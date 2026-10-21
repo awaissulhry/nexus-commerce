@@ -13,8 +13,10 @@
  * id a caller gives is the chosen ad account's own (its `account_id`) or one Meta lists as shared with it; every pixel is
  * one of the chosen ad account's (`/act_<id>/adspixels`: pixels live on the ad account). An ad account another business
  * in Nexus uses (an owner of a shared-in audience, a recipient of a share, the account of an ad that uses an audience)
- * appears as `{ adAccountId, takenByAnotherBusiness: true }` only. Customer-list audiences: Meta never gives their
- * members (only upload counts), and Nexus never asks (no `/users`, no `/salts`).
+ * appears as `{ adAccountId, takenByAnotherBusiness: true }` only. A shared-in audience (another account owns it) is
+ * read only for what the chosen account needs to use it — name, type, size range, status and its own labels; its rule,
+ * source, seeds, uploads, value data and sharing are its owner's and are never asked (review A1). Customer-list
+ * audiences: Meta never gives their members (only upload counts), and Nexus never asks (no `/users`, no `/salts`).
  *
  * Checked 2026-10-21 with `curl -sL <page>.md` (developers.facebook.com/documentation/ads-commerce/marketing-api/…) and
  * Meta's Python Business SDK (github.com/facebook/facebook-python-business-sdk, main, facebook_business/adobjects):
@@ -99,12 +101,6 @@ export function unixToIso(v: unknown): string | null {
   return n && n > 0 ? new Date(n * 1000).toISOString() : null
 }
 
-/** A URL without its query and fragment (a page address can carry a buyer's e-mail or an order number in it). */
-export function stripQuery(url: unknown): string | null {
-  const t = text(url)
-  return t ? t.split(/[?#]/)[0] : null
-}
-
 const MAX_TEXT = 4000
 
 /**
@@ -162,6 +158,37 @@ export async function readRows(connectionId: string, operation: string, path: st
 }
 
 /**
+ * Rows of a list kept by `keep`, read page by page until `want` rows are kept or the list ends — at most `maxPages`
+ * pages (then `capped`: more may match; never said to be all of them).
+ */
+export async function scanRows(connectionId: string, operation: string, path: string, query: Record<string, MetaQueryValue>, opts: { want: number; keep: (row: Record<string, unknown>) => boolean; pageSize: number; maxPages: number }) {
+  let size = Math.max(1, opts.pageSize)
+  const kept: Record<string, unknown>[] = []
+  let after: string | null = null
+  let scanned = 0
+  let pages = 0
+  while (pages < opts.maxPages) {
+    let body: { data?: unknown; paging?: { cursors?: { after?: unknown }; next?: unknown } }
+    try {
+      body = (await metaReadOne({ connectionId }, { operation, path, query: { limit: size, ...query, ...(after ? { after } : {}) } })).body as typeof body
+    } catch (err) {
+      // Meta's "reduce the amount of data" on the first page: the same list in pages of 20.
+      if (pages === 0 && size > 20 && lessData(err)) { size = 20; continue }
+      throw err
+    }
+    pages++
+    const data = Array.isArray(body.data) ? body.data.filter((r): r is Record<string, unknown> => !!r && typeof r === 'object') : []
+    scanned += data.length
+    for (const row of data) if (opts.keep(row)) kept.push(row)
+    const next = typeof body.paging?.cursors?.after === 'string' && body.paging?.next ? body.paging.cursors.after : null
+    if (!next) return { rows: kept.slice(0, opts.want), scanned, more: kept.length > opts.want, capped: false }
+    if (kept.length >= opts.want) return { rows: kept.slice(0, opts.want), scanned, more: true, capped: false }
+    after = next
+  }
+  return { rows: kept.slice(0, opts.want), scanned, more: true, capped: true }
+}
+
+/**
  * One part of a view that reads several things: its answer, or the refusal in words (that part alone) — Meta's, or
  * Nexus's own before a call (e.g. no business portfolio for a per-portfolio read). A lost token, a throttle or a gateway
  * refusal ends the whole view.
@@ -197,19 +224,70 @@ export async function chosenPixelIds(account: MetaChosenAccount): Promise<string
   return read.rows.map((r) => idText(r.id)).filter((id): id is string => !!id)
 }
 
-/** A pixel id of the chosen ad account's (or its only pixel, when none is named), else refused in words. */
-export async function ownPixel(account: MetaChosenAccount, pixelId: string | null | undefined, allowDefault = true): Promise<string> {
+/**
+ * The ad accounts a pixel is connected to inside the chosen account's business portfolio (shared_accounts: `business`
+ * is required), and whether one of them is an ad account another business in Nexus uses (then that account is its id
+ * and the flag only).
+ */
+export async function pixelAccounts(account: MetaChosenAccount, pixelId: string, maxRows = 200) {
+  if (!account.businessId) refuse('the chosen ad account belongs to no business portfolio Nexus knows, and Meta lists a pixel\'s ad accounts per portfolio')
+  const read = await readRows(account.connectionId, 'datasets.sharedAccounts', `${pixelId}/shared_accounts`, { business: account.businessId, fields: 'account_id,name' }, maxRows)
+  const ids = read.rows.map((r) => metaAdAccountId(r.account_id ?? r.id)).filter((id): id is string => !!id)
+  const taken = await takenIds('AD_ACCOUNT', ids)
+  return {
+    items: read.rows.map((r) => {
+      const id = metaAdAccountId(r.account_id ?? r.id)
+      if (id && taken.has(id)) return { adAccountId: id, takenByAnotherBusiness: true as const }
+      return { adAccountId: id, name: text(r.name), chosenHere: id === account.adAccountId, takenByAnotherBusiness: false as const }
+    }),
+    usedByAnotherBusiness: taken.size > 0,
+    more: read.more,
+  }
+}
+
+/**
+ * Is this pixel also used by another business in Nexus (connected to an ad account another business chose)? Checked
+ * every time, never assumed: 'unchecked' with the reason when Nexus could not see all of its ad accounts.
+ */
+export async function pixelVerdict(account: MetaChosenAccount, pixelId: string): Promise<{ taken: boolean } | { unchecked: string }> {
+  const accounts = await part(() => pixelAccounts(account, pixelId, 200))
+  if ('refused' in accounts) return { unchecked: accounts.refused }
+  if (accounts.usedByAnotherBusiness) return { taken: true }
+  if (accounts.more) return { unchecked: 'the pixel is connected to more ad accounts than Nexus reads at once (200)' }
+  return { taken: false }
+}
+
+export const TAKEN_PIXEL = 'That pixel is also connected to an ad account another business in Nexus uses, so Nexus does not read it here (its events belong to both businesses). Use a pixel of this business\'s own, or disconnect the other account from it in Meta\'s Events Manager.'
+
+/**
+ * A pixel id of the chosen ad account's (or its only pixel, when none is named) and whether another business in Nexus
+ * uses it too; refused in words when it is not the chosen account's or Nexus could not check it.
+ */
+export async function ownPixelState(account: MetaChosenAccount, pixelId: string | null | undefined, allowDefault = true): Promise<{ pixelId: string; takenByAnotherBusiness: boolean }> {
   const ids = await chosenPixelIds(account)
+  let id: string
   if (!pixelId) {
     if (!allowDefault) refuse('Name the pixel (pixelId from meta-datasets view list).')
-    if (ids.length === 1) return ids[0]
-    refuse(ids.length === 0
-      ? 'The ad account this business chose has no pixel (dataset) yet. Meta creates one in Events Manager, or create-meta-dataset asks for it (a person approves it).'
-      : `The ad account this business chose has ${ids.length} pixels: name one (pixelId from meta-datasets view list).`)
+    if (ids.length !== 1) {
+      refuse(ids.length === 0
+        ? 'The ad account this business chose has no pixel (dataset) yet. Meta creates one in Events Manager, or create-meta-dataset asks for it (a person approves it).'
+        : `The ad account this business chose has ${ids.length} pixels: name one (pixelId from meta-datasets view list).`)
+    }
+    id = ids[0]
+  } else {
+    id = metaObjectId(pixelId) ?? refuse(`"${pixelId}" is not a Meta pixel id (digits).`)
+    if (!ids.includes(id)) refuse('That pixel is not on the ad account this business chose, so it is not read (pixels live on the ad account; meta-datasets view list shows its pixels).')
   }
-  const id = metaObjectId(pixelId) ?? refuse(`"${pixelId}" is not a Meta pixel id (digits).`)
-  if (!ids.includes(id)) refuse('That pixel is not on the ad account this business chose, so it is not read (pixels live on the ad account; meta-datasets view list shows its pixels).')
-  return id
+  const verdict = await pixelVerdict(account, id)
+  if ('unchecked' in verdict) refuse(`Nexus could not check whether another business in Nexus also uses this pixel (${verdict.unchecked}), so it does not read it.`)
+  return { pixelId: id, takenByAnotherBusiness: verdict.taken }
+}
+
+/** A pixel of the chosen ad account that no other business in Nexus uses, else refused in words. */
+export async function ownPixel(account: MetaChosenAccount, pixelId: string | null | undefined, allowDefault = true): Promise<string> {
+  const state = await ownPixelState(account, pixelId, allowDefault)
+  if (state.takenByAnotherBusiness) refuse(TAKEN_PIXEL)
+  return state.pixelId
 }
 
 // ── audiences ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -228,7 +306,13 @@ const SESSION_FIELDS = 'session_id,start_time,end_time,num_received,num_matched,
 const SHARED_INFO_FIELDS = 'account_id,account_name,business_id,business_name,sharing_status'
 const SHARED_CAMPAIGN_FIELDS = 'account_id,account_name,adset_including_count,adset_excluding_count,campaign_delivery_status,campaign_objective,campaign_schedule'
 const SHARING_REQUEST_FIELDS = 'id,initiator{id,name},recipient{id,name},relationship_type,request_status,request_type,custom_audiences'
-const AUDIENCE_PERMISSION_FIELDS = 'audience{id,name},share_account_id,share_account_name'
+const AUDIENCE_PERMISSION_FIELDS = 'audience{id,name,account_id},share_account_id,share_account_name'
+/**
+ * Review A1 — a SHARED-IN audience (another account owns it) is read only for what the chosen account needs to use it:
+ * its name and type, its size range, whether it can deliver, and the labels the chosen account set on it. Its rule,
+ * lookalike spec and seeds, source, pixel, opt-out link and description are its owner's: never asked.
+ */
+export const SHARED_IN_DETAIL_FIELDS = 'id,account_id,name,subtype,approximate_count_lower_bound,approximate_count_upper_bound,delivery_status,operation_status,audience_labels'
 const SAVED_FIELDS = 'id,name,description,approximate_count_lower_bound,approximate_count_upper_bound,run_status,operation_status,delete_time,time_created,time_updated'
 const SAVED_DETAIL_FIELDS = `${SAVED_FIELDS},targeting,sentence_lines`
 
@@ -265,7 +349,15 @@ function deliveryOf(v: unknown) {
   return { ...s, usableInAds: usable, words }
 }
 
-/** One audience row as Nexus answers it (the chosen account's view). */
+/** Is this raw audience row flagged for integrity (operation 471, or fields named)? */
+const flaggedRaw = (row: Record<string, unknown>) => status(row.operation_status)?.code === 471
+  || (Array.isArray(row.fields_violating_integrity_policy) && row.fields_violating_integrity_policy.length > 0)
+
+/**
+ * One audience row as Nexus answers it (the chosen account's view). A shared-in audience (another account owns it)
+ * keeps only what the chosen account needs to use it — review A1: id, name, type, size range, delivery and operation
+ * status, and its owner account (only its id and the flag when another business in Nexus uses that account).
+ */
 export function audienceRow(row: Record<string, unknown>, chosenAdAccountId: string, takenOwners: ReadonlySet<string>) {
   const owner = metaAdAccountId(row.account_id)
   const operation = status(row.operation_status)
@@ -273,27 +365,31 @@ export function audienceRow(row: Record<string, unknown>, chosenAdAccountId: str
   const deleteTime = unixToIso(row.delete_time)
   const { size, sizeNote } = audienceSize(row.approximate_count_lower_bound, row.approximate_count_upper_bound)
   const source = row.data_source && typeof row.data_source === 'object' ? row.data_source as Record<string, unknown> : null
-  return {
+  const sharedIn = owner !== null && owner !== chosenAdAccountId
+  const common = {
     audienceId: idText(row.id),
     name: text(row.name),
     subtype: text(row.subtype),
-    description: text(row.description),
-    // A shared-in audience: its owner account, or only its id and the flag when another business in Nexus uses it.
-    sharedIn: owner !== null && owner !== chosenAdAccountId,
-    ownerAdAccount: owner && owner !== chosenAdAccountId ? (takenOwners.has(owner) ? { adAccountId: owner, takenByAnotherBusiness: true } : { adAccountId: owner, takenByAnotherBusiness: false }) : null,
+    sharedIn,
+    ownerAdAccount: owner && sharedIn ? (takenOwners.has(owner) ? { adAccountId: owner, takenByAnotherBusiness: true } : { adAccountId: owner, takenByAnotherBusiness: false }) : null,
     size,
     sizeNote,
     delivery: deliveryOf(row.delivery_status),
     operation: operation ? { ...operation, words: operation.code !== null ? OPERATION_WORDS[operation.code] ?? null : null } : null,
+    flagged: operation?.code === 471 || flaggedFields.length > 0,
+    expiring: operation?.code === 100 || deleteTime !== null,
+  }
+  if (sharedIn) return common
+  return {
+    ...common,
+    description: text(row.description),
     dataSource: source ? { type: text(source.type), subType: text(source.sub_type) } : null,
     customerFileSource: text(row.customer_file_source),
     retentionDays: num(row.retention_days),
     isValueBased: bool(row.is_value_based),
     pixelId: idText(row.pixel_id),
     sharingStatus: plain(row.sharing_status, 1) ?? null,
-    flagged: operation?.code === 471 || flaggedFields.length > 0,
     flaggedFields,
-    expiring: operation?.code === 100 || deleteTime !== null,
     deleteTime,
     createdTime: unixToIso(row.time_created),
     updatedTime: unixToIso(row.time_updated),
@@ -325,6 +421,12 @@ export async function ownAudience(account: MetaChosenAccount, id: string): Promi
   if (listed.rows.some((r) => idText(r.id) === audienceId)) return { audienceId, sharedIn: true }
   refuse('That audience is not the chosen ad account\'s, nor shared with it, so it is not read (view list shows the audiences it can use).')
 }
+
+/** Review B7 — at most this many pages (of 50) a filtered audience view reads. */
+export const MAX_SCAN_PAGES = 40
+const SHARED_IN_WORDS = 'Shared with the chosen ad account by its owner: Nexus shows only what the chosen account needs to use it (name, type, size range, status and the labels the chosen account set). Its rule, source, seeds, uploads, value data and sharing are its owner\'s.'
+const SHARED_IN_REFUSAL = 'That audience is shared with the chosen ad account by its owner: its uploads, value data and sharing belong to its owner, so Nexus does not read them (view detail shows what the chosen account may see).'
+const idOf = (v: unknown): string | null => (v && typeof v === 'object' ? idText((v as { id?: unknown }).id) : idText(v))
 
 const TERMS_LINK = (adAccountId: string) => `https://business.facebook.com/ads/manage/customaudiences/tos/?act=${adAccountId}`
 
@@ -362,27 +464,37 @@ export async function audiencesView(input: AudiencesInput) {
     case 'lookalikes': {
       const pixelId = input.pixelId ? await ownPixel(account, input.pixelId, false) : null
       const fields = input.view === 'lookalikes' ? LOOKALIKE_FIELDS : AUDIENCE_FIELDS
-      // AU-001 — the account's own and shared-in audiences (pages of 50: an audience row is wide; Meta suggests 20
-      // when it asks for less data, which readRows does).
-      const read = await readRows(connectionId, `audiences.${input.view}`, listPath, { fields, ...(pixelId ? { pixel_id: pixelId } : {}) }, maxRows, 50)
-      let items = await audienceRows(account, read.rows)
+      const query = { fields, ...(pixelId ? { pixel_id: pixelId } : {}) }
       const subtype = input.view === 'lookalikes' ? 'LOOKALIKE' : input.subtype ?? null
-      if (subtype) items = items.filter((r) => r.subtype === subtype)
-      if (input.view === 'flagged') items = items.filter((r) => r.flagged)
-      const lookalikes = input.view === 'lookalikes'
+      // AU-001 — the account's own and shared-in audiences, pages of 50 (an audience row is wide; Meta suggests 20 when
+      // it asks for less data, which both readers do). Review B7 — a filtered view reads on until it has enough matches
+      // or MAX_SCAN_PAGES pages, and says so when the cap stopped it.
+      const filtered = input.view === 'flagged' || !!subtype
+      const read = filtered
+        ? await scanRows(connectionId, `audiences.${input.view}`, listPath, query, {
+          want: maxRows, pageSize: 50, maxPages: MAX_SCAN_PAGES,
+          keep: (r) => (!subtype || r.subtype === subtype) && (input.view !== 'flagged' || flaggedRaw(r)),
+        })
+        : { ...(await readRows(connectionId, `audiences.${input.view}`, listPath, query, maxRows, 50)), scanned: null, capped: false }
+      const items = await audienceRows(account, read.rows)
+      const out = input.view === 'lookalikes'
         ? items.map((item) => {
+          // Review A1 — a shared-in lookalike's spec (its seeds, countries) is its owner's: not shown.
+          if (item.sharedIn) return item
           const raw = read.rows.find((r) => idText(r.id) === item.audienceId)
           return { ...item, lookalikeSpec: plain(raw?.lookalike_spec, 1) ?? null }
         })
-        : null
+        : items
       return {
         ...base, view: input.view, ...(pixelId ? { pixelId } : {}), ...(subtype ? { subtype } : {}),
-        items: lookalikes ?? items, read: read.rows.length, more: read.more,
+        items: out, more: read.more,
+        ...(read.scanned !== null ? { audiencesScanned: read.scanned } : {}),
+        ...(read.capped ? { stoppedAtPageCap: `Nexus read the first ${read.scanned} audiences of the account (${MAX_SCAN_PAGES} pages) and stopped there: more may match.` } : {}),
         note: input.view === 'flagged'
           ? 'Audiences Meta flagged for integrity (operation 471, or fields named in flaggedFields): change the flagged name, description or rule (an edit that leaves them is refused, 100/1713231); a flagged lookalike or customer-list audience cannot be edited, and since v24 a campaign using one cannot be created or updated.'
           : input.view === 'lookalikes'
             ? 'Lookalike audiences of the chosen account with their spec (type, ratio, countries, origin). Meta gives no size for lookalikes (-1); one unused in active ads for 90 days is inactive (450); Meta refreshes a lookalike about every 3 days while an ad set uses it. A seed\'s lookalikes: view detail of the seed (lookalikeAudienceIds).'
-            : 'Sizes are Meta\'s ranges (lowerBound to upperBound), never an exact number. sharedIn: shared with the chosen account by another (its owner account, or only its id when another business in Nexus uses it). Customer-list members are never shown (Meta does not give them).',
+            : 'Sizes are Meta\'s ranges (lowerBound to upperBound), never an exact number. sharedIn: shared with the chosen account by its owner — only its name, type, size and status are shown (the rest is its owner\'s); its owner account is its id only when another business in Nexus uses it. Customer-list members are never shown (Meta does not give them).',
       }
     }
     case 'expiring': {
@@ -397,14 +509,25 @@ export async function audiencesView(input: AudiencesInput) {
     }
     case 'detail': {
       const own = await needAudience()
-      // AU-002 / AU-014 — a shared-in audience is read as the chosen account sees it (ad_account_id) with the labels the
-      // chosen account set on it (acting_account_id); AU-009 its capabilities.
-      const recipient = own.sharedIn ? { ad_account_id: adAccountId, acting_account_id: adAccountId } : {}
-      const read = await metaReadOne({ connectionId }, { operation: 'audiences.detail', path: own.audienceId, query: { fields: AUDIENCE_DETAIL_FIELDS, ...recipient } })
+      if (own.sharedIn) {
+        // AU-002 / AU-014, review A1 — a shared-in audience as the chosen account sees it (ad_account_id) with the labels
+        // the chosen account set on it (acting_account_id): its name, type, size, status and those labels only.
+        const read = await metaReadOne({ connectionId }, { operation: 'audiences.detail', path: own.audienceId, query: { fields: SHARED_IN_DETAIL_FIELDS, ad_account_id: adAccountId, acting_account_id: adAccountId } })
+        const body = read.body as Record<string, unknown>
+        const [row] = await audienceRows(account, [{ ...body, id: body.id ?? own.audienceId }])
+        return {
+          ...base, view: 'detail',
+          audience: { ...row, labels: plain(body.audience_labels, 1) ?? null, labelsOf: 'the chosen ad account (acting_account_id)' },
+          note: SHARED_IN_WORDS,
+        }
+      }
+      // AU-002 — the account's own audience in full; AU-009 what Meta says it may be used for.
+      const read = await metaReadOne({ connectionId }, { operation: 'audiences.detail', path: own.audienceId, query: { fields: AUDIENCE_DETAIL_FIELDS } })
       const body = read.body as Record<string, unknown>
       const [row] = await audienceRows(account, [{ ...body, id: body.id ?? own.audienceId }])
       const capabilities = await part(async () => {
-        const caps = await readRows(connectionId, 'audiences.capabilities', `${own.audienceId}/capabilities`, {}, 50)
+        // Review B6 — the node's one documented field (CustomAudienceCapabilities.capabilities, SDK).
+        const caps = await readRows(connectionId, 'audiences.capabilities', `${own.audienceId}/capabilities`, { fields: 'capabilities' }, 50)
         return caps.rows.map((r) => plain(r, 1))
       })
       return {
@@ -418,7 +541,7 @@ export async function audiencesView(input: AudiencesInput) {
           permissionForActions: plain(body.permission_for_actions, 1) ?? null,
           optOutLink: text(body.opt_out_link),
           labels: plain(body.audience_labels, 1) ?? null,
-          labelsOf: own.sharedIn ? 'the chosen ad account (acting_account_id)' : 'the owner (the chosen ad account)',
+          labelsOf: 'the owner (the chosen ad account)',
         },
         capabilities,
         capabilitiesNote: 'What Meta says the audience may be used for (custom-audience/capabilities; Meta documents no meaning for its fields).',
@@ -450,13 +573,15 @@ export async function audiencesView(input: AudiencesInput) {
         ...base, view: 'ads-using', audienceId: own.audienceId,
         ads: mine.map((r) => ({ adId: idText(r.id), name: text(r.name), adSetId: idText(r.adset_id), campaignId: idText(r.campaign_id), effectiveStatus: text(r.effective_status) })),
         adSets: [...adSets.values()],
-        otherAccounts: [...byAccount.entries()].map(([id, ads]) => (taken.has(id) ? { adAccountId: id, ads, takenByAnotherBusiness: true } : { adAccountId: id, ads, takenByAnotherBusiness: false })),
+        // Review A1 — an account another business in Nexus uses: its id and the flag only (not even how many ads).
+        otherAccounts: [...byAccount.entries()].map(([id, ads]) => (taken.has(id) ? { adAccountId: id, takenByAnotherBusiness: true } : { adAccountId: id, ads, takenByAnotherBusiness: false })),
         more: read.more,
-        note: 'Deleting, unsharing or editing this audience changes these ads: a deleted audience stops them for good. Ads of other ad accounts it is shared with are counted only.',
+        note: 'Deleting, unsharing or editing this audience changes these ads: a deleted audience stops them for good. Ads of other ad accounts it is shared with are counted only (another business\'s account: its id only).',
       }
     }
     case 'sessions': {
       const own = await needAudience()
+      if (own.sharedIn) refuse(SHARED_IN_REFUSAL)
       // AU-007 — did the upload batches land (received / matched / invalid counts; never the people).
       const sessionId = input.sessionId ? (metaObjectId(input.sessionId) ?? refuse('sessionId is digits.')) : null
       const read = await readRows(connectionId, 'audiences.sessions', `${own.audienceId}/sessions`, { fields: SESSION_FIELDS, ...(sessionId ? { session_id: sessionId } : {}) }, maxRows)
@@ -472,6 +597,7 @@ export async function audiencesView(input: AudiencesInput) {
     }
     case 'health': {
       const own = await needAudience()
+      if (own.sharedIn) refuse(SHARED_IN_REFUSAL)
       // AU-008 — the value data shared through the Audience API (custom-audience/health), not delivery health.
       const day = (v: string | null | undefined, what: string) => (v ? (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : refuse(`${what} is YYYY-MM-DD (UTC).`)) : null)
       const calculated = day(input.calculatedDate, 'calculatedDate')
@@ -485,6 +611,7 @@ export async function audiencesView(input: AudiencesInput) {
     }
     case 'sharing': {
       const own = await needAudience()
+      if (own.sharedIn) refuse(SHARED_IN_REFUSAL)
       // AU-010 / AU-011 / AU-012 — per recipient, its campaigns, and the ad accounts it is shared with. Each recipient
       // account another business in Nexus uses is its id and the flag only.
       const perms = input.permissions && (SHARE_PERMISSIONS as readonly string[]).includes(input.permissions) ? input.permissions : null
@@ -518,14 +645,29 @@ export async function audiencesView(input: AudiencesInput) {
       const requestStatus = input.requestStatus && (SHARING_REQUEST_STATUSES as readonly string[]).includes(input.requestStatus) ? input.requestStatus : null
       const requests = (edge: 'initiated_audience_sharing_requests' | 'received_audience_sharing_requests', partnerKey: string) => part(async () => {
         const read = await readRows(connectionId, `audiences.${edge}`, `${businessId}/${edge}`, { fields: SHARING_REQUEST_FIELDS, ...(partner ? { [partnerKey]: partner } : {}), ...(requestStatus ? { request_status: requestStatus } : {}) }, maxRows)
+        const received = edge === 'received_audience_sharing_requests'
         return read.rows.map((r) => ({
           requestId: idText(r.id), initiator: plain(r.initiator, 1) ?? null, recipient: plain(r.recipient, 1) ?? null, relationshipType: plain(r.relationship_type, 1) ?? null,
-          requestStatus: text(r.request_status), requestType: text(r.request_type), customAudiences: plain(r.custom_audiences, 1) ?? null,
+          requestStatus: text(r.request_status), requestType: text(r.request_type),
+          // Review A3 — a received request offers the other business's audiences: their ids only.
+          customAudiences: received
+            ? (Array.isArray(r.custom_audiences) ? r.custom_audiences.map((a) => ({ audienceId: idOf(a) })).filter((a) => a.audienceId) : [])
+            : plain(r.custom_audiences, 1) ?? null,
         }))
       })
       const permissions = (edge: 'shared_audience_permissions' | 'received_audience_permissions') => part(async () => {
         const read = await readRows(connectionId, `audiences.${edge}`, `${businessId}/${edge}`, { fields: AUDIENCE_PERMISSION_FIELDS, ...(partner ? { partner_id: partner } : {}) }, maxRows)
-        return maskedAccounts(read.rows.map((r) => ({ adAccountId: metaAdAccountId(r.share_account_id), accountName: text(r.share_account_name), audience: plain(r.audience, 1) ?? null })), 'adAccountId')
+        // Review A3 — an audience that is not the chosen account's own is its id (and the flag when its account is
+        // another business's in Nexus); never its name.
+        const owners = read.rows.map((r) => metaAdAccountId((r.audience as { account_id?: unknown } | undefined)?.account_id)).filter((id): id is string => !!id && id !== adAccountId)
+        const takenOwners = await takenIds('AD_ACCOUNT', owners)
+        return maskedAccounts(read.rows.map((r) => {
+          const a = (r.audience && typeof r.audience === 'object' ? r.audience : {}) as Record<string, unknown>
+          const owner = metaAdAccountId(a.account_id)
+          const audience = owner === adAccountId ? { audienceId: idOf(a), name: text(a.name) }
+            : owner && takenOwners.has(owner) ? { audienceId: idOf(a), takenByAnotherBusiness: true } : { audienceId: idOf(a) }
+          return { adAccountId: metaAdAccountId(r.share_account_id), accountName: text(r.share_account_name), audience }
+        }), 'adAccountId')
       })
       const [sent, received, sharedOut, sharedIn] = await Promise.all([
         requests('initiated_audience_sharing_requests', 'recipient_id'), requests('received_audience_sharing_requests', 'initiator_id'),

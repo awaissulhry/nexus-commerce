@@ -79,7 +79,9 @@ const metaAudiences: AgentTool = {
     + 'Audience terms are signed (a person signs them in Meta; a system user cannot) and the existing-customers list. '
     + 'Sizes are Meta\'s ranges (lowerBound to upperBound), never one number; Meta gives no size for lookalikes. Meta '
     + 'never gives the people in an audience, and Nexus never asks. Only the chosen ad account\'s audiences (and those '
-    + 'shared with it) are read; an ad account another business in Nexus uses is its id only. Read only: audience changes '
+    + 'shared with it) are read; a shared-in audience shows only its name, type, size, status and the chosen account\'s '
+    + 'labels (its rule, source, uploads, value data and sharing are its owner\'s: refused); an ad account another '
+    + 'business in Nexus uses is its id only. Read only: audience changes '
     + 'are set-meta-… tools, each a request a person approves.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => audiencesView({

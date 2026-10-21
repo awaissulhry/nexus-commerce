@@ -67,12 +67,11 @@ const metaDatasets: AgentTool = {
     eventSource: z.preprocess(upper, z.enum(EVENT_SOURCES)).optional().describe('stats: only WEB_ONLY (the browser pixel) or SERVER_ONLY (a server: the Conversions API)'),
     agentName: z.string().trim().regex(/^[a-z0-9][a-z0-9_.-]{0,39}$/).optional().describe('sources, stats, quality: only events a partner sent with this partner_agent name (lower case, e.g. the shop platform\'s; Meta documents no list of names)'),
     hours: z.number().int().min(1).max(MAX_STATS_HOURS).optional().describe(`stats, sources, custom-conversions stats: the last N hours (default 168 = 7 days, at most ${MAX_STATS_HOURS} = 28 days); diagnostics event-log: at most 168; legacy-offline: uploads of this window`),
-    check: z.preprocess(lower, z.enum(DIAGNOSTIC_CHECKS)).optional().describe('diagnostics: issues (default) | events-last-fired | domains-last-fired | recent-events | event-log | raw-fires | delivery-recommendations | item-prices | microdata | collaborative-ads'),
+    check: z.preprocess(lower, z.enum(DIAGNOSTIC_CHECKS)).optional().describe('diagnostics: issues (default) | events-last-fired | domains-last-fired | recent-events | event-log | raw-fires | delivery-recommendations | item-prices | microdata (waits for step 12\'s catalog check) | collaborative-ads'),
     domains: z.array(z.string().trim().regex(/^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$/i)).min(1).max(50).optional().describe('diagnostics domains-last-fired: the shop\'s host names (shop.example)'),
     lookbackSeconds: z.number().int().min(60).max(604800).optional().describe('diagnostics recent-events: how far back, in seconds (default one day, at most 7 days)'),
     filterType: z.enum(RAW_FIRE_FILTERS).optional().describe('diagnostics raw-fires: filter by device_type, event_detection_method, host or url (with filter)'),
     filter: z.string().trim().min(1).max(200).optional().describe('diagnostics raw-fires: the value of filterType'),
-    catalogId: metaId('diagnostics microdata: the catalog to compare the page microdata with'),
     actionSource: z.preprocess(upper, z.enum(ACTION_SOURCES)).optional().describe('diagnostics collaborative-ads: WEBSITE or PHYSICAL_STORE'),
     currentDomain: z.string().trim().min(1).max(260).optional().describe('event-setup: only the parameter extractors of this web address (https://shop.example)'),
     scope: z.preprocess(lower, z.enum(CONVERSION_SCOPES)).optional().describe('custom-conversions: account (default) | business (the portfolio\'s) | dataset (built on pixelId) | one | stats (customConversionId)'),
@@ -87,19 +86,21 @@ const metaDatasets: AgentTool = {
   description:
     'The business\'s Meta datasets (pixels), read live from Meta. view list (default): the chosen ad account\'s pixels '
     + '(Meta keeps pixels on ad accounts). portfolio: the business portfolio\'s pixels (all, owned, client, pending) — one '
-    + 'not on the chosen ad account is its id only. detail: settings, automatic matching, cookies, the base code (to '
-    + 'compare with the shop), entries and match rate, and the audiences built on it. access: the ad accounts it is '
-    + 'connected to (one another business in Nexus uses: its id only — its events may then mix both businesses\' sales), '
-    + 'partner businesses, people and system users. stats: event volume per hour for up to 28 days, by event, source '
-    + '(WEB_ONLY browser / SERVER_ONLY Conversions API), device, browser, host, URL, match keys and more. sources — the '
-    + 'check before Nexus would ever send events: for Purchase (or event) it answers browserAndServer yes / no / unknown '
-    + 'from Meta\'s browser and server counts, whether Meta deduplicates them (dedup keys, coverage), which partner sends '
-    + 'by server (agentName, the last uploading app, a Conversions API Gateway), and the gap, if any; it lists what Meta '
-    + 'does not give. quality: Event Match Quality (out of 10) per event with match keys and fixes, additional conversions, '
+    + 'not on the chosen ad account is its id only. A pixel also connected to an ad account another business in Nexus uses '
+    + 'is its id and the flag only, and no view reads it. detail: settings, automatic matching, cookies, the base code (to '
+    + 'compare with the shop), entries and match rate, and the chosen account\'s audiences built on it. access: the ad '
+    + 'accounts it is connected to, partner businesses, people and system users. stats: event volume per hour for up to '
+    + '28 days, by event, source (WEB_ONLY browser / SERVER_ONLY Conversions API), device, browser, host, URL, match keys '
+    + 'and more. sources — the check before Nexus would ever send events: for Purchase (or event) it answers '
+    + 'browserAndServer yes / no / unknown — server yes or no only when Meta\'s server count and its Dataset Quality API '
+    + 'agree —, the coverage of browser events by the server copy against Meta\'s goal, and the gap: none (covered to the '
+    + 'goal), coverage (below it), dedup (nothing deduplicated), server, browser or unknown; which partner sends by server '
+    + '(Meta\'s count for agentName, the last uploading app, a Conversions API Gateway); it lists what Meta does not give. quality: Event Match Quality (out of 10) per event with match keys and fixes, additional conversions, '
     + 'coverage, deduplication, freshness, value problems, delay, and the spend and ad sets tied to each event. '
     + 'quality-offline, quality-legacy: offline events and the older edges. diagnostics: issues, last fired, recent '
     + 'events, the event log, raw fires (page addresses without their query; never the event body), delivery '
-    + 'recommendations, item prices, microdata, collaborative ads. gateway: the Conversions API Gateway. '
+    + 'recommendations, item prices, collaborative ads (microdata against a catalog waits for the catalog ownership check of '
+    + 'meta-catalogs). gateway: the Conversions API Gateway. '
     + 'custom-conversions: the account\'s (with Meta\'s 100-per-account count), the portfolio\'s, a pixel\'s, one, its '
     + 'stats — a rule cannot change after creation. event-setup: event rules and parameter extractors (read only: Meta\'s '
     + 'public API cannot change them; Meta\'s own MCP or Events Manager does). legacy-offline: old offline sets and '
@@ -121,7 +122,6 @@ const metaDatasets: AgentTool = {
       lookbackSeconds: typeof args.lookbackSeconds === 'number' ? args.lookbackSeconds : null,
       filterType: str(args.filterType),
       filter: str(args.filter),
-      catalogId: str(args.catalogId),
       actionSource: str(args.actionSource),
       currentDomain: str(args.currentDomain),
       scope: str(args.scope),

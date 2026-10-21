@@ -11,9 +11,11 @@
  *
  * ALLOW-LISTS ONLY (lesson from steps 1–2): the caller never names a Graph path, field or parameter; every view sends a
  * fixed request with a fixed field list, and every answer keeps only the keys named here. Every pixel read is one of the
- * chosen ad account's (Meta: pixels live on the ad account, `/act_<id>/adspixels`); in the business portfolio's lists a
- * pixel that is not on the chosen ad account is its id only, and `{ id, takenByAnotherBusiness: true }` when it is
- * connected to an ad account another business in Nexus uses. Every custom conversion read is the chosen ad account's.
+ * chosen ad account's (Meta: pixels live on the ad account, `/act_<id>/adspixels`) AND checked, every time, not to be
+ * connected to an ad account another business in Nexus uses (shared_accounts in the portfolio): such a pixel is
+ * `{ pixelId, takenByAnotherBusiness: true }` only in every list and detail, and every other view refuses it (review
+ * A4); never said to be free without that check. In the portfolio's lists a pixel that is not on the chosen ad account
+ * is its id only. Every custom conversion read is the chosen ad account's.
  * An ad account another business in Nexus uses is `{ adAccountId, takenByAnotherBusiness: true }` only; an ad set that
  * is not the chosen account's is its id only. Debug feeds never carry a page's query string or Meta's raw event body
  * (a buyer's data could be in them), and nothing is stored or logged.
@@ -48,7 +50,8 @@
  *     recent_events (event and lookback_window seconds required), real_time_event_log (start_time, end_time, limit;
  *     "recent pixel fires for the logged in user"), raw_fires (event required; filter_type device_type |
  *     event_detection_method | host | url; filter), ads_signal_diagnostic_issues (ad_account_id required),
- *     pixel_delivery_recommendations, item_price_stats, microdata_stats (catalog_id required),
+ *     pixel_delivery_recommendations, item_price_stats, microdata_stats (catalog_id required — not sent: a catalog is
+ *     checked to be the business's only from step 12),
  *     cpas_events_debugging_info (action_source), cloudbridge_dataset_status, setup_quality (agent_name),
  *     integration_quality (agent_name, time_range), openbridge_configurations, event_rules (CalibratorExistingRule),
  *     extractors (current_domain; SignalsIWLExtractor); business/openbridge_configurations; the node fields of each from
@@ -70,7 +73,7 @@ import { MetaReadError } from './errors.js'
 import { metaChosenAccount, objectKindOf, type MetaChosenAccount } from './live.js'
 import { decimalToMicros, minorOf } from './money.js'
 import { takenIds } from './taken.js'
-import { act, bool, chosenPixelIds, num, ownPixel, part, pickRow, plain, readRows, refuse, stripQuery, text, audienceRow } from './live-audiences.js'
+import { act, audienceRow, bool, chosenPixelIds, num, ownPixel, ownPixelState, part, pickRow, pixelAccounts, pixelVerdict, plain, readRows, refuse, TAKEN_PIXEL, text } from './live-audiences.js'
 
 export const DATASET_VIEWS = [
   'list', 'portfolio', 'detail', 'access', 'stats', 'sources', 'quality', 'quality-offline', 'quality-legacy', 'diagnostics', 'gateway',
@@ -121,7 +124,7 @@ const PIXEL_DETAIL_KEYS = [
 ] as const
 const AUDIENCE_OF_PIXEL_FIELDS = 'id,account_id,name,subtype,approximate_count_lower_bound,approximate_count_upper_bound,delivery_status,operation_status,retention_days,time_created,time_updated'
 /** Every key of Meta's Dataset Quality API web block that Nexus reads (full example on the page). */
-export const QUALITY_WEB_FIELDS = [
+const QUALITY_WEB_PARTS = [
   'event_name',
   'event_match_quality{composite_score,match_key_feedback{identifier,coverage{percentage},potential_aly_acr_increase{percentage,description}},diagnostics}',
   'acr{percentage,description}', 'event_potential_aly_acr_increase{percentage,description}', 'event_coverage{percentage,goal_percentage,description}',
@@ -130,7 +133,8 @@ export const QUALITY_WEB_FIELDS = [
   'event_ad_sets{ad_set_id,ad_set_name,objective,spend_amount,spend_currency_code,event_use}',
   'value_diagnostics{issue_type,issue_count,event_count,issue_rate,issue_example}',
   'event_delay{events_delayed_over_2h,events_delayed_over_24h,total_events,pct_delayed_over_2h,pct_delayed_over_24h}',
-].join(',')
+]
+export const QUALITY_WEB_FIELDS = QUALITY_WEB_PARTS.join(',')
 /** What the D2 check reads of the quality block: coverage, deduplication, match quality and freshness, no money. */
 const SOURCES_WEB_FIELDS = [
   'event_name', 'event_match_quality{composite_score}', 'event_coverage{percentage,goal_percentage}',
@@ -146,7 +150,7 @@ const EVENT_RULE_FIELDS = 'id,event_type,rule,rule_type,status,creation_source,c
 const EXTRACTOR_FIELDS = 'id,event_type,extractor_type,domain_uri,extractor_config'
 const UPLOAD_FIELDS = 'id,upload_tag,creation_time,first_upload_time,last_upload_time,event_time_min,event_time_max,valid_entries,matched_entries,duplicate_entries,match_rate_approx,api_calls,is_excluded_for_lift'
 const OFFLINE_SET_FIELDS = 'id,name,description,creation_time,is_consolidated_container,is_unavailable,last_upload_app,valid_entries,matched_entries,duplicate_entries,match_rate_approx,event_time_min,event_time_max'
-const DIAGNOSTIC_FIELDS: Record<(typeof DIAGNOSTIC_CHECKS)[number], { edge: string; fields: string }> = {
+const DIAGNOSTIC_FIELDS: Partial<Record<(typeof DIAGNOSTIC_CHECKS)[number], { edge: string; fields: string }>> = {
   issues: { edge: 'ads_signal_diagnostic_issues', fields: 'data_source_id,data_source_type,diagnostic_type,event_name,traffic_anomaly_drop_percentage,traffic_anomaly_drop_timestamp' },
   'events-last-fired': { edge: 'event_last_fired_time', fields: 'event,last_fired_time' },
   'domains-last-fired': { edge: 'domain_last_fired_time', fields: 'domain_name,last_fired_time' },
@@ -156,10 +160,8 @@ const DIAGNOSTIC_FIELDS: Record<(typeof DIAGNOSTIC_CHECKS)[number], { edge: stri
   'raw-fires': { edge: 'raw_fires', fields: 'event,event_src,event_detection_method,device_type,placed_url,timestamp,user_pii_keys' },
   'delivery-recommendations': { edge: 'pixel_delivery_recommendations', fields: 'custom_event_type,optimization_goal' },
   'item-prices': { edge: 'item_price_stats', fields: 'date,item_price_coverage' },
-  microdata: { edge: 'microdata_stats', fields: 'allowed_domains,errors_stats_for_time_ranges,has_valid_events,suggested_allowed_domains_count_max,suggested_trusted_domains' },
   'collaborative-ads': { edge: 'cpas_events_debugging_info', fields: 'event_name,diagnostic,counts' },
 }
-const URL_KEYS = new Set(['url', 'placed_url'])
 
 /** An amount Meta gives as a decimal of a currency ("108947.38") in that currency's minor units, with the currency. */
 export function currencyCents(amount: unknown, currency: unknown): { cents: number | null; currency: string | null } {
@@ -172,41 +174,62 @@ export function currencyCents(amount: unknown, currency: unknown): { cents: numb
 export const MAX_STATS_HOURS = 672
 const WEEK = 7 * 24 * 3600
 
-/** The last `hours` hours (≤ 28 days) as Unix-second windows of at most 7 days each, oldest first. */
+/**
+ * The last `hours` hours (≤ 28 days) as Unix-second windows, oldest first, each SHORTER than 7 days: the whole span
+ * starts one minute after now − hours (review B4 — Meta answers "up to seven days from the request time", so a window
+ * may never reach back a full 7 days), split into equal windows.
+ */
 export function statsWindows(hours: number, now: Date = new Date()): Array<{ start: number; end: number }> {
   const span = Math.min(MAX_STATS_HOURS, Math.max(1, Math.trunc(hours))) * 3600
   const end = Math.floor(now.getTime() / 1000)
-  const out: Array<{ start: number; end: number }> = []
-  for (let start = end - span; start < end; start += WEEK) out.push({ start, end: Math.min(end, start + WEEK) })
-  return out
+  const start = end - span + 60
+  const count = Math.ceil(span / WEEK)
+  const length = Math.floor((end - start) / count)
+  return Array.from({ length: count }, (_, i) => ({ start: start + i * length, end: i === count - 1 ? end : start + (i + 1) * length }))
+}
+
+/** Review A5 — every http(s) address in Meta's answer without its query and fragment, at any depth. */
+export function stripUrls(value: unknown, depth = 0): unknown {
+  if (typeof value === 'string') return value.replace(/(https?:\/\/[^\s?#"'<>]*)[?#][^\s"'<>]*/gi, '$1')
+  if (depth > 8) return value
+  if (Array.isArray(value)) return value.map((v) => stripUrls(v, depth + 1))
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, stripUrls(v, depth + 1)]))
+  return value
 }
 
 // ── shared reads ─────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** A pixel row as answered: settings, owner portfolio (id only) and whether it is the chosen ad account's. */
-function pixelRow(row: Record<string, unknown>, keys: readonly string[], account: MetaChosenAccount, onChosen: boolean) {
+/**
+ * A pixel row of the chosen ad account, called only after Nexus CHECKED that no other business in Nexus uses it
+ * (pixelVerdict): settings, owner portfolio (id only).
+ */
+function pixelRow(row: Record<string, unknown>, keys: readonly string[], account: MetaChosenAccount) {
   const owner = idOf(row.owner_business)
   return {
     pixelId: idText(row.id), ...pickRow(row, keys), ownerBusinessId: owner, ownedByThisPortfolio: owner !== null && owner === account.businessId,
-    onChosenAdAccount: onChosen, takenByAnotherBusiness: false,
+    onChosenAdAccount: true, takenByAnotherBusiness: false,
   }
 }
 
-/** The ad accounts a pixel is connected to inside the business portfolio (shared_accounts: `business` is required). */
-async function pixelAccounts(account: MetaChosenAccount, pixelId: string, maxRows = 200) {
-  if (!account.businessId) refuse('The chosen ad account belongs to no business portfolio Nexus knows, and Meta reads a pixel\'s ad accounts per portfolio.')
-  const read = await readRows(account.connectionId, 'datasets.sharedAccounts', `${pixelId}/shared_accounts`, { business: account.businessId, fields: 'account_id,name' }, maxRows)
-  const ids = read.rows.map((r) => metaAdAccountId(r.account_id ?? r.id)).filter((id): id is string => !!id)
-  const taken = await takenIds('AD_ACCOUNT', ids)
-  return {
-    items: read.rows.map((r) => {
-      const id = metaAdAccountId(r.account_id ?? r.id)
-      if (id && taken.has(id)) return { adAccountId: id, takenByAnotherBusiness: true as const }
-      return { adAccountId: id, name: text(r.name), chosenHere: id === account.adAccountId, takenByAnotherBusiness: false as const }
-    }),
-    usedByAnotherBusiness: taken.size > 0,
-    more: read.more,
+/**
+ * Review A4 — the chosen ad account's pixel rows, each checked against the other businesses in Nexus: one connected to an
+ * ad account another business uses is `{ pixelId, takenByAnotherBusiness: true }` only; one Nexus could not check (or
+ * past the first MAX_TAKEN_CHECKS) is its id and why — never asserted free without the check.
+ */
+async function checkedPixelRows(account: MetaChosenAccount, rows: Record<string, unknown>[], keys: readonly string[]) {
+  let checks = MAX_TAKEN_CHECKS
+  const out: unknown[] = []
+  for (const r of rows) {
+    const id = idText(r.id)
+    if (!id) continue
+    if (checks <= 0) { out.push({ pixelId: id, checked: false, why: `Nexus checks at most ${MAX_TAKEN_CHECKS} pixels at once; name this one (pixelId).` }); continue }
+    checks--
+    const verdict = await pixelVerdict(account, id)
+    if ('unchecked' in verdict) out.push({ pixelId: id, checked: false, why: `Nexus could not check whether another business in Nexus uses it (${verdict.unchecked}).` })
+    else if (verdict.taken) out.push({ pixelId: id, takenByAnotherBusiness: true })
+    else out.push(pixelRow(r, keys, account))
   }
+  return out
 }
 
 /** Is this ad set the chosen account's? Nexus's own rows, else one live account_id read. */
@@ -220,6 +243,13 @@ async function adSetOfChosen(account: MetaChosenAccount, adSetId: string): Promi
     throw err
   }
 }
+
+/**
+ * Review B5 — value_diagnostics and event_delay are on Meta's page (September 2026) but not in the SDK: when Meta refuses
+ * the field list (#100), the quality view reads again without them and says so.
+ */
+const DOCS_ONLY_QUALITY_FIELDS = ['value_diagnostics', 'event_delay'] as const
+export const QUALITY_WEB_FIELDS_SDK = QUALITY_WEB_PARTS.filter((f) => !DOCS_ONLY_QUALITY_FIELDS.some((d) => f.startsWith(`${d}{`))).join(',')
 
 /** Meta's Dataset Quality API for one pixel (web or offline block). */
 async function datasetQuality(account: MetaChosenAccount, pixelId: string, block: 'web' | 'offline', fields: string, agentName: string | null, operation: string) {
@@ -295,7 +325,8 @@ async function statsOf(account: MetaChosenAccount, pixelId: string, query: Recor
       const data = Array.isArray(result.data) ? result.data as Array<Record<string, unknown>> : []
       const values = data.map((d) => {
         const raw = typeof d.value === 'string' ? d.value : d.value === undefined || d.value === null ? (text(d.event) ?? null) : String(d.value)
-        const value = query.aggregation === 'url' ? stripQuery(raw) : raw
+        // Review A5 — url, url_by_rule and any other value that is a web address: never its query.
+        const value = typeof raw === 'string' ? stripUrls(raw) as string : raw
         const count = num(d.count)
         if (value !== null && count !== null) totals.set(value, (totals.get(value) ?? 0) + count)
         return { value, count }
@@ -310,99 +341,129 @@ async function statsOf(account: MetaChosenAccount, pixelId: string, query: Recor
 // ── the D2 check: who sends the events ───────────────────────────────────────────────────────────────────────────
 
 export type YesNo = 'yes' | 'no' | 'unknown'
+type DedupKey = ReturnType<typeof dedupKeys>[number]
+
+/** What the Dataset Quality API says of one event's server side, or that it was not read. */
+export type QualityEvidence = { refused: true } | { row: boolean; matchQualityScore: number | null; coveragePercent: number | null; goalPercent: number | null; dedupKeys: DedupKey[] }
 
 /**
- * The plain verdict of the D2 check for one event: browser and server counts (Meta's stats with event_source WEB_ONLY /
- * SERVER_ONLY) and the dedup keys (Dataset Quality API). Pure.
+ * The plain verdict of the D2 check for one event (the Owner's rule: never a false "covered" — missing purchases — and
+ * never a false "missing" — double counting). Pure.
+ *   - browser: Meta's stats with event_source WEB_ONLY (> 0 yes, 0 no);
+ *   - server (review B2): Meta's stats with event_source SERVER_ONLY AND the Dataset Quality API must agree — server
+ *     events show there as a match-quality score, an event coverage or server events carrying a dedup key. Stats > 0
+ *     and the API shows them: yes; stats 0 and the API shows none: no; they disagree, or either was not read: unknown;
+ *   - browserAndServer: yes when both are yes; no only when one side is yes and the other no; else unknown;
+ *   - coverage (review B1): the larger of Meta's event_coverage and the dedup coverage summed over the keys (Meta: each
+ *     key's share is incremental); the gap is none only when it reaches Meta's goal_percentage, `coverage` between 0 and
+ *     the goal, `dedup` at 0 (both send, nothing deduplicated: double counting), unknown without a goal or coverage.
  */
-export function sendersVerdict(input: { browserCount: number | null; serverCount: number | null; dedupKeys: ReturnType<typeof dedupKeys>; coveragePercent: number | null }) {
-  const { browserCount, serverCount } = input
+export function sendersVerdict(input: { browserCount: number | null; serverCount: number | null; quality: QualityEvidence }) {
+  const { browserCount, serverCount, quality } = input
+  const read = 'row' in quality ? quality : null
+  const keys = read?.dedupKeys ?? []
   const browser: YesNo = browserCount === null ? 'unknown' : browserCount > 0 ? 'yes' : 'no'
-  const server: YesNo = serverCount === null ? 'unknown' : serverCount > 0 ? 'yes' : 'no'
-  // "no" only when the event reached Meta from one side and not from the other: no event at all, or one side unread,
-  // says nothing about who would send one (no sale in the window, or nobody sends it).
-  const nothing = browserCount === 0 && serverCount === 0
+  const serverByStats: YesNo = serverCount === null ? 'unknown' : serverCount > 0 ? 'yes' : 'no'
+  const serverShown = read ? read.row && (read.matchQualityScore !== null || (read.coveragePercent ?? 0) > 0 || keys.some((k) => (k.serverEventsWithKeyPercent ?? 0) > 0)) : null
+  const serverByQuality: YesNo = serverShown === null ? 'unknown' : serverShown ? 'yes' : 'no'
+  const server: YesNo = serverByStats !== 'unknown' && serverByStats === serverByQuality ? serverByStats : 'unknown'
   const both: YesNo = browser === 'yes' && server === 'yes' ? 'yes' : (browser === 'yes' && server === 'no') || (browser === 'no' && server === 'yes') ? 'no' : 'unknown'
-  const eventId = input.dedupKeys.find((k) => k.key === 'event_id')
-  const anyDeduped = input.dedupKeys.some((k) => (k.browserEventsDedupedPercent ?? 0) > 0)
-  const deduplicated: YesNo = both !== 'yes' ? 'unknown' : input.dedupKeys.length === 0 ? 'unknown' : anyDeduped ? 'yes' : 'no'
-  const gap = nothing ? 'unknown'
-    : both === 'yes' ? (deduplicated === 'no' ? 'dedup' : deduplicated === 'yes' ? 'none' : 'unknown')
-      : server === 'no' && browser === 'yes' ? 'server'
-        : browser === 'no' && server === 'yes' ? 'browser'
-          : 'unknown'
+  const dedupCoverage = keys.length ? keys.reduce((sum, k) => sum + (k.browserEventsDedupedPercent ?? 0), 0) : null
+  const eventCoverage = read?.coveragePercent ?? null
+  const coverage = dedupCoverage === null ? eventCoverage : eventCoverage === null ? dedupCoverage : Math.max(dedupCoverage, eventCoverage)
+  const goal = read?.goalPercent ?? null
+  const deduplicated: YesNo = both !== 'yes' || dedupCoverage === null ? 'unknown' : dedupCoverage > 0 ? 'yes' : 'no'
+  const gap = both === 'yes'
+    ? coverage === null ? 'unknown' : coverage === 0 ? 'dedup' : goal === null ? 'unknown' : coverage >= goal ? 'none' : 'coverage'
+    : server === 'no' && browser === 'yes' ? 'server'
+      : browser === 'no' && server === 'yes' ? 'browser'
+        : 'unknown'
+  const eventId = keys.find((k) => k.key === 'event_id')
   return {
-    browser, server, both, deduplicated, gap,
+    browser, server, serverByStats, serverByQuality, both, deduplicated, gap,
+    coveragePercent: coverage, eventCoveragePercent: eventCoverage, dedupCoveragePercent: dedupCoverage, coverageGoalPercent: goal,
     eventIdOnBrowserPercent: eventId?.browserEventsWithKeyPercent ?? null,
     eventIdOnServerPercent: eventId?.serverEventsWithKeyPercent ?? null,
-    serverCoveragePercent: input.coveragePercent,
   }
 }
 
-const GAP_WORDS: Record<string, string> = {
-  none: 'No gap: the event reaches Meta from the browser AND from a server, and Meta deduplicates them. Nexus sending it too would add nothing (upload-meta-events stays off).',
-  dedup: 'Both send it, but Meta reports no deduplication: the same purchase may be counted twice. Fix the sender\'s event_id (the shop platform\'s pixel and Conversions API must share it); Nexus sending more would not help.',
-  server: 'Only the browser pixel sends it: no server copy (Conversions API) reached Meta in the window. This is the gap Nexus could fill (upload-meta-events, with the same event_id as the browser event), after the Owner\'s word.',
-  browser: 'Only a server sends it: the browser pixel did not send it in the window. Check the pixel on the shop (the shop platform\'s Meta app); Nexus does not send browser events.',
-  unknown: 'Unknown: Meta\'s answer does not settle it (no such event in the window, or a part of the read was refused — see each part). Widen hours (up to 672) or check the parts below.',
+/** The gap in words (the coverage gap names Meta's numbers). */
+export function gapWords(gap: string, event: string, coverage: number | null, goal: number | null): string {
+  switch (gap) {
+    case 'none': return `No gap: ${event} reaches Meta from the browser AND from a server, and the server copy covers ${coverage}% of browser ${event} events (Meta's goal: ${goal}%). Nexus sending it too would add nothing (upload-meta-events stays off).`
+    case 'coverage': return `Partly covered: the server copy covers about ${coverage}% of browser ${event} events; Meta's goal is ${goal}%. Some purchases reach Meta from the browser only. Fix the sender's server events and their event_id first (the shop platform's Meta app); Nexus would send only the missing ones, with the same event_id, after the Owner's word.`
+    case 'dedup': return `Both send ${event}, but Meta deduplicates none of them: the same purchase may be counted twice. Fix the sender's event_id (the shop platform's pixel and Conversions API must share it); Nexus sending more would not help.`
+    case 'server': return `Only the browser pixel sends ${event}: Meta's stats and its Dataset Quality API both show no server copy (Conversions API) in the window. This is the gap Nexus could fill (upload-meta-events, with the same event_id as the browser event), after the Owner's word.`
+    case 'browser': return `Only a server sends ${event}: the browser pixel did not send it in the window. Check the pixel on the shop (the shop platform's Meta app); Nexus does not send browser events.`
+    default: return `Unknown: Meta's answers do not settle it — no ${event} in the window, Meta's stats and its Dataset Quality API disagree, a part was refused, or Meta gave no coverage goal (see each part). Widen hours (up to 672) or check the parts below.`
+  }
 }
 
 /** The D2 view: for one pixel and one event (Purchase by default), who sends it and whether Meta deduplicates it. */
 async function sourcesView(account: MetaChosenAccount, pixelId: string, input: { event: string; hours: number; agentName: string | null; now: Date }) {
   const { event, hours, agentName, now } = input
-  const [browser, server, bySource, quality, partnerQuality, pixel, gateways, accounts] = await Promise.all([
+  const [browser, server, bySource, quality, partner, pixel, gateways] = await Promise.all([
     part(() => statsOf(account, pixelId, { aggregation: 'event', event_source: 'WEB_ONLY' }, hours, now, 'datasets.sources.web')),
     part(() => statsOf(account, pixelId, { aggregation: 'event', event_source: 'SERVER_ONLY' }, hours, now, 'datasets.sources.server')),
     // Meta documents `event` only for the custom_data_field aggregation: the source labels are for every event.
     part(() => statsOf(account, pixelId, { aggregation: 'event_source' }, hours, now, 'datasets.sources.bySource')),
     part(() => datasetQuality(account, pixelId, 'web', SOURCES_WEB_FIELDS, null, 'datasets.sources.quality')),
-    agentName ? part(() => datasetQuality(account, pixelId, 'web', SOURCES_WEB_FIELDS, agentName, 'datasets.sources.partner')) : Promise.resolve(null),
+    // Review B3 — a partner is proven by Meta's own count of the server events it sent (the documented `agent` filter of
+    // the stats edge), never by a quality row alone.
+    agentName ? part(() => statsOf(account, pixelId, { aggregation: 'event', event_source: 'SERVER_ONLY', agent: agentName }, hours, now, 'datasets.sources.partner')) : Promise.resolve(null),
     part(async () => (await metaReadOne({ connectionId: account.connectionId }, { operation: 'datasets.sources.pixel', path: pixelId, query: { fields: 'last_fired_time,last_upload_app,last_upload_app_changed_time' } })).body as Record<string, unknown>),
     part(async () => (await readRows(account.connectionId, 'datasets.sources.gateway', `${pixelId}/openbridge_configurations`, { fields: 'id,active,partner_name,capi_publishing_state' }, 20)).rows),
-    part(() => pixelAccounts(account, pixelId, 200)),
   ])
   const refused = (v: unknown): v is { refused: string } => !!v && typeof v === 'object' && 'refused' in (v as object)
   const count = (v: typeof browser) => (refused(v) ? null : v.totals[event] ?? 0)
   const eventRow = refused(quality) ? undefined : quality.find((r) => r.event_name === event)
-  const partnerRow = partnerQuality && !refused(partnerQuality) ? partnerQuality.find((r) => r.event_name === event) : undefined
   const keys = dedupKeys(eventRow)
-  const verdict = sendersVerdict({ browserCount: count(browser), serverCount: count(server), dedupKeys: keys, coveragePercent: eventRow ? pct(eventRow.event_coverage) : null })
+  const evidence: QualityEvidence = refused(quality) ? { refused: true } : {
+    row: !!eventRow,
+    matchQualityScore: eventRow ? num((eventRow.event_match_quality as { composite_score?: unknown } | undefined)?.composite_score) : null,
+    coveragePercent: eventRow ? pct(eventRow.event_coverage) : null,
+    goalPercent: eventRow?.event_coverage ? num((eventRow.event_coverage as { goal_percentage?: unknown }).goal_percentage) : null,
+    dedupKeys: keys,
+  }
+  const verdict = sendersVerdict({ browserCount: count(browser), serverCount: count(server), quality: evidence })
+  const words = gapWords(verdict.gap, event, verdict.coveragePercent, verdict.coverageGoalPercent)
   const both = verdict.both === 'yes' ? `yes — ${event} reached this pixel from the browser AND from a server`
-    : verdict.both === 'no' ? `no — ${event} reached this pixel only from ${verdict.browser === 'yes' ? 'the browser' : verdict.server === 'yes' ? 'a server' : 'neither side'}`
+    : verdict.both === 'no' ? `no — ${event} reached this pixel only from ${verdict.browser === 'yes' ? 'the browser' : 'a server'}`
       : 'unknown'
+  const partnerCount = partner && !refused(partner) ? partner.totals[event] ?? 0 : null
   return {
     pixelId, event, hours,
-    answer: {
-      browserAndServer: verdict.both,
-      sentence: `Does ${event} come from the browser AND a server? ${both}. ${GAP_WORDS[verdict.gap]}`,
-      ...verdict,
-      gapWords: GAP_WORDS[verdict.gap],
-    },
+    answer: { browserAndServer: verdict.both, sentence: `Does ${event} come from the browser AND a server? ${both}. ${words}`, ...verdict, gapWords: words },
     counts: {
       browser: refused(browser) ? browser : { [event]: count(browser), allEvents: browser.totals },
       server: refused(server) ? server : { [event]: count(server), allEvents: server.totals },
       bySource: refused(bySource) ? bySource : { totals: bySource.totals, note: 'Every event of the pixel per source, under Meta\'s own labels (stats aggregation event_source; Meta does not document the labels).' },
     },
-    deduplication: { keys, coveragePercent: verdict.serverCoveragePercent, coverageGoalPercent: eventRow?.event_coverage ? num((eventRow.event_coverage as { goal_percentage?: unknown }).goal_percentage) : null, matchQualityScore: eventRow ? num((eventRow.event_match_quality as { composite_score?: unknown } | undefined)?.composite_score) : null, freshness: plain(eventRow?.data_freshness, 1) ?? null, ...(refused(quality) ? { refused: quality.refused } : {}) },
+    deduplication: {
+      keys, coveragePercent: verdict.coveragePercent, eventCoveragePercent: verdict.eventCoveragePercent, dedupCoveragePercent: verdict.dedupCoveragePercent,
+      coverageGoalPercent: verdict.coverageGoalPercent, matchQualityScore: 'row' in evidence ? evidence.matchQualityScore : null, freshness: plain(eventRow?.data_freshness, 1) ?? null,
+      ...(refused(quality) ? { refused: quality.refused } : {}),
+    },
     integrations: {
       partnerAgent: agentName ? {
         agentName,
-        sendsThisEventByServer: refused(partnerQuality) ? 'unknown' : partnerRow ? 'yes' : 'not-seen',
-        words: refused(partnerQuality) ? partnerQuality!.refused
-          : partnerRow ? `Meta has ${event} server events sent with partner_agent "${agentName}" (Dataset Quality API filtered by agent_name).`
-            : `Meta shows no ${event} server event sent with partner_agent "${agentName}" — that partner does not send it, or uses another partner_agent name (Meta documents no list of names).`,
+        serverEventsSent: partnerCount,
+        sendsThisEventByServer: partnerCount === null ? 'unknown' : partnerCount > 0 ? 'yes' : 'not-seen',
+        words: partner && refused(partner) ? partner.refused
+          : partnerCount && partnerCount > 0 ? `Meta counts ${partnerCount} ${event} server events sent with partner_agent "${agentName}" in the window (stats, event_source SERVER_ONLY, agent).`
+            : `Meta counts no ${event} server event sent with partner_agent "${agentName}" in the window — that partner does not send it, or uses another partner_agent name (Meta documents no list of names).`,
       } : null,
       lastUploadApp: refused(pixel) ? pixel : { app: text(pixel.last_upload_app), changedTime: num(pixel.last_upload_app_changed_time), lastFiredTime: text(pixel.last_fired_time) },
       conversionsApiGateway: refused(gateways) ? gateways : gateways.map((g) => ({ id: idText(g.id), active: bool(g.active), partnerName: text(g.partner_name), publishingState: text(g.capi_publishing_state) })),
-      alsoOnAnotherBusinessesAdAccount: refused(accounts) ? null : accounts.usedByAnotherBusiness,
     },
     metaDoesNotGive: [
       'which app or partner sent each BROWSER event (Meta reports only browser vs server, and its own source labels)',
-      'a list of the partner_agent names that sent server events (only a filter by a name you know: agentName)',
+      'a list of the partner_agent names that sent server events (only a count for a name you know: agentName)',
       'the shop platform\'s own partner_agent name (not documented by Meta)',
-      'how many purchases were sent twice or deduplicated as a count — only the percentages of events carrying each key and of browser events deduplicated',
+      'how many purchases were sent twice or deduplicated as a count — only the percentages of events carrying each key, of browser events deduplicated and of coverage',
+      'whether the SERVER_ONLY / WEB_ONLY counts include events Meta deduplicated (not documented: LIVE-PROBES SG-030c)',
     ],
-    note: `Counts are Meta's, over the last ${hours} hours (7 days per request). ${refused(accounts) ? '' : accounts.usedByAnotherBusiness ? 'This pixel is also connected to an ad account another business in Nexus uses: its events can mix both businesses\' sales. ' : ''}Nexus sends no event itself until upload-meta-events (step 33) is switched on by the Owner.`,
+    note: `Counts are Meta's, over the last ${hours} hours (windows shorter than 7 days). Nexus checked first that no other business in Nexus uses this pixel. Nexus sends no event itself until upload-meta-events (step 33) is switched on by the Owner.`,
   }
 }
 
@@ -424,7 +485,6 @@ export interface DatasetsInput {
   lookbackSeconds?: number | null
   filterType?: string | null
   filter?: string | null
-  catalogId?: string | null
   actionSource?: string | null
   currentDomain?: string | null
   scope?: string | null
@@ -459,8 +519,8 @@ export async function datasetsView(input: DatasetsInput) {
       // SG-001 — the chosen ad account's pixels (datasets).
       const read = await readRows(connectionId, 'datasets.list', `${act(adAccountId)}/adspixels`, { fields: PIXEL_LIST_FIELDS, summary: 'total_count' }, maxRows)
       return {
-        ...base, view: 'list', items: read.rows.map((r) => pixelRow(r, PIXEL_ROW_KEYS, account, true)).filter((r) => r.pixelId), more: read.more,
-        note: 'The pixels (datasets) on the ad account this business chose — Meta keeps pixels on ad accounts. A pixel another business in Nexus also uses shows in view access (alsoOnAnotherBusinessesAdAccount).',
+        ...base, view: 'list', items: await checkedPixelRows(account, read.rows, PIXEL_ROW_KEYS), more: read.more,
+        note: 'The pixels (datasets) on the ad account this business chose — Meta keeps pixels on ad accounts. Each is checked against the other businesses in Nexus: one also connected to an ad account another business uses is its id and the flag only, and Nexus reads nothing more of it.',
       }
     }
     case 'portfolio': {
@@ -476,14 +536,15 @@ export async function datasetsView(input: DatasetsInput) {
       for (const r of read.rows) {
         const id = idText(r.id)
         if (!id) continue
-        if (chosen.has(id)) { items.push(pixelRow(r, PIXEL_ROW_KEYS, account, true)); continue }
-        // Not on the chosen ad account: its id only — and the flag when it is connected to an ad account another
-        // business in Nexus uses (shared_accounts inside this portfolio; a check per pixel, at most MAX_TAKEN_CHECKS).
-        if (checks <= 0) { items.push({ pixelId: id, onChosenAdAccount: false, checked: false }); continue }
+        // Every pixel is checked against the other businesses in Nexus (shared_accounts inside this portfolio; at most
+        // MAX_TAKEN_CHECKS per answer): one another business uses is its id and the flag only; one not on the chosen ad
+        // account is its id only; only a checked pixel of the chosen account is shown in full.
+        if (checks <= 0) { items.push({ pixelId: id, onChosenAdAccount: chosen.has(id), checked: false }); continue }
         checks--
-        const accounts = await part(() => pixelAccounts(account, id, 200))
-        if ('refused' in accounts) items.push({ pixelId: id, onChosenAdAccount: false, checked: false })
-        else if (accounts.usedByAnotherBusiness) items.push({ pixelId: id, takenByAnotherBusiness: true })
+        const verdict = await pixelVerdict(account, id)
+        if ('unchecked' in verdict) items.push({ pixelId: id, onChosenAdAccount: chosen.has(id), checked: false })
+        else if (verdict.taken) items.push({ pixelId: id, takenByAnotherBusiness: true })
+        else if (chosen.has(id)) items.push(pixelRow(r, PIXEL_ROW_KEYS, account))
         else items.push({ pixelId: id, onChosenAdAccount: false, checked: true })
       }
       return {
@@ -493,17 +554,21 @@ export async function datasetsView(input: DatasetsInput) {
     }
     case 'detail': {
       // SG-004 / SG-005 / AU-020 — settings, the base code (to check the shop installs it) and the audiences built on it.
-      const pixelId = await pixel()
+      const state = await ownPixelState(account, input.pixelId)
+      // Review A4 — a pixel another business in Nexus also uses: its id and the flag, nothing more read.
+      if (state.takenByAnotherBusiness) return { ...base, view: 'detail', pixel: { pixelId: state.pixelId, takenByAnotherBusiness: true }, note: TAKEN_PIXEL }
+      const pixelId = state.pixelId
       const read = await metaReadOne({ connectionId }, { operation: 'datasets.detail', path: pixelId, query: { fields: PIXEL_DETAIL_FIELDS } })
       const audiences = await part(async () => {
         const rows = await readRows(connectionId, 'datasets.audiences', `${pixelId}/audiences`, { fields: AUDIENCE_OF_PIXEL_FIELDS, ad_account: adAccountId }, maxRows, 50)
-        return rows.rows.map((r) => {
+        // Review A6 — the chosen account's own audiences only (like the custom conversions of a dataset).
+        return rows.rows.filter((r) => metaAdAccountId(r.account_id) === adAccountId).map((r) => {
           const row = audienceRow(r, adAccountId, new Set())
-          return { audienceId: row.audienceId, name: row.name, subtype: row.subtype, size: row.size, sizeNote: row.sizeNote, delivery: row.delivery, operation: row.operation, retentionDays: row.retentionDays }
+          return { audienceId: row.audienceId, name: row.name, subtype: row.subtype, size: row.size, sizeNote: row.sizeNote, delivery: row.delivery, operation: row.operation, retentionDays: 'retentionDays' in row ? row.retentionDays : null }
         })
       })
       return {
-        ...base, view: 'detail', pixel: pixelRow(read.body as Record<string, unknown>, PIXEL_DETAIL_KEYS, account, true), audiences,
+        ...base, view: 'detail', pixel: pixelRow(read.body as Record<string, unknown>, PIXEL_DETAIL_KEYS, account), audiences,
         note: 'code is the pixel base code to compare with what the shop has installed (the shop platform\'s Meta app installs its own; Nexus never writes theme code). audiences: the chosen ad account\'s audiences built on this pixel (meta-audiences reads each).',
       }
     }
@@ -521,8 +586,7 @@ export async function datasetsView(input: DatasetsInput) {
       ])
       return {
         ...base, view: 'access', pixelId, adAccounts: accounts, partnerBusinesses: { sharedAgencies, agencies }, people: users,
-        alsoOnAnotherBusinessesAdAccount: 'refused' in accounts ? null : accounts.usedByAnotherBusiness,
-        note: 'Who may use this pixel: the portfolio\'s ad accounts it is connected to (one another business in Nexus uses is its id only — then its events can mix both businesses\' sales), partner businesses it is shared with, and the people and system users assigned to it with their tasks.',
+        note: 'Who may use this pixel: the portfolio\'s ad accounts it is connected to, partner businesses it is shared with, and the people and system users assigned to it with their tasks. (A pixel also connected to an ad account another business in Nexus uses is not read here at all.)',
       }
     }
     case 'stats': {
@@ -536,7 +600,7 @@ export async function datasetsView(input: DatasetsInput) {
       return {
         ...base, view: 'stats', pixelId, aggregation, hours, ...(input.eventSource ? { eventSource: input.eventSource } : {}), ...(agentName ? { agentName } : {}),
         totals: result.totals, buckets: result.buckets, more: result.more,
-        note: 'Meta\'s counts per hour (buckets) and summed over the window (totals), read 7 days at a time. eventSource SERVER_ONLY = sent by a server (the Conversions API), WEB_ONLY = the browser pixel. Meta strips query strings from URLs.',
+        note: 'Meta\'s counts per hour (buckets) and summed over the window (totals), in windows shorter than 7 days. eventSource SERVER_ONLY = sent by a server (the Conversions API), WEB_ONLY = the browser pixel. Page addresses come without their query (Meta strips it; Nexus too).',
       }
     }
     case 'sources': {
@@ -546,7 +610,15 @@ export async function datasetsView(input: DatasetsInput) {
     case 'quality': {
       // SG-045 … SG-055 — Event Match Quality and the rest of the Dataset Quality API, per event.
       const pixelId = await pixel()
-      const rows = await datasetQuality(account, pixelId, 'web', QUALITY_WEB_FIELDS, agentName, 'datasets.quality')
+      let withoutFields: string[] = []
+      let rows: Record<string, unknown>[]
+      try {
+        rows = await datasetQuality(account, pixelId, 'web', QUALITY_WEB_FIELDS, agentName, 'datasets.quality')
+      } catch (err) {
+        if (!(err instanceof MetaReadError) || err.failure.origin !== 'meta' || (err.failure.code ?? '').split('/')[0] !== '100') throw err
+        withoutFields = [...DOCS_ONLY_QUALITY_FIELDS]
+        rows = await datasetQuality(account, pixelId, 'web', QUALITY_WEB_FIELDS_SDK, agentName, 'datasets.quality.sdkFields')
+      }
       const checks = { left: MAX_ADSET_CHECKS }
       const events = []
       for (const row of rows.slice(0, 100)) {
@@ -555,6 +627,7 @@ export async function datasetsView(input: DatasetsInput) {
       }
       return {
         ...base, view: 'quality', pixelId, ...(agentName ? { agentName } : {}), events,
+        ...(withoutFields.length ? { withoutFields, withoutFieldsNote: `Meta refused ${withoutFields.join(' and ')} (on Meta's page since September 2026, not yet in its SDK): read again without them.` } : {}),
         note: `Meta's Dataset Quality API (web events; real time, coverage a 7-day average): matchQuality.score out of 10 (Meta suggests 6 or more), its match keys and what to fix (diagnostics), additional conversions the Conversions API adds, coverage (share of browser events also sent by a server, against Meta's goal), dedupKeys, freshness, the ad spend tied to each event and the ad sets that use it (another account's ad set: its id only), value and currency problems, and how late events arrive. ${agentName ? `Only events sent with partner_agent "${agentName}".` : 'Every sender (agentName narrows it to one partner_agent; Nexus sends no event itself yet).'}`,
       }
     }
@@ -564,7 +637,7 @@ export async function datasetsView(input: DatasetsInput) {
       const rows = await datasetQuality(account, pixelId, 'offline', OFFLINE_FIELDS, agentName, 'datasets.qualityOffline')
       return {
         ...base, view: 'quality-offline', pixelId, events: rows.slice(0, 100).map((r) => pickRow(r, ['event_name', 'composite', 'match_key', 'frequency', 'freshness'])),
-        note: 'Meta\'s data quality score for offline events (scores out of 10 over 28 days; 8.5 or more opens omnichannel ads; Meta calls it beta). CRM (conversion leads) quality: Meta\'s page for it does not open, so Nexus does not ask for it.',
+        note: 'Meta\'s data quality score for offline events (scores out of 10 over 28 days; 8.5 or more opens omnichannel ads; Meta calls it beta). CRM (conversion leads) quality: not read — Meta\'s page for it (listed in its index) answers an error page, and neither the SDK nor any other page names its block or fields, so Nexus has nothing documented to ask.',
       }
     }
     case 'quality-legacy': {
@@ -577,8 +650,11 @@ export async function datasetsView(input: DatasetsInput) {
       return { ...base, view: 'quality-legacy', pixelId, setupQuality: setup, integrationQuality: integration, note: 'The older quality edges ("based on previous events sent by the calling Partner"); Meta\'s Dataset Quality API (view quality) replaced them.' }
     }
     case 'diagnostics': {
-      const pixelId = await pixel()
       const check = (input.check ?? 'issues') as (typeof DIAGNOSTIC_CHECKS)[number]
+      // Review A2 — a catalog id cannot be checked to be the business's yet (catalog ownership is step 12, decision D7):
+      // the microdata check waits for it, before any call.
+      if (check === 'microdata') refuse('check microdata compares the pixel with a catalog, and Nexus cannot check yet that a catalog is this business\'s: it comes with step 12\'s catalog ownership check (meta-catalogs).')
+      const pixelId = await pixel()
       const spec = DIAGNOSTIC_FIELDS[check] ?? refuse(`check is one of ${DIAGNOSTIC_CHECKS.join(', ')}.`)
       const query: Record<string, MetaQueryValue> = { fields: spec.fields }
       if (check === 'issues') query.ad_account_id = adAccountId
@@ -602,18 +678,13 @@ export async function datasetsView(input: DatasetsInput) {
         query.start_time = window.start
         query.end_time = window.end
       }
-      if (check === 'microdata') query.catalog_id = input.catalogId ? (metaObjectId(input.catalogId) ?? refuse('catalogId is digits.')) : refuse('check microdata compares the pixel with a catalog: name it (catalogId).')
       if (check === 'collaborative-ads' && input.actionSource) query.action_source = input.actionSource
       const keys = spec.fields.split(',')
       const read = await readRows(connectionId, `datasets.diagnostics.${check}`, `${pixelId}/${spec.edge}`, query, maxRows)
       return {
         ...base, view: 'diagnostics', check, pixelId,
-        items: read.rows.map((r) => {
-          const row = pickRow(r, keys)
-          for (const key of URL_KEYS) if (typeof r[key] === 'string') row[key === 'url' ? 'url' : 'placedUrl'] = stripQuery(r[key])
-          if (Array.isArray(r.sample_urls)) row.sampleUrls = r.sample_urls.map(stripQuery)
-          return row
-        }),
+        // Review A5 — every web address at any depth without its query (a buyer's data can sit in one).
+        items: read.rows.map((r) => stripUrls(pickRow(r, keys))),
         more: read.more,
         note: DIAGNOSTIC_NOTES[check],
       }
@@ -648,9 +719,9 @@ export async function datasetsView(input: DatasetsInput) {
       const [rules, extractors] = await Promise.all([
         part(async () => (await readRows(connectionId, 'datasets.eventRules', `${pixelId}/event_rules`, { fields: EVENT_RULE_FIELDS }, maxRows)).rows.map((r) => {
           const row = pickRow(r, EVENT_RULE_FIELDS.split(',').filter((k) => k !== 'sample_urls'))
-          return { ...row, sampleUrls: Array.isArray(r.sample_urls) ? r.sample_urls.slice(0, 20).map(stripQuery) : [] }
+          return stripUrls({ ...row, sampleUrls: Array.isArray(r.sample_urls) ? r.sample_urls.slice(0, 20) : [] })
         })),
-        part(async () => (await readRows(connectionId, 'datasets.extractors', `${pixelId}/extractors`, { fields: EXTRACTOR_FIELDS, ...(domain ? { current_domain: domain } : {}) }, maxRows)).rows.map((r) => pickRow(r, EXTRACTOR_FIELDS.split(',')))),
+        part(async () => (await readRows(connectionId, 'datasets.extractors', `${pixelId}/extractors`, { fields: EXTRACTOR_FIELDS, ...(domain ? { current_domain: domain } : {}) }, maxRows)).rows.map((r) => stripUrls(pickRow(r, EXTRACTOR_FIELDS.split(','))))),
       ])
       return {
         ...base, view: 'event-setup', pixelId, eventRules: rules, parameterExtractors: extractors,
@@ -697,7 +768,7 @@ const DIAGNOSTIC_NOTES: Record<(typeof DIAGNOSTIC_CHECKS)[number], string> = {
   'raw-fires': 'Recent raw fires of one event: source (event_src), detection method, device, page address (without its query) and which customer-information KEYS were sent (never their values; Meta\'s raw event body is never read).',
   'delivery-recommendations': 'Meta\'s suggested optimisation goal per event for this pixel.',
   'item-prices': 'How many events carried an item price, per day (catalog matching).',
-  microdata: 'The page microdata the pixel saw compared with the catalog named (allowed and suggested domains, errors).',
+  microdata: 'Waits for step 12\'s catalog ownership check.',
   'collaborative-ads': 'Collaborative ads: counts per event and diagnostic for recent days (Nexus runs no collaborative ads).',
 }
 
@@ -715,8 +786,16 @@ async function customConversionsView(account: MetaChosenAccount, input: Datasets
   const RULE_NOTE = 'A custom conversion\'s rule cannot change after it is made (only its name, description and default value can): a different rule is a new custom conversion. isUnavailable: Meta flagged it (an appeal is Meta\'s screens only).'
   const own = async () => {
     const id = metaObjectId(input.customConversionId ?? '') ?? refuse('Name the custom conversion (customConversionId from scope account).')
-    const check = await metaReadOne({ connectionId }, { operation: 'datasets.conversionOwner', path: id, query: { fields: 'account_id' } })
-    if (metaAdAccountId((check.body as { account_id?: unknown }).account_id) !== adAccountId) refuse('That custom conversion is not the chosen ad account\'s, so it is not read.')
+    // Review A7 — `custom_event_type` too: only a custom conversion has one, so another object of the account (a campaign,
+    // an ad set) is never taken for one (Meta refuses the field on another node type).
+    let owner: string | null = null
+    try {
+      const check = await metaReadOne({ connectionId }, { operation: 'datasets.conversionOwner', path: id, query: { fields: 'account_id,custom_event_type' } })
+      owner = metaAdAccountId((check.body as { account_id?: unknown }).account_id)
+    } catch (err) {
+      if (!(err instanceof MetaReadError) || err.failure.authLost || err.failure.throttled || err.failure.origin !== 'meta') throw err
+    }
+    if (owner !== adAccountId) refuse('That is not a custom conversion of the chosen ad account, so it is not read.')
     return id
   }
   switch (scope) {
@@ -772,7 +851,8 @@ async function customConversionsView(account: MetaChosenAccount, input: Datasets
       for (const window of statsWindows(hours, now)) {
         const read = await readRows(connectionId, 'datasets.conversionStats', `${id}/stats`, { aggregation, start_time: window.start, end_time: window.end }, 400)
         more = more || read.more
-        results.push(...read.rows.map((r) => plain(r, 1)))
+        // Review A5 — aggregation url (and any other value): web addresses without their query.
+        results.push(...read.rows.map((r) => stripUrls(plain(r, 1))))
       }
       // Amount aggregations are money (US dollars, Meta's own conversion): a restricted key.
       const money = aggregation === 'usd_amount' || aggregation === 'unmatched_usd_amount'

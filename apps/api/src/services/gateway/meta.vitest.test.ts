@@ -303,6 +303,9 @@ describe('read only by construction', () => {
     // Audiences: the account's list, one audience as the chosen account sees it, its sessions, value data, recipients.
     expect(ok(`${BASE}/act_1234567890/customaudiences?fields=id,name,delete_time&filtering=[{"field":"delete_time","operator":"GREATER_THAN","value":0}]&pixel_id=120000000000501&limit=50`)).toBeNull()
     expect(ok(`${BASE}/120000000000401?fields=id,audience_labels&ad_account_id=1234567890&acting_account_id=1234567890`)).toBeNull()
+    // Review A8 — only on that read (it asks the labels), never on another object read.
+    expect(ok(`${BASE}/120000000000401?fields=id,name&acting_account_id=1234567890`)).toMatch(/"acting_account_id" is not one/)
+    expect(ok(`${BASE}/120000000000201?fields=id,status&ad_account_id=1234567890`)).toMatch(/"ad_account_id" is not one/)
     expect(ok(`${BASE}/120000000000401/sessions?fields=session_id,num_received&session_id=7`)).toBeNull()
     expect(ok(`${BASE}/120000000000401/health?fields=health&calculated_date=2026-10-01&processed_date=2026-10-02`)).toBeNull()
     expect(ok(`${BASE}/120000000000401/adaccounts?fields=id&permissions=targeting`)).toBeNull()
@@ -326,7 +329,7 @@ describe('read only by construction', () => {
     expect(ok(`${BASE}/120000000000501/recent_events?fields=count&event=Purchase&lookback_window=86400`)).toBeNull()
     expect(ok(`${BASE}/120000000000501/real_time_event_log?fields=event&start_time=1&end_time=2`)).toBeNull()
     expect(ok(`${BASE}/120000000000501/raw_fires?fields=event&event=Purchase&filter_type=host&filter=shop.example`)).toBeNull()
-    expect(ok(`${BASE}/120000000000501/microdata_stats?fields=has_valid_events&catalog_id=1`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/microdata_stats?fields=has_valid_events&catalog_id=1`)).toMatch(/"catalog_id" is not one/)
     expect(ok(`${BASE}/120000000000501/cpas_events_debugging_info?fields=counts&action_source=WEBSITE`)).toBeNull()
     expect(ok(`${BASE}/120000000000501/extractors?fields=id&current_domain=https://shop.example`)).toBeNull()
     expect(ok(`${BASE}/120000000000501/offline_event_uploads?fields=id&start_time=1&end_time=2&sort_by=CREATION_TIME&order=DESCENDING&upload_tag=t`)).toBeNull()

@@ -302,7 +302,6 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/recent_events$/, keys: new Set(['lookback_window']) },
   { route: /^\d+\/real_time_event_log$/, keys: new Set(['start_time', 'end_time']) },
   { route: /^\d+\/raw_fires$/, keys: new Set(['filter_type', 'filter']) },
-  { route: /^\d+\/microdata_stats$/, keys: new Set(['catalog_id']) },
   { route: /^\d+\/cpas_events_debugging_info$/, keys: new Set(['action_source']) },
   { route: /^\d+\/extractors$/, keys: new Set(['current_domain']) },
   { route: /^\d+\/offline_event_uploads$/, keys: new Set(['start_time', 'end_time', 'sort_by', 'order', 'upload_tag']) },

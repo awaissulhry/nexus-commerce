@@ -13,12 +13,20 @@ const h = vi.hoisted(() => ({
   calls: [] as Array<{ operation: string; path: string; query?: Record<string, unknown> }>,
   answer: null as null | ((req: { operation: string; path: string; query?: Record<string, unknown> }) => unknown),
   rowsFor: null as null | ((req: { operation: string; path: string; query?: Record<string, unknown> }) => unknown),
+  /** Pages of a list read page by page (scanRows): the page for a request's `after` cursor. */
+  pageFor: null as null | ((req: { operation: string; path: string; query?: Record<string, unknown> }) => unknown),
   taken: [] as Array<{ id: string }>,
 }))
 vi.mock('../../meta/meta-accounts.service.js', () => ({ listMetaConnections: vi.fn(async () => h.connections) }))
 vi.mock('../../marketing/meta-ads/read-client.js', async () => ({
   metaReadOne: vi.fn(async (_t: unknown, req: Req) => {
     h.calls.push(req)
+    // A filtered audience list is read page by page (scanRows): one page of rowsFor, unless pageFor pages it.
+    if (req.path.endsWith('/customaudiences')) {
+      const page = h.pageFor?.(req) ?? { data: h.rowsFor?.(req) ?? [] }
+      if (page instanceof Error || (page as { data?: unknown }).data instanceof Error) throw page instanceof Error ? page : (page as { data: Error }).data
+      return { body: page, calls: 1 }
+    }
     const body = h.answer?.(req)
     if (body instanceof Error) throw body
     return { body: body ?? {}, calls: 1 }
@@ -45,6 +53,7 @@ import { AUDIENCE_VIEWS, audienceSize } from '../../marketing/meta-ads/live-audi
 import { MetaReadError, type MetaFailure } from '../../marketing/meta-ads/errors.js'
 import { metaUrl } from '../../gateway/meta.js'
 import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
+import { graphParamAllowed, type GraphNode } from '../../marketing/meta-ads/graph-allow.js'
 
 const tool = META_ADS_AUDIENCES_TOOLS[0]
 const ctx = { can: () => true, via: 'claude' as const }
@@ -73,7 +82,7 @@ const audience = (id: string, extra: Record<string, unknown> = {}) => ({
 })
 
 beforeEach(() => {
-  h.connections = [CHOSEN]; h.calls.length = 0; h.taken = []
+  h.connections = [CHOSEN]; h.calls.length = 0; h.taken = []; h.pageFor = null
   h.answer = (req) => (req.operation === 'audiences.ownerCheck' ? { account_id: req.path === AUD ? OWN : OTHER_ACCOUNT, subtype: 'CUSTOM' } : { id: req.path, ...audience(req.path) })
   h.rowsFor = (req) => {
     if (req.path === `act_${OWN}/customaudiences`) return [audience(AUD), audience(SHARED, { account_id: OTHER_ACCOUNT })]
@@ -150,6 +159,19 @@ describe('sizes are Meta\'s ranges', () => {
     await run({ view: 'expiring' })
     expect(h.calls[0].query?.filtering).toEqual([{ field: 'delete_time', operator: 'GREATER_THAN', value: 0 }])
   })
+  it('a filtered view reads on page by page until it has its matches, and says when the page cap stopped it', async () => {
+    h.pageFor = (req) => (!req.query?.after
+      ? { data: [audience(AUD)], paging: { cursors: { after: 'p2' }, next: 'https://graph.facebook.com/next' } }
+      : { data: [audience('120000000000403', { subtype: 'LOOKALIKE' })] })
+    const found = data(await run({ view: 'lookalikes' }))
+    expect(found.items.map((r: any) => r.audienceId)).toEqual(['120000000000403'])
+    expect(found).not.toHaveProperty('stoppedAtPageCap')
+    expect(h.calls.filter((c) => c.path === `act_${OWN}/customaudiences`).map((c) => c.query?.after ?? null)).toEqual([null, 'p2'])
+    h.pageFor = () => ({ data: [audience(AUD)], paging: { cursors: { after: 'more' }, next: 'https://graph.facebook.com/next' } })
+    const capped = data(await run({ view: 'lookalikes' }))
+    expect(capped.items).toEqual([])
+    expect(capped.stoppedAtPageCap).toMatch(/stopped there: more may match/)
+  })
   it('Meta\'s "reduce the amount of data" (error 1) is asked again with pages of 20', async () => {
     h.rowsFor = (req) => (req.query?.limit === 50 ? metaError('1/99') : [audience(AUD)])
     const res = await run({ view: 'list' })
@@ -159,13 +181,33 @@ describe('sizes are Meta\'s ranges', () => {
 })
 
 describe('only the chosen account\'s audiences and pixels', () => {
-  it('its own audience is read plainly; a shared-in one as the chosen account sees it, with its own labels', async () => {
+  it('its own audience is read in full (capabilities: fields=capabilities); a shared-in one only as far as the chosen account needs', async () => {
     await run({ view: 'detail', audienceId: AUD })
     expect(h.calls.find((c) => c.operation === 'audiences.detail')?.query).not.toHaveProperty('ad_account_id')
+    expect(h.calls.find((c) => c.operation === 'audiences.capabilities')?.query).toMatchObject({ fields: 'capabilities' })
     h.calls.length = 0
+    h.answer = (req) => (req.operation === 'audiences.ownerCheck' ? { account_id: OTHER_ACCOUNT, subtype: 'LOOKALIKE' }
+      : { ...audience(SHARED, { account_id: OTHER_ACCOUNT, subtype: 'LOOKALIKE' }), rule: '{"url":"x"}', lookalike_spec: { origin: [{ id: '1' }] }, description: 'theirs', pixel_id: '9', opt_out_link: 'https://x', audience_labels: ['HIGH_VALUE_CUSTOMERS'] })
     const res = data(await run({ view: 'detail', audienceId: SHARED }))
-    expect(h.calls.find((c) => c.operation === 'audiences.detail')?.query).toMatchObject({ ad_account_id: OWN, acting_account_id: OWN })
-    expect(res.audience).toMatchObject({ labelsOf: 'the chosen ad account (acting_account_id)' })
+    const detail = h.calls.find((c) => c.operation === 'audiences.detail')!
+    expect(detail.query).toMatchObject({ ad_account_id: OWN, acting_account_id: OWN })
+    expect(String(detail.query?.fields)).not.toMatch(/rule|lookalike|opt_out|pixel_id|data_source|customer_file_source|description/)
+    expect(Object.keys(res.audience).sort()).toEqual(['audienceId', 'delivery', 'expiring', 'flagged', 'labels', 'labelsOf', 'name', 'operation', 'ownerAdAccount', 'sharedIn', 'size', 'sizeNote', 'subtype'])
+    expect(res.audience).toMatchObject({ labels: ['HIGH_VALUE_CUSTOMERS'], labelsOf: 'the chosen ad account (acting_account_id)' })
+    expect(h.calls.some((c) => c.operation === 'audiences.capabilities')).toBe(false)
+  })
+  it.each(['sessions', 'health', 'sharing'])('view %s of a shared-in audience is refused before any read of it', async (view) => {
+    const res = await run({ view, audienceId: SHARED })
+    expect(res.error).toMatch(/belong to its owner/)
+    expect(h.calls.some((c) => c.path.startsWith(`${SHARED}/`))).toBe(false)
+  })
+  it('a shared-in row of the list keeps only its name, type, size and status', async () => {
+    h.rowsFor = (req) => (req.path === `act_${OWN}/customaudiences` ? [audience(SHARED, { account_id: OTHER_ACCOUNT, description: 'theirs', pixel_id: '9', data_source: { type: 'X' }, customer_file_source: 'USER_PROVIDED_ONLY' })] : [])
+    const row = data(await run({ view: 'list' })).items[0]
+    expect(row).not.toHaveProperty('description')
+    expect(row).not.toHaveProperty('pixelId')
+    expect(row).not.toHaveProperty('dataSource')
+    expect(row).toMatchObject({ audienceId: SHARED, sharedIn: true, size: { lowerBound: 1000, upperBound: 1200 } })
   })
   it('an audience neither the account\'s nor shared with it is refused before it is read', async () => {
     const res = await run({ view: 'detail', audienceId: '120000000000499' })
@@ -175,6 +217,15 @@ describe('only the chosen account\'s audiences and pixels', () => {
   it('a campaign id of the account is not taken for an audience (Meta refuses `subtype` on it)', async () => {
     h.answer = (req) => (req.operation === 'audiences.ownerCheck' ? metaError('100') : {})
     expect((await run({ view: 'ads-using', audienceId: '120000000000101' })).error).toMatch(/not the chosen ad account's/)
+  })
+  it('review A8 — the recipient keys go only on the shared-in audience read; meta-ads-graph-read never sends them', () => {
+    const url = (fields: string) => metaUrl(SHARED, { fields, ad_account_id: OWN, acting_account_id: OWN })
+    expect(metaReadOnlyProblem({ method: 'GET', url: url('id,name,audience_labels'), kind: 'read' })).toBeNull()
+    expect(metaReadOnlyProblem({ method: 'GET', url: url('id,name,status'), kind: 'read' })).toMatch(/"ad_account_id" is not one/)
+    for (const node of [null, 'Campaign', 'AdSet', 'Ad', 'AdCreative', 'AdsInsights', 'AdAccount'] as Array<GraphNode | null>) {
+      expect(graphParamAllowed(node, 'ad_account_id')).toBe(false)
+      expect(graphParamAllowed(node, 'acting_account_id')).toBe(false)
+    }
   })
   it('a pixel that is not on the chosen ad account is refused', async () => {
     expect((await run({ view: 'list', pixelId: '120000000000599' })).error).toMatch(/not on the ad account this business chose/)
@@ -199,7 +250,7 @@ describe('what an audience touches', () => {
     ] : [])
     const res = data(await run({ view: 'ads-using', audienceId: AUD }))
     expect(res.adSets).toEqual([{ adSetId: '20', campaignId: '10', ads: 2, activeAds: 1, adIds: ['1', '2'] }])
-    expect(res.otherAccounts).toEqual([{ adAccountId: OTHER_ACCOUNT, ads: 1, takenByAnotherBusiness: true }])
+    expect(res.otherAccounts).toEqual([{ adAccountId: OTHER_ACCOUNT, takenByAnotherBusiness: true }])
     expect(JSON.stringify(res)).not.toMatch(/Their ad/)
   })
   it('sharing: a recipient account another business in Nexus uses is its id and the flag only', async () => {
@@ -227,6 +278,25 @@ describe('what an audience touches', () => {
     const res = data(await run({ view: 'terms' }))
     expect(res).toMatchObject({ customAudienceTermsSigned: true, existingCustomerAudienceIds: [AUD], personTermsAccepted: { refused: 'Meta refused the read (100).' } })
     expect(res.signLink).toBe(`https://business.facebook.com/ads/manage/customaudiences/tos/?act=${OWN}`)
+  })
+  it('business-sharing: another account\'s audience is its id (and the flag); a received request offers audience ids only', async () => {
+    h.taken = [{ id: OTHER_ACCOUNT }]
+    h.rowsFor = (req) => {
+      if (req.path === '9876543210/shared_audience_permissions') {
+        return [
+          { audience: { id: AUD, name: 'Ours', account_id: OWN }, share_account_id: '4444444444', share_account_name: 'Agency X ads' },
+          { audience: { id: SHARED, name: 'Theirs', account_id: OTHER_ACCOUNT }, share_account_id: '4444444444' },
+          { audience: { id: '120000000000405', name: 'Elsewhere', account_id: '3333333333' }, share_account_id: '4444444444' },
+        ]
+      }
+      if (req.path === '9876543210/received_audience_sharing_requests') return [{ id: '77', request_status: 'PENDING', custom_audiences: [{ id: '120000000000406', name: 'Offered' }] }]
+      return []
+    }
+    const res = data(await run({ view: 'business-sharing' }))
+    expect(res.permissionsShared.map((r: any) => r.audience)).toEqual([{ audienceId: AUD, name: 'Ours' }, { audienceId: SHARED, takenByAnotherBusiness: true }, { audienceId: '120000000000405' }])
+    expect(res.requestsReceived[0].customAudiences).toEqual([{ audienceId: '120000000000406' }])
+    expect(JSON.stringify(res)).not.toMatch(/Theirs|Elsewhere|Offered/)
+    expect(h.calls.find((c) => c.path === '9876543210/shared_audience_permissions')?.query?.fields).toBe('audience{id,name,account_id},share_account_id,share_account_name')
   })
   it('business-sharing needs the chosen account\'s business portfolio', async () => {
     h.connections = [{ ...CHOSEN, adAccount: { ...CHOSEN.adAccount, businessId: null } }]

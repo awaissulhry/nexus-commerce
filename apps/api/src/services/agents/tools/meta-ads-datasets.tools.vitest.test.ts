@@ -43,7 +43,7 @@ vi.mock('../../../db.js', () => ({
 }))
 
 import { META_ADS_DATASETS_TOOLS } from './meta-ads-datasets.tools.js'
-import { CONVERSION_SCOPES, currencyCents, DATASET_VIEWS, DIAGNOSTIC_CHECKS, sendersVerdict, statsWindows } from '../../marketing/meta-ads/live-datasets.js'
+import { CONVERSION_SCOPES, currencyCents, DATASET_VIEWS, DIAGNOSTIC_CHECKS, QUALITY_WEB_FIELDS_SDK, sendersVerdict, statsWindows, stripUrls } from '../../marketing/meta-ads/live-datasets.js'
 import { MetaReadError, type MetaFailure } from '../../marketing/meta-ads/errors.js'
 import { metaUrl } from '../../gateway/meta.js'
 import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
@@ -134,10 +134,15 @@ describe('every view, check and scope — only what the real gateway lets throug
     ['raw-fires', { event: 'Purchase', filterType: 'host', filter: 'shop.example' }, 'raw_fires'],
     ['delivery-recommendations', {}, 'pixel_delivery_recommendations'],
     ['item-prices', {}, 'item_price_stats'],
-    ['microdata', { catalogId: '120000000000801' }, 'microdata_stats'],
     ['collaborative-ads', { actionSource: 'website' }, 'cpas_events_debugging_info'],
   ]
-  it('covers every diagnostics check', () => { expect(CHECKS.map(([c]) => c).sort()).toEqual([...DIAGNOSTIC_CHECKS].sort()) })
+  it('covers every diagnostics check (microdata waits for step 12)', () => { expect([...CHECKS.map(([c]) => c), 'microdata'].sort()).toEqual([...DIAGNOSTIC_CHECKS].sort()) })
+  it('diagnostics microdata is refused in words before any call (a catalog is checked to be the business\'s only from step 12)', async () => {
+    expect((await run({ view: 'diagnostics', check: 'microdata' })).error).toMatch(/step 12's catalog ownership check/)
+    expect(h.calls).toHaveLength(0)
+    expect(() => tool.input.parse({ view: 'diagnostics', check: 'microdata', catalogId: '1' })).not.toThrow()
+    expect(tool.input.parse({ view: 'diagnostics', check: 'microdata', catalogId: '1' })).not.toHaveProperty('catalogId')
+  })
   it.each(CHECKS)('diagnostics %s', async (check, args, edge) => {
     const res = await run({ view: 'diagnostics', check, ...args })
     expect(res.ok, String(res.error)).toBe(true)
@@ -187,24 +192,70 @@ describe('only the chosen ad account\'s pixels', () => {
     h.taken = []
     expect(data(await run({ view: 'portfolio' })).items[1]).toEqual({ pixelId: OTHER_PIXEL, onChosenAdAccount: false, checked: true })
   })
-  it('access: another business\'s ad account on the pixel is its id only, and the pixel says it mixes both', async () => {
-    h.taken = [{ id: OTHER_ACCOUNT }]
+  it('access: the pixel\'s ad accounts, people and partners, read with the portfolio', async () => {
     h.rowsFor = (req) => {
       if (req.path === `act_${OWN}/adspixels`) return pixels
-      if (req.path === `${PIXEL}/shared_accounts`) return [{ account_id: OWN, name: 'Shop A ads' }, { account_id: OTHER_ACCOUNT, name: 'Shop B ads' }]
+      if (req.path === `${PIXEL}/shared_accounts`) return [{ account_id: OWN, name: 'Shop A ads' }]
       return []
     }
     const res = data(await run({ view: 'access' }))
-    expect(res.adAccounts.items).toEqual([{ adAccountId: OWN, name: 'Shop A ads', chosenHere: true, takenByAnotherBusiness: false }, { adAccountId: OTHER_ACCOUNT, takenByAnotherBusiness: true }])
-    expect(res.alsoOnAnotherBusinessesAdAccount).toBe(true)
+    expect(res.adAccounts.items).toEqual([{ adAccountId: OWN, name: 'Shop A ads', chosenHere: true, takenByAnotherBusiness: false }])
     expect(h.calls.find((c) => c.path === `${PIXEL}/shared_accounts`)?.query?.business).toBe(BIZ)
   })
 })
 
+describe('a pixel another business in Nexus uses is never read (review A4)', () => {
+  const takenPixel = () => {
+    h.taken = [{ id: OTHER_ACCOUNT }]
+    h.rowsFor = (req) => {
+      if (req.path === `act_${OWN}/adspixels`) return [{ id: PIXEL, name: 'Shared pixel' }]
+      if (req.path === `${PIXEL}/shared_accounts`) return [{ account_id: OWN }, { account_id: OTHER_ACCOUNT, name: 'Shop B ads' }]
+      return []
+    }
+  }
+  it.each(['access', 'stats', 'sources', 'quality', 'diagnostics', 'gateway', 'event-setup', 'quality-offline'])('view %s refuses it before reading it', async (view) => {
+    takenPixel()
+    expect((await run({ view })).error).toMatch(/another business in Nexus uses/)
+    expect(h.calls.map((c) => c.path).filter((p) => p.startsWith(PIXEL) && !p.endsWith('/shared_accounts'))).toEqual([])
+    expect(h.calls.some((c) => c.path === 'dataset_quality')).toBe(false)
+  })
+  it('list and detail show it as its id and the flag only', async () => {
+    takenPixel()
+    expect(data(await run({ view: 'list' })).items).toEqual([{ pixelId: PIXEL, takenByAnotherBusiness: true }])
+    h.calls.length = 0
+    const res = data(await run({ view: 'detail' }))
+    expect(res.pixel).toEqual({ pixelId: PIXEL, takenByAnotherBusiness: true })
+    expect(h.calls.some((c) => c.operation === 'datasets.detail')).toBe(false)
+    expect(JSON.stringify(res)).not.toMatch(/Shared pixel|Shop B/)
+  })
+  it('never "free" without the check: no portfolio, or a refused check, refuses the views and leaves list rows at their id', async () => {
+    h.connections = [{ ...CHOSEN, adAccount: { ...CHOSEN.adAccount, businessId: null } }]
+    expect((await run({ view: 'sources' })).error).toMatch(/could not check whether another business in Nexus also uses this pixel/)
+    expect(data(await run({ view: 'list' })).items).toEqual([expect.objectContaining({ pixelId: PIXEL, checked: false })])
+    h.connections = [CHOSEN]
+    h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels : req.path === `${PIXEL}/shared_accounts` ? metaError('200') : [])
+    expect((await run({ view: 'quality' })).error).toMatch(/could not check/)
+    const row = data(await run({ view: 'list' })).items[0]
+    expect(row).not.toHaveProperty('name')
+    expect(row).not.toHaveProperty('takenByAnotherBusiness')
+  })
+  it('detail lists only the chosen account\'s own audiences built on the pixel', async () => {
+    h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels : req.path === `${PIXEL}/audiences` ? [
+      { id: '120000000000401', account_id: OWN, name: 'Ours', approximate_count_lower_bound: 1, approximate_count_upper_bound: 2, retention_days: 30 },
+      { id: '120000000000402', account_id: OTHER_ACCOUNT, name: 'Theirs' },
+    ] : [])
+    const res = data(await run({ view: 'detail' }))
+    expect(res.audiences).toEqual([expect.objectContaining({ audienceId: '120000000000401', name: 'Ours', retentionDays: 30 })])
+    expect(JSON.stringify(res)).not.toMatch(/Theirs/)
+  })
+})
+
 describe('D2 — who sends the events (view sources)', () => {
-  const setup = (input: { browser?: Record<string, number> | Error; server?: Record<string, number> | Error; dedup?: unknown[]; partner?: boolean }) => {
+  type Dqa = { coverage?: number | null; goal?: number | null; score?: number | null; dedup?: unknown[] } | Error | 'none'
+  const setup = (input: { browser?: Record<string, number> | Error; server?: Record<string, number> | Error; dqa?: Dqa; partner?: Record<string, number> }) => {
     h.rowsFor = (req) => {
       if (req.path === `act_${OWN}/adspixels`) return pixels
+      if (req.path === `${PIXEL}/stats` && req.query?.agent) return stats(input.partner ?? {})
       if (req.path === `${PIXEL}/stats` && req.query?.event_source === 'WEB_ONLY') return input.browser instanceof Error ? input.browser : stats(input.browser ?? {})
       if (req.path === `${PIXEL}/stats` && req.query?.event_source === 'SERVER_ONLY') return input.server instanceof Error ? input.server : stats(input.server ?? {})
       if (req.path === `${PIXEL}/stats`) return [{ aggregation: 'event_source', data: [{ value: 'server', count: 3 }] }]
@@ -212,71 +263,90 @@ describe('D2 — who sends the events (view sources)', () => {
     }
     h.answer = (req) => {
       if (req.path === 'dataset_quality') {
-        if (req.query?.agent_name) return { web: input.partner ? [{ event_name: 'Purchase', event_match_quality: { composite_score: 7 } }] : [] }
-        return { web: [{ event_name: 'Purchase', event_coverage: { percentage: 80, goal_percentage: 75 }, event_match_quality: { composite_score: 6.4 }, dedupe_key_feedback: input.dedup ?? [] }] }
+        const d = input.dqa ?? {}
+        if (d instanceof Error) return d
+        if (d === 'none') return { web: [] }
+        return { web: [{
+          event_name: 'Purchase',
+          ...(d.coverage === null ? {} : { event_coverage: { percentage: d.coverage ?? 80, goal_percentage: d.goal === undefined ? 75 : d.goal } }),
+          ...(d.score === null ? {} : { event_match_quality: { composite_score: d.score ?? 6.4 } }),
+          dedupe_key_feedback: d.dedup ?? [],
+        }] }
       }
       return { last_upload_app: 'Shop app', last_upload_app_changed_time: 1760000000 }
     }
   }
-  const eventId = (overall: number) => ({ dedupe_key: 'event_id', browser_events_with_dedupe_key: { percentage: 100 }, server_events_with_dedupe_key: { percentage: 98 }, overall_browser_coverage_from_dedupe_key: { percentage: overall } })
+  const key = (name: string, overall: number, server = 98) => ({ dedupe_key: name, browser_events_with_dedupe_key: { percentage: 100 }, server_events_with_dedupe_key: { percentage: server }, overall_browser_coverage_from_dedupe_key: { percentage: overall } })
+  const noServerSide: Dqa = { coverage: 0, score: null, dedup: [key('event_id', 0, 0)] }
 
-  it('browser AND server, deduplicated → yes, no gap (upload-meta-events stays off)', async () => {
-    setup({ browser: { Purchase: 10, PageView: 900 }, server: { Purchase: 9 }, dedup: [eventId(88)] })
+  it('browser AND server, covered to Meta\'s goal → yes, no gap (upload-meta-events stays off)', async () => {
+    setup({ browser: { Purchase: 10, PageView: 900 }, server: { Purchase: 9 }, dqa: { coverage: 80, goal: 75, dedup: [key('event_id', 70), key('external_id', 12)] } })
     const res = data(await run({ view: 'sources' }))
-    expect(res.answer).toMatchObject({ browserAndServer: 'yes', browser: 'yes', server: 'yes', deduplicated: 'yes', gap: 'none', eventIdOnBrowserPercent: 100, eventIdOnServerPercent: 98, serverCoveragePercent: 80 })
+    expect(res.answer).toMatchObject({ browserAndServer: 'yes', browser: 'yes', server: 'yes', serverByStats: 'yes', serverByQuality: 'yes', deduplicated: 'yes', gap: 'none', coveragePercent: 82, dedupCoveragePercent: 82, eventCoveragePercent: 80, coverageGoalPercent: 75, eventIdOnServerPercent: 98 })
     expect(res.answer.sentence).toMatch(/^Does Purchase come from the browser AND a server\? yes/)
     expect(res.counts.browser).toMatchObject({ Purchase: 10 })
-    expect(res.counts.server).toMatchObject({ Purchase: 9 })
     expect(res.integrations.lastUploadApp).toMatchObject({ app: 'Shop app' })
-    expect(res.metaDoesNotGive.length).toBeGreaterThan(2)
-    // The two counts are Meta's own browser / server split, one request per 7 days.
+    expect(res.metaDoesNotGive.length).toBeGreaterThan(3)
     const sources = h.calls.filter((c) => c.path === `${PIXEL}/stats`).map((c) => c.query?.event_source ?? c.query?.aggregation)
     expect(sources.sort()).toEqual(['SERVER_ONLY', 'WEB_ONLY', 'event_source'])
   })
-  it('browser only → no, the gap is the server copy; server only → no, the gap is the browser pixel', async () => {
-    setup({ browser: { Purchase: 10 }, server: {} })
-    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ browserAndServer: 'no', browser: 'yes', server: 'no', gap: 'server' })
+  it('Meta\'s own example (34.1% coverage, goal 75%) is a coverage gap, never "no gap"', async () => {
+    setup({ browser: { Purchase: 10 }, server: { Purchase: 4 }, dqa: { coverage: 34.1, goal: 75, dedup: [key('event_id', 14.8), key('external_id', 15.96)] } })
+    const answer = data(await run({ view: 'sources' })).answer
+    expect(answer).toMatchObject({ browserAndServer: 'yes', gap: 'coverage', coveragePercent: 34.1 })
+    expect(answer.gapWords).toMatch(/covers about 34.1% of browser Purchase events; Meta's goal is 75%/)
+  })
+  it('server "no" only when the stats AND the Dataset Quality API show no server side; they disagree → unknown', async () => {
+    setup({ browser: { Purchase: 10 }, server: {}, dqa: noServerSide })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ browserAndServer: 'no', server: 'no', gap: 'server' })
+    setup({ browser: { Purchase: 10 }, server: {}, dqa: 'none' })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ server: 'no', gap: 'server' })
+    // The stats say no server event, but Meta's quality API scores server events: unknown, never a false "missing".
+    setup({ browser: { Purchase: 10 }, server: {}, dqa: { coverage: 0, score: 6.1, dedup: [] } })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ serverByStats: 'no', serverByQuality: 'yes', server: 'unknown', browserAndServer: 'unknown', gap: 'unknown' })
+    // The stats count server events, but the quality API shows none: unknown, never a false "covered".
+    setup({ browser: { Purchase: 10 }, server: { Purchase: 5 }, dqa: noServerSide })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ serverByStats: 'yes', serverByQuality: 'no', server: 'unknown', gap: 'unknown' })
+    // The quality API refused: the server side stays unknown either way.
+    setup({ browser: { Purchase: 10 }, server: { Purchase: 5 }, dqa: metaError('100') })
+    const refused = data(await run({ view: 'sources' }))
+    expect(refused.answer).toMatchObject({ server: 'unknown', gap: 'unknown' })
+    expect(refused.deduplication.refused).toBe('Meta refused the read (100).')
+  })
+  it('server only → no, the gap is the browser pixel; both but nothing deduplicated → dedup; nothing at all → unknown', async () => {
     setup({ browser: {}, server: { Purchase: 4 } })
     expect(data(await run({ view: 'sources' })).answer).toMatchObject({ browserAndServer: 'no', gap: 'browser' })
-  })
-  it('both but never deduplicated → the gap is deduplication; no event at all, or a refused count → unknown', async () => {
-    setup({ browser: { Purchase: 10 }, server: { Purchase: 10 }, dedup: [eventId(0)] })
+    setup({ browser: { Purchase: 10 }, server: { Purchase: 10 }, dqa: { coverage: 0, dedup: [key('event_id', 0)] } })
     expect(data(await run({ view: 'sources' })).answer).toMatchObject({ browserAndServer: 'yes', deduplicated: 'no', gap: 'dedup' })
-    setup({ browser: {}, server: {} })
+    setup({ browser: {}, server: {}, dqa: noServerSide })
     expect(data(await run({ view: 'sources' })).answer).toMatchObject({ browserAndServer: 'unknown', gap: 'unknown' })
-    setup({ browser: metaError('100'), server: { Purchase: 3 } })
-    const res = data(await run({ view: 'sources' }))
-    expect(res.answer).toMatchObject({ browser: 'unknown', server: 'yes', browserAndServer: 'unknown' })
-    expect(res.counts.browser).toEqual({ refused: 'Meta refused the read (100).' })
+    setup({ browser: { Purchase: 10 }, server: { Purchase: 10 }, dqa: { coverage: 90, goal: null, dedup: [key('event_id', 90)] } })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ browserAndServer: 'yes', gap: 'unknown' })
   })
-  it('a partner\'s agent name: seen with it, or not seen (Meta lists no names)', async () => {
-    setup({ browser: { Purchase: 1 }, server: { Purchase: 1 }, partner: true })
-    expect(data(await run({ view: 'sources', agentName: 'shop' })).integrations.partnerAgent).toMatchObject({ agentName: 'shop', sendsThisEventByServer: 'yes' })
-    expect(h.calls.find((c) => c.path === 'dataset_quality' && c.query?.agent_name)?.query).toMatchObject({ dataset_id: PIXEL, agent_name: 'shop' })
-    setup({ browser: { Purchase: 1 }, server: { Purchase: 1 }, partner: false })
-    expect(data(await run({ view: 'sources', agentName: 'shop' })).integrations.partnerAgent.sendsThisEventByServer).toBe('not-seen')
+  it('a partner is proven by Meta\'s count of the server events sent with its agent name (a made-up name: not seen)', async () => {
+    setup({ browser: { Purchase: 1 }, server: { Purchase: 1 }, partner: { Purchase: 7 } })
+    expect(data(await run({ view: 'sources', agentName: 'shop' })).integrations.partnerAgent).toMatchObject({ agentName: 'shop', serverEventsSent: 7, sendsThisEventByServer: 'yes' })
+    expect(h.calls.find((c) => c.query?.agent)?.query).toMatchObject({ aggregation: 'event', event_source: 'SERVER_ONLY', agent: 'shop' })
+    expect(h.calls.some((c) => c.path === 'dataset_quality' && c.query?.agent_name)).toBe(false)
+    setup({ browser: { Purchase: 1 }, server: { Purchase: 1 }, partner: {} })
+    expect(data(await run({ view: 'sources', agentName: 'made-up-agent' })).integrations.partnerAgent).toMatchObject({ sendsThisEventByServer: 'not-seen', serverEventsSent: 0 })
+    expect(refusedCalls()).toEqual([])
   })
-  it('28 days are read 7 days at a time; another event can be checked', async () => {
+  it('28 days are read in four windows, each shorter than 7 days; another event can be checked', async () => {
     setup({ browser: { AddToCart: 5 }, server: { AddToCart: 5 } })
     const res = data(await run({ view: 'sources', event: 'AddToCart', hours: 672 }))
-    expect(res.answer.browserAndServer).toBe('yes')
     expect(res.counts.browser.AddToCart).toBe(20)
-    expect(h.calls.filter((c) => c.query?.event_source === 'WEB_ONLY')).toHaveLength(4)
-  })
-  it('an account outside a business portfolio still answers; only the per-portfolio part says why it is missing', async () => {
-    h.connections = [{ ...CHOSEN, adAccount: { ...CHOSEN.adAccount, businessId: null } }]
-    setup({ browser: { Purchase: 2 }, server: { Purchase: 2 }, dedup: [eventId(50)] })
-    const res = await run({ view: 'sources' })
-    expect(res.ok, String(res.error)).toBe(true)
-    expect(data(res).answer.gap).toBe('none')
-    expect(data(res).integrations.alsoOnAnotherBusinessesAdAccount).toBeNull()
-    expect(h.calls.some((c) => c.path.endsWith('/shared_accounts'))).toBe(false)
+    const windows = h.calls.filter((c) => c.query?.event_source === 'WEB_ONLY').map((c) => Number(c.query?.end_time) - Number(c.query?.start_time))
+    expect(windows).toHaveLength(4)
+    for (const w of windows) expect(w).toBeLessThan(7 * 24 * 3600)
   })
   it('sendersVerdict is the whole rule', () => {
-    expect(sendersVerdict({ browserCount: 5, serverCount: 5, dedupKeys: [], coveragePercent: null })).toMatchObject({ both: 'yes', deduplicated: 'unknown', gap: 'unknown' })
+    const read = (extra: Partial<{ row: boolean; matchQualityScore: number | null; coveragePercent: number | null; goalPercent: number | null; dedupKeys: any[] }> = {}) => ({ row: true, matchQualityScore: 6, coveragePercent: 80, goalPercent: 75, dedupKeys: [], ...extra })
+    expect(sendersVerdict({ browserCount: 5, serverCount: 5, quality: read() })).toMatchObject({ both: 'yes', deduplicated: 'unknown', gap: 'none' })
     // One side unread and the other at 0 proves nothing (maybe no sale at all): unknown, never "no".
-    expect(sendersVerdict({ browserCount: null, serverCount: 0, dedupKeys: [], coveragePercent: null })).toMatchObject({ both: 'unknown', server: 'no', gap: 'unknown' })
-    expect(sendersVerdict({ browserCount: 3, serverCount: null, dedupKeys: [], coveragePercent: null })).toMatchObject({ both: 'unknown', browser: 'yes', gap: 'unknown' })
+    expect(sendersVerdict({ browserCount: null, serverCount: 0, quality: read({ matchQualityScore: null, coveragePercent: 0 }) })).toMatchObject({ both: 'unknown', server: 'no', gap: 'unknown' })
+    expect(sendersVerdict({ browserCount: 3, serverCount: null, quality: read() })).toMatchObject({ both: 'unknown', browser: 'yes', gap: 'unknown' })
+    expect(sendersVerdict({ browserCount: 3, serverCount: 3, quality: { refused: true } })).toMatchObject({ server: 'unknown', gap: 'unknown' })
   })
 })
 
@@ -316,10 +386,21 @@ describe('quality, money and other accounts\' ad sets', () => {
     expect(currencyCents(1500, 'jpy')).toEqual({ cents: 1500, currency: 'JPY' })
     expect(currencyCents(undefined, 'EUR')).toEqual({ cents: null, currency: 'EUR' })
   })
-  it('statsWindows: at most 7 days a request, at most 28 days', () => {
-    expect(statsWindows(672, NOW)).toHaveLength(4)
+  it('statsWindows: each window shorter than 7 days, starting one minute after now − hours, at most 28 days', () => {
+    const end = NOW.getTime() / 1000
+    expect(statsWindows(1, NOW)).toEqual([{ start: end - 3600 + 60, end }])
+    expect(statsWindows(168, NOW)).toEqual([{ start: end - 7 * 24 * 3600 + 60, end }])
+    const four = statsWindows(672, NOW)
+    expect(four).toHaveLength(4)
+    expect(four[0].start).toBe(end - 28 * 24 * 3600 + 60)
+    expect(four.at(-1)!.end).toBe(end)
+    for (let i = 1; i < 4; i++) expect(four[i].start).toBe(four[i - 1].end)
+    for (const w of four) expect(w.end - w.start).toBeLessThan(7 * 24 * 3600)
     expect(statsWindows(1000, NOW)).toHaveLength(4)
-    expect(statsWindows(1, NOW)).toEqual([{ start: NOW.getTime() / 1000 - 3600, end: NOW.getTime() / 1000 }])
+  })
+  it('stripUrls: every web address at any depth loses its query and fragment', () => {
+    expect(stripUrls({ a: [{ b: 'see https://shop.example/thanks?email=a@b.c#x and http://x.example/p?q=1' }], n: 3 }))
+      .toEqual({ a: [{ b: 'see https://shop.example/thanks and http://x.example/p' }], n: 3 })
   })
   it('stats sums the hours per value; URLs never keep a query', async () => {
     h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels : req.path === `${PIXEL}/stats` ? [
@@ -329,6 +410,21 @@ describe('quality, money and other accounts\' ad sets', () => {
     const res = data(await run({ view: 'stats', aggregation: 'url' }))
     expect(res.totals).toEqual({ 'https://shop.example/thanks': 5 })
     expect(JSON.stringify(res)).not.toMatch(/email=/)
+    h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels : req.path === `${PIXEL}/stats` ? [{ aggregation: 'url_by_rule', data: [{ value: 'https://shop.example/p?order=55', count: 1 }] }] : [])
+    expect(JSON.stringify(data(await run({ view: 'stats', aggregation: 'url_by_rule' })))).not.toMatch(/order=55/)
+  })
+  it('quality: when Meta refuses the newer fields (#100), it reads again without value_diagnostics and event_delay', async () => {
+    h.answer = (req) => (req.path === 'dataset_quality'
+      ? (String(req.query?.fields).includes('event_delay') ? metaError('100') : { web: [{ event_name: 'Purchase' }] })
+      : {})
+    const res = data(await run({ view: 'quality' }))
+    expect(res.events).toHaveLength(1)
+    expect(res.withoutFields).toEqual(['value_diagnostics', 'event_delay'])
+    const asked = h.calls.filter((c) => c.path === 'dataset_quality').map((c) => String(c.query?.fields))
+    expect(asked).toHaveLength(2)
+    expect(asked[1]).toBe(`web{${QUALITY_WEB_FIELDS_SDK}}`)
+    expect(asked[1]).not.toMatch(/value_diagnostics|event_delay/)
+    expect(asked[1]).toMatch(/event_spend\{amount,currency_code\}/)
   })
 })
 
@@ -343,9 +439,16 @@ describe('custom conversions', () => {
     expect(res.items[0]).toMatchObject({ customConversionId: CC, defaultValueCents: 1250, pixelId: PIXEL, rule: '{"and":[]}' })
     expect(res.note).toMatch(/rule cannot change after it is made/)
   })
-  it('one of another account is refused before it is read; stats in US dollars come under the restricted key', async () => {
-    expect((await run({ view: 'custom-conversions', scope: 'one', customConversionId: '120000000000799' })).error).toMatch(/not the chosen ad account's/)
+  it('one of another account — or another kind of object — is refused before it is read; stats in US dollars come under the restricted key', async () => {
+    expect((await run({ view: 'custom-conversions', scope: 'one', customConversionId: '120000000000799' })).error).toMatch(/not a custom conversion of the chosen ad account/)
+    expect(h.calls.find((c) => c.operation === 'datasets.conversionOwner')?.query?.fields).toBe('account_id,custom_event_type')
     expect(h.calls.some((c) => c.operation === 'datasets.conversion')).toBe(false)
+    const answer = h.answer
+    h.answer = (req) => (req.operation === 'datasets.conversionOwner' ? metaError('100') : answer!(req))
+    expect((await run({ view: 'custom-conversions', scope: 'one', customConversionId: '120000000000101' })).error).toMatch(/not a custom conversion of the chosen ad account/)
+    h.answer = answer
+    h.rowsFor = (req) => (req.path === `${CC}/stats` ? [{ aggregation: 'url', data: [{ value: 'https://shop.example/thanks?email=a@b.c', count: 2 }] }] : [])
+    expect(JSON.stringify(data(await run({ view: 'custom-conversions', scope: 'stats', customConversionId: CC, conversionAggregation: 'url' })))).not.toMatch(/email=/)
     h.rowsFor = (req) => (req.path === `${CC}/stats` ? [{ aggregation: 'usd_amount', data: [{ usd_amount: 10 }] }] : [])
     const res = data(await run({ view: 'custom-conversions', scope: 'stats', customConversionId: CC, conversionAggregation: 'usd_amount' }))
     expect(res).toHaveProperty('usdAmounts')
@@ -376,6 +479,5 @@ describe('debug feeds never carry a buyer\'s data', () => {
   it('the checks that need an input ask for it before any Meta call', async () => {
     expect((await run({ view: 'diagnostics', check: 'domains-last-fired' })).error).toMatch(/needs the domains/)
     expect((await run({ view: 'diagnostics', check: 'raw-fires' })).error).toMatch(/needs the event/)
-    expect((await run({ view: 'diagnostics', check: 'microdata' })).error).toMatch(/name it \(catalogId\)/)
   })
 })
