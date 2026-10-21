@@ -102,6 +102,7 @@ import { META_ADS_DATASETS_TOOLS } from './tools/meta-ads-datasets.tools.js'
 import { META_ADS_CAMPAIGN_SETTINGS_TOOLS } from './tools/meta-ads-campaign-settings.tools.js'
 import { META_ADS_CREATE_TOOLS } from './tools/meta-ads-create.tools.js'
 import { META_ADS_REMOVE_TOOLS } from './tools/meta-ads-remove.tools.js'
+import { META_ADS_LABELS_RULES_TOOLS } from './tools/meta-ads-labels-rules.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -327,6 +328,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_CREATE_TOOLS,
   // Meta ads step 22 (2026-10-21): remove-meta-ads-items (delete for good, on the person's explicit ask only; no undo).
   ...META_ADS_REMOVE_TOOLS,
+  // Meta ads step 21 (2026-10-21): set-meta-labels, set-meta-value-rules, create-meta-reach-frequency (a booking SPENDS MONEY).
+  ...META_ADS_LABELS_RULES_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).
