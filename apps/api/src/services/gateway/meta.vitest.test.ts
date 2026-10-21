@@ -446,7 +446,12 @@ describe('read only by construction', () => {
       'id,reactions', 'id,reactions{id,name}', 'id,reactions.limit(100)', 'id,reactions.limit(1).summary(total_count)', 'id,reactions.summary(total_count)',
       'id,reactions.limit(0).summary(total_count){id,name}', 'id,reactions.limit(0).summary(total_count).as(r)', 'id,reactions.type(LOVE).limit(0).summary(total_count).fields(name)',
       'id,attachments{reactions{id}}', 'id,reactions.type(love).limit(0).summary(total_count)',
+      // Re-review 2 — a space after the count is no delimiter.
+      'id,reactions.limit(0).summary(total_count) .limit(100){id,name}', 'id,reactions.limit(0).summary(total_count) .fields(id,name)',
+      'id,reactions.limit(0).summary(total_count)  .as(x)', 'id,reactions.limit(0).summary(total_count) ,shares', 'id,reactions .limit(0).summary(total_count)',
     ]) expect(f(fields), fields).toMatch(/reactions inside fields only as a count/)
+    // A count closing an expansion is one too.
+    expect(f('id,attachments{target{id},reactions.limit(0).summary(total_count)}')).toBeNull()
   })
 })
 

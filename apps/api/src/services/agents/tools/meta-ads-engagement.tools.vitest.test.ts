@@ -108,6 +108,7 @@ function ownMeta(req: Req): unknown {
   if (req.path === `${THREADS}/replies`) return { data: [{ id: '200000000000078', caption: 'Love it', username: 'fan_1', like_count: 2, hide_status: 'HUSHED', extra: 'raw' }] }
   if (req.path === POST && fields === 'id,attachments{target{id}}') return { id: POST, attachments: { data: [{ target: { id: PHOTO } }] } }
   if (req.path === PHOTO_COMMENT && fields === 'id,object{id}') return { id: PHOTO_COMMENT, object: { id: PHOTO } }
+  if (req.path === PHOTO && fields === 'id,from{id}') return { id: PHOTO, from: { id: PAGE } }
   if (req.path === PHOTO_COMMENT) return { id: PHOTO_COMMENT, message: 'Nice photo' }
   if (req.operation === 'posts.adCreative') return { id: AD, account_id: ACCOUNT, creative: { id: '120000000000401', account_id: ACCOUNT, effective_object_story_id: POST, effective_instagram_media_id: MEDIA } }
   if (req.operation === 'instagram.mediaOwnerCheck') return { id: req.path, owner: { id: IG } }
@@ -318,6 +319,19 @@ describe('only the chosen Page\'s forms, the chosen account\'s ads, the chosen P
       expect((await run('meta-comments', { view: 'comment', postId: POST, commentId: PHOTO_COMMENT })).error, label).toMatch(/not on that post of the Facebook Page this business chose/)
       expect(h.calls.some((c) => c.operation === 'comments.comment'), label).toBe(false)
     }
+    // Re-review 1 — the post shares ANOTHER Page's photo: its comments are that Page's people's, refused (no from, or an
+    // error, too).
+    for (const [label, owner] of [
+      ['another Page\'s photo', { id: PHOTO, from: { id: '120000000000099' } }], ['no author', { id: PHOTO }],
+      ['another object', { id: '210000000000099', from: { id: PAGE } }], ['an error', metaError('100', '(#100) Tried accessing nonexisting field (from)')],
+    ] as Array<[string, unknown]>) {
+      for (const view of ['comment', 'replies', 'engagement']) {
+        h.calls.length = 0
+        h.reply = (req) => (req.path === PHOTO && req.query?.fields === 'id,from{id}' ? owner : ownMeta(req))
+        expect((await run('meta-comments', { view, postId: POST, commentId: PHOTO_COMMENT })).error, `${label} ${view}`).toMatch(/not on that post of the Facebook Page this business chose/)
+        expect(h.calls.some((c) => c.operation === 'comments.comment' || c.operation === 'comments.replies' || /reactions/.test(String(c.query?.fields))), `${label} ${view}`).toBe(false)
+      }
+    }
     // A comment on another post entirely: refused after its object read alone.
     h.reply = ownMeta
     h.calls.length = 0
@@ -402,8 +416,8 @@ describe('people\'s data: named keys only; Meta\'s refusals in plain words', () 
   })
   it('engagement is counts only: reactions in all and per type, comments, shares — nobody\'s reaction, no person\'s id', async () => {
     const res = (await run('meta-comments', { view: 'engagement', postId: POST })).data as Record<string, unknown>
-    expect(res).toMatchObject({ reactions: 9, reactionsByType: { LIKE: 1, LOVE: 4, WOW: 1, HAHA: 1, SORRY: 1, ANGRY: 1 }, comments: 7, shares: 3 })
-    expect(res).not.toHaveProperty('sorryAskedAs')
+    expect(res).toMatchObject({ reactions: 9, reactionsByType: { LIKE: 1, LOVE: 4, WOW: 1, HAHA: 1, SAD: 1, ANGRY: 1 }, comments: 7, shares: 3 })
+    expect(res).not.toHaveProperty('sadAskedAs')
     expect(h.calls.filter((c) => /reactions/.test(String(c.query?.fields))).every((c) => /\.limit\(0\)\.summary\(total_count\)/.test(String(c.query?.fields)))).toBe(true)
     // Review B8 — every count read asks limit 0 (no comment or like is fetched).
     await run('meta-comments', { view: 'dynamic-posts', postId: POST })
@@ -411,11 +425,17 @@ describe('people\'s data: named keys only; Meta\'s refusals in plain words', () 
     expect(counts.length).toBe(3)
     expect(counts.every((c) => c.query?.limit === 0)).toBe(true)
   })
-  it('review B4 — Meta refusing SORRY (#100) is asked again as SAD (the SDK\'s name)', async () => {
-    h.reply = (req) => (String(req.query?.fields).includes('type(SORRY)') ? metaError('100', '(#100) Param type must be one of {NONE, LIKE, LOVE, WOW, HAHA, SAD, ANGRY}') : String(req.query?.fields).includes('type(SAD)') ? { id: req.path, reactions: { summary: { total_count: 2 } } } : ownMeta(req))
+  it('review B4 — SAD first (the SDK\'s name); SORRY (the v26 page\'s) only when Meta refuses SAD with #100', async () => {
+    h.reply = (req) => (String(req.query?.fields).includes('type(SAD)') ? metaError('100', '(#100) Param type must be one of {NONE, LIKE, LOVE, WOW, HAHA, SORRY, ANGRY}') : String(req.query?.fields).includes('type(SORRY)') ? { id: req.path, reactions: { summary: { total_count: 2 } } } : ownMeta(req))
     const res = (await run('meta-comments', { view: 'engagement', postId: POST })).data as Record<string, unknown>
-    expect(res).toMatchObject({ reactionsByType: { SORRY: 2 }, sorryAskedAs: 'SAD' })
+    expect(res).toMatchObject({ reactionsByType: { SAD: 2 }, sadAskedAs: 'SORRY' })
     expect(gatewayProblems()).toEqual([])
+    // Any other refusal is not retried.
+    h.calls.length = 0
+    h.reply = (req) => (String(req.query?.fields).includes('type(SAD)') ? metaError('10', 'Permission denied', 'forbidden') : ownMeta(req))
+    const other = (await run('meta-comments', { view: 'engagement', postId: POST })).data as Record<string, unknown>
+    expect(other).toMatchObject({ reactionsByType: { SAD: null } })
+    expect(h.calls.some((c) => String(c.query?.fields).includes('type(SORRY)'))).toBe(false)
   })
   it('Meta refusing a lead read for the app\'s access says what it takes (D4) and where real leads are', async () => {
     h.reply = (req) => (/\/leads$/.test(req.path) ? metaError('200', '(#200) Requires leads_retrieval permission', 'forbidden') : ownMeta(req))
@@ -489,6 +509,10 @@ describe('people\'s data: named keys only; Meta\'s refusals in plain words', () 
     expect((await run('meta-comments', { view: 'tags' })).data).toMatchObject({ items: [], more: true })
     expect(h.calls.filter((c) => c.operation === 'comments.tags')).toHaveLength(10)
     expect(gatewayProblems()).toEqual([])
+  })
+  it('re-review 4 — tags: from after to is refused before any call', async () => {
+    expect((await run('meta-comments', { view: 'tags', from: '2026-10-20', to: '2026-10-01' })).error).toMatch(/from is after to/)
+    expect(h.calls).toHaveLength(0)
   })
   it('review A4 — only real calendar days are taken, before any call', async () => {
     expect(isRealDay('2026-10-21')).toBe(true)

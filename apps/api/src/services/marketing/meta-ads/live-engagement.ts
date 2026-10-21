@@ -484,8 +484,12 @@ export const COMMENT_VIEWS = [
 export type CommentView = typeof COMMENT_VIEWS[number]
 export const COMMENT_FILTERS = ['toplevel', 'stream'] as const
 export const COMMENT_ORDERS = ['newest', 'oldest'] as const
-/** The reaction types of the v26 reactions reference (LIKE counts CARE too). */
-export const REACTION_TYPES = ['LIKE', 'LOVE', 'WOW', 'HAHA', 'SORRY', 'ANGRY'] as const
+/**
+ * The reaction types Nexus counts: Meta's SDK names (profile.py Type: SAD for the sad face; the v26 reactions page writes
+ * SORRY, asked only when Meta refuses SAD). CARE is a type of its own in the SDK (the reactions page says LIKE counts
+ * include it): Nexus does not count it apart.
+ */
+export const REACTION_TYPES = ['LIKE', 'LOVE', 'WOW', 'HAHA', 'SAD', 'ANGRY'] as const
 export const TAG_MEDIA_TYPES = ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM'] as const
 /** view dynamic-posts reads two counts per catalog-ad post: at most this many posts. */
 export const MAX_DYNAMIC_POSTS = 25
@@ -560,6 +564,16 @@ async function ownFacebookComment(account: MetaChosenAccount, postIdArg: string,
   }
   const objectId = idText(obj(body.object)?.id)
   if (idText(body.id) !== shape.commentId || !objectId || !targets.has(objectId)) throw new MetaLiveRefusal(NOT_ON_POST)
+  // Re-review 1 — a post can carry ANOTHER Page's photo or video it shared: the object must be the chosen Page's own
+  // (Photo and Video both answer `from`), one read of its id and author alone; any other answer is refused.
+  let owner: Row
+  try {
+    owner = (await read('id,from{id}', 'comments.objectOwnerCheck', objectId)).body as Row
+  } catch (err) {
+    if (err instanceof MetaReadError && err.failure.origin === 'meta' && !err.failure.throttled && !err.failure.authLost) throw new MetaLiveRefusal(NOT_ON_POST)
+    throw err
+  }
+  if (idText(owner.id) !== objectId || idText(obj(owner.from)?.id) !== pageId) throw new MetaLiveRefusal(`${NOT_ON_POST} (its photo or video is not the chosen Page's own.)`)
   return { postId, commentId: shape.commentId, prefixes: [shape.ownPart, objectId] }
 }
 
@@ -827,6 +841,7 @@ export async function liveComments(input: CommentsInput) {
     case 'tags': {
       const instagramId = instagramOf(account)
       realDays(input.from, input.to)
+      if (input.from && input.to && input.from > input.to) throw new MetaLiveRefusal('from is after to.')
       const query: Record<string, MetaQueryValue> = { fields: COMMENT_FIELDS.Tagged }
       // Meta's bounds are strict: after the start of `from`, before the start of the day after `to` (UTC).
       if (input.from) query.posted_after = `${input.from}T00:00:00`
@@ -931,15 +946,15 @@ async function engagement(account: MetaChosenAccount, input: CommentsInput) {
   const notRead: string[] = []
   // One count per type (Meta's own example: reactions.type(LOVE).limit(0).summary(total_count)); none lists a person.
   const count = (type: string) => metaReadOne({ connectionId }, { operation: 'comments.reactionsByType', path: target, query: { fields: `id,reactions.type(${type}).limit(0).summary(total_count)` } })
-  let sorryAskedAs: 'SAD' | null = null
+  let sadAskedAs: 'SORRY' | null = null
   const types = await Promise.all(REACTION_TYPES.map((type) => part(async () => {
     try {
       return await count(type)
     } catch (err) {
-      // Review fix B4 — the v26 reactions page names SORRY, Meta's SDK (profile.py) SAD: on Meta's #100 SAD is asked.
-      if (type !== 'SORRY' || !(err instanceof MetaReadError) || err.failure.origin !== 'meta' || !/^100(\/|$)/.test(err.failure.code ?? '')) throw err
-      sorryAskedAs = 'SAD'
-      return count('SAD')
+      // Review fix B4 (re-review 3) — Meta's SDK (profile.py) names SAD, the v26 reactions page SORRY: SORRY only on #100.
+      if (type !== 'SAD' || !(err instanceof MetaReadError) || err.failure.origin !== 'meta' || !/^100(\/|$)/.test(err.failure.code ?? '')) throw err
+      sadAskedAs = 'SORRY'
+      return count('SORRY')
     }
   })))
   REACTION_TYPES.forEach((type, i) => {
@@ -954,9 +969,9 @@ async function engagement(account: MetaChosenAccount, input: CommentsInput) {
   }
   return {
     pageId, postId, ...(ids ? { commentId: ids.commentId } : {}),
-    reactions: reactionTotal(body), reactionsByType: byType, ...(sorryAskedAs ? { sorryAskedAs } : {}),
+    reactions: reactionTotal(body), reactionsByType: byType, ...(sadAskedAs ? { sadAskedAs } : {}),
     comments, shares: ids ? undefined : num(obj(body.shares)?.count) ?? 0,
     ...(notRead.length ? { notRead } : {}),
-    note: 'Counts only: Meta lets nobody list who reacted. LIKE includes CARE. comments counts comments and replies (a comment: its replies). shares: the post\'s share count (view shares lists the public ones). Meta may answer a count only to a Page token.',
+    note: 'Counts only: Meta lets nobody list who reacted. Meta\'s reactions page says LIKE counts include CARE, its SDK lists CARE apart: Nexus does not count CARE on its own. comments counts comments and replies (a comment: its replies). shares: the post\'s share count (view shares lists the public ones). Meta may answer a count only to a Page token.',
   }
 }

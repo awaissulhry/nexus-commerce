@@ -350,7 +350,8 @@ const FIELD_DENIED = new Set([
  * no person who reacted is ever listed (Meta's own example on object/reactions).
  */
 const REACTIONS_FIELD = /(?<![A-Za-z0-9_])reactions(?![A-Za-z0-9_])/gi
-const REACTIONS_COUNT_ONLY = /^(?:\.type\([A-Z]{2,12}\))?\.limit\(0\)\.summary\(total_count\)(?![A-Za-z0-9_.{(])/
+// Re-review 2 — the count ends the field: the next character is the end, a comma or a closing } or ) (never a space).
+const REACTIONS_COUNT_ONLY = /^(?:\.type\([A-Z]{2,12}\))?\.limit\(0\)\.summary\(total_count\)(?=$|[,})])/
 
 /** Review 2 — never inside an expansion (`{…}` or `.fields(…)`): another object's Instagram account, owner, ratings, feed. */
 const NESTED_DENIED = new Set(['instagram_business_account', 'owner_business', 'ratings', 'feed', 'blocked'])
