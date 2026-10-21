@@ -118,30 +118,38 @@ describe('rules — money only under …Cents keys', () => {
   })
 })
 
-describe('study results — cost metrics apart, a creative test\'s outcome', () => {
-  it('reads Meta\'s JSON-string rows per group; spend and cost per incremental conversion go to costAsMeta', () => {
+describe('study results — only known plain metrics unrestricted, a creative test\'s outcome', () => {
+  it('reads Meta\'s JSON-string rows per group; spend, costs, any sales or value metric and anything nested go to moneyAsMeta', () => {
     const out = mapResults([
-      JSON.stringify({ cell_id: '6000000000001', population_test: 2334212, impressions: 19020874, spend: 26059, conversions_incremental: -162.9, conversions_confidence: 0.69, conversions_CPiC: -159.95, buyers_CPiB: -20.7 }),
+      JSON.stringify({
+        cell_id: '6000000000001', population_test: 2334212, impressions: 19020874, spend: 26059, conversions_incremental: -162.9, conversions_confidence: 0.69,
+        conversions_raw_pValue: 0.12, conversions_CPiC: -159.95, buyers_CPiB: -20.7, conversions_sales_value: 4200.5, incremental_purchase_value: 99,
+        conversions_test: { nested: 1 }, brand_new_metric: 7,
+      }),
       'not json',
     ])
     expect(out.unreadable).toBe(1)
     expect(out.rows).toEqual([{
       cellId: '6000000000001', age: null, gender: null, country: null,
-      numbers: { population_test: 2334212, impressions: 19020874, conversions_incremental: -162.9, conversions_confidence: 0.69 },
-      costAsMeta: { spend: 26059, conversions_CPiC: -159.95, buyers_CPiB: -20.7 },
+      numbers: { population_test: 2334212, impressions: 19020874, conversions_incremental: -162.9, conversions_confidence: 0.69, conversions_raw_pValue: 0.12 },
+      moneyAsMeta: { spend: 26059, conversions_CPiC: -159.95, buyers_CPiB: -20.7, conversions_sales_value: 4200.5, incremental_purchase_value: 99, conversions_test: { nested: 1 }, brand_new_metric: 7 },
     }])
   })
   it('a creative test: high performers are the outcome; the winner fields Meta leaves empty are not shown as a result', () => {
     const out = mapResults([{ high_performer_ids: ['120000000000301'], confidence_by_ad_object_id: { 120000000000301: 0.93 }, winner_ad_object_id: null, winner_confidence: null }])
     expect(out.rows[0].creativeTest).toMatchObject({ highPerformerAdIds: ['120000000000301'], confidenceByAdId: { 120000000000301: 0.93 } })
     expect(out.rows[0].numbers).toEqual({})
+    // A confidence map that is not plain numbers is not shown unrestricted.
+    const odd = mapResults([{ confidence_by_ad_object_id: { 120000000000301: { value: 0.9 } } }])
+    expect(odd.rows[0]).toMatchObject({ creativeTest: { confidenceByAdId: null }, moneyAsMeta: { confidence_by_ad_object_id: { 120000000000301: { value: 0.9 } } } })
   })
 })
 
 describe('how to act on a recommendation (RC-023)', () => {
-  it('a type Meta applies, with its signature: apply-meta-recommendations; a budget raise SPENDS MONEY', () => {
-    expect(howToAct('SCALE_GOOD_CAMPAIGN', true)).toMatchObject({ byApi: true, tool: 'apply-meta-recommendations', spendsMoney: 'yes' })
+  it('a type Meta applies, with its signature: apply-meta-recommendations, which comes with a later step; a budget raise SPENDS MONEY', () => {
+    expect(howToAct('SCALE_GOOD_CAMPAIGN', true)).toMatchObject({ byApi: true, tool: 'apply-meta-recommendations', toolComesWith: 'a later Nexus step (step 28)', spendsMoney: 'yes' })
     expect(howToAct('SCALE_GOOD_CAMPAIGN', true).sentence).toMatch(/SPENDS MONEY/)
+    expect(howToAct('SCALE_GOOD_CAMPAIGN', true).sentence).toMatch(/comes with a later Nexus step \(step 28\)/)
     expect(howToAct('MUSIC', true)).toMatchObject({ byApi: true, spendsMoney: 'no' })
   })
   it('the same type without a signature cannot be applied by API now', () => {

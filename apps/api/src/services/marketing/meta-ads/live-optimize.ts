@@ -55,7 +55,7 @@
  *     seconds or dd-mm-yyyy; until after since) and `GET /<test id>`; the guide asks for a Page access token, and its
  *     answer names test_insights {timestamp, videos{<video id>{plays, impressions, …, instream_ads_earnings}}} and
  *     declared_winning_video, where the SDK (pagepostexperiment.py) names insight_snapshots, declared_winning_video_id,
- *     declared_winning_time and publish_time — the SDK's names are asked first, the guide's after a refusal
+ *     declared_winning_time and publish_time — the guide's names are asked first, the SDK's after a refusal
  *     (LIVE-PROBES EX-900, EX-903); `GET /<test>/video_insights` is SDK only and its page is 404 (RECHECK EX-903: not used)
  *   - rules (ad-rules/guides/api-calls, reference/ad-account/adrules_library, docs/marketing-api/reference/ad-rule —
  *     fields id, account_id "the ad account that owns the rule", created_by, created_time, disable_error_code,
@@ -76,7 +76,7 @@ import type { MetaQueryValue } from '../../gateway/meta.js'
 import { metaReadOne } from './read-client.js'
 import { MetaReadError } from './errors.js'
 import { decimalToMicros, metaOffset, minorOf } from './money.js'
-import { accountToday, accountYesterday, addDays } from './dates.js'
+import { accountToday, addDays } from './dates.js'
 import { graphSafe, list, metaChosenAccount, MetaLiveRefusal, objectInAccount, type MetaChosenAccount } from './live.js'
 import { takenIds } from './taken.js'
 
@@ -141,7 +141,7 @@ async function oneWithFallbacks(connectionId: string, operation: string, path: s
   let refused: MetaReadError | null = null
   for (const extra of extras) {
     try {
-      return { body: (await metaReadOne({ connectionId }, { operation, path, query: { ...query, fields: `${core},${extra}` } })).body as Row, note: null as string | null }
+      return { body: (await metaReadOne({ connectionId }, { operation, path, query: { ...query, fields: `${core},${extra}` } })).body as Row, note: refused ? `Meta refused some fields here (${extras[0]}), so the others were asked: ${refused.failure.sentence}` : null as string | null }
     } catch (err) {
       if (!fieldRefused(err)) throw err
       refused = err
@@ -151,13 +151,52 @@ async function oneWithFallbacks(connectionId: string, operation: string, path: s
   return { body, note: refused ? `Meta refused some fields here (${extras.join(' / ')}), so they are missing: ${refused.failure.sentence}` : null }
 }
 
-/** A list read with `core` plus `extra`, read again with `core` alone when Meta refuses the extra fields. */
-async function listWithFallback(connectionId: string, operation: string, path: string, core: string, extra: string, query: Record<string, MetaQueryValue>, maxRows: number) {
-  try {
-    return { ...(await list(connectionId, operation, path, { ...query, fields: `${core},${extra}` }, maxRows)), note: null as string | null }
-  } catch (err) {
-    if (!fieldRefused(err)) throw err
-    return { ...(await list(connectionId, operation, path, { ...query, fields: core }, maxRows)), note: `Meta refused some fields here (${extra}), so they are missing: ${err.failure.sentence}` }
+/** A list read with `core` plus the first of `extras` Meta takes (each tried in turn), else `core` alone. */
+async function listWithFallback(connectionId: string, operation: string, path: string, core: string, extras: string | string[], query: Record<string, MetaQueryValue>, maxRows: number) {
+  const tries = Array.isArray(extras) ? extras : [extras]
+  let refused: MetaReadError | null = null
+  for (const extra of tries) {
+    try {
+      return { ...(await list(connectionId, operation, path, { ...query, fields: `${core},${extra}` }, maxRows)), note: refused ? `Meta refused some fields here (${tries[0]}), so the others were asked: ${refused.failure.sentence}` : null as string | null }
+    } catch (err) {
+      if (!fieldRefused(err)) throw err
+      refused = err
+    }
+  }
+  return { ...(await list(connectionId, operation, path, { ...query, fields: core }, maxRows)), note: `Meta refused some fields here (${tries.join(' / ')}), so they are missing: ${refused!.failure.sentence}` }
+}
+
+/** Pages Nexus reads at most (100 rows each) while it filters a list itself. */
+const MATCH_PAGE_CAP = 10
+
+/**
+ * Review fix B6 — a list Nexus filters itself (Meta takes no such filter): pages are read until `maxRows` rows MATCH or
+ * the page cap, and the answer says plainly when the cap stopped it (`capNote`). `all` is every row read (for counts).
+ */
+async function readMatching<T>(connectionId: string, operation: string, path: string, query: Record<string, MetaQueryValue>, map: (row: Row) => T, match: (item: T) => boolean, maxRows: number) {
+  const all: T[] = []
+  const items: T[] = []
+  let after: string | null = null
+  let pages = 0
+  let morePages = false
+  for (;;) {
+    const read = await metaReadOne({ connectionId }, { operation, path, query: { ...query, limit: 100, ...(after ? { after } : {}) } })
+    pages++
+    const body = read.body as { data?: unknown; paging?: { cursors?: { after?: unknown }; next?: unknown } }
+    for (const row of rowsOf(body)) {
+      const item = map(row)
+      all.push(item)
+      if (match(item)) items.push(item)
+    }
+    const next = typeof body.paging?.cursors?.after === 'string' && body.paging?.next ? body.paging.cursors.after : null
+    if (!next) break
+    if (items.length >= maxRows || pages >= MATCH_PAGE_CAP) { morePages = true; break }
+    after = next
+  }
+  const capped = morePages && items.length < maxRows
+  return {
+    items: items.slice(0, maxRows), all, more: morePages || items.length > maxRows,
+    capNote: capped ? `Nexus read the first ${all.length} rows of Meta's list (${MATCH_PAGE_CAP} pages) and filtered them itself; more may match further on: ask with a narrower filter.` : null,
   }
 }
 
@@ -203,7 +242,7 @@ const STAGE_WORDS: Record<string, string> = {
 
 /**
  * The types Meta applies by API (performance-recommendations "Recommendation-specific parameters"; master RC-008…RC-021):
- * apply-meta-recommendations (step 28) sends them, each a request a person approves. `spendsMoney` as the master rows
+ * apply-meta-recommendations (a later Nexus step, step 28) will send them, each a request a person approves. `spendsMoney` as the master rows
  * judge it: yes = can raise spend at once, maybe = can widen delivery, no = same budget.
  */
 const APPLY_BY_API: Readonly<Record<string, { what: string; spendsMoney: 'yes' | 'maybe' | 'no' }>> = {
@@ -259,8 +298,8 @@ export function howToAct(type: string | null, hasSignature: boolean) {
   const apply = type ? APPLY_BY_API[type] : undefined
   if (apply && hasSignature) {
     return {
-      byApi: true, tool: 'apply-meta-recommendations', spendsMoney: apply.spendsMoney, what: apply.what,
-      sentence: `Meta applies this by API: apply-meta-recommendations asks for it (a person approves it)${apply.spendsMoney === 'yes' ? ' — it SPENDS MONEY' : apply.spendsMoney === 'maybe' ? ' — it can widen delivery' : ''}. The signature goes stale: read again right before.`,
+      byApi: true, tool: 'apply-meta-recommendations', toolComesWith: 'a later Nexus step (step 28)', spendsMoney: apply.spendsMoney, what: apply.what,
+      sentence: `Meta applies this by API. Nexus's apply-meta-recommendations comes with a later Nexus step (step 28), and will ask for it as a request a person approves${apply.spendsMoney === 'yes' ? ' — it SPENDS MONEY' : apply.spendsMoney === 'maybe' ? ' — it can widen delivery' : ''}; until then, the Ads Manager link. The signature goes stale: read again right before.`,
     }
   }
   const elsewhere = type ? ACT_ELSEWHERE[type] : undefined
@@ -276,17 +315,26 @@ export function howToAct(type: string | null, hasSignature: boolean) {
   }
 }
 
+/**
+ * Review fix A6 — the budget recommendations' own texts can name amounts ("raise the budget by …"): for them the body and
+ * the lift estimate sit under a restricted key (moneyTextAsMeta) instead.
+ */
+const MONEY_TEXT_TYPES = new Set(['BUDGET_LIMITED', 'SCALE_GOOD_CAMPAIGN'])
+const isMoneyText = (type: string | null, name: string | null) => (!!type && MONEY_TEXT_TYPES.has(type)) || (!!name && /budget|scale_good/i.test(name))
+
 /** One recommendation as Meta gives it (account or portfolio read), in Nexus's words. */
 function mapRecommendation(raw: Row, known: Map<string, { kind: string; name: string | null }>) {
   const content = obj(raw.recommendation_content) ?? {}
   const type = text(raw.type)
+  const name = text(raw.recommendation_name)
   const signature = text(raw.recommendation_signature) ?? idText(raw.recommendation_signature)
   const stage = text(raw.recommendation_stage)
   const objectIds = idsOf(raw.object_ids)
+  const texts = { liftEstimate: text(content.lift_estimate ?? raw.lift_estimate), body: text(content.body ?? raw.body) }
   return {
-    type, name: text(raw.recommendation_name), stage, stageText: stage ? STAGE_WORDS[stage] ?? stage : null, level: text(raw.level),
+    type, name, stage, stageText: stage ? STAGE_WORDS[stage] ?? stage : null, level: text(raw.level),
     signature, time: metaTime(raw.recommendation_time),
-    liftEstimate: text(content.lift_estimate ?? raw.lift_estimate), body: text(content.body ?? raw.body),
+    ...(isMoneyText(type, name) ? { liftEstimate: null, body: null, moneyTextAsMeta: texts } : texts),
     opportunityScoreLift: num(content.opportunity_score_lift ?? raw.opportunity_score_lift),
     objects: objectIds.slice(0, 100).map((id) => ({ id, kind: known.get(id)?.kind ?? null, name: known.get(id)?.name ?? null })),
     objectCount: objectIds.length,
@@ -303,6 +351,28 @@ function recommendationsOf(rows: Row[]): Row[] {
     else if (row.recommendation_signature !== undefined || row.type !== undefined || row.recommendation_name !== undefined) out.push(row)
   }
   return out
+}
+
+/** The answer's spelling of each stage asked (both reads answer the long form). */
+const STAGE_ANSWERED: Record<RecommendationStage, string> = { mid_flight: 'mid_flight_recommendation', pre_create: 'pre_create_guidance' }
+
+/**
+ * Review fix B1 — the stage and name filters are also applied by Nexus to what Meta answers, so a filter Meta ignored (a
+ * spelling it does not take: the guide writes lower case, the SDK upper case — LIVE-PROBES RC-002) never looks applied.
+ * A name matches the account read's type (lower case; a versioned type such as fragmentation_v3 matches fragmentation)
+ * or the portfolio read's name.
+ */
+function nexusFilter<T extends { stage: string | null; type: string | null; name: string | null }>(items: T[], stage: RecommendationStage | null | undefined, names: string[] | null) {
+  const keep = items.filter((i) => {
+    if (stage && i.stage && i.stage !== STAGE_ANSWERED[stage]) return false
+    if (names) {
+      const own = (i.name ?? i.type ?? '').toLowerCase()
+      if (!names.some((n) => own === n || own.startsWith(`${n}_v`))) return false
+    }
+    return true
+  })
+  const left = items.length - keep.length
+  return { items: keep, leftOutByNexus: left, ...(left ? { filterNote: `Meta answered ${left} recommendation${left === 1 ? '' : 's'} outside the filter asked (it may not take that spelling); Nexus left ${left === 1 ? 'it' : 'them'} out.` } : {}) }
 }
 
 const RECOMMENDATION_NOTE = 'Meta may list fewer recommendations than Ads Manager shows. A recommendation cannot be dismissed by API (only in Ads Manager), and its signature goes stale: read again right before applying.'
@@ -335,60 +405,86 @@ export async function metaRecommendations(input: RecommendationInput) {
     })
     const raw = recommendationsOf(rowsOf(read.body))
     const known = await knownObjects(account, raw.flatMap((r) => idsOf(r.object_ids)))
-    return raw.map((r) => mapRecommendation(r, known))
+    return nexusFilter(raw.map((r) => mapRecommendation(r, known)), input.stage, names)
   }
 
   switch (input.view) {
     case 'score': return { ...base, opportunityScore: await score(), note: 'Meta\'s opportunity score now (0–100); it moves during the day as campaigns change. view history shows it day by day.' }
     case 'list': {
-      const items = await accountList()
-      return { ...base, items, byApi: items.filter((i) => i.howToAct.byApi).length, note: RECOMMENDATION_NOTE }
+      const listed = await accountList()
+      return { ...base, ...listed, byApi: listed.items.filter((i) => i.howToAct.byApi).length, note: RECOMMENDATION_NOTE }
     }
     case 'overview': {
       // IN-105 — like Meta's own ads_get_opportunity_score: the score with the recommendations, in one answer.
       const [s, l] = await Promise.all([part(score), part(accountList)])
       return {
-        ...base, opportunityScore: s.value, scoreNotRead: s.notRead, items: l.value ?? [], itemsNotRead: l.notRead,
-        totalScoreLift: (l.value ?? []).reduce((sum, i) => sum + (i.opportunityScoreLift ?? 0), 0), note: RECOMMENDATION_NOTE,
+        ...base, opportunityScore: s.value, scoreNotRead: s.notRead, ...(l.value ?? { items: [] }), itemsNotRead: l.notRead,
+        totalScoreLift: (l.value?.items ?? []).reduce((sum, i) => sum + (i.opportunityScoreLift ?? 0), 0), note: RECOMMENDATION_NOTE,
       }
     }
     case 'portfolio': {
       // RC-003 — the portfolio read, asked about the chosen ad account ONLY (each other account may be another business's).
       const businessId = account.businessId
       if (!businessId) throw new MetaLiveRefusal('The chosen ad account belongs to no business portfolio Meta named, so there is no portfolio read: view list reads the account\'s own recommendations.')
-      const read = await metaReadOne({ connectionId }, {
+      const portfolioRead = async (withContent: boolean) => rowsOf((await metaReadOne({ connectionId }, {
         operation: 'recommendations.portfolio', path: `${businessId}/recommendations`,
         query: {
-          ad_account_ids: adAccountId, fields: 'recommendation_content',
+          ad_account_ids: adAccountId, ...(withContent ? { fields: 'recommendation_content' } : {}),
           ...(input.stage ? { recommendation_stages: [PORTFOLIO_STAGE[input.stage]] } : {}), ...(names ? { recommendation_names: names } : {}),
           ...(input.locale ? { locale: input.locale } : {}),
         },
-      })
-      const rows = rowsOf(read.body)
+      })).body)
+      // Review fix B2 — `fields=recommendation_content` may leave Meta's own fields out (LIVE-PROBES RC-003): when no row
+      // names an ad account, read once more without it; never answer "no recommendations" from rows that name none.
+      let rows = await portfolioRead(true)
+      let withContent = true
+      if (!rows.some((r) => metaAdAccountId(r.ad_account_id))) {
+        rows = await portfolioRead(false)
+        withContent = false
+      }
+      if (!rows.some((r) => metaAdAccountId(r.ad_account_id))) {
+        return {
+          ...base, businessId, opportunityScore: null, items: [], accountNamed: false,
+          sentence: `Meta's portfolio answer ${rows.length ? `has ${rows.length} row${rows.length === 1 ? '' : 's'} but none names an ad account` : 'has no row naming the chosen ad account'}, so Nexus cannot tell which are this business's and shows none — that is not "no recommendations". view list reads the account's own.`,
+        }
+      }
       const mine = rows.filter((r) => metaAdAccountId(r.ad_account_id) === adAccountId)
       const raw = recommendationsOf(mine)
       const known = await knownObjects(account, raw.flatMap((r) => idsOf(r.object_ids)))
       return {
-        ...base, businessId,
+        ...base, businessId, accountNamed: true,
         opportunityScore: mine.length ? num(mine[0].opportunity_score) : null,
-        items: raw.map((r) => mapRecommendation(r, known)),
+        ...nexusFilter(raw.map((r) => mapRecommendation(r, known)), input.stage, names),
         otherAccountsLeftOut: rows.length - mine.length,
+        ...(withContent ? {} : { contentNote: 'Meta answered no account with the texts asked, so this read is without them (liftEstimate and body are empty).' }),
         note: `${RECOMMENDATION_NOTE} The portfolio read names each recommendation by name and level (not by type); view list gives the type and whether Meta applies it by API.`,
       }
     }
     case 'history': {
       const tz = account.timeZone ?? 'UTC'
       const today = accountToday(tz)
-      const to = input.to ?? accountYesterday(tz)
+      // Review fix B3 — Meta states a two-day latency: the default ends two days back; a 5014023 ("to_date … violates one-day
+      // data latency") is asked once more one day earlier.
+      let to = input.to ?? addDays(today, -2)
       if (to >= today) throw new MetaLiveRefusal(`to must be before today (${today}, the account's time zone): Meta has the score up to yesterday at most, and the last two days may still be missing.`)
       const from = input.from ?? addDays(to, -14)
       if (from > to) throw new MetaLiveRefusal('from is after to.')
       if (from < addDays(to, -45)) throw new MetaLiveRefusal(`Meta reads at most 45 days back from to (from ${addDays(to, -45)} at the earliest); ask again in pieces.`)
       const reasons = input.reasons !== false
-      const read = await metaReadOne({ connectionId }, {
+      const ask = (until: string) => metaReadOne({ connectionId }, {
         operation: 'recommendations.history', path: `${act(adAccountId)}/opportunity_score_history`,
-        query: { from_date: from, to_date: to, get_reason: reasons },
+        query: { from_date: from, to_date: until, get_reason: reasons },
       })
+      let read: Awaited<ReturnType<typeof ask>>
+      let movedBack = false
+      try {
+        read = await ask(to)
+      } catch (err) {
+        if (!(err instanceof MetaReadError) || err.failure.code !== '100/5014023' || addDays(to, -1) < from) throw err
+        to = addDays(to, -1)
+        movedBack = true
+        read = await ask(to)
+      }
       const days = rowsOf(read.body).map((d) => ({
         date: text(d.date),
         opportunityScore: num(d.opportunity_score),
@@ -405,6 +501,7 @@ export async function metaRecommendations(input: RecommendationInput) {
       }))
       return {
         ...base, from, to, reasons, days,
+        ...(movedBack ? { toNote: `Meta had no score for the day asked yet, so the history ends one day earlier (${to}).` } : {}),
         note: 'Meta\'s daily snapshot of the score (it can differ from the score now, which moves during the day). The last two days may be missing (Meta\'s latency). Budgets in minor units of the account currency.',
       }
     }
@@ -415,8 +512,8 @@ export async function metaRecommendations(input: RecommendationInput) {
 
 export const EXPERIMENT_VIEWS = ['list', 'portfolio', 'study', 'results', 'sharing', 'object', 'brand-lift', 'private-lift', 'page-video-tests', 'page-video-test'] as const
 export type ExperimentView = typeof EXPERIMENT_VIEWS[number]
-/** The study types Meta names (reference/ad-study `type`, split-testing for SPLIT_TEST_V2, the Ads CLI's study list). */
-export const STUDY_TYPES = ['SPLIT_TEST', 'SPLIT_TEST_V2', 'LIFT', 'GEO_LIFT', 'CONTINUOUS_LIFT_CONFIG', 'BACKEND_AB_TESTING'] as const
+/** The study types Meta names (reference/ad-study `type` enum, split-testing for SPLIT_TEST_V2, the Ads CLI's study list). */
+export const STUDY_TYPES = ['SPLIT_TEST', 'SPLIT_TEST_V2', 'LIFT', 'GEO_LIFT', 'CONTINUOUS_LIFT_CONFIG', 'BACKEND_AB_TESTING', 'CREATIVE_SPEND_ENFORCEMENT', 'PORTFOLIO_OPTIMIZER', 'VERSION_CONTROL'] as const
 export const STUDY_STATES = ['planned', 'running', 'measuring', 'finished', 'cancelled'] as const
 export type StudyState = typeof STUDY_STATES[number]
 export const RESULT_BREAKDOWNS = ['cell_id', 'age', 'gender', 'country'] as const
@@ -425,6 +522,7 @@ export const OBJECT_KINDS = ['campaign', 'adset', 'ad'] as const
 const STUDY_TYPE_WORDS: Record<string, string> = {
   SPLIT_TEST: 'A/B test (split test)', SPLIT_TEST_V2: 'creative test', LIFT: 'conversion lift study', GEO_LIFT: 'geo lift study',
   CONTINUOUS_LIFT_CONFIG: 'continuous lift (run by Meta)', BACKEND_AB_TESTING: 'Meta\'s own back-end test',
+  CREATIVE_SPEND_ENFORCEMENT: 'creative spend enforcement (Meta)', PORTFOLIO_OPTIMIZER: 'portfolio optimiser (Meta)', VERSION_CONTROL: 'version control (Meta)',
 }
 const STATE_WORDS: Record<StudyState, string> = {
   planned: 'not started yet', running: 'running', measuring: 'ended; Meta still counts conversions until the observation end',
@@ -463,9 +561,8 @@ function mapStudy(raw: Row, account: MetaChosenAccount, now: Date = new Date()) 
     ownerBusinessId: idText(obj(raw.business)?.id ?? null), createdBy: person(raw.created_by, account), updatedBy: person(raw.updated_by, account),
   }
 }
-type Study = ReturnType<typeof mapStudy>
 
-const STUDY_NOTE = 'A study cannot be deleted (Meta has no delete for it); a running one can only be extended or given more objects (set-meta-experiment, end-meta-experiment). Changing an ad set, ad or campaign that is in a running test can spoil the test.'
+const STUDY_NOTE = 'A study cannot be deleted (Meta has no delete for it); a running one can only be extended or given more objects. Making, changing and ending tests (create-meta-experiment, set-meta-experiment, end-meta-experiment) come with a later Nexus step (step 28). Changing an ad set, ad or campaign that is in a running test can spoil the test.'
 const LIFT_NOTE = 'Conversion lift needs Meta\'s own grant ("Conversion Lift Measurement is currently limited", Meta\'s lift guide): when Meta refuses, the business asks its Meta representative. Study objectives and results also need the Meta app above development access (Meta\'s error 270).'
 
 /** The studies Meta says touch the chosen ad account (impacting_ad_studies), as Meta gives them. */
@@ -507,13 +604,24 @@ async function mapCells(rows: Row[], account: MetaChosenAccount) {
 
 const mapObjective = (o: Row) => ({ objectiveId: idText(o.id), name: text(o.name), type: text(o.type), isPrimary: bool(o.is_primary), lastUpdatedResults: text(o.last_updated_results) })
 
-/** Lift metrics that are money (Meta's Lift Metrics Glossary: spend, cost per incremental conversion / buyer): kept apart. */
-const COST_METRIC = /^spend$|cpi[a-z]|^cost|_cost/i
+/**
+ * Review fix A3 — an ALLOW-list of the lift metrics that are not money (Meta's lift guide answer: populations,
+ * impressions, conversions and buyers counted, scaled, incremental with its bounds and share, confidence, rank, p-value),
+ * each only as a plain number. Every other key (spend, cost per incremental conversion or buyer, any sales or value
+ * metric, anything nested or new) goes to `moneyAsMeta`, restricted to the ad-spend money permission.
+ */
+const LIFT_PLAIN_METRIC = /^(population_(test|control|reached)|impressions|reach|(conversions|buyers)_(test|exposed|notexposed|control_scaled|control_raw_scaled|incremental|incremental_lower|incremental_upper|incremental_share|confidence|multicell_confidence|multicell_rank|raw_pvalue|frequentist_pvalue))$/i
 const CREATIVE_TEST_KEYS = new Set(['high_performer_ids', 'confidence_by_ad_object_id', 'winner_ad_object_id', 'winner_confidence'])
+const plainNumber = (v: unknown) => v === null || (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && /^-?\d+(\.\d+)?(e-?\d+)?$/i.test(v))
+/** A map of ids to plain numbers (a creative test's confidence by ad), else null (then it is restricted). */
+const numberMap = (v: unknown): Row | null => {
+  const o = obj(v)
+  return o && Object.values(o).every(plainNumber) ? o : null
+}
 
 /**
- * An objective's results as Meta gives them (a list of JSON strings, or of objects): per breakdown row its numbers, its
- * cost metrics apart (`costAsMeta`, money: units as Meta reports them), and a creative test's outcome.
+ * An objective's results as Meta gives them (a list of JSON strings, or of objects): per breakdown row the plain numbers
+ * Nexus knows, every other metric under `moneyAsMeta` (restricted; Meta's own units), and a creative test's outcome.
  */
 export function mapResults(results: unknown) {
   const rows = arr(results).map((r) => {
@@ -524,19 +632,21 @@ export function mapResults(results: unknown) {
   return {
     rows: rows.filter((r): r is Row => !!r).map((r) => {
       const numbers: Row = {}
-      const costAsMeta: Row = {}
+      const moneyAsMeta: Row = {}
       const creative: Row = {}
       for (const [key, value] of Object.entries(r)) {
         if (['cell_id', 'age', 'gender', 'country'].includes(key)) continue
         if (CREATIVE_TEST_KEYS.has(key)) creative[key] = value
-        else if (COST_METRIC.test(key)) costAsMeta[key] = value
-        else numbers[key] = value
+        else if (LIFT_PLAIN_METRIC.test(key) && plainNumber(value)) numbers[key] = value
+        else moneyAsMeta[key] = value
       }
+      const confidence = creative.confidence_by_ad_object_id === undefined ? null : numberMap(creative.confidence_by_ad_object_id)
+      if (creative.confidence_by_ad_object_id !== undefined && !confidence) moneyAsMeta.confidence_by_ad_object_id = creative.confidence_by_ad_object_id
       return {
-        cellId: idText(r.cell_id), age: text(r.age), gender: text(r.gender), country: text(r.country), numbers, costAsMeta,
+        cellId: idText(r.cell_id), age: text(r.age), gender: text(r.gender), country: text(r.country), numbers, moneyAsMeta,
         ...(Object.keys(creative).length ? {
           creativeTest: {
-            highPerformerAdIds: idsOf(creative.high_performer_ids), confidenceByAdId: obj(creative.confidence_by_ad_object_id),
+            highPerformerAdIds: idsOf(creative.high_performer_ids), confidenceByAdId: confidence,
             note: 'For a creative test Meta names the high performers (its winner fields are always empty for creative tests).',
           },
         } : {}),
@@ -546,35 +656,48 @@ export function mapResults(results: unknown) {
   }
 }
 
-async function objectiveResults(account: MetaChosenAccount, objectiveId: string, breakdowns: string[]) {
+async function objectiveResults(account: MetaChosenAccount, objectiveId: string, breakdowns: string[], ds: string | null) {
   const read = await metaReadOne({ connectionId: account.connectionId }, {
     operation: 'experiments.results', path: objectiveId,
-    query: { fields: `${OBJECTIVE_FIELDS},results`, ...(breakdowns.length ? { breakdowns } : {}) },
+    query: { fields: `${OBJECTIVE_FIELDS},results`, ...(breakdowns.length ? { breakdowns } : {}), ...(ds ? { ds } : {}) },
   })
   const body = read.body as Row
   const results = mapResults(body.results)
   return {
-    ...mapObjective(body), breakdowns, results: results.rows,
+    ...mapObjective(body), breakdowns, asOfDay: ds, results: results.rows,
     ...(results.unreadable ? { unreadableRows: results.unreadable } : {}),
     ...(results.rows.length ? {} : { noResults: 'No results yet: Meta shows them once the study has them (resultsFirstAvailableDate), and a breakdown only when it holds at least 100 conversions (test and control together).' }),
   }
 }
 
-/** The video A/B test fields: the guide's answer and the SDK agree on these; the result fields differ (see the header). */
+/**
+ * The video A/B test fields: the guide's answer and the SDK agree on these; the result fields differ (see the header).
+ * Review fix B4 — the GUIDE's result fields are asked first (RECHECK EX-903), the SDK's only after Meta refuses them.
+ */
 const VIDEO_TEST_CORE = 'id,name,description,optimization_goal,control_video_id,experiment_video_ids,publish_status,creation_time,updated_time,scheduled_experiment_timestamp'
-const VIDEO_TEST_SDK = 'publish_time,declared_winning_video_id,declared_winning_time,insight_snapshots'
 const VIDEO_TEST_GUIDE = 'test_insights,declared_winning_video'
-const VIDEO_TEST_LIST_EXTRA = 'publish_time,declared_winning_video_id,declared_winning_time'
+const VIDEO_TEST_SDK = 'publish_time,declared_winning_video_id,declared_winning_time,insight_snapshots'
+const VIDEO_TEST_LIST_GUIDE = 'declared_winning_video'
+const VIDEO_TEST_LIST_SDK = 'publish_time,declared_winning_video_id,declared_winning_time'
 
-/** Money inside a video test's insights (in-stream ad earnings) under its own restricted key, at any depth. */
-function earningsApart(value: unknown, depth = 0): unknown {
-  if (depth > 10) return null
-  if (Array.isArray(value)) return value.map((v) => earningsApart(v, depth + 1))
-  const o = obj(value)
-  if (!o) return value
-  const out: Row = {}
-  for (const [key, child] of Object.entries(o)) out[key === 'instream_ads_earnings' ? 'earningsAsMeta' : key] = earningsApart(child, depth + 1)
-  return out
+/**
+ * Review fix A3 — the per-video numbers Meta's guide lists that are not money, each only as a plain number (the retention
+ * graph: a map of seconds to shares). Every other key — in-stream ad earnings, anything nested or new — goes to the
+ * restricted `moneyAsMeta`.
+ */
+const VIDEO_PLAIN_METRICS = new Set([
+  'plays', 'impressions', 'fan_impressions', 'link_clicks', 'comments', 'shares', 'reactions', 'video_views', 'video_views_3s',
+  'video_views_15s', 'video_views_60s', 'avg_video_views', 'avg_time_watched',
+])
+function videoMetrics(metrics: unknown) {
+  const numbers: Row = {}
+  const moneyAsMeta: Row = {}
+  for (const [key, value] of Object.entries(obj(graphSafe(metrics)) ?? {})) {
+    if (VIDEO_PLAIN_METRICS.has(key) && plainNumber(value)) numbers[key] = value
+    else if (key === 'video_retention_graph' && numberMap(value)) numbers[key] = value
+    else moneyAsMeta[key] = value
+  }
+  return { numbers, moneyAsMeta }
 }
 
 function mapVideoTest(raw: Row) {
@@ -588,17 +711,19 @@ function mapVideoTest(raw: Row) {
     declaredWinnerVideoId: idText(raw.declared_winning_video_id ?? raw.declared_winning_video), declaredWinnerTime: metaTime(raw.declared_winning_time),
     ...(videos ? {
       insightsTime: metaTime(insights?.timestamp),
-      videos: Object.entries(videos).map(([videoId, metrics]) => ({ videoId, ...(earningsApart(graphSafe(metrics)) as Row) })),
+      videos: Object.entries(videos).map(([videoId, metrics]) => ({ videoId, ...videoMetrics(metrics) })),
     } : {}),
-    ...(raw.insight_snapshots !== undefined ? { snapshots: earningsApart(graphSafe(raw.insight_snapshots)) } : {}),
+    // The SDK's snapshots have no documented shape: all of it is restricted (snapshotsAsMeta).
+    ...(raw.insight_snapshots !== undefined ? { snapshotsAsMeta: graphSafe(raw.insight_snapshots) } : {}),
   }
 }
 
 const NO_PAGE = 'No Facebook Page is chosen for this business yet. A person chooses it in Settings › Channels › Meta, or Claude asks for it with set-meta-connection (a person approves it).'
 const VIDEO_TEST_NOTE = 'Meta\'s Video A/B Testing API for the chosen Page (2–4 unpublished reels or videos per test, up to 50 tests at once). Meta\'s guide asks for a Page access token: Nexus reads the Page with the business\'s system-user token, so when Meta\'s words ask for a Page token or permission, the read comes with a later Nexus step.'
 
-/** A day (YYYY-MM-DD) as epoch seconds at 00:00 UTC (the video test list's since / until). */
+/** A day (YYYY-MM-DD) as epoch seconds at 00:00 UTC (the video test list's since); `until` is the end of its own day. */
 const epochOf = (day: string) => Math.floor(Date.parse(`${day}T00:00:00Z`) / 1000)
+const endOfDayEpoch = (day: string) => epochOf(addDays(day, 1)) - 1
 
 export interface ExperimentInput {
   connectionId?: string | null
@@ -612,6 +737,8 @@ export interface ExperimentInput {
   state?: StudyState | null
   nameContains?: string | null
   breakdowns?: Array<typeof RESULT_BREAKDOWNS[number]> | null
+  /** Results as of this day (Meta's ds; within the last 30 days). */
+  ds?: string | null
   withResults?: boolean
   testId?: string | null
   since?: string | null
@@ -626,17 +753,22 @@ export async function metaExperiments(input: ExperimentInput) {
   const maxRows = clampRows(input.maxRows, 200)
   const breakdowns = input.breakdowns?.length ? [...new Set(input.breakdowns)] : ['cell_id']
   if (breakdowns.includes('country') && !breakdowns.includes('cell_id')) throw new MetaLiveRefusal('Meta breaks results down by country only together with cell_id.')
+  // Review fix B5 — Meta's results "as of a day in the last 30 days" (lift guide, master EX-007): checked before any call.
+  const ds = input.ds ?? null
+  if (ds) {
+    const today = accountToday(account.timeZone ?? 'UTC')
+    if (ds > today || ds < addDays(today, -30)) throw new MetaLiveRefusal(`ds is a day in the last 30 days (${addDays(today, -30)} to ${today}, the account's time zone).`)
+  }
 
   switch (input.view) {
     case 'list': {
       // EX-001 (+ the Ads CLI's filters, EX-904): Meta's list documents no parameter, so Nexus filters what it answers.
-      const read = await impactingStudies(account, STUDY_FIELDS, maxRows)
-      const all = read.rows.map((r) => mapStudy(r, account))
       const word = input.nameContains?.trim().toLowerCase() || null
-      const items = all.filter((s) => (!input.type || s.type === input.type) && (!input.state || s.state === input.state) && (!word || (s.name ?? '').toLowerCase().includes(word)))
+      const read = await readMatching(connectionId, 'experiments.impacting', `${act(adAccountId)}/impacting_ad_studies`, { fields: STUDY_FIELDS }, (r) => mapStudy(r, account),
+        (s) => (!input.type || s.type === input.type) && (!input.state || s.state === input.state) && (!word || (s.name ?? '').toLowerCase().includes(word)), maxRows)
       return {
-        ...base, items, matching: items.length, read: all.length, more: read.more,
-        running: all.filter((s) => s.state === 'running').length,
+        ...base, items: read.items, matching: read.items.length, read: read.all.length, more: read.more, capNote: read.capNote,
+        running: read.all.filter((s) => s.state === 'running').length,
         note: `Studies that touch the chosen ad account or anything in it (Meta's impacting_ad_studies); type, state and name are filtered by Nexus. ${STUDY_NOTE}`,
       }
     }
@@ -669,7 +801,7 @@ export async function metaExperiments(input: ExperimentInput) {
         part(async () => (await list(connectionId, 'experiments.objectives', `${own.studyId}/objectives`, { fields: OBJECTIVE_FIELDS }, 50)).rows.map(mapObjective)),
       ])
       const results = input.withResults === false || !objectives.value?.length ? [] : await Promise.all(objectives.value.slice(0, 10).map(async (o) => {
-        const r = await part(() => objectiveResults(account, o.objectiveId!, breakdowns))
+        const r = await part(() => objectiveResults(account, o.objectiveId!, breakdowns, ds))
         return r.value ?? { ...o, notRead: r.notRead }
       }))
       return {
@@ -688,8 +820,8 @@ export async function metaExperiments(input: ExperimentInput) {
       const old = own.startTime && own.startTime < '2021-07-13'
       return {
         ...base, studyId: own.studyId, type: own.type,
-        objectives: await Promise.all(ids.map((id) => objectiveResults(account, id, breakdowns))),
-        note: `${old ? '' : 'Studies started after 2021-07-13 have no "buyers" metrics and no age, gender or country breakdowns. '}Metric names are Meta's (its Lift Metrics Glossary); costAsMeta holds the cost metrics in Meta's own units. ${own.type === 'LIFT' || own.type === 'GEO_LIFT' ? LIFT_NOTE : ''}`.trim(),
+        objectives: await Promise.all(ids.map((id) => objectiveResults(account, id, breakdowns, ds))),
+        note: `${old ? '' : 'Studies started after 2021-07-13 have no "buyers" metrics and no age, gender or country breakdowns. '}Metric names are Meta's (its Lift Metrics Glossary); moneyAsMeta holds spend, cost and value metrics and any metric Nexus does not know, in Meta's own units. ${own.type === 'LIFT' || own.type === 'GEO_LIFT' ? LIFT_NOTE : ''}`.trim(),
       }
     }
     case 'sharing': {
@@ -704,7 +836,7 @@ export async function metaExperiments(input: ExperimentInput) {
           return accountsMasked(rows.map((r) => String(r.account_id ?? r.id ?? '')), account, names)
         }),
       ])
-      return { ...base, studyId: own.studyId, viewers: viewers.value, viewersNotRead: viewers.notRead, adAccounts: related.value, adAccountsNotRead: related.notRead, note: 'People are Meta ids only (their names stay on Meta\'s side). Sharing a study is set-meta-experiment.' }
+      return { ...base, studyId: own.studyId, viewers: viewers.value, viewersNotRead: viewers.notRead, adAccounts: related.value, adAccountsNotRead: related.notRead, note: 'People are Meta ids only (their names stay on Meta\'s side). Sharing a study (set-meta-experiment) comes with a later Nexus step (step 28).' }
     }
     case 'object': {
       // AD-019 / EX-003 — is this campaign, ad set or ad in a test (before changing it)?
@@ -729,7 +861,7 @@ export async function metaExperiments(input: ExperimentInput) {
         const body = (await metaReadOne({ connectionId }, { operation: 'experiments.brandLiftCampaign', path: id, query: { fields: 'can_create_brand_lift_study,brand_lift_studies{id,name,type,start_time,end_time,observation_end_time,canceled_time}' } })).body as Row
         campaign = { campaignId: id, canCreateBrandLiftStudy: bool(body.can_create_brand_lift_study), studies: (Array.isArray(body.brand_lift_studies) ? body.brand_lift_studies : rowsOf(body.brand_lift_studies)).map(obj).filter((s): s is Row => !!s).map((s) => mapStudy(s, account)) }
       }
-      return { ...base, canCreateBrandLiftStudy: accountRead.value, accountNotRead: accountRead.notRead, campaign, note: 'Brand lift studies are Meta\'s "Automated Brand Lift V2" studies; making one is create-meta-experiment, where Meta allows it.' }
+      return { ...base, canCreateBrandLiftStudy: accountRead.value, accountNotRead: accountRead.notRead, campaign, note: 'Brand lift studies are Meta\'s "Automated Brand Lift V2" studies; making one (create-meta-experiment, where Meta allows it) comes with a later Nexus step (step 28).' }
     }
     case 'private-lift': {
       // EX-010 — Meta-run private lift computations and continuous lift configs (only where a study of that kind exists).
@@ -747,9 +879,9 @@ export async function metaExperiments(input: ExperimentInput) {
     case 'page-video-tests': {
       // EX-900 — the chosen Page's organic video A/B tests.
       if (!account.pageId) throw new MetaLiveRefusal(NO_PAGE)
-      if (input.since && input.until && input.until <= input.since) throw new MetaLiveRefusal('until must be after since (Meta\'s rule for this list).')
-      const read = await listWithFallback(connectionId, 'experiments.pageVideoTests', `${account.pageId}/ab_tests`, VIDEO_TEST_CORE, VIDEO_TEST_LIST_EXTRA, {
-        ...(input.since ? { since: epochOf(input.since) } : {}), ...(input.until ? { until: epochOf(input.until) } : {}),
+      if (input.since && input.until && input.until < input.since) throw new MetaLiveRefusal('until is before since.')
+      const read = await listWithFallback(connectionId, 'experiments.pageVideoTests', `${account.pageId}/ab_tests`, VIDEO_TEST_CORE, [VIDEO_TEST_LIST_GUIDE, VIDEO_TEST_LIST_SDK], {
+        ...(input.since ? { since: epochOf(input.since) } : {}), ...(input.until ? { until: endOfDayEpoch(input.until) } : {}),
       }, maxRows)
       return { ...base, pageId: account.pageId, items: read.rows.map(mapVideoTest), more: read.more, fieldsNote: read.note, note: VIDEO_TEST_NOTE }
     }
@@ -760,8 +892,8 @@ export async function metaExperiments(input: ExperimentInput) {
       if (!testId) throw new MetaLiveRefusal('Name the test (testId, digits, from view page-video-tests).')
       const tests = await list(connectionId, 'experiments.pageVideoTestCheck', `${account.pageId}/ab_tests`, { fields: 'id' }, 500)
       if (!tests.rows.some((r) => idText(r.id) === testId)) throw new MetaLiveRefusal('That test is not one of the chosen Page\'s video tests, so it is not read.')
-      const read = await oneWithFallbacks(connectionId, 'experiments.pageVideoTest', testId, VIDEO_TEST_CORE, [VIDEO_TEST_SDK, VIDEO_TEST_GUIDE])
-      return { ...base, pageId: account.pageId, test: mapVideoTest(read.body), fieldsNote: read.note, note: `${VIDEO_TEST_NOTE} earningsAsMeta is the in-stream ad earnings in Meta's own units.` }
+      const read = await oneWithFallbacks(connectionId, 'experiments.pageVideoTest', testId, VIDEO_TEST_CORE, [VIDEO_TEST_GUIDE, VIDEO_TEST_SDK])
+      return { ...base, pageId: account.pageId, test: mapVideoTest(read.body), fieldsNote: read.note, note: `${VIDEO_TEST_NOTE} moneyAsMeta holds the in-stream ad earnings and any metric Nexus does not know, in Meta's own units.` }
     }
   }
 }
@@ -770,7 +902,7 @@ export async function metaExperiments(input: ExperimentInput) {
 
 export const RULE_VIEWS = ['list', 'rule', 'history', 'account-history', 'preview'] as const
 export type RuleView = typeof RULE_VIEWS[number]
-export const RULE_STATUSES = ['ENABLED', 'DISABLED', 'HAS_ISSUES'] as const
+export const RULE_STATUSES = ['ENABLED', 'DISABLED', 'HAS_ISSUES', 'DELETED'] as const
 export const RULE_EVALUATION_TYPES = ['SCHEDULE', 'TRIGGER'] as const
 /** The history actions Meta names (SDK adrulehistory.py Action). */
 export const RULE_HISTORY_ACTIONS = [
@@ -939,20 +1071,27 @@ export interface RuleInput {
   maxRows?: number
 }
 
-/** A rule id from a caller, read only when the rule's account_id is the chosen ad account. */
+/**
+ * A rule id from a caller (review fix A5): its account_id ALONE is read first and must be the chosen ad account; only then
+ * is anything of the rule read (`fields`, which name a field only a rule has, so another node of the account — a campaign
+ * — is refused by Meta, #100, and never read on).
+ */
 async function ownRule(account: MetaChosenAccount, ruleId: string, fields: string): Promise<{ id: string; body: Row }> {
   const id = metaObjectId(ruleId)
   if (!id) throw new MetaLiveRefusal(`"${ruleId}" is not a Meta rule id (digits).`)
-  let body: Row
-  try {
-    body = (await metaReadOne({ connectionId: account.connectionId }, { operation: 'rules.ownerCheck', path: id, query: { fields } })).body as Row
-  } catch (err) {
-    if (err instanceof MetaReadError && (err.failure.notFound || err.failure.permissionDenied || fieldRefused(err))) {
-      throw new MetaLiveRefusal('That is not a rule of the ad account this business chose (Meta does not show it as one), so it is not read.')
+  const notARule = () => new MetaLiveRefusal('That is not a rule of the ad account this business chose (Meta does not show it as one), so it is not read.')
+  const read = async (operation: string, asked: string) => {
+    try {
+      return (await metaReadOne({ connectionId: account.connectionId }, { operation, path: id, query: { fields: asked } })).body as Row
+    } catch (err) {
+      if (err instanceof MetaReadError && (err.failure.notFound || err.failure.permissionDenied || fieldRefused(err))) throw notARule()
+      throw err
     }
-    throw err
   }
-  if (metaAdAccountId(body.account_id) !== account.adAccountId) throw new MetaLiveRefusal('That rule belongs to another ad account than the one this business chose, so it is not read.')
+  const owner = await read('rules.ownerCheck', 'account_id')
+  if (metaAdAccountId(owner.account_id) !== account.adAccountId) throw new MetaLiveRefusal('That rule belongs to another ad account than the one this business chose, so it is not read.')
+  const body = await read('rules.read', fields)
+  if (body.evaluation_spec === undefined || body.evaluation_spec === null) throw notARule()
   return { id, body }
 }
 
@@ -971,11 +1110,12 @@ export async function metaAdRules(input: RuleInput) {
   switch (input.view) {
     case 'list': {
       // RU-001 / RU-034 — every rule, trigger rules too (Ads Manager does not show those), with the ones Meta stopped.
-      const read = await list(connectionId, 'rules.library', `${act(adAccountId)}/adrules_library`, { fields: RULE_FIELDS }, maxRows)
-      const all = read.rows.map((r) => mapRule(r, account))
-      const items = all.filter((r) => (!input.status || r.status === input.status) && (!input.evaluationType || r.evaluationType === input.evaluationType))
+      const read = await readMatching(connectionId, 'rules.library', `${act(adAccountId)}/adrules_library`, { fields: RULE_FIELDS }, (r) => mapRule(r, account),
+        (r) => (!input.status || r.status === input.status) && (!input.evaluationType || r.evaluationType === input.evaluationType), maxRows)
+      const all = read.all
       return {
-        ...base, items, more: read.more,
+        ...base, items: read.items, more: read.more, capNote: read.capNote,
+        // Of the rules read (all of them unless capNote says the cap stopped the read).
         counts: { all: all.length, on: all.filter((r) => r.status === 'ENABLED').length, withIssues: all.filter((r) => r.hasIssues).length, triggerRules: all.filter((r) => !r.visibleInAdsManager).length, canRaiseSpend: all.filter((r) => r.canRaiseSpend && r.status === 'ENABLED').length },
         note: `Trigger rules (evaluationType TRIGGER) run on Meta but Ads Manager never shows them: this list does. A rule with issues was stopped by Meta (disableErrorCode; Meta does not document the codes). ${money}`,
       }
@@ -989,15 +1129,16 @@ export async function metaAdRules(input: RuleInput) {
       // RU-029 — one rule's runs: what it did to which object, with the rule as it was at each run.
       if (!input.ruleId) throw new MetaLiveRefusal('Name the rule (ruleId, from view list); view account-history reads every rule\'s runs.')
       // evaluation_spec only a rule has: another node of the account (a campaign) is refused by Meta (#100), never read on.
-      const { id } = await ownRule(account, input.ruleId, 'id,account_id,evaluation_spec')
+      const { id } = await ownRule(account, input.ruleId, 'id,evaluation_spec')
       const read = await list(connectionId, 'rules.history', `${id}/history`, { fields: HISTORY_FIELDS, ...filters }, maxRows)
       return { ...base, ruleId: id, runs: read.rows.map((r) => mapHistory(r, account)), more: read.more, note: `Newest first as Meta gives them; the rule's own state at each run shows its edits. ${money}` }
     }
     case 'account-history': {
       // RU-030 — every rule's runs on the account, newest first, each with its rule id.
-      const read = await list(connectionId, 'rules.accountHistory', `${act(adAccountId)}/adrules_history`, { fields: `${HISTORY_FIELDS},rule_id`, ...filters }, maxRows)
-      const runs = read.rows.map((r) => mapHistory(r, account)).filter((r) => !input.evaluationType || r.ruleAtRun.evaluationType === input.evaluationType)
-      return { ...base, runs, more: read.more, note: `Every rule's runs, newest first. ${money}` }
+      // The evaluation type is filtered by Nexus (Meta's evaluation_type parameter here is SDK only, never sent).
+      const read = await readMatching(connectionId, 'rules.accountHistory', `${act(adAccountId)}/adrules_history`, { fields: `${HISTORY_FIELDS},rule_id`, ...filters }, (r) => mapHistory(r, account),
+        (r) => !input.evaluationType || r.ruleAtRun.evaluationType === input.evaluationType, maxRows)
+      return { ...base, runs: read.items, more: read.more, capNote: read.capNote, note: `Every rule's runs, newest first. ${money}` }
     }
   }
 }

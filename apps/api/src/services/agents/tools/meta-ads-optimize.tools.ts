@@ -11,7 +11,7 @@
  *                         EX-900, EX-903)
  *   meta-ad-rules         Meta's automated rules, trigger rules included (Ads Manager hides those), one rule, a rule's
  *                         and the account's run history, why a rule stopped; the preview is a POST, so it comes with
- *                         set-meta-ad-rule (RU-001, RU-002, RU-029…RU-031, RU-034)
+ *                         set-meta-ad-rule, a later Nexus step (RU-001, RU-002, RU-029…RU-031, RU-034)
  * Money in minor units (cents) of the account currency, each money key restricted to the ad-spend money permission.
  */
 import { z } from 'zod'
@@ -27,8 +27,8 @@ import {
 
 const ADSPEND = FIELDS.financialsAdspendView
 /** Each tool's own money keys (minor units of the account currency, or Meta's own units where the key says AsMeta). */
-export const RECOMMENDATION_MONEY = { budgetThenCents: ADSPEND, budgetNowCents: ADSPEND } as const
-export const EXPERIMENT_MONEY = { costAsMeta: ADSPEND, earningsAsMeta: ADSPEND } as const
+export const RECOMMENDATION_MONEY = { budgetThenCents: ADSPEND, budgetNowCents: ADSPEND, moneyTextAsMeta: ADSPEND } as const
+export const EXPERIMENT_MONEY = { moneyAsMeta: ADSPEND, snapshotsAsMeta: ADSPEND } as const
 export const RULE_MONEY = { valueCents: ADSPEND, amountCents: ADSPEND, limitCents: ADSPEND, targetValueCents: ADSPEND, oldValueCents: ADSPEND, newValueCents: ADSPEND } as const
 
 const lower = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : v)
@@ -68,7 +68,7 @@ const metaRecommendationsTool: AgentTool = {
       .describe('overview, list, portfolio: only these recommendation names, Meta\'s lower-case snake case (e.g. fragmentation, aplusc_standard_enhancements_bundle)'),
     locale: z.string().trim().regex(/^[a-z]{2}_[A-Z]{2}$/).optional().describe('portfolio: the language of Meta\'s texts, e.g. it_IT (default: Meta\'s choice)'),
     from: dayArg('history: first day (default: 14 days before to; at most 45 days before to)'),
-    to: dayArg('history: last day (default: yesterday in the account\'s time zone; never today)'),
+    to: dayArg('history: last day (default: two days ago in the account\'s time zone, Meta\'s latency; never today)'),
     reasons: z.boolean().optional().describe('history: also what moved the score each day, per campaign (default true)'),
     connectionId: connectionArg,
   }),
@@ -77,10 +77,14 @@ const metaRecommendationsTool: AgentTool = {
     + 'recommendations, read live from Meta. view overview (default): the score now with every recommendation, like '
     + 'Meta\'s own opportunity-score tool. score: the score only. list: each recommendation with its type, stage, the '
     + 'campaigns, ad sets or ads it is about (names where Nexus has read them), Meta\'s expected lift, the points it adds '
-    + 'to the score, its Ads Manager link, and how to act on it: the types Meta applies by API go through '
-    + 'apply-meta-recommendations (a person approves; a budget raise SPENDS MONEY), the others name the Nexus tool that '
-    + 'does the same or Meta\'s screens. portfolio: the business portfolio\'s read, asked about the chosen account only. '
-    + 'history: the score day by day for up to 45 days ending yesterday, and per campaign what moved it (budgets, applied '
+    + 'to the score, its Ads Manager link, and how to act on it: the types Meta applies by API will go through '
+    + 'apply-meta-recommendations, which comes with a later Nexus step (step 28; a person approves; a budget raise SPENDS '
+    + 'MONEY) — until then the Ads Manager link; the others name the Nexus tool that does the same or Meta\'s screens. '
+    + 'The texts of budget recommendations can name amounts and need the ad-spend money permission. Nexus also applies '
+    + 'the stage and name filters to what Meta answers. portfolio: the business portfolio\'s read, asked about the chosen '
+    + 'account only. '
+    + 'history: the score day by day for up to 45 days (by default ending two days ago: Meta\'s data is two days late), '
+    + 'and per campaign what moved it (budgets, applied '
     + 'or newly eligible recommendations). Meta may list fewer recommendations than Ads Manager; a recommendation cannot '
     + 'be dismissed by API (only in Ads Manager). Read only; budgets in minor units (cents) of the account currency.',
   async handler(args): Promise<ToolResult> {
@@ -116,17 +120,19 @@ const metaExperimentsTool: AgentTool = {
     objectiveId: metaIdArg('results: one objective of the study (default: each of its objectives, at most 10)'),
     breakdowns: z.array(z.preprocess(lower, z.enum(RESULT_BREAKDOWNS))).max(4).optional()
       .describe('study, results: how Meta splits the results — cell_id (default: per group), age, gender, country (country only with cell_id)'),
+    ds: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+      .describe('study, results: the results as they were on this day (Meta\'s ds, YYYY-MM-DD, within the last 30 days; default: the latest)'),
     withResults: z.boolean().optional().describe('study: also read each objective\'s results (default true)'),
     objectKind: z.preprocess(lower, z.enum(OBJECT_KINDS)).optional().describe('object: campaign | adset | ad'),
     objectId: metaIdArg('object: a campaign, ad set or ad of the chosen ad account (Meta\'s id)'),
     campaignId: metaIdArg('brand-lift: also this campaign of the chosen ad account (its brand lift studies)'),
     type: z.preprocess(upper, z.enum(STUDY_TYPES)).optional()
-      .describe('list: only this kind — SPLIT_TEST (A/B test), SPLIT_TEST_V2 (creative test), LIFT, GEO_LIFT, CONTINUOUS_LIFT_CONFIG, BACKEND_AB_TESTING'),
+      .describe('list: only this kind — SPLIT_TEST (A/B test), SPLIT_TEST_V2 (creative test), LIFT, GEO_LIFT, CONTINUOUS_LIFT_CONFIG, BACKEND_AB_TESTING, CREATIVE_SPEND_ENFORCEMENT, PORTFOLIO_OPTIMIZER, VERSION_CONTROL'),
     state: z.preprocess(lower, z.enum(STUDY_STATES)).optional().describe('list: only studies that are planned | running | measuring | finished | cancelled'),
     nameContains: z.string().trim().min(1).max(100).optional().describe('list: only studies whose name holds this text'),
     testId: metaIdArg('page-video-test: the Page video test (testId from view page-video-tests)'),
     since: dayArg('page-video-tests: tests from this day'),
-    until: dayArg('page-video-tests: tests up to this day (after since)'),
+    until: dayArg('page-video-tests: tests up to and including this day (not before since)'),
     maxRows: maxRowsArg,
     connectionId: connectionArg,
   }),
@@ -143,8 +149,10 @@ const metaExperimentsTool: AgentTool = {
     + 'campaign\'s. private-lift: Meta-run lift computations. page-video-tests, page-video-test: the chosen Page\'s '
     + 'video A/B tests with each video\'s numbers and the declared winner. A study cannot be deleted; conversion lift '
     + 'needs Meta\'s grant and results need the Meta app above development access — Meta\'s refusal is passed on in '
-    + 'plain words. Making, changing or ending a test: create-meta-experiment, set-meta-experiment, '
-    + 'end-meta-experiment. Read only; cost metrics (costAsMeta, earningsAsMeta) in Meta\'s own units.',
+    + 'plain words. Making, changing or ending a test (create-meta-experiment, set-meta-experiment, '
+    + 'end-meta-experiment) comes with a later Nexus step (step 28). Read only; spend, cost, value and earnings — and any '
+    + 'metric Nexus does not know — sit under moneyAsMeta (Meta\'s own units, ad-spend money permission). Filters Nexus '
+    + 'applies itself read up to 10 pages and say so when more may match.',
   async handler(args): Promise<ToolResult> {
     const input: ExperimentInput = {
       connectionId: str(args.connectionId),
@@ -152,6 +160,7 @@ const metaExperimentsTool: AgentTool = {
       studyId: str(args.studyId),
       objectiveId: str(args.objectiveId),
       breakdowns: Array.isArray(args.breakdowns) ? args.breakdowns as ExperimentInput['breakdowns'] : null,
+      ds: str(args.ds),
       withResults: args.withResults !== false,
       objectKind: (args.objectKind ?? null) as ExperimentInput['objectKind'],
       objectId: str(args.objectId),
@@ -182,7 +191,7 @@ const metaAdRulesTool: AgentTool = {
   input: z.object({
     view: z.preprocess(lower, z.enum(RULE_VIEWS)).default('list').describe('list (default) | rule | history | account-history | preview'),
     ruleId: metaIdArg('rule, history: the rule (ruleId from view list)'),
-    status: z.preprocess(upper, z.enum(RULE_STATUSES)).optional().describe('list: only rules ENABLED | DISABLED | HAS_ISSUES (stopped by Meta)'),
+    status: z.preprocess(upper, z.enum(RULE_STATUSES)).optional().describe('list: only rules ENABLED | DISABLED | HAS_ISSUES (stopped by Meta) | DELETED'),
     evaluationType: z.preprocess(upper, z.enum(RULE_EVALUATION_TYPES)).optional()
       .describe('list, account-history: only SCHEDULE or TRIGGER rules (trigger rules are invisible in Ads Manager)'),
     objectId: metaIdArg('history, account-history: only runs on this campaign, ad set or ad (Meta\'s id)'),
@@ -200,8 +209,9 @@ const metaAdRulesTool: AgentTool = {
     + 'the codes). rule: one rule. history: what one rule did at each run, to which object, with old and new values and '
     + 'the rule as it was then. account-history: every rule\'s runs, newest first. preview: Meta\'s preview of a rule is '
     + 'a POST request and Meta documents no read form, so it comes with set-meta-ad-rule (step 29). Making, changing, '
-    + 'switching off, running or deleting a rule: set-meta-ad-rule, remove-meta-ad-rule (each a request a person '
-    + 'approves). Read only; money in conditions, actions and history in minor units (cents) of the account currency.',
+    + 'switching off, running or deleting a rule (set-meta-ad-rule, remove-meta-ad-rule) comes with a later Nexus step '
+    + '(step 29). Filters Nexus applies itself read up to 10 pages and say so when more may match. Read only; money in '
+    + 'conditions, actions and history in minor units (cents) of the account currency.',
   async handler(args): Promise<ToolResult> {
     const input: RuleInput = {
       connectionId: str(args.connectionId),

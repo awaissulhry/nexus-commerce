@@ -506,6 +506,7 @@ describe('step 8 — recommendations, studies and rules add only their own query
       '9876543210/ad_studies?fields=id,name&limit=100',
       '6100000000001/cells?fields=id,name,treatment_percentage,adaccounts.limit(100),campaigns.limit(100),adsets.limit(100),control_percentage,ad_ids&limit=100',
       '6300000000001?fields=id,name,type,is_primary,last_updated_results,results&breakdowns=["cell_id","age"]',
+      '6300000000001?fields=id,results&breakdowns=["cell_id"]&ds=2026-10-20',
       '6100000000001/related_ad_accounts?fields=account_id,name', '6100000000001/viewers?fields=id',
       '120000000000101?fields=can_create_brand_lift_study,brand_lift_studies{id,name,type,start_time,end_time}',
       '120000000000201/ad_studies?fields=id,name',
@@ -523,6 +524,9 @@ describe('step 8 — recommendations, studies and rules add only their own query
       ['act_1234567890/insights?fields=spend&from_date=2026-10-01', 'from_date'], ['act_1234567890/opportunity_score_history?time_range={}', 'time_range'],
       ['act_1234567890?fields=id&breakdowns=["age"]', 'breakdowns'], ['120000000000101/ad_studies?fields=id&breakdowns=["age"]', 'breakdowns'],
       ['6100000000001/cells?fields=id&breakdowns=["cell_id"]', 'breakdowns'],
+      // Review fix A2 — on a bare id only with a top-level `results` field (a study objective's results read).
+      ['120000000000101?fields=id,name&breakdowns=["age"]', 'breakdowns'], ['120000000000101?fields=id,name&ds=2026-10-20', 'ds'],
+      ['120000000000101?fields=id,insights{results}&breakdowns=["age"]', 'breakdowns'], ['120000000000101/insights?fields=spend&ds=2026-10-20', 'ds'],
       ['act_1234567890/history?object_id=1', 'object_id'], ['120000000000201/adrules_history?action=PAUSED', 'action'],
       ['act_1234567890/adrules_library?fields=id&evaluation_type=TRIGGER', 'evaluation_type'], ['act_1234567890/adrules_history?evaluation_type=TRIGGER', 'evaluation_type'],
       ['120000000000010/feed?fields=id&until=1792454400', 'until'], ['act_1234567890/ab_tests?since=1', 'since'],

@@ -54,8 +54,9 @@ vi.mock('../../../db.js', () => {
 })
 
 import { EXPERIMENT_MONEY, META_ADS_OPTIMIZE_TOOLS, RECOMMENDATION_MONEY, RULE_MONEY } from './meta-ads-optimize.tools.js'
+import { META_ADS_READ_TOOLS } from './meta-ads-read.tools.js'
 import { MetaReadError, type MetaFailure } from '../../marketing/meta-ads/errors.js'
-import { accountToday, accountYesterday, addDays } from '../../marketing/meta-ads/dates.js'
+import { accountToday, addDays } from '../../marketing/meta-ads/dates.js'
 import { metaUrl } from '../../gateway/meta.js'
 import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
 
@@ -122,9 +123,12 @@ describe('meta-recommendations', () => {
     const out = await data('meta-recommendations', {})
     expect(out).toMatchObject({ opportunityScore: 71.5, totalScoreLift: 10, scoreNotRead: null, itemsNotRead: null })
     expect(out.items[0]).toMatchObject({
-      type: 'SCALE_GOOD_CAMPAIGN', signature: '1234567', liftEstimate: 'Up to 8% more purchases', opportunityScoreLift: 6, stageText: 'for campaigns, ad sets or ads that run now',
-      objects: [{ id: '120000000000201', kind: 'adset', name: 'Shop A adset 201' }], howToAct: { byApi: true, tool: 'apply-meta-recommendations', spendsMoney: 'yes' },
+      type: 'SCALE_GOOD_CAMPAIGN', signature: '1234567', opportunityScoreLift: 6, stageText: 'for campaigns, ad sets or ads that run now',
+      objects: [{ id: '120000000000201', kind: 'adset', name: 'Shop A adset 201' }], howToAct: { byApi: true, tool: 'apply-meta-recommendations', toolComesWith: 'a later Nexus step (step 28)', spendsMoney: 'yes' },
+      // Review fix A6 — a budget recommendation's texts can name amounts: restricted.
+      liftEstimate: null, body: null, moneyTextAsMeta: { liftEstimate: 'Up to 8% more purchases', body: 'Two ad sets deliver well' },
     })
+    expect([...moneyKeys(out)].every((k) => k in RECOMMENDATION_MONEY)).toBe(true)
     expect(out.items[1]).toMatchObject({ type: 'BUDGET_LIMITED', signature: null, objects: [{ id: '120000000000101', kind: 'campaign' }, { id: '120000000000999', kind: null, name: null }], howToAct: { byApi: false, nexusTools: ['set-meta-ad-set', 'set-meta-campaign'] } })
     expect(out.note).toMatch(/cannot be dismissed by API/)
     expect(h.calls.map((c) => [c.path, c.query])).toEqual([['act_1234567890', { fields: 'opportunity_score' }], ['act_1234567890/recommendations', {}]])
@@ -135,8 +139,15 @@ describe('meta-recommendations', () => {
     h.bodies.set('act_1234567890/recommendations', RECS)
     expect(await data('meta-recommendations', { view: 'overview' })).toMatchObject({ opportunityScore: null, scoreNotRead: 'Meta refused the read: no score' })
     h.calls.length = 0
-    await data('meta-recommendations', { view: 'list', stage: 'MID_FLIGHT', names: ['Fragmentation', 'scale_good_campaign'] })
+    const listed = await data('meta-recommendations', { view: 'list', stage: 'MID_FLIGHT', names: ['Fragmentation', 'scale_good_campaign'] })
     expect(h.calls[0].query).toEqual({ recommendation_stages: ['mfr'], recommendation_names: ['fragmentation', 'scale_good_campaign'] })
+    // Review fix B1 — Meta answered BUDGET_LIMITED although only fragmentation and scale_good_campaign were asked: Nexus
+    // filters too, so an ignored filter never looks applied.
+    expect(listed).toMatchObject({ leftOutByNexus: 1, filterNote: expect.stringMatching(/outside the filter/) })
+    expect(listed.items.map((i: any) => i.type)).toEqual(['SCALE_GOOD_CAMPAIGN'])
+    h.bodies.set('act_1234567890/recommendations', { data: [{ recommendations: [{ type: 'FRAGMENTATION_V3', recommendation_stage: 'pre_create_guidance' }, { type: 'FRAGMENTATION_V3', recommendation_stage: 'mid_flight_recommendation' }] }] })
+    const versioned = await data('meta-recommendations', { view: 'list', stage: 'mid_flight', names: ['fragmentation'] })
+    expect(versioned).toMatchObject({ leftOutByNexus: 1, items: [{ type: 'FRAGMENTATION_V3', stage: 'mid_flight_recommendation' }] })
     expect(gatewayProblems()).toEqual([])
   })
   it('portfolio: asked about the chosen account only; a row of another account is dropped, never shown', async () => {
@@ -154,10 +165,23 @@ describe('meta-recommendations', () => {
     expect((await run('meta-recommendations', { view: 'portfolio' })).error).toMatch(/no business portfolio/)
     expect(h.calls).toHaveLength(0)
   })
-  it('history: up to yesterday, at most 45 days, with what moved the score; budgets in minor units', async () => {
+  it('portfolio (review fix B2): rows that name no account are read once more without the texts; never "no recommendations"', async () => {
+    h.bodies.set('9876543210/recommendations', (req: Req) => (req.query?.fields
+      ? { data: [{ recommendation_content: { body: 'x' } }] }
+      : { data: [{ ad_account_id: '1234567890', opportunity_score: 70, recommendations: [{ recommendation_name: 'fragmentation' }] }] }))
+    const second = await data('meta-recommendations', { view: 'portfolio' })
+    expect(h.calls.map((c) => c.query?.fields ?? null)).toEqual(['recommendation_content', null])
+    expect(second).toMatchObject({ accountNamed: true, opportunityScore: 70, items: [{ name: 'fragmentation' }], contentNote: expect.stringMatching(/without them/) })
+    h.bodies.set('9876543210/recommendations', { data: [{ opportunity_score: 12, recommendations: [{ recommendation_name: 'other' }] }] })
+    const none = await data('meta-recommendations', { view: 'portfolio' })
+    expect(none).toMatchObject({ accountNamed: false, items: [], sentence: expect.stringMatching(/not "no recommendations"/) })
+    expect(JSON.stringify(none)).not.toMatch(/"other"/)
+    expect(gatewayProblems()).toEqual([])
+  })
+  it('history: by default to two days back (Meta\'s latency), at most 45 days, with what moved the score; budgets in minor units', async () => {
     h.bodies.set('act_1234567890/opportunity_score_history', { data: [{ date: '2026-10-18', opportunity_score: '90', changelog: [{ campaign_id: '120000000000101', score_change: '+34', campaign_details: [{ ad_object_id: '120000000000201', ad_object_type: 'ad_set', budget_then: '5000', budget_now: '6000', eligible_recommendation_types_then: ['advantage_plus_audience'], applied_recommendation_types_now: ['advantage_plus_audience'] }] }] }] })
     const out = await data('meta-recommendations', { view: 'history' })
-    const to = accountYesterday('Europe/Rome')
+    const to = addDays(accountToday('Europe/Rome'), -2)
     expect(h.calls[0]).toEqual({ operation: 'recommendations.history', path: 'act_1234567890/opportunity_score_history', query: { from_date: addDays(to, -14), to_date: to, get_reason: true } })
     expect(out.days).toEqual([{ date: '2026-10-18', opportunityScore: 90, changes: [{ campaignId: '120000000000101', scoreChange: 34, objects: [{ objectId: '120000000000201', objectType: 'ad_set', budgetThenCents: 5000, budgetNowCents: 6000, eligibleThen: ['advantage_plus_audience'], eligibleNow: [], appliedThen: [], appliedNow: ['advantage_plus_audience'] }] }] }])
     expect([...moneyKeys(out)].every((k) => k in RECOMMENDATION_MONEY)).toBe(true)
@@ -168,6 +192,12 @@ describe('meta-recommendations', () => {
     expect((await run('meta-recommendations', { view: 'history', from: addDays(to, -46), to })).error).toMatch(/at most 45 days/)
     expect((await run('meta-recommendations', { view: 'history', from: to, to: addDays(to, -1) })).error).toMatch(/from is after to/)
     expect(h.calls).toHaveLength(0)
+    // A 5014023 (the day asked has no data yet) is asked once more, one day earlier — and said so.
+    const yesterday = addDays(today, -1)
+    h.fail = (req) => (req.query?.to_date === yesterday ? metaRefusal('100/5014023', 'Meta refused the read: to_date violates one-day data latency') : null)
+    const back = await data('meta-recommendations', { view: 'history', to: yesterday })
+    expect(h.calls.map((c) => c.query?.to_date)).toEqual([yesterday, addDays(yesterday, -1)])
+    expect(back).toMatchObject({ to: addDays(yesterday, -1), toNote: expect.stringMatching(/one day earlier/) })
   })
 })
 
@@ -196,7 +226,7 @@ describe('meta-experiments', () => {
     h.bodies.set('6100000000001', STUDY_RUNNING)
     h.bodies.set('6100000000001/cells', { data: [{ id: '6200000000001', name: 'Group A', treatment_percentage: 50, adaccounts: { data: [{ id: 'act_1234567890' }, { id: 'act_1111111111' }] }, adsets: { data: [{ id: '120000000000201' }] } }] })
     h.bodies.set('6100000000001/objectives', { data: [{ id: '6300000000001', name: 'Purchases', type: 'CONVERSIONS', is_primary: true }] })
-    h.bodies.set('6300000000001', { id: '6300000000001', name: 'Purchases', results: [JSON.stringify({ cell_id: '6200000000001', conversions_incremental: 12.5, spend: 260 })] })
+    h.bodies.set('6300000000001', { id: '6300000000001', name: 'Purchases', results: [JSON.stringify({ cell_id: '6200000000001', conversions_incremental: 12.5, spend: 260, conversions_sales_value: 1999 })] })
     h.fail = (req) => (req.path === '6100000000001/cells' && String(req.query?.fields).includes('ad_ids') ? metaRefusal('100', 'Meta refused the read: (#100) nonexisting field (ad_ids)') : null)
     const out = await data('meta-experiments', { view: 'study', studyId: '6100000000001' })
     expect(out.study).toMatchObject({ studyId: '6100000000001', state: 'running' })
@@ -207,7 +237,8 @@ describe('meta-experiments', () => {
     }])
     expect(out.cellsNote).toMatch(/ad_ids/)
     expect(out.objectives).toEqual([{ objectiveId: '6300000000001', name: 'Purchases', type: 'CONVERSIONS', isPrimary: true, lastUpdatedResults: null }])
-    expect(out.results[0]).toMatchObject({ objectiveId: '6300000000001', breakdowns: ['cell_id'], results: [{ cellId: '6200000000001', numbers: { conversions_incremental: 12.5 }, costAsMeta: { spend: 260 } }] })
+    expect(out.results[0]).toMatchObject({ objectiveId: '6300000000001', breakdowns: ['cell_id'], results: [{ cellId: '6200000000001', numbers: { conversions_incremental: 12.5 }, moneyAsMeta: { spend: 260, conversions_sales_value: 1999 } }] })
+    expect(JSON.stringify(out.results[0].results[0].numbers)).not.toMatch(/1999|260/)
     expect(h.calls.find((c) => c.path === '6300000000001')?.query).toEqual({ fields: 'id,name,type,is_primary,last_updated_results,results', breakdowns: ['cell_id'] })
     expect([...moneyKeys(out)].every((k) => k in EXPERIMENT_MONEY)).toBe(true)
     expect(gatewayProblems()).toEqual([])
@@ -231,6 +262,16 @@ describe('meta-experiments', () => {
     expect(out.objectives[0]).toMatchObject({ breakdowns: ['cell_id', 'age'], results: [{ creativeTest: { highPerformerAdIds: ['120000000000301'] } }] })
     expect(out.note).toMatch(/no "buyers" metrics/)
     expect(gatewayProblems()).toEqual([])
+    // Review fix B5 — results as of a day (Meta's ds), only within the last 30 days.
+    const day = addDays(accountToday('Europe/Rome'), -3)
+    h.calls.length = 0
+    await data('meta-experiments', { view: 'results', studyId: '6100000000003', ds: day })
+    expect(h.calls.find((c) => c.path === '6300000000003')?.query).toMatchObject({ ds: day, breakdowns: ['cell_id'] })
+    expect(gatewayProblems()).toEqual([])
+    h.calls.length = 0
+    expect((await run('meta-experiments', { view: 'results', studyId: '6100000000003', ds: addDays(accountToday('Europe/Rome'), -31) })).error).toMatch(/last 30 days/)
+    expect((await run('meta-experiments', { view: 'results', studyId: '6100000000003', ds: addDays(accountToday('Europe/Rome'), 1) })).error).toMatch(/last 30 days/)
+    expect(h.calls).toHaveLength(0)
     h.fail = (req) => (req.path === '6300000000003' ? metaRefusal('270', 'Meta does not let this system user read this: (#270) development access level', { permissionDenied: true }) : null)
     expect((await run('meta-experiments', { view: 'results', studyId: '6100000000003' })).error).toMatch(/#270/)
   })
@@ -272,20 +313,39 @@ describe('meta-experiments', () => {
   it('page video tests: only the chosen Page; one test only when that Page lists it; the guide\'s fields after a refusal; earnings apart', async () => {
     h.bodies.set('120000000000010/ab_tests', (req: Req) => ({ data: [{ id: '7100000000001', name: 'Hook test', optimization_goal: 'REELS_PLAYS', experiment_video_ids: ['7200000000001', '7200000000002'], publish_status: 'LIVE', creation_time: '1760000000' }].map((r) => (String(req.query?.fields) === 'id' ? { id: r.id } : r)) }))
     const list = await data('meta-experiments', { view: 'page-video-tests', since: '2026-10-01', until: '2026-10-20' })
-    expect(h.calls[0].query).toMatchObject({ since: Date.parse('2026-10-01T00:00:00Z') / 1000, until: Date.parse('2026-10-20T00:00:00Z') / 1000 })
+    // Review fix B7 — until includes its own day (to its last second, UTC); B4 — the guide's fields first.
+    expect(h.calls[0].query).toMatchObject({ since: Date.parse('2026-10-01T00:00:00Z') / 1000, until: Date.parse('2026-10-21T00:00:00Z') / 1000 - 1, fields: expect.stringMatching(/,declared_winning_video$/) })
     expect(list.items[0]).toMatchObject({ testId: '7100000000001', videoIds: ['7200000000001', '7200000000002'], createdTime: '2025-10-09T08:53:20.000Z' })
     expect((await run('meta-experiments', { view: 'page-video-test', testId: '7100000000099' })).error).toMatch(/not one of the chosen Page's video tests/)
-    h.fail = (req) => (req.path === '7100000000001' && String(req.query?.fields).includes('insight_snapshots') ? metaRefusal('100', 'Meta refused the read: (#100) nonexisting field (insight_snapshots)') : null)
-    h.bodies.set('7100000000001', { id: '7100000000001', declared_winning_video: '7200000000001', test_insights: { timestamp: '1760000000', videos: { 7200000000001: { plays: 10, instream_ads_earnings: 3 } } } })
+    h.bodies.set('7100000000001', { id: '7100000000001', declared_winning_video: '7200000000001', test_insights: { timestamp: '1760000000', videos: { 7200000000001: { plays: 10, instream_ads_earnings: 3, video_retention_graph: { 0: 1, 1: 0.5 }, sales_value: 50, nested: { a: 1 } } } } })
     const one = await data('meta-experiments', { view: 'page-video-test', testId: '7100000000001' })
-    expect(one.test).toMatchObject({ declaredWinnerVideoId: '7200000000001', videos: [{ videoId: '7200000000001', plays: 10, earningsAsMeta: 3 }] })
-    expect(JSON.stringify(one)).not.toMatch(/instream_ads_earnings/)
-    expect(h.calls.filter((c) => c.path === '7100000000001').map((c) => c.query?.fields)).toEqual([expect.stringContaining('insight_snapshots'), expect.stringContaining('test_insights')])
+    // Review fix A3 — only the guide's plain counts stay unrestricted; earnings, values and anything nested or new do not.
+    expect(one.test).toMatchObject({ declaredWinnerVideoId: '7200000000001', videos: [{ videoId: '7200000000001', numbers: { plays: 10, video_retention_graph: { 0: 1, 1: 0.5 } }, moneyAsMeta: { instream_ads_earnings: 3, sales_value: 50, nested: { a: 1 } } }] })
+    expect(h.calls.filter((c) => c.path === '7100000000001').map((c) => c.query?.fields)).toEqual([expect.stringContaining('test_insights')])
+    // The SDK's names only after Meta refuses the guide's; its snapshots have no documented shape: all restricted.
+    h.calls.length = 0
+    h.fail = (req) => (req.path === '7100000000001' && String(req.query?.fields).includes('test_insights') ? metaRefusal('100', 'Meta refused the read: (#100) nonexisting field (test_insights)') : null)
+    h.bodies.set('7100000000001', { id: '7100000000001', declared_winning_video_id: '7200000000002', insight_snapshots: [{ t: [{ 1: { plays: 4, instream_ads_earnings: 2 } }] }] })
+    const sdk = await data('meta-experiments', { view: 'page-video-test', testId: '7100000000001' })
+    expect(sdk.test).toMatchObject({ declaredWinnerVideoId: '7200000000002', snapshotsAsMeta: [{ t: [{ 1: { plays: 4, instream_ads_earnings: 2 } }] }] })
+    expect(sdk.fieldsNote).toMatch(/test_insights/)
+    expect(h.calls.filter((c) => c.path === '7100000000001').map((c) => c.query?.fields)).toEqual([expect.stringContaining('test_insights'), expect.stringContaining('insight_snapshots')])
     expect([...moneyKeys(one)].every((k) => k in EXPERIMENT_MONEY)).toBe(true)
+    expect([...moneyKeys(sdk)].every((k) => k in EXPERIMENT_MONEY)).toBe(true)
     expect(gatewayProblems()).toEqual([])
     h.connections = [{ ...CHOSEN, page: null }]
     h.calls.length = 0
     expect((await run('meta-experiments', { view: 'page-video-tests' })).error).toMatch(/No Facebook Page is chosen/)
+    expect(h.calls).toHaveLength(0)
+  })
+})
+
+describe('review fix A2 — breakdowns and ds never ride on another bare-id read', () => {
+  it('meta-ads-graph-read refuses breakdowns on a campaign id before any call', async () => {
+    h.known = new Map([['120000000000101', 'campaign']])
+    const graph = META_ADS_READ_TOOLS.find((t) => t.name === 'meta-ads-graph-read')!
+    const res = await graph.handler(graph.input.parse({ path: '120000000000101', fields: 'id,name', params: { breakdowns: '["age"]' } }), ctx as never)
+    expect(res).toMatchObject({ ok: false, error: expect.stringMatching(/does not send the parameter "breakdowns"/) })
     expect(h.calls).toHaveLength(0)
   })
 })
@@ -316,19 +376,20 @@ describe('meta-ad-rules', () => {
     const other = await run('meta-ad-rules', { view: 'rule', ruleId: '23850000000000003' })
     expect(other.error).toMatch(/belongs to another ad account/)
     expect(JSON.stringify(other)).not.toMatch(/Other business rule/)
+    // Review fix A5 — only account_id is read before the check: nothing of another account's rule is ever asked.
+    expect(h.calls.filter((c) => c.path === '23850000000000003').map((c) => c.query?.fields)).toEqual(['account_id'])
     h.calls.length = 0
     expect((await run('meta-ad-rules', { view: 'history', ruleId: '23850000000000003' })).error).toMatch(/belongs to another ad account/)
-    expect(h.calls.map((c) => c.path)).toEqual(['23850000000000003'])
+    expect(h.calls.map((c) => [c.path, c.query?.fields])).toEqual([['23850000000000003', 'account_id']])
     h.fail = (req) => (req.path === '23850000000000004' ? metaRefusal('100/33', 'Meta says this does not exist', { notFound: true }) : null)
     expect((await run('meta-ad-rules', { view: 'rule', ruleId: '23850000000000004' })).error).toMatch(/not a rule of the ad account/)
   })
   it('history: the rule\'s runs with Meta\'s filters; old and new budgets in minor units; account-history carries the rule id', async () => {
-    h.bodies.set('23850000000000001', { account_id: '1234567890' })
+    h.bodies.set('23850000000000001', { account_id: '1234567890', evaluation_spec: { evaluation_type: 'SCHEDULE' } })
     h.bodies.set('23850000000000001/history', { data: [{ timestamp: '2026-10-20T00:30:00+0000', is_manual: false, evaluation_spec: { evaluation_type: 'SCHEDULE' }, execution_spec: { execution_type: 'CHANGE_BUDGET' }, results: [{ object_id: '120000000000201', object_type: 'ADSET', actions: [{ action: 'CHANGED_BUDGET', field: 'daily_budget', old_value: '5000', new_value: '6000' }] }] }] })
     const out = await data('meta-ad-rules', { view: 'history', ruleId: '23850000000000001', objectId: '120000000000201', action: 'changed_budget', hideNoChanges: true })
-    expect(h.calls.map((c) => c.path)).toEqual(['23850000000000001', '23850000000000001/history'])
-    expect(h.calls[0].query).toEqual({ fields: 'id,account_id,evaluation_spec' })
-    expect(h.calls[1].query).toMatchObject({ object_id: '120000000000201', action: 'CHANGED_BUDGET', hide_no_changes: true })
+    expect(h.calls.map((c) => [c.path, c.query?.fields])).toEqual([['23850000000000001', 'account_id'], ['23850000000000001', 'id,evaluation_spec'], ['23850000000000001/history', expect.any(String)]])
+    expect(h.calls[2].query).toMatchObject({ object_id: '120000000000201', action: 'CHANGED_BUDGET', hide_no_changes: true })
     expect(out.runs).toEqual([{ time: '2026-10-20T00:30:00.000Z', manual: false, error: null, ruleAtRun: { evaluationType: 'SCHEDULE', action: 'CHANGE_BUDGET' }, changedSomething: true, results: [{ objectId: '120000000000201', objectType: 'ADSET', actions: [{ action: 'CHANGED_BUDGET', actionText: 'changed the budget', field: 'daily_budget', oldValueCents: 5000, newValueCents: 6000 }] }] }])
     h.bodies.set('act_1234567890/adrules_history', { data: [
       { rule_id: '23850000000000002', timestamp: '2026-10-20T01:00:00+0000', evaluation_spec: { evaluation_type: 'TRIGGER' }, results: [] },
@@ -341,6 +402,28 @@ describe('meta-ad-rules', () => {
     expect(h.calls.at(-1)?.query?.fields).toMatch(/,rule_id$/)
     expect([...moneyKeys(out)].every((k) => k in RULE_MONEY)).toBe(true)
     expect(gatewayProblems()).toEqual([])
+  })
+  it('review fix B6 — a filter Nexus applies itself reads on until enough rows match, and says so when the page cap stopped it', async () => {
+    const page = (rows: unknown[]) => ({ data: rows, paging: { cursors: { after: 'c1' }, next: 'https://graph.facebook.com/v26.0/next' } })
+    h.bodies.set('act_1234567890/adrules_library', page([RULE]))
+    const capped = await data('meta-ad-rules', { status: 'HAS_ISSUES' })
+    expect(h.calls).toHaveLength(10)
+    expect(capped).toMatchObject({ items: [], more: true, capNote: expect.stringMatching(/first 10 rows .* more may match/) })
+    h.calls.length = 0
+    h.bodies.set('act_1234567890/adrules_library', page([RULE, TRIGGER]))
+    const enough = await data('meta-ad-rules', { status: 'ENABLED', maxRows: 1 })
+    expect(h.calls).toHaveLength(1)
+    expect(enough).toMatchObject({ items: [{ ruleId: '23850000000000001' }], more: true, capNote: null })
+    h.calls.length = 0
+    h.bodies.set('act_1234567890/impacting_ad_studies', page([STUDY_DONE]))
+    expect(await data('meta-experiments', { view: 'list', state: 'running' })).toMatchObject({ items: [], capNote: expect.stringMatching(/more may match/) })
+    expect(h.calls.every((c) => c.query?.limit === 100)).toBe(true)
+    expect(gatewayProblems()).toEqual([])
+  })
+  it('a rule check never reads on when the id is not a rule (no evaluation_spec answered)', async () => {
+    h.bodies.set('120000000000101', { account_id: '1234567890' })
+    expect((await run('meta-ad-rules', { view: 'rule', ruleId: '120000000000101' })).error).toMatch(/not a rule of the ad account/)
+    expect(h.calls.some((c) => c.path.endsWith('/history'))).toBe(false)
   })
   it('preview: Meta\'s preview is a POST with no read form — it comes with set-meta-ad-rule, and no call is made', async () => {
     const out = await data('meta-ad-rules', { view: 'preview', ruleId: '23850000000000001' })
