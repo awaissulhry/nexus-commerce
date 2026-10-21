@@ -67,6 +67,12 @@ export async function metaChosenPageOf(connectionId: string): Promise<string | n
   return link?.externalId ?? null
 }
 
+/** Meta step 21: the Instagram account this business chose through this connection (its INSTAGRAM MetaAccountLink), or null. */
+export async function metaChosenInstagramOf(connectionId: string): Promise<string | null> {
+  const link = await prisma.metaAccountLink.findFirst({ where: { connectionId, product: 'INSTAGRAM' }, select: { externalId: true } })
+  return link?.externalId ?? null
+}
+
 /** The kinds of Meta object Nexus's daily read stores (and a change by object id may name). */
 export type MetaStoredKind = 'campaign' | 'adset' | 'ad'
 

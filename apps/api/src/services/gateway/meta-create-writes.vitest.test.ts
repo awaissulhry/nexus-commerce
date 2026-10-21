@@ -291,7 +291,7 @@ describe('review B3 — the WhatsApp marketing-messages field: read on the ad ac
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 
-describe('review A2 — every Meta DELETE has two senders: removalDraft (undo of a create) and metaRemoveDraft (step 22, explicit ask)', () => {
+describe('review A2 — every Meta DELETE has its named senders: removalDraft (undo of a create), metaRemoveDraft (step 22, explicit ask) and labelsDraft (step 21: a label, explicit ask)', () => {
   const SRC = join(HERE, '../..')
   /** Every non-test .ts file under apps/api/src, by its path from there. */
   const files = (dir: string, out: string[] = []): string[] => {
@@ -319,6 +319,11 @@ describe('review A2 — every Meta DELETE has two senders: removalDraft (undo of
     const remove = all.find((f) => f.path === 'services/agents/tools/meta-ads-remove.tools.ts')!.text
     expect(remove.match(/\bmetaRemoveDraft\(/g)).toHaveLength(1)
     expect(remove).toMatch(/confirmDelete: z\.literal\(true\)/)
+    // Step 21 — the label delete: labelsDraft, called by set-meta-labels only, refused unless confirmDelete is true.
+    expect(callers('labelsDraft')).toEqual(['services/agents/tools/meta-ads-labels-rules.tools.ts'])
+    const labels = all.find((f) => f.path === 'services/marketing/meta-ads/change-labels.ts')!.text
+    expect(labels.indexOf('request.confirmDelete !== true')).toBeGreaterThan(0)
+    expect(labels.indexOf('request.confirmDelete !== true')).toBeLessThan(labels.indexOf("method: 'DELETE'"))
   })
   it('no gateway call of Meta outside the gateway names a method but GET', () => {
     const META_CALL = /gateway(Call|Fetch)\(\{[^]*?channel:\s*['"`]META['"`][^]*?\}\)/g
@@ -342,6 +347,8 @@ describe('review A2 — every Meta DELETE has two senders: removalDraft (undo of
       'services/marketing/meta-ads/change-create-common.ts': 1, // removalDraft: the undo of a create or a copy
       'services/marketing/meta-ads/change-draft.ts': 1, // the request type
       'services/marketing/meta-ads/change-remove.ts': 1, // step 22: metaRemoveDraft's one delete request builder (explicit ask)
+      'services/gateway/meta-labels-rules.ts': 1, // step 21: the adlabel.delete rule (a judge)
+      'services/marketing/meta-ads/change-labels.ts': 1, // step 21: labelsDraft's label delete (explicit ask: confirmDelete)
       'services/marketing/meta-ads/write-client.ts': 6, // passes on what a request names
     })
     // A method named by a constant, a variable or a ternary: only where it is passed on.

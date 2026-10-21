@@ -21,7 +21,7 @@
  * Never logs a token, a request body or an answer.
  */
 import { metaWriteCall, type MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaRemoveKind } from '../../gateway/meta-calls.js'
+import type { MetaLabelsKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
 import { failureOfAnswer, failureOfThrow, localFailure, type MetaFailure } from './errors.js'
@@ -56,7 +56,7 @@ export interface MetaWriteTarget { connectionId: string; adAccountId: string }
 export interface MetaObjectChange {
   objectId: string
   /** The kind of object (the gateway confirms it before anything is sent). Step 22: a creative, a video, an Instant Experience part. */
-  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind
+  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
   params: Record<string, string>
   operation: string
   budget?: boolean
@@ -81,6 +81,8 @@ export interface MetaObjectChange {
   parent?: { kind: 'campaign' | 'adset'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (include_recommendations, master CMP-031). */
   recommendations?: boolean
+  /** Step 21 — an edge that changes the object itself (a campaign's labels edge): the object is read back, not a new one. */
+  readBackObject?: true
 }
 
 /**
@@ -123,12 +125,33 @@ const unixOf = (v: unknown): string => {
   return Number.isFinite(ms) ? String(Math.floor(ms / 1000)) : text
 }
 
+/**
+ * Step 21 — an object's label list as asked (`[{"id": …} | {"name": …}]`, the WHOLE list it should carry) against Meta's
+ * read-back (`adlabels{id,name}`: a list or {data: […]}): the same number of labels, each asked one matched by its id, or by
+ * its name when it was named only (Meta made it). Order does not count.
+ */
+function labelListMatches(got: unknown, value: string): boolean {
+  let asked: unknown
+  try { asked = JSON.parse(value) } catch { return false }
+  const rows = Array.isArray(got) ? got : got && typeof got === 'object' && Array.isArray((got as { data?: unknown }).data) ? (got as { data: unknown[] }).data : null
+  if (!Array.isArray(asked) || !rows || rows.length !== asked.length) return false
+  const left = rows.map((r) => (r && typeof r === 'object' ? r as Record<string, unknown> : {}))
+  return asked.every((a) => {
+    const entry = (a ?? {}) as Record<string, unknown>
+    const i = left.findIndex((r) => (entry.id !== undefined ? String(r.id) === String(entry.id) : r.name === entry.name))
+    if (i < 0) return false
+    left.splice(i, 1)
+    return true
+  })
+}
+
 /** Step 18 — the fields of a read-back that do not show what was asked (a field not sent back is not judged). */
 export function readBackMismatch(node: Record<string, unknown> | null, expected: Record<string, string>): string[] {
   if (!node) return []
   return Object.entries(expected).filter(([field, value]) => {
     const got = node[field]
     if (got === undefined || got === null) return false
+    if (field === 'adlabels') return !labelListMatches(got, value)
     if (TIME_FIELDS.has(field)) return unixOf(got) !== unixOf(value)
     return (typeof got === 'string' || typeof got === 'number' || typeof got === 'boolean' ? String(got) : JSON.stringify(got)) !== value
   }).map(([field]) => field)
@@ -253,7 +276,7 @@ export async function metaSendChange(
       if (body && ownId && Object.keys(body).length > 1) return { node: body, readBack: 'same-request', waitedMs }
       // Step 19 — a copy answers copied_<kind>_id with the ids of everything it made (ad_object_ids): the copy is read back
       // and Meta's answer kept beside it (the read cannot give those ids again).
-      const created = createdIdOf(body)
+      const created = change.readBackObject ? change.objectId : createdIdOf(body)
       const node = created ? await readObject(target, created, `${operation}.readBack`, fields) : null
       return { node: node ? { ...body, ...node } : body, readBack: node ? 'second-read' : 'none', waitedMs }
     }

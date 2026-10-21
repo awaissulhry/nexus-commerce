@@ -9,7 +9,7 @@
  */
 import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaRemoveKind } from '../../gateway/meta-calls.js'
+import type { MetaLabelsKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
 export interface MetaChangeRequest {
@@ -49,7 +49,7 @@ export interface MetaChangeRequest {
    * The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`; step 19: a create names
    * the chosen ad account itself, `adaccount`).
    */
-  objectKind?: 'highdemandperiod' | 'adaccount' | MetaRemoveKind
+  objectKind?: 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
   /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
@@ -68,6 +68,11 @@ export interface MetaChangeRequest {
    * after the creatives that use it): when one of them did not happen as asked, it is not sent.
    */
   needs?: number[]
+  /**
+   * Step 21 — an edge that changes the object itself (labels ADDED to a campaign: POST /<campaign>/adlabels answers
+   * {"success": true}): the object is read back, never a new one.
+   */
+  readBackObject?: true
 }
 
 export interface MetaChangeDraft {

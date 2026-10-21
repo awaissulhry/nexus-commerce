@@ -193,6 +193,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'create-meta-ad-set': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-create.tools test)',
   'copy-meta-ads': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-create.tools test)',
   'remove-meta-ads-items': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-remove.tools test)',
+  'set-meta-labels': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-labels-rules.tools test)',
+  'set-meta-value-rules': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-labels-rules.tools test)',
+  'create-meta-reach-frequency': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-labels-rules.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -548,6 +551,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'copy-meta-ads': () => ({ kind: 'campaign', sourceId: '120000000000001' }),
   // Meta ads step 22: the delete refuses in words here (no business has Meta; its own test runs it).
   'remove-meta-ads-items': () => ({ items: [{ kind: 'campaign', id: '120000000000001' }], confirmDelete: true }),
+  // Meta ads step 21: labels, value rules and reach & frequency refuse in words here (no business has Meta; their own test runs them).
+  'set-meta-labels': () => ({ action: 'add', objects: [{ kind: 'campaign', id: '120000000000001' }], labelNames: ['Label A'] }),
+  'set-meta-value-rules': () => ({ action: 'detach', adSetId: '120000000000002' }),
+  'create-meta-reach-frequency': () => ({ action: 'cancel', predictionId: '120000000000090' }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),

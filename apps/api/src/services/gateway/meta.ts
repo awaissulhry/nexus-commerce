@@ -17,7 +17,7 @@
  */
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
-import { META_REST_HOST, type MetaRemoveKind } from './meta-calls.js'
+import { META_REST_HOST, type MetaLabelsKind, type MetaRemoveKind } from './meta-calls.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -73,7 +73,7 @@ export interface MetaWriteRequest {
   /** The object changed: its id, digits only (`POST /<id>`). */
   objectId: string
   /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
-  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind
+  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -96,9 +96,14 @@ export interface MetaWriteRequest {
  * The edges a change posts to: a budget schedule (step 18); a campaign's or ad set's create on the ad account (`act_<id>`),
  * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
  */
-export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge
+export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge
 /** Step 22 — remove-meta-ads-items: an image or a video out of the ad account's library, a video's caption languages. */
 export type MetaRemoveEdge = 'adimages' | 'advideos' | 'captions'
+/**
+ * Step 21 — set-meta-labels (a label made on the ad account, labels added to a campaign), set-meta-value-rules (a value rule
+ * set made, deleted or translated) and create-meta-reach-frequency (a prediction, a reservation, a cancel).
+ */
+export type MetaLabelsEdge = 'adlabels' | 'value_rule_set' | 'delete_rule_set' | 'value_rule_set_translation' | 'reachfrequencypredictions'
 
 /**
  * One Meta change (or Meta's check of one) through the gateway. A change is never retried (`maxTransientRetries 0`):
