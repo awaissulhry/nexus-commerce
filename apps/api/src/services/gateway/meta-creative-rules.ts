@@ -1083,7 +1083,8 @@ export const META_CREATIVE_MAX_ASSETS = 150
  * Limited-tier ads read bucket (45 reads, one back every 12.5 s): the item or set itself, and — once per catalog per check —
  * the catalog's owner and, for a client catalog, the portfolio's client list; the ad account's portfolio is read once per
  * check. A creative is checked three times (the tool's preview, Meta's check, the create): five keep one check at most 16
- * reads (1 + 5 × 3), all three within the bucket's 45 — and cover Meta's examples (one product set; two items).
+ * reads (1 + 5 × 3), about 48 over the three (plus a client catalog's list pages): the account's ads bucket (45, refilled one
+ * per 12.5 s) makes the last ones wait a little, never refuses them — and five cover Meta's examples (one product set; two items).
  */
 export const META_CREATIVE_MAX_CATALOG_IDS = 5
 

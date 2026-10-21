@@ -173,7 +173,7 @@ const createMetaCreative: AgentTool = {
     + 'feature generated with AI means the ad using it must start '
     + 'PAUSED and be previewed (meta-ad-preview) first. A partnership ad names its partner (partner); Meta asks the '
     + 'partner\'s permission itself. Refused in words: political ads (banned in the EU), WhatsApp Status identities (not in '
-    + 'the EU), app links (Nexus has no app), retailer_item_ids (no documented shape), catalog promo-code sources, polls (gone in '
+    + 'the EU), app links (Nexus has no app), retailer_item_ids (advertiser product ids the catalog rule cannot check), catalog promo-code sources, polls (gone in '
     + 'v26), Threads ids (Threads runs through Instagram), shop routing (a shop Nexus cannot confirm), saved Page welcome flows '
     + '(they need the Page\'s own token). A creative SPENDS NOTHING (it serves only once an ad uses it) and '
     + 'cannot be changed once made: a new look is a new creative swapped onto the ad, which sends an ACTIVE ad back to '
