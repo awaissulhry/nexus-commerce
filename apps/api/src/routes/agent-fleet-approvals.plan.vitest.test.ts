@@ -311,4 +311,50 @@ describe('Item 7 — a secret argument on the Approvals page: the mask in the li
       expect((broken.json() as { error: string }).error).toMatch(/set-price: its secret argument price could not be decrypted \(bad_format\)\. Nothing was run\./)
     })
   })
+
+  it('a run\'s steps (GET /agent/fleet/runs/:id/steps), an in-app run written before item 7: a step\'s plain creator ad code as the mask', async () => {
+    const steps = [
+      { type: 'tool', name: 'create-meta-boost', args: { source: 'creator-instagram-code', adCode: 'CODE_LEGACY_STEP', name: 'Creator boost' }, result: { ok: true }, ms: 1 },
+      { type: 'tool', name: 'set-price', args: { productId: ids.p1, price: 52 }, result: { ok: true }, ms: 1 },
+    ]
+    const run = await inside(() => database.client.agentRun.create({ data: { agentKey: 'copilot', trigger: 'manual', status: 'done', steps } }))
+    expect(run.mode).toBeNull() // the legacy shape: the steps Json, not AgentStep rows
+    const answer = await get('all', `/agent/fleet/runs/${run.id}/steps`)
+    expect(answer.statusCode, answer.body).toBe(200)
+    expect(answer.json()).toEqual({
+      shape: 'legacy-json',
+      steps: [{ ...steps[0], args: { source: 'creator-instagram-code', adCode: '[redacted]', name: 'Creator boost' } }, steps[1]],
+    })
+    expect(answer.body).not.toContain('CODE_LEGACY_STEP')
+  })
+
+  it('editing a request stored before item 7 (its secret plain) while no encryption key is set up: 503 in words, nothing stored, no value named', async () => {
+    await withSecretPrice(async () => {
+      const id = await inside(async () => {
+        const db = database.client
+        const run = await db.agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'done', via: 'claude' } })
+        // As a request was stored before item 7: the secret argument in plain text.
+        return (await db.agentApproval.create({
+          data: { agentRunId: run.id, toolName: 'set-price', riskTier: 'high', args: { productId: ids.p1, price: 53.17 }, preview: {}, status: 'pending', expiresAt: new Date(Date.now() + 3_600_000) },
+        })).id
+      })
+      const rows = () => inside(() => database.client.agentApproval.count())
+      const before = await rows()
+      const key = process.env.NEXUS_CREDENTIAL_ENC_KEY // this run's made-up key (beforeAll), put back below
+      vi.stubEnv('NEXUS_CREDENTIAL_ENC_KEY', undefined)
+      cryptoTest.resetKeyCache()
+      try {
+        const edited = await post('all', `/agent/fleet/approvals/${id}/amend`, { args: { price: 54.29 } })
+        expect(edited.statusCode, edited.body).toBe(503)
+        expect(edited.json()).toEqual({ error: 'set-price: Nexus could not encrypt its secret argument price (no encryption key is set up), so the request was not stored.' })
+        expect(edited.body).not.toMatch(/53\.17|54\.29/)
+      } finally {
+        vi.stubEnv('NEXUS_CREDENTIAL_ENC_KEY', key)
+        cryptoTest.resetKeyCache()
+      }
+      // Nothing stored: no new request (plain or sealed), and the one edited still waits as it was.
+      expect(await rows()).toBe(before)
+      expect(await approval(id)).toMatchObject({ status: 'pending', args: { productId: ids.p1, price: 53.17 } })
+    })
+  })
 })
