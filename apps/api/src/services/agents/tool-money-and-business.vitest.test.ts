@@ -245,6 +245,13 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   // Meta ads step 11: audiences and datasets read Meta live (their own tests run them on an account).
   'meta-audiences': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-audiences.tools test)',
   'meta-datasets': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-datasets.tools test)',
+  // Meta ads step 32: datasets, custom conversions, event setup read (and change) Meta live (their own test runs them).
+  'create-meta-dataset': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  'set-meta-dataset': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  'set-meta-dataset-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  'set-meta-custom-conversion': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  'set-meta-event-setup': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  'remove-meta-signal-items': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -575,6 +582,13 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // Meta ads step 11: no business here has Meta, so both refuse in words before any call.
   'meta-audiences': () => ({ view: 'list' }),
   'meta-datasets': () => ({ view: 'sources' }),
+  // Meta ads step 32: no business here has Meta, so each refuses in words before any call.
+  'create-meta-dataset': () => ({ name: 'Shop A dataset' }),
+  'set-meta-dataset': () => ({ pixelId: '120000000000050', name: 'Shop A dataset' }),
+  'set-meta-dataset-access': () => ({ pixelId: '120000000000050', action: 'connect-ad-account' }),
+  'set-meta-custom-conversion': () => ({ action: 'update', customConversionId: '120000000000060', defaultValueCents: 1000 }),
+  'set-meta-event-setup': () => ({ want: 'create-rule' }),
+  'remove-meta-signal-items': () => ({ items: [{ kind: 'customConversion', id: '120000000000060' }], confirmDelete: true }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),

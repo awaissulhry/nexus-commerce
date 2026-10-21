@@ -18,6 +18,7 @@
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { META_REST_HOST } from './meta-calls.js'
+import type { MetaSignalsEdge, MetaSignalsKind } from './meta-signals-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -73,7 +74,7 @@ export interface MetaWriteRequest {
   /** The object changed: its id, digits only (`POST /<id>`). */
   objectId: string
   /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
-  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | MetaSignalsKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -83,7 +84,7 @@ export interface MetaWriteRequest {
   maxRateWaitMs?: number
   triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook'
   /** Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. */
-  edge?: 'budget_schedules'
+  edge?: 'budget_schedules' | MetaSignalsEdge
   /** Step 18 — DELETE (a budget schedule's, no body); default POST. */
   method?: 'POST' | 'DELETE'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
@@ -98,7 +99,8 @@ export interface MetaWriteRequest {
  */
 export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayResponse> {
   const remove = req.method === 'DELETE'
-  const body = remove ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
+  // Step 32 — a DELETE that names keys (a pixel's ad account or partner) carries them as its form body, like a POST.
+  const body = remove && !Object.keys(req.params).length ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
   return gatewayCall({
     channel: 'META',
     operation: req.operation,

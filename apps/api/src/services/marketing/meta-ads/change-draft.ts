@@ -8,6 +8,7 @@
  * facts F1 X6): a change of N objects is N requests, sent in order, each with its own outcome (meta-ads-kit.ts).
  */
 import type { MetaStatusKind } from './live-status.js'
+import type { MetaSignalsEdge, MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
 export interface MetaChangeRequest {
@@ -44,9 +45,9 @@ export interface MetaChangeRequest {
   /** The fields read back (default id,status,effective_status). */
   readBackFields?: string
   /** The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`). */
-  objectKind?: 'highdemandperiod'
+  objectKind?: 'highdemandperiod' | MetaSignalsKind
   /** A create on the object's edge (POST /<id>/budget_schedules). */
-  edge?: 'budget_schedules'
+  edge?: 'budget_schedules' | MetaSignalsEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
   /** A budget schedule's campaign or ad set. */

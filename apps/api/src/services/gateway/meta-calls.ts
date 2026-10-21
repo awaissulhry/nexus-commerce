@@ -48,6 +48,7 @@ import { createHmac } from 'node:crypto'
 import { META_GRAPH_HOST, metaGraphApiVersion } from '../meta/api-version.js'
 import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.js'
 import { META_SETTINGS_WRITE_RULES } from './meta-settings-rules.js'
+import { META_SIGNALS_WRITE_RULES, type MetaSignalsKind } from './meta-signals-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -757,6 +758,8 @@ export interface MetaWriteRule {
 
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
 export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+  // Step 32 — a dataset's ad account, business portfolio, pixel, custom conversion, event source group, Page or Instagram account.
+  | MetaSignalsKind
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
 export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' }
 
@@ -848,14 +851,17 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   if (batch) return { problem: batch, batch: true }
   // Step 18 — a DELETE goes only by a DELETE rule for the kind the call names (today a budget schedule's), with no body.
   const deleteRule = method === 'DELETE' ? writeRules().find((r) => r.method === 'DELETE' && r.path.test(graph.route) && kindMatches(r, input.objectKind)) : undefined
-  if (method === 'DELETE' && (!deleteRule || (input.body !== undefined && input.body !== ''))) {
+  // Step 32 — a DELETE whose rule names body keys (Meta's `curl -X DELETE -F …`: a pixel's ad account or partner) is
+  // judged below exactly like a POST, its form body and all.
+  const bodied = !!deleteRule && deleteRule.required.length > 0
+  if (method === 'DELETE' && (!deleteRule || (!bodied && input.body !== undefined && input.body !== ''))) {
     return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule; deleting campaigns, ad sets and ads is its own tool, not built yet), and cancels no async batch')
   }
-  if (deleteRule) {
+  if (deleteRule && !bodied) {
     if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
     return { write: { rule: deleteRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: deleteRule.kinds, method: 'DELETE' } }
   }
-  if (method !== 'POST') return refuse(`Nexus sends Meta no ${method}`)
+  if (method !== 'POST' && !bodied) return refuse(`Nexus sends Meta no ${method}`)
   const parsed = writeParams(input.body)
   if ('problem' in parsed) return refuse(parsed.problem)
   const keys = [...parsed.params.keys()]
@@ -884,7 +890,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const body = new URLSearchParams(order.map((k): [string, string] => [k, parsed.params.get(k)!])).toString()
   const budget = typeof rule.budget === 'function' ? rule.budget(parsed.params) : rule.budget
   const ids = rule.ids?.(parsed.params) ?? []
-  return { write: { rule: rule.name, objectId: graph.segments[0], check, body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}) } }
+  return { write: { rule: rule.name, objectId: graph.segments[0], check, body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}), ...(bodied ? { method: 'DELETE' as const } : {}) } }
 }
 
 /** Step 18 — a rule with kinds matches only a call that names one of them; the status rule (no kinds) a campaign, ad set or ad. */
@@ -894,7 +900,7 @@ const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kin
 /** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY). */
 const MAX_ANY_WRITE_BODY = 16_000
 /** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts) — read when judged, never at load. */
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES]
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...META_SIGNALS_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {

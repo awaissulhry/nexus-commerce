@@ -884,6 +884,20 @@ describe('C1 — every registered tool keeps the contract', () => {
         },
         after: { kind: 'highdemandperiod', id: '120000000000031', parent: { kind: 'campaign', id: '120000000000001' }, fields: { budget_value: '30', exists: 'yes' }, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 32: a dataset's settings, its access and a custom conversion's go back through the tool the record names;
+      // a custom conversion made is deleted again (remove-meta-signal-items, a person approves).
+      'set-meta-dataset': {
+        before: { part: 'pixel', id: '120000000000050', fields: { name: 'Shop A old' }, undo: { tool: 'set-meta-dataset', args: { pixelId: '120000000000050', name: 'Shop A old' } }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { part: 'pixel', id: '120000000000050', fields: { name: 'Shop A' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-dataset-access': {
+        before: { part: 'access', id: '120000000000050', fields: { connected: 'no' }, undo: { tool: 'set-meta-dataset-access', args: { pixelId: '120000000000050', action: 'disconnect-ad-account' } }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { part: 'access', id: '120000000000050', fields: { connected: 'yes' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-custom-conversion': {
+        before: { part: 'conversion', id: '', fields: {}, created: false, undo: { tool: 'remove-meta-signal-items', args: { items: [{ kind: 'customConversion', id: '120000000000060' }], confirmDelete: true } }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { part: 'conversion', id: '120000000000060', customConversionId: '120000000000060', fields: { exists: 'yes' }, created: true, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1053,7 +1067,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-custom-goals', 'set-google-custom-audiences', 'set-google-user-lists', 'set-google-reusable-audiences',
       'upload-google-sales', 'adjust-google-sales',
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
-      'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule']) {
+      'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule',
+      'create-meta-dataset', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-custom-conversion', 'remove-meta-signal-items']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

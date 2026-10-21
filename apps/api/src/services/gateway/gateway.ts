@@ -35,6 +35,7 @@ import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } fro
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite } from './meta-calls.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
+import { isMetaSignalsKind, type MetaSignalsKind } from './meta-signals-rules.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
 import { writeLedgerRow } from './ledger.js'
@@ -129,7 +130,7 @@ export interface GatewayRequest {
    * trust it: it confirms it (the business's stored row, or a field only that kind has in its one live read) and refuses
    * the change otherwise, so the write allow-list is literally a campaign, an ad set or an ad — never a creative or a Page.
    */
-  metaObjectKind?: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+  metaObjectKind?: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | MetaSignalsKind
   /**
    * Meta step 18: a change of a budget schedule (high-demand period, `metaObjectKind: 'highdemandperiod'`) names the
    * campaign or ad set it belongs to; the gateway confirms that object is of the chosen ad account AND lists the period
@@ -400,7 +401,10 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // only). Then Meta's per-object limits: a change waits 30 s after the last one of the same object, and an ad set's
   // budget changes wait out Meta's hour (meta-object-limits.ts).
   if (metaWrite && req.connectionId) {
-    const owner = await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, req.metaParent)
+    // Step 32 — a dataset, custom conversion or event source group change: its own rule (marketing/meta-ads/signals-rule.ts).
+    const owner = isMetaSignalsKind(req.metaObjectKind)
+      ? await (await import('../marketing/meta-ads/signals-rule.js')).metaSignalsProblem(req.connectionId, metaWrite, req.metaObjectKind)
+      : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, req.metaParent)
       ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)
     if (!metaWrite.check) {
