@@ -10,8 +10,7 @@
  * that put back what the change replaced — computed from the live state it replaced — or null with the reasons in
  * `before.noUndo` (Meta has no way back: budget sharing off, a ROAS goal under campaign budget, a catalog added, …).
  */
-import { META_NO_CAP } from '../../gateway/meta-settings-rules.js'
-import { META_UPDATE_CHECK_PROVEN } from '../../gateway/meta-calls.js'
+import { META_NO_CAP, metaSettingsCheckAllowed } from '../../gateway/meta-settings-rules.js'
 import { currencyExponent } from './money.js'
 
 /** What a settings change records, before and after (AgentChange; undo reads them). */
@@ -78,10 +77,11 @@ export function viewedFields(fields: readonly string[], node: Record<string, unk
 
 /**
  * Meta's check of a campaign settings change: Meta documents validate_only on campaign updates (reference/
- * ad-campaign-group.md "Updating") but Nexus uses it only once LIVE-PROBE ST17-01 proved Meta honours it on an update
- * (gateway META_UPDATE_CHECK_PROVEN, flipped by the leader); an ad set update and a budget schedule have none.
+ * ad-campaign-group.md "Updating") but Nexus uses it only once LIVE-PROBE ST18-03 proved Meta honours it on a SETTINGS
+ * update (meta-settings-rules.ts META_SETTINGS_CHECK_PROVEN, flipped by the leader — not step 17's status flag, review A5);
+ * an ad set update and a budget schedule have none.
  */
-export const campaignSettingsCheck = (proven: boolean = META_UPDATE_CHECK_PROVEN): 'meta' | 'not-yet' => (proven ? 'meta' : 'not-yet')
+export const campaignSettingsCheck = (proven: boolean = metaSettingsCheckAllowed()): 'meta' | 'not-yet' => (proven ? 'meta' : 'not-yet')
 
 /** A Meta money amount (minor units) in words: "12.34 EUR". */
 export function money(cents: number | null, currency: string | null): string {

@@ -22,7 +22,7 @@ const campaign = (over: Partial<LiveCampaign> = {}): LiveCampaign => ({
 })
 const child = (id: string, over: Partial<LiveChildAdSet> = {}): LiveChildAdSet => ({ id, name: `Ad set ${id.slice(-1)}`, status: 'ACTIVE', dailyBudget: null, lifetimeBudget: null, bidAmount: null, endTime: null, ...over })
 const live = (over: Partial<CampaignSettingsLive> = {}): CampaignSettingsLive => ({
-  campaign: campaign(), currency: 'EUR', adSets: [child(A1), child(A2)], adSetsMore: false, pixels: new Set(['120000000000050', '120000000000051']), catalogs: null, productSetCatalog: null, ...over,
+  campaign: campaign(), currency: 'EUR', adSets: [child(A1), child(A2)], adSetsMore: false, pixels: new Set(['120000000000050', '120000000000051']), ...over,
 })
 const ok = (d: MetaChangeDraft | { refusal: string }): MetaChangeDraft => { if ('refusal' in d) throw new Error(d.refusal); return d }
 const refusal = (d: MetaChangeDraft | { refusal: string }) => ('refusal' in d ? d.refusal : null)
@@ -88,7 +88,8 @@ describe('budget sharing, bid strategy, spend cap', () => {
     expect(refusal(campaignSettingsDraft({ campaignId: C, bidStrategy: 'COST_CAP' }, live()))).toMatch(/needs each ad set's cap.*missing/)
     const d = ok(campaignSettingsDraft({ campaignId: C, bidStrategy: 'COST_CAP', adSetBidAmounts: [{ adSetId: A1, bidAmountCents: 900 }, { adSetId: A2, bidAmountCents: 800 }] }, live()))
     expect(d.requests[0].params).toEqual({ bid_strategy: 'COST_CAP', adset_bid_amounts: `{"${A1}":900,"${A2}":800}` })
-    expect(d.spendsMoney).toEqual([])
+    // Review A1 — an ad set whose bid Nexus could not read may pay more under its new cap: said, the request raises spend.
+    expect(d.spendsMoney[0]).toMatch(/ad set 120000000000002 had no bid Nexus could read, now 9\.00 EUR/)
     expect((d.before as SettingsRecord).undo).toEqual({ bidStrategy: 'LOWEST_COST_WITHOUT_CAP' })
     const back = ok(campaignSettingsDraft({ campaignId: C, bidStrategy: 'LOWEST_COST_WITHOUT_CAP' }, live({ campaign: campaign({ bidStrategy: 'COST_CAP' }), adSets: [child(A1, { bidAmount: '900' }), child(A2, { bidAmount: '800' })] })))
     expect(back.spendsMoney[0]).toMatch(/Removing .*cost per result goal: without a cap/)
@@ -115,12 +116,31 @@ describe('budget sharing, bid strategy, spend cap', () => {
   })
 })
 
+describe('review A1 — each new cap against the ad set\'s bid now', () => {
+  it('an ACTIVE campaign, an ad set bid of 1.00, a cost cap of 100.00: SPENDS MONEY, the request raises spend', () => {
+    const d = ok(campaignSettingsDraft({ campaignId: C, bidStrategy: 'COST_CAP', adSetBidAmounts: [{ adSetId: A1, bidAmountCents: 10000 }] }, live({ adSets: [child(A1, { bidAmount: '100' })] })))
+    expect(d.spendsMoney[0]).toMatch(/ad set 120000000000002 1\.00 EUR → 100\.00 EUR — the campaign is on/)
+    expect(d.requests[0].raisesSpend).toBe(true)
+    expect(ok(campaignSettingsDraft({ campaignId: C, bidStrategy: 'COST_CAP', adSetBidAmounts: [{ adSetId: A1, bidAmountCents: 50 }] }, live({ adSets: [child(A1, { bidAmount: '100' })] }))).spendsMoney).toEqual([])
+  })
+  it('bid cap → cost cap at the SAME amount still SPENDS (a cost cap is an average); a cap kept with new amounts is set-meta-ad-set\'s', () => {
+    const capped = live({ campaign: campaign({ bidStrategy: 'LOWEST_COST_WITH_BID_CAP' }), adSets: [child(A1, { bidAmount: '900' })] })
+    const d = ok(campaignSettingsDraft({ campaignId: C, bidStrategy: 'COST_CAP', adSetBidAmounts: [{ adSetId: A1, bidAmountCents: 900 }] }, capped))
+    expect(d.spendsMoney.join(' ')).toMatch(/AVERAGE cost near the goal, so single bids may go above the old cap/)
+    expect(d.requests[0].raisesSpend).toBe(true)
+    expect(refusal(campaignSettingsDraft({ campaignId: C, bidStrategy: 'LOWEST_COST_WITH_BID_CAP', adSetBidAmounts: [{ adSetId: A1, bidAmountCents: 1200 }] }, capped))).toMatch(/set-meta-ad-set bidAmountCents/)
+  })
+})
+
 describe('category, promoted object, objective, pacing, the rest', () => {
   it('a special ad category needs its countries, warns about targeting and the customer goal reset', () => {
     expect(refusal(campaignSettingsDraft({ campaignId: C, specialAdCategory: 'HOUSING' }, live()))).toMatch(/countries/)
     const d = ok(campaignSettingsDraft({ campaignId: C, specialAdCategory: 'HOUSING', specialAdCategoryCountries: ['IT'] }, live()))
     expect(d.requests[0].params).toEqual({ special_ad_category: 'HOUSING', special_ad_category_country: '["IT"]' })
     expect(d.warnings.join(' ')).toMatch(/customer lifecycle goal goes back to broad/)
+    // Review A3 — the reset widens who sees the ads.
+    expect(d.spendsMoney[0]).toMatch(/widens its audience/)
+    expect(d.requests[0].raisesSpend).toBe(true)
     expect((d.before as SettingsRecord).undo).toEqual({ specialAdCategory: 'NONE' })
   })
   it('a promoted object is sent whole (Meta replaces it), with the account\'s own pixel only', () => {
@@ -128,7 +148,11 @@ describe('category, promoted object, objective, pacing, the rest', () => {
     expect(JSON.parse(d.requests[0].params.promoted_object)).toEqual({ pixel_id: '120000000000050', custom_event_type: 'ADD_TO_CART' })
     expect((d.before as SettingsRecord).undo).toEqual({ promotedObject: { pixelId: '120000000000050', customEventType: 'PURCHASE' } })
     expect(refusal(campaignSettingsDraft({ campaignId: C, promotedObject: { pixelId: '120000000000059' } }, live()))).toMatch(/not one of the chosen ad account's own pixels/)
-    expect(refusal(campaignSettingsDraft({ campaignId: C, promotedObject: { productCatalogId: '120000000000060' } }, live({ catalogs: null })))).toMatch(/could not read which catalogs/)
+    expect(refusal(campaignSettingsDraft({ campaignId: C, promotedObject: { productCatalogId: '120000000000060' } }, live()))).toMatch(/did not check the catalog/)
+    expect(refusal(campaignSettingsDraft({ campaignId: C, promotedObject: { productCatalogId: '120000000000060' } }, live({ catalogProblem: 'Catalog 120000000000060 is not one the chosen ad account\'s business portfolio owns or was given, so it is not sent.' })))).toMatch(/not one the chosen ad account's business portfolio owns/)
+    expect(ok(campaignSettingsDraft({ campaignId: C, promotedObject: { productCatalogId: '120000000000060' } }, live({ catalogProblem: null }))).requests[0].params.promoted_object).toMatch(/"product_catalog_id":"120000000000060"/)
+    // Review B3 — a pixel rule is an ad set's only.
+    expect(refusal(campaignSettingsDraft({ campaignId: C, promotedObject: { pixelRule: '{"url":{"i_contains":"thanks"}}' } }, live()))).toMatch(/pixel rule is an ad set's/)
     expect(refusal(campaignSettingsDraft({ campaignId: C, promotedObject: { customEventType: 'LEAD' } }, live({ campaign: campaign({ promotedObject: { page_id: '1' } }) })))).toMatch(/holds page_id/)
   })
   it('the objective only of a campaign with no ad set', () => {
@@ -151,7 +175,8 @@ describe('category, promoted object, objective, pacing, the rest', () => {
     expect(refusal(campaignSettingsDraft({ campaignId: C }, live()))).toMatch(/Name at least one setting.*set-meta-ad-set startTime.*frequencyCaps.*deprecated/)
   })
   it('reads only what a request needs; the plan and basis are stable for the same live state', () => {
-    expect(campaignReadsNeeded({ campaignId: C, name: 'x' }, campaign())).toEqual({ adSets: false, pixels: false, catalogs: false, productSetId: null })
+    expect(campaignReadsNeeded({ campaignId: C, name: 'x' }, campaign())).toEqual({ adSets: false, pixels: false, catalog: null })
+    expect(campaignReadsNeeded({ campaignId: C, promotedObject: { productSetId: '120000000000061' } }, campaign())).toMatchObject({ catalog: { catalogId: null, productSetId: '120000000000061' } })
     expect(campaignReadsNeeded({ campaignId: C, promotedObject: { customEventType: 'LEAD' } }, campaign())).toMatchObject({ pixels: true })
     const a = ok(campaignSettingsDraft({ campaignId: C, dailyBudgetCents: 7000 }, live()))
     const b = ok(campaignSettingsDraft({ campaignId: C, dailyBudgetCents: 7000 }, live({ campaign: campaign({ effectiveStatus: 'WITH_ISSUES' }) })))

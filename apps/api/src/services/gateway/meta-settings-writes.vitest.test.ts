@@ -7,7 +7,9 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const h = vi.hoisted(() => ({ calls: [] as Array<{ url: string; init: RequestInit }>, answers: [] as Array<() => Response> }))
+const h = vi.hoisted(() => ({ calls: [] as Array<{ url: string; init: RequestInit }>, answers: [] as Array<() => Response>, takenPortfolios: new Set<string>() }))
+// Review A4 — which portfolios another Nexus business uses (nexus_meta_links_taken PORTFOLIO): a stand-in.
+vi.mock('../marketing/meta-ads/taken.js', () => ({ takenIds: vi.fn(async (_product: string, ids: string[]) => new Set(ids.filter((id) => h.takenPortfolios.has(id)))) }))
 vi.mock('./account.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.accountModule))
 vi.mock('./ledger.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 vi.mock('../cx/token.service.js', () => ({
@@ -24,7 +26,8 @@ import { gatewayLedger, gatewayMetaChosen, gatewayMetaStored } from '../../test-
 import { __rateTest } from './rate.js'
 import { metaWriteCall } from './meta.js'
 import { metaWriteVerdict } from './meta-calls.js'
-import { META_NO_CAP } from './meta-settings-rules.js'
+import { META_NO_CAP, META_SETTINGS_CHECK_PROVEN, metaSettingsCheckAllowed } from './meta-settings-rules.js'
+import { campaignSettingsCheck } from '../marketing/meta-ads/change-settings-common.js'
 import { __metaObjectLimitsTest } from './meta-object-limits.js'
 import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
 
@@ -44,7 +47,7 @@ const json = (body: unknown, status = 200) => () => new Response(JSON.stringify(
 beforeEach(() => {
   __rateTest.useMemory()
   __metaObjectLimitsTest.useMemory()
-  h.calls = []; h.answers = []; gatewayLedger.length = 0
+  h.calls = []; h.answers = []; h.takenPortfolios.clear(); gatewayLedger.length = 0
   for (const key of Object.keys(gatewayMetaChosen)) delete gatewayMetaChosen[key]
   for (const key of Object.keys(gatewayMetaStored)) delete gatewayMetaStored[key]
   gatewayMetaStored[CAMPAIGN] = { adAccountId: '1234567890', kind: 'campaign' }
@@ -112,6 +115,29 @@ describe('campaign.settings values', () => {
     expect(campaign({ name: 'x'.repeat(401) })).toMatch(/1 to 400/)
     expect(campaign({ objective: 'OUTCOME_SALÉS' })).toMatch(/plain ASCII/)
     expect(campaign({ promoted_object: '{"custom_event_str":"acquisto è"}' })).toMatch(/plain ASCII/)
+  })
+  it('review A5 — Meta\'s check of a SETTINGS change has its own flag (not step 17\'s status one): both states', () => {
+    expect(META_SETTINGS_CHECK_PROVEN).toBe(false)
+    expect([metaSettingsCheckAllowed(), metaSettingsCheckAllowed(true)]).toEqual([false, true])
+    expect([campaignSettingsCheck(), campaignSettingsCheck(true)]).toEqual(['not-yet', 'meta'])
+    expect(problem({ body: form({ name: 'Shop A', execution_options: '["validate_only"]' }), objectKind: 'campaign', kind: 'read' })).toMatch(/ST18-03/)
+  })
+  it('review A8 / B3 — text refuses format characters; a pixel rule only on an ad set, in one exact shape', () => {
+    expect(campaign({ name: 'Shop \u202eA' })).toMatch(/no control or format characters/)
+    expect(adSet({ dsa_payor: 'Shop \u200bA', dsa_beneficiary: 'Shop A' })).toMatch(/no control or format characters/)
+    const rule = (r: unknown) => JSON.stringify({ pixel_id: '120000000000050', pixel_rule: JSON.stringify(r) })
+    expect(adSet({ promoted_object: rule({ url: { i_contains: 'thank-you' } }) })).toBeNull()
+    expect(adSet({ promoted_object: rule({ and: [{ event: { eq: 'Purchase' } }, { value: { gt: 10 } }] }) })).toBeNull()
+    expect(campaign({ promoted_object: rule({ url: { i_contains: 'thank-you' } }) })).toMatch(/promoted_object has only/)
+    expect(adSet({ promoted_object: rule({ url: { regex: '.*' } }) })).toMatch(/not a pixel rule operator/)
+    expect(adSet({ promoted_object: rule({ and: [{ or: [{ and: [{ url: { eq: 'x' } }] }] }] }) })).toMatch(/at most 3 levels/)
+    expect(adSet({ promoted_object: rule({ url: { eq: 'x' }, event: { eq: 'y' } }) })).toMatch(/exactly one key/)
+    expect(adSet({ promoted_object: rule({ 'URL-X': { eq: 'x' } }) })).toMatch(/not a pixel rule field/)
+    expect(adSet({ promoted_object: rule({ url: { eq: { nested: 1 } } }) })).toMatch(/plain text, a number/)
+    expect(adSet({ promoted_object: JSON.stringify({ pixel_rule: '{"url": {"eq":"x"}}' }) })).toMatch(/one spelling/)
+  })
+  it('review B9 — frequency caps count impressions only', () => {
+    expect(adSet({ frequency_control_specs: '[{"event":"VIDEO_VIEWS","interval_days":7,"max_frequency":2}]' })).toMatch(/event is one of IMPRESSIONS/)
   })
   it('Meta\'s check only once proven; the read-back only of the campaign\'s own fields', () => {
     expect(problem({ body: form({ daily_budget: '5000', execution_options: '["validate_only"]' }), objectKind: 'campaign', kind: 'read' })).toMatch(/does not use Meta's check for a campaign settings change yet/)
@@ -230,6 +256,35 @@ describe('through the gateway: the ids inside a body and a period\'s campaign ar
     expect(res.ok).toBe(true)
     expect(new URL(h.calls[0].url).searchParams.get('fields')).toBe('account_id,subtype,time_created')
     expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'POST'])
+  })
+  it('review A4 — a catalog or a product set inside a promoted object follows the catalog rule (portfolio, not another business\'s)', async () => {
+    const PORTFOLIO = '120000000000090'
+    const promoted = (o: Record<string, string>) => ({ promoted_object: JSON.stringify(o) })
+    expect(verdict({ body: form(promoted({ product_catalog_id: '120000000000060', product_set_id: '120000000000061' })), objectKind: 'campaign' }))
+      .toMatchObject({ write: { ids: [{ id: '120000000000060', kind: 'catalog' }, { id: '120000000000061', kind: 'productset' }] } })
+    // A forged catalog id: the portfolio's catalogs do not hold it.
+    h.answers.push(json({ id: 'act_1234567890', business: { id: PORTFOLIO } }), json({ data: [{ id: '120000000000060' }] }), json({ data: [] }))
+    const forged = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, objectKind: 'campaign', params: promoted({ product_catalog_id: '120000000000069' }), check: false }).catch((e) => e)
+    expect(forged).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/inside this change, Catalog 120000000000069 is not one the chosen ad account's business portfolio owns or was given/) })
+    expect(h.calls.map((c) => new URL(c.url).pathname)).toEqual(['/v26.0/act_1234567890', `/v26.0/${PORTFOLIO}/owned_product_catalogs`, `/v26.0/${PORTFOLIO}/client_product_catalogs`])
+    // A product set of a foreign catalog.
+    h.calls = []
+    h.answers.push(json({ id: 'act_1234567890', business: { id: PORTFOLIO } }), json({ id: '120000000000061', product_catalog: { id: '120000000000068' } }), json({ data: [{ id: '120000000000060' }] }), json({ data: [] }))
+    const foreignSet = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: AD_SET, objectKind: 'adset', params: promoted({ product_set_id: '120000000000061' }), check: false }).catch((e) => e)
+    expect(foreignSet).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
+    // A portfolio another Nexus business uses: nothing is named from it, before any catalog list is read.
+    h.calls = []
+    h.takenPortfolios.add(PORTFOLIO)
+    h.answers.push(json({ id: 'act_1234567890', business: { id: PORTFOLIO } }))
+    const taken = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, objectKind: 'campaign', params: promoted({ product_catalog_id: '120000000000060' }), check: false }).catch((e) => e)
+    expect(taken).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/Another business in Nexus uses an ad account of this Meta business portfolio/) })
+    expect(h.calls).toHaveLength(1)
+    // The portfolio's own catalog goes.
+    h.calls = []
+    h.takenPortfolios.clear()
+    h.answers.push(json({ id: 'act_1234567890', business: { id: PORTFOLIO } }), json({ data: [] }), json({ data: [{ id: '120000000000060' }] }), json({ id: CAMPAIGN }))
+    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, objectKind: 'campaign', params: promoted({ product_catalog_id: '120000000000060' }), check: false })).ok).toBe(true)
+    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET', 'GET', 'POST'])
   })
   it('a pixel inside a promoted object must be one of the chosen account\'s own pixels', async () => {
     h.answers.push(json({ data: [{ id: '120000000000051' }] }))

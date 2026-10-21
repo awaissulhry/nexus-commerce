@@ -24,11 +24,11 @@ const adSet = (over: Partial<LiveAdSet> = {}): LiveAdSet => ({
   startTime: '2026-10-01T00:00:00+0000', endTime: null, pacingType: ['standard'], adsetSchedule: null, frequencyControlSpecs: null,
   attributionSpec: [{ event_type: 'CLICK_THROUGH', window_days: 7 }, { event_type: 'VIEW_THROUGH', window_days: 1 }], incrementalAttribution: false,
   promotedObject: { pixel_id: '120000000000050', custom_event_type: 'PURCHASE' }, dsaPayor: 'Shop A', dsaBeneficiary: 'Shop A', regionalRegulatedCategories: null,
-  regionalRegulationIdentities: null, adSetGoal: { type: 0 }, creativeSequence: null, rotationBlocks: null, rotationIntervals: null, brandSafety: null,
+  regionalRegulationIdentities: null, adSetGoal: { type: 0 }, creativeSequence: null, sequenceRepetition: null, rotationBlocks: null, rotationIntervals: null, brandSafety: null,
   contextualBundling: { status: 'OPT_OUT' }, fullFunnelExploration: null, automaticManualState: null, budgetScheduling: null, targetingCountries: ['IT'], unread: [], ...over,
 })
 const live = (over: Partial<AdSetSettingsLive> = {}): AdSetSettingsLive => ({
-  adSet: adSet(), campaign: campaign(), currency: 'EUR', ads: ['120000000000003', '120000000000005'], pixels: new Set(['120000000000050', '120000000000051']), catalogs: null, productSetCatalog: null, ...over,
+  adSet: adSet(), campaign: campaign(), currency: 'EUR', ads: ['120000000000003', '120000000000005'], pixels: new Set(['120000000000050', '120000000000051']), ...over,
 })
 const ok = (d: MetaChangeDraft | { refusal: string }): MetaChangeDraft => { if ('refusal' in d) throw new Error(d.refusal); return d }
 const refusal = (d: MetaChangeDraft | { refusal: string }) => ('refusal' in d ? d.refusal : null)
@@ -64,6 +64,15 @@ describe('budget and spend limits', () => {
     const a = ok(draft({ name: 'Ad set C' }))
     expect(JSON.stringify(ok(draft({ name: 'Ad set C' }, live({ adSet: adSet({ budgetRemaining: '900', effectiveStatus: 'WITH_ISSUES' }) }))).stands)).toBe(JSON.stringify(a.stands))
     expect(JSON.stringify(ok(draft({ name: 'Ad set C' }, live({ adSet: adSet({ dailyBudget: '2500' }) }))).stands)).not.toBe(JSON.stringify(a.stands))
+  })
+  it('review A2 — an earlier start and a longer run are raises even while paused (said: nothing spends yet)', () => {
+    const paused = live({ adSet: adSet({ status: 'PAUSED', startTime: '2026-11-10T00:00:00+0000', endTime: '2026-11-20T00:00:00+0000' }) })
+    const earlier = ok(draft({ startTime: '2026-11-01T00:00:00Z' }, paused))
+    expect(earlier.spendsMoney[0]).toMatch(/starts earlier .*more days of delivery — nothing spends yet/)
+    expect(earlier.requests[0].raisesSpend).toBe(true)
+    const longer = ok(draft({ endTime: '2026-11-30T00:00:00Z' }, paused))
+    expect(longer.spendsMoney[0]).toMatch(/runs longer: more days of delivery — nothing spends yet/)
+    expect(ok(draft({ startTime: '2026-11-12T00:00:00Z' }, paused)).spendsMoney).toEqual([])
   })
   it('daily → lifetime (AS-046, unverified): sent alone with its end, SPENDS (said), Meta decides', () => {
     const d = ok(draft({ lifetimeBudgetCents: 100000, endTime: '2026-12-01T00:00:00Z' }))
@@ -113,8 +122,15 @@ describe('times, restart, scheduling, frequency, attribution', () => {
     const ended = live({ adSet: adSet({ status: 'PAUSED', endTime: '2026-10-10T00:00:00+0000' }) })
     expect(refusal(draft({ restart: true }, ended))).toMatch(/needs a new end time/)
     const d = ok(draft({ restart: true, endTime: '2026-11-30T00:00:00Z' }, ended))
-    expect(d.requests.map((r) => [r.step, r.params, r.raisesSpend])).toEqual([[1, { end_time: String(Date.parse('2026-11-30T00:00:00Z') / 1000) }, false], [2, { status: 'ACTIVE' }, true]])
+    // Review A2 — the later end is a raise even while paused; review A7 — the end is judged on the read-back.
+    expect(d.requests.map((r) => [r.step, r.params, r.raisesSpend])).toEqual([[1, { end_time: String(Date.parse('2026-11-30T00:00:00Z') / 1000) }, true], [2, { status: 'ACTIVE' }, true]])
+    expect(d.requests[0].expect).toEqual({ end_time: String(Date.parse('2026-11-30T00:00:00Z') / 1000) })
     expect(d.spendsMoney.join(' ')).toMatch(/Restarting .*delivers and spends at once/)
+    // Review A6 — one story: the restart switches it on, so every line says it spends at once (never "nothing spends yet").
+    const raised = ok(draft({ restart: true, endTime: '2026-11-30T00:00:00Z', dailyBudgetCents: 3000 }, ended))
+    expect(raised.spendsMoney.length).toBeGreaterThan(1)
+    expect(raised.spendsMoney.join(' ')).not.toMatch(/nothing spends yet/)
+    expect(raised.spendsMoney.join(' ')).toMatch(/the restart switches it on and its campaign is on/)
     expect(refusal(draft({ restart: true, endTime: '2026-11-30T00:00:00Z' }))).toMatch(/has not ended/)
   })
   it('ad scheduling on a lifetime budget (off = standard + []), under a campaign budget the schedule only', () => {
@@ -153,11 +169,37 @@ describe('times, restart, scheduling, frequency, attribution', () => {
     expect(allowedAttribution('OUTCOME_SALES', 'OFFSITE_CONVERSIONS')).toHaveLength(4)
     expect(allowedAttribution('OUTCOME_TRAFFIC', 'OFFSITE_CONVERSIONS')).toEqual(['1d_click', '7d_click'])
     expect(allowedAttribution('OUTCOME_TRAFFIC', 'LINK_CLICKS')).toEqual(['1d_click'])
+    // Review B4 — the four only for OFFSITE_CONVERSIONS; VALUE and every other goal: 1-day click only.
+    expect(allowedAttribution('OUTCOME_SALES', 'VALUE')).toEqual(['1d_click'])
     expect(attributionPresetOf([{ event_type: 'CLICK_THROUGH', window_days: 7, weight: 100 }, { event_type: 'VIEW_THROUGH', window_days: 1 }])).toBe('7d_click_1d_view')
     const d = ok(draft({ attribution: '1d_click' }))
     expect(d.requests[0].params).toEqual({ attribution_spec: '[{"event_type":"CLICK_THROUGH","window_days":1}]' })
     expect((d.before as SettingsRecord).undo).toEqual({ attribution: '7d_click_1d_view' })
     expect(refusal(draft({ attribution: '7d_click' }, live({ adSet: adSet({ optimizationGoal: 'LINK_CLICKS' }) })))).toMatch(/allows 1d_click/)
+  })
+})
+
+describe('review A9 and B7', () => {
+  it('scheduling turned on from accelerated: undo goes back to accelerated; off may name its pacing (accelerated SPENDS)', () => {
+    const fast = live({ adSet: adSet({ dailyBudget: null, lifetimeBudget: '100000', endTime: '2026-12-01T00:00:00+0000', pacingType: ['no_pacing'] }) })
+    expect((ok(draft({ dayparting: { blocks: [{ days: [1], startHour: 9, endHour: 12 }] } }, fast)).before as SettingsRecord).undo).toEqual({ dayparting: { off: true, pacing: 'no_pacing' } })
+    const scheduled = live({ adSet: adSet({ dailyBudget: null, lifetimeBudget: '100000', pacingType: ['day_parting'], adsetSchedule: [{ start_minute: 540, end_minute: 720, days: [1], timezone_type: 'USER' }] }) })
+    const off = ok(draft({ dayparting: { off: true, pacing: 'no_pacing' } }, scheduled))
+    expect(off.requests[0].params).toEqual({ pacing_type: '["no_pacing"]', adset_schedule: '[]' })
+    expect(off.spendsMoney[0]).toMatch(/as fast as Meta can/)
+    expect(refusal(draft({ dayparting: { blocks: [{ days: [1], startHour: 9, endHour: 12 }], pacing: 'no_pacing' } }, fast))).toMatch(/only with dayparting off/)
+  })
+  it('a sequence\'s repetition pattern goes back on undo; one Meta did not answer is said', () => {
+    const seq = live({ adSet: adSet({ creativeSequence: ['120000000000003'], sequenceRepetition: 'LAST_AD' }) })
+    expect((ok(draft({ creativeSequence: { adIds: ['120000000000005'], repetition: 'FULL_SEQUENCE' } }, seq)).before as SettingsRecord).undo).toEqual({ creativeSequence: { adIds: ['120000000000003'], repetition: 'LAST_AD' } })
+    expect((ok(draft({ creativeSequence: { adIds: ['120000000000005'], repetition: 'FULL_SEQUENCE' } })).before as SettingsRecord).noUndo?.join(' ')).toMatch(/repetition pattern was not readable/)
+  })
+  it('a maximum budget share raise is flagged even when the old one could not be read', () => {
+    const cbo = live({ campaign: campaign({ dailyBudget: '10000' }) })
+    expect(ok(draft({ budgetSharePercent: { max: 80 } }, cbo)).spendsMoney[0]).toMatch(/from a value Nexus could not read/)
+  })
+  it('review B7 — no ad set bid strategy change while the campaign shares budget (4834006)', () => {
+    expect(refusal(draft({ bidStrategy: 'COST_CAP', bidAmountCents: 900 }, live({ campaign: campaign({ budgetSharing: true }) })))).toMatch(/4834006/)
   })
 })
 
@@ -167,7 +209,8 @@ describe('promoted object, EU payer, customer goal, sequence, the rest', () => {
     expect(JSON.parse(d.requests[0].params.promoted_object)).toEqual({ pixel_id: '120000000000050', custom_event_type: 'ADD_TO_CART' })
     expect(refusal(draft({ promotedObject: { customEventType: 'LEAD' } }, live({ adSet: adSet({ optimizationGoal: 'LINK_CLICKS' }) })))).toMatch(/only for a sales campaign with the OFFSITE_CONVERSIONS goal/)
     expect(refusal(draft({ promotedObject: { valueSemanticType: 'MARGIN' } }))).toMatch(/cannot change/)
-    const cat = ok(draft({ promotedObject: { productCatalogId: '120000000000060' } }, live({ catalogs: new Set(['120000000000060']) })))
+    expect(refusal(draft({ promotedObject: { productCatalogId: '120000000000060' } }, live({ catalogProblem: 'Another business in Nexus uses an ad account of this Meta business portfolio.' })))).toMatch(/Another business in Nexus/)
+    const cat = ok(draft({ promotedObject: { productCatalogId: '120000000000060' } }, live({ catalogProblem: null })))
     expect((cat.before as SettingsRecord).undo).toBeNull()
     expect((cat.before as SettingsRecord).noUndo?.join(' ')).toMatch(/may not be removable/)
   })
@@ -179,7 +222,9 @@ describe('promoted object, EU payer, customer goal, sequence, the rest', () => {
   })
   it('a customer goal: Sales only, broad in a special category; Meta merges, so Nexus clears what must go; broad SPENDS', () => {
     expect(refusal(draft({ customerGoal: { type: 'exclude-existing', existingCustomerAudienceIds: ['120000000000070'] } }, live({ campaign: campaign({ objective: 'OUTCOME_TRAFFIC' }) })))).toMatch(/1870252/)
-    expect(refusal(draft({ customerGoal: { type: 'exclude-existing', existingCustomerAudienceIds: ['120000000000070'] } }, live({ campaign: campaign({ specialAdCategories: ['HOUSING'] }) })))).toMatch(/1870261/)
+    expect(refusal(draft({ customerGoal: { type: 'exclude-existing', existingCustomerAudienceIds: ['120000000000070'] } }, live({ campaign: campaign({ specialAdCategories: ['HOUSING'] }) })))).toMatch(/restricted special ad category .*1870261/)
+    // Review B9 — a political category is not a restricted one for this rule.
+    expect(ok(draft({ customerGoal: { type: 'exclude-existing', existingCustomerAudienceIds: ['120000000000070'] } }, live({ campaign: campaign({ specialAdCategories: ['ISSUES_ELECTIONS_POLITICS'] }) }))).requests).toHaveLength(1)
     expect(refusal(draft({ customerGoal: { type: 'exclude-existing' } }))).toMatch(/needs their audiences/)
     const d = ok(draft({ customerGoal: { type: 'exclude-existing', existingCustomerAudienceIds: ['120000000000070'] } }, live({ adSet: adSet({ adSetGoal: { type: 1, existing_customers_exclusions: ['120000000000070'], engaged_audiences_exclusions: ['120000000000071'] } }) })))
     expect(JSON.parse(d.requests[0].params.ad_set_goal)).toEqual({ type: 2, existing_customers_exclusions: ['120000000000070'], existing_customers_audience_label_exclusions: [], engaged_audiences_exclusions: [] })

@@ -18,7 +18,8 @@
  *     smart_promotion_type and iterative_split_test_configs are not sent (CMP-068, CMP-067): none of them is here.
  *   - reference/ad-campaign.md (ad set; no update table, the create table and SDK adset.py api_update): adset_schedule
  *     {start_minute, end_minute, days 0–6, timezone_type USER|ADVERTISER}; frequency_control_specs {event IMPRESSIONS |
- *     VIDEO_VIEWS | VIDEO_VIEWS_2S | VIDEO_VIEWS_15S, interval_days 1–90, max_frequency 1–90}; brand_safety_config
+ *     VIDEO_VIEWS | VIDEO_VIEWS_2S | VIDEO_VIEWS_15S — "only IMPRESSIONS currently", so Nexus sends IMPRESSIONS —, interval_days
+ *     1–90, max_frequency 1–90}; brand_safety_config
  *     {comment_moderation_filter AD_DISABLED|DEFAULT}; contextual_bundling_spec {status OPT_IN|OPT_OUT}; ad_set_goal
  *     {type 0|1|2, existing_customers_exclusions, engaged_audiences_exclusions, the two label lists}; dsa_payor /
  *     dsa_beneficiary (≤ 512); regional_regulated_categories + regional_regulation_identities (keys listed there);
@@ -36,10 +37,22 @@
  *     budget_value_type, time_start, time_end; api_delete) — STILL-UNVERIFIED (LIVE-PROBES CMP-059 / CMP-060).
  */
 import type { MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
-import { META_UPDATE_CHECK_PROVEN, META_VALIDATE_ONLY } from './meta-calls.js'
+import { META_VALIDATE_ONLY } from './meta-calls.js'
 
 /** Meta's "no cap" value for a campaign spend cap and an ad set's spend caps (reference/ad-campaign-group.md spend_cap). */
 export const META_NO_CAP = '922337203685478'
+
+/**
+ * Review A5 — Meta documents validate_only on a campaign UPDATE (reference/ad-campaign-group.md "Updating"), but ST17-01
+ * proves it only for a status change. A SETTINGS change (a budget, a bid strategy, a name) is checked by Meta only once
+ * LIVE-PROBE ST18-03 shows Meta honours validate_only on one (a name change of a paused test campaign, read back
+ * unchanged). THE LEADER FLIPS THIS TO true after ST18-03; until then the preview says "Meta's check is not used for this
+ * change yet". Separate from step 17's META_UPDATE_CHECK_PROVEN on purpose.
+ */
+export const META_SETTINGS_CHECK_PROVEN = false
+
+/** May Nexus ask Meta's check (validate_only) of a campaign settings change? (Both states are tested.) */
+export const metaSettingsCheckAllowed = (proven: boolean = META_SETTINGS_CHECK_PROVEN): boolean => proven
 
 type Params = ReadonlyMap<string, string>
 type Judge = (value: string, params: Params) => string | null
@@ -97,26 +110,67 @@ export const CUSTOM_EVENT_TYPES = [
   'ACHIEVEMENT_UNLOCKED', 'SPENT_CREDITS', 'LISTING_INTERACTION', 'D2_RETENTION', 'D7_RETENTION', 'OTHER',
 ] as const
 /**
- * The promoted-object keys Nexus sends: a pixel and its event, a catalog and product set, the value semantic. Pages, apps,
- * offers and the rest are never sent (no Nexus business promotes an app; a Page goes with step 19's creates).
+ * The promoted-object keys Nexus sends: a pixel and its event, a catalog and product set (the ad set's: Meta uses
+ * product_set_id at the ad set level), the value semantic. Pages, apps, offers and the rest are never sent (no Nexus
+ * business promotes an app; a Page goes with step 19's creates). pixel_rule is an AD SET's only (review B3: the campaign
+ * update table does not list it).
  */
 export const PROMOTED_OBJECT_KEYS = ['pixel_id', 'pixel_rule', 'custom_event_type', 'custom_event_str', 'product_catalog_id', 'product_set_id', 'value_semantic_type'] as const
+export const CAMPAIGN_PROMOTED_OBJECT_KEYS = PROMOTED_OBJECT_KEYS.filter((k) => k !== 'pixel_rule')
 
-const promotedObject: Judge = json('promoted_object', (o) => {
+/**
+ * Review A8 — a pixel rule in ONE exact shape (Meta's custom-conversion rule language): a rule is `{"and": [rule…]}`,
+ * `{"or": [rule…]}` or `{"<field>": {"<operator>": value}}`; at most 3 levels deep and 10 conditions; a field is url,
+ * event or a custom-data key (lower snake case); the operators are these; a value is plain text (≤ 200), a number, or a
+ * list of up to 20 of them.
+ */
+export const PIXEL_RULE_OPERATORS = ['eq', 'neq', 'contains', 'not_contains', 'i_contains', 'i_not_contains', 'starts_with', 'i_starts_with', 'lt', 'lte', 'gt', 'gte', 'is_any', 'is_not_any'] as const
+const PIXEL_RULE_FIELD = /^(url|event|[a-z][a-z0-9_]{0,39})$/
+function pixelRuleProblem(rule: unknown, depth = 1, count = { conditions: 0 }): string | null {
+  if (depth > 3) return 'a pixel rule is at most 3 levels deep'
+  if (!plainObject(rule) || Object.keys(rule).length !== 1) return 'each part of a pixel rule is an object with exactly one key'
+  const [key, value] = Object.entries(rule)[0]
+  if (key === 'and' || key === 'or') {
+    if (!Array.isArray(value) || value.length < 1 || value.length > 10) return `${key} lists 1 to 10 rules`
+    for (const part of value) { const problem = pixelRuleProblem(part, depth + 1, count); if (problem) return problem }
+    return null
+  }
+  if (!PIXEL_RULE_FIELD.test(key) || key === 'and' || key === 'or') return `"${key.slice(0, 40)}" is not a pixel rule field (url, event or a custom-data key)`
+  if (!plainObject(value) || Object.keys(value).length !== 1) return `the condition on ${key} is one operator`
+  const [op, operand] = Object.entries(value)[0]
+  if (!(PIXEL_RULE_OPERATORS as readonly string[]).includes(op)) return `${op.slice(0, 20)} is not a pixel rule operator (${PIXEL_RULE_OPERATORS.join(', ')})`
+  const scalar = (v: unknown) => (typeof v === 'string' && /^[\x20-\x7e]{0,200}$/.test(v)) || (typeof v === 'number' && Number.isFinite(v))
+  if (!(scalar(operand) || (Array.isArray(operand) && operand.length >= 1 && operand.length <= 20 && operand.every(scalar)))) return `the value of ${key} ${op} is plain text, a number or a short list of them`
+  count.conditions += 1
+  return count.conditions > 10 ? 'a pixel rule has at most 10 conditions' : null
+}
+
+const promotedJudge = (keys: readonly string[]): Judge => json('promoted_object', (o) => {
   if (!plainObject(o) || !Object.keys(o).length) return 'promoted_object is an object with at least one key'
-  if (!exactKeys(o, PROMOTED_OBJECT_KEYS)) return `promoted_object has only ${PROMOTED_OBJECT_KEYS.join(', ')}`
+  if (!exactKeys(o, keys)) return `promoted_object has only ${keys.join(', ')}`
   for (const key of ['pixel_id', 'product_catalog_id', 'product_set_id'] as const) if (key in o && !isId(o[key])) return `promoted_object.${key} is a Meta id (digits, as a JSON string)`
   if ('custom_event_type' in o && !(CUSTOM_EVENT_TYPES as readonly unknown[]).includes(o.custom_event_type)) return 'promoted_object.custom_event_type is one of Meta\'s event types'
   if ('custom_event_str' in o && !(typeof o.custom_event_str === 'string' && /^[\x20-\x7e]{1,100}$/.test(o.custom_event_str))) return 'promoted_object.custom_event_str is plain text, at most 100 characters'
   if ('value_semantic_type' in o && !['VALUE', 'MARGIN', 'LIFETIME_VALUE'].includes(o.value_semantic_type as string)) return 'promoted_object.value_semantic_type is VALUE, MARGIN or LIFETIME_VALUE'
   if ('pixel_rule' in o) {
-    if (typeof o.pixel_rule !== 'string' || o.pixel_rule.length > 2000 || !plainObject(canonical(o.pixel_rule) ?? null)) return 'promoted_object.pixel_rule is a JSON rule (an object, as a string, at most 2000 characters)'
+    const rule = typeof o.pixel_rule === 'string' && o.pixel_rule.length <= 2000 ? canonical(o.pixel_rule) : undefined
+    if (rule === undefined) return 'promoted_object.pixel_rule is a JSON rule as a string, in one spelling, at most 2000 characters'
+    const problem = pixelRuleProblem(rule)
+    if (problem) return `promoted_object.pixel_rule: ${problem}`
   }
   return null
 })
+const campaignPromotedObject = promotedJudge(CAMPAIGN_PROMOTED_OBJECT_KEYS)
+const adSetPromotedObject = promotedJudge(PROMOTED_OBJECT_KEYS)
+/** Review A4 — the pixel, the catalog and the product set a promoted object names, for the gateway's account checks. */
 const promotedIds = (params: Params): MetaWriteBodyId[] => {
   const o = canonical(params.get('promoted_object') ?? '')
-  return plainObject(o) && isId(o.pixel_id) ? [{ id: o.pixel_id, kind: 'pixel' }] : []
+  if (!plainObject(o)) return []
+  return [
+    ...(isId(o.pixel_id) ? [{ id: o.pixel_id, kind: 'pixel' as const }] : []),
+    ...(isId(o.product_catalog_id) ? [{ id: o.product_catalog_id, kind: 'catalog' as const }] : []),
+    ...(isId(o.product_set_id) ? [{ id: o.product_set_id, kind: 'productset' as const }] : []),
+  ]
 }
 
 const textOf = (max: number, what: string): Judge => (value) => {
@@ -159,7 +213,7 @@ function judged(judges: Record<string, Judge>, also?: (params: Params) => string
 const settingsCheck: Judge = (value, params) => {
   if (value !== META_VALIDATE_ONLY) return `the only execution_options Nexus sends is exactly ${META_VALIDATE_ONLY} (Meta's check, which changes nothing)`
   if (params.has('fields')) return 'Meta\'s check (validate_only) changes nothing, so it reads nothing back (no fields)'
-  return META_UPDATE_CHECK_PROVEN ? null : 'Nexus does not use Meta\'s check for a campaign settings change yet (until a live probe shows Meta honours validate_only on updates)'
+  return metaSettingsCheckAllowed() ? null : 'Nexus does not use Meta\'s check for a campaign settings change yet (until LIVE-PROBE ST18-03 shows Meta honours validate_only on a settings update)'
 }
 
 // ── set-meta-campaign: POST /{campaign_id} ─────────────────────────────────────────────────────────────────────────────
@@ -206,7 +260,7 @@ const CAMPAIGN_JUDGES: Record<string, Judge> = {
   is_adset_budget_sharing_enabled: oneOf(['false'], 'is_adset_budget_sharing_enabled (Nexus only switches it off)'),
   special_ad_category: oneOf(SPECIAL_AD_CATEGORIES, 'special_ad_category'),
   special_ad_category_country: countries,
-  promoted_object: promotedObject,
+  promoted_object: campaignPromotedObject,
   objective: oneOf(OUTCOME_OBJECTIVES, 'objective'),
   pacing_type: oneOf(PACING_VALUES, 'pacing_type'),
   is_reels_trending_ads_enabled: bool('is_reels_trending_ads_enabled'),
@@ -240,7 +294,8 @@ export const OPTIMIZATION_SUB_EVENTS = [
 ] as const
 /** CLICKS is deprecated and NONE is not a billing choice: neither is sent. */
 export const BILLING_EVENTS = ['IMPRESSIONS', 'LINK_CLICKS', 'THRUPLAY', 'POST_ENGAGEMENT', 'PAGE_LIKES', 'OFFER_CLAIMS', 'PURCHASE', 'LISTING_INTERACTION', 'APP_INSTALLS'] as const
-export const FREQUENCY_EVENTS = ['IMPRESSIONS', 'VIDEO_VIEWS', 'VIDEO_VIEWS_2S', 'VIDEO_VIEWS_15S'] as const
+/** Review B9 — Meta lists VIDEO_VIEWS* too, but says "only IMPRESSIONS currently" (reference/ad-campaign.md). */
+export const FREQUENCY_EVENTS = ['IMPRESSIONS'] as const
 export const REGIONAL_CATEGORIES = ['TAIWAN_FINSERV', 'AUSTRALIA_FINSERV', 'INDIA_FINSERV', 'TAIWAN_UNIVERSAL', 'SINGAPORE_UNIVERSAL', 'THAILAND_UNIVERSAL', 'AUSTRALIA_UNIVERSAL', 'MALAYSIA_UNIVERSAL', 'BRAZIL_REGULATION'] as const
 export const REGIONAL_IDENTITY_KEYS = [
   'taiwan_finserv_beneficiary', 'taiwan_finserv_payer', 'australia_finserv_beneficiary', 'australia_finserv_payer', 'india_finserv_beneficiary',
@@ -336,7 +391,7 @@ const ADSET_JUDGES: Record<string, Judge> = {
   frequency_control_specs: frequencySpecs,
   attribution_spec: oneOf(ATTRIBUTION_SPECS, 'attribution_spec (one of Meta\'s four combinations, as Nexus writes them)'),
   is_incremental_attribution_enabled: bool('is_incremental_attribution_enabled'),
-  promoted_object: promotedObject,
+  promoted_object: adSetPromotedObject,
   dsa_payor: textOf(512, 'dsa_payor'),
   dsa_beneficiary: textOf(512, 'dsa_beneficiary'),
   regional_regulated_categories: regionalCategories,

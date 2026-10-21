@@ -22,7 +22,8 @@ import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool, ToolChange, ToolUndo } from '../tool-types.js'
 import { metaChangePreview, metaConnectionArg, metaIdArg, metaWhyArg, META_CHANGE_RULES, recordAccount, runMetaChange, type MetaDraftBuilder } from './meta-ads-kit.js'
 import { MetaLiveRefusal } from '../../marketing/meta-ads/live.js'
-import { liveAccountCapabilities, liveAccountCatalogs, liveAccountPixels, liveAdSet, liveAdSetAds, liveBudgetSchedules, liveCampaign, liveCampaignAdSets, liveFieldValues, liveProductSetCatalog, type MetaSettingsTarget } from '../../marketing/meta-ads/live-settings.js'
+import { liveAccountCapabilities, liveAccountPixels, liveAdSet, liveAdSetAds, liveBudgetSchedules, liveCampaign, liveCampaignAdSets, liveFieldValues, type MetaSettingsTarget } from '../../marketing/meta-ads/live-settings.js'
+import { metaCatalogProblem } from '../../marketing/meta-ads/catalog-rule.js'
 import { CAMPAIGN_NOT_SENT, campaignReadsNeeded, campaignSettingsDraft, type CampaignSettingsRequest } from '../../marketing/meta-ads/change-campaign-settings.js'
 import { AD_SET_NOT_SENT, ATTRIBUTION_PRESETS, adSetReadsNeeded, adSetSettingsDraft, type AdSetSettingsRequest } from '../../marketing/meta-ads/change-ad-set-settings.js'
 import { budgetScheduleDraft, livePeriodFields, type BudgetScheduleRequest, type ScheduleObject } from '../../marketing/meta-ads/change-budget-schedule.js'
@@ -43,14 +44,16 @@ const META_SETTINGS_MONEY = {
 
 const centsArg = (what: string) => z.number().int().positive().max(100_000_000_000).describe(`${what}, in minor units of the ad account's currency (cents for EUR)`)
 const idList = (what: string, max: number) => z.array(z.string().trim().regex(/^\d{1,20}$/, 'a Meta id is digits only')).max(max).describe(what)
+/** Review A8 — text a person types (a name, the EU payer): any script, no control or format character (no U+202E). */
+const typedText = (max: number) => z.string().trim().min(1).max(max).regex(/^[^\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]*$/u, 'no control or format characters')
 const isoArg = (what: string) => z.string().trim().min(10).max(40).describe(`${what} (ISO 8601 with its offset, e.g. 2026-11-01T08:00:00Z)`)
 const promotedArg = z.object({
   pixelId: z.string().trim().regex(/^\d{1,20}$/).optional().describe('the pixel (one of the ad account\'s own)'),
-  pixelRule: z.string().trim().max(2000).optional().describe('ad set only: a pixel rule (Meta\'s JSON rule, as a string)'),
+  pixelRule: z.string().trim().max(2000).optional().describe('AD SET only: a pixel rule (Meta\'s JSON rule as a string: {"and"|"or": [rules]} or {"<url | event | custom-data key>": {"<operator>": value}}, ≤ 3 levels, ≤ 10 conditions)'),
   customEventType: z.enum(CUSTOM_EVENT_TYPES).optional().describe('the conversion event (PURCHASE, ADD_TO_CART, …)'),
   customEventStr: z.string().trim().min(1).max(100).optional().describe('with OTHER: the event\'s own name'),
-  productCatalogId: z.string().trim().regex(/^\d{1,20}$/).optional().describe('a catalog of the ad account\'s business portfolio'),
-  productSetId: z.string().trim().regex(/^\d{1,20}$/).optional().describe('campaign only: a product set of such a catalog'),
+  productCatalogId: z.string().trim().regex(/^\d{1,20}$/).optional().describe('a catalog of the chosen ad account\'s business portfolio (owned or a client catalog; never a portfolio another Nexus business uses)'),
+  productSetId: z.string().trim().regex(/^\d{1,20}$/).optional().describe('the ad sets\' product set (Meta uses it at the ad set level; an ad set keeps its own as it is): a product set of such a catalog'),
   valueSemanticType: z.enum(['VALUE', 'MARGIN', 'LIFETIME_VALUE']).optional().describe('campaign only: what the event value means'),
 }).describe('the promoted object: only the keys named change (Meta replaces the whole object, so Nexus sends it with the rest as it is)')
 
@@ -127,9 +130,8 @@ const buildCampaign = (args: Record<string, unknown>): MetaDraftBuilder => guard
   const needs = campaignReadsNeeded(request, campaign)
   const children = needs.adSets ? await liveCampaignAdSets(target, campaign.id) : null
   const pixels = needs.pixels ? await liveAccountPixels(target) : null
-  const catalogs = needs.catalogs ? await liveAccountCatalogs(target) : null
-  const productSetCatalog = needs.productSetId ? await liveProductSetCatalog(target, needs.productSetId) : null
-  return campaignSettingsDraft(request, { campaign, currency: account.currency, adSets: children?.adSets ?? null, adSetsMore: children?.more ?? false, pixels, catalogs, productSetCatalog })
+  const catalogProblem = needs.catalog ? await metaCatalogProblem(target, needs.catalog) : undefined
+  return campaignSettingsDraft(request, { campaign, currency: account.currency, adSets: children?.adSets ?? null, adSetsMore: children?.more ?? false, pixels, catalogProblem })
 })
 
 const setMetaCampaign: AgentTool = {
@@ -144,8 +146,11 @@ const setMetaCampaign: AgentTool = {
   // Most parts are put back by undo; budget sharing off and a ROAS goal under a campaign budget have no way back (Meta).
   reversibility: 'partial',
   consequencesFor: (args) => {
+    // Review A9 — only parts with no way back on Meta: budget sharing off, and a ROAS goal strategy (a campaign bid
+    // strategy exists only under a campaign budget, where Meta never switches a ROAS goal away).
     const keys = Object.keys(args).filter((k) => !['connectionId', 'campaignId', 'why'].includes(k) && args[k] !== undefined)
-    return keys.length === 1 && keys[0] === 'budgetSharing' ? { reversibility: 'none' } : null
+    const forGood = (k: string) => k === 'budgetSharing' || (k === 'bidStrategy' && args.bidStrategy === 'LOWEST_COST_WITH_MIN_ROAS')
+    return keys.length > 0 && keys.every(forGood) ? { reversibility: 'none' } : null
   },
   maxClaudeTrust: 'ask',
   requires: [F.adsCampaignsManage, ADSPEND],
@@ -153,7 +158,7 @@ const setMetaCampaign: AgentTool = {
   input: z.object({
     connectionId: metaConnectionArg,
     campaignId: metaIdArg('the campaign'),
-    name: z.string().trim().min(1).max(400).optional().describe('its new name (emoji allowed)'),
+    name: typedText(400).optional().describe('its new name (emoji allowed)'),
     dailyBudgetCents: centsArg('a campaign daily budget: changes it, switches a lifetime one to daily, or turns campaign budget on').optional(),
     lifetimeBudgetCents: centsArg('a campaign lifetime budget (every ad set needs an end time)').optional(),
     adSetBudgets: z.array(z.object({
@@ -206,9 +211,8 @@ const buildAdSet = (args: Record<string, unknown>): MetaDraftBuilder => guarded(
   const needs = adSetReadsNeeded(request, adSet)
   const ads = needs.ads ? (await liveAdSetAds(target, adSet.id)).ads.map((a) => a.id) : null
   const pixels = needs.pixels ? await liveAccountPixels(target) : null
-  const catalogs = needs.catalogs ? await liveAccountCatalogs(target) : null
-  const productSetCatalog = needs.productSetId ? await liveProductSetCatalog(target, needs.productSetId) : null
-  return adSetSettingsDraft(request, { adSet, campaign, currency: account.currency, ads, pixels, catalogs, productSetCatalog })
+  const catalogProblem = needs.catalog ? await metaCatalogProblem(target, needs.catalog) : undefined
+  return adSetSettingsDraft(request, { adSet, campaign, currency: account.currency, ads, pixels, catalogProblem })
 })
 
 const daypartBlock = z.object({
@@ -235,7 +239,7 @@ const setMetaAdSet: AgentTool = {
   input: z.object({
     connectionId: metaConnectionArg,
     adSetId: metaIdArg('the ad set'),
-    name: z.string().trim().min(1).max(400).optional().describe('its new name'),
+    name: typedText(400).optional().describe('its new name'),
     optimizationGoal: z.enum(OPTIMIZATION_GOALS).optional().describe('the performance goal (sends its ads back to review; restarts learning)'),
     optimizationSubEvent: z.enum(OPTIMIZATION_SUB_EVENTS).optional().describe('the optimisation sub-event (video sound on, travel; NONE)'),
     billingEvent: z.enum(BILLING_EVENTS).optional().describe('what is paid for (sends its ads back to review)'),
@@ -256,11 +260,12 @@ const setMetaAdSet: AgentTool = {
     restart: z.literal(true).optional().describe('an ad set past its end: endTime moves it, then it is switched on (two requests)'),
     dayparting: z.object({
       off: z.literal(true).optional().describe('ad scheduling off (all day)'),
+      pacing: z.enum(['standard', 'no_pacing']).optional().describe('with off: the pacing it goes back to (standard unless named; no_pacing spends faster)'),
       blocks: z.array(daypartBlock).min(1).max(168).optional().describe('the hours it delivers (lifetime budget only)'),
     }).optional().describe('ad scheduling: off, or the blocks of hours'),
     pacing: z.enum(['standard', 'no_pacing']).optional().describe('standard or no_pacing (accelerated — spends faster); no campaign budget'),
     frequencyCaps: z.array(z.object({
-      event: z.enum(FREQUENCY_EVENTS).optional().describe('IMPRESSIONS (default; Meta: only IMPRESSIONS currently)'),
+      event: z.enum(FREQUENCY_EVENTS).optional().describe('IMPRESSIONS (Meta: "only IMPRESSIONS currently")'),
       intervalDays: z.number().int().min(1).max(90).describe('over this many days'),
       maxFrequency: z.number().int().min(1).max(90).describe('at most this many times'),
     })).max(4).optional().describe('frequency caps (REACH or THRUPLAY goal only); [] removes them'),
@@ -268,13 +273,13 @@ const setMetaAdSet: AgentTool = {
     incrementalAttribution: z.boolean().optional().describe('incremental attribution optimisation (Meta\'s SDK only; its answer decides)'),
     promotedObject: promotedArg.optional(),
     dsa: z.object({
-      payor: z.string().trim().min(1).max(512).describe('who pays for the ads (shown to people in the EU)'),
-      beneficiary: z.string().trim().min(1).max(512).describe('who benefits from the ads (shown to people in the EU)'),
+      payor: typedText(512).describe('who pays for the ads (shown to people in the EU)'),
+      beneficiary: typedText(512).describe('who benefits from the ads (shown to people in the EU)'),
     }).optional().describe('the EU payer and beneficiary: both, always (Meta fills a missing one from the account default, not from the other)'),
     regional: z.object({
       categories: z.array(z.enum(REGIONAL_CATEGORIES)).max(9).describe('the regional regulated categories'),
       identities: z.partialRecord(z.enum(REGIONAL_IDENTITY_KEYS), z.string().trim().regex(/^\d{1,20}$/)).describe('Meta-verified identity ids per key (only the keys its categories need)'),
-    }).optional().describe('regional regulated categories (Taiwan, Australia, India, Singapore, Thailand, Malaysia, Brazil — not the EU)'),
+    }).optional().describe('regional regulated categories (Taiwan, Australia, India, Singapore, Thailand, Malaysia, Brazil — not the EU); Nexus does not check whose the identity ids are (Meta verifies them)'),
     customerGoal: z.object({
       type: z.enum(['broad', 'exclude-existing', 'exclude-existing-and-engaged']).describe('who it reaches'),
       existingCustomerAudienceIds: idList('custom audiences of existing customers (the account\'s own)', 100).optional(),

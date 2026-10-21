@@ -93,6 +93,8 @@ export interface LiveAdSet {
   regionalRegulationIdentities: Row | null
   adSetGoal: Row | null
   creativeSequence: string[] | null
+  /** creative_sequence_repetition_pattern (SDK only: its own read group; null when Meta did not answer it). */
+  sequenceRepetition: string | null
   rotationBlocks: unknown[] | null
   rotationIntervals: unknown[] | null
   brandSafety: Row | null
@@ -170,6 +172,7 @@ const ADSET_EXTRA_GROUPS = [
   { name: 'fullFunnelExploration', fields: 'full_funnel_exploration_mode' },
   { name: 'automaticManualState', fields: 'automatic_manual_state' },
   { name: 'budgetScheduling', fields: 'is_budget_schedule_enabled' },
+  { name: 'sequenceRepetition', fields: 'creative_sequence_repetition_pattern' },
 ]
 
 /** One ad set, now (ADSET_CORE_FIELDS of step 6 + its SDK-only fields), with its campaign. */
@@ -200,6 +203,7 @@ export async function liveAdSet(target: MetaSettingsTarget, adSetId: string): Pr
     incrementalAttribution: bool(body.is_incremental_attribution_enabled), promotedObject: obj(body.promoted_object),
     dsaPayor: text(body.dsa_payor), dsaBeneficiary: text(body.dsa_beneficiary), regionalRegulatedCategories: strings(body.regional_regulated_categories),
     regionalRegulationIdentities: obj(body.regional_regulation_identities), adSetGoal: obj(body.ad_set_goal), creativeSequence: strings(body.creative_sequence),
+    sequenceRepetition: text(body.creative_sequence_repetition_pattern),
     rotationBlocks: list(body.time_based_ad_rotation_id_blocks), rotationIntervals: list(body.time_based_ad_rotation_intervals),
     brandSafety: obj(body.brand_safety_config), contextualBundling: obj(body.contextual_bundling_spec),
     fullFunnelExploration: text(body.full_funnel_exploration_mode), automaticManualState: text(body.automatic_manual_state),
@@ -232,38 +236,6 @@ export async function liveBudgetSchedules(target: MetaSettingsTarget, objectId: 
 export async function liveAccountPixels(target: MetaSettingsTarget): Promise<Set<string>> {
   const read = await listPaged(target.connectionId, 'settings.read.pixels', `act_${target.adAccountId}/adspixels`, { fields: 'id' }, 100)
   return new Set(read.rows.map((r) => text(r.id)).filter((x): x is string => !!x))
-}
-
-/**
- * The catalogs the ad account's business portfolio owns or was given (a promoted object names only these). Null when Meta
- * does not answer the portfolio (then no catalog is sent).
- */
-export async function liveAccountCatalogs(target: MetaSettingsTarget): Promise<Set<string> | null> {
-  try {
-    const account = await metaReadOne({ connectionId: target.connectionId }, { operation: 'settings.read.account.business', path: `act_${target.adAccountId}`, query: { fields: 'business{id}' } })
-    const business = metaObjectId(obj((account.body as Row).business)?.id)
-    if (!business) return null
-    const out = new Set<string>()
-    for (const edge of ['owned_product_catalogs', 'client_product_catalogs']) {
-      const read = await listPaged(target.connectionId, `settings.read.${edge}`, `${business}/${edge}`, { fields: 'id' }, 100)
-      for (const r of read.rows) { const id = text(r.id); if (id) out.add(id) }
-    }
-    return out
-  } catch (err) {
-    if (err instanceof MetaReadError && !err.failure.authLost && !err.failure.throttled) return null
-    throw err
-  }
-}
-
-/** The catalog a product set belongs to (null when Meta does not say). */
-export async function liveProductSetCatalog(target: MetaSettingsTarget, productSetId: string): Promise<string | null> {
-  try {
-    const read = await metaReadOne({ connectionId: target.connectionId }, { operation: 'settings.read.productSet', path: productSetId, query: { fields: 'id,product_catalog{id}' } })
-    return metaObjectId(obj((read.body as Row).product_catalog)?.id)
-  } catch (err) {
-    if (err instanceof MetaReadError && !err.failure.authLost && !err.failure.throttled) return null
-    throw err
-  }
 }
 
 /** The ad account's capabilities (CAN_USE_BUDGET_SCHEDULING_API, …); null when Meta does not answer them. */

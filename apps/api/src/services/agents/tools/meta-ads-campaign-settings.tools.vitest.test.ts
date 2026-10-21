@@ -34,8 +34,6 @@ vi.mock('../../marketing/meta-ads/live-settings.js', async (importActual) => {
     liveAdSetAds: vi.fn(async () => ({ ads: h.ads.map((id) => ({ id, status: 'ACTIVE' })), more: false })),
     liveBudgetSchedules: vi.fn(async () => structuredClone(h.periods)),
     liveAccountPixels: vi.fn(async () => new Set(['120000000000050'])),
-    liveAccountCatalogs: vi.fn(async () => null),
-    liveProductSetCatalog: vi.fn(async () => null),
     liveAccountCapabilities: vi.fn(async () => h.capabilities),
     liveFieldValues: vi.fn(async (_target: unknown, _id: string, fields: string[]) => Object.fromEntries(fields.map((f) => [f, h.fieldValues[f] ?? null]))),
   }
@@ -77,7 +75,7 @@ const AD_SET = {
   lifetimeMinSpendTarget: null, dailySpendCap: null, lifetimeSpendCap: null, minBudgetSpendPercentage: null, maxBudgetSpendPercentage: null, startTime: '2026-09-01T00:00:00+0000',
   endTime: '2026-10-10T00:00:00+0000', pacingType: ['standard'], adsetSchedule: null, frequencyControlSpecs: null, attributionSpec: null, incrementalAttribution: null,
   promotedObject: null, dsaPayor: null, dsaBeneficiary: null, regionalRegulatedCategories: null, regionalRegulationIdentities: null, adSetGoal: null, creativeSequence: null,
-  rotationBlocks: null, rotationIntervals: null, brandSafety: null, contextualBundling: null, fullFunnelExploration: null, automaticManualState: null, budgetScheduling: null,
+  sequenceRepetition: null, rotationBlocks: null, rotationIntervals: null, brandSafety: null, contextualBundling: null, fullFunnelExploration: null, automaticManualState: null, budgetScheduling: null,
   targetingCountries: ['IT'], unread: [],
 }
 const PERIOD = { id: P, budgetValue: 20, budgetValueType: 'ABSOLUTE', recurrenceType: 'ONE_TIME', timeStart: '2099-01-01T08:00:00+0000', timeEnd: '2099-01-01T20:00:00+0000' }
@@ -113,6 +111,13 @@ describe('the tools', () => {
     expect(tool('set-meta-budget-schedule').consequencesFor!({ action: 'create' })).toEqual({ reversibility: 'none' })
     expect(tool('set-meta-campaign').consequencesFor!({ campaignId: C, budgetSharing: false })).toEqual({ reversibility: 'none' })
     expect(tool('set-meta-campaign').consequencesFor!({ campaignId: C, name: 'x' })).toBeNull()
+    // Review A9 — a ROAS goal strategy on its own has no way back (a campaign bid strategy is a campaign budget's).
+    expect(tool('set-meta-campaign').consequencesFor!({ campaignId: C, bidStrategy: 'LOWEST_COST_WITH_MIN_ROAS' })).toEqual({ reversibility: 'none' })
+    expect(tool('set-meta-campaign').consequencesFor!({ campaignId: C, bidStrategy: 'COST_CAP' })).toBeNull()
+    // Review A8 — no format character (U+202E turns text around) in a name or the EU payer.
+    expect(() => tool('set-meta-campaign').input.parse({ campaignId: C, name: 'Shop \u202eA' })).toThrow()
+    expect(() => tool('set-meta-ad-set').input.parse({ adSetId: S, dsa: { payor: 'Shop \u202eA', beneficiary: 'Shop A' } })).toThrow()
+    expect(() => tool('set-meta-campaign').input.parse({ campaignId: C, name: 'Saldi 🏍️ città' })).not.toThrow()
     expect(() => tool('set-meta-campaign').input.parse({ campaignId: C, budgetSharing: true })).toThrow()
     expect(() => tool('set-meta-campaign').input.parse({ campaignId: C, specialAdCategory: 'ISSUES_ELECTIONS_POLITICS' })).toThrow()
     expect(tool('set-meta-ad-set').description).toMatch(/Retail Media Network/)
@@ -185,7 +190,14 @@ describe('set-meta-ad-set', () => {
     const failed = await run('set-meta-ad-set', args, p)
     expect(failed).toEqual({ ok: false, error: expect.stringMatching(/^Not run: Meta changed nothing\..*2\. Switch on .*not sent — step 1 did not happen/) })
     expect(h.send).toHaveBeenCalledTimes(1)
+    // Review A7 — Meta says success but the end reads back unchanged: not done, and the switch-on is never sent.
     h.send.mockReset()
+    h.send.mockImplementationOnce(async () => ({ node: { id: S, end_time: '2026-10-10T00:00:00+0000' }, readBack: 'second-read', waitedMs: 0 }))
+    const unchanged = await run('set-meta-ad-set', args, p)
+    expect(unchanged).toEqual({ ok: false, error: expect.stringMatching(/^Not confirmed: 1\. .*not what was asked \(end_time\).* 2\. Switch on .*not sent — step 1 did not happen/) })
+    expect(h.send).toHaveBeenCalledTimes(1)
+    h.send.mockReset()
+    __metaObjectLimitsTest.useMemory()
     h.send.mockImplementationOnce(async () => ({ node: { id: S, end_time: '2099-02-01T00:00:00+0000' }, readBack: 'second-read', waitedMs: 0 }))
       .mockImplementationOnce(async () => ({ node: { id: S, status: 'ACTIVE', effective_status: 'ACTIVE' }, readBack: 'second-read', waitedMs: 31_000 }))
     const ran = await run('set-meta-ad-set', args, p)

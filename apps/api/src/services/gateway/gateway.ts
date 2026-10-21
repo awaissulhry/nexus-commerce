@@ -739,13 +739,24 @@ async function metaListedIds(connectionId: string, path: string): Promise<Set<st
  * Meta step 18 — the ids INSIDE a change's body (meta-settings-rules.ts `ids`): the child ad sets of a campaign's budget
  * or bid move, the ads of a sequence or rotation, the custom audiences an ad set excludes — each of the chosen ad account
  * and of its kind (its stored row, else one live read of its account_id and two fields only that kind has); the pixel of
- * a promoted object — one of the chosen ad account's own pixels (`act_<id>/adspixels`). Any other: nothing is sent.
+ * a promoted object — one of the chosen ad account's own pixels (`act_<id>/adspixels`); its catalog or product set — the
+ * catalog rule (review A4). Any other: nothing is sent.
  */
 async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite): Promise<{ code: string; sentence: string } | null> {
   if (!write.ids?.length) return null
   if (write.ids.length > 150) return { code: 'META_WRITE_NOT_ALLOWED', sentence: 'Nothing was sent to Meta: a change names at most 150 objects inside its body.' }
   let pixels: Set<string> | null | undefined
   for (const inner of write.ids) {
+    // Review A4 — a catalog or a product set: the ONE catalog rule (marketing/meta-ads/catalog-rule.ts): of the chosen ad
+    // account's business portfolio, and that portfolio no other Nexus business's.
+    if (inner.kind === 'catalog' || inner.kind === 'productset') {
+      const chosen = await metaChosenAdAccountOf(connectionId)
+      if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection.' }
+      const { metaCatalogProblem } = await import('../marketing/meta-ads/catalog-rule.js')
+      const problem = await metaCatalogProblem({ connectionId, adAccountId: chosen }, inner.kind === 'catalog' ? { catalogId: inner.id } : { productSetId: inner.id })
+      if (problem) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: inside this change, ${problem}` }
+      continue
+    }
     if (inner.kind === 'pixel') {
       if (pixels === undefined) {
         const chosen = await metaChosenAdAccountOf(connectionId)

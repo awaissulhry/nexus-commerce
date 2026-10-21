@@ -16,7 +16,8 @@
  *   - bidding/overview/bid-strategy.md: COST_CAP needs IMPRESSIONS billing and standard pacing; LOWEST_COST_WITH_MIN_ROAS
  *     needs the VALUE goal, takes bid_constraints {roas_average_floor} and never bid_amount; under a campaign budget the
  *     strategy is the campaign's and the floor is per ad set (advantage-campaign-budget.md); removing a ROAS goal under a
- *     campaign budget is impossible (RECHECK AS-051 CORRECTED) — without one it is STILL-UNVERIFIED (sent; Meta decides).
+ *     campaign budget is impossible (RECHECK AS-051 CORRECTED); without one it is documented (bid-strategy.md "Remove
+ *     roas_average_floor from minimum ROAS bidding ad set": bid_strategy=LOWEST_COST_WITHOUT_CAP + bid_constraints={}).
  *   - bidding/overview/pacing-and-scheduling.md: day_parting needs a lifetime budget; blocks on the hour, ≥ 1 hour; off =
  *     pacing_type ["standard"] + adset_schedule [] (RECHECK AS-058 CONFIRMED); under a campaign budget pacing is the
  *     campaign's (CMP-073), so an ad set then sends its schedule only.
@@ -82,7 +83,8 @@ export interface AdSetSettingsRequest {
   /** null: no end (daily budgets only). */
   endTime?: string | null
   restart?: boolean
-  dayparting?: { off?: boolean; blocks?: DaypartBlock[] }
+  /** off: ad scheduling off, with the pacing it goes back to (standard unless named; review A9). */
+  dayparting?: { off?: boolean; pacing?: 'standard' | 'no_pacing'; blocks?: DaypartBlock[] }
   pacing?: 'standard' | 'no_pacing'
   frequencyCaps?: FrequencyCapAsk[]
   attribution?: AttributionPreset
@@ -106,8 +108,8 @@ export interface AdSetSettingsLive {
   /** The ad set's ads (read when a sequence or rotation is asked). */
   ads: string[] | null
   pixels: Set<string> | null
-  catalogs: Set<string> | null
-  productSetCatalog: string | null
+  /** The catalog rule's answer for the catalog / product set the promoted object will name (null: it may; undefined: none named). */
+  catalogProblem?: string | null
 }
 
 /** Answers in words for what set-meta-ad-set does not send (row AS-101; budget schedules: set-meta-budget-schedule). */
@@ -116,9 +118,12 @@ export const AD_SET_NOT_SENT = [
   'Scheduled budget increases: set-meta-budget-schedule.',
 ]
 
-export function adSetReadsNeeded(request: AdSetSettingsRequest, adSet: LiveAdSet): { ads: boolean; pixels: boolean; catalogs: boolean; productSetId: string | null } {
+export function adSetReadsNeeded(request: AdSetSettingsRequest, adSet: LiveAdSet): { ads: boolean; pixels: boolean; catalog: { catalogId: string | null; productSetId: string | null } | null } {
   const merged = request.promotedObject ? promotedMerged(adSet.promotedObject, request.promotedObject) : {}
-  return { ads: !!(request.creativeSequence || request.adRotation), pixels: !!merged.pixel_id, catalogs: !!(merged.product_catalog_id || merged.product_set_id), productSetId: merged.product_set_id ?? null }
+  return {
+    ads: !!(request.creativeSequence || request.adRotation), pixels: !!merged.pixel_id,
+    catalog: merged.product_catalog_id || merged.product_set_id ? { catalogId: merged.product_catalog_id ?? null, productSetId: merged.product_set_id ?? null } : null,
+  }
 }
 
 const SALES_OBJECTIVES = new Set(['OUTCOME_SALES', 'CONVERSIONS', 'PRODUCT_CATALOG_SALES'])
@@ -142,7 +147,6 @@ export function attributionPresetOf(spec: unknown[] | null): AttributionPreset |
 /** The attribution presets Meta allows for this objective and goal (its table). */
 export function allowedAttribution(objective: string | null, goal: string | null): readonly AttributionPreset[] {
   if (goal === 'OFFSITE_CONVERSIONS' && objective && SALES_OBJECTIVES.has(objective)) return ATTRIBUTION_PRESETS
-  if (goal === 'VALUE' && objective && SALES_OBJECTIVES.has(objective)) return ATTRIBUTION_PRESETS
   if (goal === 'OFFSITE_CONVERSIONS' && objective && CLICK_OBJECTIVES.has(objective)) return ['1d_click', '7d_click']
   return ['1d_click']
 }
@@ -169,8 +173,11 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
   const noUndo: string[] = []
   const undo: Record<string, unknown> = {}
   const broken = (why: string) => { noUndo.push(why) }
-  const on = isOn(a.status, c.status)
-  const spendWord = on ? 'the ad set and its campaign are on, so it can spend more from now' : 'nothing spends yet: the ad set or its campaign is not on (it spends once both are)'
+  // Review A6 — a restart switches the ad set on in this same change: it counts as on (its campaign decides).
+  const on = request.restart ? isOn(c.status) : isOn(a.status, c.status)
+  const spendWord = request.restart
+    ? (on ? 'the restart switches it on and its campaign is on, so it spends at once' : 'nothing spends yet: its campaign is not on (the restart switches the ad set on; it spends once the campaign is on)')
+    : on ? 'the ad set and its campaign are on, so it can spend more from now' : 'nothing spends yet: the ad set or its campaign is not on (it spends once both are)'
   const cbo = !!(c.dailyBudget || c.lifetimeBudget)
   const cboType: 'daily' | 'lifetime' | null = c.dailyBudget ? 'daily' : c.lifetimeBudget ? 'lifetime' : null
   const nowSec = Math.floor(now.getTime() / 1000)
@@ -287,7 +294,7 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
     const oldMax = a.maxBudgetSpendPercentage === null ? null : Number(a.maxBudgetSpendPercentage)
     const back: Record<string, number> = {}
     if (min !== undefined && min !== oldMin) { params.min_budget_spend_percentage = String(min); lines.push(['Minimum budget share %', oldMin, min]); if (oldMin !== null) back.min = oldMin; else broken('The minimum budget share was not readable before.'); if (min > (oldMin ?? 0)) spendsMoney.push(`A minimum budget share of ${min}% may steer more of the campaign budget to ${who} (Meta does not document these fields): ${spendWord}.`) }
-    if (max !== undefined && max !== oldMax) { params.max_budget_spend_percentage = String(max); lines.push(['Maximum budget share %', oldMax, max]); if (oldMax !== null) back.max = oldMax; else broken('The maximum budget share was not readable before.'); if (oldMax !== null && max > oldMax) spendsMoney.push(`A maximum budget share of ${max}% (from ${oldMax}%) may let more of the campaign budget go to ${who}: ${spendWord}.`) }
+    if (max !== undefined && max !== oldMax) { params.max_budget_spend_percentage = String(max); lines.push(['Maximum budget share %', oldMax, max]); if (oldMax !== null) back.max = oldMax; else broken('The maximum budget share was not readable before.'); if (oldMax === null || max > oldMax) spendsMoney.push(`A maximum budget share of ${max}% (from ${oldMax === null ? 'a value Nexus could not read' : `${oldMax}%`}) may let more of the campaign budget go to ${who}: ${spendWord}.`) }
     if (Object.keys(back).length) undo.budgetSharePercent = back
     if (params.min_budget_spend_percentage || params.max_budget_spend_percentage) warnings.push('Meta lists min_budget_spend_percentage and max_budget_spend_percentage by name only; Nexus sends them and Meta\'s answer decides what they do.')
     else skipped.push(`${who}'s budget shares are already so.`)
@@ -299,6 +306,8 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
   let strategy = strategyNow
   if (request.bidStrategy !== undefined) {
     if (cbo) return { refusal: `${who} is under a campaign budget: the bid strategy is the campaign's (set-meta-campaign bidStrategy).` }
+    // Review B7 — adset-budget-sharing.md: the bid strategy cannot change mid-flight while ad sets share budget (4834006).
+    if (c.budgetSharing === true && request.bidStrategy !== a.bidStrategy) return { refusal: `${who}'s campaign shares budget between its ad sets: Meta refuses a bid strategy change mid-flight then (4834006).` }
     if (request.bidStrategy === a.bidStrategy) skipped.push(`${who}'s bid strategy is already ${a.bidStrategy}.`)
     else {
       if (request.bidStrategy === 'LOWEST_COST_WITH_MIN_ROAS' && request.roasGoal === undefined) return { refusal: 'A ROAS goal strategy needs the minimum ROAS (roasGoal).' }
@@ -353,12 +362,13 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
     if (strategyNow !== 'LOWEST_COST_WITH_MIN_ROAS') skipped.push(`${who} has no ROAS goal.`)
     else if (cbo) return { refusal: `${who}'s campaign has a ROAS goal under a campaign budget: Meta says "you cannot currently switch to other bid strategies after you create your campaign". Copy it into a new campaign without one.` }
     else {
-      // AS-051 without a campaign budget — STILL-UNVERIFIED: no Meta page shows it (LIVE-PROBES AS-051).
+      // AS-051 without a campaign budget — documented (bid-strategy.md "Remove roas_average_floor from minimum ROAS bidding
+      // ad set"): bid_strategy=LOWEST_COST_WITHOUT_CAP + bid_constraints={} (review B2).
       params.bid_strategy = 'LOWEST_COST_WITHOUT_CAP'
       params.bid_constraints = '{}'
       lines.push(['Bid strategy', 'LOWEST_COST_WITH_MIN_ROAS', 'LOWEST_COST_WITHOUT_CAP (no ROAS goal)'])
       spendsMoney.push(`Removing ${who}'s ROAS goal: Meta then buys the most results for the budget whatever their value — ${spendWord}.`)
-      warnings.push('Meta documents no way to remove a ROAS goal: Nexus sends highest volume with empty bid constraints and Meta\'s answer decides.')
+      warnings.push('Meta\'s bid strategy guide removes a ROAS goal from an ad set with its own budget this way: highest volume and empty bid constraints.')
       undo.bidStrategy = 'LOWEST_COST_WITH_MIN_ROAS'
       if (typeof a.bidConstraints?.roas_average_floor === 'number') undo.roasGoal = roasOfFloor(a.bidConstraints.roas_average_floor)
       else broken('The ROAS goal was not readable before.')
@@ -375,7 +385,8 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
       params.start_time = String(start)
       lines.push(['Starts', a.startTime, iso(String(start))])
       if (a.startTime) undo.startTime = new Date(startNow! * 1000).toISOString(); else broken('The start time was not readable before.')
-      if (on && start <= nowSec && (startNow === null || startNow > nowSec)) spendsMoney.push(`${who} starts now instead of ${a.startTime}: ${spendWord}.`)
+      // Review A2 — an earlier start is a longer run (and one at or before now starts at once).
+      if (startNow === null || start < startNow) spendsMoney.push(`${who} starts ${start <= nowSec ? 'now' : 'earlier'} (${iso(String(start))} instead of ${a.startTime ?? 'no start'}): more days of delivery — ${spendWord}.`)
     }
   }
   let endAsked: number | null | undefined
@@ -396,7 +407,7 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
       if (a.endTime && endNow! > nowSec) undo.endTime = new Date(endNow! * 1000).toISOString()
       else if (!a.endTime) undo.endTime = null
       else broken('Its old end time has passed: Meta refuses an end in the past.')
-      if (on && (endAsked === null || (endNow !== null && endAsked > endNow))) spendsMoney.push(`${who} runs ${endAsked === null ? 'without an end' : 'longer'}: more days of delivery — ${spendWord}.`)
+      if (endAsked === null || (endNow !== null && endAsked > endNow)) spendsMoney.push(`${who} runs ${endAsked === null ? 'without an end' : 'longer'}: more days of delivery — ${spendWord}.`)
     }
   }
   // ── ad scheduling (AS-057, AS-058) and pacing (AS-059) ──
@@ -404,13 +415,15 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
   if (request.dayparting) {
     const { off, blocks } = request.dayparting
     if (!!off === !!blocks?.length) return { refusal: 'Dayparting is either off: true or a list of blocks.' }
+    if (blocks?.length && request.dayparting.pacing) return { refusal: 'Ad scheduling sets the pacing to day_parting itself: name a pacing only with dayparting off.' }
     if (off) {
       if (pacingNow !== 'day_parting' && !a.adsetSchedule?.length) skipped.push(`${who} has no ad schedule.`)
       else {
-        if (!cbo) params.pacing_type = '["standard"]'
+        const after = request.dayparting.pacing ?? 'standard'
+        if (!cbo) params.pacing_type = JSON.stringify([after])
         params.adset_schedule = '[]'
-        lines.push(['Ad scheduling', 'on', 'off (all day)'])
-        if (on) spendsMoney.push(`Without its schedule ${who} delivers at every hour: ${spendWord}.`)
+        lines.push(['Ad scheduling', 'on', `off (all day${!cbo && after === 'no_pacing' ? ', accelerated' : ''})`])
+        spendsMoney.push(`Without its schedule ${who} delivers at every hour${!cbo && after === 'no_pacing' ? ', as fast as Meta can' : ''}: ${spendWord}.`)
         const back = scheduleBack(a.adsetSchedule)
         if (back) undo.dayparting = { blocks: back }; else broken('The previous schedule was not readable in a shape Nexus sends.')
       }
@@ -428,9 +441,10 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
         params.adset_schedule = value
         lines.push(['Ad scheduling', a.adsetSchedule?.length ? `${a.adsetSchedule.length} block(s)` : 'off (all day)', `${spec.length} block(s), ${spec[0].timezone_type === 'USER' ? 'in the viewer\'s time zone' : 'in the account\'s time zone'}`])
         const hoursNow = pacingNow === 'day_parting' ? weeklyHours(a.adsetSchedule) : 168
-        if (on && weeklyHours(spec) > hoursNow) spendsMoney.push(`The new schedule lets ${who} deliver ${weeklyHours(spec)} hours a week instead of ${hoursNow}: ${spendWord}.`)
+        if (weeklyHours(spec) > hoursNow) spendsMoney.push(`The new schedule lets ${who} deliver ${weeklyHours(spec)} hours a week instead of ${hoursNow}: ${spendWord}.`)
         const back = pacingNow === 'day_parting' ? scheduleBack(a.adsetSchedule) : null
-        if (pacingNow === 'day_parting') { if (back) undo.dayparting = { blocks: back }; else broken('The previous schedule was not readable in a shape Nexus sends.') } else undo.dayparting = { off: true }
+        // Review A9 — the undo turns scheduling off again with the pacing it had (accelerated stays accelerated).
+        if (pacingNow === 'day_parting') { if (back) undo.dayparting = { blocks: back }; else broken('The previous schedule was not readable in a shape Nexus sends.') } else undo.dayparting = { off: true, ...(pacingNow === 'no_pacing' ? { pacing: 'no_pacing' } : {}) }
         warnings.push('Ad schedule changes do not send the ads back to review.')
       }
     }
@@ -460,8 +474,8 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
       lines.push(['Frequency caps', capsWords(a.frequencyControlSpecs), capsWords(spec)])
       const back = capsBack(a.frequencyControlSpecs)
       if (back) undo.frequencyCaps = back; else broken('The previous frequency caps were not readable in a shape Nexus sends.')
-      if (on && request.frequencyCaps.length === 0 && a.frequencyControlSpecs?.length) spendsMoney.push(`Without a frequency cap Meta may show ${who}'s ads more often: ${spendWord}.`)
-      else if (on && looserCaps(a.frequencyControlSpecs, spec)) spendsMoney.push(`A looser frequency cap lets Meta show ${who}'s ads more often: ${spendWord}.`)
+      if (request.frequencyCaps.length === 0 && a.frequencyControlSpecs?.length) spendsMoney.push(`Without a frequency cap Meta may show ${who}'s ads more often: ${spendWord}.`)
+      else if (looserCaps(a.frequencyControlSpecs, spec)) spendsMoney.push(`A looser frequency cap lets Meta show ${who}'s ads more often: ${spendWord}.`)
     }
   }
 
@@ -530,7 +544,7 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
     params.regional_regulated_categories = value
     params.regional_regulation_identities = JSON.stringify(request.regional.identities)
     lines.push(['Regional regulated categories', a.regionalRegulatedCategories?.join(', ') || 'none', request.regional.categories.join(', ') || 'none'])
-    warnings.push('Regional categories are for ads shown in Taiwan, Australia, India, Singapore, Thailand, Malaysia or Brazil (not the EU, where the payer and beneficiary apply); the identities are ids Meta verified.')
+    warnings.push('Regional categories are for ads shown in Taiwan, Australia, India, Singapore, Thailand, Malaysia or Brazil (not the EU, where the payer and beneficiary apply). Nexus does not check whose these identity ids are: Meta verifies them, and refuses an id that is not a verified identity of this advertiser.')
     if (a.regionalRegulatedCategories?.every((c) => inList(REGIONAL_CATEGORIES, c)) && a.regionalRegulationIdentities && Object.keys(a.regionalRegulationIdentities).length
       && Object.keys(a.regionalRegulationIdentities).every((k) => inList(REGIONAL_IDENTITY_KEYS, k))) {
       undo.regional = { categories: a.regionalRegulatedCategories, identities: Object.fromEntries(Object.entries(a.regionalRegulationIdentities).map(([k, v]) => [k, String(v)])) }
@@ -541,8 +555,10 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
   if (request.customerGoal) {
     const g = request.customerGoal
     if (c.objective !== 'OUTCOME_SALES') return { refusal: `Meta takes a customer goal only on a Sales (OUTCOME_SALES) ad set; ${who}'s campaign is ${c.objective ?? 'unknown'} (1870252).` }
-    const restricted = (c.specialAdCategories ?? []).some((x) => x !== 'NONE')
-    if (restricted && g.type !== 'broad') return { refusal: `${who}'s campaign is in a special ad category: Meta allows only a broad customer goal there (1870261).` }
+    // Review B9 — the restricted categories (reference/ad-campaign.md "Ad set goal"): housing, employment, credit, financial
+    // products and services, online gambling — not NONE, not political ads.
+    const restricted = (c.specialAdCategories ?? []).some((x) => x !== 'NONE' && x !== 'ISSUES_ELECTIONS_POLITICS')
+    if (restricted && g.type !== 'broad') return { refusal: `${who}'s campaign is in a restricted special ad category (housing, employment, credit, financial products and services, online gambling): Meta allows only a broad customer goal there (1870261).` }
     const type = GOAL_TYPE[g.type]
     const existing = [...(g.existingCustomerAudienceIds ?? [])]
     const existingLabels = [...(g.existingCustomerLabels ?? [])]
@@ -587,7 +603,9 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
     if (request.creativeSequence.repetition) params.creative_sequence_repetition_pattern = request.creativeSequence.repetition
     lines.push(['Ad sequence', a.creativeSequence?.join(' → ') || 'none', ids.join(' → ') || 'none'])
     warnings.push('Meta refuses to pause or archive an ad that is part of a sequence (pause the ad set instead).')
-    undo.creativeSequence = { adIds: a.creativeSequence ?? [] }
+    // Review A9 — the repetition pattern goes back too (read in its own group; when Meta did not answer it, said).
+    undo.creativeSequence = { adIds: a.creativeSequence ?? [], ...(a.sequenceRepetition === 'FULL_SEQUENCE' || a.sequenceRepetition === 'LAST_AD' ? { repetition: a.sequenceRepetition } : {}) }
+    if (request.creativeSequence.repetition && !a.sequenceRepetition) broken('The previous repetition pattern was not readable, so undo cannot put it back.')
   }
   if (request.adRotation) {
     const blocks = request.adRotation.blocks
@@ -672,7 +690,8 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
 
   if (!Object.keys(params).length) return { refusal: `Nothing to change: ${skipped.join(' ')}` }
 
-  const EXPECTED = ['name', 'optimization_goal', 'optimization_sub_event', 'billing_event', 'daily_budget', 'lifetime_budget', 'bid_strategy', 'bid_amount', 'min_budget_spend_percentage', 'dsa_payor', 'dsa_beneficiary']
+  // Review A7 — the times too (judged as Unix seconds): a restart whose end did not move never sends its switch-on.
+  const EXPECTED = ['name', 'optimization_goal', 'optimization_sub_event', 'billing_event', 'daily_budget', 'lifetime_budget', 'bid_strategy', 'bid_amount', 'min_budget_spend_percentage', 'dsa_payor', 'dsa_beneficiary', 'start_time', 'end_time']
   const expect: Record<string, string> = Object.fromEntries(Object.entries(params).filter(([k]) => EXPECTED.includes(k)))
   const readFields = Object.keys(params).filter((k) => READABLE.has(k))
   const budget = !!(params.daily_budget || params.lifetime_budget)

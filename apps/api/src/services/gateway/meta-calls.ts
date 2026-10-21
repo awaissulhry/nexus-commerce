@@ -724,7 +724,7 @@ export interface MetaWriteRule {
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
 export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
-export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' }
+export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' }
 
 const fieldsValueProblem = (value: string): string | null => {
   const names = value.split(',')
@@ -836,7 +836,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   if ((input.body as string).length > maxBody) return refuse(`a Meta change body is at most ${maxBody} characters`)
   for (const [key, value] of parsed.params) {
     if (rule.text?.has(key)) {
-      if (!PRINTABLE_TEXT.test(value)) return refuse(`the value of "${key}" is printable text (no control characters)`)
+      if (!PRINTABLE_TEXT.test(value)) return refuse(`the value of "${key}" is printable text (no control or format characters)`)
     } else if (!/^[\x20-\x7e]*$/.test(value)) return refuse(`the value of "${key}" is plain ASCII`)
   }
   const problem = rule.values(parsed.params)
@@ -856,8 +856,8 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
 const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kinds
   ? !!kind && (rule.kinds as readonly string[]).includes(kind)
   : kind === undefined || kind === 'campaign' || kind === 'adset' || kind === 'ad')
-/** Step 18 — printable text in any script (a name with accents or an emoji, the EU payer's name): no control character. */
-const PRINTABLE_TEXT = /^[^\p{Cc}\p{Cs}\u2028\u2029]*$/u
+/** Step 18 — printable text in any script (a name with accents or an emoji, the EU payer's name): no control or format character (review A8: no U+202E). */
+const PRINTABLE_TEXT = /^[^\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]*$/u
 /** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY). */
 const MAX_ANY_WRITE_BODY = 16_000
 /** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts) — read when judged, never at load. */

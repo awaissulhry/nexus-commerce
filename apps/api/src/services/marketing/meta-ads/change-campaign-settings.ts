@@ -35,7 +35,7 @@ import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './cha
 import { campaignSettingsCheck, isOn, money, settingsView, type SettingsRecord } from './change-settings-common.js'
 import type { LiveCampaign, LiveChildAdSet } from './live-settings.js'
 import { bidAmountParam, budgetParam, campaignSpendCapParam, metaUnitsToMinor, MetaUnitError } from './settings-units.js'
-import { BID_STRATEGIES as BID_STRATEGY_LIST, CAMPAIGN_SETTINGS_READ_BACK, CUSTOM_EVENT_TYPES, META_NO_CAP, PROMOTED_OBJECT_KEYS, SPECIAL_AD_CATEGORIES as SPECIAL_AD_CATEGORY_LIST, type BID_STRATEGIES, type OUTCOME_OBJECTIVES, type SPECIAL_AD_CATEGORIES } from '../../gateway/meta-settings-rules.js'
+import { BID_STRATEGIES as BID_STRATEGY_LIST, CAMPAIGN_PROMOTED_OBJECT_KEYS, CAMPAIGN_SETTINGS_READ_BACK, CUSTOM_EVENT_TYPES, META_NO_CAP, PROMOTED_OBJECT_KEYS, SPECIAL_AD_CATEGORIES as SPECIAL_AD_CATEGORY_LIST, type BID_STRATEGIES, type OUTCOME_OBJECTIVES, type SPECIAL_AD_CATEGORIES } from '../../gateway/meta-settings-rules.js'
 
 export type MetaBidStrategy = typeof BID_STRATEGIES[number]
 export type MetaObjective = typeof OUTCOME_OBJECTIVES[number]
@@ -85,20 +85,20 @@ export interface CampaignSettingsLive {
   adSetsMore: boolean
   /** The account's own pixels (read when a pixel is named). */
   pixels: Set<string> | null
-  /** The catalogs of the account's business portfolio (read when a catalog or product set is named; null: not answered). */
-  catalogs: Set<string> | null
-  /** The catalog of the named product set. */
-  productSetCatalog: string | null
+  /**
+   * The catalog rule's answer for the catalog / product set the promoted object will name (catalog-rule.ts: of the chosen
+   * ad account's business portfolio, no other Nexus business's): null = it may; undefined = not asked (none named).
+   */
+  catalogProblem?: string | null
 }
 
 /** Which live reads a request needs, beyond the campaign itself (the promoted object as it will be: current + asked). */
-export function campaignReadsNeeded(request: CampaignSettingsRequest, campaign: LiveCampaign): { adSets: boolean; pixels: boolean; catalogs: boolean; productSetId: string | null } {
+export function campaignReadsNeeded(request: CampaignSettingsRequest, campaign: LiveCampaign): { adSets: boolean; pixels: boolean; catalog: { catalogId: string | null; productSetId: string | null } | null } {
   const merged = request.promotedObject ? promotedMerged(campaign.promotedObject, request.promotedObject) : {}
   return {
     adSets: !!(request.adSetBudgets || request.bidStrategy || request.adSetBidAmounts || request.objective || request.dailyBudgetCents !== undefined || request.lifetimeBudgetCents !== undefined),
     pixels: !!merged.pixel_id,
-    catalogs: !!(merged.product_catalog_id || merged.product_set_id),
-    productSetId: merged.product_set_id ?? null,
+    catalog: merged.product_catalog_id || merged.product_set_id ? { catalogId: merged.product_catalog_id ?? null, productSetId: merged.product_set_id ?? null } : null,
   }
 }
 
@@ -268,6 +268,7 @@ function draft(request: CampaignSettingsRequest, live: CampaignSettingsLive): Me
   if (request.bidStrategy) {
     const to = request.bidStrategy
     const from = c.bidStrategy
+    if (to === from && request.adSetBidAmounts) return { refusal: `${who} bids with ${STRATEGY_WORDS[to]} already: change an ad set's cap with set-meta-ad-set bidAmountCents (Meta documents adset_bid_amounts only for a move from automatic bidding to a cap).` }
     if (to === from) skipped.push(`${who}'s bid strategy is already ${STRATEGY_WORDS[to]}.`)
     else {
       if (!hasCbo) return { refusal: `${who} has no campaign budget: its bid strategy is on each ad set (set-meta-ad-set bidStrategy).` }
@@ -289,7 +290,14 @@ function draft(request: CampaignSettingsRequest, live: CampaignSettingsLive): Me
           if (extra.length) return { refusal: `Not of ${who}: ad set ${extra.join(', ')}.` }
           params.adset_bid_amounts = JSON.stringify(Object.fromEntries([...bids].map(([id, v]) => [id, Number(bidAmountParam(v, cur))])))
           for (const [id, v] of [...bids].slice(0, 10)) lines.push([`Ad set ${id} cap`, money(cents(children.find((a) => a.id === id)?.bidAmount ?? null, cur), cur), money(v, cur)])
+          // Review A1 — each new cap against the ad set's bid now: a raise, or one Nexus could not read, can pay more.
+          const raised = [...bids].map(([id, v]) => ({ id, v, old: cents(children.find((a) => a.id === id)?.bidAmount ?? null, cur) })).filter((b) => b.old === null || b.v > b.old)
+          if (raised.length) {
+            spendsMoney.push(`New caps that may let Meta pay more per result: ${raised.slice(0, 10).map((b) => `ad set ${b.id} ${b.old === null ? `had no bid Nexus could read, now ${money(b.v, cur)}` : `${money(b.old, cur)} → ${money(b.v, cur)}`}`).join('; ')}${raised.length > 10 ? ` and ${raised.length - 10} more` : ''} — ${spendWord}.`)
+          }
         }
+        // Review A1 — a cost cap is an average: single bids may go above it, where a bid cap never does.
+        if (from === 'LOWEST_COST_WITH_BID_CAP' && to === 'COST_CAP') spendsMoney.push(`From a bid cap to a cost per result goal: Meta keeps the AVERAGE cost near the goal, so single bids may go above the old cap — ${spendWord}.`)
         warnings.push('A cap limits what Meta pays per result: delivery may slow. Meta reads each cap per 1,000 impressions for ad sets billed on impressions.')
       } else if (request.adSetBidAmounts) {
         return { refusal: 'adSetBidAmounts goes only with a move to a bid cap or cost cap strategy.' }
@@ -337,7 +345,11 @@ function draft(request: CampaignSettingsRequest, live: CampaignSettingsLive): Me
       params.special_ad_category = to
       if (countries) params.special_ad_category_country = JSON.stringify(countries)
       lines.push(['Special ad category', `${from}${c.specialAdCategoryCountry?.length ? ` (${c.specialAdCategoryCountry.join(', ')})` : ''}`, `${to}${countries?.length ? ` (${countries.join(', ')})` : ''}`])
-      if (to !== 'NONE') warnings.push(`Moving ${who} into ${to}: its targeting must already meet the category's rules (Meta refuses it otherwise; meta-targeting-check), Meta strips targeting options the category forbids, and every ad set's customer lifecycle goal goes back to broad.`)
+      if (to !== 'NONE') {
+        warnings.push(`Moving ${who} into ${to}: its targeting must already meet the category's rules (Meta refuses it otherwise; meta-targeting-check), Meta strips targeting options the category forbids, and every ad set's customer lifecycle goal goes back to broad.`)
+        // Review A3 — the reset widens who sees the ads: customer goals back to broad, age / gender / radius limits removed.
+        spendsMoney.push(`Moving ${who} into ${to} widens its audience: Meta sets every ad set's customer goal back to broad (existing customers see the ads again) and removes the age, gender and location limits the category forbids — ${spendWord}.`)
+      }
       if ((SPECIAL_AD_CATEGORY_LIST as readonly string[]).includes(from)) undo.specialAdCategory = from
       else noUndo.push(`The previous category (${from}) is not one Nexus sends.`)
       if (c.specialAdCategoryCountry?.length) undo.specialAdCategoryCountries = c.specialAdCategoryCountry
@@ -348,8 +360,9 @@ function draft(request: CampaignSettingsRequest, live: CampaignSettingsLive): Me
 
   // ── promoted object (CMP-062) ──
   if (request.promotedObject) {
+    if (request.promotedObject.pixelRule !== undefined) return { refusal: 'A pixel rule is an ad set\'s (set-meta-ad-set promotedObject.pixelRule): Meta\'s campaign promoted object does not take one.' }
     const current = c.promotedObject ?? {}
-    const foreign = Object.keys(current).filter((k) => !(PROMOTED_OBJECT_KEYS as readonly string[]).includes(k))
+    const foreign = Object.keys(current).filter((k) => !(CAMPAIGN_PROMOTED_OBJECT_KEYS as readonly string[]).includes(k))
     if (foreign.length) return { refusal: `${who}'s promoted object holds ${foreign.join(', ')}, which Nexus does not send: change it in Ads Manager.` }
     const merged = promotedMerged(current, request.promotedObject)
     const problem = promotedProblem(merged, live)
@@ -478,14 +491,12 @@ function campaignFieldOf(c: LiveCampaign, field: string): unknown {
   return map[field] ?? null
 }
 
-/** Why a promoted object cannot be sent: a pixel not the account's, a catalog not the portfolio's, a product set of another catalog. */
-export function promotedProblem(merged: Record<string, string>, live: { pixels: Set<string> | null; catalogs: Set<string> | null; productSetCatalog: string | null }): string | null {
+/** Why a promoted object cannot be sent: a pixel not the account's; a catalog or product set the catalog rule refuses. */
+export function promotedProblem(merged: Record<string, string>, live: { pixels: Set<string> | null; catalogProblem?: string | null }): string | null {
   if (merged.pixel_id && !live.pixels?.has(merged.pixel_id)) return `Pixel ${merged.pixel_id} is not one of the chosen ad account's own pixels (meta-ads-graph-read act_<id>/adspixels lists them).`
   if (merged.product_catalog_id || merged.product_set_id) {
-    if (!live.catalogs) return 'Nexus could not read which catalogs the ad account\'s business portfolio has, so no catalog is sent.'
-    if (merged.product_catalog_id && !live.catalogs.has(merged.product_catalog_id)) return `Catalog ${merged.product_catalog_id} is not one the ad account's business portfolio owns or was given.`
-    if (merged.product_set_id && (!live.productSetCatalog || !live.catalogs.has(live.productSetCatalog))) return `Product set ${merged.product_set_id} is not in a catalog of the ad account's business portfolio.`
-    if (merged.product_set_id && merged.product_catalog_id && live.productSetCatalog !== merged.product_catalog_id) return `Product set ${merged.product_set_id} is not in catalog ${merged.product_catalog_id}.`
+    if (live.catalogProblem === undefined) return 'Nexus did not check the catalog, so it is not sent.'
+    if (live.catalogProblem) return live.catalogProblem
   }
   if (merged.custom_event_type === 'OTHER' && !merged.custom_event_str) return 'A custom event type OTHER names its event (customEventStr).'
   return null
