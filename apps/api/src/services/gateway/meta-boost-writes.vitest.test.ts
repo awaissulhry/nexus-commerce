@@ -333,7 +333,7 @@ describe('round 2 — no leading 0 in an id; no post without its creator; every 
   it('a code is cut out in lower-case %-encoding and escaped twice too', async () => {
     const code = 'Ab/Cd+Ef=1234'
     const forms = metaSecretForms(code)
-    expect(forms).toEqual(expect.arrayContaining([code, 'Ab\\/Cd+Ef=1234', 'Ab\\\\/Cd+Ef=1234', 'Ab%2FCd%2BEf%3D1234', 'Ab%2fCd%2bEf%3d1234']))
+    expect(forms).toEqual(expect.arrayContaining([code, 'Ab\\/Cd+Ef=1234', 'Ab\\\\/Cd+Ef=1234', 'Ab\\\\\\/Cd+Ef=1234', 'Ab%2FCd%2BEf%3D1234', 'Ab%2fCd%2bEf%3d1234']))
     const echoes = ['Ab%2fCd%2bEf%3d1234', JSON.stringify(JSON.stringify(code).slice(1, -1).replace(/\//g, '\\/')).slice(1, -1)]
     // The echoes as Meta's answer would carry them (each already a valid JSON string spelling).
     h.answers.push(discovery({ ig_user_id: CREATOR_IG }), () => new Response(`{"error":{"message":"bad ${echoes.join(' and ')}","code":100}}`, { status: 400 }))

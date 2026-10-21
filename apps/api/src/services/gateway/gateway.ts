@@ -853,7 +853,9 @@ export function metaSecretForms(secret: string): string[] {
   const json1Slash = json1.replace(/\//g, '\\/')
   const pct = [encodeURIComponent(secret), new URLSearchParams({ s: secret }).toString().slice(2)]
   const lower = (v: string) => v.replace(/%[0-9A-F]{2}/g, (m) => m.toLowerCase())
-  const forms = [secret, json1, json1Slash, JSON.stringify(json1).slice(1, -1), JSON.stringify(json1Slash).slice(1, -1), ...pct, ...pct.map(lower)]
+  // Re-review (step 26) — a nested answer escaped PHP-style escapes `/` at both levels (`Ab\\\/Cd`).
+  const json2Slash = JSON.stringify(json1Slash).slice(1, -1).replace(/\//g, '\\/')
+  const forms = [secret, json1, json1Slash, JSON.stringify(json1).slice(1, -1), JSON.stringify(json1Slash).slice(1, -1), json2Slash, ...pct, ...pct.map(lower)]
   return [...new Set(forms.filter((f) => f.length >= 4))].sort((a, b) => b.length - a.length)
 }
 
