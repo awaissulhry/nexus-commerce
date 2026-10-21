@@ -2,7 +2,8 @@
  * Meta ads step 8 (2026-10-21) — reads of Meta's opportunity score and recommendations, its A/B tests and lift studies
  * (and the chosen Page's video A/B tests), and Meta's own automated rules, LIVE from Meta through the gateway (GET only).
  * Nothing here stores anything, and nothing here changes Meta: applying a recommendation (step 28), making or ending a
- * test (step 28) and making, changing, previewing or running a rule (step 29) are change tools of their own.
+ * test (step 28) and making, changing, previewing or running a rule (set-meta-ad-rule, remove-meta-ad-rule — step 29) are
+ * change tools of their own.
  *
  * ONLY the business's chosen assets (metaChosenAccount), with fixed field lists per node type (a caller never names a
  * Graph field or path):
@@ -68,7 +69,8 @@
  *   - the rule preview is a POST: "Preview the evaluation of a Schedule Based Rule by sending a POST request"
  *     (ad-rules/guides/api-calls "Preview a rule"); the SDK has only AdRule.create_preview (method POST) and the ad-rule
  *     reference lists no preview edge to read. Meta documents NO GET form, and the gateway's reads are GET only by
- *     construction, so the preview comes with set-meta-ad-rule (step 29) — RULE_PREVIEW_SENTENCE.
+ *     construction, so the preview is part of set-meta-ad-rule's own preview (step 29: a POST that only reads, on the
+ *     gateway's write allow-list as a read) — RULE_PREVIEW_SENTENCE.
  */
 import { metaAdAccountId, metaObjectId } from '../../cx/connectors/meta/discovery.js'
 import prisma from '../../../db.js'
@@ -913,7 +915,7 @@ export const RULE_HISTORY_ACTIONS = [
   'ENABLE_WTWA_UPSELL_IN_DUPLICATION', 'ENDPOINT_PINGED', 'ERROR', 'FACEBOOK_NOTIFICATION_SENT', 'MESSAGE_SENT', 'NOT_CHANGED', 'PAUSED', 'UNPAUSED',
 ] as const
 
-const RULE_FIELDS = 'id,account_id,name,status,evaluation_spec,execution_spec,schedule_spec,created_by{id},created_time,updated_time,disable_error_code'
+export const RULE_FIELDS = 'id,account_id,name,status,evaluation_spec,execution_spec,schedule_spec,created_by{id},created_time,updated_time,disable_error_code'
 const HISTORY_FIELDS = 'timestamp,is_manual,results,evaluation_spec,execution_spec,schedule_spec,exception_code,exception_message'
 
 const STATUS_WORDS: Record<string, string> = {
@@ -1089,9 +1091,9 @@ function mapHistory(raw: Row, account: MetaChosenAccount) {
 
 /**
  * RU-031 — why the rule preview is not here (the header has the proof): Meta's preview is a POST, the gateway's reads are
- * GET only, and Meta documents no GET form.
+ * GET only, and Meta documents no GET form. set-meta-ad-rule sends it as part of its own preview (step 29).
  */
-export const RULE_PREVIEW_SENTENCE = 'Meta\'s preview of a rule (which objects a schedule rule would hit now) is a POST request (POST /<rule id>/preview, Meta\'s Ad Rules guide), and Meta documents no read (GET) form of it. Nexus\'s reads never send a POST, so the preview comes with set-meta-ad-rule (step 29), next to running a rule now. Until then: view rule says the rule\'s conditions in plain words, view history what it did at each run, and meta-ads-live shows the objects as they are now.'
+export const RULE_PREVIEW_SENTENCE = 'Meta\'s preview of a rule (which objects a schedule rule would act on now) is a POST request (POST /<rule id>/preview, Meta\'s Ad Rules guide), and Meta documents no read (GET) form of it, so this read tool does not send it. set-meta-ad-rule sends it as part of its own preview: action run (run a schedule rule now), action status with enabled true, or action update of a schedule rule lists the objects Meta says the rule would act on now, and nothing changes until a person approves. view rule says the rule\'s conditions in plain words, view history what it did at each run.'
 
 export interface RuleInput {
   connectionId?: string | null
@@ -1110,7 +1112,7 @@ export interface RuleInput {
  * is anything of the rule read (`fields`, which name a field only a rule has, so another node of the account — a campaign
  * — is refused by Meta, #100, and never read on).
  */
-async function ownRule(account: MetaChosenAccount, ruleId: string, fields: string): Promise<{ id: string; body: Row }> {
+export async function ownRule(account: MetaChosenAccount, ruleId: string, fields: string): Promise<{ id: string; body: Row }> {
   const id = metaObjectId(ruleId)
   if (!id) throw new MetaLiveRefusal(`"${ruleId}" is not a Meta rule id (digits).`)
   const notARule = () => new MetaLiveRefusal('That is not a rule of the ad account this business chose (Meta does not show it as one), so it is not read.')

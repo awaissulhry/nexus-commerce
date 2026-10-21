@@ -55,7 +55,7 @@ export interface MetaWriteTarget { connectionId: string; adAccountId: string }
 export interface MetaObjectChange {
   objectId: string
   /** The kind of object (the gateway confirms it before anything is sent). */
-  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adrule' | 'adaccount'
   params: Record<string, string>
   operation: string
   budget?: boolean
@@ -68,8 +68,12 @@ export interface MetaObjectChange {
   expect?: Record<string, string>
   /** Step 18 — the fields read back (default id,status,effective_status); on the POST only when `readBackInPost`. */
   readBackFields?: string
-  /** Step 18 — a create on the object's edge (POST /<id>/budget_schedules): the new object is read back, not the parent. */
-  edge?: 'budget_schedules'
+  /**
+   * Step 18 — a create on the object's edge (POST /<id>/budget_schedules): the new object is read back, not the parent.
+   * Step 29 — a rule made on act_<id>/adrules_library (the new rule read back); a rule's run (POST /<rule id>/execute: Meta's
+   * {"success": true} is the answer — nothing is read back, as for any edge whose answer names no new id).
+   */
+  edge?: 'budget_schedules' | 'adrules_library' | 'execute'
   /** Step 18 — DELETE (a budget schedule's): Meta's {"success": true} is the answer, nothing is read back. */
   method?: 'POST' | 'DELETE'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway checks the period is one of its own). */

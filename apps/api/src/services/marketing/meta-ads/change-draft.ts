@@ -43,10 +43,14 @@ export interface MetaChangeRequest {
   expect?: Record<string, string>
   /** The fields read back (default id,status,effective_status). */
   readBackFields?: string
-  /** The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`). */
-  objectKind?: 'highdemandperiod'
-  /** A create on the object's edge (POST /<id>/budget_schedules). */
-  edge?: 'budget_schedules'
+  /**
+   * The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`). Step 29: a Meta
+   * automated rule (`adrule`) or the ad account's rule library (`adaccount`, a rule's create); `kind` then only types the
+   * request (`campaign` by convention) — the operation, the gateway's kind and the read-back are the rule's own.
+   */
+  objectKind?: 'highdemandperiod' | 'adrule' | 'adaccount'
+  /** A create on the object's edge (POST /<id>/budget_schedules; step 29: act_<id>/adrules_library, <rule id>/execute). */
+  edge?: 'budget_schedules' | 'adrules_library' | 'execute'
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
   /** A budget schedule's campaign or ad set. */

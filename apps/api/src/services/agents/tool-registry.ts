@@ -99,6 +99,8 @@ import { META_ADS_ENGAGEMENT_TOOLS } from './tools/meta-ads-engagement.tools.js'
 import { META_ADS_AUDIENCES_TOOLS } from './tools/meta-ads-audiences.tools.js'
 import { META_ADS_DATASETS_TOOLS } from './tools/meta-ads-datasets.tools.js'
 import { META_ADS_CAMPAIGN_SETTINGS_TOOLS } from './tools/meta-ads-campaign-settings.tools.js'
+// Meta ads step 29 (2026-10-21): Meta's automated rules.
+import { META_ADS_RULES_TOOLS } from './tools/meta-ads-rules.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -318,6 +320,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_DATASETS_TOOLS,
   // Meta ads step 18 (2026-10-21): set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule (settings, budgets, bids).
   ...META_ADS_CAMPAIGN_SETTINGS_TOOLS,
+  // Meta ads step 29 (2026-10-21): set-meta-ad-rule (make, change, switch, run Meta's rules), remove-meta-ad-rule.
+  ...META_ADS_RULES_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

@@ -884,6 +884,22 @@ describe('C1 — every registered tool keeps the contract', () => {
         },
         after: { kind: 'highdemandperiod', id: '120000000000031', parent: { kind: 'campaign', id: '120000000000001' }, fields: { budget_value: '30', exists: 'yes' }, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 29: a rule switched off is switched on again; a deleted rule is made again (a new rule) by set-meta-ad-rule.
+      'set-meta-ad-rule': {
+        before: { kind: 'adrule', action: 'status', id: '120000000000101', exists: 'yes', undo: { action: 'status', ruleId: '120000000000101', enabled: true }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { kind: 'adrule', action: 'status', id: '120000000000101', exists: 'yes', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'remove-meta-ad-rule': {
+        before: {
+          kind: 'adrule', action: 'remove', id: '120000000000101', exists: 'yes', noUndo: [], accountId: 'conn-1', adAccountId: '1234567890',
+          undo: {
+            action: 'create', name: 'Rule A', enable: true,
+            evaluation: { type: 'SCHEDULE', filters: [{ field: 'entity_type', operator: 'EQUAL', value: 'ADSET' }, { field: 'time_preset', operator: 'EQUAL', value: 'LAST_7D' }, { field: 'spent', operator: 'GREATER_THAN', valueCents: 5000 }] },
+            execution: { type: 'PAUSE' }, schedule: { type: 'DAILY' },
+          },
+        },
+        after: { kind: 'adrule', action: 'remove', id: '120000000000101', exists: 'no', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1053,7 +1069,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-custom-goals', 'set-google-custom-audiences', 'set-google-user-lists', 'set-google-reusable-audiences',
       'upload-google-sales', 'adjust-google-sales',
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
-      'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule']) {
+      'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule',
+      'set-meta-ad-rule', 'remove-meta-ad-rule']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

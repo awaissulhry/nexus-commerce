@@ -434,7 +434,7 @@ describe('meta-ad-rules', () => {
   it('preview: Meta\'s preview is a POST with no read form — it comes with set-meta-ad-rule, and no call is made', async () => {
     const out = await data('meta-ad-rules', { view: 'preview', ruleId: '23850000000000001' })
     expect(out.sentence).toMatch(/POST request/)
-    expect(out.sentence).toMatch(/set-meta-ad-rule \(step 29\)/)
+    expect(out.sentence).toMatch(/set-meta-ad-rule sends it as part of its own preview/)
     expect(h.calls).toHaveLength(0)
   })
 })

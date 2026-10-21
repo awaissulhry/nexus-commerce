@@ -48,6 +48,7 @@ import { createHmac } from 'node:crypto'
 import { META_GRAPH_HOST, metaGraphApiVersion } from '../meta/api-version.js'
 import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.js'
 import { META_SETTINGS_WRITE_RULES } from './meta-settings-rules.js'
+import { metaAdRuleWriteRules } from './meta-ad-rule-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -753,10 +754,14 @@ export interface MetaWriteRule {
   maxBody?: number
   /** Step 18 — the ids inside the body, each checked to be of the chosen ad account by the gateway before anything goes. */
   ids?: (params: ReadonlyMap<string, string>) => MetaWriteBodyId[]
+  /** Step 29 — a POST with no body at all (a rule's run now, Meta's preview of a rule): no key, nothing judged but the path. */
+  emptyBody?: true
+  /** Step 29 — a POST that only reads (Meta's preview of a rule): it goes as a read, like Meta's check, and changes nothing. */
+  readOnly?: true
 }
 
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
-export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adrule' | 'adaccount'
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
 export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' }
 
@@ -820,6 +825,8 @@ export interface MetaJudgedWrite {
   ids?: MetaWriteBodyId[]
   /** Step 18 — a DELETE (a budget schedule's); every other change is a POST. */
   method?: 'DELETE'
+  /** Step 29 — a POST that only reads (Meta's preview of a rule): no per-object hold is noted for it. */
+  readOnly?: true
 }
 
 /** The gateway's verdict on a Meta call that is not a GET: why it is refused (and whether as a batch), or the judged write. */
@@ -856,6 +863,15 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     return { write: { rule: deleteRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: deleteRule.kinds, method: 'DELETE' } }
   }
   if (method !== 'POST') return refuse(`Nexus sends Meta no ${method}`)
+  // Step 29 — a POST with no body only by a rule made for one (a rule's run now, or Meta's preview of it).
+  if (input.body === undefined || input.body === '') {
+    const bare = writeRules().find((r) => r.method === 'POST' && r.emptyBody && r.path.test(graph.route) && kindMatches(r, input.objectKind))
+    if (bare) {
+      const check = bare.readOnly === true
+      if (input.kind !== (check ? 'read' : 'write')) return refuse(check ? 'this POST only reads and goes as a read; this one is declared otherwise' : 'a Meta change goes as a write; this one is declared otherwise')
+      return { write: { rule: bare.name, objectId: graph.segments[0], check, body: '', budget: false, ...(bare.kinds ? { kinds: bare.kinds } : {}), ...(check ? { readOnly: true as const } : {}) } }
+    }
+  }
   const parsed = writeParams(input.body)
   if ('problem' in parsed) return refuse(parsed.problem)
   const keys = [...parsed.params.keys()]
@@ -893,8 +909,8 @@ const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kin
   : kind === undefined || kind === 'campaign' || kind === 'adset' || kind === 'ad')
 /** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY). */
 const MAX_ANY_WRITE_BODY = 16_000
-/** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts) — read when judged, never at load. */
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES]
+/** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts), then step 29's rule changes (meta-ad-rule-rules.ts) — read when judged, never at load. */
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...metaAdRuleWriteRules()]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {

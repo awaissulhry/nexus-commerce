@@ -73,7 +73,7 @@ export interface MetaWriteRequest {
   /** The object changed: its id, digits only (`POST /<id>`). */
   objectId: string
   /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
-  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adrule' | 'adaccount'
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -82,8 +82,12 @@ export interface MetaWriteRequest {
   /** How long the call may wait for a slot of the account's rate bucket (a change waits longer than a read). */
   maxRateWaitMs?: number
   triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook'
-  /** Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. */
-  edge?: 'budget_schedules'
+  /**
+   * Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. Step 29 — a
+   * rule made on the ad account's rule library (`POST /act_<id>/adrules_library`) and a rule's run now (`POST /<rule
+   * id>/execute`, no body).
+   */
+  edge?: 'budget_schedules' | 'adrules_library' | 'execute'
   /** Step 18 — DELETE (a budget schedule's, no body); default POST. */
   method?: 'POST' | 'DELETE'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
@@ -146,5 +150,30 @@ export async function metaRestCall(req: Omit<MetaCallRequest, 'auth'>): Promise<
     max429Retries: 0,
     timeoutMs: req.timeoutMs ?? 60_000,
     ledger: req.triggeredBy ? { triggeredBy: req.triggeredBy } : undefined,
+  })
+}
+
+// ── Meta's preview of an automated rule (step 29, 2026-10-21) ─────────────────────────────────────────────────────────
+
+/**
+ * Meta's preview of a schedule rule: `POST /<rule id>/preview` with no parameter (ad-rules/guides/api-calls "Preview a
+ * rule": it "returns a list of objects that satisfy all specified filters of the rule at that time"; SDK
+ * AdRule.create_preview, POST, no params). A POST that only reads: the gateway's write allow-list judges it
+ * (meta-ad-rule-rules.ts `adRule.preview`, kind read), confirms the rule is of the chosen ad account and sends it only while
+ * Meta changes are switched on, like Meta's check. Retried once after a network error, like a read.
+ */
+export async function metaRulePreviewCall(req: { connectionId: string; ruleId: string; timeoutMs?: number }): Promise<GatewayResponse> {
+  return gatewayCall({
+    channel: 'META',
+    operation: 'rules.preview',
+    kind: 'read',
+    connectionId: req.connectionId,
+    url: metaUrl(`${req.ruleId}/preview`),
+    method: 'POST',
+    body: '',
+    metaObjectKind: 'adrule',
+    maxTransientRetries: 1,
+    max429Retries: 0,
+    timeoutMs: req.timeoutMs ?? 60_000,
   })
 }
