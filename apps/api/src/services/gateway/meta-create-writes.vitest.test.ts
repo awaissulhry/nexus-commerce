@@ -315,7 +315,10 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
     // Step 25 — create-meta-creative's create and async job bring their own senders too (the creative read back).
     // Step 27 — create-meta-ad's create (the ad and its inline creative read back), set-meta-ad's update (its creative read
     // back as creative_id) and the undo's creative removal (only once the ad reads DELETED) bring their own senders.
-    expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-kit.ts', 'services/marketing/meta-ads/change-ads.ts', 'services/marketing/meta-ads/change-creatives.ts', 'services/marketing/meta-ads/change-media.ts'])
+    // Step 40 — set-meta-account-settings, set-meta-spend-cap and set-meta-insights-features bring their own senders too: the
+    // same request through metaSendChange, then a read-back (the agency declaration, the tracking specs, the features) or
+    // Meta's 10-a-day limit in words. None sends a DELETE.
+    expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-account-settings.tools.ts', 'services/agents/tools/meta-ads-kit.ts', 'services/marketing/meta-ads/change-ads.ts', 'services/marketing/meta-ads/change-creatives.ts', 'services/marketing/meta-ads/change-media.ts'])
     expect(callers('metaCheckChange')).toEqual(['services/agents/tools/meta-ads-kit.ts'])
     expect(callers('removalDraft')).toEqual(['services/agents/tools/meta-ads-create.tools.ts'])
     expect(all.find((f) => f.path === 'services/agents/tools/meta-ads-create.tools.ts')!.text.match(/\bremovalDraft\(/g)).toHaveLength(1)
@@ -379,6 +382,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/gateway/meta-webhook-rules.ts': 4, // step 30: app.subscriptions.delete, adaccount.subscribed_apps.delete, page.subscribed_apps.delete, adaccount.alert.delete (judges)
       'services/marketing/meta-ads/change-webhooks.ts': 3, // step 30: set-meta-webhooks' unsubscribe-app, disconnect-ad-account, remove-page
       'services/marketing/meta-ads/change-alert-subscriptions.ts': 1, // step 30: remove-meta-alert-subscription's delete of one alert subscription of the chosen ad account
+      'services/gateway/meta-catalog-rules.ts': 11, // step 34: nine catalog DELETE rules and the items_batch DELETE judge (judges)
+      'services/marketing/meta-ads/change-catalog-admin.ts': 8, // step 34: remove-meta-catalog-items' deletes (explicit ask), the undo of a catalog / set Nexus made, a pixel, person or partner off a catalog (meta-catalog-writes test)
     })
     // A method named by a constant, a variable or a ternary: only where it is passed on.
     const computed = world.flatMap((f) => [...f.text.matchAll(/\bmethod:\s*([^,}\n]+)/g)].map((m) => m[1].trim())
