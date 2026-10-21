@@ -13,7 +13,7 @@ let database: Awaited<ReturnType<typeof formulaDatabase>>
 vi.mock('../../../db.js', () => ({ default: new Proxy({}, { get: (_target, property) => Reflect.get(database.client, property) }) }))
 vi.mock('../../../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }))
 
-const { recordInboundBatch } = await import('./ledger.js')
+const { recordInbound, recordInboundBatch } = await import('./ledger.js')
 const { claimInboundMany, finishInboundClaimMany } = await import('./claims.js')
 
 const A = 'ledger_batch_alpha'
@@ -44,7 +44,8 @@ describe('the batch ledger', () => {
     expect(written.every((w) => w.id && !w.duplicate)).toBe(true)
     const { claims } = await inWs(A, () => claimInboundMany(written.map((w) => w.id as string)))
     expect(claims).toHaveLength(1000)
-    await inWs(A, () => finishInboundClaimMany(claims, { done: claims.slice(0, 990).map((c) => c.id), release: claims.slice(990, 995).map((c) => c.id), failed: claims.slice(995).map((c) => ({ id: c.id, error: 'queue down' })) }))
+    // Review N2 — failures grouped per (reason, attempt): two reasons here, each row keeps its own.
+    await inWs(A, () => finishInboundClaimMany(claims, { done: claims.slice(0, 990).map((c) => c.id), release: claims.slice(990, 995).map((c) => c.id), failed: claims.slice(995).map((c, i) => ({ id: c.id, error: i < 3 ? 'queue down' : 'notice failed' })) }))
     expect(Date.now() - started).toBeLessThan(4_000)
     const rows = await inWs(A, () => database.client.webhookEvent.findMany({ where: { externalId: { startsWith: 'meta:batch-' } }, select: { status: true, attempts: true, processingToken: true, nextAttemptAt: true, verifiedBy: true } }))
     const count = (status: string, attempts: number) => rows.filter((r) => r.status === status && r.attempts === attempts && r.processingToken === null).length
@@ -54,7 +55,20 @@ describe('the batch ledger', () => {
     // Failed: one attempt spent, retried after its backoff.
     expect(count('failed', 1)).toBe(5)
     expect(rows.every((r) => r.verifiedBy === 'meta_hmac')).toBe(true)
+    const failedRows = await inWs(A, () => database.client.webhookEvent.findMany({ where: { externalId: { startsWith: 'meta:batch-' }, status: 'failed' }, select: { lastError: true, nextAttemptAt: true } }))
+    expect(failedRows.map((r) => r.lastError).sort()).toEqual(['notice failed', 'notice failed', 'queue down', 'queue down', 'queue down'])
+    expect(failedRows.every((r) => r.nextAttemptAt && r.nextAttemptAt.getTime() > Date.now())).toBe(true)
   }, 60_000)
+
+  it('a rejected Meta delivery keeps its X-Hub-Signature-256 header in verificationHeaders (and no other header)', async () => {
+    await inWs(A, () => recordInbound({
+      channel: 'META', eventType: 'unverified', externalId: 'meta-unverified:1234567890123:2026-10-21T09', payload: { appId: '1234567890123', firstDigest: 'ab' },
+      headers: { 'x-hub-signature-256': 'sha256=00ff', authorization: 'Bearer not-kept', cookie: 'not-kept' }, rawBody: null, connectionId: 'conn-a',
+      signatureOk: false, verifiedBy: 'none', status: 'failed', lastError: 'mismatch',
+    }))
+    const row = await inWs(A, () => database.client.webhookEvent.findFirstOrThrow({ where: { externalId: 'meta-unverified:1234567890123:2026-10-21T09' }, select: { verificationHeaders: true, rawBody: true, signatureOk: true } }))
+    expect(row).toEqual({ verificationHeaders: { 'x-hub-signature-256': 'sha256=00ff' }, rawBody: null, signatureOk: false })
+  })
 
   it('a redelivery adds to deliveries and reports the stored status; an identity that differs is refused; inside one batch too', async () => {
     const again = await inWs(A, () => recordInboundBatch([rec(0), rec(0), rec(1, { connectionId: 'conn-other' }), rec(2000)]))

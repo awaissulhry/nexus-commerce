@@ -314,12 +314,13 @@ const scalarAt = (value: Record<string, unknown>, path: string): unknown => {
 const MESSAGING_IDS = ['message.mid', 'message_edit.mid', 'reaction.mid', 'postback.mid', 'read.mid'] as const
 
 /**
- * The ledger's delivery id for a change, the same on every retry of Meta's (whatever batch it comes in). Review F4:
+ * The ledger's delivery id for a change on one connection, the same on every retry of Meta's (whatever batch it comes
+ * in). Review F4:
  *   - a topic with event ids (a lead, a comment, an alert, a batch handle): those ids alone;
  *   - a Messenger / Instagram event: its message id and its own timestamp, never `entry.time` (when it was SENT);
  *   - anything else: the whole change and `entry.time` (a state that comes back later is a new change).
  */
-export function metaChangeKey(appId: string, change: MetaWebhookChange): string {
+export function metaChangeKey(appId: string, connectionId: string, change: MetaWebhookChange): string {
   const topic = META_WEBHOOK_TOPICS[metaTopicOf(change)]
   const ids = (topic?.idKeys ?? []).map((path) => scalarAt(change.value, path))
   let identity: unknown[]
@@ -328,7 +329,8 @@ export function metaChangeKey(appId: string, change: MetaWebhookChange): string 
     const mid = MESSAGING_IDS.map((path) => scalarAt(change.value, path)).find((v) => v !== null && v !== '') ?? null
     identity = mid !== null ? ['mid', mid, change.value.timestamp ?? null] : ['event', change.value]
   } else identity = ['time', change.time, change.value]
-  const digest = createHash('sha256').update(JSON.stringify([appId, change.object, change.entryId, change.field, ...identity])).digest('hex')
+  // Review N1 — the account row is part of the id: a business that moved to a new Meta connection row records anew.
+  const digest = createHash('sha256').update(JSON.stringify([appId, connectionId, change.object, change.entryId, change.field, ...identity])).digest('hex')
   return `meta:${digest}`
 }
 
@@ -461,12 +463,12 @@ export function metaWebhookNotice(payload: MetaWebhookPayload): MetaNotice | nul
 
 /**
  * Review F2 — a delivery for this business's Meta app that the app secret Nexus holds for it does not sign: nothing
- * of it was read. One unread notice per app (the subject), however many such deliveries arrive.
+ * of it was read. At most one per business per 24 hours (the receiver passes the day as its occurrence).
  */
 export function metaSignatureNotice(appId: string): MetaNotice {
   return {
     kind: 'meta-webhook-signature', severity: 'danger', title: 'Meta webhook signatures stopped matching',
-    body: `Meta sent notifications for Meta app ${appId} that the app secret Nexus holds for this business does not sign, so Nexus read none of them. Was the app secret changed in Meta? Enter the new one in Settings › Channels › Meta (Replace).`,
+    body: `Nexus received notifications for Meta app ${appId} that the app secret it holds for this business does not sign, so it read none of them. Either the app secret was changed in Meta (enter the new one in Settings › Channels › Meta, Replace), or someone other than Meta sent them.`,
     entityType: 'meta-app', entityId: `${appId}~signature`, href: CHANNELS_PAGE,
   }
 }

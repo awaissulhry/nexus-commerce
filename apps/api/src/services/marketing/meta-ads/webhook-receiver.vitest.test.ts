@@ -16,6 +16,10 @@ const h = vi.hoisted(() => ({
   routes: [] as Array<{ workspaceId: string; connectionId: string; externalAccountId: string | null }>,
   apps: {} as Record<string, { appId: string; secret: string; ws: string }>,
   appIdReads: 0,
+  appReadFails: new Set<string>(),
+  checkFails: new Set<string>(),
+  conflictOn: null as string | null,
+  occurrences: [] as Array<string | undefined>,
   links: [] as Array<{ ws: string; connectionId: string; product: string; externalId: string }>,
   connections: [] as Array<{ ws: string; id: string; externalAccountId: string }>,
   checks: [] as Array<{ connectionId: string; ws: string | null }>,
@@ -43,12 +47,18 @@ vi.mock('../../cx/token.service.js', async () => {
   return {
     metaWebhookSignatureCheck: async (connectionId: string, appId: string, raw: Buffer, header: string | undefined) => {
       h.checks.push({ connectionId, ws: h.ws })
+      if (h.checkFails.has(connectionId)) return 'error'
       const app = h.apps[connectionId]
       if (!app || app.ws !== h.ws) return 'no_app'
       if (app.appId !== appId) return 'other_app'
       return metaWebhookSignatureOk(raw, header, app.secret) ? 'match' : 'mismatch'
     },
-    metaAppIdOf: async (connectionId: string) => { h.appIdReads++; return h.apps[connectionId]?.ws === h.ws ? h.apps[connectionId].appId : null },
+    metaAppIdOf: async (connectionId: string) => (h.apps[connectionId]?.ws === h.ws ? h.apps[connectionId].appId : null),
+    metaStoredAppId: async (connectionId: string) => {
+      h.appIdReads++
+      if (h.appReadFails.has(connectionId)) throw new Error('KMS unavailable')
+      return h.apps[connectionId]?.ws === h.ws ? h.apps[connectionId].appId : null
+    },
   }
 })
 vi.mock('../../../db.js', () => ({
@@ -72,7 +82,10 @@ const write = (rec: any) => {
 }
 vi.mock('../../cx/ingress/ledger.js', () => ({
   recordInbound: async (rec: any) => (h.ledgerDown ? { id: null, duplicate: false } : write(rec)),
-  recordInboundBatch: async (recs: any[]) => { h.batches.push({ ws: h.ws, size: recs.length }); return recs.map((rec) => (h.ledgerDown ? { id: null, duplicate: false } : write(rec))) },
+  recordInboundBatch: async (recs: any[]) => {
+    h.batches.push({ ws: h.ws, size: recs.length })
+    return recs.map((rec) => (h.ledgerDown ? { id: null, duplicate: false } : rec.eventType === h.conflictOn ? { id: null, duplicate: true, conflict: 'identity_mismatch' } : write(rec)))
+  },
 }))
 vi.mock('../../cx/ingress/claims.js', () => ({
   claimInboundMany: async (ids: string[]) => {
@@ -89,8 +102,9 @@ vi.mock('../../cx/ingress/claims.js', () => ({
   },
 }))
 // One unread notice per (business, kind, subject), as channel-alerts does.
-vi.mock('../../cx/channel-alerts.service.js', () => ({ raiseChannelAlertInTx: async (_tx: unknown, alert: any) => {
-  const key = `${h.ws}|${alert.kind}|${alert.entityType}|${alert.entityId}`
+vi.mock('../../cx/channel-alerts.service.js', () => ({ raiseChannelAlertInTx: async (_tx: unknown, alert: any, options?: { occurrenceId?: string }) => {
+  if (alert.kind === 'meta-webhook-signature') h.occurrences.push(options?.occurrenceId)
+  const key = `${h.ws}|${alert.kind}|${alert.entityType}|${alert.entityId}|${options?.occurrenceId ?? ''}`
   if (h.unread.has(key)) return { created: 0, deduped: 1, recipients: 1 }
   h.unread.add(key)
   h.notices.push({ ws: h.ws, alert })
@@ -98,7 +112,7 @@ vi.mock('../../cx/channel-alerts.service.js', () => ({ raiseChannelAlertInTx: as
 } }))
 vi.mock('./enqueue.js', () => ({ enqueueMetaWebhookReread: async (adAccountId: string) => { h.rereads.push({ ws: h.ws, adAccountId }); return h.reread } }))
 
-const { metaSignatureVerdicts, receiveMetaWebhook, handleMetaWebhookEvent, metaAppConnected, metaAppUsers, recordMetaSignatureMismatch, routeMetaChanges, forgetMetaAppIds } = await import('./webhook-receiver.js')
+const { metaSignatureVerdicts, receiveMetaWebhook, handleMetaWebhookEvent, metaAppConnected, metaAppKnown, metaAppUsers, recordMetaSignatureMismatch, routeMetaChanges, forgetMetaAppIds } = await import('./webhook-receiver.js')
 const { metaWebhookChanges } = await import('./webhook-topics.js')
 
 const APP = '1234567890123'
@@ -120,6 +134,7 @@ beforeEach(() => {
   h.routes = [{ workspaceId: 'ws-a', connectionId: 'conn-a', externalAccountId: USER_A }, { workspaceId: 'ws-b', connectionId: 'conn-b', externalAccountId: '120000000000012' }, { workspaceId: 'ws-c', connectionId: 'conn-c', externalAccountId: '120000000000013' }]
   h.apps = { 'conn-a': { appId: APP, secret: SECRET, ws: 'ws-a' }, 'conn-b': { appId: APP, secret: SECRET, ws: 'ws-b' }, 'conn-c': { appId: OTHER_APP, secret: 'the-secret-of-another-app-000000', ws: 'ws-c' } }
   h.appIdReads = 0
+  h.appReadFails.clear(); h.checkFails.clear(); h.conflictOn = null; h.occurrences.length = 0
   h.links = [
     { ws: 'ws-a', connectionId: 'conn-a', product: 'AD_ACCOUNT', externalId: ACT_A },
     { ws: 'ws-a', connectionId: 'conn-a', product: 'PAGE', externalId: PAGE_A },
@@ -137,7 +152,7 @@ describe('trust: who uses the app, whose own secret signed these bytes', () => {
     const raw = Buffer.from(JSON.stringify({ object: 'ad_account', entry: [issue(ACT_A)] }))
     h.apps['conn-b'].secret = 'a-stale-secret-business-b-kept-00'
     const verdicts = await metaSignatureVerdicts(APP, raw, sign(raw))
-    expect(verdicts).toEqual({ users: [A, B], signers: [A], mismatched: [B] })
+    expect(verdicts).toEqual({ users: [A, B], signers: [A], mismatched: [B], unsure: false })
     // conn-c uses another app: its secret is never touched.
     expect(h.checks).toEqual([{ connectionId: 'conn-a', ws: 'ws-a' }, { connectionId: 'conn-b', ws: 'ws-b' }])
     const reads = h.appIdReads
@@ -147,11 +162,25 @@ describe('trust: who uses the app, whose own secret signed these bytes', () => {
   })
 
   it('an app no business uses has no users (refused before its body is read); verification knows only used apps', async () => {
-    expect(await metaAppUsers('5550000000000')).toEqual([])
-    expect(await metaAppUsers('not-an-app')).toEqual([])
+    expect(await metaAppUsers('5550000000000')).toEqual({ users: [], unsure: false })
+    expect(await metaAppUsers('not-an-app')).toEqual({ users: [], unsure: false })
     expect(await metaAppConnected(APP)).toBe(true)
     expect(await metaAppConnected(OTHER_APP)).toBe(true)
     expect(await metaAppConnected('5550000000000')).toBe(false)
+  })
+
+  it('review N3 — a connection whose app id could not be read is "unsure" (503), and the failed read is never kept', async () => {
+    h.appReadFails.add('conn-c')
+    expect(await metaAppKnown(OTHER_APP)).toBe('unsure')
+    expect(await metaAppKnown(APP)).toBe('known')
+    const reads = h.appIdReads
+    h.appReadFails.clear()
+    expect(await metaAppKnown(OTHER_APP)).toBe('known')
+    expect(h.appIdReads).toBe(reads + 1)
+    // A candidate whose secret could not be checked makes the verdicts unsure.
+    const raw = Buffer.from('{}')
+    h.checkFails.add('conn-b')
+    expect(await metaSignatureVerdicts(APP, raw, sign(raw))).toMatchObject({ signers: [A], unsure: true })
   })
 
   it('a signature nobody\'s secret matches: one row per business per hour (digest + header, never the bytes) and one notice each; never the platform\'s business', async () => {
@@ -164,6 +193,10 @@ describe('trust: who uses the app, whose own secret signed these bytes', () => {
     expect(h.rows[0].payload).toEqual({ appId: APP, firstDigest: expect.stringMatching(/^[0-9a-f]{64}$/) })
     expect(h.notices.map((n) => [n.ws, n.alert.kind, n.alert.entityId])).toEqual([['ws-a', 'meta-webhook-signature', `${APP}~signature`], ['ws-b', 'meta-webhook-signature', `${APP}~signature`]])
     expect(h.rows.some((r) => r.ws === 'legacy')).toBe(false)
+    // Review N5 — at most one per business per 24 hours: the day is the notice's occurrence; the text names both causes.
+    expect(h.occurrences).toEqual(['day-20747', 'day-20747', 'day-20747', 'day-20747'])
+    expect(h.notices[0].alert.body).toMatch(/Either the app secret was changed in Meta .* or someone other than Meta sent them/)
+    expect(h.rows[0].headers).toEqual({ 'x-hub-signature-256': 'sha256=00' })
   })
 })
 
@@ -189,9 +222,34 @@ describe('routing: one business per change, never another', () => {
     // B's own ad account in a delivery only A's secret signed: never A's, never recorded.
     expect(await receiveMetaWebhook({ appId: APP, signers: [A], users: [A, B], body: { object: 'ad_account', entry: [issue(ACT_B)] } })).toMatchObject({ recorded: 0, ignored: 1 })
     expect(h.rows).toEqual([])
-    // With A the only business on the app, the alert is A's.
+    // With A the only business on the app (B disconnected), the alert is A's.
+    h.routes = h.routes.filter((r) => r.connectionId !== 'conn-b')
     expect(await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body: devAlert })).toMatchObject({ recorded: 1, handled: 1 })
     expect(h.notices).toEqual([{ ws: 'ws-a', alert: expect.objectContaining({ kind: 'meta-app-notice', title: 'Meta app alert: Rate limit' }) }])
+  })
+
+  it('review N4 — an app-level change is decided on app ids read again now: a business that joined the app inside the TTL counts', async () => {
+    const devAlert = { object: 'application', entry: [{ id: APP, time: 1, changes: [{ field: 'dev_alerts', value: { notification_id: '7', header: 'Rate limit' } }] }] }
+    h.apps['conn-b'].appId = OTHER_APP
+    expect((await metaAppUsers(APP)).users).toEqual([A]) // kept: B uses another app
+    h.apps['conn-b'].appId = APP // B switched to this app inside the TTL
+    expect((await metaAppUsers(APP)).users).toEqual([A]) // the kept ids still say A alone…
+    expect(await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body: devAlert })).toMatchObject({ recorded: 0, ignored: 1, unsure: false })
+    // A read that fails then: undecided, answered 503 (unsure), nothing recorded.
+    h.appReadFails.add('conn-b')
+    expect(await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body: devAlert })).toMatchObject({ recorded: 0, unsure: true })
+    expect(h.rows).toEqual([])
+  })
+
+  it('review N1 — a business on a NEW connection row records anew; a delivery id bound to another account row is ignored, never 503', async () => {
+    const body = { object: 'ad_account', entry: [issue(ACT_A)] }
+    await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body })
+    h.links.push({ ws: 'ws-a', connectionId: 'conn-a2', product: 'AD_ACCOUNT', externalId: ACT_A })
+    const moved = { workspaceId: 'ws-a', connectionId: 'conn-a2', systemUserId: USER_A }
+    expect(await receiveMetaWebhook({ appId: APP, signers: [moved], users: [moved], body })).toMatchObject({ recorded: 1, duplicates: 0, notRecorded: 0 })
+    expect(new Set(h.rows.map((r) => r.externalId)).size).toBe(2)
+    h.conflictOn = 'ad_account.with_issues_ad_objects'
+    expect(await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body: { object: 'ad_account', entry: [issue(ACT_A, '120000000000777')] } })).toMatchObject({ ignored: 1, notRecorded: 0, recorded: 0 })
   })
 
   it('a link the business chose through ANOTHER connection than the one whose secret signed is not routed', async () => {

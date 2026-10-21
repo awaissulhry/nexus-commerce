@@ -114,29 +114,31 @@ describe('what the ledger keeps', () => {
 
   it('review F4 — event ids key a change whatever entry.time says; Messenger events by message id and their own timestamp; states by time', () => {
     const lead = (time: number, leadgen_id = '120000000000901') => metaWebhookChanges({ object: 'page', entry: [{ id: PAGE, time, changes: [{ field: 'leadgen', value: { leadgen_id, form_id: '1', page_id: PAGE } }] }] })![0]
-    expect(metaChangeKey(APP, lead(1))).toBe(metaChangeKey(APP, lead(99)))
-    expect(metaChangeKey(APP, lead(1))).not.toBe(metaChangeKey(APP, lead(1, '120000000000902')))
+    expect(metaChangeKey(APP, 'conn-a', lead(1))).toBe(metaChangeKey(APP, 'conn-a', lead(99)))
+    expect(metaChangeKey(APP, 'conn-a', lead(1))).not.toBe(metaChangeKey(APP, 'conn-a', lead(1, '120000000000902')))
     const message = (entryTime: number, timestamp: number, mid = 'm1') => metaWebhookChanges({ object: 'page', entry: [{ id: PAGE, time: entryTime, messaging: [{ sender: { id: '7' }, recipient: { id: PAGE }, timestamp, message: { mid, text: 'x' } }] }] })![0]
-    expect(metaChangeKey(APP, message(1, 5))).toBe(metaChangeKey(APP, message(2, 5)))
-    expect(metaChangeKey(APP, message(1, 5))).not.toBe(metaChangeKey(APP, message(1, 5, 'm2')))
+    expect(metaChangeKey(APP, 'conn-a', message(1, 5))).toBe(metaChangeKey(APP, 'conn-a', message(2, 5)))
+    expect(metaChangeKey(APP, 'conn-a', message(1, 5))).not.toBe(metaChangeKey(APP, 'conn-a', message(1, 5, 'm2')))
     const read = (entryTime: number) => metaWebhookChanges({ object: 'page', entry: [{ id: PAGE, time: entryTime, messaging: [{ sender: { id: '7' }, recipient: { id: PAGE }, timestamp: 6, read: { watermark: 9 } }] }] })![0]
-    expect(metaChangeKey(APP, read(1))).toBe(metaChangeKey(APP, read(2)))
+    expect(metaChangeKey(APP, 'conn-a', read(1))).toBe(metaChangeKey(APP, 'conn-a', read(2)))
     // A state with no event id (fatigue HIGH again next week) is a new change when Meta sends it at another time.
     const fatigue = (time: number) => metaWebhookChanges({ object: 'ad_account', entry: [{ id: ACT, time, changes: [{ field: 'creative_fatigue', value: { adgroup_id: '1', creative_fatigue_level: 'HIGH' } }] }] })![0]
-    expect(metaChangeKey(APP, fatigue(1))).not.toBe(metaChangeKey(APP, fatigue(2)))
+    expect(metaChangeKey(APP, 'conn-a', fatigue(1))).not.toBe(metaChangeKey(APP, 'conn-a', fatigue(2)))
     // IG comments by their comment id.
     const comment = (time: number) => metaWebhookChanges({ object: 'instagram', entry: [{ id: IG, time, changes: [{ field: 'comments', value: { comment_id: '1790000000000001', text: 'x' } }] }] })![0]
-    expect(metaChangeKey(APP, comment(1))).toBe(metaChangeKey(APP, comment(2)))
+    expect(metaChangeKey(APP, 'conn-a', comment(1))).toBe(metaChangeKey(APP, 'conn-a', comment(2)))
   })
 
   it('a change has one delivery key across retries and batches; another change, another key', () => {
     const [a] = metaWebhookChanges(adAccountBody([{ field: 'with_issues_ad_objects', value: { id: '1', level: 'AD' } }]))!
     const [again] = metaWebhookChanges({ object: 'ad_account', entry: [{ id: '999', time: 2, changes: [] }, { id: ACT, time: 1782862117, changes: [{ field: 'with_issues_ad_objects', value: { id: '1', level: 'AD' } }] }] })!
     const [other] = metaWebhookChanges(adAccountBody([{ field: 'with_issues_ad_objects', value: { id: '2', level: 'AD' } }]))!
-    expect(metaChangeKey(APP, a)).toBe(metaChangeKey(APP, again))
-    expect(metaChangeKey(APP, a)).not.toBe(metaChangeKey(APP, other))
-    expect(metaChangeKey(APP, a)).not.toBe(metaChangeKey('9999999999999', a))
-    expect(metaChangeKey(APP, a)).toMatch(/^meta:[0-9a-f]{64}$/)
+    expect(metaChangeKey(APP, 'conn-a', a)).toBe(metaChangeKey(APP, 'conn-a', again))
+    expect(metaChangeKey(APP, 'conn-a', a)).not.toBe(metaChangeKey(APP, 'conn-a', other))
+    expect(metaChangeKey(APP, 'conn-a', a)).not.toBe(metaChangeKey('9999999999999', 'conn-a', a))
+    expect(metaChangeKey(APP, 'conn-a', a)).toMatch(/^meta:[0-9a-f]{64}$/)
+    // Review N1 — another connection row of the business: another delivery id.
+    expect(metaChangeKey(APP, 'conn-a', a)).not.toBe(metaChangeKey(APP, 'conn-a2', a))
   })
 
   it('entry.time in seconds or milliseconds', () => {

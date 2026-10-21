@@ -36,7 +36,7 @@ import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { workspaceIdForQuery } from '../../../lib/workspace-context.js'
 import { activeChannelRoutes, withIngressWorkspace } from '../../../lib/workspace-ingress.js'
-import { metaAppIdOf, metaWebhookSignatureCheck } from '../../cx/token.service.js'
+import { metaAppIdOf, metaStoredAppId, metaWebhookSignatureCheck } from '../../cx/token.service.js'
 import { recordInbound, recordInboundBatch } from '../../cx/ingress/ledger.js'
 import { claimInboundMany, finishInboundClaimMany, type InboundClaim } from '../../cx/ingress/claims.js'
 import type { InboundHandlerContext } from '../../cx/ingress/handlers.js'
@@ -75,27 +75,49 @@ export function forgetMetaAppIds(connectionId?: string): void {
   else appIds.clear()
 }
 
-async function appIdOf(route: { workspaceId: string; connectionId: string }): Promise<string | null> {
+/** A connection's app id, kept only when the read WORKED (review N3); throws when its credentials could not be read. */
+async function appIdOf(route: { workspaceId: string; connectionId: string }, fresh = false): Promise<string | null> {
   const kept = appIds.get(route.connectionId)
-  if (kept && Date.now() - kept.at < APP_ID_TTL_MS) return kept.appId
-  const appId = await withIngressWorkspace(route.workspaceId, () => metaAppIdOf(route.connectionId)).catch(() => null)
-  appIds.set(route.connectionId, { appId, at: Date.now() })
+  if (!fresh && kept && Date.now() - kept.at < APP_ID_TTL_MS) return kept.appId
+  const appId = await withIngressWorkspace(route.workspaceId, () => metaStoredAppId(route.connectionId))
+  if (appId) appIds.set(route.connectionId, { appId, at: Date.now() })
+  else appIds.delete(route.connectionId)
   return appId
 }
 
-/** The Meta connections (one or more businesses) that use this app. No secret is read. */
-export async function metaAppUsers(appId: string): Promise<MetaSigningBusiness[]> {
-  if (!META_APP_ID.test(appId)) return []
-  const users: MetaSigningBusiness[] = []
-  for (const route of await activeChannelRoutes(META_CHANNEL)) {
-    if ((await appIdOf(route)) === appId) users.push({ workspaceId: route.workspaceId, connectionId: route.connectionId, systemUserId: route.externalAccountId ?? null })
-  }
-  return users
+export interface MetaAppUsers {
+  users: MetaSigningBusiness[]
+  /** True when a connection's app id could not be read: it may be one more user (answer 503, Meta sends again). */
+  unsure: boolean
 }
 
-/** Verification (GET) and the route's early refusal: does a connected business use this Meta app? */
+/** The Meta connections (one or more businesses) that use this app. No secret is read. `fresh`: no kept app id. */
+export async function metaAppUsers(appId: string, options: { fresh?: boolean } = {}): Promise<MetaAppUsers> {
+  const out: MetaAppUsers = { users: [], unsure: false }
+  if (!META_APP_ID.test(appId)) return out
+  for (const route of await activeChannelRoutes(META_CHANNEL)) {
+    let own: string | null
+    try {
+      own = await appIdOf(route, options.fresh)
+    } catch (err) {
+      out.unsure = true
+      logger.warn('[meta-webhooks] a connection\'s app id could not be read', { error: errorText(err) })
+      continue
+    }
+    if (own === appId) out.users.push({ workspaceId: route.workspaceId, connectionId: route.connectionId, systemUserId: route.externalAccountId ?? null })
+  }
+  return out
+}
+
+/** The route's early decision: a business uses this app, none does, or Nexus could not tell (a read failed). */
+export async function metaAppKnown(appId: string): Promise<'known' | 'unknown' | 'unsure'> {
+  const { users, unsure } = await metaAppUsers(appId)
+  return users.length ? 'known' : unsure ? 'unsure' : 'unknown'
+}
+
+/** Verification (GET): does a connected business use this Meta app? */
 export async function metaAppConnected(appId: string): Promise<boolean> {
-  return (await metaAppUsers(appId)).length > 0
+  return (await metaAppKnown(appId)) === 'known'
 }
 
 // ── 1. trust ───────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -107,14 +129,18 @@ export interface MetaSignatureVerdicts {
   signers: MetaSigningBusiness[]
   /** The ones whose secret did not. */
   mismatched: MetaSigningBusiness[]
+  /** A candidate could not be checked (its credentials could not be read): answer 503 so Meta sends again. */
+  unsure: boolean
 }
 
 /** Of the connections that use this app, which own secrets signed exactly these bytes (each checked in its business). */
 export async function metaSignatureVerdicts(appId: string, rawBody: Buffer, signature: string | string[] | undefined): Promise<MetaSignatureVerdicts> {
-  const out: MetaSignatureVerdicts = { users: [], signers: [], mismatched: [] }
-  for (const user of await metaAppUsers(appId)) {
+  const candidates = await metaAppUsers(appId)
+  const out: MetaSignatureVerdicts = { users: [], signers: [], mismatched: [], unsure: candidates.unsure }
+  for (const user of candidates.users) {
     const verdict = await withIngressWorkspace(user.workspaceId, () => metaWebhookSignatureCheck(user.connectionId, appId, rawBody, signature))
-      .catch((err) => { logger.warn('[meta-webhooks] a connection could not check a signature', { error: errorText(err) }); return 'no_app' as const })
+      .catch((err) => { logger.warn('[meta-webhooks] a connection could not check a signature', { error: errorText(err) }); return 'error' as const })
+    if (verdict === 'error') { out.unsure = true; continue }
     if (verdict !== 'match' && verdict !== 'mismatch') { forgetMetaAppIds(user.connectionId); continue }
     out.users.push(user)
     ;(verdict === 'match' ? out.signers : out.mismatched).push(user)
@@ -122,10 +148,10 @@ export async function metaSignatureVerdicts(appId: string, rawBody: Buffer, sign
   return out
 }
 
-const raise = (notice: MetaNotice, meta: Record<string, unknown>) => raiseChannelAlertInTx(prisma, {
+const raise = (notice: MetaNotice, meta: Record<string, unknown>, options?: { occurrenceId: string }) => raiseChannelAlertInTx(prisma, {
   kind: notice.kind, severity: notice.severity, title: notice.title, body: notice.body,
   entityType: notice.entityType, entityId: notice.entityId, href: notice.href, meta,
-})
+}, options)
 
 /**
  * A delivery for this app that these businesses' secrets do not sign: per business ONE ledger row per hour (the first
@@ -145,7 +171,8 @@ export async function recordMetaSignatureMismatch(appId: string, rawBody: Buffer
         signatureOk: false, verifiedBy: 'none', status: 'failed',
         lastError: `X-Hub-Signature-256 does not match the app secret this business holds for Meta app ${appId}; nothing of the delivery was read.`,
       })
-      await raise(metaSignatureNotice(appId), { source: 'meta-webhook', appId })
+      // Review N5 — at most one such notice per business per 24 hours, read or not.
+      await raise(metaSignatureNotice(appId), { source: 'meta-webhook', appId }, { occurrenceId: `day-${Math.floor(now.getTime() / 86_400_000)}` })
     }).catch((err) => logger.warn('[meta-webhooks] could not record a signature mismatch', { error: errorText(err) }))
   }
 }
@@ -164,8 +191,11 @@ async function ownedIds(business: MetaSigningBusiness, product: 'AD_ACCOUNT' | '
   return new Set(rows.map((r) => r.externalId))
 }
 
-/** The one signing business each change belongs to, or null (ignored). `users`: every business using the app. */
-export async function routeMetaChanges(signers: MetaSigningBusiness[], users: MetaSigningBusiness[], changes: MetaWebhookChange[]): Promise<Array<MetaSigningBusiness | null>> {
+/**
+ * The one signing business each change belongs to, or null (ignored). `users`: every business using the app, or null
+ * when that is not known for sure (then no app-level or catalog change is routed).
+ */
+export async function routeMetaChanges(signers: MetaSigningBusiness[], users: MetaSigningBusiness[] | null, changes: MetaWebhookChange[]): Promise<Array<MetaSigningBusiness | null>> {
   const routes = changes.map(metaRouteOf)
   const owned = new Map<string, Set<string>>()
   for (const product of ['AD_ACCOUNT', 'PAGE', 'INSTAGRAM'] as const) {
@@ -173,8 +203,8 @@ export async function routeMetaChanges(signers: MetaSigningBusiness[], users: Me
     for (const business of signers) owned.set(`${business.connectionId}|${product}`, await ownedIds(business, product, ids))
   }
   // Review F3 — an app-level or catalog change names no business: only when ONE business uses the app at all.
-  const usingWorkspaces = new Set([...users, ...signers].map((b) => b.workspaceId))
-  const appBusiness = usingWorkspaces.size === 1 ? [...signers].sort((a, b) => a.connectionId.localeCompare(b.connectionId))[0] ?? null : null
+  const usingWorkspaces = users ? new Set([...users, ...signers].map((b) => b.workspaceId)) : null
+  const appBusiness = usingWorkspaces?.size === 1 ? [...signers].sort((a, b) => a.connectionId.localeCompare(b.connectionId))[0] ?? null : null
   return routes.map((route) => {
     if (!route) return null
     const product = LINK_PRODUCT[route.kind]
@@ -204,6 +234,8 @@ export interface MetaReceiveOutcome {
   later: number
   /** Changes the ledger could not take: the delivery is answered 503 so Meta sends it again. */
   notRecorded: number
+  /** An app-level change could not be decided (a connection's app id could not be read): answered 503 too. */
+  unsure: boolean
 }
 
 interface Action { key: string; run: () => Promise<void> }
@@ -275,13 +307,20 @@ async function settle(claims: InboundClaim[], deadline: number, outcome: MetaRec
  * Steps 2–4 for a delivery that one or more businesses' secrets signed. Never throws for a change: each is recorded,
  * ignored or counted as not recorded. Null when the body is not Meta's envelope.
  */
-export async function receiveMetaWebhook(input: { appId: string; signers: MetaSigningBusiness[]; users: MetaSigningBusiness[]; body: unknown; startedAt?: number }): Promise<MetaReceiveOutcome | null> {
+export async function receiveMetaWebhook(input: { appId: string; signers: MetaSigningBusiness[]; users: MetaSigningBusiness[]; unsure?: boolean; body: unknown; startedAt?: number }): Promise<MetaReceiveOutcome | null> {
   const changes = metaWebhookChanges(input.body)
   if (!changes) return null
   if (changes.length >= MAX_CHANGES_PER_DELIVERY) logger.warn('[meta-webhooks] a delivery held more changes than Nexus reads at once; the rest were not read', { read: changes.length })
   const deadline = (input.startedAt ?? Date.now()) + INLINE_BUDGET_MS
-  const outcome: MetaReceiveOutcome = { changes: changes.length, recorded: 0, duplicates: 0, ignored: 0, handled: 0, failed: 0, later: 0, notRecorded: 0 }
-  const owners = await routeMetaChanges(input.signers, input.users, changes)
+  const outcome: MetaReceiveOutcome = { changes: changes.length, recorded: 0, duplicates: 0, ignored: 0, handled: 0, failed: 0, later: 0, notRecorded: 0, unsure: false }
+  // Review N4 — an app-level or catalog change is decided on app ids read again now, never on kept ones.
+  let users: MetaSigningBusiness[] | null = input.unsure ? null : input.users
+  if (changes.some((change) => metaRouteOf(change)?.kind === 'APP')) {
+    const fresh = await metaAppUsers(input.appId, { fresh: true })
+    users = fresh.unsure || input.unsure ? null : fresh.users
+    if (!users) outcome.unsure = true
+  }
+  const owners = await routeMetaChanges(input.signers, users, changes)
   const byBusiness = new Map<string, { business: MetaSigningBusiness; changes: MetaWebhookChange[] }>()
   changes.forEach((change, i) => {
     const owner = owners[i]
@@ -296,13 +335,16 @@ export async function receiveMetaWebhook(input: { appId: string; signers: MetaSi
     await withIngressWorkspace(business.workspaceId, async () => {
       const acts = own.map((change) => META_WEBHOOK_TOPICS[metaTopicOf(change)]?.act ?? 'record')
       const written = await recordInboundBatch(own.map((change, i) => ({
-        channel: META_CHANNEL, eventType: metaTopicOf(change), externalId: metaChangeKey(input.appId, change),
+        channel: META_CHANNEL, eventType: metaTopicOf(change), externalId: metaChangeKey(input.appId, business.connectionId, change),
         payload: metaWebhookPayload(input.appId, change), providerTimestamp: metaChangeTime(change.time),
         signatureOk: true, verifiedBy: 'meta_hmac' as const, connectionId: business.connectionId,
         status: acts[i] === 'record' ? 'done' as const : 'pending' as const,
       })))
       const due = new Set<string>()
       written.forEach((w, i) => {
+        // Review N1 — a delivery id bound to another account row is never a reason to make Meta resend (it would for
+        // 36 h, and Messenger unsubscribes after one): logged and ignored.
+        if (w.conflict === 'identity_mismatch') { outcome.ignored++; logger.warn('[meta-webhooks] a change is bound to another account row; ignored', { eventType: metaTopicOf(own[i]) }); return }
         if (!w.id) { outcome.notRecorded++; return }
         if (w.duplicate) outcome.duplicates++
         else outcome.recorded++
@@ -340,7 +382,9 @@ async function stillOwned(payload: MetaWebhookPayload, connectionId: string): Pr
   }
   // Review F3 — app-level and catalog: the connection still uses the app, and this is still the ONE business using it.
   if ((await metaAppIdOf(connectionId)) !== payload.appId) return false
-  const using = new Set((await metaAppUsers(payload.appId)).map((u) => u.workspaceId))
+  const fresh = await metaAppUsers(payload.appId, { fresh: true })
+  if (fresh.unsure) throw new Error('A Meta connection\'s app id could not be read; this change is tried again later.')
+  const using = new Set(fresh.users.map((u) => u.workspaceId))
   return using.size === 1 && using.has(workspaceIdForQuery())
 }
 

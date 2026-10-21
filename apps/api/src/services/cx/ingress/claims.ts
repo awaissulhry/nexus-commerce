@@ -177,9 +177,23 @@ export async function finishInboundClaimMany(claims: InboundClaim[], outcome: { 
       attempts: { decrement: 1 }, processingToken: null, processingUntil: null, nextAttemptAt: now,
     } })
   }
+  // Review N2 — one UPDATE per (reason, attempt): rows failing alike share the backoff and the dead-letter verdict.
+  const groups = new Map<string, { reason: string; attempt: number; ids: string[] }>()
   for (const failure of outcome.failed) {
     const claim = claims.find((c) => c.id === failure.id)
-    if (claim) await finishInboundClaim(claim, false, failure.error, now)
+    if (!claim) continue
+    const reason = (failure.error || 'Processing failed').slice(0, 500)
+    const key = JSON.stringify([reason, claim.attempt])
+    const group = groups.get(key) ?? { reason, attempt: claim.attempt, ids: [] }
+    group.ids.push(claim.id)
+    groups.set(key, group)
+  }
+  for (const { reason, attempt, ids } of groups.values()) {
+    const exhausted = attempt >= MAX_INBOUND_ATTEMPTS
+    await prisma.webhookEvent.updateMany({ where: { ...held, id: { in: ids }, attempts: attempt }, data: {
+      status: exhausted ? 'dlq' : 'failed', isProcessed: false, processedAt: null, processingToken: null, processingUntil: null,
+      nextAttemptAt: exhausted ? null : new Date(now.getTime() + inboundBackoffMs(attempt)), lastError: reason, error: reason,
+    } })
   }
 }
 

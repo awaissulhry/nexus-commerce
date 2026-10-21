@@ -14,6 +14,8 @@ const h = vi.hoisted(() => ({
   received: [] as Array<{ appId: string; body: unknown; signers: unknown[]; users: unknown[] }>,
   mismatches: [] as Array<{ appId: string; businesses: unknown[] }>,
   connectedAsked: 0,
+  knownUnsure: false,
+  verdictUnsure: false,
   outcome: { changes: 1, recorded: 1, duplicates: 0, ignored: 0, handled: 1, failed: 0, later: 0, notRecorded: 0 } as Record<string, number> | null,
 }))
 
@@ -23,10 +25,11 @@ vi.mock('../services/marketing/meta-ads/webhook-receiver.js', async () => {
   return {
     META_APP_ID: /^\d{5,25}$/,
     metaAppConnected: async (appId: string) => { h.connectedAsked++; return h.appConnected && appId === APP },
+    metaAppKnown: async (appId: string) => (h.knownUnsure ? 'unsure' : h.appConnected && appId === APP ? 'known' : 'unknown'),
     metaSignatureVerdicts: async (appId: string, raw: Buffer, header: string | undefined) => {
       const user = { workspaceId: 'ws-a', connectionId: 'conn-a', systemUserId: null }
       const ok = appId === APP && metaWebhookSignatureOk(raw, header, SECRET)
-      return { users: appId === APP ? [user] : [], signers: ok ? [user] : [], mismatched: appId === APP && !ok ? [user] : [] }
+      return { users: appId === APP ? [user] : [], signers: ok ? [user] : [], mismatched: appId === APP && !ok ? [user] : [], unsure: h.verdictUnsure }
     },
     receiveMetaWebhook: async (input: { appId: string; body: unknown; signers: unknown[]; users: unknown[] }) => { h.received.push(input); return h.outcome },
     recordMetaSignatureMismatch: async (appId: string, _raw: Buffer, _headers: unknown, businesses: unknown[]) => { h.mismatches.push({ appId, businesses }) },
@@ -52,6 +55,8 @@ beforeEach(() => {
   h.received.length = 0
   h.mismatches.length = 0
   h.connectedAsked = 0
+  h.knownUnsure = false
+  h.verdictUnsure = false
   h.outcome = { changes: 1, recorded: 1, duplicates: 0, ignored: 0, handled: 1, failed: 0, later: 0, notRecorded: 0 }
   vi.stubEnv('META_WEBHOOK_VERIFY_TOKEN', 'a-long-verify-token-for-tests')
 })
@@ -111,6 +116,17 @@ describe('POST — a notification', () => {
     expect(h.mismatches).toEqual([])
     // The known app's cap is 4 MB.
     expect((await post(huge, null)).statusCode).toBe(413)
+  })
+
+  it('review N3 — when a connection could not be checked, Meta is asked to send again (503), never told the app is unknown', async () => {
+    h.knownUnsure = true
+    expect((await post(body)).statusCode).toBe(503)
+    h.knownUnsure = false
+    h.verdictUnsure = true
+    expect((await post(body, sign(body, 'a-forged-secret-00000000000000000'))).statusCode).toBe(503)
+    // Signed for one business while another could not be checked: recorded for the signer, still 503 so Meta resends.
+    expect((await post(body)).statusCode).toBe(503)
+    expect(h.received).toHaveLength(1)
   })
 
   it('a forged body that is not even JSON is never parsed: 200 and nothing handed on', async () => {
