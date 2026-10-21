@@ -357,6 +357,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/marketing/meta-ads/change-ad-rule.ts': 1, // step 29: remove-meta-ad-rule's delete (explicit ask: confirmDelete)
       'services/gateway/meta-brand-safety-rules.ts': 6, // step 39: a list's delete, unshare, a person, posts, an ad account, a content list (judges)
       'services/marketing/meta-ads/change-block-lists.ts': 6, // step 39: set-meta-block-list's undo deletes and remove-meta-block-list (explicit ask: confirmDelete)
+      'services/gateway/meta-lead-form-rules.ts': 1, // step 36: the testlead.delete rule (a judge)
+      'services/marketing/meta-ads/change-lead-forms.ts': 2, // step 36: a test lead's replace and remove-test-lead (only test leads Nexus made)
       'services/marketing/meta-ads/write-client.ts': 6, // passes on what a request names
     })
     // A method named by a constant, a variable or a ternary: only where it is passed on.
@@ -398,6 +400,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
 })
 /** Methods passed on, not chosen: the kit hands a request's own method to the write client; the gateway and its types. */
 const EXPECTED_COMPUTED: string[] = [
+  // Step 36 — the kit's plan hash names a request's own method (planOf: no sender).
+  'services/agents/tools/meta-ads-kit.ts: r.method',
   'services/agents/tools/meta-ads-kit.ts: request.method',
   // Step 23 — a video's upload method (advideos | video_ads), not an HTTP method.
   'services/agents/tools/meta-ads-media-upload.tools.ts: (video.method as VideoSource[\'method\']) ?? null',

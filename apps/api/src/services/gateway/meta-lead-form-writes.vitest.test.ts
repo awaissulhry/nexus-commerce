@@ -211,10 +211,10 @@ describe('the lead-form rules are an exact allow-list', () => {
     expect(tl(new URLSearchParams({ field_data: answers }).toString(), 'page')).toMatchObject({ problem: expect.stringMatching(/only Meta change/) })
     const del = (input: Partial<Parameters<typeof metaWriteVerdict>[0]>) => metaWriteVerdict({ method: 'DELETE', url: `${BASE}/${LEAD}`, kind: 'write', objectKind: 'testlead', ...input })
     expect(del({})).toEqual({ write: { rule: 'testlead.delete', objectId: LEAD, check: false, body: '', budget: false, kinds: ['testlead'], method: 'DELETE', auth: 'page' } })
-    expect(del({ body: 'x=1' })).toMatchObject({ problem: expect.stringMatching(/deletes nothing on Meta yet but .*a test lead Nexus made on a lead form of the chosen Page/) })
-    expect(del({ objectKind: undefined })).toMatchObject({ problem: expect.stringMatching(/deletes nothing on Meta yet/) })
-    expect(del({ objectKind: 'leadform' })).toMatchObject({ problem: expect.stringMatching(/deletes nothing on Meta yet/) })
-    expect(del({ objectKind: 'page', url: `${BASE}/${PAGE}` })).toMatchObject({ problem: expect.stringMatching(/deletes nothing on Meta yet/) })
+    expect(del({ body: 'x=1' })).toMatchObject({ problem: expect.stringMatching(/Nexus deletes on Meta only .*a test lead Nexus made on a lead form of the chosen Page/) })
+    expect(del({ objectKind: undefined })).toMatchObject({ problem: expect.stringMatching(/Nexus deletes on Meta only/) })
+    expect(del({ objectKind: 'leadform' })).toMatchObject({ problem: expect.stringMatching(/Nexus deletes on Meta only/) })
+    expect(del({ objectKind: 'page', url: `${BASE}/${PAGE}` })).toMatchObject({ problem: expect.stringMatching(/Nexus deletes on Meta only/) })
     expect(del({ kind: 'read' })).toMatchObject({ problem: expect.stringMatching(/goes as a write/) })
   })
   it('a caller can never ask for the Page token: any auth but the account\'s is refused, the Page\'s included', () => {
@@ -408,7 +408,9 @@ describe('the owner check of a change made as the Page', () => {
     h.answers.push(tokenAnswer(), json({ success: true }))
     const gone = await metaWriteCall({ connectionId: 'm-1', operation: 'testlead.delete', objectId: LEAD, objectKind: 'testlead', method: 'DELETE', params: {}, check: false })
     expect(gone.ok).toBe(true)
-    expect(sent(1)).toMatchObject({ method: 'DELETE', body: undefined })
+    // The merge with main: a DELETE without keys sends no form field (main's gateway passes its empty body on).
+    expect(sent(1).method).toBe('DELETE')
+    expect(sent(1).body ?? '').toBe('')
     expect(sent(1).url.searchParams.get('access_token')).toBe(PAGE_TOKEN)
   })
   it('an id inside the body: the intro\'s cover photo must be a photo OF the chosen Page', async () => {
