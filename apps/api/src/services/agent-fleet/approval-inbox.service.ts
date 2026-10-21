@@ -900,6 +900,10 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-meta-connection': ['basis', 'plan', 'reach'],
   // Meta step 17 (2026-10-21): the live state it stands on, the requests it sends, where it lands (meta-ads-kit).
   'set-meta-status': ['basis', 'plan', 'reach'],
+  // Meta step 18 (2026-10-21): a campaign's and an ad set's settings, budgets and bids; scheduled budget increases.
+  'set-meta-campaign': ['basis', 'plan', 'reach'],
+  'set-meta-ad-set': ['basis', 'plan', 'reach'],
+  'set-meta-budget-schedule': ['basis', 'plan', 'reach'],
   // Meta step 23 (2026-10-21): create-meta-media — the files and account it stands on, the requests (the bytes too), where.
   'create-meta-media': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).

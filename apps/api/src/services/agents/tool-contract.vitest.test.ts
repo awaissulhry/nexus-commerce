@@ -867,6 +867,23 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { items: [{ kind: 'campaign', id: '120000000000001', name: 'Campaign A', status: 'ACTIVE' }], accountId: 'conn-1', adAccountId: '1234567890' },
         after: { items: [{ kind: 'campaign', id: '120000000000001', status: 'PAUSED' }], accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 18: what a settings change replaced goes back through the same tool (its record holds those arguments).
+      'set-meta-campaign': {
+        before: { kind: 'campaign', id: '120000000000001', fields: { daily_budget: '5000' }, undo: { dailyBudgetCents: 5000 }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { kind: 'campaign', id: '120000000000001', fields: { daily_budget: '7000' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-ad-set': {
+        before: { kind: 'adset', id: '120000000000002', fields: { bid_amount: '150' }, undo: { bidAmountCents: 150 }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { kind: 'adset', id: '120000000000002', fields: { bid_amount: '180' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-budget-schedule': {
+        before: {
+          kind: 'highdemandperiod', id: '120000000000031', parent: { kind: 'campaign', id: '120000000000001' }, fields: { budget_value: '20', exists: 'yes' },
+          undo: { action: 'change', level: 'campaign', objectId: '120000000000001', periodId: '120000000000031', startTime: '2099-01-01T08:00:00.000Z', endTime: '2099-01-01T20:00:00.000Z', increaseCents: 2000 },
+          noUndo: [], accountId: 'conn-1', adAccountId: '1234567890',
+        },
+        after: { kind: 'highdemandperiod', id: '120000000000031', parent: { kind: 'campaign', id: '120000000000001' }, fields: { budget_value: '30', exists: 'yes' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       // Meta step 23: what an upload made new comes out of the ad account's library again (create-meta-media kind undo).
       'create-meta-media': {
         before: { kind: 'image', items: [{ kind: 'image', source: 'da_test', inLibrary: false }] },
@@ -1041,7 +1058,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-custom-goals', 'set-google-custom-audiences', 'set-google-user-lists', 'set-google-reusable-audiences',
       'upload-google-sales', 'adjust-google-sales',
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
-      'set-meta-connection', 'set-meta-status', 'create-meta-media']) {
+      'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule', 'create-meta-media']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

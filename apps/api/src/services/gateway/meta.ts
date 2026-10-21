@@ -2,8 +2,9 @@
  * Meta on the gateway (Meta ads M1, 2026-10-20): the ONE way Nexus calls Meta (Graph and Marketing API at
  * graph.facebook.com). Reads are GETs (metaCall); a change (step 17) is a POST of a form body (metaWriteCall) that the
  * gateway lets through only when it is on its write allow-list and its object is of the business's chosen ad account
- * (meta-calls.ts metaWriteVerdict, gateway.ts 3b). Step 23: a video's link handed to Meta's resumable upload host
- * (metaRuploadCall, rupload.facebook.com — judged in meta-media-rules.ts; Nexus sends no video byte).
+ * (meta-calls.ts metaWriteVerdict, gateway.ts 3b).
+ * Step 23: a video's link handed to Meta's resumable upload host (metaRuploadCall, rupload.facebook.com — judged in
+ * meta-media-rules.ts; Nexus sends no video byte).
  *
  * - `path` is below the pinned version (services/meta/api-version.ts): `me`, `act_123/campaigns`, `debug_token`.
  * - `query` values are sent as Meta reads them: text as is, a list or an object as JSON (`fields` may be a list).
