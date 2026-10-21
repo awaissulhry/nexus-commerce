@@ -434,6 +434,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   // Meta ads step 2 — a read of this business's chosen Meta ad account, now (read-only; at most once an hour per account,
   // as Ads › Meta's "Read now"). The trigger route's recordCronRun is the single run record.
   'meta-ads-sync': () => import('./ads-meta-sync.job.js').then((m) => m.runMetaAdsSyncOnce(new Date(), 'MANUAL')),
+  // Meta ads step 37 — the Instagram comment poll of this business, now (read-only; a notice per media with new comments).
+  'meta-instagram-comment-poll': () => import('./meta-instagram-comment-poll.job.js').then((m) => m.runMetaInstagramCommentPollOnce()),
   // Platform health watchdog (2026-10-07) — the daily checks of crons, feeds, ad writes, approvals, automation and queues
   // (services/platform-health/), measured, stored and alerted on now. Reads only, plus its own rows and alerts.
   'platform-health-watchdog': () => import('./platform-health-watchdog.job.js').then((m) => m.runPlatformHealthWatchdogOnce('manual')),

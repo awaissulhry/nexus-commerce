@@ -37,6 +37,20 @@ describe('Meta write rules: load order', () => {
     expect(forms.META_LEAD_FORM_WRITE_RULES.length).toBeGreaterThan(0)
   })
 
+  it('loads meta-settings-rules.ts first: the comment rules hold real patterns (step 37)', async () => {
+    await import('./meta-settings-rules.js')
+    const comments = await import('./meta-comment-rules.js')
+    const texts = comments.META_COMMENT_WRITE_RULES.flatMap((r) => Object.values(r.text ?? {}))
+    expect(texts.length).toBeGreaterThan(0)
+    expect(texts.every((p) => p instanceof RegExp)).toBe(true)
+  })
+
+  it('loads meta-comment-rules.ts first (step 37)', async () => {
+    const comments = await import('./meta-comment-rules.js')
+    expect(comments.META_COMMENT_WRITE_RULES.length).toBeGreaterThan(0)
+    expect(comments.META_COMMENT_TEXT.test('Grazie!\nA presto')).toBe(true)
+  })
+
   it('loads meta-calls.ts first, and every rule is in writeRules', async () => {
     const calls = await import('./meta-calls.js')
     const settings = await import('./meta-settings-rules.js')

@@ -903,6 +903,11 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { action: 'test-lead', pageId: '120000000000010', formId: '600000000000001', name: 'Form A', testLeadId: null, accountId: 'conn-1', adAccountId: '1234567890' },
         after: { action: 'test-lead', pageId: '120000000000010', formId: '600000000000001', name: 'Form A', testLeadId: '700000000000001', accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 37: a hidden comment is shown again (hide ⇄ unhide; a reply it made is deleted, a delete has no undo).
+      'set-meta-comments': {
+        before: { action: 'hide', platform: 'facebook', pageId: '120000000000010', postId: '120000000000010_500000000000001', commentId: '500000000000001_900000000000001', hidden: false, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { action: 'hide', platform: 'facebook', pageId: '120000000000010', postId: '120000000000010_500000000000001', commentId: '500000000000001_900000000000001', hidden: true, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1073,7 +1078,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'upload-google-sales', 'adjust-google-sales',
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
       'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule',
-      'set-meta-brand-safety', 'set-meta-block-list', 'remove-meta-block-list', 'create-meta-lead-form', 'set-meta-lead-form']) {
+      'set-meta-brand-safety', 'set-meta-block-list', 'remove-meta-block-list', 'create-meta-lead-form', 'set-meta-lead-form', 'set-meta-comments']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

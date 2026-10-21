@@ -38,6 +38,7 @@ import { metaRestFileExportOf, type MetaWriteKind } from './meta-calls.js'
 import { BRAND_SAFETY_KINDS, metaBrandSafetyOwnerProblem, metaExportOwnerProblem, metaTargetingOwnerProblem, noteBlockListDraftMade, type MetaCheckRead } from './meta-brand-safety-owner.js'
 import { META_PAGE_KINDS, metaPageOwnerProblem } from './meta-page-owner.js'
 import { MetaPageTokenUnavailable, metaPageTokenFor, scrubExactToken } from './meta-page-token.js'
+import { META_THREADS_KINDS, metaThreadsOwnerProblem } from './meta-comment-owner.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
@@ -139,7 +140,7 @@ export interface GatewayRequest {
    * campaign or ad set it belongs to; the gateway confirms that object is of the chosen ad account AND lists the period
    * among its own budget schedules before anything is sent.
    */
-  metaParent?: { kind: 'campaign' | 'adset'; id: string }
+  metaParent?: { kind: 'campaign' | 'adset' | 'ad' | 'brandedpost'; id: string }
   /**
    * Meta step 39 (Q8): the text of the ONE file a change uploads (a block list's URL file, made by Nexus). The gateway judges
    * it with the rule's own judge and sends it as the rule's one multipart file part; never a path or bytes of a caller's.
@@ -427,7 +428,9 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // Step 36 (Q1) — a change made AS the chosen Facebook Page (`auth: 'page'`, or a Page kind named): its object must be
     // that Page or a child of it the gateway confirms (meta-page-owner.ts), before the Page's token is read.
     const owner = metaWrite.auth === 'page' || (req.metaObjectKind && META_PAGE_KINDS.has(req.metaObjectKind))
-      ? await metaPageOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId))
+      ? await metaPageOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId), req.metaParent)
+      // Step 37 — a Threads ad's post or reply: of an ad of the chosen ad account (meta-comment-owner.ts).
+      : req.metaObjectKind && META_THREADS_KINDS.has(req.metaObjectKind) ? await metaThreadsOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId), req.metaParent)
       : metaWrite.targeting ? (req.metaObjectKind === 'adsettargeting' ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
       : req.metaObjectKind && BRAND_SAFETY_KINDS.has(req.metaObjectKind) ? await metaBrandSafetyOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId), req.metaRun)
         : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | undefined, req.metaParent)
@@ -735,7 +738,7 @@ const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad' | 'customaudie
  * cannot place, of another kind, or of any other account (another business's too) gets nothing sent; the sentence never
  * names the other account.
  */
-async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | undefined, parent?: { kind: 'campaign' | 'adset'; id: string }): Promise<{ code: string; sentence: string } | null> {
+async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | undefined, parent?: { kind: 'campaign' | 'adset' | 'ad' | 'brandedpost'; id: string }): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   // Step 18 — a budget schedule: its campaign or ad set first, then the period among that object's own.
   if (kind === 'highdemandperiod') return metaPeriodOwnerProblem(connectionId, write, parent)
@@ -777,7 +780,7 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
  * object's own budget schedules (ONE live read of `/<campaign | ad set>/budget_schedules`, at most 50 per object — Meta's
  * limit, high-demand-period.md). Anything else: nothing is sent.
  */
-async function metaPeriodOwnerProblem(connectionId: string, write: MetaJudgedWrite, parent: { kind: 'campaign' | 'adset'; id: string } | undefined): Promise<{ code: string; sentence: string } | null> {
+async function metaPeriodOwnerProblem(connectionId: string, write: MetaJudgedWrite, parent: { kind: 'campaign' | 'adset' | 'ad' | 'brandedpost'; id: string } | undefined): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   if (!parent || (parent.kind !== 'campaign' && parent.kind !== 'adset') || !/^\d{1,20}$/.test(parent.id)) {
     return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of budget schedule ${id} names the campaign or ad set it belongs to.` }

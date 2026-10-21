@@ -93,8 +93,11 @@ export interface MetaWriteRequest {
   file?: string
   /** Step 39 (review A9) — the run of the change this request belongs to (a block-list draft is used only by its own run). */
   run?: string
-  /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
-  parent?: { kind: 'campaign' | 'adset'; id: string }
+  /**
+   * Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). Step 37 — a Threads
+   * post's or reply's ad (`ad`), a branded-content post's comment's post (`brandedpost`).
+   */
+  parent?: { kind: 'campaign' | 'adset' | 'ad' | 'brandedpost'; id: string }
 }
 
 /** The edges a Nexus change writes on: step 18's budget schedules; step 39's brand-safety edges. */
@@ -102,6 +105,9 @@ export type MetaWriteEdge = 'budget_schedules' | 'brand_safety_content_filter_le
   | 'assigned_users' | 'auto_applied_ad_accounts' | 'content_block_lists' | 'content' | 'applied_ad_accounts'
   // Step 36 — a lead form on the chosen Page, a test lead on a form of it.
   | 'leadgen_forms' | 'test_leads'
+  // Step 37 — comments: a comment or reply, a like, a block (Facebook); a reply, a top-level comment, a mention reply
+  // (Instagram); a Threads reply's hide and a Threads reply.
+  | 'comments' | 'likes' | 'blocked' | 'replies' | 'mentions' | 'manage_reply' | 'add_reply'
 
 /**
  * One Meta change (or Meta's check of one) through the gateway. A change is never retried (`maxTransientRetries 0`):
@@ -112,7 +118,8 @@ export type MetaWriteEdge = 'budget_schedules' | 'brand_safety_content_filter_le
 export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayResponse> {
   const remove = req.method === 'DELETE'
   // Step 39 — a file upload has no form field (the file is its one part); a DELETE carries its keys only when it has some.
-  const empty = req.file !== undefined || (remove && !Object.keys(req.params).length)
+  // Step 37 — a POST with no form field (a like as the Page) goes with no body at all, as its bare rule takes it.
+  const empty = req.file !== undefined || (!Object.keys(req.params).length && !req.check)
   const body = empty ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
   return gatewayCall({
     channel: 'META',

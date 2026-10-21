@@ -73,8 +73,8 @@ export interface MetaObjectChange {
   edge?: MetaWriteEdge
   /** Step 18 — DELETE (a budget schedule's): Meta's {"success": true} is the answer, nothing is read back (step 39: unless `judge` reads it). */
   method?: 'POST' | 'DELETE'
-  /** Step 18 — a budget schedule's campaign or ad set (the gateway checks the period is one of its own). */
-  parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** Step 18 — a budget schedule's campaign or ad set (the gateway checks the period is one of its own); step 37 — a Threads post's ad, a branded post. */
+  parent?: { kind: 'campaign' | 'adset' | 'ad' | 'brandedpost'; id: string }
   /** Step 39 (Q8) — the text of the one file Nexus made (a block list's URL file): its rule's multipart file part. */
   file?: string
   /**
@@ -128,15 +128,32 @@ const cut = (words: string | null | undefined) => (words ? (words.length > MAX_W
 
 /** Step 36 review B3 — the kinds a change makes AS the chosen Page (its own token: gateway meta-page-token.ts). */
 const PAGE_KINDS: ReadonlySet<string> = new Set(['page', 'leadform', 'testlead'])
+/** Step 37 — the comment kinds made as the chosen Page (Facebook comments and the chosen Instagram account's). */
+const COMMENT_KINDS: ReadonlySet<string> = new Set(['fbpost', 'fbcomment', 'fbpagecomment', 'brandedcomment', 'igmedia', 'igcomment', 'iguser'])
 
 /** The failure of a change's answer, in words about a CHANGE (errors.ts says them about a read). */
-function changeFailure(answer: Pick<GatewayResponse, 'status' | 'verdict'>, kind?: string): MetaFailure {
+function changeFailure(answer: Pick<GatewayResponse, 'status' | 'verdict'>, kind?: string, operation?: string): MetaFailure {
   const failure = failureOfAnswer(answer)
   if (failure.origin !== 'meta') return failure
   const words = cut(answer.verdict?.channelMessage)
   const code = failure.code ? ` (${failure.code})` : ''
   // Step 36 review B3 — a change made with the Page's own token: a refused token or permission is the Page's condition
   // (the system user's role or task on the chosen Page), never "make a new system-user token" or the ad account's.
+  // Step 37 — a comment change made as the chosen Page: the Page's MODERATE / CREATE_CONTENT tasks and the comment permissions.
+  if (kind && COMMENT_KINDS.has(kind) && (failure.authLost || failure.permissionDenied)) {
+    return {
+      ...failure,
+      sentence: `Meta did not accept this comment change made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. The system user needs the Page's MODERATE task — and CREATE_CONTENT for a comment or like as the Page — (Meta Business settings › Users › System users › Assign assets) and its token pages_manage_engagement, pages_read_engagement, pages_read_user_engagement and, for Instagram, instagram_manage_comments. Nothing was changed.`,
+    }
+  }
+  // Step 37 (re-review B) — a block or unblock on the chosen Page (kind `page`): the Page token, the MODERATE task and the
+  // permissions Meta's error 283 names for /{page}/blocked; step 36's lead-form sentence below is unchanged.
+  if (kind === 'page' && operation?.startsWith('pageblock.') && (failure.authLost || failure.permissionDenied)) {
+    return {
+      ...failure,
+      sentence: `Meta did not accept this block or unblock made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. It goes with the Page's own token: the system user needs the Page's MODERATE task (Meta Business settings › Users › System users › Assign assets) and its token pages_read_engagement and pages_manage_metadata (Meta's error 283 for the Page's blocked list). Nothing was changed.`,
+    }
+  }
   if (kind && PAGE_KINDS.has(kind) && (failure.authLost || failure.permissionDenied)) {
     return {
       ...failure,
@@ -261,7 +278,7 @@ export async function metaSendChange(
     return { node, readBack: node ? 'second-read' : 'none', waitedMs }
   }
   // Not a plain success: what Meta answered, then what the object is now.
-  const failure = answer.ok ? localFailure('Meta answered success: false and gave no reason.', 'CHANGE_FAILED') : changeFailure(answer, change.kind)
+  const failure = answer.ok ? localFailure('Meta answered success: false and gave no reason.', 'CHANGE_FAILED') : changeFailure(answer, change.kind, change.operation)
   const unanswered = answer.status === 0 || answer.status >= 500
   const wanted = expectedOf(change)
   // Step 18 — an edge create or a DELETE cannot be judged by reading the object: Meta's answer is all there is (step 39:

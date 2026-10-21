@@ -52,6 +52,7 @@ import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.
 import { META_SETTINGS_WRITE_RULES } from './meta-settings-rules.js'
 import { META_BRAND_SAFETY_WRITE_RULES } from './meta-brand-safety-rules.js'
 import { META_LEAD_FORM_WRITE_RULES } from './meta-lead-form-rules.js'
+import { META_COMMENT_WRITE_RULES } from './meta-comment-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -771,6 +772,8 @@ export interface MetaWriteRule {
    * lead keeps its questions' names, never the answers.
    */
   ledger?: (params: ReadonlyMap<string, string>) => Record<string, string>
+  /** Step 37 — a POST with no body at all (a like as the Page: POST /<post | comment>/likes); only a call that sends none. */
+  bare?: true
 }
 
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
@@ -780,6 +783,10 @@ export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
   | 'adsettargeting' | 'adaccount' | 'business' | 'publisherblocklist' | 'contentblocklist'
   // Step 36 — the chosen Facebook Page itself, a lead form of it, a test lead Nexus made on such a form (meta-page-owner.ts).
   | 'page' | 'leadform' | 'testlead'
+  // Step 37 — comments: a post of the chosen Page, a comment on one (the Page's own comment apart), a comment on a creator's
+  // branded-content post that tags the chosen Page; the chosen Instagram account's media, a comment on it, the account's own
+  // node; the Threads post of an ad of the chosen ad account and a direct reply on it (meta-comment-owner.ts).
+  | 'fbpost' | 'fbcomment' | 'fbpagecomment' | 'brandedcomment' | 'igmedia' | 'igcomment' | 'iguser' | 'threadsmedia' | 'threadsreply'
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
 export interface MetaWriteBodyId {
   id: string
@@ -788,6 +795,8 @@ export interface MetaWriteBodyId {
   kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' | 'adaccount' | 'business' | 'agency' | 'publisherblocklist' | 'blocklistdraft'
     // Step 36: a photo of the chosen Facebook Page (a lead form's intro photo).
     | 'pagephoto'
+    // Step 37: the media or comment the chosen Instagram account was @mentioned in (a mention reply's media_id / comment_id).
+    | 'mentionedmedia' | 'mentionedcomment'
 }
 
 const fieldsValueProblem = (value: string): string | null => {
@@ -892,7 +901,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   if (method === 'DELETE') {
     const deleteRule = bodyless ? candidates.find((r) => !r.required.length && !r.optional.length) : undefined
     if (!deleteRule && (bodyless || !candidates.some((r) => r.required.length || r.optional.length))) {
-      return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule), a test lead Nexus made on a lead form of the chosen Page (set-meta-lead-form) and what its brand-safety tools name (a block list, its shares, people, posts and ad accounts: set-meta-block-list, remove-meta-block-list; deleting campaigns, ad sets and ads is its own tool, not built yet), and cancels no async batch')
+      return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule), a test lead Nexus made on a lead form of the chosen Page (set-meta-lead-form) and what its brand-safety tools name (a block list, its shares, people, posts and ad accounts: set-meta-block-list, remove-meta-block-list; deleting campaigns, ad sets and ads is its own tool, not built yet), a comment on a post of the chosen Page or on the chosen Instagram account\'s media, a like of the Page and a person it blocked (set-meta-comments), and cancels no async batch')
     }
     if (deleteRule) {
       if (input.file !== undefined) return refuse('a Meta DELETE carries no file')
@@ -912,13 +921,19 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     const { key, filename, contentType } = fileRule.file
     return { write: { rule: fileRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, ...(fileRule.kinds ? { kinds: fileRule.kinds } : {}), file: { key, filename, contentType, text: input.file } } }
   }
+  // Step 37 — a POST with no body at all goes only by a rule marked bare (a like as the Page), as a write.
+  const bare = method === 'POST' && bodyless ? candidates.find((r) => r.bare) : undefined
+  if (bare) {
+    if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
+    return { write: { rule: bare.name, objectId: graph.segments[0], check: false, body: '', budget: false, ...(bare.kinds ? { kinds: bare.kinds } : {}), ...(bare.auth ? { auth: bare.auth } : {}) } }
+  }
   const parsed = writeParams(input.body)
   if ('problem' in parsed) return refuse(parsed.problem)
   const keys = [...parsed.params.keys()]
   const rule = candidates.find((r) => r.required.every((k) => parsed.params.has(k)) && keys.every((k) => r.required.includes(k) || r.optional.includes(k))
     && (!r.anyOf || r.anyOf.some((k) => parsed.params.has(k))))
   if (!rule) {
-    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a brand-safety change named with its kind (set-meta-brand-safety, set-meta-block-list, remove-meta-block-list), or a lead-form change of the chosen Facebook Page named with its kind (create-meta-lead-form, set-meta-lead-form); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a brand-safety change named with its kind (set-meta-brand-safety, set-meta-block-list, remove-meta-block-list), or a lead-form change of the chosen Facebook Page named with its kind (create-meta-lead-form, set-meta-lead-form), or a comment change named with its kind (set-meta-comments); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
   // Step 18 — each rule's own length and text keys; every other value stays plain ASCII (as step 17 judged them all).
   const maxBody = rule.maxBody ?? MAX_WRITE_BODY
@@ -958,7 +973,7 @@ const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kin
 /** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY); step 39: an ad set's whole targeting. */
 const MAX_ANY_WRITE_BODY = 200_000
 /** Step 17's status rule, step 18's settings rules, step 39's brand-safety rules, step 36's lead-form rules — read when judged, never at load. */
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...META_BRAND_SAFETY_WRITE_RULES, ...META_LEAD_FORM_WRITE_RULES]
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...META_BRAND_SAFETY_WRITE_RULES, ...META_LEAD_FORM_WRITE_RULES, ...META_COMMENT_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {

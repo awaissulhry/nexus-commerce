@@ -7988,6 +7988,10 @@
     {
       "name": "MetaAdsReadState",
       "fields": []
+    },
+    {
+      "name": "MetaInstagramCommentPoll",
+      "fields": []
     }
   ]
 }

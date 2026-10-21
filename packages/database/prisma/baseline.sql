@@ -11603,6 +11603,22 @@ CREATE TABLE "MetaAdsReadState" (
     CONSTRAINT "MetaAdsReadState_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "MetaInstagramCommentPoll" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "connectionId" TEXT NOT NULL,
+    "instagramId" TEXT NOT NULL,
+    "mediaId" TEXT NOT NULL,
+    "commentsCount" INTEGER NOT NULL,
+    "newestCommentAt" TIMESTAMP(3),
+    "polledAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "MetaInstagramCommentPoll_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE INDEX "Product_gtin_idx" ON "Product"("gtin");
 
@@ -17434,6 +17450,12 @@ CREATE INDEX "MetaAdsReadState_workspaceId_idx" ON "MetaAdsReadState"("workspace
 
 -- CreateIndex
 CREATE UNIQUE INDEX "MetaAdsReadState_workspaceId_adAccountId_resource_key" ON "MetaAdsReadState"("workspaceId", "adAccountId", "resource");
+
+-- CreateIndex
+CREATE INDEX "MetaInstagramCommentPoll_workspaceId_idx" ON "MetaInstagramCommentPoll"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MetaInstagramCommentPoll_workspaceId_instagramId_mediaId_key" ON "MetaInstagramCommentPoll"("workspaceId", "instagramId", "mediaId");
 
 -- AddForeignKey
 ALTER TABLE "Product" ADD CONSTRAINT "Product_familyId_fkey" FOREIGN KEY ("familyId") REFERENCES "ProductFamily"("id") ON DELETE SET NULL ON UPDATE CASCADE;

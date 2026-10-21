@@ -53,8 +53,8 @@ export interface MetaChangeRequest {
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
-  /** A budget schedule's campaign or ad set. */
-  parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** A budget schedule's campaign or ad set; step 37 — a Threads post's or reply's ad, a branded-content comment's post. */
+  parent?: { kind: 'campaign' | 'adset' | 'ad' | 'brandedpost'; id: string }
   // ── step 39 (brand safety) ──
   /** The text of the one file Nexus made for this request (a block list's URL file; part of the approved plan). */
   file?: string
@@ -73,6 +73,9 @@ export interface MetaChangeRequest {
   skipReadBack?: true
   /** Meta's codes this request may meet, in plain words (base code → sentence), added to the step's sentence. */
   explain?: Readonly<Record<string, string>>
+  // ── step 37 (comments) ──
+  /** Meta's success is the whole answer (a like, a block — no id, never read back): the step says "Meta confirmed it." */
+  answerOnly?: true
 }
 
 export interface MetaChangeDraft {

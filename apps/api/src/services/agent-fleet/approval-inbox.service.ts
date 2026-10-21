@@ -911,6 +911,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // Meta step 36 (2026-10-21): lead forms and test leads of the chosen Page (meta-ads-lead-forms.tools.ts).
   'create-meta-lead-form': ['basis', 'plan', 'reach'],
   'set-meta-lead-form': ['basis', 'plan', 'reach'],
+  // Meta step 37 (2026-10-21): comments and moderation (meta-ads-comments.tools.ts).
+  'set-meta-comments': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

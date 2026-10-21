@@ -540,6 +540,7 @@
     "MetaAdsAdSet",
     "MetaAdsAd",
     "MetaAdsDailyMetric",
-    "MetaAdsReadState"
+    "MetaAdsReadState",
+    "MetaInstagramCommentPoll"
   ]
 }

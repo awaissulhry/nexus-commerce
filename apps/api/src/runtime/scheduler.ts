@@ -79,6 +79,7 @@ import { startEtsyReceiptsPollCron } from "../jobs/etsy-receipts-poll.job.js";
 import { startEbayAdsSyncCrons } from "../jobs/ebay-ads-sync.job.js";
 import { startGoogleAdsSyncCron } from "../jobs/ads-google-sync.job.js";
 import { startMetaAdsSyncCron } from "../jobs/ads-meta-sync.job.js";
+import { startMetaInstagramCommentPollCron } from "../jobs/meta-instagram-comment-poll.job.js";
 import { startReconcileCron } from "../jobs/reconcile-cron.job.js";
 import { startLateShipmentFlagCron } from "../jobs/late-shipment-flag.job.js";
 import { startTrackingPushbackCron } from "../jobs/tracking-pushback.job.js";
@@ -605,6 +606,10 @@ export async function startScheduler(): Promise<void> {
   // NEXUS_META_ADS_SYNC=off schedules nothing).
   markCronStep('meta-ads-sync')
   startMetaAdsSyncCron();
+  // Meta ads step 37 — the Instagram comment poll: every 15 minutes per business with a chosen Instagram account, new
+  // comments become a notice (read-only; stores no comment's words or author; NEXUS_META_IG_COMMENT_POLL=off schedules nothing).
+  markCronStep('meta-instagram-comment-poll')
+  startMetaInstagramCommentPollCron();
   // P5.3 — daily reconcile cron: Amazon drift + cumulative bleed + stale-conflict escalation
   startReconcileCron();
 

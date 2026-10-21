@@ -23687,3 +23687,29 @@ model MetaAdsReadState {
   @@unique([workspaceId, adAccountId, resource], name: "meta_ads_read_state")
   @@index([workspaceId])
 }
+
+/// Meta step 37 (2026-10-21) — what the Instagram comment poll needs to find NEW comments on the newest media of the
+/// business's chosen Instagram account (Instagram sends no comment webhook without Advanced access, so Nexus looks every
+/// 15 minutes and tells the business). One row per media of the newest 25 the poll reads; rows of media no longer among them,
+/// or of another Instagram account, are dropped. People's data stays out: NO comment text, username or user id is stored —
+/// only the media id, Meta's comment count, the newest comment time seen and when the poll last read it.
+model MetaInstagramCommentPoll {
+  workspaceId     String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id              String    @id @default(cuid())
+  /// The META ChannelConnection the poll reads through (no foreign key, as the read tables above).
+  connectionId    String
+  /// The chosen Instagram account (digits) and one of its media (digits).
+  instagramId     String
+  mediaId         String
+  /// Meta's comments_count of the media when last read (comments and their replies).
+  commentsCount   Int
+  /// The newest top-level comment time the poll saw on it (null: none read yet; the poll then counts from polledAt).
+  newestCommentAt DateTime?
+  /// When the poll last read this media.
+  polledAt        DateTime
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([workspaceId, instagramId, mediaId], name: "meta_ig_comment_poll")
+  @@index([workspaceId])
+}

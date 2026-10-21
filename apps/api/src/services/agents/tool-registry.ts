@@ -100,6 +100,8 @@ import { META_ADS_CAMPAIGN_SETTINGS_TOOLS } from './tools/meta-ads-campaign-sett
 import { META_ADS_BRAND_SAFETY_TOOLS } from './tools/meta-ads-brand-safety.tools.js'
 // Meta ads step 36 (2026-10-21): lead forms and test leads (changes made as the chosen Page).
 import { META_ADS_LEAD_FORMS_TOOLS } from './tools/meta-ads-lead-forms.tools.js'
+// Meta ads step 37 (2026-10-21): comments and moderation (Facebook and Instagram as the chosen Page, Threads ads).
+import { META_ADS_COMMENTS_TOOLS } from './tools/meta-ads-comments.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -320,6 +322,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_BRAND_SAFETY_TOOLS,
   // Meta ads step 36 (2026-10-21): create-meta-lead-form, set-meta-lead-form (lead forms and test leads, as the Page).
   ...META_ADS_LEAD_FORMS_TOOLS,
+  // Meta ads step 37 (2026-10-21): set-meta-comments (hide, delete, reply, edit, like, block, comments off, mention replies).
+  ...META_ADS_COMMENTS_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).
