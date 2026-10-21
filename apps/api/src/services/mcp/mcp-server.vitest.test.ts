@@ -58,6 +58,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 8 (2026-10-21) — meta-recommendations, meta-experiments and meta-ad-rules read Meta live.
 // Meta ads step 14 (2026-10-21) — meta-lead-forms, meta-leads and meta-comments read Meta live.
 // Meta ads step 11 (2026-10-21) — meta-audiences and meta-datasets read Meta live.
+// Meta ads step 18 (2026-10-21) — set-meta-campaign, set-meta-ad-set and set-meta-budget-schedule read Meta live and change it.
 
 const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -107,7 +108,7 @@ const OPEN_WORLD = [
   'set-google-shopping-settings', 'set-google-status', 'set-google-targeting', 'set-google-urls',
   'set-google-user-access', 'set-google-user-lists', 'set-google-value-rules', 'set-hourly-bid-plan', 'set-listing-price',
   'set-listing-stock',
-  'set-master-prices', 'set-meta-connection', 'set-meta-status', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
+  'set-master-prices', 'set-meta-ad-set', 'set-meta-budget-schedule', 'set-meta-campaign', 'set-meta-connection', 'set-meta-status', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
   'set-promotion', 'set-sd-brand-safety', 'set-sd-budget-rule', 'set-sd-optimization-rule', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid',
   'shipping-rates', 'shopify-content', 'submit-aplus-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock',
   'tune-ad-engine', 'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'undo-worse-ad-change',

@@ -55,12 +55,58 @@ export interface MetaWriteTarget { connectionId: string; adAccountId: string }
 export interface MetaObjectChange {
   objectId: string
   /** The kind of object (the gateway confirms it before anything is sent). */
-  kind: 'campaign' | 'adset' | 'ad'
+  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
   params: Record<string, string>
   operation: string
   budget?: boolean
   /** Ask the read-back in the same POST (documented for a campaign update only); else a GET reads it back. */
   readBackInPost?: boolean
+  /**
+   * Step 18 — what the read-back must show (field → value as Meta writes it). Default: `status` as sent. A field Meta does
+   * not send back is not judged.
+   */
+  expect?: Record<string, string>
+  /** Step 18 — the fields read back (default id,status,effective_status); on the POST only when `readBackInPost`. */
+  readBackFields?: string
+  /** Step 18 — a create on the object's edge (POST /<id>/budget_schedules): the new object is read back, not the parent. */
+  edge?: 'budget_schedules'
+  /** Step 18 — DELETE (a budget schedule's): Meta's {"success": true} is the answer, nothing is read back. */
+  method?: 'POST' | 'DELETE'
+  /** Step 18 — a budget schedule's campaign or ad set (the gateway checks the period is one of its own). */
+  parent?: { kind: 'campaign' | 'adset'; id: string }
+}
+
+/** Step 18 — what the read-back must show: the request's own `expect`, else its status. */
+export const expectedOf = (change: Pick<MetaObjectChange, 'params' | 'expect'>): Record<string, string> =>
+  change.expect ?? (change.params.status ? { status: change.params.status } : {})
+
+/** Step 18 — what the object reads now, for the fields a change asked (`daily_budget 5000, bid_strategy COST_CAP`). */
+export function readsOf(node: Record<string, unknown>, expected: Record<string, string>): string {
+  const parts = Object.keys(expected).map((field) => {
+    const got = node[field]
+    return `${field} ${got === undefined || got === null ? '(not sent back)' : typeof got === 'object' ? JSON.stringify(got) : String(got)}`
+  })
+  return parts.length ? parts.join(', ') : 'as before'
+}
+
+/** Step 18 review A7 — times are sent as UTC Unix seconds and read back as ISO 8601: both judged as Unix seconds. */
+const TIME_FIELDS = new Set(['start_time', 'end_time', 'time_start', 'time_end'])
+const unixOf = (v: unknown): string => {
+  const text = String(v)
+  if (/^\d{1,11}$/.test(text)) return text
+  const ms = Date.parse(text)
+  return Number.isFinite(ms) ? String(Math.floor(ms / 1000)) : text
+}
+
+/** Step 18 — the fields of a read-back that do not show what was asked (a field not sent back is not judged). */
+export function readBackMismatch(node: Record<string, unknown> | null, expected: Record<string, string>): string[] {
+  if (!node) return []
+  return Object.entries(expected).filter(([field, value]) => {
+    const got = node[field]
+    if (got === undefined || got === null) return false
+    if (TIME_FIELDS.has(field)) return unixOf(got) !== unixOf(value)
+    return (typeof got === 'string' || typeof got === 'number' || typeof got === 'boolean' ? String(got) : JSON.stringify(got)) !== value
+  }).map(([field]) => field)
 }
 
 const MAX_WORDS = 300
@@ -84,7 +130,7 @@ export async function metaCheckChange(target: MetaWriteTarget, change: MetaObjec
   const operation = `${change.operation}.check`
   let answer: GatewayResponse
   try {
-    answer = await metaWriteCall({ connectionId: target.connectionId, operation, objectId: change.objectId, objectKind: change.kind, params: change.params, check: true })
+    answer = await metaWriteCall({ connectionId: target.connectionId, operation, objectId: change.objectId, objectKind: change.kind, params: change.params, check: true, ...(change.parent ? { parent: change.parent } : {}) })
   } catch (err) {
     const failure = failureOfThrow(err) ?? localFailure(`Nexus could not ask Meta's check (${err instanceof Error ? err.message : String(err)}).`, 'NEXUS_ERROR')
     throw new MetaWriteError(failure, operation, 'not_sent')
@@ -111,10 +157,10 @@ export interface MetaChangeResult {
   afterError?: string
 }
 
-/** One GET of the object (id, status, effective_status), or null when it cannot be read — never throws. */
-async function readObject(target: MetaWriteTarget, objectId: string, operation: string): Promise<Record<string, unknown> | null> {
+/** One GET of the object (id, status, effective_status — or the change's own read-back fields), or null when it cannot be read — never throws. */
+async function readObject(target: MetaWriteTarget, objectId: string, operation: string, fields: string = READ_BACK): Promise<Record<string, unknown> | null> {
   try {
-    const read = await metaReadOne({ connectionId: target.connectionId }, { operation, path: objectId, query: { fields: READ_BACK } })
+    const read = await metaReadOne({ connectionId: target.connectionId }, { operation, path: objectId, query: { fields } })
     return read.body && typeof read.body === 'object' ? read.body as Record<string, unknown> : null
   } catch {
     // A Meta refusal, a gateway refusal or a problem of Nexus's own: the object is not read (the caller says so).
@@ -153,10 +199,12 @@ export async function metaSendChange(
     await sleep(waitedMs)
   }
   let answer: GatewayResponse
+  const fields = change.readBackFields ?? READ_BACK
   try {
     answer = await metaWriteCall({
       connectionId: target.connectionId, operation, objectId: change.objectId, objectKind: change.kind,
-      params: { ...change.params, ...(change.readBackInPost ? { fields: READ_BACK } : {}) }, check: false, maxRateWaitMs: WRITE_RATE_WAIT_MS,
+      params: { ...change.params, ...(change.readBackInPost ? { fields } : {}) }, check: false, maxRateWaitMs: WRITE_RATE_WAIT_MS,
+      ...(change.edge ? { edge: change.edge } : {}), ...(change.method === 'DELETE' ? { method: 'DELETE' as const } : {}), ...(change.parent ? { parent: change.parent } : {}),
     })
   } catch (err) {
     // The gateway throws only before it sends (a refusal, or a problem of Nexus's own such as the database): nothing left.
@@ -166,22 +214,37 @@ export async function metaSendChange(
   const body = answer.ok ? answer.json<Record<string, unknown>>() : null
   if (answer.ok && !(body && body.success === false)) {
     if (body && typeof body.status === 'string') return { node: body, readBack: 'same-request', waitedMs }
-    const node = await readObject(target, change.objectId, `${operation}.readBack`)
+    // Step 18 — a DELETE answers {"success": true}: the object is gone, nothing to read back.
+    if (change.method === 'DELETE') return { node: body, readBack: 'none', waitedMs }
+    // Step 18 — a create on an edge answers the NEW object (read-after-write): read back that one, never the parent.
+    if (change.edge) {
+      const created = body && (typeof body.id === 'string' || typeof body.id === 'number') ? String(body.id) : null
+      if (body && created && Object.keys(body).length > 1) return { node: body, readBack: 'same-request', waitedMs }
+      const node = created ? await readObject(target, created, `${operation}.readBack`, fields) : null
+      return { node: node ?? body, readBack: node ? 'second-read' : 'none', waitedMs }
+    }
+    if (change.expect && change.readBackInPost && body && (typeof body.id === 'string' || typeof body.id === 'number')) return { node: body, readBack: 'same-request', waitedMs }
+    const node = await readObject(target, change.objectId, `${operation}.readBack`, fields)
     return { node, readBack: node ? 'second-read' : 'none', waitedMs }
   }
   // Not a plain success: what Meta answered, then what the object is now.
   const failure = answer.ok ? localFailure('Meta answered success: false and gave no reason.', 'CHANGE_FAILED') : changeFailure(answer)
   const unanswered = answer.status === 0 || answer.status >= 500
-  const wanted = change.params.status
-  const node = await readObject(target, change.objectId, `${operation}.readAfterError`)
-  if (node && wanted && node.status === wanted) return { node, readBack: 'second-read', waitedMs, afterError: unanswered ? 'Meta did not answer, or failed on its side' : failure.sentence }
+  const wanted = expectedOf(change)
+  // Step 18 — an edge create or a DELETE cannot be judged by reading the object: Meta's answer is all there is.
+  const node = change.edge || change.method === 'DELETE' ? null : await readObject(target, change.objectId, `${operation}.readAfterError`, fields)
+  if (node && Object.keys(wanted).length && Object.keys(wanted).every((f) => node[f] !== undefined && node[f] !== null) && !readBackMismatch(node, wanted).length) {
+    return { node, readBack: 'second-read', waitedMs, afterError: unanswered ? 'Meta did not answer, or failed on its side' : failure.sentence }
+  }
+  // Step 18 — a create on an edge or a DELETE that Meta answered with an error made nothing (Meta judged it).
+  if ((change.edge || change.method === 'DELETE') && !unanswered) throw new MetaWriteError(failure, operation, 'refused')
   if (!node) {
     const sentence = unanswered
       ? META_UNKNOWN_OUTCOME
       : `${failure.sentence.replace(/ Nothing was changed\.$/, '')} — and Nexus could not read the object back to see whether it changed. Nexus never sends it again by itself; meta-ads-live shows it now.`
     throw new MetaWriteError({ ...failure, sentence }, operation, 'unknown')
   }
-  const reads = `it still reads ${typeof node.status === 'string' ? node.status : 'unchanged'}`
+  const reads = change.expect ? `it reads ${readsOf(node, wanted)}` : `it still reads ${typeof node.status === 'string' ? node.status : 'unchanged'}`
   if (unanswered) {
     throw new MetaWriteError({ ...failure, sentence: `Meta did not confirm it; ${reads}, but Meta may still apply it. Nexus never sends it again by itself; meta-ads-live shows it.` }, operation, 'unknown')
   }
