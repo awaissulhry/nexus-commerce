@@ -171,8 +171,8 @@ describe('create-meta-instant-experience', () => {
     expect(ran!.data).toMatchObject({ canvasId: CANVAS, link: `https://fb.com/canvas_doc/${CANVAS}`, elementIds: ['120000000000801', '120000000000802', '120000000000803'], published: false })
     expect(ran!.change).toEqual({
       before: { action: 'create', pageId: PAGE, canvasId: null, name: 'Experience A', elementIds: [], hidden: null, accountId: 'm-1', adAccountId: '1234567890' },
-      // Review B-1 — the body Nexus SENT (the photo and the footer; the button sits in the footer), in order.
-      after: { action: 'create', pageId: PAGE, canvasId: CANVAS, name: 'Experience A', elementIds: ['120000000000801', '120000000000802', '120000000000803'], hidden: false, bodyElementIds: ['120000000000801', '120000000000803'], accountId: 'm-1', adAccountId: '1234567890' },
+      // Review B-1 — the body Nexus SENT (the photo and the footer; the button sits in the footer), in order; re-review #2 — with their types.
+      after: { action: 'create', pageId: PAGE, canvasId: CANVAS, name: 'Experience A', elementIds: ['120000000000801', '120000000000802', '120000000000803'], hidden: false, bodyElementIds: ['120000000000801', '120000000000803'], bodyElementTypes: ['photo', 'footer'], accountId: 'm-1', adAccountId: '1234567890' },
     })
   })
   it('run: a part Meta refuses stops what holds it and the experience; the parts made are recorded and named; Meta\'s Page limit in words', async () => {
@@ -186,7 +186,7 @@ describe('create-meta-instant-experience', () => {
     expect(ran!.data.steps[2].sentence).toMatch(/stands on step 2/)
     expect(ran!.data).toMatchObject({ canvasId: null, elementIds: ['120000000000801'] })
     expect(ran!.data.sentence).toMatch(/a part has no undo but a delete a person asks for/)
-    expect(ran!.change!.after).toMatchObject({ canvasId: null, elementIds: ['120000000000801'], bodyElementIds: null })
+    expect(ran!.change!.after).toMatchObject({ canvasId: null, elementIds: ['120000000000801'], bodyElementIds: null, bodyElementTypes: null })
   })
   it('undo hides the experience it made (Meta deletes none), valid for set-meta-instant-experience; current() reads it; no experience: words', async () => {
     const change = {
@@ -214,13 +214,39 @@ describe('set-meta-instant-experience', () => {
     expect(preview.ok, JSON.stringify(preview)).toBe(true)
     expect(ran!.ok, JSON.stringify(ran)).toBe(true)
     expect(h.send.mock.calls[1][1]).toMatchObject({ objectId: CANVAS, kind: 'canvas', operation: 'canvas.update', params: { name: 'Experience B', body_element_ids: JSON.stringify([PART, '120000000000805']) } })
-    expect(ran!.change!.after).toMatchObject({ action: 'edit', fields: { name: 'Experience B', elementIds: [PART, '120000000000805'] }, madeElementIds: ['120000000000805'] })
+    expect(ran!.change!.after).toMatchObject({ action: 'edit', fields: { name: 'Experience B', elementIds: [PART, '120000000000805'] }, madeElementIds: ['120000000000805'], bodyElementIds: [PART, '120000000000805'], bodyElementTypes: ['listed', 'text'] })
     const change = ran!.change as { before: unknown; after: unknown }
     const back = set.undo!.request(change)
     expect(back).toEqual({ tool: 'set-meta-instant-experience', args: { connectionId: 'm-1', action: 'edit', canvasId: CANVAS, name: 'Experience A', parts: [{ elementId: PART }], why: expect.stringMatching(/only while it is unpublished/) } })
     expect(() => set.input.parse((back as { args: unknown }).args)).not.toThrow()
     h.canvas = { ...CANVAS_STATE, name: 'Experience B', elementIds: [PART, '120000000000805'] }
     expect(await set.undo!.current(change)).toEqual(change.after)
+  })
+  it('re-review #1 — an edit that adds an automatic video and changes the name: the preview says the parts have no undo; the undo of the name still runs', async () => {
+    const TV = '120000000000806'
+    h.send.mockImplementationOnce(async () => ({ node: { id: TV }, readBack: 'none', waitedMs: 0 }))
+    h.send.mockImplementationOnce(async () => ({ node: { id: CANVAS, name: 'Experience B', is_published: false }, readBack: 'second-read', waitedMs: 0 }))
+    const { preview, ran } = await run(set, { action: 'edit', canvasId: CANVAS, name: 'Experience B', parts: [{ elementId: PART }, { type: 'templateVideo', productSetId: '120000000000061' }] })
+    expect(preview.ok, JSON.stringify(preview)).toBe(true)
+    expect(preview.preview.warnings.join(' ')).toMatch(/Undo: Parts: the new body holds step 1 \(automatic video from a product set\), which Meta's read-back of its body \(body_elements\) does not list .*the undo cannot put the parts back/)
+    expect(ran!.ok, JSON.stringify(ran)).toBe(true)
+    const change = ran!.change as { before: Record<string, any>; after: Record<string, any> }
+    // The parts are neither recorded nor compared for the undo; the body sent and its types are kept.
+    expect(change.before.fields).toEqual({ name: 'Experience A' })
+    expect(change.after).toMatchObject({ fields: { name: 'Experience B' }, bodyElementIds: [PART, TV], bodyElementTypes: ['listed', 'templateVideo'], madeElementIds: [TV] })
+    expect(change.after.fields).not.toHaveProperty('elementIds')
+    // Meta's read-back does not list the automatic video: the undo's check still sees the edit as it left it.
+    h.canvas = { ...CANVAS_STATE, name: 'Experience B', elementIds: [PART], sentElementIds: [PART, TV], sentElementTypes: ['listed', 'templateVideo'] }
+    expect(await set.undo!.current(change)).toEqual(change.after)
+    const back = set.undo!.request(change)
+    expect(back).toEqual({ tool: 'set-meta-instant-experience', args: { connectionId: 'm-1', action: 'edit', canvasId: CANVAS, name: 'Experience A', why: expect.stringMatching(/only while it is unpublished/) } })
+    // And the undo itself is a change Nexus takes: the name, one request.
+    const undone = (await set.handler(set.input.parse((back as { args: unknown }).args) as Record<string, unknown>, asker)) as Out
+    expect(undone.ok, JSON.stringify(undone)).toBe(true)
+    expect(undone.preview.requests.map((r: { label: string }) => r.label)).toEqual([`Change the Instant Experience "Experience B" (${CANVAS})`])
+    // Another name since: changed, said by the undo's check.
+    h.canvas = { ...h.canvas, name: 'Experience C' }
+    expect(await set.undo!.current(change)).toMatchObject({ fields: { name: 'Experience C' } })
   })
   it('review B-6 — an edit of the colour to RRGGBB: Meta reads it back as FF + it, and its undo still sees it unchanged', async () => {
     h.send.mockImplementationOnce(async () => ({ node: { id: CANVAS, is_published: false, background_color: 'FF000000' }, readBack: 'second-read', waitedMs: 0 }))

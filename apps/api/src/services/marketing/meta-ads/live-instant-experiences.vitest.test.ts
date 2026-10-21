@@ -1,8 +1,8 @@
 /**
  * Meta step 27b review B-1 — the live state an Instant Experience change stands on: Meta's read-back of its parts
  * (body_elements, and fb_body_elements when Meta answers it — each row's own id, or its `element`'s) and the body Nexus last
- * SENT (its own change records: a create's bodyElementIds, a later edit's fields.elementIds). Meta and the database are
- * stand-ins. Made-up ids.
+ * SENT (its own change records: a create's or a later edit's bodyElementIds — an edit's fields.elementIds before re-review
+ * #2 — with each part's type, bodyElementTypes). Meta and the database are stand-ins. Made-up ids.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -57,6 +57,7 @@ describe('an Instant Experience as a change reads it', () => {
       canvasId: CANVAS, published: false, elementIds: ['120000000000711', '120000000000712'],
       fbElementIds: ['120000000000711', '120000000000712', '120000000000713'],
       sentElementIds: ['120000000000711', '120000000000712', '120000000000713'],
+      sentElementTypes: null,
     })
     expect(h.reads[1].fields.split(',')).toEqual(expect.arrayContaining(['body_elements', 'fb_body_elements']))
     expect(h.where).toEqual({
@@ -78,8 +79,22 @@ describe('an Instant Experience as a change reads it', () => {
       { after: { action: 'hide', pageId: PAGE, canvasId: CANVAS, hidden: true } },
       { after: { action: 'create', pageId: PAGE, canvasId: CANVAS, bodyElementIds: ['120000000000711', '120000000000713'] } },
     ]
-    expect(await nexusIxBodyOf(PAGE, CANVAS)).toEqual(['120000000000711', '120000000000713'])
+    expect(await nexusIxBodyOf(PAGE, CANVAS)).toEqual({ ids: ['120000000000711', '120000000000713'], types: null })
     h.rows = [{ after: { action: 'create', pageId: PAGE, canvasId: CANVAS, bodyElementIds: null } }]
     expect(await nexusIxBodyOf(PAGE, CANVAS)).toBeNull()
+  })
+  it('re-review #2 — the body Nexus sent comes with each part\'s type; an edit whose parts have no undo keeps its body in bodyElementIds; types that are not one per part are not taken', async () => {
+    h.answer = answers(() => CANVAS_READ)
+    h.rows = [
+      { after: { action: 'edit', pageId: PAGE, canvasId: CANVAS, fields: { name: 'Experience B' }, bodyElementIds: ['120000000000711', '120000000000713'], bodyElementTypes: ['listed', 'templateVideo'] } },
+      { after: { action: 'create', pageId: PAGE, canvasId: CANVAS, bodyElementIds: ['120000000000711'], bodyElementTypes: ['photo'] } },
+    ]
+    expect(await liveIxCanvas('m-1', CANVAS)).toMatchObject({ sentElementIds: ['120000000000711', '120000000000713'], sentElementTypes: ['listed', 'templateVideo'] })
+    h.rows = [{ after: { action: 'create', pageId: PAGE, canvasId: CANVAS, bodyElementIds: ['120000000000711', '120000000000713'], bodyElementTypes: ['photo', null] } }]
+    expect(await nexusIxBodyOf(PAGE, CANVAS)).toEqual({ ids: ['120000000000711', '120000000000713'], types: ['photo', null] })
+    h.rows = [{ after: { action: 'create', pageId: PAGE, canvasId: CANVAS, bodyElementIds: ['120000000000711', '120000000000713'], bodyElementTypes: ['photo'] } }]
+    expect(await nexusIxBodyOf(PAGE, CANVAS)).toEqual({ ids: ['120000000000711', '120000000000713'], types: null })
+    h.rows = [{ after: { action: 'create', pageId: PAGE, canvasId: CANVAS, bodyElementIds: ['120000000000711'], bodyElementTypes: [7] } }]
+    expect(await nexusIxBodyOf(PAGE, CANVAS)).toEqual({ ids: ['120000000000711'], types: null })
   })
 })

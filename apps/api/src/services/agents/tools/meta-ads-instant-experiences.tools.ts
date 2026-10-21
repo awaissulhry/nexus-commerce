@@ -235,8 +235,10 @@ const createMetaInstantExperience: AgentTool = {
     const elementIds = madePartIds(done)
     const made = done.find(({ request }) => request.operation === 'canvas.create')
     const canvasId = made ? createdIdOf(made.result.node) : null
-    // Review B-1 — the body Nexus SENT, in order (Meta's read-back may not list every part of it).
+    // Review B-1 — the body Nexus SENT, in order (Meta's read-back may not list every part of it); re-review #2 — with each
+    // part's type, from the draft (null: an existing part Nexus did not make).
     const bodyElementIds = canvasId ? ixSentBody(done, 'canvas.create') ?? null : null
+    const bodyElementTypes = bodyElementIds ? (draft.after as IxCreateRecord).bodyElementTypes ?? null : null
     const readHidden = made?.result.node && typeof made.result.node.is_hidden === 'boolean' ? made.result.node.is_hidden : null
     const hidden = canvasId ? readHidden ?? (args.hidden === true) : null
     return {
@@ -248,7 +250,7 @@ const createMetaInstantExperience: AgentTool = {
           : 'The Instant Experience itself was not made: the parts made are named above and stay on the Page (remove-meta-ads-items deletes a part on an explicit ask; set-meta-instant-experience cannot use them before an experience exists).',
       },
       before: { ...before },
-      after: { action: 'create', pageId: before.pageId, canvasId, name: before.name, elementIds, hidden, bodyElementIds } satisfies IxCreateRecord,
+      after: { action: 'create', pageId: before.pageId, canvasId, name: before.name, elementIds, hidden, bodyElementIds, bodyElementTypes } satisfies IxCreateRecord,
       ...(canvasId ? {} : { noUndo: `Meta made ${elementIds.length} part(s) but not the Instant Experience: a part has no undo but a delete a person asks for (remove-meta-ads-items, kind canvaselement).` }),
     }
   }),
@@ -357,8 +359,9 @@ const setMetaInstantExperience: AgentTool = {
     + 'an ad that links to it does (create-meta-creative with https://fb.com/canvas_doc/<id>, then create-meta-ad); showing '
     + 'a published one again may let such an ad show it again (SPENDS MONEY is said). Every request goes AS the Page: '
     + 'Nexus\'s gateway reads the chosen Page\'s own token for it (the system user needs the Page\'s Advertise task) — a '
-    + 'token is never shown. Undo: an edit puts the old values back while unpublished (swipe to open and a hero asset or '
-    + 'template that was not there cannot be put back: said), hide ⇄ show again; a publish has none.'
+    + 'token is never shown. Undo: an edit puts the old values back while unpublished (swipe to open, a hero asset or '
+    + 'template that was not there, and the parts when the new body holds an automatic video, lead form or existing post — '
+    + 'Meta\'s read-back does not list them — cannot be put back: said), hide ⇄ show again; a publish has none.'
     + META_CHANGE_RULES,
   undo: setUndo,
   handler: (args, ctx) => metaChangePreview(args, ctx, buildSet(args)),
@@ -371,7 +374,16 @@ const setMetaInstantExperience: AgentTool = {
       const made = madePartIds(done)
       // The parts as sent: an existing part's id, or the id Meta answered for a part this run made (`@<step>`).
       const elementIds = ixSentBody(done, 'canvas.update')
-      record = { ...after, fields: { ...(after.fields ?? {}), ...(elementIds ? { elementIds } : {}) }, ...(made.length ? { madeElementIds: made } : {}) }
+      // Re-review #1 — the undo compares the parts only when the draft recorded the old ones (Meta's read-back lists every part
+      // of the new body); re-review #2 — the body sent and its parts' types are always recorded (bodyElementIds, bodyElementTypes).
+      const compareParts = 'elementIds' in (before.fields ?? {})
+      const { bodyElementTypes, ...rest } = after
+      record = {
+        ...rest,
+        fields: { ...(after.fields ?? {}), ...(elementIds && compareParts ? { elementIds } : {}) },
+        ...(elementIds ? { bodyElementIds: elementIds, ...(bodyElementTypes ? { bodyElementTypes } : {}) } : {}),
+        ...(made.length ? { madeElementIds: made } : {}),
+      }
     } else if (after.action === 'publish') {
       record = { ...after, published: node && typeof node.is_published === 'boolean' ? node.is_published : after.published ?? null }
     } else {

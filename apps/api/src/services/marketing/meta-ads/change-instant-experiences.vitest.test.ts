@@ -206,21 +206,69 @@ describe('set-meta-instant-experience as drafts', () => {
   })
   it('review B-1 — an edit whose new body leaves out a part the read-back does not list (Nexus sent it, or fb_body_elements names it) is refused, naming it; its undo cannot put such a body back', () => {
     const TV = '120000000000713'
+    // A record without types (kept before re-review #2): its parts count as before, of a type unknown to Nexus.
     const sent = canvas({ elementIds: [PART], sentElementIds: [PART, TV] })
     expect(ixUnlistedParts(sent)).toEqual([TV])
     const lost = refusalOf(ixEditDraft({ parts: [{ elementId: PART }, { type: 'text', text: 'Neu' }] }, sent))
-    expect(lost).toMatch(new RegExp(`holds part ${TV} \\(the body Nexus last sent names it\\), which Meta's read-back of its body \\(body_elements\\) does not list .* would be lost: name it in the parts .*Nothing was sent`))
+    expect(lost).toMatch(new RegExp(`holds part ${TV} \\(its type unknown to Nexus; Nexus last sent it, unless it was removed in Meta's editor\\), which Meta's read-back of its body \\(body_elements\\) does not list .* would be lost: name it in the parts .*Nothing was sent`))
     expect(refusalOf(ixEditDraft({ parts: [{ type: 'text', text: 'Neu' }] }, canvas({ elementIds: [PART], fbElementIds: [PART, TV] })))).toMatch(new RegExp(`part ${TV} \\(Meta's fb_body_elements names it\\)`))
-    // Named in the body: sent, and the old body cannot be put back (it would lose it).
+    // Named in the body: sent; the parts have no undo (Meta's read-back does not list it) and are not recorded for one.
     const kept = draftOf(ixEditDraft({ name: 'Experience B', parts: [{ elementId: PART }, { elementId: TV }, { type: 'text', text: 'Neu' }] }, sent))
     expect(kept.requests.map((r) => r.operation)).toEqual(['canvas.element.create', 'canvas.update'])
     expect(kept.changes['Parts in order']).toMatchObject({ from: `${PART} (and ${TV}, which Meta's read-back does not list)` })
-    expect(kept.before).toMatchObject({ undo: { action: 'edit', canvasId: CANVAS, name: 'Experience A' } })
+    expect(kept.before).toMatchObject({ fields: { name: 'Experience A' }, undo: { action: 'edit', canvasId: CANVAS, name: 'Experience A' } })
+    expect((kept.before as { fields: Record<string, unknown> }).fields).not.toHaveProperty('elementIds')
     expect((kept.before as { undo: Record<string, unknown> }).undo.parts).toBeUndefined()
-    expect((kept.before as { noUndo: string[] }).noUndo.join(' ')).toMatch(new RegExp(`Parts: Meta's read-back of the old body \\(body_elements\\) does not list ${TV} .*without losing it`))
+    expect((kept.before as { noUndo: string[] }).noUndo.join(' ')).toMatch(new RegExp(`Parts: the new body holds part ${TV} \\(its type unknown to Nexus\\), which Meta's read-back of its body \\(body_elements\\) does not list .*the undo cannot put the parts back`))
+    expect(kept.after).toMatchObject({ bodyElementTypes: ['listed', null, 'text'] })
     // A name alone never touches the parts; a body the read-back lists in full is put back as before.
     expect(draftOf(ixEditDraft({ name: 'Experience B' }, sent)).requests).toHaveLength(1)
     expect(draftOf(ixEditDraft({ parts: [{ type: 'text', text: 'Neu' }, { elementId: PART }] }, canvas({ sentElementIds: [PART] }))).before).toMatchObject({ undo: { parts: [{ elementId: PART }] } })
+  })
+  it('re-review #2 — each part\'s type is kept: a photo removed in Meta\'s editor neither blocks an edit nor is made final by a publish; an automatic video, a lead form or an existing post Nexus sent still blocks', () => {
+    const PHOTO = '120000000000712'
+    const TV = '120000000000713'
+    // Nexus sent [PART, PHOTO, TV]; a person removed PHOTO in Meta's editor; body_elements lists PART (no automatic video).
+    const typed = canvas({ elementIds: [PART], sentElementIds: [PART, PHOTO, TV], sentElementTypes: ['photo', 'photo', 'templateVideo'] })
+    expect(ixUnlistedParts(typed)).toEqual([TV])
+    const edit = draftOf(ixEditDraft({ parts: [{ elementId: PART }, { elementId: TV }, { type: 'text', text: 'Neu' }] }, typed))
+    expect(edit.requests.map((r) => r.operation)).toEqual(['canvas.element.create', 'canvas.update'])
+    expect(edit.changes['Parts in order']).toMatchObject({ from: `${PART} (and ${TV}, which Meta's read-back does not list)` })
+    expect(edit.after).toMatchObject({ bodyElementTypes: ['photo', 'templateVideo', 'text'] })
+    expect(refusalOf(ixEditDraft({ parts: [{ elementId: PART }, { type: 'text', text: 'Neu' }] }, typed))).toMatch(new RegExp(`holds part ${TV} \\(an automatic video; Nexus last sent it, unless it was removed in Meta's editor\\), .* would be lost`))
+    for (const [type, word] of [['leadForm', 'a lead form'], ['existingPost', 'an existing post']] as const) {
+      const other = canvas({ elementIds: [PART], sentElementIds: [PART, TV], sentElementTypes: ['photo', type] })
+      expect(refusalOf(ixEditDraft({ parts: [{ elementId: PART }, { type: 'text', text: 'Neu' }] }, other))).toMatch(new RegExp(`holds part ${TV} \\(${word}; Nexus last sent it, unless it was removed in Meta's editor\\)`))
+    }
+    // Only the photo removed in Meta's editor: nothing held, nothing refused, the parts keep their undo.
+    const removed = canvas({ elementIds: [PART], sentElementIds: [PART, PHOTO], sentElementTypes: ['photo', 'photo'] })
+    expect(ixUnlistedParts(removed)).toEqual([])
+    const again = draftOf(ixEditDraft({ parts: [{ elementId: PART }, { type: 'text', text: 'Neu' }] }, removed))
+    expect(again.changes['Parts in order']).toMatchObject({ from: PART })
+    expect(again.before).toMatchObject({ fields: { elementIds: [PART] }, undo: { parts: [{ elementId: PART }] } })
+    // … nor is it listed as made final by a publish; the automatic video is.
+    const publish = draftOf(ixPublishDraft(removed))
+    expect(Object.keys(publish.changes).join(' ')).not.toContain(PHOTO)
+    expect(publish.summary).toMatch(/its 1 part is final/)
+    expect(draftOf(ixPublishDraft(typed)).changes).toMatchObject({ [`Part ${TV}`]: { from: 'can be edited', to: `final (an automatic video; Nexus last sent it, unless it was removed in Meta's editor; Meta's read-back does not list it)` } })
+    expect(Object.keys(draftOf(ixPublishDraft(typed)).changes).join(' ')).not.toContain(PHOTO)
+    // 'listed' is a part Meta listed when Nexus sent it; a word Nexus does not know, or a null entry, counts as before.
+    expect(ixUnlistedParts(canvas({ elementIds: [PART], sentElementIds: [PART, PHOTO], sentElementTypes: ['listed', 'listed'] }))).toEqual([])
+    expect(ixUnlistedParts(canvas({ elementIds: [PART], sentElementIds: [PART, PHOTO], sentElementTypes: ['photo', 'gallery'] }))).toEqual([PHOTO])
+    expect(ixUnlistedParts(canvas({ elementIds: [PART], sentElementIds: [PART, PHOTO], sentElementTypes: ['photo', null] }))).toEqual([PHOTO])
+    // A create records the type of each part of its body (an existing part's: not known).
+    expect(draftOf(ixCreateDraft({ name: 'Experience A', parts: [...COLLECTION, { elementId: PART }] }, ctx)).after).toMatchObject({ bodyElementTypes: ['photo', 'productSet', 'footer', null] })
+  })
+  it('re-review #1 — an edit that makes or keeps a part the read-back does not list says the parts have no undo; the name keeps its undo; the parts are neither recorded nor compared for it', () => {
+    const d = draftOf(ixEditDraft({ name: 'Experience B', parts: [{ elementId: PART }, { type: 'templateVideo', productSetId: SET }] }, canvas()))
+    expect(d.before).toMatchObject({ fields: { name: 'Experience A' }, undo: { action: 'edit', canvasId: CANVAS, name: 'Experience A' } })
+    expect((d.before as { fields: Record<string, unknown> }).fields).not.toHaveProperty('elementIds')
+    expect((d.before as { undo: Record<string, unknown> }).undo.parts).toBeUndefined()
+    expect(d.warnings.join(' ')).toMatch(/Undo: Parts: the new body holds step 1 \(automatic video from a product set\), which Meta's read-back of its body \(body_elements\) does not list .*the undo cannot put the parts back/)
+    expect(d.warnings.join(' ')).not.toMatch(/Its undo puts the old values back/)
+    expect(d.after).toMatchObject({ fields: { name: 'Experience B' }, bodyElementTypes: ['listed', 'templateVideo'] })
+    // A part of a type Meta lists: the parts keep their undo.
+    expect(draftOf(ixEditDraft({ name: 'Experience B', parts: [{ elementId: PART }, { type: 'text', text: 'Neu' }] }, canvas())).before).toMatchObject({ fields: { elementIds: [PART] }, undo: { name: 'Experience A', parts: [{ elementId: PART }] } })
   })
   it('review B-6 — a colour Meta reads as AARRGGBB is already the RRGGBB asked; the read-back check takes FF + the six digits', () => {
     expect(draftOf(ixEditDraft({ backgroundColor: 'FFFFFF' }, canvas()))).toMatchObject({ requests: [], skipped: ['Background colour is already FFFFFF.'] })
@@ -250,7 +298,7 @@ describe('set-meta-instant-experience as drafts', () => {
     expect(listed.changes).toMatchObject({
       [`Part 1: ${PART}`]: { from: 'can be edited', to: 'final' },
       'Part 2: 120000000000712': { from: 'can be edited', to: 'final' },
-      'Part 120000000000713': { from: 'can be edited', to: expect.stringMatching(/final \(the body Nexus last sent names it; Meta's read-back does not list it\)/) },
+      'Part 120000000000713': { from: 'can be edited', to: expect.stringMatching(/final \(its type unknown to Nexus; Nexus last sent it, unless it was removed in Meta's editor; Meta's read-back does not list it\)/) },
     })
     expect(listed.summary).toMatch(/its 3 parts are final/)
     expect(listed.totals).toMatchObject({ parts: 3 })

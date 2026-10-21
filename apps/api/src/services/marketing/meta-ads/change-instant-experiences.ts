@@ -296,8 +296,9 @@ export function madeIdOf(done: ReadonlyArray<{ request: MetaChangeRequest; resul
   return id
 }
 
-/** A part as the body or a container names it: an existing part's id, or the step of this change that makes it. */
-type Ref = { id: string } | { step: number; word: string }
+/** A part as the body or a container names it: an existing part's id, or the step of this change that makes it (and its type). */
+type MadeRef = { step: number; word: string; type: IxPartType }
+type Ref = { id: string } | MadeRef
 const refWord = (r: Ref) => ('id' in r ? `part ${r.id}` : `step ${r.step} (${r.word})`)
 
 interface Planned { requests: MetaChangeRequest[]; refs: Ref[]; made: number; lines: Array<[string, unknown, unknown]> }
@@ -335,7 +336,7 @@ function planParts(items: IxPartInput[], pageId: string, firstStep: number): Pla
     const judged = META_CANVAS_ELEMENT_JUDGES[key](sample, key, ids)
     if (judged) return { refusal: `Nexus would not send ${where} (a ${WORD[type]}): ${judged}.` }
     const step = firstStep + requests.length
-    const childSteps = childRefs.filter((r): r is { step: number; word: string } => 'step' in r).map((r) => r.step)
+    const childSteps = childRefs.filter((r): r is MadeRef => 'step' in r).map((r) => r.step)
     const operation = 'canvas.element.create'
     // Review A-2 — what goes into it, in the label (one per part) and the change line.
     const content = ixPartContent(p as IxPartInput & { type: IxPartType }, childRefs.map(refWord).join(', '))
@@ -353,7 +354,7 @@ function planParts(items: IxPartInput[], pageId: string, firstStep: number): Pla
       check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, skipReadBack: true, explain: IX_EXPLAIN, asPage: true,
     })
     lines.push([`Part ${step}: ${WORD[type]}${p.name ? ` "${p.name}"` : ''}`, 'none', `new — ${content}`])
-    return { step, word: WORD[type] }
+    return { step, word: WORD[type], type }
   }
   const refs: Ref[] = []
   for (const [i, item] of items.entries()) {
@@ -420,9 +421,10 @@ export interface IxCreateInput {
 /**
  * What a create records (undo hides the experience it made; its parts are named so remove-meta-ads-items can delete them).
  * Review B-1 — `bodyElementIds`: the body Nexus SENT (body_element_ids, in order), which Meta's read-back may not list in
- * full; an edit or undo that would lose one of them is refused (ixUnlistedParts).
+ * full; an edit or undo that would lose one of them is refused (ixUnlistedParts). Re-review #2 — `bodyElementTypes`: each
+ * sent part's type, in the same order (null: Nexus does not know it — an existing part named by elementId).
  */
-export interface IxCreateRecord { action: 'create'; pageId: string; canvasId: string | null; name: string; elementIds: string[]; hidden: boolean | null; bodyElementIds?: string[] | null }
+export interface IxCreateRecord { action: 'create'; pageId: string; canvasId: string | null; name: string; elementIds: string[]; hidden: boolean | null; bodyElementIds?: string[] | null; bodyElementTypes?: Array<IxSentType | null> | null }
 
 const canvasFields = (c: { backgroundColor?: string; swipeToOpen?: boolean; template?: string; heroFacebookPostId?: string; heroInstagramMediaId?: string }) => ({
   ...(has(c.backgroundColor) ? { background_color: c.backgroundColor! } : {}),
@@ -493,7 +495,8 @@ export function ixCreateDraft(input: IxCreateInput, ctx: IxContext): MetaChangeD
     requests: [...planned.requests, request],
     stands: { pageId: ctx.pageId, existingParts: planned.refs.filter((r): r is { id: string } => 'id' in r).map((r) => r.id) },
     before,
-    after: { ...before },
+    // Re-review #2 — the type of each part the body names, in order (the run records it beside the ids it sent).
+    after: { ...before, bodyElementTypes: planned.refs.map((r) => ('id' in r ? null : r.type)) },
   }
 }
 
@@ -519,6 +522,12 @@ export interface IxSetRecord {
   noUndo?: string[]
   /** edit (after): the parts this change made new. */
   madeElementIds?: string[]
+  /**
+   * edit (after), re-review #2 — the body this change SENT (body_element_ids, in order) and each part's type (null: not known
+   * to Nexus). `fields.elementIds` holds it too, for the undo, only when Meta's read-back lists every part of it.
+   */
+  bodyElementIds?: string[]
+  bodyElementTypes?: Array<IxSentType | null>
   published?: boolean | null
   hidden?: boolean | null
 }
@@ -537,23 +546,56 @@ export interface IxEditInput {
 const whoOf = (c: IxCanvasState) => `Instant Experience "${c.name ?? 'no name'}" (${c.canvasId})`
 
 /**
+ * The type of a part as Nexus recorded it when it sent the body: a part type, `listed` (a part Meta's read-back listed when
+ * Nexus sent it), or null — not known (a record without types, an existing part Nexus did not make).
+ */
+export type IxSentType = IxPartType | 'listed'
+/** Re-review #2 — the part types Meta's canvas reference does not list in body_elements (fb_body_elements adds the automatic video). */
+const UNLISTED_TYPES: ReadonlySet<IxPartType> = new Set(['templateVideo', 'leadForm', 'existingPost'])
+const UNLISTED_WORD: Readonly<Partial<Record<IxPartType, string>>> = { templateVideo: 'an automatic video', leadForm: 'a lead form', existingPost: 'an existing post' }
+
+/** The type Nexus recorded for a part of the body it last sent, or null. */
+const sentTypeOf = (canvas: IxCanvasState, id: string): IxSentType | null => {
+  const i = canvas.sentElementIds?.indexOf(id) ?? -1
+  const t = i >= 0 ? canvas.sentElementTypes?.[i] ?? null : null
+  return t === 'listed' || (IX_PART_TYPES as readonly string[]).includes(t ?? '') ? t as IxSentType : null
+}
+
+/**
+ * Re-review #2 — whether a part Meta's read-back (body_elements) does not list now is still held by the experience: Meta's
+ * fb_body_elements names it, or Nexus sent it as a type body_elements does not list, or Nexus knows no type of it (counted
+ * as before: never lost unseen). A part of any other type that body_elements no longer lists was removed in Meta's editor.
+ */
+const unlistedPart = (canvas: IxCanvasState, id: string): boolean => {
+  if (canvas.elementIds?.includes(id)) return false
+  if (canvas.fbElementIds?.includes(id)) return true
+  const t = sentTypeOf(canvas, id)
+  return t === null || (t !== 'listed' && UNLISTED_TYPES.has(t))
+}
+
+/**
  * Review B-1 — the parts an Instant Experience holds that Meta's read-back (body_elements) does not list: its canvas
  * reference lists only photo, header, video, text, carousel, button, footer, store locator, product list and product set
  * there — no automatic video, lead form or existing post (fb_body_elements adds the automatic video). Nexus knows them
- * from the body it last sent (its change records) and from fb_body_elements when Meta answers it.
+ * from the body it last sent (its change records, with each part's type: re-review #2) and from fb_body_elements when
+ * Meta answers it.
  */
 export function ixUnlistedParts(canvas: IxCanvasState): string[] {
-  const listed = new Set(canvas.elementIds ?? [])
-  return [...new Set([...(canvas.sentElementIds ?? []), ...(canvas.fbElementIds ?? [])])].filter((id) => !listed.has(id))
+  return [...new Set([...(canvas.sentElementIds ?? []), ...(canvas.fbElementIds ?? [])])].filter((id) => unlistedPart(canvas, id))
 }
-/** Who names these parts: "the body Nexus last sent names it", "… and Meta's fb_body_elements name them". */
-const whenceOf = (canvas: IxCanvasState, ids: string[]) => {
-  const who = [
-    ids.some((id) => canvas.sentElementIds?.includes(id)) ? 'the body Nexus last sent' : null,
-    ids.some((id) => canvas.fbElementIds?.includes(id)) ? 'Meta\'s fb_body_elements' : null,
-  ].filter(Boolean)
-  return `${who.join(' and ')} ${who.length > 1 ? 'name' : 'names'} ${ids.length === 1 ? 'it' : 'them'}`
+/** What such a part is, in words: "an automatic video", "its type unknown to Nexus"; null when only fb_body_elements says. */
+const kindOf = (canvas: IxCanvasState, id: string): string | null => {
+  const t = sentTypeOf(canvas, id)
+  if (t) return t === 'listed' ? null : UNLISTED_WORD[t] ?? null
+  return canvas.fbElementIds?.includes(id) ? null : 'its type unknown to Nexus'
 }
+/** Who names such a part: Meta's fb_body_elements, or the body Nexus last sent (unless a person removed it in Meta's editor since). */
+const whenceOf = (canvas: IxCanvasState, id: string): string | null => {
+  if (canvas.fbElementIds?.includes(id)) return 'Meta\'s fb_body_elements names it'
+  return canvas.sentElementIds?.includes(id) ? 'Nexus last sent it, unless it was removed in Meta\'s editor' : null
+}
+/** Such a part in words: "120… (an automatic video; Nexus last sent it, unless it was removed in Meta's editor)". */
+const heldWords = (canvas: IxCanvasState, id: string) => `${id} (${[kindOf(canvas, id), whenceOf(canvas, id)].filter(Boolean).join('; ')})`
 const sameList = (a: string[] | null | undefined, b: string[] | null | undefined) => !!a && !!b && a.length === b.length && a.every((x, i) => x === b[i])
 
 /** The edit of an unpublished Instant Experience as a draft: new parts first, then ONE POST /{canvas} with the fields changed. */
@@ -590,6 +632,8 @@ export function ixEditDraft(input: IxEditInput, canvas: IxCanvasState): MetaChan
     noUndo.push('Swipe to open: Meta does not read enable_swipe_to_open back (it is no Canvas field in Meta\'s SDK), so the undo cannot put the old setting back.')
   }
   let planned: Planned | null = null
+  let bodyTypes: Array<IxSentType | null> | null = null
+  let held: Ref[] = []
   if (input.parts !== undefined) {
     if (!input.parts.length) return { refusal: 'An Instant Experience keeps at least one part: name the whole body in its new order.' }
     const p = planParts(input.parts, canvas.pageId, 1)
@@ -597,16 +641,22 @@ export function ixEditDraft(input: IxEditInput, canvas: IxCanvasState): MetaChan
     const newIds = p.refs.map((r) => ('id' in r ? r.id : null))
     if (!p.made && sameList(newIds as string[], canvas.elementIds)) skipped.push('The parts are already in this order.')
     else {
-      // Review B-1 — a part Meta's read-back does not list (but Nexus sent, or fb_body_elements names) that the new body leaves
-      // out would be lost without anyone seeing it: refused in words, never sent.
+      // Review B-1 — a part Meta's read-back does not list (but Nexus sent as such a type, or fb_body_elements names) that the
+      // new body leaves out would be lost without anyone seeing it: refused in words, never sent. Re-review #2 — a part of a
+      // type Meta lists that it no longer lists was removed in Meta's editor: not held, not refused.
       const kept = new Set(newIds.filter((id): id is string => !!id))
       const lost = ixUnlistedParts(canvas).filter((id) => !kept.has(id))
       if (lost.length) {
         const them = lost.length === 1 ? 'it' : 'them'
-        return { refusal: `Nexus would not send this edit: the ${who} holds ${lost.length === 1 ? 'part' : 'parts'} ${lost.join(', ')} (${whenceOf(canvas, lost)}), which Meta's read-back of its body (body_elements) does not list — its reference lists no automatic video, lead form or existing post there. The new body leaves ${them} out, so ${lost.length === 1 ? 'it' : 'they'} would be lost: name ${them} in the parts where ${lost.length === 1 ? 'it belongs' : 'they belong'} (by elementId). Nothing was sent.` }
+        return { refusal: `Nexus would not send this edit: the ${who} holds ${lost.length === 1 ? 'part' : 'parts'} ${lost.map((id) => heldWords(canvas, id)).join(', ')}, which Meta's read-back of its body (body_elements) does not list — its reference lists no automatic video, lead form or existing post there. The new body leaves ${them} out, so ${lost.length === 1 ? 'it' : 'they'} would be lost: name ${them} in the parts where ${lost.length === 1 ? 'it belongs' : 'they belong'} (by elementId). Nothing was sent.` }
       }
       planned = p
-      oldFields.elementIds = canvas.elementIds
+      // Re-review #2 — each part's type, recorded beside the body sent (a part Meta lists now and Nexus knows no type of: 'listed').
+      bodyTypes = p.refs.map((r) => ('id' in r ? sentTypeOf(canvas, r.id) ?? (canvas.elementIds?.includes(r.id) ? 'listed' : null) : r.type))
+      // Re-review #1 — a part of the new body Meta's read-back will not list (made now or kept): Nexus cannot see it, so the
+      // undo neither records nor compares the parts (the other fields keep their undo).
+      held = p.refs.filter((r) => ('id' in r ? unlistedPart(canvas, r.id) : UNLISTED_TYPES.has(r.type)))
+      if (!held.length) oldFields.elementIds = canvas.elementIds
       lines.push(...p.lines)
       const unlisted = ixUnlistedParts(canvas)
       lines.push(['Parts in order', `${canvas.elementIds?.join(', ') ?? 'not read'}${unlisted.length ? ` (and ${unlisted.join(', ')}, which Meta's read-back does not list)` : ''}`, p.refs.map(refWord).join(', ')])
@@ -618,10 +668,7 @@ export function ixEditDraft(input: IxEditInput, canvas: IxCanvasState): MetaChan
   // What the undo sends: the old values Meta read (a value it did not read, or none to send back, cannot be put back).
   for (const [key, old] of Object.entries(oldFields) as Array<[keyof IxEditFields, unknown]>) {
     if (key === 'elementIds') {
-      // Review B-1 — an old body Meta's read-back does not list in full cannot be put back without losing what it leaves out.
-      const unlisted = ixUnlistedParts(canvas)
-      if (unlisted.length) noUndo.push(`Parts: Meta's read-back of the old body (body_elements) does not list ${unlisted.join(', ')} (${whenceOf(canvas, unlisted)}), so the undo cannot put the old body back without losing ${unlisted.length === 1 ? 'it' : 'them'}.`)
-      else if (Array.isArray(old) && old.length) undo.parts = (old as string[]).map((id) => ({ elementId: id }))
+      if (Array.isArray(old) && old.length) undo.parts = (old as string[]).map((id) => ({ elementId: id }))
       else noUndo.push('Parts: Nexus could not read the old parts (or there were none), so the undo cannot put them back.')
     } else if (old === null || old === undefined) {
       noUndo.push(`${key === 'heroFacebookPostId' || key === 'heroInstagramMediaId' ? 'Hero asset' : key === 'template' ? 'Template' : key}: there was none (or Meta did not read it), and Meta documents no way to clear it, so the undo leaves it.`)
@@ -633,6 +680,15 @@ export function ixEditDraft(input: IxEditInput, canvas: IxCanvasState): MetaChan
     else if (key === 'heroFacebookPostId') undo.heroFacebookPostId = old
     else if (key === 'heroInstagramMediaId') undo.heroInstagramMediaId = old
     else if (key === 'template') undo.template = old
+  }
+  // Re-review #1 — the parts of the new body Meta's read-back does not list: said, with no undo for the parts.
+  if (held.length) {
+    const words = held.map((r) => {
+      if (!('id' in r)) return refWord(r)
+      const kind = kindOf(canvas, r.id)
+      return `part ${r.id}${kind ? ` (${kind})` : ''}`
+    })
+    noUndo.push(`Parts: the new body holds ${words.join(', ')}, which Meta's read-back of its body (body_elements) does not list — its reference lists no automatic video, lead form or existing post there — so Nexus cannot see whether the parts stay as this edit leaves them, and the undo cannot put the parts back.`)
   }
   const operation = 'canvas.update'
   const needsIds = !!planned?.refs.some((r) => 'step' in r)
@@ -671,7 +727,7 @@ export function ixEditDraft(input: IxEditInput, canvas: IxCanvasState): MetaChan
     requests: [...(planned?.requests ?? []), request],
     stands: { canvasId: canvas.canvasId, pageId: canvas.pageId, published: canvas.published, name: canvas.name, backgroundColor: canvas.backgroundColor, elementIds: canvas.elementIds, heroFacebookPostId: canvas.heroFacebookPostId, heroInstagramMediaId: canvas.heroInstagramMediaId, templateId: canvas.templateId },
     before: record(oldFields, { undo: Object.keys(undo).length ? { action: 'edit', canvasId: canvas.canvasId, ...undo } : null, noUndo }),
-    after: record(newFields, { ...(input.swipeToOpen !== undefined ? { notReadBack: { swipeToOpen: input.swipeToOpen } } : {}) }),
+    after: record(newFields, { ...(input.swipeToOpen !== undefined ? { notReadBack: { swipeToOpen: input.swipeToOpen } } : {}), ...(bodyTypes ? { bodyElementTypes: bodyTypes } : {}) }),
   }
 }
 
@@ -689,7 +745,7 @@ export function ixPublishDraft(canvas: IxCanvasState): MetaChangeDraft | { refus
   const { changes, more } = changeLines([
     [who, 'unpublished (can be edited)', 'PUBLISHED (can never be edited again)'],
     ...(canvas.elementIds === null ? [['Parts', 'not read', 'made final as they are'] as [string, unknown, unknown]] : canvas.elementIds.map((id, i): [string, unknown, unknown] => [`Part ${i + 1}: ${id}`, 'can be edited', 'final'])),
-    ...unlisted.map((id): [string, unknown, unknown] => [`Part ${id}`, 'can be edited', `final (${whenceOf(canvas, [id])}; Meta's read-back does not list it)`]),
+    ...unlisted.map((id): [string, unknown, unknown] => [`Part ${id}`, 'can be edited', `final (${[kindOf(canvas, id), whenceOf(canvas, id)].filter(Boolean).join('; ')}; Meta's read-back does not list it)`]),
   ])
   return {
     summary: `Publish the ${who} — ONE WAY: it can never be edited again (its ${canvas.elementIds === null ? 'parts are' : `${plural(canvas.elementIds.length + unlisted.length, 'part')} ${canvas.elementIds.length + unlisted.length === 1 ? 'is' : 'are'}`} final), and ads can then link to it.`,

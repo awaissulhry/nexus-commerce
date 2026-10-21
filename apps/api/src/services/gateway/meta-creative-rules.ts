@@ -177,8 +177,11 @@ const text = (max: number, opts: { lines?: boolean; blank?: boolean } = {}): Jud
 }
 /** Meta: a creative's URL "≤1000" characters (reference/ad-creative Limits). */
 const LINK_MAX = 1000
-/** An Instant Experience's link (`https://fb.com/canvas_doc/<id>`, collection-ads guide): its id goes to the gateway's check. */
-const CANVAS_LINK = /^https:\/\/fb\.com\/canvas_doc\/(\d{1,20})$/
+/**
+ * An Instant Experience's link (`https://fb.com/canvas_doc/<id>`, collection-ads guide): its id goes to the gateway's check.
+ * Step 27b re-review #4 — no leading zero, as meta-canvas-rules.ts META_CANVAS_LINK.
+ */
+const CANVAS_LINK = /^https:\/\/fb\.com\/canvas_doc\/([1-9]\d{0,19})$/
 /**
  * A link a creative names: https, a public host, no key or signature (step 23's rule). Review A5 — a link to an Instant
  * Experience is taken in Meta's ONE documented form only (`https://fb.com/canvas_doc/<id>`: no www, facebook.com, slash,

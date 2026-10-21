@@ -56,6 +56,11 @@ export interface IxCanvasState {
   fbElementIds?: string[] | null
   /** Review B-1 — the body Nexus last SENT for it (its create's or a later edit's change record); null or absent: none. */
   sentElementIds?: string[] | null
+  /**
+   * Re-review #2 — the type of each part of that body, in the same order (change-instant-experiences.ts IxSentType); null or
+   * absent (a record from before types were kept), or a null entry: not known.
+   */
+  sentElementTypes?: Array<string | null> | null
   heroFacebookPostId: string | null
   heroInstagramMediaId: string | null
   templateId: string | null
@@ -73,10 +78,11 @@ const BODY_ID = /^\d{1,25}$/
 
 /**
  * Review B-1 — the body Nexus last sent for this Instant Experience of this Page: its change records (this business's only:
- * row-level security), newest first — a create's `bodyElementIds`, an edit's `fields.elementIds` (a change that sent no
- * parts names none). Null when Nexus sent none.
+ * row-level security), newest first — a create's or an edit's `bodyElementIds` (an edit recorded before re-review #2: its
+ * `fields.elementIds`; a change that sent no parts names none), with each part's type (`bodyElementTypes`, re-review #2:
+ * null when the record keeps none, or not one per part). Null when Nexus sent none.
  */
-export async function nexusIxBodyOf(pageId: string, canvasId: string): Promise<string[] | null> {
+export async function nexusIxBodyOf(pageId: string, canvasId: string): Promise<{ ids: string[]; types: Array<string | null> | null } | null> {
   const rows = await prisma.agentChange.findMany({
     where: { toolName: { in: [META_IX_CREATE_TOOL, META_IX_SET_TOOL] }, AND: [{ after: { path: ['canvasId'], equals: canvasId } }, { after: { path: ['pageId'], equals: pageId } }] },
     select: { after: true },
@@ -85,8 +91,12 @@ export async function nexusIxBodyOf(pageId: string, canvasId: string): Promise<s
   })
   for (const row of rows) {
     const after = obj(row.after)
-    const body = after?.action === 'create' ? after.bodyElementIds : after?.action === 'edit' ? obj(after.fields)?.elementIds : undefined
-    if (Array.isArray(body) && body.length && body.every((id) => typeof id === 'string' && BODY_ID.test(id))) return body as string[]
+    const body = after?.action === 'create' ? after.bodyElementIds : after?.action === 'edit' ? after.bodyElementIds ?? obj(after.fields)?.elementIds : undefined
+    if (Array.isArray(body) && body.length && body.every((id) => typeof id === 'string' && BODY_ID.test(id))) {
+      const types = after?.bodyElementTypes
+      const typed = Array.isArray(types) && types.length === body.length && types.every((t) => t === null || typeof t === 'string')
+      return { ids: body as string[], types: typed ? types as Array<string | null> : null }
+    }
   }
   return null
 }
@@ -99,6 +109,7 @@ export async function liveIxCanvas(connectionId: string, canvasId: string): Prom
   const body = read.body ?? {}
   if (idText(body.id) !== id) throw new MetaLiveRefusal('Meta answered another object than the Instant Experience asked; nothing of it is used.')
   const parts = body.body_elements === undefined ? null : partIdsOf(body.body_elements)
+  const sent = await nexusIxBodyOf(pageId, id)
   return {
     pageId,
     canvasId: id,
@@ -108,7 +119,8 @@ export async function liveIxCanvas(connectionId: string, canvasId: string): Prom
     backgroundColor: typeof body.background_color === 'string' ? body.background_color : null,
     elementIds: parts,
     fbElementIds: body.fb_body_elements === undefined ? null : partIdsOf(body.fb_body_elements),
-    sentElementIds: await nexusIxBodyOf(pageId, id),
+    sentElementIds: sent?.ids ?? null,
+    sentElementTypes: sent?.types ?? null,
     heroFacebookPostId: idText(body.hero_asset_facebook_post_id),
     heroInstagramMediaId: idText(body.hero_asset_instagram_media_id),
     templateId: idText(obj(body.source_template)?.id),
