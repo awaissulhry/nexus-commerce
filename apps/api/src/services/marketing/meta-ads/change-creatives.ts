@@ -7,10 +7,10 @@
  *   create   ONE creative of the chosen ad account (POST /act_<id>/adcreatives — Meta's check, validate_only, first), built
  *            on the business's CHOSEN Page and Instagram account (Nexus fills them; a partnership ad names its partner beside
  *            them). Every creative carries the silent features explicitly: every Advantage+ creative feature Meta documents
- *            OFF unless asked (gateway META_CREATIVE_FEATURES), multi-advertiser ads OFF unless asked; and, where Meta
- *            documents them for the creative's kind (review B, gateway silentKeysOf), no music, no format automation and no
- *            shop routing unless asked; automatic product tags on a static image and the reordering of carousel cards OFF
- *            unless asked (review A1). The run reads the creative back and says what
+ *            OFF unless asked (gateway META_CREATIVE_FEATURES), multi-advertiser ads OFF unless asked; and, by what the
+ *            creative does (review B, made fail-safe in round 2: gateway silentKeysFor), no music beside a story, no format
+ *            automation and no shop routing wherever a website destination or a catalog part is, automatic product tags on
+ *            every image and the reordering of carousel cards OFF unless asked. The run reads the creative back and says what
  *            Meta kept (Meta silently drops an opt-in it finds ineligible; it may also show a feature it switched on itself).
  *            "Was it new?": Meta answers the id of an EXISTING creative for a duplicate (reference/ad-creative "If you try
  *            to add an creative that isn't unique … return the creative ID of the existing ad creative"); an AdCreative has
@@ -31,8 +31,8 @@
  */
 import prisma from '../../../db.js'
 import {
-  creativeKindOf, finishCreative, isJsonCreativeKey, judgeCreativeForm, judgeCreativeKey, META_AI_GENERATED_FEATURES, META_CREATIVE_FEATURES, META_CREATIVE_TEXT,
-  metaCreativeTextProblem, newCreativeWalk, partsOptIns, silentKeysOf, type CreativeKind,
+  creativeTypeOf, finishCreative, isJsonCreativeKey, judgeCreativeForm, judgeCreativeKey, META_AI_GENERATED_FEATURES, META_CREATIVE_FEATURES, META_CREATIVE_TEXT,
+  metaCreativeTextProblem, newCreativeWalk, partsOptIns, silentKeysFor, type CreativeType,
 } from '../../gateway/meta-creative-rules.js'
 import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import type { MetaChangeAccount } from './change-account.js'
@@ -156,10 +156,11 @@ export interface BuiltCreative {
   params: Record<string, string>
   warnings: string[]
   featuresOn: string[]
-  /** Review B — what the creative is (its silent keys follow it). */
-  kind: CreativeKind
-  /** Review A1 — Meta's automatic product tags switched off (a static image), and whether it has a carousel. */
-  productTagsOff: boolean
+  /** Review round 2 — what the creative is, by its main button, and the silent keys it carries (gateway silentKeysFor). */
+  type: CreativeType
+  silent: ReturnType<typeof silentKeysFor>
+  /** Review A1 — Meta's automatic product tags said for its images (off unless asked; null: no image), and a carousel. */
+  productTags: 'on' | 'off' | null
   carousel: boolean
 }
 
@@ -212,12 +213,9 @@ export function buildCreative(request: CreativeRequest, chosen: { pageId: string
     if (igId) creative.instagram_user_id = igId
   }
   Object.assign(creative, parts, branded)
-  // Review B — the kind of creative decides the silent keys Meta documents for it (gateway silentKeysOf).
-  const kind = creativeKindOf(creative)
-  const silent = silentKeysOf(kind)
   if (request.shopDestination) return { refusal: `Nothing was asked of Meta: shop routing (WEBSITE_AND_SHOP) needs a Facebook or Instagram shop named (onsite_destinations, Meta's Shops guide), and Nexus cannot confirm a shop is this business's own: it comes with the catalog / commerce steps. Shop routing stays off.` }
   const music = request.music === 'random' ? [{ type: 'random' }] : []
-  if (kind === 'existing-post') {
+  if (request.postId) {
     if (Object.keys(feed).length) return { refusal: 'Nothing was asked of Meta: a creative of an existing post takes no asset feed here (only music, by the argument music).' }
     // No asset feed on an existing post unless music is asked: Meta's music is an asset-feed opt-in, and the post keeps its
     // own media (LIVE-PROBES CR-416p).
@@ -234,10 +232,13 @@ export function buildCreative(request: CreativeRequest, chosen: { pageId: string
     if (feedCarousels.some((c) => isObject(c) && 'multi_share_optimized' in c)) return { refusal: 'Nothing was asked of Meta: the card order is the argument carouselAutoOrder, not carousels[].multi_share_optimized.' }
     ;(creative.asset_feed_spec as Record<string, unknown>).carousels = feedCarousels.map((c) => (isObject(c) ? { ...c, multi_share_optimized: auto } : c))
   }
-  // Review A1 — Meta tags catalog products on a static image by itself (master CR-314, "ON by default"): switched off unless asked.
-  const linkData = story?.link_data
-  const staticImage = kind !== 'catalog' && !!story && (!!story.photo_data || (!!linkData && (!!linkData.image_hash || !!linkData.picture) && !linkData.child_attachments && !linkData.collection_thumbnails))
-  if (staticImage && request.autoProductTags !== true) creative.interactive_components_spec = { components: [{ type: 'product_tag', enroll_status: 'opt_out' }] }
+  // Review round 2 — the silent keys follow what the creative DOES (gateway silentKeysFor, the same function the gateway
+  // judges with): a website destination anywhere, a catalog part, images.
+  const silent = silentKeysFor(creative)
+  const type = creativeTypeOf(creative)
+  // Review A1 / round 2 — Meta tags catalog products on single and carousel images by itself ("enabled by default"):
+  // said explicitly on every creative with images — opt_out unless the request asks (then opt_in).
+  if (silent.productTags) creative.interactive_components_spec = { components: [{ type: 'product_tag', enroll_status: request.autoProductTags === true ? 'opt_in' : 'opt_out' }] }
   // The silent features (lane prompt, binding): every documented feature named, OFF unless asked.
   const asked = [...new Set(request.aiFeatures ?? [])]
   const unknown = asked.filter((f) => !META_CREATIVE_FEATURES.includes(f))
@@ -250,7 +251,7 @@ export function buildCreative(request: CreativeRequest, chosen: { pageId: string
   creative.contextual_multi_ads = { enroll_status: request.multiAdvertiser ? 'OPT_IN' : 'OPT_OUT' }
   const formats = new Map((request.formatAutomation ?? []).map((f) => [f.format, f.dataSources]))
   for (const f of formats.keys()) {
-    if (!silent.formats?.includes(f)) return { refusal: `Nothing was asked of Meta: Meta documents format automation ${f} ${silent.formats ? `for a ${kind} creative only as ${silent.formats.join(', ')}` : `for website and catalog creatives, not for a ${kind} creative`}.` }
+    if (!silent.formats?.includes(f)) return { refusal: `Nothing was asked of Meta: Meta documents format automation ${f} ${silent.formats ? `for this creative only as ${silent.formats.join(', ')}` : 'for creatives with a website destination or a catalog part, and this one has neither'}.` }
   }
   if (silent.formats) creative.format_transformation_spec = silent.formats.map((format) => ({ format, data_source: formats.get(format)?.length ? formats.get(format) : ['none'] }))
   if (silent.destination) creative.destination_spec = { destination_type: 'WEBSITE_AND_SHOP_OPT_OUT' }
@@ -268,7 +269,7 @@ export function buildCreative(request: CreativeRequest, chosen: { pageId: string
   // What the gateway will judge is exactly this (one spelling): checked here too, so a preview never promises what it refuses.
   const gateway = judgeCreativeForm(new Map(Object.entries(params)))
   if ('problem' in gateway) return { refusal: `Nothing was asked of Meta: ${gateway.problem}.` }
-  return { creative: judged, params, warnings: finished.warnings, featuresOn: asked, kind, productTagsOff: !!creative.interactive_components_spec, carousel: !!cards || Array.isArray(feedCarousels) }
+  return { creative: judged, params, warnings: finished.warnings, featuresOn: asked, type, silent, productTags: silent.productTags ? (request.autoProductTags === true ? 'on' : 'off') : null, carousel: !!cards || Array.isArray(feedCarousels) }
 }
 
 /** The plain-text parts of a creative a person reads, for Meta's length advice (F1: headline ≤25, text ≤90 recommended). */
@@ -485,7 +486,7 @@ async function createDraft(account: MetaChangeAccount, request: CreativeRequest)
     doneSentence: (result) => createdSentence(label, result.node),
   }
   const ai = asked.filter((f) => META_AI_GENERATED_FEATURES.has(f))
-  const silent = silentKeysOf(built.kind)
+  const silent = built.silent
   const optIns = partsOptIns(built.creative)
   const warnings = [
     'A creative spends nothing: it serves only once an ad uses it (create-meta-ad) and that ad, its ad set and its campaign are on.',
@@ -495,11 +496,11 @@ async function createDraft(account: MetaChangeAccount, request: CreativeRequest)
       : `Every one of the ${META_CREATIVE_FEATURES.length} Advantage+ creative features Meta documents is sent OFF (Meta switches some on by default otherwise: adapt_to_placement, inline_comment, description_automation); the run reads the creative back and says what Meta has.`,
     ...ai.map((f) => `${f} is generated with AI: an ad using this creative must be created PAUSED and previewed first (meta-ad-preview view ad or creative, creativeFeature ${f}) and only then switched on — Meta's rule; create-meta-ad enforces it.`),
     request.multiAdvertiser ? 'Multi-advertiser ads: ON at your request (Meta may show this ad next to other advertisers\' ads).' : 'Multi-advertiser ads: OFF (contextual_multi_ads OPT_OUT; Meta opts a creative in when it is not said).',
-    `A ${built.kind} creative: Nexus sends the silent keys Meta documents for this kind (review B) — every Advantage+ feature and multi-advertiser ads${silent.audios ? ', music' : ''}${silent.formats ? ', format automation' : ''}${silent.destination ? ', shop routing' : ''}.`,
+    `A ${built.type} creative${silent.destination ? ' with a website destination or catalog part' : ''}: Nexus says each silent key it carries — every Advantage+ feature and multi-advertiser ads${silent.audios ? ', music' : ''}${silent.formats ? ', format automation' : ''}${silent.destination ? ', shop routing' : ''}${silent.productTags ? ', automatic product tags' : ''}.`,
     request.music === 'random' ? 'Music: Meta adds a track of its choice (asset_feed_spec.audios random).' : silent.audios ? 'Music: none (asset_feed_spec.audios empty, Meta\'s way to opt out).' : 'Music: none (an existing post keeps its own media; no asset feed is sent).',
     ...(silent.formats ? [(request.formatAutomation ?? []).length ? `Format automation ON at your request: ${(request.formatAutomation ?? []).map((f) => `${f.format} from ${f.dataSources.join(', ')}`).join('; ')}; every other format (${silent.formats.join(', ')}) is sent with data_source none.` : `Format automation: none (${silent.formats.join(', ')} each sent with data_source none).`] : []),
     ...(silent.destination ? ['Shop routing: OFF (destination_spec WEBSITE_AND_SHOP_OPT_OUT; v26 sends an eligible creative to the shop by itself otherwise).'] : []),
-    ...(built.productTagsOff ? ['Automatic product tags: OFF (interactive_components_spec product_tag opt_out; Meta tags catalog products on a static image by itself otherwise — autoProductTags switches it on).'] : request.autoProductTags ? ['Automatic product tags: ON at your request (Meta may tag catalog products on the image by itself).'] : []),
+    ...(built.productTags === 'off' ? ['Automatic product tags: OFF (interactive_components_spec product_tag opt_out; Meta tags catalog products on single and carousel images by itself otherwise — autoProductTags switches it on).'] : built.productTags === 'on' ? ['Automatic product tags: ON at your request (product_tag opt_in: Meta may tag catalog products on the images by itself).'] : []),
     ...(built.carousel ? [request.carouselAutoOrder ? 'Carousel order: Meta may reorder the cards at your request (multi_share_optimized true).' : 'Carousel order: as given (multi_share_optimized false; Meta reorders the cards by itself otherwise — carouselAutoOrder switches it on).'] : []),
     ...(optIns.length ? [`Opt-ins inside the creative's own parts, at your request: ${optIns.join('; ')}.`] : []),
     ...(request.partner ? ['A partnership ad needs the partner\'s permission: without it Meta keeps the ad "pending delivery" and Meta itself sends the partner a permission request.'] : []),

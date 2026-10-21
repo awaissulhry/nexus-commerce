@@ -133,7 +133,7 @@ describe('create-meta-creative — the preview', () => {
     expect(words).toMatch(new RegExp(`Every one of the ${META_CREATIVE_FEATURES.length} Advantage\\+ creative features Meta documents is sent OFF`))
     expect(words).toMatch(/Multi-advertiser ads: OFF/)
     expect(words).toMatch(/Music: none/)
-    expect(words).toMatch(/A website creative/)
+    expect(words).toMatch(/A standard creative with a website destination or catalog part/)
     expect(words).toMatch(/Automatic product tags: OFF/)
     expect(words).toMatch(/swap on an ACTIVE ad sends that ad back to Meta's review/)
     expect(words).not.toMatch(/headline of up to 25 characters/)
@@ -215,7 +215,8 @@ describe('create-meta-creative — the preview', () => {
     expect(checked().params.object_story_id).toBe(POST)
     expect(checked().params.instagram_user_id).toBe(IG)
     // Review B — an existing post carries no asset feed, format or shop key.
-    expect(Object.keys(checked().params).sort()).toEqual(['call_to_action', 'contextual_multi_ads', 'degrees_of_freedom_spec', 'instagram_user_id', 'name', 'object_story_id'])
+    // Round 2 — its button links to the website, so the website keys go too (fail-safe).
+    expect(Object.keys(checked().params).sort()).toEqual(['call_to_action', 'contextual_multi_ads', 'degrees_of_freedom_spec', 'destination_spec', 'format_transformation_spec', 'instagram_user_id', 'name', 'object_story_id'])
   })
 })
 
@@ -344,7 +345,8 @@ describe('review round 1', () => {
     const p = await preview(carousel)
     expect(p.ok, JSON.stringify(p)).toBe(true)
     expect(sentJson('object_story_spec').link_data.multi_share_optimized).toBe(false)
-    expect(checked().params.interactive_components_spec).toBeUndefined()
+    // Round 2 — carousel images carry the product-tag opt-out too.
+    expect(sentJson('interactive_components_spec')).toEqual({ components: [{ type: 'product_tag', enroll_status: 'opt_out' }] })
     expect(p.preview.warnings.join(' ')).toMatch(/Carousel order: as given/)
     h.check.mockClear()
     const q = await preview({ ...carousel, carouselAutoOrder: true })
@@ -353,13 +355,13 @@ describe('review round 1', () => {
     expect((await preview({ ...carousel, story: { link_data: { ...carousel.story.link_data, multi_share_optimized: true } } })).error).toMatch(/carouselAutoOrder/)
     h.check.mockClear()
     const tags = await preview({ ...image, autoProductTags: true })
-    expect(checked().params.interactive_components_spec).toBeUndefined()
+    expect(sentJson('interactive_components_spec')).toEqual({ components: [{ type: 'product_tag', enroll_status: 'opt_in' }] })
     expect(tags.preview.warnings.join(' ')).toMatch(/Automatic product tags: ON at your request/)
   })
 
   it('A6 — opt-ins inside the parts are named; the silent keys are read back', async () => {
     const p = await preview({ ...image, parts: { media_sourcing_spec: { related_media: { opt_in_status: 'OPT_IN' } } } })
-    expect(p.preview.warnings.join(' ')).toMatch(/Opt-ins inside the creative's own parts, at your request: media_sourcing_spec.related_media OPT_IN/)
+    expect(p.preview.warnings.join(' ')).toMatch(/Opt-ins inside the creative's own parts, at your request: media_sourcing_spec.related_media.opt_in_status OPT_IN/)
     h.send.mockImplementation(async () => ({
       node: { id: '120000000000301', name: 'Creative A', status: 'ACTIVE', effective_object_story_id: POST, degrees_of_freedom_spec: { creative_features_spec: {} }, format_transformation_spec: [{ format: 'carousel', data_source: ['catalog'] }], asset_feed_spec: { audios: [{ type: 'random' }] }, destination_spec: { destination_type: 'WEBSITE_AND_SHOP' }, interactive_components_spec: { components: [{ type: 'product_tag', enroll_status: 'opt_out' }] } },
       readBack: 'second-read', waitedMs: 0,
@@ -400,5 +402,17 @@ describe('review round 1', () => {
     const p = await preview({ action: 'welcome-flow' })
     expect(p).toMatchObject({ ok: false, error: WELCOME_FLOWS_ANSWER })
     expect(WELCOME_FLOWS_ANSWER).toMatch(/Page-token mode \(step 36\)/)
+  })
+})
+
+describe('review round 2', () => {
+  it('the tool sends the website keys from the same rule as the gateway, and refuses a stray marker of another type', async () => {
+    const ctm = { name: 'Chat A', story: { link_data: { link: 'https://www.example.com/', image_hash: 'abc123def456', call_to_action: { type: 'MESSAGE_PAGE', value: { app_destination: 'MESSENGER' } }, page_welcome_message: 'Ciao' } } }
+    const p = await preview(ctm)
+    expect(p.ok, JSON.stringify(p)).toBe(true)
+    expect(sentJson('destination_spec')).toEqual({ destination_type: 'WEBSITE_AND_SHOP_OPT_OUT' })
+    expect(p.preview.warnings.join(' ')).toMatch(/A messaging creative with a website destination/)
+    const stray = await preview({ ...image, story: { link_data: { ...image.story.link_data, page_welcome_message: 'Ciao' } } })
+    expect(stray.error).toMatch(/main button makes it a standard creative/)
   })
 })
