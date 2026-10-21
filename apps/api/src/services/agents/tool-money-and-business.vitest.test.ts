@@ -231,6 +231,10 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-ad-library': 'it reads Meta live through the business\'s Meta connection, and no business here has one (meta-ads-partners.tools test)',
   'meta-brand-safety': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-safety.tools test)',
   'meta-webhooks': 'it reads the business\'s Meta app and chosen ad account live from Meta, and no business here has one (meta-ads-safety.tools test)',
+  // Meta ads step 8: the score and recommendations, tests and studies, and Meta's rules read Meta live (meta-ads-optimize.tools test).
+  'meta-recommendations': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-optimize.tools test)',
+  'meta-experiments': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-optimize.tools test)',
+  'meta-ad-rules': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-optimize.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -545,6 +549,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-ad-library': () => ({ view: 'search', searchTerms: 'casco', countries: ['IT'] }),
   'meta-brand-safety': () => ({ view: 'block-lists' }),
   'meta-webhooks': () => ({ view: 'all' }),
+  // Meta ads step 8: the three reads refuse in words here (no business has Meta; meta-ads-optimize.tools.vitest.test.ts runs them).
+  'meta-recommendations': () => ({ view: 'overview' }),
+  'meta-experiments': () => ({ view: 'list' }),
+  'meta-ad-rules': () => ({ view: 'list' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),
