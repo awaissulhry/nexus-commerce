@@ -378,7 +378,7 @@ describe('Item 7 — a secret argument is stored encrypted, and opened only for 
     await runOrQueueTool('boost-code', { adCode: 'CODE_123' }, PRICE_PERSON, 'run1')
     db.agentApproval.findUnique.mockResolvedValue({ id: 'a1', status: 'pending', toolName: 'boost-code', args: storedArgs() } as never)
     // The sweep runs a decision inside the request's business (WorkspaceWorker / workspace-sweep bind it).
-    const out = await withWorkspace(BUSINESS, () => decideApproval('a1', 'approve', systemPrincipal('Awais')))
+    const out = await withWorkspace(BUSINESS, () => decideApproval('a1', 'approve', systemPrincipal('Person A')))
     expect(out).toMatchObject({ ok: true, status: 'executed' })
     expect(execute).toHaveBeenCalledWith({ adCode: 'CODE_123' }, expect.anything())
   })
