@@ -524,7 +524,8 @@ describe('read only by construction', () => {
     ]) expect(q(path), path).toBeNull()
     // Refused anywhere else: on another edge, or an override on a read that is not an item's.
     for (const [path, key] of [
-      ['act_1234567890/assigned_users?fields=id&business=9876543210', 'business'], ['120000000000700/agencies?fields=id&business=9876543210', 'business'],
+      // Step 3 (#717) allows business on act_<id>/assigned_users (Meta requires it there); it stays refused on other edges.
+      ['act_1234567890/agencies?fields=id&business=9876543210', 'business'], ['120000000000700/agencies?fields=id&business=9876543210', 'business'],
       [`act_1234567890/ads?fields=id&filter=${filter}`, 'filter'], ['120000000000700/product_feeds?fields=id&error_type=X', 'error_type'],
       ['120000000000700/product_feeds?fields=id&handle=x', 'handle'], ['120000000000700/insights?fields=spend&types=["X"]', 'types'],
       ['120000000000700/products?fields=id&bulk_pagination=true', 'bulk_pagination'], ['120000000000700/products?fields=id&return_only_approved_products=true', 'return_only_approved_products'],
