@@ -187,6 +187,9 @@ const CATALOG_DETAIL_MORE = 'store_catalog_settings,commerce_merchant_settings{i
 export const ITEM_LIST_FIELDS = 'id,retailer_id,retailer_product_group_id,name,brand,availability,condition,price,sale_price,currency,review_status,visibility,image_url,url,errors'
 /** Health lists: no prices (the health tool holds no money). */
 const ITEM_HEALTH_FIELDS = 'id,retailer_id,retailer_product_group_id,name,availability,review_status,review_rejection_reasons,errors'
+// Rebase on step 14 (#708) — no `tags`: the gateway never asks a field named `tags` (FIELD_DENIED), because on posts and
+// Instagram media it lists tagged people, and a numeric id does not tell the gateway which node it is. An item's tags are
+// therefore not read here; a product set can still FILTER on them (step 13's set filter, not a field).
 export const ITEM_DETAIL_CORE = [
   'id', 'retailer_id', META_ITEM_OVERRIDE_FIELD, 'parent_product_id', 'name', 'description', 'short_description', 'rich_text_description', 'brand',
   'category', 'fb_product_category', 'product_type', 'condition', 'availability', 'quantity_to_sell_on_facebook', 'price', 'sale_price',
@@ -194,7 +197,7 @@ export const ITEM_DETAIL_CORE = [
   'videos', 'video_fetch_status', 'color', 'size', 'material', 'pattern', 'gender', 'age_group', 'gtin', 'manufacturer_part_number', 'origin_country',
   'importer_name', 'importer_address', 'manufacturer_info', 'product_disclosures', 'custom_label_0', 'custom_label_1', 'custom_label_2', 'custom_label_3',
   'custom_label_4', 'custom_number_0', 'custom_number_1', 'custom_number_2', 'custom_number_3', 'custom_number_4', 'additional_variant_attributes',
-  'shipping_weight_value', 'shipping_weight_unit', 'expiration_date', 'tags', 'visibility', 'review_status', 'review_rejection_reasons',
+  'shipping_weight_value', 'shipping_weight_unit', 'expiration_date', 'visibility', 'review_status', 'review_rejection_reasons',
   'capability_to_review_status', 'capabilities_disabled_by_user', 'errors', 'invalidation_errors', 'generated_background_images',
   'generated_background_images_ad_usage', 'commerce_insights', 'product_catalog{id}', 'product_feed{id,name}',
 ].join(',')
@@ -660,7 +663,7 @@ export async function liveCatalogItems(input: ItemsInput) {
     case 'item-videos': {
       // CT-026 — the item's video fetch data (SDK only; the documented videos and video_fetch_status are in view item).
       const { id, catalog } = await item()
-      const read = await withNote(() => listPaged(connectionId, 'items.videos', `${id}/videos_metadata`, { fields: 'id,url,tags,video' }, 50))
+      const read = await withNote(() => listPaged(connectionId, 'items.videos', `${id}/videos_metadata`, { fields: 'id,url,video' }, 50))
       return { ...base, catalogId: catalog.catalogId, itemId: id, items: read.rows.map((r) => tidy(r)), note: 'Meta\'s SDK names this edge; its page does not. view item has the documented videos and video_fetch_status.' }
     }
     case 'groups': {
