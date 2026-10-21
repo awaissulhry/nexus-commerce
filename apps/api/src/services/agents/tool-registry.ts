@@ -111,6 +111,8 @@ import { META_ADS_COMMERCE_TOOLS } from './tools/meta-ads-commerce.tools.js'
 import { META_ADS_MEDIA_UPLOAD_TOOLS } from './tools/meta-ads-media-upload.tools.js'
 // Meta ads step 29 (2026-10-21): Meta's automated rules.
 import { META_ADS_RULES_TOOLS } from './tools/meta-ads-rules.tools.js'
+// Meta ads step 7 (2026-10-21): insights at every level, background report runs, saved and partner reports (read only).
+import { META_ADS_INSIGHTS_TOOLS } from './tools/meta-ads-insights.tools.js'
 // Meta ads step 31 (2026-10-21): audiences — create, change, people (opt-outs out; D8), sharing, delete.
 import { META_ADS_AUDIENCE_CHANGES_TOOLS } from './tools/meta-ads-audience-changes.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
@@ -352,6 +354,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_MEDIA_UPLOAD_TOOLS,
   // Meta ads step 29 (2026-10-21): set-meta-ad-rule (make, change, switch, run Meta's rules), remove-meta-ad-rule.
   ...META_ADS_RULES_TOOLS,
+  // Meta ads step 7 (2026-10-21): meta-ads-numbers, meta-ads-report, meta-ads-saved-reports (read only).
+  ...META_ADS_INSIGHTS_TOOLS,
   // Meta ads step 31 (2026-10-21): create-meta-audience, set-meta-audience, set-meta-audience-members,
   // set-meta-audience-sharing, remove-meta-audience.
   ...META_ADS_AUDIENCE_CHANGES_TOOLS,

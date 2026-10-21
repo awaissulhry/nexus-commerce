@@ -275,6 +275,10 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-instagram-product-tags': 'it reads the business\'s chosen Instagram account live from Meta, and no business here has Meta (meta-ads-commerce.tools test)',
   // Meta ads step 23: an upload reads the business's chosen Meta ad account before anything (meta-ads-media-upload.tools test).
   'create-meta-media': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-media-upload.tools test)',
+  // Meta ads step 7: the numbers, report runs and saved reports read the chosen ad account live from Meta (meta-ads-insights.tools test).
+  'meta-ads-numbers': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-insights.tools test)',
+  'meta-ads-report': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-insights.tools test)',
+  'meta-ads-saved-reports': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-insights.tools test)',
   // Meta ads step 31: the audience changes read the business's chosen Meta ad account live (their own test runs them).
   'create-meta-audience': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-audience-changes.tools test)',
   'set-meta-audience': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-audience-changes.tools test)',
@@ -650,6 +654,11 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-instagram-product-tags': () => ({ view: 'eligibility' }),
   // Meta ads step 23: an upload refuses in words before any fetch or call (no business here has Meta; its own test runs it).
   'create-meta-media': () => ({ kind: 'image', images: [{ libraryImageId: 'da_test_asset' }] }),
+  // Meta ads step 7: each refuses in words because no business here has Meta (meta-ads-insights.tools.vitest.test.ts runs
+  // every view on an account).
+  'meta-ads-numbers': () => ({ view: 'numbers' }),
+  'meta-ads-report': () => ({ action: 'status', reportRunId: '6000000000001' }),
+  'meta-ads-saved-reports': () => ({ view: 'mmm-reports' }),
   // Meta ads step 31: no business here has Meta, so each refuses in words before any call.
   'create-meta-audience': () => ({ kind: 'customer_list', name: 'List A' }),
   'set-meta-audience': () => ({ audienceId: '120000000000040', name: 'List B' }),

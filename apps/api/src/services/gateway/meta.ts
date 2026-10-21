@@ -251,3 +251,33 @@ export async function metaRuploadCall(req: MetaUploadRequest): Promise<GatewayRe
     timeoutMs: req.timeoutMs ?? 120_000,
   })
 }
+
+// ── report runs (step 7, 2026-10-21) ─────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One report run of the chosen ad account's numbers: `POST /act_<id>/insights` with the read's parameters as a form body
+ * (Meta makes an AdReportRun and answers `{ report_run_id }`; nothing on the account changes). It goes as a READ: never
+ * braked, held or retried like a change; the gateway judges every key and value (meta-calls.ts reportRunProblem) and
+ * checks the ad account is the one this business chose through this connection. Not retried after no answer: Meta may
+ * have started it (a second run would only cost a read).
+ */
+export async function metaReportRunCall(req: { connectionId: string; operation: string; adAccountId: string; params: Record<string, MetaQueryValue>; triggeredBy?: 'cron' | 'manual' | 'api' }): Promise<GatewayResponse> {
+  const body = new URLSearchParams()
+  for (const [key, value] of Object.entries(req.params)) {
+    if (value === undefined || value === null) continue
+    body.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value))
+  }
+  return gatewayCall({
+    channel: 'META',
+    operation: req.operation,
+    kind: 'read',
+    connectionId: req.connectionId,
+    url: metaUrl(`act_${req.adAccountId}/insights`),
+    method: 'POST',
+    body: body.toString(),
+    maxTransientRetries: 0,
+    max429Retries: 0,
+    timeoutMs: 60_000,
+    ledger: req.triggeredBy ? { triggeredBy: req.triggeredBy } : undefined,
+  })
+}
