@@ -927,6 +927,9 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
   if (write.ids.length > 150) return { code: 'META_WRITE_NOT_ALLOWED', sentence: 'Nothing was sent to Meta: a change names at most 150 objects inside its body.' }
   let pixels: Set<string> | null | undefined
   let optimizeCheck: ((inner: MetaWriteBodyId) => Promise<{ code: string; sentence: string } | null>) | undefined
+  // Step 25 — this call's memo of the catalog rule (the portfolio read once, each catalog and id judged once): made per
+  // call and dropped with it, so nothing carries across calls, connections or businesses.
+  let catalogMemo: import('../marketing/meta-ads/catalog-rule.js').CatalogRuleMemo | undefined
   // Step 21 — each of the chosen ad account's own lists read once per change.
   const accountLists = new Map<MetaAccountListKind, Set<string> | null>()
   for (const inner of write.ids) {
@@ -961,12 +964,14 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
       continue
     }
     // Review A4 — a catalog or a product set: the ONE catalog rule (marketing/meta-ads/catalog-rule.ts): of the chosen ad
-    // account's business portfolio, and that portfolio no other Nexus business's.
-    if (inner.kind === 'catalog' || inner.kind === 'productset') {
+    // account's business portfolio, and that portfolio no other Nexus business's. Step 25 — a catalog item (a creative's
+    // product tag or product data) by the same rule: its catalog.
+    if (inner.kind === 'catalog' || inner.kind === 'productset' || inner.kind === 'productitem') {
       const chosen = await metaChosenAdAccountOf(connectionId)
       if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection.' }
-      const { metaCatalogProblem } = await import('../marketing/meta-ads/catalog-rule.js')
-      const problem = await metaCatalogProblem({ connectionId, adAccountId: chosen }, inner.kind === 'catalog' ? { catalogId: inner.id } : { productSetId: inner.id })
+      const { metaCatalogProblem, newCatalogRuleMemo } = await import('../marketing/meta-ads/catalog-rule.js')
+      catalogMemo ??= newCatalogRuleMemo()
+      const problem = await metaCatalogProblem({ connectionId, adAccountId: chosen }, inner.kind === 'catalog' ? { catalogId: inner.id } : inner.kind === 'productset' ? { productSetId: inner.id } : { productItemId: inner.id }, catalogMemo)
       if (problem) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: inside this change, ${problem}` }
       continue
     }

@@ -10,7 +10,15 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const h = vi.hoisted(() => ({ calls: [] as Array<{ url: string; init: RequestInit }>, answers: [] as Array<() => Response> }))
+const h = vi.hoisted(() => ({ calls: [] as Array<{ url: string; init: RequestInit }>, answers: [] as Array<() => Response>, takenPortfolios: new Set<string>() }))
+// Step 18's catalog rule — which portfolios another Nexus business uses (nexus_meta_links_taken PORTFOLIO): a stand-in.
+vi.mock('../marketing/meta-ads/taken.js', () => {
+  const takenIds = vi.fn(async (_product: string, ids: string[]) => new Set(ids.filter((id) => h.takenPortfolios.has(id))))
+  return {
+    takenIds,
+    portfolioTaken: vi.fn(async (id: string) => ((await takenIds('PORTFOLIO', [id])).has(id) ? { portfolioId: id, takenByAnotherBusiness: true, sentence: 'taken' } : null)),
+  }
+})
 vi.mock('./account.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.accountModule))
 vi.mock('./ledger.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 vi.mock('../cx/token.service.js', () => ({
@@ -91,6 +99,7 @@ beforeEach(() => {
   gatewayMetaPage['m-1'] = PAGE
   gatewayMetaInstagram['m-1'] = IG
   gatewayMetaTakenLinks.clear()
+  h.takenPortfolios.clear()
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
     h.calls.push({ url: String(url), init })
     return h.answers.shift()?.() ?? new Response(JSON.stringify({ success: true }), { status: 200 })
@@ -174,12 +183,16 @@ describe('the creative allow-list, at every depth', () => {
     expect('warnings' in judged && (judged as { warnings: string[] }).warnings.join(' ')).toMatch(/Meta fetches a picture link itself/)
   })
 
-  it('answers in words: political ads, WhatsApp identities, Threads ids, app links, catalog ids (step 18), polls, instagram_actor_id, page-less ads', () => {
+  it('answers in words: political ads, WhatsApp identities, Threads ids, app links, retailer item ids, catalog promo sources, polls, instagram_actor_id, page-less ads', () => {
     expect(problem({ body: form(creative({ authorization_category: 'POLITICAL' })) })).toMatch(/banned in the EU/)
     expect(problem({ body: form(creative({ wamo_whatsapp_identity_spec: 'x' })) })).toMatch(/do not run in the EU/)
     expect(problem({ body: form(creative({ threads_user_id: '123' })) })).toMatch(/Threads ads on the Instagram account/)
     expect(problem({ body: form(creative({ applink_treatment: 'web_only' })) })).toMatch(/no app/)
-    expect(problem({ body: form(creative({ product_set_id: '123' })) })).toMatch(/catalog rule \(step 18\)/)
+    expect(problem({ body: form(creative({ object_story_spec: { page_id: PAGE, link_data: { link: 'https://www.example.com/', image_hash: HASH, retailer_item_ids: ['0'] } } })) })).toMatch(/cannot check a retailer id against the catalog rule/)
+    const promo = (extra: Record<string, unknown>) => creative({ asset_feed_spec: { audios: [], promotional_metadata: { allowed_coupon_code_sources: ['AD_CREATIVE_PRIMARY_TEXT'], ...extra } } })
+    expect(problem({ body: form(promo({})) })).toBeNull()
+    expect(problem({ body: form(promo({ product_catalog_id: '120000000000060' })) })).toMatch(/no catalog promotion or Meta offer is a code source/)
+    expect(problem({ body: form(promo({ allowed_promo_offer_ids: ['120000000000061'] })) })).toMatch(/no catalog promotion or Meta offer is a code source/)
     expect(problem({ body: form(creative({ title: 'x' })) })).toMatch(/without a Page/)
     expect(problem({ body: form(creative({ interactive_components_spec: { components: [{ type: 'poll' }] } })) })).toMatch(/removed polls/)
     expect(problem({ body: form(creative({ interactive_components_spec: { components: [{ type: 'product_tag', enroll_status: 'opt_out' }] } })) })).toBeNull()
@@ -364,7 +377,8 @@ describe('review round 1', () => {
     expect(problem({ body: form(video) })).toMatch(/media_type_automation.customizations is not a key/)
     const meta = creative()
     ;(meta.degrees_of_freedom_spec.creative_features_spec as Record<string, unknown>).product_extensions = { enroll_status: 'OPT_IN', action_metadata: { type: 'MANUAL' } }
-    expect(problem({ body: form(meta) })).toMatch(/product_extensions.action_metadata is not a key/)
+    // Step 25b — product extensions take action_metadata MANUAL, but only beside an associated product set (fix 2 below).
+    expect(problem({ body: form(meta) })).toMatch(/product_extensions goes ON only beside creative_sourcing_spec.associated_product_set_id/)
     expect(problem({ body: form(creative({ contextual_multi_ads: { enroll_status: 'OPT_OUT', action_metadata: { type: 'DEFAULT' } } })) })).toMatch(/action_metadata is not a key/)
     const cta = (type: string) => creative({ object_story_spec: { page_id: PAGE, link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type, value: { link: 'https://www.example.com/' } } } } })
     expect(problem({ body: form(cta('BUY_ACTIVITY_TICKETS')) })).toMatch(/is one of/)
@@ -374,7 +388,7 @@ describe('review round 1', () => {
 
   it('B5 / B6 — a shop destination and a Threads id are answered in Meta\'s own terms', () => {
     expect(problem({ body: form(creative({ destination_spec: { destination_type: 'WEBSITE_AND_SHOP' } })) })).toMatch(/WEBSITE_AND_SHOP_OPT_OUT/)
-    expect(problem({ body: form(creative({ asset_feed_spec: { audios: [], onsite_destinations: [{ storefront_shop_id: '1' }] } })) })).toMatch(/cannot confirm a Facebook or Instagram shop/)
+    expect(problem({ body: form(creative({ asset_feed_spec: { audios: [], onsite_destinations: [{ storefront_shop_id: '1' }] } })) })).toMatch(/cannot confirm that the Page's Facebook or Instagram shop/)
     expect(problem({ body: form(creative({ threads_user_id: '123' })) })).toMatch(/Threads ads on the Instagram account/)
   })
 })
@@ -542,5 +556,171 @@ describe('step 25 review round 4 — Meta\'s link-redirect pages are websites, a
   })
   it('refuses each as a creative link', () => {
     for (const link of redirects) expect(problem({ body: form(withStory({ link_data: { link, image_hash: HASH } })) }), link).toMatch(/name the website itself/)
+  })
+})
+
+describe('C2-REBASE-18 — catalog creatives through step 18\'s ONE catalog rule (step 12\'s read rule)', () => {
+  const PORTFOLIO = '120000000000090'
+  const PARTNER_OTHER_NEXUS = '120000000000081' // a portfolio another business in Nexus uses
+  const CATALOG = '120000000000060' // the portfolio's own
+  const FOREIGN_CATALOG = '120000000000063' // a client catalog whose owner is another Nexus business's portfolio
+  const SET = '120000000000061'
+  const ITEM = '120000000000071'
+  /** Master CR-448 — an Advantage+ catalog template creative: template_data + the creative's product_set_id. */
+  const template = (over: Record<string, unknown> = {}, data: Record<string, unknown> = {}) => complete({
+    name: 'Catalog A',
+    object_story_spec: { page_id: PAGE, template_data: { link: 'https://www.example.com/', message: '{{product.name}} {{product.price}}', name: '{{product.name}}', call_to_action: { type: 'SHOP_NOW' }, ...data } },
+    product_set_id: SET,
+    ...over,
+  })
+  /** Master CR-313 — catalog items tagged by hand on an image (and Meta's automatic tagging then off: no enroll component). */
+  const tagged = (tags: Array<Record<string, unknown>>) => creative({ interactive_components_spec: { components: tags } })
+  const tag = (id = ITEM, x = 0.5, y = 0.5) => ({ type: 'product_tag', product_tag_spec: { product_id: id }, position_spec: { x, y } })
+  const idsOf = (body: string) => { const v = verdict({ body }); return 'write' in v ? v.write.ids : v }
+  const send = (c: Record<string, unknown>) => metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(c))) })
+  const meta400 = () => json({ error: { message: 'Unsupported get request.', type: 'GraphMethodException', code: 100 } }, 400)
+
+  it('every product set and catalog item goes to the gateway as a body id of its kind (rows CR-041, 234, 263, 313, 330, 414, 448–465, CT-106)', () => {
+    expect(idsOf(form(template()))).toEqual(expect.arrayContaining([{ id: SET, kind: 'productset' }]))
+    // A template's boosted set (CR-448), localized text (CT-106 / CR-461), overlays and automatic tags in the template (CR-451, CR-456).
+    const rich = template({}, {
+      boosted_product_set_id: '120000000000062',
+      customization_rules_spec: [{ customization_spec: { language: 'fr_XX' }, message: 'Bonjour {{product.name}}' }, { customization_spec: {}, message: 'Ciao' }],
+    })
+    expect(idsOf(form(rich))).toEqual(expect.arrayContaining([{ id: SET, kind: 'productset' }, { id: '120000000000062', kind: 'productset' }]))
+    // Product extensions (CR-330, CR-414) and product data (CR-041 / CR-211) at the top and in the story.
+    const extensions = creative({ creative_sourcing_spec: { associated_product_set_id: SET }, product_data: [{ product_id: ITEM, product_source: 'MANUAL', product_decision: 'ACCEPT' }] })
+    expect(idsOf(form(extensions))).toEqual(expect.arrayContaining([{ id: SET, kind: 'productset' }, { id: ITEM, kind: 'productitem' }]))
+    const inStory = creative({ object_story_spec: { page_id: PAGE, link_data: { link: 'https://www.example.com/', image_hash: HASH }, product_data: [{ product_id: '120000000000072', product_source: 'MANUAL', product_decision: 'ACCEPT' }] } })
+    expect(idsOf(form(inStory))).toEqual(expect.arrayContaining([{ id: '120000000000072', kind: 'productitem' }]))
+    expect(problem({ body: form(creative({ product_data: [{ product_id: ITEM, product_source: 'AUTOMATIC', product_decision: 'ACCEPT' }] })) })).toMatch(/product_source is one of MANUAL/)
+    // Product tags by hand (CR-313): each item a body id; never beside the automatic-tagging component, never both in one.
+    expect(idsOf(form(tagged([tag(), tag('120000000000072', 0.2, 0.8)])))).toEqual(expect.arrayContaining([{ id: ITEM, kind: 'productitem' }, { id: '120000000000072', kind: 'productitem' }]))
+    expect(problem({ body: form(tagged([tag(), { type: 'product_tag', enroll_status: 'opt_out' }])) })).toMatch(/products tagged by hand \(product_tag_spec\) or ONE automatic-tagging component/)
+    expect(problem({ body: form(tagged([{ ...tag(), enroll_status: 'opt_out' }])) })).toMatch(/not both \(Meta answers an error\)/)
+    expect(problem({ body: form(tagged([tag(ITEM, 1.5)])) })).toMatch(/position from 0 to 1/)
+    expect(problem({ body: form(tagged([{ type: 'product_tag', product_tag_spec: { product_id: ITEM } }])) })).toMatch(/position_spec/)
+    expect(problem({ body: form(template({ product_set_id: 'x' })) })).toMatch(/product_set_id is a Meta id/)
+  })
+
+  // The gateway reads, in order: the chosen ad account's portfolio, the set's (or item's) catalog, the catalog's owner, and —
+  // only when the portfolio does not own it — the portfolio's client catalogs.
+  const own = (child: string) => [json({ id: ACT, business: { id: PORTFOLIO } }), json({ id: child, product_catalog: { id: CATALOG } }), json({ id: CATALOG, business: { id: PORTFOLIO } })]
+  const foreign = (child: string) => [json({ id: ACT, business: { id: PORTFOLIO } }), json({ id: child, product_catalog: { id: FOREIGN_CATALOG } }), json({ id: FOREIGN_CATALOG, business: { id: PARTNER_OTHER_NEXUS } }), json({ data: [{ id: FOREIGN_CATALOG }] })]
+
+  for (const [kind, build, extra] of [
+    ['a product set (product_set_id)', () => template(), [] as Array<() => Response>],
+    ['a catalog item (a product tag by hand)', () => tagged([tag()]), [json({ data: [{ hash: HASH, status: 'ACTIVE' }] })]],
+  ] as const) {
+    const child = kind.startsWith('a product set') ? SET : ITEM
+    it(`${kind}: the business's own catalog passes; another business's catalog, a shared portfolio and an unreadable one are refused`, async () => {
+      // Own catalog: the POST goes.
+      h.answers.push(...own(child), ...extra, json({ id: '120000000000301' }))
+      await send(build())
+      expect(h.calls.at(-1)!.init.method).toBe('POST')
+      expect(h.calls.slice(0, 3).map((c) => new URL(c.url).pathname.split('/').pop())).toEqual([ACT, child, CATALOG])
+      // A client catalog whose owner is a portfolio another business in Nexus uses: nothing is sent.
+      h.calls = []; h.takenPortfolios.add(PARTNER_OTHER_NEXUS)
+      h.answers.push(...foreign(child))
+      await expect(send(build())).rejects.toThrow(/inside this change, That catalog belongs to a business portfolio another business in Nexus uses\. Nexus names no such catalog in a change, so nothing is sent/)
+      expect(h.calls.filter((c) => c.init.method === 'POST')).toHaveLength(0)
+      // The chosen ad account's portfolio is another Nexus business's too: refused before the set or item is read.
+      h.calls = []; h.answers = []; h.takenPortfolios.add(PORTFOLIO)
+      h.answers.push(json({ id: ACT, business: { id: PORTFOLIO } }))
+      await expect(send(build())).rejects.toThrow(/shared with another business in Nexus.*nothing is sent/)
+      expect(h.calls.map((c) => c.init.method)).toEqual(['GET'])
+      // Meta does not answer the set or item: refused in words, never a pass.
+      h.calls = []; h.answers = []; h.takenPortfolios.clear()
+      h.answers.push(json({ id: ACT, business: { id: PORTFOLIO } }), meta400())
+      await expect(send(build())).rejects.toThrow(/Nexus could not confirm that this (product set|catalog item) is in one of the business's catalogs.*nothing is sent/)
+      expect(h.calls.filter((c) => c.init.method === 'POST')).toHaveLength(0)
+    })
+  }
+})
+
+describe('step 25b — the catalog review: every catalog part a marker, product extensions, the read budget, template cards, wording', () => {
+  const SET = '120000000000061'
+  const ITEM = '120000000000071'
+  const PORTFOLIO = '120000000000090'
+  const CATALOG = '120000000000060'
+  const pd = [{ product_id: ITEM, product_source: 'MANUAL', product_decision: 'ACCEPT' }]
+  /** Master CR-211 — a click-to-messenger creative (no website destination of its own). */
+  const messenger = (extra: Record<string, unknown> = {}, story: Record<string, unknown> = {}) => ({
+    name: 'Chat A',
+    object_story_spec: { page_id: PAGE, link_data: { link: 'https://fb.com/messenger_doc/', image_hash: HASH, name: 'Chat', call_to_action: { type: 'MESSAGE_PAGE', value: { app_destination: 'MESSENGER' } } }, ...story },
+    ...extra,
+  })
+  const tagSpec = { interactive_components_spec: { components: [{ type: 'product_tag', product_tag_spec: { product_id: ITEM }, position_spec: { x: 0.5, y: 0.5 } }] } }
+
+  it('fix 1 (HIGH) — every catalog part makes a catalog creative: the six format opt-outs and the shop opt-out are REQUIRED', () => {
+    const parts: Array<[string, Record<string, unknown>]> = [
+      ['creative_sourcing_spec.associated_product_set_id', messenger({ creative_sourcing_spec: { associated_product_set_id: SET } })],
+      ['product_data (top level)', messenger({ product_data: pd })],
+      ['object_story_spec.product_data', messenger({}, { product_data: pd })],
+      ['product_tag_spec', messenger(tagSpec)],
+      ['link_data.boosted_product_set_id', messenger({}, { link_data: { link: 'https://fb.com/messenger_doc/', image_hash: HASH, name: 'Chat', boosted_product_set_id: SET, call_to_action: { type: 'MESSAGE_PAGE', value: { app_destination: 'MESSENGER' } } } })],
+    ]
+    for (const [label, c] of parts) {
+      expect(silentKeysFor(c), label).toMatchObject({ formats: META_FORMAT_AUTOMATION_FORMATS, destination: true })
+      // Without the opt-outs (as the review's probe sent it): refused.
+      const bare = { ...complete(messenger()), ...c }
+      expect(problem({ body: form(bare) }), label).toMatch(/names format_transformation_spec for each of da_collection|names destination_spec/)
+      // With them: accepted.
+      expect(problem({ body: form(complete(c)) }), label).toBeNull()
+    }
+    // A messenger creative with no catalog part still needs neither.
+    expect(silentKeysFor(messenger())).toMatchObject({ formats: null, destination: false })
+  })
+
+  it('fix 2 (MEDIUM) — product extensions: ON only beside an associated set, with action_metadata MANUAL only then', () => {
+    const withFeature = (c: Record<string, unknown>, details: Record<string, unknown>) => {
+      const full = complete(c)
+      full.degrees_of_freedom_spec.creative_features_spec.product_extensions = details
+      return full
+    }
+    const withSet = messenger({ creative_sourcing_spec: { associated_product_set_id: SET } })
+    expect(problem({ body: form(withFeature(withSet, { enroll_status: 'OPT_IN', action_metadata: { type: 'MANUAL' } })) })).toBeNull()
+    expect(problem({ body: form(withFeature(withSet, { enroll_status: 'OPT_IN' })) })).toBeNull()
+    expect(problem({ body: form(withFeature(messenger(), { enroll_status: 'OPT_IN' })) })).toMatch(/product_extensions goes ON only beside creative_sourcing_spec.associated_product_set_id/)
+    expect(problem({ body: form(withFeature(creative(), { enroll_status: 'OPT_IN', action_metadata: { type: 'MANUAL' } })) })).toMatch(/goes ON only beside/)
+    expect(problem({ body: form(withFeature(withSet, { enroll_status: 'OPT_OUT', action_metadata: { type: 'MANUAL' } })) })).toMatch(/action_metadata goes only with product_extensions switched on/)
+    expect(problem({ body: form(withFeature(withSet, { enroll_status: 'OPT_IN', action_metadata: { type: 'AUTOMATIC' } })) })).toMatch(/action_metadata.type is one of MANUAL/)
+    // No other feature takes action_metadata.
+    const other = complete(withSet)
+    other.degrees_of_freedom_spec.creative_features_spec.inline_comment = { enroll_status: 'OPT_IN', action_metadata: { type: 'MANUAL' } }
+    expect(problem({ body: form(other) })).toMatch(/action_metadata/)
+  })
+
+  it('fix 3 (MEDIUM) — at most 5 product sets and catalog items per creative; one call reads the portfolio once and each catalog once', async () => {
+    const items = (n: number) => complete(messenger({ product_data: Array.from({ length: n }, (_, i) => ({ product_id: `12000000000007${i}`, product_source: 'MANUAL', product_decision: 'ACCEPT' })) }))
+    expect(problem({ body: form(items(5)) })).toBeNull()
+    expect(problem({ body: form(items(6)) })).toMatch(/at most 5 product sets and catalog items \(this one names 6\)/)
+    // Two items of the same catalog in one creative: the ad account's portfolio and the catalog are read once each.
+    const two = complete(messenger({ product_data: [pd[0], { ...pd[0], product_id: '120000000000072' }] }))
+    h.answers.push(
+      json({ id: ACT, business: { id: PORTFOLIO } }),
+      json({ id: ITEM, product_catalog: { id: CATALOG } }), json({ id: CATALOG, business: { id: PORTFOLIO } }),
+      json({ id: '120000000000072', product_catalog: { id: CATALOG } }),
+      json({ data: [{ hash: HASH, status: 'ACTIVE' }] }), json({ id: '120000000000301' }),
+    )
+    await metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(two))) })
+    expect(h.calls.map((c) => `${c.init.method} ${new URL(c.url).pathname.split('/').pop()}`)).toEqual([
+      `GET ${ACT}`, `GET ${ITEM}`, `GET ${CATALOG}`, 'GET 120000000000072', `GET adimages`, `POST adcreatives`,
+    ])
+  })
+
+  it('fix 4 (LOW) — a catalog template with its own cards (CR-450 static cards) names multi_share_optimized', () => {
+    const cards = [{ link: 'https://www.example.com/coupon', name: 'Coupon', static_card: true }, { link: 'https://www.example.com/', name: '{{product.name}}' }]
+    const template = (data: Record<string, unknown>) => complete({ name: 'Catalog A', object_story_spec: { page_id: PAGE, template_data: { link: 'https://www.example.com/', message: 'Tutti', child_attachments: cards, ...data } }, product_set_id: SET })
+    expect(problem({ body: form(template({})) })).toMatch(/catalog template with its own cards names template_data.multi_share_optimized/)
+    expect(problem({ body: form(template({ multi_share_optimized: false })) })).toBeNull()
+  })
+
+  it('fix 5 (LOW) — the words: retailer ids cannot be checked against the catalog rule; a shop cannot be confirmed (no "requires")', () => {
+    const retailer = creative({ object_story_spec: { page_id: PAGE, link_data: { link: 'https://www.example.com/', image_hash: HASH, retailer_item_ids: ['SKU-1'] } } })
+    expect(problem({ body: form(retailer) })).toMatch(/advertiser's own product ids for a collection, and Nexus cannot check a retailer id against the catalog rule/)
+    const shop = problem({ body: form(creative({ asset_feed_spec: { audios: [], onsite_destinations: [{ storefront_shop_id: '120000000000555' }] } })) })
+    expect(shop).toMatch(/cannot confirm that the Page's Facebook or Instagram shop and its commerce account are this business's own/)
+    expect(shop).not.toMatch(/requires/)
   })
 })

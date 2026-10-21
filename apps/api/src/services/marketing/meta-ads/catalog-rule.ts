@@ -48,7 +48,13 @@ import { portfolioTaken, takenIds } from './taken.js'
 type Row = Record<string, unknown>
 
 /** What the catalog checks use of the chosen account: its connection and its business portfolio (a MetaChosenAccount fits). */
-export type CatalogAccount = Pick<MetaChosenAccount, 'connectionId' | 'businessId'>
+export type CatalogAccount = Pick<MetaChosenAccount, 'connectionId' | 'businessId'> & {
+  /**
+   * Step 25 — one change's memo of catalog verdicts (CatalogRuleMemo.catalogs): a catalog named twice in one change is read
+   * once. Absent (every other caller): each check reads, as before.
+   */
+  catalogs?: Map<string, Promise<ReadableCatalog>>
+}
 
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null)
 const idText = (v: unknown): string | null => ((typeof v === 'string' || typeof v === 'number') && String(v).trim() ? String(v).trim() : null)
@@ -170,6 +176,15 @@ export async function clientCatalogIds(account: CatalogAccount, portfolioId: str
  * catalog), and the client list only when the portfolio does not own it. For a WRITE: writableCatalog, never this.
  */
 export async function readableCatalog(account: CatalogAccount, catalogId: string, operation = 'catalog.ownerCheck'): Promise<ReadableCatalog> {
+  if (!account.catalogs) return readableCatalogOnce(account, catalogId, operation)
+  // Step 25 — within one change only (the memo dies with it), keyed by connection, portfolio and catalog: the same verdict,
+  // a refusal included, without reading Meta again.
+  const key = `${account.connectionId}|${account.businessId ?? ''}|${catalogId}`
+  let verdict = account.catalogs.get(key)
+  if (!verdict) { verdict = readableCatalogOnce(account, catalogId, operation); account.catalogs.set(key, verdict) }
+  return verdict
+}
+async function readableCatalogOnce(account: CatalogAccount, catalogId: string, operation: string): Promise<ReadableCatalog> {
   const portfolioId = await catalogPortfolio(account)
   const id = metaObjectId(catalogId)
   if (!id) throw new MetaLiveRefusal(`"${catalogId}" is not a Meta catalog id (digits).`)
@@ -584,6 +599,9 @@ export async function writableCatalog(
  * one. The tool asks it before the preview, and the gateway asks it again before it sends anything (gateway.ts
  * metaBodyIdsProblem). The portfolio is read live from the ad account (`business`, reference/ad-account), so the gateway
  * needs no stored account. Reads only, through the gateway.
+ *
+ * Step 25 — a creative also names catalog ITEMS (a product tag's product_id, product_data's product_id): an item counts as
+ * its catalog too, by the same read rule (catalogChild kind item: its own product_catalog, then readableCatalog).
  */
 export interface CatalogRuleTarget { connectionId: string; adAccountId: string }
 
@@ -597,13 +615,38 @@ const notSent = (sentence: string): string =>
   `${sentence.replace(/,? (so (it is not|no catalog is) read( here)?|and (reads none|does not read it))\.$/, '.')} Nexus names no such catalog in a change, so nothing is sent.`
 
 /** Why this catalog / product set may not be named by a change of the chosen ad account, in words; null when it may. */
-export async function metaCatalogProblem(target: CatalogRuleTarget, ids: { catalogId?: string | null; productSetId?: string | null }): Promise<string | null> {
-  if (!ids.catalogId && !ids.productSetId) return null
+/**
+ * Step 25 — ONE change that names several catalog ids (a creative's product set, its tagged items, its product data): the
+ * ad account's portfolio is read once, each catalog's verdict and each id's verdict are remembered. The caller makes a memo
+ * per change (the tool per draft, the gateway per call) and drops it with the change: nothing is kept across changes,
+ * connections or businesses. Without a memo, metaCatalogProblem reads as before.
+ */
+export interface CatalogRuleMemo {
+  portfolios: Map<string, Promise<string | null>>
+  catalogs: Map<string, Promise<ReadableCatalog>>
+  verdicts: Map<string, Promise<string | null>>
+}
+export const newCatalogRuleMemo = (): CatalogRuleMemo => ({ portfolios: new Map(), catalogs: new Map(), verdicts: new Map() })
+
+export async function metaCatalogProblem(target: CatalogRuleTarget, ids: { catalogId?: string | null; productSetId?: string | null; productItemId?: string | null }, memo?: CatalogRuleMemo): Promise<string | null> {
+  if (!ids.catalogId && !ids.productSetId && !ids.productItemId) return null
+  if (!memo) return catalogProblemOnce(target, ids)
+  const key = `${target.connectionId}|${target.adAccountId}|${ids.catalogId ?? ''}|${ids.productSetId ?? ''}|${ids.productItemId ?? ''}`
+  let verdict = memo.verdicts.get(key)
+  if (!verdict) { verdict = catalogProblemOnce(target, ids, memo); memo.verdicts.set(key, verdict) }
+  return verdict
+}
+
+async function catalogProblemOnce(target: CatalogRuleTarget, ids: { catalogId?: string | null; productSetId?: string | null; productItemId?: string | null }, memo?: CatalogRuleMemo): Promise<string | null> {
   try {
-    const read = await metaReadOne({ connectionId: target.connectionId }, { operation: 'catalogRule.portfolio', path: `act_${target.adAccountId}`, query: { fields: 'business{id}' } })
-    const account: CatalogAccount = { connectionId: target.connectionId, businessId: idIn(read.body, 'business') }
+    const portfolioOf = () => metaReadOne({ connectionId: target.connectionId }, { operation: 'catalogRule.portfolio', path: `act_${target.adAccountId}`, query: { fields: 'business{id}' } }).then((read) => idIn(read.body, 'business'))
+    const accountKey = `${target.connectionId}|${target.adAccountId}`
+    let portfolio = memo?.portfolios.get(accountKey)
+    if (!portfolio) { portfolio = portfolioOf(); memo?.portfolios.set(accountKey, portfolio) }
+    const account: CatalogAccount = { connectionId: target.connectionId, businessId: await portfolio, ...(memo ? { catalogs: memo.catalogs } : {}) }
     if (ids.productSetId) await catalogChild(account, { kind: 'product_set', id: ids.productSetId, catalogId: ids.catalogId ?? null })
-    else await readableCatalog(account, ids.catalogId!)
+    if (ids.productItemId) await catalogChild(account, { kind: 'item', id: ids.productItemId, catalogId: ids.catalogId ?? null })
+    if (!ids.productSetId && !ids.productItemId) await readableCatalog(account, ids.catalogId!)
     return null
   } catch (err) {
     // A refusal of the read rule is said in its own words; a lookup that fails (Meta's refusal, a lost connection, the

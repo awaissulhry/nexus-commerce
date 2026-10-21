@@ -18,7 +18,16 @@ const h = vi.hoisted(() => ({
   send: vi.fn(),
   check: vi.fn(),
   owned: vi.fn(),
+  taken: new Set<string>(),
 }))
+// Step 18's catalog rule — which portfolios another Nexus business uses (nexus_meta_links_taken PORTFOLIO): a stand-in.
+vi.mock('../../marketing/meta-ads/taken.js', () => {
+  const takenIds = vi.fn(async (_product: string, ids: string[]) => new Set(ids.filter((id) => h.taken.has(id))))
+  return {
+    takenIds,
+    portfolioTaken: vi.fn(async (id: string) => ((await takenIds('PORTFOLIO', [id])).has(id) ? { portfolioId: id, takenByAnotherBusiness: true, sentence: 'taken' } : null)),
+  }
+})
 vi.mock('../../marketing/meta-ads/change-account.js', () => ({ metaChangeAccount: vi.fn(async () => h.account) }))
 vi.mock('../../marketing/meta-ads/live.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/meta-ads/live.js')>()),
@@ -50,6 +59,7 @@ import { META_ADS_CREATIVES_TOOLS } from './meta-ads-creatives.tools.js'
 import { META_CHANGE_RULES } from './meta-ads-kit.js'
 import { __creativeTiming, WELCOME_FLOWS_ANSWER } from '../../marketing/meta-ads/change-creatives.js'
 import { MetaLiveRefusal } from '../../marketing/meta-ads/live.js'
+import { localFailure, MetaReadError } from '../../marketing/meta-ads/errors.js'
 import { META_CREATIVE_FEATURES, META_NON_CATALOG_FORMATS } from '../../gateway/meta-creative-rules.js'
 import { canonical } from './ads-change-kit.js'
 import { MATERIAL_PREVIEW_FIELDS } from '../../agent-fleet/approval-inbox.service.js'
@@ -93,6 +103,7 @@ beforeEach(() => {
   h.send.mockReset()
   h.check.mockReset(); h.check.mockImplementation(async () => undefined)
   h.owned.mockReset(); h.owned.mockImplementation(async (_a: unknown, id: string) => id)
+  h.taken.clear()
 })
 
 describe('the tools', () => {
@@ -163,7 +174,7 @@ describe('create-meta-creative — the preview', () => {
     expect(p.preview.changes['Advantage+ creative features ON'].to).toBe('image_templates, inline_comment')
   })
 
-  it('refuses in words, before any call: another Page, the silent keys through parts, music by hand, political, catalog, no name', async () => {
+  it('refuses in words, before any call: another Page, the silent keys through parts, music by hand, political, retailer item ids, no name', async () => {
     const refusal = async (args: Record<string, unknown>) => {
       const p = await preview(args)
       expect(p.ok, JSON.stringify(p)).toBe(false)
@@ -174,7 +185,7 @@ describe('create-meta-creative — the preview', () => {
     expect(await refusal({ ...image, parts: { contextual_multi_ads: { enroll_status: 'OPT_IN' } } })).toMatch(/multiAdvertiser/)
     expect(await refusal({ ...image, assetFeed: { audios: [{ type: 'random' }] } })).toMatch(/music is the argument music/)
     expect(await refusal({ ...image, parts: { authorization_category: 'POLITICAL' } })).toMatch(/banned in the EU/)
-    expect(await refusal({ ...image, parts: { product_set_id: '120000000000444' } })).toMatch(/catalog rule \(step 18\)/)
+    expect(await refusal({ ...image, story: { link_data: { ...image.story.link_data, retailer_item_ids: ['0'] } } })).toMatch(/cannot check a retailer id against the catalog rule/)
     expect(await refusal({ ...image, story: { link_data: { ...image.story.link_data }, instagram_actor_id: IG } })).toMatch(/instagram_user_id/)
     expect(await refusal({ ...image, postId: POST })).toMatch(/one of them/)
     expect(await refusal({ name: 'From a post', postId: '120000000000099_500000000000001' })).toMatch(/not on the Facebook Page this business chose/)
@@ -435,5 +446,129 @@ describe('review round 3', () => {
     h.check.mockClear()
     await preview({ name: 'Link A', story: { link_data: { link: 'https://www.example.com/', message: 'Senza immagine' } } })
     expect(sentJson('interactive_components_spec')).toEqual({ components: [{ type: 'product_tag', enroll_status: 'opt_out' }] })
+  })
+})
+
+describe('C2-REBASE-18 — create-meta-creative names a product set or a catalog item only through step 18\'s catalog rule', () => {
+  const PORTFOLIO = '120000000000090'
+  const OTHER_NEXUS = '120000000000081' // a portfolio another business in Nexus uses
+  const CATALOG = '120000000000060' // the portfolio's own
+  const FOREIGN_CATALOG = '120000000000063' // a client catalog whose owner is another Nexus business's portfolio
+  const SET = '120000000000061'
+  const ITEM = '120000000000071'
+  /** Meta as the catalog rule reads it: the ad account's portfolio, the set's / item's catalog, the catalog's owner. */
+  const catalogMeta = (child: string, catalog: string, fails = false) => h.read.mockImplementation(async (_c: unknown, q: { path: string }) => {
+    const answers: Record<string, unknown> = {
+      act_1234567890: { id: 'act_1234567890', business: { id: PORTFOLIO } },
+      [child]: { id: child, product_catalog: { id: catalog } },
+      [CATALOG]: { id: CATALOG, business: { id: PORTFOLIO } },
+      [FOREIGN_CATALOG]: { id: FOREIGN_CATALOG, business: { id: OTHER_NEXUS } },
+      [`${PORTFOLIO}/client_product_catalogs`]: { data: [{ id: FOREIGN_CATALOG }] },
+    }
+    if (fails && q.path === child) throw new MetaReadError(localFailure('Meta refused it (100): Unsupported get request.', 'X'), 'r', 1)
+    return { body: answers[q.path] ?? {}, calls: 1 }
+  })
+  /** Master CR-448 — an Advantage+ catalog template: template_data and the creative's product set. */
+  const template = { name: 'Catalog A', story: { template_data: { link: 'https://www.example.com/', message: '{{product.name}} {{product.price}}', name: '{{product.name}}', call_to_action: { type: 'SHOP_NOW' } } }, parts: { product_set_id: SET } }
+  /** Master CR-313 — a catalog item tagged by hand on the image. */
+  const tagged = { ...image, productTags: [{ productId: ITEM, x: 0.5, y: 0.4 }] }
+
+  for (const [kind, args, child, word] of [
+    ['a product set (product_set_id)', template, SET, 'product set'],
+    ['a catalog item (productTags)', tagged, ITEM, 'catalog item'],
+  ] as const) {
+    it(`${kind}: the business's own catalog passes; another business's catalog, a shared portfolio and an unreadable one are refused before Meta's check`, async () => {
+      catalogMeta(child, CATALOG)
+      const p = await preview(args)
+      expect(p.ok, JSON.stringify(p)).toBe(true)
+      expect(h.check).toHaveBeenCalledTimes(1)
+      expect(p.preview.warnings.join(' ')).toContain(`Catalog: ${word} ${child} — each passed the catalog rule`)
+      h.check.mockClear()
+      const refusal = async () => { const r = await preview(args); expect(r.ok, JSON.stringify(r)).toBe(false); return r.error ?? '' }
+      catalogMeta(child, FOREIGN_CATALOG); h.taken.add(OTHER_NEXUS)
+      expect(await refusal()).toMatch(new RegExp(`^Nothing was asked of Meta: ${word} ${child}: That catalog belongs to a business portfolio another business in Nexus uses\\. Nexus names no such catalog in a change, so nothing is sent\\.$`))
+      catalogMeta(child, CATALOG); h.taken.add(PORTFOLIO)
+      expect(await refusal()).toMatch(/shared with another business in Nexus.*nothing is sent/)
+      h.taken.clear(); catalogMeta(child, CATALOG, true)
+      expect(await refusal()).toMatch(new RegExp(`could not confirm that this ${word} is in one of the business's catalogs`))
+      expect(h.check).not.toHaveBeenCalled()
+    })
+  }
+
+  it('products tagged by hand go instead of the automatic-tagging opt-out, never beside autoProductTags', async () => {
+    catalogMeta(ITEM, CATALOG)
+    const p = await preview(tagged)
+    expect(p.ok, JSON.stringify(p)).toBe(true)
+    expect(sentJson('interactive_components_spec')).toEqual({ components: [{ type: 'product_tag', product_tag_spec: { product_id: ITEM }, position_spec: { x: 0.5, y: 0.4 } }] })
+    expect(p.preview.warnings.join(' ')).toContain(`Products tagged by hand: item ${ITEM} at (0.5, 0.4); Meta's automatic product tagging is off`)
+    expect(p.preview.warnings.join(' ')).not.toMatch(/Automatic product tags: OFF/)
+    const both = await preview({ ...tagged, autoProductTags: true })
+    expect(both.error).toMatch(/ask productTags or autoProductTags, not both/)
+    expect(() => ask()({ ...image, productTags: [{ productId: ITEM, x: 2, y: 0 }] })).toThrow()
+  })
+
+  it('product extensions (CR-330 / CR-414) and product data (CR-041): the set and each item through the rule', async () => {
+    h.read.mockImplementation(async (_c: unknown, q: { path: string }) => ({
+      body: ({ act_1234567890: { business: { id: PORTFOLIO } }, [SET]: { id: SET, product_catalog: { id: CATALOG } }, [ITEM]: { id: ITEM, product_catalog: { id: CATALOG } }, [CATALOG]: { id: CATALOG, business: { id: PORTFOLIO } } } as Record<string, unknown>)[q.path] ?? {},
+      calls: 1,
+    }))
+    const p = await preview({ ...image, aiFeatures: ['product_extensions'], parts: { creative_sourcing_spec: { associated_product_set_id: SET }, product_data: [{ product_id: Number(ITEM), product_source: 'MANUAL', product_decision: 'ACCEPT' }] } })
+    expect(p.ok, JSON.stringify(p)).toBe(true)
+    expect(sentJson('product_data')).toEqual([{ product_id: ITEM, product_source: 'MANUAL', product_decision: 'ACCEPT' }])
+    expect(sentJson('creative_sourcing_spec')).toEqual({ associated_product_set_id: SET })
+    expect(p.preview.warnings.join(' ')).toContain(`Catalog: product set ${SET}, catalog item ${ITEM}`)
+  })
+})
+
+describe('step 25b — the catalog review in the tool: catalog opt-outs, product extensions, one read per catalog, template cards', () => {
+  const PORTFOLIO = '120000000000090'
+  const CATALOG = '120000000000060'
+  const SET = '120000000000061'
+  const ITEM = '120000000000071'
+  const ITEM2 = '120000000000072'
+  const ownMeta = () => h.read.mockImplementation(async (_c: unknown, q: { path: string }) => ({
+    body: ({ act_1234567890: { business: { id: PORTFOLIO } }, [SET]: { id: SET, product_catalog: { id: CATALOG } }, [ITEM]: { id: ITEM, product_catalog: { id: CATALOG } }, [ITEM2]: { id: ITEM2, product_catalog: { id: CATALOG } }, [CATALOG]: { id: CATALOG, business: { id: PORTFOLIO } } } as Record<string, unknown>)[q.path] ?? {},
+    calls: 1,
+  }))
+  const messenger = { name: 'Chat A', story: { link_data: { link: 'https://fb.com/messenger_doc/', image_hash: 'abc123def456', name: 'Chat', call_to_action: { type: 'MESSAGE_PAGE', value: { app_destination: 'MESSENGER' } } } } }
+
+  it('fix 1 — a messenger creative with an associated set or tagged products carries all six format opt-outs and the shop opt-out', async () => {
+    ownMeta()
+    for (const args of [{ ...messenger, parts: { creative_sourcing_spec: { associated_product_set_id: SET } } }, { ...messenger, productTags: [{ productId: ITEM, x: 0.5, y: 0.5 }] }]) {
+      h.check.mockClear()
+      const p = await preview(args)
+      expect(p.ok, JSON.stringify(p)).toBe(true)
+      expect(sentJson('format_transformation_spec')).toEqual(['da_collection', 'sa_collection', 'single_media', 'catalog_single_media', 'carousel', 'video_slideshow'].map((format) => ({ format, data_source: ['none'] })))
+      expect(sentJson('destination_spec')).toEqual({ destination_type: 'WEBSITE_AND_SHOP_OPT_OUT' })
+    }
+  })
+
+  it('fix 2 — product extensions go ON with action_metadata MANUAL beside the associated set; never without one', async () => {
+    ownMeta()
+    const p = await preview({ ...messenger, aiFeatures: ['product_extensions'], parts: { creative_sourcing_spec: { associated_product_set_id: SET } } })
+    expect(p.ok, JSON.stringify(p)).toBe(true)
+    expect(sentJson('degrees_of_freedom_spec').creative_features_spec.product_extensions).toEqual({ enroll_status: 'OPT_IN', action_metadata: { type: 'MANUAL' } })
+    expect(sentJson('degrees_of_freedom_spec').creative_features_spec.inline_comment).toEqual({ enroll_status: 'OPT_OUT' })
+    const none = await preview({ ...messenger, aiFeatures: ['product_extensions'] })
+    expect(none.error).toMatch(/product_extensions goes ON only beside creative_sourcing_spec.associated_product_set_id/)
+  })
+
+  it('fix 3 — one draft reads the ad account\'s portfolio once and each catalog once; more than 5 sets and items are refused', async () => {
+    ownMeta()
+    const p = await preview({ ...messenger, productTags: [{ productId: ITEM, x: 0.2, y: 0.2 }, { productId: ITEM2, x: 0.8, y: 0.8 }] })
+    expect(p.ok, JSON.stringify(p)).toBe(true)
+    expect(h.read.mock.calls.map((c) => (c[1] as { path: string }).path)).toEqual(['act_1234567890', ITEM, CATALOG, ITEM2])
+    const six = await preview({ ...messenger, productTags: Array.from({ length: 6 }, (_, i) => ({ productId: `12000000000007${i}`, x: 0.1, y: 0.1 })) })
+    expect(six.error).toMatch(/at most 5 product sets and catalog items/)
+  })
+
+  it('fix 4 — a catalog template\'s own cards: their order is said (multi_share_optimized), never by hand', async () => {
+    ownMeta()
+    const template = { name: 'Catalog A', story: { template_data: { link: 'https://www.example.com/', message: 'Tutti', child_attachments: [{ link: 'https://www.example.com/coupon', name: 'Coupon', static_card: true }, { link: 'https://www.example.com/', name: '{{product.name}}' }] } }, parts: { product_set_id: SET } }
+    const p = await preview(template)
+    expect(p.ok, JSON.stringify(p)).toBe(true)
+    expect(sentJson('object_story_spec').template_data.multi_share_optimized).toBe(false)
+    const byHand = await preview({ ...template, story: { template_data: { ...template.story.template_data, multi_share_optimized: true } } })
+    expect(byHand.error).toMatch(/the card order is the argument carouselAutoOrder/)
   })
 })
