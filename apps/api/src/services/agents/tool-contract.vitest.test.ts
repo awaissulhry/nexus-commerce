@@ -867,6 +867,50 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { items: [{ kind: 'campaign', id: '120000000000001', name: 'Campaign A', status: 'ACTIVE' }], accountId: 'conn-1', adAccountId: '1234567890' },
         after: { items: [{ kind: 'campaign', id: '120000000000001', status: 'PAUSED' }], accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 18: what a settings change replaced goes back through the same tool (its record holds those arguments).
+      'set-meta-campaign': {
+        before: { kind: 'campaign', id: '120000000000001', fields: { daily_budget: '5000' }, undo: { dailyBudgetCents: 5000 }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { kind: 'campaign', id: '120000000000001', fields: { daily_budget: '7000' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-ad-set': {
+        before: { kind: 'adset', id: '120000000000002', fields: { bid_amount: '150' }, undo: { bidAmountCents: 150 }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { kind: 'adset', id: '120000000000002', fields: { bid_amount: '180' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-budget-schedule': {
+        before: {
+          kind: 'highdemandperiod', id: '120000000000031', parent: { kind: 'campaign', id: '120000000000001' }, fields: { budget_value: '20', exists: 'yes' },
+          undo: { action: 'change', level: 'campaign', objectId: '120000000000001', periodId: '120000000000031', startTime: '2099-01-01T08:00:00.000Z', endTime: '2099-01-01T20:00:00.000Z', increaseCents: 2000 },
+          noUndo: [], accountId: 'conn-1', adAccountId: '1234567890',
+        },
+        after: { kind: 'highdemandperiod', id: '120000000000031', parent: { kind: 'campaign', id: '120000000000001' }, fields: { budget_value: '30', exists: 'yes' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 19: a create's or a copy's undo deletes what it made (its record names it) through the same tool.
+      'create-meta-campaign': {
+        before: { op: 'create', made: [], top: [], madeAt: '', accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'create', made: [{ kind: 'campaign', id: '120000000000001', name: 'Campaign A' }], top: [{ kind: 'campaign', id: '120000000000001' }], madeAt: '2026-10-21T08:00:00.000Z', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'create-meta-ad-set': {
+        before: { op: 'create', made: [], top: [], madeAt: '', accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'create', made: [{ kind: 'adset', id: '120000000000002', name: 'Ad set B' }], top: [{ kind: 'adset', id: '120000000000002' }], madeAt: '2026-10-21T08:00:00.000Z', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 21: label lists go back as they were, a label made is deleted, a rename goes back; a value rule change
+      // puts the earlier rules back, an attach the earlier set; a booking is cancelled, an ad set's reservation detached.
+      'set-meta-labels': {
+        before: { op: 'objects', objects: [{ kind: 'adset', id: '120000000000002', labels: [{ id: '120000000000070', name: 'Label A' }] }], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'objects', objects: [{ kind: 'adset', id: '120000000000002', labels: [{ id: '120000000000070', name: 'Label A' }, { id: '120000000000071', name: 'Label B' }] }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-value-rules': {
+        before: { op: 'attach', adSet: { id: '120000000000002', valueRuleSetId: null }, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'attach', adSet: { id: '120000000000002', valueRuleSetId: '120000000000080' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'create-meta-reach-frequency': {
+        before: { op: 'reserve', predictionId: '120000000000090', reservationId: null, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'reserve', predictionId: '120000000000090', reservationId: '120000000000091', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'copy-meta-ads': {
+        before: { op: 'copy', made: [], top: [], madeAt: '', accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'copy', made: [{ kind: 'campaign', id: '120000000000009' }, { kind: 'adset', id: '120000000000010' }], top: [{ kind: 'campaign', id: '120000000000009' }], madeAt: '2026-10-21T08:00:00.000Z', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1036,7 +1080,9 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-custom-goals', 'set-google-custom-audiences', 'set-google-user-lists', 'set-google-reusable-audiences',
       'upload-google-sales', 'adjust-google-sales',
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
-      'set-meta-connection', 'set-meta-status']) {
+      'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule',
+      'create-meta-campaign', 'create-meta-ad-set', 'copy-meta-ads',
+      'remove-meta-ads-items', 'set-meta-labels', 'set-meta-value-rules', 'create-meta-reach-frequency']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })
