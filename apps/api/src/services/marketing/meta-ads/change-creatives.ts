@@ -7,8 +7,10 @@
  *   create   ONE creative of the chosen ad account (POST /act_<id>/adcreatives — Meta's check, validate_only, first), built
  *            on the business's CHOSEN Page and Instagram account (Nexus fills them; a partnership ad names its partner beside
  *            them). Every creative carries the silent features explicitly: every Advantage+ creative feature Meta documents
- *            OFF unless asked (gateway META_CREATIVE_FEATURES), multi-advertiser ads OFF unless asked, no music unless asked,
- *            no format automation unless asked, no shop routing unless asked. The run reads the creative back and says what
+ *            OFF unless asked (gateway META_CREATIVE_FEATURES), multi-advertiser ads OFF unless asked; and, where Meta
+ *            documents them for the creative's kind (review B, gateway silentKeysOf), no music, no format automation and no
+ *            shop routing unless asked; automatic product tags on a static image and the reordering of carousel cards OFF
+ *            unless asked (review A1). The run reads the creative back and says what
  *            Meta kept (Meta silently drops an opt-in it finds ineligible; it may also show a feature it switched on itself).
  *            "Was it new?": Meta answers the id of an EXISTING creative for a duplicate (reference/ad-creative "If you try
  *            to add an creative that isn't unique … return the creative ID of the existing ad creative"); an AdCreative has
@@ -29,8 +31,8 @@
  */
 import prisma from '../../../db.js'
 import {
-  finishCreative, isJsonCreativeKey, judgeCreativeForm, judgeCreativeKey, META_AI_GENERATED_FEATURES, META_CREATIVE_FEATURES, META_CREATIVE_TEXT,
-  META_FORMAT_AUTOMATION_FORMATS, metaCreativeTextProblem, newCreativeWalk,
+  creativeKindOf, finishCreative, isJsonCreativeKey, judgeCreativeForm, judgeCreativeKey, META_AI_GENERATED_FEATURES, META_CREATIVE_FEATURES, META_CREATIVE_TEXT,
+  metaCreativeTextProblem, newCreativeWalk, partsOptIns, silentKeysOf, type CreativeKind,
 } from '../../gateway/meta-creative-rules.js'
 import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import type { MetaChangeAccount } from './change-account.js'
@@ -42,6 +44,13 @@ import { pageOf, pagePostId } from './live-media.js'
 import { listPaged } from './live-objects.js'
 
 export const CREATIVE_TOOL = 'create-meta-creative'
+/**
+ * Master CR-207 (review B2) — saved welcome-message flows (`GET/POST/DELETE /{page_id}/welcome_message_flows`, SDK only) are
+ * a Page write that needs the Page's own access token (lane question Q1). C2-PAGE-TOKEN: lane C4's step 36 builds the
+ * gateway's `auth: 'page'` mode; lane C2 wires these flows to it then. A creative uses a flow by its id already
+ * (asset_feed_spec.additional_data.partner_app_welcome_message_flow_id).
+ */
+export const WELCOME_FLOWS_ANSWER = 'Saved welcome-message flows of the Page (create, list, delete) need the Page\'s own access token, which Nexus does not hold yet: they come with the Page-token mode (step 36). Until then a person makes them in Meta Business Suite; a creative already uses one by its id (assetFeed.additional_data.partner_app_welcome_message_flow_id).'
 export const SET_CREATIVE_TOOL = 'set-meta-creative'
 /** At most this many creatives taken back per request. */
 export const MAX_CREATIVE_UNDO = 10
@@ -59,7 +68,7 @@ export const __creativeTiming = {
 
 export interface PartnerRequest { pageId?: string | null; instagramId?: string | null; mainIdentity: 'brand' | 'creator' }
 export interface CreativeRequest {
-  action: 'create' | 'undo'
+  action: 'create' | 'undo' | 'welcome-flow'
   name?: string | null
   /** Meta's object_story_spec without page_id / instagram_user_id (Nexus fills the chosen ones). */
   story?: Record<string, unknown> | null
@@ -79,6 +88,10 @@ export interface CreativeRequest {
   music?: 'off' | 'random' | null
   formatAutomation?: Array<{ format: string; dataSources: string[] }>
   shopDestination?: boolean | null
+  /** Review A1 — let Meta tag catalog products on a static image by itself (default: off). */
+  autoProductTags?: boolean | null
+  /** Review A1 — let Meta reorder a carousel's cards (multi_share_optimized; default: off). */
+  carouselAutoOrder?: boolean | null
   partner?: PartnerRequest | null
   async?: boolean | null
   /** undo: the creatives an earlier create-meta-creative made new. */
@@ -93,11 +106,17 @@ const OWN_KEYS: Readonly<Record<string, string>> = {
   name: 'name', object_story_spec: 'story', object_story_id: 'postId', asset_feed_spec: 'assetFeed', instagram_user_id: 'withInstagram',
   degrees_of_freedom_spec: 'aiFeatures (and featureSettings)', contextual_multi_ads: 'multiAdvertiser', format_transformation_spec: 'formatAutomation',
   destination_spec: 'shopDestination', facebook_branded_content: 'partner', instagram_branded_content: 'partner', execution_options: '(Nexus asks Meta\'s check itself)',
+  interactive_components_spec: 'autoProductTags',
 }
 
 const nowSec = () => Math.floor(Date.now() / 1000)
-/** Meta's clock and Nexus's differ by a little: a post made in this window before the send counts as made by it. */
-const CLOCK_SLACK_SEC = 60
+/**
+ * Review A4 — Meta's clock and Nexus's differ by a little: a post made at most this long before the send counts as made by
+ * it. Kept to a few seconds on purpose: a duplicate of a creative another request made just before (Meta then answers
+ * THAT creative) must not pass as new — Meta's and Nexus's clocks are both network-synced, and the post is made during this
+ * very call, so its time is never earlier than the send by more than a small skew.
+ */
+const CLOCK_SLACK_SEC = 5
 const secondsOf = (value: unknown): number | null => {
   const t = typeof value === 'string' ? Date.parse(value) : NaN
   return Number.isFinite(t) ? Math.floor(t / 1000) : null
@@ -137,6 +156,11 @@ export interface BuiltCreative {
   params: Record<string, string>
   warnings: string[]
   featuresOn: string[]
+  /** Review B — what the creative is (its silent keys follow it). */
+  kind: CreativeKind
+  /** Review A1 — Meta's automatic product tags switched off (a static image), and whether it has a carousel. */
+  productTagsOff: boolean
+  carousel: boolean
 }
 
 /** Build one creative from the request and the business's chosen Page and Instagram account; or why not (no call). */
@@ -188,22 +212,48 @@ export function buildCreative(request: CreativeRequest, chosen: { pageId: string
     if (igId) creative.instagram_user_id = igId
   }
   Object.assign(creative, parts, branded)
+  // Review B — the kind of creative decides the silent keys Meta documents for it (gateway silentKeysOf).
+  const kind = creativeKindOf(creative)
+  const silent = silentKeysOf(kind)
+  if (request.shopDestination) return { refusal: `Nothing was asked of Meta: shop routing (WEBSITE_AND_SHOP) needs a Facebook or Instagram shop named (onsite_destinations, Meta's Shops guide), and Nexus cannot confirm a shop is this business's own: it comes with the catalog / commerce steps. Shop routing stays off.` }
   const music = request.music === 'random' ? [{ type: 'random' }] : []
-  creative.asset_feed_spec = { ...feed, audios: music }
+  if (kind === 'existing-post') {
+    if (Object.keys(feed).length) return { refusal: 'Nothing was asked of Meta: a creative of an existing post takes no asset feed here (only music, by the argument music).' }
+    // No asset feed on an existing post unless music is asked: Meta's music is an asset-feed opt-in, and the post keeps its
+    // own media (LIVE-PROBES CR-416p).
+    if (music.length) creative.asset_feed_spec = { audios: music }
+  } else creative.asset_feed_spec = { ...feed, audios: music }
+  // Review A1 — a carousel's card order: Meta reorders the cards by itself (multi_share_optimized, default true) unless told.
+  const auto = request.carouselAutoOrder === true
+  const story = creative.object_story_spec as Record<string, Record<string, unknown> | undefined> | undefined
+  const cards = story?.link_data && Array.isArray(story.link_data.child_attachments)
+  if (story?.link_data && 'multi_share_optimized' in story.link_data) return { refusal: 'Nothing was asked of Meta: the card order is the argument carouselAutoOrder (Meta reorders the cards only when it is true), not link_data.multi_share_optimized.' }
+  if (cards) story!.link_data = { ...story!.link_data, multi_share_optimized: auto }
+  const feedCarousels = (creative.asset_feed_spec as { carousels?: unknown } | undefined)?.carousels
+  if (Array.isArray(feedCarousels)) {
+    if (feedCarousels.some((c) => isObject(c) && 'multi_share_optimized' in c)) return { refusal: 'Nothing was asked of Meta: the card order is the argument carouselAutoOrder, not carousels[].multi_share_optimized.' }
+    ;(creative.asset_feed_spec as Record<string, unknown>).carousels = feedCarousels.map((c) => (isObject(c) ? { ...c, multi_share_optimized: auto } : c))
+  }
+  // Review A1 — Meta tags catalog products on a static image by itself (master CR-314, "ON by default"): switched off unless asked.
+  const linkData = story?.link_data
+  const staticImage = kind !== 'catalog' && !!story && (!!story.photo_data || (!!linkData && (!!linkData.image_hash || !!linkData.picture) && !linkData.child_attachments && !linkData.collection_thumbnails))
+  if (staticImage && request.autoProductTags !== true) creative.interactive_components_spec = { components: [{ type: 'product_tag', enroll_status: 'opt_out' }] }
   // The silent features (lane prompt, binding): every documented feature named, OFF unless asked.
   const asked = [...new Set(request.aiFeatures ?? [])]
   const unknown = asked.filter((f) => !META_CREATIVE_FEATURES.includes(f))
   if (unknown.length) return { refusal: `Nothing was asked of Meta: ${unknown.join(', ')} ${unknown.length === 1 ? 'is not an' : 'are not'} Advantage+ creative feature${unknown.length === 1 ? '' : 's'} Meta documents.` }
   const settings = isObject(request.featureSettings) ? request.featureSettings : {}
-  for (const key of Object.keys(settings)) if (!META_CREATIVE_FEATURES.includes(key)) return { refusal: `Nothing was asked of Meta: featureSettings.${key} is not an Advantage+ creative feature Meta documents.` }
+  for (const key of Object.keys(settings)) if (!asked.includes(key)) return { refusal: `Nothing was asked of Meta: featureSettings.${key} goes only with ${key} in aiFeatures (a feature switched on).` }
   creative.degrees_of_freedom_spec = {
-    creative_features_spec: Object.fromEntries(META_CREATIVE_FEATURES.map((f) => [f, { enroll_status: asked.includes(f) ? 'OPT_IN' : 'OPT_OUT', ...(asked.includes(f) && isObject(settings[f]) ? settings[f] : {}) }])),
+    creative_features_spec: Object.fromEntries(META_CREATIVE_FEATURES.map((f) => [f, { enroll_status: asked.includes(f) ? 'OPT_IN' : 'OPT_OUT', ...(asked.includes(f) && isObject(settings[f]) ? { customizations: settings[f] } : {}) }])),
   }
   creative.contextual_multi_ads = { enroll_status: request.multiAdvertiser ? 'OPT_IN' : 'OPT_OUT' }
   const formats = new Map((request.formatAutomation ?? []).map((f) => [f.format, f.dataSources]))
-  for (const f of formats.keys()) if (!(META_FORMAT_AUTOMATION_FORMATS as readonly string[]).includes(f)) return { refusal: `Nothing was asked of Meta: ${f} is not a format Meta transforms (${META_FORMAT_AUTOMATION_FORMATS.join(', ')}).` }
-  creative.format_transformation_spec = META_FORMAT_AUTOMATION_FORMATS.map((format) => ({ format, data_source: formats.get(format)?.length ? formats.get(format) : ['none'] }))
-  creative.destination_spec = { destination_type: request.shopDestination ? 'WEBSITE_AND_SHOP' : 'WEBSITE_AND_SHOP_OPT_OUT' }
+  for (const f of formats.keys()) {
+    if (!silent.formats?.includes(f)) return { refusal: `Nothing was asked of Meta: Meta documents format automation ${f} ${silent.formats ? `for a ${kind} creative only as ${silent.formats.join(', ')}` : `for website and catalog creatives, not for a ${kind} creative`}.` }
+  }
+  if (silent.formats) creative.format_transformation_spec = silent.formats.map((format) => ({ format, data_source: formats.get(format)?.length ? formats.get(format) : ['none'] }))
+  if (silent.destination) creative.destination_spec = { destination_type: 'WEBSITE_AND_SHOP_OPT_OUT' }
   // THE judge (gateway/meta-creative-rules.ts): every key at every depth, cleaned; then the ids and the silent features.
   const walk = newCreativeWalk(!!igId)
   const judged: Record<string, unknown> = {}
@@ -218,7 +268,7 @@ export function buildCreative(request: CreativeRequest, chosen: { pageId: string
   // What the gateway will judge is exactly this (one spelling): checked here too, so a preview never promises what it refuses.
   const gateway = judgeCreativeForm(new Map(Object.entries(params)))
   if ('problem' in gateway) return { refusal: `Nothing was asked of Meta: ${gateway.problem}.` }
-  return { creative: judged, params, warnings: finished.warnings, featuresOn: asked }
+  return { creative: judged, params, warnings: finished.warnings, featuresOn: asked, kind, productTagsOff: !!creative.interactive_components_spec, carousel: !!cards || Array.isArray(feedCarousels) }
 }
 
 /** The plain-text parts of a creative a person reads, for Meta's length advice (F1: headline ≤25, text ≤90 recommended). */
@@ -240,8 +290,12 @@ function textAdvice(creative: Record<string, unknown>, instagram: boolean): stri
 
 // ── create: the run ─────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** What the run reads back of a creative (Meta: "To confirm the final configuration, use a GET request"). */
-export const CREATIVE_READ_BACK = 'id,name,status,object_story_id,effective_object_story_id,degrees_of_freedom_spec,contextual_multi_ads,asset_feed_spec,effective_authorization_category'
+/**
+ * What the run reads back of a creative (Meta: "To confirm the final configuration, use a GET request") — review A6: the
+ * silent keys too (destination_spec, format_transformation_spec, the music in asset_feed_spec, the product tags in
+ * interactive_components_spec, the carousel order in object_story_spec).
+ */
+export const CREATIVE_READ_BACK = 'id,name,status,object_story_id,effective_object_story_id,object_story_spec,degrees_of_freedom_spec,contextual_multi_ads,asset_feed_spec,format_transformation_spec,destination_spec,interactive_components_spec,effective_authorization_category'
 
 /** The features a creative reads back as ON. */
 function featuresOn(node: Record<string, unknown> | null): string[] {
@@ -249,13 +303,32 @@ function featuresOn(node: Record<string, unknown> | null): string[] {
   return Object.entries(spec).filter(([, v]) => v?.enroll_status === 'OPT_IN').map(([k]) => k).sort()
 }
 
+/** Is this creative id already claimed by another record of this business (an earlier create, not undone)? */
+async function claimedBefore(creativeId: string, adAccountId: string): Promise<boolean> {
+  try {
+    const rows = await prisma.agentChange.findMany({
+      where: { toolName: CREATIVE_TOOL, undoneAt: null, after: { path: ['items'], array_contains: [{ creativeId }] } },
+      select: { id: true, after: true },
+      take: 20,
+    })
+    return rows.some((r) => (r.after as { adAccountId?: unknown } | null)?.adAccountId === adAccountId)
+  } catch {
+    // Not proven otherwise: count it as claimed (never new, never deleted by an undo).
+    return true
+  }
+}
+
 /**
- * Was the creative NEW (made by this send)? Its own unpublished post's created_time (an AdCreative has no created_time):
- * made since the send = new; older = Meta answered an existing creative (or an existing post) = not new; a creative of an
- * existing post (object_story_id), or a post Nexus cannot read = not proven new. Only `true` lets an undo delete it.
+ * Was the creative NEW (made by this send)? An AdCreative has no created_time, so its own unpublished post's created_time:
+ * made since the send (within CLOCK_SLACK_SEC) = new. Review A4 — NOT new when Meta reads back another name than the one
+ * sent (a duplicate answers the existing creative, with its own name), when another record of this business (not undone)
+ * already claims this creative id, or when the post is older. A creative of an existing post (object_story_id), or a post
+ * Nexus cannot read = not proven new. Only `true` lets an undo delete it.
  */
-async function creativeWasNew(target: MetaWriteTarget, node: Record<string, unknown>, sentAt: number, fromExistingPost: boolean): Promise<boolean | null> {
-  if (fromExistingPost) return null
+async function creativeWasNew(target: MetaWriteTarget, creativeId: string, node: Record<string, unknown>, sentAt: number, made: { name: string; fromExistingPost: boolean }): Promise<boolean | null> {
+  if (typeof node.name === 'string' && node.name !== made.name) return false
+  if (await claimedBefore(creativeId, target.adAccountId)) return false
+  if (made.fromExistingPost) return null
   const post = typeof node.effective_object_story_id === 'string' && /^\d{1,25}_\d{1,25}$/.test(node.effective_object_story_id) ? node.effective_object_story_id : null
   if (!post) return null
   try {
@@ -277,39 +350,56 @@ async function readCreative(target: MetaWriteTarget, creativeId: string): Promis
   }
 }
 
+/** Review A6 — the silent keys as Meta reads them back (null: not sent back). */
+function silentRead(read: Record<string, unknown>) {
+  const feed = read.asset_feed_spec as { audios?: unknown } | undefined
+  const formats = Array.isArray(read.format_transformation_spec) ? (read.format_transformation_spec as Array<{ format?: unknown; data_source?: unknown }>) : null
+  const components = (read.interactive_components_spec as { components?: Array<{ type?: unknown; enroll_status?: unknown }> } | undefined)?.components
+  const link = ((read.object_story_spec as { link_data?: Record<string, unknown> } | undefined)?.link_data) ?? null
+  return {
+    destination: (read.destination_spec as { destination_type?: unknown } | undefined)?.destination_type ?? null,
+    formatsOn: formats ? formats.filter((f) => !(Array.isArray(f.data_source) && f.data_source.length === 1 && f.data_source[0] === 'none')).map((f) => String(f.format)) : null,
+    music: feed && 'audios' in feed ? (Array.isArray(feed.audios) && feed.audios.length > 0) : null,
+    productTags: Array.isArray(components) ? (components.find((c) => c.type === 'product_tag')?.enroll_status ?? null) : null,
+    carouselAutoOrder: link && typeof link.multi_share_optimized === 'boolean' ? link.multi_share_optimized : null,
+  }
+}
+
 /** The run's node of a creative Meta made: its id, "was it new?", what Meta kept of the features asked, and what else. */
-async function madeNode(target: MetaWriteTarget, creativeId: string, node: Record<string, unknown> | null, sentAt: number, asked: string[], fromExistingPost: boolean, jobId: string | null = null) {
+async function madeNode(target: MetaWriteTarget, creativeId: string, node: Record<string, unknown> | null, sentAt: number, asked: string[], made: { name: string; fromExistingPost: boolean }, jobId: string | null = null) {
   const read = node && 'degrees_of_freedom_spec' in node ? node : (await readCreative(target, creativeId)) ?? node ?? {}
   const on = featuresOn(read)
   const generated = Array.isArray((read.asset_feed_spec as { bodies?: unknown } | undefined)?.bodies) ? ((read.asset_feed_spec as { bodies: unknown[] }).bodies.length) : 0
   return {
     creativeId,
     jobId,
-    new: await creativeWasNew(target, read, sentAt, fromExistingPost),
+    new: await creativeWasNew(target, creativeId, read, sentAt, made),
+    name: typeof read.name === 'string' ? read.name : null,
     status: typeof read.status === 'string' ? read.status : null,
     featuresRead: 'degrees_of_freedom_spec' in read,
     featuresOn: on,
     droppedByMeta: asked.filter((f) => !on.includes(f)),
     onWithoutAsking: on.filter((f) => !asked.includes(f)),
     multiAdvertiser: (read.contextual_multi_ads as { enroll_status?: unknown } | undefined)?.enroll_status ?? null,
+    ...silentRead(read),
     authorization: typeof read.effective_authorization_category === 'string' ? read.effective_authorization_category : null,
     bodiesInFeed: generated,
   }
 }
 
-function sendCreate(act: string, params: Record<string, string>, asked: string[], fromExistingPost: boolean) {
+function sendCreate(act: string, params: Record<string, string>, asked: string[], made: { name: string; fromExistingPost: boolean }) {
   return async (target: MetaWriteTarget): Promise<MetaChangeResult> => {
     const operation = 'creative.create'
     const sentAt = nowSec()
     const result = await metaSendChange(target, { objectId: act, kind: 'adaccount', params, operation, edge: 'adcreatives', readBackFields: CREATIVE_READ_BACK, timeoutMs: 120_000 })
     const creativeId = idOf(result.node?.id)
     if (!creativeId) throw new MetaWriteError(localFailure(`Meta answered the creative without an id, so Nexus cannot say what it made. ${META_UNKNOWN_OUTCOME}`, 'NO_CREATIVE_ID'), operation, 'unknown')
-    return { node: await madeNode(target, creativeId, result.node, sentAt, asked, fromExistingPost), readBack: result.readBack, waitedMs: result.waitedMs }
+    return { node: await madeNode(target, creativeId, result.node, sentAt, asked, made), readBack: result.readBack, waitedMs: result.waitedMs }
   }
 }
 
 /** M5-33 — the async job: sent, then its requests read until Meta names the creative it made (or the polls run out). */
-function sendAsync(act: string, params: Record<string, string>, asked: string[], fromExistingPost: boolean) {
+function sendAsync(act: string, params: Record<string, string>, asked: string[], made: { name: string; fromExistingPost: boolean }) {
   return async (target: MetaWriteTarget): Promise<MetaChangeResult> => {
     const operation = 'creative.async'
     const sentAt = nowSec()
@@ -331,7 +421,7 @@ function sendAsync(act: string, params: Record<string, string>, asked: string[],
     if (!creativeId) {
       return { node: { creativeId: null, jobId, new: null, status: state, featuresOn: [], droppedByMeta: [], onWithoutAsking: [], featuresRead: false, multiAdvertiser: null, authorization: null, bodiesInFeed: 0 }, readBack: 'none', waitedMs: result.waitedMs }
     }
-    return { node: await madeNode(target, creativeId, null, sentAt, asked, fromExistingPost, jobId), readBack: 'second-read', waitedMs: result.waitedMs }
+    return { node: await madeNode(target, creativeId, null, sentAt, asked, made, jobId), readBack: 'second-read', waitedMs: result.waitedMs }
   }
 }
 
@@ -343,7 +433,10 @@ const newWords = (isNew: unknown) => (isNew === true
 
 /** The step's sentence once Meta made it: the id, "was it new?", the features Meta kept, and what to do next. */
 function createdSentence(label: string, node: Record<string, unknown> | null): string {
-  const n = (node ?? {}) as { creativeId?: string | null; jobId?: string | null; status?: string | null; new?: unknown; featuresRead?: boolean; featuresOn?: string[]; droppedByMeta?: string[]; onWithoutAsking?: string[]; multiAdvertiser?: unknown; authorization?: string | null }
+  const n = (node ?? {}) as {
+    creativeId?: string | null; jobId?: string | null; status?: string | null; new?: unknown; featuresRead?: boolean; featuresOn?: string[]; droppedByMeta?: string[]; onWithoutAsking?: string[]; multiAdvertiser?: unknown; authorization?: string | null
+    destination?: unknown; formatsOn?: string[] | null; music?: boolean | null; productTags?: unknown; carouselAutoOrder?: boolean | null
+  }
   if (!n.creativeId) return `${label}: Meta took the async job ${n.jobId ?? '?'}${n.status ? ` (${n.status})` : ''} but has not named the creative yet; meta-ad-details view creatives shows it once made. Nexus cannot prove it new, so its undo never deletes it.`
   const parts = [
     `${label}: Meta made creative ${n.creativeId}${n.status ? ` (${n.status})` : ''}; ${newWords(n.new)}.`,
@@ -352,6 +445,12 @@ function createdSentence(label: string, node: Record<string, unknown> | null): s
     n.droppedByMeta?.length ? `Meta dropped ${n.droppedByMeta.join(', ')} as ineligible for this creative (it does so silently).` : '',
     n.onWithoutAsking?.length ? `WARNING: Meta has ${n.onWithoutAsking.join(', ')} ON although Nexus did not ask for ${n.onWithoutAsking.length === 1 ? 'it' : 'them'} — make the creative again without ${n.onWithoutAsking.length === 1 ? 'it' : 'them'} if that is not wanted.` : '',
     n.multiAdvertiser === 'OPT_IN' ? 'Multi-advertiser ads: ON.' : '',
+    // Review A6 — the other silent keys as Meta reads them back (only what it sent back is said).
+    n.formatsOn?.length ? `Format automation Meta has ON: ${n.formatsOn.join(', ')}.` : '',
+    n.music === true ? 'Music: ON.' : '',
+    typeof n.destination === 'string' && n.destination !== 'WEBSITE_AND_SHOP_OPT_OUT' ? `Shop routing reads ${n.destination}.` : '',
+    n.productTags === 'opt_out' ? 'Automatic product tags: off.' : '',
+    n.carouselAutoOrder === true ? 'Meta may reorder the carousel cards (multi_share_optimized).' : '',
     n.authorization && n.authorization !== 'NONE' ? `Meta classes it as ${n.authorization} (effective_authorization_category): an ad with it will not run in the EU.` : '',
     `See it before it spends: meta-ad-preview view creative creativeId ${n.creativeId} (Claude only; links are public for 24 h).`,
   ]
@@ -382,12 +481,12 @@ async function createDraft(account: MetaChangeAccount, request: CreativeRequest)
     // Meta documents validate_only on POST /act_<id>/adcreatives (reference/ad-account/adcreatives), not on asyncadcreatives.
     check: async ? 'none' : 'meta', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
     operation: async ? 'creative.async' : 'creative.create', edge: async ? 'asyncadcreatives' : 'adcreatives',
-    send: async ? sendAsync(act, params, asked, fromExistingPost) : sendCreate(act, params, asked, fromExistingPost),
+    send: async ? sendAsync(act, params, asked, { name, fromExistingPost }) : sendCreate(act, params, asked, { name, fromExistingPost }),
     doneSentence: (result) => createdSentence(label, result.node),
   }
   const ai = asked.filter((f) => META_AI_GENERATED_FEATURES.has(f))
-  const story = built.creative.object_story_spec as Record<string, unknown> | undefined
-  const staticImage = !!story && (!!story.photo_data || (!!story.link_data && !(story.link_data as Record<string, unknown>).child_attachments))
+  const silent = silentKeysOf(built.kind)
+  const optIns = partsOptIns(built.creative)
   const warnings = [
     'A creative spends nothing: it serves only once an ad uses it (create-meta-ad) and that ad, its ad set and its campaign are on.',
     'Creatives cannot be changed once made (Meta lets only their name, labels and status change: set-meta-creative): a change is a new creative swapped onto the ad, and a swap on an ACTIVE ad sends that ad back to Meta\'s review.',
@@ -396,11 +495,14 @@ async function createDraft(account: MetaChangeAccount, request: CreativeRequest)
       : `Every one of the ${META_CREATIVE_FEATURES.length} Advantage+ creative features Meta documents is sent OFF (Meta switches some on by default otherwise: adapt_to_placement, inline_comment, description_automation); the run reads the creative back and says what Meta has.`,
     ...ai.map((f) => `${f} is generated with AI: an ad using this creative must be created PAUSED and previewed first (meta-ad-preview view ad or creative, creativeFeature ${f}) and only then switched on — Meta's rule; create-meta-ad enforces it.`),
     request.multiAdvertiser ? 'Multi-advertiser ads: ON at your request (Meta may show this ad next to other advertisers\' ads).' : 'Multi-advertiser ads: OFF (contextual_multi_ads OPT_OUT; Meta opts a creative in when it is not said).',
-    request.music === 'random' ? 'Music: Meta adds a track of its choice (asset_feed_spec.audios random).' : 'Music: none (asset_feed_spec.audios empty, Meta\'s way to opt out).',
-    (request.formatAutomation ?? []).length ? `Format automation ON at your request: ${(request.formatAutomation ?? []).map((f) => `${f.format} from ${f.dataSources.join(', ')}`).join('; ')}; every other format is sent with data_source none.` : 'Format automation: none (every format_transformation_spec format sent with data_source none).',
-    request.shopDestination ? 'Shop routing ON at your request (destination_spec WEBSITE_AND_SHOP: Meta may send people to the Facebook or Instagram shop instead of the website).' : 'Shop routing: OFF (destination_spec WEBSITE_AND_SHOP_OPT_OUT; v26 sends an eligible creative to the shop by itself otherwise).',
+    `A ${built.kind} creative: Nexus sends the silent keys Meta documents for this kind (review B) — every Advantage+ feature and multi-advertiser ads${silent.audios ? ', music' : ''}${silent.formats ? ', format automation' : ''}${silent.destination ? ', shop routing' : ''}.`,
+    request.music === 'random' ? 'Music: Meta adds a track of its choice (asset_feed_spec.audios random).' : silent.audios ? 'Music: none (asset_feed_spec.audios empty, Meta\'s way to opt out).' : 'Music: none (an existing post keeps its own media; no asset feed is sent).',
+    ...(silent.formats ? [(request.formatAutomation ?? []).length ? `Format automation ON at your request: ${(request.formatAutomation ?? []).map((f) => `${f.format} from ${f.dataSources.join(', ')}`).join('; ')}; every other format (${silent.formats.join(', ')}) is sent with data_source none.` : `Format automation: none (${silent.formats.join(', ')} each sent with data_source none).`] : []),
+    ...(silent.destination ? ['Shop routing: OFF (destination_spec WEBSITE_AND_SHOP_OPT_OUT; v26 sends an eligible creative to the shop by itself otherwise).'] : []),
+    ...(built.productTagsOff ? ['Automatic product tags: OFF (interactive_components_spec product_tag opt_out; Meta tags catalog products on a static image by itself otherwise — autoProductTags switches it on).'] : request.autoProductTags ? ['Automatic product tags: ON at your request (Meta may tag catalog products on the image by itself).'] : []),
+    ...(built.carousel ? [request.carouselAutoOrder ? 'Carousel order: Meta may reorder the cards at your request (multi_share_optimized true).' : 'Carousel order: as given (multi_share_optimized false; Meta reorders the cards by itself otherwise — carouselAutoOrder switches it on).'] : []),
+    ...(optIns.length ? [`Opt-ins inside the creative's own parts, at your request: ${optIns.join('; ')}.`] : []),
     ...(request.partner ? ['A partnership ad needs the partner\'s permission: without it Meta keeps the ad "pending delivery" and Meta itself sends the partner a permission request.'] : []),
-    ...(staticImage && !built.creative.interactive_components_spec ? ['Meta may tag catalog products on a static image by itself; parts.interactive_components_spec {"components":[{"type":"product_tag","enroll_status":"opt_out"}]} switches that off (master CR-314).'] : []),
     'If Meta already holds the same creative, it answers that one\'s id: nothing new is made then, and the undo never deletes it.',
     ...(async ? ['Meta makes it in the background (asyncadcreatives; Meta has no check for that edge): the run reads the job and says the creative it made. A creative Nexus did not read back is never deleted by the undo.'] : []),
     // Master CR-445 (asset-feed-spec/multi-language-ads): Meta's automatic translation starts only from these languages.

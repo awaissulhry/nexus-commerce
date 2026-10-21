@@ -15,12 +15,13 @@ import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool, ToolChange, ToolUndo } from '../tool-types.js'
 import { metaChangePreview, metaConnectionArg, metaIdArg, metaWhyArg, META_CHANGE_RULES, recordAccount, runMetaChange, type MetaDraftBuilder, type MetaRunOutcome } from './meta-ads-kit.js'
 import {
-  CREATIVE_TOOL, creativeDraft, MAX_CREATIVE_UNDO, SET_CREATIVE_TOOL, setCreativeDraft,
+  CREATIVE_TOOL, creativeDraft, MAX_CREATIVE_UNDO, SET_CREATIVE_TOOL, setCreativeDraft, WELCOME_FLOWS_ANSWER,
   type CreativeDraft, type CreativeRecordItem, type CreativeRequest, type SetCreativeRequest,
 } from '../../marketing/meta-ads/change-creatives.js'
 import type { MetaChangeDraft, MetaChangeRequest } from '../../marketing/meta-ads/change-draft.js'
 import type { MetaChangeResult } from '../../marketing/meta-ads/write-client.js'
 import { META_CREATIVE_FEATURES, META_CREATIVE_TEXT, META_FORMAT_AUTOMATION_FORMATS, META_FORMAT_DATA_SOURCES } from '../../gateway/meta-creative-rules.js'
+import { metaReadOne } from '../../marketing/meta-ads/read-client.js'
 
 const spec = (what: string) => z.record(z.string(), z.unknown()).optional().describe(what)
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
@@ -29,7 +30,7 @@ const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null
 function requestOf(args: Record<string, unknown>): CreativeRequest {
   const partner = args.partner as Record<string, unknown> | undefined
   return {
-    action: args.action === 'undo' ? 'undo' : 'create',
+    action: args.action === 'undo' ? 'undo' : args.action === 'welcome-flow' ? 'welcome-flow' : 'create',
     name: str(args.name),
     story: (args.story as Record<string, unknown> | undefined) ?? null,
     postId: str(args.postId),
@@ -42,6 +43,8 @@ function requestOf(args: Record<string, unknown>): CreativeRequest {
     music: args.music === 'random' ? 'random' : 'off',
     formatAutomation: (args.formatAutomation as CreativeRequest['formatAutomation']) ?? [],
     shopDestination: args.shopDestination === true,
+    autoProductTags: args.autoProductTags === true,
+    carouselAutoOrder: args.carouselAutoOrder === true,
     partner: partner ? { pageId: str(partner.pageId), instagramId: str(partner.instagramId), mainIdentity: partner.mainIdentity === 'creator' ? 'creator' : 'brand' } : null,
     async: args.async === true,
     creatives: (args.creatives as string[] | undefined) ?? [],
@@ -113,12 +116,12 @@ const createMetaCreative: AgentTool = {
   openWorld: true,
   // A creative it made new can be deleted again (while no ad uses it); a delete cannot be taken back.
   reversibility: 'partial',
-  consequencesFor: (args) => (args.action === 'undo' ? { reversibility: 'none' } : { reversibility: 'partial' }),
+  consequencesFor: (args) => (args.action === 'undo' || args.action === 'welcome-flow' ? { reversibility: 'none' } : { reversibility: 'partial' }),
   maxClaudeTrust: 'ask',
   requires: [F.adsCampaignsManage],
   input: z.object({
     connectionId: metaConnectionArg,
-    action: z.enum(['create', 'undo']).optional().describe('create (default): one new creative; undo: delete creatives an earlier create-meta-creative made new (undo-change fills it)'),
+    action: z.enum(['create', 'undo', 'welcome-flow']).optional().describe('create (default): one new creative; undo: delete creatives an earlier create-meta-creative made new (undo-change fills it); welcome-flow: Nexus answers why it saves no Page welcome-message flow yet'),
     name: z.string().trim().min(1).max(META_CREATIVE_TEXT.name).optional().describe('create: the creative\'s name in the ad account (1 to 100 characters)'),
     story: spec('create: Meta\'s object_story_spec WITHOUT page_id and instagram_user_id (Nexus fills the business\'s chosen Page and Instagram account): link_data (image or link ad, carousel child_attachments 2–10, collection collection_thumbnails, messaging page_welcome_message), photo_data, video_data (video_id of the account\'s library), text_data or template_data (Advantage+ catalog); images by image_hash from create-meta-media or picture / url / image_url (a public https link Meta fetches)'),
     postId: z.string().trim().regex(/^\d{1,25}_\d{1,25}$/, 'a post id: <Page id>_<post id>').optional().describe('create: or an existing post of the chosen Page (object_story_id, meta-page-posts lists them)'),
@@ -126,14 +129,16 @@ const createMetaCreative: AgentTool = {
     parts: spec('create: the creative\'s other keys, as Meta names them: url_tags, adlabels, call_to_action (with postId), ad_disclaimer_spec, portrait_customizations, platform_customizations, interactive_components_spec, branded_content (testimonial), creative_sourcing_spec (site links), media_sourcing_spec, marketing_message_structured_spec, recommender_settings, template_url_spec, categorization_criteria, category_media_source, object_type'),
     withInstagram: z.boolean().optional().describe('create: run on Instagram too, as the chosen Instagram account (default: true when one is chosen)'),
     aiFeatures: z.array(z.enum(META_CREATIVE_FEATURES as [string, ...string[]])).max(80).optional().describe('create: the Advantage+ creative features to switch ON (every other one Meta documents is sent OFF)'),
-    featureSettings: z.record(z.string(), z.record(z.string(), z.unknown())).optional().describe('create: per feature switched on, Meta\'s customizations / action_metadata (e.g. {"product_extensions":{"action_metadata":{"type":"MANUAL"}}})'),
+    featureSettings: z.record(z.string(), z.record(z.string(), z.unknown())).optional().describe('create: per feature switched on, its customizations as Meta documents them (adapt_to_placement: aspect_ratio_config {ar_4_5|ar_9_16: {adapt: {enroll_status}}}, image_crop_style, showcase_card_display; text_optimizations / enhance_cta: text_extraction {enroll_status}), e.g. {"adapt_to_placement":{"aspect_ratio_config":{"ar_9_16":{"adapt":{"enroll_status":"OPT_OUT"}}}}}'),
     multiAdvertiser: z.boolean().optional().describe('create: allow multi-advertiser ads (default false: contextual_multi_ads OPT_OUT)'),
     music: z.enum(['off', 'random']).optional().describe('create: off (default) or random (Meta adds a track of its choice)'),
     formatAutomation: z.array(z.object({
       format: z.enum(META_FORMAT_AUTOMATION_FORMATS).describe('the format Meta may turn the creative into'),
       dataSources: z.array(z.enum(META_FORMAT_DATA_SOURCES.filter((s) => s !== 'none') as [string, ...string[]])).min(1).max(4).describe('where Meta takes the extra media from'),
     })).max(6).optional().describe('create: format automation switched ON (every other format is sent with data_source none)'),
-    shopDestination: z.boolean().optional().describe('create: let Meta send people to the Facebook or Instagram shop instead of the website (default false: WEBSITE_AND_SHOP_OPT_OUT)'),
+    shopDestination: z.boolean().optional().describe('create: shop routing (WEBSITE_AND_SHOP) — answered in words: it names a Facebook or Instagram shop Nexus cannot confirm as the business\'s own (it comes with the catalog / commerce steps); a website creative is sent WEBSITE_AND_SHOP_OPT_OUT'),
+    autoProductTags: z.boolean().optional().describe('create: let Meta tag catalog products on a static image by itself (default false: sent opt_out)'),
+    carouselAutoOrder: z.boolean().optional().describe('create: let Meta reorder a carousel\'s cards (multi_share_optimized; default false: the cards stay in your order)'),
     partner: z.object({
       pageId: metaIdArg('the partner\'s (creator\'s) Facebook Page').optional(),
       instagramId: metaIdArg('the partner\'s (creator\'s) Instagram account').optional(),
@@ -153,19 +158,23 @@ const createMetaCreative: AgentTool = {
     + 'by their hash (create-meta-media) or a public https link Meta fetches. Every Advantage+ creative feature Meta '
     + 'documents is sent OFF unless named in aiFeatures; multi-advertiser ads, music, format automation and shop routing '
     + 'are OFF unless asked — the preview names each one switched on, and the run reads the creative back and says what '
-    + 'Meta kept (Meta drops an ineligible opt-in silently). A feature generated with AI means the ad using it must start '
+    + 'Meta kept (Meta drops an ineligible opt-in silently). Each silent key goes only where Meta documents it for the kind '
+    + 'of creative (website, catalog, messaging, lead, call, event, Instant Experience, existing post…). Automatic product tags '
+    + 'on a static image and the reordering of carousel cards are OFF unless asked (autoProductTags, carouselAutoOrder). A '
+    + 'feature generated with AI means the ad using it must start '
     + 'PAUSED and be previewed (meta-ad-preview) first. A partnership ad names its partner (partner); Meta asks the '
     + 'partner\'s permission itself. Refused in words: political ads (banned in the EU), WhatsApp Status identities (not in '
     + 'the EU), app links (Nexus has no app), catalog and product-set ids (they come with the catalog rule), polls (gone in '
-    + 'v26), Threads ids (Threads runs through Instagram). A creative SPENDS NOTHING (it serves only once an ad uses it) and '
+    + 'v26), Threads ids (Threads runs through Instagram), shop routing (a shop Nexus cannot confirm), saved Page welcome flows '
+    + '(they need the Page\'s own token). A creative SPENDS NOTHING (it serves only once an ad uses it) and '
     + 'cannot be changed once made: a new look is a new creative swapped onto the ad, which sends an ACTIVE ad back to '
     + 'review. Meta checks it first (validate_only). If Meta already holds the same creative it answers that one: then '
     + 'nothing new is made and the undo never deletes it. action undo deletes only creatives this tool made new, while no '
     + 'ad uses them (undo-change asks for it).'
     + META_CHANGE_RULES,
   undo: createUndo,
-  handler: (args, ctx) => metaChangePreview(args, ctx, build(args)),
-  execute: (args, ctx) => runMetaChange(args, ctx, build(args), createFinish),
+  handler: (args, ctx) => (args.action === 'welcome-flow' ? Promise.resolve({ ok: false, error: WELCOME_FLOWS_ANSWER }) : metaChangePreview(args, ctx, build(args))),
+  execute: (args, ctx) => (args.action === 'welcome-flow' ? Promise.resolve({ ok: false, error: `Not run: ${WELCOME_FLOWS_ANSWER}` }) : runMetaChange(args, ctx, build(args), createFinish)),
 }
 
 // ── set-meta-creative ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -187,17 +196,37 @@ function setFinish(draft: MetaChangeDraft, done: Array<{ request: MetaChangeRequ
     kind: 'set', creativeId: after.creativeId,
     ...(ops.has('creative.update') && 'name' in after ? { name: after.name } : {}),
     ...(ops.has('creative.update') && 'status' in after ? { status: after.status } : {}),
-    ...((ops.has('creative.update') || ops.has('creative.addLabels')) && 'labels' in after ? { labels: after.labels } : {}),
+    // Review A3 — labels kept sorted, as the undo's live read reads them (the compare-and-swap compares the two).
+    ...((ops.has('creative.update') || ops.has('creative.addLabels')) && Array.isArray(after.labels) ? { labels: [...(after.labels as string[])].sort() } : {}),
   }
   return { data: { creative: made }, before, after: made }
 }
 
-/** Undo: the old name and the old label list go back; a review state Meta set cannot be written back. */
+/**
+ * Undo: the old name and the old label list go back; a review state Meta set cannot be written back. Review A3 — `current`
+ * reads the creative LIVE (its name, status and labels) and answers only the keys the change wrote: when a later change
+ * moved one of them, the compare-and-swap refuses the undo (it would overwrite that change).
+ */
 const setUndo: ToolUndo = {
   async current(change: ToolChange) {
-    const after = (change.after ?? {}) as Stamped
+    const after = (change.after ?? {}) as Stamped & { creativeId?: unknown; name?: unknown; status?: unknown; labels?: unknown }
     const account = await recordAccount(after)
-    return account ? { ...after, accountId: account.accountId, adAccountId: account.adAccountId } : null
+    if (!account || typeof after.creativeId !== 'string') return null
+    let live: { name?: unknown; status?: unknown; adlabels?: { data?: Array<{ name?: unknown }> } | Array<{ name?: unknown }> }
+    try {
+      live = (await metaReadOne<typeof live>({ connectionId: account.target.connectionId }, { operation: 'creative.undoRead', path: after.creativeId, query: { fields: 'id,name,status,adlabels{name}' } })).body
+    } catch {
+      return null
+    }
+    const rows = Array.isArray(live.adlabels) ? live.adlabels : live.adlabels?.data ?? []
+    const labels = rows.map((l) => (typeof l?.name === 'string' ? l.name : '')).filter(Boolean).sort()
+    return {
+      kind: after.kind, creativeId: after.creativeId,
+      ...('name' in after ? { name: typeof live.name === 'string' ? live.name : null } : {}),
+      ...('status' in after ? { status: typeof live.status === 'string' ? live.status : null } : {}),
+      ...('labels' in after ? { labels } : {}),
+      accountId: account.accountId, adAccountId: account.adAccountId,
+    }
   },
   request(change: ToolChange) {
     const before = (change.before ?? {}) as { name?: unknown; labels?: unknown; status?: unknown }

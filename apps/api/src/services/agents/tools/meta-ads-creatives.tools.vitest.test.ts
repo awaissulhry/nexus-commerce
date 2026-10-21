@@ -48,9 +48,10 @@ vi.mock('../../../db.js', () => ({
 
 import { META_ADS_CREATIVES_TOOLS } from './meta-ads-creatives.tools.js'
 import { META_CHANGE_RULES } from './meta-ads-kit.js'
-import { __creativeTiming } from '../../marketing/meta-ads/change-creatives.js'
+import { __creativeTiming, WELCOME_FLOWS_ANSWER } from '../../marketing/meta-ads/change-creatives.js'
 import { MetaLiveRefusal } from '../../marketing/meta-ads/live.js'
-import { META_CREATIVE_FEATURES, META_FORMAT_AUTOMATION_FORMATS } from '../../gateway/meta-creative-rules.js'
+import { META_CREATIVE_FEATURES, META_NON_CATALOG_FORMATS } from '../../gateway/meta-creative-rules.js'
+import { canonical } from './ads-change-kit.js'
 import { MATERIAL_PREVIEW_FIELDS } from '../../agent-fleet/approval-inbox.service.js'
 import { __metaObjectLimitsTest } from '../../gateway/meta-object-limits.js'
 import type { ToolContext, ToolResult } from '../tool-types.js'
@@ -122,8 +123,9 @@ describe('create-meta-creative — the preview', () => {
     expect(Object.values(features).every((f: any) => f.enroll_status === 'OPT_OUT')).toBe(true)
     expect(sentJson('contextual_multi_ads')).toEqual({ enroll_status: 'OPT_OUT' })
     expect(sentJson('asset_feed_spec')).toEqual({ audios: [] })
-    expect(sentJson('format_transformation_spec')).toEqual(META_FORMAT_AUTOMATION_FORMATS.map((format) => ({ format, data_source: ['none'] })))
+    expect(sentJson('format_transformation_spec')).toEqual(META_NON_CATALOG_FORMATS.map((format) => ({ format, data_source: ['none'] })))
     expect(sentJson('destination_spec')).toEqual({ destination_type: 'WEBSITE_AND_SHOP_OPT_OUT' })
+    expect(sentJson('interactive_components_spec')).toEqual({ components: [{ type: 'product_tag', enroll_status: 'opt_out' }] })
     expect(p.preview.spendsMoney).toBe(false)
     expect(p.preview.metaCheck.checked).toBe('all')
     const words = p.preview.warnings.join(' ')
@@ -131,6 +133,8 @@ describe('create-meta-creative — the preview', () => {
     expect(words).toMatch(new RegExp(`Every one of the ${META_CREATIVE_FEATURES.length} Advantage\\+ creative features Meta documents is sent OFF`))
     expect(words).toMatch(/Multi-advertiser ads: OFF/)
     expect(words).toMatch(/Music: none/)
+    expect(words).toMatch(/A website creative/)
+    expect(words).toMatch(/Automatic product tags: OFF/)
     expect(words).toMatch(/swap on an ACTIVE ad sends that ad back to Meta's review/)
     expect(words).not.toMatch(/headline of up to 25 characters/)
     const long = await preview({ ...image, story: { link_data: { ...image.story.link_data, name: 'Un titolo davvero troppo lungo per Meta', message: `${'#saldi '.repeat(31)}https://www.example.com` } } })
@@ -176,6 +180,11 @@ describe('create-meta-creative — the preview', () => {
     expect(await refusal({ name: 'From a post', postId: '120000000000099_500000000000001' })).toMatch(/not on the Facebook Page this business chose/)
     expect(await refusal({ story: image.story })).toMatch(/name is 1 to 100/)
     expect(await refusal({ ...image, story: { link_data: { ...image.story.link_data, link: 'http://www.example.com/' } } })).toMatch(/https/)
+    expect(await refusal({ ...image, shopDestination: true })).toMatch(/cannot confirm a shop is this business's own/)
+    expect(await refusal({ ...image, parts: { interactive_components_spec: { components: [] } } })).toMatch(/autoProductTags/)
+    expect(await refusal({ ...image, featureSettings: { adapt_to_placement: { image_crop_style: 'x' } } })).toMatch(/goes only with adapt_to_placement in aiFeatures/)
+    expect(await refusal({ ...image, formatAutomation: [{ format: 'da_collection', dataSources: ['catalog'] }] })).toMatch(/only as sa_collection|for a website creative only/)
+    expect(await refusal({ name: 'From a post', postId: POST, assetFeed: { bodies: [{ text: 'x' }] } })).toMatch(/takes no asset feed/)
     expect(h.check).not.toHaveBeenCalled()
     expect(() => ask()({ ...image, aiFeatures: ['image_template'] })).toThrow()
   })
@@ -205,6 +214,8 @@ describe('create-meta-creative — the preview', () => {
     expect(p.ok, JSON.stringify(p)).toBe(true)
     expect(checked().params.object_story_id).toBe(POST)
     expect(checked().params.instagram_user_id).toBe(IG)
+    // Review B — an existing post carries no asset feed, format or shop key.
+    expect(Object.keys(checked().params).sort()).toEqual(['call_to_action', 'contextual_multi_ads', 'degrees_of_freedom_spec', 'instagram_user_id', 'name', 'object_story_id'])
   })
 })
 
@@ -323,5 +334,71 @@ describe('set-meta-creative', () => {
     h.owned.mockImplementation(async () => { throw new MetaLiveRefusal('That creative does not belong to the ad account this business chose, so it is not read.') })
     expect((await preview({ creativeId: '120000000000301', name: 'X' }, set)).error).toMatch(/does not belong/)
     expect(() => ask(set)({ creativeId: '120000000000301', status: 'DELETED' })).toThrow()
+  })
+})
+
+describe('review round 1', () => {
+  it('A1 — a carousel keeps its card order unless asked; product tags only on a static image; both named', async () => {
+    const card = (n: number) => ({ link: `https://www.example.com/p${n}`, name: `Card ${n}`, image_hash: 'abc123def456' })
+    const carousel = { name: 'Carousel A', story: { link_data: { link: 'https://www.example.com/', message: 'Tutti', child_attachments: [card(1), card(2), card(3)] } } }
+    const p = await preview(carousel)
+    expect(p.ok, JSON.stringify(p)).toBe(true)
+    expect(sentJson('object_story_spec').link_data.multi_share_optimized).toBe(false)
+    expect(checked().params.interactive_components_spec).toBeUndefined()
+    expect(p.preview.warnings.join(' ')).toMatch(/Carousel order: as given/)
+    h.check.mockClear()
+    const q = await preview({ ...carousel, carouselAutoOrder: true })
+    expect(sentJson('object_story_spec').link_data.multi_share_optimized).toBe(true)
+    expect(q.preview.warnings.join(' ')).toMatch(/Meta may reorder the cards at your request/)
+    expect((await preview({ ...carousel, story: { link_data: { ...carousel.story.link_data, multi_share_optimized: true } } })).error).toMatch(/carouselAutoOrder/)
+    h.check.mockClear()
+    const tags = await preview({ ...image, autoProductTags: true })
+    expect(checked().params.interactive_components_spec).toBeUndefined()
+    expect(tags.preview.warnings.join(' ')).toMatch(/Automatic product tags: ON at your request/)
+  })
+
+  it('A6 — opt-ins inside the parts are named; the silent keys are read back', async () => {
+    const p = await preview({ ...image, parts: { media_sourcing_spec: { related_media: { opt_in_status: 'OPT_IN' } } } })
+    expect(p.preview.warnings.join(' ')).toMatch(/Opt-ins inside the creative's own parts, at your request: media_sourcing_spec.related_media OPT_IN/)
+    h.send.mockImplementation(async () => ({
+      node: { id: '120000000000301', name: 'Creative A', status: 'ACTIVE', effective_object_story_id: POST, degrees_of_freedom_spec: { creative_features_spec: {} }, format_transformation_spec: [{ format: 'carousel', data_source: ['catalog'] }], asset_feed_spec: { audios: [{ type: 'random' }] }, destination_spec: { destination_type: 'WEBSITE_AND_SHOP' }, interactive_components_spec: { components: [{ type: 'product_tag', enroll_status: 'opt_out' }] } },
+      readBack: 'second-read', waitedMs: 0,
+    }))
+    const r = await run(image)
+    const step = r.data.steps[0].sentence as string
+    expect(step).toMatch(/Format automation Meta has ON: carousel/)
+    expect(step).toMatch(/Music: ON/)
+    expect(step).toMatch(/Shop routing reads WEBSITE_AND_SHOP/)
+    expect(step).toMatch(/Automatic product tags: off/)
+  })
+
+  it('A4 — not new when Meta reads back another name, or another record already claims the creative', async () => {
+    const back = (name: string) => async () => ({ node: { id: '120000000000301', name, status: 'ACTIVE', effective_object_story_id: POST, degrees_of_freedom_spec: { creative_features_spec: {} } }, readBack: 'second-read', waitedMs: 0 })
+    h.send.mockImplementation(back('Another name'))
+    expect((await run(image)).change.after.items[0].new).toBe(false)
+    h.send.mockImplementation(back('Creative A'))
+    h.records = [{ id: 'ch-0', after: { kind: 'create', adAccountId: '1234567890', items: [{ kind: 'creative', creativeId: '120000000000301', new: true }] } }]
+    expect((await run(image)).change.after.items[0].new).toBe(false)
+    h.records = []
+    expect((await run(image)).change.after.items[0].new).toBe(true)
+  })
+
+  it('A3 — the undo of A → B refuses once a later change made it C (the live read moves)', async () => {
+    h.read.mockImplementation(async () => ({ body: { id: '120000000000301', name: 'Creative A', status: 'ACTIVE', adlabels: { data: [{ name: 'Spring' }] } }, calls: 1 }))
+    h.send.mockImplementation(async () => ({ node: { id: '120000000000301', name: 'Creative B', status: 'ACTIVE' }, readBack: 'second-read', waitedMs: 0 }))
+    const r = await run({ creativeId: '120000000000301', name: 'Creative B', labels: ['Summer', 'Autumn'] }, set)
+    expect(r.change.after.labels).toEqual(['Autumn', 'Summer'])
+    h.read.mockImplementation(async () => ({ body: { id: '120000000000301', name: 'Creative B', status: 'ACTIVE', adlabels: { data: [{ name: 'Summer' }, { name: 'Autumn' }] } }, calls: 1 }))
+    expect(canonical(await set.undo!.current(r.change))).toBe(canonical(r.change.after))
+    h.read.mockImplementation(async () => ({ body: { id: '120000000000301', name: 'Creative C', status: 'ACTIVE', adlabels: { data: [{ name: 'Summer' }, { name: 'Autumn' }] } }, calls: 1 }))
+    expect(canonical(await set.undo!.current(r.change))).not.toBe(canonical(r.change.after))
+    h.read.mockImplementation(async () => ({ body: { id: '120000000000301', name: 'Creative B', status: 'ACTIVE', adlabels: { data: [{ name: 'Summer' }] } }, calls: 1 }))
+    expect(canonical(await set.undo!.current(r.change))).not.toBe(canonical(r.change.after))
+  })
+
+  it('B2 — saved Page welcome-message flows are answered in words (they need the Page token)', async () => {
+    const p = await preview({ action: 'welcome-flow' })
+    expect(p).toMatchObject({ ok: false, error: WELCOME_FLOWS_ANSWER })
+    expect(WELCOME_FLOWS_ANSWER).toMatch(/Page-token mode \(step 36\)/)
   })
 })

@@ -22,8 +22,10 @@
  * until lane C1's catalog rule (step 18) is on this base: C2-REBASE-18.
  *
  * The silent features (lane prompt, binding): every creative Nexus sends carries an explicit `enroll_status` for EVERY
- * Advantage+ creative feature Meta names (META_CREATIVE_FEATURES), `contextual_multi_ads`, `format_transformation_spec` for
- * every format, `asset_feed_spec.audios` and `destination_spec` — the gateway refuses a creative without one of them.
+ * Advantage+ creative feature Meta names (META_CREATIVE_FEATURES) and `contextual_multi_ads`; review B — the other silent
+ * keys only where Meta documents them for the creative's kind (silentKeysOf: `asset_feed_spec.audios` beside a story,
+ * `format_transformation_spec` on website and catalog creatives, `destination_spec` on website-destination ones) — the
+ * gateway refuses a creative without its kind's keys, or with a key Meta does not document for its kind.
  *
  * Checked 2026-10-21 (curl ≥ 3 s apart; .md pages under developers.facebook.com/documentation/ads-commerce/marketing-api/):
  *   - reference/ad-account/adcreatives.md "Creating": the parameter table (actor_id … wamo_whatsapp_identity_spec);
@@ -142,10 +144,24 @@ const text = (max: number, opts: { lines?: boolean; blank?: boolean } = {}): Jud
 }
 /** Meta: a creative's URL "≤1000" characters (reference/ad-creative Limits). */
 const LINK_MAX = 1000
-const link: Judge = (value, path) => {
+/** An Instant Experience's link (`https://fb.com/canvas_doc/<id>`, collection-ads guide): its id goes to the gateway's check. */
+const CANVAS_LINK = /^https:\/\/fb\.com\/canvas_doc\/(\d{1,20})$/
+/**
+ * A link a creative names: https, a public host, no key or signature (step 23's rule). Review A5 — a link to an Instant
+ * Experience is taken in Meta's ONE documented form only (`https://fb.com/canvas_doc/<id>`: no www, facebook.com, slash,
+ * query or other path), and its id goes to the gateway's check wherever the link appears.
+ */
+const link: Judge = (value, path, walk) => {
   if (typeof value !== 'string') return no(`${path} is an https link`)
   const problem = metaPublicLinkProblem(value, path, LINK_MAX)
-  return problem ? no(problem) : ok(value)
+  if (problem) return no(problem)
+  const url = new URL(value)
+  if (/(^|\.)(fb|facebook)\.com$/.test(url.hostname) && /canvas/i.test(`${url.pathname}${url.search}`)) {
+    const canvas = CANVAS_LINK.exec(value)
+    if (!canvas) return no(`${path}: an Instant Experience link is exactly https://fb.com/canvas_doc/<id> (Meta's collection-ads guide), nothing else`)
+    walk.assets.push({ id: canvas[1], kind: 'canvas' })
+  }
+  return ok(value)
 }
 /**
  * A picture Meta fetches into the library (master MD-005: link_data.picture, photo_data.url, video_data.image_url,
@@ -156,24 +172,14 @@ const link: Judge = (value, path) => {
 const picture: Judge = (value, path, walk) => {
   const out = link(value, path, walk)
   if ('problem' in out) return out
-  if (/(^|\.)(fbcdn\.net|cdninstagram\.com|facebook\.com|fbsbx\.com)$/.test(new URL(String(value)).hostname)) return no(`${path}: Meta says not to use image links it returned ("host the image on your own servers"): upload it with create-meta-media and use its hash`)
+  if (/(^|\.)(fbcdn\.net|cdninstagram\.com|facebook\.com|fb\.com|fbsbx\.com)$/.test(new URL(String(value)).hostname)) return no(`${path}: Meta says not to use image links it returned ("host the image on your own servers"): upload it with create-meta-media and use its hash`)
   warn(walk, 'Meta fetches a picture link itself (a JPG or PNG of at most 8 MB; error 3858258 when the site\'s robots.txt blocks it) and copies it into the ad account\'s library: Nexus fetches nothing.')
   return out
 }
 /** The call-to-action link: an https link, or `tel:+<digits>` for a call ad (CALL_NOW, master CR-250). */
-const ctaLink: Judge = (value, path, walk) => (typeof value === 'string' && /^tel:\+\d{6,15}$/.test(value) ? ok(value) : canvasAware(value, path, walk))
+const ctaLink: Judge = (value, path, walk) => (typeof value === 'string' && /^tel:\+\d{6,15}$/.test(value) ? ok(value) : link(value, path, walk))
 /** A display link (`caption`, `display_url`: "must be an actual URL"): an https link or a bare host with a path. */
 const displayLink: Judge = (value, path, walk) => (typeof value === 'string' && /^(?!https?:)[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(\/[A-Za-z0-9._~\-/]*)?$/.test(value) && value.length <= LINK_MAX ? ok(value) : link(value, path, walk))
-/** An Instant Experience's link (`https://fb.com/canvas_doc/<id>`, collection-ads guide): its id goes to the gateway's check. */
-const CANVAS_LINK = /^https:\/\/fb\.com\/canvas_doc\/(\d{1,20})$/
-const canvasAware: Judge = (value, path, walk) => {
-  const out = link(value, path, walk)
-  if ('value' in out) {
-    const canvas = CANVAS_LINK.exec(String(value))
-    if (canvas) walk.assets.push({ id: canvas[1], kind: 'canvas' })
-  }
-  return out
-}
 /** An Instagram app link for the unified profile visit (master CR-225): instagram://user?username=<name>. */
 const instagramAppLink: Judge = (value, path) => (typeof value === 'string' && /^instagram:\/\/user\?username=[A-Za-z0-9._]{1,30}$/.test(value) ? ok(value) : no(`${path} is instagram://user?username=<the Instagram username> (Nexus has no app of its own)`))
 const digits = (value: unknown) => (typeof value === 'string' && /^\d{1,20}$/.test(value) ? value : null)
@@ -209,6 +215,16 @@ const refuse = (why: string): Judge => (_value, path) => no(`${path}: ${why}`)
 const CATALOG = 'catalog and product-set ids come with lane C1\'s catalog rule (step 18), which checks each is the business\'s chosen catalog: Nexus sends none before it' // C2-REBASE-18: wire metaCatalogProblem here
 const NO_APP = 'Nexus sells online and has no app of its own, so it sends no app link, store link, playable or app id'
 const BOOST = 'a creative made from an existing Instagram or Facebook post of someone else comes with create-meta-boost (step 26)'
+/**
+ * Review B6 — the reference lists threads_user_id with no description of what it takes; Meta's Threads guide has a Threads
+ * ad use the Instagram account ("that Instagram account needs to be used").
+ */
+const THREADS = 'Meta\'s reference names a Threads id without saying what it takes, and its Threads guide runs Threads ads on the Instagram account ("that Instagram account needs to be used"): Nexus sends no Threads id; Threads delivery comes with the chosen Instagram account and the ad set\'s Threads placement'
+/**
+ * Review B5 — a shop destination names a Facebook or Instagram SHOP (storefront_shop_id; the Shops guide requires
+ * onsite_destinations for WEBSITE_AND_SHOP): Nexus cannot confirm a shop is this business's own.
+ */
+const SHOP = 'Nexus cannot confirm a Facebook or Instagram shop (storefront_shop_id) is this business\'s own, and Meta\'s Shops guide requires one (onsite_destinations) for shop routing: it comes with the catalog / commerce steps'
 
 /** A JSON object of exactly these keys (each optional; `need`: these must be there). */
 function obj(keys: Record<string, Judge>, need: readonly string[] = []): Judge {
@@ -290,7 +306,7 @@ export const META_CTA_TYPES: readonly string[] = [
   'WATCH_LIVE_VIDEO', 'WATCH_MORE', 'WATCH_VIDEO', 'WHATSAPP_MESSAGE', 'WOODHENGE_SUPPORT',
   // Guides: click-to-instagram / multi-destination (INSTAGRAM_MESSAGE), profile visits (VIEW_INSTAGRAM_PROFILE, VISIT_PROFILE),
   // event tickets (GET_EVENT_TICKETS), and the creative edge's own extra values (F1 M5-11).
-  'INSTAGRAM_MESSAGE', 'VIEW_INSTAGRAM_PROFILE', 'VISIT_PROFILE', 'GET_EVENT_TICKETS', 'SAVE', 'GET_MOBILE_APP', 'BUY_ACTIVITY_TICKETS', 'STREAM_NOW',
+  'INSTAGRAM_MESSAGE', 'VIEW_INSTAGRAM_PROFILE', 'VISIT_PROFILE', 'GET_EVENT_TICKETS', 'SAVE', 'GET_MOBILE_APP',
 ]
 /** Messaging destinations a call to action names (click-to-messenger / -whatsapp / -instagram guides). */
 const APP_DESTINATIONS = ['MESSENGER', 'WHATSAPP', 'INSTAGRAM_DIRECT', 'MESSENGER_AND_WHATSAPP'] as const
@@ -409,7 +425,7 @@ const customizationRule = obj({
 }, ['customization_spec'])
 
 const childAttachment = obj({
-  link: canvasAware,
+  link: link,
   name: text(META_CREATIVE_TEXT.headline),
   description: text(META_CREATIVE_TEXT.description, { lines: true }),
   caption: displayLink,
@@ -426,7 +442,7 @@ const childAttachment = obj({
 
 /** link_data, and template_data (the same AdCreativeLinkData, with the catalog template keys). */
 const linkData = obj({
-  link: canvasAware,
+  link: link,
   message: text(META_CREATIVE_TEXT.message, { lines: true }),
   name: text(META_CREATIVE_TEXT.headline),
   description: text(META_CREATIVE_TEXT.description, { lines: true }),
@@ -474,7 +490,6 @@ const photoData = obj({
   page_welcome_message: pageWelcome,
   branded_content_sponsor_page_id: sponsorPage,
   branded_content_shared_to_sponsor_status: token,
-  branded_content_sponsor_relationship: token,
   image_crops: refuse('Meta takes no crop on a photo post ("Facebook typically renders images from photo posts in full"): use link_data for a cropped image'),
 })
 const videoData = obj({
@@ -508,7 +523,7 @@ const objectStorySpec = obj({
   template_data: linkData,
   whats_app_business_phone_number: phone,
   instagram_actor_id: refuse('Meta takes the Instagram account as instagram_user_id (instagram_actor_id is gone, errors 2238055 / 2446149): Nexus fills the chosen one'),
-  threads_user_id: refuse('a Threads ad runs through the business\'s Instagram account (Meta\'s Threads guide: "that Instagram account needs to be used"), so Nexus sends no Threads id'),
+  threads_user_id: refuse(THREADS),
   product_data: refuse(CATALOG),
 }, ['page_id'])
 
@@ -561,7 +576,7 @@ const assetFeedSpec = obj({
   bodies: list(textAsset(META_CREATIVE_TEXT.message, { lines: true }), 49),
   titles: list(textAsset(META_CREATIVE_TEXT.headline), 49),
   descriptions: list(textAsset(META_CREATIVE_TEXT.description, { lines: true, blank: true }), 49),
-  link_urls: list(obj({ website_url: canvasAware, display_url: displayLink, carousel_see_more_url: link, url_tags: urlTags, adlabels: assetLabels, deeplink_url: refuse(NO_APP), android_url: refuse(NO_APP), ios_url: refuse(NO_APP), object_store_urls: refuse(NO_APP), omnichannel_link_spec: refuse(NO_APP) }), 49),
+  link_urls: list(obj({ website_url: link, display_url: displayLink, carousel_see_more_url: link, url_tags: urlTags, adlabels: assetLabels, deeplink_url: refuse(NO_APP), android_url: refuse(NO_APP), ios_url: refuse(NO_APP), object_store_urls: refuse(NO_APP), omnichannel_link_spec: refuse(NO_APP) }), 49),
   call_to_action_types: list(enumOf(META_CTA_TYPES), 5),
   call_to_actions: list(obj({ type: enumOf(META_CTA_TYPES), value: ctaValue, adlabels: assetLabels }, ['type']), 5),
   ad_formats: list(enumOf(['SINGLE_IMAGE', 'CAROUSEL', 'SINGLE_VIDEO', 'AUTOMATIC_FORMAT', 'COLLECTION']), 2, 1),
@@ -586,18 +601,20 @@ const assetFeedSpec = obj({
   call_ads_configuration: obj({ callback_type: enumOf(['FORM']), call_destination_type: enumOf(['PHONE', 'MESSENGER', 'MESSENGER_AND_PHONE', 'WEBSITE_AND_CALL', 'WHATSAPP', 'WHATSAPP_ORGANIC']), phone_number: phone }),
   // Master CR-261: an upcoming event of the chosen Instagram account (the reminder button).
   upcoming_events: list(obj({ event_id: id('igevent'), event_title: text(META_CREATIVE_TEXT.headline), start_time: int(1_000_000_000, 4_000_000_000) }, ['event_id']), 1),
-  // Master CR-440: promo codes — only codes Nexus writes (manual), never Meta's automatic sources or a catalog.
+  // Master CR-440: promo codes (review B1, checked on docs/marketing-api/reference/ad-asset-promotional-metadata/): the code
+  // sources are always named — only the creative's text and Nexus's own code, never Meta's automatic sources — and at most
+  // ONE manual code (2+ characters: letters, digits, - and _). offer_details is not sent; neither is a catalog.
   promotional_metadata: obj({
-    manual_coupon_codes: list(text(50), 10),
-    allowed_coupon_code_sources: list(enumOf(['manual']), 1),
-    offer_details: text(500, { lines: true }),
+    allowed_coupon_code_sources: list(enumOf(['AD_CREATIVE_PRIMARY_TEXT', 'AD_CREATIVE_MANUAL_COUPON_CODES']), 2, 1),
+    manual_coupon_codes: list((value, path) => (typeof value === 'string' && /^[A-Za-z0-9_-]{2,50}$/.test(value) ? ok(value) : no(`${path} is a promo code of 2 to 50 letters, digits, - or _`)), 1, 1),
     is_auto_update_allowed: enumOfBool(false),
+    offer_details: refuse('Meta\'s promotional metadata reference has no offer text Nexus sends: say the offer in the ad\'s text and its disclaimer (ad_disclaimer_spec OFFER_DETAILS)'),
     product_catalog_id: refuse(CATALOG),
     allowed_promo_offer_ids: refuse(CATALOG),
-  }),
+  }, ['allowed_coupon_code_sources']),
   message_extensions: list(obj({ type: token }, ['type']), 5),
-  onsite_destinations: refuse(CATALOG),
-  shops_bundle: refuse(CATALOG),
+  onsite_destinations: refuse(SHOP),
+  shops_bundle: refuse(SHOP),
   app_product_page_id: refuse(NO_APP),
 })
 /** A boolean that may only be this value (Meta's automatic promo-code updates stay off). */
@@ -605,17 +622,24 @@ function enumOfBool(only: boolean): Judge {
   return (value, path) => (value === only ? ok(value) : no(`${path} is ${only} (Nexus lets Meta change no promo code by itself)`))
 }
 
-/** degrees_of_freedom_spec: only creative_features_spec, each feature's enroll_status (+ the customizations Meta documents). */
-const featureDetails = obj({
-  enroll_status: enumOf(['OPT_IN', 'OPT_OUT']),
-  customizations: obj({
-    text_extraction: obj({ enroll_status: enumOf(['OPT_IN', 'OPT_OUT']) }, ['enroll_status']),
-    video_crop_style: enumOf(['AUTO', 'NONE']),
-    showcase_card_display: enumOf(['NONE', 'AUTO']),
-  }),
-  action_metadata: obj({ type: enumOf(['MANUAL']) }, ['type']),
-}, ['enroll_status'])
-const featuresSpec = obj(Object.fromEntries(META_CREATIVE_FEATURES.map((f) => [f, featureDetails])))
+/**
+ * degrees_of_freedom_spec: only creative_features_spec, each feature's enroll_status, and the customizations Meta documents
+ * for that feature (review B3): adapt_to_placement — aspect_ratio_config {ar_4_5 | ar_9_16: {adapt: {enroll_status}}}
+ * (reference ad-creative-feature-customizations-aspect-ratios-config → -aspect-ratio-config → -enroll-status),
+ * image_crop_style (an enum whose values Meta does not list: passed as Meta's word, Meta's check answers — LIVE-PROBES
+ * CR-405) and showcase_card_display NONE | AUTO (catalog, master CR-405); text_optimizations and enhance_cta —
+ * text_extraction {enroll_status} (the Advantage+ guide's table). No other feature takes a customization here.
+ */
+const status = enumOf(['OPT_IN', 'OPT_OUT'])
+const enrolled = obj({ enroll_status: status }, ['enroll_status'])
+const ratio = obj({ adapt: enrolled }, ['adapt'])
+const FEATURE_CUSTOMIZATIONS: Readonly<Record<string, Judge>> = {
+  adapt_to_placement: obj({ aspect_ratio_config: obj({ ar_4_5: ratio, ar_9_16: ratio }), image_crop_style: token, showcase_card_display: enumOf(['NONE', 'AUTO']) }),
+  text_optimizations: obj({ text_extraction: enrolled }),
+  enhance_cta: obj({ text_extraction: enrolled }),
+}
+const featureDetails = (feature: string) => obj({ enroll_status: status, ...(FEATURE_CUSTOMIZATIONS[feature] ? { customizations: FEATURE_CUSTOMIZATIONS[feature] } : {}) }, ['enroll_status'])
+const featuresSpec = obj(Object.fromEntries(META_CREATIVE_FEATURES.map((f) => [f, featureDetails(f)])))
 const degreesOfFreedom = obj({ creative_features_spec: featuresSpec }, ['creative_features_spec'])
 const formatTransformation = list(obj({ format: enumOf(META_FORMAT_AUTOMATION_FORMATS), data_source: list(enumOf(META_FORMAT_DATA_SOURCES), 5, 1) }, ['format', 'data_source']), META_FORMAT_AUTOMATION_FORMATS.length, 1)
 
@@ -635,9 +659,11 @@ const CREATIVE_KEYS: Readonly<Record<string, { judge: Judge; json: boolean }>> =
   instagram_user_id: { judge: digitsOnly, json: false },
   asset_feed_spec: { judge: assetFeedSpec, json: true },
   degrees_of_freedom_spec: { judge: degreesOfFreedom, json: true },
-  contextual_multi_ads: { judge: obj({ enroll_status: enumOf(['OPT_IN', 'OPT_OUT']) }, ['enroll_status']), json: true },
+  // Master CR-432: enroll_status, and the action_metadata Meta names beside it (review B3: only here).
+  contextual_multi_ads: { judge: obj({ enroll_status: enumOf(['OPT_IN', 'OPT_OUT']), action_metadata: obj({ type: token }, ['type']) }, ['enroll_status']), json: true },
   format_transformation_spec: { judge: formatTransformation, json: true },
-  destination_spec: { judge: obj({ destination_type: enumOf(['WEBSITE_AND_SHOP', 'WEBSITE_AND_SHOP_OPT_OUT']) }, ['destination_type']), json: true },
+  // Master CR-266: the opt-out only (review B5: shop routing names a shop Nexus cannot confirm — SHOP).
+  destination_spec: { judge: obj({ destination_type: enumOf(['WEBSITE_AND_SHOP_OPT_OUT']) }, ['destination_type']), json: true },
   url_tags: { judge: urlTags, json: false },
   adlabels: { judge: labels, json: true },
   call_to_action: { judge: callToAction, json: true },
@@ -675,7 +701,7 @@ export const META_CREATIVE_REFUSED: Readonly<Record<string, string>> = {
   authorization_category: 'Nexus never declares a political or social-issue ad: they are banned in the EU since 2025-10-06 (Meta\'s TTPA rules), Nexus\'s markets',
   wamo_whatsapp_identity_spec: 'WhatsApp Status ads with a WhatsApp identity do not run in the EU, Nexus\'s markets (Meta\'s ads-in-whatsapp-status guide)',
   regional_regulation_disclaimer_spec: 'the regional finance disclaimers are for Taiwan, Australia, India and Singapore, not Nexus\'s EU markets',
-  threads_user_id: 'a Threads ad runs through the business\'s Instagram account (Meta\'s Threads guide), so Nexus sends no Threads id',
+  threads_user_id: THREADS,
   applink_treatment: NO_APP, object_store_url: NO_APP, playable_asset_id: NO_APP, enable_direct_install: NO_APP, enable_launch_instant_app: NO_APP,
   use_page_actor_override: NO_APP, omnichannel_link_spec: NO_APP,
   place_page_set_id: 'Nexus sells online and keeps no store-location pages (a place page set), so it makes no dynamic local ad',
@@ -706,18 +732,89 @@ export function judgeCreativeKey(key: string, value: unknown, walk: CreativeWalk
 }
 export const isJsonCreativeKey = (key: string) => Object.prototype.hasOwnProperty.call(CREATIVE_KEYS, key) && CREATIVE_KEYS[key].json
 
-/** The silent features a creative must carry explicitly (the binding lane rule): why not, or null. */
+// ── the kind of a creative, and the silent keys Meta documents for it (review B) ─────────────────────────────────────
+
+/** What a creative is, for the silent keys it carries (review B: a key only where Meta documents it for that kind). */
+export type CreativeKind = 'existing-post' | 'catalog' | 'instant-experience' | 'lead' | 'messaging' | 'call' | 'event' | 'reminder' | 'profile' | 'page-post' | 'website'
+
+/** Does any member named `key`, at any depth, pass `pred`? */
+function anyMember(value: unknown, key: string, pred: (v: unknown) => boolean = () => true, depth = 0): boolean {
+  if (depth > 12 || !value || typeof value !== 'object') return false
+  if (Array.isArray(value)) return value.some((v) => anyMember(v, key, pred, depth + 1))
+  return Object.entries(value as Record<string, unknown>).some(([k, v]) => (k === key && pred(v)) || anyMember(v, key, pred, depth + 1))
+}
+const MESSAGING_CTAS = new Set(['MESSAGE_PAGE', 'WHATSAPP_MESSAGE', 'INSTAGRAM_MESSAGE'])
+const PROFILE_CTAS = new Set(['VIEW_INSTAGRAM_PROFILE', 'VISIT_PROFILE'])
+
+/**
+ * The kind of a creative (pure; the tool and the gateway read the same): an existing post; Advantage+ catalog
+ * (template_data); an Instant Experience (collection-ads: a canvas_doc link or collection thumbnails); a lead form; a
+ * messaging destination (click-to-messenger / -whatsapp / -instagram); a call; an event; a reminder; a profile visit; a Page
+ * post with no website link (photo_data / text_data); else a website-destination creative (link, video or carousel with an
+ * https link, or an asset feed with link_urls).
+ */
+export function creativeKindOf(creative: Record<string, unknown>): CreativeKind {
+  if (creative.object_story_id) return 'existing-post'
+  const story = (creative.object_story_spec ?? {}) as Record<string, unknown>
+  const feed = (creative.asset_feed_spec ?? {}) as Record<string, unknown>
+  const has = (key: string, pred?: (v: unknown) => boolean) => anyMember(creative, key, pred)
+  if (story.template_data || creative.product_set_id) return 'catalog'
+  if (has('link', (v) => typeof v === 'string' && CANVAS_LINK.test(v)) || has('website_url', (v) => typeof v === 'string' && CANVAS_LINK.test(v)) || has('collection_thumbnails')) return 'instant-experience'
+  if (has('lead_gen_form_id')) return 'lead'
+  if (has('app_destination') || has('page_welcome_message') || has('partner_app_welcome_message_flow_id') || has('type', (v) => MESSAGING_CTAS.has(String(v)))
+    || feed.optimization_type === 'DOF_MESSAGING_DESTINATION' || has('whats_app_business_phone_number') || creative.marketing_message_structured_spec) return 'messaging'
+  if (has('call_ads_configuration') || has('link', (v) => typeof v === 'string' && v.startsWith('tel:')) || has('type', (v) => v === 'CALL_NOW')) return 'call'
+  if (creative.object_type === 'EVENT' || has('event_id')) return 'event'
+  if (feed.upcoming_events) return 'reminder'
+  if (has('type', (v) => PROFILE_CTAS.has(String(v))) || feed.optimization_type === 'UNIFIED_PROFILE_VISIT_DESTINATION') return 'profile'
+  if (!has('link', (v) => typeof v === 'string' && v.startsWith('https://')) && !has('website_url')) return 'page-post'
+  return 'website'
+}
+
+/** Format automation formats Meta documents for catalog creatives only (format-automation; master CR-420, CR-421). */
+export const META_CATALOG_FORMATS: readonly string[] = ['da_collection', 'catalog_single_media']
+/** The rest: a single image or video, or a carousel (master CR-422, CR-423). */
+export const META_NON_CATALOG_FORMATS: readonly string[] = META_FORMAT_AUTOMATION_FORMATS.filter((f) => !META_CATALOG_FORMATS.includes(f))
+
+/**
+ * Review B — the silent keys a creative of this kind carries, each where Meta documents it for that kind (so one refusal by
+ * Meta cannot block every kind): every Advantage+ feature and contextual_multi_ads on every creative; asset_feed_spec.audios
+ * beside an object_story_spec (the music guide's own example) — never on an existing post (no asset feed is sent there:
+ * Meta's music is an asset-feed opt-in, "To opt into the music feature using the asset_feed_spec parameter", and an
+ * existing post keeps its own media; LIVE-PROBES CR-416p); format_transformation_spec on a website creative (the non-catalog
+ * formats) and on a catalog creative (all six); destination_spec WEBSITE_AND_SHOP_OPT_OUT on the creatives the Shops guide
+ * covers (website destination: website and catalog creatives) — not on messaging, Instant Experience, lead, call, event,
+ * reminder, profile, Page-post or existing-post creatives.
+ */
+export function silentKeysOf(kind: CreativeKind): { audios: boolean; formats: readonly string[] | null; destination: boolean } {
+  return {
+    audios: kind !== 'existing-post',
+    formats: kind === 'website' ? META_NON_CATALOG_FORMATS : kind === 'catalog' ? META_FORMAT_AUTOMATION_FORMATS : null,
+    destination: kind === 'website' || kind === 'catalog',
+  }
+}
+
+/** The silent features a creative must carry explicitly, by its kind (the binding lane rule; review B): why not, or null. */
 export function silentFeaturesProblem(creative: Record<string, unknown>): string | null {
   const dof = creative.degrees_of_freedom_spec as { creative_features_spec?: Record<string, { enroll_status?: unknown }> } | undefined
   const features = dof?.creative_features_spec ?? {}
   const missing = META_CREATIVE_FEATURES.filter((f) => !features[f]?.enroll_status)
   if (missing.length) return `a creative names an enroll_status for every Advantage+ creative feature Meta documents (missing: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ', …' : ''}): Nexus switches none on silently`
   if (!(creative.contextual_multi_ads as { enroll_status?: unknown } | undefined)?.enroll_status) return 'a creative names contextual_multi_ads.enroll_status (Meta opts a creative into multi-advertiser ads when it is missing)'
-  const formats = Array.isArray(creative.format_transformation_spec) ? (creative.format_transformation_spec as Array<{ format?: unknown }>).map((f) => f.format) : []
-  if (META_FORMAT_AUTOMATION_FORMATS.some((f) => formats.filter((x) => x === f).length !== 1)) return `a creative names format_transformation_spec for each of ${META_FORMAT_AUTOMATION_FORMATS.join(', ')} once (Meta transforms the format by itself when one is missing)`
-  const feed = creative.asset_feed_spec as { audios?: unknown } | undefined
-  if (!feed || !Array.isArray(feed.audios)) return 'a creative names asset_feed_spec.audios (empty: no music; Meta\'s guide opts out of music that way)'
-  if (!(creative.destination_spec as { destination_type?: unknown } | undefined)?.destination_type) return 'a creative names destination_spec.destination_type (v26 sends an eligible creative to the shop by itself when it is missing)'
+  const kind = creativeKindOf(creative)
+  const want = silentKeysOf(kind)
+  const formats = Array.isArray(creative.format_transformation_spec) ? (creative.format_transformation_spec as Array<{ format?: unknown }>).map((f) => String(f.format)) : null
+  if (want.formats) {
+    const sent = formats ?? []
+    if (sent.length !== want.formats.length || want.formats.some((f) => sent.filter((x) => x === f).length !== 1)) return `a ${kind} creative names format_transformation_spec for each of ${want.formats.join(', ')} once, and no other format (Meta transforms the format by itself when one is missing)`
+  } else if (formats) return `Meta documents format automation for website and catalog creatives only, not for a ${kind} creative: Nexus sends none there`
+  const feed = creative.asset_feed_spec as Record<string, unknown> | undefined
+  if (want.audios) {
+    if (!feed || !Array.isArray(feed.audios)) return 'a creative names asset_feed_spec.audios (empty: no music; Meta\'s guide opts out of music that way)'
+  } else if (feed && (Object.keys(feed).some((k) => k !== 'audios') || !Array.isArray(feed.audios) || !feed.audios.length)) return 'a creative of an existing post takes an asset_feed_spec only for music asked (audios random)'
+  const destination = (creative.destination_spec as { destination_type?: unknown } | undefined)?.destination_type
+  if (want.destination && !destination) return `a ${kind} creative names destination_spec.destination_type (v26 sends an eligible creative to the shop by itself when it is missing)`
+  if (!want.destination && creative.destination_spec) return `Meta's Shops guide covers website-destination creatives only, not a ${kind} creative: Nexus sends no destination_spec there`
   return null
 }
 
@@ -725,18 +822,34 @@ export function silentFeaturesProblem(creative: Record<string, unknown>): string
  * The identity of a creative, after the walk: the Page and Instagram account it runs as, each the chosen one, or a
  * partner's beside the chosen one as its sponsor (partnership ads: master CR-320 brand as main identity, CR-321 creator as
  * main identity) — handed to the gateway as identity assets (`with`: the sponsor named). A legacy sponsor Page and every
- * sponsor named while the chosen Page is the identity are partner assets.
+ * sponsor named while the chosen Page is the identity are partner assets. Review A2 — an Instagram account named both in
+ * the story and at the top level must be the SAME one (each is checked otherwise one would go unseen): two are refused.
  */
-export function identityAssets(creative: Record<string, unknown>): MetaWriteAsset[] {
+export function identityAssets(creative: Record<string, unknown>): MetaWriteAsset[] | { problem: string } {
   const story = creative.object_story_spec as { page_id?: string; instagram_user_id?: string } | undefined
   const sponsorPage = (creative.facebook_branded_content as { sponsor_page_id?: string } | undefined)?.sponsor_page_id
   const sponsorIg = (creative.instagram_branded_content as { sponsor_id?: string } | undefined)?.sponsor_id
   const out: MetaWriteAsset[] = []
   if (story?.page_id) out.push({ id: story.page_id, kind: 'identitypage', ...(sponsorPage ? { with: sponsorPage } : {}) })
   else if (sponsorPage) out.push({ id: sponsorPage, kind: 'partnerpage' })
-  const ig = story?.instagram_user_id ?? (typeof creative.instagram_user_id === 'string' ? creative.instagram_user_id : undefined)
-  if (ig) out.push({ id: ig, kind: 'identityinstagram', ...(sponsorIg ? { with: sponsorIg } : {}) })
+  const igs = [...new Set([story?.instagram_user_id, typeof creative.instagram_user_id === 'string' ? creative.instagram_user_id : undefined].filter((v): v is string => !!v))]
+  if (igs.length > 1) return { problem: 'a creative names ONE Instagram account: object_story_spec.instagram_user_id and instagram_user_id differ' }
+  if (igs.length) out.push({ id: igs[0], kind: 'identityinstagram', ...(sponsorIg ? { with: sponsorIg } : {}) })
   else if (sponsorIg) out.push({ id: sponsorIg, kind: 'partnerinstagram' })
+  return out
+}
+
+/**
+ * Review A6 — the opt-ins a creative carries in its own parts (beside the arguments the preview names already), each in
+ * words: Meta's related media, its optimized marketing-message text, automatic product tags in a catalog template, format
+ * automation in an asset feed.
+ */
+export function partsOptIns(creative: Record<string, unknown>): string[] {
+  const out: string[] = []
+  if (anyMember(creative.media_sourcing_spec, 'opt_in_status', (v) => v === 'OPT_IN')) out.push('media_sourcing_spec.related_media OPT_IN (Meta adds related media to the ad)')
+  if ((creative.marketing_message_structured_spec as { is_optimized_text?: unknown } | undefined)?.is_optimized_text === true) out.push('marketing_message_structured_spec.is_optimized_text (Meta rewrites the WhatsApp message text)')
+  if (anyMember(creative, 'automated_product_tags', (v) => v === true)) out.push('automated_product_tags (Meta tags catalog products by itself)')
+  if ((creative.asset_feed_spec as { optimization_type?: unknown } | undefined)?.optimization_type === 'FORMAT_AUTOMATION') out.push('asset_feed_spec.optimization_type FORMAT_AUTOMATION (Meta picks carousel or collection by itself)')
   return out
 }
 
@@ -772,8 +885,10 @@ export function finishCreative(creative: Record<string, unknown>, walk: Creative
   if (creative.object_story_spec && creative.object_story_id) return { problem: 'a creative names object_story_spec or object_story_id, not both' }
   const silent = silentFeaturesProblem(creative)
   if (silent) return { problem: silent }
+  const identity = identityAssets(creative)
+  if ('problem' in identity) return identity
   const seen = new Set<string>()
-  const assets = [...identityAssets(creative), ...walk.assets].filter((a) => {
+  const assets = [...identity, ...walk.assets].filter((a) => {
     const key = `${a.kind}:${a.id}:${a.with ?? ''}`
     if (seen.has(key)) return false
     seen.add(key)
@@ -837,9 +952,10 @@ export const META_CREATIVE_WRITE_RULES: readonly MetaWriteRule[] = [
   {
     // M5-11 … M5-24, M5-29 … M5-31 (master CR-013 …): a creative of the chosen ad account, and Meta's check of it.
     name: 'adaccount.creative.create', method: 'POST', path: /^act_\d{1,20}\/adcreatives$/, kinds: ACCOUNT,
-    required: ['name', 'degrees_of_freedom_spec', 'contextual_multi_ads', 'format_transformation_spec', 'asset_feed_spec', 'destination_spec'],
+    // The silent keys every creative carries; the ones Meta documents per kind are judged by silentFeaturesProblem (review B).
+    required: ['name', 'degrees_of_freedom_spec', 'contextual_multi_ads'],
     // The keys Nexus answers in words (META_CREATIVE_REFUSED) match the rule so that its judge says why; it refuses each.
-    optional: [...Object.keys(CREATIVE_KEYS).filter((k) => !['name', 'degrees_of_freedom_spec', 'contextual_multi_ads', 'format_transformation_spec', 'asset_feed_spec', 'destination_spec'].includes(k)), ...Object.keys(META_CREATIVE_REFUSED), 'execution_options'],
+    optional: [...Object.keys(CREATIVE_KEYS).filter((k) => !['name', 'degrees_of_freedom_spec', 'contextual_multi_ads'].includes(k)), ...Object.keys(META_CREATIVE_REFUSED), 'execution_options'],
     anyOf: ['object_story_spec', 'object_story_id'],
     text: CREATIVE_JSON_TEXT, maxBody: META_CREATIVE_MAX_BODY, edgeCall: true, budget: false, check: true,
     values: createJudge, assets: createAssets,
