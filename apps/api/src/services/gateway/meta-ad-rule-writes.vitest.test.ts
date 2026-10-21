@@ -110,7 +110,7 @@ describe('the rule entries of the write allow-list', () => {
       'today_impressions / aggregate(today_impressions)', '(today_impressions / aggregate(today_impressions))', 'constructor']) {
       expect(ruleFieldProblem(ok), ok).toBeNull()
     }
-    for (const bad of ['Spent', 'lifetime_campaign.spent x', 'ad.adset.spent', 'campaign_id', 'adset.account_id', 'campaign.7d_click:id', 'campaign.inline:adlabel_ids', '1d_click:daily_budget', 'adset.entity_type', 'aggregate(daily_budget)', 'id + spent', 'today_impressions/yesterday_impressions', 'spent; DROP', '(spent', 'a + b + c + d + e + f + g', 'aggregate(adset.reach)', `${'x'.repeat(201)}`]) {
+    for (const bad of ['Spent', 'lifetime_campaign.spent x', 'ad.adset.spent', 'campaign_id', 'adset.account_id', 'campaign.7d_click:id', 'campaign.inline:adlabel_ids', 'creative.id', 'account.id', 'page.id', 'campaign.creative.id', 'foo.ids', '1d_click:daily_budget', 'adset.entity_type', 'aggregate(daily_budget)', 'id + spent', 'today_impressions/yesterday_impressions', 'spent; DROP', '(spent', 'a + b + c + d + e + f + g', 'aggregate(adset.reach)', `${'x'.repeat(201)}`]) {
       expect(ruleFieldProblem(bad), bad).not.toBeNull()
     }
   })
@@ -217,6 +217,11 @@ describe('review round 1 — isolation, operators, Meta\'s grammar', () => {
     expect(create({ schedule: { schedule_type: 'CUSTOM', schedule: [{ start_minute: 1440 }] } })).toMatch(/0 … 1410/)
     expect(create({ schedule: { schedule_type: 'CUSTOM', schedule: [{ start_minute: 1410, end_minute: 1440 }] } })).toBeNull()
     expect(create({ evaluation: { ...EVAL, filters: [{ field: 'entity_type', value: 'CAMPAIGN', operator: 'EQUAL' }] }, execution: { execution_type: 'CHANGE_CAMPAIGN_BUDGET', execution_options: [{ field: 'change_spec', value: { amount: 10, unit: 'PERCENTAGE' }, operator: 'EQUAL' }, { field: 'execution_count_limit', value: 2, operator: 'EQUAL' }] } })).toMatch(/CHANGE_BUDGET and CHANGE_BID only/)
+  })
+  it('re-review N3 — at most 150 ids in all lists of a rule together, refused before anything is sent', () => {
+    const ids = (from: number) => Array.from({ length: 100 }, (_, i) => String(120000000001000 + from + i))
+    expect(create({ evaluation: { ...EVAL, filters: [...EVAL.filters, { field: 'adset.id', value: ids(0), operator: 'IN' }, { field: 'campaign.id', value: ids(500), operator: 'NOT_IN' }] } })).toMatch(/at most 150 objects and labels in all \(this one 200\)/)
+    expect(create({ evaluation: { ...EVAL, filters: [...EVAL.filters, { field: 'adset.id', value: ids(0), operator: 'IN' }] } })).toBeNull()
   })
   it('the refusal sentences name the rule tools', () => {
     expect(problem({ method: 'DELETE', url: `${BASE}/${RULE}`, body: undefined })).toMatch(/remove-meta-ad-rule/)

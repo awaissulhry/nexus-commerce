@@ -180,6 +180,11 @@ describe('review round 1', () => {
   const rotate: AdRuleRequest = { action: 'create', name: 'Rotate', evaluation: { type: 'SCHEDULE', filters: [{ field: 'entity_type', operator: 'EQUAL', value: 'AD' }, { field: 'adset.id', operator: 'IN', value: [AD_SET] }] }, execution: { type: 'ROTATE' }, schedule: { type: 'DAILY' } }
   const ROTATE = { execution_type: 'ROTATE' }
   const TARGET = { execution_type: 'CHANGE_BID', execution_options: [{ field: 'change_spec', value: { amount: 1500, target_field: 'cost_per_purchase_fb' }, operator: 'EQUAL' }] }
+  it('re-review N3 — the preview refuses a rule with more than 150 ids in all its lists', () => {
+    const ids = (from: number) => Array.from({ length: 100 }, (_, i) => String(120000000001000 + from + i))
+    const filters = [...pauseRule.evaluation!.filters!, { field: 'adset.id', operator: 'IN' as const, value: ids(0) }, { field: 'campaign.id', operator: 'NOT_IN' as const, value: ids(500) }]
+    expect(refusal({ ...pauseRule, evaluation: { ...pauseRule.evaluation!, filters } })).toMatch(/at most 150 objects and labels in all/)
+  })
   it('A1 — ROTATE switches the next ad on: SPENDS MONEY when made on, switched on, changed while on, or run', () => {
     const on = draft({ ...rotate, enable: true })
     expect(on.spendsMoney[0]).toMatch(/switches the next ad of the ad set on/)
@@ -209,6 +214,9 @@ describe('review round 1', () => {
       refusal({ action: 'create', name: 'T', evaluation: { type: 'TRIGGER', filters, trigger }, execution: { type: 'NOTIFICATION' } })
     expect(t({ type: 'STATS_CHANGE', field: 'adset.cpc', operator: 'GREATER_THAN', valueCents: 100 })).toMatch(/not allowed as a trigger/)
     expect(t({ type: 'METADATA_CREATION' }, [{ field: 'entity_type', operator: 'EQUAL', value: 'ADSET' }, { field: 'time_preset', operator: 'EQUAL', value: 'TODAY' }, { field: 'campaign.today_spent', operator: 'GREATER_THAN', valueCents: 100 }])).toMatch(/schedule rules only/)
+    // Re-review N2 — a result with a time-preset prefix is schedule-only (Meta marks today_spent, yesterday_spent, lifetime_* "No").
+    expect(t({ type: 'METADATA_CREATION' }, [{ field: 'entity_type', operator: 'EQUAL', value: 'ADSET' }, { field: 'time_preset', operator: 'EQUAL', value: 'TODAY' }, { field: 'today_impressions', operator: 'GREATER_THAN', value: 100 }])).toMatch(/schedule rules only/)
+    expect(t({ type: 'STATS_CHANGE', field: 'last_7d_spent', operator: 'GREATER_THAN', valueAsMeta: 1000 })).toMatch(/not allowed as a trigger/)
     expect(t({ type: 'STATS_MILESTONE', field: 'ctr', operator: 'EQUAL', value: 2 }, [{ field: 'entity_type', operator: 'EQUAL', value: 'ADSET' }, { field: 'time_preset', operator: 'EQUAL', value: 'LIFETIME' }])).toMatch(/milestone fields/)
     expect(refusal({ ...pauseRule, evaluation: { ...pauseRule.evaluation!, filters: [...pauseRule.evaluation!.filters!, { field: 'campaign.objective', operator: 'EQUAL', value: 'OUTCOME_SALES' }] } })).toMatch(/objective takes IN, NOT_IN/)
   })

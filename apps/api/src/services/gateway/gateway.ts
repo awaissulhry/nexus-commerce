@@ -36,7 +36,7 @@ import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-
 import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite } from './meta-calls.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { metaGraphBase } from '../meta/api-version.js'
-import { ruleBodyIds } from './meta-ad-rule-rules.js'
+import { MAX_RULE_BODY_IDS, ruleBodyIds } from './meta-ad-rule-rules.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
 import { writeLedgerRow } from './ledger.js'
 import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
@@ -821,7 +821,7 @@ async function metaRuleOwnerProblem(connectionId: string, write: MetaJudgedWrite
   }
   if (!write.body) return null
   const inner = ruleBodyIds(write.body)
-  if (inner.length > 150) return { code: 'META_WRITE_NOT_ALLOWED', sentence: 'Nothing was sent to Meta: a rule names at most 150 objects and labels Nexus checks one by one; scope it by entity_type, a name or a label instead.' }
+  if (inner.length > MAX_RULE_BODY_IDS) return { code: 'META_WRITE_NOT_ALLOWED', sentence: 'Nothing was sent to Meta: a rule names at most 150 objects and labels Nexus checks one by one; scope it by entity_type, a name or a label instead.' }
   for (const item of inner) {
     const inside = (sentence: string) => sentence.replace(/^Nothing was sent to Meta: /, 'Nothing was sent to Meta: inside this rule, ')
     if (item.kind === 'campaign' || item.kind === 'adset' || item.kind === 'ad') {

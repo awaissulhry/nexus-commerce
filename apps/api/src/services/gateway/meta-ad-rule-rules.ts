@@ -158,7 +158,8 @@ export type ParsedRuleField =
 
 const isMetadataBase = (base: string) => Object.prototype.hasOwnProperty.call(METADATA_OPERATORS, base)
 /** Review A2 — an id named any other way than id, adlabel_ids or aggregation_id (campaign_id, account_id, …): never sent. */
-const OTHER_ID = /(^|_)ids?$/
+// Re-review N1 — dotted spellings too (creative.id, account.id, campaign.creative.id, foo.ids).
+const OTHER_ID = /(^|[._])ids?$/
 
 function simpleProblem(p: { level: RuleLevel | null; attribution: string | null; base: string }, inFormula: boolean): string | null {
   const meta = isMetadataBase(p.base)
@@ -231,7 +232,8 @@ export function isAdvancedRuleField(field: string): boolean {
   const parsed = parseRuleField(field)
   if ('problem' in parsed) return false
   if (parsed.kind !== 'simple') return true
-  return !isMetadataBase(parsed.base) && (parsed.level !== null || parsed.attribution !== null || /^(daily|lifetime)_ratio_spent$/.test(parsed.base))
+  // Re-review N2 — a result with a time-preset prefix (today_impressions, last_7d_spent, lifetime_spent) is schedule-only too.
+  return !isMetadataBase(parsed.base) && (parsed.level !== null || parsed.attribution !== null || TIME_PRESET_PREFIX.test(parsed.base) || /^(daily|lifetime)_ratio_spent$/.test(parsed.base))
 }
 
 /**
@@ -478,6 +480,9 @@ export function wholeRuleSpecsProblem(evaluation: unknown, execution: unknown, s
   if (trigger && !TRIGGER_EXECUTION_TYPES.has(type)) return `a trigger rule takes ${[...TRIGGER_EXECUTION_TYPES].join(', ')} (not ${type})`
   if (!trigger && type === 'PING_ENDPOINT') return 'PING_ENDPOINT is for trigger rules only (Meta)'
   if (trigger && Array.isArray(x.execution_options) && x.execution_options.length && type !== 'NOTIFICATION') return 'a trigger rule takes no execution option but the people a NOTIFICATION goes to (Meta)'
+  // Re-review N3 — the gateway checks at most MAX_RULE_BODY_IDS ids of a rule, one by one: the same count in the preview.
+  const ids = specIds(evaluation).length
+  if (ids > MAX_RULE_BODY_IDS) return `a rule names at most ${MAX_RULE_BODY_IDS} objects and labels in all (this one ${ids}): Nexus checks each is of the chosen ad account — scope it by entity_type, a name or a label instead`
   return null
 }
 
@@ -496,7 +501,14 @@ function wholeRuleProblem(params: Params): string | null {
  * labels it reads (adlabel_ids). The gateway checks each is of the chosen ad account.
  */
 export function ruleBodyIds(body: string): Array<{ id: string; kind: 'adobject' | 'campaign' | 'adset' | 'ad' | 'adlabel' }> {
-  const spec = canonicalJson(new URLSearchParams(body).get('evaluation_spec') ?? '')
+  return specIds(canonicalJson(new URLSearchParams(body).get('evaluation_spec') ?? ''))
+}
+
+/** At most this many ids (objects and labels, all lists together) in one rule: the gateway checks each one by one. */
+export const MAX_RULE_BODY_IDS = 150
+
+/** The ids of an evaluation spec (its filters and its trigger), each with the kind of object it names. */
+function specIds(spec: unknown): Array<{ id: string; kind: 'adobject' | 'campaign' | 'adset' | 'ad' | 'adlabel' }> {
   if (!plainObject(spec)) return []
   const conditions = [...(Array.isArray(spec.filters) ? spec.filters : []), ...(plainObject(spec.trigger) ? [spec.trigger] : [])]
   const out: Array<{ id: string; kind: 'adobject' | 'campaign' | 'adset' | 'ad' | 'adlabel' }> = []
