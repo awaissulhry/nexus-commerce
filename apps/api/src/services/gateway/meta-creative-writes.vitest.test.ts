@@ -521,3 +521,21 @@ describe('review round 3', () => {
     expect(silentKeysFor(withStory({ link_data: { link: 'https://www.example.com/', image_hash: HASH } })).destination).toBe(true)
   })
 })
+
+describe('step 25 review round 4 — Meta\'s link-redirect pages are websites, and refused as links', () => {
+  const redirects = [
+    'https://l.facebook.com/l.php?u=https://www.example.com/',
+    'https://lm.facebook.com/l.php?u=https://www.example.com/',
+    'https://www.facebook.com/l.php?u=https://www.example.com/',
+    'https://www.facebook.com/flx/warn/?u=https://www.example.com/',
+    'https://l.instagram.com/?u=https://www.example.com/',
+    'https://l.messenger.com/l.php?u=https://www.example.com/',
+    'https://www.facebook.com/shop_a?next=www.example.com',
+  ]
+  it('counts each as a website destination (the opt-outs are then required)', () => {
+    for (const link of redirects) expect(silentKeysFor(withStory({ link_data: { link, image_hash: HASH } })).destination, link).toBe(true)
+  })
+  it('refuses each as a creative link', () => {
+    for (const link of redirects) expect(problem({ body: form(withStory({ link_data: { link, image_hash: HASH } })) }), link).toMatch(/name the website itself/)
+  })
+})

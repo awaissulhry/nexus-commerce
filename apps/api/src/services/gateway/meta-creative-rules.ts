@@ -159,6 +159,8 @@ const link: Judge = (value, path, walk) => {
   const url = new URL(value)
   // Review round 2 — a link to fb.com / facebook.com is written plainly: %-encoding could hide a canvas_doc path.
   if (/(^|\.)(fb|facebook)\.com$/.test(url.hostname) && /%/.test(`${url.pathname}${url.search}`)) return no(`${path}: a link to ${url.hostname} is written without %-encoding`)
+  // Review round 4 — Meta's link-redirect pages (l.facebook.com/l.php?u=…, flx/warn, l.instagram.com) hide the real website.
+  if (metaRedirectLink(url)) return no(`${path}: name the website itself, not Meta's redirect page (${url.hostname}${url.pathname})`)
   if (/(^|\.)(fb|facebook)\.com$/.test(url.hostname) && /canvas/i.test(`${url.pathname}${url.search}`)) {
     const canvas = CANVAS_LINK.exec(value)
     if (!canvas) return no(`${path}: an Instant Experience link is exactly https://fb.com/canvas_doc/<id> (Meta's collection-ads guide), nothing else`)
@@ -839,9 +841,23 @@ export const META_NON_CATALOG_FORMATS: readonly string[] = META_FORMAT_AUTOMATIO
  */
 const DESTINATION_KEYS = ['link', 'product_link', 'website_url', 'carousel_see_more_url', 'site_link_url']
 const META_OWNED_HOST = /(^|\.)(fb\.com|facebook\.com|m\.me|messenger\.com|instagram\.com|wa\.me|whatsapp\.com|threads\.net)$/
+/**
+ * Review round 4 — a Meta link that carries another site: a redirect host (`l.` / `lm.`), a redirect path (`/l.php`, `/l/`,
+ * `/flx/`), or a query value that is itself a web address. The link judge refuses it; isWebsite counts it as a website
+ * (fail safe: the opt-outs are then required).
+ */
+function metaRedirectLink(url: URL): boolean {
+  if (!META_OWNED_HOST.test(url.hostname)) return false
+  if (/^(l|lm)\./.test(url.hostname)) return true
+  if (/^\/(l\.php|l\/|flx\/)/i.test(url.pathname)) return true
+  return [...url.searchParams.values()].some((v) => /^(https?:|\/\/|www\.)/i.test(v.trim()) || /:\/\//.test(v))
+}
 const isWebsite = (v: unknown) => {
   if (typeof v !== 'string' || !v.startsWith('https://')) return false
-  try { return !META_OWNED_HOST.test(new URL(v).hostname) } catch { return false }
+  try {
+    const url = new URL(v)
+    return !META_OWNED_HOST.test(url.hostname) || metaRedirectLink(url)
+  } catch { return false }
 }
 /** Does the body name an https website destination anywhere (a link, a card's link, a button's link, a feed link, a template URL)? */
 export function hasWebsiteDestination(creative: Record<string, unknown>): boolean {
