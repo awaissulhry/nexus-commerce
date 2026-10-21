@@ -10,6 +10,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type Req = { operation: string; path: string; query?: Record<string, unknown> }
 const h = vi.hoisted(() => ({
+  asked: (() => {
+    /** The stub answers only the top-level fields a read names (so a field dropped from a field list fails a test). */
+    const topFields = (fields: unknown): Set<string> => {
+      let depth = 0
+      let top = ''
+      for (const c of String(fields ?? '')) { if (c === '{') depth++; else if (c === '}') depth--; else if (depth === 0) top += c }
+      return new Set(top.split(',').map((f) => f.trim()).filter(Boolean))
+    }
+    const asked = (body: Record<string, unknown>, fields: unknown) => { const keep = topFields(fields); return Object.fromEntries(Object.entries(body).filter(([k]) => k === 'id' || keep.has(k))) }
+    return asked
+  })(),
   connections: [] as Array<Record<string, unknown>>,
   calls: [] as Req[],
   w: {} as {
@@ -40,7 +51,7 @@ vi.mock('./read-client.js', async () => {
       h.calls.push(req); failIf(req)
       if (req.path.startsWith('act_')) return { body: { business: h.w.portfolio ? { id: h.w.portfolio } : null }, calls: 1 }
       if (req.query?.fields === 'owner_business{id}') return { body: { owner_business: h.w.owner[req.path] ? { id: h.w.owner[req.path] } : null }, calls: 1 }
-      if (req.operation === 'signalsRule.conversion') { const c = h.w.conversions[req.path]; if (!c) throw notFound(); return { body: c, calls: 1 } }
+      if (req.operation === 'signalsRule.conversion') { const c = h.w.conversions[req.path]; if (!c) throw notFound(); return { body: h.asked(c, req.query?.fields), calls: 1 } }
       if (req.operation === 'signalsRule.group') return { body: h.w.group[req.path] ?? {}, calls: 1 }
       return { body: {}, calls: 1 }
     }),
@@ -145,6 +156,9 @@ describe('a pixel: step 11\'s verdict — only free is changed', () => {
     expect(await ask('dataset.disconnectAccount', PIXEL, 'pixel', { account_id: OWN, business: BIZ })).toBeNull()
     expect(await ask('dataset.disconnectAccount', PIXEL, 'pixel', { account_id: '5555555555', business: BIZ })).toMatchObject({ sentence: expect.stringMatching(/chosen ad account only/) })
     expect(await ask('dataset.disconnectAccount', PIXEL, 'pixel', { account_id: OWN, business: '1111111111' })).toMatchObject({ sentence: expect.stringMatching(/own business portfolio only/) })
+    // A CONNECT body too: the chosen ad account and its portfolio only.
+    expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'pixel', { account_id: '5555555555', business: BIZ })).toMatchObject({ sentence: expect.stringMatching(/chosen ad account only/) })
+    expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'pixel', { account_id: OWN, business: '1111111111' })).toMatchObject({ sentence: expect.stringMatching(/own business portfolio only/) })
   })
   it('connect a pixel not on the account yet: only one the chosen portfolio owns, none of its accounts or partners another business\'s', async () => {
     expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'pixel', { account_id: OWN, business: BIZ })).toBeNull()

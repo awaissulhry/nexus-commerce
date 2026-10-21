@@ -1,8 +1,7 @@
 /**
  * Meta step 32 on the gateway: the dataset, custom conversion and event source group changes reach Meta only on their
  * EXACT allow-list entries — keys per kind of object (named, then confirmed by signals-rule.ts), every value judged, JSON
- * in one spelling, a DELETE with a form body only for the two rules Meta documents that way (a dataset's ad account, a
- * partner) — and the gateway asks the ONE ownership rule (signals-rule.ts) before anything is sent. Step 17's status rule
+ * in one spelling, a DELETE with a form body only for a dataset's ad account (its two required keys) — and the gateway asks the ONE ownership rule (signals-rule.ts) before anything is sent. Step 17's status rule
  * and step 18's settings rules stay as they were. Made-up ids only.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

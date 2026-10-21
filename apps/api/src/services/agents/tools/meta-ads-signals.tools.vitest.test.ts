@@ -11,6 +11,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type Req = { operation: string; path: string; query?: Record<string, unknown> }
 const h = vi.hoisted(() => ({
+  asked: (() => {
+    /** The stub answers only the top-level fields a read names (so a field dropped from a field list fails a test). */
+    const topFields = (fields: unknown): Set<string> => {
+      let depth = 0
+      let top = ''
+      for (const c of String(fields ?? '')) { if (c === '{') depth++; else if (c === '}') depth--; else if (depth === 0) top += c }
+      return new Set(top.split(',').map((f) => f.trim()).filter(Boolean))
+    }
+    const asked = (body: Record<string, unknown>, fields: unknown) => { const keep = topFields(fields); return Object.fromEntries(Object.entries(body).filter(([k]) => k === 'id' || keep.has(k))) }
+    return asked
+  })(),
   account: { target: { connectionId: 'conn-1', adAccountId: '1234567890' }, accountId: 'conn-1', adAccountId: '1234567890', name: 'Shop A ads', currency: 'EUR' } as Record<string, unknown>,
   connections: [] as Array<Record<string, unknown>>,
   calls: [] as Req[],
@@ -30,7 +41,7 @@ vi.mock('../../marketing/meta-ads/read-client.js', async () => {
       if (req.path.startsWith('act_')) return { body: { business: { id: w.portfolio } }, calls: 1 }
       if (req.query?.fields === 'owner_business{id}') return { body: { owner_business: { id: w.owner[req.path] ?? w.portfolio } }, calls: 1 }
       if (req.operation === 'signals.pixelSettings') return { body: w.settings[req.path] ?? {}, calls: 1 }
-      if (req.operation === 'signalsRule.conversion' || req.operation === 'signals.conversion') { const c = w.conversions[req.path]; if (!c) throw notFound(); return { body: c, calls: 1 } }
+      if (req.operation === 'signalsRule.conversion' || req.operation === 'signals.conversion') { const c = w.conversions[req.path]; if (!c) throw notFound(); return { body: h.asked(c, req.query?.fields), calls: 1 } }
       if (req.operation === 'signalsRule.group') return { body: w.group[req.path] ?? {}, calls: 1 }
       return { body: {}, calls: 1 }
     }),
@@ -43,7 +54,7 @@ vi.mock('../../marketing/meta-ads/read-client.js', async () => {
           : edge === 'shared_accounts' ? (w.accounts[`${head}:${req.query?.business}`] ?? [])
             : edge === 'event_source_groups' ? w.groups.map((id: string) => ({ id }))
               : edge === 'adsets' ? w.adSets
-                : edge === 'customconversions' ? Object.entries(w.conversions).map(([id, c]) => ({ id, ...(c as object) }))
+                : edge === 'customconversions' ? Object.entries(w.conversions).map(([id, c]) => h.asked({ id, ...(c as object) }, req.query?.fields))
                   : []
       onRows(rows)
       return { rows: rows.length, calls: 1, truncated: false }
@@ -195,6 +206,12 @@ describe('set-meta-dataset', () => {
     const back = tool('set-meta-dataset').undo!.request(change)
     expect(back).toMatchObject({ tool: 'set-meta-dataset', args: { connectionId: 'conn-1', pixelId: PIXEL, automaticMatching: { enabled: false }, dataUse: 'ADVERTISING_AND_ANALYTICS' } })
     expect(tool('set-meta-dataset').input.safeParse((back as { args: unknown }).args).success).toBe(true)
+  })
+  it('data use back to ads when the ONLY ad set optimises on a custom conversion of the pixel is SPENDS MONEY (review A5)', async () => {
+    h.w.settings[PIXEL] = { ...SETTINGS, data_use_setting: 'ANALYTICS_ONLY' }
+    h.w.adSets = [{ id: AD_SET, name: 'Ad set B', status: 'ACTIVE', campaign: { status: 'ACTIVE' }, promoted_object: { custom_conversion_id: CC } }]
+    const p = await preview('set-meta-dataset', { pixelId: PIXEL, dataUse: 'ADVERTISING_AND_ANALYTICS' })
+    expect(p.preview).toMatchObject({ spendsMoney: true, spendsMoneyBecause: [expect.stringMatching(/1 is on now.*Ad set B/)] })
   })
   it('an event source group: create from free pixels only; update of one of the portfolio\'s with its undo', async () => {
     expect(await preview('set-meta-dataset', { eventSourceGroup: { action: 'create', name: 'G', pixelIds: [PIXEL, '120000000000999'] } })).toMatchObject({ ok: false })

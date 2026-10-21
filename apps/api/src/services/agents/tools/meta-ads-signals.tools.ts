@@ -11,9 +11,9 @@
  *                              businesses and people (SG-014, SG-021, SG-022, SG-024) are not here (lane C3 decision: like
  *                              set-google-account-links / set-google-user-access they need their own permission and an Owner
  *                              exception — step 41 or Meta's Business settings)
- *   set-meta-custom-conversion create (≤ 100 per ad account, counted first; its rule fixed for good), rename / describe /
- *                              default value, claim into the portfolio — SG-090 … SG-092, SG-094 (SG-091: the ad account
- *                              route, Meta documents no business-level create)
+ *   set-meta-custom-conversion create (≤ 100 per ad account, counted first; its rule fixed for good; its default value),
+ *                              rename / describe, claim into the portfolio — SG-090 … SG-092, SG-094 (SG-091: the ad
+ *                              account route, Meta documents no business-level create)
  *   remove-meta-signal-items   delete custom conversions Nexus made (explicit ask); event rules and parameter extractors
  *                              answer that Meta cannot — SG-093, SG-100, SG-104
  * Each change like set-meta-status (meta-ads-kit.ts): a preview from the live state, an approvalId, a person approves it,
@@ -91,11 +91,9 @@ function signalsFinish(draft: MetaChangeDraft, done: Done, decorate?: (before: S
   const createdId = planned.created ? idOfNode(node) : null
   const after: SignalsRecord = { ...planned, ...(createdId ? { id: createdId } : {}), fields: planned.created ? { ...fields, exists: createdId ? 'yes' : null } : fields }
   decorate?.(before, after, node)
-  const pending = node && typeof node.pending_request_id === 'string'
   return {
     data: {
       id: after.id || null, fields: after.fields,
-      ...(pending ? { pending: 'Meta made a sharing request: the partner sees the dataset once its business accepts it in Meta\'s business settings.' } : {}),
       ...(before.noUndo?.length ? { noUndo: before.noUndo } : {}),
     },
     before, after,

@@ -99,7 +99,6 @@ import { META_ADS_ENGAGEMENT_TOOLS } from './tools/meta-ads-engagement.tools.js'
 import { META_ADS_AUDIENCES_TOOLS } from './tools/meta-ads-audiences.tools.js'
 import { META_ADS_DATASETS_TOOLS } from './tools/meta-ads-datasets.tools.js'
 import { META_ADS_CAMPAIGN_SETTINGS_TOOLS } from './tools/meta-ads-campaign-settings.tools.js'
-// Meta ads step 32 (2026-10-21): datasets, custom conversions, event setup (changes; event setup is read only).
 // Meta ads step 32 (2026-10-21): datasets and custom conversions (changes).
 import { META_ADS_SIGNALS_TOOLS } from './tools/meta-ads-signals.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
