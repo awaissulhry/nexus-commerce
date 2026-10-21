@@ -28,7 +28,7 @@ import { connectionArg, guarded, lower, metaIdArg } from './meta-ads-read.tools.
 
 const ADSPEND = FIELDS.financialsAdspendView
 /** meta-activity-log's money key: the details of budget, bid, spending-limit and billing events. */
-export const META_ACTIVITY_MONEY = { metaRaw: ADSPEND } as const
+const META_ACTIVITY_MONEY = { metaRaw: ADSPEND } as const
 
 const upper = (v: unknown) => (typeof v === 'string' ? v.trim().toUpperCase() : v)
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null)
@@ -117,7 +117,9 @@ const metaActivityLog: AgentTool = {
     + 'or reached, lifetime budgets spent) or review (approved and rejected ads, audience appeals, first delivery, learning), '
     + 'event types, made by Nexus or others, one actor. whyItStopped explains spending limits reached, budgets spent, ended '
     + 'campaigns, status changes and rejections in words. Meta documents no object filter on the account log (only in its '
-    + 'SDK): when Meta refuses it, Nexus reads the account\'s log of those days once and keeps that object\'s events. Billing '
+    + 'SDK): when Meta refuses it, Nexus reads the account\'s log of those days once and keeps that object\'s events; and as Meta '
+    + 'may ignore a filter it does not know, every answer is checked against the days, the actor and the object (filterCheck '
+    + 'counts what Meta returned outside them; Meta\'s category cannot be checked from its answer). Billing '
     + 'events with amounts: meta-billing view events. ' + READ_LINE,
   async handler(args): Promise<ToolResult> {
     return guarded(() => activityLog({

@@ -7,9 +7,28 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../../db.js', () => ({ default: {} }))
+const g = vi.hoisted(() => ({
+  connections: [] as Array<Record<string, unknown>>,
+  accounts: [] as Array<Record<string, unknown>>,
+  queries: [] as Array<{ model: string; args: Record<string, any> }>,
+}))
+vi.mock('../../meta/meta-accounts.service.js', () => ({ listMetaConnections: vi.fn(async () => g.connections) }))
+vi.mock('../../../db.js', () => ({
+  default: {
+    metaAdAccount: { findMany: vi.fn(async (args: Record<string, any>) => { g.queries.push({ model: 'metaAdAccount', args }); return g.accounts }) },
+    outboundApiCallLog: {
+      groupBy: vi.fn(async (args: Record<string, any>) => {
+        g.queries.push({ model: 'ledger', args })
+        return args.by.includes('errorCode')
+          ? [{ connectionId: 'conn-1', errorCode: '80004', _count: { _all: 3 }, _max: { createdAt: new Date('2026-10-21T07:00:00Z') } }, { connectionId: 'conn-1', errorCode: 'RATE_LIMITED_LOCAL', _count: { _all: 9 }, _max: { createdAt: null } }]
+          : [{ connectionId: 'conn-1', _count: { _all: 41 } }]
+      }),
+    },
+    notification: { findMany: vi.fn(async (args: Record<string, any>) => { g.queries.push({ model: 'notification', args }); return [{ entityId: 'META:/v20.0/act_1/campaigns' }] }) },
+  },
+}))
 
-import { judgeMetaHealth, metaAdsCheck, type MetaConnectionFacts, type MetaHealthFacts } from './meta.checks.js'
+import { gatherMetaHealthFacts, judgeMetaHealth, metaAdsCheck, type MetaConnectionFacts, type MetaHealthFacts } from './meta.checks.js'
 import { HEALTH_CHECKS } from '../registry.js'
 
 const NOW = new Date('2026-10-21T08:00:00.000Z')
@@ -94,5 +113,40 @@ describe('meta-ads — the Meta connection, from Nexus\'s own records', () => {
   })
   it('a call Meta upgraded from an expired API version warns', () => {
     expect(judgeMetaHealth(facts({ versionNotices: 2 }), NOW)).toMatchObject({ status: 'warn', message: expect.stringMatching(/expired API version/) })
+  })
+})
+
+describe('meta-ads — the gather reads Nexus\'s own records only (review A5)', () => {
+  it('maps each connection with the account as last read, the ledger\'s throttles (Nexus\'s own holds apart) and the version notices', async () => {
+    g.queries.length = 0
+    g.connections = [{
+      connectionId: 'conn-1', label: 'Meta — Shop A', state: 'ok', stateText: 'ok',
+      token: { checkedAt: ago(HOUR), isValid: true, expiresAt: ahead(40 * DAY), neverExpires: false, missing: [{ scope: 'ads_read', required: true }, { scope: 'catalog_management', required: false }] },
+      adAccount: { adAccountId: '1234567890' }, read: { lastReadAt: ago(HOUR), lastStatus: 'SUCCESS', lastDataDay: '2026-10-20' },
+    }]
+    g.accounts = [{ adAccountId: '1234567890', accountStatus: 9, disableReason: 0, lastSuccessAt: new Date(NOW.getTime() - 2 * HOUR) }]
+    const facts = await gatherMetaHealthFacts(NOW)
+    expect(facts.connections[0]).toMatchObject({
+      connectionId: 'conn-1', adAccountId: '1234567890', account: { status: 9, disableReason: 0 },
+      read: { lastSuccessAt: ago(2 * HOUR), lastStatus: 'SUCCESS' }, token: { missingRequired: ['ads_read'] },
+    })
+    expect(facts.throttles).toEqual([
+      { connectionId: 'conn-1', code: '80004', calls: 3, lastAt: '2026-10-21T07:00:00.000Z', local: false },
+      { connectionId: 'conn-1', code: 'RATE_LIMITED_LOCAL', calls: 9, lastAt: null, local: true },
+    ])
+    expect(facts).toMatchObject({ calls: [{ connectionId: 'conn-1', calls: 41 }], versionNotices: 1, readingOn: true })
+    // Meta's rows of the last day only; the deprecation watch's Meta notices of 30 days.
+    const ledger = g.queries.filter((q) => q.model === 'ledger')
+    expect(ledger.every((q) => q.args.where.channel === 'META' && q.args.where.createdAt.gte.getTime() === NOW.getTime() - DAY)).toBe(true)
+    expect(g.queries.find((q) => q.model === 'notification')?.args.where).toMatchObject({ type: 'channel-deprecation', entityId: { startsWith: 'META:' } })
+    expect(judgeMetaHealth(facts, NOW)).toMatchObject({ status: 'warn', message: expect.stringMatching(/grace period/) })
+  })
+  it('no Meta connection: no account read, and the verdict is ok — never "could not measure"', async () => {
+    g.queries.length = 0
+    g.connections = []
+    const facts = await gatherMetaHealthFacts(NOW)
+    expect(facts.connections).toEqual([])
+    expect(g.queries.some((q) => q.model === 'metaAdAccount')).toBe(false)
+    expect(metaAdsCheck.judge(facts, NOW).status).toBe('ok')
   })
 })

@@ -20,6 +20,7 @@ const h = vi.hoisted(() => ({
   ledger: [] as Array<{ connectionId: string | null; errorCode: string | null; _count: { _all: number }; _max: { createdAt: Date | null } }>,
   notices: [] as Array<{ entityId: string }>,
   live: null as null | Record<string, unknown>,
+  funding: false,
 }))
 vi.mock('../../meta/meta-accounts.service.js', () => ({ listMetaConnections: vi.fn(async () => h.connections) }))
 vi.mock('../../meta/meta-connection-live.js', () => ({ liveConnectionCheck: vi.fn(async () => h.live) }))
@@ -99,6 +100,9 @@ const PIXEL = '400000000000001'
 const PIXEL_OTHER = '400000000000002'
 const CONVERSION = '410000000000001'
 const NOW = Date.now()
+/** UTC days relative to now, so the fixtures stay inside the default window (the last 7 days) whenever the suite runs. */
+const dayAgo = (n: number) => new Date(NOW - n * 86_400_000).toISOString().slice(0, 10)
+const YESTERDAY = dayAgo(1)
 const isoAgo = (hours: number) => new Date(NOW - hours * 3_600_000).toISOString()
 const CHOSEN = {
   connectionId: 'conn-1', label: 'Meta — Shop A', state: 'ok', stateText: 'Nexus reads “Shop A ads” once a day (read only).', authStatus: 'ok',
@@ -110,7 +114,7 @@ const CHOSEN = {
 }
 
 const activity = (over: Record<string, unknown>) => ({
-  event_time: '2026-10-20T10:00:00+0000', date_time_in_timezone: '20/10/2026 at 12:00', event_type: 'update_campaign_run_status', translated_event_type: 'Campaign status updated',
+  event_time: `${YESTERDAY}T10:00:00+0000`, date_time_in_timezone: '20/10/2026 at 12:00', event_type: 'update_campaign_run_status', translated_event_type: 'Campaign status updated',
   actor_id: PERSON, actor_name: 'Person A', application_id: null, application_name: null, object_id: CAMPAIGN, object_name: 'Campaign A', object_type: 'CAMPAIGN',
   extra_data: '{"old_value":"Active","new_value":"Paused","type":"run_status"}', ...over,
 })
@@ -134,8 +138,13 @@ function answers(req: Req): unknown {
     return { failed_delivery_checks: [{ check_name: 'page_status', summary: 'The Page is restricted', description: 'Fix the Page', extra_info: { adgroup_ids: [AD], campaign_ids: [CAMPAIGN], countries: ['IT'] } }] }
   }
   if (req.path === `act_${ACCOUNT}` && f === 'account_status,disable_reason') return { account_status: 9, disable_reason: 0 }
-  if (req.path === `act_${ACCOUNT}` && f.includes('funding_source,')) return { funding_source: null, is_prepay_account: false }
-  if (req.path === `act_${ACCOUNT}` && f.includes('funding_source_details')) return {}
+  if (req.path === `act_${ACCOUNT}` && f.includes('funding_source,')) return { funding_source: h.funding ? '700000000000009' : null, is_prepay_account: false }
+  if (req.path === `act_${ACCOUNT}` && f.includes('funding_source_details')) {
+    return h.funding ? {
+      funding_source_details: { id: '700000000000009', type: 1, display_string: 'Visa *1234', coupons: [{ coupon_id: '710000000000001', currency: 'EUR', display_amount: '€50.00', original_display_amount: '€100.00' }] },
+      expired_funding_source_details: { id: '700000000000008', type: 1, display_string: 'Mastercard *5678' },
+    } : {}
+  }
   if (req.path === `act_${ACCOUNT}/campaigns`) {
     const st = JSON.stringify(req.query?.effective_status)
     return st.includes('IN_PROCESS') ? { data: [{ id: '120000000000011', name: 'New campaign', effective_status: 'IN_PROCESS' }] } : { data: [{ id: CAMPAIGN, name: 'Campaign A', effective_status: 'WITH_ISSUES', issues_info: [{ level: 'CAMPAIGN', error_code: 2460004, error_summary: 'Flagged custom conversion' }] }] }
@@ -146,7 +155,7 @@ function answers(req: Req): unknown {
     return { data: [{ id: AD, name: 'Ad A', campaign_id: CAMPAIGN, adset_id: ADSET, effective_status: 'DISAPPROVED', issues_info: [], ad_review_feedback: { global: { POLICY: 'words' } } }] }
   }
   if (req.path === `act_${ACCOUNT}/ads_volume`) return { data: [{ actor_id: PAGE, ads_running_or_in_review_count: 248, limit_on_ads_running_or_in_review: 250 }] }
-  if (req.path === `act_${ACCOUNT}/adcreatives`) return { data: [{ id: '700000000000001', name: 'Creative A', status: 'IN_PROCESS' }, { id: '700000000000002', name: 'Creative B', status: 'ACTIVE' }] }
+  if (req.path === `act_${ACCOUNT}/adcreatives`) return { data: [{ id: '700000000000001', name: 'Creative A', status: 'IN_PROCESS' }, { id: '700000000000002', name: 'Creative B', status: 'ACTIVE' }, { id: '700000000000003', name: 'Creative C', status: 'IN-PROCESS' }] }
   if (req.path === `act_${ACCOUNT}/customconversions`) return { data: [{ id: CONVERSION, name: 'Purchase 50+', custom_event_type: 'PURCHASE', is_archived: false, is_unavailable: true, last_fired_time: '2026-10-19T00:00:00+0000' }] }
   if (req.path === `act_${ACCOUNT}/adspixels`) return { data: [{ id: PIXEL, name: 'Shop A pixel', is_unavailable: true, owner_business: { id: PORTFOLIO } }, { id: PIXEL_OTHER, name: 'Other pixel', is_unavailable: false, owner_business: { id: OTHER_PORTFOLIO } }] }
   if (req.path === `${PAGE}/page_status`) {
@@ -170,7 +179,7 @@ beforeEach(() => {
   h.stored = { campaign: [CAMPAIGN], adset: [ADSET], ad: [AD] }
   h.children = { adSets: [ADSET], ads: [CHILD_AD] }
   h.account = { adAccountId: ACCOUNT, accountStatus: 1, disableReason: 0, lastSuccessAt: new Date(NOW - 5 * 3_600_000), lastSyncAt: new Date(NOW - 5 * 3_600_000), settingsReadAt: new Date(NOW - 5 * 3_600_000), settings: { failed_delivery_checks: [], adsVolume: [{ ads_running_or_in_review_count: 12, limit_on_ads_running_or_in_review: 250 }] } }
-  h.ledger = []; h.notices = []
+  h.ledger = []; h.notices = []; h.funding = false
   h.live = {
     token: { checkedAt: new Date(NOW).toISOString(), isValid: true, appId: APP, appMatches: true, type: 'SYSTEM_USER', userId: SYSTEM_USER, expiresAt: new Date(NOW + 10 * 86_400_000).toISOString(), neverExpires: false, dataAccessExpiresAt: null, scopes: ['ads_read'], missing: [], problem: null },
     tokenError: null,
@@ -223,7 +232,8 @@ describe('meta-account-health', () => {
     expect(out.status).toBe('ok')
     expect(out.account).toMatchObject({ adAccountId: ACCOUNT, statusText: 'Active', adsCanRun: true, failedDeliveryChecks: [] })
     expect(out.objectsAsOfLastRead).toEqual({ campaigns: { WITH_ISSUES: 1 }, adSets: {}, ads: { DISAPPROVED: 2, PENDING_BILLING_INFO: 1 } })
-    expect(out.adsVolumeAsOfLastRead).toEqual({ adsRunningOrInReview: 12, limit: 250 })
+    // Review B5 — the daily read keeps the count only; the limit is view problems'.
+    expect(out.adsVolumeAsOfLastRead).toEqual({ adsRunningOrInReview: 12, limit: expect.stringMatching(/not read daily/) })
     expect(out.throttlesLast24h[0]).toMatchObject({ code: 'RATE_LIMITED_LOCAL', calls: 7, byNexus: true })
     expect(out.throttlesLast24h[1]).toMatchObject({ code: '613/1487632', what: expect.stringMatching(/4 times in the last hour/) })
   })
@@ -234,7 +244,8 @@ describe('meta-account-health', () => {
     expect(out.status).toBe('fail')
     expect(out.message).toMatch(/refused the token/)
     expect(out.message).toMatch(/Disabled: no ad runs/)
-    expect(out.account).toMatchObject({ adsCanRun: false, disableReasonText: 'Compromised ad account', stopChanges: expect.stringMatching(/make no Meta change/) })
+    expect(out.account).toMatchObject({ adsCanRun: false, disableReasonText: 'Compromised ad account', stopChanges: expect.stringMatching(/make no Meta change/), whatToDoIs: expect.stringMatching(/Nexus's advice/) })
+    expect(out.message).toMatch(/Nexus's advice: Meta thinks the account was compromised/)
   })
   it('summary: no Meta connection says so (no call)', async () => {
     h.connections = []
@@ -256,7 +267,9 @@ describe('meta-account-health', () => {
     const out = data(await run('meta-account-health', { view: 'problems' }))
     expect(h.calls.map((c) => c.operation)).toEqual(expect.arrayContaining(['objects.problems.account', 'objects.problems.campaigns', 'objects.problems.ads', 'health.processing.campaigns', 'health.processing.creatives']))
     expect(out.problems.map((p: { level: string; id: string }) => [p.level, p.id])).toEqual([['campaign', CAMPAIGN], ['ad', AD]])
-    expect(out.processing.map((p: { level: string; id: string }) => [p.level, p.id])).toEqual([['campaign', '120000000000011'], ['creative', '700000000000001']])
+    // Review B4 — Meta's guide spells it IN-PROCESS, its SDK IN_PROCESS: both.
+    expect(out.processing.map((p: { level: string; id: string }) => [p.level, p.id])).toEqual([['campaign', '120000000000011'], ['creative', '700000000000001'], ['creative', '700000000000003']])
+    expect(out.processing[2].statusText).toMatch(/Being processed/)
     expect(out.pagesNearAdLimit).toEqual([expect.objectContaining({ pageId: PAGE, adsRunningOrInReview: 248, limit: 250, sentence: expect.stringMatching(/248 of its 250/) })])
   })
   it('payment: the trouble in words, without who made a charge or its amount', async () => {
@@ -267,6 +280,14 @@ describe('meta-account-health', () => {
     expect(out.adsWaitingForBilling).toEqual([{ adId: AD, name: 'Ad A', adSetId: ADSET }])
     expect(out.troubleEvents).toEqual([{ time: expect.any(String), type: 'ad_account_billing_charge_failed', typeText: 'Charge failed' }])
     expect(JSON.stringify(out)).not.toMatch(/Person A|12\.00/)
+  })
+  it('payment: a payment method is its kind only — never Meta\'s masked text, its id or a coupon\'s amounts (review A1)', async () => {
+    h.funding = true
+    const out = data(await run('meta-account-health', { view: 'payment' }))
+    expect(out.paymentSetup).toEqual({ hasPaymentMethod: true, prepaid: false, paymentMethod: { type: 1, typeText: 'Credit or debit card' }, expiredPaymentMethod: true })
+    // As an ads.view reader sees it (the tool has no money keys: nothing is stripped, so nothing may be there).
+    const seen = financialPayloadCopy(out, { isOwner: false, permissions: new Set(['ads.view']) } as never, tool('meta-account-health').restrictedFields)
+    expect(JSON.stringify(seen)).not.toMatch(/Visa|\*1234|Mastercard|\*5678|50\.00|100\.00|700000000000009|710000000000001|coupon|shownAs/)
   })
   it('signals: flagged conversions and unavailable pixels; a pixel of another business\'s portfolio is its id and a flag', async () => {
     h.taken = [{ product: 'PORTFOLIO', id: OTHER_PORTFOLIO }]
@@ -289,7 +310,10 @@ describe('meta-account-health', () => {
   })
   it('page: Meta asking for the Page\'s own token is said plainly', async () => {
     h.answer = (req) => (req.path.endsWith('/page_status') ? refusedByMeta('(#190) This method must be called with a Page Access Token', '190', 'auth_revoked') : answers(req))
-    expect((await run('meta-account-health', { view: 'page' })).error).toMatch(/Page's own access token/)
+    const error = (await run('meta-account-health', { view: 'page' })).error
+    expect(error).toMatch(/Page's own access token/)
+    // Review B3 — Meta's integrity guide also asks pages_manage_metadata: named.
+    expect(error).toMatch(/pages_manage_metadata/)
   })
   it('connection: the token now, usage, version and throttles in words', async () => {
     h.ledger = [{ connectionId: 'conn-1', errorCode: '17/2446079', _count: { _all: 3 }, _max: { createdAt: new Date(NOW) } }]
@@ -313,10 +337,12 @@ describe('meta-account-health', () => {
 
 describe('meta-activity-log', () => {
   it('account: the days always sent; Nexus named, anyone else by id; a role change keeps no name or details; money under metaRaw', async () => {
-    const out = data(await run('meta-activity-log', { from: '2026-10-14', to: '2026-10-20', category: 'status' }))
+    const out = data(await run('meta-activity-log', { from: dayAgo(7), to: YESTERDAY, category: 'status' }))
     const req = h.calls.find((c) => c.operation === 'activity.account')!
     expect(req.path).toBe(`act_${ACCOUNT}/activities`)
-    expect(req.query).toMatchObject({ since: Date.UTC(2026, 9, 14) / 1000, until: Date.UTC(2026, 9, 21) / 1000, category: 'STATUS' })
+    expect(req.query).toMatchObject({ since: Date.parse(`${dayAgo(7)}T00:00:00Z`) / 1000, until: Date.parse(`${dayAgo(0)}T00:00:00Z`) / 1000, category: 'STATUS' })
+    // Meta's category cannot be checked from the answer on the account's log: said so (review A2).
+    expect(out.filterCheck.sentences.join(' ')).toMatch(/category filter cannot be checked/)
     expect(req.query).not.toHaveProperty('business_id')
     const [statusEvent, budget, role, limit, review, , unknownObject] = out.events
     expect(statusEvent.by).toEqual({ madeByNexus: false, who: 'someone else (a person, an agency or Meta)', actorId: PERSON, app: null })
@@ -369,6 +395,38 @@ describe('meta-activity-log', () => {
     const req = h.calls.find((c) => c.operation === 'activity.adset')!
     expect(req.path).toBe(`${ADSET}/activities`)
     expect(req.query).toMatchObject({ business_id: PORTFOLIO })
+  })
+  it('Meta may ignore a filter it does not know: every answer is checked against the days, the actor and the object (review A2)', async () => {
+    const old = `${dayAgo(30)}T10:00:00+0000`
+    const log = (rows: unknown[]) => (req: Req) => (req.path.endsWith('/activities') ? { data: rows } : answers(req))
+    h.answer = log([activity({ object_id: AD }), activity({ object_id: AD, event_time: old }), activity({ object_id: AD, actor_id: SYSTEM_USER }), activity({ object_id: CAMPAIGN })])
+    const ad = data(await run('meta-activity-log', { scope: 'ad', id: AD, actorId: PERSON }))
+    expect(ad.events.map((e: { object: { id: string } }) => e.object.id)).toEqual([AD])
+    expect(ad.filterCheck).toMatchObject({ checked: ['days', 'actor', 'object'], outsideDays: 1, otherActors: 1, otherObjects: 1, outsideKnownObjects: 0 })
+    expect(ad.filterCheck.sentences.join(' ')).toMatch(/since \/ until.*uid.*oid/)
+    expect(ad.scanned).toBe(4)
+    // A campaign with its children: an object Nexus does not know under it is kept, flagged, and said.
+    h.answer = log([activity({}), activity({ object_id: ADSET }), activity({ object_id: '120000000000777' })])
+    const campaign = data(await run('meta-activity-log', { scope: 'campaign', id: CAMPAIGN }))
+    expect(campaign.events.map((e: { object: { id: string }; outsideKnownObjects?: boolean }) => [e.object.id, e.outsideKnownObjects ?? false])).toEqual([[CAMPAIGN, false], [ADSET, false], ['120000000000777', true]])
+    expect(campaign.filterCheck).toMatchObject({ outsideKnownObjects: 1, checked: ['days', 'object (known ad sets and ads)'] })
+    expect(campaign.filterCheck.sentences.join(' ')).toMatch(/may have ignored the object filter, or they are new/)
+    // Without its children, only the campaign's own entries stay.
+    expect(data(await run('meta-activity-log', { scope: 'campaign', id: CAMPAIGN, withChildren: false })).events.map((e: { object: { id: string } }) => e.object.id)).toEqual([CAMPAIGN])
+    // The ad set's own edge documents its filters: its days are still checked, its objects are Meta's.
+    h.answer = log([activity({ object_id: AD }), activity({ object_id: ADSET, event_time: old })])
+    const adSet = data(await run('meta-activity-log', { scope: 'adset', id: ADSET, category: 'AD' }))
+    expect(adSet.events.map((e: { object: { id: string } }) => e.object.id)).toEqual([AD])
+    expect(adSet.filterCheck).toMatchObject({ checked: ['days'], outsideDays: 1 })
+    expect(adSet.filterCheck.sentences.join(' ')).not.toMatch(/category/)
+  })
+  it('a plain event\'s amounts are money: a new ad set\'s budget goes under metaRaw, never in change (review A3)', async () => {
+    h.answer = (req) => (req.path.endsWith('/activities') ? { data: [activity({ event_type: 'create_ad_set', object_id: ADSET, object_type: 'ADSET', extra_data: '{"new_value":{"value":5000,"currency":"EUR"},"type":"daily_budget","status":"PAUSED","amount":"50.00"}' })] } : answers(req))
+    const out = data(await run('meta-activity-log', {}))
+    expect(out.events[0].change).toEqual({ type: 'daily_budget', status: 'PAUSED' })
+    expect(out.events[0].metaRaw).toEqual({ new_value: { value: 5000, currency: 'EUR' }, amount: '50.00' })
+    const seen = financialPayloadCopy(out, { isOwner: false, permissions: new Set(['ads.view']) } as never, tool('meta-activity-log').restrictedFields)
+    expect(JSON.stringify(seen)).not.toMatch(/5000|50\.00|EUR/)
   })
   it('filters: topic, event types, made by, actor', async () => {
     expect(data(await run('meta-activity-log', { topic: 'account' })).events.map((e: { type: string }) => e.type)).toEqual(['ad_account_add_user_to_role', 'account_spending_limit_reached'])

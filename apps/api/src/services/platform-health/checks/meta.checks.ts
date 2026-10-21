@@ -31,7 +31,9 @@ export const META_ACCOUNT_STATUS_MEANING: Readonly<Record<number, string>> = {
   100: 'Being closed: no ad runs.',
   101: 'Closed: no ad runs.',
 }
-/** disable_reason → what a person does about it (reference/ad-account, disable_reason 0–15). */
+/** Review B7 — Meta's reference names each disable reason only: what to do about it is Nexus's advice, and is labelled so. */
+export const NEXUS_ADVICE = 'Nexus\'s advice: Meta\'s reference gives only the reason\'s name (reference/ad-account, disable_reason).'
+/** disable_reason → what a person does about it, in Nexus's words (Meta's reference lists the names 0–15 only). */
 export const META_DISABLE_REASON_STEP: Readonly<Record<number, string>> = {
   1: 'Meta found an ads policy breach: read Account Quality in Meta Business Suite and request a review there.',
   2: 'Meta is reviewing intellectual-property reports: answer in Account Quality.',
@@ -76,15 +78,15 @@ export interface MetaHealthFacts {
 }
 
 /** The heartbeat checks the token every 12 h (cx/connectors/meta/spec.ts CHECK_EVERY_MS): older than this is late. */
-export const META_TOKEN_CHECK_LATE_MS = 36 * HOUR
+const META_TOKEN_CHECK_LATE_MS = 36 * HOUR
 /** Nexus renews 30 days before the end; this many days left means the renewal kept failing. */
 export const META_TOKEN_WARN_DAYS = 14
-export const META_TOKEN_FAIL_DAYS = 7
+const META_TOKEN_FAIL_DAYS = 7
 /** The daily read runs at 06:50 UTC: its last success older than this is late, older than the second a failure. */
-export const META_READ_LATE_MS = 26 * HOUR
-export const META_READ_FAIL_MS = 50 * HOUR
+const META_READ_LATE_MS = 26 * HOUR
+const META_READ_FAIL_MS = 50 * HOUR
 /** Meta throttled this many calls in 24 h: worth a look (Nexus backs off from 75 % of Meta's limits on its own). */
-export const META_THROTTLES_WARN = 5
+const META_THROTTLES_WARN = 5
 /** Nexus's own hold before Meta's limit (gateway rate bucket), not Meta's refusal. */
 export const LOCAL_HOLD = 'RATE_LIMITED_LOCAL'
 
@@ -125,7 +127,7 @@ function judgeConnection(c: MetaConnectionFacts, facts: MetaHealthFacts, now: Da
     const words = META_ACCOUNT_STATUS_MEANING[s] ?? `status ${s}, which Meta does not document.`
     problems.push([META_RUNNING_STATUSES.has(s) ? 'warn' : 'fail', `${name}: the ad account's status at Meta is ${words}`])
   }
-  if (reason !== null && reason !== 0) problems.push(['fail', `${name}: Meta gives disable reason ${reason}. ${META_DISABLE_REASON_STEP[reason] ?? 'Meta does not document it.'}`])
+  if (reason !== null && reason !== 0) problems.push(['fail', `${name}: Meta gives disable reason ${reason}. ${META_DISABLE_REASON_STEP[reason] ? `Nexus's advice: ${META_DISABLE_REASON_STEP[reason]}` : 'Meta does not document it.'}`])
   // Meta's throttles of this connection.
   const meta = facts.throttles.filter((t) => t.connectionId === c.connectionId && !t.local)
   const throttled = meta.reduce((n, t) => n + t.calls, 0)

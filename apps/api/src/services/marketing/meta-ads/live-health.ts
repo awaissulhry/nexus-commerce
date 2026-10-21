@@ -61,7 +61,7 @@ import { META_ACTIVITY_CATEGORIES } from '../../gateway/meta-calls.js'
 import { metaGraphApiVersion } from '../../meta/api-version.js'
 import { liveConnectionCheck } from '../../meta/meta-connection-live.js'
 import { listMetaConnections } from '../../meta/meta-accounts.service.js'
-import { gatherMetaHealthFacts, judgeMetaHealth, LOCAL_HOLD, META_ACCOUNT_STATUS_MEANING, META_DISABLE_REASON_STEP, META_RUNNING_STATUSES } from '../../platform-health/checks/meta.checks.js'
+import { gatherMetaHealthFacts, judgeMetaHealth, LOCAL_HOLD, META_ACCOUNT_STATUS_MEANING, META_DISABLE_REASON_STEP, META_RUNNING_STATUSES, META_TOKEN_WARN_DAYS, NEXUS_ADVICE } from '../../platform-health/checks/meta.checks.js'
 import { metaReadOne } from './read-client.js'
 import { MetaReadError } from './errors.js'
 import { graphSafe, metaChosenAccount, MetaLiveRefusal, objectInAccount, type MetaChosenAccount } from './live.js'
@@ -111,20 +111,22 @@ async function piece<T>(work: () => Promise<T>): Promise<{ value: T | null; notR
 // ── account status and disable reason in words (LG-006) ─────────────────────────────────────────────────────────────
 
 /** The account's state as a person reads it: status, reason, whether ads can run, what to do. Pure. */
-export function accountStateOf(status: number | null, reason: number | null) {
+function accountStateOf(status: number | null, reason: number | null) {
   return {
     status, statusText: statusText(status),
     statusMeaning: status === null ? null : META_ACCOUNT_STATUS_MEANING[status] ?? `Meta gives status ${status}, which its reference does not list.`,
     adsCanRun: status === null ? null : META_RUNNING_STATUSES.has(status),
     disableReason: reason, disableReasonText: reason === null ? null : DISABLE_REASON_WORDS[reason] ?? `Reason ${reason}`,
+    // Review B7 — Meta's reference names each reason only (0–15); what to do about it is Nexus's advice, and says so.
     whatToDo: reason !== null && reason !== 0 ? META_DISABLE_REASON_STEP[reason] ?? 'Meta does not document this reason: read Account Quality in Meta Business Suite.' : null,
+    ...(reason !== null && reason !== 0 ? { whatToDoIs: NEXUS_ADVICE } : {}),
     // Master LG-006: reason 15 — Meta thinks the account was compromised: no change should go to it.
     ...(reason === 15 ? { stopChanges: 'Meta thinks this ad account was compromised: make no Meta change through Nexus until Meta restores it.' } : {}),
   }
 }
 
 /** failed_delivery_checks (DeliveryCheck): words, and the ads, campaigns and countries Meta names (SDK extra_info). Pure. */
-export function deliveryChecksOf(v: unknown) {
+function deliveryChecksOf(v: unknown) {
   return rowsOf(v).map((c) => {
     const extra = obj(c.extra_info)
     return {
@@ -137,7 +139,7 @@ export function deliveryChecksOf(v: unknown) {
 // ── throttles in words (ACC-021) ────────────────────────────────────────────────────────────────────────────────────
 
 /** Meta's throttle codes (code or code/subcode, as the gateway's ledger keeps them): what each is and what Nexus does. */
-export const META_THROTTLE_WORDS: Readonly<Record<string, { what: string; nexus: string }>> = {
+const META_THROTTLE_WORDS: Readonly<Record<string, { what: string; nexus: string }>> = {
   '17/2446079': { what: 'The ad account\'s call score was used up (Meta scores a read 1 and a change 3; 60 points on the Limited tier, 9,000 on Full; then up to 5 minutes blocked).', nexus: 'The read stops and runs again at the next run; Nexus holds calls back from 75 % of the score.' },
   '613/1487742': { what: 'Too many calls from this ad account (the account\'s call score).', nexus: 'The read stops and runs again at the next run; Nexus holds calls back from 75 % of the score.' },
   '613/5044001': { what: 'More than 100 changes a second for this app and ad account.', nexus: 'Nexus sends changes one by one; spread big change plans out.' },
@@ -193,7 +195,7 @@ async function ledgerThrottles(connectionId: string, hours: number, now: Date) {
 export const HEALTH_VIEWS = ['summary', 'account', 'problems', 'payment', 'signals', 'page', 'connection'] as const
 export type HealthView = typeof HEALTH_VIEWS[number]
 
-export interface HealthInput {
+interface HealthInput {
   connectionId?: string | null
   view: HealthView
   includePausedByParent?: boolean
@@ -235,7 +237,8 @@ async function healthSummary(input: HealthInput) {
       checksAsOf: stored?.settingsReadAt?.toISOString() ?? null,
     } : null,
     objectsAsOfLastRead: adAccountId ? { campaigns: tally(counts[0]), adSets: tally(counts[1]), ads: tally(counts[2]) } : null,
-    adsVolumeAsOfLastRead: volume ? { adsRunningOrInReview: num(volume.ads_running_or_in_review_count), limit: num(volume.limit_on_ads_running_or_in_review) } : null,
+    // Review B5 — the daily read asks ads_volume without a field list: the count only, never the Page's limit.
+    adsVolumeAsOfLastRead: volume ? { adsRunningOrInReview: num(volume.ads_running_or_in_review_count), limit: 'not read daily: view problems reads each Page\'s limit (pagesNearAdLimit)' } : null,
     callsLast24h: ledger.calls, throttlesLast24h: ledger.throttles,
     apiVersion: metaGraphApiVersion(), versionNoticesLast30Days: facts.versionNotices,
     notes: [
@@ -278,6 +281,9 @@ async function healthAccount(account: MetaChosenAccount) {
   }
 }
 
+/** A creative's status while Meta processes it or after it found an issue (post-processing guide and SDK spellings). */
+const CREATIVE_PROCESSING: ReadonlySet<string> = new Set(['IN_PROCESS', 'IN-PROCESS', 'WITH_ISSUES', 'WITH-ISSUES'])
+
 /** LG-010, ACC-034, LG-019 — one sweep: step 6's delivery problems, what Meta is still processing, Pages near their ad limit. */
 async function healthProblems(account: MetaChosenAccount, input: HealthInput) {
   const { connectionId, adAccountId } = account
@@ -290,10 +296,11 @@ async function healthProblems(account: MetaChosenAccount, input: HealthInput) {
     piece(() => listPaged(connectionId, 'health.processing.adsets', `${act(adAccountId)}/adsets`, { fields: 'id,name,campaign_id,effective_status,issues_info', effective_status: ['IN_PROCESS'] }, maxRows)),
     piece(() => listPaged(connectionId, 'health.processing.creatives', `${act(adAccountId)}/adcreatives`, { fields: 'id,name,status' }, 100)),
   ])
-  const row = (level: string) => (r: Row) => ({ level, id: idText(r.id), name: text(r.name), campaignId: idText(r.campaign_id), effectiveStatus: text(r.effective_status ?? r.status), statusText: STATUS_WORDS[text(r.effective_status ?? r.status) ?? ''] ?? text(r.effective_status ?? r.status) })
+  const row = (level: string) => (r: Row) => ({ level, id: idText(r.id), name: text(r.name), campaignId: idText(r.campaign_id), effectiveStatus: text(r.effective_status ?? r.status), statusText: STATUS_WORDS[(text(r.effective_status ?? r.status) ?? '').replace(/-/g, '_')] ?? text(r.effective_status ?? r.status) })
   const processing = [
     ...(campaigns.value?.rows ?? []).map(row('campaign')), ...(adSets.value?.rows ?? []).map(row('adset')),
-    ...(creatives.value?.rows ?? []).filter((r) => ['IN_PROCESS', 'WITH_ISSUES'].includes(text(r.status) ?? '')).map(row('creative')),
+    // Review B4 — Meta's post-processing guide writes IN-PROCESS, its SDK IN_PROCESS: both are read as one.
+    ...(creatives.value?.rows ?? []).filter((r) => CREATIVE_PROCESSING.has(text(r.status) ?? '')).map(row('creative')),
   ]
   // LG-019 — a Page at its ad limit publishes no new ad.
   const pages = Array.isArray(sweep.adsVolume) ? sweep.adsVolume as Row[] : []
@@ -315,6 +322,12 @@ async function healthProblems(account: MetaChosenAccount, input: HealthInput) {
       'pagesNearAdLimit: a Page with 90 % or more of its ads-running-or-in-review limit; at the limit new ads do not publish and existing ones can only be paused or archived.',
     ],
   }
+}
+
+/** A payment method as meta-account-health shows it: its kind only (step 3's fundingOf also has the masked text and coupons). */
+function paymentKindOf(v: unknown): { type: number | null; typeText: string | null } | null {
+  const m = obj(v)
+  return m ? { type: num(m.type), typeText: text(m.typeText) } : null
 }
 
 /** The billing events that mean trouble (step 3's BILLING_EVENT_TYPES, read through billingView). */
@@ -351,7 +364,12 @@ async function healthPayment(account: MetaChosenAccount, input: HealthInput) {
     adAccountId, from, to,
     trouble: problems.length > 0, problems,
     account: accountStateOf(status, reason),
-    paymentSetup: pay ? { hasPaymentMethod: bool(pay.hasPaymentMethod), prepaid: bool(pay.prepaid), paymentMethod: pay.paymentMethod ?? null, expiredPaymentMethod: pay.expiredPaymentMethod ?? null } : null,
+    // Review A1 — the kind of payment method only: never Meta's masked text, its id or a coupon's amounts (meta-billing view
+    // payment shows them to a person who may see ad spend).
+    paymentSetup: pay ? {
+      hasPaymentMethod: bool(pay.hasPaymentMethod), prepaid: bool(pay.prepaid),
+      paymentMethod: paymentKindOf(pay.paymentMethod), expiredPaymentMethod: pay.expiredPaymentMethod === undefined ? null : !!obj(pay.expiredPaymentMethod),
+    } : null,
     adsWaitingForBilling: waitingAds, troubleEvents: trouble, missing,
     notes: [
       'Fixing a payment is a person\'s, in Ads Manager › Billing and payments (Meta has no API for payment methods, funds or paying a balance).',
@@ -409,9 +427,18 @@ const META_LINK = /^https:\/\/([a-z0-9-]+\.)*(facebook|meta|fb|instagram)\.com(\
 const metaLink = (v: unknown): string | null => { const s = text(v); return s && META_LINK.test(s) ? s : null }
 const violationTypes = (v: unknown) => strings(v).slice(0, 20)
 
+const PAGE_INTEGRITY_NOTE = 'Meta answers a Page\'s integrity (page_status) to a Page access token with the pages_manage_metadata permission (pages-api/integrity-webhook): the token needs pages_manage_metadata ticked, and the Page assigned to the system user.'
+
 async function healthPage(account: MetaChosenAccount) {
   const pageId = pageOf(account)
-  const body = (await onPage(() => metaReadOne({ connectionId: account.connectionId }, { operation: 'health.pageStatus', path: `${pageId}/page_status`, query: {} }))).body as Row
+  let body: Row
+  try {
+    body = (await onPage(() => metaReadOne({ connectionId: account.connectionId }, { operation: 'health.pageStatus', path: `${pageId}/page_status`, query: {} }))).body as Row
+  } catch (err) {
+    // Review B3 — Meta's integrity guide asks a Page access token AND pages_manage_metadata: name both.
+    if (err instanceof MetaLiveRefusal) throw new MetaLiveRefusal(`${err.message} ${PAGE_INTEGRITY_NOTE}`)
+    throw err
+  }
   const status = text(body.status)
   return {
     pageId, checkedAt: timeOf(body.timestamp),
@@ -448,7 +475,7 @@ async function healthConnection(input: HealthInput) {
   if (token && !token.isValid) problems.push(`Meta says the token is not valid${token.problem ? `: ${token.problem}` : '.'} Make a new system-user token and enter it in Settings › Channels › Meta.`)
   if (token && !token.appMatches) problems.push('The token belongs to another Meta app than the one entered for this business.')
   const left = token?.expiresAt ? Math.floor((Date.parse(token.expiresAt) - now.getTime()) / 86_400_000) : null
-  if (token?.isValid && left !== null && left < 14) problems.push(`The token expires in ${left} days and Nexus has not renewed it (it renews from 30 days before).`)
+  if (token?.isValid && left !== null && left < META_TOKEN_WARN_DAYS) problems.push(`The token expires in ${left} days and Nexus has not renewed it (it renews from 30 days before).`)
   const required = (token?.missing ?? []).filter((m) => m.required)
   if (required.length) problems.push(`The token does not carry ${required.map((m) => m.scope).join(', ')}.`)
   const usage = live.usage
@@ -492,7 +519,7 @@ export async function healthView(input: HealthInput) {
 // ── meta-activity-log ───────────────────────────────────────────────────────────────────────────────────────────────
 
 export const ACTIVITY_SCOPES = ['account', 'campaign', 'adset', 'ad'] as const
-export type ActivityScope = typeof ACTIVITY_SCOPES[number]
+type ActivityScope = typeof ACTIVITY_SCOPES[number]
 /** AdActivity Category (SDK adactivity.py; the ad set edge's `category` on v26): the gateway's own list, the one source. */
 export const ACTIVITY_CATEGORIES = META_ACTIVITY_CATEGORIES
 export const ACTIVITY_TOPICS = ['all', 'account', 'review'] as const
@@ -523,12 +550,12 @@ export const ACTIVITY_EVENT_TYPES = [
   'update_campaign_value_adjustment_rule', 'update_delivery_type_cross_level_shift',
 ] as const
 /** LG-004 — the account's own events: status, people, spending limits and their hits, business information. */
-export const ACCOUNT_TOPIC_EVENTS: ReadonlySet<string> = new Set([
+const ACCOUNT_TOPIC_EVENTS: ReadonlySet<string> = new Set([
   'ad_account_update_status', 'ad_account_add_user_to_role', 'ad_account_remove_user_from_role', 'ad_account_update_spend_limit', 'ad_account_reset_spend_limit',
   'ad_account_remove_spend_limit', 'ad_account_set_business_information', 'account_spending_limit_reached', 'campaign_spending_limit_reached', 'lifetime_budget_spent',
 ])
 /** LG-005 — review and policy events, and the delivery and learning milestones Meta logs with them. */
-export const REVIEW_TOPIC_EVENTS: ReadonlySet<string> = new Set([
+const REVIEW_TOPIC_EVENTS: ReadonlySet<string> = new Set([
   'ad_review_approved', 'ad_review_declined', 'update_ad_run_status_to_be_set_after_review', 'create_custom_audience_appeal', 'accept_custom_audience_appeal',
   'reject_custom_audience_appeal', 'apply_restrictions_custom_audience', 'first_delivery_event', 'di_ad_set_learning_stage_exit', 'update_ad_set_learning_stage_status',
 ])
@@ -560,7 +587,7 @@ const STOP_WORDS: Readonly<Record<string, string>> = {
   ad_review_declined: 'Meta rejected an ad in review (meta-ad-details view ad shows the review feedback).',
 }
 /** extra_data keys Nexus passes on (Meta documents the field only as "JSON encoded extra information"); the rest are named. */
-export const ACTIVITY_DETAIL_KEYS: ReadonlySet<string> = new Set(['old_value', 'new_value', 'value', 'type', 'reason', 'status', 'currency', 'amount', 'field', 'old_status', 'new_status'])
+const ACTIVITY_DETAIL_KEYS: ReadonlySet<string> = new Set(['old_value', 'new_value', 'value', 'type', 'reason', 'status', 'currency', 'amount', 'field', 'old_status', 'new_status'])
 const EMAIL_LIKE = /[^\s@]+@[^\s@]+\.[^\s@]+/
 const KEY_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/
 /**
@@ -601,6 +628,21 @@ export function activityDetailsOf(raw: unknown): { kept: Record<string, unknown>
   return { kept: Object.keys(kept).length ? kept : null, leftOut, leftOutKeys }
 }
 
+/** Keys that carry an amount: never in `change` (alone or inside a sub-object). */
+const MONEY_DETAIL_KEYS: ReadonlySet<string> = new Set(['amount', 'currency', 'value'])
+/** Details split into plain facts and the parts that carry an amount. Pure. */
+function splitMoney(kept: Record<string, unknown> | null): { plain: Record<string, unknown> | null; money: Record<string, unknown> | null } {
+  if (!kept) return { plain: null, money: null }
+  const plain: Record<string, unknown> = {}
+  const money: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(kept)) {
+    const inner = obj(value)
+    if (MONEY_DETAIL_KEYS.has(key) || (inner && Object.keys(inner).some((k) => MONEY_DETAIL_KEYS.has(k)))) money[key] = value
+    else plain[key] = value
+  }
+  return { plain: Object.keys(plain).length ? plain : null, money: Object.keys(money).length ? money : null }
+}
+
 export interface ActivityInput {
   connectionId?: string | null
   scope: ActivityScope
@@ -633,7 +675,8 @@ function activityRow(r: Row, account: MetaChosenAccount, ownIds: ReadonlySet<str
   const personal = PERSONAL_EVENTS.has(type ?? '')
   const nameShown = !personal && ((!!objectId && ownIds.has(objectId)) || (!!objectType && AD_OBJECT_TYPE.test(objectType)))
   const details = personal ? { kept: null, leftOut: 0, leftOutKeys: [] } : activityDetailsOf(r.extra_data)
-  const plainDetails = PLAIN_DETAIL_EVENTS.has(type ?? '')
+  // Review A3 — a plain event's amounts (a new ad set's budget, a merge's value) are money all the same: under metaRaw.
+  const split = PLAIN_DETAIL_EVENTS.has(type ?? '') ? splitMoney(details.kept) : { plain: null, money: details.kept }
   return {
     time: timeOf(r.event_time), timeInAccountZone: text(r.date_time_in_timezone), type, typeText: text(r.translated_event_type),
     object: { id: objectId, type: objectType, ...(nameShown ? { name: text(r.object_name) } : r.object_name ? { nameLeftOut: true } : {}) },
@@ -643,7 +686,8 @@ function activityRow(r: Row, account: MetaChosenAccount, ownIds: ReadonlySet<str
       actorId, ...(bySystemUser || byPage ? { actorName: text(r.actor_name) } : {}),
       app: appId ? { appId, name: text(r.application_name), nexusApp } : null,
     },
-    ...(details.kept ? (plainDetails ? { change: details.kept } : { metaRaw: details.kept }) : {}),
+    ...(split.plain ? { change: split.plain } : {}),
+    ...(split.money ? { metaRaw: split.money } : {}),
     ...(details.leftOut ? { detailsLeftOut: details.leftOut, leftOutKeys: details.leftOutKeys } : {}),
     ...(personal ? { personal: 'A person\'s own data: no name and no details (meta-account-access view people shows the people on the account).' } : {}),
   }
@@ -671,7 +715,9 @@ export async function activityLog(input: ActivityInput) {
   const madeBy = input.madeBy ?? 'anyone'
   const localFilter = topic !== 'all' || eventTypes.size > 0 || madeBy !== 'anyone'
   // Meta's own filters, each key on its route (gateway ROUTE_KEYS): the days always ("one week by default" otherwise).
-  const query: Record<string, MetaQueryValue> = { fields: ACTIVITY_FIELDS, since: unixOf(from), until: unixOf(to) + 86_400, ...(category ? { category } : {}), ...(actorId ? { uid: actorId } : {}) }
+  const since = unixOf(from)
+  const until = unixOf(to) + 86_400
+  const query: Record<string, MetaQueryValue> = { fields: ACTIVITY_FIELDS, since, until, ...(category ? { category } : {}), ...(actorId ? { uid: actorId } : {}) }
   const scan = localFilter ? MAX_ROWS : maxRows
   let path = `${act(adAccountId)}/activities`
   let objectId: string | null = null
@@ -680,6 +726,7 @@ export async function activityLog(input: ActivityInput) {
   // ownIds: whose names are shown (the account, the chosen Page, the object and its children); objectIds: the object and its children.
   const ownIds = new Set<string>([adAccountId, ...(account.pageId ? [account.pageId] : [])])
   const objectIds = new Set<string>()
+  let children = false
   let read: Awaited<ReturnType<typeof listPaged>>
   if (input.scope === 'account') {
     if (input.id) throw new MetaLiveRefusal('scope account reads the whole account: leave id out, or name scope campaign, adset or ad with its id.')
@@ -696,7 +743,7 @@ export async function activityLog(input: ActivityInput) {
     } else {
       // Campaigns and ads have no edge of their own: the account's log with Meta's object filter (oid; add_children for a
       // campaign's ad sets and ads — SDK only, LIVE-PROBES LG-001b).
-      const children = input.scope === 'campaign' && input.withChildren !== false
+      children = input.scope === 'campaign' && input.withChildren !== false
       if (children) {
         const [adSets, ads] = await Promise.all([
           prisma.metaAdsAdSet.findMany({ where: { adAccountId, campaignId: objectId }, select: { adSetId: true }, take: 2000 }),
@@ -719,8 +766,36 @@ export async function activityLog(input: ActivityInput) {
     }
   }
   for (const id of objectIds) ownIds.add(id)
+  // Review A2 — the account log's filters are in Meta's SDK only (v26: "This endpoint doesn't have any parameters"), and
+  // Graph may IGNORE a key it does not know: every answer is checked here. The days and the actor on every entry; the
+  // object for an ad, or a campaign without its children; with its children, an entry about an object Nexus does not
+  // know under the campaign is kept and flagged. Meta's category cannot be checked from the answer: said so.
+  const check = { outsideDays: 0, otherActors: 0, otherObjects: 0, outsideKnownObjects: 0 }
+  const flagged = new WeakSet<Row>()
+  const accountLog = path === `${act(adAccountId)}/activities`
+  const exactObject = accountLog && !!objectId && !children
+  const verified = read.rows.filter((r) => {
+    const at = Date.parse(text(r.event_time) ?? '') / 1000
+    if (!Number.isFinite(at) || at < since || at >= until) { check.outsideDays++; return false }
+    if (actorId && idText(r.actor_id) !== actorId) { check.otherActors++; return false }
+    const rowObject = idText(r.object_id) ?? text(r.object_id)
+    if (exactObject && rowObject !== objectId) { check.otherObjects++; return false }
+    if (accountLog && children && (!rowObject || !objectIds.has(rowObject))) { check.outsideKnownObjects++; flagged.add(r) }
+    return true
+  })
+  const filterCheck = {
+    checked: ['days', ...(actorId ? ['actor'] : []), ...(exactObject ? ['object'] : children && accountLog ? ['object (known ad sets and ads)'] : [])],
+    ...check,
+    sentences: [
+      ...(check.outsideDays ? [`Meta returned ${check.outsideDays} entr${check.outsideDays === 1 ? 'y' : 'ies'} outside these days: it may have ignored since / until; Nexus left them out.`] : []),
+      ...(check.otherActors ? [`Meta returned ${check.otherActors} entr${check.otherActors === 1 ? 'y' : 'ies'} of other actors: it may have ignored the actor filter (uid); Nexus left them out.`] : []),
+      ...(check.otherObjects ? [`Meta returned ${check.otherObjects} entr${check.otherObjects === 1 ? 'y' : 'ies'} about other objects: it may have ignored the object filter (oid); Nexus left them out.`] : []),
+      ...(check.outsideKnownObjects ? [`${check.outsideKnownObjects} entr${check.outsideKnownObjects === 1 ? 'y names objects' : 'ies name objects'} Nexus does not know under this campaign (outsideKnownObjects): Meta may have ignored the object filter, or they are new (Nexus learns new ones at the next daily read).`] : []),
+      ...(category && accountLog ? [`Meta's category filter cannot be checked from its answer (the account's log documents no parameter): entries of another category mean Meta ignored it (LIVE-PROBES LG-001).`] : []),
+    ],
+  }
   const systemUserId = account.connection.systemUser?.id ?? null
-  const rows = read.rows.filter((r) => {
+  const rows = verified.filter((r) => {
     const type = text(r.event_type) ?? ''
     if (topic === 'account' && !ACCOUNT_TOPIC_EVENTS.has(type)) return false
     if (topic === 'review' && !REVIEW_TOPIC_EVENTS.has(type)) return false
@@ -731,12 +806,12 @@ export async function activityLog(input: ActivityInput) {
     }
     return true
   })
-  const events = rows.slice(0, maxRows).map((r) => activityRow(r, account, ownIds))
+  const events = rows.slice(0, maxRows).map((r) => ({ ...activityRow(r, account, ownIds), ...(flagged.has(r) ? { outsideKnownObjects: true } : {}) }))
   const whyItStopped = events.filter((e) => e.type && STOP_WORDS[e.type]).slice(0, 20).map((e) => ({ time: e.time, type: e.type, objectId: e.object.id, sentence: STOP_WORDS[e.type!] }))
   return {
     adAccountId, scope: input.scope, objectId, from, to,
     filters: { category, topic, eventTypes: [...eventTypes], madeBy, actorId, ...(input.scope === 'campaign' ? { withChildren: input.withChildren !== false } : {}) },
-    answeredBy, ...(objectFilterRefused ? { objectFilterRefused } : {}),
+    answeredBy, ...(objectFilterRefused ? { objectFilterRefused } : {}), filterCheck,
     events, scanned: read.rows.length,
     more: read.more || rows.length > maxRows ? `Nexus read ${read.rows.length} entries of these days${localFilter ? ' and kept the ones asked for' : ''}; narrow the days or the filters to see the rest.` : null,
     whyItStopped,
