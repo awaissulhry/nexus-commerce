@@ -39,6 +39,18 @@
 import type { MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
 import { META_VALIDATE_ONLY } from './meta-calls.js'
 
+/**
+ * Text a person types (review A8, round 2): any script, never a control or format character (U+202E turns text around,
+ * U+200C, tag characters U+E0020–E007F, a soft hyphen hide or reorder it). STRICT for the EU payer and beneficiary (shown
+ * to people as the advertiser's identity). A NAME also takes U+200D (zero-width joiner) only BETWEEN two emoji, as a
+ * family or job emoji is written; anywhere else it is refused. One pattern each, used by the tools' zod and this gateway.
+ */
+export const META_STRICT_TEXT = /^[^\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]*$/u
+export const META_NAME_TEXT = /^(?:[^\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]|(?<=\p{Extended_Pictographic}[\u{FE0F}\u{1F3FB}-\u{1F3FF}]?)\u200D(?=\p{Extended_Pictographic}))*$/u
+/** Does a text pass the same check as a new one of the tools (trimmed, 1 to max characters, its pattern)? Undo uses it. */
+export const typedTextOk = (value: string | null | undefined, pattern: RegExp, max: number): value is string =>
+  typeof value === 'string' && value === value.trim() && value.length > 0 && [...value].length <= max && pattern.test(value)
+
 /** Meta's "no cap" value for a campaign spend cap and an ad set's spend caps (reference/ad-campaign-group.md spend_cap). */
 export const META_NO_CAP = '922337203685478'
 
@@ -451,7 +463,7 @@ export const META_SETTINGS_WRITE_RULES: readonly MetaWriteRule[] = [
     required: [],
     optional: [...CAMPAIGN_SETTINGS_KEYS, 'execution_options', 'fields'],
     anyOf: CAMPAIGN_SETTINGS_KEYS,
-    text: new Set(['name']),
+    text: { name: META_NAME_TEXT },
     maxBody: 12_000,
     values: judged(CAMPAIGN_JUDGES, (params) => (params.has('adset_budgets') && (params.has('daily_budget') || params.has('lifetime_budget'))
       ? 'a campaign budget and adset_budgets never go together (one moves budgets to the ad sets, the other sets the campaign\'s)' : null)),
@@ -467,7 +479,7 @@ export const META_SETTINGS_WRITE_RULES: readonly MetaWriteRule[] = [
     required: [],
     optional: ADSET_SETTINGS_KEYS,
     anyOf: ADSET_SETTINGS_KEYS,
-    text: new Set(['name', 'dsa_payor', 'dsa_beneficiary']),
+    text: { name: META_NAME_TEXT, dsa_payor: META_STRICT_TEXT, dsa_beneficiary: META_STRICT_TEXT },
     maxBody: 8_000,
     values: judged(ADSET_JUDGES, (params) => {
       if (params.has('daily_budget') && params.has('lifetime_budget')) return 'an ad set has a daily or a lifetime budget, not both in one change'

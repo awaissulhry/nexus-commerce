@@ -30,7 +30,7 @@ import { budgetScheduleDraft, livePeriodFields, type BudgetScheduleRequest, type
 import { settingsView, viewedFields, type SettingsRecord } from '../../marketing/meta-ads/change-settings-common.js'
 import type { MetaChangeDraft } from '../../marketing/meta-ads/change-draft.js'
 import {
-  BID_STRATEGIES, BILLING_EVENTS, CUSTOM_EVENT_TYPES, CUSTOMER_LABELS, ENGAGED_LABELS, FREQUENCY_EVENTS, OPTIMIZATION_GOALS, OPTIMIZATION_SUB_EVENTS,
+  BID_STRATEGIES, BILLING_EVENTS, CUSTOM_EVENT_TYPES, META_NAME_TEXT, META_STRICT_TEXT, CUSTOMER_LABELS, ENGAGED_LABELS, FREQUENCY_EVENTS, OPTIMIZATION_GOALS, OPTIMIZATION_SUB_EVENTS,
   OUTCOME_OBJECTIVES, REGIONAL_CATEGORIES, REGIONAL_IDENTITY_KEYS, SPECIAL_AD_CATEGORIES,
 } from '../../gateway/meta-settings-rules.js'
 
@@ -44,8 +44,11 @@ const META_SETTINGS_MONEY = {
 
 const centsArg = (what: string) => z.number().int().positive().max(100_000_000_000).describe(`${what}, in minor units of the ad account's currency (cents for EUR)`)
 const idList = (what: string, max: number) => z.array(z.string().trim().regex(/^\d{1,20}$/, 'a Meta id is digits only')).max(max).describe(what)
-/** Review A8 — text a person types (a name, the EU payer): any script, no control or format character (no U+202E). */
-const typedText = (max: number) => z.string().trim().min(1).max(max).regex(/^[^\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]*$/u, 'no control or format characters')
+/**
+ * Review A8 — text a person types: any script, no control or format character (no U+202E) — the gateway's own patterns
+ * (meta-settings-rules.ts): a name may join two emoji with U+200D; the EU payer and beneficiary never take one.
+ */
+const typedText = (max: number, pattern: RegExp) => z.string().trim().min(1).max(max).regex(pattern, 'no control or format characters')
 const isoArg = (what: string) => z.string().trim().min(10).max(40).describe(`${what} (ISO 8601 with its offset, e.g. 2026-11-01T08:00:00Z)`)
 const promotedArg = z.object({
   pixelId: z.string().trim().regex(/^\d{1,20}$/).optional().describe('the pixel (one of the ad account\'s own)'),
@@ -158,7 +161,7 @@ const setMetaCampaign: AgentTool = {
   input: z.object({
     connectionId: metaConnectionArg,
     campaignId: metaIdArg('the campaign'),
-    name: typedText(400).optional().describe('its new name (emoji allowed)'),
+    name: typedText(400, META_NAME_TEXT).optional().describe('its new name (emoji allowed)'),
     dailyBudgetCents: centsArg('a campaign daily budget: changes it, switches a lifetime one to daily, or turns campaign budget on').optional(),
     lifetimeBudgetCents: centsArg('a campaign lifetime budget (every ad set needs an end time)').optional(),
     adSetBudgets: z.array(z.object({
@@ -239,7 +242,7 @@ const setMetaAdSet: AgentTool = {
   input: z.object({
     connectionId: metaConnectionArg,
     adSetId: metaIdArg('the ad set'),
-    name: typedText(400).optional().describe('its new name'),
+    name: typedText(400, META_NAME_TEXT).optional().describe('its new name'),
     optimizationGoal: z.enum(OPTIMIZATION_GOALS).optional().describe('the performance goal (sends its ads back to review; restarts learning)'),
     optimizationSubEvent: z.enum(OPTIMIZATION_SUB_EVENTS).optional().describe('the optimisation sub-event (video sound on, travel; NONE)'),
     billingEvent: z.enum(BILLING_EVENTS).optional().describe('what is paid for (sends its ads back to review)'),
@@ -273,8 +276,8 @@ const setMetaAdSet: AgentTool = {
     incrementalAttribution: z.boolean().optional().describe('incremental attribution optimisation (Meta\'s SDK only; its answer decides)'),
     promotedObject: promotedArg.optional(),
     dsa: z.object({
-      payor: typedText(512).describe('who pays for the ads (shown to people in the EU)'),
-      beneficiary: typedText(512).describe('who benefits from the ads (shown to people in the EU)'),
+      payor: typedText(512, META_STRICT_TEXT).describe('who pays for the ads (shown to people in the EU)'),
+      beneficiary: typedText(512, META_STRICT_TEXT).describe('who benefits from the ads (shown to people in the EU)'),
     }).optional().describe('the EU payer and beneficiary: both, always (Meta fills a missing one from the account default, not from the other)'),
     regional: z.object({
       categories: z.array(z.enum(REGIONAL_CATEGORIES)).max(9).describe('the regional regulated categories'),

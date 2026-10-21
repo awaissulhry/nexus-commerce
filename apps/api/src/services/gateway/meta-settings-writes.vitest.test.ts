@@ -7,9 +7,14 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const h = vi.hoisted(() => ({ calls: [] as Array<{ url: string; init: RequestInit }>, answers: [] as Array<() => Response>, takenPortfolios: new Set<string>() }))
+const h = vi.hoisted(() => ({ calls: [] as Array<{ url: string; init: RequestInit }>, answers: [] as Array<() => Response>, takenPortfolios: new Set<string>(), takenFails: false }))
 // Review A4 — which portfolios another Nexus business uses (nexus_meta_links_taken PORTFOLIO): a stand-in.
-vi.mock('../marketing/meta-ads/taken.js', () => ({ takenIds: vi.fn(async (_product: string, ids: string[]) => new Set(ids.filter((id) => h.takenPortfolios.has(id)))) }))
+vi.mock('../marketing/meta-ads/taken.js', () => ({
+  takenIds: vi.fn(async (_product: string, ids: string[]) => {
+    if (h.takenFails) throw new Error('connection to the database lost')
+    return new Set(ids.filter((id) => h.takenPortfolios.has(id)))
+  }),
+}))
 vi.mock('./account.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.accountModule))
 vi.mock('./ledger.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 vi.mock('../cx/token.service.js', () => ({
@@ -47,7 +52,7 @@ const json = (body: unknown, status = 200) => () => new Response(JSON.stringify(
 beforeEach(() => {
   __rateTest.useMemory()
   __metaObjectLimitsTest.useMemory()
-  h.calls = []; h.answers = []; h.takenPortfolios.clear(); gatewayLedger.length = 0
+  h.calls = []; h.answers = []; h.takenPortfolios.clear(); h.takenFails = false; gatewayLedger.length = 0
   for (const key of Object.keys(gatewayMetaChosen)) delete gatewayMetaChosen[key]
   for (const key of Object.keys(gatewayMetaStored)) delete gatewayMetaStored[key]
   gatewayMetaStored[CAMPAIGN] = { adAccountId: '1234567890', kind: 'campaign' }
@@ -135,6 +140,15 @@ describe('campaign.settings values', () => {
     expect(adSet({ promoted_object: rule({ 'URL-X': { eq: 'x' } }) })).toMatch(/not a pixel rule field/)
     expect(adSet({ promoted_object: rule({ url: { eq: { nested: 1 } } }) })).toMatch(/plain text, a number/)
     expect(adSet({ promoted_object: JSON.stringify({ pixel_rule: '{"url": {"eq":"x"}}' }) })).toMatch(/one spelling/)
+  })
+  it('round 2 — a NAME may join two emoji with U+200D; nothing else of the format characters; the EU payer stays strict', () => {
+    expect(campaign({ name: 'Saldi 👨‍👩‍👧 città' })).toBeNull()
+    expect(adSet({ name: 'Team 👩🏽‍💻' })).toBeNull()
+    expect(campaign({ name: 'Sal\u200ddi' })).toMatch(/no control or format characters/)
+    expect(campaign({ name: 'Shop\u{E0041}A' })).toMatch(/no control or format characters/)
+    expect(campaign({ name: 'Shop\u200cA' })).toMatch(/no control or format characters/)
+    expect(campaign({ name: 'Shop\u00adA' })).toMatch(/no control or format characters/)
+    expect(adSet({ dsa_payor: 'Shop 👨‍👩‍👧', dsa_beneficiary: 'Shop A' })).toMatch(/no control or format characters/)
   })
   it('review B9 — frequency caps count impressions only', () => {
     expect(adSet({ frequency_control_specs: '[{"event":"VIDEO_VIEWS","interval_days":7,"max_frequency":2}]' })).toMatch(/event is one of IMPRESSIONS/)
@@ -285,6 +299,17 @@ describe('through the gateway: the ids inside a body and a period\'s campaign ar
     h.answers.push(json({ id: 'act_1234567890', business: { id: PORTFOLIO } }), json({ data: [] }), json({ data: [{ id: '120000000000060' }] }), json({ id: CAMPAIGN }))
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, objectKind: 'campaign', params: promoted({ product_catalog_id: '120000000000060' }), check: false })).ok).toBe(true)
     expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET', 'GET', 'POST'])
+  })
+  it('round 2 — a catalog lookup that FAILS (Meta refuses it, or the database) refuses the change: nothing is sent', async () => {
+    const promoted = { promoted_object: JSON.stringify({ product_catalog_id: '120000000000060' }) }
+    h.answers.push(json({ error: { code: 200, message: 'Permissions error' } }, 400))
+    const metaFails = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, objectKind: 'campaign', params: promoted, check: false }).catch((e) => e)
+    expect(metaFails).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/could not confirm the catalog/) })
+    h.takenFails = true
+    h.answers.push(json({ id: 'act_1234567890', business: { id: '120000000000090' } }))
+    const dbFails = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, objectKind: 'campaign', params: promoted, check: false }).catch((e) => e)
+    expect(dbFails).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/could not confirm the catalog \(connection to the database lost\)/) })
+    expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
   })
   it('a pixel inside a promoted object must be one of the chosen account\'s own pixels', async () => {
     h.answers.push(json({ data: [{ id: '120000000000051' }] }))

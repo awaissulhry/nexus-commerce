@@ -88,8 +88,8 @@ describe('budget sharing, bid strategy, spend cap', () => {
     expect(refusal(campaignSettingsDraft({ campaignId: C, bidStrategy: 'COST_CAP' }, live()))).toMatch(/needs each ad set's cap.*missing/)
     const d = ok(campaignSettingsDraft({ campaignId: C, bidStrategy: 'COST_CAP', adSetBidAmounts: [{ adSetId: A1, bidAmountCents: 900 }, { adSetId: A2, bidAmountCents: 800 }] }, live()))
     expect(d.requests[0].params).toEqual({ bid_strategy: 'COST_CAP', adset_bid_amounts: `{"${A1}":900,"${A2}":800}` })
-    // Review A1 — an ad set whose bid Nexus could not read may pay more under its new cap: said, the request raises spend.
-    expect(d.spendsMoney[0]).toMatch(/ad set 120000000000002 had no bid Nexus could read, now 9\.00 EUR/)
+    // Round 2 N4 — automatic bidding → a cap cannot raise spend: no spend line.
+    expect(d.spendsMoney).toEqual([])
     expect((d.before as SettingsRecord).undo).toEqual({ bidStrategy: 'LOWEST_COST_WITHOUT_CAP' })
     const back = ok(campaignSettingsDraft({ campaignId: C, bidStrategy: 'LOWEST_COST_WITHOUT_CAP' }, live({ campaign: campaign({ bidStrategy: 'COST_CAP' }), adSets: [child(A1, { bidAmount: '900' }), child(A2, { bidAmount: '800' })] })))
     expect(back.spendsMoney[0]).toMatch(/Removing .*cost per result goal: without a cap/)
@@ -117,11 +117,29 @@ describe('budget sharing, bid strategy, spend cap', () => {
 })
 
 describe('review A1 — each new cap against the ad set\'s bid now', () => {
-  it('an ACTIVE campaign, an ad set bid of 1.00, a cost cap of 100.00: SPENDS MONEY, the request raises spend', () => {
-    const d = ok(campaignSettingsDraft({ campaignId: C, bidStrategy: 'COST_CAP', adSetBidAmounts: [{ adSetId: A1, bidAmountCents: 10000 }] }, live({ adSets: [child(A1, { bidAmount: '100' })] })))
+  it('an ACTIVE capped campaign, an ad set cap of 1.00, a cost cap of 100.00: SPENDS MONEY, the request raises spend', () => {
+    const capped = (bid: string | null) => live({ campaign: campaign({ bidStrategy: 'LOWEST_COST_WITH_BID_CAP' }), adSets: [child(A1, { bidAmount: bid })] })
+    const d = ok(campaignSettingsDraft({ campaignId: C, bidStrategy: 'COST_CAP', adSetBidAmounts: [{ adSetId: A1, bidAmountCents: 10000 }] }, capped('100')))
     expect(d.spendsMoney[0]).toMatch(/ad set 120000000000002 1\.00 EUR → 100\.00 EUR — the campaign is on/)
     expect(d.requests[0].raisesSpend).toBe(true)
-    expect(ok(campaignSettingsDraft({ campaignId: C, bidStrategy: 'COST_CAP', adSetBidAmounts: [{ adSetId: A1, bidAmountCents: 50 }] }, live({ adSets: [child(A1, { bidAmount: '100' })] }))).spendsMoney).toEqual([])
+    // An unreadable cap on a capped ad set is said too.
+    expect(ok(campaignSettingsDraft({ campaignId: C, bidStrategy: 'COST_CAP', adSetBidAmounts: [{ adSetId: A1, bidAmountCents: 100 }] }, capped(null))).spendsMoney[0]).toMatch(/had a cap Nexus could not read/)
+  })
+  it('round 2 N4 — automatic bidding → a cap: no spend line, whatever the amounts (a cap cannot raise spend)', () => {
+    const d = ok(campaignSettingsDraft({ campaignId: C, bidStrategy: 'COST_CAP', adSetBidAmounts: [{ adSetId: A1, bidAmountCents: 10000 }] }, live({ adSets: [child(A1, { bidAmount: '100' })] })))
+    expect(d.spendsMoney).toEqual([])
+    expect(d.requests[0].raisesSpend).toBe(false)
+  })
+  it('round 2 N1 — a cap → a ROAS goal removes the cap: SPENDS MONEY', () => {
+    const d = ok(campaignSettingsDraft({ campaignId: C, bidStrategy: 'LOWEST_COST_WITH_MIN_ROAS' }, live({ campaign: campaign({ bidStrategy: 'COST_CAP' }) })))
+    expect(d.spendsMoney.join(' ')).toMatch(/cost per result goal of campaign "Campaign A" .* is removed for a ROAS goal/)
+    expect(d.requests[0].raisesSpend).toBe(true)
+  })
+  it('round 2 N3 — an old name with characters Nexus does not send is not put back by undo (said)', () => {
+    const d = ok(campaignSettingsDraft({ campaignId: C, name: 'Campaign B' }, live({ campaign: campaign({ name: 'Campaign \u202eA' }) })))
+    expect((d.before as SettingsRecord).undo).toBeNull()
+    expect((d.before as SettingsRecord).noUndo?.join(' ')).toMatch(/old name has characters/)
+    expect((ok(campaignSettingsDraft({ campaignId: C, name: 'Campaign B' }, live({ campaign: campaign({ name: 'Saldi 👨‍👩‍👧' }) }))).before as SettingsRecord).undo).toEqual({ name: 'Saldi 👨‍👩‍👧' })
   })
   it('bid cap → cost cap at the SAME amount still SPENDS (a cost cap is an average); a cap kept with new amounts is set-meta-ad-set\'s', () => {
     const capped = live({ campaign: campaign({ bidStrategy: 'LOWEST_COST_WITH_BID_CAP' }), adSets: [child(A1, { bidAmount: '900' })] })

@@ -713,8 +713,11 @@ export interface MetaWriteRule {
   kinds?: readonly MetaWriteKind[]
   /** Step 18 — at least one of these keys (a settings rule has no single required key). */
   anyOf?: readonly string[]
-  /** Step 18 — keys whose value may be any printable text (a name, the EU payer): every other value stays plain ASCII. */
-  text?: ReadonlySet<string>
+  /**
+   * Step 18 — keys whose value may be text a person types (a name, the EU payer), each with its pattern
+   * (meta-settings-rules.ts META_NAME_TEXT / META_STRICT_TEXT): every other value stays plain ASCII.
+   */
+  text?: Readonly<Record<string, RegExp>>
   /** Step 18 — the longest body of this rule (default MAX_WRITE_BODY). */
   maxBody?: number
   /** Step 18 — the ids inside the body, each checked to be of the chosen ad account by the gateway before anything goes. */
@@ -835,8 +838,9 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const maxBody = rule.maxBody ?? MAX_WRITE_BODY
   if ((input.body as string).length > maxBody) return refuse(`a Meta change body is at most ${maxBody} characters`)
   for (const [key, value] of parsed.params) {
-    if (rule.text?.has(key)) {
-      if (!PRINTABLE_TEXT.test(value)) return refuse(`the value of "${key}" is printable text (no control or format characters)`)
+    const pattern = rule.text && Object.prototype.hasOwnProperty.call(rule.text, key) ? rule.text[key] : null
+    if (pattern) {
+      if (!pattern.test(value)) return refuse(`the value of "${key}" is printable text (no control or format characters)`)
     } else if (!/^[\x20-\x7e]*$/.test(value)) return refuse(`the value of "${key}" is plain ASCII`)
   }
   const problem = rule.values(parsed.params)
@@ -856,8 +860,6 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
 const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kinds
   ? !!kind && (rule.kinds as readonly string[]).includes(kind)
   : kind === undefined || kind === 'campaign' || kind === 'adset' || kind === 'ad')
-/** Step 18 — printable text in any script (a name with accents or an emoji, the EU payer's name): no control or format character (review A8: no U+202E). */
-const PRINTABLE_TEXT = /^[^\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]*$/u
 /** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY). */
 const MAX_ANY_WRITE_BODY = 16_000
 /** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts) — read when judged, never at load. */

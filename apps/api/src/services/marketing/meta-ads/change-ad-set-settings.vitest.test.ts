@@ -198,6 +198,32 @@ describe('review A9 and B7', () => {
     const cbo = live({ campaign: campaign({ dailyBudget: '10000' }) })
     expect(ok(draft({ budgetSharePercent: { max: 80 } }, cbo)).spendsMoney[0]).toMatch(/from a value Nexus could not read/)
   })
+  it('round 2 N1 — bid cap → cost cap (even at the same amount) and a cap → a ROAS goal: SPENDS MONEY', () => {
+    const capped = live({ adSet: adSet({ bidStrategy: 'LOWEST_COST_WITH_BID_CAP', bidAmount: '900', optimizationGoal: 'VALUE' }) })
+    const cost = ok(draft({ bidStrategy: 'COST_CAP' }, capped))
+    expect(cost.spendsMoney[0]).toMatch(/AVERAGE cost near the cap/)
+    expect(cost.requests[0].raisesSpend).toBe(true)
+    expect(ok(draft({ bidStrategy: 'COST_CAP', bidAmountCents: 900 }, capped)).spendsMoney.join(' ')).toMatch(/AVERAGE/)
+    expect(ok(draft({ bidStrategy: 'LOWEST_COST_WITH_MIN_ROAS', roasGoal: 2 }, capped)).spendsMoney.join(' ')).toMatch(/is removed for a ROAS goal/)
+    expect(ok(draft({ roasGoal: 2 }, capped)).spendsMoney.join(' ')).toMatch(/is removed for a ROAS goal/)
+  })
+  it('round 2 N2 — a frequency cap on another event than impressions has no undo through the tool (said)', () => {
+    const video = live({ adSet: adSet({ optimizationGoal: 'THRUPLAY', frequencyControlSpecs: [{ event: 'VIDEO_VIEWS', interval_days: 7, max_frequency: 2 }] }) })
+    const d = ok(draft({ frequencyCaps: [{ intervalDays: 7, maxFrequency: 1 }] }, video))
+    expect((d.before as SettingsRecord).undo).toBeNull()
+    expect((d.before as SettingsRecord).noUndo?.join(' ')).toMatch(/frequency caps were not readable in a shape Nexus sends/)
+  })
+  it('round 2 N3 — an old name or EU payer with format characters is not put back by undo (said)', () => {
+    const odd = live({ adSet: adSet({ name: 'Ad\u200cset', dsaPayor: 'Shop\u202eA', dsaBeneficiary: 'Shop A' }) })
+    const d = ok(draft({ name: 'Ad set C', dsa: { payor: 'Shop B', beneficiary: 'Shop B' } }, odd))
+    expect((d.before as SettingsRecord).undo).toBeNull()
+    expect((d.before as SettingsRecord).noUndo?.join(' ')).toMatch(/old name has characters.*old payer or beneficiary has characters/)
+  })
+  it('round 2 N5 — scheduling off with accelerated pacing: refused under a cost cap and under a campaign budget', () => {
+    const scheduled = { dailyBudget: null, lifetimeBudget: '100000', pacingType: ['day_parting'], adsetSchedule: [{ start_minute: 540, end_minute: 720, days: [1], timezone_type: 'USER' }] }
+    expect(refusal(draft({ dayparting: { off: true, pacing: 'no_pacing' } }, live({ adSet: adSet({ ...scheduled, bidStrategy: 'COST_CAP', bidAmount: '900' }) })))).toMatch(/cost cap needs standard pacing/)
+    expect(refusal(draft({ dayparting: { off: true, pacing: 'no_pacing' } }, live({ campaign: campaign({ lifetimeBudget: '900000', pacingType: ['day_parting'] }), adSet: adSet({ ...scheduled, lifetimeBudget: null }) })))).toMatch(/pacing is the campaign's/)
+  })
   it('review B7 — no ad set bid strategy change while the campaign shares budget (4834006)', () => {
     expect(refusal(draft({ bidStrategy: 'COST_CAP', bidAmountCents: 900 }, live({ campaign: campaign({ budgetSharing: true }) })))).toMatch(/4834006/)
   })

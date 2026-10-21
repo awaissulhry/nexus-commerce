@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
   fieldValues: {} as Record<string, unknown>,
   capabilities: ['CAN_USE_BUDGET_SCHEDULING_API'] as string[] | null,
   refuseRead: null as string | null,
+  catalogProblem: null as string | null,
   check: vi.fn(async () => undefined),
   send: vi.fn(),
 }))
@@ -38,6 +39,8 @@ vi.mock('../../marketing/meta-ads/live-settings.js', async (importActual) => {
     liveFieldValues: vi.fn(async (_target: unknown, _id: string, fields: string[]) => Object.fromEntries(fields.map((f) => [f, h.fieldValues[f] ?? null]))),
   }
 })
+// Round 2 — the catalog rule's answer is a stand-in here (catalog-rule.vitest.test.ts and the gateway's tests run it).
+vi.mock('../../marketing/meta-ads/catalog-rule.js', () => ({ metaCatalogProblem: vi.fn(async () => h.catalogProblem) }))
 vi.mock('../../marketing/meta-ads/write-client.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/meta-ads/write-client.js')>()),
   metaCheckChange: h.check,
@@ -94,6 +97,7 @@ beforeEach(() => {
   h.fieldValues = {}
   h.capabilities = ['CAN_USE_BUDGET_SCHEDULING_API']
   h.refuseRead = null
+  h.catalogProblem = null
 })
 
 describe('the tools', () => {
@@ -118,6 +122,11 @@ describe('the tools', () => {
     expect(() => tool('set-meta-campaign').input.parse({ campaignId: C, name: 'Shop \u202eA' })).toThrow()
     expect(() => tool('set-meta-ad-set').input.parse({ adSetId: S, dsa: { payor: 'Shop \u202eA', beneficiary: 'Shop A' } })).toThrow()
     expect(() => tool('set-meta-campaign').input.parse({ campaignId: C, name: 'Saldi 🏍️ città' })).not.toThrow()
+    // Round 2 — a name joins two emoji with U+200D, never other text; a tag character never; the EU payer stays strict.
+    expect(() => tool('set-meta-campaign').input.parse({ campaignId: C, name: 'Saldi 👨‍👩‍👧' })).not.toThrow()
+    expect(() => tool('set-meta-campaign').input.parse({ campaignId: C, name: 'Sal\u200ddi' })).toThrow()
+    expect(() => tool('set-meta-ad-set').input.parse({ adSetId: S, name: 'Shop\u{E0041}A' })).toThrow()
+    expect(() => tool('set-meta-ad-set').input.parse({ adSetId: S, dsa: { payor: 'Shop 👨‍👩‍👧', beneficiary: 'Shop A' } })).toThrow()
     expect(() => tool('set-meta-campaign').input.parse({ campaignId: C, budgetSharing: true })).toThrow()
     expect(() => tool('set-meta-campaign').input.parse({ campaignId: C, specialAdCategory: 'ISSUES_ELECTIONS_POLITICS' })).toThrow()
     expect(tool('set-meta-ad-set').description).toMatch(/Retail Media Network/)
@@ -176,6 +185,16 @@ describe('set-meta-campaign', () => {
   it('an id of another account or another kind: refused in words before any change', async () => {
     h.refuseRead = 'Campaign 120000000000009 is not of the Meta ad account this business chose: Nexus changes nothing in another account.'
     expect(await preview('set-meta-campaign', { campaignId: '120000000000009', name: 'x' })).toEqual({ ok: false, error: expect.stringMatching(/not of the Meta ad account this business chose/) })
+    expect(h.send).not.toHaveBeenCalled()
+  })
+})
+
+describe('round 2 — a catalog lookup that fails refuses at the tool', () => {
+  it('the catalog rule\'s failure is the answer; nothing is checked or sent', async () => {
+    h.catalogProblem = 'Nexus could not confirm the catalog (connection to the database lost), so it is not sent.'
+    const out = await preview('set-meta-campaign', { campaignId: C, promotedObject: { productCatalogId: '120000000000060' } })
+    expect(out).toEqual({ ok: false, error: expect.stringMatching(/could not confirm the catalog/) })
+    expect(h.check).not.toHaveBeenCalled()
     expect(h.send).not.toHaveBeenCalled()
   })
 })

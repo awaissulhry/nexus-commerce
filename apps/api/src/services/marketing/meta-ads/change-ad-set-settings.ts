@@ -40,7 +40,7 @@ import { promotedBack, promotedMerged, promotedProblem, type MetaBidStrategy, ty
 import { targetsEu, type LiveAdSet, type LiveCampaign } from './live-settings.js'
 import { adSetSpendCapParam, bidAmountMeaning, bidAmountParam, budgetParam, metaUnitsToMinor, MetaUnitError, minSpendTargetParam, roasFloorParam, roasOfFloor, unixSecondsParam } from './settings-units.js'
 import { ADSET_CORE_FIELDS } from './live-objects.js'
-import { ATTRIBUTION_SPECS, BID_STRATEGIES, BILLING_EVENTS, CUSTOMER_LABELS, ENGAGED_LABELS, META_NO_CAP, OPTIMIZATION_GOALS, OPTIMIZATION_SUB_EVENTS, REGIONAL_CATEGORIES, REGIONAL_IDENTITY_KEYS } from '../../gateway/meta-settings-rules.js'
+import { ATTRIBUTION_SPECS, BID_STRATEGIES, BILLING_EVENTS, FREQUENCY_EVENTS, META_NAME_TEXT, META_STRICT_TEXT, typedTextOk, CUSTOMER_LABELS, ENGAGED_LABELS, META_NO_CAP, OPTIMIZATION_GOALS, OPTIMIZATION_SUB_EVENTS, REGIONAL_CATEGORIES, REGIONAL_IDENTITY_KEYS } from '../../gateway/meta-settings-rules.js'
 
 export type AttributionPreset = '1d_click' | '7d_click' | '1d_click_1d_view' | '7d_click_1d_view'
 export const ATTRIBUTION_PRESETS: readonly AttributionPreset[] = ['1d_click', '7d_click', '1d_click_1d_view', '7d_click_1d_view']
@@ -53,7 +53,7 @@ const GOAL_TYPE: Readonly<Record<CustomerGoalType, 0 | 1 | 2>> = { broad: 0, 'ex
 const GOAL_NAME: Readonly<Record<number, CustomerGoalType>> = { 0: 'broad', 2: 'exclude-existing', 1: 'exclude-existing-and-engaged' }
 
 export interface DaypartBlock { days: number[]; startHour: number; endHour: number; timezone?: 'USER' | 'ADVERTISER' }
-export interface FrequencyCapAsk { event?: 'IMPRESSIONS' | 'VIDEO_VIEWS' | 'VIDEO_VIEWS_2S' | 'VIDEO_VIEWS_15S'; intervalDays: number; maxFrequency: number }
+export interface FrequencyCapAsk { event?: 'IMPRESSIONS'; intervalDays: number; maxFrequency: number }
 export interface CustomerGoalAsk {
   type: CustomerGoalType
   existingCustomerAudienceIds?: string[]
@@ -194,7 +194,7 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
   // ── name (AS-040), goal (AS-041), sub-event (AS-042), billing (AS-043) ──
   if (request.name !== undefined) {
     if (request.name === a.name) skipped.push(`${who} is already named "${a.name}".`)
-    else { params.name = request.name; lines.push(['Name', a.name, request.name]); if (a.name) undo.name = a.name; else broken('The ad set had no name to put back.') }
+    else { params.name = request.name; lines.push(['Name', a.name, request.name]); if (typedTextOk(a.name, META_NAME_TEXT, 400)) undo.name = a.name; else broken(a.name ? 'The old name has characters (or a length) Nexus does not send, so undo cannot put it back.' : 'The ad set had no name to put back.') }
   }
   const goal = request.optimizationGoal ?? a.optimizationGoal
   if (request.optimizationGoal !== undefined && request.optimizationGoal !== a.optimizationGoal) {
@@ -322,6 +322,10 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
         if (a.bidStrategy === 'LOWEST_COST_WITH_MIN_ROAS' && typeof a.bidConstraints?.roas_average_floor === 'number') undo.roasGoal = roasOfFloor(a.bidConstraints.roas_average_floor)
       } else broken('The bid strategy was not readable before.')
       if (request.bidStrategy === 'LOWEST_COST_WITHOUT_CAP' && a.bidStrategy && a.bidStrategy !== 'LOWEST_COST_WITHOUT_CAP') spendsMoney.push(`Removing ${who}'s ${a.bidStrategy}: without a cap Meta may pay more per result — ${spendWord}.`)
+      // Round 2 N1 — as set-meta-campaign: a cap → a ROAS goal removes the cap; a bid cap → a cost cap (even at the same
+      // amount) lets single bids go above it (a cost cap is an average).
+      if (request.bidStrategy === 'LOWEST_COST_WITH_MIN_ROAS' && CAPS.has(a.bidStrategy ?? '')) spendsMoney.push(`${who}'s ${a.bidStrategy} is removed for a ROAS goal: Meta then has no ceiling per result — ${spendWord}.`)
+      if (request.bidStrategy === 'COST_CAP' && a.bidStrategy === 'LOWEST_COST_WITH_BID_CAP') spendsMoney.push(`From a bid cap to a cost cap for ${who}: Meta keeps the AVERAGE cost near the cap, so single bids may go above it — ${spendWord}.`)
       warnings.push('A bid strategy change starts learning again.')
     }
   }
@@ -346,6 +350,8 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
       if ((request.optimizationGoal ?? a.optimizationGoal) !== 'VALUE') return { refusal: 'A ROAS goal needs the VALUE performance goal (Meta\'s bid strategy guide).' }
       params.bid_strategy = 'LOWEST_COST_WITH_MIN_ROAS'
       if (!lines.some(([l]) => l === 'Bid strategy')) lines.push(['Bid strategy', a.bidStrategy, 'LOWEST_COST_WITH_MIN_ROAS'])
+      // Round 2 N1 — a cap gives way to the ROAS goal: the cap is removed.
+      if (CAPS.has(a.bidStrategy ?? '') && !spendsMoney.some((x) => x.includes('is removed for a ROAS goal'))) spendsMoney.push(`${who}'s ${a.bidStrategy} is removed for a ROAS goal: Meta then has no ceiling per result — ${spendWord}.`)
       if (inList(BID_STRATEGIES, a.bidStrategy) && undo.bidStrategy === undefined) undo.bidStrategy = a.bidStrategy
       if (a.bidStrategy && CAPS.has(a.bidStrategy) && a.bidAmount) undo.bidAmountCents = metaUnitsToMinor(a.bidAmount, cur)
     }
@@ -420,6 +426,9 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
       if (pacingNow !== 'day_parting' && !a.adsetSchedule?.length) skipped.push(`${who} has no ad schedule.`)
       else {
         const after = request.dayparting.pacing ?? 'standard'
+        // Round 2 N5 — as the pacing path: under a campaign budget pacing is the campaign's; a cost cap needs standard.
+        if (request.dayparting.pacing && cbo) return { refusal: `${who} is under a campaign budget: pacing is the campaign's (set-meta-campaign pacing); turn scheduling off without naming a pacing.` }
+        if (after === 'no_pacing' && strategy === 'COST_CAP') return { refusal: 'A cost cap needs standard pacing (Meta\'s bid strategy guide).' }
         if (!cbo) params.pacing_type = JSON.stringify([after])
         params.adset_schedule = '[]'
         lines.push(['Ad scheduling', 'on', `off (all day${!cbo && after === 'no_pacing' ? ', accelerated' : ''})`])
@@ -535,8 +544,9 @@ function draft(request: AdSetSettingsRequest, live: AdSetSettingsLive, now: Date
       params.dsa_beneficiary = request.dsa.beneficiary
       lines.push(['EU payer / beneficiary (shown to people in the EU)', `${a.dsaPayor ?? 'none'} / ${a.dsaBeneficiary ?? 'none'}`, `${request.dsa.payor} / ${request.dsa.beneficiary}`])
       if (!targetsEu(a.targetingCountries)) warnings.push(`${who} does not target the EU: Meta does not keep a payer and beneficiary for it.`)
-      if (a.dsaPayor && a.dsaBeneficiary) undo.dsa = { payor: a.dsaPayor, beneficiary: a.dsaBeneficiary }
-      else broken('There was no payer and beneficiary before: Meta documents no way to clear them.')
+      // Round 2 N3 — only text that passes the same check as a new one goes back (else said).
+      if (typedTextOk(a.dsaPayor, META_STRICT_TEXT, 512) && typedTextOk(a.dsaBeneficiary, META_STRICT_TEXT, 512)) undo.dsa = { payor: a.dsaPayor, beneficiary: a.dsaBeneficiary }
+      else broken(a.dsaPayor || a.dsaBeneficiary ? 'The old payer or beneficiary has characters (or a length) Nexus does not send, so undo cannot put them back.' : 'There was no payer and beneficiary before: Meta documents no way to clear them.')
     }
   }
   if (request.regional) {
@@ -774,7 +784,8 @@ function capsBack(specs: unknown[] | null): FrequencyCapAsk[] | null {
   for (const raw of specs) {
     const s = (raw ?? {}) as Record<string, unknown>
     const event = s.event as FrequencyCapAsk['event']
-    if (!['IMPRESSIONS', 'VIDEO_VIEWS', 'VIDEO_VIEWS_2S', 'VIDEO_VIEWS_15S'].includes(String(event)) || !Number.isInteger(s.interval_days) || !Number.isInteger(s.max_frequency)) return null
+    // Round 2 N2 — only the events the tool sends (impressions): any other has no undo through it.
+    if (!(FREQUENCY_EVENTS as readonly string[]).includes(String(event)) || !Number.isInteger(s.interval_days) || !Number.isInteger(s.max_frequency)) return null
     out.push({ event, intervalDays: s.interval_days as number, maxFrequency: s.max_frequency as number })
   }
   return out

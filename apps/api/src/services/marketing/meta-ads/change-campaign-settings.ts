@@ -35,7 +35,7 @@ import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './cha
 import { campaignSettingsCheck, isOn, money, settingsView, type SettingsRecord } from './change-settings-common.js'
 import type { LiveCampaign, LiveChildAdSet } from './live-settings.js'
 import { bidAmountParam, budgetParam, campaignSpendCapParam, metaUnitsToMinor, MetaUnitError } from './settings-units.js'
-import { BID_STRATEGIES as BID_STRATEGY_LIST, CAMPAIGN_PROMOTED_OBJECT_KEYS, CAMPAIGN_SETTINGS_READ_BACK, CUSTOM_EVENT_TYPES, META_NO_CAP, PROMOTED_OBJECT_KEYS, SPECIAL_AD_CATEGORIES as SPECIAL_AD_CATEGORY_LIST, type BID_STRATEGIES, type OUTCOME_OBJECTIVES, type SPECIAL_AD_CATEGORIES } from '../../gateway/meta-settings-rules.js'
+import { BID_STRATEGIES as BID_STRATEGY_LIST, META_NAME_TEXT, typedTextOk, CAMPAIGN_PROMOTED_OBJECT_KEYS, CAMPAIGN_SETTINGS_READ_BACK, CUSTOM_EVENT_TYPES, META_NO_CAP, PROMOTED_OBJECT_KEYS, SPECIAL_AD_CATEGORIES as SPECIAL_AD_CATEGORY_LIST, type BID_STRATEGIES, type OUTCOME_OBJECTIVES, type SPECIAL_AD_CATEGORIES } from '../../gateway/meta-settings-rules.js'
 
 export type MetaBidStrategy = typeof BID_STRATEGIES[number]
 export type MetaObjective = typeof OUTCOME_OBJECTIVES[number]
@@ -166,7 +166,7 @@ function draft(request: CampaignSettingsRequest, live: CampaignSettingsLive): Me
   // ── name (CMP-046) ──
   if (request.name !== undefined) {
     if (request.name === c.name) skipped.push(`${who} is already named "${c.name}".`)
-    else { params.name = request.name; lines.push(['Name', c.name, request.name]); if (c.name) undo.name = c.name; else noUndo.push('The campaign had no name to put back.') }
+    else { params.name = request.name; lines.push(['Name', c.name, request.name]); if (typedTextOk(c.name, META_NAME_TEXT, 400)) undo.name = c.name; else noUndo.push(c.name ? 'The old name has characters (or a length) Nexus does not send, so undo cannot put it back.' : 'The campaign had no name to put back.') }
   }
 
   // ── budget (CMP-036 amount, CMP-037 daily ⇄ lifetime, CMP-039 campaign budget on) ──
@@ -290,10 +290,11 @@ function draft(request: CampaignSettingsRequest, live: CampaignSettingsLive): Me
           if (extra.length) return { refusal: `Not of ${who}: ad set ${extra.join(', ')}.` }
           params.adset_bid_amounts = JSON.stringify(Object.fromEntries([...bids].map(([id, v]) => [id, Number(bidAmountParam(v, cur))])))
           for (const [id, v] of [...bids].slice(0, 10)) lines.push([`Ad set ${id} cap`, money(cents(children.find((a) => a.id === id)?.bidAmount ?? null, cur), cur), money(v, cur)])
-          // Review A1 — each new cap against the ad set's bid now: a raise, or one Nexus could not read, can pay more.
-          const raised = [...bids].map(([id, v]) => ({ id, v, old: cents(children.find((a) => a.id === id)?.bidAmount ?? null, cur) })).filter((b) => b.old === null || b.v > b.old)
+          // Review A1 — each new cap against the ad set's bid now: a raise, or one Nexus could not read, can pay more. Round 2
+          // N4 — only when the campaign HAD a cap: adding a cap where there was none (automatic bidding) cannot raise spend.
+          const raised = !CAPS.has(from ?? '') ? [] : [...bids].map(([id, v]) => ({ id, v, old: cents(children.find((a) => a.id === id)?.bidAmount ?? null, cur) })).filter((b) => b.old === null || b.v > b.old)
           if (raised.length) {
-            spendsMoney.push(`New caps that may let Meta pay more per result: ${raised.slice(0, 10).map((b) => `ad set ${b.id} ${b.old === null ? `had no bid Nexus could read, now ${money(b.v, cur)}` : `${money(b.old, cur)} → ${money(b.v, cur)}`}`).join('; ')}${raised.length > 10 ? ` and ${raised.length - 10} more` : ''} — ${spendWord}.`)
+            spendsMoney.push(`New caps that may let Meta pay more per result: ${raised.slice(0, 10).map((b) => `ad set ${b.id} ${b.old === null ? `had a cap Nexus could not read, now ${money(b.v, cur)}` : `${money(b.old, cur)} → ${money(b.v, cur)}`}`).join('; ')}${raised.length > 10 ? ` and ${raised.length - 10} more` : ''} — ${spendWord}.`)
           }
         }
         // Review A1 — a cost cap is an average: single bids may go above it, where a bid cap never does.
@@ -303,6 +304,8 @@ function draft(request: CampaignSettingsRequest, live: CampaignSettingsLive): Me
         return { refusal: 'adSetBidAmounts goes only with a move to a bid cap or cost cap strategy.' }
       }
       if (to === 'LOWEST_COST_WITHOUT_CAP' && from && from !== 'LOWEST_COST_WITHOUT_CAP') spendsMoney.push(`Removing ${who}'s ${STRATEGY_WORDS[from] ?? from}: without a cap Meta may pay more per result — ${spendWord}.`)
+      // Round 2 N1 — a cap → a ROAS goal: the cap is removed (Meta then bids for value, with no ceiling per result).
+      if (to === 'LOWEST_COST_WITH_MIN_ROAS' && CAPS.has(from ?? '')) spendsMoney.push(`The ${STRATEGY_WORDS[from!]} of ${who} is removed for a ROAS goal: Meta then has no ceiling per result — ${spendWord}.`)
       if (to === 'LOWEST_COST_WITH_MIN_ROAS') {
         noUndo.push('A ROAS goal under a campaign budget cannot be switched to another bid strategy afterwards (Meta).')
         warnings.push(`A ROAS goal under a campaign budget is for good: Meta does not let ${who} switch to another bid strategy afterwards (only a copy into a new campaign can). Each ad set then needs its minimum ROAS (set-meta-ad-set roasGoal) and a VALUE goal; Meta needs the account to be allowed ROAS goals.`)

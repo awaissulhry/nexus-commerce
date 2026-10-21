@@ -48,7 +48,9 @@ export async function metaCatalogProblem(target: CatalogRuleTarget, ids: { catal
     }
     return catalogs.has(catalogId!) ? null : `Catalog ${catalogId} is not one the chosen ad account's business portfolio owns or was given, so it is not sent.`
   } catch (err) {
+    // Round 2 — a lookup that fails (Meta's refusal, a lost connection, the database) never lets a catalog through: the
+    // change is refused in words, here and at the gateway, and nothing is sent.
     if (err instanceof MetaReadError) return `Nexus could not confirm the catalog (${err.message}), so it is not sent.`
-    throw err
+    return `Nexus could not confirm the catalog (${err instanceof Error ? err.message : String(err)}), so it is not sent.`
   }
 }
