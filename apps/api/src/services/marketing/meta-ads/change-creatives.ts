@@ -50,8 +50,13 @@ import type { MetaWriteBodyId } from '../../gateway/meta-calls.js'
 export const CREATIVE_TOOL = 'create-meta-creative'
 /** Step 26 — create-meta-boost: a creative of an existing post (marketing/meta-ads/change-boosts.ts), made by this builder. */
 export const BOOST_TOOL = 'create-meta-boost'
-/** Step 26 — the tools whose records claim a creative made (a creative one of them claims is never "new" to another). */
-export const CREATIVE_RECORD_TOOLS: readonly string[] = [CREATIVE_TOOL, BOOST_TOOL]
+/** Step 27 — create-meta-ad: an ad whose inline creative it made (marketing/meta-ads/change-ads.ts). */
+export const AD_TOOL = 'create-meta-ad'
+/**
+ * Step 26 — the tools whose records claim a creative made (a creative one of them claims is never "new" to another). Step 27:
+ * create-meta-ad claims the inline creative of an ad it made.
+ */
+export const CREATIVE_RECORD_TOOLS: readonly string[] = [CREATIVE_TOOL, BOOST_TOOL, AD_TOOL]
 /**
  * Master CR-207 (review B2) — saved welcome-message flows (`GET/POST/DELETE /{page_id}/welcome_message_flows`, SDK only) are
  * a Page write that needs the Page's own access token (lane question Q1). C2-PAGE-TOKEN: lane C4's step 36 builds the
@@ -115,6 +120,11 @@ export interface CreativeRequest {
   base?: Record<string, unknown> | null
   /** Step 26 — an existing post's destinations (asset_feed_spec optimization_type + call_to_actions); music is named beside them. */
   existingFeed?: Record<string, unknown> | null
+  /**
+   * Step 27 — built INLINE on a new ad (create-meta-ad): only there may it carry a "message us" footer
+   * (asset_feed_spec.message_extensions, master CR-218: Meta answers error 3 for one on the creative edge).
+   */
+  inlineOnAd?: boolean | null
 }
 
 /** What a create made (AgentChange after; undo reads it). Only facts that do not move with time. */
@@ -157,7 +167,7 @@ function normalizeLinks(value: unknown): unknown {
   return value
 }
 /** Ids a caller wrote as numbers, as strings (the gateway takes ids as strings). */
-const ID_KEYS = new Set(['page_id', 'instagram_user_id', 'video_id', 'lead_gen_form_id', 'event_id', 'element_id', 'sponsor_page_id', 'sponsor_id', 'branded_content_sponsor_page_id', 'partner_app_welcome_message_flow_id', 'conversation_template_id', 'flow_id', 'page', 'product_set_id', 'boosted_product_set_id', 'associated_product_set_id', 'product_id'])
+const ID_KEYS = new Set(['page_id', 'instagram_user_id', 'video_id', 'original_video_id', 'lead_gen_form_id', 'event_id', 'element_id', 'sponsor_page_id', 'sponsor_id', 'branded_content_sponsor_page_id', 'partner_app_welcome_message_flow_id', 'conversation_template_id', 'flow_id', 'page', 'product_set_id', 'boosted_product_set_id', 'associated_product_set_id', 'product_id'])
 function stringIds(value: unknown, key = ''): unknown {
   if (typeof value === 'number' && ID_KEYS.has(key) && Number.isSafeInteger(value)) return String(value)
   if (Array.isArray(value)) return value.map((v) => stringIds(v))
@@ -165,6 +175,8 @@ function stringIds(value: unknown, key = ''): unknown {
   return value
 }
 const clean = (value: unknown) => stringIds(normalizeLinks(normalizeText(value)))
+/** Step 27 — the same cleaning for a new ad's own JSON parts (create-meta-ad: flexible-format groups). */
+export const cleanCreativeJson = clean
 
 // ── the creative ────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -200,6 +212,8 @@ export function buildCreative(request: CreativeRequest, chosen: { pageId: string
   }
   const feed = isObject(request.assetFeed) ? clean(request.assetFeed) as Record<string, unknown> : {}
   if ('audios' in feed) return { refusal: 'Nothing was asked of Meta: music is the argument music (off, or random: Meta picks a track), never asset_feed_spec.audios.' }
+  // Step 27 (master CR-218) — a "message us" footer only inline on a new ad (create-meta-ad messageFooter).
+  if ('message_extensions' in feed && !request.inlineOnAd) return { refusal: 'Nothing was asked of Meta: a "message us" footer (asset_feed_spec.message_extensions) is made only inline on a new ad — create-meta-ad messageFooter: Meta answers error 3 for a creative made on its own with one.' }
   // The identity: the chosen Page and Instagram account; a partnership ad's partner beside them (CR-320 / CR-321).
   const withIg = request.withInstagram !== false && !!chosen.instagramId
   const partner = request.partner ?? null
@@ -418,8 +432,11 @@ function silentRead(read: Record<string, unknown>) {
   }
 }
 
-/** The run's node of a creative Meta made: its id, "was it new?", what Meta kept of the features asked, and what else. */
-async function madeNode(target: MetaWriteTarget, creativeId: string, node: Record<string, unknown> | null, sentAt: number, asked: string[], made: MadeCreative, jobId: string | null = null) {
+/**
+ * The run's node of a creative Meta made: its id, "was it new?", what Meta kept of the features asked, and what else. Step 27:
+ * create-meta-ad says the same of the inline creative of a new ad.
+ */
+export async function madeNode(target: MetaWriteTarget, creativeId: string, node: Record<string, unknown> | null, sentAt: number, asked: string[], made: MadeCreative, jobId: string | null = null) {
   const read = node && 'degrees_of_freedom_spec' in node ? node : (await readCreative(target, creativeId)) ?? node ?? {}
   const on = featuresOn(read)
   const generated = Array.isArray((read.asset_feed_spec as { bodies?: unknown } | undefined)?.bodies) ? ((read.asset_feed_spec as { bodies: unknown[] }).bodies.length) : 0
@@ -629,8 +646,8 @@ async function recordOf(creativeId: string, adAccountId: string, tool: string): 
   return rows.find((r) => (r.after as { adAccountId?: unknown } | null)?.adAccountId === adAccountId)?.id ?? null
 }
 
-/** Every ad status but DELETED (an archived ad still uses its creative). */
-const AD_STATUSES_BUT_DELETED = ['ACTIVE', 'PAUSED', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED', 'PENDING_BILLING_INFO', 'CAMPAIGN_PAUSED', 'ARCHIVED', 'ADSET_PAUSED', 'IN_PROCESS', 'WITH_ISSUES']
+/** Every ad status but DELETED (an archived ad still uses its creative). Step 27: an ad set's ads are counted with it. */
+export const AD_STATUSES_BUT_DELETED = ['ACTIVE', 'PAUSED', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED', 'PENDING_BILLING_INFO', 'CAMPAIGN_PAUSED', 'ARCHIVED', 'ADSET_PAUSED', 'IN_PROCESS', 'WITH_ISSUES']
 
 /**
  * The undo of a create: delete the creatives a create of THIS tool (create-meta-creative; step 26: create-meta-boost) made NEW

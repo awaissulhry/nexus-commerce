@@ -992,6 +992,15 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { kind: 'partnership', action: 'approve-creators', instagramId: '17841400000000001', creators: [{ instagramId: '17841400000000099', approved: false }] },
         after: { kind: 'partnership', action: 'approve-creators', instagramId: '17841400000000001', creators: [{ instagramId: '17841400000000099', approved: true }], accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 27: an ad it made (never run) is deleted again; a rename and a creative swap go back.
+      'create-meta-ad': {
+        before: { kind: 'create', items: [] },
+        after: { kind: 'create', items: [{ kind: 'ad', adId: '120000000000003', adSetId: '120000000000002', name: 'Ad A', status: 'PAUSED', creativeId: '120000000000301' }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-ad': {
+        before: { kind: 'set', adId: '120000000000003', name: 'Ad A', status: 'PAUSED', creativeId: '120000000000301', labels: [], scheduleStart: null, scheduleEnd: null },
+        after: { kind: 'set', adId: '120000000000003', name: 'Ad B', creativeId: '120000000000302', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       // Meta step 32: a dataset's settings, its access and a custom conversion's go back through the tool the record names;
       // a custom conversion made is deleted again (remove-meta-signal-items, a person approves).
       'set-meta-dataset': {
@@ -1184,7 +1193,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-meta-audience', 'set-meta-audience', 'set-meta-audience-members', 'set-meta-audience-sharing', 'remove-meta-audience',
       'create-meta-lead-form', 'set-meta-lead-form',
       'create-meta-boost', 'set-meta-partnership-access',
-      'create-meta-dataset', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-custom-conversion', 'remove-meta-signal-items']) {
+      'create-meta-dataset', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-custom-conversion', 'remove-meta-signal-items',
+      'create-meta-ad', 'set-meta-ad']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

@@ -115,6 +115,8 @@ export interface MetaObjectChange {
   runId?: string
   /** Step 36 — never read back: Meta's answer (the new id) is all Nexus keeps (a test lead: these tools never read a lead). */
   skipReadBack?: true
+  /** Step 27 — a new ad's check runs Meta's synchronous integrity review with it (synchronous_ad_review, AD-027). */
+  adReview?: boolean
 }
 
 /**
@@ -153,7 +155,9 @@ export function readsOf(node: Record<string, unknown>, expected: Record<string, 
 /** Step 18 review A7 — times are sent as UTC Unix seconds and read back as ISO 8601: both judged as Unix seconds. */
 const TIME_FIELDS = new Set(['start_time', 'end_time', 'time_start', 'time_end',
   // Step 28 — a study's windows and a Page video test's start.
-  'observation_end_time', 'cooldown_start_time', 'scheduled_experiment_timestamp'])
+  'observation_end_time', 'cooldown_start_time', 'scheduled_experiment_timestamp',
+  // Step 27 — an ad's own schedule.
+  'ad_schedule_start_time', 'ad_schedule_end_time'])
 const unixOf = (v: unknown): string => {
   const text = String(v)
   if (/^\d{1,11}$/.test(text)) return text
@@ -254,7 +258,7 @@ export async function metaCheckChange(target: MetaWriteTarget, change: MetaObjec
   try {
     answer = await metaWriteCall({
       connectionId: target.connectionId, operation, objectId: change.objectId, objectKind: change.kind, params: change.params, check: true,
-      ...(change.parent ? { parent: change.parent } : {}), ...(change.edge ? { edge: change.edge } : {}), ...(change.recommendations ? { recommendations: true } : {}),
+      ...(change.parent ? { parent: change.parent } : {}), ...(change.edge ? { edge: change.edge } : {}), ...(change.recommendations ? { recommendations: true } : {}), ...(change.adReview ? { adReview: true } : {}),
     })
   } catch (err) {
     const failure = failureOfThrow(err) ?? localFailure(`Nexus could not ask Meta's check (${err instanceof Error ? err.message : String(err)}).`, 'NEXUS_ERROR')

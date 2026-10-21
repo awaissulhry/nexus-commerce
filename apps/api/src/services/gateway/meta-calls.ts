@@ -80,6 +80,7 @@ import { META_VALIDATE_ONLY } from './meta-write-check.js'
 import { META_LEAD_FORM_WRITE_RULES } from './meta-lead-form-rules.js'
 import { META_BOOST_WRITE_RULES, metaRestWriteVerdict } from './meta-boost-rules.js'
 import { META_SIGNALS_WRITE_RULES, type MetaSignalsKind } from './meta-signals-rules.js'
+import { META_AD_WRITE_RULES } from './meta-ad-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -1115,7 +1116,17 @@ export type MetaBrandSafetyKind = 'adsettargeting' | 'publisherblocklist' | 'con
  */
 export type MetaPageKind = 'leadform' | 'testlead'
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
-export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' | 'productitem' | 'campaign' | 'page' | 'customconversion' | 'video' | MetaLabelsBodyKind | MetaOptimizeBodyKind | MetaBrandSafetyBodyKind | MetaAudienceBodyKind | MetaPageBodyKind }
+export interface MetaWriteBodyId {
+  id: string
+  // Step 27 — `creative`: an existing creative a new ad (or a swap) shows, of the chosen ad account (metaOwnerProblem).
+  kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' | 'productitem' | 'campaign' | 'page' | 'customconversion' | 'video' | 'creative' | MetaLabelsBodyKind | MetaOptimizeBodyKind | MetaBrandSafetyBodyKind | MetaAudienceBodyKind | MetaPageBodyKind
+  /**
+   * Step 27 review A1 — a creative an ad shows while ACTIVE: its Advantage+ switches are read with its account_id and must
+   * all say OPT_OUT (meta-ad-rules.ts metaActivationProblem) — `always` (a new ad created ACTIVE) or `if-ad-active` (a swap:
+   * when the ad being changed is ACTIVE).
+   */
+  activation?: 'always' | 'if-ad-active'
+}
 /**
  * Step 31 — ids inside an audience's body only (meta-audience-rules.ts; gateway.ts metaBodyIdsProblem, audience-ids.ts): a
  * campaign or ad set a lookalike learns from, the chosen Instagram account, a lead form or Instant Experience of the chosen
@@ -1409,8 +1420,8 @@ const MAX_ANY_WRITE_BODY = Math.max(200_000, META_IMAGE_MAX_BODY, MEMBERS_MAX_BO
 /** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts), step 19's, step 22's, step 21's (meta-labels-rules.ts) step 28's (meta-optimize-rules.ts) and step 29's rule changes (meta-ad-rule-rules.ts) — read when judged, never at load. */
 // Step 23 — then create-meta-media's media rules (meta-media-rules.ts); step 25's creative rules (meta-creative-rules.ts);
 // step 39's brand-safety rules; step 31's audience rules (meta-audience-rules.ts); step 26's boost and partnership-access
-// rules (meta-boost-rules.ts); step 36's lead-form rules; step 32's dataset and custom conversion rules (meta-signals-rules.ts) last.
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...metaCreateWriteRules(), ...META_REMOVE_WRITE_RULES, ...metaLabelsWriteRules(), ...META_OPTIMIZE_WRITE_RULES, ...META_MEDIA_WRITE_RULES, ...metaAdRuleWriteRules(), ...META_CREATIVE_WRITE_RULES, ...META_BRAND_SAFETY_WRITE_RULES, ...META_AUDIENCE_WRITE_RULES, ...META_BOOST_WRITE_RULES, ...META_LEAD_FORM_WRITE_RULES, ...META_SIGNALS_WRITE_RULES]
+// rules (meta-boost-rules.ts); step 36's lead-form rules; step 32's dataset and custom conversion rules (meta-signals-rules.ts); step 27's ad rules (meta-ad-rules.ts).
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...metaCreateWriteRules(), ...META_REMOVE_WRITE_RULES, ...metaLabelsWriteRules(), ...META_OPTIMIZE_WRITE_RULES, ...META_MEDIA_WRITE_RULES, ...metaAdRuleWriteRules(), ...META_CREATIVE_WRITE_RULES, ...META_BRAND_SAFETY_WRITE_RULES, ...META_AUDIENCE_WRITE_RULES, ...META_BOOST_WRITE_RULES, ...META_LEAD_FORM_WRITE_RULES, ...META_SIGNALS_WRITE_RULES, ...META_AD_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {

@@ -126,6 +126,9 @@ export interface MetaChangeRequest {
   skipReadBack?: true
   /** Meta's codes this request may meet, in plain words (base code → sentence), added to the step's sentence. */
   explain?: Readonly<Record<string, string>>
+  // ── step 27 ──
+  /** A new ad's check runs Meta's synchronous integrity review with it (synchronous_ad_review, AD-026 … AD-028). */
+  adReview?: boolean
 }
 
 export interface MetaChangeDraft {

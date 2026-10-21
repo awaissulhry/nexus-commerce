@@ -49,6 +49,14 @@
  * reference/ad-account/adcreatives.md (instagram_permalink_url "URL for a post on Instagram you want to run as an ad";
  * branded_content ad_format enum {0, 1, 2, 3}); SDK adcreativebrandedcontentads.py (ad_format int, promoted_page_id string).
  *
+ * Step 27 (2026-10-21) — the SAME judge takes a new ad's INLINE creative (create-meta-ad: judgeCreativeSpec, the creative as
+ * one JSON object). Only there may a website ad carry a "message us" footer (asset_feed_spec.message_extensions: whatsapp,
+ * messenger or instagram_message, beside a website link and button — the creative edge and the async job refuse it, Meta
+ * answers error 3: ad-creative/messaging-ads/website-ads-click-to-message.md). media_sourcing_spec also takes a multi-media
+ * ad (ad-creative/multi-media-ads.md: up to 10 images and videos, each with its source and opt_in_status said, per-media
+ * text, landing page, placement exclusions, crops and persona — out-of-cycle-changes/occ-2026.md 2026-10-19; SDK
+ * adcreativemediasourcingspec.py). judgeAssetGroups (flexible-ad-format.md) and judgeAdPersona judge an ad's own JSON parts.
+ *
  * Checked 2026-10-21 (curl ≥ 3 s apart; .md pages under developers.facebook.com/documentation/ads-commerce/marketing-api/):
  *   - reference/ad-account/adcreatives.md "Creating": the parameter table (actor_id … wamo_whatsapp_identity_spec);
  *     execution_options list<enum{validate_only}>; "if the object_story_id being used is already in use by an existing
@@ -421,6 +429,9 @@ const LAYER = {
 
 // ── the parts of a creative ─────────────────────────────────────────────────────────────────────────────────────────
 
+/** Step 27 (master CR-218) — the channels of a website ad's "message us" footer (asset_feed_spec.message_extensions). */
+export const META_MESSAGE_FOOTERS = ['whatsapp', 'messenger', 'instagram_message'] as const
+
 /** Text limits Nexus holds, Meta's own (asset-feed-spec, multi-language ads: title 255, body 4,096, description 10,000). */
 export const META_CREATIVE_TEXT = { message: 4096, headline: 255, description: 10_000, greeting: 300, iceTitle: 80, quickReply: 20, label: 100, name: 100 } as const
 
@@ -714,11 +725,72 @@ const assetFeedSpec = obj({
     if (!manual && promo.manual_coupon_codes?.length) return no(`${path}: a manual_coupon_codes code goes only with the source AD_CREATIVE_MANUAL_COUPON_CODES`)
     return judged
   },
-  message_extensions: list(obj({ type: token }, ['type']), 5),
+  // Step 27 (master CR-218, ad-creative/messaging-ads/website-ads-click-to-message.md) — the "message us" footer of a website
+  // ad: ONE channel, Meta's own three words. Only inline on a new ad (create-meta-ad): the creative edge answers error 3.
+  message_extensions: list(obj({ type: enumOf(META_MESSAGE_FOOTERS) }, ['type']), 1, 1),
   onsite_destinations: refuse(SHOP),
   shops_bundle: refuse(SHOP),
   app_product_page_id: refuse(NO_APP),
 })
+/**
+ * Step 27 (master CR-427; out-of-cycle-changes/occ-2026.md, 2026-10-19 "Creative audience pairing") — an age and gender
+ * persona paired with the whole ad or one image or video: {age_min, age_max, genders}. Nexus's markets are in the EU, where
+ * Meta targets nobody under 18 (F1 M6): 18 to 65.
+ */
+const persona: Judge = (value, path, walk) => {
+  const judged = obj({ age_min: int(18, 65), age_max: int(18, 65), genders: list(int(1, 2), 2, 1) })(value, path, walk)
+  if ('problem' in judged) return judged
+  const p = judged.value as { age_min?: number; age_max?: number; genders?: number[] }
+  if (!Object.keys(p).length) return no(`${path} names an age range or genders`)
+  if (p.age_min !== undefined && p.age_max !== undefined && p.age_min > p.age_max) return no(`${path}.age_min is at most age_max`)
+  if (p.genders && new Set(p.genders).size !== p.genders.length) return no(`${path}.genders names each gender once (1 men, 2 women)`)
+  return judged
+}
+
+/**
+ * Step 27 (master CR-425, CR-426; ad-creative/multi-media-ads.md, SDK adcreativemediasourcingspec.py) — a multi-media ad: up
+ * to 10 images and videos, each with its source and its related-media switch said explicitly (opt_in only when asked: the
+ * preview names it), per-media text, landing page, placement exclusions, crops and persona; global titles, bodies and
+ * descriptions. related_media never beside explicit images or videos; no hash or video twice.
+ */
+const mediaTextKeys = {
+  titles: list(obj({ text: text(META_CREATIVE_TEXT.headline) }, ['text']), 5),
+  bodies: list(obj({ text: text(META_CREATIVE_TEXT.message, { lines: true }) }, ['text']), 5),
+  descriptions: list(obj({ text: text(META_CREATIVE_TEXT.description, { lines: true }) }, ['text']), 5),
+}
+const mediaText = obj(mediaTextKeys)
+const mediaCommon = {
+  source: enumOf(['multi_media']),
+  opt_in_status: enumOf(['opt_in', 'opt_out']),
+  text_customizations: mediaText,
+  destination_customizations: list(obj({ url: link, display_url: displayLink }, ['url']), 1),
+  placement_customizations: list(obj({
+    publisher_platform: enumOf(['facebook', 'instagram', 'audience_network', 'messenger', 'whatsapp', 'threads']),
+    placement_exclusions: list(token, 20, 1),
+  }, ['publisher_platform', 'placement_exclusions']), 6),
+  creative_audience_pairing_persona: persona,
+}
+const mediaSourcingSpec: Judge = (value, path, walk) => {
+  const judged = obj({
+    related_media: obj({ opt_in_status: enumOf(['OPT_IN', 'OPT_OUT']) }, ['opt_in_status']),
+    images: list(obj({ hash, url: picture, image_crops: list(obj({ type: enumOf(['manual', 'auto_crop', 'smart_crop', 'super_crop']), crop_spec: crops() }, ['type']), 4), ...mediaCommon }, ['source', 'opt_in_status']), 10),
+    // Review B6 — each video names its original video and a thumbnail (its link or how Meta makes it), as the guide asks.
+    videos: list(obj({ video_id: bodyId('video'), original_video_id: bodyId('video'), thumbnail_url: picture, thumbnail_source: token, ...mediaCommon }, ['video_id', 'original_video_id', 'source', 'opt_in_status']), 10),
+    ...mediaTextKeys,
+  })(value, path, walk)
+  if ('problem' in judged) return judged
+  const m = judged.value as { related_media?: unknown; images?: Array<{ hash?: string; url?: string }>; videos?: Array<{ video_id: string }> }
+  const images = m.images ?? []
+  const videos = m.videos ?? []
+  if (m.related_media && (images.length || videos.length)) return no(`${path}: related_media never goes beside explicit images or videos (Meta's multi-media guide)`)
+  if (images.length + videos.length > 10) return no(`${path} holds at most 10 images and videos together`)
+  if (images.some((i) => !i.hash === !i.url)) return no(`${path}.images: each image names its hash or its url, one of them`)
+  if ((m.videos as Array<{ thumbnail_url?: string; thumbnail_source?: string }> | undefined ?? []).some((v) => !v.thumbnail_url && !v.thumbnail_source)) return no(`${path}.videos: each video names thumbnail_url or thumbnail_source (Meta's multi-media guide)`)
+  const hashes = images.map((i) => i.hash).filter(Boolean)
+  if (new Set(hashes).size !== hashes.length || new Set(videos.map((v) => v.video_id)).size !== videos.length) return no(`${path} names each image hash and each video once (Meta refuses duplicates)`)
+  return judged
+}
+
 /** A boolean that may only be this value (Meta's automatic promo-code updates stay off). */
 function enumOfBool(only: boolean): Judge {
   return (value, path) => (value === only ? ok(value) : no(`${path} is ${only} (Nexus lets Meta change no promo code by itself)`))
@@ -830,7 +902,8 @@ const CREATIVE_KEYS: Readonly<Record<string, { judge: Judge; json: boolean }>> =
     // Master CR-330 / CR-414 — product extensions: the product set shown under the ad (step 18's catalog rule).
     associated_product_set_id: bodyId('productset'),
   }), json: true },
-  media_sourcing_spec: { judge: obj({ related_media: obj({ opt_in_status: enumOf(['OPT_IN', 'OPT_OUT']) }, ['opt_in_status']) }), json: true },
+  // Step 27 — related media, or a multi-media ad's images and videos (CR-425 … CR-427: mediaSourcingSpec).
+  media_sourcing_spec: { judge: mediaSourcingSpec, json: true },
   marketing_message_structured_spec: { judge: obj({ language: locale, conversation_template_id: scopedId, footer: text(60), greeting: text(META_CREATIVE_TEXT.greeting, { lines: true }), is_optimized_text: bool }), json: true },
   recommender_settings: { judge: obj({ preferred_events: list(enumOf(['ViewContent', 'Search', 'AddToCart', 'AddToWishlist', 'InitiateCheckout', 'AddPaymentInfo', 'Purchase', 'Subscribe', 'RecurringSubscriptionPayment', 'Lead', 'CompleteRegistration', 'CustomConversion', 'AggregateCustomConversion', 'Other']), 14), product_sales_channel: enumOf(['ONLINE', 'IN_STORE', 'OMNI']) }), json: true },
   template_url_spec: { judge: templateUrl, json: true },
@@ -936,8 +1009,8 @@ export function creativeTypeProblem(creative: Record<string, unknown>): string |
   ].filter((t): t is string => typeof t === 'string')
   const markers: Array<[CreativeType, boolean, string]> = [
     ['messaging', anyMember(creative, 'app_destination') || anyMember(creative, 'page_welcome_message') || anyMember(creative, 'partner_app_welcome_message_flow_id')
-      || anyMember(creative, 'whats_app_business_phone_number') || !!creative.marketing_message_structured_spec || anyMember(creative, 'message_extensions')
-      || ctaTypes.some((t) => MESSAGING_CTAS.has(t)), 'a messaging part (a messaging destination, a welcome message, a WhatsApp number or message, message extensions)'],
+      || anyMember(creative, 'whats_app_business_phone_number') || !!creative.marketing_message_structured_spec
+      || ctaTypes.some((t) => MESSAGING_CTAS.has(t)), 'a messaging part (a messaging destination, a welcome message, a WhatsApp number or message)'],
     ['call', anyMember(creative, 'call_ads_configuration') || anyMember(creative, 'link', (v) => typeof v === 'string' && v.startsWith('tel:')) || ctaTypes.includes('CALL_NOW'), 'a call part (CALL_NOW, a tel: link, call_ads_configuration)'],
     ['profile', ctaTypes.some((t) => PROFILE_CTAS.has(t)), 'a profile-visit button'],
     ['lead', anyMember(creative, 'lead_gen_form_id'), 'a lead form'],
@@ -951,7 +1024,23 @@ export function creativeTypeProblem(creative: Record<string, unknown>): string |
       return `the creative's main button makes it a ${type} creative, and it carries ${what}, which goes only with a ${needs} creative: name one kind of creative`
     }
   }
+  // Step 27 (master CR-218) — a "message us" footer goes only on a WEBSITE ad with a website button: Meta's guide names
+  // LEARN_MORE "or other website CTAs" and says messaging buttons are "not compatible" (website-ads-click-to-message.md).
+  if (anyMember(creative, 'message_extensions') && (type !== 'standard' || !hasWebsiteDestination(creative))) {
+    return 'a "message us" footer (asset_feed_spec.message_extensions) goes only on a website ad: a website link and a website button such as LEARN_MORE, never a messaging button'
+  }
   return null
+}
+
+/**
+ * Step 27 (master CR-218) — what only an ad's inline creative may carry: Meta answers error 3 for a creative made on its own
+ * with a "message us" footer ("Creating a standalone creative via POST /adcreatives with message_extensions is not
+ * supported", website-ads-click-to-message.md). Why not on the creative edge, or null.
+ */
+export function inlineOnlyProblem(creative: Record<string, unknown>): string | null {
+  return anyMember(creative.asset_feed_spec, 'message_extensions')
+    ? 'a "message us" footer (asset_feed_spec.message_extensions) is made only inline on a new ad (create-meta-ad messageFooter): Meta answers error 3 for a creative made on its own with one'
+    : null
 }
 
 /** Format automation formats Meta documents for catalog creatives only (format-automation; master CR-420, CR-421). */
@@ -1272,12 +1361,32 @@ export function judgeCreativeForm(params: ReadonlyMap<string, string>, skip: rea
   return finishCreative(creative, walk)
 }
 
+/**
+ * Step 27 review B6 — a multi-media ad (ad-creative/multi-media-ads.md "Limitations"): "The primary media in
+ * object_story_spec must also appear in media_sourcing_spec" — its image hash (or picture link) among the images, its video
+ * among the videos. Why not, or null.
+ */
+export function multiMediaProblem(creative: Record<string, unknown>): string | null {
+  const media = creative.media_sourcing_spec as { images?: Array<{ hash?: string; url?: string }>; videos?: Array<{ video_id?: string }> } | undefined
+  if (!media || !(media.images?.length || media.videos?.length)) return null
+  const story = (creative.object_story_spec ?? {}) as { link_data?: { image_hash?: string; picture?: string }; video_data?: { video_id?: string }; photo_data?: { image_hash?: string; url?: string } }
+  const video = story.video_data?.video_id
+  if (video) return (media.videos ?? []).some((v) => v.video_id === video) ? null : `media_sourcing_spec.videos names the primary video ${video} of object_story_spec too (Meta's multi-media rule)`
+  const hash = story.link_data?.image_hash ?? story.photo_data?.image_hash
+  const url = story.link_data?.picture ?? story.photo_data?.url
+  if (hash) return (media.images ?? []).some((i) => i.hash === hash) ? null : `media_sourcing_spec.images names the primary image ${hash} of object_story_spec too (Meta's multi-media rule)`
+  if (url) return (media.images ?? []).some((i) => i.url === url) ? null : 'media_sourcing_spec.images names the primary picture link of object_story_spec too (Meta\'s multi-media rule)'
+  return 'a multi-media ad names its primary image or video in object_story_spec (link_data image_hash or picture, or video_data video_id), and lists it in media_sourcing_spec too'
+}
+
 /** After a creative's keys were judged: the silent features, the identity, the ids (deduplicated and bounded). */
 export function finishCreative(creative: Record<string, unknown>, walk: CreativeWalk): { creative: Record<string, unknown>; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[]; warnings: string[] } | { problem: string } {
   if (!creative.object_story_spec && !isExistingPostCreative(creative)) return { problem: 'a creative names object_story_spec (Nexus fills the chosen Page) or object_story_id (a post of the chosen Page) — or, made by create-meta-boost, an Instagram media, an Instagram post link or a creator\'s ad code' }
   if (creative.object_story_spec && creative.object_story_id) return { problem: 'a creative names object_story_spec or object_story_id, not both' }
   const contradiction = creativeTypeProblem(creative)
   if (contradiction) return { problem: contradiction }
+  const multi = multiMediaProblem(creative)
+  if (multi) return { problem: multi }
   const silent = silentFeaturesProblem(creative)
   if (silent) return { problem: silent }
   const extensions = productExtensionsProblem(creative)
@@ -1324,7 +1433,8 @@ const CREATIVE = ['creative'] as const
 const createJudge = (params: ReadonlyMap<string, string>): string | null => {
   if (params.has('execution_options') && params.get('execution_options') !== META_VALIDATE_ONLY) return `the only execution_options Nexus sends is exactly ${META_VALIDATE_ONLY} (Meta's check, which changes nothing)`
   const judged = judgeCreativeForm(params, ['execution_options'])
-  return 'problem' in judged ? judged.problem : null
+  // Step 27 — a "message us" footer is made only inline on a new ad.
+  return 'problem' in judged ? judged.problem : inlineOnlyProblem(judged.creative)
 }
 const createAssets = (params: ReadonlyMap<string, string>): MetaWriteAsset[] => {
   const judged = judgeCreativeForm(params, ['execution_options'])
@@ -1334,23 +1444,35 @@ const createIds = (params: ReadonlyMap<string, string>): MetaWriteBodyId[] => {
   const judged = judgeCreativeForm(params, ['execution_options'])
   return 'problem' in judged ? [] : judged.ids
 }
-/** The async job's creative_spec: the same creative as one JSON object (its parts as objects, not as JSON text). */
-function asyncSpec(raw: string | undefined): { creative: Record<string, unknown>; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[] } | { problem: string } {
+/**
+ * A creative as ONE JSON object (its parts as objects, not as JSON text): the async job's creative_spec (step 25) and, step
+ * 27, a new ad's inline `creative` (create-meta-ad) — `label` names it in the sentence. Every key judged, ONE spelling.
+ */
+export function judgeCreativeSpec(raw: string | undefined, label = 'creative_spec'): { creative: Record<string, unknown>; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[]; warnings: string[] } | { problem: string } {
   let spec: unknown
-  try { spec = JSON.parse(raw ?? '') } catch { return { problem: 'creative_spec is JSON' } }
-  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return { problem: 'creative_spec is a JSON object' }
-  const walk = newCreativeWalk()
+  try { spec = JSON.parse(raw ?? '') } catch { return { problem: `${label} is JSON` } }
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return { problem: `${label} is a JSON object` }
+  const story = (spec as { object_story_spec?: { instagram_user_id?: unknown } }).object_story_spec
+  const walk = newCreativeWalk(typeof (spec as { instagram_user_id?: unknown }).instagram_user_id === 'string' || typeof story?.instagram_user_id === 'string')
   const creative: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(spec as Record<string, unknown>)) {
     const judged = judgeCreativeKey(key, value, walk)
-    if ('problem' in judged) return { problem: `creative_spec.${judged.problem}` }
+    if ('problem' in judged) return { problem: `${label}.${judged.problem}` }
     creative[key] = judged.value
   }
-  if (JSON.stringify(creative) !== raw) return { problem: 'creative_spec is written in one spelling (as JSON.stringify writes it)' }
-  if (typeof creative.name !== 'string') return { problem: 'creative_spec names the creative (name)' }
+  if (JSON.stringify(creative) !== raw) return { problem: `${label} is written in one spelling (as JSON.stringify writes it)` }
+  if (typeof creative.name !== 'string') return { problem: `${label} names the creative (name)` }
   return finishCreative(creative, walk)
 }
-const labelsJudge = (value: string): string | null => {
+const asyncSpec = (raw: string | undefined) => {
+  const judged = judgeCreativeSpec(raw)
+  if ('problem' in judged) return judged
+  // Step 27 — a "message us" footer is made only inline on a new ad (the async job makes a creative on its own).
+  const inline = inlineOnlyProblem(judged.creative)
+  return inline ? { problem: inline } : judged
+}
+/** A label list in ONE spelling (step 27: an ad's labels too). */
+export const labelsJudge = (value: string): string | null => {
   let parsed: unknown
   try { parsed = JSON.parse(value) } catch { return 'adlabels is JSON' }
   const judged = labels(parsed, 'adlabels', newCreativeWalk())
@@ -1359,7 +1481,7 @@ const labelsJudge = (value: string): string | null => {
 }
 
 /** Step 26 — the creator's ad codes in a creative's branded_content (or an async job's creative_spec), as text. */
-function adCodesIn(raw: string | undefined, spec: boolean): string[] {
+export function adCodesIn(raw: string | undefined, spec: boolean): string[] {
   if (!raw || !/_boost_post_access_token/.test(raw)) return []
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>
@@ -1431,3 +1553,56 @@ export const META_CREATIVE_WRITE_RULES: readonly MetaWriteRule[] = [
     values: (params) => labelsJudge(params.get('adlabels')!),
   },
 ]
+
+// ── step 27: the JSON parts of a new ad that are not its creative, judged with the same judges ──────────────────────
+
+/** One JSON form value judged by `judge`, in ONE spelling; its ids for the gateway's check. */
+function judgedJson(raw: string | undefined, label: string, judge: Judge): { value: unknown; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[]; warnings: string[] } | { problem: string } {
+  let parsed: unknown
+  try { parsed = JSON.parse(raw ?? '') } catch { return { problem: `${label} is JSON` } }
+  const walk = newCreativeWalk()
+  const judged = judge(parsed, label, walk)
+  if ('problem' in judged) return judged
+  if (JSON.stringify(judged.value) !== raw) return { problem: `${label} is written in one spelling (as JSON.stringify writes it)` }
+  return { value: judged.value, assets: walk.assets, ids: walk.ids, warnings: walk.warnings }
+}
+
+/** The text types of a flexible-format group (flexible-ad-format.md: primary_text, headline, …; the creative's own three). */
+export const META_ASSET_GROUP_TEXT_TYPES = ['primary_text', 'headline', 'description'] as const
+const TEXT_MAX: Readonly<Record<string, number>> = { primary_text: META_CREATIVE_TEXT.message, headline: META_CREATIVE_TEXT.headline, description: META_CREATIVE_TEXT.description }
+
+/**
+ * Step 27 (master CR-430, F1 M5-20; flexible-ad-format.md, checked 2026-10-21) — `creative_asset_groups_spec` on a new ad:
+ * {"groups":[{images[{hash}], videos[{video_id}], texts[{text, text_type}], call_to_action{type, value{link}}}]} — each group
+ * at least one image or video, at most 5 texts of a text type, every call to action of ONE type. Images of the chosen
+ * account's library, videos of its video library (the gateway checks each).
+ */
+export function judgeAssetGroups(raw: string | undefined): { value: unknown; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[]; warnings: string[] } | { problem: string } {
+  const group = obj({
+    images: list(obj({ hash }, ['hash']), 10),
+    videos: list(obj({ video_id: bodyId('video') }, ['video_id']), 10),
+    texts: list((value, path, walk) => {
+      const judged = obj({ text_type: enumOf(META_ASSET_GROUP_TEXT_TYPES), text: (v, p) => (typeof v === 'string' ? ok(v) : no(`${p} is text`)) }, ['text', 'text_type'])(value, path, walk)
+      if ('problem' in judged) return judged
+      const t = judged.value as { text: string; text_type: string }
+      const problem = metaCreativeTextProblem(t.text, TEXT_MAX[t.text_type], `${path}.text`, { lines: t.text_type !== 'headline' })
+      return problem ? no(problem) : judged
+    }, 15),
+    call_to_action: obj({ type: enumOf(META_CTA_TYPES), value: obj({ link }, ['link']) }, ['type']),
+  })
+  const judged = judgedJson(raw, 'creative_asset_groups_spec', obj({ groups: list(group, 10, 1) }, ['groups']))
+  if ('problem' in judged) return judged
+  const groups = (judged.value as { groups: Array<{ images?: unknown[]; videos?: unknown[]; texts?: Array<{ text_type: string }>; call_to_action?: { type: string } }> }).groups
+  for (const [i, g] of groups.entries()) {
+    if (!(g.images?.length || g.videos?.length)) return { problem: `creative_asset_groups_spec.groups[${i}] holds at least one image or video` }
+    for (const type of META_ASSET_GROUP_TEXT_TYPES) if ((g.texts ?? []).filter((t) => t.text_type === type).length > 5) return { problem: `creative_asset_groups_spec.groups[${i}] holds at most 5 texts of type ${type}` }
+  }
+  const ctas = new Set(groups.map((g) => g.call_to_action?.type).filter(Boolean))
+  if (ctas.size > 1) return { problem: 'every call to action of creative_asset_groups_spec is of ONE type (Meta\'s flexible-format rule)' }
+  return judged
+}
+
+/** Step 27 (master CR-427) — `creative_audience_pairing_persona` on a new ad (the whole ad's persona). */
+export function judgeAdPersona(raw: string | undefined): { value: unknown } | { problem: string } {
+  return judgedJson(raw, 'creative_audience_pairing_persona', persona)
+}

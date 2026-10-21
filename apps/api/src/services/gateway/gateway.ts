@@ -45,6 +45,8 @@ import { META_SIGNALS_WRITE_RULES, type MetaSignalsKind } from './meta-signals-r
 import { metaGraphBase } from '../meta/api-version.js'
 import { MAX_RULE_BODY_IDS, ruleBodyIds } from './meta-ad-rule-rules.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
+// Meta step 27 review A1 — the activation rule of an ACTIVE ad's creative (meta-ad-rules.ts).
+import { metaActivationProblem } from './meta-ad-rules.js'
 import { writeLedgerRow } from './ledger.js'
 import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
 import { assertWriteAccount, type WriteTarget } from '../write-account-guard.js'
@@ -1014,6 +1016,12 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
       if (!pixels?.has(inner.id)) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: pixel ${inner.id} is not one Nexus can confirm among the chosen ad account's own pixels.` }
       continue
     }
+    // Step 27 review A1 — a creative an ad shows while ACTIVE: owner, kind and Advantage+ switches in one read.
+    if (inner.kind === 'creative' && inner.activation) {
+      const problem = await metaCreativeActivationProblem(connectionId, write, inner.id, inner.activation)
+      if (problem) return problem
+      continue
+    }
     // Step 28 — an ad set or ad of a recommendation, a lift cell's ad account, a viewer, a Page video, a study's own cell
     // (a custom conversion is step 19's check above).
     if (inner.kind === 'adsetorad' || inner.kind === 'adaccount' || inner.kind === 'person' || inner.kind === 'pagevideo' || inner.kind === 'studycell') {
@@ -1030,6 +1038,35 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
     if (problem) return { code: problem.code, sentence: problem.sentence.replace(/^Nothing was sent to Meta: /, `Nothing was sent to Meta: inside this change, `) }
   }
   return null
+}
+
+/**
+ * Meta step 27 review A1 — a creative an ad shows while ACTIVE (a new ad created ACTIVE, or a swap onto an ad that is ACTIVE —
+ * `if-ad-active`: the ad's status read first, one live read). In ONE live read of the creative (account_id, the creative's
+ * two kind fields and degrees_of_freedom_spec) it must be of the chosen ad account, a creative, and say OPT_OUT for every
+ * Advantage+ feature (meta-ad-rules.ts metaActivationProblem): else nothing is sent.
+ */
+async function metaCreativeActivationProblem(connectionId: string, write: MetaJudgedWrite, creativeId: string, activation: 'always' | 'if-ad-active'): Promise<{ code: string; sentence: string } | null> {
+  if (activation === 'if-ad-active') {
+    const ad = await metaOwnerRead(connectionId, write.objectId, 'status')
+    const status = ad.body?.status
+    if (typeof status !== 'string') return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `Nothing was sent to Meta: Nexus could not read whether ad ${write.objectId} is ACTIVE, so it cannot judge the creative it would show.` }
+    if (status !== 'ACTIVE') {
+      const owner = await metaOwnerProblem(connectionId, { ...write, objectId: creativeId, check: false }, 'creative')
+      return owner ? { code: owner.code, sentence: owner.sentence.replace(/^Nothing was sent to Meta: /, 'Nothing was sent to Meta: inside this change, ') } : null
+    }
+  }
+  const chosen = await metaChosenAdAccountOf(connectionId)
+  if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection, so Nexus changes nothing on Meta.' }
+  const { body } = await metaOwnerRead(connectionId, creativeId, ['account_id', ...META_KIND_FIELD.creative, 'degrees_of_freedom_spec'].join(','))
+  const account = body && (typeof body.account_id === 'string' || typeof body.account_id === 'number') ? String(body.account_id).replace(/^act_/, '') : null
+  if (!account) return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `Nothing was sent to Meta: inside this change, Nexus could not confirm which ad account creative ${creativeId} belongs to, nor its Advantage+ switches.` }
+  if (account !== chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: inside this change, object ${creativeId} is not of the Meta ad account this business chose through this connection.` }
+  if (META_KIND_FIELD.creative.some((name) => { const value = body?.[name]; return value === undefined || value === null || value === '' })) {
+    return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: inside this change, ${creativeId} is not a creative Nexus can confirm; a Nexus change writes only an object of the kind it names.` }
+  }
+  const problem = metaActivationProblem(body, `creative ${creativeId}`)
+  return problem ? { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: an ACTIVE ad shows only a creative that switches on no Advantage+ feature — ${problem}.` } : null
 }
 
 /** Meta step 39 — is this the name of a brand-safety write rule (meta-brand-safety-rules.ts)? Read when judged, never at load. */

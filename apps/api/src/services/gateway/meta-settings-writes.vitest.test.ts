@@ -74,7 +74,8 @@ describe('kinds: a settings rule matches only the kind the call names', () => {
   it('a campaign\'s settings go as campaign.settings; the same body named an ad set or an ad, or no kind, is refused', () => {
     expect(verdict({ body: form({ daily_budget: '5000' }), objectKind: 'campaign' })).toEqual({ write: { rule: 'campaign.settings', objectId: CAMPAIGN, check: false, body: 'daily_budget=5000', budget: false, kinds: ['campaign'] } })
     expect(problem({ body: form({ spend_cap: '100000' }), objectKind: 'adset' })).toMatch(/only Meta change Nexus sends is a status change/)
-    expect(problem({ body: form({ name: 'Shop A' }), objectKind: 'ad' })).toMatch(/only Meta change/)
+    // Step 27 — an ad's name is set-meta-ad's (meta-ad-rules.ts ad.update), never a campaign settings rule.
+    expect(verdict({ body: form({ name: 'Shop A' }), objectKind: 'ad' })).toMatchObject({ write: { rule: 'ad.update', kinds: ['ad'] } })
     expect(problem({ body: form({ name: 'Shop A' }) })).toMatch(/only Meta change/)
   })
   it('the status rule stays step 17\'s: a status change named a budget schedule is refused', () => {

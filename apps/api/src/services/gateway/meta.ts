@@ -117,6 +117,11 @@ export interface MetaWriteRequest {
   parent?: { kind: 'campaign' | 'adset'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
   recommendations?: boolean
+  /**
+   * Step 27 — a new ad's check (POST /act_<id>/ads) runs Meta's synchronous integrity review with it (`synchronous_ad_review`,
+   * documented only beside validate_only; AD-026 … AD-028). The gateway's ad-create rule judges the exact value.
+   */
+  adReview?: boolean
 }
 
 /**
@@ -124,7 +129,9 @@ export interface MetaWriteRequest {
  * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
-  | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge | MetaBoostEdge | MetaSignalsEdge
+  | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge | MetaBoostEdge | MetaSignalsEdge | MetaAdEdge
+/** Step 27 — create-meta-ad: a new ad on the chosen ad account (an ad's labels: step 21's `adlabels`). */
+export type MetaAdEdge = 'ads'
 /** Step 26 — set-meta-partnership-access: the chosen Instagram account's partnership edges and a media's ad code. */
 export type MetaBoostEdge = 'branded_content_ad_permissions' | 'branded_content_tag_approval' | 'collaboration_invites' | 'partnership_ad_code'
 /**
@@ -167,7 +174,8 @@ export type MetaCreativeEdge = 'adcreatives' | 'asyncadcreatives'
  */
 export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayResponse> {
   const remove = req.method === 'DELETE'
-  const check = req.recommendations ? '["validate_only","include_recommendations"]' : '["validate_only"]'
+  // Step 27 — a new ad's check adds Meta's synchronous integrity review (adReview); step 19's recommendations come last.
+  const check = JSON.stringify(['validate_only', ...(req.adReview ? ['synchronous_ad_review'] : []), ...(req.recommendations ? ['include_recommendations'] : [])])
   // Step 22 — a DELETE with parameters (an image's hash, a video's id) sends them as its form body, as a POST does.
   const body = remove
     ? (Object.keys(req.params).length ? new URLSearchParams(req.params).toString() : undefined)

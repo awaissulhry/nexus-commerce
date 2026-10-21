@@ -312,7 +312,9 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
     expect(callers('metaWriteCall')).toEqual(['services/marketing/meta-ads/write-client.ts'])
     // Step 23 — create-meta-media's requests bring their own senders (an upload read again, the video-ads upload's calls).
     // Step 25 — create-meta-creative's create and async job bring their own senders too (the creative read back).
-    expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-kit.ts', 'services/marketing/meta-ads/change-creatives.ts', 'services/marketing/meta-ads/change-media.ts'])
+    // Step 27 — create-meta-ad's create (the ad and its inline creative read back), set-meta-ad's update (its creative read
+    // back as creative_id) and the undo's creative removal (only once the ad reads DELETED) bring their own senders.
+    expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-kit.ts', 'services/marketing/meta-ads/change-ads.ts', 'services/marketing/meta-ads/change-creatives.ts', 'services/marketing/meta-ads/change-media.ts'])
     expect(callers('metaCheckChange')).toEqual(['services/agents/tools/meta-ads-kit.ts'])
     expect(callers('removalDraft')).toEqual(['services/agents/tools/meta-ads-create.tools.ts'])
     expect(all.find((f) => f.path === 'services/agents/tools/meta-ads-create.tools.ts')!.text.match(/\bremovalDraft\(/g)).toHaveLength(1)
@@ -370,6 +372,9 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/marketing/meta-ads/change-boosts.ts': 5, // the tag-approval removal, the ad code's removal, the allowlist removal, the untag
       'services/gateway/meta-signals-rules.ts': 2, // step 32: dataset.disconnectAccount, customConversion.delete (judges)
       'services/marketing/meta-ads/change-signals.ts': 2, // step 32: a dataset's disconnect from the chosen ad account, remove-meta-signal-items' delete (explicit ask: confirmDelete; only what Nexus made)
+      // Step 27 — create-meta-ad's undo: an ad it made that never ran (step 19's object.delete), then its inline creative made
+      // new (step 22's creative.delete: the request and its own sender, sent only once the ad reads DELETED).
+      'services/marketing/meta-ads/change-ads.ts': 3,
     })
     // A method named by a constant, a variable or a ternary: only where it is passed on.
     const computed = world.flatMap((f) => [...f.text.matchAll(/\bmethod:\s*([^,}\n]+)/g)].map((m) => m[1].trim())
