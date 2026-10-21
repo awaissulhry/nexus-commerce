@@ -908,7 +908,9 @@ export function silentKeysFor(creative: Record<string, unknown>): { audios: bool
  */
 export function silentKeysToSend(creative: Record<string, unknown>): ReturnType<typeof silentKeysFor> {
   const min = silentKeysFor(creative)
-  return creative.object_story_id ? { ...min, formats: min.formats ?? META_NON_CATALOG_FORMATS, destination: true } : min
+  // Review (step 26 B4) — an existing post may be an image or an image carousel, which Meta tags automatically ("enabled by
+  // default"): the product-tag opt-out goes too (fail safe; LIVE-PROBE CR-416q).
+  return creative.object_story_id ? { ...min, formats: min.formats ?? META_NON_CATALOG_FORMATS, destination: true, productTags: true } : min
 }
 
 /** The silent features a creative must carry explicitly (the binding lane rule; review B, round 2): why not, or null. */
