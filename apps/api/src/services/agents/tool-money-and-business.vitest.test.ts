@@ -253,6 +253,11 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-lead-forms': 'it reads the business\'s chosen Meta Page live from Meta, and no business here has one (meta-ads-engagement.tools test)',
   'meta-leads': 'it reads the business\'s chosen Meta Page or ad account live from Meta, and no business here has one (meta-ads-engagement.tools test)',
   'meta-comments': 'it reads the business\'s chosen Meta Page or Instagram account live from Meta, and no business here has one (meta-ads-engagement.tools test)',
+  // Meta ads step 12: the catalog reads read Meta live for the chosen account's business portfolio (meta-ads-catalog.tools test).
+  'meta-catalogs': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-catalog.tools test)',
+  'meta-catalog-items': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-catalog.tools test)',
+  'meta-catalog-feeds': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-catalog.tools test)',
+  'meta-catalog-health': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-catalog.tools test)',
   // Meta ads step 3: the account itself, its billing and who has access read Meta live.
   'meta-ad-account': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-account.tools test)',
   'meta-billing': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-account.tools test)',
@@ -608,6 +613,12 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-lead-forms': () => ({ view: 'list' }),
   'meta-leads': () => ({ view: 'form', formId: '600000000000001' }),
   'meta-comments': () => ({ view: 'post', postId: '120000000000010_500000000000001' }),
+  // Meta ads step 12: the catalog reads refuse in words because no business here has Meta (meta-ads-catalog.tools.vitest.test.ts
+  // runs every view on an account).
+  'meta-catalogs': () => ({ view: 'list' }),
+  'meta-catalog-items': () => ({ view: 'list', catalogId: '120000000000700' }),
+  'meta-catalog-feeds': () => ({ view: 'list', catalogId: '120000000000700' }),
+  'meta-catalog-health': () => ({ view: 'readiness', catalogId: '120000000000700' }),
   // Meta ads step 3: each tool's default view refuses in words because no business here has Meta
   // (meta-ads-account.tools.vitest.test.ts runs every view on an account).
   'meta-ad-account': () => ({ view: 'settings' }),

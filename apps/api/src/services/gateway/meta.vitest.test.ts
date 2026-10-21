@@ -502,6 +502,54 @@ describe('read only by construction', () => {
     // A count closing an expansion is one too.
     expect(f('id,attachments{target{id},reactions.limit(0).summary(total_count)}')).toBeNull()
   })
+  it('step 12 — catalogs, items, feeds and catalog health: each key only on its own edge', () => {
+    const q = (path: string) => ok(`${BASE}/${path}`)
+    const filter = encodeURIComponent('{"retailer_id":{"is_any":["SKU-1"]}}')
+    // Allowed where the read uses it.
+    for (const path of [
+      '120000000000700/assigned_users?fields=id,name,tasks&business=9876543210',
+      '120000000000700/data_sources?fields=id,name&ingestion_source_type=ALL',
+      `120000000000700/products?fields=id,retailer_id,price&filter=${filter}&error_priority=HIGH&error_type=IMAGE_RESOLUTION_LOW&summary=total_count`,
+      `120000000000710/products?fields=id&filter=${filter}`,
+      '120000000000700/check_batch_request_status?fields=handle,status&handle=AbC-1_2&load_ids_of_invalid_requests=true',
+      '120000000000700/product_sets_batch?fields=handle,status&handle=AbC-1',
+      '120000000000700/diagnostics?fields=title&types=["IMAGE_QUALITY"]&severities=["MUST_FIX"]&affected_channels=["da"]&affected_entities=["product_item"]&affected_features=["checkout"]',
+      '120000000000700/event_stats?fields=event&breakdowns=["DEVICE_TYPE"]',
+      '120000000000760/da_checks?fields=key,result&checks=["pixel_decline"]&connection_method=ALL',
+      '120000000000720/errors?fields=id,summary&error_priority=HIGH',
+      '120000000000740/override_details?fields=key,type,values&type=COUNTRY&keys=["IT"]',
+      '9876543210/collaborative_ads_collaboration_requests?fields=id,status&request_role=RECEIVER',
+      '120000000000740?fields=id,retailer_id,retailer_product_group_id,price&override_country=IT',
+      '120000000000740?fields=id,retailer_product_group_id&override_language=it_IT',
+      '120000000000700/dpa_eligible_ad_accounts?fields=id,account_id&search=1234567890',
+    ]) expect(q(path), path).toBeNull()
+    // Refused anywhere else: on another edge, or an override on a read that is not an item's.
+    for (const [path, key] of [
+      // Step 3 (#717) allows business on act_<id>/assigned_users (Meta requires it there); it stays refused on other edges.
+      ['act_1234567890/agencies?fields=id&business=9876543210', 'business'], ['120000000000700/agencies?fields=id&business=9876543210', 'business'],
+      [`act_1234567890/ads?fields=id&filter=${filter}`, 'filter'], ['120000000000700/product_feeds?fields=id&error_type=X', 'error_type'],
+      ['120000000000700/product_feeds?fields=id&handle=x', 'handle'], ['120000000000700/insights?fields=spend&types=["X"]', 'types'],
+      ['120000000000700/products?fields=id&bulk_pagination=true', 'bulk_pagination'], ['120000000000700/products?fields=id&return_only_approved_products=true', 'return_only_approved_products'],
+      ['120000000000700/check_batch_request_status?handle=x&error_priority=HIGH', 'error_priority'], ['120000000000760/da_checks?fields=key&event=Purchase', 'event'],
+      ['120000000000700/connected_businesses?fields=id&role=ADMIN', 'role'], ['120000000000700/dpa_eligible_ad_accounts?fields=id&search=x', 'search'],
+      ['120000000000740?fields=id,name&override_country=IT', 'override_country'], ['120000000000740?fields=id,product_catalog{retailer_product_group_id}&override_language=it_IT', 'override_language'],
+      ['act_1234567890?fields=name&override_country=IT', 'override_country'], ['9876543210/collaborative_ads_collaboration_requests?fields=id&since=2026-01-01', 'since'],
+      ['120000000000700/products?fields=id&error_type=NOT_A_META_ERROR', 'error_type'], ['120000000000700/products?fields=id&error_type=image_resolution_low', 'error_type'],
+      ['120000000000700/dpa_eligible_ad_accounts?fields=id&search=Shop', 'search'], ['act_1234567890/adaccounts?fields=id&search=1234567890', 'search'],
+    ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
+    // A catalog's people and partners are read through their edges, never expanded into fields.
+    expect(q('120000000000700?fields=id,assigned_users{name}')).toMatch(/never expands "assigned_users"/)
+    expect(q('120000000000700?fields=id,agencies{name}')).toMatch(/never expands "agencies"/)
+  })
+  it('step 12 round 4 item 7 — an items read\'s filter only as a JSON object (as the facets filter)', () => {
+    const q = (path: string) => ok(`${BASE}/${path}`)
+    for (const rule of ['{"retailer_id":{"is_any":["SKU-1"]}}', '{"and":[{"availability":{"eq":"in stock"}},{"review_status":{"eq":"rejected"}}]}']) {
+      expect(q(`120000000000700/products?fields=id&filter=${encodeURIComponent(rule)}`), rule).toBeNull()
+    }
+    for (const value of ['["retailer_id"]', 'retailer_id', '{"retailer_id":', '42', 'null', '"x"', '']) {
+      expect(q(`120000000000700/products?fields=id&filter=${encodeURIComponent(value)}`), value).toMatch(/"filter" is not one/)
+    }
+  })
   it('step 3 — the account itself, its billing and who has access: each key only on its own edge; the feature settings are the only hyphenated paths', () => {
     const q = (path: string) => ok(`${BASE}/${path}`)
     for (const path of [
