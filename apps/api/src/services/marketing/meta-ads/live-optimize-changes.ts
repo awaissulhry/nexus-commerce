@@ -258,8 +258,10 @@ export async function liveOpenStudies(account: MetaChosenAccount, now: Date = ne
   const rows = read.rows.map((r) => openRow(r, now))
   // Review B5 — whether each open lift measures the WHOLE chosen account (a cell of it): read from its cells (null: not read).
   const openLifts = []
-  for (const lift of rows.filter((s) => s.type === 'LIFT' && notOver(s)).slice(0, 10)) {
+  for (const [i, lift] of rows.filter((s) => s.type === 'LIFT' && notOver(s)).entries()) {
     let wholeAccount: boolean | null = null
+    // At most 10 lifts' cells are read (Meta's rate limits); any further one counts as not read (unknown), never dropped.
+    if (i >= 10) { openLifts.push({ ...lift, wholeAccount }); continue }
     try {
       const cells = await listPaged(account.connectionId, 'optimizeChange.liftCells', `${lift.studyId}/cells`, { fields: 'id,adaccounts.limit(100)' }, 150)
       wholeAccount = cells.rows.some((c) => accountIdsOf(c.adaccounts).includes(account.adAccountId))

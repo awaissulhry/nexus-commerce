@@ -425,6 +425,8 @@ export interface SetExperimentLive {
   /** The people with a role on the chosen ad account (null: Meta did not answer). */
   people: Set<string> | null
   videoTest: { id: string; name: string | null; publishStatus: string | null; concluded: boolean | null } | null
+  /** Follow-up 2 — the OTHER lift studies on the chosen account that are not over (null: not read for this change). */
+  openLifts?: OpenStudy[] | null
 }
 
 /** A study's fields as a record views them (times as UTC Unix seconds; viewers and splits sorted). */
@@ -570,6 +572,21 @@ export function setExperimentDraft(request: SetExperimentRequest, live: SetExper
     if (request.splits?.length) { const r = refuseAfterStart('the split (treatment percentages)'); if (r) return r }
     if (request.removeCellIds?.length) { const r = refuseAfterStart('its cells be removed (nothing can be removed from a running study)'); if (r) return r }
     const splits = new Map((request.splits ?? []).map((x) => [x.cellId, x]))
+    // Follow-up 3 / 6 — a holdout only in a lift's split (nothing would be sent otherwise), above 0, at most two decimals.
+    for (const sp of request.splits ?? []) {
+      if (sp.controlPercent === undefined) continue
+      if (s.type !== 'LIFT') return { refusal: 'A holdout (controlPercent) is a lift study\'s only: this study has none, so nothing of it would be sent.' }
+      if (!(sp.controlPercent > 0) || sp.controlPercent > 100 || !two(sp.controlPercent)) return { refusal: `Cell ${sp.cellId}: a lift holdout is above 0 and at most 100 %, with at most two decimals.` }
+    }
+    // Follow-up 2 — B5 on a change too: a new whole-account cell overlaps every other open lift; new objects overlap a lift
+    // that measures the whole account (or whose cells were not read). Nexus's own rule.
+    const others = live.openLifts === undefined ? [] : live.openLifts
+    if (request.addCells?.length || request.addObjects?.length) {
+      if (others === null) return { refusal: `Nexus could not read the other lift studies on the chosen ad account, so it cannot tell whether the new ${request.addCells?.length ? 'cells' : 'objects'} are in one already. ${ONE_TEST_RULE}` }
+      if (request.addCells?.some((c) => c.wholeAdAccount) && others.length) return { refusal: `The whole ad account is already measured by ${openWords(others)}. ${ONE_TEST_RULE}` }
+      const whole = others.filter((l) => l.wholeAccount !== false)
+      if (whole.length) return { refusal: `The whole ad account is measured by ${openWords(whole)}${whole.some((l) => l.wholeAccount === null) ? ' (Nexus could not read its cells, so it counts it as measuring the whole account)' : ''}: every object in it is in that test. ${ONE_TEST_RULE}` }
+    }
     const removed = new Set(request.removeCellIds ?? [])
     for (const id of [...splits.keys(), ...removed]) if (!s.cells.some((c) => c.id === id)) return { refusal: `${id} is not a cell of ${who}.` }
     if (request.splits?.length && s.cells.some((c) => !removed.has(c.id) && !splits.has(c.id))) return { refusal: 'A change of the split names every remaining cell\'s share (Meta: they are correlated).' }
@@ -610,7 +627,10 @@ export function setExperimentDraft(request: SetExperimentRequest, live: SetExper
     if (withShares && existing.some((c) => typeof c.treatment_percentage !== 'number')) return { refusal: 'Nexus could not read every cell\'s share, which Meta needs with a change of the split or a new cell.' }
     if (withShares && s.type === 'LIFT') {
       const unread = kept.filter((c, i) => typeof existing[i].control_percentage !== 'number')
-      if (unread.length) return { refusal: `Nexus could not read the holdout of cell ${unread.map((c) => `"${c.name ?? c.id}"`).join(', ')}, and Meta needs every cell's share and holdout with this change: name it in splits (controlPercent).` }
+      // Follow-up 4 — once it runs, the split (holdouts too) is fixed: there is nothing to name, so the change waits.
+      if (unread.length) return { refusal: started
+        ? `Nexus could not read the holdout of cell ${unread.map((c) => `"${c.name ?? c.id}"`).join(', ')}, and Meta needs every cell's share and holdout with this change; once a study runs its split cannot be changed, so Nexus cannot make this change safely now (read the study again later, or change it in Ads Manager).`
+        : `Nexus could not read the holdout of cell ${unread.map((c) => `"${c.name ?? c.id}"`).join(', ')}, and Meta needs every cell's share and holdout with this change: name it in splits (controlPercent).` }
       const none = kept.filter((c, i) => !((existing[i].control_percentage as number) > 0))
       if (none.length) return { refusal: `Cell ${none.map((c) => `"${c.name ?? c.id}"`).join(', ')}: a lift study's cell has a holdout (controlPercent above 0).` }
     }
@@ -640,7 +660,9 @@ export function setExperimentDraft(request: SetExperimentRequest, live: SetExper
     for (const c of s.cells) {
       if (removed.has(c.id)) { lines.push([`Cell "${c.name ?? c.id}"`, `${c.treatment ?? '?'} %`, 'removed']); continue }
       const sp = splits.get(c.id)
-      if (sp) lines.push([`Cell "${c.name ?? c.id}" share`, `${c.treatment ?? '?'} %${c.control !== null ? ` (+ ${c.control} % holdout)` : ''}`, `${sp.percent} %${sp.controlPercent !== undefined ? ` (+ ${sp.controlPercent} % holdout)` : ''}`])
+      // Follow-up 3 — the line shows what IS sent: a lift split without a holdout sends the one read.
+      const sentControl = s.type === 'LIFT' ? (sp?.controlPercent ?? c.control) : null
+      if (sp) lines.push([`Cell "${c.name ?? c.id}" share`, `${c.treatment ?? '?'} %${c.control !== null ? ` (+ ${c.control} % holdout)` : ''}`, `${sp.percent} %${sentControl !== null && sentControl !== undefined ? ` (+ ${sentControl} % holdout)` : ''}`])
       const adds = addedTo.get(c.id)
       if (adds?.length) lines.push([`Cell "${c.name ?? c.id}" objects`, `${(cellLevel(c)?.ids.length ?? 0)}`, `+ ${adds.map((x) => listed(live.objects.get(x.id)!)).join(', ')}`])
     }
@@ -655,6 +677,10 @@ export function setExperimentDraft(request: SetExperimentRequest, live: SetExper
     }
     if (request.splits?.length && s.cells.every((c) => c.treatment !== null)) undo.splits = s.cells.filter((c) => !removed.has(c.id)).map((c) => ({ cellId: c.id, percent: c.treatment!, ...(s.type === 'LIFT' && c.control !== null ? { controlPercent: c.control } : {}) }))
     if (added.length || request.addObjects?.length || removed.size) noUndo.push(started ? 'Meta lets nothing be removed from a running study: added cells and objects stay.' : 'Added or removed cells and objects are not put back by undo (ask set-meta-experiment again before it starts).')
+    // Follow-up 5 — objects added alone to a lift's cells: Nexus sends the cells by id only (no share, no holdout); whether
+    // Meta keeps each cell's holdout as it is then is a live probe (LIVE-PROBES EX-020-lift).
+    if (s.type === 'LIFT' && request.addObjects?.length && !withShares) warnings.push('The cells go to Meta by id with their objects only — no share and no holdout (a running study\'s split is fixed). Meta is expected to keep each cell\'s holdout as it is; that is not proven yet (LIVE-PROBES EX-020-lift): meta-experiments view study shows it after.')
+    if (removed.size) warnings.push('After the run Nexus reads the study again and says whether Meta removed the cells (an omitted cell is how Meta removes one).')
     if (request.addObjects?.length || added.length) {
       const addedObjs = addedObjectIds(request).map((o) => live.objects.get(o.id)!).filter(Boolean)
       if (addedObjs.some((o) => o.on)) warnings.push('The objects added keep spending as they are set; the test only splits who sees which.')

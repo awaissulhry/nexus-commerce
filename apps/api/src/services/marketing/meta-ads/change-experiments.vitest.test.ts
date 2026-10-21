@@ -175,7 +175,7 @@ describe('set-meta-experiment', () => {
     ] })
     const addC = [{ name: 'C', percent: 10, controlPercent: 5, adSetIds: ['120000000000203'] }]
     expect(refusal(setExperimentDraft({ action: 'update', studyId: lift.id, addCells: addC }, setLive(lift)))).toMatch(/could not read the holdout of cell "A".*name it in splits/)
-    expect(refusal(setExperimentDraft({ action: 'update', studyId: lift.id, splits: [{ cellId: '120000000000061', percent: 40, controlPercent: 0 }, { cellId: '120000000000062', percent: 40, controlPercent: 5 }] }, setLive(lift)))).toMatch(/has a holdout \(controlPercent above 0\)/)
+    expect(refusal(setExperimentDraft({ action: 'update', studyId: lift.id, splits: [{ cellId: '120000000000061', percent: 40, controlPercent: 0 }, { cellId: '120000000000062', percent: 40, controlPercent: 5 }] }, setLive(lift)))).toMatch(/a lift holdout is above 0/)
     const read = study({ ...lift, cells: [{ ...lift.cells![0], control: 5 }, lift.cells![1]] })
     const d = ok(setExperimentDraft({ action: 'update', studyId: lift.id, addCells: addC }, setLive(read)))
     expect(JSON.parse(d.requests[0].params.cells)).toEqual([
@@ -192,6 +192,42 @@ describe('set-meta-experiment', () => {
     const ab = study({ observationEndTime: NOW + 15 * 86400 })
     const a = ok(setExperimentDraft({ action: 'update', studyId: ab.id, endTime: iso(NOW + 20 * 86400) }, setLive(ab)))
     expect((a.before as ExperimentRecord).noUndo!.join(' ')).toMatch(/old observation end .* not put back by undo: Nexus moves an observation end only for a lift study/)
+  })
+  it('follow-ups 2–6 — splits say only what is sent; a running lift with an unread holdout waits; objects added alone to a lift are said; B5 on a change', () => {
+    const planned = study()
+    // 3 — an A/B split with a holdout is refused (nothing of it would be sent); 6 — a lift holdout has at most two decimals.
+    expect(refusal(setExperimentDraft({ action: 'update', studyId: planned.id, splits: [{ cellId: '120000000000061', percent: 60, controlPercent: 5 }, { cellId: '120000000000062', percent: 40 }] }, setLive(planned)))).toMatch(/lift study's only/)
+    const lift = study({ type: 'LIFT', cells: [
+      { id: '120000000000061', name: 'A', treatment: 45, control: 5, adAccounts: [], campaigns: [C1], adSets: [], ads: [] },
+      { id: '120000000000062', name: 'B', treatment: 40, control: 10, adAccounts: [], campaigns: [], adSets: [S1], ads: [] },
+    ] })
+    expect(refusal(setExperimentDraft({ action: 'update', studyId: lift.id, splits: [{ cellId: '120000000000061', percent: 45, controlPercent: 5.555 }, { cellId: '120000000000062', percent: 40 }] }, setLive(lift)))).toMatch(/at most two decimals/)
+    // 3 — a lift split without a holdout shows the holdout that IS sent (the one read).
+    const d = ok(setExperimentDraft({ action: 'update', studyId: lift.id, splits: [{ cellId: '120000000000061', percent: 50 }, { cellId: '120000000000062', percent: 35 }] }, setLive(lift)))
+    expect(d.changes).toMatchObject({ 'Cell "A" share': { from: '45 % (+ 5 % holdout)', to: '50 % (+ 5 % holdout)' } })
+    expect(JSON.parse(d.requests[0].params.cells)[0]).toEqual({ id: '120000000000061', treatment_percentage: 50, control_percentage: 5 })
+    // 4 — running, a holdout not read: no "name it in splits" (splits are fixed once it runs).
+    const runningLift = study({ ...lift, state: 'running', startTime: NOW - 86400, cells: [{ ...lift.cells![0], control: null }, lift.cells![1]] })
+    const waits = refusal(setExperimentDraft({ action: 'update', studyId: lift.id, addCells: [{ name: 'C', percent: 5, controlPercent: 5, adSetIds: ['120000000000203'] }] }, setLive(runningLift, { openLifts: [] })))
+    expect(waits).toMatch(/cannot make this change safely now/)
+    expect(waits).not.toMatch(/name it in splits/)
+    // 5 — objects added alone to a lift's cell: sent by id without share or holdout, said with its probe.
+    const running2 = study({ ...lift, state: 'running', startTime: NOW - 86400 })
+    const added = ok(setExperimentDraft({ action: 'update', studyId: lift.id, addObjects: [{ cellId: '120000000000062', adSetIds: ['120000000000203'] }] }, setLive(running2, { openLifts: [] })))
+    expect(JSON.parse(added.requests[0].params.cells)).toEqual([{ id: '120000000000061' }, { id: '120000000000062', adsets: [S1, '120000000000203'] }])
+    expect(added.warnings.join(' ')).toMatch(/no share and no holdout.*LIVE-PROBES EX-020-lift/)
+    // 2 — B5 on a change: other open lifts unread, a whole-account cell next to another lift, objects under a whole-account lift.
+    const other = { studyId: '120000000000049', name: 'Other lift', state: 'running', endTime: NOW + 3600, wholeAccount: false }
+    expect(refusal(setExperimentDraft({ action: 'update', studyId: lift.id, addObjects: [{ cellId: '120000000000062', adSetIds: ['120000000000203'] }] }, setLive(running2, { openLifts: null })))).toMatch(/could not read the other lift studies/)
+    expect(refusal(setExperimentDraft({ action: 'update', studyId: lift.id, addCells: [{ name: 'All', percent: 5, controlPercent: 5, wholeAdAccount: true }] }, setLive(lift, { openLifts: [other] })))).toMatch(/already measured by study "Other lift"/)
+    expect(refusal(setExperimentDraft({ action: 'update', studyId: lift.id, addObjects: [{ cellId: '120000000000062', adSetIds: ['120000000000203'] }] }, setLive(running2, { openLifts: [{ ...other, wholeAccount: true }] })))).toMatch(/measured by study "Other lift".*Nexus's own rule/)
+    expect(refusal(setExperimentDraft({ action: 'update', studyId: lift.id, addObjects: [{ cellId: '120000000000062', adSetIds: ['120000000000203'] }] }, setLive(running2, { openLifts: [other] })))).toBeNull()
+  })
+  it('follow-up — an old description longer in UTF-16 than the tool takes is said, not recorded', () => {
+    const long = study({ state: 'running', startTime: NOW - 86400, description: '🏍'.repeat(600) })
+    const d = ok(setExperimentDraft({ action: 'update', studyId: long.id, description: 'Short' }, setLive(long)))
+    expect((d.before as ExperimentRecord).undo).toBeNull()
+    expect((d.before as ExperimentRecord).noUndo!.join(' ')).toMatch(/old description is not one Nexus can send back/)
   })
   it('round 2 A9 / B5 / B6 — a name longer in UTF-16 than the tool takes; no object test while a whole-account lift runs; a removal checks the 100 %', () => {
     const emoji = study({ state: 'running', startTime: NOW - 86400, name: '🏍'.repeat(150) })

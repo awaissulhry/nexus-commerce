@@ -195,6 +195,8 @@ describe('apply-meta-recommendations', () => {
     h.targets.set('120000000000210', adSet({ id: '120000000000210' }))
     const undoPreview = (await preview('apply-meta-recommendations', (back as { args: Record<string, unknown> }).args)).preview
     expect(undoPreview.warnings.join(' ')).toMatch(/found by its time only/)
+    // Follow-up — the answer says plainly that copies Meta makes later are not found by the undo.
+    expect(ran.data.copiesSentence).toMatch(/Copies Meta makes LATER are not found by the undo/)
     // Copies Nexus could not read: no undo, said.
     h.copies = null
     h.send.mockImplementationOnce(async () => ({ node: { success: true }, readBack: 'none', waitedMs: 0 }))
@@ -243,11 +245,14 @@ describe('create-meta-experiment', () => {
     expect(ran.change!.after).toMatchObject({ kind: 'study', id: STUDY })
   })
   it('round 2 — "on" in the preview is deliversNow (configured status chain), not Meta\'s effective status', async () => {
-    h.targets.set(S1, adSet({ effectiveStatus: 'ACTIVE', campaignStatus: 'PAUSED' }))
-    h.targets.set('120000000000202', adSet({ id: '120000000000202', effectiveStatus: 'IN_PROCESS' }))
+    // Its own effective status says ACTIVE, but its campaign is paused: NOT on. The other is IN_PROCESS under active parents: on.
+    h.targets.set(S1, adSet({ name: 'Stale active', effectiveStatus: 'ACTIVE', campaignStatus: 'PAUSED' }))
+    h.targets.set('120000000000202', adSet({ id: '120000000000202', name: 'In review', effectiveStatus: 'IN_PROCESS' }))
     const p = (await preview('create-meta-experiment', ab)).preview
     expect(p.warnings.join(' ')).toMatch(/1 on, 1 not on/)
-    expect(p.warnings.join(' ')).toMatch(/Not on now.*Ad set B/)
+    const notOn = p.warnings.find((w: string) => w.startsWith('Not on now'))!
+    expect(notOn).toMatch(/Stale active/)
+    expect(notOn).not.toMatch(/In review/)
   })
   it('an object another account owns: refused before any change', async () => {
     h.targets.delete('120000000000202')
@@ -269,6 +274,21 @@ describe('set-meta-experiment and end-meta-experiment', () => {
     const back = t.undo!.request(ran.change!)
     expect(back).toEqual({ tool: 'set-meta-experiment', args: { connectionId: 'm-1', action: 'update', studyId: STUDY, name: 'Audience test', why: 'undo of an earlier Meta study change' } })
     expect(t.input.safeParse((back as { args: unknown }).args).success).toBe(true)
+  })
+  it('follow-ups — adding objects reads the OTHER open lifts first (Nexus\'s one-test rule); a removal is read back after the run', async () => {
+    const { liveOpenStudies, liveStudy } = await import('../../marketing/meta-ads/live-optimize-changes.js')
+    vi.mocked(liveOpenStudies).mockResolvedValueOnce({ open: 2, read: 2, more: false, openLifts: [{ studyId: '120000000000049', name: 'Account lift', type: 'LIFT', state: 'running', startTime: null, endTime: null, wholeAccount: true }] })
+    h.targets.set('120000000000203', adSet({ id: '120000000000203', name: 'Ad set D' }))
+    expect(await preview('set-meta-experiment', { action: 'update', studyId: STUDY, addObjects: [{ cellId: '120000000000061', adSetIds: ['120000000000203'] }] })).toEqual({ ok: false, error: expect.stringMatching(/measured by study "Account lift".*Nexus's own rule/) })
+    // A planned study's cell removed: after the run Nexus reads it again and says whether Meta removed it.
+    const cell = (id: string, name: string, treatment: number, adSet: string) => ({ id, name, treatment, control: null, adAccounts: [], campaigns: [], adSets: [adSet], ads: [] })
+    h.study = { ...structuredClone(STUDY_LIVE), state: 'planned', startTime: NOW + 86400, endTime: NOW + 6 * 86400, cells: [cell('120000000000061', 'A', 50, S1), cell('120000000000062', 'B', 40, '120000000000202'), cell('120000000000063', 'C', 10, '120000000000204')] }
+    const args = { action: 'update', studyId: STUDY, removeCellIds: ['120000000000063'] }
+    const p = (await preview('set-meta-experiment', args)).preview
+    h.send.mockImplementationOnce(async () => { h.study = { ...h.study!, cells: (h.study!.cells as Array<{ id: string }>).filter((c) => c.id !== '120000000000063') }; return { node: { id: STUDY, name: 'Audience test' }, readBack: 'second-read', waitedMs: 0 } })
+    const ran = await run('set-meta-experiment', args, p)
+    expect(ran.data.removedCells).toBe('Meta removed cell 120000000000063 (read back).')
+    vi.mocked(liveStudy).mockClear()
   })
   it('a study that also holds another account\'s objects: refused, nothing sent', async () => {
     h.foreign = 'Study 120000000000041 also measures another ad account: Nexus changes a study only when everything in it is the chosen ad account\'s.'

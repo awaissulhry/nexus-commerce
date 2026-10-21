@@ -13,10 +13,15 @@ vi.mock('./read-client.js', () => ({
     h.reads.push({ path: input.path, query: input.query ?? {} })
     return { body: h.answer(input.path, input.query ?? {}), calls: 1 }
   }),
-  metaReadAll: vi.fn(),
+  metaReadAll: vi.fn(async (_t: unknown, input: { path: string; query?: Record<string, unknown> }, onRows: (rows: unknown[]) => void) => {
+    h.reads.push({ path: input.path, query: input.query ?? {} })
+    const rows = ((h.answer(input.path, input.query ?? {}) as { data?: unknown[] }).data ?? [])
+    onRows(rows)
+    return { rows: rows.length, calls: 1, truncated: false }
+  }),
 }))
 
-import { liveNewCopies, liveOpenStudies, studyForeignProblem, type LiveStudy } from './live-optimize-changes.js'
+import { liveNewCopies, liveOpenStudies, liveStudy, studyForeignProblem, type LiveStudy } from './live-optimize-changes.js'
 import type { MetaChosenAccount } from './live.js'
 
 const T = { connectionId: 'm-1', adAccountId: '1234567890' }
@@ -69,6 +74,31 @@ describe('liveOpenStudies (round 2 B5)', () => {
     }
     const out = await liveOpenStudies({ connectionId: 'm-1', adAccountId: '1234567890' } as MetaChosenAccount)
     expect(out.openLifts.map((l) => [l.studyId, l.wholeAccount])).toEqual([['120000000000041', true], ['120000000000042', false], ['120000000000043', null]])
+  })
+})
+
+describe('follow-ups — lifts past the tenth; act_ account ids in a study\'s cells', () => {
+  it('open lifts after the tenth count as not read (null), never dropped', async () => {
+    const future = Math.floor(Date.now() / 1000) + 86400
+    h.answer = (path) => {
+      if (path.endsWith('/impacting_ad_studies')) return { data: Array.from({ length: 12 }, (_, i) => ({ id: String(120000000000060 + i), type: 'LIFT', start_time: iso(SINCE - 86400), end_time: iso(future) })) }
+      return { data: [{ id: '1', adaccounts: [] }] }
+    }
+    const out = await liveOpenStudies({ connectionId: 'm-1', adAccountId: '1234567890' } as MetaChosenAccount)
+    expect(out.openLifts).toHaveLength(12)
+    expect(out.openLifts.slice(0, 10).every((l) => l.wholeAccount === false)).toBe(true)
+    expect(out.openLifts.slice(10).map((l) => l.wholeAccount)).toEqual([null, null])
+    expect(h.reads.filter((r) => r.path.endsWith('/cells'))).toHaveLength(10)
+  })
+  it('a study\'s cells read ad accounts written act_<id>, as numbers or as objects', async () => {
+    h.answer = (path) => {
+      if (path.endsWith('/impacting_ad_studies')) return { data: [{ id: '120000000000041', type: 'LIFT', start_time: iso(SINCE) }] }
+      if (path === '120000000000041/cells') return { data: [{ id: '1', name: 'A', treatment_percentage: 90, control_percentage: 10, adaccounts: ['act_1234567890', 5555555555, { id: 'act_4444444444' }] }] }
+      if (path.endsWith('/objectives') || path.endsWith('/viewers')) return { data: [] }
+      return { id: '120000000000041', name: 'L', type: 'LIFT', business: { id: '120000000000090' } }
+    }
+    const s = await liveStudy({ connectionId: 'm-1', adAccountId: '1234567890' } as MetaChosenAccount, '120000000000041')
+    expect(s.cells![0].adAccounts).toEqual(['1234567890', '5555555555', '4444444444'])
   })
 })
 

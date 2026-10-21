@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import { additionalBudgetParam, applyDraft, applyTargetIds, deliversNow, restoreDraft, APPLY_TYPES, type ApplyLive, type ApplyRecord } from './change-recommendations.js'
 import type { ApplyTarget, LiveRecommendation } from './live-optimize-changes.js'
+import { APPLY_BY_API } from './live-optimize.js'
 import type { MetaChangeDraft } from './change-draft.js'
 
 const S1 = '120000000000201'
@@ -91,6 +92,10 @@ describe('per type', () => {
     const d = ok(applyDraft({ signature: '1', allowNewObjects: true }, live(rec('CONVERSION_LEADS_OPTIMIZATION', [S1]), [target({ kind: 'adset', id: S1, effectiveStatus: 'PAUSED', status: 'PAUSED' })])))
     expect(d.spendsMoney.join(' ')).toMatch(/does not say whether they start running/)
     expect(d.requests[0]).toMatchObject({ raisesSpend: true, undoable: true })
+  })
+  it('step 8\'s table agrees (NEW-3): the landing-page goal and creative fatigue spend money, saying Meta\'s texts differ', () => {
+    expect(APPLY_BY_API.LANDING_PAGE_VIEW_OPTIMIZATION_GOAL).toMatchObject({ spendsMoney: 'yes', what: expect.stringMatching(/texts differ/) })
+    expect(APPLY_BY_API.CREATIVE_FATIGUE).toMatchObject({ spendsMoney: 'yes', what: expect.stringMatching(/texts differ/) })
   })
   it('review A3 — creative fatigue always SPENDS MONEY (Meta adds ads and does not say whether they start ACTIVE), even when nothing is on', () => {
     const d = ok(applyDraft({ signature: '1', allowNewObjects: true }, live(rec('CREATIVE_FATIGUE', [A1]), [target({ kind: 'ad', id: A1, status: 'PAUSED' })])))

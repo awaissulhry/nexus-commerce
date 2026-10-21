@@ -18,6 +18,7 @@ import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool, ToolChange, ToolResult, ToolUndo } from '../tool-types.js'
 import { metaChangePreview, metaConnectionArg, metaIdArg, metaWhyArg, META_CHANGE_RULES, recordAccount, runMetaChange, type MetaDraftBuilder } from './meta-ads-kit.js'
 import { metaChosenAccount, MetaLiveRefusal } from '../../marketing/meta-ads/live.js'
+import { MetaReadError } from '../../marketing/meta-ads/errors.js'
 import { liveAccountPixels } from '../../marketing/meta-ads/live-settings.js'
 import {
   liveAccountBusiness, liveAccountCustomConversions, liveAccountPeople, liveApplyTargets, liveNewCopies, liveObjectStudies, liveOpenStudies, livePageVideo,
@@ -439,8 +440,44 @@ const buildSet = (args: Record<string, unknown>): MetaDraftBuilder => guarded(as
     pixels: request.objectives?.some((o) => o.pixelId) ? await liveAccountPixels(account.target) : null,
     customConversions: request.objectives?.some((o) => o.customConversionIds?.length) ? await liveAccountCustomConversions(account.target) : null,
     people: business ? await liveAccountPeople(account.target, business) : null,
+    // Follow-up 2 — the OTHER open lifts on the account, when cells or objects are added (null: not readable).
+    ...(request.addCells?.length || request.addObjects?.length ? { openLifts: await otherOpenLifts(chosen, study.id) } : {}),
   })
 })
+
+/** The lift studies on the chosen account that are not over, but this one; null when Meta does not answer the list. */
+async function otherOpenLifts(chosen: Awaited<ReturnType<typeof metaChosenAccount>>, studyId: string): Promise<OpenStudy[] | null> {
+  try {
+    const open = await liveOpenStudies(chosen)
+    if (open.more) return null
+    return open.openLifts.filter((l) => l.studyId !== studyId).map((l) => ({ studyId: l.studyId, name: l.name, state: l.state, endTime: l.endTime, wholeAccount: l.wholeAccount }))
+  } catch (err) {
+    if (err instanceof MetaReadError && !err.failure.authLost && !err.failure.throttled) return null
+    throw err
+  }
+}
+
+/**
+ * Follow-up 6 — a removal of cells: the study is read again after the run and the answer says whether Meta removed them
+ * (best effort; a read that fails is said, the record stands).
+ */
+async function afterSet(result: ToolResult, args: Record<string, unknown>): Promise<ToolResult> {
+  const removed = Array.isArray(args.removeCellIds) ? (args.removeCellIds as string[]) : []
+  if (!result.ok || !removed.length || typeof args.studyId !== 'string') return result
+  let sentence: string
+  try {
+    const ranOn = ((result.data as Record<string, unknown>).account as { accountId?: unknown } | undefined)?.accountId
+    const chosen = await metaChosenAccount(typeof ranOn === 'string' ? ranOn : null)
+    const study = await liveStudy(chosen, args.studyId)
+    const still = removed.filter((id) => study.cells?.some((c) => c.id === id))
+    sentence = !study.cells
+      ? 'Nexus could not read the study\'s cells again: meta-experiments view study shows whether Meta removed them.'
+      : still.length ? `Meta still lists cell ${still.join(', ')}: it did not remove ${still.length === 1 ? 'it' : 'them'} (meta-experiments view study shows the cells).` : `Meta removed cell ${removed.join(', ')} (read back).`
+  } catch (err) {
+    sentence = `Nexus could not read the study again (${err instanceof Error ? err.message : String(err)}): meta-experiments view study shows whether Meta removed the cells.`
+  }
+  return { ...result, data: { ...(result.data as Record<string, unknown>), removedCells: sentence } }
+}
 
 function studyRecordFinish(draft: MetaChangeDraft) {
   return { data: { id: (draft.after as ExperimentRecord).id, fields: (draft.after as ExperimentRecord).fields }, before: draft.before, after: draft.after }
@@ -522,7 +559,7 @@ const setMetaExperiment: AgentTool = {
     + META_CHANGE_RULES,
   undo: setUndo,
   handler: (args, ctx) => metaChangePreview(args, ctx, buildSet(args)),
-  execute: (args, ctx) => runMetaChange(args, ctx, buildSet(args), studyRecordFinish),
+  execute: async (args, ctx) => afterSet(await runMetaChange(args, ctx, buildSet(args), studyRecordFinish), args),
 }
 
 // ── end-meta-experiment ─────────────────────────────────────────────────────────────────────────────────────────
