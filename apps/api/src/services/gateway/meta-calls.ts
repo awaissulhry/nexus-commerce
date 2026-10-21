@@ -146,6 +146,10 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  *     error_priority; <item>/override_details keys, type; <portfolio>/collaborative_ads_collaboration_requests
  *     request_role; and override_country, override_language only on one item's read (its field list names
  *     META_ITEM_OVERRIDE_FIELD, `when` below).
+ *   - step 13 (product sets, commerce, Instagram product tags — marketing/meta-ads/live-commerce.ts), each only on its own
+ *     edge: <catalog>/product_sets parent_id, ancestor_id, has_children, retailer_id; <catalog>/facets facets, filter (both
+ *     built by Nexus from typed args); <Instagram account>/catalog_product_search catalog_id, q; <Instagram account>/
+ *     product_appeal product_id. A set's items use the products edge's keys above.
  */
 const READ_KEYS = new Set(['fields', 'limit', 'after', 'before', 'summary'])
 /**
@@ -316,6 +320,12 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/override_details$/, keys: new Set(['keys', 'type']) },
   { route: /^\d+\/collaborative_ads_collaboration_requests$/, keys: new Set(['request_role']) },
   { route: /^\d+$/, keys: new Set(['override_country', 'override_language']), when: (query) => fieldNamed(query, META_ITEM_OVERRIDE_FIELD) },
+  // Step 13 — product sets, facets, Instagram product search and appeals (marketing/meta-ads/live-commerce.ts), each key on
+  // its own edge (a set's items take the products edge's filter, error_priority, error_type above).
+  { route: /^\d+\/product_sets$/, keys: new Set(['parent_id', 'ancestor_id', 'has_children', 'retailer_id']) },
+  { route: /^\d+\/facets$/, keys: new Set(['facets', 'filter']) },
+  { route: /^\d+\/catalog_product_search$/, keys: new Set(['catalog_id', 'q']) },
+  { route: /^\d+\/product_appeal$/, keys: new Set(['product_id']) },
 ]
 /** Step 14 review A2 — the key's value is one of these. */
 function valueIn(key: string, values: readonly string[]): (query: URLSearchParams) => boolean {

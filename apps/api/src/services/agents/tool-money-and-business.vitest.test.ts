@@ -244,6 +244,10 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-catalog-items': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-catalog.tools test)',
   'meta-catalog-feeds': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-catalog.tools test)',
   'meta-catalog-health': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-catalog.tools test)',
+  // Meta ads step 13: product sets, commerce accounts and Instagram product tags read Meta live (meta-ads-commerce.tools test).
+  'meta-product-sets': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-commerce.tools test)',
+  'meta-commerce': 'it reads the business\'s chosen Meta Page and business portfolio live from Meta, and no business here has Meta (meta-ads-commerce.tools test)',
+  'meta-instagram-product-tags': 'it reads the business\'s chosen Instagram account live from Meta, and no business here has Meta (meta-ads-commerce.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -573,6 +577,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-catalog-items': () => ({ view: 'list', catalogId: '120000000000700' }),
   'meta-catalog-feeds': () => ({ view: 'list', catalogId: '120000000000700' }),
   'meta-catalog-health': () => ({ view: 'readiness', catalogId: '120000000000700' }),
+  // Meta ads step 13: refused in words because no business here has Meta (meta-ads-commerce.tools.vitest.test.ts runs every view).
+  'meta-product-sets': () => ({ view: 'list', catalogId: '120000000000700' }),
+  'meta-commerce': () => ({ view: 'accounts' }),
+  'meta-instagram-product-tags': () => ({ view: 'eligibility' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),
