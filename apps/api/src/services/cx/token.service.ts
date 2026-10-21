@@ -700,6 +700,42 @@ export async function metaAppIdOf(connectionId: string): Promise<string | null> 
   }
 }
 
+/** A connection that is not Meta's, is disconnected or holds no app: "no app". Anything else (KMS, database) is a failure. */
+function noMetaApp(err: unknown): boolean {
+  return err instanceof ConnectionNeedsReauth || (err instanceof Error && /^(No Meta app id|This is not a Meta connection)/.test(err.message))
+}
+
+/**
+ * Meta ads step 30 — the connection's Meta app id: null when it holds none; THROWS when it could not be read (the
+ * webhook receiver then asks Meta to send again instead of calling the app unknown).
+ */
+export async function metaStoredAppId(connectionId: string): Promise<string | null> {
+  try {
+    return (await metaCredentialsOf(connectionId)).app.appId
+  } catch (err) {
+    if (noMetaApp(err)) return null
+    throw err
+  }
+}
+
+/**
+ * Meta ads step 30 — is a webhook delivery signed by THIS connection's Meta app? `other_app` when the connection uses
+ * another app than `appId` (the app the callback URL names), `match` / `mismatch` for X-Hub-Signature-256 over the RAW
+ * body with its app secret, `no_app` when no usable app is stored, `error` when the credentials could not be read.
+ * Never the secret, never an exception (webhook-signature.ts).
+ */
+export async function metaWebhookSignatureCheck(connectionId: string, appId: string, rawBody: Buffer, header: string | string[] | undefined): Promise<'match' | 'mismatch' | 'other_app' | 'no_app' | 'error'> {
+  let app: MetaAppCredentials
+  try {
+    app = (await metaCredentialsOf(connectionId)).app
+  } catch (err) {
+    return noMetaApp(err) ? 'no_app' : 'error'
+  }
+  if (app.appId !== appId) return 'other_app'
+  const { metaWebhookSignatureOk } = await import('./connectors/meta/webhook-signature.js')
+  return metaWebhookSignatureOk(rawBody, header, app.appSecret) ? 'match' : 'mismatch'
+}
+
 /**
  * Renew a 60-day Meta system-user token (called under the refresh lease, inside its renewal window). Meta's documented
  * call: GET oauth/access_token?grant_type=fb_exchange_token&client_id&client_secret&set_token_expires_in_60_days=true

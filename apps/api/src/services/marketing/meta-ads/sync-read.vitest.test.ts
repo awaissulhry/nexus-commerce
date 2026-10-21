@@ -316,3 +316,30 @@ describe('later reads', () => {
     expect(h.calls).toHaveLength(0)
   })
 })
+
+describe('step 30 — the re-read a verified webhook asks for (kind WEBHOOK)', () => {
+  it('reads the account and its structure only: no daily numbers, the last read and its status untouched, structureSyncedAt moved', async () => {
+    const before = await inA(() => db().metaAdAccount.findFirstOrThrow({ where: { adAccountId: AD_ACCOUNT } }))
+    const days = await inA(() => db().metaAdsDailyMetric.count({ where: { adAccountId: AD_ACCOUNT } }))
+    // Meta pushed effective_status for campaign 101: the re-read finds it with issues.
+    h.override = (req) => (req.operation === 'campaigns.list'
+      ? { ok: true, status: 200, body: { data: [{ id: '120000000000101', name: 'Shop A campaign 1', status: 'ACTIVE', effective_status: 'WITH_ISSUES', objective: 'OUTCOME_SALES', daily_budget: '2500' }] } }
+      : null)
+    const AT = new Date('2026-10-21T09:10:30Z')
+    const result = await inA(() => syncMetaAdAccount({ connectionId: conn[A], adAccountId: AD_ACCOUNT }, { kind: 'WEBHOOK', now: AT }))
+    expect(result).toMatchObject({ kind: 'WEBHOOK', mode: null, window: null, metricRows: 0 })
+    expect(h.calls.some((c) => c.operation.startsWith('insights.'))).toBe(false)
+    expect(h.calls.map((c) => c.operation)).toEqual(expect.arrayContaining(['adAccount.read', 'campaigns.list', 'adsets.list', 'ads.list']))
+    const after = await inA(() => db().metaAdAccount.findFirstOrThrow({ where: { adAccountId: AD_ACCOUNT } }))
+    // "Read now" stays free (its hourly limit reads lastSyncAt), and the read's own status is the daily read's.
+    expect(after.lastSyncAt).toEqual(before.lastSyncAt)
+    expect(after.lastSyncStatus).toBe(before.lastSyncStatus)
+    expect(after.callsLastRun).toBe(before.callsLastRun)
+    expect(after.structureSyncedAt!.getTime()).toBeGreaterThan(before.structureSyncedAt?.getTime() ?? 0)
+    expect(await inA(() => db().metaAdsDailyMetric.count({ where: { adAccountId: AD_ACCOUNT } }))).toBe(days)
+    const campaign = await inA(() => db().metaAdsCampaign.findFirstOrThrow({ where: { adAccountId: AD_ACCOUNT, campaignId: '120000000000101' } }))
+    expect(campaign.effectiveStatus).toBe('WITH_ISSUES')
+    // Business B's rows were never touched.
+    expect(h.calls.every((c) => c.connectionId === conn[A])).toBe(true)
+  })
+})

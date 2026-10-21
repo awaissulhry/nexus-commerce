@@ -186,6 +186,20 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-google-account-links': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-account.tools test)',
   'set-meta-connection': 'it reads what the business\'s Meta system user can see live from Meta, and no business here has Meta connected (meta-ads-connection.tools test)',
   'set-meta-status': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-status.tools test)',
+  'set-meta-campaign': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-campaign-settings.tools test)',
+  'set-meta-ad-set': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-campaign-settings.tools test)',
+  'set-meta-budget-schedule': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-campaign-settings.tools test)',
+  'create-meta-campaign': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-create.tools test)',
+  'create-meta-ad-set': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-create.tools test)',
+  'copy-meta-ads': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-create.tools test)',
+  'remove-meta-ads-items': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-remove.tools test)',
+  'set-meta-labels': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-labels-rules.tools test)',
+  'set-meta-value-rules': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-labels-rules.tools test)',
+  'create-meta-reach-frequency': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-labels-rules.tools test)',
+  'apply-meta-recommendations': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-optimize-changes.tools test)',
+  'create-meta-experiment': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-optimize-changes.tools test)',
+  'set-meta-experiment': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-optimize-changes.tools test)',
+  'end-meta-experiment': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-optimize-changes.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -244,6 +258,15 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-catalog-items': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-catalog.tools test)',
   'meta-catalog-feeds': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-catalog.tools test)',
   'meta-catalog-health': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-catalog.tools test)',
+  // Meta ads step 3: the account itself, its billing and who has access read Meta live.
+  'meta-ad-account': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-account.tools test)',
+  'meta-billing': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-account.tools test)',
+  'meta-account-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-account.tools test)',
+  // Meta ads step 5: the change history reads the chosen ad account live (meta-account-health's default view needs no call).
+  'meta-activity-log': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-health.tools test)',
+  // Meta ads step 11: audiences and datasets read Meta live (their own tests run them on an account).
+  'meta-audiences': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-audiences.tools test)',
+  'meta-datasets': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-datasets.tools test)',
   // Meta ads step 13: product sets, commerce accounts and Instagram product tags read Meta live (meta-ads-commerce.tools test).
   'meta-product-sets': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-commerce.tools test)',
   'meta-commerce': 'it reads the business\'s chosen Meta Page and business portfolio live from Meta, and no business here has Meta (meta-ads-commerce.tools test)',
@@ -540,6 +563,25 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-ads-graph-read': () => ({ path: 'act_1234567890/campaigns' }),
   // Meta ads step 17: the write base's status change refuses in words here (no business has Meta; its own test runs it).
   'set-meta-status': () => ({ items: [{ kind: 'campaign', id: '120000000000001' }], status: 'PAUSED' }),
+  // Meta ads step 18: the settings changes refuse in words here (no business has Meta; their own test runs them).
+  'set-meta-campaign': () => ({ campaignId: '120000000000001', dailyBudgetCents: 5000 }),
+  'set-meta-ad-set': () => ({ adSetId: '120000000000002', bidAmountCents: 150 }),
+  'set-meta-budget-schedule': () => ({ action: 'switch', level: 'campaign', objectId: '120000000000001', enabled: false }),
+  // Meta ads step 19: the creates and copies refuse in words here (no business has Meta; their own test runs them).
+  'create-meta-campaign': () => ({ name: 'Campaign A', objective: 'OUTCOME_SALES', dailyBudgetCents: 5000 }),
+  'create-meta-ad-set': () => ({ campaignId: '120000000000001', name: 'Ad set B', optimizationGoal: 'LINK_CLICKS', targeting: { countries: ['IT'] } }),
+  'copy-meta-ads': () => ({ kind: 'campaign', sourceId: '120000000000001' }),
+  // Meta ads step 22: the delete refuses in words here (no business has Meta; its own test runs it).
+  'remove-meta-ads-items': () => ({ items: [{ kind: 'campaign', id: '120000000000001' }], confirmDelete: true }),
+  // Meta ads step 21: labels, value rules and reach & frequency refuse in words here (no business has Meta; their own test runs them).
+  'set-meta-labels': () => ({ action: 'add', objects: [{ kind: 'campaign', id: '120000000000001' }], labelNames: ['Label A'] }),
+  'set-meta-value-rules': () => ({ action: 'detach', adSetId: '120000000000002' }),
+  'create-meta-reach-frequency': () => ({ action: 'cancel', predictionId: '120000000000090' }),
+  // Meta ads step 28: recommendations and experiments refuse in words here (no business has Meta; their own test runs them).
+  'apply-meta-recommendations': () => ({ signature: '1234567' }),
+  'create-meta-experiment': () => ({ kind: 'ab-test', name: 'Test A', startTime: '2099-01-01T00:00:00Z', endTime: '2099-01-15T00:00:00Z', cells: [{ name: 'A', percent: 50, adSetIds: ['120000000000002'] }, { name: 'B', percent: 50, adSetIds: ['120000000000003'] }] }),
+  'set-meta-experiment': () => ({ action: 'update', studyId: '120000000000041', name: 'Test B' }),
+  'end-meta-experiment': () => ({ studyId: '120000000000041', endAt: '2099-01-01T00:15:00Z' }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),
@@ -577,6 +619,18 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-catalog-items': () => ({ view: 'list', catalogId: '120000000000700' }),
   'meta-catalog-feeds': () => ({ view: 'list', catalogId: '120000000000700' }),
   'meta-catalog-health': () => ({ view: 'readiness', catalogId: '120000000000700' }),
+  // Meta ads step 3: each tool's default view refuses in words because no business here has Meta
+  // (meta-ads-account.tools.vitest.test.ts runs every view on an account).
+  'meta-ad-account': () => ({ view: 'settings' }),
+  'meta-billing': () => ({ view: 'spend' }),
+  'meta-account-access': () => ({ view: 'people' }),
+  // Meta ads step 5: the health summary is Nexus's own records (no Meta here: it says so); the history refuses in words
+  // (meta-ads-health.tools.vitest.test.ts runs every view on an account).
+  'meta-account-health': () => ({ view: 'summary' }),
+  'meta-activity-log': () => ({ scope: 'account' }),
+  // Meta ads step 11: no business here has Meta, so both refuse in words before any call.
+  'meta-audiences': () => ({ view: 'list' }),
+  'meta-datasets': () => ({ view: 'sources' }),
   // Meta ads step 13: refused in words because no business here has Meta (meta-ads-commerce.tools.vitest.test.ts runs every view).
   'meta-product-sets': () => ({ view: 'list', catalogId: '120000000000700' }),
   'meta-commerce': () => ({ view: 'accounts' }),

@@ -96,6 +96,17 @@ import { META_ADS_OPTIMIZE_TOOLS } from './tools/meta-ads-optimize.tools.js'
 // Meta ads step 14 (2026-10-21): lead forms, leads and comments (read only; leads and comments are Claude's door only).
 import { META_ADS_ENGAGEMENT_TOOLS } from './tools/meta-ads-engagement.tools.js'
 import { META_ADS_CATALOG_TOOLS } from './tools/meta-ads-catalog.tools.js'
+import { META_ADS_ACCOUNT_TOOLS } from './tools/meta-ads-account.tools.js'
+import { META_ADS_HEALTH_TOOLS } from './tools/meta-ads-health.tools.js'
+// Meta ads step 11 (2026-10-21): audiences and datasets (pixels), read only.
+import { META_ADS_AUDIENCES_TOOLS } from './tools/meta-ads-audiences.tools.js'
+import { META_ADS_DATASETS_TOOLS } from './tools/meta-ads-datasets.tools.js'
+import { META_ADS_CAMPAIGN_SETTINGS_TOOLS } from './tools/meta-ads-campaign-settings.tools.js'
+import { META_ADS_CREATE_TOOLS } from './tools/meta-ads-create.tools.js'
+import { META_ADS_REMOVE_TOOLS } from './tools/meta-ads-remove.tools.js'
+import { META_ADS_LABELS_RULES_TOOLS } from './tools/meta-ads-labels-rules.tools.js'
+// Meta ads step 28 (2026-10-21): apply recommendations; make, change and end experiments.
+import { META_ADS_OPTIMIZE_CHANGES_TOOLS } from './tools/meta-ads-optimize-changes.tools.js'
 import { META_ADS_COMMERCE_TOOLS } from './tools/meta-ads-commerce.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
@@ -313,6 +324,23 @@ const ALL: AgentTool[] = [
   ...META_ADS_ENGAGEMENT_TOOLS,
   // Meta ads step 12 (2026-10-21): meta-catalogs, meta-catalog-items, meta-catalog-feeds, meta-catalog-health (read only).
   ...META_ADS_CATALOG_TOOLS,
+  // Meta ads step 3 (2026-10-21): meta-ad-account, meta-billing, meta-account-access (read only).
+  ...META_ADS_ACCOUNT_TOOLS,
+  // Meta ads step 5 (2026-10-21): meta-account-health, meta-activity-log (read only).
+  ...META_ADS_HEALTH_TOOLS,
+  // Meta ads step 11 (2026-10-21): meta-audiences, meta-datasets (read only; datasets view sources = the D2 check).
+  ...META_ADS_AUDIENCES_TOOLS,
+  ...META_ADS_DATASETS_TOOLS,
+  // Meta ads step 18 (2026-10-21): set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule (settings, budgets, bids).
+  ...META_ADS_CAMPAIGN_SETTINGS_TOOLS,
+  // Meta ads step 19 (2026-10-21): create-meta-campaign, create-meta-ad-set, copy-meta-ads (born PAUSED; undo deletes what they made).
+  ...META_ADS_CREATE_TOOLS,
+  // Meta ads step 22 (2026-10-21): remove-meta-ads-items (delete for good, on the person's explicit ask only; no undo).
+  ...META_ADS_REMOVE_TOOLS,
+  // Meta ads step 21 (2026-10-21): set-meta-labels, set-meta-value-rules, create-meta-reach-frequency (a booking SPENDS MONEY).
+  ...META_ADS_LABELS_RULES_TOOLS,
+  // Meta ads step 28 (2026-10-21): apply-meta-recommendations, create-meta-experiment, set-meta-experiment, end-meta-experiment.
+  ...META_ADS_OPTIMIZE_CHANGES_TOOLS,
   // Meta ads step 13 (2026-10-21): meta-product-sets, meta-commerce, meta-instagram-product-tags (read only).
   ...META_ADS_COMMERCE_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
