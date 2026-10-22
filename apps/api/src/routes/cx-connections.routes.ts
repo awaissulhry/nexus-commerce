@@ -13,10 +13,11 @@
  *   GET  /api/cx/channels                  the catalogue as the UI sees it
  *   GET  /api/cx/apps                      P0.5: each app's secret expiry date (never a secret)
  *   PUT  /api/cx/apps/:channelKey/secret-expiry   P0.5: record or clear that date
- *   GET  /api/cx/apps/credentials          Google: the app's client id, whether a secret is set, the
- *                                          redirect URI to register (never the secret)
- *   PUT  /api/cx/apps/:channelKey/credentials     Google: set the client id + secret (write-only); only an Owner of
- *                                          every business profile with Google connected (the app serves them all)
+ *   GET  /api/cx/apps/credentials          Google and Amazon Ads: the app's client id, whether a secret is set,
+ *                                          Google's redirect URI to register (never the secret)
+ *   PUT  /api/cx/apps/:channelKey/credentials     Google: set the client id + secret; Amazon Ads: a new secret for the
+ *                                          same client (write-only); only an Owner of every business profile with
+ *                                          that channel connected (the app serves them all)
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify'
@@ -27,7 +28,7 @@ import { listConnectionEvents } from '../services/cx/events.service.js'
 import { refreshNow, revoke, RefreshFailed, RefreshContended } from '../services/cx/token.service.js'
 import { runHeartbeatFor } from '../jobs/cx-heartbeat.job.js'
 import { listAppSecrets, setAppSecretExpiry } from '../services/cx/app-secret-expiry.js'
-import { AppCredentialsError, appCredentialsRefusal, listAppCredentials, setAppCredentials } from '../services/cx/app-credentials.service.js'
+import { AppCredentialsError, appCredentialsRefusal, listAppCredentials, ownerRequiredSentence, setAppCredentials } from '../services/cx/app-credentials.service.js'
 import { ensureLoaded } from '../lib/auth/guards.js'
 import { resolvePermissions } from '../lib/auth/rbac.js'
 import { accountCallsById } from '../services/cx/account-calls.service.js'
@@ -222,19 +223,16 @@ export default async function cxConnectionsRoutes(app: FastifyInstance): Promise
     },
   )
 
-  // ── Google — our app's client id + secret, set by an Owner (write-only) ────────────────────────
+  // ── Google and Amazon Ads — our app's client id + secret, set by an Owner (write-only) ──────────
   app.get('/cx/apps/credentials', async () => ({ apps: await listAppCredentials() }))
 
   app.put<{ Params: { channelKey: string }; Body: { clientId?: unknown; clientSecret?: unknown } }>(
     '/cx/apps/:channelKey/credentials',
     async (request, reply) => {
       if (!(await isOwnerRequest(request))) {
-        return reply.code(403).send({
-          error: 'Only an Owner can set app credentials. Google\'s app credentials serve every business profile, so only an Owner of every business profile with Google connected can change them.',
-          code: 'owner_required',
-        })
+        return reply.code(403).send({ error: ownerRequiredSentence(request.params.channelKey), code: 'owner_required' })
       }
-      // The app is one for every business: an Owner of this one may not change another business's Google sign-in.
+      // The app is one for every business: an Owner of this one may not change another business's sign-in at that channel.
       const refusal = await appCredentialsRefusal(request.params.channelKey, request.authUser!.id)
       if (refusal) return reply.code(403).send({ error: refusal, code: 'owner_of_every_business_required' })
       try {
