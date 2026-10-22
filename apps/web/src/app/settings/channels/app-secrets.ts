@@ -76,12 +76,15 @@ export function sortAppSecrets(rows: AppSecretRow[]): AppSecretRow[] {
 /**
  * Google (2026-10-13) — our own Google Cloud OAuth client, from `GET /api/cx/apps/credentials`. The secret
  * is write-only: the API says whether one is set, never what it is. The client id is not a secret.
+ *
+ * Amazon Ads (2026-10-22) — the same list: the client id Nexus uses (it never changes here) and a new secret after
+ * Reset Secret in Amazon's developer console. No redirect URI to register.
  */
 export interface AppCredentialsRow {
   channelKey: string
   label: string
   environment: string
-  /** The exact address to register in Google Cloud; null when the server does not know its public address. */
+  /** The exact address to register in Google Cloud; null when the server does not know its public address (always null for Amazon Ads). */
   redirectUri: string | null
   redirectUriProblem: string | null
   clientId: string | null
@@ -91,23 +94,34 @@ export interface AppCredentialsRow {
   updatedAt: string | null
 }
 
-/** What the Google sign-in app's status pill and sentence say. */
+/** What a sign-in app's status pill and sentence say (Google's words, or Amazon Ads' own). */
 export function appCredentialsStatus(row: AppCredentialsRow): { tone: Tone; label: string; detail: string } {
+  const ads = row.channelKey === 'AMAZON_ADS'
   if (row.source === 'none' || !row.clientId) {
     return {
       tone: 'warning',
       label: 'Not set',
-      detail: 'Google cannot be connected until an Owner pastes the client ID and client secret of the Nexus OAuth client from Google Cloud.',
+      detail: ads
+        ? 'Amazon Ads cannot be used until its app is set up in the server environment. After that, an Owner can paste a new secret here.'
+        : 'Google cannot be connected until an Owner pastes the client ID and client secret of the Nexus OAuth client from Google Cloud.',
     }
   }
   if (!row.secretSet) {
-    return { tone: 'warning', label: 'Secret missing', detail: `Client ${row.clientId} is set, but its secret is not. Paste the client secret to finish.` }
+    return {
+      tone: 'warning',
+      label: 'Secret missing',
+      detail: ads
+        ? `Client ${row.clientId} is set, but its secret is not. Amazon Ads cannot be used until an Owner pastes the client secret.`
+        : `Client ${row.clientId} is set, but its secret is not. Paste the client secret to finish.`,
+    }
   }
   if (row.source === 'environment') {
     return {
       tone: 'info',
       label: 'From the server settings',
-      detail: `Nexus uses client ${row.clientId} from the server’s environment. Saving here replaces it.`,
+      detail: ads
+        ? `Nexus uses client ${row.clientId} and its secret from the server’s environment. Saving a new secret here replaces the secret; the client stays the same.`
+        : `Nexus uses client ${row.clientId} from the server’s environment. Saving here replaces it.`,
     }
   }
   return {
@@ -120,10 +134,21 @@ export function appCredentialsStatus(row: AppCredentialsRow): { tone: Tone; labe
 /** Google's web client ids end in `.apps.googleusercontent.com` (the API checks the same). */
 export const GOOGLE_CLIENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,200}\.apps\.googleusercontent\.com$/
 
-/** What is wrong with the form before it is sent, in words; null when it can be saved. */
-export function appCredentialsFormProblem(clientId: string, clientSecret: string): string | null {
+/** The secret Amazon shows after Reset Secret (the API checks the same). */
+export const AMAZON_CLIENT_SECRET_PATTERN = /^amzn1\.oa2-cs\.v1\.[0-9a-f]{64}$/
+
+/**
+ * What is wrong with the form before it is sent, in words; null when it can be saved. Amazon Ads: the secret only (its
+ * client ID is shown read-only and the API checks it is the one Nexus uses).
+ */
+export function appCredentialsFormProblem(clientId: string, clientSecret: string, channelKey = 'GOOGLE'): string | null {
   const id = clientId.trim()
   const secret = clientSecret.trim()
+  if (channelKey === 'AMAZON_ADS') {
+    if (!secret) return 'Paste the new client secret.'
+    if (!AMAZON_CLIENT_SECRET_PATTERN.test(secret)) return 'This is not an Amazon client secret. It starts with amzn1.oa2-cs.v1. Paste it again.'
+    return null
+  }
   if (!id && !secret) return 'Paste the client ID and the client secret.'
   if (!GOOGLE_CLIENT_ID_PATTERN.test(id)) return 'The client ID of a Google OAuth client ends in .apps.googleusercontent.com.'
   if (!secret) return 'Paste the client secret too. Google shows it next to the client ID.'

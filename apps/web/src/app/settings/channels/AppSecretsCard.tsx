@@ -12,6 +12,9 @@
  * shows the redirect URI to register there and takes the client ID + secret (`PUT /api/cx/apps/GOOGLE/
  * credentials`, only an Owner of every business profile with Google connected). The secret is write-only: once saved
  * it is never shown again.
+ *
+ * Amazon Ads (2026-10-22): the same list. The card shows the client ID Nexus uses, read-only (a different client would
+ * sign every Ads account out), and takes a new secret after Reset Secret in Amazon's developer console. No redirect URI.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -64,10 +67,10 @@ export function AppSecretsCard() {
   return (
     <Card
       header="App secrets"
-      description="Our own app credentials at each channel. Amazon requires a new SP-API app secret every 180 days; when it expires, every Amazon call stops. Google needs the client ID and secret of our Google Cloud OAuth client before any business can connect Google."
+      description="Our own app credentials at each channel. Amazon requires a new SP-API app secret every 180 days; when it expires, every Amazon call stops. Google needs the client ID and secret of our Google Cloud OAuth client before any business can connect Google. The Amazon Ads app's secret is set here too."
     >
       {credentialsError && (
-        <Banner tone="danger" title="The Google sign-in app could not be loaded">
+        <Banner tone="danger" title="The app sign-in settings could not be loaded">
           {credentialsError}
         </Banner>
       )}
@@ -165,9 +168,13 @@ function AppSecretItem({ row, onSaved }: { row: AppSecretRow; onSaved: () => Pro
   )
 }
 
-/** Google: the redirect URI to register, and the client ID + secret (write-only) an Owner pastes. */
+/**
+ * Google: the redirect URI to register, and the client ID + secret (write-only) an Owner pastes.
+ * Amazon Ads: the client ID Nexus uses (read-only) and a new secret (write-only).
+ */
 function AppCredentialsItem({ row, onSaved }: { row: AppCredentialsRow; onSaved: () => Promise<void> }) {
   const api = getBackendUrl()
+  const ads = row.channelKey === 'AMAZON_ADS'
   const status = appCredentialsStatus(row)
   const [clientId, setClientId] = useState(row.clientId ?? '')
   const [clientSecret, setClientSecret] = useState('')
@@ -187,7 +194,7 @@ function AppCredentialsItem({ row, onSaved }: { row: AppCredentialsRow; onSaved:
   }
 
   const save = async () => {
-    const problem = appCredentialsFormProblem(clientId, clientSecret)
+    const problem = appCredentialsFormProblem(clientId, clientSecret, row.channelKey)
     if (problem) { setResult({ tone: 'danger', title: 'Nothing was saved', text: problem }); return }
     setBusy(true)
     setResult(null)
@@ -202,7 +209,7 @@ function AppCredentialsItem({ row, onSaved }: { row: AppCredentialsRow; onSaved:
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
       setClientSecret('')
       await onSaved()
-      setResult({ tone: 'success', title: 'Saved. Google can now be connected.' })
+      setResult({ tone: 'success', title: ads ? 'Saved. Nexus now uses the new Amazon Ads secret.' : 'Saved. Google can now be connected.' })
     } catch (err) {
       setResult({ tone: 'danger', title: 'Nothing was saved', text: err instanceof Error ? err.message : 'The client was not saved.' })
     } finally {
@@ -224,20 +231,34 @@ function AppCredentialsItem({ row, onSaved }: { row: AppCredentialsRow; onSaved:
           </Pill>
         </div>
         <p className="nds-app-secret-detail">{status.detail}</p>
-        <p className="nds-app-secret-detail">
-          In Google Cloud, create an OAuth client of type “Web application”, add the redirect URI below to its authorised
-          redirect URIs, then paste its client ID and secret here. They serve every business profile, so only an Owner of
-          every business profile with Google connected can save them.
-        </p>
+        {ads ? (
+          <p className="nds-app-secret-detail">
+            In the Amazon developer console (Login with Amazon → Security Profiles → Nexus Commerce → Web Settings), click
+            Reset Secret, then paste the new secret here. The client ID stays the same. Nexus starts using the new secret at
+            once.
+          </p>
+        ) : (
+          <p className="nds-app-secret-detail">
+            In Google Cloud, create an OAuth client of type “Web application”, add the redirect URI below to its authorised
+            redirect URIs, then paste its client ID and secret here. They serve every business profile, so only an Owner of
+            every business profile with Google connected can save them.
+          </p>
+        )}
         <div className="nds-app-secrets">
-          {row.redirectUri && (
+          {!ads && row.redirectUri && (
             <Field label="Redirect URI" hint="Register this exact address in Google Cloud.">
               <Input value={row.redirectUri} readOnly spellCheck={false} onFocus={(event) => event.currentTarget.select()} />
             </Field>
           )}
-          <Field label="Client ID" hint="Ends in .apps.googleusercontent.com.">
-            <Input value={clientId} onChange={(event) => setClientId(event.target.value)} autoComplete="off" spellCheck={false} />
-          </Field>
+          {ads ? (
+            <Field label="Client ID">
+              <Input value={clientId} readOnly spellCheck={false} onFocus={(event) => event.currentTarget.select()} />
+            </Field>
+          ) : (
+            <Field label="Client ID" hint="Ends in .apps.googleusercontent.com.">
+              <Input value={clientId} onChange={(event) => setClientId(event.target.value)} autoComplete="off" spellCheck={false} />
+            </Field>
+          )}
           <Field
             label="Client secret"
             hint={row.secretSet ? 'A secret is saved. It is never shown; paste a new one to replace it.' : 'Stored encrypted and never shown again.'}
@@ -247,7 +268,7 @@ function AppCredentialsItem({ row, onSaved }: { row: AppCredentialsRow; onSaved:
         </div>
       </div>
       <div className="nds-app-secret-form">
-        {row.redirectUri && (
+        {!ads && row.redirectUri && (
           <Button variant="secondary" size="sm" onClick={() => void copy()}>
             Copy redirect URI
           </Button>
@@ -256,7 +277,7 @@ function AppCredentialsItem({ row, onSaved }: { row: AppCredentialsRow; onSaved:
           {busy ? 'Saving…' : 'Save'}
         </Button>
       </div>
-      {row.redirectUriProblem && (
+      {!ads && row.redirectUriProblem && (
         <Banner tone="warning" title="The redirect URI is not ready">
           {row.redirectUriProblem}
         </Banner>

@@ -61,7 +61,11 @@ describe('Google sign-in app (appCredentialsStatus, appCredentialsFormProblem)',
     clientId: '123-abc.apps.googleusercontent.com', secretSet: true, source: 'saved', updatedAt: '2026-10-13T09:00:00.000Z', ...over,
   })
   it('not set → a warning that says who sets it', () => {
-    expect(appCredentialsStatus(creds({ source: 'none', clientId: null, secretSet: false }))).toMatchObject({ tone: 'warning', label: 'Not set' })
+    expect(appCredentialsStatus(creds({ source: 'none', clientId: null, secretSet: false }))).toEqual({
+      tone: 'warning',
+      label: 'Not set',
+      detail: 'Google cannot be connected until an Owner pastes the client ID and client secret of the Nexus OAuth client from Google Cloud.',
+    })
   })
   it('saved → success, names the client and never a secret', () => {
     const s = appCredentialsStatus(creds({}))
@@ -69,8 +73,12 @@ describe('Google sign-in app (appCredentialsStatus, appCredentialsFormProblem)',
     expect(s.detail).toBe('Client 123-abc.apps.googleusercontent.com. The secret is stored encrypted and is never shown. Saved 13 Oct 2026.')
   })
   it('from the environment → info; a client with no secret → warning', () => {
-    expect(appCredentialsStatus(creds({ source: 'environment' }))).toMatchObject({ tone: 'info', label: 'From the server settings' })
-    expect(appCredentialsStatus(creds({ secretSet: false }))).toMatchObject({ tone: 'warning', label: 'Secret missing' })
+    expect(appCredentialsStatus(creds({ source: 'environment' }))).toEqual({
+      tone: 'info', label: 'From the server settings', detail: 'Nexus uses client 123-abc.apps.googleusercontent.com from the server’s environment. Saving here replaces it.',
+    })
+    expect(appCredentialsStatus(creds({ secretSet: false }))).toEqual({
+      tone: 'warning', label: 'Secret missing', detail: 'Client 123-abc.apps.googleusercontent.com is set, but its secret is not. Paste the client secret to finish.',
+    })
   })
   it.each([
     ['', '', /client ID and the client secret/],
@@ -82,5 +90,51 @@ describe('Google sign-in app (appCredentialsStatus, appCredentialsFormProblem)',
   })
   it('accepts a Google client id + secret (spaces around them are trimmed)', () => {
     expect(appCredentialsFormProblem(' 123-abc.apps.googleusercontent.com ', ' GOCSPX-secret ')).toBeNull()
+  })
+  it('naming Google gives the same answers as before', () => {
+    expect(appCredentialsFormProblem('', '', 'GOOGLE')).toBe('Paste the client ID and the client secret.')
+    expect(appCredentialsFormProblem('123-abc.apps.googleusercontent.com', '', 'GOOGLE')).toBe('Paste the client secret too. Google shows it next to the client ID.')
+  })
+})
+
+describe('Amazon Ads sign-in app (2026-10-22): a new secret for the same client', () => {
+  // Made-up Login with Amazon values in the real shapes.
+  const ADS_CLIENT_ID = `amzn1.application-oa2-client.${'a1'.repeat(16)}`
+  const ADS_SECRET = `amzn1.oa2-cs.v1.${'f0'.repeat(32)}`
+  const creds = (over: Partial<AppCredentialsRow>): AppCredentialsRow => ({
+    channelKey: 'AMAZON_ADS', label: 'Amazon Ads', environment: 'production', redirectUri: null, redirectUriProblem: null,
+    clientId: ADS_CLIENT_ID, secretSet: true, source: 'saved', updatedAt: '2026-10-22T09:00:00.000Z', ...over,
+  })
+  it('says Amazon Ads in its own words, never Google', () => {
+    expect(appCredentialsStatus(creds({ source: 'none', clientId: null, secretSet: false }))).toEqual({
+      tone: 'warning',
+      label: 'Not set',
+      detail: 'Amazon Ads cannot be used until its app is set up in the server environment. After that, an Owner can paste a new secret here.',
+    })
+    expect(appCredentialsStatus(creds({ secretSet: false }))).toEqual({
+      tone: 'warning',
+      label: 'Secret missing',
+      detail: `Client ${ADS_CLIENT_ID} is set, but its secret is not. Amazon Ads cannot be used until an Owner pastes the client secret.`,
+    })
+    expect(appCredentialsStatus(creds({ source: 'environment' }))).toEqual({
+      tone: 'info',
+      label: 'From the server settings',
+      detail: `Nexus uses client ${ADS_CLIENT_ID} and its secret from the server’s environment. Saving a new secret here replaces the secret; the client stays the same.`,
+    })
+    const saved = appCredentialsStatus(creds({}))
+    expect(saved).toEqual({ tone: 'success', label: 'Set', detail: `Client ${ADS_CLIENT_ID}. The secret is stored encrypted and is never shown. Saved 22 Oct 2026.` })
+    for (const s of [saved, appCredentialsStatus(creds({ source: 'none', clientId: null }))]) expect(s.detail).not.toMatch(/Google/)
+  })
+  it.each([
+    ['', 'Paste the new client secret.'],
+    ['   ', 'Paste the new client secret.'],
+    ['GOCSPX-x', 'This is not an Amazon client secret. It starts with amzn1.oa2-cs.v1. Paste it again.'],
+    [`amzn1.oa2-cs.v1.${'f0'.repeat(31)}`, 'This is not an Amazon client secret. It starts with amzn1.oa2-cs.v1. Paste it again.'],
+    [`${ADS_SECRET} x`, 'This is not an Amazon client secret. It starts with amzn1.oa2-cs.v1. Paste it again.'],
+  ])('refuses the secret %j before sending', (secret, words) => {
+    expect(appCredentialsFormProblem(ADS_CLIENT_ID, secret, 'AMAZON_ADS')).toBe(words)
+  })
+  it('accepts an Amazon secret (spaces around it are trimmed); the read-only client ID is not checked here', () => {
+    expect(appCredentialsFormProblem(ADS_CLIENT_ID, ` ${ADS_SECRET} `, 'AMAZON_ADS')).toBeNull()
   })
 })
