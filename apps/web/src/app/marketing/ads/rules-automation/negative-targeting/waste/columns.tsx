@@ -256,7 +256,6 @@ export function wasteColumns(phone: boolean): ColDef<WasteGridRow>[] {
     { ...integerColumn<WasteGridRow>('stockOutDays'), colId: 'stockOut', headerName: L.stockOut, width: 120, sortable: false, headerTooltip: 'Days left out: the product was out of stock' },
     { ...integerColumn<WasteGridRow>('stillServesIn'), colId: 'stillServes', headerName: L.stillServes, width: 128, sortable: false, headerTooltip: 'Other ad groups where these words still spend' },
     actionsColumn<WasteGridRow>({
-      width: 132,
       primary: (row) => verbOf(wasteVerb(row)) as never,
       prefsLabel: 'Action',
     }),
@@ -311,7 +310,7 @@ export function stoppedColumns(phone: boolean): ColDef<StoppedGridRow>[] {
     { colId: 'spendBefore', headerName: L.spendBefore, valueGetter: (p) => p.data?.spendBeforeCents ?? null, valueFormatter: moneyOf, cellRenderer: SpendBeforeCell, width: 124, cellClass: num, ...numeric, headerTooltip: 'Spend in the 30 days before it stopped' },
     { colId: 'state', headerName: L.state, valueGetter: (p) => (p.data ? stateWord(p.data.state) : ''), cellRenderer: StoppedStateCell, width: 80, cellClass: 'nds-ag-cell' },
     { ...integerColumn<StoppedGridRow>('stillServesIn'), colId: 'stillServes', headerName: L.stillServes, width: 128, headerTooltip: 'Other ad groups where these words still spend' },
-    actionsColumn<StoppedGridRow>({ width: 120, primary: (row) => verbOf(stoppedVerb(row)) as never, prefsLabel: 'Action' }),
+    actionsColumn<StoppedGridRow>({ primary: (row) => verbOf(stoppedVerb(row)) as never, prefsLabel: 'Action' }),
   ]
   return hide(STOPPED_COLUMN_SPECS, cols.map((c) => ({ ...c, ...H })) as ColDef[]) as ColDef<StoppedGridRow>[]
 }

@@ -28,7 +28,15 @@ describe('actionsColumn shapes (G2)', () => {
     expect(two.width).toBe(200)
     expect(two.suppressKeyboardEvent).toBe(rendererOwnsKeyboard)
     expect(actionsColumn<{ id: string }>({ primary: () => [] }).width).toBe(200)
-    expect(actionsColumn<{ id: string }>({ primary: () => [], width: 240 }).width).toBe(240)
+  })
+
+  it('the width is the first paint only: no page number, and no "size to fit" or auto-size moves it (2026-10-23)', () => {
+    // @ts-expect-error — a page may not choose the width; the column fits its buttons (`renderers/actionsFit.ts`).
+    actionsColumn<{ id: string }>({ primary: () => [], width: 240 })
+    const col = actionsColumn<{ id: string }>({ primary: [{ label: 'Approve' }, { label: 'Reject' }], items: () => [] })
+    expect(col.resizable).toBe(false)
+    expect(col.suppressSizeToFit).toBe(true)
+    expect(col.suppressAutoSize).toBe(true)
   })
 })
 
