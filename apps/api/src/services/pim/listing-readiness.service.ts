@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client'
-import type { ListingReadinessPage, ListingReadinessRow } from '@nexus/shared/listing-readiness'
+import type { ListingReadinessIssue, ListingReadinessPage, ListingReadinessRow, ReadinessProblemKind } from '@nexus/shared/listing-readiness'
 import prisma from '../../db.js'
 import { normalizeLanguage } from './content-language.js'
 import { SCOPE_STATES } from './readiness-model.js'
@@ -34,6 +34,26 @@ export function readinessQuery(query: Record<string, unknown>) {
   if (!Number.isSafeInteger(page) || page < 1 || page > 100_000) throw new Error('Use a positive page number')
   return { familyId, jobId, productIds, skus, listingIds, accountId, channel, marketplace, language, state, page }
 }
+
+/**
+ * Why a stored `missing[]` entry is a problem, in the page's words. The producers: `kind` is stamped by the studio sheet
+ * (`language-fallback`) and the variation checks (`theme-unset`, `theme-deprecated`, `attribute-unbound`, `collision`,
+ * `value-missing`); `requiredEmpty` is a flag beside it (readiness-model.ts). A required field that only lacks its
+ * translation is stamped `language-fallback` AND flagged: its value exists in another language, so the fix is to
+ * translate it — the kind wins over the flag. Unknown or absent kinds (validators, mapping verdicts) are other checks.
+ */
+export function readinessProblemKind(entry: { kind?: unknown; requiredEmpty?: unknown }): ReadinessProblemKind {
+  switch (entry.kind) {
+    case 'language-fallback': return 'translation'
+    case 'value-missing': return 'required'
+    case 'theme-unset': case 'theme-deprecated': case 'attribute-unbound': return 'setup'
+    case 'collision': return 'rule'
+  }
+  return entry.requiredEmpty === true ? 'required' : 'check'
+}
+const ISSUE_KIND: Record<ReadinessProblemKind, ListingReadinessIssue['kind']> = { required: 'missing', translation: 'translation', setup: 'schema', rule: 'invalid', check: 'check' }
+/** The same verdict in the old page's issue vocabulary (it said `missing` for every entry before). */
+export const listingIssueKind = (entry: { kind?: unknown; requiredEmpty?: unknown }): ListingReadinessIssue['kind'] => ISSUE_KIND[readinessProblemKind(entry)]
 
 /** Shared by the paged reader and Translate: filtering happens before count/page. */
 export async function listingReadinessWhere(query: Record<string, unknown>, userId: string | null): Promise<Prisma.ReadinessIndexWhereInput> {
@@ -76,12 +96,12 @@ export async function listingReadiness(query: Record<string, unknown>, userId: s
     if (record.market) params.set('market', record.market)
     if (record.accountId) params.set('account', record.accountId)
     if (record.aliasId) params.set('alias', record.aliasId)
-    const missing = Array.isArray(record.missing) ? record.missing as Array<{ field: string; label: string; reason: string }> : []
+    const missing = Array.isArray(record.missing) ? record.missing as Array<{ field: string; label: string; reason: string; kind?: string; requiredEmpty?: true }> : []
     return { id: record.id, productId: record.productId, sku: record.product.sku, name: record.product.name,
       channel: record.channel ?? 'SHARED', marketplace: record.market ?? '', accountId: record.accountId, accountName: record.label,
       aliasKey: record.aliasId ?? '', locale: record.language, state: record.state as ListingReadinessRow['state'], pct: record.pct,
       computedAt: record.computedAt.toISOString(), ...(record.pendingSince ? { pendingSince: record.pendingSince.toISOString() } : {}), familyId: record.product.familyId,
-      issues: missing.map(issue => ({ field: issue.field, label: issue.label, kind: 'missing', message: issue.reason })),
+      issues: missing.map(issue => ({ field: issue.field, label: issue.label, kind: listingIssueKind(issue), message: issue.reason })),
       editorHref: `/products/${encodeURIComponent(record.productId)}/edit/studio?${params}` }
   })
   return { computedAt: rows.reduce<string | null>((date, row) => !date || row.computedAt! < date ? row.computedAt! : date, null), page: input.page, pageSize: PAGE_SIZE, total, productCount,

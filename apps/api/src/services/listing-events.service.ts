@@ -62,6 +62,10 @@ export type ListingEvent =
   // Images rebuild P1 — a family's photo plan changed on one layer (`layer` = SHARED, CHANNEL:EBAY, LISTING:…).
   // The Media page and the Information sheet's Product media column refetch; `productId` is the family root.
   | { type: 'product.media.changed'; productId: string; layer: string; ts: number }
+  // Listing readiness rebuild §3 — one family's readiness rows changed: rebuilt, or marked pending while it is re-checked.
+  // Raised only after COMMIT, once per family per transaction, by `announceReadinessUpdated` (pim/readiness-events.ts).
+  // The Listing readiness page re-reads that family. Mirrors the catalogue's readiness.updated.
+  | { type: 'readiness.updated'; rootProductId: string; ts: number }
   // Sheet publish parity, step 2 — a product sheet publication changed status (sent, waiting for the channel,
   // settled by the result sweep or a status read). `productId` is the family; open sheets and the publish
   // history refetch the publication's rows. Mirrors the catalogue's publication.status_changed.
@@ -157,6 +161,8 @@ const LISTING_BUS_TYPES_LIST = [
   'inventory.cases_changed',
   // Step 4 — durable too; the bus is how a Send-to-FBA plan's move reaches an open Matrix and the plans drawer.
   'fba.plan_changed',
+  // Listing readiness rebuild §3 — a rebuild in the worker or the scheduler reaches the API's open pages through this list.
+  'readiness.updated',
 ] as const satisfies readonly EventType[]
 
 const bus = createCrossReplicaBus<ListingEvent>({

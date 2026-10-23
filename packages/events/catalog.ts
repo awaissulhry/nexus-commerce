@@ -205,6 +205,20 @@ export const EVENTS = {
     }),
     subject: (p) => p.productId,
   }),
+  // Listing readiness rebuild §3 (2026-10-23) — published by apps/api/src/services/pim/readiness-events.ts after COMMIT,
+  // once per family per transaction: by the one materializer (`reconcileFamilyReadiness`, so every rebuild path) and by a
+  // pending mark that wrote rows (`markReadinessPending`). The Listing readiness page re-reads that family only.
+  // Mirrors `ReadinessUpdatedPayload` (packages/shared/listing-readiness.ts).
+  'readiness.updated': defineEvent({
+    type: 'readiness.updated',
+    context: 'catalog',
+    description: "One family's readiness rows changed (rebuilt, or marked pending while it is re-checked); subscribers re-read that family.",
+    schema: z.strictObject({
+      /** The family root (the main product). */
+      rootProductId: z.string().min(1),
+    }),
+    subject: (p) => p.rootProductId,
+  }),
   'wizard.submitted': defineEvent({
     type: 'wizard.submitted',
     context: 'catalog',

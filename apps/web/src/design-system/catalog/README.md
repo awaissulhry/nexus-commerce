@@ -243,3 +243,10 @@ Detail popover: in #detail-popover-example open the card with the pointer (rest 
 ### Approvals grid parts — 2026-10-05
 
 `#change-value-example` (Grid): before → after in full and compact form; the 160 px box must ellipsize the line and keep "+N more" whole. `#row-verbs-example`: a small queue grid — Approve (primary) and Reject (danger outline) beside ⋯, a HELD Approve that stays focusable and shows its reason, a countdown status. A click on a verb or the ⋯ must not change "Open:"; a click elsewhere on the row must. Tab walks Approve → Reject → ⋯ inside one cell. `#grid-shortcuts-example`: focus a cell, then A / R / Enter / Esc act on that row; typing A or R in the search field must stay text. `#countdown-example` (Components › Countdown): "Runs in 14 s" ticks each second and ends at "Starting…" with Done +1; Restart re-arms it. Verify light and dark, desktop and 390 px.
+
+### Family footer row — 2026-10-23
+
+`#family-footer-frame-example` (Grid): the row under an open family, as Products and Listing readiness draw it — "Showing
+**10** of **40** variations" with a muted second line and "View all 40", then "**3** variations" with "Open family". Check
+the small muted type and bold numbers, the action at the end of the line, light and dark, 1280 and 390 px; Tab reaches
+the action.

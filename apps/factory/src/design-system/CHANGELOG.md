@@ -1,3 +1,11 @@
+## The row under an open family is a DS part — 2026-10-23
+
+Mirrored from `apps/web`. `grid/toolbars/FamilyFooterFrame.tsx` and `grid/theme/grid.css` (both apps, identical); exported from `grid` (web).
+- **`FamilyFooterFrame`** `{ shown, total, noun?, nounOne?, extra?, extraTitle?, action? }`: "Showing **10** of **40**
+  variations" (or "**3** variations" when all are on screen), an optional muted second line, and the action at the end.
+  Moved from /products (`FamilyFooter.tsx` and its `.famFoot` styles, now `.nds-grid-famfoot` on tokens) so Products and
+  Listing readiness share one frame; Products renders the same markup and words as before.
+
 ## Meta has its channel name — 2026-10-20
 
 Mirrored from `apps/web`. `lib/account-identity.ts` (both apps, identical).

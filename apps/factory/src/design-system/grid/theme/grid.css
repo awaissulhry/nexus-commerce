@@ -1263,6 +1263,11 @@
 @media (max-width: 599px) {
   .nds-grid-footstrip:not(.nds-grid-sheet-status) { flex-wrap: wrap; row-gap: var(--nds-space-8); }
 }
+/* The row under an open product family (`../toolbars/FamilyFooterFrame`, moved from /products 2026-10-23): the count,
+   an optional muted line, the action. The row is `--nds-grid-footer-row-h` tall (one fixed height); the line centres in
+   it and wraps on a narrow card. Flush left on purpose — see the component. */
+.nds-grid-famfoot { display: flex; align-items: center; gap: var(--nds-space-12); flex-wrap: wrap; height: 100%; padding: var(--nds-space-10) var(--nds-space-14); }
+.nds-grid-famfoot-count { font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
 
 /* the toolbar's swapping halves (`../toolbars/GridSelectionActions`). The search field and an `sm` button are both
    28: the cluster holds the toolbar's height on the first tick and never wraps — when it does not fit,

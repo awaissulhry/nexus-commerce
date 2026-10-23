@@ -1,23 +1,22 @@
 'use client'
 
 /**
- * The full-width row beneath an expanded family. Count on the left; on the right a real DS
- * Button wrapping a real <a target="_blank"> — the live page's footer, reproduced rather than
- * re-imagined. Shown for EVERY family: the button's value is a page scoped to one family, worth
- * reaching whether the family has three variations or forty. The two cases are different actions
- * and do not share a label: capped, the click GETS YOU THE REST and the count belongs in the
- * button; complete, the click only FOCUSES them. The parent's own "N variations" link is the
- * same page one click earlier, and the Owner keeps both.
+ * The full-width row beneath an expanded family, drawn by the DS `FamilyFooterFrame` (the count, the mapping line, the
+ * action) — the same frame Listing readiness uses (2026-10-23). On the right a real DS Button wrapping a real
+ * <a target="_blank"> — the live page's footer, reproduced rather than re-imagined. Shown for EVERY family: the
+ * button's value is a page scoped to one family, worth reaching whether the family has three variations or forty. The
+ * two cases are different actions and do not share a label: capped, the click GETS YOU THE REST and the count belongs
+ * in the button; complete, the click only FOCUSES them. The parent's own "N variations" link is the same page one
+ * click earlier, and the Owner keeps both.
  */
 import { ExternalLink } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { Button } from '@/design-system/primitives'
-import type { ICellRendererParams } from '@/design-system/grid'
+import { FamilyFooterFrame, type ICellRendererParams } from '@/design-system/grid'
 import type { FamilyFooterRow } from '@/app/products/next/productsDatasource'
 import { getBackendUrl } from '@/lib/backend-url'
 
-import styles from './styles.module.css'
 import { familyHref } from './columns'
 import {
   familyFooterCounts,
@@ -97,29 +96,22 @@ export function FamilyFooter({ data }: ICellRendererParams<FamilyFooterRow>) {
   if (!data) return null
   const capped = data.total > data.shown
   return (
-    <div className={styles.famFoot}>
-      <span className={styles.famFootCount}>
-        {capped ? (
-          <>Showing <b>{data.shown}</b> of <b>{data.total}</b> variations</>
-        ) : (
-          <><b>{data.total}</b> {data.total === 1 ? 'variation' : 'variations'}</>
-        )}
-      </span>
-      {/* VT.4b — the unit is COORDINATES, and the label says so: a family can be derived on 25 coordinates and
-          overridden on one, which is exactly what GALE-JACKET is. */}
-      <span
-        className={styles.famFootCount}
-        title={counts
-          ? `Variation mapping across this family's ${counts.rows} coordinate${counts.rows === 1 ? '' : 's'} in the readiness index.`
-          : 'The readiness index has not answered for this family yet.'}
-      >
-        Variation mapping · {counts ? familyFooterSentence(counts) : 'Not computed'}
-      </span>
-      <Button asChild size="sm" variant="secondary">
-        <a href={familyHref(data.parentId)} target="_blank" rel="noopener noreferrer">
-          {capped ? `View all ${data.total}` : 'Open family'} <ExternalLink size={13} />
-        </a>
-      </Button>
-    </div>
+    <FamilyFooterFrame
+      shown={data.shown}
+      total={data.total}
+      /* VT.4b — the unit is COORDINATES, and the label says so: a family can be derived on 25 coordinates and
+         overridden on one, which is exactly what GALE-JACKET is. */
+      extra={<>Variation mapping · {counts ? familyFooterSentence(counts) : 'Not computed'}</>}
+      extraTitle={counts
+        ? `Variation mapping across this family's ${counts.rows} coordinate${counts.rows === 1 ? '' : 's'} in the readiness index.`
+        : 'The readiness index has not answered for this family yet.'}
+      action={
+        <Button asChild size="sm" variant="secondary">
+          <a href={familyHref(data.parentId)} target="_blank" rel="noopener noreferrer">
+            {capped ? `View all ${data.total}` : 'Open family'} <ExternalLink size={13} />
+          </a>
+        </Button>
+      }
+    />
   )
 }

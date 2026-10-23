@@ -31,6 +31,16 @@ describe('materialized listing readiness', () => {
     db.readinessIndex.findMany.mockResolvedValue([])
     expect((await listingReadiness({}, null)).computedAt).toBeNull()
   })
+  it('keeps the stored kind of each issue instead of calling every one missing', async () => {
+    db.readinessIndex.findMany.mockImplementation(async input => input.select ? [{ productId: 'p1' }] : [row('fr', { missing: [
+      { field: 'title', label: 'Title', reason: 'fr content is missing; showing it fallback.', kind: 'language-fallback' },
+      { field: 'brand', label: 'Brand', reason: 'Required and empty', requiredEmpty: true },
+      { field: 'variation_theme', label: 'Variation theme', reason: 'No variation theme', kind: 'theme-unset' },
+      { field: 'size', label: 'Size', reason: 'Two variants collide', kind: 'collision' },
+      { field: 'bullet', label: 'Bullet', reason: 'Too long' },
+    ] })])
+    expect((await listingReadiness({}, null)).rows[0].issues.map(issue => issue.kind)).toEqual(['translation', 'missing', 'schema', 'invalid', 'check'])
+  })
   it('accepts indexed marketplace channels without a second hardcoded list', async () => {
     expect(await listingReadinessWhere({ channel: 'woocommerce' }, null)).toMatchObject({ channel: 'WOOCOMMERCE' })
   })

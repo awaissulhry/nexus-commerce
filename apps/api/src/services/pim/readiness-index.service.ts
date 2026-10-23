@@ -16,6 +16,7 @@ import { logger } from '../../utils/logger.js'
 import { safeJobId } from '../../lib/job-id.js'
 import { channelFootprint, type ChannelFootprint } from '../channel-footprint.service.js'
 import { rebuildAfterResponse } from './readiness-after-response.js'
+import { announceReadinessUpdated } from './readiness-events.js'
 
 export type ReadinessScope = { channel: string; market: string; accountId: string | null }
 
@@ -171,6 +172,14 @@ export type PendingScope = { channel: string; market: string; accountId?: string
 
 export async function markReadinessPending(rootIds: string[], scope?: PendingScope, options?: { onlyNewMarks?: boolean }): Promise<number> {
   if (!rootIds.length) return 0
+  const marked = await markPendingRows(rootIds, scope, options)
+  // Listing readiness rebuild §3 — open pages say "Checking…" for these families (`readiness.updated`, after COMMIT). Only
+  // when rows were marked: a product sheet save of a family already pending marks none, so a typing burst says it once.
+  if (marked > 0) announceReadinessUpdated(rootIds)
+  return marked
+}
+
+async function markPendingRows(rootIds: string[], scope?: PendingScope, options?: { onlyNewMarks?: boolean }): Promise<number> {
   if (options?.onlyNewMarks && !scope) {
     // The product sheet's own deferred saves (`produceReadinessForProducts` `afterResponse`): rows already pending are
     // left alone, so two saves of one family do not queue on its readiness rows and restart each other. Each such save
@@ -542,6 +551,9 @@ export async function reconcileFamilyReadiness(productId: string, scope?: Readin
     // behind to be drained forever. A mark set by a write that commits after this snapshot conflicts with this
     // Serializable transaction and is retried, so it is never cleared unseen.
     await prisma.readinessIndex.updateMany({ where: { product: { OR: [{ id: rootId }, { parentId: rootId }] }, pendingSince: { not: null }, ...scopeWhere }, data: { pendingSince: null } })
+    // Listing readiness rebuild §3 — every rebuild path ends here: open pages re-read this family (`readiness.updated`),
+    // after the COMMIT of the transaction this rebuild ran in (its own, or the save's); a rollback or a retry drops it.
+    announceReadinessUpdated([rootId])
     return rows.length
   }))
 }

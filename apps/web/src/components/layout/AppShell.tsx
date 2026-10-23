@@ -13,8 +13,9 @@
  *
  *   1. full chrome        — the app's own routes.
  *   2. NO_RAIL_PREFIXES   — the route brings its OWN shell and rail (the ads cockpit's
- *                           `AdsSidebar`, `/products/next`'s `ProductsRail`). It never wanted the
- *                           app rail; it does want the top bar.
+ *                           `AdsSidebar`, the `ProductsRail` of `/products/next` and
+ *                           `/products/listing-readiness`). It never wanted the app rail; it does
+ *                           want the top bar.
  *   3. NO_CHROME_PREFIXES — the route must show nothing about us AT ALL.
  *
  * 🔴 Level 3 is a privacy boundary, not a styling choice. `/shared` renders a report for someone
@@ -42,7 +43,7 @@ import { AppTopBar } from '@/app/_shared/AppTopBar'
  * That still governs their CONTENT. It no longer governs the chrome: since 2026-08-31 the bar
  * and rail are one dark surface on every route, so this list no longer needs to mark them.
  */
-const NO_RAIL_PREFIXES = ['/marketing/ads', '/products/next']
+const NO_RAIL_PREFIXES = ['/marketing/ads', '/products/next', '/products/listing-readiness']
 
 /**
  * The same family, for routes with a DYNAMIC segment.

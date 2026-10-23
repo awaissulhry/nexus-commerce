@@ -4358,3 +4358,6 @@ The approved accessibility follow-up is complete: held ScopeBar wrapper/ring is 
 ## 2026-10-19 — Publish window frame
 - CLOSED: a `Modal` could not hold its close: the Publish window's X looked live and did nothing while a publish started — `Modal closeHeld` (held X with its reason; Esc and backdrop do nothing). Both apps.
 - CLOSED: `Button size="sm" wrap` kept the `sm` tier's fixed height, so a second line ran out of the box; the Publish window restyled `.nds-btn.sm` locally (`oneClick.module.css`) — `.nds-btn.sm.wrap` now grows from the tier's height. Both apps.
+
+## 2026-10-23 — Listing readiness rebuild, lane 3b
+- CLOSED: the row under an open product family ("Showing 10 of 40 variations" · "View all 40") lived only in /products (`app/products/next/FamilyFooter.tsx` + `.famFoot` in its module, raw 12px / 10px 14px), so Listing readiness could only copy it. Promoted to `grid/toolbars/FamilyFooterFrame.tsx` (`.nds-grid-famfoot` in `grid.css` on `--nds-space-*`, mirrored in Factory); Products renders through it, same markup and words — apps/web/src/design-system/grid/toolbars/FamilyFooterFrame.tsx

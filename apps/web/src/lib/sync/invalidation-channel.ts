@@ -96,6 +96,10 @@ export type InvalidationType =
   // with their versions and `fields`). The product sheet and the Matrix re-read through `listingValuesLive.ts`.
   | 'inventory.stock_changed'
   | 'listing.values_changed'
+  // Listing readiness rebuild §3 — one family's readiness rows changed (rebuilt, or marked pending while it is re-checked).
+  // `id` = the family root; `meta.rootProductId` the same. Only the Listing readiness page re-reads on it (that family);
+  // the Products list does not listen to it.
+  | 'readiness.updated'
   // F-RT.1 — inbound shipment events. Originally H.14 wired this through
   // a per-page EventSource; now flows through useInboundEvents → here so
   // stock / replenishment / returns / POs (anything that cares about

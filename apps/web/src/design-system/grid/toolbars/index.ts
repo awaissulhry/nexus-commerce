@@ -5,6 +5,8 @@
 export { GridToolbar, type GridToolbarProps } from '../../patterns/GridToolbar'
 export { GridPager, GRID_PAGE_SIZES, DEFAULT_GRID_PAGE_SIZE, type GridPagerProps } from './GridPager'
 export { GridFooterStrip, GridFooterSpacer } from './GridFooterStrip'
+// Listing readiness rebuild (2026-10-23) — the row under an open family ("Showing 10 of 40 variations"), moved from /products.
+export { FamilyFooterFrame, type FamilyFooterFrameProps } from './FamilyFooterFrame'
 export { GridDensityToggle, GRID_DENSITY_OPTIONS, type GridDensityToggleProps } from './GridDensityToggle'
 export { GridSelectionActions, SelectionLabel, SelectionNote, GridSearchSlot } from './GridSelectionActions'
 // LX.F2 / R-LX-18 — the toolbar's overflow rule, measured. The reasoning and the numbers are in the file.
