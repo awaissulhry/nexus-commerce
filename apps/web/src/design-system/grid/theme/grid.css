@@ -626,8 +626,10 @@
 .nds-cell-expand:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -1px; }
 .nds-cell-expand-slot { width: 20px; flex: none; }
 
-/* actions: Edit + ⋯, right-aligned */
-.nds-cell-actions { display: flex; gap: 6px; justify-content: flex-end; align-items: center; }
+/* actions: one line of buttons at their own size, at the right edge. The column fits them (`renderers/actionsFit.ts`),
+   so they are never squeezed, wrapped or cut. */
+.nds-cell-actions { display: flex; flex: none; flex-wrap: nowrap; gap: 6px; justify-content: flex-end; align-items: center; width: max-content; margin-left: auto; }
+.nds-cell-actions > * { flex: none; }
 
 /* tags: one named chip, or up to N glyph chips and a +N */
 .nds-cell-tags { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; overflow: hidden; }

@@ -332,8 +332,11 @@ export const holdColumn = <T,>(col: ColDef<T>, end: 'left' | 'right', pinned = f
 /* ── actions ──────────────────────────────────────────────────────────────────────────────── */
 
 export interface ActionsColumnOptions<T> extends ActionsCellParams<T> {
-  /** Overrides the shape-derived default (56 for a `⋯`-only column, 120 with one `primary` verb, 200 with two or a per-row function). */
-  width?: number
+  /*
+   * 🔴 No `width` (2026-10-23). The column fits its buttons on screen (`renderers/actionsFit.ts`); a number chosen on a
+   * page is the guess that cut "Approve · Reject · ⋯" on Approvals (200 px for buttons that need more). The type
+   * refuses one, so the guess cannot come back.
+   */
   /**
    * Freeze at the right edge. **Defaults to `true`** — see `actionsColumn` for why the old `false`
    * default was a bug that only appeared on wide grids.
@@ -359,7 +362,7 @@ export interface ActionsColumnOptions<T> extends ActionsCellParams<T> {
  * expensive direction. `pinned: false` is still available for a grid that genuinely wants it to
  * scroll away (ruling #146).
  */
-export const actionsColumn = <T,>({ width, pinned = true, prefsLabel: _prefsLabel, ...params }: ActionsColumnOptions<T>): ColDef<T> =>
+export const actionsColumn = <T,>({ pinned = true, prefsLabel: _prefsLabel, ...params }: ActionsColumnOptions<T>): ColDef<T> =>
   holdColumn<T>(
     {
       colId: 'actions',
@@ -386,10 +389,17 @@ export const actionsColumn = <T,>({ width, pinned = true, prefsLabel: _prefsLabe
        * 2026-10-05 (gap G2): the rule moved to `actionsColumnWidth` (`renderers/rowVerbs.ts`), and it IS tested now —
        * `rowVerbs.vitest.test.ts`, and this preset itself in `presets.verbs.vitest.test.ts` (it parses in node today):
        * 56 / 120 unchanged, and 200 for two verbs or a per-row function that may return two.
+       *
+       * 2026-10-23: that number is only the FIRST PAINT now. Each cell measures its buttons and the column takes the
+       * widest row (`renderers/actionsFit.ts`) — the labels, the font, the density and the language included. A saved
+       * layout never restores it (`NexusGrid`), and any other width change is put back. Neither "size to fit" nor
+       * "auto-size" may move it.
        */
-      width: width ?? actionsColumnWidth(params.primary),
+      width: actionsColumnWidth(params.primary),
       sortable: false,
       resizable: false,
+      suppressSizeToFit: true,
+      suppressAutoSize: true,
       suppressHeaderMenuButton: true,
       cellClass: 'nds-ag-cell',
       /* Its buttons sit right, so a header that names the column ("Actions" on /products, from the Customise label)

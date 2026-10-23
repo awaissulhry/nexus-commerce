@@ -90,12 +90,11 @@ export const PREFERENCE_COLUMNS: ReadonlyArray<{ key: string; label: string; loc
 ]
 
 /**
- * Desktop widths. At 1280 px the card is ~1164 px and the pinned actions take 200, so ☐ (~44) + Status + What + Product
- * + Change (its minimum) + Why fit the ~964 px left without sideways scrolling; Asked by, Asked and Expires may scroll.
+ * Desktop widths. At 1280 px the card is ~1164 px and the pinned actions take about 206, so ☐ (~44) + Status + What +
+ * Product + Change (its minimum) + Why fit the ~958 px left without sideways scrolling; Asked by, Asked and Expires may
+ * scroll. The actions column has no number here: it fits its buttons (DS `actionsColumn`, `renderers/actionsFit.ts`).
  */
-export const DESKTOP_WIDTHS = { status: 140, what: 176, product: 192, changeMin: 176, why: 232, actions: 200 } as const
-/** Phone: one verb (Approve is the widest, 75 px) and the cell's padding. */
-export const PHONE_ACTIONS_WIDTH = 104
+export const DESKTOP_WIDTHS = { status: 140, what: 176, product: 192, changeMin: 176, why: 232 } as const
 
 /* ── cells ────────────────────────────────────────────────────────────────────────────────── */
 
@@ -279,7 +278,6 @@ export function queueColumns(handlers: HandlersRef, phone: boolean): ColDef<Queu
     // No ⋯ on a phone: the row opens the drawer.
     ...(phone ? {} : { items }),
     menuLabel: (row) => `More actions for ${rowName(row)}`,
-    width: phone ? PHONE_ACTIONS_WIDTH : DESKTOP_WIDTHS.actions,
   })
   const groups: ColDef<QueueRow>[] = (Object.entries(GROUP_COLUMN) as Array<[Exclude<QueueGroup, 'none'>, string]>).map(([group, colId]) => ({
     colId,

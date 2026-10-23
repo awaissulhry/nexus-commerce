@@ -38,7 +38,9 @@ import { GRID_LOCALE_TEXT } from './locale'
 import { GridNoRowsOverlay } from './renderers/overlays'
 import { LIGHT_PINNED } from '../lib/opens-dark'
 import { NARROW_QUERY } from '../components/useNarrow'
-import { declaredPinning, withPinning } from './statePinning'
+import { colIdsWhere, declaredPinning, withoutColumnSizing, withPinning } from './statePinning'
+import { ActionsCell } from './renderers/cells'
+import { refitActionsColumns } from './renderers/actionsFit'
 import { fillHandleHit } from './editors/openGesture'
 import { registerGridModules } from './modules'
 import { workspaceGridTheme } from './theme/theme'
@@ -439,12 +441,19 @@ export function NexusGrid<T>({
       const data = api.getGridOption(key)
       if (data && data.length) api.setGridOption(key, [...data])
     }
+    // A density moves the cell padding, so the actions column fits its buttons again (`renderers/actionsFit.ts`).
+    refitActionsColumns(api)
   }, [rowHeight, headerHeight, getRowHeight])
   // A restored state that does not name its pins keeps the pins the column definitions declare: AG resets a missing
   // `columnPinning` to none (design audit M14 — the ⋯ column fell outside the card after a reload). `statePinning.ts`.
   // AG reads `initialState` once, so it is worked out from the definitions the grid starts with.
+  // It never restores the actions column's width: that column fits its buttons on screen, and a stored number is only
+  // an old one (2026-10-23, the cut Approve · Reject · ⋯ on Approvals; `renderers/actionsFit.ts`).
   const initialState = useMemo(
-    () => withPinning(agProps.initialState, declaredPinning(agProps.columnDefs)),
+    () => withoutColumnSizing(
+      withPinning(agProps.initialState, declaredPinning(agProps.columnDefs)),
+      colIdsWhere(agProps.columnDefs, col => col.cellRenderer === ActionsCell),
+    ),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- read once with the definitions of the first render, as AG does
     [agProps.initialState],
   )
