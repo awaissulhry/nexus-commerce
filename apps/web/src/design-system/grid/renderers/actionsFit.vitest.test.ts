@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { GridApi } from 'ag-grid-community'
 
 import { actionsRowWidth, grownWidth, joinActionsFit, refitActionsColumns, verbsThatFit, type ActionsGeometry } from './actionsFit'
@@ -45,13 +45,8 @@ describe('grownWidth — grow-only', () => {
 })
 
 describe('the coordinator — one fitted width per grid and column', () => {
-  let frames: Array<() => void>
-  const flush = () => { const run = frames; frames = []; for (const f of run) f() }
-  beforeEach(() => {
-    frames = []
-    vi.stubGlobal('requestAnimationFrame', (cb: () => void) => frames.push(cb))
-  })
-  afterEach(() => vi.unstubAllGlobals())
+  /** The queued width checks run (they are microtasks). */
+  const flush = () => Promise.resolve()
 
   function fakeGrid(start = 200) {
     let width = start
@@ -72,53 +67,53 @@ describe('the coordinator — one fitted width per grid and column', () => {
     }
   }
 
-  it('sets the column to the widest row, once per frame, and only grows while the grid lives', () => {
+  it('sets the column to the widest row, once per task, and only grows while the grid lives', async () => {
     const grid = fakeGrid()
     const a = joinActionsFit(grid.api, 'actions', () => {})
     const b = joinActionsFit(grid.api, 'actions', () => {})
     a.report(172)
     b.report(206)
-    flush()
+    await flush()
     expect(grid.setColumnWidths).toHaveBeenCalledTimes(1)
     expect(grid.width()).toBe(206)
     a.report(138)
-    flush()
+    await flush()
     expect(grid.width()).toBe(206)
     expect(grid.setColumnWidths).toHaveBeenCalledTimes(1)
   })
 
-  it('a width set by anything else — a saved layout of 104, a view — is put straight back', () => {
+  it('a width set by anything else — a saved layout of 104, a view — is put straight back', async () => {
     const grid = fakeGrid()
     joinActionsFit(grid.api, 'actions', () => {}).report(206)
-    flush()
+    await flush()
     grid.resize(104)
-    flush()
+    await flush()
     expect(grid.width()).toBe(206)
   })
 
-  it('a refit (density, grid width) measures the mounted rows again and may shrink; a row that left is not asked', () => {
+  it('a refit (density, grid width) measures the mounted rows again and may shrink; a row that left is not asked', async () => {
     const grid = fakeGrid()
     let need = 206
     const stays = joinActionsFit(grid.api, 'actions', () => stays.report(need))
     const leaves = joinActionsFit(grid.api, 'actions', () => leaves.report(400))
     stays.report(need)
-    flush()
+    await flush()
     leaves.leave()
     need = 190
     refitActionsColumns(grid.api)
-    flush()
+    await flush()
     expect(grid.width()).toBe(190)
     need = 180
     grid.gridSizeChanged()
-    flush()
+    await flush()
     expect(grid.width()).toBe(180)
   })
 
-  it('no row measured yet: the column keeps its first-paint width', () => {
+  it('no row measured yet: the column keeps its first-paint width', async () => {
     const grid = fakeGrid(120)
     joinActionsFit(grid.api, 'actions', () => {})
     grid.resize(120)
-    flush()
+    await flush()
     expect(grid.setColumnWidths).not.toHaveBeenCalled()
   })
 })

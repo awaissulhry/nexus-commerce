@@ -67,16 +67,23 @@ interface ColumnFit {
   need: number
   /** Each mounted cell's "measure again". */
   cells: Set<() => void>
-  frame: number | null
+  /** A width check is already queued. */
+  queued: boolean
 }
 
 const grids = new WeakMap<GridApi, Map<string, ColumnFit>>()
 
-/** Set the column to its fitted width on the next frame, unless it already is (one write per frame per column). */
+/**
+ * Set the column to its fitted width once the reports of this commit are in, unless it already is: one write per
+ * column per task. A microtask, not a frame: it lands before the browser paints (no frame of the old width), and a
+ * tab in the background — where `requestAnimationFrame` does not run — is fitted too (measured: a background tab kept
+ * the 200 px first paint until it was shown).
+ */
 function hold(api: GridApi, colId: string, fit: ColumnFit): void {
-  if (fit.frame !== null || typeof requestAnimationFrame === 'undefined') return
-  fit.frame = requestAnimationFrame(() => {
-    fit.frame = null
+  if (fit.queued) return
+  fit.queued = true
+  queueMicrotask(() => {
+    fit.queued = false
     if (!fit.need || api.isDestroyed()) return
     const column = api.getColumn(colId)
     if (column && Math.abs(column.getActualWidth() - fit.need) >= 1) api.setColumnWidths([{ key: colId, newWidth: fit.need }], true)
@@ -99,7 +106,7 @@ function fitOf(api: GridApi, colId: string): ColumnFit {
     api.addEventListener('gridSizeChanged', () => refitActionsColumns(api))
   }
   let fit = columns.get(colId)
-  if (!fit) columns.set(colId, (fit = { need: 0, cells: new Set(), frame: null }))
+  if (!fit) columns.set(colId, (fit = { need: 0, cells: new Set(), queued: false }))
   return fit
 }
 
