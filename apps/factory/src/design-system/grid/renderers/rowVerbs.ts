@@ -88,8 +88,8 @@ export function rowVerbKey<T>(verb: RowVerb<T>, index: number): string {
 /**
  * The column's default width, from its shape (#690: the width follows the shape, it is derived, not chosen by eye).
  * `⋯` only = 56 (28 + 2 × 14 cell padding); one verb = 120 (unchanged since #690); two verbs, or a function that may
- * return two = 200 (two `sm` buttons of ~7 letters, the `⋯`, two 6px gaps and the padding). A page with longer
- * labels passes `width`.
+ * return two = 200 (two `sm` buttons of ~7 letters, the `⋯`, two 6px gaps and the padding). It is the FIRST PAINT
+ * only: each cell then measures its buttons and the column takes the widest row (`actionsFit.ts`, 2026-10-23).
  */
 export function actionsColumnWidth<T>(input: RowVerbsInput<T> | undefined): number {
   if (!input) return 56

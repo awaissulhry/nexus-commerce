@@ -12,7 +12,7 @@
  * Styling: `../theme/grid.css` (`.nds-grid-*`), tokens from `tokens/grid.ts`. No CSS module, so
  * the cell reads the same in a page card, a modal and a drawer.
  */
-import { memo, useEffect, useState, type ReactNode } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ChevronDown, ChevronRight, ExternalLink, Lock, MoreHorizontal, Pause, TriangleAlert } from 'lucide-react'
 import type { ICellRendererParams, IRowNode } from 'ag-grid-community'
@@ -26,6 +26,7 @@ import { EMPTY_DASH, formatGridValue, type FormatOptions, type GridValueKind } f
 import { longTextMarkLabel, longTextState, type LongTextCaps } from './longTextState'
 import { readinessMeta, readinessPillLabel, type RowReadinessState, type ScopeReadinessState } from './readiness'
 import { keepFromGrid, rowVerbHeld, rowVerbKey, rowVerbsOf, rowVerbVariant, type RowVerb, type RowVerbsInput } from './rowVerbs'
+import { ACTIONS_MAX_SHARE, ACTIONS_MENU_WIDTH, actionsRowWidth, joinActionsFit, verbsThatFit, type ActionsFitMember, type ActionsGeometry } from './actionsFit'
 
 /* ── the dash ─────────────────────────────────────────────────────────────────────────────── */
 
@@ -309,20 +310,93 @@ function RowVerbButton<T>({ verb, data }: { verb: RowVerb<T>; data: T }) {
   return held ? <Tooltip label={held} portal>{button}</Tooltip> : button
 }
 
+/** A verb that moved into the ⋯ menu on a narrow grid: the same action, and a held verb keeps saying why. */
+function foldedVerbItem<T>(verb: RowVerb<T>, index: number, data: T): MenuItemDef {
+  const held = rowVerbHeld(verb, data)
+  return {
+    id: `verb:${rowVerbKey(verb, index)}`,
+    label: verb.label,
+    ...(verb.tone === 'danger' ? { tone: 'danger' as const } : {}),
+    ...(held ? { disabled: true, description: held } : {}),
+    ...(verb.href && !held ? { href: verb.href(data) } : {}),
+    ...(verb.onClick && !held ? { onSelect: () => verb.onClick?.(data) } : {}),
+  }
+}
+
+/** The cell's padding and borders, left and right together: what the column needs beside the buttons. */
+function cellChrome(el: HTMLElement): number {
+  const cell = el.closest('.ag-cell')
+  if (!cell) return 0
+  const s = getComputedStyle(cell)
+  return parseFloat(s.paddingLeft) + parseFloat(s.paddingRight) + parseFloat(s.borderLeftWidth) + parseFloat(s.borderRightWidth)
+}
+
 function ActionsCellImpl<T>(p: ICellRendererParams<T> & ActionsCellParams<T>) {
   const data = p.data
+  const verbs = data ? rowVerbsOf(p.primary, data) : []
+  const items = data ? p.items?.(data) ?? [] : []
+  /* The column fits its buttons (`actionsFit.ts`): this cell measures what it draws and reports the width its row
+     needs. On a grid too narrow for every verb, the verbs that do not fit move into the ⋯ menu. A change of the verbs
+     or their words (`signature`) shows every verb again, so each one is measured before anything folds. */
+  const signature = verbs.map((verb, i) => `${rowVerbKey(verb, i)}=${typeof verb.label === 'string' ? verb.label : ''}`).join('|')
+  const [fold, setFold] = useState({ signature, shown: verbs.length })
+  const shown = fold.signature === signature ? Math.min(fold.shown, verbs.length) : verbs.length
+  const ref = useRef<HTMLDivElement>(null)
+  const widths = useRef<{ signature: string; verbs: number[] }>({ signature, verbs: [] })
+  const member = useRef<ActionsFitMember | null>(null)
+  const measure = useRef<() => void>(() => {})
+  measure.current = () => {
+    const el = ref.current
+    if (!el || !member.current) return
+    if (widths.current.signature !== signature) widths.current = { signature, verbs: [] }
+    const buttons = Array.from(el.children)
+    for (let i = 0; i < shown; i++) if (buttons[i]) widths.current.verbs[i] = buttons[i].getBoundingClientRect().width
+    const trigger = buttons.length > shown ? buttons[shown] : null
+    const geometry: ActionsGeometry = {
+      verbs: verbs.map((_, i) => widths.current.verbs[i] ?? 0),
+      menu: trigger ? trigger.getBoundingClientRect().width : ACTIONS_MENU_WIDTH,
+      hasItems: items.length > 0,
+      gap: parseFloat(getComputedStyle(el).columnGap) || 0,
+      chrome: cellChrome(el),
+    }
+    const grid = el.closest('.ag-root-wrapper')
+    const room = grid && grid.clientWidth > 0 ? grid.clientWidth * ACTIONS_MAX_SHARE : Number.POSITIVE_INFINITY
+    const fits = verbsThatFit(geometry, room)
+    if (fits !== shown) {
+      setFold({ signature, shown: fits })
+      return
+    }
+    member.current.report(actionsRowWidth(geometry, shown))
+  }
+  const hasData = !!data
+  useLayoutEffect(() => {
+    const colId = p.column?.getColId()
+    const el = ref.current
+    if (!hasData || !colId || !el) return
+    member.current = joinActionsFit(p.api, colId, () => measure.current())
+    // A font that loads late or a label that changes resizes the buttons: measure again.
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => measure.current())
+    observer?.observe(el)
+    return () => {
+      observer?.disconnect()
+      member.current?.leave()
+      member.current = null
+    }
+  }, [p.api, p.column, hasData])
+  // Every render: the verbs, a held verb or the fold may have changed what this row needs.
+  useLayoutEffect(() => measure.current())
+
   if (!data) return null
-  const items = p.items?.(data) ?? []
-  const verbs = rowVerbsOf(p.primary, data)
+  const menu = [...verbs.slice(shown).map((verb, i) => foldedVerbItem(verb, shown + i, data)), ...items]
   /* A click anywhere in this cell — a verb, the ⋯ — must not reach the GRID: no `rowClicked` (the row's drawer), no
      click-selection. Flagged in the capture phase, never stopped: see `keepFromGrid`. */
   return (
-    <div className="nds-cell-actions" onClickCapture={keepFromGrid} onDoubleClickCapture={keepFromGrid}>
-      {verbs.map((verb, i) => <RowVerbButton key={rowVerbKey(verb, i)} verb={verb} data={data} />)}
-      {items.length > 0 && (
+    <div ref={ref} className="nds-cell-actions" onClickCapture={keepFromGrid} onDoubleClickCapture={keepFromGrid}>
+      {verbs.slice(0, shown).map((verb, i) => <RowVerbButton key={rowVerbKey(verb, i)} verb={verb} data={data} />)}
+      {menu.length > 0 && (
         <Menu
           label={<MoreHorizontal size={15} />}
-          items={items}
+          items={menu}
           align="right"
           triggerProps={{ className: 'nds-btn sm icon', 'aria-label': p.menuLabel?.(data) ?? 'More actions' }}
         />

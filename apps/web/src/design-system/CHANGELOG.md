@@ -1,3 +1,20 @@
+## The actions column fits its buttons — 2026-10-23
+
+`grid/renderers/cells.tsx`, `grid/renderers/actionsFit.ts`, `grid/theme/grid.css` (both apps, identical);
+`grid/columns/presets.ts`, `grid/NexusGrid.tsx`, `grid/statePinning.ts` (web).
+- **`actionsColumn` has no `width` option.** The width was a guess from the number of verbs (56 / 120 / 200) or a page's
+  own number; on Approvals "Approve · Reject · ⋯" needs more than its 200 px and the end of every waiting row was cut
+  (Harvest terms the same). The shape number is now the first paint only.
+- **`ActionsCell` measures its buttons** and the column takes the widest row (`actionsFit.ts`): the labels, the font, the
+  density and the language included. Grow-only while the grid lives (no jump on scroll); measured again when the grid's
+  width or the density changes (`refitActionsColumns`); any other width change is put back. `suppressSizeToFit` and
+  `suppressAutoSize` keep "size to fit" and auto-size off it.
+- **A saved layout or view never restores its width** (`NexusGrid` drops it from `initialState`: `withoutColumnSizing`,
+  `colIdsWhere`).
+- **Narrow grids fold, never cut:** when the buttons need more than half the grid (`ACTIONS_MAX_SHARE`), the verbs that
+  do not fit move into the ⋯ menu with the same action and the same held reason.
+- **`.nds-cell-actions`** keeps the buttons on one line at their own size (`flex: none`, `width: max-content`).
+
 ## Meta has its channel name — 2026-10-20
 
 `lib/account-identity.ts` (both apps, identical).

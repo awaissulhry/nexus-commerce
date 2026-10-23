@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GridState } from 'ag-grid-community'
 
-import { declaredPinning, withPinning } from './statePinning'
+import { colIdsWhere, declaredPinning, withoutColumnSizing, withPinning } from './statePinning'
 
 describe('declaredPinning — the pins the column definitions declare', () => {
   it('reads pinned (true is left), else initialPinned, groups flattened, field when there is no colId', () => {
@@ -37,5 +37,31 @@ describe('withPinning — a restored state keeps the pins (design audit M14)', (
   it('never shares the arrays it was given', () => {
     const out = withPinning(sizing, pins)
     expect(out.columnPinning?.leftColIds).not.toBe(pins.leftColIds)
+  })
+})
+
+describe('withoutColumnSizing — a fitted column never takes a stored width (2026-10-23)', () => {
+  const state: GridState = { columnSizing: { columnSizingModel: [{ colId: 'what', width: 180 }, { colId: 'actions', width: 104 }] }, sort: { sortModel: [] } }
+  it('drops the stored width of the named columns and keeps the rest', () => {
+    expect(withoutColumnSizing(state, ['actions'])).toEqual({ ...state, columnSizing: { columnSizingModel: [{ colId: 'what', width: 180 }] } })
+  })
+  it('the same object when it stores none of them, or when there is nothing to drop', () => {
+    expect(withoutColumnSizing(state, ['other'])).toBe(state)
+    expect(withoutColumnSizing(state, [])).toBe(state)
+    expect(withoutColumnSizing(undefined, ['actions'])).toBeUndefined()
+    const bare: GridState = { sort: { sortModel: [] } }
+    expect(withoutColumnSizing(bare, ['actions'])).toBe(bare)
+  })
+})
+
+describe('colIdsWhere — the ids of the definitions a test picks', () => {
+  it('flattens groups and reads colId, else field', () => {
+    const mark = () => null
+    expect(colIdsWhere([
+      { colId: 'actions', cellRenderer: mark },
+      { field: 'name' },
+      { headerName: 'Group', children: [{ field: 'more', cellRenderer: mark }] },
+    ], col => col.cellRenderer === mark)).toEqual(['actions', 'more'])
+    expect(colIdsWhere(undefined, () => true)).toEqual([])
   })
 })
