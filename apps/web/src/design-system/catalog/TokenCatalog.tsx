@@ -135,6 +135,7 @@ import { WorkspaceSubheaderExample } from './WorkspaceSubheaderExample'
 import { ChangeValueExample } from './ChangeValueExample'
 import { CountdownExample } from './CountdownExample'
 import { GridRowVerbsExample } from './GridRowVerbsExample'
+import { FamilyFooterFrameExample } from './FamilyFooterFrameExample'
 import { SwitchColumnExample } from './SwitchColumnExample'
 import { ModeColumnExample } from './ModeColumnExample'
 import { BidPartsExample } from './BidPartsExample'
@@ -1065,6 +1066,7 @@ export function TokenCatalog() {
         <GridViewsMenuExample />
         <ChangeValueExample />
         <GridRowVerbsExample />
+        <FamilyFooterFrameExample />
         <SwitchColumnExample />
         <ModeColumnExample />
         <BidPartsExample />

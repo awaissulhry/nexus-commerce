@@ -155,29 +155,8 @@
 
 /* ── Tags column ──────────────────────────────────────────────────────── */
 
-/* ── Variation-family footer (the capped-preview handoff) ─────────────── */
 /* ── Variation-family footer ──────────────────────────────────────────── */
-/* A full-width AG row beneath the last of a family's variations. Flush left, deliberately.
-   Indenting it to line up with the child rows sounds tidier and is not: a child's content sits
-   behind the 43px selection column, the grid's cell padding, a 20px chevron slot and a
-   thumbnail — measured, that is 120px to the thumb and 187px to the title, both of which move
-   with the density tier. Any such number is a constant that silently goes wrong at one of three
-   densities. The sunken ground already says this row belongs to the family above it, and Seller
-   Central left-aligns its own equivalent for the same reason. */
-.famFoot {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  /* The row is a data row tall (one fixed `rowHeight` for the whole grid); the line centres in it. */
-  height: 100%;
-  padding: 10px 14px;
-}
-
-.famFootCount {
-  font-size: var(--nds-font-size-sm);
-  color: var(--nds-text-muted);
-}
+/* Drawn by the DS `FamilyFooterFrame` (`.nds-grid-famfoot` in design-system/grid/theme/grid.css, 2026-10-23). */
 
 /* Loading row shown while fetching children */
 /* Aligned with the child rows it stands in for — it IS one, briefly. The DS's tint and the 3px

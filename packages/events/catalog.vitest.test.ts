@@ -166,6 +166,23 @@ describe('fba.plan_changed (Step 4 Send to FBA)', () => {
   })
 })
 
+describe('readiness.updated (Listing readiness rebuild §3) — the live event of the Listing readiness page', () => {
+  it('carries the family root only, partitioned by it, in the catalog context', () => {
+    const payload = parseEventPayload('readiness.updated', { rootProductId: 'fam_1' })
+    expect(payload).toEqual({ rootProductId: 'fam_1' })
+    expect(deriveSubject('readiness.updated', payload)).toBe('fam_1')
+    expect(getEventDefinition('readiness.updated').context).toBe('catalog')
+    expect(isEventType('readiness.updated')).toBe(true)
+  })
+
+  it('refuses an empty or missing root and any other key (no state, no rows: the page re-reads)', () => {
+    expect(() => parseEventPayload('readiness.updated', { rootProductId: '' })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('readiness.updated', {})).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('readiness.updated', { productId: 'fam_1' })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('readiness.updated', { rootProductId: 'fam_1', pending: true })).toThrow(/Invalid payload/)
+  })
+})
+
 describe('subject derivation', () => {
   it('derives a non-empty subject for every event from a minimal payload', () => {
     // Every definition must be able to produce a partition key. A definition
@@ -184,6 +201,7 @@ describe('subject derivation', () => {
       'listing.synced': { listingId: 'l1', status: 'SUCCESS' },
       'listing.values_changed': { productId: 'p1', listings: [{ listingId: 'l1', productId: 'p2', version: 4 }], fields: ['quantity'] },
       'listing.publish_action_changed': { productId: 'p1', listingIds: ['l1'], column: 'status', value: 'inactive' },
+      'readiness.updated': { rootProductId: 'p1' },
       'wizard.submitted': { wizardId: 'w1', productId: 'p1', status: 'LIVE' },
       'bulk.progress': { jobId: 'j1', processed: 1, total: 2, succeeded: 1, failed: 0 },
       'bulk.completed': { jobId: 'j1', status: 'DONE' },

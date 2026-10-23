@@ -11,6 +11,7 @@ import { inspectCatalogSource, previewCatalogSource, listSourcePresets, listSour
 import { fetchCatalogSource } from '../services/pim/catalog-source-fetch.js'
 import { catalogWorkbookTemplate, type WorkbookDestination } from '../services/pim/catalog-workbook-scopes.js'
 import { listingReadiness } from '../services/pim/listing-readiness.service.js'
+import { readinessDetail, readinessFamilies, readinessFamilyMembers } from '../services/pim/listing-readiness-families.service.js'
 import { productTransferOptions, resolveProductTransferBoundary, checkProductTransferBoundary } from '../services/pim/catalog-product-transfer.js'
 import { visitActiveWorkspaces } from '../lib/workspace-sweep.js'
 import { workspaceContext } from '../lib/workspace-context.js'
@@ -138,6 +139,19 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
   fastify.get('/catalog-transfer/readiness', async (request, reply) => {
     reply.header('Cache-Control', 'no-store')
     return listingReadiness(request.query as Record<string, unknown>, actor(request))
+  })
+  // The family view (rebuild 2026-10-23): one row per family, its open members, and one destination's Fix window.
+  fastify.get('/catalog-transfer/readiness/families', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    return readinessFamilies(request.query as Record<string, unknown>, actor(request))
+  })
+  fastify.get('/catalog-transfer/readiness/families/:rootId/members', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    return readinessFamilyMembers((request.params as { rootId: string }).rootId, request.query as Record<string, unknown>, actor(request))
+  })
+  fastify.get('/catalog-transfer/readiness/detail', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    return readinessDetail(request.query as Record<string, unknown>, actor(request))
   })
   fastify.get('/catalog-transfer/source/history', async request => listSourceHistory(actor(request), Number((request.query as { page?: string }).page ?? 1)))
   fastify.get('/catalog-transfer/source/fields', async request => sourceMappingFields(request.query as Parameters<typeof sourceMappingFields>[0]))

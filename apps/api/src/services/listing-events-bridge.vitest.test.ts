@@ -121,6 +121,22 @@ describe('inventory.stock_changed reaches the listing SSE bus', () => {
     off()
   })
 
+  // Listing readiness rebuild §3 — a rebuild in the queue worker or the scheduler's drain publishes on its own process;
+  // declaring the type on the bus is the bridge to the API's /api/listings/events stream, so the open page hears it.
+  it('delivers a relayed readiness.updated with its family root, and a local one once (no echo)', async () => {
+    const seen: any[] = []
+    const off = subscribeListingEvents((e) => seen.push(e))
+    await broker.publish([{ ...envelope('readiness.updated', { rootProductId: 'fam-1' }), subject: 'fam-1' }])
+    expect(seen).toHaveLength(1)
+    expect(seen[0]).toMatchObject({ type: 'readiness.updated', rootProductId: 'fam-1' })
+    expect(typeof seen[0].ts).toBe('number')
+
+    publishListingEvent({ type: 'readiness.updated', rootProductId: 'fam-2', ts: Date.now() })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(seen.map((e) => e.rootProductId)).toEqual(['fam-1', 'fam-2'])
+    off()
+  })
+
   it('unsubscribes cleanly', async () => {
     const before = getListenerCount()
     const off = subscribeListingEvents(() => {})

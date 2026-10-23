@@ -45,6 +45,9 @@
 //   listing.publish_action_changed → invalidation 'listing.updated' with meta.subtype 'listing.publish_action_changed'
 //                       (build shape v2, P8 — a waiting Status or Action value changed; other open sheets of the
 //                       family read their Status and Action columns again. Nothing was sent to a channel.)
+//   readiness.updated → invalidation 'readiness.updated' (Listing readiness rebuild §3 — one family's readiness was
+//                       rebuilt or marked pending; `id` and meta.rootProductId = the family root. Only the Listing
+//                       readiness page listens: it re-reads that family. The Products list does not.)
 //   ping             → no-op (just confirms liveness)
 
 'use client'
@@ -61,6 +64,8 @@ interface ListingEvent {
   reason?: string
   status?: string
   durationMs?: number
+  /** readiness.updated — the family root. */
+  rootProductId?: string
   ts: number
   [key: string]: any
 }
@@ -81,6 +86,16 @@ export function fbaPlanInvalidations(event: { planId?: unknown; status?: unknown
   const productIds = Array.isArray(event.productIds) ? [...new Set(event.productIds.filter((id): id is string => typeof id === 'string' && id.length > 0))] : []
   if (productIds.length === 0) return [{ type: 'inventory.stock_changed', id: event.planId, meta }]
   return productIds.map((productId) => ({ type: 'inventory.stock_changed' as const, id: productId, meta: { ...meta, productId } }))
+}
+
+/**
+ * Listing readiness rebuild §3 — `readiness.updated` ({ rootProductId }): one family's readiness rows changed (rebuilt
+ * after COMMIT, or marked pending while it is re-checked). Its own invalidation type, `id` = the family root, so the
+ * Listing readiness page re-reads that family alone; nothing else listens to it. No root → nothing to re-read.
+ */
+export function readinessInvalidation(event: { rootProductId?: unknown }): Omit<InvalidationEvent, 'origin'> | null {
+  if (typeof event.rootProductId !== 'string' || !event.rootProductId) return null
+  return { type: 'readiness.updated', id: event.rootProductId, meta: { source: 'sse', rootProductId: event.rootProductId } }
 }
 
 export interface UseListingEventsResult {
@@ -196,6 +211,10 @@ export function useListingEvents(enabled = true): UseListingEventsResult {
             meta: { source: 'sse', subtype: parsed.type, productId: parsed.productId, listingIds: parsed.listingIds,
               column: parsed.column, value: parsed.value },
           })
+        } else if (parsed.type === 'readiness.updated') {
+          // Listing readiness rebuild §3 — the family's readiness changed: the Listing readiness page re-reads it.
+          const invalidation = readinessInvalidation(parsed)
+          if (invalidation) emitInvalidation(invalidation)
         } else if (parsed.type === 'product.created') {
           emitInvalidation({ type: 'product.created', id: parsed.productId, meta: { source: 'sse' } })
         } else if (parsed.type === 'product.deleted') {
@@ -232,6 +251,8 @@ export function useListingEvents(enabled = true): UseListingEventsResult {
       'product.media.changed',
       'publication.status_changed',
       'listing.publish_action_changed',
+      // Listing readiness rebuild §3 — a family's readiness was rebuilt or marked pending.
+      'readiness.updated',
       'ping',
     ]
     for (const t of namedTypes) source.addEventListener(t, handle as EventListener)

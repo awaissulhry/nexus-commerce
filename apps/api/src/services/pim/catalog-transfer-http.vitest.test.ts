@@ -50,6 +50,18 @@ it('serves lightweight readiness choices and refuses ambiguous or unowned review
   expect(missing.statusCode).toBe(400)
   expect(missing.json().error).toBe('Import job not found')
 })
+it('serves the family readiness routes uncached and refuses bad input with 400 before reading anything', async () => {
+  const before = state.store.queries.length
+  for (const url of ['/api/catalog-transfer/readiness/families?pageSize=25', '/api/catalog-transfer/readiness/families?state=checks-passed',
+    '/api/catalog-transfer/readiness/families/root/members?limit=0', '/api/catalog-transfer/readiness/detail?productId=p0&destination=AMAZON',
+    '/api/catalog-transfer/readiness/detail?productId=p0&family=yes&destination=%5Bnull%2Cnull%2Cnull%2Cnull%5D']) {
+    const refused = await app.inject(url)
+    expect(refused.statusCode, url).toBe(400)
+    expect(refused.headers['cache-control'], url).toBe('no-store')
+    expect(refused.json().error, url).toEqual(expect.any(String))
+  }
+  expect(state.store.queries.length).toBe(before)
+})
 it('runs multipart upload, source mapping, complete paginated HTTP review and apply through registered routes', async () => {
   const boundary = 'session-two-isolated-boundary'
   const payload = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="source.csv"\r\nContent-Type: text/csv\r\n\r\nSKU,Name,Amazon A\n000000,HTTP shared,HTTP title\r\n--${boundary}--\r\n`
