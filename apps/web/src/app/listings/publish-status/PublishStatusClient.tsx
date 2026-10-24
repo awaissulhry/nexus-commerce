@@ -319,9 +319,9 @@ function GateHealth() {
                         <td className="px-2 py-1 font-mono text-xs">
                           {r.sku ? (
                             <Link
-                              href={`/listings?search=${encodeURIComponent(r.sku)}`}
+                              href={`/listings/legacy?search=${encodeURIComponent(r.sku)}`}
                               className="text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
-                              title={`Open /listings filtered to ${r.sku}`}
+                              title={`Open the legacy Listings page filtered to ${r.sku}`}
                             >
                               {r.sku}
                             </Link>
@@ -408,9 +408,9 @@ function GateHealth() {
                       <td className="px-2 py-1 font-mono text-xs">
                         {r.sku ? (
                           <Link
-                            href={`/listings?search=${encodeURIComponent(r.sku)}`}
+                            href={`/listings/legacy?search=${encodeURIComponent(r.sku)}`}
                             className="text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
-                            title={`Open /listings filtered to ${r.sku}`}
+                            title={`Open the legacy Listings page filtered to ${r.sku}`}
                           >
                             {r.sku}
                           </Link>

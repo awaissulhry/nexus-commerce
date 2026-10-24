@@ -1224,7 +1224,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
       if (Object.prototype.hasOwnProperty.call(body, 'isPublished')) return reply.code(409).send({
         code: 'CHANNEL_WORKFLOW_REQUIRED', error: 'Use the listing channel workflow to publish or withdraw listings. A local status flag cannot confirm a marketplace change.',
-        reviewHref: `/products/listing-readiness?${new URLSearchParams({ listingIds: id })}`,
+        reviewHref: `/listings?${new URLSearchParams({ listingIds: id })}`,
       })
       // A quantity or a sale goes through the Studio matrix's write (FBA refused, the Amazon EU group, eBay/Etsy have
       // no sale, the price permission) — the very rules of the matrix cell. Alone: that write is its own transaction.
@@ -3391,7 +3391,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       if (action === 'publish' || action === 'unpublish') {
         return reply.code(409).send({ code: 'CHANNEL_WORKFLOW_REQUIRED',
           error: 'Use the listing channel workflow to publish or withdraw listings. A local status flag cannot confirm a marketplace change.',
-          reviewHref: '/products/listing-readiness' })
+          reviewHref: '/listings' })
       }
       // An Undo names its job; the listings come from what that job changed.
       if (ids.length === 0 && action !== 'undo') return reply.code(400).send({ error: 'listingIds[] is required' })

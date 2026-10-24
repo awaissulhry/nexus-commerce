@@ -22,7 +22,7 @@ afterAll(async () => { await app.close() })
 it.each(['publish', 'unpublish'])('refuses legacy %s before creating a job or changing a listing flag', async action => {
   const response = await app.inject({ method: 'POST', url: '/listings/bulk-action', payload: { action, listingIds: ['listing-a'] } })
   expect(response.statusCode).toBe(409)
-  expect(response.json()).toMatchObject({ code: 'CHANNEL_WORKFLOW_REQUIRED', reviewHref: '/products/listing-readiness' })
+  expect(response.json()).toMatchObject({ code: 'CHANNEL_WORKFLOW_REQUIRED', reviewHref: '/listings' })
   expect(mocks.write).not.toHaveBeenCalled()
 })
 it.each([true, false])('refuses a generic isPublished=%s patch without changing local state', async isPublished => {

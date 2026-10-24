@@ -93,7 +93,7 @@ describe('the API parameters', () => {
   it('one family’s page keeps the filters and starts on page 1', () => {
     const href = familyPageHref(parseReadinessQuery('?channel=EBAY&page=3'), 'root 2')
     const url = new URL(href, 'http://x')
-    expect(url.pathname).toBe('/products/listing-readiness')
+    expect(url.pathname).toBe('/listings')
     expect(Object.fromEntries(url.searchParams)).toEqual({ channel: 'EBAY', parent: 'root 2' })
   })
 })

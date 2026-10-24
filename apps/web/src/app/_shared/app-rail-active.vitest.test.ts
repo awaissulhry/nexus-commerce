@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveActiveNav, hrefMatchesPath, type ActiveNavNode } from './app-rail-active'
+import { buildAppNav } from './app-nav'
 
 /**
  * The real shape from app-nav.ts: a three-level group where EVERY group's href
@@ -88,6 +89,13 @@ describe('resolveActiveNav', () => {
 
   it('never highlights an external link', () => {
     expect(resolveActiveNav(FLEET, '/docs')).toBeNull()
+  })
+
+  it('Listings: the new page lights Listings, the old page lights its own Legacy row (2026-10-24)', () => {
+    const nav = buildAppNav({}, { amazon: true, ebay: true })
+    expect(resolveActiveNav(nav, '/listings')).toEqual({ href: '/listings', depth: 1 })
+    expect(resolveActiveNav(nav, '/listings/legacy')).toEqual({ href: '/listings/legacy', depth: 2 })
+    expect(resolveActiveNav(nav, '/listings/amazon/it')).toEqual({ href: '/listings/amazon/it', depth: 3 })
   })
 })
 

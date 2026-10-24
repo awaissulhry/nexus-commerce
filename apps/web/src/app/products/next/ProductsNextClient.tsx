@@ -614,7 +614,7 @@ function ProductsNextInner() {
   const moreActionItems = useMemo<MenuItemDef[]>(
     () => [{ id: 'readiness', label: 'Check listing readiness…', icon: <Send size={13} />, onSelect: () => {
       if (selection.ids.length > BULK_MAX) { toast(`Select ${BULK_MAX} or fewer products for a readiness check.`, 'danger'); return }
-      router.push(`/products/listing-readiness?${new URLSearchParams({ productIds: selection.ids.join(',') })}`)
+      router.push(`/listings?${new URLSearchParams({ productIds: selection.ids.join(',') })}`)
     } }],
     [selection.ids, router, toast],
   )
@@ -1355,7 +1355,7 @@ function ProductsNextInner() {
             ) : (
               <>
                 <Button asChild size="sm">
-                  <Link href="/products/listing-readiness">Listing readiness</Link>
+                  <Link href="/listings">Listings</Link>
                 </Button>
                 <Button asChild size="sm">
                   <Link href="/products/catalog-transfer">

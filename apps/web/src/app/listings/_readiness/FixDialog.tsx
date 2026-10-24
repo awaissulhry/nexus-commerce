@@ -18,8 +18,8 @@ import Link from '@/lib/workspaces/Link'
 import { Button, Pill, Spinner, Tag } from '@/design-system/primitives'
 import { AsOf, Banner, Disclosure, EmptyState, Modal } from '@/design-system/components'
 import { SkuTag, readinessMeta } from '@/design-system/grid'
-import { languageLabel } from '../[id]/edit/_studio/scopes'
-import { transferApi } from '../catalog-transfer/transferApi'
+import { languageLabel } from '@/app/products/[id]/edit/_studio/scopes'
+import { transferApi } from '@/app/products/catalog-transfer/transferApi'
 import {
   emptyWords, fixDetailPath, stateLine, fixTitle, inBusiness, listingTotal, listingWords, moreWords, problemKindLabel, productTitle,
   requiredByWords, stateParts,
