@@ -1,36 +1,20 @@
+// /listings/amazon/<market> — the Listings page for one Amazon market
+// (2026-10-24, docs/listings/LISTINGS-STORE-PAGES-2026-10-24.md).
+// The old page is /listings/legacy/amazon/<market>.
 import type { Metadata } from 'next'
-import { COUNTRY_NAMES } from '@/lib/country-names'
-import AmazonListingsClient from '../AmazonListingsClient'
+import { ReadinessPage, marketLock } from '../../_readiness/ReadinessPage'
+import { scopeTitle } from '../../_readiness/readinessScope'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+export const fetchCache = 'force-no-store'
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ market: string }>
-}): Promise<Metadata> {
-  const { market } = await params
-  const label = COUNTRY_NAMES[market.toUpperCase()] ?? market.toUpperCase()
-  return { title: `Amazon ${label} · Listings` }
+type Params = { params: Promise<{ market: string }> }
+
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
+  return { title: scopeTitle(await marketLock('AMAZON', params)) }
 }
 
-export default async function AmazonMarketPage({
-  params,
-}: {
-  params: Promise<{ market: string }>
-}) {
-  const { market } = await params
-  const code = market.toUpperCase()
-  const label = COUNTRY_NAMES[code] ?? code
-  return (
-    <AmazonListingsClient
-      lockMarketplace={code}
-      breadcrumbs={[
-        { label: 'Listings', href: '/listings' },
-        { label: 'Amazon', href: '/listings/amazon' },
-        { label },
-      ]}
-    />
-  )
+export default async function AmazonMarketListingsPage({ params }: Params) {
+  return <ReadinessPage lock={await marketLock('AMAZON', params)} />
 }

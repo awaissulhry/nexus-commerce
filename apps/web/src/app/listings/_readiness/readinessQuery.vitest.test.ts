@@ -15,9 +15,11 @@ import {
   translateScope,
   viewFiltersOf,
   withFilter,
+  withLock,
   withViewFilters,
   withoutFilters,
 } from './readinessQuery'
+import type { ReadinessLock } from './readinessScope'
 
 describe('parseReadinessQuery — every older link keeps working', () => {
   it('the Products menu: ?productIds= is the selection', () => {
@@ -166,5 +168,63 @@ describe('translateScope — only what the old scope can express', () => {
   })
   it('an older state value the old scope knows still passes', () => {
     expect(translateScope(parseReadinessQuery('?language=it&state=absent'))).toEqual({ ok: true, query: { language: 'it', state: 'absent' } })
+  })
+})
+
+/* ── A store page's lock (2026-10-24, docs/listings/LISTINGS-STORE-PAGES-2026-10-24.md) ──────────────────────────── */
+
+describe('a store page', () => {
+  const AMAZON_IT: ReadinessLock = { channel: 'AMAZON', marketplace: 'IT' }
+  const AMAZON: ReadinessLock = { channel: 'AMAZON', marketplace: '' }
+  const SHOPIFY: ReadinessLock = { channel: 'SHOPIFY', marketplace: '' }
+
+  it('shows its store and market whatever the address says', () => {
+    const q = parseReadinessQuery('?channel=EBAY&marketplace=DE&language=it', AMAZON_IT)
+    expect(q).toMatchObject({ channel: 'AMAZON', marketplace: 'IT', language: 'it', lock: AMAZON_IT })
+    expect(apiFilterParams(q)).toEqual({ channel: 'AMAZON', marketplace: 'IT', language: 'it' })
+  })
+
+  it('a store page without a market lets the market be chosen; Shopify’s one market is fixed', () => {
+    expect(parseReadinessQuery('?marketplace=de', AMAZON)).toMatchObject({ channel: 'AMAZON', marketplace: 'DE' })
+    expect(parseReadinessQuery('?marketplace=IT', SHOPIFY)).toMatchObject({ channel: 'SHOPIFY', marketplace: '' })
+  })
+
+  it('writes an address without what the path already says', () => {
+    const q = parseReadinessQuery('?state=blocked&language=de', AMAZON_IT)
+    expect(serializeReadinessQuery(q)).toBe('language=de&state=blocked')
+    expect(serializeReadinessQuery(parseReadinessQuery('?marketplace=DE', AMAZON))).toBe('marketplace=DE')
+    expect(serializeReadinessQuery(parseReadinessQuery('', AMAZON_IT))).toBe('')
+  })
+
+  it('keeps a family’s own page on the store page', () => {
+    expect(familyPageHref(parseReadinessQuery('?state=warn', AMAZON_IT), 'root-1')).toBe('/listings/amazon/it?state=warn&parent=root-1')
+    expect(familyPageHref(parseReadinessQuery('', SHOPIFY), 'root-1')).toBe('/listings/shopify?parent=root-1')
+  })
+
+  it('a fixed filter does not change; Clear and a saved view keep the lock', () => {
+    const q = parseReadinessQuery('?language=it', AMAZON_IT)
+    expect(withFilter(q, 'channel', 'EBAY')).toBe(q)
+    expect(withFilter(q, 'marketplace', 'DE')).toBe(q)
+    expect(withFilter(q, 'language', 'de')).toMatchObject({ channel: 'AMAZON', marketplace: 'IT', language: 'de' })
+    expect(withoutFilters(q)).toMatchObject({ channel: 'AMAZON', marketplace: 'IT', language: '' })
+    expect(withViewFilters(q, { channel: 'EBAY', marketplace: 'DE', state: 'ready' })).toMatchObject({ channel: 'AMAZON', marketplace: 'IT', state: 'ready' })
+  })
+
+  it('counts and saves only the filters the page does not fix', () => {
+    const q = parseReadinessQuery('?language=it&familyId=f1', AMAZON_IT)
+    expect(activeFilterCount(q)).toBe(2)
+    expect(viewFiltersOf(q)).toEqual({ channel: '', marketplace: '', accountId: '', language: 'it', familyId: 'f1', state: '' })
+    expect(viewFiltersOf(parseReadinessQuery('?marketplace=DE', AMAZON))).toMatchObject({ channel: '', marketplace: 'DE' })
+  })
+
+  it('withLock leaves an unlocked or already locked query as it is', () => {
+    expect(withLock(EMPTY_READINESS_QUERY)).toBe(EMPTY_READINESS_QUERY)
+    const q = parseReadinessQuery('', AMAZON_IT)
+    expect(withLock(q)).toBe(q)
+  })
+
+  it('Translate and the Fix window keep the store and market', () => {
+    const q = parseReadinessQuery('?language=it', AMAZON_IT)
+    expect(translateScope(q)).toEqual({ ok: true, query: { channel: 'AMAZON', marketplace: 'IT', language: 'it' } })
   })
 })

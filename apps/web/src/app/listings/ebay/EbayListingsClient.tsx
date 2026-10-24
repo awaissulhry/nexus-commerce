@@ -24,6 +24,7 @@ import { COUNTRY_NAMES } from '@/lib/country-names'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
 import ListingsWorkspace from '../ListingsWorkspace'
+import { readinessPath } from '../_readiness/readinessScope'
 
 // eBay's seeded marketplaces from the audit (5 countries) — IT first
 // because it's Xavia's primary. Others appended left-to-right by
@@ -50,11 +51,14 @@ interface Props {
   /** When set, locks to a specific eBay marketplace (per-market route). */
   lockMarketplace?: string
   breadcrumbs?: Array<{ label: string; href?: string }>
+  /** Since 2026-10-24 this is the old eBay page (`/listings/legacy/ebay[/<market>]`): its note and link. */
+  legacy?: boolean
 }
 
 export default function EbayListingsClient({
   lockMarketplace,
   breadcrumbs,
+  legacy = false,
 }: Props) {
   // L-RT.1 — open the SSE pipe on direct landings to /listings/ebay
   // so this page's invalidationTypes wiring fires sub-200ms. Without
@@ -69,8 +73,8 @@ export default function EbayListingsClient({
 
   useEffect(() => {
     const country = COUNTRY_NAMES[activeMarket] ?? activeMarket
-    document.title = `eBay ${country} · Listings`
-  }, [activeMarket])
+    document.title = `eBay ${country} · Listings${legacy ? ' (legacy)' : ''}`
+  }, [activeMarket, legacy])
 
   const overviewUrl = useMemo(
     () => `/api/listings/ebay/overview?marketplace=${activeMarket}`,
@@ -151,6 +155,7 @@ export default function EbayListingsClient({
         lockChannel="EBAY"
         lockMarketplace={activeMarket}
         breadcrumbs={breadcrumbs}
+        legacy={legacy ? { store: 'eBay', href: readinessPath({ channel: 'EBAY', marketplace: lockMarketplace ?? '' }) } : undefined}
         storageKey="ebay"
         channelDefaultVisible={['thumb', 'product', 'marketplace', 'status', 'syncStatus', 'price', 'quantity', 'externalId', 'lastSync', 'actions']}
       />

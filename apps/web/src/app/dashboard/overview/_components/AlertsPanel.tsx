@@ -116,8 +116,10 @@ export default function AlertsPanel({
       label: t('overview.alerts.suppressions'),
       count: alerts.suppressions,
       // Suppressions live across Amazon listings; the master view
-      // filtered to suppressed status is the right drill-down.
-      href: '/listings/amazon?suppressed=true',
+      // filtered to suppressed status is the right drill-down. Since
+      // 2026-10-24 the page with the suppression list is the old Amazon
+      // page (`/listings/amazon` is the new Listings page for Amazon).
+      href: '/listings/legacy/amazon',
       tone: 'rose',
       impact: t('overview.alerts.impact.suppressions'),
       actionLabel: t('overview.alerts.action.resolve'),

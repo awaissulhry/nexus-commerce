@@ -263,10 +263,13 @@ function productTarget(ref: { id?: string | null; sku?: string | null; name?: st
   })
 }
 
-/** The listings page of a channel, searched for the SKU (the products page's own link). */
+/**
+ * The old Listings page (live status), searched for the SKU on every market of its channel — the products page's own
+ * link. Since 2026-10-24 `/listings/<channel>` is the new Listings page, which has no live status.
+ */
 function listingHref(channel: string | null, sku: string | null): string | null {
   if (!sku || !channel || !['AMAZON', 'EBAY', 'SHOPIFY'].includes(channel)) return null
-  return `/listings/${channel.toLowerCase()}?search=${seg(sku)}`
+  return `/listings/legacy?channel=${channel}&search=${seg(sku)}`
 }
 
 const EBAY_AD_TOOLS = new Set(['set-ebay-ad-rates', 'promote-ebay-listings', 'set-ebay-campaign-budget', 'ebay-keywords-change', 'create-ebay-campaign'])

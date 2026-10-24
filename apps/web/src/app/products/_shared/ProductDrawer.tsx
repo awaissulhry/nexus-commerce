@@ -1729,11 +1729,10 @@ function ListingsTab({
                         )}
                         <Link
                           // W5.45 — was /listings/${l.id} which 404s (no
-                          // /listings/[id] route ever existed). Send the
-                          // operator to the channel's listing index instead;
-                          // they can find this listing there. Better than a
-                          // dead-end click.
-                          href={`/listings/${l.channel.toLowerCase()}`}
+                          // /listings/[id] route ever existed). Since
+                          // 2026-10-24 the old Listings page opens this one
+                          // listing's drawer (`?drawer=<listingId>`).
+                          href={`/listings/legacy?drawer=${encodeURIComponent(l.id)}`}
                           className="text-sm text-blue-700 hover:underline inline-flex items-center gap-0.5"
                         >
                           {t('products.drawer.listings.open')} <ChevronRight className="w-3 h-3" />
