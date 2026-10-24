@@ -1,14 +1,17 @@
+// /listings/ebay — the Listings page for every eBay market
+// (2026-10-24, docs/listings/LISTINGS-STORE-PAGES-2026-10-24.md).
+// The old eBay page is /listings/legacy/ebay.
 import type { Metadata } from 'next'
-import EbayListingsClient from './EbayListingsClient'
+import { ReadinessPage } from '../_readiness/ReadinessPage'
+import { scopeTitle, type ReadinessLock } from '../_readiness/readinessScope'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
-export const metadata: Metadata = { title: 'eBay · Listings' }
+export const fetchCache = 'force-no-store'
+
+const LOCK: ReadinessLock = { channel: 'EBAY', marketplace: '' }
+export const metadata: Metadata = { title: scopeTitle(LOCK) }
 
 export default function EbayListingsPage() {
-  return (
-    <EbayListingsClient
-      breadcrumbs={[{ label: 'Listings', href: '/listings' }, { label: 'eBay' }]}
-    />
-  )
+  return <ReadinessPage lock={LOCK} />
 }

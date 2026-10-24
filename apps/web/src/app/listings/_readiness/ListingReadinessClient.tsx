@@ -15,18 +15,23 @@
  *
  * The address is the page's state (`readinessQuery.ts`): every older link keeps working, and the page writes its
  * filters back with `history.replaceState` so a reload or a shared link shows the same thing.
+ *
+ * The menu's store pages are this page with a lock (`readinessScope.ts`, 2026-10-24): `/listings/amazon`,
+ * `/listings/amazon/it`, `/listings/ebay`, `/listings/ebay/de`, `/listings/shopify` show that store (and market) only.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Archive, History, Search, SlidersHorizontal } from 'lucide-react'
+import { AlertTriangle, Archive, ChevronDown, History, Search, SlidersHorizontal } from 'lucide-react'
 import type { ReadinessDestination } from '@nexus/shared/listing-readiness'
 
 import Link from '@/lib/workspaces/Link'
+import { browserWorkspaceId, workspaceHref } from '@/lib/workspaces/paths'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useInvalidationChannel, type InvalidationEvent, type InvalidationType } from '@/lib/sync/invalidation-channel'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { usePolledList } from '@/lib/sync/use-polled-list'
 import { streamsEnabled } from '@/lib/sync/dev-stream-gate'
 import { Button, Input, Pill, TokenChip } from '@/design-system/primitives'
-import { Banner, EmptyState, MetricStrip, ToastProvider, type Metric } from '@/design-system/components'
+import { Banner, EmptyState, Menu, MetricStrip, ToastProvider, type Metric } from '@/design-system/components'
 import { FilterBar, GridToolbar, PageHeader, PreferencesModal, type FilterDimension, type PreferencesValue } from '@/design-system/patterns'
 import type { PreferencesColumnSpec } from '@/design-system/patterns/PreferencesModal'
 import {
@@ -71,6 +76,7 @@ import {
   translateScope,
   viewFiltersOf,
   withFilter,
+  withLock,
   withViewFilters,
   withoutFilters,
   type ReadinessFilterKey,
@@ -83,6 +89,7 @@ import { READINESS_TILES, listingsInView, stateForTile, tileAccent, tileCount, t
 import { channelLabel, destinationLookup, orderedChips, plural } from './marketChips'
 import { marketsColumnState, marketsFill, marketsFillForWindow, sizingForWidth } from './marketsWidth'
 import { relativeTime } from './relativeTime'
+import { legacyMarketHref, legacyPath, lockedKeys, marketCount, marketWord, readinessPath, scopeWords, storeWord, suppressedListings, type ReadinessLock } from './readinessScope'
 
 /* ── Constants ──────────────────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -152,17 +159,45 @@ function withCurrent(options: Array<{ value: string; label: string }>, value: st
   return !value || options.some((o) => o.value === value) ? options : [...options, { value, label: value }]
 }
 
+/** The crumbs above the title (the DS header's eyebrow, as on Publish history). */
+function ScopeCrumbs({ crumbs }: { crumbs: Array<{ label: string; href: string }> }) {
+  return (
+    <nav aria-label="Breadcrumb">
+      {crumbs.map((c, i) => (
+        <span key={c.href}>
+          {i > 0 && <span aria-hidden> › </span>}
+          <Link href={c.href}>{c.label}</Link>
+        </span>
+      ))}
+    </nav>
+  )
+}
+
+/** The eBay page's own tools: before 2026-10-24 two tiles and a button on the old eBay page. */
+function ebayTools(lock: ReadinessLock): Array<{ id: string; label: string; href: string }> {
+  const inBusiness = (href: string) => workspaceHref(browserWorkspaceId(), href)
+  return [
+    { id: 'markdowns', label: 'Markdowns', href: inBusiness('/listings/ebay/markdowns') },
+    { id: 'campaigns', label: 'Promoted campaigns', href: inBusiness('/listings/ebay/campaigns') },
+    { id: 'gaps', label: 'Gap analysis', href: inBusiness(`/listings/ebay/gaps${lock.marketplace ? `?marketplace=${lock.marketplace}` : ''}`) },
+  ]
+}
+
+/** `GET /api/listings/amazon/overview` — the part this page reads: the old Amazon page's suppression list. */
+interface AmazonSuppressions { activeSuppressions: Array<{ listingId: string; listing: { marketplace: string } }> }
+
 /* ── The page ───────────────────────────────────────────────────────────────────────────────────────────────────── */
 
-function ListingReadinessInner() {
+function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   const backendUrl = getBackendUrl()
 
   // ── The query (the address is its owner) ──────────────────────
   const [query, setQueryState] = useState<ReadinessPageQuery | null>(null)
   const queryRef = useRef(query)
   queryRef.current = query
+  // Every change keeps the store page's lock (`withLock`): a tile, Clear, a saved view, a view that answers late.
   const setQuery = useCallback((update: (q: ReadinessPageQuery) => ReadinessPageQuery) => {
-    setQueryState((prev) => (prev ? update(prev) : prev))
+    setQueryState((prev) => (prev ? withLock(update(prev)) : prev))
   }, [])
   const [density, setDensity] = useState<DensityMode>(DEFAULT_DENSITY)
   const densityRef = useRef(density)
@@ -201,7 +236,7 @@ function ListingReadinessInner() {
   // Read the address once, on the client. A remembered page size applies unless the link names its own paging.
   useEffect(() => {
     const search = new URLSearchParams(window.location.search)
-    const parsed = parseReadinessQuery(search)
+    const parsed = parseReadinessQuery(search, lock)
     const remembered = gridViews.lastUsed?.page
     if (remembered && isDensity(remembered.density)) setDensity(remembered.density)
     const pageSize = !search.has('pageSize') && !search.has('page') && remembered && isPageSize(remembered.pageSize) ? remembered.pageSize : parsed.pageSize
@@ -394,7 +429,9 @@ function ListingReadinessInner() {
     const channels = [...new Set(markets.map((m) => m.channel))]
     const marketOptions = [...new Map(markets.filter((m) => !query.channel || m.channel === query.channel).map((m) => [m.code, m])).values()]
     const accounts = (options?.accounts ?? []).filter((a) => !query.channel || a.channelType === query.channel)
-    return [
+    // A store page's store (and market) is the page itself, not a filter: those two are not offered.
+    const locked: readonly string[] = lockedKeys(query.lock)
+    const dimensions: FilterDimension[] = [
       { key: 'channel', label: 'Channel', kind: 'select', value: query.channel, onChange: set('channel'),
         options: withCurrent([{ value: '', label: 'All channels' }, { value: 'SHARED', label: 'Shared product' }, ...channels.map((c) => ({ value: c, label: channelLabel(c) }))], query.channel) },
       { key: 'marketplace', label: 'Market', kind: 'select', value: query.marketplace, onChange: set('marketplace'),
@@ -406,6 +443,7 @@ function ListingReadinessInner() {
       { key: 'familyId', label: 'Product family', kind: 'select', value: query.familyId, onChange: set('familyId'),
         options: withCurrent([{ value: '', label: 'All families' }, ...(options?.families ?? []).map((f) => ({ value: f.id, label: f.label }))], query.familyId) },
     ]
+    return dimensions.filter((d) => !locked.includes(d.key))
   }, [query, options, languages.options, setQuery])
 
   // ── Search (debounced, like Products) ─────────────────────────
@@ -504,10 +542,20 @@ function ListingReadinessInner() {
   const translate = query ? translateScope(query) : null
   const translateHeld = !translate ? 'Loading…' : !translate.ok ? translate.reason : families && families.total === 0 ? 'No products match these filters.' : null
 
+  // ── Amazon: listings Amazon suppressed (readiness cannot see them; the old Amazon page lists them) ──
+  const amazonUrl = lock?.channel === 'AMAZON' ? `/api/listings/amazon/overview${lock.marketplace ? `?marketplace=${lock.marketplace}` : ''}` : null
+  const { data: amazon } = usePolledList<AmazonSuppressions>({
+    url: amazonUrl,
+    intervalMs: LIVE_INTERVAL_MS,
+    invalidationTypes: ['listing.updated', 'listing.created', 'listing.deleted'],
+  })
+  const suppressed = amazon ? suppressedListings(amazon.activeSuppressions) : null
+
+  const words = scopeWords(lock)
   if (!query) {
     return (
       <div className={styles.wrap}>
-        <PageHeader title="Listings" subtitle="Loading…" />
+        <PageHeader eyebrow={words.crumbs.length ? <ScopeCrumbs crumbs={words.crumbs} /> : undefined} title={words.title} subtitle="Loading…" />
       </div>
     )
   }
@@ -515,9 +563,11 @@ function ListingReadinessInner() {
   const subtitle = query.parent
     ? members
       ? `${plural(members.variantCount, 'variation')}${family?.sku ? ` of ${family.sku}` : ''} · listing readiness`
-      : 'Listings'
+      : words.title
     : families
-      ? `${plural(families.listingCount, 'listing')} on ${plural(families.destinations.filter((d) => d.channel !== 'SHARED').length, 'market')} · checked ${relativeTime(families.computedAt, now)}`
+      ? lockedKeys(lock).includes('marketplace')
+        ? `${plural(families.listingCount, 'listing')} · checked ${relativeTime(families.computedAt, now)}`
+        : `${plural(families.listingCount, 'listing')} on ${plural(marketCount(families.destinations), 'market')} · checked ${relativeTime(families.computedAt, now)}`
       : '— listings'
   const count = query.parent ? (
     // Rows, as on the top level: the parent's own listing and its variations are all products.
@@ -530,11 +580,15 @@ function ListingReadinessInner() {
     </>
   )
   const stateChip = query.parent && query.state ? (query.state === 'notChecked' ? 'Not checked' : readinessMeta(query.state, 'scope').label) : null
+  // One family's page on a store page: the store page is one more crumb (on /listings the chip below is the way back).
+  const crumbs = query.parent && lock ? [...words.crumbs, { label: words.title, href: readinessPath(lock) }] : words.crumbs
 
   return (
     <div className={styles.wrap}>
       <PageHeader
-        title={query.parent ? familyName : 'Listings'}
+        // No eyebrow on /listings: the DS header aligns differently with one.
+        eyebrow={crumbs.length ? <ScopeCrumbs crumbs={crumbs} /> : undefined}
+        title={query.parent ? familyName : words.title}
         subtitle={subtitle}
         actions={
           <div className={styles.acts}>
@@ -546,18 +600,56 @@ function ListingReadinessInner() {
                 <History size={13} /> Publish history
               </Link>
             </Button>
-            {/* The old page keeps the jobs this one does not do (live status, prices, stock, bulk edits). */}
+            {/* The old page keeps the jobs this one does not do (live status, prices, stock, bulk edits); a store
+                page's old page is that store's (`/listings/legacy/amazon/it`). */}
             <Button asChild size="sm">
-              <Link href="/listings/legacy">
-                <Archive size={13} /> Legacy listings
+              <Link href={legacyPath(lock)}>
+                <Archive size={13} /> {lock ? `Legacy ${storeWord(lock.channel)} listings` : 'Legacy listings'}
               </Link>
             </Button>
+            {lock?.channel === 'EBAY' && (
+              <Menu
+                align="right"
+                label={<>eBay tools <ChevronDown size={13} aria-hidden /></>}
+                items={ebayTools(lock)}
+                triggerProps={{ className: 'nds-btn sm' }}
+              />
+            )}
           </div>
         }
       />
 
       {/* One family's page reads its members only; the tiles count the whole result, so they stand aside here. */}
       {!query.parent && <MetricStrip metrics={metrics} className={styles.kpis} />}
+
+      {/* Readiness cannot see what Amazon suppressed; the old Amazon page lists it, one market at a time. */}
+      {lock?.channel === 'AMAZON' && suppressed && suppressed.count > 0 && (
+        <Banner
+          tone="danger"
+          className={styles.banner}
+          title={`Amazon reports ${suppressed.more ? 'at least ' : ''}${plural(suppressed.count, 'suppressed listing')}${lock.marketplace ? ` on ${words.title}` : ''}.`}
+          action={
+            lock.marketplace ? (
+              <Button asChild size="sm">
+                <Link href={legacyPath(lock)}>Fix them on the legacy Amazon page</Link>
+              </Button>
+            ) : undefined
+          }
+        >
+          Amazon hides a suppressed listing, so nobody can buy it.
+          {!lock.marketplace && (
+            <>
+              {' '}Fix them on the legacy Amazon page:{' '}
+              {suppressed.markets.map((m, i) => (
+                <span key={m.code}>
+                  {i > 0 && ' · '}
+                  <Link className={styles.bannerLink} href={legacyMarketHref('AMAZON', m.code)}>{marketWord(m.code)} ({m.count.toLocaleString('en')})</Link>
+                </span>
+              ))}
+            </>
+          )}
+        </Banner>
+      )}
 
       {(optionsError || languages.error) && (
         <Banner tone="warning" className={styles.banner}>
@@ -715,11 +807,14 @@ function ListingReadinessInner() {
   )
 }
 
-/** The DS ToastProvider for this subtree (the views menu reports through it), as on Products. */
-export function ListingReadinessClient() {
+/**
+ * The DS ToastProvider for this subtree (the views menu reports through it), as on Products. `lock`: a store page's
+ * store and market (`readinessScope.ts`); none on `/listings`.
+ */
+export function ListingReadinessClient({ lock = null }: { lock?: ReadinessLock | null }) {
   return (
     <ToastProvider>
-      <ListingReadinessInner />
+      <ListingReadinessInner lock={lock} />
     </ToastProvider>
   )
 }

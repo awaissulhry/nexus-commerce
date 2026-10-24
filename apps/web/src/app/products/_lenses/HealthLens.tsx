@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
+import { legacySkuHref } from '@/app/listings/_readiness/readinessScope'
 import { AlertTriangle } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -127,7 +128,7 @@ export function HealthLens() {
             {data.recentErrors.slice(0, 30).map((e) => (
               <li key={e.id}>
                 <Link
-                  href={`/listings/${e.channel.toLowerCase()}?search=${encodeURIComponent(e.productSku)}`}
+                  href={legacySkuHref(e.channel, e.productSku)}
                   className="flex items-start justify-between gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   <div className="flex items-start gap-2 min-w-0 flex-1">

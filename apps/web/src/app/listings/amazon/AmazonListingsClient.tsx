@@ -19,6 +19,7 @@ import '@/design-system/styles/components.css'
 import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import ListingsWorkspace from '../ListingsWorkspace'
+import { readinessPath } from '../_readiness/readinessScope'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Tabs } from '@/components/ui/Tabs'
@@ -66,9 +67,11 @@ interface Props {
   /** When set, locks to a specific Amazon marketplace (per-market route). */
   lockMarketplace?: string
   breadcrumbs?: Array<{ label: string; href?: string }>
+  /** Since 2026-10-24 this is the old Amazon page (`/listings/legacy/amazon[/<market>]`): its note and link. */
+  legacy?: boolean
 }
 
-export default function AmazonListingsClient({ lockMarketplace, breadcrumbs }: Props) {
+export default function AmazonListingsClient({ lockMarketplace, breadcrumbs, legacy = false }: Props) {
   // L-RT.1 — open the SSE pipe on direct landings to /listings/amazon
   // so the page's existing invalidationTypes wiring on usePolledList
   // actually fires. Without this mount, the only path that ever opened
@@ -84,8 +87,8 @@ export default function AmazonListingsClient({ lockMarketplace, breadcrumbs }: P
 
   useEffect(() => {
     const country = COUNTRY_NAMES[activeMarket] ?? activeMarket
-    document.title = `Amazon ${country} · Listings`
-  }, [activeMarket])
+    document.title = `Amazon ${country} · Listings${legacy ? ' (legacy)' : ''}`
+  }, [activeMarket, legacy])
 
   const overviewUrl = useMemo(
     () => `/api/listings/amazon/overview?marketplace=${activeMarket}`,
@@ -153,6 +156,7 @@ export default function AmazonListingsClient({ lockMarketplace, breadcrumbs }: P
         lockChannel="AMAZON"
         lockMarketplace={activeMarket}
         breadcrumbs={breadcrumbs}
+        legacy={legacy ? { store: 'Amazon', href: readinessPath({ channel: 'AMAZON', marketplace: lockMarketplace ?? '' }) } : undefined}
         storageKey="amazon"
         channelDefaultVisible={['thumb', 'product', 'marketplace', 'status', 'syncStatus', 'price', 'quantity', 'externalId', 'lastSync', 'actions']}
       />

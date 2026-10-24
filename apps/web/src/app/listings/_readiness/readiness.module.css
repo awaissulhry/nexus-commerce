@@ -114,6 +114,16 @@
   outline-offset: 1px;
   border-radius: var(--nds-radius-sm);
 }
+.bannerLink {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-link);
+  text-decoration: underline;
+}
+.bannerLink:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
+  border-radius: var(--nds-radius-sm);
+}
 .stepMessage {
   font-size: var(--nds-font-size-sm);
   color: var(--nds-text-2);
