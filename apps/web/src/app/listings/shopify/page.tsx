@@ -1,14 +1,16 @@
+// /listings/shopify — the Listings page for Shopify (2026-10-24, docs/listings/LISTINGS-STORE-PAGES-2026-10-24.md).
+// The old Shopify page is /listings/legacy/shopify.
 import type { Metadata } from 'next'
-import ShopifyListingsClient from './ShopifyListingsClient'
+import { ReadinessPage } from '../_readiness/ReadinessPage'
+import { scopeTitle, type ReadinessLock } from '../_readiness/readinessScope'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
-export const metadata: Metadata = { title: 'Shopify · Listings' }
+export const fetchCache = 'force-no-store'
+
+const LOCK: ReadinessLock = { channel: 'SHOPIFY', marketplace: '' }
+export const metadata: Metadata = { title: scopeTitle(LOCK) }
 
 export default function ShopifyListingsPage() {
-  return (
-    <ShopifyListingsClient
-      breadcrumbs={[{ label: 'Listings', href: '/listings' }, { label: 'Shopify' }]}
-    />
-  )
+  return <ReadinessPage lock={LOCK} />
 }

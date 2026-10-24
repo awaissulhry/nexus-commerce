@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
 import ListingsWorkspace from '../ListingsWorkspace'
+import { readinessPath } from '../_readiness/readinessScope'
 
 interface PathAOverview {
   channel: string
@@ -30,9 +31,11 @@ interface PathAOverview {
 
 interface Props {
   breadcrumbs?: Array<{ label: string; href?: string }>
+  /** Since 2026-10-24 this is the old Shopify page (`/listings/legacy/shopify`): its note and link. */
+  legacy?: boolean
 }
 
-export default function ShopifyListingsClient({ breadcrumbs }: Props) {
+export default function ShopifyListingsClient({ breadcrumbs, legacy = false }: Props) {
   // L-RT.1 — open SSE pipe on direct landings to /listings/shopify.
   // See AmazonListingsClient for the full rationale; one-liner mounts
   // the listing-events EventSource so the invalidationTypes below
@@ -57,6 +60,7 @@ export default function ShopifyListingsClient({ breadcrumbs }: Props) {
       <ListingsWorkspace
         lockChannel="SHOPIFY"
         breadcrumbs={breadcrumbs}
+        legacy={legacy ? { store: 'Shopify', href: readinessPath({ channel: 'SHOPIFY', marketplace: '' }) } : undefined}
         storageKey="shopify"
         channelDefaultVisible={['thumb', 'product', 'status', 'syncStatus', 'price', 'quantity', 'pricingRule', 'lastSync', 'actions']}
       />

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from '@/lib/workspaces/Link'
+import { legacyMarketHref } from '@/app/listings/_readiness/readinessScope'
 import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
@@ -208,7 +209,7 @@ export default function MarketplaceMatrix({
                       >
                         {slot && !empty ? (
                           <Link
-                            href={`/listings/${c.toLowerCase()}?marketplace=${m}`}
+                            href={legacyMarketHref(c, m)}
                             className="block hover:text-blue-600 group"
                           >
                             {cellContent}

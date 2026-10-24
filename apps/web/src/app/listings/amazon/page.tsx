@@ -1,14 +1,17 @@
+// /listings/amazon — the Listings page for every Amazon market
+// (2026-10-24, docs/listings/LISTINGS-STORE-PAGES-2026-10-24.md).
+// The old Amazon page is /listings/legacy/amazon.
 import type { Metadata } from 'next'
-import AmazonListingsClient from './AmazonListingsClient'
+import { ReadinessPage } from '../_readiness/ReadinessPage'
+import { scopeTitle, type ReadinessLock } from '../_readiness/readinessScope'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
-export const metadata: Metadata = { title: 'Amazon · Listings' }
+export const fetchCache = 'force-no-store'
+
+const LOCK: ReadinessLock = { channel: 'AMAZON', marketplace: '' }
+export const metadata: Metadata = { title: scopeTitle(LOCK) }
 
 export default function AmazonListingsPage() {
-  return (
-    <AmazonListingsClient
-      breadcrumbs={[{ label: 'Listings', href: '/listings' }, { label: 'Amazon' }]}
-    />
-  )
+  return <ReadinessPage lock={LOCK} />
 }

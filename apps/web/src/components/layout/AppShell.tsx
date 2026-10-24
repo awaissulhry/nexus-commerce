@@ -13,8 +13,9 @@
  *
  *   1. full chrome        — the app's own routes.
  *   2. NO_RAIL_PREFIXES   — the route brings its OWN shell and rail (the ads cockpit's
- *                           `AdsSidebar`, the `ProductsRail` of `/products`, `/products/next` and
- *                           `/listings`). It never wanted the app rail; it does want the top bar.
+ *                           `AdsSidebar`, the `ProductsRail` of `/products`, `/products/next`,
+ *                           `/listings` and its store pages). It never wanted the app rail; it does
+ *                           want the top bar.
  *   3. NO_CHROME_PREFIXES — the route must show nothing about us AT ALL.
  *
  * 🔴 Level 3 is a privacy boundary, not a styling choice. `/shared` renders a report for someone
@@ -25,6 +26,7 @@
  */
 
 import { usePathname } from '@/lib/workspaces/navigation'
+import { readinessLockFromPath } from '@/app/listings/_readiness/readinessScope'
 import type { ReactNode } from 'react'
 // Rail styles (.h10-rail / .h10-item / .h10-sub* / chrome). These used to come from
 // ads.css, which meant every non-standalone route pulled in the whole ads cockpit —
@@ -85,10 +87,11 @@ export default function AppShell({
 }) {
   const pathname = usePathname() || ''
   const noChrome = NO_CHROME_PREFIXES.some((p) => pathname.startsWith(p))
-  // `/products` and `/listings` exactly: their sub-pages (`/listings/legacy`, `/listings/amazon`, …) keep the app rail.
+  // `/products` exactly, and the Listings page with its store pages (`/listings`, `/listings/amazon`, `/listings/amazon/it`,
+  // … — `readinessLockFromPath`): the other Listings pages (`/listings/legacy…`, `/listings/ebay/gaps`, …) keep the app rail.
   const noRail =
     pathname === '/products' ||
-    pathname === '/listings' ||
+    readinessLockFromPath(pathname) !== undefined ||
     NO_RAIL_PREFIXES.some((p) => pathname.startsWith(p)) ||
     NO_RAIL_PATTERNS.some((r) => r.test(pathname))
   const settingsShell = pathname === '/settings' || pathname.startsWith('/settings/')

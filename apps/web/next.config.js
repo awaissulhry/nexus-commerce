@@ -11,6 +11,15 @@ const path = require('node:path');
 // 2026-10-24 — the address options only the old Listings page reads (`ListingsWorkspace.tsx`). `/listings` with one of
 // them lands on `/listings/legacy` (the redirects below). `search` too: the new page's search is `q`.
 const LEGACY_LISTINGS_OPTIONS = ['lens', 'listingStatus', 'search', 'syncStatus', 'hasError', 'lowStock', 'published', 'sortBy', 'sortDir', 'drawer'];
+// The store pages are the new Listings page for one store too; their old pages are under `/listings/legacy/`. A market
+// is two letters, so `/listings/ebay/campaigns`, `gaps` and `markdowns` are never caught.
+const LEGACY_STORE_PAGES = [
+  { source: '/listings/amazon', destination: '/listings/legacy/amazon' },
+  { source: '/listings/amazon/:market([a-zA-Z]{2})', destination: '/listings/legacy/amazon/:market' },
+  { source: '/listings/ebay', destination: '/listings/legacy/ebay' },
+  { source: '/listings/ebay/:market([a-zA-Z]{2})', destination: '/listings/legacy/ebay/:market' },
+  { source: '/listings/shopify', destination: '/listings/legacy/shopify' },
+];
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -134,6 +143,11 @@ const nextConfig = {
       ...LEGACY_LISTINGS_OPTIONS.map((key) => ({
         source: '/listings', has: [{ type: 'query', key }], destination: '/listings/legacy', permanent: false,
       })),
+      // The same for each store page (docs/listings/LISTINGS-STORE-PAGES-2026-10-24.md): `/listings/amazon/it?search=…`
+      // lands on `/listings/legacy/amazon/it?search=…`.
+      ...LEGACY_STORE_PAGES.flatMap(({ source, destination }) => LEGACY_LISTINGS_OPTIONS.map((key) => ({
+        source, has: [{ type: 'query', key }], destination, permanent: false,
+      }))),
       // ── RA.SPINE S3 — one derived rule, replacing six hand-written copies ──────────────────
       //
       // The old index client (`RulesAutomationClient.tsx`, since removed) resolved an unknown OR ROUTED

@@ -16,6 +16,7 @@
  */
 
 import Link from '@/lib/workspaces/Link'
+import { legacySkuHref } from '@/app/listings/_readiness/readinessScope'
 import { GitBranch, Network } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -217,7 +218,7 @@ export function CoverageLens({
                     return (
                       <td key={ch} className="px-2 py-2 text-center">
                         <Link
-                          href={`/listings/${ch.toLowerCase()}?search=${encodeURIComponent(p.sku)}`}
+                          href={legacySkuHref(ch, p.sku)}
                           className={`inline-flex items-center px-2 py-1 border rounded text-sm hover:opacity-80 ${tone}`}
                         >
                           <span className="font-semibold tabular-nums">

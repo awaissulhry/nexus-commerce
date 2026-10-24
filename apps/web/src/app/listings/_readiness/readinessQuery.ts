@@ -10,6 +10,7 @@
  */
 import type { ReadinessStateFilter } from '@nexus/shared/listing-readiness'
 import { SCOPE_READINESS_STATES } from '@/design-system/grid/renderers/readiness'
+import { lockedKeys, readinessPath, type ReadinessLock } from './readinessScope'
 
 export const READINESS_PAGE_SIZES = [50, 100, 200] as const
 export type ReadinessPageSize = (typeof READINESS_PAGE_SIZES)[number]
@@ -40,19 +41,34 @@ export interface ReadinessPageQuery {
   parent: string
   page: number
   pageSize: ReadinessPageSize
+  /** A store page's store and market (`readinessScope.ts`): the filters it fixes always hold its values. */
+  lock: ReadinessLock | null
 }
 
 export const EMPTY_READINESS_QUERY: ReadinessPageQuery = {
   selector: null, familyId: '', channel: '', marketplace: '', accountId: '', language: '', state: '', q: '', parent: '',
-  page: 1, pageSize: DEFAULT_READINESS_PAGE_SIZE,
+  page: 1, pageSize: DEFAULT_READINESS_PAGE_SIZE, lock: null,
 }
+
+/**
+ * The lock's filters, put back. Every way the query changes ends here — an older link, a filter, Clear, a saved view —
+ * so a store page always shows its own store and market.
+ */
+export function withLock(query: ReadinessPageQuery): ReadinessPageQuery {
+  const lock = query.lock
+  if (!lock) return query
+  const keys = lockedKeys(lock)
+  const marketplace = keys.includes('marketplace') ? lock.marketplace : query.marketplace
+  return query.channel === lock.channel && query.marketplace === marketplace ? query : { ...query, channel: lock.channel, marketplace }
+}
+const isLocked = (query: ReadinessPageQuery, key: ReadinessFilterKey): boolean => (lockedKeys(query.lock) as readonly string[]).includes(key)
 
 const STATE_VALUES: ReadonlySet<string> = new Set<string>([...SCOPE_READINESS_STATES, 'notChecked'])
 export const isStateFilter = (value: string): value is ReadinessStateFilter => STATE_VALUES.has(value)
 export const isPageSize = (value: number): value is ReadinessPageSize => (READINESS_PAGE_SIZES as readonly number[]).includes(value)
 
-/** The address → the page's query. Unknown or invalid values are dropped, never sent on. */
-export function parseReadinessQuery(search: string | URLSearchParams): ReadinessPageQuery {
+/** The address → the page's query. Unknown or invalid values are dropped, never sent on; a store page's lock wins. */
+export function parseReadinessQuery(search: string | URLSearchParams, lock: ReadinessLock | null = null): ReadinessPageQuery {
   const params = typeof search === 'string' ? new URLSearchParams(search) : search
   const text = (key: string) => (params.get(key) ?? '').trim()
   const kind = SELECTOR_KINDS.find((k) => text(k) !== '')
@@ -60,7 +76,7 @@ export function parseReadinessQuery(search: string | URLSearchParams): Readiness
   const state = text('state')
   const page = Number(text('page'))
   const pageSize = Number(text('pageSize'))
-  return {
+  return withLock({
     selector,
     // The API refuses a family together with a selection; the link's own selection is what it was opened for.
     familyId: selector ? '' : text('familyId'),
@@ -73,7 +89,8 @@ export function parseReadinessQuery(search: string | URLSearchParams): Readiness
     parent: text('parent'),
     page: Number.isSafeInteger(page) && page >= 1 ? page : 1,
     pageSize: isPageSize(pageSize) ? pageSize : DEFAULT_READINESS_PAGE_SIZE,
-  }
+    lock,
+  })
 }
 
 /**
@@ -89,20 +106,22 @@ export function apiFilterParams(query: ReadinessPageQuery): Record<string, strin
   return out
 }
 
-/** The address the page keeps in sync (`replaceState`). Defaults are left out, so a plain visit stays `?`-free. */
+/**
+ * The address the page keeps in sync (`replaceState`). Defaults are left out, so a plain visit stays `?`-free; so is
+ * what the path already says (`/listings/amazon/it`, never `?channel=AMAZON&marketplace=IT`).
+ */
 export function serializeReadinessQuery(query: ReadinessPageQuery): string {
   const params = new URLSearchParams(apiFilterParams(query))
+  for (const key of lockedKeys(query.lock)) params.delete(key)
   if (query.parent) params.set('parent', query.parent)
   if (query.page > 1) params.set('page', String(query.page))
   if (query.pageSize !== DEFAULT_READINESS_PAGE_SIZE) params.set('pageSize', String(query.pageSize))
   return params.toString()
 }
 
-export const READINESS_PATH = '/listings'
-
-/** One family's own page (`View all 40`, "N variations"): the same filters, that family only, from page 1. */
+/** One family's own page (`View all 40`, "N variations"): the same page and filters, that family only, from page 1. */
 export function familyPageHref(query: ReadinessPageQuery, rootId: string): string {
-  return `${READINESS_PATH}?${serializeReadinessQuery({ ...query, parent: rootId, page: 1 })}`
+  return `${readinessPath(query.lock)}?${serializeReadinessQuery({ ...query, parent: rootId, page: 1 })}`
 }
 
 /** `GET …/readiness/families` for one page. */
@@ -128,8 +147,10 @@ export function pageOfBlock(startRow: number, endRow: number, pageSize: Readines
   return { page, pageSize, skip, take }
 }
 
-/** One filter changed: the page goes back to 1; a new channel drops the market and store it no longer has. */
+/** One filter changed: the page goes back to 1; a new channel drops the market and store it no longer has. A filter the
+ *  page's lock fixes does not change. */
 export function withFilter(query: ReadinessPageQuery, key: ReadinessFilterKey, value: string): ReadinessPageQuery {
+  if (isLocked(query, key)) return query
   const next: ReadinessPageQuery = { ...query, [key]: value, page: 1 }
   if (key === 'channel' && value !== query.channel) { next.marketplace = ''; next.accountId = '' }
   if (key === 'marketplace' && value !== query.marketplace) next.accountId = ''
@@ -140,27 +161,34 @@ export function withFilter(query: ReadinessPageQuery, key: ReadinessFilterKey, v
 
 /** "Clear" in the Filters panel: the five filters go; the link's selection, the tile, the search and the family page stay. */
 export function withoutFilters(query: ReadinessPageQuery): ReadinessPageQuery {
-  return { ...query, channel: '', marketplace: '', accountId: '', language: '', familyId: '', page: 1 }
+  return withLock({ ...query, channel: '', marketplace: '', accountId: '', language: '', familyId: '', page: 1 })
 }
 
-export const activeFilterCount = (query: ReadinessPageQuery): number => FILTER_KEYS.filter((key) => query[key] !== '').length
+/** The filters set in the Filters panel. What the lock fixes is the page, not a filter. */
+export const activeFilterCount = (query: ReadinessPageQuery): number =>
+  FILTER_KEYS.filter((key) => query[key] !== '' && !isLocked(query, key)).length
 
-/** The values a saved view keeps beside the grid's own state. The link's selection and the search are not a view. */
+/**
+ * The values a saved view keeps beside the grid's own state. The link's selection and the search are not a view, and
+ * neither is the store page it was saved on: one list of views serves every Listings page.
+ */
 export interface ReadinessViewFilters { channel: string; marketplace: string; accountId: string; language: string; familyId: string; state: ReadinessStateFilter | '' }
 export const viewFiltersOf = (query: ReadinessPageQuery): ReadinessViewFilters => ({
-  channel: query.channel, marketplace: query.marketplace, accountId: query.accountId, language: query.language, familyId: query.familyId, state: query.state,
+  channel: isLocked(query, 'channel') ? '' : query.channel,
+  marketplace: isLocked(query, 'marketplace') ? '' : query.marketplace,
+  accountId: query.accountId, language: query.language, familyId: query.familyId, state: query.state,
 })
 export function withViewFilters(query: ReadinessPageQuery, filters: Partial<ReadinessViewFilters> | null | undefined): ReadinessPageQuery {
   if (!filters) return query
   const text = (v: unknown) => (typeof v === 'string' ? v : '')
   const state = text(filters.state)
   const familyId = text(filters.familyId)
-  return {
+  return withLock({
     ...query,
     channel: text(filters.channel), marketplace: text(filters.marketplace), accountId: text(filters.accountId),
     language: text(filters.language), familyId, state: isStateFilter(state) ? state : '',
     selector: familyId ? null : query.selector, page: 1,
-  }
+  })
 }
 
 /* ── The link's own selection, as a removable chip ─────────────────────────────────────────────────────────────── */

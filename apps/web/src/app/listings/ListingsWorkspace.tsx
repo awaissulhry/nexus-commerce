@@ -234,8 +234,12 @@ interface Props {
    * channel-appropriate columns by default.
    */
   channelDefaultVisible?: string[]
-  /** `/listings/legacy` only: the note that the new Listings page is the main one now (2026-10-24). */
-  legacy?: boolean
+  /**
+   * The old pages only (2026-10-24): the note that the new Listings page is the main one now, and its link.
+   * `/listings/legacy` names no store; a store's old page (`/listings/legacy/amazon/it`) names it and links to that
+   * store's new page.
+   */
+  legacy?: { store?: string; href: string }
 }
 
 // XG.5 — Product (leading) and Actions (trailing) are now locked so
@@ -893,10 +897,10 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
       {legacy && (
         <Banner
           tone="info"
-          title="This is the old Listings page."
+          title={`This is the old ${legacy.store ? `${legacy.store} listings` : 'Listings'} page.`}
           action={
             <NexusButton asChild variant="secondary" size="sm">
-              <Link href="/listings">Open Listings</Link>
+              <Link href={legacy.href}>Open Listings</Link>
             </NexusButton>
           }
         >
