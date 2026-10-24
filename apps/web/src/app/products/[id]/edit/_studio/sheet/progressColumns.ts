@@ -202,7 +202,7 @@ export function studioFieldHref(base: { pathname: string; search: string }, targ
 }
 
 /**
- * The listings readiness page, narrowed to one channel · market · language — inside the CURRENT business profile
+ * The Listings page (`/listings`, the readiness page since 2026-10-24), narrowed to one channel · market · language — inside the CURRENT business profile
  * (`/w/<id>/…`): a bare `/products/…` link lands on the profile chooser when profiles are on (measured 2026-09-26).
  */
 export function listingsHref(target: { channel: string | null; market?: string | null; language?: string | null }, workspaceId: string | null = browserWorkspaceId()): string {
@@ -210,7 +210,7 @@ export function listingsHref(target: { channel: string | null; market?: string |
   params.set('channel', target.channel ?? 'SHARED')
   if (target.market) params.set('marketplace', target.market)
   if (target.language) params.set('language', target.language)
-  return workspaceHref(workspaceId, `/products/listing-readiness?${params}`)
+  return workspaceHref(workspaceId, `/listings?${params}`)
 }
 
 /* ── the column ───────────────────────────────────────────────────────────────────────────── */

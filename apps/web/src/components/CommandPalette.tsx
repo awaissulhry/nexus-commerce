@@ -66,7 +66,7 @@ export interface Command {
 export const COMMANDS: Command[] = [
   // Navigation
   { id: 'goto-products', label: 'Go to Products', icon: Package, href: '/products', group: 'Navigation', chord: 'g p' },
-  { id: 'goto-listings', label: 'Go to All Listings', icon: Boxes, href: '/listings', group: 'Navigation', chord: 'g l' },
+  { id: 'goto-listings', label: 'Go to Listings', icon: Boxes, href: '/listings', group: 'Navigation', chord: 'g l' },
   { id: 'goto-orders', label: 'Go to Orders', icon: FileText, href: '/orders', group: 'Navigation', chord: 'g o' },
   { id: 'goto-pricing', label: 'Go to Pricing', icon: Tag, href: '/pricing', group: 'Navigation', chord: 'g r' },
   { id: 'goto-stock', label: 'Go to Stock', icon: Warehouse, href: '/fulfillment/stock', group: 'Navigation', chord: 'g s' },
@@ -944,10 +944,11 @@ export default function CommandPalette() {
           group: 'Listings' as const,
           keywords: `${l.channel} ${l.marketplace} ${l.listingStatus}${priceLabel}`,
           // Search lands the operator on the master view filtered to
-          // that exact SKU. /listings's grid shows it as the only row;
-          // if multiple channels carry the SKU each appears so the
-          // operator can pick the right marketplace.
-          href: `/listings?search=${encodeURIComponent(l.product.sku)}`,
+          // that exact SKU. The legacy Listings grid (/listings/legacy
+          // since 2026-10-24) shows it as the only row; if multiple
+          // channels carry the SKU each appears so the operator can pick
+          // the right marketplace.
+          href: `/listings/legacy?search=${encodeURIComponent(l.product.sku)}`,
         } as Command
       }),
     [remoteListings],

@@ -29,10 +29,10 @@ describe('FamilyFooterFrame', () => {
     expect(html({ shown: 1, total: 1, noun: 'products', nounOne: 'product' })).toContain('<b>1</b> product</span>')
   })
   it('the extra line is muted like the count, with its hover text; the action comes last', () => {
-    const out = html({ shown: 2, total: 2, extra: 'Variation mapping · Not computed', extraTitle: 'Not answered yet.', action: createElement('a', { href: '/x' }, 'Open family') })
+    const out = html({ shown: 2, total: 2, extra: 'Variation mapping · Not computed', extraTitle: 'Not answered yet.', action: createElement('a', { href: '/products' }, 'Open family') })
     expect(out).toBe(
       '<div class="nds-grid-famfoot"><span class="nds-grid-famfoot-count"><b>2</b> variations</span>'
-      + '<span class="nds-grid-famfoot-count" title="Not answered yet.">Variation mapping · Not computed</span><a href="/x">Open family</a></div>',
+      + '<span class="nds-grid-famfoot-count" title="Not answered yet.">Variation mapping · Not computed</span><a href="/products">Open family</a></div>',
     )
   })
   it('the styles are on DS tokens and the same in web and Factory', () => {

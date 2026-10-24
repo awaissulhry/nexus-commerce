@@ -168,6 +168,17 @@ export default function ListingHealthGrid({ refreshKey = 0, className }: Props) 
   )
 }
 
+/**
+ * A healthy cell's listings. Amazon and eBay have a page per market (`/listings/amazon/it`); every other store opens
+ * the legacy Listings page with the same filters. Not `/listings`: since 2026-10-24 that is the readiness page, and a
+ * healthy cell is about the listings' live sync state, which only the listing pages show.
+ */
+export function healthyCellHref(channel: string, marketplace: string): string {
+  const store = channel.toLowerCase()
+  if ((store === 'amazon' || store === 'ebay') && marketplace) return `/listings/${store}/${encodeURIComponent(marketplace.toLowerCase())}`
+  return `/listings/legacy?${new URLSearchParams({ channel, marketplace })}`
+}
+
 function Cell({
   cell,
   onDrilldown,
@@ -187,12 +198,12 @@ function Cell({
     return 'green'
   })()
 
-  // Healthy cells go straight to /listings filtered.
+  // Healthy cells go straight to that market's listings (`healthyCellHref`).
   // Anything with red/amber/gray opens the inline drilldown modal —
   // operator stays in /sync-logs context, picks a listing, and
   // deep-links to the right channel tab from there.
   const isHealthy = dominant === 'green'
-  const greenHref = `/listings?channel=${encodeURIComponent(cell.channel)}&marketplace=${encodeURIComponent(cell.marketplace)}`
+  const greenHref = healthyCellHref(cell.channel, cell.marketplace)
 
   const title = `${Object.entries(cell.byStatus)
     .map(([k, v]) => `${k}: ${v}`)

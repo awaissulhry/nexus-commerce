@@ -1,6 +1,6 @@
 /*
- * /products/listing-readiness — layout and domain content only. Every control is a design-system component; nothing
- * here restyles one. `--nds-*` tokens only. The page frame is the Products page's (`../next/styles.module.css`):
+ * /listings — layout and domain content only. Every control is a design-system component; nothing
+ * here restyles one. `--nds-*` tokens only. The page frame is the Products page's (`products/next/styles.module.css`):
  * the same wrapper padding, the same gaps between header, tiles, filters and the grid card, the same phone rule.
  */
 

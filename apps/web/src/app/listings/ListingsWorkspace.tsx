@@ -67,6 +67,7 @@ import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
 import { Listbox } from '@/design-system/components/Listbox'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { Button as NexusButton } from '@/design-system/primitives'
+import { Banner } from '@/design-system/components'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { COUNTRY_NAMES } from '@/lib/country-names'
@@ -233,6 +234,8 @@ interface Props {
    * channel-appropriate columns by default.
    */
   channelDefaultVisible?: string[]
+  /** `/listings/legacy` only: the note that the new Listings page is the main one now (2026-10-24). */
+  legacy?: boolean
 }
 
 // XG.5 — Product (leading) and Actions (trailing) are now locked so
@@ -328,7 +331,7 @@ const CHANNEL_TONE: Record<string, string> = {
 }
 
 // ── Component ───────────────────────────────────────────────────────
-export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleOverride, breadcrumbs, storageKey: storageKeyProp, channelDefaultVisible }: Props) {
+export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleOverride, breadcrumbs, storageKey: storageKeyProp, channelDefaultVisible, legacy }: Props) {
   // Market-specific pages get their own storage namespace (amazon-it, ebay-de, …)
   // so column layouts don't bleed across markets.
   const storageKey = (storageKeyProp ?? 'listings') +
@@ -396,7 +399,9 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   })
   const [columnPickerOpen, setColumnPickerOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [drawerListingId, setDrawerListingId] = useState<string | null>(null)
+  // `?drawer=<listingId>` opens that listing (the API calls log links here); the effect after `updateUrl` drops the
+  // option once that drawer closes or another listing opens, so a reload does not open it again.
+  const [drawerListingId, setDrawerListingId] = useState<string | null>(() => searchParams.get('drawer'))
 
   // XG.5 — sticky toggles for the shared PreferencesModal. Per-channel
   // subpages (/listings/amazon etc.) inherit via the same storageKey
@@ -524,6 +529,11 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
     }
     router.replace(`${pathname}?${next.toString()}`, { scroll: false })
   }, [searchParams, pathname, router])
+
+  const drawerParam = searchParams.get('drawer')
+  useEffect(() => {
+    if (drawerParam && drawerListingId !== drawerParam) updateUrl({ drawer: undefined })
+  }, [drawerParam, drawerListingId, updateUrl])
 
   // ── Data fetching ──────────────────────────────────────────────────
   // Phase 10 — Grid lens uses usePolledList. The hook owns the fetch
@@ -879,6 +889,20 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           </NexusButton>
         }
       />
+
+      {legacy && (
+        <Banner
+          tone="info"
+          title="This is the old Listings page."
+          action={
+            <NexusButton asChild variant="secondary" size="sm">
+              <Link href="/listings">Open Listings</Link>
+            </NexusButton>
+          }
+        >
+          The new Listings page is the main one now. This page stays for live status, prices, stock and bulk edits.
+        </Banner>
+      )}
 
       {/* KPI strip — clickable tiles drive grid filters. Matches the
           /products + /stock + /replenishment pattern. */}
@@ -2663,7 +2687,7 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
 
   return (
     <>
-      {selectedIds.length > 0 && selectedIds.length <= 200 && <NexusButton asChild size="sm"><Link href={`/products/listing-readiness?${new URLSearchParams({ listingIds: selectedIds.join(',') })}`}>Check listing readiness</Link></NexusButton>}
+      {selectedIds.length > 0 && selectedIds.length <= 200 && <NexusButton asChild size="sm"><Link href={`/listings?${new URLSearchParams({ listingIds: selectedIds.join(',') })}`}>Check listing readiness</Link></NexusButton>}
       {selectedIds.length > 200 && <p>Select 200 or fewer listings to check readiness.</p>}
       <BulkActionShell
         selectedCount={selectedIds.length}
@@ -4413,7 +4437,7 @@ function CellInlineActions({
           onSync()
         }}
       />
-      <NexusButton asChild size="xs" variant="quiet" onClick={e => e.stopPropagation()}><Link aria-label="Review listing readiness" href={`/products/listing-readiness?${new URLSearchParams({ listingIds: listingId })}`}><Eye size={11} aria-hidden /></Link></NexusButton>
+      <NexusButton asChild size="xs" variant="quiet" onClick={e => e.stopPropagation()}><Link aria-label="Review listing readiness" href={`/listings?${new URLSearchParams({ listingIds: listingId })}`}><Eye size={11} aria-hidden /></Link></NexusButton>
       {listingUrl && (
         <CellActionButton
           icon={ExternalLink}
@@ -5092,7 +5116,7 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
                   Sync
                 </button>
               </Tooltip>
-              <NexusButton asChild size="sm"><Link href={`/products/listing-readiness?${new URLSearchParams({ listingIds: listing.id })}`}>Review listing readiness</Link></NexusButton>
+              <NexusButton asChild size="sm"><Link href={`/listings?${new URLSearchParams({ listingIds: listing.id })}`}>Review listing readiness</Link></NexusButton>
               {listing.listingUrl && (
                 <Tooltip content={`Open on ${listing.channel.toLowerCase()}`}>
                   <a

@@ -12,7 +12,7 @@
 import type { ReadinessFamiliesPage, ReadinessMembersPage } from '@nexus/shared/listing-readiness'
 import type { IServerSideDatasource, IServerSideGetRowsParams } from '@/design-system/grid'
 
-import { transferApi } from '../catalog-transfer/transferApi'
+import { transferApi } from '@/app/products/catalog-transfer/transferApi'
 import { familiesParams, membersParams, MEMBER_PREVIEW_LIMIT, pageOfBlock, type ReadinessPageQuery } from './readinessQuery'
 import { familyPreview, type ReadinessGridRow } from './readinessRows'
 

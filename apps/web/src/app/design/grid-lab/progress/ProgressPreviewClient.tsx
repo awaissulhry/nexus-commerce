@@ -77,7 +77,7 @@ export function ProgressPreviewClient() {
         landOnCell(api, { rowId: row.id, colId: field })
         setNotice(`Cursor on ${LABEL[field as Field]} of ${row.sku}. Press Enter or type to fill it.`)
       },
-      footerLink: () => (scope.id === 'shared' ? null : { label: `All products for ${scope.label}`, href: '/products/listing-readiness' }),
+      footerLink: () => (scope.id === 'shared' ? null : { label: `All products for ${scope.label}`, href: '/listings' }),
     } satisfies ProgressCellParams,
   }), [])
 

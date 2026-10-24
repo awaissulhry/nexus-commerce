@@ -79,8 +79,8 @@ describe('links and actions', () => {
     expect(Object.fromEntries(url.searchParams)).toEqual({ market: 'IT', chip: 'x', scope: 'AMAZON', locale: 'it', account: 'acc', rec: 'primary:c1', cell: 'brand' })
   })
   it('listingsHref narrows the listings page to one channel · market · language; the shared product is SHARED', () => {
-    expect(listingsHref({ channel: 'AMAZON', market: 'IT', language: 'it' }, null)).toBe('/products/listing-readiness?channel=AMAZON&marketplace=IT&language=it')
-    expect(listingsHref({ channel: null, language: 'it' }, null)).toBe('/products/listing-readiness?channel=SHARED&language=it')
+    expect(listingsHref({ channel: 'AMAZON', market: 'IT', language: 'it' }, null)).toBe('/listings?channel=AMAZON&marketplace=IT&language=it')
+    expect(listingsHref({ channel: null, language: 'it' }, null)).toBe('/listings?channel=SHARED&language=it')
   })
   it('a field of this sheet: visible → Go to, hidden → Show and go to, absent → a sentence', () => {
     expect(sheetFieldAction('visible', 'Brand', 'x')).toEqual({ kind: 'goto', label: 'Go to' })

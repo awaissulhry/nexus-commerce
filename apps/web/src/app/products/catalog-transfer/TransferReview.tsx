@@ -180,7 +180,7 @@ export function TransferReview({ jobId, options, onReset, onJob, onSettled, onRe
     {!!job?.warnings.length && <Banner tone="warning" title="Review notes">{job.warnings.map(w => <p key={w}>{w}</p>)}</Banner>}
     <div className={styles.actions}>
       {purpose === 'file' && <Button disabled={busy || active || !job && !error} onClick={onReset}>Upload another file</Button>}
-      {purpose === 'file' && job && ['COMPLETED', 'PARTIAL'].includes(job.state) && (onReturn ? <Button variant="primary" onClick={onReturn}>Return to product</Button> : <Button asChild variant="primary"><Link href={`/products/listing-readiness${job.cells ? '' : `?job=${encodeURIComponent(jobId)}`}`}>Check saved products for listing</Link></Button>)}
+      {purpose === 'file' && job && ['COMPLETED', 'PARTIAL'].includes(job.state) && (onReturn ? <Button variant="primary" onClick={onReturn}>Return to product</Button> : <Button asChild variant="primary"><Link href={`/listings${job.cells ? '' : `?job=${encodeURIComponent(jobId)}`}`}>Check saved products for listing</Link></Button>)}
       {purpose === 'file' && job && ['PARTIAL', 'FAILED'].includes(job.state) && <Button disabled={busy || !allowApply} onClick={retry}>Review unprocessed or refused records again</Button>}
       {purpose === 'file' && job && hasReadyRecords(job) && <Button variant="secondary" disabled={busy || !allowApply} onClick={() => void applyReady()}>{busy ? words.saving : 'Save the ready records'}</Button>}
       {job?.state === 'QUEUED' && !counts?.refused && (!!counts?.changed || purpose === 'copy') && <Button variant="primary" disabled={busy || !allowApply} onClick={() => void apply()}>{busy ? words.saving : words.save}</Button>}

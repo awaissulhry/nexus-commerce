@@ -8,8 +8,8 @@
  */
 import type { ListingReadinessRow } from '@nexus/shared/listing-readiness'
 import { browserWorkspaceId, workspaceHref } from '@/lib/workspaces/paths'
-import { studioFieldHref } from '../[id]/edit/_studio/sheet/progressColumns'
-import { studioRowId } from '../[id]/edit/_studio/sheet/channel/types'
+import { studioFieldHref } from '@/app/products/[id]/edit/_studio/sheet/progressColumns'
+import { studioRowId } from '@/app/products/[id]/edit/_studio/sheet/channel/types'
 
 export function issueFieldHref(row: Pick<ListingReadinessRow, 'editorHref' | 'productId' | 'channel' | 'aliasKey'>, field: string, workspaceId: string | null = browserWorkspaceId()): string {
   const at = row.editorHref.indexOf('?')

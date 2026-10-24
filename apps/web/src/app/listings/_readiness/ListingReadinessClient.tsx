@@ -1,8 +1,9 @@
 'use client'
 
 /**
- * /products/listing-readiness — what is ready, what needs work, and where to fix it (rebuild 2026-10-23, layout A;
- * docs/listings/READINESS-REBUILD-2026-10-23.md §2).
+ * /listings — the Listings page: what is ready, what needs work, and where to fix it (rebuild 2026-10-23, layout A;
+ * docs/listings/READINESS-REBUILD-2026-10-23.md §2). It took over the Listings menu entry on 2026-10-24; the old
+ * page is `/listings/legacy` (docs/listings/LISTINGS-SWAP-2026-10-24.md).
  *
  * The Products page's frame and parts, the same way round: header · tiles · Filters · one grid card (toolbar, the
  * server-side tree grid, the pager). One row per product family; a family folds open to a 10-row preview and the
@@ -16,7 +17,7 @@
  * filters back with `history.replaceState` so a reload or a shared link shows the same thing.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeft, Search, SlidersHorizontal } from 'lucide-react'
+import { AlertTriangle, Archive, History, Search, SlidersHorizontal } from 'lucide-react'
 import type { ReadinessDestination } from '@nexus/shared/listing-readiness'
 
 import Link from '@/lib/workspaces/Link'
@@ -48,9 +49,9 @@ import {
   type PrefsBridgeOptions,
 } from '@/design-system/grid'
 
-import { transferApi } from '../catalog-transfer/transferApi'
-import { TranslateDialog, useCatalogLanguages } from '../next/TranslateDialog'
-import { DEFAULT_DENSITY, type DensityMode } from '../next/density'
+import { transferApi } from '@/app/products/catalog-transfer/transferApi'
+import { TranslateDialog, useCatalogLanguages } from '@/app/products/next/TranslateDialog'
+import { DEFAULT_DENSITY, type DensityMode } from '@/app/products/next/density'
 import { ReadinessFixDialog } from './FixDialog'
 import styles from './readiness.module.css'
 import { READINESS_COLUMN_SPECS, ReadinessFamilyFooter, readinessColumns, readinessTreeColumn, type ReadinessGridContext } from './readinessColumns'
@@ -506,7 +507,7 @@ function ListingReadinessInner() {
   if (!query) {
     return (
       <div className={styles.wrap}>
-        <PageHeader title="Listing readiness" subtitle="Loading…" />
+        <PageHeader title="Listings" subtitle="Loading…" />
       </div>
     )
   }
@@ -514,7 +515,7 @@ function ListingReadinessInner() {
   const subtitle = query.parent
     ? members
       ? `${plural(members.variantCount, 'variation')}${family?.sku ? ` of ${family.sku}` : ''} · listing readiness`
-      : 'Listing readiness'
+      : 'Listings'
     : families
       ? `${plural(families.listingCount, 'listing')} on ${plural(families.destinations.filter((d) => d.channel !== 'SHARED').length, 'market')} · checked ${relativeTime(families.computedAt, now)}`
       : '— listings'
@@ -533,7 +534,7 @@ function ListingReadinessInner() {
   return (
     <div className={styles.wrap}>
       <PageHeader
-        title={query.parent ? familyName : 'Listing readiness'}
+        title={query.parent ? familyName : 'Listings'}
         subtitle={subtitle}
         actions={
           <div className={styles.acts}>
@@ -541,8 +542,14 @@ function ListingReadinessInner() {
               Translate filtered products…
             </Button>
             <Button asChild size="sm">
-              <Link href="/products">
-                <ArrowLeft size={13} /> Back to products
+              <Link href="/listings/publish-status">
+                <History size={13} /> Publish history
+              </Link>
+            </Button>
+            {/* The old page keeps the jobs this one does not do (live status, prices, stock, bulk edits). */}
+            <Button asChild size="sm">
+              <Link href="/listings/legacy">
+                <Archive size={13} /> Legacy listings
               </Link>
             </Button>
           </div>
@@ -620,7 +627,7 @@ function ListingReadinessInner() {
             // A failed read is not an empty result and not a slow one.
             <EmptyState
               icon={<AlertTriangle size={20} />}
-              title="Couldn’t load listing readiness"
+              title="Couldn’t load the listings"
               description={listError}
               action={<Button size="sm" variant="secondary" onClick={() => refreshGrid(REFRESH_ALL)}>Try again</Button>}
             />

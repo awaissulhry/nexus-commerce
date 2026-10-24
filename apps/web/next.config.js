@@ -8,6 +8,10 @@ const { backendRewrites } = require('./src/lib/workspaces/backendRewrite.cjs');
 const { oauthRewrites, oauthHeaders } = require('./src/lib/oauth/oauthRoutes.cjs');
 const path = require('node:path');
 
+// 2026-10-24 — the address options only the old Listings page reads (`ListingsWorkspace.tsx`). `/listings` with one of
+// them lands on `/listings/legacy` (the redirects below). `search` too: the new page's search is `q`.
+const LEGACY_LISTINGS_OPTIONS = ['lens', 'listingStatus', 'search', 'syncStatus', 'hasError', 'lowStock', 'published', 'sortBy', 'sortDir', 'drawer'];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -120,6 +124,16 @@ const nextConfig = {
       { source: '/products/new', destination: '/products?new=1', permanent: true },
       { source: '/catalog/add', destination: '/products?new=1', permanent: true },
       { source: '/products/upload', destination: '/products/catalog-transfer', permanent: true },
+      // ── 2026-10-24 — the Listings swap (docs/listings/LISTINGS-SWAP-2026-10-24.md) ──────────────────────────────
+      // `/listings` is the readiness page now; the old page is `/listings/legacy`. The readiness page's old address
+      // lands on the new one, filters and all (Next passes the request's query through).
+      { source: '/products/listing-readiness', destination: '/listings', permanent: true },
+      // A bookmark or stored link with an option only the old page reads lands on the old page, query and all. One
+      // rule per option (`has` is AND). Not permanent: a later option of the same name on the new page must not be
+      // shadowed by a 308 a browser cached. `page`, `pageSize`, `channel` and `marketplace` both pages read: no rule.
+      ...LEGACY_LISTINGS_OPTIONS.map((key) => ({
+        source: '/listings', has: [{ type: 'query', key }], destination: '/listings/legacy', permanent: false,
+      })),
       // ── RA.SPINE S3 — one derived rule, replacing six hand-written copies ──────────────────
       //
       // The old index client (`RulesAutomationClient.tsx`, since removed) resolved an unknown OR ROUTED

@@ -98,7 +98,7 @@ export function serializeReadinessQuery(query: ReadinessPageQuery): string {
   return params.toString()
 }
 
-export const READINESS_PATH = '/products/listing-readiness'
+export const READINESS_PATH = '/listings'
 
 /** One family's own page (`View all 40`, "N variations"): the same filters, that family only, from page 1. */
 export function familyPageHref(query: ReadinessPageQuery, rootId: string): string {

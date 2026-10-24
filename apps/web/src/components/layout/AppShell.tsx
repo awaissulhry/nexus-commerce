@@ -13,9 +13,8 @@
  *
  *   1. full chrome        — the app's own routes.
  *   2. NO_RAIL_PREFIXES   — the route brings its OWN shell and rail (the ads cockpit's
- *                           `AdsSidebar`, the `ProductsRail` of `/products/next` and
- *                           `/products/listing-readiness`). It never wanted the app rail; it does
- *                           want the top bar.
+ *                           `AdsSidebar`, the `ProductsRail` of `/products`, `/products/next` and
+ *                           `/listings`). It never wanted the app rail; it does want the top bar.
  *   3. NO_CHROME_PREFIXES — the route must show nothing about us AT ALL.
  *
  * 🔴 Level 3 is a privacy boundary, not a styling choice. `/shared` renders a report for someone
@@ -43,7 +42,7 @@ import { AppTopBar } from '@/app/_shared/AppTopBar'
  * That still governs their CONTENT. It no longer governs the chrome: since 2026-08-31 the bar
  * and rail are one dark surface on every route, so this list no longer needs to mark them.
  */
-const NO_RAIL_PREFIXES = ['/marketing/ads', '/products/next', '/products/listing-readiness']
+const NO_RAIL_PREFIXES = ['/marketing/ads', '/products/next']
 
 /**
  * The same family, for routes with a DYNAMIC segment.
@@ -86,8 +85,10 @@ export default function AppShell({
 }) {
   const pathname = usePathname() || ''
   const noChrome = NO_CHROME_PREFIXES.some((p) => pathname.startsWith(p))
+  // `/products` and `/listings` exactly: their sub-pages (`/listings/legacy`, `/listings/amazon`, …) keep the app rail.
   const noRail =
     pathname === '/products' ||
+    pathname === '/listings' ||
     NO_RAIL_PREFIXES.some((p) => pathname.startsWith(p)) ||
     NO_RAIL_PATTERNS.some((r) => r.test(pathname))
   const settingsShell = pathname === '/settings' || pathname.startsWith('/settings/')

@@ -72,11 +72,12 @@ export default function AlertsPanel({
     items.push({
       label: t('overview.alerts.failedListings'),
       count: alerts.failedListings,
-      // C.4 — link to the master /listings filtered by status, not a
+      // C.4 — link to the master listings view filtered by status, not a
       // hardcoded /listings/amazon. Failures can be on any channel
       // and the master view shows them all with channel/marketplace
-      // chips ready to drill down further.
-      href: '/listings?listingStatus=ERROR',
+      // chips ready to drill down further. Since 2026-10-24 that view is
+      // /listings/legacy: the new /listings page has no listing status.
+      href: '/listings/legacy?listingStatus=ERROR',
       tone: 'rose',
       impact: t('overview.alerts.impact.failedListings'),
       actionLabel: t('overview.alerts.action.resolve'),
@@ -85,7 +86,7 @@ export default function AlertsPanel({
     items.push({
       label: t('overview.alerts.draftListings'),
       count: alerts.draftListings,
-      href: '/listings?listingStatus=DRAFT',
+      href: '/listings/legacy?listingStatus=DRAFT',
       tone: 'amber',
       impact: t('overview.alerts.impact.draftListings'),
       actionLabel: t('overview.alerts.action.publish'),
