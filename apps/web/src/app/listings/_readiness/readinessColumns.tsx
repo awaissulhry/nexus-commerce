@@ -490,14 +490,14 @@ function listingColumnDefs(ctx: ReadinessGridContext, o: { scope: PageScope; col
   const defs: Record<ListingColumn, ColDef<ReadinessGridRow>> = {
     status: { ...base('status', 132), valueGetter: (v) => { const f = facts(v); return f ? statusWords(f).label : null }, cellRenderer: ListingStatusCell,
       ...filter(gridFilterDef('set', { options: CHANNEL_STATE_OPTIONS.map((c) => ({ value: c.value, label: c.label })) })) },
-    price: { ...base('price', 150), ...numericColumn, valueGetter: (v) => { const f = facts(v); return f ? priceWords(f) : null },
+    price: { ...base('price', 190), ...numericColumn, valueGetter: (v) => { const f = facts(v); return f ? priceWords(f) : null },
       cellRenderer: ListingPriceCell, ...filter(gridFilterDef('number')) },
     qty: { ...base('qty', 120), ...numericColumn, valueGetter: (v) => facts(v)?.qty?.min ?? null, cellRenderer: ListingQtyCell,
       ...filter(gridFilterDef('number')) },
     channelId: { ...base('channelId', 150), valueGetter: (v) => facts(v)?.externalId ?? null, cellRenderer: ListingChannelIdCell, ...filter(gridFilterDef('text')) },
     lastPush: { ...base('lastPush', 150), valueGetter: (v) => { const f = facts(v); return f ? lastPushMeta(f.push)?.label ?? null : null }, cellRenderer: ListingLastPushCell },
     synced: { ...base('synced', 120), valueGetter: (v) => facts(v)?.syncedOldest ?? null, cellRenderer: ListingSyncedCell },
-    messages: { ...base('messages', 130), ...numericColumn, valueGetter: (v) => { const f = facts(v); return f ? messageWords(f).total : null }, cellRenderer: ListingMessagesCell },
+    messages: { ...base('messages', 170), ...numericColumn, valueGetter: (v) => { const f = facts(v); return f ? messageWords(f).total : null }, cellRenderer: ListingMessagesCell },
   }
   return o.columns.map((column) => defs[column])
 }
