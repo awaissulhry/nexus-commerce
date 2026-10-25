@@ -188,7 +188,6 @@ describe('🔴 guard — no fixed market list and no second profile resolver in 
       'services/advertising/share-of-voice.service.ts',
       'services/advertising/keyword-tracker.service.ts',
       'services/advertising/keyword-watchlist.service.ts',
-      'services/advertising/keyword-harvest.service.ts',
       'services/advertising/ads-reporting-views.service.ts',
       'routes/keyword-actions.routes.ts',
       'routes/advertising-intel.routes.ts',

@@ -12,7 +12,6 @@
  *                request he approved — is warned and goes once he confirms (3A); a protected TERM still refuses him;
  *                another business's protection does not leak; an unknown market binds every market's protection; an
  *                opt-out wins over a category
- *   page         the Keyword Harvest read: the stricter of the saved policy and the strategy, whole; one market only
  *   rules        harvest_and_negate without its own numbers reads the strategy, with them keeps its own; the stop rules
  *                (pause, archive, floor) skip a protected product's keyword; the optimiser holds its zero-sales cut
  *   feed         recommendations name the strategy's window and row
@@ -37,12 +36,11 @@ vi.mock('../../../lib/queue.js', () => {
   }
 })
 
-import { harvestForScope, openTermsStrategy, protectedAdGroups, protectedAsinRefusal, protectedAsins, termsForAdGroups } from './terms.js'
+import { openTermsStrategy, protectedAdGroups, protectedAsinRefusal, protectedAsins, termsForAdGroups } from './terms.js'
 import { previewHarvest } from '../ads-harvest.service.js'
 import { checkAdsWriteGate } from '../ads-write-gate.js'
 import { negativeWireRefusal } from '../ads-negation-policy.js'
 import { writeNegativeProductTarget } from '../ads-negative-kw.service.js'
-import { getKeywordHarvest } from '../keyword-harvest.service.js'
 import { previewBidOptimization } from '../ads-bid-optimizer.service.js'
 
 const A = 'w1_terms_alpha'
@@ -174,15 +172,6 @@ describe('thresholds per ad group', () => {
   it('another business without a group answers nothing', async () => {
     expect(await inB(() => openTermsStrategy())).toBeNull()
   })
-
-  it('one subject for a page: an ad group, campaigns (the stricter across them), the market\'s own row', async () => {
-    await inA(async () => {
-      expect(await harvestForScope('IT', {})).toMatchObject({ group: { minOrders: 3 }, source: { level: 'market' } })
-      expect(await harvestForScope('IT', { campaignIds: [ids.c1, ids.c2] })).toMatchObject({ group: { minOrders: 4, windowDays: 90 }, source: { level: 'product' } })
-      expect(await harvestForScope('IT', { adGroupId: ids.g2 })).toMatchObject({ group: { minOrders: 3 } })
-      expect(await harvestForScope('DE', {})).toBeNull()
-    })
-  })
 })
 
 describe('the harvest preview', () => {
@@ -298,34 +287,6 @@ describe('a protected product\'s ASIN is never negated', () => {
         .toEqual([{ adGroupId: ids.g2, kind: 'PRODUCT', expressionValue: 'B0TESTV001' }])
       await db().adTarget.deleteMany({ where: { isNegative: true } })
     })
-  })
-})
-
-describe('the Keyword Harvest read', () => {
-  it('one market: the stricter of the saved policy and the strategy is in force, whole', async () => {
-    const out = await inA(() => getKeywordHarvest({ market: 'IT' }))
-    expect(out.criteria.policy).toMatchObject({
-      criteria: { minOrders: 3, minClicks: 5, maxAcosPct: 40, windowDays: 30, excludeExactMatched: true },
-      stored: { minOrders: 2, minClicks: 3, maxAcosPct: 45, windowDays: 60 }, source: 'default',
-      strategy: { minOrders: 3, binds: true, source: { level: 'market', label: 'Test market (IT)', version: 1 } },
-    })
-    expect(out.criteria.inForce).toMatchObject({ minOrders: 3, windowDays: 30 })
-    expect(out.rows.map((r) => r.term).sort()).toEqual(['alpha jacket', 'eta visor'])
-  })
-
-  it('a campaign: its products\' group; a stricter saved policy binds instead; every market in view: no strategy', async () => {
-    const two = await inA(() => getKeywordHarvest({ market: 'IT', campaign: ids.c2 }))
-    expect(two.criteria.policy).toMatchObject({ criteria: { minOrders: 4, minClicks: 0, maxAcosPct: null, windowDays: 90 }, strategy: { binds: true, source: { label: 'TEST-T-Q (IT)' } } })
-    expect(two.rows.map((r) => r.term)).toEqual(['delta helmet'])
-    await inA(() => db().adsHarvestPolicy.create({ data: { scopeGrain: 'market', scopeId: 'IT', minOrders: 5, minClicks: 1, maxAcosPct: 60, windowDays: 60, updatedBy: 'user:test' } }))
-    try {
-      const saved = await inA(() => getKeywordHarvest({ market: 'IT' }))
-      expect(saved.criteria.policy).toMatchObject({ criteria: { minOrders: 5, windowDays: 60 }, source: 'market', strategy: { minOrders: 3, binds: false } })
-    } finally {
-      await inA(() => db().adsHarvestPolicy.deleteMany({}))
-    }
-    const all = await inA(() => getKeywordHarvest({ market: 'all' }))
-    expect(all.criteria.policy).toMatchObject({ criteria: { minOrders: 2, windowDays: 60 }, strategy: null })
   })
 })
 

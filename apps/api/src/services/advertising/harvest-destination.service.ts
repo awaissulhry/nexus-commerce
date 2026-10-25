@@ -631,19 +631,3 @@ export async function storedHarvestDestination(scopeGrain: HvDestGrain, scopeId:
     select: { adGroupId: true, negateAtSource: true, updatedBy: true },
   })
 }
-
-export async function listHarvestDestinations() {
-  const rows = await prisma.adsHarvestDestination.findMany({ orderBy: [{ scopeGrain: 'asc' }, { scopeId: 'asc' }, { matchType: 'asc' }] })
-  const ags = await prisma.adGroup.findMany({
-    where: { id: { in: [...new Set(rows.map((r) => r.adGroupId))] } },
-    select: { id: true, name: true, campaign: { select: { name: true } } },
-  })
-  const byId = new Map(ags.map((a) => [a.id, a]))
-  return rows.map((r) => ({
-    id: r.id, scopeGrain: r.scopeGrain as HvDestGrain, scopeId: r.scopeId === HV_DEST_ACCOUNT ? null : r.scopeId,
-    matchType: r.matchType as HvCreateType, adGroupId: r.adGroupId,
-    adGroupName: byId.get(r.adGroupId)?.name ?? '(deleted ad group)',
-    campaignName: byId.get(r.adGroupId)?.campaign?.name ?? '',
-    negateAtSource: r.negateAtSource, updatedAt: r.updatedAt.toISOString(), updatedBy: r.updatedBy,
-  }))
-}
