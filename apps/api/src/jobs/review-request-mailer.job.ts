@@ -10,7 +10,7 @@
  *   3. For non-Amazon channels (eBay, Shopify): send the email template
  *      and mark SENT (or FAILED).
  *   4. For Amazon: fire the Solicitations API call; check the 4-30d window
- *      is still valid first.
+ *      is still valid first (before day 4 the row waits for day 4).
  *
  * Amazon Solicitations is still gated by NEXUS_ENABLE_AMAZON_SOLICITATIONS=true
  * (D.7 gate). Non-Amazon email is gated by NEXUS_ENABLE_OUTBOUND_EMAILS=true.
@@ -26,9 +26,12 @@ import {
 } from '../services/reviews/review-scheduler.service.js'
 import { sendReviewRequestEmail } from '../services/reviews/review-request-email.service.js'
 import {
+  AMAZON_SOLICITATION_MAX_DAYS,
+  AMAZON_SOLICITATION_MIN_DAYS,
   sendAmazonSolicitation,
   isBenignFailure,
   benignSuppressedReason,
+  outsideWindowUpdate,
 } from '../services/reviews/amazon-solicitations.service.js'
 import { sendSentimentCheckEmail, resolveLocaleForMarketplace } from '../services/reviews/sentiment-check-email.service.js'
 import { readReviewMailerState } from '../services/reviews/review-mailer-state.service.js'
@@ -291,7 +294,16 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
         const daysSinceDelivery = order.deliveredAt
           ? (Date.now() - order.deliveredAt.getTime()) / (24 * 60 * 60 * 1000)
           : Infinity
-        if (daysSinceDelivery < 4 || daysSinceDelivery > 30) {
+        if (daysSinceDelivery < AMAZON_SOLICITATION_MIN_DAYS) {
+          // Too early (the delivery date moved later): wait for day 4.
+          await prisma.reviewRequest.update({
+            where: { id: req.id },
+            data: { scheduledFor: new Date(order.deliveredAt!.getTime() + AMAZON_SOLICITATION_MIN_DAYS * 24 * 60 * 60 * 1000) },
+          })
+          skipped += 1 // stays SCHEDULED
+          continue
+        }
+        if (daysSinceDelivery > AMAZON_SOLICITATION_MAX_DAYS) {
           await prisma.reviewRequest.update({
             where: { id: req.id },
             data: { status: 'SKIPPED', suppressedReason: `Outside Amazon 4-30d window (${Math.round(daysSinceDelivery)}d)` },
@@ -324,6 +336,13 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
             },
           })
           sent += 1
+        } else if (result.errorCode === 'OUTSIDE_WINDOW') {
+          // Amazon's delivery date can be later than ours: tomorrow again, until our day 30.
+          await prisma.reviewRequest.update({
+            where: { id: req.id },
+            data: outsideWindowUpdate(order.deliveredAt!, result.errorMessage),
+          })
+          skipped += 1
         } else if (isBenignFailure(result.errorCode)) {
           // NOT_IMPLEMENTED / UNKNOWN_MARKETPLACE / ALREADY_SOLICITED →
           // SKIPPED, no retry (permanent / config / dup-protect).

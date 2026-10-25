@@ -39,6 +39,16 @@ const AMAZON_MARKETPLACE_ID_MAP: Record<string, string> = {
   JP: 'A1VC38T7YXB528', AU: 'A39IBJ37TRP1C6', SG: 'A19VAU5U5O7RUS', IN: 'A21TJRUUN4KGV',
 }
 
+/**
+ * Our window for a review request, in days after OUR delivery date. Amazon's own rule is 5-30 days after ITS delivery
+ * date (HTTP 403: "You can't use this feature to request a review outside the 5-30 day range after the order delivery
+ * date."). Ours is an estimate (ship + 3 business days), usually later than Amazon's, so our day 4 is usually Amazon's
+ * day 5 or later; when it is not, Amazon answers OUTSIDE_WINDOW and the request is tried again the next day.
+ */
+export const AMAZON_SOLICITATION_MIN_DAYS = 4
+export const AMAZON_SOLICITATION_MAX_DAYS = 30
+const DAY_MS = 24 * 60 * 60 * 1000
+
 export function amazonMarketplaceIdFor(code: string | null | undefined): string | null {
   if (!code) return null
   return AMAZON_MARKETPLACE_ID_MAP[code.toUpperCase()] ?? null
@@ -52,6 +62,7 @@ export interface SolicitationResult {
    *    NOT_IMPLEMENTED   — NEXUS_ENABLE_AMAZON_SOLICITATIONS env flag is off
    *    UNKNOWN_MARKETPLACE — marketplace short code didn't map to an id
    *    ALREADY_SOLICITED — Amazon's duplicate-protection (HTTP 400/403 + "already")
+   *    OUTSIDE_WINDOW    — Amazon says the order is outside its 5-30 day range (HTTP 400/403)
    *    HTTP_xxx          — non-benign HTTP error, x replaced by status
    *    EXCEPTION         — fetch / network / other thrown error
    */
@@ -123,6 +134,15 @@ export async function sendAmazonSolicitation(args: {
         errorMessage: msg.slice(0, 500),
       }
     }
+    // Amazon counts the window from its own delivery date, which can be later than ours. Not benign: the mailer
+    // tries again the next day (outsideWindowUpdate).
+    if (/HTTP 40[03]/.test(msg) && /outside the .*day range/i.test(msg)) {
+      return {
+        ok: false,
+        errorCode: 'OUTSIDE_WINDOW',
+        errorMessage: msg.slice(0, 500),
+      }
+    }
     const httpMatch = msg.match(/HTTP (\d+)/)
     if (httpMatch) {
       return {
@@ -174,4 +194,17 @@ export function benignSuppressedReason(errorCode: string | null | undefined): st
     default:
       return null
   }
+}
+
+/**
+ * The ReviewRequest update after Amazon answered OUTSIDE_WINDOW. While tomorrow is still inside our 30 days after
+ * delivery, the row stays SCHEDULED for tomorrow; such a refusal does not use up a retry. After that it is SKIPPED.
+ */
+export function outsideWindowUpdate(deliveredAt: Date, errorMessage: string | null | undefined, now: Date = new Date()) {
+  const tomorrow = new Date(now.getTime() + DAY_MS)
+  const lastDay = new Date(deliveredAt.getTime() + AMAZON_SOLICITATION_MAX_DAYS * DAY_MS)
+  const common = { providerResponseCode: 'OUTSIDE_WINDOW', errorMessage: errorMessage ?? null, lastAttemptAt: now, nextRetryAt: null }
+  return tomorrow <= lastDay
+    ? { ...common, status: 'SCHEDULED' as const, scheduledFor: tomorrow }
+    : { ...common, status: 'SKIPPED' as const, suppressedReason: 'Outside Amazon window: Amazon refused every day until day 30' }
 }
