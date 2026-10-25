@@ -102,6 +102,8 @@ import { META_COMMENT_WRITE_RULES } from './meta-comment-rules.js'
 import { metaPageReadOf, metaWhatsAppRead, type MetaPageRead } from './meta-page-reads.js'
 // Step 4 — the business-portfolio reads' fixed lists (a leaf module: no import cycle).
 import { META_CLIENT_OBJECT_VALUES, META_INVITATION_ASSET_TYPES, META_SHARING_AGREEMENT_STATUSES } from '../meta/meta-business-lists.js'
+// Step 24 — the organic post rules (the chosen Page's posts, the chosen Instagram account's media, as the Page).
+import { META_GRAPH_VIDEO_HOST, META_POST_WRITE_RULES, type MetaPostBodyKind, type MetaPostKind } from './meta-post-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -1173,6 +1175,11 @@ export interface MetaWriteRule {
   appIdOf?: (route: string, params: ReadonlyMap<string, string>) => string | null
   /** Step 33 — false: Meta's per-object limits (one change every 30 s) do not apply (Conversions API events). */
   objectLimits?: false
+  /**
+   * Step 24 (review B-F1) — the change goes to Meta's video host graph-video.facebook.com (a Page's video post: every v26
+   * example of POST /<page>/videos names it), and only such a rule does; no other change is ever sent there.
+   */
+  videoHost?: true
 }
 
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
@@ -1193,6 +1200,8 @@ export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | '
   | MetaCatalogKind
   // Step 37 — what only set-meta-comments names (MetaCommentKind, below).
   | MetaCommentKind
+  // Step 24 — what only the post tools name (meta-post-rules.ts MetaPostKind).
+  | MetaPostKind
 /**
  * Step 26 — what a partnership-access change names: the chosen Instagram account itself (`<ig id>/branded_content_ad_permissions
  * | branded_content_tag_approval | collaboration_invites`) or a media of it (`<media id>/partnership_ad_code`). The chosen
@@ -1283,6 +1292,8 @@ export interface MetaWriteBodyId {
   kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' | 'productitem' | 'campaign' | 'page' | 'customconversion' | 'video' | 'creative' | MetaLabelsBodyKind | MetaOptimizeBodyKind | MetaBrandSafetyBodyKind | MetaAudienceBodyKind | MetaPageBodyKind | MetaCatalogBodyKind
     // Step 20 — a place page set of the chosen ad account (inside an ad set's targeting).
     | 'placepageset'
+    // Step 24 — ids inside a post's body (meta-post-rules.ts MetaPostBodyKind; meta-post-owner.ts checks them).
+    | MetaPostBodyKind
   /**
    * Step 27 review A1 — a creative an ad shows while ACTIVE: its Advantage+ switches are read with its account_id and must
    * all say OPT_OUT (meta-ad-rules.ts metaActivationProblem) — `always` (a new ad created ACTIVE) or `if-ad-active` (a swap:
@@ -1469,12 +1480,18 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   // Step 26 (review B1) — Meta's partnership REST host has its own exact judge (meta-boost-rules.ts); null: not that host.
   const rest = metaRestWriteVerdict(input)
   if (rest) return rest
+  // Step 24 (review B-F1) — a Page's video post goes to Meta's video host: judged on the same canonical parse as the Graph
+  // host (the host swapped back for the parse only), on a Page's videos edge only, and only by a rule marked `videoHost`.
+  const onVideoHost = input.url.startsWith(`https://${META_GRAPH_VIDEO_HOST}/`)
+  const judgedUrl = onVideoHost ? input.url.replace(`https://${META_GRAPH_VIDEO_HOST}`, `https://${META_GRAPH_HOST}`) : input.url
   // The Graph root with its version (`…/v26.0/`, Meta's batch endpoint) is judged as the root, so a batch is named as one.
-  const graph = graphRouteOf(input.url.replace(/^(https:\/\/graph\.facebook\.com\/v\d+\.\d+)\/(?=$|[?#])/i, '$1'))
+  const graph = graphRouteOf(judgedUrl.replace(/^(https:\/\/graph\.facebook\.com\/v\d+\.\d+)\/(?=$|[?#])/i, '$1'))
   if (!graph) return refuse('Nexus calls Meta only at https://graph.facebook.com')
   if ('problem' in graph) return refuse(graph.problem)
   const pinned = metaGraphApiVersion()
   if (graph.version !== pinned) return refuse(`Nexus calls Meta only on API version ${pinned} (this call: ${graph.version ?? 'no version'})`)
+  const videoHostWords = `Nexus sends to Meta's video host ${META_GRAPH_VIDEO_HOST} only a Page's video post (POST /<page>/videos, create-meta-page-post); every other change goes to https://graph.facebook.com`
+  if (onVideoHost && (method !== 'POST' || !/^\d+\/videos$/.test(graph.route))) return refuse(videoHostWords)
   const queryKeys = [...graph.search.keys()]
   if (queryKeys.length > 0 && method !== 'DELETE') return refuse('a Meta change carries its parameters in its body, never in the URL')
   const batch = metaBatchProblem(method, graph.route, input.body)
@@ -1512,7 +1529,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     return refuse('on the chosen Instagram account\'s partnership edges Nexus deletes only what set-meta-partnership-access sends: creators taken off its tag-approval list (user_ids) and the ad code of one of its media (no body)')
   }
   if (method === 'DELETE' && !(bareDelete && noBody) && !(deleteRules.some((r) => r.required.length || r.optional.length) && !noBody)) {
-    return refuse('Nexus deletes on Meta only a scheduled budget increase of the chosen ad account (set-meta-budget-schedule), a concluded video test of the chosen Page (set-meta-experiment), a test lead Nexus made on a lead form of the chosen Page (set-meta-lead-form), one of its automated rules (remove-meta-ad-rule), the undo of a create or a copy, and what a person explicitly asked remove-meta-ads-items to delete: a campaign, ad set, ad or creative named with its kind (no body), an image or a video of the chosen ad account\'s library (its hash or video_id as the only body key) or a part of an Instant Experience of the chosen Page, and what the brand-safety tools name (a block list, its shares, people, posts and ad accounts: set-meta-block-list, remove-meta-block-list); and for audiences (step 31) one of the chosen ad account\'s own audiences (no body), the hashed people of one of its customer lists or of all of them (payload) or an audience\'s share with ad accounts (adaccounts) — remove-meta-audience, set-meta-audience-members, set-meta-audience-sharing; and for datasets (step 32) a dataset\'s link to the chosen ad account (account_id and business as the body: set-meta-dataset-access) and a custom conversion Nexus made (no body: remove-meta-signal-items); and for webhooks (step 30) an app\'s webhook subscription (object and fields in the URL\'s query), the app\'s link to the chosen ad account (app_id in the query) or to the chosen Page (set-meta-webhooks) and one of the chosen ad account\'s alert subscriptions (remove-meta-alert-subscription), and the catalog changes of its catalog tools (a catalog, product set, item or supplementary feed of this business on explicit ask, the undo of a catalog or set Nexus made, a pixel, person or partner taken off a catalog: remove-meta-catalog-items, create-meta-catalog, set-meta-product-set, set-meta-catalog, set-meta-catalog-access), and for comments (step 37) a comment on a post of the chosen Page or on the chosen Instagram account\'s media, a like of the Page and a person it blocked (set-meta-comments); it cancels no async batch')
+    return refuse('Nexus deletes on Meta only a scheduled budget increase of the chosen ad account (set-meta-budget-schedule), a concluded video test of the chosen Page (set-meta-experiment), a test lead Nexus made on a lead form of the chosen Page (set-meta-lead-form), one of its automated rules (remove-meta-ad-rule), the undo of a create or a copy, and what a person explicitly asked remove-meta-ads-items to delete: a campaign, ad set, ad or creative named with its kind (no body), an image or a video of the chosen ad account\'s library (its hash or video_id as the only body key) or a part of an Instant Experience of the chosen Page, and what the brand-safety tools name (a block list, its shares, people, posts and ad accounts: set-meta-block-list, remove-meta-block-list); and for audiences (step 31) one of the chosen ad account\'s own audiences (no body), the hashed people of one of its customer lists or of all of them (payload) or an audience\'s share with ad accounts (adaccounts) — remove-meta-audience, set-meta-audience-members, set-meta-audience-sharing; and for datasets (step 32) a dataset\'s link to the chosen ad account (account_id and business as the body: set-meta-dataset-access) and a custom conversion Nexus made (no body: remove-meta-signal-items); and for webhooks (step 30) an app\'s webhook subscription (object and fields in the URL\'s query), the app\'s link to the chosen ad account (app_id in the query) or to the chosen Page (set-meta-webhooks) and one of the chosen ad account\'s alert subscriptions (remove-meta-alert-subscription), and the catalog changes of its catalog tools (a catalog, product set, item or supplementary feed of this business on explicit ask, the undo of a catalog or set Nexus made, a pixel, person or partner taken off a catalog: remove-meta-catalog-items, create-meta-catalog, set-meta-product-set, set-meta-catalog, set-meta-catalog-access), and for comments (step 37) a comment on a post of the chosen Page or on the chosen Instagram account\'s media, a like of the Page and a person it blocked (set-meta-comments), and for posts (step 24) a Facebook post or an Instagram media Nexus made, on a person\'s explicit ask or as the undo of a dark post (remove-meta-page-post); it cancels no async batch')
   }
   if (bareDelete && noBody) {
     if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
@@ -1565,8 +1582,15 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     if (/^act_\d+\/(adcreatives|asyncadcreatives)$/.test(graph.route) || input.objectKind === 'creative') {
       return refuse(`the only Meta change Nexus sends on a creative is create-meta-creative's (a creative of the chosen ad account, or its async job), set-meta-creative's (a creative's name, status or labels) or remove-meta-ads-items' delete, each with its own keys; this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
     }
+    // Step 24 — a call on a post edge of the chosen Page or Instagram account, or on a post named by its kind, that matches
+    // none of the post tools' rules, in its own words.
+    if (/^\d+\/(feed|photos|videos|media|media_publish|upcoming_events)$/.test(graph.route) || ['postpage', 'pagepostedit', 'pagepostmade', 'postig', 'igmediamade'].includes(input.objectKind ?? '')) {
+      return refuse(`the only Meta change Nexus sends for an organic post is create-meta-page-post's (a post, its unpublished photos, a video post of the chosen Page), set-meta-page-post's (an edit of a post of the chosen Page), remove-meta-page-post's (the delete of a post or Instagram media Nexus made) or create-meta-instagram-post's (a container, its publish, an upcoming event of the chosen Instagram account), each with its own keys; this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    }
     return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a create or a copy (create-meta-campaign, create-meta-ad-set, copy-meta-ads: each its own edge and keys), or a delete a person asked for (remove-meta-ads-items: each its own path and keys), or a label, value rule or reach & frequency change (set-meta-labels, set-meta-value-rules, create-meta-reach-frequency: each its own path and keys), or a change of one of the chosen ad account's automated rules (set-meta-ad-rule), or a report run of the chosen ad account's numbers (meta-ads-report: POST /act_<id>/insights, which changes nothing), or a brand-safety change named with its kind (set-meta-brand-safety, set-meta-block-list, remove-meta-block-list), or an audience change named with its kind (create-meta-audience, set-meta-audience, set-meta-audience-members, set-meta-audience-sharing: each its own path and keys), or a lead-form change of the chosen Facebook Page named with its kind (create-meta-lead-form, set-meta-lead-form), or a dataset or custom conversion change named with its kind (create-meta-dataset, set-meta-dataset, set-meta-dataset-access, set-meta-custom-conversion, remove-meta-signal-items: each its own path and keys), or a webhook or alert subscription (set-meta-webhooks, set-meta-alert-subscription), or a targeting, placement or ad-account-controls change named with its kind (set-meta-targeting, set-meta-placements, set-meta-account-controls), or Conversions API events of a pixel (POST /<pixel id>/events, upload-meta-events), or a catalog change (create-meta-catalog, set-meta-catalog, set-meta-catalog-access, set-meta-product-set, remove-meta-catalog-items: each its own path and keys), or a change of the chosen ad account's own settings, spending limit, tracking specs or insights features (set-meta-account-settings, set-meta-spend-cap, set-meta-insights-features: each its own keys), or an Instant Experience change of the chosen Facebook Page (create-meta-instant-experience, set-meta-instant-experience), or a comment change named with its kind (set-meta-comments); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
+  // Step 24 (review B-F1) — the video host only for a rule marked so, and such a rule only there.
+  if (onVideoHost !== (rule.videoHost === true)) return refuse(onVideoHost ? videoHostWords : `a Page's video post goes to Meta's video host https://${META_GRAPH_VIDEO_HOST} (every v26 example of POST /<page>/videos names it)`)
   // Step 18 — each rule's own length and text keys; every other value stays plain ASCII (as step 17 judged them all).
   const maxBody = rule.maxBody ?? MAX_WRITE_BODY
   if ((input.body as string).length > maxBody) return refuse(`a Meta change body is at most ${maxBody} characters`)
@@ -1672,8 +1696,10 @@ const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META
   ...META_CATALOG_WRITE_RULES,
   // Step 40 — the ad account's own settings, spending limit, tracking specs, insights features (meta-account-settings-rules.ts).
   ...META_ACCOUNT_SETTINGS_WRITE_RULES,
-  // Step 37 — comments and moderation (meta-comment-rules.ts) last.
-  ...META_COMMENT_WRITE_RULES]
+  // Step 37 — comments and moderation (meta-comment-rules.ts).
+  ...META_COMMENT_WRITE_RULES,
+  // Step 24 — organic posts of the chosen Page and Instagram account (meta-post-rules.ts) last.
+  ...META_POST_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {

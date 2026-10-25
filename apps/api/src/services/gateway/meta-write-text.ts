@@ -11,3 +11,9 @@
  */
 export const META_STRICT_TEXT = /^[^\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]*$/u
 export const META_NAME_TEXT = /^(?:[^\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]|(?<=\p{Extended_Pictographic}[\u{FE0F}\u{1F3FB}-\u{1F3FF}]?)\u200D(?=\p{Extended_Pictographic}))*$/u
+/**
+ * Text of several lines (a comment, a post, a caption): META_NAME_TEXT and a line break (U+000A). Derived from it, never
+ * written again. Step 37 made it (meta-comment-rules.ts re-exports it); step 24 moved it here, the leaf, so every rules file
+ * takes it from the leaf.
+ */
+export const META_COMMENT_TEXT = new RegExp(META_NAME_TEXT.source.replace(/^\^\(\?:/, '^(?:\\n|'), 'u')
