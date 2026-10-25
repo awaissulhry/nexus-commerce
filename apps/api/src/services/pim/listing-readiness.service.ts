@@ -55,8 +55,21 @@ const ISSUE_KIND: Record<ReadinessProblemKind, ListingReadinessIssue['kind']> = 
 /** The same verdict in the old page's issue vocabulary (it said `missing` for every entry before). */
 export const listingIssueKind = (entry: { kind?: unknown; requiredEmpty?: unknown }): ListingReadinessIssue['kind'] => ISSUE_KIND[readinessProblemKind(entry)]
 
-/** Shared by the paged reader and Translate: filtering happens before count/page. */
-export async function listingReadinessWhere(query: Record<string, unknown>, userId: string | null): Promise<Prisma.ReadinessIndexWhereInput> {
+/** A `listingIds` selection: the coordinate of each listing, as the index stores it. */
+export interface ReadinessListingCoordinate { productId: string; channel: string; market: string | null; accountId: string | null; aliasId: string | null }
+/** What a readiness query selects, before it becomes a Prisma `where` (here) or SQL (the family view). */
+export interface ReadinessSelection {
+  input: ReturnType<typeof readinessQuery>
+  /** The products: never deleted, narrowed by a product selector (product IDs, SKUs, a family, an import). */
+  product: Prisma.ProductWhereInput
+  /** A product selector narrows `product` beyond `deletedAt: null`. */
+  productSelected: boolean
+  /** The `listingIds` selector, one coordinate per listing found (none found: nothing matches). */
+  listings?: ReadinessListingCoordinate[]
+}
+
+/** The query's selection, its import and listings looked up. One reading for `listingReadinessWhere` and the family view. */
+export async function readinessSelection(query: Record<string, unknown>, userId: string | null): Promise<ReadinessSelection> {
   const input = readinessQuery(query)
   let skus = input.skus
   if (input.jobId) {
@@ -72,13 +85,20 @@ export async function listingReadinessWhere(query: Record<string, unknown>, user
   }
   const product: Prisma.ProductWhereInput = { deletedAt: null,
     ...(input.productIds ? { id: { in: input.productIds } } : skus ? { sku: { in: skus } } : input.familyId ? { OR: [{ familyId: input.familyId }, { familyId: null, parent: { familyId: input.familyId } }] } : {}) }
+  const productSelected = !!(input.productIds || skus || input.familyId)
+  if (!input.listingIds) return { input, product, productSelected }
+  const listings = await prisma.channelListing.findMany({ where: { id: { in: input.listingIds }, product: { deletedAt: null } }, select: { productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true } })
+  return { input, product, productSelected,
+    listings: listings.map(listing => ({ productId: listing.productId, channel: listing.channel, market: listing.marketplace, accountId: listing.channelConnectionId, aliasId: listing.aliasKey || null })) }
+}
+
+/** Shared by the paged reader and Translate: filtering happens before count/page. */
+export async function listingReadinessWhere(query: Record<string, unknown>, userId: string | null): Promise<Prisma.ReadinessIndexWhereInput> {
+  const { input, product, listings } = await readinessSelection(query, userId)
   const where: Prisma.ReadinessIndexWhereInput = { product,
     ...(input.channel ? { channel: input.channel === 'SHARED' ? null : input.channel } : {}), ...(input.marketplace ? { market: input.marketplace } : {}),
     ...(input.accountId ? { accountId: input.accountId } : {}), ...(input.language ? { language: input.language } : {}), ...(input.state ? { state: input.state } : {}) }
-  if (input.listingIds) {
-    const listings = await prisma.channelListing.findMany({ where: { id: { in: input.listingIds }, product: { deletedAt: null } }, select: { productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true } })
-    where.OR = listings.map(listing => ({ productId: listing.productId, channel: listing.channel, market: listing.marketplace, accountId: listing.channelConnectionId, aliasId: listing.aliasKey || null }))
-  }
+  if (listings) where.OR = listings
   return where
 }
 

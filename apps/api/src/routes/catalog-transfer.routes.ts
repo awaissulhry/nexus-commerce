@@ -11,7 +11,8 @@ import { inspectCatalogSource, previewCatalogSource, listSourcePresets, listSour
 import { fetchCatalogSource } from '../services/pim/catalog-source-fetch.js'
 import { catalogWorkbookTemplate, type WorkbookDestination } from '../services/pim/catalog-workbook-scopes.js'
 import { listingReadiness } from '../services/pim/listing-readiness.service.js'
-import { readinessDetail, readinessFamilies, readinessFamilyMembers } from '../services/pim/listing-readiness-families.service.js'
+import { readinessDetail, readinessFamiliesIfChanged, readinessFamilyMembersIfChanged } from '../services/pim/listing-readiness-families.service.js'
+import { matches } from '../utils/list-etag.js'
 import { productTransferOptions, resolveProductTransferBoundary, checkProductTransferBoundary } from '../services/pim/catalog-product-transfer.js'
 import { visitActiveWorkspaces } from '../lib/workspace-sweep.js'
 import { workspaceContext } from '../lib/workspace-context.js'
@@ -141,13 +142,19 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
     return listingReadiness(request.query as Record<string, unknown>, actor(request))
   })
   // The family view (rebuild 2026-10-23): one row per family, its open members, and one destination's Fix window.
+  // The two lists answer an unchanged poll with 304 (list-etag.ts): the browser revalidates and hands the page its copy.
   fastify.get('/catalog-transfer/readiness/families', async (request, reply) => {
-    reply.header('Cache-Control', 'no-store')
-    return readinessFamilies(request.query as Record<string, unknown>, actor(request))
+    const { etag, page } = await readinessFamiliesIfChanged(request.query as Record<string, unknown>, actor(request), tag => matches(request, tag))
+    reply.header('ETag', etag)
+    reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
+    return page ?? reply.code(304).send()
   })
   fastify.get('/catalog-transfer/readiness/families/:rootId/members', async (request, reply) => {
-    reply.header('Cache-Control', 'no-store')
-    return readinessFamilyMembers((request.params as { rootId: string }).rootId, request.query as Record<string, unknown>, actor(request))
+    const { etag, page } = await readinessFamilyMembersIfChanged((request.params as { rootId: string }).rootId, request.query as Record<string, unknown>, actor(request),
+      tag => matches(request, tag))
+    reply.header('ETag', etag)
+    reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
+    return page ?? reply.code(304).send()
   })
   fastify.get('/catalog-transfer/readiness/detail', async (request, reply) => {
     reply.header('Cache-Control', 'no-store')

@@ -3,9 +3,11 @@
  *
  * Reads the materialized `ReadinessIndex` only (never a live resolve). One top-level row per family root
  * (`parentId ?? id`); a "listing" is one product on one destination, its languages folded into one verdict (worst wins).
- * Two passes keep a business of ~11,300 index rows fast: LIGHT columns of every filtered row (tiles, order, paging), then
- * the problems (`missing[]`) of the requested page only, aggregated in SQL so no page moves the JSON of every row.
- * Filters are `listingReadinessWhere()` (the same as Translate); the state filter applies after the language fold.
+ * The top level keeps a business of ~11,300 index rows fast without moving them: ONE SQL summary of the whole filtered
+ * result (tiles, totals, the destinations, and the ids of the requested page's families in row order — `familiesSummary`),
+ * then the LIGHT columns of the page's families only, through the same fold, fill and words as the members, and their
+ * problems (`missing[]`) aggregated in SQL. A cheap fingerprint of the result answers an unchanged poll with 304.
+ * Filters are `listingReadinessWhere()`'s selection (the same as Translate); the state filter applies after the language fold.
  */
 import { Prisma } from '@prisma/client'
 import type {
@@ -16,8 +18,10 @@ import type {
 import prisma from '../../db.js'
 import { inDatabaseReadTransaction } from '../../lib/database-context.js'
 import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
-import { listingReadinessWhere, readinessProblemKind, readinessQuery } from './listing-readiness.service.js'
+import { listingReadinessWhere, readinessProblemKind, readinessQuery, readinessSelection } from './listing-readiness.service.js'
 import { SCOPE_STATES, scopeStateRank } from './readiness-model.js'
+import { workspaceContext } from '../../lib/workspace-context.js'
+import { weakEtag } from '../../utils/list-etag.js'
 
 /* ── query ────────────────────────────────────────────────────────────────────────────────── */
 
@@ -225,7 +229,7 @@ export function describeDestinations(infos: Iterable<DestinationInfo>, storeName
 }
 
 /** Stores named only where the words need them: two or more accounts on one channel and market. */
-async function storeNamesFor(entries: Iterable<StoreKey>): Promise<Map<string, string>> {
+export async function storeNamesFor(entries: Iterable<StoreKey>): Promise<Map<string, string>> {
   const ids = [...storesByMarket(entries).values()].filter(set => set.size > 1).flatMap(set => [...set]).filter(Boolean)
   if (!ids.length) return new Map()
   const connections = await prisma.channelConnection.findMany({ where: { id: { in: ids } }, select: { id: true, accountLabel: true, displayName: true } })
@@ -386,7 +390,7 @@ export function nextStepOf(pick: ReturnType<typeof pickNextStep>, at: (key: stri
     affected: pick.chip.counts[pick.chip.state], productId: sample.productId, locale: sample.locale, href: studioHref(sample.productId, coordinate, sample.locale) }
 }
 
-interface ProductInfo { id: string; sku: string; name: string | null; parentId: string | null; isParent: boolean }
+export interface ProductInfo { id: string; sku: string; name: string | null; parentId: string | null; isParent: boolean }
 const nameKey = (name: string | null) => (name ?? '').toLowerCase()
 /** Worst first, then name (case-insensitive), SKU, id — stable. */
 export function compareRows(a: { state: ReadinessScopeState; name: string | null; sku: string; id: string }, b: typeof a): number {
@@ -433,7 +437,7 @@ export function searchScope(hits: ReadonlyArray<{ id: string; parentId: string |
 }
 const familyScope = (rootId: string): Prisma.ReadinessIndexWhereInput => ({ product: { OR: [{ id: rootId }, { parentId: rootId }] } })
 
-async function productsOf(ids: Iterable<string>): Promise<Map<string, ProductInfo>> {
+export async function productsOf(ids: Iterable<string>): Promise<Map<string, ProductInfo>> {
   const select = { id: true, sku: true, name: true, parentId: true, isParent: true } as const
   const wanted = [...new Set(ids)]
   const products = new Map((wanted.length ? await prisma.product.findMany({ where: { id: { in: wanted } }, select }) : []).map(p => [p.id, p as ProductInfo]))
@@ -474,57 +478,198 @@ async function rowsOf<T extends { id: string; members: MemberSummary[] }>(rows: 
     computedAt: oldest(chips.map(c => c.computedAt)), pending: chips.some(c => c.pending) }))
 }
 
-export const DAY_MS = 24 * 60 * 60 * 1000
+/* ── the top level in SQL: one summary of the whole result, then the page's families only ─────────────────────────── */
 
-/** The header's "checked …": the newest check, and the listings last checked more than a day ago (filled ones have none). */
-export function checkedOf(rows: ReadonlyArray<{ computedAt: Date }>, listings: ReadonlyArray<Pick<FoldedListing, 'computedAt'>>, now = Date.now()): ReadinessFamiliesPage['checked'] {
-  const latest = rows.reduce<Date | null>((at, r) => !at || r.computedAt > at ? r.computedAt : at, null)
-  return { latest: iso(latest), olderThanDay: listings.filter(l => l.computedAt && now - l.computedAt.getTime() > DAY_MS).length }
+const RANK = Object.fromEntries(SCOPE_STATES.map(state => [state, scopeStateRank(state)])) as Record<ReadinessScopeState, number>
+/** A rank from `SCOPE_STATES` (code, never input), written into the statement as a literal. */
+const rankLiteral = (rank: number) => Prisma.raw(String(Math.trunc(rank)))
+/** `stateOf` + `scopeStateRank` in SQL: a stored state outside the vocabulary reads as not computed. */
+const RANK_SQL = Prisma.sql`CASE r.state ${Prisma.join(SCOPE_STATES.map(state => Prisma.sql`WHEN ${state} THEN ${rankLiteral(RANK[state])}`), ' ')} ELSE ${rankLiteral(RANK.notComputed)} END`
+const FROM_INDEX = Prisma.sql`"ReadinessIndex" r JOIN "Product" p ON p.id = r."productId"`
+/** The line of `checked.olderThanDay`, 24 hours ago, as the index stores time (UTC wall clock, `::timestamp`). */
+const dayAgo = () => new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+/** `searchScope` in SQL: the row's product matches, or its family's own product (the root) does; Prisma's case-insensitive `contains`. */
+function searchSql(q: string): Prisma.Sql {
+  const pattern = `%${q}%`
+  const hit = (alias: string) => {
+    const t = Prisma.raw(alias)
+    return Prisma.sql`${t}."deletedAt" IS NULL AND (${t}.sku ILIKE ${pattern} OR ${t}.name ILIKE ${pattern} OR ${t}.gtin ILIKE ${pattern} OR ${t}.ean ILIKE ${pattern} OR ${t}.upc ILIKE ${pattern})`
+  }
+  return Prisma.sql`((${hit('p')}) OR EXISTS (SELECT 1 FROM "Product" s WHERE s.id = p."parentId" AND s."parentId" IS NULL AND ${hit('s')}))`
 }
+
+/**
+ * `scopedWhere` in SQL, over `FROM_INDEX`: `listingReadinessWhere`'s selection (a product selector resolved to product ids
+ * first, `listingIds` to their coordinates), channel / market / account / language on the index columns, and the search,
+ * inside the statement (never a list of every matching product). Parameterised throughout.
+ */
+async function readinessFilter(query: Record<string, unknown>, q: string | undefined, userId: string | null, ...extra: Prisma.Sql[]): Promise<Prisma.Sql> {
+  const { input, product, productSelected, listings } = await readinessSelection({ ...query, state: undefined }, userId)
+  const parts = [Prisma.sql`p."deletedAt" IS NULL`]
+  if (productSelected) {
+    const ids = (await prisma.product.findMany({ where: product, select: { id: true } })).map(found => found.id)
+    parts.push(Prisma.sql`r."productId" = ANY(${ids}::text[])`)
+  }
+  if (input.channel) parts.push(input.channel === 'SHARED' ? Prisma.sql`r.channel IS NULL` : Prisma.sql`r.channel = ${input.channel}`)
+  if (input.marketplace) parts.push(Prisma.sql`r.market = ${input.marketplace}`)
+  if (input.accountId) parts.push(Prisma.sql`r."accountId" = ${input.accountId}`)
+  if (input.language) parts.push(Prisma.sql`r.language = ${input.language}`)
+  if (listings) {
+    parts.push(listings.length ? Prisma.sql`(${Prisma.join(listings.map(l => Prisma.sql`(r."productId" = ${l.productId} AND r.channel IS NOT DISTINCT FROM ${l.channel}
+      AND r.market IS NOT DISTINCT FROM ${l.market} AND r."accountId" IS NOT DISTINCT FROM ${l.accountId} AND r."aliasId" IS NOT DISTINCT FROM ${l.aliasId})`), ' OR ')})` : Prisma.sql`FALSE`)
+  }
+  if (q) parts.push(searchSql(q))
+  return Prisma.join([...parts, ...extra], ' AND ')
+}
+
+interface FamiliesSummary extends ReadinessStateCounts {
+  listingCount: number; productCount: number; total: number; pendingCount: number; olderThanDay: number
+  oldest: Date | null; latest: Date | null
+  /** The requested page's family roots, in row order. */
+  roots: string[]
+  destinations: Array<{ key: string; channel: string | null; market: string | null; accountId: string | null; aliasId: string | null; label: string; languages: string[] }> | null
+}
+
+/**
+ * The whole filtered result in ONE statement, counted as the TypeScript model counts it:
+ *   listing — the languages of one product on one destination folded: the worst state, the oldest check, pending when any
+ *             row is (`foldListings`);
+ *   family  — listings grouped by `COALESCE(parentId, id)` (`familiesOf`); `fillNotComputed` is members × destinations −
+ *             listings present, each one `notComputed` (none for a `listingIds` selection);
+ *   ranked  — the family's state (the worst of its listings, a filled one included) and whether the state filter keeps it
+ *             (a member with a matching listing: `matchingCount > 0`).
+ * It returns the tiles, the totals, the checked times, the destinations (first label: the smallest), and the requested
+ * page's roots in `compareRows` order: state, then the root's name lower-cased, SKU, id, compared bytewise (`COLLATE "C"`).
+ */
+async function familiesSummary(filter: Prisma.Sql, input: ReturnType<typeof familiesQuery>, cutoff: string): Promise<FamiliesSummary> {
+  const fill = !input.listingIds
+  const ranks = input.state === 'notChecked' ? [RANK.absent, RANK.notComputed] : input.state ? [RANK[input.state]] : null
+  const hit = ranks ? Prisma.sql`bool_or(rank IN (${Prisma.join(ranks.map(rankLiteral))}))` : Prisma.sql`TRUE`
+  const filledHit = !ranks || ranks.includes(RANK.notComputed) ? Prisma.sql`filled > 0` : Prisma.sql`FALSE`
+  const [summary] = await prisma.$queryRaw<FamiliesSummary[]>(Prisma.sql`
+    WITH f AS (
+      SELECT r."productId" AS pid, r."coordinateKey" AS ck, r.channel, r.market, r."accountId" AS account, r."aliasId" AS alias, r.language AS lang,
+        r.label, ${RANK_SQL} AS rank, r."computedAt" AS at, r."pendingSince" IS NOT NULL AS pending, COALESCE(p."parentId", p.id) AS root
+      FROM ${FROM_INDEX} WHERE ${filter}
+    ), listing AS (
+      SELECT root, pid, ck, min(rank) AS rank, min(at) AS at, bool_or(pending) AS pending FROM f GROUP BY root, pid, ck
+    ), family AS (
+      SELECT root, count(*) AS present, count(DISTINCT pid) AS members,
+        ${fill ? Prisma.sql`count(DISTINCT pid) * count(DISTINCT ck) - count(*)` : Prisma.sql`0`} AS filled,
+        min(rank) AS worst, bool_or(pending) AS pending, count(*) FILTER (WHERE at < ${cutoff}::timestamp) AS old, ${hit} AS hit,
+        count(*) FILTER (WHERE rank = ${rankLiteral(RANK.blocked)}) AS blocked, count(*) FILTER (WHERE rank = ${rankLiteral(RANK.warn)}) AS warn,
+        count(*) FILTER (WHERE rank = ${rankLiteral(RANK.notComputed)}) AS not_computed, count(*) FILTER (WHERE rank = ${rankLiteral(RANK.absent)}) AS absent,
+        count(*) FILTER (WHERE rank = ${rankLiteral(RANK.ready)}) AS ready
+      FROM listing GROUP BY root
+    ), ranked AS (
+      SELECT family.*, CASE WHEN filled > 0 THEN LEAST(worst, ${rankLiteral(RANK.notComputed)}) ELSE worst END AS state, (hit OR ${filledHit}) AS matched FROM family
+    )
+    SELECT COALESCE(sum(blocked), 0)::int AS blocked, COALESCE(sum(warn), 0)::int AS warn, COALESCE(sum(not_computed + filled), 0)::int AS "notComputed",
+      COALESCE(sum(absent), 0)::int AS absent, COALESCE(sum(ready), 0)::int AS ready,
+      COALESCE(sum(present + filled), 0)::int AS "listingCount", COALESCE(sum(members), 0)::int AS "productCount",
+      (count(*) FILTER (WHERE matched))::int AS total, (count(*) FILTER (WHERE pending))::int AS "pendingCount", COALESCE(sum(old), 0)::int AS "olderThanDay",
+      (SELECT min(at) FROM f) AS oldest, (SELECT max(at) FROM f) AS latest,
+      ARRAY(SELECT x.root FROM ranked x LEFT JOIN "Product" rp ON rp.id = x.root WHERE x.matched
+        ORDER BY x.state, lower(COALESCE(rp.name, '')) COLLATE "C", COALESCE(rp.sku, '') COLLATE "C", x.root COLLATE "C"
+        LIMIT ${input.pageSize} OFFSET ${(input.page - 1) * input.pageSize}) AS roots,
+      (SELECT json_agg(json_build_object('key', d.ck, 'channel', d.channel, 'market', d.market, 'accountId', d.account, 'aliasId', d.alias,
+          'label', d.label, 'languages', d.languages))
+        FROM (SELECT ck, channel, market, account, alias, min(label) AS label, array_agg(DISTINCT lang) AS languages FROM f GROUP BY ck, channel, market, account, alias) d) AS destinations
+    FROM ranked`)
+  return summary
+}
+
+/** The LIGHT columns of the given families' rows, under the same filter (a family: the root itself and its variants). */
+async function familyRowsOf(filter: Prisma.Sql, roots: readonly string[]): Promise<LightRow[]> {
+  if (!roots.length) return []
+  return prisma.$queryRaw<LightRow[]>(Prisma.sql`
+    SELECT r.id, r."productId", r."coordinateKey", r.channel, r.market, r."accountId", r."aliasId", r.language, r.label, r.state, r."computedAt", r."pendingSince"
+    FROM ${FROM_INDEX}
+    WHERE ${filter} AND r."productId" IN (SELECT m.id FROM "Product" m WHERE m."parentId" = ANY(${[...roots]}::text[]) OR (m."parentId" IS NULL AND m.id = ANY(${[...roots]}::text[])))`)
+}
+
+interface Fingerprint { rows: number; latest: Date | null; pending: number; old: number; products: Date | null; roots: Date | null; variants: number }
+/**
+ * What an answer depends on, in one aggregate (the `list-etag.ts` pattern): the filtered index rows (how many, the newest
+ * check, the pending marks, how many are older than the 24-hour line), the newest edit of their products and of the
+ * family roots (names, SKUs, families), and the roots' live variants; with the request's query, business and user. An
+ * equal fingerprint is the same answer, so the route can say 304.
+ */
+async function readinessEtag(filter: Prisma.Sql, cutoff: string, context: Record<string, unknown>, rootId?: string): Promise<string> {
+  const [row] = await prisma.$queryRaw<Fingerprint[]>(Prisma.sql`
+    WITH f AS (
+      SELECT r."computedAt" AS at, r."pendingSince" AS ps, p."updatedAt" AS pu, COALESCE(p."parentId", p.id) AS root FROM ${FROM_INDEX} WHERE ${filter}
+    ), roots AS (${rootId ? Prisma.sql`SELECT root AS id FROM f UNION SELECT ${rootId}::text` : Prisma.sql`SELECT DISTINCT root AS id FROM f`})
+    SELECT count(*)::int AS rows, max(at) AS latest, count(ps)::int AS pending, (count(*) FILTER (WHERE at < ${cutoff}::timestamp))::int AS old, max(pu) AS products,
+      (SELECT max(rp."updatedAt") FROM roots JOIN "Product" rp ON rp.id = roots.id) AS roots,
+      (SELECT count(*)::int FROM "Product" v WHERE v."parentId" IN (SELECT id FROM roots) AND v."deletedAt" IS NULL) AS variants
+    FROM f`)
+  return weakEtag([row.rows, row.latest?.getTime(), row.pending, row.old, row.products?.getTime(), row.roots?.getTime(), row.variants],
+    { ...context, workspaceId: workspaceContext()?.workspaceId ?? null })
+}
+
+/** An answer, or `page: null` when the caller already holds it (`unchanged(etag)`: the route says 304). */
+export interface FreshAnswer<T> { etag: string | null; page: T | null }
 
 /** GET /api/catalog-transfer/readiness/families */
 export async function readinessFamilies(query: Record<string, unknown>, userId: string | null): Promise<ReadinessFamiliesPage> {
+  return (await familiesRead(query, userId)).page!
+}
+/** The same, with its ETag; `page` is null when `unchanged(etag)`. */
+export function readinessFamiliesIfChanged(query: Record<string, unknown>, userId: string | null, unchanged: (etag: string) => boolean): Promise<FreshAnswer<ReadinessFamiliesPage>> {
+  return familiesRead(query, userId, unchanged)
+}
+
+async function familiesRead(query: Record<string, unknown>, userId: string | null, unchanged?: (etag: string) => boolean): Promise<FreshAnswer<ReadinessFamiliesPage>> {
   const input = familiesQuery(query)
-  // One snapshot: the page's problems are read by the row ids of the light pass, which a rebuild replaces.
+  const cutoff = dayAgo()
+  // One snapshot: the fingerprint, the summary and the page's rows (whose ids the problems are read by) see the same index.
   return inDatabaseReadTransaction(prisma, async () => {
-    const where = await scopedWhere(query, input.q, userId)
-    const rows: LightRow[] = await prisma.readinessIndex.findMany({ where, select: LIGHT })
-    const products = await productsOf(rows.map(r => r.productId))
-    const infos = destinationInfos(rows)
+    const filter = await readinessFilter(query, input.q, userId)
+    const etag = unchanged ? await readinessEtag(filter, cutoff, { endpoint: 'families', query, userId }) : null
+    if (etag && unchanged!(etag)) return { etag, page: null }
+    const summary = await familiesSummary(filter, input, cutoff)
+    const infos = new Map<string, DestinationInfo>((summary.destinations ?? []).map(d => [d.key,
+      { key: d.key, channel: d.channel, market: d.market, accountId: d.accountId, aliasId: d.aliasId, label: d.label, languages: new Set(d.languages) }]))
     const destinations = describeDestinations(infos.values(), await storeNamesFor(infos.values()))
     const order = new Map(destinations.map((d, i) => [d.key, i]))
-    const families = [...familiesOf(foldListings(rows).values(), id => products.get(id)?.parentId).entries()].map(([rootId, family]) => {
-      // A listing selection names listings, not destinations: a sibling outside it was not asked about (2026-10-25).
+    // The page's families only: the same fold, fill and words as before, over their own rows.
+    const rows = await familyRowsOf(filter, summary.roots)
+    const products = await productsOf(rows.map(r => r.productId))
+    const families = familiesOf(foldListings(rows).values(), id => products.get(id)?.parentId)
+    const page = summary.roots.flatMap((rootId): FamilyPageItem[] => {
+      const family = families.get(rootId)
+      if (!family) return []
       if (!input.listingIds) fillNotComputed(family)
       const root = products.get(rootId) ?? { id: rootId, sku: '', name: null, parentId: null, isParent: false }
       const members = summarizeMembers(family, rootId, root.isParent || family.size > 1, id => products.get(id), input.state)
-      const listings = members.flatMap(m => m.listings)
-      return { id: rootId, root, members, listings, state: listings.reduce<ReadinessScopeState>((s, l) => worse(s, l.state), 'ready'),
-        matchingCount: members.filter(m => m.matches).length, pending: listings.some(l => l.pending) }
+      return [{ id: rootId, root, members, listings: members.flatMap(m => m.listings), matchingCount: members.filter(m => m.matches).length }]
     })
-    const all = families.flatMap(f => f.listings)
-    const stats = countStates(all)
-    const shown = families.filter(f => f.matchingCount > 0)
-      .sort((a, b) => compareRows({ ...a.root, state: a.state }, { ...b.root, state: b.state }))
-    const page = shown.slice((input.page - 1) * input.pageSize, input.page * input.pageSize)
-    const [problems, variants, faces] = await Promise.all([
-      problemAggregates(page.flatMap(f => f.listings.flatMap(l => l.rowIds)), 'root'),
-      variantCountsOf(page.map(f => f.id)), facesOf(page.map(f => f.id)),
-    ])
-    const built = await rowsOf(page, problems, order, infos, f => f.listings)
-    return {
-      page: input.page, pageSize: input.pageSize, total: shown.length, listingCount: all.length,
-      productCount: families.reduce((n, f) => n + f.members.length, 0),
-      stats: { ...stats, all: all.length }, destinations,
-      computedAt: iso(rows.reduce<Date | null>((at, r) => !at || r.computedAt < at ? r.computedAt : at, null)),
-      checked: checkedOf(rows, all), pendingCount: families.filter(f => f.pending).length,
-      rows: built.map(({ row, chips, state, nextStep, computedAt, pending }): ReadinessFamilyRow => ({
-        id: row.id, sku: row.root.sku, name: row.root.name, imageUrl: faces.get(row.id)?.imageUrl ?? null, photoCount: faces.get(row.id)?.photoCount ?? 0,
-        state, chips, nextStep, computedAt, pending, editorHref: productHref(row.id),
-        isParent: row.root.isParent || (variants.get(row.id) ?? 0) > 0, variantCount: variants.get(row.id) ?? 0, matchingCount: row.matchingCount,
-      })),
-    }
+    const { blocked, warn, notComputed, absent, ready } = summary
+    return { etag, page: {
+      page: input.page, pageSize: input.pageSize, total: summary.total, listingCount: summary.listingCount, productCount: summary.productCount,
+      stats: { blocked, warn, notComputed, absent, ready, all: summary.listingCount }, destinations,
+      computedAt: iso(summary.oldest), checked: { latest: iso(summary.latest), olderThanDay: summary.olderThanDay }, pendingCount: summary.pendingCount,
+      rows: await familyPageRows(page, order, infos),
+    } }
   })
+}
+
+/** One page's families, folded and filled, in row order. */
+export interface FamilyPageItem { id: string; root: ProductInfo; members: MemberSummary[]; listings: FoldedListing[]; matchingCount: number }
+/** The page's families in words: chips, state, next step, picture, variants. */
+export async function familyPageRows(page: readonly FamilyPageItem[], order: ReadonlyMap<string, number>, infos: ReadonlyMap<string, DestinationInfo>): Promise<ReadinessFamilyRow[]> {
+  const [problems, variants, faces] = await Promise.all([
+    problemAggregates(page.flatMap(f => f.listings.flatMap(l => l.rowIds)), 'root'),
+    variantCountsOf(page.map(f => f.id)), facesOf(page.map(f => f.id)),
+  ])
+  const built = await rowsOf(page, problems, order, infos, f => f.listings)
+  return built.map(({ row, chips, state, nextStep, computedAt, pending }): ReadinessFamilyRow => ({
+    id: row.id, sku: row.root.sku, name: row.root.name, imageUrl: faces.get(row.id)?.imageUrl ?? null, photoCount: faces.get(row.id)?.photoCount ?? 0,
+    state, chips, nextStep, computedAt, pending, editorHref: productHref(row.id),
+    isParent: row.root.isParent || (variants.get(row.id) ?? 0) > 0, variantCount: variants.get(row.id) ?? 0, matchingCount: row.matchingCount,
+  }))
 }
 
 /** GET /api/catalog-transfer/readiness/families/:rootId/members — the open family (the parent's own listing first). */
@@ -552,6 +697,17 @@ export async function readinessFamilyMembers(rootId: string, query: Record<strin
         state, chips, nextStep, computedAt, pending, editorHref: productHref(row.id),
         parentId: row.member.product.parentId, isParentListing: row.member.isParentListing,
       })) }
+  })
+}
+
+/** The members with their ETag; `page` is null when `unchanged(etag)` (the route says 304). */
+export async function readinessFamilyMembersIfChanged(rootId: string, query: Record<string, unknown>, userId: string | null,
+  unchanged: (etag: string) => boolean): Promise<FreshAnswer<ReadinessMembersPage>> {
+  const input = membersQuery(rootId, query)
+  return inDatabaseReadTransaction(prisma, async () => {
+    const filter = await readinessFilter(query, input.q, userId, Prisma.sql`(p.id = ${input.rootId} OR p."parentId" = ${input.rootId})`)
+    const etag = await readinessEtag(filter, dayAgo(), { endpoint: 'members', rootId: input.rootId, query, userId }, input.rootId)
+    return unchanged(etag) ? { etag, page: null } : { etag, page: await readinessFamilyMembers(rootId, query, userId) }
   })
 }
 

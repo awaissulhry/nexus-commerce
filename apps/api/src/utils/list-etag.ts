@@ -129,10 +129,17 @@ export async function listEtag(
   const maxUpdatedAtMs =
     rawMax instanceof Date ? rawMax.getTime() : rawMax != null ? Number(rawMax) : null
 
-  const filterHash = hashFilterContext(input.filterContext)
-  const etag = `W/"${count}.${maxUpdatedAtMs ?? 0}.${filterHash}"`
+  const etag = weakEtag([count, maxUpdatedAtMs], input.filterContext)
 
   return { etag, count, maxUpdatedAtMs }
+}
+
+/**
+ * The same weak ETag for a list whose freshness needs more than one count and one timestamp (several signals from one
+ * aggregate the caller ran): `W/"<signal>.<signal>….<filter_hash>"`, a missing signal written 0.
+ */
+export function weakEtag(signals: ReadonlyArray<number | null | undefined>, filterContext?: Record<string, unknown>): string {
+  return `W/"${signals.map(signal => signal ?? 0).join('.')}.${hashFilterContext(filterContext)}"`
 }
 
 /**
