@@ -18,7 +18,7 @@
  */
 import prisma from '../../../db.js'
 import { normalizeMarketplaceCode } from '../../../utils/marketplace-code.js'
-import { harvestStricter, type HarvestThresholds, type NegateThresholds } from './fields.js'
+import type { HarvestThresholds, NegateThresholds } from './fields.js'
 import { openStrategy, type EffectiveStrategy, type StrategyView } from './effective.js'
 import { loadCatalog, strategyMarkets } from './load.js'
 import { resolveProducts, type CatalogProduct, type StrategySource } from './resolve.js'
@@ -106,32 +106,6 @@ export async function termsForAdGroups(
     }
   }
   return out
-}
-
-/**
- * The harvest group for ONE subject of one market, for a page that applies one set of criteria: an ad group, a
- * campaign, several campaigns (a portfolio: the stricter group across them), a set of products (a product line,
- * resolved together), or else the market's own row. Null: the strategy sets no harvest group there.
- */
-export async function harvestForScope(
-  market: string,
-  subject: { adGroupId?: string | null; campaignIds?: readonly string[] | null; productIds?: readonly string[] | null },
-): Promise<{ group: HarvestThresholds; source: StrategySource } | null> {
-  const code = strategyMarketOf(market)
-  if (!code) return null
-  const view = await openStrategy(code)
-  if (view.empty || !sets(view, 'harvest')) return null
-  let subjects: EffectiveStrategy[] = []
-  if (subject.adGroupId) subjects = [...(await view.forAdGroups([subject.adGroupId])).values()]
-  else if (subject.campaignIds) subjects = [...(await view.forCampaigns(subject.campaignIds)).values()]
-  else if (subject.productIds?.length) subjects = [await view.forProducts(subject.productIds)]
-  if (!subjects.length) subjects = [view.forMarket()]
-  let picked: { group: HarvestThresholds; source: StrategySource } | null = null
-  for (const s of subjects) {
-    const h = termsOf(s).harvest
-    if (h && (!picked || harvestStricter(h.group, picked.group))) picked = h
-  }
-  return picked
 }
 
 // ── Protection ────────────────────────────────────────────────────────────────────────────────────

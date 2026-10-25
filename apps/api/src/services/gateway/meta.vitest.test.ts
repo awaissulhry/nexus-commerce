@@ -1224,3 +1224,73 @@ describe('step 15 — conversations, templates and the messaging setup: their ow
     ]) expect(ok(`${path}?fields=${encodeURIComponent(fields)}`), fields).toMatch(/never expands "(conversations|messages)"/)
   })
 })
+
+describe('step 4 — the business portfolio reads: each new key on its own edge, only with a value Nexus sends', () => {
+  const q = (path: string) => metaReadOnlyProblem({ method: 'GET', url: `${BASE}/${path}`, kind: 'read' })
+  it('allowed where meta-business, meta-business-people, meta-business-assets and meta-business-partners read', () => {
+    for (const path of [
+      '200000000000001/assigned_owned_assets?fields=id,role,permitted_tasks,name&asset_type=PAGE&limit=100',
+      '200000000000001/assigned_client_assets?fields=id,role,permitted_tasks&asset_type=PRODUCT_CATALOG&limit=100',
+      '200000000000001/assigned_owned_assets?fields=id,role,permitted_tasks&asset_type=INSTAGRAM_ACCOUNT_V2',
+      '9876543210/client_objects?fields=id,permitted_tasks,name&type=product-catalog&limit=100&summary=total_count',
+      '9876543210/client_objects?fields=id,permitted_tasks&type=instagram-account-v2',
+      '9876543210/partner_relationships?fields=id,name,relationship&exclude_declined_requests=true&limit=100&summary=total_count',
+      '9876543210/partner_relationships?fields=id,name&exclude_declined_requests=false',
+      '9876543210/initiated_sharing_agreements?fields=id,request_status&request_status=PENDING&receiving_business_id=9000000000002&limit=100',
+      // The plain reads of the step: fixed fields, no key of their own.
+      '9876543210?fields=id,name,created_time,updated_time,timezone_id,two_factor_type,verification_status,vertical,vertical_id,primary_page{id,name},link,is_hidden,profile_picture_uri',
+      '9876543210?fields=created_by{id},updated_by{id}',
+      '9876543210?fields=marketing_messages_onboarding_status{status,time},whatsapp_business_manager_messaging_limit',
+      '9876543210?fields=collaborative_ads_managed_partner_eligibility{is_eligible,reason_code,reason_description},collaborative_ads_managed_partner_business_info{seller_business_status,partition_type,vertical}',
+      'me/businesses?fields=id,name,verification_status,permitted_roles&limit=100',
+      '9876543210/owned_domains?fields=id,domain_name,status&limit=100',
+      '9876543210/business_users?fields=id,name,role,finance_permission,ip_permission,two_fac_status,tasks,marked_for_removal&limit=100&summary=total_count',
+      '9876543210/system_users?fields=id,name,role,created_time,finance_permission,ip_permission,created_by{id}&limit=100&summary=total_count',
+      '9876543210/pending_users?fields=id,role,status,created_time,expiration_time,updated_time,finance_role,invited_user_type,created_by{id},updated_by{id},tasks,ip_role&limit=100',
+      '9876543210/finance_permissions?fields=finance_permission,user{id,name}&limit=100',
+      '9876543210/pending_owned_pages?fields=id,page{id,name}&limit=100', '9876543210/pending_client_apps?fields=id,application{id,name},is_requested,permitted_tasks',
+      '9876543210/client_business_asset_groups?fields=id,name,permitted_tasks,owner_business{id}',
+      '120000000000010/global_brand_children?fields=id,name,link', '120000000000010/store_locations?fields=id,store_code,full_address,zip_code,phone_number,hours,price_range,pickup_options',
+      '210000000000001/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status,name_status',
+      // Fix round 1: the received agreements (B-F1), the partners edge (no key of its own), the owners and asset ids (A-F1, B-F7).
+      '9876543210/received_sharing_agreements?fields=id,request_status&request_status=APPROVE&requesting_business_id=9000000000002&limit=100',
+      '9876543210/partners?fields=id,name&limit=100&summary=total_count',
+      '200000000000001/assigned_owned_assets?fields=id,role,permitted_tasks,name,asset{id}&asset_type=PAGE',
+      '9876543210/client_pages?fields=id,name,permitted_tasks,category,link,is_published,verification_status,business{id}&limit=100&summary=total_count',
+      '9876543210/client_pages?fields=id,business{id}', '9876543210/instagram_accounts?fields=id,username,owner_business{id}',
+      '120000000000010/global_brand_children?fields=id,name,link,business{id}', '9876543210/finance_permissions?fields=finance_permission,user',
+      // Fix round 2 (re-review N1): the converted Instagram accounts with their owner.
+      '9876543210/instagram_business_accounts?fields=id,username,owner_business{id}&limit=100',
+    ]) expect(q(path), path).toBeNull()
+  })
+  it('a value Nexus does not send is refused by name; a key on another edge is refused as unknown there', () => {
+    for (const [path, words] of [
+      ['200000000000001/assigned_owned_assets?fields=id&asset_type=SYSTEM_USER', /the value of "asset_type" is not one Nexus sends here/],
+      ['200000000000001/assigned_client_assets?fields=id&asset_type=page', /the value of "asset_type"/],
+      ['200000000000001/assigned_client_assets?fields=id&asset_type=PAGE,PIXEL', /the value of "asset_type"/],
+      ['9876543210/client_objects?fields=id&type=user', /the value of "type" is not one Nexus sends here/],
+      ['9876543210/client_objects?fields=id&type=system-user', /the value of "type"/],
+      ['9876543210/partner_relationships?fields=id&exclude_declined_requests=1', /the value of "exclude_declined_requests"/],
+      ['9876543210/initiated_sharing_agreements?fields=id&request_status=pending', /the value of "request_status"/],
+      ['9876543210/initiated_sharing_agreements?fields=id&receiving_business_id=act_1', /the value of "receiving_business_id"/],
+      ['120000000000010/assigned_users?fields=id&asset_type=PAGE', /the query key "asset_type" is not one a Nexus read of Meta uses here/],
+      ['9876543210/owned_pages?fields=id&type=page', /the query key "type" is not one/],
+      ['9876543210/pending_users?fields=id&email=someone@example.com', /the query key "email" is not one/],
+      ['9876543210/owned_businesses?fields=id&client_user_id=100000000000001', /the query key "client_user_id" is not one/],
+      ['9876543210/finance_permissions?fields=id&user=100000000000001', /the query key "user" is not one/],
+      ['9876543210/agencies?fields=id&exclude_declined_requests=true', /the query key "exclude_declined_requests" is not one/],
+      ['act_1234567890/campaigns?fields=id&request_status=PENDING', /the query key "request_status" is not one/],
+      ['9876543210/system_users?fields=id,name,access_token', /a read never asks Meta for a token/],
+      ['9876543210/received_sharing_agreements?fields=id&receiving_business_id=9000000000002', /the query key "receiving_business_id" is not one/],
+      ['9876543210/initiated_sharing_agreements?fields=id&requesting_business_id=9000000000002', /the query key "requesting_business_id" is not one/],
+      ['9876543210/received_sharing_agreements?fields=id&request_status=approve', /the value of "request_status"/],
+      ['9876543210/received_sharing_agreements?fields=id&requesting_business_id=act_1', /the value of "requesting_business_id"/],
+      ['9876543210/partners?fields=id&exclude_declined_requests=true', /the query key "exclude_declined_requests" is not one/],
+      ['9876543210/partners?fields=id&request_status=PENDING', /the query key "request_status" is not one/],
+      // Re-review N7 — the received agreements' keys only on a portfolio's own edge, anchored.
+      ['act_1/received_sharing_agreements?fields=id&request_status=PENDING', /the query key "request_status" is not one/],
+      ['9876543210/x/received_sharing_agreements?fields=id&request_status=PENDING', /the query key "request_status" is not one/],
+      ['9876543210/received_sharing_agreements_v2?fields=id&request_status=PENDING', /the query key "request_status" is not one/],
+    ] as Array<[string, RegExp]>) expect(q(path), path).toMatch(words)
+  })
+})

@@ -45,7 +45,7 @@ export interface HarvestCriteria {
 /**
  * The shipped defaults, used when no policy exists at any grain.
  *
- * Every one is measured, not chosen (`scripts/_hv-2-criteria.mts`, prod 2026-08-12):
+ * Every one is measured, not chosen (`scripts/_hv-2-criteria.mts`, prod 2026-08-12; removed 2026-10-25: in git history):
  *
  *   minOrders 2            the published practitioner bar, and D2 — unchanged. 1 → 92 candidates,
  *                          2 → 17, 3 → 8.
@@ -134,19 +134,6 @@ export async function resolveHarvestPolicy(scope: HvPolicyScope, kind = 'graduat
   }
 
   return { criteria: { ...HV_DEFAULT_CRITERIA }, source: 'default', sourceScopeId: null, hasOwn: false, updatedAt: null, updatedBy: null }
-}
-
-/** Every policy row, for the "where else is one set" list the save dialog shows. */
-export async function listHarvestPolicies(kind = 'graduate') {
-  const rows = await prisma.adsHarvestPolicy.findMany({ where: { kind }, orderBy: [{ scopeGrain: 'asc' }, { scopeId: 'asc' }] })
-  return rows.map((r) => ({
-    id: r.id,
-    scopeGrain: r.scopeGrain as HvPolicyGrain,
-    scopeId: r.scopeId === HV_ACCOUNT_SCOPE ? null : r.scopeId,
-    criteria: { minOrders: r.minOrders, minClicks: r.minClicks, maxAcosPct: r.maxAcosPct, windowDays: r.windowDays, excludeExactMatched: r.excludeExactMatched },
-    updatedAt: r.updatedAt.toISOString(),
-    updatedBy: r.updatedBy,
-  }))
 }
 
 export class HarvestPolicyError extends Error {

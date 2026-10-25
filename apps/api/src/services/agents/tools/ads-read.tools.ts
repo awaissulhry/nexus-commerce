@@ -1395,7 +1395,7 @@ const adSearchTerms: AgentTool = {
   restrictedFields: AD_MONEY,
   input: z.object({
     kind: z.preprocess(lower, z.enum(TERM_KINDS)).default('all')
-      .describe('wasteful = spent at least 15.00 with no order (negative keyword candidates); converting = 2 or more orders (a first look only: the harvest bar, place and state are harvest-candidates); all = both (default)'),
+      .describe('wasteful = spent at least 15.00 with no order (a first look only: ad-waste holds the waste test in force, the verb and what is held); converting = 2 or more orders (a first look only: the harvest bar, place and state are harvest-candidates); all = both (default)'),
     campaignId: campaignArg,
     market: marketArg,
     search: z.string().trim().min(1).max(100).optional().describe('only search terms that contain this text'),
@@ -1405,7 +1405,8 @@ const adSearchTerms: AgentTool = {
   }),
   description:
     'What shoppers typed that triggered the Amazon ads, from the search-term report, in two lists: wasteful terms '
-    + '(spent with no order: candidates for create-negative-keyword) by spend, then converting terms (2 or more orders) by '
+    + '(spent with no order, by a fixed bar: a first look only — ad-waste judges waste by the test in force, with its verb and '
+    + 'what is held) by spend, then converting terms (2 or more orders) by '
     + 'orders. A converting term is harvested through the harvest engine, never from here: harvest-candidates lists it with '
     + 'the bar it must pass (the ads strategy\'s, else the brain\'s test), where it would go, its start bid and its state, '
     + 'and apply-harvest asks for the harvest (its candidateId is on the row when the campaign belongs to one product). '

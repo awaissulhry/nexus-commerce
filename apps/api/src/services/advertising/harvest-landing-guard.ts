@@ -1,7 +1,7 @@
 /**
  * HARVEST FIX (2026-10-10, bugs B1 + B10 of the Keyword Harvest research) — the landing guard the harvest paths ask before
- * they count a keyword as landed and negate the term at its source: the page's promote and a recommendation's accept
- * (ads-harvest.service.ts applyHarvest, harvest-promote.service.ts planPromotion), a rule's harvest (applyHarvest's landing
+ * they count a keyword as landed and negate the term at its source: a recommendation's accept
+ * (ads-harvest.service.ts applyHarvest), a rule's harvest (applyHarvest's landing
  * and its handover to a home elsewhere, promote_to_exact's handover), and the ads brain (brain/harvest.ts the destination
  * it chooses, brain/harvest-write.ts the pair it writes, the apply-brain-harvest request). harvest-search-term and
  * graduate-keyword do not ask it yet (the harvest engine lane takes them over).

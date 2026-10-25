@@ -30,7 +30,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *
  * ── 🔴 Why the resolver proposes a SHORTLIST and never a destination ──────────────────────────
  *
- * Measured on prod 2026-08-12 across all 289 ad groups (`scripts/_hv-3-destination.mts`):
+ * Measured on prod 2026-08-12 across all 289 ad groups (`scripts/_hv-3-destination.mts`, removed 2026-10-25: in git history):
  *
  *   target EXACT   resolves for 287 of 287 sources · UNIQUE for **38 (13%)** · median 5 · max 21
  *   target PHRASE  284 of 287 · unique 48
@@ -630,20 +630,4 @@ export async function storedHarvestDestination(scopeGrain: HvDestGrain, scopeId:
     where: { scopeGrain_scopeId_matchType: workspaceKey({ scopeGrain, scopeId, matchType }) },
     select: { adGroupId: true, negateAtSource: true, updatedBy: true },
   })
-}
-
-export async function listHarvestDestinations() {
-  const rows = await prisma.adsHarvestDestination.findMany({ orderBy: [{ scopeGrain: 'asc' }, { scopeId: 'asc' }, { matchType: 'asc' }] })
-  const ags = await prisma.adGroup.findMany({
-    where: { id: { in: [...new Set(rows.map((r) => r.adGroupId))] } },
-    select: { id: true, name: true, campaign: { select: { name: true } } },
-  })
-  const byId = new Map(ags.map((a) => [a.id, a]))
-  return rows.map((r) => ({
-    id: r.id, scopeGrain: r.scopeGrain as HvDestGrain, scopeId: r.scopeId === HV_DEST_ACCOUNT ? null : r.scopeId,
-    matchType: r.matchType as HvCreateType, adGroupId: r.adGroupId,
-    adGroupName: byId.get(r.adGroupId)?.name ?? '(deleted ad group)',
-    campaignName: byId.get(r.adGroupId)?.campaign?.name ?? '',
-    negateAtSource: r.negateAtSource, updatedAt: r.updatedAt.toISOString(), updatedBy: r.updatedBy,
-  }))
 }
