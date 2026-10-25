@@ -34,3 +34,11 @@ export function addToPlan(plan: RefreshPlan, event: LiveEventLike): RefreshPlan 
 export function familiesToRefresh(plan: RefreshPlan, openFamilies: readonly string[]): string[] {
   return plan.all ? [...openFamilies] : openFamilies.filter((id) => plan.roots.has(id))
 }
+
+/** Coming back to the tab fires `focus` and `visibilitychange` together: one read, not two. */
+export const RETURN_DEDUPE_MS = 2_000
+
+/** Whether a re-read may start now, given when the last one started (null: never). */
+export function mayRefreshAgain(lastAt: number | null, now: number): boolean {
+  return lastAt == null || now - lastAt >= RETURN_DEDUPE_MS
+}

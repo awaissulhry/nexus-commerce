@@ -115,7 +115,7 @@ export function MarketChipsCell(p: CellParams) {
   if (!data) return null
   const ctx = contextOf(p)
   const chips = orderedChips(data.chips, ctx.destinations())
-  if (chips.length === 0) return <span className={styles.none}>No listings</span>
+  if (chips.length === 0) return <span className={styles.none}>No markets</span>
   const pill = ({ chip, label, text }: PlacedChip) => {
     const sentence = chipAriaLabel(chip, label)
     const tone = readinessMeta(chip.state, 'scope').tone

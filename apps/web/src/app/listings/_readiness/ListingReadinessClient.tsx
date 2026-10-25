@@ -21,7 +21,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Archive, ChevronDown, History, Search, SlidersHorizontal } from 'lucide-react'
-import type { ReadinessDestination } from '@nexus/shared/listing-readiness'
+import type { ReadinessDestination, ReadinessFamiliesPage } from '@nexus/shared/listing-readiness'
 
 import Link from '@/lib/workspaces/Link'
 import { browserWorkspaceId, workspaceHref } from '@/lib/workspaces/paths'
@@ -61,7 +61,7 @@ import { ReadinessFixDialog } from './FixDialog'
 import styles from './readiness.module.css'
 import { READINESS_COLUMN_SPECS, ReadinessFamilyFooter, readinessColumns, readinessTreeColumn, type ReadinessGridContext } from './readinessColumns'
 import { createReadinessDatasource, type ReadinessTopLevel } from './readinessDatasource'
-import { addToPlan, EMPTY_PLAN, familiesToRefresh, LIVE_DEBOUNCE_MS, LIVE_INTERVAL_MS, READINESS_EVENT, type RefreshPlan } from './readinessLive'
+import { addToPlan, EMPTY_PLAN, familiesToRefresh, LIVE_DEBOUNCE_MS, LIVE_INTERVAL_MS, mayRefreshAgain, READINESS_EVENT, type RefreshPlan } from './readinessLive'
 import {
   DEFAULT_READINESS_PAGE_SIZE,
   EMPTY_READINESS_QUERY,
@@ -85,7 +85,7 @@ import {
   type ReadinessViewFilters,
 } from './readinessQuery'
 import { canExpand, isFamilyRow, isReadinessFooter, readinessRowId, type ReadinessGridRow } from './readinessRows'
-import { READINESS_TILES, listingsInView, stateForTile, tileAccent, tileCount, tileHint, tileLabel, tileOfState } from './readinessTiles'
+import { listingsInView, stateForTile, tileAccent, tileCount, tileHint, tileIsLit, tileLabel, visibleTiles } from './readinessTiles'
 import { channelLabel, destinationLookup, orderedChips, plural } from './marketChips'
 import { marketsColumnState, marketsFill, marketsFillForWindow, sizingForWidth } from './marketsWidth'
 import { relativeTime } from './relativeTime'
@@ -171,6 +171,16 @@ function ScopeCrumbs({ crumbs }: { crumbs: Array<{ label: string; href: string }
       ))}
     </nav>
   )
+}
+
+/**
+ * " · checked 2 min ago", and " · 12 listings last checked over a day ago" when there are any: the newest check, so
+ * one family waiting for its nightly turn does not make the whole page read as stale (2026-10-25).
+ */
+function checkedWords(checked: ReadinessFamiliesPage['checked'] | undefined, now: number): string {
+  if (!checked?.latest) return ''
+  const old = checked.olderThanDay > 0 ? ` · ${plural(checked.olderThanDay, 'listing')} last checked over a day ago` : ''
+  return ` · checked ${relativeTime(checked.latest, now)}${old}`
 }
 
 /** The eBay page's own tools: before 2026-10-24 two tiles and a button on the old eBay page. */
@@ -394,10 +404,14 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   useInvalidationChannel(LIVE_TYPES, onLiveEvent)
   // A re-read every 30 s and when the tab comes back, as on Products — and the "checked 2 min ago" words move on.
   const [now, setNow] = useState(() => Date.now())
+  const lastReadAt = useRef<number | null>(null)
   useEffect(() => {
     const refreshVisible = () => {
       if (document.visibilityState !== 'visible') return
-      setNow(Date.now())
+      const at = Date.now()
+      if (!mayRefreshAgain(lastReadAt.current, at)) return
+      lastReadAt.current = at
+      setNow(at)
       refreshGrid(REFRESH_ALL)
     }
     const timer = window.setInterval(refreshVisible, LIVE_INTERVAL_MS)
@@ -526,12 +540,12 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   const state = query?.state ?? ''
   const metrics = useMemo<Metric[]>(
     () =>
-      READINESS_TILES.map((tile) => ({
+      visibleTiles(families?.stats ?? null, state).map((tile) => ({
         label: tileLabel(tile),
         value: families ? tileCount(families.stats, tile).toLocaleString('en') : '—',
         hint: tileHint(tile),
         accent: tileAccent(tile),
-        active: tileOfState(state) === tile,
+        active: tileIsLit(state, tile),
         onClick: () => setQuery((q) => ({ ...q, state: stateForTile(q.state, tile), page: 1 })),
       })),
     [families, state, setQuery],
@@ -565,9 +579,7 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       ? `${plural(members.variantCount, 'variation')}${family?.sku ? ` of ${family.sku}` : ''} · listing readiness`
       : words.title
     : families
-      ? lockedKeys(lock).includes('marketplace')
-        ? `${plural(families.listingCount, 'listing')} · checked ${relativeTime(families.computedAt, now)}`
-        : `${plural(families.listingCount, 'listing')} on ${plural(marketCount(families.destinations), 'market')} · checked ${relativeTime(families.computedAt, now)}`
+      ? `${lockedKeys(lock).includes('marketplace') ? plural(families.listingCount, 'listing') : `${plural(families.listingCount, 'listing')} on ${plural(marketCount(families.destinations), 'market')}`}${checkedWords(families.checked, now)}`
       : '— listings'
   const count = query.parent ? (
     // Rows, as on the top level: the parent's own listing and its variations are all products.
@@ -579,7 +591,7 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       <b>{families ? listingsInView(families.stats, query.state).toLocaleString('en') : '—'}</b> listings
     </>
   )
-  const stateChip = query.parent && query.state ? (query.state === 'notChecked' ? 'Not checked' : readinessMeta(query.state, 'scope').label) : null
+  const stateChip = query.parent && query.state ? (query.state === 'notChecked' ? 'Not set up or not computed' : readinessMeta(query.state, 'scope').label) : null
   // One family's page on a store page: the store page is one more crumb (on /listings the chip below is the way back).
   const crumbs = query.parent && lock ? [...words.crumbs, { label: words.title, href: readinessPath(lock) }] : words.crumbs
 

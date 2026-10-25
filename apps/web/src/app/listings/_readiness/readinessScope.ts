@@ -2,23 +2,23 @@
  * Listings — one store, or one market of a store (2026-10-24, docs/listings/LISTINGS-STORE-PAGES-2026-10-24.md).
  *
  * The menu's store pages (`/listings/amazon`, `/listings/amazon/it`, `/listings/ebay`, `/listings/ebay/de`,
- * `/listings/shopify`) are the Listings page with a lock: the path names the store (and the market), no filter, saved
+ * `/listings/shopify`, `/listings/etsy`) are the Listings page with a lock: the path names the store (and the market), no filter, saved
  * view or link moves the page away from it, and every link the page writes keeps it. The old store pages are
- * `/listings/legacy/<store>[/<market>]`.
+ * `/listings/legacy/<store>[/<market>]`; Etsy never had one (2026-10-25: its page is new).
  *
  * Pure — no React, no fetch — so every mapping is a test.
  */
 import { COUNTRY_NAMES } from '@/app/_shared/app-nav'
 
-export type ReadinessStore = 'AMAZON' | 'EBAY' | 'SHOPIFY'
+export type ReadinessStore = 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'ETSY'
 
 export interface ReadinessLock {
   channel: ReadinessStore
-  /** Upper case (`IT`, `UK`); `''` = every market of the store. Shopify has one market (`GLOBAL`), so never one here. */
+  /** Upper case (`IT`, `UK`); `''` = every market of the store. Shopify and Etsy have no market pages, so never one here. */
   marketplace: string
 }
 
-const STORE_WORDS: Record<ReadinessStore, string> = { AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify' }
+const STORE_WORDS: Record<ReadinessStore, string> = { AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify', ETSY: 'Etsy' }
 export const storeWord = (channel: ReadinessStore): string => STORE_WORDS[channel]
 export const marketWord = (code: string): string => COUNTRY_NAMES[code] ?? code
 
@@ -32,7 +32,7 @@ export function marketOfSegment(segment: string): string | null {
   return code === 'GB' ? 'UK' : code
 }
 
-const STORE_PATH = /^\/listings\/(amazon|ebay|shopify)(?:\/([^/]+))?$/
+const STORE_PATH = /^\/listings\/(amazon|ebay|shopify|etsy)(?:\/([^/]+))?$/
 
 /**
  * The Listings page a path shows: a lock, `null` for `/listings` itself, `undefined` for any other page
@@ -45,7 +45,7 @@ export function readinessLockFromPath(pathname: string): ReadinessLock | null | 
   if (!match) return undefined
   const channel = match[1].toUpperCase() as ReadinessStore
   if (match[2] === undefined) return { channel, marketplace: '' }
-  if (channel === 'SHOPIFY') return undefined
+  if (channel === 'SHOPIFY' || channel === 'ETSY') return undefined
   const marketplace = marketOfSegment(match[2])
   return marketplace ? { channel, marketplace } : undefined
 }
@@ -63,8 +63,12 @@ export function readinessPath(lock: ReadinessLock | null): string {
   return lock.marketplace ? `${store}/${lock.marketplace.toLowerCase()}` : store
 }
 
-/** The old page for the same store and market (`/listings/legacy/amazon/it`); the old Listings page with no lock. */
+/**
+ * The old page for the same store and market (`/listings/legacy/amazon/it`); the old Listings page with no lock. Etsy
+ * never had an old page of its own: the old Listings page, Etsy only.
+ */
 export function legacyPath(lock: ReadinessLock | null): string {
+  if (lock?.channel === 'ETSY') return `/listings/legacy?${new URLSearchParams({ channel: 'ETSY' })}`
   return lock ? readinessPath(lock).replace(/^\/listings/, '/listings/legacy') : '/listings/legacy'
 }
 

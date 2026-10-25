@@ -3,6 +3,7 @@ import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 import { contentLanguages, contentWireValue } from './content-read.js'
 import { normalizeLanguage } from './content-language.js'
 import { listActiveConnections } from '../connection-resolver.service.js'
+import { channelFootprint } from '../channel-footprint.service.js'
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { TRANSFER_CHANNELS, transferCategoryField, transferIsStore, type TransferRow, type ProductTransferBoundary } from '@nexus/shared/catalog-transfer'
@@ -37,10 +38,19 @@ export async function catalogTransferLanguages() {
   return { sourceLanguage: PRIMARY_CONTENT_LOCALE, languages: readinessLanguages(markets) }
 }
 
-/** Readiness includes all active markets, beyond the transfer destination subset. */
+/**
+ * Readiness's Market filter: the business's footprint (connected channels, their switched-on markets, Amazon markets
+ * Amazon says the seller uses), beyond the transfer destination subset — never a market the business does not sell on
+ * (2026-10-25; it listed every active `Marketplace` row before).
+ */
 export async function catalogReadinessOptions() {
-  const [options, markets] = await Promise.all([catalogDestinationOptions(), prisma.marketplace.findMany({ where: { isActive: true }, orderBy: [{ channel: 'asc' }, { code: 'asc' }], select: { channel: true, code: true, name: true } })])
-  return { ...options, markets }
+  const [options, markets, footprint] = await Promise.all([
+    catalogDestinationOptions(),
+    prisma.marketplace.findMany({ where: { isActive: true }, orderBy: [{ channel: 'asc' }, { code: 'asc' }], select: { channel: true, code: true, name: true } }),
+    channelFootprint(),
+  ])
+  const served = new Set(footprint.channels.flatMap(c => c.markets.map(code => `${c.channel}:${code}`)))
+  return { ...options, markets: markets.filter(m => served.has(`${m.channel}:${m.code}`)) }
 }
 
 export async function catalogTransferOptions() {

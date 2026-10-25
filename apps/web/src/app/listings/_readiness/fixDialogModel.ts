@@ -29,9 +29,9 @@ export function problemKindLabel(kind: ReadinessProblemKind): string {
 
 const count = (n: number) => n.toLocaleString('en')
 
-/** "1 listing" / "20 listings". */
+/** "1 product" / "20 products": the Fix window shows ONE destination, where a listing is a product. */
 export function listingWords(n: number): string {
-  return `${count(n)} ${n === 1 ? 'listing' : 'listings'}`
+  return `${count(n)} ${n === 1 ? 'product' : 'products'}`
 }
 
 /** "and 30 more" when the API sent fewer listings than the problem touches; null when it sent them all. */
@@ -79,13 +79,13 @@ export function stateParts(counts: ReadinessStateCounts): StatePart[] {
     })
 }
 
-/** The summary's listings line: "21 listings, all blocked", or "21 listings: 18 blocked · 3 ready". */
+/** The summary's line for one destination: "21 products, all blocked", or "21 products: 18 blocked · 3 ready". */
 export function stateLine(counts: ReadinessStateCounts): string {
   const parts = stateParts(counts)
   const total = listingTotal(counts)
-  const listings = `${count(total)} ${total === 1 ? 'listing' : 'listings'}`
-  if (parts.length === 1) return total === 1 ? `${listings}, ${parts[0].label.toLowerCase()}` : `${listings}, all ${parts[0].label.toLowerCase()}`
-  return `${listings}: ${parts.map((part) => part.text).join(' · ')}`
+  const products = `${count(total)} ${total === 1 ? 'product' : 'products'}`
+  if (parts.length === 1) return total === 1 ? `${products}, ${parts[0].label.toLowerCase()}` : `${products}, all ${parts[0].label.toLowerCase()}`
+  return `${products}: ${parts.map((part) => part.text).join(' · ')}`
 }
 
 /** Listings in the counts. */

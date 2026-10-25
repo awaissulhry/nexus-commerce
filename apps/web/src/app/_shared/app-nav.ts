@@ -149,6 +149,7 @@ export function buildAppNav(counts: SidebarCounts, conn: Connections): RailNavIt
           moreMarketsCount: SUPPORTED_MARKETS.EBAY.length,
         },
         { label: 'Shopify', href: '/listings/shopify' },
+        { label: 'Etsy', href: '/listings/etsy' },
         // 2026-10-24 — `/listings` is the new Listings page; the old one stays one click away for the jobs only it does.
         { label: 'Legacy listings', href: '/listings/legacy' },
       ],

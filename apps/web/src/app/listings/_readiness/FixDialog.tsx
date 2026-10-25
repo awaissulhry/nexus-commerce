@@ -131,7 +131,7 @@ function Summary({ detail }: { detail: ReadinessDetail }) {
       <span>
         {detail.pending
           ? 'Checking… the list is from the last check'
-          : detail.computedAt ? <>Checked <AsOf at={detail.computedAt} /></> : 'Not checked yet'}
+          : detail.computedAt ? <>Checked <AsOf at={detail.computedAt} /></> : 'Not computed yet'}
       </span>
     </span>
   )

@@ -4,9 +4,11 @@ const state = vi.hoisted(() => ({
   markets: [] as { channel: string; code: string; name: string; languages: string[]; language: string; isActive: boolean }[],
   db: { marketplace: { findMany: vi.fn() }, productFamily: { findMany: vi.fn() } },
   connections: vi.fn(),
+  footprint: vi.fn(),
 }))
 vi.mock('../../db.js', () => ({ default: state.db }))
 vi.mock('../connection-resolver.service.js', () => ({ listActiveConnections: state.connections }))
+vi.mock('../channel-footprint.service.js', () => ({ channelFootprint: state.footprint }))
 import { catalogReadinessOptions, catalogTransferLanguages } from './catalog-transfer-export.js'
 
 beforeEach(() => {
@@ -34,6 +36,9 @@ beforeEach(() => {
   state.connections.mockImplementation(async channel => channel === 'AMAZON'
     ? [{ id: 'account-123456', channelType: 'AMAZON', marketplace: 'BE', accountLabel: 'Belgium seller', isPrimary: false }]
     : [])
+  state.footprint.mockResolvedValue({ channels: [
+    { channel: 'AMAZON', accounts: [], markets: ['BE'] }, { channel: 'EBAY', accounts: [], markets: ['IT'] }, { channel: 'SHOPIFY', accounts: [], markets: ['GLOBAL'] },
+  ], markets: {}, notConnected: [], excludedMarkets: [] })
 })
 
 it('keeps the source language first and normalizes active multilingual and scalar authorities', async () => {
@@ -56,4 +61,9 @@ it('keeps readiness markets in channel/code order with the original response fie
       { channel: 'SHOPIFY', code: 'GLOBAL', name: 'Store' },
     ],
   })
+})
+
+it('offers only the markets the business sells on: a channel with no connected account, or a market it left, is not a choice', async () => {
+  state.footprint.mockResolvedValue({ channels: [{ channel: 'AMAZON', accounts: [], markets: ['BE'] }], markets: {}, notConnected: [{ channel: 'EBAY', markets: ['IT'] }], excludedMarkets: [] })
+  expect((await catalogReadinessOptions()).markets).toEqual([{ channel: 'AMAZON', code: 'BE', name: 'Belgium' }])
 })

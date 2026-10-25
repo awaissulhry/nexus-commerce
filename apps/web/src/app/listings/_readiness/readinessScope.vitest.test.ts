@@ -22,13 +22,14 @@ describe('the path → the page', () => {
     expect(readinessLockFromPath('/listings/ebay/DE')).toEqual({ channel: 'EBAY', marketplace: 'DE' })
     expect(readinessLockFromPath('/listings/ebay/gb')).toEqual({ channel: 'EBAY', marketplace: 'UK' })
     expect(readinessLockFromPath('/listings/shopify')).toEqual({ channel: 'SHOPIFY', marketplace: '' })
+    expect(readinessLockFromPath('/listings/etsy')).toEqual({ channel: 'ETSY', marketplace: '' })
   })
 
   it('is no Listings page anywhere else', () => {
     for (const path of [
       '/listings/legacy', '/listings/legacy/amazon', '/listings/legacy/amazon/it', '/listings/publish-status',
       '/listings/generate', '/listings/ebay/campaigns', '/listings/ebay/gaps', '/listings/ebay/markdowns',
-      '/listings/amazon/default', '/listings/shopify/it', '/listings/etsy', '/listings/amazon/it/x', '/products',
+      '/listings/amazon/default', '/listings/shopify/it', '/listings/etsy/it', '/listings/amazon/it/x', '/products',
     ]) expect(readinessLockFromPath(path)).toBeUndefined()
   })
 
@@ -46,6 +47,8 @@ describe('the page → its links and words', () => {
     expect(lockedKeys({ channel: 'AMAZON', marketplace: '' })).toEqual(['channel'])
     expect(lockedKeys({ channel: 'AMAZON', marketplace: 'IT' })).toEqual(['channel', 'marketplace'])
     expect(lockedKeys({ channel: 'SHOPIFY', marketplace: '' })).toEqual(['channel', 'marketplace'])
+    // Etsy's markets are the business's own: its Market filter stays.
+    expect(lockedKeys({ channel: 'ETSY', marketplace: '' })).toEqual(['channel'])
   })
 
   it('links to itself and to its old page', () => {
@@ -55,6 +58,9 @@ describe('the page → its links and words', () => {
     expect(legacyPath({ channel: 'AMAZON', marketplace: '' })).toBe('/listings/legacy/amazon')
     expect(legacyPath({ channel: 'AMAZON', marketplace: 'IT' })).toBe('/listings/legacy/amazon/it')
     expect(legacyPath({ channel: 'SHOPIFY', marketplace: '' })).toBe('/listings/legacy/shopify')
+    // Etsy never had an old page of its own: the old Listings page, Etsy only.
+    expect(legacyPath({ channel: 'ETSY', marketplace: '' })).toBe('/listings/legacy?channel=ETSY')
+    expect(readinessPath({ channel: 'ETSY', marketplace: '' })).toBe('/listings/etsy')
   })
 
   it('names itself: title, crumbs and the browser tab', () => {
