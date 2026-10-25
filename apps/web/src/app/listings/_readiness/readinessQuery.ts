@@ -6,11 +6,24 @@
  * older bookmarks (`?skus=`, `?familyId=`, `?market=`, `?state=`, `?accountId=`, `?page=`). The new page adds `q`
  * (search), `pageSize`, `parent` (one family's page) and the `notChecked` tile state; the live layer (step 3 of
  * docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md) adds `live` (channel states) and `flags` (live flags), each a
- * comma list, sent to the API under the same names.
+ * comma list, sent to the API under the same names. Step 4 adds the server's order (`sort`, `dir`; none = state, worst
+ * first) and the market page's column filters (`priceMin`, `priceMax`, `qtyMin`, `qtyMax`, `channelId`; the Status
+ * column filter writes `live`).
  *
  * Pure — no React, no fetch — so every mapping is a test.
  */
-import { READINESS_LIVE_FLAGS, READINESS_LIVE_STATES, type ReadinessLiveFlag, type ReadinessLiveState, type ReadinessStateFilter } from '@nexus/shared/listing-readiness'
+import {
+  READINESS_COLUMN_FILTER_KEYS,
+  READINESS_LIVE_FLAGS,
+  READINESS_LIVE_STATES,
+  READINESS_SORTS,
+  type ReadinessColumnFilterKey,
+  type ReadinessLiveFlag,
+  type ReadinessLiveState,
+  type ReadinessSort,
+  type ReadinessSortDir,
+  type ReadinessStateFilter,
+} from '@nexus/shared/listing-readiness'
 import { SCOPE_READINESS_STATES } from '@/design-system/grid/renderers/readiness'
 import { lockedKeys, readinessPath, type ReadinessLock } from './readinessScope'
 
@@ -49,12 +62,39 @@ export interface ReadinessPageQuery {
   pageSize: ReadinessPageSize
   /** A store page's store and market (`readinessScope.ts`): the filters it fixes always hold its values. */
   lock: ReadinessLock | null
+  /** Step 4: the server's order. `''` = the default (state, worst first). */
+  sort: ReadinessSort | ''
+  dir: ReadinessSortDir
+  /** Step 4: the market page's column filters, as typed (numbers as text; `''` = not set). */
+  priceMin: string
+  priceMax: string
+  qtyMin: string
+  qtyMax: string
+  channelId: string
 }
 
 export const EMPTY_READINESS_QUERY: ReadinessPageQuery = {
   selector: null, familyId: '', channel: '', marketplace: '', accountId: '', language: '', state: '', live: [], flags: [], q: '',
-  parent: '', page: 1, pageSize: DEFAULT_READINESS_PAGE_SIZE, lock: null,
+  parent: '', page: 1, pageSize: DEFAULT_READINESS_PAGE_SIZE, lock: null, sort: '', dir: 'asc',
+  priceMin: '', priceMax: '', qtyMin: '', qtyMax: '', channelId: '',
 }
+
+/* ── Step 4: the order and the column filters ─────────────────────────────────────────────────────────────────────── */
+
+export const isSort = (value: string): value is ReadinessSort => (READINESS_SORTS as readonly string[]).includes(value)
+/** The column filters the API reads, with what each accepts (the API's own rule: prices with up to 4 decimals, whole quantities). */
+const COLUMN_FILTER_PATTERN: Record<ReadinessColumnFilterKey, RegExp> = {
+  priceMin: /^\d{1,9}(?:\.\d{1,4})?$/, priceMax: /^\d{1,9}(?:\.\d{1,4})?$/, qtyMin: /^\d{1,9}$/, qtyMax: /^\d{1,9}$/, channelId: /^[\s\S]{1,200}$/,
+}
+/** A column filter's value as the API takes it; anything else is dropped (never sent on). */
+export function columnFilterValue(key: ReadinessColumnFilterKey, value: unknown): string {
+  const text = typeof value === 'number' && Number.isFinite(value) ? String(value) : typeof value === 'string' ? value.trim() : ''
+  return COLUMN_FILTER_PATTERN[key].test(text) ? text : ''
+}
+/** The column filters in use. */
+export const columnFilterCount = (query: Pick<ReadinessPageQuery, ReadinessColumnFilterKey>): number =>
+  (query.priceMin || query.priceMax ? 1 : 0) + (query.qtyMin || query.qtyMax ? 1 : 0) + (query.channelId ? 1 : 0)
+const NO_COLUMN_FILTERS: Pick<ReadinessPageQuery, ReadinessColumnFilterKey> = { priceMin: '', priceMax: '', qtyMin: '', qtyMax: '', channelId: '' }
 
 /**
  * The lock's filters, put back. Every way the query changes ends here — an older link, a filter, Clear, a saved view —
@@ -106,6 +146,9 @@ export function parseReadinessQuery(search: string | URLSearchParams, lock: Read
     page: Number.isSafeInteger(page) && page >= 1 ? page : 1,
     pageSize: isPageSize(pageSize) ? pageSize : DEFAULT_READINESS_PAGE_SIZE,
     lock,
+    sort: isSort(text('sort')) ? (text('sort') as ReadinessSort) : '',
+    dir: text('dir') === 'desc' ? 'desc' : 'asc',
+    ...Object.fromEntries(READINESS_COLUMN_FILTER_KEYS.map((key) => [key, columnFilterValue(key, text(key))])) as Pick<ReadinessPageQuery, ReadinessColumnFilterKey>,
   })
 }
 
@@ -121,6 +164,12 @@ export function apiFilterParams(query: ReadinessPageQuery): Record<string, strin
   if (query.live.length) out.live = query.live.join(',')
   if (query.flags.length) out.flags = query.flags.join(',')
   if (query.q) out.q = query.q
+  // Step 4: the order (the default is left out) and the column filters.
+  if (query.sort) {
+    out.sort = query.sort
+    if (query.dir === 'desc') out.dir = 'desc'
+  }
+  for (const key of READINESS_COLUMN_FILTER_KEYS) if (query[key]) out[key] = query[key]
   return out
 }
 
@@ -185,6 +234,8 @@ export function withoutFilters(query: ReadinessPageQuery): ReadinessPageQuery {
   return withLock({
     ...query, channel: '', marketplace: '', accountId: '', language: '', familyId: '', live: [],
     flags: query.flags.filter((flag) => flag !== 'lowStock'), page: 1,
+    // Step 4: the column filters go too; the order stays.
+    ...NO_COLUMN_FILTERS,
   })
 }
 
@@ -193,6 +244,7 @@ export const activeFilterCount = (query: ReadinessPageQuery): number =>
   FILTER_KEYS.filter((key) => query[key] !== '' && !isLocked(query, key)).length
   + (query.live.length > 0 ? 1 : 0)
   + (query.flags.includes('lowStock') ? 1 : 0)
+  + columnFilterCount(query)
 
 /**
  * The values a saved view keeps beside the grid's own state. The link's selection and the search are not a view, and
@@ -201,12 +253,18 @@ export const activeFilterCount = (query: ReadinessPageQuery): number =>
 export interface ReadinessViewFilters {
   channel: string; marketplace: string; accountId: string; language: string; familyId: string; state: ReadinessStateFilter | ''
   live: ReadinessLiveState[]; flags: ReadinessLiveFlag[]
+  /** Step 4: the order and the column filters (absent from a view saved before). */
+  sort?: ReadinessSort | ''; dir?: ReadinessSortDir
+  priceMin?: string; priceMax?: string; qtyMin?: string; qtyMax?: string; channelId?: string
 }
 export const viewFiltersOf = (query: ReadinessPageQuery): ReadinessViewFilters => ({
   channel: isLocked(query, 'channel') ? '' : query.channel,
   marketplace: isLocked(query, 'marketplace') ? '' : query.marketplace,
   accountId: query.accountId, language: query.language, familyId: query.familyId, state: query.state,
   live: [...query.live], flags: [...query.flags],
+  // Step 4: only what is set, so a view without an order or a column filter reads as before.
+  ...(query.sort ? { sort: query.sort, dir: query.dir } : {}),
+  ...Object.fromEntries(READINESS_COLUMN_FILTER_KEYS.filter((key) => query[key]).map((key) => [key, query[key]])),
 })
 export function withViewFilters(query: ReadinessPageQuery, filters: Partial<ReadinessViewFilters> | null | undefined): ReadinessPageQuery {
   if (!filters) return query
@@ -221,6 +279,9 @@ export function withViewFilters(query: ReadinessPageQuery, filters: Partial<Read
     // A view saved before the live layer has neither: it shows every channel state.
     live: knownValues(list(filters.live), READINESS_LIVE_STATES), flags: knownValues(list(filters.flags), READINESS_LIVE_FLAGS),
     selector: familyId ? null : query.selector, page: 1,
+    // A view saved before step 4 has no order and no column filter: the default order, none.
+    sort: isSort(text(filters.sort)) ? (text(filters.sort) as ReadinessSort) : '', dir: filters.dir === 'desc' ? 'desc' : 'asc',
+    ...Object.fromEntries(READINESS_COLUMN_FILTER_KEYS.map((key) => [key, columnFilterValue(key, filters[key])])) as Pick<ReadinessPageQuery, ReadinessColumnFilterKey>,
   })
 }
 
@@ -283,11 +344,24 @@ export function translateScope(query: ReadinessPageQuery): { ok: true; query: Re
   if (query.q) return { ok: false, reason: 'Translate cannot narrow by a search. Clear the search box first.' }
   if (query.state === 'notChecked') return { ok: false, reason: 'Translate cannot narrow to Not checked. Choose another tile or All first.' }
   if (query.parent) return { ok: false, reason: 'Translate cannot narrow to one family’s page. Use the Product family filter instead.' }
-  if (query.live.length || query.flags.length) {
-    return { ok: false, reason: 'Translate cannot narrow by what is on the channel. Clear Channel state, Stock and the live tiles first.' }
+  if (query.live.length || query.flags.length || columnFilterCount(query) > 0) {
+    return { ok: false, reason: 'Translate cannot narrow by what is on the channel. Clear Channel state, Stock, the live tiles and the column filters first.' }
   }
   const params = apiFilterParams(query)
   const out: Record<string, string> = {}
   for (const key of TRANSLATE_KEYS) if (params[key]) out[key] = params[key]
   return { ok: true, query: out }
+}
+
+/* ── Export (step 4) ──────────────────────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The plain download link of the page's result: `GET /api/catalog-transfer/readiness/export` with the page's filters
+ * and order, a format and a level. A plain link carries no request header, so the business goes in the address
+ * (`workspaceId`, as the API reads it) when there is one.
+ */
+export function exportHref(base: string, query: ReadinessPageQuery, format: 'csv' | 'xlsx', level: 'listing' | 'family', workspaceId: string | null): string {
+  const params = new URLSearchParams({ ...apiFilterParams(query), format, level })
+  if (workspaceId) params.set('workspaceId', workspaceId)
+  return `${base}/api/catalog-transfer/readiness/export?${params}`
 }

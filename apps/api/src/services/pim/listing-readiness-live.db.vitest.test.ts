@@ -116,7 +116,9 @@ describe('the families page', () => {
     expect(chip(family, SHARED).live).toBeNull()
     expect(chip(family, AMAZON_IT).live).toEqual({ state: 'mixed', listed: 2, notListed: 1, byState: { active: 2 }, externalId: 'B0PARENT', url: 'https://www.amazon.it/dp/B0PARENT',
       priceMin: 45, priceMax: 49.9, currency: 'EUR', quantity: 17, fulfillment: 'FBM', channelErrorCount: 1, suppressedCount: 1, outOfSyncCount: 1, syncFailedCount: 0,
-      lastSyncedAt: null, duplicates: 0 })
+      lastSyncedAt: null, duplicates: 0,
+      // Step 4: the warnings beside the errors (Channel messages), the pinned prices, the last push (none here was pushed).
+      channelWarningCount: 1, pricePinnedCount: 0, pricedCount: 2, push: { worst: null, failed: 0, waiting: 0, done: 0, other: 0 } })
     expect(chip(family, AMAZON_UK).live).toMatchObject({ state: 'mixed', listed: 1, notListed: 2, byState: { active: 2 }, duplicates: 1, quantity: null, currency: 'GBP' })
     // The archived customization: an extra chip, readiness "Not set up" (absent), its listing live.
     expect(chip(family, ALIAS_OLD)).toMatchObject({ state: 'absent', counts: { absent: 1 }, issueCount: 0, live: { state: 'mixed', listed: 1, notListed: 2, byState: { active: 1 } } })

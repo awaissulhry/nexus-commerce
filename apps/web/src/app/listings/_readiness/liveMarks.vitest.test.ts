@@ -153,4 +153,10 @@ describe('the On the channel column', () => {
     expect(orderWithLiveAfterMarkets(['auto', 'markets', 'nextStep'])).toBeNull()
     expect(orderWithLiveAfterMarkets([LIVE_COLUMN, 'nextStep'])).toBeNull()
   })
+  it('step 4: the per-listing columns go right after Markets in their order, On the channel after them', () => {
+    const order = ['status', 'price', 'qty', 'channelId', LIVE_COLUMN]
+    expect(orderWithLiveAfterMarkets(['auto', 'markets', 'nextStep', 'checked', 'actions', LIVE_COLUMN, 'qty', 'status', 'price'], order))
+      .toEqual(['auto', 'markets', 'status', 'price', 'qty', LIVE_COLUMN, 'nextStep', 'checked', 'actions'])
+    expect(orderWithLiveAfterMarkets(['auto', 'markets', 'status', 'price', LIVE_COLUMN, 'nextStep'], order)).toBeNull()
+  })
 })

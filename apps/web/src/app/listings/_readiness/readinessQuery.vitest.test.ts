@@ -4,6 +4,7 @@ import {
   EMPTY_READINESS_QUERY,
   activeFilterCount,
   apiFilterParams,
+  exportHref,
   familiesParams,
   familyPageHref,
   membersParams,
@@ -288,5 +289,59 @@ describe('a search with several terms', () => {
     expect(notFoundWords({ tokens: 40, unmatched: [] })).toBeNull()
     expect(notFoundWords({ tokens: 1, unmatched: ['x'] })).toBeNull()
     expect(notFoundWords(undefined)).toBeNull()
+  })
+})
+
+/* ── Step 4: the server's order, the column filters and the export ─────────────────────────────────────────────────── */
+
+describe('the order and the column filters in the address', () => {
+  const MARKET: ReadinessLock = { channel: 'AMAZON', marketplace: 'IT' }
+  it('sort, dir and the five column filter keys are read, sent to the API under the same names, and kept in the address', () => {
+    const q = parseReadinessQuery('?sort=price&dir=desc&priceMin=20&priceMax=30.5&qtyMin=1&qtyMax=9&channelId=B0AB&live=active', MARKET)
+    expect(q).toMatchObject({ sort: 'price', dir: 'desc', priceMin: '20', priceMax: '30.5', qtyMin: '1', qtyMax: '9', channelId: 'B0AB', live: ['active'] })
+    expect(apiFilterParams(q)).toEqual({ channel: 'AMAZON', marketplace: 'IT', live: 'active', sort: 'price', dir: 'desc', priceMin: '20', priceMax: '30.5', qtyMin: '1', qtyMax: '9', channelId: 'B0AB' })
+    expect(Object.fromEntries(familiesParams(q, 1, 50))).toMatchObject({ sort: 'price', dir: 'desc', priceMin: '20' })
+    expect(Object.fromEntries(membersParams(q, 10, 0))).toMatchObject({ sort: 'price', dir: 'desc' })
+    expect(serializeReadinessQuery(q)).toBe('live=active&sort=price&dir=desc&priceMin=20&priceMax=30.5&qtyMin=1&qtyMax=9&channelId=B0AB')
+    expect(parseReadinessQuery(serializeReadinessQuery(q), MARKET)).toEqual(q)
+  })
+  it('the default order is left out of the address; junk is dropped, never sent on', () => {
+    expect(parseReadinessQuery('')).toMatchObject({ sort: '', dir: 'asc', priceMin: '', channelId: '' })
+    expect(serializeReadinessQuery(parseReadinessQuery('?dir=desc'))).toBe('')
+    const junk = parseReadinessQuery('?sort=cheapest&dir=sideways&priceMin=ten&priceMax=-3&qtyMin=1.5&qtyMax=99999999999')
+    expect(junk).toMatchObject({ sort: '', dir: 'asc', priceMin: '', priceMax: '', qtyMin: '', qtyMax: '' })
+    expect(apiFilterParams(junk)).toEqual({})
+    expect(apiFilterParams(parseReadinessQuery('?sort=name'))).toEqual({ sort: 'name' })
+  })
+  it('a store page keeps them; Clear empties the column filters but keeps the order; they count as filters', () => {
+    const q = parseReadinessQuery('?sort=checked&dir=desc&qtyMax=3&channelId=B0', MARKET)
+    expect(familyPageHref(q, 'root-1')).toBe('/listings/amazon/it?sort=checked&dir=desc&qtyMax=3&channelId=B0&parent=root-1')
+    expect(activeFilterCount(q)).toBe(2)
+    expect(withoutFilters(q)).toMatchObject({ sort: 'checked', dir: 'desc', qtyMax: '', channelId: '', channel: 'AMAZON', marketplace: 'IT' })
+    expect(withFilter(q, 'language', 'it')).toMatchObject({ sort: 'checked', qtyMax: '3' })
+  })
+  it('a saved view keeps them; a view saved before step 4 has the default order and no column filter', () => {
+    const q = parseReadinessQuery('?sort=stock&dir=desc&priceMin=5', MARKET)
+    expect(viewFiltersOf(q)).toMatchObject({ sort: 'stock', dir: 'desc', priceMin: '5' })
+    expect(viewFiltersOf(parseReadinessQuery('', MARKET))).not.toHaveProperty('sort')
+    expect(withViewFilters(parseReadinessQuery('', MARKET), viewFiltersOf(q))).toMatchObject({ sort: 'stock', dir: 'desc', priceMin: '5', page: 1 })
+    expect(withViewFilters(q, { channel: 'EBAY' })).toMatchObject({ sort: '', dir: 'asc', priceMin: '' })
+    expect(withViewFilters(q, { sort: 'cheapest' as never, priceMin: 'x' })).toMatchObject({ sort: '', priceMin: '' })
+  })
+  it('Translate is held while a column filter narrows the page; an order does not hold it', () => {
+    expect(translateScope(parseReadinessQuery('?language=it&channelId=B0', MARKET))).toMatchObject({ ok: false, reason: expect.stringContaining('column filters') })
+    expect(translateScope(parseReadinessQuery('?language=it&sort=name', MARKET))).toEqual({ ok: true, query: { channel: 'AMAZON', marketplace: 'IT', language: 'it' } })
+  })
+})
+
+describe('the export link', () => {
+  it('a plain download of the page\'s filters and order, with the format, the level and the business', () => {
+    const q = parseReadinessQuery('?state=blocked&sort=price&dir=desc&q=gale', { channel: 'AMAZON', marketplace: 'IT' })
+    const href = exportHref('https://api.test', q, 'xlsx', 'listing', 'ws_12345678')
+    const url = new URL(href)
+    expect(url.pathname).toBe('/api/catalog-transfer/readiness/export')
+    expect(Object.fromEntries(url.searchParams)).toEqual({ channel: 'AMAZON', marketplace: 'IT', state: 'blocked', q: 'gale', sort: 'price', dir: 'desc',
+      format: 'xlsx', level: 'listing', workspaceId: 'ws_12345678' })
+    expect(new URL(exportHref('https://api.test', EMPTY_READINESS_QUERY, 'csv', 'family', null)).search).toBe('?format=csv&level=family')
   })
 })

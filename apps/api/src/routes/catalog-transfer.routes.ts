@@ -12,6 +12,7 @@ import { fetchCatalogSource } from '../services/pim/catalog-source-fetch.js'
 import { catalogWorkbookTemplate, type WorkbookDestination } from '../services/pim/catalog-workbook-scopes.js'
 import { listingReadiness } from '../services/pim/listing-readiness.service.js'
 import { readinessDetail, readinessFamiliesIfChanged, readinessFamilyMembersIfChanged } from '../services/pim/listing-readiness-families.service.js'
+import { ExportTooLarge, exportReadiness } from '../services/pim/listing-readiness-export.service.js'
 import { matches } from '../utils/list-etag.js'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { permissionCheckerFor } from './studio-matrix.routes.js'
@@ -166,6 +167,18 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
   fastify.get('/catalog-transfer/readiness/detail', async (request, reply) => {
     reply.header('Cache-Control', 'no-store')
     return readinessDetail(request.query as Record<string, unknown>, actor(request), liveFor(request))
+  })
+  // Live layer step 4: the page's result as CSV or Excel (`products.export`; the live columns with `listings.view` only).
+  fastify.get('/catalog-transfer/readiness/export', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    try {
+      const file = await exportReadiness(request.query as Record<string, unknown>, actor(request), liveFor(request))
+      return reply.header('Content-Type', file.contentType).header('Content-Disposition', `attachment; filename="${file.filename}"`).send(file.data)
+    } catch (error) {
+      // Too many rows: the count travels with the refusal, so the page can say how far to narrow.
+      if (error instanceof ExportTooLarge) return reply.code(400).send({ error: error.message, count: error.count })
+      throw error
+    }
   })
   fastify.get('/catalog-transfer/source/history', async request => listSourceHistory(actor(request), Number((request.query as { page?: string }).page ?? 1)))
   fastify.get('/catalog-transfer/source/fields', async request => sourceMappingFields(request.query as Parameters<typeof sourceMappingFields>[0]))

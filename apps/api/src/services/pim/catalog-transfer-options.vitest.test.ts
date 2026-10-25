@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({
-  markets: [] as { channel: string; code: string; name: string; languages: string[]; language: string; isActive: boolean }[],
+  markets: [] as { channel: string; code: string; name: string; languages: string[]; language: string; isActive: boolean; currency: string }[],
   db: { marketplace: { findMany: vi.fn() }, productFamily: { findMany: vi.fn() } },
   connections: vi.fn(),
   footprint: vi.fn(),
@@ -14,10 +14,10 @@ import { catalogReadinessOptions, catalogTransferLanguages } from './catalog-tra
 beforeEach(() => {
   vi.resetAllMocks()
   state.markets = [
-    { channel: 'SHOPIFY', code: 'GLOBAL', name: 'Store', languages: ['it', 'de'], language: 'it', isActive: true },
-    { channel: 'AMAZON', code: 'BE', name: 'Belgium', languages: ['nl-BE', 'fr-BE'], language: 'nl', isActive: true },
-    { channel: 'EBAY', code: 'IT', name: 'Italy', languages: [], language: 'it-IT', isActive: true },
-    { channel: 'AMAZON', code: 'ES', name: 'Spain', languages: ['es'], language: 'es', isActive: false },
+    { channel: 'SHOPIFY', code: 'GLOBAL', name: 'Store', languages: ['it', 'de'], language: 'it', isActive: true, currency: 'EUR' },
+    { channel: 'AMAZON', code: 'BE', name: 'Belgium', languages: ['nl-BE', 'fr-BE'], language: 'nl', isActive: true, currency: 'EUR' },
+    { channel: 'EBAY', code: 'IT', name: 'Italy', languages: [], language: 'it-IT', isActive: true, currency: 'EUR' },
+    { channel: 'AMAZON', code: 'ES', name: 'Spain', languages: ['es'], language: 'es', isActive: false, currency: 'EUR' },
   ]
   state.db.marketplace.findMany.mockImplementation(async ({ where, select, orderBy }) => {
     const rows = state.markets.filter(row => row.isActive === where.isActive)
@@ -55,15 +55,16 @@ it('keeps readiness markets in channel/code order with the original response fie
   expect(await catalogReadinessOptions()).toEqual({
     families: [{ id: 'xavia', code: 'XAVIA', label: 'Xavia' }],
     accounts: [{ id: 'account-123456', channelType: 'AMAZON', marketplace: 'BE', accountLabel: 'Belgium seller', isPrimary: false, displayName: 'Belgium seller · 123456' }],
+    // The currency: a store page offers its Price column only when the store's markets share one (live layer step 4).
     markets: [
-      { channel: 'AMAZON', code: 'BE', name: 'Belgium' },
-      { channel: 'EBAY', code: 'IT', name: 'Italy' },
-      { channel: 'SHOPIFY', code: 'GLOBAL', name: 'Store' },
+      { channel: 'AMAZON', code: 'BE', name: 'Belgium', currency: 'EUR' },
+      { channel: 'EBAY', code: 'IT', name: 'Italy', currency: 'EUR' },
+      { channel: 'SHOPIFY', code: 'GLOBAL', name: 'Store', currency: 'EUR' },
     ],
   })
 })
 
 it('offers only the markets the business sells on: a channel with no connected account, or a market it left, is not a choice', async () => {
   state.footprint.mockResolvedValue({ channels: [{ channel: 'AMAZON', accounts: [], markets: ['BE'] }], markets: {}, notConnected: [{ channel: 'EBAY', markets: ['IT'] }], excludedMarkets: [] })
-  expect((await catalogReadinessOptions()).markets).toEqual([{ channel: 'AMAZON', code: 'BE', name: 'Belgium' }])
+  expect((await catalogReadinessOptions()).markets).toEqual([{ channel: 'AMAZON', code: 'BE', name: 'Belgium', currency: 'EUR' }])
 })

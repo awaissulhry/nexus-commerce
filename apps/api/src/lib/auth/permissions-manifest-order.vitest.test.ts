@@ -271,6 +271,9 @@ describe('permission manifest ordering', () => {
     expect(permissionForRoute('GET', '/api/catalog-transfer/readiness/families')).toBe('products.view')
     expect(permissionForRoute('GET', '/api/catalog-transfer/readiness/families/:rootId/members')).toBe('products.view')
     expect(permissionForRoute('GET', '/api/catalog-transfer/readiness/detail')).toBe('products.view')
+    // Live layer step 4: the Listings export is an export, never an import (the catch-all) or a plain read.
+    expect(permissionForRoute('GET', '/api/catalog-transfer/readiness/export')).toBe('products.export')
+    expect(permissionForRoute('POST', '/api/catalog-transfer/readiness/export')).toBe('products.import')
     expect(permissionForRoute('POST', '/api/catalog-transfer/preview')).toBe('products.import')
     expect(permissionForRoute('POST', '/api/catalog-transfer/jobs/job/apply')).toBe('products.import')
   })

@@ -11,10 +11,10 @@
  */
 import { Prisma } from '@prisma/client'
 import {
-  READINESS_LIVE_FLAGS, READINESS_LIVE_STATES,
+  ONE_MARKET_TO_SORT, READINESS_DESTINATION_SORTS, READINESS_LIVE_FLAGS, READINESS_LIVE_STATES, READINESS_SORTS,
   type ReadinessChip, type ReadinessDestination, type ReadinessDetail, type ReadinessFamiliesPage, type ReadinessFamilyRow, type ReadinessLiveFlag,
   type ReadinessLiveState, type ReadinessMemberRow, type ReadinessMembersPage, type ReadinessNextStep, type ReadinessProblem, type ReadinessProblemKind,
-  type ReadinessScopeState, type ReadinessStateCounts, type ReadinessStateFilter,
+  type ReadinessScopeState, type ReadinessSort, type ReadinessSortDir, type ReadinessStateCounts, type ReadinessStateFilter,
 } from '@nexus/shared/listing-readiness'
 import prisma from '../../db.js'
 import { inDatabaseReadTransaction } from '../../lib/database-context.js'
@@ -24,8 +24,8 @@ import { SCOPE_STATES, scopeStateRank } from './readiness-model.js'
 import { workspaceContext } from '../../lib/workspace-context.js'
 import { weakEtag } from '../../utils/list-etag.js'
 import {
-  attachLive, liveFilterCtes, liveScopeOf, liveSqlView, liveTileCtes, liveTilesOf, readChannelSection, resolveSearchTokens, SEARCH_MAX_CHARS, SEARCH_MAX_TERMS,
-  searchProductHits, searchTerms, type LiveOptions, type LiveSqlView, type LiveTiles,
+  attachLive, canonicalMarketSql, liveFilterCtes, liveJoinsSql, liveMarketCode, liveScopeOf, liveSqlView, liveTileCtes, liveTilesOf, listingScopeSql, readChannelSection, readLive,
+  resolveSearchTokens, SEARCH_MAX_CHARS, SEARCH_MAX_TERMS, searchProductHits, searchTerms, summarizeLive, type LiveOptions, type LiveRead, type LiveSqlView, type LiveTiles,
 } from './listing-readiness-live.service.js'
 
 /* ── query ────────────────────────────────────────────────────────────────────────────────── */
@@ -52,8 +52,41 @@ export function familiesQuery(query: Record<string, unknown>) {
   const state = text(query.state, 'state')
   if (state && !STATE_FILTERS.includes(state)) throw new Error('Select a readiness state')
   if (query.pageSize !== undefined && query.pageSize !== '' && !PAGE_SIZES.includes(query.pageSize as string)) throw new Error('Show 50, 100 or 200 rows per page')
-  return { ...base, q, state: state as ReadinessStateFilter | undefined, pageSize: Number(query.pageSize || 50), ...liveFilters(query) }
+  const order = sortOf(query)
+  // Step 4: a price (stock, status, last sync) is one destination's — currencies differ, and Amazon EU shares one quantity.
+  if (READINESS_DESTINATION_SORTS.includes(order.sort) && (!base.channel || base.channel === 'SHARED' || !base.marketplace)) throw new Error(ONE_MARKET_TO_SORT)
+  return { ...base, q, state: state as ReadinessStateFilter | undefined, pageSize: Number(query.pageSize || 50), ...liveFilters(query), ...order, columns: columnFiltersOf(query) }
 }
+
+/** Step 4 — the row order (`READINESS_SORTS`, `asc` or `desc`); the default is today's: state, worst first. */
+export function sortOf(query: Record<string, unknown>): { sort: ReadinessSort; dir: ReadinessSortDir } {
+  const sort = text(query.sort, 'sort') ?? 'state'
+  if (!(READINESS_SORTS as readonly string[]).includes(sort)) throw new Error(`Sort by ${READINESS_SORTS.join(', ')}`)
+  const dir = text(query.dir, 'sort direction') ?? 'asc'
+  if (dir !== 'asc' && dir !== 'desc') throw new Error('Sort asc or desc')
+  return { sort: sort as ReadinessSort, dir }
+}
+
+/** Step 4 — the market page's column filters (`READINESS_COLUMN_FILTER_KEYS`). Empty = none. */
+export interface ColumnFilters { priceMin?: number; priceMax?: number; qtyMin?: number; qtyMax?: number; channelId?: string }
+export function columnFiltersOf(query: Record<string, unknown>): ColumnFilters {
+  const number = (key: 'priceMin' | 'priceMax' | 'qtyMin' | 'qtyMax', pattern: RegExp, words: string) => {
+    const value = text(query[key], words, 20)
+    if (value === undefined) return {}
+    if (!pattern.test(value)) throw new Error(`Enter ${words} as a number`)
+    return { [key]: Number(value) }
+  }
+  const out: ColumnFilters = {
+    ...number('priceMin', /^\d{1,9}(?:\.\d{1,4})?$/, 'the lowest price'), ...number('priceMax', /^\d{1,9}(?:\.\d{1,4})?$/, 'the highest price'),
+    ...number('qtyMin', /^\d{1,9}$/, 'the lowest quantity'), ...number('qtyMax', /^\d{1,9}$/, 'the highest quantity'),
+  }
+  const channelId = text(query.channelId, 'channel ID')
+  if (channelId) out.channelId = channelId
+  if (out.priceMin !== undefined && out.priceMax !== undefined && out.priceMin > out.priceMax) throw new Error('The lowest price is above the highest')
+  if (out.qtyMin !== undefined && out.qtyMax !== undefined && out.qtyMin > out.qtyMax) throw new Error('The lowest quantity is above the highest')
+  return out
+}
+const hasColumnFilters = (columns: ColumnFilters) => Object.keys(columns).length > 0
 
 /**
  * Live layer step 3 — the live filters (`resultCtes` applies them in the SQL summary): `live` = channel states (any of
@@ -420,6 +453,23 @@ export function compareRows(a: { state: ReadinessScopeState; name: string | null
   return scopeStateRank(a.state) - scopeStateRank(b.state) || cmp(nameKey(a.name), nameKey(b.name)) || cmp(a.sku, b.sku) || cmp(a.id, b.id)
 }
 
+/**
+ * Step 4 — one row's facts for a sort: its state and words, and for the other sorts its value (a number; null sorts
+ * last whichever the direction). The primary key follows `dir`; ties fall to the name, the SKU and the id, ascending.
+ * `familiesSummary`'s ORDER BY says the same in SQL.
+ */
+export interface SortFacts { state: ReadinessScopeState; name: string | null; sku: string; id: string; value?: number | null }
+export function compareSorted(a: SortFacts, b: SortFacts, sort: ReadinessSort, dir: ReadinessSortDir): number {
+  const flip = dir === 'desc' ? -1 : 1
+  const ties = () => cmp(nameKey(a.name), nameKey(b.name)) || cmp(a.sku, b.sku) || cmp(a.id, b.id)
+  if (sort === 'state') return flip * (scopeStateRank(a.state) - scopeStateRank(b.state)) || ties()
+  if (sort === 'name') return flip * cmp(nameKey(a.name), nameKey(b.name)) || cmp(a.sku, b.sku) || cmp(a.id, b.id)
+  const x = a.value ?? null, y = b.value ?? null
+  if (x === null || y === null) return Number(x === null) - Number(y === null) || ties()
+  return flip * (x - y) || ties()
+}
+const isDefaultOrder = (order: { sort: ReadinessSort; dir: ReadinessSortDir }) => order.sort === 'state' && order.dir === 'asc'
+
 export interface MemberSummary { product: ProductInfo; listings: FoldedListing[]; state: ReadinessScopeState; isParentListing: boolean; matches: boolean }
 /** The members of one family: the parent's own listing first, then variants worst-first, then name and SKU. */
 export function summarizeMembers(family: FamilyListings, rootId: string, rootIsParent: boolean, product: (id: string) => ProductInfo | undefined, filter?: ReadinessStateFilter): MemberSummary[] {
@@ -482,7 +532,7 @@ const iso = (date: Date | null | undefined) => date ? date.toISOString() : null
 const oldest = (dates: Iterable<string | null>) => { let at: string | null = null; for (const d of dates) if (d && (!at || d < at)) at = d; return at }
 
 /** The rows of one listing set, in words: chips, state, next step (notes fetched for problem-less picks only). */
-async function rowsOf<T extends { id: string; members: MemberSummary[] }>(rows: readonly T[], problems: Map<string, Map<string, ProblemSummary[]>>,
+export async function rowsOf<T extends { id: string; members: MemberSummary[] }>(rows: readonly T[], problems: Map<string, Map<string, ProblemSummary[]>>,
   order: ReadonlyMap<string, number>, infos: ReadonlyMap<string, DestinationInfo>, listingsOf: (row: T) => FoldedListing[]) {
   const built = rows.map(row => {
     const issues = problems.get(row.id)
@@ -507,7 +557,7 @@ const rankLiteral = (rank: number) => Prisma.raw(String(Math.trunc(rank)))
 const RANK_SQL = Prisma.sql`CASE r.state ${Prisma.join(SCOPE_STATES.map(state => Prisma.sql`WHEN ${state} THEN ${rankLiteral(RANK[state])}`), ' ')} ELSE ${rankLiteral(RANK.notComputed)} END`
 const FROM_INDEX = Prisma.sql`"ReadinessIndex" r JOIN "Product" p ON p.id = r."productId"`
 /** The line of `checked.olderThanDay`, 24 hours ago, as the index stores time (UTC wall clock, `::timestamp`). */
-const dayAgo = () => new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+export const dayAgo = () => new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
 /** `searchScope` in SQL: the row's product matches, or its family's own product (the root) does; Prisma's case-insensitive `contains`. */
 function searchSql(q: string): Prisma.Sql {
@@ -524,7 +574,7 @@ function searchSql(q: string): Prisma.Sql {
  * first, `listingIds` to their coordinates), channel / market / account / language on the index columns, and the search,
  * inside the statement (never a list of every matching product). Parameterised throughout.
  */
-async function readinessFilter(query: Record<string, unknown>, q: string | undefined, userId: string | null, ...extra: Prisma.Sql[]): Promise<Prisma.Sql> {
+export async function readinessFilter(query: Record<string, unknown>, q: string | undefined, userId: string | null, ...extra: Prisma.Sql[]): Promise<Prisma.Sql> {
   const { input, product, productSelected, listings } = await readinessSelection({ ...query, state: undefined }, userId)
   const parts = [Prisma.sql`p."deletedAt" IS NULL`]
   if (productSelected) {
@@ -554,7 +604,143 @@ async function searchFilterSql(q: string): Promise<Prisma.Sql> {
   return Prisma.sql`(${searchSql(q)} OR p.id = ANY(${hits.map(h => h.id)}::text[]) OR p."parentId" = ANY(${hits.filter(h => !h.parentId).map(h => h.id)}::text[]))`
 }
 
-interface FamiliesSummary extends ReadinessStateCounts {
+/* ── step 4: the one destination, the sort and the column filters in SQL ─────────────────────────────────────────── */
+
+/** The one destination a market page names (channel, market, store): what price, stock, status and last sync read. */
+export interface OneDestination { channel: string; market: string; accountId: string | null }
+
+/**
+ * The request's one destination: a channel (not Shared) and a market, and the store — named, or the only store the
+ * business checks there. `many`: the market has more than one store and none is named. Null: no one market.
+ */
+export async function oneDestinationOf(input: { channel?: string; marketplace?: string; accountId?: string }): Promise<OneDestination | 'many' | null> {
+  if (!input.channel || input.channel === 'SHARED' || !input.marketplace) return null
+  const market = liveMarketCode(input.marketplace)
+  if (input.accountId) return { channel: input.channel, market, accountId: input.accountId }
+  const stores = await prisma.$queryRaw<Array<{ accountId: string | null }>>(Prisma.sql`
+    SELECT DISTINCT "accountId" FROM "ReadinessIndex" WHERE channel = ${input.channel} AND market = ${input.marketplace} AND "aliasId" IS NULL`)
+  if (stores.length > 1) return 'many'
+  return { channel: input.channel, market, accountId: stores[0]?.accountId ?? null }
+}
+
+/** A `ChannelListing` row `l` is the main listing (no alias) on the destination, in the page's scope (the join rule). */
+function onDestinationSql(dest: OneDestination, view: LiveSqlView): Prisma.Sql {
+  return Prisma.join([
+    Prisma.sql`upper(btrim(l.channel)) = ${dest.channel}`, Prisma.sql`${canonicalMarketSql('l.marketplace')} = ${dest.market}`,
+    Prisma.sql`NULLIF(l."channelConnectionId", '') IS NOT DISTINCT FROM ${dest.accountId}`, Prisma.sql`COALESCE(l."aliasKey", '') = ''`,
+    ...listingScopeSql(view.scope),
+  ], ' AND ')
+}
+
+/**
+ * Per family root of `src`: its products (`<p>m`), whether it has variations (`<p>k`), and each product's main listings
+ * on the destination (`<p>l`): `counted` as `summarizeLive` counts (the variations; the product itself when it has none),
+ * how many listings (`n` > 1: GB and UK twins), the lowest price, the quantity, the oldest sync, any listing Active, any
+ * channel id containing the column filter's text. `<p>c` is MATERIALIZED: read once, it would otherwise be inlined into
+ * `<p>l` and its per-listing state joins run again for every product (measured: minutes on 300 products).
+ */
+function destinationCtes(src: string, p: string, dest: OneDestination, view: LiveSqlView,
+  extra: { status?: boolean; idPattern?: string; priceRange?: { low?: number; high?: number } }): Prisma.Sql {
+  const raw = (sqlText: string) => Prisma.raw(sqlText)
+  const state = extra.status ? Prisma.sql`live_s.state` : Prisma.sql`NULL::text`
+  const joins = extra.status ? liveJoinsSql({ presence: view.presence }) : Prisma.empty
+  const idHit = extra.idPattern !== undefined
+    ? Prisma.sql`bool_or(c.ext ILIKE ${extra.idPattern} OR c.parent ILIKE ${extra.idPattern})` : Prisma.sql`FALSE`
+  // A listing priced in range (each listing: GB and UK twins may differ).
+  const range = extra.priceRange
+  const priceHit = range ? Prisma.sql`bool_or(${Prisma.join([Prisma.sql`c.price IS NOT NULL`,
+    ...(range.low !== undefined ? [Prisma.sql`c.price >= ${range.low}::float8`] : []), ...(range.high !== undefined ? [Prisma.sql`c.price <= ${range.high}::float8`] : [])], ' AND ')})`
+    : Prisma.sql`FALSE`
+  return Prisma.sql`
+    ${raw(p)}m AS (SELECT DISTINCT root, pid FROM ${raw(src)}),
+    ${raw(p)}k AS (SELECT root, bool_or(pid <> root) AS kids FROM ${raw(p)}m GROUP BY root),
+    ${raw(p)}c AS MATERIALIZED (
+      SELECT l."productId" AS pid, l.price::float8 AS price, l.quantity AS qty, l."lastSyncedAt" AS synced, ${state} AS state,
+             l."externalListingId" AS ext, l."externalParentId" AS parent
+        FROM "ChannelListing" l ${joins}
+       WHERE l."productId" IN (SELECT pid FROM ${raw(p)}m) AND ${onDestinationSql(dest, view)}),
+    ${raw(p)}l AS (
+      SELECT m.root, m.pid, (m.pid <> m.root OR NOT k.kids) AS counted, count(c.pid)::int AS n, min(c.price) AS price, min(c.qty) AS qty,
+             min(c.synced) AS synced, COALESCE(bool_or(c.state = 'active'), false) AS active, COALESCE(${idHit}, false) AS id_hit,
+             COALESCE(${priceHit}, false) AS price_hit
+        FROM ${raw(p)}m m JOIN ${raw(p)}k k ON k.root = m.root LEFT JOIN ${raw(p)}c c ON c.pid = m.pid
+       GROUP BY m.root, m.pid, k.kids),
+    ${raw(p)}v AS (
+      SELECT root, min(price) FILTER (WHERE counted) AS price,
+             CASE WHEN bool_or(n > 1) THEN NULL ELSE sum(qty) FILTER (WHERE counted AND n = 1) END AS stock,
+             (avg(active::int) FILTER (WHERE counted))::float8 AS status, min(synced) AS synced, bool_or(id_hit) AS id_hit,
+             bool_or(counted AND price_hit) AS price_any
+        FROM ${raw(p)}l GROUP BY root)`
+}
+
+/** `LIKE` text, wildcards escaped: the channel ID filter means "contains these characters". */
+const containsPattern = (value: string) => `%${value.replace(/[\\%_]/g, char => `\\${char}`)}%`
+
+/**
+ * The column filters in SQL (step 4): `cf_keep` = the families of `src` that pass them on the one destination — a main
+ * listing priced in range (the lowest and the highest price are both bounds), the summed quantity in range, a channel
+ * id (ASIN, Item ID, parent ASIN) containing the text. Null when none is set or there is no one destination.
+ */
+function columnFilterCtes(src: string, columns: ColumnFilters, dest: OneDestination | null, view: LiveSqlView | null): Prisma.Sql | null {
+  if (!view || !dest || !hasColumnFilters(columns)) return null
+  const keep: Prisma.Sql[] = []
+  if (columns.priceMin !== undefined || columns.priceMax !== undefined) keep.push(Prisma.sql`v.price_any`)
+  if (columns.qtyMin !== undefined) keep.push(Prisma.sql`v.stock >= ${columns.qtyMin}::bigint`)
+  if (columns.qtyMax !== undefined) keep.push(Prisma.sql`v.stock <= ${columns.qtyMax}::bigint`)
+  if (columns.channelId) keep.push(Prisma.sql`v.id_hit`)
+  const ctes = destinationCtes(src, 'cf_', dest, view, {
+    ...(columns.channelId ? { idPattern: containsPattern(columns.channelId) } : {}),
+    ...(columns.priceMin !== undefined || columns.priceMax !== undefined ? { priceRange: { low: columns.priceMin, high: columns.priceMax } } : {}),
+  })
+  return Prisma.sql`${ctes}, cf_keep AS (SELECT v.root FROM cf_v v WHERE ${Prisma.join(keep, ' AND ')})`
+}
+
+/** The sort in SQL (step 4): extra CTEs, the joins onto `ranked x`, and the ORDER BY with `compareSorted`'s ties. */
+interface OrderPlan { ctes: Prisma.Sql | null; joins: Prisma.Sql; order: Prisma.Sql }
+const NAME_KEY = Prisma.sql`lower(COALESCE(rp.name, '')) COLLATE "C"`
+const TIES = Prisma.sql`${NAME_KEY}, COALESCE(rp.sku, '') COLLATE "C", x.root COLLATE "C"`
+function orderPlan(order: { sort: ReadinessSort; dir: ReadinessSortDir }, view: LiveSqlView | null, dest: OneDestination | null): OrderPlan {
+  const dir = Prisma.raw(order.dir === 'desc' ? 'DESC' : 'ASC')
+  const by = (value: Prisma.Sql, joins: Prisma.Sql = Prisma.empty, ctes: Prisma.Sql | null = null): OrderPlan =>
+    ({ ctes, joins, order: Prisma.sql`${value} ${dir} NULLS LAST, ${TIES}` })
+  switch (order.sort) {
+    case 'name': return { ctes: null, joins: Prisma.empty, order: Prisma.sql`${NAME_KEY} ${dir}, COALESCE(rp.sku, '') COLLATE "C", x.root COLLATE "C"` }
+    case 'checked': return by(Prisma.sql`x.checked_at`)
+    case 'problems': {
+      // Distinct problems (field × destination) over the family's index rows, as the chips count them; plus, with the
+      // live layer, the open channel errors of its products' listings in scope (the chips' summaries, summed).
+      const fields = Prisma.sql`so_fields AS (
+        SELECT x.root, count(DISTINCT (x.ck, COALESCE(e->>'field', '')))::int AS n
+          FROM f x JOIN "ReadinessIndex" ri ON ri.id = x.rid
+          CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(ri.missing) = 'array' THEN ri.missing ELSE '[]'::jsonb END) e
+         GROUP BY x.root)`
+      if (!view) return by(Prisma.sql`COALESCE(sf.n, 0)`, Prisma.sql`LEFT JOIN so_fields sf ON sf.root = x.root`, fields)
+      const scope = listingScopeSql(view.scope)
+      // The result's listings in scope, read once (MATERIALIZED), then their open errors.
+      const errors = Prisma.sql`so_listings AS MATERIALIZED (
+        SELECT l.id, l."productId" AS pid FROM "ChannelListing" l
+         WHERE l."productId" IN (SELECT pid FROM f)${scope.length ? Prisma.sql` AND ${Prisma.join(scope, ' AND ')}` : Prisma.empty}),
+      so_errors AS (
+        SELECT m.root, count(*)::int AS n FROM (SELECT DISTINCT root, pid FROM f) m
+          JOIN so_listings l ON l.pid = m.pid
+          JOIN "ListingIssue" i ON i."listingId" = l.id AND i."resolvedAt" IS NULL AND upper(i.severity) = 'ERROR'
+         GROUP BY m.root)`
+      return by(Prisma.sql`(COALESCE(sf.n, 0) + COALESCE(se.n, 0))`,
+        Prisma.sql`LEFT JOIN so_fields sf ON sf.root = x.root LEFT JOIN so_errors se ON se.root = x.root`, Prisma.sql`${fields}, ${errors}`)
+    }
+    case 'price': case 'stock': case 'status': case 'synced': {
+      if (!view || !dest) return orderPlan({ sort: 'state', dir: 'asc' }, view, dest)
+      const ctes = destinationCtes('f', 'so_', dest, view, { status: order.sort === 'status' })
+      return by(Prisma.sql`sv.${Prisma.raw(order.sort)}`, Prisma.sql`LEFT JOIN so_v sv ON sv.root = x.root`, ctes)
+    }
+    default: return { ctes: null, joins: Prisma.empty, order: Prisma.sql`x.state ${dir}, ${TIES}` }
+  }
+}
+
+/** What the page's SQL reads beside the filter: the live view (null without `listings.view`) and the one destination. */
+export interface SqlPlan { view: LiveSqlView | null; dest: OneDestination | null }
+
+export interface FamiliesSummary extends ReadinessStateCounts {
   listingCount: number; productCount: number; total: number; pendingCount: number; olderThanDay: number
   oldest: Date | null; latest: Date | null
   /** The requested page's family roots, in row order. */
@@ -579,43 +765,56 @@ interface FamiliesSummary extends ReadinessStateCounts {
  * (`liveFilterCtes`). Live filters narrow the RESULT, like channel and market: every tile follows them; only the readiness
  * `state` tile stays a filter after the fold.
  */
-function resultCtes(filter: Prisma.Sql, input: ReturnType<typeof familiesQuery>, view: LiveSqlView | null): Prisma.Sql {
+function resultCtes(filter: Prisma.Sql, input: ReturnType<typeof familiesQuery>, plan: SqlPlan): Prisma.Sql {
   const f0 = Prisma.sql`f0 AS (
-      SELECT r."productId" AS pid, r."coordinateKey" AS ck, r.channel, r.market, r."accountId" AS account, r."aliasId" AS alias, r.language AS lang,
+      SELECT r.id AS rid, r."productId" AS pid, r."coordinateKey" AS ck, r.channel, r.market, r."accountId" AS account, r."aliasId" AS alias, r.language AS lang,
         r.label, ${RANK_SQL} AS rank, r."computedAt" AS at, r."pendingSince" IS NOT NULL AS pending, COALESCE(p."parentId", p.id) AS root
       FROM ${FROM_INDEX} WHERE ${filter}
     )`
-  const live = liveFilterCtes('f0', !input.listingIds, view)
-  return live ? Prisma.sql`${f0}, ${live}, f AS (SELECT * FROM f0 WHERE root IN (SELECT root FROM lf_keep))` : Prisma.sql`${f0}, f AS (SELECT * FROM f0)`
+  const parts = [f0]
+  let src = 'f0'
+  const live = liveFilterCtes('f0', !input.listingIds, plan.view)
+  if (live) { parts.push(live, Prisma.sql`f1 AS (SELECT * FROM f0 WHERE root IN (SELECT root FROM lf_keep))`); src = 'f1' }
+  // Step 4: the market page's column filters narrow the result the same way, on its one destination.
+  const columns = columnFilterCtes(src, input.columns, plan.dest, plan.view)
+  if (columns) { parts.push(columns, Prisma.sql`f2 AS (SELECT * FROM ${Prisma.raw(src)} WHERE root IN (SELECT root FROM cf_keep))`); src = 'f2' }
+  parts.push(Prisma.sql`f AS (SELECT * FROM ${Prisma.raw(src)})`)
+  return Prisma.join(parts, ', ')
 }
 
-async function familiesSummary(filter: Prisma.Sql, input: ReturnType<typeof familiesQuery>, cutoff: string, view: LiveSqlView | null = null): Promise<FamiliesSummary> {
+/**
+ * Step 4: the roots come in the request's order (`orderPlan`, `compareSorted` in SQL). `paging` null = every matched
+ * family (the export); else the requested page.
+ */
+export async function familiesSummary(filter: Prisma.Sql, input: ReturnType<typeof familiesQuery>, cutoff: string, plan: SqlPlan = { view: null, dest: null },
+  paging: { limit: number; offset: number } | null = { limit: input.pageSize, offset: (input.page - 1) * input.pageSize }): Promise<FamiliesSummary> {
   const fill = !input.listingIds
+  const order = orderPlan(input, plan.view, plan.dest)
   const ranks = input.state === 'notChecked' ? [RANK.absent, RANK.notComputed] : input.state ? [RANK[input.state]] : null
   const hit = ranks ? Prisma.sql`bool_or(rank IN (${Prisma.join(ranks.map(rankLiteral))}))` : Prisma.sql`TRUE`
   const filledHit = !ranks || ranks.includes(RANK.notComputed) ? Prisma.sql`filled > 0` : Prisma.sql`FALSE`
   const [summary] = await prisma.$queryRaw<FamiliesSummary[]>(Prisma.sql`
-    WITH ${resultCtes(filter, input, view)}, listing AS (
+    WITH ${resultCtes(filter, input, plan)}, listing AS (
       SELECT root, pid, ck, min(rank) AS rank, min(at) AS at, bool_or(pending) AS pending FROM f GROUP BY root, pid, ck
     ), family AS (
       SELECT root, count(*) AS present, count(DISTINCT pid) AS members,
         ${fill ? Prisma.sql`count(DISTINCT pid) * count(DISTINCT ck) - count(*)` : Prisma.sql`0`} AS filled,
-        min(rank) AS worst, bool_or(pending) AS pending, count(*) FILTER (WHERE at < ${cutoff}::timestamp) AS old, ${hit} AS hit,
+        min(rank) AS worst, bool_or(pending) AS pending, count(*) FILTER (WHERE at < ${cutoff}::timestamp) AS old, ${hit} AS hit, min(at) AS checked_at,
         count(*) FILTER (WHERE rank = ${rankLiteral(RANK.blocked)}) AS blocked, count(*) FILTER (WHERE rank = ${rankLiteral(RANK.warn)}) AS warn,
         count(*) FILTER (WHERE rank = ${rankLiteral(RANK.notComputed)}) AS not_computed, count(*) FILTER (WHERE rank = ${rankLiteral(RANK.absent)}) AS absent,
         count(*) FILTER (WHERE rank = ${rankLiteral(RANK.ready)}) AS ready
       FROM listing GROUP BY root
     ), ranked AS (
       SELECT family.*, CASE WHEN filled > 0 THEN LEAST(worst, ${rankLiteral(RANK.notComputed)}) ELSE worst END AS state, (hit OR ${filledHit}) AS matched FROM family
-    )
+    )${order.ctes ? Prisma.sql`, ${order.ctes}` : Prisma.empty}
     SELECT COALESCE(sum(blocked), 0)::int AS blocked, COALESCE(sum(warn), 0)::int AS warn, COALESCE(sum(not_computed + filled), 0)::int AS "notComputed",
       COALESCE(sum(absent), 0)::int AS absent, COALESCE(sum(ready), 0)::int AS ready,
       COALESCE(sum(present + filled), 0)::int AS "listingCount", COALESCE(sum(members), 0)::int AS "productCount",
       (count(*) FILTER (WHERE matched))::int AS total, (count(*) FILTER (WHERE pending))::int AS "pendingCount", COALESCE(sum(old), 0)::int AS "olderThanDay",
       (SELECT min(at) FROM f) AS oldest, (SELECT max(at) FROM f) AS latest,
-      ARRAY(SELECT x.root FROM ranked x LEFT JOIN "Product" rp ON rp.id = x.root WHERE x.matched
-        ORDER BY x.state, lower(COALESCE(rp.name, '')) COLLATE "C", COALESCE(rp.sku, '') COLLATE "C", x.root COLLATE "C"
-        LIMIT ${input.pageSize} OFFSET ${(input.page - 1) * input.pageSize}) AS roots,
+      ARRAY(SELECT x.root FROM ranked x LEFT JOIN "Product" rp ON rp.id = x.root ${order.joins} WHERE x.matched
+        ORDER BY ${order.order}
+        ${paging ? Prisma.sql`LIMIT ${paging.limit} OFFSET ${paging.offset}` : Prisma.empty}) AS roots,
       (SELECT json_agg(json_build_object('key', d.ck, 'channel', d.channel, 'market', d.market, 'accountId', d.account, 'aliasId', d.alias,
           'label', d.label, 'languages', d.languages))
         FROM (SELECT ck, channel, market, account, alias, min(label) AS label, array_agg(DISTINCT lang) AS languages FROM f GROUP BY ck, channel, market, account, alias) d) AS destinations
@@ -624,15 +823,15 @@ async function familiesSummary(filter: Prisma.Sql, input: ReturnType<typeof fami
 }
 
 /** The live tiles over the whole result (after the live filters), in one statement (`liveTileCtes`). */
-async function liveTiles(filter: Prisma.Sql, input: ReturnType<typeof familiesQuery>, view: LiveSqlView): Promise<LiveTiles> {
+async function liveTiles(filter: Prisma.Sql, input: ReturnType<typeof familiesQuery>, plan: SqlPlan & { view: LiveSqlView }): Promise<LiveTiles> {
   const [row] = await prisma.$queryRaw<Array<Parameters<typeof liveTilesOf>[0]>>(Prisma.sql`
-    WITH ${resultCtes(filter, input, view)}, ${liveTileCtes('f', !input.listingIds, view, !!input.language)}
+    WITH ${resultCtes(filter, input, plan)}, ${liveTileCtes('f', !input.listingIds, plan.view, !!input.language)}
     SELECT * FROM lt_tiles`)
   return liveTilesOf(row)
 }
 
 /** The LIGHT columns of the given families' rows, under the same filter (a family: the root itself and its variants). */
-async function familyRowsOf(filter: Prisma.Sql, roots: readonly string[]): Promise<LightRow[]> {
+export async function familyRowsOf(filter: Prisma.Sql, roots: readonly string[]): Promise<LightRow[]> {
   if (!roots.length) return []
   return prisma.$queryRaw<LightRow[]>(Prisma.sql`
     SELECT r.id, r."productId", r."coordinateKey", r.channel, r.market, r."accountId", r."aliasId", r.language, r.label, r.state, r."computedAt", r."pendingSince"
@@ -692,27 +891,15 @@ async function familiesRead(query: Record<string, unknown>, userId: string | nul
   // One snapshot: the fingerprint, the summary and the page's rows (whose ids the problems are read by) see the same index.
   return inDatabaseReadTransaction(prisma, async () => {
     const filter = await readinessFilter(query, input.q, userId)
-    // The live layer (step 3): only for a caller with listings.view; without it the live filters are ignored.
-    const view = await liveSqlView(input, options.live === true)
-    const etag = unchanged ? await readinessEtag(filter, cutoff, { endpoint: 'families', query, userId }, undefined, !!view) : null
+    // The live layer (step 3): only for a caller with listings.view; without it the live filters (and step 4's live sorts
+    // and column filters) are ignored.
+    const plan = await sqlPlanOf(input, options.live === true)
+    const etag = unchanged ? await readinessEtag(filter, cutoff, { endpoint: 'families', query, userId, sort: input.sort, dir: input.dir }, undefined, !!plan.view) : null
     if (etag && unchanged!(etag)) return { etag, page: null }
-    const summary = await familiesSummary(filter, input, cutoff, view)
-    const infos = new Map<string, DestinationInfo>((summary.destinations ?? []).map(d => [d.key,
-      { key: d.key, channel: d.channel, market: d.market, accountId: d.accountId, aliasId: d.aliasId, label: d.label, languages: new Set(d.languages) }]))
-    const destinations = describeDestinations(infos.values(), await storeNamesFor(infos.values()))
-    const order = new Map(destinations.map((d, i) => [d.key, i]))
+    const summary = await familiesSummary(filter, input, cutoff, plan)
+    const { infos, destinations, order } = await destinationsOf(summary)
     // The page's families only: the same fold, fill and words as before, over their own rows.
-    const rows = await familyRowsOf(filter, summary.roots)
-    const products = await productsOf(rows.map(r => r.productId))
-    const families = familiesOf(foldListings(rows).values(), id => products.get(id)?.parentId)
-    const page = summary.roots.flatMap((rootId): FamilyPageItem[] => {
-      const family = families.get(rootId)
-      if (!family) return []
-      if (!input.listingIds) fillNotComputed(family)
-      const root = products.get(rootId) ?? { id: rootId, sku: '', name: null, parentId: null, isParent: false }
-      const members = summarizeMembers(family, rootId, root.isParent || family.size > 1, id => products.get(id), input.state)
-      return [{ id: rootId, root, members, listings: members.flatMap(m => m.listings), matchingCount: members.filter(m => m.matches).length }]
-    })
+    const { items: page } = await familyItemsOf(filter, summary.roots, input)
     const { blocked, warn, notComputed, absent, ready } = summary
     const result: ReadinessFamiliesPage = {
       page: input.page, pageSize: input.pageSize, total: summary.total, listingCount: summary.listingCount, productCount: summary.productCount,
@@ -721,9 +908,47 @@ async function familiesRead(query: Record<string, unknown>, userId: string | nul
       rows: await familyPageRows(page, order, infos),
     }
     // Live layer step 3 (listing-readiness-live.service.ts): the live tiles over the whole result (SQL), then ONE post-step over the page.
-    const tiles = view ? await liveTiles(filter, input, view) : null
-    return { etag, page: await attachLive(result, { query: input, live: !!view, rowProducts: new Map(page.map(f => [f.id, f.members.map(m => m.product.id)])), tiles }) }
+    const tiles = plan.view ? await liveTiles(filter, input, { ...plan, view: plan.view }) : null
+    return { etag, page: await attachLive(result, { query: input, live: !!plan.view, rowProducts: new Map(page.map(f => [f.id, f.members.map(m => m.product.id)])), tiles }) }
   })
+}
+
+/**
+ * The SQL plan of a request (step 4): the live view (null without `listings.view`) and, when a live sort or a column
+ * filter needs it, the one destination. A market with more than one store and none named: a live sort is refused (400),
+ * the column filters are ignored.
+ */
+export async function sqlPlanOf(input: ReturnType<typeof familiesQuery>, live: boolean): Promise<SqlPlan> {
+  const view = await liveSqlView(input, live)
+  const destinationSort = READINESS_DESTINATION_SORTS.includes(input.sort)
+  if (!view || (!destinationSort && !hasColumnFilters(input.columns))) return { view, dest: null }
+  const dest = await oneDestinationOf(input)
+  if (dest === 'many' && destinationSort) throw new Error('Choose one store to sort by price, stock, status or last sync: this market has more than one')
+  return { view, dest: dest === 'many' ? null : dest }
+}
+
+/** The summary's destinations: their facts, their words in chip order, and that order. */
+export async function destinationsOf(summary: Pick<FamiliesSummary, 'destinations'>) {
+  const infos = new Map<string, DestinationInfo>((summary.destinations ?? []).map(d => [d.key,
+    { key: d.key, channel: d.channel, market: d.market, accountId: d.accountId, aliasId: d.aliasId, label: d.label, languages: new Set(d.languages) }]))
+  const destinations = describeDestinations(infos.values(), await storeNamesFor(infos.values()))
+  return { infos, destinations, order: new Map(destinations.map((d, i) => [d.key, i])) }
+}
+
+/** The given families (roots, in row order), folded, filled and summarized over their own rows, as the page builds them. */
+export async function familyItemsOf(filter: Prisma.Sql, roots: readonly string[], input: Pick<ReturnType<typeof familiesQuery>, 'listingIds' | 'state'>) {
+  const rows = await familyRowsOf(filter, roots)
+  const products = await productsOf(rows.map(r => r.productId))
+  const families = familiesOf(foldListings(rows).values(), id => products.get(id)?.parentId)
+  const items = roots.flatMap((rootId): FamilyPageItem[] => {
+    const family = families.get(rootId)
+    if (!family) return []
+    if (!input.listingIds) fillNotComputed(family)
+    const root = products.get(rootId) ?? { id: rootId, sku: '', name: null, parentId: null, isParent: false }
+    const members = summarizeMembers(family, rootId, root.isParent || family.size > 1, id => products.get(id), input.state)
+    return [{ id: rootId, root, members, listings: members.flatMap(m => m.listings), matchingCount: members.filter(m => m.matches).length }]
+  })
+  return { items, products }
 }
 
 /** One page's families, folded and filled, in row order. */
@@ -757,7 +982,9 @@ export async function readinessFamilyMembers(rootId: string, query: Record<strin
     const folded = familiesOf(foldListings(rows).values(), () => input.rootId).get(input.rootId) ?? new Map()
     const family = input.listingIds ? folded : fillNotComputed(folded)
     const root = products.get(input.rootId)
-    const members = summarizeMembers(family, input.rootId, !!root?.isParent || variantCount > 0, id => products.get(id), input.state).filter(m => m.matches)
+    const matching = summarizeMembers(family, input.rootId, !!root?.isParent || variantCount > 0, id => products.get(id), input.state).filter(m => m.matches)
+    // Step 4: the request's order (the parent's own listing stays first).
+    const members = isDefaultOrder(input) ? matching : await sortMembers(matching, input, options.live === true)
     const page = members.slice(input.offset, input.offset + input.limit).map(m => ({ id: m.product.id, members: [m], member: m }))
     const [problems, faces] = await Promise.all([problemAggregates(page.flatMap(m => m.member.listings.flatMap(l => l.rowIds)), 'product'), facesOf(page.map(m => m.id))])
     const built = await rowsOf(page, problems, order, infos, m => m.member.listings)
@@ -772,13 +999,80 @@ export async function readinessFamilyMembers(rootId: string, query: Record<strin
   })
 }
 
+/**
+ * Step 4 — an open family's members in the request's order: the parent's own listing first, then `compareSorted` over
+ * each member's own value. A live sort without `listings.view` (or without one destination) keeps today's order.
+ */
+async function sortMembers(members: MemberSummary[], input: ReturnType<typeof membersQuery>, live: boolean): Promise<MemberSummary[]> {
+  const values = await memberSortValues(members, input, live)
+  if (!values) return members
+  const facts = (m: MemberSummary): SortFacts => ({ ...m.product, state: m.state, value: values.get(m.product.id) ?? null })
+  return [...members].sort((a, b) => Number(b.isParentListing) - Number(a.isParentListing) || compareSorted(facts(a), facts(b), input.sort, input.dir))
+}
+
+const timeOf = (at: Date | string | null | undefined) => at ? new Date(at).getTime() : null
+const oldestCheck = (listings: readonly FoldedListing[]) => {
+  const times = listings.flatMap(l => l.computedAt ? [l.computedAt.getTime()] : [])
+  return times.length ? Math.min(...times) : null
+}
+/** The canonical key of the main listing on one destination (`liveDestinationKey`'s shape). */
+export const destinationKeyOf = (dest: OneDestination) => JSON.stringify([dest.channel, dest.market, dest.accountId, null])
+
+/** A product's value on the one destination for a live sort, as the chips' summaries say it (`summarizeLive`). */
+export function destinationValue(sort: ReadinessSort, productIds: readonly string[], key: string, read: LiveRead): number | null {
+  const summary = summarizeLive(productIds, key, read)
+  switch (sort) {
+    case 'price': return summary.priceMin
+    case 'stock': return summary.quantity
+    case 'synced': return timeOf(summary.lastSyncedAt)
+    case 'status': {
+      // The share of counted products with an Active listing here (`destinationCtes`' `status`).
+      const counted = productIds.filter(id => read.facts.products.get(id)?.parentId)
+      const ids = counted.length ? counted : productIds
+      return ids.filter(id => (read.get(id)?.get(key) ?? []).some(e => e.state === 'active')).length / ids.length
+    }
+    default: return null
+  }
+}
+
+/** Open channel errors of a product's listings in the read (every destination). */
+export const channelErrorsOf = (read: LiveRead, productId: string) =>
+  [...(read.get(productId)?.values() ?? [])].flat().reduce((n, entry) => n + entry.channelErrorCount, 0)
+
+/** Each member's sort value; null = the sort cannot apply here (a live sort without live data or one destination). */
+async function memberSortValues(members: readonly MemberSummary[], input: ReturnType<typeof membersQuery>, live: boolean): Promise<Map<string, number | null> | null> {
+  const ids = members.map(m => m.product.id)
+  const out = new Map<string, number | null>()
+  if (input.sort === 'state' || input.sort === 'name') return out
+  if (input.sort === 'checked') {
+    for (const m of members) out.set(m.product.id, oldestCheck(m.listings))
+    return out
+  }
+  if (input.sort === 'problems') {
+    const problems = await problemAggregates(members.flatMap(m => m.listings.flatMap(l => l.rowIds)), 'product')
+    const read = live ? await readLive(ids, liveScopeOf(input)) : null
+    for (const m of members) {
+      const fields = [...(problems.get(m.product.id)?.values() ?? [])].reduce((n, list) => n + list.length, 0)
+      out.set(m.product.id, fields + (read ? channelErrorsOf(read, m.product.id) : 0))
+    }
+    return out
+  }
+  if (!live) return null
+  const dest = await oneDestinationOf(input)
+  if (dest === 'many') throw new Error('Choose one store to sort by price, stock, status or last sync: this market has more than one')
+  if (!dest) return null
+  const read = await readLive(ids, liveScopeOf(input))
+  for (const id of ids) out.set(id, destinationValue(input.sort, [id], destinationKeyOf(dest), read))
+  return out
+}
+
 /** The members with their ETag; `page` is null when `unchanged(etag)` (the route says 304). */
 export async function readinessFamilyMembersIfChanged(rootId: string, query: Record<string, unknown>, userId: string | null,
   unchanged: (etag: string) => boolean, options: LiveOptions = {}): Promise<FreshAnswer<ReadinessMembersPage>> {
   const input = membersQuery(rootId, query)
   return inDatabaseReadTransaction(prisma, async () => {
     const filter = await readinessFilter(query, input.q, userId, Prisma.sql`(p.id = ${input.rootId} OR p."parentId" = ${input.rootId})`)
-    const etag = await readinessEtag(filter, dayAgo(), { endpoint: 'members', rootId: input.rootId, query, userId }, input.rootId, options.live === true)
+    const etag = await readinessEtag(filter, dayAgo(), { endpoint: 'members', rootId: input.rootId, query, userId, sort: input.sort, dir: input.dir }, input.rootId, options.live === true)
     return unchanged(etag) ? { etag, page: null } : { etag, page: await readinessFamilyMembers(rootId, query, userId, options) }
   })
 }
