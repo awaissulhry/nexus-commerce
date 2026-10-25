@@ -10,10 +10,11 @@
  * Filters are `listingReadinessWhere()`'s selection (the same as Translate); the state filter applies after the language fold.
  */
 import { Prisma } from '@prisma/client'
-import type {
-  ReadinessChip, ReadinessDestination, ReadinessDetail, ReadinessFamiliesPage, ReadinessFamilyRow, ReadinessMemberRow,
-  ReadinessMembersPage, ReadinessNextStep, ReadinessProblem, ReadinessProblemKind, ReadinessScopeState, ReadinessStateCounts,
-  ReadinessStateFilter,
+import {
+  READINESS_LIVE_FLAGS, READINESS_LIVE_STATES,
+  type ReadinessChip, type ReadinessDestination, type ReadinessDetail, type ReadinessFamiliesPage, type ReadinessFamilyRow, type ReadinessLiveFlag,
+  type ReadinessLiveState, type ReadinessMemberRow, type ReadinessMembersPage, type ReadinessNextStep, type ReadinessProblem, type ReadinessProblemKind,
+  type ReadinessScopeState, type ReadinessStateCounts, type ReadinessStateFilter,
 } from '@nexus/shared/listing-readiness'
 import prisma from '../../db.js'
 import { inDatabaseReadTransaction } from '../../lib/database-context.js'
@@ -22,6 +23,7 @@ import { listingReadinessWhere, readinessProblemKind, readinessQuery, readinessS
 import { SCOPE_STATES, scopeStateRank } from './readiness-model.js'
 import { workspaceContext } from '../../lib/workspace-context.js'
 import { weakEtag } from '../../utils/list-etag.js'
+import { attachLive, liveScopeOf, readChannelSection, SEARCH_MAX_CHARS, SEARCH_MAX_TERMS, searchProductHits, searchTerms, type LiveOptions } from './listing-readiness-live.service.js'
 
 /* ── query ────────────────────────────────────────────────────────────────────────────────── */
 
@@ -41,11 +43,28 @@ const count = (value: unknown, fallback: number, min: number, max: number, messa
 /** Everything `readinessQuery` accepts (its `state` aside), plus the search, the state tile and the page size. */
 export function familiesQuery(query: Record<string, unknown>) {
   const base = readinessQuery({ ...query, state: undefined })
-  const q = text(query.q, 'search')
+  // Live layer step 3: a search may be a pasted list (SKUs, ASINs, Item IDs) — up to 500 terms / 4,000 characters.
+  const q = text(query.q, 'search', SEARCH_MAX_CHARS)
+  if (q && searchTerms(q).length > SEARCH_MAX_TERMS) throw new Error(`Search for up to ${SEARCH_MAX_TERMS} terms at once`)
   const state = text(query.state, 'state')
   if (state && !STATE_FILTERS.includes(state)) throw new Error('Select a readiness state')
   if (query.pageSize !== undefined && query.pageSize !== '' && !PAGE_SIZES.includes(query.pageSize as string)) throw new Error('Show 50, 100 or 200 rows per page')
-  return { ...base, q, state: state as ReadinessStateFilter | undefined, pageSize: Number(query.pageSize || 50) }
+  return { ...base, q, state: state as ReadinessStateFilter | undefined, pageSize: Number(query.pageSize || 50), ...liveFilters(query) }
+}
+
+/**
+ * Live layer step 3 — the live filters, accepted now and applied by the SQL summary's follow-up: `live` = channel states
+ * (any of them: OR), `flags` = live flags (all of them: AND), comma lists. Unknown values are dropped, never refused;
+ * a caller without `listings.view` has them ignored.
+ */
+export function liveFilters(query: Record<string, unknown>): { liveStates?: ReadinessLiveState[]; liveFlags?: ReadinessLiveFlag[] } {
+  const list = <T extends string>(value: unknown, allowed: readonly T[]) => {
+    const raw = Array.isArray(value) ? value.join(',') : typeof value === 'string' ? value : ''
+    const picked = [...new Set(raw.split(',').map(v => v.trim()).filter((v): v is T => (allowed as readonly string[]).includes(v)))]
+    return picked.length ? picked : undefined
+  }
+  const liveStates = list(query.live, READINESS_LIVE_STATES), liveFlags = list(query.flags, READINESS_LIVE_FLAGS)
+  return { ...(liveStates ? { liveStates } : {}), ...(liveFlags ? { liveFlags } : {}) }
 }
 export function membersQuery(rootId: unknown, query: Record<string, unknown>) {
   const root = text(rootId, 'product')
@@ -424,11 +443,8 @@ function sampleOf(members: readonly MemberSummary[], destinationKey: string, sta
 /** `listingReadinessWhere` (without `state`: it applies after the fold) AND the search AND any extra scope. */
 async function scopedWhere(query: Record<string, unknown>, q: string | undefined, userId: string | null, ...extra: Prisma.ReadinessIndexWhereInput[]): Promise<Prisma.ReadinessIndexWhereInput> {
   const parts = [await listingReadinessWhere({ ...query, state: undefined }, userId), ...extra]
-  if (q) {
-    const contains = { contains: q, mode: 'insensitive' as const }
-    const hits = await prisma.product.findMany({ where: { deletedAt: null, OR: [{ sku: contains }, { name: contains }, { gtin: contains }, { ean: contains }, { upc: contains }] }, select: { id: true, parentId: true } })
-    parts.push(searchScope(hits))
-  }
+  // Today's phrase search (SKU, name, barcode) AND each term exactly on the channel ids (live layer step 3).
+  if (q) parts.push(searchScope(await searchProductHits(q)))
   return parts.length === 1 ? parts[0] : { AND: parts }
 }
 /** A product matches itself; a family's own product (the root) matching brings the whole family. */
@@ -613,15 +629,16 @@ async function readinessEtag(filter: Prisma.Sql, cutoff: string, context: Record
 export interface FreshAnswer<T> { etag: string | null; page: T | null }
 
 /** GET /api/catalog-transfer/readiness/families */
-export async function readinessFamilies(query: Record<string, unknown>, userId: string | null): Promise<ReadinessFamiliesPage> {
-  return (await familiesRead(query, userId)).page!
+export async function readinessFamilies(query: Record<string, unknown>, userId: string | null, options: LiveOptions = {}): Promise<ReadinessFamiliesPage> {
+  return (await familiesRead(query, userId, undefined, options)).page!
 }
 /** The same, with its ETag; `page` is null when `unchanged(etag)`. */
-export function readinessFamiliesIfChanged(query: Record<string, unknown>, userId: string | null, unchanged: (etag: string) => boolean): Promise<FreshAnswer<ReadinessFamiliesPage>> {
-  return familiesRead(query, userId, unchanged)
+export function readinessFamiliesIfChanged(query: Record<string, unknown>, userId: string | null, unchanged: (etag: string) => boolean,
+  options: LiveOptions = {}): Promise<FreshAnswer<ReadinessFamiliesPage>> {
+  return familiesRead(query, userId, unchanged, options)
 }
 
-async function familiesRead(query: Record<string, unknown>, userId: string | null, unchanged?: (etag: string) => boolean): Promise<FreshAnswer<ReadinessFamiliesPage>> {
+async function familiesRead(query: Record<string, unknown>, userId: string | null, unchanged?: (etag: string) => boolean, options: LiveOptions = {}): Promise<FreshAnswer<ReadinessFamiliesPage>> {
   const input = familiesQuery(query)
   const cutoff = dayAgo()
   // One snapshot: the fingerprint, the summary and the page's rows (whose ids the problems are read by) see the same index.
@@ -647,12 +664,14 @@ async function familiesRead(query: Record<string, unknown>, userId: string | nul
       return [{ id: rootId, root, members, listings: members.flatMap(m => m.listings), matchingCount: members.filter(m => m.matches).length }]
     })
     const { blocked, warn, notComputed, absent, ready } = summary
-    return { etag, page: {
+    const result: ReadinessFamiliesPage = {
       page: input.page, pageSize: input.pageSize, total: summary.total, listingCount: summary.listingCount, productCount: summary.productCount,
       stats: { blocked, warn, notComputed, absent, ready, all: summary.listingCount }, destinations,
       computedAt: iso(summary.oldest), checked: { latest: iso(summary.latest), olderThanDay: summary.olderThanDay }, pendingCount: summary.pendingCount,
       rows: await familyPageRows(page, order, infos),
-    } }
+    }
+    // Live layer step 3 (listing-readiness-live.service.ts): ONE post-step over the built page. Keep this call when the computation above changes.
+    return { etag, page: await attachLive(result, { query: input, live: options.live === true, rowProducts: new Map(page.map(f => [f.id, f.members.map(m => m.product.id)])) }) }
   })
 }
 
@@ -673,7 +692,7 @@ export async function familyPageRows(page: readonly FamilyPageItem[], order: Rea
 }
 
 /** GET /api/catalog-transfer/readiness/families/:rootId/members — the open family (the parent's own listing first). */
-export async function readinessFamilyMembers(rootId: string, query: Record<string, unknown>, userId: string | null): Promise<ReadinessMembersPage> {
+export async function readinessFamilyMembers(rootId: string, query: Record<string, unknown>, userId: string | null, options: LiveOptions = {}): Promise<ReadinessMembersPage> {
   const input = membersQuery(rootId, query)
   return inDatabaseReadTransaction(prisma, async () => {
     const where = await scopedWhere(query, input.q, userId, familyScope(input.rootId))
@@ -691,23 +710,25 @@ export async function readinessFamilyMembers(rootId: string, query: Record<strin
     const page = members.slice(input.offset, input.offset + input.limit).map(m => ({ id: m.product.id, members: [m], member: m }))
     const [problems, faces] = await Promise.all([problemAggregates(page.flatMap(m => m.member.listings.flatMap(l => l.rowIds)), 'product'), facesOf(page.map(m => m.id))])
     const built = await rowsOf(page, problems, order, infos, m => m.member.listings)
-    return { rootId: input.rootId, shown: built.length, total: members.length, variantCount,
+    const result: ReadinessMembersPage = { rootId: input.rootId, shown: built.length, total: members.length, variantCount,
       rows: built.map(({ row, chips, state, nextStep, computedAt, pending }): ReadinessMemberRow => ({
         id: row.id, sku: row.member.product.sku, name: row.member.product.name, imageUrl: faces.get(row.id)?.imageUrl ?? null, photoCount: faces.get(row.id)?.photoCount ?? 0,
         state, chips, nextStep, computedAt, pending, editorHref: productHref(row.id),
         parentId: row.member.product.parentId, isParentListing: row.member.isParentListing,
       })) }
+    // Live layer step 3 (listing-readiness-live.service.ts): ONE post-step over the built page. Keep this call when the computation above changes.
+    return attachLive(result, { query: input, live: options.live === true, rowProducts: new Map(page.map(m => [m.id, [m.id]])) })
   })
 }
 
 /** The members with their ETag; `page` is null when `unchanged(etag)` (the route says 304). */
 export async function readinessFamilyMembersIfChanged(rootId: string, query: Record<string, unknown>, userId: string | null,
-  unchanged: (etag: string) => boolean): Promise<FreshAnswer<ReadinessMembersPage>> {
+  unchanged: (etag: string) => boolean, options: LiveOptions = {}): Promise<FreshAnswer<ReadinessMembersPage>> {
   const input = membersQuery(rootId, query)
   return inDatabaseReadTransaction(prisma, async () => {
     const filter = await readinessFilter(query, input.q, userId, Prisma.sql`(p.id = ${input.rootId} OR p."parentId" = ${input.rootId})`)
     const etag = await readinessEtag(filter, dayAgo(), { endpoint: 'members', rootId: input.rootId, query, userId }, input.rootId)
-    return unchanged(etag) ? { etag, page: null } : { etag, page: await readinessFamilyMembers(rootId, query, userId) }
+    return unchanged(etag) ? { etag, page: null } : { etag, page: await readinessFamilyMembers(rootId, query, userId, options) }
   })
 }
 
@@ -739,7 +760,7 @@ export function detailProblems(rows: ReadonlyArray<{ productId: string; language
 }
 
 /** GET /api/catalog-transfer/readiness/detail — one product (or its whole family) on one destination. */
-export async function readinessDetail(query: Record<string, unknown>, userId: string | null): Promise<ReadinessDetail> {
+export async function readinessDetail(query: Record<string, unknown>, userId: string | null, options: LiveOptions = {}): Promise<ReadinessDetail> {
   const input = detailQuery(query)
   const { destination } = input
   return inDatabaseReadTransaction(prisma, async () => {
@@ -783,8 +804,10 @@ export async function readinessDetail(query: Record<string, unknown>, userId: st
     for (const row of scoped) if (row.note?.trim() && (row.state === 'absent' || (row.state !== 'ready' && !(Array.isArray(row.missing) && row.missing.length)))) notes.add(row.note.trim())
     if (counts.notComputed || !listings.length) notes.add(NOT_CHECKED_MESSAGE)
     const worstLanguage = languages.find(l => l.state === state)?.locale ?? languages[0]?.locale ?? PRIMARY_CONTENT_LOCALE
+    // Live layer step 3: what the channel says here (null on Shared and without listings.view).
+    const channel = options.live === true ? await readChannelSection(ordered.length ? ordered.map(m => m.product.id) : [asked.id], destination, liveScopeOf(input)) : null
     return { productId: input.productId, family: input.family, destination: described, state, counts,
       computedAt: oldest(listings.map(l => iso(l.computedAt))), pending: listings.some(l => l.pending), languages, problems, notes: [...notes],
-      editorHref: studioHref(input.productId, destination, worstLanguage) }
+      editorHref: studioHref(input.productId, destination, worstLanguage), channel }
   })
 }

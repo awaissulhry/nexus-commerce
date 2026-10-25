@@ -215,7 +215,9 @@ describe('query checks (answered 400 by the route)', () => {
     expect(familiesQuery({ q: '  gale ', state: 'notChecked', pageSize: '200', page: '2', channel: 'amazon', market: 'it' })).toMatchObject({ q: 'gale', state: 'notChecked', pageSize: 200, page: 2, channel: 'AMAZON', marketplace: 'IT' })
     expect(() => familiesQuery({ pageSize: '25' })).toThrow('50, 100 or 200')
     expect(() => familiesQuery({ state: 'checks-passed' })).toThrow('readiness state')
-    expect(() => familiesQuery({ q: 'x'.repeat(201) })).toThrow('Invalid search')
+    // Live layer step 3: a search may be a pasted list — 4,000 characters (and 500 terms).
+    expect(familiesQuery({ q: 'x'.repeat(4000) }).q).toHaveLength(4000)
+    expect(() => familiesQuery({ q: 'x'.repeat(4001) })).toThrow('Invalid search')
     expect(() => familiesQuery({ q: ['a', 'b'] })).toThrow('Invalid search')
     expect(() => familiesQuery({ familyId: 'f', skus: 'A' })).toThrow('Choose one')
     expect(() => familiesQuery({ page: '0' })).toThrow('positive')

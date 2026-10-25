@@ -68,6 +68,12 @@ export interface ReadinessDestination {
   aliasKey: string
   /** Short words for the chip: "Shared", "Amazon IT", "eBay IT", "Shopify"; plus the store or alias when one market has more than one. */
   label: string
+  /**
+   * Live layer (step 3): set on a destination Nexus does not check readiness for — it only holds a listing that matches
+   * no readiness destination (no account recorded, an account or market outside the business's footprint, an archived
+   * listing customization, no market recorded). Why, in words. Absent on every readiness destination.
+   */
+  note?: string
 }
 
 /** One chip: the verdict of a row (family or product) on one destination. */
@@ -393,7 +399,12 @@ export interface ReadinessChannelListing {
   suppressions: ReadinessSuppression[]
   differs: ReadinessDiffer[]
   lastPublish: { at: string; outcome: string; message: string | null } | null
+  /** The newest sync attempts of this listing (at most 10, newest first); absent from an older API. */
+  syncAttempts?: ReadinessSyncAttempt[]
 }
+
+/** One sync attempt of a listing (`SyncAttempt`), as stored. */
+export interface ReadinessSyncAttempt { at: string; status: string; source: string; durationMs: number | null; error: string | null }
 
 /** The Listing window's "On the channel" tab: the row's listings on one destination. */
 export interface ReadinessChannelSection {
