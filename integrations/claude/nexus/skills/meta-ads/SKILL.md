@@ -48,6 +48,7 @@ Nexus's daily read costs no Meta call. The live reads ask Meta now and count aga
 - **Audiences and pixels:** `meta-audiences` (read `view: "ads-using"` before deleting, unsharing or changing one), `meta-datasets` (pixels; whether the shop already sends purchases by server; event match quality; custom conversions).
 - **Catalogs and shops:** `meta-catalogs` (`view: "writer"`: who writes the items — where Shopify feeds a catalog, Shopify keeps writing and Nexus writes no items), `meta-catalog-items`, `meta-catalog-feeds`, `meta-catalog-health`, `meta-product-sets`, `meta-commerce`, `meta-instagram-product-tags`.
 - **Leads and comments:** `meta-lead-forms`, `meta-leads`, `meta-comments`. Leads and comments carry people's names, e-mails and words: use them only for what the person asked; Nexus keeps none. Real leads need Meta's App Review first: until then Meta answers test leads only.
+- **Messages and messaging setup:** `meta-conversations` (Messenger and Instagram Direct conversations and their last 20 messages, the Page's inbox labels, who answers a person, WhatsApp message and call numbers), `meta-message-templates` (Messenger utility templates, WhatsApp templates and groups), `meta-messaging-setup` (the Messenger and Instagram profile, welcome flows for messaging ads, personas, calling, where messaging and Threads ads can send people). Messages carry people's names, ids and words: use them only for what the person asked; Nexus keeps none. Every answer says Meta's messaging window (24 hours after the person's last message). Real customers' messages need Meta's Advanced Access (App Review); WhatsApp needs a WhatsApp Business account of the business's own portfolio.
 - **Partners and research:** `meta-partnership-content`, `meta-ad-library`.
 - **Brand safety:** `meta-brand-safety`. Block lists and delivery reports need Meta's grant: without it the answer names the controls that need none.
 - **Webhooks and alerts:** `meta-webhooks`.
@@ -117,7 +118,7 @@ Say so plainly, and that the person does it in Meta's screens:
 
 ## 7. Coming, not in Nexus yet
 
-Say "not in Nexus yet" and name the place in Meta: making or changing catalog items and feeds (Shopify writes the items: change or remove them in Shopify; `remove-meta-catalog-items` deletes items and supplementary feeds only in a catalog Shopify does not feed), Page and Instagram posts, Messenger and Instagram Direct messages, people and partner access to the ad account and the Page, and the business portfolio's admin.
+Say "not in Nexus yet" and name the place in Meta: making or changing catalog items and feeds (Shopify writes the items: change or remove them in Shopify; `remove-meta-catalog-items` deletes items and supplementary feeds only in a catalog Shopify does not feed), Page and Instagram posts, sending Messenger and Instagram Direct messages (and labelling, templates and the messaging setup: the reads are in Nexus), people and partner access to the ad account and the Page, and the business portfolio's admin.
 
 ## 8. After, and undo
 
