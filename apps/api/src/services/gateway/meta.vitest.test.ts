@@ -1158,3 +1158,69 @@ function metaWriteProblemOf(method: string, url: string, body: string): string |
   const verdict = metaWriteVerdict({ method, url, kind: 'write', body })
   return 'problem' in verdict ? verdict.problem : null
 }
+
+describe('step 15 — conversations, templates and the messaging setup: their own keys on their own routes, each with a value Nexus sends', () => {
+  const ok = (path: string) => metaReadOnlyProblem({ method: 'GET', url: `${BASE}/${path}`, kind: 'read' })
+  it('allowed where the read uses it', () => {
+    const analytics = 'pricing_analytics.start(1759276800).end(1760918400).granularity(DAILY).phone_numbers(["390000000001"]).country_codes(["IT"]).dimensions(["PRICING_CATEGORY","PHONE"]).pricing_categories(["MARKETING"]).pricing_types(["REGULAR"])'
+    for (const path of [
+      '120000000000010/conversations?fields=id,updated_time,participants&platform=messenger&limit=100',
+      '120000000000010/conversations?fields=id,participants&platform=instagram&user_id=310000000000001&folder=partnership',
+      't_400000000000001?fields=id,participants', 't_400000000000001/messages?fields=id,created_time,from,to,message&limit=20',
+      'aWdfZAG06MTpJR01lc3N3Njkz/messages?fields=id,created_time,from,to,message,attachments{id,name,file_url,image_data,video_data},shares{id,name,description,type,url},story,is_unsupported,reply_to',
+      '120000000000010/custom_labels?fields=id,page_label_name',
+      '120000000000010/thread_owner?recipient=300000000000001&fields=thread_owner',
+      '120000000000010/messenger_call_permissions?psid=300000000000001&fields=permission,actions',
+      '120000000000010/custom_user_settings?psid=300000000000001&fields=page_level_persistent_menu,user_level_persistent_menu',
+      '120000000000010/messenger_profile?fields=get_started,ice_breakers&platform=instagram', '120000000000010/messenger_profile?fields=greeting&platform=messenger',
+      '120000000000010/welcome_message_flows?flow_id=520000000000001&fields=id,name', '120000000000010/personas?fields=id,name,profile_picture_url',
+      '120000000000010/messenger_call_settings?fields=audio_enabled,call_hours,call_routing', '120000000000010/messaging_feature_review?fields=feature,status',
+      '120000000000010/chat_plugin?fields=theme_color', '120000000000010/ctx_optimization_eligibility?fields=ctm',
+      '120000000000010/messenger_lead_forms?fields=id,privacy_url,fblead_form{id}', '540000000000001/steps?limit=100',
+      '120000000000010?fields=id,instagram_business_account', '120000000000010?fields=id,messaging_feature_status',
+      '120000000000010?fields=id,has_whatsapp_number,whatsapp_number,connected_instagram_account,page_backed_threads_account_id,messenger_ads_default_icebreakers',
+      'act_1234567890/connected_instagram_accounts_with_iabp?fields=id,iabp_id,username&business_id=9876543210',
+      '170000000000001/connected_threads_user?fields=threads_user_id', '170000000000001/instagram_backed_threads_user?fields=threads_user_id',
+      '9876543210/owned_whatsapp_business_accounts?fields=id,name,currency,timezone_id,status', '500000000000001/phone_numbers?fields=id,display_phone_number',
+      `500000000000001?fields=${encodeURIComponent(`id,${analytics}`)}`,
+      `500000000000001?fields=${encodeURIComponent('id,call_analytics.start(1759276800).end(1759363200).granularity(HALF_HOUR).directions(["USER_INITIATED"])')}`,
+      '120000000000010/message_templates?fields=id,name,status&name=order_update&name_or_content=ordine%20spedito&language=it,de_DE&status=APPROVED,REJECTED',
+      '500000000000001/message_templates?fields=id,name&category=UTILITY,MARKETING&quality_score=GREEN&since=1759276800&until=1760918400&summary=total_count',
+      '500000000000001/template_groups?fields=id,name,description', `510000000000001?fields=${encodeURIComponent('id,whatsapp_business_account{id}')}`,
+      `510000000000001?fields=${encodeURIComponent('id,name,whatsapp_business_templates.limit(100){id,name,status,category,language}')}`,
+    ]) expect(ok(path), path).toBeNull()
+  })
+  it('each key only on its own route', () => {
+    for (const [path, key] of [
+      ['120000000000010/feed?fields=id&platform=messenger', 'platform'], ['120000000000010/custom_labels?fields=id&user_id=1', 'user_id'],
+      ['120000000000010/messages?fields=id&folder=partnership', 'folder'], ['120000000000010/custom_labels?fields=id&psid=1', 'psid'],
+      ['120000000000010/conversations?fields=id&recipient=1', 'recipient'], ['120000000000010/personas?fields=id&flow_id=1', 'flow_id'],
+      ['act_1234567890/instagram_accounts?fields=id&business_id=9876543210', 'business_id'], ['120000000000010/conversations?fields=id&name=x', 'name'],
+      ['120000000000010/feed?fields=id&status=APPROVED', 'status'], ['act_1234567890/campaigns?fields=id&quality_score=GREEN', 'quality_score'],
+      ['500000000000001/template_groups?fields=id&since=1', 'since'], ['120000000000010/conversations?fields=id&tags=x', 'tags'],
+      ['120000000000010/welcome_message_flows?fields=id&app_id=1', 'app_id'], ['500000000000001/message_templates?fields=id&source=MANUAL', 'source'],
+      ['500000000000001/message_templates?fields=id&content=x', 'content'], ['t_400000000000001/messages?fields=id&source=ALL', 'source'],
+    ]) expect(ok(path), path).toMatch(new RegExp(`"${key}" is not one`))
+  })
+  it('each key only with a value Nexus sends', () => {
+    const conversations = '120000000000010/conversations?fields=id'
+    const templates = '500000000000001/message_templates?fields=id'
+    for (const [path, key] of [
+      [`${conversations}&platform=MESSENGER`, 'platform'], [`${conversations}&platform=whatsapp`, 'platform'], [`${conversations}&platform=`, 'platform'],
+      [`${conversations}&user_id=me`, 'user_id'], [`${conversations}&user_id=1,2`, 'user_id'], [`${conversations}&folder=inbox`, 'folder'],
+      ['120000000000010/thread_owner?recipient=abc', 'recipient'], ['120000000000010/messenger_call_permissions?psid=1%2C2', 'psid'],
+      ['120000000000010/messenger_profile?fields=greeting&platform=whatsapp', 'platform'], ['120000000000010/welcome_message_flows?flow_id=x1', 'flow_id'],
+      [`${templates}&name=Order Update`, 'name'], [`${templates}&name_or_content=${encodeURIComponent('a\nb')}`, 'name_or_content'],
+      [`${templates}&name_or_content=${'x'.repeat(101)}`, 'name_or_content'], [`${templates}&language=it,it`, 'language'], [`${templates}&language=italian`, 'language'],
+      [`${templates}&status=approved`, 'status'], [`${templates}&status=APPROVED,APPROVED`, 'status'], [`${templates}&category=TRANSACTIONAL`, 'category'],
+      [`${templates}&quality_score=BLUE`, 'quality_score'], [`${templates}&since=2026-10-01`, 'since'], [`${templates}&until=x`, 'until'],
+    ]) expect(ok(path), path).toMatch(new RegExp(`"${key}" is not one`))
+  })
+  it('conversations and messages never inside fields: only through their own edges', () => {
+    for (const [path, fields] of [
+      ['120000000000010', 'id,conversations{messages{message}}'], ['120000000000010', 'id,conversations.limit(5){id}'], ['t_400000000000001', 'id,messages{message,from}'],
+      ['t_400000000000001', 'id,participants,messages'], ['500000000000001', 'id,pricing_analytics.start(1).end(2).granularity(DAILY),messages'],
+      ['act_1234567890/connected_instagram_accounts_with_iabp', 'id,conversations{id}'],
+    ]) expect(ok(`${path}?fields=${encodeURIComponent(fields)}`), fields).toMatch(/never expands "(conversations|messages)"/)
+  })
+})

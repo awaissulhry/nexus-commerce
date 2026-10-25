@@ -32,7 +32,7 @@ vi.mock('./advertising/ads-automation-notify.service.js', () => ({ notifyAutomat
 // whether the tick ran or was skipped as paused.
 vi.mock('./reviews/review-scheduler.service.js', () => ({ schedulePendingOrders: vi.fn(async () => ({ scheduled: 0 })), buildReviewUrl: vi.fn(() => '') }))
 vi.mock('./reviews/review-request-email.service.js', () => ({ sendReviewRequestEmail: vi.fn() }))
-vi.mock('./reviews/amazon-solicitations.service.js', () => ({ sendAmazonSolicitation: vi.fn(), isBenignFailure: vi.fn(() => false), benignSuppressedReason: vi.fn(() => null) }))
+vi.mock('./reviews/amazon-solicitations.service.js', async (importOriginal) => ({ ...(await importOriginal<object>()), sendAmazonSolicitation: vi.fn(), isBenignFailure: vi.fn(() => false), benignSuppressedReason: vi.fn(() => null) }))
 vi.mock('./reviews/sentiment-check-email.service.js', () => ({ sendSentimentCheckEmail: vi.fn(), resolveLocaleForMarketplace: vi.fn(() => 'en') }))
 vi.mock('./reviews/orders-delivered-backfill.service.js', () => ({ applyShipDeliveryHeuristic: vi.fn(async () => ({ updated: 0 })) }))
 
