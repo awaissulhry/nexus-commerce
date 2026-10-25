@@ -127,7 +127,7 @@ Some new paths only act when the Owner turns them on in the server's environment
 | `order-desk` | What to ship today, late orders, labels, tracking, refunds due |
 | `handle-return` | A return from request to refund |
 | `buyer-message` | Write to a buyer, reply to eBay feedback, ask for an Amazon review |
-| `ads-weekly-review` | How the ads are doing, and what to change (a stop is lower bids; a real pause only when you mean one) |
+| `ads-weekly-review` | How the ads are doing, and what to change (a stop is lower bids; a wasting keyword is paused and kept paused; any other real pause only when you mean one) |
 | `ads-strategy` | Your ads strategy per market, category and product, kept in Nexus: read it, compare, and propose the changes as one plan |
 | `ads-playbook` | How a product's Amazon ads are built and run: include it, build or adopt its campaigns through Nexus's own builder, start them (you approve it) or stop them with low bids; phases, drift and winners as Nexus adds them |
 | `google-ads` | Your Google Ads and Merchant Center: read them, plan, and ask for changes or a whole build as one request you approve (what spends more is marked; new campaigns start paused); what Google's API cannot do |
