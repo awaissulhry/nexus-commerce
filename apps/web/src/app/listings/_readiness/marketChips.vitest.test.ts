@@ -7,8 +7,6 @@ import {
   chipText,
   destinationFromKey,
   destinationLookup,
-  fixDestination,
-  fixHeldReason,
   nextStepPlace,
   orderedChips,
   worstChip,
@@ -85,21 +83,11 @@ describe('destinations', () => {
   })
 })
 
-describe('Fix', () => {
+describe('the Next step', () => {
   const step = { destinationKey: 'next', field: 'sizeChart', label: 'Size chart', message: 'Add a size chart', kind: 'required' as const, affected: 20, productId: 'p', locale: 'de', href: '/x' }
-  it('opens on the next step’s destination', () => {
-    expect(fixDestination({ nextStep: step, chips: [chip('a', { state: 'blocked' })] })).toBe('next')
-  })
-  it('else on the chip that needs attention first (Blocked → Warnings → Not computed → Not set up → Ready)', () => {
-    const chips = [chip('r'), chip('n', { state: 'absent' }), chip('w', { state: 'warn' }), chip('c', { state: 'notComputed' })]
-    expect(fixDestination({ nextStep: null, chips })).toBe('w')
+  it('the chip that needs attention first (Blocked → Warnings → Not computed → Not set up → Ready)', () => {
     expect(worstChip([chip('r'), chip('n', { state: 'absent' }), chip('c', { state: 'notComputed' })])?.destinationKey).toBe('c')
     expect(worstChip([])).toBeNull()
-  })
-  it('is held, with its reason, when there is nothing to open', () => {
-    expect(fixHeldReason({ nextStep: null, chips: [], state: 'notComputed' })).toContain('no listing')
-    expect(fixHeldReason({ nextStep: null, chips: [chip('r')], state: 'ready' })).toContain('Nothing to fix')
-    expect(fixHeldReason({ nextStep: step, chips: [chip('r')], state: 'blocked' })).toBeNull()
   })
   it('the next step says where and how many', () => {
     expect(nextStepPlace(step, 'Amazon DE')).toBe('Amazon DE · 20 products')

@@ -69,10 +69,17 @@ export interface ManyPublishDialogProps {
   destinations: PublicationDestinationOption[]
   loadingDestinations?: boolean
   discoveryFailed?: boolean | null
+  /**
+   * The destinations to start on (option keys, `publicationScopeKey`) — the Listings window opens it on its own market.
+   * With them the pickers start on that channel and account, with the listed markets there as well (OD1 A). A key the
+   * options do not have is ignored. Default: none (where the products are listed).
+   */
+  initialKeys?: readonly string[]
   onClose(): void
 }
 
 type Busy = 'check' | 'submit' | 'cancel' | 'read' | null
+const NO_KEYS: readonly string[] = []
 const READ_MS = 4_000
 const LISTING = { one: 'listing', many: 'listings' }
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -84,7 +91,7 @@ function statusGroupMeta(children: readonly PublishPlanBatchChild[]) {
   return planChildMeta(open ?? children.find(child => !SUCCEEDED.has(child.status.toUpperCase())) ?? children[0])
 }
 
-export function ManyPublishDialog({ productIds, familyCount, destinations, loadingDestinations = false, discoveryFailed = null, onClose }: ManyPublishDialogProps) {
+export function ManyPublishDialog({ productIds, familyCount, destinations, loadingDestinations = false, discoveryFailed = null, initialKeys = NO_KEYS, onClose }: ManyPublishDialogProps) {
   const canPublish = usePermission('products.publish')
   // P11 — what the window does: Send changes, or one Status for every listing there.
   const [action, setAction] = useState<ManyPublishAction>('content')
@@ -109,14 +116,14 @@ export function ManyPublishDialog({ productIds, familyCount, destinations, loadi
   // are listed) arrive after the window opens, so until the person picks, the choice follows them: the first channel and
   // account where a product is listed, with every such market (`initialChoice`); otherwise nothing is pre-chosen unless
   // the business has exactly one destination. A channel the chosen action does not reach starts the choice again.
-  const [choice, setChoice] = useState<PickerChoice>(() => initialChoice(options, []))
+  const [choice, setChoice] = useState<PickerChoice>(() => initialChoice(options, initialKeys))
   const [touched, setTouched] = useState(false)
   const [batch, setBatch] = useState<PublishPlanBatchView | null>(null)
   useEffect(() => {
     if (batch) return
     const lost = options.length > 0 && !options.some(o => o.scope.channel === choice.channel && o.scope.accountId === choice.accountId)
-    if ((!touched && listedSet) || lost) setChoice(initialChoice(options, [], listedSet))
-  }, [choice.channel, choice.accountId, options, listedSet, touched, batch])
+    if ((!touched && listedSet) || lost) setChoice(initialChoice(options, initialKeys, listedSet))
+  }, [choice.channel, choice.accountId, options, listedSet, touched, batch, initialKeys])
   const ticked = useMemo(() => new Set(choice.keys), [choice.keys])
   const [active, setActive] = useState<string | null>(null)
   const tabBase = useId()

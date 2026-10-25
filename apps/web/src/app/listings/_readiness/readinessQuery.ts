@@ -8,7 +8,8 @@
  * docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md) adds `live` (channel states) and `flags` (live flags), each a
  * comma list, sent to the API under the same names. Step 4 adds the server's order (`sort`, `dir`; none = state, worst
  * first) and the market page's column filters (`priceMin`, `priceMax`, `qtyMin`, `qtyMax`, `channelId`; the Status
- * column filter writes `live`).
+ * column filter writes `live`). The Listing window (step 5) adds `listing`: one listing id the page opens the window on
+ * (`/listings?listing=<id>`); it is the page's, never sent to the API as a filter.
  * Step 7 adds `view` (`problems`: the Problems view; never sent) and
  * `problem` (one row of it, sent to the API: the families with that problem — the Problems view's Show products).
  *
@@ -63,6 +64,8 @@ export interface ReadinessPageQuery {
   q: string
   /** One family's page (`View all 40`): the root product id. */
   parent: string
+  /** The Listing window opened on one listing (`?listing=<id>`); '' when none. Not a filter. */
+  listing: string
   page: number
   pageSize: ReadinessPageSize
   /** A store page's store and market (`readinessScope.ts`): the filters it fixes always hold its values. */
@@ -84,7 +87,7 @@ export interface ReadinessPageQuery {
 
 export const EMPTY_READINESS_QUERY: ReadinessPageQuery = {
   selector: null, familyId: '', channel: '', marketplace: '', accountId: '', language: '', state: '', live: [], flags: [], q: '',
-  parent: '', page: 1, pageSize: DEFAULT_READINESS_PAGE_SIZE, lock: null, sort: '', dir: 'asc',
+  parent: '', listing: '', page: 1, pageSize: DEFAULT_READINESS_PAGE_SIZE, lock: null, sort: '', dir: 'asc',
   priceMin: '', priceMax: '', qtyMin: '', qtyMax: '', channelId: '', view: 'products', problem: '',
 }
 
@@ -159,6 +162,7 @@ export function parseReadinessQuery(search: string | URLSearchParams, lock: Read
     flags: knownValues(commaList(text('flags')), READINESS_LIVE_FLAGS),
     q: text('q'),
     parent,
+    listing: text('listing'),
     page: Number.isSafeInteger(page) && page >= 1 ? page : 1,
     pageSize: isPageSize(pageSize) ? pageSize : DEFAULT_READINESS_PAGE_SIZE,
     lock,
@@ -201,6 +205,7 @@ export function serializeReadinessQuery(query: ReadinessPageQuery): string {
   const params = new URLSearchParams(apiFilterParams(query))
   for (const key of lockedKeys(query.lock)) params.delete(key)
   if (query.parent) params.set('parent', query.parent)
+  if (query.listing) params.set('listing', query.listing)
   if (query.view === 'problems') params.set('view', 'problems')
   if (query.page > 1) params.set('page', String(query.page))
   if (query.pageSize !== DEFAULT_READINESS_PAGE_SIZE) params.set('pageSize', String(query.pageSize))
@@ -209,7 +214,7 @@ export function serializeReadinessQuery(query: ReadinessPageQuery): string {
 
 /** One family's own page (`View all 40`, "N variations"): the same page and filters, that family only, from page 1. */
 export function familyPageHref(query: ReadinessPageQuery, rootId: string): string {
-  return `${readinessPath(query.lock)}?${serializeReadinessQuery({ ...query, parent: rootId, page: 1, problem: '' })}`
+  return `${readinessPath(query.lock)}?${serializeReadinessQuery({ ...query, parent: rootId, listing: '', page: 1, problem: '' })}`
 }
 
 /** `GET …/readiness/families` for one page. */
