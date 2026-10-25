@@ -290,3 +290,68 @@ describe('a search with several terms', () => {
     expect(notFoundWords(undefined)).toBeNull()
   })
 })
+
+/* ── Live layer step 7: Products | Problems, and one problem ───────────────────────────────────────────────────── */
+import * as step7 from './readinessQuery'
+
+describe('step 7 — `view` and `problem` in the address', () => {
+  const PROBLEM = 'r:["AMAZON","DE","a1",null]:size_chart'
+  const AMAZON_DE: ReadinessLock = { channel: 'AMAZON', marketplace: 'DE' }
+
+  it('reads them; a problem is sent to the API, the view never is', () => {
+    const problems = step7.parseReadinessQuery('?view=problems&channel=EBAY')
+    expect(problems).toMatchObject({ view: 'problems', problem: '', channel: 'EBAY' })
+    expect(step7.apiFilterParams(problems)).toEqual({ channel: 'EBAY' })
+    const one = step7.parseReadinessQuery(`?problem=${encodeURIComponent(PROBLEM)}&state=blocked`)
+    expect(one).toMatchObject({ view: 'products', problem: PROBLEM })
+    expect(step7.apiFilterParams(one)).toEqual({ state: 'blocked', problem: PROBLEM })
+    expect(Object.fromEntries(step7.familiesParams(one, 1, 50))).toMatchObject({ problem: PROBLEM })
+    expect(Object.fromEntries(step7.membersParams(one, 10, 0))).toMatchObject({ problem: PROBLEM })
+  })
+
+  it('drops what is not one: an unknown view, a problem that is not an id, a problem with the Problems view, Problems on a family page', () => {
+    expect(step7.parseReadinessQuery('?view=board')).toMatchObject({ view: 'products' })
+    expect(step7.parseReadinessQuery('?problem=size_chart')).toMatchObject({ problem: '' })
+    expect(step7.parseReadinessQuery(`?view=problems&problem=${encodeURIComponent(PROBLEM)}`)).toMatchObject({ view: 'problems', problem: '' })
+    expect(step7.parseReadinessQuery('?view=problems&parent=root1')).toMatchObject({ view: 'products', parent: 'root1' })
+    // A family's own page reads its members, which a problem does not narrow: no chip that does nothing.
+    expect(step7.parseReadinessQuery(`?parent=root1&problem=${encodeURIComponent(PROBLEM)}`)).toMatchObject({ problem: '' })
+    expect(step7.familyPageHref({ ...step7.EMPTY_READINESS_QUERY, problem: PROBLEM }, 'root1')).toBe('/listings?parent=root1')
+    expect(step7.isProblemId(`n:${'x'.repeat(1300)}`)).toBe(false)
+    expect(step7.isProblemId('c:["EBAY","IT","e1",null]:0123:') && step7.isProblemId('n:["EBAY","IT","e1",null]')).toBe(true)
+  })
+
+  it('writes them back, a store page keeping its lock; the default view stays out of the address', () => {
+    const q = step7.parseReadinessQuery('?view=problems&state=warn', AMAZON_DE)
+    expect(q).toMatchObject({ channel: 'AMAZON', marketplace: 'DE', view: 'problems' })
+    expect(step7.serializeReadinessQuery(q)).toBe('state=warn&view=problems')
+    const shown = step7.withProblem(q, PROBLEM)
+    expect(shown).toMatchObject({ view: 'products', problem: PROBLEM, channel: 'AMAZON', marketplace: 'DE', page: 1 })
+    expect(step7.parseReadinessQuery(step7.serializeReadinessQuery(shown), AMAZON_DE)).toEqual(shown)
+    expect(step7.serializeReadinessQuery(step7.EMPTY_READINESS_QUERY)).toBe('')
+  })
+
+  it('the switch: Problems drops the problem chip and a family page; Products keeps everything; page 1', () => {
+    const one = { ...step7.EMPTY_READINESS_QUERY, problem: PROBLEM, page: 3, channel: 'AMAZON' }
+    expect(step7.withView(one, 'problems')).toMatchObject({ view: 'problems', problem: '', page: 1, channel: 'AMAZON' })
+    expect(step7.withView(one, 'products')).toBe(one)
+    expect(step7.withView({ ...one, view: 'problems', problem: '' }, 'products')).toMatchObject({ view: 'products', page: 1 })
+    expect(step7.withProblem(one, 'nonsense').problem).toBe('')
+  })
+
+  it('a saved view keeps the Problems view; a view saved before it (or on Products) opens Products', () => {
+    const q = { ...step7.EMPTY_READINESS_QUERY, view: 'problems' as const, state: 'blocked' as const }
+    expect(step7.viewFiltersOf(q)).toMatchObject({ view: 'problems', state: 'blocked' })
+    expect('view' in step7.viewFiltersOf(step7.EMPTY_READINESS_QUERY)).toBe(false)
+    expect(step7.withViewFilters({ ...step7.EMPTY_READINESS_QUERY, problem: PROBLEM }, step7.viewFiltersOf(q))).toMatchObject({ view: 'problems', problem: '' })
+    expect(step7.withViewFilters(q, { channel: 'EBAY' })).toMatchObject({ view: 'products', channel: 'EBAY' })
+    expect(step7.withViewFilters({ ...step7.EMPTY_READINESS_QUERY, problem: PROBLEM }, { channel: 'EBAY' })).toMatchObject({ problem: PROBLEM })
+  })
+
+  it('the problem chip is not a Filters-panel filter: Clear keeps it; Translate holds while it is on', () => {
+    const one = { ...step7.EMPTY_READINESS_QUERY, problem: PROBLEM, language: 'it' }
+    expect(step7.withoutFilters(one).problem).toBe(PROBLEM)
+    expect(step7.activeFilterCount(one)).toBe(1)
+    expect(step7.translateScope(one)).toEqual({ ok: false, reason: 'Translate cannot narrow to one problem. Remove the problem chip first.' })
+  })
+})

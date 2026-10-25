@@ -6,7 +6,8 @@
  * older bookmarks (`?skus=`, `?familyId=`, `?market=`, `?state=`, `?accountId=`, `?page=`). The new page adds `q`
  * (search), `pageSize`, `parent` (one family's page) and the `notChecked` tile state; the live layer (step 3 of
  * docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md) adds `live` (channel states) and `flags` (live flags), each a
- * comma list, sent to the API under the same names.
+ * comma list, sent to the API under the same names. Step 7 adds `view` (`problems`: the Problems view; never sent) and
+ * `problem` (one row of it, sent to the API: the families with that problem — the Problems view's Show products).
  *
  * Pure — no React, no fetch — so every mapping is a test.
  */
@@ -29,6 +30,9 @@ export interface ReadinessSelector { kind: SelectorKind; value: string }
 export type ReadinessFilterKey = 'channel' | 'marketplace' | 'accountId' | 'language' | 'familyId'
 export const FILTER_KEYS: readonly ReadinessFilterKey[] = ['channel', 'marketplace', 'accountId', 'language', 'familyId']
 
+/** The grid card shows products (the families) or problems (one row per problem × destination; live layer step 7). */
+export type ReadinessView = 'products' | 'problems'
+
 export interface ReadinessPageQuery {
   selector: ReadinessSelector | null
   familyId: string
@@ -49,11 +53,15 @@ export interface ReadinessPageQuery {
   pageSize: ReadinessPageSize
   /** A store page's store and market (`readinessScope.ts`): the filters it fixes always hold its values. */
   lock: ReadinessLock | null
+  /** Step 7: Products (the default) or Problems. One family's page has no Problems view. */
+  view: ReadinessView
+  /** Step 7: one problem's id (`r:…`, `c:…`, `n:…`): only the families with it. Never together with the Problems view. */
+  problem: string
 }
 
 export const EMPTY_READINESS_QUERY: ReadinessPageQuery = {
   selector: null, familyId: '', channel: '', marketplace: '', accountId: '', language: '', state: '', live: [], flags: [], q: '',
-  parent: '', page: 1, pageSize: DEFAULT_READINESS_PAGE_SIZE, lock: null,
+  parent: '', page: 1, pageSize: DEFAULT_READINESS_PAGE_SIZE, lock: null, view: 'products', problem: '',
 }
 
 /**
@@ -72,6 +80,8 @@ const isLocked = (query: ReadinessPageQuery, key: ReadinessFilterKey): boolean =
 const STATE_VALUES: ReadonlySet<string> = new Set<string>([...SCOPE_READINESS_STATES, 'notChecked'])
 export const isStateFilter = (value: string): value is ReadinessStateFilter => STATE_VALUES.has(value)
 export const isPageSize = (value: number): value is ReadinessPageSize => (READINESS_PAGE_SIZES as readonly number[]).includes(value)
+/** The shape of a problem id (the API checks the rest and refuses what is not one): a source, then a destination key. */
+export const isProblemId = (value: string): boolean => value.length <= 1200 && /^[rcn]:\[/.test(value)
 
 /** The values of `allowed` a list names, once each, in `allowed`'s order (so one choice is one address). Junk is dropped. */
 export function knownValues<T extends string>(values: Iterable<unknown>, allowed: readonly T[]): T[] {
@@ -90,6 +100,11 @@ export function parseReadinessQuery(search: string | URLSearchParams, lock: Read
   const state = text('state')
   const page = Number(text('page'))
   const pageSize = Number(text('pageSize'))
+  // Step 7: the Problems view, or one problem; the Problems view lists every problem, so it never carries one, and a
+  // family's own page reads its members, which a problem does not narrow.
+  const parent = text('parent')
+  const view: ReadinessView = text('view') === 'problems' && !parent ? 'problems' : 'products'
+  const problem = (params.get('problem') ?? '').trim()
   return withLock({
     selector,
     // The API refuses a family together with a selection; the link's own selection is what it was opened for.
@@ -102,10 +117,12 @@ export function parseReadinessQuery(search: string | URLSearchParams, lock: Read
     live: knownValues(commaList(text('live')), READINESS_LIVE_STATES),
     flags: knownValues(commaList(text('flags')), READINESS_LIVE_FLAGS),
     q: text('q'),
-    parent: text('parent'),
+    parent,
     page: Number.isSafeInteger(page) && page >= 1 ? page : 1,
     pageSize: isPageSize(pageSize) ? pageSize : DEFAULT_READINESS_PAGE_SIZE,
     lock,
+    view,
+    problem: view === 'products' && !parent && isProblemId(problem) ? problem : '',
   })
 }
 
@@ -121,6 +138,8 @@ export function apiFilterParams(query: ReadinessPageQuery): Record<string, strin
   if (query.live.length) out.live = query.live.join(',')
   if (query.flags.length) out.flags = query.flags.join(',')
   if (query.q) out.q = query.q
+  // Step 7: one problem narrows the families; the Problems view itself (`view`) is the page's, never the API's.
+  if (query.problem) out.problem = query.problem
   return out
 }
 
@@ -132,6 +151,7 @@ export function serializeReadinessQuery(query: ReadinessPageQuery): string {
   const params = new URLSearchParams(apiFilterParams(query))
   for (const key of lockedKeys(query.lock)) params.delete(key)
   if (query.parent) params.set('parent', query.parent)
+  if (query.view === 'problems') params.set('view', 'problems')
   if (query.page > 1) params.set('page', String(query.page))
   if (query.pageSize !== DEFAULT_READINESS_PAGE_SIZE) params.set('pageSize', String(query.pageSize))
   return params.toString()
@@ -139,7 +159,7 @@ export function serializeReadinessQuery(query: ReadinessPageQuery): string {
 
 /** One family's own page (`View all 40`, "N variations"): the same page and filters, that family only, from page 1. */
 export function familyPageHref(query: ReadinessPageQuery, rootId: string): string {
-  return `${readinessPath(query.lock)}?${serializeReadinessQuery({ ...query, parent: rootId, page: 1 })}`
+  return `${readinessPath(query.lock)}?${serializeReadinessQuery({ ...query, parent: rootId, page: 1, problem: '' })}`
 }
 
 /** `GET …/readiness/families` for one page. */
@@ -201,12 +221,15 @@ export const activeFilterCount = (query: ReadinessPageQuery): number =>
 export interface ReadinessViewFilters {
   channel: string; marketplace: string; accountId: string; language: string; familyId: string; state: ReadinessStateFilter | ''
   live: ReadinessLiveState[]; flags: ReadinessLiveFlag[]
+  /** Step 7: set only for the Problems view (a view saved before it, or on Products, has none). */
+  view?: ReadinessView
 }
 export const viewFiltersOf = (query: ReadinessPageQuery): ReadinessViewFilters => ({
   channel: isLocked(query, 'channel') ? '' : query.channel,
   marketplace: isLocked(query, 'marketplace') ? '' : query.marketplace,
   accountId: query.accountId, language: query.language, familyId: query.familyId, state: query.state,
   live: [...query.live], flags: [...query.flags],
+  ...(query.view === 'problems' ? { view: 'problems' as const } : {}),
 })
 export function withViewFilters(query: ReadinessPageQuery, filters: Partial<ReadinessViewFilters> | null | undefined): ReadinessPageQuery {
   if (!filters) return query
@@ -221,6 +244,8 @@ export function withViewFilters(query: ReadinessPageQuery, filters: Partial<Read
     // A view saved before the live layer has neither: it shows every channel state.
     live: knownValues(list(filters.live), READINESS_LIVE_STATES), flags: knownValues(list(filters.flags), READINESS_LIVE_FLAGS),
     selector: familyId ? null : query.selector, page: 1,
+    // Step 7: the view's own view; a problem chip stays on Products, the Problems view lists every problem.
+    ...(filters.view === 'problems' && !query.parent ? { view: 'problems' as const, problem: '' } : { view: 'products' as const }),
   })
 }
 
@@ -286,8 +311,22 @@ export function translateScope(query: ReadinessPageQuery): { ok: true; query: Re
   if (query.live.length || query.flags.length) {
     return { ok: false, reason: 'Translate cannot narrow by what is on the channel. Clear Channel state, Stock and the live tiles first.' }
   }
+  if (query.problem) return { ok: false, reason: 'Translate cannot narrow to one problem. Remove the problem chip first.' }
   const params = apiFilterParams(query)
   const out: Record<string, string> = {}
   for (const key of TRANSLATE_KEYS) if (params[key]) out[key] = params[key]
   return { ok: true, query: out }
+}
+
+/* ── Step 7: Products | Problems ───────────────────────────────────────────────────────────────────────────────── */
+
+/** The switch: the Problems view lists every problem (a problem chip goes); Products keeps everything. Page 1 either way. */
+export function withView(query: ReadinessPageQuery, view: ReadinessView): ReadinessPageQuery {
+  if (query.view === view) return query
+  return view === 'problems' ? { ...query, view, problem: '', parent: '', page: 1 } : { ...query, view, page: 1 }
+}
+
+/** Show products: back to Products, only the families with that problem. */
+export function withProblem(query: ReadinessPageQuery, id: string): ReadinessPageQuery {
+  return { ...query, view: 'products', problem: isProblemId(id) ? id : '', page: 1 }
 }

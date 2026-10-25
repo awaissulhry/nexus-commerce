@@ -528,7 +528,8 @@ export function extraDestination(key: string, footprint: ReadonlyMap<string, str
     label: `${channelWords(channel ?? '')}${where}${alias}${store}`, ...(note ? { note } : {}) }
 }
 
-async function extraDestinationFacts(keys: readonly string[]): Promise<ExtraDestinationFacts> {
+/** (Exported for the Problems view, live layer step 7.) */
+export async function extraDestinationFacts(keys: readonly string[]): Promise<ExtraDestinationFacts> {
   const coordinates = keys.map(coordinateOfKey)
   const aliasIds = [...new Set(coordinates.map(c => c.aliasId).filter((id): id is string => !!id))]
   const accountIds = [...new Set(coordinates.map(c => c.accountId).filter((id): id is string => !!id))]
