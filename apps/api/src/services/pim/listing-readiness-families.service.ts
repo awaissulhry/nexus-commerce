@@ -23,7 +23,10 @@ import { listingReadinessWhere, readinessProblemKind, readinessQuery, readinessS
 import { SCOPE_STATES, scopeStateRank } from './readiness-model.js'
 import { workspaceContext } from '../../lib/workspace-context.js'
 import { weakEtag } from '../../utils/list-etag.js'
-import { attachLive, liveScopeOf, readChannelSection, SEARCH_MAX_CHARS, SEARCH_MAX_TERMS, searchProductHits, searchTerms, type LiveOptions } from './listing-readiness-live.service.js'
+import {
+  attachLive, liveFilterCtes, liveScopeOf, liveSqlView, liveTileCtes, liveTilesOf, readChannelSection, resolveSearchTokens, SEARCH_MAX_CHARS, SEARCH_MAX_TERMS,
+  searchProductHits, searchTerms, type LiveOptions, type LiveSqlView, type LiveTiles,
+} from './listing-readiness-live.service.js'
 
 /* ── query ────────────────────────────────────────────────────────────────────────────────── */
 
@@ -53,9 +56,10 @@ export function familiesQuery(query: Record<string, unknown>) {
 }
 
 /**
- * Live layer step 3 — the live filters, accepted now and applied by the SQL summary's follow-up: `live` = channel states
- * (any of them: OR), `flags` = live flags (all of them: AND), comma lists. Unknown values are dropped, never refused;
- * a caller without `listings.view` has them ignored.
+ * Live layer step 3 — the live filters (`resultCtes` applies them in the SQL summary): `live` = channel states (any of
+ * them: OR), `flags` = live flags (all of them, on one listing: AND), comma lists. They keep or drop whole families; the
+ * open family's members are not narrowed by them. Unknown values are dropped, never refused; a caller without
+ * `listings.view` has them ignored.
  */
 export function liveFilters(query: Record<string, unknown>): { liveStates?: ReadinessLiveState[]; liveFlags?: ReadinessLiveFlag[] } {
   const list = <T extends string>(value: unknown, allowed: readonly T[]) => {
@@ -535,8 +539,19 @@ async function readinessFilter(query: Record<string, unknown>, q: string | undef
     parts.push(listings.length ? Prisma.sql`(${Prisma.join(listings.map(l => Prisma.sql`(r."productId" = ${l.productId} AND r.channel IS NOT DISTINCT FROM ${l.channel}
       AND r.market IS NOT DISTINCT FROM ${l.market} AND r."accountId" IS NOT DISTINCT FROM ${l.accountId} AND r."aliasId" IS NOT DISTINCT FROM ${l.aliasId})`), ' OR ')})` : Prisma.sql`FALSE`)
   }
-  if (q) parts.push(searchSql(q))
+  if (q) parts.push(await searchFilterSql(q))
   return Prisma.join([...parts, ...extra], ' AND ')
+}
+
+/**
+ * The search (live layer step 3): today's phrase search (`searchSql`) OR each term matched exactly on the products' and
+ * listings' ids (`resolveSearchTokens`: SKU, barcodes, ASIN, eBay Item ID, channel SKUs, a customization's SKU) — one
+ * term or a pasted list. The family rule is `searchScope`'s: a hit is itself; a root hit brings its family.
+ */
+async function searchFilterSql(q: string): Promise<Prisma.Sql> {
+  const { hits } = await resolveSearchTokens(q)
+  if (!hits.length) return searchSql(q)
+  return Prisma.sql`(${searchSql(q)} OR p.id = ANY(${hits.map(h => h.id)}::text[]) OR p."parentId" = ANY(${hits.filter(h => !h.parentId).map(h => h.id)}::text[]))`
 }
 
 interface FamiliesSummary extends ReadinessStateCounts {
@@ -558,17 +573,29 @@ interface FamiliesSummary extends ReadinessStateCounts {
  * It returns the tiles, the totals, the checked times, the destinations (first label: the smallest), and the requested
  * page's roots in `compareRows` order: state, then the root's name lower-cased, SKU, id, compared bytewise (`COLLATE "C"`).
  */
-async function familiesSummary(filter: Prisma.Sql, input: ReturnType<typeof familiesQuery>, cutoff: string): Promise<FamiliesSummary> {
+/**
+ * The result's rows as `f` (step 3): the filtered index rows (`f0`), narrowed — when the caller may see listings and asked
+ * for live filters — to the families with a member's listing on a destination in view that satisfies them
+ * (`liveFilterCtes`). Live filters narrow the RESULT, like channel and market: every tile follows them; only the readiness
+ * `state` tile stays a filter after the fold.
+ */
+function resultCtes(filter: Prisma.Sql, input: ReturnType<typeof familiesQuery>, view: LiveSqlView | null): Prisma.Sql {
+  const f0 = Prisma.sql`f0 AS (
+      SELECT r."productId" AS pid, r."coordinateKey" AS ck, r.channel, r.market, r."accountId" AS account, r."aliasId" AS alias, r.language AS lang,
+        r.label, ${RANK_SQL} AS rank, r."computedAt" AS at, r."pendingSince" IS NOT NULL AS pending, COALESCE(p."parentId", p.id) AS root
+      FROM ${FROM_INDEX} WHERE ${filter}
+    )`
+  const live = liveFilterCtes('f0', !input.listingIds, view)
+  return live ? Prisma.sql`${f0}, ${live}, f AS (SELECT * FROM f0 WHERE root IN (SELECT root FROM lf_keep))` : Prisma.sql`${f0}, f AS (SELECT * FROM f0)`
+}
+
+async function familiesSummary(filter: Prisma.Sql, input: ReturnType<typeof familiesQuery>, cutoff: string, view: LiveSqlView | null = null): Promise<FamiliesSummary> {
   const fill = !input.listingIds
   const ranks = input.state === 'notChecked' ? [RANK.absent, RANK.notComputed] : input.state ? [RANK[input.state]] : null
   const hit = ranks ? Prisma.sql`bool_or(rank IN (${Prisma.join(ranks.map(rankLiteral))}))` : Prisma.sql`TRUE`
   const filledHit = !ranks || ranks.includes(RANK.notComputed) ? Prisma.sql`filled > 0` : Prisma.sql`FALSE`
   const [summary] = await prisma.$queryRaw<FamiliesSummary[]>(Prisma.sql`
-    WITH f AS (
-      SELECT r."productId" AS pid, r."coordinateKey" AS ck, r.channel, r.market, r."accountId" AS account, r."aliasId" AS alias, r.language AS lang,
-        r.label, ${RANK_SQL} AS rank, r."computedAt" AS at, r."pendingSince" IS NOT NULL AS pending, COALESCE(p."parentId", p.id) AS root
-      FROM ${FROM_INDEX} WHERE ${filter}
-    ), listing AS (
+    WITH ${resultCtes(filter, input, view)}, listing AS (
       SELECT root, pid, ck, min(rank) AS rank, min(at) AS at, bool_or(pending) AS pending FROM f GROUP BY root, pid, ck
     ), family AS (
       SELECT root, count(*) AS present, count(DISTINCT pid) AS members,
@@ -596,6 +623,14 @@ async function familiesSummary(filter: Prisma.Sql, input: ReturnType<typeof fami
   return summary
 }
 
+/** The live tiles over the whole result (after the live filters), in one statement (`liveTileCtes`). */
+async function liveTiles(filter: Prisma.Sql, input: ReturnType<typeof familiesQuery>, view: LiveSqlView): Promise<LiveTiles> {
+  const [row] = await prisma.$queryRaw<Array<Parameters<typeof liveTilesOf>[0]>>(Prisma.sql`
+    WITH ${resultCtes(filter, input, view)}, ${liveTileCtes('f', !input.listingIds, view, !!input.language)}
+    SELECT * FROM lt_tiles`)
+  return liveTilesOf(row)
+}
+
 /** The LIGHT columns of the given families' rows, under the same filter (a family: the root itself and its variants). */
 async function familyRowsOf(filter: Prisma.Sql, roots: readonly string[]): Promise<LightRow[]> {
   if (!roots.length) return []
@@ -605,24 +640,37 @@ async function familyRowsOf(filter: Prisma.Sql, roots: readonly string[]): Promi
     WHERE ${filter} AND r."productId" IN (SELECT m.id FROM "Product" m WHERE m."parentId" = ANY(${[...roots]}::text[]) OR (m."parentId" IS NULL AND m.id = ANY(${[...roots]}::text[])))`)
 }
 
-interface Fingerprint { rows: number; latest: Date | null; pending: number; old: number; products: Date | null; roots: Date | null; variants: number }
+interface Fingerprint { rows: number; latest: Date | null; pending: number; old: number; products: Date | null; roots: Date | null; variants: number
+  listings?: number; listed?: Date | null; issues?: number; issueAt?: Date | null; suppressionAt?: Date | null; driftAt?: Date | null; snapshotAt?: Date | null }
 /**
  * What an answer depends on, in one aggregate (the `list-etag.ts` pattern): the filtered index rows (how many, the newest
  * check, the pending marks, how many are older than the 24-hour line), the newest edit of their products and of the
  * family roots (names, SKUs, families), and the roots' live variants; with the request's query, business and user. An
- * equal fingerprint is the same answer, so the route can say 304.
+ * equal fingerprint is the same answer, so the route can say 304. With the live layer on (`live`, step 3) it also holds
+ * what the channel side of those products shows — their listings (how many, the newest edit), open channel messages,
+ * suppressions, drift and the publish/delete records — and the permission bit itself: a live change is never a 304.
  */
-async function readinessEtag(filter: Prisma.Sql, cutoff: string, context: Record<string, unknown>, rootId?: string): Promise<string> {
+async function readinessEtag(filter: Prisma.Sql, cutoff: string, context: Record<string, unknown>, rootId?: string, live = false): Promise<string> {
+  const facts = live ? Prisma.sql`,
+      (SELECT count(*)::int FROM ll) AS listings, (SELECT max(ll.at) FROM ll) AS listed,
+      (SELECT count(*)::int FROM "ListingIssue" i WHERE i."listingId" IN (SELECT id FROM ll) AND i."resolvedAt" IS NULL) AS issues,
+      (SELECT max(GREATEST(i."lastSeenAt", COALESCE(i."resolvedAt", i."lastSeenAt"))) FROM "ListingIssue" i WHERE i."listingId" IN (SELECT id FROM ll)) AS "issueAt",
+      (SELECT max(s."updatedAt") FROM "AmazonSuppression" s WHERE s."listingId" IN (SELECT id FROM ll)) AS "suppressionAt",
+      (SELECT max(d."updatedAt") FROM "ChannelDrift" d WHERE d."channelListingId" IN (SELECT id FROM ll)) AS "driftAt",
+      (SELECT max(GREATEST(n."createdAt", COALESCE(n."acceptedAt", n."createdAt"))) FROM "ChannelListingSnapshot" n WHERE n."channelListingId" IN (SELECT id FROM ll)) AS "snapshotAt"` : Prisma.empty
   const [row] = await prisma.$queryRaw<Fingerprint[]>(Prisma.sql`
     WITH f AS (
-      SELECT r."computedAt" AS at, r."pendingSince" AS ps, p."updatedAt" AS pu, COALESCE(p."parentId", p.id) AS root FROM ${FROM_INDEX} WHERE ${filter}
-    ), roots AS (${rootId ? Prisma.sql`SELECT root AS id FROM f UNION SELECT ${rootId}::text` : Prisma.sql`SELECT DISTINCT root AS id FROM f`})
+      SELECT r."computedAt" AS at, r."pendingSince" AS ps, p."updatedAt" AS pu, r."productId" AS pid, COALESCE(p."parentId", p.id) AS root FROM ${FROM_INDEX} WHERE ${filter}
+    ), roots AS (${rootId ? Prisma.sql`SELECT root AS id FROM f UNION SELECT ${rootId}::text` : Prisma.sql`SELECT DISTINCT root AS id FROM f`})${live ? Prisma.sql`,
+    ll AS (SELECT l.id, l."updatedAt" AS at FROM "ChannelListing" l WHERE l."productId" IN (SELECT pid FROM f UNION SELECT id FROM roots))` : Prisma.empty}
     SELECT count(*)::int AS rows, max(at) AS latest, count(ps)::int AS pending, (count(*) FILTER (WHERE at < ${cutoff}::timestamp))::int AS old, max(pu) AS products,
       (SELECT max(rp."updatedAt") FROM roots JOIN "Product" rp ON rp.id = roots.id) AS roots,
-      (SELECT count(*)::int FROM "Product" v WHERE v."parentId" IN (SELECT id FROM roots) AND v."deletedAt" IS NULL) AS variants
+      (SELECT count(*)::int FROM "Product" v WHERE v."parentId" IN (SELECT id FROM roots) AND v."deletedAt" IS NULL) AS variants${facts}
     FROM f`)
-  return weakEtag([row.rows, row.latest?.getTime(), row.pending, row.old, row.products?.getTime(), row.roots?.getTime(), row.variants],
-    { ...context, workspaceId: workspaceContext()?.workspaceId ?? null })
+  const time = (at: Date | null | undefined) => at ? new Date(at).getTime() : null
+  return weakEtag([row.rows, time(row.latest), row.pending, row.old, time(row.products), time(row.roots), row.variants,
+    ...(live ? [row.listings, time(row.listed), row.issues, time(row.issueAt), time(row.suppressionAt), time(row.driftAt), time(row.snapshotAt)] : [])],
+    { ...context, live, workspaceId: workspaceContext()?.workspaceId ?? null })
 }
 
 /** An answer, or `page: null` when the caller already holds it (`unchanged(etag)`: the route says 304). */
@@ -644,9 +692,11 @@ async function familiesRead(query: Record<string, unknown>, userId: string | nul
   // One snapshot: the fingerprint, the summary and the page's rows (whose ids the problems are read by) see the same index.
   return inDatabaseReadTransaction(prisma, async () => {
     const filter = await readinessFilter(query, input.q, userId)
-    const etag = unchanged ? await readinessEtag(filter, cutoff, { endpoint: 'families', query, userId }) : null
+    // The live layer (step 3): only for a caller with listings.view; without it the live filters are ignored.
+    const view = await liveSqlView(input, options.live === true)
+    const etag = unchanged ? await readinessEtag(filter, cutoff, { endpoint: 'families', query, userId }, undefined, !!view) : null
     if (etag && unchanged!(etag)) return { etag, page: null }
-    const summary = await familiesSummary(filter, input, cutoff)
+    const summary = await familiesSummary(filter, input, cutoff, view)
     const infos = new Map<string, DestinationInfo>((summary.destinations ?? []).map(d => [d.key,
       { key: d.key, channel: d.channel, market: d.market, accountId: d.accountId, aliasId: d.aliasId, label: d.label, languages: new Set(d.languages) }]))
     const destinations = describeDestinations(infos.values(), await storeNamesFor(infos.values()))
@@ -670,8 +720,9 @@ async function familiesRead(query: Record<string, unknown>, userId: string | nul
       computedAt: iso(summary.oldest), checked: { latest: iso(summary.latest), olderThanDay: summary.olderThanDay }, pendingCount: summary.pendingCount,
       rows: await familyPageRows(page, order, infos),
     }
-    // Live layer step 3 (listing-readiness-live.service.ts): ONE post-step over the built page. Keep this call when the computation above changes.
-    return { etag, page: await attachLive(result, { query: input, live: options.live === true, rowProducts: new Map(page.map(f => [f.id, f.members.map(m => m.product.id)])) }) }
+    // Live layer step 3 (listing-readiness-live.service.ts): the live tiles over the whole result (SQL), then ONE post-step over the page.
+    const tiles = view ? await liveTiles(filter, input, view) : null
+    return { etag, page: await attachLive(result, { query: input, live: !!view, rowProducts: new Map(page.map(f => [f.id, f.members.map(m => m.product.id)])), tiles }) }
   })
 }
 
@@ -727,7 +778,7 @@ export async function readinessFamilyMembersIfChanged(rootId: string, query: Rec
   const input = membersQuery(rootId, query)
   return inDatabaseReadTransaction(prisma, async () => {
     const filter = await readinessFilter(query, input.q, userId, Prisma.sql`(p.id = ${input.rootId} OR p."parentId" = ${input.rootId})`)
-    const etag = await readinessEtag(filter, dayAgo(), { endpoint: 'members', rootId: input.rootId, query, userId }, input.rootId)
+    const etag = await readinessEtag(filter, dayAgo(), { endpoint: 'members', rootId: input.rootId, query, userId }, input.rootId, options.live === true)
     return unchanged(etag) ? { etag, page: null } : { etag, page: await readinessFamilyMembers(rootId, query, userId, options) }
   })
 }

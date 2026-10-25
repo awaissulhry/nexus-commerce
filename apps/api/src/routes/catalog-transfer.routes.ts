@@ -148,12 +148,15 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
   // The family view (rebuild 2026-10-23): one row per family, its open members, and one destination's Fix window.
   // The two lists answer an unchanged poll with 304 (list-etag.ts): the browser revalidates and hands the page its copy.
   fastify.get('/catalog-transfer/readiness/families', async (request, reply) => {
+    // A refusal (400) is never cached; an answer is revalidated by its ETag.
+    reply.header('Cache-Control', 'no-store')
     const { etag, page } = await readinessFamiliesIfChanged(request.query as Record<string, unknown>, actor(request), tag => matches(request, tag), liveFor(request))
     reply.header('ETag', etag)
     reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
     return page ?? reply.code(304).send()
   })
   fastify.get('/catalog-transfer/readiness/families/:rootId/members', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
     const { etag, page } = await readinessFamilyMembersIfChanged((request.params as { rootId: string }).rootId, request.query as Record<string, unknown>, actor(request),
       tag => matches(request, tag), liveFor(request))
     reply.header('ETag', etag)

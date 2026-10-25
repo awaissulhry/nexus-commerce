@@ -10,8 +10,8 @@ vi.mock('../../db.js', () => ({ default: {} }))
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, readinessQueue: null, addJobSafely: vi.fn() }))
 import type { ListingDeletion } from '@nexus/shared/listing-actions'
 import {
-  buildLive, canonicalDestinationKey, currencyMap, differsOf, extraDestination, foldStates, inLiveScope, liveCounts, liveDestinationKey, liveFlagsOf,
-  liveMarketCode, searchTerms, summarizeLive, unmatchedNote, type LiveListingRow, type LiveProduct, type LiveStatsRow,
+  buildLive, canonicalDestinationKey, currencyMap, differsOf, extraDestination, foldStates, inLiveScope, liveDestinationKey, liveFlagsOf,
+  liveMarketCode, liveTilesOf, searchTerms, summarizeLive, unmatchedNote, type LiveListingRow, type LiveProduct,
 } from './listing-readiness-live.service.js'
 import { destinationSellingStates, OLD_CLOSE_PAUSE_REASON } from '../listings/listing-action.service.js'
 
@@ -169,16 +169,9 @@ describe('a row on one destination', () => {
 })
 
 describe('the live tiles', () => {
-  const row = (productId: string, extra: Partial<LiveStatsRow> = {}): LiveStatsRow => ({ id: `s${++n}`, productId, channel: 'AMAZON', marketplace: 'IT', channelConnectionId: 'a1',
-    aliasKey: '', state: 'active', error: false, suppressed: false, outOfSync: false, lowStock: false, ...extra })
-  it('listings by state and flag; Not listed = product × destination without a listing (or only a removed one)', () => {
-    const counts = liveCounts([row('v1', { lowStock: true }), row('v2', { state: 'paused', error: true, outOfSync: true }), row('v3', { state: 'not_listed' }),
-      row('v1', { marketplace: 'GB', suppressed: true })], [
-      { productId: 'v1', destinationKey: AMAZON_IT }, { productId: 'v2', destinationKey: AMAZON_IT }, { productId: 'v3', destinationKey: AMAZON_IT },
-      { productId: 'v4', destinationKey: AMAZON_IT }, { productId: 'v1', destinationKey: key(null) }, { productId: 'v1', destinationKey: AMAZON_UK },
-      { productId: 'v1', destinationKey: AMAZON_UK },
-    ])
-    expect(counts).toEqual({ listings: 4, active: 2, paused: 1, draft: 0, ended: 0, unknown: 0, notListed: 2, error: 1, suppressed: 1, outOfSync: 1, lowStock: 1 })
+  it('come from the page\'s SQL in one row; unmatched listings are their own count', () => {
+    const counts = { listings: 4, active: 2, paused: 1, draft: 0, ended: 0, unknown: 0, notListed: 2, error: 1, suppressed: 1, outOfSync: 1, lowStock: 1 }
+    expect(liveTilesOf({ ...counts, unmatched: 1 })).toEqual({ counts, unmatched: 1 })
   })
 })
 

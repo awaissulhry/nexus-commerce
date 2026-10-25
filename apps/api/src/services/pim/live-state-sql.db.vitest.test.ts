@@ -21,7 +21,7 @@ import { Prisma } from '@prisma/client'
 import type { ReadinessLiveFlag } from '@nexus/shared/listing-readiness'
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { liveFlagsOf, liveFlagsSql, liveJoinsSql, livePresenceColumns, liveStateSql, liveStatsRows, readLive } from './listing-readiness-live.service.js'
+import { liveCtes, liveFlagsOf, liveFlagsSql, liveJoinsSql, livePresenceColumns, liveStateSql, readLive } from './listing-readiness-live.service.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 
@@ -140,9 +140,14 @@ describe('the SQL live state and flags = the TypeScript ones', () => {
     expect(listings.filter(l => facts.ended.some(e => e.listing === l.id)).some(l => ts.get(l.id as string)!.state === 'paused' && !(l.offerClosedAt))).toBe(true)
   })
 
-  it('the live tiles\' read is the same SQL (liveStatsRows)', async () => {
+  it('the page\'s live CTEs (the tiles and the live filters read them) carry the same state and flags', async () => {
     const ts = await tsRead()
-    const rows = await scoped(() => liveStatsRows(products.map(p => p.id)))
+    const view = { presence: true, states: [], flags: [], scope: {} }
+    const rows = await scoped(() => prisma.$queryRaw<Array<{ id: string; state: string } & Record<ReadinessLiveFlag, boolean>>>(Prisma.sql`
+      WITH src AS (SELECT p.id AS pid, COALESCE(p."parentId", p.id) AS root, NULL::text AS channel, NULL::text AS market, NULL::text AS account, NULL::text AS alias
+                     FROM "Product" p WHERE p.id = ANY(${products.map(p => p.id)}::text[])),
+      ${liveCtes('src', 't_', true, view)}
+      SELECT id, state, error, suppressed, "outOfSync", "lowStock" FROM t_cl`))
     expect(rows.length).toBe(listings.length)
     for (const row of rows) expect({ state: row.state, flags: FLAGS.filter(f => row[f]) }).toEqual(ts.get(row.id))
   })

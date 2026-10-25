@@ -30,7 +30,7 @@ vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, sea
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { readinessDetail, readinessFamilies, readinessFamilyMembers } from './listing-readiness-families.service.js'
+import { readinessDetail, readinessFamilies, readinessFamiliesIfChanged, readinessFamilyMembers, readinessFamilyMembersIfChanged } from './listing-readiness-families.service.js'
 import { readLive, resolveSearchTokens } from './listing-readiness-live.service.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -183,7 +183,7 @@ describe('the Listing window', () => {
     expect(channel.listings.map(l => [l.productId, l.sku, l.live.listingId])).toEqual([['lv-root', 'LV', 'lv-l-root'], ['lv-v1', 'LV-M', 'lv-l-v1'], ['lv-v2', 'LV-L', 'lv-l-v2']])
     const v2 = channel.listings[2]
     expect(v2.messages.map(m => [m.severity, m.code, m.message, m.source])).toEqual([['error', 'SUPPRESSED', 'Missing main image', 'amazon-suppression'], ['warning', '18027', 'Your title is long', 'listings-api']])
-    expect(v2.suppressions).toEqual([{ reasonCode: 'MISSING_IMAGE', reasonText: 'Missing main image', severity: 'ERROR', source: 'sp-api-poll', suppressedAt: '2026-10-24T09:00:00.000Z' }])
+    expect(v2.suppressions).toEqual([{ id: expect.any(String), reasonCode: 'MISSING_IMAGE', reasonText: 'Missing main image', severity: 'ERROR', source: 'sp-api-poll', suppressedAt: '2026-10-24T09:00:00.000Z' }])
     expect(v2.differs).toEqual([{ field: 'price', nexus: '45', channel: '44.5', foundAt: '2026-10-24T03:00:00.000Z' }])
     expect(v2.lastPublish).toBeNull()
     const attempts = channel.listings[1].syncAttempts!
@@ -224,5 +224,81 @@ describe('search', () => {
     expect(phrase.rows).toEqual([['lv-root', 4]])
     expect(phrase.search).toBeUndefined()
     expect((await scoped(() => resolveSearchTokens('B0V1 b0v1 NOPE'))).unmatched).toEqual(['NOPE'])
+  })
+})
+
+describe('the live filters, in the page\'s SQL', () => {
+  const ask = async (query: Record<string, unknown>, live = true) => {
+    const page = await scoped(() => readinessFamilies(query, null, { live }))
+    return { ids: page.rows.map(r => r.id), total: page.total, all: page.stats.all, listings: page.liveStats?.listings ?? null }
+  }
+  it('channel states: ANY of them; Not listed = a destination with no listing (or only a removed one)', async () => {
+    expect(await ask({ live: 'active' })).toMatchObject({ ids: ['lv-root', 'lv-solo'], total: 2 })
+    expect(await ask({ live: 'paused,ended' })).toMatchObject({ ids: [], total: 0, all: 0, listings: 0 })
+    expect(await ask({ live: 'paused,active' })).toMatchObject({ total: 2 })
+    // The parka family has variations not listed on Amazon IT and UK; the gloves are listed everywhere they are checked.
+    expect(await ask({ live: 'not_listed' })).toMatchObject({ ids: ['lv-root'], total: 1 })
+    expect(await ask({ live: 'draft,not_listed' })).toMatchObject({ ids: ['lv-root'] })
+  })
+  it('flags: ALL of them on the same listing; with a state, both', async () => {
+    // Suppressed: only the parka. Every tile follows the narrowed result (the readiness tiles too).
+    expect(await ask({ flags: 'suppressed' })).toEqual({ ids: ['lv-root'], total: 1, all: 12, listings: 6 })
+    expect(await ask({ flags: 'error,lowStock,outOfSync,suppressed' })).toMatchObject({ ids: ['lv-root'] })
+    expect(await ask({ live: 'paused', flags: 'suppressed' })).toMatchObject({ ids: [], total: 0 })
+    expect(await ask({ live: 'not_listed', flags: 'suppressed' })).toMatchObject({ ids: [], total: 0 })
+    // Two flags on two different listings of one family do not make a match.
+    await scoped(async () => {
+      await prisma.channelListing.update({ where: { id: 'lv-l-v2' }, data: { quantity: 50 } })
+      await prisma.channelListing.update({ where: { id: 'lv-l-v1' }, data: { quantity: 3 } })
+    })
+    try {
+      expect(await ask({ flags: 'lowStock' })).toMatchObject({ ids: ['lv-root'] })
+      expect(await ask({ flags: 'lowStock,suppressed' })).toMatchObject({ ids: [], total: 0 })
+    } finally {
+      await scoped(async () => {
+        await prisma.channelListing.update({ where: { id: 'lv-l-v2' }, data: { quantity: 2 } })
+        await prisma.channelListing.update({ where: { id: 'lv-l-v1' }, data: { quantity: 15 } })
+      })
+    }
+  })
+  it('paging counts the narrowed result; a caller without listings.view has the live filters ignored', async () => {
+    const second = await scoped(() => readinessFamilies({ live: 'active', page: '2' }, null, { live: true }))
+    expect(second).toMatchObject({ total: 2, rows: [] })
+    expect(await ask({ flags: 'suppressed', live: 'paused' }, false)).toEqual({ ids: ['lv-root', 'lv-solo'], total: 2, all: 14, listings: null })
+    // Unknown values are dropped, never refused.
+    expect(await ask({ live: 'bogus', flags: 'nope' })).toMatchObject({ total: 2 })
+  })
+})
+
+describe('the ETag with the live layer', () => {
+  it('answers 304 while nothing changed, never after a listing, a channel message or the permission changed', async () => {
+    const families = (held: string | null, live = true) => scoped(() => readinessFamiliesIfChanged({}, null, tag => tag === held, { live }))
+    const first = await families(null)
+    expect(first.page).not.toBeNull()
+    expect(await families(first.etag)).toEqual({ etag: first.etag, page: null })
+    // The same data without listings.view is another answer.
+    expect((await families(first.etag, false)).etag).not.toBe(first.etag)
+    // A listing's price changes: a new answer.
+    await scoped(() => prisma.channelListing.update({ where: { id: 'lv-l-solo' }, data: { price: 19.9 } }))
+    const priced = await families(first.etag)
+    expect(priced.page).not.toBeNull()
+    // A channel message opens on a listing: a new answer again.
+    await scoped(() => prisma.listingIssue.create({ data: { id: 'lv-issue-new', listingId: 'lv-l-solo', code: '1', severity: 'ERROR', message: 'New', attributeNames: [], categories: [], fingerprint: 'N::' } }))
+    try {
+      const flagged = await families(priced.etag)
+      expect(flagged.page).not.toBeNull()
+      expect(flagged.page!.liveStats!.error).toBe(2)
+      // The open family's members answer the same way.
+      const members = (held: string | null) => scoped(() => readinessFamilyMembersIfChanged('lv-root', {}, null, tag => tag === held, { live: true }))
+      const open = await members(null)
+      expect((await members(open.etag)).page).toBeNull()
+      await scoped(() => prisma.amazonSuppression.updateMany({ where: { listingId: 'lv-l-v2' }, data: { resolvedAt: new Date() } }))
+      expect((await members(open.etag)).page).not.toBeNull()
+    } finally {
+      await scoped(async () => {
+        await prisma.listingIssue.delete({ where: { id: 'lv-issue-new' } })
+        await prisma.amazonSuppression.updateMany({ where: { listingId: 'lv-l-v2' }, data: { resolvedAt: null } })
+      })
+    }
   })
 })

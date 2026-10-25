@@ -27,6 +27,7 @@ import {
   type FamilyPageItem, type LightRow,
 } from './listing-readiness-families.service.js'
 import { listingReadinessWhere } from './listing-readiness.service.js'
+import { attachLive, searchProductHits } from './listing-readiness-live.service.js'
 import { scopeStateRank } from './readiness-model.js'
 import { weakEtag } from '../../utils/list-etag.js'
 
@@ -64,11 +65,8 @@ async function inMemoryFamilies(query: Record<string, unknown>): Promise<Readine
   const cutoff = new Date(Date.now() - 24 * HOUR)
   return inDatabaseReadTransaction(prisma, async () => {
     const parts: Prisma.ReadinessIndexWhereInput[] = [await listingReadinessWhere({ ...query, state: undefined }, null)]
-    if (input.q) {
-      const contains = { contains: input.q, mode: 'insensitive' as const }
-      const hits = await prisma.product.findMany({ where: { deletedAt: null, OR: [{ sku: contains }, { name: contains }, { gtin: contains }, { ean: contains }, { upc: contains }] }, select: { id: true, parentId: true } })
-      parts.push(searchScope(hits))
-    }
+    // The search as the members and the Fix window read it (step 3: the phrase OR each term exactly on the ids).
+    if (input.q) parts.push(searchScope(await searchProductHits(input.q)))
     const rows: LightRow[] = await prisma.readinessIndex.findMany({ where: parts.length === 1 ? parts[0] : { AND: parts }, select: LIGHT })
     const products = await productsOf(rows.map(r => r.productId))
     const infos = destinationInfos(rows)
@@ -86,14 +84,15 @@ async function inMemoryFamilies(query: Record<string, unknown>): Promise<Readine
     const shown = families.filter(f => f.matchingCount > 0).sort((a, b) => compareRows({ ...a.root, state: a.state }, { ...b.root, state: b.state }))
     const page: FamilyPageItem[] = shown.slice((input.page - 1) * input.pageSize, input.page * input.pageSize)
     const times = rows.map(r => r.computedAt.getTime())
-    return {
+    // The live layer's post-step (step 3), off: the same null live fields and the pasted-list summary.
+    return attachLive({
       page: input.page, pageSize: input.pageSize, total: shown.length, listingCount: all.length, productCount: families.reduce((n, f) => n + f.members.length, 0),
       stats: { ...countStates(all), all: all.length }, destinations,
       computedAt: times.length ? new Date(Math.min(...times)).toISOString() : null,
       checked: { latest: times.length ? new Date(Math.max(...times)).toISOString() : null, olderThanDay: all.filter(l => !l.filled && l.computedAt! < cutoff).length },
       pendingCount: families.filter(f => f.pending).length,
       rows: await familyPageRows(page, order, infos),
-    }
+    } as ReadinessFamiliesPage, { query: input, live: false, rowProducts: new Map() })
   })
 }
 

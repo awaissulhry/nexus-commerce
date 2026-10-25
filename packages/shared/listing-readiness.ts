@@ -381,6 +381,8 @@ export interface ReadinessChannelMessage {
 }
 
 export interface ReadinessSuppression {
+  /** The `AmazonSuppression` row (step 5's "Mark resolved in Nexus" addresses it). */
+  id: string
   reasonCode: string | null
   reasonText: string
   severity: string | null
@@ -398,10 +400,18 @@ export interface ReadinessChannelListing {
   messages: ReadinessChannelMessage[]
   suppressions: ReadinessSuppression[]
   differs: ReadinessDiffer[]
-  lastPublish: { at: string; outcome: string; message: string | null } | null
+  /** The listing's last publish or selling change, as `readPublicationStatus` reads it; null = none recorded here. */
+  lastPublish: { at: string; outcome: ReadinessPublishOutcome; message: string | null } | null
   /** The newest sync attempts of this listing (at most 10, newest first); absent from an older API. */
   syncAttempts?: ReadinessSyncAttempt[]
 }
+
+/**
+ * This listing's own result in its last publish (`readPublicationStatus`, `StudioRowLastPublish.outcome`): SUBMITTED =
+ * sent, the channel has not answered; ACCEPTED = the channel took it; VERIFIED = Nexus read it back as sent; FAILED = the
+ * channel refused it (`message` says why); UNKNOWN = Nexus does not know this row's own result.
+ */
+export type ReadinessPublishOutcome = 'SUBMITTED' | 'ACCEPTED' | 'VERIFIED' | 'FAILED' | 'UNKNOWN'
 
 /** One sync attempt of a listing (`SyncAttempt`), as stored. */
 export interface ReadinessSyncAttempt { at: string; status: string; source: string; durationMs: number | null; error: string | null }

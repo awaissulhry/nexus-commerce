@@ -25,7 +25,7 @@ import { Prisma } from '@prisma/client'
 import { familySellingState, type ListingDeletion, type SellingState, type SellingStateRead } from '@nexus/shared/listing-actions'
 import type {
   ReadinessChannelListing, ReadinessChannelMessage, ReadinessChannelSection, ReadinessChip, ReadinessDestination, ReadinessDiffer,
-  ReadinessFamiliesPage, ReadinessLive, ReadinessLiveCounts, ReadinessLiveFlag, ReadinessLiveSummary, ReadinessMembersPage,
+  ReadinessFamiliesPage, ReadinessLive, ReadinessLiveCounts, ReadinessLiveFlag, ReadinessLiveState, ReadinessLiveSummary, ReadinessMembersPage,
   ReadinessOutOfSync, ReadinessScopeState, ReadinessSuppression, ReadinessSyncAttempt,
 } from '@nexus/shared/listing-readiness'
 import { listingUrlFor } from '@nexus/shared/listing-url'
@@ -34,7 +34,6 @@ import { isFbaCoordinate } from '../../lib/amazon-fulfillment.js'
 // Types only: the listing-action engine (and the queues it imports) loads when a live read runs (`sellingReader`).
 import type { destinationSellingStates as DestinationSellingStates, SellingStateListing } from '../listings/listing-action.service.js'
 import { readListingDeletions } from '../listings/listing-deletions.js'
-import { readPublicationStatus } from './publication-status.service.js'
 
 /* ── the join rule ────────────────────────────────────────────────────────────────────────── */
 
@@ -381,43 +380,116 @@ export const liveScopeOf = (query: LiveQuery): LiveScope => ({
   ...(query.accountId ? { accountId: query.accountId } : {}), ...(query.listingIds ? { listingIds: query.listingIds } : {}),
 })
 
+/** The live tiles of a families page, computed in the page's SQL (`liveTileCtes`). */
+export interface LiveTiles { counts: ReadinessLiveCounts; unmatched: number }
+
 export interface AttachLiveInput {
   query: LiveQuery
   live: boolean
   /** The page's rows → their products (a family row: its members in the result; a member row: itself). */
   rowProducts: ReadonlyMap<string, readonly string[]>
-  /** Families page: every readiness listing of the result (product × destination), for the live tiles. */
-  resultListings?: Iterable<{ productId: string; destinationKey: string }>
+  /** Families page: the live tiles over the whole result (null without `listings.view`). */
+  tiles?: LiveTiles | null
 }
 
-/** One row of the live tiles' read (`liveStatsRows`). */
-export interface LiveStatsRow {
-  id: string; productId: string; channel: string; marketplace: string; channelConnectionId: string | null; aliasKey: string
-  state: SellingState; error: boolean; suppressed: boolean; outOfSync: boolean; lowStock: boolean
+/* ── the live layer inside the page's SQL (step 2's summary) ──────────────────────────────── */
+
+/** What the page's SQL needs of the live layer. Null for a caller without `listings.view`: live filters are ignored. */
+export interface LiveSqlView {
+  /** The raw-SQL presence columns exist (`livePresenceColumns`). */
+  presence: boolean
+  /** `live`: channel states, ANY of them. `not_listed` = no listing on the destination (or only one Nexus removed). */
+  states: readonly ReadinessLiveState[]
+  /** `flags`: live flags, ALL of them on the same listing. */
+  flags: readonly ReadinessLiveFlag[]
+  /** The page's channel / market / account / listing selection, as it narrows listings. */
+  scope: LiveScope
+}
+
+/** The view for a caller with `listings.view` (one query: the presence columns), else null. */
+export async function liveSqlView(query: LiveQuery & { liveStates?: readonly ReadinessLiveState[]; liveFlags?: readonly ReadinessLiveFlag[] }, live: boolean): Promise<LiveSqlView | null> {
+  if (!live) return null
+  return { presence: await livePresenceColumns(), states: query.liveStates ?? [], flags: query.liveFlags ?? [], scope: liveScopeOf(query) }
+}
+export const liveFiltering = (view: LiveSqlView | null): view is LiveSqlView => !!view && (view.states.length > 0 || view.flags.length > 0)
+
+/** A market code as the join rule reads it (GB = UK), in SQL. */
+const canonMarket = (column: string) => `CASE upper(btrim(COALESCE(${column}, ''))) WHEN 'GB' THEN 'UK' ELSE upper(btrim(COALESCE(${column}, ''))) END`
+/** The join rule in SQL: listing `c` (a `*cl` row) belongs to pair `x` (a `*pair` row). */
+const PAIR_MATCH = 'c.pid = x.pid AND c.channel = x.channel AND c.cmarket = x.cmarket AND c.account = x.account AND c.alias IS NOT DISTINCT FROM x.alias'
+const FLAG_COLUMN: Record<ReadinessLiveFlag, string> = { error: 'c.error', suppressed: 'c.suppressed', outOfSync: 'c."outOfSync"', lowStock: 'c."lowStock"' }
+
+/**
+ * Live CTEs over a source CTE `src` of readiness rows (columns `root, pid, channel, market, account, alias`), named
+ * with `prefix`:
+ *   <prefix>mem  — the products of each family;
+ *   <prefix>pair — product × channel destination of its family, the "not computed" fill included (`fill`), as the
+ *                  readiness model counts them (Shared has no live layer);
+ *   <prefix>cl   — those products' listings in the page's scope, with the join-rule coordinate, `liveStateSql` and
+ *                  `liveFlagsSql`.
+ */
+export function liveCtes(src: string, prefix: string, fill: boolean, view: LiveSqlView): Prisma.Sql {
+  const flags = liveFlagsSql()
+  const scope: Prisma.Sql[] = []
+  if (view.scope.channel) scope.push(view.scope.channel === 'SHARED' ? Prisma.sql`FALSE` : Prisma.sql`upper(btrim(l.channel)) = ${view.scope.channel}`)
+  if (view.scope.marketplace) scope.push(Prisma.sql`${Prisma.raw(canonMarket('l.marketplace'))} = ${liveMarketCode(view.scope.marketplace)}`)
+  if (view.scope.accountId) scope.push(Prisma.sql`l."channelConnectionId" = ${view.scope.accountId}`)
+  if (view.scope.listingIds) scope.push(Prisma.sql`l.id = ANY(${[...view.scope.listingIds]}::text[])`)
+  const destination = `upper(btrim(channel)) AS channel, ${canonMarket('market')} AS cmarket, account, alias`
+  const raw = (text: string) => Prisma.raw(text)
+  return Prisma.sql`
+    ${raw(prefix)}mem AS (SELECT DISTINCT root, pid FROM ${raw(src)}),
+    ${raw(prefix)}pair AS (${fill
+      ? raw(`SELECT DISTINCT m.root, m.pid, d.channel, d.cmarket, d.account, d.alias FROM ${prefix}mem m
+          JOIN (SELECT DISTINCT root, ${destination} FROM ${src} WHERE channel IS NOT NULL) d ON d.root = m.root`)
+      : raw(`SELECT DISTINCT root, pid, ${destination} FROM ${src} WHERE channel IS NOT NULL`)}),
+    ${raw(prefix)}cl AS (
+      SELECT l.id, l."productId" AS pid, upper(btrim(l.channel)) AS channel, ${raw(canonMarket('l.marketplace'))} AS cmarket,
+             l."channelConnectionId" AS account, NULLIF(l."aliasKey", '') AS alias, ${liveStateSql()} AS state,
+             ${flags.error} AS error, ${flags.suppressed} AS suppressed, ${flags.outOfSync} AS "outOfSync", ${flags.lowStock} AS "lowStock"
+        FROM "ChannelListing" l ${liveJoinsSql({ presence: view.presence })}
+       WHERE l."productId" IN (SELECT pid FROM ${raw(prefix)}mem)${scope.length ? Prisma.sql` AND ${Prisma.join(scope, ' AND ')}` : Prisma.empty})`
 }
 
 /**
- * The live tiles from the read's rows: listings (`ChannelListing` rows) by state and flag, and `notListed` = the
- * result's product × destination pairs (Shared aside) with no listing there, or only one Nexus removed.
+ * The live filters in SQL: `lf_keep` = the families (roots) of `src` with a product × destination pair that satisfies
+ * them — a listing there whose state is ANY of `states` (none given: any) and that carries ALL of `flags`; or, when
+ * `not_listed` is asked and no flag is, no listing there (or only removed ones). Null when no live filter is set.
  */
-export function liveCounts(rows: readonly LiveStatsRow[], resultListings: Iterable<{ productId: string; destinationKey: string }>): ReadinessLiveCounts {
-  const counts: ReadinessLiveCounts = { listings: 0, active: 0, paused: 0, draft: 0, ended: 0, unknown: 0, notListed: 0, error: 0, suppressed: 0, outOfSync: 0, lowStock: 0 }
-  const listed = new Set<string>()
-  for (const row of rows) {
-    counts.listings++
-    if (row.state === 'active' || row.state === 'paused' || row.state === 'draft' || row.state === 'ended' || row.state === 'unknown') counts[row.state]++
-    if (row.state !== 'not_listed') listed.add(`${row.productId}\u0000${liveDestinationKey(row)}`)
-    for (const flag of ['error', 'suppressed', 'outOfSync', 'lowStock'] as const) if (row[flag]) counts[flag]++
-  }
-  const pairs = new Set<string>()
-  for (const listing of resultListings) {
-    if (isSharedKey(listing.destinationKey)) continue
-    const pair = `${listing.productId}\u0000${canonicalDestinationKey(listing.destinationKey)}`
-    if (pairs.has(pair)) continue
-    pairs.add(pair)
-    if (!listed.has(pair)) counts.notListed++
-  }
-  return counts
+export function liveFilterCtes(src: string, fill: boolean, view: LiveSqlView | null): Prisma.Sql | null {
+  if (!liveFiltering(view)) return null
+  const ok = [view.states.length ? Prisma.sql`c.state = ANY(${[...view.states]}::text[])` : Prisma.sql`TRUE`, ...view.flags.map(flag => Prisma.raw(FLAG_COLUMN[flag]))]
+  const absent = view.states.includes('not_listed') && !view.flags.length
+    ? Prisma.sql` OR NOT EXISTS (SELECT 1 FROM lf_cl c WHERE ${Prisma.raw(PAIR_MATCH)} AND c.state <> 'not_listed')` : Prisma.empty
+  return Prisma.sql`${liveCtes(src, 'lf_', fill, view)},
+    lf_keep AS (SELECT DISTINCT x.root FROM lf_pair x WHERE EXISTS (SELECT 1 FROM lf_cl c WHERE ${Prisma.raw(PAIR_MATCH)} AND ${Prisma.join(ok, ' AND ')})${absent})`
+}
+
+/**
+ * The live tiles in SQL over the result `src`: `lt_tiles` (one row) — the result's listings in scope (`ChannelListing`
+ * rows; under a language filter only those on a destination the result shows) by state and flag; `notListed` = pairs
+ * with no listing there, or only removed ones; `unmatched` = listings on no readiness destination of the business.
+ */
+export function liveTileCtes(src: string, fill: boolean, view: LiveSqlView, languageFiltered: boolean): Prisma.Sql {
+  const same = 'd.channel = c.channel AND d.cmarket = c.cmarket AND d.account = c.account AND d.alias IS NOT DISTINCT FROM c.alias'
+  const count = (where: string) => Prisma.raw(`(count(*) FILTER (WHERE ${where}))::int`)
+  return Prisma.sql`${liveCtes(src, 'lt_', fill, view)},
+    lt_fp AS (SELECT DISTINCT upper(btrim(channel)) AS channel, ${Prisma.raw(canonMarket('market'))} AS cmarket, "accountId" AS account, "aliasId" AS alias
+                FROM "ReadinessIndex" WHERE channel IS NOT NULL),
+    lt_shown AS (SELECT DISTINCT upper(btrim(channel)) AS channel, ${Prisma.raw(canonMarket('market'))} AS cmarket, account, alias FROM ${Prisma.raw(src)} WHERE channel IS NOT NULL),
+    lt_v AS (SELECT c.*, EXISTS (SELECT 1 FROM lt_fp d WHERE ${Prisma.raw(same)}) AS footprint FROM lt_cl c
+              ${languageFiltered ? Prisma.raw(`WHERE EXISTS (SELECT 1 FROM lt_shown d WHERE ${same})`) : Prisma.empty}),
+    lt_tiles AS (SELECT count(*)::int AS listings, ${count(`state = 'active'`)} AS active, ${count(`state = 'paused'`)} AS paused, ${count(`state = 'draft'`)} AS draft,
+        ${count(`state = 'ended'`)} AS ended, ${count(`state = 'unknown'`)} AS unknown, ${count('error')} AS error, ${count('suppressed')} AS suppressed,
+        ${count('"outOfSync"')} AS "outOfSync", ${count('"lowStock"')} AS "lowStock", ${count('NOT footprint')} AS unmatched,
+        (SELECT count(*)::int FROM lt_pair x WHERE NOT EXISTS (SELECT 1 FROM lt_cl c WHERE ${Prisma.raw(PAIR_MATCH)} AND c.state <> 'not_listed')) AS "notListed"
+      FROM lt_v)`
+}
+
+/** `lt_tiles`' row in the page's words. */
+export function liveTilesOf(row: ReadinessLiveCounts & { unmatched: number }): LiveTiles {
+  const { unmatched, ...counts } = row
+  return { counts, unmatched }
 }
 
 /** The readiness destinations of the business (its footprint, aliases included): canonical key → the index's own key. */
@@ -475,18 +547,6 @@ export async function livePresenceColumns(): Promise<boolean> {
   return (rows[0]?.n ?? 0) === 2
 }
 
-/** Every listing of these products, with its state and flags computed in SQL (`liveStateSql`, `liveFlagsSql`). */
-export async function liveStatsRows(productIds: readonly string[]): Promise<LiveStatsRow[]> {
-  if (!productIds.length) return []
-  const presence = await livePresenceColumns()
-  const flags = liveFlagsSql()
-  return prisma.$queryRaw<LiveStatsRow[]>(Prisma.sql`
-    SELECT l.id, l."productId", l.channel, l.marketplace, l."channelConnectionId", l."aliasKey", ${liveStateSql()} AS state,
-           ${flags.error} AS error, ${flags.suppressed} AS suppressed, ${flags.outOfSync} AS "outOfSync", ${flags.lowStock} AS "lowStock"
-      FROM "ChannelListing" l ${liveJoinsSql({ presence })}
-     WHERE l."productId" = ANY(${[...productIds]}::text[])`)
-}
-
 /**
  * THE post-step of the families and members pages (live layer step 3). It fills, for a caller with `listings.view`:
  *  - every channel chip's `live` (family and member rows) and a member row's `listing` (its own listing; null when not
@@ -494,8 +554,8 @@ export async function liveStatsRows(productIds: readonly string[]): Promise<Live
  *  - EXTRA chips for a row's listings that match none of its chips: readiness `absent` with the destination's `note`
  *    when Nexus does not check that destination at all (counted in `unmatchedListings`), `notComputed` when it does
  *    but this family was not checked there yet. A language filter shows its own destinations only: no extra chips;
- *  - the families page's `liveStats` (the live tiles, over the whole result: `liveStatsRows` in SQL) and the extra
- *    destinations (appended after the readiness ones).
+ *  - the families page's `liveStats` and `unmatchedListings` (the live tiles: the caller computes them over the whole
+ *    result in its SQL, `liveTileCtes`) and the extra destinations (appended after the readiness ones).
  * The pasted-list `search` summary is filled for every caller. Without `listings.view` every live field is null and
  * no chip is added. Readiness itself (states, tiles, order, paging, next step) is never changed.
  */
@@ -513,8 +573,6 @@ export async function attachLive<P extends ReadinessFamiliesPage | ReadinessMemb
   }
   const scope = liveScopeOf(input.query)
   const live = await readLive([...input.rowProducts.values()].flat(), scope)
-  const resultListings = input.resultListings ? [...input.resultListings] : []
-  const statsRows = familiesPage ? (await liveStatsRows([...new Set(resultListings.map(l => l.productId))])).filter(row => inLiveScope(row, scope)) : []
   const footprint = await readinessFootprint()
   const pageKeys = new Map((familiesPage?.destinations ?? []).map(d => [canonicalDestinationKey(d.key), d.key]))
   const rawKey = (key: string) => pageKeys.get(key) ?? footprint.get(key) ?? key
@@ -546,10 +604,8 @@ export async function attachLive<P extends ReadinessFamiliesPage | ReadinessMemb
   }
 
   if (familiesPage) {
-    const shown = new Set(pageKeys.keys())
-    const counted = statsRows.filter(row => shown.has(liveDestinationKey(row)) || !input.query.language)
-    familiesPage.liveStats = liveCounts(counted, resultListings)
-    familiesPage.unmatchedListings = input.query.language ? 0 : counted.filter(row => !footprint.has(liveDestinationKey(row))).length
+    familiesPage.liveStats = input.tiles?.counts ?? null
+    familiesPage.unmatchedListings = input.tiles?.unmatched ?? 0
     const missing = [...extraKeys].filter(key => !pageKeys.has(key)).sort(compareKeys)
     if (missing.length) {
       const facts = await extraDestinationFacts(missing)
@@ -613,7 +669,7 @@ export async function readChannelSection(productIds: readonly string[], destinat
     select: { listingId: true, code: true, severity: true, message: true, attributeNames: true, source: true, firstSeenAt: true, lastSeenAt: true },
     orderBy: [{ lastSeenAt: 'desc' }, { id: 'asc' }] })
   const suppressions = await prisma.amazonSuppression.findMany({ where: { listingId: { in: ids }, resolvedAt: null },
-    select: { listingId: true, reasonCode: true, reasonText: true, severity: true, source: true, suppressedAt: true }, orderBy: [{ suppressedAt: 'desc' }, { id: 'asc' }] })
+    select: { id: true, listingId: true, reasonCode: true, reasonText: true, severity: true, source: true, suppressedAt: true }, orderBy: [{ suppressedAt: 'desc' }, { id: 'asc' }] })
   const drifts = await prisma.channelDrift.findMany({ where: { channelListingId: { in: ids } }, select: { channelListingId: true, driftCount: true, driftedFields: true } })
   const attempts = await prisma.$queryRaw<Array<{ listingId: string; attemptedAt: Date; status: string; source: string; durationMs: number | null; error: string | null }>>(Prisma.sql`
     SELECT a."listingId", a."attemptedAt", a.status, a.source, a."durationMs", a.error
@@ -636,7 +692,7 @@ export async function readChannelSection(productIds: readonly string[], destinat
     const drift = driftOf.get(entry.listingId)
     return {
       productId, sku: live.facts.products.get(productId)?.sku ?? '', live: entry, messages,
-      suppressions: (suppressionsOf.get(entry.listingId) ?? []).map((s): ReadinessSuppression => ({ reasonCode: s.reasonCode, reasonText: s.reasonText,
+      suppressions: (suppressionsOf.get(entry.listingId) ?? []).map((s): ReadinessSuppression => ({ id: s.id, reasonCode: s.reasonCode, reasonText: s.reasonText,
         severity: s.severity, source: s.source, suppressedAt: iso(s.suppressedAt) })),
       differs: drift ? differsOf(drift.driftCount, drift.driftedFields) : [],
       lastPublish: lastPublish.get(entry.listingId) ?? null,
@@ -656,11 +712,14 @@ async function lastPublishes(entries: ReadonlyArray<{ productId: string; row: Li
     const k = `${entry.row.channel}\u0000${entry.row.marketplace}\u0000${entry.row.channelConnectionId}\u0000${entry.row.aliasKey}`
     if (!coordinates.has(k)) coordinates.set(k, entry)
   }
+  // Loaded here: the publish reader imports the channel publication clients (and their queues); the page lists never need them.
+  const { readPublicationStatus } = coordinates.size ? await import('./publication-status.service.js') : { readPublicationStatus: null }
   for (const { productId, row } of coordinates.values()) {
     try {
-      const status = await readPublicationStatus({ productId, channel: row.channel, marketplace: row.marketplace, accountId: row.channelConnectionId!,
+      const status = await readPublicationStatus!({ productId, channel: row.channel, marketplace: row.marketplace, accountId: row.channelConnectionId!,
         ...(row.aliasKey ? { aliasKey: row.aliasKey } : {}) })
-      for (const listing of status.rows) if (listing.last) out.set(listing.listingId, { at: listing.last.at, outcome: listing.last.outcome ?? listing.last.status, message: listing.last.message ?? null })
+      // The row's own outcome; not known (no stored per-SKU result, no journal outcome) reads UNKNOWN.
+      for (const listing of status.rows) if (listing.last) out.set(listing.listingId, { at: listing.last.at, outcome: listing.last.outcome ?? 'UNKNOWN', message: listing.last.message ?? null })
     } catch (error) {
       // A destination the publish reader refuses (a market switched off, an account gone): no last publish, said as such.
       const e = error as { statusCode?: unknown; code?: unknown }
@@ -719,10 +778,12 @@ export async function resolveSearchTokens(q: string | null | undefined): Promise
 }
 
 /** Today's search: the whole text inside a SKU, name or barcode. */
-async function phraseHits(q: string): Promise<SearchHit[]> {
+const phraseWhere = (q: string) => {
   const contains = { contains: q, mode: 'insensitive' as const }
-  return prisma.product.findMany({ where: { deletedAt: null, OR: [{ sku: contains }, { name: contains }, { gtin: contains }, { ean: contains }, { upc: contains }] },
-    select: { id: true, parentId: true } })
+  return { deletedAt: null, OR: [{ sku: contains }, { name: contains }, { gtin: contains }, { ean: contains }, { upc: contains }] }
+}
+async function phraseHits(q: string): Promise<SearchHit[]> {
+  return prisma.product.findMany({ where: phraseWhere(q), select: { id: true, parentId: true } })
 }
 
 /** The readiness search (`scopedWhere`): today's phrase search AND every term matched exactly on the ids above. */
@@ -739,7 +800,7 @@ export async function searchSummary(q: string | undefined): Promise<ReadinessFam
   if (!q) return undefined
   const terms = searchTerms(q)
   if (terms.length < 2) return undefined
-  if (!/[,\n\r\t]/.test(q) && (await phraseHits(q)).length) return undefined
+  if (!/[,\n\r\t]/.test(q) && await prisma.product.findFirst({ where: phraseWhere(q), select: { id: true } })) return undefined
   const { unmatched } = await resolveSearchTokens(q)
   return { tokens: terms.length, unmatched }
 }
