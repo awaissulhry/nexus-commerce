@@ -41,6 +41,7 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { channelLabel } from '@nexus/shared/channel-label'
+import { isListingShell, readinessDestinationAllowed } from '@nexus/shared/listing-readiness'
 import { listingRegion, whereCoordinate } from '../../lib/listing-coordinate.js'
 import { chooseConnection, listActiveConnections } from '../connection-resolver.service.js'
 import { validateAliasWriteTargets } from './listing-alias.service.js'
@@ -206,14 +207,27 @@ function coordinateWhere(productIds: string[], c: Coordinate): Prisma.ChannelLis
   return { ...levels[0], productId: { in: productIds } }
 }
 
-type Member = { id: string; parentId: string | null; sku: string }
+type Member = { id: string; parentId: string | null; sku: string; productType: string | null }
 type ExistingRow = { id: string; productId: string; version: number }
 
 async function productsToEnsure(tx: Tx, requested: string[], family: boolean, c: Coordinate) {
-  const select = { id: true, parentId: true, sku: true } as const
+  const select = { id: true, parentId: true, sku: true, productType: true } as const
   const products: Member[] = await tx.product.findMany({ where: { id: { in: requested }, deletedAt: null }, select })
   if (products.length !== requested.length) {
     throw new DraftListingError('PRODUCT_UNAVAILABLE', 'A product in this save is no longer available. Reload and try again.', 404)
+  }
+  // 2026-10-25 — an old eBay listing shell gets no listing outside its own (`readinessDestinationAllowed`).
+  const shells = products.filter(p => isListingShell(p.productType))
+  if (shells.length) {
+    const own = await tx.channelListing.findMany({ where: { productId: { in: shells.map(p => p.id) } }, select: { productId: true, channel: true, marketplace: true, channelConnectionId: true } })
+    const refused = shells.filter(p => !readinessDestinationAllowed({ productType: p.productType,
+      ownListings: own.filter(l => l.productId === p.id).map(l => ({ channel: l.channel, market: l.marketplace, accountId: l.channelConnectionId })) },
+    { channel: c.channel, market: c.market, accountId: c.accountId }))
+    if (refused.length) {
+      throw new DraftListingError('PRODUCT_UNAVAILABLE', refused.length === 1
+        ? `${refused[0].sku} is an old eBay listing shell. It lives only on its own eBay listing.`
+        : `${refused.map(p => p.sku).join(', ')} are old eBay listing shells. They live only on their own eBay listings.`)
+    }
   }
   const sku = new Map(products.map(p => [p.id, p.sku]))
   const skus = (ids: string[]) => ids.map(id => sku.get(id) ?? id).join(', ')

@@ -74,6 +74,12 @@ beforeAll(async () => {
     }
     await product('solo', undefined, { isParent: false })
     await product('gone', undefined, { isParent: false, deletedAt: new Date() })
+    // Two old eBay listing shells, each holding one eBay IT listing (the account is gone; the rule reads the listing).
+    for (const key of ['shell', 'shell2']) {
+      await product(key, undefined, { productType: 'EBAY_LISTING_SHELL' })
+      await prisma.channelListing.create({ data: { productId: ids[key], channel: 'EBAY', marketplace: 'IT', channelMarket: 'EBAY_IT', region: 'IT',
+        channelConnectionId: accounts.ebayGone, listingStatus: 'ACTIVE', isPublished: true, externalListingId: `ITEM-${key}` } })
+    }
 
     // `live`: a published listing on Amazon SE for the parent and variant A only — B and C are left out.
     const listed = (key: string) => prisma.channelListing.create({ data: { productId: ids[key], channel: 'AMAZON', marketplace: 'SE', channelMarket: 'AMAZON_SE',
@@ -224,6 +230,18 @@ describe('ensureDraftListings — market, product and alias', () => {
     expect(await refusal({ productIds: [ids.gale], aliasKey: ids.aliasKey })).toMatchObject({ code: 'LISTING_SCOPE_MISMATCH' })
     expect(await refusal({ productIds: [ids.alias], aliasKey: 'made-up-alias' })).toMatchObject({ code: 'LISTING_SCOPE_MISMATCH' })
     expect(await rowsOf([ids.alias, ids.aliasA, ids.aliasB, ids.aliasC])).toHaveLength(2)
+  })
+
+  it('an old eBay listing shell gets no listing outside its own eBay listing (2026-10-25)', async () => {
+    expect(await refusal({ productIds: [ids.shell] })).toMatchObject({ code: 'PRODUCT_UNAVAILABLE', statusCode: 409,
+      message: 'DL-shell is an old eBay listing shell. It lives only on its own eBay listing.' })
+    expect(await refusal({ productIds: [ids.shell, ids.shell2], family: true })).toMatchObject({ code: 'PRODUCT_UNAVAILABLE',
+      message: 'DL-shell, DL-shell2 are old eBay listing shells. They live only on their own eBay listings.' })
+    // Named with an ordinary product, the whole save is refused: nothing is written for either.
+    const soloBefore = (await rowsOf([ids.solo], { channel: 'AMAZON' })).length
+    expect(await refusal({ productIds: [ids.solo, ids.shell] })).toMatchObject({ code: 'PRODUCT_UNAVAILABLE' })
+    expect(await rowsOf([ids.solo], { channel: 'AMAZON' })).toHaveLength(soloBefore)
+    expect(await rowsOf([ids.shell, ids.shell2], { channel: 'AMAZON' })).toHaveLength(0)
   })
 
   it('runs in the caller’s transaction: a rollback leaves no draft', async () => {

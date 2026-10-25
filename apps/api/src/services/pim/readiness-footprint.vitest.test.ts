@@ -38,7 +38,7 @@ afterAll(async () => { await state.db?.close() }, 30_000)
 
 describe('reconcileReadinessFootprint', () => {
   it('does nothing when the index already follows the footprint (no rebuild loop)', async () => {
-    expect(await inFixture('F1', reconcileReadinessFootprint)).toEqual({ removed: [], missing: [], markedFamilies: 0 })
+    expect(await inFixture('F1', reconcileReadinessFootprint)).toEqual({ removed: [], missing: [], markedFamilies: 0, shellRows: 0 })
   })
 
   it('deletes an old "No active account" row, and only in its own business', async () => {
@@ -63,7 +63,7 @@ describe('reconcileReadinessFootprint', () => {
     expect(await channelsOf('F1')).toEqual(['EBAY', 'ETSY', null].sort((a, b) => String(a).localeCompare(String(b))))
     expect(await inFixture('F1', () => prisma.readinessIndex.count({ where: { pendingSince: { not: null } } }))).toBe(0)
     // Settled: the next check finds nothing to do.
-    expect(await inFixture('F1', reconcileReadinessFootprint)).toEqual({ removed: [], missing: [], markedFamilies: 0 })
+    expect(await inFixture('F1', reconcileReadinessFootprint)).toEqual({ removed: [], missing: [], markedFamilies: 0, shellRows: 0 })
 
     // Disconnect it: its rows go at the next check, and nothing else does.
     await inFixture('F1', () => prisma.channelConnection.update({ where: { id: etsy.id }, data: { isActive: false } }))
@@ -77,6 +77,6 @@ describe('reconcileReadinessFootprint', () => {
     // F3 has never been computed: no Shared rows to mark, whatever the footprint says.
     expect(await inFixture('F3', () => prisma.readinessIndex.count())).toBe(0)
     const result = await inFixture('F3', reconcileReadinessFootprint)
-    expect(result).toEqual({ removed: [], missing: [], markedFamilies: 0 })
+    expect(result).toEqual({ removed: [], missing: [], markedFamilies: 0, shellRows: 0 })
   })
 })
