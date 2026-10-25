@@ -215,60 +215,7 @@ export async function getDaypartingCursor(scope: { market: string; portfolio?: s
   }
 }
 
-// ── 4 · Keyword Harvest ─────────────────────────────────────────────────────────────────────────
-export interface HvCursor {
-  /** the feed's newest DAY — "a new day landed" */
-  feedDay: string | null
-  /** the feed's newest WRITE — catches a RE-ingest of a day already on screen, which changes every
-   *  number in the grid while `feedDay` holds still */
-  feedAt: string | null
-  /** rows in the last 90 days. Bounded deliberately: the Sunday 90-day purge would otherwise drop
-   *  this count every week over rows no window on the page can show. */
-  feedN: number
-  /** positive keywords in scope — harvest's subject is EXISTENCE, so a count, never `updatedAt` */
-  kwN: number
-  /** of those, how many reached Amazon — `local-only` is a first-class status here and it flips
-   *  with no create and no delete */
-  kwAtAmazon: number
-  /** a threshold change re-decides every row, and moves nothing else in this cursor */
-  policyAt: string | null
-}
-
-export async function getHarvestCursor(scope: { market: string; campaign?: string | null }): Promise<HvCursor> {
-  const market = scope.market && scope.market !== 'all' ? scope.market.toUpperCase() : null
-  const since90 = new Date(Date.now() - 90 * 86_400_000)
-  const [feed, kwN, kwAtAmazon, policy] = await Promise.all([
-    prisma.amazonAdsSearchTerm.aggregate({
-      where: { ...(market ? { marketplace: market } : {}), date: { gte: since90 } },
-      _max: { date: true, createdAt: true }, _count: { _all: true },
-    }),
-    prisma.adTarget.count({
-      where: {
-        isNegative: false,
-        ...(market || scope.campaign
-          ? { adGroup: { campaign: { ...(market ? { marketplace: market } : {}), ...(scope.campaign ? { id: scope.campaign } : {}) } } }
-          : {}),
-      },
-    }),
-    prisma.adTarget.count({
-      where: {
-        isNegative: false, NOT: { externalTargetId: null },
-        ...(market || scope.campaign
-          ? { adGroup: { campaign: { ...(market ? { marketplace: market } : {}), ...(scope.campaign ? { id: scope.campaign } : {}) } } }
-          : {}),
-      },
-    }),
-    prisma.adsHarvestPolicy.aggregate({ _max: { updatedAt: true } }).catch(() => ({ _max: { updatedAt: null } })),
-  ])
-  return {
-    feedDay: feed._max.date?.toISOString().slice(0, 10) ?? null,
-    feedAt: feed._max.createdAt?.toISOString() ?? null,
-    feedN: feed._count._all,
-    kwN,
-    kwAtAmazon,
-    policyAt: policy._max.updatedAt?.toISOString() ?? null,
-  }
-}
+// ── 4 · Keyword Harvest — gone (2026-10-25) with the old Keyword Harvest routes; the page reads routes/advertising-harvest.routes.ts.
 
 // ── 5 · Negative Targeting — gone (wave 4, 2026-10-11) with the old Negatives page and its routes.
 
