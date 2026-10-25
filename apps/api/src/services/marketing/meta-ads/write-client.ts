@@ -28,6 +28,7 @@ import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../
 import { failureOfAnswer, failureOfThrow, localFailure, type MetaFailure } from './errors.js'
 import { metaReadOne } from './read-client.js'
 import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
+import type { MetaPostKind } from '../../gateway/meta-post-rules.js'
 // Step 27b review B-6 — an Instant Experience's colour reads back as AARRGGBB when RRGGBB was sent.
 import { metaCanvasColorSame } from '../../gateway/meta-canvas-rules.js'
 
@@ -83,6 +84,8 @@ export interface MetaObjectChange {
     | MetaCatalogKind
     // Step 37 — a post or comment of the chosen Page, a branded-content comment, an Instagram comment, a Threads ad's post or reply.
     | MetaCommentKind
+    // Step 24 — the chosen Page or Instagram account as it posts, a post of the Page, a post or media Nexus made.
+    | MetaPostKind
   params: Record<string, string>
   operation: string
   budget?: boolean
@@ -109,9 +112,9 @@ export interface MetaObjectChange {
   method?: 'POST' | 'DELETE'
   /**
    * Step 18 — a budget schedule's campaign or ad set (the gateway checks the period is one of its own); step 34: a feed's
-   * catalog; step 37 — a Threads post's ad, a branded post.
+   * catalog; step 37 — a Threads post's ad, a branded post; step 24 — a video post's video.
    */
-  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost'; id: string }
+  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (include_recommendations, master CMP-031). */
   recommendations?: boolean
   /** Step 21 — an edge that changes the object itself (a campaign's labels edge): the object is read back, not a new one. */
@@ -139,6 +142,8 @@ export interface MetaObjectChange {
   via?: MetaRequestVia
   /** Step 20 (review A2) — the targeting keys the draft changed (the gateway lets only these differ from live). */
   targetingKeys?: string[]
+  /** Step 24 (review B-F1) — a Page's video post goes to Meta's video host. */
+  videoHost?: true
 }
 
 /** Step 30 — how a webhook or alert subscription change travels (none of it is needed by a change of an object). */
@@ -259,6 +264,8 @@ const cut = (words: string | null | undefined) => (words ? (words.length > MAX_W
 const PAGE_KINDS: ReadonlySet<string> = new Set(['page', 'leadform', 'testlead', 'canvas'])
 /** Step 37 — the comment kinds made as the chosen Page (Facebook comments and the chosen Instagram account's). */
 const COMMENT_KINDS: ReadonlySet<string> = new Set(['fbpost', 'fbcomment', 'fbpagecomment', 'brandedcomment', 'igmedia', 'igcomment', 'iguser'])
+/** Step 24 — the post kinds made as the chosen Page (its posts; the chosen Instagram account's media and events). */
+const POST_KINDS: ReadonlySet<string> = new Set(['postpage', 'pagepostedit', 'pagepostmade', 'postig', 'igmediamade'])
 
 /** Step 30 part 3 review round 2 (A-L3) — the token a change goes with by its gateway rule (meta-calls.ts metaWriteRuleAuth). */
 function ruleAuthOf(change: MetaObjectChange): 'page' | 'app' | undefined {
@@ -293,6 +300,17 @@ function changeFailure(answer: Pick<GatewayResponse, 'status' | 'verdict'>, chan
     return {
       ...failure,
       sentence: `Meta did not accept this comment change made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. The system user needs the Page's MODERATE task — and CREATE_CONTENT for a comment or like as the Page — (Meta Business settings › Users › System users › Assign assets) and its token pages_manage_engagement, pages_read_engagement, pages_read_user_engagement and, for Instagram, instagram_manage_comments. Nothing was changed.`,
+    }
+  }
+  // Step 24 — a post change made as the chosen Page: the Page's tasks and the posting permissions (Facebook), or the
+  // Instagram account's publishing ones — never "make a new system-user token" or the ad account's.
+  if (auth === 'page' && kind && POST_KINDS.has(kind) && (failure.authLost || failure.permissionDenied)) {
+    const instagram = kind === 'postig' || kind === 'igmediamade'
+    return {
+      ...failure,
+      sentence: instagram
+        ? `Meta did not accept this Instagram change made with the chosen Facebook Page's token${code}${words ? `: ${words}` : ''}. The system user needs the CREATE_CONTENT or MANAGE task on the Page the Instagram account is connected to (Meta Business settings › Users › System users › Assign assets), and its token instagram_basic, instagram_content_publish, pages_read_engagement and ads_management or ads_read (its role comes through the business portfolio) — a delete also instagram_manage_contents, an upcoming event instagram_manage_upcoming_events, a paid-partner label instagram_branded_content_creator or instagram_basic. If the Page needs Page Publishing Authorization or two-factor authentication, a person completes it first. This request changed nothing; the steps before it say what Meta already made.`
+        : `Meta did not accept this post change made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. The system user needs the Page's CREATE_CONTENT task (ADVERTISE for an unpublished video for ads; MANAGE and MODERATE for an edit or a delete) in Meta Business settings › Users › System users › Assign assets, and its token pages_manage_posts, pages_read_engagement and pages_show_list — publish_video for a video post, pages_manage_ads for a video for ads, pages_manage_engagement and pages_read_user_engagement for an edit or a delete. This request changed nothing; the steps before it say what Meta already made.`,
     }
   }
   // Step 37 (re-review B) — a block or unblock on the chosen Page (kind `page`): the Page token, the MODERATE task and the
@@ -409,6 +427,7 @@ export async function metaSendChange(
       ...(change.via?.path ? { path: change.via.path } : {}), ...(change.via?.query ? { query: change.via.query } : {}),
       ...(change.via?.method === 'PATCH' ? { method: 'PATCH' as const } : {}),
       ...(change.targetingKeys?.length ? { targetingKeys: change.targetingKeys } : {}),
+      ...(change.videoHost ? { videoHost: true as const } : {}),
     })
   } catch (err) {
     // The gateway throws only before it sends (a refusal, or a problem of Nexus's own such as the database): nothing left.

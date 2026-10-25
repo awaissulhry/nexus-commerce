@@ -33,6 +33,9 @@ export const gatewayMetaTakenLinks = new Set<string>()
 /** Meta step 36: what Nexus's change records say it made on a Page (`${kind}:${objectId}:${pageId}`); nothing else is. */
 export const gatewayMetaNexusMade = new Set<string>()
 
+/** Meta step 24: the posts, media and containers Nexus's change records say it made (`${kind}:${objectId}:${ownerId}`). */
+export const gatewayMetaPostsMade = new Set<string>()
+
 /** Meta step 39: each connection's chosen ad account's business portfolio; a connection not here has `9876543210`. */
 export const gatewayMetaPortfolio: Record<string, string | null> = {}
 
@@ -61,6 +64,13 @@ export const accountModule = {
   META_IX_SET_TOOL: 'set-meta-instant-experience',
   // Meta step 37: the comment tool.
   META_COMMENTS_TOOL: 'set-meta-comments',
+  // Meta step 24: the post tools and what their records say Nexus made.
+  META_PAGE_POST_CREATE_TOOL: 'create-meta-page-post',
+  META_IG_POST_CREATE_TOOL: 'create-meta-instagram-post',
+  // Keys `${kind}:${id}:${owner}`; a video post's video: `pagevideo:${videoId}:${pageId}` (B-F2).
+  metaPostNexusMade: async (kind: 'pagepost' | 'pagevideo' | 'igmedia' | 'igcontainer', objectId: string, ownerId: string): Promise<boolean> => gatewayMetaPostsMade.has(`${kind}:${objectId}:${ownerId}`),
+  // Meta step 24 (re-review N1): a video post's video by its post (`pagepostvideo:${postId}:${pageId}:${videoId}`).
+  metaPagePostVideoOf: async (postId: string, pageId: string): Promise<string | null> => [...gatewayMetaPostsMade].find((k) => k.startsWith(`pagepostvideo:${postId}:${pageId}:`))?.split(':')[3] ?? null,
 }
 export const ledgerModule = {
   writeLedgerRow: async (row: GatewayLedgerRow): Promise<void> => { gatewayLedger.push(row) },

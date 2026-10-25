@@ -38,9 +38,11 @@ import type { MetaJudgedWrite, MetaWriteKind } from './meta-calls.js'
 import type { MetaCheckRead } from './meta-brand-safety-owner.js'
 // Step 37 — the comment kinds made as the Page (posts, comments, the chosen Instagram account's media and comments).
 import { META_COMMENT_PAGE_KINDS, metaCommentOwnerProblem } from './meta-comment-owner.js'
+// Step 24 — the post kinds made as the Page (the chosen Page's posts, the chosen Instagram account's media and events).
+import { META_POST_KINDS, metaPostOwnerProblem } from './meta-post-owner.js'
 
 /** The kinds this check confirms (every rule marked `auth: 'page'` names one of them). */
-export const META_PAGE_KINDS: ReadonlySet<MetaWriteKind> = new Set<MetaWriteKind>(['page', 'leadform', 'testlead', 'canvas', ...META_COMMENT_PAGE_KINDS])
+export const META_PAGE_KINDS: ReadonlySet<MetaWriteKind> = new Set<MetaWriteKind>(['page', 'leadform', 'testlead', 'canvas', ...META_COMMENT_PAGE_KINDS, ...META_POST_KINDS])
 
 type Problem = { code: string; sentence: string } | null
 const idOf = (v: unknown): string | null => (typeof v === 'string' || typeof v === 'number') && String(v).trim() ? String(v).trim() : null
@@ -88,6 +90,8 @@ export async function metaPageOwnerProblem(connectionId: string, write: MetaJudg
   if (write.auth !== 'page') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${id} is a Page object, and only a change made as the Page writes one.` }
   // Step 37 — a comment change: its own owner check (meta-comment-owner.ts), the ids inside its body included.
   if (META_COMMENT_PAGE_KINDS.has(kind as MetaWriteKind)) return metaCommentOwnerProblem(connectionId, write, kind, read, parent)
+  // Step 24 — a post change: its own owner check (meta-post-owner.ts), the ids inside its body included.
+  if (META_POST_KINDS.has(kind as MetaWriteKind)) return metaPostOwnerProblem(connectionId, write, kind, read, run, parent)
   const pageId = await metaChosenPageOf(connectionId)
   if (!pageId) return { code: 'META_PAGE_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Facebook Page chosen through this connection, so Nexus changes nothing made as a Page.' }
   const problem = kind === 'page' ? (id === pageId ? null : { code: 'META_PAGE_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${id} is not the Facebook Page this business chose through this connection.` })

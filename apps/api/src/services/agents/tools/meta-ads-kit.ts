@@ -340,6 +340,8 @@ export function objectChangeOf(request: MetaChangeRequest): MetaObjectChange {
     ...(request.via ? { via: request.via } : {}),
     // Step 20 (review A2) — the targeting keys the draft changed, for the gateway's live comparison.
     ...(request.targetingKeys?.length ? { targetingKeys: request.targetingKeys } : {}),
+    // Step 24 (review B-F1) — a Page's video post on Meta's video host.
+    ...(request.videoHost ? { videoHost: true as const } : {}),
   }
 }
 
