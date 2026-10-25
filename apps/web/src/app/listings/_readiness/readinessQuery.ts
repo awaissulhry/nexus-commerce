@@ -85,8 +85,7 @@ export interface ReadinessPageQuery {
 export const EMPTY_READINESS_QUERY: ReadinessPageQuery = {
   selector: null, familyId: '', channel: '', marketplace: '', accountId: '', language: '', state: '', live: [], flags: [], q: '',
   parent: '', page: 1, pageSize: DEFAULT_READINESS_PAGE_SIZE, lock: null, sort: '', dir: 'asc',
-  priceMin: '', priceMax: '', qtyMin: '', qtyMax: '', channelId: '',
-  parent: '', page: 1, pageSize: DEFAULT_READINESS_PAGE_SIZE, lock: null, view: 'products', problem: '',
+  priceMin: '', priceMax: '', qtyMin: '', qtyMax: '', channelId: '', view: 'products', problem: '',
 }
 
 /* ── Step 4: the order and the column filters ─────────────────────────────────────────────────────────────────────── */
