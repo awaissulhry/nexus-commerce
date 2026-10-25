@@ -9,8 +9,8 @@
  *   2. Find ReviewRequest rows with status='SCHEDULED' and scheduledFor ≤ now().
  *   3. For non-Amazon channels (eBay, Shopify): send the email template
  *      and mark SENT (or FAILED).
- *   4. For Amazon: fire the Solicitations API call; check the 5-30d window
- *      is still valid first (before day 5 the row waits for day 5).
+ *   4. For Amazon: fire the Solicitations API call; check the 4-30d window
+ *      is still valid first (before day 4 the row waits for day 4).
  *
  * Amazon Solicitations is still gated by NEXUS_ENABLE_AMAZON_SOLICITATIONS=true
  * (D.7 gate). Non-Amazon email is gated by NEXUS_ENABLE_OUTBOUND_EMAILS=true.
@@ -290,12 +290,12 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
 
     try {
       if (order.channel === 'AMAZON') {
-        // Verify 5-30d window still valid
+        // Verify 4-30d window still valid
         const daysSinceDelivery = order.deliveredAt
           ? (Date.now() - order.deliveredAt.getTime()) / (24 * 60 * 60 * 1000)
           : Infinity
         if (daysSinceDelivery < AMAZON_SOLICITATION_MIN_DAYS) {
-          // Too early (scheduled before day 5, or the delivery date moved): wait for day 5.
+          // Too early (the delivery date moved later): wait for day 4.
           await prisma.reviewRequest.update({
             where: { id: req.id },
             data: { scheduledFor: new Date(order.deliveredAt!.getTime() + AMAZON_SOLICITATION_MIN_DAYS * 24 * 60 * 60 * 1000) },
@@ -306,7 +306,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
         if (daysSinceDelivery > AMAZON_SOLICITATION_MAX_DAYS) {
           await prisma.reviewRequest.update({
             where: { id: req.id },
-            data: { status: 'SKIPPED', suppressedReason: `Outside Amazon 5-30d window (${Math.round(daysSinceDelivery)}d)` },
+            data: { status: 'SKIPPED', suppressedReason: `Outside Amazon 4-30d window (${Math.round(daysSinceDelivery)}d)` },
           })
           skipped += 1
           continue

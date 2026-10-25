@@ -597,7 +597,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
           if (!order) { skipped++; errors.push({ orderId, reason: 'not found' }); continue }
           if (!order.deliveredAt) { skipped++; errors.push({ orderId, reason: 'not delivered' }); continue }
           const days = (Date.now() - order.deliveredAt.getTime()) / (24 * 60 * 60 * 1000)
-          if (days < AMAZON_SOLICITATION_MIN_DAYS || days > AMAZON_SOLICITATION_MAX_DAYS) { skipped++; errors.push({ orderId, reason: `outside 5–30d window (${Math.round(days)}d)` }); continue }
+          if (days < AMAZON_SOLICITATION_MIN_DAYS || days > AMAZON_SOLICITATION_MAX_DAYS) { skipped++; errors.push({ orderId, reason: `outside 4–30d window (${Math.round(days)}d)` }); continue }
           if (order.returns.some((r) => ACTIVE_RETURN_STATUSES.includes(r.status as any))) {
             skipped++; errors.push({ orderId, reason: 'active return' }); continue
           }
@@ -666,12 +666,12 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
         }
         const days = (Date.now() - order.deliveredAt.getTime()) / (24 * 60 * 60 * 1000)
         if (days < AMAZON_SOLICITATION_MIN_DAYS) {
-          // Too early: wait for day 5.
+          // Too early: wait for day 4.
           await prisma.reviewRequest.update({ where: { id: req.id }, data: { scheduledFor: new Date(order.deliveredAt.getTime() + AMAZON_SOLICITATION_MIN_DAYS * 24 * 60 * 60 * 1000) } })
           continue
         }
         if (days > AMAZON_SOLICITATION_MAX_DAYS) {
-          await prisma.reviewRequest.update({ where: { id: req.id }, data: { status: 'SUPPRESSED', suppressedReason: `outside 5–30d window (${Math.round(days)}d)` } })
+          await prisma.reviewRequest.update({ where: { id: req.id }, data: { status: 'SUPPRESSED', suppressedReason: `outside 4–30d window (${Math.round(days)}d)` } })
           suppressed++; continue
         }
         const [activeReturn, refund] = await Promise.all([

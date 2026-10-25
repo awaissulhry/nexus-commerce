@@ -3,7 +3,7 @@
  * PostgreSQL with the production schema and policies (PGlite). Amazon's Solicitations call and eBay's RespondToFeedback
  * are MOCKED: nothing leaves the machine.
  *
- *   request-review  — Amazon only, 5–30 days after delivery, never with an open return, once per order; dry run or
+ *   request-review  — Amazon only, 4–30 days after delivery, never with an open return, once per order; dry run or
  *                     live as the switch says; eBay buyers refused (decision O-2); a return opened after the approval
  *                     refuses the run and Amazon is not called; never confirm or auto; cannot be undone.
  *   reply-to-review — eBay only, at most 80 characters, one reply per feedback, refused while eBay replies are off;
@@ -92,9 +92,8 @@ describe('request-review (07 O13)', () => {
     vi.unstubAllEnvs()
   })
 
-  it('the 5–30 day window, an open return, an eBay buyer, a channel without a request call', async () => {
-    expect((await dryRun('request-review', { orderId: await order({ deliveredAt: daysAgo(2) }) })).error).toMatch(/delivered less than 5 days ago/)
-    expect((await dryRun('request-review', { orderId: await order({ deliveredAt: daysAgo(4.5) }) })).error).toMatch(/delivered less than 5 days ago/)
+  it('the 4–30 day window, an open return, an eBay buyer, a channel without a request call', async () => {
+    expect((await dryRun('request-review', { orderId: await order({ deliveredAt: daysAgo(2) }) })).error).toMatch(/delivered less than 4 days ago/)
     expect((await dryRun('request-review', { orderId: await order({ deliveredAt: daysAgo(40) }) })).error).toMatch(/delivered more than 30 days ago/)
     expect((await dryRun('request-review', { orderId: await order({ deliveredAt: null }) })).error).toMatch(/it is not delivered yet/)
     const returning = await order()

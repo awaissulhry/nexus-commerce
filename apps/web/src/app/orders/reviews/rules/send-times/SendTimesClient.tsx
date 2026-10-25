@@ -200,7 +200,7 @@ export default function SendTimesClient() {
         <p>
           A request whose send date lands on a given weekday is asked at that day’s hour, in the buyer’s timezone.
           A per-rule “preferred hour” still overrides this. <strong>Day rank</strong> only matters for rules with
-          “shift to best day” on — they move the send to the lowest-ranked nearby weekday. On Amazon the 5–30 day
+          “shift to best day” on — they move the send to the lowest-ranked nearby weekday. On Amazon the 4–30 day
           window always wins. Inactive rows fall back to the global default (or the order’s delivery time).
         </p>
       </div>

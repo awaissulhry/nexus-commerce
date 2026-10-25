@@ -50,7 +50,7 @@ describe('outsideWindowUpdate', () => {
 
   it('day 29.5: tomorrow is past day 30, SKIPPED with the reason', () => {
     const update = outsideWindowUpdate(delivered, REFUSED, new Date(delivered.getTime() + 29.5 * DAY))
-    expect(update).toMatchObject({ status: 'SKIPPED', suppressedReason: 'Outside Amazon 5-30d window: Amazon refused every day until day 30', nextRetryAt: null })
+    expect(update).toMatchObject({ status: 'SKIPPED', suppressedReason: 'Outside Amazon window: Amazon refused every day until day 30', nextRetryAt: null })
     expect(update).not.toHaveProperty('scheduledFor')
   })
 })

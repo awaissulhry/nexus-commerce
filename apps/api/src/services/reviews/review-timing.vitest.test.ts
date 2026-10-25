@@ -47,12 +47,8 @@ describe('amazon clamp', () => {
   it('clamps high delay to 25d', () => {
     expect(resolveSendTiming(amz(null), rule({ sendDelayDays: 40 }), TABLE).scheduledFor?.getTime()).toBe(DELIV.getTime() + 25 * DAY)
   })
-  it('clamps low delay to 5d (Amazon refuses a request before day 5)', () => {
-    expect(resolveSendTiming(amz(null), rule({ sendDelayDays: 2, minDaysSinceDelivery: 2 }), TABLE).scheduledFor?.getTime()).toBe(DELIV.getTime() + 5 * DAY)
-  })
-  it('a rule at day 4 goes on day 5 on Amazon, day 4 on eBay', () => {
-    expect(resolveSendTiming(amz(null), rule({ sendDelayDays: 4, minDaysSinceDelivery: 4 }), TABLE).scheduledFor?.getTime()).toBe(DELIV.getTime() + 5 * DAY)
-    expect(resolveSendTiming(ebay(), rule({ sendDelayDays: 4, minDaysSinceDelivery: 4 }), TABLE).scheduledFor?.getTime()).toBe(DELIV.getTime() + 4 * DAY)
+  it('clamps low delay to 4d', () => {
+    expect(resolveSendTiming(amz(null), rule({ sendDelayDays: 2, minDaysSinceDelivery: 2 }), TABLE).scheduledFor?.getTime()).toBe(DELIV.getTime() + 4 * DAY)
   })
 })
 

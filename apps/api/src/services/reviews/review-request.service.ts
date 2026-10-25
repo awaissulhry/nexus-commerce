@@ -3,7 +3,7 @@
  * (POST /orders/:id/request-review) so the order page and Claude's `request-review` run the same code. It answers as
  * the route did (RouteAnswer), proven by routes/review-actions-parity.vitest.test.ts.
  *
- * The rules (Amazon's, applied to every channel): delivered 5–30 days ago; no active return; no refund (on the channel,
+ * The rules (Amazon's, applied to every channel): delivered 4–30 days ago; no active return; no refund (on the channel,
  * or a return refunded in Nexus); not already
  * SENT or SCHEDULED. Amazon: the Solicitations call (live behind NEXUS_ENABLE_AMAZON_SOLICITATIONS; off = recorded
  * SKIPPED). Other channels have no request API: recorded SKIPPED (track only).
@@ -13,8 +13,6 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../../db.js'
 import { AnswerReply, RouteAnswer, answered, type RouteLog } from '../../lib/route-answer.js'
 import {
-  AMAZON_SOLICITATION_MAX_DAYS,
-  AMAZON_SOLICITATION_MIN_DAYS,
   amazonMarketplaceIdFor,
   benignSuppressedReason,
   isBenignFailure,
@@ -64,8 +62,8 @@ export async function reviewRequestCheck(id: string) {
   if (!order) return { ok: false as const, status: 404, error: 'Order not found' }
   if (!order.deliveredAt) return { ok: false as const, status: 400, error: 'Order not yet delivered' }
   const days = (Date.now() - order.deliveredAt.getTime()) / DAY_MS
-  if (days < AMAZON_SOLICITATION_MIN_DAYS) return { ok: false as const, status: 400, error: 'Too soon — Amazon requires ≥5 days post-delivery' }
-  if (days > AMAZON_SOLICITATION_MAX_DAYS) return { ok: false as const, status: 400, error: 'Too late — Amazon blocks requests after 30 days' }
+  if (days < 4) return { ok: false as const, status: 400, error: 'Too soon — Amazon requires ≥4 days post-delivery' }
+  if (days > 30) return { ok: false as const, status: 400, error: 'Too late — Amazon blocks requests after 30 days' }
   if (order.returns.some((r) => (ACTIVE_RETURN_STATUSES as readonly string[]).includes(r.status))) {
     return { ok: false as const, status: 400, error: 'Order has an active return — solicitation suppressed' }
   }

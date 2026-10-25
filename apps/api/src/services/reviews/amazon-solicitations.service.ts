@@ -40,10 +40,12 @@ const AMAZON_MARKETPLACE_ID_MAP: Record<string, string> = {
 }
 
 /**
- * Amazon's window for a review request, in days after its delivery date. Amazon refuses anything else with HTTP 403:
- * "You can't use this feature to request a review outside the 5-30 day range after the order delivery date."
+ * Our window for a review request, in days after OUR delivery date. Amazon's own rule is 5-30 days after ITS delivery
+ * date (HTTP 403: "You can't use this feature to request a review outside the 5-30 day range after the order delivery
+ * date."). Ours is an estimate (ship + 3 business days), usually later than Amazon's, so our day 4 is usually Amazon's
+ * day 5 or later; when it is not, Amazon answers OUTSIDE_WINDOW and the request is tried again the next day.
  */
-export const AMAZON_SOLICITATION_MIN_DAYS = 5
+export const AMAZON_SOLICITATION_MIN_DAYS = 4
 export const AMAZON_SOLICITATION_MAX_DAYS = 30
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -82,7 +84,7 @@ export interface SolicitationResult {
  *   - Retry on 429/5xx with 1s/2s/4s backoff
  *
  * Caller is responsible for:
- *   - Re-checking eligibility (5-30d post-delivery window, no active returns)
+ *   - Re-checking eligibility (4-30d post-delivery window, no active returns)
  *   - Writing the result onto a ReviewRequest row
  *   - Advancing attemptCount + nextRetryAt for the RV.3.3 re-try loop
  */
@@ -204,5 +206,5 @@ export function outsideWindowUpdate(deliveredAt: Date, errorMessage: string | nu
   const common = { providerResponseCode: 'OUTSIDE_WINDOW', errorMessage: errorMessage ?? null, lastAttemptAt: now, nextRetryAt: null }
   return tomorrow <= lastDay
     ? { ...common, status: 'SCHEDULED' as const, scheduledFor: tomorrow }
-    : { ...common, status: 'SKIPPED' as const, suppressedReason: 'Outside Amazon 5-30d window: Amazon refused every day until day 30' }
+    : { ...common, status: 'SKIPPED' as const, suppressedReason: 'Outside Amazon window: Amazon refused every day until day 30' }
 }
