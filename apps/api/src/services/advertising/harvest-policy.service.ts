@@ -45,7 +45,7 @@ export interface HarvestCriteria {
 /**
  * The shipped defaults, used when no policy exists at any grain.
  *
- * Every one is measured, not chosen (`scripts/_hv-2-criteria.mts`, prod 2026-08-12):
+ * Every one is measured, not chosen (`scripts/_hv-2-criteria.mts`, prod 2026-08-12; removed 2026-10-25: in git history):
  *
  *   minOrders 2            the published practitioner bar, and D2 — unchanged. 1 → 92 candidates,
  *                          2 → 17, 3 → 8.

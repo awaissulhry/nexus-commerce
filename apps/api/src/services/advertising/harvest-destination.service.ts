@@ -30,7 +30,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *
  * ── 🔴 Why the resolver proposes a SHORTLIST and never a destination ──────────────────────────
  *
- * Measured on prod 2026-08-12 across all 289 ad groups (`scripts/_hv-3-destination.mts`):
+ * Measured on prod 2026-08-12 across all 289 ad groups (`scripts/_hv-3-destination.mts`, removed 2026-10-25: in git history):
  *
  *   target EXACT   resolves for 287 of 287 sources · UNIQUE for **38 (13%)** · median 5 · max 21
  *   target PHRASE  284 of 287 · unique 48
