@@ -100,6 +100,8 @@ import { META_CANVAS_WRITE_RULES } from './meta-canvas-rules.js'
 import { META_COMMENT_WRITE_RULES } from './meta-comment-rules.js'
 // Step 15 — the chosen Page's conversations, inbox and messaging setup, read with the Page's own token.
 import { metaPageReadOf, metaWhatsAppRead, type MetaPageRead } from './meta-page-reads.js'
+// Step 4 — the business-portfolio reads' fixed lists (a leaf module: no import cycle).
+import { META_CLIENT_OBJECT_VALUES, META_INVITATION_ASSET_TYPES, META_SHARING_AGREEMENT_STATUSES } from '../meta/meta-business-lists.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -527,6 +529,19 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/message_templates$/, keys: new Set(['category']), when: (query) => subsetOf(query.get('category'), ['MARKETING', 'UTILITY', 'AUTHENTICATION']) },
   { route: /^\d+\/message_templates$/, keys: new Set(['quality_score']), when: (query) => subsetOf(query.get('quality_score'), ['GREEN', 'YELLOW', 'RED', 'UNKNOWN']) },
   { route: /^\d+\/message_templates$/, keys: new Set(['since', 'until']), when: (query) => ['since', 'until'].every((k) => !query.has(k) || /^\d{1,12}$/.test(query.get(k) ?? '')) },
+  // Step 4 (meta-business, meta-business-people, meta-business-assets, meta-business-partners — marketing/meta-ads/live-business.ts),
+  // each key only on its own edge and only with a value Nexus sends (services/meta/meta-business-lists.ts): an invitation's
+  // asset type (REQUIRED by Meta on both edges), a client object's type (REQUIRED), the partner list without declined
+  // requests, the sharing agreements by status or partner portfolio.
+  { route: /^\d+\/(assigned_client_assets|assigned_owned_assets)$/, keys: new Set(['asset_type']), when: valueIn('asset_type', META_INVITATION_ASSET_TYPES) },
+  { route: /^\d+\/client_objects$/, keys: new Set(['type']), when: valueIn('type', META_CLIENT_OBJECT_VALUES) },
+  { route: /^\d+\/partner_relationships$/, keys: new Set(['exclude_declined_requests']), when: valueIn('exclude_declined_requests', ['true', 'false']) },
+  { route: /^\d+\/initiated_sharing_agreements$/, keys: new Set(['request_status']), when: valueIn('request_status', META_SHARING_AGREEMENT_STATUSES) },
+  { route: /^\d+\/initiated_sharing_agreements$/, keys: new Set(['receiving_business_id']), when: digitsIn('receiving_business_id') },
+  // Review B-F1 — and the agreements others started with this portfolio (business/received_sharing_agreements: the same
+  // request_status enum, requesting_business_id).
+  { route: /^\d+\/received_sharing_agreements$/, keys: new Set(['request_status']), when: valueIn('request_status', META_SHARING_AGREEMENT_STATUSES) },
+  { route: /^\d+\/received_sharing_agreements$/, keys: new Set(['requesting_business_id']), when: digitsIn('requesting_business_id') },
 ]
 /** Step 5 — the key's value is a Meta id (digits). */
 function digitsIn(key: string): (query: URLSearchParams) => boolean {
