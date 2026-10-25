@@ -25,26 +25,32 @@
  * (`pageHasLive`); an older API, or a person without `listings.view`, sees the page as it was, the Amazon suppression
  * banner included.
  *
+ * Step 4: a store or market page's per-listing columns (Status · Price · Qty · Channel ID · Last push · Synced ·
+ * Channel messages, `listingColumns.ts`), header clicks that sort on the server, a market page's column filters, and
+ * Export ▾ (CSV or Excel of the result in view). AG owns a sort or a column filter while its column exists; the address
+ * mirrors it, and a saved view or the Filters bar puts its values back into AG.
  * Step 7 adds the Problems view (`ProblemsView.tsx`): a Products | Problems switch in the toolbar (`?view=problems`), one
  * row per problem × destination, and Show products back here with `?problem=<id>` and its removable chip. The Products
  * grid stays mounted off stage meanwhile, so the header, the tiles and the saved views keep reading it.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Archive, ChevronDown, History, Search, SlidersHorizontal } from 'lucide-react'
-import type { ReadinessDestination, ReadinessFamiliesPage } from '@nexus/shared/listing-readiness'
+import { AlertTriangle, Archive, ChevronDown, Download, History, Search, SlidersHorizontal } from 'lucide-react'
+import { READINESS_DESTINATION_SORTS, READINESS_EXPORT_MAX_ROWS, type ReadinessDestination, type ReadinessFamiliesPage } from '@nexus/shared/listing-readiness'
+import type { GridFilterModel } from '@nexus/shared/products-grid'
 
 import Link from '@/lib/workspaces/Link'
-import { browserWorkspaceId, workspaceHref } from '@/lib/workspaces/paths'
+import { WORKSPACES_ENABLED, browserWorkspaceId, workspaceHref } from '@/lib/workspaces/paths'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useInvalidationChannel, type InvalidationEvent, type InvalidationType } from '@/lib/sync/invalidation-channel'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { streamsEnabled } from '@/lib/sync/dev-stream-gate'
 import { Button, Input, Pill, TokenChip } from '@/design-system/primitives'
-import { Banner, EmptyState, Menu, MetricStrip, ToastProvider, type Metric } from '@/design-system/components'
+import { Banner, EmptyState, Menu, MetricStrip, ToastProvider, type MenuItemDef, type Metric } from '@/design-system/components'
 import { FilterBar, GridToolbar, PageHeader, PreferencesModal, type FilterDimension, type PreferencesValue } from '@/design-system/patterns'
 import type { PreferencesColumnSpec } from '@/design-system/patterns/PreferencesModal'
 import {
+  AG_AUTO_COL,
   GRID_DENSITIES,
   GridDensityProvider,
   GridDensityToggle,
@@ -60,6 +66,7 @@ import {
   useGridState,
   type GridApi,
   type GridReadyEvent,
+  type GridState,
   type GridStateKey,
   type PrefsBridgeOptions,
 } from '@/design-system/grid'
@@ -69,7 +76,7 @@ import { TranslateDialog, useCatalogLanguages } from '@/app/products/next/Transl
 import { DEFAULT_DENSITY, type DensityMode } from '@/app/products/next/density'
 import { ReadinessFixDialog } from './FixDialog'
 import styles from './readiness.module.css'
-import { READINESS_COLUMN_SPECS, ReadinessFamilyFooter, readinessColumns, readinessTreeColumn, type ReadinessGridContext } from './readinessColumns'
+import { ReadinessFamilyFooter, readinessColumns, readinessTreeColumn, type ReadinessGridContext } from './readinessColumns'
 import { createReadinessDatasource, type ReadinessTopLevel } from './readinessDatasource'
 import { addToPlan, EMPTY_PLAN, familiesToRefresh, LIVE_DEBOUNCE_MS, LIVE_INTERVAL_MS, mayRefreshAgain, READINESS_EVENT, type RefreshPlan } from './readinessLive'
 import {
@@ -78,6 +85,7 @@ import {
   READINESS_PAGE_SIZES,
   activeFilterCount,
   apiFilterParams,
+  exportHref,
   familyPageHref,
   isPageSize,
   notFoundWords,
@@ -101,6 +109,26 @@ import { channelLabel, destinationLookup, orderedChips, plural } from './marketC
 import { marketsColumnState, marketsFill, marketsFillForWindow, sizingForWidth } from './marketsWidth'
 import { relativeTime } from './relativeTime'
 import { hasLiveColumn, LIVE_COLUMN, orderWithLiveAfterMarkets, pageHasLive } from './liveMarks'
+import {
+  FILTER_COLUMNS,
+  LIVE_COLUMN_ORDER,
+  SORT_OF_COLUMN,
+  destinationColumnsReady,
+  filtersFromModel,
+  gridStateToApply,
+  initialColumnIds,
+  initialGridState,
+  listingChips,
+  listingColumnsFor,
+  listingFacts,
+  pageScopeOf,
+  readinessColumnSpecs,
+  requestQuery,
+  sortFromModel,
+  sortableColumns,
+  type PageScope,
+  type SortEntry,
+} from './listingColumns'
 import {
   CHANNEL_STATE_OPTIONS,
   LIVE_TILE_HINT,
@@ -142,15 +170,18 @@ const NO_CHOICES: number[] = []
 const NO_SORT_OPTIONS: Array<{ value: string; label: string }> = []
 const REFRESH_ALL: RefreshPlan = { all: true, roots: new Set() }
 
-/** The Customise dialog's columns, its bridge to AG and its defaults. On the channel is one only with live data. */
+/**
+ * The Customise dialog's columns, its bridge to AG and its defaults. On the channel is one only with live data; the
+ * per-listing columns (step 4) only on a store or market page with live data, hidden at first on a store page.
+ */
 interface ColumnSetup { bridge: PrefsBridgeOptions; specs: PreferencesColumnSpec[]; defaults: PreferencesValue }
-function columnSetup(live: boolean): ColumnSetup {
-  const columns = READINESS_COLUMN_SPECS.filter((c) => live || c.key !== LIVE_COLUMN)
+function columnSetup(live: boolean, scope: PageScope = 'all', currencies: readonly string[] = [], channel: string | null = null): ColumnSetup {
+  const columns = readinessColumnSpecs(scope, { live, listingColumns: listingColumnsFor(scope, { live, currencies }), channel })
   return {
-    bridge: { columns: columns.map((c) => ({ key: c.key, locked: 'locked' in c && c.locked })), treeColumnKey: 'product' },
-    specs: columns.map((c) => ({ key: c.key, label: c.label, ...('locked' in c && c.locked ? { locked: true, uncounted: true } : {}) })),
+    bridge: { columns: columns.map((c) => ({ key: c.key, locked: !!c.locked })), treeColumnKey: 'product' },
+    specs: columns.map((c) => ({ key: c.key, label: c.label, ...(c.locked ? { locked: true, uncounted: true } : {}) })),
     defaults: {
-      visibleColumns: columns.map((c) => c.key),
+      visibleColumns: columns.filter((c) => c.shown).map((c) => c.key),
       lockedColumns: [],
       stickyFirstColumn: true,
       stickyLastColumn: true,
@@ -169,7 +200,8 @@ const isDensity = (value: unknown): value is DensityMode => (GRID_DENSITIES as r
 interface ReadinessOptions {
   families: Array<{ id: string; code?: string | null; label: string }>
   accounts: Array<{ id: string; channelType: string; marketplace?: string | null; displayName: string }>
-  markets: Array<{ channel: string; code: string; name: string }>
+  /** `currency`: step 4 (a store page offers Price only when its markets share one); absent from an older API. */
+  markets: Array<{ channel: string; code: string; name: string; currency?: string | null }>
 }
 
 /** What a saved view keeps beside the grid's own column state. */
@@ -192,6 +224,18 @@ interface FixTarget {
 function withCurrent(options: Array<{ value: string; label: string }>, value: string): Array<{ value: string; label: string }> {
   return !value || options.some((o) => o.value === value) ? options : [...options, { value, label: value }]
 }
+
+/** What a new query is, for the purge (`signature`): what the datasource would send, and the family page and page size. */
+const signatureOf = (q: ReadinessPageQuery) => JSON.stringify({ filters: apiFilterParams(q), parent: q.parent, pageSize: q.pageSize })
+
+/** AG's sort, as a list in its order. */
+function sortModelOfGrid(api: GridApi<ReadinessGridRow>): SortEntry[] {
+  return api.getColumnState().filter((c) => c.sort).sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0))
+    .map((c) => ({ colId: c.colId, sort: c.sort === 'desc' ? 'desc' : 'asc' }))
+}
+
+/** A live sort reads one destination: elsewhere (a saved view, an older link) the page keeps its default order. */
+const isDestinationSort = (sort: string) => (READINESS_DESTINATION_SORTS as readonly string[]).includes(sort)
 
 /** The crumbs above the title (the DS header's eyebrow, as on Publish history). */
 function ScopeCrumbs({ crumbs }: { crumbs: Array<{ label: string; href: string }> }) {
@@ -274,10 +318,19 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       setQuery((q) => ({ ...withViewFilters(q, page.filters), ...(isPageSize(page.pageSize) ? { pageSize: page.pageSize } : {}) }))
     },
   })
-  // A saved layout remembers Markets' `flex`; a phone reads it without (see `marketsWidth.ts`).
-  const [initialState] = useState(() => sizingForWidth(gridViews.initialState, marketsFillForWindow()))
+  const scope = pageScopeOf(lock)
   /** The last visit had live data (its layout has the On the channel column): start with the column, as it was left. */
   const [liveAtMount] = useState(() => hasLiveColumn(gridViews.initialState))
+  // A saved layout remembers Markets' `flex`; a phone reads it without (see `marketsWidth.ts`). Step 4: the address's
+  // order and column filters, for the columns the grid starts with (a column that arrives later gets them from the
+  // effect that puts the address into AG, below).
+  const [initialState] = useState(() => {
+    const sized = sizingForWidth(gridViews.initialState, marketsFillForWindow())
+    const url = typeof window !== 'undefined' ? parseReadinessQuery(window.location.search, lock) : EMPTY_READINESS_QUERY
+    const owned = [...initialColumnIds(listingColumnsFor(scope, { live: hasLiveColumn(gridViews.initialState), currencies: [] }))]
+      .filter((id) => (SORT_OF_COLUMN[id] && !(isDestinationSort(SORT_OF_COLUMN[id]) && scope !== 'market')) || (scope === 'market' && (FILTER_COLUMNS as readonly string[]).includes(id)))
+    return initialGridState(sized, url, new Set(owned)) as GridState | undefined
+  })
   /** What the latest answer says, for the cells (set before its rows draw). */
   const liveRef = useRef(liveAtMount)
 
@@ -295,8 +348,23 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // ── The filter lists (the store's currencies decide the Price column on a store page) ──
+  const [options, setOptions] = useState<ReadinessOptions | null>(null)
+  const [optionsError, setOptionsError] = useState('')
+  useEffect(() => {
+    const controller = new AbortController()
+    void transferApi<ReadinessOptions>('catalog-transfer/readiness/options', undefined, controller.signal)
+      .then(setOptions)
+      .catch((error: Error) => { if (!controller.signal.aborted) setOptionsError(error.message) })
+    return () => controller.abort()
+  }, [])
+
   // ── The grid ──────────────────────────────────────────────────
   const [gridApi, setGridApi] = useState<GridApi<ReadinessGridRow> | null>(null)
+  /** Step 4: the columns whose sort or filter AG owns now (they exist, and may sort or filter here). */
+  const ownedRef = useRef<ReadonlySet<string>>(new Set())
+  /** Step 4: the page names one destination (the live sorts may run). */
+  const destinationReadyRef = useRef(false)
   const gridApiRef = useRef<GridApi<ReadinessGridRow> | null>(null)
   const [pager, setPager] = useState<{ page: number; pageCount: number }>({ page: 1, pageCount: 1 })
 
@@ -315,7 +383,11 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   const datasource = useMemo(
     () =>
       createReadinessDatasource({
-        getQuery: () => queryRef.current ?? EMPTY_READINESS_QUERY,
+        // Step 4: this request's own sort and column filters (AG's) where AG owns them; a live sort only on one destination.
+        getQuery: (grid) => {
+          const next = requestQuery(queryRef.current ?? EMPTY_READINESS_QUERY, { ...grid, columns: ownedRef.current })
+          return next.sort && isDestinationSort(next.sort) && !destinationReadyRef.current ? { ...next, sort: '', dir: 'asc' } : next
+        },
         onRequest: () => setUpdating(true),
         onTopLevel: (next) => {
           liveRef.current = pageHasLive(next.page)
@@ -359,9 +431,12 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       familyHref: (rootId) => familyPageHref(queryRef.current ?? EMPTY_READINESS_QUERY, rootId),
       flat: () => !!queryRef.current?.parent,
       liveShown: () => liveRef.current,
+      // Step 4: the row's main listings on this store and market (and the store chosen in Filters).
+      listingFactsOf: (row) => listingFacts(listingChips(row.chips, lookupRef.current, { lock, accountId: queryRef.current?.accountId })),
+      pageChannel: () => lock?.channel ?? null,
       now: () => Date.now(),
     }),
-    [],
+    [lock],
   )
   /** Markets takes the free width only when there is some (`marketsWidth.ts`). The window's width decides
    *  before the grid's first layout (AG must never start with a flex column it cannot place); the card's width after. */
@@ -377,7 +452,22 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   }, [cardShown])
   // Live data, as the latest answer says; until the first answer, as the last visit left it.
   const liveShown = top ? pageHasLive(top.page) : liveAtMount
-  const columnDefs = useMemo(() => readinessColumns(cellContext, { fill, live: liveShown }), [cellContext, fill, liveShown])
+  // Step 4: the per-listing columns (a store or market page with live data), what sorts and what filters.
+  const currencies = useMemo(() => (options?.markets ?? []).filter((m) => lock && m.channel === lock.channel).map((m) => m.currency ?? ''), [options, lock])
+  const listingCols = useMemo(() => listingColumnsFor(scope, { live: liveShown, currencies }), [scope, liveShown, currencies])
+  const destinationReady = destinationColumnsReady(scope, lock, query?.accountId ?? '', families?.destinations ?? [...knownRef.current.values()])
+  const sortable = useMemo(() => sortableColumns(destinationReady), [destinationReady])
+  const filterable = liveShown && destinationReady
+  const columnDefs = useMemo(
+    () => readinessColumns(cellContext, { fill, live: liveShown, scope, listingColumns: listingCols, sortable, filterable, channel: lock?.channel ?? null }),
+    [cellContext, fill, liveShown, scope, listingCols, sortable, filterable, lock],
+  )
+  const ownedColumns = useMemo(() => {
+    const ids = [AG_AUTO_COL, ...columnDefs.flatMap((c) => ('colId' in c && c.colId ? [c.colId] : []))]
+    return new Set(ids.filter((id) => sortable.has(id) || (filterable && (FILTER_COLUMNS as readonly string[]).includes(id))))
+  }, [columnDefs, sortable, filterable])
+  ownedRef.current = ownedColumns
+  destinationReadyRef.current = destinationReady
   // On the channel arrives with the first answer that has live data, and AG puts a new column last: it goes after
   // Markets, once. A column the grid started with sits where the person left it.
   const livePlacedRef = useRef(liveAtMount)
@@ -389,7 +479,7 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       const ids = gridApi.getColumnState().map((c) => c.colId)
       if (!ids.includes(LIVE_COLUMN)) return
       livePlacedRef.current = true
-      const order = orderWithLiveAfterMarkets(ids)
+      const order = orderWithLiveAfterMarkets(ids, LIVE_COLUMN_ORDER)
       if (order) gridApi.applyColumnState({ state: order.map((colId) => ({ colId })), applyOrder: true })
     }
     place()
@@ -400,14 +490,29 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   useEffect(() => {
     if (gridApi && !gridApi.isDestroyed()) gridApi.applyColumnState({ state: marketsColumnState(fill) })
   }, [gridApi, fill])
-  const autoGroupColumnDef = useMemo(() => readinessTreeColumn(), [])
+  // A header click on Product sorts by name (step 4).
+  const autoGroupColumnDef = useMemo(() => readinessTreeColumn({ sortable: true }), [])
 
   /**
    * A NEW QUERY purges and re-asks from page 1. What counts as new is what the datasource would SEND — the filters,
    * the family page, the page size — so the pager moving or a refresh never folds the open families away.
    */
-  const signature = query ? JSON.stringify({ filters: apiFilterParams(query), parent: query.parent, pageSize: query.pageSize }) : ''
+  const signature = query ? signatureOf(query) : ''
   const lastSignature = useRef<string | null>(null)
+  /**
+   * Step 4 — the address's order and column filters, put into AG where AG owns them (a saved view, the Filters bar's
+   * Channel state, a live tile, Clear, a column that just arrived). AG then reads the page again itself, so the purge
+   * below is skipped for that change.
+   */
+  useEffect(() => {
+    if (!gridApi || gridApi.isDestroyed() || !query) return
+    const apply = gridStateToApply(query, { sortModel: sortModelOfGrid(gridApi), filterModel: gridApi.getFilterModel() as GridFilterModel, columns: ownedColumns })
+    if (!apply.sort && !apply.filter) return
+    if (apply.sort) gridApi.applyColumnState({ state: apply.sort.map((e) => ({ colId: e.colId, sort: e.sort })), defaultState: { sort: null } })
+    if (apply.filter) gridApi.setFilterModel(apply.filter)
+    if (lastSignature.current !== null && lastSignature.current !== signatureOf(query)) gridApi.paginationGoToPage(0)
+    lastSignature.current = signatureOf(query)
+  }, [gridApi, query, ownedColumns])
   useEffect(() => {
     if (!gridApi || !signature) return
     if (lastSignature.current === signature) return
@@ -488,15 +593,6 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   }, [refreshGrid])
 
   // ── Filters ───────────────────────────────────────────────────
-  const [options, setOptions] = useState<ReadinessOptions | null>(null)
-  const [optionsError, setOptionsError] = useState('')
-  useEffect(() => {
-    const controller = new AbortController()
-    void transferApi<ReadinessOptions>('catalog-transfer/readiness/options', undefined, controller.signal)
-      .then(setOptions)
-      .catch((error: Error) => { if (!controller.signal.aborted) setOptionsError(error.message) })
-    return () => controller.abort()
-  }, [])
   const languages = useCatalogLanguages()
 
   const filterDimensions = useMemo<FilterDimension[]>(() => {
@@ -586,11 +682,35 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   }, [])
   const onPage = useCallback((n: number) => gridApiRef.current?.paginationGoToPage(n - 1), [])
   const onPageSize = useCallback((n: number) => { if (isPageSize(n)) setQuery((q) => ({ ...q, pageSize: n, page: 1 })) }, [setQuery])
+  /**
+   * Step 4 — a header click or a column filter: AG has already started the read with it (`requestQuery`), so the
+   * address only mirrors it (no purge), from page 1.
+   */
+  const mirrorGrid = useCallback((patch: (q: ReadinessPageQuery) => Partial<ReadinessPageQuery>) => {
+    initialPageRef.current = null
+    setQueryState((prev) => {
+      if (!prev) return prev
+      const next = withLock({ ...prev, ...patch(prev) })
+      if (signatureOf(next) === signatureOf(prev)) return prev
+      lastSignature.current = signatureOf(next)
+      return { ...next, page: 1 }
+    })
+  }, [])
+  const onSortChanged = useCallback((e: { api: GridApi<ReadinessGridRow> }) => {
+    const model = sortModelOfGrid(e.api)
+    mirrorGrid(() => sortFromModel(model))
+    if (!e.api.isDestroyed()) e.api.paginationGoToPage(0)
+  }, [mirrorGrid])
+  const onFilterChanged = useCallback((e: { api: GridApi<ReadinessGridRow> }) => {
+    const model = e.api.getFilterModel() as GridFilterModel
+    mirrorGrid((q) => filtersFromModel(model, ownedRef.current, q))
+    if (!e.api.isDestroyed()) e.api.paginationGoToPage(0)
+  }, [mirrorGrid])
 
   // ── Customise: the DS dialog over AG's column state ───────────
-  const columns = useMemo(() => columnSetup(liveShown), [liveShown])
+  const columns = useMemo(() => columnSetup(liveShown, scope, currencies, lock?.channel ?? null), [liveShown, scope, currencies, lock])
   const [prefsOpen, setPrefsOpen] = useState(false)
-  const [prefs, setPrefs] = useState<PreferencesValue>(() => columnSetup(liveAtMount).defaults)
+  const [prefs, setPrefs] = useState<PreferencesValue>(() => columnSetup(liveAtMount, scope, [], lock?.channel ?? null).defaults)
   const openCustomise = useCallback(() => {
     const api = gridApiRef.current
     if (!api || api.isDestroyed()) return
@@ -658,6 +778,27 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   })
   const suppressed = amazon ? suppressedListings(amazon.activeSuppressions) : null
 
+  // ── Export ▾ (step 4): a plain download of the result in view, with the page's filters and order ──
+  const exportItems = useMemo<MenuItemDef[]>(() => {
+    if (!query) return []
+    const inView = families ? listingsInView(families.stats, query.state) : null
+    const held = query.parent ? 'Export the list of families: one family’s own page is not a filter the export reads.' : !families ? 'Loading…' : null
+    const ordered = query.sort && isDestinationSort(query.sort) && !destinationReady ? { ...query, sort: '' as const, dir: 'asc' as const } : query
+    const workspaceId = WORKSPACES_ENABLED ? browserWorkspaceId() : null
+    const item = (id: string, label: string, format: 'csv' | 'xlsx', level: 'listing' | 'family', rows: number | null, note: string): MenuItemDef => {
+      const over = rows !== null && rows > READINESS_EXPORT_MAX_ROWS
+      const reason = held ?? (over ? `${plural(rows!, 'row')}: at most ${READINESS_EXPORT_MAX_ROWS.toLocaleString('en')} at once. Narrow the filters first.` : null)
+      return reason ? { id, label, disabled: true, description: reason } : { id, label, description: note, href: exportHref(backendUrl, ordered, format, level, workspaceId) }
+    }
+    const listings = inView === null ? 'the listings in view' : `the ${plural(inView, 'listing')} in view`
+    return [
+      item('csv', `CSV of ${listings}`, 'csv', 'listing', inView, 'One row per listing'),
+      item('xlsx', `Excel of ${listings}`, 'xlsx', 'listing', inView, 'One row per listing'),
+      { id: 'families', separator: true },
+      item('csv-families', 'CSV, one row per family', 'csv', 'family', families?.total ?? null, scope === 'market' ? 'With its price, quantity and status here' : 'Readiness only: values across markets are not added up'),
+      item('xlsx-families', 'Excel, one row per family', 'xlsx', 'family', families?.total ?? null, scope === 'market' ? 'With its price, quantity and status here' : 'Readiness only: values across markets are not added up'),
+    ]
+  }, [query, families, destinationReady, backendUrl, scope])
   // ── Live layer step 7: Products | Problems ────────────────────
   const [problemsPage, setProblemsPage] = useState<ReadinessProblemsPage | null>(null)
   const problemWords = useProblemWords(query)
@@ -722,6 +863,12 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
                 <Archive size={13} /> {lock ? `Legacy ${storeWord(lock.channel)} listings` : 'Legacy listings'}
               </Link>
             </Button>
+            <Menu
+              align="right"
+              label={<><Download size={13} aria-hidden /> Export <ChevronDown size={13} aria-hidden /></>}
+              items={exportItems}
+              triggerProps={{ className: 'nds-btn sm' }}
+            />
             {lock?.channel === 'EBAY' && (
               <Menu
                 align="right"
@@ -877,6 +1024,10 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
                 paginationPageSizeSelector={false}
                 suppressPaginationPanel
                 onPaginationChanged={onPaginationChanged}
+                onSortChanged={onSortChanged}
+                onFilterChanged={onFilterChanged}
+                // The server sorts by one column (step 4): a shift-click replaces the sort, it does not add one.
+                suppressMultiSort
                 rowModelType="serverSide"
                 serverSideDatasource={datasource}
                 // One AG block is one API page (50 / 100 / 200).

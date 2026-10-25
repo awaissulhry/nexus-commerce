@@ -155,6 +155,45 @@
   color: var(--nds-danger-text);
 }
 
+/* ── The per-listing columns (step 4): a value with its small mark ("Pinned", "20 var."), the channel id as a link ── */
+.listingValue {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--nds-space-2) var(--nds-space-4);
+  min-width: 0;
+  white-space: nowrap;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+}
+.listingAside {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+.listingId,
+.listingLink {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-size: var(--nds-font-size-sm);
+}
+.listingId { color: var(--nds-text-2); }
+.listingLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--nds-text-link);
+  text-decoration: none;
+}
+.listingLink:hover { text-decoration: underline; }
+.listingLink:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
+  border-radius: var(--nds-radius-sm);
+}
+
 /* ── Checked: the age of the check; "Checking…" above it while Nexus rebuilds ── */
 .checked {
   display: flex;

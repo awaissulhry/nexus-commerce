@@ -46,7 +46,8 @@ export async function catalogTransferLanguages() {
 export async function catalogReadinessOptions() {
   const [options, markets, footprint] = await Promise.all([
     catalogDestinationOptions(),
-    prisma.marketplace.findMany({ where: { isActive: true }, orderBy: [{ channel: 'asc' }, { code: 'asc' }], select: { channel: true, code: true, name: true } }),
+    // `currency`: the Listings store page offers its Price column only when the store's markets share one (step 4).
+    prisma.marketplace.findMany({ where: { isActive: true }, orderBy: [{ channel: 'asc' }, { code: 'asc' }], select: { channel: true, code: true, name: true, currency: true } }),
     channelFootprint(),
   ])
   const served = new Set(footprint.channels.flatMap(c => c.markets.map(code => `${c.channel}:${code}`)))

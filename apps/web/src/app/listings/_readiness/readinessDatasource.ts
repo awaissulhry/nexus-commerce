@@ -8,19 +8,30 @@
  * FAMILY PAGE `?parent=<rootId>`: the members endpoint IS the top level, flat, paged with `limit` + `offset`.
  *
  * Stateless apart from a request counter: a refresh is `api.refreshServerSide(...)` and AG re-asks.
+ *
+ * Step 4: a header click (the server's order) and a column filter reach the request through AG's own `sortModel` and
+ * `filterModel` (`listingColumns.ts` `requestQuery`): AG starts the read before the page hears of the click.
  */
 import type { ReadinessFamiliesPage, ReadinessMembersPage } from '@nexus/shared/listing-readiness'
+import type { GridFilterModel } from '@nexus/shared/products-grid'
 import type { IServerSideDatasource, IServerSideGetRowsParams } from '@/design-system/grid'
 
 import { transferApi } from '@/app/products/catalog-transfer/transferApi'
 import { familiesParams, membersParams, MEMBER_PREVIEW_LIMIT, pageOfBlock, type ReadinessPageQuery } from './readinessQuery'
 import { familyPreview, type ReadinessGridRow } from './readinessRows'
+import type { SortEntry } from './listingColumns'
 
 export type ReadinessTopLevel = { kind: 'families'; page: ReadinessFamiliesPage } | { kind: 'members'; page: ReadinessMembersPage }
 
+/** The grid's sort and filters as one request carries them. */
+export interface ReadinessGridModels { sortModel: readonly SortEntry[]; filterModel: GridFilterModel }
+
 export interface ReadinessDatasourceOptions {
-  /** Read at request time, so a filter change followed by a refresh sends the new filters. */
-  getQuery: () => ReadinessPageQuery
+  /**
+   * Read at request time, so a filter change followed by a refresh sends the new filters. `grid`: this request's own
+   * sort and filters (AG's), which the page merges in where their columns exist.
+   */
+  getQuery: (grid: ReadinessGridModels) => ReadinessPageQuery
   /** A top-level read started (the live pill says "Updating…"). */
   onRequest?: () => void
   /** The latest top-level answer: the header, the tiles, the toolbar count and the chip labels read it. */
@@ -37,7 +48,10 @@ export function createReadinessDatasource({ getQuery, onRequest, onTopLevel, onE
   return {
     getRows: async (params: IServerSideGetRowsParams<ReadinessGridRow>) => {
       const { request } = params
-      const query = getQuery()
+      const query = getQuery({
+        sortModel: (request.sortModel ?? []).map((e) => ({ colId: e.colId, sort: e.sort === 'desc' ? 'desc' : 'asc' })),
+        filterModel: (request.filterModel ?? {}) as GridFilterModel,
+      })
       const groupKeys = request.groupKeys ?? []
       const isRoot = groupKeys.length === 0
       const version = isRoot ? ++rootRequest : null

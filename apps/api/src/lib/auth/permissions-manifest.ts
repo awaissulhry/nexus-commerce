@@ -611,6 +611,8 @@ export const ENTRIES: Entry[] = [
   P(F.productsView, (m, p) => m === 'GET' && p === '/api/catalog-transfer/readiness/problems'),
   P(F.productsView, (m, p) => m === 'GET' && /^\/api\/catalog-transfer\/products\/[^/]+\/options$/.test(p)),
   P(F.productsExport, (_m, p) => p === '/api/catalog-transfer/export' || /^\/api\/catalog-transfer\/products\/[^/]+\/export$/.test(p)),
+  // The Listings page's export (live layer step 4): before the catch-all below, which would make it an import.
+  P(F.productsExport, (m, p) => m === 'GET' && p === '/api/catalog-transfer/readiness/export'),
   // PSIE — the product sheet's export; its import routes fall under the catalog-transfer prefix below.
   P(F.productsExport, (m, p) => m === 'POST' && /^\/api\/catalog-transfer\/sheet\/products\/[^/]+\/export$/.test(p)),
   P(F.productsImport, pfx('/api/catalog-transfer')),

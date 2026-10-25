@@ -26,7 +26,7 @@ import { familySellingState, type ListingDeletion, type SellingState, type Selli
 import type {
   ReadinessChannelListing, ReadinessChannelMessage, ReadinessChannelSection, ReadinessChip, ReadinessDestination, ReadinessDiffer,
   ReadinessFamiliesPage, ReadinessLive, ReadinessLiveCounts, ReadinessLiveFlag, ReadinessLiveState, ReadinessLiveSummary, ReadinessMembersPage,
-  ReadinessOutOfSync, ReadinessScopeState, ReadinessSuppression, ReadinessSyncAttempt,
+  ReadinessOutOfSync, ReadinessPushState, ReadinessPushSummary, ReadinessScopeState, ReadinessSuppression, ReadinessSyncAttempt,
 } from '@nexus/shared/listing-readiness'
 import { listingUrlFor } from '@nexus/shared/listing-url'
 import prisma from '../../db.js'
@@ -96,6 +96,8 @@ export interface LiveListingRow extends SellingStateListing {
   quantity: number | null
   followMasterQuantity: boolean
   quantityOverride: number | null
+  /** Step 4: false = the price is pinned on this listing. Absent from rows built by hand (read as following). */
+  followMasterPrice?: boolean
   syncStatus: string | null
   lastSyncStatus: string | null
   lastSyncError: string | null
@@ -154,6 +156,7 @@ export function liveOf(row: LiveListingRow, read: SellingStateRead, product: Pic
     externalId: row.externalListingId || null, externalParentId: row.externalParentId || null,
     url: listingUrlFor(row.channel, row.marketplace, row.externalListingId || null),
     price: num(row.price), salePrice: num(row.salePrice), currency, quantity: row.quantity ?? null,
+    followsMasterPrice: row.followMasterPrice !== false,
     fulfillment: fba === null ? null : fba ? 'FBA' : 'FBM',
     syncStatus: failed ? 'FAILED' : row.lastSyncStatus || (row.syncStatus && upper(row.syncStatus) !== 'IDLE' ? row.syncStatus : null),
     lastSyncedAt: iso(row.lastSyncedAt), lastSyncError: row.lastSyncError ?? null,
@@ -246,7 +249,7 @@ const LISTING_COLUMNS = Prisma.sql`
     'attributes', CASE WHEN jsonb_typeof(l."platformAttributes"->'attributes') = 'object'
       THEN jsonb_strip_nulls(jsonb_build_object('fulfillment_availability', l."platformAttributes"->'attributes'->'fulfillment_availability')) END
   )) AS "platformAttributes",
-  l.price::float8 AS price, l."salePrice"::float8 AS "salePrice", l.quantity, l."followMasterQuantity", l."quantityOverride",
+  l.price::float8 AS price, l."salePrice"::float8 AS "salePrice", l.quantity, l."followMasterQuantity", l."quantityOverride", l."followMasterPrice",
   l."syncStatus", l."lastSyncStatus", l."lastSyncError", l."lastSyncedAt", l."syncPaused", l."syncLocked", l."publishAction", l."publishActionAt",
   (SELECT count(*) FROM "ListingIssue" i WHERE i."listingId" = l.id AND i."resolvedAt" IS NULL AND upper(i.severity) = 'ERROR')::int AS errors,
   (SELECT count(*) FROM "ListingIssue" i WHERE i."listingId" = l.id AND i."resolvedAt" IS NULL AND upper(i.severity) = 'WARNING')::int AS warnings,
@@ -352,6 +355,7 @@ export function summarizeLive(rowProductIds: readonly string[], destinationKey: 
   const quantities = counted.filter(id => entries(id).length === 1).map(id => entries(id)[0].quantity).filter((q): q is number => q !== null)
   const fulfilments = new Set(countedEntries.map(e => e.fulfillment).filter(Boolean))
   const synced = allEntries.map(e => e.lastSyncedAt).filter((at): at is string => !!at).sort()
+  const priced = countedEntries.filter(e => e.price !== null)
   return {
     state, listed: counted.filter(id => entries(id).length > 0).length, notListed: counted.filter(id => !entries(id).length).length, byState,
     externalId, url: channel && externalId ? listingUrlFor(channel, market ?? '', externalId) : null,
@@ -365,7 +369,37 @@ export function summarizeLive(rowProductIds: readonly string[], destinationKey: 
     syncFailedCount: allEntries.filter(e => e.outOfSync.includes('push-failed')).length,
     lastSyncedAt: synced[0] ?? null,
     duplicates,
+    // Step 4: the Channel messages, Price and Last push columns.
+    channelWarningCount: allEntries.reduce((n, e) => n + e.channelWarningCount, 0),
+    pricePinnedCount: priced.filter(e => e.followsMasterPrice === false).length,
+    pricedCount: priced.length,
+    push: pushSummary(allEntries),
   }
+}
+
+/* ── the last push (step 4) ───────────────────────────────────────────────────────────────── */
+
+const PUSH_WAITING = new Set(['PENDING', 'QUEUED', 'SYNCING', 'IN_PROGRESS', 'PUBLISHING', 'SUBMITTED'])
+const PUSH_DONE = new Set(['SUCCESS', 'SUCCEEDED', 'SYNCED', 'IN_SYNC', 'ACCEPTED', 'VERIFIED'])
+/** A listing's last push (`ReadinessLive.syncStatus`, as stored) in four words; null = never pushed. */
+export function pushStateOf(syncStatus: string | null | undefined): ReadinessPushState | null {
+  const status = upper(syncStatus)
+  if (!status) return null
+  if (status === 'FAILED') return 'failed'
+  if (PUSH_WAITING.has(status)) return 'waiting'
+  if (PUSH_DONE.has(status)) return 'done'
+  return 'other'
+}
+const PUSH_ORDER: readonly ReadinessPushState[] = ['failed', 'waiting', 'other', 'done']
+/** The listings by their last push; `worst` is the first of failed, waiting, other, done that has one. */
+export function pushSummary(entries: ReadonlyArray<Pick<ReadinessLive, 'syncStatus'>>): ReadinessPushSummary {
+  const out: ReadinessPushSummary = { worst: null, failed: 0, waiting: 0, done: 0, other: 0 }
+  for (const entry of entries) {
+    const state = pushStateOf(entry.syncStatus)
+    if (state) out[state]++
+  }
+  out.worst = PUSH_ORDER.find(state => out[state] > 0) ?? null
+  return out
 }
 
 /* ── the page post-step ───────────────────────────────────────────────────────────────────── */
@@ -419,6 +453,18 @@ const canonMarket = (column: string) => `CASE upper(btrim(COALESCE(${column}, ''
 const PAIR_MATCH = 'c.pid = x.pid AND c.channel = x.channel AND c.cmarket = x.cmarket AND c.account = x.account AND c.alias IS NOT DISTINCT FROM x.alias'
 const FLAG_COLUMN: Record<ReadinessLiveFlag, string> = { error: 'c.error', suppressed: 'c.suppressed', outOfSync: 'c."outOfSync"', lowStock: 'c."lowStock"' }
 
+/** The page's channel / market / account / listing selection over the `ChannelListing` row `l` (`inLiveScope` in SQL). */
+export function listingScopeSql(scope: LiveScope): Prisma.Sql[] {
+  const parts: Prisma.Sql[] = []
+  if (scope.channel) parts.push(scope.channel === 'SHARED' ? Prisma.sql`FALSE` : Prisma.sql`upper(btrim(l.channel)) = ${scope.channel}`)
+  if (scope.marketplace) parts.push(Prisma.sql`${Prisma.raw(canonMarket('l.marketplace'))} = ${liveMarketCode(scope.marketplace)}`)
+  if (scope.accountId) parts.push(Prisma.sql`l."channelConnectionId" = ${scope.accountId}`)
+  if (scope.listingIds) parts.push(Prisma.sql`l.id = ANY(${[...scope.listingIds]}::text[])`)
+  return parts
+}
+/** A market code as the join rule reads it (GB = UK), over a SQL column. */
+export const canonicalMarketSql = (column: string): Prisma.Sql => Prisma.raw(canonMarket(column))
+
 /**
  * Live CTEs over a source CTE `src` of readiness rows (columns `root, pid, channel, market, account, alias`), named
  * with `prefix`:
@@ -430,11 +476,7 @@ const FLAG_COLUMN: Record<ReadinessLiveFlag, string> = { error: 'c.error', suppr
  */
 export function liveCtes(src: string, prefix: string, fill: boolean, view: LiveSqlView): Prisma.Sql {
   const flags = liveFlagsSql()
-  const scope: Prisma.Sql[] = []
-  if (view.scope.channel) scope.push(view.scope.channel === 'SHARED' ? Prisma.sql`FALSE` : Prisma.sql`upper(btrim(l.channel)) = ${view.scope.channel}`)
-  if (view.scope.marketplace) scope.push(Prisma.sql`${Prisma.raw(canonMarket('l.marketplace'))} = ${liveMarketCode(view.scope.marketplace)}`)
-  if (view.scope.accountId) scope.push(Prisma.sql`l."channelConnectionId" = ${view.scope.accountId}`)
-  if (view.scope.listingIds) scope.push(Prisma.sql`l.id = ANY(${[...view.scope.listingIds]}::text[])`)
+  const scope = listingScopeSql(view.scope)
   const destination = `upper(btrim(channel)) AS channel, ${canonMarket('market')} AS cmarket, account, alias`
   const raw = (text: string) => Prisma.raw(text)
   return Prisma.sql`

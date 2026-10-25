@@ -300,6 +300,8 @@ export interface ReadinessLive {
   currency: string | null
   /** The quantity Nexus last sent or read. Amazon EU shares one number across its markets. */
   quantity: number | null
+  /** Step 4: the price follows the master price (false = pinned on this listing). Absent from an older API. */
+  followsMasterPrice?: boolean
   fulfillment: 'FBA' | 'FBM' | null
   /** The last push, as stored (`SYNCED`, `PENDING`, `FAILED`, …). */
   syncStatus: string | null
@@ -339,7 +341,68 @@ export interface ReadinessLiveSummary {
   lastSyncedAt: string | null
   /** More than one listing for one product here (GB and UK twins): reported, never picked. */
   duplicates: number
+  /**
+   * Step 4 — open channel WARNINGS of the listings here (`channelErrorCount` holds the errors): the Channel messages
+   * column says both. Absent from an older API.
+   */
+  channelWarningCount?: number
+  /** Step 4 — the counted listings whose price is pinned on the listing (not following the master price). */
+  pricePinnedCount?: number
+  /** Step 4 — the counted listings with a price (the denominator of `pricePinnedCount`). */
+  pricedCount?: number
+  /** Step 4 — the listings here by their last push (`ReadinessLive.syncStatus`): the worst, and how many of each. */
+  push?: ReadinessPushSummary
 }
+
+/**
+ * A listing's last push in four words (step 4): `failed` (the push failed), `waiting` (sent or queued, no answer yet),
+ * `done` (the channel took it), `other` (a stored status Nexus has no word for). A listing never pushed has none.
+ */
+export type ReadinessPushState = 'failed' | 'waiting' | 'done' | 'other'
+export interface ReadinessPushSummary {
+  /** failed > waiting > other > done; null = no listing here was ever pushed. */
+  worst: ReadinessPushState | null
+  failed: number
+  waiting: number
+  done: number
+  other: number
+}
+
+/* ── Step 4: sorting, column filters, export ─────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The server's row orders (`sort` on the families and members endpoints), each `asc` or `desc`; ties always fall to the
+ * name, then the SKU, then the id (ascending, bytewise):
+ *   state    the readiness state, worst first (the default)
+ *   name     the product name, case-insensitive
+ *   problems the distinct readiness problems (field × destination) plus the open channel errors (live only)
+ *   checked  the oldest check first
+ *   price    the lowest price on the one destination      ┐
+ *   stock    the summed quantity on the one destination    │ live only (`listings.view`), and only when the request
+ *   status   the share of Active listings on it            │ fixes ONE channel and market (and the store when the
+ *   synced   the oldest sync on it                         ┘ market has more than one); else 400
+ * Price, stock, status and synced read the main listing (no alias); a value nobody has sorts last either way.
+ */
+export const READINESS_SORTS = ['state', 'name', 'problems', 'checked', 'price', 'stock', 'status', 'synced'] as const
+export type ReadinessSort = (typeof READINESS_SORTS)[number]
+export type ReadinessSortDir = 'asc' | 'desc'
+/** The sorts that need one destination (and live data). */
+export const READINESS_DESTINATION_SORTS: readonly ReadinessSort[] = ['price', 'stock', 'status', 'synced']
+export const ONE_MARKET_TO_SORT = 'Choose one market to sort by price, stock, status or last sync'
+
+/**
+ * The market page's column filters (step 4), applied on the one destination; ignored elsewhere and without
+ * `listings.view`. Like the live filters they keep or drop whole families: a family stays when one of its main listings
+ * there has a price in range, when its summed quantity is in range, and when one of its channel ids contains the text.
+ */
+export const READINESS_COLUMN_FILTER_KEYS = ['priceMin', 'priceMax', 'qtyMin', 'qtyMax', 'channelId'] as const
+export type ReadinessColumnFilterKey = (typeof READINESS_COLUMN_FILTER_KEYS)[number]
+
+/** GET /api/catalog-transfer/readiness/export — at most this many rows. */
+export const READINESS_EXPORT_MAX_ROWS = 50_000
+export type ReadinessExportFormat = 'csv' | 'xlsx'
+/** `listing`: one row per product × destination; `family`: one row per family (live columns only on one destination). */
+export type ReadinessExportLevel = 'listing' | 'family'
 
 /** The live filter: a listing's state on its channel. `not_listed` = products with no listing on a destination. */
 export type ReadinessLiveState = 'active' | 'paused' | 'draft' | 'not_listed' | 'ended' | 'unknown'

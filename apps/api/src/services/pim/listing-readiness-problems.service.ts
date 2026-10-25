@@ -24,6 +24,7 @@ import { readinessProblemKind } from './listing-readiness.service.js'
 import {
   channelName, describeDestinations, familiesQuery, kindRank, readinessEtag, readinessFilter, resultCtes, storeNamesFor,
   type DestinationInfo, type FreshAnswer,
+  sqlPlanOf, type SqlPlan,
 } from './listing-readiness-families.service.js'
 import {
   canonicalDestinationKey, extraDestination, extraDestinationFacts, liveDestinationKey, liveSqlView, readinessFootprint,
@@ -107,9 +108,9 @@ async function notListedAggregates(base: Prisma.Sql, view: LiveSqlView): Promise
     SELECT ck, count(DISTINCT root)::int AS products, count(*)::int AS listings FROM pr_nl GROUP BY ck`)
 }
 
-async function destinationRows(filter: Prisma.Sql, input: Input, view: LiveSqlView | null): Promise<DestinationInfo[]> {
+async function destinationRows(filter: Prisma.Sql, input: Input, plan: SqlPlan): Promise<DestinationInfo[]> {
   const rows = await prisma.$queryRaw<Array<{ key: string; channel: string | null; market: string | null; accountId: string | null; aliasId: string | null; label: string; languages: string[] }>>(Prisma.sql`
-    WITH ${resultCtes(filter, input, view)}
+    WITH ${resultCtes(filter, input, plan)}
     SELECT ck AS key, channel, market, account AS "accountId", alias AS "aliasId", min(label) AS label, array_agg(DISTINCT lang) AS languages
     FROM f GROUP BY ck, channel, market, account, alias`)
   return rows.map(d => ({ ...d, languages: new Set(d.languages) }))
@@ -199,18 +200,20 @@ async function problemsRead(query: Record<string, unknown>, userId: string | nul
   const input = familiesQuery(asked)
   return inDatabaseReadTransaction(prisma, async () => {
     const filter = await readinessFilter(asked, input.q, userId)
-    const view = await liveSqlView(input, options.live === true)
+    // Step 4's plan: the live view and, on a market page, its one destination (its column filters narrow this view too).
+    const plan = await sqlPlanOf(input, options.live === true)
+    const view = plan.view
     const etag = unchanged
       ? await readinessEtag(filter, new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), { endpoint: 'problems', query: asked, userId }, undefined, !!view)
       : null
     if (etag && unchanged!(etag)) return { etag, page: null }
 
-    const infos = await destinationRows(filter, input, view)
+    const infos = await destinationRows(filter, input, plan)
     const described = describeDestinations(infos, await storeNamesFor(infos))
     const position = new Map(described.map((d, i) => [d.key, i]))
     const byKey = new Map(described.map(d => [d.key, d]))
     const byCanonical = new Map(described.map(d => [canonicalDestinationKey(d.key), d]))
-    const base = Prisma.sql`${resultCtes(filter, input, view)}, ${keptFamiliesCtes(input)}`
+    const base = Prisma.sql`${resultCtes(filter, input, plan)}, ${keptFamiliesCtes(input)}`
 
     const readiness = readinessProblemRows(await readinessAggregates(base, filter), key => byKey.get(key) ?? byCanonical.get(canonicalDestinationKey(key))!)
     let channel: ReadinessProblemRow[] = [], channelTotal = 0, notListed: ReadinessProblemRow[] = []

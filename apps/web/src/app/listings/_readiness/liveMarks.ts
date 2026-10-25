@@ -182,13 +182,14 @@ export function hasLiveColumn(state: { columnOrder?: { orderedColIds?: readonly 
 
 /**
  * A column that arrives after the grid is up goes to the end (AG keeps the order it has); this one belongs right after
- * Markets. The column order with it there, or null when there is nothing to move.
+ * Markets. The column order with it there, or null when there is nothing to move. `liveIds`: the live columns in their
+ * order (step 4 adds the per-listing ones before On the channel); those the grid has go right after Markets.
  */
-export function orderWithLiveAfterMarkets(ids: readonly string[]): string[] | null {
+export function orderWithLiveAfterMarkets(ids: readonly string[], liveIds: readonly string[] = [LIVE_COLUMN]): string[] | null {
   const at = ids.indexOf('markets')
-  const live = ids.indexOf(LIVE_COLUMN)
-  if (at < 0 || live < 0 || live === at + 1) return null
-  const rest = ids.filter((id) => id !== LIVE_COLUMN)
-  rest.splice(rest.indexOf('markets') + 1, 0, LIVE_COLUMN)
+  const present = liveIds.filter((id) => ids.includes(id))
+  if (at < 0 || present.length === 0 || present.every((id, i) => ids[at + 1 + i] === id)) return null
+  const rest = ids.filter((id) => !present.includes(id))
+  rest.splice(rest.indexOf('markets') + 1, 0, ...present)
   return rest
 }
