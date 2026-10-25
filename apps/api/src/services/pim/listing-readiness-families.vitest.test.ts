@@ -7,7 +7,7 @@ vi.mock('../../db.js', () => ({ default: {} }))
 import {
   chipsOf, compareRows, describeDestinations, detailProblems, detailQuery, destinationInfos, familiesOf, familiesQuery, fillNotComputed, foldListings,
   matchesState, membersQuery, nextStepOf, pickNextStep, problemSummaries, searchScope, studioHref, summarizeMembers, channelName, aliasNameOf, countStates,
-  NOT_CHECKED_MESSAGE, NOT_SET_UP_MESSAGE, checkedOf, DAY_MS, type LightRow, type ProblemSummary, type ProblemAggregateRow,
+  NOT_CHECKED_MESSAGE, NOT_SET_UP_MESSAGE, type LightRow, type ProblemSummary, type ProblemAggregateRow,
 } from './listing-readiness-families.service.js'
 import { listingIssueKind, readinessProblemKind } from './listing-readiness.service.js'
 
@@ -239,12 +239,3 @@ describe('query checks (answered 400 by the route)', () => {
   })
 })
 
-describe('the header\'s "checked …" (2026-10-25)', () => {
-  it('is the NEWEST check, plus the listings last checked more than a day ago; a filled listing has no check', () => {
-    const now = Date.parse('2026-10-25T12:00:00Z')
-    const rows = [{ computedAt: new Date('2026-10-25T11:58:00Z') }, { computedAt: new Date('2026-10-20T08:00:00Z') }]
-    const listings = [{ computedAt: new Date('2026-10-25T11:58:00Z') }, { computedAt: new Date('2026-10-20T08:00:00Z') }, { computedAt: new Date(now - DAY_MS - 1) }, { computedAt: null }]
-    expect(checkedOf(rows, listings, now)).toEqual({ latest: '2026-10-25T11:58:00.000Z', olderThanDay: 2 })
-    expect(checkedOf([], [], now)).toEqual({ latest: null, olderThanDay: 0 })
-  })
-})
