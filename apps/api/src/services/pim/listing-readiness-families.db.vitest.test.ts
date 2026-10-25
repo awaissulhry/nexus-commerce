@@ -138,3 +138,25 @@ it.skipIf(process.env.NEXUS_READINESS_PERF !== '1')('a business of production si
     expect(page.rows.length).toBe(Math.min(50, page.total))
   }
 }, 300_000)
+
+it('a listing selection names listings: no "not computed" sibling is made up outside it; the header has the newest check (2026-10-25)', async () => {
+  const listing = (productId: string, accountId: string) => ({ productId, channel: 'AMAZON', marketplace: 'IT', channelConnectionId: accountId, aliasKey: '',
+    channelMarket: 'AMAZON_IT', region: 'IT', externalListingId: `lf-sel-${productId}`, listingStatus: 'DRAFT' as const, isPublished: false, syncPaused: true })
+  const extra = index('lf-v2', AMAZON_IT_2, 'it', 'ready')
+  await scoped(() => prisma.readinessIndex.create({ data: extra as never }))
+  const [a, b] = await scoped(() => Promise.all([prisma.channelListing.create({ data: listing('lf-v1', 'lf-a1') as never }), prisma.channelListing.create({ data: listing('lf-v2', 'lf-a2') as never })]))
+  try {
+    const page = await scoped(() => readinessFamilies({ listingIds: `${a.id},${b.id}` }, null))
+    expect(page.rows.map(r => r.id)).toEqual(['lf-root'])
+    // v1 on the Xavia account, v2 on the Gale account — and nothing invented for v1 on Gale or v2 on Xavia.
+    expect(page.stats).toEqual({ blocked: 1, warn: 0, notComputed: 0, absent: 0, ready: 1, all: 2 })
+    expect(page.checked).toEqual({ latest: computedAt.toISOString(), olderThanDay: 2 })
+    const members = await scoped(() => readinessFamilyMembers('lf-root', { listingIds: `${a.id},${b.id}` }, null))
+    expect(members.rows.flatMap(r => r.chips.map(c => c.state)).filter(s => s === 'notComputed')).toEqual([])
+    // Without the selection the same rows DO make v1 on Gale and v2 on Xavia "not computed": they were never checked there.
+    expect((await scoped(() => readinessFamilies({ channel: 'AMAZON' }, null))).stats.notComputed).toBeGreaterThan(0)
+  } finally {
+    await scoped(() => prisma.channelListing.deleteMany({ where: { id: { in: [a.id, b.id] } } }))
+    await scoped(() => prisma.readinessIndex.deleteMany({ where: { productId: 'lf-v2', coordinateKey: extra.coordinateKey } }))
+  }
+})

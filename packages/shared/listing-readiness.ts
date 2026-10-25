@@ -151,6 +151,11 @@ export interface ReadinessFamiliesPage {
   destinations: ReadinessDestination[]
   /** The oldest check in the result. */
   computedAt: string | null
+  /**
+   * The header's "checked …" (2026-10-25): `latest` = the newest check in the result; `olderThanDay` = listings whose
+   * last check (the oldest of their languages) is more than a day old. A filled ("not computed") listing has no check.
+   */
+  checked: { latest: string | null; olderThanDay: number }
   /** Families waiting for a rebuild. */
   pendingCount: number
   rows: ReadinessFamilyRow[]

@@ -106,13 +106,16 @@ export function destinationLines(destinations: readonly ReadinessDestination[]):
   return linesOf(destinations.map((destination) => ({ destination, text: placeOf(destination).word })), (x) => x.destination)
 }
 
-/** The chip's full sentence for a screen reader and the pointer: "Amazon DE: Blocked, 3 problems, 20 listings". */
+/**
+ * The chip's full sentence for a screen reader and the pointer: "Amazon DE: Blocked, 3 problems, 20 products". On one
+ * destination a listing IS a product there, so the sentence counts products (one unit with the toolbar).
+ */
 export function chipAriaLabel(chip: ReadinessChip, label: string): string {
   const meta = readinessMeta(chip.state, 'scope')
-  const listings = listingTotal(chip.counts)
+  const products = listingTotal(chip.counts)
   const parts = [meta.label]
   if (chip.issueCount > 0) parts.push(plural(chip.issueCount, 'problem'))
-  parts.push(plural(listings, 'listing'))
+  parts.push(plural(products, 'product'))
   const sentence = `${label}: ${parts.join(', ')}`
   return chip.pending ? `${sentence}. Checking again now; this is the last result.` : sentence
 }
@@ -140,7 +143,7 @@ export function fixHeldReason(row: Pick<ReadinessRowBase, 'nextStep' | 'chips' |
   return null
 }
 
-/** The Next step's last line: "Amazon DE · 20 listings". */
+/** The Next step's last line: "Amazon DE · 20 products" (the products on that destination the problem touches). */
 export function nextStepPlace(step: Pick<ReadinessNextStep, 'affected'>, label: string): string {
-  return `${label} · ${plural(step.affected, 'listing')}`
+  return `${label} · ${plural(step.affected, 'product')}`
 }

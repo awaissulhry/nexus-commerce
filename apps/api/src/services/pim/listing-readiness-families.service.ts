@@ -360,10 +360,10 @@ export function pickNextStep(chips: readonly ReadinessChip[], problems: Readonly
   return { chip: [...candidates].sort((a, b) => position(a.destinationKey) - position(b.destinationKey))[0], problem: null }
 }
 
-export const NOT_CHECKED_MESSAGE = 'Not checked yet — Nexus checks it within a few minutes'
+export const NOT_CHECKED_MESSAGE = 'Not computed yet — Nexus checks it within a few minutes'
 export const NOT_SET_UP_MESSAGE = 'Not set up for this market yet'
 const NO_PROBLEM: Record<ReadinessScopeState, { label: string; message: string; kind: ReadinessProblemKind }> = {
-  notComputed: { label: 'Not checked yet', message: NOT_CHECKED_MESSAGE, kind: 'check' },
+  notComputed: { label: 'Not computed', message: NOT_CHECKED_MESSAGE, kind: 'check' },
   absent: { label: 'Not set up', message: NOT_SET_UP_MESSAGE, kind: 'setup' },
   blocked: { label: 'Problems not recorded', message: 'Nexus has not recorded the problems yet — open the product to see them', kind: 'check' },
   warn: { label: 'Problems not recorded', message: 'Nexus has not recorded the problems yet — open the product to see them', kind: 'check' },
@@ -474,6 +474,14 @@ async function rowsOf<T extends { id: string; members: MemberSummary[] }>(rows: 
     computedAt: oldest(chips.map(c => c.computedAt)), pending: chips.some(c => c.pending) }))
 }
 
+export const DAY_MS = 24 * 60 * 60 * 1000
+
+/** The header's "checked …": the newest check, and the listings last checked more than a day ago (filled ones have none). */
+export function checkedOf(rows: ReadonlyArray<{ computedAt: Date }>, listings: ReadonlyArray<Pick<FoldedListing, 'computedAt'>>, now = Date.now()): ReadinessFamiliesPage['checked'] {
+  const latest = rows.reduce<Date | null>((at, r) => !at || r.computedAt > at ? r.computedAt : at, null)
+  return { latest: iso(latest), olderThanDay: listings.filter(l => l.computedAt && now - l.computedAt.getTime() > DAY_MS).length }
+}
+
 /** GET /api/catalog-transfer/readiness/families */
 export async function readinessFamilies(query: Record<string, unknown>, userId: string | null): Promise<ReadinessFamiliesPage> {
   const input = familiesQuery(query)
@@ -486,7 +494,8 @@ export async function readinessFamilies(query: Record<string, unknown>, userId: 
     const destinations = describeDestinations(infos.values(), await storeNamesFor(infos.values()))
     const order = new Map(destinations.map((d, i) => [d.key, i]))
     const families = [...familiesOf(foldListings(rows).values(), id => products.get(id)?.parentId).entries()].map(([rootId, family]) => {
-      fillNotComputed(family)
+      // A listing selection names listings, not destinations: a sibling outside it was not asked about (2026-10-25).
+      if (!input.listingIds) fillNotComputed(family)
       const root = products.get(rootId) ?? { id: rootId, sku: '', name: null, parentId: null, isParent: false }
       const members = summarizeMembers(family, rootId, root.isParent || family.size > 1, id => products.get(id), input.state)
       const listings = members.flatMap(m => m.listings)
@@ -507,7 +516,8 @@ export async function readinessFamilies(query: Record<string, unknown>, userId: 
       page: input.page, pageSize: input.pageSize, total: shown.length, listingCount: all.length,
       productCount: families.reduce((n, f) => n + f.members.length, 0),
       stats: { ...stats, all: all.length }, destinations,
-      computedAt: iso(rows.reduce<Date | null>((at, r) => !at || r.computedAt < at ? r.computedAt : at, null)), pendingCount: families.filter(f => f.pending).length,
+      computedAt: iso(rows.reduce<Date | null>((at, r) => !at || r.computedAt < at ? r.computedAt : at, null)),
+      checked: checkedOf(rows, all), pendingCount: families.filter(f => f.pending).length,
       rows: built.map(({ row, chips, state, nextStep, computedAt, pending }): ReadinessFamilyRow => ({
         id: row.id, sku: row.root.sku, name: row.root.name, imageUrl: faces.get(row.id)?.imageUrl ?? null, photoCount: faces.get(row.id)?.photoCount ?? 0,
         state, chips, nextStep, computedAt, pending, editorHref: productHref(row.id),
@@ -529,7 +539,8 @@ export async function readinessFamilyMembers(rootId: string, query: Record<strin
     const products = await productsOf([input.rootId, ...rows.map(r => r.productId)])
     const infos = destinationInfos(rows)
     const order = new Map(describeDestinations(infos.values(), await storeNamesFor(infos.values())).map((d, i) => [d.key, i]))
-    const family = fillNotComputed(familiesOf(foldListings(rows).values(), () => input.rootId).get(input.rootId) ?? new Map())
+    const folded = familiesOf(foldListings(rows).values(), () => input.rootId).get(input.rootId) ?? new Map()
+    const family = input.listingIds ? folded : fillNotComputed(folded)
     const root = products.get(input.rootId)
     const members = summarizeMembers(family, input.rootId, !!root?.isParent || variantCount > 0, id => products.get(id), input.state).filter(m => m.matches)
     const page = members.slice(input.offset, input.offset + input.limit).map(m => ({ id: m.product.id, members: [m], member: m }))
@@ -593,7 +604,7 @@ export async function readinessDetail(query: Record<string, unknown>, userId: st
     // Members of the family that lack this destination while a sibling has it were not checked there yet.
     const family: FamilyListings = new Map(members.map(m => [m.productId, new Map()]))
     for (const listing of foldListings(rows).values()) family.get(listing.productId)?.set(listing.destinationKey, listing)
-    if (rows.length) fillNotComputed(family)
+    if (rows.length && !input.listingIds) fillNotComputed(family)
     const rootHasVariants = rootId !== asked.id || await prisma.product.count({ where: { parentId: rootId, deletedAt: null } }) > 0
     const ordered = summarizeMembers(family, rootId, !!products.get(rootId)?.isParent || rootHasVariants, id => products.get(id))
       .filter(m => input.family || m.product.id === asked.id)

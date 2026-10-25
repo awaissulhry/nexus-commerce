@@ -33,15 +33,15 @@ describe('chip text', () => {
 
 describe('chip aria text — a full sentence', () => {
   it('state, problems, listings', () => {
-    expect(chipAriaLabel(chip('k', { state: 'blocked', issueCount: 3, counts: counts({ blocked: 12, warn: 8 }) }), 'Amazon DE')).toBe('Amazon DE: Blocked, 3 problems, 20 listings')
+    expect(chipAriaLabel(chip('k', { state: 'blocked', issueCount: 3, counts: counts({ blocked: 12, warn: 8 }) }), 'Amazon DE')).toBe('Amazon DE: Blocked, 3 problems, 20 products')
   })
   it('one of each is singular; no problems says none', () => {
-    expect(chipAriaLabel(chip('k', { state: 'warn', issueCount: 1, counts: counts({ warn: 1 }) }), 'Shopify')).toBe('Shopify: Warnings, 1 problem, 1 listing')
-    expect(chipAriaLabel(chip('k'), 'Shared')).toBe('Shared: Ready, 1 listing')
+    expect(chipAriaLabel(chip('k', { state: 'warn', issueCount: 1, counts: counts({ warn: 1 }) }), 'Shopify')).toBe('Shopify: Warnings, 1 problem, 1 product')
+    expect(chipAriaLabel(chip('k'), 'Shared')).toBe('Shared: Ready, 1 product')
   })
   it('a pending chip says it is checking and that this is the last result', () => {
     expect(chipAriaLabel(chip('k', { state: 'blocked', issueCount: 2, pending: true, counts: counts({ blocked: 1 }) }), 'Amazon IT'))
-      .toBe('Amazon IT: Blocked, 2 problems, 1 listing. Checking again now; this is the last result.')
+      .toBe('Amazon IT: Blocked, 2 problems, 1 product. Checking again now; this is the last result.')
   })
 })
 
@@ -82,8 +82,8 @@ describe('Fix', () => {
     expect(fixHeldReason({ nextStep: step, chips: [chip('r')], state: 'blocked' })).toBeNull()
   })
   it('the next step says where and how many', () => {
-    expect(nextStepPlace(step, 'Amazon DE')).toBe('Amazon DE · 20 listings')
-    expect(nextStepPlace({ affected: 1 }, 'eBay IT')).toBe('eBay IT · 1 listing')
+    expect(nextStepPlace(step, 'Amazon DE')).toBe('Amazon DE · 20 products')
+    expect(nextStepPlace({ affected: 1 }, 'eBay IT')).toBe('eBay IT · 1 product')
   })
 })
 
@@ -111,7 +111,7 @@ describe('chip lines', () => {
   it('keeps the full destination words for the sentence a screen reader hears', () => {
     const [, amazon] = chipLines([chip('s'), chip('a-de', { state: 'blocked', issueCount: 2 })], lookup)
     expect(amazon.items[0].label).toBe('Amazon DE')
-    expect(chipAriaLabel(amazon.items[0].chip, amazon.items[0].label)).toBe('Amazon DE: Blocked, 2 problems, 1 listing')
+    expect(chipAriaLabel(amazon.items[0].chip, amazon.items[0].label)).toBe('Amazon DE: Blocked, 2 problems, 1 product')
   })
   it('has no first line when every destination has a market', () => {
     expect(chipLines([chip('a-it')], lookup).map((l) => l.label)).toEqual(['Amazon'])

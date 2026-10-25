@@ -18,9 +18,9 @@ describe('the Fix window words', () => {
     expect(problemKindLabel('novel' as never)).toBe('novel')
   })
   it('counts listings, singular for one', () => {
-    expect(listingWords(1)).toBe('1 listing')
-    expect(listingWords(20)).toBe('20 listings')
-    expect(listingWords(1240)).toBe('1,240 listings')
+    expect(listingWords(1)).toBe('1 product')
+    expect(listingWords(20)).toBe('20 products')
+    expect(listingWords(1240)).toBe('1,240 products')
   })
   it('says how many listings were left out of the list, and nothing when none were', () => {
     expect(moreWords(50, 80)).toBe('and 30 more')
@@ -89,8 +89,8 @@ describe('the Fix window links', () => {
 describe('the summary’s listings line', () => {
   const c = (over: Partial<Record<'blocked' | 'warn' | 'notComputed' | 'absent' | 'ready', number>>) => ({ blocked: 0, warn: 0, notComputed: 0, absent: 0, ready: 0, ...over })
   it('says "all" when every listing has one state, and lists the states otherwise', () => {
-    expect(stateLine(c({ blocked: 21 }))).toBe('21 listings, all blocked')
-    expect(stateLine(c({ blocked: 18, ready: 3 }))).toBe('21 listings: 18 blocked · 3 ready')
-    expect(stateLine(c({ ready: 1 }))).toBe('1 listing, ready')
+    expect(stateLine(c({ blocked: 21 }))).toBe('21 products, all blocked')
+    expect(stateLine(c({ blocked: 18, ready: 3 }))).toBe('21 products: 18 blocked · 3 ready')
+    expect(stateLine(c({ ready: 1 }))).toBe('1 product, ready')
   })
 })

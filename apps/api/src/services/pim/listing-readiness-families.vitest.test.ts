@@ -7,7 +7,7 @@ vi.mock('../../db.js', () => ({ default: {} }))
 import {
   chipsOf, compareRows, describeDestinations, detailProblems, detailQuery, destinationInfos, familiesOf, familiesQuery, fillNotComputed, foldListings,
   matchesState, membersQuery, nextStepOf, pickNextStep, problemSummaries, searchScope, studioHref, summarizeMembers, channelName, aliasNameOf, countStates,
-  NOT_CHECKED_MESSAGE, NOT_SET_UP_MESSAGE, type LightRow, type ProblemSummary, type ProblemAggregateRow,
+  NOT_CHECKED_MESSAGE, NOT_SET_UP_MESSAGE, checkedOf, DAY_MS, type LightRow, type ProblemSummary, type ProblemAggregateRow,
 } from './listing-readiness-families.service.js'
 import { listingIssueKind, readinessProblemKind } from './listing-readiness.service.js'
 
@@ -155,7 +155,7 @@ describe('chips and the next step', () => {
   it('a worst chip without a recorded problem uses the row note, else plain words, and opens the errors tab', () => {
     const coordinate = () => ({ channel: 'AMAZON', market: 'IT', accountId: 'a1', aliasId: null })
     const notComputed = chipsOf([listing('v1', AMAZON_IT, 'notComputed'), listing('v2', AMAZON_IT, 'notComputed'), listing('v1', SHARED, 'ready')], order)
-    expect(nextStepOf(pickNextStep(notComputed, new Map(), order), coordinate, { productId: 'v1', locale: 'it' })).toEqual({ destinationKey: AMAZON_IT, field: null, label: 'Not checked yet',
+    expect(nextStepOf(pickNextStep(notComputed, new Map(), order), coordinate, { productId: 'v1', locale: 'it' })).toEqual({ destinationKey: AMAZON_IT, field: null, label: 'Not computed',
       message: NOT_CHECKED_MESSAGE, kind: 'check', affected: 2, productId: 'v1', locale: 'it', href: '/products/v1/edit/studio?scope=AMAZON&locale=it&tab=errors&market=IT&account=a1' })
     const absent = chipsOf([listing('v1', AMAZON_IT, 'absent')], order)
     expect(nextStepOf(pickNextStep(absent, new Map(), order), coordinate, { productId: 'v1', locale: 'it' })).toMatchObject({ message: NOT_SET_UP_MESSAGE, kind: 'setup', label: 'Not set up' })
@@ -236,5 +236,15 @@ describe('query checks (answered 400 by the route)', () => {
   })
   it('search: a product matches itself, a matching root brings its family', () => {
     expect(searchScope([{ id: 'root', parentId: null }, { id: 'v9', parentId: 'other' }])).toEqual({ product: { OR: [{ id: { in: ['root', 'v9'] } }, { parentId: { in: ['root'] } }] } })
+  })
+})
+
+describe('the header\'s "checked …" (2026-10-25)', () => {
+  it('is the NEWEST check, plus the listings last checked more than a day ago; a filled listing has no check', () => {
+    const now = Date.parse('2026-10-25T12:00:00Z')
+    const rows = [{ computedAt: new Date('2026-10-25T11:58:00Z') }, { computedAt: new Date('2026-10-20T08:00:00Z') }]
+    const listings = [{ computedAt: new Date('2026-10-25T11:58:00Z') }, { computedAt: new Date('2026-10-20T08:00:00Z') }, { computedAt: new Date(now - DAY_MS - 1) }, { computedAt: null }]
+    expect(checkedOf(rows, listings, now)).toEqual({ latest: '2026-10-25T11:58:00.000Z', olderThanDay: 2 })
+    expect(checkedOf([], [], now)).toEqual({ latest: null, olderThanDay: 0 })
   })
 })
