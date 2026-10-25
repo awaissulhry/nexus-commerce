@@ -34,13 +34,20 @@
  * grid stays mounted off stage meanwhile, so the header, the tiles and the saved views keep reading it.
  * The Listing window (step 5): a chip, Open, or a link `?listing=<listingId>` opens one product or family on one
  * destination (`ListingDialog.tsx`); ▲ / ▼ (J / K) walk the grid's rows in view. It replaced the Fix window.
+ *
+ * Selection and the bulk bar (step 6), like Products: a tick box per row (Space ticks the focused row, Shift-click a
+ * range), the header box ticks this page's rows, and a family row stands for its family. While rows are ticked the
+ * toolbar says which listings an action reaches and offers the bulk actions (`useListingsBulk.tsx`); the destinations
+ * in scope are the page's, narrowed by its Channel, Market and Store filters (`listingsBulk.ts`). A right-click on a row
+ * opens the row's ⋯ menu — on the chip under the pointer — with AG's own copy items after a rule.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { AlertTriangle, Archive, ChevronDown, Download, History, Search, SlidersHorizontal } from 'lucide-react'
 import { READINESS_DESTINATION_SORTS, READINESS_EXPORT_MAX_ROWS, type ReadinessDestination, type ReadinessFamiliesPage } from '@nexus/shared/listing-readiness'
 import type { GridFilterModel } from '@nexus/shared/products-grid'
 
 import Link from '@/lib/workspaces/Link'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { WORKSPACES_ENABLED, browserWorkspaceId, workspaceHref } from '@/lib/workspaces/paths'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useInvalidationChannel, type InvalidationEvent, type InvalidationType } from '@/lib/sync/invalidation-channel'
@@ -59,6 +66,7 @@ import {
   GridPager,
   GridSearchSlot,
   GridViewsMenu,
+  LoadedRowsSelectionHeader,
   NexusGrid,
   columnStateToPrefs,
   gridDensity,
@@ -66,6 +74,9 @@ import {
   prefsToColumnState,
   readinessMeta,
   useGridState,
+  type AgMenuItemDef,
+  type DefaultMenuItem,
+  type GetContextMenuItemsParams,
   type GridApi,
   type GridReadyEvent,
   type GridState,
@@ -77,7 +88,9 @@ import { transferApi } from '@/app/products/catalog-transfer/transferApi'
 import { TranslateDialog, useCatalogLanguages } from '@/app/products/next/TranslateDialog'
 import { DEFAULT_DENSITY, type DensityMode } from '@/app/products/next/density'
 import { ListingDialog } from './ListingDialog'
-import { destinationForRow, navIds, type ListingTab, type ViewRow } from './listingDialogModel'
+import { destinationForRow, navIds, openDestination, tabForChip, type ListingTab, type ViewRow } from './listingDialogModel'
+import { EMPTY_SELECTION, bulkSelection, destinationsInScope, isSelectableRow, menuDestination, publishKeys, rowMenuItems } from './listingsBulk'
+import { useListingsBulk } from './useListingsBulk'
 import styles from './readiness.module.css'
 import { ReadinessFamilyFooter, readinessColumns, readinessTreeColumn, type ReadinessGridContext } from './readinessColumns'
 import { createReadinessDatasource, type ReadinessTopLevel } from './readinessDatasource'
@@ -87,6 +100,7 @@ import {
   EMPTY_READINESS_QUERY,
   READINESS_PAGE_SIZES,
   activeFilterCount,
+  columnFilterCount,
   apiFilterParams,
   exportHref,
   familyPageHref,
@@ -288,6 +302,35 @@ function ebayTools(lock: ReadinessLock): Array<{ id: string; label: string; href
 /** `GET /api/listings/amazon/overview` — the part this page reads: the old Amazon page's suppression list. */
 interface AmazonSuppressions { activeSuppressions: Array<{ listingId: string; listing: { marketplace: string } }> }
 
+/**
+ * The ticked rows, read from the loaded nodes (as Products reads them: under the server-side model a header tick is a
+ * selection STATE, and the loaded nodes answer `isSelected()` correctly). AG's node ids, for a cheap "same as before".
+ */
+function readTicked(api: GridApi<ReadinessGridRow>): { ids: string[]; rows: ReadinessDataRow[] } {
+  const ids: string[] = []
+  const rows: ReadinessDataRow[] = []
+  api.forEachNode((node) => {
+    if (node.data && isSelectableRow(node.data) && !isReadinessFooter(node.data) && node.isSelected()) {
+      ids.push(node.id ?? '')
+      rows.push(node.data)
+    }
+  })
+  return { ids, rows }
+}
+const NO_TICKS: { ids: string[]; rows: ReadinessDataRow[] } = { ids: [], rows: [] }
+
+/** A row-menu item in AG's right-click menu: AG takes plain names; a link opens as the ⋯ menu's would. */
+function agMenuItem(item: MenuItemDef): AgMenuItemDef<ReadinessGridRow> {
+  const href = item.href
+  const action = item.onSelect ?? (href ? () => { window.open(href, item.target === '_blank' ? '_blank' : '_self', 'noopener,noreferrer') } : undefined)
+  return {
+    name: typeof item.label === 'string' ? item.label : item.id,
+    disabled: item.disabled,
+    ...(typeof item.description === 'string' ? { tooltip: item.description } : {}),
+    ...(action ? { action } : {}),
+  }
+}
+
 /* ── The page ───────────────────────────────────────────────────────────────────────────────────────────────────── */
 
 function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
@@ -381,6 +424,24 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   const destinationReadyRef = useRef(false)
   const gridApiRef = useRef<GridApi<ReadinessGridRow> | null>(null)
   const [pager, setPager] = useState<{ page: number; pageCount: number }>({ page: 1, pageCount: 1 })
+  const router = useRouter()
+
+  // ── Selection: the grid owns it, the page reads it (as on Products) ──
+  const [ticked, setTicked] = useState(NO_TICKS)
+  const selection = useMemo(() => bulkSelection(ticked.rows), [ticked.rows])
+  const onSelectionChanged = useCallback((e: { api: GridApi<ReadinessGridRow> }) => {
+    const next = readTicked(e.api)
+    setTicked((prev) => (prev.ids.length === next.ids.length && prev.ids.every((id, i) => id === next.ids[i]) ? { ...prev, rows: next.rows } : next))
+  }, [])
+  // A re-read replaces every row's data: the ticked rows are read again, so the bar acts on what the grid shows.
+  const tickedCount = ticked.ids.length
+  const onStoreRefreshed = useCallback((e: { api: GridApi<ReadinessGridRow> }) => { if (tickedCount > 0) setTicked(readTicked(e.api)) }, [tickedCount])
+  const clearSelection = useCallback(() => {
+    const api = gridApiRef.current
+    if (api && !api.isDestroyed()) api.deselectAll()
+  }, [])
+  /** The row menu (⋯ and right-click), filled in once the bulk bar exists; the grid's context reads it. */
+  const rowMenuRef = useRef<(row: ReadinessDataRow, destinationKey: string | null) => MenuItemDef[]>(() => [])
 
   // ── What the last top-level answer said ───────────────────────
   const [top, setTop] = useState<ReadinessTopLevel | null>(null)
@@ -469,6 +530,7 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       listingFactsOf: (row) => listingFacts(listingChips(row.chips, lookupRef.current, { lock, accountId: queryRef.current?.accountId })),
       pageChannel: () => lock?.channel ?? null,
       now: () => Date.now(),
+      rowMenu: (row, destinationKey) => rowMenuRef.current(row, destinationKey),
     }),
     [lock, rowsInView, targetFor],
   )
@@ -751,6 +813,30 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   const isServerSideGroup = useCallback((d: ReadinessGridRow) => !queryRef.current?.parent && canExpand(d), [])
   const getServerSideGroupKey = useCallback((d: ReadinessGridRow) => d.id, [])
   const getRowId = useCallback((p: { data: ReadinessGridRow; parentKeys?: string[] }) => readinessRowId(p.data, p.parentKeys), [])
+  // Ticking, as on Products: a box per row, the header box ticks this page's rows (never rows not loaded), Space ticks
+  // the focused row and Shift-click a range (AG's own). Not the family footer, not a family's own parent listing.
+  const rowSelection = useMemo<NonNullable<ComponentProps<typeof NexusGrid<ReadinessGridRow>>['rowSelection']>>(
+    () => ({
+      mode: 'multiRow',
+      checkboxes: true,
+      headerCheckbox: false,
+      enableClickSelection: false,
+      isRowSelectable: (node) => isSelectableRow(node.data),
+      hideDisabledCheckboxes: true,
+    }),
+    [],
+  )
+  const selectionColumnDef = useMemo(() => ({ width: gridGeometry.selectColW, maxWidth: gridGeometry.selectColW, resizable: false, headerComponent: LoadedRowsSelectionHeader }), [])
+  /** Right-click a row: its ⋯ menu (on the chip under the pointer), then AG's own items (copy, export) below a rule. */
+  const getContextMenuItems = useCallback((p: GetContextMenuItemsParams<ReadinessGridRow>) => {
+    const defaults = (p.defaultItems ?? []) as (DefaultMenuItem | AgMenuItemDef<ReadinessGridRow>)[]
+    const data = p.node?.data
+    if (!data || isReadinessFooter(data)) return defaults
+    const target = (p.event as { target?: EventTarget | null } | null | undefined)?.target
+    const chip = target instanceof Element ? target.closest('[data-destination-key]')?.getAttribute('data-destination-key') ?? null : null
+    const own = rowMenuRef.current(data, chip).map(agMenuItem)
+    return defaults.length ? [...own, 'separator' as DefaultMenuItem, ...defaults] : own
+  }, [])
   const bindViews = gridViews.bind
   const onGridReady = useCallback((e: GridReadyEvent<ReadinessGridRow>) => {
     gridApiRef.current = e.api
@@ -852,6 +938,39 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   const [translateOpen, setTranslateOpen] = useState(false)
   const translate = query ? translateScope(query) : null
   const translateHeld = !translate ? 'Loading…' : !translate.ok ? translate.reason : families && families.total === 0 ? 'No products match these filters.' : null
+
+  // ── The bulk bar (step 6): the destinations in scope, the bar, the row menu ──
+  /** The page's destinations. One family's page reads members, which carry keys only: those seen this visit and the ticked rows' chips. */
+  const destinationsShown = useMemo(() => {
+    if (!query?.parent) return families?.destinations ?? []
+    const seen = new Map(knownRef.current)
+    for (const row of ticked.rows) for (const chip of row.chips) if (!seen.has(chip.destinationKey)) seen.set(chip.destinationKey, lookupRef.current(chip.destinationKey))
+    return [...seen.values()]
+  }, [query?.parent, families, ticked.rows])
+  const bulkScope = useMemo(
+    () => destinationsInScope(destinationsShown, { channel: query?.channel, marketplace: query?.marketplace, accountId: query?.accountId }),
+    [destinationsShown, query?.channel, query?.marketplace, query?.accountId],
+  )
+  // The bar is the Products view's: in the Problems view (step 7) it stands aside and asks nothing (the ticks stay).
+  const barSelection = query?.view === 'problems' && !query.parent ? EMPTY_SELECTION : selection
+  const bulk = useListingsBulk({
+    selection: barSelection, scope: bulkScope, lock, language: query?.language ?? '', clear: clearSelection,
+    narrowed: { columnFilters: query ? columnFilterCount(query) : 0, problem: !!query?.problem },
+  })
+  const copyText = useCallback((text: string, what: string) => {
+    const failed = (error: unknown) => toast(`Could not copy the ${what}: ${error instanceof Error ? error.message : String(error)}`, 'danger')
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) { failed(new Error('the browser does not allow it here')); return }
+    navigator.clipboard.writeText(text).then(() => toast(`Copied the ${what}: ${text}`, 'success'), failed)
+  }, [toast])
+  const publishRow = bulk.publish
+  rowMenuRef.current = (row, asked) => rowMenuItems(row, menuDestination(row, asked, openDestination(row)), {
+    destination: (key) => lookupRef.current(key),
+    openListing: (r, key) => cellContext.openListing(r, key, { tab: tabForChip(r.chips.find((c) => c.destinationKey === key)) }),
+    edit: (r) => router.push(r.editorHref),
+    // One row: the Publish window on that product, starting on the chip's destination.
+    publish: (r, key) => publishRow([r.id], 1, key ? publishKeys([lookupRef.current(key)]) : []),
+    copy: copyText,
+  })
 
   // ── Amazon: listings Amazon suppressed, from the old Amazon page — only while the answer has no live data (an older
   //    API, no `listings.view`). With live data the Suppressed tile says it, and this 30-second call is not made. ──
@@ -1047,10 +1166,12 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       {/* One card: toolbar + grid + pager. The grid is as tall as its page of rows and the PAGE scrolls (Products). */}
       <div ref={cardRef} className="nds-gridcard nds-grid-card">
         <GridToolbar
-          count={problemsShown ? <><b>{problemsCount.shown}</b> {problemsCount.unit}</> : count}
+          // The Problems view counts problems; ticked rows (Products only) say what they reach.
+          count={problemsShown ? <><b>{problemsCount.shown}</b> {problemsCount.unit}</> : bulk.count ?? count}
           right={
             <>
-              <GridDensityToggle value={density} onChange={setDensity} />
+              {/* Density steps aside while rows are ticked: the bulk actions need the room (Products). */}
+              {!bulk.actions && <GridDensityToggle value={density} onChange={setDensity} />}
               <Button size="sm" onClick={openCustomise} heldReason={problemsShown ? 'Customise sets the Products columns. Switch to Products first.' : gridApi ? null : 'The grid is still loading.'}>
                 <SlidersHorizontal size={13} /> Customise
               </Button>
@@ -1071,17 +1192,20 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
               options={[{ value: 'products', label: 'Products' }, { value: 'problems', label: 'Problems' }]}
             />
           )}
-          <GridSearchSlot>
-            <Input
-              leadingIcon={<Search size={13} style={{ color: 'var(--nds-text-3)' }} />}
-              // With the live layer the search also finds channel ids, and many SKUs pasted at once.
-              placeholder={liveShown ? 'Search SKU, name, ASIN, Item ID…' : 'Search SKU or name…'}
-              aria-label={liveShown ? 'Search SKU, name, ASIN or Item ID' : 'Search SKU or name'}
-              value={searchDraft}
-              onChange={(e) => { searchDirty.current = true; setSearchDraft(e.target.value) }}
-              style={{ width: '100%' }}
-            />
-          </GridSearchSlot>
+          {/* While rows are ticked the bulk actions take the search box's place (never in the Problems view). */}
+          {bulk.actions ?? (
+            <GridSearchSlot>
+              <Input
+                leadingIcon={<Search size={13} style={{ color: 'var(--nds-text-3)' }} />}
+                // With the live layer the search also finds channel ids, and many SKUs pasted at once.
+                placeholder={liveShown ? 'Search SKU, name, ASIN, Item ID…' : 'Search SKU or name…'}
+                aria-label={liveShown ? 'Search SKU, name, ASIN or Item ID' : 'Search SKU or name'}
+                value={searchDraft}
+                onChange={(e) => { searchDirty.current = true; setSearchDraft(e.target.value) }}
+                style={{ width: '100%' }}
+              />
+            </GridSearchSlot>
+          )}
         </GridToolbar>
 
         {/* The grid, the DS Thumbnail and the cells follow this one density. */}
@@ -1099,6 +1223,7 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
               {/* Live layer step 7: in the Problems view the Products grid stays mounted, off stage. */}
               <div className={problemsShown ? problemsStyles.offstage : undefined} aria-hidden={problemsShown || undefined}>
               <NexusGrid<ReadinessGridRow>
+                getContextMenuItems={getContextMenuItems}
                 domLayout="autoHeight"
                 density={density}
                 rows="media"
@@ -1131,6 +1256,10 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
                 columnDefs={columnDefs}
                 columnDialog={columnDialog}
                 context={cellContext}
+                selectionColumnDef={selectionColumnDef}
+                rowSelection={rowSelection}
+                onSelectionChanged={onSelectionChanged}
+                onStoreRefreshed={onStoreRefreshed}
                 initialState={initialState}
                 overlayNoRowsTemplate={NO_ROWS_TEMPLATE}
               />
@@ -1187,6 +1316,8 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
           returnFocusTo={returnFocus}
         />
       )}
+
+      {bulk.dialogs}
 
       {translate?.ok && (
         <TranslateDialog open={translateOpen} onClose={() => setTranslateOpen(false)} language={query.language} scope={{ kind: 'readiness', query: translate.query }} />
