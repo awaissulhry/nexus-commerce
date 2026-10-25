@@ -1063,7 +1063,11 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
         </GridDensityProvider>
       </div>
 
-      <p className={styles.note}>Readiness reflects saved information. Publishing runs its own checks before anything is sent.</p>
+      <p className={styles.note}>
+        {liveShown
+          ? 'Readiness reflects saved information. On the channel is what Nexus last sent to or read from each channel, not a fresh read. Publishing runs its own checks before anything is sent.'
+          : 'Readiness reflects saved information. Publishing runs its own checks before anything is sent.'}
+      </p>
 
       {prefsOpen && (
         <PreferencesModal
