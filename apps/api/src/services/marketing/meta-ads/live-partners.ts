@@ -282,8 +282,11 @@ const PARTNERSHIP_ACCESS = 'Meta\'s partnership-content reads need business_mana
 const CREATOR_ACCESS = 'Creator Marketplace needs instagram_creator_marketplace_discovery with Advanced access (Meta\'s App Review; Standard access answers test data only), the brand accepted into Instagram\'s creator marketplace, and a Page access token of the Page linked to the brand\'s Instagram account — Nexus reads with the business\'s system-user token for now; the Owner can also use the Creator Marketplace in Meta\'s own apps.'
 const IG_USER_TOKEN = 'Meta documents this Instagram read with a Facebook User token of a person with a task on the linked Page; Nexus reads with the business\'s system-user token (the Instagram account assigned to the system user). If Meta refuses here, the Owner sees it in the Instagram app.'
 
-/** A creator lookup on the chosen Instagram account (business_discovery): the creator's id, or the flag when another business uses it. */
-async function discover(account: MetaChosenAccount, username: string, inner: string, operation: string) {
+/**
+ * A creator lookup on the chosen Instagram account (business_discovery): the creator's id, or the flag when another business
+ * uses it. Step 24 — exported: a post's collaborator is checked the same way (live-posts.ts igUsernameTaken).
+ */
+export async function discover(account: MetaChosenAccount, username: string, inner: string, operation: string) {
   const name = username.trim().replace(/^@/, '')
   if (!IG_USERNAME.test(name)) throw new MetaLiveRefusal('An Instagram username is 1–30 letters, digits, dots and underscores.')
   const instagramId = instagramOf(account)
