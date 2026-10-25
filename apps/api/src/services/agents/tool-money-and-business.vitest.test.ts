@@ -329,6 +329,11 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-conversations': 'it reads the business\'s chosen Meta Page live from Meta, and no business here has one (meta-ads-messaging.tools test)',
   'meta-message-templates': 'it reads the business\'s chosen Meta Page live from Meta, and no business here has one (meta-ads-messaging.tools test)',
   'meta-messaging-setup': 'it reads the business\'s chosen Meta Page live from Meta, and no business here has one (meta-ads-messaging.tools test)',
+  // Meta ads step 4: the business portfolio reads read Meta live (meta-ads-business.tools test runs every view on an account).
+  'meta-business': 'it reads the business\'s chosen Meta business portfolio live from Meta, and no business here has Meta connected (meta-ads-business.tools test)',
+  'meta-business-people': 'it reads the business\'s chosen Meta business portfolio live from Meta, and no business here has Meta connected (meta-ads-business.tools test)',
+  'meta-business-assets': 'it reads the business\'s chosen Meta business portfolio live from Meta, and no business here has Meta connected (meta-ads-business.tools test)',
+  'meta-business-partners': 'it reads the business\'s chosen Meta business portfolio live from Meta, and no business here has Meta connected (meta-ads-business.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -760,6 +765,11 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-conversations': () => ({ view: 'messenger' }),
   'meta-message-templates': () => ({ view: 'messenger' }),
   'meta-messaging-setup': () => ({ view: 'profile' }),
+  // Meta ads step 4: each tool's default view refuses in words because no business here has Meta.
+  'meta-business': () => ({ view: 'portfolio' }),
+  'meta-business-people': () => ({ view: 'people' }),
+  'meta-business-assets': () => ({ view: 'pages' }),
+  'meta-business-partners': () => ({ view: 'agencies' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),
