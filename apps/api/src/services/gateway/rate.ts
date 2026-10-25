@@ -23,7 +23,7 @@ export const DEFAULT_BUCKETS: Record<GatewayChannel, BucketParams> = {
   ETSY: { capacity: 10, refillPerSec: 5 },
   // Google: a host with no group of its own (GOOGLE_BUCKETS below holds the four that have one).
   GOOGLE: { capacity: 5, refillPerSec: 1 },
-  // Meta: a call with no group of its own (META_BUCKETS below holds the three that have one).
+  // Meta: a call with no group of its own (META_BUCKETS below holds the ones that have one).
   META: { capacity: 5, refillPerSec: 0.2 },
 }
 
@@ -38,15 +38,30 @@ export const DEFAULT_BUCKETS: Record<GatewayChannel, BucketParams> = {
  * 100,000 / 190,000 calls an hour) the headers' `ads_api_access_tier` = standard_access moves the bucket to
  * META_FULL_BUCKETS. Meta's own usage headers hold a bucket too: from 75 %, and while Meta says access is blocked.
  */
-export const META_BUCKETS: Record<'ads' | 'insights' | 'auth', BucketParams> = {
+/**
+ * Step 15 fix A1 (2026-10-25) — two groups that are not the ad account's: `page`, the calls made with the chosen Page's own
+ * token and the read of that token (they count against the Page's, Instagram account's and Messenger's own limits —
+ * Meta's rate-limiting page: Pages "4800 × engaged users" a day, the Conversations API "2 calls per second per Facebook
+ * Page"), refilled one per second; `whatsapp`, the reads of the business's WhatsApp Business account ("200 requests per
+ * hour, per app, per WABA" by default), refilled 200 an hour. Neither depends on the Marketing API tier, so the Full table
+ * keeps them as they are. The ads bucket never pays for them.
+ */
+type MetaBucketGroup = 'ads' | 'insights' | 'auth' | 'page' | 'whatsapp'
+const META_PAGE_BUCKET: BucketParams = { capacity: 20, refillPerSec: 1 }
+const META_WHATSAPP_BUCKET: BucketParams = { capacity: 20, refillPerSec: 200 / 3600 }
+export const META_BUCKETS: Record<MetaBucketGroup, BucketParams> = {
   ads: { capacity: 45, refillPerSec: 0.08 },
   insights: { capacity: 30, refillPerSec: 1 / 6 },
   auth: { capacity: 5, refillPerSec: 1 },
+  page: META_PAGE_BUCKET,
+  whatsapp: META_WHATSAPP_BUCKET,
 }
-export const META_FULL_BUCKETS: Record<'ads' | 'insights' | 'auth', BucketParams> = {
+export const META_FULL_BUCKETS: Record<MetaBucketGroup, BucketParams> = {
   ads: { capacity: 300, refillPerSec: 10 },
   insights: { capacity: 200, refillPerSec: 5 },
   auth: { capacity: 5, refillPerSec: 1 },
+  page: META_PAGE_BUCKET,
+  whatsapp: META_WHATSAPP_BUCKET,
 }
 /** The tier value Meta's headers give the Full Marketing API tier (the Limited one is development_access). */
 export const META_FULL_TIER = 'standard_access'
@@ -143,6 +158,19 @@ export interface RedisLike {
   pexpire(key: string, ms: number): Promise<unknown>
 }
 
+/**
+ * Step 15 re-review N1 — a hold keeps the LATER of its old and new end, as the memory store does (Math.max): a shorter
+ * hold (a 300 s hold after another call's throttle) never cuts a longer one Meta named (up to an hour). One atomic step.
+ */
+export const HOLD_LUA = `
+local hold = tonumber(redis.call('HGET', KEYS[1], 'hold')) or 0
+local untilMs = tonumber(ARGV[1]); local now = tonumber(ARGV[2])
+if untilMs > hold then hold = untilMs end
+redis.call('HSET', KEYS[1], 'hold', tostring(hold), 'tokens', '0', 'ts', tostring(now))
+redis.call('PEXPIRE', KEYS[1], math.max(3600000, hold - now))
+return hold
+`
+
 class RedisBucketStore implements BucketStore {
   constructor(private readonly redis: RedisLike) {}
   async take(key: string, p: BucketParams, cost: number, now: number): Promise<TakeResult> {
@@ -150,8 +178,7 @@ class RedisBucketStore implements BucketStore {
     return { ok: ok === 1, waitMs: Number(wait), tokensLeft: Number(tokens) }
   }
   async holdUntil(key: string, untilMs: number) {
-    await this.redis.hset(`gw:bucket:${key}`, 'hold', String(untilMs), 'tokens', '0', 'ts', String(Date.now()))
-    await this.redis.pexpire(`gw:bucket:${key}`, 3_600_000)
+    await this.redis.eval(HOLD_LUA, 1, `gw:bucket:${key}`, Math.round(untilMs), Date.now())
   }
   async setParams(key: string, params: BucketParams) {
     await this.redis.hset(`gw:params:${key}`, 'capacity', String(params.capacity), 'refillPerSec', String(params.refillPerSec))

@@ -29,6 +29,9 @@
  * Channel messages, `listingColumns.ts`), header clicks that sort on the server, a market page's column filters, and
  * Export ▾ (CSV or Excel of the result in view). AG owns a sort or a column filter while its column exists; the address
  * mirrors it, and a saved view or the Filters bar puts its values back into AG.
+ * Step 7 adds the Problems view (`ProblemsView.tsx`): a Products | Problems switch in the toolbar (`?view=problems`), one
+ * row per problem × destination, and Show products back here with `?problem=<id>` and its removable chip. The Products
+ * grid stays mounted off stage meanwhile, so the header, the tiles and the saved views keep reading it.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Archive, ChevronDown, Download, History, Search, SlidersHorizontal } from 'lucide-react'
@@ -142,6 +145,13 @@ import {
   withStock,
 } from './liveFilters'
 import { legacyMarketHref, legacyPath, lockedKeys, marketCount, marketWord, readinessPath, scopeWords, storeWord, suppressedListings, type ReadinessLock } from './readinessScope'
+// Live layer step 7: the Problems view.
+import type { ReadinessProblemRow, ReadinessProblemsPage } from '@nexus/shared/listing-readiness'
+import { SegmentedControl } from '@/design-system/primitives'
+import { ProblemsView, useProblemWords } from './ProblemsView'
+import problemsStyles from './ProblemsView.module.css'
+import { problemsCountWords } from './problemsModel'
+import { withProblem, withView, type ReadinessView } from './readinessQuery'
 
 /* ── Constants ──────────────────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -526,9 +536,12 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   }, [query, pager.page])
 
   // ── Live ──────────────────────────────────────────────────────
+  /** Live layer step 7: the Problems view reads again with every refresh of the grid. */
+  const [problemsTick, setProblemsTick] = useState(0)
   /** Read the screen again in place: the top level, and the open families the plan names. */
   const refreshGrid = useCallback((plan: RefreshPlan) => {
     setListError(null)
+    setProblemsTick((n) => n + 1)
     const api = gridApiRef.current
     if (!api || api.isDestroyed()) return
     api.refreshServerSide({ purge: false })
@@ -786,6 +799,12 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       item('xlsx-families', 'Excel, one row per family', 'xlsx', 'family', families?.total ?? null, scope === 'market' ? 'With its price, quantity and status here' : 'Readiness only: values across markets are not added up'),
     ]
   }, [query, families, destinationReady, backendUrl, scope])
+  // ── Live layer step 7: Products | Problems ────────────────────
+  const [problemsPage, setProblemsPage] = useState<ReadinessProblemsPage | null>(null)
+  const problemWords = useProblemWords(query)
+  const problemsShown = query?.view === 'problems' && !query.parent
+  const switchView = useCallback((view: string) => setQuery((q) => withView(q, view as ReadinessView)), [setQuery])
+  const showProducts = useCallback((row: ReadinessProblemRow) => setQuery((q) => withProblem(q, row.id)), [setQuery])
 
   const words = scopeWords(lock)
   if (!query) {
@@ -813,6 +832,8 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       <b>{families ? listingsInView(families.stats, query.state).toLocaleString('en') : '—'}</b> listings
     </>
   )
+  // Live layer step 7: the Problems view counts problems.
+  const problemsCount = problemsCountWords(problemsPage)
   const notFound = query.parent ? null : notFoundWords(families?.search)
   const stateChip = query.parent && query.state ? (query.state === 'notChecked' ? 'Not set up or not computed' : readinessMeta(query.state, 'scope').label) : null
   // One family's page on a store page: the store page is one more crumb (on /listings the chip below is the way back).
@@ -904,7 +925,7 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
         <FilterBar dimensions={filterDimensions} activeCount={activeFilterCount(query)} onClear={() => setQuery(withoutFilters)} />
       </div>
 
-      {(query.selector || query.parent) && (
+      {(query.selector || query.parent || query.problem) && (
         <div className={styles.scope} role="group" aria-label="This page shows only">
           {query.selector && (
             <TokenChip
@@ -917,6 +938,12 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
           {query.parent && (
             <TokenChip onRemove={() => setQuery((q) => ({ ...q, parent: '', page: 1 }))} removeLabel={`Show every family, not only ${familyName}`}>
               {familyName}
+            </TokenChip>
+          )}
+          {/* Live layer step 7: Show products' problem. */}
+          {query.problem && problemWords && (
+            <TokenChip onRemove={() => setQuery((q) => ({ ...q, problem: '', page: 1 }))} removeLabel={`Show every product, not only ${problemWords}`}>
+              {problemWords}
             </TokenChip>
           )}
           {stateChip && (
@@ -933,11 +960,11 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       {/* One card: toolbar + grid + pager. The grid is as tall as its page of rows and the PAGE scrolls (Products). */}
       <div ref={cardRef} className="nds-gridcard nds-grid-card">
         <GridToolbar
-          count={count}
+          count={problemsShown ? <><b>{problemsCount.shown}</b> {problemsCount.unit}</> : count}
           right={
             <>
               <GridDensityToggle value={density} onChange={setDensity} />
-              <Button size="sm" onClick={openCustomise} heldReason={gridApi ? null : 'The grid is still loading.'}>
+              <Button size="sm" onClick={openCustomise} heldReason={problemsShown ? 'Customise sets the Products columns. Switch to Products first.' : gridApi ? null : 'The grid is still loading.'}>
                 <SlidersHorizontal size={13} /> Customise
               </Button>
               <GridViewsMenu views={gridViews} />
@@ -947,6 +974,16 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
             </>
           }
         >
+          {/* Live layer step 7: Products | Problems (one family's own page has no Problems view). */}
+          {!query.parent && (
+            <SegmentedControl
+              size="sm"
+              ariaLabel="Show products or problems"
+              value={query.view}
+              onChange={switchView}
+              options={[{ value: 'products', label: 'Products' }, { value: 'problems', label: 'Problems' }]}
+            />
+          )}
           <GridSearchSlot>
             <Input
               leadingIcon={<Search size={13} style={{ color: 'var(--nds-text-3)' }} />}
@@ -972,6 +1009,8 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
             />
           ) : (
             <>
+              {/* Live layer step 7: in the Problems view the Products grid stays mounted, off stage. */}
+              <div className={problemsShown ? problemsStyles.offstage : undefined} aria-hidden={problemsShown || undefined}>
               <NexusGrid<ReadinessGridRow>
                 domLayout="autoHeight"
                 density={density}
@@ -1015,6 +1054,10 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
                 onPage={onPage}
                 onPageSize={onPageSize}
               />
+              </div>
+              {problemsShown && (
+                <ProblemsView query={query} refreshKey={problemsTick} density={density} onLoaded={setProblemsPage} onShowProducts={showProducts} />
+              )}
             </>
           )}
         </GridDensityProvider>

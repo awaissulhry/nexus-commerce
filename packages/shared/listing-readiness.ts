@@ -486,3 +486,52 @@ export interface ReadinessChannelSection {
   /** When Nexus read these rows. */
   readAt: string
 }
+
+/*
+ * ── The Problems view (25 October 2026 — docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md, step 7) ───────────────
+ * Fix by problem, not product by product: one row per problem × destination, over the same result as the page (its
+ * filters, search, tiles). Three sources: readiness (a field an index row names in `missing[]`), the channel's own
+ * messages word for word (open `ListingIssue`s) and "Ready, not listed". The last two need `listings.view`.
+ * "Products" counts the page's rows (family roots and single products), "Listings" what the problem touches there:
+ * readiness listings (one product on one destination) for readiness and Ready-not-listed, listings on the channel for
+ * channel messages. Show products filters the page by the row's `id` (`problem=<id>` on the families endpoint).
+ */
+
+export type ReadinessProblemSource = 'readiness' | 'channel' | 'notListed'
+
+/** One row of the Problems view. */
+export interface ReadinessProblemRow {
+  /** Stable token: `r:<destinationKey>:<field>`, `c:<destinationKey>:<md5 of the message>:<code>`, `n:<destinationKey>`. */
+  id: string
+  source: ReadinessProblemSource
+  /** The field's label (readiness), "Message from Amazon" (channel), "Ready, not listed". */
+  label: string
+  /** Readiness: the worst state of the listings it is on. Null for the other sources. */
+  state: 'blocked' | 'warn' | null
+  /** Readiness: why it is a problem (its most urgent entry's kind). */
+  kind: ReadinessProblemKind | null
+  /** Readiness: the field key ('' when the check names none). */
+  field: string | null
+  /** Channel: the channel's own code ('' when it sent none). */
+  code: string | null
+  /** Channel: the worst severity the message carries. */
+  severity: 'error' | 'warning' | 'info' | null
+  /** Word for word: the stored readiness sentence (its first listing's), or the channel's message. */
+  message: string
+  /** Where: the store and market, in the chips' words. */
+  destination: ReadinessDestination
+  products: number
+  listings: number
+}
+
+/** GET /api/catalog-transfer/readiness/problems */
+export interface ReadinessProblemsPage {
+  /** Blocked before warnings before channel messages before Ready-not-listed; then most products first. */
+  rows: ReadinessProblemRow[]
+  /** Problem rows before the cap; more than `rows.length` when the list was cut. */
+  total: number
+  /** The cap (500). */
+  limit: number
+  /** Channel messages and Ready-not-listed are in (the caller has `listings.view`). */
+  live: boolean
+}

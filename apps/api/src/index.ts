@@ -65,7 +65,7 @@ import brandSettingsRoutes from "./routes/brand-settings.routes.js";
 import settingsAuditRoutes from "./routes/settings-audit.routes.js";
 import profileRoutes from "./routes/profile.routes.js";
 import workspacesRoutes from "./routes/workspaces.routes.js";
-import { workspaceHook } from "./lib/workspace-hook.js";
+import { varyByWorkspace, workspaceHook } from "./lib/workspace-hook.js";
 import workspaceInvitationsRoutes from './routes/workspace-invitations.routes.js';
 import settingsWebhooksRoutes from "./routes/settings-webhooks.routes.js";
 import settingsPrivacyRoutes from "./routes/settings-privacy.routes.js";
@@ -468,6 +468,8 @@ app.addHook('onSend', (request, reply, payload, done) => {
   // Set here rather than in the route: this hook runs AFTER the handler, so a header the
   // handler sets would be silently overwritten.
   reply.header('Content-Security-Policy', apiContentSecurityPolicy(request.url ?? '', reply))
+  // A cached answer belongs to one business only (varyByWorkspace).
+  reply.header('Vary', varyByWorkspace(reply.getHeader('Vary')))
   done(null, payload)
 });
 

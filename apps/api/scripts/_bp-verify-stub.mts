@@ -181,10 +181,6 @@ createServer(async (req, res) => {
       })
       return json(200, { items: rows.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaign?.name ?? null, status: g.status, campaignStatus: g.campaign?.status ?? null, adProduct: g.campaign?.adProduct ?? null, portfolioId: g.campaign?.portfolioId ?? null })) })
     }
-    if (url === '/api/advertising/harvest-pathways' && req.method === 'GET') {
-      const { listHarvestPathways } = await import('../src/services/advertising/harvest-pathways.service.js')
-      return json(200, await listHarvestPathways())
-    }
     // BUD-PP / PLC-P2 — the draft-rule preview, served from the real service (engine, dryRun, no
     // writes), dispatched on the draft's slug exactly as the route does.
     if (url === '/api/advertising/automation-rules/preview' && req.method === 'POST') {
@@ -205,10 +201,6 @@ createServer(async (req, res) => {
     if (url === '/api/advertising/placement-rules/strip' && req.method === 'GET') {
       const { getPlacementRulesStrip } = await import('../src/services/advertising/placement-grid.service.js')
       return json(200, await getPlacementRulesStrip())
-    }
-    if (url === '/api/advertising/harvest-cohort' && req.method === 'GET') {
-      const { getHarvestCohort } = await import('../src/services/advertising/harvest-cohort.service.js')
-      return json(200, await getHarvestCohort({ market: 'all', outcome: null, actor: null, since: null, q: null } as never))
     }
     if (url === '/api/advertising/suggestions/count' && req.method === 'GET') {
       return json(200, { pending: await prisma.adsRuleSuggestion.count({ where: { status: 'pending' } }) })

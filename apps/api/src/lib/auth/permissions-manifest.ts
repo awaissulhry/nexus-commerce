@@ -607,6 +607,8 @@ export const ENTRIES: Entry[] = [
   P(F.aiRun, (m, p) => m === 'POST' && p === '/api/catalog-transfer/translate/apply'),
   P(F.productsView, (m, p) => m === 'GET' && (['/api/catalog-transfer/readiness', '/api/catalog-transfer/readiness/options', '/api/catalog-transfer/readiness/families', '/api/catalog-transfer/readiness/detail'].includes(p)
     || /^\/api\/catalog-transfer\/readiness\/families\/[^/]+\/members$/.test(p))),
+  // Listings live layer step 7 — the Problems view reads like the families page (before the catch-all below).
+  P(F.productsView, (m, p) => m === 'GET' && p === '/api/catalog-transfer/readiness/problems'),
   P(F.productsView, (m, p) => m === 'GET' && /^\/api\/catalog-transfer\/products\/[^/]+\/options$/.test(p)),
   P(F.productsExport, (_m, p) => p === '/api/catalog-transfer/export' || /^\/api\/catalog-transfer\/products\/[^/]+\/export$/.test(p)),
   // The Listings page's export (live layer step 4): before the catch-all below, which would make it an import.

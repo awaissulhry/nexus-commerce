@@ -86,6 +86,8 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 40 (2026-10-21) — set-meta-account-settings, set-meta-spend-cap and set-meta-insights-features read Meta live and change it.
 // Meta ads step 27b (2026-10-21) — create-meta-instant-experience and set-meta-instant-experience read Meta live and change it (as the Page).
 // Meta ads step 37 (2026-10-21) — set-meta-comments reads Meta live and changes it (comments, as the Page; Threads ads).
+// Meta ads step 15 (2026-10-25) — meta-conversations, meta-message-templates and meta-messaging-setup read Meta live.
+// Meta ads step 4 (2026-10-25) — meta-business, meta-business-people, meta-business-assets and meta-business-partners read Meta live.
 
 const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -108,10 +110,12 @@ const OPEN_WORLD = [
   'import-catalog', 'issue-refund', 'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock',
   'meta-account-access', 'meta-account-health', 'meta-activity-log', 'meta-ad-account', 'meta-ad-accounts', 'meta-ad-details', 'meta-ad-library',
   'meta-ad-preview', 'meta-ad-rules', 'meta-ad-sets', 'meta-ads-graph-read', 'meta-ads-live', 'meta-ads-numbers', 'meta-ads-report',
-  'meta-ads-saved-reports', 'meta-audiences', 'meta-billing', 'meta-brand-safety', 'meta-campaigns', 'meta-catalog-feeds', 'meta-catalog-health',
-  'meta-catalog-items', 'meta-catalogs', 'meta-comments', 'meta-commerce', 'meta-connection', 'meta-datasets', 'meta-experiments',
+  'meta-ads-saved-reports', 'meta-audiences', 'meta-billing', 'meta-brand-safety',
+  'meta-business', 'meta-business-assets', 'meta-business-partners', 'meta-business-people',
+  'meta-campaigns', 'meta-catalog-feeds', 'meta-catalog-health',
+  'meta-catalog-items', 'meta-catalogs', 'meta-comments', 'meta-commerce', 'meta-connection', 'meta-conversations', 'meta-datasets', 'meta-experiments',
   'meta-instagram-media', 'meta-instagram-product-tags', 'meta-instant-experiences', 'meta-labels', 'meta-lead-forms', 'meta-leads',
-  'meta-media-library', 'meta-page-posts', 'meta-partnership-content', 'meta-product-sets', 'meta-recommendations', 'meta-targeting-check',
+  'meta-media-library', 'meta-message-templates', 'meta-messaging-setup', 'meta-page-posts', 'meta-partnership-content', 'meta-product-sets', 'meta-recommendations', 'meta-targeting-check',
   'meta-targeting-search', 'meta-value-rules', 'meta-webhooks',
   'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
@@ -295,7 +299,8 @@ describe('MCP.7 — every tool, as Claude sees it', () => {
     // W4-1 — and report-ads-run: the scheduled Claude run's own report.
     // Meta ads step 10 (review A2) — and meta-ad-preview: its links are public, and the in-app chat keeps tool results.
     // Meta ads step 14 — and meta-leads, meta-comments: people's data is never kept in an in-app run.
-    expect(listTools().filter((tool) => !offeredOn(tool, 'app')).map((tool) => tool.name).sort()).toEqual(['confirm-change', 'meta-ad-preview', 'meta-comments', 'meta-leads', 'report-ads-run'])
+    // Meta ads step 15 — and meta-conversations: people's messages are never kept in an in-app run.
+    expect(listTools().filter((tool) => !offeredOn(tool, 'app')).map((tool) => tool.name).sort()).toEqual(['confirm-change', 'meta-ad-preview', 'meta-comments', 'meta-conversations', 'meta-leads', 'report-ads-run'])
   })
 })
 

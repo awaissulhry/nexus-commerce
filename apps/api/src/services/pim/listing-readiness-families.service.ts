@@ -27,6 +27,8 @@ import {
   attachLive, canonicalMarketSql, liveFilterCtes, liveJoinsSql, liveMarketCode, liveScopeOf, liveSqlView, liveTileCtes, liveTilesOf, listingScopeSql, readChannelSection, readLive,
   resolveSearchTokens, SEARCH_MAX_CHARS, SEARCH_MAX_TERMS, searchProductHits, searchTerms, summarizeLive, type LiveOptions, type LiveRead, type LiveSqlView, type LiveTiles,
 } from './listing-readiness-live.service.js'
+// Live layer step 7: the Problems view's `problem=<id>` filter.
+import { problemFilterCtes, problemQuery } from './listing-readiness-problem-filter.js'
 
 /* ── query ────────────────────────────────────────────────────────────────────────────────── */
 
@@ -55,7 +57,7 @@ export function familiesQuery(query: Record<string, unknown>) {
   const order = sortOf(query)
   // Step 4: a price (stock, status, last sync) is one destination's — currencies differ, and Amazon EU shares one quantity.
   if (READINESS_DESTINATION_SORTS.includes(order.sort) && (!base.channel || base.channel === 'SHARED' || !base.marketplace)) throw new Error(ONE_MARKET_TO_SORT)
-  return { ...base, q, state: state as ReadinessStateFilter | undefined, pageSize: Number(query.pageSize || 50), ...liveFilters(query), ...order, columns: columnFiltersOf(query) }
+  return { ...base, q, state: state as ReadinessStateFilter | undefined, pageSize: Number(query.pageSize || 50), ...liveFilters(query), ...problemQuery(query), ...order, columns: columnFiltersOf(query) }
 }
 
 /** Step 4 — the row order (`READINESS_SORTS`, `asc` or `desc`); the default is today's: state, worst first. */
@@ -778,6 +780,9 @@ function resultCtes(filter: Prisma.Sql, input: ReturnType<typeof familiesQuery>,
   // Step 4: the market page's column filters narrow the result the same way, on its one destination.
   const columns = columnFilterCtes(src, input.columns, plan.dest, plan.view)
   if (columns) { parts.push(columns, Prisma.sql`f2 AS (SELECT * FROM ${Prisma.raw(src)} WHERE root IN (SELECT root FROM cf_keep))`); src = 'f2' }
+  // Live layer step 7: `problem=<id>` keeps the families with that problem (`pf_keep`, listing-readiness-problem-filter.ts).
+  const problem = problemFilterCtes(src, filter, input.problem, plan.view)
+  if (problem) { parts.push(problem, Prisma.sql`f3 AS (SELECT * FROM ${Prisma.raw(src)} WHERE root IN (SELECT root FROM pf_keep))`); src = 'f3' }
   parts.push(Prisma.sql`f AS (SELECT * FROM ${Prisma.raw(src)})`)
   return Prisma.join(parts, ', ')
 }
@@ -1156,3 +1161,6 @@ export async function readinessDetail(query: Record<string, unknown>, userId: st
       editorHref: studioHref(input.productId, destination, worstLanguage), channel }
   })
 }
+
+/* ── Live layer step 7: the Problems view (listing-readiness-problems.service.ts) reads the same result ──────────── */
+export { resultCtes, readinessEtag }

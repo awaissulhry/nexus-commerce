@@ -325,6 +325,15 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   // Meta ads step 27b: Instant Experiences read the business's chosen Meta ad account and Page live (meta-ads-instant-experiences.tools test).
   'create-meta-instant-experience': 'it reads the business\'s chosen Meta ad account and Page live from Meta, and no business here has Meta connected (meta-ads-instant-experiences.tools test)',
   'set-meta-instant-experience': 'it reads the business\'s chosen Meta ad account and Page live from Meta, and no business here has Meta connected (meta-ads-instant-experiences.tools test)',
+  // Meta ads step 15: conversations, templates and the messaging setup read the chosen Page, Instagram or WhatsApp account live from Meta.
+  'meta-conversations': 'it reads the business\'s chosen Meta Page live from Meta, and no business here has one (meta-ads-messaging.tools test)',
+  'meta-message-templates': 'it reads the business\'s chosen Meta Page live from Meta, and no business here has one (meta-ads-messaging.tools test)',
+  'meta-messaging-setup': 'it reads the business\'s chosen Meta Page live from Meta, and no business here has one (meta-ads-messaging.tools test)',
+  // Meta ads step 4: the business portfolio reads read Meta live (meta-ads-business.tools test runs every view on an account).
+  'meta-business': 'it reads the business\'s chosen Meta business portfolio live from Meta, and no business here has Meta connected (meta-ads-business.tools test)',
+  'meta-business-people': 'it reads the business\'s chosen Meta business portfolio live from Meta, and no business here has Meta connected (meta-ads-business.tools test)',
+  'meta-business-assets': 'it reads the business\'s chosen Meta business portfolio live from Meta, and no business here has Meta connected (meta-ads-business.tools test)',
+  'meta-business-partners': 'it reads the business\'s chosen Meta business portfolio live from Meta, and no business here has Meta connected (meta-ads-business.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -752,6 +761,15 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // Meta ads step 27b: no business here has Meta, so each refuses in words before any call.
   'create-meta-instant-experience': () => ({ name: 'Experience A', parts: [{ type: 'text', text: 'Hello' }] }),
   'set-meta-instant-experience': () => ({ action: 'hide', canvasId: '120000000000701' }),
+  // Meta ads step 15: each refuses in words because no business here has Meta (meta-ads-messaging.tools.vitest.test.ts runs every view).
+  'meta-conversations': () => ({ view: 'messenger' }),
+  'meta-message-templates': () => ({ view: 'messenger' }),
+  'meta-messaging-setup': () => ({ view: 'profile' }),
+  // Meta ads step 4: each tool's default view refuses in words because no business here has Meta.
+  'meta-business': () => ({ view: 'portfolio' }),
+  'meta-business-people': () => ({ view: 'people' }),
+  'meta-business-assets': () => ({ view: 'pages' }),
+  'meta-business-partners': () => ({ view: 'agencies' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),
@@ -1547,7 +1565,8 @@ describe('MCP.2 — money a person may not see never comes back', () => {
   // report-ads-run is Claude's door only too; it needs the ad-spend money permission (ads-manager.tools.vitest.test.ts).
   // Meta ads step 10 — meta-ad-preview is Claude's door only as well (its public links never reach the in-app chat); it holds no money.
   // Meta ads step 14 — so are meta-leads and meta-comments (people's data is never kept in an in-app run); no money either.
-  const mcpOnlyMeta = new Set(['meta-ad-preview', 'meta-leads', 'meta-comments'])
+  // Meta ads step 15 — and meta-conversations (people's messages); its only money is the WhatsApp cost.
+  const mcpOnlyMeta = new Set(['meta-ad-preview', 'meta-leads', 'meta-comments', 'meta-conversations'])
   const tools = () => listTools().filter((tool) => !AI_DRAFTS.has(tool.name) && tool.name !== 'confirm-change' && tool.name !== 'report-ads-run' && !mcpOnlyMeta.has(tool.name))
 
   it('the money-cleared run really reads the seeded money (positive control)', async () => {

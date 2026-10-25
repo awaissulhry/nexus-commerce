@@ -13,6 +13,8 @@ import { catalogWorkbookTemplate, type WorkbookDestination } from '../services/p
 import { listingReadiness } from '../services/pim/listing-readiness.service.js'
 import { readinessDetail, readinessFamiliesIfChanged, readinessFamilyMembersIfChanged } from '../services/pim/listing-readiness-families.service.js'
 import { ExportTooLarge, exportReadiness } from '../services/pim/listing-readiness-export.service.js'
+// Live layer step 7: the Problems view.
+import { readinessProblemsIfChanged } from '../services/pim/listing-readiness-problems.service.js'
 import { matches } from '../utils/list-etag.js'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { permissionCheckerFor } from './studio-matrix.routes.js'
@@ -179,6 +181,14 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
       if (error instanceof ExportTooLarge) return reply.code(400).send({ error: error.message, count: error.count })
       throw error
     }
+  })
+  // Live layer step 7: the Problems view — one row per problem × destination over the page's result; 304 when unchanged.
+  fastify.get('/catalog-transfer/readiness/problems', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    const { etag, page } = await readinessProblemsIfChanged(request.query as Record<string, unknown>, actor(request), tag => matches(request, tag), liveFor(request))
+    reply.header('ETag', etag)
+    reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
+    return page ?? reply.code(304).send()
   })
   fastify.get('/catalog-transfer/source/history', async request => listSourceHistory(actor(request), Number((request.query as { page?: string }).page ?? 1)))
   fastify.get('/catalog-transfer/source/fields', async request => sourceMappingFields(request.query as Parameters<typeof sourceMappingFields>[0]))

@@ -18,15 +18,6 @@ import { simulateAutopilot, applyAutopilot } from '../services/advertising/ads-a
 import { getKeywordTracker } from '../services/advertising/keyword-tracker.service.js'
 // Ads wave 4c (F3) — every `?market=` here is checked against the markets Nexus reads, not a fixed four.
 import { adsReadMarkets } from '../services/advertising/ads-markets.service.js'
-import { getKeywordHarvest, HV_MARKET_ALL, type HvStatus, type HvKind, type HvSortKey } from '../services/advertising/keyword-harvest.service.js'
-import { resolveHarvestPolicy, listHarvestPolicies, saveHarvestPolicy, deleteHarvestPolicy, HV_DEFAULT_CRITERIA, type HvPolicyGrain } from '../services/advertising/harvest-policy.service.js'
-import { planPromotion } from '../services/advertising/harvest-promote.service.js'
-import { getHarvestCohort } from '../services/advertising/harvest-cohort.service.js'
-import {
-  loadDestinationGraph, resolveStoredDestinations, rankDestinations, listHarvestDestinations,
-  saveHarvestDestination, deleteHarvestDestination, HV_CREATE_TYPES,
-  type HvDestGrain, type HvCreateType,
-} from '../services/advertising/harvest-destination.service.js'
 import {
   getBidGrid, BID_MARKET_ALL, BID_BANDS,
   type BidBand, type BidMeasured, type BidStatusFilter, type BidView,
@@ -49,10 +40,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
    * RT.0 — invalidate the ads read cache after any successful write from THIS plugin.
    *
    * `advertising.routes.ts` has carried this hook since Phase 4; this file never did, and it has
-   * grown to **48 write routes** (bid policies, spend ceilings, campaign goals, harvest policies and
-   * destinations, watchlists, budget baselines…). Meanwhile `GET /advertising/campaigns` is
-   * `cached(…, 300)` — so a write through any of those 48 left the Apply Rules grid serving a
-   * five-minute-old answer, and no amount of client-side polling can see past a cache.
+   * grown to **48 write routes** (bid policies, spend ceilings, campaign goals, watchlists, budget
+   * baselines…). Meanwhile `GET /advertising/campaigns` is `cached(…, 300)` — so a write through
+   * any of those 48 left the Apply Rules grid serving a five-minute-old answer, and no amount of
+   * client-side polling can see past a cache.
    *
    * Verbatim copy of the sibling hook, deliberately: two flush policies for one cache is how they
    * start to disagree about what a write invalidates.
@@ -440,91 +431,6 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return out
   })
 
-  // ── HV.1 — the Keyword Harvest page's one read ──────────────────────
-  //
-  // Here rather than in advertising.routes.ts for the reason KT.1, NEG.1 and BID.S0 are: that file
-  // is ~600 KB, the default `grep` in this repo (ugrep) returns NOTHING on it so a duplicate is
-  // easy to miss, and a duplicate route registration is a BOOT CRASH rather than a warning.
-  //
-  // One call carries the resolved scope, the census over the FULL candidate set, the facets and
-  // the rows — so the page can state what it is showing without a second fetch, and no number it
-  // renders is ever computed from a page of rows.
-  //
-  // Read-only, and it will stay read-only: HV.4 (promote) and HV.7 (queue) are POSTs of their own.
-  fastify.get('/advertising/keyword-harvest', async (request, reply) => {
-    const q = (request.query ?? {}) as Record<string, string | undefined>
-    // `all` is accepted, as on Negative Targeting: a candidate count and a spend total both sum
-    // honestly across markets, and every row carries its own market.
-    // 🔴 HV.10 — `all`, a single code, or a COMMA LIST (`IT,DE`). The list is validated by
-    // `parseMarketScope`, which drops unknown codes rather than erroring, so a stale link naming a
-    // disconnected market narrows the view instead of 400-ing. A request that names ONLY unknown
-    // codes is still a mistake worth reporting, so it is refused here rather than silently widened.
-    const raw = (q.market ?? '').trim()
-    const market = raw.toLowerCase() === HV_MARKET_ALL ? HV_MARKET_ALL : raw.toUpperCase()
-    const readMarkets = await adsReadMarkets()
-    if (market !== HV_MARKET_ALL) {
-      const named = market.split(',').map((c) => c.trim()).filter(Boolean)
-      const known = named.filter((c) => readMarkets.includes(c))
-      if (named.length === 0 || known.length === 0) {
-        reply.status(400)
-        return { error: `market is required and must be one of ${readMarkets.join('/')}, a comma list of them, or "all"`, code: 'market_required' }
-      }
-    }
-    const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
-      (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
-    // 🔴 Not a truthiness test — see the note on minClicks below.
-    const numOrNull = (v: string | undefined) => (v != null && v !== '' ? Number(v) : null)
-
-    const out = await getKeywordHarvest({
-      market,
-      line: q.line ?? null,
-      portfolio: q.portfolio ?? null,
-      campaign: q.campaign ?? null,
-      adGroup: q.adGroup ?? null,
-      // HV.2 — the FILTER half. Absent means "use the policy in force for this scope", which the
-      // service resolves; it never means a hard-coded default here.
-      //
-      // 🔴 `!= null && !== ''`, NOT a truthiness test. `minClicks=0` is a legitimate value that
-      // says "no click floor for this view", and `q.minClicks ? …` would read it as absent and
-      // silently hand back the policy's 3. Found on prod by checking that the count moved when
-      // the param did: it did not, and `overridden` said `(none)` while the URL said otherwise.
-      windowDays: numOrNull(q.window),
-      minOrders: numOrNull(q.minOrders),
-      minClicks: numOrNull(q.minClicks),
-      // 'none' is a value, not an absence: it clears the ceiling for this view, and is the only
-      // way a link can distinguish "no ceiling" from "whatever the policy says".
-      maxAcosPct: q.maxAcos === 'none' ? 'none' : numOrNull(q.maxAcos),
-      matched: oneOf(q.matched, ['all', 'harvestable'] as const),
-      minSpendEur: numOrNull(q.minSpend),
-      status: oneOf(q.status, ['new', 'already-exact-here', 'exact-elsewhere', 'local-only', 'all'] as const) as HvStatus | 'all' | null,
-      kind: oneOf(q.kind, ['keyword', 'product', 'all'] as const) as HvKind | 'all' | null,
-      // HV.3 — how the destination resolved, and the self-competition filter.
-      dest: oneOf(q.dest, ['all', 'proposed', 'overridden', 'none'] as const),
-      competing: q.competing === '1' ? true : null,
-      q: q.q ?? null,
-      sort: oneOf(q.sort, ['term', 'market', 'source', 'impressions', 'clicks', 'spend', 'orders', 'sales', 'acos', 'cpc', 'status', 'negated', 'kind'] as const) as HvSortKey | null,
-      dir: q.dir === 'asc' ? 'asc' : 'desc',
-    })
-    // Short private cache. The base is a 60-day grouped scan of 10,826 search-term rows joined to
-    // the full positive/negative target set, and it changes only when the five-minute export
-    // ingest lands a new day.
-    reply.header('Cache-Control', 'private, max-age=60')
-
-    /**
-     * HV.6 — the actors panel, computed ONLY when it is open.
-     *
-     * Additive on this route rather than a route of its own, deliberately. Registering a route is
-     * the one operation in this repo that can crash the API on boot (a duplicate registration in a
-     * 600 KB file the default grep cannot read), and this panel needs exactly one caller. Behind
-     * `?actors=1` the grid pays nothing for it: absent, not one extra query runs.
-     */
-    if (q.actors === '1') {
-      const { getHarvestActors } = await import('../services/advertising/harvest-actors.service.js')
-      return { ...out, actors: await getHarvestActors({ market }) }
-    }
-    return out
-  })
-
   /**
    * PLC-P1 — the Placement tab's one-line strip: what a placement rule can reach, and what
    * already rewrites those lanes.
@@ -738,187 +644,6 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       query: q.query, market,
       line: q.line || null, portfolio: q.portfolio || null, campaign: q.campaign || null,
     })
-  })
-
-  // ── HV.2 — the harvest policy ───────────────────────────────────────
-  //
-  // 🔴 The policy is NOT the filter. `GET /advertising/keyword-harvest` already returns the
-  // criteria in force for a view, because the view composes a stored policy with whatever the URL
-  // overrides. These three routes are about the STORED half only: what is saved, where, and by
-  // whom. Keeping them separate is what stops a URL override from ever looking like a decision.
-  fastify.get('/advertising/harvest-policy', async (request) => {
-    const q = (request.query ?? {}) as Record<string, string | undefined>
-    const raw = (q.market ?? '').trim()
-    const market = raw.toLowerCase() === HV_MARKET_ALL ? HV_MARKET_ALL : (raw ? raw.toUpperCase() : HV_MARKET_ALL)
-    const [resolved, all] = await Promise.all([
-      resolveHarvestPolicy({ market, line: q.line ?? null, portfolio: q.portfolio ?? null, campaign: q.campaign ?? null, adGroup: q.adGroup ?? null }),
-      listHarvestPolicies(),
-    ])
-    // Every policy that exists, not just the one in force: the save dialog has to be able to say
-    // "you already have one at IT" before an operator creates a second at a narrower grain and
-    // wonders why nothing changed.
-    return { resolved, policies: all, defaults: HV_DEFAULT_CRITERIA }
-  })
-
-  fastify.put('/advertising/harvest-policy', async (request, reply) => {
-    const b = (request.body ?? {}) as Record<string, unknown>
-    const userId = (request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'
-    try {
-      const saved = await saveHarvestPolicy({
-        scopeGrain: String(b.scopeGrain ?? '') as HvPolicyGrain,
-        scopeId: b.scopeId == null ? null : String(b.scopeId),
-        criteria: {
-          minOrders: Number(b.minOrders),
-          minClicks: Number(b.minClicks),
-          maxAcosPct: b.maxAcosPct == null || b.maxAcosPct === '' ? null : Number(b.maxAcosPct),
-          windowDays: Number(b.windowDays),
-          excludeExactMatched: b.excludeExactMatched !== false,
-        },
-        updatedBy: `user:${userId}`,
-      })
-      return { ok: true, saved }
-    } catch (e) {
-      const err = e as { code?: string; message?: string }
-      reply.status(400)
-      return { ok: false, error: err.message ?? 'could not save the policy', code: err.code ?? 'bad_request' }
-    }
-  })
-
-  // Removing an override is how a scope goes back to inheriting. Without it a saved policy would
-  // be permanent, which is the "cannot be undone" class of control this section keeps deleting.
-  fastify.delete('/advertising/harvest-policy', async (request, reply) => {
-    const q = (request.query ?? {}) as Record<string, string | undefined>
-    try {
-      const out = await deleteHarvestPolicy(String(q.scopeGrain ?? '') as HvPolicyGrain, q.scopeId ?? null)
-      return { ok: true, ...out }
-    } catch (e) {
-      const err = e as { code?: string; message?: string }
-      reply.status(err.code === 'not_found' ? 404 : 400)
-      return { ok: false, error: err.message ?? 'could not remove the policy', code: err.code ?? 'bad_request' }
-    }
-  })
-
-  // ── HV.3 — the harvest destination ──────────────────────────────────
-  //
-  // 🔴 These three are the STORED override only. `GET /advertising/keyword-harvest` already returns
-  // the resolved destination on every row, because the destination is what decides whether the H.3
-  // isolation negative fires — it is a property of a candidate, not a separate lookup.
-  //
-  // Nothing here reaches Amazon. HV.4 owns the write.
-  fastify.get('/advertising/harvest-destination', async (request) => {
-    const q = (request.query ?? {}) as Record<string, string | undefined>
-    const raw = (q.market ?? '').trim()
-    const market = raw.toLowerCase() === HV_MARKET_ALL ? HV_MARKET_ALL : (raw ? raw.toUpperCase() : HV_MARKET_ALL)
-    const scope = { market, line: q.line ?? null, portfolio: q.portfolio ?? null, campaign: q.campaign ?? null, adGroup: q.adGroup ?? null }
-    const [stored, all] = await Promise.all([resolveStoredDestinations(scope), listHarvestDestinations()])
-
-    // The picker's options for ONE source ad group. Supplied on demand rather than on every row of
-    // the grid: the shortlist is 5-21 ad groups per row and 8 rows of it is a payload nobody reads.
-    let shortlist: ReturnType<typeof rankDestinations> = []
-    if (q.sourceAdGroupId) {
-      const graph = await loadDestinationGraph()
-      const createType = (HV_CREATE_TYPES as string[]).includes(q.matchType ?? '') ? (q.matchType as HvCreateType) : 'EXACT'
-      shortlist = rankDestinations(graph, q.sourceAdGroupId, createType, q.term ?? '', q.kind === 'product' ? 'product' : 'keyword')
-    }
-    return { resolved: Object.fromEntries(stored), destinations: all, shortlist }
-  })
-
-  fastify.put('/advertising/harvest-destination', async (request, reply) => {
-    const b = (request.body ?? {}) as Record<string, unknown>
-    const userId = (request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'
-    try {
-      const saved = await saveHarvestDestination({
-        scopeGrain: String(b.scopeGrain ?? '') as HvDestGrain,
-        scopeId: b.scopeId == null ? null : String(b.scopeId),
-        matchType: String(b.matchType ?? 'EXACT') as HvCreateType,
-        adGroupId: String(b.adGroupId ?? ''),
-        negateAtSource: b.negateAtSource !== false,
-        updatedBy: `user:${userId}`,
-      })
-      return { ok: true, saved }
-    } catch (e) {
-      const err = e as { code?: string; message?: string }
-      reply.status(400)
-      return { ok: false, error: err.message ?? 'could not save the destination', code: err.code ?? 'bad_request' }
-    }
-  })
-
-  fastify.delete('/advertising/harvest-destination', async (request, reply) => {
-    const q = (request.query ?? {}) as Record<string, string | undefined>
-    try {
-      const out = await deleteHarvestDestination(
-        String(q.scopeGrain ?? '') as HvDestGrain,
-        q.scopeId ?? null,
-        String(q.matchType ?? 'EXACT') as HvCreateType,
-      )
-      return { ok: true, ...out }
-    } catch (e) {
-      const err = e as { code?: string; message?: string }
-      reply.status(err.code === 'not_found' ? 404 : 400)
-      return { ok: false, error: err.message ?? 'could not remove the destination', code: err.code ?? 'bad_request' }
-    }
-  })
-
-  // ── HV.4 — the paired write's plan (read only) ─────────────────────
-  //
-  // GET plans a promote (nothing is written). The write (POST /advertising/harvest-promote) and the push of a keyword that
-  // never reached Amazon (POST /advertising/harvest-push) were removed with the Keyword Harvest page (2026-10-11): a
-  // harvest is one approval request through the harvest engine (routes/advertising-harvest.routes.ts).
-  fastify.get('/advertising/harvest-promote', async (request, reply) => {
-    const q = (request.query ?? {}) as Record<string, string | undefined>
-    const raw = (q.market ?? '').trim()
-    const market = raw.toLowerCase() === HV_MARKET_ALL ? HV_MARKET_ALL : (raw ? raw.toUpperCase() : HV_MARKET_ALL)
-    // Repeated `?ids=` params, not a delimited string: a candidate id is
-    // `market|campaign|adGroup|term` and a search term may itself contain a comma or a pipe.
-    const rawIds = (request.query as { ids?: string | string[] }).ids
-    const ids = (Array.isArray(rawIds) ? rawIds : rawIds ? [rawIds] : []).filter(Boolean)
-    if (ids.length === 0) { reply.status(400); return { error: 'ids is required', code: 'ids_required' } }
-    if (ids.length > 200) { reply.status(400); return { error: `${ids.length} candidates in one request; the cap is 200`, code: 'too_many' } }
-    return planPromotion({ market, candidateIds: ids, line: q.line ?? null, portfolio: q.portfolio ?? null, campaign: q.campaign ?? null, adGroup: q.adGroup ?? null })
-  })
-
-  // ── HV.5 — the harvested cohort ─────────────────────────────────────
-  //
-  // "Did the last batch work?" — the second half of the page's question. Read-only.
-  /**
-   * HV-R P3a — GET /advertising/harvest-pathways
-   *
-   * Every ad group that can SOURCE a harvest and every one that can RECEIVE it, so the Keyword
-   * Harvest tab's Ad Group View can answer *"which of my ad groups is harvesting, and which is
-   * not?"*. It previously derived its rows from `actions[0].mappings`, which only a BUILDER rule
-   * writes — and all five harvest rules here are ENGINE rules with none, so the view rendered 0
-   * rows and always would have.
-   *
-   * Read-only. No assignment is invented: an ad group with no rule attached is reported as exactly
-   * that, and P3b adds the binding that changes it.
-   */
-  fastify.get('/advertising/harvest-pathways', async (_request, reply) => {
-    const { listHarvestPathways } = await import('../services/advertising/harvest-pathways.service.js')
-    const out = await listHarvestPathways()
-    reply.header('Cache-Control', 'private, max-age=120')
-    return out
-  })
-
-  fastify.get('/advertising/harvest-cohort', async (request, reply) => {
-    const q = (request.query ?? {}) as Record<string, string | undefined>
-    const raw = (q.market ?? '').trim()
-    const market = raw.toLowerCase() === HV_MARKET_ALL ? HV_MARKET_ALL : (raw ? raw.toUpperCase() : HV_MARKET_ALL)
-    const readMarkets = await adsReadMarkets()
-    if (market !== HV_MARKET_ALL && !readMarkets.includes(market)) {
-      reply.status(400)
-      return { error: `market must be one of ${readMarkets.join('/')} or "all"`, code: 'market_required' }
-    }
-    const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
-      (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
-    const out = await getHarvestCohort({
-      market,
-      outcome: oneOf(q.outcome, ['served', 'never-served', 'not-measured', 'local-only', 'all'] as const) as never,
-      actor: oneOf(q.actor, ['engine', 'operator', 'app-bulk', 'mirrored', 'all'] as const) as never,
-      since: q.since ?? null,
-      q: q.q ?? null,
-    })
-    reply.header('Cache-Control', 'private, max-age=60')
-    return out
   })
 
   // ── PLC.3 — what a scope-bulk write WOULD do ────────────────────────
@@ -2293,7 +2018,7 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
-   * RT.2 — the five page cursors. Shapes, and the reason each field is not the obvious one, are in
+   * RT.2 — the page cursors. Shapes, and the reason each field is not the obvious one, are in
    * `ads-cursors.service.ts`; the measurement that disqualified the obvious ones is in
    * `scripts/_rt-cursor-probe.mts`.
    *
@@ -2327,13 +2052,6 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const { getDaypartingCursor } = await import('../services/advertising/ads-cursors.service.js')
     reply.header('Cache-Control', 'no-store')
     return getDaypartingCursor({ market: q.market ?? 'all', portfolio: q.portfolio || null, campaign: q.campaign || null })
-  })
-
-  fastify.get('/advertising/keyword-harvest/cursor', async (request, reply) => {
-    const q = (request.query ?? {}) as Record<string, string | undefined>
-    const { getHarvestCursor } = await import('../services/advertising/ads-cursors.service.js')
-    reply.header('Cache-Control', 'no-store')
-    return getHarvestCursor({ market: q.market ?? 'all', campaign: q.campaign || null })
   })
 
   fastify.get('/advertising/write-refusals', async (request, reply) => {

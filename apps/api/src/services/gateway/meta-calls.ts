@@ -98,6 +98,10 @@ import { META_CATALOG_WRITE_RULES, type MetaCatalogBodyKind, type MetaCatalogKin
 import { META_CANVAS_WRITE_RULES } from './meta-canvas-rules.js'
 // Step 37 — the comment rules (Facebook and Instagram as the chosen Page; Threads ads with the system user's token).
 import { META_COMMENT_WRITE_RULES } from './meta-comment-rules.js'
+// Step 15 — the chosen Page's conversations, inbox and messaging setup, read with the Page's own token.
+import { metaPageReadOf, metaWhatsAppRead, type MetaPageRead } from './meta-page-reads.js'
+// Step 4 — the business-portfolio reads' fixed lists (a leaf module: no import cycle).
+import { META_CLIENT_OBJECT_VALUES, META_INVITATION_ASSET_TYPES, META_SHARING_AGREEMENT_STATUSES } from '../meta/meta-business-lists.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -499,6 +503,45 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/third_party_partner_viewability_requests$/, keys: new Set(['start_ds', 'end_ds']), when: (query) => /^\d{4}-\d{2}-\d{2}$/.test(query.get('start_ds') ?? '') && /^\d{4}-\d{2}-\d{2}$/.test(query.get('end_ds') ?? '') },
   { route: /^\d+\/third_party_partner_viewability_requests$/, keys: new Set(['platform']), when: valueIn('platform', ['AUDIENCE_NETWORK', 'FACEBOOK', 'INSTAGRAM']) },
   { route: /^\d+\/third_party_partner_viewability_requests$/, keys: new Set(['type']), when: valueIn('type', ['DISPLAY_EVENT', 'IMPRESSION', 'VIDEO_EVENT']) },
+  // Step 15 — conversations, message templates, messaging setup (marketing/meta-ads/live-messaging.ts), each key only on
+  // its own route and only with a value Nexus sends: a Page's conversations take platform (messenger | instagram), user_id
+  // (a person's scoped id, digits) and folder (partnership: creator conversations); thread_owner recipient and
+  // messenger_call_permissions / custom_user_settings psid (digits); messenger_profile platform; welcome_message_flows
+  // flow_id; message_templates name (a template name), name_or_content (plain text), language (locale codes), status,
+  // category, quality_score (Meta's enums) and since / until (unix seconds) — the ad account's
+  // connected_instagram_accounts_with_iabp business_id is step 3's (above). Conversations and messages stay out of
+  // `fields` (FIELD_DENIED): their edges only.
+  // The Page's own reads among them go with the chosen Page's token (meta-page-reads.ts).
+  { route: /^\d+\/conversations$/, keys: new Set(['platform']), when: valueIn('platform', ['messenger', 'instagram']) },
+  { route: /^\d+\/conversations$/, keys: new Set(['user_id']), when: digitsIn('user_id') },
+  { route: /^\d+\/conversations$/, keys: new Set(['folder']), when: valueIn('folder', ['partnership']) },
+  { route: /^\d+\/thread_owner$/, keys: new Set(['recipient']), when: digitsIn('recipient') },
+  { route: /^\d+\/(messenger_call_permissions|custom_user_settings)$/, keys: new Set(['psid']), when: digitsIn('psid') },
+  { route: /^\d+\/messenger_profile$/, keys: new Set(['platform']), when: valueIn('platform', ['messenger', 'instagram']) },
+  { route: /^\d+\/welcome_message_flows$/, keys: new Set(['flow_id']), when: digitsIn('flow_id') },
+  { route: /^\d+\/message_templates$/, keys: new Set(['name']), when: (query) => /^[a-z0-9_]{1,512}$/.test(query.get('name') ?? '') },
+  { route: /^\d+\/message_templates$/, keys: new Set(['name_or_content']), when: (query) => /^[^\x00-\x1f\x7f]{1,100}$/u.test(query.get('name_or_content') ?? '') },
+  {
+    route: /^\d+\/message_templates$/, keys: new Set(['language']),
+    when: (query) => { const list = (query.get('language') ?? '').split(','); return list.length <= 20 && new Set(list).size === list.length && list.every((l) => /^[a-z]{2,3}(_[A-Z]{2,3})?$/.test(l)) },
+  },
+  { route: /^\d+\/message_templates$/, keys: new Set(['status']), when: (query) => subsetOf(query.get('status'), ['APPROVED', 'IN_APPEAL', 'PENDING', 'REJECTED', 'PENDING_DELETION', 'DELETED', 'DISABLED', 'PAUSED', 'LIMIT_EXCEEDED', 'ARCHIVED']) },
+  { route: /^\d+\/message_templates$/, keys: new Set(['category']), when: (query) => subsetOf(query.get('category'), ['MARKETING', 'UTILITY', 'AUTHENTICATION']) },
+  { route: /^\d+\/message_templates$/, keys: new Set(['quality_score']), when: (query) => subsetOf(query.get('quality_score'), ['GREEN', 'YELLOW', 'RED', 'UNKNOWN']) },
+  { route: /^\d+\/message_templates$/, keys: new Set(['since', 'until']), when: (query) => ['since', 'until'].every((k) => !query.has(k) || /^\d{1,12}$/.test(query.get(k) ?? '')) },
+  // Step 4 (meta-business, meta-business-people, meta-business-assets, meta-business-partners — marketing/meta-ads/live-business.ts),
+  // each key only on its own edge and only with a value Nexus sends (services/meta/meta-business-lists.ts): an invitation's
+  // asset type (REQUIRED by Meta on both edges), a client object's type (REQUIRED), the partner list without declined
+  // requests, the sharing agreements by status or partner portfolio.
+  { route: /^\d+\/(assigned_client_assets|assigned_owned_assets)$/, keys: new Set(['asset_type']), when: valueIn('asset_type', META_INVITATION_ASSET_TYPES) },
+  { route: /^\d+\/client_objects$/, keys: new Set(['type']), when: valueIn('type', META_CLIENT_OBJECT_VALUES) },
+  { route: /^\d+\/partner_relationships$/, keys: new Set(['exclude_declined_requests']), when: valueIn('exclude_declined_requests', ['true', 'false']) },
+  { route: /^\d+\/initiated_sharing_agreements$/, keys: new Set(['request_status']), when: valueIn('request_status', META_SHARING_AGREEMENT_STATUSES) },
+  { route: /^\d+\/initiated_sharing_agreements$/, keys: new Set(['receiving_business_id']), when: digitsIn('receiving_business_id') },
+  // Review B-F1 — and the agreements others started with this portfolio (business/received_sharing_agreements: the same
+  // request_status enum, requesting_business_id).
+  { route: /^\d+\/received_sharing_agreements$/, keys: new Set(['request_status']), when: valueIn('request_status', META_SHARING_AGREEMENT_STATUSES) },
+  { route: /^\d+\/received_sharing_agreements$/, keys: new Set(['requesting_business_id']), when: digitsIn('requesting_business_id') },
 ]
 /** Step 5 — the key's value is a Meta id (digits). */
 function digitsIn(key: string): (query: URLSearchParams) => boolean {
@@ -691,8 +734,12 @@ export interface MetaCallVerdict {
   /**
    * Step 30 part 3 — the ONE read that goes with a Page's own token: the apps installed on a Page (`<page>/subscribed_apps`).
    * The gateway reads that token itself (meta-page-token.ts), only when `pageId` is the business's CHOSEN Page.
+   * Step 15 — and the chosen Page's conversations, inbox and messaging setup (meta-page-reads.ts; `pageId` null: a
+   * conversation's own node or messages, with the chosen Page's token).
    */
-  pageRead?: { pageId: string }
+  pageRead?: MetaPageRead
+  /** Step 15 fix A1 — a read of the business's WhatsApp Business account: its own rate bucket (meta-page-reads.ts). */
+  whatsappRead?: true
 }
 
 /** Step 30 part 3 — what the read of a Page's connected apps may name (reference/page/subscribed_apps: id, name, subscribed_fields). */
@@ -777,6 +824,12 @@ export function metaCallVerdict(input: { method: string; url: string; kind: stri
     if (after !== null && !PAGE_APPS_CURSOR.test(after)) return refuse('a Page\'s connected apps are read with after as Meta\'s own cursor only (letters, digits, _, - and =, at most 512)')
     return { problem: null, renewalClientId: null, pageRead: { pageId: pageApps[1] } }
   }
+  // Step 15 — the chosen Page's conversations, inbox and messaging setup go with the Page's own token too: exact keys and
+  // fields per route (meta-page-reads.ts), and gateway.ts checks the Page is the chosen one before any token is read.
+  const pageRead = metaPageReadOf(route, segments, search, input.auth)
+  if (pageRead && 'problem' in pageRead) return refuse(pageRead.problem)
+  if (pageRead) return { problem: null, renewalClientId: null, pageRead: pageRead as MetaPageRead }
+  if (metaWhatsAppRead(route, search, false)) return { problem: null, renewalClientId: null, whatsappRead: true }
   return { problem: null, renewalClientId: null }
 }
 

@@ -1,0 +1,49 @@
+/*
+ * /listings — the Problems view (live layer step 7). Layout and domain content only: every control is a design-system
+ * component and nothing here restyles one. `--nds-*` tokens only.
+ */
+
+/* The capped notice sits inside the grid card, above the list, with the card's own side padding. */
+.capped { margin: var(--nds-space-8) var(--nds-space-12); }
+
+/* Problem: the label on its line, the tags under it. Wraps rather than cuts: every word of a label must show. */
+.problem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-3);
+  min-width: 0;
+  padding-block: var(--nds-space-6);
+}
+.label {
+  font-weight: var(--nds-font-weight-semibold);
+  font-size: var(--nds-font-size-base);
+  color: var(--nds-text);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+
+/* Where and Message: the words wrap, word for word; the row grows with them. */
+.where,
+.message {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding-block: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+}
+.where { color: var(--nds-text-2); }
+.message { color: var(--nds-text); }
+
+/* The Products view while Problems shows: still mounted (the tiles, the header, the saved views read it), out of sight,
+   out of the tab order, taking no room. `visibility` keeps its layout real, so its columns measure true on return. */
+.offstage {
+  visibility: hidden;
+  height: 0;
+  overflow: hidden;
+}

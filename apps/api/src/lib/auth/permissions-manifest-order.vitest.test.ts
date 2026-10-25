@@ -278,6 +278,11 @@ describe('permission manifest ordering', () => {
     expect(permissionForRoute('POST', '/api/catalog-transfer/jobs/job/apply')).toBe('products.import')
   })
 
+  it('lets product readers open the Listings Problems view (live layer step 7), not the import catch-all', () => {
+    expect(permissionForRoute('GET', '/api/catalog-transfer/readiness/problems')).toBe('products.view')
+    expect(permissionForRoute('POST', '/api/catalog-transfer/readiness/problems')).toBe('products.import')
+  })
+
   it('requires import permission for legacy import writes and view permission for history', () => {
     expect(permissionForRoute('GET', '/api/import-jobs')).toBe('products.view')
     expect(permissionForRoute('POST', '/api/import-jobs')).toBe('products.import')

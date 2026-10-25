@@ -127,7 +127,8 @@ describe('MCP.3 — every tool describes its own arguments', () => {
     // W4-1 — so is report-ads-run: the scheduled Claude run's own report.
     // Meta ads step 10 (review A2) — and meta-ad-preview: its links are public, and the in-app chat keeps tool results.
     // Meta ads step 14 — and meta-leads, meta-comments: people's data is never kept in an in-app run.
-    const mcpOnly = new Set(['confirm-change', 'report-ads-run', 'meta-ad-preview', 'meta-leads', 'meta-comments'])
+    // Meta ads step 15 — and meta-conversations: people's messages are never kept in an in-app run.
+    const mcpOnly = new Set(['confirm-change', 'report-ads-run', 'meta-ad-preview', 'meta-leads', 'meta-comments', 'meta-conversations'])
     expect(offered.map((t) => t.name).sort()).toEqual(listTools().filter((t) => !mcpOnly.has(t.name)).map((t) => t.name).sort())
     for (const tool of offered) expect(tool.input_schema).toBe(inputJsonSchema(listTools().find((t) => t.name === tool.name)!))
   })
