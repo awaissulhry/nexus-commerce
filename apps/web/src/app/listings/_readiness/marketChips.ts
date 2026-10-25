@@ -1,5 +1,6 @@
 /**
- * Listing readiness — the Markets column's chips, the Next step line and the Fix target, in words.
+ * Listing readiness — the Markets column's chips and the Next step line, in words (where Open opens a row is
+ * `listingDialogModel.ts`'s `openDestination`).
  *
  * One chip per destination the row is on, in the API's destination order (Shared, then channel, market, store,
  * alias). The chip's colour and word are the design system's (`readinessMeta(state, 'scope')`); its number is the
@@ -8,7 +9,7 @@
  *
  * Pure — no React — so the chip text and the screen-reader sentence are tests.
  */
-import type { ReadinessChip, ReadinessDestination, ReadinessNextStep, ReadinessRowBase, ReadinessStateCounts } from '@nexus/shared/listing-readiness'
+import type { ReadinessChip, ReadinessDestination, ReadinessNextStep, ReadinessStateCounts } from '@nexus/shared/listing-readiness'
 import { readinessMeta, SCOPE_READINESS_STATES } from '@/design-system/grid/renderers/readiness'
 import { liveSentence } from './liveMarks'
 
@@ -103,7 +104,7 @@ export function chipLines(chips: readonly ReadinessChip[], destinationOf: (key: 
   return linesOf(placed, (c) => destinationOf(c.chip.destinationKey))
 }
 
-/** The Fix window's market switcher, in the same lines as the grid's chips. */
+/** The Listing window's market switcher, in the same lines as the grid's chips. */
 export function destinationLines(destinations: readonly ReadinessDestination[]): Array<PlaceLine<{ destination: ReadinessDestination; text: string }>> {
   return linesOf(destinations.map((destination) => ({ destination, text: placeOf(destination).word })), (x) => x.destination)
 }
@@ -135,18 +136,6 @@ export function worstChip(chips: readonly ReadinessChip[]): ReadinessChip | null
     if (!worst || (RANK.get(chip.state) ?? 99) < (RANK.get(worst.state) ?? 99)) worst = chip
   }
   return worst
-}
-
-/** Where Fix opens: the next step's destination, else the chip that needs attention first. */
-export function fixDestination(row: Pick<ReadinessRowBase, 'nextStep' | 'chips'>): string | null {
-  return row.nextStep?.destinationKey ?? worstChip(row.chips)?.destinationKey ?? null
-}
-
-/** Why Fix is held on this row, or null when it opens. */
-export function fixHeldReason(row: Pick<ReadinessRowBase, 'nextStep' | 'chips' | 'state'>): string | null {
-  if (row.chips.length === 0) return 'Nothing to check: this product has no listing here.'
-  if (!row.nextStep && row.state === 'ready') return 'Ready on every market. Nothing to fix.'
-  return null
 }
 
 /** The Next step's last line: "Amazon DE · 20 products" (the products on that destination the problem touches). */

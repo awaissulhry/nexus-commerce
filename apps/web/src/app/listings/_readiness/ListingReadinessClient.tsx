@@ -32,6 +32,8 @@
  * Step 7 adds the Problems view (`ProblemsView.tsx`): a Products | Problems switch in the toolbar (`?view=problems`), one
  * row per problem × destination, and Show products back here with `?problem=<id>` and its removable chip. The Products
  * grid stays mounted off stage meanwhile, so the header, the tiles and the saved views keep reading it.
+ * The Listing window (step 5): a chip, Open, or a link `?listing=<listingId>` opens one product or family on one
+ * destination (`ListingDialog.tsx`); ▲ / ▼ (J / K) walk the grid's rows in view. It replaced the Fix window.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Archive, ChevronDown, Download, History, Search, SlidersHorizontal } from 'lucide-react'
@@ -46,8 +48,8 @@ import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { streamsEnabled } from '@/lib/sync/dev-stream-gate'
 import { Button, Input, Pill, TokenChip } from '@/design-system/primitives'
-import { Banner, EmptyState, Menu, MetricStrip, ToastProvider, type MenuItemDef, type Metric } from '@/design-system/components'
-import { FilterBar, GridToolbar, PageHeader, PreferencesModal, type FilterDimension, type PreferencesValue } from '@/design-system/patterns'
+import { Banner, EmptyState, Menu, MetricStrip, ToastProvider, useToast, type MenuItemDef, type Metric } from '@/design-system/components'
+import { FilterBar, GridToolbar, PageHeader, PreferencesModal, type DetailNav, type FilterDimension, type PreferencesValue } from '@/design-system/patterns'
 import type { PreferencesColumnSpec } from '@/design-system/patterns/PreferencesModal'
 import {
   AG_AUTO_COL,
@@ -74,7 +76,8 @@ import {
 import { transferApi } from '@/app/products/catalog-transfer/transferApi'
 import { TranslateDialog, useCatalogLanguages } from '@/app/products/next/TranslateDialog'
 import { DEFAULT_DENSITY, type DensityMode } from '@/app/products/next/density'
-import { ReadinessFixDialog } from './FixDialog'
+import { ListingDialog } from './ListingDialog'
+import { destinationForRow, navIds, type ListingTab, type ViewRow } from './listingDialogModel'
 import styles from './readiness.module.css'
 import { ReadinessFamilyFooter, readinessColumns, readinessTreeColumn, type ReadinessGridContext } from './readinessColumns'
 import { createReadinessDatasource, type ReadinessTopLevel } from './readinessDatasource'
@@ -103,7 +106,7 @@ import {
   type ReadinessPageSize,
   type ReadinessViewFilters,
 } from './readinessQuery'
-import { canExpand, isFamilyRow, isReadinessFooter, readinessRowId, type ReadinessGridRow } from './readinessRows'
+import { canExpand, isFamilyRow, isReadinessFooter, readinessRowId, type ReadinessDataRow, type ReadinessGridRow } from './readinessRows'
 import { listingsInView, stateForTile, tileAccent, tileCount, tileHint, tileIsLit, tileLabel, visibleTiles } from './readinessTiles'
 import { channelLabel, destinationLookup, orderedChips, plural } from './marketChips'
 import { marketsColumnState, marketsFill, marketsFillForWindow, sizingForWidth } from './marketsWidth'
@@ -211,14 +214,25 @@ interface ReadinessViewState {
   filters: ReadinessViewFilters
 }
 
-interface FixTarget {
+/** What the Listing window shows: one product or family on one destination, on one tab. */
+interface ListingTarget {
   productId: string
   family: boolean
   destinationKey: string
   /** The row's own destinations, in chip order: the window's switcher. */
   destinations: ReadinessDestination[]
   productName: string
+  tab: ListingTab
+  /** The grid row it shows (Prev / Next); null when opened from a link (the row is then looked up by product). */
+  rowId: string | null
+  /** Prev / Next moved on: closing returns the focus to this row's chip, not to what opened the window. */
+  moved: boolean
+  /** A `?listing=` link: the listing the per-listing tabs open on. */
+  listingId: string | null
 }
+
+/** `GET /api/catalog-transfer/readiness/listing/:id` — where one listing sits on the page. */
+interface ListingLink { productId: string; rootId: string; destinationKey: string; sku: string; name: string | null }
 
 /** A select filter whose value the options do not list (still loading, or an older link) still shows that value. */
 function withCurrent(options: Array<{ value: string; label: string }>, value: string): Array<{ value: string; label: string }> {
@@ -409,24 +423,44 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
     [],
   )
 
-  // ── The Fix window ────────────────────────────────────────────
-  const [fix, setFix] = useState<FixTarget | null>(null)
+  // ── The Listing window ────────────────────────────────────────
+  const [target, setTarget] = useState<ListingTarget | null>(null)
+  const targetRef = useRef(target)
+  targetRef.current = target
+
+  /** The grid's rows in view (the page on screen, open families included), in order: what Prev / Next walk. */
+  const rowsInView = useCallback((): ViewRow[] => {
+    const api = gridApiRef.current
+    if (!api || api.isDestroyed()) return []
+    const rows: ViewRow[] = []
+    for (let i = Math.max(0, api.getFirstDisplayedRowIndex()); i <= api.getLastDisplayedRowIndex(); i++) {
+      const node = api.getDisplayedRowAtIndex(i)
+      if (node?.id && node.data && !isReadinessFooter(node.data)) rows.push({ id: node.id, data: node.data })
+    }
+    return rows
+  }, [])
+
+  /** The window on one row: a family row's chip is the family's verdict, so the window reads the whole family there. */
+  const targetFor = useCallback((row: ReadinessDataRow, destinationKey: string, rowId: string | null): Omit<ListingTarget, 'tab' | 'moved' | 'listingId'> => {
+    const own = orderedChips(row.chips, queryRef.current?.parent ? [...knownRef.current.values()] : destinationsRef.current)
+    return {
+      productId: row.id,
+      family: isFamilyRow(row) && row.isParent && !queryRef.current?.parent,
+      destinationKey,
+      destinations: own.map((chip) => lookupRef.current(chip.destinationKey)),
+      productName: row.name || row.sku,
+      rowId,
+    }
+  }, [])
 
   /** One object for the life of the page (AG `context`); its functions read the page's current state. */
   const cellContext = useMemo<ReadinessGridContext>(
     () => ({
       destinations: () => (queryRef.current?.parent ? [...knownRef.current.values()] : destinationsRef.current),
       destinationOf: (key) => lookupRef.current(key),
-      // A family row's chip is the family's verdict: the window reads the whole family on that destination.
-      openFix: (row, destinationKey) => {
-        const own = orderedChips(row.chips, queryRef.current?.parent ? [...knownRef.current.values()] : destinationsRef.current)
-        setFix({
-          productId: row.id,
-          family: isFamilyRow(row) && row.isParent && !queryRef.current?.parent,
-          destinationKey,
-          destinations: own.map((chip) => lookupRef.current(chip.destinationKey)),
-          productName: row.name || row.sku,
-        })
+      openListing: (row, destinationKey, opts) => {
+        const rowId = opts?.rowId ?? rowsInView().find((r) => r.data === row)?.id ?? null
+        setTarget({ ...targetFor(row, destinationKey, rowId), tab: opts?.tab ?? 'readiness', moved: false, listingId: null })
       },
       familyHref: (rootId) => familyPageHref(queryRef.current ?? EMPTY_READINESS_QUERY, rootId),
       flat: () => !!queryRef.current?.parent,
@@ -436,7 +470,7 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       pageChannel: () => lock?.channel ?? null,
       now: () => Date.now(),
     }),
-    [lock],
+    [lock, rowsInView, targetFor],
   )
   /** Markets takes the free width only when there is some (`marketsWidth.ts`). The window's width decides
    *  before the grid's first layout (AG must never start with a flex column it cannot place); the card's width after. */
@@ -591,6 +625,59 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       document.removeEventListener('visibilitychange', refreshVisible)
     }
   }, [refreshGrid])
+
+  // ── The Listing window: Prev / Next, the switcher, the link ───
+  /** The grid changed under an open window (a refresh, a family folded open): "3 of 50" is counted again. */
+  const [, setGridTick] = useState(0)
+  const onModelUpdated = useCallback(() => { if (targetRef.current) setGridTick((n) => n + 1) }, [])
+  const goToRow = useCallback((id: string) => {
+    const row = rowsInView().find((r) => r.id === id)
+    if (!row) return
+    setTarget((t) => {
+      if (!t) return t
+      const key = destinationForRow(row.data, t.destinationKey)
+      return key ? { ...targetFor(row.data, key, row.id), tab: t.tab, moved: true, listingId: null } : t
+    })
+  }, [rowsInView, targetFor])
+  const closeWindow = useCallback(() => {
+    setTarget(null)
+    // A link's window closes for good: the address no longer opens it.
+    if (queryRef.current?.listing) setQuery((q) => ({ ...q, listing: '' }))
+  }, [setQuery])
+  // After Prev / Next the opener was another row's chip: the focus goes back to this row's chip instead.
+  const returnFocus = useCallback(() => {
+    const t = targetRef.current
+    if (!t?.moved || !t.rowId) return null
+    return document.querySelector<HTMLElement>(`.ag-row[row-id="${CSS.escape(t.rowId)}"] [data-destination-key="${CSS.escape(t.destinationKey)}"]`)
+  }, [])
+  // `?listing=<id>`: where that listing sits, then the window on it ("On the channel" first).
+  const { toast } = useToast()
+  const linkedListing = query?.listing ?? ''
+  useEffect(() => {
+    if (!linkedListing) return
+    const controller = new AbortController()
+    void transferApi<ListingLink>(`catalog-transfer/readiness/listing/${encodeURIComponent(linkedListing)}`, undefined, controller.signal)
+      .then((link) => {
+        if (controller.signal.aborted) return
+        setTarget({
+          productId: link.productId, family: false, destinationKey: link.destinationKey, destinations: [lookupRef.current(link.destinationKey)],
+          productName: link.name || link.sku, tab: 'channel', rowId: null, moved: false, listingId: linkedListing,
+        })
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return
+        toast(`The listing in the link could not be opened: ${error instanceof Error ? error.message : String(error)}`, 'warning')
+        setQuery((q) => ({ ...q, listing: '' }))
+      })
+    return () => controller.abort()
+  }, [linkedListing, setQuery, toast])
+  let nav: DetailNav | undefined
+  if (target) {
+    const rows = rowsInView()
+    // A link's window has no row: the product's own row, when it is in view.
+    const current = target.rowId ?? rows.find((r) => r.data.id === target.productId)?.id ?? ''
+    nav = { ids: navIds(rows), current, onGo: goToRow, noun: 'product' }
+  }
 
   // ── Filters ───────────────────────────────────────────────────
   const languages = useCatalogLanguages()
@@ -1034,6 +1121,7 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
                 cacheBlockSize={query.pageSize}
                 getRowId={getRowId}
                 onGridReady={onGridReady}
+                onModelUpdated={onModelUpdated}
                 treeData
                 flatTree
                 isServerSideGroup={isServerSideGroup}
@@ -1084,17 +1172,23 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
         />
       )}
 
-      {fix && (
-        <ReadinessFixDialog
+      {target && (
+        <ListingDialog
           open
-          // The window only reads; a fix saved elsewhere arrives as a live event. Closing returns the focus to the chip.
-          onClose={() => setFix(null)}
-          productId={fix.productId}
-          family={fix.family}
-          destinationKey={fix.destinationKey}
-          destinations={fix.destinations}
+          // A fix saved elsewhere arrives as a live event. Closing returns the focus to the chip or button that opened it.
+          onClose={closeWindow}
+          productId={target.productId}
+          family={target.family}
+          destinationKey={target.destinationKey}
+          destinations={target.destinations}
+          onDestination={(key) => setTarget((t) => (t ? { ...t, destinationKey: key, listingId: null } : t))}
+          tab={target.tab}
+          onTab={(tab) => setTarget((t) => (t ? { ...t, tab } : t))}
           query={apiFilterParams(query)}
-          productName={fix.productName}
+          productName={target.productName}
+          listingId={target.listingId}
+          nav={nav}
+          returnFocusTo={returnFocus}
         />
       )}
 
