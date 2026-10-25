@@ -3,12 +3,14 @@
  *
  * One chip per destination the row is on, in the API's destination order (Shared, then channel, market, store,
  * alias). The chip's colour and word are the design system's (`readinessMeta(state, 'scope')`); its number is the
- * API's `issueCount`. Nothing here decides a verdict — it only says what the API answered.
+ * API's `issueCount`. Nothing here decides a verdict — it only says what the API answered. The chip's live mark and the
+ * channel's part of its sentence are `liveMarks.ts`'s (the live layer, 2026-10-25).
  *
  * Pure — no React — so the chip text and the screen-reader sentence are tests.
  */
 import type { ReadinessChip, ReadinessDestination, ReadinessNextStep, ReadinessRowBase, ReadinessStateCounts } from '@nexus/shared/listing-readiness'
 import { readinessMeta, SCOPE_READINESS_STATES } from '@/design-system/grid/renderers/readiness'
+import { liveSentence } from './liveMarks'
 
 export const plural = (n: number, one: string, many = `${one}s`): string => `${n.toLocaleString('en')} ${n === 1 ? one : many}`
 
@@ -108,16 +110,20 @@ export function destinationLines(destinations: readonly ReadinessDestination[]):
 
 /**
  * The chip's full sentence for a screen reader and the pointer: "Amazon DE: Blocked, 3 problems, 20 products". On one
- * destination a listing IS a product there, so the sentence counts products (one unit with the toolbar).
+ * destination a listing IS a product there, so the sentence counts products (one unit with the toolbar). With live data
+ * (`chip.live`) the channel's part follows: "… 20 products. On Amazon: Mixed, 18 Active, 2 Not listed. 1 Suppressed."
+ * `channel` is the destination's channel (`AMAZON`); without it the live part is left out.
  */
-export function chipAriaLabel(chip: ReadinessChip, label: string): string {
+export function chipAriaLabel(chip: ReadinessChip, label: string, channel?: string): string {
   const meta = readinessMeta(chip.state, 'scope')
   const products = listingTotal(chip.counts)
   const parts = [meta.label]
   if (chip.issueCount > 0) parts.push(plural(chip.issueCount, 'problem'))
   parts.push(plural(products, 'product'))
-  const sentence = `${label}: ${parts.join(', ')}`
-  return chip.pending ? `${sentence}. Checking again now; this is the last result.` : sentence
+  const readiness = `${label}: ${parts.join(', ')}`
+  const sentence = chip.live && channel ? `${readiness}. ${liveSentence(chip.live, channelLabel(channel))}` : readiness
+  if (!chip.pending) return sentence
+  return `${sentence}${sentence.endsWith('.') ? '' : '.'} Checking again now; this is the last result.`
 }
 
 const RANK = new Map(SCOPE_READINESS_STATES.map((s, i) => [s, i]))

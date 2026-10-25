@@ -5,7 +5,10 @@
  *
  *   Product    the tree column: the DS identity cell (expander · photo · name → studio · SKU · "N variations"), drawn
  *              the way the Products page draws it (`next/columns.tsx` `ProductCell`, `next/ProductTreeCell.tsx`).
- *   Markets    one chip per destination — a DS `Pill` that is a real button; its tone and word are `readinessMeta`.
+ *   Markets    one chip per destination — a DS `Pill` that is a real button; its tone and word are `readinessMeta`,
+ *              its mark what the channel shows (`liveMarks.ts`: ● Active · ◐ Mixed · ○ not selling · ▲ a problem).
+ *   On the channel  the row's listings on the channel, summed over its chips ("18 Active · 2 Not listed"). Only when
+ *              the page has live data (the live layer, 2026-10-25).
  *   Next step  the most urgent problem, a link to the exact field in the studio, and where it is.
  *   Checked    how old the check is; "Checking…" while Nexus rebuilds it.
  *   Actions    Fix (the Fix window) · Edit (the studio) — the DS `actionsColumn`.
@@ -13,14 +16,15 @@
  * Cells read the page through AG's `context` (`ReadinessGridContext`): the destination labels, the Fix window and the
  * family page link. Every verdict, count and order is the API's.
  */
-import { Fragment } from 'react'
-import { ExternalLink } from 'lucide-react'
+import { Fragment, type ReactElement } from 'react'
+import { Circle, Contrast, ExternalLink, TriangleAlert } from 'lucide-react'
 import type { ReadinessDestination } from '@nexus/shared/listing-readiness'
 
 import Link from '@/lib/workspaces/Link'
 import { browserWorkspaceId, workspaceHref } from '@/lib/workspaces/paths'
 import { Button, Pill, Spinner, Tag } from '@/design-system/primitives'
 import {
+  EmptyValue,
   ExpandButton,
   ExpandSlot,
   FamilyFooterFrame,
@@ -35,6 +39,7 @@ import {
 } from '@/design-system/grid'
 
 import styles from './readiness.module.css'
+import { chipGlyph, LIVE_COLUMN, onChannelWords, type ChipGlyph } from './liveMarks'
 import { chipAriaLabel, chipLines, chipText, fixDestination, fixHeldReason, nextStepPlace, orderedChips, plural, type PlacedChip } from './marketChips'
 import { MARKETS_FIXED_WIDTH } from './marketsWidth'
 import { absoluteTime, relativeTime } from './relativeTime'
@@ -51,6 +56,8 @@ export interface ReadinessGridContext {
   familyHref: (rootId: string) => string
   /** A family's own page: its members are flat, nothing folds open. */
   flat: () => boolean
+  /** The latest answer carries live data (`pageHasLive`): the chips draw their live marks. */
+  liveShown: () => boolean
   now: () => number
 }
 
@@ -110,23 +117,36 @@ export function ReadinessTreeCell(p: CellParams) {
 
 /* ── Markets ────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
+/** The glyph in the chip's icon slot. The sentence says it in words; the glyph is for the eye. */
+const GLYPH_ICON: Record<Exclude<ChipGlyph, 'dot' | 'none'>, ReactElement> = {
+  pending: <Spinner size={9} />,
+  mixed: <Contrast size={10} strokeWidth={2.5} aria-hidden />,
+  off: <Circle size={10} strokeWidth={2.5} aria-hidden />,
+  problem: <TriangleAlert size={10} strokeWidth={2.5} aria-hidden />,
+}
+
 export function MarketChipsCell(p: CellParams) {
   const data = dataOf(p)
   if (!data) return null
   const ctx = contextOf(p)
   const chips = orderedChips(data.chips, ctx.destinations())
   if (chips.length === 0) return <span className={styles.none}>No markets</span>
+  const liveShown = ctx.liveShown()
   const pill = ({ chip, label, text }: PlacedChip) => {
-    const sentence = chipAriaLabel(chip, label)
+    const sentence = chipAriaLabel(chip, label, ctx.destinationOf(chip.destinationKey).channel)
     const tone = readinessMeta(chip.state, 'scope').tone
     const open = () => ctx.openFix(data, chip.destinationKey)
-    // A chip waiting for its rebuild says so with the DS spinner in place of its status dot.
-    return chip.pending ? (
-      <Pill key={chip.destinationKey} tone={tone} icon={<Spinner size={9} />} onClick={open} aria-label={sentence} title={sentence}>
-        {text}
-      </Pill>
-    ) : (
-      <Pill key={chip.destinationKey} tone={tone} dot onClick={open} aria-label={sentence} title={sentence}>
+    // The colour stays the readiness colour; the mark is the channel's (a waiting rebuild keeps the DS spinner).
+    const glyph = chipGlyph(chip, liveShown)
+    if (glyph === 'dot' || glyph === 'none') {
+      return (
+        <Pill key={chip.destinationKey} tone={tone} dot={glyph === 'dot'} onClick={open} aria-label={sentence} title={sentence}>
+          {text}
+        </Pill>
+      )
+    }
+    return (
+      <Pill key={chip.destinationKey} tone={tone} icon={GLYPH_ICON[glyph]} onClick={open} aria-label={sentence} title={sentence}>
         {text}
       </Pill>
     )
@@ -145,6 +165,22 @@ export function MarketChipsCell(p: CellParams) {
           </Fragment>
         ),
       )}
+    </div>
+  )
+}
+
+/* ── On the channel ─────────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** The row's listings on the channel: the states on one line, the problems under them. A dash: no live data here. */
+export function OnChannelCell(p: CellParams) {
+  const data = dataOf(p)
+  if (!data) return null
+  const words = onChannelWords(data.chips)
+  if (!words) return <EmptyValue />
+  return (
+    <div className={styles.onChannel} title={words.text}>
+      {words.states && <span className={styles.onChannelStates}>{words.states}</span>}
+      {words.problems && <span className={styles.onChannelProblems}>{words.problems}</span>}
     </div>
   )
 }
@@ -206,10 +242,11 @@ export function ReadinessFamilyFooter(p: CellParams) {
 
 /* ── Column definitions ─────────────────────────────────────────────────────────────────────────────────────────── */
 
-/** The page's columns, in order, for the Customise dialog. Product and Actions stay. */
+/** The page's columns, in order, for the Customise dialog. Product and Actions stay. On the channel: with live data only. */
 export const READINESS_COLUMN_SPECS = [
   { key: 'product', label: 'Product', locked: true },
   { key: 'markets', label: 'Markets' },
+  { key: LIVE_COLUMN, label: 'On the channel' },
   { key: 'nextStep', label: 'Next step' },
   { key: 'checked', label: 'Checked' },
   { key: 'actions', label: 'Actions', locked: true },
@@ -234,8 +271,22 @@ export function readinessTreeColumn(): ColDef<ReadinessGridRow> {
   }
 }
 
-export function readinessColumns(ctx: ReadinessGridContext, { fill = true }: { fill?: boolean } = {}): ColDef<ReadinessGridRow>[] {
+/**
+ * The columns. `live`: the page has live data — only then is there an "On the channel" column (an older API, or a
+ * person without `listings.view`, sees the page as it was).
+ */
+export function readinessColumns(ctx: ReadinessGridContext, { fill = true, live = false }: { fill?: boolean; live?: boolean } = {}): ColDef<ReadinessGridRow>[] {
   const row = (v: { data?: ReadinessGridRow }) => (v.data && !isReadinessFooter(v.data) ? v.data : null)
+  const onChannel: ColDef<ReadinessGridRow>[] = live ? [{
+    colId: LIVE_COLUMN,
+    headerName: 'On the channel',
+    width: 210,
+    minWidth: 170,
+    sortable: false,
+    cellClass: 'nds-ag-cell',
+    valueGetter: (v) => { const d = row(v); return d ? onChannelWords(d.chips)?.text ?? null : null },
+    cellRenderer: OnChannelCell,
+  }] : []
   return [
     {
       colId: 'markets',
@@ -253,6 +304,7 @@ export function readinessColumns(ctx: ReadinessGridContext, { fill = true }: { f
       },
       cellRenderer: MarketChipsCell,
     },
+    ...onChannel,
     {
       colId: 'nextStep',
       headerName: 'Next step',

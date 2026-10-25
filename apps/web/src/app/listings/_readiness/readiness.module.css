@@ -133,6 +133,28 @@
   color: var(--nds-text-muted);
 }
 
+/* ── On the channel: the states on one line, the problems under them (the Next step's two-line shape) ── */
+.onChannel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  width: 100%;
+}
+.onChannelStates,
+.onChannelProblems {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-size: var(--nds-font-size-sm);
+}
+.onChannelStates { color: var(--nds-text-2); }
+.onChannelProblems {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-danger-text);
+}
+
 /* ── Checked: the age of the check; "Checking…" above it while Nexus rebuilds ── */
 .checked {
   display: flex;

@@ -7,6 +7,7 @@ import {
   familiesParams,
   familyPageHref,
   membersParams,
+  notFoundWords,
   pageOfBlock,
   parseReadinessQuery,
   selectorChipText,
@@ -135,7 +136,7 @@ describe('saved views keep the filters, not the link’s selection', () => {
   it('round-trips the filters and the state', () => {
     const q = parseReadinessQuery('?channel=AMAZON&marketplace=DE&state=warn&productIds=p1')
     const filters = viewFiltersOf(q)
-    expect(filters).toEqual({ channel: 'AMAZON', marketplace: 'DE', accountId: '', language: '', familyId: '', state: 'warn' })
+    expect(filters).toEqual({ channel: 'AMAZON', marketplace: 'DE', accountId: '', language: '', familyId: '', state: 'warn', live: [], flags: [] })
     expect(withViewFilters(EMPTY_READINESS_QUERY, filters)).toMatchObject({ channel: 'AMAZON', marketplace: 'DE', state: 'warn', page: 1 })
   })
   it('ignores junk from an old view', () => {
@@ -213,7 +214,7 @@ describe('a store page', () => {
   it('counts and saves only the filters the page does not fix', () => {
     const q = parseReadinessQuery('?language=it&familyId=f1', AMAZON_IT)
     expect(activeFilterCount(q)).toBe(2)
-    expect(viewFiltersOf(q)).toEqual({ channel: '', marketplace: '', accountId: '', language: 'it', familyId: 'f1', state: '' })
+    expect(viewFiltersOf(q)).toEqual({ channel: '', marketplace: '', accountId: '', language: 'it', familyId: 'f1', state: '', live: [], flags: [] })
     expect(viewFiltersOf(parseReadinessQuery('?marketplace=DE', AMAZON))).toMatchObject({ channel: '', marketplace: 'DE' })
   })
 
@@ -226,5 +227,66 @@ describe('a store page', () => {
   it('Translate and the Fix window keep the store and market', () => {
     const q = parseReadinessQuery('?language=it', AMAZON_IT)
     expect(translateScope(q)).toEqual({ ok: true, query: { channel: 'AMAZON', marketplace: 'IT', language: 'it' } })
+  })
+})
+
+/* ── The live layer (step 3 of docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md) ─────────────────────────────────── */
+
+describe('the live filters in the address', () => {
+  it('live and flags are comma lists; junk is dropped, each value once, in the API’s order', () => {
+    const q = parseReadinessQuery('?live=ended,active,teleport,active&flags=lowStock,error,nope')
+    expect(q.live).toEqual(['active', 'ended'])
+    expect(q.flags).toEqual(['error', 'lowStock'])
+    expect(parseReadinessQuery('?live=&flags=,').live).toEqual([])
+  })
+  it('every live state and flag of the contract is read', () => {
+    expect(parseReadinessQuery('?live=active,paused,draft,not_listed,ended,unknown').live).toEqual(['active', 'paused', 'draft', 'not_listed', 'ended', 'unknown'])
+    expect(parseReadinessQuery('?flags=error,suppressed,outOfSync,lowStock').flags).toEqual(['error', 'suppressed', 'outOfSync', 'lowStock'])
+  })
+  it('sent to the API under the same names, and kept in the address', () => {
+    const q = parseReadinessQuery('?state=blocked&live=active,paused&flags=error&q=gale')
+    expect(apiFilterParams(q)).toEqual({ state: 'blocked', live: 'active,paused', flags: 'error', q: 'gale' })
+    expect(Object.fromEntries(familiesParams(q, 1, 50))).toMatchObject({ live: 'active,paused', flags: 'error' })
+    expect(Object.fromEntries(membersParams(q, 10, 0))).toMatchObject({ live: 'active,paused', flags: 'error' })
+    expect(serializeReadinessQuery(q)).toBe('state=blocked&live=active%2Cpaused&flags=error&q=gale')
+    expect(parseReadinessQuery(serializeReadinessQuery(q))).toEqual(q)
+  })
+  it('a store page keeps them, and its family page too', () => {
+    const lock: ReadinessLock = { channel: 'AMAZON', marketplace: 'IT' }
+    const q = parseReadinessQuery('?live=active&flags=suppressed', lock)
+    expect(apiFilterParams(q)).toEqual({ channel: 'AMAZON', marketplace: 'IT', live: 'active', flags: 'suppressed' })
+    expect(serializeReadinessQuery(q)).toBe('live=active&flags=suppressed')
+    expect(familyPageHref(q, 'root-1')).toBe('/listings/amazon/it?live=active&flags=suppressed&parent=root-1')
+    expect(withFilter(q, 'language', 'it')).toMatchObject({ live: ['active'], flags: ['suppressed'] })
+  })
+  it('Clear empties Channel state and Stock (Low stock); the live tiles’ flags stay, as the readiness tile does', () => {
+    const q = parseReadinessQuery('?language=it&live=paused&flags=error,lowStock&state=warn')
+    expect(activeFilterCount(q)).toBe(3)
+    expect(withoutFilters(q)).toMatchObject({ language: '', live: [], flags: ['error'], state: 'warn' })
+    expect(activeFilterCount(parseReadinessQuery('?flags=error'))).toBe(0)
+  })
+  it('a saved view keeps them; a view saved before them shows every channel state', () => {
+    const q = parseReadinessQuery('?live=active&flags=outOfSync')
+    expect(viewFiltersOf(q)).toMatchObject({ live: ['active'], flags: ['outOfSync'] })
+    expect(withViewFilters(EMPTY_READINESS_QUERY, viewFiltersOf(q))).toMatchObject({ live: ['active'], flags: ['outOfSync'] })
+    expect(withViewFilters(q, { channel: 'EBAY' })).toMatchObject({ live: [], flags: [] })
+    expect(withViewFilters(q, { live: ['nope', 'ended'] as never, flags: 'error' as never })).toMatchObject({ live: ['ended'], flags: [] })
+  })
+  it('Translate is held while they narrow the page: its scope cannot', () => {
+    expect(translateScope(parseReadinessQuery('?language=it&live=active'))).toMatchObject({ ok: false, reason: expect.stringContaining('channel') })
+    expect(translateScope(parseReadinessQuery('?language=it&flags=lowStock'))).toMatchObject({ ok: false, reason: expect.stringContaining('Stock') })
+  })
+})
+
+describe('a search with several terms', () => {
+  it('names the first terms that matched nothing, then how many more', () => {
+    const unmatched = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7']
+    expect(notFoundWords({ tokens: 40, unmatched })).toBe('7 of 40 not found: A1, A2, A3, A4, A5 and 2 more')
+    expect(notFoundWords({ tokens: 40, unmatched: ['B0ABC', 'GAL-1', '1234'] })).toBe('3 of 40 not found: B0ABC, GAL-1, 1234')
+  })
+  it('says nothing when every term matched, for one word, or from an older API', () => {
+    expect(notFoundWords({ tokens: 40, unmatched: [] })).toBeNull()
+    expect(notFoundWords({ tokens: 1, unmatched: ['x'] })).toBeNull()
+    expect(notFoundWords(undefined)).toBeNull()
   })
 })

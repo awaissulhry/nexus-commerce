@@ -18,6 +18,12 @@
  *
  * The menu's store pages are this page with a lock (`readinessScope.ts`, 2026-10-24): `/listings/amazon`,
  * `/listings/amazon/it`, `/listings/ebay`, `/listings/ebay/de`, `/listings/shopify` show that store (and market) only.
+ *
+ * The live layer (step 3 of docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md, read only): what the channel shows,
+ * as far as Nexus knows — each chip's mark, the "On the channel" column, the live tiles (Live · Errors · Suppressed ·
+ * Out of sync) and the Channel state and Stock filters. All of it only when the answer carries live data
+ * (`pageHasLive`); an older API, or a person without `listings.view`, sees the page as it was, the Amazon suppression
+ * banner included.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Archive, ChevronDown, History, Search, SlidersHorizontal } from 'lucide-react'
@@ -70,6 +76,7 @@ import {
   apiFilterParams,
   familyPageHref,
   isPageSize,
+  notFoundWords,
   parseReadinessQuery,
   selectorChipText,
   serializeReadinessQuery,
@@ -89,6 +96,22 @@ import { listingsInView, stateForTile, tileAccent, tileCount, tileHint, tileIsLi
 import { channelLabel, destinationLookup, orderedChips, plural } from './marketChips'
 import { marketsColumnState, marketsFill, marketsFillForWindow, sizingForWidth } from './marketsWidth'
 import { relativeTime } from './relativeTime'
+import { hasLiveColumn, LIVE_COLUMN, orderWithLiveAfterMarkets, pageHasLive } from './liveMarks'
+import {
+  CHANNEL_STATE_OPTIONS,
+  LIVE_TILE_HINT,
+  LIVE_TILES,
+  STOCK_OPTIONS,
+  channelStatesOf,
+  liveTileAccent,
+  liveTileCount,
+  liveTileIsLit,
+  liveTileLabel,
+  stockOf,
+  withChannelStates,
+  withLiveTile,
+  withStock,
+} from './liveFilters'
 import { legacyMarketHref, legacyPath, lockedKeys, marketCount, marketWord, readinessPath, scopeWords, storeWord, suppressedListings, type ReadinessLock } from './readinessScope'
 
 /* ── Constants ──────────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -108,23 +131,23 @@ const NO_CHOICES: number[] = []
 const NO_SORT_OPTIONS: Array<{ value: string; label: string }> = []
 const REFRESH_ALL: RefreshPlan = { all: true, roots: new Set() }
 
-const BRIDGE: PrefsBridgeOptions = {
-  columns: READINESS_COLUMN_SPECS.map((c) => ({ key: c.key, locked: 'locked' in c && c.locked })),
-  treeColumnKey: 'product',
-}
-const PREFERENCE_SPECS: PreferencesColumnSpec[] = READINESS_COLUMN_SPECS.map((c) => ({
-  key: c.key,
-  label: c.label,
-  ...('locked' in c && c.locked ? { locked: true, uncounted: true } : {}),
-}))
-const DEFAULT_PREFS: PreferencesValue = {
-  visibleColumns: READINESS_COLUMN_SPECS.map((c) => c.key),
-  lockedColumns: [],
-  stickyFirstColumn: true,
-  stickyLastColumn: true,
-  pageSize: 0,
-  sortBy: '',
-  sortDir: 'asc',
+/** The Customise dialog's columns, its bridge to AG and its defaults. On the channel is one only with live data. */
+interface ColumnSetup { bridge: PrefsBridgeOptions; specs: PreferencesColumnSpec[]; defaults: PreferencesValue }
+function columnSetup(live: boolean): ColumnSetup {
+  const columns = READINESS_COLUMN_SPECS.filter((c) => live || c.key !== LIVE_COLUMN)
+  return {
+    bridge: { columns: columns.map((c) => ({ key: c.key, locked: 'locked' in c && c.locked })), treeColumnKey: 'product' },
+    specs: columns.map((c) => ({ key: c.key, label: c.label, ...('locked' in c && c.locked ? { locked: true, uncounted: true } : {}) })),
+    defaults: {
+      visibleColumns: columns.map((c) => c.key),
+      lockedColumns: [],
+      stickyFirstColumn: true,
+      stickyLastColumn: true,
+      pageSize: 0,
+      sortBy: '',
+      sortDir: 'asc',
+    },
+  }
 }
 
 const isDensity = (value: unknown): value is DensityMode => (GRID_DENSITIES as readonly unknown[]).includes(value)
@@ -242,6 +265,10 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   })
   // A saved layout remembers Markets' `flex`; a phone reads it without (see `marketsWidth.ts`).
   const [initialState] = useState(() => sizingForWidth(gridViews.initialState, marketsFillForWindow()))
+  /** The last visit had live data (its layout has the On the channel column): start with the column, as it was left. */
+  const [liveAtMount] = useState(() => hasLiveColumn(gridViews.initialState))
+  /** What the latest answer says, for the cells (set before its rows draw). */
+  const liveRef = useRef(liveAtMount)
 
   // Read the address once, on the client. A remembered page size applies unless the link names its own paging.
   useEffect(() => {
@@ -280,6 +307,7 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
         getQuery: () => queryRef.current ?? EMPTY_READINESS_QUERY,
         onRequest: () => setUpdating(true),
         onTopLevel: (next) => {
+          liveRef.current = pageHasLive(next.page)
           if (next.kind === 'families') {
             destinationsRef.current = next.page.destinations
             for (const d of next.page.destinations) knownRef.current.set(d.key, d)
@@ -319,6 +347,7 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       },
       familyHref: (rootId) => familyPageHref(queryRef.current ?? EMPTY_READINESS_QUERY, rootId),
       flat: () => !!queryRef.current?.parent,
+      liveShown: () => liveRef.current,
       now: () => Date.now(),
     }),
     [],
@@ -335,7 +364,27 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
     observer.observe(card)
     return () => observer.disconnect()
   }, [cardShown])
-  const columnDefs = useMemo(() => readinessColumns(cellContext, { fill }), [cellContext, fill])
+  // Live data, as the latest answer says; until the first answer, as the last visit left it.
+  const liveShown = top ? pageHasLive(top.page) : liveAtMount
+  const columnDefs = useMemo(() => readinessColumns(cellContext, { fill, live: liveShown }), [cellContext, fill, liveShown])
+  // On the channel arrives with the first answer that has live data, and AG puts a new column last: it goes after
+  // Markets, once. A column the grid started with sits where the person left it.
+  const livePlacedRef = useRef(liveAtMount)
+  useEffect(() => { if (!liveShown) livePlacedRef.current = false }, [liveShown])
+  useEffect(() => {
+    if (!gridApi || gridApi.isDestroyed()) return
+    const place = () => {
+      if (livePlacedRef.current || gridApi.isDestroyed()) return
+      const ids = gridApi.getColumnState().map((c) => c.colId)
+      if (!ids.includes(LIVE_COLUMN)) return
+      livePlacedRef.current = true
+      const order = orderWithLiveAfterMarkets(ids)
+      if (order) gridApi.applyColumnState({ state: order.map((colId) => ({ colId })), applyOrder: true })
+    }
+    place()
+    gridApi.addEventListener('gridColumnsChanged', place)
+    return () => { if (!gridApi.isDestroyed()) gridApi.removeEventListener('gridColumnsChanged', place) }
+  }, [gridApi, columnDefs])
   // The column's live state, too: a restored layout or an earlier width may still carry the other setting.
   useEffect(() => {
     if (gridApi && !gridApi.isDestroyed()) gridApi.applyColumnState({ state: marketsColumnState(fill) })
@@ -456,9 +505,18 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
         options: withCurrent([{ value: '', label: 'All languages' }, ...languages.options], query.language) },
       { key: 'familyId', label: 'Product family', kind: 'select', value: query.familyId, onChange: set('familyId'),
         options: withCurrent([{ value: '', label: 'All families' }, ...(options?.families ?? []).map((f) => ({ value: f.id, label: f.label }))], query.familyId) },
+      // What the channel shows: only when the answer carries it.
+      ...(liveShown ? [
+        { key: 'live', label: 'Channel state', kind: 'multiselect' as const, value: channelStatesOf(query),
+          onChange: (values: string[]) => setQuery((q) => withChannelStates(q, values)),
+          options: CHANNEL_STATE_OPTIONS.map((o) => ({ value: o.value, label: o.label })) },
+        { key: 'stock', label: 'Stock', kind: 'select' as const, value: stockOf(query),
+          onChange: (value: string) => setQuery((q) => withStock(q, value)),
+          options: STOCK_OPTIONS.map((o) => ({ value: o.value, label: o.label })) },
+      ] : []),
     ]
     return dimensions.filter((d) => !locked.includes(d.key))
-  }, [query, options, languages.options, setQuery])
+  }, [query, options, languages.options, setQuery, liveShown])
 
   // ── Search (debounced, like Products) ─────────────────────────
   useEffect(() => {
@@ -516,24 +574,25 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   const onPageSize = useCallback((n: number) => { if (isPageSize(n)) setQuery((q) => ({ ...q, pageSize: n, page: 1 })) }, [setQuery])
 
   // ── Customise: the DS dialog over AG's column state ───────────
+  const columns = useMemo(() => columnSetup(liveShown), [liveShown])
   const [prefsOpen, setPrefsOpen] = useState(false)
-  const [prefs, setPrefs] = useState<PreferencesValue>(DEFAULT_PREFS)
+  const [prefs, setPrefs] = useState<PreferencesValue>(() => columnSetup(liveAtMount).defaults)
   const openCustomise = useCallback(() => {
     const api = gridApiRef.current
     if (!api || api.isDestroyed()) return
-    setPrefs((current) => columnStateToPrefs(api.getColumnState(), current, BRIDGE))
+    setPrefs((current) => columnStateToPrefs(api.getColumnState(), current, columns.bridge))
     setPrefsOpen(true)
-  }, [])
+  }, [columns])
   const applyPrefs = useCallback((next: PreferencesValue) => {
     const api = gridApiRef.current
     if (!api || api.isDestroyed()) return
-    api.applyColumnState({ state: prefsToColumnState(next, BRIDGE), applyOrder: true })
+    api.applyColumnState({ state: prefsToColumnState(next, columns.bridge), applyOrder: true })
     setPrefs(next)
-  }, [])
+  }, [columns])
   const resetColumns = useCallback(() => {
     gridApiRef.current?.resetColumnState()
-    setPrefs(DEFAULT_PREFS)
-  }, [])
+    setPrefs(columns.defaults)
+  }, [columns])
   const columnDialog = useMemo(() => ({ customise: openCustomise, reset: resetColumns }), [openCustomise, resetColumns])
 
   // ── Tiles ─────────────────────────────────────────────────────
@@ -550,14 +609,34 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       })),
     [families, state, setQuery],
   )
+  // The live tiles count listings ON THE CHANNEL, so each says its unit; a click toggles the live filter.
+  const liveStats = families?.liveStats ?? null
+  const liveFilters = useMemo(() => ({ live: query?.live ?? [], flags: query?.flags ?? [] }), [query?.live, query?.flags])
+  const liveMetrics = useMemo<Metric[]>(
+    () =>
+      liveStats
+        ? LIVE_TILES.map((tile) => ({
+          label: liveTileLabel(tile),
+          value: liveTileCount(liveStats, tile).toLocaleString('en'),
+          hint: LIVE_TILE_HINT,
+          accent: liveTileAccent(tile),
+          active: liveTileIsLit(liveFilters, tile),
+          onClick: () => setQuery((q) => withLiveTile(q, tile)),
+        }))
+        : [],
+    [liveStats, liveFilters, setQuery],
+  )
 
   // ── Translate ─────────────────────────────────────────────────
   const [translateOpen, setTranslateOpen] = useState(false)
   const translate = query ? translateScope(query) : null
   const translateHeld = !translate ? 'Loading…' : !translate.ok ? translate.reason : families && families.total === 0 ? 'No products match these filters.' : null
 
-  // ── Amazon: listings Amazon suppressed (readiness cannot see them; the old Amazon page lists them) ──
-  const amazonUrl = lock?.channel === 'AMAZON' ? `/api/listings/amazon/overview${lock.marketplace ? `?marketplace=${lock.marketplace}` : ''}` : null
+  // ── Amazon: listings Amazon suppressed, from the old Amazon page — only while the answer has no live data (an older
+  //    API, no `listings.view`). With live data the Suppressed tile says it, and this 30-second call is not made. ──
+  const amazonUrl = lock?.channel === 'AMAZON' && top !== null && !liveShown
+    ? `/api/listings/amazon/overview${lock.marketplace ? `?marketplace=${lock.marketplace}` : ''}`
+    : null
   const { data: amazon } = usePolledList<AmazonSuppressions>({
     url: amazonUrl,
     intervalMs: LIVE_INTERVAL_MS,
@@ -591,6 +670,7 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       <b>{families ? listingsInView(families.stats, query.state).toLocaleString('en') : '—'}</b> listings
     </>
   )
+  const notFound = query.parent ? null : notFoundWords(families?.search)
   const stateChip = query.parent && query.state ? (query.state === 'notChecked' ? 'Not set up or not computed' : readinessMeta(query.state, 'scope').label) : null
   // One family's page on a store page: the store page is one more crumb (on /listings the chip below is the way back).
   const crumbs = query.parent && lock ? [...words.crumbs, { label: words.title, href: readinessPath(lock) }] : words.crumbs
@@ -633,9 +713,11 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
 
       {/* One family's page reads its members only; the tiles count the whole result, so they stand aside here. */}
       {!query.parent && <MetricStrip metrics={metrics} className={styles.kpis} />}
+      {/* The second group: what is on the channel. Its own strip, so the two units never share a row. */}
+      {!query.parent && liveMetrics.length > 0 && <MetricStrip metrics={liveMetrics} className={styles.kpis} />}
 
-      {/* Readiness cannot see what Amazon suppressed; the old Amazon page lists it, one market at a time. */}
-      {lock?.channel === 'AMAZON' && suppressed && suppressed.count > 0 && (
+      {/* Without live data, readiness cannot see what Amazon suppressed; the old Amazon page lists it, one market at a time. */}
+      {lock?.channel === 'AMAZON' && !liveShown && suppressed && suppressed.count > 0 && (
         <Banner
           tone="danger"
           className={styles.banner}
@@ -696,6 +778,9 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
         </div>
       )}
 
+      {/* Pasted terms that matched nothing ("3 of 40 not found: …"). */}
+      {notFound && <Banner tone="warning" className={styles.banner}>{notFound}</Banner>}
+
       {/* One card: toolbar + grid + pager. The grid is as tall as its page of rows and the PAGE scrolls (Products). */}
       <div ref={cardRef} className="nds-gridcard nds-grid-card">
         <GridToolbar
@@ -716,8 +801,9 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
           <GridSearchSlot>
             <Input
               leadingIcon={<Search size={13} style={{ color: 'var(--nds-text-3)' }} />}
-              placeholder="Search SKU or name…"
-              aria-label="Search SKU or name"
+              // With the live layer the search also finds channel ids, and many SKUs pasted at once.
+              placeholder={liveShown ? 'Search SKU, name, ASIN, Item ID…' : 'Search SKU or name…'}
+              aria-label={liveShown ? 'Search SKU, name, ASIN or Item ID' : 'Search SKU or name'}
               value={searchDraft}
               onChange={(e) => { searchDirty.current = true; setSearchDraft(e.target.value) }}
               style={{ width: '100%' }}
@@ -790,8 +876,8 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
           title="Customise columns"
           value={prefs}
           onConfirm={applyPrefs}
-          allColumns={PREFERENCE_SPECS}
-          defaultVisible={DEFAULT_PREFS.visibleColumns}
+          allColumns={columns.specs}
+          defaultVisible={columns.defaults.visibleColumns}
           pageSizeChoices={NO_CHOICES}
           sortFieldOptions={NO_SORT_OPTIONS}
           showSticky={false}
