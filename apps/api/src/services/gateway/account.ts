@@ -156,3 +156,35 @@ export async function metaPageObjectNexusMade(kind: 'leadform' | 'testlead' | 'c
 
 /** The tool whose change records name the comments and replies Nexus made (step 37). */
 export const META_COMMENTS_TOOL = 'set-meta-comments'
+
+/** Step 24 — the post tools whose change records name what Nexus made on the chosen Page and Instagram account. */
+export const META_PAGE_POST_CREATE_TOOL = 'create-meta-page-post'
+export const META_IG_POST_CREATE_TOOL = 'create-meta-instagram-post'
+
+/**
+ * Meta step 24: did Nexus make this post, media, container or video, for the business the call runs in? Its change records
+ * say so (AgentChange, row-level security: only this business's rows): a Page post create-meta-page-post made (`after.postId`,
+ * on `after.pageId`) or the video of a video post it made (`after.videoId`: Meta names a video post's post later), an
+ * Instagram media create-meta-instagram-post published (`after.mediaId`) or a container it made (`after.containerId`), on
+ * `after.instagramId`. Nothing else is ever one.
+ */
+export async function metaPostNexusMade(kind: 'pagepost' | 'pagevideo' | 'igmedia' | 'igcontainer', objectId: string, ownerId: string): Promise<boolean> {
+  const where = kind === 'pagepost' || kind === 'pagevideo'
+    ? { toolName: META_PAGE_POST_CREATE_TOOL, AND: [{ after: { path: [kind === 'pagepost' ? 'postId' : 'videoId'], equals: objectId } }, { after: { path: ['pageId'], equals: ownerId } }] }
+    : { toolName: META_IG_POST_CREATE_TOOL, AND: [{ after: { path: [kind === 'igmedia' ? 'mediaId' : 'containerId'], equals: objectId } }, { after: { path: ['instagramId'], equals: ownerId } }] }
+  const row = await prisma.agentChange.findFirst({ where, select: { id: true } })
+  return row !== null
+}
+
+/**
+ * Meta step 24 (re-review N1): the video of a video post create-meta-page-post made on this Page, by the post id its record
+ * names (null: no such record, or not a video post). A creative may show that video by its own id.
+ */
+export async function metaPagePostVideoOf(postId: string, pageId: string): Promise<string | null> {
+  const row = await prisma.agentChange.findFirst({
+    where: { toolName: META_PAGE_POST_CREATE_TOOL, AND: [{ after: { path: ['postId'], equals: postId } }, { after: { path: ['pageId'], equals: pageId } }] },
+    select: { after: true },
+  })
+  const after = row?.after && typeof row.after === 'object' && !Array.isArray(row.after) ? row.after as Record<string, unknown> : null
+  return after && typeof after.videoId === 'string' && /^\d{1,25}$/.test(after.videoId) ? after.videoId : null
+}

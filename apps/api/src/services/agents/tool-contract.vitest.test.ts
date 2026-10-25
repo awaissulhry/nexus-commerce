@@ -1084,6 +1084,15 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { action: 'hide', platform: 'facebook', pageId: '120000000000010', postId: '120000000000010_500000000000001', commentId: '500000000000001_900000000000001', hidden: false, accountId: 'conn-1', adAccountId: '1234567890' },
         after: { action: 'hide', platform: 'facebook', pageId: '120000000000010', postId: '120000000000010_500000000000001', commentId: '500000000000001_900000000000001', hidden: true, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 24: a dark post it made is deleted (remove-meta-page-post); an edit's old text goes back through the same tool.
+      'create-meta-page-post': {
+        before: { action: 'create', platform: 'facebook', format: 'link', pageId: '120000000000010', postId: null, photoIds: [], videoId: null, publish: 'dark', scheduledAt: null },
+        after: { action: 'create', platform: 'facebook', format: 'link', pageId: '120000000000010', postId: '120000000000010_500000000000001', photoIds: [], videoId: null, publish: 'dark', scheduledAt: null, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-page-post': {
+        before: { action: 'edit', pageId: '120000000000010', postId: '120000000000010_500000000000001', fields: { message: 'Old text', hidden: false } },
+        after: { action: 'edit', pageId: '120000000000010', postId: '120000000000010_500000000000001', fields: { message: 'New text', hidden: true }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1268,7 +1277,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-meta-targeting', 'set-meta-placements', 'set-meta-account-controls',
       'upload-meta-events',
       'create-meta-catalog', 'set-meta-catalog', 'set-meta-catalog-access', 'set-meta-product-set', 'remove-meta-catalog-items', 'set-meta-account-settings', 'set-meta-spend-cap', 'set-meta-insights-features',
-      'create-meta-instant-experience', 'set-meta-instant-experience', 'set-meta-comments']) {
+      'create-meta-instant-experience', 'set-meta-instant-experience', 'set-meta-comments',
+      'create-meta-page-post', 'set-meta-page-post', 'remove-meta-page-post', 'create-meta-instagram-post']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

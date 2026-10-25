@@ -222,6 +222,11 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-meta-spend-cap': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-account-settings.tools test)',
   'set-meta-insights-features': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-account-settings.tools test)',
   'set-meta-comments': 'it reads the business\'s chosen Meta ad account, Page and Instagram account live from Meta, and no business here has Meta connected (meta-ads-comments.tools test)',
+  // Meta ads step 24: organic posts read the business's chosen Meta ad account, Page and Instagram account live (meta-ads-posts.tools test).
+  'create-meta-page-post': 'it reads the business\'s chosen Meta ad account and Page live from Meta, and no business here has Meta connected (meta-ads-posts.tools test)',
+  'set-meta-page-post': 'it reads the business\'s chosen Meta ad account and Page live from Meta, and no business here has Meta connected (meta-ads-posts.tools test)',
+  'remove-meta-page-post': 'it reads the business\'s chosen Meta ad account, Page and Instagram account live from Meta, and no business here has Meta connected (meta-ads-posts.tools test)',
+  'create-meta-instagram-post': 'it reads the business\'s chosen Meta ad account and Instagram account live from Meta, and no business here has Meta connected (meta-ads-posts.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -675,6 +680,11 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-meta-insights-features': () => ({ feature: 'impression_device' }),
   // Meta ads step 37: a comment change refuses in words here (no business has Meta; its own test runs it).
   'set-meta-comments': () => ({ action: 'hide', platform: 'facebook', postId: '120000000000010_500000000000001', commentId: '500000000000001_900000000000001' }),
+  // Meta ads step 24: a post change refuses in words here (no business has Meta; its own test runs it).
+  'create-meta-page-post': () => ({ format: 'text', publish: 'dark', message: 'Shop A news' }),
+  'set-meta-page-post': () => ({ postId: '120000000000010_500000000000001', hidden: true }),
+  'remove-meta-page-post': () => ({ platform: 'facebook', postId: '120000000000010_500000000000001', confirmDelete: true }),
+  'create-meta-instagram-post': () => ({ kind: 'image', image: { imageUrl: 'https://example.com/a.jpg' }, caption: 'Shop A news' }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),

@@ -41,6 +41,9 @@ import { META_BRAND_SAFETY_WRITE_RULES } from './meta-brand-safety-rules.js'
 // Step 40 — the ad account's own changes (their refusal names a change, not a create).
 import { META_ACCOUNT_SETTINGS_WRITE_RULES } from './meta-account-settings-rules.js'
 import { metaPageOwnerProblem, noteCanvasElementMade } from './meta-page-owner.js'
+// Step 24 — a post's photos and an Instagram post's containers made in a run (the post of the same run may name them).
+import { noteMetaPostPartMade } from './meta-post-owner.js'
+import { isMetaPostBodyKind, type MetaPostKind } from './meta-post-rules.js'
 import { MetaPageTokenUnavailable, metaPageTokenFor, scrubExactToken } from './meta-page-token.js'
 import { META_THREADS_KINDS, metaThreadsOwnerProblem } from './meta-comment-owner.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
@@ -149,9 +152,10 @@ export interface GatewayRequest {
    * Meta step 18: a change of a budget schedule (high-demand period, `metaObjectKind: 'highdemandperiod'`) names the
    * campaign or ad set it belongs to; the gateway confirms that object is of the chosen ad account AND lists the period
    * among its own budget schedules before anything is sent. Meta step 34: a feed's catalog (a feed node names none). Meta
-   * step 37: a Threads post's or reply's ad (`ad`), a branded-content post a comment is on (`brandedpost`).
+   * step 37: a Threads post's or reply's ad (`ad`), a branded-content post a comment is on (`brandedpost`). Meta step 24:
+   * the video of a video post Nexus deletes (`pagevideo`, re-review N4).
    */
-  metaParent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost'; id: string }
+  metaParent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string }
   /**
    * Meta step 39 (review A9): the run of a Nexus change this call belongs to (the kit's own id): a block-list draft is
    * remembered for, and used by, only the same run.
@@ -487,7 +491,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
           // Step 32 — a dataset, custom conversion or event source group change: chosen by its rule (it also names step 19's
           // `adaccount` and step 28's `page`, whose own checks run first), then signals-rule.ts with every id inside the body.
           : isSignalsRule(metaWrite.rule) ? await metaSignalsOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
-          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind | MetaWebhookKind | MetaTargetingKind | MetaCommentKind> | undefined, req.metaParent)
+          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind | MetaWebhookKind | MetaTargetingKind | MetaCommentKind | MetaPostKind> | undefined, req.metaParent)
           ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
           ?? await metaMediaAssetsProblem(req.connectionId, metaWrite)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)
@@ -769,6 +773,9 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     if (ok && metaWrite.rule === 'blocklist.draft') noteBlockListDraftMade(req.connectionId, req.metaRun, text)
     // Step 27b — a part of an Instant Experience Meta made: the same run may name it (the experience, a footer, a carousel).
     if (ok && metaWrite.rule === 'canvas.element.create') noteCanvasElementMade(req.connectionId, req.metaRun, text)
+    // Step 24 — a post's unpublished photo or an Instagram container Meta made: the same run may name it (the post, the
+    // carousel, the publish).
+    if (ok && (metaWrite.rule === 'pagepost.photo' || metaWrite.rule === 'igmedia.container')) noteMetaPostPartMade(req.connectionId, req.metaRun, metaWrite.rule, text)
     if (objectLimit) await holdMetaObject(req.connectionId, metaWrite.objectId, objectLimit)
     // Step 29 — a POST that only reads (Meta's preview of a rule) changes nothing: no 30-s hold of the object either.
     else if (!metaWrite.edgeCall && !metaWrite.readOnly && (ok || status === 0 || status >= 500)) await noteMetaObjectTouched(req.connectionId, metaWrite.objectId, { budget: ok && metaWrite.budget && !metaWrite.check })
@@ -880,7 +887,7 @@ const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad' | 'customaudie
  * cannot place, of another kind, or of any other account (another business's too) gets nothing sent; the sentence never
  * names the other account.
  */
-async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | 'adrule' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaMediaWriteKind | MetaBoostWriteKind | MetaCatalogKind | MetaEventsKind | undefined, parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost'; id: string }): Promise<{ code: string; sentence: string } | null> {
+async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | 'adrule' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaMediaWriteKind | MetaBoostWriteKind | MetaCatalogKind | MetaEventsKind | undefined, parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string }): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   // Step 29 — Meta's automated rules: the chosen ad account's rule library (a rule's create, with every id inside the
   // rule checked), or one of its rules (and the ids inside).
@@ -983,7 +990,7 @@ async function metaWebhookOwnerProblem(connectionId: string, write: MetaJudgedWr
  * object's own budget schedules (ONE live read of `/<campaign | ad set>/budget_schedules`, at most 50 per object — Meta's
  * limit, high-demand-period.md). Anything else: nothing is sent.
  */
-async function metaPeriodOwnerProblem(connectionId: string, write: MetaJudgedWrite, parent: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost'; id: string } | undefined): Promise<{ code: string; sentence: string } | null> {
+async function metaPeriodOwnerProblem(connectionId: string, write: MetaJudgedWrite, parent: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string } | undefined): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   if (!parent || (parent.kind !== 'campaign' && parent.kind !== 'adset') || !/^\d{1,20}$/.test(parent.id)) {
     return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of budget schedule ${id} names the campaign or ad set it belongs to.` }
@@ -1179,6 +1186,8 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
     if (inner.kind === 'business' || inner.kind === 'agency' || inner.kind === 'publisherblocklist' || inner.kind === 'blocklistdraft' || inner.kind === 'pagephoto'
       || inner.kind === 'pagepost' || inner.kind === 'instagrammedia' || inner.kind === 'canvasvideo' || inner.kind === 'canvaselement'
       || inner.kind === 'mentionedmedia' || inner.kind === 'mentionedcomment') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: inside this change, ${inner.id} is not an object this change may name.` }
+    // Step 24 — and the ids inside a post (its photos, library images, sponsors, containers, place): meta-post-owner.ts.
+    if (isMetaPostBodyKind(inner.kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: inside this change, ${inner.id} is not an object this change may name.` }
     // Step 22 — a video inside a body (the video a library removal names): listed in the chosen ad account's library.
     const problem = await metaOwnerProblem(connectionId, { ...write, objectId: inner.id, check: false }, inner.kind)
     if (problem) return { code: problem.code, sentence: problem.sentence.replace(/^Nothing was sent to Meta: /, `Nothing was sent to Meta: inside this change, `) }

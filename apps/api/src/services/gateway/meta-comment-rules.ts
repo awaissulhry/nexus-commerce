@@ -58,7 +58,7 @@
  * 2,200, a Threads reply 500 — the limits of Meta's own apps.
  */
 import type { MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
-import { META_NAME_TEXT } from './meta-write-text.js'
+import { META_COMMENT_TEXT } from './meta-write-text.js'
 import { metaLeadUrlProblem } from './meta-lead-form-rules.js'
 
 type Params = ReadonlyMap<string, string>
@@ -66,9 +66,9 @@ type Params = ReadonlyMap<string, string>
 /**
  * The text of a comment or reply: step 18's ONE shared pattern (meta-write-text.ts META_NAME_TEXT — no control or format
  * character, the zero-width joiner only between two emoji), and a line break (U+000A) — a reply is often a few lines.
- * Derived from that pattern, never written again.
+ * Step 24 moved it to the leaf meta-write-text.ts; re-exported here for step 37's importers.
  */
-export const META_COMMENT_TEXT = new RegExp(META_NAME_TEXT.source.replace(/^\^\(\?:/, '^(?:\\n|'), 'u')
+export { META_COMMENT_TEXT }
 
 /** Nexus's caps per platform (Meta's own apps' limits; its API pages state none). */
 export const META_COMMENT_LIMITS = { facebook: 8000, instagram: 2200, threads: 500, url: 2000 } as const

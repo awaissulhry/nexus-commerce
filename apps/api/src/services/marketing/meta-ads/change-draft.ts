@@ -12,6 +12,7 @@ import type { MetaWriteEdge } from '../../gateway/meta.js'
 import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaCommentKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaTargetingKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
 import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
 import type { MetaCatalogKind } from '../../gateway/meta-catalog-rules.js'
+import type { MetaPostKind } from '../../gateway/meta-post-rules.js'
 import type { MetaChangeResult, MetaRequestVia, MetaWriteTarget } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
@@ -91,12 +92,14 @@ export interface MetaChangeRequest {
     // account's media, a Threads ad's post or reply (set-meta-comments; its Instagram media and account are step 26's
     // `igmedia` and `iguser`, a block names the chosen Page, `page`).
     | MetaCommentKind
+    // Step 24 — the chosen Page or Instagram account as it posts, a post of the Page, a post or media Nexus made.
+    | MetaPostKind
   /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
-  /** A budget schedule's campaign or ad set; step 34: a feed's catalog; step 37 — a Threads post's or reply's ad, a branded-content comment's post. */
-  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost'; id: string }
+  /** A budget schedule's campaign or ad set; step 34: a feed's catalog; step 37 — a Threads post's or reply's ad, a branded-content comment's post; step 24 — a video post's video. */
+  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string }
   /** Step 19 — Meta's check of this create asks its setup recommendations too (master CMP-031). */
   recommendations?: boolean
   /**
@@ -157,6 +160,9 @@ export interface MetaChangeRequest {
   // ── step 37 (comments) ──
   /** Meta's success is the whole answer (a like, a block — no id, never read back): the step says "Meta confirmed it." */
   answerOnly?: true
+  // ── step 24 (posts) ──
+  /** It goes to Meta's video host graph-video.facebook.com (a Page's video post; review B-F1). */
+  videoHost?: true
 }
 
 export interface MetaChangeDraft {
