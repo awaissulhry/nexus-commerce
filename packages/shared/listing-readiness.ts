@@ -203,3 +203,42 @@ export interface ReadinessDetail {
 
 /** The live event: one family's readiness changed. */
 export interface ReadinessUpdatedPayload { rootProductId: string }
+
+/*
+ * ── Old eBay listing shells (25 October 2026 — docs/listings/READINESS-LISTING-SHELLS-2026-10-25.md) ─────────────────
+ * The old eBay flat-file import made a product of its own for each extra eBay listing (`AIREON-ALT1`, …): a placeholder
+ * that holds one eBay listing of another product. It is not a product to sell anywhere else. So it is checked, and may
+ * get a listing, only on Shared and where it holds its own listing. Every other product: every destination.
+ * The readiness rebuild, the index's minute check and draft listings all ask `readinessDestinationAllowed`.
+ */
+
+/** The product type of an old eBay listing shell. */
+export const LISTING_SHELL_TYPE = 'EBAY_LISTING_SHELL'
+
+export function isListingShell(productType: string | null | undefined): boolean {
+  return productType === LISTING_SHELL_TYPE
+}
+
+/** A destination, or one of the product's own listings. Shared (the master content) has no channel. */
+export interface ListingPlace { channel: string | null; market: string | null; accountId: string | null }
+
+// The readiness index says UK where a listing may say GB.
+const marketCode = (code: string | null) => {
+  const upper = (code ?? '').toUpperCase()
+  return upper === 'GB' ? 'UK' : upper
+}
+
+/**
+ * May this product be checked on (or get a listing on) this destination? Shared: yes. A product that is not a shell:
+ * yes. A shell: only where it holds one of its own listings: same channel, same market, and the same account when both
+ * name one.
+ */
+export function readinessDestinationAllowed(
+  product: { productType: string | null | undefined; ownListings: readonly ListingPlace[] },
+  destination: ListingPlace,
+): boolean {
+  if (!destination.channel || !isListingShell(product.productType)) return true
+  return product.ownListings.some(listing => listing.channel === destination.channel
+    && marketCode(listing.market) === marketCode(destination.market)
+    && (!listing.accountId || !destination.accountId || listing.accountId === destination.accountId))
+}

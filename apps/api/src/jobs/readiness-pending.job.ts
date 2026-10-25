@@ -33,8 +33,8 @@ export function startReadinessPendingCron() {
     // It never fails the drain: a failed check is logged and retried next minute.
     try {
       const footprint = await reconcileReadinessFootprint()
-      if (footprint.removed.length || footprint.markedFamilies) {
-        logger.info('[readiness] channel footprint changed', { removed: footprint.removed, missing: footprint.missing, pendingFamilies: footprint.markedFamilies })
+      if (footprint.removed.length || footprint.markedFamilies || footprint.shellRows) {
+        logger.info('[readiness] channel footprint changed', { removed: footprint.removed, missing: footprint.missing, pendingFamilies: footprint.markedFamilies, shellRows: footprint.shellRows })
       }
     } catch (error) {
       logger.warn('[readiness] channel footprint check failed; retried next minute', { error: error instanceof Error ? error.message : String(error) })

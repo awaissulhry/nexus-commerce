@@ -16,6 +16,7 @@
 import type { PrismaClient } from '@nexus/database'
 import { evaluateRules } from './feed-transform.service.js'
 import { logger } from '../../utils/logger.js'
+import { LISTING_SHELL_TYPE } from '@nexus/shared/listing-readiness'
 
 const OUT_OF_STOCK_THRESHOLD = 0
 
@@ -57,6 +58,8 @@ async function loadFeedProducts(
     where: {
       status: { not: 'INACTIVE' },
       deletedAt: null,
+      // 2026-10-25 — an old eBay listing shell holds one eBay listing of another product; it is no product to advertise.
+      OR: [{ productType: null }, { productType: { not: LISTING_SHELL_TYPE } }],
     } as never,
     select: {
       id: true,

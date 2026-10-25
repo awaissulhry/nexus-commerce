@@ -17,6 +17,7 @@ import { safeJobId } from '../../lib/job-id.js'
 import { channelFootprint, type ChannelFootprint } from '../channel-footprint.service.js'
 import { rebuildAfterResponse } from './readiness-after-response.js'
 import { announceReadinessUpdated } from './readiness-events.js'
+import { LISTING_SHELL_TYPE, isListingShell, readinessDestinationAllowed } from '@nexus/shared/listing-readiness'
 
 export type ReadinessScope = { channel: string; market: string; accountId: string | null }
 
@@ -391,6 +392,8 @@ export interface FootprintReconcile {
   missing: Array<{ channel: string; market: string; accountId: string }>
   /** Families pending after this check marked them (0 when nothing was marked). The drain rebuilds them. */
   markedFamilies: number
+  /** Rows of an old eBay listing shell on a destination it may not have (`removeShellRows`), deleted. */
+  shellRows: number
 }
 
 /**
@@ -429,7 +432,29 @@ export async function reconcileReadinessFootprint(): Promise<FootprintReconcile>
         ORDER BY r.id FOR NO KEY UPDATE OF r)`
     if (markedRows > 0) markedFamilies = await countPendingReadinessFamilies()
   }
-  return { removed, missing, markedFamilies }
+  return { removed, missing, markedFamilies, shellRows: await removeShellRows() }
+}
+
+/**
+ * 2026-10-25 — an old eBay listing shell is checked only on Shared and where it holds its own listing
+ * (`readinessDestinationAllowed`). A rebuild no longer writes its other rows; the rows written before the rule are
+ * deleted here, like a coordinate outside the footprint. Cheap: the shells (by `productType`) and their channel rows.
+ */
+async function removeShellRows(): Promise<number> {
+  const shells = await prisma.product.findMany({ where: { productType: LISTING_SHELL_TYPE, deletedAt: null },
+    select: { id: true, productType: true, channelListings: { select: { channel: true, marketplace: true, channelConnectionId: true } } } })
+  if (!shells.length) return 0
+  const byId = new Map(shells.map(shell => [shell.id, { productType: shell.productType,
+    ownListings: shell.channelListings.map(l => ({ channel: l.channel, market: l.marketplace, accountId: l.channelConnectionId })) }]))
+  const ids = [...byId.keys()]
+  const rows = await prisma.readinessIndex.findMany({ where: { channel: { not: null }, product: { OR: [{ id: { in: ids } }, { parentId: { in: ids } }] } },
+    select: { id: true, channel: true, market: true, accountId: true, product: { select: { id: true, parentId: true } } } })
+  const wrong = rows.filter(row => {
+    const shell = byId.get(row.product.parentId ?? row.product.id)
+    return !!shell && !readinessDestinationAllowed(shell, row)
+  })
+  if (!wrong.length) return 0
+  return (await prisma.readinessIndex.deleteMany({ where: { id: { in: wrong.map(row => row.id) } } })).count
 }
 
 /**
@@ -446,7 +471,7 @@ export async function reconcileFamilyReadiness(productId: string, scope?: Readin
       // (`catalog-language.ts` `catalogLanguageValues`). Deriving it from the sheet cell instead would be a second
       // answer to "what does this cell say", and the two would drift the first time either changed.
       prisma.product.findMany({ where: { OR: [{ id: rootId }, { parentId: rootId }], deletedAt: null },
-        select: { id: true, parentId: true, familyId: true, name: true, description: true, bulletPoints: true, keywords: true, categoryAttributes: true, localizedContent: true,
+        select: { id: true, parentId: true, productType: true, familyId: true, name: true, description: true, bulletPoints: true, keywords: true, categoryAttributes: true, localizedContent: true,
           translations: true, parent: { select: { id: true, name: true, description: true, bulletPoints: true, keywords: true, categoryAttributes: true, localizedContent: true, translations: true } } } }),
       prisma.marketplace.findMany({ where: { isActive: true }, orderBy: [{ channel: 'asc' }, { code: 'asc' }] }),
       // P3b S2 — the channel destinations follow the business's footprint (active accounts and their markets).
@@ -459,7 +484,14 @@ export async function reconcileFamilyReadiness(productId: string, scope?: Readin
     const destinations: Array<{ coordinate: ReadinessCoordinate; language: string; label: string }> = languages.map(language => ({
       coordinate: { channel: null, market: null, accountId: null, aliasId: null }, language, label: 'Shared product',
     }))
-    destinations.push(...readinessChannelDestinations(footprint, markets))
+    // 2026-10-25 — an old eBay listing shell is checked only on Shared and where it holds its own listing.
+    const rootType = products.find(p => p.id === rootId)?.productType
+    const ownListings = isListingShell(rootType)
+      ? (await prisma.channelListing.findMany({ where: { productId: rootId }, select: { channel: true, marketplace: true, channelConnectionId: true } }))
+        .map(l => ({ channel: l.channel, market: l.marketplace, accountId: l.channelConnectionId }))
+      : []
+    destinations.push(...readinessChannelDestinations(footprint, markets)
+      .filter(d => readinessDestinationAllowed({ productType: rootType, ownListings }, d.coordinate)))
     const computedAt = new Date()
     /**
      * LX.F2 R-LX-17 — the SORT KEY for `title@<lang>` / `description@<lang>`, from the one resolver.
