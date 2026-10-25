@@ -141,11 +141,11 @@
   min-width: 0;
   width: 100%;
 }
+/* The words wrap rather than cut: the row is as tall as its Markets lines anyway, and every count must show. */
 .onChannelStates,
 .onChannelProblems {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
   min-width: 0;
   font-size: var(--nds-font-size-sm);
 }
@@ -158,8 +158,10 @@
 /* ── The per-listing columns (step 4): a value with its small mark ("Pinned", "20 var."), the channel id as a link ── */
 .listingValue {
   display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
-  gap: var(--nds-space-4);
+  gap: var(--nds-space-2) var(--nds-space-4);
   min-width: 0;
   white-space: nowrap;
   font-size: var(--nds-font-size-sm);
