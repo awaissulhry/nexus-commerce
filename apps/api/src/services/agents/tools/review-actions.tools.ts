@@ -5,7 +5,7 @@
  * (never confirm, never auto), the preview says whether the channel call is live, and a run whose approval no longer
  * describes the order or the review is refused (stale).
  *
- *   - request-review: Amazon's "Request a Review" (Solicitations), delivered 4–30 days ago, no active return, no
+ *   - request-review: Amazon's "Request a Review" (Solicitations), delivered 5–30 days ago, no active return, no
  *     refund, once per order. eBay buyers are written to only through eBay (decision O-2); the other channels have no
  *     request call (their review e-mails run from the review rules).
  *   - reply-to-review: eBay only (RespondToFeedback: public, one reply per feedback, at most 80 characters). Amazon
@@ -37,15 +37,15 @@ async function freshOrStale(preview: () => Promise<ToolResult>, ctx: ToolContext
 // ── request-review ──────────────────────────────────────────────────────────────────────────────────
 
 const requestInput = z.object({
-  orderId: z.string().trim().min(1).max(64).describe('Nexus order id (from order-search): an Amazon order delivered 4–30 days ago'),
+  orderId: z.string().trim().min(1).max(64).describe('Nexus order id (from order-search): an Amazon order delivered 5–30 days ago'),
 })
 type RequestArgs = z.infer<typeof requestInput>
 
 /** The route's refusal in a sentence for the person. */
 const REQUEST_REFUSAL: Record<string, string> = {
-  'Order not yet delivered': 'it is not delivered yet (Amazon allows a request 4–30 days after delivery)',
-  'Too soon — Amazon requires ≥4 days post-delivery': 'it was delivered less than 4 days ago (Amazon allows a request 4–30 days after delivery)',
-  'Too late — Amazon blocks requests after 30 days': 'it was delivered more than 30 days ago (Amazon allows a request 4–30 days after delivery)',
+  'Order not yet delivered': 'it is not delivered yet (Amazon allows a request 5–30 days after delivery)',
+  'Too soon — Amazon requires ≥5 days post-delivery': 'it was delivered less than 5 days ago (Amazon allows a request 5–30 days after delivery)',
+  'Too late — Amazon blocks requests after 30 days': 'it was delivered more than 30 days ago (Amazon allows a request 5–30 days after delivery)',
   'Order has an active return — solicitation suppressed': 'it has an open return, so no review is asked for',
   'Order has a refund — solicitation suppressed': 'it was refunded, so no review is asked for',
   'Missing amazonOrderId or unknown marketplace': 'Nexus does not know its Amazon marketplace',
@@ -91,7 +91,7 @@ const requestReviewTool: AgentTool = {
   maxClaudeTrust: 'ask',
   description:
     'Ask the buyer of an Amazon order of this business for a review, through Amazon\'s "Request a Review" (Amazon writes '
-    + 'and sends it; live or a dry run, as the preview says). Only 4–30 days after delivery, never with an open return or '
+    + 'and sends it; live or a dry run, as the preview says). Only 5–30 days after delivery, never with an open return or '
     + 'a refund, once per order. eBay buyers are written to only through eBay; other channels have no request call. '
     + 'Always waits for a person to approve it in Nexus; it cannot be undone.',
   handler: (args) => previewRequest(args as RequestArgs),

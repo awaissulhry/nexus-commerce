@@ -5,19 +5,22 @@
  * Resolves the send delay (rule override → editable ReviewTimingDefault table →
  * DEFAULT), picks the anchor date (delivery / ship / purchase; Amazon forced to
  * delivery), optionally pins a preferred local hour (in the marketplace timezone)
- * and skips weekends, then clamps to the rule window and Amazon's 4–25d hard cap.
+ * and skips weekends, then clamps to the rule window and Amazon's 5–25d hard cap.
  *
  * Parity: with the migration backfill `sendDelayDays = minDaysSinceDelivery` and
  * the new fields defaulting to today's behaviour (anchor=DELIVERY, no hour, no
  * weekend skip), this reproduces the old `deliveredAt + max(4,minDays)` exactly —
  * because minDays is always ≥4 (write-clamped) and the hour/weekend window-clamp
- * is gated off unless those features are used.
+ * is gated off unless those features are used. One exception: on Amazon a rule at
+ * day 4 goes on day 5, because Amazon refuses a request before day 5
+ * (AMAZON_SOLICITATION_MIN_DAYS).
  */
+
+import { AMAZON_SOLICITATION_MIN_DAYS } from './amazon-solicitations.service.js'
 
 const DAY = 24 * 60 * 60 * 1000
 export const DEFAULT_DELAY_DAYS = 12 // last resort if the timing table has no match
-const AMAZON_MIN_DAYS = 4
-const AMAZON_MAX_DAYS = 25 // inside the 4–30d Solicitations window, margin for the send-time re-check
+const AMAZON_MAX_DAYS = 25 // inside the 5–30d Solicitations window, margin for the send-time re-check
 
 // Marketplace → IANA timezone (mirrors AMAZON_MARKETPLACE_ID_MAP). Default Rome.
 const MARKETPLACE_TZ: Record<string, string> = {
@@ -149,7 +152,7 @@ export function resolveSendTiming(
 
   const amazonClamp = (d: Date): Date => {
     if (order.channel === 'AMAZON' && order.deliveredAt) {
-      const aLo = new Date(order.deliveredAt.getTime() + AMAZON_MIN_DAYS * DAY)
+      const aLo = new Date(order.deliveredAt.getTime() + AMAZON_SOLICITATION_MIN_DAYS * DAY)
       const aHi = new Date(order.deliveredAt.getTime() + AMAZON_MAX_DAYS * DAY)
       if (d < aLo) return aLo
       if (d > aHi) return aHi

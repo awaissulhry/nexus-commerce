@@ -3,7 +3,7 @@
  * (POST /reviews/:id/reply/send) move into services/reviews/review-request.service.ts and
  * services/reviews/review-reply-send.service.ts with NO change to what the routes do and answer. The snapshots in
  * __snapshots__/review-actions-parity.vitest.test.ts.snap were written by the route code BEFORE the move: every
- * refusal (not delivered, the 4–30 day window, an active return, a refund, already sent, an unknown market), Amazon
+ * refusal (not delivered, the 5–30 day window, an active return, a refund, already sent, an unknown market), Amazon
  * live / dry run / failure / retry, a channel without a request API; the reply on eBay (sent, failed), on Amazon
  * (recorded MANUAL), into a draft — with the rows they leave and the events they raise.
  *

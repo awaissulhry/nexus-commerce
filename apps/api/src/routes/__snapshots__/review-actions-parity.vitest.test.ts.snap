@@ -426,7 +426,7 @@ exports[`07 O13 — review request and reply: the routes answer exactly as befor
   },
   {
     "body": {
-      "error": "Too soon — Amazon requires ≥4 days post-delivery",
+      "error": "Too soon — Amazon requires ≥5 days post-delivery",
     },
     "status": 400,
   },

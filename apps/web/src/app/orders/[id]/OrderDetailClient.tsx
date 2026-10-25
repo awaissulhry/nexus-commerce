@@ -218,7 +218,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
             <button
               onClick={requestReviewNow}
               disabled={reviewBusy || !order.deliveredAt}
-              title={!order.deliveredAt ? 'Order must be delivered first' : 'Send Amazon review request now (4-30d window)'}
+              title={!order.deliveredAt ? 'Order must be delivered first' : 'Send Amazon review request now (5-30d window)'}
               className="h-8 px-3 text-base bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900 rounded hover:bg-amber-100 dark:hover:bg-amber-900/60 disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               <Star size={12} className={reviewBusy ? 'animate-pulse' : ''} /> Request review
@@ -308,7 +308,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
           <button
             onClick={requestReviewNow}
             disabled={reviewBusy || !order.deliveredAt}
-            title={!order.deliveredAt ? 'Order must be delivered first' : 'Send Amazon review request (4–30 days post-delivery)'}
+            title={!order.deliveredAt ? 'Order must be delivered first' : 'Send Amazon review request (5–30 days post-delivery)'}
             className="h-8 px-3 text-sm font-medium border border-slate-300 dark:border-slate-600 rounded-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
           >
             <Star size={12} className={reviewBusy ? 'animate-pulse' : ''} /> Request a review
@@ -587,7 +587,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
             <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
               {!order.deliveredAt
                 ? 'Wait until order is delivered before requesting.'
-                : 'Amazon allows one request per order, between 4–30 days post-delivery, with no custom message.'}
+                : 'Amazon allows one request per order, between 5–30 days post-delivery, with no custom message.'}
             </div>
           </Card>
 

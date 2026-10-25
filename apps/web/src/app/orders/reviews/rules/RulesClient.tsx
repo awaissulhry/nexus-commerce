@@ -583,7 +583,7 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
               <input type="number" min="4" max="30" value={minDays} onChange={(e) => setMinDays(Math.max(4, Math.min(30, Number(e.target.value) || 7)))} className="w-20 h-8 px-2 text-right tabular-nums border border-default dark:border-slate-700 rounded text-md" />
               <span className="text-sm text-slate-500 dark:text-slate-400">to</span>
               <input type="number" min="4" max="30" value={maxDays} onChange={(e) => setMaxDays(Math.max(4, Math.min(30, Number(e.target.value) || 25)))} className="w-20 h-8 px-2 text-right tabular-nums border border-default dark:border-slate-700 rounded text-md" />
-              <span className="text-xs text-slate-500 dark:text-slate-400">Amazon caps at 4–30 days (the eligibility window)</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">Amazon caps at 5–30 days (the eligibility window)</span>
             </div>
           </div>
 
