@@ -29,10 +29,13 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import {
+  AMAZON_SOLICITATION_MAX_DAYS,
+  AMAZON_SOLICITATION_MIN_DAYS,
   sendAmazonSolicitation as sharedSendAmazonSolicitation,
   amazonMarketplaceIdFor as sharedAmazonMarketplaceIdFor,
   isBenignFailure,
   benignSuppressedReason,
+  outsideWindowUpdate,
 } from '../services/reviews/amazon-solicitations.service.js'
 import { requestReviewForOrder } from '../services/reviews/review-request.service.js'
 
@@ -594,7 +597,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
           if (!order) { skipped++; errors.push({ orderId, reason: 'not found' }); continue }
           if (!order.deliveredAt) { skipped++; errors.push({ orderId, reason: 'not delivered' }); continue }
           const days = (Date.now() - order.deliveredAt.getTime()) / (24 * 60 * 60 * 1000)
-          if (days < 4 || days > 30) { skipped++; errors.push({ orderId, reason: `outside 4–30d window (${Math.round(days)}d)` }); continue }
+          if (days < AMAZON_SOLICITATION_MIN_DAYS || days > AMAZON_SOLICITATION_MAX_DAYS) { skipped++; errors.push({ orderId, reason: `outside 4–30d window (${Math.round(days)}d)` }); continue }
           if (order.returns.some((r) => ACTIVE_RETURN_STATUSES.includes(r.status as any))) {
             skipped++; errors.push({ orderId, reason: 'active return' }); continue
           }
@@ -662,7 +665,12 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
           suppressed++; continue
         }
         const days = (Date.now() - order.deliveredAt.getTime()) / (24 * 60 * 60 * 1000)
-        if (days < 4 || days > 30) {
+        if (days < AMAZON_SOLICITATION_MIN_DAYS) {
+          // Too early: wait for day 4.
+          await prisma.reviewRequest.update({ where: { id: req.id }, data: { scheduledFor: new Date(order.deliveredAt.getTime() + AMAZON_SOLICITATION_MIN_DAYS * 24 * 60 * 60 * 1000) } })
+          continue
+        }
+        if (days > AMAZON_SOLICITATION_MAX_DAYS) {
           await prisma.reviewRequest.update({ where: { id: req.id }, data: { status: 'SUPPRESSED', suppressedReason: `outside 4–30d window (${Math.round(days)}d)` } })
           suppressed++; continue
         }
@@ -685,6 +693,13 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
             failed++; continue
           }
           const result = await sendAmazonSolicitation({ amazonOrderId, marketplaceCode: order.marketplace ?? '' })
+          if (result.errorCode === 'OUTSIDE_WINDOW') {
+            // Amazon's delivery date can be later than ours: tomorrow again, until our day 30.
+            const data = outsideWindowUpdate(order.deliveredAt, result.errorMessage)
+            await prisma.reviewRequest.update({ where: { id: req.id }, data })
+            if (data.status === 'SKIPPED') suppressed++
+            continue
+          }
           const benign = isBenignFailure(result.errorCode)
           const newStatus = result.ok ? 'SENT' : benign ? 'SKIPPED' : 'FAILED'
           await prisma.reviewRequest.update({

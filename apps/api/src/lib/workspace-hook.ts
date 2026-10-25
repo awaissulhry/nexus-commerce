@@ -26,6 +26,17 @@ export function requestedWorkspace(request: Pick<FastifyRequest, 'headers' | 'qu
   return id
 }
 
+/**
+ * The Vary value with the workspace header added. The business comes in x-nexus-workspace-id and answers may be cached by
+ * the browser (Cache-Control max-age), so without it the browser served one business's answer to another business for up
+ * to 30 s after a switch (2026-10-22). Keeps what is there; '*' varies by everything already.
+ */
+export function varyByWorkspace(prior: unknown): string {
+  const value = Array.isArray(prior) ? prior.join(', ') : prior == null ? '' : String(prior)
+  if (value.trim() === '*' || value.split(',').some((name) => name.trim().toLowerCase() === 'x-nexus-workspace-id')) return value
+  return value ? `${value}, x-nexus-workspace-id` : 'x-nexus-workspace-id'
+}
+
 /** Callback form preserves the verified context through the remaining Fastify lifecycle. */
 export function createWorkspaceHook(service: Pick<ReturnType<typeof createWorkspaceService>, 'list' | 'membership'>, loadSession = validateSession): preHandlerHookHandler {
 return (request, reply, done) => {
