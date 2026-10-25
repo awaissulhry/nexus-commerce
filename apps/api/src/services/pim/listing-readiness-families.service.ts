@@ -27,6 +27,8 @@ import {
   attachLive, liveFilterCtes, liveScopeOf, liveSqlView, liveTileCtes, liveTilesOf, readChannelSection, resolveSearchTokens, SEARCH_MAX_CHARS, SEARCH_MAX_TERMS,
   searchProductHits, searchTerms, type LiveOptions, type LiveSqlView, type LiveTiles,
 } from './listing-readiness-live.service.js'
+// Live layer step 7: the Problems view's `problem=<id>` filter.
+import { problemFilterCtes, problemQuery } from './listing-readiness-problem-filter.js'
 
 /* ── query ────────────────────────────────────────────────────────────────────────────────── */
 
@@ -52,7 +54,8 @@ export function familiesQuery(query: Record<string, unknown>) {
   const state = text(query.state, 'state')
   if (state && !STATE_FILTERS.includes(state)) throw new Error('Select a readiness state')
   if (query.pageSize !== undefined && query.pageSize !== '' && !PAGE_SIZES.includes(query.pageSize as string)) throw new Error('Show 50, 100 or 200 rows per page')
-  return { ...base, q, state: state as ReadinessStateFilter | undefined, pageSize: Number(query.pageSize || 50), ...liveFilters(query) }
+  // Live layer step 7: `problem=<id>` (the Problems view's Show products), applied in `resultCtes`.
+  return { ...base, q, state: state as ReadinessStateFilter | undefined, pageSize: Number(query.pageSize || 50), ...liveFilters(query), ...problemQuery(query) }
 }
 
 /**
@@ -586,7 +589,10 @@ function resultCtes(filter: Prisma.Sql, input: ReturnType<typeof familiesQuery>,
       FROM ${FROM_INDEX} WHERE ${filter}
     )`
   const live = liveFilterCtes('f0', !input.listingIds, view)
-  return live ? Prisma.sql`${f0}, ${live}, f AS (SELECT * FROM f0 WHERE root IN (SELECT root FROM lf_keep))` : Prisma.sql`${f0}, f AS (SELECT * FROM f0)`
+  // Live layer step 7: `problem=<id>` keeps the families with that problem (`pf_keep`, listing-readiness-problem-filter.ts).
+  const problem = problemFilterCtes('f0', filter, input.problem, view)
+  const keep = [...(live ? [Prisma.sql`root IN (SELECT root FROM lf_keep)`] : []), ...(problem ? [Prisma.sql`root IN (SELECT root FROM pf_keep)`] : [])]
+  return Prisma.sql`${Prisma.join([f0, ...(live ? [live] : []), ...(problem ? [problem] : [])], ', ')}, f AS (SELECT * FROM f0${keep.length ? Prisma.sql` WHERE ${Prisma.join(keep, ' AND ')}` : Prisma.empty})`
 }
 
 async function familiesSummary(filter: Prisma.Sql, input: ReturnType<typeof familiesQuery>, cutoff: string, view: LiveSqlView | null = null): Promise<FamiliesSummary> {
@@ -862,3 +868,6 @@ export async function readinessDetail(query: Record<string, unknown>, userId: st
       editorHref: studioHref(input.productId, destination, worstLanguage), channel }
   })
 }
+
+/* ── Live layer step 7: the Problems view (listing-readiness-problems.service.ts) reads the same result ──────────── */
+export { readinessFilter, resultCtes, readinessEtag }
