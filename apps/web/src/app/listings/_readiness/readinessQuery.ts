@@ -4,11 +4,13 @@
  * Every link that ever opened this page keeps working: the Products menu (`?productIds=`), the Listings pages
  * (`?listingIds=`), an import's review (`?job=`), the studio's progress cards (`?channel=&marketplace=&language=`) and
  * older bookmarks (`?skus=`, `?familyId=`, `?market=`, `?state=`, `?accountId=`, `?page=`). The new page adds `q`
- * (search), `pageSize`, `parent` (one family's page) and the `notChecked` tile state.
+ * (search), `pageSize`, `parent` (one family's page) and the `notChecked` tile state; the live layer (step 3 of
+ * docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md) adds `live` (channel states) and `flags` (live flags), each a
+ * comma list, sent to the API under the same names.
  *
  * Pure — no React, no fetch — so every mapping is a test.
  */
-import type { ReadinessStateFilter } from '@nexus/shared/listing-readiness'
+import { READINESS_LIVE_FLAGS, READINESS_LIVE_STATES, type ReadinessLiveFlag, type ReadinessLiveState, type ReadinessStateFilter } from '@nexus/shared/listing-readiness'
 import { SCOPE_READINESS_STATES } from '@/design-system/grid/renderers/readiness'
 import { lockedKeys, readinessPath, type ReadinessLock } from './readinessScope'
 
@@ -36,6 +38,10 @@ export interface ReadinessPageQuery {
   language: string
   /** A tile (`blocked`, `warn`, `ready`, `notChecked`) or an older link's own state (`absent`, `notComputed`). */
   state: ReadinessStateFilter | ''
+  /** The live layer: the listings' states on the channel (the Channel state filter, the Live tile). Empty = any. */
+  live: ReadinessLiveState[]
+  /** The live layer: flags every listing must carry (the Errors, Suppressed and Out of sync tiles; Stock › Low stock). */
+  flags: ReadinessLiveFlag[]
   q: string
   /** One family's page (`View all 40`): the root product id. */
   parent: string
@@ -46,8 +52,8 @@ export interface ReadinessPageQuery {
 }
 
 export const EMPTY_READINESS_QUERY: ReadinessPageQuery = {
-  selector: null, familyId: '', channel: '', marketplace: '', accountId: '', language: '', state: '', q: '', parent: '',
-  page: 1, pageSize: DEFAULT_READINESS_PAGE_SIZE, lock: null,
+  selector: null, familyId: '', channel: '', marketplace: '', accountId: '', language: '', state: '', live: [], flags: [], q: '',
+  parent: '', page: 1, pageSize: DEFAULT_READINESS_PAGE_SIZE, lock: null,
 }
 
 /**
@@ -67,6 +73,14 @@ const STATE_VALUES: ReadonlySet<string> = new Set<string>([...SCOPE_READINESS_ST
 export const isStateFilter = (value: string): value is ReadinessStateFilter => STATE_VALUES.has(value)
 export const isPageSize = (value: number): value is ReadinessPageSize => (READINESS_PAGE_SIZES as readonly number[]).includes(value)
 
+/** The values of `allowed` a list names, once each, in `allowed`'s order (so one choice is one address). Junk is dropped. */
+export function knownValues<T extends string>(values: Iterable<unknown>, allowed: readonly T[]): T[] {
+  const named = new Set<unknown>(values)
+  return allowed.filter((value) => named.has(value))
+}
+/** A comma list from the address (`live=active,paused`). */
+const commaList = (text: string): string[] => text.split(',').map((v) => v.trim()).filter(Boolean)
+
 /** The address → the page's query. Unknown or invalid values are dropped, never sent on; a store page's lock wins. */
 export function parseReadinessQuery(search: string | URLSearchParams, lock: ReadinessLock | null = null): ReadinessPageQuery {
   const params = typeof search === 'string' ? new URLSearchParams(search) : search
@@ -85,6 +99,8 @@ export function parseReadinessQuery(search: string | URLSearchParams, lock: Read
     accountId: text('accountId'),
     language: text('language'),
     state: isStateFilter(state) ? state : '',
+    live: knownValues(commaList(text('live')), READINESS_LIVE_STATES),
+    flags: knownValues(commaList(text('flags')), READINESS_LIVE_FLAGS),
     q: text('q'),
     parent: text('parent'),
     page: Number.isSafeInteger(page) && page >= 1 ? page : 1,
@@ -102,6 +118,8 @@ export function apiFilterParams(query: ReadinessPageQuery): Record<string, strin
   if (query.selector) out[query.selector.kind] = query.selector.value
   for (const key of FILTER_KEYS) if (query[key]) out[key] = query[key]
   if (query.state) out.state = query.state
+  if (query.live.length) out.live = query.live.join(',')
+  if (query.flags.length) out.flags = query.flags.join(',')
   if (query.q) out.q = query.q
   return out
 }
@@ -159,34 +177,49 @@ export function withFilter(query: ReadinessPageQuery, key: ReadinessFilterKey, v
   return next
 }
 
-/** "Clear" in the Filters panel: the five filters go; the link's selection, the tile, the search and the family page stay. */
+/**
+ * "Clear" in the Filters panel: the panel's filters go — the five, Channel state (`live`) and Stock (the `lowStock`
+ * flag); the link's selection, the tiles (`state`, the live tiles' flags), the search and the family page stay.
+ */
 export function withoutFilters(query: ReadinessPageQuery): ReadinessPageQuery {
-  return withLock({ ...query, channel: '', marketplace: '', accountId: '', language: '', familyId: '', page: 1 })
+  return withLock({
+    ...query, channel: '', marketplace: '', accountId: '', language: '', familyId: '', live: [],
+    flags: query.flags.filter((flag) => flag !== 'lowStock'), page: 1,
+  })
 }
 
 /** The filters set in the Filters panel. What the lock fixes is the page, not a filter. */
 export const activeFilterCount = (query: ReadinessPageQuery): number =>
   FILTER_KEYS.filter((key) => query[key] !== '' && !isLocked(query, key)).length
+  + (query.live.length > 0 ? 1 : 0)
+  + (query.flags.includes('lowStock') ? 1 : 0)
 
 /**
  * The values a saved view keeps beside the grid's own state. The link's selection and the search are not a view, and
  * neither is the store page it was saved on: one list of views serves every Listings page.
  */
-export interface ReadinessViewFilters { channel: string; marketplace: string; accountId: string; language: string; familyId: string; state: ReadinessStateFilter | '' }
+export interface ReadinessViewFilters {
+  channel: string; marketplace: string; accountId: string; language: string; familyId: string; state: ReadinessStateFilter | ''
+  live: ReadinessLiveState[]; flags: ReadinessLiveFlag[]
+}
 export const viewFiltersOf = (query: ReadinessPageQuery): ReadinessViewFilters => ({
   channel: isLocked(query, 'channel') ? '' : query.channel,
   marketplace: isLocked(query, 'marketplace') ? '' : query.marketplace,
   accountId: query.accountId, language: query.language, familyId: query.familyId, state: query.state,
+  live: [...query.live], flags: [...query.flags],
 })
 export function withViewFilters(query: ReadinessPageQuery, filters: Partial<ReadinessViewFilters> | null | undefined): ReadinessPageQuery {
   if (!filters) return query
   const text = (v: unknown) => (typeof v === 'string' ? v : '')
+  const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
   const state = text(filters.state)
   const familyId = text(filters.familyId)
   return withLock({
     ...query,
     channel: text(filters.channel), marketplace: text(filters.marketplace), accountId: text(filters.accountId),
     language: text(filters.language), familyId, state: isStateFilter(state) ? state : '',
+    // A view saved before the live layer has neither: it shows every channel state.
+    live: knownValues(list(filters.live), READINESS_LIVE_STATES), flags: knownValues(list(filters.flags), READINESS_LIVE_FLAGS),
     selector: familyId ? null : query.selector, page: 1,
   })
 }
@@ -218,6 +251,23 @@ export function selectorChipText(selector: ReadinessSelector): string {
   }
 }
 
+/* ── A search with several terms (pasted SKUs, ASINs, Item IDs) ─────────────────────────────────────────────────── */
+
+/** How many pasted terms the notice names before "and N more". */
+export const NOT_FOUND_SHOWN = 5
+
+/**
+ * The notice under a search with several terms when some matched nothing (`ReadinessFamiliesPage.search`):
+ * "3 of 40 not found: GAL-1, GAL-2, B0ABC and 1 more". Null when every term matched, or for a one-word search (the
+ * empty grid already says so).
+ */
+export function notFoundWords(search: { tokens: number; unmatched: readonly string[] } | null | undefined, shown = NOT_FOUND_SHOWN): string | null {
+  if (!search || search.tokens < 2 || search.unmatched.length === 0) return null
+  const named = search.unmatched.slice(0, shown).join(', ')
+  const more = search.unmatched.length - Math.min(shown, search.unmatched.length)
+  return `${search.unmatched.length.toLocaleString('en')} of ${search.tokens.toLocaleString('en')} not found: ${named}${more > 0 ? ` and ${more.toLocaleString('en')} more` : ''}`
+}
+
 /* ── Translate filtered products… ──────────────────────────────────────────────────────────────────────────────── */
 
 /** The keys the old readiness scope (`listingReadinessWhere`, the Translate preview) reads. Anything else would be ignored there. */
@@ -233,6 +283,9 @@ export function translateScope(query: ReadinessPageQuery): { ok: true; query: Re
   if (query.q) return { ok: false, reason: 'Translate cannot narrow by a search. Clear the search box first.' }
   if (query.state === 'notChecked') return { ok: false, reason: 'Translate cannot narrow to Not checked. Choose another tile or All first.' }
   if (query.parent) return { ok: false, reason: 'Translate cannot narrow to one family’s page. Use the Product family filter instead.' }
+  if (query.live.length || query.flags.length) {
+    return { ok: false, reason: 'Translate cannot narrow by what is on the channel. Clear Channel state, Stock and the live tiles first.' }
+  }
   const params = apiFilterParams(query)
   const out: Record<string, string> = {}
   for (const key of TRANSLATE_KEYS) if (params[key]) out[key] = params[key]

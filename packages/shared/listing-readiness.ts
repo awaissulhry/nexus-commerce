@@ -1,3 +1,5 @@
+import type { SellingState } from './listing-actions.js'
+
 /** Local preparation checks. These results never authorize or confirm a live submission. */
 export interface ListingReadinessIssue {
   field: string
@@ -66,6 +68,12 @@ export interface ReadinessDestination {
   aliasKey: string
   /** Short words for the chip: "Shared", "Amazon IT", "eBay IT", "Shopify"; plus the store or alias when one market has more than one. */
   label: string
+  /**
+   * Live layer (step 3): set on a destination Nexus does not check readiness for — it only holds a listing that matches
+   * no readiness destination (no account recorded, an account or market outside the business's footprint, an archived
+   * listing customization, no market recorded). Why, in words. Absent on every readiness destination.
+   */
+  note?: string
 }
 
 /** One chip: the verdict of a row (family or product) on one destination. */
@@ -80,6 +88,13 @@ export interface ReadinessChip {
   pending: boolean
   /** The oldest check on this destination. */
   computedAt: string | null
+  /**
+   * What the channel shows for this row's listings here (step 3 of the live layer). `null` on Shared, and for a caller
+   * without `listings.view`; absent from an older API.
+   */
+  live?: ReadinessLiveSummary | null
+  /** A member row's own listing on this destination (null = not listed there). Family rows carry `live` only. */
+  listing?: ReadinessLive | null
 }
 
 /** Why a problem is a problem, in the page's words. */
@@ -158,6 +173,12 @@ export interface ReadinessFamiliesPage {
   checked: { latest: string | null; olderThanDay: number }
   /** Families waiting for a rebuild. */
   pendingCount: number
+  /** The live tiles (step 3). `null` for a caller without `listings.view`; absent from an older API. */
+  liveStats?: ReadinessLiveCounts | null
+  /** Listings in the result's scope that match no readiness destination (each shows as an extra chip). */
+  unmatchedListings?: number
+  /** A search with several terms (pasted SKUs, ASINs, Item IDs): how many, and the ones that matched nothing. */
+  search?: { tokens: number; unmatched: string[] }
   rows: ReadinessFamilyRow[]
 }
 
@@ -204,6 +225,8 @@ export interface ReadinessDetail {
   /** Notes of rows that could not be checked ("Not set up" reasons), distinct. */
   notes: string[]
   editorHref: string
+  /** What the channel says (step 5). `null` on Shared and without `listings.view`; absent from an older API. */
+  channel?: ReadinessChannelSection | null
 }
 
 /** The live event: one family's readiness changed. */
@@ -246,4 +269,157 @@ export function readinessDestinationAllowed(
   return product.ownListings.some(listing => listing.channel === destination.channel
     && marketCode(listing.market) === marketCode(destination.market)
     && (!listing.accountId || !destination.accountId || listing.accountId === destination.accountId))
+}
+
+/*
+ * ── The live layer (25 October 2026 — docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md, steps 3–6) ───────────────
+ * Readiness says whether Nexus's saved data is good enough; the live layer says what the channel shows NOW, as far as
+ * Nexus knows: the `ChannelListing` row (what Nexus last sent or read), its open `ListingIssue`s and Amazon
+ * suppressions, and its drift. Never a fresh channel read. A listing belongs to a readiness destination when product,
+ * channel, market (GB = UK), account and alias agree. The words are the product sheet's (`SellingState`, Owner
+ * 2026-10-04: Active · Inactive · Not listed · Ended · Mixed).
+ */
+
+/** Why a listing differs from what Nexus holds. */
+export type ReadinessOutOfSync = 'channel-differs' | 'push-failed'
+
+/** One listing (a `ChannelListing` row) on its channel. */
+export interface ReadinessLive {
+  listingId: string
+  state: SellingState
+  /** Why the state is what it is, in words, when there is more to say ("Ended on eBay", "Old Nexus-only mark"). */
+  reason: string | null
+  /** ASIN, eBay Item ID, Shopify product id … */
+  externalId: string | null
+  /** Amazon: the parent ASIN of a variation. */
+  externalParentId: string | null
+  /** The live listing on the channel, when it has a page. */
+  url: string | null
+  price: number | null
+  salePrice: number | null
+  currency: string | null
+  /** The quantity Nexus last sent or read. Amazon EU shares one number across its markets. */
+  quantity: number | null
+  fulfillment: 'FBA' | 'FBM' | null
+  /** The last push, as stored (`SYNCED`, `PENDING`, `FAILED`, …). */
+  syncStatus: string | null
+  lastSyncedAt: string | null
+  lastSyncError: string | null
+  /** Open channel messages: errors (suppressions included) and warnings. */
+  channelErrorCount: number
+  channelWarningCount: number
+  suppressed: boolean
+  outOfSync: ReadinessOutOfSync[]
+  /** Nexus holds the sync for this listing (paused / held). */
+  held: boolean
+}
+
+/** A row's listings on one destination, summed: the chip's live mark and the "On the channel" words. */
+export interface ReadinessLiveSummary {
+  /** `mixed` when the listings differ. */
+  state: SellingState
+  /** Products of the row with a listing here, and without. */
+  listed: number
+  notListed: number
+  byState: Partial<Record<SellingState, number>>
+  /** The parent's (or the single product's) channel id and link. */
+  externalId: string | null
+  url: string | null
+  /** Over the listings here — one destination, so one currency. */
+  priceMin: number | null
+  priceMax: number | null
+  currency: string | null
+  quantity: number | null
+  fulfillment: 'FBA' | 'FBM' | 'mixed' | null
+  channelErrorCount: number
+  suppressedCount: number
+  outOfSyncCount: number
+  syncFailedCount: number
+  /** The oldest sync of the listings here. */
+  lastSyncedAt: string | null
+  /** More than one listing for one product here (GB and UK twins): reported, never picked. */
+  duplicates: number
+}
+
+/** The live filter: a listing's state on its channel. `not_listed` = products with no listing on a destination. */
+export type ReadinessLiveState = 'active' | 'paused' | 'draft' | 'not_listed' | 'ended' | 'unknown'
+export const READINESS_LIVE_STATES: readonly ReadinessLiveState[] = ['active', 'paused', 'draft', 'not_listed', 'ended', 'unknown']
+
+/**
+ * The live flags. `error` = an open channel error, a failed last push, or a listing in error; `outOfSync` = the
+ * channel differs from Nexus, or the last push failed; `lowStock` = active with quantity at or under the product's
+ * low-stock threshold.
+ */
+export type ReadinessLiveFlag = 'error' | 'suppressed' | 'outOfSync' | 'lowStock'
+export const READINESS_LIVE_FLAGS: readonly ReadinessLiveFlag[] = ['error', 'suppressed', 'outOfSync', 'lowStock']
+
+/** The live tiles. Listings are `ChannelListing` rows (the menu badge's unit); `notListed` counts product × destination. */
+export interface ReadinessLiveCounts {
+  listings: number
+  active: number
+  paused: number
+  draft: number
+  ended: number
+  unknown: number
+  notListed: number
+  error: number
+  suppressed: number
+  outOfSync: number
+  lowStock: number
+}
+
+/** A channel message, word for word. */
+export interface ReadinessChannelMessage {
+  code: string | null
+  severity: 'error' | 'warning' | 'info'
+  message: string
+  attributeNames: string[]
+  /** Where it came from: the channel's answer to a push, a report, Nexus's own record. */
+  source: string
+  firstSeenAt: string | null
+  lastSeenAt: string | null
+}
+
+export interface ReadinessSuppression {
+  /** The `AmazonSuppression` row (step 5's "Mark resolved in Nexus" addresses it). */
+  id: string
+  reasonCode: string | null
+  reasonText: string
+  severity: string | null
+  source: string
+  suppressedAt: string | null
+}
+
+/** A field where the channel differs from Nexus. */
+export interface ReadinessDiffer { field: string; nexus: string | null; channel: string | null; foundAt: string | null }
+
+export interface ReadinessChannelListing {
+  productId: string
+  sku: string
+  live: ReadinessLive
+  messages: ReadinessChannelMessage[]
+  suppressions: ReadinessSuppression[]
+  differs: ReadinessDiffer[]
+  /** The listing's last publish or selling change, as `readPublicationStatus` reads it; null = none recorded here. */
+  lastPublish: { at: string; outcome: ReadinessPublishOutcome; message: string | null } | null
+  /** The newest sync attempts of this listing (at most 10, newest first); absent from an older API. */
+  syncAttempts?: ReadinessSyncAttempt[]
+}
+
+/**
+ * This listing's own result in its last publish (`readPublicationStatus`, `StudioRowLastPublish.outcome`): SUBMITTED =
+ * sent, the channel has not answered; ACCEPTED = the channel took it; VERIFIED = Nexus read it back as sent; FAILED = the
+ * channel refused it (`message` says why); UNKNOWN = Nexus does not know this row's own result.
+ */
+export type ReadinessPublishOutcome = 'SUBMITTED' | 'ACCEPTED' | 'VERIFIED' | 'FAILED' | 'UNKNOWN'
+
+/** One sync attempt of a listing (`SyncAttempt`), as stored. */
+export interface ReadinessSyncAttempt { at: string; status: string; source: string; durationMs: number | null; error: string | null }
+
+/** The Listing window's "On the channel" tab: the row's listings on one destination. */
+export interface ReadinessChannelSection {
+  summary: ReadinessLiveSummary
+  listings: ReadinessChannelListing[]
+  /** When Nexus read these rows. */
+  readAt: string
 }

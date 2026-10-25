@@ -102,6 +102,10 @@
       "types": "./dist/listing-readiness.d.ts",
       "default": "./dist/listing-readiness.js"
     },
+    "./listing-url": {
+      "types": "./dist/listing-url.d.ts",
+      "default": "./dist/listing-url.js"
+    },
     "./reference-values": {
       "types": "./dist/reference-values.d.ts",
       "default": "./dist/reference-values.js"

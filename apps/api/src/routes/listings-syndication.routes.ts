@@ -37,6 +37,7 @@ import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL } 
 import { connectionLabel, connectionLabelDirectory } from '../services/connection-label.js'
 import { ebayMarkdownBenefit } from '../services/ebay-markdown-benefit.js'
 import { NOT_STORE_PHOTO } from '../services/images/store-photos.js'
+import { listingUrlFor } from '@nexus/shared/listing-url'
 
 // ─────────────────────────────────────────────────────────────────────
 // SYNDICATION — universal /listings workspace endpoints
@@ -100,39 +101,6 @@ function safeNum(v: unknown): number | undefined {
   if (v == null) return undefined
   const n = Number(v)
   return Number.isFinite(n) ? n : undefined
-}
-
-function listingUrlFor(channel: string, marketplace: string, externalId: string | null): string | null {
-  if (!externalId) return null
-  switch (channel) {
-    case 'AMAZON': {
-      const tld: Record<string, string> = {
-        US: 'com', CA: 'ca', MX: 'com.mx', BR: 'com.br',
-        UK: 'co.uk', GB: 'co.uk', DE: 'de', FR: 'fr', IT: 'it', ES: 'es', NL: 'nl', PL: 'pl', SE: 'se', BE: 'com.be', TR: 'com.tr',
-        AE: 'ae', SA: 'sa', EG: 'eg',
-        JP: 'co.jp', AU: 'com.au', SG: 'sg', IN: 'in',
-      }
-      const t = tld[marketplace.toUpperCase()] ?? 'com'
-      return `https://www.amazon.${t}/dp/${externalId}`
-    }
-    case 'EBAY': {
-      const tld: Record<string, string> = {
-        US: 'com', UK: 'co.uk', GB: 'co.uk', DE: 'de', IT: 'it', FR: 'fr', ES: 'es', AU: 'com.au', CA: 'ca',
-      }
-      const t = tld[marketplace.toUpperCase()] ?? 'com'
-      return `https://www.ebay.${t}/itm/${externalId}`
-    }
-    case 'SHOPIFY':
-      // Shopify product IDs aren't directly URLable without store handle —
-      // the admin link is the closest we can build server-side.
-      return null
-    case 'ETSY':
-      return `https://www.etsy.com/listing/${externalId}`
-    case 'WOOCOMMERCE':
-      return null
-    default:
-      return null
-  }
 }
 
 /** Listing title projection; outbound platformAttributes never supplies product content. */

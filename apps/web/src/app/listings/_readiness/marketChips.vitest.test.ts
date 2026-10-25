@@ -45,6 +45,26 @@ describe('chip aria text — a full sentence', () => {
   })
 })
 
+describe('chip aria text — the channel’s part (the live layer)', () => {
+  const live = {
+    state: 'mixed' as const, listed: 18, notListed: 2, byState: { active: 18 }, externalId: null, url: null, priceMin: null, priceMax: null,
+    currency: null, quantity: null, fulfillment: null, channelErrorCount: 0, suppressedCount: 1, outOfSyncCount: 0, syncFailedCount: 0,
+    lastSyncedAt: null, duplicates: 0,
+  }
+  const blocked = chip('k', { state: 'blocked', issueCount: 3, counts: counts({ blocked: 12, warn: 8 }), live })
+  it('follows the readiness sentence, in the channel’s words', () => {
+    expect(chipAriaLabel(blocked, 'Amazon DE', 'AMAZON')).toBe('Amazon DE: Blocked, 3 problems, 20 products. On Amazon: Mixed, 18 Active, 2 Not listed. 1 Suppressed.')
+  })
+  it('a pending chip says it is checking after both', () => {
+    expect(chipAriaLabel({ ...blocked, pending: true }, 'Amazon DE', 'AMAZON'))
+      .toBe('Amazon DE: Blocked, 3 problems, 20 products. On Amazon: Mixed, 18 Active, 2 Not listed. 1 Suppressed. Checking again now; this is the last result.')
+  })
+  it('no live data (Shared, no permission, an older API): the sentence as before', () => {
+    expect(chipAriaLabel(chip('k', { live: null }), 'Shared', 'SHARED')).toBe('Shared: Ready, 1 product')
+    expect(chipAriaLabel(chip('k'), 'eBay IT', 'EBAY')).toBe('eBay IT: Ready, 1 product')
+  })
+})
+
 describe('destinations', () => {
   it('chips follow the destinations order; unknown ones go last in their own order', () => {
     const a = key('SHARED', null, null, null), b = key('AMAZON', 'IT', 'acc', null), c = key('AMAZON', 'DE', 'acc', null), x = key('ETSY', 'GLOBAL', 'e', null)

@@ -13,6 +13,8 @@ import { catalogWorkbookTemplate, type WorkbookDestination } from '../services/p
 import { listingReadiness } from '../services/pim/listing-readiness.service.js'
 import { readinessDetail, readinessFamiliesIfChanged, readinessFamilyMembersIfChanged } from '../services/pim/listing-readiness-families.service.js'
 import { matches } from '../utils/list-etag.js'
+import { FEATURES as F } from '@nexus/shared/permissions'
+import { permissionCheckerFor } from './studio-matrix.routes.js'
 import { productTransferOptions, resolveProductTransferBoundary, checkProductTransferBoundary } from '../services/pim/catalog-product-transfer.js'
 import { visitActiveWorkspaces } from '../lib/workspace-sweep.js'
 import { workspaceContext } from '../lib/workspace-context.js'
@@ -20,6 +22,8 @@ import { recoverSheetImports } from '../services/pim/sheet-transfer/sheet-import
 import { writeEditorWorkbook, inspectEditorTransfer, readEditorInput, readEditorTransfer, requireEditorVersions, readCatalogTransferUpload, PRODUCT_TRANSFER_MAX_BYTES, type ChannelFileDecisions } from '../services/pim/catalog-editor-workbook.js'
 
 const actor = (request: FastifyRequest) => (request as FastifyRequest & { authUser?: { id?: string } }).authUser?.id ?? null
+/** The Listings page's live layer (step 3): live data was `listings.view` on the old page, so it stays so here. */
+const liveFor = (request: FastifyRequest) => ({ live: permissionCheckerFor(request)(F.listingsView) })
 const marketOf = (value: unknown) => {
   const market = String(value ?? '').trim().toUpperCase()
   if (!/^(?:[A-Z]{2}|GLOBAL)$/.test(market)) throw new Error('Select a marketplace for the attribute dictionary')
@@ -144,21 +148,24 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
   // The family view (rebuild 2026-10-23): one row per family, its open members, and one destination's Fix window.
   // The two lists answer an unchanged poll with 304 (list-etag.ts): the browser revalidates and hands the page its copy.
   fastify.get('/catalog-transfer/readiness/families', async (request, reply) => {
-    const { etag, page } = await readinessFamiliesIfChanged(request.query as Record<string, unknown>, actor(request), tag => matches(request, tag))
+    // A refusal (400) is never cached; an answer is revalidated by its ETag.
+    reply.header('Cache-Control', 'no-store')
+    const { etag, page } = await readinessFamiliesIfChanged(request.query as Record<string, unknown>, actor(request), tag => matches(request, tag), liveFor(request))
     reply.header('ETag', etag)
     reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
     return page ?? reply.code(304).send()
   })
   fastify.get('/catalog-transfer/readiness/families/:rootId/members', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
     const { etag, page } = await readinessFamilyMembersIfChanged((request.params as { rootId: string }).rootId, request.query as Record<string, unknown>, actor(request),
-      tag => matches(request, tag))
+      tag => matches(request, tag), liveFor(request))
     reply.header('ETag', etag)
     reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
     return page ?? reply.code(304).send()
   })
   fastify.get('/catalog-transfer/readiness/detail', async (request, reply) => {
     reply.header('Cache-Control', 'no-store')
-    return readinessDetail(request.query as Record<string, unknown>, actor(request))
+    return readinessDetail(request.query as Record<string, unknown>, actor(request), liveFor(request))
   })
   fastify.get('/catalog-transfer/source/history', async request => listSourceHistory(actor(request), Number((request.query as { page?: string }).page ?? 1)))
   fastify.get('/catalog-transfer/source/fields', async request => sourceMappingFields(request.query as Parameters<typeof sourceMappingFields>[0]))
