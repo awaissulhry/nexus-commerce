@@ -13,7 +13,8 @@
  *              columns (step 4, `listingColumns.ts`): the row's main listings there, in the design system's words.
  *   Next step  the most urgent problem, a link to the exact field in the studio, and where it is.
  *   Checked    how old the check is; "Checking…" while Nexus rebuilds it.
- *   Actions    Open (the Listing window) · Edit (the studio) — the DS `actionsColumn`.
+ *   Actions    Open (the Listing window) · Edit (the studio) · ⋯ (the row menu, the same list as the right-click menu:
+ *              `listingsBulk.ts` `rowMenuItems`) — the DS `actionsColumn`.
  *
  * Cells read the page through AG's `context` (`ReadinessGridContext`): the destination labels, the Listing window and the
  * family page link. Every verdict, count and order is the API's. A chip opens the Listing window on its destination: a ▲
@@ -22,6 +23,7 @@
 import { Fragment, type ReactElement } from 'react'
 import { Circle, Contrast, ExternalLink, TriangleAlert } from 'lucide-react'
 import type { ReadinessDestination } from '@nexus/shared/listing-readiness'
+import type { MenuItemDef } from '@/design-system/components'
 
 import Link from '@/lib/workspaces/Link'
 import { browserWorkspaceId, workspaceHref } from '@/lib/workspaces/paths'
@@ -92,6 +94,11 @@ export interface ReadinessGridContext {
   /** Step 4: the page's store (`AMAZON` …), or null on /listings. */
   pageChannel: () => string | null
   now: () => number
+  /**
+   * The row's menu (⋯ and right-click read the same list): on `destinationKey` when the row has that chip (the one
+   * right-clicked), else where Open opens.
+   */
+  rowMenu: (row: ReadinessDataRow, destinationKey: string | null) => MenuItemDef[]
 }
 
 type CellParams = ICellRendererParams<ReadinessGridRow>
@@ -474,6 +481,8 @@ export function readinessColumns(ctx: ReadinessGridContext, options: ReadinessCo
             ariaLabel: (data) => (isReadinessFooter(data) ? 'Edit' : `Edit ${data.sku} in the studio`),
           },
         ],
+        items: (data) => (isReadinessFooter(data) ? [] : ctx.rowMenu(data, null)),
+        menuLabel: (data) => (isReadinessFooter(data) ? 'More actions' : `More actions for ${data.sku}`),
       }),
       sortable: false,
     },

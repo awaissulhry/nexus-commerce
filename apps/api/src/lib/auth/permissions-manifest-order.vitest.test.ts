@@ -276,6 +276,8 @@ describe('permission manifest ordering', () => {
     expect(permissionForRoute('POST', '/api/catalog-transfer/readiness/export')).toBe('products.import')
     // The Listing window's link reads where one listing sits; it never reaches the import catch-all.
     expect(permissionForRoute('GET', '/api/catalog-transfer/readiness/listing/:id')).toBe('products.view')
+    // The bulk bar's reach is a read (a POST only for its id lists); it never reaches the import catch-all either.
+    expect(permissionForRoute('POST', '/api/catalog-transfer/readiness/listing-ids')).toBe('products.view')
     expect(permissionForRoute('POST', '/api/catalog-transfer/preview')).toBe('products.import')
     expect(permissionForRoute('POST', '/api/catalog-transfer/jobs/job/apply')).toBe('products.import')
   })
