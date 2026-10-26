@@ -1,8 +1,8 @@
 /**
  * Reviews area — where each channel's reviews come from and whether they still arrive, in plain words (the Overview's
- * channel table and setup banner; Reviews Settings › Sources reads the same answer in PR D). It takes over the job of
- * GET /reviews/ingest-health without ever naming a setting key: a person reads "Sign-in expired · Reconnect", never a
- * variable.
+ * channel table and setup banner; Reviews Settings › Sources reads the same answer in PR D). It took over the job of
+ * GET /reviews/ingest-health (retired in PR D) without ever naming a setting key: a person reads "Sign-in expired ·
+ * Reconnect", never a variable.
  *
  * Shape: `readSourceFacts()` reads (connections, Amazon topic reads, review counts per channel and market, the last
  * review read), `sourcesFromFacts()` turns the facts into states and setup problems — pure, tested in
