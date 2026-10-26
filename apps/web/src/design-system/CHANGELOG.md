@@ -14,6 +14,7 @@ Web; the files marked (both apps) are identical in apps/factory. Every default r
 - **`GridToolbar wrap`**: the bar may take a second line on a narrow desktop card; the right-hand group moves down whole, right-aligned (`.nds-grid-card > .nds-toolbar.wrap`). (both apps)
 - **`opensDark`**: a surface opened from a `.nds-theme-responsive` section strictly INSIDE a light pin follows the theme (the Negative Targeting page in the ads shell); a shell carrying both classes on one element keeps today's answer. (both apps)
 - **Shell**: the rail count badge on `--nds-rail-badge-bg` (red-700, 5.44:1 under white; was red-500, 3.9:1); the top bar's phone width rule for the business name now names the element it means (`app-topbar.css`).
+
 ## DetailModal counts a paged list — 2026-10-26
 
 Reviews Inbox (PR B). Web only: `patterns/{DetailModal,detailModalModel,index}`.
