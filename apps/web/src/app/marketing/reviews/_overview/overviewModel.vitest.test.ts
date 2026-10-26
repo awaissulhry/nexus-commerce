@@ -122,7 +122,7 @@ describe('needs you', () => {
   it('each action opens a page that exists today (through the one link module)', () => {
     expect(needsActionHref(item({}).action)).toBe('/marketing/reviews/inbox?channel=EBAY&market=IT')
     expect(needsActionHref({ label: 'See alert', page: 'alerts', params: { market: 'DE' } })).toBe('/marketing/reviews/spikes?market=DE')
-    expect(needsActionHref({ label: 'See requests', page: 'requests', params: { status: 'FAILED' } })).toBe('/marketing/reviews/requests')
+    expect(needsActionHref({ label: 'See requests', page: 'requests', params: { status: 'FAILED' } })).toBe('/marketing/reviews/requests?status=FAILED')
   })
 
   it('a reply is held without Manage reviews, with the reason; opening a page is not', () => {

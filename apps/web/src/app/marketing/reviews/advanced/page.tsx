@@ -1,12 +1,14 @@
 /**
  * UX.2 — Advanced index. The 8 power-features demoted from the primary nav live
  * here as a labeled card grid — still fully working, just out of the everyday
- * Overview / Respond / Ask-for-reviews path. "Demote, don't delete."
+ * Overview / Inbox / Requests path. "Demote, don't delete."
  */
 
 import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, Grid, Package, Wrench, Bot, Lightbulb, Upload, SlidersHorizontal, Clock, QrCode, type LucideIcon } from 'lucide-react'
 import { ReviewsNav } from '../_shared/ReviewsNav'
+import { inboxHref, requestsHref } from '../_lib/reviewsLinks'
+import { RULES_PATH, TIMING_PATH, timingPath } from '../requests/requestsPaths'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,11 +19,11 @@ const FEATURES: { href: string; label: string; desc: string; icon: LucideIcon }[
   { href: '/marketing/reviews/by-product', label: 'By product', desc: 'Per-SKU review rollup, sorted by negative rate.', icon: Package },
   { href: '/marketing/reviews/heatmap', label: 'Heatmap', desc: 'Day × category sentiment grid.', icon: Grid },
   { href: '/marketing/reviews/automation', label: 'Automation', desc: 'Rule-driven review automation (added disabled + dry-run).', icon: Bot },
-  { href: '/marketing/reviews/inbox?import=1', label: 'Import reviews', desc: 'Upload CSV / TSV / JSON / XLSX exports (Seller Central, Judge.me, Loox).', icon: Upload },
-  { href: '/orders/reviews/rules', label: 'Request rules', desc: 'Define when post-purchase review requests are sent.', icon: SlidersHorizontal },
-  { href: '/orders/reviews/rules/timing', label: 'Timing defaults', desc: 'Edit the per-product-type “days after delivery” baseline.', icon: Clock },
-  { href: '/orders/reviews/rules/send-times', label: 'Send times', desc: 'Best local hour to ask, per weekday + market (send-time optimization).', icon: Clock },
-  { href: '/marketing/reviews/inserts', label: 'Review inserts', desc: 'Printable in-box cards with a QR to the Amazon review page (compliant).', icon: QrCode },
+  { href: inboxHref({ import: 1 }), label: 'Import reviews', desc: 'Upload CSV / TSV / JSON / XLSX exports (Seller Central, Judge.me, Loox).', icon: Upload },
+  { href: RULES_PATH, label: 'Request rules', desc: 'Define when post-purchase review requests are sent.', icon: SlidersHorizontal },
+  { href: TIMING_PATH, label: 'Timing defaults', desc: 'Edit the per-product-type “days after delivery” baseline.', icon: Clock },
+  { href: timingPath('send-hours'), label: 'Send times', desc: 'Best local hour to ask, per weekday + market (send-time optimization).', icon: Clock },
+  { href: requestsHref({ inserts: 1 }), label: 'Review inserts', desc: 'Printable in-box cards with a QR to the Amazon review page (compliant).', icon: QrCode },
 ]
 
 export default function AdvancedPage() {

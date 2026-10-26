@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   inboxHref,
   insightsHref,
@@ -14,6 +14,14 @@ import {
 } from './reviewsLinks'
 
 const APP = fileURLToPath(new URL('../../..', import.meta.url))
+const WEB_ROOT = fileURLToPath(new URL('../../../../..', import.meta.url))
+
+interface NextRedirect { source: string; destination: string; permanent?: boolean; has?: unknown[] }
+const loadRedirects = async (): Promise<NextRedirect[]> => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const cfg = require(join(WEB_ROOT, 'next.config.js')) as { redirects: () => Promise<NextRedirect[]> }
+  return cfg.redirects()
+}
 
 /** True when `href`'s path is a page of the app (a `[param]` folder matches any one segment). */
 function isPage(href: string): boolean {
@@ -36,7 +44,7 @@ describe('reviews links', () => {
     expect(withQuery('/x', { stars: [1, 2], none: [] })).toBe('/x?stars=1%2C2')
   })
 
-  it('points every link at a page that exists today', () => {
+  it('points every link at a page that exists', () => {
     const pages: InsightsPage[] = ['themes', 'products', 'alerts', 'fixes', 'brief']
     const hrefs = [
       inboxHref(), inboxHref({ import: 1 }), inboxHref({ channel: 'EBAY', market: 'DE', stars: [1] }),
@@ -60,7 +68,38 @@ describe('reviews links', () => {
     expect(insightsHref('products', { product: 'a b' })).toBe('/marketing/reviews/products/a%20b')
   })
 
+  it('sends the Requests links to the Queue, its windows and one rule’s editor, filters and all', () => {
+    expect(requestsHref()).toBe('/marketing/reviews/requests')
+    expect(requestsHref({ status: 'FAILED', channel: 'EBAY', market: 'DE', period: '7d' })).toBe('/marketing/reviews/requests?status=FAILED&channel=EBAY&market=DE')
+    expect(requestsHref({ inserts: 1 })).toBe('/marketing/reviews/requests?inserts=1')
+    expect(requestsHref({ preview: true, channel: 'SHOPIFY' })).toBe('/marketing/reviews/requests?channel=SHOPIFY&preview=1')
+    expect(ruleHref('rule 1/2')).toBe('/marketing/reviews/requests/rules/rule%201%2F2')
+  })
+
   it('sends Settings to Settings › Channels until the Reviews settings page exists', () => {
     expect(reviewsSettingsHref('sources')).toBe('/settings/channels')
+  })
+})
+
+describe('old Requests addresses', () => {
+  afterEach(() => { vi.unstubAllEnvs() })
+
+  const OLD: Array<[string, string]> = [
+    ['/marketing/reviews/inserts', '/marketing/reviews/requests?inserts=1'],
+    ['/marketing/reviews/requests/test/preview', '/marketing/reviews/requests?preview=1'],
+    ['/orders/reviews/rules/timing', '/marketing/reviews/requests/timing'],
+    ['/orders/reviews/rules/send-times', '/marketing/reviews/requests/timing?section=send-hours'],
+    ['/orders/reviews/rules', '/marketing/reviews/requests/rules'],
+  ]
+
+  it('land for good on the Requests page that does their job, also inside a business', async () => {
+    vi.stubEnv('NEXT_PUBLIC_WORKSPACES_ENABLED', '1')
+    const redirects = await loadRedirects()
+    for (const [source, destination] of OLD) {
+      expect(redirects.find((r) => r.source === source && !r.has), source).toMatchObject({ destination, permanent: true })
+      expect(redirects.find((r) => r.source === `/w/:workspaceId${source}`)?.destination, source).toBe(`/w/:workspaceId${destination}`)
+      expect(isPage(destination), destination).toBe(true)
+      expect(isPage(source), `${source} has no page left`).toBe(false)
+    }
   })
 })

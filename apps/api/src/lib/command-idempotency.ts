@@ -112,6 +112,12 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/reviews/:id/reply/send': 'review-reply-send',
   '/api/reviews/import/apply': 'review-import-apply',
   '/api/reviews/inbox/bulk': 'review-inbox-bulk',
+  // Reviews › Requests (PR C) — one "Run now" per press, one snooze / skip / send now of the picked requests, one test
+  // e-mail, one on / off / delete of the picked rules, even when the answer is lost and the page sends it again.
+  '/api/review-queue/run': 'review-queue-run',
+  '/api/review-queue/bulk': 'review-queue-bulk',
+  '/api/review-emails/test': 'review-email-test',
+  '/api/review-rules/bulk': 'review-rules-bulk',
 }
 
 /** The POST routes whose Idempotency-Key is honoured (for the tests that hold a route to it). */

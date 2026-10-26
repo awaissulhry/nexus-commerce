@@ -131,6 +131,15 @@ const nextConfig = {
       { source: '/listings/legacy', destination: '/listings', permanent: true },
       { source: '/listings/legacy/:store', destination: '/listings/:store', permanent: true },
       { source: '/listings/legacy/:store/:market', destination: '/listings/:store/:market', permanent: true },
+      // ── 2026-10-26 — Reviews › Requests (Reviews rebuild, PR C) ──────────────────────────────────────────────────────
+      // Package inserts and the e-mail preview are windows of the Queue now; the review-request rules and their timing
+      // pages moved from Orders into Reviews › Requests. Exact paths, so their order among themselves does not matter;
+      // the longer sources still come first.
+      { source: '/marketing/reviews/requests/test/preview', destination: '/marketing/reviews/requests?preview=1', permanent: true },
+      { source: '/marketing/reviews/inserts', destination: '/marketing/reviews/requests?inserts=1', permanent: true },
+      { source: '/orders/reviews/rules/send-times', destination: '/marketing/reviews/requests/timing?section=send-hours', permanent: true },
+      { source: '/orders/reviews/rules/timing', destination: '/marketing/reviews/requests/timing', permanent: true },
+      { source: '/orders/reviews/rules', destination: '/marketing/reviews/requests/rules', permanent: true },
       // ── RA.SPINE S3 — one derived rule, replacing six hand-written copies ──────────────────
       //
       // The old index client (`RulesAutomationClient.tsx`, since removed) resolved an unknown OR ROUTED

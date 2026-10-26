@@ -17,7 +17,21 @@ import { lintBuyerCopy } from '../services/comms/message-lint.js'
  *   POST   /api/orders/:id/request-review   manual one-off
  *   POST   /api/orders/bulk-request-reviews bulk one-off
  *
- *   POST   /api/review-engine/tick          trigger the worker once
+ * Reviews area PR C (services/reviews/review-queue.service.ts; no database call here):
+ *   GET    /api/review-queue                the queue: rows, tiles, failures of 7 days, facets
+ *   GET    /api/review-queue/sending        paused?, next run, last run, what is due
+ *   GET    /api/review-queue/:id            one request: window, Amazon's answer, timeline, held actions
+ *   POST   /api/review-queue/run            the ONE sender now (held while paused)
+ *   POST   /api/review-queue/pause|resume   the business's switch; the actor is the signed-in person
+ *   POST   /api/review-queue/bulk           snooze / skip / send now
+ *   GET    /api/review-emails/preview       the review e-mail as a buyer gets it (no send)
+ *   POST   /api/review-emails/test          one real e-mail to the signed-in person
+ *   GET    /api/review-rules?withStats=1    + sent30, rate30, matched30 per rule
+ *   POST   /api/review-rules/bulk           on / off / delete, held rules in words
+ *   GET    /api/review-rules/export?ids=    the chosen rules (all without ids)
+ *
+ * POST /api/review-engine/tick is gone (B9): it sent without the pause switch and the "How was it?" check and marked
+ * every non-Amazon request skipped. "Run now" is POST /api/review-queue/run, the same sender as the hourly cron.
  *
  * The Amazon Solicitations API call is wrapped behind a stub function
  * (sendAmazonSolicitation) that the SP-API client wires into. When the
@@ -32,21 +46,26 @@ import {
   AMAZON_SOLICITATION_MAX_DAYS,
   AMAZON_SOLICITATION_MIN_DAYS,
   sendAmazonSolicitation as sharedSendAmazonSolicitation,
-  amazonMarketplaceIdFor as sharedAmazonMarketplaceIdFor,
   isBenignFailure,
   benignSuppressedReason,
-  outsideWindowUpdate,
 } from '../services/reviews/amazon-solicitations.service.js'
 import { requestReviewForOrder } from '../services/reviews/review-request.service.js'
-
-type RuleScope =
-  | 'AMAZON_PER_MARKETPLACE'
-  | 'AMAZON_GLOBAL'
-  | 'EBAY'
-  | 'SHOPIFY'
-  | 'WOOCOMMERCE'
-  | 'ETSY'
-  | 'MANUAL'
+import { findOrdersMatchingRule } from '../services/reviews/review-scheduler.service.js'
+import { requestUserId } from '../lib/auth/request-permission.js'
+import {
+  bulkReviewQueue,
+  bulkReviewRules,
+  exportReviewRules,
+  listReviewQueue,
+  pauseReviewQueue,
+  resumeReviewQueue,
+  reviewEmailPreview,
+  reviewQueueDetail,
+  reviewSendingState,
+  ruleStats,
+  runReviewQueueNow,
+  sendReviewEmailTest,
+} from '../services/reviews/review-queue.service.js'
 
 const ACTIVE_RETURN_STATUSES = ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING'] as const
 
@@ -55,7 +74,13 @@ const ACTIVE_RETURN_STATUSES = ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIV
 // the cron mailer import from there. The shared module also exports
 // isBenignFailure / benignSuppressedReason for status classification.
 const sendAmazonSolicitation = sharedSendAmazonSolicitation
-const amazonMarketplaceIdFor = sharedAmazonMarketplaceIdFor
+
+/** A service's refusal (statusCode 400/403 + words) as its status; anything else is a 500 with the message. */
+function sendFailure(reply: any, err: any) {
+  const status = typeof err?.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 500 ? err.statusCode : 500
+  if (status === 500) logger.error('[REVIEW QUEUE] request failed', { message: err?.message })
+  return reply.status(status).send({ error: err?.message ?? 'failed' })
+}
 
 // Extract the channel order id Amazon expects (Amazon Order ID).
 function extractAmazonOrderId(order: any): string | null {
@@ -80,14 +105,27 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
   // ═══════════════════════════════════════════════════════════════════
   // RULES — CRUD
   // ═══════════════════════════════════════════════════════════════════
-  fastify.get('/review-rules', async (_request, reply) => {
+  fastify.get('/review-rules', async (request, reply) => {
     try {
       const rules = await prisma.reviewRule.findMany({
         orderBy: [{ isActive: 'desc' }, { scope: 'asc' }, { name: 'asc' }],
         include: { _count: { select: { requests: true } } },
       })
+      // PR C — `?withStats=1`: sent in 30 days, review rate (estimate), orders the rule decided in 30 days.
+      const withStats = (request.query as { withStats?: string })?.withStats === '1'
+      let stats: Awaited<ReturnType<typeof ruleStats>> | null = null
+      let statsError: string | null = null
+      if (withStats) {
+        stats = await ruleStats().catch((err) => {
+          logger.warn('[REVIEW ENGINE] rule stats failed', { message: err?.message })
+          statsError = 'The numbers of the last 30 days could not be read'
+          return null
+        })
+      }
       return {
+        ...(withStats ? { statsError } : {}),
         items: rules.map((r) => ({
+          ...(stats ? (stats.get(r.id) ?? { sent30: 0, rate30: null, matched30: 0 }) : {}),
           id: r.id, name: r.name, scope: r.scope, marketplace: r.marketplace,
           isActive: r.isActive,
           minDaysSinceDelivery: r.minDaysSinceDelivery,
@@ -215,30 +253,24 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // RX.6 — Export all rules as portable JSON (no ids / counts).
-  fastify.get('/review-rules/export', async (_request, reply) => {
-    const rules = await prisma.reviewRule.findMany({ orderBy: [{ scope: 'asc' }, { name: 'asc' }] })
-    const exported = rules.map((r) => ({
-      name: r.name,
-      scope: r.scope,
-      marketplace: r.marketplace,
-      isActive: r.isActive,
-      minDaysSinceDelivery: r.minDaysSinceDelivery,
-      maxDaysSinceDelivery: r.maxDaysSinceDelivery,
-      exclusions: r.exclusions,
-      minOrderTotalCents: r.minOrderTotalCents,
-      notes: r.notes,
-      productTypes: r.productTypes,
-      sendDelayDays: r.sendDelayDays,
-      anchor: r.anchor,
-      sendHourLocal: r.sendHourLocal,
-      skipWeekends: r.skipWeekends,
-      shiftToBestDay: r.shiftToBestDay,
-      useSentimentDiversion: r.useSentimentDiversion,
-      fallbackOnNoResponse: r.fallbackOnNoResponse,
-    }))
-    reply.header('Content-Disposition', 'attachment; filename="review-rules.json"')
-    return { version: 1, exportedAt: new Date().toISOString(), rules: exported }
+  // RX.6 — Export rules as portable JSON (no ids / counts). PR C — `?ids=a,b` exports only those (the bulk bar).
+  fastify.get('/review-rules/export', async (request, reply) => {
+    try {
+      const exported = await exportReviewRules((request.query as { ids?: string })?.ids)
+      reply.header('Content-Disposition', 'attachment; filename="review-rules.json"')
+      return exported
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  // PR C (ruling 13) — the Rules page's bulk bar: { ids ≤ 200, action: 'on' | 'off' | 'delete' } → { changed, held }.
+  fastify.post('/review-rules/bulk', async (request, reply) => {
+    try {
+      return await bulkReviewRules(request.body)
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
   })
 
   // RX.6 — Import rules from JSON. Upserts on (name, scope, marketplace);
@@ -647,84 +679,94 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ═══════════════════════════════════════════════════════════════════
-  // ENGINE TICK — process SCHEDULED rows now
+  // REVIEW QUEUE — Reviews area PR C (logic in review-queue.service.ts)
   // ═══════════════════════════════════════════════════════════════════
-  fastify.post('/review-engine/tick', async (_request, reply) => {
+  fastify.get('/review-queue', async (request, reply) => {
     try {
-      const due = await prisma.reviewRequest.findMany({
-        where: { status: 'SCHEDULED', scheduledFor: { lte: new Date() } },
-        take: 200,
-        include: { order: true },
-      })
-      let sent = 0, failed = 0, suppressed = 0
-      for (const req of due) {
-        const order = req.order
-        // Re-check eligibility before sending — state may have changed
-        if (!order.deliveredAt) {
-          await prisma.reviewRequest.update({ where: { id: req.id }, data: { status: 'SUPPRESSED', suppressedReason: 'not delivered' } })
-          suppressed++; continue
-        }
-        const days = (Date.now() - order.deliveredAt.getTime()) / (24 * 60 * 60 * 1000)
-        if (days < AMAZON_SOLICITATION_MIN_DAYS) {
-          // Too early: wait for day 4.
-          await prisma.reviewRequest.update({ where: { id: req.id }, data: { scheduledFor: new Date(order.deliveredAt.getTime() + AMAZON_SOLICITATION_MIN_DAYS * 24 * 60 * 60 * 1000) } })
-          continue
-        }
-        if (days > AMAZON_SOLICITATION_MAX_DAYS) {
-          await prisma.reviewRequest.update({ where: { id: req.id }, data: { status: 'SUPPRESSED', suppressedReason: `outside 4–30d window (${Math.round(days)}d)` } })
-          suppressed++; continue
-        }
-        const [activeReturn, refund] = await Promise.all([
-          prisma.return.findFirst({ where: { orderId: order.id, status: { in: ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING'] } } }),
-          prisma.financialTransaction.findFirst({ where: { orderId: order.id, transactionType: 'Refund' } }),
-        ])
-        if (activeReturn) {
-          await prisma.reviewRequest.update({ where: { id: req.id }, data: { status: 'SUPPRESSED', suppressedReason: 'active return' } })
-          suppressed++; continue
-        }
-        if (refund) {
-          await prisma.reviewRequest.update({ where: { id: req.id }, data: { status: 'SUPPRESSED', suppressedReason: 'has refund' } })
-          suppressed++; continue
-        }
-        if (order.channel === 'AMAZON') {
-          const amazonOrderId = extractAmazonOrderId(order)
-          if (!amazonOrderId || !amazonMarketplaceIdFor(order.marketplace)) {
-            await prisma.reviewRequest.update({ where: { id: req.id }, data: { status: 'FAILED', errorMessage: 'missing amazonOrderId or marketplaceId' } })
-            failed++; continue
-          }
-          const result = await sendAmazonSolicitation({ amazonOrderId, marketplaceCode: order.marketplace ?? '' })
-          if (result.errorCode === 'OUTSIDE_WINDOW') {
-            // Amazon's delivery date can be later than ours: tomorrow again, until our day 30.
-            const data = outsideWindowUpdate(order.deliveredAt, result.errorMessage)
-            await prisma.reviewRequest.update({ where: { id: req.id }, data })
-            if (data.status === 'SKIPPED') suppressed++
-            continue
-          }
-          const benign = isBenignFailure(result.errorCode)
-          const newStatus = result.ok ? 'SENT' : benign ? 'SKIPPED' : 'FAILED'
-          await prisma.reviewRequest.update({
-            where: { id: req.id },
-            data: {
-              status: newStatus,
-              sentAt: result.ok ? new Date() : null,
-              providerRequestId: result.providerRequestId ?? null,
-              providerResponseCode: result.errorCode ?? null,
-              errorMessage: benign ? null : result.errorMessage ?? null,
-              suppressedReason: benignSuppressedReason(result.errorCode),
-            },
-          })
-          if (result.ok) sent++
-          else if (benign) suppressed++
-          else failed++
-        } else {
-          await prisma.reviewRequest.update({ where: { id: req.id }, data: { status: 'SKIPPED', suppressedReason: 'non-Amazon — track-only' } })
-          suppressed++
-        }
-      }
-      return { processed: due.length, sent, failed, suppressed }
+      reply.header('Cache-Control', 'no-store')
+      return await listReviewQueue((request.query ?? {}) as Record<string, unknown>)
     } catch (err: any) {
-      logger.error('[REVIEW ENGINE] tick failed', { message: err.message })
-      return reply.status(500).send({ error: err.message })
+      return sendFailure(reply, err)
+    }
+  })
+
+  fastify.get('/review-queue/sending', async (_request, reply) => {
+    try {
+      reply.header('Cache-Control', 'no-store')
+      return await reviewSendingState()
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  fastify.get('/review-queue/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const detail = await reviewQueueDetail(id)
+      if (!detail) return reply.status(404).send({ error: 'Request not found' })
+      reply.header('Cache-Control', 'no-store')
+      return detail
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  // "Run now": the ONE sender (jobs/review-request-mailer.job.ts runReviewMailerOnce), held while sending is paused.
+  fastify.post('/review-queue/run', async (_request, reply) => {
+    try {
+      const ran = await runReviewQueueNow()
+      if ('held' in ran) return reply.status(409).send({ held: ran.held, error: ran.held })
+      return { result: ran.result }
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  fastify.post('/review-queue/pause', async (request, reply) => {
+    try {
+      const actor = requestUserId(request)
+      const sending = await pauseReviewQueue((request.body as { reason?: unknown } | undefined)?.reason, actor)
+      return { ok: true, sending }
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  fastify.post('/review-queue/resume', async (request, reply) => {
+    try {
+      const actor = requestUserId(request)
+      const sending = await resumeReviewQueue(actor)
+      return { ok: true, sending }
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  // { ids ≤ 200, action: 'snooze' | 'skip' | 'send-now', days?: 1 | 3 | 7 } → { changed, held: {id, words}[], result? }
+  fastify.post('/review-queue/bulk', async (request, reply) => {
+    try {
+      return await bulkReviewQueue(request.body)
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  fastify.get('/review-emails/preview', async (request, reply) => {
+    try {
+      reply.header('Cache-Control', 'no-store')
+      return await reviewEmailPreview((request.query ?? {}) as Record<string, unknown>)
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  // One real e-mail to the signed-in person's own address (never a buyer's; no order is touched).
+  fastify.post('/review-emails/test', async (request, reply) => {
+    try {
+      requestUserId(request)
+      return await sendReviewEmailTest((request.body ?? {}) as Record<string, unknown>, request.authUser?.email)
+    } catch (err: any) {
+      return sendFailure(reply, err)
     }
   })
 
@@ -829,76 +871,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
   })
 }
 
-// ────────────────────────────────────────────────────────────────────
-// Rule matcher — finds Order rows that satisfy a ReviewRule.
-// Single source of truth for both dry-run and the engine tick.
-// ────────────────────────────────────────────────────────────────────
-async function findOrdersMatchingRule(rule: any) {
-  // Channel scope
-  let channelClause: any = {}
-  switch (rule.scope as RuleScope) {
-    case 'AMAZON_GLOBAL':
-      channelClause = { channel: 'AMAZON' }
-      break
-    case 'AMAZON_PER_MARKETPLACE':
-      channelClause = { channel: 'AMAZON', marketplace: rule.marketplace }
-      break
-    case 'EBAY':       channelClause = { channel: 'EBAY' }; break
-    case 'SHOPIFY':    channelClause = { channel: 'SHOPIFY' }; break
-    case 'WOOCOMMERCE':channelClause = { channel: 'WOOCOMMERCE' }; break
-    case 'ETSY':       channelClause = { channel: 'ETSY' }; break
-    case 'MANUAL':     channelClause = { channel: 'MANUAL' }; break
-  }
-
-  const minDate = new Date(Date.now() - rule.maxDaysSinceDelivery * 24 * 60 * 60 * 1000)
-  const maxDate = new Date(Date.now() - rule.minDaysSinceDelivery * 24 * 60 * 60 * 1000)
-
-  const where: any = {
-    ...channelClause,
-    deliveredAt: { gte: minDate, lte: maxDate },
-    // Already-sent or scheduled requests for this channel are excluded —
-    // dedup via the unique constraint on (orderId, channel).
-    reviewRequests: { none: { channel: channelClause.channel } },
-  }
-
-  const exclusions: string[] = rule.exclusions ?? []
-  const ANDs: any[] = []
-
-  if (exclusions.includes('has_active_return')) {
-    ANDs.push({ returns: { none: { status: { in: ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING'] } } } })
-  }
-  if (exclusions.includes('has_refund')) {
-    ANDs.push({ financialTransactions: { none: { transactionType: 'Refund' } } })
-  }
-  if (exclusions.includes('fba_only')) {
-    ANDs.push({ fulfillmentMethod: 'FBA' })
-  }
-  if (exclusions.includes('fbm_only')) {
-    ANDs.push({ fulfillmentMethod: 'FBM' })
-  }
-  if (rule.minOrderTotalCents != null) {
-    ANDs.push({ totalPrice: { gte: rule.minOrderTotalCents / 100 } })
-  }
-  // RRT.3 — product-type targeting (case-insensitive substring on the order's
-  // items' productType), consistent with the JS matcher's t.includes(pattern).
-  const productTypes: string[] = rule.productTypes ?? []
-  if (productTypes.length > 0) {
-    ANDs.push({ OR: productTypes.map((p: string) => ({ items: { some: { product: { productType: { contains: String(p), mode: 'insensitive' } } } } })) })
-  }
-  if (ANDs.length > 0) where.AND = ANDs
-
-  return prisma.order.findMany({
-    where,
-    select: {
-      id: true, channel: true, marketplace: true, channelOrderId: true,
-      totalPrice: true, customerEmail: true, deliveredAt: true,
-      // RRT.6 — extra fields so dry-run can preview the resolved scheduledFor.
-      shippedAt: true, purchaseDate: true,
-      items: { take: 1, select: { product: { select: { productType: true } } } },
-    },
-    orderBy: { deliveredAt: 'asc' },
-    take: 5000,
-  })
-}
+// Rule matcher — services/reviews/review-scheduler.service.ts findOrdersMatchingRule (PR C: honours the same
+// "Skip when" boxes as the scheduler).
 
 export default ordersReviewsRoutes
