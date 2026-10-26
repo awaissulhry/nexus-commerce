@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
-import { CATEGORY_LABEL } from '../_shared/ReviewsNav'
+import { THEME_LABEL } from '../_lib/reviewWords'
 
 interface Cell {
   date: string
@@ -102,7 +102,7 @@ export function HeatmapGrid({
             {categories.map((cat) => (
               <tr key={cat}>
                 <th className="sticky left-0 bg-white dark:bg-slate-900 px-2 py-1 text-left font-medium text-slate-700 dark:text-slate-300 z-10">
-                  {CATEGORY_LABEL[cat] ?? cat}
+                  {THEME_LABEL[cat] ?? cat}
                 </th>
                 {dates.map((d) => {
                   const cell = byKey.get(`${d}::${cat}`)
@@ -125,7 +125,7 @@ export function HeatmapGrid({
                         className={`block rounded text-center py-1 px-0.5 font-mono text-[10px] ${cls} hover:opacity-80`}
                         title={
                           cell
-                            ? `${d} · ${CATEGORY_LABEL[cat] ?? cat} · total ${cell.total} · neg ${cell.negative} · pos ${cell.positive}`
+                            ? `${d} · ${THEME_LABEL[cat] ?? cat} · total ${cell.total} · neg ${cell.negative} · pos ${cell.positive}`
                             : 'no data'
                         }
                       >

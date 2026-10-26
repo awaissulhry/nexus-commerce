@@ -7,7 +7,7 @@ import Link from '@/lib/workspaces/Link'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { Loader2, Wrench } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { CATEGORY_LABEL } from '../_shared/ReviewsNav'
+import { THEME_LABEL } from '../_lib/reviewWords'
 import { Listbox } from '@/design-system/components/Listbox'
 
 interface SpikeRow {
@@ -157,7 +157,7 @@ export function SpikesFullClient({ initial }: { initial: SpikeRow[] }) {
                         : 'Resolved'}
                   </span>
                   <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900">
-                    {CATEGORY_LABEL[s.category] ?? s.category}
+                    {THEME_LABEL[s.category] ?? s.category}
                   </span>
                   <span className="font-mono text-xs text-slate-500">{s.marketplace}</span>
                   {s.spikeMultiplier && (

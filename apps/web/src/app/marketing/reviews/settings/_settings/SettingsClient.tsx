@@ -92,12 +92,16 @@ export function SettingsClient() {
   const discard = useCallback(() => setDraft(saved), [saved])
   const held = manageHeld ?? (draft ? saveHeldReason(draft) : null)
 
-  // ── `?section=` scrolls to that section once the page is drawn ──
+  // ── `?section=` scrolls to that section once the page is drawn, then leaves the address (build spec §1.3) ──
   useEffect(() => {
     const section = sectionFromSearch(window.location.search)
     if (!section) return
     const frame = requestAnimationFrame(() => {
       document.querySelector<HTMLElement>(`[data-builder-section="${section}"]`)?.scrollIntoView({ block: 'start' })
+      const params = new URLSearchParams(window.location.search)
+      params.delete('section')
+      const rest = params.toString()
+      window.history.replaceState({}, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`)
     })
     return () => cancelAnimationFrame(frame)
   }, [])

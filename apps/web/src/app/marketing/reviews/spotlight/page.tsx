@@ -10,9 +10,11 @@
  */
 
 import { useEffect, useState } from 'react'
-import { Lightbulb } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { ReviewsNav } from '../_shared/ReviewsNav'
+import { PageHeader } from '@/design-system/patterns'
+import { usePathname } from '@/lib/workspaces/navigation'
+import { reviewsCrumbs } from '../_shell/reviews-crumbs'
+import { ReviewsMenuButton } from '../_shell/ReviewsShell'
 import { SpotlightClient, type Spotlight } from './SpotlightClient'
 
 async function fetchJson<T>(url: string, fallback: T): Promise<T> {
@@ -26,6 +28,7 @@ async function fetchJson<T>(url: string, fallback: T): Promise<T> {
 }
 
 export default function SpotlightPage() {
+  const pathname = usePathname() ?? ''
   const [data, setData] = useState<{ spotlight: Spotlight | null } | null>(null)
 
   useEffect(() => {
@@ -41,20 +44,12 @@ export default function SpotlightPage() {
 
   return (
     <div className="px-4 py-4">
-      <div className="flex items-start gap-3 mb-3">
-        <Lightbulb className="h-6 w-6 text-amber-500 dark:text-amber-400 mt-0.5" />
-        <div className="flex-1">
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-            Review Spotlight
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            An AI Voice-of-Customer brief: what customers love, what they complain about, what&apos;s
-            emerging, and concrete actions to take — synthesized across your recent reviews.
-          </p>
-        </div>
-      </div>
-
-      <ReviewsNav />
+      <PageHeader
+        eyebrow={reviewsCrumbs(pathname)}
+        title="Review Spotlight"
+        subtitle="An AI Voice-of-Customer brief: what customers love, what they complain about, what’s emerging, and concrete actions to take — synthesized across your recent reviews."
+        actions={<ReviewsMenuButton />}
+      />
       {data ? (
         <SpotlightClient initial={data.spotlight} />
       ) : (

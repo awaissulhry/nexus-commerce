@@ -118,9 +118,9 @@ export function insightsHref(page: InsightsPage, params: InsightsLinkParams = {}
 
 export type ReviewsSettingsSection = 'sources' | 'emails' | 'templates' | 'alerts' | 'automations' | 'pipeline'
 
-/** Reviews settings. New: `/marketing/reviews/settings?section=…` (PR D). Today: Settings › Channels. */
-export function reviewsSettingsHref(_section?: ReviewsSettingsSection): string {
-  return '/settings/channels'
+/** Reviews › Settings, `/marketing/reviews/settings`; `section` scrolls to that section once (settingsModel.ts). */
+export function reviewsSettingsHref(section?: ReviewsSettingsSection | null): string {
+  return withQuery('/marketing/reviews/settings', { section })
 }
 
 /** One product's reviews. New: the product pop-up on Insights › Products (PR E). Today: the old product page. */

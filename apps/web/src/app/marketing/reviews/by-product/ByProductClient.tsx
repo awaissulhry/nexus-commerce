@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
 import Link from '@/lib/workspaces/Link'
-import { CATEGORY_LABEL } from '../_shared/ReviewsNav'
+import { THEME_LABEL } from '../_lib/reviewWords'
 import { Listbox } from '@/design-system/components/Listbox'
 
 interface ProductBucket {
@@ -132,7 +132,7 @@ export function ByProductClient({ initial }: { initial: ProductBucket[] }) {
                         key={c.category}
                         className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900"
                       >
-                        {CATEGORY_LABEL[c.category] ?? c.category} · {c.count}
+                        {THEME_LABEL[c.category] ?? c.category} · {c.count}
                       </span>
                     ))}
                     {b.topCategories.length === 0 && (
