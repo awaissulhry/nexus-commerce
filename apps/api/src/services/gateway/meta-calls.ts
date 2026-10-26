@@ -104,6 +104,8 @@ import { metaPageReadOf, metaWhatsAppRead, type MetaPageRead } from './meta-page
 import { META_CLIENT_OBJECT_VALUES, META_INVITATION_ASSET_TYPES, META_SHARING_AGREEMENT_STATUSES } from '../meta/meta-business-lists.js'
 // Step 24 — the organic post rules (the chosen Page's posts, the chosen Instagram account's media, as the Page).
 import { META_GRAPH_VIDEO_HOST, META_POST_WRITE_RULES, type MetaPostBodyKind, type MetaPostKind } from './meta-post-rules.js'
+// Step 41 — people and partner access of the chosen ad account, Page and Instagram account, and the portfolio's relationships.
+import { META_ACCESS_KINDS, META_ACCESS_WRITE_RULES, type MetaAccessKind } from './meta-access-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -1202,6 +1204,8 @@ export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | '
   | MetaCommentKind
   // Step 24 — what only the post tools name (meta-post-rules.ts MetaPostKind).
   | MetaPostKind
+  // Step 41 — what only set-meta-user-access and set-meta-partner-access name (meta-access-rules.ts MetaAccessKind).
+  | MetaAccessKind
 /**
  * Step 26 — what a partnership-access change names: the chosen Instagram account itself (`<ig id>/branded_content_ad_permissions
  * | branded_content_tag_approval | collaboration_invites`) or a media of it (`<media id>/partnership_ad_code`). The chosen
@@ -1587,6 +1591,11 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     if (/^\d+\/(feed|photos|videos|media|media_publish|upcoming_events)$/.test(graph.route) || ['postpage', 'pagepostedit', 'pagepostmade', 'postig', 'igmediamade'].includes(input.objectKind ?? '')) {
       return refuse(`the only Meta change Nexus sends for an organic post is create-meta-page-post's (a post, its unpublished photos, a video post of the chosen Page), set-meta-page-post's (an edit of a post of the chosen Page), remove-meta-page-post's (the delete of a post or Instagram media Nexus made) or create-meta-instagram-post's (a container, its publish, an upcoming event of the chosen Instagram account), each with its own keys; this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
     }
+    // Step 41 — a call named with an access kind that matches none of set-meta-user-access's or set-meta-partner-access's
+    // rules, in its own words.
+    if (input.objectKind && META_ACCESS_KINDS.has(input.objectKind)) {
+      return refuse(`the only Meta change Nexus sends for people or partner access is set-meta-user-access's (a person's tasks on the chosen ad account, Page, Instagram business asset or a dataset — POST assigned_users with user and tasks, and business for a Page or Instagram account — or a person taken off with user, never on a dataset) or set-meta-partner-access's (a share with business and permitted_tasks, a partner taken off with business — a dataset's on the query —, a relationship ended on the portfolio's agencies or clients with business, a dataset's whole list of server-event businesses: POST /<pixel> server_events_business_ids; kinds accessadaccount, accesspage, accessinstagram, accessportfolio, accesspixel), each with its own keys; this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    }
     return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a create or a copy (create-meta-campaign, create-meta-ad-set, copy-meta-ads: each its own edge and keys), or a delete a person asked for (remove-meta-ads-items: each its own path and keys), or a label, value rule or reach & frequency change (set-meta-labels, set-meta-value-rules, create-meta-reach-frequency: each its own path and keys), or a change of one of the chosen ad account's automated rules (set-meta-ad-rule), or a report run of the chosen ad account's numbers (meta-ads-report: POST /act_<id>/insights, which changes nothing), or a brand-safety change named with its kind (set-meta-brand-safety, set-meta-block-list, remove-meta-block-list), or an audience change named with its kind (create-meta-audience, set-meta-audience, set-meta-audience-members, set-meta-audience-sharing: each its own path and keys), or a lead-form change of the chosen Facebook Page named with its kind (create-meta-lead-form, set-meta-lead-form), or a dataset or custom conversion change named with its kind (create-meta-dataset, set-meta-dataset, set-meta-dataset-access, set-meta-custom-conversion, remove-meta-signal-items: each its own path and keys), or a webhook or alert subscription (set-meta-webhooks, set-meta-alert-subscription), or a targeting, placement or ad-account-controls change named with its kind (set-meta-targeting, set-meta-placements, set-meta-account-controls), or Conversions API events of a pixel (POST /<pixel id>/events, upload-meta-events), or a catalog change (create-meta-catalog, set-meta-catalog, set-meta-catalog-access, set-meta-product-set, remove-meta-catalog-items: each its own path and keys), or a change of the chosen ad account's own settings, spending limit, tracking specs or insights features (set-meta-account-settings, set-meta-spend-cap, set-meta-insights-features: each its own keys), or an Instant Experience change of the chosen Facebook Page (create-meta-instant-experience, set-meta-instant-experience), or a comment change named with its kind (set-meta-comments); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
   // Step 24 (review B-F1) — the video host only for a rule marked so, and such a rule only there.
@@ -1699,7 +1708,9 @@ const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META
   // Step 37 — comments and moderation (meta-comment-rules.ts).
   ...META_COMMENT_WRITE_RULES,
   // Step 24 — organic posts of the chosen Page and Instagram account (meta-post-rules.ts) last.
-  ...META_POST_WRITE_RULES]
+  ...META_POST_WRITE_RULES,
+  // Step 41 — people and partner access (meta-access-rules.ts) last.
+  ...META_ACCESS_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {

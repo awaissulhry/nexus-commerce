@@ -27,8 +27,8 @@
  * Lane C3 decision (review round 1): who ELSE may use a dataset — partner portfolios (POST / DELETE /{pixel}/agencies),
  * businesses allowed to send its server events (server_events_business_ids) and people's tasks (POST
  * /{pixel}/assigned_users) — gives or takes another business's or a person's access to the pixel's customer events: like
- * set-google-account-links / set-google-user-access it needs its own permission and an Owner exception. It is not here: it
- * belongs to step 41 (partner access) or Meta's Business settings.
+ * set-google-account-links / set-google-user-access it needs its own permission and an Owner exception. It is not here: step
+ * 41 built it (meta-access-rules.ts, asset `pixel`; the Owner's exception of 2026-10-26).
  *   - business/event_source_groups.md: POST, event_sources (list of ids) + name both required → {id}; SDK
  *     eventsourcegroup.py api_update (event_sources, name) and create_shared_account (accounts) — SDK only (BM-057).
  *   - ad-account/customconversions.md + docs/marketing-api/reference/custom-conversion (older page, its create table and

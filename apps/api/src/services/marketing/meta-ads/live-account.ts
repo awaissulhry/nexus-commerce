@@ -1088,7 +1088,7 @@ async function accessAgencies(account: MetaChosenAccount, maxRows: number) {
     more: read.more,
     notes: [
       'Other business portfolios (agencies, partners) with access to this ad account, with what they may do; one another business in Nexus uses is its id only.',
-      'Removing an agency\'s access is a change a person approves; Meta has no API to add one (the agency asks, the account\'s admin accepts in Business settings).',
+      'Sharing the ad account with a partner or taking one off is set-meta-partner-access, a change a person approves (the share: Meta names the route, its parameters are in its SDK only, so Meta\'s answer decides).',
     ],
   }
 }

@@ -1093,6 +1093,15 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { action: 'edit', pageId: '120000000000010', postId: '120000000000010_500000000000001', fields: { message: 'Old text', hidden: false } },
         after: { action: 'edit', pageId: '120000000000010', postId: '120000000000010_500000000000001', fields: { message: 'New text', hidden: true }, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 41: a person's old tasks are given back; a partner shared is taken off again.
+      'set-meta-user-access': {
+        before: { op: 'set', asset: 'ad-account', nodeId: 'act_1234567890', personId: '120000000000002', assigned: true, tasks: ['ANALYZE'] },
+        after: { op: 'set', asset: 'ad-account', nodeId: 'act_1234567890', personId: '120000000000002', assigned: true, tasks: ['ADVERTISE', 'ANALYZE'], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-partner-access': {
+        before: { op: 'share', asset: 'ad-account', nodeId: 'act_1234567890', partnerId: '120000000000070', shared: false, tasks: null },
+        after: { op: 'share', asset: 'ad-account', nodeId: 'act_1234567890', partnerId: '120000000000070', shared: true, tasks: ['ANALYZE'], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1278,7 +1287,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'upload-meta-events',
       'create-meta-catalog', 'set-meta-catalog', 'set-meta-catalog-access', 'set-meta-product-set', 'remove-meta-catalog-items', 'set-meta-account-settings', 'set-meta-spend-cap', 'set-meta-insights-features',
       'create-meta-instant-experience', 'set-meta-instant-experience', 'set-meta-comments',
-      'create-meta-page-post', 'set-meta-page-post', 'remove-meta-page-post', 'create-meta-instagram-post']) {
+      'create-meta-page-post', 'set-meta-page-post', 'remove-meta-page-post', 'create-meta-instagram-post',
+      'set-meta-user-access', 'set-meta-partner-access']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

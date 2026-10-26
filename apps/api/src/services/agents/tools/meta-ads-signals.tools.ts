@@ -8,9 +8,9 @@
  *                              change event rules, parameter extractors, domain-control rules or traffic permissions by API
  *                              — BM-057, SG-010 … SG-013, SG-041, SG-098, SG-099, SG-102, SG-103
  *   set-meta-dataset-access    connect / disconnect the CHOSEN ad account — SG-018, SG-019. Partner portfolios, server-event
- *                              businesses and people (SG-014, SG-021, SG-022, SG-024) are not here (lane C3 decision: like
- *                              set-google-account-links / set-google-user-access they need their own permission and an Owner
- *                              exception — step 41 or Meta's Business settings)
+ *                              businesses and people (SG-014, SG-021, SG-022, SG-024) are step 41's: set-meta-user-access and
+ *                              set-meta-partner-access with asset `pixel` (users.manage + ads.connect, the Owner's exception
+ *                              of 2026-10-26)
  *   set-meta-custom-conversion create (≤ 100 per ad account, counted first; its rule fixed for good; its default value),
  *                              rename / describe, claim into the portfolio — SG-090 … SG-092, SG-094 (SG-091: the ad
  *                              account route, Meta documents no business-level create)

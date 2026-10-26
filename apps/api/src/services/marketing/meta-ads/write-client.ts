@@ -23,6 +23,8 @@
 import { metaRestWriteCall, metaRuploadCall, metaWriteCall, type MetaRestWriteRequest, type MetaWriteEdge } from '../../gateway/meta.js'
 import { metaWriteRuleAuth, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaCommentKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaTargetingKind, type MetaWebhookKind } from '../../gateway/meta-calls.js'
 import type { MetaCatalogKind } from '../../gateway/meta-catalog-rules.js'
+// Step 41 — set-meta-user-access and set-meta-partner-access's kinds.
+import type { MetaAccessKind } from '../../gateway/meta-access-rules.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
 import { failureOfAnswer, failureOfThrow, localFailure, type MetaFailure } from './errors.js'
@@ -86,6 +88,8 @@ export interface MetaObjectChange {
     | MetaCommentKind
     // Step 24 — the chosen Page or Instagram account as it posts, a post of the Page, a post or media Nexus made.
     | MetaPostKind
+    // Step 41 — the chosen ad account, Page or Instagram account's business asset (people, partners), or the portfolio.
+    | MetaAccessKind
   params: Record<string, string>
   operation: string
   budget?: boolean
@@ -144,6 +148,8 @@ export interface MetaObjectChange {
   targetingKeys?: string[]
   /** Step 24 (review B-F1) — a Page's video post goes to Meta's video host. */
   videoHost?: true
+  /** Step 41 (option-1 review N3) — the list a whole-list change was built on: the gateway compares Meta's under its lock. */
+  expectedIds?: string[]
 }
 
 /** Step 30 — how a webhook or alert subscription change travels (none of it is needed by a change of an object). */
@@ -428,6 +434,7 @@ export async function metaSendChange(
       ...(change.via?.method === 'PATCH' ? { method: 'PATCH' as const } : {}),
       ...(change.targetingKeys?.length ? { targetingKeys: change.targetingKeys } : {}),
       ...(change.videoHost ? { videoHost: true as const } : {}),
+      ...(change.expectedIds ? { expectedIds: change.expectedIds } : {}),
     })
   } catch (err) {
     // The gateway throws only before it sends (a refusal, or a problem of Nexus's own such as the database): nothing left.
