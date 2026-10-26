@@ -10,12 +10,18 @@
  * Policy guardrails baked into the system prompt: no incentives, no
  * asking the customer to change/remove the review, no external links —
  * the same rules Amazon/eBay enforce on seller replies.
+ *
+ * Reviews Inbox (2026-10-26): the draft is written in the buyer's language (the review's own language when known) and
+ * comes with an English line for the team (`englishText`, null when the reply is English), from the same call; it
+ * stays within the channel's reply limit (`reviewReplyRules`).
  */
 
+import { reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { renderBrandVoiceBlock } from '../ai/brand-voice.service.js'
 import { resolveLocaleForMarketplace } from './sentiment-check-email.service.js'
+import { reviewKindOf } from './review-visibility.js'
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages'
 const ANTHROPIC_VERSION = '2023-06-01'
@@ -41,6 +47,8 @@ export interface DraftReplyInput {
 
 export interface DraftReplyResult {
   text: string
+  /** What the reply says, in English, for the team; null when the reply is English. */
+  englishText: string | null
   locale: Locale
   tone: Tone
   model: string
@@ -92,6 +100,33 @@ function fallbackReply(locale: Locale, tone: Tone, product: string | null): stri
   return FALLBACK[locale][tone](p)
 }
 
+function fallbackDraft(locale: Locale, tone: Tone, product: string | null): DraftReplyResult {
+  return {
+    text: fallbackReply(locale, tone, product),
+    englishText: locale === 'en' ? null : fallbackReply('en', tone, product),
+    locale,
+    tone,
+    model: 'fallback',
+    usedAi: false,
+  }
+}
+
+/** The model's answer: JSON {reply, english} when asked for both, else plain text (the reply alone). */
+export function parseDraftAnswer(raw: string, locale: Locale): { text: string; englishText: string | null } {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim()
+  if (locale !== 'en' && cleaned.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(cleaned) as { reply?: unknown; english?: unknown }
+      const text = typeof parsed.reply === 'string' ? parsed.reply.trim() : ''
+      const english = typeof parsed.english === 'string' && parsed.english.trim() ? parsed.english.trim() : null
+      if (text) return { text, englishText: english }
+    } catch {
+      /* not JSON: the whole answer is the reply */
+    }
+  }
+  return { text: cleaned, englishText: null }
+}
+
 export async function draftReviewReply(input: DraftReplyInput): Promise<DraftReplyResult> {
   const review = await prisma.review.findUnique({
     where: { id: input.reviewId },
@@ -102,7 +137,13 @@ export async function draftReviewReply(input: DraftReplyInput): Promise<DraftRep
   })
   if (!review) throw new Error('review not found')
 
-  const locale: Locale = input.locale ?? (resolveLocaleForMarketplace(review.marketplace) as Locale)
+  // The buyer's language: the review's own language when Nexus knows it and drafts in it, else the market's.
+  const reviewLocale = review.language && review.language in LANG_NAME ? (review.language as Locale) : null
+  const locale: Locale = input.locale ?? reviewLocale ?? (resolveLocaleForMarketplace(review.marketplace) as Locale)
+  const limit = reviewReplyRules(review.channel, {
+    kind: reviewKindOf(review.channel, review.ingestSource),
+    imported: (review.ingestSource ?? '').toUpperCase().startsWith('IMPORT'),
+  }).limit
   const langName = LANG_NAME[locale] ?? 'English'
   const label = review.sentiment?.label ?? null
   const tone: Tone =
@@ -116,9 +157,7 @@ export async function draftReviewReply(input: DraftReplyInput): Promise<DraftRep
   const productName = review.product?.name ?? review.sku ?? null
 
   const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    return { text: fallbackReply(locale, tone, productName), locale, tone, model: 'fallback', usedAi: false }
-  }
+  if (!apiKey) return fallbackDraft(locale, tone, productName)
 
   let brandVoice = ''
   try {
@@ -146,6 +185,10 @@ export async function draftReviewReply(input: DraftReplyInput): Promise<DraftRep
     `- ${toneRule}\n` +
     `- Never offer incentives or discounts, and never ask them to change or remove their review (against marketplace policy).\n` +
     `- Do not include external links or email addresses.` +
+    (limit != null ? `\n- At most ${limit} characters in total (the channel refuses longer replies).` : '') +
+    (locale !== 'en'
+      ? `\nAnswer with STRICT JSON only: {"reply": the reply in ${langName}, "english": the same reply in English, for the seller's team}.`
+      : '') +
     (brandVoice ? `\n${brandVoice}` : '')
 
   const userText =
@@ -153,7 +196,9 @@ export async function draftReviewReply(input: DraftReplyInput): Promise<DraftRep
     `"${review.body}"\n` +
     `Product: ${productName ?? 'unknown'} (${review.product?.productType ?? 'product'})` +
     (input.instructions ? `\nExtra instruction from operator: ${input.instructions}` : '') +
-    `\n\nWrite the reply now in ${langName}, plain text only.`
+    (locale !== 'en'
+      ? `\n\nWrite the reply now in ${langName}, as the JSON described.`
+      : `\n\nWrite the reply now in ${langName}, plain text only.`)
 
   try {
     const res = await fetch(ENDPOINT, {
@@ -165,7 +210,7 @@ export async function draftReviewReply(input: DraftReplyInput): Promise<DraftRep
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 400,
+        max_tokens: 800,
         temperature: 0.5,
         system,
         messages: [{ role: 'user', content: userText }],
@@ -181,12 +226,47 @@ export async function draftReviewReply(input: DraftReplyInput): Promise<DraftRep
       .map((b) => b.text ?? '')
       .join('')
       .trim()
-    if (!text) throw new Error('empty completion')
-    return { text, locale, tone, model: MODEL, usedAi: true }
+    const answer = parseDraftAnswer(text, locale)
+    if (!answer.text) throw new Error('empty completion')
+    return { text: answer.text, englishText: answer.englishText, locale, tone, model: MODEL, usedAi: true }
   } catch (err) {
     logger.warn('[review-reply] AI draft failed, using fallback', {
       error: err instanceof Error ? err.message : String(err),
     })
-    return { text: fallbackReply(locale, tone, productName), locale, tone, model: 'fallback', usedAi: false }
+    return fallbackDraft(locale, tone, productName)
   }
+}
+
+/**
+ * POST /reviews/:id/reply/draft and the Inbox bulk "Draft with AI": draft a reply and keep it as a DRAFT
+ * ReviewResponse that waits for a person (nothing is posted). 'not_found' when the review is not in this business.
+ */
+export async function createReplyDraft(
+  reviewId: string,
+  input: { locale?: Locale; tone?: string; instructions?: string; actor?: string | null } = {},
+): Promise<
+  | { error: 'not_found' }
+  | { response: Awaited<ReturnType<typeof prisma.reviewResponse.create>>; usedAi: boolean; tone: Tone; englishText: string | null }
+> {
+  const review = await prisma.review.findUnique({ where: { id: reviewId }, select: { id: true, channel: true } })
+  if (!review) return { error: 'not_found' }
+  const draft = await draftReviewReply({
+    reviewId,
+    locale: input.locale,
+    tone: (input.tone as 'auto' | Tone) ?? 'auto',
+    instructions: input.instructions,
+  })
+  const response = await prisma.reviewResponse.create({
+    data: {
+      reviewId,
+      channel: review.channel,
+      locale: draft.locale,
+      body: draft.text,
+      status: 'DRAFT',
+      isAiDrafted: draft.usedAi,
+      model: draft.model,
+      ...(input.actor ? { createdBy: input.actor } : {}),
+    },
+  })
+  return { response, usedAi: draft.usedAi, tone: draft.tone, englishText: draft.englishText }
 }

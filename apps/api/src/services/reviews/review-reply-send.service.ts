@@ -6,14 +6,28 @@
  * eBay: the real RespondToFeedback (Trading API, behind NEXUS_EBAY_REAL_API; one public reply per feedback). Amazon
  * and Shopify have no public reply API: the reply is recorded MANUAL (the operator posts it on the platform). A reply
  * that went out marks the review RESPONDED and raises review.responded.
+ *
+ * Reviews Inbox (2026-10-26): the channel's reply rules (`reviewReplyRules`, @nexus/shared) decide, and this send
+ * refuses what they refuse, before anything is posted or stored: a second reply where the channel allows one (409
+ * already_replied), a closed reply window (409 window_closed), a reply over the limit (400 too_long). Only a rule in
+ * 'send' mode posts through the channel (eBay feedback read from eBay); an imported row is recorded MANUAL.
  */
 
+import { replyRefusal, reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import prisma from '../../db.js'
 import { AnswerReply, RouteAnswer } from '../../lib/route-answer.js'
+import { reviewKindOf } from './review-visibility.js'
 
 /** Live or off, from the switch respondToEbayFeedback reads. */
 export function ebayReplyMode(): 'live' | 'off' {
   return process.env.NEXUS_EBAY_REAL_API === 'true' ? 'live' : 'off'
+}
+
+/** eBay feedback read with a seller reply already on it (GetFeedback `FeedbackResponse`). */
+export function repliedOnChannel(channel: string, rawPayload: unknown): boolean {
+  if (channel !== 'EBAY' || !rawPayload || typeof rawPayload !== 'object') return false
+  const response = (rawPayload as { FeedbackResponse?: unknown }).FeedbackResponse
+  return typeof response === 'string' && response.trim().length > 0
 }
 
 export interface ReplyBody {
@@ -28,7 +42,7 @@ export async function sendReviewReply(id: string, b: ReplyBody): Promise<RouteAn
   const reply = new AnswerReply()
   const review = await prisma.review.findUnique({
     where: { id },
-    select: { id: true, channel: true, externalReviewId: true },
+    select: { id: true, channel: true, externalReviewId: true, marketplace: true, postedAt: true, ingestSource: true, rawPayload: true },
   })
   if (!review) return reply.code(404).send({ error: 'not_found' })
   const text = (b.body ?? '').trim()
@@ -40,11 +54,22 @@ export async function sendReviewReply(id: string, b: ReplyBody): Promise<RouteAn
     if (!draft) return reply.code(404).send({ error: 'response_not_found' })
   }
 
+  const sent = await prisma.reviewResponse.count({ where: { reviewId: id, status: 'SENT' } })
+  const rules = reviewReplyRules(review.channel, {
+    kind: reviewKindOf(review.channel, review.ingestSource),
+    marketplace: review.marketplace,
+    postedAt: review.postedAt,
+    imported: (review.ingestSource ?? '').toUpperCase().startsWith('IMPORT'),
+    replied: sent > 0 || repliedOnChannel(review.channel, review.rawPayload),
+  })
+  const refusal = replyRefusal(rules, text)
+  if (refusal) return reply.code(refusal.code === 'too_long' || refusal.code === 'empty_body' ? 400 : 409).send({ error: refusal.code, message: refusal.words })
+
   let code = 'MANUAL'
   let ok = true
   let errorMessage: string | null = null
 
-  if (review.channel === 'EBAY') {
+  if (rules.mode === 'send' && review.channel === 'EBAY') {
     // Loaded here: the adapter builds the eBay auth service when imported, and the tool registry imports this file.
     const { respondToEbayFeedback } = await import('./adapters/ebay-feedback.adapter.js')
     const res = await respondToEbayFeedback(review.externalReviewId, text)
