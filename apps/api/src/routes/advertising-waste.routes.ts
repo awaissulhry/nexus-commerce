@@ -10,7 +10,8 @@
  * portfolioIds, productIds, campaignIds, adGroupIds — comma-separated, at most 500 each, a singular merged in as a list of
  * one; OR inside a list, AND across lists; the rows and the tiles follow it. Money is in cents of the row's currency
  * under WASTE_MONEY keys, stripped for a person without financials.adspend.view (the same switch as the response filter,
- * field-filter.ts); such a person's rows are never ordered by a money key (the order would give the ranking away). Hrefs
+ * field-filter.ts); such a person's rows are never ordered by a money key (rows: spend, xCpa; stopped: spendBefore, saved —
+ * the order would give the ranking away). Hrefs
  * carry no /w/<id> prefix.
  *
  * WRITE block (lane NWRITE) — the page's writes, through the same code as Claude's Nexus tools
@@ -18,8 +19,9 @@
  * the approver. ads.campaigns.manage (the manifest's /api/advertising write rule) and each tool's own permissions.
  *
  *   POST /advertising/waste/preview          { items: [{ rowId, action, where?, keepUntil?, targetRowId?, adGroupId? }], why? }
- *                                            (action KEEP_UNTIL too; each step has level and final) → { steps, blocked,
- *                                            planHash } — writes nothing
+ *                                            (action KEEP_UNTIL too; each step has level and final; each NEGATE_* step its
+ *                                            reach: what it would block, step 4) → { steps, blocked, planHash, reach: the
+ *                                            sent steps together } — writes nothing; money stripped as on the reads
  *   POST /advertising/waste/apply            { planHash, items, why?, code? } → 202 { changeSetId, status: queued | waiting,
  *                                            executeAfter?, needsCode, approve, steps, blocked } · 200 { status: applied }
  *                                            when the business lets the tool run without approval · 409 the preview moved ·
@@ -32,6 +34,13 @@
  *                                            { results, failed } — each through the Approvals page's path; a rule's Ask-me
  *                                            card (`suggestion:<id>`) through the Suggestions page's own apply / dismiss (a
  *                                            pause_target keeps the keyword paused); one that is not the page's is 404
+ *
+ *   POST /advertising/waste/follow-ups/:id/run     step 4 — the negatives that wait for a protected term's removal (the
+ *                                            change set id): send them now if the removal ran (the server sends them, as
+ *                                            the person who approved it; the cron does the same about once a minute) →
+ *                                            WAITING · SENDING · SENT (changeSetId, its change set now) · REFUSED (why) ·
+ *                                            CANCELLED, per row
+ *   POST /advertising/waste/follow-ups/:id/cancel  the Undo: nothing sent while it waits; once sent, its changeSetId
  *
  * Undo: POST /api/advertising/changes/:id/undo, or undo-change with the changeSetId (the set) or a step's change id.
  * Idempotency-Key honoured on every POST here (COMMAND_SCOPES).
@@ -51,6 +60,16 @@
  *   GET   /advertising/waste/rules/:id/history?days=&market=&limit=   its changes, each with `changeId` for the undo route
  *   POST  /advertising/waste/rules/:id/archive | /unarchive          archive (replaces delete) / restore at Off
  *   POST  /advertising/waste/rules/mode { ids, mode }     Off · Watch · Ask me · Auto, each through the level dial
+ *
+ * WORDS block (step 4, 2026-10-25) — the Words view (services/advertising/waste/words.ts): a word (1 or 2 words
+ * next to each other) that wastes across shoppers' search terms. Reads (ads.view), the READ block's scope, `no-store`,
+ * the money keys stripped without financials.adspend.view; Block word goes through POST /waste/preview | apply with
+ * `{ rowId: 'word:<market>|<word>', action: 'NEGATE_PHRASE', where, scope? }` (one negative phrase per place).
+ *
+ *   GET   /advertising/waste/words?<scope>&show=wasting|blocked|all&q=&sort=&page=&pageSize=   { rows, total, page,
+ *                                                       pageSize, totals, criteria, freshness }
+ *   GET   /advertising/waste/words/ids?<same>           { ids, total, truncated } — select all N that match
+ *   GET   /advertising/waste/word/:id?<scope lists>     { row, terms, places, products, history } — one word
  */
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
@@ -61,10 +80,11 @@ import { readHistory } from '../services/advertising/waste/history.js'
 import { isMoneySort, MAX_PAGE_SIZE, WASTE_MONEY } from '../services/advertising/waste/pure.js'
 import { invalidateWasteFacts, readWasteRowIds, readWasteRows } from '../services/advertising/waste/read.js'
 import { readRowDetail } from '../services/advertising/waste/row.js'
-import { readStopped } from '../services/advertising/waste/stopped.js'
+import { isStoppedMoneySort, readStopped } from '../services/advertising/waste/stopped.js'
 import { requestPrincipal, ToolAccessError, type UserPrincipal } from '../services/agents/call-tool.js'
 import { APPLY_BODY, DECIDE_BODY, PREVIEW_BODY, applyWaste, decideWaiting, previewWaste } from '../services/advertising/waste/write.js'
 import { waitingSteps } from '../services/advertising/waste/waiting-steps.js'
+import { cancelFollowUp, runFollowUp } from '../services/advertising/waste/follow-up.js'
 import { MAX_SKIP_ROWS, reopenSkips, skipRows, unskipRows } from '../services/advertising/waste/skip.js'
 import { listWasteRules, wasteRuleHistory, WASTE_RULES_MONEY } from '../services/advertising/waste-rules/read.js'
 import { previewWasteRule } from '../services/advertising/waste-rules/preview.js'
@@ -72,6 +92,8 @@ import { setWasteRuleArchived, setWasteRulesMode } from '../services/advertising
 import { STARTERS } from '../services/advertising/waste-rules/pure.js'
 import type { AdsActor } from '../services/advertising/ads-mutation.service.js'
 import { ID_LIST } from '../services/advertising/ads-scope-lists.js'
+import { readWordDetail, readWordIds, readWords } from '../services/advertising/waste/words.js'
+import { isWordMoneySort, WORD_SHOWS, WORD_SORT_RE } from '../services/advertising/waste/words-pure.js'
 
 const NO_PERMISSIONS: ResolvedPermissions = { isOwner: false, permissions: new Set() }
 
@@ -123,7 +145,8 @@ const PAGE = {
 const ROWS_QUERY = z.object({
   ...SCOPE, ...PAGE,
   kind: z.enum(['keyword', 'term', 'all']).default('all'),
-  show: z.enum(['wasting', 'waiting', 'skipped', 'turned-on', 'clashes', 'all']).default('wasting'),
+  // Step 4 — protected: wasting rows a protected term keeps safe (the Protected tile, totals.protected).
+  show: z.enum(['wasting', 'waiting', 'skipped', 'turned-on', 'clashes', 'protected', 'all']).default('wasting'),
   owner: z.string().trim().min(1).max(64).optional(),
   sort: z.string().trim().regex(/^-?(spend|clicks|orders|xCpa|text|where|product|owner|state)$/, 'one of spend, clicks, orders, xCpa, text, where, product, owner, state (a leading - for descending)').optional(),
 }).strict()
@@ -132,6 +155,7 @@ const STOPPED_QUERY = z.object({
   kind: z.enum(['keyword', 'term', 'all']).default('all'),
   owner: z.string().trim().min(1).max(64).optional(),
   show: z.enum(['kept', 'negated', 'turned-on', 'still-bought', 'all']).default('all'),
+  sort: z.string().trim().regex(/^-?(text|where|product|owner|since|spendBefore|saved|state|stillServes)$/, 'one of text, where, product, owner, since, spendBefore, saved, state, stillServes (a leading - for descending)').optional(),
 }).strict()
 const HISTORY_QUERY = z.object({
   ...SCOPE,
@@ -141,6 +165,8 @@ const HISTORY_QUERY = z.object({
 
 /** A person who does not see ad spend is never ordered by it: a money sort reads as `where`. */
 const sortFor = (request: FastifyRequest, sort: string | undefined) => (sort && isMoneySort(sort) && !seesAdSpend(request) ? 'where' : sort ?? (seesAdSpend(request) ? '-spend' : 'where'))
+/** The Stopped view the same way: a money sort reads as `where`; none: the newest stop first. */
+const stoppedSortFor = (request: FastifyRequest, sort: string | undefined) => (sort && isStoppedMoneySort(sort) && !seesAdSpend(request) ? 'where' : sort)
 
 const wasteReadRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/advertising/waste/rows', async (request, reply) => {
@@ -166,7 +192,7 @@ const wasteReadRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'no-store')
     const parsed = STOPPED_QUERY.safeParse(request.query ?? {})
     if (!parsed.success) return badQuery(reply, parsed.error)
-    const out = await readStopped(parsed.data)
+    const out = await readStopped({ ...parsed.data, sort: stoppedSortFor(request, parsed.data.sort) })
     if ('error' in out) return reply.code(out.status).send({ error: out.error })
     const { ok: _ok, ...body } = out
     return withoutHiddenMoney(request, body)
@@ -234,7 +260,8 @@ export async function wasteWriteRoutes(fastify: FastifyInstance): Promise<void> 
     const parsed = PREVIEW_BODY.safeParse(request.body ?? {})
     if (!parsed.success) return reply.code(400).send({ error: problemOf(parsed.error) })
     const out = await previewWaste(parsed.data.items, person, parsed.data.why)
-    return { steps: out.steps, blocked: out.blocked, planHash: out.planHash }
+    // Step 4 — each negative's reach (and their total) carries money under WASTE_MONEY keys: stripped as on the reads.
+    return withoutHiddenMoney(request, { steps: out.steps, blocked: out.blocked, planHash: out.planHash, reach: out.reach })
   })
 
   fastify.post('/advertising/waste/apply', async (request, reply) => {
@@ -301,6 +328,27 @@ export async function wasteWriteRoutes(fastify: FastifyInstance): Promise<void> 
     // One decision: its own status, as the Approvals page answers it. Several: 200 with each result.
     if (results.length === 1 && failed) return reply.code(results[0].httpStatus ?? 409).send({ results, failed })
     return { results, failed }
+  })
+
+  // Step 4 — the negatives that wait for a protected term's removal: "now" (with their state), and the Undo.
+  const followUpId = (request: FastifyRequest) => String((request.params as { approvalId?: unknown }).approvalId ?? '').trim()
+  fastify.post('/advertising/waste/follow-ups/:approvalId/run', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    const person = await personOf(request, reply)
+    if (!person) return
+    const id = followUpId(request)
+    if (!id || id.length > 64) return reply.code(400).send({ error: 'approvalId: name the removal' })
+    const out = await runFollowUp(id)
+    return out ?? reply.code(404).send({ error: 'Nothing waits for this removal.' })
+  })
+  fastify.post('/advertising/waste/follow-ups/:approvalId/cancel', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    const person = await personOf(request, reply)
+    if (!person) return
+    const id = followUpId(request)
+    if (!id || id.length > 64) return reply.code(400).send({ error: 'approvalId: name the removal' })
+    const out = await cancelFollowUp(id, actorOf(person))
+    return out ?? reply.code(404).send({ error: 'Nothing waits for this removal.' })
   })
 }
 
@@ -388,6 +436,56 @@ export async function wasteRulesRoutes(fastify: FastifyInstance): Promise<void> 
 
 // ═════════════════════════════════════════ end RULES block (lane NRULES) ═════════════════════════════════════════
 
+// ═════════════════════════════════════════════════ WORDS block ══════════════════════════════════════════════════
+
+const WORDS_QUERY = z.object({
+  ...SCOPE, ...PAGE,
+  show: z.enum(WORD_SHOWS as [string, ...string[]]).default('wasting'),
+  sort: z.string().trim().regex(WORD_SORT_RE, 'one of spend, clicks, orders, terms, places, products, word, state (a leading - for descending)').optional(),
+}).strict()
+/** One word's detail reads the list's filter-bar lists (its market is in its id). */
+const { market: _market, ...SCOPE_LISTS } = SCOPE
+const WORD_QUERY = z.object(SCOPE_LISTS).strict()
+
+/** As the rows: a person who does not see ad spend is never ordered by it (the most terms first instead). */
+const wordSortFor = (request: FastifyRequest, sort: string | undefined) => (sort && isWordMoneySort(sort) && !seesAdSpend(request) ? '-terms' : sort ?? (seesAdSpend(request) ? '-spend' : '-terms'))
+
+/** The Words view's reads (registered by the plugin below). */
+export async function wasteWordsRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.get('/advertising/waste/words', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    const parsed = WORDS_QUERY.safeParse(request.query ?? {})
+    if (!parsed.success) return badQuery(reply, parsed.error)
+    const out = await readWords({ ...parsed.data, show: parsed.data.show as (typeof WORD_SHOWS)[number], sort: wordSortFor(request, parsed.data.sort) })
+    if ('error' in out) return reply.code(out.status).send({ error: out.error })
+    const { ok: _ok, ...body } = out
+    return withoutHiddenMoney(request, body)
+  })
+
+  fastify.get('/advertising/waste/words/ids', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    const parsed = WORDS_QUERY.safeParse(request.query ?? {})
+    if (!parsed.success) return badQuery(reply, parsed.error)
+    const out = await readWordIds({ ...parsed.data, show: parsed.data.show as (typeof WORD_SHOWS)[number], sort: wordSortFor(request, parsed.data.sort) })
+    if ('error' in out) return reply.code(out.status).send({ error: out.error })
+    return { ids: out.ids, total: out.total, truncated: out.truncated }
+  })
+
+  fastify.get('/advertising/waste/word/:id', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    const wordId = String((request.params as { id?: string }).id ?? '').trim()
+    if (!wordId || wordId.length > 300) return reply.code(400).send({ error: 'id: a word id (word:<market>|<word>)' })
+    const parsed = WORD_QUERY.safeParse(request.query ?? {})
+    if (!parsed.success) return badQuery(reply, parsed.error)
+    const out = await readWordDetail(wordId, parsed.data)
+    if ('error' in out) return reply.code(out.status).send({ error: out.error })
+    const { ok: _ok, ...body } = out
+    return withoutHiddenMoney(request, body)
+  })
+}
+
+// ═══════════════════════════════════════════════ end WORDS block ════════════════════════════════════════════════
+
 const advertisingWasteRoutes: FastifyPluginAsync = async (fastify) => {
   // The reads reuse one market's facts for a short while (read.ts marketWasteFacts): a write through this page forgets
   // them, so the next read shows it at once.
@@ -397,6 +495,7 @@ const advertisingWasteRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(wasteReadRoutes)
   await wasteWriteRoutes(fastify)
   await wasteRulesRoutes(fastify)
+  await wasteWordsRoutes(fastify)
 }
 
 export default advertisingWasteRoutes

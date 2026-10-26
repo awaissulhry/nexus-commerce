@@ -8,8 +8,11 @@
  *   Wasting  ☐ · Term (kind mark, words, match chip) · Where (portfolio › campaign › ad group) · Product · Spend ·
  *            Clicks · Orders · ×CPA · Who · State · the verb      (hidden: Impressions, ACoS, CPC, 90 d, Trend, Stock-out
  *            days, Still serves in)
- *   Stopped  ☐ · Term · Where · Product · Kept by · Since · Spend before · State · the verb  (hidden: Still serves in)
+ *   Stopped  ☐ · Term · Where · Product · Kept by · Since · Spend before · Saved · State · the verb  (hidden: Still serves
+ *            in). Saved (step 4, "Did it work?"): the money saved since the stop, "Too early" for the first 14 days.
  *   Phone    Term (its path as line 2) · Spend · State — a tap opens the full-screen sheet (6-neg-design.md §7).
+ *   Step 4   a protected row's Term cell holds the protected term as line 2 (a chip; its panel: match, scope, why) —
+ *            Shift+Enter on the cell opens it; on the phone the State mark names it and the sheet shows it.
  *
  * Money is in the row's own currency; a money key the server left out (no ad-spend permission) reads as a dash. The
  * columns are built once per phone flag (useMemo), their handlers read through AG's `context` ref.
@@ -26,10 +29,12 @@ import Link from '@/lib/workspaces/Link'
 import { dayWords, money } from '../../bid/_shared/format'
 import { OwnerChip } from '../../_shared/OwnerChip'
 import { ProductCell } from '../../_shared/ProductCell'
-import { ClashMark, KindMark, MatchChip, SkippedMark, StateMark, WaitingMark } from './marks'
+import { ClashMark, FollowUpMark, KindMark, MatchChip, SkippedMark, StateMark, WaitingMark } from './marks'
 import { ownerKeys, placeKeys, sinceKeys, verbKeys } from './cellKeys'
+import { ProtectionChip } from './protection'
+import { keptProtectedWords, termKeys } from './protectionModel'
 import {
-  acosText, chipOwner, moneyOr, pathOf, plural, productWords, sinceView, stateWord, stoppedVerb, wasteVerb, xCpaText, type RowVerbView,
+  acosText, chipOwner, moneyOr, pathOf, plural, productWords, savedView, sinceView, stateWord, stoppedVerb, wasteVerb, xCpaText, type RowVerbView,
 } from './wasteModel'
 import type { Ref, StoppedRow, WasteRow } from './wasteTypes'
 import styles from '../negatives.module.css'
@@ -46,13 +51,16 @@ export interface CellHandlers {
   verb(rowId: string, verb: RowVerbView): void
   /** A rule's chip opens the rule on this page (the Rules view). */
   ruleHref(ruleId: string): string
+  /** Why every verb is held for this person (wasteModel.ts writeHeld), or null. */
+  noWrite: string | null
 }
 export interface CellContext { readonly current: CellHandlers }
 type Cell<R> = ICellRendererParams<R> & { context?: CellContext }
 
 /** The term: our keyword (Crosshair) or a shopper's search term (TextSearch), its words, its match chip; on a phone
  *  its path is line 2 (cut from the front, the ad group stays readable). */
-function TermView({ row, phone }: { row: WasteGridRow | StoppedGridRow; phone?: boolean }) {
+function TermView({ row, phone, cell }: { row: WasteGridRow | StoppedGridRow; phone?: boolean; cell?: HTMLElement | null }) {
+  const protection = !phone && 'protection' in row && row.state === 'PROTECTED' ? row.protection : undefined
   return (
     <span className={styles.term}>
       <span className={styles.termLine}>
@@ -60,6 +68,10 @@ function TermView({ row, phone }: { row: WasteGridRow | StoppedGridRow; phone?: 
         <span className={phone ? styles.termWrap : styles.termText} title={row.text}>{row.text}</span>
         {row.kind !== 'TERM' || row.id.startsWith('neg:') ? <MatchChip match={row.match} /> : null}
       </span>
+      {/* Step 4 — which protected term keeps it safe; its panel says the match, the scope and why. */}
+      {protection && protection.terms.length > 0 && (
+        <span className={styles.termLine} onClickCapture={keepFromGrid}><ProtectionChip protection={protection} returnFocus={() => cell?.focus()} /></span>
+      )}
       {phone && (
         // The leaf only (its ad group, else its campaign): the one name that tells two rows apart; the record has the path.
         <span className={styles.termSub} onClickCapture={keepFromGrid} title={entityPathText(row.path)}>
@@ -69,7 +81,7 @@ function TermView({ row, phone }: { row: WasteGridRow | StoppedGridRow; phone?: 
     </span>
   )
 }
-const TermCell = memo(function TermCell({ data }: Cell<WasteGridRow | StoppedGridRow>) { return data ? <TermView row={data} /> : null })
+const TermCell = memo(function TermCell({ data, eGridCell }: Cell<WasteGridRow | StoppedGridRow>) { return data ? <TermView row={data} cell={eGridCell} /> : null })
 const PhoneTermCell = memo(function PhoneTermCell({ data }: Cell<WasteGridRow | StoppedGridRow>) { return data ? <TermView row={data} phone /> : null })
 
 /**
@@ -128,7 +140,8 @@ const WasteStateCell = memo(function WasteStateCell({ data }: Cell<WasteGridRow>
       <StateMark row={data} />
       {data.clash && <ClashMark clash={data.clash} />}
       {data.waiting && <WaitingMark waiting={data.waiting} />}
-      {data.skipped && <SkippedMark skipped={data.skipped} />}
+      {data.skipped && <SkippedMark skipped={data.skipped} label={keptProtectedWords(data)} />}
+      {data.followUp && <FollowUpMark followUp={data.followUp} />}
     </span>
   )
 })
@@ -158,6 +171,14 @@ const SinceCell = memo(function SinceCell({ data }: Cell<StoppedGridRow>) {
 const SpendBeforeCell = memo(function SpendBeforeCell({ data }: Cell<StoppedGridRow>) {
   if (!data) return null
   return <span title="Spend in the 30 days before it stopped">{moneyOr(data.spendBeforeCents, data.currency)}</span>
+})
+
+/** Step 4 — "Did it work?": the money saved since the stop (amber while its words still spend elsewhere), "Too early"
+ *  for the first 14 days; why, on hover and in the cell's words for a screen reader. */
+const SavedCell = memo(function SavedCell({ data }: Cell<StoppedGridRow>) {
+  if (!data) return null
+  const v = savedView(data)
+  return <span className={styles[`tone_${v.tone}`]} title={v.hint}>{v.text}<span className="nds-vh">. {v.hint}</span></span>
 })
 
 const TrendCell = memo(function TrendCell({ data }: Cell<WasteGridRow>) {
@@ -216,6 +237,7 @@ export const STOPPED_COLUMN_SPECS: ReadonlyArray<ColumnSpec> = [
   { key: 'owner', label: 'Kept by' },
   { key: 'since', label: 'Since' },
   { key: 'spendBefore', label: 'Spend before' },
+  { key: 'saved', label: 'Saved' },
   { key: 'state', label: 'State' },
   { key: 'stillServes', label: 'Still serves in', hidden: true },
 ]
@@ -225,7 +247,7 @@ const hide = (specs: ReadonlyArray<ColumnSpec>, cols: ColDef[]) => {
   const hidden = new Set(specs.filter((c) => c.hidden).map((c) => c.key))
   return cols.map((c) => (hidden.has(c.colId as string) ? { ...c, hide: true } : c))
 }
-/** The server orders the Wasting view: a header's sort is sent as `?sort=`; the grid never re-sorts a page. */
+/** The server orders the Wasting and Stopped views: a header's sort is sent as `?sort=`; the grid never re-sorts a page. */
 const serverSort = { comparator: () => 0 }
 
 export function wasteColumns(phone: boolean): ColDef<WasteGridRow>[] {
@@ -239,7 +261,7 @@ export function wasteColumns(phone: boolean): ColDef<WasteGridRow>[] {
     return phoneCols.map((c) => ({ ...c, ...H }))
   }
   const cols: ColDef<WasteGridRow>[] = [
-    { colId: 'term', headerName: L.term, valueGetter: (p) => p.data?.text ?? '', cellRenderer: TermCell, pinned: 'left', width: 220, cellClass: 'nds-ag-cell', ...serverSort },
+    { colId: 'term', headerName: L.term, valueGetter: (p) => p.data?.text ?? '', cellRenderer: TermCell, pinned: 'left', width: 220, cellClass: 'nds-ag-cell', suppressKeyboardEvent: termKeys as ColDef<WasteGridRow>['suppressKeyboardEvent'], ...serverSort, headerTooltip: 'Enter: the row · Shift+Enter: the protected term that keeps it safe' },
     { colId: 'where', headerName: L.where, valueGetter: (p) => (p.data ? entityPathText(p.data.path) : ''), cellRenderer: WhereCell, flex: 1, minWidth: 240, cellClass: 'nds-ag-cell', suppressKeyboardEvent: placeKeys as ColDef<WasteGridRow>['suppressKeyboardEvent'], ...serverSort, headerTooltip: 'Campaign, then its ad group; the portfolio on hover. Enter: the campaign · Shift+Enter: the ad group' },
     { colId: 'product', headerName: L.product, valueGetter: (p) => (p.data ? productWords(p.data) : ''), cellRenderer: ProductRenderer, suppressKeyboardEvent: entityLinksKeys as ColDef<WasteGridRow>['suppressKeyboardEvent'], width: 124, cellClass: 'nds-ag-cell', ...serverSort },
     { colId: 'spend', headerName: L.spend, valueGetter: (p) => p.data?.d?.spendCents ?? null, valueFormatter: moneyOf, cellRenderer: SpendCell, width: 92, cellClass: num, ...numeric, ...serverSort, headerTooltip: 'Spend in the window, out-of-stock days left out' },
@@ -276,14 +298,15 @@ export function withVerbHandler<R extends WasteGridRow | StoppedGridRow>(cols: C
         primary: (row: R) => {
           const v = kind === 'waste' ? wasteVerb(row as WasteGridRow) : stoppedVerb(row as StoppedGridRow)
           if (!v) return []
-          return [{ ...verbOf(v)[0]!, onClick: (d: R) => handlers.current.verb(d.id, v) }]
+          return [{ ...verbOf(v)[0]!, disabled: () => handlers.current.noWrite ?? v.held, onClick: (d: R) => handlers.current.verb(d.id, v) }]
         },
         // The row's second action in its ⋯ (a wasting keyword with a negative over it: Remove negative…).
         items: (row: R) => {
           const v = kind === 'waste' ? wasteVerb(row as WasteGridRow) : null
           const second = v?.second
           if (!second) return []
-          return [{ id: second.action, label: second.label, title: second.sentence, disabled: !!second.held, description: second.held ?? undefined, onSelect: () => handlers.current.verb(row.id, second) }]
+          const held = handlers.current.noWrite ?? second.held
+          return [{ id: second.action, label: second.label, title: second.sentence, disabled: !!held, description: held ?? undefined, onSelect: () => handlers.current.verb(row.id, second) }]
         },
         menuLabel: (row: R) => `More for ${row.text}`,
       },
@@ -295,9 +318,9 @@ export function stoppedColumns(phone: boolean): ColDef<StoppedGridRow>[] {
   const L = LABEL(STOPPED_COLUMN_SPECS)
   if (phone) {
     const phoneCols: ColDef<StoppedGridRow>[] = [
-      { colId: 'term', headerName: L.term, valueGetter: (p) => p.data?.text ?? '', cellRenderer: PhoneTermCell, flex: 1, minWidth: 120, cellClass: 'nds-ag-cell' },
-      { colId: 'since', headerName: L.since, valueGetter: (p) => p.data?.since ?? null, cellRenderer: SinceCell, width: 72, cellClass: 'nds-ag-cell', suppressKeyboardEvent: sinceKeys as ColDef<StoppedGridRow>['suppressKeyboardEvent'] },
-      { colId: 'state', headerName: '', valueGetter: (p) => (p.data ? stateWord(p.data.state) : ''), cellRenderer: StoppedStateCell, width: 52, cellClass: 'nds-ag-cell', headerTooltip: 'State' },
+      { colId: 'term', headerName: L.term, valueGetter: (p) => p.data?.text ?? '', cellRenderer: PhoneTermCell, flex: 1, minWidth: 120, cellClass: 'nds-ag-cell', sortable: false },
+      { colId: 'since', headerName: L.since, valueGetter: (p) => p.data?.since ?? null, cellRenderer: SinceCell, width: 72, cellClass: 'nds-ag-cell', suppressKeyboardEvent: sinceKeys as ColDef<StoppedGridRow>['suppressKeyboardEvent'], sortable: false },
+      { colId: 'state', headerName: '', valueGetter: (p) => (p.data ? stateWord(p.data.state) : ''), cellRenderer: StoppedStateCell, width: 52, cellClass: 'nds-ag-cell', headerTooltip: 'State', sortable: false },
     ]
     return phoneCols.map((c) => ({ ...c, ...H }))
   }
@@ -306,11 +329,13 @@ export function stoppedColumns(phone: boolean): ColDef<StoppedGridRow>[] {
     { colId: 'where', headerName: L.where, valueGetter: (p) => (p.data ? entityPathText(p.data.path) : ''), cellRenderer: WhereCell, flex: 1, minWidth: 240, cellClass: 'nds-ag-cell', suppressKeyboardEvent: placeKeys as ColDef<StoppedGridRow>['suppressKeyboardEvent'], headerTooltip: 'Campaign, then its ad group (or the whole campaign); the portfolio on hover. Enter: the campaign · Shift+Enter: the ad group' },
     { colId: 'product', headerName: L.product, valueGetter: (p) => (p.data ? productWords(p.data) : ''), cellRenderer: ProductRenderer, suppressKeyboardEvent: entityLinksKeys as ColDef<StoppedGridRow>['suppressKeyboardEvent'], width: 132, cellClass: 'nds-ag-cell' },
     { colId: 'owner', headerName: L.owner, valueGetter: (p) => (p.data ? chipOwner(p.data.owner).hint : ''), cellRenderer: OwnerCell, width: 116, cellClass: 'nds-ag-cell', suppressKeyboardEvent: ownerKeys as ColDef<StoppedGridRow>['suppressKeyboardEvent'] },
-    { colId: 'since', headerName: L.since, valueGetter: (p) => p.data?.since ?? null, cellRenderer: SinceCell, width: 92, cellClass: 'nds-ag-cell', valueFormatter: (p) => dayWords(p.value as string | null), suppressKeyboardEvent: sinceKeys as ColDef<StoppedGridRow>['suppressKeyboardEvent'], headerTooltip: 'When it was added or paused, from the record that says so. Enter: how it is known' },
+    { colId: 'since', headerName: L.since, valueGetter: (p) => p.data?.since ?? null, cellRenderer: SinceCell, width: 92, cellClass: 'nds-ag-cell', valueFormatter: (p) => dayWords(p.value as string | null), suppressKeyboardEvent: sinceKeys as ColDef<StoppedGridRow>['suppressKeyboardEvent'], ...DESC_FIRST, headerTooltip: 'When it was added or paused, from the record that says so. Enter: how it is known' },
     { colId: 'spendBefore', headerName: L.spendBefore, valueGetter: (p) => p.data?.spendBeforeCents ?? null, valueFormatter: moneyOf, cellRenderer: SpendBeforeCell, width: 124, cellClass: num, ...numeric, headerTooltip: 'Spend in the 30 days before it stopped' },
+    { colId: 'saved', headerName: L.saved, valueGetter: (p) => (p.data ? savedView(p.data).cents : null), valueFormatter: (p) => (p.data ? savedView(p.data).text : ''), cellRenderer: SavedCell, width: 104, cellClass: num, ...numeric, headerTooltip: 'Did it work? Its spend a day before the stop × the days since, minus what it spent since (to 3 days ago). Too early: the first 14 days' },
     { colId: 'state', headerName: L.state, valueGetter: (p) => (p.data ? stateWord(p.data.state) : ''), cellRenderer: StoppedStateCell, width: 80, cellClass: 'nds-ag-cell' },
     { ...integerColumn<StoppedGridRow>('stillServesIn'), colId: 'stillServes', headerName: L.stillServes, width: 128, headerTooltip: 'Other ad groups where these words still spend' },
     actionsColumn<StoppedGridRow>({ primary: (row) => verbOf(stoppedVerb(row)) as never, prefsLabel: 'Action' }),
   ]
-  return hide(STOPPED_COLUMN_SPECS, cols.map((c) => ({ ...c, ...H })) as ColDef[]) as ColDef<StoppedGridRow>[]
+  // Every column but the verbs is ordered by the server (`?sort=`), as on the Wasting view.
+  return hide(STOPPED_COLUMN_SPECS, cols.map((c) => ({ ...c, ...H, ...(c.colId === 'actions' ? {} : serverSort) })) as ColDef[]) as ColDef<StoppedGridRow>[]
 }

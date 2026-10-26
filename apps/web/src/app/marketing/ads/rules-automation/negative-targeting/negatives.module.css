@@ -339,3 +339,34 @@
   align-items: stretch;
   gap: var(--nds-space-12);
 }
+
+/* ── the review: what a negative would block (step 4) ─────────────────────────────────────────────────── */
+
+.reach {
+  display: grid;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.stepWhat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+/* One line, never broken mid-number: the What column takes its width (a phone's review table scrolls in its box). */
+.reachLine,
+.reachSold {
+  font-size: var(--nds-font-size-sm);
+  white-space: nowrap;
+}
+
+.reachLine {
+  color: var(--nds-text-2);
+}
+
+.reachSold {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-danger-text);
+}

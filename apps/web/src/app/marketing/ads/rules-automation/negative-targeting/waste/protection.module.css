@@ -1,0 +1,107 @@
+/*
+ * Negative Targeting page, step 4 — the protected term's chip, its panel and the review's lead. Layout
+ * and domain content only; DS tokens only. The chip is the DS Pill inside the DS DetailPopover's trigger.
+ */
+
+.chipWrap {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The trigger keeps the DS reset (nds-detailpop-trigger); here only its room in a cell. */
+.chipButton {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chipText {
+  display: inline-block;
+  min-width: 0;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.more {
+  margin-left: var(--nds-space-4);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 340px;
+}
+
+.term {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-6) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.term:last-child {
+  border-bottom: 0;
+}
+
+.termHead {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.termWords {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.scope {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.reason {
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.keeps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin-top: var(--nds-space-6);
+}
+
+.keepsHead {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.keepsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 136px;
+  overflow-y: auto;
+}
+
+.moreLine {
+  align-self: center;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}

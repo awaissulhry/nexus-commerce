@@ -10,6 +10,7 @@
  *   protected              ShieldCheck          turned on outside Nexus  TriangleAlert
  *   not at Amazon          CloudOff             waiting for you          Hourglass
  *   skipped                AlarmClock
+ *   step 4: protection being removed, its negative follows  Hourglass (muted) · not stopped after it   the warning glyph
  */
 import type { ReactNode } from 'react'
 import { AlarmClock, Ban, CloudOff, Crosshair, Hourglass, Lock, Pause, Play, ShieldCheck, TextSearch, TriangleAlert } from 'lucide-react'
@@ -18,7 +19,8 @@ import { useTooltipsDisabled } from '@/design-system/primitives/Tooltip'
 import { IdentityChip, WarnGlyph } from '@/design-system/grid'
 import { dayWords, relWords } from '../../bid/_shared/format'
 import { kindWord, matchChip, matchWord, planWords, stateSentence, type AnyState } from './wasteModel'
-import type { Match, RowKind, StoppedRow } from './wasteTypes'
+import { followUpSentence } from './protectionModel'
+import type { Match, RowKind, StoppedRow, WasteRow } from './wasteTypes'
 import styles from '../negatives.module.css'
 
 const G = { size: 13, strokeWidth: 2.25, 'aria-hidden': true as const }
@@ -51,7 +53,7 @@ export function MatchChip({ match }: { match: Match | null | undefined }) {
 }
 
 /** A row's state, one icon (and a lock for kept paused, the E / P chip for a negative). */
-export function StateMark({ row, focusable = false }: { row: { state: AnyState; match?: Match; level?: 'AD_GROUP' | 'CAMPAIGN' | null; keptPaused?: StoppedRow['keptPaused']; clash?: unknown }; focusable?: boolean }) {
+export function StateMark({ row, focusable = false }: { row: { state: AnyState; match?: Match; level?: 'AD_GROUP' | 'CAMPAIGN' | null; keptPaused?: StoppedRow['keptPaused']; clash?: unknown; protection?: WasteRow['protection'] }; focusable?: boolean }) {
   const label = stateSentence(row)
   switch (row.state) {
     case 'RUNNING': return <Mark label={label} tone="ok" focusable={focusable}><Play {...G} className="nds-cell-glyph" /></Mark>
@@ -84,7 +86,14 @@ export function ClashMark({ clash, focusable = false }: { clash: { label: string
   return <Mark label={clash.label} tone="bad" focusable={focusable}><WarnGlyph /></Mark>
 }
 
-/** Skipped until a day: the row comes back with fresh numbers. */
-export function SkippedMark({ skipped }: { skipped: { until: string } }) {
-  return <Mark label={`Skipped until ${dayWords(skipped.until)}`} tone="muted"><AlarmClock {...G} className="nds-cell-glyph" /></Mark>
+/** Step 4 — Remove protection and stop still finishing on the server, or not stopped after the protection went (and why). */
+export function FollowUpMark({ followUp, focusable = false }: { followUp: NonNullable<WasteRow['followUp']>; focusable?: boolean }) {
+  return followUp.status === 'WAITING'
+    ? <Mark label={followUpSentence(followUp)} tone="muted" focusable={focusable}><Hourglass {...G} className="nds-cell-glyph" /></Mark>
+    : <Mark label={followUpSentence(followUp)} tone="bad" focusable={focusable}><WarnGlyph /></Mark>
+}
+
+/** Skipped until a day: the row comes back with fresh numbers. Step 4: a kept-protected row says so (`label`). */
+export function SkippedMark({ skipped, label }: { skipped: { until: string }; label?: string | null }) {
+  return <Mark label={label ?? `Skipped until ${dayWords(skipped.until)}`} tone="muted"><AlarmClock {...G} className="nds-cell-glyph" /></Mark>
 }

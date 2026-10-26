@@ -6468,21 +6468,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return { ok: true, ...(await launchProductFunnel(b as never)) } } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
-  // ── AX.11: Search-term n-gram analysis ──────────────────────────────
-  //
-  // NEG.6 folded this surface into the Negative Targeting page and added `marketplace` — the route
-  // forwarded only `windowDays`, so every number it returned was account-wide. It still is when
-  // `marketplace` is absent, so this is additive and the old caller is unchanged.
-  fastify.get('/advertising/ngrams', async (request, reply) => {
-    const q = request.query as Record<string, string | undefined>
-    const { analyzeNgrams } = await import('../services/advertising/ads-ngram.service.js')
-    reply.header('Cache-Control', 'private, max-age=120')
-    return analyzeNgrams({
-      windowDays: q.windowDays ? Number(q.windowDays) : undefined,
-      marketplace: q.marketplace || null,
-    })
-  })
-
   // ── AX2.6: our own search-term impression mix + overlap / outbid checks ──
   // The path keeps its old name, but nothing here is a share of voice: `impressionMixPct` (was `sovPct`, renamed
   // 2026-10-10 — no web reader) is a query's share of OUR OWN search-term impressions, not a market share. Amazon's

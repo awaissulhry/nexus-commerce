@@ -11,12 +11,16 @@
  *   POST /api/advertising/waste/skip { ids, days | until } · /unskip { ids }          Nexus only
  *   POST /api/advertising/waste/waiting/decide { decisions }                          Approve / Reject on the page
  *   POST /api/agent/fleet/approvals/:id/undo                                          Undo inside the 20 s window
+ *   POST /api/agent/fleet/approvals/:id/commit                                        run it once the window closed (step 4:
+ *                                                                                     a protection's removal, then its negatives)
+ *   POST /api/advertising/waste/follow-ups/:id/run · …/cancel                         step 4: the negatives Nexus sends once
+ *                                                                                     the protection is removed (their state)
  *   POST /api/claude/changes/:id/undo                                                 Undo of a change set that ran
  *   POST /api/advertising/changes/:id/undo                                            Undo of one history row
  */
 import { getBackendUrl } from '@/lib/backend-url'
 import { listSearch, type ListQuery } from './wasteModel'
-import type { ApplyAnswer, DecideResult, IdsAnswer, PreviewAnswer, RowDetail, RowsAnswer, StoppedAnswer, StoppedRow, WaitingSteps, WasteItem, WasteRow } from './wasteTypes'
+import type { ApplyAnswer, DecideResult, FollowUpView, IdsAnswer, PreviewAnswer, RowDetail, RowsAnswer, StoppedAnswer, StoppedRow, WaitingSteps, WasteItem, WasteRow } from './wasteTypes'
 
 const WASTE = '/api/advertising/waste'
 
@@ -87,8 +91,9 @@ export async function applyWaste(planHash: string, items: readonly WasteItem[], 
 
 export interface SkipAnswer { ok: boolean; error?: string; skipped?: Array<{ rowId: string; until: string }>; undo?: unknown }
 
-/** Skip rows for 7 or 30 d; or reopen the very skips an Unskip ended (its Undo: the same start, person, end and reason). */
-export async function skipRows(ids: readonly string[], args: { days: 7 | 30 } | { until: string } | { reopen: string[] }): Promise<SkipAnswer> {
+/** Skip rows for 7 or 30 d (step 4: `reason`, Keep protected's words); or reopen the very skips an Unskip ended (its Undo:
+ *  the same start, person, end and reason). */
+export async function skipRows(ids: readonly string[], args: { days: 7 | 30; reason?: string } | { until: string } | { reopen: string[] }): Promise<SkipAnswer> {
   try {
     const r = await post(`${WASTE}/skip`, 'reopen' in args ? { reopen: args.reopen } : { ids, ...args })
     return r.status === 200 ? { ok: true, ...(r.body as object) } : { ok: false, error: errorOf(r.body, r.status) }
@@ -128,6 +133,24 @@ export async function takeBackApproval(approvalId: string): Promise<{ ok: boolea
     return r.status === 200 ? { ok: true } : { ok: false, error: errorOf(r.body, r.status) }
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'No answer from the server.' } }
 }
+
+/** Step 4 — run an approved change once its 20 s window closed (the Approvals page's "run it now"; refused before). */
+export async function commitApproval(approvalId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const r = await post(`/api/agent/fleet/approvals/${encodeURIComponent(approvalId)}/commit`, {})
+    return r.status === 200 ? { ok: true } : { ok: false, error: errorOf(r.body, r.status) }
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'No answer from the server.' } }
+}
+
+/** Step 4 — the negatives that wait for a protected term's removal: "send now if it ran" (its state), the Undo. */
+async function followUpCall(approvalId: string, verb: 'run' | 'cancel'): Promise<FollowUpView | null> {
+  try {
+    const r = await post(`${WASTE}/follow-ups/${encodeURIComponent(approvalId)}/${verb}`, {})
+    return r.status === 200 ? (r.body as unknown as FollowUpView) : null
+  } catch { return null }
+}
+export const runFollowUp = (approvalId: string) => followUpCall(approvalId, 'run')
+export const cancelFollowUp = (approvalId: string) => followUpCall(approvalId, 'cancel')
 
 /** A rejected rule card back to waiting (the Suggestions page's own restore). */
 export async function restoreCard(suggestionId: string): Promise<{ ok: boolean; error?: string }> {

@@ -9,6 +9,7 @@
  *              blocks them, and every keyword of ours with the same words that runs — each with its owner and numbers
  *   blockedIn  every standing negative of the market (in campaigns that run) that blocks the words, with who made it
  *   history    the row's own history (history.ts), 90 days
+ *   effect     a standing negative's "Did it work?" (step 4: stopped.ts withEffects), as on its Stopped row
  * A row in a place that does not run is still answered (its detail), but its runsIn reads only places that run.
  */
 import prisma from '../../../db.js'
@@ -16,7 +17,7 @@ import { historyItems, type HistoryItem } from './history.js'
 import { NO_OWNER } from './owner.js'
 import { negativeMatch, parseRowId, termKeyOf, type Match, type Owner, type Ref, type RowNumbers, type WasteRow } from './pure.js'
 import { blockersOf, blocksNow, buildWasteRows, loadWasteFacts, marketCode, ownerOfNegative, placeRefs, type WasteFacts } from './read.js'
-import { buildStoppedRows, type StoppedRow } from './stopped.js'
+import { buildStoppedRows, withEffects, type StoppedRow } from './stopped.js'
 
 export interface Place {
   portfolio: Ref | null
@@ -67,6 +68,8 @@ export async function readRowDetail(id: string, now: Date = new Date()): Promise
     ?? buildStoppedRows(f, { campaignId: f.adGroups.get(at.adGroupId)!.campaignId, idle: true }).rows.find((r) => r.id === id)
   else row = buildWasteRows(f, { adGroupId: at.adGroupId, idle: true }).find((r) => r.id === id)
   if (!row) return { ok: false, status: 404, error: at.kind === 'term' ? `No search term "${at.key}" with clicks in that ad group in 90 days.` : `${id} is not a row this page judges here.` }
+  // Step 4 — a standing negative's record says what it saved, as its Stopped row does.
+  if ('actions' in row) row = (await withEffects([row], [f], now))[0]
 
   // Where the words run and where they are blocked, across the market's places that run.
   const market = buildWasteRows(f, {})

@@ -132,6 +132,16 @@ export interface WasteRow {
    * counts only there (the tile counts every ask it lists: no count without a list). Absent on every other row.
    */
   askOnly?: true
+  /**
+   * Step 4 — a PROTECTED row only: every protected term that keeps it safe (the page names the first),
+   * each with its match, scope and why, and `then`: the hold its verb keeps once they are all removed (protect.ts).
+   */
+  protection?: RowProtection
+  /**
+   * Step 4 — "Remove protection and stop" on this row, still finishing on the server: WAITING (its negative is sent once
+   * the protection is removed) or REFUSED (the protection went, the negative did not: `why`, in plain words). Absent else.
+   */
+  followUp?: { status: 'WAITING' | 'REFUSED'; why: string | null; at: string }
   /** A clash the Owner should see (the Clashes tile lists exactly these rows), with why in plain words; null: none. */
   clash: null | {
     kind: ClashKind
@@ -139,6 +149,23 @@ export interface WasteRow {
     /** NEG_OVER_OWN_KEYWORD: the standing negative that blocks our keyword (the fix removes it). */
     negative?: { rowId: string; text: string; match: 'EXACT' | 'PHRASE' | 'ASIN'; level: 'AD_GROUP' | 'CAMPAIGN'; campaign: Ref; adGroup: Ref | null; owner: Owner }
   }
+}
+
+/** Step 4 — one protected term (AdKeywordProtection) that keeps a row safe, as the row shows it. */
+export interface RowProtectionTerm {
+  id: string
+  term: string
+  match: 'EXACT' | 'PREFIX' | 'CONTAINS'
+  /** null: every market. */
+  market: string | null
+  /** null: every campaign. */
+  campaign: Ref | null
+  reason: string | null
+}
+export interface RowProtection {
+  terms: RowProtectionTerm[]
+  /** The hold the row's verb keeps once every term is removed; null: the verb runs. */
+  then: { label: string; reason: string } | null
 }
 
 /**
@@ -171,6 +198,8 @@ export interface WasteTotals {
   negated: number
   clashes: number
   skipped: number
+  /** Step 4 — wasting rows a protected term keeps safe: exactly what show=protected answers (isKeptSafe). */
+  protected: number
 }
 
 export interface WasteCriteria {
@@ -183,9 +212,13 @@ export interface WasteCriteria {
   ordersThrough: string
 }
 
-/** The money keys of every waste answer (stripped for a person without financials.adspend.view, the route). */
+/**
+ * The money keys of every waste answer (stripped for a person without financials.adspend.view, the route). Step 4: a
+ * stop's effect (effect.ts) keeps its money under beforePerDayCents, afterCents and savedCents; a reach (reach.ts) under
+ * spendCents and salesCents.
+ */
 export const WASTE_MONEY: Readonly<Record<string, string>> = Object.fromEntries(
-  ['spendCents', 'salesCents', 'acosPct', 'cpcCents', 'xCpa', 'spendBarCents', 'wastingSpendCents', 'wastingSpendByCurrency', 'spendBeforeCents', 'spark']
+  ['spendCents', 'salesCents', 'acosPct', 'cpcCents', 'xCpa', 'spendBarCents', 'wastingSpendCents', 'wastingSpendByCurrency', 'spendBeforeCents', 'spark', 'beforePerDayCents', 'afterCents', 'savedCents']
     .map((k) => [k, FIELDS.financialsAdspendView]),
 )
 
@@ -386,13 +419,15 @@ export function deliveryOf(status: string | null | undefined, rolledBackAt: Date
 
 // ── Filters, order, pages ───────────────────────────────────────────────────────────────────────────────────────
 
-export type ShowFilter = 'wasting' | 'waiting' | 'skipped' | 'turned-on' | 'clashes' | 'all'
+export type ShowFilter = 'wasting' | 'waiting' | 'skipped' | 'turned-on' | 'clashes' | 'protected' | 'all'
 export type KindFilter = 'keyword' | 'term' | 'all'
 export const SORT_KEYS = ['spend', 'clicks', 'orders', 'xCpa', 'text', 'where', 'product', 'owner', 'state'] as const
 export type SortKey = (typeof SORT_KEYS)[number]
 
 /** The rows a Wasting tile counts: the test met, still running (a protected one shows its held verb), not skipped. */
 export const isWasting = (r: Pick<WasteRow, 'test' | 'state' | 'skipped'>) => r.test.met && (r.state === 'RUNNING' || r.state === 'PROTECTED') && !r.skipped
+/** Step 4 — the Protected tile: a wasting row that a protected term keeps safe (the test met, PROTECTED, not skipped). */
+export const isKeptSafe = (r: Pick<WasteRow, 'test' | 'state' | 'skipped'>) => r.test.met && r.state === 'PROTECTED' && !r.skipped
 
 export function showMatches(r: WasteRow, show: ShowFilter): boolean {
   // A row listed only for what waits on it shows under Waiting, never as a keyword or term "with numbers" (All).
@@ -402,6 +437,7 @@ export function showMatches(r: WasteRow, show: ShowFilter): boolean {
   if (show === 'skipped') return r.skipped != null
   if (show === 'turned-on') return r.state === 'TURNED_ON_ELSEWHERE'
   if (show === 'clashes') return r.clash != null
+  if (show === 'protected') return isKeptSafe(r)
   return true
 }
 
@@ -478,7 +514,7 @@ export function withAskCounts<T extends Pick<WasteRow, 'waiting'>>(rows: readonl
 }
 
 export function totalsOf(rows: readonly WasteRow[], show: ShowFilter, extra: { negated: number }): WasteTotals {
-  let wasting = 0, keptPaused = 0, turnedOn = 0, skipped = 0, keywords = 0, terms = 0
+  let wasting = 0, keptPaused = 0, turnedOn = 0, skipped = 0, keywords = 0, terms = 0, keptSafe = 0
   // Waiting counts asks (an approval or a rule card), not rows: one ask may cover several places.
   const asks = new Set<string>()
   const byCurrency: Record<string, number> = {}
@@ -500,6 +536,7 @@ export function totalsOf(rows: readonly WasteRow[], show: ShowFilter, extra: { n
     if (r.state === 'KEPT_PAUSED') keptPaused++
     if (r.state === 'TURNED_ON_ELSEWHERE') turnedOn++
     if (r.skipped) skipped++
+    if (isKeptSafe(r)) keptSafe++
     if (showMatches(r, show)) { if (r.kind === 'TERM') terms++; else keywords++ }
   }
   // Money is never added across currencies: several → the split, and a null total with its reason.
@@ -513,6 +550,8 @@ export function totalsOf(rows: readonly WasteRow[], show: ShowFilter, extra: { n
     wastingSpendNote: several ? `The wasting spend is in ${currencies.length} currencies (${currencies.join(', ')}): see it per currency; it is never added up.` : null,
     // The Clashes tile counts exactly the rows show=clashes answers (Bid audit M1).
     keywords, terms, waiting: asks.size, keptPaused, turnedOn, negated: extra.negated, clashes: rows.filter((r) => r.clash != null).length, skipped,
+    // Step 4 — the Protected tile counts exactly the rows show=protected answers.
+    protected: keptSafe,
   }
 }
 
