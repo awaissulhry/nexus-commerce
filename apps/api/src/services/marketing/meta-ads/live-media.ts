@@ -671,14 +671,14 @@ async function adPost(account: MetaChosenAccount, input: PostsInput) {
     instagramMediaId: idText(creative.effective_instagram_media_id),
     sourceInstagramMediaId: idText(creative.source_instagram_media_id),
     instagramPermalink: text(creative.instagram_permalink_url),
-    note: 'The post id is what the comment tools read (a later Nexus step); view post reads it when it is on the chosen Page. Meta gives no Instagram link for Advantage+ catalog ads (template creatives) or story ads.',
+    note: 'The post id is what meta-comments reads and set-meta-comments answers; view post reads it when it is on the chosen Page. Meta gives no Instagram link for Advantage+ catalog ads (template creatives) or story ads.',
   }
 }
 
 // ── meta-instagram-media ─────────────────────────────────────────────────────────────────────────────────────────
 
-// MD-134 (a publish container's status) is not a view: Nexus makes no containers yet, and a container has no owner on
-// Meta to check; the Instagram publish step adds it for the container ids it stores.
+// MD-134 (a publish container's status) is not a view: a container has no owner on Meta to check, so the state of the
+// containers Nexus makes is read by create-meta-instagram-post (step 24) for the container ids it stores.
 export const INSTAGRAM_VIEWS = ['accounts', 'media', 'stories', 'media-detail', 'media-insights', 'account-insights', 'quota', 'upcoming-events', 'video-check'] as const
 export type InstagramView = typeof INSTAGRAM_VIEWS[number]
 
@@ -1149,7 +1149,7 @@ export async function liveInstantExperiences(input: IxInput) {
     const documentId = idText(obj((doc.body as Row).document)?.id)
     if (!documentId || !/^\d{1,25}$/.test(documentId)) throw new MetaLiveRefusal('Meta answered the template without its document, so its parts cannot be read.')
     const parts = await onPage(() => templateRead(() => metaReadOne({ connectionId }, { operation: 'ix.templateDocument', path: documentId, query: { fields: 'id,body_elements' } })))
-    return { template: input.template, templateId, document: tidy(obj((doc.body as Row).document)), parts: tidy((parts.body as Row).body_elements ?? []), note: 'The parts this template takes, in order (Meta\'s template; the layout is fixed). Making one is a change tool (a later Nexus step).' }
+    return { template: input.template, templateId, document: tidy(obj((doc.body as Row).document)), parts: tidy((parts.body as Row).body_elements ?? []), note: 'The parts this template takes, in order (Meta\'s template; the layout is fixed). create-meta-instant-experience makes one from it (template).' }
   }
   const pageId = pageOf(account)
   switch (input.view) {

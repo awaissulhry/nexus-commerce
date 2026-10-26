@@ -200,6 +200,10 @@ const HARD_RULES = [
   // Meta ads step 17 (2026-10-21) — Meta changes are the …-meta-… tools (set-, create-, remove-, copy-, apply-, end-,
   // upload-meta-…; step 45, Owner "yes MCP"); a Meta app secret or token is a person's to enter in Settings, never Claude's.
   'Meta changes go through …-meta-… tools; never take a Meta app secret or token in chat',
+  // Meta ads step 46 (2026-10-26) — the D1 guides (steps 42, 43): a guide sends nothing and returns no approvalId, only the
+  // account holder's steps in Meta's screens; asked again with since, it reads what was done.
+  'Some …-meta-… tools guide acts only the account holder may do in Meta: nothing sent, no approvalId',
+  "the steps in Meta's screens; since reads the result",
 ]
 
 /**
@@ -246,6 +250,9 @@ const MOVED_TO_DESCRIPTIONS: ReadonlyArray<readonly [string, string]> = [
   ['set-hourly-bid-plan', 'A plan a person made or last changed changes by rule only where the business allowed it'],
   ['enable-ads', 'it never runs by rule'],
   ['platform-health-checks', 'Read it first in a daily run'], ['platform-health-checks', 'the watchdog itself did not run'],
+  // Meta ads step 46 (2026-10-26) — room for the Meta guide line: what business-overview holds and a plan's 200 steps are
+  // said by the tools themselves.
+  ['business-overview', 'each with the exact code tools take'], ['submit-change-plan', 'Ask for up to 200 changes'],
 ]
 
 describe('MCP.7 — every tool, as Claude sees it', () => {

@@ -1164,7 +1164,7 @@ async function leadTemplates(account: MetaChosenAccount, idArg: string | null, m
   const read = await onPageRead(() => listGroups(connectionId, 'setup.leadTemplates', `${pageId}/messenger_lead_forms`, [{ name: 'template', fields: SETUP_FIELDS.LeadTemplate }, { name: 'details', fields: SETUP_FIELDS.LeadTemplateMore }], {}, id ? 500 : maxRows), LEAD_TEMPLATE_ACCESS)
   const row = (r: Row) => ({ leadTemplateId: idText(r.id), privacyUrl: text(r.privacy_url), reminderText: text(r.reminder_text), stopQuestionMessage: text(r.stop_question_message), firstStepId: idText(r.first_step_id), leadFormId: idText(obj(r.fblead_form)?.id) })
   if (!id) {
-    return { pageId, items: read.rows.map(row), more: read.more, notRead: missingOf(read.missing), note: `The Page's Messenger lead templates (automated question flows in Messenger lead ads). leadTemplateId reads one with its steps. Making one is a change tool (a later Nexus step). ${PAGE_READ_NOTE}` }
+    return { pageId, items: read.rows.map(row), more: read.more, notRead: missingOf(read.missing), note: `The Page's Messenger lead templates (automated question flows in Messenger lead ads). leadTemplateId reads one with its steps. Making one is Ads Manager\'s only (Meta\'s v24 changelog deprecates making Messenger lead ads by API). ${PAGE_READ_NOTE}` }
   }
   const found = read.rows.find((r) => idText(r.id) === id)
   if (!found) throw new MetaLiveRefusal('That lead template is not one of the chosen Page\'s Messenger lead templates (among the first 500 Meta lists), so it is not read.')

@@ -249,7 +249,7 @@ const createMetaMedia: AgentTool = {
     + 'locale); undo-change asks for it. kind captions: an SRT text you give (UTF-8, at most 200 KB) and its locale onto a '
     + 'video of the chosen ad account\'s library, optionally its default caption (Meta takes each locale once; its undo '
     + 'takes the locale off again). thumbnail and playable are answered in words: Meta takes a custom thumbnail only for a '
-    + 'video associated with a Page (it comes with the Page step; a creative sets its video\'s thumbnail itself), and Nexus '
+    + 'video associated with a Page (Nexus does not upload one to a Page video yet; a creative sets its video\'s thumbnail itself), and Nexus '
     + 'holds no HTML5 playable files. An upload SPENDS NOTHING (it is used only once a creative and an ad use it) and Meta '
     + 'has no check for it (no validate_only on these edges): the preview says so. Image bytes are never stored or logged; a '
     + 'caption text is kept only with its request (its approval, the run that asked for it, or its change-plan step), never '

@@ -16,8 +16,9 @@
  *
  * Meta lets only the FULL Marketing API access tier manage people and partners by API: the preview names the tier Meta
  * named on the read it just made, and a refusal at the run is passed on with Meta's words and what it needs (no workaround).
- * Connection writes (revoke / rotate a token, install the app — ACC-001/002/003/005/006/012) are NOT here (the Owner's
- * decision 2026-10-20: their own preview and yes). Meta's own MCP has no tool for these (master rows: "—").
+ * Connection writes (install the app, make, rotate or revoke a token, take a permission off — ACC-001/002/003/005/006/012)
+ * are in no tool: Claude's tools never touch the keys (the Owner, 2026-10-26: out of scope). A person connects and renews
+ * Meta in Nexus Settings › Channels › Meta and does key work in Meta's Business Settings. Meta's own MCP has none either.
  */
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'

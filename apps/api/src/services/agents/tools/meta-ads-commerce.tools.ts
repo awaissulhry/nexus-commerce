@@ -76,7 +76,7 @@ const metaProductSets: AgentTool = {
     + 'starts_with only on category, no non-English characters in label filters; a price is minor units, sent as Meta\'s '
     + 'price × 100; only for a person who may see revenue — counts under a price give prices away). Prices are minor units of each item\'s currency (priceCents) with Meta\'s text; a set filter that '
     + 'names a price is under filterWithPricesShown. The sets an item is in: meta-catalog-items view item-sets. Changing '
-    + 'sets is a change tool (a later Nexus step). Read only.',
+    + 'sets is set-meta-product-set (deleting one: remove-meta-catalog-items). Read only.',
   async handler(args, ctx): Promise<ToolResult> {
     // Review A1 — a price condition only for a person who may see revenue (counts and members under a price give it away).
     const can = (permission: Parameters<typeof ctx.can>[0]) => ctx.can(permission)
@@ -175,7 +175,8 @@ const metaInstagramProductTags: AgentTool = {
     + '(mediaId, slides): the tags on a feed post or carousel with their place, review status and price (Meta\'s tag read does not cover Reels, Stories, IGTV or Live). appeal (itemId): the appeal '
     + 'state of a product rejected for tagging. Prices are Meta\'s text under restricted keys (priceCents only when the '
     + 'text names an ISO currency). Meta cannot: tag Stories or Live, tag for Creator accounts, or remove a tag by API '
-    + '(Instagram app only). Adding tags and appealing are change tools (a later Nexus step). Read only.',
+    + '(Instagram app only). Adding or moving tags on a published post and appealing are set-meta-instagram-product-tags (a new post\'s tags: '
+    + 'create-meta-instagram-post productTags). Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveInstagramProductTags({
       connectionId: str(args.connectionId),

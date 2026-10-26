@@ -389,7 +389,7 @@ describe('review round 1', () => {
 
   it('B5 / B6 — a shop destination and a Threads id are answered in Meta\'s own terms', () => {
     expect(problem({ body: form(creative({ destination_spec: { destination_type: 'WEBSITE_AND_SHOP' } })) })).toMatch(/WEBSITE_AND_SHOP_OPT_OUT/)
-    expect(problem({ body: form(creative({ asset_feed_spec: { audios: [], onsite_destinations: [{ storefront_shop_id: '1' }] } })) })).toMatch(/cannot confirm that the Page's Facebook or Instagram shop/)
+    expect(problem({ body: form(creative({ asset_feed_spec: { audios: [], onsite_destinations: [{ storefront_shop_id: '1' }] } })) })).toMatch(/every Meta ad sends people to the business's own shop, on the product's page/)
     expect(problem({ body: form(creative({ threads_user_id: '123' })) })).toMatch(/Threads ads on the Instagram account/)
   })
 })
@@ -720,11 +720,12 @@ describe('step 25b — the catalog review: every catalog part a marker, product 
     expect(problem({ body: form(template({ multi_share_optimized: false })) })).toBeNull()
   })
 
-  it('fix 5 (LOW) — the words: retailer ids cannot be checked against the catalog rule; a shop cannot be confirmed (no "requires")', () => {
+  it('fix 5 (LOW) — the words: retailer ids cannot be checked against the catalog rule; shop routing is never sent (no "requires")', () => {
     const retailer = creative({ object_story_spec: { page_id: PAGE, link_data: { link: 'https://www.example.com/', image_hash: HASH, retailer_item_ids: ['SKU-1'] } } })
     expect(problem({ body: form(retailer) })).toMatch(/advertiser's own product ids for a collection, and Nexus cannot check a retailer id against the catalog rule/)
     const shop = problem({ body: form(creative({ asset_feed_spec: { audios: [], onsite_destinations: [{ storefront_shop_id: '120000000000555' }] } })) })
-    expect(shop).toMatch(/cannot confirm that the Page's Facebook or Instagram shop and its commerce account are this business's own/)
+    // Step 46 — the Owner's rule (2026-10-23): every Meta ad sends people to the business's own shop.
+    expect(shop).toMatch(/never to a Facebook or Instagram shop Meta picks \(the Owner's rule of 2026-10-23\), so Nexus sends no shop routing/)
     expect(shop).not.toMatch(/requires/)
   })
 })

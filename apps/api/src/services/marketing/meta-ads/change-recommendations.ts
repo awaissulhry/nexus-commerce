@@ -72,8 +72,8 @@ type UndoKind = 'budgets' | 'goal' | 'background' | 'none'
  */
 interface TypeRule { level: Level; selection: 'none' | 'optional' | 'required'; spend: Spend; undo: UndoKind; copies?: 'adset' | 'ad'; noUndo?: string; warn: string[] }
 
-const TARGETING_NO_UNDO = 'Putting an ad set\'s targeting back is set-meta-targeting\'s (a later Nexus step); the record keeps how each ad set was before (Advantage+ audience and placements). Until then: Ads Manager.'
-const CREATIVE_NO_UNDO = 'Meta switches the feature on in each ad\'s creative; switching it off again is a creative change (set-meta-creative, a later Nexus step) — Meta may need a new creative for it. Until then: Ads Manager.'
+const TARGETING_NO_UNDO = 'Putting an ad set back is a change of its own: set-meta-targeting (Advantage+ audience) or set-meta-placements (placements); the record keeps how each ad set was before (Advantage+ audience and placements).'
+const CREATIVE_NO_UNDO = 'Meta switches the feature on in each ad\'s creative, and a creative cannot change once made: switching it off again is a new creative with the feature off (create-meta-creative) swapped onto the ad (set-meta-ad), which sends an active ad back to Meta\'s review.'
 const LEARNING = 'Meta\'s learning phase may restart for the ad sets it changes.'
 const REVIEW = 'Meta may review the changed ads again before they deliver.'
 
