@@ -153,6 +153,9 @@ describe('what a copy made, and the undo of a create or a copy', () => {
     expect(removalDraft(record, [now({ spend: null })], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/could not read what/) })
     expect(removalDraft(record, [now({ childrenMore: true })], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/more ad sets or ads than Nexus reads/) })
     expect(removalDraft(record, [], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/could not read campaign/) })
+    // 2026-10-22 live — the read's refusal is said in Meta's words, never only "could not read".
+    const why = new Map([['campaign:120000000000009', 'Nexus could not read campaign 120000000000009 from Meta: Meta refused the read: Syntax error "Field effective_status specified more than once." (Meta trace T).']])
+    expect(removalDraft(record, [], 'copy-meta-ads', why)).toEqual({ refusal: 'Nothing is deleted: Nexus could not read campaign 120000000000009 from Meta: Meta refused the read: Syntax error "Field effective_status specified more than once." (Meta trace T) — so campaign 120000000000009 is kept.' })
     expect(removalDraft(record, [now({ there: false })], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/deleted already/) })
     // Review A3 — spend is reported late: nothing that delivers now is deleted (it, or anything under it).
     expect(removalDraft(record, [now({ status: 'ACTIVE', effectiveStatus: 'ACTIVE' })], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/is on: Meta reports spend late/) })

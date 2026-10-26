@@ -116,3 +116,37 @@ export function withStock(query: ReadinessPageQuery, value: string): ReadinessPa
   const others = query.flags.filter((flag) => flag !== 'lowStock')
   return { ...query, flags: knownValues(value === 'lowStock' ? [...others, 'lowStock'] : others, READINESS_LIVE_FLAGS), page: 1 }
 }
+
+/* ── One tile row (2026-10-26): the live tiles that stay in the row, and Filters › Channel problem ──────────────────── */
+
+/** The live tiles in the page's one row (after All · Blocked · Warnings). Suppressed and Out of sync are Channel problem. */
+export const ROW_LIVE_TILES: readonly LiveTileKey[] = ['live', 'error']
+
+/** Filters › Channel problem: one at a time, the same flags the Errors tile sets. */
+export const CHANNEL_PROBLEM_OPTIONS: ReadonlyArray<{ value: '' | Exclude<LiveTileKey, 'live'>; label: string }> = [
+  { value: '', label: 'All' },
+  { value: 'error', label: liveTileLabel('error') },
+  { value: 'suppressed', label: liveTileLabel('suppressed') },
+  { value: 'outOfSync', label: liveTileLabel('outOfSync') },
+]
+
+/** The Channel problem the page filters on, '' for none. */
+export const channelProblemOf = (filters: LiveFilters): string => TILE_FLAGS.find((flag) => filters.flags.includes(flag)) ?? ''
+
+/** Channel problem › a choice replaces the other problem flag; All takes it away. Low stock stays. Back to page 1. */
+export function withChannelProblem(query: ReadinessPageQuery, value: string): ReadinessPageQuery {
+  const others = query.flags.filter((flag) => !TILE_FLAGS.includes(flag))
+  const chosen = TILE_FLAGS.find((flag) => flag === value)
+  return { ...query, flags: knownValues(chosen ? [...others, chosen] : others, READINESS_LIVE_FLAGS), page: 1 }
+}
+
+/** Is a live tile (Live, Errors) or a Channel problem lighting the row? Then the row's All is not lit. */
+export function anyLiveTileFilter(filters: LiveFilters): boolean {
+  return ROW_LIVE_TILES.some((tile) => liveTileIsLit(filters, tile)) || channelProblemOf(filters) !== ''
+}
+
+/** The row's All: the live tiles' filters go (Live's `live=active`, a Channel problem); Low stock and other states stay. */
+export function withoutLiveTiles(query: ReadinessPageQuery): ReadinessPageQuery {
+  const liveIsTile = query.live.length === 1 && query.live[0] === 'active'
+  return { ...query, live: liveIsTile ? [] : query.live, flags: query.flags.filter((flag) => !TILE_FLAGS.includes(flag)), page: 1 }
+}

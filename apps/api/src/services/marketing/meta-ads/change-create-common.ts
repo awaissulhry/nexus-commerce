@@ -76,7 +76,7 @@ export const REMOVE_LATER = 'delete it with remove-meta-ads-items (only when the
  * nothing" alone is not enough), Meta lets be deleted, and has spent nothing (all read live first: liveMadeObject).
  * Anything else is said, not sent.
  */
-export function removalDraft(record: MadeRecord, live: MadeNow[], tool: string): MetaChangeDraft | { refusal: string } {
+export function removalDraft(record: MadeRecord, live: MadeNow[], tool: string, unread: ReadonlyMap<string, string> = new Map()): MetaChangeDraft | { refusal: string } {
   if (record.op === 'background-copy') return { refusal: `This was a background copy: Meta made the copies later, and Nexus never had their ids, so undo cannot tell them apart — meta-campaigns view copies shows them; ${REMOVE_LATER}.` }
   if (record.op === 'remove') return { refusal: 'This change deleted what an earlier change made: a deletion on Meta is final, there is nothing to put back.' }
   if (!record.top.length) return { refusal: 'This change recorded nothing it made on Meta, so there is nothing to delete.' }
@@ -88,7 +88,12 @@ export function removalDraft(record: MadeRecord, live: MadeNow[], tool: string):
   for (const top of record.top) {
     const now = live.find((l) => l.id === top.id && l.kind === top.kind)
     const who = `${KIND_WORD[top.kind]} ${top.id}`
-    if (!now) { kept.push(`Nexus could not read ${who}, so it is kept.`); continue }
+    if (!now) {
+      // The live read's refusal in Meta's (or Nexus's) words — "could not read" alone hid a 2500 for a day (2026-10-22).
+      const why = unread.get(`${top.kind}:${top.id}`)?.trim().replace(/\.$/, '')
+      kept.push(why ? `${why} — so ${who} is kept.` : `Nexus could not read ${who}, so it is kept.`)
+      continue
+    }
     if (!now.there) { skipped.push(`${who} is no longer on Meta (deleted already).`); continue }
     const foreign = now.children.filter((c) => !made.has(c))
     if (foreign.length || now.childrenMore) {
