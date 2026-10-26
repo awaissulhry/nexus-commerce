@@ -322,6 +322,28 @@ describe('consent PR 2 — the people of a customer list IN: POST /users and a r
     const kept = JSON.stringify(gatewayLedger.at(-1))
     expect(kept).not.toContain(hash('a@example.com'))
     expect(kept).not.toContain('example.com')
+    // The owner read of an upload also asks is_value_based (a removal's does not).
+    expect(new URL(h.calls[0].url).searchParams.get('fields')).toBe('account_id,subtype,time_created,is_value_based')
+  })
+  it('review NIT 2 — defence in depth: the gateway sends people only into a CUSTOM list that is not value-based', async () => {
+    for (const [answer, words] of [
+      [{ id: AUDIENCE, account_id: '1234567890', subtype: 'WEBSITE', time_created: 1700000000 }, /is not a customer list \(subtype CUSTOM\)/],
+      [{ id: AUDIENCE, account_id: '1234567890', subtype: 'CUSTOM', time_created: 1700000000, is_value_based: true }, /is a value-based customer list/],
+    ] as const) {
+      for (const [edge, params] of [['users', { payload: PAYLOAD }], ['usersreplace', { payload: PAYLOAD, session: SESSION }]] as const) {
+        h.calls = []
+        h.answers.push(json(answer))
+        const res = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: AUDIENCE, objectKind: 'customaudience', edge, params, check: false }).catch((e) => e)
+        expect(res).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
+        expect(String(res.message)).toMatch(words)
+        expect(h.calls.map((c) => c.init.method)).toEqual(['GET'])
+      }
+    }
+    // A removal from a value-based list is not judged so (taking people out is always allowed).
+    h.calls = []
+    h.answers.push(json({ id: AUDIENCE, account_id: '1234567890', subtype: 'CUSTOM', time_created: 1700000000 }), json({ num_received: 2 }))
+    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: AUDIENCE, objectKind: 'customaudience', edge: 'users', method: 'DELETE', params: { payload: PAYLOAD }, check: false })).ok).toBe(true)
+    expect(new URL(h.calls[0].url).searchParams.get('fields')).toBe('account_id,subtype,time_created')
   })
 })
 

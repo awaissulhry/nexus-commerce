@@ -63,7 +63,7 @@ vi.mock('../../marketing/meta-ads/audience-members.js', async (importActual) => 
   optedOutPeople: vi.fn(async () => { h.peopleRead('optedOut'); return structuredClone(h.people) }),
   consentedPeople: vi.fn(async (since: Date | null) => { h.peopleRead('consented', since); return structuredClone(h.consented) }),
   consentEndedPeople: vi.fn(async () => { h.peopleRead('ended'); return structuredClone(h.ended) }),
-  shopifyConsentPeople: vi.fn(async (since: Date | null) => { h.peopleRead('held', since); return structuredClone(h.held) }),
+  addedPeople: vi.fn(async (ranAt: Date, since: Date | null) => { h.peopleRead('held', ranAt, since); return structuredClone(h.held) }),
 }))
 vi.mock('../../marketing/meta-ads/customer-lists-switch.js', () => ({
   metaCustomerListsSwitch: vi.fn(async () => ({ on: h.uploadsOn, since: h.uploadsOn ? '2026-10-26T08:00:00.000Z' : null, by: h.uploadsOn ? 'Owner' : null })),
@@ -304,7 +304,7 @@ describe('set-meta-audience-members (D8)', () => {
     expect(h.peopleRead).not.toHaveBeenCalled()
     expect(h.send).not.toHaveBeenCalled()
   })
-  it('add: consenting Shopify buyers\' hashes into ONE list (POST /users, no session); counts only; its undo takes them out again', async () => {
+  it('add: consenting Shopify buyers\' hashes into ONE list (POST /users, no session); counts only; its undo takes out the rows held when it ran', async () => {
     h.uploadsOn = true
     h.consented = { hashes: [hash('a@example.com'), hash('b@example.com')].sort(), skipped: 0 }
     // The list is judged before anyone's hash is read.
@@ -317,7 +317,7 @@ describe('set-meta-audience-members (D8)', () => {
     expect(out.ok).toBe(true)
     expect(h.peopleRead).toHaveBeenCalledWith('consented', new Date('2026-10-01T00:00:00Z'))
     expect(out.preview).toMatchObject({ spendsMoney: false, totals: { hashedEmails: 2, requests: 1 }, summary: expect.stringMatching(/^Meta: add 2 hashed e-mails .* to customer list "List A" \(120000000000040\) of ad account act_1234567890\.$/) })
-    expect(out.preview.warnings.join(' ')).toMatch(/Undo takes them out of the list again/)
+    expect(out.preview.warnings.join(' ')).toMatch(/Undo takes the people out again .* already held when this add ran/)
     expect(JSON.stringify(out)).not.toContain(hash('a@example.com'))
     h.send.mockImplementationOnce(async () => ({ node: { audience_id: A, session_id: '0', num_received: 2, num_invalid_entries: 0, invalid_entry_samples: { [hash('a@example.com')]: 'x' } }, readBack: 'none', waitedMs: 0 }))
     const ran = await run('set-meta-audience-members', { mode: 'add', audienceId: A, since: '2026-10-01' }, out.preview)
@@ -333,16 +333,22 @@ describe('set-meta-audience-members (D8)', () => {
     expect(kept).not.toContain('example.com')
     const t = tool('set-meta-audience-members')
     expect(await t.undo!.current(ran.change!)).toEqual(ran.change!.after)
+    // Review FIX-2 — the add keeps when it ran; its undo passes that time, and the undo reads only rows held then.
+    const ranAt = (ran.change!.after as { ranAt?: string }).ranAt!
+    expect(Number.isNaN(Date.parse(ranAt))).toBe(false)
     const back = t.undo!.request(ran.change!)
-    expect(back).toEqual({ tool: 'set-meta-audience-members', args: { connectionId: 'm-1', mode: 'remove', who: 'added', audienceId: A, since: '2026-10-01', why: expect.any(String) } })
+    expect(back).toEqual({ tool: 'set-meta-audience-members', args: { connectionId: 'm-1', mode: 'remove', who: 'added', addRanAt: ranAt, audienceId: A, since: '2026-10-01', why: expect.any(String) } })
     expect(t.input.safeParse((back as { args: unknown }).args).success).toBe(true)
-    // The undo itself: everyone Nexus holds a consent row for since that day, taken out (a superset), said so.
     h.held = { hashes: [hash('a@example.com'), hash('b@example.com'), hash('c@example.com')].sort(), skipped: 0 }
     const undo = await preview('set-meta-audience-members', (back as { args: Record<string, unknown> }).args)
     expect(undo.ok).toBe(true)
-    expect(h.peopleRead).toHaveBeenLastCalledWith('held', new Date('2026-10-01T00:00:00Z'))
-    expect(undo.preview.warnings.join(' ')).toMatch(/It is the undo of an add/)
+    expect(h.peopleRead).toHaveBeenLastCalledWith('held', new Date(ranAt), new Date('2026-10-01T00:00:00Z'))
+    expect(undo.preview.warnings.join(' ')).toMatch(/It is the undo of an add that ran at/)
     expect(undo.preview.totals).toMatchObject({ people: 3 })
+    // An add record without its run time (none should exist) is refused in words, never widened.
+    expect(t.undo!.request({ before: {}, after: { mode: 'add', audienceId: A, people: 2, batches: 1, since: null } })).toEqual({ refusal: expect.stringMatching(/recorded no time it ran/) })
+    // who added without addRanAt is refused at the door of the draft.
+    expect(await preview('set-meta-audience-members', { mode: 'remove', who: 'added', audienceId: A })).toEqual({ ok: false, error: expect.stringMatching(/it takes addRanAt/) })
   })
   it('replace: one session of usersreplace requests, approved and run with a new session id; no undo, in words', async () => {
     h.uploadsOn = true
@@ -376,7 +382,7 @@ describe('set-meta-audience-members (D8)', () => {
     h.ended = { hashes: [hash('a@example.com'), hash('b@example.com')].sort(), skipped: 0 }
     const out = await preview('set-meta-audience-members', { mode: 'remove', audienceId: A })
     expect(out.preview.totals).toMatchObject({ people: 2 })
-    expect(out.preview.warnings.join(' ')).toMatch(/1 opted out of the business's e-mail and 2 no longer say yes on Shopify/)
+    expect(out.preview.warnings.join(' ')).toMatch(/1 opted out of the business's e-mail and 2 had said yes on Shopify and unsubscribed since/)
     expect(tool('set-meta-audience-members').undo!.request({ before: { mode: 'remove' }, after: { mode: 'remove', audienceId: A } })).toEqual({ refusal: expect.stringMatching(/never put back/) })
   })
   it('remove: the people who said no as hashes in DELETE requests; no hash in the preview, the answer or the record', async () => {

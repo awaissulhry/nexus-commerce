@@ -16,9 +16,14 @@
  *   say "no": an unsubscribe link, a spam complaint, a GDPR request or an operator's entry; never a bounce. The query
  *   filters that in the database. Meta asks that a person who opts out leaves every customer list of the account
  *   (reference/custom-audience "Updating"): that is mode opt_out_everywhere. Mode remove takes out, besides them, the
- *   people whose Shopify consent ended (`consentEndedPeople`: a row no longer SUBSCRIBED), unless they still say yes on
- *   another active Shopify account of the business. The undo of an add takes out everyone Nexus holds a Shopify consent
- *   row for (`shopifyConsentPeople`): Nexus keeps no list of whom an add sent, and that is everyone it could have sent.
+ *   people whose yes ended (`consentEndedPeople`: Shopify's UNSUBSCRIBED — "not subscribed to email marketing but was
+ *   previously subscribed"; never NOT_SUBSCRIBED, PENDING, INVALID or REDACTED: Nexus never sends Meta the hash of a
+ *   person who never said yes, not even in a DELETE), unless they still say yes on another active Shopify account of the
+ *   business. The undo of an add (`addedPeople`) takes out the rows that said yes or whose yes ended and that Nexus
+ *   already held when the add ran: Nexus keeps no list of whom an add sent.
+ *
+ *   `since` is Shopify's own consent time (emailConsentAt, consent_updated_at), never when Nexus wrote the row: a backfill
+ *   run never changes who "said yes since" a day. A row Shopify gave no consent time counts only without since.
  *
  * Privacy: each e-mail is normalised (trim, lower case — custom-audiences guide #hash) and hashed with SHA-256 (lowercase
  * hex) the moment it is read; the plain address is never kept, logged, stored or returned, and the hashes live only in
@@ -77,7 +82,10 @@ function hashedRows(rows: Array<{ emailSha256: string }>): HashedPeople {
   return { hashes: [...hashes].sort(), skipped }
 }
 
-const recordedSince = (since: Date | null) => (since ? { updatedAt: { gte: since } } : {})
+/** Shopify's consent time on or after the day (a row with no consent time is never "since" a day). */
+const consentSince = (since: Date | null) => (since ? { emailConsentAt: { gte: since } } : {})
+/** Shopify's state of a yes that ended: "not subscribed to email marketing but was previously subscribed". */
+const ENDED = 'UNSUBSCRIBED'
 
 /**
  * The rows that say yes on an ACTIVE Shopify account this business owns (row-level security: this business's rows only;
@@ -89,7 +97,7 @@ async function sayingYes(since: Date | null, without: string[]): Promise<Array<{
     where: {
       emailState: YES,
       connection: { is: { channelType: 'SHOPIFY', isActive: true, workspaceId: workspaceIdForQuery() } },
-      ...recordedSince(since),
+      ...consentSince(since),
       ...(without.length ? { emailSha256: { notIn: without } } : {}),
     },
     select: { emailSha256: true },
@@ -99,8 +107,8 @@ async function sayingYes(since: Date | null, without: string[]): Promise<Array<{
 /**
  * The people a customer list may get (D8, P1 = B, P2 = A): Shopify buyers of an active Shopify account this business
  * owns who said yes to its e-mail marketing (SUBSCRIBED), never one who opted out of its e-mail (EmailSuppression,
- * `optedOutPeople`) — every filter in the database query. `since`: only rows Nexus recorded or changed from then on (to
- * send a long list in parts). Refused in words when the opt-outs are too many to subtract in one query.
+ * `optedOutPeople`) — every filter in the database query. `since`: only rows whose Shopify consent time is on or after
+ * that day (to send a long list in parts). Refused in words when the opt-outs are too many to subtract in one query.
  */
 export async function consentedPeople(since: Date | null): Promise<HashedPeople | { refusal: string }> {
   const optedOut = await optedOutPeople(null)
@@ -111,24 +119,33 @@ export async function consentedPeople(since: Date | null): Promise<HashedPeople 
 }
 
 /**
- * The people whose Shopify consent ended: a row that no longer says yes (UNSUBSCRIBED, NOT_SUBSCRIBED, PENDING, INVALID,
- * REDACTED), recorded or changed since a day — unless the same person still says yes on an active Shopify account of the
- * business (then the business still has their yes, and an add would send them again).
+ * The people whose yes ended: Shopify's UNSUBSCRIBED only ("not subscribed to email marketing but was previously
+ * subscribed"), with Shopify's consent time since a day — never a person who never said yes (NOT_SUBSCRIBED, PENDING,
+ * INVALID, REDACTED): their hash never goes to Meta, not even in a DELETE. Unless the same person still says yes on an
+ * active Shopify account of the business (then the business still has their yes, and an add would send them again). A
+ * person a Shopify admin moved straight from SUBSCRIBED to NOT_SUBSCRIBED is not here: they leave the list with the next
+ * replace.
  */
 export async function consentEndedPeople(since: Date | null): Promise<HashedPeople> {
-  const ended = hashedRows(await prisma.shopifyMarketingConsent.findMany({ where: { emailState: { not: YES }, ...recordedSince(since) }, select: { emailSha256: true } }))
+  const ended = hashedRows(await prisma.shopifyMarketingConsent.findMany({ where: { emailState: ENDED, ...consentSince(since) }, select: { emailSha256: true } }))
   if (!ended.hashes.length) return ended
   const stillYes = new Set(hashedRows(await sayingYes(null, [])).hashes)
   return { hashes: ended.hashes.filter((h) => !stillYes.has(h)), skipped: ended.skipped }
 }
 
 /**
- * Everyone Nexus holds a Shopify consent row for (any state, any of the business's Shopify accounts), recorded or changed
- * since a day: the undo of an add takes them out — Nexus keeps no list of whom an add sent, and everyone it sent has
- * such a row (unless Shopify asked to erase them since, or their shop was uninstalled: their hash is gone with the row).
+ * The undo of an add: the rows that say yes (SUBSCRIBED) or whose yes ended (UNSUBSCRIBED), of any of the business's
+ * Shopify accounts, that Nexus already held when the add ran (createdAt ≤ ranAt), with the add's own `since` (Shopify's
+ * consent time: it only grows, so it never drops a person the add sent). Nexus keeps no list of whom an add sent, so this
+ * can also take out people another add put in. It cannot take out a person erased since (customers/redact deletes the
+ * row), one whose shop was uninstalled since (its rows are purged), one whose e-mail changed at Shopify since (the row
+ * holds the new hash), or one whose Shopify state is now neither of the two.
  */
-export async function shopifyConsentPeople(since: Date | null): Promise<HashedPeople> {
-  return hashedRows(await prisma.shopifyMarketingConsent.findMany({ where: recordedSince(since), select: { emailSha256: true } }))
+export async function addedPeople(ranAt: Date, since: Date | null): Promise<HashedPeople> {
+  return hashedRows(await prisma.shopifyMarketingConsent.findMany({
+    where: { emailState: { in: [YES, ENDED] }, createdAt: { lte: ranAt }, ...consentSince(since) },
+    select: { emailSha256: true },
+  }))
 }
 
 /** Two lists of people as one (each once, sorted). */

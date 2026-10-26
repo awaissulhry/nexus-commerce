@@ -30,7 +30,7 @@ import {
   changeableAudience, chosenOf, liveAudienceDetail, liveExistingCustomerUsers, liveAudienceSharing, liveAudienceTypeTags, liveAudienceUse, liveAudiencesNamed, liveIdProblems, liveTerms,
 } from '../../marketing/meta-ads/live-audience-change.js'
 import {
-  consentedPeople, consentEndedPeople, memberCounts, optedOutPeople, shopifyConsentPeople, unionOf, type HashedPeople,
+  addedPeople, consentedPeople, consentEndedPeople, memberCounts, optedOutPeople, unionOf, type HashedPeople,
 } from '../../marketing/meta-ads/audience-members.js'
 import { metaCustomerListsSwitch } from '../../marketing/meta-ads/customer-lists-switch.js'
 import { MetaReadError } from '../../marketing/meta-ads/errors.js'
@@ -389,7 +389,7 @@ const setMetaAudience: AgentTool = {
 // ── set-meta-audience-members ───────────────────────────────────────────────────────────────────────────────────
 
 const sinceArg = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD').optional()
-  .describe('only people recorded on or after this day (UTC, YYYY-MM-DD): add — buyers whose Shopify consent Nexus recorded or last changed then; remove / opt_out_everywhere — people who said no then. To send a long list in parts; never with replace')
+  .describe('only people from this day on (UTC, YYYY-MM-DD): add — buyers whose Shopify consent time (consent_updated_at) is then or later (a yes Shopify gives no time for is sent only without since); remove — people who opted out then, or whose yes ended on Shopify then; opt_out_everywhere — people who opted out then. To send a long list in parts; never with replace')
 
 const buildMembers = (args: Record<string, unknown>): MetaDraftBuilder => guarded(async (account) => {
   const request = requestOf<AudienceMembersRequest>(args)
@@ -431,7 +431,12 @@ const buildMembers = (args: Record<string, unknown>): MetaDraftBuilder => guarde
     if ('refusal' in people) return people
     return membersDraft(request, { ...live, audience, use, people })
   }
-  if (request.mode === 'remove' && request.who === 'added') return membersDraft(request, { ...live, audience, use, people: await shopifyConsentPeople(since) })
+  if (request.mode === 'remove' && request.who === 'added') {
+    // The undo of an add: only rows Nexus already held when the add ran (its record's ranAt).
+    const ranAt = new Date(request.addRanAt!)
+    if (Number.isNaN(ranAt.getTime())) return { refusal: 'addRanAt is the time the add ran (ISO 8601, from its record).' }
+    return membersDraft(request, { ...live, audience, use, people: await addedPeople(ranAt, since) })
+  }
   const optedOut = await optedOutPeople(since)
   if (request.mode === 'opt_out_everywhere') return membersDraft(request, { ...live, audience, use, people: optedOut })
   const ended = await consentEndedPeople(since)
@@ -446,21 +451,24 @@ function membersFinish(draft: MetaChangeDraft, done: Done) {
   // A replace answers the session's running total (num_received "so far"): its last answer, not a sum.
   const replace = record.mode === 'replace'
   const last = counts.at(-1)
+  // Consent PR 2 review — an add keeps when it ran: its undo takes out only rows Nexus already held then.
+  const ranAt = record.mode === 'add' ? { ranAt: new Date().toISOString() } : {}
   return {
     data: {
-      ...record, batchesSent: done.length,
+      ...record, batchesSent: done.length, ...ranAt,
       received: replace ? last?.received ?? null : sum('received'), invalidEntries: replace ? last?.invalid ?? null : sum('invalid'),
       note: 'Meta applies it within about 24 hours; meta-audiences view sessions shows its upload sessions.',
     },
     before: record,
-    after: { ...record, batchesSent: done.length },
+    after: { ...record, batchesSent: done.length, ...ranAt },
   }
 }
 
 /**
- * Consent PR 2 — the undo of an add takes the people out again (mode remove, who added: everyone Nexus holds a Shopify
- * consent row for, since the add's day — Nexus keeps no list of whom it sent). A replace has none: Meta does not list a
- * Custom Audience's members. People taken out are never put back.
+ * Consent PR 2 — the undo of an add takes the people out again (mode remove, who added, addRanAt = the add's run time:
+ * the rows that said yes or whose yes ended and that Nexus already held then, with the add's own since — Nexus keeps no
+ * list of whom it sent). A replace has none: Meta does not list a Custom Audience's members. People taken out are never
+ * put back.
  */
 const membersUndo: ToolUndo = {
   async current(change: ToolChange) {
@@ -474,10 +482,11 @@ const membersUndo: ToolUndo = {
     if (after.mode === 'replace') return { refusal: 'A replace has no exact undo: Meta does not list a Custom Audience\'s members, so Nexus cannot know who was in the list before and cannot put them back. To change it again, replace it again or take people out (set-meta-audience-members).' }
     if (after.mode !== 'add') return { refusal: 'People taken out of a customer list are never put back: they opted out, or their Shopify consent ended.' }
     if (!after.audienceId) return { refusal: 'This change recorded no customer list, so there is nobody to take out.' }
+    if (!after.ranAt) return { refusal: 'This add recorded no time it ran, so Nexus cannot tell whom it may have sent: take people out with mode remove instead.' }
     return {
       tool: 'set-meta-audience-members',
       args: {
-        ...(after.accountId ? { connectionId: after.accountId } : {}), mode: 'remove', who: 'added', audienceId: after.audienceId,
+        ...(after.accountId ? { connectionId: after.accountId } : {}), mode: 'remove', who: 'added', addRanAt: after.ranAt, audienceId: after.audienceId,
         ...(after.since ? { since: after.since } : {}), why: 'undo of an earlier add: take the people it sent out of the customer list again',
       },
     }
@@ -501,10 +510,11 @@ const setMetaAudienceMembers: AgentTool = {
   requires: [ADS_MANAGE, F.customersExport],
   input: z.object({
     connectionId: metaConnectionArg,
-    mode: z.enum(MEMBER_MODES).describe('add: the hashed e-mails of Shopify buyers who said yes to the business\'s e-mail into ONE customer list; replace: everyone in ONE customer list replaced by them (no undo); remove: the people who said no (opted out of the business\'s e-mail, or whose Shopify consent ended) out of ONE customer list; opt_out_everywhere: the people who opted out out of EVERY customer list of the ad account'),
+    mode: z.enum(MEMBER_MODES).describe('add: the hashed e-mails of Shopify buyers who said yes to the business\'s e-mail into ONE customer list; replace: everyone in ONE customer list replaced by them (no undo); remove: the people who said no (opted out of the business\'s e-mail, or whose yes ended on Shopify) out of ONE customer list; opt_out_everywhere: the people who opted out out of EVERY customer list of the ad account'),
     audienceId: metaIdArg('add, replace, remove: the customer list (the chosen ad account\'s own)').optional(),
     since: sinceArg,
-    who: z.enum(REMOVE_WHO).optional().describe('remove only: said_no (the default) — the people who said no; added — everyone an add could have sent (everyone Nexus holds a Shopify consent row for): what the undo of an add takes out'),
+    who: z.enum(REMOVE_WHO).optional().describe('remove only: said_no (the default) — the people who said no; added — the undo of an add (with addRanAt): the rows that said yes or whose yes ended and that Nexus already held when the add ran'),
+    addRanAt: z.string().trim().datetime({ offset: true }).optional().describe('who added only: the time the add ran (ISO 8601, from its record; undo-change passes it)'),
     why: metaWhyArg,
   }),
   description:
@@ -514,11 +524,16 @@ const setMetaAudienceMembers: AgentTool = {
     + 'never an Amazon, eBay or Etsy buyer, never a phone, name or address — and only while the business\'s switch '
     + '"Upload customer lists to Meta" is on (a person turns it on in Nexus, Settings › Channels › Meta; Claude cannot) and '
     + 'Meta\'s Custom Audience terms are signed for the ad account (Meta\'s tos_accepted; refused in words when Nexus cannot '
-    + 'read them). add: into ONE customer list (in parts with since); its undo takes them out again. replace: everyone in '
+    + 'read them). add: into ONE customer list (in parts with since: Shopify\'s consent time). Its undo takes out the rows '
+    + 'that said yes, or whose yes ended since, and that Nexus already held when the add ran: Nexus keeps no list of whom '
+    + 'it sent, so the undo can also take out people another add put in; it cannot take out people erased at Shopify '
+    + 'since, people whose shop was uninstalled since, or people whose e-mail changed at Shopify since. replace: everyone in '
     + 'ONE customer list replaced, as one Meta replace session — it has NO undo, because Meta does not list a list\'s '
-    + 'members (a refresh is a replace asked again). remove: the people who said no (opted out of the business\'s e-mail: '
-    + 'an unsubscribe, a spam complaint, a GDPR request, an operator\'s entry — never a bounce; or whose Shopify consent '
-    + 'ended) out of ONE customer list. opt_out_everywhere: the people who opted out out of EVERY customer list of the ad '
+    + 'members (a refresh is a replace asked again), and only while the list is Normal. remove: the people who said no '
+    + '(opted out of the business\'s e-mail: an unsubscribe, a spam complaint, a GDPR request, an operator\'s entry — never '
+    + 'a bounce; or whose yes ended on Shopify: UNSUBSCRIBED; never a person who never said yes) out of ONE customer list. '
+    + 'A person erased at Shopify stays in Meta\'s lists until the next replace or a remove that finds them on the opt-out '
+    + 'list (Nexus no longer holds their hash). opt_out_everywhere: the people who opted out out of EVERY customer list of the ad '
     + 'account, as Meta asks. Each e-mail goes only as its SHA-256 hash (trimmed, lower case), at most 10,000 per request; '
     + 'Nexus keeps no list of them and the preview and the answer give counts only. Any change of who is in a list ads use, '
     + 'and every opt_out_everywhere, is SPENDS MONEY. With the business\'s "Claude\'s changes need no approval" switch on, '

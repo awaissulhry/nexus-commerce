@@ -120,7 +120,7 @@ export function MetaConnectionCards({ connectionId, reloadSignal, onChanged }: {
       const next = await setMetaCustomerListsSwitch(on)
       setListsSwitch(next)
       setSwitchNote(next.on
-        ? { tone: 'success', title: 'Uploading customer lists to Meta is on', text: `Nothing is uploaded yet: Claude may now ask to add the hashed e-mails of Shopify buyers who said yes to the business's e-mail to a customer list. ${UPLOAD_RULE}` }
+        ? { tone: 'success', title: 'Uploading customer lists to Meta is on', text: `Nothing is uploaded yet: Claude may now ask to add the hashed e-mails of Shopify buyers who said yes to the business's e-mail to a customer list, or to replace a list's people with them. ${UPLOAD_RULE}` }
         : { tone: 'success', title: 'Uploading customer lists to Meta is off', text: 'Nexus adds and replaces nobody in a Meta customer list, not even in a change approved earlier. People uploaded before stay until they are taken out or the list is deleted.' })
     } catch (err) {
       setSwitchNote({ tone: 'danger', title: 'The switch was not changed', text: err instanceof Error ? err.message : 'Nexus could not reach the server. Try again.' })
@@ -235,7 +235,7 @@ export function MetaConnectionCards({ connectionId, reloadSignal, onChanged }: {
         ? 'Your role cannot see this switch, or Nexus could not read it.'
         : `${listsSwitch.on
           ? `On${listsSwitch.since ? ` since ${formatMoment(listsSwitch.since) ?? listsSwitch.since}` : ''}${listsSwitch.by ? ` (${listsSwitch.by})` : ''}. Claude may ask to add or replace the people of a customer list with the hashed e-mails of Shopify buyers who said yes to the business's e-mail (never Amazon, eBay or Etsy buyers). ${UPLOAD_RULE}`
-          : `Off (the default): Nexus uploads nobody to a Meta customer list; it only takes people out. On, Claude may ask to upload the hashed e-mails of Shopify buyers who said yes to the business's e-mail. ${UPLOAD_RULE}`}${mayChangeLists ? '' : ' Turning it on or off needs the permission to manage the business\'s security.'}`,
+          : `Off (the default): Nexus uploads nobody to a Meta customer list; it can still take people out, each time a person approves it. On, Claude may ask to upload the hashed e-mails of Shopify buyers who said yes to the business's e-mail. ${UPLOAD_RULE}`}${mayChangeLists ? '' : ' Turning it on or off needs the permission to manage the business\'s security.'}`,
     },
   ]
   const canChoose = connection.state !== 'sign_in_needed' && connection.state !== 'token_problem'

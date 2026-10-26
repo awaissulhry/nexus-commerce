@@ -11,19 +11,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({
   rows: [] as Array<{ email: string }>,
   where: null as unknown,
-  consent: [] as Array<{ emailSha256: string; emailState: string; connectionOk: boolean; updatedAt: Date }>,
+  consent: [] as Array<{ emailSha256: string; emailState: string; connectionOk: boolean; emailConsentAt: Date | null; createdAt: Date; updatedAt: Date }>,
   consentWheres: [] as unknown[],
 }))
 vi.mock('../../../db.js', () => ({
   default: {
     emailSuppression: { findMany: vi.fn(async (args: { where: unknown }) => { h.where = args.where; return h.rows }) },
-    // A stand-in that applies the where it is given (state, account, since, notIn), so the test sees what the query keeps.
+    // A stand-in that applies the where it is given (state, account, consent time, creation, updatedAt, notIn), so the
+    // test sees what the query keeps; any other key fails the test.
     shopifyMarketingConsent: {
       findMany: vi.fn(async (args: { where: Record<string, any> }) => {
         h.consentWheres.push(args.where)
         const w = args.where
-        return h.consent.filter((r) => (w.emailState === undefined || (typeof w.emailState === 'string' ? r.emailState === w.emailState : r.emailState !== w.emailState.not))
+        for (const key of Object.keys(w)) if (!['emailState', 'connection', 'emailConsentAt', 'createdAt', 'updatedAt', 'emailSha256'].includes(key)) throw new Error(`stand-in: unknown key ${key}`)
+        const state = (r: { emailState: string }) => (w.emailState === undefined ? true
+          : typeof w.emailState === 'string' ? r.emailState === w.emailState
+            : w.emailState.in ? w.emailState.in.includes(r.emailState) : r.emailState !== w.emailState.not)
+        return h.consent.filter((r) => state(r)
           && (w.connection === undefined || r.connectionOk)
+          && (w.emailConsentAt === undefined || (r.emailConsentAt !== null && r.emailConsentAt >= w.emailConsentAt.gte))
+          && (w.createdAt === undefined || r.createdAt <= w.createdAt.lte)
           && (w.updatedAt === undefined || r.updatedAt >= w.updatedAt.gte)
           && (w.emailSha256 === undefined || !w.emailSha256.notIn.includes(r.emailSha256)))
           .map((r) => ({ emailSha256: r.emailSha256 }))
@@ -35,14 +42,17 @@ vi.mock('@nexus/database/workspace-context', () => ({ workspaceIdForQuery: () =>
 
 import {
   consentedPeople, consentEndedPeople, MAX_OPT_OUTS_SUBTRACTED, memberBatches, memberCounts, newSessionId, normalisedEmail, NO_CONSENT, optedOutPeople, OPT_OUT_SOURCES,
-  replaceBatches, sha256Hex, shopifyConsentPeople, unionOf,
+  addedPeople, replaceBatches, sha256Hex, unionOf,
 } from './audience-members.js'
 import { MEMBERS_PER_REQUEST } from '../../gateway/meta-audience-rules.js'
 
 beforeEach(() => { h.rows = []; h.where = null; h.consent = []; h.consentWheres = [] })
 
 const OCT = new Date('2026-10-01T00:00:00Z')
-const row = (email: string, emailState: string, connectionOk = true, updatedAt = new Date('2026-10-20T00:00:00Z')) => ({ emailSha256: sha256Hex(email), emailState, connectionOk, updatedAt })
+const SEP = new Date('2026-09-01T00:00:00Z')
+/** A consent row: its Shopify consent time (null: Shopify gave none), when Nexus made it, and when a write last touched it (a backfill bumps it). */
+const row = (email: string, emailState: string, connectionOk = true, emailConsentAt: Date | null = new Date('2026-10-20T00:00:00Z'), createdAt = new Date('2026-10-02T00:00:00Z')) =>
+  ({ emailSha256: sha256Hex(email), emailState, connectionOk, emailConsentAt, createdAt, updatedAt: new Date('2026-10-26T06:00:00Z') })
 
 describe('consent (D8) — the switch-off words', () => {
   it('say the switch is off, who turns it on, and that taking people out needs none', () => {
@@ -61,11 +71,12 @@ describe('consent PR 2 — who an upload may send', () => {
       row('pending@example.com', 'PENDING'),
       row('gone@example.com', 'SUBSCRIBED', false),
       row('optout@example.com', 'SUBSCRIBED'),
-      row('old@example.com', 'SUBSCRIBED', true, new Date('2026-09-01T00:00:00Z')),
+      row('old@example.com', 'SUBSCRIBED', true, SEP),
+      row('timeless@example.com', 'SUBSCRIBED', true, null),
     ]
     h.rows = [{ email: 'OptOut@example.com ' }]
     const all = await consentedPeople(null)
-    expect(all).toEqual({ hashes: [sha256Hex('yes@example.com'), sha256Hex('old@example.com')].sort(), skipped: 0 })
+    expect(all).toEqual({ hashes: [sha256Hex('yes@example.com'), sha256Hex('old@example.com'), sha256Hex('timeless@example.com')].sort(), skipped: 0 })
     expect(h.consentWheres.at(-1)).toEqual({
       emailState: 'SUBSCRIBED',
       connection: { is: { channelType: 'SHOPIFY', isActive: true, workspaceId: 'ws-a' } },
@@ -73,8 +84,11 @@ describe('consent PR 2 — who an upload may send', () => {
     })
     // The opt-outs are read for every day (an old opt-out still holds), only the consent rows by since.
     expect(h.where).toEqual({ channel: null, source: { in: [...OPT_OUT_SOURCES] } })
+    // Review NIT 4 — since is Shopify's consent time: every row here was touched by today's backfill (updatedAt), and that
+    // changes nothing; a yes Shopify gave no time for is sent only without since.
     expect(await consentedPeople(OCT)).toEqual({ hashes: [sha256Hex('yes@example.com')], skipped: 0 })
-    expect(h.consentWheres.at(-1)).toMatchObject({ updatedAt: { gte: OCT } })
+    expect(h.consentWheres.at(-1)).toMatchObject({ emailConsentAt: { gte: OCT } })
+    expect(h.consentWheres.at(-1)).not.toHaveProperty('updatedAt')
     // Nothing of a plain address leaves.
     expect(JSON.stringify(all)).not.toContain('example.com')
   })
@@ -88,24 +102,58 @@ describe('consent PR 2 — who an upload may send', () => {
     expect(await consentedPeople(null)).toEqual({ refusal: expect.stringMatching(/uploads nobody rather than someone who said no/) })
     expect(h.consentWheres).toHaveLength(0)
   })
-  it('consent ended: rows no longer SUBSCRIBED since a day, unless the person still says yes on an active account of the business', async () => {
+  it('review FIX-1 — a yes that ended is UNSUBSCRIBED only: a buyer who never said yes is never taken out, not even in a DELETE', async () => {
     h.consent = [
       row('ended@example.com', 'UNSUBSCRIBED'),
+      row('never@example.com', 'NOT_SUBSCRIBED'),
+      row('pending@example.com', 'PENDING'),
+      row('invalid@example.com', 'INVALID'),
+      row('redacted@example.com', 'REDACTED'),
       row('both@example.com', 'UNSUBSCRIBED'),
       row('both@example.com', 'SUBSCRIBED'),
       row('elsewhere@example.com', 'UNSUBSCRIBED'),
       row('elsewhere@example.com', 'SUBSCRIBED', false),
-      row('early@example.com', 'INVALID', true, new Date('2026-09-01T00:00:00Z')),
+      row('early@example.com', 'UNSUBSCRIBED', true, SEP),
     ]
-    expect(await consentEndedPeople(OCT)).toEqual({ hashes: [sha256Hex('ended@example.com'), sha256Hex('elsewhere@example.com')].sort(), skipped: 0 })
-    expect(h.consentWheres[0]).toEqual({ emailState: { not: 'SUBSCRIBED' }, updatedAt: { gte: OCT } })
-    expect((await consentEndedPeople(null)).hashes).toContain(sha256Hex('early@example.com'))
+    const since = await consentEndedPeople(OCT)
+    expect(since).toEqual({ hashes: [sha256Hex('ended@example.com'), sha256Hex('elsewhere@example.com')].sort(), skipped: 0 })
+    expect(h.consentWheres[0]).toEqual({ emailState: 'UNSUBSCRIBED', emailConsentAt: { gte: OCT } })
+    const all = await consentEndedPeople(null)
+    expect(all.hashes).toContain(sha256Hex('early@example.com'))
+    for (const never of ['never@example.com', 'pending@example.com', 'invalid@example.com', 'redacted@example.com']) {
+      expect(since.hashes).not.toContain(sha256Hex(never))
+      expect(all.hashes).not.toContain(sha256Hex(never))
+    }
   })
-  it('the undo of an add: everyone with a consent row (any state) since its day; two lists as one', async () => {
-    h.consent = [row('a@example.com', 'SUBSCRIBED'), row('b@example.com', 'UNSUBSCRIBED', false), row('c@example.com', 'SUBSCRIBED', true, new Date('2026-09-01T00:00:00Z'))]
-    expect((await shopifyConsentPeople(OCT)).hashes).toEqual([sha256Hex('a@example.com'), sha256Hex('b@example.com')].sort())
-    expect(h.consentWheres.at(-1)).toEqual({ updatedAt: { gte: OCT } })
-    expect((await shopifyConsentPeople(null)).hashes).toHaveLength(3)
+  it('review FIX-2 — the undo of an add: yes or ended rows Nexus already held when the add ran, with the add\'s own since', async () => {
+    const ranAt = new Date('2026-10-10T12:00:00Z')
+    const changed = { ...row('old-address@example.com', 'SUBSCRIBED'), emailSha256: sha256Hex('new-address@example.com') }
+    h.consent = [
+      row('sent@example.com', 'SUBSCRIBED'),
+      row('sent-then-ended@example.com', 'UNSUBSCRIBED'),
+      row('other-add@example.com', 'SUBSCRIBED', false),
+      row('never@example.com', 'NOT_SUBSCRIBED'),
+      row('moved@example.com', 'INVALID'),
+      row('later@example.com', 'SUBSCRIBED', true, new Date('2026-10-20T00:00:00Z'), new Date('2026-10-11T00:00:00Z')),
+      changed,
+      // erased@example.com (customers/redact) and uninstalled@example.com (app/uninstalled) have no row any more.
+    ]
+    const undo = await addedPeople(ranAt, null)
+    expect(h.consentWheres.at(-1)).toEqual({ emailState: { in: ['SUBSCRIBED', 'UNSUBSCRIBED'] }, createdAt: { lte: ranAt } })
+    // Who it takes out: whom it sent, a yes that ended since, and (Nexus keeps no list) someone another add may have put in.
+    for (const out of ['sent@example.com', 'sent-then-ended@example.com', 'other-add@example.com']) expect(undo.hashes).toContain(sha256Hex(out))
+    // Never a person who never said yes, nor a row Nexus made after the add ran.
+    for (const stays of ['never@example.com', 'later@example.com']) expect(undo.hashes).not.toContain(sha256Hex(stays))
+    // What it cannot reach: a state now neither yes nor ended, an e-mail changed at Shopify since (only the new hash is
+    // held), a person erased since or a shop uninstalled since (no row).
+    expect(undo.hashes).not.toContain(sha256Hex('moved@example.com'))
+    expect(undo.hashes).not.toContain(sha256Hex('old-address@example.com'))
+    expect(undo.hashes).toContain(sha256Hex('new-address@example.com'))
+    for (const gone of ['erased@example.com', 'uninstalled@example.com']) expect(undo.hashes).not.toContain(sha256Hex(gone))
+    // The add's own since (Shopify's consent time) narrows it, never past whom the add sent.
+    const narrowed = await addedPeople(ranAt, OCT)
+    expect(h.consentWheres.at(-1)).toEqual({ emailState: { in: ['SUBSCRIBED', 'UNSUBSCRIBED'] }, createdAt: { lte: ranAt }, emailConsentAt: { gte: OCT } })
+    expect(narrowed.hashes).toContain(sha256Hex('sent@example.com'))
     expect(unionOf({ hashes: ['b', 'a'], skipped: 1 }, { hashes: ['a', 'c'], skipped: 0 })).toEqual({ hashes: ['a', 'b', 'c'], skipped: 1 })
   })
 })

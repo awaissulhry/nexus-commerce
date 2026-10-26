@@ -629,13 +629,14 @@ export function setAudienceDraft(request: AudienceSetRequest, live: AudienceSetL
 export const MEMBER_MODES = ['add', 'replace', 'remove', 'opt_out_everywhere'] as const
 export type MemberMode = typeof MEMBER_MODES[number]
 /**
- * Whom mode remove takes out: the people who said no (the default: opted out of the business's e-mail, or whose Shopify
- * consent ended), or everyone an add could have sent (the undo of an add: everyone Nexus holds a Shopify consent row for).
+ * Whom mode remove takes out: the people who said no (the default: opted out of the business's e-mail, or whose yes ended
+ * on Shopify — UNSUBSCRIBED), or the undo of an add (`added`, with the add's run time `addRanAt`): the rows that said yes
+ * or whose yes ended and that Nexus already held when the add ran.
  */
 export const REMOVE_WHO = ['said_no', 'added'] as const
 export type RemoveWho = typeof REMOVE_WHO[number]
 
-export interface AudienceMembersRequest { mode: MemberMode; audienceId?: string; since?: string; who?: RemoveWho }
+export interface AudienceMembersRequest { mode: MemberMode; audienceId?: string; since?: string; who?: RemoveWho; addRanAt?: string }
 export interface AudienceMembersLive {
   adAccountId: string
   /** The business's switch "Upload customer lists to Meta" (customer-lists-switch.ts): an add or a replace only while on. */
@@ -647,10 +648,14 @@ export interface AudienceMembersLive {
   audience: AudienceDetail | null
   use: AudienceUse | null
   people: HashedPeople
-  /** remove, who said_no: how many opted out of the business's e-mail, and how many no longer say yes on Shopify. */
+  /** remove, who said_no: how many opted out of the business's e-mail, and how many whose yes ended on Shopify. */
   saidNo?: { optedOut: number; consentEnded: number } | null
 }
-export interface AudienceMembersRecord { mode: MemberMode; audienceId: string | null; people: number; batches: number; since: string | null; who?: RemoveWho }
+export interface AudienceMembersRecord {
+  mode: MemberMode; audienceId: string | null; people: number; batches: number; since: string | null; who?: RemoveWho
+  /** An add, once it ran: when (ISO) — its undo takes out only rows Nexus already held then. */
+  ranAt?: string
+}
 
 const UPLOADS = new Set<MemberMode>(['add', 'replace'])
 /** What an upload sends, in words (D8, P1 = B, P2 = A): short, and in full. */
@@ -658,6 +663,12 @@ const CONSENTED_SHORT = 'Shopify buyers who said yes to the business\'s e-mail'
 const CONSENTED = 'Shopify buyers of this business who said yes to its e-mail marketing (Nexus\'s copy of Shopify\'s consent, from its active Shopify accounts), less everyone who opted out of its e-mail; never an Amazon, eBay or Etsy buyer'
 /** #691 — the truth about "Claude's changes need no approval": the uploads switch is the real gate. */
 const NO_APPROVAL_UPLOAD = 'With this business\'s "Claude\'s changes need no approval" switch on, an upload Claude asks for runs about 20 s after it is asked, unless someone stops it: "Upload customer lists to Meta" is the switch that decides whether Nexus uploads at all.'
+/**
+ * Consent PR 2 review — what a person reads about the people an undo of an add, or any removal, cannot reach: Nexus no
+ * longer holds their hash.
+ */
+const ERASED_STAY = 'A person erased at Shopify (customers/redact) stays in Meta\'s lists until the next replace, or a remove that finds them on the business\'s opt-out list: Nexus no longer holds their hash.'
+const ADD_UNDO = 'Undo takes the people out again (set-meta-audience-members mode remove, who added): the rows that said yes, or whose yes ended since, and that Nexus already held when this add ran. Nexus keeps no list of whom it sent, so the undo can also take out people another add put in. It cannot take out people erased at Shopify since, people whose shop was uninstalled since, people whose e-mail changed at Shopify since, or people whose Shopify state is now neither subscribed nor unsubscribed.'
 const termsUnread = (problem: string | null | undefined, upload: boolean) => `Nexus could not read whether Meta's Custom Audience terms are signed for this ad account (${problem ?? 'Meta gave no answer'}), so it ${upload ? 'uploads nobody: Meta takes no customer list without them' : 'takes nobody out'}. Ask again later.`
 
 function nobodyWords(request: AudienceMembersRequest, since: string | null, skipped: number): string {
@@ -665,13 +676,13 @@ function nobodyWords(request: AudienceMembersRequest, since: string | null, skip
   const from = since ? ` recorded since ${since}` : ''
   if (request.mode === 'add') return `Nobody to add: no Shopify buyer of this business's active Shopify accounts${from} says yes to its e-mail in Nexus's copy of Shopify's consent, or each who does opted out of its e-mail${rows}. If the Shopify consent backfill never ran, a person runs it first.`
   if (request.mode === 'replace') return `Nobody to put in the list: no Shopify buyer of this business's active Shopify accounts says yes to its e-mail in Nexus's copy of Shopify's consent${rows}, and a replace with nobody would empty the list (to empty it, delete it: remove-meta-audience).`
-  if (request.mode === 'remove' && request.who === 'added') return `Nobody to take out: Nexus holds no Shopify consent row${from}${rows}.`
-  return `Nobody to take out: Nexus's list of people who opted out of the business's e-mail${request.mode === 'remove' ? ' or whose Shopify consent ended' : ''}${since ? ` since ${since}` : ''} is empty${rows}.`
+  if (request.mode === 'remove' && request.who === 'added') return `Nobody to take out: Nexus held no Shopify consent row that said yes or whose yes ended when the add ran${from}${rows}.`
+  return `Nobody to take out: Nexus's list of people who opted out of the business's e-mail${request.mode === 'remove' ? ' or whose yes ended on Shopify' : ''}${since ? ` since ${since}` : ''} is empty${rows}.`
 }
 
 function tooManyWords(request: AudienceMembersRequest, count: number, since: string | null): string {
   if (request.mode === 'replace') return `${count} consenting Shopify buyers: a replace sends everyone in ONE session of at most 10 requests of 10,000 (${MAX_PEOPLE} people). Add them in parts instead (mode add with since).`
-  const who = request.mode === 'add' ? 'consenting Shopify buyers' : request.who === 'added' ? 'people with a Shopify consent row' : 'people said no'
+  const who = request.mode === 'add' ? 'consenting Shopify buyers' : request.who === 'added' ? 'people the add may have sent' : 'people said no'
   return `${count} ${who}${since ? ` since ${since}` : ''}: Nexus sends at most ${MAX_PEOPLE} in one change (10 requests of 10,000). Ask with since (a later day) to ${request.mode === 'add' ? 'add' : 'take out'} them in parts.`
 }
 
@@ -683,6 +694,8 @@ export function membersArgsProblem(request: AudienceMembersRequest, uploadsOn: b
   // D8 — the business's own switch first: off, nobody is added and nothing is replaced.
   if (UPLOADS.has(request.mode) && !uploadsOn) return NO_CONSENT
   if (request.who && request.mode !== 'remove') return 'who goes with mode remove only.'
+  if (request.who === 'added' && !request.addRanAt) return 'who added is the undo of an add: it takes addRanAt, the time the add ran (from the add\'s record; undo-change passes it).'
+  if (request.addRanAt && request.who !== 'added') return 'addRanAt goes with who added only (the undo of an add).'
   if (request.mode === 'replace' && request.since) return 'A replace puts the WHOLE list of consenting Shopify buyers in place of everyone in it now: it takes no since (a replace with a part would leave only that part).'
   return null
 }
@@ -707,6 +720,10 @@ export function membersProblem(request: AudienceMembersRequest, live: Omit<Audie
   if (upload && a.isValueBased === true) return `${who(a)} is a value-based customer list: its people go with a value each (LOOKALIKE_VALUE), which Nexus does not send (it uploads hashed e-mails only, and Meta never replaces a value-based list with one without values).`
   if (a.operationCode === 414) return `${who(a)} is being replaced right now (Meta 414): Meta takes no other change of its people until that ends. Ask again later.`
   if (a.flagged) return `${who(a)} is flagged for integrity: Meta takes no change of its people until that is resolved in Audience Manager (100/1713230).`
+  // Consent PR 2 review — Meta's guide #replace-api: "Make sure your audience's operation_status is Normal" (200).
+  if (request.mode === 'replace' && a.operationCode !== 200) {
+    return `Meta replaces a customer list's people only while its status is Normal (operation_status 200), and ${who(a)} reads ${a.operationCode === null ? 'no status' : `status ${a.operationCode}`}${a.operationCode === 410 ? ' (no upload yet: add people first with mode add, then replace)' : ''}. Nothing was queued.`
+  }
   return null
 }
 
@@ -748,7 +765,8 @@ export function membersDraft(request: AudienceMembersRequest, live: AudienceMemb
     changes = { [`People in ${list}`]: { from: 'as Meta has them', to: `${n} more at most (those Meta matches and does not have yet)` } }
     warnings = [
       `${n} go to Meta, into ${list} of ad account ${account}: the SHA-256 of each e-mail (trimmed, lower case — Meta's rule), never the address itself, a name or a phone. They are ${CONSENTED}. Nexus keeps no list of them, and the answer counts what Meta received, never who.`,
-      'Undo takes them out of the list again (set-meta-audience-members mode remove, who added): Nexus keeps no list of whom it sent, so the undo takes out everyone Nexus holds a Shopify consent row for — the people this add sent, and at most some the list had already.',
+      ADD_UNDO,
+      ERASED_STAY,
       'Meta needs up to 24 hours to apply it, and matches only people it knows.',
       ...(inUse ? [`${inUse}: adding people through /users restarts the learning phase of their ad sets (Meta; a replace does not).`] : []),
       NO_APPROVAL_UPLOAD,
@@ -766,6 +784,7 @@ export function membersDraft(request: AudienceMembersRequest, live: AudienceMemb
     warnings = [
       `${n} go to Meta and REPLACE everyone in ${list} of ad account ${account}: the SHA-256 of each e-mail (trimmed, lower case — Meta's rule), never the address itself, a name or a phone. They are ${CONSENTED}. Nexus keeps no list of them, and the answer counts what Meta received, never who.`,
       'No undo: Meta does not list a Custom Audience\'s members, so Nexus cannot know who was in the list before and cannot put them back. To change it again, replace it again or take people out.',
+      'Meta asks that the list be Normal (operation_status 200) before a replace: it reads Normal now.',
       `It goes as ONE replace session of ${plural(batches.length, 'request')}: the first starts the replace, the last ends it, and Meta keeps the session open 90 minutes at most. If a later request does not reach Meta, Meta keeps only what it got, so the list is smaller until the next replace.`,
       'A replace does not restart the learning phase of the ad sets that use the list (Meta); Meta needs up to 24 hours to apply it, and matches only people it knows.',
       NO_APPROVAL_UPLOAD,
@@ -775,21 +794,25 @@ export function membersDraft(request: AudienceMembersRequest, live: AudienceMemb
   } else {
     const batches = memberBatches(hashes)
     const added = request.mode === 'remove' && request.who === 'added'
-    const whom = added ? 'with a Shopify consent row (whom an add could have sent)' : request.mode === 'remove' ? 'who said no (opted out of the business\'s e-mail, or no longer say yes on Shopify)' : 'who opted out of the business\'s e-mail'
+    const whom = added ? 'whom the add may have sent (the undo of an add)' : request.mode === 'remove' ? 'who said no (opted out of the business\'s e-mail, or whose yes ended on Shopify)' : 'who opted out of the business\'s e-mail'
     requests = batches.map((b, i) => audienceRequest(i + 1, `Take ${plural(b.count, 'person', 'people')} ${whom} out of ${list}${batches.length > 1 ? ` (batch ${i + 1} of ${batches.length})` : ''}`, request.mode === 'remove'
       ? { objectId: a!.id, objectKind: 'customaudience', params: b.params, operation: 'audience.users.remove', edge: 'users', method: 'DELETE', raisesSpend: spendsMoney.length > 0 }
       : { objectId: account, objectKind: 'adaccount', params: b.params, operation: 'adaccount.optOut', edge: 'usersofanyaudience', method: 'DELETE', raisesSpend: true }))
     summary = `Meta: take ${people} ${whom} out of ${list}.`
     changes = { [request.mode === 'remove' ? `People in ${list}` : 'People in every customer list of the ad account']: { from: 'as Meta has them', to: `${people} fewer at most (those Meta matches)` } }
     const parts = live.saidNo && request.mode === 'remove' && !added
-      ? [`Of them, ${live.saidNo.optedOut} opted out of the business's e-mail and ${live.saidNo.consentEnded} no longer say yes on Shopify (one person may be both); someone who still says yes on another active Shopify account of the business stays.`] : []
+      ? [
+        `Of them, ${live.saidNo.optedOut} opted out of the business's e-mail and ${live.saidNo.consentEnded} had said yes on Shopify and unsubscribed since (one person may be both); someone who still says yes on another active Shopify account of the business stays.`,
+        'Nobody who never said yes is sent, not even here: a person a Shopify admin moved straight from subscribed to not subscribed is not taken out — they leave the list with the next replace.',
+      ] : []
     warnings = [
       'Each e-mail goes as its SHA-256 hash only (trimmed, lower case — Meta\'s rule); Nexus keeps no list of them, and the answer counts what Meta received, never who.',
       'Meta needs up to 24 hours to apply it, and matches only people it knows.',
       ...parts,
       added
-        ? 'It is the undo of an add: Nexus keeps no list of whom an add sent, so it takes out everyone Nexus holds a Shopify consent row for — also some the list may have had before. Someone Shopify asked Nexus to erase since, or whose shop was uninstalled, has no row any more and stays in the list until a replace or the list\'s delete.'
+        ? `It is the undo of an add that ran at ${request.addRanAt}: it takes out the rows that said yes, or whose yes ended since, and that Nexus already held then. Nexus keeps no list of whom the add sent, so this can also take out people another add put in. It cannot take out people erased at Shopify since, people whose shop was uninstalled since, people whose e-mail changed at Shopify since, or people whose Shopify state is now neither subscribed nor unsubscribed.`
         : 'No undo: people who said no are never put back.',
+      ERASED_STAY,
       ...(inUse ? [`${inUse}: taking people out of it restarts the learning phase of their ad sets (Meta).`] : []),
       ...(request.mode === 'opt_out_everywhere' ? ['It covers every customer list of the ad account, also one shared with an ad account another business in Nexus uses: an opt-out is honoured everywhere.'] : []),
       ...notSent,
