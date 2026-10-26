@@ -1421,6 +1421,10 @@ body.nds-drawer-resizing * {
 .nds-metric .dlt.down {
   color: var(--nds-danger-strong);
 }
+/* A change that is neither good nor bad ("same as the month before"): the secondary text tone, never green or red. */
+.nds-metric .dlt.neutral {
+  color: var(--nds-text-2);
+}
 /* Sub-line that says what the number COUNTS. Muted tier, not the icon tier: it is running text
    at 11.5px, below the 18.66px where --nds-text-3 would clear AA. */
 .nds-metric .hint {

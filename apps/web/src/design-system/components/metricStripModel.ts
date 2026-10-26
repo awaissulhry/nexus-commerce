@@ -18,3 +18,15 @@ export function metricKind(m: { href?: string | null; onClick?: unknown }): Metr
 export function metricMinWidth(px: number | null | undefined): number {
   return px != null && Number.isFinite(px) && px >= 64 ? Math.round(px) : 150
 }
+
+/** A delta's colour. `neutral` is a change that is neither good nor bad ("same as the month before"). */
+export type MetricDeltaTone = 'positive' | 'negative' | 'neutral'
+
+/**
+ * The class a delta wears (`.dlt.up` success, `.dlt.down` danger, `.dlt.neutral` `--nds-text-2`). `tone` wins; without
+ * it `positive` decides, as before: true → up, anything else → down.
+ */
+export function metricDeltaClass(delta: { positive?: boolean; tone?: MetricDeltaTone }): 'up' | 'down' | 'neutral' {
+  const tone = delta.tone ?? (delta.positive ? 'positive' : 'negative')
+  return tone === 'positive' ? 'up' : tone === 'negative' ? 'down' : 'neutral'
+}

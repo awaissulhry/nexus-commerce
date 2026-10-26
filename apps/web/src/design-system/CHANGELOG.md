@@ -17,6 +17,8 @@ Web only: `patterns/{ReplyComposer,replyComposerModel,Lightbox,lightboxModel}`, 
   ("No 3-star ratings to show"). No ratings: "No ratings yet". Track = `.nds-progress`.
 - **`MetricStrip`**: `Metric.href` makes a tile a link (`linkAs`, default Next's `Link`; `href` + `onClick` is a type error)
   with a chevron; `minTileWidth` (px → `--nds-metrics-min`); two tiles per row under 760 px. `metricKind()`.
+  `delta.tone?: 'positive'|'negative'|'neutral'` (wins over `positive`; `.dlt.neutral` = `--nds-text-2`, the same rule
+  in both `components.css`): "same as the month before" is neither green nor red. `metricDeltaClass()`.
 - **Banner actions wrap**: `.nds-banner` wraps; `.nds-banner-action` wraps with an 8 px gap and pushes right; under 560 px it
   takes its own line (the dismiss stays on the first).
 - **`Textarea limit` / `counterLabel`**: "312 / 500" under the field (grapheme count, `Intl.Segmenter`), never blocks

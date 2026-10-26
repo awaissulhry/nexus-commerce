@@ -1,13 +1,16 @@
 import type { ComponentType, CSSProperties, ReactNode } from 'react'
 import NextLink from 'next/link'
 import { ChevronRight } from 'lucide-react'
-import { metricKind, metricMinWidth } from './metricStripModel'
+import { metricDeltaClass, metricKind, metricMinWidth, type MetricDeltaTone } from './metricStripModel'
 
 interface MetricBase {
   label: ReactNode
   value: ReactNode
-  /** optional change indicator */
-  delta?: { value: ReactNode; positive?: boolean }
+  /**
+   * Optional change indicator. `positive` colours it success (true) or danger; `tone` wins over it and adds `neutral`
+   * (`--nds-text-2`) for a change that is neither good nor bad — "same as the month before" is not good news in green.
+   */
+  delta?: { value: ReactNode; positive?: boolean; tone?: MetricDeltaTone }
   /**
    * Descriptive sub-line under the value — what the number counts ("live & selling", "no
    * available units"). NOT a delta: `delta` is a movement and is coloured up/down, this is a
@@ -79,7 +82,7 @@ export function MetricStrip({ metrics, className, linkAs, minTileWidth }: Metric
                 row of tiles keeps its numbers on one line whatever label wraps. */}
             <div className="nds-metric-body">
               <div className="val">{m.value}</div>
-              {m.delta != null && <div className={`dlt ${m.delta.positive ? 'up' : 'down'}`}>{m.delta.value}</div>}
+              {m.delta != null && <div className={`dlt ${metricDeltaClass(m.delta)}`}>{m.delta.value}</div>}
               {m.hint != null && <div className="hint">{m.hint}</div>}
             </div>
           </>
