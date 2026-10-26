@@ -73,7 +73,7 @@ export async function businessSettingsAdmin(input: { connectionId?: string | nul
 }
 
 /** The portfolio's name for the steps; a refused read leaves it out (the steps name the portfolio by its id). */
-async function portfolioName(account: MetaChosenAccount): Promise<string | null> {
+export async function portfolioName(account: MetaChosenAccount): Promise<string | null> {
   try { return (await readBusinessSettings(account, 'admin.settings')).name } catch (err) {
     if (err instanceof MetaReadError) return null
     throw err

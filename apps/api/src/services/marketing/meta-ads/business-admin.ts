@@ -178,10 +178,11 @@ const STATE_TEXT: Readonly<Record<AdminState, string>> = {
   'cannot-tell': 'Nexus cannot tell from Meta\'s answer whether it is done (each item says why).',
 }
 
-const AGAIN = 'When the Owner has done it, ask again with the same arguments: Nexus reads Meta again and says what is done.'
-const againWithSince = (what: string, readAt: string) => `Then ask again with ${what} and since "${readAt}" (this answer's readAt): Nexus reads Meta again and says whether it is done.`
+export const AGAIN = 'When the Owner has done it, ask again with the same arguments: Nexus reads Meta again and says what is done.'
+export const againWithSince = (what: string, readAt: string) => `Then ask again with ${what} and since "${readAt}" (this answer's readAt): Nexus reads Meta again and says whether it is done.`
 
-function guide(base: Omit<AdminGuide, 'nexusSends' | 'state' | 'stateText' | 'rule' | 'afterwards'> & { afterwards?: string; stateText?: string }): AdminGuide {
+/** Step 43 reuses it for the business-asset guides (business-assets-admin.ts), with its own rule line where D1_LINE is not the act's. */
+export function guide(base: Omit<AdminGuide, 'nexusSends' | 'state' | 'stateText' | 'rule' | 'afterwards'> & { afterwards?: string; stateText?: string; rule?: string }): AdminGuide {
   const state = stateOf(base.items)
   const left = state !== 'done'
   return {
@@ -196,17 +197,17 @@ function guide(base: Omit<AdminGuide, 'nexusSends' | 'state' | 'stateText' | 'ru
     warnings: base.warnings,
     afterwards: base.afterwards ?? AGAIN,
     readAt: base.readAt,
-    rule: D1_LINE,
+    rule: base.rule ?? D1_LINE,
     help: base.help,
     ...(base.missing?.length ? { missing: base.missing } : {}),
   }
 }
 
-const openSettings = (portfolio: { portfolioId: string; name: string | null }) =>
+export const openSettings = (portfolio: { portfolioId: string; name: string | null }) =>
   `Open ${META_SETTINGS} and pick the business portfolio ${portfolio.name ? `"${portfolio.name}" ` : ''}(id ${portfolio.portfolioId}: the portfolio of the business's chosen ad account). Only a person with full access to the portfolio sees the places below.`
 
 /** `since` as a time (ms; null when not given), or a refusal when it is not a time. */
-function sinceOf(since: string | undefined): { ms: number | null } | { refusal: string } {
+export function sinceOf(since: string | undefined): { ms: number | null } | { refusal: string } {
   if (!since) return { ms: null }
   const ms = timeOf(since)
   return ms === null ? { refusal: 'since must be a time (ISO 8601, e.g. the readAt of the first answer).' } : { ms }

@@ -146,8 +146,8 @@ const metaBusinessAssets: AgentTool = {
     + 'names its owner portfolio and no other business in Nexus uses it; else its id only. Meta documents no API to make a '
     + 'business asset group; the store-locations edge is read only (Meta\'s Page Locations API, which Nexus does not use, '
     + 'manages location Pages); WhatsApp numbers are added and verified in WhatsApp Manager or WhatsApp\'s own API, which '
-    + 'Nexus does not use (it only reads them). Claiming, requesting or removing a Page, Instagram account or app is an '
-    + 'admin\'s change a person approves. The Pages the system user itself has a role on: meta-connection view choices; '
+    + 'Nexus does not use (it only reads them). Claiming, requesting or removing a Page, Instagram account or app is the '
+    + 'Owner\'s own step in Meta\'s screens (D1: set-meta-business-assets and remove-meta-business-asset give the steps). The Pages the system user itself has a role on: meta-connection view choices; '
     + 'the chosen ad account\'s Pages and Instagram accounts: meta-account-access. ' + READ_LINE,
   async handler(args): Promise<ToolResult> {
     return guarded(() => assetsView({
