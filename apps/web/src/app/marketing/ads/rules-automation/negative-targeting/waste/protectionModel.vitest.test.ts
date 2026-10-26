@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  alsoKeepsLine, alsoKeepsTitle, followUpLine, followUpSentence, followUpWaitWords, followUpWords, keepProtectedIds, keptProtectedWords, MAX_REVIEW_ITEMS, protectionChipWords, protectionScopeWords,
+  alsoKeepsLine, alsoKeepsTitle, followUpLine, protectsView, followUpSentence, followUpWaitWords, followUpWords, keepProtectedIds, keptProtectedWords, MAX_REVIEW_ITEMS, protectionChipWords, protectionScopeWords,
   protectionSentence, removeProtectionBulkCount, removeProtectionBulkPlan, removeProtectionHeld, removeProtectionItems, stepOrderNote, termKeys, watchFollowUp,
   WATCH_TRIES, type WatchDeps,
 } from './protectionModel'
@@ -184,5 +184,23 @@ describe('the Term cell\'s keys', () => {
     expect(termKeys({ event: { key: 'Enter', type: 'keydown', target: cell }, editing: false })).toBe(false)
     expect(termKeys({ event: { key: 'Enter', shiftKey: true, type: 'keydown', target: { closest: () => ({}) } }, editing: false })).toBe(true)
     expect(termKeys({ event: { key: 'Enter', shiftKey: true, type: 'keydown', target: { closest: () => null, querySelector: () => null } }, editing: false })).toBe(false)
+  })
+})
+
+describe('the record: what protects it', () => {
+  it('one line per protected term, the card\'s line and the note', () => {
+    const v = protectsView(row({ protection: prot([term('p1', 'waterproof', { reason: 'Core word of the rain range' }), term('p2', 'waterproof jacket', { match: 'EXACT' })]) }))!
+    expect(v.rows).toEqual([
+      { id: 'p1', term: 'waterproof', match: 'Contains', where: 'Amazon IT · every campaign', why: 'Core word of the rain range' },
+      { id: 'p2', term: 'waterproof jacket', match: 'Exact', where: 'Amazon IT · every campaign', why: '—' },
+    ])
+    expect(v.desc).toBe('Each of these terms keeps it safe on its own')
+    expect(v.note).toBe('No negative and no pause can stop it while it is protected. Without the protection, it can be stopped.')
+  })
+  it('what still holds it once removed, and a kept-protected row', () => {
+    const v = protectsView(row({ protection: prot([term('p1', 'rain')], { label: 'Harvest keeps it', reason: 'x' }), skipped: { until: '2026-11-24', by: null, at: null } }))!
+    expect(v.desc).toBe('This term keeps it safe')
+    expect(v.note).toBe('No negative and no pause can stop it while it is protected. Without the protection: harvest keeps it. Kept protected until 24 Nov: it stays out of view until then.')
+    expect(protectsView(row({ protection: prot([]) }))).toBeNull()
   })
 })

@@ -5,19 +5,26 @@
  * grid, Customise and the tests read it). A click on a row (or Enter on a cell) opens the word; a number that names a set
  * opens that set in the word's record (Terms → its terms, Places → where it runs, several products → its products).
  *
- *   desktop  ☐ · Word · Terms · Spend · Clicks · Orders · Places · Product · State · Block word
+ *   desktop  ☐ · Word · Terms · Spend · Clicks · Orders · Places · Product · State · Block word + ⋯
  *            (hidden: Impressions, ACoS, CPC, Sold, Out of stock)
- *   phone    Word (its terms and places as line 2) · Spend · State — a tap opens the full-screen sheet
+ *   phone    the same columns, scrolling sideways in the card (the redesign, D16): Word first (150 px, two lines), no
+ *            ticks, the verb last and unpinned; a tap opens the full-screen sheet
+ *
+ * The redesign (2026-10-26, BRIEF D6, D14): two-line rows; the State is ONE chip with a word in a tone (wordsModel.ts
+ * wordStateChip) and, for a 2-word piece one of whose words wastes too, a smaller line under it; "Block word" is a
+ * secondary row button (the one blue button of the flow is in its review) and the ⋯ holds Block word · whole campaign and
+ * Open record.
  */
 import { memo, type MouseEvent } from 'react'
-import { Ban, Hand, Layers, Play, ShieldCheck, WholeWord } from 'lucide-react'
+import { Layers, WholeWord } from 'lucide-react'
 import { actionsColumn, integerColumn, keepFromGrid, type ColDef, type ICellRendererParams, type RowVerb } from '@/design-system/grid'
+import type { MenuItemDef } from '@/design-system/components'
 import Link from '@/lib/workspaces/Link'
 import { TwoLineLink } from '../../_shared/ProductCell'
 import { ownerKeys, verbKeys } from '../waste/cellKeys'
-import { Mark } from '../waste/marks'
+import { Mark, StateChip } from '../waste/marks'
 import { acosText, moneyOr, plural } from '../waste/wasteModel'
-import { placesWords, productsWords, termsWords, wordStateSentence, wordStateWord, wordVerb, type WordTab, type WordVerbView } from './wordsModel'
+import { placesWords, productsWords, wordStateChip, wordStateSub, wordStateWord, wordVerb, type WordTab, type WordVerbView } from './wordsModel'
 import type { WordRow } from './wordsTypes'
 import styles from '../negatives.module.css'
 import own from './words.module.css'
@@ -26,7 +33,7 @@ export type WordGridRow = WordRow
 
 /** What the cells ask the view (AG's `context`: a ref that never changes identity). */
 export interface WordCellHandlers {
-  /** Open the word's record on a tab (a count that names a set). */
+  /** Open the word's record on a tab (a count that names a set, the ⋯'s Open record). */
   open(id: string, tab: WordTab): void
   /** Block word (the ad group, or the whole campaign). */
   block(id: string, campaign: boolean): void
@@ -40,24 +47,6 @@ type Cell = ICellRendererParams<WordGridRow> & { context?: WordCellContext }
 
 const G = { size: 13, strokeWidth: 2.25, 'aria-hidden': true as const }
 
-/** The word's state, one icon (its sentence on hover, on focus and for a screen reader). */
-export function WordStateMark({ row, focusable = false }: { row: Pick<WordRow, 'state' | 'stateWhy'>; focusable?: boolean }) {
-  const label = wordStateSentence(row)
-  switch (row.state) {
-    case 'WASTING': return <Mark label={label} tone="bad" focusable={focusable}><Play {...G} className="nds-cell-glyph" /></Mark>
-    case 'PARTLY_BLOCKED': return <Mark label={label} tone="warn" focusable={focusable}><Ban {...G} className="nds-cell-glyph" /></Mark>
-    case 'BLOCKED': return <Mark label={label} tone="info" focusable={focusable}><Ban {...G} className="nds-cell-glyph" /></Mark>
-    case 'PROTECTED': return <Mark label={label} tone="ok" focusable={focusable}><ShieldCheck {...G} className="nds-cell-glyph" /></Mark>
-    case 'HELD': return <Mark label={label} tone="muted" focusable={focusable}><Hand {...G} className="nds-cell-glyph" /></Mark>
-    default: return <Mark label={label} tone="ok" focusable={focusable}><Play {...G} className="nds-cell-glyph" /></Mark>
-  }
-}
-
-/** A 2-word piece one of whose words wastes too: blocking that word blocks it. */
-export function CoveredMark({ by, focusable = false }: { by: string; focusable?: boolean }) {
-  return <Mark label={`Covered by "${by}": blocking that word blocks this one`} tone="muted" focusable={focusable}><Layers {...G} className="nds-cell-glyph" /></Mark>
-}
-
 /** The word mark (a word, not a whole search term). */
 export const WordMark = ({ terms }: { terms: number }) => (
   <Mark label={`A word ${plural(terms, 'search term')} hold`} tone="muted"><WholeWord {...G} className="nds-cell-glyph" /></Mark>
@@ -68,13 +57,9 @@ function WordView({ row, phone }: { row: WordGridRow; phone?: boolean }) {
     <span className={styles.term}>
       <span className={styles.termLine}>
         <WordMark terms={row.terms} />
+        {/* Phone: the word wraps to two lines in its 150 px. */}
         <span className={phone ? styles.termWrap : styles.termText} title={row.word}>{row.word}</span>
       </span>
-      {phone && (
-        <span className={`${styles.termSub} nds-cell-muted`} title={`${termsWords(row.terms)} · ${placesWords(row)}`}>
-          <span className={styles.ellipsis}>{`${termsWords(row.terms)} · ${plural(row.places.adGroups, 'ad group')}`}</span>
-        </span>
-      )}
     </span>
   )
 }
@@ -123,21 +108,29 @@ const SpendCell = memo(function SpendCell({ data }: Cell) {
   return <span title={data.stockOutDays ? `${plural(data.stockOutDays, 'day')} out of stock left out` : undefined}>{moneyOr(data.d.spendCents, data.currency)}</span>
 })
 
+/** D6 — the state as one chip (a word in a tone, its mark); under it, the word that covers a 2-word piece. */
 const StateCell = memo(function StateCell({ data }: Cell) {
   if (!data) return null
+  const sub = wordStateSub(data)
   return (
-    <span className={styles.marks}>
-      <WordStateMark row={data} />
-      {data.coveredBy && <CoveredMark by={data.coveredBy} />}
+    <span className={own.stateCell}>
+      <StateChip chip={wordStateChip(data)} />
+      {sub && (
+        <span className={`nds-cell-sub ${own.stateSub}`} title={sub.title}>
+          <Layers size={12} strokeWidth={2.25} aria-hidden className="nds-cell-glyph" />
+          <span className={styles.ellipsis}>{sub.word}</span>
+          <span className="nds-vh">: blocking that word blocks this one</span>
+        </span>
+      )}
     </span>
   )
 })
 
-/** The verb as the DS row button (held with the server's reason when it lands nowhere). */
+/** The verb as the DS row button, secondary (D6), held with the server's reason when it lands nowhere. */
 const verbOf = (v: WordVerbView): RowVerb<WordGridRow> => ({
   id: 'block-word',
   label: v.short,
-  tone: v.primary ? 'primary' : 'default',
+  tone: 'default',
   ariaLabel: () => v.sentence,
   disabled: () => v.held,
 })
@@ -171,33 +164,31 @@ export const WORD_COLUMN_SPECS: ReadonlyArray<ColumnSpec> = [
 /** Cells that answer Enter themselves (a link or a button): Enter there never opens the record. */
 export const WORD_OWN_KEY_COLUMNS = new Set(['terms', 'places', 'products', 'actions'])
 
+/**
+ * The board's widths (D14): Word 220 · Terms 84 · Spend 100 · Clicks 84 · Orders 84 · Places 130 · Product ≥ 140 · State
+ * 150 · the verb fits its buttons. Phone (D16): the same columns, Word 150 and two lines, the verb last and unpinned.
+ */
 export function wordColumns(phone: boolean, handlers: WordCellContext): ColDef<WordGridRow>[] {
   const L = Object.fromEntries(WORD_COLUMN_SPECS.map((c) => [c.key, c.label])) as Record<string, string>
-  if (phone) {
-    const phoneCols: ColDef<WordGridRow>[] = [
-      { colId: 'word', headerName: L.word, valueGetter: (p) => p.data?.word ?? '', cellRenderer: PhoneWordCell, flex: 1, minWidth: 120, cellClass: 'nds-ag-cell', sortable: false },
-      { colId: 'spend', headerName: L.spend, valueGetter: (p) => p.data?.d.spendCents ?? null, valueFormatter: moneyOf, cellRenderer: SpendCell, width: 88, cellClass: num, ...numeric, sortable: false },
-      { colId: 'state', headerName: '', valueGetter: (p) => (p.data ? wordStateWord(p.data.state) : ''), cellRenderer: StateCell, width: 52, cellClass: 'nds-ag-cell', sortable: false, headerTooltip: 'State' },
-    ]
-    return phoneCols.map((c) => ({ ...c, ...H }))
-  }
   const hidden = new Set(WORD_COLUMN_SPECS.filter((c) => c.hidden).map((c) => c.key))
+  const keys = { suppressKeyboardEvent: ownerKeys as ColDef<WordGridRow>['suppressKeyboardEvent'] }
   const cols: ColDef<WordGridRow>[] = [
-    { colId: 'word', headerName: L.word, valueGetter: (p) => p.data?.word ?? '', cellRenderer: WordCell, pinned: 'left', width: 220, cellClass: 'nds-ag-cell', ...serverSort },
-    { colId: 'terms', headerName: L.terms, valueGetter: (p) => p.data?.terms ?? null, cellRenderer: TermsCell, width: 84, cellClass: num, ...numeric, ...serverSort, suppressKeyboardEvent: ownerKeys as ColDef<WordGridRow>['suppressKeyboardEvent'], headerTooltip: 'Search terms that hold the word (its words next to each other). Enter: show them' },
-    { colId: 'spend', headerName: L.spend, valueGetter: (p) => p.data?.d.spendCents ?? null, valueFormatter: moneyOf, cellRenderer: SpendCell, width: 96, cellClass: num, ...numeric, ...serverSort, headerTooltip: 'Its terms\' spend in the window, out-of-stock days left out' },
-    { ...integerColumn<WordGridRow>('d.clicks'), colId: 'clicks', headerName: L.clicks, width: 78, ...DESC_FIRST, ...serverSort },
-    { ...integerColumn<WordGridRow>('d.orders'), colId: 'orders', headerName: L.orders, width: 80, ...DESC_FIRST, ...serverSort, headerTooltip: 'Orders up to today: a late order can only save a word' },
-    { colId: 'places', headerName: L.places, valueGetter: (p) => p.data?.places.adGroups ?? null, cellRenderer: PlacesCell, width: 120, cellClass: 'nds-ag-cell', ...DESC_FIRST, ...serverSort, suppressKeyboardEvent: ownerKeys as ColDef<WordGridRow>['suppressKeyboardEvent'], headerTooltip: 'Ad groups where its terms spent. Enter: show where' },
-    { colId: 'products', headerName: L.products, valueGetter: (p) => (p.data ? productsWords(p.data) : ''), cellRenderer: ProductsCell, flex: 1, minWidth: 132, cellClass: 'nds-ag-cell', ...serverSort, suppressKeyboardEvent: ownerKeys as ColDef<WordGridRow>['suppressKeyboardEvent'] },
-    { colId: 'state', headerName: L.state, valueGetter: (p) => (p.data ? wordStateWord(p.data.state) : ''), cellRenderer: StateCell, width: 80, cellClass: 'nds-ag-cell', ...serverSort },
+    { colId: 'word', headerName: L.word, valueGetter: (p) => p.data?.word ?? '', cellRenderer: phone ? PhoneWordCell : WordCell, pinned: 'left', width: phone ? 150 : 220, cellClass: 'nds-ag-cell', ...serverSort },
+    { colId: 'terms', headerName: L.terms, valueGetter: (p) => p.data?.terms ?? null, cellRenderer: TermsCell, width: 84, cellClass: num, ...numeric, ...serverSort, ...keys, headerTooltip: 'Search terms that hold the word (its words next to each other). Enter: show them' },
+    { colId: 'spend', headerName: L.spend, valueGetter: (p) => p.data?.d.spendCents ?? null, valueFormatter: moneyOf, cellRenderer: SpendCell, width: 100, cellClass: num, ...numeric, ...serverSort, headerTooltip: 'Its terms\' spend in the window, out-of-stock days left out' },
+    { ...integerColumn<WordGridRow>('d.clicks'), colId: 'clicks', headerName: L.clicks, width: 84, ...DESC_FIRST, ...serverSort },
+    { ...integerColumn<WordGridRow>('d.orders'), colId: 'orders', headerName: L.orders, width: 84, ...DESC_FIRST, ...serverSort, headerTooltip: 'Orders up to today: a late order can only save a word' },
+    { colId: 'places', headerName: L.places, valueGetter: (p) => p.data?.places.adGroups ?? null, cellRenderer: PlacesCell, width: 130, cellClass: 'nds-ag-cell', ...DESC_FIRST, ...serverSort, ...keys, headerTooltip: 'Ad groups where its terms spent. Enter: show where' },
+    { colId: 'products', headerName: L.products, valueGetter: (p) => (p.data ? productsWords(p.data) : ''), cellRenderer: ProductsCell, ...(phone ? { width: 140 } : { flex: 1, minWidth: 140 }), cellClass: 'nds-ag-cell', ...serverSort, ...keys },
+    { colId: 'state', headerName: L.state, valueGetter: (p) => (p.data ? wordStateWord(p.data.state) : ''), cellRenderer: StateCell, width: 150, cellClass: 'nds-ag-cell', ...serverSort },
     { ...integerColumn<WordGridRow>('d.impressions'), colId: 'impressions', headerName: L.impressions, width: 116, sortable: false },
     { colId: 'acos', headerName: L.acos, valueGetter: (p) => p.data?.d.acosPct ?? null, valueFormatter: (p) => acosText(p.value as number | null), width: 92, cellClass: num, ...numeric, sortable: false },
     { colId: 'cpc', headerName: L.cpc, valueGetter: (p) => p.data?.d.cpcCents ?? null, valueFormatter: moneyOf, width: 88, cellClass: num, ...numeric, sortable: false },
     { ...integerColumn<WordGridRow>('sold'), colId: 'sold', headerName: L.sold, width: 80, sortable: false, headerTooltip: 'Terms holding it that sold in their window' },
     { ...integerColumn<WordGridRow>('stockOutDays'), colId: 'stockOut', headerName: L.stockOut, width: 120, sortable: false, headerTooltip: 'Days left out: the product was out of stock' },
     {
-      ...actionsColumn<WordGridRow>({ primary: (row) => [verbOf(wordVerb(row))] as never, prefsLabel: 'Action' }),
+      // A phone keeps the verb as the last column (two pinned columns leave no room).
+      ...actionsColumn<WordGridRow>({ primary: (row) => [verbOf(wordVerb(row))] as never, prefsLabel: 'Action', pinned: !phone }),
       suppressKeyboardEvent: verbKeys as ColDef<WordGridRow>['suppressKeyboardEvent'],
     },
   ]
@@ -215,11 +206,15 @@ export function wordColumns(phone: boolean, handlers: WordCellContext): ColDef<W
           const v = wordVerb(row)
           return [{ ...verbOf(v), disabled: () => handlers.current.noWrite ?? v.held, onClick: (d: WordGridRow) => handlers.current.block(d.id, false) }]
         },
-        // The whole campaign: in the row's ⋯.
-        items: (row: WordGridRow) => {
+        // The ⋯: the whole campaign, then Open record (it never needs a write).
+        items: (row: WordGridRow): MenuItemDef[] => {
           const v = wordVerb(row, 'campaign')
           const held = handlers.current.noWrite ?? v.held
-          return [{ id: 'block-campaign', label: v.label, title: v.sentence, disabled: !!held, description: held ?? undefined, onSelect: () => handlers.current.block(row.id, true) }]
+          return [
+            { id: 'block-campaign', label: v.label, title: v.sentence, ...(held ? { disabled: true, description: held } : { onSelect: () => handlers.current.block(row.id, true) }) },
+            { id: 'sep-record', separator: true },
+            { id: 'record', label: 'Open record', onSelect: () => handlers.current.open(row.id, 'overview') },
+          ]
         },
         menuLabel: (row: WordGridRow) => `More for ${row.word}`,
       },

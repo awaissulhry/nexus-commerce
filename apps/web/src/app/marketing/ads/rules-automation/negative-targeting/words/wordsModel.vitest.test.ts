@@ -6,10 +6,12 @@
 import { describe, expect, it } from 'vitest'
 import { viewOf, VIEWS } from '../waste/wasteModel'
 import {
+  blockPlanView, blockWordWords, productChecks, termsCardWords, wordBanner, wordMetrics, wordPill, wordPlacePill, wordSubtitle, wordTestWords, wordWhereWords,
   groupTerms, placesWords, placeWhy, productsWords, wordCsvRow, wordOfId, wordsBulkCounts, wordsBulkPlan, wordSearch, wordsEmpty, wordShowChips, wordShowOf,
   wordSortOf, wordSortParam, wordsSearch, wordStateSentence, wordStateWord, wordTabOf, wordVerb, WORD_CSV_HEADERS,
+  wordShowOptions, wordsCount, wordStateChip, wordStateSub,
 } from './wordsModel'
-import type { WordRow } from './wordsTypes'
+import type { WordPlace, WordProduct, WordRow } from './wordsTypes'
 
 const row = (word: string, extra: Partial<WordRow> = {}): WordRow => ({
   id: `word:IT|${word}`, word, words: word.includes(' ') ? 2 : 1, market: 'IT', currency: 'EUR', terms: 6, sold: 0,
@@ -125,5 +127,96 @@ describe('the list', () => {
     // A held verb as the Wasting CSV writes one.
     expect(wordCsvRow(row('rain', { verb: { action: 'NEGATE_PHRASE', where: 'adGroup', held: { label: 'Protected', reason: 'Protected' }, places: 0 } })).at(-1)).toBe('Block word (held)')
     expect(wordCsvRow(row('cheap', { d: { impressions: 0, clicks: 90, orders: 0 } }))[3]).toBe('—')
+  })
+})
+
+describe('the record (RECORD-SPEC)', () => {
+  const ref = (id: string, name = id) => ({ id, name })
+  const product = (id: string, met: boolean, spendCents: number, orders: number, extra: Partial<WordProduct> = {}): WordProduct => ({
+    product: ref(id), productCount: 1, terms: 4, places: 2, d: { impressions: 0, clicks: 40, orders, spendCents },
+    test: { met, by: null, sentence: '', windowDays: 60, clicksNeeded: 41, spendBarCents: 2256, xCpaBar: 1.5 }, ...extra,
+  })
+  const place = (state: WordPlace['state'], extra: Partial<WordPlace> = {}): WordPlace => ({
+    level: 'AD_GROUP', portfolio: null, campaign: ref('c1', 'Winter jacket'), adGroup: ref('g1', 'Broad — coats'), product: null, productCount: 1,
+    campaignId: 'c1', adGroupId: 'g1', terms: 3, d: { impressions: 0, clicks: 30, orders: 0, spendCents: 1420 }, state, held: null, blockedBy: null, ...extra,
+  })
+  const cheap = row('cheap', {
+    terms: 13, sold: 1, products: 3, places: { adGroups: 7, campaigns: 5, open: 3, blocked: 0 }, state: 'WASTING', stateWhy: 'Wastes for WJ-500-L.',
+    d: { impressions: 0, clicks: 668, orders: 7, spendCents: 29590, cpcCents: 44 },
+    wastesFor: { product: ref('wj', 'WJ-500-L'), terms: 8, adGroups: 4, orders: 0, products: 1 }, verb: { action: 'NEGATE_PHRASE', where: 'adGroup', held: null, places: 3 },
+  })
+  const products = [product('wj', true, 4350, 0, { product: ref('wj', 'WJ-500-L'), terms: 8, places: 4 }), product('tj', false, 16000, 0), product('rg', false, 9240, 7)]
+
+  it('the header: what it is and how far it reaches; the state pill', () => {
+    expect(wordSubtitle(cheap)).toBe('Word in 13 search terms · 7 ad groups · 5 campaigns')
+    expect(wordPill(cheap)).toMatchObject({ word: 'Wasting', tone: 'danger', sentence: 'Wastes for WJ-500-L' })
+  })
+
+  it('the banner: for which product it wastes, and that Block word stops it only there', () => {
+    expect(wordBanner(cheap, products)).toEqual({
+      tone: 'danger', title: 'For WJ-500-L it spent €43.50 in 8 search terms and sold nothing',
+      desc: 'That is 1 of its 3 products. The other 2 products do not waste (7 orders), so Block word stops it only for WJ-500-L.',
+    })
+    expect(wordBanner(row('rain', { state: 'BLOCKED', stateWhy: 'A negative phrase blocks it everywhere.', places: { adGroups: 2, campaigns: 1, open: 0, blocked: 2 } }), null))
+      .toMatchObject({ tone: 'success', title: 'A negative phrase blocks it everywhere' })
+  })
+
+  it('the tiles, each product on its own, the About test', () => {
+    expect(wordMetrics(cheap).map((m) => [m.label, m.value, m.hint])).toEqual([['Spend', '€295.90', 'last 60 days'], ['Clicks', '668', '€0.44 a click'], ['Orders', '7', 'up to today'], ['Search terms', '13', '1 sold']])
+    const c = productChecks(cheap, products)
+    expect(c.desc).toBe('1 of 3 wastes in the last 60 days, each judged by its own limit')
+    expect(c.rows[0]).toMatchObject({ spend: '€43.50', terms: 8, adGroups: 4, limit: '41 clicks · €22.56', result: { tone: 'danger', word: 'Wastes' } })
+    expect(c.rows[1].result.word).toBe('Not wasting')
+    expect(wordTestWords(cheap.test)).toEqual({ value: 'This page\'s default', hint: 'Each product by its own limit. Spend: 1.5 × its target cost per order.' })
+  })
+
+  it('what Block word does: where it lands and what it blocks there; where it is left out and why', () => {
+    const v = blockPlanView(cheap, [
+      place('OPEN'), place('OPEN', { adGroupId: 'g2', terms: 2, d: { impressions: 0, clicks: 1, orders: 0, spendCents: 1280 } }),
+      place('HELD', { adGroupId: 'g3', held: { label: 'Too young', reason: 'The ad group is 9 days old: nothing is stopped in a place younger than 14 days.' } }),
+    ])
+    expect(v.desc).toBe('It adds a negative phrase "cheap" in 2 ad groups, one change each. Together it blocks 5 search terms · €27.00 · 0 orders.')
+    expect(v.rows.map((r) => [r.block, r.why])).toEqual([
+      ['Negative phrase', 'Blocks 3 terms · €14.20 · 0 orders'],
+      ['Negative phrase', 'Blocks 2 terms · €12.80 · 0 orders'],
+      ['Left out', 'The ad group is 9 days old: nothing is stopped in a place younger than 14 days.'],
+    ])
+  })
+
+  it('the footer\'s primary says what it does; the code\'s words when it is held', () => {
+    expect(blockWordWords(cheap).label).toBe('Block \u201ccheap\u201d in 3 ad groups')
+    expect(blockWordWords(row('rain', { verb: { action: 'NEGATE_PHRASE', where: 'adGroup', held: { label: 'Protected', reason: 'Protected' }, places: 0 } })).label).toBe('Block word')
+  })
+
+  it('the Search terms and Where it runs lines', () => {
+    expect(termsCardWords(cheap)).toBe('1 sold · together €295.90 · 668 clicks · 7 orders')
+    expect(wordWhereWords(cheap).spends).toBe('7 ad groups in 5 campaigns · it wastes in 3 of them')
+    expect(wordPlacePill('OPEN')).toEqual({ word: 'Wasting', tone: 'danger' })
+    expect(wordPlacePill('HELD')).toEqual({ word: 'Held', tone: 'neutral' })
+  })
+})
+
+describe('the list (the redesign, 2026-10-26)', () => {
+  it('Show for the page\'s filter bar carries the read\'s counts, none while unread; the toolbar counts words', () => {
+    expect(wordShowOptions({ wasting: 5, blocked: 12, held: 0, protected: 2, all: 149 })).toEqual([
+      { value: 'wasting', label: 'Wasting', count: 5 }, { value: 'blocked', label: 'Blocked', count: 12 }, { value: 'all', label: 'All', count: 149 },
+    ])
+    expect(wordShowOptions(null)).toEqual([{ value: 'wasting', label: 'Wasting' }, { value: 'blocked', label: 'Blocked' }, { value: 'all', label: 'All' }])
+    expect(wordsCount(5)).toEqual([{ n: '5', words: ' words' }])
+    expect(wordsCount(1)).toEqual([{ n: '1', words: ' word' }])
+  })
+
+  it('the state is one chip with a word and a tone (D6); the server\'s sentence is its hover', () => {
+    expect(wordStateChip(row('cheap', { state: 'WASTING' }))).toMatchObject({ word: 'Wasting', tone: 'danger', mark: 'play' })
+    expect(wordStateChip(row('jacket', { state: 'PROTECTED' }))).toMatchObject({ word: 'Protected', tone: 'success', mark: 'shield' })
+    expect(wordStateChip(row('free'))).toEqual({ word: 'Partly blocked', tone: 'warning', mark: 'ban', title: row('free').stateWhy })
+    expect(wordStateChip(row('x', { state: 'BLOCKED' }))).toMatchObject({ word: 'Blocked', tone: 'info', mark: 'ban' })
+    expect(wordStateChip(row('x', { state: 'HELD' }))).toMatchObject({ word: 'Held', tone: 'neutral', mark: 'clock' })
+    expect(wordStateChip(row('x', { state: 'NOT_WASTING' }))).toMatchObject({ word: 'Not wasting', tone: 'neutral', mark: 'play' })
+  })
+
+  it('a 2-word piece says which word covers it, under the chip', () => {
+    expect(wordStateSub(row('cheap jacket', { coveredBy: 'cheap' }))).toEqual({ word: 'Covered by "cheap"', title: 'Covered by "cheap": blocking that word blocks this one' })
+    expect(wordStateSub(row('cheap'))).toBeNull()
   })
 })

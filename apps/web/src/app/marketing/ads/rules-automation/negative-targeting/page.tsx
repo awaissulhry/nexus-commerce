@@ -2,7 +2,8 @@
  * Negative Targeting — the Rules & Automation tab that stops ads waste (2026-10-11, Negative Targeting page programme
  * wave 2, lane NVIEW).
  *
- * Mounts `NegativesClient`: header · tab bar · tiles · [Wasting | Stopped | Words | Rules]. Wasting lists our keywords and
+ * Mounts `NegativesClient` (the redesign, 2026-10-26: the platform's list page): header · tab bar · tiles · banners · the
+ * filter bar and its chips · ONE grid card [Wasting | Stopped | Words | Rules] · a note. Wasting lists our keywords and
  * the shoppers' search terms that waste (pause and keep paused · negative exact / phrase); Stopped lists every kept-paused
  * keyword and standing negative; Words lists the words that waste across search terms (Block word: a negative phrase);
  * Rules is lane NRVIEW's `rules/WasteRulesView`. One record modal per row, every write

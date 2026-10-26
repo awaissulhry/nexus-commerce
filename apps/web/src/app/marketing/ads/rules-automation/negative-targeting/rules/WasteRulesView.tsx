@@ -18,19 +18,30 @@
  *
  * Focus (audit M10): every review, the builder and the detail give the focus back to what opened
  * them — the control in the detail, the row's cell, or the toolbar button.
+ *
+ * The redesign (2026-10-26, BRIEF D5, D7, D8, D15, D16): the same grid card as the Wasting view —
+ *   toolbar   [Wasting | Stopped | Words | Rules] · "4 rules" · Search · Archived      New rule · density · Customise · Views
+ *             · status (the right side one group: on a narrow card it takes the next line, right-aligned)
+ *   ticked    "2 ticked" · Mode… · Archive… (Unarchive… in the Archived list) · Clear; the density and New rule step aside
+ *   grid      two-line rows at the remembered density; the pager under it, always; under the card one note in the
+ *             columns' own words
+ *   export    the page header's Export ▾ (This view as CSV · Ticked rows as CSV): this view hands its items up
+ *   phone     the same columns scrolling sideways, no ticks; the search on its own line
+ * The rule builder page stays exactly as it was (Owner 2026-10-11).
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
-import { Archive, ArchiveRestore, Download, Plus, Search, SlidersHorizontal } from 'lucide-react'
-import { Button, Input, Skeleton } from '@/design-system/primitives'
-import { Banner, EntityPath, Listbox, useNarrow, useToast, type EntityLinkComponent, type ListboxPanelOption } from '@/design-system/components'
+import { AlertCircle, Archive, ArchiveRestore, Plus, Search, SearchX, SlidersHorizontal } from 'lucide-react'
+import { Button, Input, Pill } from '@/design-system/primitives'
+import { Banner, EmptyState, EntityPath, Listbox, useNarrow, useToast, type EntityLinkComponent, type ListboxPanelOption, type MenuItemDef } from '@/design-system/components'
 import {
   EditModeBar, GridToolbar, PreferencesModal, ReviewChangesModal,
   type DetailNav, type PreferencesValue, type ReviewChange, type ReviewResult, type ReviewState,
 } from '@/design-system/patterns'
 import {
-  GridCard, GridSearchSlot, GridSelectionActions, GridViewsMenu, cellOf, columnStateToPrefs, displayedRowIds, exportGridCsv, prefsToColumnState, useGridState,
-  type GridApi, type GridReadyEvent, type GridStateKey, type NexusGridProps, type PrefsBridgeOptions,
+  DEFAULT_GRID_DENSITY, downloadCsv, GRID_DENSITIES, GridCard, GridDensityProvider, GridDensityToggle, GridPager, GridSearchSlot, GridSelectionActions, GridViewsMenu,
+  cellOf, columnStateToPrefs, displayedRowIds, exportGridCsv, gridCsvRows, gridCsvSourceFromApi, prefsToColumnState, useGridState,
+  type GridApi, type GridDensityName, type GridReadyEvent, type GridStateKey, type NexusGridProps, type PrefsBridgeOptions,
 } from '@/design-system/grid'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import Link from '@/lib/workspaces/Link'
@@ -43,11 +54,13 @@ import type { ScopeView } from '../../_shared/scopeFilter/useScopeFilter'
 import { MODES, MODE_WORD, type BidMode } from '../../bid/rules/bidRulesModel'
 import { fetchSuggestions, fetchUndoPreview } from '../../bid/rules/ruleApi'
 import { useWasteReview } from '../waste/useWasteReview'
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES, pagerWords, tickedCount } from '../waste/wasteModel'
+import pageStyles from '../negatives.module.css'
 import {
   archiveRule, fetchWasteRules, restoreSuggestion, saveModes, unarchiveRule, undoChange,
 } from './wasteRulesApi'
 import {
-  archiveWords, changeFromTo, isFiltered, isPseudo, plural, readError, visibleRows,
+  archiveWords, changeFromTo, isFiltered, isPseudo, plural, readError, RULES_NOTE, visibleRows,
   type ArchiveAnswer, type WasteRuleChange, type WasteRuleRow, type WasteRulesAnswer,
 } from './wasteRulesModel'
 import {
@@ -86,6 +99,9 @@ const DEFAULT_PREFS: PreferencesValue = {
 }
 const NO_CHOICES: number[] = []
 const NO_SORT: Array<{ value: string; label: string }> = []
+/** What the views remember beside AG's own: the Archived list, the density (D5). */
+interface PageState { archived: boolean; density?: GridDensityName }
+const isDensity = (v: unknown): v is GridDensityName => (GRID_DENSITIES as readonly unknown[]).includes(v)
 const SET_MODE_OPTIONS: ListboxPanelOption[] = MODES.map((m) => ({ value: m, label: MODE_WORD[m] }))
 const PANEL_TABS: readonly PanelTab[] = ['overview', 'preview', 'history', 'waiting', 'settings']
 const isPanelTab = (v: unknown): v is PanelTab => typeof v === 'string' && (PANEL_TABS as readonly string[]).includes(v)
@@ -107,20 +123,23 @@ const NEG_SLUG = 'negative-targeting'
 function useWasteRules(market: string) {
   const [answer, setAnswer] = useState<WasteRulesAnswer | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  /** A read is on its way (the toolbar's "Updating…"). */
+  const [reading, setReading] = useState(true)
   const seq = useRef(0)
   const load = useCallback(async (): Promise<WasteRulesAnswer | null> => {
     const mine = ++seq.current
+    setReading(true)
     try {
       const a = await fetchWasteRules(market)
-      if (mine === seq.current) { setAnswer(a); setErr(null) }
+      if (mine === seq.current) { setAnswer(a); setErr(null); setReading(false) }
       return a
     } catch (e) {
-      if (mine === seq.current) setErr((e as Error).message)
+      if (mine === seq.current) { setErr((e as Error).message); setReading(false) }
       return null
     }
   }, [market])
   useEffect(() => { setAnswer(null); setErr(null); void load() }, [load])
-  return { answer, err, load, put: setAnswer }
+  return { answer, err, reading, load, put: setAnswer }
 }
 
 const FOCUSABLE = 'button:not([aria-hidden="true"]), [href], input, [tabindex]:not([tabindex="-1"])'
@@ -134,12 +153,15 @@ function ruleCell(id: string | null | undefined, col = 'rule'): HTMLElement | nu
   return document.querySelector<HTMLElement>(`.ag-row[row-id="${CSS.escape(id)}"] [col-id="${col}"]`)
 }
 
-export function WasteRulesView({ market, viewSwitch, scope }: {
+export function WasteRulesView({ market, viewSwitch, scope, onExportItems }: {
   market: string
-  /** The page's [Wasting | Stopped | Rules] switch, at the start of the toolbar (optional: the page may show it above). */
+  /** The page's [Wasting | Stopped | Words | Rules] switch, at the start of the toolbar (optional: the page may show it above). */
   viewSwitch?: ReactNode
   /** The page's filter bar: only the rules that can act on its picks show (and count); the Brain and Harvest rows always. */
   scope?: ScopeView
+  /** The redesign (D2): this view's items for the page header's Export ▾ (This view as CSV · Ticked rows as CSV); null
+   *  when the view leaves. */
+  onExportItems?: (items: MenuItemDef[] | null) => void
 }) {
   const router = useRouter()
   const params = useSearchParams()
@@ -163,7 +185,7 @@ export function WasteRulesView({ market, viewSwitch, scope }: {
   // The rules the page's filter bar reaches (the Brain and Harvest rows always; nothing while its lists are read): the
   // table and its counts count these.
   const read = useWasteRules(market)
-  const { err, load, put } = read
+  const { err, load, put, reading } = read
   const pending = !!scope?.pending
   const scopeReach = scope?.reach ?? null
   const answer = useMemo(() => (read.answer && !pending ? narrowRules(read.answer, scopeReach, isPseudo) : null), [read.answer, pending, scopeReach])
@@ -265,25 +287,46 @@ export function WasteRulesView({ market, viewSwitch, scope }: {
   const pinned = useMemo<GridRow[]>(() => shown.filter(isPseudo).map((r) => ({ id: r.id, row: r, mode: r.mode, pending: false, h: handlers })), [shown])
   const selected = useMemo(() => selectedIds.flatMap((id) => byId.get(id) ?? []), [selectedIds, byId])
 
-  const pageState = useRef({ archived: showArchived })
-  pageState.current = { archived: showArchived }
+  // D5 — the density (Compact · Cozy · Spacious) is remembered with the layout, as on Listings.
+  const [density, setDensity] = useState<GridDensityName>(DEFAULT_GRID_DENSITY)
+  const pageState = useRef<PageState>({ archived: showArchived, density })
+  pageState.current = { archived: showArchived, density }
   const restoringLastUsed = useRef(false)
-  const views = useGridState<{ archived: boolean }>({
+  const views = useGridState<PageState>({
     surface: 'ads-neg-rules',
     // Land on the scope's default view even when it answers after the grid is up (grid audit F7).
     landOnLateDefault: true,
     baseUrl: getBackendUrl(),
     getPageState: () => pageState.current,
-    applyPageState: (pg) => { if (!restoringLastUsed.current) setQuery({ archived: pg?.archived ? '1' : null }) },
+    applyPageState: (pg) => {
+      if (pg && isDensity(pg.density)) setDensity(pg.density)
+      if (!restoringLastUsed.current) setQuery({ archived: pg?.archived ? '1' : null })
+    },
     persistKeys: PERSIST_KEYS,
   })
+  const lastDensity = views.lastUsed?.page?.density
+  useEffect(() => { if (isDensity(lastDensity)) setDensity(lastDensity) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const bindViews = useRef(views.bind)
   bindViews.current = views.bind
   const markDirty = views.markDirty
-  useEffect(() => { markDirty() }, [markDirty, showArchived])
+  useEffect(() => { markDirty() }, [markDirty, showArchived, density])
 
+  // D7 — the pager (the grid pages the rules; the Brain and Harvest rows are pinned and not paged).
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE)
+  const [pager, setPager] = useState({ page: 1, pageCount: 1 })
+  const onPaginationChanged = useCallback<NonNullable<NexusGridProps<GridRow>['onPaginationChanged']>>((e) => {
+    if (e.api.isDestroyed()) return
+    const next = { page: e.api.paginationGetCurrentPage() + 1, pageCount: Math.max(1, e.api.paginationGetTotalPages()) }
+    setPager((cur) => (cur.page === next.page && cur.pageCount === next.pageCount ? cur : next))
+  }, [])
+  const onPage = useCallback((n: number) => apiRef.current?.paginationGoToPage(n - 1), [])
+  const onPageSize = useCallback((n: number) => { setPageSize(n); apiRef.current?.paginationGoToPage(0) }, [])
+
+  const bindPhone = useRef(phone)
+  bindPhone.current = phone
   const onGridReady = useCallback((e: GridReadyEvent<GridRow>) => {
     apiRef.current = e.api
+    if (bindPhone.current) return
     restoringLastUsed.current = true
     bindViews.current(e.api)
     restoringLastUsed.current = false
@@ -325,6 +368,18 @@ export function WasteRulesView({ market, viewSwitch, scope }: {
       toast(`${plural(out.rows, 'rule')} exported`, 'success')
     } catch (e) { toast(`Not exported: ${(e as Error).message}`, 'danger') }
   }, [search, toast])
+  /** The ticked rules only: the same file, its rows kept to the ticks. */
+  const exportTicked = useCallback(() => {
+    const api = apiRef.current
+    if (!api || api.isDestroyed()) return
+    try {
+      const ticked = new Set(selectedIds)
+      const source = gridCsvSourceFromApi(api, { suffix: 'selected' })
+      const out = gridCsvRows({ ...source, rows: source.rows.filter((r) => ticked.has(r.key)) }, 'negative-targeting-rules')
+      downloadCsv(out.fileName, out.csv)
+      toast(`${plural(out.rows, 'rule')} exported`, 'success')
+    } catch (e) { toast(`Not exported: ${(e as Error).message}`, 'danger') }
+  }, [selectedIds, toast])
 
   // ── the builder page: opening it is a step in the history (Back closes it); closing goes back over it ──────────────
   const builderPushed = useRef(false)
@@ -351,14 +406,14 @@ export function WasteRulesView({ market, viewSwitch, scope }: {
   const filtered = isFiltered(filter)
   const scopeActive = !!scope?.active
   const clearScope = scope?.clear
-  // M4: a failed read says so (and offers Try again), never "No rules yet".
-  const noRowsParams = useMemo(() => (!answer && err
-    ? { title: 'Rules not read', message: readError(err) ?? '', action: { label: 'Try again', onClick: () => void load() } }
+  // M4: a failed read says so (and offers Try again), never "No rules yet". The States board: a DS EmptyState in the grid.
+  const emptyState = useMemo(() => (!answer && err
+    ? <EmptyState icon={<AlertCircle size={20} aria-hidden />} title="Rules not read" description={readError(err) ?? undefined} action={<Button size="sm" onClick={() => void load()}>Try again</Button>} />
     : filtered
-      ? { title: showArchived && !search.trim() ? 'No archived rules' : 'No rule matches', message: '', action: { label: 'Clear filters', onClick: clearFilters } }
+      ? <EmptyState icon={<SearchX size={20} aria-hidden />} title={showArchived && !search.trim() ? 'No archived rules' : 'No rule matches'} action={<Button size="sm" onClick={clearFilters}>Clear filters</Button>} />
       : scopeActive && clearScope
-        ? { title: FILTER_EMPTY.title, message: '', action: { label: FILTER_EMPTY.clear, onClick: () => clearScope() } }
-        : { title: 'No stop-waste rules yet', message: '', action: archiveHeld ? undefined : { label: 'New rule', onClick: openNew } }),
+        ? <EmptyState icon={<SearchX size={20} aria-hidden />} title={FILTER_EMPTY.title} action={<Button size="sm" onClick={() => clearScope()}>{FILTER_EMPTY.clear}</Button>} />
+        : <EmptyState title="No stop-waste rules yet" action={archiveHeld ? undefined : <Button size="sm" onClick={openNew}>New rule</Button>} />),
   [answer, err, load, filtered, clearFilters, archiveHeld, openNew, showArchived, search, scopeActive, clearScope])
 
   // ── reviews ───────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -629,11 +684,44 @@ export function WasteRulesView({ market, viewSwitch, scope }: {
   const panelRow = panelId ? byId.get(panelId) ?? null : null
   const total = showArchived ? t?.archived ?? 0 : t?.rules ?? 0
   const searched = search.trim() !== ''
+  // D5 — the count in the DS toolbar's form: "4 rules", "1 of 4" while searching, "2 ticked" while rules are ticked.
   const countText = !answer
     ? (err ? 'Not read' : 'Reading…')
-    : searched ? <><b>{gridRows.length}</b> of <b>{total}</b></>
-      : <><b>{total}</b> {total === 1 ? 'rule' : 'rules'}</>
-  const lead = viewSwitch ? <span className={styles.line}>{viewSwitch}</span> : null
+    : selected.length ? tickedCount(selected.length).map((c) => <span key="n"><b>{c.n}</b>{c.words}</span>)
+      : searched ? <><b>{gridRows.length}</b> of <b>{total}</b></>
+        : <><b>{total}</b> {total === 1 ? 'rule' : 'rules'}</>
+
+  /* ── the header's Export ▾ (D2): this view as CSV, the ticked rules as CSV ── */
+  const exportItems = useMemo<MenuItemDef[]>(() => [
+    gridRows.length
+      ? { id: 'view', label: 'This view as CSV', onSelect: exportCsv }
+      : { id: 'view', label: 'This view as CSV', disabled: true, description: 'Nothing to export' },
+    selected.length
+      ? { id: 'ticked', label: 'Ticked rows as CSV', onSelect: exportTicked }
+      : { id: 'ticked', label: 'Ticked rows as CSV', disabled: true, description: 'No rows ticked' },
+  ], [gridRows.length, exportCsv, selected.length, exportTicked])
+  const onExportRef = useRef(onExportItems)
+  onExportRef.current = onExportItems
+  // Not while the builder page is open: nothing of the list is on screen then.
+  useEffect(() => { onExportRef.current?.(builder ? null : exportItems) }, [exportItems, !!builder]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onExportRef.current?.(null), [])
+
+  /* ── toolbar (D5, D15): the view switch · the count · the search · Archived | New rule · density · Customise · Views ·
+     status; ticked: the bulk actions take the search's place, New rule and the density step aside ── */
+  // New rule opens the shared rule builder PAGE, exactly as today.
+  const newRule = selected.length ? null : <span data-return="new"><Button size="sm" variant="primary" heldReason={archiveHeld} onClick={openNew}><Plus size={14} aria-hidden /> New rule</Button></span>
+  const status = <Pill tone={err ? 'danger' : 'success'} dot size="md">{err ? 'Not updating' : reading ? 'Updating…' : 'Up to date'}</Pill>
+  const searchBox = (
+    <GridSearchSlot>
+      <Input size="sm" type="search" aria-label="Search rules" placeholder="Search" leadingIcon={<Search size={14} aria-hidden />} value={search} onChange={(e) => setSearch(e.target.value)} />
+    </GridSearchSlot>
+  )
+  // A filter of the list (consistency #12): after the search.
+  const archivedToggle = (
+    <Button size="sm" aria-pressed={showArchived} onClick={() => setQuery({ archived: showArchived ? null : '1' })}>
+      <Archive size={14} aria-hidden /> Archived{t ? ` ${t.archived}` : ''}
+    </Button>
+  )
 
   // The builder is a full page (Owner 2026-10-11): while it is open, nothing of the list is under it to reach by Tab.
   if (builder) {
@@ -663,65 +751,76 @@ export function WasteRulesView({ market, viewSwitch, scope }: {
         <EditModeBar count={draftCount} onDiscard={() => setDraft({})} onApply={() => void startModeReview(draftedCell)} applyLabel={`Review ${plural(draftCount, 'change')}…`} />
       )}
 
-      <GridCard
-        toolbar={selected.length > 0 ? (
-          <GridToolbar count={<span className={styles.line}>{lead}<span className={styles.count}>Selected <b>{selected.length}</b></span></span>}>
-            <GridSelectionActions>
-              {showArchived ? (
-                <Button size="sm" variant="secondary" heldReason={archiveHeld} onClick={() => startUnarchive(selected, firstCell)}><ArchiveRestore size={14} aria-hidden /> Unarchive…</Button>
+      <div className={pageStyles.cardWrap}>
+        <GridCard
+          toolbar={(
+            <GridToolbar
+              wrap
+              right={phone ? (
+                // A phone: the search (and Archived) take their own line under the bar (the card's narrow rule).
+                <>{newRule}{status}{searchBox}{archivedToggle}</>
               ) : (
-                <>
-                  {modeHeld
-                    ? <Button size="sm" variant="secondary" heldReason={modeHeld}>Mode…</Button>
-                    : <Listbox size="sm" width={130} ariaLabel="Set the mode of the selected rules" placeholder="Mode…" options={SET_MODE_OPTIONS} value="" onChange={(v) => { if ((MODES as readonly string[]).includes(v)) setDraft((d) => pickModeFor(d, selected, v as BidMode)) }} />}
-                  <Button size="sm" variant="secondary" heldReason={archiveHeld} onClick={() => startArchive(selected, firstCell)}><Archive size={14} aria-hidden /> Archive…</Button>
-                </>
+                // One group (the code's toolbarRight): on a narrow card it takes the next line, right-aligned.
+                <span className={styles.toolbarRight}>
+                  {newRule}
+                  {/* The density steps aside while rules are ticked, as on Listings. */}
+                  {!selected.length && <GridDensityToggle value={density} onChange={setDensity} />}
+                  <Button size="sm" onClick={openCustomise}><SlidersHorizontal size={13} aria-hidden /> Customise</Button>
+                  <GridViewsMenu views={views} />
+                  {status}
+                </span>
               )}
-              <Button size="sm" variant="link" onClick={() => apiRef.current?.deselectAll()}>Clear</Button>
-            </GridSelectionActions>
-          </GridToolbar>
-        ) : (
-          <GridToolbar
-            count={<span className={styles.line}>{lead}<span className={styles.count} aria-live="polite">{countText}</span></span>}
-            right={(
-              <span className={styles.toolbarRight}>
-                <Button size="sm" variant="secondary" aria-pressed={showArchived} onClick={() => setQuery({ archived: showArchived ? null : '1' })}>
-                  <Archive size={14} aria-hidden /> Archived{t ? ` ${t.archived}` : ''}
-                </Button>
-                {!phone && <GridViewsMenu views={views} />}
-                {!phone && <Button size="sm" variant="secondary" onClick={openCustomise}><SlidersHorizontal size={14} aria-hidden /> Customise</Button>}
-                {!phone && <Button size="sm" variant="secondary" onClick={exportCsv}><Download size={14} aria-hidden /> Export</Button>}
-                <span data-return="new"><Button size="sm" variant="primary" heldReason={archiveHeld} onClick={openNew}><Plus size={14} aria-hidden /> New rule</Button></span>
-              </span>
-            )}
-          >
-            <GridSearchSlot>
-              <Input size="sm" type="search" aria-label="Search rules" placeholder="Search" leadingIcon={<Search size={14} aria-hidden />} value={search} onChange={(e) => setSearch(e.target.value)} />
-            </GridSearchSlot>
-          </GridToolbar>
-        )}
-      >
-        {!answer && !err ? (
-          <div className={styles.gridSkeleton} role="status" aria-label="Reading the rules">
-            <Skeleton height={14} /><Skeleton height={14} /><Skeleton height={14} /><Skeleton height={14} />
-          </div>
-        ) : (
-          <WasteRulesTable
-            rows={gridRows}
-            pinned={pinned}
-            context={context}
-            phone={phone}
-            selectable={!phone && !(modeHeld && archiveHeld)}
-            noRowsParams={noRowsParams}
-            initialState={views.initialState}
-            columnDialog={columnDialog}
-            onGridReady={onGridReady}
-            onRowClicked={onRowClicked}
-            onCellKeyDown={onCellKeyDown}
-            onSelectionChanged={onSelectionChanged}
-          />
-        )}
-      </GridCard>
+            >
+              {viewSwitch}
+              <span className="cnt">{countText}</span>
+              {selected.length > 0 ? (
+                <GridSelectionActions>
+                  {showArchived ? (
+                    <Button size="sm" heldReason={archiveHeld} onClick={() => startUnarchive(selected, firstCell)}><ArchiveRestore size={14} aria-hidden /> Unarchive…</Button>
+                  ) : (
+                    <>
+                      {modeHeld
+                        ? <Button size="sm" heldReason={modeHeld}>Mode…</Button>
+                        : <Listbox size="sm" width={130} ariaLabel="Set the mode of the selected rules" placeholder="Mode…" options={SET_MODE_OPTIONS} value="" onChange={(v) => { if ((MODES as readonly string[]).includes(v)) setDraft((d) => pickModeFor(d, selected, v as BidMode)) }} />}
+                      <Button size="sm" heldReason={archiveHeld} onClick={() => startArchive(selected, firstCell)}><Archive size={14} aria-hidden /> Archive…</Button>
+                    </>
+                  )}
+                  <Button size="sm" variant="link" onClick={() => apiRef.current?.deselectAll()}>Clear</Button>
+                </GridSelectionActions>
+              ) : !phone && <>{searchBox}{archivedToggle}</>}
+            </GridToolbar>
+          )}
+          // D7 — the pager is always there once the rules are read (never over a failed first read).
+          footer={answer ? (
+            <GridPager page={pager.page} pageCount={pager.pageCount} pageSize={pageSize} pageSizes={PAGE_SIZES}
+              left={<span className={pageStyles.pagerWords}>{pagerWords(pager.page, pageSize, gridRows.length)}</span>}
+              onPage={onPage} onPageSize={onPageSize} />
+          ) : undefined}
+        >
+          <GridDensityProvider value={density}>
+            <WasteRulesTable
+              rows={gridRows}
+              pinned={pinned}
+              context={context}
+              phone={phone}
+              selectable={!phone && !(modeHeld && archiveHeld)}
+              loading={!answer && !err}
+              emptyState={emptyState}
+              density={density}
+              pageSize={pageSize}
+              // A phone draws the same columns but never takes the desktop's saved widths and order (D16).
+              initialState={phone ? undefined : views.initialState}
+              columnDialog={phone ? undefined : columnDialog}
+              onGridReady={onGridReady}
+              onRowClicked={onRowClicked}
+              onCellKeyDown={onCellKeyDown}
+              onSelectionChanged={onSelectionChanged}
+              onPaginationChanged={onPaginationChanged}
+            />
+          </GridDensityProvider>
+        </GridCard>
+        <p className={pageStyles.note}>{RULES_NOTE}</p>
+      </div>
 
       {panelId && (panelRow ? (
         <WasteRuleModal
@@ -800,7 +899,8 @@ export function WasteRulesView({ market, viewSwitch, scope }: {
             </Button>
           ) : undefined}
           returnFocusTo={backTarget}
-          size="xl"
+          // The review's own size (useWasteReview): on a phone the full-screen sheet with each change a stacked card.
+          size={decide.size}
         />
       )}
 

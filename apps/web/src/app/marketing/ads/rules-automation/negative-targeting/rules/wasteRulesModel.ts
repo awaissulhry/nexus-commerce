@@ -243,6 +243,9 @@ export function last7Tab(row: Pick<WasteRuleRow, 'changed7d' | 'last7d' | 'waiti
   return last7Parts(row).find((p) => p.tab)?.tab ?? 'overview'
 }
 
+/** D8 — the one note under the Rules card, in the columns' own words (the Last 7 d and the Waiting hovers). */
+export const RULES_NOTE = `${LAST_WEEK}: keywords it paused, negatives it added, asks it made, refusals · Waiting: asks waiting for you — approve or reject them here`
+
 // ── search, archived ────────────────────────────────────────────────────────────────────────────────────────────────
 
 const norm = (s: string) => s.toLocaleLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '')

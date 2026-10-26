@@ -1,26 +1,24 @@
 'use client'
 
 /**
- * Negative Targeting page (2026-10-11, lane NVIEW) — the row marks (6-neg-design.md §5): every state is an outline icon
- * with no visible words; the words are the tooltip and the accessible name. No emoji (Owner 2026-10-07).
+ * Negative Targeting page (2026-10-11, lane NVIEW) — the row marks (6-neg-design.md §5): an outline icon whose words are
+ * its tooltip and accessible name (`Mark`): our keyword or target (Crosshair) or a shopper's search term (TextSearch),
+ * and the match chip (E · P · B · A · PT · C). No emoji (Owner 2026-10-07).
  *
- *   our keyword or target  Crosshair            a shopper's search term  TextSearch
- *   running                Play                 paused                   Pause
- *   kept paused            Pause + Lock         negative                 Ban (+ the E / P chip)
- *   protected              ShieldCheck          turned on outside Nexus  TriangleAlert
- *   not at Amazon          CloudOff             waiting for you          Hourglass
- *   skipped                AlarmClock
- *   step 4: protection being removed, its negative follows  Hourglass (muted) · not stopped after it   the warning glyph
+ * The redesign (2026-10-26, BRIEF D6): a state is ONE chip — the DS Pill with its mark and a word in a tone ("Wasting",
+ * "Waiting · asked by Brain", "Blocked"), never a mark alone — and a smaller line under it for a clash, a follow-up or a
+ * skip (`StateChip`, `StateSub`; their words: wasteModel.ts stateChip / stateSub). The icon-only state marks are gone.
+ *
+ *   running Play · paused / kept paused Pause · negative Ban · protected ShieldCheck · turned on outside Nexus
+ *   TriangleAlert · not at Amazon CloudOff · waiting Hourglass · skipped AlarmClock · a clash or a refusal the DS warning
  */
 import type { ReactNode } from 'react'
-import { AlarmClock, Ban, CloudOff, Crosshair, Hourglass, Lock, Pause, Play, ShieldCheck, TextSearch, TriangleAlert } from 'lucide-react'
-import { Tooltip } from '@/design-system/primitives'
+import { AlarmClock, Ban, CloudOff, Crosshair, Hourglass, Pause, Play, ShieldCheck, TextSearch, TriangleAlert } from 'lucide-react'
+import { Pill, Tooltip } from '@/design-system/primitives'
 import { useTooltipsDisabled } from '@/design-system/primitives/Tooltip'
 import { IdentityChip, WarnGlyph } from '@/design-system/grid'
-import { dayWords, relWords } from '../../bid/_shared/format'
-import { kindWord, matchChip, matchWord, planWords, stateSentence, type AnyState } from './wasteModel'
-import { followUpSentence } from './protectionModel'
-import type { Match, RowKind, StoppedRow, WasteRow } from './wasteTypes'
+import { kindWord, matchChip, matchWord, type ChipMark, type StateChipView, type StateSubView } from './wasteModel'
+import type { Match, RowKind } from './wasteTypes'
 import styles from '../negatives.module.css'
 
 const G = { size: 13, strokeWidth: 2.25, 'aria-hidden': true as const }
@@ -52,48 +50,43 @@ export function MatchChip({ match }: { match: Match | null | undefined }) {
   return <IdentityChip label={chip} tip={matchWord(match)} />
 }
 
-/** A row's state, one icon (and a lock for kept paused, the E / P chip for a negative). */
-export function StateMark({ row, focusable = false }: { row: { state: AnyState; match?: Match; level?: 'AD_GROUP' | 'CAMPAIGN' | null; keptPaused?: StoppedRow['keptPaused']; clash?: unknown; protection?: WasteRow['protection'] }; focusable?: boolean }) {
-  const label = stateSentence(row)
-  switch (row.state) {
-    case 'RUNNING': return <Mark label={label} tone="ok" focusable={focusable}><Play {...G} className="nds-cell-glyph" /></Mark>
-    case 'PAUSED': return <Mark label={label} tone="muted" focusable={focusable}><Pause {...G} className="nds-cell-glyph" /></Mark>
-    case 'KEPT_PAUSED': return (
-      <Mark label={label} tone="warn" focusable={focusable}>
-        <Pause {...G} className="nds-cell-glyph" /><Lock size={10} strokeWidth={2.5} aria-hidden className="nds-cell-glyph" />
-      </Mark>
-    )
-    case 'NEGATED': return <Mark label={label} tone="info" focusable={focusable}><Ban {...G} className="nds-cell-glyph" /></Mark>
-    case 'PROTECTED': return <Mark label={label} tone="ok" focusable={focusable}><ShieldCheck {...G} className="nds-cell-glyph" /></Mark>
-    // With its clash mark beside it (a Wasting row), it shows that it runs; alone (a Stopped row), the warning.
-    case 'TURNED_ON_ELSEWHERE': return row.clash
-      ? <Mark label={label} tone="bad" focusable={focusable}><Play {...G} className="nds-cell-glyph" /></Mark>
-      : <Mark label={label} tone="bad" focusable={focusable}><TriangleAlert {...G} className="nds-cell-glyph" /></Mark>
-    case 'NOT_AT_AMAZON': return <Mark label={label} tone="muted" focusable={focusable}><CloudOff {...G} className="nds-cell-glyph" /></Mark>
-    default: return null
+/* ── the redesign: one chip per state (D6) ────────────────────────────────────────────────────────────────────────── */
+
+const CHIP_G = { size: 12, strokeWidth: 2.25, 'aria-hidden': true as const, className: 'nds-cell-glyph' }
+
+/** A chip's mark (12 px, the chip's own tone colours it). */
+export function ChipGlyph({ mark }: { mark: ChipMark }) {
+  switch (mark) {
+    case 'play': return <Play {...CHIP_G} />
+    case 'pause': return <Pause {...CHIP_G} />
+    case 'ban': return <Ban {...CHIP_G} />
+    case 'shield': return <ShieldCheck {...CHIP_G} />
+    case 'hourglass': return <Hourglass {...CHIP_G} />
+    case 'alert': return <TriangleAlert {...CHIP_G} />
+    case 'cloud': return <CloudOff {...CHIP_G} />
+    case 'clock': return <AlarmClock {...CHIP_G} />
+    default: return <WarnGlyph />
   }
 }
 
-/** Waiting for a person: by whom, when it expires, and a plan's steps (decided together, NFIX). */
-export function WaitingMark({ waiting }: { waiting: { by: { name: string }; at: string; expiresAt: string | null; plan?: { steps: number; offPage: number } } }) {
-  const plan = planWords(waiting.plan)
-  const label = `Waiting for you · asked by ${waiting.by.name} ${relWords(waiting.at)}${waiting.expiresAt ? ` · expires ${relWords(waiting.expiresAt)}` : ''}${plan ? ` · ${plan}, approved together` : ''}`
-  return <Mark label={label} tone="warn"><Hourglass {...G} className="nds-cell-glyph" /></Mark>
+/**
+ * A row's state as the DS Pill: its mark and one word in a tone; the code's sentence on hover and, after the word, for a
+ * screen reader. A long word ("Waiting · asked by Brain") ends in "…" inside the cell (Pill `truncate`).
+ */
+export function StateChip({ chip }: { chip: StateChipView }) {
+  return (
+    <Pill tone={chip.tone} size="sm" icon={<ChipGlyph mark={chip.mark} />} title={chip.title} truncate>
+      {chip.word}<span className="nds-vh">. {chip.title}</span>
+    </Pill>
+  )
 }
 
-/** A clash the Owner should see: the DS warning glyph, its words (`clash.label`) on hover, focus and for a screen reader. */
-export function ClashMark({ clash, focusable = false }: { clash: { label: string }; focusable?: boolean }) {
-  return <Mark label={clash.label} tone="bad" focusable={focusable}><WarnGlyph /></Mark>
-}
-
-/** Step 4 — Remove protection and stop still finishing on the server, or not stopped after the protection went (and why). */
-export function FollowUpMark({ followUp, focusable = false }: { followUp: NonNullable<WasteRow['followUp']>; focusable?: boolean }) {
-  return followUp.status === 'WAITING'
-    ? <Mark label={followUpSentence(followUp)} tone="muted" focusable={focusable}><Hourglass {...G} className="nds-cell-glyph" /></Mark>
-    : <Mark label={followUpSentence(followUp)} tone="bad" focusable={focusable}><WarnGlyph /></Mark>
-}
-
-/** Skipped until a day: the row comes back with fresh numbers. Step 4: a kept-protected row says so (`label`). */
-export function SkippedMark({ skipped, label }: { skipped: { until: string }; label?: string | null }) {
-  return <Mark label={label ?? `Skipped until ${dayWords(skipped.until)}`} tone="muted"><AlarmClock {...G} className="nds-cell-glyph" /></Mark>
+/** The smaller line under a chip: a clash in red, a follow-up or a skip muted; its words on hover too (it may be cut). */
+export function StateSub({ sub }: { sub: StateSubView }) {
+  return (
+    <span className={`${styles.stateSub} ${sub.tone === 'danger' ? styles.tone_bad : styles.tone_muted}`} title={sub.word}>
+      {sub.mark === 'warn' ? <WarnGlyph /> : <ChipGlyph mark={sub.mark} />}
+      <span className={styles.stateSubText}>{sub.word}</span>
+    </span>
+  )
 }

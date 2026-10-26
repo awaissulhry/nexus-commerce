@@ -275,6 +275,20 @@
   padding-left: 8px;
   padding-right: 8px;
 }
+/* `truncate` (2026-10-26, as `.nds-tag.is-truncated`): one line inside its container, ending in "…"; the full words
+   ride in `title`. The words sit in `.nds-pill-text`, because text in a flex box ellipsises only inside an element. */
+.nds-pill.is-truncated {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  vertical-align: top;
+}
+.nds-pill.is-truncated .nds-pill-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ── Program / targeting badge ───────────────────────────────────── */
 .nds-badge {

@@ -4361,3 +4361,16 @@ The approved accessibility follow-up is complete: held ScopeBar wrapper/ring is 
 
 ## 2026-10-23 — Listing readiness rebuild, lane 3b
 - CLOSED: the row under an open product family ("Showing 10 of 40 variations" · "View all 40") lived only in /products (`app/products/next/FamilyFooter.tsx` + `.famFoot` in its module, raw 12px / 10px 14px), so Listing readiness could only copy it. Promoted to `grid/toolbars/FamilyFooterFrame.tsx` (`.nds-grid-famfoot` in `grid.css` on `--nds-space-*`, mirrored in Factory); Products renders through it, same markup and words — apps/web/src/design-system/grid/toolbars/FamilyFooterFrame.tsx
+
+## 2026-10-26 — Negative Targeting redesign (H-DS, DS contract 1–11)
+- CLOSED: `FilterBar` was a panel only and its `select` field was unnamed — `layout="inline"` (one row, Clear at its end held at 0, a phone "Filters (n)" button + full-screen sheet), a `listbox` dimension (single pick, counts muted), `select` / `listbox` named by their label (`Combobox labelledBy`, `Listbox labelledBy`).
+- CLOSED: `Pill` could not truncate (`Tag` had `is-truncated`) — `Pill truncate` (one line, "…", the words as `title`). Both apps.
+- CLOSED: compact grids had no two-line row (28 / 36 px; a term over its campaign needs 40) — `GridRowKind 'two-line'` 40 · 43 · 49 (`rowHeightFor`, `tokens/grid.ts` `rowTwoLine`).
+- CLOSED: an empty grid drew `GridNoRowsOverlay`, never the page's DS `EmptyState` — `NexusGrid emptyState`.
+- CLOSED: the review on a phone was a 5-column table in a 350 px dialog (Note off-screen) — `ReviewChangesPanel` / `ReviewChangesModal` draw one card per change below 760 px; `ChangeReview tick={false}` for changes that go together.
+- CLOSED: a Timeline step had no control (Undo) — `TimelineStep.action`. Both apps.
+- CLOSED: `SummaryTable` had 24 px rows only, a fixed last-column-right rule and no phone form — `density="roomy"` (44 px), `align`, `stackOnPhone`, `.nds-summary-sub`.
+- CLOSED: `Sparkline` drew a fixed 88 × 22 box only — `fluid` (fills its container; viewBox, non-scaling stroke, round dots).
+- CLOSED: records hand-rolled their main + side-panel grid — `RecordLayout` (`minmax(0, 1fr) minmax(260px, 300px)`, one column below 760 px). Both apps.
+- CLOSED: `KeyValue` always collapsed to one column on a phone — `phoneColumns={2}`. Both apps.
+- CLOSED: the rail's count badge was white on red-500 (3.9:1) — `--nds-rail-badge-bg` (red-700, 5.44:1); the top bar's phone rule for the business name named a class no element carried (`.nds-topbar-profile-name`) — it now names the switcher's name span.

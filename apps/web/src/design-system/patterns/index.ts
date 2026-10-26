@@ -16,7 +16,7 @@ export {
   type ScopeReadinessState,
 } from './ScopeBar'
 export { FilterPanel, FilterField, type FilterPanelProps } from './FilterPanel'
-export { FilterBar, type FilterBarProps, type FilterBarOption, type FilterDimension } from './FilterBar'
+export { FilterBar, filtersButtonWords, type FilterBarProps, type FilterBarOption, type FilterDimension, type FilterBarLayout } from './FilterBar'
 export { GridToolbar, type GridToolbarProps } from './GridToolbar'
 export {
   PREFERENCES_DEFAULTS,

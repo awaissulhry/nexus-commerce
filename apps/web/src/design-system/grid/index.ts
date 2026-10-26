@@ -19,7 +19,7 @@
  * Only this folder (and app/design/grid-lab) may import `ag-grid-*` —
  * scripts/check-ag-grid-import-boundary.mjs fails the push otherwise.
  */
-export { NexusGrid, numericColumn, type NexusGridProps, type GridDensity, type GridRowKind } from './NexusGrid'
+export { NexusGrid, numericColumn, rowHeightFor, type NexusGridProps, type GridDensity, type GridRowKind } from './NexusGrid'
 export type {
   AgMenuItemDef,
   CellClassParams,

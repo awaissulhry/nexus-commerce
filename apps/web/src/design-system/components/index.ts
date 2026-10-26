@@ -93,7 +93,7 @@ export { CellAction, type CellActionProps } from './CellAction'
 
 export { RecordListInput, type RecordListInputProps, type RecordListField } from './RecordListInput'
 
-export { SummaryTable, type SummaryTableProps } from './SummaryTable'
+export { SummaryTable, type SummaryTableProps, type SummaryTableAlign, type SummaryTableDensity } from './SummaryTable'
 
 export { ActionConfirm, canConfirmAction, useActionConfirm, type ActionConfirmProps, type ActionConfirmApi } from './ActionConfirm'
 // Sheet publish parity (2026-10-04) — the typed confirmation, shared by ActionConfirm, the Publish window and the selling dialogs.
@@ -112,6 +112,7 @@ export { JobProgress, jobPercent, type JobProgressProps } from './JobProgress'
 export { Timeline, type TimelineProps, type TimelineStep } from './Timeline'
 // Bid page DS lane (2026-10-10) — a small step chart (promoted from the parked BidSpark), and what a row works on as links.
 export { Sparkline, type SparklineProps } from './Sparkline'
+export { RecordLayout, type RecordLayoutProps } from './RecordLayout'
 export { sparkGeometry, sparkSummary, sparkWords, SPARK_BOX, type SparkShape, type SparkValue, type SparkBox, type SparkGeometry } from './sparklineModel'
 export { EntityLinks, type EntityLinksProps, type EntityLinkComponent } from './EntityLinks'
 export { entityLinksView, entityLinksText, entityCountWords, compareEntityLinks, type EntityRef, type EntityNoun, type EntityLinksView } from './entityLinksModel'

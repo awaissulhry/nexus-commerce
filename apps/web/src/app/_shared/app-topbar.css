@@ -112,7 +112,10 @@
   .nds-topbar-search > .nds-searchtrigger { display: none; }
   .nds-topbar-search-compact { display: flex; }
   .nds-topbar .nds-topbar-utility { gap: var(--nds-space-4); padding-inline: var(--nds-space-8); }
-  .nds-topbar .nds-topbar-profile-name { max-width: var(--nds-space-48); }
+  /* The business name in the profile switcher. This rule named `.nds-topbar-profile-name`, a class no element carries
+     (the name is ProfileSwitcher's CSS-module `.name`, `min(22vw, 14rem)`), so it never applied (2026-10-26). It now
+     names the switcher trigger's one text span: the Menu's button, the only menu in the utility region. */
+  .nds-topbar .nds-topbar-utility > .nds-menu-wrap > .nds-btn > span { max-inline-size: var(--nds-space-48); }
 }
 
 /* Right region: identity + utility. */

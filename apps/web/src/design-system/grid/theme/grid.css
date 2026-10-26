@@ -1364,6 +1364,9 @@
    second line beats a hidden button here; above 640 px nothing changes (the cluster never wraps; labels hide only when
    they do not fit on one line, measured). Scoped to `.nds-grid-card` (`GridCard`, /products): the studio sheet's toolbar has its own fixed height
    and fold. */
+/* `GridToolbar wrap` (2026-10-26): the bar may take a second line at any width; the right-hand group, kept on one line by
+   its owner, moves down whole and stays right (`.nds-toolbar > .grow + *`). */
+.nds-grid-card > .nds-toolbar.wrap { flex-wrap: wrap; row-gap: var(--nds-space-8); }
 @container (max-width: 640px) {
   .nds-grid-card > .nds-toolbar { flex-wrap: wrap; row-gap: var(--nds-space-8); }
   .nds-grid-card > .nds-toolbar > .nds-grid-selbar { flex: 1 0 100%; order: 3; flex-wrap: wrap; row-gap: var(--nds-space-6); }

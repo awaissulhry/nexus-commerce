@@ -24,20 +24,26 @@ export interface GridToolbarProps {
   children?: ReactNode
   /** Right-aligned actions (e.g. Customise, Export, density, Live). */
   right?: ReactNode
+  /**
+   * Let the bar take a second line on a desktop card that is too narrow for it (2026-10-26, the Negative Targeting Rules
+   * view): the right-hand group then moves to the next line as ONE group, right-aligned. Default false: one line, as
+   * today (below 640 px the card wraps anyway).
+   */
+  wrap?: boolean
 }
 
 /** How long the bar must keep overflowing, unchanged, before it makes room for its scrollbar (the fold latches in
  *  1–2 frames, its last tier a render later; measured in Chromium). */
 const TOOLBAR_SETTLE_MS = 250
 
-export function GridToolbar({ count, children, right }: GridToolbarProps) {
+export function GridToolbar({ count, children, right, wrap = false }: GridToolbarProps) {
   const bar = useRef<HTMLDivElement>(null)
   // A sheet's toolbar scrolls sideways on its 40px band (grid.css): while it does, the band grows for the
   // scrollbar instead of the bar drawing it over the controls. It SETTLES first: on every load the bar overflows
   // for a frame or two until `GridToolbarFold` folds the chips, and marking at once made the toolbar jump.
   useHorizontalOverflow(bar, { settleMs: TOOLBAR_SETTLE_MS })
   return (
-    <div className="nds-toolbar" ref={bar}>
+    <div className={wrap ? 'nds-toolbar wrap' : 'nds-toolbar'} ref={bar}>
       {count != null && <span className="cnt">{count}</span>}
       {children}
       <span className="grow" />

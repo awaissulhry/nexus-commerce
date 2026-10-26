@@ -9,7 +9,10 @@
  *            keep paused until — POST /waste/preview (writes nothing) → Save → POST /waste/apply: ONE change set,
  *            approved by the person who clicks (a step the API says `needsCode` for asks the authenticator code in the DS
  *            StepUpModal; none does since 2026-10-12). Undo: inside the 20 s window the approve is taken back and the request rejected; after it,
- *            the set is undone (undo-change), or one history row (POST /advertising/changes/:id/undo).
+ *            the set is undone (undo-change), or one history row (POST /advertising/changes/:id/undo). A removed negative
+ *            is final: "Stop it (20 s)" in its window; once it ends the line, the rows and the count say so ("Archived at
+ *            Amazon", never "1 sending" any more — recordModel.ts ranResult). The review is the DS detail size
+ *            (`WASTE_REVIEW_SIZE`): a full-screen sheet on a phone, each change a stacked card.
  *   skip     Skip 7 d / 30 d, Unskip — Nexus only; Undo is the other one.
  *   decide   Approve / Reject what waits for you — through the Approvals page's path. Undo of an approve: back to
  *            waiting inside its window; a reject does not come back (said, never a silent button).
@@ -38,8 +41,9 @@ import {
   reachLine, reachTotalLine, reachWindowWords, saveWords, showsTogether, shownSteps, soldItems, soldNotes, stepStateWord, undoWords, unknownAction, verbLabel,
   type BulkPlan, type DecideLine, type SoldItem, type Waiting,
 } from './wasteModel'
+import { ranResult } from './recordModel'
 import type { ApplyAnswer, FollowUpView, HistoryItem, PreviewAnswer, PreviewStep, ReachTotal, Ref, WaitingSteps, WasteItem } from './wasteTypes'
-import styles from '../negatives.module.css'
+import styles from './record.module.css'
 
 const WorkspaceLink = Link as unknown as EntityLinkComponent
 /** A rule's Ask-me card (`suggestion:<id>`): rejecting it dismisses it, and Undo restores it. */
@@ -81,6 +85,12 @@ export interface WasteReview {
   /** Step 4 — above the table: what else a removed protected term keeps safe; the terms that sold it would block (red), the sent negatives together, the window. */
   lead?: ReactNode
 }
+
+/**
+ * The review's size (2026-10-26): the DS detail size, so on a phone the review is the full-screen sheet with each change
+ * as a stacked card (the DS draws them below 760 px); the hosts pass it to `ReviewChangesModal`.
+ */
+export const WASTE_REVIEW_SIZE = 'detail' as const
 
 /** The authenticator code asked on top of the review, when the API says a step needs it (`needsCode`). */
 export interface StepUpAsk { busy: boolean; error: string | null; approvalId: string | null }
@@ -418,9 +428,13 @@ export function useWasteReview({ market, after }: { market: string | null; after
           return Object.fromEntries(sent.map((s) => [`${steps.indexOf(s)}:${s.rowId}`, { ok, words: ok ? 'Stopped: not sent' : back.error ?? r?.error ?? 'Too late to stop', verb: 'stopped' }]))
         }
         const ms = answer.executeAfter ? Math.max(0, Date.parse(answer.executeAfter) - Date.now()) : 20_000
-        window.setTimeout(() => setReview((cur) => (cur && cur.ask === a && cur.state.phase === 'done' && cur.undo && !cur.undoing
-          ? { ...cur, undo: null, undoLabel: null, summary: amazon ? 'Removed at Amazon — final' : 'Removed in Nexus — final' }
-          : cur)), ms)
+        // Once the window ended it is final: the line, the rows' results and the count say so (no more "1 sending").
+        window.setTimeout(() => setReview((cur) => {
+          if (!cur || cur.ask !== a || cur.state.phase !== 'done' || !cur.undo || cur.undoing) return cur
+          const ran = { ...cur.state.results }
+          for (const s of sent) { const key = `${steps.indexOf(s)}:${s.rowId}`; const r = ranResult(s, ran[key]); if (r) ran[key] = r }
+          return { ...cur, undo: null, undoLabel: null, summary: amazon ? 'Removed at Amazon — final' : 'Removed in Nexus — final', state: { phase: 'done', results: ran } }
+        }), ms)
       }
     } else if (id && (answer.status === 'queued' || answer.status === 'waiting')) {
       undo = async () => {
@@ -577,5 +591,5 @@ export function useWasteReview({ market, after }: { market: string | null; after
     setReview((v) => (v && v.state.phase === 'saving' ? { ...v, state: { phase: 'ready' } } : v))
   }, [])
 
-  return { review, stepUp, ask, save, submitCode, cancelCode, undoSaved, retry, close }
+  return { review, stepUp, ask, save, submitCode, cancelCode, undoSaved, retry, close, size: WASTE_REVIEW_SIZE }
 }

@@ -13,11 +13,12 @@
  *   review    the server's preview (`POST /waste/preview`) in the review's words: where it lands, what is left out.
  */
 import { CHANGE_STATE_TONE, CHANGE_STATE_WORD, type ChangeState, type ChangeTone } from '../../bid/_shared/delivery'
-import { dayWords, money } from '../../bid/_shared/format'
+import { dayWords, money, relWords } from '../../bid/_shared/format'
 import { addApiParams, type ScopeApi } from '../../_shared/scopeFilter/scopeFilterModel'
+import { MARKET_NAME } from '../../../_shell/adsMarkets'
 import type {
   ActionGate, ApplyAnswer, Delivery, HistoryAction, Match, Owner, PreviewAnswer, PreviewStep, Reach, ReachTotal, Ref, RowKind, RowState, StoppedRow, StoppedState,
-  StoppedTotals, VerbAction, WaitingSteps, WasteAction, WasteItem, WasteRow, WasteTotals, Where,
+  StoppedTotals, VerbAction, WaitingSteps, WasteAction, WasteCriteria, WasteFreshness, WasteItem, WasteRow, WasteTotals, Where,
 } from './wasteTypes'
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
@@ -734,16 +735,21 @@ export function tilesOf(args: {
   wastingShow: WastingShow
   stoppedShow: StoppedShow
   currency: string
+  /** The redesign (D3): the page's window ("€754.50 in 60 days"), from the server's criteria; absent = the money only. */
+  windowDays?: number | null
 }): TileView[] {
-  const { waste, stopped, view, wastingShow, stoppedShow, currency } = args
+  const { waste, stopped, view, wastingShow, stoppedShow, currency, windowDays } = args
   const hint = waste?.wasting ? spendHint(waste, currency) : null
+  // D3 — every tile has a hint line, so the six are one height: the money and its window, the asks, else a short form of
+  // the tile's own title.
+  const spend = hint ? `${hint.text}${windowDays ? ` in ${windowDays} days` : ''}` : 'wasting now'
   return [
-    { id: 'wasting', label: 'Wasting', short: 'Wasting', value: waste?.wasting ?? null, hint: hint?.text, active: view === 'wasting' && wastingShow === 'wasting', clickable: true, title: hint?.note ?? 'Wasting now. The spend counts each euro once: search terms inside a wasting keyword are not added again' },
-    { id: 'waiting', label: 'Waiting for you', short: 'Waiting', value: waste?.waiting ?? null, hint: waste?.waiting ? (waste.waiting === 1 ? 'ask' : 'asks') : undefined, active: view === 'wasting' && wastingShow === 'waiting', clickable: !!waste?.waiting, title: 'Asks waiting for your approval (one ask may cover several places)' },
-    { id: 'kept', label: 'Kept paused', short: 'Kept paused', value: stopped?.kept ?? null, active: view === 'stopped' && stoppedShow === 'kept', clickable: !!stopped?.kept, title: 'Kept paused: no rule, Brain or plan turns them on' },
-    { id: 'blocked', label: 'Blocked', short: 'Blocked', value: stopped?.negated ?? null, active: view === 'stopped' && stoppedShow === 'negated', clickable: !!stopped?.negated, title: 'Negatives that block now' },
-    { id: 'clashes', label: 'Clashes', short: 'Clashes', value: waste?.clashes ?? null, active: view === 'wasting' && wastingShow === 'clashes', clickable: !!waste?.clashes, title: 'Clashes: turned on outside Nexus, a negative over our own keyword, a negative that blocks a term that sold' },
-    { id: 'protected', label: 'Protected', short: 'Protected', value: waste?.protected ?? null, active: view === 'wasting' && wastingShow === 'protected', clickable: !!waste?.protected, title: 'Wasting, but a protected term keeps it safe: keep it protected, or remove the protection and stop it' },
+    { id: 'wasting', label: 'Wasting', short: 'Wasting', value: waste?.wasting ?? null, hint: spend, active: view === 'wasting' && wastingShow === 'wasting', clickable: true, title: hint?.note ?? 'Wasting now. The spend counts each euro once: search terms inside a wasting keyword are not added again' },
+    { id: 'waiting', label: 'Waiting for you', short: 'Waiting', value: waste?.waiting ?? null, hint: typeof waste?.waiting === 'number' ? plural(waste.waiting, 'ask') : 'waiting for your approval', active: view === 'wasting' && wastingShow === 'waiting', clickable: !!waste?.waiting, title: 'Asks waiting for your approval (one ask may cover several places)' },
+    { id: 'kept', label: 'Kept paused', short: 'Kept paused', value: stopped?.kept ?? null, hint: 'nothing turns them on', active: view === 'stopped' && stoppedShow === 'kept', clickable: !!stopped?.kept, title: 'Kept paused: no rule, Brain or plan turns them on' },
+    { id: 'blocked', label: 'Blocked', short: 'Blocked', value: stopped?.negated ?? null, hint: 'negatives that block now', active: view === 'stopped' && stoppedShow === 'negated', clickable: !!stopped?.negated, title: 'Negatives that block now' },
+    { id: 'clashes', label: 'Clashes', short: 'Clashes', value: waste?.clashes ?? null, hint: 'need a look', active: view === 'wasting' && wastingShow === 'clashes', clickable: !!waste?.clashes, title: 'Clashes: turned on outside Nexus, a negative over our own keyword, a negative that blocks a term that sold' },
+    { id: 'protected', label: 'Protected', short: 'Protected', value: waste?.protected ?? null, hint: 'kept safe by a term', active: view === 'wasting' && wastingShow === 'protected', clickable: !!waste?.protected, title: 'Wasting, but a protected term keeps it safe: keep it protected, or remove the protection and stop it' },
   ]
 }
 
@@ -772,6 +778,19 @@ export function tileQuery(id: TileId, active: boolean): Record<string, string | 
   }
 }
 
+/** The Wasting view's Show picks: their words and counts (the same read; Waiting counts asks, as its tile does). */
+export function wastingChips(t: WasteTotals | null): Array<{ id: WastingShow; label: string; count: number | null; title: string }> {
+  return [
+    { id: 'wasting', label: 'Wasting', count: t?.wasting ?? null, title: 'Wasting now' },
+    { id: 'waiting', label: 'Waiting', count: t?.waiting ?? null, title: 'Waiting for you' },
+    { id: 'skipped', label: 'Skipped', count: t?.skipped ?? null, title: 'Skipped for now' },
+    { id: 'turned-on', label: 'Turned on', count: t?.turnedOn ?? null, title: 'Kept paused, but turned on outside Nexus' },
+    { id: 'clashes', label: 'Clashes', count: t?.clashes ?? null, title: 'Clashes the Owner should see' },
+    { id: 'protected', label: 'Protected', count: t?.protected ?? null, title: 'Wasting, but a protected term keeps it safe' },
+    { id: 'all', label: 'All', count: null, title: 'Every keyword and search term with numbers' },
+  ]
+}
+
 /** The Stopped view's filter chips: their words and counts (the same read). */
 export function stoppedChips(t: StoppedTotals | null): Array<{ id: StoppedShow; label: string; count: number | null; title: string }> {
   return [
@@ -784,12 +803,6 @@ export function stoppedChips(t: StoppedTotals | null): Array<{ id: StoppedShow; 
 }
 
 // ── counts and empties ──────────────────────────────────────────────────────────────────────────────────────────────
-
-/** The Waiting list's count in the tile's unit (audit N3): "4 asks · 5 places" — one ask may cover several places. */
-export function waitingCount(asks: number | null | undefined, places: number): string {
-  if (asks == null) return plural(places, 'row')
-  return asks === places ? plural(asks, 'ask') : `${plural(asks, 'ask')} · ${plural(places, 'place')}`
-}
 
 /** The toolbar count: "14", "Showing 3 of 14" when a filter narrows the view's total. */
 export const countText = (shown: number, total: number | null, narrowed: boolean): string =>
@@ -898,4 +911,207 @@ export function effectLine(r: Pick<StoppedRow, 'since' | 'effect' | 'currency'>)
   if (!e || e.verdict === 'TOO_EARLY' || v.cents == null) return { value: v.text, hint: v.hint }
   const parts = [`Saved ${v.text}`, hasMoney(e.beforePerDayCents) ? `before ${money(e.beforePerDayCents, r.currency)} a day` : null, hasMoney(e.afterCents) ? `after ${money(e.afterCents, r.currency)}` : null]
   return { value: parts.filter(Boolean).join(' · '), hint: e.words }
+}
+
+// ── the redesign (2026-10-26, BRIEF D2–D8, D12, D13): the frame's words, the state chips, the rows' ⋯ ────────────────
+
+/**
+ * D2 — the header's one live line, from what the reads give: the market, what the page does, the search terms' last
+ * day and when Nexus read them ("Amazon Italy · stops ads that spend with no orders · search terms to 24 Oct · checked
+ * 6 min ago"). A part no read gives is left out, never guessed.
+ */
+export function headerLine(a: { market: string | null | undefined; freshness?: Pick<WasteFreshness, 'searchTermsThrough' | 'readAt'> | null; now?: number }): string {
+  const code = (a.market ?? '').trim().toUpperCase()
+  const checked = a.freshness?.readAt ? relWords(a.freshness.readAt, a.now) : '—'
+  return [
+    code && code !== 'ALL' ? `Amazon ${MARKET_NAME[code] ?? code}` : 'Amazon, all markets',
+    'stops ads that spend with no orders',
+    a.freshness?.searchTermsThrough ? `search terms to ${dayWords(a.freshness.searchTermsThrough)}` : null,
+    checked !== '—' ? `checked ${checked}` : null,
+  ].filter(Boolean).join(' · ')
+}
+
+/** D4 — the Kind field's words (the brief's; the toolbar's icons named them "Keywords: ours" / "Search terms: shoppers'"). */
+export const KIND_WORDS: Readonly<Record<KindFilter, string>> = { all: 'All', keyword: 'Our keywords and targets', term: 'Search terms' }
+
+/** D4 — how many of the view's own fields in the filter bar filter now (Kind, Show off its default). */
+export function ownFilterCount(view: 'wasting' | 'stopped', kind: KindFilter, show: string): number {
+  return (kind !== 'all' ? 1 : 0) + (show !== (view === 'wasting' ? 'wasting' : 'all') ? 1 : 0)
+}
+
+/** One bold number and the words after it: "9" + " rows". */
+export interface CountPart { n: string; words: string }
+
+/**
+ * D5 — the toolbar's count in the code's units: "9 rows · €754.50" (the money only when the rows are exactly what it
+ * counts: Show Wasting, every kind, the same number of rows as the tile), "2 asks · 3 places" (Waiting counts asks, as
+ * its tile does), "59 rows".
+ */
+export function toolbarCount(a: { view: 'wasting' | 'stopped'; show: string; kind: KindFilter; total: number; totals: WasteTotals | StoppedTotals | null; currency: string }): CountPart[] {
+  const rows: CountPart = { n: String(a.total), words: a.total === 1 ? ' row' : ' rows' }
+  if (a.view !== 'wasting' || !a.totals || !('wasting' in a.totals)) return [rows]
+  const t = a.totals
+  if (a.show === 'waiting' && typeof t.waiting === 'number') {
+    const asks: CountPart = { n: String(t.waiting), words: t.waiting === 1 ? ' ask' : ' asks' }
+    return t.waiting === a.total ? [asks] : [asks, { n: String(a.total), words: a.total === 1 ? ' place' : ' places' }]
+  }
+  if (a.show === 'wasting' && a.kind === 'all' && a.total === t.wasting) {
+    const spend = spendHint(t, a.currency)
+    if (spend) return [rows, { n: spend.text, words: '' }]
+  }
+  return [rows]
+}
+
+/** D5 — while rows are ticked the count says how many: "3 ticked". */
+export const tickedCount = (n: number): CountPart[] => [{ n: String(n), words: ' ticked' }]
+
+/** D7 — the pager's line, always shown: "1–9 of 9", "51–59 of 59", "0 of 0". */
+export function pagerWords(page: number, pageSize: number, total: number): string {
+  if (!(total > 0)) return '0 of 0'
+  const from = Math.min((Math.max(1, page) - 1) * pageSize + 1, total)
+  return `${from}–${Math.min(from + pageSize - 1, total)} of ${total}`
+}
+
+/** The Stopped view's money columns in the code's words (their header hovers; the note under the card says the same). */
+export const SPEND_BEFORE_WORDS = 'Spend in the 30 days before it stopped'
+export const SAVED_WORDS = 'Did it work? Its spend a day before the stop × the days since, minus what it spent since (to 3 days ago). Too early: the first 14 days'
+
+/**
+ * D8 — the one note under the card, only in the code's own words: the Wasting view's test as the server words it
+ * (`criteria.sentence`: the window, the days its numbers reach, the bar); the Stopped view's two money columns. Null when
+ * the read did not say (nothing is made up in its place).
+ */
+export function noteLine(view: 'wasting' | 'stopped', criteria: Pick<WasteCriteria, 'sentence'> | null | undefined): string | null {
+  if (view === 'stopped') {
+    return 'Spend before: spend in the 30 days before it stopped · Saved (did it work?): its spend a day before the stop × the days since, minus what it spent since (to 3 days ago) · Too early: the first 14 days'
+  }
+  return criteria?.sentence?.trim() || null
+}
+
+/** A chip's tone (the DS Pill tones). */
+export type ChipTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
+/** The mark a chip or its second line draws (marks.tsx). */
+export type ChipMark = 'play' | 'pause' | 'ban' | 'shield' | 'hourglass' | 'alert' | 'cloud' | 'clock' | 'warn'
+export interface StateChipView { word: string; tone: ChipTone; mark: ChipMark; title: string }
+/** The smaller line under a chip: a clash (red), Remove protection and stop still finishing (or refused), a skip. */
+export interface StateSubView { word: string; tone: 'danger' | 'muted'; mark: ChipMark }
+
+/** Who asked, as the chip says it: a rule's card (`suggestion:<id>`, as useWasteReview reads it) is "Rule" — its name
+ *  is in the hover; anyone else by the name the server gives (Brain, Claude, You). */
+export const askerWord = (w: { approvalId: string; by: { name: string } }): string => (w.approvalId.startsWith('suggestion:') ? 'Rule' : w.by.name)
+
+/** The whole waiting sentence (the chip's hover and its screen-reader words): who, when, until when, a plan's steps. */
+export function waitingSentence(w: { by: { name: string }; at: string; expiresAt: string | null; plan?: { steps: number; offPage: number } }, now?: number): string {
+  const plan = planWords(w.plan)
+  return `Waiting for you · asked by ${w.by.name} ${relWords(w.at, now)}${w.expiresAt ? ` · expires ${relWords(w.expiresAt, now)}` : ''}${plan ? ` · ${plan}, approved together` : ''}`
+}
+
+const CHIP: Readonly<Record<AnyState, Omit<StateChipView, 'title'>>> = {
+  RUNNING: { word: 'Running', tone: 'neutral', mark: 'play' },
+  PAUSED: { word: 'Paused', tone: 'neutral', mark: 'pause' },
+  KEPT_PAUSED: { word: 'Kept paused', tone: 'info', mark: 'pause' },
+  NEGATED: { word: 'Blocked', tone: 'info', mark: 'ban' },
+  PROTECTED: { word: 'Protected', tone: 'success', mark: 'shield' },
+  TURNED_ON_ELSEWHERE: { word: 'Turned on', tone: 'warning', mark: 'alert' },
+  NOT_AT_AMAZON: { word: 'Not at Amazon', tone: 'neutral', mark: 'cloud' },
+}
+
+/**
+ * D6 — a row's state as ONE chip: a word with a tone and its mark, never a mark alone; the code's sentence on hover. A
+ * running row that wastes (its test is met) says Wasting, one that does not says Running; a waiting row says who asked
+ * (D12: "Waiting · asked by Brain").
+ */
+export function stateChip(
+  r: { state: AnyState; match?: Match; level?: 'AD_GROUP' | 'CAMPAIGN' | null; keptPaused?: StoppedRow['keptPaused']; protection?: WasteRow['protection']; test?: { met: boolean } | null; waiting?: WasteRow['waiting'] },
+  now?: number,
+): StateChipView {
+  if (r.waiting) return { word: `Waiting · asked by ${askerWord(r.waiting)}`, tone: 'warning', mark: 'hourglass', title: waitingSentence(r.waiting, now) }
+  if (r.state === 'RUNNING' && r.test?.met) return { word: 'Wasting', tone: 'danger', mark: 'play', title: 'Running' }
+  const base = CHIP[r.state] ?? { word: stateWord(r.state), tone: 'neutral' as const, mark: 'play' as const }
+  return { ...base, title: stateSentence(r) }
+}
+
+/**
+ * D6 — the line under the chip, the first that applies: a clash the Owner should see (red; a turned-on keyword's chip
+ * says it already), Remove protection and stop still finishing or refused (`followUp`: its sentence, protectionModel),
+ * a skip ("Skipped until 3 Nov", or the kept-protected words). Null: one line.
+ */
+export function stateSub(
+  r: { state: AnyState; clash?: WasteRow['clash']; followUp?: WasteRow['followUp']; skipped?: WasteRow['skipped'] },
+  words: { followUp?: string | null; keptProtected?: string | null } = {},
+): StateSubView | null {
+  if (r.clash && r.clash.kind !== 'TURNED_ON') return { word: r.clash.label, tone: 'danger', mark: 'warn' }
+  if (r.followUp && words.followUp) return { word: words.followUp, tone: r.followUp.status === 'WAITING' ? 'muted' : 'danger', mark: r.followUp.status === 'WAITING' ? 'hourglass' : 'warn' }
+  if (r.skipped) return { word: words.keptProtected ?? `Skipped until ${dayWords(r.skipped.until)}`, tone: 'muted', mark: 'clock' }
+  return null
+}
+
+/** D12 — a waiting row's two verbs, each through its review: "Approve rain cover · 2 places" for a screen reader. */
+export function decideAria(decide: 'approve' | 'reject', r: { text: string; waiting: { rows?: number } | null }): string {
+  const places = Math.max(1, r.waiting?.rows ?? 1)
+  return `${decide === 'approve' ? 'Approve' : 'Reject'} ${r.text}${places > 1 ? ` · ${places} places` : ''}`
+}
+
+/** What a ⋯ entry asks the view: a skip of the row, its unskip, one change (with a Keep paused's old end), its record. */
+export type RowMenuAsk =
+  | { kind: 'skip'; days: 7 | 30 }
+  | { kind: 'unskip' }
+  | { kind: 'change'; item: WasteItem; keepFrom?: string }
+  | { kind: 'record' }
+/** One entry of a row's ⋯ menu (the view turns `ask` into its review); a held one says why. */
+export type RowMenuEntry =
+  | { id: string; heading: string }
+  | { id: string; separator: true }
+  | { id: string; label: string; title?: string; held: string | null; ask: RowMenuAsk }
+
+/** A ⋯ entry that does something (not a heading, not a rule). */
+export type RowMenuVerb = Extract<RowMenuEntry, { ask: RowMenuAsk }>
+
+const OPEN_RECORD: RowMenuEntry = { id: 'record', label: 'Open record', held: null, ask: { kind: 'record' } }
+/** Open record is the last entry, under a rule when other entries stand above it. It never needs a write. */
+const withRecord = (entries: RowMenuEntry[]): RowMenuEntry[] => (entries.length ? [...entries, { id: 'sep-record', separator: true }, OPEN_RECORD] : [OPEN_RECORD])
+
+/**
+ * D6 — a Wasting row's ⋯: its second verb (Remove negative… under a clash), Skip 7 d · Skip 30 d (Unskip once skipped),
+ * Open record. A keyword turned on outside Nexus is not skipped: it spends again (the record's rule, audit S9). `noWrite`
+ * holds every verb (writeHeld); Open record still works.
+ */
+export function wasteRowMenu(r: Pick<WasteRow, 'id' | 'state' | 'verb' | 'kind' | 'skipped'> & Partial<Pick<WasteRow, 'test' | 'clash'>>, noWrite: string | null): RowMenuEntry[] {
+  const out: RowMenuEntry[] = []
+  const second = wasteVerb(r)?.second
+  if (second) {
+    out.push({ id: second.action, label: second.label, title: second.sentence, held: noWrite ?? second.held, ask: { kind: 'change', item: { rowId: r.id, action: second.action, ...(second.targetRowId ? { targetRowId: second.targetRowId } : {}) } } })
+  }
+  const k = idKind(r.id)
+  if ((k === 'kw' || k === 'term') && r.state !== 'TURNED_ON_ELSEWHERE') {
+    if (r.skipped) out.push({ id: 'unskip', label: 'Unskip', held: noWrite, ask: { kind: 'unskip' } })
+    else if (r.state === 'RUNNING' || r.state === 'PROTECTED') {
+      out.push({ id: 'skip7', label: 'Skip 7 d', held: noWrite, ask: { kind: 'skip', days: 7 } }, { id: 'skip30', label: 'Skip 30 d', held: noWrite, ask: { kind: 'skip', days: 30 } })
+    }
+  }
+  return withRecord(out)
+}
+
+/**
+ * D13 — a Stopped row's ⋯ (new): the record footer's other verbs, then Open record. Turned on outside Nexus: Pause again.
+ * Our paused keyword: Keep paused (kept paused: Keep until) 7 d · 30 d · Always, and Release lock when it is kept. A
+ * negative: Open record only (Remove… is its row button). `now`: today, for the ends.
+ */
+export function stoppedRowMenu(r: Pick<StoppedRow, 'id' | 'state' | 'keptPaused' | 'actions'>, noWrite: string | null, now: number): RowMenuEntry[] {
+  const out: RowMenuEntry[] = []
+  const inDays = (d: number) => new Date(now + d * 86_400_000).toISOString().slice(0, 10)
+  if (r.state === 'TURNED_ON_ELSEWHERE') {
+    out.push({ id: 'pause', label: 'Pause again', title: 'Pause it again and keep it paused: it was turned on outside Nexus', held: noWrite, ask: { kind: 'change', item: { rowId: r.id, action: 'PAUSE' } } })
+  }
+  if (idKind(r.id) === 'kw' && (r.state === 'KEPT_PAUSED' || r.state === 'PAUSED')) {
+    const kept = r.state === 'KEPT_PAUSED'
+    const from = kept ? r.keptPaused?.until ?? 'ALWAYS' : NOT_KEPT
+    const keep = (id: string, label: string, until: string | null): RowMenuEntry => ({ id, label, held: noWrite, ask: { kind: 'change', item: { rowId: r.id, action: 'KEEP_UNTIL', keepUntil: until }, keepFrom: from } })
+    out.push({ id: 'keep', heading: kept ? 'Keep until' : 'Keep paused' }, keep('keep7', '7 d', inDays(7)), keep('keep30', '30 d', inDays(30)), keep('keepAlways', 'Always', null))
+    if (kept) {
+      const why = r.actions.release.allowed ? null : r.actions.release.why || 'Not allowed here'
+      out.push({ id: 'sep-release', separator: true }, { id: 'release', label: 'Release lock', title: verbSentence('RELEASE'), held: noWrite ?? why, ask: { kind: 'change', item: { rowId: r.id, action: 'RELEASE' } } })
+    }
+  }
+  return withRecord(out)
 }

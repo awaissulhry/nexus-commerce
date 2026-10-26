@@ -4,7 +4,8 @@
  *
  *   Where   Enter → the campaign · ⇧ Enter → the ad group (one link per line)
  *   Who     Enter → the owner's chip when it opens something (a rule)
- *   Verb    Enter or Space → the row's verb (a held verb says why on focus and does nothing)
+ *   Verb    Enter or Space → the row's verb (a held verb says why on focus and does nothing); ⇧ Enter → the second
+ *           button: Reject on a waiting row (the redesign, D12: Approve · Reject in the row), else the row's ⋯
  *   Since   Enter → the focus on the day, so its reason shows (the DS tooltip, as on hover); Esc → back to the cell (NFIX)
  * Focus ON a link or a button keeps the control's own keys. Every other key stays the grid's; a cell with no control
  * lets Enter through (the view opens the record).
@@ -55,13 +56,15 @@ export function ownerKeys({ event, editing }: CellKeyParams): boolean {
   return press(event, t.querySelector(CONTROL))
 }
 
-/** The verb: Enter or Space presses it (a held one takes the focus, so its reason shows). */
+/** The verb: Enter or Space presses it (a held one takes the focus, so its reason shows); ⇧ Enter the cell's second
+ *  button (Reject beside Approve, else the ⋯). */
 export function verbKeys({ event, editing }: CellKeyParams): boolean {
   const t = event.target as KeyTarget | null
   if (!t || typeof t.closest !== 'function') return false
   if (onControl(t)) return true
   if (editing || (event.key !== 'Enter' && event.key !== ' ') || typeof t.querySelector !== 'function') return false
-  return press(event, t.querySelector('button'))
+  const all = event.key === 'Enter' && event.shiftKey && typeof t.querySelectorAll === 'function' ? t.querySelectorAll('button') : null
+  return press(event, all && all.length > 1 ? all[1] : t.querySelector('button'))
 }
 
 /** The Since cell's day (it carries its reason in the DS tooltip). */

@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   actionWord, autoLockOf, changeFromTo, decidedElsewhere, harvestWaitingHref, heldStep, isPseudo, last7Parts, last7Tab, last7Text, modeLock, negativeWord, ownerOf, partHolds, previewParts, refusalWhy,
-  rowMatchesSearch, scopeCount, sharedWhy, scopeLevel, scopePath, scopeText, testWords, verbWords, visibleRows, waitingAsksOf, waitingGap, whoWord,
+  rowMatchesSearch, RULES_NOTE, scopeCount, sharedWhy, scopeLevel, scopePath, scopeText, testWords, verbWords, visibleRows, waitingAsksOf, waitingGap, whoWord,
   type WaitingRow, type WasteRuleRow,
 } from './wasteRulesModel'
 import {
@@ -281,5 +281,11 @@ describe('audit R-M1 — a "Pause keyword, keep it paused" rule\'s settings: onl
     expect(groups[1].items).toEqual([{ label: 'Ad group', value: 'Seed IT › Seed exact group' }])
     expect(groups[3].items[0]).toEqual({ label: 'Keywords a day', value: '10' })
     expect(JSON.stringify(groups)).not.toMatch(/negative exact|Search terms|Negation|kids|Brand/)
+  })
+})
+
+describe('the note under the card (the redesign, 2026-10-26)', () => {
+  it('says what Last 7 d and Waiting count, in the columns\' own words', () => {
+    expect(RULES_NOTE).toBe('Last 7 d: keywords it paused, negatives it added, asks it made, refusals · Waiting: asks waiting for you — approve or reject them here')
   })
 })
