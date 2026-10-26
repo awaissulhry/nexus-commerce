@@ -59,11 +59,11 @@ export const AD_TOOL = 'create-meta-ad'
 export const CREATIVE_RECORD_TOOLS: readonly string[] = [CREATIVE_TOOL, BOOST_TOOL, AD_TOOL]
 /**
  * Master CR-207 (review B2) — saved welcome-message flows (`GET/POST/DELETE /{page_id}/welcome_message_flows`, SDK only) are
- * a Page write that needs the Page's own access token (lane question Q1). C2-PAGE-TOKEN: lane C4's step 36 builds the
- * gateway's `auth: 'page'` mode; lane C2 wires these flows to it then. A creative uses a flow by its id already
- * (asset_feed_spec.additional_data.partner_app_welcome_message_flow_id).
+ * a Page write that needs the Page's own access token (lane question Q1): step 38's set-meta-messaging-setup (section
+ * welcome-flow) makes, changes and deletes them as the Page, and meta-messaging-setup (view welcome-flows) reads them
+ * (step 46: this answer names them). A creative uses a flow by its id (asset_feed_spec.additional_data.partner_app_welcome_message_flow_id).
  */
-export const WELCOME_FLOWS_ANSWER = 'Saved welcome-message flows of the Page (create, list, delete) need the Page\'s own access token, which Nexus does not hold yet: they come with the Page-token mode (step 36). Until then a person makes them in Meta Business Suite; a creative already uses one by its id (assetFeed.additional_data.partner_app_welcome_message_flow_id).'
+export const WELCOME_FLOWS_ANSWER = 'Saved welcome-message flows of the Page are not made here: set-meta-messaging-setup (section welcome-flow) makes, changes and deletes them as the Page, and meta-messaging-setup (view welcome-flows) lists them. A creative uses one by its id (assetFeed.additional_data.partner_app_welcome_message_flow_id).'
 export const SET_CREATIVE_TOOL = 'set-meta-creative'
 /** At most this many creatives taken back per request. */
 export const MAX_CREATIVE_UNDO = 10
@@ -252,7 +252,7 @@ export function buildCreative(request: CreativeRequest, chosen: { pageId: string
     if (igId) creative.instagram_user_id = igId
   }
   Object.assign(creative, parts, branded)
-  if (request.shopDestination) return { refusal: `Nothing was asked of Meta: shop routing (WEBSITE_AND_SHOP) sends people to the Page's Facebook or Instagram shop, and Nexus cannot confirm a shop is this business's own (nor its commerce account): it comes with the catalog / commerce steps. Shop routing stays off.` }
+  if (request.shopDestination) return { refusal: `Nothing was asked of Meta: shop routing (WEBSITE_AND_SHOP) lets Meta send people to the Page's Facebook or Instagram shop instead of the website. The Owner's rule (2026-10-23): every Meta ad sends people to the business's own shop, on the product's page — so Nexus never sends shop routing, and a website creative goes out WEBSITE_AND_SHOP_OPT_OUT.` }
   const music = request.music === 'random' ? [{ type: 'random' }] : []
   if (request.postId || base) {
     if (Object.keys(feed).length) return { refusal: 'Nothing was asked of Meta: a creative of an existing post takes no asset feed here (only music, by the argument music).' }

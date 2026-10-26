@@ -63,8 +63,8 @@ const metaLeadForms: AgentTool = {
     + 'state in words, language, when made and how many leads Meta keeps for it (statuses narrows it; messengerOnly: the '
     + 'ones that can be sent inside a Messenger chat). form (formId): one form — its questions in order (each answer in a '
     + 'lead carries the question\'s key), privacy policy, intro, thank-you page, consent boxes and whether it is a '
-    + 'higher-intent form. A form is read only when it is one of the chosen Page\'s forms. Making, archiving or '
-    + 're-activating a form and making a test lead are change tools (a later Nexus step). The answers people gave are '
+    + 'higher-intent form. A form is read only when it is one of the chosen Page\'s forms. A form is made with '
+    + 'create-meta-lead-form; archiving or re-activating it and its test lead are set-meta-lead-form. The answers people gave are '
     + 'meta-leads. Meta\'s v26 reference says the Page\'s form list cannot be read while its '
     + 'lead-ads guide reads it, and some Page reads answer only a Page token: Meta\'s words then say so. Read only.',
   async handler(args): Promise<ToolResult> {

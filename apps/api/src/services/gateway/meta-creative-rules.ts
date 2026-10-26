@@ -313,9 +313,10 @@ const igPermalink: Judge = (value, path) => (typeof value === 'string' && META_I
 const THREADS = 'Meta\'s reference names a Threads id without saying what it takes, and its Threads guide runs Threads ads on the Instagram account ("that Instagram account needs to be used"): Nexus sends no Threads id; Threads delivery comes with the chosen Instagram account and the ad set\'s Threads placement'
 /**
  * Review B5 — shop routing sends people to the Page's Facebook or Instagram shop (onsite_destinations, shops_bundle name
- * one): Nexus cannot confirm that shop and its commerce account are this business's own.
+ * one). Step 46 — the Owner's rule (2026-10-23): every Meta ad sends people to the business's own shop, on the product's
+ * page, so shop routing is never sent (master CR-265 / CR-267: out of scope).
  */
-const SHOP = 'Nexus cannot confirm that the Page\'s Facebook or Instagram shop and its commerce account are this business\'s own, so it sends no shop routing: it comes with the catalog / commerce steps'
+const SHOP = 'every Meta ad sends people to the business\'s own shop, on the product\'s page, never to a Facebook or Instagram shop Meta picks (the Owner\'s rule of 2026-10-23), so Nexus sends no shop routing'
 
 /** A JSON object of exactly these keys (each optional; `need`: these must be there). */
 function obj(keys: Record<string, Judge>, need: readonly string[] = []): Judge {

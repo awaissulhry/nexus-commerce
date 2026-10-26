@@ -37,7 +37,7 @@ export const EVENT_SETUP_CANNOT = 'Meta cannot change this by API: its public Ma
  */
 export const SETUP_CANNOT = 'Meta cannot change event rules, parameter extractors, domain-control rules or traffic permissions by API (v26 reference ads-pixel/event_rules, extractors, domain_control_rule: "can\'t perform"; Meta\'s SDK has no write either): a person does it in Events Manager › the dataset › Settings (Event setup tool, Traffic permissions). meta-datasets view event-setup reads the event rules and parameter extractors; Nexus does not read traffic permissions yet (view diagnostics check event-log shows an event Meta rejected by them).'
 /** Lane C3 decision: who else may use a dataset is not a step 32 change. */
-export const ACCESS_ELSEWHERE = 'Partner portfolios, the businesses allowed to send a dataset\'s server events and people\'s tasks on it are set in Meta\'s Business settings › Data sources › Datasets (Nexus\'s partner-access step, 41, is where they will be): not here.'
+export const ACCESS_ELSEWHERE = 'Partner portfolios, the businesses allowed to send a dataset\'s server events and people\'s tasks on it are set-meta-partner-access (asset pixel; server-events) and set-meta-user-access (asset pixel), or Meta\'s Business settings › Data sources › Datasets: not here.'
 /** SG-017 — a pixel has no delete (ads-pixel.md "Deleting" is empty; no delete edge). */
 export const DATASET_NO_DELETE = 'A dataset (pixel) cannot be deleted through Meta\'s API (its reference has no delete): once made it stays; a person can only stop using it or remove its ad accounts.'
 
