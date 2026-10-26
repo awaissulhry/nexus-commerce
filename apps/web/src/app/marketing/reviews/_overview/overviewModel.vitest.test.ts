@@ -120,7 +120,9 @@ describe('needs you', () => {
   })
 
   it('each action opens a page that exists today (through the one link module)', () => {
-    expect(needsActionHref(item({}).action)).toBe('/marketing/reviews/inbox?channel=EBAY&market=IT')
+    // Reply opens that review in the Inbox.
+    expect(needsActionHref(item({}).action)).toBe('/marketing/reviews/inbox?channel=EBAY&market=IT&review=r1')
+    expect(needsActionHref({ label: 'Open Inbox', page: 'inbox', params: { id: 'r1', channel: 'EBAY' } })).toBe('/marketing/reviews/inbox?channel=EBAY')
     expect(needsActionHref({ label: 'See alert', page: 'alerts', params: { market: 'DE' } })).toBe('/marketing/reviews/spikes?market=DE')
     expect(needsActionHref({ label: 'See requests', page: 'requests', params: { status: 'FAILED' } })).toBe('/marketing/reviews/requests?status=FAILED')
   })

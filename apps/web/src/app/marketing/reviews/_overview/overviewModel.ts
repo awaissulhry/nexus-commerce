@@ -416,6 +416,8 @@ export function needsActionHref(action: NeedsYouItem['action']): string {
   const p = action.params ?? {}
   switch (action.page) {
     case 'review':
+      // Reply: the Inbox, with that review's pop-up open.
+      return inboxHref({ channel: text(p, 'channel'), market: text(p, 'market'), status: text(p, 'status'), review: text(p, 'id') } satisfies InboxLinkParams)
     case 'inbox':
       return inboxHref({ channel: text(p, 'channel'), market: text(p, 'market'), status: text(p, 'status') } satisfies InboxLinkParams)
     case 'requests':
