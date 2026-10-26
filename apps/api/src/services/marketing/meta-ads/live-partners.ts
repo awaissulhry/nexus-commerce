@@ -484,7 +484,7 @@ export async function livePartnership(input: PartnershipInput) {
     case 'collab-invites': {
       const instagramId = instagramOf(account)
       const read = await noted(() => graphPage(connectionId, 'partners.collabInvites', `${instagramId}/collaboration_invites`, { fields: 'media_id,media_owner_username,caption,media_url', limit: Math.min(50, input.limit ?? 25), ...(input.after ? { after: input.after } : {}) }), IG_USER_TOKEN)
-      return { ...base, items: read.rows.map((r) => ({ mediaId: idOf(r.media_id), ownerUsername: text(r.media_owner_username), caption: text(r.caption), mediaUrl: text(r.media_url) })), nextAfter: read.nextAfter, note: 'Pending Collab invites to the chosen Instagram account (feed images, Reels and carousels; never Stories). Meta allows 300 of these reads per account per day. Accepting or declining comes with a later Nexus change step.' }
+      return { ...base, items: read.rows.map((r) => ({ mediaId: idOf(r.media_id), ownerUsername: text(r.media_owner_username), caption: text(r.caption), mediaUrl: text(r.media_url) })), nextAfter: read.nextAfter, note: 'Pending Collab invites to the chosen Instagram account (feed images, Reels and carousels; never Stories). Meta allows 300 of these reads per account per day. Accepting or declining one is set-meta-partnership-access.' }
     }
     case 'collab-media': {
       const instagramId = instagramOf(account)

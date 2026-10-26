@@ -205,10 +205,10 @@ const metaInstagramMedia: AgentTool = {
     + 'why not (copyrighted music, filters), the ads that boost or boosted it (active or not), its copyright check. media-insights, '
     + 'account-insights: Meta\'s organic numbers (views, reach, likes, saves, shares, follows, demographics; impressions '
     + 'are retired; only the metrics a media\'s kind has — a story has no likes), to pick posts to boost. quota: posts '
-    + 'published through the API in 24 hours against Meta\'s limit (a publish container\'s status comes with the publish '
-    + 'step: Nexus makes no containers yet). upcoming-events: events a reminder ad can point to. '
+    + 'published through the API in 24 hours against Meta\'s limit (the state of a publish container Nexus made is in '
+    + 'create-meta-instagram-post\'s answer). upcoming-events: events a reminder ad can point to. '
     + 'video-check (videoId): whether a video meets Instagram\'s ad rules. Only the chosen Instagram account is read: '
-    + 'another account\'s media is refused. Publishing and boosting are change tools (a later Nexus step). Read only.',
+    + 'another account\'s media is refused. Publishing is create-meta-instagram-post, boosting create-meta-boost. Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveInstagram({
       connectionId: str(args.connectionId),
@@ -340,8 +340,8 @@ const metaInstantExperiences: AgentTool = {
     + 'left behind by an unfinished builder; Meta lets no published one change). one (canvasId): one with its parts. '
     + 'elements: the parts made on the Page. template: which parts one of Meta\'s templates takes (get-new-customers, '
     + 'showcase-your-business, sell-products-without-catalog, sell-products-lifestyle, sell-products-grid; the AR template '
-    + 'is Ads Manager only). meta-ad-preview view instant-experience shows one. Making or publishing one is a change tool '
-    + '(a later Nexus step). The list goes with the chosen Page\'s own token (Meta answers it to no other). Meta refuses the '
+    + 'is Ads Manager only). meta-ad-preview view instant-experience shows one. create-meta-instant-experience makes one '
+    + '(always unpublished); set-meta-instant-experience edits, publishes or hides it. The list goes with the chosen Page\'s own token (Meta answers it to no other). Meta refuses the '
     + 'template read to the business\'s token (insufficient permissions): the answer then says so. Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveInstantExperiences({

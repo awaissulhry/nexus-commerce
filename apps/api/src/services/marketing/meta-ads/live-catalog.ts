@@ -465,7 +465,7 @@ export async function liveCatalogs(input: CatalogsInput) {
       return {
         ...base, catalogId: catalog.catalogId, total: read.totalCount,
         items: read.rows.map((r) => ({ userId: idText(r.id), name: text(r.name), userType: text(r.user_type), tasks: strings(r.tasks), permittedTasks: strings(r.permitted_tasks) })),
-        more: read.more, note: 'Giving or taking access is a change tool (a later Nexus step); a person can in Meta Business settings › Catalogs.',
+        more: read.more, note: 'Giving or taking access is set-meta-catalog-access; a person can also in Meta Business settings › Catalogs.',
       }
     }
     case 'partners': {
@@ -634,7 +634,7 @@ export async function liveCatalogItems(input: ItemsInput) {
         writtenBy: feed ? { feedId: idText(feed.id), name: nameOrHost(feed.name), ...hiddenNote('nameHidden', feed.name), sentence: 'A feed writes this item.' } : { feedId: null, sentence: 'No feed: an app (the API) or a shop platform writes this item; meta-catalogs view writer says which.' },
         review: {
           status: text(body.review_status), rejectionReasons: strings(body.review_rejection_reasons), perChannel: tidy(body.capability_to_review_status ?? null),
-          note: body.review_status === 'rejected' ? 'Rejected items do not serve. An appeal is a change (Meta\'s additional_reviews; a later Nexus step) or Commerce Manager.' : null,
+          note: body.review_status === 'rejected' ? 'Rejected items do not serve. Ask Meta for a review in Commerce Manager: Nexus sends no appeal of a catalog item.' : null,
         },
         priceNote: PRICE_NOTE,
         notes: ['generatedBackgroundImages are images Meta made itself; generatedBackgroundImagesAdUsage says whether ads may use them.'],
@@ -737,7 +737,7 @@ export async function liveCatalogFeeds(input: FeedsInput) {
       // CT-081 — the feed's extra upload schedules (each adds and updates only, never deletes).
       const { id, catalog } = await catalogChild(account, { kind: 'feed', id: feedId(), catalogId: input.catalogId })
       const read = await withNote(() => listPaged(connectionId, 'feeds.schedules', `${id}/upload_schedules`, { fields: `id,${SCHEDULE_FIELDS}` }, maxRows))
-      return { ...base, catalogId: catalog.catalogId, feedId: id, items: read.rows.map((r) => ({ scheduleId: idText(r.id), ...scheduleOf(r) })), more: read.more, note: 'Extra schedules only add and update items (meant for price and availability); the feed\'s own schedule is in view feed. Changing them is a change tool (a later Nexus step).' }
+      return { ...base, catalogId: catalog.catalogId, feedId: id, items: read.rows.map((r) => ({ scheduleId: idText(r.id), ...scheduleOf(r) })), more: read.more, note: 'Extra schedules only add and update items (meant for price and availability); the feed\'s own schedule is in view feed. set-meta-catalog-feed (action upload-schedule) adds one to a feed Nexus made.' }
     }
     case 'uploads': {
       // CT-072 — the feed's uploads, manual and scheduled.
@@ -767,7 +767,7 @@ export async function liveCatalogFeeds(input: FeedsInput) {
       const errorId = need(input.errorId ?? null, 'Name the error (errorId, from view upload-errors).')
       const { id, catalog } = await catalogChild(account, { kind: 'upload_error', id: errorId, catalogId: input.catalogId, feedId: input.feedId, uploadId: input.uploadId })
       const read = await withNote(() => listPaged(connectionId, 'feeds.suggestedRules', `${id}/suggested_rules`, { fields: 'attribute,params,type' }, 50))
-      return { ...base, catalogId: catalog.catalogId, errorId: id, items: read.rows.map((r) => ({ attribute: text(r.attribute), type: text(r.type), params: tidy(r.params ?? null) })), note: 'Applying a suggested rule is a change (a later Nexus step).' }
+      return { ...base, catalogId: catalog.catalogId, errorId: id, items: read.rows.map((r) => ({ attribute: text(r.attribute), type: text(r.type), params: tidy(r.params ?? null) })), note: 'Nexus applies a suggested rule as a rule of its own: set-meta-catalog-feed action rules (on a feed Nexus made; on a feed Shopify writes, only for the D7 label columns).' }
     }
     case 'rules': {
       // CT-082 — the feed's rules (mapping, value and fix rules).
@@ -881,7 +881,7 @@ export async function liveCatalogHealth(input: HealthInput) {
     case 'rejected': {
       // CT-115 — rejected items and why (they do not serve).
       const read = await withNote(() => listPaged(connectionId, 'health.rejected', `${catalog.catalogId}/products`, { fields: ITEM_HEALTH_FIELDS, filter: REJECTED }, maxRows, true))
-      return { ...base, total: read.totalCount, items: read.rows.map(healthItemRow), more: read.more, note: 'Rejected items do not serve. An appeal is a change (Meta\'s additional_reviews: at most 100 items a call, 10 calls a day; a later Nexus step) or Commerce Manager.' }
+      return { ...base, total: read.totalCount, items: read.rows.map(healthItemRow), more: read.more, note: 'Rejected items do not serve. Ask Meta for a review in Commerce Manager: Nexus sends no appeal of a catalog item.' }
     }
     case 'match-rate': {
       // CT-112 — how pixel and app events match the catalog's items (per day; counts not de-duplicated; Meta does not say
@@ -890,7 +890,7 @@ export async function liveCatalogHealth(input: HealthInput) {
       const read = await withTier(() => listPaged(connectionId, 'health.eventStats', `${catalog.catalogId}/event_stats`, { fields: EVENT_STAT_FIELDS, ...(input.byDevice ? { breakdowns: ['DEVICE_TYPE'] } : {}) }, 500))
       return {
         ...base, sourcesRanked: rankSources(read.rows), rows: read.rows.map((r) => ({ ...(tidy(r) as Row) })), more: read.more,
-        note: 'Meta\'s numbers per day and per event source (Meta does not say over how many days); counts are not de-duplicated, and only sources this system user can see appear. An unmatched content id is an event whose product id is not in this catalog (pixel content_ids must equal the items\' ids). sourcesRanked: Nexus\'s ranking by matched share (Meta\'s own MCP recommends sources; Meta has no public API for it). A dataset not yet connected to the catalog: meta-datasets lists the business\'s datasets; connecting one is a change (a later Nexus step).',
+        note: 'Meta\'s numbers per day and per event source (Meta does not say over how many days); counts are not de-duplicated, and only sources this system user can see appear. An unmatched content id is an event whose product id is not in this catalog (pixel content_ids must equal the items\' ids). sourcesRanked: Nexus\'s ranking by matched share (Meta\'s own MCP recommends sources; Meta has no public API for it). A dataset not yet connected to the catalog: meta-datasets lists the business\'s datasets; connecting one is set-meta-catalog action connect-pixels.',
       }
     }
     case 'pixel-checks': {

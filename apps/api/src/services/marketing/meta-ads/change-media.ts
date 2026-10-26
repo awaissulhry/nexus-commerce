@@ -84,7 +84,7 @@ export const MEDIA_TOOL = 'create-meta-media'
 // ── plain answers (no call) ─────────────────────────────────────────────────────────────────────────────────────────
 
 /** MD-024 — checked 2026-10-21: developers.facebook.com/docs/graph-api/reference/video/thumbnails (F1 M5-10). */
-export const THUMBNAIL_ANSWER = 'Meta takes a custom video thumbnail (POST /<video id>/thumbnails) only for a video associated with a Facebook Page ("Thumbnails can only be created on Videos that have been associated with a Page"), so this upload comes with Nexus\'s Page step (step 24). For an ad you do not need it: the creative sets its video\'s thumbnail itself (video_data image_hash) — upload the picture with kind image and use its hash in the creative.'
+export const THUMBNAIL_ANSWER = 'Meta takes a custom video thumbnail (POST /<video id>/thumbnails) only for a video associated with a Facebook Page ("Thumbnails can only be created on Videos that have been associated with a Page"), and Nexus does not upload one to a Page video yet. For an ad you do not need it: the creative sets its video\'s thumbnail itself (video_data image_hash) — upload the picture with kind image and use its hash in the creative.'
 /** MD-029 — checked 2026-10-21: reference/ad-account/adplayables.md; routes/assets.routes.ts (Nexus's library takes images and videos only). */
 export const PLAYABLE_ANSWER = 'Nexus holds no HTML5 playable files (its media library takes images and videos only), so it uploads no playable.'
 /** MD-011…MD-014 — checked 2026-10-21: reference/ad-account/advideos.md (upload_phase start, transfer, finish, cancel; RECHECK: the sequence is documented nowhere). */

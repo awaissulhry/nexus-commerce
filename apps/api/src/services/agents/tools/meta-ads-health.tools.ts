@@ -67,7 +67,8 @@ const metaAccountHealth: AgentTool = {
     + 'or declined charges); signals — custom conversions Meta flagged and pixels it marks unavailable; page — the chosen '
     + 'Facebook Page\'s integrity (status, violations, restrictions, Meta\'s next steps); connection — the token now, Meta\'s '
     + 'usage of each rate limit, a version warning, and every Meta throttle in the call ledger in words with what Nexus does. '
-    + 'Meta cannot fix any of these by API: appeals, Account Quality and payments are in Meta Business Suite and Ads Manager. '
+    + 'Meta cannot fix any of these by API: appeals, Account Quality and payments are in Meta Business Suite and Ads Manager '
+    + '(create-meta-appeal gives the Owner\'s steps for a review). '
     + READ_LINE,
   async handler(args): Promise<ToolResult> {
     return guarded(() => healthView({

@@ -60,16 +60,14 @@ export const INSTRUCTIONS_LIMIT = 4096
  */
 export function mcpInstructions(business: McpBusiness): string {
   return [
-    'Nexus is the back office for selling on Amazon, eBay, Shopify and Etsy.',
     `This connection works in the business "${business.name}" only: every tool reads and changes that business, and`,
     'every result says so (business). The same SKU can exist in another business; never reuse an id, a SKU or an approvalId',
     `read on another connection. Every change tool needs business: "${business.name}" — a check: any other name is refused —`,
     'and so do submit-change-plan, undo-change and confirm-change.',
-    'Read business-overview (markets, channel accounts and the exact codes and ids tools take) before naming a market',
-    'or an account.',
+    'Read business-overview before naming a market or an account.',
     'Before any change: tell the person which business it is for, read what is there now, show the plan (what changes',
     'from → to, how many, and where: Nexus only, a marketplace or a buyer), and go on only after a clear yes.',
-    'Several changes go in ONE submit-change-plan (up to 200 steps; a bulk tool is one step) or one bulk tool, never a',
+    'Several changes go in ONE submit-change-plan (a bulk tool is one step) or one bulk tool, never a',
     'loop of single requests.',
     'A change tool changes nothing from here: it returns a preview and an approvalId; a person approves it on Nexus\'s',
     'Approvals page (approveAt; it expires at expiresAt), unless the business set that change to run by its rule (status',
@@ -102,6 +100,8 @@ export function mcpInstructions(business: McpBusiness): string {
     'delete. New parts that point at new parts are ONE call (build-google-campaigns, copy-google-campaign,',
     'build-google-pmax, copy-google-pmax, create-google-…-campaign), never steps of a change plan.',
     'Meta changes go through …-meta-… tools; never take a Meta app secret or token in chat.',
+    'Some …-meta-… tools guide acts only the account holder may do in Meta: nothing sent, no approvalId, the steps in',
+    'Meta\'s screens; since reads the result.',
   ].join(' ')
 }
 
