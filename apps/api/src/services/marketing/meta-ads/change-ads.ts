@@ -555,10 +555,13 @@ async function adRecordOf(adId: string, adAccountId: string): Promise<{ id: stri
  */
 export const INSIGHTS_LAG_MS = 30 * 60_000
 
-/** The ad's numbers since it was made (spend, impressions) — null when they could not be read (then nothing is deleted). */
-async function everRan(chosen: MetaChosenAccount, adId: string, createdTime: string | null): Promise<{ spend: number; impressions: number } | null> {
+/**
+ * The ad's numbers since it was made (spend, impressions) — or why they could not be read, in Meta's (or Nexus's) words
+ * (then nothing is deleted; "could not read" alone hid Meta's refusal of the campaign undo for a day, 2026-10-22).
+ */
+async function everRan(chosen: MetaChosenAccount, adId: string, createdTime: string | null): Promise<{ spend: number; impressions: number } | { unread: string }> {
   const created = createdTime ? Date.parse(createdTime.replace(/([+-]\d{2})(\d{2})$/, '$1:$2')) : NaN
-  if (!Number.isFinite(created)) return null
+  if (!Number.isFinite(created)) return { unread: 'Meta did not say when the ad was made' }
   try {
     const read = await metaReadOne<{ data?: Array<{ spend?: unknown; impressions?: unknown }> }>({ connectionId: chosen.connectionId }, {
       operation: 'ad.spendRead', path: `${adId}/insights`,
@@ -566,8 +569,8 @@ async function everRan(chosen: MetaChosenAccount, adId: string, createdTime: str
     })
     const rows = Array.isArray(read.body.data) ? read.body.data : []
     return rows.reduce<{ spend: number; impressions: number }>((sum, r) => ({ spend: sum.spend + (Number(r.spend) || 0), impressions: sum.impressions + (Number(r.impressions) || 0) }), { spend: 0, impressions: 0 })
-  } catch {
-    return null
+  } catch (err) {
+    return { unread: err instanceof Error ? err.message : String(err) }
   }
 }
 
@@ -621,7 +624,7 @@ export async function adUndoDraft(account: MetaChangeAccount, ids: string[]): Pr
       if (Date.now() < settled) { skipped.push(`Ad ${id} stays for now: it was ${createdActive ? 'created ACTIVE' : 'changed after it was made'}, and Meta's numbers lag up to 15 minutes; try again after ${new Date(settled).toISOString().slice(11, 16)} UTC.`); continue }
     }
     const ran = await everRan(chosen, id, text(ad.created_time))
-    if (!ran) { skipped.push(`Ad ${id} stays: Nexus could not read its numbers, so it cannot confirm the ad never ran.`); continue }
+    if ('unread' in ran) { skipped.push(`Ad ${id} stays: Nexus could not read its numbers (${ran.unread.trim().replace(/\.$/, '')}), so it cannot confirm the ad never ran.`); continue }
     if (ran.spend > 0 || ran.impressions > 0) { skipped.push(`Ad ${id} stays: it has run (${ran.impressions} impressions, spend ${ran.spend}) and Meta keeps its numbers only while it exists — archive it with set-meta-status (status ARCHIVED) instead.`); continue }
     const recordCreative = records.get(id)!.creativeId
     const shows = idOf(isObject(ad.creative) ? ad.creative.id : null)
