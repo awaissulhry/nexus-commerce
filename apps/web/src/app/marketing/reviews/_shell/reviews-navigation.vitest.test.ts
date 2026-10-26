@@ -18,11 +18,11 @@ const active = (path: string) => items(path).filter(item => item.active).map(ite
 describe('reviews navigation', () => {
   it('provides unique, whitespace-free IDs for the disclosure labels and their panels', () => {
     const ids = nav.buildReviewsNavigation('/marketing/reviews').map(group => group.id)
-    expect(ids).toEqual(['reviews', 'requests', 'insights', 'settings'])
+    expect(ids).toEqual(['reviews', 'requests', 'insights', 'channels', 'settings'])
     expect(ids.every(id => /^[a-z0-9-]+$/.test(id))).toBe(true)
     expect(new Set(ids).size).toBe(ids.length)
     const groups = nav.buildReviewsNavigation('/marketing/reviews')
-    expect(groups.map(group => !!group.collapsible)).toEqual([false, true, true, false])
+    expect(groups.map(group => !!group.collapsible)).toEqual([false, true, true, true, false])
     // Settings sits alone at the bottom, under no drawn heading (as the design draws it).
     expect(groups.at(-1)).toMatchObject({ label: 'Reviews settings', hideLabel: true })
     expect(groups.at(-1)?.items.map(item => item.label)).toEqual(['Settings'])
@@ -43,11 +43,11 @@ describe('reviews navigation', () => {
     const onlyReviews = (permission: string) => permission === 'pages.reviews'
     const groups = nav.buildReviewsNavigation('/w/business_a/marketing/reviews', onlyReviews)
     const labels = groups.flatMap(group => group.items).map(item => item.label)
-    expect(labels).toEqual(['Overview', 'Inbox', 'Queue', 'Rules', 'Timing', 'Themes', 'Products', 'Alerts', 'Fixes', 'Brief'])
+    expect(labels).toEqual(['Overview', 'Inbox', 'Queue', 'Rules', 'Timing', 'Themes', 'Products', 'Alerts', 'Fixes', 'Brief', 'Amazon', 'eBay'])
     expect(groups.every(group => group.items.length > 0)).toBe(true)
     expect(nav.buildReviewsNavigation('/marketing/reviews', () => false)).toEqual([])
     // The Settings row needs "Manage reviews" as well as the page permission; without it its group goes too.
-    expect(groups.map(group => group.id)).toEqual(['reviews', 'requests', 'insights'])
+    expect(groups.map(group => group.id)).toEqual(['reviews', 'requests', 'insights', 'channels'])
     const manager = (permission: string) => permission === 'pages.reviews' || permission === 'reviews.manage'
     expect(nav.buildReviewsNavigation('/marketing/reviews', manager).flatMap(group => group.items).map(item => item.label).at(-1)).toBe('Settings')
     const settings = model.REVIEWS_NAV.flatMap(group => group.items).find(item => item.label === 'Settings')
@@ -87,6 +87,24 @@ describe('reviews navigation', () => {
     expect(active('/marketing/reviews/automation')).toEqual(['Settings'])
   })
 
+  it('lists a row per channel market under Amazon and eBay, and marks the market page itself', () => {
+    const markets = { AMAZON: ['IT', 'de', 'GB', 'bad1'], EBAY: ['IT'] }
+    const channels = nav.buildReviewsNavigation('/w/business_a/marketing/reviews/amazon/it', undefined, undefined, markets).find(group => group.id === 'channels')!
+    expect(channels.items.map(item => item.label)).toEqual(['Amazon', 'Amazon Italy', 'Amazon Germany', 'Amazon United Kingdom', 'eBay', 'eBay Italy'])
+    expect(channels.items.map(item => item.href)).toEqual([
+      '/w/business_a/marketing/reviews/amazon', '/w/business_a/marketing/reviews/amazon/it', '/w/business_a/marketing/reviews/amazon/de',
+      '/w/business_a/marketing/reviews/amazon/uk', '/w/business_a/marketing/reviews/ebay', '/w/business_a/marketing/reviews/ebay/it',
+    ])
+    expect(channels.items.filter(item => item.active).map(item => item.label)).toEqual(['Amazon Italy'])
+    const activeWith = (path: string) => nav.buildReviewsNavigation(path, undefined, undefined, markets).flatMap(group => group.items).filter(item => item.active).map(item => item.label)
+    expect(activeWith('/marketing/reviews/amazon')).toEqual(['Amazon'])
+    expect(activeWith('/marketing/reviews/ebay/it')).toEqual(['eBay Italy'])
+    // A market without a row (not sold there yet) keeps its channel's row current; no markets read → the channel rows only.
+    expect(activeWith('/marketing/reviews/ebay/de')).toEqual(['eBay'])
+    expect(active('/marketing/reviews/amazon/fr')).toEqual(['Amazon'])
+    expect(items('/marketing/reviews').filter(item => /^(Amazon|eBay)/.test(item.label)).map(item => item.label)).toEqual(['Amazon', 'eBay'])
+  })
+
   it('shows the needs-a-reply badge on the Inbox only when there is something to reply to', () => {
     const inbox = (needReply?: number) => items('/marketing/reviews', undefined, { needReply }).find(item => item.label === 'Inbox')?.badge
     expect(inbox(12)).toBe('12')
@@ -111,6 +129,13 @@ describe('reviews crumbs', () => {
   it('ends a record page on its list, as a link', () => {
     expect(trail('/marketing/reviews/requests/rules/rule-id')).toBe('Marketing › Reviews › Requests › Rules')
     expect(trail('/marketing/reviews/products/product-id')).toBe('Marketing › Reviews › Insights › Products')
+  })
+
+  it('a channel page reads Marketing › Reviews › Amazon › Italy (no "Channels" crumb)', () => {
+    expect(trail('/marketing/reviews/amazon')).toBe('Marketing › Reviews › Amazon*')
+    expect(trail('/marketing/reviews/amazon/it')).toBe('Marketing › Reviews › Amazon › Italy*')
+    expect(trail('/marketing/reviews/ebay/gb')).toBe('Marketing › Reviews › eBay › United Kingdom*')
+    expect(model.reviewsCrumbTrail('/marketing/reviews/ebay/de').map(c => c.href)).toEqual(['/marketing', '/marketing/reviews', '/marketing/reviews/ebay', '/marketing/reviews/ebay/de'])
   })
 
   it('sends a group crumb to the group’s first page', () => {

@@ -1,0 +1,356 @@
+/*
+ * Reviews › Amazon / eBay — layout and domain content only. Every control is a design-system component; nothing here
+ * restyles one. `--nds-*` tokens only. The shell (`_shell/reviews-shell.module.css`) gives the page its padding; this file
+ * spaces the sections as the approved boards do (14 px between cards) and lets every row wrap, so the page never scrolls
+ * sideways at 390 px (wide tables scroll inside their card).
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+/* The PageHeader's own bottom margin is the gap to the tabs; the column gap adds nothing more there. */
+.page > :first-child {
+  margin-bottom: var(--nds-space-4);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+@media (max-width: 599px) {
+  .actions {
+    width: 100%;
+  }
+}
+
+.tiles {
+  margin: 0;
+}
+
+.skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+}
+
+.tileSkeletons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: var(--nds-space-10);
+}
+
+@media (max-width: 759px) {
+  .tileSkeletons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ── Cards side by side ──────────────────────────────────── */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-14);
+}
+
+.wide {
+  flex: 2 1 520px;
+  min-width: 0;
+}
+
+.narrow {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+
+.half {
+  flex: 1 1 420px;
+  min-width: 0;
+}
+
+@media (max-width: 599px) {
+  .wide,
+  .narrow,
+  .half {
+    flex-basis: 100%;
+  }
+}
+
+.pad {
+  padding: var(--nds-space-12) var(--nds-space-16);
+}
+
+.stackGap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.stackEnd {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.main {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.sub {
+  font-size: var(--nds-font-size-xs-plus);
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-2);
+}
+
+.note,
+.footnote {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}
+
+.page > .footnote {
+  line-height: 1.6;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text);
+}
+
+.up {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-success-text);
+}
+
+.down {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-danger-text);
+}
+
+/* ── Rating spread ───────────────────────────────────────── */
+.bigRating {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-12);
+}
+
+.bigNumber {
+  font-size: var(--nds-font-size-2xl);
+  font-weight: var(--nds-font-weight-extrabold);
+  line-height: 1;
+  color: var(--nds-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Amazon topics: like | dislike ───────────────────────── */
+.topicCols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--nds-space-16);
+}
+
+.topicCol {
+  min-width: 0;
+}
+
+.topicHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0 0 var(--nds-space-8);
+  font-size: var(--nds-font-size-base);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.topicList,
+.sampleList,
+.pipeline,
+.dsrList,
+.bullets {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.topicRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-8) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.topicRow:last-child {
+  border-bottom: 0;
+}
+
+/* ── Samples (labelled "Coming later") ───────────────────── */
+.sampleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-14);
+  padding: var(--nds-space-8) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.sampleRow:last-child {
+  border-bottom: 0;
+}
+
+.sampleRow > .stack {
+  flex: 1 1 200px;
+}
+
+.sampleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.bullets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}
+
+/* ── Asking for reviews ──────────────────────────────────── */
+.pipelineRow {
+  display: grid;
+  grid-template-columns: minmax(180px, auto) 56px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-6) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.pipelineRow:last-child {
+  border-bottom: 0;
+}
+
+.pipelineRow > .num {
+  text-align: right;
+}
+
+@media (max-width: 599px) {
+  .pipelineRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .pipelineRow > .sub {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ── eBay detailed seller ratings ────────────────────────── */
+.dsrRow {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) auto 36px minmax(90px, auto);
+  align-items: center;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-8) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.dsrRow:last-child {
+  border-bottom: 0;
+}
+
+@media (max-width: 599px) {
+  .dsrRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+/* ── Grids ───────────────────────────────────────────────── */
+.tableScroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.clickRow {
+  cursor: pointer;
+}
+
+.cellLink {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+  text-decoration: none;
+}
+
+.cellLink:hover,
+.cellLink:focus-visible {
+  text-decoration: underline;
+}
+
+.snippet {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  color: var(--nds-text);
+}
+
+.gridNote {
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-space-16);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.dialogFoot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}
