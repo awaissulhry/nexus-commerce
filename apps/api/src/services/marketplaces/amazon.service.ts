@@ -1289,16 +1289,13 @@ export class AmazonService {
 
   /* ────────────────────────────────────────────────────────────── */
   /*  S.0 / C-3 — getListingState                                   */
-  /*  Minimal primitive used by the /api/listings/:id/resync inline */
-  /*  pull path. Distinct from fetchProductDetails which is a full  */
-  /*  catalog import (title/brand/dims/identifiers/images). Resync  */
-  /*  only needs the live state fields a marketplace might have     */
-  /*  drifted on: price, quantity, listingStatus, title.            */
-  /*                                                                */
-  /*  Unlike fetchProductDetails, this takes an explicit            */
-  /*  marketplaceId (SP-API ID like A1RKKUPIHCS9HS) — Resync hits   */
-  /*  one specific marketplace per call, not whatever              */
-  /*  AMAZON_MARKETPLACE_ID happens to be set to in env.            */
+  /*  Its one caller is the preflight report's live diff            */
+  /*  (amazon/preflight-report.service.ts): price, quantity,        */
+  /*  listingStatus, title in one marketplace. The listing's        */
+  /*  "Refresh from Amazon" (listings/resync.service.ts) does not   */
+  /*  use it: it reads by the seller SKU on the listing's own       */
+  /*  account. Unlike fetchProductDetails, this takes an explicit   */
+  /*  marketplaceId (SP-API ID like A1RKKUPIHCS9HS).                */
   /* ────────────────────────────────────────────────────────────── */
   async getListingState(
     sku: string,

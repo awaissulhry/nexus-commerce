@@ -4,10 +4,11 @@ import type {
 } from '@nexus/shared/listing-readiness'
 import { canConfirmAction } from '@/design-system/components/ActionConfirm'
 import {
-  AMAZON_EU_SHARED_MARKETS, channelIdLabel, destinationForRow, detailPath, diagnoseConfirm, emptyWords, errorText, followConfirm, followMasterBody,
+  AMAZON_EU_SHARED_MARKETS, amazonNowLine, amazonNowTitle, amazonStatusWords, channelIdLabel, destinationForRow, detailPath, diagnoseConfirm, emptyWords, errorText, followConfirm, followMasterBody,
   historyRows, inBusiness, initialFocus, lastPushOf, listingTotal, listingWords, matrixHref, moneyWords, moreWords, navIds, openDestination,
   openHeldReason, parsePinPrice, pinPriceBody, priceActions, priceWords, PROBLEM_KIND_LABELS, problemKindLabel, problemSentence, productTitle,
-  publishOutcomeMeta, publishStartKey, pushOutcomeMeta, pushWords, quantityNote, readOutcomeMeta, refusalText, requiredByWords, resolveConfirm, salesHref, sentOnlyNote,
+  nexusNowLine, publishOutcomeMeta, publishStartKey, pushOutcomeMeta, pushWords, quantityNote, readOutcomeMeta, refreshFailureTone, refreshHeldReason, refusalText,
+  requiredByWords, resolveConfirm, salesHref, sentOnlyNote,
   shownTab, stateLine, stateParts, statusSentence, syncActivityHref, syncAttemptRows, syncedWords, tabCount, tabForChip, tabLabel, windowTabs, windowTitle,
 } from './listingDialogModel'
 
@@ -261,6 +262,8 @@ describe('History', () => {
       ['push:p2', 'Push to Amazon (dry run)', 'Accepted', null],
     ])
     expect(readOutcomeMeta('TIMEOUT').label).toBe('No answer in time')
+    // Refresh from Amazon: Amazon has no listing for the seller SKU.
+    expect(readOutcomeMeta('NOT_FOUND')).toEqual({ label: 'Not found on the channel', tone: 'warning' })
     expect(historyRows([], [], 'EBAY')).toEqual([])
   })
   it('the reads the window’s data carries become History rows', () => {
@@ -367,5 +370,45 @@ describe('the title', () => {
   it('falls back to the product’s own listing SKU on the channel, never another product’s', () => {
     expect(productTitle(null, { productId: 'p-b', problems: [], channel: section([listing('a'), listing('b')]) }, false)).toBe('SKU-b')
     expect(productTitle(null, { productId: 'p-z', problems: [], channel: section([listing('a')]) }, true)).toBe('This family')
+  })
+})
+
+describe('Refresh from Amazon', () => {
+  const amazonNow = { status: 'BUYABLE', asin: 'B0TESTAS01', price: 99, currency: 'EUR', quantity: 24, fulfillment: 'FBM' as const, issues: [] }
+  it('the panel: "Amazon now (read 10:42)" and Amazon’s status, ASIN, price, quantity and messages in one line', () => {
+    expect(amazonNowTitle('2026-10-26T08:42:10Z', 'UTC')).toBe('Amazon now (read 08:42)')
+    expect(amazonNowTitle('2026-10-26T08:42:10Z', 'Europe/Rome')).toBe('Amazon now (read 09:42)')
+    expect(amazonNowLine(amazonNow)).toBe('Active · ASIN B0TESTAS01 · 99.00 EUR · Qty 24 · 0 messages')
+    const issue = { code: '90220', message: 'item_name is required but missing.', severity: 'ERROR', attributeNames: ['item_name'] }
+    expect(amazonNowLine({ ...amazonNow, issues: [issue] })).toBe('Active · ASIN B0TESTAS01 · 99.00 EUR · Qty 24 · 1 message')
+    expect(amazonNowLine({ ...amazonNow, issues: [issue, issue] })).toMatch(/· 2 messages$/)
+  })
+  it('FBA stock is never reported by Amazon’s Listings API: the panel says so instead of a number', () => {
+    expect(amazonNowLine({ ...amazonNow, quantity: null, fulfillment: 'FBA' })).toBe('Active · ASIN B0TESTAS01 · 99.00 EUR · FBA: not reported by Amazon · 0 messages')
+    expect(amazonNowLine({ ...amazonNow, quantity: null, fulfillment: null, asin: null, price: null })).toBe('Active · No ASIN · No price · Qty not reported · 0 messages')
+  })
+  it('Amazon’s status in the window’s words, anything unknown as Amazon wrote it', () => {
+    expect(amazonStatusWords('BUYABLE')).toBe('Active')
+    expect(amazonStatusWords('DISCOVERABLE')).toBe('Active, not buyable')
+    expect(amazonStatusWords('SUPPRESSED')).toBe('SUPPRESSED')
+    expect(amazonStatusWords(null)).toBe('No status reported')
+  })
+  it('Nexus’s own price and quantity, beside Amazon’s', () => {
+    expect(nexusNowLine(live('l1', { price: 89.9, currency: 'EUR', quantity: 3, fulfillment: 'FBM' }))).toBe('In Nexus: 89.90 EUR · Qty 3')
+    expect(nexusNowLine(live('l1', { price: 89.9, salePrice: 79.9, currency: 'EUR', quantity: 12, fulfillment: 'FBA' }))).toBe('In Nexus: 89.90 EUR (sale 79.90 EUR) · Qty 12 (FBA)')
+    expect(nexusNowLine(live('l1', { price: null, currency: null, quantity: null }))).toBe('In Nexus: — · Qty —')
+  })
+  it('the button is held by the API’s own 403 first, then a read in flight, no listing, and no Amazon account', () => {
+    const ready = { listingId: 'l1', accountId: 'acc1' }
+    expect(refreshHeldReason(ready)).toBeNull()
+    expect(refreshHeldReason({ ...ready, refused: 'Access denied (listings.edit)', busy: true })).toBe('Access denied (listings.edit)')
+    expect(refreshHeldReason({ ...ready, busy: true })).toBe('Reading Amazon…')
+    expect(refreshHeldReason({ ...ready, listingId: null })).toBe('Choose a listing first.')
+    expect(refreshHeldReason({ ...ready, accountId: null })).toBe('This listing has no Amazon account. Link it to an account first.')
+  })
+  it('a refresh that did not read: the API’s words as they came; Amazon’s 404 and a refusal warn, a failed read is an error', () => {
+    expect(errorText(404, { error: 'Amazon has no listing with seller SKU GAL-M in Italy.' })).toBe('Amazon has no listing with seller SKU GAL-M in Italy.')
+    expect(errorText(504, { error: 'Amazon did not answer in time (10 s). Nothing was changed.' })).toBe('Amazon did not answer in time (10 s). Nothing was changed.')
+    expect([404, 409, 502, 504, 0].map(refreshFailureTone)).toEqual(['warning', 'warning', 'danger', 'danger', 'danger'])
   })
 })

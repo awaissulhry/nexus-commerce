@@ -5,9 +5,12 @@
  * the readiness read carries what the channel says (`ReadinessDetail.channel`); words and decisions are in
  * `listingDialogModel.ts`.
  *
- *   On <channel>   the destination's live state, its id and link, the last push, suppressions (Mark resolved in Nexus ·
- *                  Diagnose with AI… for one listing, after a confirm: it costs money), the channel's messages word
- *                  for word, where the channel differs from Nexus, and every listing here.
+ *   On <channel>   the destination's live state, its id and link, the last push; on Amazon, Refresh from Amazon for the
+ *                  listing chosen in the window (`POST /api/listings/:id/resync`: a read that stores Amazon's status, an
+ *                  ASIN the listing lacked and Amazon's messages, and shows Amazon's price and quantity beside Nexus's,
+ *                  never storing them); suppressions (Mark resolved in Nexus · Diagnose with AI… for one listing, after
+ *                  a confirm: it costs money), the channel's messages word for word, where the channel differs from
+ *                  Nexus, and every listing here.
  *   Price & stock  one listing (a picker when there are several): price, master, rule, quantity (read only, with the
  *                  Amazon EU note), FBA fee. The ONLY edits in the window: Pin price… and Follow master, through
  *                  `PATCH /api/listings/:id` in the legacy drawer's save line (`drawer-save.ts`). Buffer, quantity,
@@ -15,11 +18,11 @@
  *   History        one listing's pushes and reads, newest first (the reads the window's data carries — its newest 10 —
  *                  and the listing's publish attempts).
  *
- * Price and stock are what Nexus last sent or read, never a fresh channel read. A write that answers 403 holds its
- * button with the API's own words.
+ * Price and stock are what Nexus last sent or read; only Refresh from Amazon reads the channel, and shows what it read
+ * beside them. A write that answers 403 holds its button with the API's own words.
  */
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { ExternalLink, Sparkles } from 'lucide-react'
+import { ExternalLink, RefreshCw, Sparkles } from 'lucide-react'
 import type { ReadinessChannelListing, ReadinessChannelSection, ReadinessDestination } from '@nexus/shared/listing-readiness'
 import { pricingRuleLabel } from '@nexus/shared/listing-price'
 import Link from '@/lib/workspaces/Link'
@@ -31,9 +34,10 @@ import { drawerSave, readDrawerListing, RELOAD_FIRST, sendDrawerPatch } from '..
 import { priceDriftView } from '../listing-price-view'
 import { listingCall } from './listingCall'
 import {
-  channelIdLabel, diagnoseConfirm, errorText, followConfirm, followMasterBody, historyRows, inBusiness, lastPushOf, matrixHref, moneyWords,
-  parsePinPrice, pinPriceBody, priceActions, priceWords, pricingWords, problemSentence, pushWords, quantityNote, refusalText,
-  resolveConfirm, sentOnlyNote, statusSentence, syncAttemptRows, type PublishAttemptRow, type SyncAttemptRow,
+  amazonNowLine, amazonNowTitle, channelIdLabel, diagnoseConfirm, errorText, followConfirm, followMasterBody, historyRows, inBusiness, lastPushOf,
+  matrixHref, moneyWords, nexusNowLine, parsePinPrice, pinPriceBody, priceActions, priceWords, pricingWords, problemSentence, pushWords,
+  quantityNote, refreshFailureTone, refreshHeldReason, refusalText, resolveConfirm, sentOnlyNote, statusSentence, syncAttemptRows,
+  type AmazonNow, type PublishAttemptRow, type SyncAttemptRow,
 } from './listingDialogModel'
 import { channelLabel } from './marketChips'
 import { absoluteTime } from './relativeTime'
@@ -65,17 +69,22 @@ interface Diagnosis {
   provider: { name: string; model: string; costUSD: number }
 }
 type DiagnoseState = { busy?: boolean; error?: string; result?: Diagnosis }
+/** One Refresh from Amazon, for the listing it read. */
+type AmazonReadState = { listingId: string; busy?: boolean; now?: AmazonNow; error?: { status: number; text: string } }
 
 export interface ChannelTabProps {
   channel: ReadinessChannelSection
   destination: ReadinessDestination
   family: boolean
-  /** Re-read the window (after a suppression was marked resolved). */
+  /** Re-read the window (after a suppression was marked resolved, or a refresh from Amazon). */
   onChanged: () => void
   now: number
+  /** The listing chosen in the window (shared with Price & stock and History): Refresh from Amazon reads it. */
+  focus: string | null
+  onFocus: (id: string) => void
 }
 
-export function ChannelTab({ channel, destination, family, onChanged, now }: ChannelTabProps) {
+export function ChannelTab({ channel, destination, family, onChanged, now, focus, onFocus }: ChannelTabProps) {
   const { toast } = useToast()
   const confirm = useActionConfirm()
   const word = channelLabel(destination.channel)
@@ -89,8 +98,36 @@ export function ChannelTab({ channel, destination, family, onChanged, now }: Cha
   const [diagnoses, setDiagnoses] = useState<Record<string, DiagnoseState>>({})
   const [resolving, setResolving] = useState<string | null>(null)
   // The API's own refusal (403), per kind of write: the buttons of that kind are held with it.
-  const [refused, setRefused] = useState<{ diagnose?: string; resolve?: string }>({})
+  const [refused, setRefused] = useState<{ diagnose?: string; resolve?: string; refresh?: string }>({})
+  const [amazonRead, setAmazonRead] = useState<AmazonReadState | null>(null)
   const place = destination.label
+  const focused = listings.find((listing) => listing.live.listingId === focus) ?? null
+  // Only the read of the listing on show: another listing's never stands in for it.
+  const shownRead = amazonRead && amazonRead.listingId === focus ? amazonRead : null
+  const refreshHeld = refreshHeldReason({ refused: refused.refresh, busy: amazonRead?.busy, listingId: focused?.live.listingId, accountId: destination.accountId })
+
+  const refreshFromAmazon = async () => {
+    if (!focused) return
+    const id = focused.live.listingId
+    setAmazonRead({ listingId: id, busy: true })
+    try {
+      const answer = await listingCall<{ amazon?: AmazonNow; error?: string }>(`listings/${encodeURIComponent(id)}/resync`, { method: 'POST', body: {} })
+      const refusal = refusalText(answer.status, answer.json)
+      if (refusal) setRefused((r) => ({ ...r, refresh: refusal }))
+      if (!answer.ok || !answer.json.amazon) {
+        setAmazonRead({ listingId: id, error: { status: answer.status, text: errorText(answer.status, answer.json) } })
+        // The read is on the listing's history even when it did not land.
+        if (!refusal) onChanged()
+        return
+      }
+      setAmazonRead({ listingId: id, now: answer.json.amazon })
+      // The page's row and every open view of this listing read it again; so does this window.
+      emitInvalidation({ type: 'listing.updated', id })
+      onChanged()
+    } catch (error) {
+      setAmazonRead({ listingId: id, error: { status: 0, text: error instanceof Error ? error.message : String(error) } })
+    }
+  }
 
   const diagnose = async (listing: ReadinessChannelListing) => {
     const id = listing.live.listingId
@@ -161,6 +198,29 @@ export function ChannelTab({ channel, destination, family, onChanged, now }: Cha
       {confirm.element}
       <KeyValue items={status} columns={2} labelCase="sentence" />
       <p className={styles.note}>What Nexus last sent to {word} or read from it, not a fresh read from {word} (as of <AsOf at={channel.readAt} />).</p>
+
+      {amazon && listings.length > 0 && (
+        <section className={styles.section} aria-label="Refresh from Amazon">
+          <ListingPicker listings={listings} focus={focus} onFocus={onFocus} />
+          <div className={styles.actionsRow}>
+            <Button size="sm" heldReason={refreshHeld} onClick={() => void refreshFromAmazon()}>
+              <RefreshCw size={13} aria-hidden /> Refresh from Amazon
+            </Button>
+            {focused && <span className={styles.metaText}>Reads this listing on {place} now, by its seller SKU. Nexus keeps its own price and quantity.</span>}
+          </div>
+          {shownRead?.busy && <div className={styles.inline}><Spinner size={14} /><span>Reading Amazon…</span></div>}
+          {shownRead?.error && (
+            <Banner tone={refreshFailureTone(shownRead.error.status)} title="Not read from Amazon">{shownRead.error.text}</Banner>
+          )}
+          {shownRead?.now && focused && (
+            <Banner tone="info" title={amazonNowTitle(shownRead.now.readAt)}>
+              <p className={styles.message}>{amazonNowLine(shownRead.now)}</p>
+              <p className={styles.message}>{nexusNowLine(focused.live)}</p>
+              {[shownRead.now.quantityNote, ...shownRead.now.notes].filter(Boolean).map((line) => <p key={line} className={styles.note}>{line}</p>)}
+            </Banner>
+          )}
+        </section>
+      )}
 
       {listings.length === 0 && (
         <EmptyState title={`Not listed on ${place}`} description="Nexus has no listing for this product here. Publish creates it." />

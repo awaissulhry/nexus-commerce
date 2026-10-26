@@ -26,6 +26,24 @@ export interface AmazonReads {
 }
 export interface AmazonRaw { listings: Record<string, AmazonListingRead> }
 
+/**
+ * A Listings Items read (`AmazonSpApiClient.getListingsItem`) as found, absent or failed. The client answers HTTP 404 with
+ * exactly this no-body shape (no ASIN, no status, no raw document, no error): a measured absence, not a failed read.
+ */
+export function listingsItemRead(r: { success: boolean; asin: string | null; status: unknown; rawResponse?: unknown; error?: string }): AmazonListingRead {
+  if (!r.success) return { status: 'error', reason: r.error ?? 'Amazon could not read this listing.' }
+  if (r.asin === null && r.status === null && r.rawResponse === undefined && r.error === undefined) return { status: 'absent' }
+  return { status: 'found', raw: r.rawResponse && typeof r.rawResponse === 'object' && !Array.isArray(r.rawResponse) ? r.rawResponse as Json : {} }
+}
+
+/** The B2C offer of one marketplace in a Listings Items read (`offers`). */
+export const b2cOfferOf = (raw: Json, marketplaceId: string): Json | undefined =>
+  (raw.offers as Json[] | undefined)?.find(o => o.marketplaceId === marketplaceId && (o.offerType ?? 'B2C') === 'B2C')
+
+/** The merchant-fulfilled availability (`DEFAULT`) of a Listings Items read: Amazon reports no quantity for its own (FBA) stock. */
+export const merchantAvailabilityOf = (raw: Json): Json | undefined =>
+  (raw.fulfillmentAvailability as Json[] | undefined)?.find(f => f.fulfillmentChannelCode === 'DEFAULT')
+
 const value = (v: unknown): LiveValue => v == null || v === '' || (Array.isArray(v) && !v.length) ? { state: 'absent' } : { state: 'value', value: v }
 const unread = (reason: string): LiveValue => ({ state: 'unread', reason })
 const inMarket = (entries: unknown, marketplaceId: string): Json[] =>
@@ -92,8 +110,8 @@ export async function readAmazonListing(destination: AmazonDestination, reads: A
         values[axis] = String(raw)
         if (!order[axis].includes(values[axis])) order[axis].push(values[axis])
       }
-      const offer = (read.raw.offers as Json[] | undefined)?.find(o => o.marketplaceId === marketplaceId && (o.offerType ?? 'B2C') === 'B2C')
-      const merchant = (read.raw.fulfillmentAvailability as Json[] | undefined)?.find(f => f.fulfillmentChannelCode === 'DEFAULT')
+      const offer = b2cOfferOf(read.raw, marketplaceId)
+      const merchant = merchantAvailabilityOf(read.raw)
       return { sku, values,
         price: offer?.price?.amount != null ? value({ amount: String(offer.price.amount), currency: offer.price.currencyCode ?? null }) : { state: 'absent' as const },
         stock: Number.isSafeInteger(merchant?.quantity) ? value(merchant!.quantity) : unread('Amazon reports no merchant quantity for this SKU (Amazon-fulfilled or not set).') }
