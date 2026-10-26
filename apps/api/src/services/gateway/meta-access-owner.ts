@@ -67,7 +67,7 @@ const PAGES = 5
  * Every row of a list (these fields), page by page up to `pages`; null when a page could not be read, more are left, or
  * Meta says there is a next page without the cursor to read it (review A-N1: never taken for the end of the list).
  */
-export async function listedRows(io: MetaOwnerIo, path: string, query: Record<string, string>, pages = PAGES): Promise<Record<string, unknown>[] | null> {
+async function listedRows(io: MetaOwnerIo, path: string, query: Record<string, string>, pages = PAGES): Promise<Record<string, unknown>[] | null> {
   const rows: Record<string, unknown>[] = []
   let after: string | null = null
   for (let page = 0; page < pages; page++) {
@@ -82,7 +82,7 @@ export async function listedRows(io: MetaOwnerIo, path: string, query: Record<st
   return null
 }
 /** The ids of a list read in full (listedRows), or null. */
-export async function listedIdSet(io: MetaOwnerIo, path: string, query: Record<string, string> = {}, pages = PAGES): Promise<Set<string> | null> {
+async function listedIdSet(io: MetaOwnerIo, path: string, query: Record<string, string> = {}, pages = PAGES): Promise<Set<string> | null> {
   const rows = await listedRows(io, path, { fields: 'id', ...query }, pages)
   return rows ? new Set(rows.map(idOf).filter((id): id is string => !!id)) : null
 }
@@ -109,7 +109,7 @@ async function portfolioPeople(io: MetaOwnerIo, portfolio: string): Promise<{ pe
  * owned_instagram_assets ig_user_id — each read in full): a link saved without its portfolio, or a business that reaches an
  * asset of this portfolio through a partner, fails closed. Null: Nexus cannot tell (counted as shared wherever it matters).
  */
-export async function sharedPortfolio(io: MetaOwnerIo, portfolio: string, chosen: string): Promise<boolean | null> {
+async function sharedPortfolio(io: MetaOwnerIo, portfolio: string, chosen: string): Promise<boolean | null> {
   if ((await takenIds('PORTFOLIO', [portfolio])).has(portfolio)) return true
   const accounts = await listedRows(io, `${portfolio}/owned_ad_accounts`, { fields: 'account_id' })
   const pages = await listedRows(io, `${portfolio}/owned_pages`, { fields: 'id' })

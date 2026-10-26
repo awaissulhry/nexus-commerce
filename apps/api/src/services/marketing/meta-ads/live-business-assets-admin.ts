@@ -3,7 +3,9 @@
  * that are merged already — step 2's ad account lists of the chosen portfolio (live.ts liveAdAccounts), step 4's asset lists
  * (live-business.ts assetsView: Pages, Instagram accounts, apps, asset groups, each row masked by step 4's one rule),
  * step 3's read of the ad accounts allowed to advertise for the chosen Instagram account (the same path and keys), step 41's
- * account read (status, disable reason) and step 42's portfolio name. Every call is a GET through the gateway; nothing
+ * account read (status, disable reason) and step 42's portfolio name; for set-meta-billing step 3's credit lines, invoice
+ * groups, their ad accounts and the chosen ad account's own invoice group and payment method (live-account.ts), and step 41's
+ * portfolio check (its own ad accounts, Pages and Instagram accounts). Every call is a GET through the gateway; nothing
  * here writes, stores or remembers anything (D1: the Owner makes these changes in Meta's screens).
  *
  * One business at a time: when another business in Nexus uses an ad account of the chosen portfolio, no asset guide is
@@ -14,14 +16,14 @@ import { MetaReadError } from './errors.js'
 import { liveAdAccounts, metaChosenAccount, MetaLiveRefusal, type AdAccountList, type MetaChosenAccount } from './live.js'
 import { assetsView, chosenPortfolio, portfolioShared, type AssetView } from './live-business.js'
 import { portfolioName } from './live-business-admin.js'
-import { liveAccessState } from './live-access-change.js'
-import { DISABLE_REASON_WORDS } from './live-account.js'
+import { liveAccessState, livePortfolioOwnAssets } from './live-access-change.js'
+import { billingView, creditLines, DISABLE_REASON_WORDS } from './live-account.js'
 import { listPaged, part } from './paging.js'
 import { takenIds, type MetaTakenProduct } from './taken.js'
 import { AD_ACCOUNT_STATUS_WORDS, metaAdAccountId } from '../../cx/connectors/meta/discovery.js'
 import {
-  appealGuide, assetGuide, newAdAccountGuide, removeGuide,
-  type AppealAsk, type AssetAsk, type AssetLists, type ListedAsset, type NewAdAccountAsk, type RemoveAsk,
+  appealGuide, assetGuide, billingGuide, newAdAccountGuide, removeGuide,
+  type AppealAsk, type AssetAsk, type AssetLists, type BillingAsk, type BillingLive, type InvoiceGroupSeen, type ListedAsset, type NewAdAccountAsk, type RemoveAsk,
 } from './business-assets-admin.js'
 import type { AdminGuide } from './business-admin.js'
 
@@ -224,4 +226,71 @@ export async function appealAdmin(input: { connectionId?: string | null } & Appe
     }
   } else state = { adAccountId: chosen.adAccountId, name: chosen.name, status: null, disableReason: null }
   return done(appealGuide({ subject: input.subject, since: input.since }, { portfolioId, account: state, statusWords: AD_ACCOUNT_STATUS_WORDS, reasonWords: DISABLE_REASON_WORDS, readAt }))
+}
+
+export const BILLING_SHARED = 'Another business in Nexus uses an ad account, Page or Instagram account of this Meta business portfolio (or Nexus cannot read the portfolio\'s own in full), so Nexus gives no steps for its billing and reads nothing more of it: its credit line pays that business\'s ads too. A person with full access and finance access changes it in Meta Business settings › Billing & payments.'
+/** How many invoice groups of the owned lines Nexus reads (100 a line, as step 3's meta-billing reads 50). */
+const MAX_GROUPS = 100
+
+/**
+ * set-meta-billing — BM-903 … BM-907 (the leader's decision after review 1: a D1 guide). The portfolio is refused before any
+ * call when its link is another business's, and after step 41's read of its own ad accounts, Pages and Instagram accounts
+ * when one of them is another business's (or the lists cannot be read in full).
+ */
+export async function billingAdmin(input: { connectionId?: string | null } & BillingAsk): Promise<AdminGuide> {
+  const { account, portfolioId } = await assetScope(input.connectionId)
+  const own = await livePortfolioOwnAssets(account, portfolioId)
+  if (!own.adAccounts || !own.pages || !own.instagram) throw new MetaLiveRefusal(BILLING_SHARED)
+  const shared = (await takenIds('AD_ACCOUNT', own.adAccounts.filter((id) => id !== account.adAccountId))).size > 0
+    || (await takenIds('PAGE', own.pages)).size > 0 || (await takenIds('INSTAGRAM', own.instagram)).size > 0
+  if (shared) throw new MetaLiveRefusal(BILLING_SHARED)
+  const readAt = new Date().toISOString()
+  const name = await portfolioName(account)
+  const lines = await creditLines(account, portfolioId, null)
+  const groups: InvoiceGroupSeen[] = []
+  const unsure: string[] = []
+  for (const creditLineId of lines.owned) {
+    const list = await part(() => listPaged(account.connectionId, 'assets.billing.invoiceGroups', `${creditLineId}/extended_credit_invoice_groups`, { fields: 'id,name,auto_enroll' }, MAX_GROUPS))
+    if (!list.value) { unsure.push(`Meta did not answer credit line ${creditLineId}'s invoice groups (${list.notRead})`); continue }
+    if (list.value.more) unsure.push(`credit line ${creditLineId} has more invoice groups than Nexus reads (${MAX_GROUPS})`)
+    for (const row of list.value.rows) {
+      const groupId = typeof row.id === 'string' || typeof row.id === 'number' ? String(row.id) : null
+      if (!groupId || !/^\d{1,25}$/.test(groupId)) continue
+      groups.push({ groupId, creditLineId, name: typeof row.name === 'string' ? row.name : null, autoEnroll: typeof row.auto_enroll === 'boolean' ? row.auto_enroll : null, adAccountIds: null, accountsMore: false, takenAccounts: [] })
+    }
+  }
+  // The floor: the asked group's ad accounts, read in full (never another business's billing).
+  const target = input.invoiceGroupId ? groups.find((g) => g.groupId === input.invoiceGroupId) : undefined
+  if (target) {
+    const accounts = await part(() => listPaged(account.connectionId, 'assets.billing.invoiceGroupAccounts', `${target.groupId}/ad_accounts`, { fields: 'account_id' }, 500))
+    if (accounts.value) {
+      target.adAccountIds = accounts.value.rows.map((r) => metaAdAccountId(r.account_id ?? r.id)).filter((id): id is string => !!id)
+      target.accountsMore = accounts.value.more
+      target.takenAccounts = [...await takenIds('AD_ACCOUNT', target.adAccountIds.filter((id) => id !== account.adAccountId))]
+    }
+  }
+  // Review F3, F4 — the chosen ad account's own invoice group and payment method (step 3's read), for a move only.
+  let billing: BillingLive['account'] = null
+  if (input.action === 'add-account' || input.action === 'remove-account') {
+    try {
+      const pay = await billingView({ connectionId: account.connectionId, view: 'payment' }) as {
+        invoiceGroup: { invoiceGroupId: string | null } | null
+        paymentMethod: { paymentMethodId: string | null; type: number | null; typeText: string | null } | null
+        missing: Array<{ part: string; sentence: string }>
+      }
+      const refusedPayment = pay.missing.find((m) => m.part === 'paymentMethod')
+      billing = {
+        group: { id: pay.invoiceGroup?.invoiceGroupId ?? null },
+        payment: refusedPayment && !pay.paymentMethod ? { refused: refusedPayment.sentence }
+          : { type: pay.paymentMethod?.type ?? null, typeText: pay.paymentMethod?.typeText ?? null, id: pay.paymentMethod?.paymentMethodId ?? null },
+      }
+    } catch (err) {
+      if (!(err instanceof MetaReadError) && !(err instanceof MetaLiveRefusal)) throw err
+      billing = { group: { refused: err.message }, payment: { refused: err.message } }
+    }
+  }
+  return done(billingGuide(
+    { action: input.action, creditLineId: input.creditLineId, invoiceGroupId: input.invoiceGroupId, name: input.name, confirmDelete: input.confirmDelete, since: input.since },
+    { portfolioId, portfolioName: name, adAccountId: account.adAccountId, creditLines: lines.owned, foreignLines: lines.foreign.length, groups, groupsUnsure: unsure.length ? unsure.join('; ') : null, account: billing, readAt },
+  ))
 }

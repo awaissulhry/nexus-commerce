@@ -134,7 +134,7 @@ const metaBilling: AgentTool = {
     + 'its e-mail addresses; no tax numbers on a personal-use account), credit-allocations, cards (type and last four only), '
     + 'credit-applications. Meta cannot, by any API: add or change a payment method, add prepaid funds, give card '
     + 'receipts, open or raise a credit line — a person does these in Meta Business settings. Changing the spending limit '
-    + 'or invoice groups is a change a person approves (set-meta-spend-cap, set-meta-billing). ' + READ_LINE
+    + 'is a change a person approves (set-meta-spend-cap); invoice groups are the Owner\'s own step in Meta\'s screens (D1: set-meta-billing gives the steps). ' + READ_LINE
     + ' Needs the ad-spend money permission. Money in minor units (cents) of the account currency; a credit line\'s in its own currency.',
   async handler(args): Promise<ToolResult> {
     const view = (args.view ?? 'spend') as BillingView

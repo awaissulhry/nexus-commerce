@@ -93,7 +93,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 35 (2026-10-25) — set-meta-catalog-items, set-meta-catalog-feed and set-meta-instagram-product-tags read Meta live and change it.
 // Meta ads step 38 (2026-10-26) — create-meta-message, set-meta-conversation-labels, set-meta-message-templates and set-meta-messaging-setup read Meta live and change it (a message reaches a person).
 // Meta ads step 42 (2026-10-26) — set-meta-business-settings, set-meta-business-people and create-meta-system-user read Meta live (D1: read only; the Owner makes the change in Meta's screens).
-// Meta ads step 43 (2026-10-26) — set-meta-business-assets, remove-meta-business-asset, create-meta-ad-account and create-meta-appeal read Meta live (D1: read only); create-meta-backed-account and set-meta-billing read Meta live and change it.
+// Meta ads step 43 (2026-10-26) — set-meta-business-assets, remove-meta-business-asset, create-meta-ad-account, create-meta-appeal and set-meta-billing read Meta live (D1: read only); create-meta-backed-account reads Meta live and changes it.
 
 const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',

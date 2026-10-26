@@ -5,8 +5,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  appealGuide, assetGuide, newAdAccountGuide, removeGuide, ASSET_GROUP_NO_API, D1_APPEAL_LINE, D1_ASSET_LINE, NEW_ACCOUNT_MONEY,
-  type AppealLive, type AssetLists, type AssetLive, type ListedAsset, type NewAdAccountLive, type RemoveLive,
+  appealGuide, assetGuide, billingGuide, d1AssetLine, newAdAccountGuide, removeGuide, ASSET_GROUP_NO_API, D1_APPEAL_LINE, INVOICE_EMAILS, MONTH_END_LOCK, NEW_ACCOUNT_MONEY, ONE_INVOICE_GROUP, OWN_INVOICE, WHO,
+  type AppealLive, type AssetLists, type AssetLive, type BillingLive, type InvoiceGroupSeen, type ListedAsset, type NewAdAccountLive, type RemoveLive,
 } from './business-assets-admin.js'
 import type { AdminGuide } from './business-admin.js'
 
@@ -29,11 +29,18 @@ const no = (out: AdminGuide | { refusal: string }): string => { if (!('refusal' 
 const steps = (g: AdminGuide) => g.ownerSteps.join(' ')
 
 describe('every guide sends nothing and carries D1', () => {
-  it('nexusSends nothing, the asset rule line, the portfolio named, readAt', () => {
+  it('nexusSends nothing, the act\'s own rule line (review F8), the portfolio named, readAt', () => {
     const g = ok(assetGuide({ action: 'claim-page', pageId: OTHER_PAGE }, assetLive()))
-    expect(g).toMatchObject({ nexusSends: 'nothing', rule: D1_ASSET_LINE, portfolioId: PORTFOLIO, readAt: READ_AT, state: 'to-do' })
-    expect(D1_ASSET_LINE).toMatch(/For all add and remove endpoints: Access token's user needs to be an admin of the business/)
+    expect(g).toMatchObject({ nexusSends: 'nothing', rule: d1AssetLine(WHO.claimPage), portfolioId: PORTFOLIO, readAt: READ_AT, state: 'to-do' })
+    expect(g.rule).toMatch(/the access token of an Admin user or Admin system user of your business/)
     expect(steps(g)).toMatch(/"Shop A" \(id 9876543210/)
+    // Each act its own sentence; the Business Asset Groups API's only for an asset group.
+    expect(ok(assetGuide({ action: 'claim-ad-account', adAccountId: OTHER_ACCOUNT }, assetLive())).rule).toMatch(/The requester needs to be an admin of the Business claiming the ad account/)
+    expect(ok(assetGuide({ action: 'request-page', pageId: OTHER_PAGE }, assetLive())).rule).toMatch(/can't make any changes, except to add Pages or ad accounts/)
+    expect(ok(assetGuide({ action: 'link-instagram' }, assetLive({ authorized: { adAccountIds: [], more: false } }))).rule).toMatch(/You must be at least an ADMIN of the business/)
+    expect(ok(assetGuide({ action: 'asset-group', name: 'Brand A' }, assetLive())).rule).toMatch(/For all add and remove endpoints/)
+    expect(ok(assetGuide({ action: 'claim-ad-account', adAccountId: OTHER_ACCOUNT }, assetLive())).rule).not.toMatch(/For all add and remove endpoints/)
+    expect(ok(assetGuide({ action: 'claim-page', pageId: OTHER_PAGE }, assetLive())).rule).not.toMatch(/For all add and remove endpoints/)
   })
 })
 
@@ -44,7 +51,8 @@ describe('claim-ad-account / request-ad-account (AA-063, AA-064)', () => {
     expect(steps(g)).toMatch(/Accounts › Ad accounts › Add an ad account/)
     expect(steps(g)).toMatch(/Enter the ad account ID 1234567891.*Claim ad account/)
     expect(g.putBack.possible).toBe('partly')
-    expect(g.warnings.join(' ')).toMatch(/can't be deleted or transferred/)
+    expect(g.warnings.join(' ')).toMatch(/may permanently move it into the portfolio, meaning it can't be deleted or transferred/)
+    expect(g.warnings.join(' ')).not.toMatch(/for good/)
     expect(g.warnings.join(' ')).toMatch(/prepaid balance/)
     expect(g.items[0].asked).toEqual({ adAccountId: 'act_1234567891', owner: 'this portfolio' })
   })
@@ -255,5 +263,88 @@ describe('create-meta-appeal (LG-015, LG-016)', () => {
     expect(g.state).toBe('cannot-tell')
     expect(g.items[0].sentence).toMatch(/Meta documents no field that says whether a business portfolio is restricted/)
     expect(steps(g)).toMatch(/the business portfolio \(id 9876543210\)/)
+  })
+})
+
+describe('set-meta-billing (BM-903 … BM-907) — a D1 guide (the leader\'s decision after review 1)', () => {
+  const LINE = '120000000000300'
+  const GROUP_A = '120000000000310'
+  const GROUP_B = '120000000000311'
+  const group = (over: Partial<InvoiceGroupSeen> = {}): InvoiceGroupSeen => ({ groupId: GROUP_A, creditLineId: LINE, name: 'Group A', autoEnroll: false, adAccountIds: [ACCOUNT], accountsMore: false, takenAccounts: [], ...over })
+  const live = (over: Partial<BillingLive> = {}): BillingLive => ({
+    portfolioId: PORTFOLIO, portfolioName: 'Shop A', adAccountId: ACCOUNT, creditLines: [LINE], foreignLines: 0,
+    groups: [group(), group({ groupId: GROUP_B, name: 'Group B', adAccountIds: [] })], groupsUnsure: null,
+    account: { group: { id: GROUP_A }, payment: { type: 4, typeText: 'Meta credit line (monthly invoicing)', id: LINE } }, readAt: '2026-10-15T10:00:00.000Z', ...over,
+  })
+  it('every answer sends nothing, quotes Meta\'s full control and finance rule, names the month-end lock and the one-group rule', () => {
+    const g = ok(billingGuide({ action: 'add-account', invoiceGroupId: GROUP_B }, live()))
+    expect(g).toMatchObject({ nexusSends: 'nothing', rule: d1AssetLine(WHO.invoiceGroup), state: 'to-do' })
+    expect(g.rule).toMatch(/You have full control of the business portfolio and access to manage finance/)
+    expect(g.warnings).toContain(MONTH_END_LOCK)
+    expect(MONTH_END_LOCK).toMatch(/Billing information can't be edited from 2 days before the end of the month until 4 days after the month ends/)
+    expect(MONTH_END_LOCK).toMatch(/up to 3 days before the invoice is sent/)
+    expect(g.warnings).toContain(ONE_INVOICE_GROUP)
+    expect(ONE_INVOICE_GROUP).toMatch(/^Meta: "An ad account can belong to only one invoice group at a time\." So Meta moves the ad account out of its current group, or refuses the add\.$/)
+    expect(g.warnings.join(' ')).not.toMatch(/SDK only|reference says/)
+    // The lock window by today's date: a note inside it, none outside.
+    expect(g.warnings.join(' ')).not.toMatch(/inside or at the edge of that window/)
+    expect(ok(billingGuide({ action: 'add-account', invoiceGroupId: GROUP_B }, live({ readAt: '2026-10-30T10:00:00.000Z' }))).warnings.join(' ')).toMatch(/inside or at the edge of that window/)
+    expect(ok(billingGuide({ action: 'add-account', invoiceGroupId: GROUP_B }, live({ readAt: '2026-11-03T10:00:00.000Z' }))).warnings.join(' ')).toMatch(/inside or at the edge of that window/)
+  })
+  it('add-account: "now" is the ad account\'s own invoice group (review F3); MONEY plainly; the same credit line read (F4); asked again, done', () => {
+    const g = ok(billingGuide({ action: 'add-account', invoiceGroupId: GROUP_B }, live()))
+    expect(g.items[0].now).toMatchObject({ adAccountId: 'act_1234567890', invoiceGroup: GROUP_A, group: { invoiceGroupId: GROUP_B, autoEnroll: false } })
+    expect(g.warnings[0]).toMatch(/^MONEY: this changes which monthly invoice pays for ad account act_1234567890: its spend lands on the invoice of invoice group "Group B" .* instead of invoice group "Group A" .*The same credit line pays \(Nexus read that this ad account is paid by the portfolio's own credit line\), so nothing spends more\./)
+    expect(g.ownerSteps.join(' ')).toMatch(/Billing & payments › Credit lines: click the credit line 120000000000300; go to Invoice groups, click the icon next to invoice group "Group B" .*then Edit.*add act_1234567890/)
+    expect(g.putBack.sentence).toMatch(/invoice group "Group A"/)
+    expect(ok(billingGuide({ action: 'add-account', invoiceGroupId: GROUP_B, since: '2026-10-15T10:00:00.000Z' }, live({ account: { group: { id: GROUP_B }, payment: { type: 4, typeText: null, id: LINE } } }))).state).toBe('done')
+  })
+  it('review F4 — a card-paid ad account is refused; a payment method Nexus cannot read: "Nexus cannot tell", never "nothing spends more"', () => {
+    expect(no(billingGuide({ action: 'add-account', invoiceGroupId: GROUP_B }, live({ account: { group: { id: null }, payment: { type: 1, typeText: 'Credit or debit card', id: '1' } } })))).toMatch(/Credit or debit card, not a Meta credit line/)
+    const g = ok(billingGuide({ action: 'add-account', invoiceGroupId: GROUP_B }, live({ account: { group: { id: null }, payment: { refused: 'Meta said no.' } } })))
+    expect(g.warnings[0]).toMatch(/Nexus cannot tell whether the same credit line pays/)
+    expect(g.warnings[0]).not.toMatch(/nothing spends more/)
+    // A credit line Meta names that is not the portfolio's own, with another line shared in: cannot tell.
+    expect(ok(billingGuide({ action: 'add-account', invoiceGroupId: GROUP_B }, live({ foreignLines: 1, account: { group: { id: null }, payment: { type: 4, typeText: null, id: '120000000000399' } } }))).warnings[0]).toMatch(/cannot tell/)
+    // The ad account's own group not read: the state cannot be told.
+    expect(ok(billingGuide({ action: 'add-account', invoiceGroupId: GROUP_B }, live({ account: { group: { refused: 'x' }, payment: { type: 4, typeText: null, id: LINE } } }))).state).toBe('cannot-tell')
+  })
+  it('remove-account: its own monthly invoice by default (review F7); a first ask for an account the group does not bill is refused; asked again, done; auto_enroll warned', () => {
+    const g = ok(billingGuide({ action: 'remove-account', invoiceGroupId: GROUP_A }, live({ groups: [group({ autoEnroll: true })] })))
+    expect(g.warnings[0]).toContain(OWN_INVOICE)
+    expect(OWN_INVOICE).toBe('Meta: "By default, each ad account generates its own invoice each month."')
+    expect(g.warnings.join(' ')).toMatch(/auto_enroll on/)
+    expect(no(billingGuide({ action: 'remove-account', invoiceGroupId: GROUP_B }, live()))).toMatch(/does not bill it/)
+    expect(ok(billingGuide({ action: 'remove-account', invoiceGroupId: GROUP_A, since: '2026-10-15T10:00:00.000Z' }, live({ account: { group: { id: null }, payment: { type: 4, typeText: null, id: LINE } } }))).state).toBe('done')
+  })
+  it('create-group: Meta\'s help steps, the invoice e-mail typed by the Owner (review F6); a group with that name is done', () => {
+    const g = ok(billingGuide({ action: 'create-group', name: 'Group C' }, live()))
+    expect(g.ownerSteps.join(' ')).toMatch(/Create invoice group; review Meta's invoice group terms and click Agree.*"Group C" and an e-mail address to receive invoices — the Owner types it in Meta's screen \(Nexus never takes it\).*Confirm/)
+    expect(g.warnings).toContain(INVOICE_EMAILS)
+    expect(ok(billingGuide({ action: 'create-group', name: 'Group A' }, live())).state).toBe('done')
+    expect(no(billingGuide({ action: 'create-group', name: 'Group C', creditLineId: '120000000000399' }, live()))).toMatch(/not one the business portfolio owns/)
+    expect(no(billingGuide({ action: 'create-group', name: 'Group C', invoiceGroupId: GROUP_A }, live()))).toMatch(/invoiceGroupId is not an argument of action create-group/)
+  })
+  it('rename-group: from → to, put back exactly', () => {
+    const g = ok(billingGuide({ action: 'rename-group', invoiceGroupId: GROUP_A, name: 'Group C' }, live()))
+    expect(g.items[0]).toMatchObject({ what: 'name', now: 'Group A', asked: 'Group C', done: false })
+    expect(g.putBack.sentence).toMatch(/"Group A"/)
+    expect(ok(billingGuide({ action: 'rename-group', invoiceGroupId: GROUP_A, name: 'Group A' }, live())).state).toBe('done')
+  })
+  it('delete-group: confirmDelete, an empty group only, Meta\'s delete steps and its own rule line; asked again, absence is the result', () => {
+    expect(no(billingGuide({ action: 'delete-group', invoiceGroupId: GROUP_B }, live()))).toMatch(/takes confirmDelete: true/)
+    expect(no(billingGuide({ action: 'delete-group', invoiceGroupId: GROUP_A, confirmDelete: true }, live()))).toMatch(/still bills 1 ad account/)
+    const g = ok(billingGuide({ action: 'delete-group', invoiceGroupId: GROUP_B, confirmDelete: true }, live()))
+    expect(g.rule).toBe(d1AssetLine(WHO.deleteInvoiceGroup))
+    expect(g.ownerSteps.join(' ')).toMatch(/3-dot icon next to invoice group "Group B".*Delete; Confirm/)
+    expect(g.putBack.possible).toBe('no')
+    expect(no(billingGuide({ action: 'delete-group', invoiceGroupId: '120000000000399', confirmDelete: true }, live()))).toMatch(/is not an invoice group/)
+    expect(ok(billingGuide({ action: 'delete-group', invoiceGroupId: '120000000000399', confirmDelete: true, since: '2026-10-15T10:00:00.000Z' }, live())).state).toBe('done')
+  })
+  it('the floors stay refusals: no credit line of its own, a group that bills another business, a group Nexus cannot read in full', () => {
+    expect(no(billingGuide({ action: 'create-group', name: 'Group C' }, live({ creditLines: [] })))).toMatch(/no Meta credit line of its own/)
+    expect(no(billingGuide({ action: 'rename-group', invoiceGroupId: GROUP_A, name: 'Group C' }, live({ groups: [group({ adAccountIds: [ACCOUNT, OTHER_ACCOUNT], takenAccounts: [OTHER_ACCOUNT] })] })))).toMatch(/another business in Nexus uses \(act_1234567891\)/)
+    expect(no(billingGuide({ action: 'add-account', invoiceGroupId: GROUP_A }, live({ groups: [group({ adAccountIds: null })] })))).toMatch(/could not read every ad account/)
+    expect(no(billingGuide({ action: 'delete-group', invoiceGroupId: GROUP_A, confirmDelete: true }, live({ groups: [group({ adAccountIds: [], accountsMore: true })] })))).toMatch(/could not read every ad account/)
   })
 })

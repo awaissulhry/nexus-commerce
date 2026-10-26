@@ -28,7 +28,7 @@ import { META_GRAPH_VIDEO_HOST, type MetaPostEdge, type MetaPostKind } from './m
 import type { MetaAccessEdge, MetaAccessKind } from './meta-access-rules.js'
 // Step 38 — the messaging tools' edges and kinds.
 import type { MetaMessagingEdge, MetaMessagingKind } from './meta-messaging-rules.js'
-// Step 43 — backed accounts and invoice groups.
+// Step 43 — backed accounts of the chosen Page / Instagram account.
 import type { MetaBusinessAssetEdge, MetaBusinessAssetKind } from './meta-business-asset-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
@@ -116,7 +116,7 @@ export interface MetaWriteRequest {
     | MetaAccessKind
     // Step 38 — the chosen Page as it messages, its messaging setup, labels, personas, templates; a WhatsApp account, a group.
     | MetaMessagingKind
-    // Step 43 — the chosen Page / Instagram account a backed account is made for; a credit line or invoice group of the portfolio.
+    // Step 43 — the chosen Page / Instagram account a backed account is made for.
     | MetaBusinessAssetKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
@@ -190,7 +190,7 @@ export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copie
   | MetaAccessEdge
   // Step 38 — messages, thread control, labels, templates, template groups, the messaging setup of the chosen Page.
   | MetaMessagingEdge
-  // Step 43 — backed accounts of the chosen Page / Instagram account; invoice groups and their ad accounts.
+  // Step 43 — backed accounts of the chosen Page / Instagram account.
   | MetaBusinessAssetEdge
 /** Step 33 — upload-meta-events: Conversions API events of a pixel (`<pixel id>/events`). */
 export type MetaEventsEdge = 'events'

@@ -41,7 +41,6 @@ describe('bulkApproveRefusal — what may be approved together', () => {
       'reply-to-review',
       'request-review',
       'send-customer-message',
-      'set-meta-billing',
       'unlink-channel-id',
       'void-shipping-label',
     ])

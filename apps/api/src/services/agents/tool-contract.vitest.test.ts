@@ -1129,11 +1129,6 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { section: 'profile', pageId: '120000000000010', platform: 'messenger', properties: { getStarted: { payload: 'START' }, greeting: null } },
         after: { section: 'profile', pageId: '120000000000010', platform: 'messenger', properties: { getStarted: { payload: 'BEGIN' }, greeting: [{ locale: 'default', text: 'Welcome to Shop A' }] }, accountId: 'conn-1', adAccountId: '1234567890' },
       },
-      // Meta step 43: an invoice group's old name goes back (a move is moved back; a new group is deleted while empty).
-      'set-meta-billing': {
-        before: { op: 'rename-group', creditLineId: '120000000000300', groupId: '120000000000310', name: 'Group A' },
-        after: { op: 'rename-group', creditLineId: '120000000000300', groupId: '120000000000310', name: 'Group B', accountId: 'conn-1', adAccountId: '1234567890' },
-      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1323,7 +1318,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-meta-user-access', 'set-meta-partner-access',
       'set-meta-catalog-items', 'set-meta-catalog-feed', 'set-meta-instagram-product-tags',
       'create-meta-message', 'set-meta-conversation-labels', 'set-meta-message-templates', 'set-meta-messaging-setup',
-      'create-meta-backed-account', 'set-meta-billing']) {
+      'create-meta-backed-account']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

@@ -1,10 +1,12 @@
 /**
- * Meta ads step 43 (2026-10-26) — the business portfolio's ASSET acts, by the Owner's decision D1 = A (2026-10-20, "yes 46
- * lanes"): bringing an ad account, a Page, an app or an asset group into the portfolio, letting an ad account advertise for
- * the Instagram account (set-meta-business-assets — AA-063, AA-064, AA-066, BM-044, BM-045, BM-055, BM-056), taking an ad
- * account, a Page or an Instagram account out of it (remove-meta-business-asset — AA-065, BM-047, BM-049), a new ad account
- * (create-meta-ad-account — AA-062) and an appeal of a restricted ad account or portfolio (create-meta-appeal — LG-015,
- * LG-016). Only an ADMIN of the portfolio may do any of them, so they stay in the Owner's hands: Nexus sends NO write to
+ * Meta ads step 43 (2026-10-26) — the business portfolio's ASSET and BILLING acts, by the Owner's decision D1 = A (2026-10-20,
+ * "yes 46 lanes"): bringing an ad account, a Page, an app or an asset group into the portfolio, letting an ad account
+ * advertise for the Instagram account (set-meta-business-assets — AA-063, AA-064, AA-066, BM-044, BM-045, BM-055, BM-056),
+ * taking an ad account, a Page or an Instagram account out of it (remove-meta-business-asset — AA-065, BM-047, BM-049), a new
+ * ad account (create-meta-ad-account — AA-062), an appeal of a restricted ad account or portfolio (create-meta-appeal —
+ * LG-015, LG-016) and the invoice groups of the portfolio's own credit line (set-meta-billing — BM-903 … BM-907; the leader's
+ * decision after review 1: Meta's help asks full control and finance access for them). Only an ADMIN of the portfolio may do
+ * any of them (each act's own sentence of Meta: WHO below), so they stay in the Owner's hands: Nexus sends NO write to
  * Meta, and each answer is step 42's guide (business-admin.ts `guide`) built from what Meta reads now — what is asked, from →
  * to; the exact steps in Meta's screens; how to put it back (or plainly that Meta cannot); what to watch out for — and asked
  * again, the same read says what is done. Pure: the reads are live-business-assets-admin.ts (steps 2, 3 and 4's reads).
@@ -18,11 +20,17 @@
  * create_client_app, create_ad_review_request, create_bm_review_request — no create_client_ad_account, no delete of
  * client_apps, no create of a business asset group); Meta's Business Help Center (www.facebook.com/business/help/<id>) for
  * the ids in META_ASSET_HELP:
- *   - who: "For all add and remove endpoints: Access token's user needs to be an admin of the business"; an Employee "can't
- *     make any changes, except to add Pages or ad accounts which this user is an admin of to the business". Claim an ad
- *     account: "The requester needs to be an admin of the Business claiming the ad account"; a new ad account: "You must be
- *     an admin for a business to create new ad accounts"; a Page as owner: "the access token of an Admin user or Admin system
- *     user of your business"; an ad account for an Instagram account: "You must be at least an ADMIN of the business".
+ *   - who (review F8: each act's own sentence, WHO below): claim an ad account — "The requester needs to be an admin of the
+ *     Business claiming the ad account" (ad accounts guide); a new ad account — "You must be an admin for a business to
+ *     create new ad accounts" (same); a Page as owner — "the access token of an Admin user or Admin system user of your
+ *     business" (Pages guide); an ad account for an Instagram account — "You must be at least an ADMIN of the business"
+ *     (Instagram ads guide); a Page's removal — "people with full control of a business portfolio can remove a Facebook Page"
+ *     (help 531142997352616); a request, an app, another removal — the Business Users roles: an Employee "can see all of the
+ *     information in the business settings but can't make any changes, except to add Pages or ad accounts which this user is
+ *     an admin of to the business"; an asset group — the Business Asset Groups API's own "For all add and remove endpoints:
+ *     Access token's user needs to be an admin of the business"; invoice groups — "You have full control of the business
+ *     portfolio and access to manage finance" (help 545451859299492), a delete "You must have full control of the business
+ *     portfolio or be assigned access to manage finance" (help 978657955678886).
  *   - ad accounts: a claim by an admin of the ad account is CONFIRMED at once, else PENDING until an admin of the ad account
  *     "accept[s] the request in Ads Manager"; "You cannot remove ad accounts from your business if you're OWNER and if the
  *     accounts are CONFIRMED" (only a PENDING request or AGENCY access is removed); client_ad_accounts: "temporarily
@@ -81,8 +89,20 @@ export const META_ASSET_HELP = {
   restrictedAccount: 'https://www.facebook.com/business/help/422289316306981',
 } as const
 
-/** The sentence every asset answer carries: D1, in plain words, with Meta's own rule. */
-export const D1_ASSET_LINE = 'Nexus changes nothing here and sends nothing to Meta: in Meta this is an admin\'s act on the business portfolio (Meta: "For all add and remove endpoints: Access token\'s user needs to be an admin of the business"), and the Owner\'s decision (D1) keeps it in the hands of a person with full access to the portfolio, who makes it in Meta\'s own screens. Nexus read Meta just now, shows the exact steps and how to put it back, and reads it again when asked, to say what is done.'
+/** Review F8 — each act's own sentence of Meta on who may make it (the header names each source). */
+export const WHO = {
+  claimAdAccount: '"The requester needs to be an admin of the Business claiming the ad account" (Meta\'s ad accounts guide)',
+  newAdAccount: '"You must be an admin for a business to create new ad accounts" (Meta\'s ad accounts guide)',
+  claimPage: '"you must use the access token of an Admin user or Admin system user of your business" (Meta\'s Pages guide)',
+  linkInstagram: '"You must be at least an ADMIN of the business" (Meta\'s Instagram ads guide)',
+  removePage: '"people with full control of a business portfolio can remove a Facebook Page from their business portfolio" (Meta\'s help)',
+  employee: 'an Employee of a business portfolio "can see all of the information in the business settings but can\'t make any changes, except to add Pages or ad accounts which this user is an admin of to the business" (Meta\'s business roles)',
+  assetGroup: '"For all add and remove endpoints: Access token\'s user needs to be an admin of the business" (Meta\'s Business Asset Groups API)',
+  invoiceGroup: '"You have full control of the business portfolio and access to manage finance" (Meta\'s help on invoice groups)',
+  deleteInvoiceGroup: '"You must have full control of the business portfolio or be assigned access to manage finance" (Meta\'s help on deleting an invoice group)',
+} as const
+/** The sentence every asset answer carries: D1, in plain words, with the act's own rule of Meta. */
+export const d1AssetLine = (who: string) => `Nexus changes nothing here and sends nothing to Meta: in Meta this is an admin's act on the business portfolio (Meta: ${who}), and the Owner's decision (D1) keeps it in the hands of a person with full access to the portfolio, who makes it in Meta's own screens. Nexus read Meta just now, shows the exact steps and how to put it back, and reads it again when asked, to say what is done.`
 /** An appeal's rule line: it is made by an admin of the restricted account (Meta's help). */
 export const D1_APPEAL_LINE = 'Nexus changes nothing here and sends nothing to Meta: an appeal is made by an admin of the restricted account in Meta\'s own screens (Meta: "To request a review, you must be an admin on the account"), and the Owner\'s decision (D1) keeps it in his hands — Meta\'s appeal API is written for a parent portfolio\'s child accounts with an admin token, which Nexus does not hold. Nexus read Meta just now, shows the exact steps, and reads the account again when asked.'
 
@@ -134,7 +154,7 @@ export interface AssetLive {
   readAt: string
 }
 
-const base = (live: { portfolioId: string; readAt: string }) => ({ portfolioId: live.portfolioId, readAt: live.readAt, rule: D1_ASSET_LINE })
+const base = (live: { portfolioId: string; readAt: string }, who: string) => ({ portfolioId: live.portfolioId, readAt: live.readAt, rule: d1AssetLine(who) })
 
 export function assetGuide(ask: AssetAsk, live: AssetLive): AdminGuide | { refusal: string } {
   const portfolio = { portfolioId: live.portfolioId, name: live.portfolioName }
@@ -198,7 +218,7 @@ function adAccountGuide(ask: AssetAsk, live: AssetLive, portfolio: Portfolio): A
   }
   const warnings = claim
     ? [
-        'A claim moves the ad account into this portfolio for good: Meta\'s help says a claimed ad account "can\'t be deleted or transferred to another portfolio", and its people are then given access only through this portfolio.',
+        'Meta\'s help: adding an existing ad account to a business portfolio "may permanently move it into the portfolio, meaning it can\'t be deleted or transferred to another portfolio"; its people are then given access only through this portfolio.',
         'A prepaid ad account can be claimed only with no prepaid balance left (Meta\'s help); the portfolio\'s ad account limit counts it (it grows with spend: Meta\'s help).',
         NEXUS_USES_CHOSEN,
       ]
@@ -208,12 +228,12 @@ function adAccountGuide(ask: AssetAsk, live: AssetLive, portfolio: Portfolio): A
         NEXUS_USES_CHOSEN,
       ]
   return guide({
-    ...base(live),
+    ...base(live, claim ? WHO.claimAdAccount : WHO.employee),
     action: ask.action,
     items: [item],
     ownerSteps: [...steps, AGAIN],
     putBack: claim
-      ? { possible: 'partly', sentence: 'A claim still waiting can be taken back (remove-meta-business-asset asset ad-account gives the steps); once Meta confirms it, the ad account stays in this portfolio for good (Meta: an owner\'s CONFIRMED ad account cannot be removed).', steps: [] }
+      ? { possible: 'partly', sentence: 'A claim still waiting can be taken back (remove-meta-business-asset asset ad-account gives the steps); once Meta confirms it, the ad account may stay in this portfolio permanently (Meta\'s help: a claim "may permanently move it into the portfolio"; an owner\'s CONFIRMED ad account cannot be removed).', steps: [] }
       : { possible: 'yes', sentence: 'Partner access to another portfolio\'s ad account is taken off the same way it came (remove-meta-business-asset asset ad-account gives the steps); asking again needs the owner\'s approval again.', steps: [] },
     warnings: [...warnings, SCREEN_WORDS],
     help: [META_ASSET_HELP.adAccounts, META_ASSET_HELP.adAccountLimits],
@@ -234,7 +254,7 @@ function linkInstagramGuide(ask: AssetAsk, live: AssetLive, portfolio: Portfolio
     item = { what: 'instagramAdAccount', now: { instagramId: ig, authorizedAdAccounts: read.adAccountIds.length, chosenAdAccountListed: done }, asked: { instagramId: ig, adAccountId: account, mayAdvertise: true }, done: done ? true : read.more ? null : false, ...(done || !read.more ? {} : { sentence: 'Meta lists more ad accounts than Nexus reads: it cannot tell.' }) }
   }
   return guide({
-    ...base(live),
+    ...base(live, WHO.linkInstagram),
     action: 'link-instagram',
     items: [item],
     ownerSteps: [
@@ -299,7 +319,7 @@ function pageGuide(ask: AssetAsk, live: AssetLive, portfolio: Portfolio): AdminG
         NEXUS_USES_CHOSEN,
       ]
   return guide({
-    ...base(live),
+    ...base(live, claim ? WHO.claimPage : WHO.employee),
     action: ask.action,
     items: [item],
     ownerSteps: [...steps, AGAIN],
@@ -345,7 +365,7 @@ function appGuide(ask: AssetAsk, live: AssetLive, portfolio: Portfolio): AdminGu
       : `Accounts › Apps › Add › Request access to an app ID: enter the App ID ${id} and click Request app (Meta's help; the app's owner approves it).`)
   }
   return guide({
-    ...base(live),
+    ...base(live, WHO.employee),
     action: ask.action,
     items: [item],
     ownerSteps: [...steps, AGAIN],
@@ -372,7 +392,7 @@ function assetGroupGuide(ask: AssetAsk, live: AssetLive, portfolio: Portfolio): 
     ? { what: 'assetGroup', now: same.map((r) => ({ assetGroupId: r.id, name: r.name })), asked: { name }, done: true, sentence: `Meta lists a business asset group named "${name}" in this portfolio: if it is the one meant, nothing is left to do.` }
     : { what: 'assetGroup', now: { assetGroups: lists.rows.filter((r) => r.list === 'owned').length }, asked: { name }, done: unsure ? null : false, sentence: unsure ? `Nexus finds no group with that name, but ${unsure}: it cannot tell for sure.` : 'No business asset group with that name yet.' }
   return guide({
-    ...base(live),
+    ...base(live, WHO.assetGroup),
     action: 'asset-group',
     items: [item],
     ownerSteps: [
@@ -420,6 +440,7 @@ export function removeGuide(ask: RemoveAsk, live: RemoveLive): AdminGuide | { re
   const portfolio = { portfolioId: live.portfolioId, name: live.portfolioName }
   const w = WORDS[ask.asset]
   const label = w.label(ask.id)
+  const removeWho = ask.asset === 'page' ? WHO.removePage : WHO.employee
   const given = sinceOf(ask.since)
   if ('refusal' in given) return given
   if (live.taken) return { refusal: TAKEN(w.what, label) }
@@ -431,7 +452,7 @@ export function removeGuide(ask: RemoveAsk, live: RemoveLive): AdminGuide | { re
     const item: AdminItem = unsure
       ? { what: ask.asset, now: null, asked: { id: label, removed: true }, done: null, sentence: `Nexus does not find it, but ${unsure}: it cannot tell whether it was removed.` }
       : { what: ask.asset, now: null, asked: { id: label, removed: true }, done: true, sentence: `Meta no longer lists ${w.what} ${label} in this portfolio: removed.` }
-    return guide({ ...base(live), action: ask.asset, items: [item], ownerSteps: [], putBack: { possible: 'partly', sentence: 'Only by bringing it in again (set-meta-business-assets), as the first time.', steps: [] }, warnings: [], help: [] })
+    return guide({ ...base(live, removeWho), action: ask.asset, items: [item], ownerSteps: [], putBack: { possible: 'partly', sentence: 'Only by bringing it in again (set-meta-business-assets), as the first time.', steps: [] }, warnings: [], help: [] })
   }
   if (row.seen === 'taken') return { refusal: TAKEN(w.what, label) }
   // The gate: Nexus guides a removal only of what it may name (step 4's seenAs): the asset chosen here, one the unshared
@@ -462,7 +483,7 @@ export function removeGuide(ask: RemoveAsk, live: RemoveLive): AdminGuide | { re
       ? { possible: 'yes' as const, sentence: 'A cancelled request is asked again the same way (set-meta-business-assets).', steps: [] }
       : { possible: 'partly' as const, sentence: 'Partner access comes back only when the owner shares it again or approves a new request (set-meta-business-assets request-…).', steps: [] }
   return guide({
-    ...base(live),
+    ...base(live, removeWho),
     action: ask.asset,
     items: [{ what: ask.asset, now: { id: label, list: row.list, name: row.name, ...(row.requestId ? { requestId: row.requestId } : {}) }, asked: { id: label, removed: true }, done: false }],
     ownerSteps: [...steps, againWithSince(`asset ${ask.asset}, id ${ask.id}`, live.readAt)],
@@ -512,7 +533,7 @@ export function newAdAccountGuide(ask: NewAdAccountAsk, live: NewAdAccountLive):
       : { what: 'adAccount', now: { ownedAdAccounts: count }, asked, done: live.owned.more ? null : false, ...(live.owned.more ? { sentence: 'The portfolio has more ad accounts than Nexus reads (500): it cannot tell.' } : {}) }
   }
   return guide({
-    ...base(live),
+    ...base(live, WHO.newAdAccount),
     action: 'create',
     items: [item],
     ownerSteps: [
@@ -569,7 +590,7 @@ export function appealGuide(ask: AppealAsk, live: AppealLive): AdminGuide | { re
   if (ask.subject === 'portfolio') {
     // LG-016 — no documented Business field says a portfolio is restricted (step 4 note): Nexus cannot tell, either way.
     return guide({
-      ...base(live), rule: D1_APPEAL_LINE,
+      ...base(live, WHO.employee), rule: D1_APPEAL_LINE,
       action: 'appeal-portfolio',
       items: [{ what: 'portfolioRestriction', now: null, asked: { portfolioId: live.portfolioId, reviewRequested: true }, done: null, sentence: 'Meta documents no field that says whether a business portfolio is restricted, nor one that shows a review request: Nexus cannot tell. Account status overview in Business Support Home shows both.' }],
       ownerSteps: steps(`the business portfolio (id ${live.portfolioId})`),
@@ -587,7 +608,7 @@ export function appealGuide(ask: AppealAsk, live: AppealLive): AdminGuide | { re
   const asked = { adAccountId: act(a.adAccountId), active: true }
   if (a.status === 1) {
     return guide({
-      ...base(live), rule: D1_APPEAL_LINE,
+      ...base(live, WHO.employee), rule: D1_APPEAL_LINE,
       action: 'appeal-ad-account',
       items: [{ what: 'adAccountStatus', now, asked, done: true, sentence: given.ms === null ? 'Meta reads the ad account as Active: there is nothing to appeal.' : 'Meta reads the ad account as Active again: Meta lifted the restriction.' }],
       ownerSteps: [], putBack: back,
@@ -600,7 +621,7 @@ export function appealGuide(ask: AppealAsk, live: AppealLive): AdminGuide | { re
   if (a.status === 7) return { refusal: `Meta reads ad account ${label} as ${status}: Meta is reviewing it already, so there is nothing to appeal now; Business Support Home › Account status overview shows how it stands.` }
   if (a.status !== 2) return { refusal: `Meta reads ad account ${label} with ${status}, which Nexus does not know as a restriction: Business Support Home › Account status overview shows what Meta offers.` }
   return guide({
-    ...base(live), rule: D1_APPEAL_LINE,
+    ...base(live, WHO.employee), rule: D1_APPEAL_LINE,
     action: 'appeal-ad-account',
     items: [{ what: 'adAccountStatus', now, asked, done: given.ms === null ? false : null, ...(given.ms === null ? {} : { sentence: 'Meta still reads the ad account as Disabled. Meta\'s API shows no review request or its outcome: Business Support Home shows whether the review was asked and how it stands.' }) }],
     ownerSteps: steps(`the ad account ${label}`),
@@ -611,5 +632,211 @@ export function appealGuide(ask: AppealAsk, live: AppealLive): AdminGuide | { re
     ],
     afterwards: `Ask again with subject ad-account and since "${live.readAt}": Nexus reads the ad account's status again.`,
     help: [META_ASSET_HELP.requestReview, META_ASSET_HELP.restrictedAccount],
+  })
+}
+
+// ── set-meta-billing (BM-903 … BM-907) — the leader's decision after review 1: a D1 guide ─────────────────────────────
+
+/*
+ * Checked 2026-10-26 (plain curl, ?locale=en_US): Meta's help 545451859299492 ("Create, edit or delete an invoice group for
+ * monthly invoicing"), 978657955678886 (delete), 183197756325469 (credit lines); the developer guide "Use an Invoice Group"
+ * (developers.facebook.com/docs/business-management-apis/2tier-bm-solution/guides/invoice-group: create with emails and name,
+ * update, add / remove ad_account_id, check GET /<AD_ACCOUNT_ID>?fields=extended_credit_invoice_group, delete).
+ */
+export const BILLING_ACTIONS = ['create-group', 'rename-group', 'add-account', 'remove-account', 'delete-group'] as const
+export type BillingAction = typeof BILLING_ACTIONS[number]
+
+export const META_BILLING_HELP = {
+  invoiceGroups: 'https://www.facebook.com/business/help/545451859299492',
+  deleteInvoiceGroup: 'https://www.facebook.com/business/help/978657955678886',
+  creditLines: 'https://www.facebook.com/business/help/183197756325469',
+  devGuide: 'https://developers.facebook.com/docs/business-management-apis/2tier-bm-solution/guides/invoice-group',
+} as const
+
+/** Review F2 — one true sentence, the same in the tool's description and every answer. */
+export const ONE_INVOICE_GROUP = 'Meta: "An ad account can belong to only one invoice group at a time." So Meta moves the ad account out of its current group, or refuses the add.'
+/** Review F7 — where an ad account's spend goes in no group (help 183197756325469). */
+export const OWN_INVOICE = 'Meta: "By default, each ad account generates its own invoice each month."'
+/** Review F5 — Meta's month-end lock (help) and its developer guide's rules (a warning, never a refusal). */
+export const MONTH_END_LOCK = `Meta's month-end lock: "Billing information can't be edited from 2 days before the end of the month until 4 days after the month ends" (${META_BILLING_HELP.invoiceGroups}); its developer guide: invoice groups "cannot be created, edited or deleted 2 business days before and 4 business days after the end of the month", and ad accounts are added "up to 3 days before the invoice is sent" (${META_BILLING_HELP.devGuide}).`
+/** Review F6 — a group needs an invoice e-mail: the Owner types it; Nexus never takes or reads one. */
+export const INVOICE_EMAILS = 'Nexus never takes or reads an invoice group\'s e-mail addresses (the people its invoices go to): the Owner types them in Meta\'s screen.'
+export const NO_CREDIT_LINE_OWN = 'The business portfolio has no Meta credit line of its own (monthly invoicing): a card- or PayPal-paid account has no invoice groups, so there is nothing to change. A credit line is a person\'s application in Meta Business settings › Billing & payments.'
+
+/** One invoice group of the portfolio's own credit line, as read now (its ad accounts: the floor, read in full). */
+export interface InvoiceGroupSeen {
+  groupId: string
+  creditLineId: string
+  name: string | null
+  /** Meta: "Shows if the adaccount using the current credit will be enrolled into the invoice group automatically" (null: not read). */
+  autoEnroll: boolean | null
+  /** The ad accounts it bills (digits), or null when Meta did not answer the list; accountsMore: more than Nexus reads. */
+  adAccountIds: string[] | null
+  accountsMore: boolean
+  /** Its ad accounts another business in Nexus picked. */
+  takenAccounts: string[]
+}
+export interface BillingAsk { action: BillingAction; creditLineId?: string; invoiceGroupId?: string; name?: string; confirmDelete?: boolean; since?: string }
+export interface BillingLive {
+  portfolioId: string
+  portfolioName: string | null
+  /** The business's chosen ad account (digits). */
+  adAccountId: string
+  /** The credit lines the portfolio OWNS; foreignLines: lines another portfolio shares in (never changed here). */
+  creditLines: string[]
+  foreignLines: number
+  groups: InvoiceGroupSeen[]
+  /** A line's group list Meta did not answer, or cut: a group not found cannot be told apart from one Nexus did not read. */
+  groupsUnsure: string | null
+  /**
+   * Review F3, F4 — the chosen ad account's own billing (step 3's read): the invoice group Meta names on it
+   * (extended_credit_invoice_group; null: none) and its payment method's type and id (null type: Meta did not answer).
+   * null: not read (an action that moves no ad account reads neither).
+   */
+  account: { group: { id: string | null } | { refused: string }; payment: { type: number | null; typeText: string | null; id: string | null } | { refused: string } } | null
+  readAt: string
+}
+
+const billingGroupLabel = (g: Pick<InvoiceGroupSeen, 'groupId' | 'name'>) => `invoice group ${g.name ? `"${g.name}" ` : ''}(${g.groupId})`
+const CREDIT_LINES_PLACE = 'Billing & payments › Credit lines'
+
+/** Review F4 — whether the chosen ad account is paid by this portfolio's own credit line (else no "nothing spends more"). */
+function paidBy(live: BillingLive): { kind: 'line' } | { kind: 'other'; why: string } | { kind: 'unknown'; why: string } {
+  const a = live.account
+  if (!a || 'refused' in a.payment) return { kind: 'unknown', why: `Meta did not answer the ad account's payment method${a && 'refused' in a.payment ? ` (${a.payment.refused})` : ''}` }
+  const { type, typeText, id } = a.payment
+  if (type === null) return { kind: 'unknown', why: 'Meta named no payment method type on the ad account' }
+  if (type !== 4) return { kind: 'other', why: `Meta reads ad account act_${live.adAccountId}'s payment method as ${typeText ?? `type ${type}`}, not a Meta credit line (monthly invoicing): invoice groups do not bill it` }
+  const group = 'refused' in a.group ? null : a.group.id
+  if ((group && live.groups.some((g) => g.groupId === group)) || (id && live.creditLines.includes(id))) return { kind: 'line' }
+  if (live.creditLines.length === 1 && live.foreignLines === 0) return { kind: 'line' }
+  return { kind: 'unknown', why: 'Meta reads a credit line as its payment method, but names none Nexus can tie to this portfolio\'s own' }
+}
+
+export function billingGuide(ask: BillingAsk, live: BillingLive): AdminGuide | { refusal: string } {
+  const portfolio = { portfolioId: live.portfolioId, name: live.portfolioName }
+  const given = sinceOf(ask.since)
+  if ('refusal' in given) return given
+  if (!live.creditLines.length) return { refusal: live.foreignLines ? `${NO_CREDIT_LINE_OWN} (A credit line another business portfolio shares into this one is that portfolio's: its invoice groups are not changed here.)` : NO_CREDIT_LINE_OWN }
+  const named = Object.entries({ creditLineId: ask.creditLineId, invoiceGroupId: ask.invoiceGroupId, name: ask.name, confirmDelete: ask.confirmDelete }).filter(([, v]) => v !== undefined).map(([k]) => k)
+  const takes: Record<BillingAction, string[]> = { 'create-group': ['creditLineId', 'name'], 'rename-group': ['invoiceGroupId', 'name'], 'add-account': ['invoiceGroupId'], 'remove-account': ['invoiceGroupId'], 'delete-group': ['invoiceGroupId', 'confirmDelete'] }
+  const stray = named.filter((k) => !takes[ask.action].includes(k))
+  if (stray.length) return { refusal: `${stray.join(', ')} ${stray.length === 1 ? 'is' : 'are'} not an argument of action ${ask.action} (it takes ${takes[ask.action].join(', ')}).` }
+  const now = new Date(live.readAt)
+  const day = now.getUTCDate()
+  const last = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate()
+  const lockNow = day >= last - 1 || day <= 4
+  const common = [MONTH_END_LOCK, ...(lockNow ? [`Today (${live.readAt.slice(0, 10)}, UTC) is inside or at the edge of that window: Meta may refuse the change until it ends.`] : []), SCREEN_WORDS]
+  const help = [META_BILLING_HELP.invoiceGroups, META_BILLING_HELP.devGuide]
+  const who = ask.action === 'delete-group' ? WHO.deleteInvoiceGroup : WHO.invoiceGroup
+
+  if (ask.action === 'create-group') {
+    if (!ask.name) return { refusal: 'Name the new invoice group (name).' }
+    const line = ask.creditLineId ?? (live.creditLines.length === 1 ? live.creditLines[0] : null)
+    if (!line) return { refusal: `The business portfolio has ${live.creditLines.length} credit lines of its own: name the one (creditLineId: meta-billing view credit-lines lists them).` }
+    if (!live.creditLines.includes(line)) return { refusal: `Credit line ${line} is not one the business portfolio owns (meta-billing view credit-lines lists them).` }
+    const same = live.groups.filter((g) => g.creditLineId === line && g.name === ask.name)
+    const item: AdminItem = same.length
+      ? { what: 'invoiceGroup', now: same.map((g) => ({ invoiceGroupId: g.groupId, name: g.name, autoEnroll: g.autoEnroll })), asked: { creditLineId: line, name: ask.name }, done: true, sentence: `Meta lists an invoice group named "${ask.name}" on the credit line: if it is the one meant, nothing is left to do.` }
+      : { what: 'invoiceGroup', now: { invoiceGroups: live.groups.filter((g) => g.creditLineId === line).length }, asked: { creditLineId: line, name: ask.name }, done: live.groupsUnsure ? null : false, ...(live.groupsUnsure ? { sentence: `Nexus finds no group with that name, but ${live.groupsUnsure}: it cannot tell for sure.` } : {}) }
+    return guide({
+      ...base(live, who), action: 'create-group', items: [item],
+      ownerSteps: [
+        openSettings(portfolio),
+        `${CREDIT_LINES_PLACE}: click the credit line ${line}; go to Invoice groups and click Create invoice group; review Meta's invoice group terms and click Agree (Meta's help).`,
+        `Enter the group name "${ask.name}" and an e-mail address to receive invoices — the Owner types it in Meta's screen (Nexus never takes it); pick the ad accounts to include, if any; click Confirm.`,
+        againWithSince(`action create-group, name "${ask.name}"`, live.readAt),
+      ],
+      putBack: { possible: 'yes', sentence: 'Meta\'s help: "You can edit or delete your invoice groups after creation" (action delete-group gives the steps; Nexus guides the delete of an empty group only).', steps: [] },
+      warnings: [`MONEY: a group bills nothing until an ad account is in it; then those accounts' spend comes on ONE monthly invoice (Meta: "When you create an invoice group, you receive a single invoice that includes ad spend from all ad accounts in the group").`, ONE_INVOICE_GROUP, INVOICE_EMAILS, ...common],
+      afterwards: `Ask again with action create-group, name "${ask.name}" and since "${live.readAt}".`,
+      help,
+    })
+  }
+
+  // ── a group of the portfolio's own credit line ──
+  if (!ask.invoiceGroupId) return { refusal: 'Name the invoice group (invoiceGroupId: meta-billing view invoice-groups lists them).' }
+  const group = live.groups.find((g) => g.groupId === ask.invoiceGroupId) ?? null
+  if (!group) {
+    if (ask.action === 'delete-group' && given.ms !== null) {
+      const item: AdminItem = live.groupsUnsure
+        ? { what: 'invoiceGroup', now: null, asked: { invoiceGroupId: ask.invoiceGroupId, deleted: true }, done: null, sentence: `Nexus does not find it, but ${live.groupsUnsure}: it cannot tell whether it was deleted.` }
+        : { what: 'invoiceGroup', now: null, asked: { invoiceGroupId: ask.invoiceGroupId, deleted: true }, done: true, sentence: `Meta no longer lists invoice group ${ask.invoiceGroupId} on the portfolio's credit line: deleted.` }
+      return guide({ ...base(live, who), action: 'delete-group', items: [item], ownerSteps: [], putBack: { possible: 'no', sentence: 'A deleted group does not come back: a new one has a new id.', steps: [] }, warnings: [], help: [META_BILLING_HELP.deleteInvoiceGroup] })
+    }
+    return { refusal: live.groupsUnsure
+      ? `Invoice group ${ask.invoiceGroupId} is not among what Nexus reads of the portfolio's own credit line (${live.groupsUnsure}), so it gives no steps for it.`
+      : `Invoice group ${ask.invoiceGroupId} is not an invoice group of the business portfolio's own credit line (meta-billing view invoice-groups lists them).` }
+  }
+  // The floor: a group whose ad accounts Nexus cannot read in full, or that bills another business's ad account, gets no steps.
+  if (group.adAccountIds === null || group.accountsMore) return { refusal: `Nexus could not read every ad account ${billingGroupLabel(group)} bills, so it gives no steps for it (an invoice group may bill another business's ad accounts).` }
+  if (group.takenAccounts.length) return { refusal: `${billingGroupLabel(group)} bills an ad account another business in Nexus uses (${group.takenAccounts.map((a) => `act_${a}`).join(', ')}), so Nexus gives no steps for it: it is that business's billing too.` }
+  const editPlace = `${CREDIT_LINES_PLACE}: click the credit line ${group.creditLineId}; go to Invoice groups, click the icon next to ${billingGroupLabel(group)}, then Edit (Meta's help).`
+  const groupNow = { invoiceGroupId: group.groupId, name: group.name, autoEnroll: group.autoEnroll, adAccounts: group.adAccountIds.length }
+
+  if (ask.action === 'rename-group') {
+    if (!ask.name) return { refusal: 'Name the invoice group\'s new name (name).' }
+    const done = group.name === ask.name
+    return guide({
+      ...base(live, who), action: 'rename-group',
+      items: [{ what: 'name', now: group.name, asked: ask.name, done }],
+      ownerSteps: [openSettings(portfolio), editPlace, `Update the group name to "${ask.name}" and confirm.`, AGAIN],
+      putBack: { possible: 'yes', sentence: `The same place renames it back to ${group.name === null ? 'its old name' : `"${group.name}"`}, exactly as Meta keeps it now.`, steps: [] },
+      warnings: ['A new name changes no ad account, address or e-mail of the group, and no money.', ...common],
+      help,
+    })
+  }
+
+  if (ask.action === 'add-account' || ask.action === 'remove-account') {
+    const add = ask.action === 'add-account'
+    const account = `act_${live.adAccountId}`
+    const pay = paidBy(live)
+    if (pay.kind === 'other') return { refusal: `${pay.why}, so Nexus gives no steps to ${add ? 'put it in' : 'take it out of'} ${billingGroupLabel(group)}.` }
+    const read = live.account?.group
+    const inGroup = !read || 'refused' in read ? null : read.id
+    const unreadGroup = !read || 'refused' in read
+    if (!add && !unreadGroup && inGroup !== group.groupId && given.ms === null) return { refusal: `Meta reads ad account ${account}'s invoice group as ${inGroup ? `another group (${inGroup})` : 'none'}: ${billingGroupLabel(group)} does not bill it, so there is nothing to take out.` }
+    const previous = inGroup && inGroup !== group.groupId ? live.groups.find((g) => g.groupId === inGroup) ?? { groupId: inGroup, name: null } : null
+    const done = unreadGroup ? null : add ? inGroup === group.groupId : inGroup !== group.groupId
+    const nowWords = unreadGroup ? null : inGroup ? (inGroup === group.groupId ? billingGroupLabel(group) : billingGroupLabel(previous!)) : 'no invoice group (its own monthly invoice)'
+    const spends = pay.kind === 'line'
+      ? 'The same credit line pays (Nexus read that this ad account is paid by the portfolio\'s own credit line), so nothing spends more.'
+      : `Nexus cannot tell whether the same credit line pays: ${pay.why}.`
+    const money = add
+      ? `MONEY: this changes which monthly invoice pays for ad account ${account}: its spend lands on the invoice of ${billingGroupLabel(group)} (its bill-to address, PO number and invoice e-mails) instead of ${nowWords ?? 'the invoice it is on now (Nexus could not read it)'}. ${spends}`
+      : `MONEY: this changes which monthly invoice pays for ad account ${account}: it leaves ${billingGroupLabel(group)}, and ${OWN_INVOICE} — its spend then comes on its own monthly invoice. ${spends}`
+    return guide({
+      ...base(live, who), action: ask.action,
+      items: [{ what: 'invoiceGroupOfAdAccount', now: { adAccountId: account, invoiceGroup: unreadGroup ? null : inGroup, group: groupNow }, asked: { adAccountId: account, invoiceGroup: add ? group.groupId : null }, done, ...(unreadGroup ? { sentence: `Nexus could not read ad account ${account}'s invoice group (${read && 'refused' in read ? read.refused : 'not read'}): it cannot tell.` } : {}) }],
+      ownerSteps: [openSettings(portfolio), editPlace, add ? `Update its associated ad accounts: add ${account}, and confirm.` : `Update its associated ad accounts: take ${account} out, and confirm.`, againWithSince(`action ${ask.action}, invoiceGroupId ${group.groupId}`, live.readAt)],
+      putBack: add
+        ? { possible: 'yes', sentence: previous ? `The same place in ${billingGroupLabel(previous)} puts it back there (Meta then takes it out of this one).` : `The same place takes it out again (its spend then comes on its own monthly invoice).`, steps: [] }
+        : { possible: 'yes', sentence: `The same place adds it back to ${billingGroupLabel(group)}.`, steps: [] },
+      warnings: [
+        money,
+        ONE_INVOICE_GROUP,
+        ...(!add && group.autoEnroll === true ? [`Meta reads ${billingGroupLabel(group)} with auto_enroll on ("Shows if the adaccount using the current credit will be enrolled into the invoice group automatically"): Meta may put the account back by itself.`] : []),
+        ...common,
+      ],
+      afterwards: `Ask again with action ${ask.action}, invoiceGroupId ${group.groupId} and since "${live.readAt}": Nexus reads the ad account's own invoice group (Meta's "Check the Invoice Group").`,
+      help: [...help, META_BILLING_HELP.creditLines],
+    })
+  }
+
+  // delete-group: explicit ask, an empty group only.
+  if (ask.confirmDelete !== true) return { refusal: 'Deleting an invoice group takes confirmDelete: true, asked by the person (no way back: a new group gets a new id).' }
+  if (group.adAccountIds.length) return { refusal: `${billingGroupLabel(group)} still bills ${group.adAccountIds.length} ad account${group.adAccountIds.length === 1 ? '' : 's'} (${group.adAccountIds.map((a) => `act_${a}`).join(', ')}): Nexus gives steps to delete an empty invoice group only. Take them out first (action remove-account for the chosen one; any other in Meta's screens).` }
+  return guide({
+    ...base(live, who), action: 'delete-group',
+    items: [{ what: 'invoiceGroup', now: groupNow, asked: { invoiceGroupId: group.groupId, deleted: true }, done: false }],
+    ownerSteps: [
+      openSettings(portfolio),
+      `${CREDIT_LINES_PLACE}: select the credit line ${group.creditLineId}; in the Invoice section select the 3-dot icon next to ${billingGroupLabel(group)}; Delete; Confirm on the pop-up; Close (Meta's help).`,
+      againWithSince(`action delete-group, invoiceGroupId ${group.groupId}, confirmDelete true`, live.readAt),
+    ],
+    putBack: { possible: 'no', sentence: 'A deleted invoice group does not come back: a group made again (action create-group) is a new group with a new id.', steps: [] },
+    warnings: ['It bills no ad account now, so no invoice changes (Meta: once deleted, "ad spend from those ad accounts will no longer be combined and will appear on separate invoices").', ...common],
+    afterwards: `Ask again with action delete-group, invoiceGroupId ${group.groupId}, confirmDelete true and since "${live.readAt}".`,
+    help: [META_BILLING_HELP.deleteInvoiceGroup, META_BILLING_HELP.devGuide],
   })
 }

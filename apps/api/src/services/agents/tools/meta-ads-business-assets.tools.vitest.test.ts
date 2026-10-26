@@ -1,5 +1,6 @@
 /**
- * Meta ads step 43 — set-meta-business-assets, remove-meta-business-asset, create-meta-ad-account, create-meta-appeal (D1 = A).
+ * Meta ads step 43 — set-meta-business-assets, remove-meta-business-asset, create-meta-ad-account, create-meta-appeal and
+ * set-meta-billing (D1 = A).
  * They are READS: no write of any kind reaches Meta (the read client is the only way out, and every call is a GET the real
  * gateway lets through), only the chosen ad account's business portfolio is read, nothing at all when another business in
  * Nexus uses it, an asset another business uses gets no steps, never an e-mail field; a guide asked again reads the result.
@@ -15,6 +16,7 @@ const h = vi.hoisted(() => ({
   taken: [] as Array<{ product: string; id: string }>,
   state: { status: 1, disableReason: 0, name: 'Shop A ads' } as Record<string, unknown>,
   stateCalls: 0,
+  own: { adAccounts: ['1234567890'], pages: ['120000000000010'], instagram: [] } as { adAccounts: string[] | null; pages: string[] | null; instagram: string[] | null },
 }))
 vi.mock('../../meta/meta-accounts.service.js', () => ({ listMetaConnections: vi.fn(async () => h.connections) }))
 vi.mock('../../marketing/meta-ads/read-client.js', async () => {
@@ -35,7 +37,11 @@ vi.mock('../../marketing/meta-ads/read-client.js', async () => {
   }
 })
 // Step 41's account read (its own test covers its request): here only the status it names.
-vi.mock('../../marketing/meta-ads/live-access-change.js', () => ({ liveAccessState: vi.fn(async () => { h.stateCalls++; return { ...h.state } }) }))
+vi.mock('../../marketing/meta-ads/live-access-change.js', () => ({
+  liveAccessState: vi.fn(async () => { h.stateCalls++; return { ...h.state } }),
+  // Step 41's read of the portfolio's own ad accounts, Pages and Instagram accounts (its own test covers its requests).
+  livePortfolioOwnAssets: vi.fn(async () => structuredClone(h.own)),
+}))
 vi.mock('../../../db.js', () => ({
   default: {
     // nexus_meta_links_taken(product, ids): the ids of that product another business picked.
@@ -44,7 +50,8 @@ vi.mock('../../../db.js', () => ({
 }))
 
 import { META_ADS_BUSINESS_ASSETS_TOOLS } from './meta-ads-business-assets.tools.js'
-import { ASSETS_SHARED } from '../../marketing/meta-ads/live-business-assets-admin.js'
+import { ASSETS_SHARED, BILLING_SHARED } from '../../marketing/meta-ads/live-business-assets-admin.js'
+import { ONE_INVOICE_GROUP } from '../../marketing/meta-ads/business-assets-admin.js'
 import { BUSINESS_SETTINGS_FIELDS } from '../../marketing/meta-ads/live-business.js'
 import { metaUrl } from '../../gateway/meta.js'
 import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
@@ -64,6 +71,9 @@ const PAGE = '120000000000010'
 const PAGE_2 = '120000000000011'
 const CLIENT_PAGE = '120000000000012'
 const IG = '17840000000000001'
+const LINE = '120000000000300'
+const GROUP_A = '120000000000310'
+const GROUP_B = '120000000000311'
 const CHOSEN = {
   connectionId: 'conn-1', state: 'ok', stateText: 'ok', systemUser: { id: '100000000000001', name: 'Nexus system user' }, appId: '300000000000009',
   adAccount: { adAccountId: ACCOUNT, name: 'Shop A ads', currency: 'EUR', timeZone: 'Europe/Rome', businessId: PORTFOLIO },
@@ -82,11 +92,19 @@ function answers(req: Req): unknown {
   if (req.path.endsWith('/owned_instagram_assets')) return { data: [{ id: '120000000000090', ig_user_id: IG, ig_username: 'shop_a' }] }
   if (req.path === `${IG}/authorized_adaccounts`) return { data: [{ account_id: ACCOUNT, name: 'Shop A ads' }] }
   if (req.path.endsWith('/owned_apps')) return { data: [{ id: '300000000000009', name: 'Shop A app' }] }
+  // set-meta-billing: the portfolio's own credit line, its groups (auto_enroll), a group's ad accounts, the ad account's own billing.
+  if (req.path === `${PORTFOLIO}/extendedcredits`) return { data: [{ id: LINE, owner_business: { id: PORTFOLIO } }] }
+  if (req.path === `${LINE}/extended_credit_invoice_groups`) return { data: [{ id: GROUP_A, name: 'Group A', auto_enroll: false, emails: ['a@example.com'] }, { id: GROUP_B, name: 'Group B', auto_enroll: true }] }
+  if (req.path === `${GROUP_A}/ad_accounts`) return { data: [{ account_id: ACCOUNT }] }
+  if (req.path === `${GROUP_B}/ad_accounts`) return { data: [] }
+  if (req.path === `act_${ACCOUNT}` && f.includes('extended_credit_invoice_group')) return { funding_source: '500000000000009', extended_credit_invoice_group: { id: GROUP_A, name: 'Group A' }, is_prepay_account: false }
+  if (req.path === `act_${ACCOUNT}` && f.includes('funding_source_details')) return { funding_source_details: { id: LINE, type: 4, display_string: 'Credit line' } }
   return { data: [] }
 }
 
 beforeEach(() => {
   h.connections = [CHOSEN]; h.calls.length = 0; h.answer = answers; h.taken = []; h.state = { status: 1, disableReason: 0, name: 'Shop A ads' }; h.stateCalls = 0
+  h.own = { adAccounts: [ACCOUNT], pages: [PAGE], instagram: [] }
 })
 
 /** Every call these tools made: a GET the real gateway lets through, on the chosen portfolio (or the chosen Instagram account) only. */
@@ -99,14 +117,17 @@ function callsAreReadsOfThePortfolio() {
 
 describe('four read-only guides (D1)', () => {
   it('read only, open world, ads.view, no change contract; the descriptions say Nexus sends nothing', () => {
-    expect(META_ADS_BUSINESS_ASSETS_TOOLS.map((t) => t.name)).toEqual(['set-meta-business-assets', 'remove-meta-business-asset', 'create-meta-ad-account', 'create-meta-appeal'])
+    expect(META_ADS_BUSINESS_ASSETS_TOOLS.map((t) => t.name)).toEqual(['set-meta-business-assets', 'remove-meta-business-asset', 'create-meta-ad-account', 'create-meta-appeal', 'set-meta-billing'])
     for (const t of META_ADS_BUSINESS_ASSETS_TOOLS) {
       expect({ readOnly: t.readOnly, openWorld: t.openWorld, execute: t.execute, undo: t.undo, reversibility: t.reversibility, maxClaudeTrust: t.maxClaudeTrust, alwaysAsk: t.alwaysAsk, riskTier: t.riskTier, category: t.category })
         .toEqual({ readOnly: true, openWorld: true, execute: undefined, undo: undefined, reversibility: undefined, maxClaudeTrust: undefined, alwaysAsk: undefined, riskTier: 'low', category: 'insights' })
-      expect(t.requires).toEqual(['ads.view'])
+      expect(t.requires).toEqual(t.name === 'set-meta-billing' ? ['ads.view', 'financials.adspend.view'] : ['ads.view'])
       expect(t.description).toMatch(/Nexus changes NOTHING and sends nothing to Meta with this tool \(Owner decision D1/)
     }
     expect(tool('create-meta-ad-account').description).toMatch(/MONEY: it spends nothing until it has a payment method/)
+    // Review F2 — the one-group sentence is the same in the description and in every answer.
+    expect(tool('set-meta-billing').description).toContain(ONE_INVOICE_GROUP)
+    expect(tool('set-meta-billing').description).not.toMatch(/SDK only|reference says/)
   })
   it('a portfolio another business in Nexus uses: refused before any Meta call, for every guide but the ad account\'s appeal', async () => {
     h.taken = [{ product: 'PORTFOLIO', id: PORTFOLIO }]
@@ -202,5 +223,42 @@ describe('create-meta-ad-account and create-meta-appeal', () => {
     expect(h.stateCalls).toBe(1)
     h.state = { status: 1, disableReason: 0, name: 'Shop A ads' }
     expect(data(await run('create-meta-appeal', { subject: 'ad-account' })).state).toBe('done')
+  })
+})
+
+describe('set-meta-billing (a D1 guide)', () => {
+  it('add-account: the ad account\'s own invoice group and payment method (step 3\'s read), MONEY plainly, only GETs, never an e-mail', async () => {
+    const out = data(await run('set-meta-billing', { action: 'add-account', invoiceGroupId: GROUP_B }))
+    expect(out).toMatchObject({ nexusSends: 'nothing', state: 'to-do' })
+    expect(out.items[0].now).toMatchObject({ adAccountId: `act_${ACCOUNT}`, invoiceGroup: GROUP_A, group: { invoiceGroupId: GROUP_B, autoEnroll: true } })
+    expect(out.warnings[0]).toMatch(/^MONEY: this changes which monthly invoice pays for ad account act_1234567890.*so nothing spends more/)
+    const refused = h.calls.map((c) => [c.path, metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' })]).filter(([, problem]) => problem)
+    expect(refused).toEqual([])
+    expect(h.calls.map(fieldsOf).join(' ')).not.toMatch(/email|token/)
+    expect(JSON.stringify(out)).not.toMatch(/example\.com/)
+    // F3 — the group's own list is read only as the floor (its ad accounts), never for "now".
+    expect(h.calls.some((c) => c.path === `act_${ACCOUNT}` && fieldsOf(c).includes('extended_credit_invoice_group'))).toBe(true)
+  })
+  it('asked again: the ad account\'s own invoice group decides', async () => {
+    h.answer = (req) => (req.path === `act_${ACCOUNT}` && fieldsOf(req).includes('extended_credit_invoice_group') ? { funding_source: '1', extended_credit_invoice_group: { id: GROUP_B } } : answers(req))
+    expect(data(await run('set-meta-billing', { action: 'add-account', invoiceGroupId: GROUP_B, since: '2026-10-26T10:00:00.000Z' })).state).toBe('done')
+  })
+  it('a portfolio another business uses — by its link, or by one of its own assets, or unreadable: refused; the link before any Meta call', async () => {
+    h.taken = [{ product: 'PORTFOLIO', id: PORTFOLIO }]
+    expect(errorOf(await run('set-meta-billing', { action: 'rename-group', invoiceGroupId: GROUP_A, name: 'Group C' }))).toBe(ASSETS_SHARED)
+    expect(h.calls).toEqual([])
+    h.taken = [{ product: 'PAGE', id: PAGE }]
+    expect(errorOf(await run('set-meta-billing', { action: 'rename-group', invoiceGroupId: GROUP_A, name: 'Group C' }))).toBe(BILLING_SHARED)
+    h.taken = []; h.own = { adAccounts: [ACCOUNT], pages: null, instagram: [] }
+    expect(errorOf(await run('set-meta-billing', { action: 'rename-group', invoiceGroupId: GROUP_A, name: 'Group C' }))).toBe(BILLING_SHARED)
+  })
+  it('a group that bills another business\'s ad account: refused; delete only an empty group, on confirmDelete', async () => {
+    h.answer = (req) => (req.path === `${GROUP_A}/ad_accounts` ? { data: [{ account_id: ACCOUNT }, { account_id: OTHER_ACCOUNT }] } : answers(req))
+    h.taken = [{ product: 'AD_ACCOUNT', id: OTHER_ACCOUNT }]
+    expect(errorOf(await run('set-meta-billing', { action: 'rename-group', invoiceGroupId: GROUP_A, name: 'Group C' }))).toMatch(/bills an ad account another business in Nexus uses/)
+    h.taken = []; h.answer = answers
+    expect(errorOf(await run('set-meta-billing', { action: 'delete-group', invoiceGroupId: GROUP_A, confirmDelete: true }))).toMatch(/still bills 1 ad account/)
+    expect(data(await run('set-meta-billing', { action: 'delete-group', invoiceGroupId: GROUP_B, confirmDelete: true })).ownerSteps.join(' ')).toMatch(/3-dot icon/)
+    expect(() => tool('set-meta-billing').input.parse({ action: 'delete-group', invoiceGroupId: GROUP_B, confirmDelete: false })).toThrow()
   })
 })
