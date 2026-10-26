@@ -7080,6 +7080,11 @@
     "compound": {},
     "relations": []
   },
+  "AdsWasteFollowUp": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
   "GoogleAccountLink": {
     "scalar": {},
     "compound": {

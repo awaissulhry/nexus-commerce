@@ -19,7 +19,7 @@ export interface NgramRow {
    * For a 1-gram the two counts agree; for a 2-gram this over-reports by up to 4.7×.
    *
    * Anything offering an ACTION must count contiguous token matches itself, and put that number on
-   * the row instead (the old Negatives page's wasteful-words read did).
+   * the row instead (the Negative Targeting page's Words view does: waste/words-pure.ts).
    */
   terms: number
   impressions: number; clicks: number; costCents: number; orders: number; salesCents: number
@@ -28,38 +28,27 @@ export interface NgramRow {
 
 const STOP = new Set(['the', 'a', 'an', 'and', 'or', 'for', 'of', 'to', 'in', 'di', 'da', 'il', 'la', 'le', 'e', 'per', 'con', 'der', 'die', 'das', 'und'])
 
+/** Grams under this spend in the window are left out (€3, in cents of the terms' currency). */
+const MIN_COST_CENTS = 300
+
 /**
- * NEG.6 — the scope filter. Additive: every field is optional and absent means "account-wide",
- * which is exactly what this function did before, so the standalone `GET /advertising/ngrams`
- * caller is byte-identical.
+ * NEG.6 — the scope: every field is optional, and absent means "account-wide". Its two callers name a window and a
+ * market (ai-goal-suggest.service.ts) or nothing (agent-fleet negative-candidates.observation.ts).
  *
- * 🔴 It exists because an account-wide number under a narrowed heading is a lie, and the data says
- * so loudly. Measured 2026-08-12 over 60 days: `homologué` (€72.47) is **100% FR**, `protezioni`
- * (€134.32) is **100% IT**. Showing either under an "IT · GALE line" heading would attribute spend
- * to a market that never spent it.
- *
- * `campaignIds`/`adGroupIds` are **EXTERNAL** Amazon ids, because that is what
- * `AmazonAdsSearchTerm` stores. Passing local ids returns zero rows forever and looks exactly like
- * a quiet account — the caller maps them.
+ * 🔴 The market exists because an account-wide number under a narrowed heading is a lie, and the data says so loudly.
+ * Measured 2026-08-12 over 60 days: one French word's spend was 100% FR and one Italian word's 100% IT — showing either
+ * under one market's heading would attribute spend to a market that never spent it.
  */
 export interface NgramScope {
   windowDays?: number
-  minCostCents?: number
   marketplace?: string | null
-  /** EXTERNAL Amazon campaign ids. */
-  campaignIds?: string[] | null
-  /** EXTERNAL Amazon ad-group ids. */
-  adGroupIds?: string[] | null
 }
 
 export async function analyzeNgrams(opts: NgramScope = {}): Promise<{ windowDays: number; winning: NgramRow[]; wasteful: NgramRow[] }> {
   const windowDays = opts.windowDays ?? 60
-  const minCost = opts.minCostCents ?? 300
   const since = new Date(Date.now() - windowDays * 86400_000)
   const where: Record<string, unknown> = { date: { gte: since } }
   if (opts.marketplace) where.marketplace = opts.marketplace
-  if (opts.campaignIds) where.campaignId = { in: opts.campaignIds }
-  if (opts.adGroupIds) where.adGroupId = { in: opts.adGroupIds }
   const rows = await prisma.amazonAdsSearchTerm.groupBy({
     by: ['query'],
     where,
@@ -83,7 +72,7 @@ export async function analyzeNgrams(opts: NgramScope = {}): Promise<{ windowDays
     for (const g of grams) bump(g, g.includes(' ') ? 2 : 1, impr, clk, cost, ord, sales)
   }
 
-  const all = [...map.values()].filter((r) => r.costCents >= minCost)
+  const all = [...map.values()].filter((r) => r.costCents >= MIN_COST_CENTS)
   for (const r of all) { r.acos = r.salesCents > 0 ? r.costCents / r.salesCents : null; r.roas = r.costCents > 0 ? r.salesCents / r.costCents : null }
   const winning = all.filter((r) => r.orders > 0).sort((a, b) => (b.roas ?? 0) - (a.roas ?? 0)).slice(0, 50)
   const wasteful = all.filter((r) => r.orders === 0).sort((a, b) => b.costCents - a.costCents).slice(0, 50)

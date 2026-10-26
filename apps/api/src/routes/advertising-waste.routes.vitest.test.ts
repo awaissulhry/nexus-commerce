@@ -404,6 +404,74 @@ describe('GET /api/advertising/waste/rows — the wasting rows', () => {
   })
 })
 
+describe('step 4 — the Protected tile: wasting rows a protected term keeps safe', () => {
+  const brand = termId('g-broad1', 'jacket brand')
+  it('show=protected lists exactly totals.protected (the test met, PROTECTED, not skipped), each naming the term that holds it', async () => {
+    const res = await rowsOf('show=protected&pageSize=200')
+    expect(res.total).toBe(res.totals.protected)
+    expect(res.rows.map((r: Row) => r.id)).toEqual([brand])
+    expect(res.rows[0]).toMatchObject({
+      state: 'PROTECTED', test: { met: true }, verb: { held: { label: 'Protected' } },
+      protection: { terms: [{ term: 'jacket brand', match: 'EXACT', market: null, campaign: null, reason: null, id: expect.any(String) }], then: null },
+    })
+    // One number, one list: every protected wasting row of the whole read, and no other row carries a protection.
+    const all = await rowsOf('show=all&pageSize=200')
+    expect(all.rows.filter((r: Row) => r.state === 'PROTECTED' && r.test.met && !r.skipped).map((r: Row) => r.id)).toEqual([brand])
+    expect(all.rows.filter((r: Row) => r.state !== 'PROTECTED').some((r: Row) => 'protection' in r)).toBe(false)
+    expect(all.totals.protected).toBe(1)
+    expect((await get('rows/ids', 'show=protected')).json()).toEqual({ ids: [brand], total: 1, truncated: false })
+    // The tile follows the text and owner filters like the rows.
+    expect((await rowsOf('show=protected&q=kids')).totals.protected).toBe(0)
+  })
+
+  it('every term that holds a row, the first named; a market and campaign term reads its scope; kept protected leaves the tile', async () => {
+    const kids = termId('g-broad1', 'jacket kids')
+    const made = await withWorkspace(business(A), async () => {
+      const c = database.client as any
+      return [
+        await c.adKeywordProtection.create({ data: { mode: 'WHITELIST', term: 'kids', matchType: 'CONTAINS', marketplace: 'IT', campaignId: 'c-broad', reason: 'made up: a line we keep', createdAt: ago(2) } }),
+        await c.adKeywordProtection.create({ data: { mode: 'WHITELIST', term: 'jacket kids', matchType: 'EXACT', createdAt: ago(1) } }),
+      ]
+    })
+    try {
+      const res = await rowsOf('show=protected&pageSize=200')
+      expect(res.rows.map((r: Row) => r.id).sort()).toEqual([brand, kids].sort())
+      expect(byId(res.rows).get(kids).protection).toEqual({
+        terms: [
+          { id: made[0].id, term: 'kids', match: 'CONTAINS', market: 'IT', campaign: { id: 'c-broad', name: 'Test c-broad', href: '/marketing/ads/campaigns/c-broad' }, reason: 'made up: a line we keep' },
+          { id: made[1].id, term: 'jacket kids', match: 'EXACT', market: null, campaign: null, reason: null },
+        ],
+        then: null,
+      })
+      // The held verb names the first, as before.
+      expect(byId(res.rows).get(kids).verb.held.reason).toMatch(/"kids" is a protected term/)
+      // Kept protected (the page's Skip): out of the tile, under Skipped, still protected.
+      await withWorkspace(business(A), () => (database.client as any).adsWasteSkip.create({ data: { rowKey: kids, until: new Date(NOW + 30 * DAY), by: 'user:u1', at: ago(0), reason: 'Kept protected: the protected term stays.' } }))
+      const after = await rowsOf('show=protected&pageSize=200')
+      expect([after.total, after.totals.protected]).toEqual([1, 1])
+      const skipped = byId((await rowsOf('show=skipped&pageSize=200')).rows).get(kids)
+      expect(skipped).toMatchObject({ state: 'PROTECTED', skipped: { by: 'user:u1' }, protection: { terms: [{ term: 'kids' }, { term: 'jacket kids' }] } })
+    } finally {
+      await withWorkspace(business(A), async () => {
+        const c = database.client as any
+        await c.adsWasteSkip.deleteMany({})
+        await c.adKeywordProtection.deleteMany({ where: { id: { in: made.map((m) => m.id) } } })
+      })
+    }
+  })
+
+  it('the MCP tool ad-waste takes show protected: the same rows and totals as the route', async () => {
+    const { ADS_WASTE_TOOLS } = await import('../services/agents/tools/ads-waste.tools.js')
+    const out = await withWorkspace(business(A), () => ADS_WASTE_TOOLS[0].handler({ view: 'rows', market: 'IT', show: 'protected' }, {} as never)) as { ok: boolean; data: any }
+    const route = await rowsOf('show=protected')
+    expect(out.ok).toBe(true)
+    expect(out.data.rows.map((r: Row) => r.id)).toEqual(route.rows.map((r: Row) => r.id))
+    expect(out.data.totals.protected).toBe(route.totals.protected)
+    expect(out.data.rows[0].protection.terms[0].term).toBe('jacket brand')
+    expect(ADS_WASTE_TOOLS[0].description).toMatch(/protected: exactly the rows show protected lists/)
+  })
+})
+
 describe('scope filter — the four lists on rows, rows/ids, stopped and history (2026-10-12)', () => {
   const idsOf = async (path: string, query: string): Promise<string[]> => {
     const res = await get(path, query)
@@ -893,6 +961,13 @@ describe('NFIX — "Since" is the day a negative was added; "Waiting for you" li
     // Unknown days sort last; no row reads the re-sync's day.
     const order = res.json().rows.map((r: Row) => r.since)
     expect(order.slice(-11).every((s: string | null) => s === null)).toBe(true)
+    // Ordered by Since either way, unknown days stay last (like Saved), and the known days keep their order.
+    for (const sort of ['since', '-since']) {
+      const by = ((await get('stopped', `${DE}&pageSize=200&sort=${sort}`)).json().rows as Row[]).map((r) => r.since as string | null)
+      expect(by.slice(-11).every((s) => s === null), sort).toBe(true)
+      const known = by.filter((s): s is string => s !== null)
+      expect(known, sort).toEqual([...known].sort((a, b) => (sort === 'since' ? a.localeCompare(b) : b.localeCompare(a))))
+    }
     expect(order.filter((s: string | null) => s && Date.parse(s) > Date.parse(ago(1).toISOString()))).toEqual([])
   })
 
@@ -934,5 +1009,88 @@ describe('NFIX — "Since" is the day a negative was added; "Waiting for you" li
     expect(brain.waiting).toBe(1)
     // Harvest's: only the asks whose request is still open (the page links to the Keyword Harvest page's list).
     expect(res.json().rules.find((r: Row) => r.id === 'harvest').waiting).toBe(1)
+  })
+})
+
+describe('step 4 — "Did it work?" on the Stopped view: the money saved since the stop', () => {
+  // Its own market (FR), made here last: the reads above never see it.
+  const FR = 'market=FR'
+  beforeAll(async () => {
+    await withWorkspace(business(A), async () => {
+      const c = database.client as any
+      await c.campaign.create({ data: { id: 'c-fr', name: 'Test c-fr', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'FR', externalCampaignId: 'EXT-c-fr', dailyBudget: '20.00', startDate: new Date('2026-01-01T00:00:00Z') } })
+      for (const id of ['g-fr1', 'g-fr2']) await c.adGroup.create({ data: { id, campaignId: 'c-fr', name: `group ${id}`, externalAdGroupId: `EXT-${id}` } })
+      const neg = async (id: string, text: string, daysAgo: number) => {
+        await c.adTarget.create({ data: { id, adGroupId: 'g-fr1', kind: 'KEYWORD', expressionType: 'NEGATIVE_EXACT', expressionValue: text, bidCents: 0, isNegative: true, negativeLevel: 'AD_GROUP', externalTargetId: `EXT-${id}`, createdAt: ago(daysAgo) } })
+        await c.advertisingActionLog.create({ data: { userId: 'user:u1', actionType: 'create_negative_keyword', entityType: 'AD_TARGET', entityId: id, payloadBefore: {}, payloadAfter: { keywordText: text }, amazonResponseStatus: 'SUCCESS', createdAt: ago(daysAgo) } })
+      }
+      await neg('n-fr-saved', 'fr boots', 40)
+      await neg('n-fr-still', 'fr gloves', 40)
+      await neg('n-fr-early', 'fr socks', 9)
+      const st = (groupId: string, query: string, daysAgo: number, spendCents: number) => c.amazonAdsSearchTerm.create({ data: {
+        profileId: 'P-FR', marketplace: 'FR', adProduct: 'SPONSORED_PRODUCTS', date: dayAgo(daysAgo), campaignId: 'EXT-c-fr', adGroupId: `EXT-${groupId}`, matchType: 'BROAD', query,
+        impressions: 100, clicks: 5, costMicros: BigInt(spendCents) * 10_000n, currencyCode: 'EUR', orders7d: 0, sales7dCents: 0,
+      } })
+      // In the 30 days before the stop (40 days ago): 3 × 30.00 each in its place; after it, 5.00 of "fr boots".
+      for (const d of [45, 50, 55]) { await st('g-fr1', 'fr boots', d, 3000); await st('g-fr1', 'fr gloves', d, 3000) }
+      await st('g-fr1', 'fr boots', 20, 500)
+      // Another place that runs still buys "fr gloves", not blocked there: it still spends.
+      await st('g-fr2', 'fr gloves', 10, 800)
+      // Our keyword, paused 30 days ago (the pause on record): 3 × 15.00 of its own spend before, none since.
+      await c.adTarget.create({ data: { id: 'k-fr', adGroupId: 'g-fr2', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'fr jacket', bidCents: 40, externalTargetId: 'EXT-k-fr', status: 'PAUSED' } })
+      await c.advertisingActionLog.create({ data: { userId: 'user:u1', actionType: 'AD_ENTITY_STATE_UPDATE', entityType: 'AD_TARGET', entityId: 'k-fr', payloadBefore: { status: 'ENABLED' }, payloadAfter: { status: 'PAUSED' }, amazonResponseStatus: 'SUCCESS', createdAt: ago(30) } })
+      for (const d of [35, 40, 45]) await c.amazonAdsDailyPerformance.create({ data: { profileId: 'P-FR', marketplace: 'FR', adProduct: 'SPONSORED_PRODUCTS', date: dayAgo(d), entityType: 'AD_TARGET', entityId: 'EXT-k-fr', localEntityId: 'k-fr', clicks: 10, costMicros: 15_000_000n, currencyCode: 'EUR', reportedAt: ago(1) } })
+    })
+  })
+
+  it('saved = before per day × the days since (to 3 days ago) − after; still spends elsewhere; too early under 14 days', async () => {
+    const res = await get('stopped', `${FR}&pageSize=200`)
+    expect(res.statusCode, res.body).toBe(200)
+    const rows = byId(res.json().rows)
+    // 9000 over the 30 days before = 300 a day, 37 days counted after, 500 spent after.
+    expect(rows.get('neg:n-fr-saved').effect).toEqual({ since: ago(40).toISOString(), days: 40, verdict: 'SAVED', beforePerDayCents: 300, afterCents: 500, savedCents: 300 * 37 - 500, words: 'Spends less here in the 37 days since the stop' })
+    // The same 30 days the "Spend before" reads.
+    expect(rows.get('neg:n-fr-saved').spendBeforeCents).toBe(300 * 30)
+    expect(rows.get('neg:n-fr-still').effect).toMatchObject({ verdict: 'STILL_SPENDS', beforePerDayCents: 300, afterCents: 0, savedCents: 300 * 37, words: 'Stopped here, but its words still spend in 1 other ad group' })
+    expect(rows.get('neg:n-fr-early').effect).toEqual({ since: ago(9).toISOString(), days: 9, verdict: 'TOO_EARLY', beforePerDayCents: null, afterCents: null, savedCents: null, words: 'Stopped 9 days ago, checked from 14 days' })
+    expect(rows.get('kw:k-fr').effect).toMatchObject({ verdict: 'SAVED', days: 30, beforePerDayCents: 150, afterCents: 0, savedCents: 150 * 27, words: 'No spend here in the 27 days since the stop' })
+  })
+
+  it('the record and Claude (ad-waste view stopped) read the same effect', async () => {
+    const listed = byId((await get('stopped', `${FR}&pageSize=200`)).json().rows)
+    const one = await get(`row/${encodeURIComponent('neg:n-fr-saved')}`)
+    expect(one.statusCode, one.body).toBe(200)
+    expect(one.json().row.effect).toEqual(listed.get('neg:n-fr-saved').effect)
+    const { ADS_WASTE_TOOLS } = await import('../services/agents/tools/ads-waste.tools.js')
+    const viaTool = await withWorkspace(business(A), () => ADS_WASTE_TOOLS[0].handler({ view: 'stopped', market: 'FR' }, {} as never)) as { ok: boolean; data: any }
+    expect(viaTool.ok).toBe(true)
+    expect(byId(viaTool.data.rows).get('neg:n-fr-still').effect).toEqual(listed.get('neg:n-fr-still').effect)
+  })
+
+  it('the server orders the Stopped view: by what each stop saved across pages (too early last), by since; 400 another key', async () => {
+    const ids = async (query: string) => ((await get('stopped', `${FR}&${query}`)).json().rows as Row[]).map((r) => r.id)
+    expect([...await ids('sort=-saved&pageSize=2'), ...await ids('sort=-saved&pageSize=2&page=2')]).toEqual(['neg:n-fr-still', 'neg:n-fr-saved', 'kw:k-fr', 'neg:n-fr-early'])
+    expect(await ids('sort=saved')).toEqual(['kw:k-fr', 'neg:n-fr-saved', 'neg:n-fr-still', 'neg:n-fr-early'])
+    expect(await ids('sort=since')).toEqual(['neg:n-fr-saved', 'neg:n-fr-still', 'kw:k-fr', 'neg:n-fr-early'])
+    // The default: the newest stop first.
+    expect(await ids('')).toEqual(['neg:n-fr-early', 'kw:k-fr', 'neg:n-fr-saved', 'neg:n-fr-still'])
+    expect((await get('stopped', `${FR}&sort=-spend`)).statusCode).toBe(400)
+    // Claude's view stopped takes the same order.
+    const { ADS_WASTE_TOOLS } = await import('../services/agents/tools/ads-waste.tools.js')
+    const viaTool = await withWorkspace(business(A), () => ADS_WASTE_TOOLS[0].handler({ view: 'stopped', market: 'FR', sort: '-saved' }, {} as never)) as { ok: boolean; data: any }
+    expect(viaTool.data.rows.map((r: Row) => r.id)).toEqual(['neg:n-fr-still', 'neg:n-fr-saved', 'kw:k-fr', 'neg:n-fr-early'])
+  })
+
+  it('a person without ad spend reads the verdict and its words, never the money', async () => {
+    permissions = { isOwner: false, permissions: new Set(['ads.view']) }
+    try {
+      const vNoMoney = byId((await get('stopped', `${FR}&pageSize=200`)).json().rows).get('neg:n-fr-saved').effect
+      expect(vNoMoney).toEqual({ since: ago(40).toISOString(), days: 40, verdict: 'SAVED', words: 'Spends less here in the 37 days since the stop' })
+      // Never ordered by money: a money sort reads as the place.
+      const where = ((await get('stopped', `${FR}&sort=-saved`)).json().rows as Row[]).map((r) => `${r.campaign.name} ${r.adGroup?.name ?? ''}`)
+      expect(where).toEqual([...where].sort((a, b) => a.localeCompare(b)))
+    } finally {
+      permissions = { isOwner: true, permissions: new Set() }
+    }
   })
 })

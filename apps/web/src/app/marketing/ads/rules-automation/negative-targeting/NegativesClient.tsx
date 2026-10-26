@@ -6,10 +6,12 @@
  *
  *   header   Negative Targeting                                                       [Amazon IT ▾]
  *   tabs     the Rules & Automation tab bar
- *   tiles    Wasting · Waiting for you · Kept paused · Blocked · Clashes — each filters the view under it; each number
- *            comes from the read whose table it opens (Bid audit M1)
- *   view     [Wasting | Stopped | Rules] — `?view=`; Wasting and Stopped are `waste/WasteView`, Rules is lane NRVIEW's
- *            `rules/WasteRulesView`
+ *   tiles    Wasting · Waiting for you · Kept paused · Blocked · Clashes · Protected — each filters the view under it; each
+ *            number comes from the read whose table it opens (Bid audit M1); on a phone Clashes and Protected stay off
+ *            the strip (two rows of two) and are a filter away (Show ▾)
+ *   view     [Wasting | Stopped | Words | Rules] — `?view=`; Wasting and Stopped are `waste/WasteView`, Words (step 4,
+ *            2026-10-25: a word that wastes across search terms, blocked as a negative phrase) is `words/WordsView`, Rules
+ *            is lane NRVIEW's `rules/WasteRulesView`
  *
  * Two jobs on one page: OUR keyword or target that wastes is paused and KEPT paused (no rule, Brain or plan turns it on);
  * a SHOPPER'S search term that wastes gets a negative (exact, phrase or product; in the ad group or the whole campaign).
@@ -36,6 +38,7 @@ import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { currencyOf } from '../bid/_shared/format'
 import { WasteRulesView } from './rules/WasteRulesView'
 import { WasteView } from './waste/WasteView'
+import { WordsView } from './words/WordsView'
 import { readRows, readStopped } from './waste/wasteApi'
 import {
   DEFAULT_PAGE_SIZE, kindOf, PAGE_SIZES, stoppedShowOf, tileQuery, tilesOf, viewOf, wastingShowOf, type TileId,
@@ -43,11 +46,15 @@ import {
 import type { StoppedTotals, WasteTotals } from './waste/wasteTypes'
 import styles from './negatives.module.css'
 
-const VIEWS = [{ value: 'wasting', label: 'Wasting' }, { value: 'stopped', label: 'Stopped' }, { value: 'rules', label: 'Rules' }]
+const VIEWS = [{ value: 'wasting', label: 'Wasting' }, { value: 'stopped', label: 'Stopped' }, { value: 'words', label: 'Words' }, { value: 'rules', label: 'Rules' }]
 const PAGE = '/marketing/ads/rules-automation/negative-targeting'
 const TILE_ACCENT: Readonly<Record<TileId, string>> = {
   wasting: 'var(--nds-danger)', waiting: 'var(--nds-warning)', kept: 'var(--nds-primary)', blocked: 'var(--nds-info)', clashes: 'var(--nds-border-strong)',
+  // Step 4 — the shield's tone (a protected row's state mark).
+  protected: 'var(--nds-success)',
 }
+/** On a phone the strip keeps four tiles (two rows of two); these are a filter away (Show ▾). */
+const PHONE_HIDDEN: ReadonlySet<TileId> = new Set<TileId>(['clashes', 'protected'])
 
 export function NegativesClient() {
   return <ToastProvider><NegativesPage /></ToastProvider>
@@ -105,7 +112,7 @@ function NegativesPage() {
 
   const tiles = useMemo(() => tilesOf({ waste: wasteTotals, stopped: stoppedTotals, view, wastingShow, stoppedShow, currency: currencyOf(market) }), [wasteTotals, stoppedTotals, view, wastingShow, stoppedShow, market])
   const metrics: Metric[] = tiles
-    .filter((t) => !(phone && t.id === 'clashes'))
+    .filter((t) => !(phone && PHONE_HIDDEN.has(t.id)))
     .map((t) => ({
       label: <span title={t.title}>{phone ? t.short : t.label}</span>,
       value: t.value ?? '—',
@@ -122,7 +129,7 @@ function NegativesPage() {
 
   const viewSwitch = (
     <SegmentedControl size="sm" ariaLabel="View" options={VIEWS} value={view}
-      onChange={(v) => setQuery({ view: v === 'wasting' ? null : v, show: null, sort: null, page: null, row: null, tab: null, rule: null })} />
+      onChange={(v) => setQuery({ view: v === 'wasting' ? null : v, show: null, sort: null, page: null, row: null, word: null, tab: null, rule: null })} />
   )
 
   // The rule builder is a full page (Owner 2026-10-11): while it is open nothing of this page is under it (the Rules view
@@ -136,7 +143,7 @@ function NegativesPage() {
           {...rulesTabHeader('negative-targeting')}
           markets={readMarkets}
           market={market}
-          onMarketChange={(m) => setQuery({ market: m && m !== 'all' ? m : null, page: null, row: null, tab: null })}
+          onMarketChange={(m) => setQuery({ market: m && m !== 'all' ? m : null, page: null, row: null, word: null, tab: null })}
           showDataSync={false}
           showDateRange={false}
           showChangeLog={false}
@@ -148,6 +155,9 @@ function NegativesPage() {
         {!building && <MetricStrip className={styles.tiles} metrics={metrics} />}
         {view === 'rules' ? (
           <WasteRulesView market={market ?? 'all'} viewSwitch={viewSwitch} scope={filter} />
+        ) : view === 'words' ? (
+          <WordsView market={market} viewSwitch={viewSwitch} show={rawShow} q={q} scope={filter} sort={sort} page={page} pageSize={pageSize}
+            canWrite={canWrite} setQuery={setQuery} onWrote={onWrote} refreshKey={refreshKey} />
         ) : (
           // Keyed by the tab: each list keeps its own saved layout (widths, order). Unkeyed, the grid read the first
           // tab's layout once and the second tab opened with it, then saved it over its own (grid audit B7).

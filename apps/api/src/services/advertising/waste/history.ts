@@ -259,6 +259,36 @@ export async function historyItems(f: WasteFacts, s: ResolvedScope, days: number
     })
   }
 
+  // Step 4 — "Remove protection and stop": a negative the server could not send once the protection was removed.
+  for (const fu of f.followUps ?? []) {
+    if (new Date(fu.createdAt).getTime() < since.getTime()) continue
+    for (const rowId of fu.rowIds) {
+      const mine = fu.results.find((r) => r.rowId === rowId)
+      if (!(fu.status === 'REFUSED' || (fu.status === 'SENT' && mine && !mine.sent))) continue
+      if (filter.targetIds || filter.termKey) {
+        const own = (filter.targetIds && [...filter.targetIds].some((id) => rowId === `kw:${id}`)) || (filter.termKey && rowId.endsWith(`|${filter.termKey}`))
+        if (!own) continue
+      }
+      const isTerm = rowId.startsWith('term:')
+      if ((kind === 'keyword' && isTerm) || (kind === 'term' && !isTerm)) continue
+      const target = rowId.startsWith('kw:') ? f.targetById.get(rowId.slice(3)) : undefined
+      const term = isTerm ? rowId.slice(5).split('|') : null
+      const groupId = target?.adGroupId ?? (term ? [...f.adGroups.values()].find((g) => g.externalAdGroupId === term[1])?.id : undefined)
+      if (!groupId || !places.has(groupId)) continue
+      const refs = placeRefs(f, groupId)
+      items.push({
+        at: fu.endedAt ?? fu.createdAt, action: 'refused',
+        text: target ? labelFor(target.expressionValue, target.kind || 'UNKNOWN', target.expressionType).label : (f.placesByKey.get(term!.slice(2).join('|'))?.[0]?.text ?? term!.slice(2).join('|')),
+        kind: isTerm ? 'TERM' : (target && targetMatch(target.kind, target.expressionType)?.rowKind) || 'KEYWORD', rowId,
+        campaign: refs.campaign, adGroup: refs.adGroup, product: refs.product,
+        by: refOfOwner(ownerOfActor(fu.by, names)),
+        why: `Not stopped after the protection was removed: ${plainWords((mine?.why ?? fu.why ?? 'it was refused').replace(/\.$/, ''))}.`,
+        changeId: null, changeSetId: fu.approvalId, delivery: 'REFUSED',
+        undo: { available: false, why: 'Nothing was sent: there is nothing to undo here (the protection\'s removal has its own Undo).' },
+      })
+    }
+  }
+
   items.sort((a, b) => b.at.localeCompare(a.at))
   return { rows: items.slice(0, HISTORY_MAX), truncated: items.length > HISTORY_MAX }
 }

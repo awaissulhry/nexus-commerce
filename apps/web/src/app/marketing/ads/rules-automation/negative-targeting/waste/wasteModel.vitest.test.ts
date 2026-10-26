@@ -67,9 +67,9 @@ describe('verbs', () => {
     expect(wasteVerb(row())).toMatchObject({ action: 'PAUSE', where: null, label: 'Pause', short: 'Pause', held: null })
     expect(wasteVerb(term({ verb: { action: 'NEGATE_EXACT', where: 'campaign', held: null } }))).toMatchObject({ label: 'Negative exact · whole campaign', short: 'Negative' })
   })
-  it('a held verb stays, with the server\'s reason; a protected row is held', () => {
+  it('a held verb stays, with the server\'s reason; a protected row\'s verb opens its record (step 4: its two actions are there)', () => {
     expect(wasteVerb(term({ verb: { action: 'NEGATE_EXACT', where: 'adGroup', held: { label: 'Our keyword', reason: 'It would block our own keyword' } } }))?.held).toBe('It would block our own keyword')
-    expect(wasteVerb(term({ state: 'PROTECTED' }))?.held).toBe('Protected: never negated')
+    expect(wasteVerb(term({ state: 'PROTECTED', verb: { action: 'NEGATE_EXACT', where: 'adGroup', held: { label: 'Protected', reason: '"x" is a protected term' } } }))).toMatchObject({ label: 'Protected…', held: null, primary: false, opens: true })
   })
   it('turned on outside Nexus: Pause again (kept paused), in bulk too', () => {
     expect(wasteVerb(row({ state: 'TURNED_ON_ELSEWHERE' }))).toMatchObject({ action: 'PAUSE', label: 'Pause again', held: null })
@@ -157,23 +157,27 @@ describe('the review', () => {
 })
 
 describe('tiles', () => {
-  const waste: WasteTotals = { wasting: 4, wastingSpendCents: 12000, keywords: 2, terms: 2, waiting: 2, keptPaused: 1, negated: 9, clashes: 3, skipped: 0 }
+  const waste: WasteTotals = { wasting: 4, wastingSpendCents: 12000, keywords: 2, terms: 2, waiting: 2, keptPaused: 1, negated: 9, clashes: 3, skipped: 0, protected: 1 }
   const stop: StoppedTotals = { all: 12, kept: 2, paused: 1, negated: 9, turnedOn: 0, stillBought: 1, notAtAmazon: 0, inactive: 5 }
   it('each number comes from the read whose table it opens', () => {
     const t = tilesOf({ waste, stopped: stop, view: 'wasting', wastingShow: 'wasting', stoppedShow: 'all', currency: 'EUR' })
     expect(t.map((x) => [x.id, x.value, x.active, x.clickable])).toEqual([
-      ['wasting', 4, true, true], ['waiting', 2, false, true], ['kept', 2, false, true], ['blocked', 9, false, true], ['clashes', 3, false, true],
+      ['wasting', 4, true, true], ['waiting', 2, false, true], ['kept', 2, false, true], ['blocked', 9, false, true], ['clashes', 3, false, true], ['protected', 1, false, true],
     ])
+    // Step 4 — an older server without the count: a dash, never zero, and not a button.
+    expect(tilesOf({ waste: { ...waste, protected: undefined }, stopped: stop, view: 'wasting', wastingShow: 'wasting', stoppedShow: 'all', currency: 'EUR' })[5]).toMatchObject({ id: 'protected', value: null, clickable: false })
     expect(t[0].hint).toBe('€120.00')
   })
   it('unknown is a dash, never zero', () => {
-    expect(tilesOf({ waste: null, stopped: null, view: 'wasting', wastingShow: 'wasting', stoppedShow: 'all', currency: 'EUR' }).map((x) => x.value)).toEqual([null, null, null, null, null])
+    expect(tilesOf({ waste: null, stopped: null, view: 'wasting', wastingShow: 'wasting', stoppedShow: 'all', currency: 'EUR' }).map((x) => x.value)).toEqual([null, null, null, null, null, null])
   })
   it('a tile goes to its view; the pressed one goes back', () => {
     expect(tileQuery('kept', false)).toMatchObject({ view: 'stopped', show: 'kept' })
     expect(tileQuery('kept', true)).toMatchObject({ view: 'stopped', show: null })
     expect(tileQuery('waiting', false)).toMatchObject({ view: null, show: 'waiting' })
     expect(tileQuery('clashes', false)).toMatchObject({ view: null, show: 'clashes' })
+    expect(tileQuery('protected', false)).toMatchObject({ view: null, show: 'protected' })
+    expect(tileQuery('protected', true)).toMatchObject({ view: null, show: null })
   })
   it('money in several currencies is split, never added up', () => {
     expect(spendHint({ wastingSpendCents: null, currency: null, wastingSpendByCurrency: { GBP: 4000, EUR: 50000 }, wastingSpendNote: 'several' }, 'EUR')).toEqual({ text: '€500.00 · £40.00', note: 'several' })

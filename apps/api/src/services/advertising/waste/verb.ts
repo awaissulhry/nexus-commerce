@@ -12,8 +12,10 @@
  *   held (first that applies) protected term · our own keyword in this ad group (a negative would block it: L1) · a term
  *                               harvested in the last 30 days · a place younger than 14 days · a shared campaign with no
  *                               owner · (keywords) its search terms sell.
+ *   a word (Words view)       → negative phrase, through the same list: words.ts names the keyword that holds the word and
+ *                               the harvested term that holds it (`ownKeywordText`, `harvestedText`).
  */
-import { HARVEST_QUIET_DAYS, PLACE_MIN_AGE_DAYS, type Match, type RowKind, type Verb } from './pure.js'
+import { HARVEST_QUIET_DAYS, PLACE_MIN_AGE_DAYS, termKeyOf, type Match, type RowKind, type Verb } from './pure.js'
 
 export interface VerbFacts {
   kind: RowKind
@@ -27,8 +29,12 @@ export interface VerbFacts {
   protectedBy?: string | null
   /** TERM: the same text is our own keyword or target in this ad group (any match, paused ones too). */
   ownKeywordHere?: boolean
+  /** Words view: our keyword that HOLDS the word there (a negative phrase of the word would block it); named in the reason. */
+  ownKeywordText?: string | null
   /** Days since a harvest made this text a keyword (any of the product's); null: never harvested. */
   harvestedDaysAgo?: number | null
+  /** Words view: the harvested term that holds the word (named in the reason). */
+  harvestedText?: string | null
   /** Days since the ad group was created. */
   placeAgeDays?: number | null
   /** The campaign advertises several product families (or ads Nexus cannot tie): nobody owns its stops. */
@@ -49,10 +55,13 @@ export function verbFor(f: VerbFacts): Verb {
 function heldFor(f: VerbFacts): Verb['held'] {
   if (f.protectedBy) return { label: 'Protected', reason: `"${f.protectedBy}" is a protected term: no negative and no pause may stop it.` }
   if (f.kind === 'TERM' && f.ownKeywordHere) {
+    if (f.ownKeywordText && termKeyOf(f.ownKeywordText) !== termKeyOf(f.text)) {
+      return { label: 'Our keyword', reason: `Our keyword "${f.ownKeywordText}" holds "${f.text}": a negative phrase here would block it.` }
+    }
     return { label: 'Our keyword', reason: `"${f.text}" is our own keyword in this ad group: a negative here would block it. Pause the keyword instead.` }
   }
   if (f.harvestedDaysAgo != null && f.harvestedDaysAgo < HARVEST_QUIET_DAYS) {
-    return { label: 'Harvested lately', reason: `Harvest made "${f.text}" a keyword ${plural(Math.max(0, Math.floor(f.harvestedDaysAgo)), 'day')} ago: Harvest judges it until ${HARVEST_QUIET_DAYS} days have passed.` }
+    return { label: 'Harvested lately', reason: `Harvest made "${f.harvestedText ?? f.text}" a keyword ${plural(Math.max(0, Math.floor(f.harvestedDaysAgo)), 'day')} ago: Harvest judges it until ${HARVEST_QUIET_DAYS} days have passed.` }
   }
   if (f.placeAgeDays != null && f.placeAgeDays < PLACE_MIN_AGE_DAYS) {
     return { label: 'New place', reason: `The ad group is ${plural(Math.max(0, Math.floor(f.placeAgeDays)), 'day')} old: nothing is stopped in a place younger than ${PLACE_MIN_AGE_DAYS} days.` }

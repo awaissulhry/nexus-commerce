@@ -1,0 +1,92 @@
+/*
+ * Negative Targeting page, Words view (step 4, 2026-10-25) — layout only, design-system tokens only. Everything else is
+ * the page's own (../negatives.module.css).
+ */
+
+/* A line with its place under it (a word's terms, its places). */
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.sub {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+/* A word's terms: term and where · product · spend · clicks · orders (the numbers right-aligned). */
+.table {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.head,
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 180px) 96px 72px 72px;
+  align-items: center;
+  gap: var(--nds-space-12);
+  min-height: 40px;
+  padding: var(--nds-space-4) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.head {
+  min-height: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-2);
+}
+
+.product {
+  display: flex;
+  min-width: 0;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Phone: the term and its place on top, the product under it, the three numbers in one row, each named. */
+@media (max-width: 760px) {
+  .head {
+    display: none;
+  }
+
+  .row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--nds-space-4) var(--nds-space-12);
+  }
+
+  .row > .lines,
+  .row > .product {
+    grid-column: 1 / -1;
+  }
+
+  .row > .num {
+    text-align: left;
+  }
+
+  .row > .num::before {
+    content: attr(data-label) " ";
+    color: var(--nds-text-2);
+  }
+}
+
+/* A count in a numbers column: its link sits right, under its right-aligned header. */
+.cellEnd {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+}

@@ -13,8 +13,13 @@
  * Every verb opens the review ABOVE this modal (`onAsk`); the record is read again after it (`version`). A verb the
  * server holds stays on screen, held, with its reason (Button `heldReason`); so does every verb for a person who may not
  * change ads.
+ *
+ * Step 4 — a protected row: Overview names the protected term(s) that keep it safe (the chip: match,
+ * scope, why); the footer is Keep protected (Skip 30 d; Unskip once kept) · Remove protection and stop… (one review: the
+ * removal first, then the row's own verb), held with why when the stop would still be held or the person may not.
  */
 import { useEffect, useState, type ReactNode } from 'react'
+import { usePermission } from '@/lib/auth/AuthProvider'
 import { ChevronDown } from 'lucide-react'
 import { Button, Tag, Tooltip } from '@/design-system/primitives'
 import { EntityPath, KeyValue, Menu, Sparkline, SummaryTable, useNarrow, type EntityLinkComponent, type MenuItemDef } from '@/design-system/components'
@@ -22,13 +27,15 @@ import { DetailModal, type DetailModalProps, type DetailNav } from '@/design-sys
 import Link from '@/lib/workspaces/Link'
 import { dayWords, money, relWords, whenWords } from '../../bid/_shared/format'
 import { OwnerChip } from '../../_shared/OwnerChip'
-import { ClashMark, KindMark, MatchChip, SkippedMark, StateMark, WaitingMark } from './marks'
+import { ClashMark, FollowUpMark, KindMark, MatchChip, SkippedMark, StateMark, WaitingMark } from './marks'
 import { readRow } from './wasteApi'
 import {
-  chipOwner, deliveryView, historyWord, isAsinText, moneyOr, NOT_KEPT, pathOf, planWords, plural, stoppedVerb, verbLabel, verbSentence, waitingOf, wasteVerb, xCpaText,
+  chipOwner, deliveryView, effectLine, historyWord, isAsinText, moneyOr, NO_WRITE, NOT_KEPT, pathOf, planWords, plural, savedView, stoppedVerb, verbLabel, verbSentence, waitingOf, wasteVerb, xCpaText,
   type DetailTab,
 } from './wasteModel'
 import type { WasteAsk } from './useWasteReview'
+import { ProtectionChip } from './protection'
+import { followUpSentence, KEEP_PROTECTED_DAYS, keptProtectedWords, removeProtectionHeld, removeProtectionItems, UNPROTECT_PERMISSIONS } from './protectionModel'
 import type { HistoryItem, Place, RowDetail as RowDetailAnswer, StoppedRow, WasteAction, WasteItem, WasteRow, Where } from './wasteTypes'
 import styles from '../negatives.module.css'
 
@@ -55,7 +62,6 @@ export interface RowDetailProps {
   returnFocusTo?: DetailModalProps['returnFocusTo']
 }
 
-const NO_WRITE = 'You can see ads here, not change them'
 
 export function RowDetail({ id, listRow, tab, onTab, nav, canWrite, version, onAsk, onClose, onOpen, ruleHref, returnFocusTo }: RowDetailProps) {
   const [detail, setDetail] = useState<{ id: string; answer: RowDetailAnswer } | null>(null)
@@ -106,7 +112,8 @@ export function RowDetail({ id, listRow, tab, onTab, nav, canWrite, version, onA
       <StateMark row={row} focusable />
       {!isStopped(row) && row.clash && <ClashMark clash={row.clash} focusable />}
       {!isStopped(row) && row.waiting && <WaitingMark waiting={row.waiting} />}
-      {!isStopped(row) && row.skipped && <SkippedMark skipped={row.skipped} />}
+      {!isStopped(row) && row.skipped && <SkippedMark skipped={row.skipped} label={keptProtectedWords(row)} />}
+      {!isStopped(row) && row.followUp && <FollowUpMark followUp={row.followUp} focusable />}
       <OwnerChip kind={owner.kind} label={owner.label} hint={owner.hint} locked={owner.locked} href={owner.ruleId ? ruleHref(owner.ruleId) : null} />
     </span>
   ) : undefined
@@ -210,6 +217,9 @@ function Footer({ row, held, onAsk }: { row: WasteRow | StoppedRow; held: string
     )
   }
 
+  // Step 4 — a protected row: Keep protected, or Remove protection and stop.
+  if (row.state === 'PROTECTED' && row.protection?.terms.length) return <ProtectedFooter row={row} held={held} onAsk={onAsk} />
+
   // A keyword turned on outside Nexus is not skipped: it spends again (audit S9).
   const skip = row.state === 'TURNED_ON_ELSEWHERE' ? null : row.skipped
     ? <Button size="sm" heldReason={held} onClick={() => onAsk({ kind: 'unskip', rows: [askRow(row)] })}>Unskip</Button>
@@ -266,6 +276,28 @@ function Footer({ row, held, onAsk }: { row: WasteRow | StoppedRow; held: string
   )
 }
 
+/**
+ * Step 4 — a protected row's two actions: Keep protected (the Skip for 30 d: it stays protected, out of view; Unskip once
+ * kept) and Remove protection and stop… (the removal of each protected term that holds it, then its own verb, ONE review).
+ */
+function ProtectedFooter({ row, held, onAsk }: { row: WasteRow; held: string | null; onAsk(a: WasteAsk): void }) {
+  // The removal's tool (Claude's guardrail tool) asks these on top of changing ads here: the same permissions as today.
+  const [automation, bids, budgets, spend] = [usePermission(UNPROTECT_PERMISSIONS[0]), usePermission(UNPROTECT_PERMISSIONS[1]), usePermission(UNPROTECT_PERMISSIONS[2]), usePermission(UNPROTECT_PERMISSIONS[3])]
+  const removeHeld = removeProtectionHeld(row, { write: !held, unprotect: automation && bids && budgets && spend })
+  return (
+    <div className={styles.footer}>
+      {row.skipped
+        ? <Button size="sm" heldReason={held} onClick={() => onAsk({ kind: 'unskip', rows: [askRow(row)] })}>Unskip</Button>
+        : <Button size="sm" heldReason={held} aria-label="Keep protected: hide it for 30 days, the protection stays"
+            onClick={() => onAsk({ kind: 'skip', keep: 'protected', days: KEEP_PROTECTED_DAYS, rows: [askRow(row)] })}>Keep protected</Button>}
+      <span className="grow" />
+      <Button size="sm" variant={row.test.met && !removeHeld ? 'primary' : 'secondary'} heldReason={removeHeld}
+        aria-label={`Remove the protection and ${row.verb.action === 'PAUSE' ? 'pause it' : 'add the negative'}: one review, the protection first`}
+        onClick={() => onAsk({ kind: 'change', items: removeProtectionItems(row), texts: { [row.id]: row.text } })}>Remove protection and stop…</Button>
+    </div>
+  )
+}
+
 /* ── Overview ────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
 function Overview({ row, ruleHref, onWhere, onOpen }: { row: WasteRow | StoppedRow; ruleHref(id: string): string; onWhere(): void; onOpen(id: string): void }) {
@@ -283,7 +315,14 @@ function Overview({ row, ruleHref, onWhere, onOpen }: { row: WasteRow | StoppedR
       ...(row.places > 1 ? [{ label: 'Same negative', value: plural(row.places, 'place') }] : []),
       { label: 'Still spends in', value: row.stillServesIn ? <Button size="xs" variant="link" onClick={onWhere}>{plural(row.stillServesIn, 'ad group')}</Button> : '—' },
     ]
-    return <KeyValue items={items} columns={cols} />
+    // Step 4 — "Did it work?" on a line of its own: the saving since the stop, before and after; why below it.
+    const effect = effectLine(row)
+    return (
+      <div className={styles.overview}>
+        <KeyValue items={items} columns={cols} />
+        <KeyValue items={[{ label: 'Did it work?', value: <span className={styles[`tone_${savedView(row).tone}`]}>{effect.value}</span>, hint: effect.hint }]} />
+      </div>
+    )
   }
   const d = row.d
   const t = row.test
@@ -340,6 +379,14 @@ function Overview({ row, ruleHref, onWhere, onOpen }: { row: WasteRow | StoppedR
           ) : row.clash.label,
           hint: neg ? row.clash.label : undefined,
         }] : []),
+        // Step 4 — which protected term keeps it safe (the chip: match, scope, why) and what holds it once removed.
+        ...(row.state === 'PROTECTED' && row.protection?.terms.length ? [{
+          label: 'Protected by',
+          value: <ProtectionChip protection={row.protection} />,
+          hint: row.protection.then ? `Without it: ${row.protection.then.label.toLowerCase()}` : 'Without it: it can stop',
+        }] : []),
+        // Step 4 — Remove protection and stop, still finishing on the server, or not stopped and why.
+        ...(row.followUp ? [{ label: 'After the protection', value: followUpSentence(row.followUp), hint: relWords(row.followUp.at) }] : []),
         ...(row.via ? [{ label: 'Bought by', value: row.via.href ? <Link href={row.via.href} className="nds-entitylink">{row.via.name}</Link> : row.via.name }] : []),
         ...(row.stillServesIn ? [{ label: 'Still spends in', value: <Button size="xs" variant="link" onClick={onWhere}>{plural(row.stillServesIn, 'other ad group')}</Button> }] : []),
         ...(row.waiting ? [{
@@ -349,7 +396,7 @@ function Overview({ row, ruleHref, onWhere, onOpen }: { row: WasteRow | StoppedR
         }] : []),
         // NFIX — an ask that is a change plan says so before Approve: its steps run (or are dropped) together.
         ...(row.waiting?.plan ? [{ label: 'Part of', value: planWords(row.waiting.plan)!, hint: 'Approved or rejected together: Approve lists every step first' }] : []),
-        ...(row.skipped ? [{ label: 'Skipped', value: `to ${dayWords(row.skipped.until)}` }] : []),
+        ...(row.skipped ? [{ label: row.state === 'PROTECTED' ? 'Kept protected' : 'Skipped', value: `to ${dayWords(row.skipped.until)}` }] : []),
         ...(row.lastChange ? [{ label: 'Last change', value: `${row.lastChange.action} · ${relWords(row.lastChange.at)}`, hint: row.lastChange.by.name }] : []),
         ...(row.owner.kind === 'RULE' && row.owner.id ? [{ label: 'Rule', value: <Link href={ruleHref(row.owner.id)} className="nds-entitylink">{row.owner.name}</Link> }] : []),
       ]} />
@@ -406,7 +453,8 @@ function WhereTab({ current, currency, runsIn, blockedIn, onOpen, held, onAsk }:
 
 /* ── History ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
-function HistoryTab({ items, canWrite, onUndo }: { items: HistoryItem[]; canWrite: boolean; onUndo(item: HistoryItem): void }) {
+/** A record's History tab (the Wasting and Stopped rows, and a word's negatives). */
+export function HistoryTab({ items, canWrite, onUndo }: { items: HistoryItem[]; canWrite: boolean; onUndo(item: HistoryItem): void }) {
   if (!items.length) return <p className={styles.quiet}>No changes in 90 d</p>
   return (
     <SummaryTable

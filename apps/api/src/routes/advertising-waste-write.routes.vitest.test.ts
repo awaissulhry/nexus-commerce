@@ -427,3 +427,255 @@ describe('rule cards and the campaign screen\'s release', () => {
     expect(await target('t-low')).toMatchObject({ status: 'ENABLED', keptPausedAt: null, keptPausedBy: null })
   })
 })
+
+describe('step 4 — the reach check in every negative review, the same for Claude', () => {
+  // Made-up searches in the second ad group of the jacket, 6 days ago (inside the page's 60 days, clicks to 3 days ago).
+  beforeAll(async () => {
+    const day = new Date(Math.floor(Date.now() / 86_400_000) * 86_400_000 - 6 * 86_400_000)
+    const t = (query: string, spendCents: number, orders = 0) => ({
+      profileId: 'P-IT-TEST', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', date: day, campaignId: 'EXT-c-it', adGroupId: 'EXT-g-it2', query,
+      impressions: 60, clicks: 6, costMicros: BigInt(spendCents) * 10_000n, currencyCode: 'EUR', sales7dCents: orders * 4000, orders7d: orders,
+    })
+    await inA(() => database.client.amazonAdsSearchTerm.createMany({ data: [t('made up gloves cheap', 300), t('cheap made up gloves', 200), t('made up gloves', 400, 2), t('gloves made up', 900)] as never }))
+    const { invalidateWasteFacts } = await import('../services/advertising/waste/read.js')
+    invalidateWasteFacts()
+  })
+  const EXACT = { rowId: 'term:IT|EXT-g-it2|made up gloves cheap', action: 'NEGATE_EXACT' }
+  const PHRASE = { rowId: 'term:IT|EXT-g-it2|made up gloves', action: 'NEGATE_PHRASE' }
+
+  it('each negative says what it would block; a phrase every term holding its words; the terms that sold; the sent ones together', async () => {
+    const res = await post('/preview', { items: [EXACT, PHRASE, { rowId: 'kw:t-sup', action: 'PAUSE' }] })
+    expect(res.statusCode, res.body).toBe(200)
+    const body = res.json()
+    expect(body.steps[0]).toMatchObject({ refusal: null, reach: { windowDays: 60, currency: 'EUR', terms: 1, spendCents: 300, clicks: 6, orders: 0, salesCents: 0, sold: [] } })
+    // The phrase blocks three of the four (not "gloves made up": its words out of order), one of them sold — the warning.
+    // The tool keeps its own hold (a term that converts where it lands): a warning here, never a new refusal.
+    expect(body.steps[1].reach).toEqual({ windowDays: 60, currency: 'EUR', terms: 3, spendCents: 900, clicks: 18, orders: 2, salesCents: 8000, sold: [{ text: 'made up gloves', orders: 2 }] })
+    expect(body.steps[1].refusal).toMatchObject({ code: 'refused' })
+    expect(body.steps[2]).not.toHaveProperty('reach')
+    // Together: the steps that are sent.
+    expect(body.reach).toEqual({ windowDays: 60, currency: 'EUR', terms: 1, spendCents: 300, clicks: 6, orders: 0, salesCents: 0, currencies: [{ currency: 'EUR', spendCents: 300, salesCents: 0 }] })
+    // The planHash does not stand on it: apply takes the preview as it is.
+    const apply = await post('/apply', { items: [EXACT], planHash: (await post('/preview', { items: [EXACT] })).json().planHash })
+    expect(apply.statusCode, apply.body).toBe(202)
+    await inA(() => database.client.agentApproval.updateMany({ where: { id: apply.json().changeSetId }, data: { status: 'rejected', reason: 'test cleanup' } }))
+  })
+
+  it('a person who may not see ad spend reads the counts, never the money', async () => {
+    permissions = new Set(OWNER.filter((p) => p !== FIELDS.financialsAdspendView))
+    const body = (await post('/preview', { items: [EXACT] })).json()
+    expect(body.steps[0].reach).toEqual({ windowDays: 60, currency: 'EUR', terms: 1, clicks: 6, orders: 0, sold: [] })
+    expect(JSON.stringify(body)).not.toMatch(/spendCents|salesCents/)
+  })
+
+  it('Claude reads the same answer: add-negative-targets and create-negative-keyword carry it as pageReach', async () => {
+    const page = (await post('/preview', { items: [EXACT, PHRASE] })).json()
+    const { getTool } = await import('../services/agents/tool-registry.js')
+    const add = await inA(() => getTool('add-negative-targets')!.handler({ adGroupIds: ['g-it2'], keywords: [{ text: 'made up gloves cheap', matchType: 'NEGATIVE_EXACT' }] }, {} as never)) as Row
+    expect(add.ok, JSON.stringify(add)).toBe(true)
+    expect(add.preview.changes[0].pageReach).toEqual(page.steps[0].reach)
+    expect(add.preview.pageReachTotal).toMatchObject({ terms: 1, spendCents: 300, currency: 'EUR' })
+    const one = await inA(() => getTool('create-negative-keyword')!.handler({ externalCampaignId: 'EXT-c-it', externalAdGroupId: 'EXT-g-it2', keywordText: 'made up gloves cheap' }, {} as never)) as Row
+    expect(one.ok, JSON.stringify(one)).toBe(true)
+    expect(one.preview.pageReach).toEqual(page.steps[0].reach)
+  })
+})
+
+describe('step 4 — Remove protection and stop: the protected term removed through Claude\'s guardrail tool, then the row\'s verb', () => {
+  const WITH_BUDGETS = [...OWNER, FEATURES.adsBudgetsEdit]
+  // A term written straight to the table moves no change stamp (the page's writes do): the facts are read again.
+  const fresh = async () => (await import('../services/advertising/waste/read.js')).invalidateWasteFacts()
+  const protect = async (data: Record<string, unknown>) => { const p = await inA(() => database.client.adKeywordProtection.create({ data: { mode: 'WHITELIST', createdBy: 'user:made-up', ...data } as never })); await fresh(); return p }
+  const gone = (id: string) => inA(async () => (await database.client.adKeywordProtection.count({ where: { id } })) === 0)
+  // The approver's own role holds the guardrail tool's permissions too (the commit re-checks the person's role, not the request).
+  const role = () => inA(async () => (await database.client.userRole.findFirstOrThrow({ where: { userId }, select: { roleId: true } })).roleId)
+  beforeAll(async () => { const id = await role(); await inA(() => database.client.role.update({ where: { id }, data: { permissions: WITH_BUDGETS } })) })
+  afterAll(async () => { const id = await role(); await inA(() => database.client.role.update({ where: { id }, data: { permissions: OWNER } })) })
+
+  it('a protected keyword: the removal and the pause preview together and go as ONE change set; run, the term is gone and the keyword kept paused', async () => {
+    const p = await protect({ term: 'cheap boots', matchType: 'EXACT', marketplace: 'IT', reason: 'made up: our own line' })
+    const items = [{ rowId: 'kw:t-low', action: 'UNPROTECT', protectionId: p.id }, { rowId: 'kw:t-low', action: 'PAUSE' }]
+    // The removal's tool asks ads.budgets.edit too (the same permissions as the guardrail tool today): without it both are left out.
+    const without = (await post('/preview', { items })).json()
+    expect(without.steps.map((s: Row) => s.refusal?.code)).toEqual(['forbidden', 'needs_unprotect'])
+    permissions = new Set(WITH_BUDGETS)
+    const preview = (await post('/preview', { items })).json()
+    expect(preview.blocked).toBe(0)
+    expect(preview.steps[0]).toMatchObject({
+      rowId: 'kw:t-low', action: 'UNPROTECT', tool: 'set-ad-guardrail', text: 'cheap boots', from: 'PROTECTED', to: 'NOT_PROTECTED', lands: 'nexus', raise: true, refusal: null,
+      place: { campaign: null, adGroup: null },
+      protection: { id: p.id, term: 'cheap boots', match: 'EXACT', market: 'IT', campaign: null, reason: 'made up: our own line', alsoKeeps: { count: 0, terms: [] } },
+      summary: expect.stringMatching(/Removes the protection of/),
+    })
+    expect(preview.steps[1]).toMatchObject({ action: 'PAUSE', tool: 'pause-ads', refusal: null })
+    expect(preview.steps[1].after).toBeUndefined()
+    const res = await post('/apply', { items, planHash: preview.planHash })
+    expect(res.statusCode, res.body).toBe(202)
+    const body = res.json()
+    expect(body).toMatchObject({ status: 'queued', tool: 'submit-change-plan', approve: { ok: true } })
+    const steps = await inA(() => database.client.agentPlanStep.findMany({ where: { approvalId: body.changeSetId }, orderBy: { position: 'asc' } }))
+    expect(steps.map((s) => s.toolName)).toEqual(['set-ad-guardrail', 'pause-ads'])
+    expect(await commitNow(body.changeSetId)).toMatchObject({ finished: true, counts: { done: 2 } })
+    expect(await gone(p.id)).toBe(true)
+    expect(await target('t-low')).toMatchObject({ status: 'PAUSED', keptPausedBy: `user:${userId}` })
+    const audit = await inA(() => database.client.advertisingActionLog.findFirstOrThrow({ where: { actionType: 'remove_keyword_protection', entityId: p.id } }))
+    expect(audit).toMatchObject({ userId: `user:${userId}`, entityType: 'KEYWORD_PROTECTION' })
+    // Undo puts the protection back exactly: the same term, match and market, its reason and who set it.
+    const change = await inA(() => database.client.agentChange.findFirstOrThrow({ where: { toolName: 'set-ad-guardrail', approvalId: body.changeSetId } }))
+    const { getTool } = await import('../services/agents/tool-registry.js')
+    const back = getTool('set-ad-guardrail')!.undo!.request(change as never) as { tool: string; args: Record<string, unknown> }
+    expect(back).toEqual({ tool: 'set-ad-guardrail', args: { kind: 'protected-term', op: 'set', term: 'cheap boots', matchType: 'EXACT', marketplace: 'IT', note: 'made up: our own line', restoreChangeId: change.id } })
+    const { executeTool } = await import('../services/agents/call-tool.js')
+    const approver = { kind: 'user' as const, userId, label: 'Nora Negative', via: 'app' as const, workspace: business(A), permissions: { isOwner: false, permissions: new Set<string>(WITH_BUDGETS) } }
+    expect((await inA(() => executeTool(approver as never, back.tool, back.args))).raw).toMatchObject({ ok: true })
+    expect(await inA(() => database.client.adKeywordProtection.findFirstOrThrow({ where: { term: 'cheap boots' } }))).toMatchObject({ matchType: 'EXACT', marketplace: 'IT', campaignId: null, reason: 'made up: our own line', createdBy: 'user:made-up' })
+    await inA(() => database.client.adKeywordProtection.deleteMany({ where: { term: 'cheap boots' } }))
+  })
+
+  it('a protected search term: its negative waits for the removal (sent alone first); once it ran, the SERVER sends it as the same person', async () => {
+    await inA(() => database.client.amazonAdsSearchTerm.createMany({ data: ['made up blue shoes', 'made up red shoes', 'made up green shoes'].map((query) => ({
+      profileId: 'P-IT-TEST', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', date: new Date(Date.now() - 6 * 86_400_000), campaignId: 'EXT-c-it', adGroupId: 'EXT-g-it2',
+      query, impressions: 40, clicks: 4, costMicros: 1_500_000n, currencyCode: 'EUR', sales7dCents: 0, orders7d: 0,
+    })) as never }))
+    const p = await protect({ term: 'blue', matchType: 'CONTAINS', marketplace: 'IT', campaignId: 'c-it' })
+    const row = 'term:IT|EXT-g-it2|made up blue shoes'
+    const items = [{ rowId: row, action: 'UNPROTECT', protectionId: p.id }, { rowId: row, action: 'NEGATE_EXACT', where: 'adGroup' }]
+    permissions = new Set(WITH_BUDGETS)
+    const preview = (await post('/preview', { items })).json()
+    expect(preview.steps[0]).toMatchObject({ action: 'UNPROTECT', refusal: null, protection: { term: 'blue', match: 'CONTAINS', market: 'IT', campaign: { id: 'c-it' }, alsoKeeps: { count: 0 } } })
+    // The negative's tool refuses it while the term stands: it waits for the removal, where it would land then.
+    expect(preview.steps[1]).toMatchObject({ action: 'NEGATE_EXACT', tool: 'add-negative-targets', refusal: null, after: 'UNPROTECT', lands: 'nexus', text: 'made up blue shoes', place: { adGroup: { id: 'g-it2' } } })
+    const res = await post('/apply', { items, planHash: preview.planHash })
+    expect(res.statusCode, res.body).toBe(202)
+    const first = res.json()
+    expect(first).toMatchObject({ status: 'queued', tool: 'set-ad-guardrail', followUp: { approvalId: first.changeSetId, status: 'WAITING', rowIds: [row] } })
+    expect(first.steps[1]).toMatchObject({ after: 'UNPROTECT', runsAt: null })
+    // The page may take its approve back and reject it (Undo inside the window): it is one of its requests.
+    const { isWasteRequest } = await import('../services/advertising/waste/write.js')
+    expect(await inA(() => isWasteRequest(first.changeSetId))).toBe(true)
+    // Before the removal ran nothing is sent; the row says its negative follows.
+    expect((await post(`/follow-ups/${first.changeSetId}/run`, {})).json()).toMatchObject({ status: 'WAITING' })
+    const rows = (await app.inject({ method: 'GET', url: '/api/advertising/waste/rows?market=IT&show=all&pageSize=200' })).json()
+    expect(rows.rows.find((r: Row) => r.id === row)).toMatchObject({ state: 'PROTECTED', followUp: { status: 'WAITING' } })
+    expect(await commitNow(first.changeSetId)).toMatchObject({ ok: true })
+    expect(await gone(p.id)).toBe(true)
+    // The server sends it — as the person who approved the removal, through the page's own write, one change set.
+    const sent = (await post(`/follow-ups/${first.changeSetId}/run`, {})).json()
+    // It says where it lands (Nexus only here) and that its own change set is still in its undo window: never "sent" yet.
+    expect(sent).toMatchObject({ status: 'SENT', changeSetId: expect.any(String), results: [{ rowId: row, sent: true, why: null, lands: 'nexus' }], changeSet: { status: 'scheduled', executeAfter: expect.any(String) } })
+    const second = await inA(() => database.client.agentApproval.findUniqueOrThrow({ where: { id: sent.changeSetId }, include: { agentRun: { select: { via: true, userId: true } } } }))
+    expect(second).toMatchObject({ toolName: 'add-negative-targets', status: 'scheduled', decidedByUserId: userId, agentRun: { via: 'app', userId } })
+    // Run twice: sent once.
+    expect((await post(`/follow-ups/${first.changeSetId}/run`, {})).json()).toMatchObject({ status: 'SENT', changeSetId: sent.changeSetId })
+    expect(await inA(() => database.client.agentApproval.count({ where: { toolName: 'add-negative-targets', status: { in: ['scheduled', 'pending'] } } }))).toBe(1)
+    expect(await commitNow(sent.changeSetId)).toMatchObject({ ok: true })
+    expect((await post(`/follow-ups/${first.changeSetId}/run`, {})).json()).toMatchObject({ status: 'SENT', changeSet: { status: 'executed' } })
+    expect(await inA(() => database.client.adTarget.count({ where: { adGroupId: 'g-it2', isNegative: true, expressionValue: 'made up blue shoes' } }))).toBe(1)
+    // The page's Undo once the removal ran: the click undoes the change set by its id — the term comes back exactly.
+    const { undoChangeByClick } = await import('../services/agents/change-undo.service.js')
+    const approver = { kind: 'user' as const, userId, label: 'Nora Negative', via: 'app' as const, workspace: business(A), permissions: { isOwner: false, permissions: new Set<string>(WITH_BUDGETS) } }
+    const undo = await inA(() => undoChangeByClick({ ...approver, permissions: { isOwner: false, permissions: new Set<string>([...WITH_BUDGETS, FEATURES.aiView]) } } as never, first.changeSetId))
+    expect(undo, JSON.stringify(undo)).toMatchObject({ ok: true, tool: 'set-ad-guardrail', approvalId: expect.any(String) })
+    expect(await commitNow((undo as { approvalId: string }).approvalId)).toMatchObject({ ok: true })
+    expect(await inA(() => database.client.adKeywordProtection.findFirstOrThrow({ where: { term: 'blue' } }))).toMatchObject({ matchType: 'CONTAINS', marketplace: 'IT', campaignId: 'c-it', createdBy: 'user:made-up' })
+    await inA(() => database.client.adKeywordProtection.deleteMany({ where: { term: 'blue' } }))
+    await fresh()
+  })
+
+  it('the follow-up refused, in words on the row and in its History; the Undo before it ran sends nothing', async () => {
+    permissions = new Set(WITH_BUDGETS)
+    const p = await protect({ term: 'green', matchType: 'CONTAINS', marketplace: 'IT' })
+    const row = 'term:IT|EXT-g-it2|made up green shoes'
+    const items = [{ rowId: row, action: 'UNPROTECT', protectionId: p.id }, { rowId: row, action: 'NEGATE_EXACT', where: 'adGroup' }]
+    const first = (await post('/apply', { items, planHash: (await post('/preview', { items })).json().planHash })).json()
+    expect(first.followUp).toMatchObject({ status: 'WAITING' })
+    // The term changed meanwhile: someone negated it in its ad group already.
+    await inA(() => database.client.adTarget.create({ data: { id: 't-green-neg', adGroupId: 'g-it2', kind: 'KEYWORD', expressionType: 'NEGATIVE_EXACT', expressionValue: 'made up green shoes', bidCents: 0, isNegative: true, negativeLevel: 'AD_GROUP', externalTargetId: 'EXT-t-green-neg' } }))
+    await fresh()
+    expect(await commitNow(first.changeSetId)).toMatchObject({ ok: true })
+    const refused = (await post(`/follow-ups/${first.changeSetId}/run`, {})).json()
+    expect(refused).toMatchObject({ status: 'REFUSED', results: [{ rowId: row, sent: false, why: expect.stringMatching(/already negated/) }] })
+    const history = (await app.inject({ method: 'GET', url: '/api/advertising/waste/history?market=IT&days=30' })).json().rows as Row[]
+    expect(history.find((h) => h.rowId === row && h.action === 'refused')).toMatchObject({ delivery: 'REFUSED', why: expect.stringMatching(/^Not stopped after the protection was removed: .*already negated/) })
+    // Undo before the removal ran: the follow-up is cancelled and nothing is ever sent.
+    await inA(() => database.client.adTarget.delete({ where: { id: 't-green-neg' } }))
+    await fresh()
+    const again = await protect({ term: 'green', matchType: 'CONTAINS', marketplace: 'IT' })
+    const items2 = [{ rowId: row, action: 'UNPROTECT', protectionId: again.id }, { rowId: row, action: 'NEGATE_EXACT', where: 'adGroup' }]
+    const second = (await post('/apply', { items: items2, planHash: (await post('/preview', { items: items2 })).json().planHash })).json()
+    expect((await post(`/follow-ups/${second.changeSetId}/cancel`, {})).json()).toMatchObject({ status: 'CANCELLED', changeSetId: null })
+    expect((await post(`/follow-ups/${second.changeSetId}/run`, {})).json()).toMatchObject({ status: 'CANCELLED' })
+    expect((await post('/follow-ups/nope/run', {})).statusCode).toBe(404)
+    await inA(() => database.client.adKeywordProtection.deleteMany({ where: { term: 'green' } }))
+  })
+
+  it('someone else\'s removal of a protected term is never the page\'s to read, take back or reject; the page\'s own is (its follow-up)', async () => {
+    permissions = new Set(WITH_BUDGETS)
+    await protect({ term: 'made up felt', matchType: 'EXACT', marketplace: 'IT' })
+    await protect({ term: 'made up wool', matchType: 'EXACT', marketplace: 'IT' })
+    const { requestApproval } = await import('../services/agents/approval-gate.service.js')
+    const { isWasteRequest } = await import('../services/advertising/waste/write.js')
+    const other = { kind: 'user' as const, userId, label: 'Nora Negative', via: 'claude' as const, workspace: business(A), permissions: { isOwner: false, permissions: new Set<string>(WITH_BUDGETS) } }
+    const removal = (term: string) => ({ kind: 'protected-term', op: 'remove', term, marketplace: 'IT' })
+    const alone = await inA(() => requestApproval('set-ad-guardrail', removal('made up felt'), other as never))
+    const plan = await inA(() => requestApproval('submit-change-plan', { title: 'A made-up cleanup', steps: [{ tool: 'set-ad-guardrail', args: removal('made up felt') }, { tool: 'set-ad-guardrail', args: removal('made up wool') }] }, other as never))
+    expect(alone).toMatchObject({ ok: true, mode: 'queued' })
+    expect(plan).toMatchObject({ ok: true, mode: 'queued' })
+    for (const asked of [alone, plan]) {
+      const id = (asked as Row).approvalId as string
+      expect(await inA(() => isWasteRequest(id))).toBe(false)
+      expect((await post('/waiting/decide', { decisions: [{ approvalId: id, decide: 'reject' }] })).statusCode).toBe(404)
+      expect((await app.inject({ method: 'GET', url: `/api/advertising/waste/waiting/${id}` })).statusCode).toBe(404)
+      expect((await inA(() => database.client.agentApproval.findUniqueOrThrow({ where: { id } }))).status).toBe('pending')
+    }
+    // The page's own removal carries its follow-up (the negatives that wait for it): that is what makes it the page's.
+    const { createFollowUp } = await import('../services/advertising/waste/follow-up.js')
+    const planId = (plan as Row).approvalId as string
+    await inA(() => createFollowUp({ approvalId: planId, items: [{ rowId: 'term:IT|EXT-g-it2|made up felt', action: 'NEGATE_EXACT', where: 'adGroup' }] as never, by: `user:${userId}` }))
+    expect(await inA(() => isWasteRequest(planId))).toBe(true)
+    await inA(() => database.client.adsWasteFollowUp.deleteMany({ where: { approvalId: planId } }))
+    await inA(() => database.client.agentApproval.updateMany({ where: { id: { in: [(alone as Row).approvalId as string, planId] } }, data: { status: 'rejected' } }))
+    await inA(() => database.client.adKeywordProtection.deleteMany({ where: { term: { in: ['made up felt', 'made up wool'] } } }))
+    await fresh()
+  })
+
+  it('bulk: one protected term holding two rows is ONE removal; both negatives wait for it and Nexus sends them together', async () => {
+    permissions = new Set(WITH_BUDGETS)
+    const p = await protect({ term: 'shoes', matchType: 'CONTAINS', marketplace: 'IT', campaignId: 'c-it' })
+    const r1 = 'term:IT|EXT-g-it2|made up red shoes'
+    const r2 = 'term:IT|EXT-g-it2|made up shoes'
+    const items = [{ rowId: r1, action: 'UNPROTECT', protectionId: p.id }, { rowId: r1, action: 'NEGATE_EXACT', where: 'adGroup' }, { rowId: r2, action: 'NEGATE_EXACT', where: 'adGroup' }]
+    const preview = (await post('/preview', { items })).json()
+    expect(preview.steps.map((x: Row) => [x.action, x.refusal?.code ?? null, x.after ?? null])).toEqual([['UNPROTECT', null, null], ['NEGATE_EXACT', null, 'UNPROTECT'], ['NEGATE_EXACT', null, 'UNPROTECT']])
+    // "Also keeps" never counts the rows this review stops.
+    expect(preview.steps[0].protection.alsoKeeps.terms.map((t: Row) => t.text)).not.toEqual(expect.arrayContaining(['made up red shoes', 'made up shoes']))
+    const res = (await post('/apply', { items, planHash: preview.planHash })).json()
+    expect(res).toMatchObject({ tool: 'set-ad-guardrail', followUp: { status: 'WAITING', rowIds: [r1, r2] } })
+    expect(await commitNow(res.changeSetId)).toMatchObject({ ok: true })
+    const sent = (await post(`/follow-ups/${res.changeSetId}/run`, {})).json()
+    expect(sent).toMatchObject({ status: 'SENT', results: [{ rowId: r1, sent: true }, { rowId: r2, sent: true }] })
+    expect((await inA(() => database.client.agentApproval.findUniqueOrThrow({ where: { id: sent.changeSetId } }))).toolName).toBe('submit-change-plan')
+  })
+
+  it('what else the term keeps safe; a stop that cannot go leaves the protection as it is', async () => {
+    await inA(() => database.client.amazonAdsSearchTerm.create({ data: {
+      profileId: 'P-IT-TEST', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', date: new Date(Date.now() - 6 * 86_400_000), campaignId: 'EXT-c-it', adGroupId: 'EXT-g-it2',
+      query: 'made up red hat', impressions: 30, clicks: 3, costMicros: 900_000n, currencyCode: 'EUR', sales7dCents: 0, orders7d: 0,
+    } as never }))
+    await fresh()
+    const p = await protect({ term: 'red', matchType: 'CONTAINS', marketplace: 'IT' })
+    permissions = new Set(WITH_BUDGETS)
+    const row = 'term:IT|EXT-g-it2|made up red shoes'
+    const one = (await post('/preview', { items: [{ rowId: row, action: 'UNPROTECT', protectionId: p.id }] })).json()
+    // Over its own scope (every IT campaign): the other words it holds, the row's own left out.
+    expect(one.steps[0].protection.alsoKeeps).toEqual({ count: 1, terms: [{ text: 'made up red hat', kind: 'TERM', places: 1, wasting: false }] })
+    // A product's negative (NEGATE_ASIN) does not fit a word: the stop is left out, so the removal is too.
+    const bad = (await post('/preview', { items: [{ rowId: row, action: 'UNPROTECT', protectionId: p.id }, { rowId: row, action: 'NEGATE_ASIN' }] })).json()
+    expect(bad.steps.map((s: Row) => s.refusal?.code)).toEqual(['stop_left_out', 'not_an_asin'])
+    expect((await post('/apply', { items: [{ rowId: row, action: 'UNPROTECT', protectionId: p.id }, { rowId: row, action: 'NEGATE_ASIN' }], planHash: bad.planHash })).statusCode).toBe(400)
+    expect(await gone(p.id)).toBe(false)
+    // A row no protected term holds: nothing to remove.
+    expect((await post('/preview', { items: [{ rowId: 'kw:t-sup', action: 'UNPROTECT' }] })).json().steps[0]).toMatchObject({ refusal: { code: 'not_protected' } })
+    await inA(() => database.client.adKeywordProtection.deleteMany({ where: { id: p.id } }))
+  })
+})

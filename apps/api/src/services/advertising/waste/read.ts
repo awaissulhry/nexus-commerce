@@ -48,7 +48,6 @@ export const marketCode = (value: string | null | undefined): string | null => s
 import { openStrategy, type EffectiveStrategy } from '../ads-strategy/effective.js'
 import { sourceLabel } from '../ads-strategy/terms.js'
 import { readOwnerTargets } from '../ads-target-acos-resolver.js'
-import { protectedTermHit, type ProtectedTerm } from '../ads-negation-policy.js'
 import { productFamily, resolveCampaignOwnership, type CampaignOwnership } from '../brain/ownership.js'
 import { termsDue } from '../brain/terms-shadow.js'
 import { keptLabel, negativeKeptBy, negativeOwner, NO_OWNER, ownerOfActor, refOfOwner, rowOwner, type OwnerNames } from './owner.js'
@@ -68,6 +67,9 @@ import { buildStoppedRows, filterStopped } from './stopped.js'
 import { NEGATIVE_ORIGINS } from '../ads-negative-kw.service.js'
 import { crowdSizes, negativeAdded, type AddedFact } from './since.js'
 import { withAskRows } from './asks.js'
+import { protectedTermHit } from '../ads-negation-policy.js'
+import { protectionsHolding, protectionsInScope, rowProtectionOf, type Protection } from './protect.js'
+import { readFollowUpRows, rowFollowUp, type FollowUpView } from './follow-up.js'
 
 // ── The query ───────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -247,7 +249,10 @@ export interface WasteFacts {
   marketFacts: Map<string, ProductFacts>
   negateBar: Map<string, OwnerBar>
   marketNegateBar: Map<string, OwnerBar | null>
-  protections: Array<ProtectedTerm & { marketplace: string | null; campaignId: string | null }>
+  /** Step 4 — each with its id and the market it binds as this page compares markets (null: every market). */
+  protections: Protection[]
+  /** Step 4 — the follow-ups of the last 30 days (newest first): a row still finishing, or not stopped and why. */
+  followUps: Array<FollowUpView & { by: string }>
   brainProducts: Set<string>
   rules: RuleFact[]
   ruleProductScope: Map<string, string[]>
@@ -328,7 +333,8 @@ export async function wasteChangeStamp(): Promise<string> {
       (SELECT max(GREATEST("createdAt", "lastSeenAt", COALESCE("decidedAt", "createdAt"))) FROM "AdsRuleSuggestion")::text,
       (SELECT max(GREATEST("at", COALESCE("endedAt", "at"))) FROM "AdsWasteSkip")::text,
       (SELECT max("updatedAt") FROM "AutomationRule")::text,
-      (SELECT count(*) FROM "AdsWasteSkip")::text
+      (SELECT count(*) FROM "AdsWasteSkip")::text,
+      (SELECT max("updatedAt") FROM "AdsWasteFollowUp")::text
     ) AS stamp`)
   return rows[0]?.stamp ?? ''
 }
@@ -730,7 +736,7 @@ export async function loadWasteFacts(market: string, now: Date = new Date(), foc
   const allNegativeIds = targets.filter((t) => t.isNegative).map((t) => t.id)
   const [productRows, protectionRows, ownerTargets, due, ruleRows, brainNegRows, portfolioRows] = await Promise.all([
     roots.length ? prisma.product.findMany({ where: { id: { in: roots } }, select: { id: true, sku: true, name: true, basePrice: true } }) : Promise.resolve([]),
-    prisma.adKeywordProtection.findMany({ where: { mode: 'WHITELIST' }, select: { term: true, isPrefix: true, matchType: true, reason: true, marketplace: true, campaignId: true } }),
+    prisma.adKeywordProtection.findMany({ where: { mode: 'WHITELIST' }, select: { id: true, term: true, isPrefix: true, matchType: true, reason: true, marketplace: true, campaignId: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
     readOwnerTargets([]),
     termsDue({ includeOrchestrated: true }).catch(() => ({ due: false, why: '', products: [] })),
     prisma.automationRule.findMany({
@@ -926,11 +932,13 @@ export async function loadWasteFacts(market: string, now: Date = new Date(), foc
   }
 
   const skips = new Map<string, SkipFacts>([...(await activeSkips(undefined, now))].map(([k, v]) => [k, { until: v.until, by: v.by, at: v.at }]))
+  const followUps = await readFollowUpRows(retiredSince)
 
   return {
     now, markets, focus, campaigns, adGroups, adGroupOfExt, ownership, products, portfolioNames, targets, positivesByGroup, negByGroup, negByCampaign, targetByExt, targetById,
     termPlaces, placesByKey, placesByGroup, placesByCampaign, keywords, negativeSpendBefore, stock, productFacts, marketFacts, negateBar, marketNegateBar,
-    protections: protectionRows.map((p) => ({ term: p.term, isPrefix: p.isPrefix, matchType: p.matchType, reason: p.reason, marketplace: p.marketplace, campaignId: p.campaignId })),
+    protections: protectionRows.map((p) => ({ id: p.id, term: p.term, isPrefix: p.isPrefix, matchType: p.matchType, reason: p.reason, marketplace: p.marketplace, market: p.marketplace ? marketCode(p.marketplace) : null, campaignId: p.campaignId })),
+    followUps,
     brainProducts, rules, ruleProductScope, ruleAssigned, stateChanges, lastPause, negativeCreates, retires, brainReasons, harvestSources, harvestedAt,
     waitingKw, waitingTerm, waitItems, negativeAdded: negativeAddedAt, holds, origins, skips, names, currencyOf,
     freshness: { searchTermsThrough: termsThrough >= 0 ? isoDay(termsThrough * DAY_MS) : null, keywordsThrough: keywordsThrough >= 0 ? isoDay(keywordsThrough * DAY_MS) : null, readAt: now.toISOString() },
@@ -981,12 +989,24 @@ export function numbersOf(f: WasteFacts, sums: WindowSums, adGroupId: string, wi
   }
 }
 
-/** The protected term that hits this text in this campaign, or null. */
-export function protectedBy(f: WasteFacts, campaignId: string, text: string, asNegative: boolean): string | null {
-  const c = f.campaigns.get(campaignId)
-  const list = f.protections.filter((p) => (!p.marketplace || marketCode(p.marketplace) === c?.market) && (!p.campaignId || p.campaignId === campaignId))
-  const hit = protectedTermHit(text, asNegative ? 'NEGATIVE_EXACT' : 'EXACT', list)
-  return hit ? hit.protection.term : null
+/**
+ * Every protected term that holds this text in this campaign, the one the page names first (protect.ts). `phrase`: as
+ * a negative phrase (the Words view).
+ */
+export function protectionsOn(f: WasteFacts, campaignId: string, text: string, asNegative: boolean, phrase = false): Protection[] {
+  const list = protectionsInScope(f.protections, f.campaigns.get(campaignId)?.market, campaignId)
+  return phrase ? list.filter((p) => protectedTermHit(text, 'NEGATIVE_PHRASE', [p]) != null) : protectionsHolding(list, text, asNegative)
+}
+
+/** The protected term that hits this text in this campaign, or null. `phrase`: as a negative phrase (the Words view). */
+export function protectedBy(f: WasteFacts, campaignId: string, text: string, asNegative: boolean, phrase = false): string | null {
+  return protectionsOn(f, campaignId, text, asNegative, phrase)[0]?.term ?? null
+}
+
+/** Step 4 — a row's "Remove protection and stop" still finishing, or not stopped and why (absent else). */
+function followUpOf(f: WasteFacts, rowId: string): { followUp?: NonNullable<WasteRow['followUp']> } {
+  const fu = f.followUps?.length ? rowFollowUp(f.followUps, rowId) : null
+  return fu ? { followUp: fu } : {}
 }
 
 /** The standing negatives that block a term in an ad group (its own and its campaign's). */
@@ -1106,7 +1126,8 @@ export function buildWasteRows(f: WasteFacts, s: ResolvedScope): WasteRow[] {
       if (t.externalTargetId) for (const p of f.placesByGroup.get(adGroupId) ?? []) if ((p.vias.get(t.externalTargetId)?.orders ?? 0) > 0) termsSold++
       const test = wasteTest('KEYWORD', win?.n ?? null, bar, { termsSold, stockOutDays: win?.stockOutDays ?? 0 })
       const hold = f.holds.get(t.id) ?? null
-      const prot = tm.rowKind === 'KEYWORD' ? protectedBy(f, x.c.id, t.expressionValue, false) : null
+      const holding = tm.rowKind === 'KEYWORD' ? protectionsOn(f, x.c.id, t.expressionValue, false) : []
+      const prot = holding[0]?.term ?? null
       // S8 — kept paused, but Amazon serves it: someone switched it on outside Nexus. The holder still owns it.
       const state: RowState = hold ? (t.status === 'PAUSED' ? 'KEPT_PAUSED' : 'TURNED_ON_ELSEWHERE') : t.status === 'PAUSED' ? 'PAUSED' : prot ? 'PROTECTED' : 'RUNNING'
       const changes = (f.stateChanges.get(t.id) ?? []).filter(changed)
@@ -1132,9 +1153,10 @@ export function buildWasteRows(f: WasteFacts, s: ResolvedScope): WasteRow[] {
       const kept = blocker ? negativeKeptBy(clash!.negative!.owner) : null
       // A keyword that wastes keeps Pause (the Owner's job), its clash beside it (Remove negative as a second action); only
       // a keyword that does not waste gets the clash's fix — remove the negative — as its verb.
+      const verbFacts = { kind: tm.rowKind, match: tm.match, text, protectedBy: prot, harvestedDaysAgo: harvestedDaysAgo(key), placeAgeDays: x.ageDays, sharedCampaign: x.shared, termsSold }
       const verb: Verb = blocker && !test.met
         ? { action: 'REMOVE_NEGATIVE', targetRowId: negRowId(blocker.id), where: blocker.negativeLevel === 'CAMPAIGN' ? 'campaign' : 'adGroup', held: kept ? { label: keptLabel(clash!.negative!.owner), reason: kept } : null }
-        : verbFor({ kind: tm.rowKind, match: tm.match, text, protectedBy: prot, harvestedDaysAgo: harvestedDaysAgo(key), placeAgeDays: x.ageDays, sharedCampaign: x.shared, termsSold })
+        : verbFor(verbFacts)
       rows.push({
         id: keywordRowId(t.id), kind: tm.rowKind, text, match: tm.match, channel: 'AMAZON', market: refs.market, currency: refs.currency,
         portfolio: refs.portfolio, campaign: refs.campaign, adGroup: refs.adGroup, product: refs.product, productCount: refs.productCount, via: null,
@@ -1149,6 +1171,9 @@ export function buildWasteRows(f: WasteFacts, s: ResolvedScope): WasteRow[] {
         skipped: skip ? { until: skip.until.toISOString(), by: skip.by, at: skip.at?.toISOString() ?? null } : null,
         stillServesIn: tm.rowKind === 'KEYWORD' ? servingPlaces(f, key, adGroupId).length : 0,
         lastChange: last ? { action: stateWord(last.after.status, last), at: last.at.toISOString(), by: refOfOwner(lastOwner!), changeId: last.id } : null,
+        // Step 4 — which protected terms keep it safe, and what holds the pause once they are gone.
+        ...(state === 'PROTECTED' ? { protection: rowProtectionOf(f, holding, verbFor({ ...verbFacts, protectedBy: null }).held) } : {}),
+        ...followUpOf(f, keywordRowId(t.id)),
         clash,
       })
     }
@@ -1181,7 +1206,8 @@ export function buildWasteRows(f: WasteFacts, s: ResolvedScope): WasteRow[] {
     const win = numbersOf(f, p.win[windowOf(bar.windowDays)], p.adGroupId, bar.windowDays)
     const test = wasteTest('TERM', win.n, bar, { stockOutDays: win.stockOutDays })
     const blockers = blockersOf(f, p.adGroupId, p.key)
-    const prot = protectedBy(f, x.c.id, p.text, true)
+    const holding = protectionsOn(f, x.c.id, p.text, true)
+    const prot = holding[0]?.term ?? null
     const state: RowState = blockers.length ? 'NEGATED' : prot ? 'PROTECTED' : 'RUNNING'
     const ownHere = (f.positivesByGroup.get(p.adGroupId) ?? []).some((t) => t.status !== 'ARCHIVED' && termKeyOf(t.expressionValue) === p.key)
     const waiting = blockers.length ? null : waitingFor(p.adGroupId, x.c.id, p.key)
@@ -1206,12 +1232,13 @@ export function buildWasteRows(f: WasteFacts, s: ResolvedScope): WasteRow[] {
     const id = termRowId(refs.market, g.externalAdGroupId ?? g.id, p.key)
     const skip = f.skips.get(id) ?? null
     const isAsinTerm = isAsinText(p.key)
+    const verbFacts = { kind: 'TERM' as const, match, text: p.text, isAsinTerm, adGroupsInCampaign: groupsOfTermInCampaign.get(`${x.c.id}|${p.key}`)?.size ?? 1, protectedBy: prot, ownKeywordHere: ownHere, harvestedDaysAgo: harvestedDaysAgo(p.key), placeAgeDays: x.ageDays, sharedCampaign: x.shared }
     rows.push({
       id, kind: 'TERM', text: isAsinTerm ? p.key.toUpperCase() : p.text, match, channel: 'AMAZON', market: refs.market, currency: refs.currency,
       portfolio: refs.portfolio, campaign: refs.campaign, adGroup: refs.adGroup, product: refs.product, productCount: refs.productCount,
       via: viaTarget ? { id: viaTarget.id, name: labelFor(viaTarget.expressionValue, viaTarget.kind || 'UNKNOWN', viaTarget.expressionType).label, href: adGroupHref(x.c.id, p.adGroupId, 'targets', viaTarget.id) } : null,
       state, owner,
-      verb: verbFor({ kind: 'TERM', match, text: p.text, isAsinTerm, adGroupsInCampaign: groupsOfTermInCampaign.get(`${x.c.id}|${p.key}`)?.size ?? 1, protectedBy: prot, ownKeywordHere: ownHere, harvestedDaysAgo: harvestedDaysAgo(p.key), placeAgeDays: x.ageDays, sharedCampaign: x.shared }),
+      verb: verbFor(verbFacts),
       test,
       d: { ...win.n, xCpa: xCpaOf(win.n.spendCents, x.facts.targetCpaCents) },
       d90: p.d90,
@@ -1221,6 +1248,9 @@ export function buildWasteRows(f: WasteFacts, s: ResolvedScope): WasteRow[] {
       skipped: skip ? { until: skip.until.toISOString(), by: skip.by, at: skip.at?.toISOString() ?? null } : null,
       stillServesIn: servingPlaces(f, p.key, p.adGroupId).length,
       lastChange: lastLog ? { action: lastLog.actionType === 'retire_negative' ? 'removed' : 'negated', at: lastLog.at.toISOString(), by: refOfOwner(lastOwner!), changeId: lastLog.id } : null,
+      // Step 4 — which protected terms keep it safe, and what holds the negative once they are gone.
+      ...(state === 'PROTECTED' ? { protection: rowProtectionOf(f, holding, verbFor({ ...verbFacts, protectedBy: null }).held) } : {}),
+      ...followUpOf(f, id),
       clash: state === 'NEGATED' && win.n.orders > 0 ? { kind: 'BLOCKS_SOLD', label: CLASH_LABELS.BLOCKS_SOLD } : null,
     })
   }

@@ -355,6 +355,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   // NAF.AP.4/AP.5 — expire what has run out, run what the undo window released.
   'approval-maintenance': () =>
     import('./approval-maintenance.job.js').then((m) => m.runApprovalMaintenanceOnce()),
+  // Negative Targeting step 4 — the negatives that wait for a protected term's removal.
+  'waste-follow-up': () => import('./waste-follow-up.job.js').then((m) => m.runWasteFollowUpsOnce()),
   'ads-anomaly-guard': () => import('../services/advertising/ads-anomaly-guard.service.js').then(async (m) => m.anomalyGuardSummary(await m.runAnomalyGuardOnce())),
   'ads-structural-reconcile': () => import('../services/advertising/ads-structural-reconcile.service.js').then(async (m) => {
     const r = await m.runStructuralReconcileOnce()

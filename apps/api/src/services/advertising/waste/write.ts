@@ -19,9 +19,25 @@
  *                                             its Undo puts the old end back (polish M3)
  *   NEGATE_* + adGroupId                      the term (or our keyword's text) negated in a named ad group of the same product
  *                                             where it still runs — "Still bought elsewhere" (polish S17); refused elsewhere
+ *   UNPROTECT         a PROTECTED row         set-ad-guardrail { kind: protected-term, op: remove, term, marketplace?,
+ *                                             campaignId? } — one protected term that keeps it safe (`protectionId`; the
+ *                                             first by default), Nexus only (protect.ts). Named before the row's own verb, the
+ *                                             two are "Remove protection and stop": a pause goes with it as ONE change set;
+ *                                             a negative WAITS for it (`after: 'UNPROTECT'`, never sent with it: its tool
+ *                                             refuses a protected term): the server sends it once the removal ran, as the
+ *                                             same person (follow-up.ts, step 4)
+ *   NEGATE_PHRASE     a word (Words view)     `{ rowId: 'word:<market>|<word>', action: 'NEGATE_PHRASE', where, scope? }` — ONE
+ *                                             step per place its terms spent in (words.ts wordPlaces: ad groups, or whole
+ *                                             campaigns), each add-negative-targets { negatives: [{ adGroupId | campaignId,
+ *                                             text, matchType: NEGATIVE_PHRASE }] }; a place that is blocked, held or does not
+ *                                             waste is left out with why. `scope`: the page's filter-bar lists the row was
+ *                                             read with (the same places the person saw)
  *
  * Every step also says its `level` (AD_GROUP / CAMPAIGN: a campaign negative's place ends at its campaign) and `final`
- * (a removal is archived at Amazon and cannot come back: its Done has no Undo) — polish M1, M2.
+ * (a removal is archived at Amazon and cannot come back: its Done has no Undo) — polish M1, M2. Step 4 —
+ * every NEGATE_* step says what it would block (`reach`: terms, spend, clicks, orders, sales over the page's window, and
+ * the terms that sold), and the preview the total of the steps it sends: one call at the end (reach.ts withReach), after
+ * the items are expanded into steps. A warning, never a refusal; apply re-checks nothing new (the planHash stands).
  *
  * preview  writes nothing: every row's step, where it lands, its refusal (the tool's own words), whether it raises spend,
  *          and a planHash over the rows, the requests and the facts they stand on.
@@ -30,7 +46,9 @@
  *          per row (so each row has its own change and Undo) — asked as the person and approved by the same person at
  *          once through the Approvals page's path (decideFleetApproval: the undo window; a request whose stepUp asks the
  *          code needs settings.security.manage and the authenticator code — none since 2026-10-12, the code table's
- *          lines are off). The answer: { changeSetId, status, steps, … }.
+ *          lines are off). The answer: { changeSetId, status, steps, … }. Step 4 — steps that wait for their protected
+ *          term's removal are not in it: they are written as the removal's follow-up (follow-up.ts, `followUp` in the
+ *          answer), which the server sends once the removal ran, as this person.
  * waiting  a request that waits on the page's rows (one of the tools above, or a plan holding one) approved or rejected
  *          through the same path, as on the Approvals page; any other request is 404 here. A rule's Ask-me card
  *          (`suggestion:<AdsRuleSuggestion.id>`: a keyword pause or a search-term negative) is decided through the
@@ -51,10 +69,16 @@ import { requestApproval } from '../../agents/approval-gate.service.js'
 import { PLAN_TOOL } from '../../agents/tool-types.js'
 import { decideFleetApproval } from '../../agent-fleet/approval-inbox.service.js'
 import { isAsin } from '../ads-negation-policy.js'
+import { ID_LIST } from '../ads-scope-lists.js'
 import { HOLD_SELECT, holdActive, holdStateOf, keepUntilOf, type HoldColumns } from './hold.js'
 import { WASTE_TOOLS } from './pure.js'
+import { withReach, type Reach, type ReachTotal } from './reach.js'
+import { isUnprotectArgs, linkRemovals, protectionContext, stopAfterRemovals, unprotectStep, type StepProtection, type StopRefusal, type Waits } from './protect.js'
+import { followUpItems } from './follow-up.js'
+import { wordPlaces } from './words.js'
+import { parseWordId } from './words-pure.js'
 
-export const WASTE_ACTIONS = ['PAUSE', 'NEGATE_EXACT', 'NEGATE_PHRASE', 'NEGATE_ASIN', 'TURN_ON', 'REMOVE_NEGATIVE', 'RELEASE', 'KEEP_UNTIL'] as const
+export const WASTE_ACTIONS = ['PAUSE', 'NEGATE_EXACT', 'NEGATE_PHRASE', 'NEGATE_ASIN', 'TURN_ON', 'REMOVE_NEGATIVE', 'RELEASE', 'KEEP_UNTIL', 'UNPROTECT'] as const
 export type WasteAction = (typeof WASTE_ACTIONS)[number]
 /** The most rows one preview or apply names (a change plan's steps). */
 export const MAX_WASTE_ITEMS = 200
@@ -68,6 +92,10 @@ export const WASTE_ITEM = z.object({
   targetRowId: z.string().trim().min(4).max(80).optional(),
   /** Polish S17 — NEGATE_EXACT / NEGATE_PHRASE in this ad group (Nexus id) of the same product, where the term still runs. */
   adGroupId: z.string().trim().min(1).max(64).optional(),
+  /** Step 4 — UNPROTECT: the protected term to remove (AdKeywordProtection.id, the row's `protection.terms`); the first by default. */
+  protectionId: z.string().trim().min(1).max(64).optional(),
+  /** Words view — a word's row (`word:<market>|<word>`) was read under the filter bar's lists: its places are those. */
+  scope: z.object({ portfolioIds: ID_LIST.optional(), productIds: ID_LIST.optional(), campaignIds: ID_LIST.optional(), adGroupIds: ID_LIST.optional() }).strict().optional(),
 })
 export type WasteItem = z.infer<typeof WASTE_ITEM>
 export const PREVIEW_BODY = z.object({
@@ -114,8 +142,17 @@ export interface PreviewStep {
   tool: string | null
   /** The tool's own preview sentence, as this person may read it. */
   summary: string | null
+  /** Step 4 — a NEGATE_* step: what it would block (reach.ts); null where its place cannot be read. Absent on other steps. */
+  reach?: Reach | null
+  /** Step 4 — UNPROTECT: the protected term it removes, its scope, why, and what else it keeps safe. */
+  protection?: StepProtection
+  /** Step 4 — it waits for its row's UNPROTECT (a negative of a protected term): never sent with it, sent once it ran. */
+  after?: 'UNPROTECT'
 }
-export interface WastePreview { steps: PreviewStep[]; blocked: number; planHash: string }
+/** One step as the preview reads it: the step, the tool request it is (null when left out) and the facts it stands on. */
+export interface StepOut { step: PreviewStep; request: { tool: string; args: Record<string, unknown> } | null; basis: unknown }
+/** `reach`: the steps that are sent, together (each term once); null when none adds a negative. */
+export interface WastePreview { steps: PreviewStep[]; blocked: number; planHash: string; reach: ReachTotal | null }
 
 // ── Pure: row ids, steps ────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -143,6 +180,8 @@ export function parseRowId(id: string): RowRef | null {
 /** Why this verb does not fit this row (pure), or null. */
 export function actionRefusal(ref: RowRef, item: Pick<WasteItem, 'action' | 'where'> & Partial<Pick<WasteItem, 'targetRowId' | 'adGroupId'>>): { code: string; label: string } | null {
   const a = item.action
+  // Step 4 — a protected term is removed from the row it keeps safe (ours or a shopper's), never from a negative.
+  if (a === 'UNPROTECT') return ref.kind === 'neg' ? { code: 'wrong_verb', label: 'A standing negative can only be removed.' } : null
   if (ref.kind === 'kw') {
     // Polish M9 — the negative over our keyword (its clash) is removed from the keyword's row.
     if (a === 'REMOVE_NEGATIVE') return item.targetRowId?.startsWith('neg:') ? null : { code: 'wrong_verb', label: 'Name the negative to remove (the one over this keyword).' }
@@ -206,6 +245,8 @@ export function requestFor(item: WasteItem, ref: RowRef, facts: { target?: Targe
       if (!n.isNegative) return { refusal: { code: 'not_a_negative', label: 'This is not a negative.' } }
       return { tool: 'retire-negatives', args: { negativeIds: [n.id], why } }
     }
+    // Step 4 — a protected term's removal is its own step (protect.ts unprotectStep), never a row's tool request.
+    case 'UNPROTECT': return { refusal: { code: 'wrong_verb', label: 'A protected term is removed by its own step.' } }
     default: {
       if (ref.kind !== 'term') return { refusal: { code: 'wrong_verb', label: 'Only a shopper\'s search term is negated.' } }
       const campaign = item.where === 'campaign'
@@ -233,6 +274,7 @@ export function fromTo(item: WasteItem, t: TargetFacts | undefined, now: Date = 
     case 'TURN_ON': return { from: state, to: 'RUNNING' }
     case 'RELEASE': return { from: state, to: t?.status === 'ENABLED' ? 'RUNNING' : 'PAUSED' }
     case 'REMOVE_NEGATIVE': return { from: 'NEGATED', to: 'REMOVED' }
+    case 'UNPROTECT': return { from: 'PROTECTED', to: 'NOT_PROTECTED' }
     default: return { from: 'RUNNING', to: 'NEGATED' }
   }
 }
@@ -243,13 +285,13 @@ const canonical = (v: unknown): string => JSON.stringify(v, (_k, value) => (valu
 
 /** The planHash over the rows, their requests and the facts each tool's preview stands on (pure). */
 export function planHashOf(items: readonly WasteItem[], steps: ReadonlyArray<{ request: { tool: string; args: Record<string, unknown> } | null; basis: unknown; refusal: { code: string } | null }>): string {
-  const rows = items.map((i) => ({ rowId: i.rowId.trim(), action: i.action, where: i.where ?? null, keepUntil: i.keepUntil ?? null, ...(i.targetRowId ? { targetRowId: i.targetRowId } : {}), ...(i.adGroupId ? { adGroupId: i.adGroupId } : {}) }))
+  const rows = items.map((i) => ({ rowId: i.rowId.trim(), action: i.action, where: i.where ?? null, keepUntil: i.keepUntil ?? null, ...(i.targetRowId ? { targetRowId: i.targetRowId } : {}), ...(i.adGroupId ? { adGroupId: i.adGroupId } : {}), ...(i.protectionId ? { protectionId: i.protectionId } : {}), ...(i.scope ? { scope: i.scope } : {}) }))
   return createHash('sha256').update(canonical({ rows, steps: steps.map((s) => ({ request: s.request, basis: s.basis ?? null, refusal: s.refusal?.code ?? null })) })).digest('hex')
 }
 
 /** "pause 2, negative exact 1" (pure). */
 export function countsWords(actions: readonly WasteAction[]): string {
-  const words: Record<WasteAction, string> = { PAUSE: 'pause', NEGATE_EXACT: 'negative exact', NEGATE_PHRASE: 'negative phrase', NEGATE_ASIN: 'negative product', TURN_ON: 'turn on', REMOVE_NEGATIVE: 'remove negative', RELEASE: 'release', KEEP_UNTIL: 'keep paused until' }
+  const words: Record<WasteAction, string> = { PAUSE: 'pause', NEGATE_EXACT: 'negative exact', NEGATE_PHRASE: 'negative phrase', NEGATE_ASIN: 'negative product', TURN_ON: 'turn on', REMOVE_NEGATIVE: 'remove negative', RELEASE: 'release', KEEP_UNTIL: 'keep paused until', UNPROTECT: 'remove protection' }
   const n = new Map<WasteAction, number>()
   for (const a of actions) n.set(a, (n.get(a) ?? 0) + 1)
   return [...n].map(([a, c]) => `${words[a]} ${c}`).join(', ')
@@ -345,8 +387,11 @@ async function namedPlace(adGroupId: string, own: GroupRow | undefined, text: st
 
 const PAGE_WHY = 'Negative Targeting page'
 
-/** One row's step, dry-run as the person: what it would do, where it lands, or why not. */
-async function stepOf(item: WasteItem, person: UserPrincipal, why: string, portfolios: Map<string, Ref>): Promise<{ step: PreviewStep; request: { tool: string; args: Record<string, unknown> } | null; basis: unknown }> {
+/**
+ * One row's step, dry-run as the person: what it would do, where it lands, or why not. `waitFor` (step 4): a stop after
+ * its row's UNPROTECT — when its tool refuses it only for the terms being removed, the step waits for the removal.
+ */
+async function stepOf(item: WasteItem, person: UserPrincipal, why: string, portfolios: Map<string, Ref>, waitFor?: (r: StopRefusal) => Promise<Waits | null>): Promise<StepOut> {
   const ref = parseRowId(item.rowId)
   const empty: Place = { portfolio: null, campaign: null, adGroup: null }
   const final = item.action === 'REMOVE_NEGATIVE'
@@ -398,26 +443,83 @@ async function stepOf(item: WasteItem, person: UserPrincipal, why: string, portf
   const asked = requestFor(item, ref, { target: r.target, adGroupId: g?.id, campaignId: g?.campaign.id, negative }, why)
   if ('refusal' in asked) return refused(asked.refusal.code, asked.refusal.label, { text, place, level, ...fromto })
   const raise = item.action === 'REMOVE_NEGATIVE' || (item.action === 'TURN_ON' && r.target?.status !== 'ENABLED')
+  // Step 4 — refused only for the protected terms being removed before it: the stop waits for the removal.
+  const group = g
+  const waiting = waitFor && group ? async (error: string): Promise<StepOut | null> => {
+    const waits = await waitFor({ error, text: text ?? '', campaign: { id: group.campaign.id, marketplace: group.campaign.marketplace } })
+    if (!waits) return null
+    if (waits.refusal) return refused(waits.refusal.code, waits.refusal.label, { text, place, level, ...fromto, tool: asked.tool, raise })
+    return {
+      step: { rowId: item.rowId, action: item.action, text, place, ...fromto, lands: waits.lands, runsAt: null, refusal: null, raise, level, final, needsCode: false, tool: asked.tool, summary: 'Sent once the protection is removed.', after: 'UNPROTECT' },
+      request: asked, basis: null,
+    }
+  } : undefined
+  return dryRun(person, asked, { rowId: item.rowId, action: item.action, text, place, ...fromto, raise, level, final }, waiting)
+}
+
+type StepBase = Pick<PreviewStep, 'rowId' | 'action' | 'text' | 'place' | 'from' | 'to' | 'raise' | 'level' | 'final'>
+
+/**
+ * One step's request, dry-run as the person (callTool: permissions, business, arguments, the tool's own refusals).
+ * `onRefused` (step 4): a stop after its row's UNPROTECT may wait for the removal instead of being refused.
+ */
+async function dryRun(person: UserPrincipal, asked: { tool: string; args: Record<string, unknown> }, base: StepBase, onRefused?: (error: string) => Promise<StepOut | null>): Promise<StepOut> {
+  const refused = (code: string, label: string, raise: boolean): StepOut => ({
+    step: { ...base, raise, lands: null, runsAt: null, refusal: { code, label }, needsCode: false, tool: asked.tool, summary: null }, request: null, basis: null,
+  })
   try {
     const call = await callTool(person, asked.tool, asked.args)
-    if (!call.raw.ok) return { ...refused('refused', call.raw.error ?? 'refused', { text, place, level, ...fromto, tool: asked.tool, raise }), request: null }
+    if (!call.raw.ok) return (await onRefused?.(call.raw.error ?? '')) ?? refused('refused', call.raw.error ?? 'refused', base.raise)
     const raw = (call.raw.preview ?? {}) as { reach?: { reach?: string }; stepUp?: unknown; basis?: unknown; needsCode?: number }
     const shown = (call.visible.preview ?? {}) as { effect?: unknown; summary?: unknown }
     const needsCode = raw.stepUp != null
     const lands = needsCode ? 'approval' : raw.reach?.reach === 'live' ? 'amazon' : 'nexus'
     const summary = typeof shown.effect === 'string' ? shown.effect : typeof shown.summary === 'string' ? shown.summary : null
-    return {
-      step: { rowId: item.rowId, action: item.action, text, place, ...fromto, lands, runsAt: null, refusal: null, raise, level, final, needsCode, tool: asked.tool, summary },
-      request: asked, basis: raw.basis ?? null,
-    }
+    return { step: { ...base, lands, runsAt: null, refusal: null, needsCode, tool: asked.tool, summary }, request: asked, basis: raw.basis ?? null }
   } catch (error) {
     if (!(error instanceof ToolAccessError)) throw error
-    return refused(error.code === 'forbidden' ? 'forbidden' : 'refused', error.message, { text, place, level, ...fromto, tool: asked.tool })
+    return refused(error.code === 'forbidden' ? 'forbidden' : 'refused', error.message, false)
   }
 }
 
-/** The preview of the page's rows: nothing written. Also returns each row's request, for apply. */
-export async function previewWaste(items: readonly WasteItem[], person: UserPrincipal, why?: string | null): Promise<WastePreview & { requests: Array<{ tool: string; args: Record<string, unknown> } | null> }> {
+const WORD_LEFT_OUT: Readonly<Record<'BLOCKED' | 'HELD' | 'NOT_WASTING', string>> = { BLOCKED: 'already_blocked', HELD: 'held', NOT_WASTING: 'not_wasting' }
+
+/**
+ * Words view — "Block word": one negative phrase per place the word's terms spent in (words.ts wordPlaces, the same build
+ * as the row), each dry-run as the person; a place that is blocked, held or does not waste is left out with why.
+ */
+async function wordStepsOf(item: WasteItem, person: UserPrincipal, why: string): Promise<StepOut[]> {
+  const empty: Place = { portfolio: null, campaign: null, adGroup: null }
+  const base = { rowId: item.rowId, action: item.action, from: 'RUNNING', to: 'NEGATED', raise: false, final: false } as const
+  const leftOut = (code: string, label: string, b: Pick<StepBase, 'text' | 'place' | 'level'>): StepOut => ({
+    step: { ...base, ...b, lands: null, runsAt: null, refusal: { code, label }, needsCode: false, tool: null, summary: null }, request: null, basis: null,
+  })
+  const text = parseWordId(item.rowId)?.word ?? null
+  if (item.action !== 'NEGATE_PHRASE' || item.keepUntil != null || item.targetRowId || item.adGroupId) {
+    return [leftOut('wrong_verb', 'A word is blocked as a negative phrase (Block word), in its ad groups or its whole campaigns.', { text, place: empty, level: null })]
+  }
+  const found = await wordPlaces(item.rowId, item.where === 'campaign' ? 'campaign' : 'adGroup', item.scope ?? {})
+  if ('error' in found) return [leftOut(found.status === 404 ? 'not_found' : 'bad_row', found.error, { text, place: empty, level: null })]
+  if (!found.places.length) return [leftOut('no_place', 'No ad group in the shown places runs a search term with this word.', { text: found.word, place: empty, level: null })]
+  const out: StepOut[] = []
+  for (const p of found.places) {
+    const b = { text: found.word, place: { portfolio: p.portfolio, campaign: p.campaign, adGroup: p.level === 'CAMPAIGN' ? null : p.adGroup }, level: p.level }
+    if (p.state !== 'OPEN') {
+      out.push(leftOut(WORD_LEFT_OUT[p.state], p.state === 'BLOCKED' ? `Already blocked here: the negative phrase "${p.blockedBy?.text ?? found.word}" stands.` : p.held?.reason ?? 'Held here.', b))
+      continue
+    }
+    const negative = { ...(p.level === 'CAMPAIGN' ? { campaignId: p.campaignId } : { adGroupId: p.adGroupId }), text: found.word, matchType: 'NEGATIVE_PHRASE' }
+    out.push(await dryRun(person, { tool: 'add-negative-targets', args: { negatives: [negative], why } }, { ...base, ...b }))
+  }
+  // The places that get the block first, the ones left out after them (each still its own step of this word's item).
+  return [...out.filter((o) => !o.step.refusal), ...out.filter((o) => o.step.refusal)]
+}
+
+/**
+ * The preview of the page's rows: nothing written. Also returns each row's request, for apply. `reach: false` (apply)
+ * leaves the reach check out: it is the review's, and the planHash does not stand on it.
+ */
+export async function previewWaste(items: readonly WasteItem[], person: UserPrincipal, why?: string | null, opts: { reach?: boolean } = {}): Promise<WastePreview & { requests: Array<{ tool: string; args: Record<string, unknown> } | null>; itemOf: number[] }> {
   const reason = why?.trim() ? `${PAGE_WHY}: ${why.trim()}` : PAGE_WHY
   // The portfolios the rows sit in, read once.
   const refs = items.map((i) => parseRowId(i.rowId))
@@ -428,24 +530,46 @@ export async function previewWaste(items: readonly WasteItem[], person: UserPrin
     ext.length ? prisma.adGroup.findMany({ where: { externalAdGroupId: { in: ext } }, select: { campaign: { select: { portfolioId: true } } } }) : [],
   ])
   const portfolios = await portfolioRefs([...targets.map((t) => t.adGroup?.campaign?.portfolioId ?? ''), ...groups.map((g) => g.campaign?.portfolioId ?? '')])
-  const out: Array<Awaited<ReturnType<typeof stepOf>>> = []
+  const out: StepOut[] = []
+  /** Words view — a word item's steps by its item index (one per place). */
+  const wordSteps = new Map<number, StepOut[]>()
   const seen = new Set<string>()
-  for (const item of items) {
-    // The same row named twice is one change: the second is refused, so a plan never runs a row twice.
-    const key = item.rowId.trim()
+  // Step 4 — a review that removes protected terms reads its rows once, and links each stop to its removals.
+  const ctx = await protectionContext(items)
+  for (const [index, item] of items.entries()) {
+    // The same row named twice is one change: the second is refused, so a plan never runs a row twice. Step 4 — a row's
+    // UNPROTECT is not its change ("Remove protection and stop" names both), and one protected term is removed once.
+    const key = item.action !== 'UNPROTECT' ? item.rowId.trim() : item.protectionId ? `UNPROTECT|${item.protectionId}` : `${item.rowId.trim()}|UNPROTECT|`
     if (seen.has(key)) {
       out.push({ step: { rowId: item.rowId, action: item.action, text: null, place: { portfolio: null, campaign: null, adGroup: null }, from: null, to: null, lands: null, runsAt: null, refusal: { code: 'duplicate_row', label: 'This row is named twice: one change per row.' }, raise: false, level: null, final: item.action === 'REMOVE_NEGATIVE', needsCode: false, tool: null, summary: null }, request: null, basis: null })
       continue
     }
     seen.add(key)
-    out.push(await stepOf(item, person, `${reason} — ${item.action.toLowerCase().replace('_', ' ')}`, portfolios))
+    const stepWhy = `${reason} — ${item.action.toLowerCase().replace('_', ' ')}`
+    if (item.action === 'UNPROTECT' && ctx) { out.push(await unprotectStep(item, person, ctx)); continue }
+    // Words view — a word's row expands into one step per place (each its own change, its own Undo). They are kept
+    // apart until the removals are linked: `out` stays one entry per item (protect.ts reads it by the item's index).
+    if (parseWordId(key)) { const ws = await wordStepsOf(item, person, `${reason} — block word`); wordSteps.set(index, ws); out.push(ws[0]); continue }
+    const removals = ctx?.links.get(index) ?? []
+    out.push(ctx && removals.length
+      ? await stopAfterRemovals(item, removals.map((i) => out[i]), ctx, (waitFor) => stepOf(item, person, stepWhy, portfolios, waitFor))
+      : await stepOf(item, person, stepWhy, portfolios))
   }
-  const steps = out.map((o) => o.step)
+  // Step 4 — a removal left out leaves its stops out; one whose every stop is left out stays as it is.
+  if (ctx) linkRemovals(out, ctx.links)
+  const all = out.flatMap((o, i) => wordSteps.get(i) ?? [o])
+  /** Each step's item (a word's steps share theirs). */
+  const itemOf = out.flatMap((o, i) => (wordSteps.get(i) ?? [o]).map(() => i))
+  // Step 4 — what each negative would block, once every item is a step (a word's places too).
+  const reached = opts.reach === false ? { steps: all.map((o) => o.step), total: null } : await withReach(all.map((o) => o.step))
+  const steps = reached.steps
   return {
     steps,
     blocked: steps.filter((s) => s.refusal).length,
-    planHash: planHashOf(items, out.map((o) => ({ request: o.request, basis: o.basis, refusal: o.step.refusal }))),
-    requests: out.map((o) => o.request),
+    planHash: planHashOf(items, all.map((o) => ({ request: o.request, basis: o.basis, refusal: o.step.refusal }))),
+    requests: all.map((o) => o.request),
+    itemOf,
+    reach: reached.total,
   }
 }
 
@@ -460,11 +584,18 @@ export type ApplyAnswer =
  * `waiting`, with why.
  */
 export async function applyWaste(body: z.infer<typeof APPLY_BODY>, person: UserPrincipal): Promise<ApplyAnswer> {
-  const fresh = await previewWaste(body.items, person, body.why)
+  const fresh = await previewWaste(body.items, person, body.why, { reach: false })
   if (fresh.planHash !== body.planHash) {
     return { http: 409, body: { error: 'The rows changed since the preview (a status, a hold, a negative or a refusal moved): preview again.', code: 'stale_preview', planHash: fresh.planHash, steps: fresh.steps, blocked: fresh.blocked } }
   }
-  const sending = fresh.steps.flatMap((s, i) => (!s.refusal && fresh.requests[i] ? [{ step: s, request: fresh.requests[i]! }] : []))
+  // Step 4 — a step that waits for its row's UNPROTECT is not sent now: the server sends it once the removal ran (a follow-up).
+  const sending = fresh.steps.flatMap((s, i) => (!s.refusal && !s.after && fresh.requests[i] ? [{ step: s, request: fresh.requests[i]! }] : []))
+  const waiting = new Set(fresh.steps.flatMap((s, i) => (!s.refusal && s.after ? [fresh.itemOf[i]] : [])))
+  const followUp = async (approvalId: string | undefined) => {
+    if (!waiting.size || !approvalId) return null
+    const { createFollowUp } = await import('./follow-up.js')
+    return createFollowUp({ approvalId, items: followUpItems(body.items, waiting), by: `user:${person.userId}` })
+  }
   if (!sending.length) return { http: 400, body: { error: 'Nothing to send: every row was refused (each says why).', steps: fresh.steps, blocked: fresh.blocked } }
   const title = `Negative Targeting: ${countsWords(sending.map((s) => s.step.action))}`.slice(0, 120)
   const asked = sending.length === 1
@@ -479,6 +610,8 @@ export async function applyWaste(body: z.infer<typeof APPLY_BODY>, person: UserP
   const stepUp = (asked.preview as { stepUp?: unknown } | undefined)?.stepUp ?? null
   const out = await decideFleetApproval({ id: asked.approvalId, decision: 'approve', actor: person, code: body.code, reason: body.why ?? title })
   const approve = { ok: out.ok, ...(out.code ? { code: out.code } : {}), ...(out.error ? { error: out.error } : {}) }
+  // Step 4 — the negatives that wait for this removal: the server sends them once it ran, as this person.
+  const later = await followUp(asked.approvalId)
   return {
     http: 202,
     body: {
@@ -490,9 +623,10 @@ export async function applyWaste(body: z.infer<typeof APPLY_BODY>, person: UserP
       needsCode: !!stepUp,
       ...(stepUp ? { stepUp } : {}),
       approve,
-      steps: fresh.steps.map((s) => (s.refusal ? s : { ...s, runsAt: out.executeAfter ?? null })),
+      steps: fresh.steps.map((s) => (s.refusal || s.after ? s : { ...s, runsAt: out.executeAfter ?? null })),
       blocked: fresh.blocked,
       undo: 'POST /api/advertising/changes/… or undo-change with this changeSetId (the whole set) or a step\'s change id (one row).',
+      ...(later ? { followUp: later } : {}),
     },
   }
 }
@@ -510,13 +644,20 @@ export async function isWasteCard(suggestionId: string): Promise<boolean> {
   return (card.entityType === 'AD_TARGET' && type === 'pause_target') || (card.entityType === 'SEARCH_TERM' && (type === 'add_negative_exact' || type === 'add_negative_phrase'))
 }
 
-/** Is this a request the page's Waiting rows may decide (one of its tools, or a change plan holding one)? */
+/**
+ * Is this a request the page's Waiting rows may decide (one of its tools, or a change plan holding one)? Step 4 — a
+ * protected term's removal (alone, or a plan of removals) is the page's only when the page sent it: it has the page's
+ * follow-up (the negatives that wait for it; the page never sends a removal without its stop). Anyone else's
+ * set-ad-guardrail removal is never the page's to take back or reject.
+ */
 export async function isWasteRequest(approvalId: string): Promise<boolean> {
-  const ap = await prisma.agentApproval.findUnique({ where: { id: approvalId }, select: { toolName: true } })
+  const ap = await prisma.agentApproval.findUnique({ where: { id: approvalId }, select: { toolName: true, args: true } })
   if (!ap) return false
   if ((WASTE_TOOLS as readonly string[]).includes(ap.toolName)) return true
+  const followed = async () => (await prisma.adsWasteFollowUp.count({ where: { approvalId } })) > 0
+  if (isUnprotectArgs(ap.toolName, ap.args)) return followed()
   if (ap.toolName !== PLAN_TOOL) return false
-  return (await prisma.agentPlanStep.count({ where: { approvalId, toolName: { in: [...WASTE_TOOLS] } } })) > 0
+  return (await prisma.agentPlanStep.count({ where: { approvalId, toolName: { in: [...WASTE_TOOLS] } } })) > 0 || followed()
 }
 
 /**
