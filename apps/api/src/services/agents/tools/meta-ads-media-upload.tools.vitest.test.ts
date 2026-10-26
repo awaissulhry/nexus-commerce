@@ -71,7 +71,7 @@ vi.mock('../../../db.js', () => ({
 
 import { META_ADS_MEDIA_UPLOAD_TOOLS } from './meta-ads-media-upload.tools.js'
 import { META_CHANGE_RULES } from './meta-ads-kit.js'
-import { __mediaTiming, CHUNKED_ANSWER, COPY_ANSWER, FOLDER_TAKEN, OWNER_UPLOAD_STEPS, PLAYABLE_ANSWER, THUMBNAIL_ANSWER } from '../../marketing/meta-ads/change-media.js'
+import { __mediaTiming, CHUNKED_ANSWER, COPY_ANSWER, FOLDER_TAKEN, OWNER_UPLOAD_STEPS, PLAYABLE_ANSWER, THUMBNAIL_NO_UNDO } from '../../marketing/meta-ads/change-media.js'
 import { MetaWriteError } from '../../marketing/meta-ads/write-client.js'
 import { localFailure } from '../../marketing/meta-ads/errors.js'
 import { MATERIAL_PREVIEW_FIELDS } from '../../agent-fleet/approval-inbox.service.js'
@@ -145,16 +145,15 @@ describe('the tool', () => {
     expect(() => ask({ kind: 'undo', uploads: [{ kind: 'image' }] })).toThrow()
     expect(() => ask({ kind: 'undo', uploads: [{ kind: 'video', hash: 'abc' }] })).toThrow()
   })
-  it('thumbnail, playable, chunked bytes and a copy from another account: plain answers, nothing read or sent', async () => {
+  it('playable, chunked bytes and a copy from another account: plain answers, nothing read or sent', async () => {
     for (const [args, words] of [
-      [{ kind: 'thumbnail' }, THUMBNAIL_ANSWER], [{ kind: 'playable' }, PLAYABLE_ANSWER],
+      [{ kind: 'playable' }, PLAYABLE_ANSWER],
       [{ kind: 'video', video: { videoUrl: 'https://cdn.example.com/v.mp4', method: 'chunked' } }, CHUNKED_ANSWER],
       [{ kind: 'image', images: [{ libraryImageId: 'da_hero' }], copyFromAccount: { sourceAccountId: '5555555555', hash: 'abc' } }, COPY_ANSWER],
     ] as Array<[Record<string, unknown>, string]>) {
       expect(await tool.handler(ask(args), asker)).toEqual({ ok: false, error: words })
       expect(await tool.execute!(ask(args), approved({}))).toEqual({ ok: false, error: `Not run: ${words}` })
     }
-    expect(THUMBNAIL_ANSWER).toMatch(/Thumbnails can only be created on Videos that have been associated with a Page.*does not upload one to a Page video yet/)
     expect(PLAYABLE_ANSWER).toBe('Nexus holds no HTML5 playable files (its media library takes images and videos only), so it uploads no playable.')
     expect(h.fetchPhoto).not.toHaveBeenCalled()
     expect(h.read).not.toHaveBeenCalled()
@@ -444,5 +443,57 @@ describe('undo', () => {
     expect(h.send.mock.calls[0][1]).toMatchObject({ objectId: ACT, kind: 'adaccount', params: { hash: 'a1' }, edge: 'adimages', method: 'DELETE', operation: 'media.imageRemove' })
     expect(ran.change!.after).toEqual({ kind: 'undo', items: [{ kind: 'image', hash: 'a1', removed: true }], accountId: 'm-1', adAccountId: '1234567890' })
     expect(tool.undo!.request(ran.change!)).toEqual({ refusal: expect.any(String) })
+  })
+})
+
+describe('gap 46b (master MD-024) — kind thumbnail: a Page video\'s preferred thumbnail, made as the Page, with NO undo', () => {
+  const PAGE = '120000000000010'
+  const VIDEO = '120000000000601'
+  /** Step 28's read of a Page video (livePageVideo): who posted it. */
+  const pageVideo = (from = PAGE) => h.read.mockImplementation(async (_c: unknown, q: { operation: string; path: string }) => (q.operation === 'optimizeChange.pageVideo'
+    ? { body: { id: q.path, title: 'Clip A', published: true, from: { id: from } }, calls: 1 }
+    : imagesHolding()))
+  const args = { kind: 'thumbnail', thumbnail: { videoId: VIDEO, libraryImageId: 'da_hero' } }
+  beforeEach(() => { h.chosen = { ...h.chosen, pageId: PAGE } })
+
+  it('the preview: the chosen Page\'s video (read now), the picture fetched safely, no check, NO undo said plainly, no byte shown', async () => {
+    pageVideo()
+    const out = await preview(args)
+    expect(out.ok, JSON.stringify(out)).toBe(true)
+    expect(h.read.mock.calls.map((c) => [c[1].operation, c[1].path, c[1].query])).toEqual([['optimizeChange.pageVideo', VIDEO, { fields: 'id,title,published,from{id}' }]])
+    expect(out.preview).toMatchObject({ spendsMoney: false, metaCheck: { checked: 'none' }, requests: [{ step: 1, metaCheck: 'no-check' }] })
+    expect(out.preview.requests[0].label).toBe(`Make "Hero A" (da_hero; 4×3, 1 KB) the preferred thumbnail of video ${VIDEO} "Clip A" of the chosen Facebook Page, as the Page`)
+    const words = out.preview.warnings.join(' ')
+    expect(words).toContain(THUMBNAIL_NO_UNDO)
+    expect(THUMBNAIL_NO_UNDO).toMatch(/^No undo: Meta lets no video thumbnail be changed or deleted/)
+    expect(words).toMatch(/AS the chosen Facebook Page, with the Page's own token/)
+    expect(words).toMatch(/Meta has no check for a thumbnail/)
+    expect(JSON.stringify(out.preview)).not.toContain(PNG.toString('base64').slice(0, 24))
+    expect(tool.consequencesFor!({ kind: 'thumbnail' })).toEqual({ reversibility: 'none' })
+  })
+  it('the run: the exact picture as the file, is_preferred true, on the video\'s thumbnails edge as a Page video; no undo', async () => {
+    pageVideo()
+    h.send.mockImplementationOnce(async () => ({ node: { success: true }, readBack: 'none', waitedMs: 0 }))
+    const ran = await run(args)
+    expect(ran.ok, JSON.stringify(ran)).toBe(true)
+    expect(h.send.mock.calls[0][1]).toEqual({ objectId: VIDEO, kind: 'ownpagevideo', params: { source: PNG.toString('base64'), source_file_name: 'thumbnail.png', is_preferred: 'true' }, operation: 'media.pageVideoThumbnail', edge: 'thumbnails', timeoutMs: 120_000, skipReadBack: true })
+    expect(ran.data.steps[0]).toMatchObject({ outcome: 'done', sentence: expect.stringMatching(/Meta answered success — it is the video's preferred thumbnail now\. No undo:/) })
+    expect(ran.change.after).toMatchObject({ kind: 'thumbnail', items: [{ kind: 'thumbnail', videoId: VIDEO, pageId: PAGE, source: 'da_hero', sha256: sha(PNG) }] })
+    expect(JSON.stringify(ran)).not.toContain(PNG.toString('base64').slice(0, 24))
+    expect(tool.undo!.request({ before: ran.change.before, after: ran.change.after } as never)).toEqual({ refusal: THUMBNAIL_NO_UNDO })
+  })
+  it('refused in words before anything is sent: no Page chosen, another Page\'s video, an unreadable one, a picture that is not JPG or PNG', async () => {
+    const refused = async (words: RegExp) => { const r = await preview(args); expect(r, String(words)).toEqual({ ok: false, error: expect.stringMatching(words) }) }
+    h.chosen = { ...h.chosen, pageId: null }
+    await refused(/^Nothing was asked of Meta: this business has no Facebook Page chosen/)
+    h.chosen = { ...h.chosen, pageId: PAGE }
+    pageVideo('120000000000099')
+    await refused(/^Nothing was asked of Meta: Video 120000000000601 is not one the chosen Facebook Page posted\. Meta takes a custom thumbnail only for a video of a Page/)
+    pageVideo()
+    h.files.set('https://res.example.com/hero.png', { buffer: PNG, mimeType: 'image/webp' })
+    await refused(/image\/webp: Meta's ads take JPG or PNG images/)
+    expect(await preview({ kind: 'thumbnail' })).toEqual({ ok: false, error: expect.stringMatching(/Name the Page video and the picture/) })
+    expect(() => ask({ kind: 'thumbnail', thumbnail: { videoId: 'x', libraryImageId: 'da_hero' } })).toThrow()
+    expect(h.send).not.toHaveBeenCalled()
   })
 })

@@ -19,6 +19,8 @@ const h = vi.hoisted(() => ({
   check: vi.fn(),
   owned: vi.fn(),
   taken: new Set<string>(),
+  // Gap 46b — step 16's content-discovery look-up (live-partners.ts livePartnership), as create-meta-boost's tests stub it.
+  partners: vi.fn(),
 }))
 // Step 18's catalog rule — which portfolios another Nexus business uses (nexus_meta_links_taken PORTFOLIO): a stand-in.
 vi.mock('../../marketing/meta-ads/taken.js', () => {
@@ -37,6 +39,10 @@ vi.mock('../../marketing/meta-ads/live.js', async (importActual) => ({
 vi.mock('../../marketing/meta-ads/live-objects.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/meta-ads/live-objects.js')>()),
   listPaged: h.listPaged,
+}))
+vi.mock('../../marketing/meta-ads/live-partners.js', async (importActual) => ({
+  ...(await importActual<typeof import('../../marketing/meta-ads/live-partners.js')>()),
+  livePartnership: h.partners,
 }))
 vi.mock('../../marketing/meta-ads/read-client.js', () => ({ metaReadOne: h.read }))
 vi.mock('../../marketing/meta-ads/write-client.js', async (importActual) => ({
@@ -104,6 +110,7 @@ beforeEach(() => {
   h.check.mockReset(); h.check.mockImplementation(async () => undefined)
   h.owned.mockReset(); h.owned.mockImplementation(async (_a: unknown, id: string) => id)
   h.taken.clear()
+  h.partners.mockReset(); h.partners.mockImplementation(async () => ({ items: [] }))
 })
 
 describe('the tools', () => {
@@ -572,5 +579,103 @@ describe('step 25b — the catalog review in the tool: catalog opt-outs, product
     expect(sentJson('object_story_spec').template_data.multi_share_optimized).toBe(false)
     const byHand = await preview({ ...template, story: { template_data: { ...template.story.template_data, multi_share_optimized: true } } })
     expect(byHand.error).toMatch(/the card order is the argument carouselAutoOrder/)
+  })
+})
+
+describe('gap 46b (master CR-331) — introPost: an EXISTING post as a partnership Advantage+ catalog ad\'s intro card', () => {
+  const PORTFOLIO = '120000000000090'
+  const OUTSIDE = '120000000000082' // a business outside Nexus that shares a client catalog
+  const CATALOG = '120000000000060'
+  const CLIENT_CATALOG = '120000000000064'
+  const SET = '120000000000061'
+  const PARTNER_PAGE = '120000000000555'
+  const PARTNER_IG = '17841400000000555'
+  const MEDIA = '17900000000000001'
+  const partner = { pageId: PARTNER_PAGE, instagramId: PARTNER_IG, mainIdentity: 'brand' as const }
+  const catalog = { name: 'Catalog A', story: { template_data: { link: 'https://www.example.com/', message: '{{product.name}}', call_to_action: { type: 'SHOP_NOW' } } }, parts: { product_set_id: SET }, partner }
+  /** Meta as the catalog rule and step 10's media owner check read it. */
+  const meta = (setCatalog = CATALOG, mediaOwner = IG) => h.read.mockImplementation(async (_c: unknown, q: { path: string }) => {
+    const answers: Record<string, unknown> = {
+      act_1234567890: { id: 'act_1234567890', business: { id: PORTFOLIO } },
+      [SET]: { id: SET, product_catalog: { id: setCatalog } },
+      [CATALOG]: { id: CATALOG, business: { id: PORTFOLIO } },
+      [CLIENT_CATALOG]: { id: CLIENT_CATALOG, business: { id: OUTSIDE } },
+      [`${PORTFOLIO}/client_product_catalogs`]: { data: [{ id: CLIENT_CATALOG }] },
+      [MEDIA]: { id: MEDIA, owner: { id: mediaOwner }, media_product_type: 'FEED' },
+    }
+    return { body: answers[q.path] ?? {}, calls: 1 }
+  })
+  const lookup = (author: Record<string, unknown>, platform = 'INSTAGRAM', contentId = MEDIA) => h.partners.mockImplementation(async (input: { view: string }) => (input.view === 'lookup'
+    ? { items: [{ contentId, platform, mediaType: 'IMAGE', author, partnerships: [{ adEligibility: 'AD_READY', permissionStatus: 'APPROVED', taggedPartner: { pageId: PAGE, instagramId: IG } }] }] }
+    : { items: [] }))
+  const warnings = (p: { preview: Record<string, any> }) => p.preview.warnings.join(' ')
+
+  it('the chosen Page\'s post: sent as branded_content.parent_source_facebook_post_id beside the partner, named in the preview, Meta checks it first', async () => {
+    meta()
+    const post = `${PAGE}_500000000000001`
+    const p = await preview({ ...catalog, introPost: { source: 'facebook-post', id: post } })
+    expect(p.ok, JSON.stringify(p)).toBe(true)
+    expect(sentJson('branded_content')).toEqual({ parent_source_facebook_post_id: post })
+    expect(sentJson('facebook_branded_content')).toEqual({ sponsor_page_id: PARTNER_PAGE })
+    expect(checked().params.product_set_id).toBe(SET)
+    expect(JSON.stringify(p.preview.changes)).toContain(`post ${post} of the chosen Facebook Page`)
+    expect(warnings(p)).toMatch(/Intro card: post .* the first card of this partnership catalog ad \(branded_content\.parent_source_facebook_post_id\)/)
+    expect(warnings(p)).toMatch(/names no client catalog/)
+    expect(h.partners).not.toHaveBeenCalled()
+  })
+  it('the chosen Instagram account\'s media (step 10\'s owner check), with Meta\'s note on a video still processing', async () => {
+    meta()
+    const p = await preview({ ...catalog, introPost: { source: 'instagram-media', id: MEDIA } })
+    expect(p.ok, JSON.stringify(p)).toBe(true)
+    expect(sentJson('branded_content')).toEqual({ parent_source_instagram_media_id: MEDIA })
+    expect(warnings(p)).toMatch(/When using an Instagram post that is a video, call the \/advideos endpoint/)
+    // Another account's media is not the business's own.
+    h.check.mockClear(); meta(CATALOG, PARTNER_IG)
+    const other = await preview({ ...catalog, introPost: { source: 'instagram-media', id: MEDIA } })
+    expect(other.ok).toBe(false)
+    expect(h.check).not.toHaveBeenCalled()
+  })
+  it('the partner\'s: Meta\'s content discovery lists it for the brand, by the partner named — else refused before Meta\'s check', async () => {
+    meta(); lookup({ instagramId: PARTNER_IG, pageId: null })
+    const p = await preview({ ...catalog, introPost: { source: 'creator-instagram-media', id: MEDIA } })
+    expect(p.ok, JSON.stringify(p)).toBe(true)
+    expect(h.partners).toHaveBeenCalledWith(expect.objectContaining({ view: 'lookup', contentIds: [MEDIA] }))
+    expect(JSON.stringify(p.preview.changes)).toContain('the partner\'s Instagram media 17900000000000001 (Meta\'s content discovery lists it for the brand)')
+    const refusal = async (args: Record<string, unknown>) => { h.check.mockClear(); const r = await preview(args); expect(r.ok, JSON.stringify(r)).toBe(false); expect(h.check).not.toHaveBeenCalled(); return r.error ?? '' }
+    // By another creator than the partner named.
+    lookup({ instagramId: '17841400000000999', pageId: null })
+    expect(await refusal({ ...catalog, introPost: { source: 'creator-instagram-media', id: MEDIA } })).toMatch(/is by another account than the partner this ad names \(partner\)/)
+    // The business's own content named as the partner's: said with this tool's words.
+    lookup({ instagramId: IG, pageId: null })
+    expect(await refusal({ ...catalog, introPost: { source: 'creator-instagram-media', id: MEDIA } })).toMatch(/is the business's own: name it as introPost source facebook-post or instagram-media/)
+    // Not listed: no partnership-ad access to it.
+    h.partners.mockImplementation(async () => ({ items: [] }))
+    expect(await refusal({ ...catalog, introPost: { source: 'creator-instagram-media', id: MEDIA } })).toMatch(/content discovery does not list content 17900000000000001/)
+    // By a partner another business in Nexus uses: the masked row is refused.
+    h.partners.mockImplementation(async () => ({ items: [{ contentId: MEDIA, takenByAnotherBusiness: true }] }))
+    expect(await refusal({ ...catalog, introPost: { source: 'creator-instagram-media', id: MEDIA } })).toMatch(/another business in Nexus uses: no creative of this business shows it/)
+    // A partner's Facebook post: its Page part is the partner named.
+    lookup({ pageId: PARTNER_PAGE, instagramId: null }, 'FACEBOOK', '500000000000001')
+    const fb = await preview({ ...catalog, introPost: { source: 'creator-facebook-post', id: `${PARTNER_PAGE}_500000000000001` } })
+    expect(fb.ok, JSON.stringify(fb)).toBe(true)
+    expect(sentJson('branded_content')).toEqual({ parent_source_facebook_post_id: `${PARTNER_PAGE}_500000000000001` })
+  })
+  it('only on a partnership Advantage+ catalog creative of the business portfolio\'s OWN catalog; the parent source only through introPost', async () => {
+    meta()
+    const refusal = async (args: Record<string, unknown>) => { h.check.mockClear(); const r = await preview(args); expect(r.ok, JSON.stringify(r)).toBe(false); expect(h.check).not.toHaveBeenCalled(); return r.error ?? '' }
+    const intro = { source: 'facebook-post', id: `${PAGE}_500000000000001` }
+    expect(await refusal({ ...catalog, partner: undefined, introPost: intro })).toMatch(/goes on a partnership ad — name the partner/)
+    expect(await refusal({ ...image, partner, introPost: intro })).toMatch(/goes on an Advantage\+ catalog creative — story\.template_data with parts\.product_set_id/)
+    expect(await refusal({ name: 'From a post', postId: POST, partner, introPost: intro })).toMatch(/goes on an Advantage\+ catalog creative/)
+    expect(await refusal({ ...catalog, parts: { product_set_id: SET, branded_content: { parent_source_instagram_media_id: MEDIA } } })).toMatch(/branded_content\.parent_source_instagram_media_id is this tool's own argument \(introPost\)/)
+    // A catalog creative without its product set: the gateway's own judge says it (the tool asks it first).
+    expect(await refusal({ ...catalog, parts: {}, introPost: intro })).toMatch(/goes only on an Advantage\+ catalog creative: object_story_spec\.template_data with the creative's own product_set_id/)
+    // A client catalog (even of a business outside Nexus) with an intro card: refused; without one it keeps the read rule.
+    meta(CLIENT_CATALOG)
+    expect(await refusal({ ...catalog, introPost: intro })).toMatch(/product set 120000000000061: A partnership catalog ad with an existing post as its intro card names only a catalog the chosen ad account's business portfolio owns/)
+    const plain = await preview(catalog)
+    expect(plain.ok, JSON.stringify(plain)).toBe(true)
+    expect(() => create.input.parse({ ...catalog, introPost: { source: 'creator-instagram-media', id: '0179' } })).toThrow()
+    expect(() => create.input.parse({ ...catalog, introPost: { source: 'someone-else', id: MEDIA } })).toThrow()
   })
 })

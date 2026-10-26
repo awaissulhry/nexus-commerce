@@ -642,6 +642,114 @@ describe('C2-REBASE-18 — catalog creatives through step 18\'s ONE catalog rule
   }
 })
 
+describe('gap 46b (master CR-331) — a partnership Advantage+ catalog ad with an EXISTING post as its intro card', () => {
+  const PORTFOLIO = '120000000000090'
+  const OTHER_PORTFOLIO = '120000000000082' // a business outside Nexus that shares a client catalog
+  const CATALOG = '120000000000060'
+  const CLIENT_CATALOG = '120000000000064'
+  const SET = '120000000000061'
+  const PARTNER_PAGE = '120000000000555'
+  const PARTNER_IG = '17841400000000555'
+  const MEDIA = '17900000000000001'
+  /** Master CR-331 — the brand as main identity, the partner beside it; the catalog template and its product set. */
+  const intro = (branded: Record<string, unknown>, over: Record<string, unknown> = {}) => complete({
+    name: 'Catalog A',
+    object_story_spec: { page_id: PAGE, instagram_user_id: IG, template_data: { link: 'https://www.example.com/', message: '{{product.name}}', call_to_action: { type: 'SHOP_NOW' } } },
+    product_set_id: SET,
+    facebook_branded_content: { sponsor_page_id: PARTNER_PAGE },
+    instagram_branded_content: { sponsor_id: PARTNER_IG },
+    branded_content: branded,
+    ...over,
+  })
+  const judged = (c: Record<string, unknown>) => { const v = verdict({ body: form(c) }); return 'write' in v ? v.write : v }
+  const send = (c: Record<string, unknown>) => metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(c))) })
+  // The catalog rule's reads (as step 25b): the account's portfolio, the set's catalog, the catalog's owner.
+  const ownCatalog = () => [json({ id: ACT, business: { id: PORTFOLIO } }), json({ id: SET, product_catalog: { id: CATALOG } }), json({ id: CATALOG, business: { id: PORTFOLIO } })]
+  const discovery = (rows: Array<Record<string, unknown>>) => json({ data: rows })
+  const posts = () => h.calls.filter((c) => c.init.method === 'POST')
+
+  it('the intro card is a judged key (no refusal any more): its post goes to the gateway as `introsource`, the catalog parts as OWNED', () => {
+    const ig = judged(intro({ parent_source_instagram_media_id: MEDIA })) as { assets: unknown[]; ids: unknown[] }
+    expect(ig.assets).toEqual(expect.arrayContaining([{ id: MEDIA, kind: 'introsource', with: 'INSTAGRAM' }]))
+    expect(ig.ids).toEqual(expect.arrayContaining([{ id: SET, kind: 'productset', owned: true }]))
+    const fb = judged(intro({ parent_source_facebook_post_id: `${PARTNER_PAGE}_500000000000001`, testimonial: 'Lo uso ogni giorno' })) as { assets: unknown[] }
+    expect(fb.assets).toEqual(expect.arrayContaining([{ id: `${PARTNER_PAGE}_500000000000001`, kind: 'introsource', with: 'FACEBOOK' }]))
+    // Without an intro card nothing is owned-only (step 25b's read rule stays as it is).
+    expect((judged(intro({ testimonial: 'Lo uso ogni giorno' })) as { ids: unknown[] }).ids).toEqual(expect.arrayContaining([{ id: SET, kind: 'productset' }]))
+  })
+  it('only ONE intro card, only on a partnership Advantage+ catalog creative, only Meta ids in their own forms', () => {
+    expect(problem({ body: form(intro({ parent_source_instagram_media_id: MEDIA, parent_source_facebook_post_id: `${PAGE}_500000000000001` })) })).toMatch(/ONE existing post as its intro card/)
+    // A link creative (no template, no product set) with a partner: no intro card.
+    const link = creative({ facebook_branded_content: { sponsor_page_id: PARTNER_PAGE }, branded_content: { parent_source_instagram_media_id: MEDIA } })
+    expect(problem({ body: form(link) })).toMatch(/goes only on an Advantage\+ catalog creative: object_story_spec\.template_data with the creative's own product_set_id/)
+    // A catalog creative with no partner: no intro card.
+    const alone = intro({ parent_source_instagram_media_id: MEDIA })
+    delete alone.facebook_branded_content
+    delete alone.instagram_branded_content
+    expect(problem({ body: form(alone) })).toMatch(/goes only on a partnership ad: the creative names its partner/)
+    for (const [key, value] of [['parent_source_instagram_media_id', '0179'], ['parent_source_instagram_media_id', 'abc'], ['parent_source_facebook_post_id', '500000000000001'], ['parent_source_facebook_post_id', `0${PAGE}_500000000000001`]]) {
+      expect(problem({ body: form(intro({ [key]: value })) }), `${key}=${value}`).toMatch(/is an Instagram media id|is a Facebook post id/)
+    }
+  })
+  it('the business\'s own post or media: the chosen Page\'s post by its id, the chosen Instagram account\'s media by Meta\'s owner — then it goes', async () => {
+    h.answers.push(...ownCatalog(), json({ id: '120000000000301' }))
+    await send(intro({ parent_source_facebook_post_id: `${PAGE}_500000000000001` }))
+    expect(posts()).toHaveLength(1)
+    expect(new URLSearchParams(sent(h.calls.length - 1).body!).get('branded_content')).toBe(JSON.stringify({ parent_source_facebook_post_id: `${PAGE}_500000000000001` }))
+    h.calls = []
+    h.answers.push(...ownCatalog(), json({ id: MEDIA, owner: { id: IG } }), json({ id: '120000000000302' }))
+    await send(intro({ parent_source_instagram_media_id: MEDIA }))
+    expect(posts()).toHaveLength(1)
+    expect(h.calls.some((c) => new URL(c.url).pathname.endsWith('/partnership-ads-advertisable-content'))).toBe(false)
+  })
+  it('a partner\'s: Meta\'s content discovery lists it for the brand, by the partner THIS creative names — else nothing is sent', async () => {
+    // Listed, by the partner named: it goes.
+    h.answers.push(...ownCatalog(), json({ id: MEDIA, owner: { id: PARTNER_IG } }), discovery([{ content_id: MEDIA, platform: 'INSTAGRAM', author: { ig_user_id: PARTNER_IG } }]), json({ id: '120000000000303' }))
+    await send(intro({ parent_source_instagram_media_id: MEDIA }))
+    expect(posts()).toHaveLength(1)
+    const asked = h.calls.find((c) => new URL(c.url).pathname.endsWith('/partnership-ads-advertisable-content'))!
+    expect(new URL(asked.url).searchParams.get('content_ids')).toBe(JSON.stringify([MEDIA]))
+    // Listed, but by another creator than the partner named: refused.
+    h.calls = []
+    h.answers.push(...ownCatalog(), json({ id: MEDIA, owner: { id: '17841400000000999' } }), discovery([{ content_id: MEDIA, platform: 'INSTAGRAM', author: { ig_user_id: '17841400000000999' } }]))
+    await expect(send(intro({ parent_source_instagram_media_id: MEDIA }))).rejects.toThrow(/intro card 17900000000000001 is by another account than the partner this creative names/)
+    expect(posts()).toHaveLength(0)
+    // Not listed (no partnership-ad access to it): refused.
+    h.calls = []
+    h.answers.push(...ownCatalog(), json({ id: MEDIA, owner: { id: PARTNER_IG } }), discovery([]))
+    await expect(send(intro({ parent_source_instagram_media_id: MEDIA }))).rejects.toThrow(/content discovery does not list content 17900000000000001/)
+    expect(posts()).toHaveLength(0)
+    // By a partner another Nexus business uses: refused (step 26's check; the partner is refused as an identity first).
+    h.calls = []
+    gatewayMetaTakenLinks.add(`INSTAGRAM:${PARTNER_IG}`)
+    h.answers.push(...ownCatalog())
+    await expect(send(intro({ parent_source_instagram_media_id: MEDIA }))).rejects.toThrow(/another business in Nexus uses/)
+    expect(posts()).toHaveLength(0)
+    gatewayMetaTakenLinks.clear()
+    // A partner's Facebook post: its Page part is the partner's, content discovery lists it (by its post id alone).
+    h.calls = []
+    h.answers.push(...ownCatalog(), discovery([{ content_id: '500000000000001', platform: 'FACEBOOK', author: { fb_page_id: PARTNER_PAGE } }]), json({ id: '120000000000304' }))
+    await send(intro({ parent_source_facebook_post_id: `${PARTNER_PAGE}_500000000000001` }))
+    expect(posts()).toHaveLength(1)
+    // Instagram content named as a Facebook post (or the other way round): refused.
+    h.calls = []
+    h.answers.push(...ownCatalog(), discovery([{ content_id: '500000000000001', platform: 'INSTAGRAM', author: { ig_user_id: PARTNER_IG } }]))
+    await expect(send(intro({ parent_source_facebook_post_id: `${PARTNER_PAGE}_500000000000001` }))).rejects.toThrow(/is Instagram content, not Facebook/)
+    expect(posts()).toHaveLength(0)
+  })
+  it('the catalog must be the business portfolio\'s OWN: a client catalog (even of no Nexus business) is refused with an intro card, and passes without', async () => {
+    const client = () => [json({ id: ACT, business: { id: PORTFOLIO } }), json({ id: SET, product_catalog: { id: CLIENT_CATALOG } }), json({ id: CLIENT_CATALOG, business: { id: OTHER_PORTFOLIO } }), json({ data: [{ id: CLIENT_CATALOG }] })]
+    h.answers.push(...client())
+    await expect(send(intro({ parent_source_facebook_post_id: `${PAGE}_500000000000001` }))).rejects.toThrow(/names only a catalog the chosen ad account's business portfolio owns; this one is a client catalog/)
+    expect(posts()).toHaveLength(0)
+    // The same creative without its intro card keeps step 18's read rule (a client catalog of no Nexus business passes).
+    h.calls = []
+    h.answers.push(...client(), json({ id: '120000000000305' }))
+    await send(intro({ testimonial: 'Lo uso ogni giorno' }))
+    expect(posts()).toHaveLength(1)
+  })
+})
+
 describe('step 25b — the catalog review: every catalog part a marker, product extensions, the read budget, template cards, wording', () => {
   const SET = '120000000000061'
   const ITEM = '120000000000071'

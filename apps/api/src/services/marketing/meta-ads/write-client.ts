@@ -98,6 +98,8 @@ export interface MetaObjectChange {
     | MetaMessagingKind
     // Step 43 — the chosen Page / Instagram account a backed account is made for.
     | MetaBusinessAssetKind
+    // Gap 46b (MD-024) — a video the chosen Page posted, its thumbnail made as the Page.
+    | 'ownpagevideo'
   params: Record<string, string>
   operation: string
   budget?: boolean

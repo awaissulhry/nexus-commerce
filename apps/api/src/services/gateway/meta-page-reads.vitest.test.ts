@@ -34,6 +34,8 @@ import { metaCall, metaWriteCall } from './meta.js'
 import { metaCallVerdict } from './meta-calls.js'
 import { META_PAGE_READ_RULES, META_THREAD_ID, metaPageReadOf, metaWhatsAppRead, topLevelFieldItems } from './meta-page-reads.js'
 import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
+import { META_IX_TEMPLATE_IDS, META_IX_TEMPLATE_READ } from '../meta/meta-media-lists.js'
+import { META_IX_TEMPLATE_IDS as CANVAS_TEMPLATE_IDS } from './meta-canvas-rules.js'
 
 const BASE = `https://graph.facebook.com/${META_DEFAULT_GRAPH_API_VERSION}`
 const PAGE = '120000000000010'
@@ -91,7 +93,8 @@ describe('the allow-list: which reads go with the Page\'s token', () => {
     // Step 38 (review B-F5) — the creator lookup on the chosen Instagram account (its id in instagramId, the Page's token).
     expect(verdict('170000000000010/creator_marketplace_creators?username=creator.a&fields=id,page_id,messaging_id')).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: null, instagramId: '170000000000010' } })
     expect(verdict('170000000000010/creator_marketplace_creators?username=creator.a&fields=id,username').pageRead).toBeUndefined()
-    expect(META_PAGE_READ_RULES).toHaveLength(24)
+    // Gap 46b — and the one read of Meta's Instant Experience templates (its own describe below).
+    expect(META_PAGE_READ_RULES).toHaveLength(25)
   })
   it('every other read stays a system-user read: the Page node, its other edges, a WhatsApp account, an ad account, a post', () => {
     for (const path of [
@@ -229,6 +232,44 @@ describe('live-probe fixes — the chosen Page\'s posts, insights and Instant Ex
   })
   it('no visitor_posts: Meta does not answer it on the New Pages Experience, so the gateway no longer carries its keys (EN-926)', () => {
     expect(verdict(`${PAGE}/visitor_posts?fields=id&include_hidden=true`).problem).toMatch(/"include_hidden" is not one a Nexus read of Meta uses here/)
+  })
+})
+
+describe('gap 46b (CR-489) — Meta\'s Instant Experience templates go with the chosen Page\'s token, on ONE exact read', () => {
+  const TEMPLATE = '133471657203838'
+  const fields = (f: string) => `fields=${encodeURIComponent(f)}`
+  it('each of the five template nodes, read exactly so, is a Page-token read of the CHOSEN Page (no Page in its path)', () => {
+    expect(META_IX_TEMPLATE_IDS).toHaveLength(5)
+    expect([...CANVAS_TEMPLATE_IDS]).toEqual([...META_IX_TEMPLATE_IDS])
+    for (const id of META_IX_TEMPLATE_IDS) expect(verdict(`${id}?${fields(META_IX_TEMPLATE_READ)}`), id).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: null } })
+    // A subset of its items is the same read; each item exactly as written.
+    expect(verdict(`${TEMPLATE}?fields=id`)).toMatchObject({ problem: null, pageRead: { pageId: null } })
+  })
+  it('on a template node: only fields, only its items (the document expanded exactly so), each once; no token asked', () => {
+    for (const f of ['id,document', 'id,document{id,body_elements}', 'id,document{id,name,body_elements,owner}', 'id,name,document{id,name,body_elements}', 'id,document{id,name,body_elements},id', 'id,snapshot_photo']) {
+      expect(verdict(`${TEMPLATE}?${fields(f)}`).problem, f).toMatch(/Meta's Instant Experience templates are read with fields from/)
+    }
+    expect(verdict(`${TEMPLATE}?${fields(META_IX_TEMPLATE_READ)}&limit=5`).problem).toBeTruthy()
+    expect(verdict(`${TEMPLATE}?${fields(META_IX_TEMPLATE_READ)}`, 'page').problem).toMatch(/a caller asks for no token/)
+  })
+  it('no other node takes the rule: a document id, a template-like id, a Page, a canvas are not template reads', () => {
+    for (const id of ['397246414010297', '1334716572038380', '33471657203838', PAGE]) {
+      expect(metaPageReadOf(id, [id], new URLSearchParams({ fields: META_IX_TEMPLATE_READ }), undefined), id).toBeNull()
+    }
+    // A conversation's rule shares the route's shape only for Meta's thread ids (META_THREAD_ID): a template id is none.
+    expect(META_PAGE_READ_RULES.filter((r) => r.route.test(TEMPLATE) && (r.page !== 'thread' || META_THREAD_ID.test(TEMPLATE))).map((r) => r.what)).toEqual(['Meta\'s Instant Experience templates'])
+  })
+  it('through the gateway: with the chosen Page\'s own token (read first with the system-user token); no Page chosen: nothing read or sent', async () => {
+    gatewayMetaPage['m-1'] = PAGE
+    h.answers.push(pageToken, json({ id: TEMPLATE, document: { id: '397000000000001', name: 'Get New Customers', body_elements: [] } }))
+    const read = await metaCall({ connectionId: 'm-1', operation: 'ix.template', path: TEMPLATE, query: { fields: META_IX_TEMPLATE_READ } })
+    expect(read.ok).toBe(true)
+    expect([new URL(h.calls[1].url).pathname, new URL(h.calls[1].url).searchParams.get('fields'), tokenOf(1)]).toEqual([`/${META_DEFAULT_GRAPH_API_VERSION}/${TEMPLATE}`, META_IX_TEMPLATE_READ, PAGE_TOKEN])
+    expect(read.text).not.toContain(PAGE_TOKEN)
+    expect(JSON.stringify(gatewayLedger)).not.toContain(PAGE_TOKEN)
+    h.calls = []
+    await expect(metaCall({ connectionId: 'm-2', operation: 'ix.template', path: TEMPLATE, query: { fields: META_IX_TEMPLATE_READ } })).rejects.toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
+    expect(h.calls).toHaveLength(0)
   })
 })
 

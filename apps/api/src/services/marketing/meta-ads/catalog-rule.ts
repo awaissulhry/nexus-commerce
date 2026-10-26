@@ -628,25 +628,35 @@ export interface CatalogRuleMemo {
 }
 export const newCatalogRuleMemo = (): CatalogRuleMemo => ({ portfolios: new Map(), catalogs: new Map(), verdicts: new Map() })
 
-export async function metaCatalogProblem(target: CatalogRuleTarget, ids: { catalogId?: string | null; productSetId?: string | null; productItemId?: string | null }, memo?: CatalogRuleMemo): Promise<string | null> {
+export async function metaCatalogProblem(target: CatalogRuleTarget, ids: { catalogId?: string | null; productSetId?: string | null; productItemId?: string | null; owned?: boolean }, memo?: CatalogRuleMemo): Promise<string | null> {
   if (!ids.catalogId && !ids.productSetId && !ids.productItemId) return null
   if (!memo) return catalogProblemOnce(target, ids)
-  const key = `${target.connectionId}|${target.adAccountId}|${ids.catalogId ?? ''}|${ids.productSetId ?? ''}|${ids.productItemId ?? ''}`
+  const key = `${target.connectionId}|${target.adAccountId}|${ids.catalogId ?? ''}|${ids.productSetId ?? ''}|${ids.productItemId ?? ''}|${ids.owned ? 'owned' : ''}`
   let verdict = memo.verdicts.get(key)
   if (!verdict) { verdict = catalogProblemOnce(target, ids, memo); memo.verdicts.set(key, verdict) }
   return verdict
 }
 
-async function catalogProblemOnce(target: CatalogRuleTarget, ids: { catalogId?: string | null; productSetId?: string | null; productItemId?: string | null }, memo?: CatalogRuleMemo): Promise<string | null> {
+/**
+ * Gap 46b (master CR-331) — a partnership Advantage+ catalog ad with an existing post as its intro card shows a partner
+ * beside the business's catalog: its catalog must be the business's OWN (owned by the chosen ad account's portfolio), never
+ * a client catalog another business shared (`owned`). Every other change keeps the read rule.
+ */
+export const CATALOG_NOT_OWNED_FOR_PARTNERSHIP = 'A partnership catalog ad with an existing post as its intro card names only a catalog the chosen ad account\'s business portfolio owns; this one is a client catalog another business shared with it.'
+
+async function catalogProblemOnce(target: CatalogRuleTarget, ids: { catalogId?: string | null; productSetId?: string | null; productItemId?: string | null; owned?: boolean }, memo?: CatalogRuleMemo): Promise<string | null> {
   try {
     const portfolioOf = () => metaReadOne({ connectionId: target.connectionId }, { operation: 'catalogRule.portfolio', path: `act_${target.adAccountId}`, query: { fields: 'business{id}' } }).then((read) => idIn(read.body, 'business'))
     const accountKey = `${target.connectionId}|${target.adAccountId}`
     let portfolio = memo?.portfolios.get(accountKey)
     if (!portfolio) { portfolio = portfolioOf(); memo?.portfolios.set(accountKey, portfolio) }
     const account: CatalogAccount = { connectionId: target.connectionId, businessId: await portfolio, ...(memo ? { catalogs: memo.catalogs } : {}) }
-    if (ids.productSetId) await catalogChild(account, { kind: 'product_set', id: ids.productSetId, catalogId: ids.catalogId ?? null })
-    if (ids.productItemId) await catalogChild(account, { kind: 'item', id: ids.productItemId, catalogId: ids.catalogId ?? null })
-    if (!ids.productSetId && !ids.productItemId) await readableCatalog(account, ids.catalogId!)
+    const found: ReadableCatalog[] = []
+    if (ids.productSetId) found.push((await catalogChild(account, { kind: 'product_set', id: ids.productSetId, catalogId: ids.catalogId ?? null })).catalog)
+    if (ids.productItemId) found.push((await catalogChild(account, { kind: 'item', id: ids.productItemId, catalogId: ids.catalogId ?? null })).catalog)
+    if (!ids.productSetId && !ids.productItemId) found.push(await readableCatalog(account, ids.catalogId!))
+    // Gap 46b — owned only: the portfolio's own catalog (catalogChild / readableCatalog name the relation).
+    if (ids.owned && found.some((c) => c.relation !== 'owned')) return `${CATALOG_NOT_OWNED_FOR_PARTNERSHIP} Nothing is sent.`
     return null
   } catch (err) {
     // A refusal of the read rule is said in its own words; a lookup that fails (Meta's refusal, a lost connection, the

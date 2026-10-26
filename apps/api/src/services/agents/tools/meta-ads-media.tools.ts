@@ -341,8 +341,9 @@ const metaInstantExperiences: AgentTool = {
     + 'elements: the parts made on the Page. template: which parts one of Meta\'s templates takes (get-new-customers, '
     + 'showcase-your-business, sell-products-without-catalog, sell-products-lifestyle, sell-products-grid; the AR template '
     + 'is Ads Manager only). meta-ad-preview view instant-experience shows one. create-meta-instant-experience makes one '
-    + '(always unpublished); set-meta-instant-experience edits, publishes or hides it. The list goes with the chosen Page\'s own token (Meta answers it to no other). Meta refuses the '
-    + 'template read to the business\'s token (insufficient permissions): the answer then says so. Read only.',
+    + '(always unpublished); set-meta-instant-experience edits, publishes or hides it. The list goes with the chosen Page\'s own token (Meta answers it to no other). '
+    + 'So does the template read (Meta refused it to the business\'s token: insufficient permissions); if Meta refuses it to '
+    + 'the Page\'s token too, the answer says so. Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveInstantExperiences({
       connectionId: str(args.connectionId),

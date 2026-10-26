@@ -34,7 +34,7 @@ import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, 
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaPersonalScrub, metaReadSecrets, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaBoostWriteKind, type MetaEventsKind, type MetaJudgedWrite, type MetaLabelsKind, type MetaMediaWriteKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWriteBodyId } from './meta-calls.js'
-import { metaRestFileExportOf, type MetaBrandSafetyKind, type MetaCommentKind, type MetaPageKind, type MetaTargetingKind, type MetaWebhookKind, type MetaWriteKind } from './meta-calls.js'
+import { metaRestFileExportOf, type MetaBrandSafetyKind, type MetaCommentKind, type MetaPageKind, type MetaTargetingKind, type MetaWebhookKind, type MetaWriteAsset, type MetaWriteKind } from './meta-calls.js'
 import { META_MEDIA_LIST_MAX, metaMultipartBody, metaRuploadSendUrl, metaStartedVideoOf, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
 import { metaBrandSafetyOwnerProblem, metaExportOwnerProblem, metaTargetingOwnerProblem, noteBlockListDraftMade, type MetaCheckRead } from './meta-brand-safety-owner.js'
 import { META_BRAND_SAFETY_WRITE_RULES } from './meta-brand-safety-rules.js'
@@ -1185,7 +1185,9 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
       if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection.' }
       const { metaCatalogProblem, newCatalogRuleMemo } = await import('../marketing/meta-ads/catalog-rule.js')
       catalogMemo ??= newCatalogRuleMemo()
-      const problem = await metaCatalogProblem({ connectionId, adAccountId: chosen }, inner.kind === 'catalog' ? { catalogId: inner.id } : inner.kind === 'productset' ? { productSetId: inner.id } : { productItemId: inner.id }, catalogMemo)
+      // Gap 46b (master CR-331) — a partnership catalog ad's intro card: its product sets and items of an OWNED catalog only.
+      const owned = inner.owned === true ? { owned: true } : {}
+      const problem = await metaCatalogProblem({ connectionId, adAccountId: chosen }, inner.kind === 'catalog' ? { catalogId: inner.id, ...owned } : inner.kind === 'productset' ? { productSetId: inner.id, ...owned } : { productItemId: inner.id, ...owned }, catalogMemo)
       if (problem) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: inside this change, ${problem}` }
       continue
     }
@@ -1539,6 +1541,13 @@ async function metaMediaAssetsProblem(connectionId: string, write: MetaJudgedWri
       if (problem) return problem
       continue
     }
+    // Gap 46b (master CR-331) — a partnership catalog ad's intro card: the business's own post or media, else a partner's.
+    if (asset.kind === 'introsource') {
+      boost ??= { pageId: await metaChosenPageOf(connectionId), instagramId: await metaChosenInstagramOf(connectionId), portfolioId: await metaChosenPortfolioOf(connectionId) }
+      const problem = await metaIntroCardProblem(connectionId, boost, asset, write.assets)
+      if (problem) return problem
+      continue
+    }
     if (asset.kind === 'startedvideo') {
       if (!chosen || metaVideoStartedOn(connectionId, asset.id) !== chosen) return notChosenMedia(`inside this change, video ${asset.id} is not an upload Nexus started on the chosen ad account through this connection.`)
       continue
@@ -1676,24 +1685,8 @@ async function metaBoostAssetProblem(
   switch (asset.kind) {
     case 'partnercontent':
     case 'adcode': {
-      const code = asset.kind === 'adcode'
-      const what = code ? 'the creator\'s ad code' : `content ${asset.id}`
-      if (!mine.portfolioId || (!page && !ig)) return notChosenMedia(`${where}Nexus cannot ask Meta's content discovery about ${what}: the chosen ad account names no business portfolio, or no Page or Instagram account is chosen.`)
-      const rows = await metaAdvertisableContent(connectionId, mine.portfolioId, page, ig, code ? 'ad_codes' : 'content_ids', asset.id)
-      if (!rows) return notChosenMedia(`${where}Nexus could not ask Meta's content discovery about ${what}, so nothing is sent.`)
-      // A Facebook post may come back as its post id alone (content discovery names "Facebook post ID").
-      const row = code ? (rows.length === 1 ? rows[0] : null) : rows.find((r) => r.contentId === asset.id || (asset.id.includes('_') && r.contentId === asset.id.split('_')[1])) ?? null
-      if (!row) return notChosenMedia(`${where}Meta's content discovery does not list ${what} as content the chosen Page or Instagram account may advertise.`)
-      if (code && asset.with && /^\d+$/.test(asset.with) && row.contentId !== asset.with) return notChosenMedia(`${where}the creator's ad code unlocks other content than media ${asset.with}.`)
-      if (code && asset.with && /^(INSTAGRAM|FACEBOOK)$/.test(asset.with) && row.platform && row.platform !== asset.with) return notChosenMedia(`${where}the creator's ad code is for ${row.platform === 'INSTAGRAM' ? 'Instagram' : 'Facebook'} content, not ${asset.with === 'INSTAGRAM' ? 'Instagram' : 'Facebook'}.`)
-      const postPage = !code && /^\d+_\d+$/.test(asset.id) ? asset.id.split('_')[0] : null
-      const pages = [row.authorPage, postPage].filter((v): v is string => !!v)
-      const igs = [row.authorInstagram].filter((v): v is string => !!v)
-      if (!pages.length && !igs.length) return notChosenMedia(`${where}Meta's content discovery names no author for ${what}, so Nexus cannot confirm whose it is.`)
-      if ((page && pages.includes(page)) || (ig && igs.includes(ig))) return notChosenMedia(`${where}${what} is the business's own: a partnership boost is a creator's content (boost the business's own post as such).`)
-      for (const p of pages) if (await metaLinkTaken('PAGE', p)) return notChosenMedia(`${where}${what} is by a Page another business in Nexus uses, so no creative of this business boosts it.`)
-      for (const i of igs) if (await metaLinkTaken('INSTAGRAM', i)) return notChosenMedia(`${where}${what} is by an Instagram account another business in Nexus uses, so no creative of this business boosts it.`)
-      return null
+      const found = await metaPartnerContentCheck(connectionId, mine, asset, where)
+      return 'problem' in found ? found.problem : null
     }
     case 'igpermalink': {
       if (!ig) return notChosenMedia('this business has no Instagram account chosen, so no Instagram post link is run as its ad.')
@@ -1723,6 +1716,85 @@ async function metaBoostAssetProblem(
     }
   }
   return notChosenMedia(`${where}${asset.kind === 'adcode' ? 'the ad code' : asset.id} is not an id Nexus can confirm.`)
+}
+
+/**
+ * Step 26 — a creator's content (`partnercontent`) or ad code (`adcode`) as Meta's content discovery lists it for the brand
+ * (one live read): listed, of the platform or media its ad code must unlock, by a named author that is neither the chosen
+ * Page or Instagram account nor one another Nexus business chose (a Facebook post's own Page part too). The authors when it
+ * passes (gap 46b: an intro card's author must be a partner its creative names); else why not (the code never quoted).
+ */
+async function metaPartnerContentCheck(
+  connectionId: string,
+  mine: { pageId: string | null; instagramId: string | null; portfolioId: string | null },
+  asset: { id: string; kind: string; with?: string },
+  where: string,
+): Promise<{ problem: { code: string; sentence: string } } | { platform: string | null; pages: string[]; igs: string[] }> {
+  const page = mine.pageId
+  const ig = mine.instagramId
+  const fail = (sentence: string) => ({ problem: notChosenMedia(sentence) })
+  const code = asset.kind === 'adcode'
+  const what = code ? 'the creator\'s ad code' : `content ${asset.id}`
+  if (!mine.portfolioId || (!page && !ig)) return fail(`${where}Nexus cannot ask Meta's content discovery about ${what}: the chosen ad account names no business portfolio, or no Page or Instagram account is chosen.`)
+  const rows = await metaAdvertisableContent(connectionId, mine.portfolioId, page, ig, code ? 'ad_codes' : 'content_ids', asset.id)
+  if (!rows) return fail(`${where}Nexus could not ask Meta's content discovery about ${what}, so nothing is sent.`)
+  // A Facebook post may come back as its post id alone (content discovery names "Facebook post ID").
+  const row = code ? (rows.length === 1 ? rows[0] : null) : rows.find((r) => r.contentId === asset.id || (asset.id.includes('_') && r.contentId === asset.id.split('_')[1])) ?? null
+  if (!row) return fail(`${where}Meta's content discovery does not list ${what} as content the chosen Page or Instagram account may advertise.`)
+  if (code && asset.with && /^\d+$/.test(asset.with) && row.contentId !== asset.with) return fail(`${where}the creator's ad code unlocks other content than media ${asset.with}.`)
+  if (code && asset.with && /^(INSTAGRAM|FACEBOOK)$/.test(asset.with) && row.platform && row.platform !== asset.with) return fail(`${where}the creator's ad code is for ${row.platform === 'INSTAGRAM' ? 'Instagram' : 'Facebook'} content, not ${asset.with === 'INSTAGRAM' ? 'Instagram' : 'Facebook'}.`)
+  const postPage = !code && /^\d+_\d+$/.test(asset.id) ? asset.id.split('_')[0] : null
+  const pages = [row.authorPage, postPage].filter((v): v is string => !!v)
+  const igs = [row.authorInstagram].filter((v): v is string => !!v)
+  if (!pages.length && !igs.length) return fail(`${where}Meta's content discovery names no author for ${what}, so Nexus cannot confirm whose it is.`)
+  if ((page && pages.includes(page)) || (ig && igs.includes(ig))) return fail(`${where}${what} is the business's own: a partnership boost is a creator's content (boost the business's own post as such).`)
+  for (const p of pages) if (await metaLinkTaken('PAGE', p)) return fail(`${where}${what} is by a Page another business in Nexus uses, so no creative of this business boosts it.`)
+  for (const i of igs) if (await metaLinkTaken('INSTAGRAM', i)) return fail(`${where}${what} is by an Instagram account another business in Nexus uses, so no creative of this business boosts it.`)
+  return { platform: row.platform, pages, igs }
+}
+
+/**
+ * Gap 46b (master CR-331) — the existing post a partnership Advantage+ catalog ad shows as its intro card (`introsource`,
+ * meta-creative-rules.ts; `with` its platform), before anything is sent:
+ *   - the business's OWN: a post of the chosen Page (`<chosen Page id>_<post id>`, step 25's pagepost rule) or a media of the
+ *     chosen Instagram account (step 23's rule, metaInstagramMediaOwned: Meta's owner, else its username read live); or
+ *   - a PARTNER's: step 26's check of a creator's content (metaPartnerContentCheck: Meta's content discovery lists it for the
+ *     brand — so the business already has partnership-ad access to it — by an author that is not the business itself and
+ *     no other Nexus business), of the platform named, AND by one of the partners this creative names (the sponsor beside the
+ *     chosen identity, or the identity beside the chosen sponsor: its identitypage / identityinstagram / partnerpage /
+ *     partnerinstagram assets, which metaCreativeAssetProblem checks as no other Nexus business's).
+ * Anything else, or anything Nexus cannot confirm: nothing is sent.
+ */
+async function metaIntroCardProblem(
+  connectionId: string,
+  mine: { pageId: string | null; instagramId: string | null; portfolioId: string | null },
+  asset: { id: string; kind: string; with?: string },
+  assets: readonly MetaWriteAsset[],
+): Promise<{ code: string; sentence: string } | null> {
+  const where = 'inside this creative, '
+  const platform = asset.with === 'INSTAGRAM' || asset.with === 'FACEBOOK' ? asset.with : null
+  if (!platform) return notChosenMedia(`${where}the intro card ${asset.id} names no platform Nexus checks.`)
+  if (platform === 'FACEBOOK') {
+    const post = /^([1-9]\d{0,24})_[1-9]\d{0,24}$/.exec(asset.id)
+    if (!post) return notChosenMedia(`${where}the intro card ${asset.id} is not a Facebook post id (<Page id>_<post id>).`)
+    if (mine.pageId && post[1] === mine.pageId) return null
+  } else {
+    if (!/^[1-9]\d{0,24}$/.test(asset.id)) return notChosenMedia(`${where}the intro card ${asset.id} is not an Instagram media id.`)
+    if (mine.instagramId && await metaInstagramMediaOwned(connectionId, asset.id, mine.instagramId)) return null
+  }
+  // Not the business's own: a partner's, named by this creative.
+  const chosen = new Set([mine.pageId, mine.instagramId].filter((v): v is string => !!v))
+  const partners = new Set<string>()
+  for (const a of assets) {
+    if (a.kind === 'partnerpage' || a.kind === 'partnerinstagram') partners.add(a.id)
+    if (a.kind === 'identitypage' || a.kind === 'identityinstagram') for (const id of [a.id, a.with]) if (id && !chosen.has(id)) partners.add(id)
+  }
+  if (!partners.size) return notChosenMedia(`${where}the intro card ${asset.id} is not the chosen ${platform === 'FACEBOOK' ? 'Page\'s post' : 'Instagram account\'s media'} Nexus can confirm, and the creative names no partner whose it could be.`)
+  const found = await metaPartnerContentCheck(connectionId, mine, { id: asset.id, kind: 'partnercontent' }, where)
+  if ('problem' in found) return found.problem
+  if (found.platform && found.platform !== platform) return notChosenMedia(`${where}the intro card ${asset.id} is ${found.platform === 'INSTAGRAM' ? 'Instagram' : 'Facebook'} content, not ${platform === 'INSTAGRAM' ? 'Instagram' : 'Facebook'}.`)
+  if (![...found.pages, ...found.igs].some((id) => partners.has(id))) return notChosenMedia(`${where}the intro card ${asset.id} is by another account than the partner this creative names: a partnership catalog ad shows the business's own post or its partner's.`)
+  return null
 }
 
 /**

@@ -54,10 +54,20 @@
  *     with its token (MetaPageRead.otherPages: gateway.ts decides once it knows the chosen Page);
  *   - `<id>/insights` is the Page's only when every metric is one of Nexus's Page metrics (a campaign's or an Instagram
  *     account's insights name none of them: ordinary reads, unchanged), and `<page>_<post>/insights` only with post metrics.
+ *
+ * Gap 46b (master CR-489) — Meta's own Instant Experience TEMPLATES (2026-10-26): Meta answered the template read (#4701
+ * "Insufficient permissions to access this data") to the system-user token (LIVE-PROBES CR-489); every other Instant
+ * Experience read needs the Page's own token (page/canvases "A Page access token"; live #190, CR-490), and Meta's guide
+ * (documentation/ads-commerce/marketing-api/guides/instant-experiences.md, "Get element types for a template") shows the read
+ * with an unnamed access token. So ONE read goes with the CHOSEN Page's token (`page: 'meta'`): only the five template
+ * nodes the guide names (META_IX_TEMPLATE_IDS, each exactly), only `fields`, and only META_IX_TEMPLATE_READ — the guide's
+ * two reads as one field expansion of the template's `document` (a Canvas, SDK canvastemplate.py), so the token never
+ * reaches an id Nexus did not name. No Page is in the path: it goes with the chosen Page's token, and with no Page chosen it
+ * is refused (gateway.ts). LIVE-PROBES CR-489b settles whether Meta answers it so.
  * A leaf module (it imports only the fixed metric lists, services/meta/meta-media-lists.ts, a leaf too), so meta-calls.ts
  * takes it without an import cycle.
  */
-import { PAGE_BREAKDOWNS, PAGE_METRICS, PAGE_PERIODS, POST_METRICS } from '../meta/meta-media-lists.js'
+import { META_IX_TEMPLATE_IDS, META_IX_TEMPLATE_READ, PAGE_BREAKDOWNS, PAGE_METRICS, PAGE_PERIODS, POST_METRICS } from '../meta/meta-media-lists.js'
 
 /** What the gateway does with a read on one of these routes: the chosen Page's token, for this Page (null: a conversation). */
 export interface MetaPageRead {
@@ -85,9 +95,10 @@ interface PageReadRule {
   /**
    * `path`: the Page is the route's first segment; `thread`: a conversation's own node or edge (the chosen Page's token);
    * `post`: a post's edge, `<page id>_<post id>/…` — the Page is the post id's first part; `instagram` (step 38): the route's
-   * first segment is the chosen Instagram account, read with the chosen Page's token.
+   * first segment is the chosen Instagram account, read with the chosen Page's token; `meta` (gap 46b): one of Meta's OWN
+   * nodes, named exactly by the route (an Instant Experience template), read with the chosen Page's token.
    */
-  page: 'path' | 'thread' | 'post' | 'instagram'
+  page: 'path' | 'thread' | 'post' | 'instagram' | 'meta'
   /** message_templates only: a read that is not Page-shaped is a WhatsApp account's (an ordinary read). */
   pageShapedOnly?: true
   /** Probe fixes — exactly the values these keys may carry here (limit and after keep their own checks below). */
@@ -131,6 +142,9 @@ const BOOL = /^(true|false)$/
 const DAY = /^\d{4}-\d{2}-\d{2}$/
 const oneOf = (values: readonly string[]) => new RegExp(`^(${values.join('|')})$`)
 const INSIGHT_VALUES = { period: oneOf(PAGE_PERIODS), since: DAY, until: DAY, breakdown: oneOf(PAGE_BREAKDOWNS) }
+/** Gap 46b (CR-489) — exactly Meta's five template nodes, and the one read of their parts (its top-level items). */
+const IX_TEMPLATE_ROUTE = oneOf(META_IX_TEMPLATE_IDS)
+const IX_TEMPLATE_FIELDS = new Set(topLevelFieldItems(META_IX_TEMPLATE_READ) ?? [])
 
 /**
  * The routes, their keys and their fields. Fields: the conversations guide and reference (id, updated_time, participants,
@@ -216,6 +230,9 @@ export const META_PAGE_READ_RULES: readonly PageReadRule[] = [
     route: /^\d+\/creator_marketplace_creators$/, what: 'a creator\'s messaging id', page: 'instagram', pageShapedOnly: true,
     keys: set('username', 'fields'), values: { username: /^[A-Za-z0-9._]{1,30}$/ }, fields: set('id', 'page_id', 'messaging_id'),
   },
+  // Gap 46b (master CR-489) — which parts one of Meta's Instant Experience templates takes (meta-instant-experiences view
+  // template): only the five template nodes, only `fields`, only the template's id and its document's id, name and parts.
+  { route: IX_TEMPLATE_ROUTE, what: 'Meta\'s Instant Experience templates', page: 'meta', keys: set('fields'), fields: IX_TEMPLATE_FIELDS },
 ]
 
 /** Probe fix IN-092 — the metric names of an insights read (Meta's comma list), or [] when it names none. */
@@ -262,7 +279,8 @@ export function metaPageReadOf(route: string, segments: readonly string[], searc
   // A post's Page is its id's first part. Review of #771 — a `<chosen Page>_<id>` whose second part is no post of that Page
   // still goes only with the chosen Page's own token, read only: Meta resolves the id itself and answers only what that
   // token may see, so no other Page's data is reachable (checking the post first would cost a Meta read on every call).
-  const pageId = rule.page === 'thread' || rule.page === 'instagram' ? null : rule.page === 'post' ? (segments[0] ?? '').split('_')[0] : segments[0]
+  // Gap 46b — Meta's own node (a template) names no Page: like a conversation, it goes with the CHOSEN Page's token.
+  const pageId = rule.page === 'thread' || rule.page === 'instagram' || rule.page === 'meta' ? null : rule.page === 'post' ? (segments[0] ?? '').split('_')[0] : segments[0]
   const problem = pageReadProblem(rule, keys, search, items, auth)
   if (rule.page === 'instagram') return problem ? { problem: `${rule.what} ${problem}` } : { pageId, instagramId: segments[0] }
   // Probe fix MD-101 — the feed: the problem counts only for the CHOSEN Page's own read (gateway.ts); another Page's is an

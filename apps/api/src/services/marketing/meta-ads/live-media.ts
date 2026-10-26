@@ -73,8 +73,8 @@
  *     source_instagram_media_id); canvas/preview (instant-experiences guide)
  *   - Instant Experiences (instant-experiences guide, SDK canvas.py): page/canvases (is_hidden, is_published; "A Page
  *     access token", page/canvases v26 — live #190 to the system user, CR-490), page/canvas_elements, the five template
- *     ids and template → document → body_elements (live #4701 to the system-user token, CR-489: STILL OPEN — the guide names
- *     no other token or permission; the chosen Page's token is the likely fix, not built: IX_TEMPLATE_REFUSED says so)
+ *     ids and template → document → body_elements (live #4701 to the system-user token, CR-489; gap 46b: ONE read of the
+ *     template with its document's parts, META_IX_TEMPLATE_READ, sent with the chosen Page's own token — LIVE-PROBES CR-489b)
  */
 import { metaObjectId } from '../../cx/connectors/meta/discovery.js'
 import type { MetaQueryValue } from '../../gateway/meta.js'
@@ -82,7 +82,7 @@ import { metaReadOne } from './read-client.js'
 import { MetaReadError } from './errors.js'
 import { graphSafe, metaChosenAccount, MetaLiveRefusal, objectInAccount, objectKindOf, type MetaChosenAccount } from './live.js'
 import { listPaged, listWithFallback, oneWithFallback, part, refusedFields } from './paging.js'
-import { AD_FORMATS, IG_ACCOUNT_METRICS, IG_MEDIA_METRICS, PAGE_BREAKDOWNS, PAGE_METRICS, PAGE_PERIODS, POST_METRICS } from '../../meta/meta-media-lists.js'
+import { AD_FORMATS, IG_ACCOUNT_METRICS, IG_MEDIA_METRICS, META_IX_TEMPLATE_READ, PAGE_BREAKDOWNS, PAGE_METRICS, PAGE_PERIODS, POST_METRICS } from '../../meta/meta-media-lists.js'
 
 export { AD_FORMATS, IG_ACCOUNT_METRICS, IG_MEDIA_METRICS, PAGE_BREAKDOWNS, PAGE_METRICS, PAGE_PERIODS, POST_METRICS }
 import { maskTakenRows, portfolioTaken, PORTFOLIO_TAKEN } from './taken.js'
@@ -1111,12 +1111,13 @@ export const IX_FIELDS = {
  * Live-probe fix CR-489 — Meta refused the template read to the business's system-user token: (#4701) "Insufficient
  * permissions to access this data". Meta's instant-experiences guide shows the read (GET /<template id>?fields=document,
  * then the document's body_elements) with an unnamed access token, and names no permission for it beyond the Instant
- * Experience ones (pages_manage_ads, pages_read_engagement, pages_show_list, the ADVERTISE task on the Page). Review of
- * #771 — still OPEN: every other Instant Experience read needs the Page's token (page/canvases "A Page access token"; live
- * #190, CR-490), so the chosen Page's token is the likely fix. It is not built: the template and its document are Meta's
- * own objects, so that would be a new Page-token rule (LIVE-PROBES CR-489b, the Owner decides).
+ * Experience ones (pages_manage_ads, pages_read_engagement, pages_show_list, the ADVERTISE task on the Page). Gap 46b —
+ * every other Instant Experience read needs the Page's token (page/canvases "A Page access token"; live #190, CR-490), so
+ * the read now goes with the CHOSEN Page's own token (gateway/meta-page-reads.ts: Meta's five template nodes only, exactly
+ * META_IX_TEMPLATE_READ — the guide's two reads as one field expansion of the template's document, so the token reaches no
+ * id Nexus did not name). LIVE-PROBES CR-489b settles it; until then, a #4701 to the Page's token too is said in words.
  */
-export const IX_TEMPLATE_REFUSED = 'Meta does not let this business\'s system-user token read Meta\'s Instant Experience templates: it answers (#4701) "Insufficient permissions to access this data". This is still open: Meta\'s Instant Experiences guide names no permission for this read beyond the Instant Experience ones this connection holds (pages_manage_ads, pages_read_engagement, pages_show_list and the Advertise task on the Page); the chosen Page\'s own token is the likely fix (every other Instant Experience read needs it), and Nexus does not send this read with it yet. Making one from a template does not need this read: create-meta-instant-experience takes the template by name (its layout is fixed), and Ads Manager shows each template\'s parts.'
+export const IX_TEMPLATE_REFUSED = 'Meta did not let this read through, even with the chosen Facebook Page\'s own token: it answers (#4701) "Insufficient permissions to access this data". Meta\'s Instant Experiences guide names no other token or permission for it beyond the Instant Experience ones this connection holds (pages_manage_ads, pages_read_engagement, pages_show_list and the Advertise task on the Page). Making one from a template does not need this read: create-meta-instant-experience takes the template by name (its layout is fixed), and Ads Manager shows each template\'s parts.'
 
 async function templateRead<T>(work: () => Promise<T>): Promise<T> {
   try {
@@ -1145,11 +1146,19 @@ export async function liveInstantExperiences(input: IxInput) {
   if (input.view === 'template') {
     if (!input.template) throw new MetaLiveRefusal(`Name the template (${Object.keys(IX_TEMPLATES).join(', ')}).`)
     const templateId = IX_TEMPLATES[input.template]
-    const doc = await onPage(() => templateRead(() => metaReadOne({ connectionId }, { operation: 'ix.template', path: templateId, query: { fields: 'id,document' } })))
-    const documentId = idText(obj((doc.body as Row).document)?.id)
-    if (!documentId || !/^\d{1,25}$/.test(documentId)) throw new MetaLiveRefusal('Meta answered the template without its document, so its parts cannot be read.')
-    const parts = await onPage(() => templateRead(() => metaReadOne({ connectionId }, { operation: 'ix.templateDocument', path: documentId, query: { fields: 'id,body_elements' } })))
-    return { template: input.template, templateId, document: tidy(obj((doc.body as Row).document)), parts: tidy((parts.body as Row).body_elements ?? []), note: 'The parts this template takes, in order (Meta\'s template; the layout is fixed). create-meta-instant-experience makes one from it (template).' }
+    // Gap 46b (CR-489) — ONE read, with the chosen Page's own token (the gateway's Page-token rule for Meta's five template
+    // nodes): the template, its document and the document's parts (the guide's two reads as one field expansion).
+    const read = await onPage(() => templateRead(() => metaReadOne({ connectionId }, { operation: 'ix.template', path: templateId, query: { fields: META_IX_TEMPLATE_READ } })))
+    const document = obj((read.body as Row).document)
+    const documentId = idText(document?.id)
+    if (!document || !documentId || !/^\d{1,25}$/.test(documentId)) throw new MetaLiveRefusal('Meta answered the template without its document, so its parts cannot be read.')
+    // body_elements is a list (Meta's guide); an answer that wraps it as {data: […]} is read the same way.
+    const elements = Array.isArray(document.body_elements) ? document.body_elements : Array.isArray(obj(document.body_elements)?.data) ? obj(document.body_elements)!.data as unknown[] : null
+    if (!elements) throw new MetaLiveRefusal('Meta answered the template\'s document without its parts (body_elements), so they cannot be shown.')
+    return {
+      template: input.template, templateId, document: tidy({ id: documentId, name: document.name ?? null }), parts: tidy(elements),
+      note: 'The parts this template takes, in order (Meta\'s template; the layout is fixed), read with the chosen Facebook Page\'s own token. create-meta-instant-experience makes one from it (template).',
+    }
   }
   const pageId = pageOf(account)
   switch (input.view) {
