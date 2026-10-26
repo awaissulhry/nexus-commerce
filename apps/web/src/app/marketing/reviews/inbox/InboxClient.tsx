@@ -46,7 +46,7 @@ import {
   BULK_ACTIONS, BULK_LABEL, SETTABLE_STATUSES, TAG_MAX, bulkActionHeld, bulkApplyHeld, bulkApplyLabel, bulkBody, bulkReach,
   bulkResultWords, bulkSkipWords, ownerChoices, type BulkAction, type BulkRow,
 } from './inboxBulk'
-import { INBOX_COLUMN_DEFS, INBOX_COLUMN_SPECS, INBOX_DEFAULT_PREFS, INBOX_DEFAULT_VISIBLE, INBOX_PREFS_BRIDGE } from './inboxColumns'
+import { INBOX_COLUMN_DEFS, INBOX_COLUMN_SPECS, INBOX_DEFAULT_PREFS, INBOX_DEFAULT_VISIBLE, INBOX_FIRST_COLUMN_STATE, INBOX_PREFS_BRIDGE } from './inboxColumns'
 import { createInboxDatasource, type InboxPage, type InboxRow } from './inboxDatasource'
 import {
   EMPTY_INBOX_QUERY, INBOX_PAGE_SIZES, INBOX_PERIOD_CHOICES, INBOX_STATUSES, NO_OWNER, activeFilterCount, clearFilters, gridSortOf,
@@ -158,7 +158,11 @@ function InboxInner() {
   useEffect(() => { markDirty() }, [markDirty, density, query?.pageSize])
   const initialState = useMemo<GridState | undefined>(() => {
     if (!firstQuery) return undefined
-    return { ...(gridViews.initialState ?? {}), sort: { sortModel: [gridSortOf(firstQuery.sort)] } } as GridState
+    // A saved state names its own columns (AG leaves `columnVisibility` out when none is hidden: then none is); a first
+    // visit starts from the Inbox's defaults (INBOX_FIRST_COLUMN_STATE says why a sort alone is not enough).
+    const saved = gridViews.initialState
+    const columnDefaults = saved ? { columnVisibility: saved.columnVisibility ?? { hiddenColIds: [] } } : INBOX_FIRST_COLUMN_STATE
+    return { ...columnDefaults, ...(saved ?? {}), sort: { sortModel: [gridSortOf(firstQuery.sort)] } } as GridState
     // Read once, when the grid first mounts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firstQuery])

@@ -65,6 +65,16 @@ describe('Import reviews', () => {
     expect(sampleValues(preview(), 'body')).toEqual(['Beautiful stitching', 'Zip broke'])
     expect(sampleValues(preview(), 'postedAt')).toEqual(['2026-10-02', '—'])
     expect(sampleValues(preview(), 'sku')).toEqual(['—', '—'])
+    // Every matched field shows what Nexus read, not only the text fields (an ASIN, a yes/no, a count).
+    const read = preview({ sample: [
+      { ...preview().sample[0], asin: 'B000TEST01', sku: 'OP-XL-BLK2', verifiedPurchase: true, helpfulVotes: 3, externalReviewId: 'R1' },
+      { ...preview().sample[1], asin: null, verifiedPurchase: false, helpfulVotes: 0 },
+    ] })
+    expect(sampleValues(read, 'asin')).toEqual(['B000TEST01', '—'])
+    expect(sampleValues(read, 'sku')).toEqual(['OP-XL-BLK2', '—'])
+    expect(sampleValues(read, 'verifiedPurchase')).toEqual(['Yes', 'No'])
+    expect(sampleValues(read, 'helpfulVotes')).toEqual(['3', '0'])
+    expect(sampleValues(read, 'externalReviewId')).toEqual(['R1', '—'])
   })
 
   it('the body sends the file as text or bytes, only the matched fields', () => {

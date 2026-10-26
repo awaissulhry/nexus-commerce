@@ -2,7 +2,8 @@
 
 /**
  * Reviews › Inbox — the grid's columns (build spec §3.2, the Inbox board): Received · Channel · Stars · Review ·
- * Product · order · Status by default, so the list fits beside the Reviews sub-sidebar; Mood · themes and Owner · due
+ * Product · order · Status by default, so the list fits beside the Reviews sub-sidebar (928px of grid at a 1280px
+ * window: Review's 200px minimum keeps the seven inside it); Mood · themes and Owner · due
  * come back with Customise. Received and Stars sort on the server (a header click is the API's `sort`); the rest show
  * what the row says. A review in another language shows its English on hover (`HoverCard`). Every word comes from
  * `inboxTiles.ts`.
@@ -104,7 +105,7 @@ const COLUMNS: readonly InboxColumn[] = [
   { key: 'received', label: 'Received', shown: true, def: { colId: 'received', headerName: 'Received', field: 'postedAt', width: 104, sortable: true, cellRenderer: ReceivedCell } },
   { key: 'channel', label: 'Channel', shown: true, def: { colId: 'channel', headerName: 'Channel', width: 150, sortable: false, cellRenderer: ChannelCell } },
   { key: 'stars', label: 'Stars', shown: true, def: { colId: 'stars', headerName: 'Stars', field: 'rating', width: 104, sortable: true, cellRenderer: StarsCell } },
-  { key: 'review', label: 'Review', shown: true, def: { colId: 'review', headerName: 'Review', minWidth: 240, flex: 1, sortable: false, cellRenderer: ReviewCell } },
+  { key: 'review', label: 'Review', shown: true, def: { colId: 'review', headerName: 'Review', minWidth: 200, flex: 1, sortable: false, cellRenderer: ReviewCell } },
   { key: 'product', label: 'Product · order', shown: true, def: { colId: 'product', headerName: 'Product · order', width: 200, sortable: false, cellRenderer: ProductCell } },
   { key: 'mood', label: 'Mood · themes', shown: false, def: { colId: 'mood', headerName: 'Mood · themes', width: 200, sortable: false, cellRenderer: MoodCell } },
   {
@@ -116,6 +117,17 @@ const COLUMNS: readonly InboxColumn[] = [
 
 /** The grid's columns; Mood · themes and Owner · due start hidden (Customise brings them back). */
 export const INBOX_COLUMN_DEFS: ColDef<InboxRow>[] = COLUMNS.map((c) => ({ ...c.def, hide: !c.shown }))
+
+/**
+ * The column slices of the grid's first state when nothing is saved yet. AG reads a state that names a sort but no
+ * column slice as a reset of every column it does not mention: all shown (`hide` in the definitions is overridden) and
+ * no flex (Review froze at its minimum width, then was saved as a fixed width). Measured on the products page
+ * 2026-09-05 and again here; so the page's own default says what starts hidden and which column takes the room.
+ */
+export const INBOX_FIRST_COLUMN_STATE = {
+  columnVisibility: { hiddenColIds: COLUMNS.filter((c) => !c.shown).map((c) => c.key) },
+  columnSizing: { columnSizingModel: COLUMNS.filter((c) => c.def.flex).map((c) => ({ colId: c.key, flex: c.def.flex ?? undefined })) },
+}
 
 /** Customise: every column, which show at first, and the bridge to AG's column state. */
 export const INBOX_COLUMN_SPECS: PreferencesColumnSpec[] = COLUMNS.map((c) => ({ key: c.key, label: c.label }))

@@ -69,7 +69,9 @@ export interface ImportPreview {
   willInsert: number
   sample: {
     body: string | null; title: string | null; rating: number | null; authorName: string | null
-    marketplace: string | null; postedAt: string | null; errors: string[]; warnings: string[]
+    marketplace: string | null; postedAt: string | null; sku?: string | null; asin?: string | null
+    externalReviewId?: string | null; verifiedPurchase?: boolean | null; helpfulVotes?: number | null
+    errors: string[]; warnings: string[]
   }[]
 }
 
@@ -273,8 +275,9 @@ export function sampleValues(p: ImportPreview, field: CanonicalField): [string, 
   const pick = (i: number): string => {
     const row = p.sample[i]
     if (!row) return '—'
-    const v = field === 'body' ? row.body : field === 'title' ? row.title : field === 'rating' ? row.rating : field === 'authorName' ? row.authorName
-      : field === 'marketplace' ? row.marketplace : field === 'postedAt' ? row.postedAt?.slice(0, 10) ?? null : null
+    const v = field === 'postedAt' ? row.postedAt?.slice(0, 10) ?? null
+      : field === 'verifiedPurchase' ? (row.verifiedPurchase == null ? null : row.verifiedPurchase ? 'Yes' : 'No')
+      : row[field] ?? null
     if (v == null || v === '') return '—'
     const text = String(v)
     return text.length > 60 ? `${text.slice(0, 59)}…` : text

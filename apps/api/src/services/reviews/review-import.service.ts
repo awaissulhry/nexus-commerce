@@ -443,6 +443,12 @@ export interface ImportPreview {
     authorName: string | null
     marketplace: string | null
     postedAt: string | null
+    sku: string | null
+    asin: string | null
+    /** The file's own review id; null when the file has none (Nexus then makes one from the row). */
+    externalReviewId: string | null
+    verifiedPurchase: boolean | null
+    helpfulVotes: number | null
     errors: string[]
     warnings: string[]
   }[]
@@ -479,6 +485,11 @@ export async function previewReviewImport(opts: ImportOptions): Promise<ImportPr
       authorName: r.raw?.authorName ?? null,
       marketplace: r.raw?.marketplace ?? null,
       postedAt: r.raw?.postedAt ?? null,
+      sku: r.raw?.sku ?? null,
+      asin: r.raw?.asin ?? null,
+      externalReviewId: built.mapping.externalReviewId ? r.raw?.externalReviewId ?? null : null,
+      verifiedPurchase: r.raw?.verifiedPurchase ?? null,
+      helpfulVotes: r.raw?.helpfulVotes ?? null,
       errors: r.errors,
       warnings: r.warnings,
     })),

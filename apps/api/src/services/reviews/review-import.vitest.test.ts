@@ -115,6 +115,8 @@ describe('.tsv, source and the reasons a row cannot import', () => {
     expect(preview.unknownProductRows).toBe(1)
     expect(preview.unknownProductExamples).toEqual(['SKU-NEW'])
     expect(preview.sample.find((s) => s.body === 'Runs small')?.warnings).toContain(UNKNOWN_PRODUCT_WARNING)
+    // The Match step shows the SKU it read, as it shows the text fields.
+    expect(preview.sample.find((s) => s.body === 'Runs small')?.sku).toBe('SKU-NEW')
     expect(preview.willInsert).toBe(2)
     const without = await applyReviewImport({ text: TSV, fileKind: 'tsv', source: 'shopify_app', includeUnlinked: false })
     expect(without.skippedUnlinked).toBe(1)
