@@ -45,7 +45,8 @@ Web only: `patterns/{ReplyComposer,replyComposerModel,Lightbox,lightboxModel}`, 
 - **`WorkspaceSubheader pinned`**: from 1024 px the navigation is a 224 px column beside the rail (sticky, scrolls inside)
   with Collapse → the 48 px strip; below, the drawer opens from a page button (`navigationOpen`, `onNavigationOpenChange`,
   `navigationId`). `header` optional (no band without it), `title` / `subtitle` name the panel,
-  `WorkspaceNavGroup.hideLabel` (label for readers only; never collapsible).
+  `WorkspaceNavGroup.hideLabel` (label for readers only; never collapsible). The pinned subheader's drawer closes with
+  "Close Reviews navigation" (`Close ${navigationLabel}`); the column keeps "Collapse …".
 - **`MetafieldValue`** rating draws `StarRating size="sm"` (`.nds-mf-rating svg*` rules removed).
 
 ## The row under an open family is a DS part — 2026-10-23
