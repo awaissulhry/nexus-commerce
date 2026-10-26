@@ -39,6 +39,7 @@ export function buildReviewsNavigation(
     id: group.id.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
     label: group.label,
     collapsible: group.collapsible,
+    hideLabel: group.hideLabel,
     items: group.items
       .filter(item => !hasPermission || reviewsNavItemAllowed(item, hasPermission))
       .map(item => {

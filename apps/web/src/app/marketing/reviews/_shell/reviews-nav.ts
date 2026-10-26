@@ -48,6 +48,8 @@ export interface ReviewsNavGroup {
   label: string
   /** Its label opens and closes it (Requests, Insights); the top group is always open. */
   collapsible?: boolean
+  /** The label stays for screen readers but is not drawn (the top group sits under the column title). */
+  hideLabel?: boolean
   items: readonly ReviewsNavItem[]
 }
 
@@ -56,6 +58,7 @@ export const REVIEWS_NAV: readonly ReviewsNavGroup[] = [
   {
     id: 'reviews',
     label: 'Reviews',
+    hideLabel: true,
     items: [
       { label: 'Overview', href: REVIEWS_ROOT, icon: LayoutDashboard, exact: true, match: [`${REVIEWS_ROOT}/advanced`] },
       // TEMPORARY until PR B: the Respond page and the Import page do the Inbox's job.
