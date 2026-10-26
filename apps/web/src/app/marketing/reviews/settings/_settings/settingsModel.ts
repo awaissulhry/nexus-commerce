@@ -120,6 +120,16 @@ export function sourceActionHref(action: SourceRow['action']): string | null {
   return action.href
 }
 
+/**
+ * The held "Connect" of a source Nexus reads only from a later update (Amazon seller feedback, Etsy): its reason in
+ * words. Null for a source read today — also one that needs a fix but has no fix link (its words already say what is
+ * wrong), and one whose later part is only an extra (eBay's photos and AI topics).
+ */
+export function sourceLaterHeld(row: Pick<SourceRow, 'name' | 'tone' | 'later' | 'action'>): string | null {
+  if (row.action || !row.later || row.tone !== 'neutral') return null
+  return `Coming later: Nexus reads ${row.name} in a later update.`
+}
+
 // ── Times ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()

@@ -12,7 +12,7 @@ import { NexusGrid, type ColDef, type ICellRendererParams } from '@/design-syste
 import { Button, Pill, Skeleton, Tag } from '@/design-system/primitives'
 import Link from '@/lib/workspaces/Link'
 import { ReadFailed } from './ReadFailed'
-import { sourceActionHref, timeWords, type SourceRow, type SourcesResponse } from './settingsModel'
+import { sourceActionHref, sourceLaterHeld, timeWords, type SourceRow, type SourcesResponse } from './settingsModel'
 import type { SettingsRead } from './useSettingsRead'
 import s from './settings.module.css'
 
@@ -58,11 +58,12 @@ function ActionCell({ data }: ICellRendererParams<SourceRow>) {
       </span>
     )
   }
-  if (data.later) {
+  const later = sourceLaterHeld(data)
+  if (later) {
     // ⛔ KEEP — placeholder (build spec ruling 3): this source is read from a later update; "Connect" then opens it.
     return (
       <span className={s.cellActions}>
-        <Button size="sm" heldReason={`Coming later: Nexus reads ${data.name.toLowerCase()} in a later update.`}>Connect</Button>
+        <Button size="sm" heldReason={later}>Connect</Button>
       </span>
     )
   }

@@ -12,8 +12,8 @@
  * save at once, each with its own call, a fresh read and a toast. Without "Manage reviews" every change is held and says
  * so; the unsubscribe list needs "Manage privacy settings".
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useToast } from '@/design-system/components'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ToastProvider, useToast } from '@/design-system/components'
 import { Builder, EditModeBar, PageHeader, type BuilderSection } from '@/design-system/patterns'
 import { Tag } from '@/design-system/primitives'
 import { useAuth } from '@/lib/auth/AuthProvider'
@@ -40,7 +40,16 @@ import s from './settings.module.css'
 
 const MANAGE_HELD = "You need 'Manage reviews' to change review settings."
 
+/** The page's own toasts: every save, removal and template change reports through them. */
 export function SettingsClient() {
+  return (
+    <ToastProvider>
+      <SettingsInner />
+    </ToastProvider>
+  )
+}
+
+function SettingsInner() {
   const pathname = usePathname() ?? '/marketing/reviews/settings'
   const { status, has } = useAuth()
   const { toast } = useToast()
@@ -93,18 +102,50 @@ export function SettingsClient() {
   const held = manageHeld ?? (draft ? saveHeldReason(draft) : null)
 
   // ── `?section=` scrolls to that section once the page is drawn, then leaves the address (build spec §1.3) ──
+  // Only after every read has answered: the sections above grow from their loading rows to their content, so a
+  // scroll made earlier ends above the section.
+  const scrolled = useRef(false)
+  const answered = (read: { data: unknown; error: string | null }) => read.data != null || read.error != null
+  const settled = status !== 'loading'
+    && [settings, sources, pipeline, templates, automations].every(answered)
+    && (!canPrivacy || answered(suppressions))
   useEffect(() => {
+    if (scrolled.current || !settled) return
     const section = sectionFromSearch(window.location.search)
     if (!section) return
-    const frame = requestAnimationFrame(() => {
-      document.querySelector<HTMLElement>(`[data-builder-section="${section}"]`)?.scrollIntoView({ block: 'start' })
+    scrolled.current = true
+    // The grids above size their rows after they are drawn: the section is kept at the top while the column grows —
+    // until it has kept still for 0.8 s (5 s at most) or the person scrolls or types; then the flag leaves the address.
+    const started = performance.now()
+    let movedAt = started
+    const events = ['wheel', 'touchstart', 'keydown'] as const
+    let frame = 0
+    let placedAt: number | null = null
+    const finish = () => {
+      cancelAnimationFrame(frame)
+      for (const name of events) window.removeEventListener(name, finish)
       const params = new URLSearchParams(window.location.search)
+      if (!params.has('section')) return
       params.delete('section')
       const rest = params.toString()
       window.history.replaceState({}, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`)
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [])
+    }
+    const place = () => {
+      const target = document.querySelector<HTMLElement>(`[data-builder-section="${section}"]`)
+      const top = target ? Math.round(target.getBoundingClientRect().top) : null
+      const now = performance.now()
+      if (target && top !== placedAt) {
+        target.scrollIntoView({ block: 'start' })
+        placedAt = Math.round(target.getBoundingClientRect().top)
+        movedAt = now
+      }
+      if (now - movedAt < 800 && now - started < 5000) frame = requestAnimationFrame(place)
+      else finish()
+    }
+    for (const name of events) window.addEventListener(name, finish, { passive: true })
+    frame = requestAnimationFrame(place)
+    return finish
+  }, [settled])
 
   const counts = { sources: sources.data?.problems ?? null, pipeline: pipeline.data ? pipeline.data.troubled + pipeline.data.problems.length : null }
   const flag = (id: (typeof SECTIONS)[number]['id']) => {
