@@ -29,6 +29,12 @@ vi.mock('../cx/token.service.js', () => ({
 }))
 vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
 vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: vi.fn(async () => undefined) }))
+// Step 35 (Q9) — the catalog rule a tagged product is checked by (step 25's), a stand-in here.
+const cat = vi.hoisted(() => ({ problem: null as string | null }))
+vi.mock('../marketing/meta-ads/catalog-rule.js', async (importActual) => ({
+  ...(await importActual<typeof import('../marketing/meta-ads/catalog-rule.js')>()),
+  metaCatalogProblem: vi.fn(async () => cat.problem),
+}))
 vi.mock('../../utils/otel-setup.js', () => ({ withSpan: vi.fn(async (_n: string, _a: Record<string, unknown>, fn: (span: null) => Promise<unknown>) => fn(null)) }))
 
 import { gatewayLedger, gatewayMetaChosen, gatewayMetaInstagram, gatewayMetaPage, gatewayMetaPostsMade, gatewayMetaTakenLinks } from '../../test-support/gateway-stubs.js'
@@ -254,8 +260,14 @@ describe('Instagram posts: an exact allow-list per kind of container', () => {
     expect(containerProblem({ ...image, caption: Array.from({ length: 31 }, (_, i) => `#t${i}`).join(' ') })).toMatch(/at most 30 hashtags/)
     expect(containerProblem({ ...image, caption: Array.from({ length: 21 }, (_, i) => `@user${i}`).join(' ') })).toMatch(/at most 20 @ tags/)
     expect(containerProblem({ ...image, caption: 'x'.repeat(META_POST_LIMITS.caption + 1) })).toMatch(/1 to 2200 characters/)
-    // Product tags are step 35's (it adds them to META_IG_CONTAINER_KEYS and its judges in its own hunk).
-    expect(containerProblem({ ...image, product_tags: JSON.stringify([{ product_id: '1', x: 0.5, y: 0.5 }]) })).toMatch(/only Meta change Nexus sends for an organic post/)
+    // Step 35 (Q9) — product tags on a feed image: the one tag judge (x / y on an image), each product a body id (productitem).
+    expect(container({ ...image, product_tags: '[{"product_id":"120000000000120","x":0.5,"y":0.8}]' })).toMatchObject({ write: { ids: [{ id: BRAND_IG, kind: 'igsponsor' }, { id: '110000000000001', kind: 'postplace' }, { id: '120000000000120', kind: 'productitem' }] } })
+    expect(containerProblem({ ...image, product_tags: '[{"product_id":"120000000000120"}]' })).toMatch(/needs both places/)
+    expect(containerProblem({ ...image, product_tags: JSON.stringify(Array.from({ length: 21 }, (_, i) => ({ product_id: `1200000000002${String(i).padStart(2, '0')}`, x: 0.5, y: 0.5 }))) })).toMatch(/1 to 20/)
+    expect(containerProblem({ media_type: 'STORIES', image_url: 'https://cdn.example-shop.com/s.jpg', product_tags: '[{"product_id":"120000000000120","x":0.5,"y":0.5}]' })).toMatch(/not a key of a story/)
+    expect(containerProblem({ media_type: 'REELS', video_url: 'https://cdn.example-shop.com/r.mp4', product_tags: '[{"product_id":"120000000000120","x":0.5,"y":0.5}]' })).toMatch(/x and y are for images only/)
+    expect(containerProblem({ media_type: 'VIDEO', video_url: 'https://cdn.example-shop.com/2.mp4', is_carousel_item: 'true', product_tags: JSON.stringify(Array.from({ length: 6 }, (_, i) => ({ product_id: `12000000000020${i}` }))) })).toMatch(/1 to 5/)
+    expect(containerProblem({ media_type: 'CAROUSEL', children: '180000000000001,180000000000002', product_tags: '[{"product_id":"120000000000120"}]' })).toMatch(/product_tags is not a key of a carousel/)
     expect(Object.values(META_IG_CONTAINER_KEYS).flat().every((k) => k in META_IG_CONTAINER_JUDGES)).toBe(true)
     // Never a resumable upload (Meta fetches the public link), never a caption add-on yet.
     for (const key of ['upload_type', 'poll_attachment', 'is_comment_prompt_used']) expect(containerProblem({ ...image, [key]: 'x' }), key).toMatch(/only Meta change/)
@@ -493,5 +505,35 @@ describe('review fixes — guards no rule reaches today, and a video post Nexus 
     expect(res.ok).toBe(true)
     expect(new URL(h.calls[1].url).host).toBe('graph-video.facebook.com')
     expect(sent(1).url.searchParams.get('access_token')).toBe(PAGE_TOKEN)
+  })
+})
+
+describe('step 35 (Q9) — a container\'s tagged products, through the send path', () => {
+  const PRODUCT = '120000000000120'
+  const tagged = { image_url: 'https://cdn.example-shop.com/a.jpg', product_tags: `[{"product_id":"${PRODUCT}","x":0.5,"y":0.8}]` }
+  const post = (params: Record<string, string> = tagged) => metaWriteCall({ connectionId: 'm-1', operation: 'igmedia.container', objectId: IG, objectKind: 'postig', edge: 'media', params, check: false }).catch((e) => e)
+  it('a product of a catalog this business may read that the account tags from goes; any other is refused before the token', async () => {
+    cat.problem = null
+    h.answers.push(json({ id: PRODUCT, product_catalog: { id: '120000000000100' } }), json({ data: [{ catalog_id: '120000000000100' }] }), tokenAnswer(), json({ id: CONTAINER }))
+    expect((await post()).ok).toBe(true)
+    expect(paths()).toEqual([`GET /${PRODUCT}`, `GET /${IG}/available_catalogs`, `GET /${PAGE}`, `POST /${IG}/media`])
+    expect(sent(3).url.searchParams.get('access_token')).toBe(PAGE_TOKEN)
+    h.calls = []
+    h.answers.push(json({ id: PRODUCT, product_catalog: { id: '120000000000109' } }), json({ data: [{ catalog_id: '120000000000100' }] }))
+    expect(await post()).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/not in a catalog the chosen Instagram account tags from/) })
+    expect(paths()).toEqual([`GET /${PRODUCT}`, `GET /${IG}/available_catalogs`])
+    h.calls = []
+    cat.problem = 'that catalog is not one this business may read'
+    expect(await post()).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/may read/) })
+    expect(h.calls).toHaveLength(0)
+    cat.problem = null
+  })
+  it('the tagged products are counted apart from the cap of 30 ids: a reel with 30 tags, a place and 2 sponsors goes', async () => {
+    const ids = Array.from({ length: 30 }, (_, i) => `1200000000003${String(i).padStart(2, '0')}`)
+    const reel = { media_type: 'REELS', video_url: 'https://cdn.example-shop.com/r.mp4', location_id: '110000000000001', branded_content_sponsor_ids: `[${BRAND_IG},170000000000202]`, product_tags: JSON.stringify(ids.map((id) => ({ product_id: id }))) }
+    for (const id of ids) h.answers.push(json({ id, product_catalog: { id: '120000000000100' } }), ...(id === ids[0] ? [json({ data: [{ catalog_id: '120000000000100' }] })] : []))
+    h.answers.push(tokenAnswer(), json({ id: CONTAINER }))
+    expect((await post(reel)).ok).toBe(true)
+    expect(h.calls.filter((c) => c.init.method === 'POST')).toHaveLength(1)
   })
 })

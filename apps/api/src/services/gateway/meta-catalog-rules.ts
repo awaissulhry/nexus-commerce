@@ -69,8 +69,14 @@ type Judge = (value: string, params: Params) => string | null
 
 /** The object a catalog change names by its path: a catalog, a product set, an item, a feed, the portfolio a catalog is made in. */
 export type MetaCatalogKind = 'catalog' | 'productset' | 'productitem' | 'productfeed' | 'catalogbusiness'
-export const META_CATALOG_KINDS: readonly MetaCatalogKind[] = ['catalog', 'productset', 'productitem', 'productfeed', 'catalogbusiness']
+  // Step 35 — a catalog whose items Nexus writes, an item group, a catalog's feeds edge, one of its feeds, a feed's rule, a
+  // feed's upload (meta-catalog-items-rules.ts; checked by meta-catalog-items-owner.ts).
+  | MetaCatalogItemsKind
+export type MetaCatalogItemsKind = 'catalogitems' | 'productgroup' | 'catalogfeeds' | 'catalogfeed' | 'feedrule' | 'feedupload'
+export const META_CATALOG_ITEMS_KINDS: readonly MetaCatalogItemsKind[] = ['catalogitems', 'productgroup', 'catalogfeeds', 'catalogfeed', 'feedrule', 'feedupload']
+export const META_CATALOG_KINDS: readonly MetaCatalogKind[] = ['catalog', 'productset', 'productitem', 'productfeed', 'catalogbusiness', ...META_CATALOG_ITEMS_KINDS]
 export const isMetaCatalogKind = (kind: string | undefined): kind is MetaCatalogKind => !!kind && (META_CATALOG_KINDS as readonly string[]).includes(kind)
+export const isMetaCatalogItemsKind = (kind: string | undefined): kind is MetaCatalogItemsKind => !!kind && (META_CATALOG_ITEMS_KINDS as readonly string[]).includes(kind)
 /**
  * Ids inside a catalog change's body: a segment's parent catalog, a pixel connected (the chosen ad account's) or an event
  * source disconnected (the catalog's own), a person given access (the portfolio's) or removed (the catalog's, never Nexus's

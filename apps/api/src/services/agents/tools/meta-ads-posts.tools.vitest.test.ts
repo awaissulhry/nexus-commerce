@@ -69,6 +69,22 @@ vi.mock('../../marketing/meta-ads/live-posts.js', async () => {
     }),
   }
 })
+// Step 35 (Q9) — product tags on a new post: the account's tagging state, its catalogs and the products (stand-ins).
+const q = vi.hoisted(() => ({ may: true as boolean | null, catalogs: new Set<string>(['120000000000100']), products: new Map<string, string>([['120000000000120', '120000000000100'], ['120000000000121', '120000000000100'], ['120000000000129', '120000000000109']]) }))
+vi.mock('../../marketing/meta-ads/live.js', async (importActual) => ({
+  ...(await importActual<typeof import('../../marketing/meta-ads/live.js')>()),
+  metaChosenAccount: vi.fn(async () => ({ connectionId: 'm-1', adAccountId: '1234567890', instagramId: '170000000000010' })),
+}))
+vi.mock('../../marketing/meta-ads/live-instagram-tags.js', async (importActual) => {
+  const { MetaLiveRefusal } = await import('../../marketing/meta-ads/live.js')
+  return {
+    ...(await importActual<typeof import('../../marketing/meta-ads/live-instagram-tags.js')>()),
+    liveIgMayTag: vi.fn(async () => q.may),
+    liveIgTagCatalogs: vi.fn(async () => q.catalogs),
+    liveIgProduct: vi.fn(async (_a: unknown, id: string) => { const c = q.products.get(id); if (!c) throw new MetaLiveRefusal('That id is not a catalog item.'); return { productId: id, catalogId: c, sku: null, name: null, reviewStatus: 'approved' } }),
+    taggedPostsLastDay: vi.fn(async () => 1),
+  }
+})
 vi.mock('../../marketing/meta-ads/write-client.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/meta-ads/write-client.js')>()),
   metaCheckChange: h.check,
@@ -149,7 +165,7 @@ describe('the tools', () => {
     expect(igTool.undo).toBeUndefined()
     expect(pageTool.description).toMatch(/PUBLIC at once/)
     expect(removeTool.description).toMatch(/Only select developers can perform this operation using the API/)
-    expect(igTool.description).toMatch(/Product tags are not set here yet/)
+    expect(igTool.description).toMatch(/Product tags \(productTags; a carousel per item\)/)
   })
   it('refuse what the arguments do not take, before any read', async () => {
     expect((await preview(pageTool, { format: 'text', publish: 'dark', message: 'x', link: 'https://example-shop.com/' })).error).toMatch(/link is not part of a text post/)
@@ -561,5 +577,42 @@ describe('re-review fixes', () => {
     expect(mentioned.preview.warnings.join(' ')).toMatch(/does NOT check @mentions against the accounts other businesses in Nexus use/)
     const plain = await preview(igTool, { kind: 'image', image: { imageUrl: 'https://cdn.example-shop.com/a.jpg' }, caption: 'Grazie' })
     expect(plain.preview.warnings.join(' ')).not.toMatch(/@mentions/)
+  })
+})
+
+describe('create-meta-instagram-post — product tags (step 35, Q9)', () => {
+  beforeEach(() => { q.may = true; q.catalogs = new Set(['120000000000100']) })
+  it('an image and a reel carry product_tags exactly as sent, judged by the one tag judge (x / y on images only)', async () => {
+    h.send.mockImplementation(async (_t: unknown, change: { operation: string }) => (change.operation === 'igmedia.container' ? { node: { id: '180000000000001', status_code: 'FINISHED' }, readBack: 'second-read', waitedMs: 0 } : { node: { id: '180000000000501' }, readBack: 'second-read', waitedMs: 0 }))
+    const { preview: p } = await run(igTool, { kind: 'image', image: { imageUrl: 'https://cdn.example-shop.com/a.jpg' }, productTags: [{ productId: '120000000000120', x: 0.5, y: 0.8 }] })
+    expect(sentParams(0)).toMatchObject({ product_tags: '[{"product_id":"120000000000120","x":0.5,"y":0.8}]' })
+    expect(p.preview.changes['Products tagged (exactly as sent)']).toEqual({ from: null, to: [{ product_id: '120000000000120', x: 0.5, y: 0.8 }] })
+    expect(p.preview.warnings.join(' ')).toMatch(/25 tagged posts per account in 24 hours.*cannot be removed by API/)
+    const reel = await preview(igTool, { kind: 'reel', video: { videoUrl: 'https://cdn.example-shop.com/r.mp4' }, productTags: [{ productId: '120000000000120' }] })
+    expect(reel.preview.changes['Products tagged (exactly as sent)'].to).toEqual([{ product_id: '120000000000120' }])
+    expect((await preview(igTool, { kind: 'image', image: { imageUrl: 'https://cdn.example-shop.com/a.jpg' }, productTags: [{ productId: '120000000000120' }] })).error).toMatch(/needs both places/)
+    expect((await preview(igTool, { kind: 'story', image: { imageUrl: 'https://cdn.example-shop.com/s.jpg' }, productTags: [{ productId: '120000000000120', x: 0.5, y: 0.5 }] })).error).toMatch(/Meta takes no product tags on a story/)
+  })
+  it('a carousel tags products per item: 5 an item, 20 in all, no place on a video item', async () => {
+    const tags = (from: number, n: number, placed = true) => Array.from({ length: n }, (_, i) => ({ productId: `1200000000001${String(from + i).padStart(2, '0')}`, ...(placed ? { x: 0.5, y: 0.5 } : {}) }))
+    q.products = new Map(Array.from({ length: 40 }, (_, i) => [`1200000000001${String(i).padStart(2, '0')}`, '120000000000100']))
+    const items = await preview(igTool, { kind: 'carousel', items: [{ image: { imageUrl: 'https://cdn.example-shop.com/1.jpg' }, productTags: tags(0, 2) }, { video: { videoUrl: 'https://cdn.example-shop.com/2.mp4' }, productTags: tags(2, 1, false) }] })
+    expect(items.preview.changes['Items (exactly as sent)'].to).toEqual([
+      { item: 1, kind: 'image', source: 'https://cdn.example-shop.com/1.jpg', productsTagged: [{ product_id: '120000000000100', x: 0.5, y: 0.5 }, { product_id: '120000000000101', x: 0.5, y: 0.5 }] },
+      { item: 2, kind: 'video', source: 'https://cdn.example-shop.com/2.mp4', productsTagged: [{ product_id: '120000000000102' }] },
+    ])
+    expect(() => igTool.input.parse({ kind: 'carousel', items: [{ image: { imageUrl: 'https://cdn.example-shop.com/1.jpg' }, productTags: tags(0, 6) }, { image: { imageUrl: 'https://cdn.example-shop.com/2.jpg' } }] })).toThrow()
+    const many = Array.from({ length: 5 }, (_, i) => ({ image: { imageUrl: `https://cdn.example-shop.com/${i}.jpg` }, productTags: tags(i * 5, 5) }))
+    expect((await preview(igTool, { kind: 'carousel', items: many })).error).toMatch(/at most 20 product tags in all/)
+    expect((await preview(igTool, { kind: 'carousel', items: [{ image: { imageUrl: 'https://cdn.example-shop.com/1.jpg' } }, { video: { videoUrl: 'https://cdn.example-shop.com/2.mp4' }, productTags: tags(0, 1) }] })).error).toMatch(/video item takes product tags without a place/)
+    expect((await preview(igTool, { kind: 'carousel', productTags: tags(0, 1), items: [{ image: { imageUrl: 'https://cdn.example-shop.com/1.jpg' } }, { image: { imageUrl: 'https://cdn.example-shop.com/2.jpg' } }] })).error).toMatch(/tags products on each item/)
+  })
+  it('only products of a catalog the account tags from, on an account Meta lets tag', async () => {
+    q.products = new Map([['120000000000120', '120000000000100'], ['120000000000129', '120000000000109']])
+    expect((await preview(igTool, { kind: 'image', image: { imageUrl: 'https://cdn.example-shop.com/a.jpg' }, productTags: [{ productId: '120000000000129', x: 0.5, y: 0.5 }] })).error).toMatch(/not in a catalog the chosen Instagram account tags from/)
+    expect((await preview(igTool, { kind: 'image', image: { imageUrl: 'https://cdn.example-shop.com/a.jpg' }, productTags: [{ productId: '120000000000999', x: 0.5, y: 0.5 }] })).error).toMatch(/not a catalog item/)
+    q.may = false
+    expect((await preview(igTool, { kind: 'image', image: { imageUrl: 'https://cdn.example-shop.com/a.jpg' }, productTags: [{ productId: '120000000000120', x: 0.5, y: 0.5 }] })).error).toMatch(/may not tag products/)
+    expect(h.send).not.toHaveBeenCalled()
   })
 })

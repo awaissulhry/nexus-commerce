@@ -99,6 +99,8 @@ Show one table: what changes, from → to, how many, the SPENDS MONEY lines, wha
 | Purchases sent to Meta (Conversions API; off by default) | `upload-meta-events` |
 | Catalogs and catalog segments, their settings, categories and pixels, who has them and sharing, product sets (Nexus writes no items: Shopify does) | `create-meta-catalog`, `set-meta-catalog`, `set-meta-catalog-access`, `set-meta-product-set` |
 | Delete a catalog, product set, items or a supplementary feed (explicit ask only; no undo; items, and a catalog with items, only where Shopify does not write them) | `remove-meta-catalog-items` |
+| Items, overrides, feeds, uploads and feed rules of a catalog. Where Shopify feeds the catalog, Nexus adds only its labels (internal labels, custom labels and custom numbers) by an update-only file or a rule on them; everything else only where Nexus may write the items or writes them alone. A price, by any path, only for a person who may see revenue; what can bring items into delivering catalog ads is SPENDS MONEY | `set-meta-catalog-items`; `set-meta-catalog-feed` |
+| Product tags on a published Instagram post of the chosen account (add or move: Meta cannot remove a tag by API) and an appeal of a product Meta rejected for tagging; tags on a new post go with `create-meta-instagram-post` (`productTags`) | `set-meta-instagram-product-tags` |
 | A product into or out of the Meta catalog Shopify feeds: the store's Facebook & Instagram sales channel, in the listing's Nexus draft (Shopify changes only when a person sends the draft with Review and synchronize; only an active Shopify product reaches the catalog, on Shopify's own schedule) | `set-shopify-content` with `facebookInstagram` (`publish` or `unpublish`, asked alone) |
 | Lead forms (a form is never edited or deleted once made: it is archived); test leads | `create-meta-lead-form`; `set-meta-lead-form` |
 | Posts AS the chosen Page (Page token; nothing spends): a Facebook post — dark (seen by no one until an ad shows it), scheduled, or PUBLIC at once, always said in the preview; an edit of a Page post (text, hide, publish now, schedule, paid partner); an Instagram image, reel, story or carousel (PUBLIC once published, no undo) or an upcoming event; delete a post Nexus made (explicit ask, `confirmDelete`) | `create-meta-page-post`; `set-meta-page-post`; `create-meta-instagram-post`; `remove-meta-page-post` |
@@ -121,7 +123,7 @@ Say so plainly, and that the person does it in Meta's screens:
 
 ## 7. Coming, not in Nexus yet
 
-Say "not in Nexus yet" and name the place in Meta: making or changing catalog items and feeds (Shopify writes the items: change or remove them in Shopify; `remove-meta-catalog-items` deletes items and supplementary feeds only in a catalog Shopify does not feed), sending Messenger and Instagram Direct messages (and labelling, templates and the messaging setup: the reads are in Nexus), and the business portfolio's admin (inviting people, system users).
+Say "not in Nexus yet" and name the place in Meta: changing the items Shopify writes (change or remove them in Shopify: Nexus adds only its labels there), sending Messenger and Instagram Direct messages (and labelling, templates and the messaging setup: the reads are in Nexus), and the business portfolio's admin (inviting people, system users).
 
 ## 8. After, and undo
 

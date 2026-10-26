@@ -229,6 +229,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'create-meta-instagram-post': 'it reads the business\'s chosen Meta ad account and Instagram account live from Meta, and no business here has Meta connected (meta-ads-posts.tools test)',
   'set-meta-user-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-access.tools test)',
   'set-meta-partner-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-access.tools test)',
+  'set-meta-catalog-items': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-catalog-items.tools test)',
+  'set-meta-catalog-feed': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-catalog-items.tools test)',
+  'set-meta-instagram-product-tags': 'it reads the business\'s chosen Meta ad account and Instagram account live from Meta, and no business here has Meta connected (meta-ads-catalog-items.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -690,6 +693,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // Meta ads step 41: people and partner access refuse in words here (no business has Meta; their own test runs them).
   'set-meta-user-access': () => ({ asset: 'ad-account', action: 'set', personId: '120000000000002', tasks: ['ANALYZE'] }),
   'set-meta-partner-access': () => ({ action: 'share', asset: 'ad-account', partnerBusinessId: '120000000000070', permittedTasks: ['ANALYZE'] }),
+  // Meta ads step 35: item, feed and Instagram tag changes refuse in words here (no business has Meta; their own test runs them).
+  'set-meta-catalog-items': () => ({ action: 'update', catalogId: '120000000000100', items: [{ retailerId: 'SKU-A', availability: 'in stock' }] }),
+  'set-meta-catalog-feed': () => ({ action: 'labels', catalogId: '120000000000100', feedId: '120000000000130', via: 'shopify-feed', labelItems: [{ retailerId: 'SKU-A', internalLabels: ['summer'] }] }),
+  'set-meta-instagram-product-tags': () => ({ action: 'tag', mediaId: '170000000000001', tags: [{ productId: '120000000000120', x: 0.5, y: 0.8 }] }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),

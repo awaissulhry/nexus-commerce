@@ -21,6 +21,7 @@ export const META_SCOPE = {
   instagram_basic: 'instagram_basic',
   catalog_management: 'catalog_management',
   pages_manage_ads: 'pages_manage_ads',
+  instagram_shopping_tag_products: 'instagram_shopping_tag_products',
 } as const
 
 export const META_REQUIRED_SCOPES: string[] = [META_SCOPE.ads_read]
@@ -34,6 +35,8 @@ export const META_OPTIONAL_SCOPES: string[] = [
   META_SCOPE.catalog_management,
   // Step 22 (review B2) — Instant Experience parts: guides/instant-experiences.md "Before you start" names it.
   META_SCOPE.pages_manage_ads,
+  // Step 35 (review B-F8) — ig-media/product_tags and ig-user/product_appeal "Requirements" name it beside catalog_management.
+  META_SCOPE.instagram_shopping_tag_products,
 ]
 
 /** What each permission lets Nexus do, for the sentence a missing one gets. */
@@ -44,7 +47,8 @@ const NEEDED_FOR: Readonly<Record<string, string>> = {
   pages_show_list: 'list the Facebook Pages',
   pages_read_engagement: "read the Pages' Instagram accounts",
   instagram_basic: 'read the Instagram accounts (with pages_show_list)',
-  catalog_management: 'read the catalogs, and change them with create-meta-catalog, set-meta-catalog, set-meta-catalog-access, set-meta-product-set and remove-meta-catalog-items',
+  catalog_management: 'read the catalogs, and change them with create-meta-catalog, set-meta-catalog, set-meta-catalog-access, set-meta-product-set and remove-meta-catalog-items, their items and feeds with set-meta-catalog-items and set-meta-catalog-feed, and product tags on Instagram posts with set-meta-instagram-product-tags (with instagram_shopping_tag_products)',
+  instagram_shopping_tag_products: 'tag products on the chosen Instagram account\'s posts and appeal a product Meta rejected for tagging (set-meta-instagram-product-tags), tag products on a new post (create-meta-instagram-post productTags), and read its product tags (meta-instagram-product-tags); Meta also asks catalog_management, instagram_basic and ads_read',
   pages_manage_ads: 'delete parts of an Instant Experience of the chosen Page with remove-meta-ads-items (Meta also asks pages_read_engagement, pages_show_list and the Page\'s ADVERTISE task)',
 }
 
