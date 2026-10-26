@@ -34,15 +34,16 @@
 import prisma from '../../../db.js'
 import {
   creativeTypeOf, finishCreative, isJsonCreativeKey, judgeCreativeForm, judgeCreativeKey, META_AI_GENERATED_FEATURES, META_CREATIVE_FEATURES, META_CREATIVE_TEXT,
-  metaCreativeTextProblem, newCreativeWalk, partsOptIns, silentKeysToSend, type CreativeType,
+  META_INTRO_CARD_KEYS, metaCreativeTextProblem, newCreativeWalk, partsOptIns, silentKeysToSend, type CreativeType,
 } from '../../gateway/meta-creative-rules.js'
 import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import type { MetaChangeAccount } from './change-account.js'
 import { metaSendChange, MetaWriteError, META_UNKNOWN_OUTCOME, type MetaChangeResult, type MetaWriteTarget } from './write-client.js'
-import { localFailure } from './errors.js'
+import { localFailure, MetaReadError } from './errors.js'
 import { metaReadOne } from './read-client.js'
-import { metaChosenAccount, MetaLiveRefusal, objectInAccount } from './live.js'
-import { pageOf, pagePostId } from './live-media.js'
+import { metaChosenAccount, MetaLiveRefusal, objectInAccount, type MetaChosenAccount } from './live.js'
+import { ownMedia, pageOf, pagePostId } from './live-media.js'
+import { creatorContent } from './creator-content.js'
 import { listPaged } from './live-objects.js'
 import { metaCatalogProblem, newCatalogRuleMemo } from './catalog-rule.js'
 import type { MetaWriteBodyId } from '../../gateway/meta-calls.js'
@@ -80,6 +81,14 @@ export const __creativeTiming = {
 // ── the request ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export interface PartnerRequest { pageId?: string | null; instagramId?: string | null; mainIdentity: 'brand' | 'creator' }
+/**
+ * Gap 46b (master CR-331) — whose existing post a partnership Advantage+ catalog ad shows as its intro card: the business's
+ * own (the chosen Page's post, the chosen Instagram account's media), or the partner's (a creator's post or media that Meta's
+ * content discovery lists for the brand) — the same words as create-meta-boost's sources.
+ */
+export const INTRO_SOURCES = ['facebook-post', 'instagram-media', 'creator-facebook-post', 'creator-instagram-media'] as const
+export type IntroSource = typeof INTRO_SOURCES[number]
+export interface IntroPostRequest { source: IntroSource; id: string }
 export interface CreativeRequest {
   action: 'create' | 'undo' | 'welcome-flow'
   name?: string | null
@@ -108,6 +117,8 @@ export interface CreativeRequest {
   /** Review A1 — let Meta reorder a carousel's cards (multi_share_optimized; default: off). */
   carouselAutoOrder?: boolean | null
   partner?: PartnerRequest | null
+  /** Gap 46b (master CR-331) — an existing post as the intro card of a partnership Advantage+ catalog ad. */
+  introPost?: IntroPostRequest | null
   async?: boolean | null
   /** undo: the creatives an earlier create-meta-creative made new. */
   creatives?: string[]
@@ -210,6 +221,16 @@ export function buildCreative(request: CreativeRequest, chosen: { pageId: string
   for (const key of Object.keys(parts)) {
     if (OWN_KEYS[key]) return { refusal: `Nothing was asked of Meta: ${key} is this tool's own argument (${OWN_KEYS[key]}), not a part.` }
   }
+  // Gap 46b (master CR-331) — the intro card is its own argument (introPost): checked as the business's or the partner's.
+  const brandedPart = isObject(parts.branded_content) ? parts.branded_content : null
+  const introKey = brandedPart ? META_INTRO_CARD_KEYS.find((k) => k in brandedPart) : undefined
+  if (introKey) return { refusal: `Nothing was asked of Meta: branded_content.${introKey} is this tool's own argument (introPost), not a part.` }
+  const intro = request.introPost ?? null
+  if (intro) {
+    if (base || request.inlineOnAd) return { refusal: 'Nothing was asked of Meta: an existing post as the intro card goes on a partnership Advantage+ catalog creative made with create-meta-creative (introPost); an ad then shows that creative by its id.' }
+    if (request.postId || !isObject(request.story) || !isObject(request.story.template_data)) return { refusal: 'Nothing was asked of Meta: an existing post as the intro card (introPost) goes on an Advantage+ catalog creative — story.template_data with parts.product_set_id (Meta\'s partnership catalog-ads guide: carousel or collection).' }
+    if (!request.partner) return { refusal: 'Nothing was asked of Meta: an existing post as the intro card goes on a partnership ad — name the partner (partner) beside introPost.' }
+  }
   const feed = isObject(request.assetFeed) ? clean(request.assetFeed) as Record<string, unknown> : {}
   if ('audios' in feed) return { refusal: 'Nothing was asked of Meta: music is the argument music (off, or random: Meta picks a track), never asset_feed_spec.audios.' }
   // Step 27 (master CR-218) — a "message us" footer only inline on a new ad (create-meta-ad messageFooter).
@@ -252,6 +273,11 @@ export function buildCreative(request: CreativeRequest, chosen: { pageId: string
     if (igId) creative.instagram_user_id = igId
   }
   Object.assign(creative, parts, branded)
+  // Gap 46b (master CR-331) — Meta's partnership catalog-ads guide: branded_content.parent_source_… names the intro card.
+  if (intro) {
+    const key = intro.source.endsWith('facebook-post') ? 'parent_source_facebook_post_id' : 'parent_source_instagram_media_id'
+    creative.branded_content = { ...(isObject(creative.branded_content) ? creative.branded_content : {}), [key]: intro.id.trim() }
+  }
   if (request.shopDestination) return { refusal: `Nothing was asked of Meta: shop routing (WEBSITE_AND_SHOP) lets Meta send people to the Page's Facebook or Instagram shop instead of the website. The Owner's rule (2026-10-23): every Meta ad sends people to the business's own shop, on the product's page — so Nexus never sends shop routing, and a website creative goes out WEBSITE_AND_SHOP_OPT_OUT.` }
   const music = request.music === 'random' ? [{ type: 'random' }] : []
   if (request.postId || base) {
@@ -583,18 +609,87 @@ export interface CreativeDraft extends MetaChangeDraft {
   creative: { action: 'create' | 'undo' | 'set'; name?: string; featuresOn?: string[]; async?: boolean }
 }
 
+/**
+ * Gap 46b (master CR-331) — the intro card's post, from what Meta holds now (reads only), before the preview: the business's
+ * own (a post or Page photo / video the chosen Page posted — ownFacebookPost's owner read; a media of the chosen Instagram
+ * account — step 10's ownMedia) or the
+ * partner's (step 26's creatorContent: Meta's content discovery lists it for the brand, by no other Nexus business, its
+ * eligibility said) — and then by an account the request names as its partner. The gateway checks it again before it sends
+ * (gateway.ts metaIntroCardProblem). Throws MetaLiveRefusal in words.
+ */
+/**
+ * Gap 46b review F2 — a post (`<page id>_<post id>`) or a Page photo's or video's own id the chosen Page POSTED: ONE read,
+ * `GET /<id>?fields=id,from{id}`, which the gateway sends with the chosen Page's own token (meta-page-reads.ts; Meta refuses a
+ * post read to the system-user token, live 2026-10-26) — Meta must answer this very id, `from` the chosen Page (the gateway
+ * reads the same: metaPagePostOwned). A composite id of another Page is refused before the read; a read that cannot be made
+ * with the Page's token is refused in words (never retried with another token). Throws MetaLiveRefusal in words.
+ */
+export async function ownFacebookPost(chosen: MetaChosenAccount, id: string): Promise<string> {
+  const pageId = pageOf(chosen)
+  const value = id.trim()
+  if (!/^[1-9]\d{0,24}(_[1-9]\d{0,24})?$/.test(value)) throw new MetaLiveRefusal(`"${id}" is not a Facebook post id (<Page id>_<post id>) or media id (digits).`)
+  if (value.includes('_') && !value.startsWith(`${pageId}_`)) throw new MetaLiveRefusal(`Post ${value} is not on the Facebook Page this business chose (a partner's post is a creator-… source). Nothing was asked of Meta.`)
+  let body: Record<string, unknown> = {}
+  try {
+    body = (await metaReadOne<Record<string, unknown>>({ connectionId: chosen.connectionId }, { operation: 'creative.postOwnerCheck', path: value, query: { fields: 'id,from{id}' } })).body ?? {}
+  } catch (err) {
+    const words = err instanceof MetaReadError ? err.failure.words ?? err.failure.sentence : err instanceof Error ? err.message : String(err)
+    throw new MetaLiveRefusal(`Nexus could not read ${value.includes('_') ? 'post' : 'photo or video'} ${value} with the chosen Facebook Page's own token (${words.slice(0, 300)}), so it cannot confirm the Page posted it. Nothing was asked of Meta.`)
+  }
+  const asText = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : null)
+  const from = isObject(body.from) ? asText(body.from.id) : null
+  if (asText(body.id) !== value || from !== pageId) throw new MetaLiveRefusal(`${value.includes('_') ? 'Post' : 'Photo or video'} ${value} is not one Nexus can confirm the chosen Facebook Page posted (Meta answers it with another id, another author, or not at all). Nothing was asked of Meta.`)
+  return value
+}
+
+async function introCard(chosen: MetaChosenAccount, intro: IntroPostRequest, partner: PartnerRequest): Promise<{ label: string; stands: Record<string, unknown>; warnings: string[] }> {
+  const id = intro.id.trim()
+  const videoNote = 'Meta\'s partnership catalog-ads guide: "When using an Instagram post that is a video, call the /advideos endpoint to ensure that the video is fully processed" — Meta\'s check (validate_only) answers before anything is made.'
+  if (intro.source === 'facebook-post') {
+    // Gap 46b reviews F2 / N5 — a post (<Page id>_<post id>) or a Page photo's or video's own id, confirmed by ONE owner read.
+    const postId = await ownFacebookPost(chosen, id)
+    return { label: `${postId.includes('_') ? 'post' : 'photo or video'} ${postId} of the chosen Facebook Page`, stands: { source: intro.source, postId }, warnings: [] }
+  }
+  if (intro.source === 'instagram-media') {
+    const own = await ownMedia(chosen, id)
+    return { label: `media ${own.mediaId} of the chosen Instagram account`, stands: { source: intro.source, mediaId: own.mediaId }, warnings: [videoNote] }
+  }
+  const platform = intro.source === 'creator-facebook-post' ? 'FACEBOOK' : 'INSTAGRAM'
+  if (platform === 'FACEBOOK' ? !/^[1-9]\d{0,24}(_[1-9]\d{0,24})?$/.test(id) : !/^[1-9]\d{0,24}$/.test(id)) {
+    throw new MetaLiveRefusal(platform === 'FACEBOOK' ? 'Name the partner\'s Facebook post (introPost.id: <Page id>_<post id>, or its media id; meta-partnership-content view search lists them).' : 'Name the partner\'s Instagram media (introPost.id: digits; meta-partnership-content view search lists them).')
+  }
+  const { row, warnings } = await creatorContent(chosen, { contentId: id }, platform, 'intro')
+  // Gap 46b review F1 — Meta's own authors only; a post id's Page part is the caller's text and must BE Meta's author Page.
+  const prefix = platform === 'FACEBOOK' && id.includes('_') ? id.split('_')[0] : null
+  if (prefix && prefix !== row.author?.pageId) throw new MetaLiveRefusal(`Post ${id} names a Page in its id that is not the post's author as Meta's content discovery names it. Nothing was asked of Meta.`)
+  const authors = [row.author?.pageId, row.author?.instagramId].filter((v): v is string => !!v)
+  const partners = [partner.pageId, partner.instagramId].filter((v): v is string => !!v)
+  if (!authors.some((a) => partners.includes(a))) throw new MetaLiveRefusal(`${platform === 'FACEBOOK' ? 'Post' : 'Media'} ${id} is by another account than the partner this ad names (partner): a partnership catalog ad shows the business's own post or its partner's. Nothing was asked of Meta.`)
+  return {
+    label: `the partner's ${platform === 'FACEBOOK' ? 'Facebook post' : 'Instagram media'} ${id} (Meta's content discovery lists it for the brand)`,
+    stands: { source: intro.source, contentId: row.contentId, author: row.author, eligibility: row.eligibility.map((e) => e.adEligibility) },
+    warnings: [...warnings, ...(platform === 'INSTAGRAM' ? [videoNote] : [])],
+  }
+}
+
 async function createDraft(account: MetaChangeAccount, request: CreativeRequest): Promise<CreativeDraft | { refusal: string }> {
   const chosen = await metaChosenAccount(account.accountId)
   const pageId = pageOf(chosen)
   const built = buildCreative(request, { pageId, instagramId: chosen.instagramId })
   if ('refusal' in built) return built
+  // Gap 46b review F2 — an existing post (object_story_id) is the chosen Page's by ONE owner read, as the gateway checks it.
+  if (request.postId && typeof built.creative.object_story_id === 'string') await ownFacebookPost(chosen, built.creative.object_story_id)
+  // Gap 46b (master CR-331) — the intro card's post: the business's own or the partner's, before the preview.
+  const intro = request.introPost && request.partner ? await introCard(chosen, request.introPost, request.partner) : null
   // Step 18's ONE catalog rule (step 12's read rule) for every product set and catalog item the creative names, before the
   // preview; the gateway asks it again before anything is sent (metaBodyIdsProblem).
   // One memo for this draft: the portfolio read once, each catalog judged once (catalog review: Meta's small read budget).
   const catalog = built.ids.filter((i) => i.kind === 'productset' || i.kind === 'productitem')
   const memo = newCatalogRuleMemo()
   for (const inner of catalog) {
-    const problem = await metaCatalogProblem(account.target, inner.kind === 'productset' ? { productSetId: inner.id } : { productItemId: inner.id }, memo)
+    // Gap 46b — a partnership catalog ad with an intro card names only an OWNED catalog (built.ids carry `owned`).
+    const owned = inner.owned === true ? { owned: true } : {}
+    const problem = await metaCatalogProblem(account.target, inner.kind === 'productset' ? { productSetId: inner.id, ...owned } : { productItemId: inner.id, ...owned }, memo)
     if (problem) return { refusal: `Nothing was asked of Meta: ${inner.kind === 'productset' ? 'product set' : 'catalog item'} ${inner.id}: ${problem}` }
   }
   const act = `act_${account.adAccountId}`
@@ -616,18 +711,28 @@ async function createDraft(account: MetaChangeAccount, request: CreativeRequest)
     send: async ? sendAsync(act, params, asked, { name, fromExistingPost }) : sendCreate(act, params, asked, { name, fromExistingPost }),
     doneSentence: (result) => createdSentence(label, result.node),
   }
-  const warnings = creativeWarnings(built, request, { async, instagram, catalog })
+  const warnings = [
+    ...creativeWarnings(built, request, { async, instagram, catalog }),
+    // Gap 46b (master CR-331) — the intro card, as Meta's partnership catalog-ads guide names it.
+    ...(intro ? [
+      `Intro card: ${intro.label} — Meta shows it as the parent source, the first card of this partnership catalog ad (branded_content.${request.introPost!.source.endsWith('facebook-post') ? 'parent_source_facebook_post_id' : 'parent_source_instagram_media_id'}).`,
+      'The catalog of every product set and catalog item here is the business portfolio\'s own — Nexus\'s own rule, not Meta\'s: the intro card is only for the business\'s own catalog (no client catalog); the gateway checks it again before it sends.',
+      'Meta\'s guide: "You only need to pass in branded_content.parent_source_instagram_media_id or branded_content.parent_source_facebook_post_id when using a canvas with an existing post" — a collection\'s Instant Experience shows the same post as its hero (create-meta-instant-experience, part existing post).',
+      ...intro.warnings,
+    ] : []),
+  ]
   const identity = request.partner ? `partnership (${request.partner.mainIdentity === 'creator' ? 'the creator as main identity, this business as sponsor' : 'this business as main identity, the partner as sponsor'})` : instagram ? 'the chosen Facebook Page and Instagram account' : 'the chosen Facebook Page'
   const { changes } = changeLines([
     [`Creative "${name}"`, 'not in the ad account', 'made (Meta answers its id)'],
     ['Runs as', '—', identity],
+    ...(intro ? [['Intro card', '—', intro.label] as [string, unknown, unknown]] : []),
     ['Advantage+ creative features ON', '—', asked.length ? asked.join(', ') : 'none'],
   ])
   return {
     summary: `Meta: create creative "${name}" in ad account ${act} (a creative spends nothing).`,
     changes, totals: { creatives: 1, requests: 1, featuresOn: asked.length },
     warnings, spendsMoney: [], skipped: [], requests: [request1],
-    stands: { action: 'create', adAccountId: account.adAccountId, pageId, instagramId: chosen.instagramId },
+    stands: { action: 'create', adAccountId: account.adAccountId, pageId, instagramId: chosen.instagramId, ...(intro ? { intro: intro.stands } : {}) },
     before: { kind: 'create', items: [] },
     after: { kind: 'create', items: [{ kind: 'creative', name }] },
     creative: { action: 'create', name, featuresOn: asked, async },

@@ -172,7 +172,8 @@ const metaComments: AgentTool = {
     + '(not for catalog ads, boosted posts or Instagram- / Page-backed Threads accounts). Only the chosen Page\'s posts, the '
     + 'chosen Instagram account\'s media and the chosen ad account\'s ads are read, and a comment is confirmed by Meta '
     + 'first; anything else is refused. Instagram comments arrive by these reads (Nexus has no comment webhooks). '
-    + 'Meta answers some Page reads only to a Page token, and may then answer an empty list: the answer says so. '
+    + 'Meta answers some Page reads only to a Page token, and may then answer an empty list: the answer says so. A post of '
+    + 'the chosen Page, and a photo or video it posted, are read with the Page\'s own token (with Meta changes switched off in Nexus — NEXUS_META_ADS_WRITES — no Page token is read, so these reads wait too). '
     + 'Replying, hiding and deleting: set-meta-comments. Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveComments({

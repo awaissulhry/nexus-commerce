@@ -45,9 +45,16 @@
  *           file part the gateway itself encodes: MetaWriteRule.file) and `default_locale` (a locale or none). Meta takes a
  *           locale once (482), so an upload is always new; Meta has no DELETE there: its undo is `locales_to_delete` on the
  *           same edge, then the default put back by a call of its own when Nexus read it before (MD-027, MD-027d).
- * Plain answers (no call): MD-024 thumbnails only for a video associated with a Page ("Thumbnails can only be created on
- * Videos that have been associated with a Page"; it comes with step 24's Page step; a creative sets its video's thumbnail
- * itself), MD-029 Nexus holds no HTML5 playable files.
+ *   thumbnail gap 46b (MD-024): a custom thumbnail of a video the CHOSEN Facebook Page posted (step 28's livePageVideo, with its token: Meta's
+ *           `from` is the chosen Page — "Thumbnails can only be created on Videos that have been associated with a Page"),
+ *           made its preferred one: POST /<video id>/thumbnails with `source` (the image FILE: a picture Nexus holds or a
+ *           public link, the same image rule as kind image, at most 8 MB — Meta's cap is 10 MB) and is_preferred=true, sent
+ *           AS the Page with its own token (gateway/meta-media-rules.ts `pagevideo.thumbnail`, `auth: 'page'`: step 36's
+ *           Page token mode, the Page's rate bucket — step 38; meta-page-owner.ts confirms the video again). The plan holds
+ *           the picture's sha256; its bytes are sent at run time, the gateway encoding them as the file part. No undo:
+ *           Meta's VideoThumbnail has no update and no delete (THUMBNAIL_NO_UNDO), so the earlier preferred one cannot be
+ *           made preferred again; the preview says so. Meta has no check (validate_only) on this edge.
+ * Plain answers (no call): MD-029 Nexus holds no HTML5 playable files.
  *
  * Nothing here spends money: an image, a video or a folder is used only once a creative and an ad use it. Meta has no check
  * (validate_only) on any of these edges (reference/ad-account/adimages, advideos, video_ads guide, business/creative_folders
@@ -62,10 +69,11 @@ import { META_CAPTIONS_FILE_NAME, META_IMAGE_MAX_BYTES, META_LOCALE, META_MEDIA_
 import { changeLines, plural, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import type { MetaChangeAccount } from './change-account.js'
 import { metaSendChange, metaSendRupload, MetaWriteError, META_UNKNOWN_OUTCOME, type MetaChangeResult, type MetaWriteTarget } from './write-client.js'
-import { localFailure } from './errors.js'
+import { localFailure, MetaReadError } from './errors.js'
 import { metaReadOne } from './read-client.js'
 import { metaChosenAccount, MetaLiveRefusal } from './live.js'
 import { ownMedia, videoStatusText } from './live-media.js'
+import { livePageVideo } from './live-optimize-changes.js'
 import { fieldRefused, listPaged } from './live-objects.js'
 import { takenIds } from './taken.js'
 
@@ -83,8 +91,12 @@ export const MEDIA_TOOL = 'create-meta-media'
 
 // ── plain answers (no call) ─────────────────────────────────────────────────────────────────────────────────────────
 
-/** MD-024 — checked 2026-10-21: developers.facebook.com/docs/graph-api/reference/video/thumbnails (F1 M5-10). */
-export const THUMBNAIL_ANSWER = 'Meta takes a custom video thumbnail (POST /<video id>/thumbnails) only for a video associated with a Facebook Page ("Thumbnails can only be created on Videos that have been associated with a Page"), and Nexus does not upload one to a Page video yet. For an ad you do not need it: the creative sets its video\'s thumbnail itself (video_data image_hash) — upload the picture with kind image and use its hash in the creative.'
+/**
+ * Gap 46b (MD-024) — checked 2026-10-26: docs/graph-api/reference/video-thumbnail (v26.0) "Updating: You can't perform this
+ * operation on this endpoint", "Deleting: You can't perform this operation on this endpoint"; Meta's Python Business SDK
+ * videothumbnail.py has no api_update or api_delete. So a thumbnail can never be made preferred again, nor taken off.
+ */
+export const THUMBNAIL_NO_UNDO = 'No undo: Meta lets no video thumbnail be changed or deleted (its VideoThumbnail reference: "You can\'t perform this operation on this endpoint" for both), so Nexus cannot make the earlier preferred thumbnail preferred again, nor take this one off. To go back, upload the earlier picture again as a new preferred thumbnail (it is added beside the others).'
 /** MD-029 — checked 2026-10-21: reference/ad-account/adplayables.md; routes/assets.routes.ts (Nexus's library takes images and videos only). */
 export const PLAYABLE_ANSWER = 'Nexus holds no HTML5 playable files (its media library takes images and videos only), so it uploads no playable.'
 /** MD-011…MD-014 — checked 2026-10-21: reference/ad-account/advideos.md (upload_phase start, transfer, finish, cancel; RECHECK: the sequence is documented nowhere). */
@@ -125,12 +137,15 @@ export type UploadRef =
   | { kind: 'video'; videoId: string }
   | { kind: 'captions'; videoId: string; locale: string; restoreDefault?: string | null }
 export interface CaptionsSource { videoId: string; locale: string; srt: string; fileName?: string | null; defaultLocale?: string | null }
+/** Gap 46b (MD-024) — a custom thumbnail for a video the chosen Facebook Page posted, and its picture (as kind image). */
+export interface ThumbnailSource { videoId: string; image: ImageSource }
 export interface MediaUploadRequest {
-  kind: 'image' | 'video' | 'folder' | 'captions' | 'undo'
+  kind: 'image' | 'video' | 'folder' | 'captions' | 'undo' | 'thumbnail'
   images?: ImageSource[]
   video?: VideoSource
   folder?: { name: string; description?: string | null; parentFolderId?: string | null }
   captions?: CaptionsSource
+  thumbnail?: ThumbnailSource
   uploads?: UploadRef[]
 }
 
@@ -140,7 +155,9 @@ export type MediaRecordItem =
   | { kind: 'video'; source: string; videoId: string; method: 'advideos' | 'video_ads'; new: boolean | null }
   | { kind: 'folder'; folderId: string; name: string; portfolioId: string }
   | { kind: 'captions'; videoId: string; locale: string; new: true; setDefault: string | null; defaultBefore: string | null }
-export interface MediaRecord { kind: 'image' | 'video' | 'folder' | 'captions' | 'undo'; items: Array<MediaRecordItem | (UploadRef & { removed?: true; present?: true })> }
+  // Gap 46b (MD-024) — a Page video's preferred thumbnail (no undo: the record says what was made, never how to take it back).
+  | { kind: 'thumbnail'; videoId: string; pageId: string; source: string; sha256: string }
+export interface MediaRecord { kind: 'image' | 'video' | 'folder' | 'captions' | 'undo' | 'thumbnail'; items: Array<MediaRecordItem | (UploadRef & { removed?: true; present?: true })> }
 
 /** The draft, with what the run's finish needs about each request (never recorded as is). */
 export interface MediaDraft extends MetaChangeDraft {
@@ -724,6 +741,87 @@ async function captionsDraft(account: MetaChangeAccount, captions: CaptionsSourc
   }
 }
 
+// ── a Page video's thumbnail (gap 46b, MD-024) ──────────────────────────────────────────────────────────────────────
+
+/** The sender of a thumbnail: exactly the approved picture (its sha256), its Base64 made here, alone; Meta answers {success}. */
+function sendThumbnail(videoId: string, image: PreparedMetaImage, fileName: string) {
+  return async (target: MetaWriteTarget): Promise<MetaChangeResult> => {
+    const operation = 'media.pageVideoThumbnail'
+    if (createHash('sha256').update(image.buffer).digest('hex') !== image.sha256) {
+      throw new MetaWriteError(localFailure(`"${image.label}" is not the picture that was approved; nothing was sent.`, 'IMAGE_MOVED'), operation, 'not_sent')
+    }
+    const result = await metaSendChange(target, { objectId: videoId, kind: 'ownpagevideo', params: { source: image.buffer.toString('base64'), source_file_name: fileName, is_preferred: 'true' }, operation, edge: 'thumbnails', timeoutMs: 120_000, skipReadBack: true })
+    return { node: { videoId, success: result.node?.success === true }, readBack: 'none', waitedMs: result.waitedMs }
+  }
+}
+
+/**
+ * Gap 46b review N7 — a Page video's thumbnails as Meta answers them now (`GET /<video>/thumbnails?fields=id,uri,is_preferred`,
+ * the chosen Page's token: meta-page-reads.ts, its first 50): the preferred one, and how many. A read Meta refuses is said.
+ */
+async function pageVideoThumbnails(connectionId: string, videoId: string): Promise<{ read: boolean; words: string | null; count: number; preferred: { id: string; uri: string | null } | null }> {
+  try {
+    const read = await metaReadOne<{ data?: Array<Record<string, unknown>> }>({ connectionId }, { operation: 'media.pageVideoThumbnails', path: `${videoId}/thumbnails`, query: { fields: 'id,uri,is_preferred', limit: 50 } })
+    const rows = Array.isArray(read.body.data) ? read.body.data : []
+    const top = rows.find((r) => r.is_preferred === true)
+    const id = top && (typeof top.id === 'string' || typeof top.id === 'number') ? String(top.id) : null
+    return { read: true, words: null, count: rows.length, preferred: id ? { id, uri: typeof top!.uri === 'string' ? top!.uri : null } : null }
+  } catch (err) {
+    if (err instanceof MetaReadError) return { read: false, words: err.failure.words ?? err.failure.sentence, count: 0, preferred: null }
+    throw err
+  }
+}
+
+async function thumbnailDraft(account: MetaChangeAccount, thumbnail: ThumbnailSource): Promise<MediaDraft | { refusal: string }> {
+  const chosen = await metaChosenAccount(account.accountId)
+  const pageId = chosen.pageId
+  if (!pageId) return { refusal: 'Nothing was asked of Meta: this business has no Facebook Page chosen, and Meta takes a custom thumbnail only for a video associated with a Page ("Thumbnails can only be created on Videos that have been associated with a Page").' }
+  // Step 28's read of a Page video (its title too): Meta's `from` must be the chosen Page. Like the gateway's owner read
+  // (meta-page-owner.ts videoOfPage), it goes with the chosen Page's own token (meta-page-reads.ts, re-review item 3).
+  const video = await livePageVideo(account.target, pageId, thumbnail.videoId.trim())
+  if ('refusal' in video) return { refusal: `Nothing was asked of Meta: ${video.refusal} Meta takes a custom thumbnail only for a video of a Page, and Nexus only for the chosen Page's.` }
+  const image = await prepareMetaImage(thumbnail.image)
+  if ('problem' in image) return { refusal: `Nothing was asked of Meta: ${image.problem}.` }
+  const fileName = image.mimeType === 'image/png' ? 'thumbnail.png' : 'thumbnail.jpg'
+  // Gap 46b review N7 — the video's thumbnails now, read with the chosen Page's token (meta-page-reads.ts): the preferred one's
+  // picture is the only way back, because Meta lets no thumbnail be made preferred again. Its link is shown, never a basis.
+  const now = await pageVideoThumbnails(account.target.connectionId, video.id)
+  const title = video.title ? ` "${video.title}"` : ''
+  const label = `Make "${image.label}" (${image.source}; ${image.width}×${image.height}, ${Math.ceil(image.bytes / 1024)} KB) the preferred thumbnail of video ${video.id}${title} of the chosen Facebook Page, as the Page`
+  const request: MetaChangeRequest = {
+    step: 1, label, kind: 'ad', objectKind: 'ownpagevideo', objectId: video.id,
+    // A custom sender (as kind image): the plan holds the picture's sha256, never its Base64; the sender sends `source` = the
+    // Base64 of exactly these bytes, made at send time, and the gateway sends it as the image file part.
+    params: { source_sha256: image.sha256, source_file_name: fileName, is_preferred: 'true' },
+    check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
+    operation: 'media.pageVideoThumbnail', edge: 'thumbnails',
+    send: sendThumbnail(video.id, image, fileName),
+    doneSentence: (result) => `${label}: ${result.node?.success === true ? 'Meta answered success — it is the video\'s preferred thumbnail now' : 'Meta took it'}. ${THUMBNAIL_NO_UNDO}`,
+  }
+  return {
+    summary: `Meta: a new preferred thumbnail for video ${video.id} of the chosen Facebook Page (no undo; it spends nothing).`,
+    changes: changeLines([[`Video ${video.id}${title} — preferred thumbnail`, now.read ? (now.preferred ? `thumbnail ${now.preferred.id} (it stays among the video's ${now.count} thumbnails)` : 'none marked preferred (Meta picks one itself)') : 'not read', `"${image.label}" (${image.width}×${image.height}), made as the Page`]]).changes,
+    totals: { thumbnails: 1, requests: 1 },
+    warnings: [
+      'Meta has no check for a thumbnail (its thumbnails edge lists no validate_only): the preview is built from the picture and the video as they are now.',
+      THUMBNAIL_NO_UNDO,
+      now.read
+        ? now.preferred
+          ? `The preferred thumbnail now is ${now.preferred.id}${now.preferred.uri ? `; its picture: ${now.preferred.uri} (Meta's own link, which expires — save the picture now if you may want it back)` : ' (Meta gave no link to its picture)'}.`
+          : 'Meta marks none of this video\'s thumbnails preferred now (it picks one itself).'
+        : `Nexus could not read this video's thumbnails now${now.words ? ` (Meta: ${now.words})` : ''}, so the preview cannot show the picture to save before it is replaced.`,
+      'It is made AS the chosen Facebook Page, with the Page\'s own token (Meta asks a Page access token with pages_read_user_content, pages_manage_engagement and pages_show_list).',
+      'Meta recommends a thumbnail with the same aspect ratio as the video, and takes files up to 10 MB (Nexus sends pictures up to 8 MB).',
+      'Meta: is_preferred makes it "the preferred thumbnail to be shown for this video". A creative made with video_data names its own thumbnail (image_hash or image_url). Nothing spends money.',
+    ],
+    spendsMoney: [], skipped: [], requests: [request],
+    stands: { kind: 'thumbnail', pageId, videoId: video.id, image: { source: image.source, sha256: image.sha256, bytes: image.bytes }, preferredBefore: now.read ? now.preferred?.id ?? null : 'not read' },
+    before: { kind: 'thumbnail', items: [{ kind: 'thumbnail', videoId: video.id, pageId, preferredBefore: now.preferred?.id ?? null }] },
+    after: { kind: 'thumbnail', items: [{ kind: 'thumbnail', videoId: video.id, pageId, source: image.source, sha256: image.sha256 }] },
+    media: { kind: 'thumbnail', byStep: new Map([[1, { source: image.source, label: image.label }]]) },
+  }
+}
+
 // ── undo: take back what an upload made new ─────────────────────────────────────────────────────────────────────────
 
 const keyOf = (u: UploadRef) => (u.kind === 'image' ? `image:${u.hash}` : u.kind === 'video' ? `video:${u.videoId}` : `captions:${u.videoId}:${u.locale}`)
@@ -862,7 +960,6 @@ async function undoDraft(account: MetaChangeAccount, uploads: UploadRef[]): Prom
 
 /** A plain answer for a kind or a method Nexus does not send (no call), or null. */
 export function mediaPlainAnswer(kind: MediaKind, request: { video?: VideoSource | null; copyFrom?: unknown }): string | null {
-  if (kind === 'thumbnail') return THUMBNAIL_ANSWER
   if (kind === 'playable') return PLAYABLE_ANSWER
   if (kind === 'video' && request.video?.method === 'chunked') return CHUNKED_ANSWER
   if (kind === 'image' && request.copyFrom) return COPY_ANSWER
@@ -878,6 +975,8 @@ export async function mediaDraft(account: MetaChangeAccount, request: MediaUploa
       case 'folder': return request.folder?.name?.trim() ? await folderDraft(account, request.folder) : { refusal: 'Name the folder (folder.name).' }
       case 'captions': return request.captions ? await captionsDraft(account, request.captions) : { refusal: 'Name the video, the locale and the SRT text (captions.videoId, captions.locale, captions.srt).' }
       case 'undo': return await undoDraft(account, request.uploads ?? [])
+      // Gap 46b (MD-024) — a Page video's custom thumbnail, made as the Page.
+      case 'thumbnail': return request.thumbnail ? await thumbnailDraft(account, request.thumbnail) : { refusal: 'Name the Page video and the picture (thumbnail.videoId, and thumbnail.libraryImageId or thumbnail.imageUrl).' }
     }
   } catch (err) {
     if (err instanceof MetaLiveRefusal) return { refusal: err.message }

@@ -472,10 +472,12 @@ describe('fix round 1 — every owner check holds (review A-S2); a WhatsApp dele
   const changes = () => h.calls.filter((c) => c.init.method !== 'GET')
   it('a private reply to a comment on another Page\'s post, or to a visitor post the Page wrote itself: nothing sent', async () => {
     const reply = (recipient: Record<string, string>) => send({ recipient: j(recipient), messaging_type: 'RESPONSE', message: j({ text: 'Ti scriviamo' }) })
-    h.answers.push(json({ id: 'x' }), json({ id: '500000000000001', from: { id: OTHER_PAGE } }))
+    // Gap 46b (the live read of 2026-10-26) — a post of the chosen Page and a Page media's owner read go with the chosen Page's
+    // own token: each owner read reads the token first.
+    h.answers.push(tokenAnswer(), json({ id: 'x' }), tokenAnswer(), json({ id: '500000000000001', from: { id: OTHER_PAGE } }))
     expect(await reply({ comment_id: '500000000000001_900000000000001' })).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN', message: expect.stringMatching(/not on a post of the Facebook Page this business chose/) })
     h.answers = []
-    h.answers.push(json({ id: `${PAGE}_700000000000001`, from: { id: PAGE } }))
+    h.answers.push(tokenAnswer(), json({ id: `${PAGE}_700000000000001`, from: { id: PAGE } }))
     expect(await reply({ post_id: `${PAGE}_700000000000001` })).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/written by the chosen Page itself/) })
     expect(changes()).toHaveLength(0)
   })

@@ -26,9 +26,12 @@
  *                    kind (META_POST_BODY_KINDS stays step 24's); counted apart from the cap of 30 ids.
  * A collaborator is an Instagram USERNAME, not an id, so it is not a body id here: create-meta-instagram-post checks each by
  * step 16's Business Discovery read before it queues anything (live-posts.ts igUsernameTaken).
- * Every read goes through this gateway with the business's system-user token (its read gate, ledger and rate bucket), never
- * the Page's. Anything else — another business's Page, account, post or media, a node of another kind, an id Meta cannot
- * place — gets nothing sent, and the sentence never names the other business's asset.
+ * Every read goes through this gateway (its read gate, ledger and rate bucket). Gap 46b (Meta refuses the chosen Page's posts
+ * to the system-user token, live #10 of 2026-10-26): a read of a post of the chosen Page and the exact owner reads of a Page
+ * photo or video (`id,from{id}`, a video's `id,post_id,from{id}`) go with the CHOSEN Page's own token (meta-page-reads.ts),
+ * and a missing or refused one refuses the change; every other read here keeps the business's system-user token. Anything
+ * else — another business's Page, account, post or media, a node of another kind, an id Meta cannot place — gets nothing
+ * sent, and the sentence never names the other business's asset.
  */
 import { metaChosenAdAccountOf, metaChosenInstagramOf, metaChosenPageOf, metaLinkTaken, metaPostNexusMade } from './account.js'
 import type { MetaJudgedWrite, MetaWriteKind } from './meta-calls.js'

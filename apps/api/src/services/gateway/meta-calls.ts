@@ -946,11 +946,16 @@ export function metaReadSecrets(url: string): string[] {
 
 /**
  * Why the gateway refuses this Meta call, in words, or null when it may go (metaCallVerdict's problem). Live-probe fix
- * MD-101 — and a Page feed read's own list problem, which gateway.ts refuses when the Page is the chosen one.
+ * MD-101 — and a Page feed read's own list problem, which gateway.ts refuses when the Page is the chosen one. Gap 46b — the
+ * post rule's too; `chosenPageId` (when given) is the business's chosen Page: a read whose Page is another one (a comment id
+ * `<object>_<comment>`, another Page's post) is then an ordinary read, as gateway.ts sends it.
  */
-export function metaReadOnlyProblem(input: Parameters<typeof metaCallVerdict>[0]): string | null {
+export function metaReadOnlyProblem(input: Parameters<typeof metaCallVerdict>[0], chosenPageId?: string): string | null {
   const verdict = metaCallVerdict(input)
-  return verdict.problem ?? verdict.pageRead?.otherPages?.problem ?? null
+  if (verdict.problem) return verdict.problem
+  const page = verdict.pageRead
+  if (chosenPageId !== undefined && page?.otherPages && page.pageId !== chosenPageId) return null
+  return page?.otherPages?.problem ?? null
 }
 
 /** Is this the token renewal (the only sign-in call), and with which client_id? Null when it is not one (same parse). */
@@ -1139,7 +1144,15 @@ export interface MetaWriteRule {
    * the file stored or logged (with `bulky`). Used by MD-026's captions; lane C4 (step 39: a feed's CSV, a block list) can
    * reuse it.
    */
-  file?: { key: string; nameKey: string; name: RegExp; contentType: string; maxBytes: number; judge: (text: string) => string | null }
+  file?: {
+    key: string; nameKey: string; name: RegExp; contentType: string; maxBytes: number; judge: (text: string) => string | null
+    /**
+     * Gap 46b (MD-024) — an IMAGE file (a Page video's thumbnail): the caller passes the file's Base64 as form key `key`
+     * (`judge` judges it as Base64, `maxBytes` counts its characters); the gateway sends the decoded BYTES as the file part,
+     * typed by `typeOf` from the bytes themselves (null: refused). Nothing of it is stored or logged (with `bulky`).
+     */
+    base64?: { typeOf: (bytes: Buffer) => string | null }
+  }
   /**
    * Step 39 (Q7) — the body's `targeting` may change only these keys: every other key must be exactly the ad set's LIVE
    * targeting, which the gateway reads itself (with its owner and kind check) once the write holds its rate slot.
@@ -1261,6 +1274,8 @@ export type MetaLabelsKind = 'adlabel' | 'valueruleset'
  * business portfolio (`<business>/creative_folders`) step 28's `business`.
  */
 export type MetaMediaWriteKind = 'startedvideo'
+  // Gap 46b (MD-024) — a video the CHOSEN Page posted, its thumbnail made as the Page (meta-page-owner.ts checks it).
+  | 'ownpagevideo'
 /** Step 23 — a media id inside a change's body, and what the gateway checks it is (meta-media-rules.ts). */
 export interface MetaWriteAsset {
   id: string
@@ -1279,6 +1294,11 @@ export interface MetaWriteAsset {
     // chosen Page (its id as Meta's partnership host lists it). The chosen Page and Instagram account a boost names are step
     // 19's `page` and step 31's `instagram` body ids.
     | 'partnercontent' | 'adcode' | 'igpermalink' | 'collabinvite' | 'brandedpost'
+    // Gap 46b (master CR-331) — the existing post a partnership Advantage+ catalog ad shows as its intro card
+    // (branded_content.parent_source_…; `with`: its platform, INSTAGRAM | FACEBOOK): the chosen Page's post or the chosen
+    // Instagram account's media, else a partner's that Meta's content discovery lists for the brand, by a partner the
+    // creative names (gateway.ts metaIntroCardProblem).
+    | 'introsource'
   /** Step 25 — the id it goes with (a partner's sponsor, an element's Instant Experience). */
   with?: string
 }
@@ -1335,6 +1355,12 @@ export interface MetaWriteBodyId {
    * when the ad being changed is ACTIVE).
    */
   activation?: 'always' | 'if-ad-active'
+  /**
+   * Gap 46b (master CR-331) — a product set or catalog item of a partnership catalog ad with an intro card: its catalog must
+   * be OWNED by the chosen ad account's portfolio (catalog-rule.ts metaCatalogProblem `owned`), never a client catalog.
+   * Nexus's own rule ("the intro card is only for the business's own catalog"), not Meta's (review N6).
+   */
+  owned?: true
 }
 /**
  * Step 31 — ids inside an audience's body only (meta-audience-rules.ts; gateway.ts metaBodyIdsProblem, audience-ids.ts): a
@@ -1466,8 +1492,11 @@ export interface MetaJudgedWrite {
    */
   host?: 'rupload' | 'rest'
   headers?: Record<string, string>
-  /** Step 23 — a write with a file part (MetaWriteRule.file): the gateway sends this multipart body instead of `body`. */
-  multipart?: { fields: Array<[string, string]>; file: { key: string; filename: string; contentType: string; text: string } }
+  /**
+   * Step 23 — a write with a file part (MetaWriteRule.file): the gateway sends this multipart body instead of `body`. Gap 46b —
+   * `base64`: `text` is the file's Base64 and the part carries its decoded bytes.
+   */
+  multipart?: { fields: Array<[string, string]>; file: { key: string; filename: string; contentType: string; text: string; base64?: true } }
   /** Step 31 — the body holds people's hashed data: the ledger keeps neither it nor Meta's answer (gateway.ts 9). */
   personal?: true
   /** Step 7 — a report run of the ad account `objectId` (digits): it changes nothing; the gateway checks the account is the chosen one. */
@@ -1607,8 +1636,8 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
       return refuse(`the only Meta change Nexus sends for a boost or a partnership is create-meta-boost's (an existing post as a creative, a creator's Instagram video copied with its ad code) or set-meta-partnership-access's (the chosen Instagram account's partnership permissions, tag approvals and Collab invites, an ad code's removal), each with its own keys; this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
     }
     // Step 23 — a POST on a media edge that matches none of create-meta-media's rules (nor step 22's), in its own words.
-    if (method === 'POST' && /^act_\d+\/(adimages|advideos|video_ads)$|^\d+\/(creative_folders|captions)$/.test(graph.route)) {
-      return refuse(`the only Meta change Nexus sends on a media edge is create-meta-media's upload, named with its kind (an image's bytes, a video's link or the chosen Instagram account's video, a video-ads upload, a portfolio folder, captions, a video's default caption), or a removal by remove-meta-ads-items' rules, each with its own keys; this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    if (method === 'POST' && /^act_\d+\/(adimages|advideos|video_ads)$|^\d+\/(creative_folders|captions|thumbnails)$/.test(graph.route)) {
+      return refuse(`the only Meta change Nexus sends on a media edge is create-meta-media's upload, named with its kind (an image's bytes, a video's link or the chosen Instagram account's video, a video-ads upload, a portfolio folder, captions, a video's default caption, a Page video's thumbnail), or a removal by remove-meta-ads-items' rules, each with its own keys; this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
     }
     // Step 27b — a call on the chosen Page's Instant Experience edges, or on an experience named by its kind, that matches none
     // of create-meta-instant-experience's or set-meta-instant-experience's rules, in its own words.
@@ -1670,6 +1699,8 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     if (Buffer.byteLength(text, 'utf8') > rule.file.maxBytes) return refuse(`${rule.file.key} is at most ${rule.file.maxBytes.toLocaleString('en')} bytes`)
     const fileProblem = rule.file.judge(text)
     if (fileProblem) return refuse(fileProblem)
+    // Gap 46b — an image file is typed by its own bytes (the judge has checked its Base64).
+    if (rule.file.base64 && !rule.file.base64.typeOf(Buffer.from(text, 'base64'))) return refuse(`${rule.file.key} is not a file this change sends`)
   }
   const check = parsed.params.has('execution_options')
   if (rule.reportRun) {
@@ -1695,8 +1726,13 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   } : null
   // Step 23 — the media ids inside the body, an edge call, a bulky body, a file part.
   const assets = rule.assets?.(parsed.params) ?? []
+  const fileText = rule.file ? parsed.params.get(rule.file.key)! : ''
   const multipart = rule.file
-    ? { fields: order.filter((k) => k !== rule.file!.key && k !== rule.file!.nameKey).map((k): [string, string] => [k, parsed.params.get(k)!]), file: { key: rule.file.key, filename: parsed.params.get(rule.file.nameKey)!, contentType: rule.file.contentType, text: parsed.params.get(rule.file.key)! } }
+    ? { fields: order.filter((k) => k !== rule.file!.key && k !== rule.file!.nameKey).map((k): [string, string] => [k, parsed.params.get(k)!]), file: {
+      key: rule.file.key, filename: parsed.params.get(rule.file.nameKey)!,
+      // Gap 46b — an image file's type from its own bytes (checked above), and the part its decoded bytes.
+      contentType: rule.file.base64 ? rule.file.base64.typeOf(Buffer.from(fileText, 'base64'))! : rule.file.contentType, text: fileText, ...(rule.file.base64 ? { base64: true as const } : {}),
+    } }
     : null
   // Step 26 — the partnership ad codes in the body: the ledger never keeps them, and Meta's answer loses them.
   const secrets = rule.secret ? rule.secret(parsed.params).filter((s) => typeof s === 'string' && s.length >= 4) : []

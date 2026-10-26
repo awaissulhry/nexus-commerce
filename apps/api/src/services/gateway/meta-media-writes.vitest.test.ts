@@ -23,13 +23,14 @@ vi.mock('../cx/token.service.js', () => ({
 vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
 vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: vi.fn(async () => undefined) }))
 
-import { gatewayLedger, gatewayMetaChosen, gatewayMetaInstagram, gatewayMetaSharedPortfolios } from '../../test-support/gateway-stubs.js'
+import { gatewayLedger, gatewayMetaChosen, gatewayMetaInstagram, gatewayMetaPage, gatewayMetaSharedPortfolios } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { gatewayCall } from './gateway.js'
 import { metaRuploadCall, metaWriteCall } from './meta.js'
 import { metaWriteVerdict } from './meta-calls.js'
-import { __metaMediaRulesTest, META_CAPTIONS_MAX_BYTES, META_IMAGE_BASE64_MAX, metaFileUrlProblem, metaImageBytesProblem, metaMediaTextProblem, metaRuploadUrl, metaSrtProblem, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
+import { __metaMediaRulesTest, META_CAPTIONS_MAX_BYTES, META_IMAGE_BASE64_MAX, metaFileUrlProblem, metaImageBytesProblem, metaMediaTextProblem, metaMultipartBody, metaRuploadUrl, metaSrtProblem, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
 import { __metaObjectLimitsTest, metaObjectState } from './meta-object-limits.js'
+import { metaSendChange } from '../marketing/meta-ads/write-client.js'
 import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
 
 const BASE = `https://graph.facebook.com/${META_DEFAULT_GRAPH_API_VERSION}`
@@ -377,6 +378,114 @@ describe('through the gateway', () => {
     noteMetaVideoStarted('m-1', '1234567890', VIDEO)
     const raw = await gatewayCall({ channel: 'META', operation: 'x', kind: 'write', connectionId: 'm-1', url: metaRuploadUrl(VIDEO), method: 'POST', headers: { file_url: 'https://cdn.example.com/v.mp4', offset: '0' }, body: 'bytes', metaObjectKind: 'startedvideo' }).catch((e) => e)
     expect(raw).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
+    expect(h.calls).toHaveLength(0)
+  })
+})
+
+describe('gap 46b (master MD-024) — a Page video\'s custom thumbnail, made its preferred one, AS the chosen Page', () => {
+  const PAGE = '120000000000010'
+  const PAGE_VIDEO = '120000000000601'
+  const PAGE_TOKEN = 'EAAPageTokenForGap46bTests1234567890'
+  const thumb = (params: Record<string, string>, objectKind = 'ownpagevideo') => metaWriteVerdict({ method: 'POST', url: `${BASE}/${PAGE_VIDEO}/thumbnails`, kind: 'write', objectKind, body: form(params) })
+  const thumbProblem = (params: Record<string, string>, objectKind?: string) => { const v = thumb(params, objectKind); return 'problem' in v ? v.problem : null }
+  const good = { source: JPG, source_file_name: 'thumbnail.jpg', is_preferred: 'true' }
+
+  it('the rule: source as an image FILE part (Base64 in, bytes out, typed by its bytes), its name as its type, is_preferred true — made as the Page', () => {
+    const v = thumb(good)
+    expect(v).toMatchObject({ write: { rule: 'pagevideo.thumbnail', objectId: PAGE_VIDEO, auth: 'page', bulky: true, edgeCall: true, body: '', kinds: ['ownpagevideo'] } })
+    const multipart = 'write' in v ? v.write.multipart! : null
+    expect(multipart).toEqual({ fields: [['is_preferred', 'true']], file: { key: 'source', filename: 'thumbnail.jpg', contentType: 'image/jpeg', text: JPG, base64: true } })
+    expect(thumb({ ...good, source: PNG, source_file_name: 'thumbnail.png' })).toMatchObject({ write: { multipart: { file: { contentType: 'image/png', filename: 'thumbnail.png' } } } })
+    // The file name says what the bytes are; is_preferred only true (MD-024: made the preferred one); nothing else.
+    expect(thumbProblem({ ...good, source: PNG })).toMatch(/thumbnail\.png for a PNG/)
+    expect(thumbProblem({ ...good, source_file_name: 'cover.jpg' })).toMatch(/source_file_name is thumbnail\.jpg for a JPG/)
+    expect(thumbProblem({ ...good, is_preferred: 'false' })).toMatch(/is_preferred is true/)
+    expect(thumbProblem({ source: JPG, source_file_name: 'thumbnail.jpg' })).toBeTruthy()
+    expect(thumbProblem({ ...good, name: 'x' })).toBeTruthy()
+    // Not a JPG or PNG: its name cannot say what it is (the name is judged first), and the bytes are never quoted.
+    const gif = Buffer.from('GIF89a-not-for-meta').toString('base64')
+    expect(thumbProblem({ ...good, source: gif })).toMatch(/thumbnail\.jpg for a JPG and thumbnail\.png for a PNG/)
+    expect(thumbProblem({ ...good, source: gif })).not.toContain(gif)
+    expect(thumbProblem({ ...good, source: `${JPG.slice(0, -1)}-` })).toMatch(/source is strict Base64/)
+    const big = `${JPG}${'A'.repeat(META_IMAGE_BASE64_MAX - JPG.length + 4)}`
+    expect(thumbProblem({ ...good, source: big })).toMatch(/source is at most|source is an image of at most/)
+    // Only the Page video kind; another object kind (a library video, a Page) has no thumbnail rule.
+    for (const kind of ['video', 'page', 'adaccount']) expect(thumbProblem(good, kind), kind).toMatch(/only Meta change Nexus sends on a media edge is create-meta-media's upload.*a Page video's thumbnail/)
+    // On the Graph host only (the thumbnails reference's example; the video host takes only a Page's video post).
+    const onVideoHost = metaWriteVerdict({ method: 'POST', url: `https://graph-video.facebook.com/${META_DEFAULT_GRAPH_API_VERSION}/${PAGE_VIDEO}/thumbnails`, kind: 'write', objectKind: 'ownpagevideo', body: form(good) })
+    expect('problem' in onVideoHost && onVideoHost.problem).toMatch(/video host/)
+  })
+  it('the multipart body carries the decoded BYTES, typed, named; the Base64 itself is never sent', async () => {
+    const body = metaMultipartBody({ fields: [['is_preferred', 'true']], file: { key: 'source', filename: 'thumbnail.png', contentType: 'image/png', text: PNG, base64: true } })
+    expect([...body.keys()]).toEqual(['is_preferred', 'source'])
+    const file = body.get('source') as File
+    expect([file.name, file.type]).toEqual(['thumbnail.png', 'image/png'])
+    expect(Buffer.from(await file.arrayBuffer()).equals(Buffer.from(PNG, 'base64'))).toBe(true)
+    // Captions (a text file) stay as they were.
+    const srt = metaMultipartBody({ fields: [], file: { key: 'captions_file', filename: 'spot.it_IT.srt', contentType: 'application/x-subrip', text: '1\n00:00:01,000 --> 00:00:02,000\nCiao' } })
+    expect(await (srt.get('captions_file') as File).text()).toBe('1\n00:00:01,000 --> 00:00:02,000\nCiao')
+  })
+  it('through the gateway: ONE owner read (the chosen Page posted it), the Page\'s token, then ONE multipart POST — never the ledger', async () => {
+    vi.stubEnv('NEXUS_META_ADS_WRITES', 'on')
+    gatewayMetaPage['m-1'] = PAGE
+    const token = json({ id: PAGE, access_token: PAGE_TOKEN })
+    h.answers.push(token, json({ id: PAGE_VIDEO, from: { id: PAGE } }), token, json({ success: true }))
+    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'media.pageVideoThumbnail', objectId: PAGE_VIDEO, objectKind: 'ownpagevideo', edge: 'thumbnails', params: good, check: false })
+    expect(res.ok).toBe(true)
+    // The owner read goes with the chosen Page's own token too (the live answer of 2026-10-26: Page content is refused to the
+    // system-user token), then the change with it.
+    expect(h.calls.map((c) => `${c.init.method} ${new URL(c.url).pathname.replace(`/${META_DEFAULT_GRAPH_API_VERSION}`, '')}`)).toEqual([`GET /${PAGE}`, `GET /${PAGE_VIDEO}`, `GET /${PAGE}`, `POST /${PAGE_VIDEO}/thumbnails`])
+    // Review: only what Nexus uses (no length): a field Meta leaves out never refuses it.
+    expect(new URL(h.calls[1].url).searchParams.get('fields')).toBe('id,from{id}')
+    expect(new URL(h.calls[1].url).searchParams.get('access_token')).toBe(PAGE_TOKEN)
+    const post = sent(3)
+    expect(post.url.host).toBe('graph.facebook.com')
+    expect(post.url.searchParams.get('access_token')).toBe(PAGE_TOKEN)
+    expect(post.body).toBeInstanceOf(FormData)
+    const file = (post.body as FormData).get('source') as File
+    expect([file.name, file.type, (post.body as FormData).get('is_preferred')]).toEqual(['thumbnail.jpg', 'image/jpeg', 'true'])
+    expect(Buffer.from(await file.arrayBuffer()).equals(Buffer.from(JPG, 'base64'))).toBe(true)
+    expect(JSON.stringify(gatewayLedger)).not.toContain(JPG.slice(0, 40))
+    expect(JSON.stringify(gatewayLedger)).not.toContain(PAGE_TOKEN)
+  })
+  it('review F3 — a refused Page token or permission on a thumbnail says the Page\'s task and the thumbnail permissions, never the ad account\'s or "make a new token"', async () => {
+    vi.stubEnv('NEXUS_META_ADS_WRITES', 'on')
+    gatewayMetaPage['m-1'] = PAGE
+    const target = { connectionId: 'm-1', adAccountId: '1234567890' }
+    const send = () => metaSendChange(target, { objectId: PAGE_VIDEO, kind: 'ownpagevideo', edge: 'thumbnails', params: good, operation: 'media.pageVideoThumbnail', skipReadBack: true }).catch((e) => e)
+    for (const error of [json({ error: { code: 200, message: '(#200) Permissions error' } }, 403), json({ error: { code: 10, message: '(#10) Application does not have permission for this action' } }, 403), json({ error: { code: 190, message: 'Error validating access token' } }, 400)]) {
+      __metaObjectLimitsTest.useMemory()
+      h.answers.push(json({ id: PAGE, access_token: PAGE_TOKEN }), json({ id: PAGE_VIDEO, from: { id: PAGE } }), json({ id: PAGE, access_token: PAGE_TOKEN }), error)
+      const err = await send()
+      expect(err.message).toMatch(/Meta did not accept this thumbnail made as the chosen Facebook Page.*a task on the chosen Page.*pages_read_user_content, pages_manage_engagement and pages_show_list/)
+      expect(err.message).not.toMatch(/ad account|ads_management|Make a new token|Advertise task/)
+    }
+  })
+  it('another Page\'s video, another id answered, an unreadable one, or no Page chosen: nothing sent, no token read', async () => {
+    vi.stubEnv('NEXUS_META_ADS_WRITES', 'on')
+    gatewayMetaPage['m-1'] = PAGE
+    const call = () => metaWriteCall({ connectionId: 'm-1', operation: 'media.pageVideoThumbnail', objectId: PAGE_VIDEO, objectKind: 'ownpagevideo', edge: 'thumbnails', params: good, check: false }).catch((e) => e)
+    for (const [answer, code, words] of [
+      [json({ id: PAGE_VIDEO, from: { id: '120000000000099' } }), 'META_PAGE_NOT_CHOSEN', /not one the Facebook Page this business chose posted/],
+      [json({ id: '120000000000602', from: { id: PAGE } }), 'META_PAGE_UNCONFIRMED', /another object than video/],
+      [json({ error: { message: 'Unsupported get request.', code: 100 } }, 400), 'META_PAGE_UNCONFIRMED', /could not confirm that video/],
+    ] as const) {
+      h.calls = []
+      h.answers.push(json({ id: PAGE, access_token: PAGE_TOKEN }), answer)
+      const refused = await call()
+      expect(refused, String(words)).toMatchObject({ code, message: expect.stringMatching(words) })
+      // Only the owner read (with the Page's token): the change's own token read and send never happen.
+      expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET'])
+    }
+    // No Page token for the owner read (Meta answers the token read without one): refused in the gateway's own words, and the
+    // video is never read with the system-user token.
+    h.calls = []
+    h.answers.push(json({ id: PAGE }))
+    expect(await call()).toMatchObject({ code: 'META_PAGE_UNCONFIRMED', message: expect.stringMatching(/^Nothing was sent to Meta: Nexus could not confirm that video 120000000000601 is one the Facebook Page this business chose posted \(Meta: Held, nothing sent: Meta gave Nexus no token for the business's chosen Facebook Page/) })
+    expect(h.calls.map((c) => new URL(c.url).pathname.split('/').pop())).toEqual([PAGE])
+    h.calls = []
+    delete gatewayMetaPage['m-1']
+    expect(await call()).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
     expect(h.calls).toHaveLength(0)
   })
 })
