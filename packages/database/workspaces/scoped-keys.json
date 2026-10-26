@@ -7312,5 +7312,26 @@
       ]
     },
     "relations": []
+  },
+  "ShopifyMarketingConsent": {
+    "scalar": {},
+    "compound": {
+      "shopify_marketing_consent": [
+        "connectionId",
+        "shopifyCustomerId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "connection",
+        "model": "ChannelConnection",
+        "from": [
+          "connectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
   }
 }

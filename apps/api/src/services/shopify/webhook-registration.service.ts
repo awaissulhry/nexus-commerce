@@ -3,7 +3,9 @@ import { publicApiOrigin } from '../public-api-origin.js'
  * P2.4 — register Nexus's Shopify webhooks with each connected shop, and reconcile.
  *
  * 2026-10-15 — only what Shopify order import needs: the order topics and app/uninstalled, and only for an account
- * whose order import was started (it has its start date, order-ingest-switch.ts). No product topics (Shopify follows
+ * whose order import was started (it has its start date, order-ingest-switch.ts). 2026-10-26 — plus one customer topic,
+ * customers_email_marketing_consent/update: a buyer's e-mail marketing consent, kept as a hash for later Meta customer
+ * lists (marketing-consent.service.ts; it writes no order, stock or product). No product topics (Shopify follows
  * Nexus: a product delivery never changes a Nexus product), no inventory_levels/update (it would set Nexus counts from
  * Shopify's), no privacy topics (configured with the app, not per shop). A subscription of any other topic already on
  * the shop is listed in the result (`leftInPlace`) and never deleted: a person decides.
@@ -44,7 +46,8 @@ export interface ShopifyTopicRegistration {
 
 /**
  * The topics Shopify order import registers, and only these. orders/updated also carries a payment, a cancellation and
- * a fulfilment status change, so no orders/paid, orders/cancelled or orders/fulfilled subscription is needed.
+ * a fulfilment status change, so no orders/paid, orders/cancelled or orders/fulfilled subscription is needed. The e-mail
+ * consent topic needs the read_customers scope; without it Shopify refuses that one subscription (status `refused`).
  */
 export const SHOPIFY_TOPIC_REGISTRATIONS: ShopifyTopicRegistration[] = [
   { topic: 'ORDERS_CREATE', path: '/webhooks/shopify/orders/create', eventType: 'order/create' },
@@ -52,6 +55,7 @@ export const SHOPIFY_TOPIC_REGISTRATIONS: ShopifyTopicRegistration[] = [
   { topic: 'FULFILLMENTS_CREATE', path: '/webhooks/shopify/fulfillments/create', eventType: 'fulfillment/create' },
   { topic: 'REFUNDS_CREATE', path: '/webhooks/shopify/refunds/create', eventType: 'refunds/create' },
   { topic: 'APP_UNINSTALLED', path: '/webhooks/shopify/app/uninstalled', eventType: 'app/uninstalled' },
+  { topic: 'CUSTOMERS_EMAIL_MARKETING_CONSENT_UPDATE', path: '/webhooks/shopify/customers_email_marketing_consent/update', eventType: 'customers_email_marketing_consent/update' },
 ]
 
 export interface TopicOutcome {

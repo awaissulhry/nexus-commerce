@@ -18,7 +18,7 @@
  * whether a lease has expired.
  */
 import { randomUUID } from 'node:crypto'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { inboundBackoffMs, InboundDeferred, isVerifiedInbound, MAX_INBOUND_ATTEMPTS, VERIFIED_INBOUND_WHERE } from './ledger.js'
 
@@ -95,6 +95,17 @@ function stillOwned(claim: InboundClaim, now: Date): Prisma.WebhookEventWhereInp
 }
 
 /**
+ * Event types whose stored body is cleared the moment they are handled: their body carries a person's plain e-mail and
+ * nothing needs it once handled. Shopify marketing consent (2026-10-26): the consent service keeps only a hash, and a
+ * consent change of someone who is not a buyer must leave no address behind. Cleared like the retention sweep clears
+ * (archive.ts scrubExpiredInbound): an UPDATE of `rawBody`, `verificationHeaders` and `payload`, in the same update that
+ * finishes the row as done; the row itself (identity, verdict, status, timings) stays. A row not handled (failed, dead
+ * letter, deferred) keeps its body, so it can still be retried — for this topic at most 7 days: then the retention
+ * sweep clears it too (archive.ts SHORT_LIVED_INBOUND).
+ */
+export const CLEAR_BODY_WHEN_DONE: ReadonlySet<string> = new Set(['SHOPIFY customers_email_marketing_consent/update'])
+
+/**
  * Finish a claimed attempt: done, retry after backoff, or dead letter once the budget is
  * spent. Returns false when the claim was lost; the row then belongs to someone else.
  */
@@ -102,11 +113,13 @@ export async function finishInboundClaim(claim: InboundClaim, ok: boolean, error
   now ??= await inboundDatabaseNow()
   const exhausted = claim.attempt >= MAX_INBOUND_ATTEMPTS
   const reason = ok ? null : (error ?? 'Processing failed').slice(0, 500)
+  const clearBody = ok && CLEAR_BODY_WHEN_DONE.has(`${claim.channel} ${claim.eventType}`)
   const result = await prisma.webhookEvent.updateMany({ where: stillOwned(claim, now), data: {
     status: ok ? 'done' : exhausted ? 'dlq' : 'failed', isProcessed: ok,
     processedAt: ok ? now : null, processingToken: null, processingUntil: null,
     nextAttemptAt: ok || exhausted ? null : new Date(now.getTime() + inboundBackoffMs(claim.attempt)),
     lastError: reason, error: reason,
+    ...(clearBody ? { rawBody: null, verificationHeaders: Prisma.DbNull, payload: Prisma.JsonNull } : {}),
   } })
   return result.count === 1
 }

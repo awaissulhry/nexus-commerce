@@ -2823,6 +2823,12 @@
           "relationFromFields": []
         },
         {
+          "name": "shopifyMarketingConsent",
+          "kind": "object",
+          "type": "ShopifyMarketingConsent",
+          "relationFromFields": []
+        },
+        {
           "name": "googleAccountLinks",
           "kind": "object",
           "type": "GoogleAccountLink",
@@ -7578,6 +7584,20 @@
     },
     {
       "name": "ShopifyOrderIngest",
+      "fields": [
+        {
+          "name": "connection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "connectionId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ShopifyMarketingConsent",
       "fields": [
         {
           "name": "connection",

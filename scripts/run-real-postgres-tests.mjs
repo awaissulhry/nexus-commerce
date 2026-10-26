@@ -277,7 +277,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'eBay seller grant fence (cross-record reconnects and fresh committed reads)', file: 'src/services/cx/ebay-identity-postgres.vitest.test.ts', expect: 10 },
   { name: 'credential maintenance races (rotation, backfill, rollback and shared-account isolation)', file: 'src/services/cx/credential-writers-postgres.vitest.test.ts', expect: 12 },
   { name: 'transactional eBay revocation and unresolved owner warnings', file: 'src/services/cx/revocation-postgres.vitest.test.ts', expect: 25 },
-  { name: 'durable webhook claims and retention', file: 'src/services/cx/ingress/claims.vitest.test.ts', expect: 22 },
+  { name: 'durable webhook claims and retention', file: 'src/services/cx/ingress/claims.vitest.test.ts', expect: 24 },
   { name: 'one owner per inbound row type (eBay leases × processing claims, retention archive)', file: 'src/services/cx/ingress/inbound-ownership-postgres.vitest.test.ts', expect: 13 },
   { name: 'redelivery identity and bounded inbound retention (binding, reconnects, payload expiry by UPDATE)', file: 'src/services/cx/ingress/inbound-redelivery-retention-postgres.vitest.test.ts', expect: 7 },
   { name: 'transactional event producers and duplicate consumers', file: 'src/services/event-durability.vitest.test.ts', expect: 5 },
