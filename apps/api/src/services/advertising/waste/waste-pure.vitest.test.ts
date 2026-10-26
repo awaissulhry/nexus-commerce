@@ -211,8 +211,10 @@ describe('tiles and rows come from one set (Bid audit M1)', () => {
       row('i', { state: 'TURNED_ON_ELSEWHERE', kind: 'KEYWORD', clash: { kind: 'TURNED_ON', label: 'Turned on outside Nexus' } }),
     ]
     const t = totalsOf(rows, 'wasting', { negated: 4 })
-    expect(t).toEqual({ wasting: 4, wastingSpendCents: 2000, currency: 'EUR', wastingSpendByCurrency: { EUR: 2000 }, wastingSpendNote: null, keywords: 1, terms: 3, waiting: 1, keptPaused: 1, turnedOn: 1, negated: 4, clashes: 1, skipped: 1 })
+    expect(t).toEqual({ wasting: 4, wastingSpendCents: 2000, currency: 'EUR', wastingSpendByCurrency: { EUR: 2000 }, wastingSpendNote: null, keywords: 1, terms: 3, waiting: 1, keptPaused: 1, turnedOn: 1, negated: 4, clashes: 1, skipped: 1, protected: 1 })
     expect(rows.filter((r) => showMatches(r, 'clashes')).length).toBe(t.clashes)
+    // Step 4 — the Protected tile: the rows show=protected answers.
+    expect(rows.filter((r) => showMatches(r, 'protected')).map((r) => r.id)).toEqual(['h'])
     expect(rows.filter(isWasting).length).toBe(t.wasting)
   })
   it('money is never added across currencies: several → null, the split per currency and why', () => {

@@ -1,6 +1,6 @@
 /*
  * Negative Targeting page, Rules view (2026-10-11) — layout only, design-system tokens only. Every control is the
- * design system's own; light only, like the rest of the ads console.
+ * design system's own; the page follows the theme (the redesign, 2026-10-26: tokens only, so it turns dark with it).
  */
 
 .stack {
@@ -12,28 +12,13 @@
 
 .toolbarRight {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--nds-space-8);
 }
 
-/* The count beside the switch keeps one width, so the search box never moves. */
-.count {
-  display: inline-block;
-  min-width: 8ch;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
 .clickRow {
   cursor: pointer;
-}
-
-.gridSkeleton {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-16);
-  padding: var(--nds-space-16);
 }
 
 /* ── cells ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -159,11 +144,6 @@
   min-width: 0;
 }
 
-.phoneWaiting {
-  flex: none;
-  display: inline-flex;
-}
-
 .partHold {
   flex: none;
   display: inline-flex;
@@ -187,8 +167,9 @@
 .panelTitle {
   display: inline-flex;
   align-items: center;
-  gap: var(--nds-space-6);
+  gap: var(--nds-space-8);
   min-width: 0;
+  max-width: 100%;
 }
 
 .panelBody {
@@ -227,9 +208,5 @@
 @media (max-width: 760px) {
   .line {
     flex-wrap: wrap;
-  }
-
-  .count {
-    min-width: 0;
   }
 }

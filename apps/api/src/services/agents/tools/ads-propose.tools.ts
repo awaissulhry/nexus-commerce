@@ -54,6 +54,8 @@ import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { notOfferedRefusal, recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, sourcesRecord, unsettleChange, withSource } from './ads-change-source.js'
 import { ALIAS, aliasExecute, aliasPreview, aliasUndo, candidateInCampaign, type EngineItem } from './ads-harvest-alias.js'
 import type { AgentTool, FieldPermission, ToolChange, ToolResult, ToolUndo } from '../tool-types.js'
+import { negativeReach } from '../../advertising/waste/reach.js'
+import { logger } from '../../../utils/logger.js'
 
 const BID_FLOOR_CENTS = 5
 const METRIC_WINDOW_DAYS = 60
@@ -193,7 +195,7 @@ const NEGATIVE_LIMITS = adKitLimits({ maxItems: 1 }, {
  * A5 — the negative a create-negative-keyword request would add, and what the approver must see — or why not. `rule`
  * (the dry run, not `execute`): AA-W2-7 — also the facts its limits are judged on when it may run by rule.
  */
-async function negativePreview(args: Record<string, unknown>, opts: { rule?: { approvalId?: string | null } } = {}): Promise<ToolResult> {
+async function negativePreview(args: Record<string, unknown>, opts: { rule?: { approvalId?: string | null }; pageReach?: boolean } = {}): Promise<ToolResult> {
   const externalCampaignId = String(args.externalCampaignId ?? '')
   const keywordText = String(args.keywordText ?? '').trim()
   const matchType = String(args.matchType ?? 'NEGATIVE_EXACT')
@@ -252,6 +254,15 @@ async function negativePreview(args: Record<string, unknown>, opts: { rule?: { a
   const metrics = await termMetrics(keywordText, externalCampaignId)
   const bound = await alsoChangedBy(campaign.id)
   const rule = opts.rule ? await negativeRuleFacts({ keywordText, matchType, externalCampaignId, campaign, adGroup, approvalId: opts.rule.approvalId }) : null
+  // Step 4 — the Negative Targeting page's reach check (waste/reach.ts: one answer for the page and Claude); the preview
+  // only, never in the way of it.
+  const pageReach = opts.pageReach
+    ? (await negativeReach([{ campaignId: campaign.id, adGroupId: adGroup.id, level: 'AD_GROUP', text: keywordText, match: matchType === 'NEGATIVE_PHRASE' ? 'PHRASE' : 'EXACT' }])
+      .catch((error: unknown) => {
+        logger.warn('[create-negative-keyword] the page reach could not be read; the preview goes without it', { error: error instanceof Error ? error.message : String(error) })
+        return [null]
+      }))[0]?.reach ?? null
+    : undefined
   return {
     ok: true,
     preview: {
@@ -264,6 +275,7 @@ async function negativePreview(args: Record<string, unknown>, opts: { rule?: { a
       externalAdGroupId: adGroup.externalAdGroupId,
       currency,
       metrics,
+      ...(pageReach !== undefined ? { pageReach } : {}),
       alreadyNegated: false,
       protectedDenial: null,
       reach: stored,
@@ -413,14 +425,17 @@ const createNegativeKeyword: AgentTool = {
     + 'Claude with their authenticator code when the business set it so — unless the business lets it run by its rule: '
     + 'only an exact negative of a term whose record meets the ads strategy\'s "Negate a search term when" group where '
     + 'it lands, inside its limits. The preview shows the term\'s recent '
-    + 'spend and orders, the ad group, whether it lands live at Amazon or in sandbox, and each limit with where it comes '
+    + 'spend and orders, its pageReach — the Negative Targeting page\'s reach check, the same answer its review shows: over '
+    + 'the page\'s window (windowDays) the search terms the negative would block in that ad group (a phrase: every term '
+    + 'holding the words), their spendCents, clicks, orders and salesCents, and sold: up to 10 that had an order — the ad '
+    + 'group, whether it lands live at Amazon or in sandbox, and each limit with where it comes '
     + 'from. Refused, and not queued, '
     + 'for a protected term, a term already negated in the campaign, a campaign-level negative, or when Amazon\'s '
     + 'write gate would refuse it. A protected product\'s ASIN is never negated by rule. Once approved it is created at '
     + 'once as the approver; undo-change retires it again. The list form — many negatives into many ad groups, campaign '
     + 'negatives, negative ASINs — is add-negative-targets; retire-negatives retires any negative.',
   async handler(args, ctx) {
-    return negativePreview(args, { rule: { approvalId: ctx.approvalId } })
+    return negativePreview(args, { rule: { approvalId: ctx.approvalId }, pageReach: true })
   },
   async execute(args, ctx) {
     const fresh = await negativePreview(args)

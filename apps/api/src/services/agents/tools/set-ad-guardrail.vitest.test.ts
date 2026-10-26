@@ -108,6 +108,34 @@ describe('R13 — set-ad-guardrail', () => {
     expect(await inside(() => database.client.adKeywordProtection.count())).toBe(0)
   })
 
+  it('step 4 — the undo of a removal puts the term back exactly: match, scope, reason and who set it, from the removal itself', async () => {
+    await inside(() => database.client.adKeywordProtection.create({ data: { mode: 'WHITELIST', term: 'made up line', matchType: 'CONTAINS', marketplace: 'IT', reason: 'made up: our own words', createdBy: 'user:someone-else' } }))
+    const removed = await run({ kind: 'protected-term', op: 'remove', term: 'made up line', marketplace: 'IT' })
+    expect(removed.ok).toBe(true)
+    expect(removed.change!.before.row).toEqual({ term: 'made up line', matchType: 'CONTAINS', marketplace: 'IT', campaignId: null, isPrefix: false, reason: 'made up: our own words', createdBy: 'user:someone-else' })
+    // The change as the gate records it (an AgentChange of an approval).
+    const recorded = await inside(async () => {
+      const agentRun = await database.client.agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'completed', via: 'claude' } as never })
+      const ap = await database.client.agentApproval.create({ data: { agentRunId: agentRun.id, toolName: 'set-ad-guardrail', riskTier: 'medium', args: {}, status: 'executed' } as never })
+      return database.client.agentChange.create({ data: { approvalId: ap.id, toolName: 'set-ad-guardrail', via: 'claude', reversibility: 'full', before: removed.change!.before, after: removed.change!.after } })
+    })
+    const change = { ...removed.change!, id: recorded.id }
+    expect(await inside(() => tool().undo!.current(change))).toEqual(change.after)
+    const back = tool().undo!.request(change) as { tool: string; args: Record<string, unknown> }
+    expect(back).toEqual({ tool: 'set-ad-guardrail', args: { kind: 'protected-term', op: 'set', term: 'made up line', marketplace: 'IT', matchType: 'CONTAINS', note: 'made up: our own words', restoreChangeId: recorded.id } })
+    expect((await dry(back.args)).preview).toMatchObject({ direction: 'tighten', effect: expect.stringMatching(/as it was: its match, reason and who set it/) })
+    // A restore that names another term's change, or a change that is not a removal, is refused.
+    expect((await dry({ ...back.args, term: 'other made up words' })).error).toMatch(/not the removal of “other made up words”/)
+    const put = await run(back.args)
+    expect(put.ok).toBe(true)
+    const row = await inside(() => database.client.adKeywordProtection.findFirstOrThrow({ where: { term: 'made up line' } }))
+    expect(row).toMatchObject({ mode: 'WHITELIST', matchType: 'CONTAINS', isPrefix: false, marketplace: 'IT', campaignId: null, reason: 'made up: our own words', createdBy: 'user:someone-else' })
+    // Its audit row names the person who put it back; the undo of the restore compares in the shape it recorded.
+    expect((await inside(() => database.client.advertisingActionLog.findFirstOrThrow({ where: { actionType: 'add_keyword_protection', entityId: row.id } }))).userId).toBe('user:u-r13')
+    expect(await inside(() => tool().undo!.current(put.change!))).toEqual(put.change!.after)
+    await inside(() => database.client.adKeywordProtection.deleteMany({ where: { term: 'made up line' } }))
+  })
+
   it("another business's campaign is not found; a bid policy has no campaign grain", async () => {
     expect((await dry({ kind: 'spend-ceiling', op: 'set', grain: 'CAMPAIGN', scopeId: ids.otherCampaign, dailyCapCents: 100 })).error).toBe(`CAMPAIGN ${ids.otherCampaign}: not found in this business.`)
     expect((await dry({ kind: 'bid-policy', op: 'set', grain: 'CAMPAIGN', scopeId: ids.campaign, maxBidCents: 100 })).error).toContain("a campaign's own bid bounds are its Campaign columns")

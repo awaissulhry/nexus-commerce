@@ -56,6 +56,8 @@ import { isSbSdCampaign } from '../../advertising/ads-mutation.service.js'
 import { SPONSORED_BRANDS, adProductOf, type AdWrite } from '@nexus/shared/ads-ad-product'
 import { isSdCampaign } from './ads-sd-create-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, type KitItem } from './ads-autonomy-kit.js'
+import { negativeReach, reachTotal, type ReachNegative } from '../../advertising/waste/reach.js'
+import { logger } from '../../../utils/logger.js'
 import { amountLabel, campaignCurrency, type BoundAutomation } from './ads-tool-guards.js'
 import {
   blocks, convertingWords, fingerprint, named, otherProductWords, placeWords, plural, productRootOf, reachOver, spendGate, termRulesFor,
@@ -388,7 +390,29 @@ async function boundTo(campaignIds: string[]): Promise<{ automations: BoundAutom
   return { automations, note: automations.length ? `${plural(automations.length, 'enabled rule or schedule', 'enabled rules or schedules')} bound to these campaigns may change them again.` : null }
 }
 
-async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'approvalId'>, opts: { rule: boolean }): Promise<{ result: ToolResult; items: NegItem[] }> {
+/** Step 4 — a negative as the Negative Targeting page's reach check reads it (a brand blocks no search term: none). */
+const reachNegativeOf = (i: NegItem): ReachNegative | null => (i.kind === 'BRAND' ? null : {
+  campaignId: i.campaign.id, adGroupId: i.level === 'AD_GROUP' ? i.placeId : null, level: i.level, text: i.text,
+  match: i.kind === 'PRODUCT' ? 'ASIN' : i.match === 'NEGATIVE_PHRASE' ? 'PHRASE' : 'EXACT',
+})
+
+/**
+ * Step 4 — what each negative would block on the Negative Targeting page's window (waste/reach.ts, the page's own
+ * reach check: one answer for the page and for Claude), and all of them together; never in the way of the preview.
+ */
+async function pageReachOf(items: readonly NegItem[]) {
+  const asked = items.map(reachNegativeOf)
+  const read = await negativeReach(asked.filter((n): n is ReachNegative => !!n)).catch((error: unknown) => {
+    logger.warn('[add-negative-targets] the page reach could not be read; the preview goes without it', { error: error instanceof Error ? error.message : String(error) })
+    return null
+  })
+  if (!read) return null
+  let at = 0
+  const each = asked.map((n) => (n ? read[at++] : null))
+  return { each: each.map((x) => x?.reach ?? null), total: reachTotal(each) }
+}
+
+async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'approvalId'>, opts: { rule: boolean; pageReach?: boolean }): Promise<{ result: ToolResult; items: NegItem[] }> {
   const refuse = (error: string) => ({ result: { ok: false, error } as ToolResult, items: [] as NegItem[] })
   const parsed = ADD_INPUT.safeParse(raw)
   if (!parsed.success) return refuse(parsed.error.issues.map((i) => `${i.path.join('.') || 'arguments'}: ${i.message}`).join('; '))
@@ -426,12 +450,15 @@ async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'a
   const ruleRecords = facts ? await negateRecords(items, facts.limitFacts) : null
 
   const currencyOf = new Map(items.map((i) => [i.key, i.campaign.currency]))
-  const lines = items.map((i) => {
+  // The preview only (never re-read in execute: not material).
+  const page = opts.pageReach ? await pageReachOf(items) : null
+  const lines = items.map((i, at) => {
     const r = rules.records[i.key]
     return {
       label: `${negativeWords(i)} · ${i.place}`, level: i.level, marketplace: i.campaign.marketplace, fromLabel: 'none', toLabel: negativeWords(i),
       // What it blocks of what ran there over the window, in the campaign's currency.
       blocked: { searchTerms: r?.terms ?? 0, clicks: r?.clicks ?? 0, orders: r?.orders ?? 0, spendCents: r?.spendCents ?? 0, currency: currencyOf.get(i.key) },
+      ...(page ? { pageReach: page.each[at] } : {}),
     }
   })
   const brands = items.filter((i) => i.kind === 'BRAND').length
@@ -466,6 +493,7 @@ async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'a
         ...(checked.warnings.length ? { warnings: checked.warnings } : {}),
         alsoChangedBy: bound.automations,
         ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
+        ...(page ? { pageReachTotal: page.total } : {}),
         // Every negative and the ad groups it blocks in: a change of any of them after approval is caught.
         basis: fingerprint(items.map((i) => [i.key, i.adGroupIds])),
         reach: stored,
@@ -605,10 +633,14 @@ const addNegativeTargets: AgentTool = {
     + 'own place, or when Amazon\'s write gate would refuse it; a protected product\'s ASIN is warned. A negative only lowers '
     + `spend, so it needs no authenticator code. ${BY_RULE_WORDS} (by default it does not: maxItems 0, no market; then only exact `
     + 'negatives of terms that meet the ads strategy\'s "Negate a search term when" group where they land). The preview lists '
-    + 'each negative with what it blocks of what ran there, where it lands (live at Amazon or sandbox) and each limit. '
+    + 'each negative with what it blocks of what ran there (blocked: the 90 days Nexus keeps), its pageReach — the Negative '
+    + 'Targeting page\'s reach check, the same answer its review shows: over the page\'s window (windowDays, 60 unless the ads '
+    + 'strategy names 30 or 90) the search terms it would block there (terms not blocked already), their spendCents, clicks, '
+    + 'orders and salesCents, and sold: up to 10 that had an order (a warning to read before asking) — and pageReachTotal '
+    + '(every term once, money per currency), where it lands (live at Amazon or sandbox) and each limit. '
     + 'Undo (undo-change) retires exactly what it made.',
   async handler(args, ctx) {
-    return (await decideAdd(args, ctx, { rule: true })).result
+    return (await decideAdd(args, ctx, { rule: true, pageReach: true })).result
   },
   async execute(args, ctx) {
     // MCP.12 — a product deleted after approval is not found: said first, nothing written.

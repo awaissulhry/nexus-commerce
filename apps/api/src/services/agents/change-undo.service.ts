@@ -6,6 +6,9 @@
  * as the person (their permissions for the inverse tool, its preview, its approval and audit), and then approves it as
  * the Approvals page does (decideFleetApproval): parked for the same undo window, re-checked at commit (the person's
  * permissions, the preview), run by the sweep. Nothing here writes a value itself.
+ *
+ * The id is a change's (AgentChange) or, as undo-change also takes it, a change set's (its approval: a whole plan, or a
+ * request that made one change) — the Negative Targeting page undoes its change sets once they ran (2026-10-25).
  */
 
 import { Prisma } from '@nexus/database'
@@ -34,18 +37,21 @@ function statusOf(error: string): 403 | 404 | 409 {
 export async function undoChangeByClick(principal: UserPrincipal, changeId: string, code?: unknown): Promise<UndoClickResult> {
   const id = changeId.trim()
   if (!id || id.length > 64) return { ok: false, status: 400, error: 'Name the change to undo.' }
+  // An id that names no change but a change set is read as the set's (undo-change's approvalId: a plan undoes whole).
+  const isSet = !(await prisma.agentChange.findUnique({ where: { id }, select: { id: true } })) && !!(await prisma.agentApproval.findUnique({ where: { id }, select: { id: true } }))
+  const ref = isSet ? { approvalId: id } : { changeId: id }
   const run = await prisma.agentRun.create({
     data: {
       agentKey: 'manual-action',
       trigger: 'manual',
       status: 'running',
-      input: { tool: 'undo-change', args: { changeId: id } } as Prisma.InputJsonValue,
+      input: { tool: 'undo-change', args: ref } as Prisma.InputJsonValue,
       userId: principal.userId,
       ...runOrigin(principal),
     },
   })
   // forceAsk: the inverse change is always stored as a request, so the click approves it through the window.
-  const asked = await runOrQueueTool('undo-change', { changeId: id }, principal, run.id, { forceAsk: true })
+  const asked = await runOrQueueTool('undo-change', ref, principal, run.id, { forceAsk: true })
   const queued = asked.mode === 'queued' && !!asked.approvalId
   await prisma.agentRun.update({
     where: { id: run.id },

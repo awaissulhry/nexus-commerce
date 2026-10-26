@@ -16,12 +16,21 @@
  *               it, unknown when that sync stored a crowd at once); `sinceSource` says which, `sinceWhy` says it in words
  *               (always when unknown: "—" on the page with its why)
  *   spendBefore the 30 days before `since` (null when those days are older than Nexus keeps)
+ *   effect      step 4 — "Did it work?": the money saved since the stop, TOO_EARLY for the first 14 days (effect.ts, pure);
+ *               the spend before and after is read for the rows of the page (withEffects: one query per kind), for every
+ *               matching row when the read is ordered by it; STILL_SPENDS from this view's own still-bought facts. null:
+ *               when it stopped is not known, or the days before it are older than Nexus keeps
+ *   sort        a key (STOPPED_SORT_KEYS), '-' in front for descending; default: the newest stop first. A person who does
+ *               not see ad spend is never ordered by a money key (the route reads it as `where`)
  */
+import { Prisma } from '@prisma/client'
+import prisma from '../../../db.js'
 import { labelFor } from '../bid-grid.service.js'
+import { EFFECT_MIN_DAYS, effectWindows, stopEffect, type StopEffect } from './effect.js'
 import { negativeKeptBy, NO_OWNER, ownerOfActor, refOfOwner } from './owner.js'
 import { NO_PAUSE_RECORD, type SinceSource } from './since.js'
 import {
-  DAY_MS, keywordRowId, plainWords, romeDay, negativeMatch, negRowId, ownerMatches, pageOf, targetMatch, termKeyOf,
+  DAY_MS, keywordRowId, plainWords, romeDay, negativeBlocksTerm, negativeMatch, negRowId, ownerMatches, pageOf, targetMatch, termKeyOf,
   type Match, type Owner, type Ref,
 } from './pure.js'
 import {
@@ -57,6 +66,8 @@ export interface StoppedRow {
   /** Standing negatives of the same words and match in the scope (one term in many places reads as one chip). */
   places: number
   actions: { turnOn: ActionGate; removeNegative: ActionGate; release: ActionGate }
+  /** Step 4 — "Did it work?" (effect.ts); set for the rows a read answers (withEffects), null until then or when unknown. */
+  effect: StopEffect | null
 }
 
 export interface StoppedTotals { all: number; kept: number; paused: number; negated: number; turnedOn: number; stillBought: number; notAtAmazon: number; inactive: number }
@@ -66,8 +77,51 @@ export interface StoppedQuery extends WasteScope {
   owner?: string | null
   show?: StoppedShow
   q?: string | null
+  /** A key of STOPPED_SORT_KEYS, '-' in front for descending; none: the newest stop first. */
+  sort?: string | null
   page?: number | null
   pageSize?: number | null
+}
+
+/** The Stopped view's columns the server orders by. */
+export const STOPPED_SORT_KEYS = ['text', 'where', 'product', 'owner', 'since', 'spendBefore', 'saved', 'state', 'stillServes'] as const
+export type StoppedSortKey = (typeof STOPPED_SORT_KEYS)[number]
+/** A money key of the Stopped view, for a person who may not order by it. */
+export const isStoppedMoneySort = (sort: string | null | undefined) => ['spendbefore', 'saved'].includes(String(sort ?? '').replace(/^-/, '').toLowerCase())
+
+/** The newest stop first, then the words (the view's own order, and every sort's tie-break). */
+const byNewest = (a: StoppedRow, b: StoppedRow) => (b.since ?? '').localeCompare(a.since ?? '') || a.text.localeCompare(b.text) || a.id.localeCompare(b.id)
+
+/** The Stopped view's order: a key, '-' in front for descending; an unknown or no key is the newest stop first. */
+export function compareStopped(sort: string | null | undefined): (a: StoppedRow, b: StoppedRow) => number {
+  const raw = String(sort ?? '').trim()
+  const desc = raw.startsWith('-')
+  const key = (desc ? raw.slice(1) : raw) as StoppedSortKey
+  if (!(STOPPED_SORT_KEYS as readonly string[]).includes(key)) return byNewest
+  const num = (f: (r: StoppedRow) => number | null | undefined) => (a: StoppedRow, b: StoppedRow) => {
+    const x = f(a) ?? -Infinity
+    const y = f(b) ?? -Infinity
+    return x === y ? 0 : x < y ? -1 : 1
+  }
+  const str = (f: (r: StoppedRow) => string) => (a: StoppedRow, b: StoppedRow) => f(a).localeCompare(f(b))
+  const base: Record<StoppedSortKey, (a: StoppedRow, b: StoppedRow) => number> = {
+    text: str((r) => r.text),
+    where: str((r) => `${r.portfolio?.name ?? ''} ${r.campaign.name} ${r.adGroup?.name ?? ''}`),
+    product: str((r) => r.product?.name ?? '~'),
+    owner: str((r) => r.owner.name),
+    since: str((r) => r.since ?? ''),
+    spendBefore: num((r) => r.spendBeforeCents),
+    saved: num((r) => r.effect?.savedCents),
+    state: str((r) => r.state),
+    stillServes: num((r) => r.stillServesIn),
+  }
+  const cmp = base[key]
+  // Too early or not known: no money claim, so last whichever way.
+  const claim = (r: StoppedRow) => r.effect != null && r.effect.verdict !== 'TOO_EARLY' && typeof r.effect.savedCents === 'number'
+  if (key === 'saved') return (a, b) => Number(claim(b)) - Number(claim(a)) || (desc ? -cmp(a, b) : cmp(a, b)) || byNewest(a, b)
+  // No date known: last whichever way, like Saved.
+  if (key === 'since') return (a, b) => Number(!!b.since) - Number(!!a.since) || (desc ? -cmp(a, b) : cmp(a, b)) || byNewest(a, b)
+  return (a, b) => (desc ? -cmp(a, b) : cmp(a, b)) || byNewest(a, b)
 }
 
 export type StoppedAnswer = { ok: true; rows: StoppedRow[]; total: number; page: number; pageSize: number; totals: StoppedTotals } | { ok: false; status: 400 | 404; error: string }
@@ -119,6 +173,7 @@ export function buildStoppedRows(f: WasteFacts, s: ResolvedScope): { rows: Stopp
         removeNegative: { allowed: false, why: 'Not a negative: turn it on instead.' },
         release: hold ? { allowed: true, why: 'Ends the lock: it stays as it is, but writers may turn it on again.' } : { allowed: false, why: 'Not kept paused.' },
       },
+      effect: null,
     })
   }
 
@@ -159,6 +214,7 @@ export function buildStoppedRows(f: WasteFacts, s: ResolvedScope): { rows: Stopp
         removeNegative: kept ? { allowed: false, why: kept } : !n.externalTargetId ? { allowed: true, why: 'Amazon never got it: removing it changes Nexus only.' } : { allowed: true, why: FINAL },
         release: { allowed: false, why: 'Not kept paused.' },
       },
+      effect: null,
     })
   }
   return { rows, idle }
@@ -200,11 +256,90 @@ export async function readStopped(q: StoppedQuery, now: Date = new Date()): Prom
     inactive,
   }
   const kind = q.kind ?? 'all'
-  const matching = filtered
-    .filter((r) => showMatches(r, q.show ?? 'all') && (kind === 'all' || (kind === 'term' ? r.kind === 'TERM' : r.kind !== 'TERM')))
-    .sort((a, b) => (b.since ?? '').localeCompare(a.since ?? '') || a.text.localeCompare(b.text) || a.id.localeCompare(b.id))
+  const shown = filtered.filter((r) => showMatches(r, q.show ?? 'all') && (kind === 'all' || (kind === 'term' ? r.kind === 'TERM' : r.kind !== 'TERM')))
+  // Ordered by what each stop saved: every matching row's effect is read first; else only the page's.
+  const bySaved = String(q.sort ?? '').replace(/^-/, '') === 'saved'
+  const matching = (bySaved ? await withEffects(shown, out.facts, now) : shown).sort(compareStopped(q.sort))
   const page = pageOf(matching, q.page, q.pageSize)
-  return { ok: true, rows: page.rows, total: matching.length, page: page.page, pageSize: page.pageSize, totals }
+  return { ok: true, rows: bySaved ? page.rows : await withEffects(page.rows, out.facts, now), total: matching.length, page: page.page, pageSize: page.pageSize, totals }
+}
+
+// ── Step 4 — "Did it work?" ────────────────────────────────────────────────────────────────────────────────────────
+
+const centsOf = (micros: unknown) => Math.round(Number(micros ?? 0) / 10_000)
+
+/** Its words still spend in another place, not blocked there: the view's own still-bought facts. */
+const stillSpendsIn = (r: StoppedRow) => (r.kind === 'TERM' || stillBought(r) ? r.stillServesIn : 0)
+
+/**
+ * These stopped rows with their effect (effect.ts): our keyword's own spend (AmazonAdsDailyPerformance AD_TARGET), or the
+ * spend of the words a negative blocks in its place (AmazonAdsSearchTerm, by the external ids of its campaign and ad
+ * group), before and after the stop — one query per kind, summed in SQL per row and window (never shipped per day).
+ */
+export async function withEffects(rows: readonly StoppedRow[], facts: readonly WasteFacts[], now: Date = new Date()): Promise<StoppedRow[]> {
+  type Ask = { row: StoppedRow; w: ReturnType<typeof effectWindows>; f: WasteFacts }
+  const asks: Ask[] = []
+  const done = new Map<string, StopEffect | null>()
+  for (const row of rows) {
+    if (!row.since) { done.set(row.id, null); continue }
+    const w = effectWindows(row.since, now)
+    const f = facts.find((x) => x.markets.includes(row.market))
+    // Too early needs no spend; a row whose days before Nexus does not hold, or whose market was not read, has no effect.
+    if (w.days < EFFECT_MIN_DAYS || !w.before || !f) { done.set(row.id, stopEffect({ since: row.since, now, spend: null, stillIn: stillSpendsIn(row) })); continue }
+    asks.push({ row, w, f })
+  }
+  const kw = asks.filter((a) => a.row.id.startsWith('kw:'))
+  const neg = asks.flatMap((a) => {
+    if (!a.row.id.startsWith('neg:')) return []
+    const n = a.f.targetById.get(a.row.id.slice(4))
+    const g = n ? a.f.adGroups.get(n.adGroupId) : undefined
+    const c = g ? a.f.campaigns.get(g.campaignId) : undefined
+    const m = n ? negativeMatch(n.kind, n.expressionType) : null
+    if (!n || !g || !c?.externalCampaignId || !m || (n.negativeLevel !== 'CAMPAIGN' && !g.externalAdGroupId)) return []
+    return [{ ...a, c: c.externalCampaignId, g: n.negativeLevel === 'CAMPAIGN' ? '' : g.externalAdGroupId!, text: n.expressionValue, match: m }]
+  })
+  const spend = new Map<string, { before: number; after: number }>()
+  const cols = (list: Ask[]) => ({
+    bf: list.map((a) => a.w.before!.from), bt: list.map((a) => a.w.before!.to), af: list.map((a) => a.w.after.from), at: list.map((a) => a.w.after.to),
+  })
+  const [kwRows, negRows] = await Promise.all([
+    kw.length ? (() => {
+      const v = cols(kw)
+      return prisma.$queryRaw<Array<{ id: string; b: bigint | number; a: bigint | number }>>(Prisma.sql`
+        SELECT v.id,
+               SUM(CASE WHEN (p.date - DATE '1970-01-01') BETWEEN v.bf AND v.bt THEN p."costMicros" ELSE 0 END)::bigint AS b,
+               SUM(CASE WHEN (p.date - DATE '1970-01-01') BETWEEN v.af AND v.at THEN p."costMicros" ELSE 0 END)::bigint AS a
+          FROM unnest(${kw.map((a) => a.row.id.slice(3))}::text[], ${v.bf}::int[], ${v.bt}::int[], ${v.af}::int[], ${v.at}::int[]) AS v(id, bf, bt, af, at)
+          JOIN "AmazonAdsDailyPerformance" p ON p."entityType" = 'AD_TARGET' AND p."localEntityId" = v.id
+                                            AND (p.date - DATE '1970-01-01') BETWEEN v.bf AND v.at
+         GROUP BY v.id`)
+    })() : Promise.resolve([]),
+    neg.length ? (() => {
+      const v = cols(neg)
+      return prisma.$queryRaw<Array<{ id: string; q: string; b: bigint | number; a: bigint | number }>>(Prisma.sql`
+        SELECT v.id, s.query AS q,
+               SUM(CASE WHEN (s.date - DATE '1970-01-01') BETWEEN v.bf AND v.bt THEN s."costMicros" ELSE 0 END)::bigint AS b,
+               SUM(CASE WHEN (s.date - DATE '1970-01-01') BETWEEN v.af AND v.at THEN s."costMicros" ELSE 0 END)::bigint AS a
+          FROM unnest(${neg.map((a) => a.row.id.slice(4))}::text[], ${neg.map((a) => a.c)}::text[], ${neg.map((a) => a.g)}::text[], ${v.bf}::int[], ${v.bt}::int[], ${v.af}::int[], ${v.at}::int[]) AS v(id, c, g, bf, bt, af, at)
+          JOIN "AmazonAdsSearchTerm" s ON s."campaignId" = v.c AND (v.g = '' OR s."adGroupId" = v.g)
+                                      AND (s.date - DATE '1970-01-01') BETWEEN v.bf AND v.at
+         GROUP BY v.id, s.query`)
+    })() : Promise.resolve([]),
+  ])
+  // A place with no spend on record in those days spent nothing.
+  for (const a of [...kw, ...neg]) spend.set(a.row.id, { before: 0, after: 0 })
+  for (const r of kwRows) spend.set(`kw:${r.id}`, { before: centsOf(r.b), after: centsOf(r.a) })
+  const negOf = new Map(neg.map((a) => [a.row.id, a]))
+  for (const r of negRows) {
+    const a = negOf.get(`neg:${r.id}`)
+    // Only the words this negative blocks (its match), as its spend before is counted (read.ts).
+    if (!a || !negativeBlocksTerm(termKeyOf(r.q), { text: a.text, match: a.match })) continue
+    const s = spend.get(a.row.id)!
+    s.before += centsOf(r.b)
+    s.after += centsOf(r.a)
+  }
+  for (const a of asks) done.set(a.row.id, stopEffect({ since: a.row.since!, now, spend: spend.get(a.row.id) ?? null, stillIn: stillSpendsIn(a.row) }))
+  return rows.map((r) => ({ ...r, effect: done.get(r.id) ?? null }))
 }
 
 export { NO_OWNER, DAY_MS }

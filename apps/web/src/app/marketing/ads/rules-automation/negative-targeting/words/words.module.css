@@ -1,0 +1,31 @@
+/*
+ * Negative Targeting page, Words view (step 4, 2026-10-25) — layout only, design-system tokens only. Everything else is
+ * the page's own (../negatives.module.css); the record's is ../waste/record.module.css.
+ */
+
+/* A count in a numbers column: its link sits right, under its right-aligned header. */
+.cellEnd {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+}
+
+/* The State cell (D6): the chip, and under it the word that covers a 2-word piece. */
+.stateCell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  min-width: 0;
+  max-width: 100%;
+  height: 100%;
+}
+
+.stateSub {
+  max-width: 100%;
+  gap: var(--nds-space-4);
+}
+

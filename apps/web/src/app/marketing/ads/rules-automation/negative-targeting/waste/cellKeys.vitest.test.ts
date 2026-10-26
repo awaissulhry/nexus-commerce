@@ -25,6 +25,14 @@ describe('cell keys (audit S4)', () => {
     verbKeys({ event: { key: 'Enter', type: 'keydown', target: held.target }, editing: false })
     expect(held.clicks).toEqual(['focus0'])
   })
+  it('Shift+Enter presses the second button: Reject beside Approve (a waiting row), else the ⋯', () => {
+    const clicks: string[] = []
+    const btn = (n: string) => ({ click: () => clicks.push(n), getAttribute: () => null })
+    const target = { closest: () => null, querySelector: () => btn('approve'), querySelectorAll: () => [btn('approve'), btn('reject'), btn('more')] }
+    expect(verbKeys({ event: { key: 'Enter', shiftKey: true, type: 'keydown', target }, editing: false })).toBe(true)
+    expect(verbKeys({ event: { key: 'Enter', type: 'keydown', target }, editing: false })).toBe(true)
+    expect(clicks).toEqual(['reject', 'approve'])
+  })
   it('other keys stay the grid\'s; focus on the control keeps its own keys', () => {
     expect(verbKeys({ event: { key: 'ArrowDown', target: el({ buttons: [{}] }).target }, editing: false })).toBe(false)
     expect(verbKeys({ event: { key: 'Enter', target: el({ onControl: true }).target }, editing: false })).toBe(true)

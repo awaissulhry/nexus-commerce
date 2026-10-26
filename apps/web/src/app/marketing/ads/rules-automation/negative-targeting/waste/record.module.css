@@ -1,0 +1,218 @@
+/*
+ * Negative Targeting page — the records (RowDetail, WordDetail) and the review's own lines (useWasteReview), redone
+ * 2026-10-26 (RECORD-SPEC). Layout and domain words only, design-system tokens only: every control, card, table, tile,
+ * banner and timeline is the design system's own and keeps its own look.
+ */
+
+/* ── header ──────────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ellipsis {
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.subtitle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-6);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.lead {
+  color: var(--nds-text-2);
+}
+
+.sep {
+  color: var(--nds-text-3);
+}
+
+.meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+/* ── body ────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+/* One column of cards (the main column, the side panel, a tab). */
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+/* A tab's intro line, and the line in an empty card. */
+.intro {
+  color: var(--nds-text-2);
+}
+
+/* The muted note under a card's table ("The limits come from …"). */
+.note {
+  margin: var(--nds-space-10) 0 0;
+  font-size: var(--nds-font-size-xs-plus);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}
+
+.quiet {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.strong {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.bad { color: var(--nds-danger-text); }
+.ok { color: var(--nds-success-text); }
+.warn { color: var(--nds-warning-text); }
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+/* A cell that holds a path: it keeps to its column and the path ends in an ellipsis. */
+.pathCell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* A cell's buttons, at its end. */
+.actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}
+
+/* The spend per week card's body: the line, then its two facts. */
+.trend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+/* ── footer ──────────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  width: 100%;
+}
+
+.footerNote {
+  font-size: var(--nds-font-size-xs-plus);
+  color: var(--nds-text-2);
+}
+
+.grow {
+  flex: 1;
+}
+
+.slot {
+  display: inline-flex;
+  min-width: 0;
+}
+
+/* Phone (the sheet's 760px): the quiet line first, the secondary buttons side by side, the primary across the width. */
+@media (max-width: 760px) {
+  .footerNote {
+    order: -1;
+    flex-basis: 100%;
+  }
+
+  .grow {
+    display: none;
+  }
+
+  .slot {
+    display: flex;
+    flex: 1 1 0;
+  }
+
+  .slot > * {
+    flex: 1 1 auto;
+  }
+
+  .slotPrimary {
+    flex-basis: 100%;
+  }
+}
+
+/* ── the review (useWasteReview): what a negative would block ───────────────────────────────────────────────────── */
+
+.reach {
+  display: grid;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.stepWhat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+/* One line, never broken mid-number; on a phone each change is a stacked card, so the line may wrap there. */
+.reachLine,
+.reachSold {
+  font-size: var(--nds-font-size-sm);
+  white-space: nowrap;
+}
+
+.reachLine {
+  color: var(--nds-text-2);
+}
+
+.reachSold {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-danger-text);
+}
+
+.quietInline {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nds-text-2);
+}
+
+@media (max-width: 760px) {
+  .reachLine,
+  .reachSold {
+    white-space: normal;
+  }
+}

@@ -695,12 +695,27 @@ export const GUARDRAIL_UNDO: ToolUndo = {
   async current(change) {
     const after = change.after as GuardrailChange
     const svc = await import('../../advertising/ads-guardrail-change.service.js')
-    return { kind: after.kind, key: after.key, row: svc.guardrailState(after.kind, await svc.readGuardrail(after.kind, after.key)) }
+    // Step 4 — in the shape the change recorded: a protected term now reads its reason and author too, older records not.
+    return { kind: after.kind, key: after.key, row: svc.stateLike(svc.guardrailState(after.kind, await svc.readGuardrail(after.kind, after.key)), after.row) }
   },
   request(change) {
     const before = change.before as GuardrailChange
     const key = Object.fromEntries(Object.entries(before.key).filter(([, v]) => v != null))
     if (!before.row) return { tool: 'set-ad-guardrail', args: { kind: before.kind, op: 'remove', ...key } }
+    // Step 4 — a removed protected term comes back exactly: its match, its reason, and (from this very change, never from
+    // the request) who set it.
+    if (before.kind === 'protected-term') {
+      const row = before.row as { matchType?: unknown; reason?: unknown }
+      return {
+        tool: 'set-ad-guardrail',
+        args: {
+          kind: 'protected-term', op: 'set', ...key,
+          ...(typeof row.matchType === 'string' && row.matchType ? { matchType: row.matchType } : {}),
+          ...(typeof row.reason === 'string' && row.reason ? { note: row.reason.slice(0, 300) } : {}),
+          ...(change.id ? { restoreChangeId: change.id } : {}),
+        },
+      }
+    }
     // W3-2 — a campaign's own guardrail keeps every value, a cleared one (null) too: the undo sets the kind back whole.
     const campaignKind = isCampaignKind(before.kind)
     const row = Object.fromEntries(Object.entries(before.row).filter(([k, v]) => v != null || campaignKind || ['dailyCapCents', 'minBidCents', 'maxBidCents'].includes(k)))
@@ -793,6 +808,7 @@ const setAdGuardrail: AgentTool = {
     matchType: z.enum(['EXACT', 'PREFIX', 'CONTAINS']).optional().describe('protected-term: how the term matches (default EXACT)'),
     marketplace: z.string().trim().min(1).max(20).optional().describe('protected-term: only in this market'),
     campaignId: ID.optional().describe('a campaign kind: the campaign (its Nexus id, from ad-campaigns); protected-term: only in this campaign'),
+    restoreChangeId: ID.optional().describe('protected-term set, an undo only: the change that removed this term — it comes back exactly as that change recorded it (match, reason, who set it)'),
   }),
   async handler(args, ctx) {
     const denied = campaignGuardrailPermitted(ctx, args.kind)

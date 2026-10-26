@@ -473,6 +473,9 @@ export const ENTRIES: Entry[] = [
   // stopped, one row, history. Reads, ads.view; money keys stripped without financials.adspend.view. Named on their own.
   // NFIX — a waiting request's every step (GET waiting/:id), before a person decides it on the page.
   P(F.adsView, (m, p) => isRead(m) && /^\/api\/advertising\/waste\/(rows(\/ids)?|stopped|history|row\/[^/]+|waiting\/[^/]+)$/.test(p)),
+  // Negative Targeting, Words view (step 4, 2026-10-25): the words, every id that matches, one word. Reads, ads.view; money
+  // keys stripped without financials.adspend.view. Named on their own.
+  P(F.adsView, (m, p) => isRead(m) && /^\/api\/advertising\/waste\/(words(\/ids)?|word\/[^/]+)$/.test(p)),
   // KAPI-B — one keyword's Auto / Manual (routes/advertising-bid-mode.routes.ts): a hold of its bid or the hand-back,
   // ads.bids.edit, named on its own so no reorder of the broader rules below can hand it another permission.
   P(F.adsBidsEdit, (m, p) => m.toUpperCase() === 'POST' && /^\/api\/advertising\/bids\/[^/]+\/mode$/.test(p)),

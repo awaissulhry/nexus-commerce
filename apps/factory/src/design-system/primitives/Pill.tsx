@@ -29,6 +29,11 @@ interface PillBaseProps extends Omit<HTMLAttributes<HTMLSpanElement>, 'onClick'>
    * inside a table cell. Default `sm` is the in-cell status chip every existing consumer gets.
    */
   size?: 'sm' | 'md'
+  /**
+   * One line inside its container, ending in "…" (2026-10-26, as `Tag`'s `truncate`): a long status in a narrow grid
+   * cell. The full words ride in `title` — the caller's `title`, or the pill's own text when it is plain words.
+   */
+  truncate?: boolean
   children: ReactNode
 }
 
@@ -67,18 +72,22 @@ export type PillProps = PillBaseProps & (
 )
 
 /** Status pill — matches the H10 `.h10-pill`. Becomes a button when given `onClick`. */
-export function Pill({ tone, onClick, pressed, disabled, dot, size, icon, compact, className, children, ...rest }: PillProps) {
-  const cls = `nds-pill ${tone}${onClick ? ' btn' : ''}${dot ? ' has-dot' : ''}${size === 'md' ? ' md' : ''}${compact ? ' compact' : ''}${className ? ` ${className}` : ''}`
+export function Pill({ tone, onClick, pressed, disabled, dot, size, icon, compact, truncate, className, children, ...rest }: PillProps) {
+  const cls = `nds-pill ${tone}${onClick ? ' btn' : ''}${dot ? ' has-dot' : ''}${size === 'md' ? ' md' : ''}${compact ? ' compact' : ''}${truncate ? ' is-truncated' : ''}${className ? ` ${className}` : ''}`
+  // Text in a flex box ellipsises only inside an element of its own: truncated words get one (`.nds-pill-text`).
+  const textClass = truncate && !compact ? 'nds-pill-text' : undefined
+  const words = textClass ? <span className={textClass}>{children}</span> : children
+  if (truncate && rest.title === undefined && (typeof children === 'string' || typeof children === 'number')) rest.title = String(children)
   const body = dot || icon != null ? (
     <>
       {dot && <span className="dot" aria-hidden />}
       {icon}
       {/* Wrapped only when there is a glyph to keep: a pill with neither `dot` nor `icon` renders
           exactly the node it always did, so no existing consumer's geometry moves. */}
-      {icon != null ? <span className={compact ? 'nds-vh' : undefined}>{children}</span> : children}
+      {icon != null ? <span className={compact ? 'nds-vh' : textClass}>{children}</span> : words}
     </>
   ) : (
-    children
+    words
   )
   if (onClick) {
     return (

@@ -21457,6 +21457,37 @@ model AdsWasteSkip {
   @@index([workspaceId])
 }
 
+/// Negative Targeting step 4 (2026-10-25) — "Remove protection and stop" on a shopper's search term: the negatives that
+/// wait for a protected term's removal (their tool refuses a protected term), sent by the SERVER once the removal ran, as
+/// the person who approved it, through the page's own write (waste/follow-up.ts). One per removal change set.
+///   approvalId   the removal's change set (AgentApproval.id): the follow-up runs once it executed
+///   items        the review's items it sends: the removals they depend on and the negatives (the page's WasteItem shape)
+///   rowIds       the rows it stops (each row and its History say how it went)
+///   by           the person who clicked Send (`user:<id>`)
+///   status       WAITING · SENDING · SENT · REFUSED · CANCELLED (the person's Undo)
+///   changeSetId  the negatives' change set once sent (AgentApproval.id)
+///   results      per row: sent, or why not in plain words
+model AdsWasteFollowUp {
+  // Business ownership comes from verified database context.
+  workspaceId String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String    @id @default(cuid())
+  approvalId  String
+  items       Json
+  rowIds      String[]
+  by          String
+  status      String    @default("WAITING")
+  changeSetId String?
+  results     Json?
+  why         String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  endedAt     DateTime?
+
+  @@index([approvalId])
+  @@index([status, createdAt])
+  @@index([workspaceId])
+}
+
 /// AUTO.A7 / substrate S5 — the durable record of a write-gate refusal.
 ///
 /// Until now `logGateDeny` wrote to the application log and NOWHERE ELSE, so no surface could

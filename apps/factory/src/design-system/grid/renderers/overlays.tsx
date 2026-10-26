@@ -10,7 +10,7 @@
  * The skeleton draws rows at the CURRENT density (it reads the same context the grid does), so a
  * loading Spacious grid is the height of a loaded one and nothing jumps when the data lands.
  */
-import { memo, type ReactNode } from 'react'
+import { createContext, memo, useContext, type ReactNode } from 'react'
 
 import { Button } from '../../primitives'
 import { gridDensity } from '../../tokens/grid'
@@ -22,7 +22,7 @@ export interface GridLoadingOverlayParams {
   /** Draw a thumbnail block in the first cell (media rows). */
   media?: boolean
   /** Match the host's row kind, including a thumbnail on a single-line product row. */
-  rowKind?: 'text' | 'media' | 'media-line'
+  rowKind?: 'text' | 'media' | 'media-line' | 'two-line'
 }
 
 export const GridLoadingOverlay = memo(function GridLoadingOverlay({ rows = 6, media = false, rowKind }: GridLoadingOverlayParams) {
@@ -30,7 +30,7 @@ export const GridLoadingOverlay = memo(function GridLoadingOverlay({ rows = 6, m
   const tier = gridDensity[density]
   const kind = rowKind ?? (media ? 'media' : 'text')
   const hasMedia = kind !== 'text'
-  const rowH = kind === 'media-line' ? tier.rowMediaLine : kind === 'media' ? tier.rowMedia : tier.rowText
+  const rowH = kind === 'media-line' ? tier.rowMediaLine : kind === 'media' ? tier.rowMedia : kind === 'two-line' ? tier.rowTwoLine : tier.rowText
   return (
     <div className="nds-grid-skel" role="status" aria-live="polite" aria-label="Loading">
       {Array.from({ length: rows }, (_, i) => (
@@ -38,7 +38,7 @@ export const GridLoadingOverlay = memo(function GridLoadingOverlay({ rows = 6, m
           {hasMedia && <span className="nds-grid-skel-thumb" style={{ width: tier.thumb, height: tier.thumb }} />}
           <span className="nds-grid-skel-text">
             <span className="nds-grid-skel-line" style={{ width: `${44 + ((i * 17) % 30)}%` }} />
-            {kind === 'media' && <span className="nds-grid-skel-line nds-grid-skel-line-sub" style={{ width: `${20 + ((i * 11) % 18)}%` }} />}
+            {(kind === 'media' || kind === 'two-line') && <span className="nds-grid-skel-line nds-grid-skel-line-sub" style={{ width: `${20 + ((i * 11) % 18)}%` }} />}
           </span>
         </div>
       ))}
@@ -70,4 +70,15 @@ export const GridNoRowsOverlay = memo(function GridNoRowsOverlay({ title = 'Noth
       )}
     </div>
   )
+})
+
+/**
+ * `NexusGrid emptyState` (2026-10-26): the page's own empty state, read from context rather than from AG's overlay
+ * params, so new words (a filter that now matches nothing) reach an overlay AG already drew.
+ */
+export const GridEmptyStateContext = createContext<ReactNode>(null)
+
+export const GridEmptyStateOverlay = memo(function GridEmptyStateOverlay() {
+  const node = useContext(GridEmptyStateContext)
+  return <div className="nds-ag-empty nds-grid-noRows nds-grid-emptyState" role="status">{node}</div>
 })

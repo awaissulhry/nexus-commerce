@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   ackWords, appliedWords, chipOwner, decideLines, decideSummary, planWords, doneLine, isFinal, keepWord, olderKeep, shownSteps, unknownAction, detailTabOf, emptyWords, idKind, kindOf, landsWord, listSearch, previewSummary, saveWords,
-  sinceView, skipIds, sortOf, sortParam, spendHint, verbLabel, waitingCount, stateSentence, stoppedBulkPlan, stoppedShowOf, stoppedVerb, termOfId, tileQuery, tilesOf, undoWords, viewOf, waitingOf,
+  sinceView, skipIds, sortOf, sortParam, spendHint, verbLabel, stateSentence, stoppedBulkPlan, stoppedShowOf, stoppedVerb, termOfId, tileQuery, tilesOf, undoWords, viewOf, waitingOf,
   wasteBulkCounts, wasteBulkPlan, wastingShowOf, wasteVerb, xCpaText,
+  decideAria, headerLine, KIND_WORDS, noteLine, ownFilterCount, pagerWords, stateChip, stateSub, stoppedRowMenu, tickedCount, toolbarCount, wasteRowMenu, wastingChips,
 } from './wasteModel'
 import type { PreviewStep, StoppedRow, StoppedTotals, WaitingSteps, WasteRow, WasteTotals } from './wasteTypes'
 
@@ -67,9 +68,9 @@ describe('verbs', () => {
     expect(wasteVerb(row())).toMatchObject({ action: 'PAUSE', where: null, label: 'Pause', short: 'Pause', held: null })
     expect(wasteVerb(term({ verb: { action: 'NEGATE_EXACT', where: 'campaign', held: null } }))).toMatchObject({ label: 'Negative exact · whole campaign', short: 'Negative' })
   })
-  it('a held verb stays, with the server\'s reason; a protected row is held', () => {
+  it('a held verb stays, with the server\'s reason; a protected row\'s verb opens its record (step 4: its two actions are there)', () => {
     expect(wasteVerb(term({ verb: { action: 'NEGATE_EXACT', where: 'adGroup', held: { label: 'Our keyword', reason: 'It would block our own keyword' } } }))?.held).toBe('It would block our own keyword')
-    expect(wasteVerb(term({ state: 'PROTECTED' }))?.held).toBe('Protected: never negated')
+    expect(wasteVerb(term({ state: 'PROTECTED', verb: { action: 'NEGATE_EXACT', where: 'adGroup', held: { label: 'Protected', reason: '"x" is a protected term' } } }))).toMatchObject({ label: 'Protected…', held: null, primary: false, opens: true })
   })
   it('turned on outside Nexus: Pause again (kept paused), in bulk too', () => {
     expect(wasteVerb(row({ state: 'TURNED_ON_ELSEWHERE' }))).toMatchObject({ action: 'PAUSE', label: 'Pause again', held: null })
@@ -157,23 +158,27 @@ describe('the review', () => {
 })
 
 describe('tiles', () => {
-  const waste: WasteTotals = { wasting: 4, wastingSpendCents: 12000, keywords: 2, terms: 2, waiting: 2, keptPaused: 1, negated: 9, clashes: 3, skipped: 0 }
+  const waste: WasteTotals = { wasting: 4, wastingSpendCents: 12000, keywords: 2, terms: 2, waiting: 2, keptPaused: 1, negated: 9, clashes: 3, skipped: 0, protected: 1 }
   const stop: StoppedTotals = { all: 12, kept: 2, paused: 1, negated: 9, turnedOn: 0, stillBought: 1, notAtAmazon: 0, inactive: 5 }
   it('each number comes from the read whose table it opens', () => {
     const t = tilesOf({ waste, stopped: stop, view: 'wasting', wastingShow: 'wasting', stoppedShow: 'all', currency: 'EUR' })
     expect(t.map((x) => [x.id, x.value, x.active, x.clickable])).toEqual([
-      ['wasting', 4, true, true], ['waiting', 2, false, true], ['kept', 2, false, true], ['blocked', 9, false, true], ['clashes', 3, false, true],
+      ['wasting', 4, true, true], ['waiting', 2, false, true], ['kept', 2, false, true], ['blocked', 9, false, true], ['clashes', 3, false, true], ['protected', 1, false, true],
     ])
+    // Step 4 — an older server without the count: a dash, never zero, and not a button.
+    expect(tilesOf({ waste: { ...waste, protected: undefined }, stopped: stop, view: 'wasting', wastingShow: 'wasting', stoppedShow: 'all', currency: 'EUR' })[5]).toMatchObject({ id: 'protected', value: null, clickable: false })
     expect(t[0].hint).toBe('€120.00')
   })
   it('unknown is a dash, never zero', () => {
-    expect(tilesOf({ waste: null, stopped: null, view: 'wasting', wastingShow: 'wasting', stoppedShow: 'all', currency: 'EUR' }).map((x) => x.value)).toEqual([null, null, null, null, null])
+    expect(tilesOf({ waste: null, stopped: null, view: 'wasting', wastingShow: 'wasting', stoppedShow: 'all', currency: 'EUR' }).map((x) => x.value)).toEqual([null, null, null, null, null, null])
   })
   it('a tile goes to its view; the pressed one goes back', () => {
     expect(tileQuery('kept', false)).toMatchObject({ view: 'stopped', show: 'kept' })
     expect(tileQuery('kept', true)).toMatchObject({ view: 'stopped', show: null })
     expect(tileQuery('waiting', false)).toMatchObject({ view: null, show: 'waiting' })
     expect(tileQuery('clashes', false)).toMatchObject({ view: null, show: 'clashes' })
+    expect(tileQuery('protected', false)).toMatchObject({ view: null, show: 'protected' })
+    expect(tileQuery('protected', true)).toMatchObject({ view: null, show: null })
   })
   it('money in several currencies is split, never added up', () => {
     expect(spendHint({ wastingSpendCents: null, currency: null, wastingSpendByCurrency: { GBP: 4000, EUR: 50000 }, wastingSpendNote: 'several' }, 'EUR')).toEqual({ text: '€500.00 · £40.00', note: 'several' })
@@ -276,10 +281,11 @@ describe('polish round 1 (audit 2026-10-11)', () => {
     expect(wasteVerb(row())?.primary).toBe(true)
     expect(wasteVerb(row({ test: { ...row().test, met: false } }))?.primary).toBe(false)
   })
-  it('N3: the Waiting list counts asks, as its tile does', () => {
-    expect(waitingCount(4, 5)).toBe('4 asks · 5 places')
-    expect(waitingCount(1, 1)).toBe('1 ask')
-    expect(waitingCount(null, 5)).toBe('5 rows')
+  it('N3: the Waiting list counts asks, as its tile does (the redesign: the toolbar count, wasteModel toolbarCount)', () => {
+    const words = (asks: number | undefined, places: number) => toolbarCount({ view: 'wasting', show: 'waiting', kind: 'all', total: places, totals: asks == null ? null : { wasting: 0, keywords: 0, terms: 0, waiting: asks, keptPaused: 0, negated: 0, clashes: 0, skipped: 0 }, currency: 'EUR' }).map((p) => `${p.n}${p.words}`).join(' · ')
+    expect(words(4, 5)).toBe('4 asks · 5 places')
+    expect(words(1, 1)).toBe('1 ask')
+    expect(words(undefined, 5)).toBe('5 rows')
   })
   it('M1: a campaign-wide negative says "whole campaign"', () => {
     expect(verbLabel('NEGATE_EXACT', 'campaign')).toBe('Negative exact · whole campaign')
@@ -362,5 +368,104 @@ describe('NFIX — an ask that is a change plan says so (the record and the row\
     expect(planWords({ steps: 2, offPage: 1 })).toBe('Plan · 2 steps (1 not on this page)')
     expect(planWords({ steps: 3, offPage: 0 })).toBe('Plan · 3 steps')
     expect(planWords(undefined)).toBeNull()
+  })
+})
+
+describe('the redesign (2026-10-26): the frame\'s words, the chips, the rows\' ⋯', () => {
+  const NOW = Date.parse('2026-10-26T10:00:00Z')
+  const totals: WasteTotals = { wasting: 9, wastingSpendCents: 75450, currency: 'EUR', keywords: 4, terms: 5, waiting: 2, keptPaused: 1, negated: 37, clashes: 16, skipped: 4, protected: 3 }
+
+  it('D2: the header line says only what the reads give', () => {
+    expect(headerLine({ market: 'IT', freshness: { searchTermsThrough: '2026-10-24', readAt: '2026-10-26T09:54:00Z' }, now: NOW }))
+      .toBe('Amazon Italy · stops ads that spend with no orders · search terms to 24 Oct · checked 6 min ago')
+    expect(headerLine({ market: 'all', freshness: null })).toBe('Amazon, all markets · stops ads that spend with no orders')
+    expect(headerLine({ market: 'IT', freshness: { searchTermsThrough: null, readAt: 'not a day' } })).toBe('Amazon Italy · stops ads that spend with no orders')
+  })
+
+  it('D3: every tile has a hint line; the Wasting money says its window when the server gives it', () => {
+    const t = tilesOf({ waste: totals, stopped: null, view: 'wasting', wastingShow: 'wasting', stoppedShow: 'all', currency: 'EUR', windowDays: 60 })
+    expect(t.map((x) => x.hint)).toEqual(['€754.50 in 60 days', '2 asks', 'nothing turns them on', 'negatives that block now', 'need a look', 'kept safe by a term'])
+    expect(tilesOf({ waste: null, stopped: null, view: 'wasting', wastingShow: 'wasting', stoppedShow: 'all', currency: 'EUR' }).every((x) => !!x.hint)).toBe(true)
+  })
+
+  it('D5: the count is in the code\'s units, the money only when the rows are what it counts', () => {
+    const c = (show: string, total: number, kind: 'all' | 'term' = 'all') => toolbarCount({ view: 'wasting', show, kind, total, totals, currency: 'EUR' }).map((p) => `${p.n}${p.words}`).join(' · ')
+    expect(c('wasting', 9)).toBe('9 rows · €754.50')
+    expect(c('wasting', 5, 'term')).toBe('5 rows')
+    expect(c('waiting', 3)).toBe('2 asks · 3 places')
+    expect(c('waiting', 2)).toBe('2 asks')
+    expect(c('clashes', 16)).toBe('16 rows')
+    expect(c('wasting', 0)).toBe('0 rows')
+    expect(toolbarCount({ view: 'stopped', show: 'all', kind: 'all', total: 59, totals: null, currency: 'EUR' })).toEqual([{ n: '59', words: ' rows' }])
+    expect(tickedCount(3)).toEqual([{ n: '3', words: ' ticked' }])
+  })
+
+  it('D4: Kind in the brief\'s words; the view\'s own fields that filter', () => {
+    expect(KIND_WORDS).toEqual({ all: 'All', keyword: 'Our keywords and targets', term: 'Search terms' })
+    expect(ownFilterCount('wasting', 'all', 'wasting')).toBe(0)
+    expect(ownFilterCount('wasting', 'term', 'waiting')).toBe(2)
+    expect(ownFilterCount('stopped', 'all', 'all')).toBe(0)
+    expect(ownFilterCount('stopped', 'all', 'kept')).toBe(1)
+    expect(wastingChips(totals).map((c) => [c.id, c.count])).toEqual([['wasting', 9], ['waiting', 2], ['skipped', 4], ['turned-on', null], ['clashes', 16], ['protected', 3], ['all', null]])
+  })
+
+  it('D7 / D8: the pager line, always; the note in the code\'s own words', () => {
+    expect(pagerWords(1, 50, 9)).toBe('1–9 of 9')
+    expect(pagerWords(2, 50, 59)).toBe('51–59 of 59')
+    expect(pagerWords(1, 50, 0)).toBe('0 of 0')
+    expect(noteLine('wasting', { sentence: ' Search terms: 0 orders. ' })).toBe('Search terms: 0 orders.')
+    expect(noteLine('wasting', null)).toBeNull()
+    expect(noteLine('stopped', null)).toMatch(/^Spend before: spend in the 30 days before it stopped · Saved \(did it work\?\)/)
+  })
+
+  it('D6: the state is one chip with a word; Wasting only for a row whose test is met', () => {
+    expect(stateChip(row())).toEqual({ word: 'Wasting', tone: 'danger', mark: 'play', title: 'Running' })
+    expect(stateChip(row({ test: { ...row().test, met: false } }))).toMatchObject({ word: 'Running', tone: 'neutral' })
+    expect(stateChip(term({ state: 'PROTECTED', protection: { terms: [{ id: 'p1', term: 'waterproof', match: 'CONTAINS', market: 'IT', campaign: null, reason: null }], then: null } })))
+      .toEqual({ word: 'Protected', tone: 'success', mark: 'shield', title: 'Protected by "waterproof": never negated' })
+    expect(stateChip(row({ state: 'TURNED_ON_ELSEWHERE' }))).toMatchObject({ word: 'Turned on', tone: 'warning', title: 'Kept paused, but turned on outside Nexus: it spends again' })
+    expect(stateChip(stopped())).toMatchObject({ word: 'Blocked', tone: 'info', mark: 'ban', title: 'Negative exact in this ad group' })
+    expect(stateChip(stopped({ state: 'NOT_AT_AMAZON' }))).toMatchObject({ word: 'Not at Amazon', tone: 'neutral' })
+    expect(stateChip(stopped({ id: 'kw:k1', state: 'KEPT_PAUSED', keptPaused: { by: ref('u', 'You'), at: '', until: null, reason: null } }))).toMatchObject({ word: 'Kept paused', tone: 'info', mark: 'pause' })
+  })
+
+  it('D12: a waiting row says who asked; a rule\'s card is "Rule", its name in the hover', () => {
+    const waiting = { approvalId: 'suggestion:c1', by: ref('r1', 'Stop wasting glove terms'), at: '2026-10-26T05:00:00Z', expiresAt: '2026-11-01T10:00:00Z' }
+    expect(stateChip(term({ waiting }), NOW)).toEqual({ word: 'Waiting · asked by Rule', tone: 'warning', mark: 'hourglass', title: 'Waiting for you · asked by Stop wasting glove terms 5 h ago · expires in 6 d' })
+    expect(stateChip(term({ waiting: { ...waiting, approvalId: 'a1', by: ref('brain', 'Brain') } }), NOW).word).toBe('Waiting · asked by Brain')
+    expect(decideAria('approve', term({ text: 'rain cover', waiting: { ...waiting, rows: 2 } }))).toBe('Approve rain cover · 2 places')
+    expect(decideAria('reject', term({ text: 'glove liner', waiting }))).toBe('Reject glove liner')
+  })
+
+  it('D6: the line under the chip — a clash, a follow-up, a skip; a turned-on keyword\'s chip says it already', () => {
+    expect(stateSub(row({ clash: { kind: 'NEG_OVER_OWN_KEYWORD', label: 'Negative over our own keyword' } }))).toEqual({ word: 'Negative over our own keyword', tone: 'danger', mark: 'warn' })
+    expect(stateSub(row({ state: 'TURNED_ON_ELSEWHERE', clash: { kind: 'TURNED_ON', label: 'Turned on outside Nexus' } }))).toBeNull()
+    expect(stateSub(row({ skipped: { until: '2026-11-03', by: null, at: null } }))).toEqual({ word: 'Skipped until 3 Nov', tone: 'muted', mark: 'clock' })
+    expect(stateSub(row({ state: 'PROTECTED', skipped: { until: '2026-11-24', by: null, at: null } }), { keptProtected: 'Kept protected until 24 Nov 2026' })?.word).toBe('Kept protected until 24 Nov 2026')
+    expect(stateSub(row({ followUp: { status: 'WAITING', why: null, at: '' } }), { followUp: 'Its protection is being removed' })).toMatchObject({ tone: 'muted', mark: 'hourglass' })
+    expect(stateSub(row())).toBeNull()
+  })
+
+  it('D6: a Wasting row\'s ⋯ — its second verb, Skip (or Unskip), Open record; never a skip for a keyword turned on elsewhere', () => {
+    const ids = (e: ReturnType<typeof wasteRowMenu>) => e.map((x) => x.id)
+    expect(ids(wasteRowMenu(term(), null))).toEqual(['skip7', 'skip30', 'sep-record', 'record'])
+    expect(ids(wasteRowMenu(term({ skipped: { until: '2026-11-03', by: null, at: null } }), null))).toEqual(['unskip', 'sep-record', 'record'])
+    expect(ids(wasteRowMenu(row({ state: 'TURNED_ON_ELSEWHERE' }), null))).toEqual(['record'])
+    const clash = wasteRowMenu(row({ clash: { kind: 'NEG_OVER_OWN_KEYWORD', label: 'x', negative: { rowId: 'neg:n9', text: 'rain jacket', match: 'EXACT', level: 'AD_GROUP', campaign: ref('c1'), adGroup: ref('g1'), owner: { kind: 'NONE', name: '—', id: null } } } }), 'You can see ads here, not change them')
+    expect(clash[0]).toMatchObject({ id: 'REMOVE_NEGATIVE', label: 'Remove negative…', held: 'You can see ads here, not change them', ask: { kind: 'change', item: { rowId: 'kw:k1', action: 'REMOVE_NEGATIVE', targetRowId: 'neg:n9' } } })
+    expect(clash.at(-1)).toMatchObject({ id: 'record', held: null })
+  })
+
+  it('D13: a Stopped row\'s ⋯ — the record footer\'s other verbs, then Open record', () => {
+    const ids = (e: ReturnType<typeof stoppedRowMenu>) => e.map((x) => x.id)
+    expect(ids(stoppedRowMenu(stopped(), null, NOW))).toEqual(['record'])
+    expect(ids(stoppedRowMenu(stopped({ id: 'kw:k1', state: 'TURNED_ON_ELSEWHERE' }), null, NOW))).toEqual(['pause', 'sep-record', 'record'])
+    const kept = stoppedRowMenu(stopped({ id: 'kw:k1', state: 'KEPT_PAUSED', keptPaused: { by: ref('u'), at: '', until: '2026-11-10', reason: null } }), null, NOW)
+    expect(ids(kept)).toEqual(['keep', 'keep7', 'keep30', 'keepAlways', 'sep-release', 'release', 'sep-record', 'record'])
+    expect(kept[1]).toMatchObject({ label: '7 d', ask: { kind: 'change', item: { rowId: 'kw:k1', action: 'KEEP_UNTIL', keepUntil: '2026-11-02' }, keepFrom: '2026-11-10' } })
+    expect(kept[5]).toMatchObject({ label: 'Release lock', held: 'Not kept paused' })
+    const paused = stoppedRowMenu(stopped({ id: 'kw:k2', state: 'PAUSED' }), 'You can see ads here, not change them', NOW)
+    expect(paused[0]).toEqual({ id: 'keep', heading: 'Keep paused' })
+    expect(paused[3]).toMatchObject({ label: 'Always', held: 'You can see ads here, not change them', ask: { item: { keepUntil: null }, keepFrom: 'NOT_KEPT' } })
   })
 })

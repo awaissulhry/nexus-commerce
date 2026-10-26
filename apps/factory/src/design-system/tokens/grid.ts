@@ -63,15 +63,19 @@ export interface GridCssVar {
  *      At 36 it is armed to 1031px and the whole class disappears.
  * A change here is a change to two other lanes' features. Re-measure both before touching it.
  *
- *   tier      rowText  rowMedia  rowMediaLine  header  thumb  cellPadX
- *   compact     28       52           36         28     32      10   (engine xs; DS grid `xs` 5/9 padding)
- *   cozy        43       68           44         38     40      14   (engine md)
- *   spacious    49       85           60         46     56      14   (engine lg)
+ * `rowTwoLine` is a FOURTH row kind (Negative Targeting redesign, 2026-10-26): a text row whose cells may carry a muted
+ * second line under the first (a search term over its campaign). 28px fits one line only, so compact gets 40 (13px
+ * line + 11.5px line + 2 × 6px); cozy and spacious already fit two lines and keep their text height.
+ *
+ *   tier      rowText  rowMedia  rowMediaLine  rowTwoLine  header  thumb  cellPadX
+ *   compact     28       52           36           40        28     32      10   (engine xs; DS grid `xs` 5/9 padding)
+ *   cozy        43       68           44           43        38     40      14   (engine md)
+ *   spacious    49       85           60           49        46     56      14   (engine lg)
  */
 export const gridDensity = {
-  compact: { rowText: 28, rowMedia: 52, rowMediaLine: 36, header: 28, thumb: 32, cellPadX: 10 },
-  cozy: { rowText: 43, rowMedia: 68, rowMediaLine: 44, header: 38, thumb: 40, cellPadX: 14 },
-  spacious: { rowText: 49, rowMedia: 85, rowMediaLine: 60, header: 46, thumb: 56, cellPadX: 14 },
+  compact: { rowText: 28, rowMedia: 52, rowMediaLine: 36, rowTwoLine: 40, header: 28, thumb: 32, cellPadX: 10 },
+  cozy: { rowText: 43, rowMedia: 68, rowMediaLine: 44, rowTwoLine: 43, header: 38, thumb: 40, cellPadX: 14 },
+  spacious: { rowText: 49, rowMedia: 85, rowMediaLine: 60, rowTwoLine: 49, header: 46, thumb: 56, cellPadX: 14 },
 } as const
 
 export type GridDensityName = keyof typeof gridDensity
