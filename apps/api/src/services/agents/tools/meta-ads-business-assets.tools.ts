@@ -74,7 +74,7 @@ const setMetaBusinessAssets: AgentTool = {
 const removeMetaBusinessAsset: AgentTool = {
   ...common,
   name: 'remove-meta-business-asset',
-  title: 'Take an asset out of the Meta business portfolio (Owner steps)',
+  title: 'Remove a Meta asset (Owner steps)',
   input: z.object({
     asset: z.preprocess(lower, z.enum(REMOVE_ASSETS)).describe('ad-account | page | instagram'),
     id: z.preprocess(actDigits, z.string().regex(/^\d{1,25}$/, 'a Meta id: digits (an ad account may be act_ and its digits)')).describe('the ad account, Page or Instagram account (meta-business-assets / meta-ad-accounts list them)'),

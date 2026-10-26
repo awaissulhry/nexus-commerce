@@ -69,7 +69,7 @@ const createMetaBackedAccount: AgentTool = {
   ...common,
   name: 'create-meta-backed-account',
   requires: [F.adsCampaignsManage],
-  title: 'Make a Page- or Instagram-backed account for Meta ads',
+  title: 'Make a Page- or IG-backed Meta account',
   reversibility: 'none',
   input: z.object({
     connectionId: metaConnectionArg,
@@ -169,7 +169,7 @@ const setMetaBilling: AgentTool = {
   ...common,
   name: 'set-meta-billing',
   requires: [F.adsBudgetsEdit, FIELDS.financialsAdspendView],
-  title: 'Change the invoice groups of a Meta credit line',
+  title: 'Change Meta invoice groups',
   // A rename and a move are put back; a new group is deleted while it bills nothing; a delete has none.
   reversibility: 'partial',
   consequencesFor: (args) => (args.action === 'delete-group' ? { reversibility: 'none' } : args.action === 'create-group' ? { reversibility: 'partial' } : { reversibility: 'full' }),
