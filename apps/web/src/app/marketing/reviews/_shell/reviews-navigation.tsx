@@ -10,8 +10,8 @@ export interface ReviewsNavCounts {
 
 /**
  * May this person open the row? Its own permission (Settings: manage reviews) and the page permission of where it
- * goes: a row that points at a page outside Reviews today (Rules and Timing under Orders) is hidden from someone who
- * cannot open Orders, instead of leading to "no access".
+ * goes: a row that points at a page outside Reviews is hidden from someone who cannot open that page, instead of
+ * leading to "no access".
  */
 export function reviewsNavItemAllowed(item: ReviewsNavItem, has: (permission: string) => boolean): boolean {
   const page = navPagePermission(item.href)

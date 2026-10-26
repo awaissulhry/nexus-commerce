@@ -6,7 +6,7 @@
  *   request-review  — Amazon only, 4–30 days after delivery, never with an open return, once per order; dry run or
  *                     live as the switch says; eBay buyers refused (decision O-2); a return opened after the approval
  *                     refuses the run and Amazon is not called; never confirm or auto; cannot be undone.
- *   reply-to-review — eBay only, at most 80 characters, one reply per feedback, refused while eBay replies are off;
+ *   reply-to-review — eBay only, at most 500 characters, one reply per feedback, refused while eBay replies are off;
  *                     the copy checks shown; a reply posted meanwhile refuses the run.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -137,13 +137,14 @@ describe('reply-to-review (07 O13)', () => {
     vi.unstubAllEnvs()
   })
 
-  it('refused for Amazon, while eBay replies are off, and over 80 characters; the copy checks are shown', async () => {
+  it('refused for Amazon, while eBay replies are off, and over 500 characters; the copy checks are shown', async () => {
     vi.stubEnv('NEXUS_EBAY_REAL_API', 'true')
     expect((await dryRun('reply-to-review', { reviewId: await review({ channel: 'AMAZON' }), body: 'Thanks' })).error).toMatch(/AMAZON has no public reply call/)
     expect((await dryRun('reply-to-review', { reviewId: await review(), body: 'See www.example.test' })).preview.lint).toEqual([expect.objectContaining({ severity: 'warn', message: expect.stringMatching(/External link/) })])
     vi.unstubAllEnvs()
-    expect((await dryRun('reply-to-review', { reviewId: await review(), body: 'Thanks' })).error).toMatch(/eBay replies are off here \(NEXUS_EBAY_REAL_API not enabled\)/)
-    expect(getTool('reply-to-review')!.input.safeParse({ reviewId: 'x', body: 'x'.repeat(81) }).success).toBe(false)
+    expect((await dryRun('reply-to-review', { reviewId: await review(), body: 'Thanks' })).error).toMatch(/replies to eBay are switched off on this server, so eBay would not be called/)
+    expect(getTool('reply-to-review')!.input.safeParse({ reviewId: 'x', body: 'x'.repeat(500) }).success).toBe(true)
+    expect(getTool('reply-to-review')!.input.safeParse({ reviewId: 'x', body: 'x'.repeat(501) }).success).toBe(false)
   })
 
   it('a reply posted after the approval refuses the run; eBay is not called again', async () => {

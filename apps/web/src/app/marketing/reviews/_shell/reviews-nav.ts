@@ -5,9 +5,8 @@
  *
  * TEMPORARY TARGETS (Phase 1, build spec §1.2): a row whose new page is not built yet points at the page doing that
  * job today, and owns its old address through `match`. The coordinator swaps the row's `href` (one line) when the PR
- * that builds the page lands: Inbox → `/marketing/reviews/inbox` (PR B); Rules → `/marketing/reviews/requests/rules`
- * and Timing → `/marketing/reviews/requests/timing` (PR C); the Insights rows → `/marketing/reviews/insights/<page>`
- * (PR E). The Channels group (PR F / PR I) and the Settings row (PR D, `permission: 'reviews.manage'`) are absent until
+ * that builds the page lands: Inbox → `/marketing/reviews/inbox` (PR B); the Insights rows →
+ * `/marketing/reviews/insights/<page>` (PR E). The Requests rows are on their own pages (PR C). The Channels group (PR F / PR I) and the Settings row (PR D, `permission: 'reviews.manage'`) are absent until
  * their pages exist, so no row names a page it is not.
  *
  * Framework-free (no React): the tests import it in Node.
@@ -70,11 +69,11 @@ export const REVIEWS_NAV: readonly ReviewsNavGroup[] = [
     label: 'Requests',
     collapsible: true,
     items: [
-      // Same address before and after PR C; today it also owns the package-inserts and e-mail test pages.
-      { label: 'Queue', href: `${REVIEWS_ROOT}/requests`, icon: Send, match: [`${REVIEWS_ROOT}/inserts`] },
-      // TEMPORARY until PR C: the rules pages under Orders. `match` keeps their new addresses (under Queue's) on Rules and Timing.
-      { label: 'Rules', href: '/orders/reviews/rules', icon: ListChecks, match: [`${REVIEWS_ROOT}/requests/rules`] },
-      { label: 'Timing', href: '/orders/reviews/rules/timing', icon: Clock, match: [`${REVIEWS_ROOT}/requests/timing`] },
+      // Package inserts and Preview email are windows of the Queue (their old pages redirect to it: next.config.js).
+      { label: 'Queue', href: `${REVIEWS_ROOT}/requests`, icon: Send },
+      // Under Queue's address: the longer address wins, so a rule's editor (`/requests/rules/<id>`) stays on Rules.
+      { label: 'Rules', href: `${REVIEWS_ROOT}/requests/rules`, icon: ListChecks },
+      { label: 'Timing', href: `${REVIEWS_ROOT}/requests/timing`, icon: Clock },
     ],
   },
   {

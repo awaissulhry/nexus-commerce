@@ -1,0 +1,80 @@
+/*
+ * Reviews › Requests › Rules — layout and domain content only. Every control is a design-system component; nothing here
+ * restyles one. `--nds-*` tokens only. Sections 14 px apart as on the other Reviews pages; every row wraps.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.page > :first-child {
+  margin-bottom: var(--nds-space-4);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+@media (max-width: 599px) {
+  .actions {
+    width: 100%;
+  }
+}
+
+.footnote,
+.muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.sectionHead {
+  margin: 0 0 var(--nds-space-8);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.importBody,
+.testRuns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.testRun {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.testRun + .testRun {
+  padding-top: var(--nds-space-14);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.bigNumber {
+  margin: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+}
+
+.bigNumber strong {
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-bold);
+}
+
+.headerSkeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}

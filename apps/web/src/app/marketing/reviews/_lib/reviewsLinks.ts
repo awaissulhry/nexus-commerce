@@ -10,6 +10,8 @@
  * that every target is a real page.
  */
 
+import { REQUESTS_PATH, rulePath } from '../requests/requestsPaths'
+
 type ParamValue = string | number | boolean | readonly (string | number)[] | null | undefined
 export type LinkParams = Record<string, ParamValue>
 
@@ -65,19 +67,22 @@ export interface RequestsLinkParams {
 }
 
 /**
- * The request queue. New: `/marketing/reviews/requests` with filters and the inserts / e-mail preview windows
- * (PR C). Today: the same address shows the old requests page; Package inserts and the e-mail preview are their own
- * pages.
+ * The request queue: `/marketing/reviews/requests` with its status, channel and market filters, and `inserts=1` /
+ * `preview=1` to open Package inserts or Preview email once (the Queue reads them: `requests/_queue/queueQuery.ts`).
  */
 export function requestsHref(params: RequestsLinkParams = {}): string {
-  if (params.inserts) return '/marketing/reviews/inserts'
-  if (params.preview) return '/marketing/reviews/requests/test/preview'
-  return '/marketing/reviews/requests'
+  return withQuery(REQUESTS_PATH, {
+    status: params.status,
+    channel: params.channel,
+    market: params.market,
+    inserts: params.inserts ? 1 : null,
+    preview: params.preview ? 1 : null,
+  })
 }
 
-/** One review-request rule. New: `/marketing/reviews/requests/rules/<id>` (PR C). Today: the rules page under Orders. */
-export function ruleHref(_id: string): string {
-  return '/orders/reviews/rules'
+/** One review-request rule: its editor under Reviews › Requests › Rules. */
+export function ruleHref(id: string): string {
+  return rulePath(id)
 }
 
 export type InsightsPage = 'themes' | 'products' | 'alerts' | 'fixes' | 'brief'

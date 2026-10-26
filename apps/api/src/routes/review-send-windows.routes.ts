@@ -5,6 +5,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * - GET  /api/review-send-windows[?marketplace=IT]  → list (global + overrides)
  * - PUT  /api/review-send-windows                   → upsert a marketplace's 7 rows
  * - POST /api/review-send-windows/seed[?reset=1]    → (re)seed the global default
+ * - GET  /api/review-send-windows/conversion[?marketplace=IT&windowDays=90] → review rate by send weekday×hour
  *
  * marketplace '*' = global default pattern; a code (IT/DE/…) overrides it for
  * that market. The resolver (STO.3) reads these to pin each request's send hour.
@@ -90,10 +91,12 @@ export default async function reviewSendWindowsRoutes(app: FastifyInstance) {
   })
 
   // STO.5 — descriptive conversion by send weekday×hour (read-only; not auto-applied)
+  // PR C (B11) — `?marketplace=IT` reads one market's requests ('*' or none = every market).
   app.get('/review-send-windows/conversion', async (req, reply) => {
     const windowDays = Number((req.query as any)?.windowDays) || 90
+    const marketplace = normMarket((req.query as any)?.marketplace)
     try {
-      return reply.send(await computeSendHourConversion({ windowDays }))
+      return reply.send(await computeSendHourConversion({ windowDays, marketplace: marketplace === '*' ? null : marketplace }))
     } catch (err: any) {
       logger.error('review-send-windows conversion failed', { error: err?.message })
       return reply.status(500).send({ error: err?.message ?? 'failed' })

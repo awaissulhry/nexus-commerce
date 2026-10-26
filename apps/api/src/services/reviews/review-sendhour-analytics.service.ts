@@ -9,6 +9,9 @@
  * This is descriptive only (the operator nudges the send-time table from it); it
  * is NOT auto-applied. At low review volume it will be sparse — `hasReviews`
  * tells the UI to show the "turn on ingestion" empty-state.
+ *
+ * PR C (B11) — one market at a time (`marketplace`), for the Timing page's market picker: that market's sent requests,
+ * and its reviews only.
  */
 
 import prisma from '../../db.js'
@@ -26,20 +29,23 @@ function localWeekdayHour(d: Date, tz: string): { weekday: number; hour: number 
 export interface SendHourCell { dayOfWeek: number; hour: number; sent: number; converted: number }
 export interface SendHourReport {
   windowDays: number
+  /** PR C (B11) — the market read (null = every market). */
+  marketplace: string | null
   totalSent: number
   totalConverted: number
   hasReviews: boolean
   cells: SendHourCell[]
 }
 
-export async function computeSendHourConversion(opts: { windowDays?: number; attributionWindowDays?: number } = {}): Promise<SendHourReport> {
+export async function computeSendHourConversion(opts: { windowDays?: number; attributionWindowDays?: number; marketplace?: string | null } = {}): Promise<SendHourReport> {
   const windowDays = Math.max(7, Math.min(365, opts.windowDays ?? 90))
   const attributionWindowDays = opts.attributionWindowDays ?? 30
+  const marketplace = opts.marketplace ? opts.marketplace.toUpperCase() : null
   const now = new Date()
   const since = new Date(now.getTime() - windowDays * DAY)
 
   const sentRequests = await prisma.reviewRequest.findMany({
-    where: { sentAt: { gte: since, lte: now } },
+    where: { sentAt: { gte: since, lte: now }, ...(marketplace ? { marketplace } : {}) },
     select: {
       id: true, channel: true, marketplace: true, sentAt: true,
       order: { select: { items: { select: { productId: true }, take: 1 } } },
@@ -48,7 +54,7 @@ export async function computeSendHourConversion(opts: { windowDays?: number; att
 
   const reviewSince = new Date(since.getTime() - attributionWindowDays * DAY)
   const reviews = await prisma.review.findMany({
-    where: { postedAt: { gte: reviewSince, lte: now }, channel: { in: ['AMAZON', 'EBAY', 'SHOPIFY'] } },
+    where: { postedAt: { gte: reviewSince, lte: now }, channel: { in: ['AMAZON', 'EBAY', 'SHOPIFY'] }, ...(marketplace ? { marketplace } : {}) },
     select: { channel: true, marketplace: true, productId: true, postedAt: true },
   })
 
@@ -92,6 +98,7 @@ export async function computeSendHourConversion(opts: { windowDays?: number; att
 
   return {
     windowDays,
+    marketplace,
     totalSent,
     totalConverted: converted.size,
     hasReviews: reviews.length > 0,

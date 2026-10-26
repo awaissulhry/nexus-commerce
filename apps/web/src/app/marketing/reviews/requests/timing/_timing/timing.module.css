@@ -1,0 +1,196 @@
+/*
+ * Reviews › Requests › Timing — layout and domain content only. Every control is a design-system component; nothing here
+ * restyles one. `--nds-*` tokens only (the heatmap legend's swatches use the same brand tokens as the DS Heatmap's
+ * shading). The editable rows are CSS grids that fold to stacked rows on a phone; the heatmap scrolls inside its card.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+  padding-bottom: var(--nds-space-24);
+}
+
+.page > :first-child {
+  margin-bottom: var(--nds-space-4);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.placeholder,
+.headerWithPill {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.placeholder {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.anchor {
+  scroll-margin-top: var(--nds-space-16);
+}
+
+/* ── First try by product type ──────────────────────────── */
+.typeHead,
+.typeRow {
+  display: grid;
+  grid-template-columns: 64px minmax(140px, 1fr) minmax(140px, 1fr) 150px 52px 36px;
+  align-items: center;
+  gap: var(--nds-space-10);
+}
+
+.typeHead,
+.dayHead {
+  color: var(--nds-text-3);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.typeRows,
+.dayRows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.typeRow {
+  padding: var(--nds-space-4) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.pinned {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-base);
+}
+
+.order {
+  display: inline-flex;
+  gap: var(--nds-space-2);
+}
+
+.orderGap {
+  display: inline-block;
+  width: 28px;
+}
+
+@media (max-width: 759px) {
+  .typeHead,
+  .dayHead {
+    display: none;
+  }
+
+  .typeRow {
+    grid-template-columns: 64px minmax(0, 1fr) 36px;
+  }
+
+  .typeRow > :nth-child(3),
+  .typeRow > :nth-child(4),
+  .typeRow > :nth-child(5) {
+    grid-column: 2 / span 2;
+  }
+}
+
+/* ── Send hour by weekday ───────────────────────────────── */
+.dayHead,
+.dayRow {
+  display: grid;
+  grid-template-columns: minmax(110px, 160px) 110px 130px 52px;
+  align-items: center;
+  gap: var(--nds-space-10);
+}
+
+.dayRow {
+  font-size: var(--nds-font-size-base);
+}
+
+@media (max-width: 479px) {
+  .dayRow {
+    grid-template-columns: minmax(0, 1fr) 100px;
+  }
+}
+
+.heat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.heatScroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.heatGrid {
+  min-width: 620px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-16);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--nds-radius-pill);
+  border: 1px solid var(--nds-border);
+}
+
+.swatchLight {
+  background: var(--nds-primary-soft);
+}
+
+.swatchDark {
+  background: var(--nds-primary);
+}
+
+.swatchNone {
+  background: repeating-linear-gradient(45deg, var(--nds-surface) 0 3px, var(--nds-border) 3px 5px);
+}
+
+.swatchMarked {
+  outline: 2px solid var(--nds-text);
+  outline-offset: -2px;
+}
