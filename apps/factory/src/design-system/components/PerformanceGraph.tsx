@@ -1,8 +1,9 @@
 'use client'
 
-import { ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { Bar, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { color } from '@/design-system/tokens'
 import { axisScale, isolatedPoints } from './performanceGraphModel'
+import { chartMarks, legendMarks, markOf, type ChartMark, type ChartStackPart } from './performanceGraphSeries'
 
 export interface ChartSeries {
   key: string
@@ -22,6 +23,14 @@ export interface ChartSeries {
   domain?: [number, number]
   /** The axis's tick values, e.g. `[0, 1, 2, 3, 4, 5]` (the ones inside `domain`). Default: Recharts picks them. */
   ticks?: number[]
+  /** `'bar'` draws this series as bars (new reviews per week); default `'line'`. A line is drawn over bars. */
+  shape?: 'line' | 'bar'
+  /**
+   * Stacked bars: one bar per part, stacked on this series' axis (eBay feedback by type: positive, neutral, negative),
+   * each named and coloured in the legend and the tooltip. The series' own `key` is then not drawn; `color` stays the
+   * axis line's colour.
+   */
+  stack?: readonly ChartStackPart[]
 }
 
 export interface PerformanceGraphProps {
@@ -37,21 +46,20 @@ function ChartTooltip({
   active,
   payload,
   label,
-  left,
-  right,
+  marks,
 }: {
   active?: boolean
   payload?: Array<{ dataKey?: string | number; value?: number }>
   label?: string
-  left: ChartSeries
-  right: ChartSeries
+  marks: readonly ChartMark[]
 }) {
   if (!active || !payload || payload.length === 0) return null
   return (
     <div className="nds-chart-tt">
       <div className="d">{label}</div>
       {payload.map((p) => {
-        const s = p.dataKey === left.key ? left : right
+        const s = markOf(marks, p.dataKey)
+        if (!s) return null
         return (
           <div className="r" key={String(p.dataKey)}>
             <span className="dot" style={{ background: s.color }} />
@@ -68,7 +76,7 @@ function ChartTooltip({
  * A value with no value on either side has no line segment: it gets a dot in its series' colour, or it would not show at
  * all (`isolatedPoints`). Every other point stays a plain line, as before.
  */
-function loneDots(data: PerformanceGraphProps['data'], series: ChartSeries) {
+function loneDots(data: PerformanceGraphProps['data'], series: Pick<ChartMark, 'key' | 'color'>) {
   const lone = isolatedPoints(data.map((row) => row[series.key]))
   if (lone.size === 0) return false
   return function LoneDot({ index, cx, cy }: { index: number; cx?: number; cy?: number }) {
@@ -77,13 +85,15 @@ function loneDots(data: PerformanceGraphProps['data'], series: ChartSeries) {
 }
 
 /**
- * Dual-axis combo chart (H10 AdManagerGraph): two line series on independent
- * left/right axes, tokenized axes + grid, custom tooltip + legend. Recharts.
+ * Dual-axis combo chart (H10 AdManagerGraph): two series on independent left/right axes — each a line (default), bars
+ * or stacked bars (`shape`, `stack`; Reviews 2026-10-26) — tokenized axes + grid, custom tooltip + legend. Recharts.
  * A series may fix its axis (`domain`, `ticks`); a lone value between gaps shows as a dot.
  */
 export function PerformanceGraph({ data, xKey, left, right, height = 240, className }: PerformanceGraphProps) {
   const leftAxis = left.axis === 'left' ? left : right.axis === 'left' ? right : null
   const rightAxis = right.axis === 'right' ? right : left.axis === 'right' ? left : null
+  const marks = chartMarks(left, right)
+  const legend = legendMarks(left, right)
   return (
     <div className={className || undefined}>
       {(leftAxis?.axisLabel || rightAxis?.axisLabel) && (
@@ -103,21 +113,24 @@ export function PerformanceGraph({ data, xKey, left, right, height = 240, classN
           <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: color.text3 }} tickLine={false} axisLine={false} width={46} {...axisScale(rightAxis)} />
           <Tooltip
             cursor={{ stroke: color.border }}
-            content={(props) => <ChartTooltip active={props.active} payload={props.payload as never} label={props.label as string} left={left} right={right} />}
+            content={(props) => <ChartTooltip active={props.active} payload={props.payload as never} label={props.label as string} marks={marks} />}
           />
-          <Line yAxisId={left.axis} dataKey={left.key} stroke={left.color} dot={loneDots(data, left)} strokeWidth={2} />
-          <Line yAxisId={right.axis} dataKey={right.key} stroke={right.color} dot={loneDots(data, right)} strokeWidth={2} />
+          {marks.map((m) =>
+            m.kind === 'bar' ? (
+              <Bar key={m.key} yAxisId={m.axis} dataKey={m.key} name={m.label} fill={m.color} stackId={m.stackId} maxBarSize={28} />
+            ) : (
+              <Line key={m.key} yAxisId={m.axis} dataKey={m.key} name={m.label} stroke={m.color} dot={loneDots(data, m)} strokeWidth={2} />
+            ),
+          )}
         </ComposedChart>
       </ResponsiveContainer>
       <div className="nds-chart-legend">
-        <span className="sw">
-          <span className="ln" style={{ background: left.color }} />
-          {left.label}
-        </span>
-        <span className="sw">
-          <span className="ln" style={{ background: right.color }} />
-          {right.label}
-        </span>
+        {legend.map((m) => (
+          <span className="sw" key={m.key}>
+            <span className={m.kind === 'bar' ? 'bx' : 'ln'} style={{ background: m.color }} />
+            {m.label}
+          </span>
+        ))}
       </div>
     </div>
   )

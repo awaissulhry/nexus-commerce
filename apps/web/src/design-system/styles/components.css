@@ -1843,6 +1843,17 @@ body.nds-drawer-resizing * {
   height: 2px;
   border-radius: 2px;
 }
+/* A bar series' swatch is a filled square (PerformanceGraph `shape: 'bar'` / `stack`, 2026-10-26); a line's stays a
+   line. Four or more parts wrap on a phone. */
+.nds-chart-legend {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.nds-chart-legend .bx {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
 /* An axis's name above it (`axisLabel`): left over the left axis, right over the right one, each with its line's colour. */
 .nds-chart-axes {
   display: flex;

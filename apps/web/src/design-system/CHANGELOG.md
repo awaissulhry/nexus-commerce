@@ -1,3 +1,15 @@
+## PerformanceGraph bars and stacked bars — 2026-10-26
+
+Reviews channel pages (PR F, lane L12). Both apps, identical: `components/{PerformanceGraph.tsx, performanceGraphSeries.ts}`;
+the same `.nds-chart-legend` rules appended to both `styles/components.css`. Web only: `tokens/colors.ts` `chart.positive`,
+`chart.neutral`, `chart.negative`; catalog `#review-parts-example`.
+- **`ChartSeries.shape?: 'line' | 'bar'`**: a series draws as bars (Recharts `Bar` in the same `ComposedChart`), e.g. imported
+  reviews per week under the average-rating line. Bars are drawn first, so a line sits on top.
+- **`ChartSeries.stack?: { key, label, color }[]`**: one bar per part, stacked on the series' axis (eBay feedback by type);
+  each part has its own legend swatch and tooltip row. The series' own `key` is then not drawn.
+- The legend's swatch is a square for bars (`.bx`), a line for lines; the legend wraps on a phone. Two line series render
+  exactly as before. `chartMarks()`, `seriesMarks()`, `legendMarks()`, `markOf()`, `stackTotal()` (pure, tested).
+
 ## DetailModal counts a paged list — 2026-10-26
 
 Reviews Inbox (PR B). Web only: `patterns/{DetailModal,detailModalModel,index}`.
