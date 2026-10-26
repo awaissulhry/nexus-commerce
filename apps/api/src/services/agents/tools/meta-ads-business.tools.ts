@@ -34,9 +34,12 @@ const conn = (args: Record<string, unknown>) => str(args.connectionId)
 const rows = (args: Record<string, unknown>) => (typeof args.maxRows === 'number' ? args.maxRows : undefined)
 const maxRowsArg = z.number().int().min(1).max(500).optional().describe('at most this many rows per list (default 100; at most 500)')
 
-const READ_LINE = 'Read only: Meta is never changed here (the portfolio\'s admin acts are the Owner\'s own steps in Meta\'s screens: set-meta-business-settings, set-meta-business-people and create-meta-system-user show them). Only the business portfolio of the business\'s chosen ad account is read; a Page, Instagram account, ad account or portfolio another business in Nexus uses is its id and a flag only, and when another business in Nexus uses an ad account of this portfolio its people, partners and domains are not read (its other assets are ids only).'
+const READ_LINE = 'Read only: Meta is never changed here. Only the business portfolio of the business\'s chosen ad account is read; a Page, Instagram account, ad account or portfolio another business in Nexus uses is its id and a flag only, and when another business in Nexus uses an ad account of this portfolio its people, partners and domains are not read (its other assets are ids only).'
 
 // ── meta-business ───────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Step 42 review S3 — only where it is true: the portfolio's settings, people and system users (D1). */
+const ADMIN_LINE = 'The portfolio\'s settings, people and system users are the Owner\'s own steps in Meta\'s screens (D1): set-meta-business-settings, set-meta-business-people and create-meta-system-user give the steps and read the result. '
 
 const metaBusiness: AgentTool = {
   name: 'meta-business',
@@ -62,7 +65,7 @@ const metaBusiness: AgentTool = {
     + 'owns and whether each is verified (never the verification code). Meta has no API field for the business\'s legal '
     + 'name, address, phone or website, and documents no API to start or finish business verification or to add or verify a '
     + 'domain — a person does these in Meta Business settings. People: meta-business-people; assets: meta-business-assets; partners: '
-    + 'meta-business-partners; billing: meta-billing. ' + READ_LINE,
+    + 'meta-business-partners; billing: meta-billing. ' + ADMIN_LINE + READ_LINE,
   async handler(args): Promise<ToolResult> {
     return guarded(() => businessView({ connectionId: conn(args), view: (args.view ?? 'portfolio') as BusinessView, maxRows: rows(args) }))
   },
@@ -97,7 +100,7 @@ const metaBusinessPeople: AgentTool = {
     + 'delete (a person can invalidate its tokens) — and lists system users only to an admin token (when Nexus\'s system user '
     + 'is an Employee, Meta refuses). Meta documents no change on the finance edge; its business-user role update lists the '
     + 'finance roles, what that sets is not documented. What one person can reach on the '
-    + 'chosen ad account: meta-account-access. ' + READ_LINE,
+    + 'chosen ad account: meta-account-access. ' + ADMIN_LINE + READ_LINE,
   async handler(args): Promise<ToolResult> {
     return guarded(() => peopleView({
       connectionId: conn(args), view: (args.view ?? 'people') as PeopleView, invitationId: str(args.invitationId),

@@ -16,7 +16,7 @@ import { liveAccessState } from './live-access-change.js'
 import { takenIds } from './taken.js'
 import {
   peopleGuide, settingsGuide, systemUserGuide,
-  type AdminGuide, type PeopleAsk, type PrimaryPageCheck, type SettingsAsk, type SettingsLive, type SystemUserAsk, type SystemUserLive,
+  type AdminGuide, type PeopleAsk, type PeopleLive, type PrimaryPageCheck, type SettingsAsk, type SettingsLive, type SystemUserAsk, type SystemUserLive,
 } from './business-admin.js'
 
 /** How many rows a guide reads of a list (step 4's cap): a target not found in a list Meta cut is refused, never guessed. */
@@ -72,20 +72,47 @@ export async function businessSettingsAdmin(input: { connectionId?: string | nul
   return done(settingsGuide(ask, { settings, currentPageTaken, people, primaryPage, readAt }))
 }
 
-/** set-meta-business-people — BM-032…BM-035. */
+/** The portfolio's name for the steps; a refused read leaves it out (the steps name the portfolio by its id). */
+async function portfolioName(account: MetaChosenAccount): Promise<string | null> {
+  try { return (await readBusinessSettings(account, 'admin.settings')).name } catch (err) {
+    if (err instanceof MetaReadError) return null
+    throw err
+  }
+}
+
+/**
+ * set-meta-business-people — BM-032…BM-035. Review S6: each action reads only what it needs — invite the pending
+ * invitations (a refusal keeps the steps: "cannot tell") and the people count; change-role and remove the people; the
+ * invitation actions the invitations.
+ */
 export async function businessPeopleAdmin(input: { connectionId?: string | null } & PeopleAsk): Promise<AdminGuide> {
   const { account, portfolioId } = await adminScope(input.connectionId)
   const readAt = new Date().toISOString()
-  const settings = await readBusinessSettings(account, 'admin.settings')
-  const people = await readPortfolioPeople(account, MAX_ROWS)
-  const invitations = await readInvitations(account, MAX_ROWS)
+  const name = await portfolioName(account)
+  let people: PeopleLive['people'] = null
+  let peopleCount: number | null = null
+  let invitations: PeopleLive['invitations'] = null
+  if (input.action === 'change-role' || input.action === 'remove') {
+    const read = await readPortfolioPeople(account, MAX_ROWS)
+    people = { people: read.people, totalCount: read.totalCount, more: read.more, missing: read.missing }
+  }
+  if (input.action === 'invite') {
+    try { peopleCount = (await readPortfolioPeople(account, 1)).totalCount } catch (err) { if (!(err instanceof MetaReadError)) throw err }
+    try {
+      const read = await readInvitations(account, MAX_ROWS)
+      invitations = { invitations: read.invitations, totalCount: read.totalCount, more: read.more, missing: read.missing }
+    } catch (err) {
+      if (!(err instanceof MetaReadError)) throw err
+      invitations = { refused: err.message }
+    }
+  }
+  if (input.action === 'change-invitation' || input.action === 'cancel-invitation') {
+    const read = await readInvitations(account, MAX_ROWS)
+    invitations = { invitations: read.invitations, totalCount: read.totalCount, more: read.more, missing: read.missing }
+  }
   return done(peopleGuide(
     { action: input.action, personId: input.personId, invitationId: input.invitationId, role: input.role, financeRole: input.financeRole, since: input.since },
-    {
-      portfolioId, portfolioName: settings.name, readAt,
-      people: { people: people.people, totalCount: people.totalCount, more: people.more, missing: people.missing },
-      invitations: { invitations: invitations.invitations, totalCount: invitations.totalCount, more: invitations.more, missing: invitations.missing },
-    },
+    { portfolioId, portfolioName: name, readAt, people, peopleCount, invitations },
   ))
 }
 
@@ -93,7 +120,7 @@ export async function businessPeopleAdmin(input: { connectionId?: string | null 
 export async function systemUserAdmin(input: { connectionId?: string | null } & SystemUserAsk): Promise<AdminGuide> {
   const { account, portfolioId } = await adminScope(input.connectionId)
   const readAt = new Date().toISOString()
-  const settings = await readBusinessSettings(account, 'admin.settings')
+  const name = await portfolioName(account)
   let read: SystemUserLive['read']
   try {
     const list = await readSystemUsers(account, MAX_ROWS)
@@ -117,6 +144,6 @@ export async function systemUserAdmin(input: { connectionId?: string | null } & 
   }
   return done(systemUserGuide(
     { action: input.action, name: input.name, role: input.role, systemUserId: input.systemUserId, since: input.since },
-    { portfolioId, portfolioName: settings.name, read, tier, appsOwned, readAt },
+    { portfolioId, portfolioName: name, read, tier, appsOwned, readAt, nexusSystemUserKnown: !!account.connection.systemUser?.id },
   ))
 }

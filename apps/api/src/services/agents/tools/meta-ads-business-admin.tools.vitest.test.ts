@@ -43,6 +43,7 @@ vi.mock('../../../db.js', () => ({
 }))
 
 import { META_ADS_BUSINESS_ADMIN_TOOLS } from './meta-ads-business-admin.tools.js'
+import { META_ADS_BUSINESS_TOOLS } from './meta-ads-business.tools.js'
 import { MetaReadError, failureOfAnswer } from '../../marketing/meta-ads/errors.js'
 import { BUSINESS_SETTINGS_FIELDS } from '../../marketing/meta-ads/live-business.js'
 import { ADMIN_SHARED } from '../../marketing/meta-ads/live-business-admin.js'
@@ -119,6 +120,21 @@ describe('three read-only guides (D1)', () => {
       expect(t.description).toMatch(/Nexus changes NOTHING and sends nothing to Meta with this tool \(Owner decision D1/)
       expect(t.restrictedFields).toBeUndefined()
     }
+  })
+  it('N5 — a time zone id is one of Meta\'s (0…592)', () => {
+    expect(tool('set-meta-business-settings').input.safeParse({ timezoneId: 592 }).success).toBe(true)
+    expect(tool('set-meta-business-settings').input.safeParse({ timezoneId: 593 }).success).toBe(false)
+  })
+  it('S3 — step 4\'s reads say "the Owner\'s own steps" only where it is true: settings and people, never partners or assets', () => {
+    const description = (name: string) => META_ADS_BUSINESS_TOOLS.find((t) => t.name === name)!.description
+    const owner = /The portfolio's settings, people and system users are the Owner's own steps in Meta's screens \(D1\)/
+    expect(description('meta-business')).toMatch(owner)
+    expect(description('meta-business-people')).toMatch(owner)
+    expect(description('meta-business-partners')).not.toMatch(/Owner's own steps/)
+    expect(description('meta-business-assets')).not.toMatch(/Owner's own steps/)
+    // Partner access is step 41's change a person approves; asset claims step 43's.
+    expect(description('meta-business-partners')).toMatch(/an admin's change a person approves/)
+    for (const t of META_ADS_BUSINESS_TOOLS) expect(t.description, t.name).toMatch(/Read only: Meta is never changed here\./)
   })
   it('no argument can name an e-mail address, a business or a Nexus product', () => {
     for (const t of META_ADS_BUSINESS_ADMIN_TOOLS) {
@@ -204,15 +220,34 @@ describe('set-meta-business-people', () => {
     expect(JSON.stringify(again)).not.toMatch(/@example\.com/)
     callsAreReadsOfThePortfolio()
   })
-  it('remove: the only admin refused; an employee by name; removed, asked again: done', async () => {
+  it('remove: the only admin refused; an employee by name; removed, asked again with since: done (S1: without since, refused)', async () => {
     expect(errorOf(await run('set-meta-business-people', { action: 'remove', personId: ADMIN }))).toMatch(/only admin.*3914/)
     const out = data(await run('set-meta-business-people', { action: 'remove', personId: EMPLOYEE }))
-    expect(out.ownerSteps.join(' ')).toMatch(/click "Person B" \(Nexus's id 100000000000003\)/)
+    expect(out.ownerSteps.join(' ')).toMatch(/click "Person B" \(Nexus's id 100000000000003\), then Remove/)
     h.answer = (req) => (req.path.endsWith('/business_users') ? { data: [{ id: ADMIN, name: 'Person A', role: 'ADMIN' }], summary: { total_count: 1 } } : answers(req))
-    expect(data(await run('set-meta-business-people', { action: 'remove', personId: EMPLOYEE })).state).toBe('done')
+    expect(errorOf(await run('set-meta-business-people', { action: 'remove', personId: EMPLOYEE }))).toMatch(/is not a person of this business portfolio/)
+    expect(data(await run('set-meta-business-people', { action: 'remove', personId: EMPLOYEE, since: out.readAt })).state).toBe('done')
+  })
+  it('S6 — each action reads only what it needs; a refused read it does not need never fails it; invite gives its steps with "cannot tell"', async () => {
+    h.answer = (req) => (req.path.endsWith('/pending_users') || req.path === PORTFOLIO ? refusedByMeta('(#200) Permissions error') : answers(req))
+    const removal = data(await run('set-meta-business-people', { action: 'remove', personId: EMPLOYEE }))
+    expect(removal.state).toBe('to-do')
+    expect(h.calls.some((c) => c.path.endsWith('/pending_users'))).toBe(false)
+    const invite = data(await run('set-meta-business-people', { action: 'invite', role: 'employee', since: removal.readAt }))
+    expect(invite).toMatchObject({ state: 'cannot-tell', items: [expect.objectContaining({ sentence: expect.stringMatching(/cannot read the pending invitations/) })] })
+    expect(invite.ownerSteps.join(' ')).toMatch(/Invite people/)
+    h.calls.length = 0
+    h.answer = (req) => (req.path.endsWith('/business_users') ? refusedByMeta('(#200) Permissions error') : answers(req))
+    expect(data(await run('set-meta-business-people', { action: 'cancel-invitation', invitationId: INVITE })).state).toBe('to-do')
+    expect(h.calls.some((c) => c.path.endsWith('/business_users'))).toBe(false)
+    // invite reads the people only for their count: one row.
+    h.calls.length = 0
+    h.answer = answers
+    await run('set-meta-business-people', { action: 'invite', role: 'employee' })
+    expect(h.calls.filter((c) => c.path.endsWith('/business_users')).map((c) => c.query?.limit)).toEqual([1])
   })
   it('change-role and the invitation actions find their target by id; an unknown one is refused', async () => {
-    expect(data(await run('set-meta-business-people', { action: 'change-role', personId: EMPLOYEE, role: 'admin' })).ownerSteps.join(' ')).toMatch(/full control \(Admin\)/)
+    expect(data(await run('set-meta-business-people', { action: 'change-role', personId: EMPLOYEE, role: 'admin' })).ownerSteps.join(' ')).toMatch(/Full access \(formerly full control: the Admin role\)/)
     expect(errorOf(await run('set-meta-business-people', { action: 'change-role', personId: '100000000000099', role: 'admin' }))).toMatch(/not a person of this business portfolio/)
     expect(data(await run('set-meta-business-people', { action: 'cancel-invitation', invitationId: INVITE })).ownerSteps.join(' ')).toMatch(/invitation made 2026-10-25T09:00:00\+0000 with role EMPLOYEE/)
     expect(data(await run('set-meta-business-people', { action: 'change-invitation', invitationId: INVITE, role: 'admin' })).state).toBe('to-do')
@@ -246,5 +281,11 @@ describe('create-meta-system-user', () => {
     expect(data(await run('create-meta-system-user', { action: 'remove', systemUserId: OTHER_SU })).putBack.possible).toBe('no')
     expect(h.tierCalls).toBe(0)
     callsAreReadsOfThePortfolio()
+  })
+  it('S5 — remove is refused when the connection names no system user (Nexus could not tell its own)', async () => {
+    systemUsers.push({ id: OTHER_SU, name: 'Old server', role: 'EMPLOYEE' })
+    h.connections = [{ ...CHOSEN, systemUser: null }]
+    expect(errorOf(await run('create-meta-system-user', { action: 'remove', systemUserId: OTHER_SU }))).toMatch(/does not know which system user it works as/)
+    expect(data(await run('create-meta-system-user', { action: 'rename', systemUserId: OTHER_SU, name: 'New server' })).warnings.join(' ')).toMatch(/another business in Nexus connects to Meta with this one/)
   })
 })
