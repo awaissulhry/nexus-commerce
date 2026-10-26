@@ -12,8 +12,10 @@
  *     account another business in Nexus uses is its id and the flag only
  *   - the app's connected client businesses are NOT read: Meta's v26 reference for application/connected_client_businesses
  *     says of Reading "You can't perform this operation on this endpoint" (checked 2026-10-26, docs/graph-api/reference/
- *     application/connected_client_businesses), and Meta refused the SDK's read live (#3 "Application does not have the
- *     granular permission to make this API call", ACC-038): the answer says so in words (CLIENT_BUSINESSES_NOT_READ)
+ *     application/connected_client_businesses), although SDK v26.0.2 application.py has get_connected_client_businesses
+ *     (GET /connected_client_businesses); Meta refused that read live to the APP token (#3 "Application does not have the
+ *     granular permission to make this API call", ACC-038) — the system-user token is untried (LIVE-PROBES ACC-038b):
+ *     the answer says so in words (CLIENT_BUSINESSES_NOT_READ)
  *   (GET /{user_id}/assigned_applications needs manage_app_solution, which a system user cannot hold: not read here.)
  *   - the usage headers of an ordinary answer (cx/rate-readings.ts metaUsageOf)
  */
@@ -86,7 +88,7 @@ export async function livePermissions(connectionId: string) {
 }
 
 /** ACC-038 — why the app's connected client businesses are not read (Meta's v26 reference and Meta's own refusal). */
-export const CLIENT_BUSINESSES_NOT_READ = 'Meta does not let an app read its connected client businesses: its v26 reference offers no read of them (application/connected_client_businesses: "You can\'t perform this operation on this endpoint"), and Meta refused the read to this app (#3: "Application does not have the granular permission to make this API call"). The businesses an app serves as a tech provider show in the App Dashboard (a person).'
+export const CLIENT_BUSINESSES_NOT_READ = 'Nexus does not read the app\'s connected client businesses: Meta\'s v26 reference offers no read of them (application/connected_client_businesses: "You can\'t perform this operation on this endpoint"), although Meta\'s Python SDK v26 has a getter for it (get_connected_client_businesses); Meta refused that read to the app\'s own token (#3: "Application does not have the granular permission to make this API call"), and it has not been tried with the business\'s system-user token. The businesses an app serves as a tech provider show in the App Dashboard (a person).'
 
 /** The app: its roles, the ad accounts it is authorised for in the business, and why its client businesses are not read. */
 export async function liveApp(connectionId: string, businessId: string | null) {

@@ -43,7 +43,7 @@ describe('meta-connection view app', () => {
     })
     expect(JSON.stringify(app)).not.toContain('Shop B')
     expect(app.clientBusinesses).toEqual({ items: null, error: CLIENT_BUSINESSES_NOT_READ })
-    expect(CLIENT_BUSINESSES_NOT_READ).toMatch(/You can't perform this operation on this endpoint.*#3/)
+    expect(CLIENT_BUSINESSES_NOT_READ).toMatch(/You can't perform this operation on this endpoint.*get_connected_client_businesses.*app's own token \(#3.*not been tried with the business's system-user token/)
     // Each call as the real gateway judges it, with the token it asks for.
     for (const c of h.calls) expect(metaCallVerdict({ method: 'GET', url: metaUrl(c.path, c.query as never), kind: 'read', auth: c.auth }).problem, c.operation).toBeNull()
   })

@@ -187,6 +187,7 @@ describe('sizes are Meta\'s ranges', () => {
     expect(words[1]).toBe(words[0])
     expect(words[2]).toMatch(/^Inactive lookalike: not used in active ads for 90 days/)
     expect(words[3]).toMatch(/^Lookalike build failed/)
+    expect(words[3]).not.toMatch(/100 people/)
     expect(words.slice(0, 2).join(' ')).not.toMatch(/lookalike/i)
     // Every code the custom-audience reference lists has words; an unknown one keeps Meta's own description only.
     for (const code of [0, 100, 200, 400, 410, 411, 412, 414, 415, 421, 422, 423, 431, 432, 433, 434, 441, 442, 450, 470, 471, 500]) expect(operationWords(code, 'CUSTOM'), String(code)).toEqual(expect.any(String))

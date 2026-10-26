@@ -375,7 +375,9 @@ describe('what Meta refuses is said plainly', () => {
     for (const [args, edge, words] of views) {
       h.all = (req) => (req.path.endsWith(`/${edge}`) ? hidden(edge) : [])
       const res = await run('meta-media-library', args)
-      expect(res.error, edge).toMatch(new RegExp(`Meta does not answer .* on API v26: Meta's reference lists the read \\(GET …/${edge}\\)`))
+      expect(res.error, edge).toMatch(new RegExp(`Meta does not answer .* on API v26: Meta's reference pages list the read \\(GET …/${edge}, with v25 examples\\), but on v26 Meta answers that the edge does not exist`))
+      // Review of #771 — only what is known: no guessed cause.
+      expect(res.error, edge).not.toMatch(/Meta answers so when/)
       expect(res.error, edge).toMatch(words)
       expect(res.error, edge).toMatch(/none of Meta's v26 SDKs carries a read of it/)
       expect(res.error, edge).not.toMatch(/for Nexus to fix/)
@@ -385,7 +387,7 @@ describe('what Meta refuses is said plainly', () => {
     const site = await run('meta-media-library', { view: 'website-assets', link: 'https://shop.example.com/' })
     expect(site.error).toMatch(/website_creative_assets.*A person sees what Meta suggests/)
     h.all = () => metaError('100', '(#100) Tried accessing nonexisting field (media_library_url) on node type (BusinessImage)', 'configuration')
-    expect((await run('meta-media-library', { view: 'business-images' })).error).not.toMatch(/Meta's reference lists the read/)
+    expect((await run('meta-media-library', { view: 'business-images' })).error).not.toMatch(/reference pages list the read/)
   })
   it('live-probe fix CR-489 — Meta\'s #4701 on the template read is said in words: no permission is named, and making one needs no template read', async () => {
     h.one = () => metaError('4701', 'Insufficient permissions to access this data')
@@ -393,6 +395,8 @@ describe('what Meta refuses is said plainly', () => {
     expect(res.error).toContain(IX_TEMPLATE_REFUSED)
     expect(res.error).toMatch(/Meta's words: Insufficient permissions to access this data/)
     expect(IX_TEMPLATE_REFUSED).toMatch(/create-meta-instant-experience takes the template by name/)
+    // Review of #771 — said to be open, with the likely fix (not built).
+    expect(IX_TEMPLATE_REFUSED).toMatch(/still open.*the chosen Page's own token is the likely fix.*Nexus does not send this read with it yet/)
     // Anything else Meta answers stays its own failure.
     h.one = () => metaError('100', 'Unsupported get request')
     expect((await run('meta-instant-experiences', { view: 'template', template: 'get-new-customers' })).error).not.toContain(IX_TEMPLATE_REFUSED)

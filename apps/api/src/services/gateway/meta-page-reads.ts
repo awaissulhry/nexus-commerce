@@ -245,6 +245,9 @@ export function metaPageReadOf(route: string, segments: readonly string[], searc
   const items = fields === null ? null : topLevelFieldItems(fields)
   // A WhatsApp account's templates (any read that is not the Page's Messenger template read): an ordinary read.
   if (rule.pageShapedOnly && (!keys.every((k) => rule.keys.has(k)) || !items || !items.every((f) => rule.fields.has(f)))) return null
+  // A post's Page is its id's first part. Review of #771 — a `<chosen Page>_<id>` whose second part is no post of that Page
+  // still goes only with the chosen Page's own token, read only: Meta resolves the id itself and answers only what that
+  // token may see, so no other Page's data is reachable (checking the post first would cost a Meta read on every call).
   const pageId = rule.page === 'thread' ? null : rule.page === 'post' ? (segments[0] ?? '').split('_')[0] : segments[0]
   const problem = pageReadProblem(rule, keys, search, items, auth)
   // Probe fix MD-101 — the feed: the problem counts only for the CHOSEN Page's own read (gateway.ts); another Page's is an

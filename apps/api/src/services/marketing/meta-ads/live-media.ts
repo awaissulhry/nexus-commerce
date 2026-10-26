@@ -50,8 +50,9 @@
  *     "can't", the Post node lists it; live, Meta answers it to the Page's token only (#10 to the system user, MD-106)
  *   - the media-library edges of the portfolio (images, videos, creatives, creative_folders, creative_asset_tags), the
  *     system user (assigned_creative_folders), the ad account (website_creative_assets, website_creative_info,
- *     urls_for_asset_extraction) and a campaign (video_groups): Meta's reference lists each read (checked 2026-10-26,
- *     documentation/ads-commerce/marketing-api/reference/business/images.md and the others, same nodes and fields), but
+ *     urls_for_asset_extraction) and a campaign (video_groups): Meta's reference pages list each read, with v25 examples
+ *     (checked 2026-10-26, documentation/ads-commerce/marketing-api/reference/business/images.md and the others, same
+ *     nodes and fields), but
  *     none of Meta's v26 SDKs carries a read of them (Python v26.0.2 business.py: only POST /images, /videos,
  *     /creative_folders; adaccount.py, campaign.py, systemuser.py: none — the Java SDK the same), and live Meta answered
  *     each with (#100) "Tried accessing nonexisting field" (LIVE-PROBES ST10-03): the answer says so in words (hiddenEdge)
@@ -72,8 +73,8 @@
  *     source_instagram_media_id); canvas/preview (instant-experiences guide)
  *   - Instant Experiences (instant-experiences guide, SDK canvas.py): page/canvases (is_hidden, is_published; "A Page
  *     access token", page/canvases v26 — live #190 to the system user, CR-490), page/canvas_elements, the five template
- *     ids and template → document → body_elements (live #4701 to the system-user token, CR-489: the guide names no other
- *     token or permission for it — said in words, IX_TEMPLATE_REFUSED)
+ *     ids and template → document → body_elements (live #4701 to the system-user token, CR-489: STILL OPEN — the guide names
+ *     no other token or permission; the chosen Page's token is the likely fix, not built: IX_TEMPLATE_REFUSED says so)
  */
 import { metaObjectId } from '../../cx/connectors/meta/discovery.js'
 import type { MetaQueryValue } from '../../gateway/meta.js'
@@ -182,7 +183,8 @@ export async function hiddenEdge<T>(edge: string, what: string, instead: string,
   } catch (err) {
     const words = err instanceof MetaReadError ? err.failure.words ?? err.failure.sentence : ''
     if (err instanceof MetaReadError && err.failure.origin === 'meta' && /^100(\/|$)/.test(err.failure.code ?? '') && words.toLowerCase().includes(`nonexisting field (${edge})`)) {
-      throw new MetaLiveRefusal(`Meta does not answer ${what} to this business's token on API v26: Meta's reference lists the read (GET …/${edge}), but Meta answers that the edge does not exist (Meta's words: ${words}) — Meta answers so when an app or token may not use an edge — and none of Meta's v26 SDKs carries a read of it, so Nexus cannot read it. ${instead}`)
+      // Review of #771 — only what is known: the reference pages (still with v25 examples), the v26 SDKs, Meta's answer.
+      throw new MetaLiveRefusal(`Meta does not answer ${what} to this business's token on API v26: Meta's reference pages list the read (GET …/${edge}, with v25 examples), but on v26 Meta answers that the edge does not exist (Meta's words: ${words}), and none of Meta's v26 SDKs carries a read of it, so Nexus cannot read it. ${instead}`)
     }
     throw err
   }
@@ -1109,10 +1111,12 @@ export const IX_FIELDS = {
  * Live-probe fix CR-489 — Meta refused the template read to the business's system-user token: (#4701) "Insufficient
  * permissions to access this data". Meta's instant-experiences guide shows the read (GET /<template id>?fields=document,
  * then the document's body_elements) with an unnamed access token, and names no permission for it beyond the Instant
- * Experience ones (pages_manage_ads, pages_read_engagement, pages_show_list, the ADVERTISE task on the Page); the template
- * and its document are Meta's own objects, not the chosen Page's, so the Page's token is not Nexus's to send there.
+ * Experience ones (pages_manage_ads, pages_read_engagement, pages_show_list, the ADVERTISE task on the Page). Review of
+ * #771 — still OPEN: every other Instant Experience read needs the Page's token (page/canvases "A Page access token"; live
+ * #190, CR-490), so the chosen Page's token is the likely fix. It is not built: the template and its document are Meta's
+ * own objects, so that would be a new Page-token rule (LIVE-PROBES CR-489b, the Owner decides).
  */
-export const IX_TEMPLATE_REFUSED = 'Meta does not let this business\'s token read Meta\'s Instant Experience templates: it answers (#4701) "Insufficient permissions to access this data". Meta\'s Instant Experiences guide names no permission for this read beyond the Instant Experience ones (pages_manage_ads, pages_read_engagement, pages_show_list and the Advertise task on the Page), so there is nothing named to add. Making one from a template does not need this read: create-meta-instant-experience takes the template by name (its layout is fixed), and Ads Manager shows each template\'s parts.'
+export const IX_TEMPLATE_REFUSED = 'Meta does not let this business\'s system-user token read Meta\'s Instant Experience templates: it answers (#4701) "Insufficient permissions to access this data". This is still open: Meta\'s Instant Experiences guide names no permission for this read beyond the Instant Experience ones this connection holds (pages_manage_ads, pages_read_engagement, pages_show_list and the Advertise task on the Page); the chosen Page\'s own token is the likely fix (every other Instant Experience read needs it), and Nexus does not send this read with it yet. Making one from a template does not need this read: create-meta-instant-experience takes the template by name (its layout is fixed), and Ads Manager shows each template\'s parts.'
 
 async function templateRead<T>(work: () => Promise<T>): Promise<T> {
   try {

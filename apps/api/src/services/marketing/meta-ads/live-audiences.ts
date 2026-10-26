@@ -403,7 +403,7 @@ const OPERATION_WORDS: Readonly<Record<number, string>> = {
   423: 'Invalid pixel.',
   431: 'Lookalike refresh failed: Meta could not refresh this lookalike.',
   432: 'Lookalike build failed: Meta could not build this lookalike.',
-  433: 'Lookalike build failed: Meta could not build this lookalike (Meta\'s words for 433, as for 432). Its source audience needs at least 100 people (of one country unless international seeds are allowed).',
+  433: 'Lookalike build failed: Meta could not build this lookalike (Meta\'s words for 433, as for 432).',
   434: 'Lookalike build retrying: Meta is trying again.',
   441: 'Still filling: Meta is finding people who fit it; ads can use it now, and its size grows as it fills.',
   442: 'Meta could not prefill this custom audience.',
