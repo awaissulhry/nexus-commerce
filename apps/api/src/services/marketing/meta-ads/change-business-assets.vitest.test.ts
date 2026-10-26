@@ -79,6 +79,7 @@ describe('set-meta-billing drafts (BM-903 … BM-907)', () => {
     expect(d.before).toMatchObject({ name: 'Group A' })
     expect(no(billingDraft({ action: 'rename-group', invoiceGroupId: GROUP_A, name: 'Group A' }, live()))).toMatch(/nothing to change/)
     expect(no(billingDraft({ action: 'rename-group', invoiceGroupId: GROUP_A, name: 'Group C' }, live([group({ adAccountIds: null })])))).toMatch(/could not read every ad account/)
+    expect(no(billingDraft({ action: 'rename-group', invoiceGroupId: GROUP_A, name: 'Group C' }, live([group({ adAccountIds: [], accountsMore: true })])))).toMatch(/could not read every ad account/)
     expect(no(billingDraft({ action: 'rename-group', invoiceGroupId: GROUP_A, name: 'Group C' }, live([group({ adAccountIds: ['1234567891'], takenAccounts: ['1234567891'] })])))).toMatch(/another business in Nexus uses \(act_1234567891\)/)
     expect(no(billingDraft({ action: 'rename-group', invoiceGroupId: '120000000000399', name: 'Group C' }, live()))).toMatch(/is not an invoice group of the business portfolio's own credit line/)
   })

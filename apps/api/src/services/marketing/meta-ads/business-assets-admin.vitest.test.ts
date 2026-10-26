@@ -139,6 +139,13 @@ describe('claim-app / request-app (BM-055) and asset-group (BM-056)', () => {
     expect(request.warnings.join(' ')).toMatch(/cannot tell whether another business in Nexus uses this app/)
     const pending = ok(assetGuide({ action: 'request-app', appId: '300000000000008' }, assetLive({ lists: lists([{ id: '300000000000008', list: 'pending', name: null, seen: 'unknown', requestId: '1' }]) })))
     expect(pending.ownerSteps[0]).toMatch(/The owner of app 300000000000008 accepts/)
+    // A partner's app: a claim sends its owner a request (Meta's help) — only when Meta names the owner.
+    const shared = (seen: 'named' | 'unknown') => assetLive({ lists: lists([{ id: '300000000000008', list: 'client', name: 'Partner app', seen }]) })
+    const claimShared = ok(assetGuide({ action: 'claim-app', appId: '300000000000008' }, shared('named')))
+    expect(claimShared.state).toBe('to-do')
+    expect(steps(claimShared)).toMatch(/Connect an app ID: enter the App ID 300000000000008/)
+    expect(no(assetGuide({ action: 'claim-app', appId: '300000000000008' }, shared('unknown')))).toMatch(/Meta does not name whose app/)
+    expect(ok(assetGuide({ action: 'request-app', appId: '300000000000008' }, shared('unknown'))).state).toBe('done')
   })
   it('an asset group: Meta cannot by API, the Owner\'s steps; one with that name is done', () => {
     const g = ok(assetGuide({ action: 'asset-group', name: 'Brand A' }, assetLive()))

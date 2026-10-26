@@ -326,8 +326,12 @@ function appGuide(ask: AssetAsk, live: AssetLive, portfolio: Portfolio): AdminGu
     if (!claim) return { refusal: `App ${id} is this portfolio's own: there is no access to ask for.` }
     item = { what: 'app', now: { appId: id, list: 'owned', name: row.name }, asked, done: true, sentence: 'Meta lists it among this portfolio\'s own apps.' }
   } else if (row?.list === 'client') {
-    if (claim) return { refusal: `App ${id} is another portfolio's (this portfolio has access to it): its owner keeps it unless they move it.` }
-    item = { what: 'app', now: { appId: id, list: 'client', name: row.seen === 'named' ? row.name : null }, asked, done: true, sentence: 'Meta lists it among the apps this portfolio has access to.' }
+    if (claim) {
+      // Meta's help: "If you connect or request access to an app ID, a request will be sent to the app owner to give your
+      // business portfolio ownership or access" — only for an app whose owner Meta names (no other business's in Nexus).
+      if (row.seen !== 'named') return { refusal: UNKNOWN_OWNER('app', id) }
+      item = { what: 'app', now: { appId: id, list: 'client', name: row.name }, asked, done: false, sentence: 'This portfolio has access to it; its owner keeps it until they accept a request to give this portfolio ownership.' }
+    } else item = { what: 'app', now: { appId: id, list: 'client', name: row.seen === 'named' ? row.name : null }, asked, done: true, sentence: 'Meta lists it among the apps this portfolio has access to.' }
   } else if (row?.list === 'pending') {
     item = { what: 'app', now: { appId: id, list: 'pending', requestId: row.requestId ?? null }, asked, done: false, sentence: 'Meta lists a request for it as waiting for the app\'s owner.' }
     steps.length = 0
@@ -335,7 +339,7 @@ function appGuide(ask: AssetAsk, live: AssetLive, portfolio: Portfolio): AdminGu
   } else {
     item = { what: 'app', now: null, asked, done: unsure ? null : false, sentence: unsure ? `Nexus does not find it in this portfolio's app lists, but ${unsure}: it cannot tell for sure.` : 'Not in this portfolio\'s app lists yet.' }
   }
-  if (!row) {
+  if (!row || (claim && row.list === 'client')) {
     steps.push(claim
       ? `Accounts › Apps › Add › Connect an app ID: enter the App ID ${id} and click Add app (Meta's help; Meta sends the app's owner a request to give this portfolio ownership).`
       : `Accounts › Apps › Add › Request access to an app ID: enter the App ID ${id} and click Request app (Meta's help; the app's owner approves it).`)

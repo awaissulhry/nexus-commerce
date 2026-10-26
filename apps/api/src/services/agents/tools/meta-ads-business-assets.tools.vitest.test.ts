@@ -173,6 +173,13 @@ describe('remove-meta-business-asset', () => {
     const partner = data(await run('remove-meta-business-asset', { asset: 'ad-account', id: OTHER_ACCOUNT }))
     expect(partner.ownerSteps.join(' ')).toMatch(/"Partner ads" \(ad account act_1234567891\)/)
   })
+  it('a partner\'s ad account whose owner portfolio another business in Nexus uses, or whose owner Meta names as this portfolio itself: no steps', async () => {
+    h.taken = [{ product: 'PORTFOLIO', id: OTHER_PORTFOLIO }]
+    expect(errorOf(await run('remove-meta-business-asset', { asset: 'ad-account', id: OTHER_ACCOUNT }))).toMatch(/Another business in Nexus/)
+    h.taken = []
+    h.answer = (req) => (req.path.endsWith('/client_ad_accounts') ? { data: [{ account_id: OTHER_ACCOUNT, name: 'Partner ads', business: { id: PORTFOLIO } }] } : answers(req))
+    expect(errorOf(await run('remove-meta-business-asset', { asset: 'ad-account', id: OTHER_ACCOUNT }))).toMatch(/Meta does not name whose ad account/)
+  })
   it('the chosen Instagram account: its own business asset list counts as owned', async () => {
     const out = data(await run('remove-meta-business-asset', { asset: 'instagram', id: IG }))
     expect(out.putBack.sentence).toMatch(/username and password/)
