@@ -14,6 +14,11 @@
  *
  * Amazon Solicitations is still gated by NEXUS_ENABLE_AMAZON_SOLICITATIONS=true
  * (D.7 gate). Non-Amazon email is gated by NEXUS_ENABLE_OUTBOUND_EMAILS=true.
+ *
+ * Reviews area PR C (B9) — this is the ONE sender. The hourly cron, the Requests page's "Run now"
+ * (POST /review-queue/run) and its "Send now" (POST /review-queue/bulk, `onlyIds`) all run
+ * runReviewMailerOnce(); the old POST /review-engine/tick (no pause, no "How was it?" check, every
+ * non-Amazon request marked skipped) is gone. Each run says what it did per channel and per market.
  */
 
 import cron from '../lib/cron/clustered.js'
@@ -35,6 +40,7 @@ import {
 } from '../services/reviews/amazon-solicitations.service.js'
 import { sendSentimentCheckEmail, resolveLocaleForMarketplace } from '../services/reviews/sentiment-check-email.service.js'
 import { readReviewMailerState } from '../services/reviews/review-mailer-state.service.js'
+import { MAX_TRIES, RETRY_BACKOFF_HOURS } from '../services/reviews/review-queue-words.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -47,15 +53,18 @@ let lastSummary: string | null = null
 //   attempt 1 → on FAILED: nextRetryAt = +8h
 //   attempt 2 → on FAILED: nextRetryAt = +16h
 //   attempt 3 → terminal: row stays FAILED, no nextRetryAt
-const MAX_RETRIES = 3
-const BACKOFF_HOURS = [4, 8, 16] as const
+const MAX_RETRIES = MAX_TRIES
+const BACKOFF_HOURS = RETRY_BACKOFF_HOURS
 function backoffNextRetryAt(attemptCount: number): Date | null {
   if (attemptCount >= MAX_RETRIES) return null
   const hours = BACKOFF_HOURS[attemptCount] ?? 24
   return new Date(Date.now() + hours * 60 * 60 * 1000)
 }
 
-interface MailerTickResult {
+/** What a run did with the requests of one channel or one market. `tooEarly` stay queued (Amazon's day 5 not reached). */
+export interface MailerOutcome { sent: number; failed: number; skipped: number; tooEarly: number }
+
+export interface MailerTickResult {
   deliverySwept?: number
   scheduled: number
   due: number
@@ -63,13 +72,37 @@ interface MailerTickResult {
   failed: number
   skipped: number
   retried: number
+  /** Amazon said too early (or our day 4 not reached): they stay queued; counted in `skipped` too. */
+  tooEarly?: number
   sentimentEmails?: number
   paused?: boolean
   durationMs: number
+  /** Per channel ('AMAZON', 'EBAY', 'SHOPIFY'). */
+  byChannel: Record<string, MailerOutcome>
+  /** Per channel and market ('AMAZON:IT', 'EBAY:DE', 'SHOPIFY:'). */
+  byMarket: Record<string, MailerOutcome>
 }
 
-export async function runReviewMailerOnce(): Promise<MailerTickResult> {
+export interface MailerRunOptions {
+  /**
+   * Only these requests (the Requests page's "Send now", which first makes them due). The run then neither sweeps
+   * delivery dates, nor schedules new orders, nor brings other failed requests back: it sends these, if due.
+   */
+  onlyIds?: string[]
+}
+
+export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<MailerTickResult> {
   const startedAt = Date.now()
+  const onlyIds = opts.onlyIds ? [...new Set(opts.onlyIds)] : null
+  const byChannel: Record<string, MailerOutcome> = {}
+  const byMarket: Record<string, MailerOutcome> = {}
+  const tally = (order: { channel: string; marketplace: string | null }, what: keyof MailerOutcome) => {
+    const marketKey = `${order.channel}:${order.marketplace ?? ''}`
+    for (const [book, key] of [[byChannel, order.channel], [byMarket, marketKey]] as const) {
+      book[key] ??= { sent: 0, failed: 0, skipped: 0, tooEarly: 0 }
+      book[key][what] += 1
+    }
+  }
 
   // RV.4.2 — operational kill switch. When paused, log + bail before
   // doing any work. The cron tick still runs (no harm) but produces a
@@ -85,7 +118,10 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
       pausedAt: state.pausedAt,
       pausedBy: state.pausedBy,
     })
-    return { scheduled: 0, due: 0, sent: 0, failed: 0, skipped: 0, retried: 0, paused: true, durationMs }
+    return { scheduled: 0, due: 0, sent: 0, failed: 0, skipped: 0, retried: 0, paused: true, durationMs, byChannel, byMarket }
+  }
+  if (onlyIds && onlyIds.length === 0) {
+    return { scheduled: 0, due: 0, sent: 0, failed: 0, skipped: 0, retried: 0, durationMs: Date.now() - startedAt, byChannel, byMarket }
   }
 
   // RRL.2 — advance deliveredAt INSIDE the hourly mailer tick, before
@@ -101,27 +137,32 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
   // SP-API report fetch can never block the tick, regardless of
   // NEXUS_ENABLE_DELIVERED_REPORT_FETCH. The daily cron stays as a backstop.
   let deliverySwept = 0
-  try {
-    const { applyShipDeliveryHeuristic } = await import('../services/reviews/orders-delivered-backfill.service.js')
-    const swept = await applyShipDeliveryHeuristic()
-    deliverySwept = swept.updated
-    if (swept.updated > 0) {
-      logger.info('[review-mailer] delivery sweep advanced deliveredAt', swept)
+  // Not on a "Send now" of chosen requests (onlyIds): that run touches only them.
+  if (!onlyIds) {
+    try {
+      const { applyShipDeliveryHeuristic } = await import('../services/reviews/orders-delivered-backfill.service.js')
+      const swept = await applyShipDeliveryHeuristic()
+      deliverySwept = swept.updated
+      if (swept.updated > 0) {
+        logger.info('[review-mailer] delivery sweep advanced deliveredAt', swept)
+      }
+    } catch (err) {
+      // Never let a delivery-sweep failure stop the rest of the tick.
+      logger.warn('[review-mailer] delivery sweep failed (scheduling continues)', {
+        error: err instanceof Error ? err.message : String(err),
+      })
     }
-  } catch (err) {
-    // Never let a delivery-sweep failure stop the rest of the tick.
-    logger.warn('[review-mailer] delivery sweep failed (scheduling continues)', {
-      error: err instanceof Error ? err.message : String(err),
-    })
   }
 
-  // Step 1: schedule newly delivered orders
-  const scheduleResult = await schedulePendingOrders()
+  // Step 1: schedule newly delivered orders (not on a "Send now" of chosen requests)
+  const scheduleResult = onlyIds
+    ? { examined: 0, scheduled: 0, skipped: 0, errors: 0 }
+    : await schedulePendingOrders()
 
   // RV.3.3 — pull rows ready for app-level retry back to SCHEDULED before
   // the main due query. nextRetryAt has elapsed and attemptCount < MAX_RETRIES,
   // so we get one more shot. The mailer then processes them as normal SCHEDULED.
-  const retriedRows = await prisma.reviewRequest.updateMany({
+  const retriedRows = onlyIds ? { count: 0 } : await prisma.reviewRequest.updateMany({
     where: {
       status: 'FAILED',
       nextRetryAt: { lte: new Date() },
@@ -140,6 +181,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
     where: {
       status: 'SCHEDULED',
       scheduledFor: { lte: new Date() },
+      ...(onlyIds ? { id: { in: onlyIds } } : {}),
     },
     include: {
       order: {
@@ -168,7 +210,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
     take: 200,
   })
 
-  let sent = 0, failed = 0, skipped = 0
+  let sent = 0, failed = 0, skipped = 0, tooEarly = 0
   let sentimentEmailsSent = 0
 
   for (const req of due) {
@@ -195,6 +237,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
           },
         })
         skipped += 1
+        tally(order, 'skipped')
         continue
       }
 
@@ -233,6 +276,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
               continue
             } else if (result.dryRun) {
               skipped += 1
+              tally(order, 'skipped')
               continue
             } else if (result.suppressed) {
               // RV.9.5 — recipient is on the suppression list. Mark
@@ -248,6 +292,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
                 },
               })
               skipped += 1
+              tally(order, 'skipped')
               continue
             } else {
               // Sentiment email failed → retry on backoff like any other send.
@@ -263,6 +308,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
                 },
               })
               failed += 1
+              tally(order, 'failed')
               continue
             }
           }
@@ -281,6 +327,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
             },
           })
           skipped += 1
+          tally(order, 'skipped')
           continue
         }
         // Fall through to the normal Amazon/email branch below.
@@ -301,6 +348,8 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
             data: { scheduledFor: new Date(order.deliveredAt!.getTime() + AMAZON_SOLICITATION_MIN_DAYS * 24 * 60 * 60 * 1000) },
           })
           skipped += 1 // stays SCHEDULED
+          tooEarly += 1
+          tally(order, 'tooEarly')
           continue
         }
         if (daysSinceDelivery > AMAZON_SOLICITATION_MAX_DAYS) {
@@ -309,6 +358,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
             data: { status: 'SKIPPED', suppressedReason: `Outside Amazon 4-30d window (${Math.round(daysSinceDelivery)}d)` },
           })
           skipped += 1
+          tally(order, 'skipped')
           continue
         }
         if (!order.channelOrderId) {
@@ -317,6 +367,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
             data: { status: 'SKIPPED', suppressedReason: 'No channelOrderId for Amazon solicitation' },
           })
           skipped += 1
+          tally(order, 'skipped')
           continue
         }
         const result = await sendAmazonSolicitation({
@@ -336,13 +387,19 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
             },
           })
           sent += 1
+          tally(order, 'sent')
         } else if (result.errorCode === 'OUTSIDE_WINDOW') {
           // Amazon's delivery date can be later than ours: tomorrow again, until our day 30.
+          const update = outsideWindowUpdate(order.deliveredAt!, result.errorMessage)
           await prisma.reviewRequest.update({
             where: { id: req.id },
-            data: outsideWindowUpdate(order.deliveredAt!, result.errorMessage),
+            data: update,
           })
           skipped += 1
+          if (update.status === 'SCHEDULED') {
+            tooEarly += 1
+            tally(order, 'tooEarly')
+          } else tally(order, 'skipped')
         } else if (isBenignFailure(result.errorCode)) {
           // NOT_IMPLEMENTED / UNKNOWN_MARKETPLACE / ALREADY_SOLICITED →
           // SKIPPED, no retry (permanent / config / dup-protect).
@@ -358,6 +415,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
             },
           })
           skipped += 1
+          tally(order, 'skipped')
         } else {
           // Genuine failure → schedule a retry if we haven't exhausted attempts.
           const nextRetryAt = backoffNextRetryAt(attemptCount)
@@ -373,6 +431,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
             },
           })
           failed += 1
+          tally(order, 'failed')
         }
       } else {
         // eBay / Shopify — send our own email
@@ -382,6 +441,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
             data: { status: 'SKIPPED', suppressedReason: 'No customer email on order' },
           })
           skipped += 1
+          tally(order, 'skipped')
           continue
         }
         const firstProduct = order.items[0]?.product ?? null
@@ -408,8 +468,10 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
             },
           })
           sent += 1
+          tally(order, 'sent')
         } else if (result.dryRun) {
           skipped += 1 // stay SCHEDULED in dry-run
+          tally(order, 'skipped')
         } else if (result.suppressed) {
           // RV.9.5 — recipient is suppressed; SKIPPED, no retry.
           await prisma.reviewRequest.update({
@@ -423,6 +485,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
             },
           })
           skipped += 1
+          tally(order, 'skipped')
         } else {
           const nextRetryAt = backoffNextRetryAt(attemptCount)
           await prisma.reviewRequest.update({
@@ -436,6 +499,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
             },
           })
           failed += 1
+          tally(order, 'failed')
         }
       }
     } catch (err) {
@@ -444,6 +508,7 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
         error: err instanceof Error ? err.message : String(err),
       })
       failed += 1
+      tally(order, 'failed')
     }
   }
 
@@ -477,8 +542,8 @@ export async function runReviewMailerOnce(): Promise<MailerTickResult> {
   const durationMs = Date.now() - startedAt
   lastRunAt = new Date()
   const retried = retriedRows.count
-  lastSummary = `deliverySwept=${deliverySwept} scheduled=${scheduleResult.scheduled} retried=${retried} due=${due.length} sent=${sent} sentimentEmails=${sentimentEmailsSent} failed=${failed} skipped=${skipped} durationMs=${durationMs}${pipelineWarn}`
-  return { deliverySwept, scheduled: scheduleResult.scheduled, retried, due: due.length, sent, sentimentEmails: sentimentEmailsSent, failed, skipped, durationMs }
+  lastSummary = `deliverySwept=${deliverySwept} scheduled=${scheduleResult.scheduled} retried=${retried} due=${due.length} sent=${sent} sentimentEmails=${sentimentEmailsSent} failed=${failed} skipped=${skipped} tooEarly=${tooEarly}${onlyIds ? ` only=${onlyIds.length}` : ''} durationMs=${durationMs}${pipelineWarn}`
+  return { deliverySwept, scheduled: scheduleResult.scheduled, retried, due: due.length, sent, sentimentEmails: sentimentEmailsSent, failed, skipped, tooEarly, durationMs, byChannel, byMarket }
 }
 
 export async function runReviewMailerCron(): Promise<void> {

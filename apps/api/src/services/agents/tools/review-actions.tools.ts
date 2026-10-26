@@ -6,8 +6,8 @@
  * describes the order or the review is refused (stale).
  *
  *   - request-review: Amazon's "Request a Review" (Solicitations), delivered 4–30 days ago, no active return, no
- *     refund, once per order. eBay buyers are written to only through eBay (decision O-2); the other channels have no
- *     request call (their review e-mails run from the review rules).
+ *     refund, once per order. eBay and Shopify buyers get Nexus's own review e-mail from the review rules' schedule
+ *     (jobs/review-request-mailer.job.ts); this tool never sends it (Reviews area PR C, B12).
  *   - reply-to-review: eBay only (RespondToFeedback: public, one reply per feedback, at most 80 characters). Amazon
  *     and Shopify have no reply call: post it there, the review desk can then record it.
  */
@@ -91,8 +91,9 @@ const requestReviewTool: AgentTool = {
   maxClaudeTrust: 'ask',
   description:
     'Ask the buyer of an Amazon order of this business for a review, through Amazon\'s "Request a Review" (Amazon writes '
-    + 'and sends it; live or a dry run, as the preview says). Only 4–30 days after delivery, never with an open return or '
-    + 'a refund, once per order. eBay buyers are written to only through eBay; other channels have no request call. '
+    + 'and sends it; live or a dry run, as the preview says). Amazon orders only: 4–30 days after delivery, never with an '
+    + 'open return or a refund, once per order. eBay and Shopify buyers are asked by Nexus\'s own e-mail on the review '
+    + 'rules\' schedule (Reviews › Requests); this tool does not send those. '
     + 'Always waits for a person to approve it in Nexus; it cannot be undone.',
   handler: (args) => previewRequest(args as RequestArgs),
   async execute(args, ctx) {
