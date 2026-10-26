@@ -16,6 +16,7 @@ function facts(over: Partial<SourceFacts> = {}): SourceFacts {
     topics: [],
     reviewGroups: [],
     lastReadAt: hoursAgo(0.3),
+    ebayListingMarkets: [],
     ebayFeedbackOn: true,
     amazonTopicsOn: true,
     ...over,
@@ -68,6 +69,49 @@ describe('review sources', () => {
     const out = sourcesFromFacts(facts({ reviewGroups: [group('EBAY', 'FR', 'EBAY_API', 3)] }), NOW)
     expect(out.sources[0]).toMatchObject({ market: 'FR', state: 'not_updating', reason: 'No eBay account is connected' })
     expect(out.setup).toEqual([])
+  })
+
+  it('an eBay account with no market covers every eBay market the business sells on, not Italy only', () => {
+    const out = sourcesFromFacts(facts({
+      connections: [conn('EBAY', null)],
+      reviewGroups: [group('EBAY', 'IT', 'EBAY_API', 40)],
+      ebayListingMarkets: ['IT', 'DE', 'gb', 'EBAY_FR'],
+    }), NOW)
+    const ebay = out.sources.filter(s => s.channel === 'EBAY')
+    expect(ebay.map(s => s.market)).toEqual(['DE', 'IT', 'UK'])
+    for (const s of ebay) expect(s).toMatchObject({ state: 'ok', reason: null, reconnectHref: null, lastNote: 'read every 30 min' })
+    expect(ebay.find(s => s.market === 'IT')!.reviews).toBe(40)
+    expect(out.setup).toEqual([])
+  })
+
+  it('an account-wide eBay account that stopped: every market says why, ONE banner names eBay', () => {
+    const out = sourcesFromFacts(facts({
+      connections: [conn('EBAY', null, 'needs_reauth', { lastErrorAt: hoursAgo(3) })],
+      ebayListingMarkets: ['IT', 'DE'],
+    }), NOW)
+    const ebay = out.sources.filter(s => s.channel === 'EBAY')
+    expect(ebay.map(s => [s.market, s.state, s.reason])).toEqual([['DE', 'not_updating', 'Sign-in expired'], ['IT', 'not_updating', 'Sign-in expired']])
+    expect(out.setup).toHaveLength(1)
+    expect(out.setup[0]).toMatchObject({ id: 'ebay-signin:ALL', title: 'eBay stopped updating.', href: '/settings/channels/ebay' })
+    expect(out.setup[0].words).toContain('Nexus cannot read new feedback from eBay or send replies there')
+  })
+
+  it("a market's own account comes first; a switched-off one falls back to the account-wide account", () => {
+    const out = sourcesFromFacts(facts({
+      connections: [conn('EBAY', null), conn('EBAY', 'FR', 'needs_reauth'), conn('EBAY', 'DE', 'connected', { isActive: false })],
+      ebayListingMarkets: ['DE', 'FR'],
+    }), NOW)
+    const by = Object.fromEntries(out.sources.filter(s => s.channel === 'EBAY').map(s => [s.market, s]))
+    expect(by.FR).toMatchObject({ state: 'not_updating', reason: 'Sign-in expired' })
+    expect(by.DE).toMatchObject({ state: 'ok', reason: null })
+    expect(out.setup.map(p => p.id)).toEqual(['ebay-signin:FR'])
+  })
+
+  it('an account-wide eBay account with no market to show yet is one row for eBay; listings alone without an account add nothing', () => {
+    const wide = sourcesFromFacts(facts({ connections: [conn('EBAY', null)] }), NOW)
+    expect(wide.sources).toEqual([expect.objectContaining({ channel: 'EBAY', market: null, state: 'ok', what: 'Seller feedback' })])
+    const none = sourcesFromFacts(facts({ ebayListingMarkets: ['IT', 'DE'] }), NOW)
+    expect(none.sources.filter(s => s.channel === 'EBAY')).toEqual([])
   })
 
   it('Amazon: topics per market, stars only from imported reviews, no topics on Amazon.nl', () => {
@@ -126,6 +170,7 @@ describe('review sources', () => {
       facts({ connections: [conn('EBAY', 'IT')] }),
       facts({ ebayFeedbackOn: false, amazonTopicsOn: false, connections: [conn('EBAY', 'IT'), conn('AMAZON', null, 'needs_reauth')], reviewGroups: [group('AMAZON', 'IT', 'IMPORT_CSV', 3)] }),
       facts({ lastReadAt: null, connections: [conn('EBAY', 'DE', 'disconnected')], topics: [{ marketplace: 'FR', accessStatus: 'NEEDS_BRAND_ANALYTICS_ROLE', fetchedAt: daysAgo(1) }] }),
+      facts({ connections: [conn('EBAY', null, 'revoked')], ebayListingMarkets: ['IT', 'DE'] }),
     ]
     for (const f of variants) {
       const words = wordsOf(sourcesFromFacts(f, NOW)).filter(w => !w.startsWith('/settings/'))
