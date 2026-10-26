@@ -28,13 +28,14 @@ describe('a failed section is an error, never zeros', () => {
 })
 
 describe('changes in words', () => {
-  it('a tile says the change against the period before, up is good, no change is not red', () => {
-    expect(deltaView(0.1, 'stars', '30d')).toEqual({ value: '+0.1 vs month before', positive: true })
-    expect(deltaView(-0.3, 'stars', '7d')).toEqual({ value: '−0.3 vs week before', positive: false })
-    expect(deltaView(14, 'count', '90d')).toEqual({ value: '+14 vs quarter before', positive: true })
-    expect(deltaView(-1200, 'count', '12m')).toEqual({ value: '−1,200 vs year before', positive: false })
-    expect(deltaView(0.6, 'points', '30d')).toEqual({ value: '+0.6 pts vs month before', positive: true })
-    expect(deltaView(0, 'count', '30d')).toEqual({ value: 'same as the month before', positive: true })
+  it('a tile says the change against the period before, up is good, no change is neutral (neither green nor red)', () => {
+    expect(deltaView(0.1, 'stars', '30d')).toEqual({ value: '+0.1 vs month before', tone: 'positive' })
+    expect(deltaView(-0.3, 'stars', '7d')).toEqual({ value: '−0.3 vs week before', tone: 'negative' })
+    expect(deltaView(14, 'count', '90d')).toEqual({ value: '+14 vs quarter before', tone: 'positive' })
+    expect(deltaView(-1200, 'count', '12m')).toEqual({ value: '−1,200 vs year before', tone: 'negative' })
+    expect(deltaView(0.6, 'points', '30d')).toEqual({ value: '+0.6 pts vs month before', tone: 'positive' })
+    expect(deltaView(0, 'count', '30d')).toEqual({ value: 'same as the month before', tone: 'neutral' })
+    expect(deltaView(0.04, 'stars', '7d')).toEqual({ value: 'same as the week before', tone: 'neutral' })
     expect(deltaView(null, 'stars', '30d')).toBeNull()
     expect(signed(-0.04)).toBe('0.0')
   })
@@ -112,6 +113,8 @@ describe('needs you', () => {
     expect(needsSubtitle(5, 8, null)).toBe('8 things, most urgent first')
     expect(needsSubtitle(3, 3, 'reply')).toBe('3 shown, most urgent first')
     expect(needsSubtitle(0, 0, null)).toBe('Nothing waits for you')
+    // A filter tile on with none of its kind: other kinds may still wait, so it does not say "nothing waits".
+    expect(needsSubtitle(0, 0, 'alerts')).toBe('Nothing of this kind waits for you')
     expect(ageWords(item({}).at, NOW)).toBe('3 days')
     expect(ageWords(new Date(NOW - 5 * HOUR).toISOString(), NOW)).toBe('5 h')
   })

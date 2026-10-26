@@ -152,19 +152,21 @@ export function overviewPeriodWords(period: OverviewPeriod) {
   return PERIOD_WORDS[period]
 }
 
-export interface DeltaView { value: string; positive: boolean }
+/** A tile's change, in MetricStrip's `delta` shape: `tone` colours it (positive green, negative red, neutral grey). */
+export interface DeltaView { value: string; tone: 'positive' | 'negative' | 'neutral' }
 
 /**
  * A change against the period before, for a tile: "+0.1 vs month before", "+14 vs month before", "+0.6 pts". Up is
- * good for every Overview number that has one; no change reads "same as the month before" (not red). Unknown → null.
+ * good for every Overview number that has one; no change reads "same as the month before" in the neutral tone (neither
+ * green nor red). Unknown → null.
  */
 export function deltaView(delta: number | null, unit: 'stars' | 'count' | 'points', period: OverviewPeriod): DeltaView | null {
   if (delta == null || !Number.isFinite(delta)) return null
   const { prevShort } = PERIOD_WORDS[period]
   const zero = unit === 'count' ? delta === 0 : Math.abs(delta) < 0.05
-  if (zero) return { value: `same as the ${prevShort}`, positive: true }
+  if (zero) return { value: `same as the ${prevShort}`, tone: 'neutral' }
   const text = unit === 'count' ? `${delta > 0 ? '+' : MINUS}${count(Math.abs(delta))}` : signed(delta)
-  return { value: unit === 'points' ? `${text} pts vs ${prevShort}` : `${text} vs ${prevShort}`, positive: delta > 0 }
+  return { value: unit === 'points' ? `${text} pts vs ${prevShort}` : `${text} vs ${prevShort}`, tone: delta > 0 ? 'positive' : 'negative' }
 }
 
 /** "4.4", "—". */
@@ -384,8 +386,9 @@ export function needsLimit(show: NeedsFilter | null): number {
   return show ? 8 : 5
 }
 
+/** With a filter tile on, `total` counts that kind only: none of it is not "nothing waits" (other kinds may). */
 export function needsSubtitle(shown: number, total: number, show: NeedsFilter | null): string {
-  if (total === 0) return 'Nothing waits for you'
+  if (total === 0) return show ? 'Nothing of this kind waits for you' : 'Nothing waits for you'
   if (show) return `${count(shown)} shown, most urgent first`
   return `${count(total)} ${total === 1 ? 'thing' : 'things'}, most urgent first`
 }

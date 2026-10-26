@@ -38,7 +38,7 @@
 
 .tileSkeletons {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: var(--nds-space-10);
 }
 
@@ -312,8 +312,11 @@
   color: var(--nds-grid-muted-fg);
 }
 
+/* A note that wraps inside its column ("Etsy asks buyers itself" under Requests sent, the reason under Not updating),
+   never clipped at either edge; the column sizes its rows to it (`autoHeight` in ChannelTable). */
 .cellWrap {
   white-space: normal;
+  overflow-wrap: anywhere;
   font-size: var(--nds-font-size-xs-plus);
   line-height: 1.35;
   color: var(--nds-grid-muted-fg);

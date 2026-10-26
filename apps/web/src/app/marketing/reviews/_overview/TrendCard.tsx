@@ -2,8 +2,9 @@
 
 /**
  * Reviews Overview — "Rating and reviews": reviews per day (week, month) on the left axis and the average rating on the
- * right (DS PerformanceGraph; hover shows both values). A bucket without a rated review is a gap in the rating line,
- * never a 0. The same chart in words sits under it for a screen reader.
+ * right (DS PerformanceGraph; hover shows both values). The rating axis is the 5-star scale, 0–5, whatever the data. A
+ * bucket without a rated review is a gap in the rating line, never a 0; a rated bucket between two gaps shows as a dot.
+ * The same chart in words sits under it for a screen reader.
  */
 import { useMemo } from 'react'
 import { Card, EmptyState, PerformanceGraph, type ChartSeries } from '@/design-system/components'
@@ -15,6 +16,17 @@ import { chartSubtitle, chartUnit, overviewPeriodWords, trendRows, trendSummary,
 import type { OverviewPeriod } from './overviewQuery'
 import { SectionError } from './SectionError'
 import s from './overview.module.css'
+
+/** The 5-star scale (fitted to its data, Recharts ran it 0–8). */
+/** The rating axis starts at 3 (the approved board) and only goes lower when an average does, so no point is ever cut off. */
+export function ratingAxis(points: readonly { avg: number | null }[]): { domain: [number, number]; ticks: number[] } {
+  const lows = points.map(p => p.avg).filter((v): v is number => v != null)
+  const floor = Math.max(0, Math.min(3, Math.floor(Math.min(5, ...lows))))
+  const step = 5 - floor <= 2 ? 0.5 : 1
+  const ticks: number[] = []
+  for (let t = floor; t <= 5 + 1e-9; t += step) ticks.push(Math.round(t * 10) / 10)
+  return { domain: [floor, 5], ticks }
+}
 
 export interface TrendCardProps {
   trend: { bucket: TrendBucket; points: TrendPoint[] } | null
@@ -31,7 +43,8 @@ export function TrendCard({ trend, error, loading, period, scope, onRetry }: Tre
   const rows = useMemo(() => (trend ? trendRows(trend.points, trend.bucket) : []), [trend])
   // Recharts takes colours as props (tokens/colors.ts `chart`); a null rating is a gap in its line.
   const left = useMemo<ChartSeries>(() => ({ key: 'reviews', label: chartUnit(bucket), color: chart.reference, axis: 'left', axisLabel: chartUnit(bucket), format: (v) => Math.round(v).toLocaleString('en') }), [bucket])
-  const right = useMemo<ChartSeries>(() => ({ key: 'avg', label: 'Average rating', color: chart.actual, axis: 'right', axisLabel: 'Average rating', format: (v) => v.toFixed(1) }), [])
+  const axis = useMemo(() => ratingAxis(trend?.points ?? []), [trend])
+  const right = useMemo<ChartSeries>(() => ({ key: 'avg', label: 'Average rating', color: chart.actual, axis: 'right', axisLabel: 'Average rating', format: (v) => v.toFixed(1), domain: axis.domain, ticks: axis.ticks }), [axis])
   const total = trend ? trend.points.reduce((n, p) => n + p.reviews, 0) : 0
 
   return (
