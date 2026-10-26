@@ -118,6 +118,8 @@ export interface MetaWriteRequest {
     | MetaMessagingKind
     // Step 43 — the chosen Page / Instagram account a backed account is made for.
     | MetaBusinessAssetKind
+    // Gap 46b (MD-024) — a video the chosen Page posted, its thumbnail made as the Page (meta-media-rules.ts, meta-page-owner.ts).
+    | 'ownpagevideo'
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -242,6 +244,8 @@ export type MetaLabelsEdge = 'adlabels' | 'value_rule_set' | 'delete_rule_set' |
  * video-ads upload on the ad account, a folder on its business portfolio.
  */
 export type MetaMediaEdge = 'video_ads' | 'creative_folders'
+  // Gap 46b (MD-024) — a Page video's custom thumbnail (POST /<video>/thumbnails, made as the chosen Page).
+  | 'thumbnails'
 /** Step 25 — create-meta-creative: a creative and an async creative job on the chosen ad account (a creative's labels: step 21's `adlabels`). */
 export type MetaCreativeEdge = 'adcreatives' | 'asyncadcreatives'
 /** Step 40 — the chosen ad account's account-level tracking specs, and its insights features (switched on, never off). */

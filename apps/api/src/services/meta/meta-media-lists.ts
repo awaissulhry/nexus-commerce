@@ -64,3 +64,20 @@ export const AD_FORMATS = [
 ] as const
 /** The gateway lets the preview keys go only on a read naming one of these. */
 export const META_AD_FORMATS: ReadonlySet<string> = new Set<string>(AD_FORMATS)
+
+/**
+ * Gap 46b (master CR-489) — the five Instant Experience templates Meta's instant-experiences guide names (Get New Customers,
+ * Showcase Your Business, Sell Products without catalog, Lifestyle, Grid; the AR template is Ads Manager only), in ONE place
+ * for the gateway: Meta's OWN nodes, read only with the chosen Page's token on exactly META_IX_TEMPLATE_READ
+ * (gateway/meta-page-reads.ts), and the templates create-meta-instant-experience makes from (gateway/meta-canvas-rules.ts).
+ * Step 10's IX_TEMPLATES (marketing/meta-ads/live-media.ts) names the same five (a test keeps them equal).
+ */
+export const META_IX_TEMPLATE_IDS = ['133471657203838', '1063217037112304', '424787857903852', '1369752616394017', '1932289657009030'] as const
+/**
+ * Gap 46b (master CR-489) — the one read of a template's parts: the guide's two reads (GET /<template id>?fields=document,
+ * then GET /<document id>?fields=body_elements — documentation/ads-commerce/marketing-api/guides/instant-experiences.md "Get
+ * element types for a template") as ONE, by Graph field expansion of the template's `document` (a Canvas: Meta's Python
+ * Business SDK canvastemplate.py `'document': 'Canvas'`; canvas.py `body_elements`), so the Page's token never goes to an id
+ * Nexus did not name.
+ */
+export const META_IX_TEMPLATE_READ = 'id,document{id,name,body_elements}'

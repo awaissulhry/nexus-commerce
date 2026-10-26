@@ -148,7 +148,7 @@ describe('create-meta-instant-experience as a draft', () => {
     expect(all([{ type: 'photo', photoId: '800000000000001', productTags: [{ productId: ITEM, x: 0.5, y: 0.5 }] }])).toMatch(/only to partners and advertisers on its allow list/)
     const post = all([{ type: 'existingPost', facebookPostId: '800000000000003' }])
     expect(post).toMatch(/by its own media id .*"media ID \(photo or video\)".*<page>_<post>.*IX27b-04/)
-    expect(post).toMatch(/branded_content\.parent_source_instagram_media_id or parent_source_facebook_post_id .*CR-331/)
+    expect(post).toMatch(/branded_content\.parent_source_instagram_media_id or parent_source_facebook_post_id .*create-meta-creative sends it as introPost.*CR-331/)
     expect(post).toMatch(/lists no automatic video, lead form or existing post .*IX27b-12/)
     expect(post).not.toMatch(/\/advideos/)
     expect(all([{ type: 'existingPost', instagramMediaId: '17900000000000001' }])).toMatch(/If the Instagram media is a video, .*fully processed .*\/advideos/)

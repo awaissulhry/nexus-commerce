@@ -32,7 +32,8 @@ vi.mock('../../../db.js', () => ({
   default: { agentChange: { findMany: vi.fn(async (args: { where: unknown }) => { h.where = args.where; return h.rows }) } },
 }))
 
-import { liveIxCanvas, nexusIxBodyOf } from './live-instant-experiences.js'
+import { liveIxCanvas, liveIxRefsProblem, nexusIxBodyOf } from './live-instant-experiences.js'
+import { metaPageReadOf } from '../../gateway/meta-page-reads.js'
 import { MetaReadError, localFailure } from './errors.js'
 
 const CANVAS_READ = {
@@ -96,5 +97,19 @@ describe('an Instant Experience as a change reads it', () => {
     expect(await nexusIxBodyOf(PAGE, CANVAS)).toEqual({ ids: ['120000000000711', '120000000000713'], types: null })
     h.rows = [{ after: { action: 'create', pageId: PAGE, canvasId: CANVAS, bodyElementIds: ['120000000000711'], bodyElementTypes: [7] } }]
     expect(await nexusIxBodyOf(PAGE, CANVAS)).toEqual({ ids: ['120000000000711'], types: null })
+  })
+})
+
+describe('gap 46b (re-review) — the owner reads of an Instant Experience\'s photo, video and media', () => {
+  it('go with the token the gateway reads them with: each one exactly a Page-token read of the chosen Page', async () => {
+    h.answer = (path, fields) => ({ id: path, from: { id: PAGE }, ...(fields.includes('width') ? { width: 1080, height: 1080 } : {}) })
+    const refs = { photos: ['120000000000721'], videos: ['120000000000722'], posts: ['120000000000723'], instagramMedia: [], forms: [], productSets: [], productItems: [], elements: [], canvases: [] }
+    expect(await liveIxRefsProblem('m-1', refs)).toBeNull()
+    expect(h.reads).toEqual([
+      { path: '120000000000721', fields: 'id,from{id},width,height' },
+      { path: '120000000000722', fields: 'id,from{id}' },
+      { path: '120000000000723', fields: 'id,from{id}' },
+    ])
+    expect(h.reads.map((r) => metaPageReadOf(r.path, [r.path], new URLSearchParams({ fields: r.fields }), undefined))).toEqual([{ pageId: null }, { pageId: null }, { pageId: null }])
   })
 })

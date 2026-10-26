@@ -40,6 +40,11 @@ export interface MetaOwnerIo {
   chosenAdAccount: () => Promise<string | null>
   /** One GET (fields and the other query keys given), or null when Meta did not answer it with a success. */
   read: (path: string, query: Record<string, string>) => Promise<Record<string, unknown> | null>
+  /**
+   * Gap 46b (re-review NIT 2) — the same GET with the words of a refusal: the gateway's own (a Page's video is read with the
+   * chosen Page's token — meta-page-reads.ts — and a missing or refused one is refused before Meta) or Meta's.
+   */
+  readWithWords?: (path: string, query: Record<string, string>) => Promise<{ body: Record<string, unknown> | null; words: string | null }>
   /** The existing check of a campaign, ad set or ad of the chosen account (gateway.ts metaOwnerProblem). */
   objectProblem: (id: string, kind: 'campaign' | 'adset' | 'ad') => Promise<MetaOwnerProblem | null>
 }
@@ -80,6 +85,11 @@ export async function chosenBusiness(io: MetaOwnerIo, chosen: string): Promise<s
   return idOf(body?.business)
 }
 
+/** Gap 46b — a Page video's owner read (`id,from{id}`, the chosen Page's token), with the words when it could not be made. */
+async function videoRead(io: MetaOwnerIo, videoId: string): Promise<{ body: Record<string, unknown> | null; words: string | null }> {
+  return io.readWithWords ? io.readWithWords(videoId, { fields: 'id,from{id}' }) : { body: await io.read(videoId, { fields: 'id,from{id}' }), words: null }
+}
+
 /** Why a change of this object (step 28's kinds) is refused for this connection, or null. */
 export async function metaOptimizeOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: MetaOptimizeObjectKind, io: MetaOwnerIo): Promise<MetaOwnerProblem | null> {
   const id = write.objectId
@@ -91,8 +101,9 @@ export async function metaOptimizeOwnerProblem(connectionId: string, write: Meta
     const test = await io.read(id, { fields: 'id,control_video_id,optimization_goal' })
     const control = idOf(test?.control_video_id)
     if (!control) return say(UNCONFIRMED, `Nexus could not read ${id} as a video A/B test of the chosen Page.`)
-    const video = await io.read(control, { fields: 'id,from{id}' })
-    return idOf(video?.from) === page ? null : say(NOT_CHOSEN, `${id} is not a video A/B test of the Facebook Page this business chose.`)
+    const video = await videoRead(io, control)
+    if (!video.body && video.words) return say(UNCONFIRMED, `Nexus could not read the control video of ${id}, which it reads with the chosen Facebook Page's own token (${video.words.slice(0, 300)}).`)
+    return idOf(video.body?.from) === page ? null : say(NOT_CHOSEN, `${id} is not a video A/B test of the Facebook Page this business chose.`)
   }
   const chosen = await io.chosenAdAccount()
   if (!chosen) return say(NOT_CHOSEN, 'this business has no Meta ad account chosen through this connection, so Nexus changes nothing on Meta.')
@@ -121,8 +132,9 @@ export function metaOptimizeBodyChecker(connectionId: string, write: MetaJudgedW
     if (inner.kind === 'pagevideo') {
       const page = await metaChosenPageOf(connectionId)
       if (!page) return inside(say(NOT_CHOSEN, 'this business has chosen no Facebook Page through this connection.'))
-      const video = await io.read(inner.id, { fields: 'id,from{id}' })
-      return idOf(video?.from) === page ? null : inside(say(NOT_CHOSEN, `video ${inner.id} is not one the chosen Page posted.`))
+      const video = await videoRead(io, inner.id)
+      if (!video.body && video.words) return inside(say(UNCONFIRMED, `Nexus could not read video ${inner.id}, which it reads with the chosen Facebook Page's own token (${video.words.slice(0, 300)}).`))
+      return idOf(video.body?.from) === page ? null : inside(say(NOT_CHOSEN, `video ${inner.id} is not one the chosen Page posted.`))
     }
     const chosen = await io.chosenAdAccount()
     if (!chosen) return inside(say(NOT_CHOSEN, 'this business has no Meta ad account chosen through this connection.'))

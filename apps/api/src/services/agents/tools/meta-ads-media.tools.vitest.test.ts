@@ -57,7 +57,8 @@ import { IX_TEMPLATE_REFUSED, linkOfIframe, PAGE_TOKEN_NOTE, pagePostId, PORTFOL
 import { offeredOn } from '../call-tool.js'
 import { MetaReadError, failureOfAnswer } from '../../marketing/meta-ads/errors.js'
 import { metaUrl } from '../../gateway/meta.js'
-import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
+import { metaCallVerdict, metaReadOnlyProblem } from '../../gateway/meta-calls.js'
+import { META_IX_TEMPLATE_READ } from '../../meta/meta-media-lists.js'
 
 const tool = (name: string) => META_ADS_MEDIA_TOOLS.find((t) => t.name === name)!
 const ctx = { can: (p: string) => ['ads.view'].includes(p), via: 'claude' as const }
@@ -102,7 +103,7 @@ describe('every view asks only what the real gateway lets through', () => {
       if (/OwnerCheck$/.test(req.operation) && req.path === '200000000000001') return { id: '200000000000001', from: { id: PAGE }, owner: { id: PAGE } }
       if (req.operation === 'instagram.mediaOwnerCheck') return { id: req.path, owner: { id: IG } }
       if (req.path.startsWith(`${PAGE}_`)) return { id: req.path }
-      if (req.operation === 'ix.template') return { id: req.path, document: { id: '397000000000001', name: 'Get New Customers' } }
+      if (req.operation === 'ix.template') return { id: req.path, document: { id: '397000000000001', name: 'Get New Customers', body_elements: [{ id: '397000000000002', name: 'Text', element_type: 'RICH_TEXT' }] } }
       if (/^posts\.(adCreative|creative)$|^preview\.shareLink$/.test(req.operation)) return { id: req.path, account_id: ACCOUNT, creative: { id: '120000000000401', account_id: ACCOUNT } }
       return { data: [{ body: '<iframe src="https://www.facebook.com/ads/api/preview_iframe.php?d=AQ1&amp;t=AQ2"></iframe>' }] }
     }
@@ -395,11 +396,38 @@ describe('what Meta refuses is said plainly', () => {
     expect(res.error).toContain(IX_TEMPLATE_REFUSED)
     expect(res.error).toMatch(/Meta's words: Insufficient permissions to access this data/)
     expect(IX_TEMPLATE_REFUSED).toMatch(/create-meta-instant-experience takes the template by name/)
-    // Review of #771 — said to be open, with the likely fix (not built).
-    expect(IX_TEMPLATE_REFUSED).toMatch(/still open.*the chosen Page's own token is the likely fix.*Nexus does not send this read with it yet/)
+    // Gap 46b — the read goes with the chosen Page's own token now: a #4701 to it too is said so, nothing guessed.
+    expect(IX_TEMPLATE_REFUSED).toMatch(/even with the chosen Facebook Page's own token/)
+    expect(IX_TEMPLATE_REFUSED).not.toMatch(/likely fix|does not send this read with it yet/)
     // Anything else Meta answers stays its own failure.
     h.one = () => metaError('100', 'Unsupported get request')
     expect((await run('meta-instant-experiences', { view: 'template', template: 'get-new-customers' })).error).not.toContain(IX_TEMPLATE_REFUSED)
+  })
+  it('gap 46b (CR-489) — a template\'s parts: ONE read of Meta\'s template node, its document expanded, which the gateway sends with the chosen Page\'s token', async () => {
+    h.one = (req) => (req.operation === 'ix.template'
+      ? { id: req.path, document: { id: '397000000000001', name: 'Get New Customers', body_elements: [{ id: '397000000000002', name: 'Cover Image or Video', element_type: 'PHOTO' }, { id: '397000000000003', name: 'Button', element_type: 'BUTTON' }] } }
+      : {})
+    const res = await run('meta-instant-experiences', { view: 'template', template: 'get-new-customers' })
+    expect(res).toMatchObject({ ok: true, data: { templateId: '133471657203838', document: { id: '397000000000001', name: 'Get New Customers' }, parts: [{ elementType: 'PHOTO' }, { elementType: 'BUTTON' }] } })
+    expect((res as { data: { note: string } }).data.note).toMatch(/read with the chosen Facebook Page's own token/)
+    // One call, not the guide's two: no read of the document's own id (the Page's token never goes to an id Nexus did not name).
+    expect(h.calls).toEqual([expect.objectContaining({ operation: 'ix.template', path: '133471657203838', query: { fields: META_IX_TEMPLATE_READ } })])
+    const verdict = metaCallVerdict({ method: 'GET', url: metaUrl('133471657203838', { fields: META_IX_TEMPLATE_READ }), kind: 'read' })
+    expect(verdict).toMatchObject({ problem: null, pageRead: { pageId: null } })
+    // A document without its parts is said, not shown as "no parts".
+    h.one = () => ({ id: '133471657203838', document: { id: '397000000000001', name: 'Get New Customers' } })
+    expect((await run('meta-instant-experiences', { view: 'template', template: 'get-new-customers' })).error).toMatch(/without its parts \(body_elements\)/)
+  })
+  it('gap 46b (the live read of 2026-10-26) — view post, its id check and set-meta-page-post\'s state read go with the chosen Page\'s token', async () => {
+    // Meta refused view post to the system-user token: "(#10) This endpoint requires the 'pages_read_engagement' permission or
+    // the 'Page Public Content Access' feature". Each post read Nexus sends is now one the gateway sends with the Page's token.
+    h.one = (req) => (req.path.startsWith(`${PAGE}_`) ? { id: req.path, from: { id: PAGE } } : {})
+    for (const args of [{ view: 'post', postId: `${PAGE}_500000000000001` }, { view: 'post-sponsors', postId: `${PAGE}_500000000000001` }]) await run('meta-page-posts', args)
+    const postReads = h.calls.filter((c) => c.path === `${PAGE}_500000000000001`)
+    expect(postReads.map((c) => c.operation)).toEqual(expect.arrayContaining(['posts.post', 'posts.postCheck']))
+    for (const c of postReads) expect(metaCallVerdict({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' }), c.operation).toMatchObject({ problem: null, pageRead: { pageId: PAGE } })
+    const { PAGE_POST_STATE_FIELDS } = await import('../../marketing/meta-ads/live-posts.js')
+    expect(metaCallVerdict({ method: 'GET', url: metaUrl(`${PAGE}_500000000000001`, { fields: PAGE_POST_STATE_FIELDS }), kind: 'read' })).toMatchObject({ problem: null, pageRead: { pageId: PAGE } })
   })
   it('live-probe fix MD-126 — boostAds lists the ads that boost or boosted the media, active or not', async () => {
     h.one = (req) => (req.operation === 'instagram.mediaOwnerCheck' ? { id: req.path, owner: { id: IG } }
