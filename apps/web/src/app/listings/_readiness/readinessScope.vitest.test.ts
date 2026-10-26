@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  legacyMarketHref,
-  legacyPath,
-  legacySkuHref,
+  listingsMarketHref,
+  listingsSkuHref,
+  listingWindowHref,
   lockedKeys,
   marketCount,
   marketOfSegment,
@@ -10,7 +10,6 @@ import {
   readinessPath,
   scopeTitle,
   scopeWords,
-  suppressedListings,
 } from './readinessScope'
 
 // 2026-10-24 — the menu's store pages are the Listings page with a lock (docs/listings/LISTINGS-STORE-PAGES-2026-10-24.md).
@@ -51,15 +50,9 @@ describe('the page → its links and words', () => {
     expect(lockedKeys({ channel: 'ETSY', marketplace: '' })).toEqual(['channel'])
   })
 
-  it('links to itself and to its old page', () => {
+  it('links to itself', () => {
     expect(readinessPath(null)).toBe('/listings')
     expect(readinessPath({ channel: 'EBAY', marketplace: 'UK' })).toBe('/listings/ebay/uk')
-    expect(legacyPath(null)).toBe('/listings/legacy')
-    expect(legacyPath({ channel: 'AMAZON', marketplace: '' })).toBe('/listings/legacy/amazon')
-    expect(legacyPath({ channel: 'AMAZON', marketplace: 'IT' })).toBe('/listings/legacy/amazon/it')
-    expect(legacyPath({ channel: 'SHOPIFY', marketplace: '' })).toBe('/listings/legacy/shopify')
-    // Etsy never had an old page of its own: the old Listings page, Etsy only.
-    expect(legacyPath({ channel: 'ETSY', marketplace: '' })).toBe('/listings/legacy?channel=ETSY')
     expect(readinessPath({ channel: 'ETSY', marketplace: '' })).toBe('/listings/etsy')
   })
 
@@ -87,32 +80,37 @@ describe('the page → its links and words', () => {
   })
 })
 
-describe('links to the live state: the old pages', () => {
-  it('a SKU opens the old Listings page on every market of its store', () => {
-    expect(legacySkuHref('amazon', 'GAL 1/A')).toBe('/listings/legacy?channel=AMAZON&search=GAL+1%2FA')
+// Step 8 (legacy exit) of docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md: every link to a listing's live state
+// opens this page.
+describe('links to the live state: this page', () => {
+  it('a SKU searches its store’s page (every market), or /listings for a store with no page', () => {
+    expect(listingsSkuHref('amazon', 'GAL 1/A')).toBe('/listings/amazon?q=GAL+1%2FA')
+    expect(listingsSkuHref('EBAY', 'GAL-1')).toBe('/listings/ebay?q=GAL-1')
+    expect(listingsSkuHref('SHOPIFY', 'GAL-1')).toBe('/listings/shopify?q=GAL-1')
+    expect(listingsSkuHref('ETSY', 'GAL-1')).toBe('/listings/etsy?q=GAL-1')
+    expect(listingsSkuHref('WOOCOMMERCE', 'GAL-1')).toBe('/listings?q=GAL-1')
+    expect(listingsSkuHref(null, 'GAL-1')).toBe('/listings?q=GAL-1')
   })
 
-  it('a market opens the old store page (Amazon, eBay), or the old Listings page with the same filters', () => {
-    expect(legacyMarketHref('AMAZON', 'IT')).toBe('/listings/legacy/amazon/it')
-    expect(legacyMarketHref('EBAY', 'GB')).toBe('/listings/legacy/ebay/gb')
-    expect(legacyMarketHref('SHOPIFY', 'DEFAULT')).toBe('/listings/legacy?channel=SHOPIFY&marketplace=DEFAULT')
-    expect(legacyMarketHref('AMAZON', '')).toBe('/listings/legacy?channel=AMAZON&marketplace=')
-  })
-})
-
-describe('what Amazon suppressed', () => {
-  const row = (listingId: string, marketplace: string) => ({ listingId, listing: { marketplace } })
-
-  it('counts listings, not defects, per market, most first', () => {
-    expect(suppressedListings([row('a', 'IT'), row('a', 'IT'), row('b', 'de'), row('c', 'DE')])).toEqual({
-      count: 3,
-      more: false,
-      markets: [{ code: 'DE', count: 2 }, { code: 'IT', count: 1 }],
-    })
+  it('a market opens its market page (Amazon, eBay; GB is the UK), the store page, or /listings with the filters', () => {
+    expect(listingsMarketHref('AMAZON', 'IT')).toBe('/listings/amazon/it')
+    expect(listingsMarketHref('amazon', 'de')).toBe('/listings/amazon/de')
+    expect(listingsMarketHref('EBAY', 'GB')).toBe('/listings/ebay/uk')
+    expect(listingsMarketHref('AMAZON', '')).toBe('/listings/amazon')
+    expect(listingsMarketHref('AMAZON', 'DEFAULT')).toBe('/listings/amazon')
+    expect(listingsMarketHref('SHOPIFY', 'DEFAULT')).toBe('/listings/shopify')
+    expect(listingsMarketHref('ETSY', 'GLOBAL')).toBe('/listings/etsy')
+    expect(listingsMarketHref('WOOCOMMERCE', 'GLOBAL')).toBe('/listings?channel=WOOCOMMERCE&marketplace=GLOBAL')
+    expect(listingsMarketHref('BOL_COM', 'nl')).toBe('/listings?channel=BOL_COM&marketplace=NL')
+    expect(listingsMarketHref('BOL_COM', '')).toBe('/listings?channel=BOL_COM')
+    // Every one is a page this page reads as itself.
+    for (const href of ['/listings/amazon/it', '/listings/ebay/uk', '/listings/amazon', '/listings/shopify', '/listings/etsy']) {
+      expect(readinessLockFromPath(href)).toBeTruthy()
+    }
   })
 
-  it('says when the answer was cut at its limit', () => {
-    expect(suppressedListings([row('a', 'IT'), row('b', 'IT')], 2).more).toBe(true)
-    expect(suppressedListings([])).toEqual({ count: 0, more: false, markets: [] })
+  it('one listing opens the Listing window on /listings', () => {
+    expect(listingWindowHref('cl_1')).toBe('/listings?listing=cl_1')
+    expect(listingWindowHref('a b/c')).toBe('/listings?listing=a+b%2Fc')
   })
 })

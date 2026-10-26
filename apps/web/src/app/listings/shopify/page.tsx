@@ -1,5 +1,4 @@
 // /listings/shopify — the Listings page for Shopify (2026-10-24, docs/listings/LISTINGS-STORE-PAGES-2026-10-24.md).
-// The old Shopify page is /listings/legacy/shopify.
 import type { Metadata } from 'next'
 import { ReadinessPage } from '../_readiness/ReadinessPage'
 import { scopeTitle, type ReadinessLock } from '../_readiness/readinessScope'

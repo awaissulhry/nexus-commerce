@@ -12,6 +12,7 @@
  * (`/listings?listing=<id>`); it is the page's, never sent to the API as a filter.
  * Step 7 adds `view` (`problems`: the Problems view; never sent) and
  * `problem` (one row of it, sent to the API: the families with that problem — the Problems view's Show products).
+ * Step 8 (the legacy exit) reads the old Listings page's options too, in this page's words (`legacyListingOptions.ts`).
  *
  * Pure — no React, no fetch — so every mapping is a test.
  */
@@ -29,6 +30,7 @@ import {
 } from '@nexus/shared/listing-readiness'
 import { SCOPE_READINESS_STATES } from '@/design-system/grid/renderers/readiness'
 import { lockedKeys, readinessPath, type ReadinessLock } from './readinessScope'
+import { withLegacyListingOptions } from './legacyListingOptions'
 
 export const READINESS_PAGE_SIZES = [50, 100, 200] as const
 export type ReadinessPageSize = (typeof READINESS_PAGE_SIZES)[number]
@@ -137,7 +139,8 @@ const commaList = (text: string): string[] => text.split(',').map((v) => v.trim(
 
 /** The address → the page's query. Unknown or invalid values are dropped, never sent on; a store page's lock wins. */
 export function parseReadinessQuery(search: string | URLSearchParams, lock: ReadinessLock | null = null): ReadinessPageQuery {
-  const params = typeof search === 'string' ? new URLSearchParams(search) : search
+  // The old Listings page's options (`search`, `listingStatus`, `drawer`, …) in this page's words first (step 8).
+  const params = withLegacyListingOptions(typeof search === 'string' ? new URLSearchParams(search) : search)
   const text = (key: string) => (params.get(key) ?? '').trim()
   const kind = SELECTOR_KINDS.find((k) => text(k) !== '')
   const selector = kind ? { kind, value: text(kind) } : null

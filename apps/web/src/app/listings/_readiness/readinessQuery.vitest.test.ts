@@ -433,3 +433,11 @@ describe('?listing= — the window opened on one listing', () => {
     expect(familyPageHref(q, 'root-1')).toBe('/listings?state=warn&parent=root-1')
   })
 })
+
+describe('step 8 — an old link to one listing opens the Listing window', () => {
+  it('the legacy drawer option becomes the window, the page’s own `listing` wins', () => {
+    expect(parseReadinessQuery('?drawer=cl_123').listing).toBe('cl_123')
+    expect(parseReadinessQuery('?drawer=cl_123&listing=cl_456').listing).toBe('cl_456')
+    expect(parseReadinessQuery('?search=GALE-JACKET&drawer=cl_9')).toMatchObject({ q: 'GALE-JACKET', listing: 'cl_9' })
+  })
+})

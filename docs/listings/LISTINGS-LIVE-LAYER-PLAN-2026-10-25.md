@@ -123,4 +123,25 @@ Each PR is one squash merge and can be reverted on its own. No data is changed b
 
 | PR | Branch | State |
 |---|---|---|
-| 1 — small fixes | `feat/listings-live-1-fixes` | built 25 Oct; checks in the PR |
+| 1 — small fixes | `feat/listings-live-1-fixes` | MERGED #754 |
+| 2 — load fix | `feat/listings-live-2-load` | MERGED #755 |
+| 3 — live layer | `feat/listings-live-3` | MERGED #756; browser-checked on a private local stack (dark + light, desktop + 390 px, keyboard); live-checked |
+| 4 — columns, sort, export | `feat/listings-live-4` | MERGED #761; browser-checked; live-checked (Amazon IT market page) |
+| 5 — Listing window | `feat/listings-live-5` | MERGED #763; browser-checked (no write pressed) |
+| 6 — selection + bulk bar | `feat/listings-live-6` | MERGED #764; browser-checked (no write sent) |
+| 7 — Problems view | `feat/listings-live-7` | MERGED #760 (built in parallel, merged before 4); browser-checked |
+| 8 — legacy exit | `feat/listings-live-8` | this PR |
+
+### Found during the build (not fixed in these PRs)
+
+- **Amazon single "Resync" can mark a healthy listing FAILED.** `POST /api/listings/:id/resync` sends `externalListingId`
+  (the ASIN on Amazon rows) where Amazon's getListingsItem wants the seller SKU; on Amazon's "not found" it writes
+  `syncStatus`/`lastSyncStatus` FAILED and `lastSyncError`. It also does not pin the listing's own account. The legacy
+  page's row Resync used it (that page is gone since step 8); the new Listing window leaves it out. The route stays.
+- **Bulk "Resync" does nothing.** It only marks listings PENDING; nothing picks them up. Not offered on the new page.
+- **`src/lib/command-key.vitest.test.ts` fails on main (2 tests)**, "the API's command receipts" (the routes the web
+  keys vs. the API's receipts, ads / FBA). Not caused by this work; seen 26 Oct on main after #759/#762.
+- **eBay watchers and views per listing** need a new API read (only the market-wide eBay overview read them; that route
+  went with the legacy page). Not built.
+- **Dead space after an empty result.** The design system's actions-column fit (#749) shrinks the pinned Actions column
+  (200 → 123 px) after rows return; AG does not re-flex Markets, so a 77 px gap stays until reload with a fresh layout.

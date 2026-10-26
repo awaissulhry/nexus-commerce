@@ -8,19 +8,6 @@ const { backendRewrites } = require('./src/lib/workspaces/backendRewrite.cjs');
 const { oauthRewrites, oauthHeaders } = require('./src/lib/oauth/oauthRoutes.cjs');
 const path = require('node:path');
 
-// 2026-10-24 — the address options only the old Listings page reads (`ListingsWorkspace.tsx`). `/listings` with one of
-// them lands on `/listings/legacy` (the redirects below). `search` too: the new page's search is `q`.
-const LEGACY_LISTINGS_OPTIONS = ['lens', 'listingStatus', 'search', 'syncStatus', 'hasError', 'lowStock', 'published', 'sortBy', 'sortDir', 'drawer'];
-// The store pages are the new Listings page for one store too; their old pages are under `/listings/legacy/`. A market
-// is two letters, so `/listings/ebay/campaigns`, `gaps` and `markdowns` are never caught.
-const LEGACY_STORE_PAGES = [
-  { source: '/listings/amazon', destination: '/listings/legacy/amazon' },
-  { source: '/listings/amazon/:market([a-zA-Z]{2})', destination: '/listings/legacy/amazon/:market' },
-  { source: '/listings/ebay', destination: '/listings/legacy/ebay' },
-  { source: '/listings/ebay/:market([a-zA-Z]{2})', destination: '/listings/legacy/ebay/:market' },
-  { source: '/listings/shopify', destination: '/listings/legacy/shopify' },
-];
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -134,20 +121,16 @@ const nextConfig = {
       { source: '/catalog/add', destination: '/products?new=1', permanent: true },
       { source: '/products/upload', destination: '/products/catalog-transfer', permanent: true },
       // ── 2026-10-24 — the Listings swap (docs/listings/LISTINGS-SWAP-2026-10-24.md) ──────────────────────────────
-      // `/listings` is the readiness page now; the old page is `/listings/legacy`. The readiness page's old address
-      // lands on the new one, filters and all (Next passes the request's query through).
+      // `/listings` is the readiness page now. The readiness page's old address lands on it, filters and all (Next
+      // passes the request's query through).
       { source: '/products/listing-readiness', destination: '/listings', permanent: true },
-      // A bookmark or stored link with an option only the old page reads lands on the old page, query and all. One
-      // rule per option (`has` is AND). Not permanent: a later option of the same name on the new page must not be
-      // shadowed by a 308 a browser cached. `page`, `pageSize`, `channel` and `marketplace` both pages read: no rule.
-      ...LEGACY_LISTINGS_OPTIONS.map((key) => ({
-        source: '/listings', has: [{ type: 'query', key }], destination: '/listings/legacy', permanent: false,
-      })),
-      // The same for each store page (docs/listings/LISTINGS-STORE-PAGES-2026-10-24.md): `/listings/amazon/it?search=…`
-      // lands on `/listings/legacy/amazon/it?search=…`.
-      ...LEGACY_STORE_PAGES.flatMap(({ source, destination }) => LEGACY_LISTINGS_OPTIONS.map((key) => ({
-        source, has: [{ type: 'query', key }], destination, permanent: false,
-      }))),
+      // ── 2026-10-26 — the legacy exit (step 8 of docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md) ──────────────
+      // The old Listings pages are gone; each address lands on the page that does its job now, query and all. The new
+      // page reads the old page's options (`search`, `listingStatus`, `drawer`, `lens=health`, …:
+      // `src/app/listings/_readiness/legacyListingOptions.ts`), so a bookmark or a stored alert keeps its filter.
+      { source: '/listings/legacy', destination: '/listings', permanent: true },
+      { source: '/listings/legacy/:store', destination: '/listings/:store', permanent: true },
+      { source: '/listings/legacy/:store/:market', destination: '/listings/:store/:market', permanent: true },
       // ── RA.SPINE S3 — one derived rule, replacing six hand-written copies ──────────────────
       //
       // The old index client (`RulesAutomationClient.tsx`, since removed) resolved an unknown OR ROUTED

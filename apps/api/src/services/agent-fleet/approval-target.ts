@@ -264,12 +264,16 @@ function productTarget(ref: { id?: string | null; sku?: string | null; name?: st
 }
 
 /**
- * The old Listings page (live status), searched for the SKU on every market of its channel — the products page's own
- * link. Since 2026-10-24 `/listings/<channel>` is the new Listings page, which has no live status.
+ * The Listings page (`/listings`, readiness and live state; the old page is gone since step 8 of
+ * docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md): one listing opens its Listing window (`?listing=<id>`);
+ * without an id, the SKU is searched on its store's page (every market), or on `/listings` when the store has none.
  */
-function listingHref(channel: string | null, sku: string | null): string | null {
-  if (!sku || !channel || !['AMAZON', 'EBAY', 'SHOPIFY'].includes(channel)) return null
-  return `/listings/legacy?channel=${channel}&search=${seg(sku)}`
+const LISTING_STORE_PAGES: Readonly<Record<string, string>> = { AMAZON: 'amazon', EBAY: 'ebay', SHOPIFY: 'shopify', ETSY: 'etsy' }
+function listingHref(id: string | null, channel: string | null, sku: string | null): string | null {
+  if (id) return `/listings?listing=${seg(id)}`
+  if (!sku) return null
+  const store = channel ? LISTING_STORE_PAGES[channel] : undefined
+  return `${store ? `/listings/${store}` : '/listings'}?q=${seg(sku)}`
 }
 
 const EBAY_AD_TOOLS = new Set(['set-ebay-ad-rates', 'promote-ebay-listings', 'set-ebay-campaign-budget', 'ebay-keywords-change', 'create-ebay-campaign'])
@@ -369,7 +373,7 @@ function genericTarget(toolName: string, a: Rec, p: Rec, ctx: TargetContext): Qu
       sku: firstSku,
       name: known?.name ?? null,
       count: num(totals.listings) ?? listingIds.length,
-      href: listingHref(ch, firstSku),
+      href: listingHref(listingIds[0], ch, firstSku),
     })
   }
 
@@ -690,7 +694,7 @@ const READERS: Record<string, Reader> = {
       items,
       changeCount: rows || cells.length + (num(p.moreCells) ?? 0),
       ...(first
-        ? { target: target('listing', { sku: first, name: ctx.products?.get(first)?.name ?? null, count: rows || cells.length, href: listingHref(channel, first) }) }
+        ? { target: target('listing', { sku: first, name: ctx.products?.get(first)?.name ?? null, count: rows || cells.length, href: listingHref(null, channel, first) }) }
         : {}),
     }
   },

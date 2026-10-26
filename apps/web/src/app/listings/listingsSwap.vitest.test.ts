@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { FILTER_KEYS, SELECTOR_KINDS } from './_readiness/readinessQuery'
+import { LEGACY_LISTINGS_OPTIONS } from './_readiness/legacyListingOptions'
+import { parseReadinessQuery, serializeReadinessQuery } from './_readiness/readinessQuery'
 
 /**
- * 2026-10-24 — the Listings swap (docs/listings/LISTINGS-SWAP-2026-10-24.md). `/listings` is the readiness page; the
- * old page is `/listings/legacy`. The readiness page's old address and every old-page-only link land on a page that
- * does what the link asked for, inside the business they were opened in.
+ * 2026-10-24 — the Listings swap (docs/listings/LISTINGS-SWAP-2026-10-24.md): `/listings` is the readiness page, and
+ * the readiness page's old address lands on it. 2026-10-26 — the legacy exit (step 8 of
+ * docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md): the old Listings pages are gone, every old address lands on
+ * the new page that does its job, and the new page reads the old page's options, inside the business they were
+ * opened in.
  */
 const WEB_ROOT = join(__dirname, '..', '..', '..')
 const APP = join(WEB_ROOT, 'src', 'app')
@@ -18,26 +21,24 @@ const loadRedirects = async (): Promise<NextRedirect[]> => {
   return cfg.redirects()
 }
 
-/** The options the old page reads from its address. */
-const oldPageOptions = (): string[] => {
-  const src = readFileSync(join(APP, 'listings', 'ListingsWorkspace.tsx'), 'utf8')
-  return [...new Set([...src.matchAll(/searchParams\??\.(?:get|has)\('([A-Za-z]+)'\)/g)].map((m) => m[1]!))]
-}
-/** The options the new page reads (`parseReadinessQuery`): its selections, its filters and its own words. */
-const NEW_PAGE_OPTIONS = new Set<string>([...SELECTOR_KINDS, ...FILTER_KEYS, 'market', 'state', 'q', 'parent', 'page', 'pageSize'])
+/** The Listings pages: `/listings` and the store pages. */
+const LISTINGS_PAGES = ['/listings', '/listings/amazon', '/listings/amazon/:market', '/listings/ebay', '/listings/ebay/:market', '/listings/shopify', '/listings/etsy']
+const LEGACY_EXIT: Array<[string, string]> = [
+  ['/listings/legacy', '/listings'],
+  ['/listings/legacy/:store', '/listings/:store'],
+  ['/listings/legacy/:store/:market', '/listings/:store/:market'],
+]
 
-const legacyRules = (redirects: NextRedirect[], source = '/listings') =>
-  redirects.filter((r) => r.source === source && r.has?.length === 1 && r.has[0]!.type === 'query')
-
-describe('the Listings swap', () => {
+describe('the Listings page', () => {
   afterEach(() => { vi.unstubAllEnvs() })
 
-  it('/listings renders the new page and /listings/legacy the old one; the readiness folder has no page left', () => {
+  it('/listings renders the new page; the readiness folder has no page left; the old page is gone', () => {
     expect(readFileSync(join(APP, 'listings', 'page.tsx'), 'utf8')).toContain('<ReadinessPage lock={null} />')
     expect(readFileSync(join(APP, 'listings', '_readiness', 'ReadinessPage.tsx'), 'utf8')).toContain('<ListingReadinessClient lock={lock} />')
-    expect(readFileSync(join(APP, 'listings', 'legacy', 'page.tsx'), 'utf8')).toContain('ListingsWorkspace')
     expect(existsSync(join(APP, 'listings', '_readiness', 'page.tsx'))).toBe(false)
     expect(existsSync(join(APP, 'products', 'listing-readiness'))).toBe(false)
+    expect(existsSync(join(APP, 'listings', 'legacy'))).toBe(false)
+    expect(existsSync(join(APP, 'listings', 'ListingsWorkspace.tsx'))).toBe(false)
   })
 
   it('the readiness page’s old address goes to /listings for good, also inside a business', async () => {
@@ -48,81 +49,69 @@ describe('the Listings swap', () => {
     expect(redirects.find((r) => r.source === '/w/:workspaceId/products/listing-readiness')?.destination).toBe('/w/:workspaceId/listings')
   })
 
-  it('every option only the old page reads sends /listings to /listings/legacy, also inside a business', async () => {
+  it('no rule sends a Listings page anywhere: the old options are read by the page itself', async () => {
     vi.stubEnv('NEXT_PUBLIC_WORKSPACES_ENABLED', '1')
     const redirects = await loadRedirects()
-    const onlyOld = oldPageOptions().filter((key) => !NEW_PAGE_OPTIONS.has(key))
-    expect(onlyOld).toEqual(expect.arrayContaining(['listingStatus', 'search', 'lens', 'drawer']))
-    const plain = legacyRules(redirects)
-    const inBusiness = legacyRules(redirects, '/w/:workspaceId/listings')
-    expect(plain.map((r) => r.has![0]!.key).sort()).toEqual([...onlyOld].sort())
-    for (const rule of plain) expect(rule).toMatchObject({ destination: '/listings/legacy', permanent: false })
-    for (const rule of inBusiness) expect(rule.destination).toBe('/w/:workspaceId/listings/legacy')
-    expect(inBusiness).toHaveLength(plain.length)
+    const sources = new Set(LISTINGS_PAGES.flatMap((page) => [page, `/w/:workspaceId${page}`]))
+    const taken = redirects.filter((r) => sources.has(r.source.replace(/\(\[a-zA-Z\]\{2\}\)$/, '')))
+    expect(taken).toEqual([])
+    // The page reads each old option in its own words (legacyListingOptions.vitest.test.ts has every mapping) and
+    // writes its address back without any of them.
+    expect(parseReadinessQuery('search=GAL').q).toBe('GAL')
+    expect(parseReadinessQuery('listingStatus=ERROR').flags).toEqual(['error'])
+    expect(parseReadinessQuery('lens=health').view).toBe('problems')
+    for (const key of LEGACY_LISTINGS_OPTIONS) {
+      const written = new URLSearchParams(serializeReadinessQuery(parseReadinessQuery(`${key}=true`)))
+      expect(written.has(key)).toBe(false)
+    }
   })
 
-  it('no rule takes an option the new page reads', async () => {
-    const keys = legacyRules(await loadRedirects()).map((r) => r.has![0]!.key)
-    for (const key of keys) expect(NEW_PAGE_OPTIONS.has(key)).toBe(false)
+  it('/listings/legacy[/<store>[/<market>]] goes to the new page for good, query kept, also inside a business', async () => {
+    vi.stubEnv('NEXT_PUBLIC_WORKSPACES_ENABLED', '1')
+    const redirects = await loadRedirects()
+    for (const [source, destination] of LEGACY_EXIT) {
+      const plain = redirects.filter((r) => r.source === source)
+      expect(plain).toEqual([{ source, destination, permanent: true }])
+      const inBusiness = redirects.filter((r) => r.source === `/w/:workspaceId${source}`)
+      expect(inBusiness).toEqual([{ source: `/w/:workspaceId${source}`, destination: `/w/:workspaceId${destination}`, permanent: true }])
+    }
+    // Nothing else names the old pages.
+    expect(redirects.filter((r) => r.destination.includes('/listings/legacy'))).toEqual([])
+    expect(redirects.filter((r) => r.source.includes('/listings/legacy'))).toHaveLength(LEGACY_EXIT.length * 2)
   })
 })
 
 /**
  * 2026-10-24 — the store pages (docs/listings/LISTINGS-STORE-PAGES-2026-10-24.md). `/listings/amazon[/<market>]`,
- * `/listings/ebay[/<market>]` and `/listings/shopify` are the Listings page with a lock; the old store pages are
- * `/listings/legacy/<store>[/<market>]`, and an old-page-only link to a store page lands there.
+ * `/listings/ebay[/<market>]`, `/listings/shopify` and `/listings/etsy` are the Listings page with a lock; their old
+ * clients are gone with the legacy exit. The eBay tool pages stay.
  */
 const STORE_PAGES = [
-  { path: ['amazon'], lock: "{ channel: 'AMAZON', marketplace: '' }", legacy: ['legacy', 'amazon'], client: 'AmazonListingsClient' },
-  { path: ['amazon', '[market]'], lock: "marketLock('AMAZON', params)", legacy: ['legacy', 'amazon', '[market]'], client: 'AmazonListingsClient' },
-  { path: ['ebay'], lock: "{ channel: 'EBAY', marketplace: '' }", legacy: ['legacy', 'ebay'], client: 'EbayListingsClient' },
-  { path: ['ebay', '[market]'], lock: "marketLock('EBAY', params)", legacy: ['legacy', 'ebay', '[market]'], client: 'EbayListingsClient' },
-  { path: ['shopify'], lock: "{ channel: 'SHOPIFY', marketplace: '' }", legacy: ['legacy', 'shopify'], client: 'ShopifyListingsClient' },
+  { path: ['amazon'], lock: "{ channel: 'AMAZON', marketplace: '' }" },
+  { path: ['amazon', '[market]'], lock: "marketLock('AMAZON', params)" },
+  { path: ['ebay'], lock: "{ channel: 'EBAY', marketplace: '' }" },
+  { path: ['ebay', '[market]'], lock: "marketLock('EBAY', params)" },
+  { path: ['shopify'], lock: "{ channel: 'SHOPIFY', marketplace: '' }" },
+  { path: ['etsy'], lock: "{ channel: 'ETSY', marketplace: '' }" },
 ]
 const page = (parts: string[]) => readFileSync(join(APP, 'listings', ...parts, 'page.tsx'), 'utf8')
 
 describe('the store pages', () => {
-  afterEach(() => { vi.unstubAllEnvs() })
-
-  it('each store page is the Listings page with its lock; its old page is the old store page with the note', () => {
+  it('each store page is the Listings page with its lock; the old store clients are gone', () => {
     for (const p of STORE_PAGES) {
       const text = page(p.path)
       expect(text).toContain('<ReadinessPage lock=')
       expect(text).toContain(p.lock)
-      expect(text).not.toContain(p.client)
-      const old = page(p.legacy)
-      expect(old).toContain(`<${p.client}`)
-      expect(old).toMatch(/^\s+legacy$/m)
     }
+    for (const client of ['amazon/AmazonListingsClient.tsx', 'ebay/EbayListingsClient.tsx', 'shopify/ShopifyListingsClient.tsx']) {
+      expect(existsSync(join(APP, 'listings', client))).toBe(false)
+    }
+    for (const tool of ['campaigns', 'gaps', 'markdowns']) expect(existsSync(join(APP, 'listings', 'ebay', tool, 'page.tsx'))).toBe(true)
   })
 
-  it('an option only the old page reads takes a store page to its old page, also inside a business', async () => {
-    vi.stubEnv('NEXT_PUBLIC_WORKSPACES_ENABLED', '1')
+  it('no redirect takes a store page or the eBay tool pages', async () => {
     const redirects = await loadRedirects()
-    const onlyOld = oldPageOptions().filter((key) => !NEW_PAGE_OPTIONS.has(key)).sort()
-    const pairs: Array<[string, string]> = [
-      ['/listings/amazon', '/listings/legacy/amazon'],
-      ['/listings/amazon/:market([a-zA-Z]{2})', '/listings/legacy/amazon/:market'],
-      ['/listings/ebay', '/listings/legacy/ebay'],
-      ['/listings/ebay/:market([a-zA-Z]{2})', '/listings/legacy/ebay/:market'],
-      ['/listings/shopify', '/listings/legacy/shopify'],
-    ]
-    for (const [source, destination] of pairs) {
-      const plain = legacyRules(redirects, source)
-      expect(plain.map((r) => r.has![0]!.key).sort()).toEqual(onlyOld)
-      for (const rule of plain) expect(rule).toMatchObject({ destination, permanent: false })
-      const inBusiness = legacyRules(redirects, `/w/:workspaceId${source}`)
-      expect(inBusiness).toHaveLength(plain.length)
-      for (const rule of inBusiness) expect(rule.destination).toBe(`/w/:workspaceId${destination}`)
-    }
-  })
-
-  it('a market is two letters, so the eBay tool pages are never redirected', async () => {
-    const markets = (await loadRedirects()).filter((r) => r.source.startsWith('/listings/ebay/:market'))
-    expect(markets.length).toBeGreaterThan(0)
-    const pattern = new RegExp(`^${markets[0]!.source.replace('/:market', '/').replace(/\(\[a-zA-Z\]\{2\}\)$/, '[a-zA-Z]{2}')}$`)
-    expect(pattern.test('/listings/ebay/de')).toBe(true)
-    for (const tool of ['campaigns', 'gaps', 'markdowns']) expect(pattern.test(`/listings/ebay/${tool}`)).toBe(false)
+    expect(redirects.filter((r) => /^\/listings\/(amazon|ebay|shopify|etsy)/.test(r.source))).toEqual([])
   })
 
   it('the app frame gives every store page the Listings page’s own rail', () => {

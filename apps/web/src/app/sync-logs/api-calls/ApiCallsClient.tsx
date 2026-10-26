@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import Link from '@/lib/workspaces/Link'
+import { listingWindowHref } from '@/app/listings/_readiness/readinessScope'
 import {
   AlertCircle,
   Download,
@@ -969,9 +970,9 @@ function DetailPanel({
                   </a>
                 )}
                 {row.listingId && (
-                  // The legacy Listings page opens this listing's drawer (`?drawer=`), inside the current business.
+                  // The Listings page opens this listing's window (`?listing=`), inside the current business.
                   <Link
-                    href={`/listings/legacy?drawer=${encodeURIComponent(row.listingId)}`}
+                    href={listingWindowHref(row.listingId)}
                     className="text-sm text-blue-700 dark:text-blue-400 hover:underline"
                   >
                     {t('syncLogs.apiCalls.detail.listing', { id: row.listingId.slice(0, 12) })}

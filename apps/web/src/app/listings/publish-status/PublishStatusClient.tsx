@@ -38,6 +38,7 @@ import { Disclosure } from '@/design-system/components'
 import { PublishRuns } from '@/app/products/_publication/history/PublishRuns'
 import styles from '@/app/products/_publication/history/publishRuns.module.css'
 import { accountDisplayName } from '@/design-system/lib'
+import { listingsSkuHref } from '../_readiness/readinessScope'
 
 interface DailyTrendPoint {
   day: string
@@ -319,9 +320,9 @@ function GateHealth() {
                         <td className="px-2 py-1 font-mono text-xs">
                           {r.sku ? (
                             <Link
-                              href={`/listings/legacy?search=${encodeURIComponent(r.sku)}`}
+                              href={listingsSkuHref(null, r.sku)}
                               className="text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
-                              title={`Open the legacy Listings page filtered to ${r.sku}`}
+                              title={`Open the Listings page searched for ${r.sku}`}
                             >
                               {r.sku}
                             </Link>
@@ -408,9 +409,9 @@ function GateHealth() {
                       <td className="px-2 py-1 font-mono text-xs">
                         {r.sku ? (
                           <Link
-                            href={`/listings/legacy?search=${encodeURIComponent(r.sku)}`}
+                            href={listingsSkuHref(null, r.sku)}
                             className="text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
-                            title={`Open the legacy Listings page filtered to ${r.sku}`}
+                            title={`Open the Listings page searched for ${r.sku}`}
                           >
                             {r.sku}
                           </Link>
