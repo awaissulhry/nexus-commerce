@@ -20,6 +20,10 @@
  *                    recorded (create-meta-instagram-post's `containerId`) on the same Instagram account;
  *   igsponsor        a brand's Instagram account: never the chosen one, never one another Nexus business chose;
  *   postplace        a place's Page: never one another Nexus business chose.
+ *   productitem      (step 35, Q9: a product tagged on a new Instagram post) an item of a catalog this business may read
+ *                    (step 25's catalog rule, as meta-page-owner.ts checks one) that the chosen Instagram account tags from
+ *                    (ONE read of its available_catalogs per change, and one read of the item's catalog). Not a post body
+ *                    kind (META_POST_BODY_KINDS stays step 24's); counted apart from the cap of 30 ids.
  * A collaborator is an Instagram USERNAME, not an id, so it is not a body id here: create-meta-instagram-post checks each by
  * step 16's Business Discovery read before it queues anything (live-posts.ts igUsernameTaken).
  * Every read goes through this gateway with the business's system-user token (its read gate, ledger and rate bucket), never
@@ -34,12 +38,12 @@ import { metaVideoPostIdOf, type MetaPostBodyKind } from './meta-post-rules.js'
 /** The post kinds (their rules are `auth: 'page'`; meta-page-owner.ts routes them here). */
 export const META_POST_KINDS: ReadonlySet<MetaWriteKind> = new Set<MetaWriteKind>(['postpage', 'pagepostedit', 'pagepostmade', 'postig', 'igmediamade'])
 
-/** Which ids each object kind's body may name (anything else is refused). */
-const BODY_KINDS: Readonly<Record<string, ReadonlySet<MetaPostBodyKind>>> = {
+/** Which ids each object kind's body may name (anything else is refused). Step 35 (Q9): a container's tagged products. */
+const BODY_KINDS: Readonly<Record<string, ReadonlySet<MetaPostBodyKind | 'productitem'>>> = {
   postpage: new Set<MetaPostBodyKind>(['postphoto', 'postimagehash', 'postplace']),
   pagepostedit: new Set<MetaPostBodyKind>(['postsponsorpage']),
   pagepostmade: new Set<MetaPostBodyKind>(),
-  postig: new Set<MetaPostBodyKind>(['igcontainer', 'igsponsor', 'postplace']),
+  postig: new Set<MetaPostBodyKind | 'productitem'>(['igcontainer', 'igsponsor', 'postplace', 'productitem']),
   igmediamade: new Set<MetaPostBodyKind>(),
 }
 
@@ -89,7 +93,7 @@ export async function metaPostOwnerProblem(connectionId: string, write: MetaJudg
   const id = write.objectId
   const allowed = BODY_KINDS[kind]
   if (!allowed) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOT_SENT} a post change names the kind of object it changes, and ${id} is not named so.` }
-  if ((write.ids ?? []).some((inner) => !allowed.has(inner.kind as MetaPostBodyKind))) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOT_SENT} this change names an id inside its body that Nexus does not check.` }
+  if ((write.ids ?? []).some((inner) => !allowed.has(inner.kind as MetaPostBodyKind | 'productitem'))) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOT_SENT} this change names an id inside its body that Nexus does not check.` }
   if (kind === 'postig' || kind === 'igmediamade') {
     const instagramId = await metaChosenInstagramOf(connectionId)
     if (!instagramId) return { code: 'META_INSTAGRAM_NOT_CHOSEN', sentence: `${NOT_SENT} this business has no Instagram account chosen through this Meta connection, so Nexus posts nothing on Instagram.` }
@@ -130,11 +134,18 @@ export async function metaPostOwnerProblem(connectionId: string, write: MetaJudg
 
 /** At most this many ids inside one body are checked (a carousel names at most 20 items, a photo post 10 photos). */
 const MAX_BODY_IDS = 30
+/** Step 35 (Q9) — the tagged products, counted apart (Meta: at most 30 on a reel). */
+const MAX_TAGGED_PRODUCTS = 30
 
 async function bodyIdsProblem(connectionId: string, write: MetaJudgedWrite, mine: { pageId?: string; instagramId?: string }, read: MetaCheckRead, run: string | undefined): Promise<Problem> {
   const ids = write.ids ?? []
   if (!ids.length) return null
-  if (ids.length > MAX_BODY_IDS) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOT_SENT} a post change names at most ${MAX_BODY_IDS} ids inside its body.` }
+  const products = ids.filter((i) => i.kind === 'productitem').length
+  if (ids.length - products > MAX_BODY_IDS) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOT_SENT} a post change names at most ${MAX_BODY_IDS} ids inside its body.` }
+  if (products > MAX_TAGGED_PRODUCTS) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOT_SENT} a post change tags at most ${MAX_TAGGED_PRODUCTS} products.` }
+  // Step 35 (Q9) — the catalogs the chosen Instagram account tags from, read once for the change.
+  let tagCatalogs: Promise<Set<string> | { words: string | null }> | undefined
+  let catalogMemo: import('../marketing/meta-ads/catalog-rule.js').CatalogRuleMemo | undefined
   const inside = (code: string, what: string): Problem => ({ code, sentence: `${NOT_SENT} inside this change, ${what}` })
   // The library images, read once for every hash the change names.
   let library: Promise<{ hashes: Set<string> } | { words: string | null }> | undefined
@@ -146,7 +157,7 @@ async function bodyIdsProblem(connectionId: string, write: MetaJudgedWrite, mine
     return { hashes: new Set((answer.body.data as unknown[]).map((r) => (r && typeof r === 'object' ? idOf((r as Record<string, unknown>).hash) : null)).filter((h): h is string => !!h)) }
   }
   for (const inner of ids) {
-    switch (inner.kind as MetaPostBodyKind) {
+    switch (inner.kind as MetaPostBodyKind | 'productitem') {
       case 'postphoto': {
         if (!DIGITS.test(inner.id)) return inside('META_WRITE_NOT_ALLOWED', `${inner.id} is not a photo id.`)
         if (madeInRun(connectionId, run, 'postphoto', inner.id)) continue
@@ -183,6 +194,30 @@ async function bodyIdsProblem(connectionId: string, write: MetaJudgedWrite, mine
         if (madeInRun(connectionId, run, 'igcontainer', inner.id)) continue
         if (mine.instagramId && await metaPostNexusMade('igcontainer', inner.id, mine.instagramId)) continue
         return inside('META_WRITE_NOT_ALLOWED', `container ${inner.id} is not one this change made, nor one an earlier create-meta-instagram-post of this business made on the chosen Instagram account (a container has no owner Meta can name, so Nexus publishes only its own).`)
+      }
+      case 'productitem': {
+        // Step 35 (Q9) — a tagged product: an item of a catalog this business may read (step 25's rule, as meta-page-owner.ts
+        // checks one), in a catalog the chosen Instagram account tags from.
+        if (!DIGITS.test(inner.id) || !mine.instagramId) return inside('META_WRITE_NOT_ALLOWED', `${inner.id} is not a catalog product id.`)
+        const chosen = await metaChosenAdAccountOf(connectionId)
+        if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `${NOT_SENT} this business has no Meta ad account chosen through this connection, so Nexus cannot check a catalog id.` }
+        const { metaCatalogProblem, newCatalogRuleMemo } = await import('../marketing/meta-ads/catalog-rule.js')
+        catalogMemo ??= newCatalogRuleMemo()
+        const problem = await metaCatalogProblem({ connectionId, adAccountId: chosen }, { productItemId: inner.id }, catalogMemo)
+        if (problem) return inside('META_ACCOUNT_NOT_CHOSEN', problem)
+        const item = await read(inner.id, { fields: 'product_catalog{id},retailer_id,availability' })
+        const catalogId = item.body?.product_catalog && typeof item.body.product_catalog === 'object' ? idOf((item.body.product_catalog as Record<string, unknown>).id) : null
+        if (!catalogId) return inside('META_ACCOUNT_UNCONFIRMED', `Nexus could not read the catalog of product ${inner.id}${meta(item.words)}.`)
+        const instagramId = mine.instagramId
+        tagCatalogs ??= (async () => {
+          const answer = await read(`${instagramId}/available_catalogs`, { fields: 'catalog_id,catalog_name,shop_name,product_count', limit: '25' })
+          if (!answer.body || !Array.isArray(answer.body.data)) return { words: answer.words }
+          return new Set((answer.body.data as unknown[]).map((r) => (r && typeof r === 'object' ? idOf((r as Record<string, unknown>).catalog_id) : null)).filter((c): c is string => !!c))
+        })()
+        const catalogs = await tagCatalogs
+        if (!(catalogs instanceof Set)) return inside('META_ACCOUNT_UNCONFIRMED', `Nexus could not read the catalogs the chosen Instagram account tags from${meta(catalogs.words)}.`)
+        if (!catalogs.has(catalogId)) return inside('META_WRITE_NOT_ALLOWED', `product ${inner.id} is not in a catalog the chosen Instagram account tags from.`)
+        continue
       }
       default:
         return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOT_SENT} this change names an id inside its body that Nexus does not check.` }

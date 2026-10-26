@@ -90,6 +90,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 15 (2026-10-25) — meta-conversations, meta-message-templates and meta-messaging-setup read Meta live.
 // Meta ads step 4 (2026-10-25) — meta-business, meta-business-people, meta-business-assets and meta-business-partners read Meta live.
 // Meta ads step 24 (2026-10-25) — create-meta-page-post, set-meta-page-post, remove-meta-page-post and create-meta-instagram-post read Meta live and change it (as the Page).
+// Meta ads step 35 (2026-10-25) — set-meta-catalog-items, set-meta-catalog-feed and set-meta-instagram-product-tags read Meta live and change it.
 
 const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -147,8 +148,8 @@ const OPEN_WORLD = [
   'set-listing-stock',
   'set-master-prices', 'set-meta-account-controls', 'set-meta-account-settings', 'set-meta-ad', 'set-meta-ad-rule', 'set-meta-ad-set', 'set-meta-alert-subscription', 'set-meta-audience',
   'set-meta-audience-members', 'set-meta-audience-sharing', 'set-meta-block-list', 'set-meta-brand-safety', 'set-meta-budget-schedule', 'set-meta-campaign', 'set-meta-catalog',
-  'set-meta-catalog-access', 'set-meta-comments', 'set-meta-connection', 'set-meta-creative', 'set-meta-custom-conversion', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-experiment',
-  'set-meta-insights-features', 'set-meta-instant-experience', 'set-meta-labels', 'set-meta-lead-form', 'set-meta-page-post', 'set-meta-partner-access', 'set-meta-partnership-access', 'set-meta-placements', 'set-meta-product-set', 'set-meta-spend-cap', 'set-meta-status',
+  'set-meta-catalog-access', 'set-meta-catalog-feed', 'set-meta-catalog-items', 'set-meta-comments', 'set-meta-connection', 'set-meta-creative', 'set-meta-custom-conversion', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-experiment',
+  'set-meta-insights-features', 'set-meta-instagram-product-tags', 'set-meta-instant-experience', 'set-meta-labels', 'set-meta-lead-form', 'set-meta-page-post', 'set-meta-partner-access', 'set-meta-partnership-access', 'set-meta-placements', 'set-meta-product-set', 'set-meta-spend-cap', 'set-meta-status',
   'set-meta-targeting', 'set-meta-user-access', 'set-meta-value-rules', 'set-meta-webhooks', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
   'set-promotion', 'set-sd-brand-safety', 'set-sd-budget-rule', 'set-sd-optimization-rule', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid',
   'shipping-rates', 'shopify-content', 'submit-aplus-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock',

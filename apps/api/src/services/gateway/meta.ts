@@ -212,6 +212,9 @@ export type MetaPageEdge = 'leadgen_forms' | 'test_leads' | 'canvas_elements' | 
  * items_batch that deletes its items.
  */
 export type MetaCatalogEdge = 'owned_product_catalogs' | 'categories' | 'external_event_sources' | 'assigned_users' | 'agencies' | 'product_sets' | 'items_batch'
+  // Step 35 — a catalog's overrides and feeds, a feed's uploads, rules and upload schedules, an upload's error report, an
+  // Instagram media's product tags, the chosen Instagram account's product appeals.
+  | 'localized_items_batch' | 'product_feeds' | 'uploads' | 'rules' | 'upload_schedules' | 'error_report' | 'product_tags' | 'product_appeal'
 /** Step 28 — an apply (`act_<id>/recommendations`), a new study (`<business>/ad_studies`), a new Page video test (`<page>/ab_tests`). */
 export type MetaOptimizeEdge = 'recommendations' | 'ad_studies' | 'ab_tests'
 /** Step 22 — remove-meta-ads-items: an image or a video out of the ad account's library, a video's caption languages. */

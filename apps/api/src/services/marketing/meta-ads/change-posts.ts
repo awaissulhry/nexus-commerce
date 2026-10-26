@@ -38,6 +38,8 @@ import { liveIgContainer, type IgContainerState, type IgMediaState, type PagePos
 import { libraryImageLink } from '../google-ads/asset-images.js'
 import { libraryVideoLink } from './change-media.js'
 import { metaPublicLinkProblem } from '../../gateway/meta-media-rules.js'
+// Step 35 (Q9) — product tags on a new post: the one tag judge's spelling and limits.
+import { META_IG_TAG_LIMITS, META_IG_TAGGED_POSTS_PER_DAY, metaIgProductTagsParam, type MetaIgProductTag, type MetaIgTagTarget } from '../../gateway/meta-instagram-tags.js'
 import {
   META_POST_CTA_REFUSED, META_POST_CTA_TYPES, META_POST_LIMITS, META_POST_LOCAL_CTAS, metaIgContainerProblem, metaIgEventProblem,
   META_DARK_PHOTO_POSTS_PROVEN, metaPageFeedProblem, metaPagePhotoProblem, metaPagePostEditProblem, metaPageVideoProblem, metaPostTextProblem, metaVideoPostIdOf,
@@ -711,7 +713,7 @@ export function igMediaRemoveDraft(state: IgMediaState, uses: { creativeIds: str
 export const IG_POST_KINDS = ['image', 'reel', 'story', 'carousel', 'upcoming-event', 'publish-container'] as const
 export type IgPostKind = typeof IG_POST_KINDS[number]
 export interface IgTag { username: string; x?: number; y?: number }
-export interface IgItemInput { image?: PostImageSource; video?: PostVideoSource; altText?: string; userTags?: IgTag[] }
+export interface IgItemInput { image?: PostImageSource; video?: PostVideoSource; altText?: string; userTags?: IgTag[]; productTags?: MetaIgProductTag[] }
 export interface IgEventInput { title: string; startTime: string; endTime?: string; notifications?: string[]; notifyRelativeTo?: 'EVENT_START' | 'EVENT_END' }
 export interface IgPostInput {
   kind: IgPostKind
@@ -733,6 +735,8 @@ export interface IgPostInput {
   trial?: 'MANUAL' | 'SS_PERFORMANCE'
   event?: IgEventInput
   containerId?: string
+  /** Step 35 (Q9): products tagged on a feed image or a reel (a carousel tags them on its items). */
+  productTags?: MetaIgProductTag[]
 }
 
 /** What create-meta-instagram-post records (remove-meta-page-post finds its media by mediaId; a later run publishes containerId). */
@@ -745,6 +749,8 @@ export interface IgPostRecord {
   itemContainerIds: string[]
   mediaId: string | null
   eventId: string | null
+  /** Step 35 (Q9): it carried product tags (Meta's 25 tagged posts a day per account count it). */
+  productTagged?: true
 }
 
 /**
@@ -778,24 +784,27 @@ export async function waitForContainer(connectionId: string, containerId: string
 }
 
 const tagsJson = (tags: IgTag[] | undefined) => (tags?.length ? JSON.stringify(tags.map((t) => (t.x !== undefined || t.y !== undefined ? { username: t.username, x: t.x, y: t.y } : { username: t.username }))) : null)
+/** Step 35 (Q9) — product tags as Meta takes them on a container (meta-instagram-tags.ts: one spelling; x / y on an image only). */
+const productTagsJson = (tags: MetaIgProductTag[] | undefined, target: MetaIgTagTarget) => (tags?.length ? metaIgProductTagsParam(tags, target) : null)
 
 /** The arguments a kind takes: one it does not take is refused before any read. */
 function igKindRefusal(input: IgPostInput): string | null {
   const allowed: Record<IgPostKind, Array<keyof IgPostInput>> = {
-    image: ['image', 'altText', 'caption', 'collaborators', 'userTags', 'locationId', 'sponsorInstagramIds', 'paidPartnership', 'aiGenerated'],
-    reel: ['video', 'caption', 'collaborators', 'userTags', 'locationId', 'sponsorInstagramIds', 'paidPartnership', 'aiGenerated', 'shareToFeed', 'cover', 'thumbOffsetMs', 'audioName', 'trial'],
+    image: ['image', 'altText', 'caption', 'collaborators', 'userTags', 'locationId', 'sponsorInstagramIds', 'paidPartnership', 'aiGenerated', 'productTags'],
+    reel: ['video', 'caption', 'collaborators', 'userTags', 'locationId', 'sponsorInstagramIds', 'paidPartnership', 'aiGenerated', 'shareToFeed', 'cover', 'thumbOffsetMs', 'audioName', 'trial', 'productTags'],
     story: ['image', 'video', 'userTags'],
     carousel: ['items', 'caption', 'collaborators', 'locationId', 'sponsorInstagramIds', 'paidPartnership', 'aiGenerated'],
     'upcoming-event': ['event'],
     'publish-container': ['containerId'],
   }
-  const keys: Array<keyof IgPostInput> = ['image', 'video', 'altText', 'items', 'caption', 'collaborators', 'userTags', 'locationId', 'sponsorInstagramIds', 'paidPartnership', 'aiGenerated', 'shareToFeed', 'cover', 'thumbOffsetMs', 'audioName', 'trial', 'event', 'containerId']
+  const keys: Array<keyof IgPostInput> = ['image', 'video', 'altText', 'items', 'caption', 'collaborators', 'userTags', 'locationId', 'sponsorInstagramIds', 'paidPartnership', 'aiGenerated', 'shareToFeed', 'cover', 'thumbOffsetMs', 'audioName', 'trial', 'event', 'containerId', 'productTags']
   const stray = keys.find((k) => input[k] !== undefined && !allowed[input.kind].includes(k))
   if (stray) {
     const why: Partial<Record<keyof IgPostInput, string>> = {
       caption: 'Meta takes no caption on a story', altText: 'Meta takes alt text on images only (not reels or stories; a carousel\'s image takes its own)',
       collaborators: 'Meta takes collaborators on a feed image, a reel or a carousel only', locationId: 'Meta takes no place on a story',
       userTags: input.kind === 'carousel' ? 'a carousel tags people on each item (items[].userTags)' : 'not here',
+      productTags: input.kind === 'carousel' ? 'a carousel tags products on each item (items[].productTags; Meta: 5 an item, 20 in all)' : input.kind === 'story' ? 'Meta takes no product tags on a story' : 'not here',
     }
     return `${stray} is not part of an Instagram ${input.kind}${why[stray] ? ` (${why[stray]})` : ''}; a ${input.kind} takes ${allowed[input.kind].join(', ')}.`
   }
@@ -806,6 +815,9 @@ function igKindRefusal(input: IgPostInput): string | null {
   if (input.kind === 'upcoming-event' && !input.event) return 'An upcoming event has its title and start time (event).'
   if (input.kind === 'publish-container' && !input.containerId) return 'Name the container to publish (containerId, from an earlier create-meta-instagram-post).'
   if (input.paidPartnership === false && input.sponsorInstagramIds?.length) return 'paidPartnership cannot be false with sponsors (Meta: "Automatically set to true when branded_content_sponsor_ids is provided").'
+  if (input.kind === 'carousel' && input.items?.some((i) => i.productTags?.length) && input.items.some((i) => i.video && i.productTags?.some((t) => t.x !== undefined || t.y !== undefined))) return 'A carousel video item takes product tags without a place (x and y are for images only).'
+  const productTagsInAll = (input.productTags?.length ?? 0) + (input.items ?? []).reduce((n, i) => n + (i.productTags?.length ?? 0), 0)
+  if (input.kind === 'carousel' && productTagsInAll > META_IG_TAG_LIMITS.carouselPost) return `A carousel takes at most ${META_IG_TAG_LIMITS.carouselPost} product tags in all (${productTagsInAll} asked; Meta: 5 an item).`
   return null
 }
 
@@ -820,6 +832,8 @@ export interface IgDraftContext {
   /** publish-container: the recorded container's status now (null: Meta answered none). */
   container?: { made: boolean; state: IgContainerState | null }
   now?: number
+  /** Step 35 (Q9): what the tool read of the tagged products and the account (review status, eligibility, the day's count). */
+  productTagNotes?: string[]
 }
 
 /** create-meta-instagram-post as a draft: the container(s), then the publish; or an upcoming event; or a recorded container's publish. */
@@ -931,7 +945,7 @@ export async function igPostCreateDraft(input: IgPostInput, ctx: IgDraftContext)
     const tags = tagsJson(input.userTags)
     const params: Record<string, string> = story
       ? { media_type: 'STORIES', image_url: linked.url, ...(tags ? { user_tags: tags } : {}) }
-      : { image_url: linked.url, ...common, ...(input.altText !== undefined ? { alt_text: input.altText } : {}), ...(tags ? { user_tags: tags } : {}) }
+      : { image_url: linked.url, ...common, ...(input.altText !== undefined ? { alt_text: input.altText } : {}), ...(tags ? { user_tags: tags } : {}), ...(productTagsJson(input.productTags, 'image') ? { product_tags: productTagsJson(input.productTags, 'image')! } : {}) }
     const bad = judge(params, story ? 'this story' : 'this image post')
     if (bad) return { refusal: bad }
     requests.push(container(1, `Make the ${story ? 'story' : 'image post'}'s container on the Instagram account ${ig} (${linked.source})`, params, false))
@@ -939,6 +953,7 @@ export async function igPostCreateDraft(input: IgPostInput, ctx: IgDraftContext)
     lines.unshift([story ? 'Instagram story' : 'Instagram image post', 'none', linked.source])
     if (input.altText !== undefined) lines.push(['Alt text (exactly as sent)', null, input.altText])
     if (tags) lines.push(['People tagged (exactly as sent)', null, JSON.parse(tags)])
+    if (params.product_tags) lines.push(['Products tagged (exactly as sent)', null, JSON.parse(params.product_tags)])
   } else if (input.kind === 'reel' || input.kind === 'story') {
     const linked = await videoLinkOf(input.video, 'video')
     if ('problem' in linked) return { refusal: linked.problem }
@@ -960,6 +975,7 @@ export async function igPostCreateDraft(input: IgPostInput, ctx: IgDraftContext)
         ...(cover ? { cover_url: cover } : {}), ...(input.audioName !== undefined ? { audio_name: input.audioName } : {}),
         ...(tags ? { user_tags: tags } : {}), ...(input.thumbOffsetMs !== undefined ? { thumb_offset: String(input.thumbOffsetMs) } : {}),
         ...(input.trial ? { trial_params: JSON.stringify({ graduation_strategy: input.trial }) } : {}),
+        ...(productTagsJson(input.productTags, 'reel') ? { product_tags: productTagsJson(input.productTags, 'reel')! } : {}),
       }
     const bad = judge(params, story ? 'this story' : 'this reel')
     if (bad) return { refusal: bad }
@@ -969,6 +985,7 @@ export async function igPostCreateDraft(input: IgPostInput, ctx: IgDraftContext)
     if (input.trial) lines.push(['Trial reel (shown to non-followers first)', null, input.trial === 'MANUAL' ? 'graduates when a person says so in the app' : 'Meta graduates it if it performs well'])
     if (input.shareToFeed !== undefined) lines.push(['Also in the feed', null, input.shareToFeed ? 'yes' : 'Reels tab only'])
     if (tags) lines.push(['People tagged (exactly as sent)', null, JSON.parse(tags)])
+    if (params.product_tags) lines.push(['Products tagged (exactly as sent)', null, JSON.parse(params.product_tags)])
     if (input.audioName !== undefined) lines.push(['Audio name (exactly as sent)', null, input.audioName])
     if (input.cover) lines.push(['Cover picture', null, cover])
     if (input.thumbOffsetMs !== undefined) lines.push(['Thumbnail frame', null, `${input.thumbOffsetMs} ms into the video${cover ? ' (Meta uses the cover instead)' : ''}`])
@@ -985,15 +1002,16 @@ export async function igPostCreateDraft(input: IgPostInput, ctx: IgDraftContext)
       if (!('url' in linked)) return { refusal: `${where}.image is a link (libraryImageId or imageUrl).` }
       if (item.image) jpegWarn(linked, `${where}.image`)
       const tags = tagsJson(item.userTags)
+      const products = productTagsJson(item.productTags, item.image ? 'carousel-image' : 'carousel-video')
       const params: Record<string, string> = item.image
-        ? { image_url: linked.url, is_carousel_item: 'true', ...(item.altText !== undefined ? { alt_text: item.altText } : {}), ...(tags ? { user_tags: tags } : {}) }
-        : { media_type: 'VIDEO', video_url: linked.url, is_carousel_item: 'true', ...(tags ? { user_tags: tags } : {}) }
+        ? { image_url: linked.url, is_carousel_item: 'true', ...(item.altText !== undefined ? { alt_text: item.altText } : {}), ...(tags ? { user_tags: tags } : {}), ...(products ? { product_tags: products } : {}) }
+        : { media_type: 'VIDEO', video_url: linked.url, is_carousel_item: 'true', ...(tags ? { user_tags: tags } : {}), ...(products ? { product_tags: products } : {}) }
       const bad = judge(params, where)
       if (bad) return { refusal: bad }
       const step = requests.length + 1
       requests.push(container(step, `Make item ${i + 1} of ${input.items!.length} (${item.image ? 'image' : 'video'}) of the carousel on the Instagram account ${ig} (${linked.source})`, params, !!item.video))
       containers.push({ step, video: !!item.video })
-      itemLines.push({ item: i + 1, kind: item.image ? 'image' : 'video', source: linked.source, ...(item.altText !== undefined ? { altText: item.altText } : {}), ...(tags ? { peopleTagged: JSON.parse(tags) } : {}) })
+      itemLines.push({ item: i + 1, kind: item.image ? 'image' : 'video', source: linked.source, ...(item.altText !== undefined ? { altText: item.altText } : {}), ...(tags ? { peopleTagged: JSON.parse(tags) } : {}), ...(products ? { productsTagged: JSON.parse(products) } : {}) })
     }
     lines.push(['Items (exactly as sent)', null, itemLines])
     const itemSteps = containers.map((c) => c.step)
@@ -1017,6 +1035,12 @@ export async function igPostCreateDraft(input: IgPostInput, ctx: IgDraftContext)
     containers.push({ step, video: false })
     lines.unshift(['Instagram carousel', 'none', `${plural(input.items!.length, 'item')}`])
     warnings.push('Carousel images are all cropped like the first one (1:1 by default); a carousel counts as one post against Instagram\'s limit.')
+  }
+
+  // Step 35 (Q9) — product tags reach buyers with the post; Meta's own rules, said.
+  if (input.productTags?.length || input.items?.some((i) => i.productTags?.length)) {
+    record.productTagged = true
+    warnings.push(`Products tagged show on the public post at once (a product Meta has not approved for tagging yet shows once it is). Meta allows ${META_IG_TAGGED_POSTS_PER_DAY} tagged posts per account in 24 hours (a carousel counts once); a product tag cannot be removed by API afterwards (the Instagram app removes it).`, ...(ctx.productTagNotes ?? []))
   }
 
   // The publish of the last container, once Meta says it is FINISHED.

@@ -15,7 +15,8 @@
  * step 36's Page token mode — the one mode, reused) and sends it only for the chosen Page, a post the Page wrote, the chosen
  * Instagram account or what Nexus itself made there (gateway/meta-post-owner.ts), with every id inside a body confirmed the
  * business's own. The tools never see a token. Nothing spends: an organic post is not an ad (a boost is create-meta-boost).
- * Product tags on an Instagram post are step 35's (meta-instagram-product-tags; it adds them to this tool).
+ * Product tags on a new Instagram post (step 35, Q9): productTags on an image or a reel, items[].productTags on a carousel —
+ * judged by gateway/meta-instagram-tags.ts, products only of a catalog the account tags from that this business may read.
  */
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
@@ -29,7 +30,11 @@ import {
   type IgPostInput, type IgPostRecord, type PagePostEditFields, type PagePostEditInput, type PagePostEditRecord, type PagePostInput, type PagePostRecord, type PostRemoveRecord,
 } from '../../marketing/meta-ads/change-posts.js'
 import { igContainerNexusMade, igUsernameTaken, liveCreativesUsing, liveIgContainer, liveIgMedia, liveIgQuota, livePagePost, livePostAccount, liveVideoPost } from '../../marketing/meta-ads/live-posts.js'
-import { MetaLiveRefusal } from '../../marketing/meta-ads/live.js'
+import { MetaLiveRefusal, metaChosenAccount } from '../../marketing/meta-ads/live.js'
+// Step 35 (Q9) — product tags on a new post: products of a catalog the account tags from (and this business may read).
+import { liveIgMayTag, liveIgProduct, liveIgTagCatalogs, taggedPostsLastDay } from '../../marketing/meta-ads/live-instagram-tags.js'
+import { instagramOf } from '../../marketing/meta-ads/live-media.js'
+import { META_IG_TAG_LIMITS, META_IG_TAGGED_POSTS_PER_DAY } from '../../gateway/meta-instagram-tags.js'
 import { MetaReadError } from '../../marketing/meta-ads/errors.js'
 import type { MetaChangeDraft, MetaChangeRequest } from '../../marketing/meta-ads/change-draft.js'
 import type { MetaChangeResult } from '../../marketing/meta-ads/write-client.js'
@@ -403,6 +408,12 @@ const userTags = (what: string) => z.array(z.object({
   x: xy.describe('images (required) and stories: from the left edge, 0.0–1.0').optional(),
   y: xy.describe('images (required) and stories: from the top edge, 0.0–1.0').optional(),
 }).strict().refine((t) => (t.x === undefined) === (t.y === undefined), 'x and y go together')).min(1).max(L.userTags).describe(what)
+/** Step 35 (Q9) — products tagged on the new post (meta-instagram-tags.ts judges them: limits, x / y on images only). */
+const productTags = (what: string, max: number) => z.array(z.object({
+  productId: metaIdArg('the product (meta-instagram-product-tags view search)'),
+  x: xy.describe('an image: from the left edge, 0.0–1.0 (required on an image; at most 4 decimals)').optional(),
+  y: xy.describe('an image: from the top edge, 0.0–1.0 (required on an image; at most 4 decimals)').optional(),
+}).strict().refine((t) => (t.x === undefined) === (t.y === undefined), 'x and y go together')).min(1).max(max).describe(what)
 
 const igInput = z.object({
   connectionId: metaConnectionArg,
@@ -415,10 +426,12 @@ const igInput = z.object({
     video: videoSource.describe('the item\'s video').optional(),
     altText: line(L.altText, 'an image item\'s alternative text').optional(),
     userTags: userTags('accounts tagged on this item').optional(),
+    productTags: productTags(`products tagged on this item (Meta: ${META_IG_TAG_LIMITS.carouselSlide} an item, ${META_IG_TAG_LIMITS.carouselPost} in the carousel; x / y on an image item only)`, META_IG_TAG_LIMITS.carouselSlide).optional(),
   }).strict()).min(L.carouselMin).max(L.carouselMax).describe('carousel: its items in order (an image or a video each)').optional(),
   caption: lines(L.caption, `the caption, EXACTLY as approved (at most ${L.caption} characters, ${L.hashtags} hashtags, ${L.mentions} @ tags — each @ account is notified); not on a story`).optional(),
   collaborators: z.array(username).min(1).max(L.collaborators).describe('image, reel, carousel: up to 3 accounts invited as collaborators (the post shows on their account too once they accept)').optional(),
   userTags: userTags('image, reel, story: accounts tagged in it (an image needs x and y; a reel takes usernames only)').optional(),
+  productTags: productTags(`image, reel: products tagged in it (Meta: ${META_IG_TAG_LIMITS.feedPost} on an image with x and y, ${META_IG_TAG_LIMITS.reel} on a reel without; a carousel tags them on its items)`, META_IG_TAG_LIMITS.reel).optional(),
   locationId: metaIdArg('image, reel, carousel: the Facebook Page of the place to tag (a Page with a location)').optional(),
   sponsorInstagramIds: z.array(metaIdArg('a brand\'s Instagram account id')).min(1).max(L.sponsors).describe('image, reel, carousel: up to 2 brands tagged as paid partners (the "Paid partnership" label; the brand approves it unless it pre-approved the account)').optional(),
   paidPartnership: z.boolean().describe('image, reel, carousel: the "Paid partnership" label (true without sponsors: label only)').optional(),
@@ -461,6 +474,27 @@ const buildIg = (args: Record<string, unknown>): MetaDraftBuilder => async (acco
         throw err
       }
     }
+    // Step 35 (Q9) — every tagged product: an item of a catalog the chosen Instagram account tags from that this business
+    // may read (the gateway checks the business's read again), on an account Meta lets tag products.
+    const tagged = [...new Set([...(a.productTags ?? []), ...(a.items ?? []).flatMap((i) => i.productTags ?? [])].map((t) => t.productId))]
+    const productTagNotes: string[] = []
+    if (tagged.length) {
+      const chosen = await metaChosenAccount(account.accountId)
+      const mayTag = await liveIgMayTag(chosen)
+      if (mayTag === false) return { refusal: 'This Instagram account may not tag products: Meta finds no approved Instagram Shop linked to it (Creator accounts cannot tag; since 2023-08-10 some businesses without checkout-enabled Shops cannot).' }
+      if (mayTag === null) productTagNotes.push('Meta did not say whether this account may tag products (shopping_product_tag_eligibility): its answer to the post decides.')
+      const catalogs = await liveIgTagCatalogs(chosen)
+      const review: string[] = []
+      for (const id of tagged) {
+        const product = await liveIgProduct(chosen, id)
+        if (!catalogs.has(product.catalogId)) return { refusal: `Product ${id} is not in a catalog the chosen Instagram account tags from that this business may read (meta-instagram-product-tags view catalogs).` }
+        review.push(`${id}${product.sku ? ` (SKU ${product.sku})` : ''}: ${product.reviewStatus ?? 'review status not read'}`)
+      }
+      // Meta: a product not approved for tagging is taken but shows only once approved; a rejected one never shows.
+      productTagNotes.push(`Each tagged product's review for tagging (Meta's; only an approved one shows on the post, a rejected one never does): ${review.join('; ')}.`)
+      const today = await taggedPostsLastDay(instagramOf(chosen))
+      productTagNotes.push(`Nexus tagged ${today} of this account's posts in the last 24 hours (Meta allows ${META_IG_TAGGED_POSTS_PER_DAY}; tags made in the Instagram app count too)${today >= META_IG_TAGGED_POSTS_PER_DAY ? ': Meta may refuse this one' : ''}.`)
+    }
     let container: { made: boolean; state: Awaited<ReturnType<typeof liveIgContainer>> } | undefined
     if (a.kind === 'publish-container' && a.containerId) {
       const made = await igContainerNexusMade(account.accountId, a.containerId)
@@ -468,7 +502,7 @@ const buildIg = (args: Record<string, unknown>): MetaDraftBuilder => async (acco
       if (made.made) { try { state = await liveIgContainer(account.accountId, a.containerId) } catch (err) { if (!(err instanceof MetaReadError)) throw err } }
       container = { made: made.made, state }
     }
-    return await igPostCreateDraft(a as IgPostInput, { instagramId: where.instagramId!, connectionId: account.accountId, quota, takenSponsor, takenLocation, takenCollaborator, container })
+    return await igPostCreateDraft(a as IgPostInput, { instagramId: where.instagramId!, connectionId: account.accountId, quota, takenSponsor, takenLocation, takenCollaborator, container, productTagNotes })
   } catch (err) { return refusalOf(err) }
 }
 
@@ -516,7 +550,11 @@ const createIgPost: AgentTool = {
     + 'label (up to 2 brands, never another Nexus business\'s), the made-with-AI label, and for a reel its cover, audio name, '
     + 'feed sharing and trial reel. A container Meta is still preparing is not published: the answer names it, and kind '
     + 'publish-container publishes it later (Meta keeps it 24 hours). Also an upcoming event for reminder ads. Instagram\'s '
-    + 'limit of API posts per 24 hours is read first. Product tags are not set here yet. Meta has no check for any of these; '
+    + 'limit of API posts per 24 hours is read first. Product tags (productTags; a carousel per item): products of a catalog '
+    + 'the account tags from, 20 on an image with a place, 30 on a reel, 5 an item and 20 in a carousel — public with the '
+    + 'post, and no removal by API afterwards (Meta\'s pages differ: the product-tagging guide documents these, the ig-user/media '
+    + 'reference names 5 a container and content-publishing "Shopping tags are not supported" — Nexus follows the guide, the '
+    + 'stricter way, and Meta\'s answer decides). Meta has no check for any of these; '
     + 'nothing spends (boosting is create-meta-boost). As the Page: the gateway reads its token for each request (the system '
     + 'user needs CREATE_CONTENT or MANAGE on the Page, and instagram_basic, instagram_content_publish, pages_read_engagement). '
     + 'No undo: Meta has no edit of a published Instagram post by API and no delete of an upcoming event; remove-meta-page-post '

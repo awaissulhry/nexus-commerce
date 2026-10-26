@@ -39,14 +39,14 @@ import type { MetaJudgedWrite, MetaWriteBodyId } from './meta-calls.js'
 import { chosenBusiness, listedIds, type MetaOwnerIo, type MetaOwnerProblem } from './meta-optimize-owner.js'
 import { metaChosenPageOf } from './account.js'
 import { takenIds } from '../marketing/meta-ads/taken.js'
-import type { MetaCatalogKind } from './meta-catalog-rules.js'
+import { isMetaCatalogItemsKind, type MetaCatalogKind } from './meta-catalog-rules.js'
 
 const NOT_CHOSEN = 'META_ACCOUNT_NOT_CHOSEN'
 const UNCONFIRMED = 'META_ACCOUNT_UNCONFIRMED'
 const NOT_ALLOWED = 'META_WRITE_NOT_ALLOWED'
-const say = (code: string, sentence: string): MetaOwnerProblem => ({ code, sentence: `Nothing was sent to Meta: ${sentence}` })
+export const say = (code: string, sentence: string): MetaOwnerProblem => ({ code, sentence: `Nothing was sent to Meta: ${sentence}` })
 const inside = (problem: MetaOwnerProblem): MetaOwnerProblem => ({ ...problem, sentence: problem.sentence.replace(/^Nothing was sent to Meta: /, 'Nothing was sent to Meta: inside this change, ') })
-const isProblem = (v: unknown): v is MetaOwnerProblem => !!v && typeof v === 'object' && 'code' in v && 'sentence' in v
+export const isProblem = (v: unknown): v is MetaOwnerProblem => !!v && typeof v === 'object' && 'code' in v && 'sentence' in v
 const idOf = (v: unknown): string | null => {
   const raw = v && typeof v === 'object' ? (v as Record<string, unknown>).id : v
   return (typeof raw === 'string' || typeof raw === 'number') && /^\d{1,25}$/.test(String(raw)) ? String(raw) : null
@@ -55,7 +55,7 @@ const idOf = (v: unknown): string | null => {
 const PAGES = 5
 
 /** The chosen ad account's portfolio, used by no other Nexus business — or why not. */
-async function portfolioOf(io: MetaOwnerIo): Promise<string | MetaOwnerProblem> {
+export async function portfolioOf(io: MetaOwnerIo): Promise<string | MetaOwnerProblem> {
   const chosen = await io.chosenAdAccount()
   if (!chosen) return say(NOT_CHOSEN, 'this business has no Meta ad account chosen through this connection, so Nexus changes no catalog.')
   const business = await chosenBusiness(io, chosen)
@@ -66,10 +66,10 @@ async function portfolioOf(io: MetaOwnerIo): Promise<string | MetaOwnerProblem> 
   return business
 }
 
-interface CheckedCatalog { id: string; isSegment: boolean | null }
+export interface CheckedCatalog { id: string; isSegment: boolean | null }
 
 /** A catalog this business may change: the portfolio's own, shared with no portfolio another Nexus business uses. */
-async function writableHere(io: MetaOwnerIo, catalogId: string, business: string): Promise<CheckedCatalog | MetaOwnerProblem> {
+export async function writableHere(io: MetaOwnerIo, catalogId: string, business: string): Promise<CheckedCatalog | MetaOwnerProblem> {
   const body = await io.read(catalogId, { fields: 'id,business{id},is_catalog_segment' })
   if (!body || idOf(body) !== catalogId) return say(UNCONFIRMED, `Nexus could not read ${catalogId} as a Meta catalog (another kind of object, or not readable).`)
   if (idOf(body.business) !== business) return say(NOT_CHOSEN, `catalog ${catalogId} is not owned by the business portfolio of the ad account this business chose (a client catalog is another business's).`)
@@ -120,6 +120,9 @@ export async function metaCatalogOwnerProblem(
 ): Promise<MetaOwnerProblem | null> {
   const id = write.objectId
   if (write.check) return say(NOT_ALLOWED, 'Meta documents no check (validate_only) for a catalog change.')
+  // Step 35 — a catalog's items, an item group, a catalog's feeds, a feed, a feed's rule or upload: their own checks
+  // (meta-catalog-items-owner.ts: the same portfolio and catalog checks, then step 35's D7 checks).
+  if (isMetaCatalogItemsKind(kind)) return (await import('./meta-catalog-items-owner.js')).metaCatalogItemsOwnerProblem(connectionId, write, kind, io, parent)
   const business = await portfolioOf(io)
   if (isProblem(business)) return business
   switch (kind) {

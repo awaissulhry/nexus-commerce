@@ -59,7 +59,7 @@ const USE_KIND: Readonly<Record<string, string>> = { campaign: 'campaign', adset
 export const deliveringOf = (use: CatalogUse) => use.users.filter((u) => u.effectiveStatus === 'ACTIVE')
 
 /** The campaigns, ad sets and ads that use a catalog or set, in words, and what Nexus could not see (the chosen ad account's only). */
-function useWarnings(use: CatalogUse, what: string): string[] {
+export function useWarnings(use: CatalogUse, what: string): string[] {
   const unseen = use.unseen.length ? ` Nexus could not see everything: ${use.unseen.join('; ')}.` : ''
   if (!use.users.length) return [`No campaign, ad set or ad of the chosen ad account shows ${what} as far as Nexus can see.${unseen} Ads of other ad accounts that use it are not seen by Nexus.`]
   const live = deliveringOf(use)
@@ -77,7 +77,7 @@ export const spendPremise = (use: CatalogUse) => ({ delivering: deliveringOf(use
  * Review B1 / A5 — SPENDS MONEY when a change can widen delivery and something delivers now from it, or when Nexus could not
  * see everything that may (unknown counts as spending): the sentence says which, and what Nexus did not see.
  */
-function spendLine(use: CatalogUse, what: string, how: string): string[] {
+export function spendLine(use: CatalogUse, what: string, how: string): string[] {
   const live = deliveringOf(use)
   if (!live.length && !use.unseen.length) return []
   const who = live.length ? `${plural(live.length, 'campaign, ad set or ad', 'campaigns, ad sets and ads')} delivering now (${live.map((u) => `${USE_KIND[u.kind]} ${u.id}`).join(', ')}) ${live.length === 1 ? 'uses' : 'use'} ${what}` : `Nexus could not see everything that may deliver on ${what}`
@@ -142,7 +142,9 @@ export function catalogCreateDraft(input: CatalogCreateInput, live: { portfolioI
 // ── remove-meta-catalog-items (and the undo of what a create made) ─────────────────────────────────────────────────
 
 export type RemoveKind = 'catalog' | 'product-set' | 'items' | 'item' | 'feed'
-export const CATALOG_REMOVE_KINDS: readonly RemoveKind[] = ['catalog', 'product-set', 'items', 'item', 'feed']
+  // Step 35 — an item group (CT-055; change-catalog-items.ts groupDeleteDraft).
+  | 'item-group'
+export const CATALOG_REMOVE_KINDS: readonly RemoveKind[] = ['catalog', 'product-set', 'items', 'item', 'feed', 'item-group']
 export const FINAL = 'DELETING IS FINAL: Meta keeps nothing to restore.'
 
 export interface CatalogRemoveRecord { op: 'remove'; kind: RemoveKind; catalogId: string; ids: string[]; skus?: string[] }

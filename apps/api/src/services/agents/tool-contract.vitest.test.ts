@@ -1102,6 +1102,20 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { op: 'share', asset: 'ad-account', nodeId: 'act_1234567890', partnerId: '120000000000070', shared: false, tasks: null },
         after: { op: 'share', asset: 'ad-account', nodeId: 'act_1234567890', partnerId: '120000000000070', shared: true, tasks: ['ANALYZE'], accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 35: items go back to their earlier values (a create's items are deleted by remove-made); a feed's settings,
+      // labels and rules go back; tags moved on a post are moved back (Meta cannot remove an added tag).
+      'set-meta-catalog-items': {
+        before: { op: 'update', catalogId: '120000000000100', items: [{ sku: 'SKU-A', fields: { availability: 'out of stock', price: '49.90 EUR' } }], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'update', catalogId: '120000000000100', items: [{ sku: 'SKU-A', fields: { availability: 'in stock', price: '44.90 EUR' } }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-catalog-feed': {
+        before: { op: 'labels', catalogId: '120000000000100', feedId: '120000000000130', items: [{ sku: 'SKU-A', fields: { internal_label: ['summer'], custom_label_0: null } }], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'labels', catalogId: '120000000000100', feedId: '120000000000130', via: 'shopify-feed', items: [{ sku: 'SKU-A', fields: { internal_label: ['summer', 'sale'], custom_label_0: 'Sale' } }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-instagram-product-tags': {
+        before: { op: 'tag', mediaId: '170000000000001', targetId: '170000000000001', target: 'image', moved: [{ productId: '120000000000120', x: 0.2, y: 0.3 }], added: [] },
+        after: { op: 'tag', mediaId: '170000000000001', targetId: '170000000000001', target: 'image', moved: [{ productId: '120000000000120', x: 0.5, y: 0.8 }], added: [], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1288,7 +1302,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-meta-catalog', 'set-meta-catalog', 'set-meta-catalog-access', 'set-meta-product-set', 'remove-meta-catalog-items', 'set-meta-account-settings', 'set-meta-spend-cap', 'set-meta-insights-features',
       'create-meta-instant-experience', 'set-meta-instant-experience', 'set-meta-comments',
       'create-meta-page-post', 'set-meta-page-post', 'remove-meta-page-post', 'create-meta-instagram-post',
-      'set-meta-user-access', 'set-meta-partner-access']) {
+      'set-meta-user-access', 'set-meta-partner-access',
+      'set-meta-catalog-items', 'set-meta-catalog-feed', 'set-meta-instagram-product-tags']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })
