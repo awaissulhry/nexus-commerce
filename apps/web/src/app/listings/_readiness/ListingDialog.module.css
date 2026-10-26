@@ -1,18 +1,18 @@
-/* The Fix window's layout and domain content. Every control is a DS part; tokens only. */
+/* The Listing window's layout and domain content. Every control is a DS part; tokens only. */
 
-/* The row's destinations, fixed under the title (the Modal's `subheader`); the hairline sits on the dialog's inset, as a
-   detail's tab strip does. */
-.switcher { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: start; gap: var(--nds-space-6) var(--nds-space-10); padding-block: var(--nds-space-2) var(--nds-space-12); border-bottom: 1px solid var(--nds-border-subtle); }
+/* The row's destinations, under the title (the DetailModal's `meta` row): a store's markets under its short name. */
+.switcher { flex: 1 1 100%; display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: start; gap: var(--nds-space-6) var(--nds-space-10); padding-block: var(--nds-space-2); }
 /* Each store's line, as in the grid: its short name, then its markets. Shared and the market-less stores share the first line. */
 .switchLine, .switchMarkets { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); min-width: 0; }
 .switchLine { grid-column: 1 / -1; }
 .switchStore { padding-block: var(--nds-space-4); font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); white-space: nowrap; }
 
-/* The subtitle: state, listings by state, when it was checked. */
+/* The subtitle: readiness, the channel's state, listings by state, when each was last known. */
 .summary { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4) var(--nds-space-10); }
 
 .body { display: flex; flex-direction: column; gap: var(--nds-space-16); min-width: 0; overflow-wrap: anywhere; }
-.loading { display: flex; align-items: center; justify-content: center; gap: var(--nds-space-8); padding-block: var(--nds-space-32); color: var(--nds-text-muted); }
+.section { display: flex; flex-direction: column; gap: var(--nds-space-4); min-width: 0; }
+.inline { display: flex; align-items: center; gap: var(--nds-space-8); color: var(--nds-text-muted); }
 
 .languages { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6) var(--nds-space-16); }
 .language { display: inline-flex; align-items: center; gap: var(--nds-space-6); }
@@ -23,10 +23,27 @@
 .problem:last-child { border-bottom: none; padding-bottom: 0; }
 .problemHead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6) var(--nds-space-8); min-width: 0; }
 .problemLabel { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); }
-.open { margin-inline-start: auto; }
+/* A row's buttons at its end; on a narrow window they wrap under its words. */
+.actionsEnd { margin-inline-start: auto; display: inline-flex; flex-wrap: wrap; gap: var(--nds-space-6); }
 .message { margin: 0; color: var(--nds-text-2); }
+/* The channel's own words, as it said them. */
+.quote { margin: 0; color: var(--nds-text); white-space: pre-wrap; }
 .meta { display: flex; flex-wrap: wrap; gap: var(--nds-space-2) var(--nds-space-12); font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.metaText { font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.note { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
 
 .skus { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nds-space-4); font-size: var(--nds-font-size-sm); }
 .skuName { color: var(--nds-text-muted); }
 .notes { margin: 0; padding-inline-start: var(--nds-space-18); display: grid; gap: var(--nds-space-4); }
+
+/* A read-only table that is wider than a phone scrolls sideways inside the window, never the page. */
+.tableWrap { min-width: 0; overflow-x: auto; }
+.cellStatus { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4); }
+.extLink { display: inline-flex; align-items: center; gap: var(--nds-space-4); }
+
+.picker { max-width: 360px; }
+.actionsRow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+
+/* An AI diagnosis under its suppression. */
+.diagnosis { display: flex; flex-direction: column; gap: var(--nds-space-6); padding: var(--nds-space-10) var(--nds-space-12); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md); }
+.steps { margin: 0; padding-inline-start: var(--nds-space-18); display: grid; gap: var(--nds-space-4); color: var(--nds-text-2); }

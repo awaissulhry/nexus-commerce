@@ -18,6 +18,8 @@ import { readinessProblemsIfChanged } from '../services/pim/listing-readiness-pr
 import { matches } from '../utils/list-etag.js'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { permissionCheckerFor } from './studio-matrix.routes.js'
+import { readinessListingTarget } from '../services/pim/listing-readiness-link.service.js'
+import { readinessListingIds } from '../services/pim/listing-readiness-ids.service.js'
 import { productTransferOptions, resolveProductTransferBoundary, checkProductTransferBoundary } from '../services/pim/catalog-product-transfer.js'
 import { visitActiveWorkspaces } from '../lib/workspace-sweep.js'
 import { workspaceContext } from '../lib/workspace-context.js'
@@ -189,6 +191,16 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
     reply.header('ETag', etag)
     reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
     return page ?? reply.code(304).send()
+  })
+  // The Listing window's link (`/listings?listing=<id>`): where one listing sits on the page.
+  fastify.get('/catalog-transfer/readiness/listing/:id', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    return readinessListingTarget((request.params as { id: string }).id)
+  })
+  // The bulk bar (step 6): the listings a price action on the selected products reaches, before anything runs.
+  fastify.post('/catalog-transfer/readiness/listing-ids', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    return readinessListingIds(request.body)
   })
   fastify.get('/catalog-transfer/source/history', async request => listSourceHistory(actor(request), Number((request.query as { page?: string }).page ?? 1)))
   fastify.get('/catalog-transfer/source/fields', async request => sourceMappingFields(request.query as Parameters<typeof sourceMappingFields>[0]))

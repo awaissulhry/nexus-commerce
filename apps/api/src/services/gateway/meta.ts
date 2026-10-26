@@ -23,6 +23,7 @@ import { META_REST_HOST, type MetaBoostWriteKind, type MetaBrandSafetyKind, type
 import { metaRuploadUrl } from './meta-media-rules.js'
 import type { MetaSignalsKind } from './meta-signals-rules.js'
 import type { MetaCatalogKind } from './meta-catalog-rules.js'
+import { META_GRAPH_VIDEO_HOST, type MetaPostEdge, type MetaPostKind } from './meta-post-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -103,6 +104,8 @@ export interface MetaWriteRequest {
     | MetaCatalogKind
     // Step 37 — a post or comment of the chosen Page, a branded-content comment, an Instagram comment, a Threads ad's post or reply.
     | MetaCommentKind
+    // Step 24 — the chosen Page or Instagram account as it posts, a post of the Page, a post or media Nexus made (meta-post-rules.ts).
+    | MetaPostKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -144,11 +147,14 @@ export interface MetaWriteRequest {
   targetingKeys?: string[]
   /**
    * Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own); step 34: a feed's
-   * catalog. Step 37 — a Threads post's or reply's ad (`ad`), a branded-content post's comment's post (`brandedpost`).
+   * catalog. Step 37 — a Threads post's or reply's ad (`ad`), a branded-content post's comment's post (`brandedpost`). Step 24 —
+   * a video post's video (`pagevideo`).
    */
-  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost'; id: string }
+  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
   recommendations?: boolean
+  /** Step 24 (review B-F1) — a Page's video post goes to Meta's video host (meta-post-rules.ts META_GRAPH_VIDEO_HOST). */
+  videoHost?: true
   /**
    * Step 27 — a new ad's check (POST /act_<id>/ads) runs Meta's synchronous integrity review with it (`synchronous_ad_review`,
    * documented only beside validate_only; AD-026 … AD-028). The gateway's ad-create rule judges the exact value.
@@ -163,6 +169,8 @@ export interface MetaWriteRequest {
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
   | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge | MetaBoostEdge | MetaSignalsEdge | MetaAdEdge
   | MetaWebhookEdge | MetaTargetingEdge | MetaEventsEdge | MetaCatalogEdge | MetaAccountEdge | MetaCommentEdge
+  // Step 24 — a post, a post's photo, a video post of the chosen Page; a container, its publish, an event of the chosen Instagram account.
+  | MetaPostEdge
 /** Step 33 — upload-meta-events: Conversions API events of a pixel (`<pixel id>/events`). */
 export type MetaEventsEdge = 'events'
 /** Step 27 — create-meta-ad: a new ad on the chosen ad account (an ad's labels: step 21's `adlabels`). */
@@ -240,7 +248,8 @@ export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayRespo
     operation: req.operation,
     kind: req.check ? 'read' : 'write',
     connectionId: req.connectionId,
-    url: metaUrl(path, remove ? req.query ?? {} : {}),
+    // Step 24 — a Page's video post on Meta's video host; every other change on the Graph host.
+    url: req.videoHost ? metaUrl(path).replace(/^https:\/\/graph\.facebook\.com\//, `https://${META_GRAPH_VIDEO_HOST}/`) : metaUrl(path, remove ? req.query ?? {} : {}),
     method: remove ? 'DELETE' : req.method === 'PATCH' ? 'PATCH' : 'POST',
     body,
     metaObjectKind: req.objectKind,

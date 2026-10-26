@@ -981,6 +981,11 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-meta-instant-experience': ['basis', 'plan', 'reach'],
   // Meta step 37 (2026-10-21): comments and moderation (meta-ads-comments.tools.ts).
   'set-meta-comments': ['basis', 'plan', 'reach'],
+  // Meta step 24 (2026-10-25): organic posts of the chosen Page and Instagram account (meta-ads-posts.tools.ts).
+  'create-meta-page-post': ['basis', 'plan', 'reach'],
+  'set-meta-page-post': ['basis', 'plan', 'reach'],
+  'remove-meta-page-post': ['basis', 'plan', 'reach'],
+  'create-meta-instagram-post': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

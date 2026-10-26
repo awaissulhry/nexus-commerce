@@ -13,14 +13,17 @@
  *              columns (step 4, `listingColumns.ts`): the row's main listings there, in the design system's words.
  *   Next step  the most urgent problem, a link to the exact field in the studio, and where it is.
  *   Checked    how old the check is; "Checking…" while Nexus rebuilds it.
- *   Actions    Fix (the Fix window) · Edit (the studio) — the DS `actionsColumn`.
+ *   Actions    Open (the Listing window) · Edit (the studio) · ⋯ (the row menu, the same list as the right-click menu:
+ *              `listingsBulk.ts` `rowMenuItems`) — the DS `actionsColumn`.
  *
- * Cells read the page through AG's `context` (`ReadinessGridContext`): the destination labels, the Fix window and the
- * family page link. Every verdict, count and order is the API's.
+ * Cells read the page through AG's `context` (`ReadinessGridContext`): the destination labels, the Listing window and the
+ * family page link. Every verdict, count and order is the API's. A chip opens the Listing window on its destination: a ▲
+ * chip on its "On the channel" tab, every other on Readiness (live layer step 5).
  */
 import { Fragment, type ReactElement } from 'react'
 import { Circle, Contrast, ExternalLink, TriangleAlert } from 'lucide-react'
 import type { ReadinessDestination } from '@nexus/shared/listing-readiness'
+import type { MenuItemDef } from '@/design-system/components'
 
 import Link from '@/lib/workspaces/Link'
 import { browserWorkspaceId, workspaceHref } from '@/lib/workspaces/paths'
@@ -64,7 +67,8 @@ import {
   type ListingFacts,
   type PageScope,
 } from './listingColumns'
-import { chipAriaLabel, chipLines, chipText, fixDestination, fixHeldReason, nextStepPlace, orderedChips, plural, type PlacedChip } from './marketChips'
+import { chipAriaLabel, chipLines, chipText, nextStepPlace, orderedChips, plural, type PlacedChip } from './marketChips'
+import { openDestination, openHeldReason, tabForChip, type ListingTab } from './listingDialogModel'
 import { MARKETS_FIXED_WIDTH } from './marketsWidth'
 import { absoluteTime, relativeTime } from './relativeTime'
 import { canExpand, isFamilyRow, isMemberRow, isReadinessFooter, type ReadinessDataRow, type ReadinessGridRow } from './readinessRows'
@@ -74,8 +78,11 @@ export interface ReadinessGridContext {
   /** The destinations of the latest answer, in chip order. */
   destinations: () => readonly ReadinessDestination[]
   destinationOf: (key: string) => ReadinessDestination
-  /** Open the Fix window for this row on this destination. */
-  openFix: (row: ReadinessDataRow, destinationKey: string) => void
+  /**
+   * Open the Listing window for this row on this destination: on `tab` (default Readiness), knowing the grid row it came
+   * from (`rowId`, for Prev / Next; the page finds it when not given).
+   */
+  openListing: (row: ReadinessDataRow, destinationKey: string, opts?: { rowId?: string | null; tab?: ListingTab }) => void
   /** The bare address of one family's page (`?parent=`), with the current filters. */
   familyHref: (rootId: string) => string
   /** A family's own page: its members are flat, nothing folds open. */
@@ -87,6 +94,11 @@ export interface ReadinessGridContext {
   /** Step 4: the page's store (`AMAZON` …), or null on /listings. */
   pageChannel: () => string | null
   now: () => number
+  /**
+   * The row's menu (⋯ and right-click read the same list): on `destinationKey` when the row has that chip (the one
+   * right-clicked), else where Open opens.
+   */
+  rowMenu: (row: ReadinessDataRow, destinationKey: string | null) => MenuItemDef[]
 }
 
 type CellParams = ICellRendererParams<ReadinessGridRow>
@@ -163,18 +175,18 @@ export function MarketChipsCell(p: CellParams) {
   const pill = ({ chip, label, text }: PlacedChip) => {
     const sentence = chipAriaLabel(chip, label, ctx.destinationOf(chip.destinationKey).channel)
     const tone = readinessMeta(chip.state, 'scope').tone
-    const open = () => ctx.openFix(data, chip.destinationKey)
+    const open = () => ctx.openListing(data, chip.destinationKey, { rowId: p.node.id ?? null, tab: tabForChip(chip) })
     // The colour stays the readiness colour; the mark is the channel's (a waiting rebuild keeps the DS spinner).
     const glyph = chipGlyph(chip, liveShown)
     if (glyph === 'dot' || glyph === 'none') {
       return (
-        <Pill key={chip.destinationKey} tone={tone} dot={glyph === 'dot'} onClick={open} aria-label={sentence} title={sentence}>
+        <Pill key={chip.destinationKey} tone={tone} dot={glyph === 'dot'} onClick={open} aria-label={sentence} title={sentence} data-destination-key={chip.destinationKey}>
           {text}
         </Pill>
       )
     }
     return (
-      <Pill key={chip.destinationKey} tone={tone} icon={GLYPH_ICON[glyph]} onClick={open} aria-label={sentence} title={sentence}>
+      <Pill key={chip.destinationKey} tone={tone} icon={GLYPH_ICON[glyph]} onClick={open} aria-label={sentence} title={sentence} data-destination-key={chip.destinationKey}>
         {text}
       </Pill>
     )
@@ -451,15 +463,16 @@ export function readinessColumns(ctx: ReadinessGridContext, options: ReadinessCo
         prefsLabel: 'Actions',
         primary: [
           {
-            id: 'fix',
-            label: 'Fix',
+            id: 'open',
+            label: 'Open',
             onClick: (data) => {
               const d = isReadinessFooter(data) ? null : data
-              const key = d ? fixDestination(d) : null
-              if (d && key) ctx.openFix(d, key)
+              const key = d ? openDestination(d) : null
+              // The next step is a readiness problem: Readiness. Otherwise the chip it opens on says (▲ → On the channel).
+              if (d && key) ctx.openListing(d, key, { tab: d.nextStep ? 'readiness' : tabForChip(d.chips.find((c) => c.destinationKey === key)) })
             },
-            disabled: (data) => (isReadinessFooter(data) ? 'Not a product' : fixHeldReason(data)),
-            ariaLabel: (data) => (isReadinessFooter(data) ? 'Fix' : `Fix ${data.sku}`),
+            disabled: (data) => (isReadinessFooter(data) ? 'Not a product' : openHeldReason(data)),
+            ariaLabel: (data) => (isReadinessFooter(data) ? 'Open' : `Open ${data.sku}`),
           },
           {
             id: 'edit',
@@ -468,6 +481,8 @@ export function readinessColumns(ctx: ReadinessGridContext, options: ReadinessCo
             ariaLabel: (data) => (isReadinessFooter(data) ? 'Edit' : `Edit ${data.sku} in the studio`),
           },
         ],
+        items: (data) => (isReadinessFooter(data) ? [] : ctx.rowMenu(data, null)),
+        menuLabel: (data) => (isReadinessFooter(data) ? 'More actions' : `More actions for ${data.sku}`),
       }),
       sortable: false,
     },

@@ -606,7 +606,11 @@ export const ENTRIES: Entry[] = [
   P(F.productsTranslationsEdit, (m, p) => m === 'POST' && /^\/api\/catalog-transfer\/translate\/[^/]+\/revert$/.test(p)),
   P(F.aiRun, (m, p) => m === 'POST' && p === '/api/catalog-transfer/translate/apply'),
   P(F.productsView, (m, p) => m === 'GET' && (['/api/catalog-transfer/readiness', '/api/catalog-transfer/readiness/options', '/api/catalog-transfer/readiness/families', '/api/catalog-transfer/readiness/detail'].includes(p)
-    || /^\/api\/catalog-transfer\/readiness\/families\/[^/]+\/members$/.test(p))),
+    || /^\/api\/catalog-transfer\/readiness\/families\/[^/]+\/members$/.test(p)
+    // The Listing window's link: where one listing sits on the page (before the catch-all import rule below).
+    || /^\/api\/catalog-transfer\/readiness\/listing\/[^/]+$/.test(p))
+    // The bulk bar's reach: which listings a price action reaches. A read, sent as a POST for its id lists.
+    || m === 'POST' && p === '/api/catalog-transfer/readiness/listing-ids'),
   // Listings live layer step 7 — the Problems view reads like the families page (before the catch-all below).
   P(F.productsView, (m, p) => m === 'GET' && p === '/api/catalog-transfer/readiness/problems'),
   P(F.productsView, (m, p) => m === 'GET' && /^\/api\/catalog-transfer\/products\/[^/]+\/options$/.test(p)),

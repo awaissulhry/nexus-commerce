@@ -142,6 +142,8 @@ import { META_ADS_COMMENTS_TOOLS } from './tools/meta-ads-comments.tools.js'
 import { META_ADS_MESSAGING_TOOLS } from './tools/meta-ads-messaging.tools.js'
 // Meta ads step 4 (2026-10-25): the business portfolio — itself, its people, assets and partners (read only).
 import { META_ADS_BUSINESS_TOOLS } from './tools/meta-ads-business.tools.js'
+// Meta ads step 24 (2026-10-25): organic posts of the chosen Page and Instagram account (changes made as the Page).
+import { META_ADS_POSTS_TOOLS } from './tools/meta-ads-posts.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -421,6 +423,9 @@ const ALL: AgentTool[] = [
   ...META_ADS_MESSAGING_TOOLS,
   // Meta ads step 4 (2026-10-25): meta-business, meta-business-people, meta-business-assets, meta-business-partners (read only).
   ...META_ADS_BUSINESS_TOOLS,
+  // Meta ads step 24 (2026-10-25): create-meta-page-post, set-meta-page-post, remove-meta-page-post, create-meta-instagram-post
+  // (organic posts of the chosen Page and Instagram account, as the Page; nothing spends).
+  ...META_ADS_POSTS_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

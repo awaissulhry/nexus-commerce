@@ -205,3 +205,11 @@
 @media (max-width: 599px) {
   .acts { width: 100%; }
 }
+
+/* ── The bulk bar's Undo toast: the sentence, then its Undo link on the same line ── */
+.toastLine {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+}

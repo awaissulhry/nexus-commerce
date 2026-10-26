@@ -14,7 +14,7 @@
 import type { ReadinessProblemRow, ReadinessProblemsPage, ReadinessDestination } from '@nexus/shared/listing-readiness'
 import type { Tone } from '@/design-system/primitives'
 
-import { PROBLEM_KIND_LABELS } from './fixDialogModel'
+import { PROBLEM_KIND_LABELS } from './listingDialogModel'
 import { channelLabel, destinationFromKey, plural } from './marketChips'
 import { apiFilterParams, type ReadinessPageQuery } from './readinessQuery'
 

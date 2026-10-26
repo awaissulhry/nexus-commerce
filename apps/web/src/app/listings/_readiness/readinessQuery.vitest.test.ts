@@ -410,3 +410,34 @@ describe('step 7 — `view` and `problem` in the address', () => {
     expect(step7.translateScope(one)).toEqual({ ok: false, reason: 'Translate cannot narrow to one problem. Remove the problem chip first.' })
   })
 })
+
+/* ── The Listing window's link (step 5 of docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md) ─────────────────────── */
+
+describe('?listing= — the window opened on one listing', () => {
+  it('is read from the address and kept in it, never sent to the API as a filter', () => {
+    const q = parseReadinessQuery('?listing=cl_123&channel=AMAZON')
+    expect(q.listing).toBe('cl_123')
+    expect(apiFilterParams(q)).toEqual({ channel: 'AMAZON' })
+    expect(Object.fromEntries(familiesParams(q, 1, 50))).not.toHaveProperty('listing')
+    expect(serializeReadinessQuery(q)).toBe('channel=AMAZON&listing=cl_123')
+    expect(parseReadinessQuery(serializeReadinessQuery(q))).toEqual(q)
+  })
+  it('is not a selection: ?listingIds= stays the selector, and both may be named', () => {
+    const q = parseReadinessQuery('?listingIds=a,b&listing=a')
+    expect(q.selector).toEqual({ kind: 'listingIds', value: 'a,b' })
+    expect(q.listing).toBe('a')
+  })
+  it('closing the window drops it; a family page link does not carry it', () => {
+    const q = parseReadinessQuery('?listing=cl_1&state=warn')
+    expect(serializeReadinessQuery({ ...q, listing: '' })).toBe('state=warn')
+    expect(familyPageHref(q, 'root-1')).toBe('/listings?state=warn&parent=root-1')
+  })
+})
+
+describe('step 8 — an old link to one listing opens the Listing window', () => {
+  it('the legacy drawer option becomes the window, the page’s own `listing` wins', () => {
+    expect(parseReadinessQuery('?drawer=cl_123').listing).toBe('cl_123')
+    expect(parseReadinessQuery('?drawer=cl_123&listing=cl_456').listing).toBe('cl_456')
+    expect(parseReadinessQuery('?search=GALE-JACKET&drawer=cl_9')).toMatchObject({ q: 'GALE-JACKET', listing: 'cl_9' })
+  })
+})
