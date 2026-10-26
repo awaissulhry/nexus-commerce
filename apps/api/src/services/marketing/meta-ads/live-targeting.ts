@@ -80,6 +80,7 @@ import { metaChosenAccount, metaConnectionFor, MetaLiveRefusal, objectInAccount,
 import type { MetaObjectKind } from '../../meta/meta-kinds.js'
 import { currencyExponent, metaOffset, minorToMetaUnits } from './money.js'
 import { takenIds } from './taken.js'
+import { ownWhatsAppNumberId } from './live-messaging.js'
 
 // ── enums (Meta's, narrowed to what Nexus sends) ─────────────────────────────────────────────────────────────────
 
@@ -627,6 +628,8 @@ export interface TargetingCheckInput {
   lifetimeBudgetCents?: number | null
   dailyBudgetCents?: number | null
   directSend?: boolean | null
+  /** message-delivery: the WhatsApp Business phone number the messages go from (its id; live probe TG-034). */
+  whatsappPhoneNumberId?: string | null
   lifetimeDays?: number | null
   pacingType?: string | null
   maxRows?: number | null
@@ -762,10 +765,11 @@ export async function targetingCheck(input: TargetingCheckInput) {
       if (!input.audienceId) refuse('Name the custom audience (audienceId).')
       if (!input.specialAdCategories?.length || !input.countries?.length) refuse(`Name the special ad categories (${SPECIAL_AD_CATEGORIES.join(', ')}) and the countries the campaign reaches.`)
       const id = await ownId(account, input.audienceId!, 'custom audience')
-      // The guide's own form: comma-separated lists (audiences/special-ad-category, "Eligibility").
+      // Live-probe fix TG-026 — JSON lists: Meta refused the guide's comma list ("(#100) param special_ad_categories must be
+      // an array"); metaUrl sends a list as JSON (SDK customaudience.py: list<string> for both).
       const read = await metaReadOne({ connectionId }, {
         operation: 'targeting.audienceSacEligibility', path: id,
-        query: { fields: META_AUDIENCE_SAC_FIELDS, ad_account_id: adAccountId, special_ad_categories: input.specialAdCategories!.join(','), special_ad_category_countries: input.countries!.map((c) => c.toUpperCase()).join(',') },
+        query: { fields: META_AUDIENCE_SAC_FIELDS, ad_account_id: adAccountId, special_ad_categories: [...input.specialAdCategories!], special_ad_category_countries: input.countries!.map((c) => c.toUpperCase()) },
       })
       const b = read.body as Record<string, unknown>
       const eligible = typeof b.is_eligible_for_sac_campaigns === 'boolean' ? b.is_eligible_for_sac_campaigns : null
@@ -831,7 +835,13 @@ export async function targetingCheck(input: TargetingCheckInput) {
       }
       const spec = input.targeting === undefined || input.targeting === null ? null : parsedSpec(input.targeting)
       if (spec) await checkSpecOwned(account, spec)
-      const promoted = input.promotedObject === undefined || input.promotedObject === null ? null : await checkPromotedObject(account, input.promotedObject)
+      const checked = input.promotedObject === undefined || input.promotedObject === null ? null : await checkPromotedObject(account, input.promotedObject)
+      const needAccountParts = 'Name the targeting and the promoted object (promotedObject, or the WhatsApp number: whatsappPhoneNumberId — both required for an account estimate), or an ad set (adSetId).'
+      if (!input.adSetId && (!spec || (!checked && !input.whatsappPhoneNumberId))) refuse(needAccountParts)
+      // Live-probe fix TG-034 / TG-035 — Meta asks "a valid WhatsApp Business phone number ID" for the estimate: the
+      // promoted object carries it (whats_app_business_phone_number_id), a number of the business's own WhatsApp account.
+      const number = input.whatsappPhoneNumberId ? await ownWhatsAppNumberId(account, input.whatsappPhoneNumberId) : null
+      const promoted: Record<string, unknown> | null = number ? { ...(checked ?? {}), whats_app_business_phone_number_id: number.phoneNumberId } : checked
       const query: Record<string, MetaQueryValue> = { fields: MESSAGE_FIELDS }
       if (spec) query.targeting_spec = spec
       if (promoted) query.promoted_object = promoted
@@ -850,7 +860,7 @@ export async function targetingCheck(input: TargetingCheckInput) {
       let path: string
       if (input.adSetId) path = `${await ownId(account, input.adSetId, 'ad set')}/message_delivery_estimate`
       else {
-        if (!spec || !promoted) refuse('Name the targeting and the promoted object (both required for an account estimate), or an ad set (adSetId).')
+        if (!spec || !promoted) refuse(needAccountParts)
         path = `${act(adAccountId)}/message_delivery_estimate`
       }
       // Review fix B1 — first, whether the account is onboarded to WhatsApp marketing messages (placement-targeting:
@@ -865,12 +875,24 @@ export async function targetingCheck(input: TargetingCheckInput) {
         if (!(err instanceof MetaReadError) || err.failure.authLost || err.failure.throttled) throw err
         whatsappNote = `Meta did not say whether this account is onboarded to WhatsApp marketing messages: ${err.failure.sentence}`
       }
-      const read = await metaReadOne({ connectionId }, { operation: 'targeting.messageDeliveryEstimate', path, query })
+      // Live-probe fix TG-035 — Meta refusing the estimate keeps what was read: the activation status and Meta's words.
+      let read: Awaited<ReturnType<typeof metaReadOne>>
+      try {
+        read = await metaReadOne({ connectionId }, { operation: 'targeting.messageDeliveryEstimate', path, query })
+      } catch (err) {
+        if (!(err instanceof MetaReadError) || err.failure.authLost || err.failure.throttled || err.failure.origin !== 'meta') throw err
+        return {
+          ...base, ...(input.adSetId ? { adSetId: metaObjectId(input.adSetId) } : {}),
+          whatsappActivationStatus, ...(whatsappNote ? { whatsappNote } : {}), whatsappPhoneNumberId: number?.phoneNumberId ?? null,
+          estimate: null, estimateRefused: { code: err.failure.code, words: err.failure.words ?? err.failure.sentence },
+          note: `Meta refused the estimate (estimateRefused: Meta's code and words). ${number ? '' : 'Meta asks a WhatsApp Business phone number for it: name one of the business\'s own (whatsappPhoneNumberId, its id as WhatsApp Manager shows it). '}whatsappActivationStatus says whether the account is onboarded to marketing messages (MARKETING_MESSAGE_ONBOARDED; NOT_ONBOARDED or INELIGIBLE: the placement is not available — Ads Manager onboards it).`,
+        }
+      }
       const r = dataRows(read.body)[0] ?? {}
       const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
       return {
         ...base, ...(input.adSetId ? { adSetId: metaObjectId(input.adSetId) } : {}),
-        whatsappActivationStatus, ...(whatsappNote ? { whatsappNote } : {}),
+        whatsappActivationStatus, ...(whatsappNote ? { whatsappNote } : {}), whatsappPhoneNumberId: number?.phoneNumberId ?? null,
         currency, minorUnitDigits: currency ? currencyExponent(currency) : null,
         bidAmountCents: input.bidAmountCents ?? null, lifetimeBudgetCents: input.lifetimeBudgetCents ?? null, dailyBudgetCents: input.dailyBudgetCents ?? null,
         estimateStatus: text(r.estimate_status),

@@ -188,6 +188,7 @@ const metaTargetingCheck: AgentTool = {
     lifetimeBudgetCents: z.number().int().min(1).max(10_000_000_000).optional().describe('message-delivery: lifetime budget in minor units of the account currency'),
     dailyBudgetCents: z.number().int().min(1).max(10_000_000_000).optional().describe('message-delivery: daily budget in minor units of the account currency'),
     directSend: z.boolean().optional().describe('message-delivery: a direct-send marketing-message campaign (Meta\'s is_direct_send_campaign)'),
+    whatsappPhoneNumberId: z.string().trim().regex(/^\d{1,25}$/).optional().describe('message-delivery: the WhatsApp Business phone number the messages go from — its id (digits, as WhatsApp Manager shows it), a number of a WhatsApp account the chosen ad account\'s business portfolio owns; Meta asks it for the estimate'),
     lifetimeDays: z.number().int().min(1).max(365).optional().describe('message-delivery: how many days the campaign runs'),
     pacingType: z.enum(PACING_TYPES).optional().describe('message-delivery: pacing'),
     maxRows: z.number().int().min(1).max(1000).optional().describe('retired-adsets, affected-adsets: at most this many ad sets (default 200)'),
@@ -206,8 +207,9 @@ const metaTargetingCheck: AgentTool = {
     + 'THIS WHOLE targeting (before → after; Meta does not merge a partial spec, so name all it should keep) — Meta no '
     + 'longer estimates results per day for a budget (removed in v26, every version from 2026-10-27); app goals are not '
     + 'estimated. message-delivery: a WhatsApp marketing-message estimate (the account must be onboarded to marketing '
-    + 'messages — the answer says its activation status — and the spec use whatsapp_positions marketing_messages; Meta '
-    + 'does not document the cost\'s unit, so it is given as Meta answers it). describe: who sees it in Meta\'s own words, '
+    + 'messages — the answer says its activation status, also when Meta refuses the estimate — the spec use whatsapp_positions '
+    + 'marketing_messages, and Meta asks the WhatsApp Business phone number the messages go from: whatsappPhoneNumberId, one '
+    + 'of the business\'s own; Meta does not document the cost\'s unit, so it is given as Meta answers it). describe: who sees it in Meta\'s own words, '
     + 'for a spec, an ad set or an ad. Only the chosen ad account, its ad sets, ads and custom audiences, its Page, '
     + 'Instagram account and pixels are used. Read only; money in minor units of the account currency (its smallest unit '
     + 'as Nexus counts it: cents for EUR, yen for JPY — minorUnitDigits says how many decimals).',
@@ -234,6 +236,7 @@ const metaTargetingCheck: AgentTool = {
       lifetimeBudgetCents: typeof args.lifetimeBudgetCents === 'number' ? args.lifetimeBudgetCents : null,
       dailyBudgetCents: typeof args.dailyBudgetCents === 'number' ? args.dailyBudgetCents : null,
       directSend: args.directSend === true,
+      whatsappPhoneNumberId: str(args.whatsappPhoneNumberId),
       lifetimeDays: typeof args.lifetimeDays === 'number' ? args.lifetimeDays : null,
       pacingType: str(args.pacingType),
       maxRows: typeof args.maxRows === 'number' ? args.maxRows : null,

@@ -16,7 +16,7 @@
 
 export type GraphNode =
   | 'AdAccount' | 'Campaign' | 'AdSet' | 'Ad' | 'AdCreative' | 'AdsInsights' | 'Targeting'
-  | 'AdImage' | 'AdVideo' | 'AdsVolume' | 'MinimumBudget' | 'AsyncRequest'
+  | 'AdImage' | 'AdVideo' | 'AdsVolume' | 'MinimumBudget' | 'AsyncRequest' | 'AudienceFunnel'
 
 const list = (...names: string[]) => new Set(names)
 
@@ -57,13 +57,19 @@ export const GRAPH_FIELDS: Readonly<Record<GraphNode, ReadonlySet<string>>> = {
   AdsVolume: list('ads_running_or_in_review_count', 'current_account_ads_running_or_in_review_count', 'limit_on_ads_running_or_in_review'),
   MinimumBudget: list('currency', 'min_daily_budget_imp', 'min_daily_budget_video_views', 'min_daily_budget_high_freq', 'min_daily_budget_low_freq'),
   AsyncRequest: list('id', 'status', 'scope_object_id', 'result'),
+  /**
+   * Live-probe fix TG-038 (2026-10-26) — act_<id>/audience_funnel: SDK only (Python v26.0.2 adaccount.py get_audience_funnel
+   * → audiencefunnel.py, Java AdAccount.getAudienceFunnel; Meta has no docs page). Its three fields, exactly (the custom
+   * audience groups are the account's own audiences' ids).
+   */
+  AudienceFunnel: list('audience_type_param_name', 'audience_type_param_tags', 'custom_audience_groups_info'),
 }
 
 /** Asked when a read names no fields (Meta's default answer is never taken: it is not ours to vet). */
 export const GRAPH_DEFAULT_FIELDS: Readonly<Record<GraphNode, string>> = {
   AdAccount: 'id,name,account_status', Campaign: 'id,name,status', AdSet: 'id,name,status', Ad: 'id,name,status', AdCreative: 'id,name',
   AdsInsights: 'impressions,clicks,spend', Targeting: 'geo_locations', AdImage: 'id,hash,name', AdVideo: 'id,title', AdsVolume: 'ads_running_or_in_review_count',
-  MinimumBudget: 'currency,min_daily_budget_imp', AsyncRequest: 'id,status',
+  MinimumBudget: 'currency,min_daily_budget_imp', AsyncRequest: 'id,status', AudienceFunnel: 'audience_type_param_name,audience_type_param_tags',
 }
 
 /** Which names may carry a nested list, and the node type of that list. */
@@ -73,6 +79,8 @@ const NESTED: Readonly<Record<string, GraphNode>> = { insights: 'AdsInsights', c
 export const ACCOUNT_EDGES: Readonly<Record<string, GraphNode>> = {
   campaigns: 'Campaign', adsets: 'AdSet', ads: 'Ad', adcreatives: 'AdCreative', insights: 'AdsInsights', ads_volume: 'AdsVolume',
   minimum_budgets: 'MinimumBudget', async_requests: 'AsyncRequest', adimages: 'AdImage', advideos: 'AdVideo',
+  // Live-probe fix TG-038 — the account's audience funnel (SDK only; GRAPH_FIELDS.AudienceFunnel).
+  audience_funnel: 'AudienceFunnel',
 }
 
 /** An object of the chosen account (known from Nexus's own read), and its own edges. */

@@ -272,7 +272,7 @@ const metaAdsGraphRead: AgentTool = {
   description:
     'One GET on the business\'s chosen ad account or one of its own objects, for a read the other Meta tools do not wrap. '
     + 'ALLOW-LIST ONLY: the path is act_<the chosen account> or its edges campaigns, adsets, ads, adcreatives, insights, '
-    + 'ads_volume, minimum_budgets, async_requests, adimages, advideos; or a campaign, ad set, ad or creative Nexus has read '
+    + 'ads_volume, minimum_budgets, async_requests, adimages, advideos, audience_funnel; or a campaign, ad set, ad or creative Nexus has read '
     + 'for that account, with its own edges (a campaign: adsets, ads, insights; an ad set: ads, insights; an ad: insights, '
     + 'adcreatives). fields come from each object\'s own list (the ones Nexus reads, and Meta\'s read-only numbers); a '
     + 'nested list ({…} or .fields(…)) only under insights, creative, adcreatives or targeting; modifiers .limit, '

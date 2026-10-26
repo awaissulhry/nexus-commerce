@@ -361,6 +361,35 @@ async function ownNumbers(account: MetaChosenAccount, wabaId: string, numbers: r
   return wanted
 }
 
+/** At most this many WhatsApp accounts of the portfolio are searched for one phone number (a read of each one's numbers). */
+const MAX_NUMBER_ACCOUNTS = 10
+
+/**
+ * Live-probe fix TG-034 / TG-035 (2026-10-26) — Meta's marketing-message estimate refused without "a valid WhatsApp
+ * Business phone number ID": meta-targeting-check message-delivery names one in its promoted object
+ * (`whats_app_business_phone_number_id`, ad-promoted-object reference v26 and SDK adpromotedobject.py). It must be a number
+ * of a WhatsApp account the chosen ad account's own portfolio owns (a portfolio another Nexus business reads: refused, no
+ * call), found among that account's own numbers (`<waba>/phone_numbers`, ids only); else refused before the estimate, with
+ * the business's own numbers named so the right one can be given.
+ */
+export async function ownWhatsAppNumberId(account: MetaChosenAccount, phoneNumberIdArg: string): Promise<{ wabaId: string; phoneNumberId: string }> {
+  const phoneNumberId = /^\d{1,25}$/.test(phoneNumberIdArg.trim()) ? phoneNumberIdArg.trim() : null
+  if (!phoneNumberId) throw new MetaLiveRefusal(`"${phoneNumberIdArg}" is not a WhatsApp Business phone number id (digits, as WhatsApp Manager shows it).`)
+  const portfolioId = account.businessId
+  if (!portfolioId) throw new MetaLiveRefusal(NO_PORTFOLIO)
+  if ((await takenIds('PORTFOLIO', [portfolioId])).has(portfolioId)) throw new MetaLiveRefusal(WHATSAPP_PORTFOLIO_TAKEN)
+  const accounts = await onAccess(() => listPaged(account.connectionId, 'whatsapp.accounts', `${portfolioId}/owned_whatsapp_business_accounts`, { fields: 'id' }, 50), WHATSAPP_ACCESS)
+  const wabas = accounts.rows.map((r) => idText(r.id)).filter((id): id is string => !!id && /^\d{1,25}$/.test(id))
+  if (!wabas.length) throw new MetaLiveRefusal(NO_WHATSAPP_ACCOUNT)
+  const own: string[] = []
+  for (const wabaId of wabas.slice(0, MAX_NUMBER_ACCOUNTS)) {
+    const numbers = await onAccess(() => listPaged(account.connectionId, 'whatsapp.numbers', `${wabaId}/phone_numbers`, { fields: 'id,display_phone_number' }, 100), WHATSAPP_ACCESS)
+    if (numbers.rows.some((r) => idText(r.id) === phoneNumberId)) return { wabaId, phoneNumberId }
+    own.push(...numbers.rows.map((r) => `${idText(r.id) ?? '?'}${text(r.display_phone_number) ? ` (${text(r.display_phone_number)})` : ''}`))
+  }
+  throw new MetaLiveRefusal(`That WhatsApp phone number id is not one of the numbers of the WhatsApp accounts the chosen ad account's business portfolio owns${wabas.length > MAX_NUMBER_ACCOUNTS ? ` (the first ${MAX_NUMBER_ACCOUNTS} accounts searched)` : ''}, so no estimate is asked (its numbers: ${own.join(', ') || 'none'}).`)
+}
+
 // ── Meta's own objects, unchanged (step 38's preview, basis and undo read them) ─────────────────────────────────────
 
 /** Fixed field lists per node type: the ONLY fields these reads ask (the Page's own: gateway/meta-page-reads.ts). */

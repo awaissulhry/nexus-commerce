@@ -435,8 +435,14 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
       // Step 15 — so are the chosen Page's conversations, inbox and messaging setup (meta-page-reads.ts); a conversation's
       // own node and messages (pageId null) go with the chosen Page's token.
       const forChosen = !!chosen && (judged.pageRead.pageId === null || chosen === judged.pageRead.pageId)
-      if (!forChosen) return refuse('refused', 'META_PAGE_NOT_CHOSEN', `Nothing was sent to Meta: a Page's own reads (its connected apps, conversations, inbox and messaging setup) go only to the Facebook Page this business chose through this connection, with that Page's own token${chosen ? '' : ', and this business has chosen no Page'}.`, 403)
-      metaPageRead = true
+      // Live-probe fix MD-101 — the feed of ANOTHER Page (meta-ad-library page-posts: public posts, Meta's Page Public Content
+      // Access) stays an ordinary read with the system-user token, as before; only the chosen Page's own feed takes its token.
+      const otherPages = judged.pageRead.otherPages
+      if (!(otherPages && !forChosen)) {
+        if (!forChosen) return refuse('refused', 'META_PAGE_NOT_CHOSEN', `Nothing was sent to Meta: a Page's own reads (its connected apps, posts, insights, Instant Experiences, conversations, inbox and messaging setup) go only to the Facebook Page this business chose through this connection, with that Page's own token${chosen ? '' : ', and this business has chosen no Page'}.`, 403)
+        if (otherPages?.problem) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${otherPages.problem} (${req.method} ${safePath(req.url)}).`, 403)
+        metaPageRead = true
+      }
     }
     metaWhatsAppRead = judged.whatsappRead === true
     // The renewal names the app it is for: it must be THIS connection's own app, never another.

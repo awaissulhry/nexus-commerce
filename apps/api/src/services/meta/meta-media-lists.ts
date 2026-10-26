@@ -21,6 +21,10 @@ export const POST_METRICS = [
   'post_reactions_love_total', 'post_reactions_wow_total', 'post_reactions_haha_total', 'post_reactions_sorry_total', 'post_reactions_anger_total',
   'post_video_views', 'post_video_avg_time_watched', 'post_video_complete_views_30s_unique',
 ] as const
+/** Page and post insights `period` (pages-api/platforminsights/page.md); moved here from live-media.ts for the gateway's Page-token list. */
+export const PAGE_PERIODS = ['day', 'week', 'days_28', 'month', 'lifetime', 'total_over_range'] as const
+/** The breakdowns Meta's deprecation page names for the media-view metrics (moved here from live-media.ts, as above). */
+export const PAGE_BREAKDOWNS = ['is_from_ads', 'is_from_followers'] as const
 /** ig-media/insights metrics (impressions: deprecated for media made after 2024-07-02, not offered). */
 export const IG_MEDIA_METRICS = [
   'views', 'reach', 'likes', 'comments', 'saved', 'shares', 'reposts', 'total_interactions', 'follows', 'profile_visits', 'profile_activity',

@@ -10,8 +10,9 @@
  *                           one cheap read — Business Use Case, ad account and app usage, the access tier, a version
  *                           warning (ACC-016, ACC-018, ACC-019). Nothing is kept
  *   view permissions        LIVE: the permissions the token holds, granted or declined (ACC-011)
- *   view app                LIVE: the app's roles, the ad accounts it is authorised for in the business, its connected
- *                           client businesses (ACC-037, ACC-038, ACC-903; app token)
+ *   view app                LIVE: the app's roles (app token), the ad accounts it is authorised for in the business
+ *                           (system-user token: live probe ACC-038; one another business uses is its id only); its
+ *                           connected client businesses: Meta offers no read of them, said in words (ACC-037, ACC-038, ACC-903)
  *   view choices            LIVE (kept 5 minutes; settings.integrations.manage, as Settings' own list): the ad accounts,
  *                           Pages and Instagram accounts the system user can see; one another business uses is its id only
  * (ACC-900, the apps a user is assigned to, needs manage_app_solution — not a system-user permission: not offered.)
@@ -72,7 +73,8 @@ const metaConnection: AgentTool = {
     + 'reported" when Meta does not say) — the chosen ad account, Facebook Page and Instagram account, and the pinned Meta '
     + 'API version. check: debug_token now and the usage Meta reports on one cheap read (Business Use Case, ad account '
     + 'and app usage in percent, the access tier, a version warning). permissions: granted and declined permissions. app: '
-    + 'the app\'s roles, the ad accounts it is authorised for in the business portfolio, its connected client businesses. '
+    + 'the app\'s roles, the ad accounts it is authorised for in the business portfolio (one another business in Nexus uses: '
+    + 'its id only); Meta offers no read of the app\'s connected client businesses (the answer says so). '
     + 'choices (needs settings.integrations.manage, as in Settings): the ad accounts, Facebook Pages and Instagram accounts '
     + 'the system user can see (read live, kept 5 minutes); one another business in Nexus already uses is shown by its id '
     + 'only, marked takenByAnotherBusiness (a Meta id belongs to one business; never which) — set-meta-connection asks to '
@@ -102,7 +104,7 @@ const metaConnection: AgentTool = {
         return { ok: true, data: { source: 'Read live from Meta now.', connectionId: connection.connectionId, granted: permissions.filter((p) => p.status === 'granted').map((p) => p.permission), declined: permissions.filter((p) => p.status !== 'granted') } }
       }
       if (view === 'app') {
-        return { ok: true, data: { source: 'Read live from Meta now, with the app\'s own token.', connectionId: connection.connectionId, ...(await liveApp(connection.connectionId, connection.adAccount?.businessId ?? null)) } }
+        return { ok: true, data: { source: 'Read live from Meta now: the roles with the app\'s own token, the authorised ad accounts with the business\'s system-user token.', connectionId: connection.connectionId, ...(await liveApp(connection.connectionId, connection.adAccount?.businessId ?? null)) } }
       }
       if (view === 'choices') {
         const answer = await metaChoicesAnswer(await getMetaChoices(connection.connectionId))

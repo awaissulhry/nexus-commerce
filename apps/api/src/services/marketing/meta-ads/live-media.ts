@@ -15,8 +15,11 @@
  *     chosen account's), stories, quota, events and insights.
  * Anything another business in Nexus uses (a Page, an Instagram account) is `{ id, takenByAnotherBusiness: true }` only.
  *
- * Page reads use the business's system-user token (master ACC-014, the Page's own token, comes with steps 14/37/38):
- * when Meta refuses, the answer says so plainly (PAGE_TOKEN_NOTE) and LIVE-PROBES.md names the read to try once live.
+ * Page reads use the business's system-user token, except the ones Meta answers only to the Page's own token (live probes
+ * MD-101, MD-106, IN-092, CR-490, 2026-10-26): the Page's feed, published and ad posts, a post's catalog-ad posts, Page and
+ * post insights and the Instant Experience list — the gateway sends those with the CHOSEN Page's token, which it reads
+ * itself (gateway/meta-page-reads.ts, step 36's Page token mode). When Meta refuses a Page read, the answer says so
+ * plainly in the Page's words (onPage, PAGE_TOKEN_NOTE: never the ad account's hint).
  *
  * Checked 2026-10-21 (curl, ≥3 s apart; developers.facebook.com/documentation/ads-commerce/marketing-api/reference/*.md,
  * developers.facebook.com/docs/graph-api/reference/*, developers.facebook.com/docs/instagram-platform/instagram-graph-
@@ -36,14 +39,23 @@
  *     which the SDK's AdVideo has only as an upload parameter — never asked, review B2); title, length, status,
  *     permalink_url, is_instagram_eligible are SDK only (advideo.py; RECHECK MD-022) — asked, and each one Meta refuses
  *     is dropped and named (MORE_VIDEO_FIELDS); video/thumbnails, video/captions edges
- *   - page/feed, published_posts, visitor_posts: include_hidden, show_expired (SDK page.py; the feed page: at most 100 per
- *     call, ~600 ranked posts a year, unpublished posts included, is_published says which); visitor_posts: "not supported
- *     for Pages migrated to the New Pages Experience" and "supported" on the same page (LIVE-PROBES); page/ads_posts:
+ *   - page/feed, published_posts: include_hidden, show_expired (SDK page.py; the feed page: at most 100 per call, ~600
+ *     ranked posts a year, unpublished posts included, is_published says which; the feed holds posts others wrote on the
+ *     Page too: "visitors to this Page"); visitor_posts is NOT read: its reference says "not supported for Pages that have
+ *     been migrated to the New Pages Experience", and Meta answered so for a live Page (LIVE-PROBES MD-101 / EN-926); page/ads_posts:
  *     include_inline_create, exclude_dynamic_ads, since, until; page/live_videos: the edge page says reading "can't", the
  *     Page node and SDK say it reads (broadcast_status, source) — built, Meta's answer decides (LIVE-PROBES);
  *     page/video_lists + video_list/videos (SDK videolist.py)
  *   - post (PagePost, SDK pagepost.py): attachments, sponsor_tags; dynamic_posts (RTBDynamicPost) — the edge page says
- *     "can't", the Post node lists it (RECHECK MD-106: STILL-UNVERIFIED; LIVE-PROBES)
+ *     "can't", the Post node lists it; live, Meta answers it to the Page's token only (#10 to the system user, MD-106)
+ *   - the media-library edges of the portfolio (images, videos, creatives, creative_folders, creative_asset_tags), the
+ *     system user (assigned_creative_folders), the ad account (website_creative_assets, website_creative_info,
+ *     urls_for_asset_extraction) and a campaign (video_groups): Meta's reference pages list each read, with v25 examples
+ *     (checked 2026-10-26, documentation/ads-commerce/marketing-api/reference/business/images.md and the others, same
+ *     nodes and fields), but
+ *     none of Meta's v26 SDKs carries a read of them (Python v26.0.2 business.py: only POST /images, /videos,
+ *     /creative_folders; adaccount.py, campaign.py, systemuser.py: none — the Java SDK the same), and live Meta answered
+ *     each with (#100) "Tried accessing nonexisting field" (LIVE-PROBES ST10-03): the answer says so in words (hiddenEdge)
  *   - Page insights (pages-api/platforminsights/page.md and …/deprecated-metrics.md): metric, period, since, until,
  *     breakdown; only metrics not on Meta's deprecated list are offered (PAGE_METRICS, POST_METRICS); which of them still
  *     answer after the 2026-06-15 wave is settled live (LIVE-PROBES)
@@ -59,8 +71,10 @@
  *     iframe is "only valid for 24 hours"; adgroup field preview_shareable_link; multi-language-ads (asset_feed_spec,
  *     asset_customization_rules, preview with dynamic_asset_label); use-posts-as-ads (object_id, instagram_user_id,
  *     source_instagram_media_id); canvas/preview (instant-experiences guide)
- *   - Instant Experiences (instant-experiences guide, SDK canvas.py): page/canvases (is_hidden, is_published),
- *     page/canvas_elements, the five template ids and template → document → body_elements
+ *   - Instant Experiences (instant-experiences guide, SDK canvas.py): page/canvases (is_hidden, is_published; "A Page
+ *     access token", page/canvases v26 — live #190 to the system user, CR-490), page/canvas_elements, the five template
+ *     ids and template → document → body_elements (live #4701 to the system-user token, CR-489: STILL OPEN — the guide names
+ *     no other token or permission; the chosen Page's token is the likely fix, not built: IX_TEMPLATE_REFUSED says so)
  */
 import { metaObjectId } from '../../cx/connectors/meta/discovery.js'
 import type { MetaQueryValue } from '../../gateway/meta.js'
@@ -68,9 +82,9 @@ import { metaReadOne } from './read-client.js'
 import { MetaReadError } from './errors.js'
 import { graphSafe, metaChosenAccount, MetaLiveRefusal, objectInAccount, objectKindOf, type MetaChosenAccount } from './live.js'
 import { listPaged, listWithFallback, oneWithFallback, part, refusedFields } from './paging.js'
-import { AD_FORMATS, IG_ACCOUNT_METRICS, IG_MEDIA_METRICS, PAGE_METRICS, POST_METRICS } from '../../meta/meta-media-lists.js'
+import { AD_FORMATS, IG_ACCOUNT_METRICS, IG_MEDIA_METRICS, PAGE_BREAKDOWNS, PAGE_METRICS, PAGE_PERIODS, POST_METRICS } from '../../meta/meta-media-lists.js'
 
-export { AD_FORMATS, IG_ACCOUNT_METRICS, IG_MEDIA_METRICS, PAGE_METRICS, POST_METRICS }
+export { AD_FORMATS, IG_ACCOUNT_METRICS, IG_MEDIA_METRICS, PAGE_BREAKDOWNS, PAGE_METRICS, PAGE_PERIODS, POST_METRICS }
 import { maskTakenRows, portfolioTaken, PORTFOLIO_TAKEN } from './taken.js'
 
 // Step 12 fix A4 — the read helpers moved to the leaf paging.ts and the portfolio check to taken.ts; re-exported here.
@@ -107,7 +121,12 @@ export function tidy(value: unknown, depth = 0): unknown {
 
 const NO_PAGE = 'No Facebook Page is chosen for this business yet. A person chooses it in Settings › Channels › Meta, or Claude asks for it with set-meta-connection (a person approves it).'
 const NO_INSTAGRAM = 'No Instagram account is chosen for this business yet. A person chooses it in Settings › Channels › Meta, or Claude asks for it with set-meta-connection (a person approves it).'
-export const PAGE_TOKEN_NOTE = 'If Meta\'s words ask for a Page access token or a Page permission: Nexus reads the Page with the business\'s system-user token for now (the system user needs the Page assigned in Meta Business settings); reads that need the Page\'s own token come with a later Nexus step.'
+/**
+ * Live-probe fix MD-101 — what a refused Page or Instagram read needs, in the Page's words (never the ad account's
+ * "ads_read" hint): the Page's posts, insights and Instant Experience list go with the Page's own token, the rest with the
+ * system-user token; both need the Page (and Instagram account) assigned to the system user with the task the read needs.
+ */
+export const PAGE_TOKEN_NOTE = 'What Meta needs: the business\'s chosen Facebook Page (and Instagram account) assigned to its system user in Meta Business settings (Users › System users › Assign assets) with the task the read needs — posts: Create content, Manage or Moderate; ad posts and Instant Experiences: Advertise; insights: Analyze — and the token\'s pages_show_list, pages_read_engagement, pages_read_user_content and read_insights (Instagram: instagram_basic and instagram_manage_insights). Nexus reads the Page\'s posts, insights and Instant Experience list with the Page\'s own token, which it reads for the chosen Page itself; its other reads go with the business\'s system-user token.'
 
 export function pageOf(account: MetaChosenAccount): string {
   if (!account.pageId) throw new MetaLiveRefusal(NO_PAGE)
@@ -131,22 +150,50 @@ const PAGE_TOKEN_WORDS = /page access token/i
  * A Page or Instagram read: when Meta refuses it for the token, the answer says what that means. Step 14 review A5 — a
  * token Meta no longer accepts keeps step 2's lost-token sentence (errors.ts: make a new token); only Meta's "needs a
  * Page Access Token" (#190, which the vocabulary files as a lost token) is answered as the Page-token way.
+ * Live-probe fix MD-101 — a permission refusal is worded for the Page (Meta's words, then PAGE_TOKEN_NOTE), never with
+ * errors.ts's ad-account hint ("the ad account is assigned … ads_read"), which does not apply to a Page read.
  */
 export async function onPage<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work()
   } catch (err) {
     if (err instanceof MetaReadError && err.failure.origin === 'meta' && !err.failure.throttled) {
-      if (err.failure.permissionDenied) throw new MetaLiveRefusal(`${err.message} ${PAGE_TOKEN_NOTE}`)
+      if (err.failure.permissionDenied) {
+        const words = err.failure.words ?? null
+        throw new MetaLiveRefusal(`Meta refused this Facebook Page or Instagram read for the token it went with${words ? ` (Meta's words: ${words})` : ` (${err.failure.code ?? 'no words'})`}. ${PAGE_TOKEN_NOTE}`)
+      }
       if (err.failure.authLost && PAGE_TOKEN_WORDS.test(err.failure.sentence)) {
         // Meta's own words only, without errors.ts's "make a new token" (the token still works).
-        const words = /token \((.*)\)\. Make a new token/s.exec(err.failure.sentence)?.[1] ?? err.failure.sentence
-        throw new MetaLiveRefusal(`Meta answers this read only to the Page's own access token, not to the business's system-user token, which still works (Meta's words: ${words}). ${PAGE_TOKEN_NOTE}`)
+        const words = err.failure.words ?? /token \((.*)\)\. Make a new token/s.exec(err.failure.sentence)?.[1] ?? err.failure.sentence
+        throw new MetaLiveRefusal(`Meta answers this read only to the Page's own access token, and Nexus does not send this one with the Page's token yet; the business's system-user token still works (Meta's words: ${words}). ${PAGE_TOKEN_NOTE}`)
       }
     }
     throw err
   }
 }
+
+/**
+ * Live-probe fix ST10-03 — a media-library read whose edge Meta answers "does not exist" (#100 "Tried accessing nonexisting
+ * field (<edge>)") for this token, although Meta's reference lists it: said in words, with what to use instead. Any other
+ * failure is thrown as it is.
+ */
+export async function hiddenEdge<T>(edge: string, what: string, instead: string, work: () => Promise<T>): Promise<T> {
+  try {
+    return await work()
+  } catch (err) {
+    const words = err instanceof MetaReadError ? err.failure.words ?? err.failure.sentence : ''
+    if (err instanceof MetaReadError && err.failure.origin === 'meta' && /^100(\/|$)/.test(err.failure.code ?? '') && words.toLowerCase().includes(`nonexisting field (${edge})`)) {
+      // Review of #771 — only what is known: the reference pages (still with v25 examples), the v26 SDKs, Meta's answer.
+      throw new MetaLiveRefusal(`Meta does not answer ${what} to this business's token on API v26: Meta's reference pages list the read (GET …/${edge}, with v25 examples), but on v26 Meta answers that the edge does not exist (Meta's words: ${words}), and none of Meta's v26 SDKs carries a read of it, so Nexus cannot read it. ${instead}`)
+    }
+    throw err
+  }
+}
+
+/** What the business can use instead of Meta's website-asset reads (ST10-03). */
+const WEBSITE_INSTEAD = 'A person sees what Meta suggests from a landing page in Ads Manager, while making an ad (Advantage+ creative).'
+/** What the business can use instead of the portfolio's media library (ST10-03). */
+const LIBRARY_INSTEAD = 'The chosen ad account\'s own images and videos: views images and videos; the portfolio\'s media library, folders and tags: Meta Business Suite › Media library (a person).'
 
 /** A post of the chosen Page: Meta's `<page id>_<post id>`; any other post is refused before a call. */
 export function pagePostId(pageId: string, id: string): string {
@@ -373,26 +420,27 @@ export async function liveMedia(input: MediaInput) {
       if (input.folderId && !folder) throw new MetaLiveRefusal(`"${input.folderId}" is not a Meta folder id (digits).`)
       const query: Record<string, MetaQueryValue> = folder ? { creative_folder_id: folder } : {}
       const edge = input.view === 'business-images' ? 'images' : input.view === 'business-videos' ? 'videos' : 'creatives'
+      const what = `the business portfolio's ${edge === 'creatives' ? 'creatives' : edge} (its media library)`
       if (edge === 'videos') {
-        const read = await listWithFallback(connectionId, 'media.businessVideos', `${portfolio}/videos`, MEDIA_FIELDS.Video, MORE_VIDEO_FIELDS, query, maxRows)
+        const read = await hiddenEdge(edge, what, LIBRARY_INSTEAD, () => listWithFallback(connectionId, 'media.businessVideos', `${portfolio}/videos`, MEDIA_FIELDS.Video, MORE_VIDEO_FIELDS, query, maxRows))
         return { ...base, portfolioId: portfolio, items: read.rows.map(videoRow), more: read.more, fieldsNote: read.note }
       }
       const fields = edge === 'images' ? MEDIA_FIELDS.BusinessImage : MEDIA_FIELDS.BusinessCreative
-      const read = await listPaged(connectionId, `media.business${edge === 'images' ? 'Images' : 'Creatives'}`, `${portfolio}/${edge}`, { ...query, fields }, maxRows)
+      const read = await hiddenEdge(edge, what, LIBRARY_INSTEAD, () => listPaged(connectionId, `media.business${edge === 'images' ? 'Images' : 'Creatives'}`, `${portfolio}/${edge}`, { ...query, fields }, maxRows))
       return { ...base, portfolioId: portfolio, items: read.rows.map((r) => tidy(r)), more: read.more }
     }
     case 'folders': {
       const portfolio = portfolioOf(account)
       const taken = await portfolioTaken(portfolio)
       if (taken) return { ...base, ...taken }
-      const read = await listPaged(connectionId, 'media.folders', `${portfolio}/creative_folders`, { fields: MEDIA_FIELDS.Folder }, maxRows)
+      const read = await hiddenEdge('creative_folders', 'the business portfolio\'s media-library folders', LIBRARY_INSTEAD, () => listPaged(connectionId, 'media.folders', `${portfolio}/creative_folders`, { fields: MEDIA_FIELDS.Folder }, maxRows))
       return { ...base, portfolioId: portfolio, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'create-meta-media makes a folder here (Meta has no API to rename or delete one); a person can change them in Business Settings › Media library.' }
     }
     case 'tags': {
       const portfolio = portfolioOf(account)
       const taken = await portfolioTaken(portfolio)
       if (taken) return { ...base, ...taken }
-      const read = await listPaged(connectionId, 'media.tags', `${portfolio}/creative_asset_tags`, { fields: MEDIA_FIELDS.Tag }, maxRows)
+      const read = await hiddenEdge('creative_asset_tags', 'the business portfolio\'s media-library tags', LIBRARY_INSTEAD, () => listPaged(connectionId, 'media.tags', `${portfolio}/creative_asset_tags`, { fields: MEDIA_FIELDS.Tag }, maxRows))
       return { ...base, portfolioId: portfolio, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'Meta documents no API to create, change or delete these tags.' }
     }
     case 'my-folders': {
@@ -402,14 +450,14 @@ export async function liveMedia(input: MediaInput) {
       if (taken) return { ...base, ...taken }
       const systemUser = idText(account.connection.systemUser?.id)
       if (!systemUser) throw new MetaLiveRefusal('Nexus has not read which system user this connection acts as yet (meta-connection view check reads it).')
-      const read = await listPaged(connectionId, 'media.assignedFolders', `${systemUser}/assigned_creative_folders`, { fields: MEDIA_FIELDS.AssignedFolder }, maxRows)
+      const read = await hiddenEdge('assigned_creative_folders', 'the media-library folders assigned to the business\'s system user', LIBRARY_INSTEAD, () => listPaged(connectionId, 'media.assignedFolders', `${systemUser}/assigned_creative_folders`, { fields: MEDIA_FIELDS.AssignedFolder }, maxRows))
       return { ...base, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'The folders the business\'s system user may use, with its tasks on each.' }
     }
     case 'website-assets': {
       if (!input.link) throw new MetaLiveRefusal('Name the landing page (link, a full https:// address).')
       const [assets, info] = await Promise.all([
-        part(() => listPaged(connectionId, 'media.websiteAssets', `${act(adAccountId)}/website_creative_assets`, { fields: MEDIA_FIELDS.WebsiteAssets, link_url: input.link! }, 50)),
-        part(() => listPaged(connectionId, 'media.websiteInfo', `${act(adAccountId)}/website_creative_info`, { fields: MEDIA_FIELDS.WebsiteInfo, link_url: input.link! }, 50)),
+        part(() => hiddenEdge('website_creative_assets', 'what Meta pulls from a landing page (website_creative_assets)', WEBSITE_INSTEAD, () => listPaged(connectionId, 'media.websiteAssets', `${act(adAccountId)}/website_creative_assets`, { fields: MEDIA_FIELDS.WebsiteAssets, link_url: input.link! }, 50))),
+        part(() => hiddenEdge('website_creative_info', 'what Meta keeps of a landing page (website_creative_info)', WEBSITE_INSTEAD, () => listPaged(connectionId, 'media.websiteInfo', `${act(adAccountId)}/website_creative_info`, { fields: MEDIA_FIELDS.WebsiteInfo, link_url: input.link! }, 50))),
       ])
       if (!assets.value && !info.value) throw new MetaLiveRefusal(assets.notRead ?? 'Meta refused the read.')
       return {
@@ -420,7 +468,7 @@ export async function liveMedia(input: MediaInput) {
       }
     }
     case 'asset-urls': {
-      const read = await listPaged(connectionId, 'media.assetUrls', `${act(adAccountId)}/urls_for_asset_extraction`, { fields: MEDIA_FIELDS.AssetUrl }, maxRows)
+      const read = await hiddenEdge('urls_for_asset_extraction', 'the addresses it takes website media from (urls_for_asset_extraction)', WEBSITE_INSTEAD, () => listPaged(connectionId, 'media.assetUrls', `${act(adAccountId)}/urls_for_asset_extraction`, { fields: MEDIA_FIELDS.AssetUrl }, maxRows))
       return { ...base, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'The addresses Meta takes website media and site links from for this ad account.' }
     }
     case 'campaign-videos': {
@@ -428,7 +476,7 @@ export async function liveMedia(input: MediaInput) {
       const campaignId = await objectInAccount(account, input.campaignId, 'campaign', 'media.campaignCheck')
       const query: Record<string, MetaQueryValue> = {}
       if (input.from || input.to) query.date_range = { ...(input.from ? { start: input.from } : {}), ...(input.to ? { end: input.to } : {}) }
-      const read = await listWithFallback(connectionId, 'media.campaignVideoGroups', `${campaignId}/video_groups`, MEDIA_FIELDS.VideoGroup, MEDIA_FIELDS.VideoGroupMore, query, maxRows)
+      const read = await hiddenEdge('video_groups', 'a campaign\'s video groups', 'The campaign\'s ads and the videos they use: meta-ad-details and meta-media-library view videos.', () => listWithFallback(connectionId, 'media.campaignVideoGroups', `${campaignId}/video_groups`, MEDIA_FIELDS.VideoGroup, MEDIA_FIELDS.VideoGroupMore, query, maxRows))
       return { ...base, campaignId, items: read.rows.map((r) => tidy(r)), more: read.more, fieldsNote: read.note, note: 'The video groups the campaign\'s ads use (Meta documents no fields of a video group; the rest are its SDK\'s).' }
     }
     case 'live-videos': {
@@ -471,10 +519,6 @@ export const POST_FIELDS = {
   AdPost: 'id,account_id,effective_object_story_id,object_story_id,effective_instagram_media_id,instagram_permalink_url,source_instagram_media_id',
 } as const
 
-export const PAGE_PERIODS = ['day', 'week', 'days_28', 'month', 'lifetime', 'total_over_range'] as const
-/** The breakdowns Meta's deprecation page names for the media-view metrics. */
-export const PAGE_BREAKDOWNS = ['is_from_ads', 'is_from_followers'] as const
-
 function postRow(pageId: string, row: Row) {
   const t = tidy(row) as Row
   const by = postedBy(pageId, row)
@@ -489,6 +533,12 @@ function pageRows(pageId: string, rows: Row[]) {
   const own = rows.filter((r) => idText(r.id)?.startsWith(`${pageId}_`))
   return { items: own.map((r) => postRow(pageId, r)), droppedNotOnPage: rows.length - own.length }
 }
+
+/**
+ * Live-probe fix EN-926 — page/visitor_posts v26: "This endpoint is not supported for Pages that have been migrated to the
+ * New Pages Experience", and Meta answered so live ("Unavailable feature on new Page experience", MD-101): no call is made.
+ */
+export const VISITOR_POSTS_UNAVAILABLE = 'Meta does not answer a Page\'s visitor posts for a Page on the New Pages Experience (its reference for visitor_posts: "not supported for Pages that have been migrated to the New Pages Experience"; Meta answered so for this business\'s Page), so Nexus does not ask. The posts other people write on the Page are in view feed (postedBy: someone else; who wrote each is never copied).'
 
 export interface PostsInput {
   connectionId?: string | null
@@ -518,19 +568,20 @@ export async function livePagePosts(input: PostsInput) {
   const base = { pageId }
   const hiddenExpired = (): Record<string, MetaQueryValue> => ({ ...(input.includeHidden ? { include_hidden: true } : {}), ...(input.showExpired ? { show_expired: true } : {}) })
   switch (input.view) {
+    case 'visitor':
+      // Live-probe fix EN-926 — no call: Meta does not answer visitor posts for a Page on the New Pages Experience.
+      return { ...base, items: [], unavailable: VISITOR_POSTS_UNAVAILABLE }
     case 'feed':
-    case 'published':
-    case 'visitor': {
-      const edge = input.view === 'feed' ? 'feed' : input.view === 'published' ? 'published_posts' : 'visitor_posts'
-      // The feed answers at most 100 posts per call (listPaged() never asks more than 100).
+    case 'published': {
+      const edge = input.view === 'feed' ? 'feed' : 'published_posts'
+      // The feed answers at most 100 posts per call (listPaged() never asks more than 100). Both go with the chosen Page's
+      // own token (the gateway's Page-token list: live probe MD-101).
       const read = await onPage(() => listWithFallback(connectionId, `posts.${edge}`, `${pageId}/${edge}`, POST_FIELDS.PagePost, POST_FIELDS.ListMore, hiddenExpired(), maxRows))
       return {
         ...base, ...pageRows(pageId, read.rows), more: read.more, fieldsNote: read.note,
         note: input.view === 'feed'
-          ? 'Published, unpublished (dark) and scheduled posts: isPublished says which (Meta: always false for posts made inside an ad). Meta answers about 600 ranked posts a year; expired posts cannot be read.'
-          : input.view === 'visitor'
-            ? 'Posts other people wrote on the Page. Who wrote each is never copied here: open its permalink. Replying and hiding are comment tools (a later Nexus step). Meta\'s reference says this read may not work for a Page on the New Pages Experience: Meta\'s answer then says so.'
-            : 'Published posts only.',
+          ? 'Published, unpublished (dark) and scheduled posts, and the posts other people wrote on the Page (postedBy: someone else — who wrote each is never copied: open its permalink): isPublished says which (Meta: always false for posts made inside an ad). Meta answers about 600 ranked posts a year; expired posts cannot be read.'
+          : 'Published posts only.',
       }
     }
     case 'ads-posts': {
@@ -727,7 +778,7 @@ export async function liveInstagram(input: InstagramInput) {
         ...base, media: out,
         boost: eligibility ? { eligible: typeof eligibility.eligible_to_boost === 'boolean' ? eligibility.eligible_to_boost : null, reason: text(eligibility.boost_ineligible_reason) } : null,
         boostAds: ads, fieldsNote: read.note,
-        note: 'boost is Meta\'s word on whether it can be boosted and why not (copyrighted music, filters and other interactive parts cannot). boostAds: the ACTIVE ads boosting it (inChosenAdAccount: an ad Nexus has read for the chosen account). A boosted organic post can no longer be edited.',
+        note: 'boost is Meta\'s word on whether it can be boosted and why not (copyrighted music, filters and other interactive parts cannot). boostAds: the ads that boost or boosted it, active or not (status: Meta\'s ad_status; inChosenAdAccount: an ad Nexus has read for the chosen account). A boosted organic post can no longer be edited.',
       }
     }
     case 'media-insights': {
@@ -1056,6 +1107,26 @@ export const IX_FIELDS = {
   Element: 'element',
 } as const
 
+/**
+ * Live-probe fix CR-489 — Meta refused the template read to the business's system-user token: (#4701) "Insufficient
+ * permissions to access this data". Meta's instant-experiences guide shows the read (GET /<template id>?fields=document,
+ * then the document's body_elements) with an unnamed access token, and names no permission for it beyond the Instant
+ * Experience ones (pages_manage_ads, pages_read_engagement, pages_show_list, the ADVERTISE task on the Page). Review of
+ * #771 — still OPEN: every other Instant Experience read needs the Page's token (page/canvases "A Page access token"; live
+ * #190, CR-490), so the chosen Page's token is the likely fix. It is not built: the template and its document are Meta's
+ * own objects, so that would be a new Page-token rule (LIVE-PROBES CR-489b, the Owner decides).
+ */
+export const IX_TEMPLATE_REFUSED = 'Meta does not let this business\'s system-user token read Meta\'s Instant Experience templates: it answers (#4701) "Insufficient permissions to access this data". This is still open: Meta\'s Instant Experiences guide names no permission for this read beyond the Instant Experience ones this connection holds (pages_manage_ads, pages_read_engagement, pages_show_list and the Advertise task on the Page); the chosen Page\'s own token is the likely fix (every other Instant Experience read needs it), and Nexus does not send this read with it yet. Making one from a template does not need this read: create-meta-instant-experience takes the template by name (its layout is fixed), and Ads Manager shows each template\'s parts.'
+
+async function templateRead<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work()
+  } catch (err) {
+    if (err instanceof MetaReadError && err.failure.origin === 'meta' && /^4701(\/|$)/.test(err.failure.code ?? '')) throw new MetaLiveRefusal(`${IX_TEMPLATE_REFUSED} (Meta's words: ${err.failure.words ?? err.failure.sentence})`)
+    throw err
+  }
+}
+
 export interface IxInput {
   connectionId?: string | null
   view: IxView
@@ -1074,10 +1145,10 @@ export async function liveInstantExperiences(input: IxInput) {
   if (input.view === 'template') {
     if (!input.template) throw new MetaLiveRefusal(`Name the template (${Object.keys(IX_TEMPLATES).join(', ')}).`)
     const templateId = IX_TEMPLATES[input.template]
-    const doc = await onPage(() => metaReadOne({ connectionId }, { operation: 'ix.template', path: templateId, query: { fields: 'id,document' } }))
+    const doc = await onPage(() => templateRead(() => metaReadOne({ connectionId }, { operation: 'ix.template', path: templateId, query: { fields: 'id,document' } })))
     const documentId = idText(obj((doc.body as Row).document)?.id)
     if (!documentId || !/^\d{1,25}$/.test(documentId)) throw new MetaLiveRefusal('Meta answered the template without its document, so its parts cannot be read.')
-    const parts = await onPage(() => metaReadOne({ connectionId }, { operation: 'ix.templateDocument', path: documentId, query: { fields: 'id,body_elements' } }))
+    const parts = await onPage(() => templateRead(() => metaReadOne({ connectionId }, { operation: 'ix.templateDocument', path: documentId, query: { fields: 'id,body_elements' } })))
     return { template: input.template, templateId, document: tidy(obj((doc.body as Row).document)), parts: tidy((parts.body as Row).body_elements ?? []), note: 'The parts this template takes, in order (Meta\'s template; the layout is fixed). Making one is a change tool (a later Nexus step).' }
   }
   const pageId = pageOf(account)
@@ -1087,6 +1158,7 @@ export async function liveInstantExperiences(input: IxInput) {
       if (typeof input.published === 'boolean') query.is_published = input.published
       if (typeof input.hidden === 'boolean') query.is_hidden = input.hidden
       const read = await onPage(() => listPaged(connectionId, 'ix.canvases', `${pageId}/canvases`, query, maxRows))
+      // Live probe CR-490: Meta answers this list to the Page's own token only (#190); the gateway sends it with the chosen Page's.
       return { pageId, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'An unpublished one can still be changed (and may be left behind by an unfinished builder); a published one cannot. meta-ad-preview view instant-experience shows one.' }
     }
     case 'one': {
