@@ -340,6 +340,16 @@ const nextConfig = {
       { source: '/marketing/reviews/advanced', destination: '/marketing/reviews', permanent: true },
       { source: '/marketing/reviews/automation', destination: '/marketing/reviews/settings?section=automations', permanent: true },
       { source: '/performance/feedback', destination: '/marketing/reviews/inbox?kind=seller', permanent: true },
+      // ── Reviews PR E (2026-10-26) — Insights: themes, products, alerts, fixes, brief ──
+      // The old Heatmap, By product, product page, Spikes, Actions and Spotlight pages are retired: each lands on the
+      // Insights page that does its job (a product's page opens its pop-up over Products). Insights opens on Themes.
+      { source: '/marketing/reviews/heatmap', destination: '/marketing/reviews/insights/themes', permanent: true },
+      { source: '/marketing/reviews/by-product', destination: '/marketing/reviews/insights/products', permanent: true },
+      { source: '/marketing/reviews/products/:id', destination: '/marketing/reviews/insights/products?product=:id', permanent: true },
+      { source: '/marketing/reviews/spikes', destination: '/marketing/reviews/insights/alerts', permanent: true },
+      { source: '/marketing/reviews/actions', destination: '/marketing/reviews/insights/fixes', permanent: true },
+      { source: '/marketing/reviews/spotlight', destination: '/marketing/reviews/insights/brief', permanent: true },
+      { source: '/marketing/reviews/insights', destination: '/marketing/reviews/insights/themes', permanent: true },
     ];
     // Config redirects run before the workspace rewrite. Keep legacy bookmarks
     // and routed tabs working with their original business context.

@@ -13,6 +13,7 @@ import {
   type InsightsPage,
 } from './reviewsLinks'
 import { parseInboxQuery } from '../inbox/inboxQuery'
+import { parseProductsQuery } from '../insights/products/productsQuery'
 import { sectionFromSearch } from '../settings/_settings/settingsModel'
 
 const APP = fileURLToPath(new URL('../../..', import.meta.url))
@@ -54,13 +55,14 @@ describe('reviews links', () => {
       ruleHref('rule-1'),
       ...pages.map(page => insightsHref(page)),
       insightsHref('products', { product: 'product-1' }),
+      '/marketing/reviews/insights',
       reviewsSettingsHref(), reviewsSettingsHref('automations'), reviewsSettingsHref('pipeline'),
       productReviewsHref('product-1'),
     ]
     for (const href of hrefs) expect(isPage(href), href).toBe(true)
   })
 
-  it('hands the Inbox every filter it reads; today’s other pages keep only the channel and market', () => {
+  it('hands the Inbox every filter it reads', () => {
     expect(inboxHref()).toBe('/marketing/reviews/inbox')
     expect(inboxHref({ channel: 'EBAY', market: 'DE', stars: [1, 2], period: '7d' })).toBe('/marketing/reviews/inbox?period=7d&channel=EBAY&market=DE&stars=1%2C2')
     expect(inboxHref({ kind: 'seller', status: 'OVERDUE', theme: 'FIT_SIZING', family: 'fam-1' })).toBe('/marketing/reviews/inbox?kind=seller&status=OVERDUE&theme=FIT_SIZING&family=fam-1')
@@ -71,8 +73,24 @@ describe('reviews links', () => {
     expect(reply).toBe('/marketing/reviews/inbox?channel=EBAY&market=IT&review=rev_1')
     expect(parseInboxQuery(reply.slice(reply.indexOf('?'))).review).toBe('rev_1')
     expect(inboxHref({ review: null })).toBe('/marketing/reviews/inbox')
-    expect(insightsHref('themes', { channel: 'AMAZON', sort: 'impact' })).toBe('/marketing/reviews/heatmap?channel=AMAZON')
-    expect(insightsHref('products', { product: 'a b' })).toBe('/marketing/reviews/products/a%20b')
+    // A product's reviews by its SKU (the Inbox's search reads it back).
+    expect(inboxHref({ theme: 'FIT_SIZING', q: 'TJ-BLK' })).toBe('/marketing/reviews/inbox?theme=FIT_SIZING&q=TJ-BLK')
+    expect(parseInboxQuery('?q=TJ-BLK').query.q).toBe('TJ-BLK')
+  })
+
+  it('sends the Insights links to the Insights pages, with the scope and the page’s own values', () => {
+    expect(insightsHref('themes')).toBe('/marketing/reviews/insights/themes')
+    expect(insightsHref('themes', { channel: 'AMAZON', sort: 'impact', period: '90d' })).toBe('/marketing/reviews/insights/themes?channel=AMAZON&period=90d&sort=impact')
+    // 30 days is the default period and leaves the address.
+    expect(insightsHref('alerts', { market: 'DE', period: '30d', status: 'ALL' })).toBe('/marketing/reviews/insights/alerts?market=DE&status=ALL')
+    expect(insightsHref('fixes', { kind: ['BULLETS', 'APLUS'], product: 'p-1' })).toBe('/marketing/reviews/insights/fixes?product=p-1&kind=BULLETS%2CAPLUS')
+    expect(insightsHref('brief', { brief: 'b-1' })).toBe('/marketing/reviews/insights/brief?brief=b-1')
+    // One product's reviews: its pop-up over Products, which reads `?product=` back.
+    expect(insightsHref('products', { product: 'a b' })).toBe('/marketing/reviews/insights/products?product=a+b')
+    expect(productReviewsHref('a b')).toBe('/marketing/reviews/insights/products?product=a+b')
+    expect(productReviewsHref('p-1', { channel: 'EBAY', market: 'IT', period: '7d' })).toBe('/marketing/reviews/insights/products?channel=EBAY&market=IT&period=7d&product=p-1')
+    const href = productReviewsHref('a b')
+    expect(parseProductsQuery(href.slice(href.indexOf('?'))).product).toBe('a b')
   })
 
   it('sends the Requests links to the Queue, its windows and one rule’s editor, filters and all', () => {
@@ -135,5 +153,33 @@ describe('old review pages retired with Reviews › Settings', () => {
     // The pages read what the old addresses hand them: the Inbox's Seller feedback tab, the Automations section.
     expect(parseInboxQuery('?kind=seller').query.kind).toBe('seller')
     expect(sectionFromSearch('?section=automations')).toBe('automations')
+  })
+})
+
+describe('old Insights pages retired with PR E', () => {
+  afterEach(() => { vi.unstubAllEnvs() })
+
+  const OLD: Array<[string, string, string]> = [
+    // [old address, where it lands, an example of the address with a value]
+    ['/marketing/reviews/heatmap', '/marketing/reviews/insights/themes', '/marketing/reviews/heatmap'],
+    ['/marketing/reviews/by-product', '/marketing/reviews/insights/products', '/marketing/reviews/by-product'],
+    ['/marketing/reviews/products/:id', '/marketing/reviews/insights/products?product=:id', '/marketing/reviews/products/product-1'],
+    ['/marketing/reviews/spikes', '/marketing/reviews/insights/alerts', '/marketing/reviews/spikes'],
+    ['/marketing/reviews/actions', '/marketing/reviews/insights/fixes', '/marketing/reviews/actions'],
+    ['/marketing/reviews/spotlight', '/marketing/reviews/insights/brief', '/marketing/reviews/spotlight'],
+    ['/marketing/reviews/insights', '/marketing/reviews/insights/themes', '/marketing/reviews/insights'],
+  ]
+
+  it('land for good on the Insights page that does their job, also inside a business', async () => {
+    vi.stubEnv('NEXT_PUBLIC_WORKSPACES_ENABLED', '1')
+    const redirects = await loadRedirects()
+    for (const [source, destination, example] of OLD) {
+      expect(redirects.find((r) => r.source === source && !r.has), source).toMatchObject({ destination, permanent: true })
+      expect(redirects.find((r) => r.source === `/w/:workspaceId${source}`)?.destination, source).toBe(`/w/:workspaceId${destination}`)
+      expect(isPage(destination.replace(':id', 'product-1')), destination).toBe(true)
+      if (source !== '/marketing/reviews/insights') expect(isPage(example), `${example} has no page left`).toBe(false)
+    }
+    // The Products page opens the product pop-up from the redirected address.
+    expect(parseProductsQuery('?product=product-1').product).toBe('product-1')
   })
 })

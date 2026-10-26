@@ -3,12 +3,12 @@
  * page shows in its PageHeader (ReviewsShell.tsx `reviewsCrumbs`) and the page a path belongs to. Add or move a page
  * here and the sub-sidebar and crumbs follow.
  *
- * TEMPORARY TARGETS (Phase 1, build spec §1.2): a row whose new page is not built yet points at the page doing that
- * job today, and owns its old address through `match`. The coordinator swaps the row's `href` (one line) when the PR
- * that builds the page lands. The Inbox (PR B), the Requests rows — Queue, Rules, Timing (PR C) — and Settings (PR D,
- * `permission: 'reviews.manage'`, at the bottom as the design draws it) are on their own pages; the Insights rows wait
- * for theirs (`/marketing/reviews/insights/<page>`, PR E). The Channels group (PR F / PR I) is absent until its pages
- * exist, so no row names a page it is not.
+ * TEMPORARY TARGETS (build spec §1.2): a row whose new page is not built yet points at the page doing that job today,
+ * and owns its old address through `match`. The coordinator swaps the row's `href` (one line) when the PR that builds
+ * the page lands. The Inbox (PR B), the Requests rows — Queue, Rules, Timing (PR C) —, Settings (PR D,
+ * `permission: 'reviews.manage'`, at the bottom as the design draws it) and the Insights rows (PR E,
+ * `/marketing/reviews/insights/<page>`) are on their own pages. The Channels group (PR F / PR I) is absent until its
+ * pages exist, so no row names a page it is not.
  *
  * Framework-free (no React): the tests import it in Node.
  */
@@ -82,12 +82,13 @@ export const REVIEWS_NAV: readonly ReviewsNavGroup[] = [
     label: 'Insights',
     collapsible: true,
     items: [
-      // TEMPORARY until PR E: the old Heatmap, By product (and its product pages), Spikes, Actions and Spotlight pages.
-      { label: 'Themes', href: `${REVIEWS_ROOT}/heatmap`, icon: MessageSquareText },
-      { label: 'Products', href: `${REVIEWS_ROOT}/by-product`, icon: Package, match: [`${REVIEWS_ROOT}/products`] },
-      { label: 'Alerts', href: `${REVIEWS_ROOT}/spikes`, icon: Bell },
-      { label: 'Fixes', href: `${REVIEWS_ROOT}/actions`, icon: Wrench },
-      { label: 'Brief', href: `${REVIEWS_ROOT}/spotlight`, icon: FileText },
+      // PR E (2026-10-26): the Insights pages. The old Heatmap, By product (and its product pages), Spikes, Actions and
+      // Spotlight addresses redirect here (next.config.js), so no row keeps a claim on them; `/insights` opens Themes.
+      { label: 'Themes', href: `${REVIEWS_ROOT}/insights/themes`, icon: MessageSquareText },
+      { label: 'Products', href: `${REVIEWS_ROOT}/insights/products`, icon: Package },
+      { label: 'Alerts', href: `${REVIEWS_ROOT}/insights/alerts`, icon: Bell },
+      { label: 'Fixes', href: `${REVIEWS_ROOT}/insights/fixes`, icon: Wrench },
+      { label: 'Brief', href: `${REVIEWS_ROOT}/insights/brief`, icon: FileText },
     ],
   },
   {

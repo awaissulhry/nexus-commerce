@@ -28,11 +28,6 @@ export function withQuery(path: string, params: LinkParams = {}): string {
   return text ? `${path}?${text}` : path
 }
 
-/** The channel + market filter every page of today's Reviews screens reads (their shared filter bar). */
-function scopeOnly(params: { channel?: string | null; market?: string | null }): LinkParams {
-  return { channel: params.channel, market: params.market }
-}
-
 export interface InboxLinkParams {
   period?: string | null
   channel?: string | null
@@ -42,6 +37,8 @@ export interface InboxLinkParams {
   status?: string | null
   theme?: string | null
   family?: string | null
+  /** Search text: the review, the buyer or the SKU (a product's reviews: its SKU). */
+  q?: string | null
   /** Open the Import window. */
   import?: boolean | 1 | null
   /** Open this review's pop-up (the Inbox reads `?review=<id>` once on load). */
@@ -53,8 +50,8 @@ export interface InboxLinkParams {
  * review's pop-up.
  */
 export function inboxHref(params: InboxLinkParams = {}): string {
-  const { kind, period, status, channel, market, stars, theme, family, review } = params
-  return withQuery('/marketing/reviews/inbox', { kind, period, status, channel, market, stars, theme, family, import: params.import ? 1 : null, review })
+  const { kind, period, status, channel, market, stars, theme, family, q, review } = params
+  return withQuery('/marketing/reviews/inbox', { kind, period, status, channel, market, stars, theme, family, q, import: params.import ? 1 : null, review })
 }
 
 export interface RequestsLinkParams {
@@ -90,30 +87,41 @@ export function ruleHref(id: string): string {
 export type InsightsPage = 'themes' | 'products' | 'alerts' | 'fixes' | 'brief'
 
 export interface InsightsLinkParams {
+  /** The shared Insights scope (insights/_shared/insightsScope.ts): 30 days is the default and leaves the address. */
   period?: string | null
   channel?: string | null
   market?: string | null
+  /** Themes: Mentions / Star impact / Change. */
   sort?: string | null
+  /** Products: the top complaint filter. */
   theme?: string | null
-  /** One product's reviews. */
+  /** Products: open this product's pop-up; Fixes: only this product's fixes. */
   product?: string | null
-}
-
-const INSIGHTS_TODAY: Record<InsightsPage, string> = {
-  themes: '/marketing/reviews/heatmap',
-  products: '/marketing/reviews/by-product',
-  alerts: '/marketing/reviews/spikes',
-  fixes: '/marketing/reviews/actions',
-  brief: '/marketing/reviews/spotlight',
+  /** Alerts: Open / Acknowledged / Resolved. Fixes: Open / Sent / Applied / Dismissed. */
+  status?: string | null
+  /** Fixes: the kinds shown (BULLETS, APLUS, SIZE_GUIDE, RECALL_FLAG, TASK). */
+  kind?: string | readonly string[] | null
+  /** Brief: one earlier brief, read-only. */
+  brief?: string | null
 }
 
 /**
- * An Insights page. New: `/marketing/reviews/insights/<page>` (PR E). Today: the old Heatmap, By product, Spikes,
- * Actions and Spotlight pages, which read only the channel and market; one product's reviews are their own page.
+ * An Insights page, `/marketing/reviews/insights/<page>` (PR E), with the shared scope and the page's own values. Each
+ * page reads them back once (`insightsScope.ts` and its own `*Query`/`*Model`).
  */
 export function insightsHref(page: InsightsPage, params: InsightsLinkParams = {}): string {
-  if (page === 'products' && params.product) return productReviewsHref(params.product)
-  return withQuery(INSIGHTS_TODAY[page], scopeOnly(params))
+  const { channel, market, sort, theme, product, status, kind, brief } = params
+  return withQuery(`/marketing/reviews/insights/${page}`, {
+    channel,
+    market,
+    period: params.period === '30d' ? null : params.period,
+    sort,
+    theme,
+    product,
+    status,
+    kind: typeof kind === 'string' ? kind : kind ?? null,
+    brief,
+  })
 }
 
 export type ReviewsSettingsSection = 'sources' | 'emails' | 'templates' | 'alerts' | 'automations' | 'pipeline'
@@ -123,7 +131,7 @@ export function reviewsSettingsHref(section?: ReviewsSettingsSection | null): st
   return withQuery('/marketing/reviews/settings', { section })
 }
 
-/** One product's reviews. New: the product pop-up on Insights › Products (PR E). Today: the old product page. */
-export function productReviewsHref(productId: string): string {
-  return `/marketing/reviews/products/${encodeURIComponent(productId)}`
+/** One product's reviews: the product pop-up over Insights › Products (`?product=<id>`). */
+export function productReviewsHref(productId: string, scope: { channel?: string | null; market?: string | null; period?: string | null } = {}): string {
+  return insightsHref('products', { ...scope, product: productId })
 }
