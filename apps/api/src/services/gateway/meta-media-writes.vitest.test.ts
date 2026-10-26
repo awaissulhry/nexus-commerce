@@ -477,10 +477,11 @@ describe('gap 46b (master MD-024) — a Page video\'s custom thumbnail, made its
       // Only the owner read (with the Page's token): the change's own token read and send never happen.
       expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET'])
     }
-    // The Page's token refused for the owner read: refused in words (never read with the system-user token), nothing sent.
+    // No Page token for the owner read (Meta answers the token read without one): refused in the gateway's own words, and the
+    // video is never read with the system-user token.
     h.calls = []
-    h.answers.push(json({ error: { code: 190, message: 'Error validating access token' } }, 400))
-    expect(await call()).toMatchObject({ code: 'META_PAGE_UNCONFIRMED', message: expect.stringMatching(/could not confirm that video 120000000000601 .*Meta gave Nexus no token for the business's chosen Facebook Page|could not confirm that video 120000000000601/) })
+    h.answers.push(json({ id: PAGE }))
+    expect(await call()).toMatchObject({ code: 'META_PAGE_UNCONFIRMED', message: expect.stringMatching(/^Nothing was sent to Meta: Nexus could not confirm that video 120000000000601 is one the Facebook Page this business chose posted \(Meta: Held, nothing sent: Meta gave Nexus no token for the business's chosen Facebook Page/) })
     expect(h.calls.map((c) => new URL(c.url).pathname.split('/').pop())).toEqual([PAGE])
     h.calls = []
     delete gatewayMetaPage['m-1']

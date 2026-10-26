@@ -31,7 +31,7 @@ vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: v
 import { gatewayLedger, gatewayMetaPage } from '../../test-support/gateway-stubs.js'
 import { __rateTest, bucketKey, HOLD_LUA, META_BUCKETS, observeRate, takeToken, type RedisLike } from './rate.js'
 import { metaCall, metaWriteCall } from './meta.js'
-import { metaCallVerdict } from './meta-calls.js'
+import { metaCallVerdict, metaReadOnlyProblem } from './meta-calls.js'
 import { META_PAGE_READ_RULES, META_THREAD_ID, metaPageReadOf, metaWhatsAppRead, topLevelFieldItems } from './meta-page-reads.js'
 import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
 import { META_IX_TEMPLATE_IDS, META_IX_TEMPLATE_READ } from '../meta/meta-media-lists.js'
@@ -95,7 +95,8 @@ describe('the allow-list: which reads go with the Page\'s token', () => {
     expect(verdict('170000000000010/creator_marketplace_creators?username=creator.a&fields=id,username').pageRead).toBeUndefined()
     // Gap 46b — and Meta's Instant Experience templates, a Page video's thumbnails, a post of the chosen Page by its id and the
     // owner read of a Page photo or video (their describes below).
-    expect(META_PAGE_READ_RULES).toHaveLength(28)
+    // Re-review: one exact rule per Page photo / video field list (4 lists).
+    expect(META_PAGE_READ_RULES).toHaveLength(32)
   })
   it('every other read stays a system-user read: the Page node, its other edges, a WhatsApp account, an ad account, a post', () => {
     for (const path of [
@@ -136,7 +137,10 @@ describe('the allow-list: which reads go with the Page\'s token', () => {
     for (const id of ['120000000000001', `${PAGE}_500000000000001`, 'act_1234567890', 'message_template_library', 'me', 't_abc', 't_1_2',
       'm_AG5Hz2Uq7tuwNEhXfYYKj8', 'AbCdEfGh12345678', 'awdfZAG06MTpJR01lc3N3Njkz', 'aWdfZAG06_MTpJR01lc3N3', 'aWdf123', `aWdf${'a'.repeat(197)}`]) {
       expect(META_THREAD_ID.test(id), id).toBe(false)
-      expect(verdict(`${id}?fields=id,participants`).pageRead, id).toBeUndefined()
+      // Gap 46b — a post id is the post rule's (never a conversation's): `participants` is no field of a post, so its read is
+      // refused for the chosen Page (otherPages problem), never sent as a conversation read.
+      if (id === `${PAGE}_500000000000001`) expect(verdict(`${id}?fields=id,participants`).pageRead, id).toMatchObject({ pageId: PAGE, otherPages: { problem: expect.stringMatching(/a post of the chosen Page are read with fields from/) } })
+      else expect(verdict(`${id}?fields=id,participants`).pageRead, id).toBeUndefined()
       expect(verdict(`${id}/messages?fields=id,message`).pageRead, id).toBeUndefined()
     }
   })
@@ -308,17 +312,28 @@ describe('gap 46b, the live read of 2026-10-26 — a post of the chosen Page and
   const VIEW_POST = 'id,message,story,created_time,updated_time,permalink_url,status_type,is_published,is_hidden,is_expired,is_eligible_for_promotion,promotable_id,scheduled_publish_time,full_picture,is_instagram_eligible,from{id},instagram_eligibility,video_buying_eligibility,attachments{media_type,type,title,description,url,unshimmed_url,media,target,subattachments},is_inline_created,allowed_advertising_objects,promotion_status'
   const STATE = 'id,message,is_hidden,is_published,scheduled_publish_time,timeline_visibility,permalink_url,from{id}'
   const f = (fields: string) => `fields=${encodeURIComponent(fields)}`
-  it('the chosen Page\'s post by its id — view post, the state read, the owner read, an id check — is a Page-token read of that Page', () => {
-    for (const fields of [VIEW_POST, STATE, 'id,from{id}', 'id', 'id,created_time', 'id,is_eligible_for_promotion,promotable_id,is_instagram_eligible']) {
-      expect(verdict(`${POST}?${f(fields)}`), fields).toMatchObject({ problem: null, pageRead: { pageId: PAGE } })
+  it('the chosen Page\'s post by its id — every read Nexus makes of one — is a Page-token read of that Page', () => {
+    const ENGAGEMENT = ['id,reactions.limit(0).summary(total_count),shares', ...['LIKE', 'LOVE', 'WOW', 'HAHA', 'SAD', 'SORRY', 'ANGRY'].map((t) => `id,reactions.type(${t}).limit(0).summary(total_count)`)]
+    for (const fields of [VIEW_POST, STATE, 'id,from{id}', 'id', 'id,created_time', 'id,is_eligible_for_promotion,promotable_id,is_instagram_eligible', 'id,attachments{target{id}}', 'id,from{id},created_time', 'id,created_time,can_reply_privately', ...ENGAGEMENT]) {
+      expect(verdict(`${POST}?${f(fields)}`), fields).toMatchObject({ problem: null, pageRead: { pageId: PAGE, otherPages: { problem: null } } })
     }
-    // A field off the list (comments, reactions …): an ordinary read, as before.
-    expect(verdict(`${POST}?${f('id,shares')}`).pageRead).toBeUndefined()
   })
-  it('the owner read of a Page photo or video is EXACTLY id,from{id} (the chosen Page\'s token); any other node read stays ordinary', () => {
-    expect(verdict(`500000000000003?${f('id,from{id}')}`)).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: null } })
-    for (const fields of ['id', 'from{id}', 'id,from{id},length', 'id,post_id,from{id}', 'id,title,published,from{id}', 'id,owner,username', 'id,from{id},id']) {
-      expect(verdict(`500000000000003?${f(fields)}`).pageRead, fields).toBeUndefined()
+  it('re-review FIX 1 / NIT 1 — a read of a post asking anything else names its problem (refused for the chosen Page, gateway.ts); another Page\'s or a comment id stays ordinary', () => {
+    for (const query of [f('id,privacy'), f('id,from{id,name}'), `${f('id,from{id}')}&limit=5`, f('id,from{id}.as(x)'), f('id,attachments{target}')]) {
+      const v = verdict(`${POST}?${query}`)
+      expect(v.problem ?? v.pageRead?.otherPages?.problem, query).toMatch(/a post of the chosen Page are read with|fields|limit|not one a Nexus read/)
+      expect(metaReadOnlyProblem({ method: 'GET', url: `${BASE}/${POST}?${query}`, kind: 'read' }, PAGE), query).toBeTruthy()
+    }
+    // Another Page's post, or a comment `<object>_<comment>`: the gateway sends it as an ordinary read.
+    expect(metaReadOnlyProblem({ method: 'GET', url: `${BASE}/${OTHER_PAGE}_500000000000001?${f('id,privacy')}`, kind: 'read' }, PAGE)).toBeNull()
+    expect(metaReadOnlyProblem({ method: 'GET', url: `${BASE}/500000000000001_800000000000001?${f('id,message,from{id,name}')}`, kind: 'read' }, PAGE)).toBeNull()
+  })
+  it('a Page photo or video by its own id: each of its four exact lists is a Page-token read (the chosen Page\'s); anything else stays ordinary', () => {
+    for (const fields of ['id,from{id}', 'from{id},id', 'id,from{id},width,height', 'id,post_id,from{id}', 'id,post_id,published', 'id,title,published,from{id}']) {
+      expect(verdict(`500000000000003?${f(fields)}`), fields).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: null } })
+    }
+    for (const query of [f('id'), f('from{id}'), f('id,from{id},length'), f('id,owner,username'), f('id,from{id},id'), f('id,from{id,name}'), f('id,from{id}.as(x)'), `${f('id,from{id}')}&limit=5`, f('id,from{id},width'), f('id,title,from{id}')]) {
+      expect(verdict(`500000000000003?${query}`).pageRead, query).toBeUndefined()
     }
     expect(verdict(`500000000000003?${f('id,from{id}')}`, 'page').problem).toMatch(/a caller asks for no token/)
   })

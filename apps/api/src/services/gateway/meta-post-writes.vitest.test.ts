@@ -388,9 +388,11 @@ describe('the owner check, then the Page token', () => {
     expect(taken).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/another business in Nexus uses/) })
     h.answers.push(tokenAnswer(), json({ id: POST, from: { id: PAGE } }))
     expect(await edit({ sponsor_id: PAGE })).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/the chosen Page itself/) })
-    // Only reads: the Page's token read (system-user token), then the post with the Page's own token; nothing sent.
-    expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
-    expect(h.calls.filter((c) => new URL(c.url).pathname.endsWith(`/${POST}`)).every((c) => new URL(c.url).searchParams.get('access_token') === PAGE_TOKEN)).toBe(true)
+    // Only reads, each with its own token: the Page's token read (system-user token), then the post with the Page's own.
+    const tokenOf = (c: { url: string }) => { const t = new URL(c.url).searchParams.get('access_token'); return t === PAGE_TOKEN ? 'page' : t === SYSTEM_TOKEN ? 'system' : t }
+    expect(h.calls.map((c) => [c.init.method, new URL(c.url).pathname.split('/').pop(), tokenOf(c)])).toEqual([
+      ['GET', PAGE, 'system'], ['GET', POST, 'page'], ['GET', PAGE, 'system'], ['GET', POST, 'page'],
+    ])
   })
   it('a delete: only a post or media Nexus made (its change records); nothing is read or sent for any other', async () => {
     const remove = (objectId: string, objectKind: 'pagepostmade' | 'igmediamade', connectionId = 'm-1') => metaWriteCall({ connectionId, operation: objectKind === 'pagepostmade' ? 'pagepost.delete' : 'igmedia.delete', objectId, objectKind, method: 'DELETE', params: {}, check: false }).catch((e) => e)
@@ -485,17 +487,20 @@ describe('review fixes — guards no rule reaches today, and a video post Nexus 
     expect(await remove(null)).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/not one Nexus made/) })
     expect(await remove('160000000000009')).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
     expect(h.calls).toHaveLength(0)
-    // Another Page's video, or one whose post is another: refused, nothing deleted.
-    h.answers.push(json({ id: VIDEO, post_id: '500000000000001', from: { id: OTHER_PAGE } }))
+    // Another Page's video, or one whose post is another: refused, nothing deleted. Gap 46b (re-review item 3) — the video's
+    // read (id,post_id,from{id}) goes with the chosen Page's own token: its token read first.
+    h.answers.push(tokenAnswer(), json({ id: VIDEO, post_id: '500000000000001', from: { id: OTHER_PAGE } }))
     expect(await remove()).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/not one Nexus made/) })
-    h.answers.push(json({ id: VIDEO, post_id: '500000000000009', from: { id: PAGE } }))
+    h.answers.push(tokenAnswer(), json({ id: VIDEO, post_id: '500000000000009', from: { id: PAGE } }))
     expect(await remove()).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
-    expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
+    expect(h.calls.map((c) => `${c.init.method} ${new URL(c.url).pathname.split('/').pop()} ${new URL(c.url).searchParams.get('access_token') === PAGE_TOKEN ? 'page' : 'system'}`)).toEqual([
+      `GET ${PAGE} system`, `GET ${VIDEO} page`, `GET ${PAGE} system`, `GET ${VIDEO} page`,
+    ])
     h.calls = []
-    h.answers.push(json({ id: VIDEO, post_id: '500000000000001', from: { id: PAGE } }), tokenAnswer(), json({ success: true }))
+    h.answers.push(tokenAnswer(), json({ id: VIDEO, post_id: '500000000000001', from: { id: PAGE } }), tokenAnswer(), json({ success: true }))
     expect((await remove()).ok).toBe(true)
-    expect(paths()).toEqual([`GET /${VIDEO}`, `GET /${PAGE}`, `DELETE /${POST}`])
-    expect(sent(0).url.searchParams.get('fields')).toBe('id,post_id,from{id}')
+    expect(paths()).toEqual([`GET /${PAGE}`, `GET /${VIDEO}`, `GET /${PAGE}`, `DELETE /${POST}`])
+    expect([sent(1).url.searchParams.get('fields'), sent(1).url.searchParams.get('access_token')]).toEqual(['id,post_id,from{id}', PAGE_TOKEN])
   })
   it('N2 — a video\'s post_id: the chosen Page\'s post as given or by its digits; another Page\'s post or no post is none', () => {
     expect(metaVideoPostIdOf(`${PAGE}_500000000000001`, PAGE)).toBe(`${PAGE}_500000000000001`)

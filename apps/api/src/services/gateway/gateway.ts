@@ -1422,6 +1422,18 @@ function metaOwnerIo(connectionId: string, write: MetaJudgedWrite): import('./me
         return null
       }
     },
+    // Gap 46b (re-review NIT 2) — the same read with the words of a refusal: the gateway's own (a missing or refused Page
+    // token: "Held, nothing sent …") or Meta's.
+    readWithWords: async (path, query) => {
+      const url = new URL(`${metaGraphBase()}/${path}`)
+      for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value)
+      try {
+        const answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
+        return answer.ok ? { body: answer.json<Record<string, unknown>>(), words: null } : { body: null, words: answer.verdict?.channelMessage ?? null }
+      } catch (err) {
+        return { body: null, words: err instanceof Error ? err.message : String(err) }
+      }
+    },
     objectProblem: (id, kind) => metaOwnerProblem(connectionId, { ...write, objectId: id, check: false }, kind),
   }
 }

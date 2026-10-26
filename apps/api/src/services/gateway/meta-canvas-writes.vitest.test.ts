@@ -331,9 +331,10 @@ describe('made as the chosen Page, with every id checked', () => {
       h.answers.push(...answers)
       return make(params)
     }
-    // A photo of the chosen Page (from, width, height).
-    expect((await one(part('canvas_photo', { photo_id: PHOTO }), [json({ id: PHOTO, from: { id: PAGE }, width: 1080, height: 1080 }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
-    expect(await one(part('canvas_photo', { photo_id: PHOTO }), [json({ id: PHOTO, from: { id: OTHER_PAGE }, width: 1080, height: 1080 })])).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
+    // A photo of the chosen Page (from, width, height) — gap 46b (re-review FIX 2): read with the chosen Page's own token.
+    expect((await one(part('canvas_photo', { photo_id: PHOTO }), [tokenAnswer(), json({ id: PHOTO, from: { id: PAGE }, width: 1080, height: 1080 }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
+    expect([new URL(h.calls[1].url).searchParams.get('fields'), new URL(h.calls[1].url).searchParams.get('access_token')]).toEqual(['id,from{id},width,height', PAGE_TOKEN])
+    expect(await one(part('canvas_photo', { photo_id: PHOTO }), [tokenAnswer(), json({ id: PHOTO, from: { id: OTHER_PAGE }, width: 1080, height: 1080 })])).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
     // A post: <page>_<post> of the chosen Page by its id alone; a photo or video it posted by `from`.
     expect((await one(part('canvas_existing_post', { source_facebook_post_id: `${PAGE}_500000000000001` }), [tokenAnswer(), json({ id: PART })])).ok).toBe(true)
     expect(await one(part('canvas_existing_post', { source_facebook_post_id: `${OTHER_PAGE}_500000000000001` }), [])).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
@@ -366,7 +367,7 @@ describe('made as the chosen Page, with every id checked', () => {
     expect(h.catalog).toHaveBeenCalledWith({ connectionId: 'm-1', adAccountId: '1234567890' }, { productSetId: SET }, expect.any(Object))
     h.catalog.mockClear()
     __metaObjectLimitsTest.useMemory()
-    h.answers.push(json({ id: PHOTO, from: { id: PAGE }, width: 10, height: 10 }), tokenAnswer(), json({ id: PART }))
+    h.answers.push(tokenAnswer(), json({ id: PHOTO, from: { id: PAGE }, width: 10, height: 10 }), tokenAnswer(), json({ id: PART }))
     expect((await make(part('canvas_photo', EVERY_PART.canvas_photo))).ok).toBe(true)
     expect(h.catalog).toHaveBeenCalledWith({ connectionId: 'm-1', adAccountId: '1234567890' }, { productItemId: ITEM }, expect.any(Object))
     h.calls = []

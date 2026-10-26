@@ -453,8 +453,8 @@ describe('gap 46b (master MD-024) — kind thumbnail: a Page video\'s preferred 
   /** Review N7 — the video's thumbnails now (the chosen Page's token): one preferred, with Meta's link to its picture. */
   const THUMBS = { data: [{ id: '700000000000001', uri: 'https://scontent.example.com/t1.jpg', is_preferred: true }, { id: '700000000000002', uri: 'https://scontent.example.com/t2.jpg', is_preferred: false }] }
   const pageVideo = (from: string | Error = PAGE, thumbs: unknown = THUMBS) => h.read.mockImplementation(async (_c: unknown, q: { operation: string; path: string }) => {
-    // Gap 46b (the live read of 2026-10-26) — the owner read id,from{id}, which the gateway sends with the chosen Page's token.
-    if (q.operation === 'media.pageVideoOwnerCheck') { if (from instanceof Error) throw from; return { body: { id: q.path, from: { id: from } }, calls: 1 } }
+    // Step 28's read of a Page video — gap 46b (re-review item 3): the gateway sends it with the chosen Page's own token.
+    if (q.operation === 'optimizeChange.pageVideo') { if (from instanceof Error) throw from; return { body: { id: q.path, title: 'Clip A', published: true, from: { id: from } }, calls: 1 } }
     if (q.operation === 'media.pageVideoThumbnails') { if (thumbs instanceof Error) throw thumbs; return { body: thumbs, calls: 1 } }
     return imagesHolding()
   })
@@ -466,11 +466,11 @@ describe('gap 46b (master MD-024) — kind thumbnail: a Page video\'s preferred 
     const out = await preview(args)
     expect(out.ok, JSON.stringify(out)).toBe(true)
     expect(h.read.mock.calls.map((c) => [c[1].operation, c[1].path, c[1].query])).toEqual([
-      ['media.pageVideoOwnerCheck', VIDEO, { fields: 'id,from{id}' }],
+      ['optimizeChange.pageVideo', VIDEO, { fields: 'id,title,published,from{id}' }],
       ['media.pageVideoThumbnails', `${VIDEO}/thumbnails`, { fields: 'id,uri,is_preferred', limit: 50 }],
     ])
     expect(out.preview).toMatchObject({ spendsMoney: false, metaCheck: { checked: 'none' }, requests: [{ step: 1, metaCheck: 'no-check' }] })
-    expect(out.preview.requests[0].label).toBe(`Make "Hero A" (da_hero; 4×3, 1 KB) the preferred thumbnail of video ${VIDEO} of the chosen Facebook Page, as the Page`)
+    expect(out.preview.requests[0].label).toBe(`Make "Hero A" (da_hero; 4×3, 1 KB) the preferred thumbnail of video ${VIDEO} "Clip A" of the chosen Facebook Page, as the Page`)
     const words = out.preview.warnings.join(' ')
     expect(words).toContain(THUMBNAIL_NO_UNDO)
     expect(THUMBNAIL_NO_UNDO).toMatch(/^No undo: Meta lets no video thumbnail be changed or deleted/)
@@ -518,7 +518,7 @@ describe('gap 46b (master MD-024) — kind thumbnail: a Page video\'s preferred 
     // The Page's token refused or missing for the owner read: refused in words (never read with another token).
     const { MetaReadError, failureOfAnswer } = await import('../../marketing/meta-ads/errors.js')
     pageVideo(new MetaReadError(failureOfAnswer({ status: 409, verdict: { errorClass: 'validation', channelCode: 'META_PAGE_TOKEN_UNAVAILABLE', channelMessage: 'Meta gave Nexus no token for the business\'s chosen Facebook Page' } as never }), 'r', 1))
-    await refused(/^Nothing was asked of Meta: Nexus could not read video 120000000000601 with the chosen Facebook Page's own token \(.*\)\./)
+    await refused(/^Nothing was asked of Meta: Nexus could not read video 120000000000601 from Meta: .*Meta gave Nexus no token for the business's chosen Facebook Page/)
     pageVideo()
     h.files.set('https://res.example.com/hero.png', { buffer: PNG, mimeType: 'image/webp' })
     await refused(/image\/webp: Meta's ads take JPG or PNG images/)

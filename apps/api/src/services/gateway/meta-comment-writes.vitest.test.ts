@@ -213,9 +213,14 @@ describe('the owner check, then the Page token', () => {
     // The comment id is not one Meta answers.
     h.answers.push(tokenAnswer(), json({ id: `${PAGE}_500000000000004` }), json({ id: '500000000000004_999' }))
     expect(await metaWriteCall({ connectionId: 'm-1', operation: 'fbcomment.hide', objectId: '500000000000004_900000000000004', objectKind: 'fbcomment', params: { is_hidden: 'true' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_PAGE_UNCONFIRMED' })
-    // Only reads: the Page's post and its media with the Page's own token (gap 46b), a comment with the system user's.
-    expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
-    expect(h.calls.filter((c) => /\/(120000000000010_\d+|5000000000000\d+)$/.test(new URL(c.url).pathname)).every((c) => new URL(c.url).searchParams.get('access_token') === PAGE_TOKEN)).toBe(true)
+    // Only reads, each with its own token (gap 46b): the Page's token read with the system user's, the Page's post and its
+    // photo or video with the Page's own, a comment with the system user's.
+    const tokenOf = (c: { url: string }) => { const t = new URL(c.url).searchParams.get('access_token'); return t === PAGE_TOKEN ? 'page' : t === SYSTEM_TOKEN ? 'system' : t }
+    expect(h.calls.map((c) => [c.init.method, new URL(c.url).pathname.split('/').pop(), tokenOf(c)])).toEqual([
+      ['GET', PAGE, 'system'], ['GET', `${PAGE}_500000000000002`, 'page'], ['GET', PAGE, 'system'], ['GET', '500000000000002', 'page'],
+      ['GET', PAGE, 'system'], ['GET', `${PAGE}_500000000000003`, 'page'], ['GET', PAGE, 'system'], ['GET', '500000000000003', 'page'],
+      ['GET', PAGE, 'system'], ['GET', `${PAGE}_500000000000004`, 'page'], ['GET', '500000000000004_900000000000004', 'system'],
+    ])
   })
   it('a post of another Page (another business\'s too), no Page chosen, a shape that is not a post: refused before any call', async () => {
     const like = (objectId: string, connectionId = 'm-1') => metaWriteCall({ connectionId, operation: 'fblike.create', objectId, objectKind: 'fbpost', edge: 'likes', params: {}, check: false }).catch((e) => e)

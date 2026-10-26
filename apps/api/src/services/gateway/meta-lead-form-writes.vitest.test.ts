@@ -417,17 +417,21 @@ describe('the owner check of a change made as the Page', () => {
   it('an id inside the body: the intro\'s cover photo must be a photo OF the chosen Page', async () => {
     const card = (id: string) => formParams({ context_card: JSON.stringify({ title: 'Hi', cover_photo_id: id }) })
     const go = (id: string) => { __metaObjectLimitsTest.useMemory(); return metaWriteCall({ connectionId: 'm-1', operation: 'leadform.create', objectId: PAGE, objectKind: 'page', edge: 'leadgen_forms', params: card(id), check: false }).catch((e) => e) }
-    h.answers.push(json({ id: PHOTO, from: { id: PAGE }, width: 1200, height: 628 }), tokenAnswer(), json({ id: FORM }))
+    // Gap 46b (re-review FIX 2) — the photo's owner read goes with the chosen Page's own token (its token read first).
+    h.answers.push(tokenAnswer(), json({ id: PHOTO, from: { id: PAGE }, width: 1200, height: 628 }), tokenAnswer(), json({ id: FORM }))
     expect((await go(PHOTO)).ok).toBe(true)
-    expect(sent(0).url.searchParams.get('fields')).toBe('id,from{id},width,height')
+    expect([sent(1).url.searchParams.get('fields'), sent(1).url.searchParams.get('access_token')]).toEqual(['id,from{id},width,height', PAGE_TOKEN])
     h.calls = []
-    h.answers.push(json({ id: '800000000000099', from: { id: OTHER_PAGE }, width: 1200, height: 628 }))
+    h.answers.push(tokenAnswer(), json({ id: '800000000000099', from: { id: OTHER_PAGE }, width: 1200, height: 628 }))
     expect(await go('800000000000099')).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN', message: expect.stringMatching(/not a photo of the Facebook Page this business chose/) })
-    h.answers.push(json({ id: '800000000000098', from: { id: PAGE } }))
+    h.answers.push(tokenAnswer(), json({ id: '800000000000098', from: { id: PAGE } }))
     expect(await go('800000000000098')).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
-    h.answers.push(json({ error: { code: 100, message: 'Tried accessing nonexisting field (width) on node type (Video)' } }, 400))
+    h.answers.push(tokenAnswer(), json({ error: { code: 100, message: 'Tried accessing nonexisting field (width) on node type (Video)' } }, 400))
     expect(await go('800000000000097')).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/not a photo/) })
-    expect(h.calls.every((c) => c.init.method === 'GET' && new URL(c.url).searchParams.get('fields') === 'id,from{id},width,height')).toBe(true)
+    // Only reads: per case the Page's token (system-user token), then the photo with the Page's own token.
+    const photoIds = ['800000000000099', '800000000000098', '800000000000097']
+    expect(h.calls.map((c) => [c.init.method, new URL(c.url).pathname.split('/').pop(), new URL(c.url).searchParams.get('fields')])).toEqual(photoIds.flatMap((id) => [['GET', PAGE, 'access_token'], ['GET', id, 'id,from{id},width,height']]))
+    expect(h.calls.filter((_c, i) => i % 2 === 1).map((c) => new URL(c.url).searchParams.get('access_token'))).toEqual([PAGE_TOKEN, PAGE_TOKEN, PAGE_TOKEN])
   })
 })
 

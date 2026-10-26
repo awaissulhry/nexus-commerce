@@ -269,5 +269,14 @@ describe('Page video tests', () => {
     expect(del.ok).toBe(true)
     expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET', 'GET', 'DELETE'])
     expect(new URL(h.calls[2].url).searchParams.get('access_token')).toBe('EAAPageTokenForGap46bOptimizeTests1234')
+    // Gap 46b (re-review NIT 2) — no Page token for a video's owner read: the gateway's own words, not "not the Page's video".
+    h.calls = []
+    h.answers.push(json({ id: PAGE }))
+    const noToken = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'ab_tests', params: video, check: false }).catch((e) => e)
+    expect(noToken).toMatchObject({ code: 'META_ACCOUNT_UNCONFIRMED', message: expect.stringMatching(/^Nothing was sent to Meta: inside this change, Nexus could not read video 120000000000071, which it reads with the chosen Facebook Page's own token \(.*Meta gave Nexus no token for the business's chosen Facebook Page/) })
+    expect(noToken.message).not.toMatch(/is not one the chosen Page posted/)
+    h.calls = []
+    h.answers.push(json({ id: '120000000000081', control_video_id: '120000000000071', optimization_goal: 'REELS_PLAYS' }), json({ id: PAGE }))
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000081', objectKind: 'pagevideotest', params: {}, check: false, method: 'DELETE' }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_UNCONFIRMED', message: expect.stringMatching(/Nexus could not read the control video of 120000000000081, which it reads with the chosen Facebook Page's own token \(.*Meta gave Nexus no token/) })
   })
 })

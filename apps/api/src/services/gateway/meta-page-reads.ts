@@ -67,13 +67,18 @@
  *
  * Gap 46b, the leader's live read of 2026-10-26 — `meta-page-posts view post` (GET /<chosen Page>_<post>) went with the
  * system-user token and Meta refused it: "(#10) This endpoint requires the 'pages_read_engagement' permission or the 'Page
- * Public Content Access' feature" (the feed, read with the Page's token, answered). So two more reads go with the CHOSEN
+ * Public Content Access' feature" (the feed, read with the Page's token, answered). So these reads go with the CHOSEN
  * Page's own token, never falling back to the system user's:
- *   - a post of the chosen Page by its id (`<chosen Page>_<post id>`): its fields only from POST_NODE_FIELDS (view post's,
- *     set-meta-page-post's state read, and the owner read `id,from{id}`); another Page's post, or a read asking another field,
+ *   - a post of the chosen Page by its id (`<chosen Page>_<post id>`): `fields` only, each from POST_NODE_FIELDS; a read of
+ *     the chosen Page's post asking anything else is REFUSED in words (re-review FIX 1: never sent quietly with the system
+ *     user's token); another Page's post (and a comment id `<object>_<comment>`, whose first part is never the chosen Page)
  *     stays an ordinary read, as before;
- *   - the owner read of a Page photo or video by its own id: EXACTLY `fields=id,from{id}` (any other read of a node stays
- *     ordinary), with the chosen Page's token — the business's own media is confirmed by `from`, a creator's is not its.
+ *   - a Page photo or video by its own id, each read EXACTLY its own field list (one rule per list; any other read of a node
+ *     stays ordinary): the owner read `id,from{id}`; a photo's `id,from{id},width,height` (Meta's Photo reference: "A page
+ *     access token can read all photos posted to or posted by that Page"); a video's `id,post_id,from{id}` and
+ *     `id,post_id,published` (step 24) and `id,title,published,from{id}` (step 28) — Meta's Video reference: "You must use a
+ *     valid Page Access Token or User Access Token for any video with public privacy settings", and its video guide reads
+ *     Page videos with "A Page access token requested by a person who can perform the MANAGE task on the Page".
  * A leaf module (it imports only the fixed metric lists, services/meta/meta-media-lists.ts, a leaf too), so meta-calls.ts
  * takes it without an import cycle.
  */
@@ -126,7 +131,10 @@ interface PageReadRule {
   metrics?: ReadonlySet<string>
   /** Probe fix MD-101 — the feed only: another Page's read stays an ordinary read (MetaPageRead.otherPages). */
   otherPagesOrdinary?: true
-  /** Gap 46b — with pageShapedOnly: the read is this rule's only when its fields are EXACTLY the rule's list (each once). */
+  /**
+   * Gap 46b — the read is this rule's only when its keys are the rule's and its fields are EXACTLY the rule's list (each once,
+   * in any order); several such rules may share a route, each with its own list (rule choice: metaPageReadOf).
+   */
   exactFields?: true
 }
 
@@ -170,7 +178,17 @@ const POST_NODE_FIELDS = set(
   ...POST_LIST_FIELDS, 'instagram_eligibility', 'video_buying_eligibility',
   'attachments{media_type,type,title,description,url,unshimmed_url,media,target,subattachments}', 'allowed_advertising_objects', 'promotion_status',
   'timeline_visibility',
+  // Re-review FIX 1 — meta-comments' read of what a photo or video post is made of (live-engagement.ts COMMENT_FIELDS.PostTargets),
+  // and a private reply's visitor post (live-messaging-change.ts createdOf).
+  'attachments{target{id}}', 'can_reply_privately',
+  // Re-review FIX 1 — meta-comments view engagement's counts on a post (live-engagement.ts engagement: Meta's own example
+  // reactions.type(LOVE).limit(0).summary(total_count); SAD as the SDK names it, SORRY as the v26 page does): counts only,
+  // never a person.
+  'reactions.limit(0).summary(total_count)', 'shares',
+  ...['LIKE', 'LOVE', 'WOW', 'HAHA', 'SAD', 'SORRY', 'ANGRY'].map((type) => `reactions.type(${type}).limit(0).summary(total_count)`),
 )
+/** One segment of digits: a Page photo or video by its own id (the exact-list rules below). */
+const MEDIA_NODE = /^\d+$/
 /** Gap 46b (CR-489) — exactly Meta's five template nodes, and the one read of their parts (its top-level items). */
 const IX_TEMPLATE_ROUTE = oneOf(META_IX_TEMPLATE_IDS)
 const IX_TEMPLATE_FIELDS = new Set(topLevelFieldItems(META_IX_TEMPLATE_READ) ?? [])
@@ -267,11 +285,19 @@ export const META_PAGE_READ_RULES: readonly PageReadRule[] = [
   // is_preferred): only that exact read (id, uri, is_preferred; limit), only of a video the chosen Page posted. Any other read
   // of the edge (meta-media-library view video's, which asks width, height and scale too) stays an ordinary read, as before.
   { route: /^\d+\/thumbnails$/, what: 'a Page video\'s thumbnails', page: 'video', pageShapedOnly: true, keys: set('fields', 'limit'), fields: set('id', 'uri', 'is_preferred') },
-  // Gap 46b (the live read of 2026-10-26) — a post of the CHOSEN Page by its id goes with the Page's own token (another Page's
-  // post, or a read asking a field off this list, stays ordinary, as before).
-  { route: /^\d+_\d+$/, what: 'a post of the chosen Page', page: 'post', pageShapedOnly: true, otherPagesOrdinary: true, keys: set('fields'), fields: POST_NODE_FIELDS },
-  // Gap 46b review F2 — the owner read of a Page photo or video by its own id: EXACTLY id and from{id}, the chosen Page's token.
-  { route: /^\d+$/, what: 'the owner read of a Page photo or video', page: 'meta', pageShapedOnly: true, exactFields: true, keys: set('fields'), fields: set('id', 'from{id}') },
+  // Gap 46b (the live read of 2026-10-26) — a post of the CHOSEN Page by its id goes with the Page's own token; a read of it
+  // off this list is refused in words; another Page's post stays ordinary, as before.
+  { route: /^\d+_\d+$/, what: 'a post of the chosen Page', page: 'post', otherPagesOrdinary: true, keys: set('fields'), fields: POST_NODE_FIELDS },
+  // Gap 46b — a Page photo or video by its own id, with the chosen Page's token: one rule per exact field list.
+  // Review F2: the owner read (gateway.ts metaPagePostOwned, the step 24/27b/28/37/38 owner checks, the drafts).
+  { route: MEDIA_NODE, what: 'the owner read of a Page photo or video', page: 'meta', exactFields: true, keys: set('fields'), fields: set('id', 'from{id}') },
+  // Re-review FIX 2: a Page photo's owner read with its size (meta-page-owner.ts pagephoto, live-instant-experiences.ts).
+  { route: MEDIA_NODE, what: 'a Page photo\'s owner and size', page: 'meta', exactFields: true, keys: set('fields'), fields: set('id', 'from{id}', 'width', 'height') },
+  // Re-review item 3: a Page video's post (step 24: live-posts.ts, meta-post-owner.ts) and its post state after the upload
+  // (change-posts.ts read-back), and a video for a Page video test (step 28: live-optimize-changes.ts livePageVideo).
+  { route: MEDIA_NODE, what: 'a Page video\'s post', page: 'meta', exactFields: true, keys: set('fields'), fields: set('id', 'post_id', 'from{id}') },
+  { route: MEDIA_NODE, what: 'a Page video\'s post state', page: 'meta', exactFields: true, keys: set('fields'), fields: set('id', 'post_id', 'published') },
+  { route: MEDIA_NODE, what: 'a Page video for a video test', page: 'meta', exactFields: true, keys: set('fields'), fields: set('id', 'title', 'published', 'from{id}') },
 ]
 
 /** Probe fix IN-092 — the metric names of an insights read (Meta's comma list), or [] when it names none. */
@@ -282,6 +308,10 @@ const metricShaped = (rule: PageReadRule, search: URLSearchParams): boolean => {
   const metrics = metricsOf(search)
   return metrics.length > 0 && metrics.every((m) => rule.metrics!.has(m))
 }
+
+/** Gap 46b — is this read exactly an exact-list rule's (its keys only, its fields each once and all of them)? Other rules: yes. */
+const exactShaped = (rule: PageReadRule, keys: string[], items: string[] | null): boolean => !rule.exactFields
+  || (keys.every((k) => rule.keys.has(k)) && !!items && items.length === rule.fields.size && new Set(items).size === items.length && items.every((f) => rule.fields.has(f)))
 
 /** Meta's paging cursor as Meta writes it (base64url-like: letters, digits, _, - and =) — step 30 part 3's own rule. */
 const CURSOR = /^[A-Za-z0-9_=-]{1,512}$/
@@ -308,15 +338,14 @@ export function topLevelFieldItems(value: string): string[] | null {
  * route's own list; else the Page whose token it goes with (null: the chosen Page's, for a conversation).
  */
 export function metaPageReadOf(route: string, segments: readonly string[], search: URLSearchParams, auth: unknown): MetaPageRead | { problem: string } | null {
-  const rule = META_PAGE_READ_RULES.find((r) => r.route.test(route) && (r.page !== 'thread' || META_THREAD_ID.test(segments[0] ?? '')) && metricShaped(r, search))
-  if (!rule) return null
   const keys = [...search.keys()]
   const fields = search.get('fields')
   const items = fields === null ? null : topLevelFieldItems(fields)
+  // Gap 46b — an exact-list rule is the read's only when its keys and its field list are exactly the rule's (exactShaped).
+  const rule = META_PAGE_READ_RULES.find((r) => r.route.test(route) && (r.page !== 'thread' || META_THREAD_ID.test(segments[0] ?? '')) && metricShaped(r, search) && exactShaped(r, keys, items))
+  if (!rule) return null
   // A WhatsApp account's templates (any read that is not the Page's Messenger template read): an ordinary read.
   if (rule.pageShapedOnly && (!keys.every((k) => rule.keys.has(k)) || !items || !items.every((f) => rule.fields.has(f)))) return null
-  // Gap 46b — an exact-shape rule (the media owner read): only that very field list, each once; any other read is ordinary.
-  if (rule.exactFields && (!items || items.length !== rule.fields.size || new Set(items).size !== items.length)) return null
   // A post's Page is its id's first part. Review of #771 — a `<chosen Page>_<id>` whose second part is no post of that Page
   // still goes only with the chosen Page's own token, read only: Meta resolves the id itself and answers only what that
   // token may see, so no other Page's data is reachable (checking the post first would cost a Meta read on every call).

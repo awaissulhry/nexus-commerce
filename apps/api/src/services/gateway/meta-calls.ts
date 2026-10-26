@@ -946,11 +946,16 @@ export function metaReadSecrets(url: string): string[] {
 
 /**
  * Why the gateway refuses this Meta call, in words, or null when it may go (metaCallVerdict's problem). Live-probe fix
- * MD-101 — and a Page feed read's own list problem, which gateway.ts refuses when the Page is the chosen one.
+ * MD-101 — and a Page feed read's own list problem, which gateway.ts refuses when the Page is the chosen one. Gap 46b — the
+ * post rule's too; `chosenPageId` (when given) is the business's chosen Page: a read whose Page is another one (a comment id
+ * `<object>_<comment>`, another Page's post) is then an ordinary read, as gateway.ts sends it.
  */
-export function metaReadOnlyProblem(input: Parameters<typeof metaCallVerdict>[0]): string | null {
+export function metaReadOnlyProblem(input: Parameters<typeof metaCallVerdict>[0], chosenPageId?: string): string | null {
   const verdict = metaCallVerdict(input)
-  return verdict.problem ?? verdict.pageRead?.otherPages?.problem ?? null
+  if (verdict.problem) return verdict.problem
+  const page = verdict.pageRead
+  if (chosenPageId !== undefined && page?.otherPages && page.pageId !== chosenPageId) return null
+  return page?.otherPages?.problem ?? null
 }
 
 /** Is this the token renewal (the only sign-in call), and with which client_id? Null when it is not one (same parse). */

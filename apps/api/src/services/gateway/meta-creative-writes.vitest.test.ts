@@ -298,10 +298,17 @@ describe('a creative on the gateway', () => {
     expect(new URL(h.calls[2].url).searchParams.get('access_token')).not.toBe(PAGE_TOKEN)
     await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(post('120000000000099_500000000000001')))) })).rejects.toThrow(/not a post of the Page this business chose/)
     // Gap 46b review F2 — the chosen Page's prefix is no proof: a visitor's post, another id Meta answers, or no answer: refused.
-    for (const answer of [json({ id: `${PAGE}_500000000000002`, from: { id: '300000000000001' } }), json({ id: '120000000000099_500000000000002', from: { id: '120000000000099' } }), json({ id: `${PAGE}_500000000000099`, from: { id: PAGE } }), json({ error: { message: 'Unsupported get request.', code: 100 } }, 400)]) {
+    const NOT_CONFIRMED = /post 120000000000010_500000000000002 is not one Nexus can confirm the chosen Page posted \(Meta answers it with another id or another author\)/
+    const NOT_READ = /Nexus could not read post 120000000000010_500000000000002 with the chosen Facebook Page's own token \(Unsupported get request\.\)/
+    for (const [answer, words] of [
+      [json({ id: `${PAGE}_500000000000002`, from: { id: '300000000000001' } }), NOT_CONFIRMED], // a visitor's post on the Page
+      [json({ id: '120000000000099_500000000000002', from: { id: '120000000000099' } }), NOT_CONFIRMED], // Meta answers another Page's post
+      [json({ id: `${PAGE}_500000000000099`, from: { id: PAGE } }), NOT_CONFIRMED], // Meta answers another post of the Page
+      [json({ error: { message: 'Unsupported get request.', code: 100 } }, 400), NOT_READ], // no answer
+    ] as const) {
       h.calls = []
       h.answers.push(pageToken(), answer)
-      await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(post(`${PAGE}_500000000000002`)))) })).rejects.toThrow(/post 120000000000010_500000000000002 is not one Nexus can confirm the chosen Page posted|Nexus could not read post 120000000000010_500000000000002 with the chosen Facebook Page's own token/)
+      await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(post(`${PAGE}_500000000000002`)))) }), String(words)).rejects.toThrow(words)
       expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET'])
     }
     // The Page's token refused or missing: refused in words, and never read again with the system-user token.
