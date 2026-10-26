@@ -7591,6 +7591,10 @@
       ]
     },
     {
+      "name": "ShopifyMarketingConsent",
+      "fields": []
+    },
+    {
       "name": "EtsyReceiptRefusal",
       "fields": [
         {

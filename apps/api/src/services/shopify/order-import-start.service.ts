@@ -3,9 +3,10 @@
  *
  * `startShopifyOrderImport` is the ONE writer of the account's start date (T0, order-ingest-switch.ts): it records the
  * database clock's whole second the first time it runs for the account, then registers the order webhooks
- * (webhook-registration.service.ts: the order topics and app/uninstalled only). Running it again keeps the first start
- * date and person and only re-registers what is missing, so a registration that failed half way is finished by running
- * it again. Orders Shopify created before the start date are never imported.
+ * (webhook-registration.service.ts: the order topics, app/uninstalled and the e-mail marketing consent topic). Running it
+ * again keeps the first start date and person and only re-registers what is missing, so a registration that failed half
+ * way, or a topic added later, is finished by running it again. Orders Shopify created before the start date are never
+ * imported.
  *
  * It needs the server switch NEXUS_ENABLE_SHOPIFY_ORDER_INGEST=1 (refused before anything is read or written while it is
  * off) and an active, signed-in Shopify account of this business. Nothing here changes stock, orders, listings or

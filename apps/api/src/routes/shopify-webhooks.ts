@@ -36,6 +36,7 @@ import { resolveByShopifyId } from "../services/shopify-locations.service.js";
 import { logger } from "../utils/logger.js";
 import { matchInboundSku, shopifyVariantListingStore } from "../services/listings/channel-sku-inbound.js";
 import { shopifyOrderIngressGate, type ShopifyOrderEventType, type ShopifyOrderGate } from "../services/shopify/order-ingest-switch.js";
+import { captureBuyerConsentQuietly, handleEmailConsentWebhook, redactShopifyMarketingConsent } from "../services/shopify/marketing-consent.service.js";
 
 interface ShopifyWebhookPayload {
   id: string;
@@ -472,6 +473,11 @@ export async function handleOrderCreate(payload: ShopifyWebhookPayload, context?
         });
       }
     })();
+
+    // Shopify marketing consent (2026-10-26) — a buyer Nexus has no consent row for yet gets one, read from Shopify for
+    // that one customer (services/shopify/marketing-consent.service.ts). After the order work and never in its way: a
+    // failure is logged, and a later order or a run of the consent backfill fills the row.
+    void captureBuyerConsentQuietly(context?.connectionId, order);
 
     logger.info('[ShopifyWebhooks] order-create processed', { shopifyOrderId, orderId: dbOrder.id });
   } catch (error) {
@@ -966,6 +972,37 @@ export function privacyTopicHandler(topic: string) {
   };
 }
 
+/**
+ * customers/redact — the one erasure that IS automated (the Owner's word, 2026-10-26): the customer's Shopify marketing
+ * consent row is deleted (services/shopify/marketing-consent.service.ts), so the customer can never reach a Meta
+ * customer list from it. Every other erasure stays the Owner's own unit, as above, and is logged as such.
+ */
+export async function handleCustomersRedact(
+  payload: ShopifyWebhookPayload,
+  context?: { connectionId: string | null },
+): Promise<{ consentRowsDeleted: number }> {
+  const consentRowsDeleted = await redactShopifyMarketingConsent(payload, context);
+  logger.error("[ShopifyWebhooks] customers/redact received — acknowledged and recorded; its marketing-consent row is deleted, other erasure is NOT automated", {
+    shopDomain: (payload as any)?.shop_domain ?? null,
+    customerId: (payload as any)?.customer?.id ?? null,
+    connectionId: context?.connectionId ?? null,
+    consentRowsDeleted,
+  });
+  return { consentRowsDeleted };
+}
+
+/**
+ * customers_email_marketing_consent/update — a Shopify customer's e-mail marketing consent changed. It updates the row
+ * of a buyer Nexus has (or makes one for a buyer Nexus knows); nothing is sent anywhere
+ * (services/shopify/marketing-consent.service.ts). Registered with the order topics when order import is started.
+ */
+export async function handleEmailMarketingConsentUpdate(
+  payload: ShopifyWebhookPayload,
+  context?: { connectionId: string | null },
+): Promise<unknown> {
+  return handleEmailConsentWebhook(payload, context);
+}
+
 export async function shopifyWebhookRoutes(app: FastifyInstance) {
   // CX.0 (S9): Shopify signs the raw bytes; capture them for this plugin only.
   registerRawJsonParser(app);
@@ -1228,12 +1265,14 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
   receiveShopify("/webhooks/shopify/orders/update", "order/update", ingestShopifyOrderUpdate);
   receiveShopify("/webhooks/shopify/fulfillments/create", "fulfillment/create", ingestShopifyFulfillmentCreate);
   receiveShopify("/webhooks/shopify/refunds/create", "refunds/create", ingestShopifyRefundCreate);
+  // Shopify marketing consent (2026-10-26) — a buyer's e-mail consent, on Shopify's own topic path.
+  receiveShopify("/webhooks/shopify/customers_email_marketing_consent/update", "customers_email_marketing_consent/update", handleEmailMarketingConsentUpdate);
 
   // P2.4 — the lifecycle and privacy topics, on Shopify's own topic paths.
   receiveShopify("/webhooks/shopify/app/uninstalled", "app/uninstalled", handleAppUninstalled, { lifecycle: true });
   receiveShopify("/webhooks/shopify/app/scopes_update", "app/scopes_update", handleScopesUpdate, { lifecycle: true });
   receiveShopify("/webhooks/shopify/customers/data_request", "customers/data_request", privacyTopicHandler("customers/data_request"), { lifecycle: true });
-  receiveShopify("/webhooks/shopify/customers/redact", "customers/redact", privacyTopicHandler("customers/redact"), { lifecycle: true });
+  receiveShopify("/webhooks/shopify/customers/redact", "customers/redact", handleCustomersRedact, { lifecycle: true });
   receiveShopify("/webhooks/shopify/shop/redact", "shop/redact", privacyTopicHandler("shop/redact"), { lifecycle: true });
 
   // CX.0 (S8): the unsigned `refunds/create-test` route is gone. Verify

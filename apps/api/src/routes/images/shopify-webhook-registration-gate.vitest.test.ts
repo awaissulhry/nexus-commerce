@@ -1,8 +1,9 @@
 /**
  * Registering Shopify's webhook topics starts Shopify order import. Until NEXUS_ENABLE_SHOPIFY_ORDER_INGEST=1, the
  * route refuses and the service registers nothing; with it on, the service registers only for an account whose order
- * import was started (it has its start date), and only the order topics and app/uninstalled: never a product or
- * inventory topic. A subscription of another topic already on the shop is listed, never deleted.
+ * import was started (it has its start date), and only the order topics, app/uninstalled and the e-mail marketing
+ * consent topic: never a product or inventory topic. A subscription of another topic already on the shop is listed,
+ * never deleted.
  *
  * Only the Shopify transport and the start-date read are mocked; the route and the registration service are the real
  * code, so a `webhookSubscriptionCreate` reaching the mock is a subscription Shopify would have created.
@@ -20,7 +21,7 @@ import { ensureShopifyWebhookSubscriptions, SHOPIFY_TOPIC_REGISTRATIONS } from '
 
 const FLAG = 'NEXUS_ENABLE_SHOPIFY_ORDER_INGEST'
 const creates = () => mocks.graphql.mock.calls.filter(([query]) => String(query).includes('webhookSubscriptionCreate'))
-const ORDER_TOPICS = ['ORDERS_CREATE', 'ORDERS_UPDATED', 'FULFILLMENTS_CREATE', 'REFUNDS_CREATE', 'APP_UNINSTALLED']
+const ORDER_TOPICS = ['ORDERS_CREATE', 'ORDERS_UPDATED', 'FULFILLMENTS_CREATE', 'REFUNDS_CREATE', 'APP_UNINSTALLED', 'CUSTOMERS_EMAIL_MARKETING_CONSENT_UPDATE']
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -84,9 +85,11 @@ describe('Shopify webhook registration is refused while Shopify order ingest is 
 describe('only the order topics, and only after the start date is recorded', () => {
   beforeEach(() => vi.stubEnv(FLAG, '1'))
 
-  it('the table holds the order topics and app/uninstalled, and no product, inventory or privacy topic', () => {
+  it('the table holds the order topics, app/uninstalled and the e-mail consent topic, and no product, inventory or privacy topic', () => {
     expect(SHOPIFY_TOPIC_REGISTRATIONS.map(row => row.topic)).toEqual(ORDER_TOPICS)
-    expect(SHOPIFY_TOPIC_REGISTRATIONS.map(row => row.topic).filter(topic => /^(PRODUCTS|INVENTORY|CUSTOMERS|SHOP)_/.test(topic))).toEqual([])
+    expect(SHOPIFY_TOPIC_REGISTRATIONS.map(row => row.topic).filter(topic => /^(PRODUCTS|INVENTORY|SHOP)_/.test(topic))).toEqual([])
+    // The one customer topic is the e-mail consent change: no customer create, update, delete or redact subscription.
+    expect(SHOPIFY_TOPIC_REGISTRATIONS.map(row => row.topic).filter(topic => /^CUSTOMERS_/.test(topic))).toEqual(['CUSTOMERS_EMAIL_MARKETING_CONSENT_UPDATE'])
   })
 
   it('an account with no start date registers nothing and asks Shopify nothing', async () => {

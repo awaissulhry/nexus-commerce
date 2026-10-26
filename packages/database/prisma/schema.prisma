@@ -22392,6 +22392,38 @@ model ShopifyOrderIngest {
   @@index([workspaceId])
 }
 
+/// Shopify marketing consent (2026-10-26, Owner decision D8 + follow-up (a)) — a Shopify buyer's e-mail marketing consent,
+/// copied into Nexus so a Meta customer list can later hold only buyers who said yes. One row per Shopify customer of one
+/// Shopify account, and only for a BUYER (at least one Shopify order, any date: the Owner's pick). The e-mail is never
+/// stored: only its SHA-256 after Meta's customer-list normalisation (trim, lower case; lib/customer-email-hash.ts).
+/// Written by the backfill a person runs, by the e-mail consent webhook, and once at a new buyer's first Shopify order;
+/// a customers/redact notice deletes the customer's row. Nothing here sends anything anywhere.
+model ShopifyMarketingConsent {
+  // Business ownership comes from verified database context.
+  workspaceId       String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                String    @id @default(cuid())
+  /// The SHOPIFY ChannelConnection the consent was read through (no foreign key, as the read tables).
+  connectionId      String
+  /// Shopify's customer id (digits).
+  shopifyCustomerId String
+  /// SHA-256 (lowercase hex) of the customer's e-mail, trimmed and lower-cased. Never the address itself.
+  emailSha256       String
+  /// Shopify's e-mail marketing state, upper case: SUBSCRIBED, NOT_SUBSCRIBED, PENDING, UNSUBSCRIBED, INVALID, REDACTED.
+  emailState        String
+  /// Shopify's opt-in level, upper case: SINGLE_OPT_IN, CONFIRMED_OPT_IN, UNKNOWN; null when Shopify gives none.
+  emailOptInLevel   String?
+  /// When the consent last changed at Shopify; null when it never changed. A write older than this one is not applied.
+  emailConsentAt    DateTime?
+  /// Which path wrote the row last: backfill | webhook | order.
+  source            String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([workspaceId, connectionId, shopifyCustomerId], name: "shopify_marketing_consent")
+  @@index([workspaceId, emailSha256])
+  @@index([workspaceId])
+}
+
 /// CX Etsy (2026-09-24) — an Etsy receipt Nexus refused to ingest, and why. Durable so that a
 /// refused receipt is never only a log line: the poller moves past it, the owner can see it.
 model EtsyReceiptRefusal {

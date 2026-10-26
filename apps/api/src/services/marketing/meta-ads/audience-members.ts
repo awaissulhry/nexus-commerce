@@ -21,9 +21,12 @@
  * optional on these DELETEs and Meta's DELETE examples send the payload only; an id repeated for the same people would
  * be a session Meta closed already), so the preview, the re-check and the run build the same requests.
  */
-import { createHash } from 'node:crypto'
 import prisma from '../../../db.js'
+import { normalisedEmail, sha256Hex } from '../../../lib/customer-email-hash.js'
 import { MEMBERS_PER_REQUEST } from '../../gateway/meta-audience-rules.js'
+
+// The one normaliser (lib/customer-email-hash.ts), so a hash Nexus stores is the hash a customer list gets.
+export { normalisedEmail, sha256Hex }
 
 /** Why Nexus adds nobody to a customer list (D8). */
 export const NO_CONSENT = 'Nexus adds people to a Meta customer list only from customers who gave marketing consent (Owner decision D8), '
@@ -36,15 +39,6 @@ export const OPT_OUT_SOURCES = ['UNSUBSCRIBE_LINK', 'COMPLAINT', 'GDPR_REQUEST',
 
 /** At most this many people in one change (10 requests of 10,000): more is asked in parts (`since`). */
 export const MAX_PEOPLE = 10 * MEMBERS_PER_REQUEST
-
-/** An e-mail as Meta matches it (trim, lower case), or null when it is no e-mail address at all. */
-export function normalisedEmail(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null
-  const email = raw.trim().toLowerCase()
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null
-}
-
-export const sha256Hex = (value: string): string => createHash('sha256').update(value, 'utf8').digest('hex')
 
 export interface HashedPeople {
   /** SHA-256 hashes, sorted, each once (never shown to anyone: they go only into the request bodies). */

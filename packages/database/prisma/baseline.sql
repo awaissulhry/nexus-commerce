@@ -10742,6 +10742,23 @@ CREATE TABLE "ShopifyOrderIngest" (
 );
 
 -- CreateTable
+CREATE TABLE "ShopifyMarketingConsent" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "connectionId" TEXT NOT NULL,
+    "shopifyCustomerId" TEXT NOT NULL,
+    "emailSha256" TEXT NOT NULL,
+    "emailState" TEXT NOT NULL,
+    "emailOptInLevel" TEXT,
+    "emailConsentAt" TIMESTAMP(3),
+    "source" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ShopifyMarketingConsent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "EtsyReceiptRefusal" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -17095,6 +17112,15 @@ CREATE INDEX "ShopifyOrderIngest_workspaceId_idx" ON "ShopifyOrderIngest"("works
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ShopifyOrderIngest_connectionId_key" ON "ShopifyOrderIngest"("workspaceId", "connectionId");
+
+-- CreateIndex
+CREATE INDEX "ShopifyMarketingConsent_workspaceId_emailSha256_idx" ON "ShopifyMarketingConsent"("workspaceId", "emailSha256");
+
+-- CreateIndex
+CREATE INDEX "ShopifyMarketingConsent_workspaceId_idx" ON "ShopifyMarketingConsent"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ShopifyMarketingConsent_workspaceId_connectionId_shopifyCus_key" ON "ShopifyMarketingConsent"("workspaceId", "connectionId", "shopifyCustomerId");
 
 -- CreateIndex
 CREATE INDEX "EtsyReceiptRefusal_connectionId_createdAt_idx" ON "EtsyReceiptRefusal"("connectionId", "createdAt");

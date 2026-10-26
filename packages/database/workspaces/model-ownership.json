@@ -508,6 +508,7 @@
     "EtsyReceiptIngest",
     "EtsyReceiptRefusal",
     "ShopifyOrderIngest",
+    "ShopifyMarketingConsent",
     "CommandReceipt",
     "ChannelMappingSet",
     "ChannelMappingField",

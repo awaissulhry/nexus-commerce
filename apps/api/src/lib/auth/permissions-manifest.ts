@@ -191,6 +191,8 @@ export const ENTRIES: Entry[] = [
   P(F.settingsIntegrationsManage, (_m, p) => p === '/api/shopify/shadow-report/:accountId'),
   // Shopify order import per account: its start date (T0, set once) and the order webhooks it registers.
   P(F.settingsIntegrationsManage, (_m, p) => p === '/api/shopify/order-import/:accountId' || p === '/api/shopify/order-import/:accountId/start'),
+  // Shopify marketing consent (2026-10-26) — the one-time backfill of buyers' e-mail consent, by the same people.
+  P(F.settingsIntegrationsManage, (_m, p) => p === '/api/shopify/marketing-consent/:accountId/backfill'),
 
   // ── Channel connect/disconnect (OAuth-adjacent, session-gated) ──
   // CX.1 — the shared connect flow. Only the browser-redirect callback is public.
