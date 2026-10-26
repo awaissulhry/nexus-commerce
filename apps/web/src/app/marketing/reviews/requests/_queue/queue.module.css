@@ -1,0 +1,269 @@
+/*
+ * Reviews › Requests › Queue — layout and domain content only. Every control is a design-system component; nothing
+ * here restyles one. `--nds-*` tokens only. The Reviews shell gives the page its padding; sections are 14 px apart as on
+ * the Overview, every row wraps, and wide content scrolls inside its own card (never the page sideways).
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.page > :first-child {
+  margin-bottom: var(--nds-space-4);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+@media (max-width: 599px) {
+  .actions {
+    width: 100%;
+  }
+}
+
+.bannerActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.tiles {
+  margin: 0;
+}
+
+.tileSkeleton {
+  min-height: 74px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.footnote,
+.muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.errorText {
+  margin: 0;
+  color: var(--nds-danger-strong);
+  font-size: var(--nds-font-size-sm);
+}
+
+.modalLead {
+  margin: 0 0 var(--nds-space-12);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-base);
+  line-height: 1.5;
+}
+
+.sectionHead {
+  margin: 0 0 var(--nds-space-8);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* ── Request pop-up ─────────────────────────────────────── */
+.detailActions,
+.detailMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.detailBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.answer {
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+}
+
+.answerHead {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-3);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.answerWords {
+  margin: var(--nds-space-4) 0 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+}
+
+.window {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 160px;
+}
+
+/* ── Package inserts ────────────────────────────────────── */
+.inserts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: var(--nds-space-20);
+}
+
+@media (max-width: 759px) {
+  .inserts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.insertsMain,
+.insertsPreview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  margin-bottom: var(--nds-space-4);
+  padding: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.pickList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  max-height: 260px;
+  margin: 0;
+  padding: var(--nds-space-8);
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+}
+
+.pickLabel {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-2) var(--nds-space-8);
+}
+
+.cardPreview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+  overflow-wrap: anywhere;
+}
+
+/* ── Preview email ──────────────────────────────────────── */
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.previewPickers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.email {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.emailFrame {
+  width: 100%;
+  min-height: 360px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+
+.previewTools {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--nds-space-14);
+}
+
+.tool {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  min-width: 0;
+}
+
+/* ── What requests brought ──────────────────────────────── */
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.resultTables {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--nds-space-14);
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.placeholderLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.headerSkeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
