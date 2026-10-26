@@ -292,7 +292,7 @@ describe('a creative on the gateway', () => {
     expect(new URL(h.calls[0].url).searchParams.get('fields')).toBe('id,from{id}')
     await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(post('120000000000099_500000000000001')))) })).rejects.toThrow(/not a post of the Page this business chose/)
     // Gap 46b review F2 — the chosen Page's prefix is no proof: a visitor's post, another id Meta answers, or no answer: refused.
-    for (const answer of [json({ id: `${PAGE}_500000000000002`, from: { id: '300000000000001' } }), json({ id: '120000000000099_500000000000002', from: { id: '120000000000099' } }), json({ error: { message: 'Unsupported get request.', code: 100 } }, 400)]) {
+    for (const answer of [json({ id: `${PAGE}_500000000000002`, from: { id: '300000000000001' } }), json({ id: '120000000000099_500000000000002', from: { id: '120000000000099' } }), json({ id: `${PAGE}_500000000000099`, from: { id: PAGE } }), json({ error: { message: 'Unsupported get request.', code: 100 } }, 400)]) {
       h.calls = []
       h.answers.push(answer)
       await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(post(`${PAGE}_500000000000002`)))) })).rejects.toThrow(/post 120000000000010_500000000000002 is not one Nexus can confirm the chosen Page posted/)

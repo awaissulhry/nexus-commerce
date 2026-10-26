@@ -697,6 +697,10 @@ describe('gap 46b (master CR-331) — introPost: an EXISTING post as a partnersh
     const r = await preview({ ...catalog, introPost: { source: 'facebook-post', id: `${PAGE}_500000000000002` } })
     expect(r.error).toMatch(/is not one Nexus can confirm the chosen Facebook Page posted/)
     expect(await preview({ ...catalog, introPost: { source: 'facebook-post', id: '120000000000099_500000000000002' } })).toMatchObject({ ok: false, error: expect.stringMatching(/not on the Facebook Page this business chose/) })
+    // A bare media id is read too: another Page's photo is not the business's own.
+    const read = h.read.getMockImplementation()!
+    h.read.mockImplementation(async (c: unknown, q: { path: string; operation: string }) => (q.path === '500000000000010' ? { body: { id: '500000000000010', from: { id: '120000000000099' } }, calls: 1 } : read(c, q)))
+    expect((await preview({ ...catalog, introPost: { source: 'facebook-post', id: '500000000000010' } })).error).toMatch(/Photo or video 500000000000010 is not one Nexus can confirm the chosen Facebook Page posted/)
     expect(h.check).not.toHaveBeenCalled()
   })
   it('only on a partnership Advantage+ catalog creative of the business portfolio\'s OWN catalog; the parent source only through introPost', async () => {
