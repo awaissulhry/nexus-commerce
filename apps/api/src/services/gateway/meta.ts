@@ -26,6 +26,8 @@ import type { MetaCatalogKind } from './meta-catalog-rules.js'
 import { META_GRAPH_VIDEO_HOST, type MetaPostEdge, type MetaPostKind } from './meta-post-rules.js'
 // Step 41 — the access edges (assigned_users and agencies of the chosen assets, a relationship's clients).
 import type { MetaAccessEdge, MetaAccessKind } from './meta-access-rules.js'
+// Step 38 — the messaging tools' edges and kinds.
+import type { MetaMessagingEdge, MetaMessagingKind } from './meta-messaging-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -110,6 +112,8 @@ export interface MetaWriteRequest {
     | MetaPostKind
     // Step 41 — the chosen ad account, Page or Instagram account's business asset (people, partners), or the portfolio.
     | MetaAccessKind
+    // Step 38 — the chosen Page as it messages, its messaging setup, labels, personas, templates; a WhatsApp account, a group.
+    | MetaMessagingKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -156,7 +160,7 @@ export interface MetaWriteRequest {
    * catalog. Step 37 — a Threads post's or reply's ad (`ad`), a branded-content post's comment's post (`brandedpost`). Step 24 —
    * a video post's video (`pagevideo`).
    */
-  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string }
+  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo' | 'creator'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
   recommendations?: boolean
   /** Step 24 (review B-F1) — a Page's video post goes to Meta's video host (meta-post-rules.ts META_GRAPH_VIDEO_HOST). */
@@ -179,6 +183,8 @@ export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copie
   | MetaPostEdge
   // Step 41 — people and partners of the chosen ad account, Page and Instagram account; the portfolio's relationships.
   | MetaAccessEdge
+  // Step 38 — messages, thread control, labels, templates, template groups, the messaging setup of the chosen Page.
+  | MetaMessagingEdge
 /** Step 33 — upload-meta-events: Conversions API events of a pixel (`<pixel id>/events`). */
 export type MetaEventsEdge = 'events'
 /** Step 27 — create-meta-ad: a new ad on the chosen ad account (an ad's labels: step 21's `adlabels`). */

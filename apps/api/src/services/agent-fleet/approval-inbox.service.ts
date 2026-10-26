@@ -993,6 +993,11 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-meta-catalog-items': ['basis', 'plan', 'reach'],
   'set-meta-catalog-feed': ['basis', 'plan', 'reach'],
   'set-meta-instagram-product-tags': ['basis', 'plan', 'reach'],
+  // Meta step 38 (2026-10-26): messages (the plan covers the exact words and the recipient), labels, templates, messaging setup.
+  'create-meta-message': ['basis', 'plan', 'reach'],
+  'set-meta-conversation-labels': ['basis', 'plan', 'reach'],
+  'set-meta-message-templates': ['basis', 'plan', 'reach'],
+  'set-meta-messaging-setup': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

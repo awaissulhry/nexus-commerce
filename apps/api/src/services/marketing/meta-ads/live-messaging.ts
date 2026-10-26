@@ -847,7 +847,7 @@ export async function liveConversations(input: ConversationsInput) {
       const read = await readPageLabels(account, maxRows)
       return {
         pageId: read.pageId, items: read.rows.map((r) => ({ labelId: idText(r.id), name: text(r.page_label_name) })), more: read.more,
-        note: `The chosen Page's inbox labels (Meta adds Lead Complete, Lead Disqualified, Lead in Progress and Lead Incomplete to conversations from Messenger lead ads). One person's labels are not read: Meta reads them only with the person's id in the request's path, which Nexus's call log keeps, and Nexus keeps no person's id it does not need. Making, putting on and taking off labels are change tools (a later Nexus step). ${PAGE_READ_NOTE}`,
+        note: `The chosen Page's inbox labels (Meta adds Lead Complete, Lead Disqualified, Lead in Progress and Lead Incomplete to conversations from Messenger lead ads). One person's labels are not read: Meta reads them only with the person's id in the request's path, which Nexus's call log keeps, and Nexus keeps no person's id it does not need. Making, putting on and taking off labels: set-meta-conversation-labels. ${PAGE_READ_NOTE}`,
       }
     }
     case 'thread-owner': {
@@ -858,7 +858,7 @@ export async function liveConversations(input: ConversationsInput) {
       return {
         pageId, personId, conversationId,
         threadOwner: owner ? { appId: idText(owner.app_id), expiresAt: isoOfUnix(owner.expiration) } : null,
-        note: 'Which app answers this person now (Conversation Routing; Meta replaced the Handover Protocol with it, backwards compatible). Meta names the app only to the thread owner or the Page\'s default app; null: the thread is idle (no message from the person in 24 hours) or Meta did not say. Passing and taking control are change tools (a later Nexus step).',
+        note: 'Which app answers this person now (Conversation Routing; Meta replaced the Handover Protocol with it, backwards compatible). Meta names the app only to the thread owner or the Page\'s default app; null: the thread is idle (no message from the person in 24 hours) or Meta did not say. Passing, releasing and taking control: create-meta-message action handover.',
       }
     }
     case 'call-permission': {
@@ -878,7 +878,7 @@ export async function liveConversations(input: ConversationsInput) {
       return {
         pageId, personId, conversationId,
         pageMenu: tidy(body?.page_level_persistent_menu ?? null), personMenu: tidy(body?.user_level_persistent_menu ?? null),
-        note: 'The persistent menu this person sees: the Page\'s own, or one set for this person only (personMenu). Setting or removing a person\'s menu is a change tool (a later Nexus step).',
+        note: 'The persistent menu this person sees: the Page\'s own, or one set for this person only (personMenu). Setting or removing a person\'s menu: set-meta-messaging-setup section person-menu.',
       }
     }
     case 'whatsapp-conversations':
@@ -947,7 +947,7 @@ export async function liveMessageTemplates(input: TemplatesInput) {
     const read = await readMessengerTemplates(account, input, maxRows)
     return {
       pageId: read.pageId, items: read.rows.map(templateRow), more: read.more, notRead: missingOf(read.missing),
-      note: `The chosen Page's Messenger utility templates (order, shipping and account updates; never marketing). An APPROVED one may be sent outside the 24-hour window as a utility message (messaging_type UTILITY). ${TEMPLATE_REVIEW} Making, editing and deleting templates are change tools (a later Nexus step). ${PAGE_READ_NOTE}`,
+      note: `The chosen Page's Messenger utility templates (order, shipping and account updates; never marketing). An APPROVED one may be sent outside the 24-hour window as a utility message (messaging_type UTILITY). ${TEMPLATE_REVIEW} Making, editing and deleting templates: set-meta-message-templates; sending an approved one: create-meta-message mode utility. ${PAGE_READ_NOTE}`,
     }
   }
   const pick = await ownWhatsApp(account, input.whatsappAccountId)
@@ -959,7 +959,7 @@ export async function liveMessageTemplates(input: TemplatesInput) {
       const read = await readWhatsAppTemplates(account, waba, input, maxRows)
       return {
         whatsappAccount, totalCount: read.totalCount, items: read.rows.map(templateRow), more: read.more, notRead: missingOf(read.missing),
-        note: `The business's WhatsApp templates (marketing, utility, authentication). from / to: last updated on those days (UTC). quality: Meta's GREEN, YELLOW, RED or UNKNOWN. ${TEMPLATE_REVIEW} Making, editing and deleting templates are change tools (a later Nexus step).`,
+        note: `The business's WhatsApp templates (marketing, utility, authentication). from / to: last updated on those days (UTC). quality: Meta's GREEN, YELLOW, RED or UNKNOWN. ${TEMPLATE_REVIEW} Making and deleting templates and groups: set-meta-message-templates.`,
       }
     }
     case 'groups': {
@@ -1033,7 +1033,7 @@ export async function liveMessagingSetup(input: SetupInput) {
           subjectToNewEuPrivacyRules: bool(b.subject_to_new_eu_privacy_rules),
         },
         notRead: missingOf(read.missing),
-        note: `What a person sees when they open a chat with the ${platform === 'instagram' ? 'Instagram account (ice breakers, menu)' : 'Page (Get Started button, greeting, ice breakers, menu)'}. People arriving from a click-to-message ad see that ad's own greeting and ice breakers instead (read both before changing either). subjectToNewEuPrivacyRules: Meta limits some features in Europe for this Page. ${PROFILE_NOTE} Changing the profile is a change tool (a later Nexus step). ${PAGE_READ_NOTE}`,
+        note: `What a person sees when they open a chat with the ${platform === 'instagram' ? 'Instagram account (ice breakers, menu)' : 'Page (Get Started button, greeting, ice breakers, menu)'}. People arriving from a click-to-message ad see that ad's own greeting and ice breakers instead (read both before changing either). subjectToNewEuPrivacyRules: Meta limits some features in Europe for this Page. ${PROFILE_NOTE} Changing it: set-meta-messaging-setup section profile. ${PAGE_READ_NOTE}`,
       }
     }
     case 'welcome-flows': {
@@ -1046,7 +1046,7 @@ export async function liveMessagingSetup(input: SetupInput) {
       })).filter((f) => !platform || f.platforms.includes(platform))
       return {
         pageId: read.pageId, platform: platform ?? 'all', items, more: read.more, notRead: missingOf(read.missing),
-        note: `Welcome-message flows for Click-to-Messenger and Click-to-Instagram-Direct ads (an ad names one as partner_app_welcome_message_flow_id). Nexus reads the Page's flows (Instagram flows there are those whose platforms include instagram); flows made on the Instagram account itself through Instagram Login are not on this list. Meta lists only the flows the business's Meta app made. A flow used in an ad cannot be changed or deleted. Making, changing and deleting flows are change tools (a later Nexus step). ${PAGE_READ_NOTE}`,
+        note: `Welcome-message flows for Click-to-Messenger and Click-to-Instagram-Direct ads (an ad names one as partner_app_welcome_message_flow_id). Nexus reads the Page's flows (Instagram flows there are those whose platforms include instagram); flows made on the Instagram account itself through Instagram Login are not on this list. Meta lists only the flows the business's Meta app made. A flow used in an ad cannot be changed or deleted. Making, changing and deleting flows: set-meta-messaging-setup section welcome-flow. ${PAGE_READ_NOTE}`,
       }
     }
     case 'personas': {
@@ -1059,7 +1059,7 @@ export async function liveMessagingSetup(input: SetupInput) {
         if (!one) throw new MetaLiveRefusal('That persona is not one of the chosen Page\'s (among the first 500 Meta lists), so it is not read.')
         return { pageId: read.pageId, persona: one }
       }
-      return { pageId: read.pageId, items, more: read.more, note: `Names and pictures the Page's replies can carry (a person or a bot answering for the Page). Making and deleting personas are change tools (a later Nexus step; a deleted persona keeps its old messages). ${PAGE_READ_NOTE}` }
+      return { pageId: read.pageId, items, more: read.more, note: `Names and pictures the Page's replies can carry (a person or a bot answering for the Page). Making and deleting personas: set-meta-messaging-setup section persona (a deleted persona keeps its old messages). ${PAGE_READ_NOTE}` }
     }
     case 'calling': {
       const read = await readCallSettings(account)
@@ -1068,7 +1068,7 @@ export async function liveMessagingSetup(input: SetupInput) {
         pageId: read.pageId,
         calling: { audioEnabled: bool(b.audio_enabled), videoEnabled: bool(b.video_enabled), callIconShown: bool(b.icon_enabled), callHours: tidy(b.call_hours ?? null), callRouting: tidy(b.call_routing ?? null) },
         notRead: missingOf(read.missing),
-        note: `Messenger calling of the chosen Page: audio and video calls on or off, the call icon in chats, call hours (days not listed are closed) and where incoming calls ring (META: Meta's inboxes; PARTNERS: other apps). Changing them is a change tool (a later Nexus step). ${PAGE_READ_NOTE}`,
+        note: `Messenger calling of the chosen Page: audio and video calls on or off, the call icon in chats, call hours (days not listed are closed) and where incoming calls ring (META: Meta's inboxes; PARTNERS: other apps). Changing them: set-meta-messaging-setup section calling. ${PAGE_READ_NOTE}`,
       }
     }
     case 'features': {
@@ -1142,7 +1142,7 @@ async function destinations(account: MetaChosenAccount) {
     threads: { linkedToInstagram: threadsId(linkedThreads), instagramBacked: threadsId(backedThreads), pageBacked: idText(b.page_backed_threads_account_id) },
     clickToMessageEligibility: ctx.value ? tidy(firstOf(ctx.value.body)) : null,
     ...(notRead.length ? { notRead } : {}),
-    note: 'Where a messaging or Threads ad can send people: the Page\'s WhatsApp number (Click-to-WhatsApp), its Instagram account, Instagram accounts of the ad account with their Instagram-backed Page id (iabp: used as object_id when boosting an Instagram post), and the Threads account to run Threads ads as (linked to the Instagram account, Instagram-backed, or Page-backed). Threads accounts made after 2026-01-29 must be added to the business portfolio by hand. messengerAdDefaults: the Page\'s default ice breakers and quick replies for messaging ads (read only — Meta takes no change of them on the Page: they are set per ad, or as a welcome flow). clickToMessageEligibility: Meta\'s answer on click-to-message optimisation (its field ctm; Meta does not describe it further). Making a Page- or Instagram-backed Threads account and linking a WhatsApp number are change tools (a later Nexus step).',
+    note: 'Where a messaging or Threads ad can send people: the Page\'s WhatsApp number (Click-to-WhatsApp), its Instagram account, Instagram accounts of the ad account with their Instagram-backed Page id (iabp: used as object_id when boosting an Instagram post), and the Threads account to run Threads ads as (linked to the Instagram account, Instagram-backed, or Page-backed). Threads accounts made after 2026-01-29 must be added to the business portfolio by hand. messengerAdDefaults: the Page\'s default ice breakers and quick replies for messaging ads (read only — Meta takes no change of them on the Page: they are set per ad, or as a welcome flow). clickToMessageEligibility: Meta\'s answer on click-to-message optimisation (its field ctm; Meta does not describe it further). Linking a WhatsApp number: set-meta-messaging-setup section whatsapp-number; making a Page- or Instagram-backed Threads account is not in Nexus.',
   }
 }
 

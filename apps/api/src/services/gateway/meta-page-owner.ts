@@ -40,9 +40,12 @@ import type { MetaCheckRead } from './meta-brand-safety-owner.js'
 import { META_COMMENT_PAGE_KINDS, metaCommentOwnerProblem } from './meta-comment-owner.js'
 // Step 24 — the post kinds made as the Page (the chosen Page's posts, the chosen Instagram account's media and events).
 import { META_POST_KINDS, metaPostOwnerProblem } from './meta-post-owner.js'
+// Step 38 — the messaging kinds made as the Page (its messages, labels, personas, templates and messaging setup).
+import { META_MESSAGING_PAGE_KINDS } from './meta-messaging-rules.js'
+import { metaMessagingOwnerProblem } from './meta-messaging-owner.js'
 
 /** The kinds this check confirms (every rule marked `auth: 'page'` names one of them). */
-export const META_PAGE_KINDS: ReadonlySet<MetaWriteKind> = new Set<MetaWriteKind>(['page', 'leadform', 'testlead', 'canvas', ...META_COMMENT_PAGE_KINDS, ...META_POST_KINDS])
+export const META_PAGE_KINDS: ReadonlySet<MetaWriteKind> = new Set<MetaWriteKind>(['page', 'leadform', 'testlead', 'canvas', ...META_COMMENT_PAGE_KINDS, ...META_POST_KINDS, ...META_MESSAGING_PAGE_KINDS as ReadonlySet<MetaWriteKind>])
 
 type Problem = { code: string; sentence: string } | null
 const idOf = (v: unknown): string | null => (typeof v === 'string' || typeof v === 'number') && String(v).trim() ? String(v).trim() : null
@@ -92,6 +95,8 @@ export async function metaPageOwnerProblem(connectionId: string, write: MetaJudg
   if (META_COMMENT_PAGE_KINDS.has(kind as MetaWriteKind)) return metaCommentOwnerProblem(connectionId, write, kind, read, parent)
   // Step 24 — a post change: its own owner check (meta-post-owner.ts), the ids inside its body included.
   if (META_POST_KINDS.has(kind as MetaWriteKind)) return metaPostOwnerProblem(connectionId, write, kind, read, run, parent)
+  // Step 38 — a messaging change: its own owner check (meta-messaging-owner.ts), the ids inside its body included.
+  if (META_MESSAGING_PAGE_KINDS.has(kind)) return metaMessagingOwnerProblem(connectionId, write, kind, read, parent)
   const pageId = await metaChosenPageOf(connectionId)
   if (!pageId) return { code: 'META_PAGE_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Facebook Page chosen through this connection, so Nexus changes nothing made as a Page.' }
   const problem = kind === 'page' ? (id === pageId ? null : { code: 'META_PAGE_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${id} is not the Facebook Page this business chose through this connection.` })
@@ -100,6 +105,9 @@ export async function metaPageOwnerProblem(connectionId: string, write: MetaJudg
         : await testLeadNexusMade(id, pageId)
   return problem ?? bodyIdsProblem(connectionId, write, pageId, read, run)
 }
+
+/** Step 38 — the same lead-form check for an instant form a message names (meta-messaging-owner.ts). */
+export const metaLeadFormOfPageProblem = (formId: string, pageId: string, read: MetaCheckRead): Promise<Problem> => formOfPage(formId, pageId, read)
 
 async function formOfPage(formId: string, pageId: string, read: MetaCheckRead): Promise<Problem> {
   if (await metaPageObjectNexusMade('leadform', formId, pageId)) return null

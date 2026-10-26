@@ -32,6 +32,8 @@ export const NEVER_IN_BULK: Readonly<Record<string, string>> = {
   'email-supplier': 'An e-mail to a supplier cannot be recalled once it is sent, so each one is approved on its own.',
   'reply-to-review': 'A public reply to a review cannot be recalled once it is posted, so each one is approved on its own.',
   'request-review': 'A review request reaches the buyer and cannot be recalled, so each one is approved on its own.',
+  // Meta step 38 — gated as send-customer-message: a Messenger or Instagram message reaches a person and cannot be recalled.
+  'create-meta-message': 'A Messenger or Instagram message reaches a person and cannot be recalled once it is sent, so each one is approved on its own.',
   // Cancels.
   'cancel-order': 'Cancelling an order reaches the buyer and cannot be undone, so each one is approved on its own.',
   'cancel-purchase-order': 'Cancelling a purchase order cannot be undone, so each one is approved on its own.',

@@ -15,6 +15,8 @@ import type { MetaCatalogKind } from '../../gateway/meta-catalog-rules.js'
 import type { MetaPostKind } from '../../gateway/meta-post-rules.js'
 // Step 41 — set-meta-user-access and set-meta-partner-access's kinds.
 import type { MetaAccessKind } from '../../gateway/meta-access-rules.js'
+// Step 38 — the messaging tools' kinds.
+import type { MetaMessagingKind } from '../../gateway/meta-messaging-rules.js'
 import type { MetaChangeResult, MetaRequestVia, MetaWriteTarget } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
@@ -98,12 +100,14 @@ export interface MetaChangeRequest {
     | MetaPostKind
     // Step 41 — the chosen ad account, Page or Instagram account's business asset (people, partners), or the portfolio.
     | MetaAccessKind
+    // Step 38 — the chosen Page as it messages, its messaging setup, labels, personas, templates; a WhatsApp account, a group.
+    | MetaMessagingKind
   /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
   /** A budget schedule's campaign or ad set; step 34: a feed's catalog; step 37 — a Threads post's or reply's ad, a branded-content comment's post; step 24 — a video post's video. */
-  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string }
+  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo' | 'creator'; id: string }
   /** Step 19 — Meta's check of this create asks its setup recommendations too (master CMP-031). */
   recommendations?: boolean
   /**

@@ -46,6 +46,9 @@ import { noteMetaPostPartMade } from './meta-post-owner.js'
 import { isMetaPostBodyKind, type MetaPostKind } from './meta-post-rules.js'
 import { MetaPageTokenUnavailable, metaPageTokenFor, scrubExactToken } from './meta-page-token.js'
 import { META_THREADS_KINDS, metaThreadsOwnerProblem } from './meta-comment-owner.js'
+// Step 38 — a WhatsApp template or template group change (system-user token): its own owner check.
+import { META_WHATSAPP_KINDS, isMetaMessagingBodyKind, type MetaMessagingKind } from './meta-messaging-rules.js'
+import { metaWhatsAppOwnerProblem } from './meta-messaging-owner.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { META_SIGNALS_WRITE_RULES, type MetaSignalsKind } from './meta-signals-rules.js'
 import { META_WEBHOOK_WRITE_RULES } from './meta-webhook-rules.js'
@@ -157,7 +160,7 @@ export interface GatewayRequest {
    * step 37: a Threads post's or reply's ad (`ad`), a branded-content post a comment is on (`brandedpost`). Meta step 24:
    * the video of a video post Nexus deletes (`pagevideo`, re-review N4).
    */
-  metaParent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string }
+  metaParent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo' | 'creator'; id: string }
   /**
    * Meta step 39 (review A9): the run of a Nexus change this call belongs to (the kit's own id): a block-list draft is
    * remembered for, and used by, only the same run.
@@ -415,6 +418,9 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
       return refuse('gated', 'PUBLISH_GATED', 'Nothing was sent to Meta: Meta changes are switched off in Nexus (NEXUS_META_ADS_WRITES), so Meta is not asked to check one either.', 503)
     }
     metaWrite = judged.write
+    // Step 38 — a WhatsApp template or group change counts against the WhatsApp account (Meta's limit per WABA), as its reads
+    // do (step 15): the `whatsapp` bucket, never the ad account's.
+    metaWhatsAppRead = !!req.metaObjectKind && META_WHATSAPP_KINDS.has(req.metaObjectKind)
     // Step 30 — a change that names a Meta app (an app subscription, an ad account's connected app) goes only for the
     // connection's OWN app, as the token renewal does.
     if (metaWrite.appId) {
@@ -508,6 +514,9 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
     }
     const owner = metaWrite.auth === 'page' ? await metaPageOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId), req.metaRun, req.metaParent)
       : req.metaObjectKind && META_THREADS_KINDS.has(req.metaObjectKind) ? await metaThreadsOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId), req.metaParent)
+      // Step 38 — a WhatsApp template or group (by its kind: only step 38's WhatsApp rules name it) is of a WhatsApp account
+      // the chosen ad account's own portfolio owns, a portfolio no other Nexus business shares (meta-messaging-owner.ts).
+      : req.metaObjectKind && META_WHATSAPP_KINDS.has(req.metaObjectKind) ? await metaWhatsAppOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId))
       : isWebhookRule(metaWrite.rule) ? await metaWebhookOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
       // Step 20 — a targeting rule names its own kind (step 39 an ad set's targeting; step 20 its audience or placements).
       : metaWrite.targeting ? ((metaWrite.kinds as readonly string[] | undefined)?.includes(req.metaObjectKind ?? '') ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
@@ -517,7 +526,7 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
           : isSignalsRule(metaWrite.rule) ? await metaSignalsOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
           // Step 41 — a people or partner access change: chosen by its rule (its own kinds), every id in its body checked there.
           : isMetaAccessRule(metaWrite.rule) ? await (await import('./meta-access-owner.js')).metaAccessOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaOwnerIo(req.connectionId, metaWrite), new URL(req.url).searchParams, req.metaExpectedIds)
-          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind | MetaWebhookKind | MetaTargetingKind | MetaCommentKind | MetaPostKind | MetaAccessKind> | undefined, req.metaParent)
+          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind | MetaWebhookKind | MetaTargetingKind | MetaCommentKind | MetaPostKind | MetaAccessKind | MetaMessagingKind> | undefined, req.metaParent)
           ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
           ?? await metaMediaAssetsProblem(req.connectionId, metaWrite)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)
@@ -828,7 +837,8 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
     // Step 27b review A-1 — nor does a Page's own limit on a change made AS the Page (`auth: 'page'`): 80001 ("too many calls
     // to this Page account") and step 36's 80005 count against that PAGE, not the business's ad account — holding its 'ads'
     // bucket 300 s would refuse every other Meta change of the business (a pause too) for nothing. The tool says it in words.
-    const pageLimit = metaWrite?.auth === 'page' && /^8000[15](\/|$)/.test(verdict.channelCode ?? '')
+    // Step 38 — and the Page's Instagram (80002) and Messenger (80006) limits on a message or messaging change made as the Page.
+    const pageLimit = metaWrite?.auth === 'page' && /^8000[1256](\/|$)/.test(verdict.channelCode ?? '')
     // Step 15 fix A1/A3 — a read made with the chosen Page's own token, or of the WhatsApp account, has a bucket of its own:
     // Meta's limit of that Page, Instagram account, LeadGen or Messenger (80001, 80002, 80005, 80006 — rate-limiting page,
     // Error Codes) or of that WhatsApp account (80008) holds THAT bucket 300 s, never the ad account's; any other throttle
@@ -918,7 +928,7 @@ const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad' | 'customaudie
  * cannot place, of another kind, or of any other account (another business's too) gets nothing sent; the sentence never
  * names the other account.
  */
-async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | 'adrule' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaMediaWriteKind | MetaBoostWriteKind | MetaCatalogKind | MetaEventsKind | undefined, parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string }): Promise<{ code: string; sentence: string } | null> {
+async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | 'adrule' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaMediaWriteKind | MetaBoostWriteKind | MetaCatalogKind | MetaEventsKind | undefined, parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo' | 'creator'; id: string }): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   // Step 29 — Meta's automated rules: the chosen ad account's rule library (a rule's create, with every id inside the
   // rule checked), or one of its rules (and the ids inside).
@@ -1021,7 +1031,7 @@ async function metaWebhookOwnerProblem(connectionId: string, write: MetaJudgedWr
  * object's own budget schedules (ONE live read of `/<campaign | ad set>/budget_schedules`, at most 50 per object — Meta's
  * limit, high-demand-period.md). Anything else: nothing is sent.
  */
-async function metaPeriodOwnerProblem(connectionId: string, write: MetaJudgedWrite, parent: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string } | undefined): Promise<{ code: string; sentence: string } | null> {
+async function metaPeriodOwnerProblem(connectionId: string, write: MetaJudgedWrite, parent: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo' | 'creator'; id: string } | undefined): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   if (!parent || (parent.kind !== 'campaign' && parent.kind !== 'adset') || !/^\d{1,20}$/.test(parent.id)) {
     return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of budget schedule ${id} names the campaign or ad set it belongs to.` }
@@ -1219,6 +1229,8 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
       || inner.kind === 'mentionedmedia' || inner.kind === 'mentionedcomment') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: inside this change, ${inner.id} is not an object this change may name.` }
     // Step 24 — and the ids inside a post (its photos, library images, sponsors, containers, place): meta-post-owner.ts.
     if (isMetaPostBodyKind(inner.kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: inside this change, ${inner.id} is not an object this change may name.` }
+    // Step 38 — and the ids inside a messaging change (a person, a comment, a persona, a template, …): meta-messaging-owner.ts.
+    if (isMetaMessagingBodyKind(inner.kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: inside this change, ${inner.id} is not an object this change may name.` }
     // Step 22 — a video inside a body (the video a library removal names): listed in the chosen ad account's library.
     const problem = await metaOwnerProblem(connectionId, { ...write, objectId: inner.id, check: false }, inner.kind)
     if (problem) return { code: problem.code, sentence: problem.sentence.replace(/^Nothing was sent to Meta: /, `Nothing was sent to Meta: inside this change, `) }

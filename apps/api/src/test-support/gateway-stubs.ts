@@ -71,6 +71,11 @@ export const accountModule = {
   metaPostNexusMade: async (kind: 'pagepost' | 'pagevideo' | 'igmedia' | 'igcontainer', objectId: string, ownerId: string): Promise<boolean> => gatewayMetaPostsMade.has(`${kind}:${objectId}:${ownerId}`),
   // Meta step 24 (re-review N1): a video post's video by its post (`pagepostvideo:${postId}:${pageId}:${videoId}`).
   metaPagePostVideoOf: async (postId: string, pageId: string): Promise<string | null> => [...gatewayMetaPostsMade].find((k) => k.startsWith(`pagepostvideo:${postId}:${pageId}:`))?.split(':')[3] ?? null,
+  // Meta step 38: the messaging tools.
+  META_MESSAGE_TOOL: 'create-meta-message',
+  META_LABELS_TOOL: 'set-meta-conversation-labels',
+  META_TEMPLATES_TOOL: 'set-meta-message-templates',
+  META_SETUP_TOOL: 'set-meta-messaging-setup',
 }
 export const ledgerModule = {
   writeLedgerRow: async (row: GatewayLedgerRow): Promise<void> => { gatewayLedger.push(row) },
