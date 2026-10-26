@@ -134,6 +134,15 @@ export function statusWhere(status: QueueStatus, now: Date): Record<string, unkn
   }
 }
 
+/**
+ * The queue's status filter (`?status=`) and its tile: SKIPPED is every request that was not asked, blocked ones
+ * (SUPPRESSED: a return, a refund, the do-not-email list) included, so pressing the Skipped tile shows the rows it
+ * counts. SUPPRESSED alone stays a filter of its own; every other status is `statusWhere`.
+ */
+export function statusFilterWhere(status: QueueStatus, now: Date): Record<string, unknown> {
+  return status === 'SKIPPED' ? { OR: [statusWhere('SKIPPED', now), statusWhere('SUPPRESSED', now)] } : statusWhere(status, now)
+}
+
 const NOT_ASKED = { status: { in: ['SKIPPED', 'SUPPRESSED'] } }
 const CODE_KEYS = ['SKIPPED_BY_HAND', 'ALREADY_SOLICITED', 'NOT_IMPLEMENTED', 'UNKNOWN_MARKETPLACE', 'OUTSIDE_WINDOW', 'SUPPRESSED', 'DIVERTED_NEGATIVE', 'NO_RESPONSE_NO_FALLBACK']
 const NO_DECIDING_CODE = { OR: [{ providerResponseCode: null }, { providerResponseCode: { notIn: CODE_KEYS } }] }
@@ -219,7 +228,7 @@ export function queueWhere(q: QueueQuery, now: Date): { base: Record<string, unk
     })
   }
   const base = and.length ? { AND: and } : {}
-  const full = q.status ? { AND: [...and, statusWhere(q.status, now)] } : base
+  const full = q.status ? { AND: [...and, statusFilterWhere(q.status, now)] } : base
   return { base, full }
 }
 
@@ -338,11 +347,10 @@ async function reviewRate30(now: Date): Promise<{ rate: number | null; delta: nu
 }
 
 async function queueTiles(base: Record<string, unknown>, now: Date) {
-  const count = (...statuses: QueueStatus[]) => prisma.reviewRequest.count({
-    where: { AND: [base, statuses.length === 1 ? statusWhere(statuses[0], now) : { OR: statuses.map((s) => statusWhere(s, now)) }] } as any,
-  })
+  // Each tile counts exactly what pressing it filters (statusFilterWhere): Skipped includes the blocked requests.
+  const count = (status: QueueStatus) => prisma.reviewRequest.count({ where: { AND: [base, statusFilterWhere(status, now)] } as any })
   const [scheduled, dueNow, retrying, sent, failed, skipped, rate] = await Promise.all([
-    count('SCHEDULED'), count('DUE'), count('RETRYING'), count('SENT'), count('FAILED'), count('SKIPPED', 'SUPPRESSED'),
+    count('SCHEDULED'), count('DUE'), count('RETRYING'), count('SENT'), count('FAILED'), count('SKIPPED'),
     reviewRate30(now).catch((err) => {
       logger.warn('[review-queue] review rate failed', { error: err instanceof Error ? err.message : String(err) })
       return { rate: null, delta: null }

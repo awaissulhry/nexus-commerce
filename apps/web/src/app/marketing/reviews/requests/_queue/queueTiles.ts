@@ -36,7 +36,7 @@ export const STATUS_OPTIONS: { value: QueueStatus; label: string }[] = [
   { value: 'RETRYING', label: 'Retrying' },
   { value: 'SENT', label: 'Sent' },
   { value: 'FAILED', label: 'Failed' },
-  { value: 'SKIPPED', label: 'Skipped' },
+  { value: 'SKIPPED', label: 'Skipped (every request not asked, blocked ones too)' },
   { value: 'SUPPRESSED', label: 'Blocked (a return, a refund, the do-not-email list)' },
 ]
 

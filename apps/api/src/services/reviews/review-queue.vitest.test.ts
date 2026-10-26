@@ -20,6 +20,7 @@ import {
   queueWhere,
   reasonWhere,
   rulesBulkPlan,
+  statusFilterWhere,
   statusWhere,
   testEmailWords,
   toQueueRow,
@@ -147,6 +148,20 @@ describe('review queue: status and reason as where', () => {
     const { base, full } = queueWhere(parseQueueQuery({ status: 'due', channel: 'amazon', market: 'it', period: 'all' }), NOW)
     expect(base).toEqual({ AND: [{ channel: 'AMAZON' }, { marketplace: 'IT' }] })
     expect(full).toEqual({ AND: [{ channel: 'AMAZON' }, { marketplace: 'IT' }, statusWhere('DUE', NOW)] })
+  })
+
+  it('the Skipped filter shows every request the Skipped tile counts: skipped and blocked; Blocked alone stays its own', () => {
+    const skipped = queueWhere(parseQueueQuery({ status: 'skipped', period: 'all' }), NOW).full
+    const blocked = queueWhere(parseQueueQuery({ status: 'suppressed', period: 'all' }), NOW).full
+    for (const row of all) {
+      const named = queueStatusOf(row as never, NOW)
+      expect({ row, hit: matches(skipped, row) }).toEqual({ row, hit: named === 'SKIPPED' || named === 'SUPPRESSED' })
+      expect({ row, hit: matches(blocked, row) }).toEqual({ row, hit: named === 'SUPPRESSED' })
+      // The tile counts with the same where as the filter.
+      expect(matches(statusFilterWhere('SKIPPED', NOW), row)).toBe(matches(skipped, row))
+    }
+    expect(all.some((row) => row.status === 'SUPPRESSED' && matches(skipped, row))).toBe(true)
+    for (const status of QUEUE_STATUSES.filter((s) => s !== 'SKIPPED')) expect(statusFilterWhere(status, NOW)).toEqual(statusWhere(status, NOW))
   })
 })
 
