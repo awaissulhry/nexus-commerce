@@ -19,9 +19,12 @@ export interface WorkspaceNavItem {
 
 export interface WorkspaceNavGroup {
   id: string
+  /** Always required: it names the group to a screen reader, even when `hideLabel` hides it on screen. */
   label: string
   items: readonly WorkspaceNavItem[]
   collapsible?: boolean
+  /** No label on screen (the label stays the group's accessible name); such a group is never collapsible. */
+  hideLabel?: boolean
 }
 
 export interface WorkspaceSubheaderProps {
@@ -164,11 +167,11 @@ export function WorkspaceSubheader({
   const navigation = (scope: string) => (
     <nav aria-label={navigationLabel}>
       {groups.filter(group => group.items.length > 0).map(group => {
-        const expanded = !collapsedGroups.has(group.id)
+        const expanded = !!group.hideLabel || !collapsedGroups.has(group.id)
         const groupId = `${id}-${scope}-${group.id}`
         return (
           <section className="nds-secondary-nav-group" key={group.id} aria-labelledby={`${groupId}-label`}>
-            {group.collapsible ? (
+            {group.hideLabel ? <span id={`${groupId}-label`} className="nds-vh">{group.label}</span> : group.collapsible ? (
               <button
                 id={`${groupId}-label`}
                 type="button"
