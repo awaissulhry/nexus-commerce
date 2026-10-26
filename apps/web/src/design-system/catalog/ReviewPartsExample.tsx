@@ -73,7 +73,7 @@ export function ReviewPartsExample() {
   useEffect(() => setChrome({ header: document.querySelector('.nds-topbar'), primaryNavigation: document.querySelector('.h10-rail') }), [])
 
   const metrics = useMemo<Metric[]>(() => [
-    { label: 'Average rating', value: '4.4', hint: <StarRating value={4.4} size="sm" />, href: '/design-system#review-parts-example' },
+    { label: 'Average rating', value: '4.4', delta: { value: 'same as the month before', tone: 'neutral' }, hint: <StarRating value={4.4} size="sm" />, href: '/design-system#review-parts-example' },
     { label: 'New reviews', value: '38', delta: { value: '+6 vs last 30 days', positive: true }, hint: 'opens the Inbox', href: '/design-system#review-parts-example' },
     { label: 'Needs a reply', value: '12', hint: 'oldest waits 3 days', accent: 'var(--nds-danger)', active: tile === 'reply', onClick: () => setTile(t => (t === 'reply' ? null : 'reply')) },
     { label: 'Open alerts', value: '3', hint: '1 new today', accent: 'var(--nds-warning)', active: tile === 'alerts', onClick: () => setTile(t => (t === 'alerts' ? null : 'alerts')) },

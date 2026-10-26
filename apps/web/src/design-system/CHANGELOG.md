@@ -17,6 +17,12 @@ Web only: `patterns/{ReplyComposer,replyComposerModel,Lightbox,lightboxModel}`, 
   ("No 3-star ratings to show"). No ratings: "No ratings yet". Track = `.nds-progress`.
 - **`MetricStrip`**: `Metric.href` makes a tile a link (`linkAs`, default Next's `Link`; `href` + `onClick` is a type error)
   with a chevron; `minTileWidth` (px → `--nds-metrics-min`); two tiles per row under 760 px. `metricKind()`.
+  `delta.tone?: 'positive'|'negative'|'neutral'` (wins over `positive`; `.dlt.neutral` = `--nds-text-2`, the same rule
+  in both `components.css`): "same as the month before" is neither green nor red. `metricDeltaClass()`.
+- **`PerformanceGraph`** (`PerformanceGraph.tsx`, `performanceGraphModel.ts`, both apps, identical): `ChartSeries.domain` /
+  `ticks` fix a series' axis (a 5-star rating at 0–5; it fitted its data to 0–8; data outside still widens it), and a value
+  with no value on either side draws a dot in its series' colour (a line needs two points, so it showed nothing).
+  `isolatedPoints()`, `axisScale()`.
 - **Banner actions wrap**: `.nds-banner` wraps; `.nds-banner-action` wraps with an 8 px gap and pushes right; under 560 px it
   takes its own line (the dismiss stays on the first).
 - **`Textarea limit` / `counterLabel`**: "312 / 500" under the field (grapheme count, `Intl.Segmenter`), never blocks
@@ -39,7 +45,8 @@ Web only: `patterns/{ReplyComposer,replyComposerModel,Lightbox,lightboxModel}`, 
 - **`WorkspaceSubheader pinned`**: from 1024 px the navigation is a 224 px column beside the rail (sticky, scrolls inside)
   with Collapse → the 48 px strip; below, the drawer opens from a page button (`navigationOpen`, `onNavigationOpenChange`,
   `navigationId`). `header` optional (no band without it), `title` / `subtitle` name the panel,
-  `WorkspaceNavGroup.hideLabel` (label for readers only; never collapsible).
+  `WorkspaceNavGroup.hideLabel` (label for readers only; never collapsible). The pinned subheader's drawer closes with
+  "Close Reviews navigation" (`Close ${navigationLabel}`); the column keeps "Collapse …".
 - **`MetafieldValue`** rating draws `StarRating size="sm"` (`.nds-mf-rating svg*` rules removed).
 
 ## The row under an open family is a DS part — 2026-10-23

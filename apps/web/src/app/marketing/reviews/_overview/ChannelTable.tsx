@@ -2,7 +2,9 @@
 
 /**
  * Reviews Overview — "By channel and market": rating, reviews, change, requests sent, review rate and the last review
- * per channel and market (DS NexusGrid, a small `plain` table; it scrolls sideways inside its card on a phone). A row
+ * per channel and market (DS NexusGrid, a small `plain` table). Its columns start at the board's widths, which add up to
+ * 830 px, so it fits the card a 1280 px window gives it (926 px) and only a narrower card (a phone) scrolls it sideways,
+ * inside the card. Notes under a value wrap onto a second line and the row grows to hold them (`autoHeight`). A row
  * opens that channel's reviews. eBay reads as % positive, not stars; Amazon stars come only from imported reviews
  * ("No rating data from Amazon — import reviews" otherwise); Etsy asks its buyers itself, so its requests are "—".
  * A channel that stopped updating shows "Not updating", the reason and Reconnect — never a stale date as if fine.
@@ -59,7 +61,7 @@ function SentCell({ data }: ICellRendererParams<ChannelViewRow>) {
   return (
     <span className={`${s.cellStack} ${s.alignEnd}`}>
       <span className={s.num}>{data.sent}</span>
-      {data.sentNote && <span className={s.cellSub}>{data.sentNote}</span>}
+      {data.sentNote && <span className={s.cellWrap}>{data.sentNote}</span>}
     </span>
   )
 }
@@ -70,7 +72,7 @@ function LastCell({ data }: ICellRendererParams<ChannelViewRow>) {
     return (
       <span className={s.cellStack}>
         <Tag tone="neutral">Coming later</Tag>
-        <span className={s.cellSub}>{data.lastNote}</span>
+        <span className={s.cellWrap}>{data.lastNote}</span>
       </span>
     )
   }
@@ -78,7 +80,7 @@ function LastCell({ data }: ICellRendererParams<ChannelViewRow>) {
     return (
       <span className={s.cellStack}>
         <Pill tone="danger" dot>Not updating</Pill>
-        <span className={s.cellSub}>
+        <span className={s.cellWrap}>
           {data.reason}
           {data.reconnectHref && <> · <Link href={data.reconnectHref} className={s.inlineLink}>Reconnect</Link></>}
         </span>
@@ -88,19 +90,24 @@ function LastCell({ data }: ICellRendererParams<ChannelViewRow>) {
   return (
     <span className={s.cellStack}>
       <span>{data.last}</span>
-      {data.lastNote && <span className={s.cellSub}>{data.lastNote}</span>}
+      {data.lastNote && <span className={s.cellWrap}>{data.lastNote}</span>}
     </span>
   )
 }
 
+/**
+ * The board's widths (180 · 124 · 78 · 86 · 112 · 100 · 150 and up), as each column's start and its minimum: 830 px in
+ * all. The grid stretches them to its width (`plain`), so at 1280 px (922 px inside the card's and the grid's frames)
+ * the table fits with no sideways scroll; "Last review" takes most of what is left.
+ */
 const COLUMNS: ColDef<ChannelViewRow>[] = [
-  { colId: 'channel', headerName: 'Channel and market', minWidth: 190, flex: 2, cellRenderer: NameCell },
-  { colId: 'rating', headerName: 'Rating', minWidth: 150, flex: 1, cellRenderer: RatingCell, wrapText: true },
-  { colId: 'reviews', headerName: 'Reviews', field: 'reviews', minWidth: 90, ...numericColumn },
-  { colId: 'change', headerName: 'Change', minWidth: 90, ...numericColumn, cellRenderer: ChangeCell },
-  { colId: 'sent', headerName: 'Requests sent', minWidth: 130, ...numericColumn, cellRenderer: SentCell },
-  { colId: 'rate', headerName: 'Review rate', field: 'rate', minWidth: 110, ...numericColumn },
-  { colId: 'last', headerName: 'Last review', minWidth: 200, flex: 1.5, cellRenderer: LastCell },
+  { colId: 'channel', headerName: 'Channel and market', width: 180, minWidth: 180, cellRenderer: NameCell },
+  { colId: 'rating', headerName: 'Rating', width: 124, minWidth: 124, cellRenderer: RatingCell, autoHeight: true },
+  { colId: 'reviews', headerName: 'Reviews', field: 'reviews', width: 78, minWidth: 78, ...numericColumn },
+  { colId: 'change', headerName: 'Change', width: 86, minWidth: 86, ...numericColumn, cellRenderer: ChangeCell },
+  { colId: 'sent', headerName: 'Requests sent', width: 112, minWidth: 112, ...numericColumn, cellRenderer: SentCell, autoHeight: true },
+  { colId: 'rate', headerName: 'Review rate', field: 'rate', width: 100, minWidth: 100, ...numericColumn },
+  { colId: 'last', headerName: 'Last review', width: 240, minWidth: 150, cellRenderer: LastCell, autoHeight: true },
 ]
 
 const getRowId = (p: { data: ChannelViewRow }) => p.data.id

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { metricKind, metricMinWidth } from './metricStripModel'
+import { metricDeltaClass, metricKind, metricMinWidth } from './metricStripModel'
 
 describe('metricKind', () => {
   it('is a link when the tile has an address', () => {
@@ -24,5 +24,19 @@ describe('metricMinWidth', () => {
     expect(metricMinWidth(undefined)).toBe(150)
     expect(metricMinWidth(Number.NaN)).toBe(150)
     expect(metricMinWidth(10)).toBe(150)
+  })
+})
+
+describe('metricDeltaClass', () => {
+  it('keeps positive as before: true is up, anything else down', () => {
+    expect(metricDeltaClass({ positive: true })).toBe('up')
+    expect(metricDeltaClass({ positive: false })).toBe('down')
+    expect(metricDeltaClass({})).toBe('down')
+  })
+  it('lets tone win, and a neutral change is neither up nor down', () => {
+    expect(metricDeltaClass({ tone: 'neutral' })).toBe('neutral')
+    expect(metricDeltaClass({ tone: 'neutral', positive: true })).toBe('neutral')
+    expect(metricDeltaClass({ tone: 'positive', positive: false })).toBe('up')
+    expect(metricDeltaClass({ tone: 'negative' })).toBe('down')
   })
 })

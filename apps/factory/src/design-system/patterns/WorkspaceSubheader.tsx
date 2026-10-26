@@ -206,6 +206,10 @@ export function WorkspaceSubheader({
     </nav>
   )
   const lowerLabel = navigationLabel.toLowerCase()
+  // A pinned subheader's drawer (below 1024 px) opens from a page button and closes away: "Close Reviews navigation".
+  // "Collapse …" belongs to the column, which folds to its strip, and to the plain subheader's drawer, which its own
+  // "Expand …" strip opened.
+  const drawerCloseLabel = pinned ? `Close ${navigationLabel}` : `Collapse ${lowerLabel}`
   const drawer = (
     <Drawer
       id={panelId}
@@ -218,7 +222,7 @@ export function WorkspaceSubheader({
       inset={inset}
       width="var(--nds-secondary-nav-w)"
       className="nds-secondary-navigation"
-      closeLabel={`Collapse ${lowerLabel}`}
+      closeLabel={drawerCloseLabel}
       closeIcon={<PanelLeftClose size={18} aria-hidden />}
     >
       {navigation('drawer')}

@@ -44,6 +44,9 @@ import s from './overview.module.css'
 
 const PERIOD_OPTIONS = OVERVIEW_PERIODS.map((p) => ({ value: p, label: overviewPeriodWords(p).label.replace(/^last /, '').replace(/^\w/, (c) => c.toUpperCase()) }))
 const NEEDS_POLL_MS = 60_000
+/** The board's narrowest tile: six fit one row on the 926 px page a 1280 px window leaves (6 × 132 + 5 × 12 gaps = 852;
+ *  at 150 it was 960, so the sixth wrapped). Under 760 px the strip shows two per row whatever this says. */
+const TILE_MIN_PX = 132
 const MANAGE_IMPORT = "You need 'Manage reviews' to import reviews."
 const MANAGE_ASK = "You need 'Manage reviews' to ask buyers for reviews."
 
@@ -181,7 +184,7 @@ export function OverviewClient() {
       {
         label: 'Requests sent',
         value: count(tiles.requestsSent),
-        delta: tiles.requestsFailed > 0 ? { value: `${count(tiles.requestsFailed)} failed`, positive: false } : undefined,
+        delta: tiles.requestsFailed > 0 ? { value: `${count(tiles.requestsFailed)} failed`, tone: 'negative' } : undefined,
         hint: words.label,
         active: show === 'requests',
         onClick: () => pressTile('requests'),
@@ -258,7 +261,7 @@ export function OverviewClient() {
           {sectionError(sections?.tiles) ? (
             <SectionError error={sectionError(sections?.tiles)!} onRetry={retryOverview} busy={overviewBusy} />
           ) : metrics ? (
-            <MetricStrip metrics={metrics} linkAs={Link} minTileWidth={150} className={s.tiles} />
+            <MetricStrip metrics={metrics} linkAs={Link} minTileWidth={TILE_MIN_PX} className={s.tiles} />
           ) : (
             <div className={s.tileSkeletons} aria-hidden>
               {[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} height={74} />)}
