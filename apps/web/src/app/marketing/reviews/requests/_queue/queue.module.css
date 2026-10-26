@@ -204,6 +204,13 @@
   gap: var(--nds-space-12);
 }
 
+/* On a wide window the Email switch takes the width its two labels need ("“How was it?” check" was cut off). */
+@media (min-width: 900px) {
+  .previewPickers {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) max-content;
+  }
+}
+
 .email {
   display: flex;
   flex-direction: column;

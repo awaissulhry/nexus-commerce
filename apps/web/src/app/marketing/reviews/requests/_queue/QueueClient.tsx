@@ -159,7 +159,8 @@ function Queue() {
     }
   }, [])
   useEffect(() => {
-    if (!readKey) return
+    // The key of the unfiltered queue is '' (an empty address): only "not read from the address yet" waits.
+    if (readKey === null) return
     void loadList()
   }, [readKey, loadList])
   useEffect(() => () => listAbort.current?.abort(), [])
@@ -468,7 +469,7 @@ function Queue() {
         </Banner>
       )}
 
-      {metrics ? <MetricStrip metrics={metrics} minTileWidth={140} className={s.tiles} /> : !failed && <div className={s.tileSkeleton} aria-hidden />}
+      {metrics ? <MetricStrip metrics={metrics} minTileWidth={120} className={s.tiles} /> : !failed && <div className={s.tileSkeleton} aria-hidden />}
 
       <FilterBar dimensions={dimensions} onClear={clearAll} activeCount={query ? activeFilterCount(query) : 0} />
 

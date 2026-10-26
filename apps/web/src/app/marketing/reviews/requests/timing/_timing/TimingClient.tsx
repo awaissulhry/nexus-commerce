@@ -130,7 +130,9 @@ function Timing() {
   const sendHoursRef = useRef<HTMLDivElement>(null)
   const scrolled = useRef(false)
   useEffect(() => {
-    if (scrolled.current || !windows) return
+    // The product-type table above must be drawn first (its draft, or its error): its loading rows are taller, so a
+    // scroll made before it is drawn ends past the section.
+    if (scrolled.current || !windows || !(typeDraft || defaults?.error)) return
     const params = new URLSearchParams(window.location.search)
     if (params.get('section') !== 'send-hours') return
     scrolled.current = true
@@ -138,7 +140,7 @@ function Timing() {
     params.delete('section')
     const rest = params.toString()
     window.history.replaceState({}, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`)
-  }, [windows])
+  }, [windows, defaults, typeDraft])
 
   // ── What a save would change ──
   const typeChanges = defaults?.rows && typeDraft ? defaultsChanges(defaults.rows, typeDraft) : 0
