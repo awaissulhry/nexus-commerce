@@ -204,7 +204,7 @@ export interface SettingsLive {
   readAt: string
 }
 
-const NOT_IN_HELP = (what: string) => `Nexus found no place in Meta's help for the portfolio's own ${what} (Meta's help names an ad account's time zone, which is set once): if Business portfolio info shows it, set it there; if Meta's screens have none, it stays as it is — Meta's API takes it only from an admin's token, which D1 keeps out of Nexus.`
+const NOT_IN_HELP = (what: string, note = '') => `Nexus found no place in Meta's help for the portfolio's own ${what}${note}: if Business portfolio info shows it, set it there; if Meta's screens have none, it stays as it is — Meta's API takes it only from an admin's token, which D1 keeps out of Nexus.`
 
 export function settingsGuide(ask: SettingsAsk, live: SettingsLive): AdminGuide | { refusal: string } {
   const s = live.settings
@@ -244,7 +244,7 @@ export function settingsGuide(ask: SettingsAsk, live: SettingsLive): AdminGuide 
     const done = s.timezoneId === ask.timezoneId
     items.push({ what: 'timeZone', now: s.timezoneId, asked: ask.timezoneId, done, ...(done ? {} : { sentence: 'Meta\'s time zone ids (timezone_id) are its own numbers; meta-business shows the one it reads now.' }) })
     if (!done) {
-      steps.push(`Time zone (Meta's id ${ask.timezoneId}): ${NOT_IN_HELP('time zone')}`)
+      steps.push(`Time zone (Meta's id ${ask.timezoneId}): ${NOT_IN_HELP('time zone', ' (Meta\'s help names an ad account\'s time zone, which is set once)')}`)
       back.push(`Time zone: back to Meta's id ${s.timezoneId ?? 'none'} where it was changed.`)
     }
   }

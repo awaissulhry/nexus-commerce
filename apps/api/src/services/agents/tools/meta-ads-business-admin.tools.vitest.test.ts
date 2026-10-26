@@ -172,6 +172,12 @@ describe('set-meta-business-settings', () => {
     expect(now.items[0].now).toEqual({ pageId: PAGE, takenByAnotherBusiness: true })
     callsAreReadsOfThePortfolio()
   })
+  it('a primary Page not among the owned Pages Nexus reads when Meta has more (500): refused, never guessed', async () => {
+    const many = Array.from({ length: 501 }, (_, i) => ({ id: String(120000000100000 + i), name: `Page ${i}` }))
+    h.answer = (req) => (req.path.endsWith('/owned_pages') ? { data: many } : answers(req))
+    expect(errorOf(await run('set-meta-business-settings', { primaryPageId: PAGE_2 }))).toMatch(/not among the first 500 Pages this business portfolio owns/)
+    expect(data(await run('set-meta-business-settings', { primaryPageId: '120000000100007' })).ownerSteps.join(' ')).toMatch(/"Page 7"/)
+  })
   it('asked again after the Owner did it: done, no steps left', async () => {
     h.answer = (req) => (fieldsOf(req) === BUSINESS_SETTINGS_FIELDS ? { id: PORTFOLIO, name: 'Shop A EU', two_factor_type: 'all_required', primary_page: { id: PAGE } } : answers(req))
     const out = data(await run('set-meta-business-settings', { name: 'Shop A EU', twoFactorType: 'all_required' }))

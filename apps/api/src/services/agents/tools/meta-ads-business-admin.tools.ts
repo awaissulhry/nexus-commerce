@@ -29,7 +29,7 @@ const nameArg = (what: string) => z.string().trim().min(1).max(200).regex(META_N
 const sinceArg = (what: string) => z.string().trim().datetime({ offset: true }).optional().describe(what)
 
 /** The line every description ends with (D1, in plain words). */
-const D1_TOOL_LINE = 'Nexus changes NOTHING and sends nothing to Meta with this tool (Owner decision D1: the business portfolio\'s admin acts stay in the hands of a person with full control of it, who makes them in Meta\'s own screens). It reads Meta now — only the business portfolio of the business\'s chosen ad account, and nothing at all when another business in Nexus uses that portfolio — and answers what is asked from → to, the exact steps in Meta Business settings, how to put it back (or plainly that Meta cannot) and what to watch out for; asked again with the same arguments, it reads the result and says what is done (state). Never an e-mail address, a link or a token.'
+const D1_TOOL_LINE = 'Nexus changes NOTHING and sends nothing to Meta with this tool (Owner decision D1: the business portfolio\'s admin acts stay in the hands of a person with full control of it, who makes them in Meta\'s own screens). It reads Meta now — only the business portfolio of the business\'s chosen ad account, and nothing at all when another business in Nexus uses that portfolio — and answers what is asked from → to, the exact steps in Meta Business settings, how to put it back (or plainly that Meta cannot) and what to watch out for; asked again with the same arguments, it reads the result and says what is done (state). Never an e-mail address, an invitation link or a token.'
 
 // ── set-meta-business-settings ──────────────────────────────────────────────────────────────────────────────────────
 
