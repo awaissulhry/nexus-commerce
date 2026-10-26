@@ -1186,6 +1186,12 @@ export interface MetaWriteRule {
    * `object`, `fields`), judged like a body; it takes no body. Every other call with a query is refused.
    */
   inQuery?: true
+  /**
+   * Step 38 (review B-F1) — an Instagram profile change (POST or DELETE /<page>/messenger_profile): `platform=instagram`
+   * rides in the URL's query too, as every Instagram guide sends it, and only with `platform=instagram` in the body (which
+   * keeps every key judged as a body is). No other key, and no other rule, takes a query on a POST.
+   */
+  platformQuery?: true
   /** The gateway adds `verify_token` (META_WEBHOOK_VERIFY_TOKEN) to the body it sends: never a caller's, never logged. */
   verifyToken?: true
   /** A check of the route with the judged keys (a callback that must be Nexus's own for the path's app). */
@@ -1517,7 +1523,10 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   if (graph.version !== pinned) return refuse(`Nexus calls Meta only on API version ${pinned} (this call: ${graph.version ?? 'no version'})`)
   const videoHostWords = `Nexus sends to Meta's video host ${META_GRAPH_VIDEO_HOST} only a Page's video post (POST /<page>/videos, create-meta-page-post); every other change goes to https://graph.facebook.com`
   if (onVideoHost && (method !== 'POST' || !/^\d+\/videos$/.test(graph.route))) return refuse(videoHostWords)
-  const queryKeys = [...graph.search.keys()]
+  // Step 38 (review B-F1) — exactly `platform=instagram` in the query of a messenger_profile change: judged with its rule
+  // (platformQuery) below, and otherwise like a change with no query at all.
+  const platformQuery = graph.search.getAll('platform').length === 1 && [...graph.search.keys()].length === 1 && graph.search.get('platform') === 'instagram' && /^\d{1,25}\/messenger_profile$/.test(graph.route)
+  const queryKeys = platformQuery ? [] : [...graph.search.keys()]
   if (queryKeys.length > 0 && method !== 'DELETE') return refuse('a Meta change carries its parameters in its body, never in the URL')
   const batch = metaBatchProblem(method, graph.route, input.body)
   if (batch) return { problem: batch, batch: true }
@@ -1639,6 +1648,12 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   }
   const problem = rule.values(parsed.params) ?? rule.routeCheck?.(graph.route, parsed.params) ?? null
   if (problem) return refuse(problem)
+  // Step 38 (review B-F1) — an Instagram profile change names platform=instagram in the query AND the body; nothing else does.
+  if (platformQuery || rule.platformQuery) {
+    const bodyInstagram = parsed.params.get('platform') === 'instagram'
+    if (!rule.platformQuery) return refuse('a Meta change carries its parameters in its body, never in the URL')
+    if (bodyInstagram !== platformQuery) return refuse(bodyInstagram ? 'an Instagram profile change names platform=instagram in the URL\'s query too, as Meta\'s Instagram guides send it' : 'platform=instagram goes in the query only with platform=instagram in the body')
+  }
   // Step 23 — the file part: its name, its size and its own judge (the text is never quoted back).
   if (rule.file) {
     const text = parsed.params.get(rule.file.key) ?? ''

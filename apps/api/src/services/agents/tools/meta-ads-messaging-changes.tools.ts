@@ -34,7 +34,7 @@ import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool, ToolChange, ToolUndo } from '../tool-types.js'
 import { metaChangePreview, metaConnectionArg, metaIdArg, metaWhyArg, META_CHANGE_RULES, recordAccount, runMetaChange, type MetaDraftBuilder, type MetaRunOutcome } from './meta-ads-kit.js'
 import { META_LABELS_TOOL, META_MESSAGE_TOOL, META_SETUP_TOOL, META_TEMPLATES_TOOL } from '../../gateway/account.js'
-import { META_MESSAGE_ID, META_MESSAGE_LIMITS, META_NLP_MODELS, META_TEMPLATE_LANGUAGE, META_TEMPLATE_NAME, META_WEEK_DAYS } from '../../gateway/meta-messaging-rules.js'
+import { META_MESSAGE_ID, META_MESSAGE_LIMITS, META_NLP_MODELS, META_PAGE_TEMPLATE_NAME, META_TEMPLATE_LANGUAGE, META_TEMPLATE_NAME, META_WEEK_DAYS } from '../../gateway/meta-messaging-rules.js'
 import { metaLeadUrlProblem } from '../../gateway/meta-lead-form-rules.js'
 import {
   conversationMessageDraft, creatorMessageDraft, handoverDraft, instantFormDraft, labelCreateDraft, labelDeleteDraft, labelPersonDraft, messageIdOf,
@@ -97,7 +97,7 @@ const messageInput = z.object({
   platform: platformArg,
   personId: personArg.optional(),
   mode: z.enum(MESSAGE_MODES).optional().describe('message: response (default: answers the person, inside the window) · update (unasked, inside the window) · human-agent (a person\'s own reply after the window, within 7 days of the person\'s last message, never promotional) · utility (an approved Messenger utility template: order, shipping, account updates; any time). instant-form: response or update'),
-  text: z.string().min(1).max(L.messengerText).optional().describe(`the EXACT words, as the person approved them (sent as written, nothing added; at most ${L.messengerText} characters, ${L.instagramTextBytes} bytes on Instagram)`),
+  text: z.string().min(1).max(L.messengerText).optional().describe(`the EXACT words, as the person approved them (sent as written, nothing added; at most ${L.messengerText} characters — Meta: fewer than 2,000; on Instagram at most ${L.instagramTextChars} characters and ${L.instagramTextBytes} bytes)`),
   mediaUrl: httpsUrl('instead of text: a media file Meta fetches from this https link (Nexus uploads nothing)').optional(),
   mediaType: z.enum(MEDIA_TYPES).optional().describe('with mediaUrl: image, video, audio or file (Instagram: no file, except in a creator message)'),
   quickReplies: z.array(z.object({
@@ -108,7 +108,7 @@ const messageInput = z.object({
   replyToMessageId: messageIdArg.optional().describe('message: answer this message of the conversation (one of its 20 newest, meta-conversations view messages)'),
   notification: z.enum(['regular', 'silent', 'none']).optional().describe('message (Messenger): the push the person gets — regular (default), silent, none'),
   template: z.object({
-    name: z.string().regex(META_TEMPLATE_NAME, 'a template name').describe('an APPROVED utility template of the chosen Page (meta-message-templates view messenger)'),
+    name: z.string().regex(META_PAGE_TEMPLATE_NAME, 'a template name').describe('an APPROVED utility template of the chosen Page, named as Meta lists it (meta-message-templates view messenger)'),
     language: z.string().regex(META_TEMPLATE_LANGUAGE, 'a language code').describe('its language, as Meta lists it (it_IT, en_US, …)'),
     parameters: z.array(z.object({
       component: z.enum(['header', 'body']).describe('the part the placeholder is in'),
@@ -255,10 +255,12 @@ const createMetaMessage: AgentTool = {
     + 'Page or account another business in Nexus uses is never written to; never a marketplace buyer (send-customer-message). The '
     + 'preview shows the EXACT words and the recipient\'s id; a message reaches the person at once and cannot be recalled (no undo). '
     + 'Standard access reaches only people with a role on the business\'s Meta app — real customers need Advanced Access (App '
-    + 'Review): Meta\'s refusal says so in words. Meta has no check for any of these. Nothing spends. Stored: the request keeps the '
-    + 'person\'s id and the words until it runs (the approval needs them); the change record keeps the kind, the conversation and '
-    + 'Meta\'s message id, never the words or the person\'s id; Nexus\'s call log neither. Each request is approved on its own '
-    + '(never in a bulk approve).'
+    + 'Review): Meta\'s refusal says so in words. Meta has no check for any of these. Nothing spends. Stored: the request (its '
+    + 'arguments and its preview) and Claude\'s record of the call keep the person\'s id and the words, for as long as Nexus keeps '
+    + 'them (nothing deletes them today; the run and the Approvals page need them); the change record keeps the kind, the conversation and '
+    + 'Meta\'s message id, never the words or the person\'s id; Nexus\'s call log to Meta neither. Each request is approved on its own '
+    + '(never in a bulk approve). Its Claude rule is its own (Settings › AI › Claude › Rules): turning send-customer-message Off for '
+    + 'Claude does not turn this Off — each is set on its own.'
     + META_CHANGE_RULES,
   handler: (args, ctx) => metaChangePreview(args, ctx, buildMessage(args)),
   execute: (args, ctx) => runMetaChange(args, ctx, buildMessage(args), messageFinish),
@@ -431,7 +433,8 @@ const buildTemplates = (args: Record<string, unknown>): MetaDraftBuilder => refu
   if ((a.action === 'delete' || a.action === 'group-delete') && a.confirmDelete !== true) return { refusal: 'Deleting is only on an explicit ask: confirmDelete: true (a deleted template or group cannot come back).' }
   if (a.platform === 'messenger' && a.action.startsWith('group-')) return { refusal: 'Template groups are WhatsApp\'s (platform whatsapp).' }
   if (a.platform === 'messenger' && a.whatsappAccountId) return { refusal: 'whatsappAccountId is for platform whatsapp.' }
-  if (a.platform === 'whatsapp' && a.action === 'edit') return { refusal: 'Nexus edits Messenger utility templates only; a WhatsApp template is changed by deleting it and making it again (Meta reviews it again either way), or in WhatsApp Manager.' }
+  // Review B-F4 — never "delete and make it again": an approved template's name stays blocked 30 days after a delete.
+  if (a.platform === 'whatsapp' && a.action === 'edit') return { refusal: 'Nexus does not edit WhatsApp templates yet. Meta allows an edit of an approved, rejected or paused template (WhatsApp Manager does it); deleting an approved template keeps its name blocked for 30 days, so it is no way to change one.' }
   if (a.platform === 'whatsapp' && (a.libraryTemplateName || a.libraryButtons)) return { refusal: 'Nexus copies Meta library templates for Messenger only.' }
   if (a.libraryButtons && !a.libraryTemplateName) return { refusal: 'libraryButtons go with libraryTemplateName.' }
   const chosen = await messagingAccount(account.accountId)
@@ -568,6 +571,8 @@ const setMetaMessageTemplates: AgentTool = {
   reversibility: 'partial',
   consequencesFor: (args) => {
     if (args.action === 'delete' || args.action === 'group-delete') return { reversibility: 'none' }
+    // Review A-N3 — a group's new name or description: its old one may have been empty, which Nexus cannot write back.
+    if (args.action === 'group-update' && (args.groupName !== undefined || args.description !== undefined)) return { reversibility: 'partial' }
     if (args.action === 'group-create' || args.action === 'group-update') return { reversibility: 'full' }
     return typeof args.action === 'string' ? { reversibility: 'partial' } : null
   },
@@ -586,7 +591,8 @@ const setMetaMessageTemplates: AgentTool = {
     + '(PENDING → APPROVED or REJECTED) and may change a WhatsApp template\'s category; the run shows Meta\'s status and rejection '
     + 'reason. Media headers need a file handle Nexus does not make: refused. Meta has no check for these. Nothing spends (Nexus '
     + 'sends no WhatsApp message). Undo: a template or group Nexus made is deleted; an edit writes the old parts back when Nexus '
-    + 'can send them again; a group change is put back; a delete has none.'
+    + 'can send them again; a group change is put back (a name or description that was empty before stays: Nexus sends no empty '
+    + 'text); a delete has none.'
     + META_CHANGE_RULES,
   undo: templatesUndo,
   handler: (args, ctx) => metaChangePreview(args, ctx, buildTemplates(args)),
@@ -594,6 +600,12 @@ const setMetaMessageTemplates: AgentTool = {
 }
 
 // ── set-meta-messaging-setup ─────────────────────────────────────────────────────────────────────────────────────
+
+/** Review A-B1 / S3 — what Nexus keeps of the WhatsApp code, and for how long, said as it is. */
+export const WHATSAPP_CODE_KEPT = 'The code is kept encrypted with the request for as long as Nexus keeps the request (nothing deletes '
+  + 'requests today) and shown nowhere — the Approvals list and edit form, Claude\'s record of the call and the audit rows show it '
+  + 'masked; it is opened only to send it to Meta, and never reaches the change record or Nexus\'s call log. A conversation it '
+  + 'was typed into keeps it as typed.'
 
 const localeArg = z.string().regex(/^(default|[a-z]{2}_[A-Z]{2})$/, '"default" or a locale').describe('"default" (required once: everyone else) or a locale (it_IT, de_DE, …)')
 const menuArg = z.array(z.object({
@@ -604,7 +616,7 @@ const menuArg = z.array(z.object({
     title: z.string().min(1).max(L.menuTitle).describe(`the item's words (at most ${L.menuTitle})`),
     payload: z.string().min(1).max(L.payload).optional().describe('postback: what the app receives'),
     url: httpsUrl('web_url: the link').optional(),
-    webviewHeight: z.enum(['compact', 'tall', 'full']).optional().describe('web_url: how tall the page opens'),
+    webviewHeight: z.enum(['compact', 'tall', 'full']).optional().describe('web_url (Messenger only; Instagram has none): how tall the page opens (full is Meta\'s default)'),
   })).min(1).max(L.menuItems).describe(`the menu's items (at most ${L.menuItems})`),
 })).min(1).max(L.menus)
 
@@ -650,7 +662,7 @@ const setupInput = z.object({
     quickReplies: z.array(z.object({ title: z.string().min(1).max(L.quickReplyTitle).describe('the button'), payload: z.string().min(1).max(L.payload).describe('what the app receives') })).min(1).max(L.quickReplies).optional().describe('its quick replies'),
   })).min(1).max(L.flowMessages).optional().describe(`welcome-flow: the messages people get after clicking the ad (at most ${L.flowMessages})`),
   whatsappNumber: z.string().min(7).max(20).optional().describe('whatsapp-number: the number in international form (+39…)'),
-  verificationCode: z.string().regex(/^\d{4,10}$/, 'digits').optional().describe('whatsapp-number step 2: the code WhatsApp sent to that number, read by the person on that phone (used once; never shown or kept)'),
+  verificationCode: z.string().regex(/^\d{4,10}$/, 'digits').optional().describe('whatsapp-number step 2: the code WhatsApp sent to that number, read by the person on that phone (used once; kept encrypted with the request and shown nowhere)'),
   confirmDelete: confirmDeleteArg,
   why: metaWhyArg,
 })
@@ -861,6 +873,9 @@ const setMetaMessagingSetup: AgentTool = {
   },
   maxClaudeTrust: 'ask',
   requires: [F.adsCampaignsManage, F.ordersEdit, F.customersView],
+  // Review A-B1 — the WhatsApp code is a secret argument (secret-args.ts): sealed where the request is stored, masked in
+  // every record and view (the Approvals list and edit form, Claude's record of the call, the audit rows, a planned undo).
+  secretArgs: ['verificationCode'],
   input: setupInput,
   description:
     'The messaging setup of the chosen Facebook Page, made AS the Page: its Messenger profile (Get Started, greeting, ice breakers, '
@@ -870,7 +885,7 @@ const setMetaMessagingSetup: AgentTool = {
     + 'Built-In NLP on / off and its model (Meta cannot read it back: Nexus keeps the value it set), Messenger calling (audio, '
     + 'video, call icon, call hours, where calls ring), welcome-message flows for Click-to-Messenger / Instagram ads (make, change, '
     + 'delete on confirmDelete; not one an ad uses), and linking a WhatsApp number to the Page (step 1 the number — WhatsApp sends '
-    + 'a code to it; step 2 with that code, read by the person on that phone: used once, never shown or kept; no unlink by API). '
+    + 'a code to it; step 2 with that code, read by the person on that phone, used once; no unlink by API). ' + WHATSAPP_CODE_KEPT + ' '
     + 'The Page\'s default ice breakers and quick replies for messaging ads cannot be changed by API (read-only fields: section '
     + 'messenger-ad-defaults answers so). Meta has no check for these. Nothing spends. Undo writes the old values back where Meta '
     + 'answered them in a form Nexus can send again (else the preview says there is none); what Nexus made is deleted.'

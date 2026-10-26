@@ -121,9 +121,10 @@ export const META_INSTAGRAM_INBOX_APP = '1217981644879628'
 
 /** Meta's limits where documented, Nexus's caps where not (each said in the tool). */
 export const META_MESSAGE_LIMITS = {
-  /** Messenger text: 2,000 characters (Send API reference, the message's text). */
-  messengerText: 2000,
-  /** Instagram Direct text: "UTF-8 and 1,000 bytes or less" (instagram-messaging send-message.md). */
+  /** Messenger text: "fewer than 2,000 characters" (the classic Send API reference, archived; v26 states none): 1,999 (review B-F7). */
+  messengerText: 1999,
+  /** Instagram Direct text: "less than 1,000 characters" and "UTF-8 and 1,000 bytes or less" (instagram-messaging send-message.md). */
+  instagramTextChars: 999,
   instagramTextBytes: 1000,
   quickReplies: 13, quickReplyTitle: 20, payload: 1000, url: 2000, metadata: 1000,
   labelName: 100, personaName: 50,
@@ -154,6 +155,12 @@ export const META_WHATSAPP_CATEGORIES = ['MARKETING', 'UTILITY'] as const
 
 /** A template name: lower-case letters, digits and _ (template-management.md "Template name validation"). */
 export const META_TEMPLATE_NAME = /^[a-z0-9_]{1,512}$/
+/**
+ * Review B-F8 — a Messenger template's name as Meta lists it, for a send or a delete: the WhatsApp rule above is not
+ * Messenger's (the Page message_templates reference's own example is `jaspers_market_order_delivery_update_US`). Nexus's
+ * own creates keep the lower-case rule.
+ */
+export const META_PAGE_TEMPLATE_NAME = /^[A-Za-z0-9_]{1,512}$/
 /** A template language: Meta's locale codes (en, en_US, it_IT, pt_BR, …). */
 export const META_TEMPLATE_LANGUAGE = /^[a-z]{2,3}(_[A-Z]{2})?$/
 /** A Messenger profile locale: "default" or a locale code (supported-locales.md). */
@@ -239,7 +246,7 @@ const SEND_COMPONENT: Judge = (v, where) => {
   return shape(v, where, { type: oneOf(['header', 'body', 'buttons']), parameters: list(1, META_MESSAGE_LIMITS.templateParameters, TEMPLATE_PARAMETER) }, ['type', 'parameters'])
 }
 const SEND_TEMPLATE: Judge = (v, where) => shape(v, where, {
-  name: (x, w) => (typeof x === 'string' && META_TEMPLATE_NAME.test(x) ? null : `${w} is a template name (lower case, digits and _)`),
+  name: (x, w) => (typeof x === 'string' && META_PAGE_TEMPLATE_NAME.test(x) ? null : `${w} is a template name (letters, digits and _)`),
   language: (x, w) => shape(x, w, { code: (c, cw) => (typeof c === 'string' && META_TEMPLATE_LANGUAGE.test(c) ? null : `${cw} is a language code`) }, ['code']),
   components: list(1, 3, SEND_COMPONENT),
 }, ['name', 'language'])
@@ -250,6 +257,7 @@ function messageProblem(value: unknown, platform: 'messenger' | 'instagram', var
   const text: Judge = (v, w) => {
     const problem = lines(META_MESSAGE_LIMITS.messengerText)(v, w)
     if (problem) return problem
+    if (platform === 'instagram' && [...(v as string)].length > META_MESSAGE_LIMITS.instagramTextChars) return `${w} is at most ${META_MESSAGE_LIMITS.instagramTextChars} characters on Instagram (Meta: less than 1,000)`
     return platform === 'instagram' && bytes(v as string) > META_MESSAGE_LIMITS.instagramTextBytes ? `${w} is at most ${META_MESSAGE_LIMITS.instagramTextBytes} bytes on Instagram (Meta's limit)` : null
   }
   if (variant === 'template') return shape(value, 'message', { template: SEND_TEMPLATE }, ['template'])
@@ -413,6 +421,8 @@ const metadataProblem = (params: Params): string | null => (params.has('metadata
 
 const threadRule = (control: 'pass' | 'release' | 'take'): MetaWriteRule => ({
   // create-meta-message action handover: pass (to Meta's Page or Instagram inbox, or an app on the Page), release, take.
+  // Review B-F6 — `metadata` on all three as conversation-routing.md and Instagram's routing apis.md show it (the Graph
+  // reference and the SDK list only `recipient` for release); LIVE-PROBE MS38-06 sends a release with it.
   name: `thread.${control}`,
   method: 'POST',
   path: new RegExp(`^\\d{1,25}\\/${control}_thread_control$`),
@@ -516,6 +526,10 @@ export function templateComponentsProblem(value: unknown, channel: 'messenger' |
       const buttons = c.buttons as Row[]
       if (buttons.filter((b) => b.type === 'URL').length > 2) return `${where}: at most 2 link buttons`
       if (buttons.filter((b) => b.type === 'PHONE_NUMBER').length > 1) return `${where}: at most 1 phone button`
+      // Review B-F9 — components.md: "buttons must be organized into two groups: quick reply buttons and non-quick reply
+      // buttons. If grouped incorrectly, the API will return an error".
+      const quick = buttons.map((b) => b.type === 'QUICK_REPLY')
+      if (quick.filter((q, i) => i > 0 && q !== quick[i - 1]).length > 1) return `${where}: the quick-reply buttons come together, before or after the other buttons (Meta refuses them mixed)`
     }
   }
   return value.some((c) => isObj(c) && c.type === 'BODY') ? null : 'components name a BODY'
@@ -524,6 +538,8 @@ export function templateComponentsProblem(value: unknown, channel: 'messenger' |
 const formatOf = (params: Params): 'NAMED' | 'POSITIONAL' => (params.get('parameter_format') === 'NAMED' ? 'NAMED' : 'POSITIONAL')
 const parameterFormatProblem = (params: Params): string | null => (params.has('parameter_format') ? oneOf(['NAMED', 'POSITIONAL'])(params.get('parameter_format'), 'parameter_format') : null)
 const nameProblem = (params: Params): string | null => (META_TEMPLATE_NAME.test(params.get('name') ?? '') ? null : 'name is a template name: lower-case letters, digits and _ (at most 512)')
+/** Review B-F8 — a Messenger template named as Meta lists it (its delete): letters of either case, digits and _. */
+const pageNameProblem = (params: Params): string | null => (META_PAGE_TEMPLATE_NAME.test(params.get('name') ?? '') ? null : 'name is the template\'s name as Meta lists it: letters, digits and _ (at most 512)')
 const languageProblem = (params: Params): string | null => (META_TEMPLATE_LANGUAGE.test(params.get('language') ?? '') ? null : 'language is a language code (it, it_IT, en_US, …)')
 const componentsJson = (params: Params, channel: 'messenger' | 'whatsapp'): string | null => jsonValue(params, 'components', (v) => templateComponentsProblem(v, channel, formatOf(params)))
 
@@ -554,12 +570,13 @@ const localized = (max: number, item: Judge): Judge => (v, where) => {
   if (!locales.includes('default')) return `${where} has a "default" locale (Meta requires it)`
   return new Set(locales).size === locales.length ? null : `${where} names each locale once`
 }
-const MENU_ITEM: Judge = (v, where) => {
-  if (isObj(v) && v.type === 'web_url') return shape(v, where, { type: oneOf(['web_url']), title: line(META_MESSAGE_LIMITS.menuTitle), url, webview_height_ratio: oneOf(['compact', 'tall', 'full']) }, ['type', 'title', 'url'])
+/** Review B-F10 — Instagram's persistent menu has no webview_height_ratio (igm persistent-menu.md "Limitations"). */
+const MENU_ITEM = (instagram: boolean): Judge => (v, where) => {
+  if (isObj(v) && v.type === 'web_url') return shape(v, where, { type: oneOf(['web_url']), title: line(META_MESSAGE_LIMITS.menuTitle), url, ...(instagram ? {} : { webview_height_ratio: oneOf(['compact', 'tall', 'full']) }) }, ['type', 'title', 'url'])
   return shape(v, where, { type: oneOf(['postback']), title: line(META_MESSAGE_LIMITS.menuTitle), payload: line(META_MESSAGE_LIMITS.payload) }, ['type', 'title', 'payload'])
 }
 const MENU = (instagram: boolean): Judge => localized(META_MESSAGE_LIMITS.menus, (v, where) => shape(v, where, {
-  locale: localeOf, call_to_actions: list(1, META_MESSAGE_LIMITS.menuItems, MENU_ITEM),
+  locale: localeOf, call_to_actions: list(1, META_MESSAGE_LIMITS.menuItems, MENU_ITEM(instagram)),
   ...(instagram ? {} : { composer_input_disabled: boolean }),
 }, ['locale', 'call_to_actions']))
 const ICE_BREAKERS = localized(META_MESSAGE_LIMITS.menus, (v, where) => shape(v, where, {
@@ -651,13 +668,13 @@ export const META_MESSAGING_WRITE_RULES: readonly MetaWriteRule[] = [
     ids: (params) => [{ id: params.get('user')!, kind: 'messageperson' }], ledger: () => ({ user: '(a person)' }), budget: false,
   },
   {
-    // EN-914: take it off again.
+    // EN-914: take it off again. DELETE body (custom-labels.md shows `user` in the query; a body Meta ignores deletes nothing — MS38-12).
     name: 'pagelabel.unassign', method: 'DELETE', path: /^\d{1,25}\/label$/, kinds: ['pagelabel'], auth: 'page', edgeCall: true,
     required: ['user'], optional: [], values: (params) => digits(params.get('user'), 'user'),
     ids: (params) => [{ id: params.get('user')!, kind: 'messageperson' }], ledger: () => ({ user: '(a person)' }), budget: false,
   },
   {
-    // EN-915: delete a label of the chosen Page (explicit ask; also the undo of a label Nexus made).
+    // EN-915: delete a label of the chosen Page (explicit ask; also the undo of a label Nexus made). No body (custom-labels.md).
     name: 'pagelabel.delete', method: 'DELETE', path: /^\d{1,25}$/, kinds: ['pagelabel'], auth: 'page',
     required: [], optional: [], values: () => null, budget: false,
   },
@@ -692,9 +709,10 @@ export const META_MESSAGING_WRITE_RULES: readonly MetaWriteRule[] = [
   },
   {
     // EN-925: delete ONE template of the chosen Page — always its name AND template_id (the name alone deletes every language).
+    // DELETE body (the reference's example is the query; both keys ride together, so a body Meta ignores deletes nothing — MS38-12).
     name: 'pagetemplate.delete', method: 'DELETE', path: /^\d{1,25}\/message_templates$/, ...PAGE_EDGE,
     required: ['name', 'template_id'], optional: [],
-    values: (params) => nameProblem(params) ?? digits(params.get('template_id'), 'template_id'),
+    values: (params) => pageNameProblem(params) ?? digits(params.get('template_id'), 'template_id'),
     ids: (params) => [{ id: params.get('template_id')!, kind: 'pagetemplate' }],
   },
   // ── set-meta-message-templates: WhatsApp (system-user token, the portfolio's own WhatsApp account) ──
@@ -710,7 +728,8 @@ export const META_MESSAGING_WRITE_RULES: readonly MetaWriteRule[] = [
     budget: false,
   },
   {
-    // EN-932: delete ONE WhatsApp template — its hsm_id AND name (the name alone deletes every language).
+    // EN-932: delete ONE WhatsApp template — its hsm_id AND name (the name alone deletes every language). DELETE body
+    // (template-management.md's examples are the query; both keys ride together, so a body Meta ignores deletes nothing — MS38-12).
     name: 'wabatemplate.delete', method: 'DELETE', path: /^\d{1,25}\/message_templates$/, kinds: ['waba'],
     required: ['hsm_id', 'name'], optional: [],
     values: (params) => digits(params.get('hsm_id'), 'hsm_id') ?? nameProblem(params),
@@ -743,22 +762,24 @@ export const META_MESSAGING_WRITE_RULES: readonly MetaWriteRule[] = [
     budget: false,
   },
   {
-    // EN-940: delete a group (explicit ask; also the undo of a group Nexus made) — its templates stay.
+    // EN-940: delete a group (explicit ask; also the undo of a group Nexus made) — its templates stay. No body (template-groups.md).
     name: 'templategroup.delete', method: 'DELETE', path: /^\d{1,25}$/, kinds: ['templategroup'],
     required: [], optional: [], values: () => null, budget: false,
   },
   // ── set-meta-messaging-setup (as the chosen Page) ──
   {
-    // EN-901: Messenger (or Instagram) profile properties — only the ones in the body are overwritten.
-    name: 'messengerprofile.set', method: 'POST', path: /^\d{1,25}\/messenger_profile$/, ...PAGE_EDGE,
+    // EN-901: Messenger (or Instagram) profile properties — only the ones in the body are overwritten. Instagram: platform in
+    // the body AND the query (review B-F1: Instagram's ice-breakers.md sends both, persistent-menu.md the query).
+    name: 'messengerprofile.set', method: 'POST', path: /^\d{1,25}\/messenger_profile$/, ...PAGE_EDGE, platformQuery: true,
     required: [], optional: [...META_PROFILE_FIELDS, 'platform'], anyOf: [...META_PROFILE_FIELDS],
     text: { greeting: META_COMMENT_TEXT, ice_breakers: META_COMMENT_TEXT, persistent_menu: META_COMMENT_TEXT, commands: META_COMMENT_TEXT, get_started: META_COMMENT_TEXT },
     maxBody: META_MESSAGING_SETUP_MAX_BODY,
     values: profileProblem,
   },
   {
-    // EN-902: delete profile properties — only the ones named.
-    name: 'messengerprofile.delete', method: 'DELETE', path: /^\d{1,25}\/messenger_profile$/, ...PAGE_EDGE,
+    // EN-902: delete profile properties — only the ones named. DELETE body (messenger-profile-api.md: `-X DELETE -d
+    // '{"fields":[…]}'`); Instagram: platform in the query too (review B-F1, Instagram's guides).
+    name: 'messengerprofile.delete', method: 'DELETE', path: /^\d{1,25}\/messenger_profile$/, ...PAGE_EDGE, platformQuery: true,
     required: ['fields'], optional: ['platform'],
     values: (params) => {
       if (params.has('platform') && params.get('platform') !== 'instagram') return 'platform is instagram (left out: Messenger)'
@@ -778,7 +799,8 @@ export const META_MESSAGING_WRITE_RULES: readonly MetaWriteRule[] = [
     ids: (params) => [{ id: params.get('psid')!, kind: 'messageperson' }], ledger: () => ({ psid: '(a person)', persistent_menu: '(a menu)' }),
   },
   {
-    // EN-905: take that person's own menu off (the Page's menu stays).
+    // EN-905: take that person's own menu off (the Page's menu stays). DELETE body (persistent-menu.md shows the query; both
+    // keys ride together, so a body Meta ignores deletes nothing — MS38-12).
     name: 'usermenu.delete', method: 'DELETE', path: /^\d{1,25}\/custom_user_settings$/, ...PAGE_EDGE,
     required: ['psid', 'params'], optional: [],
     values: (params) => digits(params.get('psid'), 'psid') ?? (params.get('params') === '["persistent_menu"]' ? null : 'params is ["persistent_menu"]'),
@@ -791,7 +813,7 @@ export const META_MESSAGING_WRITE_RULES: readonly MetaWriteRule[] = [
     values: (params) => line(META_MESSAGE_LIMITS.personaName)(params.get('name'), 'name') ?? url(params.get('profile_picture_url'), 'profile_picture_url'),
   },
   {
-    // EN-908: delete a persona of the chosen Page (a soft delete; explicit ask, or the undo of one Nexus made).
+    // EN-908: delete a persona of the chosen Page (a soft delete; explicit ask, or the undo of one Nexus made). No body (personas.md).
     name: 'persona.delete', method: 'DELETE', path: /^\d{1,25}$/, kinds: ['persona'], auth: 'page',
     required: [], optional: [], values: () => null, budget: false,
   },
@@ -829,7 +851,8 @@ export const META_MESSAGING_WRITE_RULES: readonly MetaWriteRule[] = [
     values: flowProblem, ids: (params) => [{ id: params.get('flow_id')!, kind: 'welcomeflow' }],
   },
   {
-    // EN-045: delete one of its flows (explicit ask; also the undo of a flow Nexus made).
+    // EN-045: delete one of its flows (explicit ask; also the undo of a flow Nexus made). Form body, as
+    // ads-welcome-message-flows.md sends it (`-X DELETE -F 'flow_id=…'`).
     name: 'welcomeflow.delete', method: 'DELETE', path: /^\d{1,25}\/welcome_message_flows$/, ...PAGE_EDGE,
     required: ['flow_id'], optional: [], values: flowProblem, ids: (params) => [{ id: params.get('flow_id')!, kind: 'welcomeflow' }],
   },

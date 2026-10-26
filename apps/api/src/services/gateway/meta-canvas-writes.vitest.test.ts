@@ -376,8 +376,10 @@ describe('made as the chosen Page, with every id checked', () => {
     gatewayMetaStored['120000000000001'] = { adAccountId: '1234567890', kind: 'campaign' }
     const pause = () => metaWriteCall({ connectionId: 'm-1', operation: 'status.change', objectId: '120000000000001', objectKind: 'campaign', params: { status: 'PAUSED' }, check: false }).catch((e) => e)
     for (const code of [80001, 80005]) {
-      // Each round its own: Meta's one change of an object every 30 s (the pause of the round before) is not what is tested.
+      // Each round its own: Meta's one change of an object every 30 s (the pause of the round before) is not what is tested,
+      // nor the Page's own bucket the round before held (step 38 review S1: a change made as the Page pays the `page` bucket).
       __metaObjectLimitsTest.useMemory()
+      __rateTest.useMemory()
       h.calls = []
       h.answers.push(tokenAnswer(), json({ error: { code, message: 'There have been too many calls to this Page account. Wait a bit and try again.' } }, 400))
       const refused = await make(part('canvas_text', EVERY_PART.canvas_text))
@@ -390,6 +392,7 @@ describe('made as the chosen Page, with every id checked', () => {
     }
     // A real throttle on a change made as the Page (code 4, the app's own limit) still holds the bucket: the pause is not sent.
     __metaObjectLimitsTest.useMemory()
+    __rateTest.useMemory()
     h.calls = []
     h.answers.push(tokenAnswer(), json({ error: { code: 4, message: 'Application request limit reached' } }, 400))
     expect((await make(part('canvas_text', EVERY_PART.canvas_text))).ok).toBe(false)

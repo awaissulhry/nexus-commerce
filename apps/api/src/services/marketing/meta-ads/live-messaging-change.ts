@@ -231,7 +231,7 @@ export async function liveCreator(account: MetaChosenAccount, usernameArg: strin
   try {
     rows = rowsOf((await metaReadOne<Row>({ connectionId: account.connectionId }, { operation: 'messaging.creatorId', path: `${account.instagramId}/creator_marketplace_creators`, query: { username, fields: 'id,page_id,messaging_id' } })).body)
   } catch (err) {
-    if (err instanceof MetaReadError && err.failure.origin === 'meta' && !err.failure.throttled && !err.failure.authLost) throw new MetaLiveRefusal(`Meta's creator marketplace did not answer for @${username}: ${err.failure.sentence} It needs instagram_creator_marketplace_discovery with Advanced access, and the brand onboarded to Instagram's creator marketplace.`)
+    if (err instanceof MetaReadError && err.failure.origin === 'meta' && !err.failure.throttled && !err.failure.authLost) throw new MetaLiveRefusal(`Meta's creator marketplace did not answer for @${username}: ${err.failure.sentence} It is read with the chosen Page's own token (the Page linked to the brand's Instagram account, as Meta asks) and needs instagram_creator_marketplace_discovery with Advanced access, and the brand onboarded to Instagram's creator marketplace.`)
     throw err
   }
   const row = rows.find((r) => idText(r.messaging_id))

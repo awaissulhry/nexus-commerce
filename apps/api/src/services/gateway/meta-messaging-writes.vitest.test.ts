@@ -33,9 +33,10 @@ vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: v
 vi.mock('../../utils/otel-setup.js', () => ({ withSpan: vi.fn(async (_n: string, _a: Record<string, unknown>, fn: (span: null) => Promise<unknown>) => fn(null)) }))
 
 import { gatewayLedger, gatewayMetaInstagram, gatewayMetaPage, gatewayMetaPortfolio, gatewayMetaSharedPortfolios, gatewayMetaStored, gatewayMetaTakenLinks } from '../../test-support/gateway-stubs.js'
-import { __rateTest } from './rate.js'
-import { metaWriteCall } from './meta.js'
+import { __rateTest, bucketKey, META_BUCKETS, observeRate, takeToken } from './rate.js'
+import { metaCall, metaWriteCall } from './meta.js'
 import { metaWriteVerdict } from './meta-calls.js'
+import { metaWhatsAppOwnerProblem } from './meta-messaging-owner.js'
 import { META_INSTAGRAM_INBOX_APP, META_MESSAGE_LIMITS, META_PAGE_INBOX_APP, META_WHATSAPP_KINDS, templateComponentsProblem } from './meta-messaging-rules.js'
 import { __metaObjectLimitsTest } from './meta-object-limits.js'
 import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
@@ -107,7 +108,11 @@ describe('the message rules are an exact allow-list', () => {
     expect(msg({ ...text('x'), recipient: { id: PERSON, comment_id: '1' } })).toMatch(/exactly one of id/)
     expect(msg({ ...text('x'), recipient: { id: 'abc' } })).toMatch(/digits/)
     expect(msg({ ...text('x'), recipient: { user_ref: 'abc' } })).toMatch(/exactly one of id/)
-    expect(msg(text('x'.repeat(META_MESSAGE_LIMITS.messengerText + 1)))).toMatch(/at most 2000/)
+    // Review B-F7 — Meta: "fewer than 2,000 characters" (Messenger); "less than 1,000 characters" and 1,000 bytes (Instagram).
+    expect(msg(text('x'.repeat(1999)))).toBeNull()
+    expect(msg(text('x'.repeat(2000)))).toMatch(/at most 1999/)
+    expect(msg(text('x'.repeat(999)), 'instagrampage')).toBeNull()
+    expect(msg(text('x'.repeat(1000)), 'instagrampage')).toMatch(/at most 999 characters on Instagram/)
     expect(msg({ ...text('x'), message: { text: 'x', quick_replies: Array.from({ length: 14 }, (_, i) => ({ content_type: 'text', title: `R${i}`, payload: 'P' })) } })).toMatch(/list of 1 to 13/)
     expect(msg({ ...text('x'), message: { text: 'x', quick_replies: [{ content_type: 'user_email', title: 'E', payload: 'P' }] } })).toMatch(/content_type is one of text/)
     expect(msg({ ...text('x'), message: { attachment: { type: 'image', payload: { url: 'http://example.com/a.jpg' } } } })).toMatch(/https link/)
@@ -220,7 +225,21 @@ describe('the label, template and setup rules', () => {
     expect(profile({ greeting: j([{ locale: 'default', text: 'Ciao {{user_first_name}}' }]) })).toMatchObject({ write: { rule: 'messengerprofile.set' } })
     expect(profile({ greeting: j([{ locale: 'it_IT', text: 'Ciao' }]) })).toMatchObject({ problem: expect.stringMatching(/"default" locale/) })
     expect(profile({ greeting: j([{ locale: 'default', text: 'x' }]), platform: 'instagram' })).toMatchObject({ problem: expect.stringMatching(/Instagram the profile takes ice_breakers, persistent_menu only/) })
-    expect(profile({ ice_breakers: j([{ locale: 'default', call_to_actions: [{ question: 'Taglie?', payload: 'SIZES' }] }]), platform: 'instagram' })).toMatchObject({ write: { rule: 'messengerprofile.set' } })
+    // Review B-F1 — Instagram: platform=instagram in the query AND the body (every Instagram guide puts it in the query).
+    const igProfile = (body: Record<string, string>, method = 'POST') => metaWriteVerdict({ method, url: `${BASE}/${PAGE}/messenger_profile?platform=instagram`, kind: 'write', objectKind: 'messagingpage', body: form(body) })
+    const ice = j([{ locale: 'default', call_to_actions: [{ question: 'Taglie?', payload: 'SIZES' }] }])
+    expect(igProfile({ ice_breakers: ice, platform: 'instagram' })).toMatchObject({ write: { rule: 'messengerprofile.set' } })
+    expect(igProfile({ fields: j(['ice_breakers']), platform: 'instagram' }, 'DELETE')).toMatchObject({ write: { rule: 'messengerprofile.delete', method: 'DELETE' } })
+    expect(profile({ ice_breakers: ice, platform: 'instagram' })).toMatchObject({ problem: expect.stringMatching(/platform=instagram in the URL's query too/) })
+    expect(profile({ fields: j(['ice_breakers']), platform: 'instagram' }, 'DELETE')).toMatchObject({ problem: expect.stringMatching(/platform=instagram in the URL's query too/) })
+    expect(igProfile({ ice_breakers: ice })).toMatchObject({ problem: expect.stringMatching(/only with platform=instagram in the body/) })
+    expect(metaWriteVerdict({ method: 'POST', url: `${BASE}/${PAGE}/messenger_profile?platform=messenger`, kind: 'write', objectKind: 'messagingpage', body: form({ ice_breakers: ice }) })).toMatchObject({ problem: expect.stringMatching(/never in the URL/) })
+    expect(metaWriteVerdict({ method: 'POST', url: `${BASE}/${PAGE}/messenger_profile?platform=instagram&fields=x`, kind: 'write', objectKind: 'messagingpage', body: form({ ice_breakers: ice, platform: 'instagram' }) })).toMatchObject({ problem: expect.stringMatching(/never in the URL/) })
+    expect(metaWriteVerdict({ method: 'POST', url: `${BASE}/${PAGE}/personas?platform=instagram`, kind: 'write', objectKind: 'messagingpage', body: form({ name: 'Anna', profile_picture_url: 'https://example.com/a.jpg' }) })).toMatchObject({ problem: expect.stringMatching(/never in the URL/) })
+    // Review B-F10 — no webview_height_ratio on Instagram's menu (Messenger's keeps it).
+    const menu = (item: Record<string, unknown>) => j([{ locale: 'default', call_to_actions: [{ type: 'web_url', title: 'Shop', url: 'https://example.com', ...item }] }])
+    expect(igProfile({ persistent_menu: menu({ webview_height_ratio: 'tall' }), platform: 'instagram' })).toMatchObject({ problem: expect.stringMatching(/no key "webview_height_ratio"/) })
+    expect(profile({ persistent_menu: menu({ webview_height_ratio: 'tall' }) })).toMatchObject({ write: { rule: 'messengerprofile.set' } })
     expect(profile({ persistent_menu: j([{ locale: 'default', composer_input_disabled: true, call_to_actions: [{ type: 'postback', title: 'Aiuto', payload: 'HELP' }] }]), platform: 'instagram' })).toMatchObject({ problem: expect.stringMatching(/no key "composer_input_disabled"/) })
     expect(profile({ account_linking_url: 'http://example.com' })).toMatchObject({ problem: expect.stringMatching(/https link/) })
     expect(profile({ platform: 'instagram' })).toMatchObject({ problem: expect.stringMatching(/only Meta change/) })
@@ -311,16 +330,29 @@ describe('the owner check, then the Page token', () => {
     const creator = (parent?: { kind: 'creator'; id: string }) => send({ recipient: j({ id: '942900000000001' }), message: j({ text: 'Ciao' }), folder: 'partnership' }, { objectKind: 'instagrampage', operation: 'instagram.message', ...(parent ? { parent } : {}) }).catch((e) => e)
     h.answers.push(json({ id: PAGE, instagram_business_account: { id: IG } }))
     expect(await creator()).toMatchObject({ message: expect.stringMatching(/names the creator/) })
-    h.answers.push(json({ id: PAGE, instagram_business_account: { id: IG } }), json({ data: [{ id: '178000000000001', messaging_id: '942900000000002' }] }))
+    h.answers.push(json({ id: PAGE, instagram_business_account: { id: IG } }), tokenAnswer(), json({ data: [{ id: '178000000000001', messaging_id: '942900000000002' }] }))
     expect(await creator({ kind: 'creator', id: 'creator.a' })).toMatchObject({ message: expect.stringMatching(/not the messaging id/) })
     gatewayMetaTakenLinks.add('INSTAGRAM:178000000000001')
-    h.answers.push(json({ id: PAGE, instagram_business_account: { id: IG } }), json({ data: [{ id: '178000000000001', messaging_id: '942900000000001' }] }))
+    h.answers.push(json({ id: PAGE, instagram_business_account: { id: IG } }), tokenAnswer(), json({ data: [{ id: '178000000000001', messaging_id: '942900000000001' }] }))
     expect(await creator({ kind: 'creator', id: 'creator.a' })).toMatchObject({ message: expect.stringMatching(/another business in Nexus uses/) })
     gatewayMetaTakenLinks.clear()
     h.calls = []
-    h.answers.push(json({ id: PAGE, instagram_business_account: { id: IG } }), json({ data: [{ id: '178000000000001', messaging_id: '942900000000001' }] }), tokenAnswer(), json({ recipient_id: '942900000000001', message_id: 'mid.$c0123456' }))
+    h.answers.push(json({ id: PAGE, instagram_business_account: { id: IG } }), tokenAnswer(), json({ data: [{ id: '178000000000001', messaging_id: '942900000000001' }] }), tokenAnswer(), json({ recipient_id: '942900000000001', message_id: 'mid.$c0123456' }))
     expect((await creator({ kind: 'creator', id: 'creator.a' })).ok).toBe(true)
-    expect(sent(1).url.searchParams.get('username')).toBe('creator.a')
+    // Review B-F5 — the lookup goes with the chosen Page's own token, as Meta's creator marketplace asks.
+    expect(sent(2).url.pathname).toMatch(new RegExp(`/${IG}/creator_marketplace_creators$`))
+    expect(sent(2).url.searchParams.get('username')).toBe('creator.a')
+    expect(sent(2).url.searchParams.get('access_token')).toBe(PAGE_TOKEN)
+  })
+  it('review B-F5 — the creator lookup goes only on the chosen Instagram account, with the Page\'s token; any other read of the route stays the system user\'s', async () => {
+    const lookup = (ig: string, query: Record<string, string> = { username: 'creator.a', fields: 'id,page_id,messaging_id' }) => metaCall({ connectionId: 'm-1', operation: 'x', path: `${ig}/creator_marketplace_creators`, query })
+    await expect(lookup('170000000000099')).rejects.toMatchObject({ code: 'META_PAGE_NOT_CHOSEN', message: expect.stringMatching(/Instagram account this business chose/) })
+    expect(h.calls).toHaveLength(0)
+    await expect(lookup(IG, { username: 'creator a', fields: 'id,page_id,messaging_id' })).rejects.toMatchObject({ code: 'META_READ_ONLY' })
+    expect(h.calls).toHaveLength(0)
+    h.answers.push(json({ data: [] }))
+    expect((await lookup(IG, { query: 'moto', fields: 'id,username' })).ok).toBe(true)
+    expect(sent(0).url.searchParams.get('access_token')).toBe(SYSTEM_TOKEN)
   })
   it('a label: one the chosen Page lists, on a person with a Messenger conversation of it', async () => {
     const assign = () => metaWriteCall({ connectionId: 'm-1', operation: 'pagelabel.assign', objectId: LABEL, objectKind: 'pagelabel', edge: 'label', params: { user: PERSON }, check: false }).catch((e) => e)
@@ -370,18 +402,58 @@ describe('the owner check, then the Page token', () => {
     expect(JSON.stringify(gatewayLedger)).not.toContain('483920')
     expect(res.text).not.toContain('483920')
   })
-  it('a Page\'s own Messenger (80006) or Instagram (80002) limit on a message holds nothing of the ad account: a pause still goes', async () => {
+  it('review S1 — a change made as the Page pays the `page` bucket, never the ad account\'s: an ads hold does not stop it, a Page hold does (nothing read or sent)', async () => {
+    const left = async (group: string) => Math.round((await takeToken('META', bucketKey('META', 'm-1', group), 0)).tokensLeft)
+    h.answers.push(tokenAnswer(), conversation(), tokenAnswer(), json({ recipient_id: PERSON, message_id: MID }))
+    expect((await send(textParams())).ok).toBe(true)
+    // The probe takes 1 itself: the ad account's bucket paid nothing; the Page's paid the token reads, the person check and 3.
+    expect(await left('ads')).toBe(META_BUCKETS.ads.capacity - 1)
+    expect(await left('page')).toBeLessThanOrEqual(META_BUCKETS.page.capacity - 3 - 1)
+    __rateTest.useMemory()
+    await observeRate('META', bucketKey('META', 'm-1', 'ads'), { retryAfterSec: 300 })
+    h.calls = []
+    h.answers.push(tokenAnswer(), conversation(), tokenAnswer(), json({ recipient_id: PERSON, message_id: MID }))
+    expect((await send(textParams())).ok).toBe(true)
+    __rateTest.useMemory()
+    await observeRate('META', bucketKey('META', 'm-1', 'page'), { retryAfterSec: 300 })
+    h.calls = []
+    // The person check reads first, with the Page's token: held locally, so nothing is read or sent.
+    expect(await send(textParams()).catch((e) => e)).toMatchObject({ code: 'META_PAGE_UNCONFIRMED', message: expect.stringMatching(/rate limit/) })
+    expect(h.calls).toHaveLength(0)
+    // A change made as the Page with no read before it (a label) is refused by its own early slot of the Page's bucket.
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'pagelabel.create', objectId: PAGE, objectKind: 'messagingpage', edge: 'custom_labels', params: { page_label_name: 'vip' }, check: false }).catch((e) => e)).toMatchObject({ code: 'RATE_LIMITED_LOCAL' })
+    expect(h.calls).toHaveLength(0)
+  })
+  it('review S1 / B-F2 — the Page\'s own limits (Messenger 80006, Instagram 80002, Page 80001, LeadGen 80005) and, on a step-38 rule, 613 and 32 hold the Page\'s bucket only: a pause still goes; code 4 holds the ad account\'s too', async () => {
     gatewayMetaStored['120000000000001'] = { adAccountId: '1234567890', kind: 'campaign' }
     const pause = () => metaWriteCall({ connectionId: 'm-1', operation: 'status.change', objectId: '120000000000001', objectKind: 'campaign', params: { status: 'PAUSED' }, check: false }).catch((e) => e)
-    for (const code of [80006, 80002]) {
+    const pageHeld = async () => !(await takeToken('META', bucketKey('META', 'm-1', 'page'), 0)).ok
+    for (const code of [80006, 80002, 80001, 80005, 613, 32, 4]) {
+      __rateTest.useMemory()
       __metaObjectLimitsTest.useMemory()
-      h.calls = []
-      h.answers.push(tokenAnswer(), conversation(), tokenAnswer(), json({ error: { code, message: 'There have been too many messenger api calls to this Page account. Wait a bit and try again.' } }, 400))
+      h.calls = []; h.answers = []
+      h.answers.push(tokenAnswer(), conversation(), tokenAnswer(), json({ error: { code, message: 'Calls to this api have exceeded the rate limit.' } }, 400))
       const refused = await send(textParams())
-      expect(refused.ok, String(code)).toBe(false)
+      expect(refused.verdict, String(code)).toMatchObject({ errorClass: 'rate_limited', channelCode: String(code) })
       h.answers.push(json({ success: true }))
-      expect((await pause()).ok, String(code)).toBe(true)
+      const paused = await pause()
+      if (code === 4) expect(paused, String(code)).toMatchObject({ code: 'RATE_LIMITED_LOCAL' })
+      else expect(paused.ok, String(code)).toBe(true)
+      expect(await pageHeld(), String(code)).toBe(true)
     }
+    // Not a step-38 rule (the app installed on the Page, step 30): there a 613 may be the ad account's own throttle — held.
+    __rateTest.useMemory()
+    __metaObjectLimitsTest.useMemory()
+    h.answers = []
+    h.answers.push(tokenAnswer(), json({ error: { code: 613, message: 'Calls to this api have exceeded the rate limit.' } }, 400))
+    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'webhooks.installPage', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: { subscribed_fields: 'leadgen' }, check: false })).verdict).toMatchObject({ channelCode: '613' })
+    expect(await pause()).toMatchObject({ code: 'RATE_LIMITED_LOCAL' })
+    // A 613 with an object's subcode is that object's limit (meta-object-limits.ts), never the Page's whole bucket.
+    __rateTest.useMemory()
+    h.answers = []
+    h.answers.push(tokenAnswer(), conversation(), tokenAnswer(), json({ error: { code: 613, error_subcode: 4841018, message: 'Calls to this api have exceeded the rate limit.' } }, 400))
+    expect((await send(textParams())).verdict).toMatchObject({ channelCode: '613/4841018' })
+    expect(await pageHeld()).toBe(false)
     delete gatewayMetaStored['120000000000001']
   })
   it('a WhatsApp account\'s own limit (80008) on a template change holds only the WhatsApp bucket: a pause still goes', async () => {
@@ -392,5 +464,60 @@ describe('the owner check, then the Page token', () => {
     h.answers.push(json({ success: true }))
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'status.change', objectId: '120000000000001', objectKind: 'campaign', params: { status: 'PAUSED' }, check: false })).ok).toBe(true)
     delete gatewayMetaStored['120000000000001']
+  })
+})
+
+describe('fix round 1 — every owner check holds (review A-S2); a WhatsApp delete names its own template (review A-N2)', () => {
+  const send = (params: Record<string, string>, extra: Partial<Parameters<typeof metaWriteCall>[0]> = {}) => metaWriteCall({ connectionId: 'm-1', operation: 'messenger.message', objectId: PAGE, objectKind: 'messengerpage', edge: 'messages', params, check: false, ...extra }).catch((e) => e)
+  const changes = () => h.calls.filter((c) => c.init.method !== 'GET')
+  it('a private reply to a comment on another Page\'s post, or to a visitor post the Page wrote itself: nothing sent', async () => {
+    const reply = (recipient: Record<string, string>) => send({ recipient: j(recipient), messaging_type: 'RESPONSE', message: j({ text: 'Ti scriviamo' }) })
+    h.answers.push(json({ id: 'x' }), json({ id: '500000000000001', from: { id: OTHER_PAGE } }))
+    expect(await reply({ comment_id: '500000000000001_900000000000001' })).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN', message: expect.stringMatching(/not on a post of the Facebook Page this business chose/) })
+    h.answers = []
+    h.answers.push(json({ id: `${PAGE}_700000000000001`, from: { id: PAGE } }))
+    expect(await reply({ post_id: `${PAGE}_700000000000001` })).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/written by the chosen Page itself/) })
+    expect(changes()).toHaveLength(0)
+  })
+  it('an instant form of another Page; an Instagram message naming another Page id: nothing sent', async () => {
+    const form = { recipient: j({ id: PERSON }), messaging_type: 'RESPONSE', message: j({ attachment: { type: 'template', payload: { template_type: 'instant_form', form_id: '120000000000601' } } }) }
+    h.answers.push(tokenAnswer(), conversation(), json({ id: '120000000000601', page_id: OTHER_PAGE, questions: { data: [{ type: 'EMAIL' }] } }))
+    expect(await send(form)).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN', message: expect.stringMatching(/lead form 120000000000601 is not a form of the Facebook Page this business chose/) })
+    h.answers = []
+    h.calls = []
+    expect(await send({ recipient: j({ id: PERSON }), messaging_type: 'RESPONSE', message: j({ text: 'Ciao' }) }, { objectKind: 'instagrampage', operation: 'instagram.message', objectId: OTHER_PAGE })).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN', message: expect.stringMatching(new RegExp(`${OTHER_PAGE} is not the Facebook Page this business chose`)) })
+    expect(h.calls).toHaveLength(0)
+    expect(changes()).toHaveLength(0)
+  })
+  it('a label taken off, a person\'s own menu set or taken off: only for a person with a Messenger conversation of the chosen Page', async () => {
+    h.answers.push(tokenAnswer(), json({ data: [{ id: LABEL }] }), tokenAnswer(), json({ data: [] }))
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'pagelabel.unassign', objectId: LABEL, objectKind: 'pagelabel', edge: 'label', method: 'DELETE', params: { user: PERSON }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/no Messenger conversation with the chosen Facebook Page/) })
+    h.answers = []
+    h.answers.push(tokenAnswer(), json({ data: [] }))
+    const menu = j([{ locale: 'default', call_to_actions: [{ type: 'postback', title: 'Aiuto', payload: 'HELP' }] }])
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'usermenu.set', objectId: PAGE, objectKind: 'messagingpage', edge: 'custom_user_settings', params: { psid: PERSON, persistent_menu: menu }, check: false }).catch((e) => e)).toMatchObject({ message: expect.stringMatching(/no Messenger conversation with the chosen Facebook Page/) })
+    h.answers = []
+    h.answers.push(tokenAnswer(), json({ data: [] }))
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'usermenu.delete', objectId: PAGE, objectKind: 'messagingpage', edge: 'custom_user_settings', method: 'DELETE', params: { psid: PERSON, params: '["persistent_menu"]' }, check: false }).catch((e) => e)).toMatchObject({ message: expect.stringMatching(/no Messenger conversation with the chosen Facebook Page/) })
+    expect(changes()).toHaveLength(0)
+  })
+  it('a group change adding a template of another account; any body id the WhatsApp check does not know: refused', async () => {
+    h.answers.push(json({ data: [{ id: WABA }] }), json({ id: '120000000000950', whatsapp_business_account: { id: WABA } }), json({ data: [{ id: '120000000000901', name: 'a' }] }))
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'templategroup.update', objectId: '120000000000950', objectKind: 'templategroup', params: { add_templates: j(['120000000000902']) }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/template 120000000000902 is not one of this WhatsApp account's templates/) })
+    expect(changes()).toHaveLength(0)
+    const read = vi.fn(async (path: string) => ({ body: path.endsWith('owned_whatsapp_business_accounts') ? { data: [{ id: WABA }] } : { data: [] }, words: null }))
+    for (const ids of [[{ id: 'abc', kind: 'wabatemplate' }], [{ id: PERSON, kind: 'messageperson' }]]) {
+      expect(await metaWhatsAppOwnerProblem('m-1', { rule: 'templategroup.create', objectId: WABA, kinds: ['waba'], check: false, body: '', budget: false, ids } as never, 'waba', read)).toMatchObject({ sentence: expect.stringMatching(/names an id inside its body that Nexus does not check/) })
+    }
+  })
+  it('A-N2 — a WhatsApp template delete: its name must be that template\'s own', async () => {
+    const del = (name: string) => metaWriteCall({ connectionId: 'm-1', operation: 'wabatemplate.delete', objectId: WABA, objectKind: 'waba', edge: 'message_templates', method: 'DELETE', params: { hsm_id: '120000000000901', name }, check: false }).catch((e) => e)
+    h.answers.push(json({ data: [{ id: WABA }] }), json({ data: [{ id: '120000000000901', name: 'promo_a' }, { id: '120000000000902', name: 'promo_b' }] }))
+    expect(await del('promo_b')).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/template 120000000000901 is named "promo_a", not "promo_b"/) })
+    expect(changes()).toHaveLength(0)
+    h.answers = []
+    h.answers.push(json({ data: [{ id: WABA }] }), json({ data: [{ id: '120000000000901', name: 'promo_a' }] }), json({ success: true }))
+    expect((await del('promo_a')).ok).toBe(true)
+    expect(changes().map((c) => c.init.method)).toEqual(['DELETE'])
   })
 })

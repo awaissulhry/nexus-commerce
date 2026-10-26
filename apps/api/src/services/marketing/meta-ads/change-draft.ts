@@ -196,6 +196,11 @@ export interface MetaChangeDraft {
   after: unknown
   /** Step 22 — everything a delete takes with it (every ad set and ad of a campaign or ad set, by id), shown in full. */
   alsoDeleted?: unknown
+  /**
+   * Step 38 (review A-N5) — what the run says when only what the change stands on moved (the requests are the same): a
+   * message's words when the person wrote again meanwhile. Left out: the kit's own words (the Meta ad account changed).
+   */
+  basisMoved?: string
 }
 
 export const MAX_CHANGE_LINES = 20

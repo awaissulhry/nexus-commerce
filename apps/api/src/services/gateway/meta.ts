@@ -148,7 +148,8 @@ export interface MetaWriteRequest {
   path?: string
   /**
    * Step 30 — a DELETE's parameters in the URL's query, as Meta's SDK sends them (an app's webhook subscription, the app's
-   * link to the chosen ad account); `params` is then empty. The gateway refuses a query on every other call.
+   * link to the chosen ad account); `params` is then empty. Step 38 — an Instagram profile change's platform=instagram (with
+   * the same key in `params`). The gateway refuses a query on every other call.
    */
   query?: Record<string, string>
   /** Step 20 (review A2) — the targeting keys this change's draft changed: the only ones the gateway lets differ from live. */
@@ -266,7 +267,8 @@ export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayRespo
     kind: req.check ? 'read' : 'write',
     connectionId: req.connectionId,
     // Step 24 — a Page's video post on Meta's video host; every other change on the Graph host.
-    url: req.videoHost ? metaUrl(path).replace(/^https:\/\/graph\.facebook\.com\//, `https://${META_GRAPH_VIDEO_HOST}/`) : metaUrl(path, remove ? req.query ?? {} : {}),
+    // Step 38 (review B-F1) — and an Instagram profile change's platform=instagram (the gateway refuses any other query).
+    url: req.videoHost ? metaUrl(path).replace(/^https:\/\/graph\.facebook\.com\//, `https://${META_GRAPH_VIDEO_HOST}/`) : metaUrl(path, req.query ?? {}),
     method: remove ? 'DELETE' : req.method === 'PATCH' ? 'PATCH' : 'POST',
     body,
     metaObjectKind: req.objectKind,

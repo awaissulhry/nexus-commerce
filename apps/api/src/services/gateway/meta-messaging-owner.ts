@@ -252,7 +252,7 @@ export async function metaWhatsAppOwnerProblem(connectionId: string, write: Meta
   if (!inner.length) return null
   if (inner.some((x) => x.kind !== 'wabatemplate' || !PAGE_ID.test(x.id))) return refuse('this change names an id inside its body that Nexus does not check.')
   // `summary` makes this read the WhatsApp account's (a Page-shaped template read goes with the chosen Page's token only).
-  const templates = await listed(read, `${waba}/message_templates`, { summary: 'total_count' })
+  const templates = await listed(read, `${waba}/message_templates`, { summary: 'total_count' }, 'id,name')
   if (!templates) return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `${NOT_SENT} Nexus could not read the WhatsApp account's templates to confirm the ones this change names.` }
   const ownTemplates = new Set(templates.rows.map((r) => idOf(r.id)))
   const foreign = inner.find((x) => !ownTemplates.has(x.id))
@@ -260,6 +260,13 @@ export async function metaWhatsAppOwnerProblem(connectionId: string, write: Meta
     return templates.more
       ? { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `${NOT_SENT} template ${foreign.id} is not among the WhatsApp account's first 500 templates, so Nexus could not confirm it is one of them.` }
       : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `${NOT_SENT} inside this change, template ${foreign.id} is not one of this WhatsApp account's templates.` }
+  }
+  // Review A-N2 — a delete names the template's hsm_id AND its name: the name must be that template's own (as the Messenger
+  // path checks), so the name of another template of the account never rides with it.
+  if (write.rule === 'wabatemplate.delete') {
+    const name = new URLSearchParams(write.body).get('name')
+    const row = templates.rows.find((r) => idOf(r.id) === inner[0]?.id)
+    if (!row || row.name !== name) return refuse(`inside this change, template ${inner[0]?.id} is named "${String(row?.name ?? '')}", not "${name}".`)
   }
   return null
 }

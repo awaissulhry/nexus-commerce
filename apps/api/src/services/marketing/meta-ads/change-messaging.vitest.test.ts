@@ -85,8 +85,11 @@ describe('the setup read back', () => {
     }
   })
   it('a menu, calling and a flow as Meta answers them, in Nexus\'s shape', () => {
+    // Review A-N4 — Meta's defaults (the text box shown, a link opening full height) read back as no value: one form only.
     expect(menuFromMeta([{ locale: 'default', composer_input_disabled: false, call_to_actions: [{ type: 'web_url', title: 'Shop', url: 'https://example.com', webview_height_ratio: 'full' }] }], false))
-      .toEqual([{ locale: 'default', composerInputDisabled: false, items: [{ type: 'web_url', title: 'Shop', url: 'https://example.com', webviewHeight: 'full' }] }])
+      .toEqual([{ locale: 'default', items: [{ type: 'web_url', title: 'Shop', url: 'https://example.com' }] }])
+    expect(menuFromMeta([{ locale: 'default', composer_input_disabled: true, call_to_actions: [{ type: 'web_url', title: 'Shop', url: 'https://example.com', webview_height_ratio: 'tall' }] }], false))
+      .toEqual([{ locale: 'default', composerInputDisabled: true, items: [{ type: 'web_url', title: 'Shop', url: 'https://example.com', webviewHeight: 'tall' }] }])
     expect(callingFromMeta({ audio_enabled: true, call_hours: { timezone_id: 'Europe/Rome', weekly_operating_hours: [{ day_of_week: 'MONDAY', open_time: '0900', close_time: '1800' }] }, call_routing: { ring_target: 'META' } }))
       .toEqual({ audio: true, hours: { timeZone: 'Europe/Rome', days: [{ day: 'MONDAY', open: '0900', close: '1800' }] }, routing: 'META' })
     expect(flowFromMeta({ id: '1', name: 'Flow A', eligible_platforms: ['MESSENGER'], welcome_message: JSON.stringify([{ message: { text: 'Ciao' } }]) })).toEqual({ name: 'Flow A', platforms: ['messenger'], messages: [{ text: 'Ciao' }] })

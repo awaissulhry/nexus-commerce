@@ -68,6 +68,11 @@ export interface MetaPageRead {
    * `problem` says why not (gateway.ts refuses it then, nothing sent).
    */
   otherPages?: { problem: string | null }
+  /**
+   * Step 38 (review B-F5) — a read on the business's chosen INSTAGRAM account that Meta answers only to the Page's token (a
+   * creator's messaging id): the path's account must be the chosen one (gateway.ts), and it goes with the chosen Page's token.
+   */
+  instagramId?: string
 }
 
 interface PageReadRule {
@@ -79,9 +84,10 @@ interface PageReadRule {
   fields: ReadonlySet<string>
   /**
    * `path`: the Page is the route's first segment; `thread`: a conversation's own node or edge (the chosen Page's token);
-   * `post`: a post's edge, `<page id>_<post id>/…` — the Page is the post id's first part.
+   * `post`: a post's edge, `<page id>_<post id>/…` — the Page is the post id's first part; `instagram` (step 38): the route's
+   * first segment is the chosen Instagram account, read with the chosen Page's token.
    */
-  page: 'path' | 'thread' | 'post'
+  page: 'path' | 'thread' | 'post' | 'instagram'
   /** message_templates only: a read that is not Page-shaped is a WhatsApp account's (an ordinary read). */
   pageShapedOnly?: true
   /** Probe fixes — exactly the values these keys may carry here (limit and after keep their own checks below). */
@@ -202,6 +208,14 @@ export const META_PAGE_READ_RULES: readonly PageReadRule[] = [
     route: /^\d+\/canvases$/, what: 'the Page\'s Instant Experiences', page: 'path',
     keys: set(...LIST_KEYS, 'is_hidden', 'is_published'), values: { is_hidden: BOOL, is_published: BOOL }, fields: CANVAS_LIST_FIELDS,
   },
+  // Step 38 (review B-F5) — create-meta-message's creator lookup: "This API requires a Page access token for a Page that is
+  // connected to your brand's Instagram business account" (instagram-api-with-facebook-login/creator-marketplace.md). Only
+  // this exact read (one username, the messaging id's fields); any other read of the route (meta-partnership-content's
+  // discovery) stays an ordinary read, as before.
+  {
+    route: /^\d+\/creator_marketplace_creators$/, what: 'a creator\'s messaging id', page: 'instagram', pageShapedOnly: true,
+    keys: set('username', 'fields'), values: { username: /^[A-Za-z0-9._]{1,30}$/ }, fields: set('id', 'page_id', 'messaging_id'),
+  },
 ]
 
 /** Probe fix IN-092 — the metric names of an insights read (Meta's comma list), or [] when it names none. */
@@ -248,8 +262,9 @@ export function metaPageReadOf(route: string, segments: readonly string[], searc
   // A post's Page is its id's first part. Review of #771 — a `<chosen Page>_<id>` whose second part is no post of that Page
   // still goes only with the chosen Page's own token, read only: Meta resolves the id itself and answers only what that
   // token may see, so no other Page's data is reachable (checking the post first would cost a Meta read on every call).
-  const pageId = rule.page === 'thread' ? null : rule.page === 'post' ? (segments[0] ?? '').split('_')[0] : segments[0]
+  const pageId = rule.page === 'thread' || rule.page === 'instagram' ? null : rule.page === 'post' ? (segments[0] ?? '').split('_')[0] : segments[0]
   const problem = pageReadProblem(rule, keys, search, items, auth)
+  if (rule.page === 'instagram') return problem ? { problem: `${rule.what} ${problem}` } : { pageId, instagramId: segments[0] }
   // Probe fix MD-101 — the feed: the problem counts only for the CHOSEN Page's own read (gateway.ts); another Page's is an
   // ordinary read, as before.
   if (rule.otherPagesOrdinary) return { pageId, otherPages: { problem: problem ? `${rule.what} ${problem}` : null } }

@@ -186,6 +186,8 @@ export const TEMPLATE_EXPLAIN: Readonly<Record<string, string>> = {
   131009: 'Meta says a parameter value is not valid.',
   368: 'Meta judged it abusive or not allowed for this Page.',
   80008: 'Meta allows only so many calls to this WhatsApp account in an hour: ask again later.',
+  // Review B-F12 — page/message_templates lists 32.
+  32: 'Meta allows only so many calls to this Page in a while (its error 32): wait a few minutes and ask again.',
 }
 const REVIEW = 'Meta reviews every template (PENDING → APPROVED or REJECTED, with its reasons; meta-message-templates shows them) and may change a WhatsApp template\'s category; "Templates will not be approved without examples".'
 
@@ -329,7 +331,13 @@ export function groupUpdateDraft(wabaId: string, group: TemplateGroupState, inpu
       ...(add.length ? [['Templates added', null, add.join(', ')] as [string, unknown, unknown]] : []),
       ...(remove.length ? [['Templates taken off', remove.join(', '), null] as [string, unknown, unknown]] : []),
     ],
-    warnings: [SETUP_NO_CHECK, 'A template is in one group at a time; taking one off keeps the numbers it already gave the group.', 'Its undo puts the name, description and templates back.'],
+    warnings: [
+      SETUP_NO_CHECK, 'A template is in one group at a time; taking one off keeps the numbers it already gave the group.',
+      // Review A-N3 — an empty old name or description cannot be written back (Nexus sends no empty text): said, not promised.
+      ...((rename !== null && !group.name) || (describe !== null && !group.description)
+        ? [`Its undo puts the templates${rename !== null && group.name ? ' and the name' : ''}${describe !== null && group.description ? ' and the description' : ''} back; the ${[rename !== null && !group.name ? 'name' : null, describe !== null && !group.description ? 'description' : null].filter(Boolean).join(' and ')} had none before, which Nexus cannot write back (it stays as set here).`]
+        : ['Its undo puts the name, description and templates back.']),
+    ],
     requests: [request({
       label: `Change template group ${group.groupId}`, objectId: group.groupId, objectKind: 'templategroup', operation: 'templategroup.update', readBackFields: 'id,name,description',
       params: { ...(rename !== null ? { name: rename } : {}), ...(describe !== null ? { description: describe } : {}), ...(add.length ? { add_templates: json(add) } : {}), ...(remove.length ? { remove_templates: json(remove) } : {}) },
@@ -373,12 +381,26 @@ export interface ProfileInput {
   commands?: Array<{ locale: string; commands: Array<{ name: string; description: string }> }>
 }
 
-/** Nexus's menu → Meta's persistent_menu. */
+/** Nexus's menu → Meta's persistent_menu. Review B-F10 — Instagram's menu has no webview_height_ratio (never sent there). */
 export function menuToMeta(menu: MenuInput, instagram: boolean): Row[] {
   return menu.map((m) => ({
     locale: m.locale,
     ...(!instagram && m.composerInputDisabled !== undefined ? { composer_input_disabled: m.composerInputDisabled } : {}),
-    call_to_actions: m.items.map((i) => (i.type === 'web_url' ? { type: 'web_url', title: i.title, url: i.url, ...(i.webviewHeight ? { webview_height_ratio: i.webviewHeight } : {}) } : { type: 'postback', title: i.title, payload: i.payload })),
+    call_to_actions: m.items.map((i) => (i.type === 'web_url' ? { type: 'web_url', title: i.title, url: i.url, ...(i.webviewHeight && !instagram ? { webview_height_ratio: i.webviewHeight } : {}) } : { type: 'postback', title: i.title, payload: i.payload })),
+  }))
+}
+/**
+ * Review A-N4 — a menu in ONE form, as a record keeps it and as Meta's answer reads back: Meta's defaults left out (the text
+ * box shown, composer_input_disabled false; a link opening full height, webview_height_ratio "full" — Meta's default), so
+ * Meta answering a default it was not sent is no change since, and the undo is not refused for it.
+ */
+export function normalMenu(menu: MenuInput): MenuInput {
+  return menu.map((m) => ({
+    locale: m.locale,
+    ...(m.composerInputDisabled ? { composerInputDisabled: true } : {}),
+    items: m.items.map((i) => (i.type === 'web_url'
+      ? { type: 'web_url' as const, title: i.title, url: i.url, ...(i.webviewHeight && i.webviewHeight !== 'full' ? { webviewHeight: i.webviewHeight } : {}) }
+      : { type: 'postback' as const, title: i.title, payload: i.payload })),
   }))
 }
 /** Meta's persistent_menu → Nexus's menu, or null when it holds anything Nexus does not send. */
@@ -397,7 +419,7 @@ export function menuFromMeta(v: unknown, instagram: boolean): MenuInput | null {
     }
     out.push({ locale: m.locale, ...(!instagram && typeof m.composer_input_disabled === 'boolean' ? { composerInputDisabled: m.composer_input_disabled } : {}), items })
   }
-  return out
+  return normalMenu(out)
 }
 
 /** One profile property in Meta's shape. */
@@ -476,10 +498,18 @@ export const SETUP_EXPLAIN: Readonly<Record<string, string>> = {
   200: 'Meta refused it for permission: the system user needs the MESSAGING task on the chosen Page and its token pages_messaging (welcome flows for Instagram also instagram_basic and instagram_manage_messages; NLP pages_manage_metadata).',
   80006: 'Meta allows only so many Messenger calls to this Page in a while (the profile: 10 calls per 10 minutes; a person\'s menu: 10 per person per 10 minutes): ask again later.',
   104: 'Meta says the request\'s signature is not right (its error 104 for the WhatsApp number check).',
+  // Review B-F12 — page/personas lists 230.
+  230: 'Meta: "Permissions disallow message to user" — the Page may not do this for that person now.',
 }
 const PROFILE_LIMIT = 'Meta allows 10 Messenger Profile calls per 10 minutes per Page, and a Page-level menu can take up to 24 hours to show.'
 
 /** EN-901 / EN-902 — set and / or clear Messenger (or Instagram) profile properties; the old values are read first. */
+/**
+ * Review B-F1 — an Instagram profile change names platform=instagram in the URL's query too (every Instagram guide does;
+ * the body keeps it): without it Meta may write the Page's MESSENGER profile, which everyone sees.
+ */
+const INSTAGRAM_QUERY = { via: { query: { platform: 'instagram' } } } as const
+
 export function profileDraft(pageId: string, platform: MessagingPlatform, live: Row, set: ProfileInput, clear: ProfileKey[]): MetaChangeDraft | { refusal: string } {
   const instagram = platform === 'instagram'
   const setKeys = PROFILE_KEYS.filter((k) => set[k] !== undefined)
@@ -489,6 +519,8 @@ export function profileDraft(pageId: string, platform: MessagingPlatform, live: 
   if (instagram) {
     const bad = [...setKeys, ...clear].filter((k) => !(META_INSTAGRAM_PROFILE_FIELDS as readonly string[]).includes(META_KEY[k]))
     if (bad.length) return { refusal: `On Instagram the profile takes iceBreakers and persistentMenu only (not ${bad.join(', ')}).` }
+    // Review B-F10 — igm persistent-menu.md "Limitations": "The webview_height_ratio parameter is not available".
+    if (set.persistentMenu?.some((m) => m.items.some((i) => i.webviewHeight !== undefined))) return { refusal: 'Instagram\'s persistent menu has no webviewHeight (Meta: "not available" there): leave it out.' }
   }
   const lines: Array<[string, unknown, unknown]> = []
   const before: Partial<Record<ProfileKey, unknown>> = {}
@@ -503,7 +535,7 @@ export function profileDraft(pageId: string, platform: MessagingPlatform, live: 
     const oldInput = profileValueFromMeta(key, old, instagram)
     before[key] = oldInput === undefined ? 'unknown' : oldInput
     if (oldInput === undefined) noUndo.push(key)
-    after[key] = set[key]
+    after[key] = key === 'persistentMenu' ? normalMenu(set.persistentMenu!) : set[key]
     setParams[META_KEY[key]] = key === 'accountLinkingUrl' ? String(metaValue) : json(metaValue)
     lines.push([key, old === undefined || old === null ? 'not set' : old, metaValue])
   }
@@ -521,10 +553,10 @@ export function profileDraft(pageId: string, platform: MessagingPlatform, live: 
   const record = (properties: Partial<Record<ProfileKey, unknown>>): SetupRecord => ({ section: 'profile', pageId, platform, properties })
   const requests: MetaChangeRequest[] = []
   if (Object.keys(setParams).length) {
-    requests.push(request({ label: `Set the ${instagram ? 'Instagram' : 'Messenger'} profile's ${Object.keys(setParams).join(', ')}`, objectId: pageId, objectKind: 'messagingpage', edge: 'messenger_profile', operation: 'messengerprofile.set', params: { ...setParams, ...(instagram ? { platform: 'instagram' } : {}) }, undoable: true, skipReadBack: true, explain: SETUP_EXPLAIN, doneSentence: confirmedSentence('The profile') }))
+    requests.push(request({ label: `Set the ${instagram ? 'Instagram' : 'Messenger'} profile's ${Object.keys(setParams).join(', ')}`, objectId: pageId, objectKind: 'messagingpage', edge: 'messenger_profile', operation: 'messengerprofile.set', params: { ...setParams, ...(instagram ? { platform: 'instagram' } : {}) }, ...(instagram ? INSTAGRAM_QUERY : {}), undoable: true, skipReadBack: true, explain: SETUP_EXPLAIN, doneSentence: confirmedSentence('The profile') }))
   }
   if (cleared.length) {
-    requests.push(request({ label: `Clear the ${instagram ? 'Instagram' : 'Messenger'} profile's ${cleared.join(', ')}`, objectId: pageId, objectKind: 'messagingpage', edge: 'messenger_profile', method: 'DELETE' as const, operation: 'messengerprofile.delete', params: { fields: json(cleared), ...(instagram ? { platform: 'instagram' } : {}) }, undoable: true, explain: SETUP_EXPLAIN }))
+    requests.push(request({ label: `Clear the ${instagram ? 'Instagram' : 'Messenger'} profile's ${cleared.join(', ')}`, objectId: pageId, objectKind: 'messagingpage', edge: 'messenger_profile', method: 'DELETE' as const, operation: 'messengerprofile.delete', params: { fields: json(cleared), ...(instagram ? { platform: 'instagram' } : {}) }, ...(instagram ? INSTAGRAM_QUERY : {}), undoable: true, explain: SETUP_EXPLAIN }))
   }
   if (!requests.length) return { ...nothing(`The ${instagram ? 'Instagram' : 'Messenger'} profile already reads so.`, { live }, record({})), skipped }
   return draftOf({
@@ -535,6 +567,9 @@ export function profileDraft(pageId: string, platform: MessagingPlatform, live: 
       'While the business\'s Meta app is in Development mode Meta shows the profile only to people with a role on the app.',
       ...(setKeys.includes('persistentMenu') && !instagram ? ['A persistent menu shows only with a Get Started button set (getStarted).'] : []),
       ...(setKeys.includes('iceBreakers') ? ['Ice breakers set by API turn off editing the Page Inbox\'s own FAQ questions; people from a click-to-message ad see that ad\'s ice breakers instead.'] : []),
+      // Review B-F11 — Meta's precedence rules (ice-breakers.md "Page Profile Priority"; persistent-menu.md).
+      ...(setKeys.includes('iceBreakers') && !instagram ? ['Ice breakers set by API take precedence over the Get Started button: people who open a new chat see the questions, not Get Started.'] : []),
+      ...(!instagram && (setKeys.includes('commands') || setKeys.includes('persistentMenu')) ? ['If commands are set, Meta shows them instead of the persistent menu (commands take priority over it).'] : []),
       noUndo.length ? `No undo for ${noUndo.join(', ')}: Meta's current value holds something Nexus does not send.` : 'Its undo writes the old values back (and clears what was not set before).',
     ],
     requests,
@@ -567,7 +602,7 @@ export function personMenuDraft(person: { personId: string; pageId: string; conv
     warnings: [SETUP_NO_CHECK, 'It shows at once; Meta allows 10 menu calls per person per 10 minutes.', oldRecord === 'unknown' ? 'No undo: their old menu holds something Nexus does not send.' : `Its undo ${oldRecord === null ? 'takes this menu off again' : 'sets their old menu again'}. The person's id is kept in this change's record for that undo.`],
     requests: [request({ label: `Set the own menu of the person in conversation ${person.conversationId}`, objectId: person.pageId, objectKind: 'messagingpage', edge: 'custom_user_settings', operation: 'usermenu.set', params: { psid: person.personId, persistent_menu: json(metaMenu) }, undoable: oldRecord !== 'unknown', skipReadBack: true, explain: SETUP_EXPLAIN, doneSentence: confirmedSentence(`The person's (conversation ${person.conversationId}) menu`) })],
     stands: { conversationId: person.conversationId, menu: liveUserMenu ?? null },
-    before: base(oldRecord), after: base(menu),
+    before: base(oldRecord), after: base(normalMenu(menu)),
   })
 }
 

@@ -47,7 +47,7 @@ import { isMetaPostBodyKind, type MetaPostKind } from './meta-post-rules.js'
 import { MetaPageTokenUnavailable, metaPageTokenFor, scrubExactToken } from './meta-page-token.js'
 import { META_THREADS_KINDS, metaThreadsOwnerProblem } from './meta-comment-owner.js'
 // Step 38 — a WhatsApp template or template group change (system-user token): its own owner check.
-import { META_WHATSAPP_KINDS, isMetaMessagingBodyKind, type MetaMessagingKind } from './meta-messaging-rules.js'
+import { META_MESSAGING_RULE_NAMES, META_WHATSAPP_KINDS, isMetaMessagingBodyKind, type MetaMessagingKind } from './meta-messaging-rules.js'
 import { metaWhatsAppOwnerProblem } from './meta-messaging-owner.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { META_SIGNALS_WRITE_RULES, type MetaSignalsKind } from './meta-signals-rules.js'
@@ -440,12 +440,15 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
       const chosen = req.connectionId ? await metaChosenPageOf(req.connectionId) : null
       // Step 15 — so are the chosen Page's conversations, inbox and messaging setup (meta-page-reads.ts); a conversation's
       // own node and messages (pageId null) go with the chosen Page's token.
-      const forChosen = !!chosen && (judged.pageRead.pageId === null || chosen === judged.pageRead.pageId)
+      // Step 38 (review B-F5) — a read on the chosen Instagram account with the Page's token (a creator's messaging id): the
+      // path's account must be the one this business chose through this connection.
+      const instagramChosen = judged.pageRead.instagramId === undefined || (!!req.connectionId && (await metaChosenInstagramOf(req.connectionId)) === judged.pageRead.instagramId)
+      const forChosen = !!chosen && instagramChosen && (judged.pageRead.pageId === null || chosen === judged.pageRead.pageId)
       // Live-probe fix MD-101 — the feed of ANOTHER Page (meta-ad-library page-posts: public posts, Meta's Page Public Content
       // Access) stays an ordinary read with the system-user token, as before; only the chosen Page's own feed takes its token.
       const otherPages = judged.pageRead.otherPages
       if (!(otherPages && !forChosen)) {
-        if (!forChosen) return refuse('refused', 'META_PAGE_NOT_CHOSEN', `Nothing was sent to Meta: a Page's own reads (its connected apps, posts, insights, Instant Experiences, conversations, inbox and messaging setup) go only to the Facebook Page this business chose through this connection, with that Page's own token${chosen ? '' : ', and this business has chosen no Page'}.`, 403)
+        if (!forChosen) return refuse('refused', 'META_PAGE_NOT_CHOSEN', `Nothing was sent to Meta: a Page's own reads (its connected apps, posts, insights, Instant Experiences, conversations, inbox and messaging setup, and a creator's messaging id for its Instagram account) go only to the Facebook Page and Instagram account this business chose through this connection, with that Page's own token${chosen ? '' : ', and this business has chosen no Page'}.`, 403)
         if (otherPages?.problem) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${otherPages.problem} (${req.method} ${safePath(req.url)}).`, 403)
         metaPageRead = true
       }
@@ -574,12 +577,13 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
   // call (meta-page-token.ts: with the system-user token, for the chosen Page only) and keeps in memory for this call only:
   // it goes on the URL that is sent, never on `url` (the ledger, the trace, the answer), and is scrubbed from the answer.
   let pageToken: string | null = null
-  // Step 15 re-review N3 — a change made AS the Page takes its own slot of the ad account's bucket (3 points) BEFORE its
-  // Page token is read (from the `page` bucket, meta-page-token.ts): during an ads hold it is refused locally first, with no
-  // token read spent on it, and the send below does not take that slot again.
+  // Step 15 re-review N3 — a change made AS the Page takes its own slot (3 points) BEFORE its Page token is read: during a
+  // hold it is refused locally first, with no token read spent on it, and the send below does not take that slot again.
+  // Step 38 review S1 — that slot is of the `page` bucket, as Page-token reads are (step 15 fix A1): a change made with the
+  // Page's own token counts against the Page's limits, never the ad account's (steps 24, 36, 37 and 38's Page changes).
   let slotTaken = false
   if (metaWrite?.auth === 'page' && req.connectionId) {
-    const early = await takeToken(req.channel, bucketKey(req.channel, req.connectionId, bucketGroupOf(req.channel, req.method, url)), req.maxRateWaitMs ?? 30_000, undefined, metaWrite.reportRun ? 1 : 3)
+    const early = await takeToken(req.channel, bucketKey(req.channel, req.connectionId, 'page'), req.maxRateWaitMs ?? 30_000, undefined, metaWrite.reportRun ? 1 : 3)
     if (!early.ok) return refuse('refused', 'RATE_LIMITED_LOCAL', `Not sent yet: the ${name} rate limit for this account needs ${Math.ceil(early.waitMs / 1000)} s more. Retry later.`, 429, early.waitMs)
     slotTaken = true
   }
@@ -693,7 +697,9 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
   // 6–7. rate bucket, send, 429 / transient retries
   // Step 15 fix A1 — a read made with the chosen Page's own token takes the `page` bucket (as the read of that token does,
   // meta-page-token.ts) and a WhatsApp account's read the `whatsapp` one (rate.ts): the ad account's bucket never pays.
-  const key = bucketKey(req.channel, req.connectionId, metaPageRead ? 'page' : metaWhatsAppRead ? 'whatsapp' : bucketGroupOf(req.channel, req.method, url))
+  // Step 38 review S1 — so does a change made AS the Page (`auth: 'page'`).
+  const metaPageCall = metaPageRead || metaWrite?.auth === 'page'
+  const key = bucketKey(req.channel, req.connectionId, metaPageCall ? 'page' : metaWhatsAppRead ? 'whatsapp' : bucketGroupOf(req.channel, req.method, url))
   const max429 = req.max429Retries ?? 2
   const maxTransient = req.maxTransientRetries ?? 1
   // A Meta change is never repeatable, whatever the caller says (step 17): a 5xx or no answer may have applied it.
@@ -834,19 +840,21 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
     // "Ad Account Level Ad Spend Rate Limits") is a daily count, not a throttle — holding the bucket 300 s would stop every
     // other Meta read and change of the business (a pause too) for nothing. set-meta-spend-cap says it in words, never again.
     const dailyCount = verdict.channelCode === '17/1885172'
-    // Step 27b review A-1 — nor does a Page's own limit on a change made AS the Page (`auth: 'page'`): 80001 ("too many calls
-    // to this Page account") and step 36's 80005 count against that PAGE, not the business's ad account — holding its 'ads'
-    // bucket 300 s would refuse every other Meta change of the business (a pause too) for nothing. The tool says it in words.
-    // Step 38 — and the Page's Instagram (80002) and Messenger (80006) limits on a message or messaging change made as the Page.
-    const pageLimit = metaWrite?.auth === 'page' && /^8000[1256](\/|$)/.test(verdict.channelCode ?? '')
-    // Step 15 fix A1/A3 — a read made with the chosen Page's own token, or of the WhatsApp account, has a bucket of its own:
+    // Step 15 fix A1/A3 — a call made with the chosen Page's own token, or of the WhatsApp account, has a bucket of its own:
     // Meta's limit of that Page, Instagram account, LeadGen or Messenger (80001, 80002, 80005, 80006 — rate-limiting page,
     // Error Codes) or of that WhatsApp account (80008) holds THAT bucket 300 s, never the ad account's; any other throttle
-    // (4, 17, 80000, 80004, …) holds the ads bucket as before, and the read's own bucket with it.
-    const ownLimit = (metaPageRead && /^8000[1256](\/|$)/.test(verdict.channelCode ?? '')) || (metaWhatsAppRead && /^80008(\/|$)/.test(verdict.channelCode ?? ''))
-    if (verdict.errorClass === 'rate_limited' && !objectLimit && !dailyCount && !pageLimit) {
+    // (4, 17, 80000, 80004, …) holds the ads bucket as before, and the call's own bucket with it.
+    // Step 27b review A-1 / step 38 review S1 — so on a change made AS the Page (`auth: 'page'`): 80001 ("too many calls to
+    // this Page account"), 80002 (Instagram), 80005 (LeadGen) and 80006 (Messenger) count against that PAGE, and so does a
+    // step-38 messaging change's 613 ("calls to this api have exceeded the rate limit": the Send API's, per Page) or 32
+    // ("too many calls to this Page") — holding the 'ads' bucket would refuse every other Meta change of the business (a pause
+    // too) for nothing. The tool says it in words. Only on those rules: elsewhere 613 is also the ad account's own throttle.
+    const pageOwn = /^8000[1256](\/|$)/.test(verdict.channelCode ?? '')
+      || (metaWrite?.auth === 'page' && META_MESSAGING_RULE_NAMES.has(metaWrite.rule) && /^(32|613)(\/|$)/.test(verdict.channelCode ?? ''))
+    const ownLimit = (metaPageCall && pageOwn) || (metaWhatsAppRead && /^80008(\/|$)/.test(verdict.channelCode ?? ''))
+    if (verdict.errorClass === 'rate_limited' && !objectLimit && !dailyCount) {
       // Re-review N2 — the ads bucket too, for the wait Meta named (its usage header) or else 300 s.
-      if (!ownLimit && (metaPageRead || metaWhatsAppRead)) await observeRate(req.channel, bucketKey(req.channel, req.connectionId, 'ads'), { retryAfterSec: reading?.retryAfterSec ?? 300 })
+      if (!ownLimit && (metaPageCall || metaWhatsAppRead)) await observeRate(req.channel, bucketKey(req.channel, req.connectionId, 'ads'), { retryAfterSec: reading?.retryAfterSec ?? 300 })
       // The call's own bucket: a wait Meta named was held above (its reading); else 300 s.
       if (!reading?.retryAfterSec) await observeRate(req.channel, key, { retryAfterSec: 300 })
     }

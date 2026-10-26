@@ -5,6 +5,7 @@
  * reply 7 days) and the dead tags are enforced; labels, templates and the messaging setup put back what they changed, delete
  * only what Nexus made, and refuse what Meta cannot take back. Made-up ids.
  */
+import { randomBytes } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const PAGE = '120000000000010'
@@ -73,7 +74,9 @@ vi.mock('../../marketing/meta-ads/write-client.js', async (importActual) => ({
   metaSendChange: h.send,
 }))
 
-import { META_ADS_MESSAGING_CHANGE_TOOLS } from './meta-ads-messaging-changes.tools.js'
+import { META_ADS_MESSAGING_CHANGE_TOOLS, WHATSAPP_CODE_KEPT } from './meta-ads-messaging-changes.tools.js'
+import { isSealed, maskSecretArgs, openSecretArgs, sealSecretArgs, SECRET_MASK } from '../secret-args.js'
+import { __test as cryptoTest } from '../../../lib/crypto.js'
 import { META_CHANGE_RULES } from './meta-ads-kit.js'
 import { getTool } from '../tool-registry.js'
 import { MATERIAL_PREVIEW_FIELDS } from '../../agent-fleet/approval-inbox.service.js'
@@ -121,6 +124,13 @@ describe('create-meta-message is gated exactly as send-customer-message — neve
   it('the same flags, the buyer-message permission and more, never in a bulk approve, its preview judged again at the run', () => {
     const buyer = getTool('send-customer-message')!
     for (const key of ['alwaysAsk', 'maxClaudeTrust', 'riskTier', 'reversibility', 'openWorld', 'readOnly'] as const) expect(message[key], key).toEqual(buyer[key])
+    // Review A-N8 — and every other key that decides what may run without a person, as the buyer tool has it: it has none of
+    // them, so neither may this one (a trust ceiling, limits a business could run it inside, a control or journal class, a
+    // strategy bound, a narrower surface). secretArgs too: the words and the person's id stay visible to the approver.
+    for (const key of ['trustCeilingFor', 'control', 'limits', 'withinLimits', 'secretArgs', 'strategyBound', 'journal', 'surfaces'] as const) {
+      expect(buyer[key], `send-customer-message ${key}`).toBeUndefined()
+      expect(message[key], key).toEqual(buyer[key])
+    }
     expect(message.requires).toEqual(expect.arrayContaining(buyer.requires!))
     expect(message.requires).toEqual(['ads.campaigns.manage', 'orders.edit', 'customers.view'])
     expect(message.requiresApprovalDefault).toBe(true)
@@ -370,7 +380,10 @@ describe('set-meta-message-templates', () => {
     expect(sentParams(3)).toEqual({ add_templates: JSON.stringify(['120000000000902']), remove_templates: JSON.stringify(['120000000000901']) })
     expect(templates.undo!.request(changed.ran!.change! as never)).toEqual({ tool: 'set-meta-message-templates', args: { connectionId: 'm-1', platform: 'whatsapp', whatsappAccountId: '120000000000900', action: 'group-update', groupId: '120000000000950', addTemplateIds: ['120000000000901'], removeTemplateIds: ['120000000000902'], why: expect.any(String) } })
     expect((await previewWith(templates, { platform: 'whatsapp', action: 'group-create', groupName: 'Group B', templateIds: ['120000000000999'] })).error).toMatch(/not a template of this WhatsApp account/)
-    expect((await previewWith(templates, { platform: 'whatsapp', action: 'edit', templateId: '120000000000901', body: { text: 'x' } })).error).toMatch(/Messenger utility templates only/)
+    // Review B-F4 — never "delete and make it again": a deleted approved template's name stays blocked 30 days.
+    const editWords = (await previewWith(templates, { platform: 'whatsapp', action: 'edit', templateId: '120000000000901', body: { text: 'x' } })).error
+    expect(editWords).toMatch(/Nexus does not edit WhatsApp templates yet.*blocked for 30 days/)
+    expect(editWords).not.toMatch(/deleting it and making it again/)
   })
 })
 
@@ -441,5 +454,133 @@ describe('set-meta-messaging-setup', () => {
     expect((await previewWith(setup, { section: 'messenger-ad-defaults' })).error).toBe(AD_DEFAULTS_CANNOT)
     expect(AD_DEFAULTS_CANNOT).toMatch(/read-only fields of the Page/)
     expect(h.send).not.toHaveBeenCalled()
+  })
+})
+
+describe('fix round 1 (reviews A and B)', () => {
+  it('A-B1 — the WhatsApp code is a secret argument: sealed where a request is stored, masked in Claude\'s record, the Approvals list and edit form, the audit rows and a plan\'s step', async () => {
+    expect(setup.secretArgs).toEqual(['verificationCode'])
+    expect(getTool('set-meta-messaging-setup')!.secretArgs).toEqual(['verificationCode'])
+    const args = { section: 'whatsapp-number', whatsappNumber: '+390000000000', verificationCode: '483920' }
+    // Every record and view masks by the tool's name (mcp-tool-call.ts, approval-inbox.service.ts, approval-queue.service.ts,
+    // approval-gate.service.ts, change-record.service.ts).
+    expect(maskSecretArgs('set-meta-messaging-setup', args)).toEqual({ ...args, verificationCode: SECRET_MASK })
+    expect(JSON.stringify(maskSecretArgs('submit-change-plan', { title: 'x', steps: [{ tool: 'set-meta-messaging-setup', args }] }))).not.toContain('483920')
+    // A made-up key for this run only; KMS unset.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('NEXUS_CREDENTIAL_ENC_KEY', randomBytes(32).toString('base64'))
+    vi.stubEnv('NEXUS_KMS_KEY_ID', undefined)
+    cryptoTest.resetKeyCache()
+    try {
+      const sealed = await sealSecretArgs(setup, args, 'business-a-test')
+      expect(isSealed(sealed.verificationCode)).toBe(true)
+      expect(JSON.stringify(sealed)).not.toContain('483920')
+      expect(await openSecretArgs(setup, sealed, 'business-a-test')).toEqual(args)
+    } finally {
+      vi.unstubAllEnvs(); cryptoTest.resetKeyCache(); warn.mockRestore()
+    }
+  })
+  it('A-S3 / A-S4 / B1 — the words say what is kept and for how long, and that each tool has its own Claude rule', () => {
+    expect(message.description).toMatch(/the request \(its arguments and its preview\) and Claude's record of the call keep the person's id and the words, for as long as Nexus keeps them \(nothing deletes them today/)
+    expect(message.description).not.toMatch(/until it runs/)
+    expect(message.description).toMatch(/turning send-customer-message Off for Claude does not turn this Off — each is set on its own/)
+    expect(setup.description).toContain(WHATSAPP_CODE_KEPT)
+    expect(WHATSAPP_CODE_KEPT).toMatch(/encrypted with the request for as long as Nexus keeps the request/)
+    expect(setup.description).not.toMatch(/never shown or kept/)
+    expect(setup.input.shape.verificationCode.description).not.toMatch(/never shown or kept/)
+  })
+  it('A-N5 — the person wrote again between the approval and the run: not sent, in those words', async () => {
+    h.send.mockResolvedValue({ node: { message_id: 'm_x0123456789' }, readBack: 'none', waitedMs: 0 })
+    const parsed = message.input.parse({ action: 'message', platform: 'messenger', personId: PERSON, text: 'Ciao' }) as Record<string, unknown>
+    const p = (await message.handler(parsed, asker)) as Out
+    h.person = personAt(60_000)
+    const ran = (await message.execute!(parsed, approved(p.preview))) as Out
+    expect(ran.error).toMatch(/the person wrote again/)
+    expect(h.send).not.toHaveBeenCalled()
+  })
+  it('A-N1 / B-F13 / B-F8 — a utility template: its category must be UTILITY as Meta answers it; button values match its buttons; a name as Meta lists it', async () => {
+    const send = (template: Record<string, unknown>) => previewWith(message, { action: 'message', platform: 'messenger', personId: PERSON, mode: 'utility', template: { name: 'order_update', language: 'it_IT', parameters: [{ component: 'body', text: '1001' }, { component: 'body', text: 'oggi' }], ...template } })
+    h.templates = [{ ...TEMPLATE, category: undefined }]
+    expect((await send({})).error).toMatch(/names no category/)
+    h.templates = [structuredClone(TEMPLATE)]
+    expect((await send({ buttons: [{ type: 'url', value: '1001' }] })).error).toMatch(/no button that takes a value/)
+    const withLink = { ...TEMPLATE, components: [...TEMPLATE.components, { type: 'BUTTONS', buttons: [{ type: 'URL', text: 'Segui', url: 'https://example.com/o/{{1}}' }, { type: 'PHONE_NUMBER', text: 'Chiama', phone_number: '+390000000000' }] }] }
+    h.templates = [withLink]
+    expect((await send({})).error).toMatch(/takes 1 button value.*url/)
+    expect((await send({ buttons: [{ type: 'postback', value: 'X' }] })).error).toMatch(/takes 1 button value/)
+    expect((await send({ buttons: [{ type: 'url', value: '1001' }] })).ok).toBe(true)
+    h.templates = [{ ...TEMPLATE, name: 'Order_Update_US' }]
+    expect((await send({ name: 'Order_Update_US' })).ok).toBe(true)
+    expect(() => templates.input.parse({ platform: 'messenger', action: 'create', name: 'Order_Update_US' })).toThrow()
+  })
+  it('B-F1 / B-F10 / B-F11 — an Instagram profile change names platform=instagram in the query too; no webviewHeight there; Meta\'s precedence said', async () => {
+    h.send.mockResolvedValue({ node: { result: 'success' }, readBack: 'none', waitedMs: 0 })
+    const ice = [{ locale: 'default', questions: [{ question: 'Taglie?', payload: 'SIZES' }] }]
+    await runWith(setup, { section: 'profile', platform: 'instagram', properties: { iceBreakers: ice } })
+    expect(sentChange(0)).toMatchObject({ operation: 'messengerprofile.set', params: { platform: 'instagram' }, via: { query: { platform: 'instagram' } } })
+    h.profile = { ice_breakers: [{ locale: 'default', call_to_actions: [{ question: 'Old?', payload: 'OLD' }] }] }
+    await runWith(setup, { section: 'profile', platform: 'instagram', clear: ['iceBreakers'] })
+    expect(sentChange(1)).toMatchObject({ method: 'DELETE', params: { platform: 'instagram' }, via: { query: { platform: 'instagram' } } })
+    h.profile = {}
+    const messenger = await runWith(setup, { section: 'profile', properties: { iceBreakers: ice, commands: [{ locale: 'default', commands: [{ name: 'help', description: 'Aiuto' }] }] } })
+    expect(sentChange(2).via).toBeUndefined()
+    expect(sentChange(2).params).not.toHaveProperty('platform')
+    expect(messenger.preview.preview.warnings.join(' ')).toMatch(/take precedence over the Get Started button/)
+    expect(messenger.preview.preview.warnings.join(' ')).toMatch(/commands take priority over it/)
+    expect((await previewWith(setup, { section: 'profile', platform: 'instagram', properties: { persistentMenu: [{ locale: 'default', items: [{ type: 'web_url', title: 'Shop', url: 'https://example.com', webviewHeight: 'tall' }] }] } })).error).toMatch(/no webviewHeight/)
+  })
+  it('A-N3 — a group\'s new description over an empty one: the undo cannot clear it, said in the preview and in the tool\'s consequences', async () => {
+    expect(templates.consequencesFor!({ action: 'group-update', description: 'x' })).toEqual({ reversibility: 'partial' })
+    expect(templates.consequencesFor!({ action: 'group-update', groupName: 'x' })).toEqual({ reversibility: 'partial' })
+    h.waba = { wabaId: '120000000000900', name: 'WA A', currency: 'EUR', timeZoneId: '1', status: 'ACTIVE' }
+    h.waTemplates = [{ templateId: '120000000000901', name: 'promo_old', language: 'it', status: 'APPROVED', category: 'MARKETING' }]
+    h.group = { groupId: '120000000000950', name: 'Group A', description: null, templateIds: ['120000000000901'] }
+    const p = await previewWith(templates, { platform: 'whatsapp', action: 'group-update', groupId: '120000000000950', description: 'Ordini' })
+    expect(p.preview.warnings.join(' ')).toMatch(/the description had none before, which Nexus cannot write back/)
+  })
+  it('A-N4 — each undo reads Meta\'s answer back in the record\'s own form: a template edit, a person\'s menu (Meta\'s defaults), calling, a flow change, a group change', async () => {
+    // A template edit.
+    h.send.mockResolvedValue({ node: { success: true, status: 'APPROVED' }, readBack: 'same-request', waitedMs: 0 })
+    const edit = await runWith(templates, { platform: 'messenger', action: 'edit', templateId: '120000000000811', body: { text: 'Order {{1}} leaves {{2}}.', examples: ['1001', 'today'] } })
+    h.templates = [{ ...TEMPLATE, components: [{ type: 'BODY', text: 'Order {{1}} leaves {{2}}.', example: { body_text: [['1001', 'today']] } }] }]
+    expect(await templates.undo!.current(edit.ran!.change! as never)).toEqual(edit.ran!.change!.after)
+    // A person's menu: Meta answers its defaults (the text box shown, a link opening full height) it was not sent.
+    h.send.mockResolvedValue({ node: { result: 'success' }, readBack: 'none', waitedMs: 0 })
+    const menu = await runWith(setup, { section: 'person-menu', personId: PERSON, menu: [{ locale: 'default', items: [{ type: 'web_url', title: 'Shop', url: 'https://example.com' }] }] })
+    h.userMenu = [{ locale: 'default', composer_input_disabled: false, call_to_actions: [{ type: 'web_url', title: 'Shop', url: 'https://example.com', webview_height_ratio: 'full' }] }]
+    expect(await setup.undo!.current(menu.ran!.change! as never)).toEqual(menu.ran!.change!.after)
+    // Calling.
+    h.calls = { audio_enabled: true, icon_enabled: true }
+    h.send.mockResolvedValue({ node: { success: true }, readBack: 'none', waitedMs: 0 })
+    const calling = await runWith(setup, { section: 'calling', calling: { icon: false } })
+    h.calls = { audio_enabled: true, icon_enabled: false }
+    expect(await setup.undo!.current(calling.ran!.change! as never)).toEqual(calling.ran!.change!.after)
+    // A flow change.
+    h.flows = [{ id: '120000000000701', name: 'Flow A', eligible_platforms: ['messenger'], welcome_message: JSON.stringify([{ message: { text: 'Ciao' } }]), is_used_in_ad: false }]
+    h.send.mockResolvedValue({ node: { success: true }, readBack: 'none', waitedMs: 0 })
+    const flow = await runWith(setup, { section: 'welcome-flow', action: 'update', flowId: '120000000000701', flowName: 'Flow B' })
+    h.flows = [{ ...h.flows[0], name: 'Flow B' }]
+    expect(await setup.undo!.current(flow.ran!.change! as never)).toEqual(flow.ran!.change!.after)
+    // A group change.
+    h.waba = { wabaId: '120000000000900', name: 'WA A', currency: 'EUR', timeZoneId: '1', status: 'ACTIVE' }
+    h.waTemplates = [{ templateId: '120000000000901', name: 'a', language: 'it', status: 'APPROVED', category: 'MARKETING' }, { templateId: '120000000000902', name: 'b', language: 'it', status: 'APPROVED', category: 'MARKETING' }]
+    h.group = { groupId: '120000000000950', name: 'Group A', description: 'Old', templateIds: ['120000000000901'] }
+    h.send.mockResolvedValue({ node: { id: '120000000000950' }, readBack: 'second-read', waitedMs: 0 })
+    const group = await runWith(templates, { platform: 'whatsapp', action: 'group-update', groupId: '120000000000950', groupName: 'Group B', addTemplateIds: ['120000000000902'] })
+    h.group = { groupId: '120000000000950', name: 'Group B', description: 'Old', templateIds: ['120000000000902', '120000000000901'] }
+    expect(await templates.undo!.current(group.ran!.change! as never)).toEqual(group.ran!.change!.after)
+  })
+  it('A-S2 — an instant form outside the 24-hour window, a private reply Meta names no time for, a labels undo on another Page: each refused', async () => {
+    h.form = { formId: '120000000000601', questionTypes: ['FULL_NAME', 'EMAIL'] }
+    h.person = personAt(25 * HOUR)
+    expect((await previewWith(message, { action: 'instant-form', platform: 'messenger', personId: PERSON, formId: '120000000000601' })).error).toMatch(/24-hour window for this person closed/)
+    h.target = { platform: 'messenger', pageId: PAGE, instagramId: null, commentId: '500000000000001_900000000000001', postId: `${PAGE}_500000000000001`, createdAt: null, canReplyPrivately: null }
+    expect((await previewWith(message, { action: 'private-reply', platform: 'messenger', postId: `${PAGE}_500000000000001`, commentId: '500000000000001_900000000000001', text: 'x' })).error).toMatch(/names no time for that comment/)
+    h.send.mockResolvedValue({ node: { id: '120000000000801' }, readBack: 'none', waitedMs: 0 })
+    const made = await runWith(labels, { action: 'create', name: 'return asked' })
+    h.labels = [{ labelId: '120000000000801', name: 'return asked' }]
+    expect(await labels.undo!.current(made.ran!.change! as never)).toEqual(made.ran!.change!.after)
+    h.chosen = { ...h.chosen, pageId: '120000000000099' }
+    expect(await labels.undo!.current(made.ran!.change! as never)).toBeNull()
   })
 })

@@ -80,6 +80,10 @@ export const MESSAGE_EXPLAIN: Readonly<Record<string, string>> = {
   80002: 'Meta allows only so many calls to this Instagram account in a while: wait a few minutes and ask again.',
   9: 'Meta\'s creator limits: 250 new creators a day and 2 messages per creator in 30 days before they reply (subcodes 2207094 / 2207095), or the creator has had too many brands writing (2207096): ask again later.',
   1: 'Meta: the form id is not right, or the form is not usable inside a conversation (subcode 2018382: only CUSTOM, EMAIL, FIRST_NAME, FULL_NAME, LAST_NAME and PHONE questions, and Open Sharing on).',
+  // Review B-F12 — codes Meta's pages list (send-messages.md's error table; page/release_thread_control; message_templates).
+  1545041: 'Meta: "This person isn\'t available right now" — they may have blocked the Page, closed their account or be unreachable. Nothing was sent.',
+  230: 'Meta: "Permissions disallow message to user" — the Page may not write to this person (or hand their conversation over) now. Nothing was sent.',
+  32: 'Meta allows only so many calls to this Page in a while (its error 32): wait a few minutes and ask again.',
 }
 
 export const MESSAGE_NO_CHECK = 'Meta has no check (validate_only) for a message: the preview is built from the live conversation, read again before it is sent.'
@@ -94,14 +98,18 @@ function request(r: Omit<MetaChangeRequest, 'step' | 'check' | 'raisesSpend' | '
   return { step: 1, check: 'none', raisesSpend: false, readBackInPost: false, budget: false, asPage: true, skipReadBack: true, ...r }
 }
 
-function draftOf(input: { summary: string; lines: Array<[string, unknown, unknown]>; warnings: string[]; requests: MetaChangeRequest[]; stands: unknown; before: unknown; after: unknown; skipped?: string[] }): MetaChangeDraft {
+function draftOf(input: { summary: string; lines: Array<[string, unknown, unknown]>; warnings: string[]; requests: MetaChangeRequest[]; stands: unknown; before: unknown; after: unknown; skipped?: string[]; basisMoved?: string }): MetaChangeDraft {
   const { changes, more } = changeLines(input.lines)
   return {
     summary: input.summary, changes, totals: { requests: input.requests.length, ...(more ? { moreLines: more } : {}) },
     warnings: input.warnings, spendsMoney: [], skipped: input.skipped ?? [], requests: input.requests.map((r, i) => ({ ...r, step: i + 1 })),
-    stands: input.stands, before: input.before, after: input.after,
+    stands: input.stands, before: input.before, after: input.after, ...(input.basisMoved ? { basisMoved: input.basisMoved } : {}),
   }
 }
+
+/** Review A-N5 — the run's words when the conversation moved under an approved message (the kit's are the ad account's). */
+export const PERSON_MOVED = 'the conversation changed since this was approved — the person wrote again, or a message, the template or Meta\'s window moved — so these words may no longer fit. Read the conversation again (meta-conversations) and ask again.'
+export const PRIVATE_REPLY_MOVED = 'the comment or post changed since this was approved (Meta answers it otherwise now), so this private reply may no longer fit. Read it again (meta-comments) and ask again.'
 
 const json = (v: unknown) => JSON.stringify(v)
 const platformName = (p: MessagingPlatform) => (p === 'instagram' ? 'Instagram Direct' : 'Messenger')
@@ -125,7 +133,8 @@ export function wordsProblem(words: MessageWords, platform: MessagingPlatform, a
   if (words.text !== undefined) {
     if (!words.text.trim()) return 'The text is empty.'
     if (!META_COMMENT_TEXT.test(words.text)) return 'The text is printable text (line breaks allowed; no control or format characters).'
-    if ([...words.text].length > META_MESSAGE_LIMITS.messengerText) return `The text is at most ${META_MESSAGE_LIMITS.messengerText} characters.`
+    if ([...words.text].length > META_MESSAGE_LIMITS.messengerText) return `The text is at most ${META_MESSAGE_LIMITS.messengerText} characters (Meta: fewer than 2,000).`
+    if (platform === 'instagram' && [...words.text].length > META_MESSAGE_LIMITS.instagramTextChars) return `On Instagram the text is at most ${META_MESSAGE_LIMITS.instagramTextChars} characters (Meta: less than 1,000).`
     if (platform === 'instagram' && Buffer.byteLength(words.text, 'utf8') > META_MESSAGE_LIMITS.instagramTextBytes) return `On Instagram Meta takes at most ${META_MESSAGE_LIMITS.instagramTextBytes} bytes of text (UTF-8: emoji and accented letters take more than one): shorten it.`
   }
   if (platform === 'instagram' && words.mediaType === 'file') return 'Instagram Direct takes an image, a video or audio (a file only in a creator message).'
@@ -241,6 +250,7 @@ export function conversationMessageDraft(person: PersonState, input: MessageInpu
     : `${type} inside the standard window (open until ${iso(w.endsAt!)})`
   const before = recordOf('message', p, person.pageId, { instagramId: p === 'instagram' ? person.instagramId : null, kind: input.mode, conversationId: person.conversationId })
   return draftOf({
+    basisMoved: PERSON_MOVED,
     summary: `Send one ${platformName(p)} message as ${businessName(p)} to the person in conversation ${person.conversationId} — it reaches them at once and cannot be recalled.`,
     lines: [
       ['To', null, `${platformName(p)} person ${person.personId} (their scoped id; conversation ${person.conversationId})`],
@@ -302,6 +312,25 @@ export function utilityText(input: UtilityInput): { header: string | null; body:
   return { header: header as string | null, body: body as string | null }
 }
 
+/**
+ * Review B-F13 — the button values a utility send gives, matched against the template's own buttons (utility-messages.md:
+ * a `buttons` parameter only for a POSTBACK button whose payload, or a URL button whose link, carries a {{n}}): one value per
+ * such button, in its order and of its type; none for a template without one. Else Meta's 100 would come after approval.
+ */
+export function utilityButtonsProblem(t: PageTemplate, given: UtilityInput['buttons']): string | null {
+  const block = componentsOfTemplate(t).find((c) => String(c.type).toUpperCase() === 'BUTTONS')
+  const buttons = block && Array.isArray(block.buttons) ? block.buttons.filter((b): b is Record<string, unknown> => !!b && typeof b === 'object') : []
+  const slots = buttons.flatMap((b): Array<'postback' | 'url'> => {
+    const type = String(b.type).toUpperCase()
+    if (type === 'POSTBACK' && typeof b.payload === 'string' && /\{\{/.test(b.payload)) return ['postback']
+    if (type === 'URL' && typeof b.url === 'string' && /\{\{/.test(b.url)) return ['url']
+    return []
+  })
+  if (!slots.length) return given.length ? `Template "${t.name}" has no button that takes a value (a postback payload or a link with a {{1}}): give no button values.` : null
+  if (given.length !== slots.length || given.some((g, i) => g.type !== slots[i])) return `Template "${t.name}" takes ${slots.length} button value${slots.length === 1 ? '' : 's'}, in its buttons' order: ${slots.join(', ')} (a url value is the end of its link that fills {{1}}).`
+  return null
+}
+
 /** The template message as Meta takes it (utility-messages.md: lower-case component types, text parameters, button params). */
 export function utilityMessageOf(input: UtilityInput): Record<string, unknown> {
   const named = input.template.parameterFormat === 'NAMED'
@@ -319,12 +348,15 @@ export function utilityMessageDraft(person: PersonState, input: UtilityInput, no
   if (person.platform !== 'messenger') return { refusal: 'Utility templates are Messenger\'s (Instagram Direct has none): outside the window an Instagram person gets only a HUMAN_AGENT reply.' }
   const t = input.template
   if (t.status !== 'APPROVED') return { refusal: `Template "${t.name}" is ${t.status ?? 'not approved'}: Meta sends only an APPROVED utility template (meta-message-templates view messenger shows its review).` }
-  if (t.category && t.category !== 'UTILITY') return { refusal: `Template "${t.name}" is ${t.category}, not UTILITY.` }
+  // Review A-N1 — a template whose category Meta did not answer is never sent as utility.
+  if (t.category !== 'UTILITY') return { refusal: t.category ? `Template "${t.name}" is ${t.category}, not UTILITY.` : `Meta names no category for template "${t.name}", so Nexus cannot confirm it is a UTILITY template: it is not sent.` }
   if (!t.language) return { refusal: `Meta names no language for template "${t.name}", so Nexus cannot send it.` }
   if (input.buttons.length > META_MESSAGE_LIMITS.messengerButtons) return { refusal: `At most ${META_MESSAGE_LIMITS.messengerButtons} button parameters.` }
   for (const p of [...input.parameters.map((x) => x.text), ...input.buttons.map((b) => b.value)]) {
     if (!p.trim() || !META_NAME_TEXT.test(p) || [...p].length > META_MESSAGE_LIMITS.bodyText) return { refusal: 'Each parameter is printable text on one line (no control or format characters).' }
   }
+  const buttonProblem = utilityButtonsProblem(t, input.buttons)
+  if (buttonProblem) return { refusal: buttonProblem }
   const words = utilityText(input)
   if ('problem' in words) return { refusal: words.problem }
   const w = windowNow(person, now)
@@ -333,6 +365,7 @@ export function utilityMessageDraft(person: PersonState, input: UtilityInput, no
   if (tooLong) return { refusal: tooLong }
   const before = recordOf('message', 'messenger', person.pageId, { kind: 'utility', conversationId: person.conversationId })
   return draftOf({
+    basisMoved: PERSON_MOVED,
     summary: `Send the approved utility template "${t.name}" (${t.language}) on Messenger as the chosen Facebook Page to the person in conversation ${person.conversationId} — it reaches them at once and cannot be recalled.`,
     lines: [
       ['To', null, `Messenger person ${person.personId} (their scoped id; conversation ${person.conversationId})`],
@@ -369,6 +402,7 @@ export function privateReplyDraft(target: PrivateReplyTarget, words: MessageWord
   if (tooLong) return { refusal: tooLong }
   const before = recordOf('private-reply', target.platform, target.pageId, { instagramId: target.instagramId, commentId: target.commentId, postId: target.postId })
   return draftOf({
+    basisMoved: PRIVATE_REPLY_MOVED,
     summary: `Send ONE private ${platformName(target.platform)} reply as ${businessName(target.platform)} to the person who wrote ${what} — it reaches them at once and cannot be recalled.`,
     lines: [
       ['To', null, `the author of ${what} (Meta finds them from it)`],
@@ -414,6 +448,7 @@ export function senderActionDraft(person: PersonState, action: SenderAction, inp
   const shown = action === 'seen' ? '"seen"' : action === 'typing-on' ? 'typing…' : action === 'typing-off' ? 'typing stops' : action === 'react' ? `reaction ${input.reaction} on message ${input.messageId}` : `reaction removed from message ${input.messageId}`
   const before = recordOf('sender-action', person.platform, person.pageId, { kind: action, conversationId: person.conversationId })
   return draftOf({
+    basisMoved: PERSON_MOVED,
     summary: `Show ${shown} to the person in conversation ${person.conversationId} in ${platformName(person.platform)}, as ${businessName(person.platform)}.`,
     lines: [['To', null, `${platformName(person.platform)} person ${person.personId} (conversation ${person.conversationId})`], ['Shows', null, shown]],
     warnings: [MESSAGE_NO_CHECK, 'The person sees it at once (Meta shows it only while they are signed in); typing stops by itself after 20 seconds or the next message.', ACCESS_NOTE],
@@ -444,6 +479,7 @@ export function instantFormDraft(person: PersonState, form: { formId: string; qu
   }
   const before = recordOf('instant-form', 'messenger', person.pageId, { conversationId: person.conversationId })
   return draftOf({
+    basisMoved: PERSON_MOVED,
     summary: `Send lead form ${form.formId} of the chosen Page inside the Messenger conversation ${person.conversationId} — it reaches them at once and cannot be recalled.`,
     lines: [['To', null, `Messenger person ${person.personId} (conversation ${person.conversationId})`], ['Message', null, `lead form ${form.formId} (${form.questionTypes.length} question${form.questionTypes.length === 1 ? '' : 's'}: ${form.questionTypes.join(', ')})`], ['Sent as', null, `${mode === 'update' ? 'UPDATE' : 'RESPONSE'} inside the standard window (open until ${iso(w.endsAt!)})`]],
     warnings: [MESSAGE_FINAL, MESSAGE_NO_CHECK, 'Meta says instant forms in conversations are in development and may change or go away; the form must have Open Sharing on (block_display_for_non_targeted_viewer false), else Meta refuses it (2018382).', 'The person\'s answers are leads: Meta keeps them in its Leads Center until real lead retrieval is approved (App Review).', ACCESS_NOTE],
@@ -500,6 +536,7 @@ export function handoverDraft(person: PersonState, control: HandoverControl, tar
   const shown = control === 'pass' ? `pass the conversation to ${to}` : control === 'release' ? 'release the conversation (it goes idle; the default app answers next)' : 'take the conversation for the business\'s Meta app'
   const before = recordOf('handover', person.platform, person.pageId, { kind: control, conversationId: person.conversationId })
   return draftOf({
+    basisMoved: PERSON_MOVED,
     summary: `${shown.charAt(0).toUpperCase()}${shown.slice(1)} — the ${platformName(person.platform)} conversation ${person.conversationId}.`,
     lines: [['Conversation', null, `${platformName(person.platform)} person ${person.personId} (conversation ${person.conversationId})`], ['Who answers', null, shown]],
     warnings: [
@@ -542,6 +579,9 @@ export const LABEL_EXPLAIN: Readonly<Record<string, string>> = {
   100: 'Meta says a parameter is not valid (the label, or the person\'s id).',
   200: 'Meta refused it for permission: labels need the Page\'s own token of someone with the MESSAGING task (pages_messaging, pages_manage_metadata, pages_show_list), and a Page admin must have accepted Meta\'s Page Contact Terms.',
   80006: 'Meta allows only so many Messenger calls to this Page in a while: wait a few minutes and ask again.',
+  // Review B-F12 — page/custom_labels lists 230.
+  230: 'Meta: "Permissions disallow message to user" — the Page may not label this person\'s conversation now.',
+  32: 'Meta allows only so many calls to this Page in a while (its error 32): wait a few minutes and ask again.',
 }
 const LABEL_NO_CHECK = 'Meta has no check (validate_only) for a label change: the preview is built from the Page\'s labels as Meta answers them now.'
 export const LABEL_DELETE_FINAL = 'A deleted label cannot come back: a new one gets a new id, and the people who carried it lose it.'
