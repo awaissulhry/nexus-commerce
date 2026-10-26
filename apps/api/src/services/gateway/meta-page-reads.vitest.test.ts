@@ -309,7 +309,7 @@ describe('gap 46b review N7 — a Page video\'s thumbnails go with the chosen Pa
 
 describe('gap 46b, the live read of 2026-10-26 — a post of the chosen Page and the owner read of its media go with the Page\'s token', () => {
   const POST = `${PAGE}_500000000000001`
-  const VIEW_POST = 'id,message,story,created_time,updated_time,permalink_url,status_type,is_published,is_hidden,is_expired,is_eligible_for_promotion,promotable_id,scheduled_publish_time,full_picture,is_instagram_eligible,from{id},instagram_eligibility,video_buying_eligibility,attachments{media_type,type,title,description,url,unshimmed_url,media,target,subattachments},is_inline_created,allowed_advertising_objects,promotion_status'
+  const VIEW_POST = 'id,message,story,created_time,updated_time,permalink_url,status_type,is_published,is_hidden,is_expired,is_eligible_for_promotion,promotable_id,scheduled_publish_time,full_picture,is_instagram_eligible,from{id},instagram_eligibility,video_buying_eligibility,attachments{media_type,type,title,description,url,unshimmed_url,media,target,subattachments},is_inline_created,promotion_status'
   const STATE = 'id,message,is_hidden,is_published,scheduled_publish_time,timeline_visibility,permalink_url,from{id}'
   const f = (fields: string) => `fields=${encodeURIComponent(fields)}`
   it('the chosen Page\'s post by its id — every read Nexus makes of one — is a Page-token read of that Page', () => {

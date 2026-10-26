@@ -452,11 +452,11 @@ describe('what Meta refuses is said plainly', () => {
     expect((await run('meta-media-library', { view: 'videos' })).ok).toBe(true)
     expect(h.calls.map((c) => c.query?.fields)).toEqual(['id,description,picture,created_time,updated_time,title,length,status,permalink_url,is_instagram_eligible', 'id,description,picture,created_time,updated_time'])
   })
-  it('review A6 / B7 — a post read asks allowed_advertising_objects (the feed reference\'s name); one refused field keeps the others', async () => {
+  it('review A6 / B7 — a post read asks the extra fields once; one refused field keeps the others (never allowed_advertising_objects: Meta has no such field on a post)', async () => {
     h.one = (req) => (String(req.query?.fields).includes('promotion_status') ? metaError('100', 'Tried accessing nonexisting field (promotion_status)') : { id: `${PAGE}_500000000000001`, is_inline_created: false })
     const res = await run('meta-page-posts', { view: 'post', postId: `${PAGE}_500000000000001` })
     expect(res).toMatchObject({ ok: true, data: { post: { isInlineCreated: false }, fieldsNote: expect.stringMatching(/Meta refused promotion_status/) } })
-    expect(String(h.calls[1].query?.fields)).toMatch(/is_inline_created,allowed_advertising_objects$/)
+    expect(String(h.calls[1].query?.fields)).toMatch(/is_inline_created$/)
   })
   it('a metric of the other kind is refused by name before any call; IG demographics carry their timeframe', async () => {
     expect((await run('meta-page-posts', { view: 'page-insights', metrics: ['post_clicks'] })).error).toMatch(/"post_clicks" is not a metric Nexus asks here/)
