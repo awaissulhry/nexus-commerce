@@ -970,6 +970,11 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { audienceId: '120000000000040', fields: { name: 'List A' }, undo: { audienceId: '120000000000040', name: 'List A', existingCustomers: [] }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
         after: { audienceId: '120000000000040', fields: { name: 'List B' }, undo: null, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Consent PR 2: an add's people are taken out again (mode remove, who added); a replace has no undo.
+      'set-meta-audience-members': {
+        before: { mode: 'add', audienceId: '120000000000040', people: 2, batches: 1, since: '2026-10-01', accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { mode: 'add', audienceId: '120000000000040', people: 2, batches: 1, since: '2026-10-01', batchesSent: 1, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-meta-audience-sharing': {
         before: { audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'], permissions: null, shared: false, accountId: 'conn-1', adAccountId: '1234567890' },
         after: { audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'], permissions: null, shared: true, accountId: 'conn-1', adAccountId: '1234567890' },

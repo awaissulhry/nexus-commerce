@@ -1,12 +1,14 @@
 /**
  * Meta ads changes, step 31 — the business's audiences on its chosen Meta ad account (Owner decision D8):
- *   create-meta-audience        a customer list (EMPTY: Nexus adds nobody — no consent field) or value-based seed, a website,
+ *   create-meta-audience        a customer list (EMPTY: people come with set-meta-audience-members) or value-based seed, a website,
  *                               engagement, offline, video viewers or catalog product audience, a lookalike (tiers)
  *   set-meta-audience           name, description, rule, opt-out link, lookalike size, customer-file source, labels,
  *                               retention, product set, allowed domains, use; the account's existing-customer audiences
  *                               (the WHOLE list, read first for the undo) and audience-type URL tags
- *   set-meta-audience-members   take the people who opted out of the business's e-mail out of one customer list or out of
- *                               EVERY customer list of the account (hashed, ≤ 10,000 per request); add / replace refused (D8)
+ *   set-meta-audience-members   add or replace a customer list's people with the hashed e-mails of Shopify buyers who said
+ *                               yes to the business's e-mail (consent PR 2: only while "Upload customer lists to Meta" is
+ *                               on and Meta's terms are signed); take the people who said no out of one list, or the
+ *                               people who opted out out of EVERY customer list of the account (hashed, ≤ 10,000 per request)
  *   set-meta-audience-sharing   share / unshare with ad accounts no other Nexus business uses
  *   remove-meta-audience        delete for good (lookalikes first), only on the person's explicit ask
  * Each a Nexus change like set-meta-status (meta-ads-kit.ts): a preview from the live state, an approvalId, a person
@@ -27,10 +29,16 @@ import type { MetaWriteBodyId } from '../../gateway/meta-calls.js'
 import {
   changeableAudience, chosenOf, liveAudienceDetail, liveExistingCustomerUsers, liveAudienceSharing, liveAudienceTypeTags, liveAudienceUse, liveAudiencesNamed, liveIdProblems, liveTerms,
 } from '../../marketing/meta-ads/live-audience-change.js'
-import { optedOutPeople, memberCounts, NO_CONSENT } from '../../marketing/meta-ads/audience-members.js'
 import {
-  audienceFieldView, COMPARED_AUDIENCE_FIELDS, CREATE_KINDS, createAudienceDraft, MAX_DELETES, MEMBER_MODES, membersDraft, removeDraft, setAudienceDraft, shareDraft,
-  type AudienceCreateRecord, type AudienceCreateRequest, type AudienceMembersRequest, type AudienceRemoveRequest, type AudienceSetRecord, type AudienceSetRequest,
+  consentedPeople, consentEndedPeople, memberCounts, optedOutPeople, shopifyConsentPeople, unionOf, type HashedPeople,
+} from '../../marketing/meta-ads/audience-members.js'
+import { metaCustomerListsSwitch } from '../../marketing/meta-ads/customer-lists-switch.js'
+import { MetaReadError } from '../../marketing/meta-ads/errors.js'
+import type { TermsState } from '../../marketing/meta-ads/live-audience-change.js'
+import {
+  audienceFieldView, COMPARED_AUDIENCE_FIELDS, CREATE_KINDS, createAudienceDraft, MAX_DELETES, MEMBER_MODES, membersArgsProblem, membersDraft, membersProblem, REMOVE_WHO, removeDraft,
+  setAudienceDraft, shareDraft,
+  type AudienceCreateRecord, type AudienceCreateRequest, type AudienceMembersRecord, type AudienceMembersRequest, type AudienceRemoveRequest, type AudienceSetRecord, type AudienceSetRequest,
   type AudienceShareRecord, type AudienceShareRequest,
 } from '../../marketing/meta-ads/change-audiences.js'
 import {
@@ -189,7 +197,7 @@ const createMetaAudience: AgentTool = {
   requires: [ADS_MANAGE],
   input: z.object({
     connectionId: metaConnectionArg,
-    kind: z.enum(CREATE_KINDS).describe('customer_list (EMPTY: Nexus adds nobody), value_seed (an empty value-based list), website (pixel rule), engagement (Page, Instagram, lead forms, Instant Experiences, shops), offline (dataset events), video (viewers), catalog (product viewers / carters / buyers), lookalike'),
+    kind: z.enum(CREATE_KINDS).describe('customer_list (EMPTY: people come only with set-meta-audience-members), value_seed (an empty value-based list: Nexus adds nobody to it), website (pixel rule), engagement (Page, Instagram, lead forms, Instant Experiences, shops), offline (dataset events), video (viewers), catalog (product viewers / carters / buyers), lookalike'),
     name: nameArg,
     description: descriptionArg.optional(),
     customerFileSource: z.enum(CUSTOMER_FILE_SOURCES).optional().describe('customer_list, value_seed: how the people were collected (default USER_PROVIDED_ONLY)'),
@@ -224,7 +232,8 @@ const createMetaAudience: AgentTool = {
   }),
   description:
     'Create ONE audience on the business\'s chosen Meta ad account (a lookalike with tiers: one per tier): a customer list '
-    + '(EMPTY — Nexus adds nobody: its customers carry no marketing consent, D8) or a value-based seed; a website audience '
+    + '(EMPTY — people come only with set-meta-audience-members: Shopify buyers who said yes to the business\'s e-mail, while '
+    + 'its switch "Upload customer lists to Meta" is on, D8) or a value-based seed (Nexus adds nobody to it); a website audience '
     + '(a rule over the ad account\'s own pixel: events, URLs, custom data, how often, how much); an engagement audience '
     + '(the chosen Page or Instagram account, a lead form or Instant Experience of the Page, its shops); an offline audience '
     + '(events of its dataset); video viewers (videos of the Page or the ad account); a catalog product audience (a product '
@@ -380,28 +389,53 @@ const setMetaAudience: AgentTool = {
 // ── set-meta-audience-members ───────────────────────────────────────────────────────────────────────────────────
 
 const sinceArg = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD').optional()
-  .describe('only people who opted out on or after this day (UTC, YYYY-MM-DD): to send a long list in parts')
+  .describe('only people recorded on or after this day (UTC, YYYY-MM-DD): add — buyers whose Shopify consent Nexus recorded or last changed then; remove / opt_out_everywhere — people who said no then. To send a long list in parts; never with replace')
 
 const buildMembers = (args: Record<string, unknown>): MetaDraftBuilder => guarded(async (account) => {
   const request = requestOf<AudienceMembersRequest>(args)
-  // D8 — refused before any read: no consent field, so nobody is added and nothing is replaced.
-  if (request.mode === 'add' || request.mode === 'replace') return { refusal: NO_CONSENT }
+  const upload = request.mode === 'add' || request.mode === 'replace'
+  // D8 — the business's own switch "Upload customer lists to Meta", before anything is read at Meta: off, no add, no replace.
+  const uploadsOn = upload ? (await metaCustomerListsSwitch()).on : false
+  const early = membersArgsProblem(request, uploadsOn)
+  if (early) return { refusal: early }
   const chosen = await chosenOf(account.accountId)
-  const terms = await liveTerms(chosen)
-  if (!terms.signed) return membersDraft(request, { adAccountId: chosen.adAccountId, terms, audience: null, use: null, people: { hashes: [], skipped: 0 } })
+  const nobody: HashedPeople = { hashes: [], skipped: 0 }
+  // Meta's own field (act_<id>?fields=tos_accepted → custom_audience_tos 1); a read that fails is said, never taken as signed.
+  let terms: TermsState | null = null
+  let termsProblem: string | null = null
+  try {
+    terms = await liveTerms(chosen)
+  } catch (err) {
+    if (!(err instanceof MetaReadError)) throw err
+    termsProblem = err.message
+  }
+  const live = { adAccountId: chosen.adAccountId, uploadsOn, terms, termsProblem }
+  if (!terms?.signed) return membersDraft(request, { ...live, audience: null, use: null, people: nobody })
   let audience = null
   let use = null
-  if (request.mode === 'remove') {
+  if (request.mode !== 'opt_out_everywhere') {
     if (!request.audienceId) return { refusal: 'Name the customer list (audienceId from meta-audiences view list).' }
     audience = (await changeableAudience(chosen, request.audienceId)).audience
     use = await liveAudienceUse(chosen, audience.id)
+    // The list is judged before anyone's hash is read (not a customer list, value-based, being replaced, flagged).
+    const problem = membersProblem(request, { ...live, audience, use })
+    if (problem) return { refusal: problem }
   } else if (request.audienceId) {
     return { refusal: 'opt_out_everywhere takes the people out of EVERY customer list of the ad account: it names no audience.' }
   }
   const since = request.since ? new Date(`${request.since}T00:00:00Z`) : null
   if (since && (Number.isNaN(since.getTime()) || since.toISOString().slice(0, 10) !== request.since)) return { refusal: 'since is a real day (YYYY-MM-DD).' }
-  const people = await optedOutPeople(since)
-  return membersDraft(request, { adAccountId: chosen.adAccountId, terms, audience, use, people })
+  if (request.mode === 'add' || request.mode === 'replace') {
+    // Consent PR 2 — consenting Shopify buyers only, every filter in the database query (audience-members.ts).
+    const people = await consentedPeople(request.mode === 'add' ? since : null)
+    if ('refusal' in people) return people
+    return membersDraft(request, { ...live, audience, use, people })
+  }
+  if (request.mode === 'remove' && request.who === 'added') return membersDraft(request, { ...live, audience, use, people: await shopifyConsentPeople(since) })
+  const optedOut = await optedOutPeople(since)
+  if (request.mode === 'opt_out_everywhere') return membersDraft(request, { ...live, audience, use, people: optedOut })
+  const ended = await consentEndedPeople(since)
+  return membersDraft(request, { ...live, audience, use, people: unionOf(optedOut, ended), saidNo: { optedOut: optedOut.hashes.length, consentEnded: ended.hashes.length } })
 })
 
 function membersFinish(draft: MetaChangeDraft, done: Done) {
@@ -409,11 +443,45 @@ function membersFinish(draft: MetaChangeDraft, done: Done) {
   // Meta's counts only: never its invalid-entry samples (they are hashes of people).
   const counts = done.map(({ result }) => memberCounts(result.node))
   const sum = (key: 'received' | 'invalid') => (counts.every((c) => c[key] !== null) ? counts.reduce((n, c) => n + (c[key] ?? 0), 0) : null)
+  // A replace answers the session's running total (num_received "so far"): its last answer, not a sum.
+  const replace = record.mode === 'replace'
+  const last = counts.at(-1)
   return {
-    data: { ...record, batchesSent: done.length, received: sum('received'), invalidEntries: sum('invalid'), note: 'Meta applies it within about 24 hours; meta-audiences view sessions shows its upload sessions.' },
+    data: {
+      ...record, batchesSent: done.length,
+      received: replace ? last?.received ?? null : sum('received'), invalidEntries: replace ? last?.invalid ?? null : sum('invalid'),
+      note: 'Meta applies it within about 24 hours; meta-audiences view sessions shows its upload sessions.',
+    },
     before: record,
     after: { ...record, batchesSent: done.length },
   }
+}
+
+/**
+ * Consent PR 2 — the undo of an add takes the people out again (mode remove, who added: everyone Nexus holds a Shopify
+ * consent row for, since the add's day — Nexus keeps no list of whom it sent). A replace has none: Meta does not list a
+ * Custom Audience's members. People taken out are never put back.
+ */
+const membersUndo: ToolUndo = {
+  async current(change: ToolChange) {
+    const after = (change.after ?? {}) as AudienceMembersRecord & { accountId?: string; adAccountId?: string }
+    const account = await recordAccount(after)
+    if (!account) return null
+    return { ...after, accountId: account.accountId, adAccountId: account.adAccountId }
+  },
+  request(change: ToolChange) {
+    const after = (change.after ?? {}) as AudienceMembersRecord & { accountId?: string }
+    if (after.mode === 'replace') return { refusal: 'A replace has no exact undo: Meta does not list a Custom Audience\'s members, so Nexus cannot know who was in the list before and cannot put them back. To change it again, replace it again or take people out (set-meta-audience-members).' }
+    if (after.mode !== 'add') return { refusal: 'People taken out of a customer list are never put back: they opted out, or their Shopify consent ended.' }
+    if (!after.audienceId) return { refusal: 'This change recorded no customer list, so there is nobody to take out.' }
+    return {
+      tool: 'set-meta-audience-members',
+      args: {
+        ...(after.accountId ? { connectionId: after.accountId } : {}), mode: 'remove', who: 'added', audienceId: after.audienceId,
+        ...(after.since ? { since: after.since } : {}), why: 'undo of an earlier add: take the people it sent out of the customer list again',
+      },
+    }
+  },
 }
 
 const setMetaAudienceMembers: AgentTool = {
@@ -425,33 +493,41 @@ const setMetaAudienceMembers: AgentTool = {
   alwaysAsk: true,
   requiresApprovalDefault: true,
   openWorld: true,
-  // People who opted out are never put back (Meta's policy too): no undo.
-  reversibility: 'none',
+  // Consent PR 2 — an add is undone (its people taken out again, a superset: Nexus keeps no list of whom it sent); a
+  // replace has no undo (Meta lists no members), and people who said no are never put back.
+  reversibility: 'partial',
+  consequencesFor: (args) => (args.mode === 'add' ? null : { reversibility: 'none' }),
   maxClaudeTrust: 'ask',
   requires: [ADS_MANAGE, F.customersExport],
   input: z.object({
     connectionId: metaConnectionArg,
-    mode: z.enum(MEMBER_MODES).describe('remove: take the people who opted out of the business\'s e-mail out of ONE customer list; opt_out_everywhere: out of EVERY customer list of the ad account; add / replace: refused — Nexus adds nobody (D8: no marketing consent recorded)'),
-    audienceId: metaIdArg('remove: the customer list (the chosen ad account\'s own)').optional(),
+    mode: z.enum(MEMBER_MODES).describe('add: the hashed e-mails of Shopify buyers who said yes to the business\'s e-mail into ONE customer list; replace: everyone in ONE customer list replaced by them (no undo); remove: the people who said no (opted out of the business\'s e-mail, or whose Shopify consent ended) out of ONE customer list; opt_out_everywhere: the people who opted out out of EVERY customer list of the ad account'),
+    audienceId: metaIdArg('add, replace, remove: the customer list (the chosen ad account\'s own)').optional(),
     since: sinceArg,
+    who: z.enum(REMOVE_WHO).optional().describe('remove only: said_no (the default) — the people who said no; added — everyone an add could have sent (everyone Nexus holds a Shopify consent row for): what the undo of an add takes out'),
     why: metaWhyArg,
   }),
   description:
-    'The people of the business\'s Meta customer lists, from Nexus (Owner decision D8). ADD and REPLACE are refused: Nexus '
-    + 'uploads only customers who gave marketing consent, and its customer records hold no consent yet — so nobody is '
-    + 'uploaded. What it does: take the people who opted out of the business\'s e-mail (Nexus\'s suppression list: an '
-    + 'unsubscribe, a spam complaint, a GDPR request, an operator\'s entry — never a bounce) out of ONE customer list '
-    + '(remove) or out of EVERY customer list of the ad account (opt_out_everywhere, as Meta asks when someone opts out). '
-    + 'Each e-mail goes only as its SHA-256 hash (trimmed, lower case), at most 10,000 per request; Nexus '
-    + 'keeps no list of them and the answer gives counts only. Refused until a person signs Meta\'s Custom Audience terms. '
-    + 'Taking people out of a list ads use, and every opt_out_everywhere, is SPENDS MONEY (an ad set that excludes the '
-    + 'list can then reach them). opt_out_everywhere covers every customer list of the account, also one shared with an '
-    + 'account another business in Nexus uses: an opt-out is honoured everywhere. '
-    + 'Meta applies it within about 24 hours; taking people out of a list active ads use restarts their learning. No undo: '
-    + 'people who opted out are never put back. Nexus sends e-mails only: no phone, name or address (D8), no Page-scoped '
-    + 'ids (Nexus keeps none), no external customer ids (Nexus never uploaded any, so none can be taken out), no US Limited '
-    + 'Data Use flags (US states only). Meta has no check for it.'
+    'The people of the business\'s Meta customer lists, from Nexus (Owner decision D8). ADD and REPLACE upload only the '
+    + 'hashed e-mails of Shopify buyers of the business (at least one Shopify order) who said yes to its e-mail marketing — '
+    + 'Nexus\'s copy of Shopify\'s consent, from its active Shopify accounts, less everyone who opted out of its e-mail; '
+    + 'never an Amazon, eBay or Etsy buyer, never a phone, name or address — and only while the business\'s switch '
+    + '"Upload customer lists to Meta" is on (a person turns it on in Nexus, Settings › Channels › Meta; Claude cannot) and '
+    + 'Meta\'s Custom Audience terms are signed for the ad account (Meta\'s tos_accepted; refused in words when Nexus cannot '
+    + 'read them). add: into ONE customer list (in parts with since); its undo takes them out again. replace: everyone in '
+    + 'ONE customer list replaced, as one Meta replace session — it has NO undo, because Meta does not list a list\'s '
+    + 'members (a refresh is a replace asked again). remove: the people who said no (opted out of the business\'s e-mail: '
+    + 'an unsubscribe, a spam complaint, a GDPR request, an operator\'s entry — never a bounce; or whose Shopify consent '
+    + 'ended) out of ONE customer list. opt_out_everywhere: the people who opted out out of EVERY customer list of the ad '
+    + 'account, as Meta asks. Each e-mail goes only as its SHA-256 hash (trimmed, lower case), at most 10,000 per request; '
+    + 'Nexus keeps no list of them and the preview and the answer give counts only. Any change of who is in a list ads use, '
+    + 'and every opt_out_everywhere, is SPENDS MONEY. With the business\'s "Claude\'s changes need no approval" switch on, '
+    + 'an add Claude asks for runs about 20 s later: "Upload customer lists to Meta" is the real gate. Meta applies it '
+    + 'within about 24 hours; an add or a removal on a list active ads use restarts their learning (a replace does not). '
+    + 'Not here: a value-based list\'s people (LOOKALIKE_VALUE), phone or multi-key uploads, Page-scoped or external ids, US '
+    + 'Limited Data Use flags. Meta has no check for it.'
     + META_CHANGE_RULES,
+  undo: membersUndo,
   handler: (args, ctx) => metaChangePreview(args, ctx, buildMembers(args)),
   execute: (args, ctx) => runMetaChange(args, ctx, buildMembers(args), membersFinish),
 }

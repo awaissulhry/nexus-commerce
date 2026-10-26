@@ -13,11 +13,20 @@
  * off by default. Turning it on sends nothing by itself: it lets Claude ASK to send purchases (only sales taken in by hand in
  * Nexus); each send is a change a person approves — or, with "Claude's changes need no approval" on, it runs 20 s after
  * Claude asks, in the asker's name. Only a person with settings.security.manage may turn it on or off.
+ *
+ * Meta consent PR 2 (D8) — "Upload customer lists to Meta": the business's customer-list switch (GET / PUT
+ * /api/meta-ads/customer-lists), a copy of the one above, off by default. Turning it on uploads nobody by itself: it lets
+ * Claude ASK to add or replace a customer list's people with the hashed e-mails of Shopify buyers who said yes to the
+ * business's e-mail; each upload is a change a person approves — or, with "Claude's changes need no approval" on, it runs
+ * about 20 s after Claude asks. Only a person with settings.security.manage may turn it on or off.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { AsOf, Banner, Card, KeyValue, type KeyValueItem } from '@/design-system/components'
 import { Button, Pill, Skeleton, Toggle } from '@/design-system/primitives'
-import { checkMetaToken, fetchMetaConnections, fetchMetaEventsSwitch, setMetaEventsSwitch, type MetaConnection, type MetaEventsSwitch } from '@/lib/meta-ads/contract'
+import {
+  checkMetaToken, fetchMetaConnections, fetchMetaCustomerListsSwitch, fetchMetaEventsSwitch, setMetaCustomerListsSwitch, setMetaEventsSwitch,
+  type MetaConnection, type MetaCustomerListsSwitch, type MetaEventsSwitch,
+} from '@/lib/meta-ads/contract'
 import { formatDay, formatMoment } from '@/app/marketing/ads/meta/metaAds'
 import { MetaAccountsDialog } from '../MetaAccountsDialog'
 import { MetaCredentialsDialog } from '../MetaCredentialsDialog'
@@ -37,6 +46,9 @@ type Note = { tone: 'success' | 'warning' | 'danger'; title: string; text?: stri
 
 /** Review F5 — how a send runs, honest with "Claude's changes need no approval" (#691). */
 const SEND_RULE = 'Each send is a change a person approves in Nexus — or, with "Claude\'s changes need no approval" on, it runs 20 s after Claude asks, in the asker\'s name, unless someone stops it. Nexus has no way yet to take in such sales, so nothing is sent until it has.'
+
+/** Consent PR 2 — how an upload runs, honest with "Claude's changes need no approval" (#691): this switch is the real gate. */
+const UPLOAD_RULE = 'Each upload is a change a person approves in Nexus — or, with "Claude\'s changes need no approval" on, it runs about 20 s after Claude asks, in the asker\'s name, unless someone stops it. Meta\'s Custom Audience terms must be signed for the ad account too.'
 
 export function MetaConnectionCards({ connectionId, reloadSignal, onChanged }: {
   /** The page's Meta connection; null when none is connected. */
@@ -61,6 +73,9 @@ export function MetaConnectionCards({ connectionId, reloadSignal, onChanged }: {
   const [mayChangeSales, setMayChangeSales] = useState(false)
   const [switching, setSwitching] = useState(false)
   const [switchNote, setSwitchNote] = useState<Note | null>(null)
+  const [listsSwitch, setListsSwitch] = useState<MetaCustomerListsSwitch | null>(null)
+  const [mayChangeLists, setMayChangeLists] = useState(false)
+  const [switchingLists, setSwitchingLists] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -77,6 +92,7 @@ export function MetaConnectionCards({ connectionId, reloadSignal, onChanged }: {
   useEffect(() => { void load() }, [load, reloadSignal])
   useEffect(() => {
     fetchMetaEventsSwitch().then((read) => { setSalesSwitch(read.switch); setMayChangeSales(read.canChange) }, () => { setSalesSwitch(null); setMayChangeSales(false) })
+    fetchMetaCustomerListsSwitch().then((read) => { setListsSwitch(read.switch); setMayChangeLists(read.canChange) }, () => { setListsSwitch(null); setMayChangeLists(false) })
   }, [reloadSignal])
 
   const switchSales = async (on: boolean) => {
@@ -93,6 +109,23 @@ export function MetaConnectionCards({ connectionId, reloadSignal, onChanged }: {
       setSwitchNote({ tone: 'danger', title: 'The switch was not changed', text: err instanceof Error ? err.message : 'Nexus could not reach the server. Try again.' })
     } finally {
       setSwitching(false)
+    }
+  }
+
+  const switchLists = async (on: boolean) => {
+    if (switchingLists) return
+    setSwitchingLists(true)
+    setSwitchNote(null)
+    try {
+      const next = await setMetaCustomerListsSwitch(on)
+      setListsSwitch(next)
+      setSwitchNote(next.on
+        ? { tone: 'success', title: 'Uploading customer lists to Meta is on', text: `Nothing is uploaded yet: Claude may now ask to add the hashed e-mails of Shopify buyers who said yes to the business's e-mail to a customer list. ${UPLOAD_RULE}` }
+        : { tone: 'success', title: 'Uploading customer lists to Meta is off', text: 'Nexus adds and replaces nobody in a Meta customer list, not even in a change approved earlier. People uploaded before stay until they are taken out or the list is deleted.' })
+    } catch (err) {
+      setSwitchNote({ tone: 'danger', title: 'The switch was not changed', text: err instanceof Error ? err.message : 'Nexus could not reach the server. Try again.' })
+    } finally {
+      setSwitchingLists(false)
     }
   }
 
@@ -192,6 +225,17 @@ export function MetaConnectionCards({ connectionId, reloadSignal, onChanged }: {
         : `${salesSwitch.on
           ? `On${salesSwitch.since ? ` since ${formatMoment(salesSwitch.since) ?? salesSwitch.since}` : ''}${salesSwitch.by ? ` (${salesSwitch.by})` : ''}. Claude may ask to send sales taken in by hand in Nexus, with every such buyer's e-mail and phone hashed. ${SEND_RULE} Website sales stay with the shop's own Meta app.`
           : `Off (the default): Nexus sends Meta no sale. On, Claude may ask to send sales taken in by hand in Nexus. ${SEND_RULE}`}${mayChangeSales ? '' : ' Turning it on or off needs the permission to manage the business\'s security.'}`,
+    },
+    {
+      label: 'Upload customer lists to Meta',
+      value: listsSwitch
+        ? <Toggle checked={listsSwitch.on} aria-label="Upload customer lists to Meta" disabled={switchingLists || !mayChangeLists} aria-busy={switchingLists || undefined} onChange={(next) => { void switchLists(next) }} />
+        : 'Not read',
+      hint: !listsSwitch
+        ? 'Your role cannot see this switch, or Nexus could not read it.'
+        : `${listsSwitch.on
+          ? `On${listsSwitch.since ? ` since ${formatMoment(listsSwitch.since) ?? listsSwitch.since}` : ''}${listsSwitch.by ? ` (${listsSwitch.by})` : ''}. Claude may ask to add or replace the people of a customer list with the hashed e-mails of Shopify buyers who said yes to the business's e-mail (never Amazon, eBay or Etsy buyers). ${UPLOAD_RULE}`
+          : `Off (the default): Nexus uploads nobody to a Meta customer list; it only takes people out. On, Claude may ask to upload the hashed e-mails of Shopify buyers who said yes to the business's e-mail. ${UPLOAD_RULE}`}${mayChangeLists ? '' : ' Turning it on or off needs the permission to manage the business\'s security.'}`,
     },
   ]
   const canChoose = connection.state !== 'sign_in_needed' && connection.state !== 'token_problem'

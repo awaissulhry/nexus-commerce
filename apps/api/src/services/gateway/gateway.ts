@@ -988,6 +988,15 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
     const problem = await metaEventsPixelProblem(connectionId, id)
     return problem ? { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${problem}` } : null
   }
+  // Consent PR 2 — a customer list's people added or replaced (hashed e-mails of consenting Shopify buyers): only while the
+  // business's switch "Upload customer lists to Meta" is on (customer-lists-switch.ts), asked again here so a change
+  // approved earlier sends nothing once it is off; then step 31's owner check of a custom audience, below.
+  if (kind === 'customaudience' && (write.rule === 'audience.users.add' || write.rule === 'audience.users.replace')) {
+    const [{ metaCustomerListsSwitch }, { NO_CONSENT }] = await Promise.all([import('../marketing/meta-ads/customer-lists-switch.js'), import('../marketing/meta-ads/audience-members.js')])
+    let on = false
+    try { on = (await metaCustomerListsSwitch()).on } catch { on = false }
+    if (!on) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${NO_CONSENT}` }
+  }
   if (!kind || !Object.prototype.hasOwnProperty.call(META_KIND_FIELD, kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of ${id} names the kind of object it changes (a campaign, an ad set or an ad).` }
   if (write.check && kind !== 'campaign') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: Meta has a check (validate_only) only for campaign changes, and ${id} is named ${kind === 'adset' || kind === 'ad' ? 'an' : 'a'} ${META_KIND_WORD[kind]}.` }
   const chosen = await metaChosenAdAccountOf(connectionId)

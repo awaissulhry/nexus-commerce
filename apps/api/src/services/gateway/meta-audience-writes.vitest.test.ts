@@ -2,8 +2,11 @@
  * Meta step 31 on the gateway: the audience changes (create-meta-audience, set-meta-audience, set-meta-audience-members,
  * set-meta-audience-sharing, remove-meta-audience) reach Meta only on their EXACT allow-list entries — path and kind of
  * object, keys, every value judged, JSON in one spelling only — and every id inside a body is the business's own; the
- * hashed people of a customer list go only as SHA-256 hashes in a DELETE, and the ledger keeps neither them nor Meta's
- * answer. Steps 17 and 18's rules are untouched. Made-up ids and example.com addresses only.
+ * hashed people of a customer list go only as SHA-256 hashes (EMAIL_SHA256, at most 10,000 a request): out in a DELETE,
+ * and — consent PR 2 — in with POST /users or a replace session with POST /usersreplace, only while the business's
+ * "Upload customer lists to Meta" is on (asked again here) and only into a custom audience of the chosen ad account; the
+ * ledger keeps neither them nor Meta's answer. Steps 17 and 18's rules are untouched. Made-up ids and example.com
+ * addresses only.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -12,6 +15,16 @@ const h = vi.hoisted(() => ({
   answers: [] as Array<() => Response>,
   idProblems: new Map<string, string>(),
   idAsked: [] as Array<{ id: string; kind: string }>,
+  uploadsOn: true,
+  switchFails: false,
+  switchAsked: 0,
+}))
+vi.mock('../marketing/meta-ads/customer-lists-switch.js', () => ({
+  metaCustomerListsSwitch: vi.fn(async () => {
+    h.switchAsked += 1
+    if (h.switchFails) throw new Error('connection to the database lost')
+    return { on: h.uploadsOn, since: null, by: null }
+  }),
 }))
 vi.mock('../marketing/meta-ads/taken.js', () => ({ takenIds: vi.fn(async () => new Set<string>()) }))
 // The audience-id rules have their own test (audience-ids.vitest.test.ts): here a stand-in says which ids are not the business's.
@@ -36,6 +49,7 @@ import { __rateTest } from './rate.js'
 import { metaWriteCall } from './meta.js'
 import { metaWriteVerdict } from './meta-calls.js'
 import { audienceRuleProblem, lookalikeSpecProblem, MEMBERS_PER_REQUEST } from './meta-audience-rules.js'
+import { NO_CONSENT } from '../marketing/meta-ads/audience-members.js'
 import { __metaObjectLimitsTest } from './meta-object-limits.js'
 import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
 
@@ -59,7 +73,7 @@ const EVENT = { operator: 'and', filters: [{ field: 'event', operator: 'eq', val
 beforeEach(() => {
   __rateTest.useMemory()
   __metaObjectLimitsTest.useMemory()
-  h.calls = []; h.answers = []; h.idProblems.clear(); h.idAsked = []; gatewayLedger.length = 0
+  h.calls = []; h.answers = []; h.idProblems.clear(); h.idAsked = []; gatewayLedger.length = 0; h.uploadsOn = true; h.switchFails = false; h.switchAsked = 0
   for (const key of Object.keys(gatewayMetaChosen)) delete gatewayMetaChosen[key]
   for (const key of Object.keys(gatewayMetaStored)) delete gatewayMetaStored[key]
   for (const key of Object.keys(gatewayMetaPage)) delete gatewayMetaPage[key]
@@ -189,16 +203,16 @@ describe('the people of a customer list: hashes only, in a DELETE', () => {
     expect(verdict({ url: `${BASE}/${ACT}/usersofanyaudience`, method: 'DELETE', body: form({ payload: PAYLOAD }) })).toMatchObject({ write: { rule: 'adaccount.usersofanyaudience', personal: true, objectId: ACT } })
     expect(problem({ url: `${BASE}/${AUDIENCE}/users`, method: 'DELETE', objectKind: 'customaudience', body: form({ payload: PAYLOAD, session: SESSION }) })).toMatch(/only Meta change/)
   })
-  it('never a plain e-mail, never an add, never more than 10,000, never another schema', () => {
+  it('never a plain e-mail, never more than 10,000, never another schema', () => {
     const del = (payload: unknown, extra: Record<string, string> = {}) => problem({ url: `${BASE}/${AUDIENCE}/users`, method: 'DELETE', objectKind: 'customaudience', body: form({ payload: JSON.stringify(payload), ...extra }) })
     expect(del({ schema: 'EMAIL_SHA256', data: ['a@example.com'] })).toMatch(/SHA-256 hash/)
     expect(del({ schema: 'EMAIL_SHA256', data: [hash('a@example.com').toUpperCase()] })).toMatch(/SHA-256 hash/)
     expect(del({ schema: 'EMAIL', data: [hash('a@example.com')] })).toMatch(/hashed e-mails only/)
     expect(del({ schema: ['EMAIL', 'PHONE'], data: [[hash('a@example.com'), '']] })).toMatch(/hashed e-mails only/)
     expect(del({ schema: 'EMAIL_SHA256', data: Array(MEMBERS_PER_REQUEST + 1).fill(hash('a@example.com')) })).toMatch(/1 to 10000/)
-    // An add (POST /users) and a replace (POST /usersreplace) are no rule at all: Nexus adds nobody (D8).
+    // Consent PR 2 — an add takes no session (review B1), a replace no less than its session.
     expect(problem({ url: `${BASE}/${AUDIENCE}/users`, objectKind: 'customaudience', body: form({ payload: PAYLOAD, session: SESSION }) })).toMatch(/only Meta change/)
-    expect(problem({ url: `${BASE}/${AUDIENCE}/usersreplace`, objectKind: 'customaudience', body: form({ payload: PAYLOAD, session: SESSION }) })).toMatch(/only Meta change/)
+    expect(problem({ url: `${BASE}/${AUDIENCE}/usersreplace`, objectKind: 'customaudience', body: form({ payload: PAYLOAD }) })).toMatch(/only Meta change/)
     // A DELETE of people without a body, or named as the account: refused.
     expect(problem({ url: `${BASE}/${AUDIENCE}/users`, method: 'DELETE', objectKind: 'customaudience' })).toMatch(/Nexus deletes on Meta only/)
     expect(problem({ url: `${BASE}/${AUDIENCE}/users`, method: 'DELETE', objectKind: 'adaccount', body: form({ payload: PAYLOAD }) })).toMatch(/Nexus deletes on Meta only/)
@@ -233,6 +247,81 @@ describe('the people of a customer list: hashes only, in a DELETE', () => {
     const res = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: ACT, objectKind: 'adaccount', edge: 'usersofanyaudience', method: 'DELETE', params: { payload: PAYLOAD }, check: false })
     expect(res.ok).toBe(true)
     expect([h.calls[0].init.method, new URL(h.calls[0].url).pathname]).toEqual(['DELETE', `/v26.0/${ACT}/usersofanyaudience`])
+  })
+})
+
+describe('consent PR 2 — the people of a customer list IN: POST /users and a replace session, hashes only', () => {
+  const add = (payload: unknown, extra: Record<string, string> = {}, objectKind = 'customaudience') => verdict({ url: `${BASE}/${AUDIENCE}/users`, objectKind, body: form({ payload: typeof payload === 'string' ? payload : JSON.stringify(payload), ...extra }) })
+  const replace = (session: unknown, payload: unknown = JSON.parse(PAYLOAD)) => verdict({ url: `${BASE}/${AUDIENCE}/usersreplace`, objectKind: 'customaudience', body: form({ payload: JSON.stringify(payload), session: typeof session === 'string' ? session : JSON.stringify(session) }) })
+  const no = (v: ReturnType<typeof verdict>) => ('problem' in v ? v.problem : null)
+  const S = { session_id: 123456789, batch_seq: 1, last_batch_flag: true, estimated_num_total: 2 }
+
+  it('an add: EMAIL_SHA256 hashes only, the payload only, into a custom audience; personal', () => {
+    expect(add(JSON.parse(PAYLOAD))).toEqual({ write: { rule: 'audience.users.add', objectId: AUDIENCE, check: false, body: form({ payload: PAYLOAD }), budget: false, kinds: ['customaudience'], personal: true } })
+    expect(no(add({ schema: 'EMAIL_SHA256', data: ['a@example.com'] }))).toMatch(/SHA-256 hash/)
+    expect(no(add({ schema: 'PHONE_SHA256', data: [hash('a@example.com')] }))).toMatch(/hashed e-mails only/)
+    expect(no(add({ schema: ['EMAIL', 'LOOKALIKE_VALUE'], data: [[hash('a@example.com'), 10]] }))).toMatch(/hashed e-mails only/)
+    expect(no(add({ schema: 'EMAIL_SHA256', data: Array(MEMBERS_PER_REQUEST + 1).fill(hash('a@example.com')) }))).toMatch(/1 to 10000/)
+    expect(no(add({ schema: 'EMAIL_SHA256', data: [] }))).toMatch(/1 to 10000/)
+    expect(no(add({ schema: 'EMAIL_SHA256', data: [hash('a@example.com')], is_raw: true }))).toMatch(/hashed e-mails only/)
+    expect(no(add(PAYLOAD.replace('{"', '{ "')))).toMatch(/one spelling only/)
+    expect(no(add(JSON.parse(PAYLOAD), { namespace: 'x' }))).toMatch(/only Meta change/)
+    // Never named as the ad account, nor as a campaign.
+    expect(no(add(JSON.parse(PAYLOAD), {}, 'adaccount'))).toMatch(/only Meta change/)
+    expect(no(add(JSON.parse(PAYLOAD), {}, 'campaign'))).toMatch(/only Meta change/)
+  })
+  it('a replace: its payload and ONE session — all four keys, a positive id, batch 1 to 10, a flag, a total', () => {
+    expect(replace(S)).toEqual({ write: { rule: 'audience.users.replace', objectId: AUDIENCE, check: false, body: form({ payload: PAYLOAD, session: JSON.stringify(S) }), budget: false, kinds: ['customaudience'], personal: true } })
+    expect(no(replace({ ...S, batch_seq: 10, last_batch_flag: false, estimated_num_total: 100_000 }))).toBeNull()
+    const { last_batch_flag: _flag, ...three } = S
+    expect(no(replace(three))).toMatch(/all four/)
+    expect(no(replace({ ...S, extra: 1 }))).toMatch(/all four/)
+    expect(no(replace({ ...S, session_id: 0 }))).toMatch(/session_id is a positive whole number/)
+    expect(no(replace({ ...S, session_id: '123456789' }))).toMatch(/session_id is a positive whole number/)
+    expect(no(replace({ ...S, session_id: 1.5 }))).toMatch(/session_id is a positive whole number/)
+    expect(no(replace({ ...S, batch_seq: 0 }))).toMatch(/batch_seq is 1 to 10/)
+    expect(no(replace({ ...S, batch_seq: 11 }))).toMatch(/batch_seq is 1 to 10/)
+    expect(no(replace({ ...S, last_batch_flag: 'true' }))).toMatch(/last_batch_flag is true or false/)
+    expect(no(replace({ ...S, estimated_num_total: 100_001 }))).toMatch(/estimated_num_total is 1 to 100000/)
+    expect(no(replace(JSON.stringify(S).replace(':', ': ')))).toMatch(/one spelling only/)
+    expect(no(replace(S, { schema: 'EMAIL_SHA256', data: ['b@example.com'] }))).toMatch(/SHA-256 hash/)
+  })
+  it('through the gateway: refused, nothing sent, while "Upload customer lists to Meta" is off or unreadable — asked for every add and replace', async () => {
+    h.uploadsOn = false
+    for (const [edge, params] of [['users', { payload: PAYLOAD }], ['usersreplace', { payload: PAYLOAD, session: SESSION }]] as const) {
+      const res = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: AUDIENCE, objectKind: 'customaudience', edge, params, check: false }).catch((e) => e)
+      expect(res).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
+      expect(String(res.message ?? res.sentence ?? JSON.stringify(res))).toContain(NO_CONSENT.slice(0, 60))
+    }
+    expect(h.switchAsked).toBe(2)
+    expect(h.calls).toHaveLength(0)
+    // A switch Nexus cannot read counts as off.
+    h.uploadsOn = true
+    h.switchFails = true
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: AUDIENCE, objectKind: 'customaudience', edge: 'users', params: { payload: PAYLOAD }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
+    expect(h.calls).toHaveLength(0)
+    h.switchFails = false
+    h.switchAsked = 2
+    // A removal never asks it.
+    h.answers.push(json({ id: AUDIENCE, account_id: '1234567890', subtype: 'CUSTOM', time_created: 1700000000 }), json({ num_received: 2 }))
+    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: AUDIENCE, objectKind: 'customaudience', edge: 'users', method: 'DELETE', params: { payload: PAYLOAD }, check: false })).ok).toBe(true)
+    expect(h.switchAsked).toBe(2)
+  })
+  it('switched on: step 31\'s owner check of the audience, then the POST; the ledger keeps no hash; another account\'s audience gets nothing', async () => {
+    h.answers.push(json({ id: AUDIENCE, account_id: '5555555555', subtype: 'CUSTOM', time_created: 1700000000 }))
+    const other = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: AUDIENCE, objectKind: 'customaudience', edge: 'users', params: { payload: PAYLOAD }, check: false }).catch((e) => e)
+    expect(other).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
+    expect(h.calls.map((c) => c.init.method)).toEqual(['GET'])
+    h.calls = []
+    h.answers.push(json({ id: AUDIENCE, account_id: '1234567890', subtype: 'CUSTOM', time_created: 1700000000 }), json({ audience_id: AUDIENCE, session_id: '1', num_received: 2, num_invalid_entries: 0, invalid_entry_samples: { [hash('a@example.com')]: 'x' } }))
+    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: AUDIENCE, objectKind: 'customaudience', edge: 'usersreplace', params: { payload: PAYLOAD, session: SESSION }, check: false })
+    expect(res.ok).toBe(true)
+    const post = h.calls[1]
+    expect([post.init.method, new URL(post.url).pathname]).toEqual(['POST', `/v26.0/${AUDIENCE}/usersreplace`])
+    expect(new URLSearchParams(String(post.init.body)).get('session')).toBe(SESSION)
+    const kept = JSON.stringify(gatewayLedger.at(-1))
+    expect(kept).not.toContain(hash('a@example.com'))
+    expect(kept).not.toContain('example.com')
   })
 })
 

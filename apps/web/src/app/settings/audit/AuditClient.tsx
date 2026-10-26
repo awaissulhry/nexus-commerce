@@ -47,6 +47,7 @@ const KEY_LABEL: Record<string, string> = {
   company: 'Company & fiscal',
   terminology: 'Terminology',
   'meta-conversions-api': 'Meta · Send sales to Meta',
+  'meta-customer-lists': 'Meta · Upload customer lists to Meta',
 }
 
 const ACTION_STYLE: Record<string, string> = {
@@ -66,6 +67,8 @@ const REVERT_DISABLED_KEYS = new Set([
   'profile.password',
   // Meta step 33 — turned on or off only in Settings › Channels › Meta (settings.security.manage).
   'meta-conversions-api',
+  // Consent PR 2 — turned on or off only in Settings › Channels › Meta (settings.security.manage).
+  'meta-customer-lists',
 ])
 
 interface Props {

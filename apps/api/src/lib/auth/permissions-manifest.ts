@@ -219,6 +219,10 @@ export const ENTRIES: Entry[] = [
   // approval".
   P(F.settingsIntegrationsManage, (m, p) => isRead(m) && p === '/api/meta-ads/conversions-api'),
   P(F.settingsSecurityManage, (m, p) => m.toUpperCase() === 'PUT' && p === '/api/meta-ads/conversions-api'),
+  // Meta consent PR 2 — the "Upload customer lists to Meta" switch: the same split as "Send sales to Meta" (buyers' hashed
+  // e-mails leave Nexus while it is on).
+  P(F.settingsIntegrationsManage, (m, p) => isRead(m) && p === '/api/meta-ads/customer-lists'),
+  P(F.settingsSecurityManage, (m, p) => m.toUpperCase() === 'PUT' && p === '/api/meta-ads/customer-lists'),
   // Meta ads step 2 — the read-only Ads › Meta tab and its "Read now" (the ads sync permission), as Google's.
   P(F.adsView, (m, p) => isRead(m) && /^\/api\/meta-ads\/(overview|campaigns(\/[^/]+\/days)?|adsets|ads)$/.test(p)),
   P(F.adsCampaignsManage, (m, p) => m.toUpperCase() === 'POST' && p === '/api/meta-ads/sync'),
