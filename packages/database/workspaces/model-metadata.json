@@ -5182,6 +5182,14 @@
       "fields": []
     },
     {
+      "name": "ReviewSettings",
+      "fields": []
+    },
+    {
+      "name": "ReviewReplyTemplate",
+      "fields": []
+    },
+    {
       "name": "OrderTag",
       "fields": [
         {

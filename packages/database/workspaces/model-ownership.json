@@ -295,6 +295,8 @@
     "ReviewSentimentCheck",
     "ReviewMailerState",
     "EmailSuppression",
+    "ReviewSettings",
+    "ReviewReplyTemplate",
     "OrderTag",
     "AiUsageLog",
     "AiFeatureModelPref",
