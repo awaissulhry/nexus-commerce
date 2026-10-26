@@ -19,7 +19,8 @@
  *   event source group  one of the chosen portfolio's (`<portfolio>/event_source_groups`), every dataset in it free.
  *   Page / Instagram    the business's chosen Page / Instagram account (its MetaAccountLink), and no other's — the tools
  *                  ask it here; the gateway asks step 28's (Page) and step 31's (Instagram) rule, the same meaning.
- * Partner portfolios, server-event businesses and people on a dataset are not step 32's (lane C3 decision): no rule here.
+ * Partner portfolios, server-event businesses and people on a dataset are step 41's (set-meta-user-access /
+ * set-meta-partner-access asset `pixel`): their own check reuses ownSignalPixel (live-access-change.ts liveAccessPixel).
  * Checked 2026-10-21: reference/ad-account (business), business/event_source_groups (fields id, name; SDK
  * eventsourcegroup.py event_sources, owner_business), custom-conversion (account_id, pixel, business), ads-pixel
  * (owner_business).

@@ -24,6 +24,8 @@ import { metaRuploadUrl } from './meta-media-rules.js'
 import type { MetaSignalsKind } from './meta-signals-rules.js'
 import type { MetaCatalogKind } from './meta-catalog-rules.js'
 import { META_GRAPH_VIDEO_HOST, type MetaPostEdge, type MetaPostKind } from './meta-post-rules.js'
+// Step 41 — the access edges (assigned_users and agencies of the chosen assets, a relationship's clients).
+import type { MetaAccessEdge, MetaAccessKind } from './meta-access-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -106,6 +108,8 @@ export interface MetaWriteRequest {
     | MetaCommentKind
     // Step 24 — the chosen Page or Instagram account as it posts, a post of the Page, a post or media Nexus made (meta-post-rules.ts).
     | MetaPostKind
+    // Step 41 — the chosen ad account, Page or Instagram account's business asset (people, partners), or the portfolio.
+    | MetaAccessKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -145,6 +149,8 @@ export interface MetaWriteRequest {
   query?: Record<string, string>
   /** Step 20 (review A2) — the targeting keys this change's draft changed: the only ones the gateway lets differ from live. */
   targetingKeys?: string[]
+  /** Step 41 (option-1 review N3) — the list a whole-list change was built on (GatewayRequest.metaExpectedIds). */
+  expectedIds?: string[]
   /**
    * Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own); step 34: a feed's
    * catalog. Step 37 — a Threads post's or reply's ad (`ad`), a branded-content post's comment's post (`brandedpost`). Step 24 —
@@ -171,6 +177,8 @@ export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copie
   | MetaWebhookEdge | MetaTargetingEdge | MetaEventsEdge | MetaCatalogEdge | MetaAccountEdge | MetaCommentEdge
   // Step 24 — a post, a post's photo, a video post of the chosen Page; a container, its publish, an event of the chosen Instagram account.
   | MetaPostEdge
+  // Step 41 — people and partners of the chosen ad account, Page and Instagram account; the portfolio's relationships.
+  | MetaAccessEdge
 /** Step 33 — upload-meta-events: Conversions API events of a pixel (`<pixel id>/events`). */
 export type MetaEventsEdge = 'events'
 /** Step 27 — create-meta-ad: a new ad on the chosen ad account (an ad's labels: step 21's `adlabels`). */
@@ -256,6 +264,7 @@ export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayRespo
     ...(req.parent ? { metaParent: req.parent } : {}),
     ...(req.run ? { metaRun: req.run } : {}),
     ...(req.targetingKeys?.length ? { metaTargetingKeys: req.targetingKeys } : {}),
+    ...(req.expectedIds ? { metaExpectedIds: req.expectedIds } : {}),
     maxTransientRetries: req.check ? 1 : 0,
     max429Retries: 0,
     maxRateWaitMs: req.maxRateWaitMs,

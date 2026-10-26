@@ -342,6 +342,8 @@ export function objectChangeOf(request: MetaChangeRequest): MetaObjectChange {
     ...(request.targetingKeys?.length ? { targetingKeys: request.targetingKeys } : {}),
     // Step 24 (review B-F1) — a Page's video post on Meta's video host.
     ...(request.videoHost ? { videoHost: true as const } : {}),
+    // Step 41 — the list a whole-list change was built on.
+    ...(request.expectedIds ? { expectedIds: request.expectedIds } : {}),
   }
 }
 

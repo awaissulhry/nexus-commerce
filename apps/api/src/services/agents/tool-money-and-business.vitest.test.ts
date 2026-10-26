@@ -227,6 +227,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-meta-page-post': 'it reads the business\'s chosen Meta ad account and Page live from Meta, and no business here has Meta connected (meta-ads-posts.tools test)',
   'remove-meta-page-post': 'it reads the business\'s chosen Meta ad account, Page and Instagram account live from Meta, and no business here has Meta connected (meta-ads-posts.tools test)',
   'create-meta-instagram-post': 'it reads the business\'s chosen Meta ad account and Instagram account live from Meta, and no business here has Meta connected (meta-ads-posts.tools test)',
+  'set-meta-user-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-access.tools test)',
+  'set-meta-partner-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-access.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -685,6 +687,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-meta-page-post': () => ({ postId: '120000000000010_500000000000001', hidden: true }),
   'remove-meta-page-post': () => ({ platform: 'facebook', postId: '120000000000010_500000000000001', confirmDelete: true }),
   'create-meta-instagram-post': () => ({ kind: 'image', image: { imageUrl: 'https://example.com/a.jpg' }, caption: 'Shop A news' }),
+  // Meta ads step 41: people and partner access refuse in words here (no business has Meta; their own test runs them).
+  'set-meta-user-access': () => ({ asset: 'ad-account', action: 'set', personId: '120000000000002', tasks: ['ANALYZE'] }),
+  'set-meta-partner-access': () => ({ action: 'share', asset: 'ad-account', partnerBusinessId: '120000000000070', permittedTasks: ['ANALYZE'] }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),

@@ -986,6 +986,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-meta-page-post': ['basis', 'plan', 'reach'],
   'remove-meta-page-post': ['basis', 'plan', 'reach'],
   'create-meta-instagram-post': ['basis', 'plan', 'reach'],
+  // Meta step 41 (2026-10-25): people and partner access — who holds what now, the admins, the requests, where.
+  'set-meta-user-access': ['basis', 'plan', 'reach'],
+  'set-meta-partner-access': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

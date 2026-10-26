@@ -186,8 +186,9 @@ const metaAccountAccess: AgentTool = {
     + 'else its id) — proving the system user holds only this business\'s assets. asset-people (asset, assetId): who '
     + 'holds tasks on the chosen Page or '
     + 'Instagram account, a catalog of the portfolio or a pixel of the account (a Page may need its own Page token: Meta says '
-    + 'so). Meta cannot: add an agency to an ad account (the agency asks, an admin accepts in Business settings). Giving or '
-    + 'removing tasks and people is a set-meta-… change a person approves. ' + READ_LINE,
+    + 'so). Giving, changing or removing people\'s tasks is set-meta-user-access; sharing an asset with a partner, taking a '
+    + 'partner off or ending a relationship is set-meta-partner-access (an ad account\'s share: Meta names the route, its '
+    + 'parameters are in its SDK only, so Meta\'s answer decides) — each a change a person approves. ' + READ_LINE,
   async handler(args): Promise<ToolResult> {
     return guarded(() => {
       const view = (args.view ?? 'people') as AccessView

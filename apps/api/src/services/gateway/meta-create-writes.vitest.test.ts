@@ -318,7 +318,9 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
     // Step 40 — set-meta-account-settings, set-meta-spend-cap and set-meta-insights-features bring their own senders too: the
     // same request through metaSendChange, then a read-back (the agency declaration, the tracking specs, the features) or
     // Meta's 10-a-day limit in words. None sends a DELETE.
-    expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-account-settings.tools.ts', 'services/agents/tools/meta-ads-kit.ts', 'services/marketing/meta-ads/change-ads.ts', 'services/marketing/meta-ads/change-creatives.ts', 'services/marketing/meta-ads/change-media.ts'])
+    // Step 41 — set-meta-user-access and set-meta-partner-access bring their own senders: the same request through
+    // metaSendChange, then ONE read of the asset's people or partners (the record keeps what Meta read).
+    expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-access.tools.ts', 'services/agents/tools/meta-ads-account-settings.tools.ts', 'services/agents/tools/meta-ads-kit.ts', 'services/marketing/meta-ads/change-ads.ts', 'services/marketing/meta-ads/change-creatives.ts', 'services/marketing/meta-ads/change-media.ts'])
     expect(callers('metaCheckChange')).toEqual(['services/agents/tools/meta-ads-kit.ts'])
     expect(callers('removalDraft')).toEqual(['services/agents/tools/meta-ads-create.tools.ts'])
     expect(all.find((f) => f.path === 'services/agents/tools/meta-ads-create.tools.ts')!.text.match(/\bremovalDraft\(/g)).toHaveLength(1)
@@ -388,6 +390,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/marketing/meta-ads/change-comments.ts': 4, // step 37: set-meta-comments' comment delete (explicit ask) and a reply's undo, an unlike, an unblock, an Instagram comment's delete (meta-comment-writes test)
       'services/gateway/meta-post-rules.ts': 2, // step 24: pagepost.delete, igmedia.delete — a post or media Nexus made (judges)
       'services/marketing/meta-ads/change-posts.ts': 2, // step 24: remove-meta-page-post's delete of a Facebook post or Instagram media Nexus made (explicit ask: confirmDelete; also the undo of a dark post)
+      'services/gateway/meta-access-rules.ts': 4, // step 41: a person off an asset, a partner off an asset, an agency's and a client's relationship ended (judges)
+      'services/marketing/meta-ads/change-access.ts': 4, // step 41: a person off (confirmRemove), a partner off (confirmRemove; a dataset's on the query), a relationship ended (confirmRemove; no undo)
     })
     // A method named by a constant, a variable or a ternary: only where it is passed on.
     const computed = world.flatMap((f) => [...f.text.matchAll(/\bmethod:\s*([^,}\n]+)/g)].map((m) => m[1].trim())

@@ -1,8 +1,8 @@
 /**
  * Meta step 32 — the dataset, custom conversion and event source group changes as drafts (pure: built from a request and
  * the live facts the tool read; no call). Master rows BM-057, SG-006–SG-013, SG-018, SG-019, SG-041, SG-090–SG-094,
- * SG-098–SG-100, SG-102–SG-104 (SG-014, SG-021, SG-022, SG-024 — partner, server-event and people access — are not here:
- * lane C3 decision, step 41). Meta's facts behind each are in gateway/meta-signals-rules.ts.
+ * SG-098–SG-100, SG-102–SG-104 (SG-014, SG-021, SG-022, SG-024 — partner, server-event and people access — are step 41's:
+ * set-meta-user-access / set-meta-partner-access asset `pixel`, change-access.ts). Meta's facts behind each are in gateway/meta-signals-rules.ts.
  *
  * What can make the account spend more is giving ad sets their dataset BACK: connecting it to the chosen ad account, or
  * its data use back to ads, lets the ad sets that optimise on it (or on a custom conversion of it) deliver again — SPENDS

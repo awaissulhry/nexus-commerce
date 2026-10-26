@@ -84,6 +84,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 33 (2026-10-21) — upload-meta-events reads Meta live and sends purchases to a pixel.
 // Meta ads step 34 (2026-10-21) — create-meta-catalog, set-meta-catalog, set-meta-catalog-access, set-meta-product-set and remove-meta-catalog-items read Meta live and change it.
 // Meta ads step 40 (2026-10-21) — set-meta-account-settings, set-meta-spend-cap and set-meta-insights-features read Meta live and change it.
+// Meta ads step 41 (2026-10-25) — set-meta-user-access and set-meta-partner-access read Meta live and change who has its assets.
 // Meta ads step 27b (2026-10-21) — create-meta-instant-experience and set-meta-instant-experience read Meta live and change it (as the Page).
 // Meta ads step 37 (2026-10-21) — set-meta-comments reads Meta live and changes it (comments, as the Page; Threads ads).
 // Meta ads step 15 (2026-10-25) — meta-conversations, meta-message-templates and meta-messaging-setup read Meta live.
@@ -147,8 +148,8 @@ const OPEN_WORLD = [
   'set-master-prices', 'set-meta-account-controls', 'set-meta-account-settings', 'set-meta-ad', 'set-meta-ad-rule', 'set-meta-ad-set', 'set-meta-alert-subscription', 'set-meta-audience',
   'set-meta-audience-members', 'set-meta-audience-sharing', 'set-meta-block-list', 'set-meta-brand-safety', 'set-meta-budget-schedule', 'set-meta-campaign', 'set-meta-catalog',
   'set-meta-catalog-access', 'set-meta-comments', 'set-meta-connection', 'set-meta-creative', 'set-meta-custom-conversion', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-experiment',
-  'set-meta-insights-features', 'set-meta-instant-experience', 'set-meta-labels', 'set-meta-lead-form', 'set-meta-page-post', 'set-meta-partnership-access', 'set-meta-placements', 'set-meta-product-set', 'set-meta-spend-cap', 'set-meta-status',
-  'set-meta-targeting', 'set-meta-value-rules', 'set-meta-webhooks', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
+  'set-meta-insights-features', 'set-meta-instant-experience', 'set-meta-labels', 'set-meta-lead-form', 'set-meta-page-post', 'set-meta-partner-access', 'set-meta-partnership-access', 'set-meta-placements', 'set-meta-product-set', 'set-meta-spend-cap', 'set-meta-status',
+  'set-meta-targeting', 'set-meta-user-access', 'set-meta-value-rules', 'set-meta-webhooks', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
   'set-promotion', 'set-sd-brand-safety', 'set-sd-budget-rule', 'set-sd-optimization-rule', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid',
   'shipping-rates', 'shopify-content', 'submit-aplus-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock',
   'tune-ad-engine', 'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'undo-worse-ad-change',

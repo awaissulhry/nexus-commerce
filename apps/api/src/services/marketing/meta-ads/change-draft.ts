@@ -13,6 +13,8 @@ import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaCommentKind, MetaPage
 import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
 import type { MetaCatalogKind } from '../../gateway/meta-catalog-rules.js'
 import type { MetaPostKind } from '../../gateway/meta-post-rules.js'
+// Step 41 — set-meta-user-access and set-meta-partner-access's kinds.
+import type { MetaAccessKind } from '../../gateway/meta-access-rules.js'
 import type { MetaChangeResult, MetaRequestVia, MetaWriteTarget } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
@@ -94,6 +96,8 @@ export interface MetaChangeRequest {
     | MetaCommentKind
     // Step 24 — the chosen Page or Instagram account as it posts, a post of the Page, a post or media Nexus made.
     | MetaPostKind
+    // Step 41 — the chosen ad account, Page or Instagram account's business asset (people, partners), or the portfolio.
+    | MetaAccessKind
   /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
@@ -151,6 +155,9 @@ export interface MetaChangeRequest {
   // ── step 20 ──
   /** The targeting keys this request changes (review A2): the gateway lets only these differ from the live spec. */
   targetingKeys?: string[]
+  // ── step 41 ──
+  /** The list a whole-list change was built on (a dataset's server-event businesses): the gateway sends nothing if it moved. */
+  expectedIds?: string[]
   // ── step 27b ──
   /**
    * It goes with the chosen Page's own token (a gateway rule marked `auth: 'page'`): Meta counts it against the PAGE's rate

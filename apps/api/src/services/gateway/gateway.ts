@@ -50,6 +50,8 @@ import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched 
 import { META_SIGNALS_WRITE_RULES, type MetaSignalsKind } from './meta-signals-rules.js'
 import { META_WEBHOOK_WRITE_RULES } from './meta-webhook-rules.js'
 import { isMetaCatalogBodyKind, isMetaCatalogKind, type MetaCatalogKind } from './meta-catalog-rules.js'
+// Step 41 — the people and partner access rules (their owner check: meta-access-owner.ts).
+import { isMetaAccessRule, type MetaAccessKind } from './meta-access-rules.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { MAX_RULE_BODY_IDS, ruleBodyIds } from './meta-ad-rule-rules.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
@@ -166,6 +168,11 @@ export interface GatewayRequest {
    * these (within the rule's own key set) differ from the ad set's live targeting it reads itself right before the send.
    */
   metaTargetingKeys?: readonly string[]
+  /**
+   * Meta step 41 (option-1 review N3) — the list a whole-list change was built on (a dataset's server-event businesses):
+   * the gateway reads Meta's list again under the asset's lock and sends nothing when it moved.
+   */
+  metaExpectedIds?: readonly string[]
 }
 
 export interface GatewayResponse {
@@ -224,10 +231,15 @@ export function gatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   return withSpan(`${req.channel.toLowerCase()}.${req.operation}`, {
     channel: req.channel, operation: req.operation, marketplace: req.marketplace ?? undefined, 'http.method': req.method,
     'http.endpoint': safePath(req.url), 'listing.id': req.ledger?.listingId ?? undefined, 'product.id': req.ledger?.productId ?? undefined,
-  }, () => runGatewayCall(req))
+  }, async () => {
+    // Meta step 41 (review A-SF2) — a people or partner access change holds its asset's lock from its owner check (6) through
+    // its send; it is let go here, however the call ends.
+    const hold: { lock?: import('./meta-access-owner.js').MetaAccessLock } = {}
+    try { return await runGatewayCall(req, hold) } finally { await hold.lock?.release() }
+  })
 }
 
-async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
+async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta-access-owner.js').MetaAccessLock } = {}): Promise<GatewayResponse> {
   const started = Date.now()
   const name = CHANNEL_NAME[req.channel]
   const base = {
@@ -482,6 +494,12 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // Step 27b — with the run of the change: a part an Instant Experience names may be one this same run made.
     // Step 37 — a comment change made as the Page names its post (`metaParent`, a branded-content post); a Threads ad's post
     // or reply (by its kind: only step 37's Threads rules name it) is of an ad of the chosen ad account (meta-comment-owner.ts).
+    // Step 41 (review A-SF2) — one access change of an asset at a time, from the owner check below through the send.
+    if (isMetaAccessRule(metaWrite.rule)) {
+      const lock = await (await import('./meta-access-owner.js')).metaAccessLock(req.connectionId, metaWrite.objectId)
+      if (!lock) return refuse('held', 'META_ACCESS_BUSY', `Held, nothing sent: another people or partner access change of ${metaWrite.objectId} is being sent right now (or Nexus could not take its lock): ask again in a minute.`, 409)
+      hold.lock = lock
+    }
     const owner = metaWrite.auth === 'page' ? await metaPageOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId), req.metaRun, req.metaParent)
       : req.metaObjectKind && META_THREADS_KINDS.has(req.metaObjectKind) ? await metaThreadsOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId), req.metaParent)
       : isWebhookRule(metaWrite.rule) ? await metaWebhookOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
@@ -491,7 +509,9 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
           // Step 32 — a dataset, custom conversion or event source group change: chosen by its rule (it also names step 19's
           // `adaccount` and step 28's `page`, whose own checks run first), then signals-rule.ts with every id inside the body.
           : isSignalsRule(metaWrite.rule) ? await metaSignalsOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
-          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind | MetaWebhookKind | MetaTargetingKind | MetaCommentKind | MetaPostKind> | undefined, req.metaParent)
+          // Step 41 — a people or partner access change: chosen by its rule (its own kinds), every id in its body checked there.
+          : isMetaAccessRule(metaWrite.rule) ? await (await import('./meta-access-owner.js')).metaAccessOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaOwnerIo(req.connectionId, metaWrite), new URL(req.url).searchParams, req.metaExpectedIds)
+          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind | MetaWebhookKind | MetaTargetingKind | MetaCommentKind | MetaPostKind | MetaAccessKind> | undefined, req.metaParent)
           ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
           ?? await metaMediaAssetsProblem(req.connectionId, metaWrite)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)
@@ -693,6 +713,11 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       const narrowed = asked?.length ? { ...write, targeting: { ...write.targeting, keys: new Set(asked) } } : write
       const owner = await metaTargetingOwnerProblem(connectionId, narrowed, req.metaObjectKind, metaCheckRead(connectionId), (ids) => metaBodyIdsProblem(connectionId, { ...write, ids }))
       if (owner) return refuse('refused', owner.code, owner.sentence, 403)
+    }
+    // Meta step 41 (re-review R-4) — the access lock is still this change's right before the send (a check that outlasted
+    // it lost it: what it read may be stale), and it is extended through the send.
+    if (hold.lock && !(await hold.lock.confirm())) {
+      return refuse('held', 'META_ACCESS_BUSY', `Held, nothing sent: the check of this access change of ${metaWrite?.objectId ?? 'the asset'} took longer than its lock, so what it read may be stale: ask again.`, 409)
     }
     attempts++
     timedOut = false

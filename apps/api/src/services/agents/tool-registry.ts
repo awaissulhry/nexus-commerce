@@ -144,6 +144,8 @@ import { META_ADS_MESSAGING_TOOLS } from './tools/meta-ads-messaging.tools.js'
 import { META_ADS_BUSINESS_TOOLS } from './tools/meta-ads-business.tools.js'
 // Meta ads step 24 (2026-10-25): organic posts of the chosen Page and Instagram account (changes made as the Page).
 import { META_ADS_POSTS_TOOLS } from './tools/meta-ads-posts.tools.js'
+// Meta ads step 41 (2026-10-25): people and partner access of the chosen ad account, Page and Instagram account.
+import { META_ADS_ACCESS_TOOLS } from './tools/meta-ads-access.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -426,6 +428,9 @@ const ALL: AgentTool[] = [
   // Meta ads step 24 (2026-10-25): create-meta-page-post, set-meta-page-post, remove-meta-page-post, create-meta-instagram-post
   // (organic posts of the chosen Page and Instagram account, as the Page; nothing spends).
   ...META_ADS_POSTS_TOOLS,
+  // Meta ads step 41 (2026-10-25): set-meta-user-access, set-meta-partner-access (never the last admin, never Nexus's own
+  // system user, only people and partners named; Meta needs the Full access tier).
+  ...META_ADS_ACCESS_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

@@ -105,6 +105,7 @@ Show one table: what changes, from → to, how many, the SPENDS MONEY lines, wha
 | Comments on the chosen Page's posts, the chosen Instagram account's media (both made AS the Page) and the Threads posts of its own ads (with the ad account's token): hide / unhide (the reversible choice), delete (for good: explicit ask, `confirmDelete`), reply, comment, edit the Page's own comment, like / unlike, block / unblock a person on the Page, comments on / off for one Instagram media, reply where the Instagram account was @mentioned (Nexus keeps no person's words or name) | `set-meta-comments` |
 | Brand safety without Meta's grant; block lists (Meta's grant) | `set-meta-brand-safety`; `set-meta-block-list`, `remove-meta-block-list` |
 | The ad account itself: name, business info, EU payer and beneficiary defaults, end advertiser, media agency and partner (set to the chosen Page it is for good), tracking specs; its spending limit: set, raise, lower, remove or reset (a raise, removal or reset is SPENDS MONEY; a reset has no undo; Meta allows 10 changes a day); a restricted breakdown switched on (no undo) | `set-meta-account-settings`; `set-meta-spend-cap`; `set-meta-insights-features` |
+| Who may use the chosen ad account, Page, Instagram account or a dataset (pixel) of the ad account: a person's or system user's tasks (set, or take off — never the last admin, never Nexus's own system user; on a dataset set only: Meta has no way to take them back); a partner portfolio's share, its removal, the end of a whole agency or client relationship (no undo); a dataset's server-event businesses (the whole list). Needs the users.manage and ads.connect permissions (the Owner's exception), for whoever approves too; Meta needs the Full access tier | `set-meta-user-access`; `set-meta-partner-access` |
 | The ad account, Page and Instagram account Nexus works in | `set-meta-connection` (Nexus only) |
 
 ## 6. What Meta's API cannot do
@@ -120,7 +121,7 @@ Say so plainly, and that the person does it in Meta's screens:
 
 ## 7. Coming, not in Nexus yet
 
-Say "not in Nexus yet" and name the place in Meta: making or changing catalog items and feeds (Shopify writes the items: change or remove them in Shopify; `remove-meta-catalog-items` deletes items and supplementary feeds only in a catalog Shopify does not feed), sending Messenger and Instagram Direct messages (and labelling, templates and the messaging setup: the reads are in Nexus), people and partner access to the ad account and the Page, and the business portfolio's admin.
+Say "not in Nexus yet" and name the place in Meta: making or changing catalog items and feeds (Shopify writes the items: change or remove them in Shopify; `remove-meta-catalog-items` deletes items and supplementary feeds only in a catalog Shopify does not feed), sending Messenger and Instagram Direct messages (and labelling, templates and the messaging setup: the reads are in Nexus), and the business portfolio's admin (inviting people, system users).
 
 ## 8. After, and undo
 
