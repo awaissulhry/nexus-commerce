@@ -49,6 +49,8 @@ export interface SidebarCounts {
   inbox?: { critical?: number; warn?: number; total?: number }
   /** Approvals grid: requests that need a person (waiting + back to you). */
   approvals?: { needsYou?: number }
+  /** Reviews area: reviews that need a reply (fixture rows never count). */
+  reviews?: { needReply?: number }
 }
 
 export interface Connections {
@@ -232,7 +234,9 @@ export function buildAppNav(counts: SidebarCounts, conn: Connections): RailNavIt
     },
     { label: 'Calendar', href: '/marketing/calendar', Icon: CalendarDays },
     { label: 'Content', href: '/marketing/content', Icon: ImageIcon },
-    { label: 'Reviews', href: '/marketing/reviews', Icon: Star },
+    // One row, no children (Owner 2026-10-26): the Reviews pages are in the Reviews sub-sidebar. The badge counts the
+    // reviews that need a reply.
+    { label: 'Reviews', href: '/marketing/reviews', Icon: Star, badge: n(counts.reviews?.needReply) },
 
     // ── Agents ───────────────────────────────────────────────────
     // NAF.SB.7 — the Agent Fleet sits on the APP rail, not inside the ads
