@@ -321,6 +321,7 @@ export function readOutcomeMeta(status: string | null | undefined): OutcomeMeta 
     case 'IN_PROGRESS': return { label: 'Reading', tone: 'info' }
     case 'FAILED': return { label: 'Failed', tone: 'danger' }
     case 'TIMEOUT': return { label: 'No answer in time', tone: 'warning' }
+    case 'NOT_FOUND': return { label: 'Not found on the channel', tone: 'warning' }
     case 'NOT_IMPLEMENTED': return { label: 'Not read: not supported on this channel', tone: 'neutral' }
     default: return { label: (status ?? '').trim() || '—', tone: 'neutral' }
   }
@@ -434,6 +435,76 @@ export function priceActions(listing: { followMasterPrice?: boolean | null } | n
 /** How the listing's price is decided, in words. */
 export function pricingWords(listing: { followMasterPrice?: boolean | null; pricingRule?: string | null }, ruleLabel: string): string {
   return listing.followMasterPrice === false ? 'Pinned: its own price, not the master' : `Follows the master price (${ruleLabel})`
+}
+
+/* ── Refresh from Amazon ────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** One of Amazon's messages in a refresh, as Amazon wrote it. */
+export interface AmazonNowIssue { code: string; message: string; severity: string; attributeNames: string[] }
+
+/**
+ * `POST /api/listings/:id/resync` on an Amazon listing → `amazon`: what Amazon holds for it now. Nexus stores Amazon's
+ * status, an ASIN the listing lacked and Amazon's messages; this price and quantity are shown, never stored.
+ */
+export interface AmazonNow {
+  readAt: string
+  market: string
+  sku: string
+  status: string | null
+  asin: string | null
+  price: number | null
+  currency: string | null
+  /** Null for FBA: Amazon's Listings API does not report Amazon-fulfilled stock (`quantityNote` says why). */
+  quantity: number | null
+  fulfillment: 'FBA' | 'FBM' | null
+  quantityNote: string | null
+  issues: AmazonNowIssue[]
+  /** What the read did not record, and why (a draft, a different ASIN). */
+  notes: string[]
+}
+
+/** Amazon's status in the window's words: BUYABLE reads Active, DISCOVERABLE Active, not buyable; anything else as Amazon wrote it. */
+export function amazonStatusWords(status: string | null | undefined): string {
+  const word = (status ?? '').trim()
+  if (word.toUpperCase() === 'BUYABLE') return SELLING_STATE_WORD.active
+  if (word.toUpperCase() === 'DISCOVERABLE') return `${SELLING_STATE_WORD.active}, not buyable`
+  return word || 'No status reported'
+}
+
+/** "Amazon now (read 10:42)", in the viewer's time (a zone for tests). */
+export function amazonNowTitle(readAt: string, timeZone?: string): string {
+  const time = new Date(readAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', ...(timeZone ? { timeZone } : {}) })
+  return `Amazon now (read ${time})`
+}
+
+/** "Active · ASIN B0… · 99.00 EUR · Qty 24 · 0 messages"; an FBA listing reads "FBA: not reported by Amazon" for its quantity. */
+export function amazonNowLine(now: Pick<AmazonNow, 'status' | 'asin' | 'price' | 'currency' | 'quantity' | 'fulfillment' | 'issues'>): string {
+  const quantity = now.quantity != null ? `Qty ${count(now.quantity)}` : now.fulfillment === 'FBA' ? 'FBA: not reported by Amazon' : 'Qty not reported'
+  const messages = `${count(now.issues.length)} ${now.issues.length === 1 ? 'message' : 'messages'}`
+  return [amazonStatusWords(now.status), now.asin ? `ASIN ${now.asin}` : 'No ASIN', now.price != null ? moneyWords(now.price, now.currency) : 'No price', quantity, messages].join(' · ')
+}
+
+/** "In Nexus: 99.00 EUR · Qty 24": the same listing's price and quantity as Nexus holds them, beside Amazon's. */
+export function nexusNowLine(live: Pick<ReadinessLive, 'price' | 'salePrice' | 'currency' | 'quantity' | 'fulfillment'>): string {
+  const quantity = live.quantity == null ? '—' : `${count(live.quantity)}${live.fulfillment === 'FBA' ? ' (FBA)' : ''}`
+  return `In Nexus: ${priceWords(live)} · Qty ${quantity}`
+}
+
+/**
+ * Why "Refresh from Amazon" is held, or null when it reads: the API's own refusal (403) first, then a read in flight, no
+ * listing chosen, and a destination without an Amazon account (the API's own words: it would refuse the read).
+ */
+export function refreshHeldReason(input: { refused?: string | null; busy?: boolean; listingId?: string | null; accountId?: string | null }): string | null {
+  if (input.refused) return input.refused
+  if (input.busy) return 'Reading Amazon…'
+  if (!input.listingId) return 'Choose a listing first.'
+  if (!input.accountId) return 'This listing has no Amazon account. Link it to an account first.'
+  return null
+}
+
+/** A refresh that did not read: Amazon has no such listing or Nexus refused (404, 409) is a warning; a failed read an error. */
+export function refreshFailureTone(status: number): 'warning' | 'danger' {
+  return status === 404 || status === 409 ? 'warning' : 'danger'
 }
 
 /* ── Which listing the per-listing tabs show ────────────────────────────────────────────────────────────────────── */

@@ -50,7 +50,7 @@ import { listingUrlFor } from '@nexus/shared/listing-url'
 // 2026-10-26 — the legacy exit (step 8 of docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md) removed the reads only
 // the old Listings page made: /listings/facets, /listings/matrix, /listings/performance, /listings/amazon/overview,
 // /listings/ebay/overview and /listings/path-a/overview.
-// POST /api/listings/:id/resync     enqueue per-listing pull from channel
+// POST /api/listings/:id/resync     read one listing from its channel now (Amazon: Refresh from Amazon)
 // POST /api/listings/bulk-action    publish/unpublish/price/follow-master/resync
 // GET  /api/listings/bulk-action/:jobId   poll job status (in-mem)
 // ─────────────────────────────────────────────────────────────────────
@@ -2251,179 +2251,27 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   })
 
   // ─────────────────────────────────────────────────────────────────
-  // POST /api/listings/:id/resync — synchronous inline pull from channel
+  // POST /api/listings/:id/resync — read ONE listing from its channel now
   //
-  // S.0 / C-3 — was a placebo (just flipped a flag with no consumer).
-  // Now hits the channel adapter directly and merges the response.
-  // Single-listing only; bulk resync stays on the bulk-action endpoint
-  // until S.4 builds the inbound queue.
-  //
-  // Status transitions:
-  //   pre-call:  syncStatus = 'SYNCING'
-  //   success:   syncStatus = 'IN_SYNC',  lastSyncStatus = 'SUCCESS'
-  //   timeout:   syncStatus = 'FAILED',   lastSyncStatus = 'FAILED'
-  //   error:     syncStatus = 'FAILED',   lastSyncStatus = 'FAILED'
-  //   501 path:  syncStatus untouched (channel adapter not wired —
-  //              not the listing's fault)
+  // Amazon: "Refresh from Amazon", a read by the listing's own seller SKU
+  // and account. It stores only Amazon's own facts (status, an ASIN the row
+  // lacks, Amazon's messages, the read time), never price / quantity /
+  // title, and answers Amazon's values beside them. Amazon's 404, a failed
+  // read or a timeout never mark the listing's push failed. The cases and
+  // their answers: services/listings/resync.service.ts. Other channels: 501.
+  // Single listing only; the bulk-action "resync" is a different path.
   // ─────────────────────────────────────────────────────────────────
   fastify.post('/listings/:id/resync', async (request, reply) => {
     const { id } = request.params as { id: string }
-
-    const existing = await prisma.channelListing.findUnique({
-      where: { id },
-      select: { translations: true,
-        id: true,
-        channel: true,
-        marketplace: true,
-        externalListingId: true,
-        version: true,
-      },
-    })
-    if (!existing) return reply.code(404).send({ error: 'Listing not found' })
-
-    if (!existing.externalListingId) {
-      return reply.code(400).send({
-        error:
-          'Listing has no externalListingId — never been published. Cannot resync.',
-      })
-    }
-
-    // Lazy-import so the route module compiles even if the resync
-    // service file moves later. Path is relative-with-extension to
-    // match the rest of the codebase's NodeNext resolution.
-    const { pullListingFromChannel, ChannelNotSupportedError, ResyncTimeoutError } =
-      await import('../services/listings/resync.service.js')
-
-    // S.4 — open a SyncAttempt row up-front so the timeline records the
-    // attempt even if the channel call hangs / crashes before we can
-    // write a terminal status. We update this row at the end with the
-    // real outcome.
-    const attemptStartedAt = Date.now()
     const source = ((request.query as any)?.source as string) ?? 'manual'
-    const attempt = await prisma.syncAttempt.create({
-      data: {
-        listingId: id,
-        status: 'IN_PROGRESS',
-        source,
-      },
-      select: { id: true },
-    })
-
-    // Mark in-flight first so concurrent polls / drawer reopens see
-    // SYNCING rather than the stale prior status.
-    await prisma.channelListing.update({
-      where: { id },
-      data: {
-        syncStatus: 'SYNCING',
-        lastSyncStatus: 'PENDING',
-      },
-    })
-
-    // Notify SSE subscribers so cells / drawers flip to amber instantly.
-    publishListingEvent({ type: 'listing.syncing', listingId: id, ts: Date.now() })
-
-    try {
-      const remote = await pullListingFromChannel(
-        {
-          channel: existing.channel,
-          marketplace: existing.marketplace,
-          externalListingId: existing.externalListingId,
-        },
-        { timeoutMs: 10_000 },
-      )
-
-      const durationMs = Date.now() - attemptStartedAt
-      const updated = await prisma.channelListing.update({
-        where: { id },
-        data: {
-          // Only overwrite columns the channel actually returned a value
-          // for. `undefined` skips the column in Prisma update payloads,
-          // so a marketplace that doesn't surface (say) a title leaves
-          // our title as-is rather than nulling it.
-          ...(remote.price != null ? { price: remote.price } : {}),
-          ...(remote.quantity != null ? { quantity: remote.quantity } : {}),
-          ...(remote.title != null ? { title: remote.title } : {}),
-          ...(remote.listingStatus != null
-            ? { listingStatus: remote.listingStatus }
-            : {}),
-          syncStatus: 'IN_SYNC',
-          lastSyncStatus: 'SUCCESS',
-          lastSyncedAt: new Date(),
-          lastSyncError: null,
-          syncRetryCount: 0,
-          version: { increment: 1 },
-        },
-      })
-      await prisma.syncAttempt.update({
-        where: { id: attempt.id },
-        data: { status: 'SUCCESS', durationMs },
-      })
-      publishListingEvent({
-        type: 'listing.synced',
-        listingId: id,
-        status: 'SUCCESS',
-        durationMs,
-        ts: Date.now(),
-      })
-      return { ok: true, listing: updated }
-    } catch (error: any) {
-      const durationMs = Date.now() - attemptStartedAt
-      // Channel adapter not implemented for this channel — revert the
-      // pre-call SYNCING marker and surface 501 cleanly. Don't write
-      // FAILED; this isn't the listing's fault.
-      if (error instanceof ChannelNotSupportedError) {
-        await prisma.channelListing.update({
-          where: { id },
-          data: { syncStatus: 'IDLE', lastSyncStatus: null },
-        })
-        await prisma.syncAttempt.update({
-          where: { id: attempt.id },
-          data: { status: 'NOT_IMPLEMENTED', durationMs, error: error.message },
-        })
-        publishListingEvent({
-          type: 'listing.synced',
-          listingId: id,
-          status: 'NOT_IMPLEMENTED',
-          durationMs,
-          ts: Date.now(),
-        })
-        return reply.code(501).send({
-          error: 'NOT_IMPLEMENTED',
-          detail: error.message,
-        })
-      }
-
-      const isTimeout = error instanceof ResyncTimeoutError
-      await prisma.channelListing.update({
-        where: { id },
-        data: {
-          syncStatus: 'FAILED',
-          lastSyncStatus: 'FAILED',
-          lastSyncError: error?.message ?? String(error),
-          syncRetryCount: { increment: 1 },
-        },
-      })
-      await prisma.syncAttempt.update({
-        where: { id: attempt.id },
-        data: {
-          status: isTimeout ? 'TIMEOUT' : 'FAILED',
-          durationMs,
-          error: error?.message ?? String(error),
-        },
-      })
-      publishListingEvent({
-        type: 'listing.synced',
-        listingId: id,
-        status: isTimeout ? 'TIMEOUT' : 'FAILED',
-        durationMs,
-        ts: Date.now(),
-      })
-      fastify.log.error({ err: error, listingId: id }, '[listings/:id/resync] failed')
-      return reply.code(isTimeout ? 504 : 502).send({
-        error: isTimeout ? 'CHANNEL_TIMEOUT' : 'CHANNEL_ERROR',
-        detail: error?.message ?? String(error),
-      })
+    const { resyncListing } = await import('../services/listings/resync.service.js')
+    const answer = await resyncListing(id, { source })
+    // The API's tsconfig is not strict, so `ok` does not narrow the answer: its refusal is the one with a body.
+    if ('body' in answer) {
+      if (answer.status === 502 || answer.status === 504) fastify.log.warn({ listingId: id, status: answer.status }, '[listings/:id/resync] the channel read did not land')
+      return reply.code(answer.status).send(answer.body)
     }
+    return { ok: true, listing: answer.listing, ...(answer.amazon ? { amazon: answer.amazon } : {}) }
   })
 
   // ─────────────────────────────────────────────────────────────────

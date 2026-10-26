@@ -26,7 +26,7 @@
 
 export type ListingEvent =
   | { type: 'shopify.schema.changed'; accountId: string; ts: number }
-  | { type: 'listing.synced'; listingId: string; status: 'SUCCESS' | 'FAILED' | 'TIMEOUT' | 'NOT_IMPLEMENTED'; durationMs?: number; ts: number }
+  | { type: 'listing.synced'; listingId: string; status: 'SUCCESS' | 'FAILED' | 'TIMEOUT' | 'NOT_FOUND' | 'NOT_IMPLEMENTED'; durationMs?: number; ts: number }
   | { type: 'listing.syncing'; listingId: string; ts: number } // emitted at start so cells can flip to amber instantly
   | { type: 'listing.updated'; listingId: string; reason?: string; ts: number }
   | { type: 'listing.created'; listingId: string; ts: number }

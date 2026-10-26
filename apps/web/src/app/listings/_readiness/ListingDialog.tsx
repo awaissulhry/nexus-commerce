@@ -13,13 +13,12 @@
  *           Fix window it replaced.
  *   footer  Open on <channel> ↗ · Sync activity · Sales  …  Close · Publish… · Open in studio.
  *
- * It reads `GET /api/catalog-transfer/readiness/detail`; the only writes are the Price & stock tab's two price edits
- * and the suppression's two buttons (`ListingDialogTabs.tsx`). "Refresh from Amazon" is not offered: its route
- * (`POST /api/listings/:id/resync`) does reach Amazon through the channel gateway, but it sends the listing's ASIN where
- * Amazon's getListingsItem wants the seller SKU, and on Amazon's "not found" it marks the listing's sync failed. The
- * host owns what is shown (product, destination, tab): Prev / Next, the switcher and a tab click
- * ask it. Escape closes; the focus goes back to the chip or button that opened it (`returnFocusTo` names the row's chip
- * after Prev / Next moved on).
+ * It reads `GET /api/catalog-transfer/readiness/detail`; the only writes are the Price & stock tab's two price edits,
+ * the suppression's two buttons and, on Amazon, "Refresh from Amazon" (`ListingDialogTabs.tsx`): a read of the chosen
+ * listing by its own seller SKU on its own account (`POST /api/listings/:id/resync`) that stores Amazon's status, an ASIN
+ * the listing lacked and Amazon's messages, never its price, quantity or title. The host owns what is shown (product,
+ * destination, tab): Prev / Next, the switcher and a tab click ask it. Escape closes; the focus goes back to the chip or
+ * button that opened it (`returnFocusTo` names the row's chip after Prev / Next moved on).
  */
 import { Fragment, useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { CheckCircle2, ExternalLink } from 'lucide-react'
@@ -196,7 +195,7 @@ export function ListingDialog({
       >
         {detail && destination ? (
           active === 'channel' && channel ? (
-            <ChannelTab channel={channel} destination={destination} family={detail.family} onChanged={reread} now={now} />
+            <ChannelTab channel={channel} destination={destination} family={detail.family} onChanged={reread} now={now} focus={focus} onFocus={setFocus} />
           ) : active === 'price' && channel ? (
             <PriceTab channel={channel} destination={destination} focus={focus} onFocus={setFocus} onChanged={reread} />
           ) : active === 'history' && channel ? (

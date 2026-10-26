@@ -15,7 +15,7 @@ import { getAmazonRegion, getAmazonSellerId } from '../../lib/amazon-sp-client.j
 import { ebayInventoryReads } from '../pim/studio-publication-ebay-inventory.js'
 import { readEbayInventoryListing } from './ebay-inventory.js'
 import { readEbayTradingListing } from './ebay-trading.js'
-import { readAmazonListing, type AmazonListingRead } from './amazon.js'
+import { listingsItemRead, readAmazonListing, type AmazonListingRead } from './amazon.js'
 import type { ServerLiveRead } from './types.js'
 import { reportedSkuOf } from '../listings/reported-sku.js'
 import type { ChannelSkuAnswer } from '../listings/channel-sku.pure.js'
@@ -72,11 +72,7 @@ async function readNow(productId: string, scope: LiveReadScope): Promise<ServerL
     return readAmazonListing({ ...destination, expectedSkus: children.map(skuOf), parentSku: skuOf(parent), marketplaceId,
       languageTag: language ? languageTag(language, scope.marketplace) : '' }, {
       async listing(sku): Promise<AmazonListingRead> {
-        const r = await client.getListingsItem({ sellerId, sku, marketplaceId, includedData: ['summaries', 'attributes', 'offers', 'fulfillmentAvailability'] })
-        if (!r.success) return { status: 'error', reason: r.error ?? 'Amazon could not read this listing.' }
-        // The client returns this exact no-body shape only for HTTP 404: a measured absence, not a failed read.
-        if (r.asin === null && r.status === null && r.rawResponse === undefined && r.error === undefined) return { status: 'absent' }
-        return { status: 'found', raw: object(r.rawResponse) }
+        return listingsItemRead(await client.getListingsItem({ sellerId, sku, marketplaceId, includedData: ['summaries', 'attributes', 'offers', 'fulfillmentAvailability'] }))
       },
       async schemaProperties(productType) {
         const row = await prisma.categorySchema.findFirst({ where: { channel: 'AMAZON', marketplace: scope.marketplace, productType, isActive: true }, orderBy: { fetchedAt: 'desc' }, select: { schemaDefinition: true } })

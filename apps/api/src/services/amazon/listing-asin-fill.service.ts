@@ -105,6 +105,20 @@ export function summaryStatus(read: { status?: unknown; rawResponse?: unknown })
   return typeof raw === 'string' && raw.trim() ? raw.trim() : null
 }
 
+/**
+ * What a read of Amazon's listing writes on the row's status. A row still marked DRAFT that Amazon holds becomes
+ * published; it, and a published row in a live status, take Amazon's status (a DRAFT row with none reported becomes
+ * ACTIVE, the flat-file pull's default). Any other row — ended, inactive, in error — keeps its status, so a read never
+ * lifts a lock such as ENDED. Shared with the listing's "Refresh from Amazon" (`listings/resync.service.ts`).
+ */
+export function amazonReadStatus(row: { listingStatus: string | null; isPublished: boolean | null }, amazonStatus: string | null): { isPublished?: true; listingStatus?: string } {
+  const current = (row.listingStatus ?? '').trim().toUpperCase()
+  const draft = !current || current === 'DRAFT'
+  const takesStatus = draft || (row.isPublished === true && AMAZON_LIVE_STATUSES.includes(current))
+  const listingStatus = takesStatus ? amazonStatus ?? (draft ? 'ACTIVE' : null) : null
+  return { ...(draft ? { isPublished: true as const } : {}), ...(listingStatus ? { listingStatus } : {}) }
+}
+
 async function eachLimited<T>(items: readonly T[], limit: number, work: (item: T) => Promise<void>) {
   let next = 0
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
@@ -164,16 +178,10 @@ export async function fillAmazonListingAsins(listingIds: readonly string[], opti
       if (!asin) { report.set(id, { ...base, sku, outcome: 'not_visible_yet', reason: 'Amazon has not made this listing visible yet.' }); return }
       const status = summaryStatus(read)
       if (!dryRun) {
-        const current = (row.listingStatus ?? '').trim().toUpperCase()
-        const draft = !current || current === 'DRAFT'
-        // A row still marked DRAFT that Amazon holds becomes published. It, and a published row in a live status, take
-        // Amazon's status (a DRAFT row with none reported becomes ACTIVE, the flat-file pull's default). Any other row —
-        // ended, inactive, in error — gains its ASIN only, so a read never lifts a lock such as ENDED.
-        const takesStatus = draft || (row.isPublished === true && AMAZON_LIVE_STATUSES.includes(current))
-        const listingStatus = takesStatus ? status ?? (draft ? 'ACTIVE' : null) : null
+        // Amazon's status by the shared rule (`amazonReadStatus`): an ended, inactive or failed row gains its ASIN only.
         const updated = await prisma.channelListing.updateMany({
           where: { id, channel: 'AMAZON', channelConnectionId: row.channelConnectionId, marketplace: row.marketplace, aliasKey: row.aliasKey, externalListingId: null },
-          data: { externalListingId: asin, version: { increment: 1 }, ...(draft ? { isPublished: true } : {}), ...(listingStatus ? { listingStatus } : {}) },
+          data: { externalListingId: asin, version: { increment: 1 }, ...amazonReadStatus(row, status) },
         })
         if (updated.count !== 1) {
           const now = await prisma.channelListing.findFirst({ where: { id }, select: { externalListingId: true } })
