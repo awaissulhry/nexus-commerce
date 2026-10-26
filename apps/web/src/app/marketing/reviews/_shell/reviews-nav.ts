@@ -5,7 +5,7 @@
  *
  * TEMPORARY TARGETS (Phase 1, build spec §1.2): a row whose new page is not built yet points at the page doing that
  * job today, and owns its old address through `match`. The coordinator swaps the row's `href` (one line) when the PR
- * that builds the page lands: Inbox → `/marketing/reviews/inbox` (PR B); Rules → `/marketing/reviews/requests/rules`
+ * that builds the page lands: Inbox (done, PR B); Rules → `/marketing/reviews/requests/rules`
  * and Timing → `/marketing/reviews/requests/timing` (PR C); the Insights rows → `/marketing/reviews/insights/<page>`
  * (PR E). The Channels group (PR F / PR I) and the Settings row (PR D, `permission: 'reviews.manage'`) are absent until
  * their pages exist, so no row names a page it is not.
@@ -61,8 +61,7 @@ export const REVIEWS_NAV: readonly ReviewsNavGroup[] = [
     hideLabel: true,
     items: [
       { label: 'Overview', href: REVIEWS_ROOT, icon: LayoutDashboard, exact: true, match: [`${REVIEWS_ROOT}/advanced`] },
-      // TEMPORARY until PR B: the Respond page and the Import page do the Inbox's job.
-      { label: 'Inbox', href: `${REVIEWS_ROOT}/desk`, icon: Inbox, badge: 'needReply', match: [`${REVIEWS_ROOT}/import`] },
+      { label: 'Inbox', href: `${REVIEWS_ROOT}/inbox`, icon: Inbox, badge: 'needReply' },
     ],
   },
   {

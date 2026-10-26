@@ -44,13 +44,10 @@ export interface InboxLinkParams {
   import?: boolean | 1 | null
 }
 
-/**
- * The Inbox. New: `/marketing/reviews/inbox` with every filter (PR B). Today: the Respond page, which reads only the
- * channel and market; Import is its own page.
- */
+/** The Inbox, `/marketing/reviews/inbox`, with every filter it reads (inbox/inboxQuery.ts) and the Import window. */
 export function inboxHref(params: InboxLinkParams = {}): string {
-  if (params.import) return '/marketing/reviews/import'
-  return withQuery('/marketing/reviews/desk', scopeOnly(params))
+  const { kind, period, status, channel, market, stars, theme, family } = params
+  return withQuery('/marketing/reviews/inbox', { kind, period, status, channel, market, stars, theme, family, import: params.import ? 1 : null })
 }
 
 export interface RequestsLinkParams {

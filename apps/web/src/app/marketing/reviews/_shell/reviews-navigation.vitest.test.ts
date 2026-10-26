@@ -26,12 +26,12 @@ describe('reviews navigation', () => {
   })
 
   it('keeps the business in native links and marks exactly one row as the page', () => {
-    const rows = items('/w/business_a/marketing/reviews/desk')
-    expect(rows.find(item => item.label === 'Inbox')).toMatchObject({ href: '/w/business_a/marketing/reviews/desk', active: true })
+    const rows = items('/w/business_a/marketing/reviews/inbox')
+    expect(rows.find(item => item.label === 'Inbox')).toMatchObject({ href: '/w/business_a/marketing/reviews/inbox', active: true })
     expect(rows.find(item => item.label === 'Overview')?.href).toBe('/w/business_a/marketing/reviews')
     expect(rows.find(item => item.label === 'Rules')?.href).toBe('/w/business_a/orders/reviews/rules')
     expect(rows.filter(item => item.active)).toHaveLength(1)
-    expect(items('/marketing/reviews/desk').find(item => item.label === 'Inbox')?.href).toBe('/marketing/reviews/desk')
+    expect(items('/marketing/reviews/inbox').find(item => item.label === 'Inbox')?.href).toBe('/marketing/reviews/inbox')
   })
 
   it('filters permissions before scoping URLs and drops empty groups', () => {
@@ -51,6 +51,7 @@ describe('reviews navigation', () => {
     expect(active('/w/business_b/marketing/reviews/requests/rules/rule-id')).toEqual(['Rules'])
     expect(active('/marketing/reviews/requests/timing')).toEqual(['Timing'])
     expect(active('/marketing/reviews/requests')).toEqual(['Queue'])
+    expect(active('/marketing/reviews/inbox')).toEqual(['Inbox'])
     expect(active('/marketing/reviews')).toEqual(['Overview'])
     expect(active('/marketing/reviews/')).toEqual(['Overview'])
     expect(active('/marketing/reviewsx')).toEqual([])
@@ -64,7 +65,6 @@ describe('reviews navigation', () => {
     expect(active('/marketing/reviews/spikes')).toEqual(['Alerts'])
     expect(active('/marketing/reviews/actions')).toEqual(['Fixes'])
     expect(active('/marketing/reviews/spotlight')).toEqual(['Brief'])
-    expect(active('/marketing/reviews/import')).toEqual(['Inbox'])
     expect(active('/marketing/reviews/inserts')).toEqual(['Queue'])
     expect(active('/marketing/reviews/requests/test/preview')).toEqual(['Queue'])
     expect(active('/marketing/reviews/advanced')).toEqual(['Overview'])
@@ -85,7 +85,7 @@ describe('reviews crumbs', () => {
 
   it('reads Marketing › Reviews › [group] › page, with the page shown marked', () => {
     expect(trail('/marketing/reviews')).toBe('Marketing › Reviews*')
-    expect(trail('/marketing/reviews/desk')).toBe('Marketing › Reviews › Inbox*')
+    expect(trail('/marketing/reviews/inbox')).toBe('Marketing › Reviews › Inbox*')
     expect(trail('/marketing/reviews/requests')).toBe('Marketing › Reviews › Requests › Queue*')
     expect(trail('/marketing/reviews/heatmap')).toBe('Marketing › Reviews › Insights › Themes*')
     expect(trail('/marketing/reviews/automation')).toBe('Marketing › Reviews')
