@@ -313,7 +313,7 @@ async function formView(account: MetaChosenAccount, pageId: string, formId: stri
       trackingParameters: tidy(b.tracking_parameters ?? null),
     },
     notRead: missingOf(read.missing),
-    note: 'questions: what the form asks, in order (type FULL_NAME, EMAIL, PHONE, CUSTOM …; key is the name each answer carries in a lead). higherIntent: Meta adds a review step. Making, archiving or re-activating a form and making a test lead are change tools (a later Nexus step). The answers people gave are meta-leads.',
+    note: 'questions: what the form asks, in order (type FULL_NAME, EMAIL, PHONE, CUSTOM …; key is the name each answer carries in a lead). higherIntent: Meta adds a review step. A form is made with create-meta-lead-form; archiving or re-activating it and its test lead are set-meta-lead-form. The answers people gave are meta-leads.',
   }
 }
 
@@ -476,7 +476,7 @@ export async function liveLeads(input: LeadsInput) {
     more: read.more,
     notRead: missingOf(read.missing),
     note: input.view === 'test'
-      ? 'Test leads of the form (one per form; made with Meta\'s lead ads testing tool, or by a later Nexus change). They are not tied to any ad.'
+      ? 'Test leads of the form (one per form; made with Meta\'s lead ads testing tool, or with set-meta-lead-form). They are not tied to any ad.'
       : `${input.view === 'ad' ? 'The leads of this ad only (a form used by several ads holds more: view form). For a call ad these are its callback requests. ' : ''}${LEADS_NOTE} An empty list may only mean Meta does not let the app read real leads yet (D4: App Review for leads_retrieval, Business Verification, a Live app); real leads are in Meta's Leads Center.`,
   }
 }
@@ -892,7 +892,7 @@ export async function liveComments(input: CommentsInput) {
           }
         }),
         more: read.more,
-        note: 'The chosen Page\'s recommendations and reviews (recommends: positive or negative). storyId is what a reply goes to (a later Nexus step). Meta answers this only to a Page token (pages_read_user_content and a CREATE_CONTENT, MANAGE or MODERATE task on the Page): until Nexus holds one, Meta\'s refusal says so.',
+        note: 'The chosen Page\'s recommendations and reviews (recommends: positive or negative). storyId is the review\'s own id (Nexus makes no reply to a review: set-meta-comments answers comments on the Page\'s own posts). Meta answers this only to a Page token (pages_read_user_content and a CREATE_CONTENT, MANAGE or MODERATE task on the Page): until Nexus holds one, Meta\'s refusal says so.',
       }
     }
   }

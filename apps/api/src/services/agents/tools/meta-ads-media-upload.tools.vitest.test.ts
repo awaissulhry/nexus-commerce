@@ -154,7 +154,7 @@ describe('the tool', () => {
       expect(await tool.handler(ask(args), asker)).toEqual({ ok: false, error: words })
       expect(await tool.execute!(ask(args), approved({}))).toEqual({ ok: false, error: `Not run: ${words}` })
     }
-    expect(THUMBNAIL_ANSWER).toMatch(/Thumbnails can only be created on Videos that have been associated with a Page.*step 24/)
+    expect(THUMBNAIL_ANSWER).toMatch(/Thumbnails can only be created on Videos that have been associated with a Page.*does not upload one to a Page video yet/)
     expect(PLAYABLE_ANSWER).toBe('Nexus holds no HTML5 playable files (its media library takes images and videos only), so it uploads no playable.')
     expect(h.fetchPhoto).not.toHaveBeenCalled()
     expect(h.read).not.toHaveBeenCalled()

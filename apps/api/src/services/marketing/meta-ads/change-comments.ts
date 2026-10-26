@@ -340,7 +340,7 @@ export function instagramReplyDraft(s: InstagramCommentState, message: string): 
   return draftOf({
     summary: `Reply to Instagram comment ${s.commentId} on the chosen account's media ${s.mediaId}, as the account — public at once.`,
     lines: [[`Reply to Instagram comment ${s.commentId}`, 'none', `"${message}"`]],
-    warnings: [COMMENT_NO_CHECK, COMMENT_PUBLIC, 'Its undo deletes the reply Nexus made (a deleted comment cannot come back).', 'Meta takes no reply on live video (a private reply by message is a later Nexus step).'],
+    warnings: [COMMENT_NO_CHECK, COMMENT_PUBLIC, 'Its undo deletes the reply Nexus made (a deleted comment cannot come back).', 'Meta takes no reply on live video (a private reply by message is create-meta-message: one per comment, within 7 days).'],
     requests: [request({ label: `Reply to Instagram comment ${s.commentId}`, objectId: s.commentId, objectKind: 'igcomment', edge: 'replies', operation: 'igcomment.reply', params: { message }, readBackFields: 'id', undoable: false })],
     stands: { platform: 'instagram', commentId: s.commentId, mediaId: s.mediaId, hidden: s.hidden, isReply: s.isReply }, before, after: { ...before },
   })

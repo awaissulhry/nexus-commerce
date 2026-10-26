@@ -122,7 +122,7 @@ const createMetaCreative: AgentTool = {
   requires: [F.adsCampaignsManage],
   input: z.object({
     connectionId: metaConnectionArg,
-    action: z.enum(['create', 'undo', 'welcome-flow']).optional().describe('create (default): one new creative; undo: delete creatives an earlier create-meta-creative made new (undo-change fills it); welcome-flow: Nexus answers why it saves no Page welcome-message flow yet'),
+    action: z.enum(['create', 'undo', 'welcome-flow']).optional().describe('create (default): one new creative; undo: delete creatives an earlier create-meta-creative made new (undo-change fills it); welcome-flow: Nexus answers where a Page welcome-message flow is made (set-meta-messaging-setup)'),
     name: z.string().trim().min(1).max(META_CREATIVE_TEXT.name).optional().describe('create: the creative\'s name in the ad account (1 to 100 characters)'),
     story: spec('create: Meta\'s object_story_spec WITHOUT page_id and instagram_user_id (Nexus fills the business\'s chosen Page and Instagram account): link_data (image or link ad, carousel child_attachments 2–10, collection collection_thumbnails, messaging page_welcome_message), photo_data, video_data (video_id of the account\'s library), text_data or template_data (Advantage+ catalog); images by image_hash from create-meta-media or picture / url / image_url (a public https link Meta fetches)'),
     postId: z.string().trim().regex(/^\d{1,25}_\d{1,25}$/, 'a post id: <Page id>_<post id>').optional().describe('create: or an existing post of the chosen Page (object_story_id, meta-page-posts lists them)'),
@@ -137,7 +137,7 @@ const createMetaCreative: AgentTool = {
       format: z.enum(META_FORMAT_AUTOMATION_FORMATS).describe('the format Meta may turn the creative into'),
       dataSources: z.array(z.enum(META_FORMAT_DATA_SOURCES.filter((s) => s !== 'none') as [string, ...string[]])).min(1).max(4).describe('where Meta takes the extra media from'),
     })).max(6).optional().describe('create: format automation switched ON (every other format is sent with data_source none)'),
-    shopDestination: z.boolean().optional().describe('create: shop routing (WEBSITE_AND_SHOP) — answered in words: it names a Facebook or Instagram shop Nexus cannot confirm as the business\'s own (it comes with the catalog / commerce steps); a website creative is sent WEBSITE_AND_SHOP_OPT_OUT'),
+    shopDestination: z.boolean().optional().describe('create: shop routing (WEBSITE_AND_SHOP) — answered in words: every Meta ad sends people to the business\'s own shop, on the product\'s page, never to a Facebook or Instagram shop Meta picks (the Owner\'s rule); a website creative is sent WEBSITE_AND_SHOP_OPT_OUT'),
     autoProductTags: z.boolean().optional().describe('create: let Meta tag catalog products on a static image by itself (default false: sent opt_out)'),
     productTags: z.array(z.object({
       productId: z.string().trim().regex(/^\d{1,20}$/, 'a catalog item id (digits)').describe('the catalog item (meta-catalog-items lists them)'),
@@ -174,8 +174,8 @@ const createMetaCreative: AgentTool = {
     + 'PAUSED and be previewed (meta-ad-preview) first. A partnership ad names its partner (partner); Meta asks the '
     + 'partner\'s permission itself. Refused in words: political ads (banned in the EU), WhatsApp Status identities (not in '
     + 'the EU), app links (Nexus has no app), retailer_item_ids (advertiser product ids the catalog rule cannot check), catalog promo-code sources, polls (gone in '
-    + 'v26), Threads ids (Threads runs through Instagram), shop routing (a shop Nexus cannot confirm), saved Page welcome flows '
-    + '(they need the Page\'s own token). A creative SPENDS NOTHING (it serves only once an ad uses it) and '
+    + 'v26), Threads ids (Threads runs through Instagram), shop routing (every ad sends people to the business\'s own shop), saved Page welcome flows '
+    + '(set-meta-messaging-setup makes them). A creative SPENDS NOTHING (it serves only once an ad uses it) and '
     + 'cannot be changed once made: a new look is a new creative swapped onto the ad, which sends an ACTIVE ad back to '
     + 'review. Meta checks it first (validate_only). If Meta already holds the same creative it answers that one: then '
     + 'nothing new is made and the undo never deletes it. action undo deletes only creatives this tool made new, while no '

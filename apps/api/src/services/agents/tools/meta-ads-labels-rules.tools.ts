@@ -196,7 +196,7 @@ const setMetaLabels: AgentTool = {
     + 'them, and there is no undo); put labels on campaigns and ad sets (by id, or by name: a new name is made by Meta), '
     + 'take them off, or set an object\'s whole list. Meta adds a campaign\'s labels with its add edge; an ad set\'s go as '
     + 'its whole list (Meta has no labels edge for an ad set) and so do removals; each object is read first and read back '
-    + 'after. At most 50 labels on one object. Labels of ads and creatives are not here (they come with the ad and creative changes). A label '
+    + 'after. At most 50 labels on one object. Labels of ads are set-meta-ad\'s and of creatives set-meta-creative\'s. A label '
     + 'changes nothing by itself, but Meta\'s automated rules can filter on labels: the preview names every ENABLED rule a '
     + 'change touches, and when that can make the account spend more (an object brought under a rule that switches on or '
     + 'raises, or taken out of one that pauses or lowers) it is SPENDS MONEY. Meta has no check for these changes. Undo puts '

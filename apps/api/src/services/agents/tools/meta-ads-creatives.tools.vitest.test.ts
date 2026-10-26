@@ -191,7 +191,8 @@ describe('create-meta-creative — the preview', () => {
     expect(await refusal({ name: 'From a post', postId: '120000000000099_500000000000001' })).toMatch(/not on the Facebook Page this business chose/)
     expect(await refusal({ story: image.story })).toMatch(/name is 1 to 100/)
     expect(await refusal({ ...image, story: { link_data: { ...image.story.link_data, link: 'http://www.example.com/' } } })).toMatch(/https/)
-    expect(await refusal({ ...image, shopDestination: true })).toMatch(/cannot confirm a shop is this business's own/)
+    // Step 46 — the Owner's rule (2026-10-23): every Meta ad sends people to the business's own shop; shop routing is never sent.
+    expect(await refusal({ ...image, shopDestination: true })).toMatch(/every Meta ad sends people to the business's own shop/)
     expect(await refusal({ ...image, parts: { interactive_components_spec: { components: [] } } })).toMatch(/autoProductTags/)
     expect(await refusal({ ...image, featureSettings: { adapt_to_placement: { image_crop_style: 'x' } } })).toMatch(/goes only with adapt_to_placement in aiFeatures/)
     expect(await refusal({ ...image, formatAutomation: [{ format: 'da_collection', dataSources: ['catalog'] }] })).toMatch(/only as sa_collection|for a website creative only/)
@@ -411,10 +412,11 @@ describe('review round 1', () => {
     expect(canonical(await set.undo!.current(r.change))).not.toBe(canonical(r.change.after))
   })
 
-  it('B2 — saved Page welcome-message flows are answered in words (they need the Page token)', async () => {
+  it('B2 — saved Page welcome-message flows are answered in words: step 38\'s set-meta-messaging-setup makes them', async () => {
     const p = await preview({ action: 'welcome-flow' })
     expect(p).toMatchObject({ ok: false, error: WELCOME_FLOWS_ANSWER })
-    expect(WELCOME_FLOWS_ANSWER).toMatch(/Page-token mode \(step 36\)/)
+    expect(WELCOME_FLOWS_ANSWER).toMatch(/set-meta-messaging-setup \(section welcome-flow\)/)
+    expect(WELCOME_FLOWS_ANSWER).not.toMatch(/Meta Business Suite/)
   })
 })
 

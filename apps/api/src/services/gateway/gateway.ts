@@ -55,6 +55,8 @@ import { META_WEBHOOK_WRITE_RULES } from './meta-webhook-rules.js'
 import { isMetaCatalogBodyKind, isMetaCatalogKind, type MetaCatalogKind } from './meta-catalog-rules.js'
 // Step 41 — the people and partner access rules (their owner check: meta-access-owner.ts).
 import { isMetaAccessRule, type MetaAccessKind } from './meta-access-rules.js'
+// Step 43 — create-meta-backed-account's writes (their owner check: meta-business-asset-owner.ts).
+import { isMetaBusinessAssetRule, type MetaBusinessAssetKind } from './meta-business-asset-rules.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { MAX_RULE_BODY_IDS, ruleBodyIds } from './meta-ad-rule-rules.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
@@ -529,7 +531,9 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
           : isSignalsRule(metaWrite.rule) ? await metaSignalsOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
           // Step 41 — a people or partner access change: chosen by its rule (its own kinds), every id in its body checked there.
           : isMetaAccessRule(metaWrite.rule) ? await (await import('./meta-access-owner.js')).metaAccessOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaOwnerIo(req.connectionId, metaWrite), new URL(req.url).searchParams, req.metaExpectedIds)
-          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind | MetaWebhookKind | MetaTargetingKind | MetaCommentKind | MetaPostKind | MetaAccessKind | MetaMessagingKind> | undefined, req.metaParent)
+          // Step 43 — a backed account of the chosen Page / Instagram account: chosen by its rule (its own kinds).
+          : isMetaBusinessAssetRule(metaWrite.rule) ? await (await import('./meta-business-asset-owner.js')).metaBusinessAssetOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
+          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind | MetaWebhookKind | MetaTargetingKind | MetaCommentKind | MetaPostKind | MetaAccessKind | MetaMessagingKind | MetaBusinessAssetKind> | undefined, req.metaParent)
           ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
           ?? await metaMediaAssetsProblem(req.connectionId, metaWrite)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)

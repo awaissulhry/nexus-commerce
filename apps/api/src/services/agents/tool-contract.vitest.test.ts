@@ -1317,7 +1317,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-meta-page-post', 'set-meta-page-post', 'remove-meta-page-post', 'create-meta-instagram-post',
       'set-meta-user-access', 'set-meta-partner-access',
       'set-meta-catalog-items', 'set-meta-catalog-feed', 'set-meta-instagram-product-tags',
-      'create-meta-message', 'set-meta-conversation-labels', 'set-meta-message-templates', 'set-meta-messaging-setup']) {
+      'create-meta-message', 'set-meta-conversation-labels', 'set-meta-message-templates', 'set-meta-messaging-setup',
+      'create-meta-backed-account']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })
