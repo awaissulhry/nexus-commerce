@@ -1116,6 +1116,19 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { op: 'tag', mediaId: '170000000000001', targetId: '170000000000001', target: 'image', moved: [{ productId: '120000000000120', x: 0.2, y: 0.3 }], added: [] },
         after: { op: 'tag', mediaId: '170000000000001', targetId: '170000000000001', target: 'image', moved: [{ productId: '120000000000120', x: 0.5, y: 0.8 }], added: [], accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 38: a label put on a person is taken off again; a template edit's old parts go back; a profile's old values.
+      'set-meta-conversation-labels': {
+        before: { action: 'add', pageId: '120000000000010', labelId: '120000000000801', labelName: 'Label A', personId: '300000000000001', assigned: false },
+        after: { action: 'add', pageId: '120000000000010', labelId: '120000000000801', labelName: 'Label A', personId: '300000000000001', assigned: true, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-message-templates': {
+        before: { channel: 'messenger', action: 'edit', pageId: '120000000000010', templateId: '120000000000811', name: 'order_update', language: 'it_IT', parameterFormat: 'POSITIONAL', parts: { body: { text: 'Order {{1}} ships today.', examples: ['1001'] } } },
+        after: { channel: 'messenger', action: 'edit', pageId: '120000000000010', templateId: '120000000000811', name: 'order_update', language: 'it_IT', parameterFormat: 'POSITIONAL', parts: { body: { text: 'Order {{1}} ships tomorrow.', examples: ['1001'] } }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-messaging-setup': {
+        before: { section: 'profile', pageId: '120000000000010', platform: 'messenger', properties: { getStarted: { payload: 'START' }, greeting: null } },
+        after: { section: 'profile', pageId: '120000000000010', platform: 'messenger', properties: { getStarted: { payload: 'BEGIN' }, greeting: [{ locale: 'default', text: 'Welcome to Shop A' }] }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1303,7 +1316,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-meta-instant-experience', 'set-meta-instant-experience', 'set-meta-comments',
       'create-meta-page-post', 'set-meta-page-post', 'remove-meta-page-post', 'create-meta-instagram-post',
       'set-meta-user-access', 'set-meta-partner-access',
-      'set-meta-catalog-items', 'set-meta-catalog-feed', 'set-meta-instagram-product-tags']) {
+      'set-meta-catalog-items', 'set-meta-catalog-feed', 'set-meta-instagram-product-tags',
+      'create-meta-message', 'set-meta-conversation-labels', 'set-meta-message-templates', 'set-meta-messaging-setup']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

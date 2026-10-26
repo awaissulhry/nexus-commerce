@@ -26,6 +26,8 @@ import type { MetaCatalogKind } from './meta-catalog-rules.js'
 import { META_GRAPH_VIDEO_HOST, type MetaPostEdge, type MetaPostKind } from './meta-post-rules.js'
 // Step 41 — the access edges (assigned_users and agencies of the chosen assets, a relationship's clients).
 import type { MetaAccessEdge, MetaAccessKind } from './meta-access-rules.js'
+// Step 38 — the messaging tools' edges and kinds.
+import type { MetaMessagingEdge, MetaMessagingKind } from './meta-messaging-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -110,6 +112,8 @@ export interface MetaWriteRequest {
     | MetaPostKind
     // Step 41 — the chosen ad account, Page or Instagram account's business asset (people, partners), or the portfolio.
     | MetaAccessKind
+    // Step 38 — the chosen Page as it messages, its messaging setup, labels, personas, templates; a WhatsApp account, a group.
+    | MetaMessagingKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -144,7 +148,8 @@ export interface MetaWriteRequest {
   path?: string
   /**
    * Step 30 — a DELETE's parameters in the URL's query, as Meta's SDK sends them (an app's webhook subscription, the app's
-   * link to the chosen ad account); `params` is then empty. The gateway refuses a query on every other call.
+   * link to the chosen ad account); `params` is then empty. Step 38 — an Instagram profile change's platform=instagram (with
+   * the same key in `params`). The gateway refuses a query on every other call.
    */
   query?: Record<string, string>
   /** Step 20 (review A2) — the targeting keys this change's draft changed: the only ones the gateway lets differ from live. */
@@ -156,7 +161,7 @@ export interface MetaWriteRequest {
    * catalog. Step 37 — a Threads post's or reply's ad (`ad`), a branded-content post's comment's post (`brandedpost`). Step 24 —
    * a video post's video (`pagevideo`).
    */
-  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string }
+  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo' | 'creator'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
   recommendations?: boolean
   /** Step 24 (review B-F1) — a Page's video post goes to Meta's video host (meta-post-rules.ts META_GRAPH_VIDEO_HOST). */
@@ -179,6 +184,8 @@ export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copie
   | MetaPostEdge
   // Step 41 — people and partners of the chosen ad account, Page and Instagram account; the portfolio's relationships.
   | MetaAccessEdge
+  // Step 38 — messages, thread control, labels, templates, template groups, the messaging setup of the chosen Page.
+  | MetaMessagingEdge
 /** Step 33 — upload-meta-events: Conversions API events of a pixel (`<pixel id>/events`). */
 export type MetaEventsEdge = 'events'
 /** Step 27 — create-meta-ad: a new ad on the chosen ad account (an ad's labels: step 21's `adlabels`). */
@@ -260,7 +267,8 @@ export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayRespo
     kind: req.check ? 'read' : 'write',
     connectionId: req.connectionId,
     // Step 24 — a Page's video post on Meta's video host; every other change on the Graph host.
-    url: req.videoHost ? metaUrl(path).replace(/^https:\/\/graph\.facebook\.com\//, `https://${META_GRAPH_VIDEO_HOST}/`) : metaUrl(path, remove ? req.query ?? {} : {}),
+    // Step 38 (review B-F1) — and an Instagram profile change's platform=instagram (the gateway refuses any other query).
+    url: req.videoHost ? metaUrl(path).replace(/^https:\/\/graph\.facebook\.com\//, `https://${META_GRAPH_VIDEO_HOST}/`) : metaUrl(path, req.query ?? {}),
     method: remove ? 'DELETE' : req.method === 'PATCH' ? 'PATCH' : 'POST',
     body,
     metaObjectKind: req.objectKind,

@@ -232,6 +232,11 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-meta-catalog-items': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-catalog-items.tools test)',
   'set-meta-catalog-feed': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-catalog-items.tools test)',
   'set-meta-instagram-product-tags': 'it reads the business\'s chosen Meta ad account and Instagram account live from Meta, and no business here has Meta connected (meta-ads-catalog-items.tools test)',
+  // Meta ads step 38: messages, labels, templates and the messaging setup read the chosen Page (or WhatsApp account) live from Meta.
+  'create-meta-message': 'it reads the business\'s chosen Meta Page and a person\'s conversation live from Meta, and no business here has Meta connected (meta-ads-messaging-changes.tools test)',
+  'set-meta-conversation-labels': 'it reads the business\'s chosen Meta Page live from Meta, and no business here has Meta connected (meta-ads-messaging-changes.tools test)',
+  'set-meta-message-templates': 'it reads the business\'s chosen Meta Page or WhatsApp account live from Meta, and no business here has Meta connected (meta-ads-messaging-changes.tools test)',
+  'set-meta-messaging-setup': 'it reads the business\'s chosen Meta Page live from Meta, and no business here has Meta connected (meta-ads-messaging-changes.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -697,6 +702,11 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-meta-catalog-items': () => ({ action: 'update', catalogId: '120000000000100', items: [{ retailerId: 'SKU-A', availability: 'in stock' }] }),
   'set-meta-catalog-feed': () => ({ action: 'labels', catalogId: '120000000000100', feedId: '120000000000130', via: 'shopify-feed', labelItems: [{ retailerId: 'SKU-A', internalLabels: ['summer'] }] }),
   'set-meta-instagram-product-tags': () => ({ action: 'tag', mediaId: '170000000000001', tags: [{ productId: '120000000000120', x: 0.5, y: 0.8 }] }),
+  // Meta ads step 38: each refuses in words here (no business has Meta; meta-ads-messaging-changes.tools.vitest.test.ts runs them).
+  'create-meta-message': () => ({ action: 'message', platform: 'messenger', personId: '300000000000001', text: 'Your parcel ships today.' }),
+  'set-meta-conversation-labels': () => ({ action: 'create', name: 'return asked' }),
+  'set-meta-message-templates': () => ({ platform: 'messenger', action: 'create', name: 'order_update', language: 'it_IT', category: 'UTILITY', body: { text: 'Your order {{1}} ships today.', examples: ['1001'] } }),
+  'set-meta-messaging-setup': () => ({ section: 'nlp', nlpEnabled: false }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),

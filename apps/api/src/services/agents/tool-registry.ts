@@ -148,6 +148,8 @@ import { META_ADS_POSTS_TOOLS } from './tools/meta-ads-posts.tools.js'
 import { META_ADS_ACCESS_TOOLS } from './tools/meta-ads-access.tools.js'
 // Meta ads step 35 — catalog items, feeds, Instagram product tags.
 import { META_ADS_CATALOG_ITEMS_TOOLS } from './tools/meta-ads-catalog-items.tools.js'
+// Meta ads step 38 (2026-10-26): messages, inbox labels, templates, messaging setup (changes made as the chosen Page; WhatsApp).
+import { META_ADS_MESSAGING_CHANGE_TOOLS } from './tools/meta-ads-messaging-changes.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -436,6 +438,9 @@ const ALL: AgentTool[] = [
   // Meta ads step 35 (2026-10-25): set-meta-catalog-items, set-meta-catalog-feed, set-meta-instagram-product-tags (D7: items
   // only where Nexus may write them; on a Shopify catalog only the D7 labels, by an update-only file).
   ...META_ADS_CATALOG_ITEMS_TOOLS,
+  // Meta ads step 38 (2026-10-26): create-meta-message (gated as send-customer-message: a message cannot be recalled),
+  // set-meta-conversation-labels, set-meta-message-templates, set-meta-messaging-setup.
+  ...META_ADS_MESSAGING_CHANGE_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

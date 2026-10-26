@@ -426,6 +426,8 @@ export async function runMetaChange(
   }
   if (now.reach.mode !== 'live') return notRun('Not run: Meta ads writes are switched off in Nexus (NEXUS_META_ADS_WRITES=off). Nothing was sent.')
   if (now.basis !== approved.basis || now.plan !== approved.plan) {
+    // Step 38 (review A-N5) — a change may say in its own words what moved under it (a message: the person wrote again).
+    if (now.plan === approved.plan && draft.basisMoved) return notRun(`Not run: ${draft.basisMoved} Nothing was sent.`)
     return notRun('Not run: the Meta ad account changed since this was approved (what it stands on, or the requests it would send). Nothing was sent. Ask for it again with the account as it is now.')
   }
 

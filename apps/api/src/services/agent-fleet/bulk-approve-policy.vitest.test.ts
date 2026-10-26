@@ -28,6 +28,7 @@ describe('bulkApproveRefusal — what may be approved together', () => {
       'cancel-order',
       'cancel-purchase-order',
       'close-listing',
+      'create-meta-message',
       'discard-new-products',
       'dispose-return-items',
       'email-supplier',

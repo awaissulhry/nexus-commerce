@@ -88,7 +88,10 @@ describe('the allow-list: which reads go with the Page\'s token', () => {
     for (const [path, pageId] of PAGE_READS) {
       expect(verdict(path), path).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId } })
     }
-    expect(META_PAGE_READ_RULES).toHaveLength(23)
+    // Step 38 (review B-F5) — the creator lookup on the chosen Instagram account (its id in instagramId, the Page's token).
+    expect(verdict('170000000000010/creator_marketplace_creators?username=creator.a&fields=id,page_id,messaging_id')).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: null, instagramId: '170000000000010' } })
+    expect(verdict('170000000000010/creator_marketplace_creators?username=creator.a&fields=id,username').pageRead).toBeUndefined()
+    expect(META_PAGE_READ_RULES).toHaveLength(24)
   })
   it('every other read stays a system-user read: the Page node, its other edges, a WhatsApp account, an ad account, a post', () => {
     for (const path of [
@@ -406,18 +409,23 @@ describe('re-review round (N1–N3)', () => {
     expect((await metaCall({ connectionId: 'm-1', operation: 'x', path: `${PAGE}/conversations`, query: { platform: 'messenger', fields: 'id' } })).verdict).toMatchObject({ errorClass: 'rate_limited', channelCode: '4' })
     expect((await takeToken('META', bucketKey('META', 'm-1', 'ads'), 0)).waitMs).toBeGreaterThan(3_500_000)
   })
-  it('N3 — a change made as the Page takes its ads slot BEFORE its token is read: during an ads hold nothing is read or sent; else one slot, not two', async () => {
+  it('N3 / step 38 review S1 — a change made as the Page takes its slot of the PAGE bucket BEFORE its token is read: during a Page hold nothing is read or sent, an ads hold does not stop it; one slot, not two', async () => {
     gatewayMetaPage['m-1'] = PAGE
     const install = () => metaWriteCall({ connectionId: 'm-1', operation: 'webhooks.installPage', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: { subscribed_fields: 'leadgen' }, check: false })
-    await observeRate('META', bucketKey('META', 'm-1', 'ads'), { retryAfterSec: 300 })
+    await observeRate('META', bucketKey('META', 'm-1', 'page'), { retryAfterSec: 300 })
     await expect(install()).rejects.toMatchObject({ code: 'RATE_LIMITED_LOCAL' })
     expect(h.calls).toHaveLength(0)
     __rateTest.useMemory()
+    await observeRate('META', bucketKey('META', 'm-1', 'ads'), { retryAfterSec: 300 })
     h.answers.push(pageToken, json({ success: true }))
     expect((await install()).ok).toBe(true)
     expect(h.calls.map((c) => tokenOf(h.calls.indexOf(c)))).toEqual(['meta-system-user-token', PAGE_TOKEN])
-    // The write took 3 of the ads bucket once (and the token read 1 of the page bucket).
-    expect(Math.round((await takeToken('META', bucketKey('META', 'm-1', 'ads'), 0)).tokensLeft)).toBe(META_BUCKETS.ads.capacity - 3 - 1)
-    expect(Math.round((await takeToken('META', bucketKey('META', 'm-1', 'page'), 0)).tokensLeft)).toBe(META_BUCKETS.page.capacity - 1 - 1)
+    __rateTest.useMemory()
+    h.calls = []
+    h.answers.push(pageToken, json({ success: true }))
+    expect((await install()).ok).toBe(true)
+    // The write took 3 of the page bucket once, the token read 1 more; the ads bucket nothing (each probe takes 1 itself).
+    expect(Math.round((await takeToken('META', bucketKey('META', 'm-1', 'ads'), 0)).tokensLeft)).toBe(META_BUCKETS.ads.capacity - 1)
+    expect(Math.round((await takeToken('META', bucketKey('META', 'm-1', 'page'), 0)).tokensLeft)).toBe(META_BUCKETS.page.capacity - 3 - 1 - 1)
   })
 })
