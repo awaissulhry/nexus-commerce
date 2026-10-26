@@ -1,5 +1,5 @@
 /**
- * Meta step 33 review F7 — the "Send sales to Meta" switch's history row is never reverted from Settings › History (a
+ * Meta step 33 review F7 (and consent PR 2's "Upload customer lists to Meta") — the "Send sales to Meta" switch's history row is never reverted from Settings › History (a
  * revert needs only settings.workspace.edit; the switch needs settings.security.manage): the revert answers 400 in words
  * and writes nothing. The database and the audit writer are stand-ins.
  */
@@ -28,6 +28,14 @@ describe('settings history revert', () => {
     const res = await app.inject({ method: 'POST', url: '/api/settings/audit/audit-1/revert' })
     expect(res.statusCode).toBe(400)
     expect(res.json().error).toMatch(/only in Settings › Channels › Meta.*the history never reverts it/)
+    expect(h.update).not.toHaveBeenCalled()
+    expect(h.audit).not.toHaveBeenCalled()
+  })
+  it('never reverts the "Upload customer lists to Meta" switch (consent PR 2)', async () => {
+    h.row = { id: 'audit-2', entityType: 'Settings', entityId: 'meta-customer-lists', action: 'update', before: { metaCustomerLists: false }, after: { metaCustomerLists: true }, userId: 'user-1' }
+    const res = await app.inject({ method: 'POST', url: '/api/settings/audit/audit-2/revert' })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toMatch(/"Upload customer lists to Meta" switch is turned on or off only in Settings › Channels › Meta.*the history never reverts it/)
     expect(h.update).not.toHaveBeenCalled()
     expect(h.audit).not.toHaveBeenCalled()
   })

@@ -211,8 +211,8 @@ export type MetaWebhookEdge = 'subscribed_apps' | 'subscriptions'
  * (`shared_accounts`), an event source group (`event_source_groups`), a claim (`claim_custom_conversions`).
  */
 export type MetaSignalsEdge = 'adspixels' | 'dataset' | 'customconversions' | 'shared_accounts' | 'event_source_groups' | 'claim_custom_conversions'
-/** Step 31 — an ad account's new audiences and product audiences, its opt-outs; an audience's people and its shares. */
-export type MetaAudienceEdge = 'customaudiences' | 'product_audiences' | 'usersofanyaudience' | 'users' | 'ad_accounts'
+/** Step 31 — an ad account's new audiences and product audiences, its opt-outs; an audience's people and its shares. Consent PR 2 — a replace of its people. */
+export type MetaAudienceEdge = 'customaudiences' | 'product_audiences' | 'usersofanyaudience' | 'users' | 'usersreplace' | 'ad_accounts'
 /** Step 20 — the ad account's controls, a place page set made on the ad account (and Meta's background variant, SDK only). */
 export type MetaTargetingEdge = 'account_controls' | 'ad_place_page_sets' | 'ad_place_page_sets_async'
 /** Step 29 — a rule made on the ad account's rule library (`act_<id>/adrules_library`), a rule's run now (`<rule id>/execute`). */

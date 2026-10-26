@@ -988,6 +988,16 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
     const problem = await metaEventsPixelProblem(connectionId, id)
     return problem ? { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${problem}` } : null
   }
+  // Consent PR 2 — a customer list's people added or replaced (hashed e-mails of consenting Shopify buyers): only while the
+  // business's switch "Upload customer lists to Meta" is on (customer-lists-switch.ts), asked again here so a change
+  // approved earlier sends nothing once it is off; then step 31's owner check of a custom audience, below.
+  const customerListIn = kind === 'customaudience' && (write.rule === 'audience.users.add' || write.rule === 'audience.users.replace')
+  if (customerListIn) {
+    const [{ metaCustomerListsSwitch }, { NO_CONSENT }] = await Promise.all([import('../marketing/meta-ads/customer-lists-switch.js'), import('../marketing/meta-ads/audience-members.js')])
+    let on = false
+    try { on = (await metaCustomerListsSwitch()).on } catch { on = false }
+    if (!on) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${NO_CONSENT}` }
+  }
   if (!kind || !Object.prototype.hasOwnProperty.call(META_KIND_FIELD, kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of ${id} names the kind of object it changes (a campaign, an ad set or an ad).` }
   if (write.check && kind !== 'campaign') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: Meta has a check (validate_only) only for campaign changes, and ${id} is named ${kind === 'adset' || kind === 'ad' ? 'an' : 'a'} ${META_KIND_WORD[kind]}.` }
   const chosen = await metaChosenAdAccountOf(connectionId)
@@ -1000,7 +1010,9 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
     return stored.kind !== kind ? notKind(` (Nexus has it as a ${META_KIND_WORD[stored.kind]})`) : null
   }
   const url = new URL(`${metaGraphBase()}/${id}`)
-  url.searchParams.set('fields', ['account_id', ...META_KIND_FIELD[kind]].join(','))
+  // Consent PR 2 review (defence in depth; the tool judges it too) — people go only into a customer list that is not
+  // value-based: its subtype and is_value_based read in the same owner read.
+  url.searchParams.set('fields', ['account_id', ...META_KIND_FIELD[kind], ...(customerListIn ? ['is_value_based'] : [])].join(','))
   let answer: GatewayResponse
   try {
     answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
@@ -1017,6 +1029,8 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
   if (account !== chosen) return notChosen
   // Both of the kind's own fields, each present with a value.
   if (META_KIND_FIELD[kind].some((name) => { const value = body?.[name]; return value === undefined || value === null || value === '' })) return notKind()
+  if (customerListIn && body?.subtype !== 'CUSTOM') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${id} is not a customer list (subtype CUSTOM), and Nexus adds or replaces people only in a customer list.` }
+  if (customerListIn && body?.is_value_based === true) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${id} is a value-based customer list, whose people go with a value each, which Nexus does not send.` }
   return null
 }
 

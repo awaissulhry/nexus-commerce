@@ -5172,6 +5172,12 @@ model AccountSettings {
   metaConversionsApiOnAt DateTime?
   /// Meta step 33 — the name of the person who turned it on.
   metaConversionsApiOnBy String?
+  /// Meta consent PR 2 (D8) — "Upload customer lists to Meta": when a person turned it on; null = off (the default).
+  /// set-meta-audience-members adds or replaces a customer list's people (consenting Shopify buyers' hashed e-mails) only
+  /// while it is on, and the gateway refuses those uploads while it is off.
+  metaCustomerListsOnAt DateTime?
+  /// Meta consent PR 2 — the name of the person who turned it on.
+  metaCustomerListsOnBy String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
