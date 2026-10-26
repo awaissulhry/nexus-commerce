@@ -6020,6 +6020,7 @@ CREATE TABLE "ReviewSpotlight" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
     "productId" TEXT,
+    "channel" TEXT,
     "marketplace" TEXT,
     "windowDays" INTEGER NOT NULL DEFAULT 30,
     "reviewCount" INTEGER NOT NULL DEFAULT 0,
@@ -6045,6 +6046,7 @@ CREATE TABLE "ReviewActionItem" (
     "detail" TEXT,
     "payload" JSONB,
     "status" TEXT NOT NULL DEFAULT 'OPEN',
+    "approvalId" TEXT,
     "source" TEXT NOT NULL DEFAULT 'manual',
     "createdBy" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -6109,6 +6111,7 @@ CREATE TABLE "ReviewSpike" (
     "acknowledgedAt" TIMESTAMP(3),
     "acknowledgedBy" TEXT,
     "resolvedAt" TIMESTAMP(3),
+    "resolvedBy" TEXT,
     "detectedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ReviewSpike_pkey" PRIMARY KEY ("id")
@@ -14868,6 +14871,9 @@ CREATE INDEX "ReviewResponse_workspaceId_idx" ON "ReviewResponse"("workspaceId")
 CREATE INDEX "ReviewSpotlight_productId_generatedAt_idx" ON "ReviewSpotlight"("productId", "generatedAt");
 
 -- CreateIndex
+CREATE INDEX "ReviewSpotlight_channel_marketplace_generatedAt_idx" ON "ReviewSpotlight"("channel", "marketplace", "generatedAt");
+
+-- CreateIndex
 CREATE INDEX "ReviewSpotlight_generatedAt_idx" ON "ReviewSpotlight"("generatedAt");
 
 -- CreateIndex
@@ -14881,6 +14887,9 @@ CREATE INDEX "ReviewActionItem_spikeId_idx" ON "ReviewActionItem"("spikeId");
 
 -- CreateIndex
 CREATE INDEX "ReviewActionItem_productId_idx" ON "ReviewActionItem"("productId");
+
+-- CreateIndex
+CREATE INDEX "ReviewActionItem_approvalId_idx" ON "ReviewActionItem"("approvalId");
 
 -- CreateIndex
 CREATE INDEX "ReviewActionItem_workspaceId_idx" ON "ReviewActionItem"("workspaceId");
