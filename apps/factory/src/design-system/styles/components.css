@@ -3949,3 +3949,14 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 
 /* Heatmap marks (Reviews parts): an outlined cell, on top of its shade ("the hour we send"). */
 .nds-heat-cell.is-marked { outline: 2px solid var(--nds-text); outline-offset: -2px; }
+
+/* Heatmap label width and pressable cells (Reviews Insights). `labelWidth` sets --nds-heat-lbl-w (theme names need
+   about 120 px); the column headers start after it. With `onCellClick` a measured cell is a button: no chrome of its
+   own, the hand cursor, a lift on hover and a solid ring on focus (the --nds-focus-ring token alone composites to no
+   visible ring, DS1-18). A long row label ends in an ellipsis; its full name is the label's tooltip. */
+.nds-heat-lbl { width: var(--nds-heat-lbl-w, 36px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-heat-cols { padding-left: calc(var(--nds-heat-lbl-w, 36px) + 2px); }
+.nds-heat-cell.is-button { display: block; margin: 0; padding: 0; border: 0; font: inherit; color: inherit; cursor: pointer; }
+.nds-heat-cell.is-button:hover { box-shadow: inset 0 0 0 1px var(--nds-text); }
+.nds-heat-cell.is-button:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; position: relative; z-index: 1; }
+@media (forced-colors: active) { .nds-heat-cell.is-button { border: 1px solid ButtonText; } }
