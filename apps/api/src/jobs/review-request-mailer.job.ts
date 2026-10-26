@@ -259,7 +259,12 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
               // (IT/DE/FR/ES → native; UK/IE → en; unknown → it).
               locale: resolveLocaleForMarketplace(order.marketplace),
             })
-            if (result.ok) {
+            // Email sending switched off answers ok + dryRun: nothing went out, so it never counts as sent.
+            if (result.dryRun) {
+              skipped += 1
+              tally(order, 'skipped')
+              continue
+            } else if (result.ok) {
               await prisma.reviewSentimentCheck.update({
                 where: { id: sentimentCheck.id },
                 data: { sentimentEmailSentAt: new Date() },
@@ -273,10 +278,6 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
                 },
               })
               sentimentEmailsSent += 1
-              continue
-            } else if (result.dryRun) {
-              skipped += 1
-              tally(order, 'skipped')
               continue
             } else if (result.suppressed) {
               // RV.9.5 — recipient is on the suppression list. Mark
@@ -456,7 +457,21 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
           reviewUrl: buildReviewUrl(order.channel, order.channelOrderId),
           locale: (order.marketplace ?? 'IT').toUpperCase() === 'IT' ? 'it' : 'en',
         })
-        if (result.ok) {
+        if (result.dryRun) {
+          // Email sending switched off answers ok + dryRun: nothing went out, so the request is not marked sent.
+          await prisma.reviewRequest.update({
+            where: { id: req.id },
+            data: {
+              status: 'SKIPPED',
+              suppressedReason: 'Email sending is off',
+              providerResponseCode: 'EMAIL_OFF',
+              lastAttemptAt: new Date(),
+              nextRetryAt: null,
+            },
+          })
+          skipped += 1
+          tally(order, 'skipped')
+        } else if (result.ok) {
           await prisma.reviewRequest.update({
             where: { id: req.id },
             data: {
@@ -469,9 +484,6 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
           })
           sent += 1
           tally(order, 'sent')
-        } else if (result.dryRun) {
-          skipped += 1 // stay SCHEDULED in dry-run
-          tally(order, 'skipped')
         } else if (result.suppressed) {
           // RV.9.5 — recipient is suppressed; SKIPPED, no retry.
           await prisma.reviewRequest.update({
