@@ -144,6 +144,9 @@ export function AppNavRail() {
       'bulk-job.completed',
       'product.created',
       'product.deleted',
+      'review.updated',
+      'review.replied',
+      'review.imported',
     ],
     debouncedRefetch,
   )

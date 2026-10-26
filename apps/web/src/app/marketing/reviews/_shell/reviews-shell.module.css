@@ -1,0 +1,35 @@
+/*
+ * The Reviews area shell (layout.tsx → ReviewsShell): the pinned Reviews sub-sidebar (DS WorkspaceSubheader `pinned`,
+ * a 224 px column from 1024 px, a drawer below) beside the page. AppShell gives this area the edge-to-edge frame, so
+ * the page padding is set here (the boards: 26 px × 30 px; 16 px side gutter on a phone).
+ */
+.shell {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  background: var(--nds-bg);
+  color: var(--nds-text);
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: var(--nds-space-26) var(--nds-space-30);
+}
+
+@media (max-width: 719px) {
+  .content {
+    padding-inline: var(--nds-space-16);
+  }
+}
+
+/* The "Reviews" button a page puts in its PageHeader actions opens the drawer; from 1024 px the column is on screen. */
+.menuButton {
+  display: contents;
+}
+
+@media (min-width: 1024px) {
+  .menuButton {
+    display: none;
+  }
+}

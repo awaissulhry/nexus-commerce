@@ -1,3 +1,5 @@
+import { heatAlpha, heatCellWords, heatMax, isHeatMarked } from './heatmapModel'
+
 export interface HeatmapProps {
   /**
    * Values as rows × cols. `null` means NO MEASUREMENT for that cell, which is not the same as a
@@ -21,14 +23,21 @@ export interface HeatmapProps {
   format?: (v: number) => string
   /** Shown in a cell's tooltip where the value is null. */
   emptyLabel?: string
+  /**
+   * Cells to outline, keyed `"row:col"` (Reviews parts, 2026-10-26): the send-hour grid marks the hour each day sends at.
+   * The outline sits on top of the shade, so the value still shows.
+   */
+  marked?: ReadonlySet<string>
+  /** A cell's words (its tooltip). Default "Mon · 14:00: 12", or `emptyLabel` for a null. Say the mark here too. */
+  cellWords?: (row: number, col: number, value: number | null) => string
   className?: string
 }
 
 /** Intensity heatmap (H10 dayparting): cell opacity scales with value/max. */
-export function Heatmap({ data, rowLabels, colLabels, colTitles, format, emptyLabel = 'no data', className }: HeatmapProps) {
+export function Heatmap({ data, rowLabels, colLabels, colTitles, format, emptyLabel = 'no data', marked, cellWords, className }: HeatmapProps) {
   // Nulls are excluded from the scale — one absent cell must not flatten the whole ramp.
-  const max = Math.max(...data.flat().filter((v): v is number => v != null), 1)
-  const cellColor = (v: number) => `rgba(31, 111, 222, ${(0.05 + (v / max) * 0.95).toFixed(3)})`
+  const max = heatMax(data)
+  const cellColor = (v: number) => `rgba(31, 111, 222, ${heatAlpha(v, max).toFixed(3)})`
   // Falls back to the axis label, so a fully-labelled axis needs no second array.
   const colName = (c: number) => colTitles?.[c] ?? colLabels?.[c] ?? ''
   return (
@@ -48,9 +57,9 @@ export function Heatmap({ data, rowLabels, colLabels, colTitles, format, emptyLa
           {row.map((v, c) => (
             <span
               key={c}
-              className={`nds-heat-cell${v == null ? ' is-empty' : ''}`}
+              className={`nds-heat-cell${v == null ? ' is-empty' : ''}${isHeatMarked(marked, r, c) ? ' is-marked' : ''}`}
               style={v == null ? undefined : { background: cellColor(v) }}
-              title={`${rowLabels[r]}${colName(c) ? ' · ' + colName(c) : ''}: ${v == null ? emptyLabel : (format ? format(v) : v)}`}
+              title={cellWords ? cellWords(r, c, v) : heatCellWords(rowLabels[r], colName(c), v, format, emptyLabel)}
             />
           ))}
         </div>

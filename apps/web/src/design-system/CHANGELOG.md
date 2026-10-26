@@ -1,3 +1,54 @@
+## Reviews parts — 2026-10-26
+
+For the Reviews area rebuild (Phase 1, PR A). Both apps, identical: `components/{StarRating,starRatingModel,RatingBars,
+ratingBarsModel,MetricStrip,metricStripModel,Heatmap,heatmapModel,index}.ts(x)`, `primitives/{Textarea,textareaCounter,index}`,
+`patterns/{WorkspaceSubheader,Builder,builderSpy,EditModeBar,editModeBarKeys}`, `grid/renderers/MetafieldValue.tsx`,
+`grid/theme/grid.css`, `styles/primitives.css`; the same blocks appended to `styles/components.css` and `styles/patterns.css`.
+Web only: `patterns/{ReplyComposer,replyComposerModel,Lightbox,lightboxModel}`, `patterns/index.ts`. Catalog
+`#review-parts-example` (`catalog/ReviewPartsExample.tsx`).
+- **`StarRating`** `{ value, max?, size?: 'sm'|'md'|'lg', count?, label?, mode?: 'read'|'input', onChange?, name? }`. Read: one
+  `role="img"` named "4.5 out of 5 stars" (the number to one decimal; `null` = "No rating"); the stars round DOWN to the
+  half (4.3 shows four, 4.7 four and a half, the half clipped); `count` adds "(128)" ("128 ratings" to a reader). Input:
+  `radiogroup`, one Tab stop, ←/→ ↑/↓ Home/End pick. `.nds-stars*`: warning on, border-strong off (text-3 in input),
+  forced-colors.
+- **`RatingBars`** `{ counts: [5★…1★], selected?, onSelect?, compact?, emptyLabel?, emptyHint?, zeroReason?, label? }`: a bar
+  per star with count and share — whole percents that add up to 100 (largest remainder). With `onSelect` each bar is a
+  toggle (`aria-pressed`, "5 stars: 82 ratings, 64%"; the pressed one clears); a 0-count bar is held with its reason
+  ("No 3-star ratings to show"). No ratings: "No ratings yet". Track = `.nds-progress`.
+- **`MetricStrip`**: `Metric.href` makes a tile a link (`linkAs`, default Next's `Link`; `href` + `onClick` is a type error)
+  with a chevron; `minTileWidth` (px → `--nds-metrics-min`); two tiles per row under 760 px. `metricKind()`.
+  `delta.tone?: 'positive'|'negative'|'neutral'` (wins over `positive`; `.dlt.neutral` = `--nds-text-2`, the same rule
+  in both `components.css`): "same as the month before" is neither green nor red. `metricDeltaClass()`.
+- **`PerformanceGraph`** (`PerformanceGraph.tsx`, `performanceGraphModel.ts`, both apps, identical): `ChartSeries.domain` /
+  `ticks` fix a series' axis (a 5-star rating at 0–5; it fitted its data to 0–8; data outside still widens it), and a value
+  with no value on either side draws a dot in its series' colour (a line needs two points, so it showed nothing).
+  `isolatedPoints()`, `axisScale()`.
+- **Banner actions wrap**: `.nds-banner` wraps; `.nds-banner-action` wraps with an 8 px gap and pushes right; under 560 px it
+  takes its own line (the dismiss stays on the first).
+- **`Textarea limit` / `counterLabel`**: "312 / 500" under the field (grapheme count, `Intl.Segmenter`), never blocks
+  typing; over the limit the counter and edge turn danger, it says "38 characters too long", the field is `aria-invalid`.
+  The counter is a polite live region in the field's `aria-describedby`. `'use client'` now.
+- **`EditModeBar applyHeldReason`** (Button `heldReason`; use it instead of `applyDisabled`) and **`saveShortcut`**: ⌘S /
+  Ctrl+S runs Apply — swallowed while held or busy — the bar says "Save with ⌘S", and leaving asks first while `count` > 0.
+- **`Builder mode="page"`**: no portal, dialog, Esc or top bar (`open` / `onClose` / `title` optional). A sticky section strip
+  across the top (`aria-current` on the section on screen, `IntersectionObserver` on the page scroller; a click scrolls
+  there and focuses it), the main column, `aside` on the right from 1200 px (below under it), `footer`. `BuilderSection.badge`.
+  Overlay mode unchanged (its strip buttons now carry `aria-current` too).
+- **`ReplyComposer`** (patterns, web) `{ value, onChange, limit, ruleLine, title?, label?, templates?, onTemplate?, draft?,
+  primary?, secondary?, sent?, refused?, window? }`: channel-agnostic; the main action is held with the first reason that
+  applies — the page's (no permission) > sent > over the limit ("Cut 38 characters to send it (the limit is 500).") > empty.
+  Sent = read-only text, time and the page's note. `replyHeldReason()`.
+- **`Lightbox`** (patterns, web) `{ open, onClose, items, index, onIndex, title?, meta?, caption?, external?, returnFocusTo? }`
+  on `Modal size="xl"` + `MediaPreview` + `Thumbnail`: ←/→ move, no wrap (Previous / Next held at the ends: "This is the
+  first photo."), "2 of 4", a failed photo says so and keeps the original link, Esc gives the focus back.
+- **`Heatmap marked`** (`"r:c"`, outlined in `--nds-text`) and **`cellWords(r, c, v)`**; `heatmapModel.ts`.
+- **`WorkspaceSubheader pinned`**: from 1024 px the navigation is a 224 px column beside the rail (sticky, scrolls inside)
+  with Collapse → the 48 px strip; below, the drawer opens from a page button (`navigationOpen`, `onNavigationOpenChange`,
+  `navigationId`). `header` optional (no band without it), `title` / `subtitle` name the panel,
+  `WorkspaceNavGroup.hideLabel` (label for readers only; never collapsible). The pinned subheader's drawer closes with
+  "Close Reviews navigation" (`Close ${navigationLabel}`); the column keeps "Collapse …".
+- **`MetafieldValue`** rating draws `StarRating size="sm"` (`.nds-mf-rating svg*` rules removed).
+
 ## The row under an open family is a DS part — 2026-10-23
 
 `grid/toolbars/FamilyFooterFrame.tsx` and `grid/theme/grid.css` (both apps, identical); exported from `grid` (web).

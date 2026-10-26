@@ -92,6 +92,7 @@ import keywordActionsRoutes from "./routes/keyword-actions.routes.js";
 import advertisingAiRoutes from "./routes/advertising-ai.routes.js";
 import amazonAdsAuthRoutes from "./routes/amazon-ads-auth.routes.js";
 import reviewsRoutes from "./routes/reviews.routes.js";
+import reviewsAreaRoutes from "./routes/reviews-area.routes.js";
 import brandBrainRoutes from "./routes/brand-brain.routes.js";
 import feedTransformRoutes from "./routes/feed-transform.routes.js";
 import feedExportRoutes from "./routes/feed-export.routes.js";
@@ -675,6 +676,7 @@ app.register(keywordActionsRoutes, { prefix: '/api' });
 app.register(advertisingAiRoutes, { prefix: '/api' }); // AIAD — AI Advertising goal wiring
 app.register(amazonAdsAuthRoutes, { prefix: '/api' });
 app.register(reviewsRoutes, { prefix: '/api' });
+app.register(reviewsAreaRoutes, { prefix: '/api' }); // Reviews area — the Overview's reads: /reviews/area/overview, /reviews/area/needs-you
 app.register(brandBrainRoutes, { prefix: '/api' });
 app.register(feedTransformRoutes, { prefix: '/api/feed-transform' });
 app.register(feedExportRoutes, { prefix: '/api/feed-export' });

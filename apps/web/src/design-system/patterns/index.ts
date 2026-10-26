@@ -33,7 +33,9 @@ export {
 export { addColumns, effectiveLocks, inViewCount, moveVisible, normalizeGroupedPreferences, orderedForDisplay, removeColumns, setHas, toggleColumn, toggleLock, togglableKeysOf } from './preferencesLogic'
 export { BulkActionBar, type BulkActionBarProps } from './BulkActionBar'
 export { EditModeBar, type EditModeBarProps } from './EditModeBar'
+export { isSaveShortcut, saveKeyAction, warnBeforeLeaving, isMacPlatform, saveShortcutWords, type SaveKeyEvent } from './editModeBarKeys'
 export { Builder, type BuilderProps, type BuilderSection } from './Builder'
+export { spyActiveSection, scrolledToEnd, builderSectionId, type SectionVisibility } from './builderSpy'
 export { ColumnCustomizer, type ColumnCustomizerProps, type CustomizableColumn } from './ColumnCustomizer'
 export { WorkspaceGrid, AdsFilterBar, stripServerKeys, isServerKey, enabledRank } from './workspace-grid/WorkspaceGrid'
 export type {
@@ -62,3 +64,9 @@ export {
   detailPosition, detailNavHeld, detailNavLabel, detailNavKey, detailBodyState, DETAIL_NAV_KEYS,
   type DetailPosition, type DetailDirection, type KeyTargetKind,
 } from './detailModalModel'
+// Reviews parts (2026-10-26) — one reply box for every channel (its limit, rule line, templates, AI draft, held send),
+// and a review's photos one at a time.
+export { ReplyComposer, type ReplyComposerProps, type ReplyTemplate, type ReplyAction } from './ReplyComposer'
+export { replyHeldReason, replyOverWords, replyLengthWords, REPLY_SENT_HELD, REPLY_EMPTY_HELD, type ReplyHeldInput } from './replyComposerModel'
+export { Lightbox, type LightboxProps, type LightboxItem } from './Lightbox'
+export { lightboxCounter, lightboxStep, lightboxHeld, lightboxKey, photoAlt, lightboxThumbLabel, type LightboxDirection } from './lightboxModel'

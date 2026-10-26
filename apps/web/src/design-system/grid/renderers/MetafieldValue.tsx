@@ -13,10 +13,11 @@
  * absolutely positioned — an absolutely positioned child escapes an AG cell (PES.7 ruling #12).
  */
 import { memo } from 'react'
-import { Check, FileText, Minus, Star } from 'lucide-react'
+import { Check, FileText, Minus } from 'lucide-react'
 
 import { TokenChip } from '../../primitives'
 import { MediaMark } from '../../components/MediaChoice'
+import { StarRating } from '../../components/StarRating'
 import { cdnFit } from '../../lib/cdn-image'
 import { EmptyValue } from './cells'
 import { ListChipValue } from './shapeCells'
@@ -100,12 +101,12 @@ export const MetafieldValue = memo(function MetafieldValue({ type, raw, labels, 
         </span>
       )
     case 'rating': {
-      // Whole stars, then a half star for a remainder of a half or more: 4.5 of 5 reads as four and a half.
-      const stars = Math.max(0, Math.min(STARS, (d.value / d.max) * STARS))
-      const whole = Math.floor(stars), half = stars - whole >= 0.5
+      // The DS StarRating (Reviews parts, 2026-10-26): whole stars, then a half star for a remainder of a half or more,
+      // the half now drawn as a clipped star. The scale is mapped onto five stars.
+      const stars = d.max > 0 ? (d.value / d.max) * STARS : 0
       return (
-        <span className="nds-mf-rating" aria-label={`Rating ${d.text}`}>
-          {Array.from({ length: STARS }, (_, i) => <Star key={i} size={12} aria-hidden className={i < whole ? 'on' : i === whole && half ? 'half' : undefined} />)}
+        <span className="nds-mf-rating">
+          <StarRating size="sm" value={stars} max={STARS} label={`Rating ${d.text}`} />
           <span className="nds-mf-text">{d.text}</span>
         </span>
       )

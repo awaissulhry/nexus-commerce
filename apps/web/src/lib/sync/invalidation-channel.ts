@@ -137,6 +137,15 @@ export type InvalidationType =
   | 'ads.keyword.changed'
   | 'ads.guardrail.changed'
   | 'ads.suggestion.changed'
+  // Reviews area (2026-10-26) — the operator's own review writes, so the rail badge, the Reviews sub-sidebar and the
+  // open Reviews pages in other tabs re-read. Arriving reviews come on the review stream (GET /api/reviews/events).
+  | 'review.updated' // triage: status, owner, tags, note; mood and themes; a bulk change
+  | 'review.replied' // a reply sent, or marked as responded
+  | 'review.imported' // an import, or its undo
+  | 'review.request.updated' // a review request snoozed, skipped, sent now or allowed again
+  | 'review.mailer.changed' // sending paused, resumed or run now
+  | 'review.rule.changed' // review-request rules, first-try timing, send hours
+  | 'review.settings.changed' // Reviews settings
 
 export interface InvalidationEvent {
   type: InvalidationType
