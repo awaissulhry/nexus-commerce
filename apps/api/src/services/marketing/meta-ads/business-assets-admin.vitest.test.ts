@@ -195,6 +195,9 @@ describe('remove-meta-business-asset (AA-065, BM-047, BM-049)', () => {
     expect(g.warnings[0]).toMatch(/This is the Page Nexus works with for this business.*set-meta-connection/)
     expect(g.afterwards).toMatch(/since "2026-10-26T10:00:00.000Z"/)
     expect(g.putBack.sentence).toMatch(/more than 7 days/)
+    // Review F8 — the Page removal's own sentence of Meta; another removal the business roles'.
+    expect(g.rule).toBe(d1AssetLine(WHO.removePage))
+    expect(g.rule).toMatch(/people with full control of a business portfolio can remove a Facebook Page/)
   })
   it('an Instagram account the portfolio owns: re-adding needs its username and password', () => {
     const g = ok(removeGuide({ asset: 'instagram', id: '17840000000000002' }, removeLive([{ id: '17840000000000002', list: 'owned', name: 'shop_b', seen: 'named' }])))
