@@ -548,7 +548,7 @@ function Queue() {
       <p className={s.footnote}>
         {AMAZON_EMAIL_WORDS} Its text is fixed — Nexus only picks the day, and a “too early” answer is tried again each day. eBay and
         Shopify buyers get our own email (<Button variant="link" inline onClick={() => setPreviewOpen(true)}>Preview email</Button>), also
-        once per order. Ask every buyer the same way: asking only happy buyers, or sending unhappy buyers elsewhere, is not allowed.
+        once per order.
       </p>
 
       {query && <ResultsCard period={query.results} onPeriod={onResults} />}
