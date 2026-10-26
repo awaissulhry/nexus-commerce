@@ -187,7 +187,7 @@ describe('pipeline jobs', () => {
 
 describe('sources', () => {
   const facts = (over: Partial<SourceFacts> = {}): SourceFacts => ({
-    connections: [], topics: [], reviewGroups: [], lastReadAt: hoursAgo(0.3), ebayFeedbackOn: true, amazonTopicsOn: true, ...over,
+    connections: [], topics: [], reviewGroups: [], lastReadAt: hoursAgo(0.3), ebayListingMarkets: [], ebayFeedbackOn: true, amazonTopicsOn: true, ...over,
   })
   const conn = (channelType: string, marketplace: string, authStatus = 'connected') =>
     ({ id: `${channelType}-${marketplace}`, channelType, marketplace, isActive: true, authStatus, lastErrorAt: hoursAgo(3), isPrimary: true })

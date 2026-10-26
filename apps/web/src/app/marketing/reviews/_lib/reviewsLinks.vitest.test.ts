@@ -3,7 +3,10 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  channelHref,
   inboxHref,
+  rulesHref,
+  timingHref,
   insightsHref,
   productReviewsHref,
   requestsHref,
@@ -56,8 +59,19 @@ describe('reviews links', () => {
       insightsHref('products', { product: 'product-1' }),
       reviewsSettingsHref(), reviewsSettingsHref('automations'), reviewsSettingsHref('pipeline'),
       productReviewsHref('product-1'),
+      channelHref('AMAZON'), channelHref('AMAZON', 'IT'), channelHref('EBAY'), channelHref('EBAY', 'GB'), rulesHref(), timingHref(),
     ]
     for (const href of hrefs) expect(isPage(href), href).toBe(true)
+  })
+
+  it('sends a channel to its Reviews page (Amazon and eBay; GB is the UK); other channels to the Inbox, scoped', () => {
+    expect(channelHref('amazon')).toBe('/marketing/reviews/amazon')
+    expect(channelHref('AMAZON', 'IT')).toBe('/marketing/reviews/amazon/it')
+    expect(channelHref('EBAY', 'gb')).toBe('/marketing/reviews/ebay/uk')
+    expect(channelHref('EBAY', 'DEFAULT')).toBe('/marketing/reviews/ebay')
+    expect(channelHref('EBAY', null)).toBe('/marketing/reviews/ebay')
+    expect(channelHref('SHOPIFY')).toBe('/marketing/reviews/inbox?channel=SHOPIFY')
+    expect(channelHref('ETSY', 'IT')).toBe('/marketing/reviews/inbox?channel=ETSY&market=IT')
   })
 
   it('hands the Inbox every filter it reads; today’s other pages keep only the channel and market', () => {

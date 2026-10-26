@@ -9,8 +9,9 @@
  * review-sources.vitest.test.ts. Fixture rows never count (review-visibility.ts).
  *
  * Phase 1 sources: Amazon = review topics per product (Customer Feedback API, weekly; not on Amazon.nl) + stars only from
- * reviews a person imports (no API gives Amazon stars, build spec ruling 5); eBay = seller feedback read every 30 min;
- * Shopify = the store's review app, by file import. Etsy is read from Phase 3.
+ * reviews a person imports (no API gives Amazon stars, build spec ruling 5); eBay = seller feedback read every 30 min,
+ * which belongs to the seller account, not to one eBay site: an account with no market covers every eBay market the
+ * business sells on; Shopify = the store's review app, by file import. Etsy is read from Phase 3.
  */
 import prisma from '../../db.js'
 import { visibleReviewWhere } from './review-visibility.js'
@@ -64,6 +65,8 @@ export interface SourceFacts {
   reviewGroups: Array<{ channel: string; marketplace: string | null; ingestSource: string | null; count: number; lastPostedAt: Date | null; lastIngestedAt: Date | null }>
   /** The last successful review read (the 30-minute job), null when it never ran. */
   lastReadAt: Date | null
+  /** The markets with an active eBay listing: where the business sells on eBay. */
+  ebayListingMarkets: string[]
   /** Whether this Nexus reads eBay feedback and Amazon topics at all (deployment switches; never shown by name). */
   ebayFeedbackOn: boolean
   amazonTopicsOn: boolean
@@ -145,6 +148,13 @@ function newest(dates: Array<Date | null | undefined>): Date | null {
 
 const key = (channel: string, market: string | null) => `${channel}|${market ?? ''}`
 
+/** A market code as the Reviews pages use it: two letters, upper case, Great Britain as the UK; anything else null. */
+export function marketCode(raw: string | null | undefined): string | null {
+  const code = raw?.trim().toUpperCase() ?? ''
+  if (!/^[A-Z]{2}$/.test(code)) return null
+  return code === 'GB' ? 'UK' : code
+}
+
 /** States for every channel × market Nexus knows reviews for, and the problems a person can fix. Pure. */
 export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: ReviewSource[]; setup: SetupProblem[] } {
   const groups = new Map<string, SourceFacts['reviewGroups']>()
@@ -215,16 +225,31 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
     })
   }
 
-  // ── eBay: seller feedback, read every 30 minutes, per connected market ──
-  // The eBay feedback read uses the account of each market (an account with no market is Italy, as the read does).
-  const ebayMarketOf = (c: SourceFacts['connections'][number]) => (c.marketplace ?? 'IT').toUpperCase()
+  // ── eBay: seller feedback, read every 30 minutes ──
+  // Feedback belongs to the seller account, not to one eBay site. An account connected for one market covers that
+  // market; an account with no market covers every eBay market the business sells on (listings, feedback held, the
+  // markets of other accounts). A market has a state of its own only for its own account.
   const ebayAll = facts.connections.filter(c => c.channelType.toUpperCase() === 'EBAY')
-  const ebayMarkets = new Set<string>([...marketsOf('EBAY'), ...active('EBAY').map(ebayMarketOf)])
-  for (const market of [...ebayMarkets].sort()) {
+  const ebayMarketOf = (c: SourceFacts['connections'][number]) => marketCode(c.marketplace)
+  const ebayWide = ebayAll.filter(c => ebayMarketOf(c) == null)
+  const pickAccount = (list: SourceFacts['connections']) => list.find(c => c.isActive && c.isPrimary) ?? list.find(c => c.isActive)
+  /** The account that reads a market: its own working account, else an account-wide one, else a switched-off one. */
+  const ebayAccountFor = (market: string | null) => {
+    const own = market ? ebayAll.filter(c => ebayMarketOf(c) === market) : []
+    return pickAccount(own) ?? pickAccount(ebayWide) ?? own[0] ?? ebayWide[0]
+  }
+  const ebayMarkets = new Set<string>([
+    ...marketsOf('EBAY'),
+    ...ebayAll.filter(c => c.isActive).map(ebayMarketOf).filter((m): m is string => m != null),
+    // Where the business sells on eBay counts only once an eBay account exists (else there is nothing to read with).
+    ...(ebayAll.length > 0 ? facts.ebayListingMarkets.map(marketCode).filter((m): m is string => m != null) : []),
+  ])
+  // An account-wide account with no market to show yet still has a state: one row for eBay as a whole.
+  const ebayRows: Array<string | null> = ebayMarkets.size > 0 ? [...ebayMarkets].sort() : ebayWide.length > 0 ? [null] : []
+  const bannerFor = new Set<string>()
+  for (const market of ebayRows) {
     const s = summary('EBAY', market)
-    // The working account of the market first; a switched-off one only when there is no other.
-    const candidates = ebayAll.filter(c => ebayMarketOf(c) === market)
-    const conn = candidates.find(c => c.isActive && c.isPrimary) ?? candidates.find(c => c.isActive) ?? candidates[0]
+    const conn = ebayAccountFor(market)
     const broken = connectionProblem(conn, 'eBay')
     const late = facts.ebayFeedbackOn && !broken && (!facts.lastReadAt || now.getTime() - facts.lastReadAt.getTime() > READ_LATE_MS)
     let state: SourceStateKind = 'ok'
@@ -236,15 +261,21 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
       reason = broken
       since = conn?.lastErrorAt ?? null
       reconnectHref = settingsHref('EBAY')
-      // A banner only for an account that exists and stopped: a market nobody connected is not a problem to fix.
-      if (conn) setup.push({
-        id: `ebay-signin:${market}`,
-        title: `${channelMarketLabel('EBAY', market)} stopped updating.`,
-        words: `${broken}${since ? ` (since ${dayWords(since)})` : ''}. Nexus cannot read new feedback from ${channelMarketLabel('EBAY', market)} or send replies there until someone connects the account again.`,
-        actionLabel: 'Reconnect in Settings',
-        href: settingsHref('EBAY'),
-        fingerprint: `ebay-signin:${market}:${broken}:${since?.toISOString() ?? ''}`,
-      })
+      // One banner per account that exists and stopped (an account-wide one names eBay, not each market): a market
+      // nobody connected is not a problem to fix.
+      if (conn && !bannerFor.has(conn.id)) {
+        bannerFor.add(conn.id)
+        const connMarket = ebayMarketOf(conn)
+        const where = channelMarketLabel('EBAY', connMarket)
+        setup.push({
+          id: `ebay-signin:${connMarket ?? 'ALL'}`,
+          title: `${where} stopped updating.`,
+          words: `${broken}${since ? ` (since ${dayWords(since)})` : ''}. Nexus cannot read new feedback from ${where} or send replies there until someone connects the account again.`,
+          actionLabel: 'Reconnect in Settings',
+          href: settingsHref('EBAY'),
+          fingerprint: `ebay-signin:${connMarket ?? 'ALL'}:${broken}:${since?.toISOString() ?? ''}`,
+        })
+      }
     } else if (!facts.ebayFeedbackOn) {
       state = 'not_updating'
       reason = 'Nexus does not read eBay feedback in this setup yet'
@@ -281,7 +312,7 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
 
 /** The facts `sourcesFromFacts` needs, read in the business the request runs in. */
 export async function readSourceFacts(): Promise<SourceFacts> {
-  const [connections, topics, grouped, lastRead] = await Promise.all([
+  const [connections, topics, grouped, lastRead, ebayListings] = await Promise.all([
     prisma.channelConnection.findMany({
       where: { channelType: { in: ['AMAZON', 'EBAY', 'SHOPIFY'] } },
       select: { id: true, channelType: true, marketplace: true, isActive: true, authStatus: true, lastErrorAt: true, isPrimary: true },
@@ -294,6 +325,7 @@ export async function readSourceFacts(): Promise<SourceFacts> {
       _max: { postedAt: true, ingestedAt: true },
     }),
     prisma.cronRun.findFirst({ where: { jobName: 'review-ingest', status: 'SUCCESS' }, orderBy: { startedAt: 'desc' }, select: { startedAt: true } }),
+    prisma.channelListing.groupBy({ by: ['marketplace'], where: { channel: 'EBAY', listingStatus: 'ACTIVE' } }),
   ])
   return {
     connections,
@@ -307,6 +339,7 @@ export async function readSourceFacts(): Promise<SourceFacts> {
       lastIngestedAt: g._max.ingestedAt ?? null,
     })),
     lastReadAt: lastRead?.startedAt ?? null,
+    ebayListingMarkets: ebayListings.map(l => l.marketplace).filter((m): m is string => typeof m === 'string'),
     // Deployment switches, read here and never named on screen.
     ebayFeedbackOn: process.env.NEXUS_EBAY_REAL_API === 'true' && process.env.NEXUS_REVIEW_INGEST_MODE === 'live',
     amazonTopicsOn: process.env.NEXUS_ENABLE_AMAZON_REVIEW_INSIGHTS === '1',

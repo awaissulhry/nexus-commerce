@@ -179,6 +179,11 @@ export const chart = {
   axis: palette.grey[500],
   grid: palette.grey[100],
   cursor: palette.grey[300],
+  // Parts of a stacked "by type" bar (eBay feedback: positive, neutral, negative; 2026-10-26). Ramp steps of the
+  // success and danger roles; neutral is the reference grey.
+  positive: palette.green[600],
+  neutral: '#667080',
+  negative: palette.red[500],
 } as const
 
 // ── Tier 2: semantic roles (consume these) ──────────────────────────

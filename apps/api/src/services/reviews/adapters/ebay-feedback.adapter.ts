@@ -17,9 +17,14 @@
  * reply limit is eBay's 500 characters (RespondToFeedback `ResponseText` "Max length: 500",
  * https://developer.ebay.com/devzone/xml/docs/reference/ebay/RespondToFeedback.html) — `EBAY_REPLY_LIMIT` in
  * @nexus/shared/review-reply-rules, which reply/send checks before this adapter is called.
+ *
+ * Reviews › eBay page (2026-10-26, B18): `fetchEbayFeedbackSummary` reads eBay's own summary for one account — the
+ * feedback score, counts by type per period and the four detailed seller ratings (GetFeedback, a read on the gateway);
+ * pages call it through ebay-feedback-summary.service.ts, at most once an hour per account.
  */
 
 import { ebayTradingSend } from '../../gateway/ebay.js'
+import { GatewayRefusal } from '../../gateway/gateway.js'
 import { XMLParser } from 'fast-xml-parser'
 import { EBAY_REPLY_LIMIT, replyLength } from '@nexus/shared/review-reply-rules'
 import prisma from '../../../db.js'
@@ -27,6 +32,7 @@ import { logger } from '../../../utils/logger.js'
 import { ebayAuthService } from '../../ebay-auth.service.js'
 import type { AdapterRawReview, AdapterResult } from './types.js'
 import { tryResolveConnection } from '../../connection-resolver.service.js'
+import { ebayFeedbackSummaryRequest, parseEbayFeedbackSummary, type EbayFeedbackSummary } from './ebay-feedback-summary.js'
 
 const TRADING_ENDPOINT =
   process.env.EBAY_SANDBOX === 'true'
@@ -165,6 +171,61 @@ export async function linkEbayFeedbackOrders(reviews: AdapterRawReview[]): Promi
     }
     if (matches.size === 1) review.orderId = [...matches][0]
   })
+}
+
+export type EbayFeedbackSummaryRead =
+  | { ok: true; summary: EbayFeedbackSummary }
+  /**
+   * `called`: whether eBay was asked at all — a read that never left Nexus (eBay reading off, no sign-in) is not
+   * counted against the hourly limit (ebay-feedback-summary.service.ts).
+   */
+  | { ok: false; called: boolean; words: string }
+
+/**
+ * Reviews › eBay page (2026-10-26, B18) — eBay's feedback summary for ONE seller account: score, positive / neutral /
+ * negative counts per period and the four detailed seller ratings (Trading `GetFeedback`, a read, through the channel
+ * gateway's `ebayTradingSend`). Same gates as the 30-minute feedback read: eBay reading switched on for this Nexus and a
+ * working sign-in. Never throws; the words are for a person ("Sign-in expired …"), never a code or a setting's name.
+ * Call it through `readEbayFeedbackSummary` (at most once an hour per account), not directly.
+ */
+export async function fetchEbayFeedbackSummary(connectionId: string): Promise<EbayFeedbackSummaryRead> {
+  if (process.env.NEXUS_EBAY_REAL_API !== 'true') {
+    return { ok: false, called: false, words: 'Nexus does not read eBay in this setup yet.' }
+  }
+  let token: string
+  try {
+    token = await ebayAuthService.getValidToken(connectionId)
+  } catch {
+    return { ok: false, called: false, words: 'The eBay sign-in did not work. Reconnect eBay in Settings › Channels.' }
+  }
+  try {
+    const res = await ebayTradingSend(connectionId, TRADING_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'X-EBAY-API-CALL-NAME': 'GetFeedback',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': process.env.EBAY_COMPAT_LEVEL || '1193',
+        'X-EBAY-API-SITEID': process.env.EBAY_SITE_ID || '101',
+        'X-EBAY-API-IAF-TOKEN': token,
+        'Content-Type': 'text/xml',
+      },
+      body: ebayFeedbackSummaryRequest(),
+    })
+    const text = await res.text()
+    if (!res.ok && !text.includes('<GetFeedbackResponse')) {
+      return { ok: false, called: true, words: 'eBay did not answer. Nexus tries again within the hour.' }
+    }
+    const parsed = parseEbayFeedbackSummary(text)
+    if (parsed.ok === true) return { ok: true, summary: parsed.summary }
+    return { ok: false, called: true, words: (parsed as Extract<typeof parsed, { ok: false }>).error }
+  } catch (err) {
+    // The gateway held the call before sending (the account needs a sign-in, its rate bucket is full): nothing reached
+    // eBay, so it does not count against the hour. Otherwise the network failed. Words, never the error.
+    logger.warn('[ebay-feedback] summary read failed', { error: err instanceof Error ? err.message : String(err) })
+    if (err instanceof GatewayRefusal) {
+      return { ok: false, called: false, words: 'Nexus held the read: the eBay account needs attention in Settings › Channels, or eBay’s limit for the hour is reached.' }
+    }
+    return { ok: false, called: true, words: 'eBay could not be read just now. Nexus tries again within the hour.' }
+  }
 }
 
 export interface EbayFeedbackOptions {

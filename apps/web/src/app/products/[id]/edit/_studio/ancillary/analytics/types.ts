@@ -49,9 +49,12 @@ export interface AnalyticsPayload {
     byChannel: Array<{ channel: string; marketplace: string | null; score: number | null }>
   }
   reviews: {
+    /** Average stars of the product's reviews (Amazon only from imported reviews; never eBay seller feedback). */
     avgRating: number | null
     reviewCount: number
     recentSpikeCount: number
+    /** Per channel: stars, or eBay's % positive. Absent from an older server. */
+    byChannel?: Array<{ channel: string; kind: 'stars' | 'positive'; rating: number | null; count: number }>
   }
 }
 

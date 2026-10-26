@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { adsHeadline, adsQuery, money, readAds, readEfficiency } from './readAds'
 import {
-  joinPriceRows, readAvailable, readDaysOfInventory, readPrices, readSales, readStockoutRisk,
+  joinPriceRows, readAvailable, readDaysOfInventory, readPrices, readReviews, readSales, readStockoutRisk,
   readTrend, sparklinePath,
 } from './readAnalytics'
 import type { AnalyticsPayload, ProductAdsPayload } from './types'
@@ -303,5 +303,35 @@ describe('joinPriceRows — joined on the coordinate, never on array position', 
   it('handles empty sides without inventing rows', () => {
     expect(joinPriceRows([], [bb('AMAZON', 'IT', 101)])).toEqual([])
     expect(joinPriceRows([cur('AMAZON', 'IT', 105)], [])[0].buyBox).toBe('No observation')
+  })
+})
+
+describe('readReviews — the Reviews card', () => {
+  const reviews = (over: Partial<AnalyticsPayload['reviews']> = {}): AnalyticsPayload['reviews'] =>
+    ({ avgRating: null, reviewCount: 0, recentSpikeCount: 0, ...over })
+
+  it('is empty only when no channel holds anything (an older server sends no byChannel)', () => {
+    expect(readReviews(reviews())).toEqual({ empty: true, stats: [] })
+    expect(readReviews(undefined).empty).toBe(true)
+    expect(readReviews(reviews({ byChannel: [] })).empty).toBe(true)
+  })
+
+  it('one star channel: the average and the count, no repeated channel line', () => {
+    const r = readReviews(reviews({ avgRating: 4.25, reviewCount: 12, byChannel: [{ channel: 'AMAZON', kind: 'stars', rating: 4.3, count: 12 }] }))
+    expect(r.stats).toEqual([{ label: 'Rating', value: '4.3' }, { label: 'Reviews', value: '12' }, { label: 'Recent spike', value: '0' }])
+  })
+
+  it('eBay seller feedback alone is a % positive, never stars, and never "no reviews"', () => {
+    const r = readReviews(reviews({ byChannel: [{ channel: 'EBAY', kind: 'positive', rating: 98.5, count: 40 }] }))
+    expect(r.empty).toBe(false)
+    expect(r.stats).toEqual([{ label: 'eBay positive · 40 feedback', value: '98.5%' }, { label: 'Recent spike', value: '0' }])
+  })
+
+  it('several channels: one line each', () => {
+    const r = readReviews(reviews({
+      avgRating: 4.4, reviewCount: 13, recentSpikeCount: 1,
+      byChannel: [{ channel: 'AMAZON', kind: 'stars', rating: 4.3, count: 12 }, { channel: 'SHOPIFY', kind: 'stars', rating: 5, count: 1 }],
+    }))
+    expect(r.stats.map((s) => `${s.label}: ${s.value}`)).toEqual(['Rating: 4.4', 'Reviews: 13', 'Amazon · 12 reviews: 4.3', 'Shopify · 1 review: 5.0', 'Recent spike: 1'])
   })
 })

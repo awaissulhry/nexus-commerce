@@ -18,6 +18,7 @@
  * Aggregating the children would be feature invention (this lane is a port), so the surface names
  * the situation instead of inventing a total nobody computed.
  */
+import { channelLabel } from '@/app/listings/_readiness/marketChips'
 import type { AnalyticsPayload, TrendPoint } from './types'
 
 export type SalesReading =
@@ -226,4 +227,30 @@ export function joinPriceRows(
       buyBoxKnown: bb?.known ?? false,
     }
   })
+}
+
+/**
+ * The Reviews card in words: the star average and count, and — when there is more than one channel, or eBay seller
+ * feedback (a % positive, never stars) — one line per channel. Nothing read anywhere → `empty`.
+ */
+export function readReviews(reviews: AnalyticsPayload['reviews'] | null | undefined): { empty: boolean; stats: Array<{ label: string; value: string }> } {
+  if (!reviews) return { empty: true, stats: [] }
+  const byChannel = reviews.byChannel ?? []
+  if (reviews.reviewCount === 0 && byChannel.every(c => c.count === 0)) return { empty: true, stats: [] }
+  const stats: Array<{ label: string; value: string }> = []
+  if (reviews.reviewCount > 0) {
+    stats.push({ label: 'Rating', value: reviews.avgRating?.toFixed(1) ?? '—' })
+    stats.push({ label: 'Reviews', value: reviews.reviewCount.toLocaleString('en') })
+  }
+  if (byChannel.length > 1 || byChannel.some(c => c.kind === 'positive')) {
+    for (const c of byChannel) {
+      if (c.count === 0) continue
+      const name = channelLabel(c.channel)
+      stats.push(c.kind === 'positive'
+        ? { label: `${name} positive · ${c.count.toLocaleString('en')} feedback`, value: c.rating == null ? '—' : `${c.rating.toFixed(1)}%` }
+        : { label: `${name} · ${c.count.toLocaleString('en')} ${c.count === 1 ? 'review' : 'reviews'}`, value: c.rating?.toFixed(1) ?? '—' })
+    }
+  }
+  stats.push({ label: 'Recent spike', value: String(reviews.recentSpikeCount) })
+  return { empty: false, stats }
 }
