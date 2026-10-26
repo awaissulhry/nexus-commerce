@@ -3,10 +3,11 @@
 /**
  * Reviews › Inbox — the grid's columns (build spec §3.2, the Inbox board): Received · Channel · Stars · Review ·
  * Product · order · Status by default, so the list fits beside the Reviews sub-sidebar (928px of grid at a 1280px
- * window: Review's 200px minimum keeps the seven inside it); Mood · themes and Owner · due
- * come back with Customise. Received and Stars sort on the server (a header click is the API's `sort`); the rest show
- * what the row says. A review in another language shows its English on hover (`HoverCard`). Every word comes from
- * `inboxTiles.ts`.
+ * window: the tick column 43 + Received 124 + Channel 150 + Stars 104 + Review's 200px minimum + Product 184 + Status
+ * 120 = 925); Mood · themes and Owner · due come back with Customise. Received is 124px, never under 120: its header
+ * needs the room for its sort arrow and menu (at 104px it read "Re…"). Received and Stars sort on the server (a header
+ * click is the API's `sort`); the rest show what the row says. A review in another language shows its English on hover
+ * (`HoverCard`). Every word comes from `inboxTiles.ts`.
  */
 import { memo } from 'react'
 import { HoverCard, StarRating } from '@/design-system/components'
@@ -102,11 +103,11 @@ interface InboxColumn {
 const STATUS_TONES = Object.fromEntries(Object.entries(STATUS_WORD).map(([key, label]) => [key, { tone: STATUS_TONE[key] ?? 'neutral', label }]))
 
 const COLUMNS: readonly InboxColumn[] = [
-  { key: 'received', label: 'Received', shown: true, def: { colId: 'received', headerName: 'Received', field: 'postedAt', width: 104, sortable: true, cellRenderer: ReceivedCell } },
+  { key: 'received', label: 'Received', shown: true, def: { colId: 'received', headerName: 'Received', field: 'postedAt', width: 124, minWidth: 120, sortable: true, cellRenderer: ReceivedCell } },
   { key: 'channel', label: 'Channel', shown: true, def: { colId: 'channel', headerName: 'Channel', width: 150, sortable: false, cellRenderer: ChannelCell } },
   { key: 'stars', label: 'Stars', shown: true, def: { colId: 'stars', headerName: 'Stars', field: 'rating', width: 104, sortable: true, cellRenderer: StarsCell } },
   { key: 'review', label: 'Review', shown: true, def: { colId: 'review', headerName: 'Review', minWidth: 200, flex: 1, sortable: false, cellRenderer: ReviewCell } },
-  { key: 'product', label: 'Product · order', shown: true, def: { colId: 'product', headerName: 'Product · order', width: 200, sortable: false, cellRenderer: ProductCell } },
+  { key: 'product', label: 'Product · order', shown: true, def: { colId: 'product', headerName: 'Product · order', width: 184, sortable: false, cellRenderer: ProductCell } },
   { key: 'mood', label: 'Mood · themes', shown: false, def: { colId: 'mood', headerName: 'Mood · themes', width: 200, sortable: false, cellRenderer: MoodCell } },
   {
     key: 'status', label: 'Status', shown: true,

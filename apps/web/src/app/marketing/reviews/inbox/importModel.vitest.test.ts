@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   IMPORT_FIELDS, IMPORT_SOURCES, IMPORT_STEPS, canOpenStep, checkCounts, doneWords, fileKindOf, importBody, importWarnings, nextHeld,
-  nextLabel, rejectsCsv, sampleValues, shownMapping, sizeWords, undoWords, type ImportPreview, type ImportState,
+  nextLabel, productCodeWord, rejectsCsv, sampleValues, shownMapping, sizeWords, undoWords, type ImportPreview, type ImportState,
 } from './importModel'
 
 const preview = (over: Partial<ImportPreview> = {}): ImportPreview => ({
@@ -57,6 +57,14 @@ describe('Import reviews', () => {
     expect(w[0].body).toMatch(/for example OP-XL-BLK2, X-2/)
     expect(w[1].title).toBe('Not imported: reviewer_email, ip_address.')
     expect(importWarnings(preview({ unknownProductRows: 0, droppedColumns: [] }))).toEqual([])
+  })
+
+  it('names the product code the file matched: ASIN, SKU, or "product code" for both', () => {
+    const body = (appliedMapping: ImportPreview['appliedMapping']) => importWarnings(preview({ appliedMapping }))[0].body
+    expect(body({ body: 'body', asin: 'ASIN' })).toMatch(/^Their ASIN is not in your catalog \(for example/)
+    expect(body({ body: 'body', sku: 'product_sku' })).toMatch(/^Their SKU is not in your catalog/)
+    expect(body({ body: 'body', sku: 'product_sku', asin: 'ASIN' })).toMatch(/^Their product code is not in your catalog/)
+    expect(productCodeWord({})).toBe('product code')
   })
 
   it('the check counts and the rows that cannot import as a CSV', () => {

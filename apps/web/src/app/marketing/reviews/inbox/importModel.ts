@@ -194,6 +194,16 @@ export function checkCounts(p: ImportPreview, includeUnlinked: boolean): { label
 
 export interface ImportWarning { key: string; tone: 'warning' | 'info'; title: string; body: string }
 
+/**
+ * What the code that names a row's product is called, from the columns the server matched: "ASIN" when only the ASIN
+ * column is matched, "SKU" when only the SKU column, else "product code" (both, or neither).
+ */
+export function productCodeWord(mapping: Mapping): 'SKU' | 'ASIN' | 'product code' {
+  if (mapping.asin && !mapping.sku) return 'ASIN'
+  if (mapping.sku && !mapping.asin) return 'SKU'
+  return 'product code'
+}
+
 /** The warnings in words: rows naming a product Nexus does not know; columns never imported (e-mail, IP). */
 export function importWarnings(p: ImportPreview): ImportWarning[] {
   const out: ImportWarning[] = []
@@ -203,7 +213,7 @@ export function importWarnings(p: ImportPreview): ImportWarning[] {
       key: 'unknown',
       tone: 'warning',
       title: `${plural(p.unknownProductRows, 'row names', 'rows name')} a product Nexus does not know.`,
-      body: `Their SKU is not in your catalog${examples ? ` (for example ${examples})` : ''}. They import without a product link and do not count in Insights per product until they are linked.`,
+      body: `Their ${productCodeWord(p.appliedMapping)} is not in your catalog${examples ? ` (for example ${examples})` : ''}. They import without a product link and do not count in Insights per product until they are linked.`,
     })
   }
   if (p.droppedColumns.length > 0) {

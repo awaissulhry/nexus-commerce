@@ -135,16 +135,29 @@ export function navIds(rows: readonly { id: string }[]): string[] {
   return rows.map((r) => r.id)
 }
 
+/**
+ * Where the rows on screen sit in the whole filtered list, for the pop-up's counter ("53 of 56", not "3 of 50"): the
+ * grid shows page `page` of `pageSize` rows; the cards (below 760 px) show every row loaded from the first. `total` is
+ * the list's own count (the API's `total`); unknown → the rows on screen are the list.
+ */
+export function navPlace(args: { narrow: boolean; page: number; pageSize: number; total: number | null | undefined }): { offset: number; total: number | null } {
+  const offset = args.narrow ? 0 : Math.max(0, args.page - 1) * Math.max(0, args.pageSize)
+  return { offset, total: args.total ?? null }
+}
+
 /** The review after `current` in the rows on screen, or null at the end ("Next review (J)"). */
 export function nextId(ids: readonly string[], current: string): string | null {
   const i = ids.indexOf(current)
   return i >= 0 && i < ids.length - 1 ? ids[i + 1] : null
 }
 
-/** Why "Next review" is held, or null. */
-export function nextHeld(ids: readonly string[], current: string): string | null {
-  if (ids.indexOf(current) < 0) return 'This review is not in the list on screen.'
-  return nextId(ids, current) ? null : 'This is the last review on this page. Go to the next page of the Inbox for more.'
+/** Why "Next review" is held, or null. With `place`, the list's last review says so instead of naming a next page. */
+export function nextHeld(ids: readonly string[], current: string, place?: { offset: number; total: number | null }): string | null {
+  const index = ids.indexOf(current)
+  if (index < 0) return 'This review is not in the list on screen.'
+  if (nextId(ids, current)) return null
+  if (place?.total != null && place.offset + index + 1 >= place.total) return 'This is the last review in the list.'
+  return 'This is the last review on this page. Go to the next page of the Inbox for more.'
 }
 
 // ── The reply ────────────────────────────────────────────────────────
@@ -238,11 +251,19 @@ export function textView(d: InboxDetail): TextView {
   }
 }
 
-/** A link to the Inbox for the other reviews with this review's first theme ("Other “Fit & sizing” reviews"). */
+/** The theme AI sets when a review fits none of the named ones. */
+const OTHER_THEME = 'OTHER'
+
+/**
+ * A link to the Inbox for the other reviews with this review's first named theme ("Other “Fit & sizing” reviews"). A
+ * review whose only theme is Other links to "Other reviews with no theme" (never `Other “Other” reviews`).
+ */
 export function sameThemeLink(d: InboxDetail): { label: string; href: string } | null {
-  const theme = d.sentiment.categories[0]
+  const themes = d.sentiment.categories
+  const theme = themes.find((t) => t !== OTHER_THEME) ?? themes[0]
   if (!theme) return null
-  return { label: `Other “${themeWord(theme)}” reviews`, href: inboxPageHref({ themes: [theme], period: 'all' }) }
+  const label = theme === OTHER_THEME ? 'Other reviews with no theme' : `Other “${themeWord(theme)}” reviews`
+  return { label, href: inboxPageHref({ themes: [theme], period: 'all' }) }
 }
 
 /** "Reply target: 28 Oct" while the review is open; "Replied" once a reply went out. */

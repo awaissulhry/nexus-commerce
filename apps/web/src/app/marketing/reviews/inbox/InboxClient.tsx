@@ -60,6 +60,7 @@ import {
 import { ImportModal } from './ImportModal'
 import { InboxCards } from './InboxCards'
 import { ReviewDetailModal } from './ReviewDetailModal'
+import { navPlace } from './reviewDetailModel'
 import s from './inbox.module.css'
 
 const MANAGE_IMPORT = "You need 'Manage reviews' to import reviews."
@@ -421,6 +422,7 @@ function InboxInner() {
     // `top` changes with every answer the grid gets, which is when the page's rows change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [narrow, cards, pager.page, top])
+  const navWhere = navPlace({ narrow, page: pager.page, pageSize: q.pageSize, total: top?.total })
 
   if (!query) {
     return <div className={s.page} aria-busy="true"><PageHeader eyebrow={reviewsCrumbs(pathname)} title="Inbox" subtitle="Loading…" actions={<ReviewsMenuButton />} /></div>
@@ -649,6 +651,7 @@ function InboxInner() {
         <ReviewDetailModal
           reviewId={openReview}
           ids={navIds}
+          place={navWhere}
           onGo={setOpenReview}
           onClose={() => setOpenReview(null)}
           canManage={canManage}

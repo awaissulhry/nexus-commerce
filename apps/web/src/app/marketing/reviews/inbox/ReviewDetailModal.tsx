@@ -2,8 +2,9 @@
 
 /**
  * Reviews › Inbox — the review pop-up (build spec §3.2 "Pop-up", the Inbox-detail board): a centred DS `DetailModal`
- * (1160 px; a full-screen sheet on a phone) over the Inbox. ▲ / ▼ and K / J walk the rows on screen ("3 of 38"), held
- * at either end with the reason; Esc closes it and the focus goes back to the row.
+ * (1160 px; a full-screen sheet on a phone) over the Inbox. ▲ / ▼ and K / J walk the rows on screen, counted in the whole
+ * filtered list ("53 of 56" on page 2), held at either end with the reason; Esc closes it and the focus goes back to the
+ * row.
  *
  * Header: the product, who · where · what · when, the stars, the mood, "Return open"; Status and Owner save at once
  * (`PATCH /api/reviews/:id/triage`). Tabs: Review · Order · Buyer · History. The Review tab: what the buyer wrote and its
@@ -38,6 +39,8 @@ export interface ReviewDetailModalProps {
   reviewId: string
   /** The ids of the rows on screen, in their order. */
   ids: readonly string[]
+  /** Where those rows sit in the whole filtered list (`navPlace`): the counter says "53 of 56", not "3 of 50". */
+  place?: { offset: number; total: number | null }
   onGo: (id: string) => void
   onClose: () => void
   canManage: boolean
@@ -51,7 +54,7 @@ type SaveState = { kind: 'idle' } | { kind: 'saving' } | { kind: 'saved'; at: st
 
 const NOTE_SAVE_MS = 800
 
-export function ReviewDetailModal({ reviewId, ids, onGo, onClose, canManage, owners, me }: ReviewDetailModalProps) {
+export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canManage, owners, me }: ReviewDetailModalProps) {
   const { toast } = useToast()
   const [detail, setDetail] = useState<InboxDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -219,7 +222,7 @@ export function ReviewDetailModal({ reviewId, ids, onGo, onClose, canManage, own
 
   // ── The view ──
   const next = nextId(ids, reviewId)
-  const nextHold = nextHeld(ids, reviewId)
+  const nextHold = nextHeld(ids, reviewId, place)
   const view = detail ? composerView(detail, { canManage }) : null
   const text = detail ? textView(detail) : null
 
@@ -274,7 +277,7 @@ export function ReviewDetailModal({ reviewId, ids, onGo, onClose, canManage, own
       activeTab={tab}
       onTabChange={(id) => setTab(id as DetailTab)}
       tabsLabel="Review sections"
-      nav={{ ids, current: reviewId, onGo, noun: 'review' }}
+      nav={{ ids, current: reviewId, onGo, noun: 'review', offset: place?.offset, total: place?.total }}
       loading={loading && !detail}
       error={!detail && error ? error : undefined}
       onRetry={() => void load(reviewId)}

@@ -1,3 +1,11 @@
+## DetailModal counts a paged list — 2026-10-26
+
+Reviews Inbox (PR B). Web only: `patterns/{DetailModal,detailModalModel,index}`.
+- **`DetailNav.offset` / `total`** (optional): the ids are one page of a longer list. The counter says where the row is in
+  the whole list ("53 of 56" on page 2, not "3 of 50"), and Previous / Next at a page's end with rows beyond say "This
+  is the last review on this page". Prev / Next still walk `ids`. `detailPosition(ids, current, place?)`,
+  `detailNavHeld(pos, noun, place?)`, `DetailPlace`. Without them nothing changes.
+
 ## Reviews parts — 2026-10-26
 
 For the Reviews area rebuild (Phase 1, PR A). Both apps, identical: `components/{StarRating,starRatingModel,RatingBars,

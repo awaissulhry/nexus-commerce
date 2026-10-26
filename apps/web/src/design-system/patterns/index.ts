@@ -62,7 +62,7 @@ export type { ReviewPanelChange, ReviewPanelResult, ReviewGroup } from './review
 export { DetailModal, type DetailModalProps, type DetailNav } from './DetailModal'
 export {
   detailPosition, detailNavHeld, detailNavLabel, detailNavKey, detailBodyState, DETAIL_NAV_KEYS,
-  type DetailPosition, type DetailDirection, type KeyTargetKind,
+  type DetailPosition, type DetailPlace, type DetailDirection, type KeyTargetKind,
 } from './detailModalModel'
 // Reviews parts (2026-10-26) — one reply box for every channel (its limit, rule line, templates, AI draft, held send),
 // and a review's photos one at a time.

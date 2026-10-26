@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import {
   MANAGE_DRAFT, MANAGE_REPLY, buyerFacts, composerView, detailSubtitle, detailTabs, detailTitle, draftResponseId, historySteps,
-  initialReplyText, navIds, nextHeld, nextId, orderFacts, replyDoneWords, replyTargetWords, returnOpen, sameThemeLink, textView,
-  themeChoices, type InboxDetail,
+  initialReplyText, navIds, navPlace, nextHeld, nextId, orderFacts, replyDoneWords, replyTargetWords, returnOpen, sameThemeLink,
+  textView, themeChoices, type InboxDetail,
 } from './reviewDetailModel'
+import { detailPosition } from '@/design-system/patterns/detailModalModel'
 
 const NOW = new Date('2026-10-26T12:00:00Z')
 
@@ -51,6 +52,20 @@ describe('review pop-up header and tabs', () => {
     expect(nextHeld(ids, 'a')).toBeNull()
     expect(nextHeld(ids, 'b')).toMatch(/last review on this page/)
     expect(nextHeld(ids, 'zzz')).toMatch(/not in the list/)
+    // The whole list is 56 rows: page 1's last row has a next page; the list's last row says so.
+    expect(nextHeld(ids, 'b', { offset: 0, total: 56 })).toMatch(/last review on this page/)
+    expect(nextHeld(ids, 'b', { offset: 54, total: 56 })).toBe('This is the last review in the list.')
+  })
+
+  it('the counter counts the whole filtered list: the grid page’s offset, or the cards from the first row', () => {
+    expect(navPlace({ narrow: false, page: 2, pageSize: 50, total: 56 })).toEqual({ offset: 50, total: 56 })
+    expect(navPlace({ narrow: false, page: 1, pageSize: 50, total: 56 })).toEqual({ offset: 0, total: 56 })
+    expect(navPlace({ narrow: true, page: 3, pageSize: 50, total: 56 })).toEqual({ offset: 0, total: 56 })
+    expect(navPlace({ narrow: false, page: 1, pageSize: 50, total: undefined })).toEqual({ offset: 0, total: null })
+    // With the DetailModal's counter: the 3rd row of page 2 reads "53 of 56", not "3 of 50".
+    const page2 = Array.from({ length: 6 }, (_, i) => `p2-${i}`)
+    expect(detailPosition(page2, 'p2-2', navPlace({ narrow: false, page: 2, pageSize: 50, total: 56 })).words).toBe('53 of 56')
+    expect(detailPosition(page2.slice(0, 3), 'p2-2', navPlace({ narrow: true, page: 1, pageSize: 50, total: 56 })).words).toBe('3 of 56')
   })
 })
 
@@ -98,6 +113,11 @@ describe('the review tab, order, buyer and history', () => {
     expect(textView(detail({ english: null })).canTranslate).toBe(true)
     expect(textView(detail({ english: null, language: 'en', languageWords: 'English' })).canTranslate).toBe(false)
     expect(sameThemeLink(detail())).toEqual({ label: 'Other “Fit & sizing” reviews', href: '/marketing/reviews/inbox?period=all&theme=FIT_SIZING' })
+    const themed = (categories: string[]) => sameThemeLink(detail({ sentiment: { label: 'NEUTRAL', categories, edited: false, editedAt: null } }))
+    // Other alone never reads `Other “Other” reviews`; a named theme after Other wins.
+    expect(themed(['OTHER'])).toEqual({ label: 'Other reviews with no theme', href: '/marketing/reviews/inbox?period=all&theme=OTHER' })
+    expect(themed(['OTHER', 'SHIPPING'])).toEqual({ label: 'Other “Shipping” reviews', href: '/marketing/reviews/inbox?period=all&theme=SHIPPING' })
+    expect(themed([])).toBeNull()
     expect(themeChoices(['FIT_SIZING'])).not.toContainEqual({ value: 'FIT_SIZING', label: 'Fit & sizing' })
   })
 

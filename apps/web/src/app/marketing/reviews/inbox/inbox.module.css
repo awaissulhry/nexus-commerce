@@ -494,6 +494,19 @@
   font-weight: var(--nds-font-weight-medium);
 }
 
+/* A field's hint in Match columns and a tile's line in Check wrap: one line cut them off ("No date: imported wi…"). */
+.mapField .sub,
+.countTile .sub {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.mapField .sub {
+  font-weight: var(--nds-font-weight-normal);
+}
+
 .required {
   color: var(--nds-text-muted);
   font-weight: var(--nds-font-weight-normal);

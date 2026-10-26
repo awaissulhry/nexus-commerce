@@ -7,7 +7,8 @@
  *   File   drop a .csv / .tsv / .xlsx / .json (up to 10 MB) and say where it is from (Amazon export, Shopify review app,
  *          Etsy, another file) and, for Amazon and other files, the market.
  *   Match  Nexus's guess for each field (one Listbox each, "Not in the file" too) with the first two rows as read;
- *          review text is required; warnings in words (SKUs not in the catalog, e-mail and IP columns never imported).
+ *          review text is required; warnings in words (SKUs or ASINs not in the catalog, e-mail and IP columns never
+ *          imported).
  *   Check  ready · already in Nexus · cannot import (with every reason, and the rows as a CSV to download).
  *   Done   "186 reviews imported", Open them in the Inbox, Import another file, Undo this import (asks first).
  *
