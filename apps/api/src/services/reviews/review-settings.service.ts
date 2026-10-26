@@ -391,11 +391,17 @@ export async function senderIdentity(): Promise<SenderView> {
   return { name: from.name ?? found.identity.brandName, address: from.address, replyTo: found.identity.supportEmail || null, editHref, problem: null }
 }
 
-/** Where the digest goes when nobody is picked: the legacy business's address of today; any other business's owners. */
+/**
+ * Where the digest goes when nobody is picked: for the legacy business the configured digest/support inbox, else its
+ * support address from the business identity; for any business without one, its owners. No address is written in code.
+ */
 export async function digestFallbackRecipients(team?: TeamMember[]): Promise<string[]> {
+  const split = (v: string) => v.split(',').map((s) => s.trim()).filter(Boolean)
   if (workspaceIdForQuery() === LEGACY_WORKSPACE_ID) {
-    return (process.env.NEXUS_REVIEW_DIGEST_TO ?? process.env.NEXUS_SUPPORT_INBOX ?? 'support@xavia.it')
-      .split(',').map((s) => s.trim()).filter(Boolean)
+    const configured = process.env.NEXUS_REVIEW_DIGEST_TO ?? process.env.NEXUS_SUPPORT_INBOX
+    if (configured) return split(configured)
+    const found = await resolveBusinessIdentity()
+    if (found.ok !== false && found.identity.supportEmail) return split(found.identity.supportEmail)
   }
   return (team ?? (await teamMembers())).filter((m) => m.owner && m.email).map((m) => m.email)
 }
