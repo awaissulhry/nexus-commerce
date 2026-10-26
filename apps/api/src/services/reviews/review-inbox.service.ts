@@ -19,6 +19,7 @@ import {
 } from './review-inbox-query.js'
 import { reviewKindOf, visibleReviewWhere, type ReviewKind } from './review-visibility.js'
 import { REVIEW_CATEGORIES } from './sentiment-extraction.service.js'
+import { reviewSources, type ReviewSource } from './review-sources.service.js'
 import { applyBulkTriage } from './review-triage.service.js'
 import { createReplyDraft } from './review-reply.service.js'
 
@@ -53,7 +54,7 @@ export interface InboxReadState {
   channel: string
   market: string | null
   ok: boolean
-  /** When Nexus last stored a review read from this channel, or null. */
+  /** Since when it has not updated (ISO), when known. */
   since: string | null
   reason: string | null
   reconnectHref: string | null
@@ -194,42 +195,26 @@ async function inboxFacets(): Promise<InboxPage['facets']> {
 }
 
 /**
- * Which channels Nexus reads reviews from, and whether that reading works — in words, never a setting's name. Today
- * only eBay feedback is read live (GetFeedback); other channels arrive by file import. Each eBay account is one row.
+ * Which channels Nexus reads reviews from, and whether that reading works — in words, never a setting's name. ONE
+ * source with the Overview's channel table and Reviews Settings › Sources: review-sources.service.ts. A channel × market
+ * that stopped updating (sign-in expired, not read since …) is `ok: false` with its reason and, when a person can fix
+ * it, where (Settings › Channels).
  */
 export async function inboxReadState(now: Date = new Date()): Promise<InboxReadState[]> {
-  const [connections, latest] = await Promise.all([
-    prisma.channelConnection.findMany({
-      where: { channelType: 'EBAY' },
-      select: { marketplace: true, isActive: true, refreshTokenExpiresAt: true },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.review.aggregate({ where: visibleReviewWhere({ channel: 'EBAY', ingestSource: 'EBAY_API' }), _max: { ingestedAt: true } }),
-  ])
-  const since = latest._max.ingestedAt?.toISOString() ?? null
-  const liveRead = process.env.NEXUS_REVIEW_INGEST_MODE === 'live' && process.env.NEXUS_EBAY_REAL_API === 'true'
-  return connections.map((c) => {
-    // A connection problem has a Reconnect; reading that is not switched on does not.
-    let reason: string | null = null
-    let reconnect = false
-    if (!c.isActive) {
-      reason = 'eBay is not connected.'
-      reconnect = true
-    } else if (c.refreshTokenExpiresAt && c.refreshTokenExpiresAt.getTime() < now.getTime()) {
-      reason = `The eBay sign-in expired on ${c.refreshTokenExpiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}.`
-      reconnect = true
-    } else if (!liveRead) {
-      reason = 'Nexus does not read eBay feedback yet. Import a file to see it here.'
-    }
-    return {
-      channel: 'EBAY',
-      market: c.marketplace ?? null,
-      ok: reason == null,
-      since,
-      reason,
-      reconnectHref: reconnect ? '/settings/channels/ebay' : null,
-    }
-  })
+  const { sources } = await reviewSources(now)
+  return readStateFromSources(sources)
+}
+
+/** The Inbox's read state from the review sources (pure). */
+export function readStateFromSources(sources: readonly ReviewSource[]): InboxReadState[] {
+  return sources.map((s) => ({
+    channel: s.channel,
+    market: s.market,
+    ok: s.state === 'ok',
+    since: s.since,
+    reason: s.reason,
+    reconnectHref: s.reconnectHref,
+  }))
 }
 
 // ── Bulk ─────────────────────────────────────────────────────────────────────────────────────────────────────────

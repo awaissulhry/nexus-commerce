@@ -101,6 +101,24 @@ describe('Reviews Inbox services (real SQL)', () => {
     expect(page.rows.find((r) => r.id === 'ebay-2')).toMatchObject({ status: 'RESOLVED', dueAt: null, overdue: false })
     expect(page.facets.families).toEqual([{ id: familyId, label: 'Test trousers' }])
     expect(page.facets.owners).toEqual(['owner-a'])
+    // The read state is the review sources' answer (one source with the Overview), in words: eBay Germany has
+    // feedback but no eBay account, so it is not read and Settings › Channels fixes it; Amazon Italy reads fine.
+    expect(page.readState.find((r) => r.channel === 'EBAY' && r.market === 'DE')).toMatchObject({
+      ok: false, reason: 'No eBay account is connected', reconnectHref: '/settings/channels/ebay',
+    })
+    expect(page.readState.find((r) => r.channel === 'AMAZON' && r.market === 'IT')).toMatchObject({ ok: true, reason: null })
+    for (const r of page.readState) expect(r.reason ?? '').not.toMatch(/NEXUS_|[A-Z]{3,}_[A-Z]{3,}/)
+  })
+
+  it('the read state maps each review source: ok, reason, since and where to fix it', async () => {
+    const { readStateFromSources } = await import('./review-inbox.service.js')
+    expect(readStateFromSources([
+      { channel: 'EBAY', market: 'DE', state: 'not_updating', reason: 'Sign-in expired', since: '2026-10-23T09:00:00.000Z', reconnectHref: '/settings/channels/ebay', what: 'Seller feedback', lastNote: null, lastReviewAt: null, reviews: 3 },
+      { channel: 'AMAZON', market: 'IT', state: 'ok', reason: null, since: null, reconnectHref: null, what: 'Topics', lastNote: null, lastReviewAt: null, reviews: 0 },
+    ])).toEqual([
+      { channel: 'EBAY', market: 'DE', ok: false, since: '2026-10-23T09:00:00.000Z', reason: 'Sign-in expired', reconnectHref: '/settings/channels/ebay' },
+      { channel: 'AMAZON', market: 'IT', ok: true, since: null, reason: null, reconnectHref: null },
+    ])
   })
 
   it('filters reach the right rows', async () => {
