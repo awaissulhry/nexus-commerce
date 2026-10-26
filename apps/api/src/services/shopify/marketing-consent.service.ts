@@ -35,7 +35,8 @@
  *   3. a buyer's first Shopify order (`captureBuyerConsentAtOrder`, after orders/create): when the customer has no row
  *      yet, Nexus reads that ONE customer's consent from Shopify. This covers the buyer whose consent webhook came before
  *      the order (ignored then), and the earlier newsletter subscriber who buys later (no consent change, so no webhook).
- * customers/redact deletes the customer's row (`redactShopifyMarketingConsent`).
+ * customers/redact deletes the customer's row (`redactShopifyMarketingConsent`); app/uninstalled deletes every row of that
+ * Shopify account (`purgeShopifyMarketingConsent`, the Owner's word, 2026-10-26).
  */
 import prisma from '../../db.js'
 import { emailSha256, normalisedEmail } from '../../lib/customer-email-hash.js'
@@ -274,6 +275,19 @@ export async function redactShopifyMarketingConsent(payload: unknown, context?: 
   const matches = [...(shopifyCustomerId ? [{ shopifyCustomerId }] : []), ...(hash ? [{ emailSha256: hash }] : [])]
   if (!matches.length) return 0
   const { count } = await prisma.shopifyMarketingConsent.deleteMany({ where: { connectionId, OR: matches } })
+  return count
+}
+
+// ── app/uninstalled ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The app was removed from the shop (the Owner's word, 2026-10-26): delete every consent row of this Shopify account,
+ * and only of it. A reinstall fills them again only through the webhook, a first order or a person's backfill. Returns
+ * how many rows went; without an account nothing can be reached, and nothing is deleted.
+ */
+export async function purgeShopifyMarketingConsent(connectionId: string | null | undefined): Promise<number> {
+  if (!connectionId) return 0
+  const { count } = await prisma.shopifyMarketingConsent.deleteMany({ where: { connectionId } })
   return count
 }
 
