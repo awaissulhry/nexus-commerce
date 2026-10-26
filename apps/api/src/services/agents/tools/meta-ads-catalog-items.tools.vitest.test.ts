@@ -354,11 +354,11 @@ describe('set-meta-instagram-product-tags', () => {
     expect(await preview('set-meta-instagram-product-tags', { action: 'tag', mediaId: '170000000000099', tags: [{ productId: '120000000000121', x: 0.5, y: 0.5 }] })).toEqual({ ok: false, error: expect.stringMatching(/not the chosen Instagram account's/) })
   })
   it('appeal: a rejected product of a catalog the account tags from; no undo', async () => {
-    const ran = await run('set-meta-instagram-product-tags', { action: 'appeal', productId: '120000000000120', reason: 'It is a toy, not a real item.' })
+    const ran = await run('set-meta-instagram-product-tags', { action: 'appeal', rejectedProductId: '120000000000120', reason: 'It is a toy, not a real item.' })
     expect(h.send.mock.calls[0][1]).toMatchObject({ objectId: '170000000000000', kind: 'iguser', edge: 'product_appeal', params: { appeal_reason: 'It is a toy, not a real item.', product_id: '120000000000120' } })
     expect(tool('set-meta-instagram-product-tags').undo!.request(ran.change)).toEqual({ refusal: expect.stringMatching(/cannot be withdrawn/) })
     h.igAppeal = { eligible: false, reviewStatus: 'rejected' }
-    expect(await preview('set-meta-instagram-product-tags', { action: 'appeal', productId: '120000000000120', reason: 'Toy.' })).toEqual({ ok: false, error: expect.stringMatching(/cannot be appealed now/) })
+    expect(await preview('set-meta-instagram-product-tags', { action: 'appeal', rejectedProductId: '120000000000120', reason: 'Toy.' })).toEqual({ ok: false, error: expect.stringMatching(/cannot be appealed now/) })
   })
   it('a run only as a request a person approved', async () => {
     const p = await preview('set-meta-instagram-product-tags', { action: 'tag', mediaId: '170000000000001', tags: [{ productId: '120000000000121', x: 0.5, y: 0.5 }] })

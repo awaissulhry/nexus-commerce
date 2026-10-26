@@ -1075,14 +1075,14 @@ const buildTags = (args: Args): MetaDraftBuilder => guarded(async (account) => {
   const action = String(args.action)
   if (action === 'new-post') return { refusal: NEW_POST_TAGS }
   if (action === 'remove') return { refusal: TAG_REMOVE_NOT_AVAILABLE }
-  const allowed: Record<string, string[]> = { tag: ['mediaId', 'slideId', 'tags'], appeal: ['productId', 'reason'] }
+  const allowed: Record<string, string[]> = { tag: ['mediaId', 'slideId', 'tags'], appeal: ['rejectedProductId', 'reason'] }
   const extra = onlyArgs(args, action, allowed[action] ?? [])
   if (extra) return { refusal: extra }
   const chosen = await chosenOf(account)
   const instagramId = instagramOf(chosen)
   if (action === 'appeal') {
-    if (typeof args.productId !== 'string' || typeof args.reason !== 'string') return { refusal: 'Name the rejected product (productId: Meta\'s product id) and why it should be approved (reason).' }
-    const product = await liveIgProduct(chosen, args.productId)
+    if (typeof args.rejectedProductId !== 'string' || typeof args.reason !== 'string') return { refusal: 'Name the rejected product (rejectedProductId: Meta\'s product id) and why it should be approved (reason).' }
+    const product = await liveIgProduct(chosen, args.rejectedProductId)
     const catalogs = await liveIgTagCatalogs(chosen)
     if (!catalogs.has(product.catalogId)) return { refusal: `Product ${product.productId} is not in a catalog the chosen Instagram account tags from (meta-instagram-product-tags view catalogs).` }
     return appealDraft({ instagramId, product, state: await liveIgAppealState(chosen, product.productId), reason: args.reason })
@@ -1158,7 +1158,8 @@ const setMetaInstagramProductTags: AgentTool = {
       x: z.number().min(0).max(1).optional().describe('a photo: from the left, 0–1 (required on a photo)'),
       y: z.number().min(0).max(1).optional().describe('a photo: from the top, 0–1 (required on a photo)'),
     })).min(1).max(META_IG_TAG_LIMITS.reel).optional().describe(`tag: the tags (a product already tagged moves; Meta: ${META_IG_TAG_LIMITS.feedPost} on a post, ${META_IG_TAG_LIMITS.carouselSlide} a carousel slide, ${META_IG_TAG_LIMITS.reel} on a Reel)`),
-    productId: metaIdArg('appeal: the rejected product').optional(),
+    // Not `productId`: that name is a Nexus product in every tool (the deleted-product check reads the registry).
+    rejectedProductId: metaIdArg('appeal: the rejected product (Meta\'s product id)').optional(),
     reason: z.string().trim().min(1).max(META_IG_APPEAL_REASON_MAX).regex(META_NAME_TEXT, 'no control or format characters').optional().describe('appeal: why the product should be approved (Meta reads it)'),
     why: metaWhyArg,
   }),
