@@ -14,6 +14,10 @@
  * Reviews Inbox (2026-10-26): the draft is written in the buyer's language (the review's own language when known) and
  * comes with an English line for the team (`englishText`, null when the reply is English), from the same call; it
  * stays within the channel's reply limit (`reviewReplyRules`).
+ *
+ * Reviews Settings (2026-10-26, PR D): the business's voice — tone (warm, neutral, formal), the languages it replies
+ * in, its sign-off and words to avoid — and its saved replies for the channel shape every draft
+ * (review-settings.service.ts). The built-in fallback gains the sign-off when the channel's limit allows.
  */
 
 import { reviewReplyRules } from '@nexus/shared/review-reply-rules'
@@ -22,6 +26,9 @@ import { logger } from '../../utils/logger.js'
 import { renderBrandVoiceBlock } from '../ai/brand-voice.service.js'
 import { resolveLocaleForMarketplace } from './sentiment-check-email.service.js'
 import { reviewKindOf } from './review-visibility.js'
+import {
+  DEFAULT_VOICE, promptTemplatesFor, readVoiceAndAlerts, replyLocale, voicePromptLines, withSignOff, type PromptTemplate, type VoiceSettings,
+} from './review-settings.service.js'
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages'
 const ANTHROPIC_VERSION = '2023-06-01'
@@ -100,10 +107,10 @@ function fallbackReply(locale: Locale, tone: Tone, product: string | null): stri
   return FALLBACK[locale][tone](p)
 }
 
-function fallbackDraft(locale: Locale, tone: Tone, product: string | null): DraftReplyResult {
+function fallbackDraft(locale: Locale, tone: Tone, product: string | null, voice: { signOff: string | null; limit: number | null } = { signOff: null, limit: null }): DraftReplyResult {
   return {
-    text: fallbackReply(locale, tone, product),
-    englishText: locale === 'en' ? null : fallbackReply('en', tone, product),
+    text: withSignOff(fallbackReply(locale, tone, product), voice.signOff, voice.limit),
+    englishText: locale === 'en' ? null : withSignOff(fallbackReply('en', tone, product), voice.signOff, null),
     locale,
     tone,
     model: 'fallback',
@@ -137,9 +144,20 @@ export async function draftReviewReply(input: DraftReplyInput): Promise<DraftRep
   })
   if (!review) throw new Error('review not found')
 
-  // The buyer's language: the review's own language when Nexus knows it and drafts in it, else the market's.
+  // The business's voice and saved replies (Reviews Settings); a failed read drafts with the defaults.
+  let voice: VoiceSettings = DEFAULT_VOICE
+  let templates: PromptTemplate[] = []
+  try {
+    ;[voice, templates] = await Promise.all([readVoiceAndAlerts().then((s) => s.voice), promptTemplatesFor(review.channel)])
+  } catch (err) {
+    logger.warn('[review-reply] reading the reply voice failed, drafting with the defaults', { error: err instanceof Error ? err.message : String(err) })
+  }
+
+  // The buyer's language: the review's own language when Nexus knows it and drafts in it, else the market's. The
+  // business may reply in other languages only (Reviews Settings › "Reply in"); a person's explicit pick wins.
   const reviewLocale = review.language && review.language in LANG_NAME ? (review.language as Locale) : null
-  const locale: Locale = input.locale ?? reviewLocale ?? (resolveLocaleForMarketplace(review.marketplace) as Locale)
+  const buyerLocale: Locale = reviewLocale ?? (resolveLocaleForMarketplace(review.marketplace) as Locale)
+  const locale: Locale = input.locale ?? replyLocale(voice.languages, buyerLocale)
   const limit = reviewReplyRules(review.channel, {
     kind: reviewKindOf(review.channel, review.ingestSource),
     imported: (review.ingestSource ?? '').toUpperCase().startsWith('IMPORT'),
@@ -157,7 +175,7 @@ export async function draftReviewReply(input: DraftReplyInput): Promise<DraftRep
   const productName = review.product?.name ?? review.sku ?? null
 
   const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) return fallbackDraft(locale, tone, productName)
+  if (!apiKey) return fallbackDraft(locale, tone, productName, { signOff: voice.signOff, limit })
 
   let brandVoice = ''
   try {
@@ -186,6 +204,7 @@ export async function draftReviewReply(input: DraftReplyInput): Promise<DraftRep
     `- Never offer incentives or discounts, and never ask them to change or remove their review (against marketplace policy).\n` +
     `- Do not include external links or email addresses.` +
     (limit != null ? `\n- At most ${limit} characters in total (the channel refuses longer replies).` : '') +
+    `\n${voicePromptLines(voice, templates, locale).map((line) => (line.startsWith('- ') ? `  ${line}` : `- ${line}`)).join('\n')}` +
     (locale !== 'en'
       ? `\nAnswer with STRICT JSON only: {"reply": the reply in ${langName}, "english": the same reply in English, for the seller's team}.`
       : '') +
@@ -233,7 +252,7 @@ export async function draftReviewReply(input: DraftReplyInput): Promise<DraftRep
     logger.warn('[review-reply] AI draft failed, using fallback', {
       error: err instanceof Error ? err.message : String(err),
     })
-    return fallbackDraft(locale, tone, productName)
+    return fallbackDraft(locale, tone, productName, { signOff: voice.signOff, limit })
   }
 }
 
