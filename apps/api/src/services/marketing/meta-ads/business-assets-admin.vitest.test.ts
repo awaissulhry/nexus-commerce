@@ -41,7 +41,7 @@ describe('claim-ad-account / request-ad-account (AA-063, AA-064)', () => {
   it('a claim: Meta\'s help steps; a claim is for good; the ad account limit and the prepaid rule', () => {
     const g = ok(assetGuide({ action: 'claim-ad-account', adAccountId: OTHER_ACCOUNT }, assetLive()))
     expect(g.state).toBe('to-do')
-    expect(steps(g)).toMatch(/Accounts › Ad accounts › \+ Add › Add an ad account/)
+    expect(steps(g)).toMatch(/Accounts › Ad accounts › Add an ad account/)
     expect(steps(g)).toMatch(/Enter the ad account ID 1234567891.*Claim ad account/)
     expect(g.putBack.possible).toBe('partly')
     expect(g.warnings.join(' ')).toMatch(/can't be deleted or transferred/)

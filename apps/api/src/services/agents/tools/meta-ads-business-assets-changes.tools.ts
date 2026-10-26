@@ -108,7 +108,12 @@ const buildBilling = (args: Args): MetaDraftBuilder => guarded(async (account) =
 /** The record: a new group's id from Meta's answer (its undo deletes exactly that group). */
 function billingFinish(draft: MetaChangeDraft, done: Done) {
   const after = { ...(draft.after as BillingRecord) }
-  if (after.op === 'create-group' && done.length) after.groupId = createdIdOf(done[0].result.node)
+  if (after.op === 'create-group' && done.length) {
+    after.groupId = createdIdOf(done[0].result.node)
+    // The name as Meta read it back (a group Meta made under another name is recorded as it is: its undo still deletes it).
+    const read = done[0].result.node?.name
+    if (typeof read === 'string') after.name = read
+  }
   return {
     data: { action: after.op, creditLineId: after.creditLineId, invoiceGroupId: after.groupId, name: after.name, ...(after.adAccountId ? { adAccountId: `act_${after.adAccountId}`, inGroup: after.inGroup } : {}) },
     before: draft.before,

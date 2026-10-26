@@ -41,11 +41,11 @@ import type { MetaChangeResult } from './write-client.js'
 export const BACKED_KINDS = ['instagram-for-page', 'threads-for-instagram', 'threads-for-page'] as const
 export type BackedKind = typeof BACKED_KINDS[number]
 
-/** Where each kind is made, what it is called, and the edge Meta takes it on. */
-export const BACKED: Readonly<Record<BackedKind, { on: 'page' | 'instagram'; edge: 'page_backed_instagram_accounts' | 'instagram_backed_threads_user' | 'page_backed_threads_accounts'; what: string; row: string }>> = {
-  'instagram-for-page': { on: 'page', edge: 'page_backed_instagram_accounts', what: 'a Page-backed Instagram account', row: 'BM-051' },
-  'threads-for-instagram': { on: 'instagram', edge: 'instagram_backed_threads_user', what: 'an Instagram-backed Threads account', row: 'CR-228' },
-  'threads-for-page': { on: 'page', edge: 'page_backed_threads_accounts', what: 'a Page-backed Threads account', row: 'CR-230' },
+/** Where each kind is made and what it is called (its edge is spelled once, in backedDraft's request). */
+export const BACKED: Readonly<Record<BackedKind, { on: 'page' | 'instagram'; what: string; row: string }>> = {
+  'instagram-for-page': { on: 'page', what: 'a Page-backed Instagram account', row: 'BM-051' },
+  'threads-for-instagram': { on: 'instagram', what: 'an Instagram-backed Threads account', row: 'CR-228' },
+  'threads-for-page': { on: 'page', what: 'a Page-backed Threads account', row: 'CR-230' },
 }
 
 /** What the reads found for a backed account (live-business-assets-change.ts liveBacked). */
@@ -84,15 +84,19 @@ export function backedDraft(live: BackedLive): MetaChangeDraft | { refusal: stri
     if (live.linkedThreads) warnings.push(`The Instagram account already has a linked Threads account (${live.linkedThreads}): Threads ads can use that one instead.`)
   }
   const label = `Make ${spec.what} for the chosen ${where} ${live.objectId}`
-  const request: MetaChangeRequest = {
-    step: 1, label, objectId: live.objectId, objectKind: spec.on === 'page' ? 'backedpage' : 'backedinstagram', edge: spec.edge, params: {},
-    check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
+  const common = {
+    step: 1, label, objectId: live.objectId, params: {},
+    check: 'none' as const, raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
     operation: `assets.backed.${live.kind}`,
     // Meta's answer is the new account's id: nothing of it is read back (it has no status to read).
-    skipReadBack: true,
+    skipReadBack: true as const,
     doneSentence: (result: MetaChangeResult) => `${label}: Meta made it${madeIdOf(result) ? ` (id ${madeIdOf(result)})` : ''}.`,
     explain: BACKED_EXPLAIN,
   }
+  // Each edge spelled as itself (a request builder never computes its edge: meta-labels-writes test).
+  const request: MetaChangeRequest = live.kind === 'instagram-for-page' ? { ...common, objectKind: 'backedpage', edge: 'page_backed_instagram_accounts' }
+    : live.kind === 'threads-for-instagram' ? { ...common, objectKind: 'backedinstagram', edge: 'instagram_backed_threads_user' }
+      : { ...common, objectKind: 'backedpage', edge: 'page_backed_threads_accounts' }
   const lines = changeLines([[spec.what, 'none', 'made by Meta (its id in the answer)']])
   return {
     summary: `${label[0].toUpperCase()}${label.slice(1)} (${spec.row}). Nothing spends: it is an identity ads may use.`,

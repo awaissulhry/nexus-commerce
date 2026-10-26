@@ -186,7 +186,7 @@ function adAccountGuide(ask: AssetAsk, live: AssetLive, portfolio: Portfolio): A
   }
   if (claim && !row) {
     steps.push(
-      'Accounts › Ad accounts › + Add › Add an ad account (Meta: claim an existing ad account).',
+      'Accounts › Ad accounts › Add an ad account (Meta\'s help: claim an existing ad account).',
       `Enter the ad account ID ${id}, confirm that you want to claim it into the portfolio shown, tick that you agree to Meta's Terms of Service and Advertising Standards for the portfolio, and click Claim ad account. If another person owns the ad account, they approve the request first (Meta's help).`,
     )
   }
@@ -523,6 +523,7 @@ export function newAdAccountGuide(ask: NewAdAccountAsk, live: NewAdAccountLive):
     warnings: [
       NEW_ACCOUNT_MONEY,
       'The currency and the time zone are set once: Meta takes no change of them later (a new ad account is the way).',
+      'Meta makes no new ad account while any ad account of the portfolio is in bad standing or in review (3980: "All of your accounts must be in good standing in order to create new ad accounts"), nor with an incomplete ad account or a Page Meta unpublished (its developer guide).',
       `Meta's limit: a new business portfolio can make one ad account, up to 3 once a campaign delivered and a payment was made, more as the portfolio spends (Meta's help: ad account limits)${count !== null ? `; this portfolio has ${count} of its own now` : ''}. Meta's API alone stops at 5 — the screens follow the portfolio's own limit.`,
       NEXUS_USES_CHOSEN,
       SCREEN_WORDS,
