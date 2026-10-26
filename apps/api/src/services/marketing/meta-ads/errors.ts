@@ -31,6 +31,11 @@ export interface MetaFailure {
   transient?: boolean
   /** One plain sentence for a person. Never a token or a request body. */
   sentence: string
+  /**
+   * Live-probe fix MD-101 — Meta's own words (cut to 300 characters), when Meta answered: a read that is not the ad
+   * account's (a Page's, live-media.ts onPage) words its own hint instead of the ad-account one in `sentence`.
+   */
+  words?: string | null
 }
 
 /**
@@ -67,7 +72,7 @@ export function failureOfAnswer(answer: Pick<GatewayResponse, 'status' | 'verdic
   const cls = answer.verdict?.errorClass ?? 'unknown'
   const code = answer.verdict?.channelCode ?? null
   const words = cut(answer.verdict?.channelMessage)
-  const base = { origin: 'meta' as const, httpStatus: answer.status, code, authLost: false, throttled: false, permissionDenied: false, notFound: false }
+  const base = { origin: 'meta' as const, httpStatus: answer.status, code, authLost: false, throttled: false, permissionDenied: false, notFound: false, words }
   if (code && META_SHRINK_CODES.has(code)) {
     return { ...base, shrink: true, sentence: `Meta could not answer that many days at once (${code}${words ? `: ${words}` : ''}). Nexus asks for fewer days.` }
   }

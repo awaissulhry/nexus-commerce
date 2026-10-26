@@ -447,7 +447,7 @@ describe('people\'s data: named keys only; Meta\'s refusals in plain words', () 
   it('a Page read Meta refuses for the token says the Page-token way; comment lists say an empty list may mean the token', async () => {
     h.reply = (req) => (/\/blocked$/.test(req.path) ? metaError('190', '(#190) This method must be called with a Page Access Token', 'auth_revoked') : ownMeta(req))
     const pageToken = (await run('meta-comments', { view: 'blocked' })).error
-    expect(pageToken).toMatch(/only to the Page's own access token, not to the business's system-user token, which still works \(Meta's words: \(#190\) This method must be called with a Page Access Token\)/)
+    expect(pageToken).toMatch(/only to the Page's own access token, and Nexus does not send this one with the Page's token yet; the business's system-user token still works \(Meta's words: \(#190\) This method must be called with a Page Access Token\)/)
     expect(pageToken).toContain(PAGE_TOKEN_NOTE)
     expect(pageToken).not.toMatch(/Make a new token/)
     h.reply = ownMeta

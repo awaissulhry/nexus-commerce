@@ -479,7 +479,10 @@ describe('meta-business-assets', () => {
   })
   it('a Page read Meta refuses for the token says what that means', async () => {
     h.answer = (req) => (req.path.endsWith('/global_brand_children') ? refusedByMeta('(#200) Requires MANAGE task', '200', 'forbidden') : answers(req))
-    expect(errorOf(await run('meta-business-assets', { view: 'page-children' }))).toMatch(/Page access token or a Page permission/)
+    // Live-probe fix MD-101 — in the Page's words (Meta's, then what the Page needs), never the ad account's ads_read hint.
+    const words = errorOf(await run('meta-business-assets', { view: 'page-children' }))
+    expect(words).toMatch(/Meta refused this Facebook Page or Instagram read .*Requires MANAGE task.*What Meta needs: the business's chosen Facebook Page/)
+    expect(words).not.toMatch(/ads_read|the ad account is assigned/)
   })
   it('instagram: owned assets named by a checkable Instagram id; a client asset and an asset without ig_user_id are ids only (A-F1 S2, S3)', async () => {
     h.taken = [{ product: 'INSTAGRAM', id: IG_TAKEN }]

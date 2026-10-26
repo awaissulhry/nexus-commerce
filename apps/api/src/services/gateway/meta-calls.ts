@@ -98,7 +98,8 @@ import { META_CATALOG_WRITE_RULES, type MetaCatalogBodyKind, type MetaCatalogKin
 import { META_CANVAS_WRITE_RULES } from './meta-canvas-rules.js'
 // Step 37 — the comment rules (Facebook and Instagram as the chosen Page; Threads ads with the system user's token).
 import { META_COMMENT_WRITE_RULES } from './meta-comment-rules.js'
-// Step 15 — the chosen Page's conversations, inbox and messaging setup, read with the Page's own token.
+// Step 15 — the chosen Page's conversations, inbox and messaging setup, read with the Page's own token (and, since the
+// live-probe fixes of 2026-10-26, its posts, catalog-ad posts, insights and Instant Experience list).
 import { metaPageReadOf, metaWhatsAppRead, type MetaPageRead } from './meta-page-reads.js'
 // Step 4 — the business-portfolio reads' fixed lists (a leaf module: no import cycle).
 import { META_CLIENT_OBJECT_VALUES, META_INVITATION_ASSET_TYPES, META_SHARING_AGREEMENT_STATUSES } from '../meta/meta-business-lists.js'
@@ -196,7 +197,7 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  *     only on its own edge: act_<id>/adimages hashes, name, minwidth, minheight; act_<id>/advideos title, minlength,
  *     maxlength; act_<id>/video_ads since, until; a portfolio's <id>/images | videos | creatives creative_folder_id;
  *     act_<id>/website_creative_assets | website_creative_info link_url; <campaign>/video_groups date_range;
- *     <page>/live_videos broadcast_status; <page>/feed | published_posts | visitor_posts include_hidden, show_expired;
+ *     <page>/live_videos broadcast_status; <page>/feed | published_posts include_hidden, show_expired;
  *     <page>/ads_posts include_inline_create, exclude_dynamic_ads, since, until; <Instagram account>/media since, until;
  *     <page | Instagram account | Instagram media>/insights metric, period, since, until, breakdown, metric_type,
  *     timeframe and <page>_<post>/insights metric, period, since, until, breakdown (organic insights);
@@ -350,7 +351,8 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^act_\d+\/(website_creative_assets|website_creative_info)$/, keys: new Set(['link_url']) },
   { route: /^\d+\/video_groups$/, keys: new Set(['date_range']) },
   { route: /^\d+\/live_videos$/, keys: new Set(['broadcast_status']) },
-  { route: /^\d+\/(feed|published_posts|visitor_posts)$/, keys: new Set(['include_hidden', 'show_expired']) },
+  // Live-probe fix EN-926 — no visitor_posts: Meta does not answer it for a Page on the New Pages Experience (live-media.ts).
+  { route: /^\d+\/(feed|published_posts)$/, keys: new Set(['include_hidden', 'show_expired']) },
   { route: /^\d+\/ads_posts$/, keys: new Set(['include_inline_create', 'exclude_dynamic_ads', 'since', 'until']) },
   { route: /^\d+\/media$/, keys: new Set(['since', 'until']) },
   // Round 2 (c) — the organic-insight keys only on an organic read: no field list (an ads insights read always names its
@@ -739,7 +741,8 @@ export interface MetaCallVerdict {
    * Step 30 part 3 — the ONE read that goes with a Page's own token: the apps installed on a Page (`<page>/subscribed_apps`).
    * The gateway reads that token itself (meta-page-token.ts), only when `pageId` is the business's CHOSEN Page.
    * Step 15 — and the chosen Page's conversations, inbox and messaging setup (meta-page-reads.ts; `pageId` null: a
-   * conversation's own node or messages, with the chosen Page's token).
+   * conversation's own node or messages, with the chosen Page's token). Live-probe fixes (2026-10-26) — and its posts,
+   * catalog-ad posts, insights and Instant Experience list; `otherPages`: the feed of another Page stays an ordinary read.
    */
   pageRead?: MetaPageRead
   /** Step 15 fix A1 — a read of the business's WhatsApp Business account: its own rate bucket (meta-page-reads.ts). */
@@ -828,8 +831,9 @@ export function metaCallVerdict(input: { method: string; url: string; kind: stri
     if (after !== null && !PAGE_APPS_CURSOR.test(after)) return refuse('a Page\'s connected apps are read with after as Meta\'s own cursor only (letters, digits, _, - and =, at most 512)')
     return { problem: null, renewalClientId: null, pageRead: { pageId: pageApps[1] } }
   }
-  // Step 15 — the chosen Page's conversations, inbox and messaging setup go with the Page's own token too: exact keys and
-  // fields per route (meta-page-reads.ts), and gateway.ts checks the Page is the chosen one before any token is read.
+  // Step 15 — the chosen Page's conversations, inbox and messaging setup go with the Page's own token too (and its posts,
+  // insights and Instant Experience list: the live-probe fixes): exact keys, values and fields per route
+  // (meta-page-reads.ts), and gateway.ts checks the Page is the chosen one before any token is read.
   const pageRead = metaPageReadOf(route, segments, search, input.auth)
   if (pageRead && 'problem' in pageRead) return refuse(pageRead.problem)
   if (pageRead) return { problem: null, renewalClientId: null, pageRead: pageRead as MetaPageRead }
@@ -929,9 +933,13 @@ export function metaReadSecrets(url: string): string[] {
   }
 }
 
-/** Why the gateway refuses this Meta call, in words, or null when it may go (metaCallVerdict's problem). */
+/**
+ * Why the gateway refuses this Meta call, in words, or null when it may go (metaCallVerdict's problem). Live-probe fix
+ * MD-101 — and a Page feed read's own list problem, which gateway.ts refuses when the Page is the chosen one.
+ */
 export function metaReadOnlyProblem(input: Parameters<typeof metaCallVerdict>[0]): string | null {
-  return metaCallVerdict(input).problem
+  const verdict = metaCallVerdict(input)
+  return verdict.problem ?? verdict.pageRead?.otherPages?.problem ?? null
 }
 
 /** Is this the token renewal (the only sign-in call), and with which client_id? Null when it is not one (same parse). */

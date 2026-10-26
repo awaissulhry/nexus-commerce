@@ -7,8 +7,13 @@
  *   - GET /me/permissions (graph-api/reference/user/permissions): data[] { permission, status granted|declined }
  *   - GET /{app_id}/roles (SDK application.py get_roles): data[] { user, role } — with the app token
  *   - GET /{app_id}/authorized_adaccounts?business= (SDK application.py get_authorized_ad_accounts; not on a doc page
- *     today: VERIFIED-SDK only)
- *   - GET /{app_id}/connected_client_businesses (SDK application.py get_connected_client_businesses)
+ *     today: VERIFIED-SDK only) — live-probe fix ACC-038 (2026-10-26): with the business's SYSTEM-USER token, not the app
+ *     token (Meta answered the app token (#102) "A user access token is required to request this resource"); an ad
+ *     account another business in Nexus uses is its id and the flag only
+ *   - the app's connected client businesses are NOT read: Meta's v26 reference for application/connected_client_businesses
+ *     says of Reading "You can't perform this operation on this endpoint" (checked 2026-10-26, docs/graph-api/reference/
+ *     application/connected_client_businesses), and Meta refused the SDK's read live (#3 "Application does not have the
+ *     granular permission to make this API call", ACC-038): the answer says so in words (CLIENT_BUSINESSES_NOT_READ)
  *   (GET /{user_id}/assigned_applications needs manage_app_solution, which a system user cannot hold: not read here.)
  *   - the usage headers of an ordinary answer (cx/rate-readings.ts metaUsageOf)
  */
@@ -18,6 +23,7 @@ import { metaUsageOf, type MetaUsage } from '../cx/rate-readings.js'
 import { checkMetaToken, MetaTokenCheckError, type MetaTokenHealth } from '../cx/connectors/meta/token-check.js'
 import { getAccessToken, metaAppIdOf } from '../cx/token.service.js'
 import { metaGraphApiVersion } from './api-version.js'
+import { takenIds } from '../marketing/meta-ads/taken.js'
 
 export class MetaLiveError extends Error {
   constructor(message: string) {
@@ -79,7 +85,10 @@ export async function livePermissions(connectionId: string) {
   return list(body).map((p) => ({ permission: String(p.permission ?? ''), status: String(p.status ?? '') })).filter((p) => p.permission)
 }
 
-/** The app: its roles, the ad accounts it is authorised for in the business, and its connected client businesses. */
+/** ACC-038 — why the app's connected client businesses are not read (Meta's v26 reference and Meta's own refusal). */
+export const CLIENT_BUSINESSES_NOT_READ = 'Meta does not let an app read its connected client businesses: its v26 reference offers no read of them (application/connected_client_businesses: "You can\'t perform this operation on this endpoint"), and Meta refused the read to this app (#3: "Application does not have the granular permission to make this API call"). The businesses an app serves as a tech provider show in the App Dashboard (a person).'
+
+/** The app: its roles, the ad accounts it is authorised for in the business, and why its client businesses are not read. */
 export async function liveApp(connectionId: string, businessId: string | null) {
   const appId = await metaAppIdOf(connectionId)
   if (!appId) throw new MetaLiveError('No Meta app id is stored for this connection.')
@@ -88,11 +97,17 @@ export async function liveApp(connectionId: string, businessId: string | null) {
   }
   const roles = await part(async () => list((await read(connectionId, 'app.roles', `${appId}/roles`, { limit: 100 }, 'app')).body)
     .map((r) => ({ userId: r.user == null ? null : String(r.user), role: typeof r.role === 'string' ? r.role : null })))
+  // ACC-038 — the business's system-user token ('account'): Meta answers this edge to a user token only (#102 to the app's).
   const authorizedAdAccounts = businessId
-    ? await part(async () => list((await read(connectionId, 'app.authorizedAdAccounts', `${appId}/authorized_adaccounts`, { business: businessId, fields: 'account_id,name', limit: 100 }, 'app')).body)
-      .map((a) => ({ adAccountId: String(a.account_id ?? a.id ?? '').replace(/^act_/, ''), name: typeof a.name === 'string' ? a.name : null })))
+    ? await part(async () => {
+      const rows = list((await read(connectionId, 'app.authorizedAdAccounts', `${appId}/authorized_adaccounts`, { business: businessId, fields: 'account_id,name', limit: 100 })).body)
+        .map((a) => ({ adAccountId: String(a.account_id ?? a.id ?? '').replace(/^act_/, ''), name: typeof a.name === 'string' ? a.name : null }))
+        .filter((a) => /^\d{1,25}$/.test(a.adAccountId))
+      // An ad account another business in Nexus uses is its id and the flag only (never its name).
+      const taken = await takenIds('AD_ACCOUNT', rows.map((a) => a.adAccountId))
+      return rows.map((a) => (taken.has(a.adAccountId) ? { adAccountId: a.adAccountId, takenByAnotherBusiness: true } : { ...a, takenByAnotherBusiness: false }))
+    })
     : { items: null, error: 'The chosen ad account names no business portfolio, so this list cannot be asked for.' }
-  const clientBusinesses = await part(async () => list((await read(connectionId, 'app.connectedClientBusinesses', `${appId}/connected_client_businesses`, { fields: 'id,name', limit: 100 }, 'app')).body)
-    .map((b) => ({ businessId: String(b.id ?? ''), name: typeof b.name === 'string' ? b.name : null })))
+  const clientBusinesses = { items: null, error: CLIENT_BUSINESSES_NOT_READ }
   return { appId, roles, authorizedAdAccounts, clientBusinesses }
 }

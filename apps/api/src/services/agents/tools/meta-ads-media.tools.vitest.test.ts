@@ -53,7 +53,7 @@ vi.mock('../../../db.js', () => {
 
 import { META_ADS_MEDIA_TOOLS } from './meta-ads-media.tools.js'
 import { META_ADS_READ_TOOLS } from './meta-ads-read.tools.js'
-import { linkOfIframe, PAGE_TOKEN_NOTE, pagePostId, PORTFOLIO_TAKEN, tidy } from '../../marketing/meta-ads/live-media.js'
+import { IX_TEMPLATE_REFUSED, linkOfIframe, PAGE_TOKEN_NOTE, pagePostId, PORTFOLIO_TAKEN, tidy, VISITOR_POSTS_UNAVAILABLE } from '../../marketing/meta-ads/live-media.js'
 import { offeredOn } from '../call-tool.js'
 import { MetaReadError, failureOfAnswer } from '../../marketing/meta-ads/errors.js'
 import { metaUrl } from '../../gateway/meta.js'
@@ -186,14 +186,14 @@ describe('only the chosen Page, Instagram account and the account\'s own media',
       { id: `${PAGE}_2`, message: 'News', story: 'Shop A updated its cover photo', from: { id: PAGE } },
       { id: '120000000000099_3', message: 'Shop B news', from: { id: '120000000000099' } },
     ]
-    const res = await run('meta-page-posts', { view: 'visitor' })
+    const res = await run('meta-page-posts', { view: 'feed' })
     expect((res.data as { items: unknown[] }).items).toEqual([
       expect.objectContaining({ id: `${PAGE}_1`, postedBy: 'someone else' }), expect.objectContaining({ id: `${PAGE}_2`, postedBy: 'the Page', story: 'Shop A updated its cover photo' }),
     ])
     // Review A6 — a row not on the chosen Page is dropped and counted; a visitor's story (it names the person) is removed.
     expect(res.data).toMatchObject({ droppedNotOnPage: 1 })
     expect(JSON.stringify(res)).not.toMatch(/900000000000001|A Person|Shop B/)
-    expect(h.calls[0]).toMatchObject({ path: `${PAGE}/visitor_posts` })
+    expect(h.calls[0]).toMatchObject({ path: `${PAGE}/feed` })
   })
   it('an Instagram media of another account is refused after one owner-only read; the chosen username is enough when Meta hides owner', async () => {
     // Review A5 — the chosen account's username is read LIVE (it may have changed since it was chosen), never the stored one.
@@ -337,11 +337,73 @@ describe('meta-ad-preview — links go to the caller, are said to be public, and
 })
 
 describe('what Meta refuses is said plainly', () => {
-  it('a Page read Meta refuses for the token says what that means (Page tokens come later)', async () => {
+  it('a Page read Meta refuses for the token says what the Page needs — Meta\'s words and the Page\'s tasks, never the ad account\'s ads_read hint (MD-101)', async () => {
     h.all = () => metaError('10', 'This endpoint requires the pages_read_engagement permission', 'forbidden')
-    const res = await run('meta-page-posts', { view: 'feed' })
-    expect(res.error).toContain(PAGE_TOKEN_NOTE)
-    expect(res.error).toMatch(/pages_read_engagement/)
+    for (const args of [{ view: 'feed' }, { view: 'ads-posts' }, { view: 'published' }]) {
+      const res = await run('meta-page-posts', args)
+      expect(res.error, args.view).toContain(PAGE_TOKEN_NOTE)
+      expect(res.error, args.view).toMatch(/Meta's words: This endpoint requires the pages_read_engagement permission/)
+      expect(res.error, args.view).not.toMatch(/ads_read|the ad account is assigned/)
+    }
+    expect(PAGE_TOKEN_NOTE).toMatch(/Create content, Manage or Moderate.*Advertise.*Analyze/)
+    // Meta's "needs a Page Access Token" on a read Nexus does not send with it yet: said as such, the token still works.
+    h.all = null
+    h.one = (req) => (req.operation === 'posts.post' ? metaError('190', 'This method must be called with a Page Access Token', 'auth_revoked') : { id: req.path })
+    const post = await run('meta-page-posts', { view: 'post', postId: `${PAGE}_500000000000001` })
+    expect(post.error).toMatch(/only to the Page's own access token, and Nexus does not send this one with the Page's token yet/)
+    expect(post.error).not.toMatch(/Make a new token/)
+  })
+  it('live-probe fix EN-926 — view visitor makes no call: Meta does not answer visitor posts on the New Pages Experience; the feed holds them', async () => {
+    const res = await run('meta-page-posts', { view: 'visitor', includeHidden: true })
+    expect(res).toEqual({ ok: true, data: { pageId: PAGE, items: [], unavailable: VISITOR_POSTS_UNAVAILABLE } })
+    expect(VISITOR_POSTS_UNAVAILABLE).toMatch(/New Pages Experience.*view feed \(postedBy: someone else/)
+    expect(h.calls).toHaveLength(0)
+  })
+  it('live-probe fix ST10-03 — a media-library edge Meta answers "does not exist" for this token is said in words, with what to use instead', async () => {
+    h.known = new Map([['120000000000101', 'campaign']])
+    const hidden = (edge: string) => metaError('100', `(#100) Tried accessing nonexisting field (${edge}) on node type (Business)`, 'configuration')
+    const views: Array<[Record<string, unknown>, string, RegExp]> = [
+      [{ view: 'business-images' }, 'images', /portfolio's images \(its media library\).*Business Suite › Media library/],
+      [{ view: 'business-videos' }, 'videos', /portfolio's videos/],
+      [{ view: 'business-creatives' }, 'creatives', /portfolio's creatives/],
+      [{ view: 'folders' }, 'creative_folders', /media-library folders/],
+      [{ view: 'tags' }, 'creative_asset_tags', /media-library tags/],
+      [{ view: 'my-folders' }, 'assigned_creative_folders', /assigned to the business's system user/],
+      [{ view: 'asset-urls' }, 'urls_for_asset_extraction', /urls_for_asset_extraction.*Ads Manager/],
+      [{ view: 'campaign-videos', campaignId: '120000000000101' }, 'video_groups', /a campaign's video groups.*meta-ad-details/],
+    ]
+    for (const [args, edge, words] of views) {
+      h.all = (req) => (req.path.endsWith(`/${edge}`) ? hidden(edge) : [])
+      const res = await run('meta-media-library', args)
+      expect(res.error, edge).toMatch(new RegExp(`Meta does not answer .* on API v26: Meta's reference lists the read \\(GET …/${edge}\\)`))
+      expect(res.error, edge).toMatch(words)
+      expect(res.error, edge).toMatch(/none of Meta's v26 SDKs carries a read of it/)
+      expect(res.error, edge).not.toMatch(/for Nexus to fix/)
+    }
+    // website-assets: both parts said in words; another #100 (a field) is not taken for a hidden edge.
+    h.all = (req) => hidden(req.path.split('/')[1])
+    const site = await run('meta-media-library', { view: 'website-assets', link: 'https://shop.example.com/' })
+    expect(site.error).toMatch(/website_creative_assets.*A person sees what Meta suggests/)
+    h.all = () => metaError('100', '(#100) Tried accessing nonexisting field (media_library_url) on node type (BusinessImage)', 'configuration')
+    expect((await run('meta-media-library', { view: 'business-images' })).error).not.toMatch(/Meta's reference lists the read/)
+  })
+  it('live-probe fix CR-489 — Meta\'s #4701 on the template read is said in words: no permission is named, and making one needs no template read', async () => {
+    h.one = () => metaError('4701', 'Insufficient permissions to access this data')
+    const res = await run('meta-instant-experiences', { view: 'template', template: 'get-new-customers' })
+    expect(res.error).toContain(IX_TEMPLATE_REFUSED)
+    expect(res.error).toMatch(/Meta's words: Insufficient permissions to access this data/)
+    expect(IX_TEMPLATE_REFUSED).toMatch(/create-meta-instant-experience takes the template by name/)
+    // Anything else Meta answers stays its own failure.
+    h.one = () => metaError('100', 'Unsupported get request')
+    expect((await run('meta-instant-experiences', { view: 'template', template: 'get-new-customers' })).error).not.toContain(IX_TEMPLATE_REFUSED)
+  })
+  it('live-probe fix MD-126 — boostAds lists the ads that boost or boosted the media, active or not', async () => {
+    h.one = (req) => (req.operation === 'instagram.mediaOwnerCheck' ? { id: req.path, owner: { id: IG } }
+      : { id: req.path, boost_eligibility_info: { eligible_to_boost: true }, boost_ads_list: { data: [{ ad_id: '120000000000301', ad_status: 'inactive' }] } })
+    const res = await run('meta-instagram-media', { view: 'media-detail', mediaId: '180000000000001' })
+    expect(res).toMatchObject({ ok: true, data: { boostAds: [{ adId: '120000000000301', status: 'inactive' }], note: expect.stringMatching(/the ads that boost or boosted it, active or not/) } })
+    expect(JSON.stringify(res)).not.toMatch(/the ACTIVE ads/)
+    expect(tool('meta-instagram-media').description).not.toMatch(/ACTIVE ads/)
   })
   it('review B2/B7 — a video read never asks `name`; only the SDK-only field Meta names is dropped, the others stay', async () => {
     h.all = (req) => (String(req.query?.fields).includes('length') ? metaError('100', 'Tried accessing nonexisting field (length) on node type (AdVideo)') : [{ id: '200000000000001', title: 'Promo' }])

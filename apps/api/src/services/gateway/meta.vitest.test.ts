@@ -370,7 +370,7 @@ describe('read only by construction', () => {
       `act_1234567890/website_creative_info?fields=id&link_url=${encodeURIComponent('https://shop.example.com/')}`,
       '120000000000101/video_groups?fields=id&date_range={"start":"2026-10-01","end":"2026-10-20"}',
       '120000000000010/live_videos?fields=id&broadcast_status=["VOD"]',
-      '120000000000010/feed?fields=id&include_hidden=true&show_expired=true', '120000000000010/visitor_posts?fields=id&include_hidden=true',
+      '120000000000010/feed?fields=id&include_hidden=true&show_expired=true',
       '120000000000010/published_posts?fields=id&show_expired=true',
       '120000000000010/ads_posts?fields=id&include_inline_create=true&exclude_dynamic_ads=true&since=2026-10-01&until=2026-10-20',
       '170000000000001/media?fields=id&since=2026-10-01&until=2026-10-20',
@@ -391,6 +391,8 @@ describe('read only by construction', () => {
       ['120000000000301/previews?ad_format=MOBILE_FEED_STANDARD&creative={}', 'creative'], ['120000000000301/previews?place_page_id=1', 'place_page_id'],
       ['act_1234567890/generatepreviews?ad_format=MOBILE_FEED_STANDARD&post={}', 'post'], ['120000000000010/canvases?fields=id&is_published=true&user_ids=[1]', 'user_ids'],
       ['120000000000010/live_videos?fields=id&source=target', 'source'], ['120000000000010/ads_posts?fields=id&include_hidden=true', 'include_hidden'],
+      // Live-probe fix EN-926 — visitor_posts is no longer read (not on the New Pages Experience): its keys are gone.
+      ['120000000000010/visitor_posts?fields=id&include_hidden=true', 'include_hidden'],
     ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
     // Round 2 (c) — the organic-insight keys only on an organic read (no field list, every metric one Nexus names); the
     // preview keys only with an ad_format of the v26 enum.
