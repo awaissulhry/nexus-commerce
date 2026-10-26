@@ -6264,6 +6264,36 @@ CREATE TABLE "EmailSuppression" (
 );
 
 -- CreateTable
+CREATE TABLE "ReviewSettings" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "tone" TEXT NOT NULL DEFAULT 'NEUTRAL',
+    "languages" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "signOff" TEXT,
+    "avoidWords" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "alerts" JSONB NOT NULL DEFAULT '[]',
+    "updatedBy" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ReviewSettings_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ReviewReplyTemplate" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "channel" TEXT,
+    "bodies" JSONB NOT NULL DEFAULT '{}',
+    "usedCount" INTEGER NOT NULL DEFAULT 0,
+    "createdBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ReviewReplyTemplate_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "OrderTag" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "orderId" TEXT NOT NULL,
@@ -14969,6 +14999,15 @@ CREATE INDEX "EmailSuppression_workspaceId_idx" ON "EmailSuppression"("workspace
 
 -- CreateIndex
 CREATE UNIQUE INDEX "EmailSuppression_email_channel_key" ON "EmailSuppression"("workspaceId", "email", "channel");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ReviewSettings_workspaceId_key" ON "ReviewSettings"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "ReviewReplyTemplate_workspaceId_idx" ON "ReviewReplyTemplate"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ReviewReplyTemplate_workspace_name_key" ON "ReviewReplyTemplate"("workspaceId", "name");
 
 -- CreateIndex
 CREATE INDEX "OrderTag_orderId_idx" ON "OrderTag"("orderId");

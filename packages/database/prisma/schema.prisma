@@ -13782,6 +13782,52 @@ model EmailSuppression {
   @@index([workspaceId])
 }
 
+/// Reviews › Settings (2026-10-26, PR D) — how this business replies to reviews (its voice) and who hears about what
+/// (its review alerts). ONE row per business (`@@unique([workspaceId])`); no row = the defaults in
+/// services/reviews/review-settings.service.ts. Read by the AI reply drafts, the review intake (new negative review
+/// alert) and the daily digest.
+model ReviewSettings {
+  // Business ownership comes from verified database context.
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+  /// The register of every reply: WARM | NEUTRAL | FORMAL.
+  tone        String   @default("NEUTRAL")
+  /// The languages replies are written in: 'buyer' (the buyer's own language) and/or it, de, fr, es, en.
+  languages   String[] @default([])
+  /// Ends every reply ("The care team"); null = none.
+  signOff     String?
+  /// Words a reply never uses.
+  avoidWords  String[] @default([])
+  /// The review alerts: [{ key: 'negative' | 'digest', on, recipients: userId[], via: ('app' | 'email')[] }].
+  alerts      Json     @default("[]")
+  /// The person who saved last (a user id).
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId], map: "ReviewSettings_workspaceId_key")
+}
+
+/// Reviews › Settings (2026-10-26, PR D) — a saved reply the team picks in the Inbox reply box ("Templates" menu), and
+/// the AI drafts follow. One text per language.
+model ReviewReplyTemplate {
+  // Business ownership comes from verified database context.
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+  name        String
+  /// AMAZON | EBAY | SHOPIFY | ETSY; null = every channel.
+  channel     String?
+  /// { "<locale>": "<text>" } for it, de, fr, es, en — at least one.
+  bodies      Json     @default("{}")
+  /// How often a person picked it in the Inbox reply box.
+  usedCount   Int      @default(0)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, name], name: "workspace_name", map: "ReviewReplyTemplate_workspace_name_key")
+  @@index([workspaceId])
+}
+
 model OrderTag {
   // Business ownership comes from verified database context.
   workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))

@@ -18,6 +18,18 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *   POST  /api/reviews/:id/translate           language + English, kept on the review
  *   POST  /api/reviews/import/:batchId/undo    removes one import's rows, keeps the ones a person worked on
  * Every Review read in this file shows visible rows only (fixture rows never show): `visibleReviewWhere`.
+ *
+ * Reviews Settings (2026-10-26, PR D) — logic in services/reviews/review-settings.service.ts and review-settings-health.ts:
+ *   GET    /api/reviews/settings                   voice, alerts (+ who), the sender (read-only), the team, templates to load
+ *   PUT    /api/reviews/settings                   { voice?, alerts? } → the settings as saved, or why not (400, in words)
+ *   GET    /api/reviews/settings/sources           each review source's state in words, and how many need a person
+ *   GET    /api/reviews/settings/pipeline          each review job's schedule, last and next run and state
+ *   GET    /api/reviews/reply-templates            ?channel= → a channel's templates and the every-channel ones
+ *   POST   /api/reviews/reply-templates            { name, channel, bodies } → the template (409 on a taken name)
+ *   PATCH  /api/reviews/reply-templates/:id        { name?, channel?, bodies? }
+ *   DELETE /api/reviews/reply-templates/:id
+ *   POST   /api/reviews/reply-templates/:id/use    a person picked it in the Inbox reply box (its "Used" count)
+ *   PATCH  /api/reviews/automation-rules/:id       { enabled } — review automations only (404 for any other rule)
  */
 
 import type { FastifyPluginAsync } from 'fastify'
@@ -58,6 +70,11 @@ import { sseResponseHeaders } from '../lib/sse.js'
 import { runReviewRuleEvaluatorOnce } from '../jobs/review-rule-evaluator.job.js'
 import { runReviewMailerOnce } from '../jobs/review-request-mailer.job.js'
 import { findReviewMailerState, pauseReviewMailer, readReviewMailerState, resumeReviewMailer } from '../services/reviews/review-mailer-state.service.js'
+import {
+  createReplyTemplate, deleteReplyTemplate, listReplyTemplates, markReplyTemplateUsed, readReviewSettings, saveReviewSettings,
+  setReviewAutomationEnabled, updateReplyTemplate,
+} from '../services/reviews/review-settings.service.js'
+import { readSettingsPipeline, readSettingsSources } from '../services/reviews/review-settings-health.js'
 
 // SR.3 — register review action handlers (side-effect import)
 import '../services/reviews/review-action-handlers.js'
@@ -933,6 +950,83 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, ...result }
   })
 
+  // PATCH /reviews/automation-rules/:id { enabled } — Reviews Settings › Automations' switch; review automations only.
+  fastify.patch<{ Params: { id: string }; Body: { enabled?: unknown } }>('/reviews/automation-rules/:id', async (request, reply) => {
+    const result = await setReviewAutomationEnabled(request.params.id, request.body?.enabled)
+    if (result.ok === false) {
+      reply.code(result.code)
+      return { error: result.code === 404 ? 'not_found' : 'invalid', message: result.words }
+    }
+    return result
+  })
+
+  // ── Reviews Settings (PR D) ─────────────────────────────────────────
+  fastify.get('/reviews/settings', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, no-store')
+    return readReviewSettings()
+  })
+
+  fastify.put('/reviews/settings', async (request, reply) => {
+    const result = await saveReviewSettings(request.body, requestUserId(request))
+    if (result.ok === false) {
+      reply.code(400)
+      return { error: 'invalid', message: result.words }
+    }
+    return result.settings
+  })
+
+  fastify.get('/reviews/settings/sources', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, no-store')
+    return readSettingsSources()
+  })
+
+  fastify.get('/reviews/settings/pipeline', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, no-store')
+    return readSettingsPipeline()
+  })
+
+  fastify.get<{ Querystring: { channel?: string } }>('/reviews/reply-templates', async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store')
+    return { items: await listReplyTemplates({ channel: request.query?.channel ?? null }) }
+  })
+
+  fastify.post('/reviews/reply-templates', async (request, reply) => {
+    const result = await createReplyTemplate(request.body, requestUserId(request))
+    if (result.ok === false) {
+      reply.code(result.code)
+      return { error: result.code === 409 ? 'name_taken' : 'invalid', message: result.words }
+    }
+    reply.code(201)
+    return result.template
+  })
+
+  fastify.patch<{ Params: { id: string } }>('/reviews/reply-templates/:id', async (request, reply) => {
+    const result = await updateReplyTemplate(request.params.id, request.body)
+    if (result.ok === false) {
+      reply.code(result.code)
+      return { error: result.code === 404 ? 'not_found' : result.code === 409 ? 'name_taken' : 'invalid', message: result.words }
+    }
+    return result.template
+  })
+
+  fastify.delete<{ Params: { id: string } }>('/reviews/reply-templates/:id', async (request, reply) => {
+    const result = await deleteReplyTemplate(request.params.id)
+    if (result.ok === false) {
+      reply.code(404)
+      return { error: 'not_found', message: result.words }
+    }
+    return result
+  })
+
+  fastify.post<{ Params: { id: string } }>('/reviews/reply-templates/:id/use', async (request, reply) => {
+    const result = await markReplyTemplateUsed(request.params.id)
+    if (result.ok === false) {
+      reply.code(404)
+      return { error: 'not_found', message: result.words }
+    }
+    return result
+  })
+
   // ── Manual cron triggers ────────────────────────────────────────────
   fastify.post('/reviews/cron/ingest/trigger', async (_request, _reply) => {
     const s = await runReviewIngestOnce()
@@ -1430,16 +1524,26 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  fastify.delete<{ Body: { email: string; channel?: string | null } }>(
+  // Reviews Settings (2026-10-26): `{ ids }` removes the ticked rows; either form removes only bounced and hand-added
+  // addresses — one a buyer unsubscribed (or complained, or asked by privacy request) stays: only the buyer can undo
+  // that. `kept` counts those.
+  fastify.delete<{ Body: { email?: string; channel?: string | null; ids?: string[] } }>(
     '/email/suppressions',
     async (request, reply) => {
       const body = request.body
+      const { removeSuppression, removeSuppressionsById } = await import('../services/reviews/email-suppression.service.js')
+      if (Array.isArray(body?.ids)) {
+        const result = await removeSuppressionsById(body.ids)
+        return { ok: true, ...result }
+      }
       if (!body?.email) return reply.code(400).send({ error: 'email required' })
-      const { removeSuppression } = await import('../services/reviews/email-suppression.service.js')
       const result = await removeSuppression({
         email: body.email,
         channel: body.channel ?? null,
       })
+      if (result.removed === 0 && result.kept > 0) {
+        return reply.code(409).send({ error: 'buyer_unsubscribed', message: 'The buyer put this address on the list. Only the buyer can undo that.' })
+      }
       return { ok: true, ...result }
     },
   )

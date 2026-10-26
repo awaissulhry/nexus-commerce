@@ -36,6 +36,7 @@ import { fetchEbayFeedback } from './adapters/ebay-feedback.adapter.js'
 import { fetchAmazonVocFeed } from './adapters/amazon-voc.adapter.js'
 import type { AdapterResult } from './adapters/types.js'
 import { publishReviewEvent } from '../review-events.service.js'
+import { notifyReviewAlert } from './review-alert-notify.service.js'
 
 const FIXTURE_DIR =
   process.env.NEXUS_REVIEW_FIXTURE_DIR ??
@@ -341,6 +342,19 @@ export async function ingestRawReviews(
             ts: now,
           })
         }
+        // Reviews Settings › Alerts — "New negative review" for the people the business picked (in Nexus and/or by
+        // e-mail). It decides itself (1–2 stars or a negative reading, arrivals only — never an imported file) and
+        // never throws.
+        await notifyReviewAlert({
+          reviewId: result.id,
+          channel: raw.channel,
+          marketplace: raw.marketplace ?? null,
+          rating: raw.rating ?? null,
+          label: extract.label,
+          ingestSource: opts.ingestSource,
+          title: raw.title ?? null,
+          body: raw.body,
+        })
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
