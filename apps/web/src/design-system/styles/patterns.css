@@ -2068,3 +2068,29 @@
     transform: none;
   }
 }
+
+/* ── Reviews parts (2026-10-26) ──────────────────────────────────── */
+/* EditModeBar `saveShortcut`: "· Save with ⌘S" after the count. */
+.nds-actionbar-key { color: var(--nds-text-2); white-space: nowrap; }
+
+/* Builder: a focus ring on the section list's buttons (both modes) and a badge after a label. */
+.nds-builder-navitem:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -2px; }
+.nds-builder-navbadge { display: inline-flex; flex: none; }
+/* Builder `mode="page"`: in the page, not over it. The section list is a sticky strip across the top (the area's own
+   navigation takes the left); the main column and, from 1200 px, a live column on the right; the footer ends it. */
+.nds-builder.page { position: static; inset: auto; z-index: auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-16) var(--nds-space-20); align-items: start; background: transparent; }
+.nds-builder.page > .nds-builder-nav { grid-column: 1 / -1; position: sticky; top: 0; z-index: var(--nds-z-sticky); width: auto; flex-direction: row; flex-wrap: wrap; gap: var(--nds-space-4); padding: var(--nds-space-8) 0 var(--nds-space-10); overflow: visible; border-right: 0; border-bottom: 1px solid var(--nds-border-subtle); background: var(--nds-bg); }
+.nds-builder.page .nds-builder-navitem { display: inline-flex; align-items: center; gap: var(--nds-space-6); padding: var(--nds-space-6) var(--nds-space-12); }
+.nds-builder.page > .nds-builder-main { display: flex; flex-direction: column; gap: var(--nds-space-16); min-width: 0; }
+.nds-builder.page .nds-builder-section { max-width: none; margin: 0; scroll-margin-top: calc(var(--nds-builder-strip-h, 48px) + var(--nds-space-8)); }
+.nds-builder.page .nds-builder-section:focus:not(:focus-visible) { outline: none; }
+.nds-builder.page > .nds-builder-aside { display: flex; flex-direction: column; gap: var(--nds-space-16); min-width: 0; }
+.nds-builder.page > .nds-builder-footer { grid-column: 1 / -1; min-width: 0; }
+@media (min-width: 1200px) {
+  .nds-builder.page.has-aside { grid-template-columns: minmax(0, 1fr) var(--nds-builder-aside-w, 300px); }
+  .nds-builder.page > .nds-builder-aside { position: sticky; top: calc(var(--nds-builder-strip-h, 48px) + var(--nds-space-12)); max-height: calc(100dvh - var(--nds-topbar-h) - var(--nds-builder-strip-h, 48px) - var(--nds-space-24)); overflow-y: auto; }
+}
+@media (max-width: 759px) {
+  .nds-builder.page > .nds-builder-nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+  .nds-builder.page .nds-builder-navitem { flex: none; }
+}

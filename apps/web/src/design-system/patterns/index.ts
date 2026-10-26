@@ -33,7 +33,9 @@ export {
 export { addColumns, effectiveLocks, inViewCount, moveVisible, normalizeGroupedPreferences, orderedForDisplay, removeColumns, setHas, toggleColumn, toggleLock, togglableKeysOf } from './preferencesLogic'
 export { BulkActionBar, type BulkActionBarProps } from './BulkActionBar'
 export { EditModeBar, type EditModeBarProps } from './EditModeBar'
+export { isSaveShortcut, saveKeyAction, warnBeforeLeaving, isMacPlatform, saveShortcutWords, type SaveKeyEvent } from './editModeBarKeys'
 export { Builder, type BuilderProps, type BuilderSection } from './Builder'
+export { spyActiveSection, scrolledToEnd, builderSectionId, type SectionVisibility } from './builderSpy'
 export { ColumnCustomizer, type ColumnCustomizerProps, type CustomizableColumn } from './ColumnCustomizer'
 export { WorkspaceGrid, AdsFilterBar, stripServerKeys, isServerKey, enabledRank } from './workspace-grid/WorkspaceGrid'
 export type {
