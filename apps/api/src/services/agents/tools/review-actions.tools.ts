@@ -8,7 +8,7 @@
  *   - request-review: Amazon's "Request a Review" (Solicitations), delivered 4–30 days ago, no active return, no
  *     refund, once per order. eBay and Shopify buyers get Nexus's own review e-mail from the review rules' schedule
  *     (jobs/review-request-mailer.job.ts); this tool never sends it (Reviews area PR C, B12).
- *   - reply-to-review: eBay only (RespondToFeedback: public, one reply per feedback, at most 80 characters). Amazon
+ *   - reply-to-review: eBay only (RespondToFeedback: public, one reply per feedback, at most 500 characters). Amazon
  *     and Shopify have no reply call: post it there, the review desk can then record it.
  */
 
@@ -117,7 +117,7 @@ const requestReviewTool: AgentTool = {
 
 const replyInput = z.object({
   reviewId: z.string().trim().min(1).max(64).describe('Nexus review id (from review-search): eBay feedback'),
-  body: z.string().trim().min(2).max(80).describe('the public reply, as it will appear under the feedback (eBay allows at most 80 characters)'),
+  body: z.string().trim().min(2).max(500).describe('the public reply, as it will appear under the feedback (eBay allows at most 500 characters)'),
 })
 type ReplyArgs = z.infer<typeof replyInput>
 
@@ -129,7 +129,7 @@ async function previewReply(a: ReplyArgs): Promise<ToolResult> {
   if (!review) return { ok: false, error: 'Review not found' }
   const which = `Review ${review.id} (${review.channel}${review.marketplace ? ` ${review.marketplace}` : ''})`
   if (review.channel !== 'EBAY') return { ok: false, error: `${which}: ${review.channel} has no public reply call Nexus can make. Post the reply on ${review.channel}; the review desk can then record it. Nothing was queued.` }
-  if (ebayReplyMode() !== 'live') return { ok: false, error: `${which}: eBay replies are off here (NEXUS_EBAY_REAL_API not enabled), so eBay would not be called. Nothing was queued.` }
+  if (ebayReplyMode() !== 'live') return { ok: false, error: `${which}: replies to eBay are switched off on this server, so eBay would not be called. Nothing was queued.` }
   const sent = await prisma.reviewResponse.findFirst({ where: { reviewId: review.id, status: 'SENT' }, select: { sentAt: true } })
   if (sent) return { ok: false, error: `${which}: it was answered already${sent.sentAt ? ` on ${sent.sentAt.toISOString().slice(0, 10)}` : ''}; eBay allows one reply per feedback. Nothing was queued.` }
   return {
@@ -158,7 +158,7 @@ const replyToReviewTool: AgentTool = {
   reversibility: 'none',
   maxClaudeTrust: 'ask',
   description:
-    'Post a public reply under an eBay feedback of this business (at most 80 characters; one reply per feedback). The '
+    'Post a public reply under an eBay feedback of this business (at most 500 characters; one reply per feedback). The '
     + 'preview shows the marketplace copy checks (no incentives, no links, no asking to change a review). Amazon and '
     + 'Shopify have no reply call: post there. Always waits for a person to approve it in Nexus; it cannot be undone. '
     + 'If the review changes before the approval runs, nothing is posted.',
