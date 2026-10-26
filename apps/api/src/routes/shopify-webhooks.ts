@@ -36,7 +36,7 @@ import { resolveByShopifyId } from "../services/shopify-locations.service.js";
 import { logger } from "../utils/logger.js";
 import { matchInboundSku, shopifyVariantListingStore } from "../services/listings/channel-sku-inbound.js";
 import { shopifyOrderIngressGate, type ShopifyOrderEventType, type ShopifyOrderGate } from "../services/shopify/order-ingest-switch.js";
-import { captureBuyerConsentQuietly, handleEmailConsentWebhook, redactShopifyMarketingConsent } from "../services/shopify/marketing-consent.service.js";
+import { captureBuyerConsentQuietly, handleEmailConsentWebhook, purgeShopifyMarketingConsent, redactShopifyMarketingConsent } from "../services/shopify/marketing-consent.service.js";
 
 interface ShopifyWebhookPayload {
   id: string;
@@ -929,8 +929,11 @@ export async function handleAppUninstalled(
     `The app was uninstalled from ${domain || "this shop"}.`,
     "shopify_app_uninstalled",
   );
+  // The account's marketing-consent rows go too (the Owner's word, 2026-10-26). After the revoke, so a failed delete
+  // never delays it; a retry of this delivery skips the revoke done and deletes again.
+  const consentRowsDeleted = await purgeShopifyMarketingConsent(context?.connectionId);
   logger.error("[ShopifyWebhooks] app/uninstalled — the account is revoked and writes are held", {
-    domain, connectionId: context?.connectionId ?? null, outcome: outcome.skipped ?? "revoked",
+    domain, connectionId: context?.connectionId ?? null, outcome: outcome.skipped ?? "revoked", consentRowsDeleted,
   });
 }
 

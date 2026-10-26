@@ -42,7 +42,7 @@ import { emailSha256, normalisedEmail, sha256Hex } from '../../lib/customer-emai
 import { sha256Hex as audienceSha256Hex, normalisedEmail as audienceNormalisedEmail } from '../marketing/meta-ads/audience-members.js'
 import {
   backfillShopifyMarketingConsent, BUYER_CONSENT_QUERY, captureBuyerConsentAtOrder, captureBuyerConsentQuietly, CONSENT_CUSTOMERS_QUERY,
-  CONSENT_PAGE_SIZE, consentStateOf, handleEmailConsentWebhook, MarketingConsentError, redactShopifyMarketingConsent,
+  CONSENT_PAGE_SIZE, consentStateOf, handleEmailConsentWebhook, MarketingConsentError, purgeShopifyMarketingConsent, redactShopifyMarketingConsent,
   shopifyCustomerIdOf, writeConsent,
 } from './marketing-consent.service.js'
 import { logger } from '../../utils/logger.js'
@@ -323,6 +323,24 @@ describe('customers/redact deletes the customer\'s consent row, of its own accou
     expect(await inA(() => redactShopifyMarketingConsent({ customer: { id: 202 } }, { connectionId: null }))).toBe(0)
     expect(await inA(() => redactShopifyMarketingConsent({}, { connectionId: CONN_A }))).toBe(0)
     expect(await rowsOf(A)).toHaveLength(2)
+  })
+})
+
+describe('app/uninstalled deletes every consent row of that Shopify account, and only of it', () => {
+  it('the account the notice came through loses all its rows; another shop and another business keep theirs', async () => {
+    const one = { emailState: 'SUBSCRIBED' as const, emailConsentAt: null, source: 'backfill' as const }
+    await inA(async () => {
+      await writeConsent({ ...one, connectionId: CONN_A, shopifyCustomerId: '301', emailSha256: sha256Hex('gone.one@example.com') })
+      await writeConsent({ ...one, connectionId: CONN_A, shopifyCustomerId: '302', emailSha256: sha256Hex('gone.two@example.com') })
+      await writeConsent({ ...one, connectionId: CONN_A2, shopifyCustomerId: '301', emailSha256: sha256Hex('other.shop@example.com') })
+    })
+    await inB(() => writeConsent({ ...one, connectionId: CONN_B, shopifyCustomerId: '301', emailSha256: sha256Hex('gone.one@example.com') }))
+    expect(await inA(() => purgeShopifyMarketingConsent(CONN_A))).toBe(2)
+    expect((await rowsOf(A)).map((r) => `${r.connectionId}/${r.shopifyCustomerId}`)).toEqual([`${CONN_A2}/301`])
+    expect(await rowsOf(B)).toHaveLength(1)
+    expect(await inA(() => purgeShopifyMarketingConsent(CONN_A))).toBe(0)
+    expect(await inA(() => purgeShopifyMarketingConsent(null))).toBe(0)
+    expect(await rowsOf(A)).toHaveLength(1)
   })
 })
 
