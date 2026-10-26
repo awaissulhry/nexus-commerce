@@ -53,11 +53,12 @@ vi.mock('../../../db.js', () => {
 
 import { META_ADS_MEDIA_TOOLS } from './meta-ads-media.tools.js'
 import { META_ADS_READ_TOOLS } from './meta-ads-read.tools.js'
-import { linkOfIframe, PAGE_TOKEN_NOTE, pagePostId, PORTFOLIO_TAKEN, tidy } from '../../marketing/meta-ads/live-media.js'
+import { IX_TEMPLATE_REFUSED, linkOfIframe, PAGE_TOKEN_NOTE, pagePostId, PORTFOLIO_TAKEN, tidy, VISITOR_POSTS_UNAVAILABLE } from '../../marketing/meta-ads/live-media.js'
 import { offeredOn } from '../call-tool.js'
 import { MetaReadError, failureOfAnswer } from '../../marketing/meta-ads/errors.js'
 import { metaUrl } from '../../gateway/meta.js'
-import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
+import { metaCallVerdict, metaReadOnlyProblem } from '../../gateway/meta-calls.js'
+import { META_IX_TEMPLATE_READ } from '../../meta/meta-media-lists.js'
 
 const tool = (name: string) => META_ADS_MEDIA_TOOLS.find((t) => t.name === name)!
 const ctx = { can: (p: string) => ['ads.view'].includes(p), via: 'claude' as const }
@@ -102,7 +103,7 @@ describe('every view asks only what the real gateway lets through', () => {
       if (/OwnerCheck$/.test(req.operation) && req.path === '200000000000001') return { id: '200000000000001', from: { id: PAGE }, owner: { id: PAGE } }
       if (req.operation === 'instagram.mediaOwnerCheck') return { id: req.path, owner: { id: IG } }
       if (req.path.startsWith(`${PAGE}_`)) return { id: req.path }
-      if (req.operation === 'ix.template') return { id: req.path, document: { id: '397000000000001', name: 'Get New Customers' } }
+      if (req.operation === 'ix.template') return { id: req.path, document: { id: '397000000000001', name: 'Get New Customers', body_elements: [{ id: '397000000000002', name: 'Text', element_type: 'RICH_TEXT' }] } }
       if (/^posts\.(adCreative|creative)$|^preview\.shareLink$/.test(req.operation)) return { id: req.path, account_id: ACCOUNT, creative: { id: '120000000000401', account_id: ACCOUNT } }
       return { data: [{ body: '<iframe src="https://www.facebook.com/ads/api/preview_iframe.php?d=AQ1&amp;t=AQ2"></iframe>' }] }
     }
@@ -186,14 +187,14 @@ describe('only the chosen Page, Instagram account and the account\'s own media',
       { id: `${PAGE}_2`, message: 'News', story: 'Shop A updated its cover photo', from: { id: PAGE } },
       { id: '120000000000099_3', message: 'Shop B news', from: { id: '120000000000099' } },
     ]
-    const res = await run('meta-page-posts', { view: 'visitor' })
+    const res = await run('meta-page-posts', { view: 'feed' })
     expect((res.data as { items: unknown[] }).items).toEqual([
       expect.objectContaining({ id: `${PAGE}_1`, postedBy: 'someone else' }), expect.objectContaining({ id: `${PAGE}_2`, postedBy: 'the Page', story: 'Shop A updated its cover photo' }),
     ])
     // Review A6 — a row not on the chosen Page is dropped and counted; a visitor's story (it names the person) is removed.
     expect(res.data).toMatchObject({ droppedNotOnPage: 1 })
     expect(JSON.stringify(res)).not.toMatch(/900000000000001|A Person|Shop B/)
-    expect(h.calls[0]).toMatchObject({ path: `${PAGE}/visitor_posts` })
+    expect(h.calls[0]).toMatchObject({ path: `${PAGE}/feed` })
   })
   it('an Instagram media of another account is refused after one owner-only read; the chosen username is enough when Meta hides owner', async () => {
     // Review A5 — the chosen account's username is read LIVE (it may have changed since it was chosen), never the stored one.
@@ -337,11 +338,104 @@ describe('meta-ad-preview — links go to the caller, are said to be public, and
 })
 
 describe('what Meta refuses is said plainly', () => {
-  it('a Page read Meta refuses for the token says what that means (Page tokens come later)', async () => {
+  it('a Page read Meta refuses for the token says what the Page needs — Meta\'s words and the Page\'s tasks, never the ad account\'s ads_read hint (MD-101)', async () => {
     h.all = () => metaError('10', 'This endpoint requires the pages_read_engagement permission', 'forbidden')
-    const res = await run('meta-page-posts', { view: 'feed' })
-    expect(res.error).toContain(PAGE_TOKEN_NOTE)
-    expect(res.error).toMatch(/pages_read_engagement/)
+    for (const args of [{ view: 'feed' }, { view: 'ads-posts' }, { view: 'published' }]) {
+      const res = await run('meta-page-posts', args)
+      expect(res.error, args.view).toContain(PAGE_TOKEN_NOTE)
+      expect(res.error, args.view).toMatch(/Meta's words: This endpoint requires the pages_read_engagement permission/)
+      expect(res.error, args.view).not.toMatch(/ads_read|the ad account is assigned/)
+    }
+    expect(PAGE_TOKEN_NOTE).toMatch(/Create content, Manage or Moderate.*Advertise.*Analyze/)
+    // Meta's "needs a Page Access Token" on a read Nexus does not send with it yet: said as such, the token still works.
+    h.all = null
+    h.one = (req) => (req.operation === 'posts.post' ? metaError('190', 'This method must be called with a Page Access Token', 'auth_revoked') : { id: req.path })
+    const post = await run('meta-page-posts', { view: 'post', postId: `${PAGE}_500000000000001` })
+    expect(post.error).toMatch(/only to the Page's own access token, and Nexus does not send this one with the Page's token yet/)
+    expect(post.error).not.toMatch(/Make a new token/)
+  })
+  it('live-probe fix EN-926 — view visitor makes no call: Meta does not answer visitor posts on the New Pages Experience; the feed holds them', async () => {
+    const res = await run('meta-page-posts', { view: 'visitor', includeHidden: true })
+    expect(res).toEqual({ ok: true, data: { pageId: PAGE, items: [], unavailable: VISITOR_POSTS_UNAVAILABLE } })
+    expect(VISITOR_POSTS_UNAVAILABLE).toMatch(/New Pages Experience.*view feed \(postedBy: someone else/)
+    expect(h.calls).toHaveLength(0)
+  })
+  it('live-probe fix ST10-03 — a media-library edge Meta answers "does not exist" for this token is said in words, with what to use instead', async () => {
+    h.known = new Map([['120000000000101', 'campaign']])
+    const hidden = (edge: string) => metaError('100', `(#100) Tried accessing nonexisting field (${edge}) on node type (Business)`, 'configuration')
+    const views: Array<[Record<string, unknown>, string, RegExp]> = [
+      [{ view: 'business-images' }, 'images', /portfolio's images \(its media library\).*Business Suite › Media library/],
+      [{ view: 'business-videos' }, 'videos', /portfolio's videos/],
+      [{ view: 'business-creatives' }, 'creatives', /portfolio's creatives/],
+      [{ view: 'folders' }, 'creative_folders', /media-library folders/],
+      [{ view: 'tags' }, 'creative_asset_tags', /media-library tags/],
+      [{ view: 'my-folders' }, 'assigned_creative_folders', /assigned to the business's system user/],
+      [{ view: 'asset-urls' }, 'urls_for_asset_extraction', /urls_for_asset_extraction.*Ads Manager/],
+      [{ view: 'campaign-videos', campaignId: '120000000000101' }, 'video_groups', /a campaign's video groups.*meta-ad-details/],
+    ]
+    for (const [args, edge, words] of views) {
+      h.all = (req) => (req.path.endsWith(`/${edge}`) ? hidden(edge) : [])
+      const res = await run('meta-media-library', args)
+      expect(res.error, edge).toMatch(new RegExp(`Meta does not answer .* on API v26: Meta's reference pages list the read \\(GET …/${edge}, with v25 examples\\), but on v26 Meta answers that the edge does not exist`))
+      // Review of #771 — only what is known: no guessed cause.
+      expect(res.error, edge).not.toMatch(/Meta answers so when/)
+      expect(res.error, edge).toMatch(words)
+      expect(res.error, edge).toMatch(/none of Meta's v26 SDKs carries a read of it/)
+      expect(res.error, edge).not.toMatch(/for Nexus to fix/)
+    }
+    // website-assets: both parts said in words; another #100 (a field) is not taken for a hidden edge.
+    h.all = (req) => hidden(req.path.split('/')[1])
+    const site = await run('meta-media-library', { view: 'website-assets', link: 'https://shop.example.com/' })
+    expect(site.error).toMatch(/website_creative_assets.*A person sees what Meta suggests/)
+    h.all = () => metaError('100', '(#100) Tried accessing nonexisting field (media_library_url) on node type (BusinessImage)', 'configuration')
+    expect((await run('meta-media-library', { view: 'business-images' })).error).not.toMatch(/reference pages list the read/)
+  })
+  it('live-probe fix CR-489 — Meta\'s #4701 on the template read is said in words: no permission is named, and making one needs no template read', async () => {
+    h.one = () => metaError('4701', 'Insufficient permissions to access this data')
+    const res = await run('meta-instant-experiences', { view: 'template', template: 'get-new-customers' })
+    expect(res.error).toContain(IX_TEMPLATE_REFUSED)
+    expect(res.error).toMatch(/Meta's words: Insufficient permissions to access this data/)
+    expect(IX_TEMPLATE_REFUSED).toMatch(/create-meta-instant-experience takes the template by name/)
+    // Gap 46b — the read goes with the chosen Page's own token now: a #4701 to it too is said so, nothing guessed.
+    expect(IX_TEMPLATE_REFUSED).toMatch(/even with the chosen Facebook Page's own token/)
+    expect(IX_TEMPLATE_REFUSED).not.toMatch(/likely fix|does not send this read with it yet/)
+    // Anything else Meta answers stays its own failure.
+    h.one = () => metaError('100', 'Unsupported get request')
+    expect((await run('meta-instant-experiences', { view: 'template', template: 'get-new-customers' })).error).not.toContain(IX_TEMPLATE_REFUSED)
+  })
+  it('gap 46b (CR-489) — a template\'s parts: ONE read of Meta\'s template node, its document expanded, which the gateway sends with the chosen Page\'s token', async () => {
+    h.one = (req) => (req.operation === 'ix.template'
+      ? { id: req.path, document: { id: '397000000000001', name: 'Get New Customers', body_elements: [{ id: '397000000000002', name: 'Cover Image or Video', element_type: 'PHOTO' }, { id: '397000000000003', name: 'Button', element_type: 'BUTTON' }] } }
+      : {})
+    const res = await run('meta-instant-experiences', { view: 'template', template: 'get-new-customers' })
+    expect(res).toMatchObject({ ok: true, data: { templateId: '133471657203838', document: { id: '397000000000001', name: 'Get New Customers' }, parts: [{ elementType: 'PHOTO' }, { elementType: 'BUTTON' }] } })
+    expect((res as { data: { note: string } }).data.note).toMatch(/read with the chosen Facebook Page's own token/)
+    // One call, not the guide's two: no read of the document's own id (the Page's token never goes to an id Nexus did not name).
+    expect(h.calls).toEqual([expect.objectContaining({ operation: 'ix.template', path: '133471657203838', query: { fields: META_IX_TEMPLATE_READ } })])
+    const verdict = metaCallVerdict({ method: 'GET', url: metaUrl('133471657203838', { fields: META_IX_TEMPLATE_READ }), kind: 'read' })
+    expect(verdict).toMatchObject({ problem: null, pageRead: { pageId: null } })
+    // A document without its parts is said, not shown as "no parts".
+    h.one = () => ({ id: '133471657203838', document: { id: '397000000000001', name: 'Get New Customers' } })
+    expect((await run('meta-instant-experiences', { view: 'template', template: 'get-new-customers' })).error).toMatch(/without its parts \(body_elements\)/)
+  })
+  it('gap 46b (the live read of 2026-10-26) — view post, its id check and set-meta-page-post\'s state read go with the chosen Page\'s token', async () => {
+    // Meta refused view post to the system-user token: "(#10) This endpoint requires the 'pages_read_engagement' permission or
+    // the 'Page Public Content Access' feature". Each post read Nexus sends is now one the gateway sends with the Page's token.
+    h.one = (req) => (req.path.startsWith(`${PAGE}_`) ? { id: req.path, from: { id: PAGE } } : {})
+    for (const args of [{ view: 'post', postId: `${PAGE}_500000000000001` }, { view: 'post-sponsors', postId: `${PAGE}_500000000000001` }]) await run('meta-page-posts', args)
+    const postReads = h.calls.filter((c) => c.path === `${PAGE}_500000000000001`)
+    expect(postReads.map((c) => c.operation)).toEqual(expect.arrayContaining(['posts.post', 'posts.postCheck']))
+    for (const c of postReads) expect(metaCallVerdict({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' }), c.operation).toMatchObject({ problem: null, pageRead: { pageId: PAGE } })
+    const { PAGE_POST_STATE_FIELDS } = await import('../../marketing/meta-ads/live-posts.js')
+    expect(metaCallVerdict({ method: 'GET', url: metaUrl(`${PAGE}_500000000000001`, { fields: PAGE_POST_STATE_FIELDS }), kind: 'read' })).toMatchObject({ problem: null, pageRead: { pageId: PAGE } })
+  })
+  it('live-probe fix MD-126 — boostAds lists the ads that boost or boosted the media, active or not', async () => {
+    h.one = (req) => (req.operation === 'instagram.mediaOwnerCheck' ? { id: req.path, owner: { id: IG } }
+      : { id: req.path, boost_eligibility_info: { eligible_to_boost: true }, boost_ads_list: { data: [{ ad_id: '120000000000301', ad_status: 'inactive' }] } })
+    const res = await run('meta-instagram-media', { view: 'media-detail', mediaId: '180000000000001' })
+    expect(res).toMatchObject({ ok: true, data: { boostAds: [{ adId: '120000000000301', status: 'inactive' }], note: expect.stringMatching(/the ads that boost or boosted it, active or not/) } })
+    expect(JSON.stringify(res)).not.toMatch(/the ACTIVE ads/)
+    expect(tool('meta-instagram-media').description).not.toMatch(/ACTIVE ads/)
   })
   it('review B2/B7 — a video read never asks `name`; only the SDK-only field Meta names is dropped, the others stay', async () => {
     h.all = (req) => (String(req.query?.fields).includes('length') ? metaError('100', 'Tried accessing nonexisting field (length) on node type (AdVideo)') : [{ id: '200000000000001', title: 'Promo' }])
@@ -358,11 +452,11 @@ describe('what Meta refuses is said plainly', () => {
     expect((await run('meta-media-library', { view: 'videos' })).ok).toBe(true)
     expect(h.calls.map((c) => c.query?.fields)).toEqual(['id,description,picture,created_time,updated_time,title,length,status,permalink_url,is_instagram_eligible', 'id,description,picture,created_time,updated_time'])
   })
-  it('review A6 / B7 — a post read asks allowed_advertising_objects (the feed reference\'s name); one refused field keeps the others', async () => {
+  it('review A6 / B7 — a post read asks the extra fields once; one refused field keeps the others (never allowed_advertising_objects: Meta has no such field on a post)', async () => {
     h.one = (req) => (String(req.query?.fields).includes('promotion_status') ? metaError('100', 'Tried accessing nonexisting field (promotion_status)') : { id: `${PAGE}_500000000000001`, is_inline_created: false })
     const res = await run('meta-page-posts', { view: 'post', postId: `${PAGE}_500000000000001` })
     expect(res).toMatchObject({ ok: true, data: { post: { isInlineCreated: false }, fieldsNote: expect.stringMatching(/Meta refused promotion_status/) } })
-    expect(String(h.calls[1].query?.fields)).toMatch(/is_inline_created,allowed_advertising_objects$/)
+    expect(String(h.calls[1].query?.fields)).toMatch(/is_inline_created$/)
   })
   it('a metric of the other kind is refused by name before any call; IG demographics carry their timeframe', async () => {
     expect((await run('meta-page-posts', { view: 'page-insights', metrics: ['post_clicks'] })).error).toMatch(/"post_clicks" is not a metric Nexus asks here/)

@@ -34,7 +34,7 @@ import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, 
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaPersonalScrub, metaReadSecrets, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaBoostWriteKind, type MetaEventsKind, type MetaJudgedWrite, type MetaLabelsKind, type MetaMediaWriteKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWriteBodyId } from './meta-calls.js'
-import { metaRestFileExportOf, type MetaBrandSafetyKind, type MetaCommentKind, type MetaPageKind, type MetaTargetingKind, type MetaWebhookKind, type MetaWriteKind } from './meta-calls.js'
+import { metaRestFileExportOf, type MetaBrandSafetyKind, type MetaCommentKind, type MetaPageKind, type MetaTargetingKind, type MetaWebhookKind, type MetaWriteAsset, type MetaWriteKind } from './meta-calls.js'
 import { META_MEDIA_LIST_MAX, metaMultipartBody, metaRuploadSendUrl, metaStartedVideoOf, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
 import { metaBrandSafetyOwnerProblem, metaExportOwnerProblem, metaTargetingOwnerProblem, noteBlockListDraftMade, type MetaCheckRead } from './meta-brand-safety-owner.js'
 import { META_BRAND_SAFETY_WRITE_RULES } from './meta-brand-safety-rules.js'
@@ -46,12 +46,17 @@ import { noteMetaPostPartMade } from './meta-post-owner.js'
 import { isMetaPostBodyKind, type MetaPostKind } from './meta-post-rules.js'
 import { MetaPageTokenUnavailable, metaPageTokenFor, scrubExactToken } from './meta-page-token.js'
 import { META_THREADS_KINDS, metaThreadsOwnerProblem } from './meta-comment-owner.js'
+// Step 38 — a WhatsApp template or template group change (system-user token): its own owner check.
+import { META_MESSAGING_RULE_NAMES, META_WHATSAPP_KINDS, isMetaMessagingBodyKind, type MetaMessagingKind } from './meta-messaging-rules.js'
+import { metaWhatsAppOwnerProblem } from './meta-messaging-owner.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { META_SIGNALS_WRITE_RULES, type MetaSignalsKind } from './meta-signals-rules.js'
 import { META_WEBHOOK_WRITE_RULES } from './meta-webhook-rules.js'
 import { isMetaCatalogBodyKind, isMetaCatalogKind, type MetaCatalogKind } from './meta-catalog-rules.js'
 // Step 41 — the people and partner access rules (their owner check: meta-access-owner.ts).
 import { isMetaAccessRule, type MetaAccessKind } from './meta-access-rules.js'
+// Step 43 — create-meta-backed-account's writes (their owner check: meta-business-asset-owner.ts).
+import { isMetaBusinessAssetRule, type MetaBusinessAssetKind } from './meta-business-asset-rules.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { MAX_RULE_BODY_IDS, ruleBodyIds } from './meta-ad-rule-rules.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
@@ -157,7 +162,7 @@ export interface GatewayRequest {
    * step 37: a Threads post's or reply's ad (`ad`), a branded-content post a comment is on (`brandedpost`). Meta step 24:
    * the video of a video post Nexus deletes (`pagevideo`, re-review N4).
    */
-  metaParent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string }
+  metaParent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo' | 'creator'; id: string }
   /**
    * Meta step 39 (review A9): the run of a Nexus change this call belongs to (the kit's own id): a block-list draft is
    * remembered for, and used by, only the same run.
@@ -415,6 +420,9 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
       return refuse('gated', 'PUBLISH_GATED', 'Nothing was sent to Meta: Meta changes are switched off in Nexus (NEXUS_META_ADS_WRITES), so Meta is not asked to check one either.', 503)
     }
     metaWrite = judged.write
+    // Step 38 — a WhatsApp template or group change counts against the WhatsApp account (Meta's limit per WABA), as its reads
+    // do (step 15): the `whatsapp` bucket, never the ad account's.
+    metaWhatsAppRead = !!req.metaObjectKind && META_WHATSAPP_KINDS.has(req.metaObjectKind)
     // Step 30 — a change that names a Meta app (an app subscription, an ad account's connected app) goes only for the
     // connection's OWN app, as the token renewal does.
     if (metaWrite.appId) {
@@ -434,9 +442,20 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
       const chosen = req.connectionId ? await metaChosenPageOf(req.connectionId) : null
       // Step 15 — so are the chosen Page's conversations, inbox and messaging setup (meta-page-reads.ts); a conversation's
       // own node and messages (pageId null) go with the chosen Page's token.
-      const forChosen = !!chosen && (judged.pageRead.pageId === null || chosen === judged.pageRead.pageId)
-      if (!forChosen) return refuse('refused', 'META_PAGE_NOT_CHOSEN', `Nothing was sent to Meta: a Page's own reads (its connected apps, conversations, inbox and messaging setup) go only to the Facebook Page this business chose through this connection, with that Page's own token${chosen ? '' : ', and this business has chosen no Page'}.`, 403)
-      metaPageRead = true
+      // Step 38 (review B-F5) — a read on the chosen Instagram account with the Page's token (a creator's messaging id): the
+      // path's account must be the one this business chose through this connection.
+      const instagramChosen = judged.pageRead.instagramId === undefined || (!!req.connectionId && (await metaChosenInstagramOf(req.connectionId)) === judged.pageRead.instagramId)
+      // Gap 46b review N7 — a video's thumbnails: ONE owner read first, the video must be one the chosen Page posted.
+      const videoOwned = judged.pageRead.videoId === undefined || (!!chosen && !!req.connectionId && (await metaPagePostOwned(req.connectionId, judged.pageRead.videoId, chosen)).owned)
+      const forChosen = !!chosen && instagramChosen && videoOwned && (judged.pageRead.pageId === null || chosen === judged.pageRead.pageId)
+      // Live-probe fix MD-101 — the feed of ANOTHER Page (meta-ad-library page-posts: public posts, Meta's Page Public Content
+      // Access) stays an ordinary read with the system-user token, as before; only the chosen Page's own feed takes its token.
+      const otherPages = judged.pageRead.otherPages
+      if (!(otherPages && !forChosen)) {
+        if (!forChosen) return refuse('refused', 'META_PAGE_NOT_CHOSEN', `Nothing was sent to Meta: a Page's own reads (its connected apps, posts, insights, Instant Experiences, conversations, inbox and messaging setup, a creator's messaging id for its Instagram account, and the thumbnails of a video it posted) go only to the Facebook Page and Instagram account this business chose through this connection, with that Page's own token${chosen ? '' : ', and this business has chosen no Page'}.`, 403)
+        if (otherPages?.problem) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${otherPages.problem} (${req.method} ${safePath(req.url)}).`, 403)
+        metaPageRead = true
+      }
     }
     metaWhatsAppRead = judged.whatsappRead === true
     // The renewal names the app it is for: it must be THIS connection's own app, never another.
@@ -502,6 +521,9 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
     }
     const owner = metaWrite.auth === 'page' ? await metaPageOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId), req.metaRun, req.metaParent)
       : req.metaObjectKind && META_THREADS_KINDS.has(req.metaObjectKind) ? await metaThreadsOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId), req.metaParent)
+      // Step 38 — a WhatsApp template or group (by its kind: only step 38's WhatsApp rules name it) is of a WhatsApp account
+      // the chosen ad account's own portfolio owns, a portfolio no other Nexus business shares (meta-messaging-owner.ts).
+      : req.metaObjectKind && META_WHATSAPP_KINDS.has(req.metaObjectKind) ? await metaWhatsAppOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId))
       : isWebhookRule(metaWrite.rule) ? await metaWebhookOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
       // Step 20 — a targeting rule names its own kind (step 39 an ad set's targeting; step 20 its audience or placements).
       : metaWrite.targeting ? ((metaWrite.kinds as readonly string[] | undefined)?.includes(req.metaObjectKind ?? '') ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
@@ -511,7 +533,9 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
           : isSignalsRule(metaWrite.rule) ? await metaSignalsOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
           // Step 41 — a people or partner access change: chosen by its rule (its own kinds), every id in its body checked there.
           : isMetaAccessRule(metaWrite.rule) ? await (await import('./meta-access-owner.js')).metaAccessOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaOwnerIo(req.connectionId, metaWrite), new URL(req.url).searchParams, req.metaExpectedIds)
-          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind | MetaWebhookKind | MetaTargetingKind | MetaCommentKind | MetaPostKind | MetaAccessKind> | undefined, req.metaParent)
+          // Step 43 — a backed account of the chosen Page / Instagram account: chosen by its rule (its own kinds).
+          : isMetaBusinessAssetRule(metaWrite.rule) ? await (await import('./meta-business-asset-owner.js')).metaBusinessAssetOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
+          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind | MetaWebhookKind | MetaTargetingKind | MetaCommentKind | MetaPostKind | MetaAccessKind | MetaMessagingKind | MetaBusinessAssetKind> | undefined, req.metaParent)
           ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
           ?? await metaMediaAssetsProblem(req.connectionId, metaWrite)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)
@@ -559,12 +583,13 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
   // call (meta-page-token.ts: with the system-user token, for the chosen Page only) and keeps in memory for this call only:
   // it goes on the URL that is sent, never on `url` (the ledger, the trace, the answer), and is scrubbed from the answer.
   let pageToken: string | null = null
-  // Step 15 re-review N3 — a change made AS the Page takes its own slot of the ad account's bucket (3 points) BEFORE its
-  // Page token is read (from the `page` bucket, meta-page-token.ts): during an ads hold it is refused locally first, with no
-  // token read spent on it, and the send below does not take that slot again.
+  // Step 15 re-review N3 — a change made AS the Page takes its own slot (3 points) BEFORE its Page token is read: during a
+  // hold it is refused locally first, with no token read spent on it, and the send below does not take that slot again.
+  // Step 38 review S1 — that slot is of the `page` bucket, as Page-token reads are (step 15 fix A1): a change made with the
+  // Page's own token counts against the Page's limits, never the ad account's (steps 24, 36, 37 and 38's Page changes).
   let slotTaken = false
   if (metaWrite?.auth === 'page' && req.connectionId) {
-    const early = await takeToken(req.channel, bucketKey(req.channel, req.connectionId, bucketGroupOf(req.channel, req.method, url)), req.maxRateWaitMs ?? 30_000, undefined, metaWrite.reportRun ? 1 : 3)
+    const early = await takeToken(req.channel, bucketKey(req.channel, req.connectionId, 'page'), req.maxRateWaitMs ?? 30_000, undefined, metaWrite.reportRun ? 1 : 3)
     if (!early.ok) return refuse('refused', 'RATE_LIMITED_LOCAL', `Not sent yet: the ${name} rate limit for this account needs ${Math.ceil(early.waitMs / 1000)} s more. Retry later.`, 429, early.waitMs)
     slotTaken = true
   }
@@ -678,7 +703,9 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
   // 6–7. rate bucket, send, 429 / transient retries
   // Step 15 fix A1 — a read made with the chosen Page's own token takes the `page` bucket (as the read of that token does,
   // meta-page-token.ts) and a WhatsApp account's read the `whatsapp` one (rate.ts): the ad account's bucket never pays.
-  const key = bucketKey(req.channel, req.connectionId, metaPageRead ? 'page' : metaWhatsAppRead ? 'whatsapp' : bucketGroupOf(req.channel, req.method, url))
+  // Step 38 review S1 — so does a change made AS the Page (`auth: 'page'`).
+  const metaPageCall = metaPageRead || metaWrite?.auth === 'page'
+  const key = bucketKey(req.channel, req.connectionId, metaPageCall ? 'page' : metaWhatsAppRead ? 'whatsapp' : bucketGroupOf(req.channel, req.method, url))
   const max429 = req.max429Retries ?? 2
   const maxTransient = req.maxTransientRetries ?? 1
   // A Meta change is never repeatable, whatever the caller says (step 17): a 5xx or no answer may have applied it.
@@ -819,18 +846,21 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
     // "Ad Account Level Ad Spend Rate Limits") is a daily count, not a throttle — holding the bucket 300 s would stop every
     // other Meta read and change of the business (a pause too) for nothing. set-meta-spend-cap says it in words, never again.
     const dailyCount = verdict.channelCode === '17/1885172'
-    // Step 27b review A-1 — nor does a Page's own limit on a change made AS the Page (`auth: 'page'`): 80001 ("too many calls
-    // to this Page account") and step 36's 80005 count against that PAGE, not the business's ad account — holding its 'ads'
-    // bucket 300 s would refuse every other Meta change of the business (a pause too) for nothing. The tool says it in words.
-    const pageLimit = metaWrite?.auth === 'page' && /^8000[15](\/|$)/.test(verdict.channelCode ?? '')
-    // Step 15 fix A1/A3 — a read made with the chosen Page's own token, or of the WhatsApp account, has a bucket of its own:
+    // Step 15 fix A1/A3 — a call made with the chosen Page's own token, or of the WhatsApp account, has a bucket of its own:
     // Meta's limit of that Page, Instagram account, LeadGen or Messenger (80001, 80002, 80005, 80006 — rate-limiting page,
     // Error Codes) or of that WhatsApp account (80008) holds THAT bucket 300 s, never the ad account's; any other throttle
-    // (4, 17, 80000, 80004, …) holds the ads bucket as before, and the read's own bucket with it.
-    const ownLimit = (metaPageRead && /^8000[1256](\/|$)/.test(verdict.channelCode ?? '')) || (metaWhatsAppRead && /^80008(\/|$)/.test(verdict.channelCode ?? ''))
-    if (verdict.errorClass === 'rate_limited' && !objectLimit && !dailyCount && !pageLimit) {
+    // (4, 17, 80000, 80004, …) holds the ads bucket as before, and the call's own bucket with it.
+    // Step 27b review A-1 / step 38 review S1 — so on a change made AS the Page (`auth: 'page'`): 80001 ("too many calls to
+    // this Page account"), 80002 (Instagram), 80005 (LeadGen) and 80006 (Messenger) count against that PAGE, and so does a
+    // step-38 messaging change's 613 ("calls to this api have exceeded the rate limit": the Send API's, per Page) or 32
+    // ("too many calls to this Page") — holding the 'ads' bucket would refuse every other Meta change of the business (a pause
+    // too) for nothing. The tool says it in words. Only on those rules: elsewhere 613 is also the ad account's own throttle.
+    const pageOwn = /^8000[1256](\/|$)/.test(verdict.channelCode ?? '')
+      || (metaWrite?.auth === 'page' && META_MESSAGING_RULE_NAMES.has(metaWrite.rule) && /^(32|613)(\/|$)/.test(verdict.channelCode ?? ''))
+    const ownLimit = (metaPageCall && pageOwn) || (metaWhatsAppRead && /^80008(\/|$)/.test(verdict.channelCode ?? ''))
+    if (verdict.errorClass === 'rate_limited' && !objectLimit && !dailyCount) {
       // Re-review N2 — the ads bucket too, for the wait Meta named (its usage header) or else 300 s.
-      if (!ownLimit && (metaPageRead || metaWhatsAppRead)) await observeRate(req.channel, bucketKey(req.channel, req.connectionId, 'ads'), { retryAfterSec: reading?.retryAfterSec ?? 300 })
+      if (!ownLimit && (metaPageCall || metaWhatsAppRead)) await observeRate(req.channel, bucketKey(req.channel, req.connectionId, 'ads'), { retryAfterSec: reading?.retryAfterSec ?? 300 })
       // The call's own bucket: a wait Meta named was held above (its reading); else 300 s.
       if (!reading?.retryAfterSec) await observeRate(req.channel, key, { retryAfterSec: 300 })
     }
@@ -912,7 +942,7 @@ const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad' | 'customaudie
  * cannot place, of another kind, or of any other account (another business's too) gets nothing sent; the sentence never
  * names the other account.
  */
-async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | 'adrule' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaMediaWriteKind | MetaBoostWriteKind | MetaCatalogKind | MetaEventsKind | undefined, parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string }): Promise<{ code: string; sentence: string } | null> {
+async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | 'adrule' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaMediaWriteKind | MetaBoostWriteKind | MetaCatalogKind | MetaEventsKind | undefined, parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo' | 'creator'; id: string }): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   // Step 29 — Meta's automated rules: the chosen ad account's rule library (a rule's create, with every id inside the
   // rule checked), or one of its rules (and the ids inside).
@@ -958,6 +988,16 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
     const problem = await metaEventsPixelProblem(connectionId, id)
     return problem ? { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${problem}` } : null
   }
+  // Consent PR 2 — a customer list's people added or replaced (hashed e-mails of consenting Shopify buyers): only while the
+  // business's switch "Upload customer lists to Meta" is on (customer-lists-switch.ts), asked again here so a change
+  // approved earlier sends nothing once it is off; then step 31's owner check of a custom audience, below.
+  const customerListIn = kind === 'customaudience' && (write.rule === 'audience.users.add' || write.rule === 'audience.users.replace')
+  if (customerListIn) {
+    const [{ metaCustomerListsSwitch }, { NO_CONSENT }] = await Promise.all([import('../marketing/meta-ads/customer-lists-switch.js'), import('../marketing/meta-ads/audience-members.js')])
+    let on = false
+    try { on = (await metaCustomerListsSwitch()).on } catch { on = false }
+    if (!on) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${NO_CONSENT}` }
+  }
   if (!kind || !Object.prototype.hasOwnProperty.call(META_KIND_FIELD, kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of ${id} names the kind of object it changes (a campaign, an ad set or an ad).` }
   if (write.check && kind !== 'campaign') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: Meta has a check (validate_only) only for campaign changes, and ${id} is named ${kind === 'adset' || kind === 'ad' ? 'an' : 'a'} ${META_KIND_WORD[kind]}.` }
   const chosen = await metaChosenAdAccountOf(connectionId)
@@ -970,7 +1010,9 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
     return stored.kind !== kind ? notKind(` (Nexus has it as a ${META_KIND_WORD[stored.kind]})`) : null
   }
   const url = new URL(`${metaGraphBase()}/${id}`)
-  url.searchParams.set('fields', ['account_id', ...META_KIND_FIELD[kind]].join(','))
+  // Consent PR 2 review (defence in depth; the tool judges it too) — people go only into a customer list that is not
+  // value-based: its subtype and is_value_based read in the same owner read.
+  url.searchParams.set('fields', ['account_id', ...META_KIND_FIELD[kind], ...(customerListIn ? ['is_value_based'] : [])].join(','))
   let answer: GatewayResponse
   try {
     answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
@@ -987,6 +1029,8 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
   if (account !== chosen) return notChosen
   // Both of the kind's own fields, each present with a value.
   if (META_KIND_FIELD[kind].some((name) => { const value = body?.[name]; return value === undefined || value === null || value === '' })) return notKind()
+  if (customerListIn && body?.subtype !== 'CUSTOM') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${id} is not a customer list (subtype CUSTOM), and Nexus adds or replaces people only in a customer list.` }
+  if (customerListIn && body?.is_value_based === true) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${id} is a value-based customer list, whose people go with a value each, which Nexus does not send.` }
   return null
 }
 
@@ -1015,7 +1059,7 @@ async function metaWebhookOwnerProblem(connectionId: string, write: MetaJudgedWr
  * object's own budget schedules (ONE live read of `/<campaign | ad set>/budget_schedules`, at most 50 per object — Meta's
  * limit, high-demand-period.md). Anything else: nothing is sent.
  */
-async function metaPeriodOwnerProblem(connectionId: string, write: MetaJudgedWrite, parent: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string } | undefined): Promise<{ code: string; sentence: string } | null> {
+async function metaPeriodOwnerProblem(connectionId: string, write: MetaJudgedWrite, parent: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo' | 'creator'; id: string } | undefined): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   if (!parent || (parent.kind !== 'campaign' && parent.kind !== 'adset') || !/^\d{1,20}$/.test(parent.id)) {
     return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of budget schedule ${id} names the campaign or ad set it belongs to.` }
@@ -1157,7 +1201,9 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
       if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection.' }
       const { metaCatalogProblem, newCatalogRuleMemo } = await import('../marketing/meta-ads/catalog-rule.js')
       catalogMemo ??= newCatalogRuleMemo()
-      const problem = await metaCatalogProblem({ connectionId, adAccountId: chosen }, inner.kind === 'catalog' ? { catalogId: inner.id } : inner.kind === 'productset' ? { productSetId: inner.id } : { productItemId: inner.id }, catalogMemo)
+      // Gap 46b (master CR-331) — a partnership catalog ad's intro card: its product sets and items of an OWNED catalog only.
+      const owned = inner.owned === true ? { owned: true } : {}
+      const problem = await metaCatalogProblem({ connectionId, adAccountId: chosen }, inner.kind === 'catalog' ? { catalogId: inner.id, ...owned } : inner.kind === 'productset' ? { productSetId: inner.id, ...owned } : { productItemId: inner.id, ...owned }, catalogMemo)
       if (problem) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: inside this change, ${problem}` }
       continue
     }
@@ -1213,6 +1259,8 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
       || inner.kind === 'mentionedmedia' || inner.kind === 'mentionedcomment') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: inside this change, ${inner.id} is not an object this change may name.` }
     // Step 24 — and the ids inside a post (its photos, library images, sponsors, containers, place): meta-post-owner.ts.
     if (isMetaPostBodyKind(inner.kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: inside this change, ${inner.id} is not an object this change may name.` }
+    // Step 38 — and the ids inside a messaging change (a person, a comment, a persona, a template, …): meta-messaging-owner.ts.
+    if (isMetaMessagingBodyKind(inner.kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: inside this change, ${inner.id} is not an object this change may name.` }
     // Step 22 — a video inside a body (the video a library removal names): listed in the chosen ad account's library.
     const problem = await metaOwnerProblem(connectionId, { ...write, objectId: inner.id, check: false }, inner.kind)
     if (problem) return { code: problem.code, sentence: problem.sentence.replace(/^Nothing was sent to Meta: /, `Nothing was sent to Meta: inside this change, `) }
@@ -1388,6 +1436,18 @@ function metaOwnerIo(connectionId: string, write: MetaJudgedWrite): import('./me
         return null
       }
     },
+    // Gap 46b (re-review NIT 2) — the same read with the words of a refusal: the gateway's own (a missing or refused Page
+    // token: "Held, nothing sent …") or Meta's.
+    readWithWords: async (path, query) => {
+      const url = new URL(`${metaGraphBase()}/${path}`)
+      for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value)
+      try {
+        const answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
+        return answer.ok ? { body: answer.json<Record<string, unknown>>(), words: null } : { body: null, words: answer.verdict?.channelMessage ?? null }
+      } catch (err) {
+        return { body: null, words: err instanceof Error ? err.message : String(err) }
+      }
+    },
     objectProblem: (id, kind) => metaOwnerProblem(connectionId, { ...write, objectId: id, check: false }, kind),
   }
 }
@@ -1509,6 +1569,13 @@ async function metaMediaAssetsProblem(connectionId: string, write: MetaJudgedWri
       if (problem) return problem
       continue
     }
+    // Gap 46b (master CR-331) — a partnership catalog ad's intro card: the business's own post or media, else a partner's.
+    if (asset.kind === 'introsource') {
+      boost ??= { pageId: await metaChosenPageOf(connectionId), instagramId: await metaChosenInstagramOf(connectionId), portfolioId: await metaChosenPortfolioOf(connectionId) }
+      const problem = await metaIntroCardProblem(connectionId, boost, asset, write.assets)
+      if (problem) return problem
+      continue
+    }
     if (asset.kind === 'startedvideo') {
       if (!chosen || metaVideoStartedOn(connectionId, asset.id) !== chosen) return notChosenMedia(`inside this change, video ${asset.id} is not an upload Nexus started on the chosen ad account through this connection.`)
       continue
@@ -1583,7 +1650,15 @@ async function metaCreativeAssetProblem(
     }
     case 'partnerpage': return partner('PAGE', asset.id, page, 'Page')
     case 'partnerinstagram': return partner('INSTAGRAM', asset.id, ig, 'Instagram account')
-    case 'pagepost': return page && asset.id.startsWith(`${page}_`) ? null : notChosenMedia(`${where}post ${asset.id} is not a post of the Page this business chose.`)
+    case 'pagepost': {
+      if (!page || !asset.id.startsWith(`${page}_`)) return notChosenMedia(`${where}post ${asset.id} is not a post of the Page this business chose.`)
+      // Gap 46b review F2 — the id's prefix is not proof: ONE owner read, Meta must answer this very id, posted BY the chosen Page.
+      const owner = await metaPagePostOwned(connectionId, asset.id, page)
+      if (owner.owned) return null
+      return notChosenMedia(owner.read
+        ? `${where}post ${asset.id} is not one Nexus can confirm the chosen Page posted (Meta answers it with another id or another author).`
+        : `${where}Nexus could not read post ${asset.id} with the chosen Facebook Page's own token${owner.words ? ` (${owner.words.slice(0, 300)})` : ''}, so it cannot confirm the Page posted it.`)
+    }
     case 'adimage': return images?.has(asset.id) ? null : notChosenMedia(`${where}image ${asset.id} is not one Nexus can confirm in the chosen ad account's image library (create-meta-media uploads it and answers its hash).`)
     case 'canvas':
     case 'pageevent': {
@@ -1646,24 +1721,8 @@ async function metaBoostAssetProblem(
   switch (asset.kind) {
     case 'partnercontent':
     case 'adcode': {
-      const code = asset.kind === 'adcode'
-      const what = code ? 'the creator\'s ad code' : `content ${asset.id}`
-      if (!mine.portfolioId || (!page && !ig)) return notChosenMedia(`${where}Nexus cannot ask Meta's content discovery about ${what}: the chosen ad account names no business portfolio, or no Page or Instagram account is chosen.`)
-      const rows = await metaAdvertisableContent(connectionId, mine.portfolioId, page, ig, code ? 'ad_codes' : 'content_ids', asset.id)
-      if (!rows) return notChosenMedia(`${where}Nexus could not ask Meta's content discovery about ${what}, so nothing is sent.`)
-      // A Facebook post may come back as its post id alone (content discovery names "Facebook post ID").
-      const row = code ? (rows.length === 1 ? rows[0] : null) : rows.find((r) => r.contentId === asset.id || (asset.id.includes('_') && r.contentId === asset.id.split('_')[1])) ?? null
-      if (!row) return notChosenMedia(`${where}Meta's content discovery does not list ${what} as content the chosen Page or Instagram account may advertise.`)
-      if (code && asset.with && /^\d+$/.test(asset.with) && row.contentId !== asset.with) return notChosenMedia(`${where}the creator's ad code unlocks other content than media ${asset.with}.`)
-      if (code && asset.with && /^(INSTAGRAM|FACEBOOK)$/.test(asset.with) && row.platform && row.platform !== asset.with) return notChosenMedia(`${where}the creator's ad code is for ${row.platform === 'INSTAGRAM' ? 'Instagram' : 'Facebook'} content, not ${asset.with === 'INSTAGRAM' ? 'Instagram' : 'Facebook'}.`)
-      const postPage = !code && /^\d+_\d+$/.test(asset.id) ? asset.id.split('_')[0] : null
-      const pages = [row.authorPage, postPage].filter((v): v is string => !!v)
-      const igs = [row.authorInstagram].filter((v): v is string => !!v)
-      if (!pages.length && !igs.length) return notChosenMedia(`${where}Meta's content discovery names no author for ${what}, so Nexus cannot confirm whose it is.`)
-      if ((page && pages.includes(page)) || (ig && igs.includes(ig))) return notChosenMedia(`${where}${what} is the business's own: a partnership boost is a creator's content (boost the business's own post as such).`)
-      for (const p of pages) if (await metaLinkTaken('PAGE', p)) return notChosenMedia(`${where}${what} is by a Page another business in Nexus uses, so no creative of this business boosts it.`)
-      for (const i of igs) if (await metaLinkTaken('INSTAGRAM', i)) return notChosenMedia(`${where}${what} is by an Instagram account another business in Nexus uses, so no creative of this business boosts it.`)
-      return null
+      const found = await metaPartnerContentCheck(connectionId, mine, asset, where)
+      return 'problem' in found ? found.problem : null
     }
     case 'igpermalink': {
       if (!ig) return notChosenMedia('this business has no Instagram account chosen, so no Instagram post link is run as its ad.')
@@ -1693,6 +1752,121 @@ async function metaBoostAssetProblem(
     }
   }
   return notChosenMedia(`${where}${asset.kind === 'adcode' ? 'the ad code' : asset.id} is not an id Nexus can confirm.`)
+}
+
+/**
+ * Step 26 — a creator's content (`partnercontent`) or ad code (`adcode`) as Meta's content discovery lists it for the brand
+ * (one live read): listed, of the platform or media its ad code must unlock, by a named author that is neither the chosen
+ * Page or Instagram account nor one another Nexus business chose (a Facebook post's own Page part too). The authors when it
+ * passes (gap 46b: an intro card's author must be a partner its creative names); else why not (the code never quoted).
+ */
+async function metaPartnerContentCheck(
+  connectionId: string,
+  mine: { pageId: string | null; instagramId: string | null; portfolioId: string | null },
+  asset: { id: string; kind: string; with?: string },
+  where: string,
+  // Gap 46b review N8 — the refusal's words for the change that asks: a boost, or a catalog ad's intro card.
+  use: 'boost' | 'intro' = 'boost',
+): Promise<{ problem: { code: string; sentence: string } } | { platform: string | null; authorPage: string | null; authorInstagram: string | null }> {
+  const page = mine.pageId
+  const ig = mine.instagramId
+  const fail = (sentence: string) => ({ problem: notChosenMedia(sentence) })
+  const code = asset.kind === 'adcode'
+  const what = code ? 'the creator\'s ad code' : `content ${asset.id}`
+  if (!mine.portfolioId || (!page && !ig)) return fail(`${where}Nexus cannot ask Meta's content discovery about ${what}: the chosen ad account names no business portfolio, or no Page or Instagram account is chosen.`)
+  const rows = await metaAdvertisableContent(connectionId, mine.portfolioId, page, ig, code ? 'ad_codes' : 'content_ids', asset.id)
+  if (!rows) return fail(`${where}Nexus could not ask Meta's content discovery about ${what}, so nothing is sent.`)
+  // A Facebook post may come back as its post id alone (content discovery names "Facebook post ID").
+  const row = code ? (rows.length === 1 ? rows[0] : null) : rows.find((r) => r.contentId === asset.id || (asset.id.includes('_') && r.contentId === asset.id.split('_')[1])) ?? null
+  if (!row) return fail(`${where}Meta's content discovery does not list ${what} as content the chosen Page or Instagram account may advertise.`)
+  if (code && asset.with && /^\d+$/.test(asset.with) && row.contentId !== asset.with) return fail(`${where}the creator's ad code unlocks other content than media ${asset.with}.`)
+  if (code && asset.with && /^(INSTAGRAM|FACEBOOK)$/.test(asset.with) && row.platform && row.platform !== asset.with) return fail(`${where}the creator's ad code is for ${row.platform === 'INSTAGRAM' ? 'Instagram' : 'Facebook'} content, not ${asset.with === 'INSTAGRAM' ? 'Instagram' : 'Facebook'}.`)
+  const postPage = !code && /^\d+_\d+$/.test(asset.id) ? asset.id.split('_')[0] : null
+  const pages = [row.authorPage, postPage].filter((v): v is string => !!v)
+  const igs = [row.authorInstagram].filter((v): v is string => !!v)
+  if (!pages.length && !igs.length) return fail(`${where}Meta's content discovery names no author for ${what}, so Nexus cannot confirm whose it is.`)
+  if ((page && pages.includes(page)) || (ig && igs.includes(ig))) {
+    return fail(use === 'boost'
+      ? `${where}${what} is the business's own: a partnership boost is a creator's content (boost the business's own post as such).`
+      : `${where}${what} is by the business's own Page or Instagram account, yet Nexus could not confirm it as the business's own post or media (Meta answered another id or author): nothing is sent.`)
+  }
+  const usesIt = use === 'boost' ? 'boosts it' : 'shows it as an intro card'
+  for (const p of pages) if (await metaLinkTaken('PAGE', p)) return fail(`${where}${what} is by a Page another business in Nexus uses, so no creative of this business ${usesIt}.`)
+  for (const i of igs) if (await metaLinkTaken('INSTAGRAM', i)) return fail(`${where}${what} is by an Instagram account another business in Nexus uses, so no creative of this business ${usesIt}.`)
+  // Gap 46b review F1 — Meta's OWN authors (never an id's Page prefix): what an intro card's partner is compared with.
+  return { platform: row.platform, authorPage: row.authorPage, authorInstagram: row.authorInstagram }
+}
+
+/**
+ * Gap 46b review F2 — is this post (`<page id>_<post id>`) or Page media (a photo's or video's own id) one the chosen Page
+ * posted? ONE read, `GET /<id>?fields=id,from{id}` through this gateway, which sends it with the CHOSEN Page's own token
+ * (meta-page-reads.ts: the post rule and the media owner rule — the live answer of 2026-10-26: Meta refuses a post read to the
+ * system-user token, #10). Meta must answer this very id, and `from` must be the chosen Page — an id's prefix alone is no
+ * proof (Meta may resolve a composite id by its post part, live-media.ts stillOnPage). `read`: whether Meta answered at all
+ * (a missing or refused Page token, or Meta's refusal, is no answer: never a system-user retry); `words` say why not.
+ */
+async function metaPagePostOwned(connectionId: string, id: string, pageId: string): Promise<{ owned: boolean; read: boolean; words: string | null }> {
+  const answer = await metaOwnerRead(connectionId, id, 'id,from{id}')
+  const body = answer.body && typeof answer.body === 'object' ? answer.body : null
+  if (!body) return { owned: false, read: false, words: answer.words }
+  const own = (value: unknown) => (typeof value === 'string' || typeof value === 'number' ? String(value) : null)
+  const from = body.from && typeof body.from === 'object' ? own((body.from as { id?: unknown }).id) : null
+  return { owned: own(body.id) === id && from === pageId, read: true, words: null }
+}
+
+/**
+ * Gap 46b (master CR-331) — the existing post a partnership Advantage+ catalog ad shows as its intro card (`introsource`,
+ * meta-creative-rules.ts; `with` its platform), before anything is sent:
+ *   - the business's OWN: a post (`<page id>_<post id>`) or a photo or video (its own id: Meta's guide names <FB_MEDIA_ID>)
+ *     the chosen Page posted — ONE owner read, metaPagePostOwned (review F2: never the id's prefix alone) — or a media of the
+ *     chosen Instagram account (step 23's rule, metaInstagramMediaOwned: Meta's owner, else its username read live); or
+ *   - a PARTNER's: step 26's check of a creator's content (metaPartnerContentCheck: Meta's content discovery lists it for the
+ *     brand — so the business already has partnership-ad access to it — by an author that is not the business itself and
+ *     no other Nexus business), of the platform named, AND by one of the partners this creative names (the sponsor beside the
+ *     chosen identity, or the identity beside the chosen sponsor: its identitypage / identityinstagram / partnerpage /
+ *     partnerinstagram assets, which metaCreativeAssetProblem checks as no other Nexus business's) — compared with Meta's OWN
+ *     authors only (review F1), and a post id's Page part must be Meta's author Page.
+ * Anything else, or anything Nexus cannot confirm: nothing is sent.
+ */
+async function metaIntroCardProblem(
+  connectionId: string,
+  mine: { pageId: string | null; instagramId: string | null; portfolioId: string | null },
+  asset: { id: string; kind: string; with?: string },
+  assets: readonly MetaWriteAsset[],
+): Promise<{ code: string; sentence: string } | null> {
+  const where = 'inside this creative, '
+  const platform = asset.with === 'INSTAGRAM' || asset.with === 'FACEBOOK' ? asset.with : null
+  if (!platform) return notChosenMedia(`${where}the intro card ${asset.id} names no platform Nexus checks.`)
+  // Gap 46b review N5 — a Facebook post (<Page id>_<post id>) or a Page photo's or video's own id (Meta's guide: <FB_MEDIA_ID>).
+  const prefix = platform === 'FACEBOOK' ? /^([1-9]\d{0,24})_[1-9]\d{0,24}$/.exec(asset.id)?.[1] ?? null : null
+  if (platform === 'FACEBOOK') {
+    if (!prefix && !/^[1-9]\d{0,24}$/.test(asset.id)) return notChosenMedia(`${where}the intro card ${asset.id} is not a Facebook post or media id.`)
+    // Gap 46b review F2 — the business's own only by ONE owner read (Meta's id and `from`, the chosen Page's token), never by
+    // the id's prefix. An id that names the chosen Page but cannot be read with its token is refused in words (no other path).
+    if (mine.pageId && (!prefix || prefix === mine.pageId)) {
+      const owner = await metaPagePostOwned(connectionId, asset.id, mine.pageId)
+      if (owner.owned) return null
+      if (prefix && !owner.read) return notChosenMedia(`${where}Nexus could not read the intro card ${asset.id} with the chosen Facebook Page's own token${owner.words ? ` (${owner.words.slice(0, 300)})` : ''}, so it cannot confirm the Page posted it.`)
+    }
+  } else {
+    if (!/^[1-9]\d{0,24}$/.test(asset.id)) return notChosenMedia(`${where}the intro card ${asset.id} is not an Instagram media id.`)
+    if (mine.instagramId && await metaInstagramMediaOwned(connectionId, asset.id, mine.instagramId)) return null
+  }
+  // Not the business's own: a partner's, named by this creative.
+  const chosen = new Set([mine.pageId, mine.instagramId].filter((v): v is string => !!v))
+  const partners = new Set<string>()
+  for (const a of assets) {
+    if (a.kind === 'partnerpage' || a.kind === 'partnerinstagram') partners.add(a.id)
+    if (a.kind === 'identitypage' || a.kind === 'identityinstagram') for (const id of [a.id, a.with]) if (id && !chosen.has(id)) partners.add(id)
+  }
+  if (!partners.size) return notChosenMedia(`${where}the intro card ${asset.id} is not the chosen ${platform === 'FACEBOOK' ? 'Page\'s post' : 'Instagram account\'s media'} Nexus can confirm, and the creative names no partner whose it could be.`)
+  const found = await metaPartnerContentCheck(connectionId, mine, { id: asset.id, kind: 'partnercontent' }, where, 'intro')
+  if ('problem' in found) return found.problem
+  if (found.platform && found.platform !== platform) return notChosenMedia(`${where}the intro card ${asset.id} is ${found.platform === 'INSTAGRAM' ? 'Instagram' : 'Facebook'} content, not ${platform === 'INSTAGRAM' ? 'Instagram' : 'Facebook'}.`)
+  // Gap 46b review F1 — a post id's Page part must BE Meta's author (it is the caller's text, not Meta's word).
+  if (prefix && prefix !== found.authorPage) return notChosenMedia(`${where}the intro card ${asset.id} names a Page in its id that is not the post's author as Meta's content discovery names it: nothing is sent.`)
+  if (![found.authorPage, found.authorInstagram].some((id) => !!id && partners.has(id))) return notChosenMedia(`${where}the intro card ${asset.id} is by another account than the partner this creative names: a partnership catalog ad shows the business's own post or its partner's.`)
+  return null
 }
 
 /**

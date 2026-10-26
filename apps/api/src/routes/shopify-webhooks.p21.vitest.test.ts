@@ -109,7 +109,8 @@ vi.mock('../db.js', () => ({
     get: (_t, model: string) => new Proxy({}, {
       get: (_m, method: string) => async (args: any) => {
         dbCalls.push({ model, method, args })
-        return method === 'updateMany' ? { count: updateManyCount } : null
+        // deleteMany: app/uninstalled deletes the account's marketing-consent rows (2026-10-26).
+        return method === 'updateMany' ? { count: updateManyCount } : method === 'deleteMany' ? { count: 0 } : null
       },
     }),
   }),
@@ -376,6 +377,8 @@ describe('P2.4 — the app lifecycle and privacy topics', () => {
     const res = await lifecycle('/webhooks/shopify/app/uninstalled', body)()
     expect(res.statusCode).toBe(200)
     expect(revoked).toEqual([{ connectionId: 'conn-1', source: 'shopify_app_uninstalled' }])
+    // The same account's marketing-consent rows go, and only that account's (the Owner's word, 2026-10-26).
+    expect(dbCalls.filter((c) => c.model === 'shopifyMarketingConsent')).toEqual([{ model: 'shopifyMarketingConsent', method: 'deleteMany', args: { where: { connectionId: 'conn-1' } } }])
   })
 
   it('uses the persisted account when a due lifecycle delivery is repeated', async () => {
@@ -385,6 +388,7 @@ describe('P2.4 — the app lifecycle and privacy topics', () => {
     expect(res.statusCode).toBe(200)
     expect(recorded[0].connectionId).toBe('conn-1')
     expect(revoked).toEqual([{ connectionId: 'stored-account', source: 'shopify_app_uninstalled' }])
+    expect(dbCalls.filter((c) => c.model === 'shopifyMarketingConsent')).toEqual([{ model: 'shopifyMarketingConsent', method: 'deleteMany', args: { where: { connectionId: 'stored-account' } } }])
   })
 
   it('refuses a no-route lifecycle notice when the ledger cannot persist it', async () => {

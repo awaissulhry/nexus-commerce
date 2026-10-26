@@ -9,6 +9,9 @@
  * `whatsapp` one, never the ad account's; Meta's own limit of that Page / Instagram / LeadGen / Messenger (80001, 80002,
  * 80005, 80006) or WhatsApp account (80008) holds THAT bucket only; any other throttle holds the ads bucket as before; and
  * the same codes on a system-user read still hold the ads bucket. Made-up ids only.
+ * Live-probe fixes (2026-10-26): the chosen Page's feed, published and ad posts, a post's catalog-ad posts, Page and post
+ * insights and the Instant Experience list go with the Page's token too (exact keys, values and fields); another Page's
+ * feed stays a system-user read; a campaign's or Instagram account's insights are no Page read.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -28,9 +31,11 @@ vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: v
 import { gatewayLedger, gatewayMetaPage } from '../../test-support/gateway-stubs.js'
 import { __rateTest, bucketKey, HOLD_LUA, META_BUCKETS, observeRate, takeToken, type RedisLike } from './rate.js'
 import { metaCall, metaWriteCall } from './meta.js'
-import { metaCallVerdict } from './meta-calls.js'
+import { metaCallVerdict, metaReadOnlyProblem } from './meta-calls.js'
 import { META_PAGE_READ_RULES, META_THREAD_ID, metaPageReadOf, metaWhatsAppRead, topLevelFieldItems } from './meta-page-reads.js'
 import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
+import { META_IX_TEMPLATE_IDS, META_IX_TEMPLATE_READ } from '../meta/meta-media-lists.js'
+import { META_IX_TEMPLATE_IDS as CANVAS_TEMPLATE_IDS } from './meta-canvas-rules.js'
 
 const BASE = `https://graph.facebook.com/${META_DEFAULT_GRAPH_API_VERSION}`
 const PAGE = '120000000000010'
@@ -85,11 +90,18 @@ describe('the allow-list: which reads go with the Page\'s token', () => {
     for (const [path, pageId] of PAGE_READS) {
       expect(verdict(path), path).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId } })
     }
-    expect(META_PAGE_READ_RULES).toHaveLength(16)
+    // Step 38 (review B-F5) — the creator lookup on the chosen Instagram account (its id in instagramId, the Page's token).
+    expect(verdict('170000000000010/creator_marketplace_creators?username=creator.a&fields=id,page_id,messaging_id')).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: null, instagramId: '170000000000010' } })
+    expect(verdict('170000000000010/creator_marketplace_creators?username=creator.a&fields=id,username').pageRead).toBeUndefined()
+    // Gap 46b — and Meta's Instant Experience templates, a Page video's thumbnails, a post of the chosen Page by its id and the
+    // owner read of a Page photo or video (their describes below).
+    // Re-review: one exact rule per Page photo / video field list (4 lists).
+    expect(META_PAGE_READ_RULES).toHaveLength(32)
   })
   it('every other read stays a system-user read: the Page node, its other edges, a WhatsApp account, an ad account, a post', () => {
     for (const path of [
-      `${PAGE}?fields=id,instagram_business_account`, `${PAGE}?fields=id,messaging_feature_status`, `${PAGE}/feed?fields=id`,
+      `${PAGE}?fields=id,instagram_business_account`, `${PAGE}?fields=id,messaging_feature_status`, `${PAGE}/live_videos?fields=id`,
+      `${PAGE}/canvas_elements?fields=element`,
       'act_1234567890/connected_instagram_accounts_with_iabp?fields=id,iabp_id&business_id=9876543210',
       '170000000000001/connected_threads_user?fields=threads_user_id', `${PAGE}_500000000000001/comments?fields=id`, '540000000000001/steps?fields=id,message&limit=100',
     ]) {
@@ -125,7 +137,10 @@ describe('the allow-list: which reads go with the Page\'s token', () => {
     for (const id of ['120000000000001', `${PAGE}_500000000000001`, 'act_1234567890', 'message_template_library', 'me', 't_abc', 't_1_2',
       'm_AG5Hz2Uq7tuwNEhXfYYKj8', 'AbCdEfGh12345678', 'awdfZAG06MTpJR01lc3N3Njkz', 'aWdfZAG06_MTpJR01lc3N3', 'aWdf123', `aWdf${'a'.repeat(197)}`]) {
       expect(META_THREAD_ID.test(id), id).toBe(false)
-      expect(verdict(`${id}?fields=id,participants`).pageRead, id).toBeUndefined()
+      // Gap 46b — a post id is the post rule's (never a conversation's): `participants` is no field of a post, so its read is
+      // refused for the chosen Page (otherPages problem), never sent as a conversation read.
+      if (id === `${PAGE}_500000000000001`) expect(verdict(`${id}?fields=id,participants`).pageRead, id).toMatchObject({ pageId: PAGE, otherPages: { problem: expect.stringMatching(/a post of the chosen Page are read with fields from/) } })
+      else expect(verdict(`${id}?fields=id,participants`).pageRead, id).toBeUndefined()
       expect(verdict(`${id}/messages?fields=id,message`).pageRead, id).toBeUndefined()
     }
   })
@@ -167,7 +182,219 @@ describe('the allow-list: which reads go with the Page\'s token', () => {
   })
 })
 
+/** Live-probe fixes — every read of these edges as live-media.ts (and live-engagement.ts, live-partners.ts) sends it. */
+const POST_FIELDS = 'id,message,story,created_time,updated_time,permalink_url,status_type,is_published,is_hidden,is_expired,is_eligible_for_promotion,promotable_id,scheduled_publish_time,full_picture,is_instagram_eligible,from{id}'
+const POST = `${PAGE}_500000000000001`
+const PROBE_READS: Array<[string, Record<string, unknown>]> = [
+  [`${PAGE}/feed?fields=${POST_FIELDS},is_inline_created&include_hidden=true&show_expired=true&limit=50`, { pageId: PAGE, otherPages: { problem: null } }],
+  [`${PAGE}/feed?fields=id,message,created_time,permalink_url,status_type&limit=25&after=QVFIUmxtX0Z6dGFCLTNnVXc9`, { pageId: PAGE, otherPages: { problem: null } }],
+  [`${PAGE}/published_posts?fields=${POST_FIELDS}&limit=50`, { pageId: PAGE }],
+  [`${PAGE}/ads_posts?include_inline_create=true&exclude_dynamic_ads=true&since=2026-10-01&until=2026-10-20&fields=${POST_FIELDS},is_inline_created&limit=50`, { pageId: PAGE }],
+  [`${POST}/dynamic_posts?fields=id,title,message,description,link,image_url,product_id,created&limit=50`, { pageId: PAGE }],
+  [`${POST}/dynamic_posts?fields=id,owner_id,product_id,title,created&limit=10`, { pageId: PAGE }],
+  [`${PAGE}/insights?metric=page_media_view,page_total_media_view_unique,page_post_engagements,page_follows,page_daily_follows_unique&period=day&since=2026-10-01&until=2026-10-20&breakdown=is_from_ads`, { pageId: PAGE }],
+  [`${POST}/insights?metric=post_media_view,post_clicks&period=lifetime&breakdown=is_from_followers`, { pageId: PAGE }],
+  [`${PAGE}/canvases?fields=id,name,is_published,is_hidden,canvas_link,update_time,background_color&is_published=true&is_hidden=false&limit=50`, { pageId: PAGE }],
+]
+
+describe('live-probe fixes — the chosen Page\'s posts, insights and Instant Experience list go with its token', () => {
+  it('each read exactly as Nexus sends it goes with the token of the Page in its path (a post\'s: the Page its id names)', () => {
+    for (const [path, pageRead] of PROBE_READS) expect(verdict(path), path).toEqual({ problem: null, renewalClientId: null, pageRead })
+    // Another Page's feed (meta-ad-library page-posts) is judged too, but stays an ordinary read (gateway.ts, below).
+    expect(verdict(`${OTHER_PAGE}/feed?fields=id,message,created_time,permalink_url,status_type&limit=25`).pageRead).toEqual({ pageId: OTHER_PAGE, otherPages: { problem: null } })
+  })
+  it('insights are the Page\'s only when every metric is a Page (or post) metric: a campaign\'s, an Instagram account\'s or media\'s are ordinary reads', () => {
+    for (const path of [
+      '120000000000101/insights?fields=spend,impressions&level=campaign', '170000000000001/insights?metric=reach,views&period=day&metric_type=total_value',
+      '180000000000001/insights?metric=views,reach,likes', `${PAGE}/insights?metric=page_follows,reach`,
+    ]) {
+      const v = verdict(path)
+      expect([v.problem, v.pageRead], path).toEqual([null, undefined])
+    }
+  })
+  it('on these routes: only their keys, values (booleans, days, Meta\'s periods and breakdowns) and fields, each once; no token asked', () => {
+    for (const [path, words] of [
+      [`${PAGE}/published_posts?fields=id&include_hidden=yes`, /published posts are read with include_hidden only as Nexus sends it/],
+      [`${PAGE}/published_posts?fields=id,admin_creator`, /published posts are read with fields from/],
+      [`${PAGE}/published_posts?fields=id,from`, /are read with fields from/],
+      [`${PAGE}/ads_posts?fields=id&since=1759276800`, /ad posts are read with since only as Nexus sends it/],
+      [`${PAGE}/ads_posts?fields=id&summary=total_count`, /ad posts are read with fields, limit, after, include_inline_create, exclude_dynamic_ads, since, until only \(not "summary"\)/],
+      [`${POST}/dynamic_posts?fields=id,owner_id&limit=101`, /a limit of digits only, 1 to 100/],
+      [`${POST}/dynamic_posts?fields=id,story`, /catalog-ad posts are read with fields from/],
+      [`${PAGE}/insights?metric=page_follows,page_follows`, /each metric once/],
+      [`${PAGE}/insights?metric=page_follows&period=hour`, /are read with period only as Nexus sends it/],
+      [`${PAGE}/insights?metric=page_follows&breakdown=age`, /are read with breakdown only as Nexus sends it/],
+      [`${POST}/insights?metric=post_clicks&until=yesterday`, /a post's insights are read with until only as Nexus sends it/],
+      [`${PAGE}/canvases?fields=id,last_editor`, /Instant Experiences are read with fields from/],
+      [`${PAGE}/canvases?fields=id&is_hidden=1`, /are read with is_hidden only as Nexus sends it/],
+    ] as Array<[string, RegExp]>) {
+      expect(verdict(path).problem, path).toMatch(words)
+    }
+    expect(verdict(`${PAGE}/canvases?fields=id`, 'app').problem).toMatch(/a caller asks for no token/)
+    // The feed's problem is carried for the gateway to judge once it knows the chosen Page.
+    expect(verdict(`${PAGE}/feed?fields=id,from`).pageRead).toEqual({ pageId: PAGE, otherPages: { problem: expect.stringMatching(/the Page's own posts are read with fields from/) } })
+    expect(verdict(`${PAGE}/feed?fields=id`, 'app').pageRead?.otherPages?.problem).toMatch(/a caller asks for no token/)
+  })
+  it('no visitor_posts: Meta does not answer it on the New Pages Experience, so the gateway no longer carries its keys (EN-926)', () => {
+    expect(verdict(`${PAGE}/visitor_posts?fields=id&include_hidden=true`).problem).toMatch(/"include_hidden" is not one a Nexus read of Meta uses here/)
+  })
+})
+
+describe('gap 46b (CR-489) — Meta\'s Instant Experience templates go with the chosen Page\'s token, on ONE exact read', () => {
+  const TEMPLATE = '133471657203838'
+  const fields = (f: string) => `fields=${encodeURIComponent(f)}`
+  it('each of the five template nodes, read exactly so, is a Page-token read of the CHOSEN Page (no Page in its path)', () => {
+    expect(META_IX_TEMPLATE_IDS).toHaveLength(5)
+    expect([...CANVAS_TEMPLATE_IDS]).toEqual([...META_IX_TEMPLATE_IDS])
+    for (const id of META_IX_TEMPLATE_IDS) expect(verdict(`${id}?${fields(META_IX_TEMPLATE_READ)}`), id).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: null } })
+    // A subset of its items is the same read; each item exactly as written.
+    expect(verdict(`${TEMPLATE}?fields=id`)).toMatchObject({ problem: null, pageRead: { pageId: null } })
+  })
+  it('on a template node: only fields, only its items (the document expanded exactly so), each once; no token asked', () => {
+    for (const f of ['id,document', 'id,document{id,body_elements}', 'id,document{id,name,body_elements,owner}', 'id,name,document{id,name,body_elements}', 'id,document{id,name,body_elements},id', 'id,snapshot_photo']) {
+      expect(verdict(`${TEMPLATE}?${fields(f)}`).problem, f).toMatch(/Meta's Instant Experience templates are read with fields from/)
+    }
+    expect(verdict(`${TEMPLATE}?${fields(META_IX_TEMPLATE_READ)}&limit=5`).problem).toBeTruthy()
+    expect(verdict(`${TEMPLATE}?${fields(META_IX_TEMPLATE_READ)}`, 'page').problem).toMatch(/a caller asks for no token/)
+  })
+  it('no other node takes the rule: a document id, a template-like id, a Page, a canvas are not template reads', () => {
+    for (const id of ['397246414010297', '1334716572038380', '33471657203838', PAGE]) {
+      expect(metaPageReadOf(id, [id], new URLSearchParams({ fields: META_IX_TEMPLATE_READ }), undefined), id).toBeNull()
+    }
+    // A conversation's rule shares the route's shape only for Meta's thread ids (META_THREAD_ID): a template id is none.
+    // (The media owner rule matches any node by its route, then only the exact read id,from{id}: never a template read.)
+    expect(META_PAGE_READ_RULES.filter((r) => r.route.test(TEMPLATE) && (r.page !== 'thread' || META_THREAD_ID.test(TEMPLATE)) && !r.exactFields).map((r) => r.what)).toEqual(['Meta\'s Instant Experience templates'])
+  })
+  it('through the gateway: with the chosen Page\'s own token (read first with the system-user token); no Page chosen: nothing read or sent', async () => {
+    gatewayMetaPage['m-1'] = PAGE
+    h.answers.push(pageToken, json({ id: TEMPLATE, document: { id: '397000000000001', name: 'Get New Customers', body_elements: [] } }))
+    const read = await metaCall({ connectionId: 'm-1', operation: 'ix.template', path: TEMPLATE, query: { fields: META_IX_TEMPLATE_READ } })
+    expect(read.ok).toBe(true)
+    expect([new URL(h.calls[1].url).pathname, new URL(h.calls[1].url).searchParams.get('fields'), tokenOf(1)]).toEqual([`/${META_DEFAULT_GRAPH_API_VERSION}/${TEMPLATE}`, META_IX_TEMPLATE_READ, PAGE_TOKEN])
+    expect(read.text).not.toContain(PAGE_TOKEN)
+    expect(JSON.stringify(gatewayLedger)).not.toContain(PAGE_TOKEN)
+    h.calls = []
+    await expect(metaCall({ connectionId: 'm-2', operation: 'ix.template', path: TEMPLATE, query: { fields: META_IX_TEMPLATE_READ } })).rejects.toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
+    expect(h.calls).toHaveLength(0)
+  })
+})
+
+describe('gap 46b review N7 — a Page video\'s thumbnails go with the chosen Page\'s token, only for a video that Page posted', () => {
+  const VIDEO = '120000000000601'
+  const THUMBS = (q: string) => `${VIDEO}/thumbnails?${q}`
+  it('exactly create-meta-media\'s read (id, uri, is_preferred; limit) is a Page-token read of the video; any other read of the edge stays ordinary', () => {
+    expect(verdict(THUMBS('fields=id,uri,is_preferred&limit=50'))).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: null, videoId: VIDEO } })
+    // meta-media-library view video's own read (width, height, scale too) is unchanged: the system-user token, as before.
+    expect(verdict(THUMBS('fields=id,uri,width,height,scale,is_preferred&limit=50')).pageRead).toBeUndefined()
+    expect(verdict(THUMBS('fields=id,uri,is_preferred&limit=500')).problem).toMatch(/limit of digits only, 1 to 100/)
+    expect(verdict(THUMBS('fields=id,uri,is_preferred&limit=50'), 'page').problem).toMatch(/a caller asks for no token/)
+  })
+  it('through the gateway: ONE owner read of the video (Meta\'s id and `from` the chosen Page), the Page\'s token, then the read; another Page\'s video: nothing read with a token', async () => {
+    gatewayMetaPage['m-1'] = PAGE
+    // The owner read is itself a Page-token read (the media owner rule): token, video, token, thumbnails.
+    h.answers.push(pageToken, json({ id: VIDEO, from: { id: PAGE } }), pageToken, json({ data: [{ id: '700000000000001', uri: 'https://scontent.example.com/t1.jpg', is_preferred: true }] }))
+    const read = await metaCall({ connectionId: 'm-1', operation: 'media.pageVideoThumbnails', path: `${VIDEO}/thumbnails`, query: { fields: 'id,uri,is_preferred', limit: 50 } })
+    expect(read.ok).toBe(true)
+    expect([new URL(h.calls[1].url).pathname, new URL(h.calls[1].url).searchParams.get('fields'), tokenOf(1)]).toEqual([`/${META_DEFAULT_GRAPH_API_VERSION}/${VIDEO}`, 'id,from{id}', PAGE_TOKEN])
+    expect([new URL(h.calls[3].url).pathname, tokenOf(3)]).toEqual([`/${META_DEFAULT_GRAPH_API_VERSION}/${VIDEO}/thumbnails`, PAGE_TOKEN])
+    for (const owner of [json({ id: VIDEO, from: { id: OTHER_PAGE } }), json({ id: '120000000000602', from: { id: PAGE } }), json({ error: { message: 'Unsupported get request.', code: 100 } }, 400)]) {
+      h.calls = []
+      h.answers.push(pageToken, owner)
+      await expect(metaCall({ connectionId: 'm-1', operation: 'x', path: `${VIDEO}/thumbnails`, query: { fields: 'id,uri,is_preferred', limit: 50 } })).rejects.toMatchObject({ code: 'META_PAGE_NOT_CHOSEN', message: expect.stringMatching(/the thumbnails of a video it posted/) })
+      // Only the owner read (with the Page's token) went: no read of the thumbnails.
+      expect(h.calls.map((c) => new URL(c.url).pathname.split('/').pop())).toEqual([PAGE, VIDEO])
+    }
+  })
+})
+
+describe('gap 46b, the live read of 2026-10-26 — a post of the chosen Page and the owner read of its media go with the Page\'s token', () => {
+  const POST = `${PAGE}_500000000000001`
+  const VIEW_POST = 'id,message,story,created_time,updated_time,permalink_url,status_type,is_published,is_hidden,is_expired,is_eligible_for_promotion,promotable_id,scheduled_publish_time,full_picture,is_instagram_eligible,from{id},instagram_eligibility,video_buying_eligibility,attachments{media_type,type,title,description,url,unshimmed_url,media,target,subattachments},is_inline_created,promotion_status'
+  const STATE = 'id,message,is_hidden,is_published,scheduled_publish_time,timeline_visibility,permalink_url,from{id}'
+  const f = (fields: string) => `fields=${encodeURIComponent(fields)}`
+  it('the chosen Page\'s post by its id — every read Nexus makes of one — is a Page-token read of that Page', () => {
+    const ENGAGEMENT = ['id,reactions.limit(0).summary(total_count),shares', ...['LIKE', 'LOVE', 'WOW', 'HAHA', 'SAD', 'SORRY', 'ANGRY'].map((t) => `id,reactions.type(${t}).limit(0).summary(total_count)`)]
+    for (const fields of [VIEW_POST, STATE, 'id,from{id}', 'id', 'id,created_time', 'id,is_eligible_for_promotion,promotable_id,is_instagram_eligible', 'id,attachments{target{id}}', 'id,from{id},created_time', 'id,created_time,can_reply_privately', ...ENGAGEMENT]) {
+      expect(verdict(`${POST}?${f(fields)}`), fields).toMatchObject({ problem: null, pageRead: { pageId: PAGE, otherPages: { problem: null } } })
+    }
+  })
+  it('re-review FIX 1 / NIT 1 — a read of a post asking anything else names its problem (refused for the chosen Page, gateway.ts); another Page\'s or a comment id stays ordinary', () => {
+    for (const query of [f('id,privacy'), f('id,from{id,name}'), `${f('id,from{id}')}&limit=5`, f('id,from{id}.as(x)'), f('id,attachments{target}')]) {
+      const v = verdict(`${POST}?${query}`)
+      expect(v.problem ?? v.pageRead?.otherPages?.problem, query).toMatch(/a post of the chosen Page are read with|fields|limit|not one a Nexus read/)
+      expect(metaReadOnlyProblem({ method: 'GET', url: `${BASE}/${POST}?${query}`, kind: 'read' }, PAGE), query).toBeTruthy()
+    }
+    // Another Page's post, or a comment `<object>_<comment>`: the gateway sends it as an ordinary read.
+    expect(metaReadOnlyProblem({ method: 'GET', url: `${BASE}/${OTHER_PAGE}_500000000000001?${f('id,privacy')}`, kind: 'read' }, PAGE)).toBeNull()
+    expect(metaReadOnlyProblem({ method: 'GET', url: `${BASE}/500000000000001_800000000000001?${f('id,message,from{id,name}')}`, kind: 'read' }, PAGE)).toBeNull()
+  })
+  it('a Page photo or video by its own id: each of its four exact lists is a Page-token read (the chosen Page\'s); anything else stays ordinary', () => {
+    for (const fields of ['id,from{id}', 'from{id},id', 'id,from{id},width,height', 'id,post_id,from{id}', 'id,post_id,published', 'id,title,published,from{id}']) {
+      expect(verdict(`500000000000003?${f(fields)}`), fields).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: null } })
+    }
+    for (const query of [f('id'), f('from{id}'), f('id,from{id},length'), f('id,owner,username'), f('id,from{id},id'), f('id,from{id,name}'), f('id,from{id}.as(x)'), `${f('id,from{id}')}&limit=5`, f('id,from{id},width'), f('id,title,from{id}')]) {
+      // Ordinary: no Page-token read AND no refusal (re-review mutation M12/M13 — an off-list read is never refused here).
+      expect(verdict(`500000000000003?${query}`), query).toEqual({ problem: null, renewalClientId: null })
+    }
+    expect(verdict(`500000000000003?${f('id,from{id}')}`, 'page').problem).toMatch(/a caller asks for no token/)
+  })
+  it('through the gateway: the owner read goes with the chosen Page\'s token (never the system user\'s); with no Page chosen nothing is read', async () => {
+    gatewayMetaPage['m-1'] = PAGE
+    h.answers.push(pageToken, json({ id: POST, from: { id: PAGE } }))
+    const read = await metaCall({ connectionId: 'm-1', operation: 'write.ownerCheck', path: POST, query: { fields: 'id,from{id}' } })
+    expect(read.ok).toBe(true)
+    expect([new URL(h.calls[0].url).searchParams.get('fields'), tokenOf(0), new URL(h.calls[1].url).pathname, tokenOf(1)]).toEqual(['access_token', 'meta-system-user-token', `/${META_DEFAULT_GRAPH_API_VERSION}/${POST}`, PAGE_TOKEN])
+    h.calls = []
+    h.answers.push(pageToken, json({ id: '500000000000003', from: { id: PAGE } }))
+    await metaCall({ connectionId: 'm-1', operation: 'write.ownerCheck', path: '500000000000003', query: { fields: 'id,from{id}' } })
+    expect(tokenOf(1)).toBe(PAGE_TOKEN)
+    // Another Page's post stays an ordinary read (system-user token), as before.
+    h.calls = []
+    await metaCall({ connectionId: 'm-1', operation: 'x', path: `${OTHER_PAGE}_500000000000001`, query: { fields: 'id,from{id}' } })
+    expect(h.calls.map((_c, i) => tokenOf(i))).toEqual(['meta-system-user-token'])
+    h.calls = []
+    await expect(metaCall({ connectionId: 'm-2', operation: 'x', path: '500000000000003', query: { fields: 'id,from{id}' } })).rejects.toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
+    expect(h.calls).toHaveLength(0)
+  })
+})
+
 describe('through the gateway', () => {
+  it('live-probe fixes — the chosen Page\'s feed, post insights and Instant Experiences go with its token; another Page\'s feed with the system-user token; a campaign\'s insights too', async () => {
+    gatewayMetaPage['m-1'] = PAGE
+    h.answers.push(pageToken, json({ data: [{ id: POST, from: { id: PAGE }, echo: PAGE_TOKEN }] }))
+    const feed = await metaCall({ connectionId: 'm-1', operation: 'posts.feed', path: `${PAGE}/feed`, query: { fields: POST_FIELDS, limit: 50 } })
+    expect(feed.ok).toBe(true)
+    expect([tokenOf(0), new URL(h.calls[1].url).pathname, tokenOf(1)]).toEqual(['meta-system-user-token', `/${META_DEFAULT_GRAPH_API_VERSION}/${PAGE}/feed`, PAGE_TOKEN])
+    expect(feed.text).not.toContain(PAGE_TOKEN)
+    h.calls = []
+    h.answers.push(pageToken, json({ data: [] }), pageToken, json({ data: [] }))
+    expect((await metaCall({ connectionId: 'm-1', operation: 'posts.postInsights', path: `${POST}/insights`, query: { metric: 'post_clicks', period: 'lifetime' } })).ok).toBe(true)
+    expect((await metaCall({ connectionId: 'm-1', operation: 'ix.canvases', path: `${PAGE}/canvases`, query: { fields: 'id,name', limit: 50 } })).ok).toBe(true)
+    expect([tokenOf(1), tokenOf(3)]).toEqual([PAGE_TOKEN, PAGE_TOKEN])
+    // Another Page's public feed (meta-ad-library page-posts): the system-user token, no Page token read — as before.
+    h.calls = []
+    h.answers.push(json({ data: [] }), json({ data: [] }))
+    expect((await metaCall({ connectionId: 'm-1', operation: 'library.pagePosts', path: `${OTHER_PAGE}/feed`, query: { fields: 'id,message,created_time,permalink_url,status_type', limit: 25 } })).ok).toBe(true)
+    expect((await metaCall({ connectionId: 'm-1', operation: 'objects.insights', path: '120000000000101/insights', query: { fields: 'spend' } })).ok).toBe(true)
+    expect(h.calls.map((_c, i) => tokenOf(i))).toEqual(['meta-system-user-token', 'meta-system-user-token'])
+    expect(JSON.stringify(gatewayLedger)).not.toContain(PAGE_TOKEN)
+  })
+  it('live-probe fixes — the chosen Page\'s feed off its list is refused (nothing sent); another Page\'s post insights, ad posts or Instant Experiences are refused before any token is read', async () => {
+    gatewayMetaPage['m-1'] = PAGE
+    await expect(metaCall({ connectionId: 'm-1', operation: 'x', path: `${PAGE}/feed`, query: { fields: 'id,from' } })).rejects.toMatchObject({ code: 'META_READ_ONLY', message: expect.stringMatching(/Nothing was sent to Meta: the Page's own posts are read with fields from/) })
+    for (const [path, query] of [
+      [`${OTHER_PAGE}_500000000000001/insights`, { metric: 'post_clicks' }], [`${OTHER_PAGE}/ads_posts`, { fields: 'id' }], [`${OTHER_PAGE}/canvases`, { fields: 'id' }],
+      [`${OTHER_PAGE}/insights`, { metric: 'page_follows' }], [`${OTHER_PAGE}_500000000000001/dynamic_posts`, { fields: 'id' }], [`${OTHER_PAGE}/published_posts`, { fields: 'id' }],
+    ] as Array<[string, Record<string, unknown>]>) {
+      await expect(metaCall({ connectionId: 'm-1', operation: 'x', path, query }), path).rejects.toMatchObject({ code: 'META_PAGE_NOT_CHOSEN', message: expect.stringMatching(/posts, insights, Instant Experiences/) })
+    }
+    // With no Page chosen, the Page's own reads are refused; another Page's feed is still an ordinary read.
+    await expect(metaCall({ connectionId: 'm-2', operation: 'x', path: `${PAGE}/canvases`, query: { fields: 'id' } })).rejects.toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
+    expect(h.calls).toHaveLength(0)
+    h.answers.push(json({ data: [] }))
+    expect((await metaCall({ connectionId: 'm-2', operation: 'x', path: `${OTHER_PAGE}/feed`, query: { fields: 'id', limit: 25 } })).ok).toBe(true)
+    expect(h.calls.map((_c, i) => tokenOf(i))).toEqual(['meta-system-user-token'])
+  })
   it('the chosen Page\'s read goes with the Page\'s own token (read first with the system-user token); the token never in the answer or the ledger', async () => {
     gatewayMetaPage['m-1'] = PAGE
     h.answers.push(pageToken, json({ data: [{ id: CONV, participants: { data: [{ id: PAGE }] }, echo: PAGE_TOKEN }] }))
@@ -308,18 +535,23 @@ describe('re-review round (N1–N3)', () => {
     expect((await metaCall({ connectionId: 'm-1', operation: 'x', path: `${PAGE}/conversations`, query: { platform: 'messenger', fields: 'id' } })).verdict).toMatchObject({ errorClass: 'rate_limited', channelCode: '4' })
     expect((await takeToken('META', bucketKey('META', 'm-1', 'ads'), 0)).waitMs).toBeGreaterThan(3_500_000)
   })
-  it('N3 — a change made as the Page takes its ads slot BEFORE its token is read: during an ads hold nothing is read or sent; else one slot, not two', async () => {
+  it('N3 / step 38 review S1 — a change made as the Page takes its slot of the PAGE bucket BEFORE its token is read: during a Page hold nothing is read or sent, an ads hold does not stop it; one slot, not two', async () => {
     gatewayMetaPage['m-1'] = PAGE
     const install = () => metaWriteCall({ connectionId: 'm-1', operation: 'webhooks.installPage', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: { subscribed_fields: 'leadgen' }, check: false })
-    await observeRate('META', bucketKey('META', 'm-1', 'ads'), { retryAfterSec: 300 })
+    await observeRate('META', bucketKey('META', 'm-1', 'page'), { retryAfterSec: 300 })
     await expect(install()).rejects.toMatchObject({ code: 'RATE_LIMITED_LOCAL' })
     expect(h.calls).toHaveLength(0)
     __rateTest.useMemory()
+    await observeRate('META', bucketKey('META', 'm-1', 'ads'), { retryAfterSec: 300 })
     h.answers.push(pageToken, json({ success: true }))
     expect((await install()).ok).toBe(true)
     expect(h.calls.map((c) => tokenOf(h.calls.indexOf(c)))).toEqual(['meta-system-user-token', PAGE_TOKEN])
-    // The write took 3 of the ads bucket once (and the token read 1 of the page bucket).
-    expect(Math.round((await takeToken('META', bucketKey('META', 'm-1', 'ads'), 0)).tokensLeft)).toBe(META_BUCKETS.ads.capacity - 3 - 1)
-    expect(Math.round((await takeToken('META', bucketKey('META', 'm-1', 'page'), 0)).tokensLeft)).toBe(META_BUCKETS.page.capacity - 1 - 1)
+    __rateTest.useMemory()
+    h.calls = []
+    h.answers.push(pageToken, json({ success: true }))
+    expect((await install()).ok).toBe(true)
+    // The write took 3 of the page bucket once, the token read 1 more; the ads bucket nothing (each probe takes 1 itself).
+    expect(Math.round((await takeToken('META', bucketKey('META', 'm-1', 'ads'), 0)).tokensLeft)).toBe(META_BUCKETS.ads.capacity - 1)
+    expect(Math.round((await takeToken('META', bucketKey('META', 'm-1', 'page'), 0)).tokensLeft)).toBe(META_BUCKETS.page.capacity - 3 - 1 - 1)
   })
 })

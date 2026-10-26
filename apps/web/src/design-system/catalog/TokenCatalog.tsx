@@ -143,6 +143,7 @@ import { HarvestPartsExample } from './HarvestPartsExample'
 import { LinkTabsExample } from './LinkTabsExample'
 import { ReviewChangesModalExample } from './ReviewChangesModalExample'
 import { DetailModalExample } from './DetailModalExample'
+import { ReviewPartsExample } from './ReviewPartsExample'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -1121,6 +1122,7 @@ export function TokenCatalog() {
         <StepUpModalExample />
         <ReviewChangesModalExample />
         <DetailModalExample />
+        <ReviewPartsExample />
 
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>PageHeader</div>
         <DSCard padded elevated>

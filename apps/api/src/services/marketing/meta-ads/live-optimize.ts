@@ -269,8 +269,8 @@ export const APPLY_BY_API: Readonly<Record<string, { what: string; spendsMoney: 
 
 /**
  * The types Meta does NOT apply by API (master RC-023; performance-recommendations "Option 3": use the object ids with the
- * campaign tools). Each names the Nexus tool that does the same (a tool not in this connection yet comes with a later
- * Nexus step) or Meta's own screens; the recommendation's Ads Manager link works for all of them.
+ * campaign tools). Each names the Nexus tools that help (a change tool's request is one a person approves) or Meta's own
+ * screens; the recommendation's Ads Manager link works for all of them.
  */
 const ACT_ELSEWHERE: Readonly<Record<string, { tools: string[]; what: string }>> = {
   BUDGET_LIMITED: { tools: ['set-meta-ad-set', 'set-meta-campaign'], what: 'raise the budget of the limited campaign or ad set (SPENDS MONEY)' },
@@ -315,7 +315,7 @@ export function howToAct(type: string | null, hasSignature: boolean) {
     sentence: apply && !hasSignature
       ? 'Meta gave no signature for this one, so it cannot be applied by API now: use the Ads Manager link, or read again later.'
       : tools.length
-        ? `Meta does not apply this type by API. Nexus does the same with ${tools.join(' or ')} (each a request a person approves; a tool not in this connection yet comes with a later Nexus step), or use the Ads Manager link.`
+        ? `Meta does not apply this type by API. Nexus helps with ${tools.join(' or ')} (a change tool asks for a request a person approves), or use the Ads Manager link.`
         : 'Meta does not apply this type by API and Nexus has no tool for it: use the Ads Manager link (adsManagerUrl).',
   }
 }

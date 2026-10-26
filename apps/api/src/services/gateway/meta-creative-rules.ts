@@ -287,11 +287,27 @@ const PROMO_SOURCES = 'Nexus takes promo codes only from the creative\'s text an
 const NO_APP = 'Nexus sells online and has no app of its own, so it sends no app link, store link, playable or app id'
 const BOOST = 'a creative made from an existing post (the chosen Page\'s post, the chosen Instagram account\'s media, or a creator\'s content or ad code) is made with create-meta-boost'
 /**
- * Step 26 — master CR-331: a partnership Advantage+ catalog ad with an existing post as its intro card is a CATALOG creative
- * (template_data + a product set). Step 18's catalog rule is on main; this card comes with lane C2's catalog follow-up (a later
- * small PR wires it through that rule). C2-REBASE-18.
+ * Gap 46b (master CR-331) — a partnership Advantage+ catalog ad (carousel or collection) with an EXISTING post as its intro
+ * card: `branded_content.parent_source_instagram_media_id` or `parent_source_facebook_post_id`. Checked 2026-10-26 (curl ≥ 3 s
+ * apart): documentation/ads-commerce/marketing-api/ad-creative/partnership-ads/ads-creation/supported-configurations/
+ * advantage-catalog-ads.md, "Create an ad creative with an existing post as the parent source" — "Specifies the Instagram
+ * media [the Facebook post] to use as the parent source media shown as the intro card", on POST /act_<id>/adcreatives beside
+ * the catalog creative's other parameters ("Whether the format is a collection or a carousel depends on other parameters");
+ * Meta's Python Business SDK adcreativebrandedcontentads.py: both are strings. ONE of them, and only on a creative that IS a
+ * partnership Advantage+ catalog creative (introCardProblem). The post goes to the gateway as an `introsource` asset (`with`:
+ * its platform): the business's own (the chosen Page's post, the chosen Instagram account's media), else a partner's that
+ * Meta's content discovery lists for the brand, by a partner this creative names (gateway.ts metaIntroCardProblem).
  */
-const CATALOG_INTRO = 'a partnership catalog ad with an existing post as its intro card (parent_source_…) is a catalog creative: it comes with lane C2\'s catalog follow-up'
+// Gap 46b review N5 — a Facebook intro card is a post (<Page id>_<post id>) or a Page photo's or video's own id: the guide's
+// example writes `"parent_source_facebook_post_id":<FB_MEDIA_ID>`. Either form is confirmed by one owner read at the gateway.
+const introPost = (platform: 'INSTAGRAM' | 'FACEBOOK'): Judge => (value, path, walk) => {
+  const v = platform === 'INSTAGRAM' ? digits(value) : (typeof value === 'string' && /^[1-9]\d{0,24}(_[1-9]\d{0,24})?$/.test(value) ? value : null)
+  if (!v) return no(platform === 'INSTAGRAM' ? `${path} is an Instagram media id (digits, as a string)` : `${path} is a Facebook post id (<Page id>_<post id>) or a Facebook media id (digits), as a string`)
+  walk.assets.push({ id: v, kind: 'introsource', with: platform })
+  return ok(v)
+}
+/** Gap 46b — the two intro-card keys of branded_content (Meta's partnership catalog-ads guide). */
+export const META_INTRO_CARD_KEYS = ['parent_source_instagram_media_id', 'parent_source_facebook_post_id'] as const
 
 /**
  * Step 26 — a creator's partnership ad code (Meta's boost-existing-post guides; master CR-323, CR-325, MD-138): letters,
@@ -313,9 +329,10 @@ const igPermalink: Judge = (value, path) => (typeof value === 'string' && META_I
 const THREADS = 'Meta\'s reference names a Threads id without saying what it takes, and its Threads guide runs Threads ads on the Instagram account ("that Instagram account needs to be used"): Nexus sends no Threads id; Threads delivery comes with the chosen Instagram account and the ad set\'s Threads placement'
 /**
  * Review B5 — shop routing sends people to the Page's Facebook or Instagram shop (onsite_destinations, shops_bundle name
- * one): Nexus cannot confirm that shop and its commerce account are this business's own.
+ * one). Step 46 — the Owner's rule (2026-10-23): every Meta ad sends people to the business's own shop, on the product's
+ * page, so shop routing is never sent (master CR-265 / CR-267: out of scope).
  */
-const SHOP = 'Nexus cannot confirm that the Page\'s Facebook or Instagram shop and its commerce account are this business\'s own, so it sends no shop routing: it comes with the catalog / commerce steps'
+const SHOP = 'every Meta ad sends people to the business\'s own shop, on the product\'s page, never to a Facebook or Instagram shop Meta picks (the Owner\'s rule of 2026-10-23), so Nexus sends no shop routing'
 
 /** A JSON object of exactly these keys (each optional; `need`: these must be there). */
 function obj(keys: Record<string, Judge>, need: readonly string[] = []): Judge {
@@ -895,7 +912,8 @@ const CREATIVE_KEYS: Readonly<Record<string, { judge: Judge; json: boolean }>> =
     instagram_boost_post_access_token: adCode,
     facebook_boost_post_access_token: adCode,
     promoted_page_id: bodyId('page'),
-    parent_source_instagram_media_id: refuse(CATALOG_INTRO), parent_source_facebook_post_id: refuse(CATALOG_INTRO),
+    // Gap 46b (master CR-331) — an existing post as a partnership catalog ad's intro card (introCardProblem says where).
+    parent_source_instagram_media_id: introPost('INSTAGRAM'), parent_source_facebook_post_id: introPost('FACEBOOK'),
     partners: refuse('Nexus names ONE partner: create-meta-creative partner (new media) or create-meta-boost (a creator\'s content)'),
   }), json: true },
   facebook_branded_content: { judge: obj({ sponsor_page_id: digitsOnly, shared_to_sponsor_status: token, sponsor_relationship: token }, ['sponsor_page_id']), json: true },
@@ -1383,10 +1401,42 @@ export function multiMediaProblem(creative: Record<string, unknown>): string | n
   return 'a multi-media ad names its primary image or video in object_story_spec (link_data image_hash or picture, or video_data video_id), and lists it in media_sourcing_spec too'
 }
 
+/** Gap 46b (master CR-331) — the intro card a creative names (its key and the post), or null. */
+export function introCardOf(creative: Record<string, unknown>): { key: typeof META_INTRO_CARD_KEYS[number]; id: string } | null {
+  const branded = creative.branded_content
+  if (!branded || typeof branded !== 'object' || Array.isArray(branded)) return null
+  const key = META_INTRO_CARD_KEYS.find((k) => (branded as Record<string, unknown>)[k] !== undefined)
+  return key ? { key, id: String((branded as Record<string, unknown>)[key]) } : null
+}
+
+/**
+ * Gap 46b (master CR-331) — why an intro card may not go on this creative, or null: ONE parent source, on an Advantage+
+ * catalog creative (object_story_spec.template_data with the creative's own product_set_id — Meta's guide: carousel or
+ * collection, "depends on other parameters"), and a partnership ad (a sponsor named: facebook_branded_content.sponsor_page_id
+ * or instagram_branded_content.sponsor_id, as create-meta-creative partner writes it for either main identity).
+ */
+export function introCardProblem(creative: Record<string, unknown>): string | null {
+  const branded = (creative.branded_content ?? {}) as Record<string, unknown>
+  const named = META_INTRO_CARD_KEYS.filter((k) => branded[k] !== undefined)
+  if (!named.length) return null
+  if (named.length > 1) return 'a catalog ad shows ONE existing post as its intro card: branded_content.parent_source_instagram_media_id or parent_source_facebook_post_id, not both'
+  const story = creative.object_story_spec as { template_data?: unknown } | undefined
+  if (!story?.template_data || typeof creative.product_set_id !== 'string') return 'an existing post as the intro card (branded_content.parent_source_…) goes only on an Advantage+ catalog creative: object_story_spec.template_data with the creative\'s own product_set_id (Meta\'s partnership catalog-ads guide; create-meta-creative introPost)'
+  const sponsorPage = (creative.facebook_branded_content as { sponsor_page_id?: unknown } | undefined)?.sponsor_page_id
+  const sponsorIg = (creative.instagram_branded_content as { sponsor_id?: unknown } | undefined)?.sponsor_id
+  if (!sponsorPage && !sponsorIg) return 'an existing post as the intro card goes only on a partnership ad: the creative names its partner (facebook_branded_content.sponsor_page_id or instagram_branded_content.sponsor_id — create-meta-creative partner)'
+  return null
+}
+
 /** After a creative's keys were judged: the silent features, the identity, the ids (deduplicated and bounded). */
 export function finishCreative(creative: Record<string, unknown>, walk: CreativeWalk): { creative: Record<string, unknown>; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[]; warnings: string[] } | { problem: string } {
   if (!creative.object_story_spec && !isExistingPostCreative(creative)) return { problem: 'a creative names object_story_spec (Nexus fills the chosen Page) or object_story_id (a post of the chosen Page) — or, made by create-meta-boost, an Instagram media, an Instagram post link or a creator\'s ad code' }
   if (creative.object_story_spec && creative.object_story_id) return { problem: 'a creative names object_story_spec or object_story_id, not both' }
+  // Gap 46b (master CR-331) — an intro card only on a partnership Advantage+ catalog creative; its catalog parts then OWNED
+  // (Nexus's own rule, not Meta's: the intro card is only for the business's own catalog — review N6).
+  const intro = introCardProblem(creative)
+  if (intro) return { problem: intro }
+  const owned = introCardOf(creative) !== null
   const contradiction = creativeTypeProblem(creative)
   if (contradiction) return { problem: contradiction }
   const multi = multiMediaProblem(creative)
@@ -1412,7 +1462,7 @@ export function finishCreative(creative: Record<string, unknown>, walk: Creative
     if (seen.has(key)) return false
     seen.add(key)
     return true
-  })
+  }).map((a) => (owned && (a.kind === 'productset' || a.kind === 'productitem') ? { ...a, owned: true as const } : a))
   if (assets.length + ids.length > META_CREATIVE_MAX_ASSETS) return { problem: `a creative names at most ${META_CREATIVE_MAX_ASSETS} ids` }
   const catalogIds = ids.filter((i) => i.kind === 'productset' || i.kind === 'productitem').length
   if (catalogIds > META_CREATIVE_MAX_CATALOG_IDS) return { problem: `a creative names at most ${META_CREATIVE_MAX_CATALOG_IDS} product sets and catalog items (this one names ${catalogIds}): each is checked live against the catalog rule, on Meta's small ads read budget` }

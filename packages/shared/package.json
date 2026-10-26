@@ -301,6 +301,10 @@
     "./fit-garment": {
       "types": "./dist/fit-garment.d.ts",
       "default": "./dist/fit-garment.js"
+    },
+    "./review-reply-rules": {
+      "types": "./dist/review-reply-rules.d.ts",
+      "default": "./dist/review-reply-rules.js"
     }
   },
   "scripts": {

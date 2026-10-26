@@ -427,6 +427,50 @@ describe('meta-targeting-check', () => {
     h.connections = [CHOSEN]
     expect((await check({ check: 'message-delivery', targeting: SPEC })).error).toMatch(/promoted object/)
   })
+  it('live-probe fix TG-034 / TG-035 — message-delivery names the business\'s own WhatsApp number in the promoted object; Meta refusing the estimate keeps the activation status', async () => {
+    const WABA = '500000000000001'
+    const PHONE = '600000000000001'
+    const spec = { ...SPEC, publisher_platforms: ['whatsapp'], whatsapp_positions: ['marketing_messages'] }
+    h.answer = (req) => (req.path === `act_${OWN}` ? { marketing_messages_settings: { whatsapp_activation_status: 'MARKETING_MESSAGE_ONBOARDED' } }
+      : req.path === '9876543210/owned_whatsapp_business_accounts' ? { data: [{ id: WABA }] }
+        : req.path === `${WABA}/phone_numbers` ? { data: [{ id: PHONE, display_phone_number: '+39 02 0000 0000' }] }
+          : { data: [{ estimate_status: 'READY', estimate_delivery: 500 }] })
+    const res = await check({ check: 'message-delivery', targeting: spec, promotedObject: { page_id: '120000000000010' }, whatsappPhoneNumberId: PHONE })
+    expect(h.calls.map((c) => c.path)).toEqual(['9876543210/owned_whatsapp_business_accounts', `${WABA}/phone_numbers`, `act_${OWN}`, `act_${OWN}/message_delivery_estimate`])
+    expect(h.calls.at(-1)?.query).toMatchObject({ promoted_object: { page_id: '120000000000010', whats_app_business_phone_number_id: PHONE }, targeting_spec: spec })
+    expect(data(res)).toMatchObject({ whatsappActivationStatus: 'MARKETING_MESSAGE_ONBOARDED', whatsappPhoneNumberId: PHONE, estimateStatus: 'READY' })
+    expect(refusedCalls()).toEqual([])
+    // The number alone is the promoted object of an account estimate.
+    h.calls.length = 0
+    expect((await check({ check: 'message-delivery', targeting: spec, whatsappPhoneNumberId: PHONE })).ok).toBe(true)
+    expect(h.calls.at(-1)?.query).toMatchObject({ promoted_object: { whats_app_business_phone_number_id: PHONE } })
+    // A number that is not one of the business's own WhatsApp accounts' is refused with its own numbers named; no estimate.
+    h.calls.length = 0
+    const foreign = await check({ check: 'message-delivery', targeting: spec, whatsappPhoneNumberId: '600000000000099' })
+    expect(foreign.error).toMatch(/not one of the numbers .* so no estimate is asked \(its numbers: 600000000000001 \(\+39 02 0000 0000\)\)/)
+    expect(h.calls.map((c) => c.path)).not.toContain(`act_${OWN}/message_delivery_estimate`)
+    // A portfolio another business in Nexus reads: refused before any WhatsApp read.
+    h.taken = [{ id: '9876543210' }]
+    h.calls.length = 0
+    expect((await check({ check: 'message-delivery', targeting: spec, whatsappPhoneNumberId: PHONE })).error).toMatch(/Another business in Nexus reads an ad account of this Meta business portfolio/)
+    expect(h.calls).toHaveLength(0)
+    h.taken = []
+    expect(() => tool('meta-targeting-check').input.parse({ check: 'message-delivery', whatsappPhoneNumberId: '+39 02 0000' })).toThrow()
+    // Meta refusing the estimate (TG-035): the activation status and Meta's own code and words come back, not an error.
+    const { MetaReadError, failureOfAnswer } = await import('../../marketing/meta-ads/errors.js')
+    const refused = 'Valid WhatsApp Business phone number ID is required for estimation'
+    const before = h.answer
+    h.answer = (req) => (req.path === `act_${OWN}/message_delivery_estimate`
+      ? new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass: 'validation', channelCode: '100', channelMessage: refused } as never }), req.operation, 1)
+      : before!(req))
+    const res2 = await check({ check: 'message-delivery', targeting: spec, promotedObject: { page_id: '120000000000010' } })
+    expect(res2).toMatchObject({ ok: true, data: { whatsappActivationStatus: 'MARKETING_MESSAGE_ONBOARDED', estimate: null, estimateRefused: { code: '100', words: refused }, note: expect.stringMatching(/name one of the business's own \(whatsappPhoneNumberId/) } })
+    // A lost token still ends the read.
+    h.answer = (req) => (req.path === `act_${OWN}/message_delivery_estimate`
+      ? new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass: 'auth_revoked', channelCode: '190', channelMessage: 'Error validating access token' } as never }), req.operation, 1)
+      : before!(req))
+    expect((await check({ check: 'message-delivery', targeting: spec, promotedObject: { page_id: '120000000000010' } })).ok).toBe(false)
+  })
   it('minorToMetaUnits: one helper, per currency', () => {
     expect(minorToMetaUnits(1234, 'EUR')).toBe(1234)
     expect(minorToMetaUnits(500, 'JPY')).toBe(500)
@@ -441,10 +485,14 @@ describe('meta-targeting-check', () => {
     // A currency Nexus has not read is never assumed.
     expect(minorToMetaUnits(1234, '')).toBeNull()
   })
-  it('audience-special-category: the chosen account\'s audience, Meta\'s own comma lists', async () => {
+  it('audience-special-category: the chosen account\'s audience; both lists as JSON arrays (live probe TG-026: Meta refused the comma list)', async () => {
     h.answer = (req) => (req.operation === OWNER ? owned(req) : { id: '23000000000001', name: 'Buyers', is_eligible_for_sac_campaigns: false })
-    const res = await check({ check: 'audience-special-category', audienceId: '23000000000001', specialAdCategories: ['HOUSING'], countries: ['it'] })
-    expect(h.calls.at(-1)).toEqual({ operation: 'targeting.audienceSacEligibility', path: '23000000000001', query: { fields: 'id,name,is_eligible_for_sac_campaigns', ad_account_id: OWN, special_ad_categories: 'HOUSING', special_ad_category_countries: 'IT' } })
+    const res = await check({ check: 'audience-special-category', audienceId: '23000000000001', specialAdCategories: ['HOUSING', 'EMPLOYMENT'], countries: ['it', 'DE'] })
+    expect(h.calls.at(-1)).toEqual({ operation: 'targeting.audienceSacEligibility', path: '23000000000001', query: { fields: 'id,name,is_eligible_for_sac_campaigns', ad_account_id: OWN, special_ad_categories: ['HOUSING', 'EMPLOYMENT'], special_ad_category_countries: ['IT', 'DE'] } })
+    // As sent: JSON arrays on the URL ("(#100) param special_ad_categories must be an array" answered the comma list).
+    const sent = new URL(metaUrl(h.calls.at(-1)!.path, h.calls.at(-1)!.query as never)).searchParams
+    expect([sent.get('special_ad_categories'), sent.get('special_ad_category_countries')]).toEqual(['["HOUSING","EMPLOYMENT"]', '["IT","DE"]'])
+    expect(refusedCalls()).toEqual([])
     expect(data(res)).toMatchObject({ eligible: false, name: 'Buyers', note: expect.stringMatching(/does not let this audience/) })
     expect(() => tool('meta-targeting-check').input.parse({ check: 'audience-special-category', specialAdCategories: ['ISSUES_ELECTIONS_POLITICS'] })).toThrow()
   })

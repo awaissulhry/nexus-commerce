@@ -20,6 +20,8 @@ const h = vi.hoisted(() => {
     salesSwitch: vi.fn(async () => ({ on: false, since: null, by: null }) as unknown),
     mayManageSecurity: true,
     setSalesSwitch: vi.fn(async (on: boolean, actor: { label: string }) => ({ switch: { on, since: on ? '2026-10-21T08:00:00.000Z' : null, by: on ? actor.label : null }, changed: true }) as unknown),
+    listsSwitch: vi.fn(async () => ({ on: false, since: null, by: null }) as unknown),
+    setListsSwitch: vi.fn(async (on: boolean, actor: { label: string }) => ({ switch: { on, since: on ? '2026-10-26T08:00:00.000Z' : null, by: on ? actor.label : null }, changed: true }) as unknown),
     logged: [] as unknown[],
   }
 })
@@ -34,6 +36,7 @@ vi.mock('../lib/auth/request-permission.js', () => ({
   }),
 }))
 vi.mock('../services/marketing/meta-ads/events-switch.js', () => ({ metaEventsSwitch: h.salesSwitch, setMetaEventsSwitch: h.setSalesSwitch }))
+vi.mock('../services/marketing/meta-ads/customer-lists-switch.js', () => ({ metaCustomerListsSwitch: h.listsSwitch, setMetaCustomerListsSwitch: h.setListsSwitch }))
 vi.mock('../utils/logger.js', () => ({ logger: { error: vi.fn((...a: unknown[]) => { h.logged.push(a) }), warn: vi.fn(), info: vi.fn() } }))
 
 import metaConnectionRoutes from './meta-connection.routes.js'
@@ -118,5 +121,42 @@ describe('step 33 — the "Send sales to Meta" switch', () => {
     const res = await app.inject({ method: 'PUT', url: '/api/meta-ads/conversions-api', payload: { on: 'yes' } })
     expect(res.statusCode).toBe(400)
     expect(h.setSalesSwitch).not.toHaveBeenCalled()
+  })
+})
+
+describe('consent PR 2 — the "Upload customer lists to Meta" switch (a copy of step 33\'s)', () => {
+  it('reads the business\'s switch and whether this person may change it; a person turns it on or off by name', async () => {
+    h.mayManageSecurity = true
+    expect((await app.inject({ method: 'GET', url: '/api/meta-ads/customer-lists' })).json()).toEqual({ switch: { on: false, since: null, by: null }, canChange: true })
+    const on = await app.inject({ method: 'PUT', url: '/api/meta-ads/customer-lists', payload: { on: true } })
+    expect(on.statusCode).toBe(200)
+    expect(on.json()).toEqual({ switch: { on: true, since: '2026-10-26T08:00:00.000Z', by: 'user-1' }, changed: true })
+    expect(h.setListsSwitch).toHaveBeenLastCalledWith(true, { label: 'user-1' })
+    // Its own switch: step 33's is never touched by it.
+    expect(h.setSalesSwitch).not.toHaveBeenCalled()
+  })
+  it('the route itself refuses a person without settings.security.manage (not only the RBAC hook)', async () => {
+    h.mayManageSecurity = false
+    expect((await app.inject({ method: 'GET', url: '/api/meta-ads/customer-lists' })).json()).toMatchObject({ canChange: false })
+    const res = await app.inject({ method: 'PUT', url: '/api/meta-ads/customer-lists', payload: { on: true } })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error).toMatch(/Upload customer lists to Meta.*settings\.security\.manage/)
+    expect(h.setListsSwitch).not.toHaveBeenCalled()
+    h.mayManageSecurity = true
+  })
+  it('only a signed-in person: a call without one (an API key, Claude) changes nothing', async () => {
+    const bare = Fastify()
+    await bare.register(metaConnectionRoutes, { prefix: '/api' })
+    await bare.ready()
+    const res = await bare.inject({ method: 'PUT', url: '/api/meta-ads/customer-lists', payload: { on: true } })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error).toMatch(/A person signed in to Nexus/)
+    expect(h.setListsSwitch).not.toHaveBeenCalled()
+    await bare.close()
+  })
+  it('refuses a body that is not true or false', async () => {
+    const res = await app.inject({ method: 'PUT', url: '/api/meta-ads/customer-lists', payload: { on: 'yes' } })
+    expect(res.statusCode).toBe(400)
+    expect(h.setListsSwitch).not.toHaveBeenCalled()
   })
 })

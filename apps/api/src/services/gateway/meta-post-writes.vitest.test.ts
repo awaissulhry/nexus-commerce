@@ -29,6 +29,12 @@ vi.mock('../cx/token.service.js', () => ({
 }))
 vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
 vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: vi.fn(async () => undefined) }))
+// Step 35 (Q9) — the catalog rule a tagged product is checked by (step 25's), a stand-in here.
+const cat = vi.hoisted(() => ({ problem: null as string | null }))
+vi.mock('../marketing/meta-ads/catalog-rule.js', async (importActual) => ({
+  ...(await importActual<typeof import('../marketing/meta-ads/catalog-rule.js')>()),
+  metaCatalogProblem: vi.fn(async () => cat.problem),
+}))
 vi.mock('../../utils/otel-setup.js', () => ({ withSpan: vi.fn(async (_n: string, _a: Record<string, unknown>, fn: (span: null) => Promise<unknown>) => fn(null)) }))
 
 import { gatewayLedger, gatewayMetaChosen, gatewayMetaInstagram, gatewayMetaPage, gatewayMetaPostsMade, gatewayMetaTakenLinks } from '../../test-support/gateway-stubs.js'
@@ -254,8 +260,14 @@ describe('Instagram posts: an exact allow-list per kind of container', () => {
     expect(containerProblem({ ...image, caption: Array.from({ length: 31 }, (_, i) => `#t${i}`).join(' ') })).toMatch(/at most 30 hashtags/)
     expect(containerProblem({ ...image, caption: Array.from({ length: 21 }, (_, i) => `@user${i}`).join(' ') })).toMatch(/at most 20 @ tags/)
     expect(containerProblem({ ...image, caption: 'x'.repeat(META_POST_LIMITS.caption + 1) })).toMatch(/1 to 2200 characters/)
-    // Product tags are step 35's (it adds them to META_IG_CONTAINER_KEYS and its judges in its own hunk).
-    expect(containerProblem({ ...image, product_tags: JSON.stringify([{ product_id: '1', x: 0.5, y: 0.5 }]) })).toMatch(/only Meta change Nexus sends for an organic post/)
+    // Step 35 (Q9) — product tags on a feed image: the one tag judge (x / y on an image), each product a body id (productitem).
+    expect(container({ ...image, product_tags: '[{"product_id":"120000000000120","x":0.5,"y":0.8}]' })).toMatchObject({ write: { ids: [{ id: BRAND_IG, kind: 'igsponsor' }, { id: '110000000000001', kind: 'postplace' }, { id: '120000000000120', kind: 'productitem' }] } })
+    expect(containerProblem({ ...image, product_tags: '[{"product_id":"120000000000120"}]' })).toMatch(/needs both places/)
+    expect(containerProblem({ ...image, product_tags: JSON.stringify(Array.from({ length: 21 }, (_, i) => ({ product_id: `1200000000002${String(i).padStart(2, '0')}`, x: 0.5, y: 0.5 }))) })).toMatch(/1 to 20/)
+    expect(containerProblem({ media_type: 'STORIES', image_url: 'https://cdn.example-shop.com/s.jpg', product_tags: '[{"product_id":"120000000000120","x":0.5,"y":0.5}]' })).toMatch(/not a key of a story/)
+    expect(containerProblem({ media_type: 'REELS', video_url: 'https://cdn.example-shop.com/r.mp4', product_tags: '[{"product_id":"120000000000120","x":0.5,"y":0.5}]' })).toMatch(/x and y are for images only/)
+    expect(containerProblem({ media_type: 'VIDEO', video_url: 'https://cdn.example-shop.com/2.mp4', is_carousel_item: 'true', product_tags: JSON.stringify(Array.from({ length: 6 }, (_, i) => ({ product_id: `12000000000020${i}` }))) })).toMatch(/1 to 5/)
+    expect(containerProblem({ media_type: 'CAROUSEL', children: '180000000000001,180000000000002', product_tags: '[{"product_id":"120000000000120"}]' })).toMatch(/product_tags is not a key of a carousel/)
     expect(Object.values(META_IG_CONTAINER_KEYS).flat().every((k) => k in META_IG_CONTAINER_JUDGES)).toBe(true)
     // Never a resumable upload (Meta fetches the public link), never a caption add-on yet.
     for (const key of ['upload_type', 'poll_attachment', 'is_comment_prompt_used']) expect(containerProblem({ ...image, [key]: 'x' }), key).toMatch(/only Meta change/)
@@ -329,21 +341,22 @@ describe('the owner check, then the Page token', () => {
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'pagepost.feed', objectId: PAGE, objectKind: 'postpage', edge: 'feed', params: attached, check: false, run: 'run-1' })).ok).toBe(true)
     expect(paths()).toEqual([`GET /${PAGE}`, `POST /${PAGE}/feed`])
     h.calls = []
-    // Another run (or none): one read of the photo; another Page's photo is refused before the token is read.
-    h.answers.push(json({ id: PHOTO, from: { id: OTHER_PAGE } }))
+    // Another run (or none): one read of the photo — gap 46b (the live read of 2026-10-26): with the chosen Page's own token,
+    // the media owner read — and another Page's photo is refused before the change's own token is read.
+    h.answers.push(tokenAnswer(), json({ id: PHOTO, from: { id: OTHER_PAGE } }))
     const theirs = await metaWriteCall({ connectionId: 'm-1', operation: 'pagepost.feed', objectId: PAGE, objectKind: 'postpage', edge: 'feed', params: attached, check: false, run: 'run-2' }).catch((e) => e)
     expect(theirs).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN', message: expect.stringMatching(/not one of the Facebook Page this business chose/) })
     expect(theirs.message).not.toContain(OTHER_PAGE)
-    expect(paths()).toEqual([`GET /${PHOTO}`])
-    expect(sent(0).url.searchParams.get('fields')).toBe('id,from{id}')
+    expect(paths()).toEqual([`GET /${PAGE}`, `GET /${PHOTO}`])
+    expect([sent(1).url.searchParams.get('fields'), sent(1).url.searchParams.get('access_token')]).toEqual(['id,from{id}', PAGE_TOKEN])
     h.calls = []
-    h.answers.push(json({ id: PHOTO, from: { id: PAGE } }), tokenAnswer(), json({ id: `${PAGE}_500000000000003` }))
+    h.answers.push(tokenAnswer(), json({ id: PHOTO, from: { id: PAGE } }), tokenAnswer(), json({ id: `${PAGE}_500000000000003` }))
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'pagepost.feed', objectId: PAGE, objectKind: 'postpage', edge: 'feed', params: attached, check: false })).ok).toBe(true)
     // A failed photo upload is never remembered as made.
     __postOwnerTest.reset(); h.calls = []
     h.answers.push(tokenAnswer(), json({ error: { code: 324, message: 'Missing or invalid image file' } }, 400))
     await metaWriteCall({ connectionId: 'm-1', operation: 'pagepost.photo', objectId: PAGE, objectKind: 'postpage', edge: 'photos', params: { url: 'https://cdn.example-shop.com/b.jpg', published: 'false' }, check: false, run: 'run-3' })
-    h.answers.push(json({ error: { code: 100, message: 'Unsupported get request' } }, 400))
+    h.answers.push(tokenAnswer(), json({ error: { code: 100, message: 'Unsupported get request' } }, 400))
     expect(await metaWriteCall({ connectionId: 'm-1', operation: 'pagepost.feed', objectId: PAGE, objectKind: 'postpage', edge: 'feed', params: { published: 'true', attached_media: JSON.stringify([{ media_fbid: '140000000000009' }]) }, check: false, run: 'run-3' }).catch((e) => e)).toMatchObject({ code: 'META_PAGE_UNCONFIRMED' })
   })
   it('a library image by its hash: one read of the chosen ad account\'s images; a hash not there is refused', async () => {
@@ -358,22 +371,28 @@ describe('the owner check, then the Page token', () => {
   })
   it('an edit: a post the chosen Page WROTE; a visitor\'s post, another Page\'s, a sponsor of another business or the Page itself: refused', async () => {
     const edit = (params: Record<string, string>, objectId = POST) => metaWriteCall({ connectionId: 'm-1', operation: 'pagepost.update', objectId, objectKind: 'pagepostedit', params, check: false }).catch((e) => e)
-    h.answers.push(json({ id: POST, from: { id: PAGE } }), tokenAnswer(), json({ success: true }))
+    // Gap 46b (the live read of 2026-10-26: Meta refuses a post read to the system-user token, #10) — the owner read goes
+    // with the chosen Page's own token too: token, post, token, change.
+    h.answers.push(tokenAnswer(), json({ id: POST, from: { id: PAGE } }), tokenAnswer(), json({ success: true }))
     expect((await edit({ message: 'Nuovo testo' })).ok).toBe(true)
-    expect(paths()).toEqual([`GET /${POST}`, `GET /${PAGE}`, `POST /${POST}`])
-    expect(sent(2).url.searchParams.get('access_token')).toBe(PAGE_TOKEN)
+    expect(paths()).toEqual([`GET /${PAGE}`, `GET /${POST}`, `GET /${PAGE}`, `POST /${POST}`])
+    expect([sent(1).url.searchParams.get('access_token'), sent(3).url.searchParams.get('access_token')]).toEqual([PAGE_TOKEN, PAGE_TOKEN])
     h.calls = []; __metaObjectLimitsTest.useMemory()
-    h.answers.push(json({ id: POST, from: { id: '300000000000001' } }))
+    h.answers.push(tokenAnswer(), json({ id: POST, from: { id: '300000000000001' } }))
     expect(await edit({ is_hidden: 'true' })).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/visitor's post/) })
     expect(await edit({ is_hidden: 'true' }, `${OTHER_PAGE}_500000000000001`)).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
     h.calls = []
     gatewayMetaTakenLinks.add(`PAGE:${BRAND_PAGE}`)
-    h.answers.push(json({ id: POST, from: { id: PAGE } }))
+    h.answers.push(tokenAnswer(), json({ id: POST, from: { id: PAGE } }))
     const taken = await edit({ sponsor_id: BRAND_PAGE })
     expect(taken).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/another business in Nexus uses/) })
-    h.answers.push(json({ id: POST, from: { id: PAGE } }))
+    h.answers.push(tokenAnswer(), json({ id: POST, from: { id: PAGE } }))
     expect(await edit({ sponsor_id: PAGE })).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/the chosen Page itself/) })
-    expect(h.calls.every((c) => c.init.method === 'GET' && new URL(c.url).searchParams.get('access_token') === SYSTEM_TOKEN)).toBe(true)
+    // Only reads, each with its own token: the Page's token read (system-user token), then the post with the Page's own.
+    const tokenOf = (c: { url: string }) => { const t = new URL(c.url).searchParams.get('access_token'); return t === PAGE_TOKEN ? 'page' : t === SYSTEM_TOKEN ? 'system' : t }
+    expect(h.calls.map((c) => [c.init.method, new URL(c.url).pathname.split('/').pop(), tokenOf(c)])).toEqual([
+      ['GET', PAGE, 'system'], ['GET', POST, 'page'], ['GET', PAGE, 'system'], ['GET', POST, 'page'],
+    ])
   })
   it('a delete: only a post or media Nexus made (its change records); nothing is read or sent for any other', async () => {
     const remove = (objectId: string, objectKind: 'pagepostmade' | 'igmediamade', connectionId = 'm-1') => metaWriteCall({ connectionId, operation: objectKind === 'pagepostmade' ? 'pagepost.delete' : 'igmedia.delete', objectId, objectKind, method: 'DELETE', params: {}, check: false }).catch((e) => e)
@@ -468,17 +487,20 @@ describe('review fixes — guards no rule reaches today, and a video post Nexus 
     expect(await remove(null)).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/not one Nexus made/) })
     expect(await remove('160000000000009')).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
     expect(h.calls).toHaveLength(0)
-    // Another Page's video, or one whose post is another: refused, nothing deleted.
-    h.answers.push(json({ id: VIDEO, post_id: '500000000000001', from: { id: OTHER_PAGE } }))
+    // Another Page's video, or one whose post is another: refused, nothing deleted. Gap 46b (re-review item 3) — the video's
+    // read (id,post_id,from{id}) goes with the chosen Page's own token: its token read first.
+    h.answers.push(tokenAnswer(), json({ id: VIDEO, post_id: '500000000000001', from: { id: OTHER_PAGE } }))
     expect(await remove()).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/not one Nexus made/) })
-    h.answers.push(json({ id: VIDEO, post_id: '500000000000009', from: { id: PAGE } }))
+    h.answers.push(tokenAnswer(), json({ id: VIDEO, post_id: '500000000000009', from: { id: PAGE } }))
     expect(await remove()).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
-    expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
+    expect(h.calls.map((c) => `${c.init.method} ${new URL(c.url).pathname.split('/').pop()} ${new URL(c.url).searchParams.get('access_token') === PAGE_TOKEN ? 'page' : 'system'}`)).toEqual([
+      `GET ${PAGE} system`, `GET ${VIDEO} page`, `GET ${PAGE} system`, `GET ${VIDEO} page`,
+    ])
     h.calls = []
-    h.answers.push(json({ id: VIDEO, post_id: '500000000000001', from: { id: PAGE } }), tokenAnswer(), json({ success: true }))
+    h.answers.push(tokenAnswer(), json({ id: VIDEO, post_id: '500000000000001', from: { id: PAGE } }), tokenAnswer(), json({ success: true }))
     expect((await remove()).ok).toBe(true)
-    expect(paths()).toEqual([`GET /${VIDEO}`, `GET /${PAGE}`, `DELETE /${POST}`])
-    expect(sent(0).url.searchParams.get('fields')).toBe('id,post_id,from{id}')
+    expect(paths()).toEqual([`GET /${PAGE}`, `GET /${VIDEO}`, `GET /${PAGE}`, `DELETE /${POST}`])
+    expect([sent(1).url.searchParams.get('fields'), sent(1).url.searchParams.get('access_token')]).toEqual(['id,post_id,from{id}', PAGE_TOKEN])
   })
   it('N2 — a video\'s post_id: the chosen Page\'s post as given or by its digits; another Page\'s post or no post is none', () => {
     expect(metaVideoPostIdOf(`${PAGE}_500000000000001`, PAGE)).toBe(`${PAGE}_500000000000001`)
@@ -493,5 +515,35 @@ describe('review fixes — guards no rule reaches today, and a video post Nexus 
     expect(res.ok).toBe(true)
     expect(new URL(h.calls[1].url).host).toBe('graph-video.facebook.com')
     expect(sent(1).url.searchParams.get('access_token')).toBe(PAGE_TOKEN)
+  })
+})
+
+describe('step 35 (Q9) — a container\'s tagged products, through the send path', () => {
+  const PRODUCT = '120000000000120'
+  const tagged = { image_url: 'https://cdn.example-shop.com/a.jpg', product_tags: `[{"product_id":"${PRODUCT}","x":0.5,"y":0.8}]` }
+  const post = (params: Record<string, string> = tagged) => metaWriteCall({ connectionId: 'm-1', operation: 'igmedia.container', objectId: IG, objectKind: 'postig', edge: 'media', params, check: false }).catch((e) => e)
+  it('a product of a catalog this business may read that the account tags from goes; any other is refused before the token', async () => {
+    cat.problem = null
+    h.answers.push(json({ id: PRODUCT, product_catalog: { id: '120000000000100' } }), json({ data: [{ catalog_id: '120000000000100' }] }), tokenAnswer(), json({ id: CONTAINER }))
+    expect((await post()).ok).toBe(true)
+    expect(paths()).toEqual([`GET /${PRODUCT}`, `GET /${IG}/available_catalogs`, `GET /${PAGE}`, `POST /${IG}/media`])
+    expect(sent(3).url.searchParams.get('access_token')).toBe(PAGE_TOKEN)
+    h.calls = []
+    h.answers.push(json({ id: PRODUCT, product_catalog: { id: '120000000000109' } }), json({ data: [{ catalog_id: '120000000000100' }] }))
+    expect(await post()).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/not in a catalog the chosen Instagram account tags from/) })
+    expect(paths()).toEqual([`GET /${PRODUCT}`, `GET /${IG}/available_catalogs`])
+    h.calls = []
+    cat.problem = 'that catalog is not one this business may read'
+    expect(await post()).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/may read/) })
+    expect(h.calls).toHaveLength(0)
+    cat.problem = null
+  })
+  it('the tagged products are counted apart from the cap of 30 ids: a reel with 30 tags, a place and 2 sponsors goes', async () => {
+    const ids = Array.from({ length: 30 }, (_, i) => `1200000000003${String(i).padStart(2, '0')}`)
+    const reel = { media_type: 'REELS', video_url: 'https://cdn.example-shop.com/r.mp4', location_id: '110000000000001', branded_content_sponsor_ids: `[${BRAND_IG},170000000000202]`, product_tags: JSON.stringify(ids.map((id) => ({ product_id: id }))) }
+    for (const id of ids) h.answers.push(json({ id, product_catalog: { id: '120000000000100' } }), ...(id === ids[0] ? [json({ data: [{ catalog_id: '120000000000100' }] })] : []))
+    h.answers.push(tokenAnswer(), json({ id: CONTAINER }))
+    expect((await post(reel)).ok).toBe(true)
+    expect(h.calls.filter((c) => c.init.method === 'POST')).toHaveLength(1)
   })
 })

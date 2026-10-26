@@ -25,6 +25,10 @@ import { metaWriteRuleAuth, type MetaBoostWriteKind, type MetaBrandSafetyKind, t
 import type { MetaCatalogKind } from '../../gateway/meta-catalog-rules.js'
 // Step 41 — set-meta-user-access and set-meta-partner-access's kinds.
 import type { MetaAccessKind } from '../../gateway/meta-access-rules.js'
+// Step 38 — the messaging tools' kinds.
+import type { MetaMessagingKind } from '../../gateway/meta-messaging-rules.js'
+// Step 43 — create-meta-backed-account's kinds.
+import type { MetaBusinessAssetKind } from '../../gateway/meta-business-asset-rules.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
 import { failureOfAnswer, failureOfThrow, localFailure, type MetaFailure } from './errors.js'
@@ -90,6 +94,12 @@ export interface MetaObjectChange {
     | MetaPostKind
     // Step 41 — the chosen ad account, Page or Instagram account's business asset (people, partners), or the portfolio.
     | MetaAccessKind
+    // Step 38 — the chosen Page as it messages, its messaging setup, labels, personas, templates; a WhatsApp account, a group.
+    | MetaMessagingKind
+    // Step 43 — the chosen Page / Instagram account a backed account is made for.
+    | MetaBusinessAssetKind
+    // Gap 46b (MD-024) — a video the chosen Page posted, its thumbnail made as the Page.
+    | 'ownpagevideo'
   params: Record<string, string>
   operation: string
   budget?: boolean
@@ -118,7 +128,7 @@ export interface MetaObjectChange {
    * Step 18 — a budget schedule's campaign or ad set (the gateway checks the period is one of its own); step 34: a feed's
    * catalog; step 37 — a Threads post's ad, a branded post; step 24 — a video post's video.
    */
-  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string }
+  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo' | 'creator'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (include_recommendations, master CMP-031). */
   recommendations?: boolean
   /** Step 21 — an edge that changes the object itself (a campaign's labels edge): the object is read back, not a new one. */
@@ -266,12 +276,18 @@ export function readBackMismatch(node: Record<string, unknown> | null, expected:
 const MAX_WORDS = 300
 const cut = (words: string | null | undefined) => (words ? (words.length > MAX_WORDS ? `${words.slice(0, MAX_WORDS - 1)}…` : words) : null)
 
-/** Step 36 review B3 — the kinds a change makes AS the chosen Page (its own token: gateway meta-page-token.ts); step 27b: an Instant Experience. */
-const PAGE_KINDS: ReadonlySet<string> = new Set(['page', 'leadform', 'testlead', 'canvas'])
+/**
+ * Step 36 review B3 — the kinds a change makes AS the chosen Page (its own token: gateway meta-page-token.ts); step 27b: an
+ * Instant Experience; gap 46b (review F3): a Page video's thumbnail (`ownpagevideo`).
+ */
+const PAGE_KINDS: ReadonlySet<string> = new Set(['page', 'leadform', 'testlead', 'canvas', 'ownpagevideo'])
 /** Step 37 — the comment kinds made as the chosen Page (Facebook comments and the chosen Instagram account's). */
 const COMMENT_KINDS: ReadonlySet<string> = new Set(['fbpost', 'fbcomment', 'fbpagecomment', 'brandedcomment', 'igmedia', 'igcomment', 'iguser'])
 /** Step 24 — the post kinds made as the chosen Page (its posts; the chosen Instagram account's media and events). */
 const POST_KINDS: ReadonlySet<string> = new Set(['postpage', 'pagepostedit', 'pagepostmade', 'postig', 'igmediamade'])
+
+/** Step 38 — the messaging kinds made as the chosen Page (messages, labels, personas, templates, the messaging setup). */
+const MESSAGING_KINDS: ReadonlySet<string> = new Set(['messengerpage', 'instagrampage', 'messagingpage', 'pagelabel', 'persona', 'messengertemplate'])
 
 /** Step 30 part 3 review round 2 (A-L3) — the token a change goes with by its gateway rule (meta-calls.ts metaWriteRuleAuth). */
 function ruleAuthOf(change: MetaObjectChange): 'page' | 'app' | undefined {
@@ -319,6 +335,18 @@ function changeFailure(answer: Pick<GatewayResponse, 'status' | 'verdict'>, chan
         : `Meta did not accept this post change made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. The system user needs the Page's CREATE_CONTENT task (ADVERTISE for an unpublished video for ads; MANAGE and MODERATE for an edit or a delete) in Meta Business settings › Users › System users › Assign assets, and its token pages_manage_posts, pages_read_engagement and pages_show_list — publish_video for a video post, pages_manage_ads for a video for ads, pages_manage_engagement and pages_read_user_engagement for an edit or a delete. This request changed nothing; the steps before it say what Meta already made.`,
     }
   }
+  // Step 38 — a message, label, template or messaging-setup change made as the chosen Page: the Page's MESSAGING task and the
+  // messaging permissions (and Advanced Access for real customers), never "make a new system-user token" or the ad account's.
+  if (auth === 'page' && kind && MESSAGING_KINDS.has(kind) && (failure.authLost || failure.permissionDenied)) {
+    return {
+      ...failure,
+      sentence: `Meta did not accept this ${kind === 'messengerpage' || kind === 'instagrampage' ? 'message' : 'messaging change'} made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. It goes with the Page's own token: the system user needs the Page's MESSAGING task (Meta Business settings › Users › System users › Assign assets) and its token pages_messaging and pages_manage_metadata — Instagram also instagram_basic and instagram_manage_messages, utility templates page_utility_messaging; with Standard access Meta reaches only people with a role on the business's Meta app (real customers need Advanced Access, App Review). Nothing was sent.`,
+    }
+  }
+  // Step 38 — a WhatsApp template or template group (system-user token): the WhatsApp permissions, never the ad account's.
+  if ((kind === 'waba' || kind === 'templategroup') && (failure.authLost || failure.permissionDenied)) {
+    return { ...failure, sentence: `Meta did not accept this WhatsApp template change${code}${words ? `: ${words}` : ''}. It needs whatsapp_business_management on the system user's token (whatsapp_business_messaging alone is refused) and the WhatsApp account assigned to the system user in Meta Business settings. Nothing was changed.` }
+  }
   // Step 37 (re-review B) — a block or unblock on the chosen Page (kind `page`): the Page token, the MODERATE task and the
   // permissions Meta's error 283 names for /{page}/blocked; step 36's lead-form sentence below is unchanged.
   if (kind === 'page' && change?.operation?.startsWith('pageblock.') && (failure.authLost || failure.permissionDenied)) {
@@ -328,6 +356,15 @@ function changeFailure(answer: Pick<GatewayResponse, 'status' | 'verdict'>, chan
     }
   }
   if (kind && PAGE_KINDS.has(kind) && (failure.authLost || failure.permissionDenied)) {
+    // Gap 46b review F3 — a Page video's thumbnail: the Page's task and the permissions Meta's thumbnails reference names
+    // (docs/graph-api/reference/video/thumbnails: pages_read_user_content, pages_manage_engagement, pages_show_list), never
+    // "make a new system-user token" or the ad account's.
+    if (kind === 'ownpagevideo') {
+      return {
+        ...failure,
+        sentence: `Meta did not accept this thumbnail made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. It goes with the Page's own token: the system user needs a task on the chosen Page (Meta Business settings › Users › System users › Assign assets; Meta's thumbnails reference names no task) and its token pages_read_user_content, pages_manage_engagement and pages_show_list (the permissions Meta's thumbnails reference names). Nothing was changed.`,
+      }
+    }
     // Step 30 part 3 review round 2 (B-3) — a webhook change made as the Page (install-page, `via`) brings its own words for
     // Meta's codes (`explain`, which the kit adds): the generic sentence here, never step 36's lead-form task advice.
     if (change?.via) return { ...failure, sentence: `Meta did not accept this change made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. Nothing was changed.` }

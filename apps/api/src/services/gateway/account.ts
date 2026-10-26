@@ -188,3 +188,9 @@ export async function metaPagePostVideoOf(postId: string, pageId: string): Promi
   const after = row?.after && typeof row.after === 'object' && !Array.isArray(row.after) ? row.after as Record<string, unknown> : null
   return after && typeof after.videoId === 'string' && /^\d{1,25}$/.test(after.videoId) ? after.videoId : null
 }
+
+/** Step 38 — the messaging tools (their change records name the labels, templates, groups, personas and flows Nexus made). */
+export const META_MESSAGE_TOOL = 'create-meta-message'
+export const META_LABELS_TOOL = 'set-meta-conversation-labels'
+export const META_TEMPLATES_TOOL = 'set-meta-message-templates'
+export const META_SETUP_TOOL = 'set-meta-messaging-setup'

@@ -81,7 +81,8 @@ const metaCatalogs: AgentTool = {
     + 'received, suggested partners, set-up (answering a request is Ads Manager only). bundle-folders, smart-pixel '
     + '(settings, stats). page-catalogs: catalogs linked to the chosen Facebook Page; shop-catalogs: the catalogs of the '
     + 'Page\'s shops. categories: Meta\'s product category list is a file on facebook.com, not an API — the answer says '
-    + 'where it is. Changing catalogs is a change tool (a later Nexus step). Read only.',
+    + 'where it is. Changing catalogs: create-meta-catalog, set-meta-catalog, set-meta-catalog-access and '
+    + 'remove-meta-catalog-items. Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveCatalogs({
       connectionId: str(args.connectionId),
@@ -133,8 +134,8 @@ const metaCatalogItems: AgentTool = {
     + 'and their variants. batch-status (catalogId, handle): what became of an items batch (Finished: rows with errors were '
     + 'NOT saved); sets-batch-status: a product-sets batch. Prices are minor units of each item\'s currency (priceCents) '
     + 'with Meta\'s own text (priceShown). Meta cannot: read "additional reviews" (it is an appeal, a change); find an item by '
-    + 'a catalog:<id>:<SKU> address (a preview token only — use skus). Changing items is a change tool (a later Nexus step; '
-    + 'on a catalog Shopify feeds Nexus writes no items, D7). Read only.',
+    + 'a catalog:<id>:<SKU> address (a preview token only — use skus). Changing items is set-meta-catalog-items '
+    + '(on a catalog Shopify feeds Nexus writes no items, D7; deleting them: remove-meta-catalog-items). Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveCatalogItems({
       connectionId: str(args.connectionId),
@@ -185,8 +186,8 @@ const metaCatalogFeeds: AgentTool = {
     + 'deletes items missing from the file). schedules: extra upload schedules (add and update only). uploads, upload '
     + '(uploadId): what each upload found, saved, refused and deleted. upload-errors: a sample of an upload\'s errors '
     + '(fatal: the item was not made) and warnings. suggested-rules (errorId): Meta\'s suggested fixes for one error. '
-    + 'rules: the feed\'s rules. Fetch addresses are shown by host only (they may hold a key). Changing feeds is a change '
-    + 'tool (a later Nexus step). Read only.',
+    + 'rules: the feed\'s rules. Fetch addresses are shown by host only (they may hold a key). Changing feeds is '
+    + 'set-meta-catalog-feed (deleting a supplementary feed: remove-meta-catalog-items). Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveCatalogFeeds({
       connectionId: str(args.connectionId),

@@ -51,7 +51,7 @@ import { PAGE_TOKEN_NOTE } from '../../marketing/meta-ads/live-media.js'
 import { callTool, offeredOn, type UserPrincipal } from '../call-tool.js'
 import { MetaReadError, failureOfAnswer } from '../../marketing/meta-ads/errors.js'
 import { metaUrl } from '../../gateway/meta.js'
-import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
+import { metaCallVerdict, metaReadOnlyProblem } from '../../gateway/meta-calls.js'
 
 const tool = (name: string) => META_ADS_ENGAGEMENT_TOOLS.find((t) => t.name === name)!
 const ctx = { can: (p: string) => ['ads.view', 'customers.view'].includes(p), via: 'claude' as const }
@@ -78,7 +78,8 @@ const CHOSEN = {
 }
 const metaError = (code: string, words: string, errorClass = 'validation') => new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass, channelCode: code, channelMessage: words } as never }), 'x', 1)
 /** Each recorded call as the real gateway judges it (null: it goes). */
-const gatewayProblems = () => h.calls.map((c) => [c.operation, metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' })]).filter(([, problem]) => problem)
+// Gap 46b — with the chosen Page named: a comment id `<object>_<comment>` is an ordinary read, as the gateway sends it.
+const gatewayProblems = () => h.calls.map((c) => [c.operation, metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' }, PAGE)]).filter(([, problem]) => problem)
 
 /** A Meta that knows the business's own form, ad, posts, media and comments (and their people). */
 const OWN_LEAD = {
@@ -307,6 +308,27 @@ describe('only the chosen Page\'s forms, the chosen account\'s ads, the chosen P
     const order = h.calls.map((c) => c.operation)
     expect(order.indexOf('comments.commentCheck')).toBeLessThan(order.indexOf('comments.replies'))
   })
+  it('gap 46b (re-review FIX 1) — ownFacebookComment\'s real reads: the post and its photo with the chosen Page\'s token, the comment with the system user\'s', async () => {
+    const res = await run('meta-comments', { view: 'comment', postId: POST, commentId: PHOTO_COMMENT })
+    expect(res.ok, JSON.stringify(res)).toBe(true)
+    // Each read as the real gateway judges it: a Page-token read of the chosen Page (its post, its photo's owner) or ordinary.
+    const tokenOf = (c: { path: string; query?: Record<string, unknown> }) => {
+      const v = metaCallVerdict({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' })
+      expect(v.problem, `${c.path} ${String(c.query?.fields)}`).toBeNull()
+      // Another Page's id (a comment `<photo>_<comment>`): the gateway sends it as an ordinary read (the system user's token).
+      if (!v.pageRead || (v.pageRead.otherPages && v.pageRead.pageId !== PAGE)) return 'system'
+      expect(v.pageRead.otherPages?.problem ?? null, `${c.path} ${String(c.query?.fields)}`).toBeNull()
+      return 'page'
+    }
+    expect(h.calls.map((c) => [c.operation, c.path, String(c.query?.fields), tokenOf(c)])).toEqual([
+      ['comments.postCheck', POST, 'id', 'page'],
+      ['comments.postTargets', POST, 'id,attachments{target{id}}', 'page'],
+      ['comments.commentObjectCheck', PHOTO_COMMENT, 'id,object{id}', 'system'],
+      ['comments.objectOwnerCheck', PHOTO, 'id,from{id}', 'page'],
+      ['comments.comment', PHOTO_COMMENT, expect.any(String), 'system'],
+      ...h.calls.slice(5).map((c) => [c.operation, c.path, String(c.query?.fields), tokenOf(c)]),
+    ])
+  })
   it('review B5 — a comment of a photo or video post: Meta\'s object must be the post\'s own photo or video (fail closed)', async () => {
     const res = await run('meta-comments', { view: 'replies', postId: POST, commentId: PHOTO_COMMENT })
     expect(res.ok).toBe(true)
@@ -447,7 +469,7 @@ describe('people\'s data: named keys only; Meta\'s refusals in plain words', () 
   it('a Page read Meta refuses for the token says the Page-token way; comment lists say an empty list may mean the token', async () => {
     h.reply = (req) => (/\/blocked$/.test(req.path) ? metaError('190', '(#190) This method must be called with a Page Access Token', 'auth_revoked') : ownMeta(req))
     const pageToken = (await run('meta-comments', { view: 'blocked' })).error
-    expect(pageToken).toMatch(/only to the Page's own access token, not to the business's system-user token, which still works \(Meta's words: \(#190\) This method must be called with a Page Access Token\)/)
+    expect(pageToken).toMatch(/only to the Page's own access token, and Nexus does not send this one with the Page's token yet; the business's system-user token still works \(Meta's words: \(#190\) This method must be called with a Page Access Token\)/)
     expect(pageToken).toContain(PAGE_TOKEN_NOTE)
     expect(pageToken).not.toMatch(/Make a new token/)
     h.reply = ownMeta

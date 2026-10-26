@@ -15,6 +15,8 @@
  * trio here. The parent builder owns ONE "Create Schedule" action + a Manual/Automate Control section
  * and calls our exposed save(enabled) via a ref; we report {valid,busy,dirty} up via onStatus.
  * Manual → enabled:false (saved but off); Automate → enabled:true (held on cadence, write-gated).
+ * 🔴 (2026-10-26) — no `enabled` (an edit where Control was not changed) sends no key, and the API keeps the plan as it
+ * is: a plan switched on elsewhere while the builder was open is not switched back off by a save of its hours.
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { Crosshair, Plus, Trash2, Sparkles, Wand2 } from 'lucide-react'
@@ -28,8 +30,11 @@ import { DemandReadout, type DemandCell, type DemandProfile } from './DemandRead
 import { RankTargetEditor, type OvMap } from './RankTargetEditor'
 import { RankTemplateModal } from './RankTemplateModal'
 import { Listbox } from '@/design-system/components'
+import { planSavedMessage, readSaveAnswer, saveRefusedMessage, type SaveAnswer } from './planSave'
 
-export interface RankPlanHandle { save: (enabled: boolean) => Promise<void> }
+/** save(): `enabled` absent = keep the plan as it is. Resolves to whether the plan runs after a save that went through,
+ *  when the answer (or the request) says it; undefined when nothing was saved or neither says it. */
+export interface RankPlanHandle { save: (enabled?: boolean) => Promise<boolean | undefined> }
 export interface RankPlanStatus { valid: boolean; busy: boolean; dirty: boolean; saved: boolean }
 
 interface DemandData { grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[]; hasData: boolean; familyOrders: number; timezone?: string; metric?: 'revenue' | 'orders' }
@@ -44,7 +49,8 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
 const api = (p: string) => `${getBackendUrl()}/api/advertising${p}`
 
-export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaign[]; name: string; groupId?: string; portfolioId?: string; onStatus?: (s: RankPlanStatus) => void; onGroupCreated?: (id: string) => void }>(function RankPlanBody({ campaigns, name, groupId, portfolioId, onStatus, onGroupCreated }, ref) {
+// 6a — `onLeftOut`: the campaigns a save left out (not Sponsored Products), so the builder can drop them from its picks.
+export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaign[]; name: string; groupId?: string; portfolioId?: string; onStatus?: (s: RankPlanStatus) => void; onGroupCreated?: (id: string) => void; onLeftOut?: (campaignIds: string[]) => void }>(function RankPlanBody({ campaigns, name, groupId, portfolioId, onStatus, onGroupCreated, onLeftOut }, ref) {
   // DPS.1 — the id of a group THIS session created. Before this existed, `groupId` came only from
   // the URL, so the 2nd save in a session was still a POST → a brand-new group every time, and the
   // server rebound the member schedules to it, stranding the previous group at zero members. (Live
@@ -140,22 +146,22 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
   // Persist as ONE named group. The API materializes one AdSchedule row per member campaign (which
   // the rank-defend cron runs — engine untouched). Per-campaign overrides are preserved by gathering
   // them from the loaded member schedules and passing them in the group's per-campaign map.
-  const saveGroup = async (enabled: boolean): Promise<{ ok: boolean; id?: string; created?: boolean }> => {
+  const saveGroup = async (enabled?: boolean): Promise<SaveAnswer & { created: boolean }> => {
     const perCamp: Record<string, unknown> = {}
     for (const c of campaigns) { const o = scheds[c.id]?.targetOverrides; if (o && Object.keys(o).length) perCamp[c.id] = o }
     // DPS.1 — an id from EITHER the URL (edit mode) or this session's earlier save (create mode).
     const gid = groupId || ownGroupId
-    const body = { id: gid || undefined, name: name.trim(), campaignIds: campaigns.map(c => c.id), windows, defaultTargetKey: baseline || null, targetOverrides: perCamp, enabled, timezone: 'Europe/Rome', portfolioId: portfolioId || null }
+    const body = { id: gid || undefined, name: name.trim(), campaignIds: campaigns.map(c => c.id), windows, defaultTargetKey: baseline || null, targetOverrides: perCamp, ...(typeof enabled === 'boolean' ? { enabled } : {}), timezone: 'Europe/Rome', portfolioId: portfolioId || null }
     const url = gid ? api(`/rank-schedule-groups/${gid}`) : api('/rank-schedule-groups')
     const r = await fetch(url, { method: gid ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(x => x.json()).catch(() => null)
-    return { ok: !!r?.id, id: r?.id, created: !gid }
+    return { ...readSaveAnswer(r), created: !gid }
   }
   const markSaved = () => { setServerBaseline(baseline); setServerWindows(windows.map(w => ({ ...w }))) }
 
-  // The ONE action, invoked by the parent's "Create Schedule" / "Save Changes" with the Control flag.
-  const doSave = async (enabled: boolean) => {
-    if (!campaigns.length || busy) return
-    if (!name.trim()) { setMsg('Name your schedule first — a schedule name is required.'); return }
+  // The ONE action, invoked by the parent's "Create Schedule" / "Save Changes" with the Control flag (absent = keep).
+  const doSave = async (enabled?: boolean): Promise<boolean | undefined> => {
+    if (!campaigns.length || busy) return undefined
+    if (!name.trim()) { setMsg('Name your schedule first — a schedule name is required.'); return undefined }
     setBusy(true); setMsg('')
     try {
       const r = await saveGroup(enabled)
@@ -164,16 +170,21 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
         // creating another one, and hand it up so the URL becomes ?groupId=… (shareable + refresh-safe).
         if (r.created && r.id) { setOwnGroupId(r.id); onGroupCreated?.(r.id) }
         markSaved(); setSavedOnce(true); setDeliverySignal(n => n + 1)
-        const n = campaigns.length
-        setMsg(enabled
-          ? `Saved + armed — one schedule "${name.trim()}" holding ${n} campaign${n === 1 ? '' : 's'} on its cadence (real Amazon pushes honour each campaign's write-gate; sandbox stays local).`
-          : `Saved — one schedule "${name.trim()}" over ${n} campaign${n === 1 ? '' : 's'}. Manual, so nothing runs yet; set Control to Automate to hold it.`)
-      } else setMsg('Save failed — please retry.')
+        // 6a — what the plan really holds, what was left out and whether it runs, from the answer; the request's
+        // on/off only when an older API does not say it.
+        const on = r.enabled ?? enabled
+        setMsg(planSavedMessage({ name: name.trim(), members: r.members ?? campaigns.length, enabled: on, leftOut: r.leftOut }))
+        if (r.leftOut.length) onLeftOut?.(r.leftOut.map(c => c.id))
+        return on
+      }
+      // A refused save (e.g. left with no Sponsored Products campaign) says why in the API's words, and reports nothing up.
+      setMsg(saveRefusedMessage(r))
+      return undefined
     } finally { setBusy(false) }
   }
   // Expose a STABLE save() that always runs the latest closure (avoids dependency churn on the ref).
   const saveRef = useRef(doSave); saveRef.current = doSave
-  useImperativeHandle(ref, () => ({ save: (enabled: boolean) => saveRef.current(enabled) }), [])
+  useImperativeHandle(ref, () => ({ save: (enabled?: boolean) => saveRef.current(enabled) }), [])
 
   // RGD.4 — the "Edit targets" modal edits GLOBAL swatches (shared across all selected campaigns) +
   // per-campaign OVERRIDES scoped to the active demand-campaign (only once it has a saved schedule).
@@ -184,13 +195,15 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
     if (r?.id && demandCampaignId) setScheds(s => ({ ...s, [demandCampaignId]: r }))
   } : undefined
 
+  // The last save's line stays visible whatever the body shows: the stub, the reload after a save, or the plan.
+  const msgLine = msg ? <div className="h10-rp-msg">{msg}</div> : null
   if (!campaigns.length) {
-    return <div className="h10-rgd-stub"><Crosshair size={26} /><b>Add campaigns first</b><span>Pick the campaigns above, then set a baseline rank + time windows here — one plan held across all of them.</span></div>
+    return <><div className="h10-rgd-stub"><Crosshair size={26} /><b>Add campaigns first</b><span>Pick the campaigns above, then set a baseline rank + time windows here — one plan held across all of them.</span></div>{msgLine}</>
   }
 
   return (
     <div className="h10-rp">
-      {!loaded ? <div className="h10-rp-load">Loading hourly bid plan…</div> : <>
+      {!loaded ? <><div className="h10-rp-load">Loading hourly bid plan…</div>{msgLine}</> : <>
         {/* Baseline — "for the rest, hold Y" */}
         <div className="h10-rp-sec">
           <div className="h10-rp-lbl">Baseline — the rest of the week, hold:</div>
@@ -278,7 +291,7 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
           </div>
         )}
 
-        {msg && <div className="h10-rp-msg">{msg}</div>}
+        {msgLine}
         <div className="h10-rp-note">Choose <b>Manual</b> or <b>Automate</b> in Control below, then <b>Create Schedule</b>. Manual stores the plan for every selected campaign but runs nothing; Automate has the engine set each hour&apos;s values on its cadence, writing only when the hour&apos;s value changes. Either way, real Amazon pushes honour each campaign&apos;s write-gate (sandbox stays local).</div>
       </>}
 

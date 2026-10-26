@@ -13,6 +13,8 @@ export { Badge, type BadgeProps, type AdProgram } from './Badge'
 export { Tag, type TagProps, type TagTone, type LegacyTagTone } from './Tag'
 export { Input, type InputProps } from './Input'
 export { Textarea, type TextareaProps } from './Textarea'
+// Reviews parts (2026-10-26) — the Textarea counter's rules: characters as a person sees them, never a block on typing.
+export { countCharacters, charactersOver, counterWords, overWords, textareaCount, type TextareaCount } from './textareaCounter'
 export { Select, type SelectProps } from './Select'
 export { Checkbox, type CheckboxProps } from './Checkbox'
 export { Toggle, type ToggleProps } from './Toggle'

@@ -459,7 +459,7 @@ export async function liveProductSets(input: ProductSetsInput) {
       const read = await withNote(() => listPaged(connectionId, 'productSets.list', `${catalog.catalogId}/product_sets`, query, clampRows(input.maxRows, 100), true))
       return {
         ...base, catalogId: catalog.catalogId, total: read.totalCount, items: read.rows.map(setRow), more: read.more,
-        note: 'A set\'s items are those its filter matches now (Meta re-applies it as items change). An empty set\'s ads do not deliver. The sets one item is in: meta-catalog-items view item-sets. Changing sets is a change tool (a later Nexus step).',
+        note: 'A set\'s items are those its filter matches now (Meta re-applies it as items change). An empty set\'s ads do not deliver. The sets one item is in: meta-catalog-items view item-sets. Changing sets is set-meta-product-set (deleting one: remove-meta-catalog-items).',
       }
     }
     case 'set': {
@@ -820,7 +820,7 @@ export async function liveCommerce(input: CommerceInput) {
       const count: IdCount = { notExact: 0 }
       return {
         ...base, commerceAccountId: own.commerceAccountId, items: await shopsOf(account, read.rows, count), more: read.more, fieldsNote: read.note, channelsNote, ...idsNote(count),
-        note: `A shop's id is what a product set needs to show as a shop collection (publish_to_shops, a change in a later Nexus step). Only sales channels set up appear (Meta). ${NAMES_HIDDEN}`,
+        note: `A shop's id is what a product set needs to show as a shop collection (publish_to_shops: set-meta-product-set). Only sales channels set up appear (Meta). ${NAMES_HIDDEN}`,
       }
     }
     case 'shop': {
@@ -1000,7 +1000,7 @@ export async function liveInstagramProductTags(input: InstagramTagsInput) {
       return {
         ...base, mediaId: media.mediaId, productType: media.productType, items, slides, fieldsNote: read.note, ...idsNote(count),
         priceNote: 'A tag\'s price is Meta\'s own text (priceShown; otherPriceShown is its short form, salePriceShown the sale price). priceCents is filled only when the text names an ISO currency (e.g. 49.90 EUR).',
-        note: `x and y place a tag on the photo (0–1 from the top-left). ${TAG_LIMITS} Adding or moving tags is a change (a later Nexus step); Meta cannot remove a tag through its API (Instagram app only).`,
+        note: `x and y place a tag on the photo (0–1 from the top-left). ${TAG_LIMITS} Adding or moving tags is set-meta-instagram-product-tags; Meta cannot remove a tag through its API (Instagram app only).`,
       }
     }
     case 'appeal': {
@@ -1012,7 +1012,7 @@ export async function liveInstagramProductTags(input: InstagramTagsInput) {
       return {
         ...base, catalogId: catalog.catalogId, productId: id, items, ...idsNote(count),
         fieldsNote: read.note,
-        note: 'Sending an appeal is a change (a later Nexus step); Meta answers it with success only, not the outcome — read this view again later.',
+        note: 'Sending an appeal is set-meta-instagram-product-tags action appeal; Meta answers it with success only, not the outcome — read this view again later.',
       }
     }
   }

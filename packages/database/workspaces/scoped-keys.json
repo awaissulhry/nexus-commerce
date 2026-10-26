@@ -7317,5 +7317,38 @@
       ]
     },
     "relations": []
+  },
+  "ShopifyMarketingConsent": {
+    "scalar": {},
+    "compound": {
+      "shopify_marketing_consent": [
+        "connectionId",
+        "shopifyCustomerId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "connection",
+        "model": "ChannelConnection",
+        "from": [
+          "connectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ReviewSettings": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ReviewReplyTemplate": {
+    "scalar": {
+      "name": "workspace_name"
+    },
+    "compound": {},
+    "relations": []
   }
 }

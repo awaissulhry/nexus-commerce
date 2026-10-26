@@ -14,7 +14,7 @@
  *
  * Prev / Next (`nav`): the host passes the ids of the table's rows in the order shown now (filtered, sorted) and the
  * current id; ▲ / ▼ and the keys K / J call `nav.onGo(id)`. At either end the button is held (focusable, says why), never
- * wraps. J / K never fire with a modifier held, nor while the focus is in a text field, a grid or a list.
+ * wraps. A paged table also passes `offset` and `total`, so the counter counts the whole list ("53 of 56"). J / K never fire with a modifier held, nor while the focus is in a text field, a grid or a list.
  *
  * Stacking and focus come from `Modal`: a ReviewChangesModal opened from inside opens ABOVE this one, Esc closes only
  * the top dialog, and when the review closes the focus goes back to the control that opened it inside this detail (or
@@ -48,6 +48,12 @@ export interface DetailNav {
   onGo: (id: string) => void
   /** "rule", "keyword": names the buttons ("Next rule") and their reasons. Default "row". */
   noun?: string
+  /**
+   * `ids` are one page of a longer list: the rows before this page and the rows in the whole list. The counter then
+   * says where the row is in the whole list ("53 of 56", not "3 of 50"); Prev / Next still walk `ids`.
+   */
+  offset?: number
+  total?: number | null
 }
 
 export interface DetailModalProps {
@@ -107,8 +113,8 @@ export function DetailModal({
   const bodyRef = useRef<HTMLDivElement>(null)
   const idBase = useId()
   const noun = nav?.noun ?? 'row'
-  const pos = detailPosition(nav?.ids ?? [], nav?.current)
-  const held = detailNavHeld(pos, noun)
+  const pos = detailPosition(nav?.ids ?? [], nav?.current, nav)
+  const held = detailNavHeld(pos, noun, nav)
   const latest = useRef({ nav, pos })
   latest.current = { nav, pos }
   const go = (dir: DetailDirection) => {

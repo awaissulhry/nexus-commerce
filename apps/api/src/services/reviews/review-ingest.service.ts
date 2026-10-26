@@ -36,6 +36,7 @@ import { fetchEbayFeedback } from './adapters/ebay-feedback.adapter.js'
 import { fetchAmazonVocFeed } from './adapters/amazon-voc.adapter.js'
 import type { AdapterResult } from './adapters/types.js'
 import { publishReviewEvent } from '../review-events.service.js'
+import { notifyReviewAlert } from './review-alert-notify.service.js'
 
 const FIXTURE_DIR =
   process.env.NEXUS_REVIEW_FIXTURE_DIR ??
@@ -56,6 +57,8 @@ interface RawReview {
   helpfulVotes?: number
   postedAt: string // ISO
   rawPayload?: unknown
+  /** Reviews Inbox — the Nexus Order this review is about, when the source names it (eBay feedback). */
+  orderId?: string
 }
 
 export interface IngestSummary {
@@ -97,12 +100,17 @@ async function loadFixtures(marketplace?: string): Promise<RawReview[]> {
 async function findOrCreateReview(
   raw: RawReview,
   ingestSource: string,
+  importBatchId?: string,
 ): Promise<{ id: string; isNew: boolean } | null> {
   const existing = await prisma.review.findFirst({
     where: { channel: raw.channel, externalReviewId: raw.externalReviewId },
-    select: { id: true },
+    select: { id: true, orderId: true },
   })
   if (existing) {
+    // Reviews Inbox — a row stored before its order was known gets the order link on the next read.
+    if (raw.orderId && !existing.orderId) {
+      await prisma.review.update({ where: { id: existing.id }, data: { orderId: raw.orderId } })
+    }
     return { id: existing.id, isNew: false }
   }
   // Resolve productId via ASIN or SKU when possible.
@@ -139,6 +147,8 @@ async function findOrCreateReview(
       postedAt: new Date(raw.postedAt),
       rawPayload: (raw.rawPayload as object | null) ?? null,
       ingestSource,
+      orderId: raw.orderId ?? null,
+      importBatchId: importBatchId ?? null,
     },
     select: { id: true },
   })
@@ -192,6 +202,26 @@ async function updateCategoryRates(reviewId: string, result: ExtractResult): Pro
   }
 }
 
+/**
+ * Reviews Inbox — "Undo this import": take removed reviews back out of the rolling ReviewCategoryRate counters that
+ * `updateCategoryRates` raised when they were read, so the spike detector stops counting them. Never below zero.
+ */
+export async function removeFromCategoryRates(
+  reviews: { productId: string | null; marketplace: string | null; postedAt: Date; label: string | null; categories: string[] }[],
+): Promise<void> {
+  for (const review of reviews) {
+    if (!review.productId || !review.marketplace || !review.label) continue
+    const date = new Date(Date.UTC(review.postedAt.getUTCFullYear(), review.postedAt.getUTCMonth(), review.postedAt.getUTCDate()))
+    const column = review.label === 'POSITIVE' ? 'positive' : review.label === 'NEGATIVE' ? 'negative' : 'neutral'
+    for (const category of review.categories) {
+      await prisma.reviewCategoryRate.updateMany({
+        where: { productId: review.productId, marketplace: review.marketplace, category, date, total: { gt: 0 }, [column]: { gt: 0 } },
+        data: { total: { decrement: 1 }, [column]: { decrement: 1 } },
+      })
+    }
+  }
+}
+
 export interface IngestOptions {
   marketplaces?: string[]
   force?: boolean // re-run sentiment on already-classified reviews
@@ -223,13 +253,13 @@ function emptySummary(mode: 'sandbox' | 'live'): IngestSummary {
  */
 export async function ingestRawReviews(
   raws: RawReview[],
-  opts: { ingestSource: string; force?: boolean; summary?: IngestSummary },
+  opts: { ingestSource: string; force?: boolean; summary?: IngestSummary; importBatchId?: string },
 ): Promise<IngestSummary> {
   const summary = opts.summary ?? emptySummary(reviewMode())
   summary.reviewsSeen += raws.length
   for (const raw of raws) {
     try {
-      const result = await findOrCreateReview(raw, opts.ingestSource)
+      const result = await findOrCreateReview(raw, opts.ingestSource, opts.importBatchId)
       if (!result) continue
       if (result.isNew) {
         summary.reviewsInserted += 1
@@ -274,6 +304,13 @@ export async function ingestRawReviews(
         brand,
       })
       await persistSentiment(extract)
+      // Reviews Inbox — the language and the English text ride on the same AI call.
+      if (extract.language) {
+        await prisma.review.update({
+          where: { id: result.id },
+          data: { language: extract.language, bodyEnglish: extract.english },
+        })
+      }
       await updateCategoryRates(result.id, extract)
       summary.sentimentExtracted += 1
 
@@ -305,6 +342,19 @@ export async function ingestRawReviews(
             ts: now,
           })
         }
+        // Reviews Settings › Alerts — "New negative review" for the people the business picked (in Nexus and/or by
+        // e-mail). It decides itself (1–2 stars or a negative reading, arrivals only — never an imported file) and
+        // never throws.
+        await notifyReviewAlert({
+          reviewId: result.id,
+          channel: raw.channel,
+          marketplace: raw.marketplace ?? null,
+          rating: raw.rating ?? null,
+          label: extract.label,
+          ingestSource: opts.ingestSource,
+          title: raw.title ?? null,
+          body: raw.body,
+        })
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

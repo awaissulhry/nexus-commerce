@@ -64,7 +64,7 @@ vi.mock('./ads-mutation.service.js', async (importOriginal) => ({
 }))
 
 const { isRankOwnedFloor, floorOwnerWords, releaseScheduleMembers, readScheduleMembers, sweepOrphanReleases, rankSwitchBrake, enabledOrphanScope } = await import('./rank-release.service.js')
-const { saveRankScheduleGroup, deleteRankScheduleGroup } = await import('./ads-create.service.js')
+const { saveRankScheduleGroup, deleteRankScheduleGroup, resolvePortfolioCampaignIds } = await import('./ads-create.service.js')
 const { patchAdSchedule, deleteAdSchedule } = await import('./ads-schedule.service.js')
 const { runRankDefendOnce, rankDefendSummaryLine } = await import('../../jobs/ad-rank-defend.job.js')
 const { setEngineSwitch } = await import('../automation/engine-switch.service.js')
@@ -164,7 +164,7 @@ describe('whose floor it is (N1)', () => {
 describe('a person stops a schedule holding a campaign (3.2)', () => {
   it('delete during Min-bid hours: the tick floors, the delete gives every remembered bid back at once, as the schedule', async () => {
     await seed('rr-del', 40, [35, 60])
-    const { id: groupId } = await inside(() => saveRankScheduleGroup({ name: 'RR delete', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-del'] }))
+    const { id: groupId } = await inside(() => saveRankScheduleGroup({ name: 'RR delete', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-del'], enabled: true }))
     const sid = await scheduleOf('rr-del')
     await isolate('rr-del')
     await inside(() => runRankDefendOnce())
@@ -184,7 +184,7 @@ describe('a person stops a schedule holding a campaign (3.2)', () => {
   it('pause (the list\'s Pause): the route answers what it gave back; a campaign someone else floored is kept', async () => {
     await seed('rr-pause', 50, [30], 'automation:rank-defend-old')
     await seed('rr-person', 50, [30], 'user:awais')
-    const { id: groupId } = await inside(() => saveRankScheduleGroup({ name: 'RR pause', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-pause', 'rr-person'] }))
+    const { id: groupId } = await inside(() => saveRankScheduleGroup({ name: 'RR pause', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-pause', 'rr-person'], enabled: true }))
 
     const preview = await app.inject({ method: 'GET', url: `/api/advertising/rank-schedule-groups/${groupId}/release-preview` })
     expect(preview.json()).toMatchObject({ campaigns: 2, restore: 1, bids: 2, keptByOthers: 1, nothing: 0, waitWhy: null })
@@ -199,7 +199,7 @@ describe('a person stops a schedule holding a campaign (3.2)', () => {
   it('a campaign removed on save gets its bids back; the members that stay keep their floor', async () => {
     await seed('rr-keep', 40, [20])
     await seed('rr-drop', 40, [20])
-    const { id } = await inside(() => saveRankScheduleGroup({ name: 'RR members', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-keep', 'rr-drop'] }))
+    const { id } = await inside(() => saveRankScheduleGroup({ name: 'RR members', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-keep', 'rr-drop'], enabled: true }))
     await isolate('rr-keep', 'rr-drop')
     await inside(() => runRankDefendOnce())
     expect((await bids('rr-drop')).floored && (await bids('rr-keep')).floored).toBe(true)
@@ -246,7 +246,7 @@ describe('a person stops a schedule holding a campaign (3.2)', () => {
 describe('while ads automation is stopped, nothing is attempted; the first run after Resume gives it back on a paused campaign (Owner S1)', () => {
   it('halted: the delete defers, Nexus\'s copy does not move; after Resume the tick\'s orphan sweep restores', async () => {
     await seed('rr-halt', 40, [35, 60], 'automation:rank-defend-gone', { status: 'PAUSED' })
-    const { id: groupId } = await inside(() => saveRankScheduleGroup({ name: 'RR halt', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-halt'] }))
+    const { id: groupId } = await inside(() => saveRankScheduleGroup({ name: 'RR halt', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-halt'], enabled: true }))
     await dial('AUTO', true)
 
     const preview = await app.inject({ method: 'GET', url: `/api/advertising/rank-schedule-groups/${groupId}/release-preview` })
@@ -278,7 +278,7 @@ describe('while ads automation is stopped, nothing is attempted; the first run a
 
   it('Rank & Dayparting switched off (Owner S7): the pause defers; the switch text counts the floors; back on, the sweep restores', async () => {
     await seed('rr-off', 40, [20], 'automation:rank-defend-off', { status: 'PAUSED' })
-    const { id: groupId } = await inside(() => saveRankScheduleGroup({ name: 'RR off', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-off'] }))
+    const { id: groupId } = await inside(() => saveRankScheduleGroup({ name: 'RR off', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-off'], enabled: true }))
     await isolate('rr-off')
     await inside(() => setEngineSwitch('rank-defend', 'OFF', 'user:test'))
     expect(await inside(() => rankSwitchBrake('base'))).toBe('base; 1 campaign holds a bid floor it set right now: switched off, it stays floored until it is switched back on, and its first run then gives back every floor no schedule holds on a paused campaign (a live one waits for a person on the Hourly Bids list)')
@@ -306,8 +306,8 @@ describe('the rank-defend tick (in-tick release, N1, the sweep)', () => {
     await seed('rr-idle', 40, [20], null) // a legacy floor: no owner recorded
     await seed('rr-dangling', 40, [20], 'automation:rank-defend-dangling')
     // A window that never opens (it ends where it starts) and no baseline: goal-mode, but nothing is due.
-    await inside(() => saveRankScheduleGroup({ name: 'RR idle', windows: [{ days: [0], startHour: 5, endHour: 5, targetKey: 'hold' }], defaultTargetKey: null, campaignIds: ['rr-idle'] }))
-    await inside(() => saveRankScheduleGroup({ name: 'RR dangling', windows: [], defaultTargetKey: 'deleted-target', campaignIds: ['rr-dangling'] }))
+    await inside(() => saveRankScheduleGroup({ name: 'RR idle', windows: [{ days: [0], startHour: 5, endHour: 5, targetKey: 'hold' }], defaultTargetKey: null, campaignIds: ['rr-idle'], enabled: true }))
+    await inside(() => saveRankScheduleGroup({ name: 'RR dangling', windows: [], defaultTargetKey: 'deleted-target', campaignIds: ['rr-dangling'], enabled: true }))
     const idleSid = await scheduleOf('rr-idle')
     await isolate('rr-idle', 'rr-dangling')
 
@@ -321,7 +321,7 @@ describe('the rank-defend tick (in-tick release, N1, the sweep)', () => {
   it('a serving schedule leaves a floor it did not set alone (N1), and still restores its own', async () => {
     await seed('rr-oos', 40, [20], 'automation:retail-guard')
     await seed('rr-own', 40, [20], 'automation:rank-defend-own')
-    await inside(() => saveRankScheduleGroup({ name: 'RR serve', windows: [], defaultTargetKey: 'hold', campaignIds: ['rr-oos', 'rr-own'] }))
+    await inside(() => saveRankScheduleGroup({ name: 'RR serve', windows: [], defaultTargetKey: 'hold', campaignIds: ['rr-oos', 'rr-own'], enabled: true }))
     await isolate('rr-oos', 'rr-own')
 
     const r = await inside(() => runRankDefendOnce())
@@ -335,7 +335,7 @@ describe('the rank-defend tick (in-tick release, N1, the sweep)', () => {
   it('a Min-bid window does not re-floor a floor someone else set (a different floor would move their bids)', async () => {
     await seed('rr-person-min', 40, [20], 'user:awais')
     await inside(() => db().campaign.update({ where: { id: 'rr-person-min' }, data: { bidsSuppressedFloorCents: 2 } }))
-    await inside(() => saveRankScheduleGroup({ name: 'RR person min', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-person-min'], targetOverrides: { 'rr-person-min': { pause: { floorBidCents: 10 } } } }))
+    await inside(() => saveRankScheduleGroup({ name: 'RR person min', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-person-min'], enabled: true, targetOverrides: { 'rr-person-min': { pause: { floorBidCents: 10 } } } }))
     await isolate('rr-person-min')
     await inside(() => runRankDefendOnce())
     expect(rec.writes.filter((w) => w.id.startsWith('rr-person-min'))).toEqual([])
@@ -348,7 +348,7 @@ describe('the rank-defend tick (in-tick release, N1, the sweep)', () => {
     await seed('rr-sw-other', 40, [20], 'user:awais', paused)
     await seed('rr-sw-1', 40, [20], 'automation:dayparting-gone', paused)
     await seed('rr-sw-2', 40, [20], 'automation:rank-plan-gone', paused)
-    await inside(() => saveRankScheduleGroup({ name: 'RR held', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-sw-held'] }))
+    await inside(() => saveRankScheduleGroup({ name: 'RR held', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-sw-held'], enabled: true }))
     await isolate('rr-sw-held', 'rr-sw-other', 'rr-sw-1', 'rr-sw-2')
     const guard = await inside(() => openEngineGuard('rank-defend'))
     const first = await inside(() => sweepOrphanReleases({ guard, governed: new Set(), limit: 1 }))
@@ -364,6 +364,89 @@ describe('the rank-defend tick (in-tick release, N1, the sweep)', () => {
     await seed('rr-sw-plan', 40, [20], 'automation:rank-plan-live', paused)
     const third = await inside(() => sweepOrphanReleases({ guard, governed: new Set(['rr-sw-plan']) }))
     expect(third.orphans).toBe(0)
+  })
+})
+
+describe('6a — an hourly plan holds Sponsored Products campaigns only', () => {
+  const display = { type: 'SD', adProduct: 'SPONSORED_DISPLAY' }
+
+  it('rank-defend leaves a Sponsored Display member alone: no floor stamped, no bid remembered, nothing written', async () => {
+    await seed('rr-sd-alone', 40, [20], undefined, display)
+    // A member row a plan saved before 6a still holds (a save now leaves the campaign out), in a Min-bid hour.
+    await inside(() => db().adSchedule.create({ data: { campaignId: 'rr-sd-alone', name: 'rr-sd-alone — RR display', windows: [], defaultTargetKey: 'pause', enabled: true } }))
+    // The mutation layer refuses these SP writes for a Sponsored Display campaign.
+    for (const id of ['rr-sd-alone-g', 'rr-sd-alone-t0']) rec.fail.add(id)
+    await isolate('rr-sd-alone')
+    const r = await inside(() => runRankDefendOnce())
+    expect(await bids('rr-sd-alone')).toMatchObject({
+      floored: false, group: { defaultBidCents: 40, suppressedFromBidCents: null }, targets: [{ bidCents: 20, suppressedFromBidCents: null }],
+    })
+    expect(rec.writes).toEqual([])
+    expect(r.decisions.find((d) => d.campaignId === 'rr-sd-alone')).toBeUndefined()
+  })
+
+  it('a save drops a Sponsored Display member it still lists: the SP member keeps its floor, nothing is written, the plan stays on', async () => {
+    await seed('rr-mix-sp', 40, [20])
+    await seed('rr-mix-sd', 40, [20], undefined, display)
+    const { id } = await inside(() => saveRankScheduleGroup({ name: 'RR mixed', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-mix-sp'], enabled: true }))
+    await inside(() => db().adSchedule.create({ data: { campaignId: 'rr-mix-sd', name: 'rr-mix-sd — RR mixed', windows: [], defaultTargetKey: 'pause', enabled: true, groupId: id } }))
+    for (const sdId of ['rr-mix-sd-g', 'rr-mix-sd-t0']) rec.fail.add(sdId)
+    await isolate('rr-mix-sp', 'rr-mix-sd')
+    await inside(() => runRankDefendOnce())
+    expect((await bids('rr-mix-sp')).floored).toBe(true)
+    rec.writes = []
+
+    // The screen's save, both still listed, `enabled` not said.
+    const out = await inside(() => saveRankScheduleGroup({ id, name: 'RR mixed', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-mix-sp', 'rr-mix-sd'] }))
+    expect(out).toMatchObject({ members: 1, release: { restored: 0, failed: 0 }, notSponsoredProducts: [{ id: 'rr-mix-sd', name: 'rr-mix-sd' }] })
+    expect(await inside(() => db().adSchedule.findFirst({ where: { campaignId: 'rr-mix-sd' } }))).toBeNull()
+    expect(rec.writes).toEqual([])
+    expect(await bids('rr-mix-sp')).toMatchObject({ floored: true, group: { defaultBidCents: 2 } })
+    expect(await bids('rr-mix-sd')).toMatchObject({ floored: false, group: { defaultBidCents: 40, suppressedFromBidCents: null } })
+    expect(await inside(() => db().rankScheduleGroup.findUnique({ where: { id }, select: { enabled: true } }))).toEqual({ enabled: true })
+  })
+
+  it('a save left with no Sponsored Products campaign is refused before anything is written: no plan change, no member removed, nothing given back', async () => {
+    await seed('rr-last-sp', 40, [20])
+    await seed('rr-last-sd', 40, [20], undefined, display)
+    const { id } = await inside(() => saveRankScheduleGroup({ name: 'RR last', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-last-sp'], enabled: true }))
+    await isolate('rr-last-sp')
+    await inside(() => runRankDefendOnce())
+    expect((await bids('rr-last-sp')).floored).toBe(true)
+    rec.writes = []
+    const versions = await inside(() => db().rankScheduleVersion.count({ where: { groupId: id } }))
+
+    // The person took the SP campaign out and left the SD one in.
+    await expect(inside(() => saveRankScheduleGroup({ id, name: 'RR last', windows: [], defaultTargetKey: 'hold', campaignIds: ['rr-last-sd'] })))
+      .rejects.toThrow('The campaign is not Sponsored Products: an hourly plan holds those only. Delete the plan instead.')
+    expect(await inside(() => db().rankScheduleGroup.findUnique({ where: { id }, select: { defaultTargetKey: true, enabled: true } }))).toEqual({ defaultTargetKey: 'pause', enabled: true })
+    expect((await inside(() => db().adSchedule.findMany({ where: { groupId: id }, select: { campaignId: true } }))).map((s: { campaignId: string }) => s.campaignId)).toEqual(['rr-last-sp'])
+    expect(await inside(() => db().rankScheduleVersion.count({ where: { groupId: id } }))).toBe(versions)
+    expect(rec.writes).toEqual([])
+    expect((await bids('rr-last-sp')).floored).toBe(true)
+
+    // Two named, a new plan: the plural, and no plan to delete; none is made.
+    await expect(inside(() => saveRankScheduleGroup({ name: 'RR none', windows: [], defaultTargetKey: 'hold', campaignIds: ['rr-last-sd', 'rr-mix-sd'] })))
+      .rejects.toThrow('None of the 2 campaigns is Sponsored Products: an hourly plan holds those only. Choose Sponsored Products campaigns.')
+    expect(await inside(() => db().rankScheduleGroup.count({ where: { name: 'RR none' } }))).toBe(0)
+    // A save that names no campaign and no portfolio is not this: it saves as before.
+    await expect(inside(() => saveRankScheduleGroup({ name: 'RR named none', windows: [], defaultTargetKey: 'hold', campaignIds: [] }))).resolves.toMatchObject({ members: 0 })
+  })
+
+  it('a portfolio plan takes in its Sponsored Products campaigns only; a row with no adProduct follows its legacy type', async () => {
+    const pf = { portfolioId: 'PF-TEST-6A' }
+    await seed('pf-sp', 40, [20], undefined, pf)
+    await seed('pf-sd', 40, [20], undefined, { ...pf, ...display })
+    await seed('pf-sb', 40, [20], undefined, { ...pf, type: 'SB', adProduct: 'SPONSORED_BRANDS' })
+    await seed('pf-legacy-sp', 40, [20], undefined, { ...pf, adProduct: null })
+    await seed('pf-legacy-sd', 40, [20], undefined, { ...pf, type: 'SD', adProduct: null })
+    await seed('pf-archived', 40, [20], undefined, { ...pf, status: 'ARCHIVED' })
+    expect((await inside(() => resolvePortfolioCampaignIds('PF-TEST-6A'))).sort()).toEqual(['pf-legacy-sp', 'pf-sp'])
+    const out = await inside(() => saveRankScheduleGroup({ name: 'RR portfolio', windows: [], defaultTargetKey: 'hold', campaignIds: [], portfolioId: 'PF-TEST-6A' }))
+    expect(out.members).toBe(2)
+    expect(out.notSponsoredProducts).toBeUndefined()
+    const rows = await inside(() => db().adSchedule.findMany({ where: { groupId: out.id }, orderBy: { campaignId: 'asc' }, select: { campaignId: true } }))
+    expect(rows.map((s: { campaignId: string }) => s.campaignId)).toEqual(['pf-legacy-sp', 'pf-sp'])
   })
 })
 
@@ -439,7 +522,7 @@ describe('a live campaign: the sweep leaves it, the list shows it, a person give
 
   it('refuses a campaign that is not a live orphan, and changes nothing', async () => {
     await seed('rf-held', 40, [20], 'automation:rank-defend-x')
-    await inside(() => saveRankScheduleGroup({ name: 'RF held', windows: [], defaultTargetKey: 'hold', campaignIds: ['rf-held'] }))
+    await inside(() => saveRankScheduleGroup({ name: 'RF held', windows: [], defaultTargetKey: 'hold', campaignIds: ['rf-held'], enabled: true }))
     await seed('rf-paused', 40, [20], 'automation:rank-defend-y', { status: 'PAUSED' })
     await seed('rf-archived', 40, [20], 'automation:rank-defend-z', { status: 'ARCHIVED' })
     await seed('rf-person', 40, [20], 'user:awais')

@@ -131,6 +131,15 @@ const nextConfig = {
       { source: '/listings/legacy', destination: '/listings', permanent: true },
       { source: '/listings/legacy/:store', destination: '/listings/:store', permanent: true },
       { source: '/listings/legacy/:store/:market', destination: '/listings/:store/:market', permanent: true },
+      // ── 2026-10-26 — Reviews › Requests (Reviews rebuild, PR C) ──────────────────────────────────────────────────────
+      // Package inserts and the e-mail preview are windows of the Queue now; the review-request rules and their timing
+      // pages moved from Orders into Reviews › Requests. Exact paths, so their order among themselves does not matter;
+      // the longer sources still come first.
+      { source: '/marketing/reviews/requests/test/preview', destination: '/marketing/reviews/requests?preview=1', permanent: true },
+      { source: '/marketing/reviews/inserts', destination: '/marketing/reviews/requests?inserts=1', permanent: true },
+      { source: '/orders/reviews/rules/send-times', destination: '/marketing/reviews/requests/timing?section=send-hours', permanent: true },
+      { source: '/orders/reviews/rules/timing', destination: '/marketing/reviews/requests/timing', permanent: true },
+      { source: '/orders/reviews/rules', destination: '/marketing/reviews/requests/rules', permanent: true },
       // ── RA.SPINE S3 — one derived rule, replacing six hand-written copies ──────────────────
       //
       // The old index client (`RulesAutomationClient.tsx`, since removed) resolved an unknown OR ROUTED
@@ -321,6 +330,17 @@ const nextConfig = {
       // wins over the request's (Next merges the destination's query over the request's), so no stale filter rides along.
       { source: '/marketing/ads-console/rank', has: [{ type: 'query', key: 'mode' }], destination: '/marketing/ads/rules-automation/control-room?mode=', permanent: true },
       { source: '/marketing/ads-console/rank', destination: '/marketing/ads/rules-automation/control-room', permanent: true },
+
+      // ── Reviews PR B (2026-10-26) — one Inbox for reviews and seller feedback ──
+      // The Respond desk and the old Import page are retired: the Inbox answers, and its Import window opens from ?import=1.
+      { source: '/marketing/reviews/desk', destination: '/marketing/reviews/inbox', permanent: true },
+      { source: '/marketing/reviews/import', destination: '/marketing/reviews/inbox?import=1', permanent: true },
+      // ── Reviews PR D (2026-10-26) — Reviews › Settings; the old review pages are retired ──
+      // Advanced was a second Overview; the review automations live in Reviews › Settings › Automations; the old
+      // seller-feedback page is the Inbox's Seller feedback tab.
+      { source: '/marketing/reviews/advanced', destination: '/marketing/reviews', permanent: true },
+      { source: '/marketing/reviews/automation', destination: '/marketing/reviews/settings?section=automations', permanent: true },
+      { source: '/performance/feedback', destination: '/marketing/reviews/inbox?kind=seller', permanent: true },
     ];
     // Config redirects run before the workspace rewrite. Keep legacy bookmarks
     // and routed tabs working with their original business context.

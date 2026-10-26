@@ -18,9 +18,13 @@
 import { useEffect, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
 import { notFound, useParams } from 'next/navigation'
-import { ChevronLeft, Star } from 'lucide-react'
+import { Star } from 'lucide-react'
+import { PageHeader } from '@/design-system/patterns'
 import { getBackendUrl } from '@/lib/backend-url'
-import { ReviewsNav, CATEGORY_LABEL } from '../../_shared/ReviewsNav'
+import { usePathname } from '@/lib/workspaces/navigation'
+import { THEME_LABEL } from '../../_lib/reviewWords'
+import { reviewsCrumbs } from '../../_shell/reviews-crumbs'
+import { ReviewsMenuButton } from '../../_shell/ReviewsShell'
 
 interface TimelineDay {
   date: string
@@ -81,6 +85,7 @@ async function fetchPayload(id: string): Promise<TimelinePayload | null> {
 export default function ProductReviewDrillDown() {
   const params = useParams<{ id: string }>()
   const id = params?.id
+  const pathname = usePathname() ?? ''
   // undefined = still loading; null = fetch failed / not found
   const [data, setData] = useState<TimelinePayload | null | undefined>(undefined)
 
@@ -96,21 +101,7 @@ export default function ProductReviewDrillDown() {
   if (data === undefined) {
     return (
       <div className="px-4 py-4" aria-busy="true">
-        <div className="mb-2">
-          <Link
-            href="/marketing/reviews/by-product"
-            className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-          >
-            <ChevronLeft className="h-3 w-3" /> Per prodotto
-          </Link>
-        </div>
-        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-          <Star className="h-5 w-5 text-amber-500" />
-          Product reviews
-        </h1>
-        <div className="mt-3">
-          <ReviewsNav />
-        </div>
+        <PageHeader eyebrow={reviewsCrumbs(pathname)} title="Product reviews" subtitle="Loading…" actions={<ReviewsMenuButton />} />
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="h-16 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
@@ -144,33 +135,17 @@ export default function ProductReviewDrillDown() {
 
   return (
     <div className="px-4 py-4">
-      <div className="mb-2">
-        <Link
-          href="/marketing/reviews/by-product"
-          className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-        >
-          <ChevronLeft className="h-3 w-3" /> Per prodotto
-        </Link>
-      </div>
-      <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-        <Star className="h-5 w-5 text-amber-500" />
-        {p.name}
-      </h1>
-      <div className="text-xs text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2 flex-wrap">
-        <Link
-          href={`/products/${p.id}`}
-          className="font-mono text-blue-600 dark:text-blue-400 hover:underline"
-        >
-          {p.sku}
-        </Link>
-        {p.productType && (
+      <PageHeader
+        eyebrow={reviewsCrumbs(pathname)}
+        title={p.name}
+        subtitle={
           <>
-            <span>·</span>
-            <span className="font-mono">{p.productType}</span>
+            <Link href={`/products/${p.id}`}>{p.sku}</Link>
+            {p.productType && <> · {p.productType}</>}
           </>
-        )}
-      </div>
-      <ReviewsNav />
+        }
+        actions={<ReviewsMenuButton />}
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
         <Stat label="Reviews 30d" value={t30.total} />
@@ -258,7 +233,7 @@ export default function ProductReviewDrillDown() {
                 return (
                   <li key={c.category} className="px-3 py-2 flex items-center gap-3 flex-wrap">
                     <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                      {CATEGORY_LABEL[c.category] ?? c.category}
+                      {THEME_LABEL[c.category] ?? c.category}
                     </span>
                     <span className="text-xs text-slate-500 tabular-nums">
                       {c.total} total ({c.positive}/{c.neutral}/{c.negative})
@@ -350,7 +325,7 @@ export default function ProductReviewDrillDown() {
                       key={c}
                       className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-900"
                     >
-                      {CATEGORY_LABEL[c] ?? c}
+                      {THEME_LABEL[c] ?? c}
                     </span>
                   ))}
                 </div>

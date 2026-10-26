@@ -381,12 +381,45 @@ export const SHARED_IN_DETAIL_FIELDS = 'id,account_id,name,subtype,approximate_c
 const SAVED_FIELDS = 'id,name,description,approximate_count_lower_bound,approximate_count_upper_bound,run_status,operation_status,delete_time,time_created,time_updated'
 const SAVED_DETAIL_FIELDS = `${SAVED_FIELDS},targeting,sentence_lines`
 
-/** operation_status codes Meta's pages explain (others: Meta's own description is shown). */
+/**
+ * operation_status codes, in Meta's words (others: Meta's own description is shown). Live-probe fix (2026-10-26, the
+ * TG-026 read): every code the custom-audience reference v26 lists (reference/custom-audience.md, operation_status:
+ * 0 … 500, checked 2026-10-26) — 433 had no words — and 450 by kind: the reference's general meaning (out of date), and for
+ * a LOOKALIKE the lookalike guide's (audiences/guides/lookalike-audiences.md#inactive); 450 is no longer worded as a
+ * lookalike's on a website or Instagram audience.
+ */
 const OPERATION_WORDS: Readonly<Record<number, string>> = {
+  0: 'Meta has no status for it.',
   100: 'Expiring: not used in an active ad set for over 2 years; Meta deletes it 90 days after it was flagged (delete_time) unless an active ad set uses it before then.',
   200: 'Normal: ready.',
-  450: 'Inactive lookalike: not used in active ads for 90 days; it can still be used, but Meta gives no size or estimate until an ad using it is published.',
+  400: 'Warning: Meta has a message about it (its description).',
+  410: 'No upload: no customer file has been uploaded yet.',
+  411: 'Low match rate: few of the uploaded people were matched.',
+  412: 'High rate of invalid entries in the last upload: the customer file has unusable data.',
+  414: 'Replacing its people: a replace is in progress.',
+  415: 'Replace failed: Meta could not replace its people.',
+  421: 'No pixel: the pixel is not installed on the website yet.',
+  422: 'Pixel not firing: the pixel sends no events.',
+  423: 'Invalid pixel.',
+  431: 'Lookalike refresh failed: Meta could not refresh this lookalike.',
+  432: 'Lookalike build failed: Meta could not build this lookalike.',
+  433: 'Lookalike build failed: Meta could not build this lookalike (Meta\'s words for 433, as for 432).',
+  434: 'Lookalike build retrying: Meta is trying again.',
+  441: 'Still filling: Meta is finding people who fit it; ads can use it now, and its size grows as it fills.',
+  442: 'Meta could not prefill this custom audience.',
+  450: 'Out of date: not used in an ad for at least 30 days, or made over 90 days ago and never used (Meta\'s words).',
+  470: 'The ad account that made it is no longer active.',
   471: 'Flagged for integrity: its name, description or rule may suggest information Meta does not allow (fieldsViolatingIntegrityPolicy); ad sets using it run WITH_ISSUES, and a flagged lookalike or customer-list audience cannot be edited.',
+  500: 'Error: Meta needs the advertiser to act on it (its description says what).',
+}
+/** 450 on a LOOKALIKE (the lookalike guide, "Inactive audiences"). */
+const INACTIVE_LOOKALIKE = 'Inactive lookalike: not used in active ads for 90 days; it can still be used, but Meta gives no size or estimate until an ad using it is published.'
+
+/** The words for an operation_status code, by the audience's kind (subtype: LOOKALIKE for a lookalike). */
+export function operationWords(code: number | null, subtype: unknown): string | null {
+  if (code === null) return null
+  if (code === 450 && typeof subtype === 'string' && subtype.toUpperCase() === 'LOOKALIKE') return INACTIVE_LOOKALIKE
+  return OPERATION_WORDS[code] ?? null
 }
 
 const status = (v: unknown) => {
@@ -440,7 +473,7 @@ export function audienceRow(row: Record<string, unknown>, chosenAdAccountId: str
     size,
     sizeNote,
     delivery: deliveryOf(row.delivery_status),
-    operation: operation ? { ...operation, words: operation.code !== null ? OPERATION_WORDS[operation.code] ?? null : null } : null,
+    operation: operation ? { ...operation, words: operationWords(operation.code, row.subtype) } : null,
     flagged: operation?.code === 471 || flaggedFields.length > 0,
     expiring: operation?.code === 100 || deleteTime !== null,
   }
@@ -786,7 +819,9 @@ export async function audiencesView(input: AudiencesInput) {
         customAudienceTermsSigned: tos.custom_audience_tos === 1 || tos.custom_audience_tos === '1',
         termsAccepted: plain(tos, 1) ?? {},
         personTermsAccepted: userTos,
-        termsSigned: tosList,
+        // The terms documents Meta offers this account (CustomAudiencesTOS: id, type, content), not signatures: live 2026-10-26 it listed
+        // custom_audience while tos_accepted had no custom_audience_tos. Whether one is signed is customAudienceTermsSigned / termsAccepted.
+        termsOffered: tosList,
         existingCustomerAudienceIds: existing,
         signLink: TERMS_LINK(adAccountId),
         note: 'A person (never a system user) signs the Custom Audience terms in Meta for the business that owns the ad account, at signLink; customer-list audiences work only after that. An ad account acting on behalf of another business also answers 1 — then the terms are that business\'s. Value-based lookalikes have terms of their own. personTermsAccepted is answered for a person\'s token only, so a system user may see Meta refuse it. existingCustomerAudienceIds: the audiences Advantage+ campaigns count as existing customers.',

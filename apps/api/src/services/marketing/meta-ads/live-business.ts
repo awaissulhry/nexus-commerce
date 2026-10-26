@@ -354,7 +354,7 @@ async function businessPortfolio(account: MetaChosenAccount) {
     missing,
     notes: [
       'verification: Meta\'s business verification of this portfolio (needed for some permissions, real lead downloads and more system users). Starting or finishing it is a person\'s step in Meta Business settings › Security centre: Meta documents no API for it (verification_status is read only).',
-      'settings: what an admin may change (name, time zone, primary Page, industry, the two-factor rule) — a change a person approves; turning the two-factor rule on can lock out people who have no two-factor (meta-business-people view people shows each one\'s status).',
+      'settings: what an admin may change (name, time zone, primary Page, industry, the two-factor rule) — the Owner\'s own step in Meta\'s screens (D1: set-meta-business-settings gives the steps and reads the result); turning the two-factor rule on can lock out people who have no two-factor (meta-business-people view people shows each one\'s status).',
       'Meta keeps the business\'s legal name, address, phone number and website in Business settings › Business info: no API field reads or changes them.',
       'createdBy / updatedBy: Nexus\'s own system user by name; anyone else is Meta\'s id (meta-business-people names the people). paymentAccountId needs the ad-spend permission (billing: meta-billing).',
       ...(shared ? ['Another business in Nexus uses an ad account of this portfolio: its people, partners and domains are not read through Nexus, and its other assets are ids only.'] : []),
@@ -515,7 +515,7 @@ async function peoplePeople(account: MetaChosenAccount, maxRows: number) {
       'twoFactor: whether the person has two-factor authentication on. Meta needs at least one admin (it refuses to remove the last one).',
       'What each person can reach on the chosen ad account: meta-account-access views people and by-person.',
       NO_EMAILS,
-      'Inviting, changing or removing people is an admin\'s change a person approves.',
+      'Inviting, changing or removing people is the Owner\'s own step in Meta\'s screens (D1): set-meta-business-people gives the steps and reads the result.',
     ],
   }
 }
@@ -530,7 +530,7 @@ async function peopleSystemUsers(account: MetaChosenAccount, maxRows: number) {
     notes: [
       'System users are the portfolio\'s machine logins (Nexus acts as one: nexusSystemUser). role Admin reaches every asset of the portfolio; Employee only what is assigned to it.',
       'Meta\'s limits follow the app\'s Ads Management Standard Access feature: Standard 1 system user and 1 admin system user, Advanced 10 system users and still 1 admin system user ("Admin System User limits will stay at 1 admin").',
-      'Meta documents a rename only (POST /{business_id}/system_users with system_user_id and name); it documents no role change and no delete (a person can invalidate a system user\'s tokens) — a person does those in Business settings › Users › System users.',
+      'Meta documents a rename only (POST /{business_id}/system_users with system_user_id and name); it documents no role change and no delete (a person can invalidate a system user\'s tokens) — a person does those in Business settings › Users › System users (D1: create-meta-system-user gives the steps for a new system user, a rename or a removal).',
       SYSTEM_USERS_NOTE,
       'Nexus never reads a system user\'s token here.',
     ],
@@ -545,7 +545,7 @@ async function peopleInvitations(account: MetaChosenAccount, maxRows: number) {
     notes: [
       'Invitations to join the portfolio that are not accepted yet, with the role and tasks each will give and when it expires (tasks null with sdkRead false: Meta did not answer them). view invitation-assets (invitationId) shows which assets each one gives.',
       'Nexus does not show whom an invitation went to (an e-mail address) or its invitation link (anyone holding it could accept it): a person sees them in Meta Business settings › Users › People.',
-      'Changing the role of an invitation or cancelling it is an admin\'s change a person approves.',
+      'Changing the role of an invitation or cancelling it is the Owner\'s own step in Meta\'s screens (D1): set-meta-business-people gives the steps and reads the result.',
     ],
   }
 }
@@ -768,7 +768,7 @@ async function assetPages(account: MetaChosenAccount, scope: { portfolioId: stri
       'owned: Pages this portfolio owns; client: Pages another portfolio lets it use (permittedTasks: what it may do); pending-owned / pending-client: claims and access requests the Page\'s admins have not answered yet (ids only: the Page is not this portfolio\'s yet, and Meta names no owner; Meta answers the pending client Pages only to an admin system user — it says so when it refuses).',
       ONE_RULE + ' A client Page\'s owner is Meta\'s `business` field, which it answers only to a Page admin\'s token: when it refuses, the client Pages are ids only (see missing).',
       'The Pages the system user itself has a role on: meta-connection view choices; the Pages the chosen ad account promotes: meta-account-access view pages. A business with a global brand Page: view page-children; a Page\'s store locations: view store-locations.',
-      'Claiming, requesting or removing a Page is an admin\'s change a person approves (a claim needs someone who has been a Page admin for over 7 days).',
+      'Claiming, requesting or removing a Page is the Owner\'s own step in Meta\'s screens (D1): set-meta-business-assets and remove-meta-business-asset give the steps and read the result (a claim needs someone who has been a Page admin for over 7 days).',
       ...(scope.shared ? ['Another business in Nexus uses an ad account of this portfolio: every Page but the one chosen here is its id only.'] : []),
     ],
   }
@@ -848,7 +848,7 @@ async function assetInstagram(account: MetaChosenAccount, scope: { portfolioId: 
     notes: [
       'assets: the portfolio\'s Instagram business assets (Meta\'s SDK only) — businessAssetId is the id people are given tasks on (meta-account-access view asset-people), instagramId the account ads use; a client one names no owner, so it is ids only. owned / client / all / converted: the Instagram accounts the portfolio owns, uses for another portfolio (permittedTasks), can reach at all, and those converted to business accounts (named only with an owner Meta names).',
       ONE_RULE + ' The chosen ad account\'s own Instagram accounts: meta-account-access view instagram.',
-      'Linking an Instagram account or removing one from the portfolio is an admin\'s change a person approves (re-adding one needs its password in Meta\'s screens).',
+      'Letting the chosen ad account advertise for the Instagram account, or removing an Instagram account from the portfolio, is the Owner\'s own step in Meta\'s screens (D1): set-meta-business-assets link-instagram and remove-meta-business-asset give the steps (re-adding one needs its password in Meta\'s screens). A Page-backed Instagram account for the chosen Page: create-meta-backed-account.',
       ...(scope.shared ? ['Another business in Nexus uses an ad account of this portfolio: every account but the one chosen here is its id only.'] : []),
     ],
   }
@@ -879,7 +879,7 @@ async function assetApps(account: MetaChosenAccount, scope: { portfolioId: strin
     notes: [
       'owned: apps this portfolio owns (nexusApp: the business\'s own Meta app Nexus uses — it must be owned by the portfolio of its system user, else Meta refuses to make system users, #104001; nexusAppOwnedByThisPortfolio null: the owned list was cut or not read); client: apps another portfolio shares (permittedTasks); pending: app requests not answered yet (requestedByThisPortfolio false: an app being shared TO this portfolio; ids only, Meta names no owner).',
       ONE_RULE + ' The apps of the chosen ad account: meta-account-access view apps.',
-      'Claiming an app or asking a client for one is an admin\'s change a person approves.',
+      'Claiming an app or asking a client for one is the Owner\'s own step in Meta\'s screens (D1): set-meta-business-assets claim-app or request-app gives the steps.',
       ...(scope.shared ? ['Another business in Nexus uses an ad account of this portfolio: every app but Nexus\'s own is its id only.'] : []),
     ],
   }
@@ -899,7 +899,7 @@ async function assetGroups(account: MetaChosenAccount, scope: { portfolioId: str
     notes: [
       'A business asset group bundles a portfolio\'s Pages, ad accounts, catalogs and more, so people get tasks on all of them at once. client: groups another portfolio shares (permittedTasks).',
       ONE_RULE,
-      'Meta documents no API to make an asset group (its Creating section is empty and the SDK has none): a person makes one in Business settings › Accounts › Business asset groups. Its contents are not read here.',
+      'Meta documents no API to make an asset group (its Creating section is empty and the SDK has none): a person makes one in Business settings › Accounts › Business asset groups (set-meta-business-assets asset-group gives the steps). Its contents are not read here.',
     ],
   }
 }

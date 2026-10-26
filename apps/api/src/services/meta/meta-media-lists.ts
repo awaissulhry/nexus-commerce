@@ -21,6 +21,10 @@ export const POST_METRICS = [
   'post_reactions_love_total', 'post_reactions_wow_total', 'post_reactions_haha_total', 'post_reactions_sorry_total', 'post_reactions_anger_total',
   'post_video_views', 'post_video_avg_time_watched', 'post_video_complete_views_30s_unique',
 ] as const
+/** Page and post insights `period` (pages-api/platforminsights/page.md); moved here from live-media.ts for the gateway's Page-token list. */
+export const PAGE_PERIODS = ['day', 'week', 'days_28', 'month', 'lifetime', 'total_over_range'] as const
+/** The breakdowns Meta's deprecation page names for the media-view metrics (moved here from live-media.ts, as above). */
+export const PAGE_BREAKDOWNS = ['is_from_ads', 'is_from_followers'] as const
 /** ig-media/insights metrics (impressions: deprecated for media made after 2024-07-02, not offered). */
 export const IG_MEDIA_METRICS = [
   'views', 'reach', 'likes', 'comments', 'saved', 'shares', 'reposts', 'total_interactions', 'follows', 'profile_visits', 'profile_activity',
@@ -60,3 +64,20 @@ export const AD_FORMATS = [
 ] as const
 /** The gateway lets the preview keys go only on a read naming one of these. */
 export const META_AD_FORMATS: ReadonlySet<string> = new Set<string>(AD_FORMATS)
+
+/**
+ * Gap 46b (master CR-489) — the five Instant Experience templates Meta's instant-experiences guide names (Get New Customers,
+ * Showcase Your Business, Sell Products without catalog, Lifestyle, Grid; the AR template is Ads Manager only), in ONE place
+ * for the gateway: Meta's OWN nodes, read only with the chosen Page's token on exactly META_IX_TEMPLATE_READ
+ * (gateway/meta-page-reads.ts), and the templates create-meta-instant-experience makes from (gateway/meta-canvas-rules.ts).
+ * Step 10's IX_TEMPLATES (marketing/meta-ads/live-media.ts) names the same five (a test keeps them equal).
+ */
+export const META_IX_TEMPLATE_IDS = ['133471657203838', '1063217037112304', '424787857903852', '1369752616394017', '1932289657009030'] as const
+/**
+ * Gap 46b (master CR-489) — the one read of a template's parts: the guide's two reads (GET /<template id>?fields=document,
+ * then GET /<document id>?fields=body_elements — documentation/ads-commerce/marketing-api/guides/instant-experiences.md "Get
+ * element types for a template") as ONE, by Graph field expansion of the template's `document` (a Canvas: Meta's Python
+ * Business SDK canvastemplate.py `'document': 'Canvas'`; canvas.py `body_elements`), so the Page's token never goes to an id
+ * Nexus did not name.
+ */
+export const META_IX_TEMPLATE_READ = 'id,document{id,name,body_elements}'

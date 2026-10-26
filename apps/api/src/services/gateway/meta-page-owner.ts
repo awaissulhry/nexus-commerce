@@ -12,7 +12,10 @@
  *             never in them, so Nexus never deletes one (LD-039: Meta documents deleting for test leads only);
  *   canvas    (step 27b) an Instant Experience OF that Page: one create-meta-instant-experience made there (its change
  *             records), else ONE live read (`GET /<canvas>?fields=id,owner,is_published`): the same id, `owner` the chosen
- *             Page, and `is_published` true or false (SDK canvas.py: only an Instant Experience has both).
+ *             Page, and `is_published` true or false (SDK canvas.py: only an Instant Experience has both);
+ *   ownpagevideo (gap 46b, MD-024: its thumbnail) a video the chosen Page POSTED: ONE live read (`GET /<video>?fields=id,
+ *             from{id}`): the same id and `from` the chosen Page (review: no field Nexus does not use is asked, so a field
+ *             Meta leaves out never refuses it; Meta itself refuses a thumbnail on a node that is not a video).
  * And every id inside the body (step 27b's Instant Experience parts name many), each confirmed before anything is sent:
  *   pagephoto       a photo OF the chosen Page (ONE live read `GET /<photo>?fields=id,from{id},width,height`: the same id,
  *                   `from` the chosen Page, a width and height — a post, video, album or comment has no such pair);
@@ -40,9 +43,12 @@ import type { MetaCheckRead } from './meta-brand-safety-owner.js'
 import { META_COMMENT_PAGE_KINDS, metaCommentOwnerProblem } from './meta-comment-owner.js'
 // Step 24 — the post kinds made as the Page (the chosen Page's posts, the chosen Instagram account's media and events).
 import { META_POST_KINDS, metaPostOwnerProblem } from './meta-post-owner.js'
+// Step 38 — the messaging kinds made as the Page (its messages, labels, personas, templates and messaging setup).
+import { META_MESSAGING_PAGE_KINDS } from './meta-messaging-rules.js'
+import { metaMessagingOwnerProblem } from './meta-messaging-owner.js'
 
 /** The kinds this check confirms (every rule marked `auth: 'page'` names one of them). */
-export const META_PAGE_KINDS: ReadonlySet<MetaWriteKind> = new Set<MetaWriteKind>(['page', 'leadform', 'testlead', 'canvas', ...META_COMMENT_PAGE_KINDS, ...META_POST_KINDS])
+export const META_PAGE_KINDS: ReadonlySet<MetaWriteKind> = new Set<MetaWriteKind>(['page', 'leadform', 'testlead', 'canvas', 'ownpagevideo', ...META_COMMENT_PAGE_KINDS, ...META_POST_KINDS, ...META_MESSAGING_PAGE_KINDS as ReadonlySet<MetaWriteKind>])
 
 type Problem = { code: string; sentence: string } | null
 const idOf = (v: unknown): string | null => (typeof v === 'string' || typeof v === 'number') && String(v).trim() ? String(v).trim() : null
@@ -85,21 +91,28 @@ export const __pageOwnerTest = { reset: () => parts.clear() }
 export async function metaPageOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: string | undefined, read: MetaCheckRead, run?: string, parent?: { kind: string; id: string }): Promise<Problem> {
   const id = write.objectId
   if (!kind || !META_PAGE_KINDS.has(kind as MetaWriteKind) || !write.kinds?.includes(kind as MetaWriteKind)) {
-    return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change made as the Facebook Page names the kind of object it changes (the Page, a lead form of it, a test lead Nexus made, an Instant Experience of it, a post or comment of it, the chosen Instagram account's media or comments), and ${id} is not named so.` }
+    return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change made as the Facebook Page names the kind of object it changes (the Page, a lead form of it, a test lead Nexus made, an Instant Experience of it, a video it posted, a post or comment of it, the chosen Instagram account's media or comments), and ${id} is not named so.` }
   }
   if (write.auth !== 'page') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${id} is a Page object, and only a change made as the Page writes one.` }
   // Step 37 — a comment change: its own owner check (meta-comment-owner.ts), the ids inside its body included.
   if (META_COMMENT_PAGE_KINDS.has(kind as MetaWriteKind)) return metaCommentOwnerProblem(connectionId, write, kind, read, parent)
   // Step 24 — a post change: its own owner check (meta-post-owner.ts), the ids inside its body included.
   if (META_POST_KINDS.has(kind as MetaWriteKind)) return metaPostOwnerProblem(connectionId, write, kind, read, run, parent)
+  // Step 38 — a messaging change: its own owner check (meta-messaging-owner.ts), the ids inside its body included.
+  if (META_MESSAGING_PAGE_KINDS.has(kind)) return metaMessagingOwnerProblem(connectionId, write, kind, read, parent)
   const pageId = await metaChosenPageOf(connectionId)
   if (!pageId) return { code: 'META_PAGE_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Facebook Page chosen through this connection, so Nexus changes nothing made as a Page.' }
   const problem = kind === 'page' ? (id === pageId ? null : { code: 'META_PAGE_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${id} is not the Facebook Page this business chose through this connection.` })
     : kind === 'leadform' ? await formOfPage(id, pageId, read)
       : kind === 'canvas' ? await canvasOfPage(id, pageId, read)
-        : await testLeadNexusMade(id, pageId)
+        // Gap 46b (MD-024) — a Page video's thumbnail: a video the chosen Page posted.
+        : kind === 'ownpagevideo' ? await videoOfPage(id, pageId, read)
+          : await testLeadNexusMade(id, pageId)
   return problem ?? bodyIdsProblem(connectionId, write, pageId, read, run)
 }
+
+/** Step 38 — the same lead-form check for an instant form a message names (meta-messaging-owner.ts). */
+export const metaLeadFormOfPageProblem = (formId: string, pageId: string, read: MetaCheckRead): Promise<Problem> => formOfPage(formId, pageId, read)
 
 async function formOfPage(formId: string, pageId: string, read: MetaCheckRead): Promise<Problem> {
   if (await metaPageObjectNexusMade('leadform', formId, pageId)) return null
@@ -128,6 +141,20 @@ async function canvasOfPage(canvasId: string, pageId: string, read: MetaCheckRea
   if (idOf(answer.body.id) !== canvasId) return { code: 'META_PAGE_UNCONFIRMED', sentence: `Nothing was sent to Meta: Meta answered another object than Instant Experience ${canvasId}.` }
   if (ownerOf(answer.body.owner) !== pageId) return { code: 'META_PAGE_NOT_CHOSEN', sentence: `Nothing was sent to Meta: Instant Experience ${canvasId} is not one of the Facebook Page this business chose.` }
   if (typeof answer.body.is_published !== 'boolean') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${canvasId} is not an Instant Experience Nexus can confirm.` }
+  return null
+}
+
+/** Gap 46b (MD-024) — a video the chosen Page posted: one live read of the id Meta answers and who posted it. */
+async function videoOfPage(videoId: string, pageId: string, read: MetaCheckRead): Promise<Problem> {
+  if (!/^[1-9]\d{0,24}$/.test(videoId)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${videoId} is not a Meta video id.` }
+  const answer = await read(videoId, { fields: 'id,from{id}' })
+  if (!answer.body) {
+    return /nonexisting field/i.test(answer.words ?? '')
+      ? { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${videoId} is not a video (Meta: ${answer.words}).` }
+      : { code: 'META_PAGE_UNCONFIRMED', sentence: `Nothing was sent to Meta: Nexus could not confirm that video ${videoId} is one the Facebook Page this business chose posted${answer.words ? ` (Meta: ${answer.words})` : ''}.` }
+  }
+  if (idOf(answer.body.id) !== videoId) return { code: 'META_PAGE_UNCONFIRMED', sentence: `Nothing was sent to Meta: Meta answered another object than video ${videoId}.` }
+  if (fromOf(answer.body) !== pageId) return { code: 'META_PAGE_NOT_CHOSEN', sentence: `Nothing was sent to Meta: video ${videoId} is not one the Facebook Page this business chose posted (Meta takes a custom thumbnail only for a video of a Page).` }
   return null
 }
 

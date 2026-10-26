@@ -104,7 +104,7 @@ const metaConversations: AgentTool = {
     + 'portfolio. The Page\'s conversations are read with the chosen Page\'s own token (the system user needs the MESSAGING '
     + 'task on the Page). Meta answers real customers\' messages only with Advanced Access (App Review; Standard access '
     + 'shows only people with a role on the Meta app), Instagram only for a verified business: Meta\'s words name what is '
-    + 'missing. Sending, labelling and handing over are change tools (a later Nexus step). Read only.',
+    + 'missing. Sending and handing over: create-meta-message; labels: set-meta-conversation-labels. Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveConversations({
       connectionId: str(args.connectionId),
@@ -161,7 +161,7 @@ const metaMessageTemplates: AgentTool = {
     + 'Filters: name, search, languages, statuses (and for WhatsApp categories, quality, from / to). Meta reviews every '
     + 'template (it may change a WhatsApp template\'s category). WhatsApp only for an account the chosen ad account\'s own '
     + 'business portfolio owns, and never when another business in Nexus uses that portfolio. Making, editing and deleting '
-    + 'templates are change tools (a later Nexus step). Read only.',
+    + 'templates: set-meta-message-templates. Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveMessageTemplates({
       connectionId: str(args.connectionId),
@@ -216,7 +216,7 @@ const metaMessagingSetup: AgentTool = {
     + 'eligibility; lead-templates: Messenger lead templates (leadTemplateId: one with its steps). An Instagram account '
     + 'another business in Nexus uses is its id only. The Page\'s own settings are read with the chosen Page\'s own token '
     + '(the system user needs the MESSAGING task on the Page); an app in Development mode shows the profile only to people '
-    + 'with a role on the app: Meta\'s words say what is missing. Changes are change tools (a later Nexus step). Read only.',
+    + 'with a role on the app: Meta\'s words say what is missing. Changes: set-meta-messaging-setup. Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveMessagingSetup({
       connectionId: str(args.connectionId),

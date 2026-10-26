@@ -65,7 +65,7 @@ vi.mock('../../../db.js', () => ({
 }))
 
 import { META_ADS_AUDIENCES_TOOLS } from './meta-ads-audiences.tools.js'
-import { AUDIENCE_VIEWS, audienceSize } from '../../marketing/meta-ads/live-audiences.js'
+import { AUDIENCE_VIEWS, audienceSize, operationWords } from '../../marketing/meta-ads/live-audiences.js'
 import { MetaReadError, type MetaFailure } from '../../marketing/meta-ads/errors.js'
 import { metaUrl } from '../../gateway/meta.js'
 import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
@@ -174,6 +174,24 @@ describe('sizes are Meta\'s ranges', () => {
     h.calls.length = 0
     await run({ view: 'expiring' })
     expect(h.calls[0].query?.filtering).toEqual([{ field: 'delete_time', operator: 'GREATER_THAN', value: 0 }])
+  })
+  it('live-probe fix — operation_status in Meta\'s words by kind: 450 is "inactive lookalike" only on a lookalike, out of date on any other; 433 has words', async () => {
+    h.rowsFor = (req) => (req.path === `act_${OWN}/customaudiences` ? [
+      audience('120000000000405', { subtype: 'WEBSITE', operation_status: { code: 450, description: 'x' } }),
+      audience('120000000000406', { subtype: 'IG_BUSINESS', operation_status: { code: 450, description: 'x' } }),
+      audience('120000000000407', { subtype: 'LOOKALIKE', operation_status: { code: 450, description: 'x' } }),
+      audience('120000000000408', { subtype: 'LOOKALIKE', operation_status: { code: 433, description: 'x' } }),
+    ] : [])
+    const words = data(await run({ view: 'list' })).items.map((r: any) => r.operation.words)
+    expect(words[0]).toMatch(/^Out of date: not used in an ad for at least 30 days, or made over 90 days ago and never used/)
+    expect(words[1]).toBe(words[0])
+    expect(words[2]).toMatch(/^Inactive lookalike: not used in active ads for 90 days/)
+    expect(words[3]).toMatch(/^Lookalike build failed/)
+    expect(words[3]).not.toMatch(/100 people/)
+    expect(words.slice(0, 2).join(' ')).not.toMatch(/lookalike/i)
+    // Every code the custom-audience reference lists has words; an unknown one keeps Meta's own description only.
+    for (const code of [0, 100, 200, 400, 410, 411, 412, 414, 415, 421, 422, 423, 431, 432, 433, 434, 441, 442, 450, 470, 471, 500]) expect(operationWords(code, 'CUSTOM'), String(code)).toEqual(expect.any(String))
+    expect([operationWords(999, 'CUSTOM'), operationWords(null, 'LOOKALIKE'), operationWords(450, 'lookalike')]).toEqual([null, null, expect.stringMatching(/^Inactive lookalike/)])
   })
   it('a filtered view reads on page by page until it has its matches, and says when the page cap stopped it', async () => {
     h.pageFor = (req) => (!req.query?.after

@@ -7,10 +7,14 @@
  * set a lookalike learns from, a product set, an ad account a share goes to) named to the gateway, which checks each
  * before anything is sent (gateway.ts metaBodyIdsProblem).
  *
- * A customer list's people go only as SHA-256 hashes (64 lowercase hex characters, never a plain e-mail) and only in a
- * DELETE (taking people who opted out of the business's e-mail out: one list, or every customer list of the account —
- * Nexus adds nobody: Nexus's customers carry no marketing consent, Owner decision D8). Those rules are `personal`: the
- * gateway's ledger keeps neither their body nor Meta's answer to them.
+ * A customer list's people go only as SHA-256 hashes (64 lowercase hex characters, never a plain e-mail), schema
+ * EMAIL_SHA256 only, at most 10,000 per request: taken out (a DELETE: the people who said no, out of one list or out of
+ * every customer list of the account), and — consent PR 2 (2026-10-26, Owner decision D8) — added (POST /{id}/users) or
+ * replaced (POST /{id}/usersreplace, with its session), only the hashed e-mails of Shopify buyers who said yes to the
+ * business's e-mail, only while the business's switch "Upload customer lists to Meta" is on (the gateway asks it again:
+ * gateway.ts metaOwnerProblem) and only into a custom audience of the chosen ad account (step 31's owner check: its
+ * account_id, its subtype and time_created). Those rules are `personal`: the gateway's ledger keeps neither their body
+ * nor Meta's answer to them.
  *
  * Checked 2026-10-21 (developers.facebook.com/documentation/ads-commerce/marketing-api/…, `.md` pages; Meta's Python
  * Business SDK facebook_business/adobjects/{adaccount,customaudience}.py on GitHub main):
@@ -44,6 +48,22 @@
  *     advantage-shopping-campaigns/audience-type-url-parameters (custom_audience_info {audience_type_param_name,
  *     new_customer_tag, existing_customer_tag}: letters, digits and _).
  * Meta documents no validate_only on any custom-audience edge (facts F1 §M8): no rule here takes execution_options.
+ * Consent PR 2 — checked 2026-10-26 (the same `.md` pages and SDK files, curl's own identity, 4 s apart):
+ *   - reference/custom-audience/users "Updating" (POST /{custom_audience_id}/users): `payload` — "`schema` *string*
+ *     `EMAIL_SHA256`, `PHONE_SHA256`, `MOBILE_ADVERTISER_ID`", "`data` … Array with users data" — and `session`
+ *     ({session_id int64 "Needs to be unique in the same ad account", estimated_num_total, batch_seq "A 1 based sequence
+ *     number", last_batch_flag}), neither marked required there (the custom-audiences guide marks both required); "only a
+ *     maximum of 10000 at a time". Nexus sends the payload only, as its removals (review B1).
+ *   - reference/custom-audience/usersreplace (POST): `payload` and `session` both "[required]", the same fields; the
+ *     guide #replace-api: "A new replace session starts when we receive a `batch_seq` of `1`", last_batch_flag ends it
+ *     ("If you do not set this flag, the session is automatically terminated 90 minutes after the first batch"), "Subtype
+ *     must be set to `CUSTOM`", no value-based ↔ non-value-based replace, and it "does not reset your ad set's learning
+ *     phase … unlike POST or DELETE API calls to the /users endpoint". Nexus sends all four session keys.
+ *   - the guide #hash: EMAIL "Trim leading and trailing white space, and convert all characters to lowercase", SHA256 in
+ *     lowercase hex (Meta's example: hash("sha256", "mary@example.com") = f1904cf1…bb79); for schema EMAIL "the data
+ *     should be a list of email `sha256` hashes" (one flat list, as the SDK's CustomAudienceMixin.format_params builds for
+ *     EMAIL_SHA256: `user.strip(" \t\r\n\0\x0B.").lower()`, then sha256 hexdigest). SDK customaudience.py create_user and
+ *     create_users_replace take param_types {namespace, payload, session}; Nexus never sends `namespace`.
  */
 import type { MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
 // The text patterns from their leaf module (meta-write-text.ts): a rules file takes no value from a module still loading.
@@ -84,6 +104,8 @@ export const SHARE_PERMISSIONS = ['targeting', 'targeting_and_insights'] as cons
 
 /** Meta: at most 10,000 rows per users request (custom-audiences guide). */
 export const MEMBERS_PER_REQUEST = 10_000
+/** Consent PR 2 — at most this many requests in ONE replace session (and one change): 100,000 people. */
+export const MEMBERS_MAX_BATCHES = 10
 /** A request of 10,000 hashes, form-encoded (each `%22<64 hex>%22%2C`). */
 export const MEMBERS_MAX_BODY = 760_000
 /** The longest rule retention Meta documents (engagement audiences: 730 days); a website rule's own is 365 (the tools hold it). */
@@ -410,9 +432,31 @@ const ACCOUNT_JUDGES: Record<string, Judge> = {
 }
 
 // Review B1 — no `session` on these DELETEs (optional in the users reference; the guide's DELETE examples send the payload
-// only): a session id repeated for the same people would be one Meta already closed.
+// only): a session id repeated for the same people would be one Meta already closed. Consent PR 2: an add the same.
 const MEMBER_JUDGES: Record<string, Judge> = {
   payload: json('payload', payloadProblem),
+}
+
+/** The session keys of a replace, all four always sent (usersreplace: session [required]). */
+const SESSION_KEYS = ['session_id', 'batch_seq', 'last_batch_flag', 'estimated_num_total'] as const
+const wholeIn = (v: unknown, min: number, max: number) => typeof v === 'number' && Number.isSafeInteger(v) && v >= min && v <= max
+/**
+ * {"session_id":<positive whole number>,"batch_seq":1–10,"last_batch_flag":true|false,"estimated_num_total":1–100000}: one
+ * replace session (session_id unique per ad account, kept an exact JSON number; batch_seq from 1).
+ */
+function sessionProblem(session: unknown): string | null {
+  if (!plainObject(session) || !exactKeys(session, SESSION_KEYS, SESSION_KEYS)) return 'the session is {"session_id","batch_seq","last_batch_flag","estimated_num_total"}, all four'
+  if (!wholeIn(session.session_id, 1, Number.MAX_SAFE_INTEGER)) return 'session_id is a positive whole number'
+  if (!wholeIn(session.batch_seq, 1, MEMBERS_MAX_BATCHES)) return `batch_seq is 1 to ${MEMBERS_MAX_BATCHES} (Nexus sends at most ${MEMBERS_MAX_BATCHES} requests in one replace)`
+  if (typeof session.last_batch_flag !== 'boolean') return 'last_batch_flag is true or false'
+  if (!wholeIn(session.estimated_num_total, 1, MEMBERS_PER_REQUEST * MEMBERS_MAX_BATCHES)) return `estimated_num_total is 1 to ${MEMBERS_PER_REQUEST * MEMBERS_MAX_BATCHES}`
+  return null
+}
+
+/** Consent PR 2 — a replace: the payload (as every people request) and its session. */
+const REPLACE_JUDGES: Record<string, Judge> = {
+  payload: json('payload', payloadProblem),
+  session: json('session', sessionProblem),
 }
 
 const SHARE_JUDGES: Record<string, Judge> = {
@@ -447,7 +491,7 @@ const ACCOUNT_EDGE = (edge: string) => new RegExp(`^act_\\d{1,20}\\/${edge}$`)
 /** Step 31 — the audience tools on the write allow-list. */
 export const META_AUDIENCE_WRITE_RULES: readonly MetaWriteRule[] = [
   {
-    // create-meta-audience kind customer_list / value_seed: an EMPTY customer list (Nexus adds nobody to it — D8).
+    // create-meta-audience kind customer_list / value_seed: an EMPTY customer list (people come with the members rules below — D8).
     name: 'audience.create.customerList',
     method: 'POST',
     path: ACCOUNT_EDGE('customaudiences'),
@@ -561,6 +605,34 @@ export const META_AUDIENCE_WRITE_RULES: readonly MetaWriteRule[] = [
     optional: [],
     maxBody: MEMBERS_MAX_BODY,
     values: judged(MEMBER_JUDGES),
+    budget: false,
+  },
+  {
+    // Consent PR 2 — set-meta-audience-members mode add: consenting Shopify buyers' hashed e-mails into ONE list of the
+    // chosen ad account (only while "Upload customer lists to Meta" is on: gateway.ts). No session (review B1).
+    name: 'audience.users.add',
+    method: 'POST',
+    personal: true,
+    path: /^\d{1,20}\/users$/,
+    kinds: ['customaudience'],
+    required: ['payload'],
+    optional: [],
+    maxBody: MEMBERS_MAX_BODY,
+    values: judged(MEMBER_JUDGES),
+    budget: false,
+  },
+  {
+    // Consent PR 2 — set-meta-audience-members mode replace: everyone in ONE list of the chosen ad account replaced by the
+    // consenting Shopify buyers' hashed e-mails, one session of at most 10 requests (only while the switch is on).
+    name: 'audience.users.replace',
+    method: 'POST',
+    personal: true,
+    path: /^\d{1,20}\/usersreplace$/,
+    kinds: ['customaudience'],
+    required: ['payload', 'session'],
+    optional: [],
+    maxBody: MEMBERS_MAX_BODY,
+    values: judged(REPLACE_JUDGES),
     budget: false,
   },
   {

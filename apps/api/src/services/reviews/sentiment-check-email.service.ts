@@ -326,6 +326,15 @@ export async function renderSentimentCheckPreview(opts: {
   }, identity)
 }
 
+/**
+ * Reviews area PR C — the "How was it?" e-mail exactly as `sendSentimentCheckEmail` sends it (subject, HTML, text),
+ * for the Requests page's "Preview email". Pure: no send, no database.
+ */
+export function renderSentimentCheckEmail(ctx: SentimentEmailContext, identity: BusinessIdentity): { subject: string; html: string; text: string } {
+  const copy = COPY[ctx.locale ?? 'it']
+  return { subject: subjectFor(copy, identity), html: buildHtml(ctx, identity), text: buildText(ctx, identity) }
+}
+
 export async function sendSentimentCheckEmail(
   ctx: SentimentEmailContext,
 ): Promise<{ ok: boolean; dryRun: boolean; error?: string; suppressed?: boolean }> {

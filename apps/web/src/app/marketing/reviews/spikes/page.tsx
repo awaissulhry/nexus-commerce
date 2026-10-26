@@ -14,9 +14,11 @@
  */
 
 import { useEffect, useState } from 'react'
-import { AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { ReviewsNav } from '../_shared/ReviewsNav'
+import { PageHeader } from '@/design-system/patterns'
+import { usePathname } from '@/lib/workspaces/navigation'
+import { reviewsCrumbs } from '../_shell/reviews-crumbs'
+import { ReviewsMenuButton } from '../_shell/ReviewsShell'
 import { SpikesFullClient } from './SpikesFullClient'
 
 interface SpikeRow {
@@ -51,6 +53,7 @@ async function fetchSpikes(): Promise<SpikeRow[]> {
 }
 
 export default function SpikesPage() {
+  const pathname = usePathname() ?? ''
   const [items, setItems] = useState<SpikeRow[] | null>(null)
 
   useEffect(() => {
@@ -66,20 +69,12 @@ export default function SpikesPage() {
   const resolved = (items ?? []).filter((s) => s.status === 'RESOLVED').length
   return (
     <div className="px-4 py-4">
-      <div className="flex items-start gap-3 mb-3">
-        <AlertTriangle className="h-6 w-6 text-rose-500 dark:text-rose-400 mt-0.5" />
-        <div className="flex-1">
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-            Spike Feed
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Spikes detected by comparing 7d vs 28d rates per (product × marketplace × category).
-            Acknowledging a spike suppresses future re-triggers until the rate returns below
-            threshold. SR.3 will wire OPEN spikes into the AutomationRule engine.
-          </p>
-        </div>
-      </div>
-      <ReviewsNav />
+      <PageHeader
+        eyebrow={reviewsCrumbs(pathname)}
+        title="Spike Feed"
+        subtitle="Spikes detected by comparing 7d vs 28d rates per (product × marketplace × category). Acknowledging a spike suppresses future re-triggers until the rate returns below threshold."
+        actions={<ReviewsMenuButton />}
+      />
       {items === null ? (
         <div aria-busy="true">
           <div className="grid grid-cols-3 gap-3 mb-4">

@@ -17,7 +17,8 @@
  * orders created at or after T0 are); otherwise it is ignored too. An order created at or after T0 goes to the existing
  * order writer unchanged.
  *
- * Registration (webhook-registration.service.ts) subscribes only the order topics and app/uninstalled. No product topics:
+ * Registration (webhook-registration.service.ts) subscribes only the order topics, app/uninstalled and (2026-10-26) the
+ * e-mail marketing consent topic, which never touches an order or stock. No product topics:
  * Shopify follows Nexus, so a products/update or products/delete delivery never changes a Nexus product (no name, no
  * status, no field; routes/shopify-webhooks.ts), and nothing is gained by asking for them. No inventory_levels/update: it
  * would set Nexus counts from Shopify's. A subscription of another topic already on the shop is listed in the result

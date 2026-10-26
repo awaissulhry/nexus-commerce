@@ -196,43 +196,9 @@ const customerSegmentsRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, updated }
   })
 
-  // ── CI.4: Review request for segment ─────────────────────────────────────
-  fastify.post('/customers/segments/:id/review-request', async (req, reply) => {
-    const { id } = req.params as { id: string }
-    const seg = await prisma.customerSegment.findUnique({ where: { id } })
-    if (!seg) return reply.status(404).send({ error: 'Segment not found' })
-
-    const { sampleIds } = await evaluateSegment(prisma, seg.conditions as unknown as SegmentCondition[], { limit: 10000 })
-
-    // Find DELIVERED orders for these customers without a recent ReviewRequest
-    const cutoff = new Date()
-    cutoff.setDate(cutoff.getDate() - 30)
-
-    const orders = await prisma.order.findMany({
-      where: {
-        customerId: { in: sampleIds },
-        status: 'DELIVERED',
-        reviewRequests: { none: { createdAt: { gte: cutoff } } },
-      },
-      select: { id: true, channel: true, marketplace: true },
-      take: 500,
-    })
-
-    if (orders.length === 0) return { ok: true, created: 0, message: 'No eligible orders found' }
-
-    await prisma.reviewRequest.createMany({
-      data: orders.map((o) => ({
-        orderId: o.id,
-        channel: o.channel,
-        status: 'SCHEDULED',
-        scheduledFor: new Date(), // schedule for now; SR.4 mailer picks up next tick
-        triggeredBy: `segment:${id}`,
-      })),
-      skipDuplicates: true,
-    })
-
-    return { ok: true, created: orders.length }
-  })
+  // CI.4 POST /customers/segments/:id/review-request was removed (Reviews area PR C, B13): it wrote a field
+  // ReviewRequest does not have (triggeredBy), so every call failed, and nothing called it. Buyers are asked through
+  // the review rules (Reviews › Requests).
 }
 
 export default customerSegmentsRoutes

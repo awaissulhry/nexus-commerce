@@ -155,6 +155,22 @@ function personActor(request: { authUser?: { id?: string }; headers: unknown }):
 }
 
 /**
+ * CC-28 — a person's full save of an hourly plan: the body as the screen sent it, minus what only the server says — who
+ * saved it (the signed-in user) and a Claude request's approval (set-hourly-bid-plan's changeSetId / alwaysVersion).
+ */
+function personPlanSave(request: { authUser?: { id?: string }; headers: unknown }, b: Record<string, unknown>): Record<string, unknown> {
+  const { userId: _userId, changeSetId: _changeSetId, alwaysVersion: _alwaysVersion, ...body } = b
+  return { ...body, userId: personActor(request) }
+}
+
+/** 6a — a plan save that failed: a save refused for leaving no Sponsored Products campaign is the person's 400, else 500. */
+async function planSaveFailure(reply: { status: (code: number) => unknown }, e: unknown): Promise<{ error: string }> {
+  const { isNoSponsoredProducts } = await import('../services/advertising/ads-create.service.js')
+  reply.status(isNoSponsoredProducts(e) ? 400 : 500)
+  return { error: (e as Error)?.message }
+}
+
+/**
  * CM-8 — a person's add, answered by what reached Amazon: 200 created or already there; 202 saved in Nexus only (the
  * campaign is not on Amazon yet); 403 refused by the write gate; 502 Amazon refused it or gave no id. `error` carries
  * the reason for every answer that is not 200, so a screen that reads only `error` (or only the status) is told too.
@@ -7781,27 +7797,33 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=15')
 
     const { campaignCensus, rankCensus } = await import('../services/advertising/ads-census.service.js')
+    const { isSpOrUnknown } = await import('../services/advertising/ads-create.service.js')
     const [census, rank, campaigns] = await Promise.all([
       campaignCensus({ marketplace: market }),
       rankCensus(),
       prisma.campaign.findMany({
         where: { status: { not: 'ARCHIVED' }, ...(market ? { marketplace: market } : {}) },
-        select: { id: true, name: true, externalCampaignId: true, marketplace: true, status: true },
+        select: { id: true, name: true, externalCampaignId: true, marketplace: true, status: true, adProduct: true, type: true },
       }),
     ])
     const held = rank.campaigns
     const count = (ids: Set<string>) => campaigns.filter((c) => ids.has(c.id)).length
-    if (!campaigns.length) return { total: census.total, covered: 0, governed: 0, switchedOff: 0, archived: census.archived, uncovered: 0, windowDays: days, uncoveredSpendCents: 0, items: [] }
+    if (!campaigns.length) return { total: census.total, covered: 0, governed: 0, switchedOff: 0, archived: census.archived, uncovered: 0, notForHourlyPlans: 0, spTotal: census.total, windowDays: days, uncoveredSpendCents: 0, notForHourlyPlansSpendCents: 0, items: [] }
 
-    const open = campaigns.filter((c) => !held.bySchedule.has(c.id) && !held.byPlan.has(c.id) && !held.switchedOff.has(c.id))
+    // 6a — uncovered = a campaign a plan could take in: Sponsored Products only (a plan leaves the others out). A Sponsored
+    // Brands or Display campaign no plan holds is its own bucket (`notForHourlyPlans`), so every campaign is still in
+    // exactly one; `spTotal` (= total − notForHourlyPlans) is the base of the share under rank control.
+    const free = campaigns.filter((c) => !held.bySchedule.has(c.id) && !held.byPlan.has(c.id) && !held.switchedOff.has(c.id))
+    const open = free.filter((c) => isSpOrUnknown(c))
+    const others = free.filter((c) => !isSpOrUnknown(c))
 
-    // Spend per uncovered campaign. Rows key on either the local FK or the external id, matching
+    // Spend per campaign no plan holds. Rows key on either the local FK or the external id, matching
     // how the heatmap resolves the same ambiguity.
     const spendById = new Map<string, { cost: bigint; impressions: number; clicks: number }>()
-    if (open.length) {
+    if (free.length) {
       const since = new Date(Date.now() - days * 24 * 3600 * 1000)
-      const localIds = open.map((c) => c.id)
-      const extIds = open.map((c) => c.externalCampaignId).filter(Boolean) as string[]
+      const localIds = free.map((c) => c.id)
+      const extIds = free.map((c) => c.externalCampaignId).filter(Boolean) as string[]
       try {
         const rows = await prisma.amazonAdsDailyPerformance.findMany({
           where: {
@@ -7811,7 +7833,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           },
           select: { localEntityId: true, entityId: true, costMicros: true, impressions: true, clicks: true },
         })
-        const byExt = new Map(open.filter((c) => c.externalCampaignId).map((c) => [c.externalCampaignId as string, c.id]))
+        const byExt = new Map(free.filter((c) => c.externalCampaignId).map((c) => [c.externalCampaignId as string, c.id]))
         for (const r of rows) {
           const cid = r.localEntityId ?? byExt.get(r.entityId)
           if (!cid) continue
@@ -7844,9 +7866,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       switchedOff: count(held.switchedOff),
       archived: census.archived,
       uncovered: open.length,
+      notForHourlyPlans: others.length,
+      spTotal: census.total - others.length,
       windowDays: days,
       marketplace: market,
       uncoveredSpendCents: items.reduce((n, i) => n + i.spendCents, 0),
+      notForHourlyPlansSpendCents: others.reduce((n, c) => n + micros(spendById.get(c.id)?.cost ?? 0n), 0),
       // Truncation is disclosed rather than silent: a "top 50" list that looks complete is how a
       // long tail of small spenders stays invisible.
       truncated: Math.max(0, items.length - limit),
@@ -7883,13 +7908,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         windows: group.windows,
         defaultTargetKey: group.defaultTargetKey,
         targetOverrides: group.targetOverrides,
-        enabled: group.enabled,
+        // C — `enabled` is not sent: the server keeps what the plan stores, so a Pause landing meanwhile stands.
         timezone: group.timezone,
         portfolioId: group.portfolioId,
         marketplace: group.marketplace,
+        userId: personActor(request), // CC-28 — the version row names the person
       } as never)
-      return { ...r, added: add.length }
-    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+      // 6a — `added`: the campaigns that really joined (not a member already, and Sponsored Products: the save leaves the
+      // others out and names them in `notSponsoredProducts`).
+      const had = new Set(members.map((m) => m.campaignId))
+      const leftOut = new Set((r.notSponsoredProducts ?? []).map((c) => c.id))
+      return { ...r, added: [...new Set(add)].filter((cid) => !had.has(cid) && !leftOut.has(cid)).length }
+    } catch (e) { return planSaveFailure(reply, e) }
   })
 
   fastify.get('/advertising/rank-schedule-groups/:id', async (request, reply) => {
@@ -7975,15 +8005,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           name: g.name,
           campaignIds: members.map((m) => m.campaignId),
           // The template supplies the PLAN. Everything else — name, campaigns, portfolio binding,
-          // timezone, and crucially `enabled` — is the group's own and is carried through, so
-          // applying a template can never arm a schedule the operator had paused.
+          // timezone — is the group's own and is carried through. C — `enabled` is not sent: the server
+          // keeps what the plan stores, so applying a template never arms a paused schedule, nor undoes
+          // a Pause that lands meanwhile.
           windows: tpl.windows,
           defaultTargetKey: tpl.defaultTargetKey,
           targetOverrides: g.targetOverrides,
-          enabled: g.enabled,
           timezone: g.timezone,
           portfolioId: g.portfolioId,
           marketplace: g.marketplace,
+          userId: personActor(request), // CC-28 — the version row names the person
         } as never)
         applied.push(gid)
       } catch (e) { failed.push({ id: gid, error: (e as Error)?.message ?? 'failed' }) }
@@ -8028,22 +8059,25 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
     const members = await prisma.adSchedule.findMany({ where: { groupId: id }, select: { campaignId: true } })
     const { saveRankScheduleGroup } = await import('../services/advertising/ads-create.service.js')
-    await saveRankScheduleGroup({
-      id: group.id,
-      name: group.name,
-      campaignIds: members.map((m) => m.campaignId),
-      windows,
-      // Only the windows change. `enabled` in particular is carried through untouched, so merging
-      // into a paused schedule can never arm it — same guarantee apply-template makes.
-      defaultTargetKey: group.defaultTargetKey,
-      targetOverrides: group.targetOverrides,
-      enabled: group.enabled,
-      timezone: group.timezone,
-      portfolioId: group.portfolioId,
-      marketplace: group.marketplace,
-    } as never)
+    let saved: Awaited<ReturnType<typeof saveRankScheduleGroup>>
+    try {
+      saved = await saveRankScheduleGroup({
+        id: group.id,
+        name: group.name,
+        campaignIds: members.map((m) => m.campaignId),
+        windows,
+        // Only the windows change. C — `enabled` is not sent: the server keeps what the plan stores, so merging into a
+        // paused schedule never arms it — same guarantee apply-template makes — nor undoes a Pause that lands meanwhile.
+        defaultTargetKey: group.defaultTargetKey,
+        targetOverrides: group.targetOverrides,
+        timezone: group.timezone,
+        portfolioId: group.portfolioId,
+        marketplace: group.marketplace,
+        userId: personActor(request), // CC-28 — the version row names the person
+      } as never)
+    } catch (e) { return planSaveFailure(reply, e) }
 
-    return { ok: true, group: { id: group.id, name: group.name, enabled: group.enabled }, added: usable.length, diff }
+    return { ok: true, group: { id: group.id, name: group.name, enabled: saved.enabled }, added: usable.length, diff }
   })
 
   /**
@@ -8365,9 +8399,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
    * one of them is already captured — saveRankScheduleGroup snapshots on every save, and bulk apply
    * goes through exactly that path — so what was missing was only the way back.
    *
-   * Restores the PLAN ONLY: windows and baseline. Name, campaigns, portfolio binding, timezone and
-   * `enabled` are the group's current state and are carried through untouched, so a restore can
-   * never re-arm a schedule the operator paused or drag back a campaign they removed.
+   * Restores the PLAN ONLY: windows and baseline. Name, campaigns, portfolio binding and timezone
+   * are the group's current state and are carried through untouched, and `enabled` is not sent (C:
+   * the server keeps what the plan stores), so a restore can never re-arm a schedule the operator
+   * paused or drag back a campaign they removed. `armed` is the state after the save.
    *
    * The restore is itself a save, so it writes its own version row. You can undo the undo, and the
    * history shows the reversal happened rather than silently rewinding.
@@ -8400,14 +8435,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         windows: version.windows,
         defaultTargetKey: version.defaultTargetKey,
         targetOverrides: group.targetOverrides,
-        enabled: group.enabled,
         timezone: group.timezone,
         portfolioId: group.portfolioId,
         marketplace: group.marketplace,
-        userId: (request.body as { userId?: string })?.userId ?? null,
+        userId: personActor(request), // CC-28 — never the body's word
       } as never)
-      return { ...r, restoredFrom: { id: version.id, createdAt: version.createdAt }, armed: group.enabled }
-    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+      return { ...r, restoredFrom: { id: version.id, createdAt: version.createdAt }, armed: r.enabled }
+    } catch (e) { return planSaveFailure(reply, e) }
   })
 
   // ── G1 — dated event overrides on a rank schedule ──────────────────────────
@@ -8563,7 +8597,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!b?.name || !String(b.name).trim()) { reply.status(400); return { error: 'name is required' } }
     if (!Array.isArray(b?.campaignIds)) { reply.status(400); return { error: 'campaignIds[] required' } }
     const { saveRankScheduleGroup } = await import('../services/advertising/ads-create.service.js')
-    try { return await saveRankScheduleGroup(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    try { return await saveRankScheduleGroup(personPlanSave(request, b) as never) } catch (e) { return planSaveFailure(reply, e) }
   })
   fastify.patch('/advertising/rank-schedule-groups/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
@@ -8572,16 +8606,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // W4-1 — moved unchanged into rank-schedule-group.service.ts, which Claude's set-hourly-bid-plan also uses.
     if (!Array.isArray(b?.campaignIds)) {
       const { patchRankScheduleGroup } = await import('../services/advertising/rank-schedule-group.service.js')
-      return answer(reply, await patchRankScheduleGroup(id, b, actorFromHeaders(request.headers as Record<string, unknown>)))
+      return answer(reply, await patchRankScheduleGroup(id, b, personActor(request))) // CC-28
     }
     if (b.name !== undefined && !String(b.name).trim()) { reply.status(400); return { error: 'name is required' } }
     const { saveRankScheduleGroup } = await import('../services/advertising/ads-create.service.js')
-    try { return await saveRankScheduleGroup({ ...(b as Record<string, unknown>), id } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    try { return await saveRankScheduleGroup({ ...personPlanSave(request, b), id } as never) } catch (e) { return planSaveFailure(reply, e) }
   })
   fastify.delete('/advertising/rank-schedule-groups/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const { deleteRankScheduleGroup } = await import('../services/advertising/ads-create.service.js')
-    try { return await deleteRankScheduleGroup(id) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    try { return await deleteRankScheduleGroup(id, { actor: personActor(request) }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } } // CC-28
   })
   // 2a — what deleting or pausing this group would give back now, read before it happens: the bids Rank & Dayparting
   // floored per member, the members someone else floored (kept), whether the give-back would wait (ads automation

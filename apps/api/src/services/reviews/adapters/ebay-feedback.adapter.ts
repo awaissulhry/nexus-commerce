@@ -12,10 +12,16 @@
  *   - Read-only. No writes to eBay.
  *   - Never throws past its boundary: parse/HTTP failures come back as
  *     { error } so the ingest pipeline records them and moves on.
+ *
+ * Reviews Inbox (2026-10-26): each feedback is linked to its Nexus order (`orderId`) from its order line, and the
+ * reply limit is eBay's 500 characters (RespondToFeedback `ResponseText` "Max length: 500",
+ * https://developer.ebay.com/devzone/xml/docs/reference/ebay/RespondToFeedback.html) — `EBAY_REPLY_LIMIT` in
+ * @nexus/shared/review-reply-rules, which reply/send checks before this adapter is called.
  */
 
 import { ebayTradingSend } from '../../gateway/ebay.js'
 import { XMLParser } from 'fast-xml-parser'
+import { EBAY_REPLY_LIMIT, replyLength } from '@nexus/shared/review-reply-rules'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { ebayAuthService } from '../../ebay-auth.service.js'
@@ -44,9 +50,15 @@ function escapeXml(s: string): string {
 export async function respondToEbayFeedback(
   feedbackId: string,
   responseText: string,
+  /** The buyer's eBay user ID (the feedback's CommentingUser): eBay's RespondToFeedback requires it as TargetUserID. */
+  targetUserId: string,
 ): Promise<{ ok: boolean; code: string; error?: string }> {
+  if (!targetUserId?.trim()) return { ok: false, code: 'NO_BUYER_ID', error: 'eBay needs the buyer’s user ID to post a reply' }
   if (process.env.NEXUS_EBAY_REAL_API !== 'true') {
     return { ok: false, code: 'OPT_IN_OFF', error: 'NEXUS_EBAY_REAL_API not enabled' }
+  }
+  if (replyLength(responseText) > EBAY_REPLY_LIMIT) {
+    return { ok: false, code: 'TOO_LONG', error: `eBay allows at most ${EBAY_REPLY_LIMIT} characters` }
   }
   // MAP.3 — DECLARED. Note the old ordering was `lastSyncAt desc`, a second way of
   // spelling "whichever account synced most recently" — the same coin flip.
@@ -64,6 +76,7 @@ export async function respondToEbayFeedback(
     `<?xml version="1.0" encoding="utf-8"?>` +
     `<RespondToFeedbackRequest xmlns="urn:ebay:apis:eBLBaseComponents">` +
     `<FeedbackID>${escapeXml(feedbackId)}</FeedbackID>` +
+    `<TargetUserID>${escapeXml(targetUserId.trim())}</TargetUserID>` +
     `<ResponseType>Reply</ResponseType>` +
     `<ResponseText>${escapeXml(responseText)}</ResponseText>` +
     `</RespondToFeedbackRequest>`
@@ -108,6 +121,50 @@ function commentTypeToRating(t: string | undefined): number | undefined {
 function asArray<T>(v: T | T[] | undefined | null): T[] {
   if (v == null) return []
   return Array.isArray(v) ? v : [v]
+}
+
+/** The order line a feedback is about, as GetFeedback names it (masked ids such as "11111111-0" are dropped). */
+export function ebayFeedbackOrderRef(detail: Record<string, unknown>): { orderLineItemId: string | null; transactionId: string | null; itemId: string | null } {
+  const text = (v: unknown) => {
+    const s = v == null ? '' : String(v).trim()
+    return s && !/^1+(-0)?$/.test(s) && s !== '0' ? s : null
+  }
+  return { orderLineItemId: text(detail.OrderLineItemID), transactionId: text(detail.TransactionID), itemId: text(detail.ItemID) }
+}
+
+/**
+ * The Nexus order of each feedback, when exactly one order matches its order line: an eBay order stored under the
+ * legacy order-line id ("ItemID-TransactionID"), or an order line whose eBay line id is the feedback's TransactionID
+ * (and whose listing, when stored, is the feedback's ItemID). No match, or more than one: no link.
+ */
+export async function linkEbayFeedbackOrders(reviews: AdapterRawReview[]): Promise<void> {
+  const refs = reviews.map((r) => ebayFeedbackOrderRef((r.rawPayload ?? {}) as Record<string, unknown>))
+  const lineIds = [...new Set(refs.map((r) => r.orderLineItemId).filter((v): v is string => !!v))]
+  const transactionIds = [...new Set(refs.map((r) => r.transactionId).filter((v): v is string => !!v))]
+  if (lineIds.length === 0 && transactionIds.length === 0) return
+  const [orders, items] = await Promise.all([
+    lineIds.length > 0
+      ? prisma.order.findMany({ where: { channel: 'EBAY', channelOrderId: { in: lineIds } }, select: { id: true, channelOrderId: true } })
+      : Promise.resolve([] as { id: string; channelOrderId: string }[]),
+    transactionIds.length > 0
+      ? prisma.orderItem.findMany({
+          where: { externalLineItemId: { in: transactionIds }, order: { channel: 'EBAY' } },
+          select: { orderId: true, externalLineItemId: true, ebayMetadata: true },
+        })
+      : Promise.resolve([] as { orderId: string; externalLineItemId: string | null; ebayMetadata: unknown }[]),
+  ])
+  reviews.forEach((review, i) => {
+    const ref = refs[i]
+    const matches = new Set<string>()
+    for (const o of orders) if (ref.orderLineItemId && o.channelOrderId === ref.orderLineItemId) matches.add(o.id)
+    for (const item of items) {
+      if (!ref.transactionId || item.externalLineItemId !== ref.transactionId) continue
+      const listing = (item.ebayMetadata as { legacyItemId?: unknown } | null)?.legacyItemId
+      if (ref.itemId && typeof listing === 'string' && listing && listing !== ref.itemId) continue
+      matches.add(item.orderId)
+    }
+    if (matches.size === 1) review.orderId = [...matches][0]
+  })
 }
 
 export interface EbayFeedbackOptions {
@@ -208,6 +265,12 @@ export async function fetchEbayFeedback(opts: EbayFeedbackOptions = {}): Promise
     return { reviews, error: err instanceof Error ? err.message : String(err) }
   }
 
+  try {
+    await linkEbayFeedbackOrders(reviews)
+  } catch (err) {
+    // The order link is a convenience: the feedback is stored without it.
+    logger.warn('[ebay-feedback] order link failed', { error: err instanceof Error ? err.message : String(err) })
+  }
   logger.info('[ebay-feedback] fetched', { count: reviews.length })
   return { reviews }
 }

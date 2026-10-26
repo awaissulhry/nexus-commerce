@@ -146,6 +146,16 @@ import { META_ADS_BUSINESS_TOOLS } from './tools/meta-ads-business.tools.js'
 import { META_ADS_POSTS_TOOLS } from './tools/meta-ads-posts.tools.js'
 // Meta ads step 41 (2026-10-25): people and partner access of the chosen ad account, Page and Instagram account.
 import { META_ADS_ACCESS_TOOLS } from './tools/meta-ads-access.tools.js'
+// Meta ads step 35 — catalog items, feeds, Instagram product tags.
+import { META_ADS_CATALOG_ITEMS_TOOLS } from './tools/meta-ads-catalog-items.tools.js'
+// Meta ads step 38 (2026-10-26): messages, inbox labels, templates, messaging setup (changes made as the chosen Page; WhatsApp).
+import { META_ADS_MESSAGING_CHANGE_TOOLS } from './tools/meta-ads-messaging-changes.tools.js'
+// Meta ads step 42 (2026-10-26): the business portfolio's admin acts as the Owner's steps in Meta's screens (D1: read only).
+import { META_ADS_BUSINESS_ADMIN_TOOLS } from './tools/meta-ads-business-admin.tools.js'
+// Meta ads step 43 (2026-10-26): business assets and invoice groups as the Owner's steps in Meta's screens (D1: read only), and
+// the one change Nexus's own token may make (backed accounts).
+import { META_ADS_BUSINESS_ASSETS_TOOLS } from './tools/meta-ads-business-assets.tools.js'
+import { META_ADS_BUSINESS_ASSET_CHANGE_TOOLS } from './tools/meta-ads-business-assets-changes.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -431,6 +441,19 @@ const ALL: AgentTool[] = [
   // Meta ads step 41 (2026-10-25): set-meta-user-access, set-meta-partner-access (never the last admin, never Nexus's own
   // system user, only people and partners named; Meta needs the Full access tier).
   ...META_ADS_ACCESS_TOOLS,
+  // Meta ads step 35 (2026-10-25): set-meta-catalog-items, set-meta-catalog-feed, set-meta-instagram-product-tags (D7: items
+  // only where Nexus may write them; on a Shopify catalog only the D7 labels, by an update-only file).
+  ...META_ADS_CATALOG_ITEMS_TOOLS,
+  // Meta ads step 38 (2026-10-26): create-meta-message (gated as send-customer-message: a message cannot be recalled),
+  // set-meta-conversation-labels, set-meta-message-templates, set-meta-messaging-setup.
+  ...META_ADS_MESSAGING_CHANGE_TOOLS,
+  // Meta ads step 42 (2026-10-26): set-meta-business-settings, set-meta-business-people, create-meta-system-user — D1: the
+  // Owner makes these admin acts in Meta's screens; read only: the exact steps and the result read again, nothing sent to Meta.
+  ...META_ADS_BUSINESS_ADMIN_TOOLS,
+  // Meta ads step 43 (2026-10-26): set-meta-business-assets, remove-meta-business-asset, create-meta-ad-account, create-meta-appeal,
+  // set-meta-billing — D1: read only, the Owner makes them in Meta's screens; create-meta-backed-account — a change a person approves.
+  ...META_ADS_BUSINESS_ASSETS_TOOLS,
+  ...META_ADS_BUSINESS_ASSET_CHANGE_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

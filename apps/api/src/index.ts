@@ -92,6 +92,7 @@ import keywordActionsRoutes from "./routes/keyword-actions.routes.js";
 import advertisingAiRoutes from "./routes/advertising-ai.routes.js";
 import amazonAdsAuthRoutes from "./routes/amazon-ads-auth.routes.js";
 import reviewsRoutes from "./routes/reviews.routes.js";
+import reviewsAreaRoutes from "./routes/reviews-area.routes.js";
 import brandBrainRoutes from "./routes/brand-brain.routes.js";
 import feedTransformRoutes from "./routes/feed-transform.routes.js";
 import feedExportRoutes from "./routes/feed-export.routes.js";
@@ -226,6 +227,7 @@ import connectionDependentsRoutes from "./routes/connection-dependents.routes.js
 import amazonListingAsinRoutes from "./routes/amazon-listing-asin.routes.js";
 import shopifyShadowReportRoutes from "./routes/shopify-shadow-report.routes.js";
 import shopifyOrderImportRoutes from "./routes/shopify-order-import.routes.js";
+import shopifyMarketingConsentRoutes from "./routes/shopify-marketing-consent.routes.js";
 import pushHealthRoutes from "./routes/push-health.routes.js";
 import pushLatencyRoutes from "./routes/push-latency.routes.js";
 import outboundLatencyRoutes from "./routes/outbound-latency.routes.js";
@@ -674,6 +676,7 @@ app.register(keywordActionsRoutes, { prefix: '/api' });
 app.register(advertisingAiRoutes, { prefix: '/api' }); // AIAD — AI Advertising goal wiring
 app.register(amazonAdsAuthRoutes, { prefix: '/api' });
 app.register(reviewsRoutes, { prefix: '/api' });
+app.register(reviewsAreaRoutes, { prefix: '/api' }); // Reviews area — the Overview's reads: /reviews/area/overview, /reviews/area/needs-you
 app.register(brandBrainRoutes, { prefix: '/api' });
 app.register(feedTransformRoutes, { prefix: '/api/feed-transform' });
 app.register(feedExportRoutes, { prefix: '/api/feed-export' });
@@ -816,6 +819,8 @@ app.register(amazonListingAsinRoutes, { prefix: '/api' });
 app.register(shopifyShadowReportRoutes, { prefix: '/api' });
 // Shopify order import per account — its start date (T0) and the order webhooks (NEXUS_ENABLE_SHOPIFY_ORDER_INGEST=1).
 app.register(shopifyOrderImportRoutes, { prefix: '/api' });
+// Shopify marketing consent (2026-10-26) — a person's one-time backfill of buyers' e-mail consent (hashed), per account.
+app.register(shopifyMarketingConsentRoutes, { prefix: '/api' });
 // RT.1 — unified push-health endpoint feeds the PushHealthChip on
 // /orders + /insights/live.
 app.register(pushHealthRoutes, { prefix: '/api' });

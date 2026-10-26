@@ -45,6 +45,9 @@ import {
   type CatalogAccessRecord, type CatalogMadeRecord, type CatalogSettingsFields, type CatalogSettingsRecord, type CategoryAsk, type ProductSetRecord, type SetAsk,
 } from '../../marketing/meta-ads/change-catalog-admin.js'
 import { createdIdOf, type MetaChangeResult } from '../../marketing/meta-ads/write-client.js'
+// Step 35 — an item group's delete (remove-meta-catalog-items kind item-group).
+import { liveGroup } from '../../marketing/meta-ads/live-catalog-items.js'
+import { groupDeleteDraft } from '../../marketing/meta-ads/change-catalog-items.js'
 import { takenIds } from '../../marketing/meta-ads/taken.js'
 import { META_NAME_TEXT, META_STRICT_TEXT } from '../../gateway/meta-write-text.js'
 import {
@@ -65,9 +68,9 @@ export const UNPUBLISH_NOT_DOCUMENTED = 'Meta documents no way to take a set out
 /** CT-067 — the plain answer (RECHECK-C4: ordering_info is SDK-only; its meaning is documented nowhere). */
 export const ITEM_ORDER_NOT_OFFERED = 'Nexus does not set the order of items inside a set: Meta\'s ordering_info is in its SDK only and no page says what its numbers mean (Meta\'s own MCP updates only a set\'s name, filter and retailer id). publish_to_shops ordering_index orders a set among a shop\'s collections, not its items.'
 
-const typedText = (max: number) => z.string().trim().min(1).max(max).regex(META_NAME_TEXT, 'no control or format characters')
-const strictText = (max: number) => z.string().trim().min(1).max(max).regex(META_STRICT_TEXT, 'no control or format characters')
-const httpsArg = (what: string) => z.string().trim().max(META_URL_MAX).refine((v) => metaHttpsUrlOk(v), 'an https address (no user or password)').describe(what)
+export const typedText = (max: number) => z.string().trim().min(1).max(max).regex(META_NAME_TEXT, 'no control or format characters')
+export const strictText = (max: number) => z.string().trim().min(1).max(max).regex(META_STRICT_TEXT, 'no control or format characters')
+export const httpsArg = (what: string) => z.string().trim().max(META_URL_MAX).refine((v) => metaHttpsUrlOk(v), 'an https address (no user or password)').describe(what)
 const imageSettingsArg = z.object({
   carouselAd: z.enum(META_IMAGE_TRANSFORMATIONS).describe('carousel ads: background_cropping_and_padding | background_padding | none'),
   singleAd: z.enum(META_IMAGE_TRANSFORMATIONS).describe('single-image ads: the same choices'),
@@ -78,10 +81,10 @@ const filterArgs = {
   currency: z.string().trim().regex(/^[A-Za-z]{3}$/).optional().describe('the currency of a price condition (default: the ad account\'s)'),
   everyItem: z.literal(true).optional().describe('true ONLY when the person asked for every item of the catalog (no condition)'),
 }
-const confirmDeleteArg = z.literal(true).describe('true, set ONLY because the person explicitly asked to DELETE exactly this (not to change or stop it)')
+export const confirmDeleteArg = z.literal(true).describe('true, set ONLY because the person explicitly asked to DELETE exactly this (not to change or stop it)')
 
 /** A builder that turns a refusal of the live reads into words. */
-const guarded = (build: MetaDraftBuilder): MetaDraftBuilder => async (account) => {
+export const guarded = (build: MetaDraftBuilder): MetaDraftBuilder => async (account) => {
   try {
     return await build(account)
   } catch (err) {
@@ -90,9 +93,9 @@ const guarded = (build: MetaDraftBuilder): MetaDraftBuilder => async (account) =
     throw err
   }
 }
-const chosenOf = (account: MetaChangeAccount): Promise<MetaChosenAccount> => metaChosenAccount(account.accountId)
+export const chosenOf = (account: MetaChangeAccount): Promise<MetaChosenAccount> => metaChosenAccount(account.accountId)
 /** The arguments an action takes: any other one given is refused in words (never silently dropped). */
-function onlyArgs(args: Args, action: string, allowed: readonly string[]): string | null {
+export function onlyArgs(args: Args, action: string, allowed: readonly string[]): string | null {
   const extra = Object.keys(args).filter((k) => args[k] !== undefined && !['connectionId', 'why', 'action', ...allowed].includes(k))
   return extra.length ? `${action} takes ${allowed.join(', ') || 'nothing more'} — not ${extra.join(', ')}.` : null
 }
@@ -102,7 +105,7 @@ const idText = (v: unknown): string | null => (typeof v === 'string' && /^\d{1,2
  * Review B1 — what uses a whole catalog: its own sets, and the chosen ad account's campaigns, ad sets and ads that name the
  * catalog or one of them (live-catalog-admin.ts liveCatalogUsers; what Nexus could not read is said and counts as spending).
  */
-async function catalogUse(chosen: MetaChosenAccount, catalogId: string, forSetDelete = false) {
+export async function catalogUse(chosen: MetaChosenAccount, catalogId: string, forSetDelete = false) {
   const sets = await liveCatalogSets(chosen, catalogId)
   // A catalog's delete deletes every set too: it says the SDK-only places Nexus does not read, as a set's delete does.
   return { sets, use: await liveCatalogUsers(chosen, { catalogId, setIds: sets.sets.map((s) => s.id), setsMore: sets.more, forSetDelete }) }
@@ -137,7 +140,7 @@ function writeFilter(chosen: MetaChosenAccount, ctx: ToolContext, input: { condi
 }
 
 /** The change record of an earlier change of this tool (read in this business: row-level security), for an undo. */
-async function recordOf(tool: string, changeId: unknown, account: MetaChangeAccount): Promise<{ before: unknown; after: unknown } | { refusal: string }> {
+export async function recordOf(tool: string, changeId: unknown, account: MetaChangeAccount): Promise<{ before: unknown; after: unknown } | { refusal: string }> {
   const id = typeof changeId === 'string' ? changeId.trim() : ''
   if (!id) return { refusal: `This is only the undo of an earlier ${tool} change (undo-change asks for it with undoOf): this tool takes no id of what to undo.` }
   const row = await prisma.agentChange.findFirst({ where: { id, toolName: tool }, select: { before: true, after: true, undoneAt: true } })
@@ -148,7 +151,7 @@ async function recordOf(tool: string, changeId: unknown, account: MetaChangeAcco
   return { before: row.before, after: row.after }
 }
 
-const common = {
+export const common = {
   category: 'advertising',
   riskTier: 'high',
   readOnly: false,
@@ -160,7 +163,7 @@ const common = {
   requires: [F.adsCampaignsManage],
 } satisfies Partial<AgentTool>
 
-const head = (record: { accountId?: string } | undefined, why: string) => ({ ...(record?.accountId ? { connectionId: record.accountId } : {}), why })
+export const head = (record: { accountId?: string } | undefined, why: string) => ({ ...(record?.accountId ? { connectionId: record.accountId } : {}), why })
 
 // ── create-meta-catalog ─────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -713,7 +716,7 @@ const setMetaProductSet: AgentTool = {
 
 const buildRemove = (args: Args): MetaDraftBuilder => guarded(async (account) => {
   const kind = String(args.kind)
-  const allowed: Record<string, string[]> = { catalog: ['catalogId', 'alsoLive'], 'product-set': ['productSetId', 'catalogId', 'alsoLive'], items: ['catalogId', 'retailerIds'], item: ['itemId', 'catalogId'], feed: ['catalogId', 'feedId'] }
+  const allowed: Record<string, string[]> = { catalog: ['catalogId', 'alsoLive'], 'product-set': ['productSetId', 'catalogId', 'alsoLive'], items: ['catalogId', 'retailerIds'], item: ['itemId', 'catalogId'], feed: ['catalogId', 'feedId'], 'item-group': ['groupId', 'catalogId', 'alsoItems'] }
   const extra = onlyArgs({ ...args, kind: undefined, confirmDelete: undefined }, kind, allowed[kind] ?? [])
   if (extra) return { refusal: extra }
   const alsoLive = args.alsoLive === true
@@ -762,6 +765,16 @@ const buildRemove = (args: Args): MetaDraftBuilder => guarded(async (account) =>
       if (feed.supplementary !== true) return { refusal: 'This is a primary feed (or Meta does not say): deleting it disables every ad of the items it brings (Meta), and Nexus deletes no items it does not write (D7). Delete it in Commerce Manager if that is meant.' }
       return feedDeleteDraft({ catalogId, feedId, name: feed.name })
     }
+    case 'item-group': {
+      // Step 35 (CT-055, SDK only) — a variant group: always ONLY_IF_EMPTY unless the person asked for its items too (D7:
+      // only where Nexus may write items).
+      const groupId = idText(args.groupId)
+      if (!groupId) return { refusal: 'Name the item group (groupId: meta-catalog-items view groups).' }
+      const group = await liveGroup(chosen, groupId, catalogId)
+      const { catalog } = await writableFor(chosen, group.catalogId, 'items')
+      const withItems = args.alsoItems === true
+      return groupDeleteDraft({ catalog: { catalogId: catalog.catalogId, name: catalog.name }, groupId: group.groupId, groupSku: group.groupSku, items: group.itemIds.size, more: group.more, withItems, use: withItems ? (await catalogUse(chosen, catalog.catalogId)).use : { users: [], unseen: [] } })
+    }
   }
   return { refusal: `kind is ${CATALOG_REMOVE_KINDS.join(', ')}.` }
 })
@@ -799,12 +812,14 @@ const removeMetaCatalogItems: AgentTool = {
   reversibility: 'none',
   input: z.object({
     connectionId: metaConnectionArg,
-    kind: z.enum(CATALOG_REMOVE_KINDS).describe('catalog | product-set | items (by retailer id) | item (by Meta\'s item id) | feed (a supplementary feed)'),
+    kind: z.enum(CATALOG_REMOVE_KINDS).describe('catalog | product-set | items (by retailer id) | item (by Meta\'s item id) | feed (a supplementary feed) | item-group (a variant group)'),
     catalogId: metaIdArg('catalog, items, feed: the catalog; product-set, item: optional check').optional(),
     productSetId: metaIdArg('product-set: the set').optional(),
     itemId: metaIdArg('item: Meta\'s item id (meta-catalog-items)').optional(),
     retailerIds: z.array(strictText(META_RETAILER_ID_MAX)).min(1).max(MAX_ITEM_DELETES).optional().describe(`items: the items' retailer ids (SKUs), at most ${MAX_ITEM_DELETES}; only those the catalog holds now are deleted`),
     feedId: metaIdArg('feed: the supplementary feed (meta-catalog-feeds)').optional(),
+    groupId: metaIdArg('item-group: the variant group (meta-catalog-items view groups)').optional(),
+    alsoItems: z.literal(true).optional().describe('item-group: true ONLY when the person asked to delete the group\'s items too (else Meta deletes it only when empty)'),
     alsoLive: z.literal(true).optional().describe('catalog, product-set: true ONLY when the person asked to delete it EVEN while ads use it (Meta refuses otherwise); the preview names what stops'),
     confirmDelete: confirmDeleteArg,
     why: metaWhyArg,
@@ -812,7 +827,8 @@ const removeMetaCatalogItems: AgentTool = {
   description:
     'DELETE for good — only when the person explicitly asked to DELETE (confirmDelete true): a catalog of the business, a '
     + 'product set, items by their retailer ids (SKUs; one batch of DELETEs, only of items the catalog holds now), one item '
-    + 'by its Meta id, or a supplementary feed. D7: items (and a catalog with its items) only where Nexus may write items — '
+    + 'by its Meta id, a supplementary feed, or a variant group (only if empty unless the person asked for its items too: '
+    + 'alsoItems; Meta\'s SDK only). D7: items (and a catalog with its items) only where Nexus may write items — '
     + 'on a catalog Shopify feeds the answer is "Shopify owns these items: remove them in Shopify"; a Shopify, partner or '
     + 'primary feed is never deleted here. Deleting is FINAL, no undo: ads on a deleted catalog, set or item stop; the '
     + 'preview lists every product set and every campaign, ad set and ad of the chosen ad account that uses it (and what Nexus '

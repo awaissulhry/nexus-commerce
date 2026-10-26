@@ -14,13 +14,17 @@
  * Step 22 (lane C1, remove-meta-ads-items) will delete images and videos on a person's explicit ask with the same two
  * DELETE rules (gateway/meta-media-rules.ts); until then this tool's undo (kind undo) is the only removal, and it removes
  * nothing an upload of this business did not make new.
+ *
+ * Gap 46b (master MD-024) — kind thumbnail: a custom thumbnail for a video the chosen Facebook Page posted, made its
+ * preferred one, sent AS the Page (its own token). It has no undo (Meta lets no thumbnail be changed or deleted): the
+ * preview says so, and the change is irreversible (reversibility 'none').
  */
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool, ToolChange, ToolUndo } from '../tool-types.js'
 import { metaChangePreview, metaConnectionArg, metaIdArg, metaWhyArg, META_CHANGE_RULES, recordAccount, runMetaChange, type MetaDraftBuilder, type MetaRunOutcome } from './meta-ads-kit.js'
 import {
-  libraryVideos, MAX_IMAGES, MAX_UNDO, MEDIA_KINDS, MEDIA_TOOL, mediaDraft, mediaPlainAnswer, VIDEO_METHODS, videoCaptions,
+  libraryVideos, MAX_IMAGES, MAX_UNDO, MEDIA_KINDS, MEDIA_TOOL, mediaDraft, mediaPlainAnswer, THUMBNAIL_NO_UNDO, VIDEO_METHODS, videoCaptions,
   type MediaDraft, type MediaKind, type MediaRecordItem, type MediaUploadRequest, type UploadRef, type VideoSource,
 } from '../../marketing/meta-ads/change-media.js'
 import type { MetaChangeDraft, MetaChangeRequest } from '../../marketing/meta-ads/change-draft.js'
@@ -41,6 +45,7 @@ function requestOf(args: Record<string, unknown>): MediaUploadRequest {
   const video = args.video as Record<string, unknown> | undefined
   const folder = args.folder as Record<string, unknown> | undefined
   const captions = args.captions as Record<string, unknown> | undefined
+  const thumbnail = args.thumbnail as Record<string, unknown> | undefined
   return {
     kind: args.kind as MediaUploadRequest['kind'],
     images: ((args.images as Array<Record<string, unknown>> | undefined) ?? []).map((i) => ({ libraryImageId: str(i.libraryImageId), imageUrl: str(i.imageUrl) })),
@@ -53,6 +58,7 @@ function requestOf(args: Record<string, unknown>): MediaUploadRequest {
     } : {}),
     ...(folder ? { folder: { name: String(folder.name ?? ''), description: str(folder.description), parentFolderId: str(folder.parentFolderId) } } : {}),
     ...(captions ? { captions: { videoId: String(captions.videoId ?? ''), locale: String(captions.locale ?? ''), srt: String(captions.srt ?? ''), fileName: str(captions.fileName), defaultLocale: str(captions.defaultLocale) } } : {}),
+    ...(thumbnail ? { thumbnail: { videoId: String(thumbnail.videoId ?? ''), image: { libraryImageId: str(thumbnail.libraryImageId), imageUrl: str(thumbnail.imageUrl) } } } : {}),
     uploads: ((args.uploads as UploadRef[] | undefined) ?? []).map((u): UploadRef => (u.kind === 'image'
       ? { kind: 'image', hash: u.hash }
       : u.kind === 'video' ? { kind: 'video', videoId: u.videoId } : { kind: 'captions', videoId: u.videoId, locale: u.locale, ...(u.restoreDefault ? { restoreDefault: u.restoreDefault } : {}) })),
@@ -72,6 +78,11 @@ function recordItem(draft: MediaDraft, request: MetaChangeRequest, result: MetaC
     case 'folder': return typeof node.folderId === 'string' ? { kind: 'folder', folderId: node.folderId, name: typeof node.name === 'string' ? node.name : source, portfolioId: request.objectId } : null
     // Meta takes a caption locale once (482): an upload Meta took is always new.
     case 'captions': return { kind: 'captions', videoId: request.objectId, locale: draft.media.byStep.get(request.step)?.label ?? '', new: true, setDefault: draft.media.captions?.setDefault ?? null, defaultBefore: draft.media.captions?.defaultBefore ?? null }
+    // Gap 46b (MD-024) — what was made the video's preferred thumbnail (no undo: nothing here says how to take it back).
+    case 'thumbnail': {
+      const made = ((draft.after as { items?: Array<Record<string, unknown>> }).items ?? [])[0] ?? {}
+      return node.success === true ? { kind: 'thumbnail', videoId: request.objectId, pageId: String(made.pageId ?? ''), source, sha256: String(made.sha256 ?? '') } : null
+    }
     case 'undo': {
       if (request.params.hash) return { kind: 'image', hash: request.params.hash, removed: true }
       if (request.params.locales_to_delete) return { kind: 'captions', videoId: request.objectId, locale: (JSON.parse(request.params.locales_to_delete) as string[])[0], removed: true }
@@ -93,6 +104,7 @@ function finish(draft: MetaChangeDraft, done: Array<{ request: MetaChangeRequest
     folder: 'Meta has no API to rename or delete a folder: it stays.',
     captions: 'The captions show on the video wherever its ads run. Their text stays only with this request (its approval, the run that asked for it, or its change-plan step); the change record, the call ledger and logs never hold it.',
     undo: 'Meta cannot put a removed file back: upload it again (create-meta-media).',
+    thumbnail: THUMBNAIL_NO_UNDO,
   }
   return {
     data: {
@@ -157,6 +169,11 @@ const mediaUndo: ToolUndo = {
     const after = (change.after ?? {}) as Stamped
     if (after.kind === 'folder') return { refusal: 'Meta has no API to delete or rename a media-library folder, so Nexus cannot take this one back (a person can in Business Settings › Media library).' }
     if (after.kind === 'undo') return { refusal: 'Meta cannot put a removed image, video or caption back: upload it again with create-meta-media (an image gets the same hash).' }
+    // Gap 46b (MD-024) — Meta has no update or delete of a video thumbnail; review N7: the one preferred before is named.
+    if (after.kind === 'thumbnail') {
+      const prior = ((change.before ?? {}) as { items?: Array<{ preferredBefore?: unknown }> }).items?.[0]?.preferredBefore
+      return { refusal: `${THUMBNAIL_NO_UNDO}${typeof prior === 'string' ? ` The thumbnail preferred before was ${prior}.` : ''}` }
+    }
     const uploads = newUploads(after)
     if (!uploads.length) {
       return { refusal: 'This upload made nothing new that Nexus may take back: what it sent was already in the ad account (or Nexus could not prove it was not), and Nexus never removes a file it did not create.' }
@@ -184,14 +201,15 @@ const createMetaMedia: AgentTool = {
   alwaysAsk: true,
   requiresApprovalDefault: true,
   openWorld: true,
-  // An image, video or caption it made new can be taken back (while no creative uses it); a folder or a removal cannot be.
+  // An image, video or caption it made new can be taken back (while no creative uses it); a folder, a removal or a Page
+  // video's thumbnail (gap 46b: Meta has no update or delete of one) cannot be.
   reversibility: 'partial',
-  consequencesFor: (args) => (args.kind === 'folder' || args.kind === 'undo' ? { reversibility: 'none' } : args.kind === 'image' || args.kind === 'video' || args.kind === 'captions' ? { reversibility: 'partial' } : null),
+  consequencesFor: (args) => (args.kind === 'folder' || args.kind === 'undo' || args.kind === 'thumbnail' ? { reversibility: 'none' } : args.kind === 'image' || args.kind === 'video' || args.kind === 'captions' ? { reversibility: 'partial' } : null),
   maxClaudeTrust: 'ask',
   requires: [F.adsCampaignsManage],
   input: z.object({
     connectionId: metaConnectionArg,
-    kind: z.enum(MEDIA_KINDS).describe('image | video | folder | captions | undo (take back what an earlier upload made new); thumbnail, playable: Nexus answers why it uploads none'),
+    kind: z.enum(MEDIA_KINDS).describe('image | video | folder | captions | thumbnail (a Page video\'s preferred thumbnail, no undo) | undo (take back what an earlier upload made new); playable: Nexus answers why it uploads none'),
     images: z.array(z.object({
       libraryImageId: libraryIdArg('an image of this business\'s Nexus image library: da_… (a library file) or pi_… (a product photo), as image-library lists them').optional(),
       imageUrl: httpsArg('or a public https:// link to a JPG or PNG (Nexus fetches it through its safe public fetch)').optional(),
@@ -222,6 +240,12 @@ const createMetaMedia: AgentTool = {
       fileName: z.string().trim().min(1).max(40).optional().describe('the file name before .<locale>.srt (letters, digits, - and _); default: captions'),
       defaultLocale: z.string().trim().regex(/^([a-z]{2}_[A-Z]{2}|none)$/, 'a locale or none').optional().describe('the video\'s default caption from now: this locale, another it already has, or none'),
     }).optional().describe('kind captions: an SRT caption file onto a video of the chosen ad account\'s library'),
+    // Gap 46b (master MD-024) — a custom thumbnail for a video of the chosen Facebook Page, made its preferred one.
+    thumbnail: z.object({
+      videoId: metaIdArg('a video the chosen Facebook Page posted (meta-page-posts and meta-media-library list them; an ad-library video cannot take one)'),
+      libraryImageId: libraryIdArg('the picture: an image of this business\'s Nexus image library (da_… or pi_…, as image-library lists them)').optional(),
+      imageUrl: httpsArg('or a public https:// link to a JPG or PNG (Nexus fetches it through its safe public fetch)').optional(),
+    }).optional().describe('kind thumbnail: a JPG or PNG of at most 8 MB made the preferred thumbnail of a video the chosen Page posted, AS the Page; Meta lets no thumbnail be changed or deleted, so there is no undo'),
     uploads: z.array(z.object({
       kind: z.enum(['image', 'video', 'captions']).describe('image, video or captions'),
       hash: hashArg.optional(),
@@ -248,10 +272,12 @@ const createMetaMedia: AgentTool = {
     + 'only what an earlier upload of this business made new (an image or a video while no creative uses it, a caption '
     + 'locale); undo-change asks for it. kind captions: an SRT text you give (UTF-8, at most 200 KB) and its locale onto a '
     + 'video of the chosen ad account\'s library, optionally its default caption (Meta takes each locale once; its undo '
-    + 'takes the locale off again). thumbnail and playable are answered in words: Meta takes a custom thumbnail only for a '
-    + 'video associated with a Page (it comes with the Page step; a creative sets its video\'s thumbnail itself), and Nexus '
-    + 'holds no HTML5 playable files. An upload SPENDS NOTHING (it is used only once a creative and an ad use it) and Meta '
-    + 'has no check for it (no validate_only on these edges): the preview says so. Image bytes are never stored or logged; a '
+    + 'takes the locale off again). kind thumbnail: a picture (as kind image) made the PREFERRED thumbnail of a video the '
+    + 'chosen Facebook Page posted, sent AS the Page with its own token — Meta takes a custom thumbnail only for a video of a '
+    + 'Page (a creative sets its own video\'s thumbnail: video_data image_hash), and lets no thumbnail be changed or deleted, '
+    + 'so it has NO UNDO (the preview says so). playable is answered in words: Nexus holds no HTML5 playable files. An '
+    + 'upload SPENDS NOTHING (it is used only once a creative and an ad use it) and Meta '
+    + 'has no check for it (no validate_only on these edges, the thumbnails edge included): the preview says so. Image bytes are never stored or logged; a '
     + 'caption text is kept only with its request (its approval, the run that asked for it, or its change-plan step), never '
     + 'in the change record, the call ledger or logs.'
     + META_CHANGE_RULES,

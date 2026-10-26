@@ -232,6 +232,7 @@ export const ROUTE_COVERAGE: Readonly<Record<string, RouteCoverage>> = {
   'settings-webhooks': { excluded: 'outgoing webhooks send business data to any address: never for Claude (09 §2)', feature: 57 },
   'sheet-delete-rows': { part: '02', feature: 1, also: 'the product sheet\'s row delete: to the recycle bin with Undo, extra listings archived; the hard delete stays excluded (#13)' },
   'sheet-transfer': { part: '09', feature: 68 },
+  'shopify-marketing-consent': { excluded: 'the backfill that copies a Shopify account\'s e-mail marketing consent into Nexus is run by a person, once per account, before Meta customer lists (09 §2: account set-up is the account holder\'s)', feature: 51 },
   'shopify-media': { part: '09', feature: 67 },
   'shopify-order-import': { excluded: 'connect, reconnect, revoke, disconnect, refresh, app secrets: the account holder signs in in the browser (09 §2); starting Shopify order import sets the account\'s start date once and registers its webhooks', feature: 51 },
   'shopify-shadow-report': { excluded: 'platform operations (job monitor, queues, telemetry, circuit breakers) are platform-wide, not one business (09 §2)', feature: 80 },

@@ -26,6 +26,10 @@ import type { MetaCatalogKind } from './meta-catalog-rules.js'
 import { META_GRAPH_VIDEO_HOST, type MetaPostEdge, type MetaPostKind } from './meta-post-rules.js'
 // Step 41 — the access edges (assigned_users and agencies of the chosen assets, a relationship's clients).
 import type { MetaAccessEdge, MetaAccessKind } from './meta-access-rules.js'
+// Step 38 — the messaging tools' edges and kinds.
+import type { MetaMessagingEdge, MetaMessagingKind } from './meta-messaging-rules.js'
+// Step 43 — backed accounts of the chosen Page / Instagram account.
+import type { MetaBusinessAssetEdge, MetaBusinessAssetKind } from './meta-business-asset-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -110,6 +114,12 @@ export interface MetaWriteRequest {
     | MetaPostKind
     // Step 41 — the chosen ad account, Page or Instagram account's business asset (people, partners), or the portfolio.
     | MetaAccessKind
+    // Step 38 — the chosen Page as it messages, its messaging setup, labels, personas, templates; a WhatsApp account, a group.
+    | MetaMessagingKind
+    // Step 43 — the chosen Page / Instagram account a backed account is made for.
+    | MetaBusinessAssetKind
+    // Gap 46b (MD-024) — a video the chosen Page posted, its thumbnail made as the Page (meta-media-rules.ts, meta-page-owner.ts).
+    | 'ownpagevideo'
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -144,7 +154,8 @@ export interface MetaWriteRequest {
   path?: string
   /**
    * Step 30 — a DELETE's parameters in the URL's query, as Meta's SDK sends them (an app's webhook subscription, the app's
-   * link to the chosen ad account); `params` is then empty. The gateway refuses a query on every other call.
+   * link to the chosen ad account); `params` is then empty. Step 38 — an Instagram profile change's platform=instagram (with
+   * the same key in `params`). The gateway refuses a query on every other call.
    */
   query?: Record<string, string>
   /** Step 20 (review A2) — the targeting keys this change's draft changed: the only ones the gateway lets differ from live. */
@@ -156,7 +167,7 @@ export interface MetaWriteRequest {
    * catalog. Step 37 — a Threads post's or reply's ad (`ad`), a branded-content post's comment's post (`brandedpost`). Step 24 —
    * a video post's video (`pagevideo`).
    */
-  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo'; id: string }
+  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost' | 'pagevideo' | 'creator'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
   recommendations?: boolean
   /** Step 24 (review B-F1) — a Page's video post goes to Meta's video host (meta-post-rules.ts META_GRAPH_VIDEO_HOST). */
@@ -179,6 +190,10 @@ export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copie
   | MetaPostEdge
   // Step 41 — people and partners of the chosen ad account, Page and Instagram account; the portfolio's relationships.
   | MetaAccessEdge
+  // Step 38 — messages, thread control, labels, templates, template groups, the messaging setup of the chosen Page.
+  | MetaMessagingEdge
+  // Step 43 — backed accounts of the chosen Page / Instagram account.
+  | MetaBusinessAssetEdge
 /** Step 33 — upload-meta-events: Conversions API events of a pixel (`<pixel id>/events`). */
 export type MetaEventsEdge = 'events'
 /** Step 27 — create-meta-ad: a new ad on the chosen ad account (an ad's labels: step 21's `adlabels`). */
@@ -196,8 +211,8 @@ export type MetaWebhookEdge = 'subscribed_apps' | 'subscriptions'
  * (`shared_accounts`), an event source group (`event_source_groups`), a claim (`claim_custom_conversions`).
  */
 export type MetaSignalsEdge = 'adspixels' | 'dataset' | 'customconversions' | 'shared_accounts' | 'event_source_groups' | 'claim_custom_conversions'
-/** Step 31 — an ad account's new audiences and product audiences, its opt-outs; an audience's people and its shares. */
-export type MetaAudienceEdge = 'customaudiences' | 'product_audiences' | 'usersofanyaudience' | 'users' | 'ad_accounts'
+/** Step 31 — an ad account's new audiences and product audiences, its opt-outs; an audience's people and its shares. Consent PR 2 — a replace of its people. */
+export type MetaAudienceEdge = 'customaudiences' | 'product_audiences' | 'usersofanyaudience' | 'users' | 'usersreplace' | 'ad_accounts'
 /** Step 20 — the ad account's controls, a place page set made on the ad account (and Meta's background variant, SDK only). */
 export type MetaTargetingEdge = 'account_controls' | 'ad_place_page_sets' | 'ad_place_page_sets_async'
 /** Step 29 — a rule made on the ad account's rule library (`act_<id>/adrules_library`), a rule's run now (`<rule id>/execute`). */
@@ -212,6 +227,9 @@ export type MetaPageEdge = 'leadgen_forms' | 'test_leads' | 'canvas_elements' | 
  * items_batch that deletes its items.
  */
 export type MetaCatalogEdge = 'owned_product_catalogs' | 'categories' | 'external_event_sources' | 'assigned_users' | 'agencies' | 'product_sets' | 'items_batch'
+  // Step 35 — a catalog's overrides and feeds, a feed's uploads, rules and upload schedules, an upload's error report, an
+  // Instagram media's product tags, the chosen Instagram account's product appeals.
+  | 'localized_items_batch' | 'product_feeds' | 'uploads' | 'rules' | 'upload_schedules' | 'error_report' | 'product_tags' | 'product_appeal'
 /** Step 28 — an apply (`act_<id>/recommendations`), a new study (`<business>/ad_studies`), a new Page video test (`<page>/ab_tests`). */
 export type MetaOptimizeEdge = 'recommendations' | 'ad_studies' | 'ab_tests'
 /** Step 22 — remove-meta-ads-items: an image or a video out of the ad account's library, a video's caption languages. */
@@ -226,6 +244,8 @@ export type MetaLabelsEdge = 'adlabels' | 'value_rule_set' | 'delete_rule_set' |
  * video-ads upload on the ad account, a folder on its business portfolio.
  */
 export type MetaMediaEdge = 'video_ads' | 'creative_folders'
+  // Gap 46b (MD-024) — a Page video's custom thumbnail (POST /<video>/thumbnails, made as the chosen Page).
+  | 'thumbnails'
 /** Step 25 — create-meta-creative: a creative and an async creative job on the chosen ad account (a creative's labels: step 21's `adlabels`). */
 export type MetaCreativeEdge = 'adcreatives' | 'asyncadcreatives'
 /** Step 40 — the chosen ad account's account-level tracking specs, and its insights features (switched on, never off). */
@@ -257,7 +277,8 @@ export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayRespo
     kind: req.check ? 'read' : 'write',
     connectionId: req.connectionId,
     // Step 24 — a Page's video post on Meta's video host; every other change on the Graph host.
-    url: req.videoHost ? metaUrl(path).replace(/^https:\/\/graph\.facebook\.com\//, `https://${META_GRAPH_VIDEO_HOST}/`) : metaUrl(path, remove ? req.query ?? {} : {}),
+    // Step 38 (review B-F1) — and an Instagram profile change's platform=instagram (the gateway refuses any other query).
+    url: req.videoHost ? metaUrl(path).replace(/^https:\/\/graph\.facebook\.com\//, `https://${META_GRAPH_VIDEO_HOST}/`) : metaUrl(path, req.query ?? {}),
     method: remove ? 'DELETE' : req.method === 'PATCH' ? 'PATCH' : 'POST',
     body,
     metaObjectKind: req.objectKind,

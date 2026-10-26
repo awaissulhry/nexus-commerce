@@ -2,9 +2,11 @@
  * Meta step 31 — create-meta-audience, set-meta-audience, set-meta-audience-members, set-meta-audience-sharing and
  * remove-meta-audience as the approval gate uses them (Meta, the account and the live reads are stand-ins): the change
  * contract of every Meta change tool; previews built from the live state (terms signed first, every id the business's
- * own, the WHOLE existing-customer list read first, the ads a delete or unshare stops listed); D8 — nobody is added,
- * opt-outs go out as hashes only and no hash reaches a preview, an answer or a record; runs only as a request a person
- * approved; undo deletes what a create made, puts back what a change replaced, and is none where Meta has none.
+ * own, the WHOLE existing-customer list read first, the ads a delete or unshare stops listed); D8 — consent PR 2: an add
+ * or a replace of consenting Shopify buyers only while the business's switch is on and the terms are signed (read, not
+ * guessed), people go out as hashes only and no hash reaches a preview, an answer or a record; runs only as a request a
+ * person approved; undo deletes what a create made, puts back what a change replaced, takes an add's people out again,
+ * and is none where Meta has none (a replace: Meta lists no members).
  * Made-up ids, example.com addresses.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -19,6 +21,12 @@ const h = vi.hoisted(() => ({
   idProblems: [] as string[],
   sameName: { ids: [] as string[], checked: true },
   people: { hashes: [] as string[], skipped: 0 },
+  consented: { hashes: [] as string[], skipped: 0 } as { hashes: string[]; skipped: number } | { refusal: string },
+  ended: { hashes: [] as string[], skipped: 0 },
+  held: { hashes: [] as string[], skipped: 0 },
+  uploadsOn: false,
+  termsFail: null as null | Error,
+  peopleRead: vi.fn(),
   existingUsers: { adSets: [] as Array<Record<string, unknown>>, problem: null as string | null },
   termsRead: vi.fn(),
   send: vi.fn(),
@@ -35,7 +43,7 @@ vi.mock('../../marketing/meta-ads/live-audience-change.js', async () => {
   }
   return {
     chosenOf: vi.fn(async () => ({ connectionId: 'm-1', adAccountId: '1234567890', pageId: '120000000000080', instagramId: '170000000000001', businessId: '120000000000090' })),
-    liveTerms: vi.fn(async () => { h.termsRead(); return structuredClone(h.terms) }),
+    liveTerms: vi.fn(async () => { h.termsRead(); if (h.termsFail) throw h.termsFail; return structuredClone(h.terms) }),
     liveAudienceDetail: vi.fn(async (_a: unknown, id: string) => detail(id)),
     changeableAudience: vi.fn(async (_a: unknown, id: string) => {
       const audience = detail(id)
@@ -52,7 +60,13 @@ vi.mock('../../marketing/meta-ads/live-audience-change.js', async () => {
 })
 vi.mock('../../marketing/meta-ads/audience-members.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/meta-ads/audience-members.js')>()),
-  optedOutPeople: vi.fn(async () => structuredClone(h.people)),
+  optedOutPeople: vi.fn(async () => { h.peopleRead('optedOut'); return structuredClone(h.people) }),
+  consentedPeople: vi.fn(async (since: Date | null) => { h.peopleRead('consented', since); return structuredClone(h.consented) }),
+  consentEndedPeople: vi.fn(async () => { h.peopleRead('ended'); return structuredClone(h.ended) }),
+  addedPeople: vi.fn(async (ranAt: Date, since: Date | null) => { h.peopleRead('held', ranAt, since); return structuredClone(h.held) }),
+}))
+vi.mock('../../marketing/meta-ads/customer-lists-switch.js', () => ({
+  metaCustomerListsSwitch: vi.fn(async () => ({ on: h.uploadsOn, since: h.uploadsOn ? '2026-10-26T08:00:00.000Z' : null, by: h.uploadsOn ? 'Owner' : null })),
 }))
 vi.mock('../../marketing/meta-ads/live-audiences.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/meta-ads/live-audiences.js')>()),
@@ -71,6 +85,7 @@ import { createHash } from 'node:crypto'
 import { META_ADS_AUDIENCE_CHANGES_TOOLS } from './meta-ads-audience-changes.tools.js'
 import { META_CHANGE_RULES } from './meta-ads-kit.js'
 import { NO_CONSENT } from '../../marketing/meta-ads/audience-members.js'
+import { MetaReadError } from '../../marketing/meta-ads/errors.js'
 import { MATERIAL_PREVIEW_FIELDS } from '../../agent-fleet/approval-inbox.service.js'
 import { __metaObjectLimitsTest } from '../../gateway/meta-object-limits.js'
 import type { AgentTool, ToolContext, ToolResult } from '../tool-types.js'
@@ -106,6 +121,12 @@ beforeEach(() => {
   h.idProblems = []
   h.sameName = { ids: [], checked: true }
   h.people = { hashes: [], skipped: 0 }
+  h.consented = { hashes: [], skipped: 0 }
+  h.ended = { hashes: [], skipped: 0 }
+  h.held = { hashes: [], skipped: 0 }
+  h.uploadsOn = false
+  h.termsFail = null
+  h.peopleRead.mockReset()
   h.existingUsers = { adSets: [], problem: null }
 })
 
@@ -119,10 +140,16 @@ describe('the tools', () => {
       expect(t.requires[0]).toBe('ads.campaigns.manage')
     }
     expect(Object.fromEntries(META_ADS_AUDIENCE_CHANGES_TOOLS.map((t) => [t.name, t.reversibility]))).toEqual({
-      'create-meta-audience': 'full', 'set-meta-audience': 'partial', 'set-meta-audience-members': 'none', 'set-meta-audience-sharing': 'partial', 'remove-meta-audience': 'none',
+      'create-meta-audience': 'full', 'set-meta-audience': 'partial', 'set-meta-audience-members': 'partial', 'set-meta-audience-sharing': 'partial', 'remove-meta-audience': 'none',
     })
     expect(tool('set-meta-audience-members').requires).toEqual(['ads.campaigns.manage', 'customers.export'])
-    expect(tool('set-meta-audience-members').undo).toBeUndefined()
+    // Consent PR 2 — only an add can be put back (its people taken out again); a replace and a removal cannot.
+    expect(tool('set-meta-audience-members').undo).toBeDefined()
+    expect(tool('set-meta-audience-members').consequencesFor!({ mode: 'add' })).toBeNull()
+    for (const mode of ['replace', 'remove', 'opt_out_everywhere']) expect(tool('set-meta-audience-members').consequencesFor!({ mode })).toEqual({ reversibility: 'none' })
+    expect(tool('set-meta-audience-members').description).toMatch(/"Upload customer lists to Meta" is on/)
+    expect(tool('set-meta-audience-members').description).toMatch(/never an Amazon, eBay or Etsy buyer/)
+    expect(tool('set-meta-audience-members').description).toMatch(/NO undo, because Meta does not list a list's members/)
     expect(tool('remove-meta-audience').undo).toBeUndefined()
     // Delete only on the person's explicit ask.
     expect(() => tool('remove-meta-audience').input.parse({ audienceIds: [A] })).toThrow()
@@ -145,7 +172,7 @@ describe('create-meta-audience', () => {
     const out = await preview('create-meta-audience', { kind: 'customer_list', name: 'List A', retentionDays: 90 })
     expect(out.ok).toBe(true)
     expect(out.preview).toMatchObject({ spendsMoney: false, metaCheck: { checked: 'none' }, requests: [{ step: 1, metaCheck: 'no-check' }] })
-    expect(out.preview.warnings.join(' ')).toMatch(/EMPTY and Nexus adds nobody/)
+    expect(out.preview.warnings.join(' ')).toMatch(/starts EMPTY\. Nexus adds people to it only with set-meta-audience-members .*"Upload customer lists to Meta" is on/)
     expect(out.preview.warnings.join(' ')).toMatch(/enable_fetch_or_create/)
     h.send.mockImplementationOnce(async () => ({ node: { id: '120000000000049', name: 'List A' }, readBack: 'second-read', waitedMs: 0 }))
     const ran = await run('create-meta-audience', { kind: 'customer_list', name: 'List A', retentionDays: 90 }, out.preview)
@@ -258,13 +285,107 @@ describe('set-meta-audience', () => {
 })
 
 describe('set-meta-audience-members (D8)', () => {
-  it('add and replace are refused before anything is read: no consent field', async () => {
+  it('add and replace are refused before anything is read while "Upload customer lists to Meta" is off', async () => {
+    h.consented = { hashes: [hash('a@example.com')], skipped: 0 }
     for (const mode of ['add', 'replace']) {
       expect(await preview('set-meta-audience-members', { mode, audienceId: A })).toEqual({ ok: false, error: NO_CONSENT })
     }
     expect(h.termsRead).not.toHaveBeenCalled()
+    expect(h.peopleRead).not.toHaveBeenCalled()
   })
-  it('remove: the opted-out people as hashes in DELETE requests; no hash in the preview, the answer or the record', async () => {
+  it('the terms are Meta\'s own field: a read that fails is refused in plain words, never taken as signed', async () => {
+    h.uploadsOn = true
+    h.consented = { hashes: [hash('a@example.com')], skipped: 0 }
+    h.termsFail = new MetaReadError({ sentence: 'Meta did not answer in time.' } as never, 'audiences.terms')
+    expect(await preview('set-meta-audience-members', { mode: 'add', audienceId: A })).toEqual({ ok: false, error: expect.stringMatching(/could not read whether Meta's Custom Audience terms are signed .*Meta did not answer in time.*uploads nobody/) })
+    h.termsFail = null
+    h.terms.signed = false
+    expect(await preview('set-meta-audience-members', { mode: 'add', audienceId: A })).toEqual({ ok: false, error: expect.stringMatching(/terms are not signed/) })
+    expect(h.peopleRead).not.toHaveBeenCalled()
+    expect(h.send).not.toHaveBeenCalled()
+  })
+  it('add: consenting Shopify buyers\' hashes into ONE list (POST /users, no session); counts only; its undo takes out the rows held when it ran', async () => {
+    h.uploadsOn = true
+    h.consented = { hashes: [hash('a@example.com'), hash('b@example.com')].sort(), skipped: 0 }
+    // The list is judged before anyone's hash is read.
+    expect(await preview('set-meta-audience-members', { mode: 'add', audienceId: VISITORS.id })).toEqual({ ok: false, error: expect.stringMatching(/not a customer list/) })
+    expect(h.peopleRead).not.toHaveBeenCalled()
+    h.audiences[A].isValueBased = true
+    expect(await preview('set-meta-audience-members', { mode: 'add', audienceId: A })).toEqual({ ok: false, error: expect.stringMatching(/value-based customer list/) })
+    h.audiences[A].isValueBased = false
+    const out = await preview('set-meta-audience-members', { mode: 'add', audienceId: A, since: '2026-10-01' })
+    expect(out.ok).toBe(true)
+    expect(h.peopleRead).toHaveBeenCalledWith('consented', new Date('2026-10-01T00:00:00Z'))
+    expect(out.preview).toMatchObject({ spendsMoney: false, totals: { hashedEmails: 2, requests: 1 }, summary: expect.stringMatching(/^Meta: add 2 hashed e-mails .* to customer list "List A" \(120000000000040\) of ad account act_1234567890\.$/) })
+    expect(out.preview.warnings.join(' ')).toMatch(/Undo takes the people out again .* already held when this add ran/)
+    expect(JSON.stringify(out)).not.toContain(hash('a@example.com'))
+    h.send.mockImplementationOnce(async () => ({ node: { audience_id: A, session_id: '0', num_received: 2, num_invalid_entries: 0, invalid_entry_samples: { [hash('a@example.com')]: 'x' } }, readBack: 'none', waitedMs: 0 }))
+    const ran = await run('set-meta-audience-members', { mode: 'add', audienceId: A, since: '2026-10-01' }, out.preview)
+    expect(ran.ok).toBe(true)
+    const sent = h.send.mock.calls[0][1]
+    expect(sent).toMatchObject({ objectId: A, kind: 'customaudience', edge: 'users', operation: 'audience.users.add' })
+    expect(sent.method).toBeUndefined()
+    expect(Object.keys(sent.params)).toEqual(['payload'])
+    expect(JSON.parse(sent.params.payload)).toEqual({ schema: 'EMAIL_SHA256', data: [hash('a@example.com'), hash('b@example.com')].sort() })
+    expect(ran.data).toMatchObject({ received: 2, invalidEntries: 0, people: 2, mode: 'add' })
+    const kept = JSON.stringify({ data: ran.data, change: ran.change })
+    expect(kept).not.toContain(hash('a@example.com'))
+    expect(kept).not.toContain('example.com')
+    const t = tool('set-meta-audience-members')
+    expect(await t.undo!.current(ran.change!)).toEqual(ran.change!.after)
+    // Review FIX-2 — the add keeps when it ran; its undo passes that time, and the undo reads only rows held then.
+    const ranAt = (ran.change!.after as { ranAt?: string }).ranAt!
+    expect(Number.isNaN(Date.parse(ranAt))).toBe(false)
+    const back = t.undo!.request(ran.change!)
+    expect(back).toEqual({ tool: 'set-meta-audience-members', args: { connectionId: 'm-1', mode: 'remove', who: 'added', addRanAt: ranAt, audienceId: A, since: '2026-10-01', why: expect.any(String) } })
+    expect(t.input.safeParse((back as { args: unknown }).args).success).toBe(true)
+    h.held = { hashes: [hash('a@example.com'), hash('b@example.com'), hash('c@example.com')].sort(), skipped: 0 }
+    const undo = await preview('set-meta-audience-members', (back as { args: Record<string, unknown> }).args)
+    expect(undo.ok).toBe(true)
+    expect(h.peopleRead).toHaveBeenLastCalledWith('held', new Date(ranAt), new Date('2026-10-01T00:00:00Z'))
+    expect(undo.preview.warnings.join(' ')).toMatch(/It is the undo of an add that ran at/)
+    expect(undo.preview.totals).toMatchObject({ people: 3 })
+    // An add record without its run time (none should exist) is refused in words, never widened.
+    expect(t.undo!.request({ before: {}, after: { mode: 'add', audienceId: A, people: 2, batches: 1, since: null } })).toEqual({ refusal: expect.stringMatching(/recorded no time it ran/) })
+    // who added without addRanAt is refused at the door of the draft.
+    expect(await preview('set-meta-audience-members', { mode: 'remove', who: 'added', audienceId: A })).toEqual({ ok: false, error: expect.stringMatching(/it takes addRanAt/) })
+  })
+  it('replace: one session of usersreplace requests, approved and run with a new session id; no undo, in words', async () => {
+    h.uploadsOn = true
+    h.consented = { hashes: [hash('a@example.com')], skipped: 0 }
+    expect(await preview('set-meta-audience-members', { mode: 'replace', audienceId: A, since: '2026-10-01' })).toEqual({ ok: false, error: expect.stringMatching(/takes no since/) })
+    expect(h.termsRead).not.toHaveBeenCalled()
+    const out = await preview('set-meta-audience-members', { mode: 'replace', audienceId: A })
+    expect(out.ok).toBe(true)
+    expect(h.peopleRead).toHaveBeenCalledWith('consented', null)
+    expect(out.preview.warnings.join(' ')).toMatch(/No undo: Meta does not list a Custom Audience's members/)
+    h.send.mockImplementationOnce(async () => ({ node: { audience_id: A, session_id: '7', num_received: 1, num_invalid_entries: 0 }, readBack: 'none', waitedMs: 0 }))
+    const ran = await run('set-meta-audience-members', { mode: 'replace', audienceId: A }, out.preview)
+    expect(ran.ok).toBe(true)
+    const sent = h.send.mock.calls[0][1]
+    expect(sent).toMatchObject({ objectId: A, kind: 'customaudience', edge: 'usersreplace', operation: 'audience.users.replace' })
+    expect(Object.keys(sent.params)).toEqual(['payload', 'session'])
+    expect(JSON.parse(sent.params.session)).toMatchObject({ batch_seq: 1, last_batch_flag: true, estimated_num_total: 1 })
+    expect(ran.data).toMatchObject({ received: 1, mode: 'replace' })
+    expect(tool('set-meta-audience-members').undo!.request(ran.change!)).toEqual({ refusal: expect.stringMatching(/A replace has no exact undo: Meta does not list a Custom Audience's members/) })
+    // The switch turned off after the approval: the run sends nothing.
+    h.send.mockClear()
+    h.uploadsOn = false
+    const late = await run('set-meta-audience-members', { mode: 'replace', audienceId: A }, out.preview)
+    expect(late.ok).toBe(false)
+    expect(JSON.stringify(late)).toMatch(/Upload customer lists to Meta/)
+    expect(h.send).not.toHaveBeenCalled()
+  })
+  it('who goes with remove only; remove takes out the people who opted out AND those whose Shopify consent ended', async () => {
+    expect(await preview('set-meta-audience-members', { mode: 'opt_out_everywhere', who: 'added' })).toEqual({ ok: false, error: 'who goes with mode remove only.' })
+    h.people = { hashes: [hash('a@example.com')], skipped: 0 }
+    h.ended = { hashes: [hash('a@example.com'), hash('b@example.com')].sort(), skipped: 0 }
+    const out = await preview('set-meta-audience-members', { mode: 'remove', audienceId: A })
+    expect(out.preview.totals).toMatchObject({ people: 2 })
+    expect(out.preview.warnings.join(' ')).toMatch(/1 opted out of the business's e-mail and 2 had said yes on Shopify and unsubscribed since/)
+    expect(tool('set-meta-audience-members').undo!.request({ before: { mode: 'remove' }, after: { mode: 'remove', audienceId: A } })).toEqual({ refusal: expect.stringMatching(/never put back/) })
+  })
+  it('remove: the people who said no as hashes in DELETE requests; no hash in the preview, the answer or the record', async () => {
     h.people = { hashes: [hash('a@example.com'), hash('b@example.com')].sort(), skipped: 1 }
     h.terms.signed = false
     expect(await preview('set-meta-audience-members', { mode: 'remove', audienceId: A })).toEqual({ ok: false, error: expect.stringMatching(/terms are not signed/) })
