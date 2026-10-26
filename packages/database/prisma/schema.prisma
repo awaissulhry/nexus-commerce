@@ -13267,6 +13267,17 @@ model Review {
   // 'FIXTURE' | 'IMPORT_CSV' | 'AMAZON_VOC' | 'EBAY_API' | 'SHOPIFY_WEBHOOK' | 'MANUAL'
   ingestSource     String?
 
+  // Reviews Inbox (2026-10-26, PR B) — all optional, filled from now on (no backfill).
+  // orderId: the Nexus Order this review/feedback is about (eBay feedback: matched from its order line). A plain id, no
+  // foreign key: a deleted order leaves the review readable.
+  orderId          String?
+  // language: ISO 639-1 code of the body ('de'); bodyEnglish: the body in English, null when the body is English or
+  // not translated yet. Both come from the sentiment call at ingest, or POST /reviews/:id/translate.
+  language         String?
+  bodyEnglish      String?
+  // importBatchId: the file import that created this row (POST /reviews/import/apply), so the import can be undone.
+  importBatchId    String?
+
   // RX.2 — Response Desk triage workflow. triageStatus null is treated
   // as NEW by the app so existing rows need no backfill.
   triageStatus    String? // NEW | IN_PROGRESS | RESPONDED | RESOLVED | IGNORED
@@ -13296,6 +13307,8 @@ model Review {
   @@index([channel, ingestedAt])
   @@index([triageStatus])
   @@index([assignee])
+  @@index([orderId])
+  @@index([importBatchId])
   @@index([workspaceId])
 }
 
@@ -13410,6 +13423,10 @@ model ReviewSentiment {
   cacheWriteTokens Int      @default(0) // Anthropic prompt-cache write
   costUSD          Decimal  @default(0) @db.Decimal(10, 6)
   extractedAt      DateTime @default(now())
+  // Reviews Inbox (2026-10-26) — a person changed the mood or themes (PATCH /reviews/:id/sentiment). Set: label and
+  // categories are the person's choice, and a later AI re-read keeps them.
+  editedBy         String?
+  editedAt         DateTime?
 
   @@index([label])
   @@index([extractedAt])
