@@ -1,0 +1,319 @@
+/**
+ * Reviews area — where each channel's reviews come from and whether they still arrive, in plain words (the Overview's
+ * channel table and setup banner; Reviews Settings › Sources reads the same answer in PR D). It takes over the job of
+ * GET /reviews/ingest-health without ever naming a setting key: a person reads "Sign-in expired · Reconnect", never a
+ * variable.
+ *
+ * Shape: `readSourceFacts()` reads (connections, Amazon topic reads, review counts per channel and market, the last
+ * review read), `sourcesFromFacts()` turns the facts into states and setup problems — pure, tested in
+ * review-sources.vitest.test.ts. Fixture rows never count (review-visibility.ts).
+ *
+ * Phase 1 sources: Amazon = review topics per product (Customer Feedback API, weekly; not on Amazon.nl) + stars only from
+ * reviews a person imports (no API gives Amazon stars, build spec ruling 5); eBay = seller feedback read every 30 min;
+ * Shopify = the store's review app, by file import. Etsy is read from Phase 3.
+ */
+import prisma from '../../db.js'
+import { visibleReviewWhere } from './review-visibility.js'
+import { channelMarketLabel, marketWords } from './overviewMath.js'
+
+export type SourceStateKind = 'ok' | 'not_updating'
+
+export interface ReviewSource {
+  channel: string
+  market: string | null
+  state: SourceStateKind
+  /** Why it is not updating, in words ("Sign-in expired"); null when it is fine. */
+  reason: string | null
+  /** Since when (ISO), when known. */
+  since: string | null
+  /** Where a person fixes it (Settings › Channels › the channel); null when no person can. */
+  reconnectHref: string | null
+  /** What this source gives, in words: "Topics · stars from imported reviews". */
+  what: string
+  /** How it arrives and when it last did: "file import · topics 20 Oct". */
+  lastNote: string | null
+  /** The newest visible review from it (ISO). */
+  lastReviewAt: string | null
+  /** Visible reviews held from it (all time). */
+  reviews: number
+}
+
+export interface SetupProblem {
+  id: string
+  title: string
+  words: string
+  actionLabel: string
+  href: string
+  /** Changes when the problem changes: a person who hid the banner sees it again then. */
+  fingerprint: string
+}
+
+export interface SourceFacts {
+  connections: Array<{
+    id: string
+    channelType: string
+    marketplace: string | null
+    isActive: boolean
+    authStatus: string
+    lastErrorAt: Date | null
+    isPrimary: boolean
+  }>
+  /** One row per Amazon product × market topic read. */
+  topics: Array<{ marketplace: string; accessStatus: string; fetchedAt: Date }>
+  /** Visible reviews per channel × market × how they arrived. */
+  reviewGroups: Array<{ channel: string; marketplace: string | null; ingestSource: string | null; count: number; lastPostedAt: Date | null; lastIngestedAt: Date | null }>
+  /** The last successful review read (the 30-minute job), null when it never ran. */
+  lastReadAt: Date | null
+  /** Whether this Nexus reads eBay feedback and Amazon topics at all (deployment switches; never shown by name). */
+  ebayFeedbackOn: boolean
+  amazonTopicsOn: boolean
+}
+
+/** Amazon review topics exist for these markets only; never on Amazon.nl (ruling 5). */
+export const NO_TOPICS_MARKETS: ReadonlySet<string> = new Set(['NL'])
+
+/** A review read older than this means eBay stopped updating (the job runs every 30 min). */
+export const READ_LATE_MS = 2 * 60 * 60 * 1000
+
+const BROKEN_AUTH: Record<string, string> = {
+  needs_reauth: 'Sign-in expired',
+  revoked: 'Access was removed on the channel',
+  disconnected: 'Not connected',
+}
+
+export function settingsHref(channel: string): string {
+  return `/settings/channels/${channel.toLowerCase()}`
+}
+
+/** "Mon 20 Oct" (UTC). */
+export function dayWords(at: Date): string {
+  return at.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '')
+}
+
+/** "20 Oct" (UTC). */
+export function shortDay(at: Date): string {
+  return at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+}
+
+/** How a review arrived, in words. */
+export function arrivalWords(ingestSource: string | null): string | null {
+  switch (ingestSource) {
+    case 'IMPORT_CSV': return 'file import'
+    case 'AMAZON_VOC': return 'review feed'
+    case 'EBAY_API': return 'read from eBay'
+    case 'SHOPIFY_WEBHOOK': return 'sent by Shopify'
+    case 'MANUAL': return 'added by hand'
+    default: return null
+  }
+}
+
+/** A connection's sign-in in words: null when it works, else what is wrong. */
+export function connectionProblem(conn: { isActive: boolean; authStatus: string } | undefined, channelName: string): string | null {
+  if (!conn) return `No ${channelName} account is connected`
+  if (!conn.isActive) return `The ${channelName} account is switched off in Nexus`
+  return BROKEN_AUTH[conn.authStatus] ?? null
+}
+
+interface TopicState {
+  lastOkAt: Date | null
+  lastAt: Date | null
+  /** The newest read was refused because the Selling Partner Insights (Brand Analytics) role is missing. */
+  roleMissing: boolean
+}
+
+/** Per market: when topics last arrived, and whether the newest read was refused for the missing role. */
+export function topicStates(topics: SourceFacts['topics']): Map<string, TopicState> {
+  const out = new Map<string, TopicState>()
+  for (const t of topics) {
+    const market = t.marketplace.toUpperCase()
+    const s = out.get(market) ?? { lastOkAt: null, lastAt: null, roleMissing: false }
+    if (t.accessStatus === 'OK' && (!s.lastOkAt || t.fetchedAt > s.lastOkAt)) s.lastOkAt = t.fetchedAt
+    if (!s.lastAt || t.fetchedAt >= s.lastAt) {
+      s.lastAt = t.fetchedAt
+      s.roleMissing = t.accessStatus === 'NEEDS_BRAND_ANALYTICS_ROLE'
+    }
+    out.set(market, s)
+  }
+  return out
+}
+
+function newest(dates: Array<Date | null | undefined>): Date | null {
+  let best: Date | null = null
+  for (const d of dates) if (d && (!best || d > best)) best = d
+  return best
+}
+
+const key = (channel: string, market: string | null) => `${channel}|${market ?? ''}`
+
+/** States for every channel × market Nexus knows reviews for, and the problems a person can fix. Pure. */
+export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: ReviewSource[]; setup: SetupProblem[] } {
+  const groups = new Map<string, SourceFacts['reviewGroups']>()
+  for (const g of facts.reviewGroups) {
+    const k = key(g.channel.toUpperCase(), g.marketplace?.toUpperCase() ?? null)
+    groups.set(k, [...(groups.get(k) ?? []), g])
+  }
+  const reviewsOf = (channel: string, market: string | null) => groups.get(key(channel, market)) ?? []
+  const marketsOf = (channel: string) => new Set(facts.reviewGroups.filter(g => g.channel.toUpperCase() === channel && g.marketplace).map(g => g.marketplace!.toUpperCase()))
+  const active = (channel: string) => facts.connections.filter(c => c.channelType.toUpperCase() === channel && c.isActive)
+  const anyConnection = (channel: string) => facts.connections.some(c => c.channelType.toUpperCase() === channel)
+
+  const sources: ReviewSource[] = []
+  const setup: SetupProblem[] = []
+  const summary = (channel: string, market: string | null) => {
+    const rows = reviewsOf(channel, market)
+    const latest = rows.reduce<SourceFacts['reviewGroups'][number] | null>((best, g) => (!best || (g.lastIngestedAt ?? 0) > (best.lastIngestedAt ?? 0) ? g : best), null)
+    return {
+      count: rows.reduce((n, g) => n + g.count, 0),
+      lastReviewAt: newest(rows.map(g => g.lastPostedAt)),
+      lastArrival: latest ? arrivalWords(latest.ingestSource) : null,
+      imported: rows.some(g => g.ingestSource === 'IMPORT_CSV' && g.count > 0),
+    }
+  }
+
+  // ── Amazon: topics per market (weekly) + stars only from imported reviews ──
+  const topics = topicStates(facts.topics)
+  const amazonMarkets = new Set<string>([...marketsOf('AMAZON'), ...topics.keys()])
+  for (const market of [...amazonMarkets].sort()) {
+    const s = summary('AMAZON', market)
+    const t = topics.get(market)
+    const noTopics = NO_TOPICS_MARKETS.has(market)
+    const topicsRead = !noTopics && t?.lastOkAt != null
+    const what = noTopics
+      ? `${s.imported || s.count > 0 ? 'Stars from imported reviews' : 'No reviews imported'} · no topics on Amazon.${market.toLowerCase()}`
+      : `${facts.amazonTopicsOn || topicsRead ? 'Topics · ' : ''}${s.count > 0 ? 'stars from imported reviews' : 'no reviews imported'}`
+    const notes = [s.lastArrival, topicsRead ? `topics ${shortDay(t!.lastOkAt!)}` : null].filter(Boolean)
+    sources.push({
+      channel: 'AMAZON', market, state: 'ok', reason: null, since: null, reconnectHref: null,
+      what: what.charAt(0).toUpperCase() + what.slice(1),
+      lastNote: notes.length ? notes.join(' · ') : null,
+      lastReviewAt: s.lastReviewAt?.toISOString() ?? null, reviews: s.count,
+    })
+  }
+  const amazonConn = active('AMAZON')
+  const amazonBroken = anyConnection('AMAZON') ? connectionProblem(amazonConn.find(c => c.isPrimary) ?? amazonConn[0], 'Amazon') : null
+  if (amazonBroken && amazonBroken !== 'No Amazon account is connected') {
+    setup.push({
+      id: 'amazon-signin',
+      title: 'Amazon stopped answering Nexus.',
+      words: `${amazonBroken}. Until someone connects Amazon again, Nexus cannot read Amazon's review topics or ask Amazon to request reviews.`,
+      actionLabel: 'Reconnect in Settings',
+      href: settingsHref('AMAZON'),
+      fingerprint: `amazon-signin:${amazonBroken}`,
+    })
+  }
+  const denied = [...topics.entries()].filter(([m, t]) => !NO_TOPICS_MARKETS.has(m) && t.roleMissing).sort(([a], [b]) => a.localeCompare(b))
+  if (denied.length > 0) {
+    const lastOk = newest(denied.map(([, t]) => t.lastOkAt))
+    const where = denied.map(([m]) => marketWords(m)).filter(Boolean).join(', ')
+    setup.push({
+      id: 'amazon-topics-role',
+      title: lastOk ? 'Amazon review topics did not update.' : 'Amazon review topics are not available.',
+      words: `Amazon refused the weekly read for ${where}: Nexus needs the Selling Partner Insights role (Brand Analytics), and the Amazon connection does not have it. ${lastOk ? `Topics stay at ${dayWords(lastOk)}` : 'No topics show'} until the account owner adds the role in Seller Central and connects Amazon again.`,
+      actionLabel: 'Fix in Settings',
+      href: settingsHref('AMAZON'),
+      fingerprint: `amazon-topics-role:${denied.map(([m]) => m).join(',')}:${lastOk?.toISOString().slice(0, 10) ?? 'never'}`,
+    })
+  }
+
+  // ── eBay: seller feedback, read every 30 minutes, per connected market ──
+  // The eBay feedback read uses the account of each market (an account with no market is Italy, as the read does).
+  const ebayMarketOf = (c: SourceFacts['connections'][number]) => (c.marketplace ?? 'IT').toUpperCase()
+  const ebayAll = facts.connections.filter(c => c.channelType.toUpperCase() === 'EBAY')
+  const ebayMarkets = new Set<string>([...marketsOf('EBAY'), ...active('EBAY').map(ebayMarketOf)])
+  for (const market of [...ebayMarkets].sort()) {
+    const s = summary('EBAY', market)
+    // The working account of the market first; a switched-off one only when there is no other.
+    const candidates = ebayAll.filter(c => ebayMarketOf(c) === market)
+    const conn = candidates.find(c => c.isActive && c.isPrimary) ?? candidates.find(c => c.isActive) ?? candidates[0]
+    const broken = connectionProblem(conn, 'eBay')
+    const late = facts.ebayFeedbackOn && !broken && (!facts.lastReadAt || now.getTime() - facts.lastReadAt.getTime() > READ_LATE_MS)
+    let state: SourceStateKind = 'ok'
+    let reason: string | null = null
+    let since: Date | null = null
+    let reconnectHref: string | null = null
+    if (broken) {
+      state = 'not_updating'
+      reason = broken
+      since = conn?.lastErrorAt ?? null
+      reconnectHref = settingsHref('EBAY')
+      // A banner only for an account that exists and stopped: a market nobody connected is not a problem to fix.
+      if (conn) setup.push({
+        id: `ebay-signin:${market}`,
+        title: `${channelMarketLabel('EBAY', market)} stopped updating.`,
+        words: `${broken}${since ? ` (since ${dayWords(since)})` : ''}. Nexus cannot read new feedback from ${channelMarketLabel('EBAY', market)} or send replies there until someone connects the account again.`,
+        actionLabel: 'Reconnect in Settings',
+        href: settingsHref('EBAY'),
+        fingerprint: `ebay-signin:${market}:${broken}:${since?.toISOString() ?? ''}`,
+      })
+    } else if (!facts.ebayFeedbackOn) {
+      state = 'not_updating'
+      reason = 'Nexus does not read eBay feedback in this setup yet'
+    } else if (late) {
+      state = 'not_updating'
+      reason = facts.lastReadAt ? `Nexus has not read eBay since ${dayWords(facts.lastReadAt)}` : 'Nexus has not read eBay yet'
+      since = facts.lastReadAt
+    }
+    sources.push({
+      channel: 'EBAY', market, state, reason, since: since?.toISOString() ?? null, reconnectHref,
+      what: 'Seller feedback',
+      lastNote: state === 'ok' ? 'read every 30 min' : s.lastArrival,
+      lastReviewAt: s.lastReviewAt?.toISOString() ?? null, reviews: s.count,
+    })
+  }
+
+  // ── Shopify: the store's review app, by file import for now ──
+  const shopify = summary('SHOPIFY', null)
+  const shopifyMarketReviews = [...marketsOf('SHOPIFY')].map(m => summary('SHOPIFY', m))
+  const shopifyCount = shopify.count + shopifyMarketReviews.reduce((n, s) => n + s.count, 0)
+  if (shopifyCount > 0 || active('SHOPIFY').length > 0) {
+    const lastImport = newest(facts.reviewGroups.filter(g => g.channel.toUpperCase() === 'SHOPIFY').map(g => g.lastIngestedAt))
+    sources.push({
+      channel: 'SHOPIFY', market: null, state: 'ok', reason: null, since: null, reconnectHref: null,
+      what: 'Store review app, by file import',
+      lastNote: lastImport ? `last file import ${shortDay(lastImport)}` : 'no file imported yet',
+      lastReviewAt: newest([shopify.lastReviewAt, ...shopifyMarketReviews.map(s => s.lastReviewAt)])?.toISOString() ?? null,
+      reviews: shopifyCount,
+    })
+  }
+
+  return { sources, setup }
+}
+
+/** The facts `sourcesFromFacts` needs, read in the business the request runs in. */
+export async function readSourceFacts(): Promise<SourceFacts> {
+  const [connections, topics, grouped, lastRead] = await Promise.all([
+    prisma.channelConnection.findMany({
+      where: { channelType: { in: ['AMAZON', 'EBAY', 'SHOPIFY'] } },
+      select: { id: true, channelType: true, marketplace: true, isActive: true, authStatus: true, lastErrorAt: true, isPrimary: true },
+    }),
+    prisma.amazonReviewInsight.findMany({ select: { marketplace: true, accessStatus: true, fetchedAt: true } }),
+    prisma.review.groupBy({
+      by: ['channel', 'marketplace', 'ingestSource'],
+      where: visibleReviewWhere(),
+      _count: { _all: true },
+      _max: { postedAt: true, ingestedAt: true },
+    }),
+    prisma.cronRun.findFirst({ where: { jobName: 'review-ingest', status: 'SUCCESS' }, orderBy: { startedAt: 'desc' }, select: { startedAt: true } }),
+  ])
+  return {
+    connections,
+    topics,
+    reviewGroups: grouped.map(g => ({
+      channel: g.channel,
+      marketplace: g.marketplace,
+      ingestSource: g.ingestSource,
+      count: g._count._all,
+      lastPostedAt: g._max.postedAt ?? null,
+      lastIngestedAt: g._max.ingestedAt ?? null,
+    })),
+    lastReadAt: lastRead?.startedAt ?? null,
+    // Deployment switches, read here and never named on screen.
+    ebayFeedbackOn: process.env.NEXUS_EBAY_REAL_API === 'true' && process.env.NEXUS_REVIEW_INGEST_MODE === 'live',
+    amazonTopicsOn: process.env.NEXUS_ENABLE_AMAZON_REVIEW_INSIGHTS === '1',
+  }
+}
+
+/** Every review source's state and the setup problems, now. */
+export async function reviewSources(now: Date = new Date()): Promise<{ sources: ReviewSource[]; setup: SetupProblem[] }> {
+  return sourcesFromFacts(await readSourceFacts(), now)
+}
