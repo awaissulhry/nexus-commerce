@@ -50,7 +50,10 @@ function escapeXml(s: string): string {
 export async function respondToEbayFeedback(
   feedbackId: string,
   responseText: string,
+  /** The buyer's eBay user ID (the feedback's CommentingUser): eBay's RespondToFeedback requires it as TargetUserID. */
+  targetUserId: string,
 ): Promise<{ ok: boolean; code: string; error?: string }> {
+  if (!targetUserId?.trim()) return { ok: false, code: 'NO_BUYER_ID', error: 'eBay needs the buyer’s user ID to post a reply' }
   if (process.env.NEXUS_EBAY_REAL_API !== 'true') {
     return { ok: false, code: 'OPT_IN_OFF', error: 'NEXUS_EBAY_REAL_API not enabled' }
   }
@@ -73,6 +76,7 @@ export async function respondToEbayFeedback(
     `<?xml version="1.0" encoding="utf-8"?>` +
     `<RespondToFeedbackRequest xmlns="urn:ebay:apis:eBLBaseComponents">` +
     `<FeedbackID>${escapeXml(feedbackId)}</FeedbackID>` +
+    `<TargetUserID>${escapeXml(targetUserId.trim())}</TargetUserID>` +
     `<ResponseType>Reply</ResponseType>` +
     `<ResponseText>${escapeXml(responseText)}</ResponseText>` +
     `</RespondToFeedbackRequest>`

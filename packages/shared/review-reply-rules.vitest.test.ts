@@ -107,4 +107,13 @@ describe('channelSiteDomain', () => {
     expect(channelSiteDomain('AMAZON', 'XX')).toBe('www.amazon.com')
     expect(channelSiteDomain('SHOPIFY', 'IT')).toBeNull()
   })
+
+  it('eBay: a reply is held when the buyer’s eBay user ID is known to be missing, not when a caller leaves it out', () => {
+    expect(reviewReplyRules('EBAY', { buyerId: '' })).toMatchObject({ heldCode: 'buyer_unknown', mode: 'send' })
+    expect(reviewReplyRules('EBAY', { buyerId: null }).held).toMatch(/buyer’s eBay user ID/)
+    expect(reviewReplyRules('EBAY', { buyerId: 'buyer_123' }).held).toBeNull()
+    expect(reviewReplyRules('EBAY', {}).held).toBeNull()
+    expect(reviewReplyRules('EBAY', { buyerId: '', replied: true }).heldCode).toBe('already_replied')
+    expect(replyRefusal(reviewReplyRules('EBAY', { buyerId: '' }), 'Thanks!')).toMatchObject({ code: 'buyer_unknown' })
+  })
 })

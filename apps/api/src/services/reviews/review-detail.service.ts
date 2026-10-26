@@ -220,6 +220,7 @@ export async function getInboxReview(id: string, now: Date = new Date()): Promis
     timeline: timeline.map((t) => ({ at: t.at.toISOString(), words: t.words })),
     reply: reviewReplyRules(r.channel, {
       kind, marketplace: r.marketplace, postedAt: r.postedAt, imported, replied: sent || repliedOnChannel(r.channel, r.rawPayload),
+      buyerId: r.authorName,
     }, now),
   }
 }
