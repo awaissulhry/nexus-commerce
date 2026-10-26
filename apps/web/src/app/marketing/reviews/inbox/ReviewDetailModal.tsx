@@ -26,6 +26,7 @@ import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import Link from '@/lib/workspaces/Link'
 import { reviewsGet, reviewsSend } from '../_lib/reviewsFetch'
 import { MOOD_WORD, STATUS_WORD, themeWord } from '../_lib/reviewWords'
+import { useReplyTemplates } from '../settings/_settings/useReplyTemplates'
 import { ownerChoices } from './inboxBulk'
 import {
   MANAGE_MOOD, MANAGE_TRIAGE, MOOD_OPTIONS, MOOD_TONE, STATUS_OPTIONS, buyerFacts, composerView, dateWords, detailSubtitle, detailTabs,
@@ -99,6 +100,13 @@ export function ReviewDetailModal({ reviewId, ids, onGo, onClose, canManage, own
   }, [detail])
 
   const reread = useCallback(() => void load(reviewId, true), [load, reviewId])
+
+  // The saved replies from Reviews › Settings, for this review's channel and language (the reply box's Templates menu).
+  const replyTemplates = useReplyTemplates(detail?.review.channel ?? null, detail?.language ?? null, detail?.review.market ?? null)
+  const pickTemplate = useCallback((id: string) => {
+    const body = replyTemplates.pick(id)
+    if (body != null) setReply(body)
+  }, [replyTemplates])
 
   // ── Writes: the call → tell every page → read again → a toast ──
   const triage = useCallback(async (patch: Record<string, unknown>, done: string | null) => {
@@ -369,6 +377,8 @@ export function ReviewDetailModal({ reviewId, ids, onGo, onClose, canManage, own
                   limit={view.limit}
                   ruleLine={view.ruleLine}
                   window={view.window}
+                  templates={canManage ? replyTemplates.templates : undefined}
+                  onTemplate={pickTemplate}
                   draft={{ onDraft: () => void draft(), busy: drafting, heldReason: view.draftHeld, englishLine: english }}
                   primary={{ label: view.primary.label, onClick: () => void send(view.primary.mode), heldReason: view.primary.held, busy: sending }}
                   secondary={secondaryActions(view, reply, () => void copy())}
