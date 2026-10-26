@@ -121,7 +121,7 @@ import {
   type ReadinessViewFilters,
 } from './readinessQuery'
 import { canExpand, isFamilyRow, isReadinessFooter, readinessRowId, type ReadinessDataRow, type ReadinessGridRow } from './readinessRows'
-import { listingsInView, stateForTile, tileAccent, tileCount, tileHint, tileIsLit, tileLabel, visibleTiles } from './readinessTiles'
+import { listingsInView, readinessFilterOptions, rowReadinessTiles, stateForTile, tileAccent, tileCount, tileHint, tileIsLit, tileLabel } from './readinessTiles'
 import { channelLabel, destinationLookup, orderedChips, plural } from './marketChips'
 import { marketsColumnState, marketsFill, marketsFillForWindow, sizingForWidth } from './marketsWidth'
 import { relativeTime } from './relativeTime'
@@ -138,6 +138,7 @@ import {
   listingChips,
   listingColumnsFor,
   listingFacts,
+  lastUsedSurface,
   pageScopeOf,
   readinessColumnSpecs,
   requestQuery,
@@ -149,7 +150,12 @@ import {
 import {
   CHANNEL_STATE_OPTIONS,
   LIVE_TILE_HINT,
-  LIVE_TILES,
+  CHANNEL_PROBLEM_OPTIONS,
+  ROW_LIVE_TILES,
+  anyLiveTileFilter,
+  withoutLiveTiles,
+  channelProblemOf,
+  withChannelProblem,
   STOCK_OPTIONS,
   channelStatesOf,
   liveTileAccent,
@@ -356,7 +362,10 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   /** A plain visit lands on a default view that answers late; a link with its own filters is an instruction and keeps them. */
   const [plainVisit] = useState(() => typeof window !== 'undefined' && window.location.search.length <= 1)
   const gridViews = useGridState<ReadinessViewState>({
-    surface: 'listing-readiness',
+    // The last-used layout per kind of page (2026-10-26): a market page starts On the channel hidden and shows the
+    // per-listing columns, and that must not hide or add columns on /listings. Named views stay shared by every page.
+    surface: lastUsedSurface(lock),
+    viewsSurface: 'listing-readiness',
     baseUrl: backendUrl,
     persistKeys: PERSIST_KEYS,
     landOnLateDefault: plainVisit,
@@ -761,11 +770,18 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
         options: withCurrent([{ value: '', label: 'All languages' }, ...languages.options], query.language) },
       { key: 'familyId', label: 'Product family', kind: 'select', value: query.familyId, onChange: set('familyId'),
         options: withCurrent([{ value: '', label: 'All families' }, ...(options?.families ?? []).map((f) => ({ value: f.id, label: f.label }))], query.familyId) },
+      // 2026-10-26 (one tile row): the readiness states the row has no tile for live here — the same `state` the tiles set.
+      { key: 'state', label: 'Readiness', kind: 'select' as const, value: query.state,
+        onChange: (value: string) => setQuery((q) => ({ ...q, state: value as ReadinessPageQuery['state'], page: 1 })),
+        options: readinessFilterOptions(query.state) },
       // What the channel shows: only when the answer carries it.
       ...(liveShown ? [
         { key: 'live', label: 'Channel state', kind: 'multiselect' as const, value: channelStatesOf(query),
           onChange: (values: string[]) => setQuery((q) => withChannelStates(q, values)),
           options: CHANNEL_STATE_OPTIONS.map((o) => ({ value: o.value, label: o.label })) },
+        { key: 'flags', label: 'Channel problem', kind: 'select' as const, value: channelProblemOf(query),
+          onChange: (value: string) => setQuery((q) => withChannelProblem(q, value)),
+          options: CHANNEL_PROBLEM_OPTIONS.map((o) => ({ value: o.value, label: o.label })) },
         { key: 'stock', label: 'Stock', kind: 'select' as const, value: stockOf(query),
           onChange: (value: string) => setQuery((q) => withStock(q, value)),
           options: STOCK_OPTIONS.map((o) => ({ value: o.value, label: o.label })) },
@@ -901,35 +917,38 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
 
   // ── Tiles ─────────────────────────────────────────────────────
   const state = query?.state ?? ''
-  const metrics = useMemo<Metric[]>(
+  const liveTileFilters = useMemo(() => ({ live: query?.live ?? [], flags: query?.flags ?? [] }), [query?.live, query?.flags])
+  const readinessMetrics = useMemo<Metric[]>(
     () =>
-      visibleTiles(families?.stats ?? null, state).map((tile) => ({
+      rowReadinessTiles(liveShown).map((tile) => ({
         label: tileLabel(tile),
         value: families ? tileCount(families.stats, tile).toLocaleString('en') : '—',
         hint: tileHint(tile),
         accent: tileAccent(tile),
-        active: tileIsLit(state, tile),
-        onClick: () => setQuery((q) => ({ ...q, state: stateForTile(q.state, tile), page: 1 })),
+        // One row (2026-10-26): All is lit only when no tile filters at all, and it clears the live tiles' filters too.
+        active: tile === 'all' ? tileIsLit(state, 'all') && !anyLiveTileFilter(liveTileFilters) : tileIsLit(state, tile),
+        onClick: () => setQuery((q) => (tile === 'all' ? withoutLiveTiles({ ...q, state: '', page: 1 }) : { ...q, state: stateForTile(q.state, tile), page: 1 })),
       })),
-    [families, state, setQuery],
+    [families, state, setQuery, liveShown, liveTileFilters],
   )
   // The live tiles count listings ON THE CHANNEL, so each says its unit; a click toggles the live filter.
   const liveStats = families?.liveStats ?? null
-  const liveFilters = useMemo(() => ({ live: query?.live ?? [], flags: query?.flags ?? [] }), [query?.live, query?.flags])
   const liveMetrics = useMemo<Metric[]>(
     () =>
       liveStats
-        ? LIVE_TILES.map((tile) => ({
+        ? ROW_LIVE_TILES.map((tile) => ({
           label: liveTileLabel(tile),
           value: liveTileCount(liveStats, tile).toLocaleString('en'),
           hint: LIVE_TILE_HINT,
           accent: liveTileAccent(tile),
-          active: liveTileIsLit(liveFilters, tile),
+          active: liveTileIsLit(liveTileFilters, tile),
           onClick: () => setQuery((q) => withLiveTile(q, tile)),
         }))
         : [],
-    [liveStats, liveFilters, setQuery],
+    [liveStats, liveTileFilters, setQuery],
   )
+  // One row, as on Products (2026-10-26): All · Blocked · Warnings · Live · Errors; every other state is a filter.
+  const metrics = useMemo(() => [...readinessMetrics, ...liveMetrics], [readinessMetrics, liveMetrics])
 
   // ── Translate ─────────────────────────────────────────────────
   const [translateOpen, setTranslateOpen] = useState(false)
@@ -1068,7 +1087,6 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       {/* One family's page reads its members only; the tiles count the whole result, so they stand aside here. */}
       {!query.parent && <MetricStrip metrics={metrics} className={styles.kpis} />}
       {/* The second group: what is on the channel. Its own strip, so the two units never share a row. */}
-      {!query.parent && liveMetrics.length > 0 && <MetricStrip metrics={liveMetrics} className={styles.kpis} />}
 
       {(optionsError || languages.error) && (
         <Banner tone="warning" className={styles.banner}>

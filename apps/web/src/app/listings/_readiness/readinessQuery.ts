@@ -260,18 +260,22 @@ export function withFilter(query: ReadinessPageQuery, key: ReadinessFilterKey, v
  * flag); the link's selection, the tiles (`state`, the live tiles' flags), the search and the family page stay.
  */
 export function withoutFilters(query: ReadinessPageQuery): ReadinessPageQuery {
+  // 2026-10-26 (one tile row): Readiness and Channel problem are Filters-bar filters too, so Clear empties them; the
+  // tiles that set the same keys go dark with them.
   return withLock({
-    ...query, channel: '', marketplace: '', accountId: '', language: '', familyId: '', live: [],
-    flags: query.flags.filter((flag) => flag !== 'lowStock'), page: 1,
+    ...query, channel: '', marketplace: '', accountId: '', language: '', familyId: '', state: '', live: [],
+    flags: [], page: 1,
     // Step 4: the column filters go too; the order stays.
     ...NO_COLUMN_FILTERS,
   })
 }
 
-/** The filters set in the Filters panel. What the lock fixes is the page, not a filter. */
+/** The filters set in the Filters panel (Readiness and Channel problem included). What the lock fixes is the page, not a filter. */
 export const activeFilterCount = (query: ReadinessPageQuery): number =>
   FILTER_KEYS.filter((key) => query[key] !== '' && !isLocked(query, key)).length
+  + (query.state ? 1 : 0)
   + (query.live.length > 0 ? 1 : 0)
+  + (query.flags.some((flag) => flag !== 'lowStock') ? 1 : 0)
   + (query.flags.includes('lowStock') ? 1 : 0)
   + columnFilterCount(query)
 

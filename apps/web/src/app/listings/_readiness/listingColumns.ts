@@ -41,6 +41,16 @@ import type { ReadinessLock } from './readinessScope'
 export type PageScope = 'all' | 'store' | 'market'
 export const pageScopeOf = (lock: ReadinessLock | null): PageScope => (!lock ? 'all' : lock.marketplace ? 'market' : 'store')
 
+/**
+ * The grid's last-used layout key per kind of page (2026-10-26): `/listings` keeps the key it always had; store and
+ * market pages get their own, so a market page's columns (On the channel hidden, the per-listing columns shown) never
+ * change `/listings`. Named views are shared by every page (`viewsSurface: 'listing-readiness'`).
+ */
+export function lastUsedSurface(lock: ReadinessLock | null): string {
+  const scope = pageScopeOf(lock)
+  return scope === 'all' ? 'listing-readiness' : `listing-readiness:${scope}`
+}
+
 export const LISTING_COLUMNS = ['status', 'price', 'qty', 'channelId', 'lastPush', 'synced', 'messages'] as const
 export type ListingColumn = (typeof LISTING_COLUMNS)[number]
 
