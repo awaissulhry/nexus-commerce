@@ -604,7 +604,7 @@ const setMetaMessageTemplates: AgentTool = {
 /** Review A-B1 / S3 — what Nexus keeps of the WhatsApp code, and for how long, said as it is. */
 export const WHATSAPP_CODE_KEPT = 'The code is kept encrypted with the request for as long as Nexus keeps the request (nothing deletes '
   + 'requests today) and shown nowhere — the Approvals list and edit form, Claude\'s record of the call and the audit rows show it '
-  + 'masked; it is opened only to send it to Meta, and never reaches the change record or Nexus\'s call log. A conversation it '
+  + 'masked; it is opened only inside Nexus, to check it and send it to Meta, and never reaches the change record or Nexus\'s call log. A conversation it '
   + 'was typed into keeps it as typed.'
 
 const localeArg = z.string().regex(/^(default|[a-z]{2}_[A-Z]{2})$/, '"default" or a locale').describe('"default" (required once: everyone else) or a locale (it_IT, de_DE, …)')

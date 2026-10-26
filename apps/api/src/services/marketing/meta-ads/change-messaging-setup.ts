@@ -803,8 +803,8 @@ export function flowDraft(pageId: string, action: 'create' | 'update' | 'delete'
 
 /**
  * CR-216 — link a WhatsApp number to the chosen Page: step 1 sends the number (WhatsApp sends a code to it), step 2 the number
- * with the code the person read on that phone. The code is in this request only: never in the preview, the plan's hash, the
- * change record, Nexus's call log or an answer.
+ * with the code the person read on that phone. The code is kept encrypted with this request (nothing deletes requests today)
+ * and is never in the preview, the plan's hash, the change record, Nexus's call log or an answer.
  */
 export function whatsappNumberDraft(page: { pageId: string; number: string | null; hasNumber: boolean | null }, number: string, code: string | null): MetaChangeDraft | { refusal: string } {
   const digits = number.replace(/[\s()-]/g, '')
@@ -818,7 +818,7 @@ export function whatsappNumberDraft(page: { pageId: string; number: string | nul
     lines: [['WhatsApp number of the Page', page.number ?? (page.hasNumber ? 'set (Meta shows no number)' : 'none'), code === null ? `${digits} (a code is sent to it)` : `${digits} (with the code you read on that phone)`]],
     warnings: [
       SETUP_NO_CHECK,
-      code === null ? 'WhatsApp sends a code to that number now; then ask again with verificationCode (the person who holds that phone reads it).' : 'The code works once; it is kept only in this request until it runs (never in the preview, the change record, Nexus\'s call log or an answer).',
+      code === null ? 'WhatsApp sends a code to that number now; then ask again with verificationCode (the person who holds that phone reads it).' : 'The code works once; it is kept encrypted with this request (nothing deletes requests today) and shown nowhere: never in the preview, the change record, Nexus\'s call log or an answer.',
       'Meta has no API to unlink the number: a person does it in the Page\'s settings. Click-to-WhatsApp ads send people to this number.',
     ],
     requests: [request({
