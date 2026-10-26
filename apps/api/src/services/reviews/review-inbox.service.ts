@@ -1,0 +1,287 @@
+/**
+ * Reviews Inbox — the list (GET /api/reviews/inbox) and the bulk bar (POST /api/reviews/inbox/bulk). The filters and
+ * the bulk plan are pure (review-inbox-query.ts); this file runs the reads and writes. Every Review read goes through
+ * `inboxWhere` → `visibleReviewWhere`, so fixture rows never show or count.
+ */
+import { isReviewOverdue, reviewDueAt, isReviewOpen } from '@nexus/shared/review-reply-rules'
+import prisma from '../../db.js'
+import { logger } from '../../utils/logger.js'
+import {
+  inboxOrderBy,
+  inboxWhere,
+  isImportedSource,
+  parseInboxQuery,
+  planInboxBulk,
+  variantWords,
+  type InboxBulkRequest,
+  type InboxBulkRow,
+  type InboxQuery,
+} from './review-inbox-query.js'
+import { reviewKindOf, visibleReviewWhere, type ReviewKind } from './review-visibility.js'
+import { REVIEW_CATEGORIES } from './sentiment-extraction.service.js'
+import { applyBulkTriage } from './review-triage.service.js'
+import { createReplyDraft } from './review-reply.service.js'
+
+export interface InboxRow {
+  id: string
+  postedAt: string
+  channel: string
+  market: string | null
+  kind: ReviewKind
+  rating: number | null
+  /** The start of the text (≤ 200 characters). */
+  snippet: string
+  /** The start of the English text, when the review is in another language and was translated. */
+  english: string | null
+  language: string | null
+  buyer: string | null
+  product: { id: string; name: string; sku: string; variant: string | null } | null
+  order: { id: string; label: string } | null
+  mood: string | null
+  themes: string[]
+  /** A row never triaged is New. */
+  status: string
+  assignee: string | null
+  /** When a reply is due, while the review is open; null once it is closed. */
+  dueAt: string | null
+  overdue: boolean
+  imported: boolean
+  responses: { sent: number; draft: number }
+}
+
+export interface InboxReadState {
+  channel: string
+  market: string | null
+  ok: boolean
+  /** When Nexus last stored a review read from this channel, or null. */
+  since: string | null
+  reason: string | null
+  reconnectHref: string | null
+}
+
+export interface InboxPage {
+  rows: InboxRow[]
+  total: number
+  page: number
+  pageSize: number
+  tabCounts: { all: number; product: number; seller: number }
+  statusCounts: { NEW: number; IN_PROGRESS: number; RESPONDED: number; RESOLVED: number; IGNORED: number; OVERDUE: number }
+  facets: { owners: string[]; themes: string[]; families: { id: string; label: string }[] }
+  readState: InboxReadState[]
+}
+
+const SNIPPET = 200
+
+function snippet(text: string | null | undefined): string {
+  const t = (text ?? '').replace(/\s+/g, ' ').trim()
+  return t.length > SNIPPET ? `${t.slice(0, SNIPPET - 1)}…` : t
+}
+
+/** GET /api/reviews/inbox. */
+export async function listInbox(rawQuery: Record<string, unknown>, now: Date = new Date()): Promise<InboxPage> {
+  const q: InboxQuery = parseInboxQuery(rawQuery)
+  const where = inboxWhere(q, now)
+
+  const [items, total, tabCounts, statusCounts, facets, readState] = await Promise.all([
+    prisma.review.findMany({
+      where,
+      orderBy: inboxOrderBy(q),
+      skip: (q.page - 1) * q.pageSize,
+      take: q.pageSize,
+      select: {
+        id: true, postedAt: true, channel: true, marketplace: true, rating: true, title: true, body: true,
+        bodyEnglish: true, language: true, authorName: true, orderId: true, ingestSource: true,
+        triageStatus: true, assignee: true,
+        sentiment: { select: { label: true, categories: true } },
+        product: { select: { id: true, name: true, sku: true, parentId: true, variantAttributes: true } },
+      },
+    }),
+    prisma.review.count({ where }),
+    inboxTabCounts(q, now),
+    inboxStatusCounts(q, now),
+    inboxFacets(),
+    inboxReadState(now),
+  ])
+
+  const ids = items.map((r) => r.id)
+  const orderIds = [...new Set(items.map((r) => r.orderId).filter((id): id is string => !!id))]
+  const [responseGroups, orders] = await Promise.all([
+    ids.length > 0
+      ? prisma.reviewResponse.groupBy({ by: ['reviewId', 'status'], where: { reviewId: { in: ids } }, _count: { _all: true } })
+      : Promise.resolve([] as { reviewId: string; status: string; _count: { _all: number } }[]),
+    orderIds.length > 0
+      ? prisma.order.findMany({ where: { id: { in: orderIds } }, select: { id: true, channelOrderId: true } })
+      : Promise.resolve([] as { id: string; channelOrderId: string }[]),
+  ])
+  const responses = new Map<string, { sent: number; draft: number }>()
+  for (const g of responseGroups) {
+    const entry = responses.get(g.reviewId) ?? { sent: 0, draft: 0 }
+    if (g.status === 'SENT') entry.sent += g._count._all
+    else if (g.status === 'DRAFT') entry.draft += g._count._all
+    responses.set(g.reviewId, entry)
+  }
+  const orderById = new Map(orders.map((o) => [o.id, o]))
+
+  const rows: InboxRow[] = items.map((r) => {
+    const status = r.triageStatus ?? 'NEW'
+    const order = r.orderId ? orderById.get(r.orderId) : undefined
+    return {
+      id: r.id,
+      postedAt: r.postedAt.toISOString(),
+      channel: r.channel,
+      market: r.marketplace,
+      kind: reviewKindOf(r.channel, r.ingestSource),
+      rating: r.rating,
+      snippet: snippet(r.title ? `${r.title} — ${r.body}` : r.body),
+      english: r.bodyEnglish ? snippet(r.bodyEnglish) : null,
+      language: r.language,
+      buyer: r.authorName,
+      product: r.product
+        ? { id: r.product.id, name: r.product.name, sku: r.product.sku, variant: r.product.parentId ? variantWords(r.product.variantAttributes) : null }
+        : null,
+      order: order ? { id: order.id, label: order.channelOrderId } : null,
+      mood: r.sentiment?.label ?? null,
+      themes: r.sentiment?.categories ?? [],
+      status,
+      assignee: r.assignee,
+      dueAt: isReviewOpen(r.triageStatus) ? reviewDueAt(r.postedAt).toISOString() : null,
+      overdue: isReviewOverdue({ status: r.triageStatus, postedAt: r.postedAt }, now),
+      imported: isImportedSource(r.ingestSource),
+      responses: responses.get(r.id) ?? { sent: 0, draft: 0 },
+    }
+  })
+
+  return { rows, total, page: q.page, pageSize: q.pageSize, tabCounts, statusCounts, facets, readState }
+}
+
+/** Each tab counts what it would show with every other filter kept. */
+async function inboxTabCounts(q: InboxQuery, now: Date): Promise<InboxPage['tabCounts']> {
+  const groups = await prisma.review.groupBy({ by: ['channel'], where: inboxWhere(q, now, { kind: true }), _count: { _all: true } })
+  const counts = { all: 0, product: 0, seller: 0 }
+  for (const g of groups) {
+    counts.all += g._count._all
+    counts[reviewKindOf(g.channel)] += g._count._all
+  }
+  return counts
+}
+
+/** Each tile counts what it would show with every other filter kept. A row never triaged counts as New. */
+async function inboxStatusCounts(q: InboxQuery, now: Date): Promise<InboxPage['statusCounts']> {
+  const base = inboxWhere(q, now, { status: true })
+  const overdueQuery: InboxQuery = { ...q, statuses: ['OVERDUE'] }
+  const [groups, overdue] = await Promise.all([
+    prisma.review.groupBy({ by: ['triageStatus'], where: base, _count: { _all: true } }),
+    prisma.review.count({ where: inboxWhere(overdueQuery, now) }),
+  ])
+  const counts = { NEW: 0, IN_PROGRESS: 0, RESPONDED: 0, RESOLVED: 0, IGNORED: 0, OVERDUE: overdue }
+  for (const g of groups) {
+    const key = (g.triageStatus ?? 'NEW') as keyof typeof counts
+    if (key in counts && key !== 'OVERDUE') counts[key] += g._count._all
+  }
+  return counts
+}
+
+async function inboxFacets(): Promise<InboxPage['facets']> {
+  const [owners, families] = await Promise.all([
+    prisma.review.groupBy({ by: ['assignee'], where: visibleReviewWhere({ assignee: { not: null } }), _count: { _all: true } }),
+    prisma.productFamily.findMany({ select: { id: true, label: true }, orderBy: { label: 'asc' } }),
+  ])
+  return {
+    owners: owners.map((o) => o.assignee).filter((a): a is string => !!a).sort((a, b) => a.localeCompare(b)),
+    themes: [...REVIEW_CATEGORIES],
+    families,
+  }
+}
+
+/**
+ * Which channels Nexus reads reviews from, and whether that reading works — in words, never a setting's name. Today
+ * only eBay feedback is read live (GetFeedback); other channels arrive by file import. Each eBay account is one row.
+ */
+export async function inboxReadState(now: Date = new Date()): Promise<InboxReadState[]> {
+  const [connections, latest] = await Promise.all([
+    prisma.channelConnection.findMany({
+      where: { channelType: 'EBAY' },
+      select: { marketplace: true, isActive: true, refreshTokenExpiresAt: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.review.aggregate({ where: visibleReviewWhere({ channel: 'EBAY', ingestSource: 'EBAY_API' }), _max: { ingestedAt: true } }),
+  ])
+  const since = latest._max.ingestedAt?.toISOString() ?? null
+  const liveRead = process.env.NEXUS_REVIEW_INGEST_MODE === 'live' && process.env.NEXUS_EBAY_REAL_API === 'true'
+  return connections.map((c) => {
+    // A connection problem has a Reconnect; reading that is not switched on does not.
+    let reason: string | null = null
+    let reconnect = false
+    if (!c.isActive) {
+      reason = 'eBay is not connected.'
+      reconnect = true
+    } else if (c.refreshTokenExpiresAt && c.refreshTokenExpiresAt.getTime() < now.getTime()) {
+      reason = `The eBay sign-in expired on ${c.refreshTokenExpiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}.`
+      reconnect = true
+    } else if (!liveRead) {
+      reason = 'Nexus does not read eBay feedback yet. Import a file to see it here.'
+    }
+    return {
+      channel: 'EBAY',
+      market: c.marketplace ?? null,
+      ok: reason == null,
+      since,
+      reason,
+      reconnectHref: reconnect ? '/settings/channels/ebay' : null,
+    }
+  })
+}
+
+// ── Bulk ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** POST /api/reviews/inbox/bulk (the request is validated by `validateInboxBulk`). */
+export async function runInboxBulk(
+  request: InboxBulkRequest,
+  actor: string,
+  now: Date = new Date(),
+): Promise<{ changed: number; skipped: { id: string; reason: string }[] }> {
+  const found = await prisma.review.findMany({
+    where: visibleReviewWhere({ id: { in: request.ids } }),
+    select: {
+      id: true, channel: true, marketplace: true, postedAt: true, ingestSource: true,
+      assignee: true, triageStatus: true, triageTags: true,
+    },
+  })
+  const replyGroups = request.action === 'draft' && found.length > 0
+    ? await prisma.reviewResponse.groupBy({ by: ['reviewId', 'status'], where: { reviewId: { in: found.map((r) => r.id) } }, _count: { _all: true } })
+    : []
+  const rows: InboxBulkRow[] = found.map((r) => {
+    const mine = replyGroups.filter((g) => g.reviewId === r.id)
+    return {
+      ...r,
+      sentReplies: mine.filter((g) => g.status === 'SENT').reduce((n, g) => n + g._count._all, 0),
+      draftReplies: mine.filter((g) => g.status === 'DRAFT').reduce((n, g) => n + g._count._all, 0),
+    }
+  })
+  const plan = planInboxBulk(request, rows, now)
+  if (plan.apply.length === 0) return { changed: 0, skipped: plan.skipped }
+
+  if (request.action !== 'draft') {
+    const changed = await applyBulkTriage(request.action, request.value, plan.apply)
+    return { changed, skipped: plan.skipped }
+  }
+
+  // Draft with AI: one AI call per review (≤ 50), a few at a time; each becomes a DRAFT reply that waits for a person.
+  let changed = 0
+  const skipped = [...plan.skipped]
+  const queue = [...plan.apply]
+  const worker = async () => {
+    for (let row = queue.shift(); row; row = queue.shift()) {
+      try {
+        const out = await createReplyDraft(row.id, { actor })
+        if ('error' in out) skipped.push({ id: row.id, reason: 'Not found in this business’s Inbox.' })
+        else changed += 1
+      } catch (err) {
+        logger.warn('[review-inbox] bulk draft failed', { reviewId: row.id, error: err instanceof Error ? err.message : String(err) })
+        skipped.push({ id: row.id, reason: 'The draft could not be made. Try this review on its own.' })
+      }
+    }
+  }
+  await Promise.all([worker(), worker(), worker()])
+  return { changed, skipped }
+}

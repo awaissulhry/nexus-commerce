@@ -41,9 +41,12 @@ const CATEGORIES = [
   'OTHER',
 ] as const
 export type ReviewCategory = (typeof CATEGORIES)[number]
+/** The closed theme set, for filters and the person's edit (PATCH /reviews/:id/sentiment). */
+export const REVIEW_CATEGORIES: readonly ReviewCategory[] = CATEGORIES
 
 const LABELS = ['POSITIVE', 'NEUTRAL', 'NEGATIVE'] as const
 export type SentimentLabel = (typeof LABELS)[number]
+export const SENTIMENT_LABELS: readonly SentimentLabel[] = LABELS
 
 export interface ExtractInput {
   reviewId: string
@@ -71,6 +74,10 @@ export interface ExtractResult {
   cacheWriteTokens: number
   costUSD: number
   rawText: string // for debugging
+  /** Reviews Inbox — ISO 639-1 code of the review text ('de'), from the same call; null when unknown. */
+  language: string | null
+  /** The review in English, from the same call; null when it is English or unknown. */
+  english: string | null
 }
 
 // ── Pricing (matches AiUsageLog rate card) ─────────────────────────────
@@ -107,13 +114,16 @@ Schema:
   "label": "POSITIVE" | "NEUTRAL" | "NEGATIVE",
   "score": number in [-1, 1] (rounded to 3 decimals),
   "categories": string[] (subset of FIT_SIZING, DURABILITY, SHIPPING, VALUE, DESIGN, QUALITY, SAFETY, COMFORT, OTHER),
-  "topPhrases": string[] (1-3 verbatim quotes from the review, max 80 chars each, no paraphrasing)
+  "topPhrases": string[] (1-3 verbatim quotes from the review, max 80 chars each, no paraphrasing),
+  "language": string (ISO 639-1 code of the language the review is written in, e.g. "it", "de", "en"),
+  "english": string | null (the title and body translated into plain, faithful English; null when the review is already in English)
 }
 
 Rules:
 - "score" magnitude must roughly match the customer rating when present: 5 stars → ≥0.6, 1 star → ≤-0.6.
 - "categories" may contain multiple themes when the review touches several (e.g. ["FIT_SIZING", "QUALITY"]). Empty array is invalid — pick OTHER if nothing else fits.
 - "topPhrases" are EXACT verbatim quotes from the review body. NEVER paraphrase. Pick the most informative phrases. If review is <30 chars, return [review].
+- "english" is a translation, never a summary: keep every point the buyer makes. When there is a title, write it first on its own line.
 - Map Italian terminology:
   * casco / caschi → motorcycle helmet (SAFETY-critical category)
   * giacca / giubbotto → motorcycle jacket
@@ -219,6 +229,8 @@ function ruleBased(input: ExtractInput): ExtractResult {
     cacheWriteTokens: 0,
     costUSD: 0,
     rawText: 'fallback (no ANTHROPIC_API_KEY)',
+    language: null,
+    english: null,
   }
 }
 
@@ -227,6 +239,8 @@ function parseJson(text: string): {
   score?: number
   categories?: string[]
   topPhrases?: string[]
+  language?: string
+  english?: string | null
 } | null {
   // Strip markdown fences just in case.
   const cleaned = text
@@ -264,6 +278,20 @@ function normalizeCategories(arr: unknown): ReviewCategory[] {
     }
   }
   return out.length > 0 ? Array.from(new Set(out)) : ['OTHER']
+}
+
+/** An ISO 639-1 code in lower case, or null. */
+export function normalizeLanguage(v: unknown): string | null {
+  if (typeof v !== 'string') return null
+  const code = v.trim().toLowerCase()
+  return /^[a-z]{2}$/.test(code) ? code : null
+}
+
+/** The English text, or null when the review is English (or the model gave none). */
+export function normalizeEnglish(v: unknown, language: string | null): string | null {
+  if (language === 'en' || typeof v !== 'string') return null
+  const text = v.trim()
+  return text ? text.slice(0, 8000) : null
 }
 
 function normalizePhrases(arr: unknown): string[] {
@@ -315,7 +343,8 @@ export async function extractSentiment(input: ExtractInput): Promise<ExtractResu
       },
       body: JSON.stringify({
         model,
-        max_tokens: 400,
+        // Room for the English translation that rides on the same call (Reviews Inbox).
+        max_tokens: 1500,
         temperature: 0.1, // deterministic classification
         system: systemBlocks,
         messages: [{ role: 'user', content: userText }],
@@ -372,6 +401,67 @@ export async function extractSentiment(input: ExtractInput): Promise<ExtractResu
     cacheWriteTokens,
     costUSD,
     rawText,
+    language: normalizeLanguage(parsed.language),
+    english: normalizeEnglish(parsed.english, normalizeLanguage(parsed.language)),
+  }
+}
+
+/**
+ * Reviews Inbox — translate one review on demand (POST /reviews/:id/translate), for rows read before the sentiment
+ * call carried the translation. Same model and endpoint as the classifier. Null when the AI service is not set up or
+ * did not answer (the caller says so; nothing is stored).
+ */
+export async function translateReviewText(input: {
+  reviewId: string
+  title?: string | null
+  body: string
+}): Promise<{ language: string | null; english: string | null } | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return null
+  const model = process.env.NEXUS_REVIEW_SENTIMENT_MODEL ?? DEFAULT_MODEL
+  const system =
+    'You translate customer reviews for an online seller. Output STRICT JSON only: ' +
+    '{"language": ISO 639-1 code of the review\'s language, "english": the title and body in plain, faithful English ' +
+    '(a translation, never a summary; the title first on its own line when there is one), or null when the review is already in English}. ' +
+    'No markdown fences. No prose.'
+  const userText = [input.title ? `Title: ${input.title}` : null, `Body: ${input.body}`].filter(Boolean).join('\n')
+  try {
+    const res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': ANTHROPIC_VERSION },
+      body: JSON.stringify({ model, max_tokens: 1500, temperature: 0, system, messages: [{ role: 'user', content: userText }] }),
+    })
+    if (!res.ok) {
+      logger.warn('[sentiment] translate: Anthropic API error', { status: res.status })
+      return null
+    }
+    const response = (await res.json()) as AnthropicResponse
+    const rawText = (response.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('')
+    const parsed = parseJson(rawText)
+    if (!parsed) return null
+    const language = normalizeLanguage(parsed.language)
+    const inputTokens = response.usage?.input_tokens ?? 0
+    const outputTokens = response.usage?.output_tokens ?? 0
+    await prisma.aiUsageLog
+      .create({
+        data: {
+          provider: 'anthropic',
+          model: response.model ?? model,
+          feature: 'review-translate',
+          entityType: 'Review',
+          entityId: input.reviewId,
+          inputTokens,
+          outputTokens,
+          costUSD: priceCents({ model: response.model ?? model, inputTokens, outputTokens, cacheHitTokens: 0, cacheWriteTokens: 0 }),
+        },
+      })
+      .catch(() => {
+        /* AiUsageLog write must not fail the translation */
+      })
+    return { language, english: normalizeEnglish(parsed.english, language) }
+  } catch (err) {
+    logger.warn('[sentiment] translate failed', { error: err instanceof Error ? err.message : String(err) })
+    return null
   }
 }
 
@@ -381,7 +471,23 @@ export async function extractSentiment(input: ExtractInput): Promise<ExtractResu
  * improved). Also writes an AiUsageLog row for spend tracking.
  */
 export async function persistSentiment(result: ExtractResult): Promise<void> {
-  await prisma.reviewSentiment.upsert({
+  // Reviews Inbox — a person's mood/themes (editedAt set) win over a later AI re-read: only the telemetry is refreshed.
+  const edited = await prisma.reviewSentiment.findUnique({ where: { reviewId: result.reviewId }, select: { editedAt: true } })
+  if (edited?.editedAt) {
+    await prisma.reviewSentiment.update({
+      where: { reviewId: result.reviewId },
+      data: {
+        topPhrases: result.topPhrases,
+        model: result.model,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        cacheHitTokens: result.cacheHitTokens,
+        cacheWriteTokens: result.cacheWriteTokens,
+        costUSD: result.costUSD,
+        extractedAt: new Date(),
+      },
+    })
+  } else await prisma.reviewSentiment.upsert({
     where: { reviewId: result.reviewId },
     create: {
       reviewId: result.reviewId,

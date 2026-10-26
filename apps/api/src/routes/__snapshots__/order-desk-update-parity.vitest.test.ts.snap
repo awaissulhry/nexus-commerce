@@ -189,6 +189,10 @@ exports[`07 O7 — order, customer and review writes: the routes answer exactly 
     "ingestedAt": "<made>",
     "rawPayload": null,
     "ingestSource": null,
+    "orderId": null,
+    "language": null,
+    "bodyEnglish": null,
+    "importBatchId": null,
     "triageStatus": "IN_PROGRESS",
     "assignee": "Ops",
     "triageTags": [
@@ -225,6 +229,10 @@ exports[`07 O7 — order, customer and review writes: the routes answer exactly 
     "ingestedAt": "<made>",
     "rawPayload": null,
     "ingestSource": null,
+    "orderId": null,
+    "language": null,
+    "bodyEnglish": null,
+    "importBatchId": null,
     "triageStatus": "IN_PROGRESS",
     "assignee": null,
     "triageTags": [
