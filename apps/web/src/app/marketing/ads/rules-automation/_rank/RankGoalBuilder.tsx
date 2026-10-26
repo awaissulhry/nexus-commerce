@@ -26,6 +26,8 @@ import { ArmPreview, type RankTargetLite } from '../dayparting/ArmPreview'
 import { ScheduleEvents } from '../dayparting/ScheduleEvents'
 import { releaseHoldLine, type ReleasePreview } from '../dayparting/scheduleHealth'
 import { parseWriteProjections, writesExplained, type WriteProjection } from './writeProjection'
+import { CONTROL_READING, CONTROL_UNREAD, controlForPlan, enabledToSend, type PlanControl } from './planControl'
+import { campaignInScope } from '../_shared/campaignPicks'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components'
 
@@ -63,6 +65,9 @@ const STEPS = [
 const HISTORY_STEP = { id: 'history', label: 'Change history' }
 // G3 — like history, only meaningful once the schedule exists: an event attaches to a saved group.
 const EVENTS_STEP = { id: 'events', label: 'Event overrides' }
+// 6a — a plan holds Sponsored Products campaigns only: every write of the rank engine is a Sponsored Products write, and
+// the API leaves any other campaign out of a save. The picker offers these only, as the Placement rule's does.
+const PLAN_AD_PRODUCTS = ['SP'] as const
 
 export function RankGoalBuilder() {
   const router = useRouter()
@@ -88,6 +93,9 @@ export function RankGoalBuilder() {
   const addCampaigns = (cs: SchedCampaign[]) => setSelCampaigns((cur) => { const have = new Set(cur.map((x) => x.id)); return [...cur, ...cs.filter((c) => !have.has(c.id))] })
   const removeCampaign = (id: string) => setSelCampaigns((cur) => cur.filter((c) => c.id !== id))
   const clearCampaigns = () => setSelCampaigns([])
+  // 6a — campaigns a save left out (not Sponsored Products) leave the picks too, so the picker lists what the plan holds
+  // and its warning has nothing left to say about them.
+  const dropLeftOut = useCallback((ids: string[]) => setSelCampaigns((cur) => cur.filter((c) => !ids.includes(c.id))), [])
 
   // Phase 5 — portfolio scope. Binding the schedule to a portfolio auto-includes that portfolio's
   // campaigns (and the backend re-unions the portfolio's current campaigns on every save, so ones
@@ -121,7 +129,7 @@ export function RankGoalBuilder() {
   const applyPortfolioScope = (pid: string) => {
     setPortfolioScope(pid)
     if (!pid) return
-    const inPf = allCamps.filter((c) => c.portfolioId === pid)
+    const inPf = allCamps.filter((c) => c.portfolioId === pid && campaignInScope(c, { adProducts: PLAN_AD_PRODUCTS }))
     if (inPf.length) addCampaigns(inPf)
   }
 
@@ -149,6 +157,15 @@ export function RankGoalBuilder() {
     router.replace(`/marketing/ads/rules-automation/builder/dayparting-schedule?${next.toString()}`, { scroll: false })
   }, [router, sp])
 
+  // RGD.7 — the Manual/Automate Control section. 🔴 On edit it opens on what the plan IS, read by the loader
+  // below, never on a default: every save sends `enabled`, so a Manual default switched a running plan off.
+  // `null` = not read yet, or the read failed — neither radio is picked, and the builder cannot save. A radio the person
+  // picks while the read is out is kept. `controlRead` is the plan's state as read (then as the last save left it): an
+  // edit sends on/off only when Control differs from it (enabledToSend).
+  const [control, setControl] = useState<PlanControl | null>(isEdit ? null : 'manual')
+  const [controlRead, setControlRead] = useState<PlanControl | null>(null)
+  const [controlUnread, setControlUnread] = useState(false)
+
   useEffect(() => {
     if (!groupId && !scheduleId) return
     if (groupId && selfCreated.current === groupId) return // just created here — state is already current
@@ -161,7 +178,12 @@ export function RankGoalBuilder() {
         const byId = new Map(camps.map((c) => [String(c.id), c]))
         if (groupId) {
           const g = await fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/${groupId}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null)
-          if (!alive || !g?.id) return
+          if (!alive) return
+          const ctl = controlForPlan(g)
+          setControlRead(ctl)
+          setControl((cur) => cur ?? ctl)
+          setControlUnread(!ctl)
+          if (!g?.id) return
           if (g.name) setName(String(g.name))
           // E1 — the saved plan, read from the server. The live in-editor plan belongs to
           // RankPlanBody, which is off-limits, so the preview shows what is SAVED and says so.
@@ -171,16 +193,22 @@ export function RankGoalBuilder() {
           if (sel.length) setSelCampaigns(sel)
           if (g.portfolioId) setPortfolioScope(String(g.portfolioId))
         } else if (scheduleId) {
-          const sj = await fetch(`${getBackendUrl()}/api/advertising/schedules`, { cache: 'no-store' }).then((r) => r.json()).catch(() => [])
+          const sj = await fetch(`${getBackendUrl()}/api/advertising/schedules`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null)
           if (!alive) return
+          if (!sj) { setControlUnread(true); return }
           const scheds = (Array.isArray(sj) ? sj : Array.isArray(sj?.items) ? sj.items : []) as Array<Record<string, unknown>>
           const sched = scheds.find((s) => String(s.id) === scheduleId)
-          if (!sched) return
+          // An old link to a schedule that is gone: nothing runs, so the save is a create on Manual.
+          if (!sched) { setControl((cur) => cur ?? 'manual'); return }
+          const ctl = controlForPlan(sched)
+          setControlRead(ctl)
+          setControl((cur) => cur ?? ctl)
+          setControlUnread(!ctl)
           if (sched.name) setName(String(sched.name))
           const camp = byId.get(String(sched.campaignId))
           if (camp) setSelCampaigns([toCampaign(camp)])
         }
-      } catch { /* fail soft */ }
+      } catch { if (alive) setControlUnread(true) /* fail soft — but Control never claims it is still reading */ }
     })()
     return () => { alive = false }
   }, [groupId, scheduleId])
@@ -224,12 +252,19 @@ export function RankGoalBuilder() {
     return () => { alive = false }
   }, [groupId])
 
-  // RGD.7 — the builder owns ONE action + a Manual/Automate Control section, matching every other
-  // rule type. The rank plan body exposes save(enabled) via a ref + reports its status up.
-  const [control, setControl] = useState<'manual' | 'automate'>('manual')
+  // RGD.7 — the builder owns ONE action + the Control section above, matching every other rule type.
+  // The rank plan body exposes save(enabled) via a ref + reports its status up. No save while Control is unread.
   const [planStatus, setPlanStatus] = useState<RankPlanStatus>({ valid: false, busy: false, dirty: false, saved: false })
   const planRef = useRef<RankPlanHandle>(null)
-  const create = useCallback(async () => { await planRef.current?.save(control === 'automate') }, [control])
+  const create = useCallback(async () => {
+    if (!control) return
+    // 🔴 On/off goes out only when said: an edit of a saved plan whose Control is as read keeps the plan as it is. A
+    // ?scheduleId save creates a new group (RankPlanBody POSTs without a groupId), so it always says it.
+    const on = await planRef.current?.save(enabledToSend(!!groupId, control, controlRead))
+    // The state the save left (from the answer): Control shows it, and a second save does not resend it.
+    if (typeof on === 'boolean') { const c = on ? 'automate' : 'manual'; setControl(c); setControlRead(c) }
+  }, [control, controlRead, groupId])
+  const canSave = planStatus.valid && !planStatus.busy && !!control
 
   // 2c (review G.11) — about how many changes a day the SAVED plan sends to Amazon, from its painted hours. Like the arm
   // preview it reads the saved plan (the editor's live plan belongs to RankPlanBody), so it is re-read after each save.
@@ -275,7 +310,7 @@ export function RankGoalBuilder() {
           {toggle}
         </div>
         <div className="r">
-          <Button variant="primary" disabled={!planStatus.valid || planStatus.busy} onClick={() => void create()}>{createLabel}</Button>
+          <Button variant="primary" disabled={!canSave} onClick={() => void create()}>{createLabel}</Button>
         </div>
       </header>
 
@@ -313,9 +348,9 @@ export function RankGoalBuilder() {
                   searchable
                   searchPlaceholder="Search portfolios…"
                 />
-                {portfolioScope && <span className="hint">Covers every campaign in this portfolio — campaigns added to it later are included on save.</span>}
+                {portfolioScope && <span className="hint">Covers every Sponsored Products campaign in this portfolio — ones added to it later are included on save.</span>}
               </div>
-              <CampaignSection selected={selCampaigns} onAdd={addCampaign} onAddMany={addCampaigns} onRemove={removeCampaign} onClear={clearCampaigns} />
+              <CampaignSection selected={selCampaigns} onAdd={addCampaign} onAddMany={addCampaigns} onRemove={removeCampaign} onClear={clearCampaigns} adProducts={PLAN_AD_PRODUCTS} holder="hourlyPlan" />
               {conflicts.length > 0 && (
                 <div className="h10-rb-conflict" role="alert">
                   <AlertTriangle size={15} />
@@ -334,12 +369,14 @@ export function RankGoalBuilder() {
             <section id="rgd-plan" className="h10-rb-sec">
               <h2>Your hourly bid plan</h2>
               <p className="h10-rb-desc">Paint what each hour of the week holds: a placement %, the Min-bid floor or a base bid. The engine sets those fixed values each hour; it reads no rank or impression share.</p>
-              <RankPlanBody ref={planRef} campaigns={selCampaigns} name={name} groupId={groupId ?? undefined} portfolioId={portfolioScope || undefined} onStatus={setPlanStatus} onGroupCreated={onGroupCreated} />
+              <RankPlanBody ref={planRef} campaigns={selCampaigns} name={name} groupId={groupId ?? undefined} portfolioId={portfolioScope || undefined} onStatus={setPlanStatus} onGroupCreated={onGroupCreated} onLeftOut={dropLeftOut} />
             </section>
 
             <section id="rgd-control" className="h10-rb-sec">
               <h2>Control</h2>
-              <p className="h10-rb-desc">Choose how this hourly bid plan runs once you create it.</p>
+              <p className="h10-rb-desc">{isEdit
+                ? 'Whether this hourly bid plan runs. It opens on how the plan is set now; a change applies when you save.'
+                : 'Choose how this hourly bid plan runs once you create it.'}</p>
               <div className="h10-rb-card control">
                 <RadioCard
                   variant="row" className="h10-rb-ctrl"
@@ -356,6 +393,7 @@ export function RankGoalBuilder() {
                   description={<>Have the engine set each hour&apos;s values automatically, writing only when the hour&apos;s value changes (real Amazon pushes still honour each campaign&apos;s write-gate).</>}
                 />
               </div>
+              {!control && <p className="h10-rb-hint-note">{controlUnread ? CONTROL_UNREAD : CONTROL_READING}</p>}
               {/* E1/E3 — what arming this actually does, at the point the choice is made. */}
               <ArmPreview
                 groupId={groupId ?? undefined}
@@ -384,7 +422,7 @@ export function RankGoalBuilder() {
             <div className="h10-rb-foot">
               <Button variant="quiet" onClick={close}>Cancel</Button>
               <span className="grow" />
-              <Button variant="primary" disabled={!planStatus.valid || planStatus.busy} onClick={() => void create()}>{createLabel}</Button>
+              <Button variant="primary" disabled={!canSave} onClick={() => void create()}>{createLabel}</Button>
             </div>
           </div>
         </main>

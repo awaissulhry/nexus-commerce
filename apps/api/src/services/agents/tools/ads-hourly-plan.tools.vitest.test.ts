@@ -342,6 +342,50 @@ describe('set-hourly-bid-plan — members', () => {
     expect((await versions(made.id)).at(-1)).toMatchObject({ campaignCount: 2, changedBy: 'user:u-approver' })
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId }))).toMatchObject({ request: { tool: TOOL, args: { op: 'set-campaigns', planId: made.id, add: ['c-h2'], remove: ['c-h4'] } } })
   })
+
+  let portfolioPlan = ''
+  it('6a — a portfolio plan: a Sponsored Display campaign it still holds can be taken out, and every other save leaves it out too; its SP campaigns stay covered', async () => {
+    portfolioPlan = await inside(async () => {
+      await campaign('c-pf-sp', { portfolioId: 'PF-TEST-6A' })
+      await campaign('c-pf-sd', { portfolioId: 'PF-TEST-6A', type: 'SD', adProduct: 'SPONSORED_DISPLAY' })
+      const g = await db().rankScheduleGroup.create({ data: { name: 'Test portfolio plan', marketplace: 'IT', windows: [], defaultTargetKey: 'test-top', portfolioId: 'PF-TEST-6A', enabled: false } })
+      for (const id of ['c-pf-sd', 'c-pf-sp']) await db().adSchedule.create({ data: { campaignId: id, name: `Test ${id} — Test portfolio plan`, windows: [], defaultTargetKey: 'test-top', enabled: false, groupId: g.id } })
+      return g.id as string
+    })
+    const out = (await preview({ op: 'set-campaigns', planId: portfolioPlan, remove: ['c-pf-sd'] })).preview
+    expect(out).toMatchObject({ members: { from: 2, to: 1, removed: [{ campaignId: 'c-pf-sd' }] } })
+    expect((await preview({ op: 'set-campaigns', planId: portfolioPlan, remove: ['c-pf-sp'] })).error).toMatch(/covers a whole portfolio/)
+    // A save that only paints hours leaves it out as well (saveRankScheduleGroup does): the draft says so.
+    const paint = (await preview({ op: 'update-windows', planId: portfolioPlan, windows: WEEK })).preview
+    expect(paint.members).toMatchObject({ from: 2, to: 1, removed: [{ campaignId: 'c-pf-sd' }] })
+  })
+
+  it('6a — the summary says in words which campaigns leave the plan because they are not Sponsored Products', async () => {
+    const paint = (await preview({ op: 'update-windows', planId: portfolioPlan, windows: WEEK })).preview
+    expect(paint.summary).toContain('1 campaign that is not Sponsored Products leaves the plan: "Test c-pf-sd" (an hourly plan holds Sponsored Products campaigns only).')
+    // Taken out by name, it is a plain removal: no second sentence.
+    const out = (await preview({ op: 'set-campaigns', planId: portfolioPlan, remove: ['c-pf-sd'] })).preview
+    expect(out.summary).not.toContain('not Sponsored Products')
+  })
+
+  it('6a — a request that would leave a plan with no Sponsored Products campaign is refused, as the save refuses it', async () => {
+    const [mixed, displayOnly] = await inside(async () => {
+      const display = { type: 'SD', adProduct: 'SPONSORED_DISPLAY' }
+      await campaign('c-mx-sp')
+      await campaign('c-mx-sd', display)
+      await campaign('c-dp-sd', display)
+      const plan = async (name: string, ids: string[]) => {
+        const g = await db().rankScheduleGroup.create({ data: { name, marketplace: 'IT', windows: [], defaultTargetKey: 'test-top', enabled: false } })
+        for (const id of ids) await db().adSchedule.create({ data: { campaignId: id, name: `Test ${id} — ${name}`, windows: [], defaultTargetKey: 'test-top', enabled: false, groupId: g.id } })
+        return g.id as string
+      }
+      return [await plan('Test mixed plan', ['c-mx-sd', 'c-mx-sp']), await plan('Test display plan', ['c-dp-sd'])]
+    })
+    // Its last Sponsored Products campaign taken out while a Sponsored Display one stays.
+    expect((await preview({ op: 'set-campaigns', planId: mixed, remove: ['c-mx-sp'] })).error).toBe('That would leave "Test mixed plan" holding no campaign: delete it instead (op delete).')
+    // A plan of Sponsored Display campaigns only, its hours painted.
+    expect((await preview({ op: 'update-windows', planId: displayOnly, windows: WEEK })).error).toBe('That would leave "Test display plan" holding no campaign: delete it instead (op delete).')
+  })
 })
 
 describe('set-hourly-bid-plan — whose plan, and which campaigns', () => {

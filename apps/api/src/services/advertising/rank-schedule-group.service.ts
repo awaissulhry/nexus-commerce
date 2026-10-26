@@ -24,9 +24,10 @@ import { targetValuesOf, type TargetValues } from './hourly-plan-week.js'
 const LIGHT_FIELDS = ['name', 'windows', 'defaultTargetKey', 'targetOverrides', 'enabled', 'marketplace', 'portfolioId', 'timezone'] as const
 
 /**
- * PATCH /advertising/rank-schedule-groups/:id without `campaignIds`. `changedBy`: who the version row names (the route:
- * the `x-actor-id` header as `user:<id>`, else `user:anonymous`). W4-1 — `opts.changeSetId`: a Claude request's switch-off
- * names its approval on every write of the give-back (absent for the screen).
+ * PATCH /advertising/rank-schedule-groups/:id without `campaignIds`. `changedBy`: who the version row names (the route,
+ * CC-28: the signed-in user as `user:<id>` (personActor); the `x-actor-id` header only when there is none, else
+ * `user:anonymous`). W4-1 — `opts.changeSetId`: a Claude request's switch-off names its approval on every write of the
+ * give-back (absent for the screen).
  */
 export async function patchRankScheduleGroup(id: string, b: Record<string, unknown>, changedBy: string, opts: { changeSetId?: string | null } = {}): Promise<ServiceOutcome<unknown>> {
   const data: Record<string, unknown> = {}

@@ -29,7 +29,7 @@ import { Button, Input, Radio, Tag, ToolbarButton } from '@/design-system/primit
 import { searchOptions } from '@/lib/option-search'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Banner, Listbox } from '@/design-system/components'
-import { campaignInScope, pickScopeTags, picksOutsideNotice, picksOutsideScope } from '../_shared/campaignPicks'
+import { campaignInScope, pickScopeTags, picksOutsideNotice, picksOutsideScope, type PicksHolder } from '../_shared/campaignPicks'
 
 export interface SchedCampaign {
   id: string
@@ -75,7 +75,7 @@ const TABS = ['All Campaigns', 'Portfolios', 'Products']
 /** A product line and the campaigns it reaches — `/advertising/scope-options`'s own shape. */
 interface ProductLine { id: string; sku: string; name: string; variations: number; campaigns: string[] }
 
-export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear, defaultStatus = 'all', marketplace = null, adProducts }: {
+export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear, defaultStatus = 'all', marketplace = null, adProducts, holder = 'rule' }: {
   selected: SchedCampaign[]
   onAdd: (c: SchedCampaign) => void
   onAddMany: (cs: SchedCampaign[]) => void
@@ -92,6 +92,8 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
   marketplace?: string | null
   /** 4i (review 4.7) — the ad types the rule can act on: ['SP'] for a Placement rule. Absent = every type. */
   adProducts?: readonly string[]
+  /** 6a — who holds the picks, for the out-of-scope warning: a rule (its save is refused) or an hourly bid plan (its save leaves them out). */
+  holder?: PicksHolder
 }) {
   const [tab, setTab] = useState('All Campaigns')
   const [all, setAll] = useState<SchedCampaign[]>([])
@@ -143,9 +145,9 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
     if (loading) return null
     const live = new Map(all.map((c) => [c.id, c]))
     const o = picksOutsideScope(selected, live, scope)
-    const notice = picksOutsideNotice(o, scope)
+    const notice = picksOutsideNotice(o, scope, holder)
     return notice ? { ids: o.ids, notice } : null
-  }, [loading, all, selected, scope])
+  }, [loading, all, selected, scope, holder])
   // OS.5 — status filtering first, then the shared ranked matcher. The old test was
   // `c.name.toLowerCase().includes(q)`, which could not find "gale broad" inside
   // "GALE | IT | Broad | Brand"; searchOptions also orders the best matches to the top,

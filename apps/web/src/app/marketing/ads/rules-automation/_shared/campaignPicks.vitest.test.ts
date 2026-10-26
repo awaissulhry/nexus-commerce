@@ -2,6 +2,7 @@
  * 4i (review 4.8, 4.10, 4.7) — the rule builder's campaign picker follows the rule's market and ad type, and a draft
  * holding picks the rule can never act on says so and drops them in one click (the save then passes 4c's check).
  */
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { campaignInScope, pickScopeTags, picksOutsideNotice, picksOutsideScope, ruleMarketOptions, type PickFacts } from './campaignPicks'
 
@@ -101,5 +102,35 @@ describe('picksOutsideScope + picksOutsideNotice — "Remove N picks outside DE"
     expect(one.button).toBe('Remove 1 pick outside DE')
     expect(one.sentence).toContain('1 pick is elsewhere (1 in IT)')
     expect(picksOutsideNotice(picksOutsideScope(ALL, new Map(), { marketplace: 'all' }), { marketplace: 'all' })).toBeNull()
+  })
+})
+
+describe('picksOutsideNotice for an hourly bid plan — a save leaves them out (6a)', () => {
+  const scope = { adProducts: ['SP'] }
+  const o = picksOutsideScope([c('a', 'IT'), c('b', 'IT', 'SB'), c('d', 'IT', 'SD')], new Map(), scope)
+  it('the default is the rule wording, unchanged', () => {
+    expect(picksOutsideNotice(o, scope)).toEqual(picksOutsideNotice(o, scope, 'rule'))
+    expect(picksOutsideNotice(o, scope)!.sentence).toContain('Nexus will not save the rule until they are removed.')
+  })
+  it('🔴 says they are not Sponsored Products, a plan holds those only, and a save leaves them out', () => {
+    expect(picksOutsideNotice(o, scope, 'hourlyPlan')).toEqual({
+      title: 'A save leaves out 2 of the 3 picked campaigns',
+      sentence: 'An hourly bid plan holds Sponsored Products campaigns only, and 2 picks are not (1 Sponsored Brands, 1 Sponsored Display). A save leaves them out.',
+      button: 'Remove 2 picks that are not Sponsored Products',
+    })
+  })
+  it('one pick reads in the singular, and nothing claims the save is refused', () => {
+    const one = picksOutsideNotice(picksOutsideScope([c('a', 'IT'), c('b', 'IT', 'SB')], new Map(), scope), scope, 'hourlyPlan')!
+    expect(one.title).toBe('A save leaves out 1 of the 2 picked campaigns')
+    expect(one.sentence).toBe('An hourly bid plan holds Sponsored Products campaigns only, and 1 pick is not (1 Sponsored Brands). A save leaves it out.')
+    expect(one.sentence).not.toMatch(/will not save/)
+  })
+  it('the picker passes its holder, a rule unless told otherwise', () => {
+    const picker = readFileSync(new URL('../_schedule/CampaignSection.tsx', import.meta.url), 'utf8')
+    expect(picker).toContain("holder = 'rule'")
+    expect(picker).toContain('picksOutsideNotice(o, scope, holder)')
+    const rules = readFileSync(new URL('./RuleBuilder.tsx', import.meta.url), 'utf8')
+    expect(rules).toMatch(/<CampaignSection /)
+    expect(rules).not.toMatch(/<CampaignSection [^>]*\bholder=/)
   })
 })
