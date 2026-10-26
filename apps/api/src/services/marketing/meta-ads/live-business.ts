@@ -354,7 +354,7 @@ async function businessPortfolio(account: MetaChosenAccount) {
     missing,
     notes: [
       'verification: Meta\'s business verification of this portfolio (needed for some permissions, real lead downloads and more system users). Starting or finishing it is a person\'s step in Meta Business settings › Security centre: Meta documents no API for it (verification_status is read only).',
-      'settings: what an admin may change (name, time zone, primary Page, industry, the two-factor rule) — a change a person approves; turning the two-factor rule on can lock out people who have no two-factor (meta-business-people view people shows each one\'s status).',
+      'settings: what an admin may change (name, time zone, primary Page, industry, the two-factor rule) — the Owner\'s own step in Meta\'s screens (D1: set-meta-business-settings gives the steps and reads the result); turning the two-factor rule on can lock out people who have no two-factor (meta-business-people view people shows each one\'s status).',
       'Meta keeps the business\'s legal name, address, phone number and website in Business settings › Business info: no API field reads or changes them.',
       'createdBy / updatedBy: Nexus\'s own system user by name; anyone else is Meta\'s id (meta-business-people names the people). paymentAccountId needs the ad-spend permission (billing: meta-billing).',
       ...(shared ? ['Another business in Nexus uses an ad account of this portfolio: its people, partners and domains are not read through Nexus, and its other assets are ids only.'] : []),
@@ -515,7 +515,7 @@ async function peoplePeople(account: MetaChosenAccount, maxRows: number) {
       'twoFactor: whether the person has two-factor authentication on. Meta needs at least one admin (it refuses to remove the last one).',
       'What each person can reach on the chosen ad account: meta-account-access views people and by-person.',
       NO_EMAILS,
-      'Inviting, changing or removing people is an admin\'s change a person approves.',
+      'Inviting, changing or removing people is the Owner\'s own step in Meta\'s screens (D1): set-meta-business-people gives the steps and reads the result.',
     ],
   }
 }
@@ -530,7 +530,7 @@ async function peopleSystemUsers(account: MetaChosenAccount, maxRows: number) {
     notes: [
       'System users are the portfolio\'s machine logins (Nexus acts as one: nexusSystemUser). role Admin reaches every asset of the portfolio; Employee only what is assigned to it.',
       'Meta\'s limits follow the app\'s Ads Management Standard Access feature: Standard 1 system user and 1 admin system user, Advanced 10 system users and still 1 admin system user ("Admin System User limits will stay at 1 admin").',
-      'Meta documents a rename only (POST /{business_id}/system_users with system_user_id and name); it documents no role change and no delete (a person can invalidate a system user\'s tokens) — a person does those in Business settings › Users › System users.',
+      'Meta documents a rename only (POST /{business_id}/system_users with system_user_id and name); it documents no role change and no delete (a person can invalidate a system user\'s tokens) — a person does those in Business settings › Users › System users (D1: create-meta-system-user gives the steps for a new system user, a rename or a removal).',
       SYSTEM_USERS_NOTE,
       'Nexus never reads a system user\'s token here.',
     ],
@@ -545,7 +545,7 @@ async function peopleInvitations(account: MetaChosenAccount, maxRows: number) {
     notes: [
       'Invitations to join the portfolio that are not accepted yet, with the role and tasks each will give and when it expires (tasks null with sdkRead false: Meta did not answer them). view invitation-assets (invitationId) shows which assets each one gives.',
       'Nexus does not show whom an invitation went to (an e-mail address) or its invitation link (anyone holding it could accept it): a person sees them in Meta Business settings › Users › People.',
-      'Changing the role of an invitation or cancelling it is an admin\'s change a person approves.',
+      'Changing the role of an invitation or cancelling it is the Owner\'s own step in Meta\'s screens (D1): set-meta-business-people gives the steps and reads the result.',
     ],
   }
 }

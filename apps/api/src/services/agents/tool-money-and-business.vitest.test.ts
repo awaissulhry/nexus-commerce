@@ -237,6 +237,10 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-meta-conversation-labels': 'it reads the business\'s chosen Meta Page live from Meta, and no business here has Meta connected (meta-ads-messaging-changes.tools test)',
   'set-meta-message-templates': 'it reads the business\'s chosen Meta Page or WhatsApp account live from Meta, and no business here has Meta connected (meta-ads-messaging-changes.tools test)',
   'set-meta-messaging-setup': 'it reads the business\'s chosen Meta Page live from Meta, and no business here has Meta connected (meta-ads-messaging-changes.tools test)',
+  // Meta ads step 42: the business-admin guides read the chosen ad account's business portfolio live from Meta (D1: read only).
+  'set-meta-business-settings': 'it reads the business\'s chosen Meta business portfolio live from Meta, and no business here has Meta connected (meta-ads-business-admin.tools test)',
+  'set-meta-business-people': 'it reads the business\'s chosen Meta business portfolio live from Meta, and no business here has Meta connected (meta-ads-business-admin.tools test)',
+  'create-meta-system-user': 'it reads the business\'s chosen Meta business portfolio live from Meta, and no business here has Meta connected (meta-ads-business-admin.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -707,6 +711,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-meta-conversation-labels': () => ({ action: 'create', name: 'return asked' }),
   'set-meta-message-templates': () => ({ platform: 'messenger', action: 'create', name: 'order_update', language: 'it_IT', category: 'UTILITY', body: { text: 'Your order {{1}} ships today.', examples: ['1001'] } }),
   'set-meta-messaging-setup': () => ({ section: 'nlp', nlpEnabled: false }),
+  // Meta ads step 42: each refuses in words here (no business has Meta; meta-ads-business-admin.tools.vitest.test.ts runs them).
+  'set-meta-business-settings': () => ({ twoFactorType: 'admin_required' }),
+  'set-meta-business-people': () => ({ action: 'invite', role: 'employee' }),
+  'create-meta-system-user': () => ({ action: 'create', name: 'Shop A reports', role: 'employee' }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),

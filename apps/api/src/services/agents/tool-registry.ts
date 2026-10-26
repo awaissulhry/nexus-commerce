@@ -150,6 +150,8 @@ import { META_ADS_ACCESS_TOOLS } from './tools/meta-ads-access.tools.js'
 import { META_ADS_CATALOG_ITEMS_TOOLS } from './tools/meta-ads-catalog-items.tools.js'
 // Meta ads step 38 (2026-10-26): messages, inbox labels, templates, messaging setup (changes made as the chosen Page; WhatsApp).
 import { META_ADS_MESSAGING_CHANGE_TOOLS } from './tools/meta-ads-messaging-changes.tools.js'
+// Meta ads step 42 (2026-10-26): the business portfolio's admin acts as the Owner's steps in Meta's screens (D1: read only).
+import { META_ADS_BUSINESS_ADMIN_TOOLS } from './tools/meta-ads-business-admin.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -441,6 +443,9 @@ const ALL: AgentTool[] = [
   // Meta ads step 38 (2026-10-26): create-meta-message (gated as send-customer-message: a message cannot be recalled),
   // set-meta-conversation-labels, set-meta-message-templates, set-meta-messaging-setup.
   ...META_ADS_MESSAGING_CHANGE_TOOLS,
+  // Meta ads step 42 (2026-10-26): set-meta-business-settings, set-meta-business-people, create-meta-system-user — D1: the
+  // Owner makes these admin acts in Meta's screens; read only: the exact steps and the result read again, nothing sent to Meta.
+  ...META_ADS_BUSINESS_ADMIN_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

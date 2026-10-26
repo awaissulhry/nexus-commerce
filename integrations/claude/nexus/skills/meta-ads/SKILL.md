@@ -113,6 +113,7 @@ Show one table: what changes, from → to, how many, the SPENDS MONEY lines, wha
 | Inbox labels of the chosen Page: make one, put it on or take it off a person's Messenger conversation, delete one (explicit ask, `confirmDelete`) | `set-meta-conversation-labels` |
 | Message templates: Messenger utility templates of the chosen Page (make — or copy one of Meta's library templates —, edit, delete one by its id and name) and WhatsApp templates and template groups of the business's own WhatsApp account (make, delete, groups; Nexus does not edit a WhatsApp template yet); Meta reviews every template | `set-meta-message-templates` |
 | The messaging setup of the chosen Page: the Messenger or Instagram profile (Get Started, greeting, ice breakers, persistent menu, allowlisted domains, account linking, commands — set or clear), one person's own menu, personas, Built-In NLP (Meta cannot read it back), calling, welcome flows for messaging ads, a WhatsApp number linked to the Page (the code read on that phone is used once, kept encrypted with the request and shown nowhere) | `set-meta-messaging-setup` |
+| The business portfolio's admin acts — its name, primary Page, time zone, industry and two-factor rule; inviting a person, a person's role, removing a person, changing or cancelling an invitation; a new system user, a rename, a removal. Nexus sends NOTHING to Meta (D1): the Owner, with full control of the portfolio, does it in Meta Business settings; the tool reads Meta now and answers from → to, the exact steps, how to put it back and the warnings (the only admin, a stricter two-factor rule, Meta's system-user limits), and asked again (with `since` for an invitation or a new system user) it reads the result. Nexus takes no e-mail address: the Owner types it in Meta | `set-meta-business-settings`, `set-meta-business-people`, `create-meta-system-user` |
 
 ## 6. What Meta's API cannot do
 
@@ -127,7 +128,7 @@ Say so plainly, and that the person does it in Meta's screens:
 
 ## 7. Coming, not in Nexus yet
 
-Say "not in Nexus yet" and name the place in Meta: changing the items Shopify writes (change or remove them in Shopify: Nexus adds only its labels there), Meta's paid or opt-in messaging (Sponsored Messages, Marketing Messages, One-time Notifications) and sending WhatsApp messages themselves (Nexus makes the WhatsApp templates; editing one is WhatsApp Manager's for now), and the business portfolio's admin (inviting people, system users).
+Say "not in Nexus yet" and name the place in Meta: changing the items Shopify writes (change or remove them in Shopify: Nexus adds only its labels there), Meta's paid or opt-in messaging (Sponsored Messages, Marketing Messages, One-time Notifications) and sending WhatsApp messages themselves (Nexus makes the WhatsApp templates; editing one is WhatsApp Manager's for now).
 
 ## 8. After, and undo
 

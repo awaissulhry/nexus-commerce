@@ -34,7 +34,7 @@ const conn = (args: Record<string, unknown>) => str(args.connectionId)
 const rows = (args: Record<string, unknown>) => (typeof args.maxRows === 'number' ? args.maxRows : undefined)
 const maxRowsArg = z.number().int().min(1).max(500).optional().describe('at most this many rows per list (default 100; at most 500)')
 
-const READ_LINE = 'Read only: Meta is never changed here (a change is an admin\'s step a person approves). Only the business portfolio of the business\'s chosen ad account is read; a Page, Instagram account, ad account or portfolio another business in Nexus uses is its id and a flag only, and when another business in Nexus uses an ad account of this portfolio its people, partners and domains are not read (its other assets are ids only).'
+const READ_LINE = 'Read only: Meta is never changed here (the portfolio\'s admin acts are the Owner\'s own steps in Meta\'s screens: set-meta-business-settings, set-meta-business-people and create-meta-system-user show them). Only the business portfolio of the business\'s chosen ad account is read; a Page, Instagram account, ad account or portfolio another business in Nexus uses is its id and a flag only, and when another business in Nexus uses an ad account of this portfolio its people, partners and domains are not read (its other assets are ids only).'
 
 // ── meta-business ───────────────────────────────────────────────────────────────────────────────────────────────────
 
