@@ -34,7 +34,8 @@ const DENIED_RE = /401|403|unauthori|not authori|access|forbidden|brand/i
 function num(v: unknown): number | null { const n = Number(v); return Number.isFinite(n) ? n : null }
 function str(v: unknown): string | null { return typeof v === 'string' && v.trim() ? v.trim() : null }
 
-export interface InsightTopic { topic: string; mentionCount: number | null; ratingImpact: number | null; snippets: string[] }
+// `share`: Amazon's own "share of reviews" for the topic (percent), when the payload carries one (Reviews Insights, PR E).
+export interface InsightTopic { topic: string; mentionCount: number | null; ratingImpact: number | null; share?: number | null; snippets: string[] }
 export interface InsightTrendPoint { month: string; starRating: number | null; reviewCount: number | null }
 export interface ParsedInsight {
   positiveTopics: InsightTopic[]
@@ -101,6 +102,7 @@ function parseTopic(raw: unknown): InsightTopic | null {
     topic,
     mentionCount: num(r.mentionCount ?? r.mentions ?? r.reviewMentions ?? r.count ?? r.reviewCount),
     ratingImpact: num(r.ratingImpact ?? r.starRatingImpact ?? r.impact ?? r.starImpact),
+    share: num(r.share ?? r.reviewPercentage ?? r.percentageOfReviews ?? r.percentOfReviews ?? r.mentionPercentage),
     snippets,
   }
 }
