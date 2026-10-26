@@ -73,7 +73,7 @@ export interface ImportPreview {
   }[]
 }
 
-/** `POST /api/reviews/import/apply` → `result`. */
+/** `POST /reviews/import/apply` → `result`. */
 export interface ImportResult {
   batchId: string
   imported: number

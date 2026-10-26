@@ -693,7 +693,9 @@ function BulkDialog({ action, rows, canManage, owners, me, onClose, onDone }: Bu
   const apply = async () => {
     setBusy(true)
     setError(null)
-    const res = await reviewsSend<{ changed: number; skipped: { id: string; reason: string }[] }>('POST', '/reviews/inbox/bulk', bulkBody(rows.map((r) => r.id), action, picked))
+    const res = await reviewsSend<{ changed: number; skipped: { id: string; reason: string }[] }>(
+      'POST', '/reviews/inbox/bulk', bulkBody(rows.map((r) => r.id), action, picked), { idempotent: true, what: 'bulk change' },
+    )
     setBusy(false)
     if (!res.data) {
       setError(res.error)

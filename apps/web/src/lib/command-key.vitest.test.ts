@@ -259,6 +259,11 @@ describe('the API’s command receipts', () => {
       // S10 — "Delete the old SKU again" in Publish history after a SKU move.
       '/api/products/:id/studio-publication/:reviewId/delete-old-sku',
       '/api/products/bulk-save',
+      // Reviews Inbox (PR B) — Send reply, "Import N reviews" and a bulk change, through reviewsSend (_lib/reviewsFetch.ts),
+      // which keys them with sendCommand.
+      '/api/reviews/:id/reply/send',
+      '/api/reviews/import/apply',
+      '/api/reviews/inbox/bulk',
     ])
   })
 

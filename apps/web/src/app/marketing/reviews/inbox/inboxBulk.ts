@@ -1,6 +1,6 @@
 /**
  * Reviews › Inbox — the bulk bar (ticked rows swap the search for Assign · Tag · Set status · Draft with AI · Clear;
- * build spec ruling 7). `POST /api/reviews/inbox/bulk { ids ≤ 200, action, value }` → `{ changed, skipped }`.
+ * build spec ruling 7). `POST /reviews/inbox/bulk { ids ≤ 200, action, value }` → `{ changed, skipped }`.
  *
  * Every button says why when it cannot run (held, never a silent grey): no "Manage reviews", nothing ticked, too many.
  * An action that cannot apply to some ticked rows counts the rows it changes ("Set 9 to Resolved", 3 already are); when
