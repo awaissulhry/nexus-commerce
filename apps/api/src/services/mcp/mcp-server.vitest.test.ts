@@ -93,6 +93,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 35 (2026-10-25) — set-meta-catalog-items, set-meta-catalog-feed and set-meta-instagram-product-tags read Meta live and change it.
 // Meta ads step 38 (2026-10-26) — create-meta-message, set-meta-conversation-labels, set-meta-message-templates and set-meta-messaging-setup read Meta live and change it (a message reaches a person).
 // Meta ads step 42 (2026-10-26) — set-meta-business-settings, set-meta-business-people and create-meta-system-user read Meta live (D1: read only; the Owner makes the change in Meta's screens).
+// Meta ads step 43 (2026-10-26) — set-meta-business-assets, remove-meta-business-asset, create-meta-ad-account and create-meta-appeal read Meta live (D1: read only); create-meta-backed-account and set-meta-billing read Meta live and change it.
 
 const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -104,7 +105,7 @@ const OPEN_WORLD = [
   'channel-identity-check', 'check-google-ads-build', 'close-listing', 'confirm-shipment', 'copy-google-campaign',
   'copy-google-pmax', 'copy-meta-ads', 'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
   'create-google-app-campaign', 'create-google-campaign', 'create-google-demand-gen-campaign',
-  'create-google-display-campaign', 'create-google-experiment', 'create-google-rsa', 'create-meta-ad', 'create-meta-ad-set', 'create-meta-audience', 'create-meta-boost', 'create-meta-campaign', 'create-meta-catalog',
+  'create-google-display-campaign', 'create-google-experiment', 'create-google-rsa', 'create-meta-ad', 'create-meta-ad-account', 'create-meta-ad-set', 'create-meta-appeal', 'create-meta-audience', 'create-meta-backed-account', 'create-meta-boost', 'create-meta-campaign', 'create-meta-catalog',
   'create-meta-creative', 'create-meta-dataset', 'create-meta-experiment', 'create-meta-instagram-post', 'create-meta-instant-experience', 'create-meta-lead-form', 'create-meta-media', 'create-meta-message', 'create-meta-page-post', 'create-meta-reach-frequency', 'create-meta-system-user', 'create-negative-keyword',
   'decide-automation-suggestions',
   'delete-listing', 'dismiss-google-recommendations', 'dispose-return-items', 'ebay-categories',
@@ -124,7 +125,7 @@ const OPEN_WORLD = [
   'meta-targeting-search', 'meta-value-rules', 'meta-webhooks',
   'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
-  'remove-google-conversion-actions', 'remove-google-labels', 'remove-meta-ad-rule', 'remove-meta-ads-items', 'remove-meta-alert-subscription', 'remove-meta-audience', 'remove-meta-block-list', 'remove-meta-catalog-items', 'remove-meta-page-post', 'remove-meta-signal-items', 'reopen-listing',
+  'remove-google-conversion-actions', 'remove-google-labels', 'remove-meta-ad-rule', 'remove-meta-ads-items', 'remove-meta-alert-subscription', 'remove-meta-audience', 'remove-meta-block-list', 'remove-meta-business-asset', 'remove-meta-catalog-items', 'remove-meta-page-post', 'remove-meta-signal-items', 'reopen-listing',
   'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',
   'request-review',
   'resend-prices', 'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign',
@@ -149,7 +150,7 @@ const OPEN_WORLD = [
   'set-google-user-access', 'set-google-user-lists', 'set-google-value-rules', 'set-hourly-bid-plan', 'set-listing-price',
   'set-listing-stock',
   'set-master-prices', 'set-meta-account-controls', 'set-meta-account-settings', 'set-meta-ad', 'set-meta-ad-rule', 'set-meta-ad-set', 'set-meta-alert-subscription', 'set-meta-audience',
-  'set-meta-audience-members', 'set-meta-audience-sharing', 'set-meta-block-list', 'set-meta-brand-safety', 'set-meta-budget-schedule', 'set-meta-business-people', 'set-meta-business-settings', 'set-meta-campaign', 'set-meta-catalog',
+  'set-meta-audience-members', 'set-meta-audience-sharing', 'set-meta-billing', 'set-meta-block-list', 'set-meta-brand-safety', 'set-meta-budget-schedule', 'set-meta-business-assets', 'set-meta-business-people', 'set-meta-business-settings', 'set-meta-campaign', 'set-meta-catalog',
   'set-meta-catalog-access', 'set-meta-catalog-feed', 'set-meta-catalog-items', 'set-meta-comments', 'set-meta-connection', 'set-meta-conversation-labels', 'set-meta-creative', 'set-meta-custom-conversion', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-experiment',
   'set-meta-insights-features', 'set-meta-instagram-product-tags', 'set-meta-instant-experience', 'set-meta-labels', 'set-meta-lead-form', 'set-meta-message-templates', 'set-meta-messaging-setup', 'set-meta-page-post', 'set-meta-partner-access', 'set-meta-partnership-access', 'set-meta-placements', 'set-meta-product-set', 'set-meta-spend-cap', 'set-meta-status',
   'set-meta-targeting', 'set-meta-user-access', 'set-meta-value-rules', 'set-meta-webhooks', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',

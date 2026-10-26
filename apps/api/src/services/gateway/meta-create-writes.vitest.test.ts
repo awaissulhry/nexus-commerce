@@ -397,6 +397,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/gateway/meta-messaging-rules.ts': 9, // step 38: a label taken off a person, a label, a utility template, a WhatsApp template, a template group, profile properties, a person's own menu, a persona, a welcome flow (judges)
       'services/marketing/meta-ads/change-messaging.ts': 2, // step 38: a label taken off a person (its undo too) and a label's delete (explicit ask: confirmDelete)
       'services/marketing/meta-ads/change-messaging-setup.ts': 6, // step 38: one template (explicit ask; also a create's undo), a template group (explicit ask; also a create's undo), profile properties cleared, a person's own menu taken off, a persona (explicit ask; also a create's undo), a welcome flow (explicit ask; also a create's undo) (meta-messaging-writes test)
+      'services/gateway/meta-business-asset-rules.ts': 2, // step 43: an ad account taken out of an invoice group, an empty invoice group's delete (judges)
+      'services/marketing/meta-ads/change-business-assets.ts': 2, // step 43: set-meta-billing's remove-account (also an add's undo) and delete-group (explicit ask: confirmDelete; also a create's undo)
     })
     // A method named by a constant, a variable or a ternary: only where it is passed on.
     const computed = world.flatMap((f) => [...f.text.matchAll(/\bmethod:\s*([^,}\n]+)/g)].map((m) => m[1].trim())

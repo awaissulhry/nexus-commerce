@@ -998,6 +998,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-meta-conversation-labels': ['basis', 'plan', 'reach'],
   'set-meta-message-templates': ['basis', 'plan', 'reach'],
   'set-meta-messaging-setup': ['basis', 'plan', 'reach'],
+  // Meta step 43 (2026-10-26): a backed account for the chosen Page / Instagram account; the portfolio's invoice groups.
+  'create-meta-backed-account': ['basis', 'plan', 'reach'],
+  'set-meta-billing': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

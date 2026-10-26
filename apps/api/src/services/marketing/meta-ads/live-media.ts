@@ -852,7 +852,7 @@ async function instagramAccounts(account: MetaChosenAccount, maxRows: number) {
   } else parts.page = { notRead: NO_PAGE }
   return {
     chosenInstagramId: chosen, ...parts,
-    note: 'portfolio / portfolioBusiness: the Instagram accounts of the chosen account\'s business portfolio; pageConnected: the account connected to the chosen Page; pageBacked: the Page-backed (shadow) account Meta makes when none is connected. One another business in Nexus uses is its id only. To choose another, set-meta-connection asks for it (a person approves it).',
+    note: 'portfolio / portfolioBusiness: the Instagram accounts of the chosen account\'s business portfolio; pageConnected: the account connected to the chosen Page; pageBacked: the Page-backed (shadow) account Meta makes when none is connected (create-meta-backed-account kind instagram-for-page makes it). One another business in Nexus uses is its id only. To choose another, set-meta-connection asks for it (a person approves it).',
   }
 }
 

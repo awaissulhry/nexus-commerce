@@ -17,6 +17,8 @@ import type { MetaPostKind } from '../../gateway/meta-post-rules.js'
 import type { MetaAccessKind } from '../../gateway/meta-access-rules.js'
 // Step 38 — the messaging tools' kinds.
 import type { MetaMessagingKind } from '../../gateway/meta-messaging-rules.js'
+// Step 43 — create-meta-backed-account's and set-meta-billing's kinds.
+import type { MetaBusinessAssetKind } from '../../gateway/meta-business-asset-rules.js'
 import type { MetaChangeResult, MetaRequestVia, MetaWriteTarget } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
@@ -102,6 +104,8 @@ export interface MetaChangeRequest {
     | MetaAccessKind
     // Step 38 — the chosen Page as it messages, its messaging setup, labels, personas, templates; a WhatsApp account, a group.
     | MetaMessagingKind
+    // Step 43 — the chosen Page / Instagram account a backed account is made for; a credit line or invoice group of the portfolio.
+    | MetaBusinessAssetKind
   /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
