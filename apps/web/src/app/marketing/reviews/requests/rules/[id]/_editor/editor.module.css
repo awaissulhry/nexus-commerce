@@ -1,0 +1,155 @@
+/*
+ * Reviews › Requests › the rule editor — layout and domain content only. The DS Builder (page mode) draws the section
+ * strip, the columns and the save bar; this file spaces the fields inside a section and the live column's content.
+ * `--nds-*` tokens only; every row wraps.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.page > :first-child {
+  margin-bottom: var(--nds-space-4);
+}
+
+.actions,
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+@media (max-width: 599px) {
+  .actions {
+    width: 100%;
+  }
+}
+
+.onOff {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-base);
+}
+
+.fields,
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.stack {
+  gap: var(--nds-space-8);
+}
+
+.scopes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-10);
+}
+
+.money {
+  max-width: 160px;
+}
+
+.hint {
+  display: block;
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.toggleRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10);
+}
+
+.toggleText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+}
+
+.checkLabel {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.lint {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-font-size-sm);
+}
+
+.lintError,
+.errorText {
+  margin: 0;
+  color: var(--nds-danger-strong);
+  font-size: var(--nds-font-size-sm);
+}
+
+.lintWarn,
+.warnText {
+  margin: 0;
+  color: var(--nds-warning-strong);
+  font-size: var(--nds-font-size-sm);
+}
+
+.placeholder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ── The live column ────────────────────────────────────── */
+.aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.when {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.whenLine {
+  margin: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding-left: var(--nds-space-18);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+}

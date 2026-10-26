@@ -1,7 +1,7 @@
 'use client'
 
 // ORDERS REBUILD — universal command center.
-// Lenses: Grid · Customer · Financials · Returns · Reviews.
+// Lenses: Grid · Customer · Financials · Returns. (Review requests live in Reviews › Requests.)
 // Inline quick-edit, bulk action toolbar (3 priorities), URL-driven state.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -32,7 +32,6 @@ import { GlobalSnapshot } from '@/components/dashboard/GlobalSnapshot'
 import { CustomerLens } from './_lenses/CustomerLens'
 import { FinancialsLens } from './_lenses/FinancialsLens'
 import { ReturnsLens } from './_lenses/ReturnsLens'
-import { ReviewsLens } from './_lenses/ReviewsLens'
 import { GridLens } from './_lenses/GridLens'
 import { FilterBar } from './_components/FilterBar'
 import { LiveSyncBadge } from './_components/LiveSyncBadge'
@@ -47,7 +46,8 @@ import {
 import { useToast } from '@/components/ui/Toast'
 import { DateField } from '@/design-system/components/DateField'
 
-type Lens = 'grid' | 'customer' | 'financials' | 'returns' | 'reviews'
+type Lens = 'grid' | 'customer' | 'financials' | 'returns'
+const LENSES: readonly Lens[] = ['grid', 'customer', 'financials', 'returns']
 
 type Tag = { id: string; name: string; color: string | null }
 
@@ -114,7 +114,9 @@ export default function OrdersWorkspace() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const lens = (searchParams.get('lens') as Lens) || 'grid'
+  // An old `?lens=reviews` (the lens moved to Reviews › Requests) opens the grid.
+  const lensParam = searchParams.get('lens')
+  const lens: Lens = LENSES.includes(lensParam as Lens) ? (lensParam as Lens) : 'grid'
   const page = parseInt(searchParams.get('page') ?? '1', 10) || 1
   const pageSize = Math.min(500, parseInt(searchParams.get('pageSize') ?? '50', 10) || 50)
   const search = searchParams.get('search') ?? ''
@@ -629,7 +631,7 @@ export default function OrdersWorkspace() {
                 fetchSavedViews()
               }}
             />
-            <Link href="/orders/reviews/rules" className="h-8 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
+            <Link href="/marketing/reviews/requests/rules" className="h-8 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
               <Star size={12} /> {t('orders.action.reviewRules')}
             </Link>
             <a
@@ -813,7 +815,6 @@ export default function OrdersWorkspace() {
       {lens === 'customer' && <CustomerLens />}
       {lens === 'financials' && <FinancialsLens orders={orders} />}
       {lens === 'returns' && <ReturnsLens />}
-      {lens === 'reviews' && <ReviewsLens />}
 
       {shortcutsOpen && (
         <KeyboardShortcutsModal
@@ -1114,7 +1115,6 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
     { key: 'customer', label: t('orders.lens.customer'), icon: User },
     { key: 'financials', label: t('orders.lens.financials'), icon: DollarSign },
     { key: 'returns', label: t('orders.lens.returns'), icon: Undo2 },
-    { key: 'reviews', label: t('orders.lens.reviews'), icon: Star },
   ]
   // U.60 — was a single `inline-flex` row with no overflow handling, so
   // adding lenses pushed the row past its container and clipped silently.
@@ -1153,4 +1153,3 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
 
 // ReturnsLens extracted to ./_lenses/ReturnsLens.tsx (O.8c).
 
-// ReviewsLens extracted to ./_lenses/ReviewsLens.tsx (O.8d).
