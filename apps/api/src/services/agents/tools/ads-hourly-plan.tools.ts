@@ -544,6 +544,18 @@ async function decide(args: Record<string, unknown>, ctx: Pick<ToolContext, 'app
     const { resolvePortfolioCampaignIds } = await import('../../advertising/ads-create.service.js')
     after.members = [...new Set([...after.members, ...(await resolvePortfolioCampaignIds(after.portfolioId))])].sort()
   }
+  // 6a — and every save leaves out a member that is not Sponsored Products (one a plan held from before): the draft drops
+  // it too, it is taken out like a removed campaign (its give-back included), and the summary names it.
+  const notSpLeaving: string[] = []
+  if (after && op !== 'rename' && op !== 'switch') {
+    notSpLeaving.push(...after.members.filter((id) => facts.get(id)?.notSp))
+    if (notSpLeaving.length) {
+      after.members = after.members.filter((id) => !notSpLeaving.includes(id))
+      for (const id of notSpLeaving) if (before?.members.includes(id) && !removed.includes(id)) removed.push(id)
+      // The save refuses a plan it would leave with no campaign (NoSponsoredProductsError): so does the request.
+      if (!after.members.length) return refuse(`That would leave "${before?.name ?? after.name}" holding no campaign: delete it instead (op delete).`)
+    }
+  }
 
   // What comes back at Amazon now: a switch-off or a delete gives back on every member; a save takes out what it removes,
   // and a plan saved switched off holds none of its members (saveRankScheduleGroup → rank-release.service.ts).
@@ -647,7 +659,10 @@ async function decide(args: Record<string, unknown>, ctx: Pick<ToolContext, 'app
     ? `At Amazon now: the bids the plan floored on ${plural(restoreIds.size, 'campaign')} come back (${plural(bidLines.length, 'bid')}, queued for Amazon through its write gate${release?.waitWhy ? `; ${release.waitWhy}` : ''}). Placement percentages stay as last set. The rest is Nexus only${later}.`
     : `${nexusOnly}${later}.${gateWords}`
   const code = planStepUp(raises, op === 'switch' && after?.enabled ? 'switches an hourly bid plan on' : release?.restore || mayGiveBack ? 'gives back bids an hourly bid plan floored' : 'changes an hourly bid plan in a way that adds spend', !!(release?.restore || mayGiveBack))
-  const effect = effectOf(op, { before, after, name, added, removed, release, releaseWords, valueLines, weekBefore, weekAfter, engine, a }) + addsSpendWords(raises, 'stepUp' in code, raises.length)
+  const notSpWords = notSpLeaving.length
+    ? ` ${plural(notSpLeaving.length, 'campaign')} that ${notSpLeaving.length === 1 ? 'is' : 'are'} not Sponsored Products leave${notSpLeaving.length === 1 ? 's' : ''} the plan: ${quoted(notSpLeaving.map((id) => facts.get(id)?.name ?? id))} (an hourly plan holds Sponsored Products campaigns only).`
+    : ''
+  const effect = effectOf(op, { before, after, name, added, removed, release, releaseWords, valueLines, weekBefore, weekAfter, engine, a }) + notSpWords + addsSpendWords(raises, 'stepUp' in code, raises.length)
 
   // What the person approves: the plan as it stood, the plan after, the targets' values it holds, whose plans it changes.
   // Not what a give-back lifts: the engine floors and lifts bids at every Min-bid hour, so that would go stale by the hour

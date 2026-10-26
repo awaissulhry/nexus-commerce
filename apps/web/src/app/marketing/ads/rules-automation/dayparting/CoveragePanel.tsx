@@ -16,12 +16,14 @@
  * is deliberately controlled, just not by a schedule. Folding it into the gap would manufacture
  * work that doesn't exist.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Button, Checkbox } from '@/design-system/primitives'
 import { ChevronDown, ShieldCheck, Plus } from 'lucide-react'
 
 import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components'
+import { addRefusedMessage, campaignsAddedMessage, readSaveAnswer } from '../_rank/planSave'
+import { coverageShare } from './coverageShare'
 
 interface OpenCampaign { id: string; name: string; marketplace: string | null; status: string; spendCents: number; impressions: number; clicks: number }
 interface Coverage {
@@ -29,6 +31,8 @@ interface Coverage {
   total: number; covered: number; governed: number; uncovered: number
   /** 7b — campaigns whose schedule is switched off (not control), and archived ones (nothing can change them). Absent on an older API. */
   switchedOff?: number; archived?: number
+  /** 6a — Sponsored Brands/Display campaigns no plan holds: an hourly plan holds Sponsored Products only, so they are not a gap. Absent on an older API. */
+  notForHourlyPlans?: number
   windowDays: number; uncoveredSpendCents: number; truncated: number; items: OpenCampaign[]
 }
 export interface ScheduleOption { value: string; label: string }
@@ -100,11 +104,6 @@ export function CoveragePanel({ market, schedules, onChanged, days = 30 }: {
     return () => { alive = false }
   }, [])
 
-  const pct = useMemo(() => {
-    if (!data || data.total === 0) return 0
-    return Math.round(((data.covered + data.governed) / data.total) * 100)
-  }, [data])
-
   const toggle = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
   const addToSchedule = async () => {
@@ -117,9 +116,12 @@ export function CoveragePanel({ market, schedules, onChanged, days = 30 }: {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ campaignIds: [...sel] }),
       })
-      if (!r.ok) { setMsg('Could not add those campaigns — please retry.'); return }
+      // 6a — what was really added (Sponsored Products only) and what was left out, from the answer; the selection's
+      // size only when an older API does not say. A refusal says why in the API's words.
+      const a = readSaveAnswer(await r.json().catch(() => null))
+      if (!r.ok) { setMsg(addRefusedMessage(a)); return }
       const name = schedules.find((s) => s.value === target)?.label ?? 'the schedule'
-      setMsg(`Added ${sel.size} campaign${sel.size === 1 ? '' : 's'} to ${name}. They inherit its windows and baseline, and its enabled state — so a paused schedule still runs nothing.`)
+      setMsg(campaignsAddedMessage({ added: a.added ?? sel.size, scheduleName: name, leftOut: a.leftOut }))
       setSel(new Set())
       await load()
       onChanged?.()
@@ -130,17 +132,21 @@ export function CoveragePanel({ market, schedules, onChanged, days = 30 }: {
   if (loading && !data) return null
   if (!data || data.total === 0) return null
 
-  const clean = data.uncovered === 0
+  // 6a — counted over the campaigns a plan can hold (Brands/Display no plan holds are named apart); clean = no
+  // Sponsored Products campaign uncovered.
+  const share = coverageShare(data)
+  const clean = share.clean
 
   return (
     <div className={`h10-cov ${clean ? 'ok' : ''}`}>
       <Button variant="quiet" inline className="h10-cov-hd" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
         {clean ? <ShieldCheck size={15} className="ic" /> : <span className="dot" aria-hidden="true" />}
         <span className="ttl">
-          <b>{data.covered + data.governed} of {data.total}</b> campaigns are under rank control
+          <b>{share.held} of {share.total}</b> campaigns are under rank control
           {data.governed > 0 && <span className="sub"> · {data.governed} by a family plan</span>}
           {(data.switchedOff ?? 0) > 0 && <span className="sub"> · {data.switchedOff} with a schedule switched off</span>}
           {(data.archived ?? 0) > 0 && <span className="sub"> · {data.archived} archived</span>}
+          {share.notForHourlyPlans > 0 && <span className="sub"> · {share.notForHourlyPlans} Brands/Display, not for hourly plans</span>}
         </span>
         {!clean && (
           <span className="gap">
@@ -154,8 +160,8 @@ export function CoveragePanel({ market, schedules, onChanged, days = 30 }: {
             : <span className="h10-cov-int bad" title="Structural faults — expand for detail">{integrity.issues} structural issue{integrity.issues === 1 ? '' : 's'}</span>
         )}
         <span className="grow" />
-        <span className="bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
-        <span className="pct">{pct}%</span>
+        <span className="bar" aria-hidden="true"><span style={{ width: `${share.pct}%` }} /></span>
+        <span className="pct">{share.pct}%</span>
         {!clean && <ChevronDown size={15} className={`chev ${open ? 'on' : ''}`} />}
       </Button>
 
@@ -172,8 +178,9 @@ export function CoveragePanel({ market, schedules, onChanged, days = 30 }: {
       {open && !clean && (
         <div className="h10-cov-b">
           <div className="h10-cov-note">
-            Ranked by spend over the last {data.windowDays} days. These campaigns hold no rank schedule and
-            no family plan — they run on whatever bid was last set.
+            Ranked by spend over the last {data.windowDays} days. These Sponsored Products campaigns hold no rank schedule
+            and no family plan — they run on whatever bid was last set. Sponsored Brands and Display campaigns are not
+            listed: a schedule changes Sponsored Products only.
           </div>
 
           <div className="h10-cov-list">

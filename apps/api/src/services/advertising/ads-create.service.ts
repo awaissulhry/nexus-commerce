@@ -2106,6 +2106,10 @@ export interface RankScheduleGroupInput {
   id?: string; name: string; marketplace?: string | null; timezone?: string
   windows: unknown[]; defaultTargetKey?: string | null
   targetOverrides?: Record<string, unknown> // per-campaign map: { [campaignId]: { targetKey: {...} } }
+  /**
+   * C — on or off, said in so many words. Absent (not a boolean): an existing plan keeps what it is, a new one is born
+   * switched off — a save that repaints hours or members never switches a plan.
+   */
   enabled?: boolean; campaignIds: string[]; portfolioId?: string | null; userId?: string
   /**
    * W4-1 — a Claude request (set-hourly-bid-plan): its approval names every write of the give-back, and its save always
@@ -2115,16 +2119,41 @@ export interface RankScheduleGroupInput {
   changeSetId?: string | null
   alwaysVersion?: boolean
 }
+/**
+ * 6a — a campaign an hourly plan may hold: Sponsored Products, or one whose ad product neither column states. Exported for
+ * the coverage list, which offers only the campaigns a plan can take in.
+ */
+export const isSpOrUnknown = (c: { adProduct?: string | null; type?: string | null }): boolean => {
+  const product = adProductOf(c)
+  return product == null || product === SPONSORED_PRODUCTS
+}
+
+/**
+ * 6a — a save that would leave a plan with no Sponsored Products campaign, every campaign it names (or its portfolio
+ * holds) being Sponsored Brands or Display: refused before anything is written. A person's route answers it 400.
+ */
+export class NoSponsoredProductsError extends Error {
+  readonly code = 'NO_SPONSORED_PRODUCTS'
+  constructor(leftOut: number, existing: boolean) {
+    super(`${leftOut === 1 ? 'The campaign is not Sponsored Products' : `None of the ${leftOut} campaigns is Sponsored Products`}: an hourly plan holds those only. ${existing ? 'Delete the plan instead.' : 'Choose Sponsored Products campaigns.'}`)
+  }
+}
+export const isNoSponsoredProducts = (e: unknown): e is NoSponsoredProductsError => (e as { code?: unknown } | null)?.code === 'NO_SPONSORED_PRODUCTS'
+
 // A portfolio-scoped group covers the whole portfolio: its current, non-archived campaigns. Resolved
 // by Campaign.portfolioId (the Amazon external id the /portfolios list also keys on).
+// 6a — its Sponsored Products campaigns only: a Sponsored Brands or Display campaign is not taken in (adProductOf: the
+// v1 column, else the legacy `type`): the engine's writes are SP writes.
 export async function resolvePortfolioCampaignIds(portfolioId: string): Promise<string[]> {
   if (!portfolioId) return []
-  const rows = await prisma.campaign.findMany({ where: { portfolioId, status: { not: 'ARCHIVED' } }, select: { id: true } })
-  return rows.map((r) => r.id)
+  const rows = await prisma.campaign.findMany({ where: { portfolioId, status: { not: 'ARCHIVED' } }, select: { id: true, adProduct: true, type: true } })
+  return rows.filter(isSpOrUnknown).map((r) => r.id)
 }
 
 // 2a — `release`: what a save gave back (campaigns removed from the group, or every member of a group saved switched off).
-export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Promise<{ id: string; members: number; moved: number; release?: ReleaseReport }> {
+// 6a — `notSponsoredProducts`: the campaigns the save left out because they are not Sponsored Products.
+// C — `enabled`: whether the plan is on as it now stands (a save that did not say keeps what was stored).
+export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Promise<{ id: string; members: number; moved: number; enabled: boolean; release?: ReleaseReport; notSponsoredProducts?: Array<{ id: string; name: string }> }> {
   const name = (input.name || '').trim()
   if (!name) throw new Error('name is required')
   let campaignIds = [...new Set((input.campaignIds || []).filter(Boolean))]
@@ -2135,9 +2164,19 @@ export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Prom
     const pcamps = await resolvePortfolioCampaignIds(String(input.portfolioId))
     campaignIds = [...new Set([...campaignIds, ...pcamps])]
   }
+  // 6a — a plan holds Sponsored Products campaigns only: every write of the rank engine is an SP write, which the mutation
+  // layer refuses for a Sponsored Brands or Display campaign — after suppressCampaignBids has stamped its floor and saved
+  // bids. One named here (a stale screen, a plan saved before this) is left out, and its schedule row goes with the
+  // removed members below.
+  const rows = campaignIds.length ? await prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true, adProduct: true, type: true } }) : []
+  const notSp = rows.filter((c) => !isSpOrUnknown(c))
+  if (notSp.length) {
+    const out = new Set(notSp.map((c) => c.id))
+    campaignIds = campaignIds.filter((id) => !out.has(id))
+    logger.warn('[6a] hourly plan save left out campaigns that are not Sponsored Products', { id: input.id ?? null, name, count: notSp.length, campaignIds: notSp.slice(0, 10).map((c) => c.id) })
+  }
   const windows = Array.isArray(input.windows) ? input.windows : []
   const overrides = (input.targetOverrides ?? {}) as Record<string, unknown>
-  const enabled = input.enabled !== false
   const tz = input.timezone || 'Europe/Rome'
   // RDX/B1 — derive the group's market from its members when the caller doesn't state one.
   // The rank builder has never sent `marketplace`, so this column was null on every live row and
@@ -2151,7 +2190,6 @@ export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Prom
       if (distinct.length === 1) marketplace = distinct[0]
     } catch { /* best-effort — a failed derive must not block the save */ }
   }
-  const gdata = { name, marketplace, timezone: tz, windows: windows as never, defaultTargetKey: input.defaultTargetKey ?? null, targetOverrides: overrides as never, enabled, portfolioId: input.portfolioId ?? null }
   // DPS.1 — belt-and-braces against duplicate groups. The client now sends the id it minted on the
   // first save, but a stale bundle (or a double-submit) can still arrive with no id. Since the block
   // below REBINDS each campaign's schedule to whichever group saved last, a blind create would strand
@@ -2170,12 +2208,21 @@ export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Prom
       logger.info('[DPS.1] adopted existing rank schedule group instead of creating a duplicate', { id: twin.id, name })
     }
   }
+  // 6a — left with no Sponsored Products campaign by the drop above: refused before anything is written (no group write,
+  // no member removed, nothing given back). A save that names no campaign and no portfolio is not this, and goes on.
+  if (notSp.length && !campaignIds.length) throw new NoSponsoredProductsError(notSp.length, !!targetId)
+  // C — on or off is said, or kept. A save that does not say `enabled` (a boolean) leaves it out of the write: an existing
+  // plan — an adopted twin too — keeps what it stores (never read here and written back, so a Pause landing meanwhile
+  // stands), and a new plan is born switched off, as Claude's and the playbook's are. Arming is always said in so many words.
+  const said = typeof input.enabled === 'boolean' ? { enabled: input.enabled } : {}
+  const gdata = { name, marketplace, timezone: tz, windows: windows as never, defaultTargetKey: input.defaultTargetKey ?? null, targetOverrides: overrides as never, portfolioId: input.portfolioId ?? null, ...said }
   const group = targetId
     ? await prisma.rankScheduleGroup.update({ where: { id: targetId }, data: gdata })
-    : await prisma.rankScheduleGroup.create({ data: { ...gdata, createdBy: input.userId ?? null } })
+    : await prisma.rankScheduleGroup.create({ data: { enabled: false, ...gdata, createdBy: input.userId ?? null } })
+  // What the plan holds now: its members, the give-back and the version row follow it.
+  const enabled = group.enabled
 
-  const camps = campaignIds.length ? await prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true } }) : []
-  const nameById = new Map(camps.map((c) => [c.id, c.name]))
+  const nameById = new Map(rows.map((c) => [c.id, c.name]))
 
   // Materialize: one AdSchedule per member campaign, bound to the group. Reuse any existing schedule
   // for the campaign (rebind to this group) so we never create a duplicate → one campaign, one row.
@@ -2232,16 +2279,30 @@ export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Prom
   } catch (e) { logger.warn('[HX.8] version snapshot failed', { id: group.id, error: (e as Error).message }) }
 
   logger.info('[Phase3] saveRankScheduleGroup', { id: group.id, name, members: campaignIds.length, moved })
-  return { id: group.id, members: campaignIds.length, moved, ...(release ? { release } : {}) }
+  return { id: group.id, members: campaignIds.length, moved, enabled, ...(release ? { release } : {}), ...(notSp.length ? { notSponsoredProducts: notSp.map((c) => ({ id: c.id, name: c.name })) } : {}) }
 }
 
 // 2a (review 3.2) — deleting a group gives back what its schedules floored on every member, after the rows are gone.
 // W4-1 — `changeSetId`: a Claude request's delete names its approval on every write of the give-back.
-export async function deleteRankScheduleGroup(id: string, opts: { changeSetId?: string | null } = {}): Promise<{ ok: boolean; removedSchedules: number; release: ReleaseReport }> {
+// CC-28 — `actor`: a person's delete (the route) leaves one audit row naming them, as a save leaves a version row.
+export async function deleteRankScheduleGroup(id: string, opts: { changeSetId?: string | null; actor?: string | null } = {}): Promise<{ ok: boolean; removedSchedules: number; release: ReleaseReport }> {
+  const was = opts.actor ? await prisma.rankScheduleGroup.findUnique({ where: { id }, select: { name: true, enabled: true } }) : null
   const members = await readScheduleMembers({ groupId: id })
   const del = await prisma.adSchedule.deleteMany({ where: { groupId: id } })
   await prisma.rankScheduleGroup.delete({ where: { id } }).catch(() => {})
   const release = await releaseScheduleMembers(members, 'its rank schedule was deleted', { changeSetId: opts.changeSetId ?? null })
+  // A delete of a plan that was not there deleted nothing: no row.
+  if (opts.actor && was) {
+    await prisma.advertisingActionLog.create({
+      data: {
+        userId: opts.actor,
+        actionType: 'rank_schedule_group_delete', entityType: 'RANK_SCHEDULE_GROUP', entityId: id,
+        payloadBefore: { name: was.name, enabled: was.enabled, campaigns: members.map((m) => m.campaignId) },
+        payloadAfter: { deleted: true, restored: release.restored, deferred: release.deferred, failed: release.failed },
+        amazonResponseStatus: 'SUCCESS',
+      },
+    }).catch(() => { /* audit must never fail the delete it describes */ })
+  }
   logger.info('[Phase3] deleteRankScheduleGroup', { id, removedSchedules: del.count, restored: release.restored, deferred: release.deferred })
   return { ok: true, removedSchedules: del.count, release }
 }
