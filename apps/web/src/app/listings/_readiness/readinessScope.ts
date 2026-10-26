@@ -3,8 +3,9 @@
  *
  * The menu's store pages (`/listings/amazon`, `/listings/amazon/it`, `/listings/ebay`, `/listings/ebay/de`,
  * `/listings/shopify`, `/listings/etsy`) are the Listings page with a lock: the path names the store (and the market), no filter, saved
- * view or link moves the page away from it, and every link the page writes keeps it. The old store pages are
- * `/listings/legacy/<store>[/<market>]`; Etsy never had one (2026-10-25: its page is new).
+ * view or link moves the page away from it, and every link the page writes keeps it. The old pages
+ * (`/listings/legacy[/<store>[/<market>]]`) are gone since the legacy exit (step 8 of
+ * docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md); their addresses send here (`next.config.js`).
  *
  * Pure — no React, no fetch — so every mapping is a test.
  */
@@ -36,7 +37,7 @@ const STORE_PATH = /^\/listings\/(amazon|ebay|shopify|etsy)(?:\/([^/]+))?$/
 
 /**
  * The Listings page a path shows: a lock, `null` for `/listings` itself, `undefined` for any other page
- * (`/listings/legacy…`, `/listings/publish-status`, `/listings/ebay/campaigns`, …). The path is the business-free one
+ * (`/listings/publish-status`, `/listings/ebay/campaigns`, …). The path is the business-free one
  * (`@/lib/workspaces/navigation`'s `usePathname`).
  */
 export function readinessLockFromPath(pathname: string): ReadinessLock | null | undefined {
@@ -61,15 +62,6 @@ export function readinessPath(lock: ReadinessLock | null): string {
   if (!lock) return '/listings'
   const store = `/listings/${lock.channel.toLowerCase()}`
   return lock.marketplace ? `${store}/${lock.marketplace.toLowerCase()}` : store
-}
-
-/**
- * The old page for the same store and market (`/listings/legacy/amazon/it`); the old Listings page with no lock. Etsy
- * never had an old page of its own: the old Listings page, Etsy only.
- */
-export function legacyPath(lock: ReadinessLock | null): string {
-  if (lock?.channel === 'ETSY') return `/listings/legacy?${new URLSearchParams({ channel: 'ETSY' })}`
-  return lock ? readinessPath(lock).replace(/^\/listings/, '/listings/legacy') : '/listings/legacy'
 }
 
 /** The header: the page's title and the crumbs above it, each a link (the title is the page itself). */
@@ -98,38 +90,37 @@ export function marketCount(destinations: ReadonlyArray<{ channel: string; marke
   return new Set(destinations.filter((d) => d.channel !== 'SHARED').map((d) => `${d.channel}:${d.marketplace}`)).size
 }
 
-/**
- * What Amazon's defect report says is suppressed (`GET /api/listings/amazon/overview` → `activeSuppressions`, at most
- * 50 rows): how many listings, and how many on each market, in menu order. A listing with two defects is one listing.
- */
-export function suppressedListings(rows: ReadonlyArray<{ listingId: string; listing: { marketplace: string } }>, limit = 50): {
-  count: number
-  /** The answer was cut at `limit` rows: there may be more. */
-  more: boolean
-  markets: Array<{ code: string; count: number }>
-} {
-  const byMarket = new Map<string, Set<string>>()
-  for (const row of rows) {
-    const code = row.listing.marketplace.toUpperCase()
-    byMarket.set(code, (byMarket.get(code) ?? new Set()).add(row.listingId))
-  }
-  const markets = [...byMarket].map(([code, ids]) => ({ code, count: ids.size })).sort((a, b) => b.count - a.count || a.code.localeCompare(b.code))
-  return { count: new Set(rows.map((r) => r.listingId)).size, more: rows.length >= limit, markets }
+/* ── Links to a listing's live state: this page ──────────────────────────────────────────────────────────────────── */
+
+/** The store page of a channel (`/listings/amazon`); `null` for a channel with no page of its own (WooCommerce, …). */
+function storePagePath(channel: string): string | null {
+  const store = channel.toUpperCase() as ReadinessStore
+  return (Object.keys(STORE_WORDS) as ReadinessStore[]).includes(store) ? readinessPath({ channel: store, marketplace: '' }) : null
 }
 
-/* ── Links to a listing's live state: the old pages ─────────────────────────────────────────────────────────────── */
-
-/** A SKU's listings on one store, live status and all: the old Listings page, every market of that store. */
-export const legacySkuHref = (channel: string, sku: string): string =>
-  `/listings/legacy?${new URLSearchParams({ channel: channel.toUpperCase(), search: sku })}`
+/**
+ * A SKU's listings: this page searched for the SKU, on its store's page (every market of it) when the store has one,
+ * else on `/listings`. The search finds the family that holds the SKU.
+ */
+export function listingsSkuHref(channel: string | null, sku: string): string {
+  return `${(channel && storePagePath(channel)) || '/listings'}?${new URLSearchParams({ q: sku })}`
+}
 
 /**
- * One store's listings on one market, live status and all. Amazon and eBay have an old page per market
- * (`/listings/legacy/amazon/it`); every other store opens the old Listings page with the same filters. The market is
- * the listing's own code (the old pages read listings, not the readiness index), so `GB` stays `GB`.
+ * One store's listings on one market. Amazon and eBay have a page per market (`/listings/amazon/it`; a listing's `GB`
+ * is the page's `uk`); Shopify and Etsy have one page; any other store is `/listings` with the same filters. A market
+ * that is not two letters (`DEFAULT`, `GLOBAL`) opens the store's page.
  */
-export function legacyMarketHref(channel: string, marketplace: string): string {
-  const store = channel.toLowerCase()
-  if ((store === 'amazon' || store === 'ebay') && marketplace) return `/listings/legacy/${store}/${encodeURIComponent(marketplace.toLowerCase())}`
-  return `/listings/legacy?${new URLSearchParams({ channel, marketplace })}`
+export function listingsMarketHref(channel: string, marketplace: string): string {
+  const store = channel.toUpperCase()
+  const page = storePagePath(store)
+  const market = marketOfSegment(marketplace)
+  if (page && (store === 'AMAZON' || store === 'EBAY') && market) return readinessPath({ channel: store, marketplace: market })
+  if (page) return page
+  const params = new URLSearchParams({ channel: store })
+  if (marketplace) params.set('marketplace', market ?? marketplace.toUpperCase())
+  return `/listings?${params}`
 }
+
+/** One listing: this page with the Listing window open on it (`?listing=<id>`, step 5). */
+export const listingWindowHref = (listingId: string): string => `/listings?${new URLSearchParams({ listing: listingId })}`

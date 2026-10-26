@@ -41,6 +41,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
+import { listingWindowHref } from '@/app/listings/_readiness/readinessScope'
 
 type AppRouter = ReturnType<typeof useRouterType>
 
@@ -633,8 +634,8 @@ export default function CommandPalette() {
   // U.2 — remote listing search. When the operator types 3+ chars in
   // the palette (and the palette is open), fire `/api/listings?search=`
   // with a 200ms debounce; matches show as a `Listings` group at the
-  // top of results. Click → /listings?search={SKU} which loads the
-  // master view filtered to that SKU. Cheap by design: pageSize=8 cap,
+  // top of results. Click → that listing's window on the Listings page
+  // (/listings?listing={id}). Cheap by design: pageSize=8 cap,
   // request cancelled by the next keystroke via AbortController.
   type ListingHit = {
     id: string
@@ -943,12 +944,9 @@ export default function CommandPalette() {
           icon: Boxes,
           group: 'Listings' as const,
           keywords: `${l.channel} ${l.marketplace} ${l.listingStatus}${priceLabel}`,
-          // Search lands the operator on the master view filtered to
-          // that exact SKU. The legacy Listings grid (/listings/legacy
-          // since 2026-10-24) shows it as the only row; if multiple
-          // channels carry the SKU each appears so the operator can pick
-          // the right marketplace.
-          href: `/listings/legacy?search=${encodeURIComponent(l.product.sku)}`,
+          // Each hit is one listing (one channel and market): it opens
+          // that listing's window on the Listings page.
+          href: listingWindowHref(l.id),
         } as Command
       }),
     [remoteListings],

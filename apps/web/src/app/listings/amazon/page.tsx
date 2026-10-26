@@ -1,6 +1,5 @@
 // /listings/amazon — the Listings page for every Amazon market
 // (2026-10-24, docs/listings/LISTINGS-STORE-PAGES-2026-10-24.md).
-// The old Amazon page is /listings/legacy/amazon.
 import type { Metadata } from 'next'
 import { ReadinessPage } from '../_readiness/ReadinessPage'
 import { scopeTitle, type ReadinessLock } from '../_readiness/readinessScope'

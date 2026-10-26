@@ -34,7 +34,7 @@ import {
   useState,
 } from 'react'
 import Link from '@/lib/workspaces/Link'
-import { legacySkuHref } from '@/app/listings/_readiness/readinessScope'
+import { listingsSkuHref } from '@/app/listings/_readiness/readinessScope'
 import { productStudioPath } from '@/lib/products/studio-path'
 import { browserWorkspaceId, workspaceHref } from '@/lib/workspaces/paths'
 import {
@@ -1495,7 +1495,7 @@ const ProductCell = memo(function ProductCell({
               return (
                 <Link
                   key={ch}
-                  href={legacySkuHref(ch, p.sku)}
+                  href={listingsSkuHref(ch, p.sku)}
                   title={t('products.grid.channelTooltip', { channel: ch, live: c.live, draft: c.draft, error: c.error, total: c.total })}
                   className={`inline-flex items-center gap-1 px-1.5 h-5 text-xs font-mono border rounded ${tone} hover:opacity-80`}
                 >

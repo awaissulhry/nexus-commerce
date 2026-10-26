@@ -30,7 +30,7 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import FailingListingsModal from './FailingListingsModal'
-import { legacyMarketHref } from '@/app/listings/_readiness/readinessScope'
+import { listingsMarketHref } from '@/app/listings/_readiness/readinessScope'
 
 type Bucket = 'green' | 'amber' | 'red' | 'gray' | 'other'
 
@@ -188,12 +188,12 @@ function Cell({
     return 'green'
   })()
 
-  // Healthy cells go straight to that market's listings, live sync state and all (`legacyMarketHref`).
+  // Healthy cells go straight to that market's listings, live sync state and all (`listingsMarketHref`).
   // Anything with red/amber/gray opens the inline drilldown modal —
   // operator stays in /sync-logs context, picks a listing, and
   // deep-links to the right channel tab from there.
   const isHealthy = dominant === 'green'
-  const greenHref = legacyMarketHref(cell.channel, cell.marketplace)
+  const greenHref = listingsMarketHref(cell.channel, cell.marketplace)
 
   const title = `${Object.entries(cell.byStatus)
     .map(([k, v]) => `${k}: ${v}`)

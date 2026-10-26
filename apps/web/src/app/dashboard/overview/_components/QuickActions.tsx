@@ -53,7 +53,7 @@ export default function QuickActions({
     },
     {
       label: t('overview.quickActions.resolveErrors'),
-      href: '/listings/legacy?listingStatus=ERROR',
+      href: '/listings?flags=error',
       icon: AlertTriangle,
       badge: alerts.failedListings,
       badgeTone: 'rose',

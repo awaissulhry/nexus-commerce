@@ -84,7 +84,8 @@ describe('every caller that puts an absolute element before a legacy <Input>', (
   }
 
   it('finds them (control: the Customers toolbar is one)', () => {
-    expect(sites.length).toBeGreaterThanOrEqual(13)
+    // 13 until 2026-10-26, when the old Listings page (one of them) was removed with the legacy exit.
+    expect(sites.length).toBeGreaterThanOrEqual(12)
     expect(sites.some((s) => s.at.startsWith('app/customers/CustomersWorkspace.tsx:'))).toBe(true)
   })
 

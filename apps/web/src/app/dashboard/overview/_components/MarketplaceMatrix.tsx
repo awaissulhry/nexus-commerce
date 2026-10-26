@@ -1,7 +1,7 @@
 'use client'
 
 import Link from '@/lib/workspaces/Link'
-import { legacyMarketHref } from '@/app/listings/_readiness/readinessScope'
+import { listingsMarketHref } from '@/app/listings/_readiness/readinessScope'
 import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
@@ -22,9 +22,9 @@ import {
  *     isn't the primary) — small below
  *
  * Marketplaces with no signal across any channel are filtered out
- * so the table stays tight. Cells link to /listings/<channel>?
- * marketplace=<m> so the operator drills into the slice that
- * caught their eye. The "∅" sentinel marketplace from orders that
+ * so the table stays tight. Cells link to that store's Listings page
+ * for the market (`/listings/amazon/it`, `listingsMarketHref`) so the
+ * operator drills into the slice that caught their eye. The "∅" sentinel marketplace from orders that
  * lacked a marketplace tag is hidden — those rows muddy the
  * matrix without operational value.
  */
@@ -209,7 +209,7 @@ export default function MarketplaceMatrix({
                       >
                         {slot && !empty ? (
                           <Link
-                            href={legacyMarketHref(c, m)}
+                            href={listingsMarketHref(c, m)}
                             className="block hover:text-blue-600 group"
                           >
                             {cellContent}

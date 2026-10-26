@@ -91,21 +91,21 @@ describe('resolveActiveNav', () => {
     expect(resolveActiveNav(FLEET, '/docs')).toBeNull()
   })
 
-  it('Listings: the new page lights Listings, the old page lights its own Legacy row (2026-10-24)', () => {
+  it('Listings: the page lights Listings; the menu has no Legacy row since the legacy exit (2026-10-26)', () => {
     const nav = buildAppNav({}, { amazon: true, ebay: true })
     expect(resolveActiveNav(nav, '/listings')).toEqual({ href: '/listings', depth: 1 })
-    expect(resolveActiveNav(nav, '/listings/legacy')).toEqual({ href: '/listings/legacy', depth: 2 })
     expect(resolveActiveNav(nav, '/listings/amazon/it')).toEqual({ href: '/listings/amazon/it', depth: 3 })
+    const listings = nav.find((item) => item.href === '/listings')
+    expect(listings?.children?.map((child) => child.label)).toEqual(['Amazon', 'eBay', 'Shopify', 'Etsy'])
   })
 
-  it('Listings: each store page lights its own row; a store’s old page lights Legacy listings (2026-10-24)', () => {
+  it('Listings: each store page lights its own row (2026-10-24)', () => {
     const nav = buildAppNav({}, { amazon: true, ebay: true })
     expect(resolveActiveNav(nav, '/listings/amazon')).toEqual({ href: '/listings/amazon', depth: 2 })
     expect(resolveActiveNav(nav, '/listings/ebay/de')).toEqual({ href: '/listings/ebay/de', depth: 3 })
     expect(resolveActiveNav(nav, '/listings/shopify')).toEqual({ href: '/listings/shopify', depth: 2 })
     // A market without its own row lights the store's.
     expect(resolveActiveNav(nav, '/listings/amazon/nl')).toEqual({ href: '/listings/amazon', depth: 2 })
-    expect(resolveActiveNav(nav, '/listings/legacy/amazon/it')).toEqual({ href: '/listings/legacy', depth: 2 })
   })
 })
 

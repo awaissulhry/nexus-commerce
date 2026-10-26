@@ -88,7 +88,7 @@ export default function AppShell({
   const pathname = usePathname() || ''
   const noChrome = NO_CHROME_PREFIXES.some((p) => pathname.startsWith(p))
   // `/products` exactly, and the Listings page with its store pages (`/listings`, `/listings/amazon`, `/listings/amazon/it`,
-  // … — `readinessLockFromPath`): the other Listings pages (`/listings/legacy…`, `/listings/ebay/gaps`, …) keep the app rail.
+  // … — `readinessLockFromPath`): the other Listings pages (`/listings/publish-status`, `/listings/ebay/gaps`, …) keep the app rail.
   const noRail =
     pathname === '/products' ||
     readinessLockFromPath(pathname) !== undefined ||

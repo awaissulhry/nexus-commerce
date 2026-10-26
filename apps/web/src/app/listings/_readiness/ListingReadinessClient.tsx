@@ -2,8 +2,9 @@
 
 /**
  * /listings — the Listings page: what is ready, what needs work, and where to fix it (rebuild 2026-10-23, layout A;
- * docs/listings/READINESS-REBUILD-2026-10-23.md §2). It took over the Listings menu entry on 2026-10-24; the old
- * page is `/listings/legacy` (docs/listings/LISTINGS-SWAP-2026-10-24.md).
+ * docs/listings/READINESS-REBUILD-2026-10-23.md §2). It took over the Listings menu entry on 2026-10-24
+ * (docs/listings/LISTINGS-SWAP-2026-10-24.md); the old page is gone since the legacy exit (step 8 of
+ * docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md), and its old address options are read here (`readinessQuery.ts`).
  *
  * The Products page's frame and parts, the same way round: header · tiles · Filters · one grid card (toolbar, the
  * server-side tree grid, the pager). One row per product family; a family folds open to a 10-row preview and the
@@ -22,8 +23,8 @@
  * The live layer (step 3 of docs/listings/LISTINGS-LIVE-LAYER-PLAN-2026-10-25.md, read only): what the channel shows,
  * as far as Nexus knows — each chip's mark, the "On the channel" column, the live tiles (Live · Errors · Suppressed ·
  * Out of sync) and the Channel state and Stock filters. All of it only when the answer carries live data
- * (`pageHasLive`); an older API, or a person without `listings.view`, sees the page as it was, the Amazon suppression
- * banner included.
+ * (`pageHasLive`); an older API, or a person without `listings.view`, sees the page as it was. The Amazon suppression
+ * banner the page showed then is gone with the old Amazon page it sent to (step 8): the Suppressed tile says it.
  *
  * Step 4: a store or market page's per-listing columns (Status · Price · Qty · Channel ID · Last push · Synced ·
  * Channel messages, `listingColumns.ts`), header clicks that sort on the server, a market page's column filters, and
@@ -34,7 +35,7 @@
  * grid stays mounted off stage meanwhile, so the header, the tiles and the saved views keep reading it.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Archive, ChevronDown, Download, History, Search, SlidersHorizontal } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Download, History, Search, SlidersHorizontal } from 'lucide-react'
 import { READINESS_DESTINATION_SORTS, READINESS_EXPORT_MAX_ROWS, type ReadinessDestination, type ReadinessFamiliesPage } from '@nexus/shared/listing-readiness'
 import type { GridFilterModel } from '@nexus/shared/products-grid'
 
@@ -43,7 +44,6 @@ import { WORKSPACES_ENABLED, browserWorkspaceId, workspaceHref } from '@/lib/wor
 import { getBackendUrl } from '@/lib/backend-url'
 import { useInvalidationChannel, type InvalidationEvent, type InvalidationType } from '@/lib/sync/invalidation-channel'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
-import { usePolledList } from '@/lib/sync/use-polled-list'
 import { streamsEnabled } from '@/lib/sync/dev-stream-gate'
 import { Button, Input, Pill, TokenChip } from '@/design-system/primitives'
 import { Banner, EmptyState, Menu, MetricStrip, ToastProvider, type MenuItemDef, type Metric } from '@/design-system/components'
@@ -144,7 +144,7 @@ import {
   withLiveTile,
   withStock,
 } from './liveFilters'
-import { legacyMarketHref, legacyPath, lockedKeys, marketCount, marketWord, readinessPath, scopeWords, storeWord, suppressedListings, type ReadinessLock } from './readinessScope'
+import { lockedKeys, marketCount, readinessPath, scopeWords, type ReadinessLock } from './readinessScope'
 // Live layer step 7: the Problems view.
 import type { ReadinessProblemRow, ReadinessProblemsPage } from '@nexus/shared/listing-readiness'
 import { SegmentedControl } from '@/design-system/primitives'
@@ -270,9 +270,6 @@ function ebayTools(lock: ReadinessLock): Array<{ id: string; label: string; href
     { id: 'gaps', label: 'Gap analysis', href: inBusiness(`/listings/ebay/gaps${lock.marketplace ? `?marketplace=${lock.marketplace}` : ''}`) },
   ]
 }
-
-/** `GET /api/listings/amazon/overview` — the part this page reads: the old Amazon page's suppression list. */
-interface AmazonSuppressions { activeSuppressions: Array<{ listingId: string; listing: { marketplace: string } }> }
 
 /* ── The page ───────────────────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -766,18 +763,6 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
   const translate = query ? translateScope(query) : null
   const translateHeld = !translate ? 'Loading…' : !translate.ok ? translate.reason : families && families.total === 0 ? 'No products match these filters.' : null
 
-  // ── Amazon: listings Amazon suppressed, from the old Amazon page — only while the answer has no live data (an older
-  //    API, no `listings.view`). With live data the Suppressed tile says it, and this 30-second call is not made. ──
-  const amazonUrl = lock?.channel === 'AMAZON' && top !== null && !liveShown
-    ? `/api/listings/amazon/overview${lock.marketplace ? `?marketplace=${lock.marketplace}` : ''}`
-    : null
-  const { data: amazon } = usePolledList<AmazonSuppressions>({
-    url: amazonUrl,
-    intervalMs: LIVE_INTERVAL_MS,
-    invalidationTypes: ['listing.updated', 'listing.created', 'listing.deleted'],
-  })
-  const suppressed = amazon ? suppressedListings(amazon.activeSuppressions) : null
-
   // ── Export ▾ (step 4): a plain download of the result in view, with the page's filters and order ──
   const exportItems = useMemo<MenuItemDef[]>(() => {
     if (!query) return []
@@ -856,13 +841,6 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
                 <History size={13} /> Publish history
               </Link>
             </Button>
-            {/* The old page keeps the jobs this one does not do (live status, prices, stock, bulk edits); a store
-                page's old page is that store's (`/listings/legacy/amazon/it`). */}
-            <Button asChild size="sm">
-              <Link href={legacyPath(lock)}>
-                <Archive size={13} /> {lock ? `Legacy ${storeWord(lock.channel)} listings` : 'Legacy listings'}
-              </Link>
-            </Button>
             <Menu
               align="right"
               label={<><Download size={13} aria-hidden /> Export <ChevronDown size={13} aria-hidden /></>}
@@ -885,35 +863,6 @@ function ListingReadinessInner({ lock }: { lock: ReadinessLock | null }) {
       {!query.parent && <MetricStrip metrics={metrics} className={styles.kpis} />}
       {/* The second group: what is on the channel. Its own strip, so the two units never share a row. */}
       {!query.parent && liveMetrics.length > 0 && <MetricStrip metrics={liveMetrics} className={styles.kpis} />}
-
-      {/* Without live data, readiness cannot see what Amazon suppressed; the old Amazon page lists it, one market at a time. */}
-      {lock?.channel === 'AMAZON' && !liveShown && suppressed && suppressed.count > 0 && (
-        <Banner
-          tone="danger"
-          className={styles.banner}
-          title={`Amazon reports ${suppressed.more ? 'at least ' : ''}${plural(suppressed.count, 'suppressed listing')}${lock.marketplace ? ` on ${words.title}` : ''}.`}
-          action={
-            lock.marketplace ? (
-              <Button asChild size="sm">
-                <Link href={legacyPath(lock)}>Fix them on the legacy Amazon page</Link>
-              </Button>
-            ) : undefined
-          }
-        >
-          Amazon hides a suppressed listing, so nobody can buy it.
-          {!lock.marketplace && (
-            <>
-              {' '}Fix them on the legacy Amazon page:{' '}
-              {suppressed.markets.map((m, i) => (
-                <span key={m.code}>
-                  {i > 0 && ' · '}
-                  <Link className={styles.bannerLink} href={legacyMarketHref('AMAZON', m.code)}>{marketWord(m.code)} ({m.count.toLocaleString('en')})</Link>
-                </span>
-              ))}
-            </>
-          )}
-        </Banner>
-      )}
 
       {(optionsError || languages.error) && (
         <Banner tone="warning" className={styles.banner}>

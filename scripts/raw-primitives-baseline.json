@@ -1,7 +1,7 @@
 {
   "note": "Raw DS-replaceable controls per file. This may only FALL. A file absent here is held at ZERO, so anything NEW must use the design system. See the script header.",
   "updatedAt": "2026-08-25",
-  "total": 3577,
+  "total": 3528,
   "files": {
     "apps/web/src/app/_shared/AppNavRail.tsx": 6,
     "apps/web/src/app/_shared/AppRail.tsx": 3,
@@ -194,8 +194,6 @@
     "apps/web/src/app/insights/sales/_components/SalesClient.tsx": 1,
     "apps/web/src/app/insights/scenarios/_components/ScenariosClient.tsx": 7,
     "apps/web/src/app/inventory/manage/ManageInventoryClient.tsx": 6,
-    "apps/web/src/app/listings/ListingsWorkspace.tsx": 46,
-    "apps/web/src/app/listings/amazon/AmazonListingsClient.tsx": 3,
     "apps/web/src/app/listings/ebay/campaigns/EbayCampaignsClient.tsx": 12,
     "apps/web/src/app/listings/ebay/gaps/EbayGapsClient.tsx": 6,
     "apps/web/src/app/listings/ebay/markdowns/EbayMarkdownsClient.tsx": 11,

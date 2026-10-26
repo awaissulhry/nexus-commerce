@@ -1,6 +1,5 @@
 // /listings/ebay — the Listings page for every eBay market
 // (2026-10-24, docs/listings/LISTINGS-STORE-PAGES-2026-10-24.md).
-// The old eBay page is /listings/legacy/ebay.
 import type { Metadata } from 'next'
 import { ReadinessPage } from '../_readiness/ReadinessPage'
 import { scopeTitle, type ReadinessLock } from '../_readiness/readinessScope'

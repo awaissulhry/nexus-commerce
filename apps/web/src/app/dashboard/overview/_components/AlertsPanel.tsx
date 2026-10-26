@@ -72,12 +72,10 @@ export default function AlertsPanel({
     items.push({
       label: t('overview.alerts.failedListings'),
       count: alerts.failedListings,
-      // C.4 — link to the master listings view filtered by status, not a
-      // hardcoded /listings/amazon. Failures can be on any channel
-      // and the master view shows them all with channel/marketplace
-      // chips ready to drill down further. Since 2026-10-24 that view is
-      // /listings/legacy: the new /listings page has no listing status.
-      href: '/listings/legacy?listingStatus=ERROR',
+      // C.4 — the Listings page filtered to listings in error, not a
+      // hardcoded /listings/amazon. Failures can be on any channel and
+      // the page shows them all with their store and market chips.
+      href: '/listings?flags=error',
       tone: 'rose',
       impact: t('overview.alerts.impact.failedListings'),
       actionLabel: t('overview.alerts.action.resolve'),
@@ -86,7 +84,8 @@ export default function AlertsPanel({
     items.push({
       label: t('overview.alerts.draftListings'),
       count: alerts.draftListings,
-      href: '/listings/legacy?listingStatus=DRAFT',
+      // Drafts read "Not listed" on the Listings page (a draft, or never sent).
+      href: '/listings?live=draft,not_listed',
       tone: 'amber',
       impact: t('overview.alerts.impact.draftListings'),
       actionLabel: t('overview.alerts.action.publish'),
@@ -115,11 +114,9 @@ export default function AlertsPanel({
     items.push({
       label: t('overview.alerts.suppressions'),
       count: alerts.suppressions,
-      // Suppressions live across Amazon listings; the master view
-      // filtered to suppressed status is the right drill-down. Since
-      // 2026-10-24 the page with the suppression list is the old Amazon
-      // page (`/listings/amazon` is the new Listings page for Amazon).
-      href: '/listings/legacy/amazon',
+      // Suppressions live across Amazon listings: the Amazon Listings
+      // page filtered to suppressed listings, every market.
+      href: '/listings/amazon?flags=suppressed',
       tone: 'rose',
       impact: t('overview.alerts.impact.suppressions'),
       actionLabel: t('overview.alerts.action.resolve'),
