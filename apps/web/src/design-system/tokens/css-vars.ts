@@ -113,6 +113,9 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-rail-chip-active-bg', value: '#dce8fb' },
   { name: '--nds-rail-chip-active-fg', value: '#1f6fde' },
   { name: '--nds-rail-ft', value: '#aeb6c2' },
+  // The rail's nav count badge (Suggestions 7): white figures on red-700, 5.44:1. On --nds-danger (red-500) they were
+  // 3.9:1, under AA for 10px text (Negative Targeting redesign, 2026-10-26). Same fill on the dark rail, so no dark entry.
+  { name: '--nds-rail-badge-bg', value: palette.red[700] },
 
   { name: '--nds-green-soft', value: palette.green.soft },
   { name: '--nds-green-500', value: palette.green[500] },

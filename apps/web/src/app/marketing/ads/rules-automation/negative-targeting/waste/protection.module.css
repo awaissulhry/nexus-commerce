@@ -30,35 +30,71 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The panel (redone 2026-10-26, the Wasting board): the head with the shield and the count, each term on its own under a
+   hairline (words + match, where, why), then the rule and Open record under a hairline. */
 .panel {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  max-width: 340px;
+  max-width: 320px;
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.headMark {
+  flex: none;
+  color: var(--nds-info-text);
 }
 
 .term {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-2);
-  padding: var(--nds-space-6) 0;
-  border-bottom: 1px solid var(--nds-border-subtle);
-}
-
-.term:last-child {
-  border-bottom: 0;
+  padding: var(--nds-space-8) 0;
+  border-top: 1px solid var(--nds-border-subtle);
 }
 
 .termHead {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--nds-space-8);
+  gap: var(--nds-space-4) var(--nds-space-8);
   min-width: 0;
 }
 
 .termWords {
   min-width: 0;
   overflow-wrap: anywhere;
+  color: var(--nds-text-strong);
+}
+
+.panelLine {
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.panelLine .scope {
+  color: inherit;
+}
+
+.foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  padding-top: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.footText {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
 }
 
 .scope {

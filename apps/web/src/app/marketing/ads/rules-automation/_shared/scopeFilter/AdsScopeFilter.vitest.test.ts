@@ -1,8 +1,8 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { AdsScopeFilter } from './AdsScopeFilter'
-import { NO_PICKS, buildIndex, type ScopePicks } from './scopeFilterModel'
+import { AdsScopeFilter, scopeChips } from './AdsScopeFilter'
+import { NO_PICKS, buildIndex, scopeDimensions, type ScopePicks } from './scopeFilterModel'
 import type { ScopeFilter } from './useScopeFilter'
 
 /** The bar as the three pages draw it (first render: desktop, open). */
@@ -39,5 +39,22 @@ describe('AdsScopeFilter', () => {
     const html = render(filter({ index: null, state: 'reading' }))
     expect(html).not.toContain('Filter lists not read')
     expect(html.match(/aria-description="Reading the list"/g)).toHaveLength(4)
+  })
+
+  it('the Negative Targeting redesign: one inline row with the page\'s own fields, one Clear for all (Bid and Harvest keep the panel)', () => {
+    const extra = [{ key: 'kind', label: 'Kind', kind: 'listbox' as const, value: '', options: [{ value: '', label: 'All' }, { value: 'term', label: 'Search terms' }], onChange: () => {} }]
+    const html = renderToStaticMarkup(createElement(AdsScopeFilter, { filter: filter(), layout: 'inline', extraDimensions: extra, extraActive: 0 }))
+    expect([...html.matchAll(/<span class="flbl" id="[^"]+">([^<]+)<\/span>/g)].map((m) => m[1])).toEqual(['Portfolio', 'Campaign', 'Ad group', 'Product', 'Kind'])
+    expect(html).not.toContain('aria-label="Hide filters"')
+    expect(render(filter())).toContain('aria-label="Hide filters"')
+  })
+
+  it('every pick as a chip\'s words; a pick the lists do not name yet shows by its id', () => {
+    const lists = scopeDimensions({ ...NO_PICKS, campaign: ['c1'], product: ['zz'] }, index, 'ready')
+    expect(scopeChips(lists).map((c) => [c.key, c.text, c.removeLabel])).toEqual([
+      ['campaign', 'Campaign: Boots Exact', 'Show every campaign, not only Boots Exact'],
+      ['product', 'Product: zz', 'Show every product, not only zz'],
+    ])
+    expect(scopeChips(scopeDimensions(NO_PICKS, index, 'ready'))).toEqual([])
   })
 })

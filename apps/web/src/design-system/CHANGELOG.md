@@ -1,3 +1,20 @@
+## The Negative Targeting redesign's parts — 2026-10-26
+
+Web; the files marked (both apps) are identical in apps/factory. Every default renders as before.
+- **`FilterBar layout="inline"`** (`'panel'` default): one row of fields (`repeat(auto-fit, minmax(170px, 1fr))`), Clear at its end held at 0 on, no head; ≤ 760 px one "Filters (n)" button opens the fields in the full-screen sheet with Clear and Done. New **`kind: 'listbox'`** dimension (single pick, `count` muted after the label); `select` and `listbox` are named by their label (**`Combobox labelledBy`**, **`Listbox labelledBy`**). (both apps)
+- **`Pill truncate`**: one line, ellipsis, the words as `title` (`.nds-pill.is-truncated`, `.nds-pill-text`). (both apps)
+- **`GridRowKind 'two-line'`** (`NexusGrid rows="two-line"`): 40 · 43 · 49 px (`tokens/grid.ts` `rowTwoLine`, `grid/rowHeight.ts` `rowHeightFor`). (tokens: both apps)
+- **`NexusGrid emptyState`**: a DS `EmptyState` drawn as the no-rows overlay (`GridEmptyStateOverlay`, read from context so new words reach it).
+- **The review on a phone**: `ReviewChangesPanel` (and so `ReviewChangesModal`) draws one card per change below 760 px — Where, What, Now → New, Note, Result (`reviewCardFields`). **`ChangeReview tick`** (default true); `false` draws no checkbox. (ChangeReview: both apps)
+- **`TimelineStep.action`**: a control at the end of the step's head line. (both apps)
+- **`SummaryTable density`** (`'compact'` | `'roomy'` 44 px), **`align`** per column, **`stackOnPhone`**, **`widths`** per column (a `colgroup`); `.nds-summary-sub` for a muted second line (`summaryTableModel.ts`). (tsx: both apps)
+- **`Sparkline fluid`**: fills its container's width (viewBox, non-scaling stroke, round-cap dots); `height` still applies. (tsx: both apps)
+- **`RecordLayout`** `{ main, aside, asideLabel? }`: `minmax(0, 1fr) minmax(260px, 300px)`, gap 20, one column below 760 px. (tsx: both apps)
+- **`KeyValue phoneColumns`** (`1` default | `2`): the columns kept below 760 px. (both apps)
+- **`GridToolbar wrap`**: the bar may take a second line on a narrow desktop card; the right-hand group moves down whole, right-aligned (`.nds-grid-card > .nds-toolbar.wrap`). (both apps)
+- **`opensDark`**: a surface opened from a `.nds-theme-responsive` section strictly INSIDE a light pin follows the theme (the Negative Targeting page in the ads shell); a shell carrying both classes on one element keeps today's answer. (both apps)
+- **Shell**: the rail count badge on `--nds-rail-badge-bg` (red-700, 5.44:1 under white; was red-500, 3.9:1); the top bar's phone width rule for the business name now names the element it means (`app-topbar.css`).
+
 ## DetailModal counts a paged list — 2026-10-26
 
 Reviews Inbox (PR B). Web only: `patterns/{DetailModal,detailModalModel,index}`.

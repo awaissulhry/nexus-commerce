@@ -9,9 +9,11 @@
  *   bulk      a verb counts the ticked words it fits; the rest are left out, each with why (never silently)
  */
 import { addApiParams, type ScopeApi } from '../../_shared/scopeFilter/scopeFilterModel'
-import { moneyOr, plural, type BulkPlan, type Picked } from '../waste/wasteModel'
+import { money } from '../../bid/_shared/format'
+import { moneyOr, plural, type BulkPlan, type CountPart, type Picked, type StateChipView } from '../waste/wasteModel'
+import type { BannerView, MetricView, RecordTone, StatePillView } from '../waste/recordModel'
 import type { WasteItem, Where } from '../waste/wasteTypes'
-import type { WordPlace, WordPlaceState, WordRow, WordState, WordTerm, WordTotals } from './wordsTypes'
+import type { WordPlace, WordPlaceState, WordProduct, WordRow, WordState, WordTerm, WordTotals } from './wordsTypes'
 
 // ── the address ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -101,8 +103,7 @@ export function placeWhy(p: Pick<WordPlace, 'state' | 'held' | 'blockedBy'>): st
   return p.held?.reason ?? null
 }
 
-/** "6 terms" / "4 ad groups · 3 campaigns" / "TST-COAT" or "2 products". */
-export const termsWords = (n: number) => plural(n, 'term')
+/** "4 ad groups · 3 campaigns" / "TST-COAT" or "2 products". */
 export const placesWords = (r: Pick<WordRow, 'places'>) => `${plural(r.places.adGroups, 'ad group')}${r.places.campaigns > 1 ? ` · ${plural(r.places.campaigns, 'campaign')}` : ''}`
 export const productsWords = (r: Pick<WordRow, 'product' | 'products'>) => (r.product ? r.product.name : r.products > 1 ? plural(r.products, 'product') : '—')
 
@@ -169,6 +170,32 @@ export function wordShowChips(t: WordTotals | null): Array<{ id: WordShow; label
   ]
 }
 
+/** D4 — the Show field of the page's filter bar: each choice with this read's count (none while it is not read). */
+export function wordShowOptions(t: WordTotals | null): Array<{ value: WordShow; label: string; count?: number }> {
+  return wordShowChips(t).map((c) => ({ value: c.id, label: c.label, ...(c.count != null ? { count: c.count } : {}) }))
+}
+
+/** D5 — the toolbar's count: "5 words". */
+export const wordsCount = (total: number): CountPart[] => [{ n: String(total), words: total === 1 ? ' word' : ' words' }]
+
+const CHIP: Readonly<Record<WordState, Omit<StateChipView, 'title'>>> = {
+  WASTING: { word: 'Wasting', tone: 'danger', mark: 'play' },
+  PARTLY_BLOCKED: { word: 'Partly blocked', tone: 'warning', mark: 'ban' },
+  BLOCKED: { word: 'Blocked', tone: 'info', mark: 'ban' },
+  PROTECTED: { word: 'Protected', tone: 'success', mark: 'shield' },
+  HELD: { word: 'Held', tone: 'neutral', mark: 'clock' },
+  NOT_WASTING: { word: 'Not wasting', tone: 'neutral', mark: 'play' },
+}
+/** D6 — a word's state as ONE chip in the list: its word in a tone and its mark; the server's sentence on hover. */
+export function wordStateChip(r: Pick<WordRow, 'state' | 'stateWhy'>): StateChipView {
+  return { ...(CHIP[r.state] ?? { word: wordStateWord(r.state), tone: 'neutral' as const, mark: 'play' as const }), title: wordStateSentence(r) }
+}
+
+/** The line under the chip: a 2-word piece one of whose words wastes too (blocking that word blocks it). */
+export function wordStateSub(r: Pick<WordRow, 'coveredBy'>): { word: string; title: string } | null {
+  return r.coveredBy ? { word: `Covered by "${r.coveredBy}"`, title: `Covered by "${r.coveredBy}": blocking that word blocks this one` } : null
+}
+
 /** The empty table's words: nothing at all vs. nothing under the filters. */
 export function wordsEmpty(show: WordShow, filtered: boolean): { title: string; clear: boolean } {
   if (filtered) return { title: 'Nothing matches these filters', clear: true }
@@ -212,4 +239,139 @@ export function wordCsvRow(r: WordRow): string[] {
     String(r.places.adGroups), String(r.places.campaigns), productsWords(r), wordStateWord(r.state),
     `${v.label}${v.held ? ' (held)' : ''}`,
   ]
+}
+
+// ── the record (2026-10-26, RECORD-SPEC R1–R15) ─────────────────────────────────────────────────────────────────────
+
+const hasMoney = (c: number | null | undefined): c is number => typeof c === 'number' && Number.isFinite(c)
+const xNum = (x: number) => (x >= 10 ? String(Math.round(x)) : x.toFixed(1))
+
+/** The record's subtitle: "Word in 13 search terms · 7 ad groups · 5 campaigns". */
+export const wordSubtitle = (r: Pick<WordRow, 'terms' | 'places'>) =>
+  `Word in ${plural(r.terms, 'search term')} · ${plural(r.places.adGroups, 'ad group')}${r.places.campaigns > 1 ? ` · ${plural(r.places.campaigns, 'campaign')}` : ''}`
+
+const WORD_TONE: Readonly<Record<WordState, RecordTone>> = {
+  WASTING: 'danger', PARTLY_BLOCKED: 'warning', BLOCKED: 'info', PROTECTED: 'info', HELD: 'neutral', NOT_WASTING: 'neutral',
+}
+/** The record's state pill: the state word in its tone, the server's sentence for a screen reader and on hover. */
+export function wordPill(r: Pick<WordRow, 'state' | 'stateWhy'>): StatePillView {
+  const glyph = r.state === 'WASTING' || r.state === 'NOT_WASTING' ? 'play' : r.state === 'PROTECTED' ? 'shield' : r.state === 'HELD' ? 'none' : 'ban'
+  return { word: wordStateWord(r.state), tone: WORD_TONE[r.state] ?? 'neutral', sentence: r.stateWhy.replace(/\.$/, ''), glyph }
+}
+
+/** The banner: for which product the word wastes, with its spend; else the state's own sentence. */
+export function wordBanner(r: WordRow, products: readonly WordProduct[] | null): BannerView {
+  const tone: RecordTone = r.state === 'WASTING' ? 'danger' : r.state === 'PARTLY_BLOCKED' ? 'warning' : r.state === 'BLOCKED' ? 'success' : 'info'
+  const v = wordVerb(r)
+  const held = v.held ? ` Block word is held: ${v.held.replace(/\.$/, '')}.` : ''
+  const blocked = r.places.blocked ? ` A negative phrase blocks it already in ${plural(r.places.blocked, 'ad group')}.` : ''
+  const wf = r.wastesFor
+  if ((r.state === 'WASTING' || r.state === 'PARTLY_BLOCKED') && wf) {
+    const name = wf.product?.name ?? 'the shared campaigns'
+    const mine = wf.product ? products?.find((p) => p.product?.id === wf.product!.id) ?? null : null
+    const sold = wf.orders === 0 ? 'sold nothing' : `sold only ${plural(wf.orders, 'order')}`
+    const title = mine && hasMoney(mine.d.spendCents)
+      ? `For ${name} it spent ${money(mine.d.spendCents, r.currency)} in ${plural(wf.terms, 'search term')} and ${sold}`
+      : `For ${name} it wastes in ${plural(wf.terms, 'search term')} and ${sold}`
+    const others = products ? products.filter((p) => !p.test.met) : []
+    const othersOrders = others.reduce((n, p) => n + p.d.orders, 0)
+    const lead = r.products > 1 && wf.products === 1
+      ? `That is 1 of its ${r.products} products.${products ? ` The other ${plural(r.products - 1, 'product')} ${r.products - 1 === 1 ? 'does' : 'do'} not waste (${plural(othersOrders, 'order')}), so Block word stops it only for ${name}.` : ''}`
+      : r.products > 1 ? `It wastes for ${wf.products} of its ${r.products} products; ${name} spent most. Block word stops it where it wastes.`
+        : r.verb.places ? `Block word adds a negative phrase "${r.word}" in ${plural(r.verb.places, 'ad group')}.` : ''
+    return { tone, title, desc: `${lead}${blocked}${held}`.trim() || null }
+  }
+  return { tone, title: r.stateWhy.replace(/\.$/, ''), desc: `${blocked}${held}`.trim() || null }
+}
+
+/** The four tiles: Spend · Clicks · Orders · Search terms. */
+export function wordMetrics(r: WordRow): MetricView[] {
+  const d = r.d
+  const stock = r.stockOutDays ? `, ${plural(r.stockOutDays, 'day')} out of stock left out` : ''
+  return [
+    { id: 'spend', label: 'Spend', value: moneyOr(d.spendCents, r.currency), hint: hasMoney(d.spendCents) ? `last ${r.test.windowDays} days${stock}` : 'You cannot see ad spend' },
+    { id: 'clicks', label: 'Clicks', value: d.clicks.toLocaleString('en-IE'), hint: hasMoney(d.cpcCents) ? `${money(d.cpcCents, r.currency)} a click` : undefined },
+    { id: 'orders', label: 'Orders', value: d.orders.toLocaleString('en-IE'), hint: 'up to today' },
+    { id: 'terms', label: 'Search terms', value: String(r.terms), hint: r.sold ? `${r.sold} sold` : 'none sold' },
+  ]
+}
+
+/** "Each product on its own": every product judged by its own limit. */
+export function productChecks(r: Pick<WordRow, 'currency' | 'test'>, products: readonly WordProduct[]): {
+  desc: string
+  rows: Array<{ id: string; product: WordProduct['product']; products: number; spend: string; terms: number; adGroups: number; limit: string; result: { tone: RecordTone; word: string } }>
+} {
+  const wasting = products.filter((p) => p.test.met).length
+  return {
+    desc: `${wasting} of ${products.length} ${wasting === 1 ? 'wastes' : 'waste'} in the last ${r.test.windowDays} days, each judged by its own limit`,
+    rows: products.map((p, i) => ({
+      id: `${i}:${p.product?.id ?? 'shared'}`,
+      product: p.product,
+      products: p.productCount,
+      spend: moneyOr(p.d.spendCents, r.currency),
+      terms: p.terms,
+      adGroups: p.places,
+      limit: [plural(p.test.clicksNeeded, 'click'), hasMoney(p.test.spendBarCents) ? money(p.test.spendBarCents, r.currency) : null].filter(Boolean).join(' · '),
+      result: p.test.met ? { tone: 'danger', word: 'Wastes' } : { tone: 'neutral', word: 'Not wasting' },
+    })),
+  }
+}
+
+/** The About card's Test: who set the limits, and how each product is judged. */
+export function wordTestWords(t: WordRow['test']): { value: string; hint: string } {
+  const value = t.by ? (t.by.id === 'strategy' ? t.by.name.charAt(0).toUpperCase() + t.by.name.slice(1) : `The rule "${t.by.name}"`) : 'This page\'s default'
+  return { value, hint: `Each product by its own limit.${t.xCpaBar ? ` Spend: ${xNum(t.xCpaBar)} × its target cost per order.` : ''}` }
+}
+
+/** "What Block word does": each place it lands in (what it blocks there), and each it leaves out with why. */
+export function blockPlanView(r: Pick<WordRow, 'word' | 'currency' | 'verb' | 'test' | 'state'>, places: readonly WordPlace[]): {
+  desc: string
+  rows: Array<{ id: string; place: WordPlace; lands: boolean; block: string; why: string }>
+} {
+  const open = places.filter((p) => p.state === 'OPEN')
+  const left = places.filter((p) => p.state !== 'OPEN')
+  const spend = open.map((p) => p.d.spendCents)
+  const together = [
+    `Together it blocks ${plural(open.reduce((n, p) => n + p.terms, 0), 'search term')}`,
+    spend.length && spend.every(hasMoney) ? money((spend as number[]).reduce((a, b) => a + b, 0), r.currency) : null,
+    plural(open.reduce((n, p) => n + p.d.orders, 0), 'order'),
+  ].filter(Boolean).join(' · ')
+  const held = wordVerb(r).held
+  return {
+    desc: open.length
+      ? `It adds a negative phrase "${r.word}" in ${plural(open.length, 'ad group')}, one change each. ${together}.`
+      : held ? `It lands nowhere: ${held.replace(/\.$/, '')}.` : 'It lands nowhere.',
+    rows: [
+      ...open.map((p) => ({
+        id: `${p.campaignId}|${p.adGroupId ?? ''}`, place: p, lands: true, block: 'Negative phrase',
+        why: [`Blocks ${plural(p.terms, 'term')}`, hasMoney(p.d.spendCents) ? money(p.d.spendCents, r.currency) : null, plural(p.d.orders, 'order')].filter(Boolean).join(' · '),
+      })),
+      ...left.map((p) => ({ id: `${p.campaignId}|${p.adGroupId ?? ''}`, place: p, lands: false, block: 'Left out', why: placeWhy(p) ?? placeStateWord(p.state) })),
+    ],
+  }
+}
+
+/** The footer's primary: "Block “cheap” in 3 ad groups" (the code's "Block word" when it lands nowhere or is held). */
+export function blockWordWords(r: Pick<WordRow, 'word' | 'verb' | 'test' | 'state'>): { label: string; sentence: string } {
+  const v = wordVerb(r)
+  return { label: !v.held && r.verb.places > 0 ? `Block \u201c${r.word}\u201d in ${plural(r.verb.places, 'ad group')}` : v.label, sentence: v.sentence }
+}
+
+/** The Search terms card's line: "1 sold · together €295.90 · 668 clicks · 7 orders". */
+export const termsCardWords = (r: Pick<WordRow, 'sold' | 'd' | 'currency'>) =>
+  `${r.sold} sold · together ${moneyOr(r.d.spendCents, r.currency)} · ${plural(r.d.clicks, 'click')} · ${plural(r.d.orders, 'order')}`
+
+/** A place's state pill on the Where it runs tab: Wasting · Blocked · Held · Not wasting. */
+export function wordPlacePill(s: WordPlaceState): { word: string; tone: RecordTone } {
+  return s === 'OPEN' ? { word: 'Wasting', tone: 'danger' } : s === 'BLOCKED' ? { word: 'Blocked', tone: 'info' } : { word: placeStateWord(s), tone: 'neutral' }
+}
+
+/** Where it runs: the intro and each list's line. */
+export function wordWhereWords(r: Pick<WordRow, 'word' | 'places' | 'test'>): { intro: string; spends: string; blocked: string; terms: string } {
+  return {
+    intro: `Where its search terms spend, and where a negative already blocks the word. Last ${r.test.windowDays} days. Block word lands only where it wastes.`,
+    spends: `${plural(r.places.adGroups, 'ad group')}${r.places.campaigns > 1 ? ` in ${plural(r.places.campaigns, 'campaign')}` : ''} · it wastes in ${r.places.open} of them`,
+    blocked: `A negative phrase "${r.word}" stops these search terms here`,
+    terms: `Every shopper's search term with "${r.word}", highest spend first. Last ${r.test.windowDays} days. A term opens its own record.`,
+  }
 }

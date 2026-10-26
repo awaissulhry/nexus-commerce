@@ -41,6 +41,33 @@ export function protectionSentence(p: RowProtection): string {
   return `Kept safe by the protected term${p.terms.length > 1 ? 's' : ''} ${p.terms.map(one).join('; ')}. No negative and no pause may stop it.`
 }
 
+/**
+ * The record's "What protects it" card (2026-10-26): one line per protected term (its words, match, where, why), the
+ * card's line, and the note under the table: what the protection blocks, and what holds the row once it is removed.
+ */
+export function protectsView(r: Pick<WasteRow, 'protection' | 'skipped' | 'state'>): {
+  rows: Array<{ id: string; term: string; match: string; where: string; why: string }>
+  desc: string
+  note: string
+} | null {
+  const terms = r.protection?.terms ?? []
+  if (!terms.length) return null
+  const then = r.protection?.then ?? null
+  const kept = keptProtectedWords(r)
+  return {
+    rows: terms.map((t) => ({ id: t.id, term: t.term, match: protectionMatchWord(t.match), where: protectionScopeWords(t), why: t.reason ?? '—' })),
+    desc: terms.length > 1 ? 'Each of these terms keeps it safe on its own' : 'This term keeps it safe',
+    note: [
+      'No negative and no pause can stop it while it is protected.',
+      then ? `Without the protection: ${then.label.charAt(0).toLowerCase()}${then.label.slice(1).replace(/\.$/, '')}.` : 'Without the protection, it can be stopped.',
+      kept ? `${kept}: it stays out of view until then.` : null,
+    ].filter(Boolean).join(' '),
+  }
+}
+
+/** The protected record's "Keep protected" button: its words on hover (the Skip for 30 days, the protection stays). */
+export const KEEP_PROTECTED_HINT = 'Hides it for 30 days. The protection stays.'
+
 // ── Keep protected (Skip 30 d) ──────────────────────────────────────────────────────────────────────────────────────
 
 /** "Keep protected" is the page's Skip for this many days. */

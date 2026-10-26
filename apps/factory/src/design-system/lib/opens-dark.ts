@@ -21,10 +21,22 @@ export const LIGHT_PINNED = '.h10-shell, .fleet-surface, .fleet-portal, [data-nd
  */
 export const BODY_PINNED_BY = '.h10-shell'
 
+/**
+ * A section that follows the theme INSIDE a light pin (the Negative Targeting page in the ads shell, 2026-10-26: the Owner's
+ * pick, only this page follows dark): what opens from it follows the theme too. Only a section strictly inside the pin
+ * counts — a shell that carries both classes on one element (`.h10-shell.nds-theme-responsive`) keeps today's answer.
+ */
+export const FOLLOWS_THEME = '.nds-theme-responsive'
+
 export function opensDark(el: Element | null | undefined): boolean {
   if (!el || !el.closest('.dark')) return false
-  if (el.closest(LIGHT_PINNED)) return false
+  const pin = el.closest(LIGHT_PINNED)
+  if (pin) {
+    const own = el.closest(FOLLOWS_THEME)
+    if (!own || own === pin || !pin.contains(own)) return false
+  }
   const doc = el.ownerDocument
-  if (doc && (el === doc.body || el === doc.documentElement) && doc.body?.querySelector(BODY_PINNED_BY)) return false
+  if (doc && (el === doc.body || el === doc.documentElement) && doc.body?.querySelector(BODY_PINNED_BY)
+    && !doc.body.querySelector(`${BODY_PINNED_BY} ${FOLLOWS_THEME}`)) return false
   return true
 }

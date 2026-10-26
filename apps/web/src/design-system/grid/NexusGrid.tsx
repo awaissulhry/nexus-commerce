@@ -25,7 +25,7 @@
  * Everything else is AG's. `columnDefs`, `treeData`, `getDataPath`, `masterDetail`, `sideBar`,
  * `rowSelection`, `cellSelection`, `initialState` — pass them straight through.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { AgGridReact, type AgGridReactProps } from 'ag-grid-react'
 import type { ColDef, ColumnPinnedEvent, ColumnResizedEvent, DefaultMenuItem, DisplayedColumnsChangedEvent, FirstDataRenderedEvent, GetMainMenuItems, GridApi, GridReadyEvent, GridSizeChangedEvent, MenuItemDef, ModelUpdatedEvent, NewColumnsLoadedEvent, ProcessUnpinnedColumnsParams } from 'ag-grid-community'
 
@@ -35,7 +35,10 @@ import { plainFirstGuess, plainGridHeight } from './plainGrid'
 import { heldLimits, widthMoved, widthsAsDefaults } from './columns/columnWidths'
 import { interactionDefaults, readsOnly } from './gridDefaults'
 import { GRID_LOCALE_TEXT } from './locale'
-import { GridNoRowsOverlay } from './renderers/overlays'
+import { GridEmptyStateContext, GridEmptyStateOverlay, GridNoRowsOverlay } from './renderers/overlays'
+import { rowHeightFor, type GridRowKind } from './rowHeight'
+
+export { rowHeightFor, type GridRowKind } from './rowHeight'
 import { LIGHT_PINNED } from '../lib/opens-dark'
 import { NARROW_QUERY } from '../components/useNarrow'
 import { colIdsWhere, declaredPinning, withoutColumnSizing, withPinning } from './statePinning'
@@ -83,19 +86,7 @@ export type {
 
 export type GridDensity = GridDensityName
 /** `text`: a one-line row. `media`: the identity cell carries a thumbnail (photo · title · sub-line). */
-/**
- * Three row kinds, not three densities.
- *
- * `text` is a plain one-line row. `media` is the /products/next shape — a thumbnail beside a STACK
- * (photo · title · sub-line), which is what buys the 52. `media-line` is the studio's: a thumbnail
- * on a ONE-LINE row, because the sheet's identity cell has no stack (SKU and Name are separate
- * columns). 36 = 32px thumbnail + 2 above + 2 below.
- *
- * 🔴 Height driven by a row's CONTENT is a property of the row; density is an operator preference
- * applied across every grid. A fourth density tier would have given the ads console a thumbnail row
- * the moment someone picked "compact" (DS.1 + PES.2, hub #184).
- */
-export type GridRowKind = 'text' | 'media' | 'media-line'
+/* The row kinds (`text` · `media` · `media-line` · `two-line`) and their heights: `rowHeight.ts`. */
 
 /**
  * A phone (≤ 760px, the DS sheet breakpoint; grid audit E9 — the rule WorkspaceGrid has had since #578): pinned columns
@@ -121,7 +112,10 @@ export interface NexusGridProps<T> extends AgGridReactProps<T> {
    * `tokens/grid.ts`, so what the grid draws is what the spec prints.
    */
   density?: GridDensity
-  /** What a row holds — drives the row height. Default `text`. */
+  /**
+   * What a row holds — drives the row height. Default `text`. `two-line` (2026-10-26): a text row whose cells may carry a
+   * muted second line (`.nds-ag-sub`) — 40 / 43 / 49 px.
+   */
   rows?: GridRowKind
   /** Container height for the normal (virtualised) layout. Ignored under `domLayout="autoHeight"`,
    *  where the grid grows with its rows and the page scrolls instead. */
@@ -184,6 +178,12 @@ export interface NexusGridProps<T> extends AgGridReactProps<T> {
    * AG's own `loading` is for the FIRST read only — its overlay draws skeleton rows over whatever is there.
    */
   reloading?: boolean
+  /**
+   * What the grid draws when it has no rows (2026-10-26): a DS `EmptyState`, drawn as the grid's no-rows overlay in place
+   * of the default "Nothing here". It follows its props: a page that changes the words (a filter that matched nothing)
+   * sees them change. Omit it for the default overlay; a page's own `noRowsOverlayComponent` still wins.
+   */
+  emptyState?: ReactNode
 }
 
 
@@ -207,6 +207,7 @@ export function NexusGrid<T>({
   plain = false,
   plainMaxHeight = 480,
   reloading = false,
+  emptyState,
   defaultColDef,
   selectionColumnDef,
   onColumnPinned,
@@ -244,8 +245,7 @@ export function NexusGrid<T>({
   const contextDensity = useGridDensity()
   const density = densityProp ?? contextDensity
   const tier = gridDensity[density]
-  const rowHeight =
-    agProps.rowHeight ?? (rows === 'media' ? tier.rowMedia : rows === 'media-line' ? tier.rowMediaLine : tier.rowText)
+  const rowHeight = agProps.rowHeight ?? rowHeightFor(rows, density)
   const headerHeight = agProps.headerHeight ?? tier.header
 
   /**
@@ -634,6 +634,7 @@ export function NexusGrid<T>({
         data-reads={reads || undefined}
       >
         <GridEmptyCellsContext.Provider value={emptyCells}>
+        <GridEmptyStateContext.Provider value={emptyState ?? null}>
         <AgGridReact<T>
           theme={workspaceGridTheme}
           rowHeight={rowHeight}
@@ -660,7 +661,7 @@ export function NexusGrid<T>({
           // AG's words in the DS's voice; the DS empty state; one tooltip pace for every grid (300 ms — AG's own 2 s
           // read as "no tooltip", Matrix audit 2026-10-08). A page's own value still wins.
           localeText={GRID_LOCALE_TEXT}
-          noRowsOverlayComponent={GridNoRowsOverlay}
+          noRowsOverlayComponent={emptyState != null ? GridEmptyStateOverlay : GridNoRowsOverlay}
           tooltipShowDelay={300}
           // Popups (header menus, dialogs, tooltips) go on the document, not inside the grid. AG
           // fits a popup to its popup parent's box; under `autoHeight` that box is the whole
@@ -672,6 +673,7 @@ export function NexusGrid<T>({
           columnDefs={columnDefs}
           initialState={initialState}
         />
+        </GridEmptyStateContext.Provider>
         </GridEmptyCellsContext.Provider>
       </div>
     </>
