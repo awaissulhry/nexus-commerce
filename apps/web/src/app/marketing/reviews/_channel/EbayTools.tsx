@@ -2,7 +2,7 @@
 
 /**
  * Reviews › eBay (build spec §3.5, rulings 3, 6, 7) — the eBay tools menu and the page's sections: a banner per market
- * Nexus is not reading (replies to it are held until it is reconnected), tiles, eBay's own detailed seller ratings and
+ * Nexus is not reading (when a reconnect fixes it, replies there are held until then), tiles, eBay's own detailed seller ratings and
  * feedback by type (Trading GetFeedback, asked at most once an hour per account), the feedback list (the Inbox's seller
  * feedback rows: ticks, select-all and a bulk bar — Assign · Set status · Mark as responded; a row opens the Inbox's
  * review pop-up, where a reply of up to 500 characters is written), and the later parts as labelled samples (eBay's AI
@@ -88,7 +88,7 @@ export function EbaySections({ lock, period, sections, busy, canManage, me, onRe
           title={b.title}
           action={b.action ? <Button asChild size="sm"><Link href={b.action.href}>{b.action.label}</Link></Button> : undefined}
         >
-          {b.body} Replies to it cannot be sent until it is reconnected.
+          {b.body}{b.action ? ' Replies there are held until the account is connected again.' : ''}
         </Banner>
       ))}
 
@@ -320,7 +320,10 @@ function FeedbackList({ lock, period, sections, busy, canManage, me, onRetry }: 
               count={ticked.length > 0 ? <><b>{ticked.length.toLocaleString('en')}</b> selected</> : list ? <><b>{rowData.length.toLocaleString('en')}</b> feedback</> : '—'}
               right={(
                 <>
-                  <SegmentedControl size="sm" ariaLabel="Type" options={options} value={type} onChange={(v) => setType(v as FeedbackFilter)} />
+                  {/* A phone is narrower than the four choices: they scroll sideways inside the card, never off its edge. */}
+                  <div className={s.segScroll}>
+                    <SegmentedControl size="sm" ariaLabel="Type" options={options} value={type} onChange={(v) => setType(v as FeedbackFilter)} />
+                  </div>
                   <Button asChild size="sm"><Link href={links.inbox({ kind: 'seller' })}>Open in the Inbox</Link></Button>
                   {/* ⛔ KEEP — placeholder (ruling 3): buyers' photos and eBay's AI topics come with eBay's REST Feedback API (PR G). */}
                   <Tag tone="neutral" title="Buyer photos and eBay’s AI topics arrive with eBay’s new feedback data in a later update">Photos and AI topics: coming later</Tag>

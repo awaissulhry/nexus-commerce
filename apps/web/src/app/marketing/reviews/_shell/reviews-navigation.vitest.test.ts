@@ -99,6 +99,7 @@ describe('reviews navigation', () => {
     const activeWith = (path: string) => nav.buildReviewsNavigation(path, undefined, undefined, markets).flatMap(group => group.items).filter(item => item.active).map(item => item.label)
     expect(activeWith('/marketing/reviews/amazon')).toEqual(['Amazon'])
     expect(activeWith('/marketing/reviews/ebay/it')).toEqual(['eBay Italy'])
+    expect(activeWith('/marketing/reviews/amazon/gb')).toEqual(['Amazon United Kingdom'])
     // A market without a row (not sold there yet) keeps its channel's row current; no markets read → the channel rows only.
     expect(activeWith('/marketing/reviews/ebay/de')).toEqual(['eBay'])
     expect(active('/marketing/reviews/amazon/fr')).toEqual(['Amazon'])

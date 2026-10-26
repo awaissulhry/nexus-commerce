@@ -237,6 +237,7 @@
   gap: var(--nds-space-8) var(--nds-space-14);
   padding: var(--nds-space-8) 0;
   border-bottom: 1px solid var(--nds-border-subtle);
+  font-size: var(--nds-font-size-sm);
 }
 
 .sampleRow:last-child {
@@ -245,6 +246,11 @@
 
 .sampleRow > .stack {
   flex: 1 1 200px;
+}
+
+/* A row with two stacks (stars and date, then the comment): the first keeps its own width, the comment takes the rest. */
+.sampleRow > .stack:has(+ .stack) {
+  flex: 0 0 auto;
 }
 
 .sampleBlock {
@@ -353,4 +359,12 @@
   display: flex;
   justify-content: flex-end;
   gap: var(--nds-space-8);
+}
+
+/* The feedback list's type choices keep their width in the toolbar (which scrolls sideways when full); on a phone, where
+   the toolbar wraps, they scroll sideways inside the card instead of being cut off at its edge. */
+.segScroll {
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow-x: auto;
 }

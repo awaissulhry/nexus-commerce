@@ -154,6 +154,8 @@ export function reviewsNav(markets?: ReviewsChannelMarkets): readonly ReviewsNav
         label: `${item.label} ${marketWord(code)}`,
         href: `${item.href}/${code.toLowerCase()}`,
         icon: CornerDownRight,
+        // `…/gb` is the UK's page too (marketOfSegment): its row stays current there.
+        ...(code === 'UK' ? { match: [`${item.href}/gb`] } : {}),
       }))]
     }),
   })
