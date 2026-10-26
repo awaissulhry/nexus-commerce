@@ -22,7 +22,7 @@ vi.mock('../cx/token.service.js', () => ({
 vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
 vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: vi.fn(async () => undefined) }))
 
-import { gatewayLedger, gatewayMetaChosen, gatewayMetaStored } from '../../test-support/gateway-stubs.js'
+import { gatewayLedger, gatewayMetaChosen, gatewayMetaPage, gatewayMetaStored } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { metaWriteCall } from './meta.js'
 import { metaWriteVerdict } from './meta-calls.js'
@@ -253,7 +253,10 @@ describe('Page video tests', () => {
   it('through the gateway: the chosen Page only, each video posted by it; a delete only of the Page\'s own test', async () => {
     const other = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000011', objectKind: 'page', edge: 'ab_tests', params: video, check: false }).catch((e) => e)
     expect(other).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
-    h.answers.push(json({ id: '120000000000071', from: { id: PAGE } }), json({ id: '120000000000072', from: { id: '120000000000011' } }))
+    // Gap 46b (the live read of 2026-10-26) — a Page video's owner read (id,from{id}) goes with the chosen Page's own token.
+    const pageToken = () => json({ id: PAGE, access_token: 'EAAPageTokenForGap46bOptimizeTests1234' })
+    gatewayMetaPage['m-1'] = PAGE
+    h.answers.push(pageToken(), json({ id: '120000000000071', from: { id: PAGE } }), pageToken(), json({ id: '120000000000072', from: { id: '120000000000011' } }))
     const foreignVideo = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'ab_tests', params: video, check: false }).catch((e) => e)
     expect(foreignVideo).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/video 120000000000072/) })
     h.page = null
@@ -261,9 +264,10 @@ describe('Page video tests', () => {
     expect(noPage).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/no Facebook Page/) })
     h.page = PAGE
     h.calls = []
-    h.answers.push(json({ id: '120000000000081', control_video_id: '120000000000071', optimization_goal: 'REELS_PLAYS' }), json({ id: '120000000000071', from: { id: PAGE } }), json({ success: true }))
+    h.answers.push(json({ id: '120000000000081', control_video_id: '120000000000071', optimization_goal: 'REELS_PLAYS' }), pageToken(), json({ id: '120000000000071', from: { id: PAGE } }), json({ success: true }))
     const del = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000081', objectKind: 'pagevideotest', params: {}, check: false, method: 'DELETE' })
     expect(del.ok).toBe(true)
-    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET', 'DELETE'])
+    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET', 'GET', 'DELETE'])
+    expect(new URL(h.calls[2].url).searchParams.get('access_token')).toBe('EAAPageTokenForGap46bOptimizeTests1234')
   })
 })

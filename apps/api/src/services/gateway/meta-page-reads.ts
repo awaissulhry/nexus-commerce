@@ -64,6 +64,16 @@
  * two reads as one field expansion of the template's `document` (a Canvas, SDK canvastemplate.py), so the token never
  * reaches an id Nexus did not name. No Page is in the path: it goes with the chosen Page's token, and with no Page chosen it
  * is refused (gateway.ts). LIVE-PROBES CR-489b settles whether Meta answers it so.
+ *
+ * Gap 46b, the leader's live read of 2026-10-26 — `meta-page-posts view post` (GET /<chosen Page>_<post>) went with the
+ * system-user token and Meta refused it: "(#10) This endpoint requires the 'pages_read_engagement' permission or the 'Page
+ * Public Content Access' feature" (the feed, read with the Page's token, answered). So two more reads go with the CHOSEN
+ * Page's own token, never falling back to the system user's:
+ *   - a post of the chosen Page by its id (`<chosen Page>_<post id>`): its fields only from POST_NODE_FIELDS (view post's,
+ *     set-meta-page-post's state read, and the owner read `id,from{id}`); another Page's post, or a read asking another field,
+ *     stays an ordinary read, as before;
+ *   - the owner read of a Page photo or video by its own id: EXACTLY `fields=id,from{id}` (any other read of a node stays
+ *     ordinary), with the chosen Page's token — the business's own media is confirmed by `from`, a creator's is not its.
  * A leaf module (it imports only the fixed metric lists, services/meta/meta-media-lists.ts, a leaf too), so meta-calls.ts
  * takes it without an import cycle.
  */
@@ -116,6 +126,8 @@ interface PageReadRule {
   metrics?: ReadonlySet<string>
   /** Probe fix MD-101 — the feed only: another Page's read stays an ordinary read (MetaPageRead.otherPages). */
   otherPagesOrdinary?: true
+  /** Gap 46b — with pageShapedOnly: the read is this rule's only when its fields are EXACTLY the rule's list (each once). */
+  exactFields?: true
 }
 
 /**
@@ -148,6 +160,17 @@ const BOOL = /^(true|false)$/
 const DAY = /^\d{4}-\d{2}-\d{2}$/
 const oneOf = (values: readonly string[]) => new RegExp(`^(${values.join('|')})$`)
 const INSIGHT_VALUES = { period: oneOf(PAGE_PERIODS), since: DAY, until: DAY, breakdown: oneOf(PAGE_BREAKDOWNS) }
+/**
+ * Gap 46b (the live read of 2026-10-26) — a post node of the chosen Page as Nexus reads one: meta-page-posts view post
+ * (live-media.ts POST_FIELDS.PagePost, .Eligibility, .More — each More field dropped when Meta refuses it), set-meta-page-post's
+ * state read (live-posts.ts PAGE_POST_STATE_FIELDS), the owner read `id,from{id}` (gateway.ts metaPagePostOwned, the step 24
+ * and 37 owner checks, create-meta-creative's draft) and the id checks (`id`, `id,created_time`, a boost's eligibility).
+ */
+const POST_NODE_FIELDS = set(
+  ...POST_LIST_FIELDS, 'instagram_eligibility', 'video_buying_eligibility',
+  'attachments{media_type,type,title,description,url,unshimmed_url,media,target,subattachments}', 'allowed_advertising_objects', 'promotion_status',
+  'timeline_visibility',
+)
 /** Gap 46b (CR-489) — exactly Meta's five template nodes, and the one read of their parts (its top-level items). */
 const IX_TEMPLATE_ROUTE = oneOf(META_IX_TEMPLATE_IDS)
 const IX_TEMPLATE_FIELDS = new Set(topLevelFieldItems(META_IX_TEMPLATE_READ) ?? [])
@@ -244,6 +267,11 @@ export const META_PAGE_READ_RULES: readonly PageReadRule[] = [
   // is_preferred): only that exact read (id, uri, is_preferred; limit), only of a video the chosen Page posted. Any other read
   // of the edge (meta-media-library view video's, which asks width, height and scale too) stays an ordinary read, as before.
   { route: /^\d+\/thumbnails$/, what: 'a Page video\'s thumbnails', page: 'video', pageShapedOnly: true, keys: set('fields', 'limit'), fields: set('id', 'uri', 'is_preferred') },
+  // Gap 46b (the live read of 2026-10-26) — a post of the CHOSEN Page by its id goes with the Page's own token (another Page's
+  // post, or a read asking a field off this list, stays ordinary, as before).
+  { route: /^\d+_\d+$/, what: 'a post of the chosen Page', page: 'post', pageShapedOnly: true, otherPagesOrdinary: true, keys: set('fields'), fields: POST_NODE_FIELDS },
+  // Gap 46b review F2 — the owner read of a Page photo or video by its own id: EXACTLY id and from{id}, the chosen Page's token.
+  { route: /^\d+$/, what: 'the owner read of a Page photo or video', page: 'meta', pageShapedOnly: true, exactFields: true, keys: set('fields'), fields: set('id', 'from{id}') },
 ]
 
 /** Probe fix IN-092 — the metric names of an insights read (Meta's comma list), or [] when it names none. */
@@ -287,6 +315,8 @@ export function metaPageReadOf(route: string, segments: readonly string[], searc
   const items = fields === null ? null : topLevelFieldItems(fields)
   // A WhatsApp account's templates (any read that is not the Page's Messenger template read): an ordinary read.
   if (rule.pageShapedOnly && (!keys.every((k) => rule.keys.has(k)) || !items || !items.every((f) => rule.fields.has(f)))) return null
+  // Gap 46b — an exact-shape rule (the media owner read): only that very field list, each once; any other read is ordinary.
+  if (rule.exactFields && (!items || items.length !== rule.fields.size || new Set(items).size !== items.length)) return null
   // A post's Page is its id's first part. Review of #771 — a `<chosen Page>_<id>` whose second part is no post of that Page
   // still goes only with the chosen Page's own token, read only: Meta resolves the id itself and answers only what that
   // token may see, so no other Page's data is reachable (checking the post first would cost a Meta read on every call).

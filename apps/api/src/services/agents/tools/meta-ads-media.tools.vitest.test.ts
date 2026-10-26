@@ -418,6 +418,17 @@ describe('what Meta refuses is said plainly', () => {
     h.one = () => ({ id: '133471657203838', document: { id: '397000000000001', name: 'Get New Customers' } })
     expect((await run('meta-instant-experiences', { view: 'template', template: 'get-new-customers' })).error).toMatch(/without its parts \(body_elements\)/)
   })
+  it('gap 46b (the live read of 2026-10-26) — view post, its id check and set-meta-page-post\'s state read go with the chosen Page\'s token', async () => {
+    // Meta refused view post to the system-user token: "(#10) This endpoint requires the 'pages_read_engagement' permission or
+    // the 'Page Public Content Access' feature". Each post read Nexus sends is now one the gateway sends with the Page's token.
+    h.one = (req) => (req.path.startsWith(`${PAGE}_`) ? { id: req.path, from: { id: PAGE } } : {})
+    for (const args of [{ view: 'post', postId: `${PAGE}_500000000000001` }, { view: 'post-sponsors', postId: `${PAGE}_500000000000001` }]) await run('meta-page-posts', args)
+    const postReads = h.calls.filter((c) => c.path === `${PAGE}_500000000000001`)
+    expect(postReads.map((c) => c.operation)).toEqual(expect.arrayContaining(['posts.post', 'posts.postCheck']))
+    for (const c of postReads) expect(metaCallVerdict({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' }), c.operation).toMatchObject({ problem: null, pageRead: { pageId: PAGE } })
+    const { PAGE_POST_STATE_FIELDS } = await import('../../marketing/meta-ads/live-posts.js')
+    expect(metaCallVerdict({ method: 'GET', url: metaUrl(`${PAGE}_500000000000001`, { fields: PAGE_POST_STATE_FIELDS }), kind: 'read' })).toMatchObject({ problem: null, pageRead: { pageId: PAGE } })
+  })
   it('live-probe fix MD-126 — boostAds lists the ads that boost or boosted the media, active or not', async () => {
     h.one = (req) => (req.operation === 'instagram.mediaOwnerCheck' ? { id: req.path, owner: { id: IG } }
       : { id: req.path, boost_eligibility_info: { eligible_to_boost: true }, boost_ads_list: { data: [{ ad_id: '120000000000301', ad_status: 'inactive' }] } })

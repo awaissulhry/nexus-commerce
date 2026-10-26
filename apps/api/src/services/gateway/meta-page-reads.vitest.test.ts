@@ -93,13 +93,14 @@ describe('the allow-list: which reads go with the Page\'s token', () => {
     // Step 38 (review B-F5) — the creator lookup on the chosen Instagram account (its id in instagramId, the Page's token).
     expect(verdict('170000000000010/creator_marketplace_creators?username=creator.a&fields=id,page_id,messaging_id')).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: null, instagramId: '170000000000010' } })
     expect(verdict('170000000000010/creator_marketplace_creators?username=creator.a&fields=id,username').pageRead).toBeUndefined()
-    // Gap 46b — and the one read of Meta's Instant Experience templates, and a Page video's thumbnails (their describes below).
-    expect(META_PAGE_READ_RULES).toHaveLength(26)
+    // Gap 46b — and Meta's Instant Experience templates, a Page video's thumbnails, a post of the chosen Page by its id and the
+    // owner read of a Page photo or video (their describes below).
+    expect(META_PAGE_READ_RULES).toHaveLength(28)
   })
   it('every other read stays a system-user read: the Page node, its other edges, a WhatsApp account, an ad account, a post', () => {
     for (const path of [
       `${PAGE}?fields=id,instagram_business_account`, `${PAGE}?fields=id,messaging_feature_status`, `${PAGE}/live_videos?fields=id`,
-      `${PAGE}/canvas_elements?fields=element`, `${PAGE}_500000000000001?fields=id`,
+      `${PAGE}/canvas_elements?fields=element`,
       'act_1234567890/connected_instagram_accounts_with_iabp?fields=id,iabp_id&business_id=9876543210',
       '170000000000001/connected_threads_user?fields=threads_user_id', `${PAGE}_500000000000001/comments?fields=id`, '540000000000001/steps?fields=id,message&limit=100',
     ]) {
@@ -257,7 +258,8 @@ describe('gap 46b (CR-489) — Meta\'s Instant Experience templates go with the 
       expect(metaPageReadOf(id, [id], new URLSearchParams({ fields: META_IX_TEMPLATE_READ }), undefined), id).toBeNull()
     }
     // A conversation's rule shares the route's shape only for Meta's thread ids (META_THREAD_ID): a template id is none.
-    expect(META_PAGE_READ_RULES.filter((r) => r.route.test(TEMPLATE) && (r.page !== 'thread' || META_THREAD_ID.test(TEMPLATE))).map((r) => r.what)).toEqual(['Meta\'s Instant Experience templates'])
+    // (The media owner rule matches any node by its route, then only the exact read id,from{id}: never a template read.)
+    expect(META_PAGE_READ_RULES.filter((r) => r.route.test(TEMPLATE) && (r.page !== 'thread' || META_THREAD_ID.test(TEMPLATE)) && !r.exactFields).map((r) => r.what)).toEqual(['Meta\'s Instant Experience templates'])
   })
   it('through the gateway: with the chosen Page\'s own token (read first with the system-user token); no Page chosen: nothing read or sent', async () => {
     gatewayMetaPage['m-1'] = PAGE
@@ -285,18 +287,58 @@ describe('gap 46b review N7 — a Page video\'s thumbnails go with the chosen Pa
   })
   it('through the gateway: ONE owner read of the video (Meta\'s id and `from` the chosen Page), the Page\'s token, then the read; another Page\'s video: nothing read with a token', async () => {
     gatewayMetaPage['m-1'] = PAGE
-    h.answers.push(json({ id: VIDEO, from: { id: PAGE } }), pageToken, json({ data: [{ id: '700000000000001', uri: 'https://scontent.example.com/t1.jpg', is_preferred: true }] }))
+    // The owner read is itself a Page-token read (the media owner rule): token, video, token, thumbnails.
+    h.answers.push(pageToken, json({ id: VIDEO, from: { id: PAGE } }), pageToken, json({ data: [{ id: '700000000000001', uri: 'https://scontent.example.com/t1.jpg', is_preferred: true }] }))
     const read = await metaCall({ connectionId: 'm-1', operation: 'media.pageVideoThumbnails', path: `${VIDEO}/thumbnails`, query: { fields: 'id,uri,is_preferred', limit: 50 } })
     expect(read.ok).toBe(true)
-    expect([new URL(h.calls[0].url).pathname, new URL(h.calls[0].url).searchParams.get('fields'), tokenOf(0)]).toEqual([`/${META_DEFAULT_GRAPH_API_VERSION}/${VIDEO}`, 'id,from{id}', 'meta-system-user-token'])
-    expect([new URL(h.calls[2].url).pathname, tokenOf(2)]).toEqual([`/${META_DEFAULT_GRAPH_API_VERSION}/${VIDEO}/thumbnails`, PAGE_TOKEN])
+    expect([new URL(h.calls[1].url).pathname, new URL(h.calls[1].url).searchParams.get('fields'), tokenOf(1)]).toEqual([`/${META_DEFAULT_GRAPH_API_VERSION}/${VIDEO}`, 'id,from{id}', PAGE_TOKEN])
+    expect([new URL(h.calls[3].url).pathname, tokenOf(3)]).toEqual([`/${META_DEFAULT_GRAPH_API_VERSION}/${VIDEO}/thumbnails`, PAGE_TOKEN])
     for (const owner of [json({ id: VIDEO, from: { id: OTHER_PAGE } }), json({ id: '120000000000602', from: { id: PAGE } }), json({ error: { message: 'Unsupported get request.', code: 100 } }, 400)]) {
       h.calls = []
-      h.answers.push(owner)
+      h.answers.push(pageToken, owner)
       await expect(metaCall({ connectionId: 'm-1', operation: 'x', path: `${VIDEO}/thumbnails`, query: { fields: 'id,uri,is_preferred', limit: 50 } })).rejects.toMatchObject({ code: 'META_PAGE_NOT_CHOSEN', message: expect.stringMatching(/the thumbnails of a video it posted/) })
-      expect(h.calls).toHaveLength(1)
-      expect(tokenOf(0)).toBe('meta-system-user-token')
+      // Only the owner read (with the Page's token) went: no read of the thumbnails.
+      expect(h.calls.map((c) => new URL(c.url).pathname.split('/').pop())).toEqual([PAGE, VIDEO])
     }
+  })
+})
+
+describe('gap 46b, the live read of 2026-10-26 — a post of the chosen Page and the owner read of its media go with the Page\'s token', () => {
+  const POST = `${PAGE}_500000000000001`
+  const VIEW_POST = 'id,message,story,created_time,updated_time,permalink_url,status_type,is_published,is_hidden,is_expired,is_eligible_for_promotion,promotable_id,scheduled_publish_time,full_picture,is_instagram_eligible,from{id},instagram_eligibility,video_buying_eligibility,attachments{media_type,type,title,description,url,unshimmed_url,media,target,subattachments},is_inline_created,allowed_advertising_objects,promotion_status'
+  const STATE = 'id,message,is_hidden,is_published,scheduled_publish_time,timeline_visibility,permalink_url,from{id}'
+  const f = (fields: string) => `fields=${encodeURIComponent(fields)}`
+  it('the chosen Page\'s post by its id — view post, the state read, the owner read, an id check — is a Page-token read of that Page', () => {
+    for (const fields of [VIEW_POST, STATE, 'id,from{id}', 'id', 'id,created_time', 'id,is_eligible_for_promotion,promotable_id,is_instagram_eligible']) {
+      expect(verdict(`${POST}?${f(fields)}`), fields).toMatchObject({ problem: null, pageRead: { pageId: PAGE } })
+    }
+    // A field off the list (comments, reactions …): an ordinary read, as before.
+    expect(verdict(`${POST}?${f('id,shares')}`).pageRead).toBeUndefined()
+  })
+  it('the owner read of a Page photo or video is EXACTLY id,from{id} (the chosen Page\'s token); any other node read stays ordinary', () => {
+    expect(verdict(`500000000000003?${f('id,from{id}')}`)).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: null } })
+    for (const fields of ['id', 'from{id}', 'id,from{id},length', 'id,post_id,from{id}', 'id,title,published,from{id}', 'id,owner,username', 'id,from{id},id']) {
+      expect(verdict(`500000000000003?${f(fields)}`).pageRead, fields).toBeUndefined()
+    }
+    expect(verdict(`500000000000003?${f('id,from{id}')}`, 'page').problem).toMatch(/a caller asks for no token/)
+  })
+  it('through the gateway: the owner read goes with the chosen Page\'s token (never the system user\'s); with no Page chosen nothing is read', async () => {
+    gatewayMetaPage['m-1'] = PAGE
+    h.answers.push(pageToken, json({ id: POST, from: { id: PAGE } }))
+    const read = await metaCall({ connectionId: 'm-1', operation: 'write.ownerCheck', path: POST, query: { fields: 'id,from{id}' } })
+    expect(read.ok).toBe(true)
+    expect([new URL(h.calls[0].url).searchParams.get('fields'), tokenOf(0), new URL(h.calls[1].url).pathname, tokenOf(1)]).toEqual(['access_token', 'meta-system-user-token', `/${META_DEFAULT_GRAPH_API_VERSION}/${POST}`, PAGE_TOKEN])
+    h.calls = []
+    h.answers.push(pageToken, json({ id: '500000000000003', from: { id: PAGE } }))
+    await metaCall({ connectionId: 'm-1', operation: 'write.ownerCheck', path: '500000000000003', query: { fields: 'id,from{id}' } })
+    expect(tokenOf(1)).toBe(PAGE_TOKEN)
+    // Another Page's post stays an ordinary read (system-user token), as before.
+    h.calls = []
+    await metaCall({ connectionId: 'm-1', operation: 'x', path: `${OTHER_PAGE}_500000000000001`, query: { fields: 'id,from{id}' } })
+    expect(h.calls.map((_c, i) => tokenOf(i))).toEqual(['meta-system-user-token'])
+    h.calls = []
+    await expect(metaCall({ connectionId: 'm-2', operation: 'x', path: '500000000000003', query: { fields: 'id,from{id}' } })).rejects.toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
+    expect(h.calls).toHaveLength(0)
   })
 })
 

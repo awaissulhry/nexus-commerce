@@ -184,34 +184,38 @@ describe('the comment rules are an exact allow-list', () => {
 })
 
 describe('the owner check, then the Page token', () => {
-  it('a Facebook comment on a post of the chosen Page: the post, then the comment (system-user token), then the change with the Page\'s own token', async () => {
-    h.answers.push(json({ id: POST }), json({ id: COMMENT }), tokenAnswer(), json({ success: true }))
+  it('a Facebook comment on a post of the chosen Page: the post (the Page\'s own token — gap 46b), then the comment (system-user token), then the change with the Page\'s own token', async () => {
+    // Gap 46b (the live read of 2026-10-26: Meta refuses a post of the Page to the system-user token, #10) — the post's read
+    // goes with the chosen Page's own token (its token read first); the comment's own read is unchanged.
+    h.answers.push(tokenAnswer(), json({ id: POST }), json({ id: COMMENT }), tokenAnswer(), json({ success: true }))
     const res = await metaWriteCall({ connectionId: 'm-1', operation: 'fbcomment.hide', objectId: COMMENT, objectKind: 'fbcomment', params: { is_hidden: 'true' }, check: false })
     expect(res.ok).toBe(true)
-    expect(paths()).toEqual([`GET /${POST}`, `GET /${COMMENT}`, `GET /${PAGE}`, `POST /${COMMENT}`])
-    expect(sent(0).url.searchParams.get('access_token')).toBe(SYSTEM_TOKEN)
-    expect(sent(1).url.searchParams.get('fields')).toBe('id')
-    expect(sent(3).url.searchParams.get('access_token')).toBe(PAGE_TOKEN)
-    expect(sent(3).body).toBe('is_hidden=true')
+    expect(paths()).toEqual([`GET /${PAGE}`, `GET /${POST}`, `GET /${COMMENT}`, `GET /${PAGE}`, `POST /${COMMENT}`])
+    expect(sent(1).url.searchParams.get('access_token')).toBe(PAGE_TOKEN)
+    expect([sent(2).url.searchParams.get('fields'), sent(2).url.searchParams.get('access_token')]).toEqual(['id', SYSTEM_TOKEN])
+    expect(sent(4).url.searchParams.get('access_token')).toBe(PAGE_TOKEN)
+    expect(sent(4).body).toBe('is_hidden=true')
     expect(JSON.stringify([gatewayLedger, res.text])).not.toContain(PAGE_TOKEN)
   })
   it('a comment on a photo or video of the chosen Page counts; one of another Page, or one Meta cannot place, is refused — nothing sent', async () => {
-    h.answers.push(json({ error: { code: 100, message: 'Object does not exist' } }, 400), json({ id: '500000000000001', from: { id: PAGE } }), json({ id: COMMENT }), tokenAnswer(), json({ success: true }))
+    h.answers.push(tokenAnswer(), json({ error: { code: 100, message: 'Object does not exist' } }, 400), tokenAnswer(), json({ id: '500000000000001', from: { id: PAGE } }), json({ id: COMMENT }), tokenAnswer(), json({ success: true }))
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'fbcomment.hide', objectId: COMMENT, objectKind: 'fbcomment', params: { is_hidden: 'false' }, check: false })).ok).toBe(true)
     h.calls = []
     __metaObjectLimitsTest.useMemory()
     // A neighbour's comment: not on a post of the chosen Page, and its photo is another Page's.
-    h.answers.push(json({ error: { code: 100, message: 'Object does not exist' } }, 400), json({ id: '500000000000002', from: { id: OTHER_PAGE } }))
+    h.answers.push(tokenAnswer(), json({ error: { code: 100, message: 'Object does not exist' } }, 400), tokenAnswer(), json({ id: '500000000000002', from: { id: OTHER_PAGE } }))
     const neighbour = await metaWriteCall({ connectionId: 'm-1', operation: 'fbcomment.hide', objectId: '500000000000002_900000000000002', objectKind: 'fbcomment', params: { is_hidden: 'true' }, check: false }).catch((e) => e)
     expect(neighbour).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN', message: expect.stringMatching(/not on a post of the Facebook Page this business chose/) })
     expect(neighbour.message).not.toContain(OTHER_PAGE)
     // Meta cannot answer either read: unconfirmed.
-    h.answers.push(json({ error: { code: 1, message: 'An unknown error occurred' } }, 500), json({ error: { code: 1, message: 'An unknown error occurred' } }, 500))
+    h.answers.push(tokenAnswer(), json({ error: { code: 1, message: 'An unknown error occurred' } }, 500), tokenAnswer(), json({ error: { code: 1, message: 'An unknown error occurred' } }, 500))
     expect(await metaWriteCall({ connectionId: 'm-1', operation: 'fbcomment.hide', objectId: '500000000000003_900000000000003', objectKind: 'fbcomment', params: { is_hidden: 'true' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_PAGE_UNCONFIRMED' })
     // The comment id is not one Meta answers.
-    h.answers.push(json({ id: `${PAGE}_500000000000004` }), json({ id: '500000000000004_999' }))
+    h.answers.push(tokenAnswer(), json({ id: `${PAGE}_500000000000004` }), json({ id: '500000000000004_999' }))
     expect(await metaWriteCall({ connectionId: 'm-1', operation: 'fbcomment.hide', objectId: '500000000000004_900000000000004', objectKind: 'fbcomment', params: { is_hidden: 'true' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_PAGE_UNCONFIRMED' })
-    expect(h.calls.every((c) => c.init.method === 'GET' && new URL(c.url).searchParams.get('access_token') === SYSTEM_TOKEN)).toBe(true)
+    // Only reads: the Page's post and its media with the Page's own token (gap 46b), a comment with the system user's.
+    expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
+    expect(h.calls.filter((c) => /\/(120000000000010_\d+|5000000000000\d+)$/.test(new URL(c.url).pathname)).every((c) => new URL(c.url).searchParams.get('access_token') === PAGE_TOKEN)).toBe(true)
   })
   it('a post of another Page (another business\'s too), no Page chosen, a shape that is not a post: refused before any call', async () => {
     const like = (objectId: string, connectionId = 'm-1') => metaWriteCall({ connectionId, operation: 'fblike.create', objectId, objectKind: 'fbpost', edge: 'likes', params: {}, check: false }).catch((e) => e)
@@ -220,21 +224,21 @@ describe('the owner check, then the Page token', () => {
     expect(await like(POST, 'm-3')).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
     expect(h.calls).toHaveLength(0)
     // The Page's own post: one read of its id, then a like with no body, as the Page.
-    h.answers.push(json({ id: POST }), tokenAnswer(), json({ success: true }))
+    h.answers.push(tokenAnswer(), json({ id: POST }), tokenAnswer(), json({ success: true }))
     const res = await metaWriteCall({ connectionId: 'm-1', operation: 'fblike.create', objectId: POST, objectKind: 'fbpost', edge: 'likes', params: {}, check: false })
     expect(res.ok).toBe(true)
-    expect(paths()).toEqual([`GET /${POST}`, `GET /${PAGE}`, `POST /${POST}/likes`])
+    expect(paths()).toEqual([`GET /${PAGE}`, `GET /${POST}`, `GET /${PAGE}`, `POST /${POST}/likes`])
     // No form field: the gateway sends an empty body, as for step 29's run now (meta-ad-rule-writes).
-    expect(sent(2).body).toBe('')
+    expect(sent(3).body).toBe('')
   })
   it('an edit only of a comment the chosen Page wrote', async () => {
-    h.answers.push(json({ id: POST }), json({ id: COMMENT, from: { id: '300000000000001' } }))
+    h.answers.push(tokenAnswer(), json({ id: POST }), json({ id: COMMENT, from: { id: '300000000000001' } }))
     const err = await metaWriteCall({ connectionId: 'm-1', operation: 'fbcomment.edit', objectId: COMMENT, objectKind: 'fbpagecomment', params: { message: 'x' }, check: false }).catch((e) => e)
     expect(err).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/edits only the Page's own comments/) })
-    expect(sent(1).url.searchParams.get('fields')).toBe('id,from{id}')
-    expect(h.calls).toHaveLength(2)
+    expect(sent(2).url.searchParams.get('fields')).toBe('id,from{id}')
+    expect(h.calls).toHaveLength(3)
     h.calls = []
-    h.answers.push(json({ id: POST }), json({ id: COMMENT, from: { id: PAGE } }), tokenAnswer(), json({ success: true }))
+    h.answers.push(tokenAnswer(), json({ id: POST }), json({ id: COMMENT, from: { id: PAGE } }), tokenAnswer(), json({ success: true }))
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'fbcomment.edit', objectId: COMMENT, objectKind: 'fbpagecomment', params: { message: 'Nuovo' }, check: false })).ok).toBe(true)
   })
   it('a branded-content comment: the post must tag the chosen Page as sponsor, the comment must be on it; the post is named', async () => {

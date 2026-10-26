@@ -697,6 +697,15 @@ describe('gap 46b (master CR-331) — introPost: an EXISTING post as a partnersh
     const r = await preview({ ...catalog, introPost: { source: 'facebook-post', id: `${PAGE}_500000000000002` } })
     expect(r.error).toMatch(/is not one Nexus can confirm the chosen Facebook Page posted/)
     expect(await preview({ ...catalog, introPost: { source: 'facebook-post', id: '120000000000099_500000000000002' } })).toMatchObject({ ok: false, error: expect.stringMatching(/not on the Facebook Page this business chose/) })
+    // The Page's token refused or missing for the owner read: refused in words, never read with another token.
+    const before = h.read.getMockImplementation()!
+    h.read.mockImplementation(async (c: unknown, q: { path: string; operation: string }) => {
+      if (q.operation === 'creative.postOwnerCheck') throw new MetaReadError(localFailure('Held, nothing sent: Meta gave Nexus no token for the business\'s chosen Facebook Page', 'META_PAGE_TOKEN_UNAVAILABLE'), 'r', 1)
+      return before(c, q)
+    })
+    expect((await preview({ ...catalog, introPost: { source: 'facebook-post', id: `${PAGE}_500000000000001` } })).error).toMatch(/Nexus could not read post 120000000000010_500000000000001 with the chosen Facebook Page's own token \(Held, nothing sent: Meta gave Nexus no token/)
+    expect((await preview({ name: 'From a post', postId: POST })).error).toMatch(/Nexus could not read post .* with the chosen Facebook Page's own token/)
+    h.read.mockImplementation(before)
     // A bare media id is read too: another Page's photo is not the business's own.
     const read = h.read.getMockImplementation()!
     h.read.mockImplementation(async (c: unknown, q: { path: string; operation: string }) => (q.path === '500000000000010' ? { body: { id: '500000000000010', from: { id: '120000000000099' } }, calls: 1 } : read(c, q)))

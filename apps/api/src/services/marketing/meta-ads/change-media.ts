@@ -45,7 +45,7 @@
  *           file part the gateway itself encodes: MetaWriteRule.file) and `default_locale` (a locale or none). Meta takes a
  *           locale once (482), so an upload is always new; Meta has no DELETE there: its undo is `locales_to_delete` on the
  *           same edge, then the default put back by a call of its own when Nexus read it before (MD-027, MD-027d).
- *   thumbnail gap 46b (MD-024): a custom thumbnail of a video the CHOSEN Facebook Page posted (step 28's livePageVideo: Meta's
+ *   thumbnail gap 46b (MD-024): a custom thumbnail of a video the CHOSEN Facebook Page posted (one owner read with its token: Meta's
  *           `from` is the chosen Page — "Thumbnails can only be created on Videos that have been associated with a Page"),
  *           made its preferred one: POST /<video id>/thumbnails with `source` (the image FILE: a picture Nexus holds or a
  *           public link, the same image rule as kind image, at most 8 MB — Meta's cap is 10 MB) and is_preferred=true, sent
@@ -73,7 +73,6 @@ import { localFailure, MetaReadError } from './errors.js'
 import { metaReadOne } from './read-client.js'
 import { metaChosenAccount, MetaLiveRefusal } from './live.js'
 import { ownMedia, videoStatusText } from './live-media.js'
-import { livePageVideo } from './live-optimize-changes.js'
 import { fieldRefused, listPaged } from './live-objects.js'
 import { takenIds } from './taken.js'
 
@@ -772,12 +771,29 @@ async function pageVideoThumbnails(connectionId: string, videoId: string): Promi
   }
 }
 
+/** Gap 46b — a video the chosen Page posted, by ONE read `GET /<video>?fields=id,from{id}` (the chosen Page's token), or why not. */
+async function pageVideoOf(connectionId: string, pageId: string, videoId: string): Promise<{ id: string; title: null } | { refusal: string }> {
+  if (!/^[1-9]\d{0,24}$/.test(videoId)) return { refusal: `"${videoId}" is not a Meta video id (digits).` }
+  let body: Record<string, unknown>
+  try {
+    body = (await metaReadOne<Record<string, unknown>>({ connectionId }, { operation: 'media.pageVideoOwnerCheck', path: videoId, query: { fields: 'id,from{id}' } })).body ?? {}
+  } catch (err) {
+    if (!(err instanceof MetaReadError)) throw err
+    return { refusal: `Nexus could not read video ${videoId} with the chosen Facebook Page's own token (${(err.failure.words ?? err.failure.sentence).slice(0, 300)}).` }
+  }
+  const asText = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : null)
+  const from = body.from && typeof body.from === 'object' ? asText((body.from as { id?: unknown }).id) : null
+  if (asText(body.id) !== videoId || from !== pageId) return { refusal: `Video ${videoId} is not one the chosen Facebook Page posted.` }
+  return { id: videoId, title: null }
+}
+
 async function thumbnailDraft(account: MetaChangeAccount, thumbnail: ThumbnailSource): Promise<MediaDraft | { refusal: string }> {
   const chosen = await metaChosenAccount(account.accountId)
   const pageId = chosen.pageId
   if (!pageId) return { refusal: 'Nothing was asked of Meta: this business has no Facebook Page chosen, and Meta takes a custom thumbnail only for a video associated with a Page ("Thumbnails can only be created on Videos that have been associated with a Page").' }
-  // Step 28's read of a Page video (meta-experiments): Meta's `from` must be the chosen Page.
-  const video = await livePageVideo(account.target, pageId, thumbnail.videoId.trim())
+  // The gateway's owner read itself (meta-page-owner.ts videoOfPage): `id,from{id}`, sent with the chosen Page's own token
+  // (meta-page-reads.ts — the live answer of 2026-10-26: Meta refuses Page content to the system-user token).
+  const video = await pageVideoOf(account.target.connectionId, pageId, thumbnail.videoId.trim())
   if ('refusal' in video) return { refusal: `Nothing was asked of Meta: ${video.refusal} Meta takes a custom thumbnail only for a video of a Page, and Nexus only for the chosen Page's.` }
   const image = await prepareMetaImage(thumbnail.image)
   if ('problem' in image) return { refusal: `Nothing was asked of Meta: ${image.problem}.` }

@@ -428,14 +428,17 @@ describe('gap 46b (master MD-024) — a Page video\'s custom thumbnail, made its
   it('through the gateway: ONE owner read (the chosen Page posted it), the Page\'s token, then ONE multipart POST — never the ledger', async () => {
     vi.stubEnv('NEXUS_META_ADS_WRITES', 'on')
     gatewayMetaPage['m-1'] = PAGE
-    h.answers.push(json({ id: PAGE_VIDEO, from: { id: PAGE } }), json({ id: PAGE, access_token: PAGE_TOKEN }), json({ success: true }))
+    const token = json({ id: PAGE, access_token: PAGE_TOKEN })
+    h.answers.push(token, json({ id: PAGE_VIDEO, from: { id: PAGE } }), token, json({ success: true }))
     const res = await metaWriteCall({ connectionId: 'm-1', operation: 'media.pageVideoThumbnail', objectId: PAGE_VIDEO, objectKind: 'ownpagevideo', edge: 'thumbnails', params: good, check: false })
     expect(res.ok).toBe(true)
-    expect(h.calls.map((c) => `${c.init.method} ${new URL(c.url).pathname.replace(`/${META_DEFAULT_GRAPH_API_VERSION}`, '')}`)).toEqual([`GET /${PAGE_VIDEO}`, `GET /${PAGE}`, `POST /${PAGE_VIDEO}/thumbnails`])
+    // The owner read goes with the chosen Page's own token too (the live answer of 2026-10-26: Page content is refused to the
+    // system-user token), then the change with it.
+    expect(h.calls.map((c) => `${c.init.method} ${new URL(c.url).pathname.replace(`/${META_DEFAULT_GRAPH_API_VERSION}`, '')}`)).toEqual([`GET /${PAGE}`, `GET /${PAGE_VIDEO}`, `GET /${PAGE}`, `POST /${PAGE_VIDEO}/thumbnails`])
     // Review: only what Nexus uses (no length): a field Meta leaves out never refuses it.
-    expect(new URL(h.calls[0].url).searchParams.get('fields')).toBe('id,from{id}')
-    expect(new URL(h.calls[0].url).searchParams.get('access_token')).toBe('meta-system-user-token')
-    const post = sent(2)
+    expect(new URL(h.calls[1].url).searchParams.get('fields')).toBe('id,from{id}')
+    expect(new URL(h.calls[1].url).searchParams.get('access_token')).toBe(PAGE_TOKEN)
+    const post = sent(3)
     expect(post.url.host).toBe('graph.facebook.com')
     expect(post.url.searchParams.get('access_token')).toBe(PAGE_TOKEN)
     expect(post.body).toBeInstanceOf(FormData)
@@ -452,7 +455,7 @@ describe('gap 46b (master MD-024) — a Page video\'s custom thumbnail, made its
     const send = () => metaSendChange(target, { objectId: PAGE_VIDEO, kind: 'ownpagevideo', edge: 'thumbnails', params: good, operation: 'media.pageVideoThumbnail', skipReadBack: true }).catch((e) => e)
     for (const error of [json({ error: { code: 200, message: '(#200) Permissions error' } }, 403), json({ error: { code: 10, message: '(#10) Application does not have permission for this action' } }, 403), json({ error: { code: 190, message: 'Error validating access token' } }, 400)]) {
       __metaObjectLimitsTest.useMemory()
-      h.answers.push(json({ id: PAGE_VIDEO, from: { id: PAGE } }), json({ id: PAGE, access_token: PAGE_TOKEN }), error)
+      h.answers.push(json({ id: PAGE, access_token: PAGE_TOKEN }), json({ id: PAGE_VIDEO, from: { id: PAGE } }), json({ id: PAGE, access_token: PAGE_TOKEN }), error)
       const err = await send()
       expect(err.message).toMatch(/Meta did not accept this thumbnail made as the chosen Facebook Page.*a task on the chosen Page.*pages_read_user_content, pages_manage_engagement and pages_show_list/)
       expect(err.message).not.toMatch(/ad account|ads_management|Make a new token|Advertise task/)
@@ -468,11 +471,17 @@ describe('gap 46b (master MD-024) — a Page video\'s custom thumbnail, made its
       [json({ error: { message: 'Unsupported get request.', code: 100 } }, 400), 'META_PAGE_UNCONFIRMED', /could not confirm that video/],
     ] as const) {
       h.calls = []
-      h.answers.push(answer)
+      h.answers.push(json({ id: PAGE, access_token: PAGE_TOKEN }), answer)
       const refused = await call()
       expect(refused, String(words)).toMatchObject({ code, message: expect.stringMatching(words) })
-      expect(h.calls.map((c) => c.init.method)).toEqual(['GET'])
+      // Only the owner read (with the Page's token): the change's own token read and send never happen.
+      expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET'])
     }
+    // The Page's token refused for the owner read: refused in words (never read with the system-user token), nothing sent.
+    h.calls = []
+    h.answers.push(json({ error: { code: 190, message: 'Error validating access token' } }, 400))
+    expect(await call()).toMatchObject({ code: 'META_PAGE_UNCONFIRMED', message: expect.stringMatching(/could not confirm that video 120000000000601 .*Meta gave Nexus no token for the business's chosen Facebook Page|could not confirm that video 120000000000601/) })
+    expect(h.calls.map((c) => new URL(c.url).pathname.split('/').pop())).toEqual([PAGE])
     h.calls = []
     delete gatewayMetaPage['m-1']
     expect(await call()).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })

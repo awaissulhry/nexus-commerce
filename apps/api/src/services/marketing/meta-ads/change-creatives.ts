@@ -39,7 +39,7 @@ import {
 import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import type { MetaChangeAccount } from './change-account.js'
 import { metaSendChange, MetaWriteError, META_UNKNOWN_OUTCOME, type MetaChangeResult, type MetaWriteTarget } from './write-client.js'
-import { localFailure } from './errors.js'
+import { localFailure, MetaReadError } from './errors.js'
 import { metaReadOne } from './read-client.js'
 import { metaChosenAccount, MetaLiveRefusal, objectInAccount, type MetaChosenAccount } from './live.js'
 import { ownMedia, pageOf, pagePostId } from './live-media.js'
@@ -619,8 +619,10 @@ export interface CreativeDraft extends MetaChangeDraft {
  */
 /**
  * Gap 46b review F2 — a post (`<page id>_<post id>`) or a Page photo's or video's own id the chosen Page POSTED: ONE read,
- * `GET /<id>?fields=id,from{id}` — Meta must answer this very id, `from` the chosen Page (the gateway reads the same:
- * metaPagePostOwned). A composite id of another Page is refused before the read. Throws MetaLiveRefusal in words.
+ * `GET /<id>?fields=id,from{id}`, which the gateway sends with the chosen Page's own token (meta-page-reads.ts; Meta refuses a
+ * post read to the system-user token, live 2026-10-26) — Meta must answer this very id, `from` the chosen Page (the gateway
+ * reads the same: metaPagePostOwned). A composite id of another Page is refused before the read; a read that cannot be made
+ * with the Page's token is refused in words (never retried with another token). Throws MetaLiveRefusal in words.
  */
 export async function ownFacebookPost(chosen: MetaChosenAccount, id: string): Promise<string> {
   const pageId = pageOf(chosen)
@@ -630,8 +632,9 @@ export async function ownFacebookPost(chosen: MetaChosenAccount, id: string): Pr
   let body: Record<string, unknown> = {}
   try {
     body = (await metaReadOne<Record<string, unknown>>({ connectionId: chosen.connectionId }, { operation: 'creative.postOwnerCheck', path: value, query: { fields: 'id,from{id}' } })).body ?? {}
-  } catch {
-    body = {}
+  } catch (err) {
+    const words = err instanceof MetaReadError ? err.failure.words ?? err.failure.sentence : err instanceof Error ? err.message : String(err)
+    throw new MetaLiveRefusal(`Nexus could not read ${value.includes('_') ? 'post' : 'photo or video'} ${value} with the chosen Facebook Page's own token (${words.slice(0, 300)}), so it cannot confirm the Page posted it. Nothing was asked of Meta.`)
   }
   const asText = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : null)
   const from = isObject(body.from) ? asText(body.from.id) : null

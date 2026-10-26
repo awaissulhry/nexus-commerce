@@ -446,7 +446,7 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
       // path's account must be the one this business chose through this connection.
       const instagramChosen = judged.pageRead.instagramId === undefined || (!!req.connectionId && (await metaChosenInstagramOf(req.connectionId)) === judged.pageRead.instagramId)
       // Gap 46b review N7 — a video's thumbnails: ONE owner read first, the video must be one the chosen Page posted.
-      const videoOwned = judged.pageRead.videoId === undefined || (!!chosen && !!req.connectionId && await metaPagePostOwned(req.connectionId, judged.pageRead.videoId, chosen))
+      const videoOwned = judged.pageRead.videoId === undefined || (!!chosen && !!req.connectionId && (await metaPagePostOwned(req.connectionId, judged.pageRead.videoId, chosen)).owned)
       const forChosen = !!chosen && instagramChosen && videoOwned && (judged.pageRead.pageId === null || chosen === judged.pageRead.pageId)
       // Live-probe fix MD-101 — the feed of ANOTHER Page (meta-ad-library page-posts: public posts, Meta's Page Public Content
       // Access) stays an ordinary read with the system-user token, as before; only the chosen Page's own feed takes its token.
@@ -1627,7 +1627,11 @@ async function metaCreativeAssetProblem(
     case 'pagepost': {
       if (!page || !asset.id.startsWith(`${page}_`)) return notChosenMedia(`${where}post ${asset.id} is not a post of the Page this business chose.`)
       // Gap 46b review F2 — the id's prefix is not proof: ONE owner read, Meta must answer this very id, posted BY the chosen Page.
-      return (await metaPagePostOwned(connectionId, asset.id, page)) ? null : notChosenMedia(`${where}post ${asset.id} is not one Nexus can confirm the chosen Page posted (Meta answers it with another id, another author, or not at all).`)
+      const owner = await metaPagePostOwned(connectionId, asset.id, page)
+      if (owner.owned) return null
+      return notChosenMedia(owner.read
+        ? `${where}post ${asset.id} is not one Nexus can confirm the chosen Page posted (Meta answers it with another id or another author).`
+        : `${where}Nexus could not read post ${asset.id} with the chosen Facebook Page's own token${owner.words ? ` (${owner.words.slice(0, 300)})` : ''}, so it cannot confirm the Page posted it.`)
     }
     case 'adimage': return images?.has(asset.id) ? null : notChosenMedia(`${where}image ${asset.id} is not one Nexus can confirm in the chosen ad account's image library (create-meta-media uploads it and answers its hash).`)
     case 'canvas':
@@ -1769,16 +1773,19 @@ async function metaPartnerContentCheck(
 
 /**
  * Gap 46b review F2 — is this post (`<page id>_<post id>`) or Page media (a photo's or video's own id) one the chosen Page
- * posted? ONE read, `GET /<id>?fields=id,from{id}` (the business's system-user token, through this gateway): Meta must answer
- * this very id, and `from` must be the chosen Page — an id's prefix alone is no proof (Meta may resolve a composite id by its
- * post part, live-media.ts stillOnPage). Unreadable = no.
+ * posted? ONE read, `GET /<id>?fields=id,from{id}` through this gateway, which sends it with the CHOSEN Page's own token
+ * (meta-page-reads.ts: the post rule and the media owner rule — the live answer of 2026-10-26: Meta refuses a post read to the
+ * system-user token, #10). Meta must answer this very id, and `from` must be the chosen Page — an id's prefix alone is no
+ * proof (Meta may resolve a composite id by its post part, live-media.ts stillOnPage). `read`: whether Meta answered at all
+ * (a missing or refused Page token, or Meta's refusal, is no answer: never a system-user retry); `words` say why not.
  */
-async function metaPagePostOwned(connectionId: string, id: string, pageId: string): Promise<boolean> {
-  const read = await metaReadFields(connectionId, id, 'id,from{id}')
-  if (!read) return false
+async function metaPagePostOwned(connectionId: string, id: string, pageId: string): Promise<{ owned: boolean; read: boolean; words: string | null }> {
+  const answer = await metaOwnerRead(connectionId, id, 'id,from{id}')
+  const body = answer.body && typeof answer.body === 'object' ? answer.body : null
+  if (!body) return { owned: false, read: false, words: answer.words }
   const own = (value: unknown) => (typeof value === 'string' || typeof value === 'number' ? String(value) : null)
-  const from = read.from && typeof read.from === 'object' ? own((read.from as { id?: unknown }).id) : null
-  return own(read.id) === id && from === pageId
+  const from = body.from && typeof body.from === 'object' ? own((body.from as { id?: unknown }).id) : null
+  return { owned: own(body.id) === id && from === pageId, read: true, words: null }
 }
 
 /**
@@ -1808,8 +1815,13 @@ async function metaIntroCardProblem(
   const prefix = platform === 'FACEBOOK' ? /^([1-9]\d{0,24})_[1-9]\d{0,24}$/.exec(asset.id)?.[1] ?? null : null
   if (platform === 'FACEBOOK') {
     if (!prefix && !/^[1-9]\d{0,24}$/.test(asset.id)) return notChosenMedia(`${where}the intro card ${asset.id} is not a Facebook post or media id.`)
-    // Gap 46b review F2 — the business's own only by ONE owner read (Meta's id and `from`), never by the id's prefix.
-    if (mine.pageId && (!prefix || prefix === mine.pageId) && await metaPagePostOwned(connectionId, asset.id, mine.pageId)) return null
+    // Gap 46b review F2 — the business's own only by ONE owner read (Meta's id and `from`, the chosen Page's token), never by
+    // the id's prefix. An id that names the chosen Page but cannot be read with its token is refused in words (no other path).
+    if (mine.pageId && (!prefix || prefix === mine.pageId)) {
+      const owner = await metaPagePostOwned(connectionId, asset.id, mine.pageId)
+      if (owner.owned) return null
+      if (prefix && !owner.read) return notChosenMedia(`${where}Nexus could not read the intro card ${asset.id} with the chosen Facebook Page's own token${owner.words ? ` (${owner.words.slice(0, 300)})` : ''}, so it cannot confirm the Page posted it.`)
+    }
   } else {
     if (!/^[1-9]\d{0,24}$/.test(asset.id)) return notChosenMedia(`${where}the intro card ${asset.id} is not an Instagram media id.`)
     if (mine.instagramId && await metaInstagramMediaOwned(connectionId, asset.id, mine.instagramId)) return null

@@ -341,21 +341,22 @@ describe('the owner check, then the Page token', () => {
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'pagepost.feed', objectId: PAGE, objectKind: 'postpage', edge: 'feed', params: attached, check: false, run: 'run-1' })).ok).toBe(true)
     expect(paths()).toEqual([`GET /${PAGE}`, `POST /${PAGE}/feed`])
     h.calls = []
-    // Another run (or none): one read of the photo; another Page's photo is refused before the token is read.
-    h.answers.push(json({ id: PHOTO, from: { id: OTHER_PAGE } }))
+    // Another run (or none): one read of the photo — gap 46b (the live read of 2026-10-26): with the chosen Page's own token,
+    // the media owner read — and another Page's photo is refused before the change's own token is read.
+    h.answers.push(tokenAnswer(), json({ id: PHOTO, from: { id: OTHER_PAGE } }))
     const theirs = await metaWriteCall({ connectionId: 'm-1', operation: 'pagepost.feed', objectId: PAGE, objectKind: 'postpage', edge: 'feed', params: attached, check: false, run: 'run-2' }).catch((e) => e)
     expect(theirs).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN', message: expect.stringMatching(/not one of the Facebook Page this business chose/) })
     expect(theirs.message).not.toContain(OTHER_PAGE)
-    expect(paths()).toEqual([`GET /${PHOTO}`])
-    expect(sent(0).url.searchParams.get('fields')).toBe('id,from{id}')
+    expect(paths()).toEqual([`GET /${PAGE}`, `GET /${PHOTO}`])
+    expect([sent(1).url.searchParams.get('fields'), sent(1).url.searchParams.get('access_token')]).toEqual(['id,from{id}', PAGE_TOKEN])
     h.calls = []
-    h.answers.push(json({ id: PHOTO, from: { id: PAGE } }), tokenAnswer(), json({ id: `${PAGE}_500000000000003` }))
+    h.answers.push(tokenAnswer(), json({ id: PHOTO, from: { id: PAGE } }), tokenAnswer(), json({ id: `${PAGE}_500000000000003` }))
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'pagepost.feed', objectId: PAGE, objectKind: 'postpage', edge: 'feed', params: attached, check: false })).ok).toBe(true)
     // A failed photo upload is never remembered as made.
     __postOwnerTest.reset(); h.calls = []
     h.answers.push(tokenAnswer(), json({ error: { code: 324, message: 'Missing or invalid image file' } }, 400))
     await metaWriteCall({ connectionId: 'm-1', operation: 'pagepost.photo', objectId: PAGE, objectKind: 'postpage', edge: 'photos', params: { url: 'https://cdn.example-shop.com/b.jpg', published: 'false' }, check: false, run: 'run-3' })
-    h.answers.push(json({ error: { code: 100, message: 'Unsupported get request' } }, 400))
+    h.answers.push(tokenAnswer(), json({ error: { code: 100, message: 'Unsupported get request' } }, 400))
     expect(await metaWriteCall({ connectionId: 'm-1', operation: 'pagepost.feed', objectId: PAGE, objectKind: 'postpage', edge: 'feed', params: { published: 'true', attached_media: JSON.stringify([{ media_fbid: '140000000000009' }]) }, check: false, run: 'run-3' }).catch((e) => e)).toMatchObject({ code: 'META_PAGE_UNCONFIRMED' })
   })
   it('a library image by its hash: one read of the chosen ad account\'s images; a hash not there is refused', async () => {
@@ -370,22 +371,26 @@ describe('the owner check, then the Page token', () => {
   })
   it('an edit: a post the chosen Page WROTE; a visitor\'s post, another Page\'s, a sponsor of another business or the Page itself: refused', async () => {
     const edit = (params: Record<string, string>, objectId = POST) => metaWriteCall({ connectionId: 'm-1', operation: 'pagepost.update', objectId, objectKind: 'pagepostedit', params, check: false }).catch((e) => e)
-    h.answers.push(json({ id: POST, from: { id: PAGE } }), tokenAnswer(), json({ success: true }))
+    // Gap 46b (the live read of 2026-10-26: Meta refuses a post read to the system-user token, #10) — the owner read goes
+    // with the chosen Page's own token too: token, post, token, change.
+    h.answers.push(tokenAnswer(), json({ id: POST, from: { id: PAGE } }), tokenAnswer(), json({ success: true }))
     expect((await edit({ message: 'Nuovo testo' })).ok).toBe(true)
-    expect(paths()).toEqual([`GET /${POST}`, `GET /${PAGE}`, `POST /${POST}`])
-    expect(sent(2).url.searchParams.get('access_token')).toBe(PAGE_TOKEN)
+    expect(paths()).toEqual([`GET /${PAGE}`, `GET /${POST}`, `GET /${PAGE}`, `POST /${POST}`])
+    expect([sent(1).url.searchParams.get('access_token'), sent(3).url.searchParams.get('access_token')]).toEqual([PAGE_TOKEN, PAGE_TOKEN])
     h.calls = []; __metaObjectLimitsTest.useMemory()
-    h.answers.push(json({ id: POST, from: { id: '300000000000001' } }))
+    h.answers.push(tokenAnswer(), json({ id: POST, from: { id: '300000000000001' } }))
     expect(await edit({ is_hidden: 'true' })).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/visitor's post/) })
     expect(await edit({ is_hidden: 'true' }, `${OTHER_PAGE}_500000000000001`)).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
     h.calls = []
     gatewayMetaTakenLinks.add(`PAGE:${BRAND_PAGE}`)
-    h.answers.push(json({ id: POST, from: { id: PAGE } }))
+    h.answers.push(tokenAnswer(), json({ id: POST, from: { id: PAGE } }))
     const taken = await edit({ sponsor_id: BRAND_PAGE })
     expect(taken).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/another business in Nexus uses/) })
-    h.answers.push(json({ id: POST, from: { id: PAGE } }))
+    h.answers.push(tokenAnswer(), json({ id: POST, from: { id: PAGE } }))
     expect(await edit({ sponsor_id: PAGE })).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/the chosen Page itself/) })
-    expect(h.calls.every((c) => c.init.method === 'GET' && new URL(c.url).searchParams.get('access_token') === SYSTEM_TOKEN)).toBe(true)
+    // Only reads: the Page's token read (system-user token), then the post with the Page's own token; nothing sent.
+    expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
+    expect(h.calls.filter((c) => new URL(c.url).pathname.endsWith(`/${POST}`)).every((c) => new URL(c.url).searchParams.get('access_token') === PAGE_TOKEN)).toBe(true)
   })
   it('a delete: only a post or media Nexus made (its change records); nothing is read or sent for any other', async () => {
     const remove = (objectId: string, objectKind: 'pagepostmade' | 'igmediamade', connectionId = 'm-1') => metaWriteCall({ connectionId, operation: objectKind === 'pagepostmade' ? 'pagepost.delete' : 'igmedia.delete', objectId, objectKind, method: 'DELETE', params: {}, check: false }).catch((e) => e)

@@ -337,17 +337,19 @@ describe('made as the chosen Page, with every id checked', () => {
     // A post: <page>_<post> of the chosen Page by its id alone; a photo or video it posted by `from`.
     expect((await one(part('canvas_existing_post', { source_facebook_post_id: `${PAGE}_500000000000001` }), [tokenAnswer(), json({ id: PART })])).ok).toBe(true)
     expect(await one(part('canvas_existing_post', { source_facebook_post_id: `${OTHER_PAGE}_500000000000001` }), [])).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
-    expect((await one(part('canvas_existing_post', { source_facebook_post_id: PHOTO }), [json({ id: PHOTO, from: { id: PAGE } }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
-    expect(await one(part('canvas_existing_post', { source_facebook_post_id: PHOTO }), [json({ id: PHOTO, from: { id: OTHER_PAGE } })])).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
+    // Gap 46b (the live read of 2026-10-26) — the owner read id,from{id} goes with the chosen Page's own token (token first).
+    expect((await one(part('canvas_existing_post', { source_facebook_post_id: PHOTO }), [tokenAnswer(), json({ id: PHOTO, from: { id: PAGE } }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
+    expect(new URL(h.calls[1].url).searchParams.get('access_token')).toBe(PAGE_TOKEN)
+    expect(await one(part('canvas_existing_post', { source_facebook_post_id: PHOTO }), [tokenAnswer(), json({ id: PHOTO, from: { id: OTHER_PAGE } })])).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
     // An Instagram media of the chosen account: its owner, else its username against the account's own.
     expect((await one(part('canvas_existing_post', { source_instagram_media_id: MEDIA }), [json({ id: MEDIA, owner: { id: IG } }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
     expect((await one(part('canvas_existing_post', { source_instagram_media_id: MEDIA }), [json({ id: MEDIA, username: 'shop_a' }), json({ id: IG, username: 'Shop_A' }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
     expect(await one(part('canvas_existing_post', { source_instagram_media_id: MEDIA }), [json({ id: MEDIA, owner: { id: '17841400000000099' } })])).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
     // A video the Page posted, else one of the chosen ad account's library.
-    expect((await one(part('canvas_video', { video_id: VIDEO }), [json({ id: VIDEO, from: { id: PAGE } }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
-    expect((await one(part('canvas_video', { video_id: VIDEO }), [json({ id: VIDEO }), json({ data: [{ id: VIDEO }] }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
-    expect(sent(1).url.pathname).toBe('/v26.0/act_1234567890/advideos')
-    expect(await one(part('canvas_video', { video_id: VIDEO }), [json({ id: VIDEO, from: { id: OTHER_PAGE } }), json({ data: [] })])).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
+    expect((await one(part('canvas_video', { video_id: VIDEO }), [tokenAnswer(), json({ id: VIDEO, from: { id: PAGE } }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
+    expect((await one(part('canvas_video', { video_id: VIDEO }), [tokenAnswer(), json({ id: VIDEO }), json({ data: [{ id: VIDEO }] }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
+    expect(sent(2).url.pathname).toBe('/v26.0/act_1234567890/advideos')
+    expect(await one(part('canvas_video', { video_id: VIDEO }), [tokenAnswer(), json({ id: VIDEO, from: { id: OTHER_PAGE } }), json({ data: [] })])).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
     // A lead form of the chosen Page.
     expect((await one(part('canvas_lead_form', { leadgen_data_id: FORM }), [json({ id: FORM, page_id: PAGE, questions: [{ type: 'EMAIL' }] }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
     expect(await one(part('canvas_lead_form', { leadgen_data_id: FORM }), [json({ id: FORM, page_id: OTHER_PAGE, questions: [{ type: 'EMAIL' }] })])).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })

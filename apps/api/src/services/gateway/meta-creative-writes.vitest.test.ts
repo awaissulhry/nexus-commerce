@@ -88,6 +88,9 @@ const problem = (input: Partial<Parameters<typeof metaWriteVerdict>[0]>) => {
 }
 const json = (body: unknown, status = 200) => () => new Response(JSON.stringify(body), { status })
 const sent = (i: number) => ({ method: h.calls[i].init.method, url: new URL(h.calls[i].url), body: h.calls[i].init.body as string | undefined })
+/** Gap 46b (the live read of 2026-10-26) — the chosen Page's own token, which the gateway reads for a post's owner read. */
+const PAGE_TOKEN = 'EAAPageTokenForGap46bCreativeTests12345'
+const pageToken = () => json({ id: PAGE, access_token: PAGE_TOKEN })
 
 beforeEach(() => {
   __rateTest.useMemory()
@@ -285,19 +288,27 @@ describe('a creative on the gateway', () => {
 
   it('a post, an Instant Experience and a lead form must be the chosen Page\'s', async () => {
     const post = (id: string) => ({ ...postSilent(), name: 'From a post', object_story_id: id })
-    // Gap 46b review F2 — ONE owner read first: Meta answers this very post, written BY the chosen Page.
-    h.answers.push(json({ id: `${PAGE}_500000000000001`, from: { id: PAGE } }))
+    // Gap 46b review F2 — ONE owner read first: Meta answers this very post, written BY the chosen Page — read with the chosen
+    // Page's OWN token (the live answer of 2026-10-26: Meta refuses a post read to the system-user token, #10).
+    h.answers.push(pageToken(), json({ id: `${PAGE}_500000000000001`, from: { id: PAGE } }))
     await metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(post(`${PAGE}_500000000000001`)))) })
-    expect(h.calls.map((c) => `${c.init.method} ${new URL(c.url).pathname.split('/').pop()}`)).toEqual([`GET ${PAGE}_500000000000001`, 'POST adcreatives'])
-    expect(new URL(h.calls[0].url).searchParams.get('fields')).toBe('id,from{id}')
+    expect(h.calls.map((c) => `${c.init.method} ${new URL(c.url).pathname.split('/').pop()}`)).toEqual([`GET ${PAGE}`, `GET ${PAGE}_500000000000001`, 'POST adcreatives'])
+    expect(new URL(h.calls[1].url).searchParams.get('fields')).toBe('id,from{id}')
+    expect(new URL(h.calls[1].url).searchParams.get('access_token')).toBe(PAGE_TOKEN)
+    expect(new URL(h.calls[2].url).searchParams.get('access_token')).not.toBe(PAGE_TOKEN)
     await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(post('120000000000099_500000000000001')))) })).rejects.toThrow(/not a post of the Page this business chose/)
     // Gap 46b review F2 — the chosen Page's prefix is no proof: a visitor's post, another id Meta answers, or no answer: refused.
     for (const answer of [json({ id: `${PAGE}_500000000000002`, from: { id: '300000000000001' } }), json({ id: '120000000000099_500000000000002', from: { id: '120000000000099' } }), json({ id: `${PAGE}_500000000000099`, from: { id: PAGE } }), json({ error: { message: 'Unsupported get request.', code: 100 } }, 400)]) {
       h.calls = []
-      h.answers.push(answer)
-      await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(post(`${PAGE}_500000000000002`)))) })).rejects.toThrow(/post 120000000000010_500000000000002 is not one Nexus can confirm the chosen Page posted/)
-      expect(h.calls.map((c) => c.init.method)).toEqual(['GET'])
+      h.answers.push(pageToken(), answer)
+      await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(post(`${PAGE}_500000000000002`)))) })).rejects.toThrow(/post 120000000000010_500000000000002 is not one Nexus can confirm the chosen Page posted|Nexus could not read post 120000000000010_500000000000002 with the chosen Facebook Page's own token/)
+      expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET'])
     }
+    // The Page's token refused or missing: refused in words, and never read again with the system-user token.
+    h.calls = []
+    h.answers.push(json({ error: { code: 190, message: 'Error validating access token' } }, 400))
+    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(post(`${PAGE}_500000000000001`)))) })).rejects.toThrow(/Nexus could not read post 120000000000010_500000000000001 with the chosen Facebook Page's own token/)
+    expect(h.calls.map((c) => `${c.init.method} ${new URL(c.url).pathname.split('/').pop()}`)).toEqual([`GET ${PAGE}`])
     const form1 = withStory({ link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type: 'SIGN_UP', value: { lead_gen_form_id: '120000000000777' } } } })
     h.calls = []
     h.answers.push(json({ data: [{ hash: HASH }] }), json({ id: '120000000000777', page: { id: '120000000000099' } }))
@@ -705,11 +716,12 @@ describe('gap 46b (master CR-331) — a partnership Advantage+ catalog ad with a
     expect(judged(intro({ parent_source_facebook_post_id: '500000000000001' }))).toMatchObject({ assets: expect.arrayContaining([{ id: '500000000000001', kind: 'introsource', with: 'FACEBOOK' }]) })
   })
   it('the business\'s own post or media: the chosen Page\'s post or media by ONE owner read (review F2), the chosen Instagram account\'s media by Meta\'s owner — then it goes', async () => {
-    h.answers.push(...ownCatalog(), json({ id: `${PAGE}_500000000000001`, from: { id: PAGE } }), json({ id: '120000000000301' }))
+    h.answers.push(...ownCatalog(), pageToken(), json({ id: `${PAGE}_500000000000001`, from: { id: PAGE } }), json({ id: '120000000000301' }))
     await send(intro({ parent_source_facebook_post_id: `${PAGE}_500000000000001` }))
     expect(posts()).toHaveLength(1)
     const ownerRead = h.calls.find((c) => new URL(c.url).pathname.endsWith(`/${PAGE}_500000000000001`))!
     expect(new URL(ownerRead.url).searchParams.get('fields')).toBe('id,from{id}')
+    expect(new URL(ownerRead.url).searchParams.get('access_token')).toBe(PAGE_TOKEN)
     expect(new URLSearchParams(sent(h.calls.length - 1).body!).get('branded_content')).toBe(JSON.stringify({ parent_source_facebook_post_id: `${PAGE}_500000000000001` }))
     h.calls = []
     h.answers.push(...ownCatalog(), json({ id: MEDIA, owner: { id: IG } }), json({ id: '120000000000302' }))
@@ -718,12 +730,19 @@ describe('gap 46b (master CR-331) — a partnership Advantage+ catalog ad with a
     expect(h.calls.some((c) => new URL(c.url).pathname.endsWith('/partnership-ads-advertisable-content'))).toBe(false)
     // Review N5 — a Page photo's or video's own id: the same owner read.
     h.calls = []
-    h.answers.push(...ownCatalog(), json({ id: '500000000000003', from: { id: PAGE } }), json({ id: '120000000000306' }))
+    h.answers.push(...ownCatalog(), pageToken(), json({ id: '500000000000003', from: { id: PAGE } }), json({ id: '120000000000306' }))
     await send(intro({ parent_source_facebook_post_id: '500000000000003' }))
     expect(posts()).toHaveLength(1)
+    expect(new URL(h.calls.find((c) => new URL(c.url).pathname.endsWith('/500000000000003'))!.url).searchParams.get('access_token')).toBe(PAGE_TOKEN)
+    // The chosen Page's post whose Page token is refused: refused in words (no partner path, no system-user read).
+    h.calls = []
+    h.answers.push(...ownCatalog(), json({ error: { code: 190, message: 'Error validating access token' } }, 400))
+    await expect(send(intro({ parent_source_facebook_post_id: `${PAGE}_500000000000001` }))).rejects.toThrow(/Nexus could not read the intro card 120000000000010_500000000000001 with the chosen Facebook Page's own token/)
+    expect(h.calls.some((c) => new URL(c.url).pathname.endsWith('/partnership-ads-advertisable-content'))).toBe(false)
+    expect(posts()).toHaveLength(0)
     // Review F2 — the chosen Page's prefix is no proof: Meta answers another author → the partner path (not listed: refused).
     h.calls = []
-    h.answers.push(...ownCatalog(), json({ id: `${PAGE}_500000000000004`, from: { id: '120000000000099' } }), discovery([]))
+    h.answers.push(...ownCatalog(), pageToken(), json({ id: `${PAGE}_500000000000004`, from: { id: '120000000000099' } }), discovery([]))
     await expect(send(intro({ parent_source_facebook_post_id: `${PAGE}_500000000000004` }))).rejects.toThrow(/content discovery does not list content 120000000000010_500000000000004/)
     expect(posts()).toHaveLength(0)
   })
@@ -740,16 +759,16 @@ describe('gap 46b (master CR-331) — a partnership Advantage+ catalog ad with a
     await expect(send(intro({ parent_source_facebook_post_id: `${PARTNER_PAGE}_500000000000005` }))).rejects.toThrow(/names a Page in its id that is not the post's author/)
     // A bare media id of the partner: Meta's author decides.
     h.calls = []
-    h.answers.push(...ownCatalog(), json({ id: '500000000000006', from: { id: PARTNER_PAGE } }), discovery([{ content_id: '500000000000006', platform: 'FACEBOOK', author: { fb_page_id: PARTNER_PAGE } }]), json({ id: '120000000000307' }))
+    h.answers.push(...ownCatalog(), pageToken(), json({ id: '500000000000006', from: { id: PARTNER_PAGE } }), discovery([{ content_id: '500000000000006', platform: 'FACEBOOK', author: { fb_page_id: PARTNER_PAGE } }]), json({ id: '120000000000307' }))
     await send(intro({ parent_source_facebook_post_id: '500000000000006' }))
     expect(posts()).toHaveLength(1)
     h.calls = []
-    h.answers.push(...ownCatalog(), json({}), discovery([{ content_id: '500000000000006', platform: 'FACEBOOK', author: { fb_page_id: CREATOR_PAGE } }]))
+    h.answers.push(...ownCatalog(), pageToken(), json({}), discovery([{ content_id: '500000000000006', platform: 'FACEBOOK', author: { fb_page_id: CREATOR_PAGE } }]))
     await expect(send(intro({ parent_source_facebook_post_id: '500000000000006' }))).rejects.toThrow(/is by another account than the partner this creative names/)
     // Review N8 — the refusals speak of an intro card, never of a boost.
     h.calls = []
     gatewayMetaTakenLinks.add(`PAGE:${CREATOR_PAGE}`)
-    h.answers.push(...ownCatalog(), json({}), discovery([{ content_id: '500000000000006', platform: 'FACEBOOK', author: { fb_page_id: CREATOR_PAGE } }]))
+    h.answers.push(...ownCatalog(), pageToken(), json({}), discovery([{ content_id: '500000000000006', platform: 'FACEBOOK', author: { fb_page_id: CREATOR_PAGE } }]))
     const taken = await send(intro({ parent_source_facebook_post_id: '500000000000006' })).catch((e: Error) => e.message)
     expect(taken).toMatch(/so no creative of this business shows it as an intro card/)
     expect(taken).not.toMatch(/boost/)
