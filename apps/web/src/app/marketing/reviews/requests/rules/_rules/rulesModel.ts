@@ -2,7 +2,7 @@
  * Reviews › Requests › Rules — the words of the rules grid (channel, markets, first try, window, skips, the A/B mark),
  * the warnings about rules that match no orders, the tiles, and what each bulk action would change (Owner ruling 7:
  * a bulk action counts the rules it changes; when it can change none it is held and names the rule that blocks it).
- * The server decides again (`POST /api/review-rules/bulk` → `{ changed, held }`); this file mirrors its rules
+ * The server decides again (`POST /review-rules/bulk` → `{ changed, held }`); this file mirrors its rules
  * (review-queue.service.ts `rulesBulkPlan`). Pure; tested in rulesModel.vitest.test.ts.
  */
 import { COUNTRY_NAMES } from '@/app/_shared/app-nav'

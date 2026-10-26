@@ -2,7 +2,7 @@
  * Reviews › Requests › Queue — the bulk bar (Owner ruling 7): which ticked requests Snooze, Skip and Send now would
  * change, and which they leave out and why. A bulk action that cannot apply to some ticked rows counts the rows it
  * changes; when it can apply to none it is held and names why. The server decides again when it runs
- * (`POST /api/review-queue/bulk` answers `{ changed, held }`); this plan only says so before the press. Send now's
+ * (`POST /review-queue/bulk` answers `{ changed, held }`); this plan only says so before the press. Send now's
  * reasons are the server's own words per row (`sendNowHeld`); Snooze and Skip follow the server's rules
  * (review-queue-words.ts `snoozeHeldFor`, `skipHeldFor`). Pure; tested in queueBulk.vitest.test.ts.
  */
