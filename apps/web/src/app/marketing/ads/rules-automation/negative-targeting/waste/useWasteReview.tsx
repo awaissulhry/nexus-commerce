@@ -32,7 +32,7 @@ import {
   applyWaste, cancelFollowUp, commitApproval, decideWaiting, previewWaste, readWaitingSteps, restoreCard, runFollowUp, skipRows, takeBackApproval, undoActionLog, undoChangeSet, unskipRows,
 } from './wasteApi'
 import { AlsoKeepsLead, ProtectionScope } from './protection'
-import { followUpLine, followUpWords, KEEP_PROTECTED_REASON, protectionMatchWord, stepOrderNote, watchFollowUp } from './protectionModel'
+import { followUpLine, followUpWaitWords, followUpWords, KEEP_PROTECTED_REASON, protectionMatchWord, stepOrderNote, watchFollowUp } from './protectionModel'
 import {
   ackWords, appliedWords, decideLines, decideSummary, deliveryView, doneLine, historyWord, isAsinText, isFinal, keepWord, landsWord, olderKeep, plural, previewSummary,
   reachLine, reachTotalLine, reachWindowWords, saveWords, showsTogether, shownSteps, soldItems, soldNotes, stepStateWord, undoWords, unknownAction, verbLabel,
@@ -360,7 +360,8 @@ export function useWasteReview({ market, after }: { market: string | null; after
     if (waits.length && id && answer.followUp && answer.status === 'queued') {
       const keyOf = (s: PreviewStep) => `${steps.indexOf(s)}:${s.rowId}`
       const removals = sent.filter((s) => !s.after)
-      for (const s of waits) results[keyOf(s)] = { ok: true, words: 'Nexus sends it once the protection is removed', verb: 'saved' }
+      const waiting = followUpWaitWords(waits)
+      for (const s of waits) results[keyOf(s)] = { ok: true, words: waiting.row(s), verb: 'saved' }
       const watch = { stopped: false }
       const stopUndo = async (): Promise<Record<string, ReviewResult>> => {
         watch.stopped = true
@@ -374,7 +375,7 @@ export function useWasteReview({ market, after }: { market: string | null; after
       }
       patch(a, {
         state: { phase: 'done', results },
-        summary: 'Removes the protection in 20 s, then Nexus sends the negative — you can leave this page · Undo stops both',
+        summary: waiting.line,
         undo: stopUndo,
         undoLabel: undoWords(sent.map((s) => s.action)),
         noUndo: null,

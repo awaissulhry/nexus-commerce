@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  alsoKeepsLine, alsoKeepsTitle, followUpLine, followUpSentence, followUpWords, keepProtectedIds, keptProtectedWords, MAX_REVIEW_ITEMS, protectionChipWords, protectionScopeWords,
+  alsoKeepsLine, alsoKeepsTitle, followUpLine, followUpSentence, followUpWaitWords, followUpWords, keepProtectedIds, keptProtectedWords, MAX_REVIEW_ITEMS, protectionChipWords, protectionScopeWords,
   protectionSentence, removeProtectionBulkCount, removeProtectionBulkPlan, removeProtectionHeld, removeProtectionItems, stepOrderNote, termKeys, watchFollowUp,
   WATCH_TRIES, type WatchDeps,
 } from './protectionModel'
@@ -139,6 +139,17 @@ describe('the follow-up: Nexus sends the negative once the removal ran; the page
     }
     expect(followUpWords(sentTo('amazon', 'rejected'), 'r')).toMatchObject({ ok: false, words: 'Not sent' })
     expect(followUpLine(null)).toMatch(/the row says how it went/)
+  })
+  it('says "sends" only for a negative that goes to Amazon while it waits for the removal; Nexus only is "saved in Nexus"', () => {
+    const amazon = followUpWaitWords([step({ lands: 'amazon' })])
+    expect(amazon.line).toBe('Removes the protection in 20 s, then Nexus sends the negative — you can leave this page · Undo stops both')
+    expect(amazon.row(step({ lands: 'amazon' }))).toBe('Nexus sends it once the protection is removed')
+    const nexus = followUpWaitWords([step({ lands: 'nexus' })])
+    expect(nexus.line).toBe('Removes the protection in 20 s, then Nexus saves the negative in Nexus only — you can leave this page · Undo stops both')
+    expect(nexus.line).not.toMatch(/sends/)
+    expect(nexus.row(step({ lands: 'nexus' }))).toBe('Saved in Nexus once the protection is removed')
+    expect(followUpWaitWords([step({ lands: 'amazon' }), step({ lands: 'nexus' })]).line).toMatch(/then Nexus sends the negatives \(some in Nexus only\)/)
+    expect(followUpWaitWords([step({ lands: 'approval' })]).line).toMatch(/then Nexus sends the negative —/)
   })
   it('a Nexus-only follow-up: the page still runs its change set at the end of its window', async () => {
     const { d, log } = deps([sentTo('nexus', 'scheduled'), sentTo('nexus', 'executed')])

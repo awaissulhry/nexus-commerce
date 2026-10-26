@@ -961,6 +961,13 @@ describe('NFIX — "Since" is the day a negative was added; "Waiting for you" li
     // Unknown days sort last; no row reads the re-sync's day.
     const order = res.json().rows.map((r: Row) => r.since)
     expect(order.slice(-11).every((s: string | null) => s === null)).toBe(true)
+    // Ordered by Since either way, unknown days stay last (like Saved), and the known days keep their order.
+    for (const sort of ['since', '-since']) {
+      const by = ((await get('stopped', `${DE}&pageSize=200&sort=${sort}`)).json().rows as Row[]).map((r) => r.since as string | null)
+      expect(by.slice(-11).every((s) => s === null), sort).toBe(true)
+      const known = by.filter((s): s is string => s !== null)
+      expect(known, sort).toEqual([...known].sort((a, b) => (sort === 'since' ? a.localeCompare(b) : b.localeCompare(a))))
+    }
     expect(order.filter((s: string | null) => s && Date.parse(s) > Date.parse(ago(1).toISOString()))).toEqual([])
   })
 

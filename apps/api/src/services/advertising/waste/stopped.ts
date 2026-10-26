@@ -119,6 +119,8 @@ export function compareStopped(sort: string | null | undefined): (a: StoppedRow,
   // Too early or not known: no money claim, so last whichever way.
   const claim = (r: StoppedRow) => r.effect != null && r.effect.verdict !== 'TOO_EARLY' && typeof r.effect.savedCents === 'number'
   if (key === 'saved') return (a, b) => Number(claim(b)) - Number(claim(a)) || (desc ? -cmp(a, b) : cmp(a, b)) || byNewest(a, b)
+  // No date known: last whichever way, like Saved.
+  if (key === 'since') return (a, b) => Number(!!b.since) - Number(!!a.since) || (desc ? -cmp(a, b) : cmp(a, b)) || byNewest(a, b)
   return (a, b) => (desc ? -cmp(a, b) : cmp(a, b)) || byNewest(a, b)
 }
 

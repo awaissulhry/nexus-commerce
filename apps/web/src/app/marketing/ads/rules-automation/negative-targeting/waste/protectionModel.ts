@@ -218,6 +218,19 @@ export function followUpWords(view: FollowUpView, rowId: string): { ok: boolean;
   return { ok: false, words: `Not sent: ${(mine?.why ?? view.why ?? 'refused').replace(/\.$/, '')}`, verb: 'sent' }
 }
 
+/**
+ * The Done line while the negatives wait for their protection's removal, and each waiting row's words then: "sends"
+ * only for a negative that goes to Amazon; a Nexus-only one is "saved in Nexus" (wasteModel.ts appliedWords). Pure.
+ */
+export function followUpWaitWords(waits: ReadonlyArray<Pick<PreviewStep, 'lands'>>): { line: string; row: (s: Pick<PreviewStep, 'lands'>) => string } {
+  const amazon = waits.filter((s) => s.lands === 'amazon' || s.lands === 'approval').length
+  const then = amazon === waits.length ? 'Nexus sends the negative' : amazon === 0 ? 'Nexus saves the negative in Nexus only' : 'Nexus sends the negatives (some in Nexus only)'
+  return {
+    line: `Removes the protection in 20 s, then ${then} — you can leave this page · Undo stops both`,
+    row: (s) => (s.lands === 'amazon' || s.lands === 'approval' ? 'Nexus sends it once the protection is removed' : 'Saved in Nexus once the protection is removed'),
+  }
+}
+
 /** The Done line once the follow-up ended: the protection is removed, then the page's own line for the negatives. Pure. */
 export function followUpLine(view: FollowUpView | null): string {
   if (!view) return 'Nexus sends the negative once the protection is removed: the row says how it went'
