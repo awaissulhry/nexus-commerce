@@ -14,8 +14,8 @@
  *             records), else ONE live read (`GET /<canvas>?fields=id,owner,is_published`): the same id, `owner` the chosen
  *             Page, and `is_published` true or false (SDK canvas.py: only an Instant Experience has both);
  *   ownpagevideo (gap 46b, MD-024: its thumbnail) a video the chosen Page POSTED: ONE live read (`GET /<video>?fields=id,
- *             from{id},length`): the same id, `from` the chosen Page, and a `length` (SDK advideo.py: a video's duration —
- *             Meta answers "nonexisting field" on a post or a photo, so another kind of node is refused).
+ *             from{id}`): the same id and `from` the chosen Page (review: no field Nexus does not use is asked, so a field
+ *             Meta leaves out never refuses it; Meta itself refuses a thumbnail on a node that is not a video).
  * And every id inside the body (step 27b's Instant Experience parts name many), each confirmed before anything is sent:
  *   pagephoto       a photo OF the chosen Page (ONE live read `GET /<photo>?fields=id,from{id},width,height`: the same id,
  *                   `from` the chosen Page, a width and height — a post, video, album or comment has no such pair);
@@ -144,10 +144,10 @@ async function canvasOfPage(canvasId: string, pageId: string, read: MetaCheckRea
   return null
 }
 
-/** Gap 46b (MD-024) — a video the chosen Page posted: one live read of who posted it and its length (a video's own field). */
+/** Gap 46b (MD-024) — a video the chosen Page posted: one live read of the id Meta answers and who posted it. */
 async function videoOfPage(videoId: string, pageId: string, read: MetaCheckRead): Promise<Problem> {
   if (!/^[1-9]\d{0,24}$/.test(videoId)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${videoId} is not a Meta video id.` }
-  const answer = await read(videoId, { fields: 'id,from{id},length' })
+  const answer = await read(videoId, { fields: 'id,from{id}' })
   if (!answer.body) {
     return /nonexisting field/i.test(answer.words ?? '')
       ? { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${videoId} is not a video (Meta: ${answer.words}).` }
@@ -155,7 +155,6 @@ async function videoOfPage(videoId: string, pageId: string, read: MetaCheckRead)
   }
   if (idOf(answer.body.id) !== videoId) return { code: 'META_PAGE_UNCONFIRMED', sentence: `Nothing was sent to Meta: Meta answered another object than video ${videoId}.` }
   if (fromOf(answer.body) !== pageId) return { code: 'META_PAGE_NOT_CHOSEN', sentence: `Nothing was sent to Meta: video ${videoId} is not one the Facebook Page this business chose posted (Meta takes a custom thumbnail only for a video of a Page).` }
-  if (typeof answer.body.length !== 'number') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${videoId} is not a video Nexus can confirm (Meta names no length for it).` }
   return null
 }
 

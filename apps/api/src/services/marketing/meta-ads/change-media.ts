@@ -69,7 +69,7 @@ import { META_CAPTIONS_FILE_NAME, META_IMAGE_MAX_BYTES, META_LOCALE, META_MEDIA_
 import { changeLines, plural, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import type { MetaChangeAccount } from './change-account.js'
 import { metaSendChange, metaSendRupload, MetaWriteError, META_UNKNOWN_OUTCOME, type MetaChangeResult, type MetaWriteTarget } from './write-client.js'
-import { localFailure } from './errors.js'
+import { localFailure, MetaReadError } from './errors.js'
 import { metaReadOne } from './read-client.js'
 import { metaChosenAccount, MetaLiveRefusal } from './live.js'
 import { ownMedia, videoStatusText } from './live-media.js'
@@ -755,6 +755,23 @@ function sendThumbnail(videoId: string, image: PreparedMetaImage, fileName: stri
   }
 }
 
+/**
+ * Gap 46b review N7 — a Page video's thumbnails as Meta answers them now (`GET /<video>/thumbnails?fields=id,uri,is_preferred`,
+ * the chosen Page's token: meta-page-reads.ts, its first 50): the preferred one, and how many. A read Meta refuses is said.
+ */
+async function pageVideoThumbnails(connectionId: string, videoId: string): Promise<{ read: boolean; words: string | null; count: number; preferred: { id: string; uri: string | null } | null }> {
+  try {
+    const read = await metaReadOne<{ data?: Array<Record<string, unknown>> }>({ connectionId }, { operation: 'media.pageVideoThumbnails', path: `${videoId}/thumbnails`, query: { fields: 'id,uri,is_preferred', limit: 50 } })
+    const rows = Array.isArray(read.body.data) ? read.body.data : []
+    const top = rows.find((r) => r.is_preferred === true)
+    const id = top && (typeof top.id === 'string' || typeof top.id === 'number') ? String(top.id) : null
+    return { read: true, words: null, count: rows.length, preferred: id ? { id, uri: typeof top!.uri === 'string' ? top!.uri : null } : null }
+  } catch (err) {
+    if (err instanceof MetaReadError) return { read: false, words: err.failure.words ?? err.failure.sentence, count: 0, preferred: null }
+    throw err
+  }
+}
+
 async function thumbnailDraft(account: MetaChangeAccount, thumbnail: ThumbnailSource): Promise<MediaDraft | { refusal: string }> {
   const chosen = await metaChosenAccount(account.accountId)
   const pageId = chosen.pageId
@@ -765,6 +782,9 @@ async function thumbnailDraft(account: MetaChangeAccount, thumbnail: ThumbnailSo
   const image = await prepareMetaImage(thumbnail.image)
   if ('problem' in image) return { refusal: `Nothing was asked of Meta: ${image.problem}.` }
   const fileName = image.mimeType === 'image/png' ? 'thumbnail.png' : 'thumbnail.jpg'
+  // Gap 46b review N7 — the video's thumbnails now, read with the chosen Page's token (meta-page-reads.ts): the preferred one's
+  // picture is the only way back, because Meta lets no thumbnail be made preferred again. Its link is shown, never a basis.
+  const now = await pageVideoThumbnails(account.target.connectionId, video.id)
   const title = video.title ? ` "${video.title}"` : ''
   const label = `Make "${image.label}" (${image.source}; ${image.width}×${image.height}, ${Math.ceil(image.bytes / 1024)} KB) the preferred thumbnail of video ${video.id}${title} of the chosen Facebook Page, as the Page`
   const request: MetaChangeRequest = {
@@ -779,18 +799,23 @@ async function thumbnailDraft(account: MetaChangeAccount, thumbnail: ThumbnailSo
   }
   return {
     summary: `Meta: a new preferred thumbnail for video ${video.id} of the chosen Facebook Page (no undo; it spends nothing).`,
-    changes: changeLines([[`Video ${video.id}${title} — preferred thumbnail`, 'the one it has now (it stays among the video\'s thumbnails)', `"${image.label}" (${image.width}×${image.height}), made as the Page`]]).changes,
+    changes: changeLines([[`Video ${video.id}${title} — preferred thumbnail`, now.read ? (now.preferred ? `thumbnail ${now.preferred.id} (it stays among the video's ${now.count} thumbnails)` : 'none marked preferred (Meta picks one itself)') : 'not read', `"${image.label}" (${image.width}×${image.height}), made as the Page`]]).changes,
     totals: { thumbnails: 1, requests: 1 },
     warnings: [
       'Meta has no check for a thumbnail (its thumbnails edge lists no validate_only): the preview is built from the picture and the video as they are now.',
       THUMBNAIL_NO_UNDO,
+      now.read
+        ? now.preferred
+          ? `The preferred thumbnail now is ${now.preferred.id}${now.preferred.uri ? `; its picture: ${now.preferred.uri} (Meta's own link, which expires — save the picture now if you may want it back)` : ' (Meta gave no link to its picture)'}.`
+          : 'Meta marks none of this video\'s thumbnails preferred now (it picks one itself).'
+        : `Nexus could not read this video's thumbnails now${now.words ? ` (Meta: ${now.words})` : ''}, so the preview cannot show the picture to save before it is replaced.`,
       'It is made AS the chosen Facebook Page, with the Page\'s own token (Meta asks a Page access token with pages_read_user_content, pages_manage_engagement and pages_show_list).',
       'Meta recommends a thumbnail with the same aspect ratio as the video, and takes files up to 10 MB (Nexus sends pictures up to 8 MB).',
-      'It shows wherever Meta shows this video of the Page. A creative names its own thumbnail (video_data image_hash or image_url), so no creative changes, and nothing spends money.',
+      'Meta: is_preferred makes it "the preferred thumbnail to be shown for this video". A creative made with video_data names its own thumbnail (image_hash or image_url). Nothing spends money.',
     ],
     spendsMoney: [], skipped: [], requests: [request],
-    stands: { kind: 'thumbnail', pageId, videoId: video.id, image: { source: image.source, sha256: image.sha256, bytes: image.bytes } },
-    before: { kind: 'thumbnail', items: [{ kind: 'thumbnail', videoId: video.id, pageId }] },
+    stands: { kind: 'thumbnail', pageId, videoId: video.id, image: { source: image.source, sha256: image.sha256, bytes: image.bytes }, preferredBefore: now.read ? now.preferred?.id ?? null : 'not read' },
+    before: { kind: 'thumbnail', items: [{ kind: 'thumbnail', videoId: video.id, pageId, preferredBefore: now.preferred?.id ?? null }] },
     after: { kind: 'thumbnail', items: [{ kind: 'thumbnail', videoId: video.id, pageId, source: image.source, sha256: image.sha256 }] },
     media: { kind: 'thumbnail', byStep: new Map([[1, { source: image.source, label: image.label }]]) },
   }

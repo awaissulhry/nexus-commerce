@@ -169,8 +169,11 @@ const mediaUndo: ToolUndo = {
     const after = (change.after ?? {}) as Stamped
     if (after.kind === 'folder') return { refusal: 'Meta has no API to delete or rename a media-library folder, so Nexus cannot take this one back (a person can in Business Settings › Media library).' }
     if (after.kind === 'undo') return { refusal: 'Meta cannot put a removed image, video or caption back: upload it again with create-meta-media (an image gets the same hash).' }
-    // Gap 46b (MD-024) — Meta has no update or delete of a video thumbnail.
-    if (after.kind === 'thumbnail') return { refusal: THUMBNAIL_NO_UNDO }
+    // Gap 46b (MD-024) — Meta has no update or delete of a video thumbnail; review N7: the one preferred before is named.
+    if (after.kind === 'thumbnail') {
+      const prior = ((change.before ?? {}) as { items?: Array<{ preferredBefore?: unknown }> }).items?.[0]?.preferredBefore
+      return { refusal: `${THUMBNAIL_NO_UNDO}${typeof prior === 'string' ? ` The thumbnail preferred before was ${prior}.` : ''}` }
+    }
     const uploads = newUploads(after)
     if (!uploads.length) {
       return { refusal: 'This upload made nothing new that Nexus may take back: what it sent was already in the ad account (or Nexus could not prove it was not), and Nexus never removes a file it did not create.' }

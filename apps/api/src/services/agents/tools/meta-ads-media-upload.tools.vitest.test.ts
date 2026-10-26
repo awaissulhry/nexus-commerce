@@ -450,9 +450,13 @@ describe('gap 46b (master MD-024) — kind thumbnail: a Page video\'s preferred 
   const PAGE = '120000000000010'
   const VIDEO = '120000000000601'
   /** Step 28's read of a Page video (livePageVideo): who posted it. */
-  const pageVideo = (from = PAGE) => h.read.mockImplementation(async (_c: unknown, q: { operation: string; path: string }) => (q.operation === 'optimizeChange.pageVideo'
-    ? { body: { id: q.path, title: 'Clip A', published: true, from: { id: from } }, calls: 1 }
-    : imagesHolding()))
+  /** Review N7 — the video's thumbnails now (the chosen Page's token): one preferred, with Meta's link to its picture. */
+  const THUMBS = { data: [{ id: '700000000000001', uri: 'https://scontent.example.com/t1.jpg', is_preferred: true }, { id: '700000000000002', uri: 'https://scontent.example.com/t2.jpg', is_preferred: false }] }
+  const pageVideo = (from = PAGE, thumbs: unknown = THUMBS) => h.read.mockImplementation(async (_c: unknown, q: { operation: string; path: string }) => {
+    if (q.operation === 'optimizeChange.pageVideo') return { body: { id: q.path, title: 'Clip A', published: true, from: { id: from } }, calls: 1 }
+    if (q.operation === 'media.pageVideoThumbnails') { if (thumbs instanceof Error) throw thumbs; return { body: thumbs, calls: 1 } }
+    return imagesHolding()
+  })
   const args = { kind: 'thumbnail', thumbnail: { videoId: VIDEO, libraryImageId: 'da_hero' } }
   beforeEach(() => { h.chosen = { ...h.chosen, pageId: PAGE } })
 
@@ -460,7 +464,10 @@ describe('gap 46b (master MD-024) — kind thumbnail: a Page video\'s preferred 
     pageVideo()
     const out = await preview(args)
     expect(out.ok, JSON.stringify(out)).toBe(true)
-    expect(h.read.mock.calls.map((c) => [c[1].operation, c[1].path, c[1].query])).toEqual([['optimizeChange.pageVideo', VIDEO, { fields: 'id,title,published,from{id}' }]])
+    expect(h.read.mock.calls.map((c) => [c[1].operation, c[1].path, c[1].query])).toEqual([
+      ['optimizeChange.pageVideo', VIDEO, { fields: 'id,title,published,from{id}' }],
+      ['media.pageVideoThumbnails', `${VIDEO}/thumbnails`, { fields: 'id,uri,is_preferred', limit: 50 }],
+    ])
     expect(out.preview).toMatchObject({ spendsMoney: false, metaCheck: { checked: 'none' }, requests: [{ step: 1, metaCheck: 'no-check' }] })
     expect(out.preview.requests[0].label).toBe(`Make "Hero A" (da_hero; 4×3, 1 KB) the preferred thumbnail of video ${VIDEO} "Clip A" of the chosen Facebook Page, as the Page`)
     const words = out.preview.warnings.join(' ')
@@ -468,8 +475,24 @@ describe('gap 46b (master MD-024) — kind thumbnail: a Page video\'s preferred 
     expect(THUMBNAIL_NO_UNDO).toMatch(/^No undo: Meta lets no video thumbnail be changed or deleted/)
     expect(words).toMatch(/AS the chosen Facebook Page, with the Page's own token/)
     expect(words).toMatch(/Meta has no check for a thumbnail/)
+    // Review N7 — the preferred thumbnail now and its picture, so the person can save it (the only way back).
+    expect(words).toContain('The preferred thumbnail now is 700000000000001; its picture: https://scontent.example.com/t1.jpg (Meta\'s own link, which expires — save the picture now if you may want it back).')
+    expect(JSON.stringify(out.preview.changes)).toContain('thumbnail 700000000000001 (it stays among the video\'s 2 thumbnails)')
+    // No unsourced claim about boosts, and no "no creative changes".
+    expect(words).not.toMatch(/boost|so no creative changes/)
     expect(JSON.stringify(out.preview)).not.toContain(PNG.toString('base64').slice(0, 24))
     expect(tool.consequencesFor!({ kind: 'thumbnail' })).toEqual({ reversibility: 'none' })
+  })
+  it('review N7 — Meta marks none preferred, or its read is refused: said plainly, and the change is still offered', async () => {
+    pageVideo(PAGE, { data: [{ id: '700000000000002', uri: 'https://scontent.example.com/t2.jpg', is_preferred: false }] })
+    const none = await preview(args)
+    expect(none.preview.warnings.join(' ')).toMatch(/Meta marks none of this video's thumbnails preferred now/)
+    const { MetaReadError, failureOfAnswer } = await import('../../marketing/meta-ads/errors.js')
+    pageVideo(PAGE, new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass: 'validation', channelCode: '200', channelMessage: 'Permissions error' } as never }), 'r', 1))
+    const unread = await preview(args)
+    expect(unread.ok, JSON.stringify(unread)).toBe(true)
+    expect(unread.preview.warnings.join(' ')).toMatch(/Nexus could not read this video's thumbnails now \(Meta: .*Permissions error.*\), so the preview cannot show the picture/)
+    expect(JSON.stringify(unread.preview.changes)).toContain('not read')
   })
   it('the run: the exact picture as the file, is_preferred true, on the video\'s thumbnails edge as a Page video; no undo', async () => {
     pageVideo()
@@ -480,7 +503,9 @@ describe('gap 46b (master MD-024) — kind thumbnail: a Page video\'s preferred 
     expect(ran.data.steps[0]).toMatchObject({ outcome: 'done', sentence: expect.stringMatching(/Meta answered success — it is the video's preferred thumbnail now\. No undo:/) })
     expect(ran.change.after).toMatchObject({ kind: 'thumbnail', items: [{ kind: 'thumbnail', videoId: VIDEO, pageId: PAGE, source: 'da_hero', sha256: sha(PNG) }] })
     expect(JSON.stringify(ran)).not.toContain(PNG.toString('base64').slice(0, 24))
-    expect(tool.undo!.request({ before: ran.change.before, after: ran.change.after } as never)).toEqual({ refusal: THUMBNAIL_NO_UNDO })
+    // Review N7 — the refusal names the thumbnail that was preferred before (its picture was shown in the preview).
+    expect(ran.change.before).toMatchObject({ kind: 'thumbnail', items: [{ kind: 'thumbnail', videoId: VIDEO, pageId: PAGE, preferredBefore: '700000000000001' }] })
+    expect(tool.undo!.request({ before: ran.change.before, after: ran.change.after } as never)).toEqual({ refusal: `${THUMBNAIL_NO_UNDO} The thumbnail preferred before was 700000000000001.` })
   })
   it('refused in words before anything is sent: no Page chosen, another Page\'s video, an unreadable one, a picture that is not JPG or PNG', async () => {
     const refused = async (words: RegExp) => { const r = await preview(args); expect(r, String(words)).toEqual({ ok: false, error: expect.stringMatching(words) }) }

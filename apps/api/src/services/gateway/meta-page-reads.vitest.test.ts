@@ -93,8 +93,8 @@ describe('the allow-list: which reads go with the Page\'s token', () => {
     // Step 38 (review B-F5) — the creator lookup on the chosen Instagram account (its id in instagramId, the Page's token).
     expect(verdict('170000000000010/creator_marketplace_creators?username=creator.a&fields=id,page_id,messaging_id')).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: null, instagramId: '170000000000010' } })
     expect(verdict('170000000000010/creator_marketplace_creators?username=creator.a&fields=id,username').pageRead).toBeUndefined()
-    // Gap 46b — and the one read of Meta's Instant Experience templates (its own describe below).
-    expect(META_PAGE_READ_RULES).toHaveLength(25)
+    // Gap 46b — and the one read of Meta's Instant Experience templates, and a Page video's thumbnails (their describes below).
+    expect(META_PAGE_READ_RULES).toHaveLength(26)
   })
   it('every other read stays a system-user read: the Page node, its other edges, a WhatsApp account, an ad account, a post', () => {
     for (const path of [
@@ -270,6 +270,33 @@ describe('gap 46b (CR-489) — Meta\'s Instant Experience templates go with the 
     h.calls = []
     await expect(metaCall({ connectionId: 'm-2', operation: 'ix.template', path: TEMPLATE, query: { fields: META_IX_TEMPLATE_READ } })).rejects.toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
     expect(h.calls).toHaveLength(0)
+  })
+})
+
+describe('gap 46b review N7 — a Page video\'s thumbnails go with the chosen Page\'s token, only for a video that Page posted', () => {
+  const VIDEO = '120000000000601'
+  const THUMBS = (q: string) => `${VIDEO}/thumbnails?${q}`
+  it('exactly create-meta-media\'s read (id, uri, is_preferred; limit) is a Page-token read of the video; any other read of the edge stays ordinary', () => {
+    expect(verdict(THUMBS('fields=id,uri,is_preferred&limit=50'))).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: null, videoId: VIDEO } })
+    // meta-media-library view video's own read (width, height, scale too) is unchanged: the system-user token, as before.
+    expect(verdict(THUMBS('fields=id,uri,width,height,scale,is_preferred&limit=50')).pageRead).toBeUndefined()
+    expect(verdict(THUMBS('fields=id,uri,is_preferred&limit=500')).problem).toMatch(/limit of digits only, 1 to 100/)
+    expect(verdict(THUMBS('fields=id,uri,is_preferred&limit=50'), 'page').problem).toMatch(/a caller asks for no token/)
+  })
+  it('through the gateway: ONE owner read of the video (Meta\'s id and `from` the chosen Page), the Page\'s token, then the read; another Page\'s video: nothing read with a token', async () => {
+    gatewayMetaPage['m-1'] = PAGE
+    h.answers.push(json({ id: VIDEO, from: { id: PAGE } }), pageToken, json({ data: [{ id: '700000000000001', uri: 'https://scontent.example.com/t1.jpg', is_preferred: true }] }))
+    const read = await metaCall({ connectionId: 'm-1', operation: 'media.pageVideoThumbnails', path: `${VIDEO}/thumbnails`, query: { fields: 'id,uri,is_preferred', limit: 50 } })
+    expect(read.ok).toBe(true)
+    expect([new URL(h.calls[0].url).pathname, new URL(h.calls[0].url).searchParams.get('fields'), tokenOf(0)]).toEqual([`/${META_DEFAULT_GRAPH_API_VERSION}/${VIDEO}`, 'id,from{id}', 'meta-system-user-token'])
+    expect([new URL(h.calls[2].url).pathname, tokenOf(2)]).toEqual([`/${META_DEFAULT_GRAPH_API_VERSION}/${VIDEO}/thumbnails`, PAGE_TOKEN])
+    for (const owner of [json({ id: VIDEO, from: { id: OTHER_PAGE } }), json({ id: '120000000000602', from: { id: PAGE } }), json({ error: { message: 'Unsupported get request.', code: 100 } }, 400)]) {
+      h.calls = []
+      h.answers.push(owner)
+      await expect(metaCall({ connectionId: 'm-1', operation: 'x', path: `${VIDEO}/thumbnails`, query: { fields: 'id,uri,is_preferred', limit: 50 } })).rejects.toMatchObject({ code: 'META_PAGE_NOT_CHOSEN', message: expect.stringMatching(/the thumbnails of a video it posted/) })
+      expect(h.calls).toHaveLength(1)
+      expect(tokenOf(0)).toBe('meta-system-user-token')
+    }
   })
 })
 

@@ -298,9 +298,11 @@ const BOOST = 'a creative made from an existing post (the chosen Page\'s post, t
  * its platform): the business's own (the chosen Page's post, the chosen Instagram account's media), else a partner's that
  * Meta's content discovery lists for the brand, by a partner this creative names (gateway.ts metaIntroCardProblem).
  */
+// Gap 46b review N5 — a Facebook intro card is a post (<Page id>_<post id>) or a Page photo's or video's own id: the guide's
+// example writes `"parent_source_facebook_post_id":<FB_MEDIA_ID>`. Either form is confirmed by one owner read at the gateway.
 const introPost = (platform: 'INSTAGRAM' | 'FACEBOOK'): Judge => (value, path, walk) => {
-  const v = platform === 'INSTAGRAM' ? digits(value) : (typeof value === 'string' && /^[1-9]\d{0,24}_[1-9]\d{0,24}$/.test(value) ? value : null)
-  if (!v) return no(platform === 'INSTAGRAM' ? `${path} is an Instagram media id (digits, as a string)` : `${path} is a Facebook post id (<Page id>_<post id>, as a string)`)
+  const v = platform === 'INSTAGRAM' ? digits(value) : (typeof value === 'string' && /^[1-9]\d{0,24}(_[1-9]\d{0,24})?$/.test(value) ? value : null)
+  if (!v) return no(platform === 'INSTAGRAM' ? `${path} is an Instagram media id (digits, as a string)` : `${path} is a Facebook post id (<Page id>_<post id>) or a Facebook media id (digits), as a string`)
   walk.assets.push({ id: v, kind: 'introsource', with: platform })
   return ok(v)
 }
@@ -1430,7 +1432,8 @@ export function introCardProblem(creative: Record<string, unknown>): string | nu
 export function finishCreative(creative: Record<string, unknown>, walk: CreativeWalk): { creative: Record<string, unknown>; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[]; warnings: string[] } | { problem: string } {
   if (!creative.object_story_spec && !isExistingPostCreative(creative)) return { problem: 'a creative names object_story_spec (Nexus fills the chosen Page) or object_story_id (a post of the chosen Page) — or, made by create-meta-boost, an Instagram media, an Instagram post link or a creator\'s ad code' }
   if (creative.object_story_spec && creative.object_story_id) return { problem: 'a creative names object_story_spec or object_story_id, not both' }
-  // Gap 46b (master CR-331) — an intro card only on a partnership Advantage+ catalog creative; its catalog parts then OWNED.
+  // Gap 46b (master CR-331) — an intro card only on a partnership Advantage+ catalog creative; its catalog parts then OWNED
+  // (Nexus's own rule, not Meta's: the intro card is only for the business's own catalog — review N6).
   const intro = introCardProblem(creative)
   if (intro) return { problem: intro }
   const owned = introCardOf(creative) !== null

@@ -285,8 +285,19 @@ describe('a creative on the gateway', () => {
 
   it('a post, an Instant Experience and a lead form must be the chosen Page\'s', async () => {
     const post = (id: string) => ({ ...postSilent(), name: 'From a post', object_story_id: id })
+    // Gap 46b review F2 — ONE owner read first: Meta answers this very post, written BY the chosen Page.
+    h.answers.push(json({ id: `${PAGE}_500000000000001`, from: { id: PAGE } }))
     await metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(post(`${PAGE}_500000000000001`)))) })
+    expect(h.calls.map((c) => `${c.init.method} ${new URL(c.url).pathname.split('/').pop()}`)).toEqual([`GET ${PAGE}_500000000000001`, 'POST adcreatives'])
+    expect(new URL(h.calls[0].url).searchParams.get('fields')).toBe('id,from{id}')
     await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(post('120000000000099_500000000000001')))) })).rejects.toThrow(/not a post of the Page this business chose/)
+    // Gap 46b review F2 — the chosen Page's prefix is no proof: a visitor's post, another id Meta answers, or no answer: refused.
+    for (const answer of [json({ id: `${PAGE}_500000000000002`, from: { id: '300000000000001' } }), json({ id: '120000000000099_500000000000002', from: { id: '120000000000099' } }), json({ error: { message: 'Unsupported get request.', code: 100 } }, 400)]) {
+      h.calls = []
+      h.answers.push(answer)
+      await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(post(`${PAGE}_500000000000002`)))) })).rejects.toThrow(/post 120000000000010_500000000000002 is not one Nexus can confirm the chosen Page posted/)
+      expect(h.calls.map((c) => c.init.method)).toEqual(['GET'])
+    }
     const form1 = withStory({ link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type: 'SIGN_UP', value: { lead_gen_form_id: '120000000000777' } } } })
     h.calls = []
     h.answers.push(json({ data: [{ hash: HASH }] }), json({ id: '120000000000777', page: { id: '120000000000099' } }))
@@ -687,20 +698,62 @@ describe('gap 46b (master CR-331) — a partnership Advantage+ catalog ad with a
     delete alone.facebook_branded_content
     delete alone.instagram_branded_content
     expect(problem({ body: form(alone) })).toMatch(/goes only on a partnership ad: the creative names its partner/)
-    for (const [key, value] of [['parent_source_instagram_media_id', '0179'], ['parent_source_instagram_media_id', 'abc'], ['parent_source_facebook_post_id', '500000000000001'], ['parent_source_facebook_post_id', `0${PAGE}_500000000000001`]]) {
+    for (const [key, value] of [['parent_source_instagram_media_id', '0179'], ['parent_source_instagram_media_id', 'abc'], ['parent_source_facebook_post_id', '0500000000000001'], ['parent_source_facebook_post_id', `0${PAGE}_500000000000001`], ['parent_source_facebook_post_id', `${PAGE}_`]]) {
       expect(problem({ body: form(intro({ [key]: value })) }), `${key}=${value}`).toMatch(/is an Instagram media id|is a Facebook post id/)
     }
+    // Review N5 — a Page photo's or video's own id (Meta's guide: <FB_MEDIA_ID>) is taken too.
+    expect(judged(intro({ parent_source_facebook_post_id: '500000000000001' }))).toMatchObject({ assets: expect.arrayContaining([{ id: '500000000000001', kind: 'introsource', with: 'FACEBOOK' }]) })
   })
-  it('the business\'s own post or media: the chosen Page\'s post by its id, the chosen Instagram account\'s media by Meta\'s owner — then it goes', async () => {
-    h.answers.push(...ownCatalog(), json({ id: '120000000000301' }))
+  it('the business\'s own post or media: the chosen Page\'s post or media by ONE owner read (review F2), the chosen Instagram account\'s media by Meta\'s owner — then it goes', async () => {
+    h.answers.push(...ownCatalog(), json({ id: `${PAGE}_500000000000001`, from: { id: PAGE } }), json({ id: '120000000000301' }))
     await send(intro({ parent_source_facebook_post_id: `${PAGE}_500000000000001` }))
     expect(posts()).toHaveLength(1)
+    const ownerRead = h.calls.find((c) => new URL(c.url).pathname.endsWith(`/${PAGE}_500000000000001`))!
+    expect(new URL(ownerRead.url).searchParams.get('fields')).toBe('id,from{id}')
     expect(new URLSearchParams(sent(h.calls.length - 1).body!).get('branded_content')).toBe(JSON.stringify({ parent_source_facebook_post_id: `${PAGE}_500000000000001` }))
     h.calls = []
     h.answers.push(...ownCatalog(), json({ id: MEDIA, owner: { id: IG } }), json({ id: '120000000000302' }))
     await send(intro({ parent_source_instagram_media_id: MEDIA }))
     expect(posts()).toHaveLength(1)
     expect(h.calls.some((c) => new URL(c.url).pathname.endsWith('/partnership-ads-advertisable-content'))).toBe(false)
+    // Review N5 — a Page photo's or video's own id: the same owner read.
+    h.calls = []
+    h.answers.push(...ownCatalog(), json({ id: '500000000000003', from: { id: PAGE } }), json({ id: '120000000000306' }))
+    await send(intro({ parent_source_facebook_post_id: '500000000000003' }))
+    expect(posts()).toHaveLength(1)
+    // Review F2 — the chosen Page's prefix is no proof: Meta answers another author → the partner path (not listed: refused).
+    h.calls = []
+    h.answers.push(...ownCatalog(), json({ id: `${PAGE}_500000000000004`, from: { id: '120000000000099' } }), discovery([]))
+    await expect(send(intro({ parent_source_facebook_post_id: `${PAGE}_500000000000004` }))).rejects.toThrow(/content discovery does not list content 120000000000010_500000000000004/)
+    expect(posts()).toHaveLength(0)
+  })
+  it('review F1 — a partner is matched with Meta\'s OWN authors only: a post id\'s Page part must be Meta\'s author Page', async () => {
+    const CREATOR_PAGE = '120000000000777'
+    // The named partner's Page as the prefix, but Meta's author is another creator: refused (the caller's prefix is no author).
+    // (Another Page's prefix: no owner read is made, the partner path answers.)
+    h.answers.push(...ownCatalog(), discovery([{ content_id: '500000000000005', platform: 'FACEBOOK', author: { fb_page_id: CREATOR_PAGE } }]))
+    await expect(send(intro({ parent_source_facebook_post_id: `${PARTNER_PAGE}_500000000000005` }))).rejects.toThrow(/names a Page in its id that is not the post's author as Meta's content discovery names it/)
+    expect(posts()).toHaveLength(0)
+    // Meta names no author Page (only the partner's Instagram account): a prefixed id is refused too.
+    h.calls = []
+    h.answers.push(...ownCatalog(), discovery([{ content_id: '500000000000005', platform: 'FACEBOOK', author: { ig_user_id: PARTNER_IG } }]))
+    await expect(send(intro({ parent_source_facebook_post_id: `${PARTNER_PAGE}_500000000000005` }))).rejects.toThrow(/names a Page in its id that is not the post's author/)
+    // A bare media id of the partner: Meta's author decides.
+    h.calls = []
+    h.answers.push(...ownCatalog(), json({ id: '500000000000006', from: { id: PARTNER_PAGE } }), discovery([{ content_id: '500000000000006', platform: 'FACEBOOK', author: { fb_page_id: PARTNER_PAGE } }]), json({ id: '120000000000307' }))
+    await send(intro({ parent_source_facebook_post_id: '500000000000006' }))
+    expect(posts()).toHaveLength(1)
+    h.calls = []
+    h.answers.push(...ownCatalog(), json({}), discovery([{ content_id: '500000000000006', platform: 'FACEBOOK', author: { fb_page_id: CREATOR_PAGE } }]))
+    await expect(send(intro({ parent_source_facebook_post_id: '500000000000006' }))).rejects.toThrow(/is by another account than the partner this creative names/)
+    // Review N8 — the refusals speak of an intro card, never of a boost.
+    h.calls = []
+    gatewayMetaTakenLinks.add(`PAGE:${CREATOR_PAGE}`)
+    h.answers.push(...ownCatalog(), json({}), discovery([{ content_id: '500000000000006', platform: 'FACEBOOK', author: { fb_page_id: CREATOR_PAGE } }]))
+    const taken = await send(intro({ parent_source_facebook_post_id: '500000000000006' })).catch((e: Error) => e.message)
+    expect(taken).toMatch(/so no creative of this business shows it as an intro card/)
+    expect(taken).not.toMatch(/boost/)
+    gatewayMetaTakenLinks.clear()
   })
   it('a partner\'s: Meta\'s content discovery lists it for the brand, by the partner THIS creative names — else nothing is sent', async () => {
     // Listed, by the partner named: it goes.

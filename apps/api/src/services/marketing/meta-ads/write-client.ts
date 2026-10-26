@@ -276,8 +276,11 @@ export function readBackMismatch(node: Record<string, unknown> | null, expected:
 const MAX_WORDS = 300
 const cut = (words: string | null | undefined) => (words ? (words.length > MAX_WORDS ? `${words.slice(0, MAX_WORDS - 1)}…` : words) : null)
 
-/** Step 36 review B3 — the kinds a change makes AS the chosen Page (its own token: gateway meta-page-token.ts); step 27b: an Instant Experience. */
-const PAGE_KINDS: ReadonlySet<string> = new Set(['page', 'leadform', 'testlead', 'canvas'])
+/**
+ * Step 36 review B3 — the kinds a change makes AS the chosen Page (its own token: gateway meta-page-token.ts); step 27b: an
+ * Instant Experience; gap 46b (review F3): a Page video's thumbnail (`ownpagevideo`).
+ */
+const PAGE_KINDS: ReadonlySet<string> = new Set(['page', 'leadform', 'testlead', 'canvas', 'ownpagevideo'])
 /** Step 37 — the comment kinds made as the chosen Page (Facebook comments and the chosen Instagram account's). */
 const COMMENT_KINDS: ReadonlySet<string> = new Set(['fbpost', 'fbcomment', 'fbpagecomment', 'brandedcomment', 'igmedia', 'igcomment', 'iguser'])
 /** Step 24 — the post kinds made as the chosen Page (its posts; the chosen Instagram account's media and events). */
@@ -353,6 +356,15 @@ function changeFailure(answer: Pick<GatewayResponse, 'status' | 'verdict'>, chan
     }
   }
   if (kind && PAGE_KINDS.has(kind) && (failure.authLost || failure.permissionDenied)) {
+    // Gap 46b review F3 — a Page video's thumbnail: the Page's task and the permissions Meta's thumbnails reference names
+    // (docs/graph-api/reference/video/thumbnails: pages_read_user_content, pages_manage_engagement, pages_show_list), never
+    // "make a new system-user token" or the ad account's.
+    if (kind === 'ownpagevideo') {
+      return {
+        ...failure,
+        sentence: `Meta did not accept this thumbnail made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. It goes with the Page's own token: the system user needs a task on the chosen Page (Meta Business settings › Users › System users › Assign assets; Meta's thumbnails reference names no task) and its token pages_read_user_content, pages_manage_engagement and pages_show_list (the permissions Meta's thumbnails reference names). Nothing was changed.`,
+      }
+    }
     // Step 30 part 3 review round 2 (B-3) — a webhook change made as the Page (install-page, `via`) brings its own words for
     // Meta's codes (`explain`, which the kit adds): the generic sentence here, never step 36's lead-form task advice.
     if (change?.via) return { ...failure, sentence: `Meta did not accept this change made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. Nothing was changed.` }

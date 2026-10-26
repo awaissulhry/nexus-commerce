@@ -1353,6 +1353,7 @@ export interface MetaWriteBodyId {
   /**
    * Gap 46b (master CR-331) — a product set or catalog item of a partnership catalog ad with an intro card: its catalog must
    * be OWNED by the chosen ad account's portfolio (catalog-rule.ts metaCatalogProblem `owned`), never a client catalog.
+   * Nexus's own rule ("the intro card is only for the business's own catalog"), not Meta's (review N6).
    */
   owned?: true
 }

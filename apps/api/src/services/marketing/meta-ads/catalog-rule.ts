@@ -638,9 +638,11 @@ export async function metaCatalogProblem(target: CatalogRuleTarget, ids: { catal
 }
 
 /**
- * Gap 46b (master CR-331) — a partnership Advantage+ catalog ad with an existing post as its intro card shows a partner
- * beside the business's catalog: its catalog must be the business's OWN (owned by the chosen ad account's portfolio), never
- * a client catalog another business shared (`owned`). Every other change keeps the read rule.
+ * Gap 46b (master CR-331) — NEXUS'S OWN RULE, not Meta's (review N6, the leader's decision): the intro card is only for the
+ * business's own catalog. Meta's partnership catalog-ads guide and master CR-331 / CR-320 say nothing of catalog ownership;
+ * Nexus asks it because such an ad puts a partner's or an existing post beside the catalog. So a creative with an intro card
+ * names only a catalog OWNED by the chosen ad account's portfolio, never a client catalog another business shared
+ * (`owned`). Every other change — a catalog creative without an intro card included — keeps the read rule unchanged.
  */
 export const CATALOG_NOT_OWNED_FOR_PARTNERSHIP = 'A partnership catalog ad with an existing post as its intro card names only a catalog the chosen ad account\'s business portfolio owns; this one is a client catalog another business shared with it.'
 

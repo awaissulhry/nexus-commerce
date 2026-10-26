@@ -83,6 +83,11 @@ export interface MetaPageRead {
    * creator's messaging id): the path's account must be the chosen one (gateway.ts), and it goes with the chosen Page's token.
    */
   instagramId?: string
+  /**
+   * Gap 46b review N7 — a video's thumbnails (create-meta-media kind thumbnail's preview): the path's video must be one the
+   * CHOSEN Page posted (gateway.ts reads its `from` first), and it goes with the chosen Page's token.
+   */
+  videoId?: string
 }
 
 interface PageReadRule {
@@ -96,9 +101,10 @@ interface PageReadRule {
    * `path`: the Page is the route's first segment; `thread`: a conversation's own node or edge (the chosen Page's token);
    * `post`: a post's edge, `<page id>_<post id>/…` — the Page is the post id's first part; `instagram` (step 38): the route's
    * first segment is the chosen Instagram account, read with the chosen Page's token; `meta` (gap 46b): one of Meta's OWN
-   * nodes, named exactly by the route (an Instant Experience template), read with the chosen Page's token.
+   * nodes, named exactly by the route (an Instant Experience template), read with the chosen Page's token; `video` (gap 46b
+   * review N7): the route's first segment is a video the chosen Page posted (gateway.ts confirms it), read with its token.
    */
-  page: 'path' | 'thread' | 'post' | 'instagram' | 'meta'
+  page: 'path' | 'thread' | 'post' | 'instagram' | 'meta' | 'video'
   /** message_templates only: a read that is not Page-shaped is a WhatsApp account's (an ordinary read). */
   pageShapedOnly?: true
   /** Probe fixes — exactly the values these keys may carry here (limit and after keep their own checks below). */
@@ -233,6 +239,11 @@ export const META_PAGE_READ_RULES: readonly PageReadRule[] = [
   // Gap 46b (master CR-489) — which parts one of Meta's Instant Experience templates takes (meta-instant-experiences view
   // template): only the five template nodes, only `fields`, only the template's id and its document's id, name and parts.
   { route: IX_TEMPLATE_ROUTE, what: 'Meta\'s Instant Experience templates', page: 'meta', keys: set('fields'), fields: IX_TEMPLATE_FIELDS },
+  // Gap 46b review N7 — a Page video's thumbnails before create-meta-media kind thumbnail changes the preferred one
+  // (docs/graph-api/reference/video/thumbnails, Reading: "Access Tokens App or Page"; VideoThumbnail fields id, uri,
+  // is_preferred): only that exact read (id, uri, is_preferred; limit), only of a video the chosen Page posted. Any other read
+  // of the edge (meta-media-library view video's, which asks width, height and scale too) stays an ordinary read, as before.
+  { route: /^\d+\/thumbnails$/, what: 'a Page video\'s thumbnails', page: 'video', pageShapedOnly: true, keys: set('fields', 'limit'), fields: set('id', 'uri', 'is_preferred') },
 ]
 
 /** Probe fix IN-092 — the metric names of an insights read (Meta's comma list), or [] when it names none. */
@@ -280,9 +291,11 @@ export function metaPageReadOf(route: string, segments: readonly string[], searc
   // still goes only with the chosen Page's own token, read only: Meta resolves the id itself and answers only what that
   // token may see, so no other Page's data is reachable (checking the post first would cost a Meta read on every call).
   // Gap 46b — Meta's own node (a template) names no Page: like a conversation, it goes with the CHOSEN Page's token.
-  const pageId = rule.page === 'thread' || rule.page === 'instagram' || rule.page === 'meta' ? null : rule.page === 'post' ? (segments[0] ?? '').split('_')[0] : segments[0]
+  const pageId = rule.page === 'thread' || rule.page === 'instagram' || rule.page === 'meta' || rule.page === 'video' ? null : rule.page === 'post' ? (segments[0] ?? '').split('_')[0] : segments[0]
   const problem = pageReadProblem(rule, keys, search, items, auth)
   if (rule.page === 'instagram') return problem ? { problem: `${rule.what} ${problem}` } : { pageId, instagramId: segments[0] }
+  // Gap 46b review N7 — a video's thumbnails: the video is checked as the chosen Page's by the gateway before any token is read.
+  if (rule.page === 'video') return problem ? { problem: `${rule.what} ${problem}` } : { pageId: null, videoId: segments[0] }
   // Probe fix MD-101 — the feed: the problem counts only for the CHOSEN Page's own read (gateway.ts); another Page's is an
   // ordinary read, as before.
   if (rule.otherPagesOrdinary) return { pageId, otherPages: { problem: problem ? `${rule.what} ${problem}` : null } }

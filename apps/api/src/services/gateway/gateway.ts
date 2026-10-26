@@ -445,12 +445,14 @@ async function runGatewayCall(req: GatewayRequest, hold: { lock?: import('./meta
       // Step 38 (review B-F5) — a read on the chosen Instagram account with the Page's token (a creator's messaging id): the
       // path's account must be the one this business chose through this connection.
       const instagramChosen = judged.pageRead.instagramId === undefined || (!!req.connectionId && (await metaChosenInstagramOf(req.connectionId)) === judged.pageRead.instagramId)
-      const forChosen = !!chosen && instagramChosen && (judged.pageRead.pageId === null || chosen === judged.pageRead.pageId)
+      // Gap 46b review N7 — a video's thumbnails: ONE owner read first, the video must be one the chosen Page posted.
+      const videoOwned = judged.pageRead.videoId === undefined || (!!chosen && !!req.connectionId && await metaPagePostOwned(req.connectionId, judged.pageRead.videoId, chosen))
+      const forChosen = !!chosen && instagramChosen && videoOwned && (judged.pageRead.pageId === null || chosen === judged.pageRead.pageId)
       // Live-probe fix MD-101 — the feed of ANOTHER Page (meta-ad-library page-posts: public posts, Meta's Page Public Content
       // Access) stays an ordinary read with the system-user token, as before; only the chosen Page's own feed takes its token.
       const otherPages = judged.pageRead.otherPages
       if (!(otherPages && !forChosen)) {
-        if (!forChosen) return refuse('refused', 'META_PAGE_NOT_CHOSEN', `Nothing was sent to Meta: a Page's own reads (its connected apps, posts, insights, Instant Experiences, conversations, inbox and messaging setup, and a creator's messaging id for its Instagram account) go only to the Facebook Page and Instagram account this business chose through this connection, with that Page's own token${chosen ? '' : ', and this business has chosen no Page'}.`, 403)
+        if (!forChosen) return refuse('refused', 'META_PAGE_NOT_CHOSEN', `Nothing was sent to Meta: a Page's own reads (its connected apps, posts, insights, Instant Experiences, conversations, inbox and messaging setup, a creator's messaging id for its Instagram account, and the thumbnails of a video it posted) go only to the Facebook Page and Instagram account this business chose through this connection, with that Page's own token${chosen ? '' : ', and this business has chosen no Page'}.`, 403)
         if (otherPages?.problem) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${otherPages.problem} (${req.method} ${safePath(req.url)}).`, 403)
         metaPageRead = true
       }
@@ -1622,7 +1624,11 @@ async function metaCreativeAssetProblem(
     }
     case 'partnerpage': return partner('PAGE', asset.id, page, 'Page')
     case 'partnerinstagram': return partner('INSTAGRAM', asset.id, ig, 'Instagram account')
-    case 'pagepost': return page && asset.id.startsWith(`${page}_`) ? null : notChosenMedia(`${where}post ${asset.id} is not a post of the Page this business chose.`)
+    case 'pagepost': {
+      if (!page || !asset.id.startsWith(`${page}_`)) return notChosenMedia(`${where}post ${asset.id} is not a post of the Page this business chose.`)
+      // Gap 46b review F2 — the id's prefix is not proof: ONE owner read, Meta must answer this very id, posted BY the chosen Page.
+      return (await metaPagePostOwned(connectionId, asset.id, page)) ? null : notChosenMedia(`${where}post ${asset.id} is not one Nexus can confirm the chosen Page posted (Meta answers it with another id, another author, or not at all).`)
+    }
     case 'adimage': return images?.has(asset.id) ? null : notChosenMedia(`${where}image ${asset.id} is not one Nexus can confirm in the chosen ad account's image library (create-meta-media uploads it and answers its hash).`)
     case 'canvas':
     case 'pageevent': {
@@ -1729,7 +1735,9 @@ async function metaPartnerContentCheck(
   mine: { pageId: string | null; instagramId: string | null; portfolioId: string | null },
   asset: { id: string; kind: string; with?: string },
   where: string,
-): Promise<{ problem: { code: string; sentence: string } } | { platform: string | null; pages: string[]; igs: string[] }> {
+  // Gap 46b review N8 — the refusal's words for the change that asks: a boost, or a catalog ad's intro card.
+  use: 'boost' | 'intro' = 'boost',
+): Promise<{ problem: { code: string; sentence: string } } | { platform: string | null; authorPage: string | null; authorInstagram: string | null }> {
   const page = mine.pageId
   const ig = mine.instagramId
   const fail = (sentence: string) => ({ problem: notChosenMedia(sentence) })
@@ -1747,22 +1755,44 @@ async function metaPartnerContentCheck(
   const pages = [row.authorPage, postPage].filter((v): v is string => !!v)
   const igs = [row.authorInstagram].filter((v): v is string => !!v)
   if (!pages.length && !igs.length) return fail(`${where}Meta's content discovery names no author for ${what}, so Nexus cannot confirm whose it is.`)
-  if ((page && pages.includes(page)) || (ig && igs.includes(ig))) return fail(`${where}${what} is the business's own: a partnership boost is a creator's content (boost the business's own post as such).`)
-  for (const p of pages) if (await metaLinkTaken('PAGE', p)) return fail(`${where}${what} is by a Page another business in Nexus uses, so no creative of this business boosts it.`)
-  for (const i of igs) if (await metaLinkTaken('INSTAGRAM', i)) return fail(`${where}${what} is by an Instagram account another business in Nexus uses, so no creative of this business boosts it.`)
-  return { platform: row.platform, pages, igs }
+  if ((page && pages.includes(page)) || (ig && igs.includes(ig))) {
+    return fail(use === 'boost'
+      ? `${where}${what} is the business's own: a partnership boost is a creator's content (boost the business's own post as such).`
+      : `${where}${what} is by the business's own Page or Instagram account, yet Nexus could not confirm it as the business's own post or media (Meta answered another id or author): nothing is sent.`)
+  }
+  const usesIt = use === 'boost' ? 'boosts it' : 'shows it as an intro card'
+  for (const p of pages) if (await metaLinkTaken('PAGE', p)) return fail(`${where}${what} is by a Page another business in Nexus uses, so no creative of this business ${usesIt}.`)
+  for (const i of igs) if (await metaLinkTaken('INSTAGRAM', i)) return fail(`${where}${what} is by an Instagram account another business in Nexus uses, so no creative of this business ${usesIt}.`)
+  // Gap 46b review F1 — Meta's OWN authors (never an id's Page prefix): what an intro card's partner is compared with.
+  return { platform: row.platform, authorPage: row.authorPage, authorInstagram: row.authorInstagram }
+}
+
+/**
+ * Gap 46b review F2 — is this post (`<page id>_<post id>`) or Page media (a photo's or video's own id) one the chosen Page
+ * posted? ONE read, `GET /<id>?fields=id,from{id}` (the business's system-user token, through this gateway): Meta must answer
+ * this very id, and `from` must be the chosen Page — an id's prefix alone is no proof (Meta may resolve a composite id by its
+ * post part, live-media.ts stillOnPage). Unreadable = no.
+ */
+async function metaPagePostOwned(connectionId: string, id: string, pageId: string): Promise<boolean> {
+  const read = await metaReadFields(connectionId, id, 'id,from{id}')
+  if (!read) return false
+  const own = (value: unknown) => (typeof value === 'string' || typeof value === 'number' ? String(value) : null)
+  const from = read.from && typeof read.from === 'object' ? own((read.from as { id?: unknown }).id) : null
+  return own(read.id) === id && from === pageId
 }
 
 /**
  * Gap 46b (master CR-331) — the existing post a partnership Advantage+ catalog ad shows as its intro card (`introsource`,
  * meta-creative-rules.ts; `with` its platform), before anything is sent:
- *   - the business's OWN: a post of the chosen Page (`<chosen Page id>_<post id>`, step 25's pagepost rule) or a media of the
+ *   - the business's OWN: a post (`<page id>_<post id>`) or a photo or video (its own id: Meta's guide names <FB_MEDIA_ID>)
+ *     the chosen Page posted — ONE owner read, metaPagePostOwned (review F2: never the id's prefix alone) — or a media of the
  *     chosen Instagram account (step 23's rule, metaInstagramMediaOwned: Meta's owner, else its username read live); or
  *   - a PARTNER's: step 26's check of a creator's content (metaPartnerContentCheck: Meta's content discovery lists it for the
  *     brand — so the business already has partnership-ad access to it — by an author that is not the business itself and
  *     no other Nexus business), of the platform named, AND by one of the partners this creative names (the sponsor beside the
  *     chosen identity, or the identity beside the chosen sponsor: its identitypage / identityinstagram / partnerpage /
- *     partnerinstagram assets, which metaCreativeAssetProblem checks as no other Nexus business's).
+ *     partnerinstagram assets, which metaCreativeAssetProblem checks as no other Nexus business's) — compared with Meta's OWN
+ *     authors only (review F1), and a post id's Page part must be Meta's author Page.
  * Anything else, or anything Nexus cannot confirm: nothing is sent.
  */
 async function metaIntroCardProblem(
@@ -1774,10 +1804,12 @@ async function metaIntroCardProblem(
   const where = 'inside this creative, '
   const platform = asset.with === 'INSTAGRAM' || asset.with === 'FACEBOOK' ? asset.with : null
   if (!platform) return notChosenMedia(`${where}the intro card ${asset.id} names no platform Nexus checks.`)
+  // Gap 46b review N5 — a Facebook post (<Page id>_<post id>) or a Page photo's or video's own id (Meta's guide: <FB_MEDIA_ID>).
+  const prefix = platform === 'FACEBOOK' ? /^([1-9]\d{0,24})_[1-9]\d{0,24}$/.exec(asset.id)?.[1] ?? null : null
   if (platform === 'FACEBOOK') {
-    const post = /^([1-9]\d{0,24})_[1-9]\d{0,24}$/.exec(asset.id)
-    if (!post) return notChosenMedia(`${where}the intro card ${asset.id} is not a Facebook post id (<Page id>_<post id>).`)
-    if (mine.pageId && post[1] === mine.pageId) return null
+    if (!prefix && !/^[1-9]\d{0,24}$/.test(asset.id)) return notChosenMedia(`${where}the intro card ${asset.id} is not a Facebook post or media id.`)
+    // Gap 46b review F2 — the business's own only by ONE owner read (Meta's id and `from`), never by the id's prefix.
+    if (mine.pageId && (!prefix || prefix === mine.pageId) && await metaPagePostOwned(connectionId, asset.id, mine.pageId)) return null
   } else {
     if (!/^[1-9]\d{0,24}$/.test(asset.id)) return notChosenMedia(`${where}the intro card ${asset.id} is not an Instagram media id.`)
     if (mine.instagramId && await metaInstagramMediaOwned(connectionId, asset.id, mine.instagramId)) return null
@@ -1790,10 +1822,12 @@ async function metaIntroCardProblem(
     if (a.kind === 'identitypage' || a.kind === 'identityinstagram') for (const id of [a.id, a.with]) if (id && !chosen.has(id)) partners.add(id)
   }
   if (!partners.size) return notChosenMedia(`${where}the intro card ${asset.id} is not the chosen ${platform === 'FACEBOOK' ? 'Page\'s post' : 'Instagram account\'s media'} Nexus can confirm, and the creative names no partner whose it could be.`)
-  const found = await metaPartnerContentCheck(connectionId, mine, { id: asset.id, kind: 'partnercontent' }, where)
+  const found = await metaPartnerContentCheck(connectionId, mine, { id: asset.id, kind: 'partnercontent' }, where, 'intro')
   if ('problem' in found) return found.problem
   if (found.platform && found.platform !== platform) return notChosenMedia(`${where}the intro card ${asset.id} is ${found.platform === 'INSTAGRAM' ? 'Instagram' : 'Facebook'} content, not ${platform === 'INSTAGRAM' ? 'Instagram' : 'Facebook'}.`)
-  if (![...found.pages, ...found.igs].some((id) => partners.has(id))) return notChosenMedia(`${where}the intro card ${asset.id} is by another account than the partner this creative names: a partnership catalog ad shows the business's own post or its partner's.`)
+  // Gap 46b review F1 — a post id's Page part must BE Meta's author (it is the caller's text, not Meta's word).
+  if (prefix && prefix !== found.authorPage) return notChosenMedia(`${where}the intro card ${asset.id} names a Page in its id that is not the post's author as Meta's content discovery names it: nothing is sent.`)
+  if (![found.authorPage, found.authorInstagram].some((id) => !!id && partners.has(id))) return notChosenMedia(`${where}the intro card ${asset.id} is by another account than the partner this creative names: a partnership catalog ad shows the business's own post or its partner's.`)
   return null
 }
 
