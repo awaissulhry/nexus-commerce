@@ -56,6 +56,7 @@ vi.mock('../../../db.js', () => ({
 
 import { META_ADS_CREATE_TOOLS } from './meta-ads-create.tools.js'
 import { liveMadeObject, liveWhatsAppMarketing } from '../../marketing/meta-ads/live-create.js'
+import { MetaLiveRefusal } from '../../marketing/meta-ads/live.js'
 import { META_CHANGE_RULES } from './meta-ads-kit.js'
 import { MetaWriteError } from '../../marketing/meta-ads/write-client.js'
 import { localFailure } from '../../marketing/meta-ads/errors.js'
@@ -214,6 +215,11 @@ describe('fix round 1', () => {
     expect(vi.mocked(liveMadeObject).mock.calls.at(-1)).toEqual([expect.anything(), 'campaign', NEW, '2026-10-21T08:00:00.000Z', 'Europe/Rome'])
     h.made[NEW] = { status: 'ACTIVE', effectiveStatus: 'ACTIVE' }
     expect(await preview('create-meta-campaign', { removeMade: true, undoOf: 'chg-6' })).toEqual({ ok: false, error: expect.stringMatching(/is on: Meta reports spend late/) })
+  })
+  it('2026-10-22 live — what the undo cannot read is kept in the read\'s own words (never only "could not read")', async () => {
+    h.changes['chg-6'] = { toolName: 'create-meta-campaign', after: { op: 'create', made: [{ kind: 'campaign', id: NEW }], top: [{ kind: 'campaign', id: NEW }], madeAt: '2026-10-21T08:00:00.000Z', accountId: 'm-1', adAccountId: '1234567890' }, undoneAt: null }
+    vi.mocked(liveMadeObject).mockRejectedValueOnce(new MetaLiveRefusal(`Nexus could not read campaign ${NEW} from Meta: Meta refused the read: Syntax error.`))
+    expect(await preview('create-meta-campaign', { removeMade: true, undoOf: 'chg-6' })).toEqual({ ok: false, error: `Nothing is deleted: Nexus could not read campaign ${NEW} from Meta: Meta refused the read: Syntax error — so campaign ${NEW} is kept.` })
   })
   it('review B3 — the WhatsApp onboarding is read for an eligible goal only, and named in the preview', async () => {
     vi.mocked(liveWhatsAppMarketing).mockClear()

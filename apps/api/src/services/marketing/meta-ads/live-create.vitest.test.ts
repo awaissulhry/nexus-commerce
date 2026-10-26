@@ -11,7 +11,7 @@ vi.mock('./read-client.js', () => ({
   metaReadAll: vi.fn(async () => ({ rows: 0, calls: 1, truncated: false })),
 }))
 
-import { dayIn, liveMadeObject } from './live-create.js'
+import { dayIn, liveCopySource, liveMadeObject } from './live-create.js'
 
 const target = { connectionId: 'm-1', adAccountId: '1234567890' }
 const AD = '120000000000013'
@@ -49,5 +49,49 @@ describe('dayIn', () => {
     expect(dayIn(lateUtc, 'America/Los_Angeles')).toBe('2026-10-21')
     expect(dayIn(lateUtc, null)).toBe('2026-10-21')
     expect(dayIn(lateUtc, 'Not/AZone')).toBe('2026-10-21')
+  })
+})
+
+/** Top-level names of a Graph `fields` value (nested {…} and modifier (…) skipped). */
+function topLevel(fields: string): string[] {
+  const out: string[] = []
+  let depth = 0
+  let cur = ''
+  for (const c of fields) {
+    if (c === '{' || c === '(') depth++
+    else if (c === '}' || c === ')') depth--
+    else if (c === ',' && depth === 0) { out.push(cur); cur = ''; continue }
+    if (depth === 0) cur += c
+  }
+  out.push(cur)
+  return out.map((n) => n.split('.')[0].trim()).filter(Boolean)
+}
+const twice = (fields: string) => topLevel(fields).filter((n, i, all) => all.indexOf(n) !== i)
+const fieldsOf = (r: Record<string, unknown>) => String((r.query as Record<string, unknown> | undefined)?.fields ?? '')
+
+describe('every read names each field once (Graph 2500 "Field … specified more than once", live 2026-10-22)', () => {
+  const C = '120000000000001'
+  const S = '120000000000002'
+  const campaign = { id: C, account_id: '1234567890', name: 'C', status: 'PAUSED', effective_status: 'PAUSED', objective: 'OUTCOME_TRAFFIC', special_ad_categories: [] }
+  it('the undo read of a campaign, an ad set and an ad', async () => {
+    for (const [kind, body] of [['campaign', campaign], ['adset', { ...campaign, objective: undefined, optimization_goal: 'LINK_CLICKS', billing_event: 'IMPRESSIONS' }], ['ad', ad({})]] as const) {
+      h.reads = []
+      h.body = body as Record<string, unknown>
+      await liveMadeObject(target, kind, C, '2026-10-21T08:00:00.000Z')
+      for (const r of h.reads) expect(twice(fieldsOf(r)), `${kind} ${String(r.operation)}`).toEqual([])
+    }
+    h.reads = []
+    h.body = campaign
+    await liveMadeObject(target, 'campaign', C, '2026-10-21T08:00:00.000Z')
+    expect(fieldsOf(h.reads[0])).toBe('id,account_id,status,effective_status,objective,insights.date_preset(maximum){spend}')
+  })
+  it('what a copy reads: the source and its parent campaign', async () => {
+    h.body = { ...campaign, campaign_id: C, optimization_goal: 'LINK_CLICKS', billing_event: 'IMPRESSIONS', adset_id: S, creative: { id: '1' } }
+    for (const kind of ['campaign', 'adset', 'ad'] as const) {
+      h.reads = []
+      await liveCopySource(target, kind, S, false)
+      expect(h.reads.length).toBeGreaterThan(0)
+      for (const r of h.reads) expect(twice(fieldsOf(r)), `${kind} ${String(r.operation)}`).toEqual([])
+    }
   })
 })

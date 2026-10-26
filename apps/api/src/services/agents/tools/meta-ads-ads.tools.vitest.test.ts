@@ -392,7 +392,10 @@ describe('create-meta-ad — the run and its undo', () => {
     expect(p.preview.requests).toHaveLength(1)
     expect(p.preview.skipped.join(' ')).toMatch(/creative 120000000000302 stays: ad 120000000000004 uses it too/)
     h.read.mockImplementation(async (_c: unknown, q: { path: string }) => { if (q.path === `${AD}/insights`) throw new Error('no answer'); return { body: reads[q.path] ?? {}, calls: 1 } })
-    expect(await refusal({ action: 'undo', ads: [AD] })).toMatch(/could not read its numbers/)
+    expect(await refusal({ action: 'undo', ads: [AD] })).toMatch(/could not read its numbers \(no answer\), so it cannot confirm/)
+    // 2026-10-22 live — Meta's own refusal words reach the answer (never only "could not read").
+    h.read.mockImplementation(async (_c: unknown, q: { path: string }) => { if (q.path === `${AD}/insights`) throw new MetaReadError(localFailure('Meta refused the read: (#100) Tried accessing nonexisting field (spend).', 'X'), 'ad.spendRead', 1); return { body: reads[q.path] ?? {}, calls: 1 } })
+    expect(await refusal({ action: 'undo', ads: [AD] })).toMatch(/Ad 120000000000\d+ stays: Nexus could not read its numbers \(Meta refused the read: \(#100\) Tried accessing nonexisting field \(spend\)\), so it cannot confirm the ad never ran\./)
   })
 })
 

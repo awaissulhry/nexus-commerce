@@ -107,17 +107,19 @@ async function removeMadeDraft(tool: CreateTool, args: Record<string, unknown>, 
   const record = (row.after ?? {}) as unknown as MadeRecord & { adAccountId?: string }
   if (record.adAccountId && record.adAccountId !== account.adAccountId) return { refusal: `Change ${changeId} made its objects on another Meta ad account than the one this business uses now: Nexus deletes nothing there.` }
   const live: MadeNow[] = []
+  const unread = new Map<string, string>()
   // Review A3 — Meta's insights dates are the ad account's: its time zone dates the spend read.
   const timeZone = await metaChosenAccount(account.accountId).then((a) => a.timeZone, () => null)
   for (const top of record.top ?? []) {
     try {
       live.push(await liveMadeObject(account.target, top.kind, top.id, record.madeAt, timeZone))
     } catch (err) {
-      // An object Nexus cannot read (another account now, a refusal) is kept: removalDraft says so.
+      // An object Nexus cannot read (another account now, a refusal) is kept: removalDraft says so, with the reason.
       if (!(err instanceof MetaLiveRefusal)) throw err
+      unread.set(`${top.kind}:${top.id}`, err.message)
     }
   }
-  return removalDraft(record, live, tool)
+  return removalDraft(record, live, tool, unread)
 }
 
 /** The run's record: what the create or copy made (its ids from Meta's answer), or what the undo deleted. */

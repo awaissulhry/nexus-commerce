@@ -102,11 +102,24 @@ export interface CopySource {
   adSetsMore: boolean
 }
 
+/**
+ * A field list with each field named ONCE. Graph refuses a field named twice (code 2500: "Field effective_status specified
+ * more than once. This is only possible before version 2.1" — Meta's answer, live 2026-10-25), and a campaign's own two
+ * kind fields (meta-kinds.ts) hold effective_status, which these reads also ask for themselves.
+ */
+const once = (names: readonly string[]): string => [...new Set(names)].join(',')
+
 const FIELDS: Readonly<Record<MadeKind, string>> = {
-  campaign: `id,account_id,name,status,effective_status,${META_KIND_FIELDS.campaign.join(',')},special_ad_categories,smart_promotion_type`,
-  adset: `id,account_id,name,status,effective_status,campaign_id,${META_KIND_FIELDS.adset.join(',')},dsa_payor,dsa_beneficiary,targeting{geo_locations}`,
-  ad: `id,account_id,name,status,effective_status,campaign_id,${META_KIND_FIELDS.ad.join(',')}`,
+  campaign: once(['id', 'account_id', 'name', 'status', 'effective_status', ...META_KIND_FIELDS.campaign, 'special_ad_categories', 'smart_promotion_type']),
+  adset: once(['id', 'account_id', 'name', 'status', 'effective_status', 'campaign_id', ...META_KIND_FIELDS.adset, 'dsa_payor', 'dsa_beneficiary', 'targeting{geo_locations}']),
+  ad: once(['id', 'account_id', 'name', 'status', 'effective_status', 'campaign_id', ...META_KIND_FIELDS.ad]),
 }
+
+/** The undo's one read of an object a change made (liveMadeObject): each field once, its whole-life spend as an expansion. */
+const madeFields = (kind: MadeKind): string => once([
+  'id', 'account_id', 'status', 'effective_status', ...META_KIND_FIELDS[kind], 'insights.date_preset(maximum){spend}',
+  ...(kind === 'ad' ? ['adset{id,creative_sequence,is_dynamic_creative}'] : []),
+])
 
 /** One object of the chosen account, of this kind (its own fields answered), or a refusal in words. */
 async function ownObject(target: MetaSettingsTarget, kind: MadeKind, objectId: string, operation: string): Promise<Row> {
@@ -205,7 +218,7 @@ export async function liveMadeObject(target: MetaSettingsTarget, kind: MadeKind,
   try {
     body = (await metaReadOne({ connectionId: target.connectionId }, {
       operation: `create.read.made.${kind}`, path: id,
-      query: { fields: `id,account_id,status,effective_status,${META_KIND_FIELDS[kind].join(',')},insights.date_preset(maximum){spend}${kind === 'ad' ? ',adset{id,creative_sequence,is_dynamic_creative}' : ''}` },
+      query: { fields: madeFields(kind) },
     })).body as Row
   } catch (err) {
     if (err instanceof MetaReadError && err.failure.notFound) return gone(null)
