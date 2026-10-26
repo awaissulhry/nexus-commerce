@@ -134,6 +134,37 @@ describe('durable inbound claim ownership', () => {
     expect(await row(pending.id)).toMatchObject({ status: 'failed', attempts: 1, processingToken: null, lastError: 'auth hold' })
   })
 
+  it('clears the stored body of a handled Shopify e-mail consent delivery, and of nothing else', async () => {
+    const consent = (overrides: Partial<Prisma.WebhookEventUncheckedCreateInput> = {}) => event({
+      eventType: 'customers_email_marketing_consent/update', payload: { customer_id: 7012345678901, email_address: 'buyer.one@example.com' },
+      rawBody: Buffer.from('{"email_address":"buyer.one@example.com"}'), verificationHeaders: { 'x-shopify-topic': 'customers_email_marketing_consent/update' },
+      ...overrides,
+    })
+    expect(claims.CLEAR_BODY_WHEN_DONE.has('SHOPIFY customers_email_marketing_consent/update')).toBe(true)
+
+    // Handled: the same update that finishes it as done clears rawBody, headers and payload; the row stays.
+    const handled = await consent()
+    const handledClaim = await inWorkspace(() => claims.claimInbound(handled.id, NOW))
+    expect(await inWorkspace(() => claims.finishInboundClaim(handledClaim!, true, undefined, NOW))).toBe(true)
+    const cleared = await row(handled.id)
+    expect(cleared).toMatchObject({ status: 'done', isProcessed: true, rawBody: null, verificationHeaders: null, payload: null, eventType: 'customers_email_marketing_consent/update' })
+    expect(JSON.stringify(cleared)).not.toMatch(/example\.com/)
+
+    // Not handled: a failure keeps the body for the retry.
+    const failed = await consent()
+    const failedClaim = await inWorkspace(() => claims.claimInbound(failed.id, NOW))
+    await inWorkspace(() => claims.finishInboundClaim(failedClaim!, false, 'boom', NOW))
+    expect(await row(failed.id)).toMatchObject({ status: 'failed', payload: { email_address: 'buyer.one@example.com' } })
+    expect((await row(failed.id)).rawBody).not.toBeNull()
+
+    // Another topic finished as done keeps its body (the retention sweep clears it later, as before).
+    const order = await event({ rawBody: Buffer.from('{"id":"order_original"}') })
+    const orderClaim = await inWorkspace(() => claims.claimInbound(order.id, NOW))
+    await inWorkspace(() => claims.finishInboundClaim(orderClaim!, true, undefined, NOW))
+    expect(await row(order.id)).toMatchObject({ status: 'done', payload: { id: 'order_original', total: '19.95' } })
+    expect((await row(order.id)).rawBody).not.toBeNull()
+  })
+
   it('schedules a failed claim without counting completion as another attempt', async () => {
     const pending = await event()
     const claim = await inWorkspace(() => claims.claimInbound(pending.id, NOW))

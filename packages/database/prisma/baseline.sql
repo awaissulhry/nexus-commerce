@@ -10749,7 +10749,6 @@ CREATE TABLE "ShopifyMarketingConsent" (
     "shopifyCustomerId" TEXT NOT NULL,
     "emailSha256" TEXT NOT NULL,
     "emailState" TEXT NOT NULL,
-    "emailOptInLevel" TEXT,
     "emailConsentAt" TIMESTAMP(3),
     "source" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -18519,6 +18518,9 @@ ALTER TABLE "EtsyReceiptIngest" ADD CONSTRAINT "EtsyReceiptIngest_connectionId_f
 
 -- AddForeignKey
 ALTER TABLE "ShopifyOrderIngest" ADD CONSTRAINT "ShopifyOrderIngest_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShopifyMarketingConsent" ADD CONSTRAINT "ShopifyMarketingConsent_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "EtsyReceiptRefusal" ADD CONSTRAINT "EtsyReceiptRefusal_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;

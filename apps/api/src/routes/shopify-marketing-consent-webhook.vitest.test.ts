@@ -14,8 +14,10 @@ const SECRET = 'consent-receiver-test-secret'
 const m = vi.hoisted(() => ({
   consent: vi.fn(async () => ({ written: 'created' })),
   redact: vi.fn(async () => 1),
-  capture: vi.fn(async () => undefined),
+  capture: vi.fn(async () => { m.sequence.push('consent capture') }),
   recorded: [] as any[],
+  /** Every database write of the order path and the consent capture, in the order they happened. */
+  sequence: [] as string[],
 }))
 
 vi.mock('../services/shopify/marketing-consent.service.js', () => ({
@@ -59,13 +61,20 @@ vi.mock('../services/shopify/content-webhook.service.js', () => ({ recordManaged
 vi.mock('../db.js', () => ({
   default: new Proxy({}, {
     get: (_t, model: string) => new Proxy({}, {
-      get: (_m, method: string) => async () => (model === 'order' && method === 'upsert' ? { id: 'order-1' } : null),
+      get: (_m, method: string) => async () => {
+        if (/^(upsert|create|update|updateMany|createMany)$/.test(method)) m.sequence.push(`${model}.${method}`)
+        return model === 'order' && method === 'upsert' ? { id: 'order-1' } : null
+      },
     }),
   }),
 }))
 vi.mock('../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }))
 vi.mock('../services/product-event.service.js', () => ({ productEventService: { emit: vi.fn() } }))
 vi.mock('../services/listing-events.service.js', () => ({ publishListingEvent: vi.fn() }))
+vi.mock('../services/listings/channel-sku-inbound.js', () => ({
+  matchInboundSku: vi.fn(async () => ({ productId: null, problem: null })),
+  shopifyVariantListingStore: vi.fn(() => async () => null),
+}))
 
 const Fastify = (await import('fastify')).default
 const webhooks = await import('./shopify-webhooks.js')
@@ -94,6 +103,7 @@ const REDACT = { shop_id: 954889, shop_domain: 'store-a.myshopify.com', customer
 beforeEach(() => {
   vi.clearAllMocks()
   m.recorded.length = 0
+  m.sequence.length = 0
 })
 
 describe('the e-mail consent topic at the receiver', () => {
@@ -128,7 +138,7 @@ describe('customers/redact deletes the consent row and still says other erasure 
     expect(response.statusCode).toBe(200)
     expect(m.redact).toHaveBeenCalledWith(REDACT, { connectionId: 'conn-1' })
     const line = vi.mocked(logger.error).mock.calls.find(([message]) => String(message).includes('customers/redact received'))
-    expect(line?.[0]).toMatch(/marketing-consent row is deleted, other erasure is NOT automated/)
+    expect(line?.[0]).toMatch(/1 marketing-consent row\(s\) deleted, other erasure is NOT automated/)
     expect(line?.[1]).toMatchObject({ consentRowsDeleted: 1, connectionId: 'conn-1' })
   })
 
@@ -140,10 +150,14 @@ describe('customers/redact deletes the consent row and still says other erasure 
 })
 
 describe("a new Shopify order asks for its buyer's consent, after the order work", () => {
-  it('handleOrderCreate hands the order and its account to the consent capture', async () => {
+  it('handleOrderCreate hands the order and its account to the consent capture only after the order and its lines are written', async () => {
     const order = { id: 820001, created_at: '2026-10-20T10:00:00Z', updated_at: '2026-10-20T10:00:00Z', financial_status: 'paid', fulfillment_status: null,
-      total_price: '20', currency: 'EUR', email: 'buyer.one@example.com', customer: { id: 7012345678901 }, line_items: [] }
+      total_price: '20', currency: 'EUR', email: 'buyer.one@example.com', customer: { id: 7012345678901 },
+      line_items: [{ id: 11, sku: 'SKU-A', quantity: 1, price: '20' }, { id: 12, sku: 'SKU-B', quantity: 1, price: '5' }] }
     await webhooks.handleOrderCreate(order as any, { connectionId: 'conn-1' })
     expect(m.capture).toHaveBeenCalledWith('conn-1', order)
+    // Synchronous order work first: the order, then each of its lines; the capture comes after all of it.
+    expect(m.sequence.slice(0, 3)).toEqual(['order.upsert', 'orderItem.upsert', 'orderItem.upsert'])
+    expect(m.sequence.indexOf('consent capture')).toBeGreaterThan(m.sequence.lastIndexOf('orderItem.upsert'))
   })
 })

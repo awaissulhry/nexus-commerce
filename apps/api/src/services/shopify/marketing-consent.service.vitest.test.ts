@@ -1,13 +1,16 @@
 /**
  * Shopify marketing consent → Nexus (2026-10-26), on a real PostgreSQL with the production schema and every business
  * policy (PGlite), business profiles ON. Shopify is stubbed at the read-only admin reader (the gateway path itself is
- * proven in gateway/* and admin-client tests); the connection lookup is stubbed so no account table is needed.
+ * proven in gateway/* and admin-client tests). The accounts are real ChannelConnection rows and the account lookup is
+ * the real resolver, so a Shopify account another business shares with this one (a real ChannelAccountGrant, readable
+ * through row-level security) is seen exactly as production sees it.
  *
  * Proven here: only a hash of the e-mail is ever stored (Meta's normalisation: trim, lower case, SHA-256); a newer
  * consent is never overwritten by an older one; the webhook keeps buyers only (a row Nexus has, or a buyer Nexus knows);
  * a buyer's first order reads that one customer's consent once; customers/redact deletes the row, of its own account and
- * business only; the backfill keeps buyers only, pages, paces, resumes, answers counts only and refuses in words; and one
- * business never sees another's rows. Made-up ids and addresses (public repo).
+ * business only, and a late delivery cannot bring the customer back; a shared account is never read or written; the
+ * backfill keeps buyers only, pages, paces, resumes, answers counts only, takes write_customers for read_customers and
+ * refuses in words; and one business never sees another's rows. Made-up ids and addresses (public repo).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../test-support/formula-database.js'
@@ -18,7 +21,6 @@ const h = vi.hoisted(() => ({
   read: null as unknown as Read,
   reads: [] as Array<{ connectionId: string; query: string; variables: Record<string, unknown> }>,
   scopes: ['read_customers'] as string[],
-  connections: {} as Record<string, { id: string; channelType: string; authStatus: string }>,
 }))
 
 vi.mock('./admin-client.js', () => ({
@@ -31,17 +33,6 @@ vi.mock('./admin-client.js', () => ({
     },
   })),
 }))
-vi.mock('../connection-resolver.service.js', async (importOriginal) => {
-  const real = await importOriginal<typeof import('../connection-resolver.service.js')>()
-  return {
-    ...real,
-    resolveConnection: vi.fn(async ({ accountId }: { accountId: string }) => {
-      const c = h.connections[accountId]
-      if (!c) throw new real.NoConnectionError('No such account.')
-      return c
-    }),
-  }
-})
 vi.mock('../../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }))
 
 let database: Awaited<ReturnType<typeof formulaDatabase>>
@@ -51,7 +42,7 @@ import { emailSha256, normalisedEmail, sha256Hex } from '../../lib/customer-emai
 import { sha256Hex as audienceSha256Hex, normalisedEmail as audienceNormalisedEmail } from '../marketing/meta-ads/audience-members.js'
 import {
   backfillShopifyMarketingConsent, BUYER_CONSENT_QUERY, captureBuyerConsentAtOrder, captureBuyerConsentQuietly, CONSENT_CUSTOMERS_QUERY,
-  CONSENT_PAGE_SIZE, consentStateOf, handleEmailConsentWebhook, MarketingConsentError, optInLevelOf, redactShopifyMarketingConsent,
+  CONSENT_PAGE_SIZE, consentStateOf, handleEmailConsentWebhook, MarketingConsentError, redactShopifyMarketingConsent,
   shopifyCustomerIdOf, writeConsent,
 } from './marketing-consent.service.js'
 import { logger } from '../../utils/logger.js'
@@ -60,6 +51,7 @@ const A = 'consent_alpha'
 const B = 'consent_bravo'
 const CONN_A = 'conn-shopify-a'
 const CONN_A2 = 'conn-shopify-a2'
+/** B's own Shopify account, which B shares with A (a read grant): A can read it, but it is never A's. */
 const CONN_B = 'conn-shopify-b'
 const scope = (workspaceId: string) => ({ workspaceId, actorUserId: null, membershipId: null, roleKeys: [] })
 const inA = <T>(work: () => Promise<T>) => withWorkspace(scope(A), work)
@@ -68,9 +60,9 @@ const db = () => database.client
 const rowsOf = (ws: string) => withWorkspace(scope(ws), () => db().shopifyMarketingConsent.findMany({ orderBy: [{ connectionId: 'asc' }, { shopifyCustomerId: 'asc' }] }))
 const HEX64 = /\b[0-9a-f]{64}\b/
 const gid = (id: string | number) => `gid://shopify/Customer/${id}`
-const node = (id: number, orders: string, email: string | null, state = 'SUBSCRIBED', updatedAt: string | null = '2026-09-01T10:00:00Z', level: string | null = 'SINGLE_OPT_IN') => ({
+const node = (id: number, orders: string, email: string | null, state = 'SUBSCRIBED', updatedAt: string | null = '2026-09-01T10:00:00Z') => ({
   id: gid(id), numberOfOrders: orders,
-  defaultEmailAddress: email === null ? null : { emailAddress: email, marketingState: state, marketingOptInLevel: level, marketingUpdatedAt: updatedAt },
+  defaultEmailAddress: email === null ? null : { emailAddress: email, marketingState: state, marketingUpdatedAt: updatedAt },
 })
 const page = (nodes: unknown[], endCursor: string | null, cost: unknown = null) =>
   ({ data: { customers: { pageInfo: { hasNextPage: endCursor !== null, endCursor }, nodes } }, errors: [], cost })
@@ -91,6 +83,19 @@ beforeAll(async () => {
   for (const id of [A, B]) {
     await database.db.query(`INSERT INTO "Workspace" (id, name, status, "createdByUserId", "creationKey", "updatedAt") VALUES ($1, $1, 'active', 'test', $1, CURRENT_TIMESTAMP)`, [id])
   }
+  const account = (id: string, channelType: string, authStatus = 'connected') =>
+    db().channelConnection.create({ data: { id, channelType, isActive: true, authStatus, managedBy: 'oauth', externalAccountId: `ext-${id}` } })
+  await inA(async () => {
+    await account(CONN_A, 'SHOPIFY')
+    await account(CONN_A2, 'SHOPIFY')
+    await account('conn-meta', 'META')
+    await account('conn-revoked', 'SHOPIFY', 'revoked')
+  })
+  // B owns CONN_B and shares it with A (the owner writes the grant; the guest reads the account through it).
+  await inB(async () => {
+    await account(CONN_B, 'SHOPIFY')
+    await db().channelAccountGrant.create({ data: { connectionId: CONN_B, workspaceId: A, ownerWorkspaceId: B, grantedByUserId: 'u-owner-b' } })
+  })
 }, 120_000)
 afterAll(async () => {
   vi.unstubAllEnvs()
@@ -103,11 +108,6 @@ beforeEach(async () => {
   h.reads.length = 0
   h.scopes = ['read_customers']
   h.read = async () => { throw new Error('Shopify was not expected to be read here') }
-  h.connections = {
-    [CONN_A]: { id: CONN_A, channelType: 'SHOPIFY', authStatus: 'connected' },
-    'conn-meta': { id: 'conn-meta', channelType: 'META', authStatus: 'connected' },
-    'conn-revoked': { id: 'conn-revoked', channelType: 'SHOPIFY', authStatus: 'revoked' },
-  }
   vi.mocked(logger.warn).mockClear()
 })
 
@@ -133,20 +133,18 @@ describe("reading Shopify's values", () => {
     for (const bad of [706405506930370084, 0, -1, 1.5, '0', '', 'abc', 'gid://shopify/Order/1', null, undefined, {}]) expect(shopifyCustomerIdOf(bad), String(bad)).toBeNull()
   })
 
-  it('states and opt-in levels are taken from an allow-list, in upper case', () => {
+  it('states are taken from an allow-list, in upper case', () => {
     expect(consentStateOf('subscribed')).toBe('SUBSCRIBED')
     expect(consentStateOf(' not_subscribed ')).toBe('NOT_SUBSCRIBED')
     expect(consentStateOf('redacted')).toBe('REDACTED')
     expect(consentStateOf('maybe')).toBeNull()
-    expect(optInLevelOf('confirmed_opt_in')).toBe('CONFIRMED_OPT_IN')
-    expect(optInLevelOf(null)).toBeNull()
   })
 })
 
 describe('the one write rule: never an older consent over a newer one', () => {
   const write = (over: Partial<Parameters<typeof writeConsent>[0]> = {}) => writeConsent({
     connectionId: CONN_A, shopifyCustomerId: '101', emailSha256: sha256Hex('a@example.com'), emailState: 'SUBSCRIBED',
-    emailOptInLevel: 'SINGLE_OPT_IN', emailConsentAt: new Date('2026-10-01T10:00:00Z'), source: 'webhook', ...over,
+    emailConsentAt: new Date('2026-10-01T10:00:00Z'), source: 'webhook', ...over,
   })
 
   it('creates, then changes for a newer or equal time, and keeps the row against an older one', async () => {
@@ -160,7 +158,7 @@ describe('the one write rule: never an older consent over a newer one', () => {
     expect(row).toMatchObject({ connectionId: CONN_A, shopifyCustomerId: '101', emailState: 'UNSUBSCRIBED', source: 'backfill' })
   })
 
-  it('a write without a time changes only a row without one', async () => {
+  it('a "yes" without a time changes only a row without one', async () => {
     await inA(async () => {
       expect(await write({ shopifyCustomerId: '102', emailConsentAt: null })).toBe('created')
       expect(await write({ shopifyCustomerId: '102', emailConsentAt: null, emailState: 'PENDING' })).toBe('updated')
@@ -168,6 +166,25 @@ describe('the one write rule: never an older consent over a newer one', () => {
       expect(await write({ shopifyCustomerId: '102', emailConsentAt: null, emailState: 'SUBSCRIBED' })).toBe('kept')
     })
     expect((await rowsOf(A))[0].emailState).toBe('UNSUBSCRIBED')
+  })
+
+  it('a "no" without a time still replaces a timed "yes" (the safe direction), and an older "yes" cannot come back after it', async () => {
+    const t2 = new Date('2026-10-02T10:00:00Z')
+    await inA(async () => {
+      expect(await write({ shopifyCustomerId: '103', emailConsentAt: t2 })).toBe('created')
+      expect(await write({ shopifyCustomerId: '103', emailConsentAt: null, emailState: 'UNSUBSCRIBED', source: 'backfill' })).toBe('updated')
+      // The row keeps its time, so a late replay of an older "yes" is still refused.
+      expect(await write({ shopifyCustomerId: '103', emailConsentAt: new Date('2026-10-01T10:00:00Z') })).toBe('kept')
+      expect(await write({ shopifyCustomerId: '103', emailConsentAt: null })).toBe('kept')
+      // A "no" without a time over a timed "no" changes nothing worth changing: kept as it is.
+      expect(await write({ shopifyCustomerId: '103', emailConsentAt: null, emailState: 'NOT_SUBSCRIBED' })).toBe('kept')
+    })
+    expect((await rowsOf(A))[0]).toMatchObject({ emailState: 'UNSUBSCRIBED', emailConsentAt: t2, source: 'backfill' })
+  })
+
+  it("the reference guard refuses a row that names another business's account, even one shared with this business", async () => {
+    await expect(inA(() => write({ connectionId: CONN_B, shopifyCustomerId: '104' }))).rejects.toThrow()
+    expect(await rowsOf(A)).toEqual([])
   })
 })
 
@@ -183,7 +200,7 @@ describe('the customers_email_marketing_consent/update webhook keeps buyers only
     const rows = await rowsOf(A)
     expect(rows).toEqual([expect.objectContaining({
       connectionId: CONN_A, shopifyCustomerId: '7012345678901', emailSha256: sha256Hex('buyer.one@example.com'), emailState: 'SUBSCRIBED',
-      emailOptInLevel: 'SINGLE_OPT_IN', emailConsentAt: new Date('2026-10-20T08:00:00Z'), source: 'webhook',
+      emailConsentAt: new Date('2026-10-20T08:00:00Z'), source: 'webhook',
     })])
     expect(JSON.stringify(rows)).not.toMatch(/@/)
   })
@@ -195,7 +212,7 @@ describe('the customers_email_marketing_consent/update webhook keeps buyers only
   })
 
   it('a customer who already has a row is updated by a newer change and not by an older, late one', async () => {
-    await inA(() => writeConsent({ connectionId: CONN_A, shopifyCustomerId: '7012345678901', emailSha256: sha256Hex('buyer.one@example.com'), emailState: 'SUBSCRIBED', emailOptInLevel: null, emailConsentAt: new Date('2026-10-01T00:00:00Z'), source: 'backfill' }))
+    await inA(() => writeConsent({ connectionId: CONN_A, shopifyCustomerId: '7012345678901', emailSha256: sha256Hex('buyer.one@example.com'), emailState: 'SUBSCRIBED', emailConsentAt: new Date('2026-10-01T00:00:00Z'), source: 'backfill' }))
     expect(await inA(() => handleEmailConsentWebhook(delivery({}, { state: 'unsubscribed', consent_updated_at: '2026-10-21T09:00:00Z' }), { connectionId: CONN_A }))).toEqual({ written: 'updated' })
     expect(await inA(() => handleEmailConsentWebhook(delivery({}, { state: 'subscribed', consent_updated_at: '2026-10-20T09:00:00Z' }), { connectionId: CONN_A }))).toEqual({ written: 'kept' })
     expect((await rowsOf(A))[0]).toMatchObject({ emailState: 'UNSUBSCRIBED', source: 'webhook' })
@@ -221,21 +238,49 @@ describe('the customers_email_marketing_consent/update webhook keeps buyers only
     expect(await rowsOf(A)).toHaveLength(1)
     expect(await rowsOf(B)).toEqual([])
   })
+
+  it('a delivery through an account another business shares with this one is ignored and writes nothing', async () => {
+    await shopifyBuyer(A, 'buyer.one@example.com')
+    expect(await inA(() => handleEmailConsentWebhook(delivery(), { connectionId: CONN_B }))).toEqual({ ignored: 'not_own_account' })
+    expect(await rowsOf(A)).toEqual([])
+    expect(await rowsOf(B)).toEqual([])
+  })
+
+  it('a customer this account received a customers/redact for never gets a row again from a late delivery', async () => {
+    await shopifyBuyer(A, 'redacted.buyer@example.com')
+    await inA(() => db().webhookEvent.create({ data: {
+      channel: 'SHOPIFY', eventType: 'customers/redact', externalId: `redact-${Date.now()}`, connectionId: CONN_A, signatureOk: true,
+      verifiedBy: 'shopify_hmac', status: 'done', attempts: 1, deliveries: 1,
+      payload: { shop_id: 954889, customer: { id: 7012345678909, email: 'redacted.buyer@example.com' }, orders_to_redact: [] },
+    } }))
+    const late = delivery({ customer_id: 7012345678909, email_address: 'redacted.buyer@example.com' }, { consent_updated_at: '2026-10-01T08:00:00Z' })
+    expect(await inA(() => handleEmailConsentWebhook(late, { connectionId: CONN_A }))).toEqual({ ignored: 'redacted' })
+    // The notice of one account does not stop another account's customer with the same id.
+    await shopifyBuyer(A, 'other.shop.buyer@example.com')
+    expect(await inA(() => handleEmailConsentWebhook({ ...late, email_address: 'other.shop.buyer@example.com' }, { connectionId: CONN_A2 }))).toEqual({ written: 'created' })
+    expect((await rowsOf(A)).map((r) => r.connectionId)).toEqual([CONN_A2])
+  })
 })
 
 describe("a buyer's first Shopify order reads that one customer's consent", () => {
   const shopifyOrder = { id: 820001, customer: { id: 7012345678902, email: 'buyer.two@example.com' } }
 
   it('no row yet: one read of that customer (its default e-mail consent only), then the row', async () => {
-    h.read = async () => ({ data: { customer: { id: gid(7012345678902), defaultEmailAddress: { emailAddress: 'Buyer.Two@example.com', marketingState: 'SUBSCRIBED', marketingOptInLevel: 'CONFIRMED_OPT_IN', marketingUpdatedAt: '2026-10-25T12:00:00Z' } } }, errors: [], cost: null })
+    h.read = async () => ({ data: { customer: { id: gid(7012345678902), defaultEmailAddress: { emailAddress: 'Buyer.Two@example.com', marketingState: 'SUBSCRIBED', marketingUpdatedAt: '2026-10-25T12:00:00Z' } } }, errors: [], cost: null })
     expect(await inA(() => captureBuyerConsentAtOrder(CONN_A, shopifyOrder))).toBe('created')
     expect(h.reads).toEqual([{ connectionId: CONN_A, query: BUYER_CONSENT_QUERY, variables: { id: gid(7012345678902) } }])
     expect(BUYER_CONSENT_QUERY).not.toMatch(/\b(firstName|lastName|phone|addresses|note|tags|orders)\b/)
-    expect((await rowsOf(A))[0]).toMatchObject({ shopifyCustomerId: '7012345678902', emailSha256: sha256Hex('buyer.two@example.com'), emailState: 'SUBSCRIBED', emailOptInLevel: 'CONFIRMED_OPT_IN', source: 'order' })
+    expect((await rowsOf(A))[0]).toMatchObject({ shopifyCustomerId: '7012345678902', emailSha256: sha256Hex('buyer.two@example.com'), emailState: 'SUBSCRIBED', source: 'order' })
+  })
+
+  it('an order through an account another business shares with this one reads nothing', async () => {
+    expect(await inA(() => captureBuyerConsentAtOrder(CONN_B, shopifyOrder))).toBe('not_own_account')
+    expect(h.reads).toEqual([])
+    expect(await rowsOf(A)).toEqual([])
   })
 
   it('a customer who already has a row, or an order with no customer, reads nothing', async () => {
-    await inA(() => writeConsent({ connectionId: CONN_A, shopifyCustomerId: '7012345678902', emailSha256: sha256Hex('buyer.two@example.com'), emailState: 'NOT_SUBSCRIBED', emailOptInLevel: null, emailConsentAt: null, source: 'backfill' }))
+    await inA(() => writeConsent({ connectionId: CONN_A, shopifyCustomerId: '7012345678902', emailSha256: sha256Hex('buyer.two@example.com'), emailState: 'NOT_SUBSCRIBED', emailConsentAt: null, source: 'backfill' }))
     expect(await inA(() => captureBuyerConsentAtOrder(CONN_A, shopifyOrder))).toBe('already_known')
     expect(await inA(() => captureBuyerConsentAtOrder(CONN_A, { id: 820002 }))).toBe('no_customer')
     expect(await inA(() => captureBuyerConsentAtOrder(null, shopifyOrder))).toBe('no_customer')
@@ -255,7 +300,7 @@ describe("a buyer's first Shopify order reads that one customer's consent", () =
 
 describe('customers/redact deletes the customer\'s consent row, of its own account and business only', () => {
   const seed = async () => {
-    const one = { emailState: 'SUBSCRIBED' as const, emailOptInLevel: null, emailConsentAt: null, source: 'backfill' as const }
+    const one = { emailState: 'SUBSCRIBED' as const, emailConsentAt: null, source: 'backfill' as const }
     await inA(async () => {
       await writeConsent({ ...one, connectionId: CONN_A, shopifyCustomerId: '201', emailSha256: sha256Hex('redact.me@example.com') })
       await writeConsent({ ...one, connectionId: CONN_A, shopifyCustomerId: '202', emailSha256: sha256Hex('keep.me@example.com') })
@@ -284,7 +329,7 @@ describe('customers/redact deletes the customer\'s consent row, of its own accou
 describe('the backfill a person runs: buyers only, page by page, counts only', () => {
   it('keeps buyers with an e-mail, skips the rest in memory, and answers counts only', async () => {
     const pages = [
-      page([node(301, '2', ' First@Example.com '), node(302, '0', 'subscriber.only@example.com'), node(303, '1', null), node(304, '5', 'second@example.com', 'UNSUBSCRIBED', null, null)], 'cursor-1'),
+      page([node(301, '2', ' First@Example.com '), node(302, '0', 'subscriber.only@example.com'), node(303, '1', null), node(304, '5', 'second@example.com', 'UNSUBSCRIBED', null)], 'cursor-1'),
       page([node(305, '1', 'third@example.com', 'SOMETHING_NEW'), { id: 'gid://shopify/Order/1', numberOfOrders: '1', defaultEmailAddress: null }, node(306, 'x', 'a@example.com'), node(307, '3', 'fourth@example.com', 'PENDING')], null),
     ]
     h.read = async () => pages.shift()!
@@ -307,7 +352,7 @@ describe('the backfill a person runs: buyers only, page by page, counts only', (
     const one = () => page([node(301, '2', 'first@example.com', 'SUBSCRIBED', '2026-09-01T10:00:00Z')], null)
     h.read = async () => one()
     await inA(() => backfillShopifyMarketingConsent(CONN_A))
-    await inA(() => writeConsent({ connectionId: CONN_A, shopifyCustomerId: '301', emailSha256: sha256Hex('first@example.com'), emailState: 'UNSUBSCRIBED', emailOptInLevel: null, emailConsentAt: new Date('2026-10-20T10:00:00Z'), source: 'webhook' }))
+    await inA(() => writeConsent({ connectionId: CONN_A, shopifyCustomerId: '301', emailSha256: sha256Hex('first@example.com'), emailState: 'UNSUBSCRIBED', emailConsentAt: new Date('2026-10-20T10:00:00Z'), source: 'webhook' }))
     const again = await inA(() => backfillShopifyMarketingConsent(CONN_A))
     expect(again).toMatchObject({ created: 0, updated: 0, keptNewer: 1 })
     expect((await rowsOf(A))[0]).toMatchObject({ emailState: 'UNSUBSCRIBED', source: 'webhook' })
@@ -349,6 +394,8 @@ describe('the backfill a person runs: buyers only, page by page, counts only', (
     expect(await refusal('conn-missing')).toMatchObject({ code: 'ACCOUNT_NOT_FOUND', status: 404 })
     expect(await refusal('conn-meta')).toMatchObject({ code: 'NOT_SHOPIFY', status: 400 })
     expect(await refusal('conn-revoked')).toMatchObject({ code: 'ACCOUNT_NEEDS_SIGNIN', status: 409 })
+    // B's account, which B shares with A: the real resolver lets A read it, and the backfill still refuses it.
+    expect(await refusal(CONN_B)).toMatchObject({ code: 'ACCOUNT_NOT_OWNED', status: 403, message: expect.stringContaining('belongs to the business that owns the shop') })
     expect(await refusal(CONN_A, { after: '' })).toMatchObject({ code: 'BAD_CURSOR', status: 400 })
     h.scopes = ['read_orders']
     expect(await refusal(CONN_A)).toMatchObject({ code: 'SCOPE_MISSING', status: 409, message: expect.stringContaining('read_customers') })
@@ -357,6 +404,19 @@ describe('the backfill a person runs: buyers only, page by page, counts only', (
     h.read = async () => ({ data: null, errors: [{ message: 'Access denied for customers field.', extensions: { code: 'ACCESS_DENIED' } }], cost: null })
     expect(await refusal(CONN_A)).toMatchObject({ code: 'SHOPIFY_ACCESS_DENIED', status: 403 })
     expect(await rowsOf(A)).toEqual([])
+  })
+
+  it('the account that owns a shared shop runs it on its own account', async () => {
+    h.read = async () => page([node(901, '1', 'b.buyer@example.com')], null)
+    expect(await inB(() => backfillShopifyMarketingConsent(CONN_B))).toMatchObject({ created: 1, complete: true })
+    expect(await rowsOf(B)).toHaveLength(1)
+    expect(await rowsOf(A)).toEqual([])
+  })
+
+  it('takes write_customers for read_customers (Shopify lists only write_x when both are granted)', async () => {
+    h.scopes = ['write_customers', 'read_orders']
+    h.read = async () => page([node(951, '1', 'a@example.com')], null)
+    expect(await inA(() => backfillShopifyMarketingConsent(CONN_A))).toMatchObject({ created: 1, complete: true })
   })
 
   it("writes only into the business it runs in", async () => {

@@ -7428,6 +7428,8 @@ model ChannelConnection {
   etsyReceiptRefusals      EtsyReceiptRefusal[]
   // Shopify order import — the start date (T0) recorded when a person switched it on for this account.
   shopifyOrderIngest       ShopifyOrderIngest[]
+  /// Shopify marketing consent (2026-10-26) — the buyers' hashed e-mail consent read through this account.
+  shopifyMarketingConsent  ShopifyMarketingConsent[]
   // Google step 1a — the Google Ads / Merchant Center / GA4 account each business picked through this login.
   googleAccountLinks       GoogleAccountLink[]
   // Meta M1 — the Meta ad account, Facebook Page and Instagram account each business picked through this system user.
@@ -22402,16 +22404,15 @@ model ShopifyMarketingConsent {
   // Business ownership comes from verified database context.
   workspaceId       String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   id                String    @id @default(cuid())
-  /// The SHOPIFY ChannelConnection the consent was read through (no foreign key, as the read tables).
+  /// The SHOPIFY ChannelConnection the consent was read through: an account this business owns (its rows go with it).
   connectionId      String
+  connection        ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   /// Shopify's customer id (digits).
   shopifyCustomerId String
   /// SHA-256 (lowercase hex) of the customer's e-mail, trimmed and lower-cased. Never the address itself.
   emailSha256       String
   /// Shopify's e-mail marketing state, upper case: SUBSCRIBED, NOT_SUBSCRIBED, PENDING, UNSUBSCRIBED, INVALID, REDACTED.
   emailState        String
-  /// Shopify's opt-in level, upper case: SINGLE_OPT_IN, CONFIRMED_OPT_IN, UNKNOWN; null when Shopify gives none.
-  emailOptInLevel   String?
   /// When the consent last changed at Shopify; null when it never changed. A write older than this one is not applied.
   emailConsentAt    DateTime?
   /// Which path wrote the row last: backfill | webhook | order.

@@ -7,19 +7,30 @@
  * anything to Meta or changes the shop; a later step reads the table for its uploads.
  *
  * Privacy: the e-mail is hashed the moment it is read (lib/customer-email-hash.ts: trim, lower case, SHA-256 — the
- * normalisation a Meta customer list needs) and only the hash is stored. No plain address is stored, logged or answered;
- * a person reads counts only.
+ * normalisation a Meta customer list needs) and only the hash is stored in this table; no plain address is logged or
+ * answered, and a person reads counts only. The inbound ledger keeps each consent delivery as Shopify sent it (with
+ * the plain address) only until it is handled: finishing it as done clears its body (cx/ingress/claims.ts
+ * CLEAR_BODY_WHEN_DONE), so after that no plain address of anyone is kept, buyer or not.
+ *
+ * Own accounts only: a Shopify account another business shares with this one is never read or written here (its
+ * customers' consent belongs to the business that owns the shop); the backfill refuses it, the webhook and the order
+ * read ignore it, and the foreign key's reference guard refuses a row that names another business's account. A reader
+ * of this table (PR 2's uploads) must take only the rows of active Shopify accounts this business owns: the rows of an
+ * account that was disconnected or uninstalled stay until a person decides (no purge on app/uninstalled yet).
  *
  * Three writers, one rule (`writeConsent`): the row of one Shopify customer of one Shopify account is created, or
  * changed only by a write whose consent time is not older than the stored one (Shopify does not deliver webhooks in
- * order, and a backfill page may be read while a webhook lands). Rows exist for buyers only:
+ * order, and a backfill page may be read while a webhook lands); a "no" without a time still replaces a "yes" (the
+ * safe direction). Rows exist for buyers only:
  *   1. the backfill a person runs (`backfillShopifyMarketingConsent`): every Shopify customer, page by page through the
  *      read-only admin reader (the channel gateway), paced by Shopify's cost bucket; a customer with no order is skipped
  *      in memory and nothing of it is kept. Resumable: a run cut short answers `resumeAfter`, the next run starts there;
  *      running it again from the start is safe (the same rows, the same rule);
  *   2. the webhook customers_email_marketing_consent/update (`handleEmailConsentWebhook`): it changes the row of a
  *      customer Nexus has, or makes one for a buyer Nexus knows (a Shopify order in Nexus with that e-mail); anyone else
- *      is ignored — their consent is read at their first order;
+ *      is ignored and gets no row (their delivery's stored body is cleared once handled, as every one of this topic) —
+ *      their consent is read at their first order. A customer whose customers/redact this account already received
+ *      never gets a row again from a late or replayed delivery;
  *   3. a buyer's first Shopify order (`captureBuyerConsentAtOrder`, after orders/create): when the customer has no row
  *      yet, Nexus reads that ONE customer's consent from Shopify. This covers the buyer whose consent webhook came before
  *      the order (ignored then), and the earlier newsletter subscriber who buys later (no consent change, so no webhook).
@@ -28,17 +39,17 @@
 import prisma from '../../db.js'
 import { emailSha256, normalisedEmail } from '../../lib/customer-email-hash.js'
 import { logger } from '../../utils/logger.js'
-import { NoConnectionError, resolveConnection } from '../connection-resolver.service.js'
+import { isOwnConnection, NoConnectionError, resolveConnection } from '../connection-resolver.service.js'
 import { shopifyAdminReader } from './admin-client.js'
 
 /** Shopify's e-mail marketing states (CustomerEmailAddressMarketingState; webhooks send them in lower case). */
 export const EMAIL_MARKETING_STATES = ['SUBSCRIBED', 'NOT_SUBSCRIBED', 'PENDING', 'UNSUBSCRIBED', 'INVALID', 'REDACTED'] as const
-/** Shopify's opt-in levels (CustomerMarketingOptInLevel). */
-export const OPT_IN_LEVELS = ['SINGLE_OPT_IN', 'CONFIRMED_OPT_IN', 'UNKNOWN'] as const
 export type ConsentSource = 'backfill' | 'webhook' | 'order'
 
 /** The Shopify scope every read here needs (the consent webhook topic needs it too). */
 export const CONSENT_SCOPE = 'read_customers'
+/** Shopify lists only write_x when both are granted (write_x implies read_x, as cx/catalog.ts scopeDriftOf reads it). */
+export const CONSENT_SCOPES_ACCEPTED = ['read_customers', 'write_customers'] as const
 /** Shopify's largest page; a page of these fields costs about 2 + 250 × 2, under Shopify's 1,000 per query. */
 export const CONSENT_PAGE_SIZE = 250
 const DEFAULT_MAX_PAGES = 20
@@ -71,7 +82,6 @@ const upperOf = <T extends string>(raw: unknown, allowed: readonly T[]): T | nul
   return (allowed as readonly string[]).includes(value) ? (value as T) : null
 }
 export const consentStateOf = (raw: unknown) => upperOf(raw, EMAIL_MARKETING_STATES)
-export const optInLevelOf = (raw: unknown) => upperOf(raw, OPT_IN_LEVELS)
 
 /** An ISO time Shopify sent, or null (none, or not a time). */
 export function consentTimeOf(raw: unknown): Date | null {
@@ -87,7 +97,6 @@ export interface ConsentWrite {
   shopifyCustomerId: string
   emailSha256: string
   emailState: (typeof EMAIL_MARKETING_STATES)[number]
-  emailOptInLevel: (typeof OPT_IN_LEVELS)[number] | null
   emailConsentAt: Date | null
   source: ConsentSource
 }
@@ -96,26 +105,59 @@ export type ConsentWriteOutcome = 'created' | 'updated' | 'kept'
 
 /**
  * Create the customer's row, or change it unless the stored consent is newer than this write's. A write without a
- * consent time changes only a row that has none either (Shopify gives no time for a consent that never changed).
- * `kept`: the row holds a newer consent, so nothing changed.
+ * consent time (Shopify gives none for a consent that never changed) changes a row that has none either; and, the safe
+ * direction, a "no" without a time (any state but SUBSCRIBED) also replaces a "yes" — it keeps the row's time, so a
+ * later replay of an older "yes" still cannot come back over it. `kept`: the row holds a newer consent, nothing changed.
  */
 export async function writeConsent(write: ConsentWrite): Promise<ConsentWriteOutcome> {
   const key = { connectionId: write.connectionId, shopifyCustomerId: write.shopifyCustomerId }
   const notNewer = write.emailConsentAt
     ? { OR: [{ emailConsentAt: null }, { emailConsentAt: { lte: write.emailConsentAt } }] }
-    : { emailConsentAt: null }
+    : write.emailState === 'SUBSCRIBED'
+      ? { emailConsentAt: null }
+      : { OR: [{ emailConsentAt: null }, { emailState: 'SUBSCRIBED' }] }
   const data = {
-    emailSha256: write.emailSha256, emailState: write.emailState, emailOptInLevel: write.emailOptInLevel,
-    emailConsentAt: write.emailConsentAt, source: write.source,
+    emailSha256: write.emailSha256, emailState: write.emailState, source: write.source,
+    ...(write.emailConsentAt ? { emailConsentAt: write.emailConsentAt } : {}),
   }
   // Twice at most: a row another writer created between this update and this create is judged once more.
   for (let attempt = 0; attempt < 2; attempt++) {
     const updated = await prisma.shopifyMarketingConsent.updateMany({ where: { ...key, ...notNewer }, data })
     if (updated.count > 0) return 'updated'
-    const created = await prisma.shopifyMarketingConsent.createMany({ data: [{ ...key, ...data }], skipDuplicates: true })
+    const created = await prisma.shopifyMarketingConsent.createMany({ data: [{ ...key, ...data, emailConsentAt: write.emailConsentAt }], skipDuplicates: true })
     if (created.count > 0) return 'created'
   }
   return 'kept'
+}
+
+/**
+ * Whether a connection is a Shopify account THIS business owns — not one another business shares with it (row-level
+ * security lets a guest business read a shared account). Inactive accounts count: a "no" must still land.
+ */
+async function ownShopifyConnection(connectionId: string): Promise<boolean> {
+  const row = await prisma.channelConnection.findUnique({ where: { id: connectionId }, select: { channelType: true, workspaceId: true } })
+  return row !== null && row.channelType === 'SHOPIFY' && isOwnConnection(row)
+}
+
+/**
+ * Whether this account already received a customers/redact notice for this customer: the notice is in the inbound
+ * ledger (Shopify's own body, HMAC-verified, routed to this account). A late or replayed consent delivery must not bring
+ * a redacted customer back. Nothing new is stored for this: the notice itself is the marker, for as long as the ledger
+ * keeps its body (the privacy policy's webhookEvents days); a consent delivery that old is no longer replayed.
+ */
+async function redactedOnThisAccount(connectionId: string, shopifyCustomerId: string): Promise<boolean> {
+  const asNumber = Number(shopifyCustomerId)
+  const notice = await prisma.webhookEvent.findFirst({
+    where: {
+      channel: 'SHOPIFY', eventType: 'customers/redact', connectionId, signatureOk: true,
+      OR: [
+        ...(Number.isSafeInteger(asNumber) ? [{ payload: { path: ['customer', 'id'], equals: asNumber } }] : []),
+        { payload: { path: ['customer', 'id'], equals: shopifyCustomerId } },
+      ],
+    },
+    select: { id: true },
+  })
+  return notice !== null
 }
 
 /** Whether this customer of this Shopify account already has a row. */
@@ -138,7 +180,8 @@ export type ConsentWebhookResult = { written: ConsentWriteOutcome } | { ignored:
 
 /**
  * One customers_email_marketing_consent/update delivery (HMAC-verified by the receiver, routed to its Shopify account).
- * Body: `customer_id`, `email_address`, `email_marketing_consent {state, opt_in_level, consent_updated_at}`.
+ * Body: `customer_id`, `email_address`, `email_marketing_consent {state, opt_in_level, consent_updated_at}` (the opt-in
+ * level is not kept: nothing reads it).
  */
 export async function handleEmailConsentWebhook(payload: unknown, context?: { connectionId?: string | null }): Promise<ConsentWebhookResult> {
   const connectionId = context?.connectionId ?? null
@@ -153,13 +196,15 @@ export async function handleEmailConsentWebhook(payload: unknown, context?: { co
     })
     return { ignored: 'unreadable' }
   }
+  // The receiver routes a delivery to the business that owns the shop; this holds it there for any other path too.
+  if (!(await ownShopifyConnection(connectionId))) return { ignored: 'not_own_account' }
+  if (await redactedOnThisAccount(connectionId, shopifyCustomerId)) return { ignored: 'redacted' }
   if (!(await hasConsentRow(connectionId, shopifyCustomerId)) && !(await knownShopifyBuyer(email))) {
-    // Not a buyer Nexus knows (yet): nothing is kept of them. Should they buy, their first order reads their consent.
+    // Not a buyer Nexus knows (yet): they get no row. Should they buy, their first order reads their consent.
     return { ignored: 'not_a_known_buyer' }
   }
   const written = await writeConsent({
     connectionId, shopifyCustomerId, emailSha256: emailSha256(email)!, emailState: state,
-    emailOptInLevel: optInLevelOf(body.email_marketing_consent?.opt_in_level),
     emailConsentAt: consentTimeOf(body.email_marketing_consent?.consent_updated_at), source: 'webhook',
   })
   return { written }
@@ -169,10 +214,10 @@ export async function handleEmailConsentWebhook(payload: unknown, context?: { co
 
 /** The one customer read at an order: its default e-mail's consent. Nothing else of the customer is asked. */
 export const BUYER_CONSENT_QUERY = `query NexusBuyerConsent($id: ID!) {
-  customer(id: $id) { id defaultEmailAddress { emailAddress marketingState marketingOptInLevel marketingUpdatedAt } }
+  customer(id: $id) { id defaultEmailAddress { emailAddress marketingState marketingUpdatedAt } }
 }`
 
-interface ShopifyEmailAddress { emailAddress?: unknown; marketingState?: unknown; marketingOptInLevel?: unknown; marketingUpdatedAt?: unknown }
+interface ShopifyEmailAddress { emailAddress?: unknown; marketingState?: unknown; marketingUpdatedAt?: unknown }
 
 /** The row a Shopify customer node gives, or why it gives none. */
 function consentFromNode(connectionId: string, node: { id?: unknown; defaultEmailAddress?: ShopifyEmailAddress | null } | null | undefined, source: ConsentSource): ConsentWrite | 'unreadable' | 'no_email' {
@@ -184,12 +229,11 @@ function consentFromNode(connectionId: string, node: { id?: unknown; defaultEmai
   if (!state) return 'unreadable'
   return {
     connectionId, shopifyCustomerId, emailSha256: hash, emailState: state,
-    emailOptInLevel: optInLevelOf(node?.defaultEmailAddress?.marketingOptInLevel),
     emailConsentAt: consentTimeOf(node?.defaultEmailAddress?.marketingUpdatedAt), source,
   }
 }
 
-export type BuyerConsentResult = 'no_customer' | 'already_known' | 'no_email' | 'unreadable' | ConsentWriteOutcome
+export type BuyerConsentResult = 'no_customer' | 'not_own_account' | 'already_known' | 'no_email' | 'unreadable' | ConsentWriteOutcome
 
 /**
  * After a Shopify order is written: if its customer has no consent row yet, read that customer's consent from Shopify
@@ -199,6 +243,7 @@ export type BuyerConsentResult = 'no_customer' | 'already_known' | 'no_email' | 
 export async function captureBuyerConsentAtOrder(connectionId: string | null | undefined, order: unknown): Promise<BuyerConsentResult> {
   const shopifyCustomerId = shopifyCustomerIdOf((order as { customer?: { id?: unknown } } | null)?.customer?.id)
   if (!connectionId || !shopifyCustomerId) return 'no_customer'
+  if (!(await ownShopifyConnection(connectionId))) return 'not_own_account'
   if (await hasConsentRow(connectionId, shopifyCustomerId)) return 'already_known'
   const { read } = await shopifyAdminReader(connectionId)
   const result = await read<{ customer: { id?: unknown; defaultEmailAddress?: ShopifyEmailAddress | null } | null }>(BUYER_CONSENT_QUERY, { id: `gid://shopify/Customer/${shopifyCustomerId}` })
@@ -235,7 +280,7 @@ export async function redactShopifyMarketingConsent(payload: unknown, context?: 
 export const CONSENT_CUSTOMERS_QUERY = `query NexusMarketingConsent($first: Int!, $after: String) {
   customers(first: $first, after: $after, sortKey: ID) {
     pageInfo { hasNextPage endCursor }
-    nodes { id numberOfOrders defaultEmailAddress { emailAddress marketingState marketingOptInLevel marketingUpdatedAt } }
+    nodes { id numberOfOrders defaultEmailAddress { emailAddress marketingState marketingUpdatedAt } }
   }
 }`
 
@@ -266,8 +311,12 @@ export interface ConsentBackfillResult {
 
 const SIGN_IN_NEEDED = new Set(['disconnected', 'revoked', 'needs_reauth'])
 
-/** The account's ChannelConnection id, once it is shown to be a signed-in Shopify account of this business. */
-async function signedInShopifyAccount(accountId: string): Promise<string> {
+/**
+ * The account's ChannelConnection id, once it is shown to be a signed-in Shopify account this business OWNS. A shared
+ * account (another business's shop, readable here through its grant) is refused: its customers' consent belongs to the
+ * business that owns the shop, and a customers/redact of the shop would never reach a copy kept here.
+ */
+async function ownSignedInShopifyAccount(accountId: string): Promise<string> {
   let connection: Awaited<ReturnType<typeof resolveConnection>>
   try {
     connection = await resolveConnection({ accountId })
@@ -276,6 +325,9 @@ async function signedInShopifyAccount(accountId: string): Promise<string> {
     throw error
   }
   if (connection.channelType !== 'SHOPIFY') throw new MarketingConsentError('NOT_SHOPIFY', 'The selected account is not a Shopify account.', 400)
+  if (!isOwnConnection(connection)) {
+    throw new MarketingConsentError('ACCOUNT_NOT_OWNED', 'This Shopify account belongs to another business that shares it with this one. Consent belongs to the business that owns the shop. Nothing was read.', 403)
+  }
   if (SIGN_IN_NEEDED.has(String(connection.authStatus))) {
     throw new MarketingConsentError('ACCOUNT_NEEDS_SIGNIN', 'This Shopify account must be signed in again before its consent can be read. Nothing was read.', 409)
   }
@@ -307,9 +359,9 @@ export async function backfillShopifyMarketingConsent(
   if (opts.after != null && (typeof opts.after !== 'string' || !opts.after.trim() || opts.after.length > 1000)) {
     throw new MarketingConsentError('BAD_CURSOR', '`after` is the resumeAfter value an earlier run answered.', 400)
   }
-  const connectionId = await signedInShopifyAccount(accountId)
+  const connectionId = await ownSignedInShopifyAccount(accountId)
   const { read, grantedScopes } = await shopifyAdminReader(connectionId)
-  if (grantedScopes.length > 0 && !grantedScopes.includes(CONSENT_SCOPE)) {
+  if (grantedScopes.length > 0 && !CONSENT_SCOPES_ACCEPTED.some((scope) => grantedScopes.includes(scope))) {
     throw new MarketingConsentError('SCOPE_MISSING', `This Shopify account has not granted ${CONSENT_SCOPE}, so Nexus cannot read its customers' consent. Nothing was read.`, 409)
   }
   const maxPages = opts.maxPages ?? DEFAULT_MAX_PAGES

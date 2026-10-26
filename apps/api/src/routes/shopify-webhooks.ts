@@ -982,7 +982,7 @@ export async function handleCustomersRedact(
   context?: { connectionId: string | null },
 ): Promise<{ consentRowsDeleted: number }> {
   const consentRowsDeleted = await redactShopifyMarketingConsent(payload, context);
-  logger.error("[ShopifyWebhooks] customers/redact received — acknowledged and recorded; its marketing-consent row is deleted, other erasure is NOT automated", {
+  logger.error(`[ShopifyWebhooks] customers/redact received — acknowledged and recorded; ${consentRowsDeleted} marketing-consent row(s) deleted, other erasure is NOT automated`, {
     shopDomain: (payload as any)?.shop_domain ?? null,
     customerId: (payload as any)?.customer?.id ?? null,
     connectionId: context?.connectionId ?? null,

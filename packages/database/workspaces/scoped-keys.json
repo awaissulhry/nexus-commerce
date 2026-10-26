@@ -7321,6 +7321,17 @@
         "shopifyCustomerId"
       ]
     },
-    "relations": []
+    "relations": [
+      {
+        "field": "connection",
+        "model": "ChannelConnection",
+        "from": [
+          "connectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
   }
 }
