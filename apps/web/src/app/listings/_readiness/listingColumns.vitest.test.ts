@@ -220,3 +220,12 @@ describe('the column filters', () => {
     expect(initialGridState(undefined, parseReadinessQuery(''), initialColumnIds([]))).toBeUndefined()
   })
 })
+
+describe('the last-used layout per kind of page (2026-10-26)', () => {
+  it('/listings keeps its key; store and market pages have their own, so a market page never hides a column on /listings', async () => {
+    const { lastUsedSurface } = await import('./listingColumns')
+    expect(lastUsedSurface(null)).toBe('listing-readiness')
+    expect(lastUsedSurface({ channel: 'AMAZON', marketplace: '' })).toBe('listing-readiness:store')
+    expect(lastUsedSurface({ channel: 'AMAZON', marketplace: 'IT' })).toBe('listing-readiness:market')
+  })
+})

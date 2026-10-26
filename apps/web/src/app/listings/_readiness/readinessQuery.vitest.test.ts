@@ -126,10 +126,10 @@ describe('withFilter — one filter changed', () => {
     const linked = { ...EMPTY_READINESS_QUERY, selector: { kind: 'productIds' as const, value: 'p1' } }
     expect(withFilter(linked, 'familyId', 'fam1')).toMatchObject({ familyId: 'fam1', selector: null })
   })
-  it('Clear empties the five filters only', () => {
+  it('Clear empties the Filters bar (Readiness included since 2026-10-26); the search and a link’s selection stay', () => {
     const q = { ...base, language: 'de', familyId: 'f', state: 'blocked' as const, q: 'x', selector: { kind: 'job' as const, value: 'j' } }
-    expect(activeFilterCount(q)).toBe(5)
-    expect(withoutFilters(q)).toMatchObject({ channel: '', marketplace: '', accountId: '', language: '', familyId: '', state: 'blocked', q: 'x', selector: { kind: 'job', value: 'j' }, page: 1 })
+    expect(activeFilterCount(q)).toBe(6)
+    expect(withoutFilters(q)).toMatchObject({ channel: '', marketplace: '', accountId: '', language: '', familyId: '', state: '', q: 'x', selector: { kind: 'job', value: 'j' }, page: 1 })
   })
 })
 
@@ -260,11 +260,11 @@ describe('the live filters in the address', () => {
     expect(familyPageHref(q, 'root-1')).toBe('/listings/amazon/it?live=active&flags=suppressed&parent=root-1')
     expect(withFilter(q, 'language', 'it')).toMatchObject({ live: ['active'], flags: ['suppressed'] })
   })
-  it('Clear empties Channel state and Stock (Low stock); the live tiles’ flags stay, as the readiness tile does', () => {
+  it('Clear empties Channel state, Channel problem, Stock and Readiness: all four are Filters-bar filters now (2026-10-26)', () => {
     const q = parseReadinessQuery('?language=it&live=paused&flags=error,lowStock&state=warn')
-    expect(activeFilterCount(q)).toBe(3)
-    expect(withoutFilters(q)).toMatchObject({ language: '', live: [], flags: ['error'], state: 'warn' })
-    expect(activeFilterCount(parseReadinessQuery('?flags=error'))).toBe(0)
+    expect(activeFilterCount(q)).toBe(5)
+    expect(withoutFilters(q)).toMatchObject({ language: '', live: [], flags: [], state: '' })
+    expect(activeFilterCount(parseReadinessQuery('?flags=error'))).toBe(1)
   })
   it('a saved view keeps them; a view saved before them shows every channel state', () => {
     const q = parseReadinessQuery('?live=active&flags=outOfSync')

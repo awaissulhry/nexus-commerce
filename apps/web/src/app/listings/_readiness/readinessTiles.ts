@@ -4,7 +4,7 @@
  * A tile counts LISTINGS (one product on one destination; its languages fold into one verdict). The numbers are the
  * API's `stats`, taken as they come: nothing here decides a verdict. Clicking a tile toggles the page's `state`.
  * Every word is the design system's (`readinessMeta(state, 'scope')`): one state, one name, as on the chips and in
- * the Fix window. Not computed shows only while something waits for its check (or when it is the filter in use).
+ * the Fix window. Since 2026-10-26 the page shows one row (`rowReadinessTiles`); the other states are Filters › Readiness.
  *
  * Pure — no React — so the tile ⇄ state mapping is a test.
  */
@@ -20,11 +20,6 @@ export type ReadinessStats = ReadinessStateCounts & { all: number }
 export function tileIsLit(state: ReadinessStateFilter | '', tile: ReadinessTileKey): boolean {
   if (state === 'notChecked') return tile === 'absent' || tile === 'notComputed'
   return (state || 'all') === tile
-}
-
-/** The tiles on screen: Not computed only while it counts something, or while it is the filter in use. */
-export function visibleTiles(stats: ReadinessStats | null, state: ReadinessStateFilter | ''): ReadinessTileKey[] {
-  return READINESS_TILES.filter((tile) => tile !== 'notComputed' || (stats?.notComputed ?? 0) > 0 || tileIsLit(state, tile))
 }
 
 /** A click: the lit tile turns off (back to All); any other tile turns on. */
@@ -81,3 +76,24 @@ const TONE_ACCENT: Record<ReadinessTone | 'primary', string> = {
   neutral: 'var(--nds-text-3)',
 }
 export const tileAccent = (tile: ReadinessTileKey): string => TONE_ACCENT[tileTone(tile)]
+
+/* ── One tile row (2026-10-26): the readiness tiles that stay in the row, and the Readiness filter ─────────────────── */
+
+/**
+ * The readiness tiles in the page's one row. With live data the row is All · Blocked · Warnings, then Live · Errors
+ * (`ROW_LIVE_TILES`); without it (an older API, or a person without `listings.view`) the row keeps Ready and Not set up
+ * instead. Every other state is the Filters bar's Readiness filter (`READINESS_FILTER_OPTIONS`).
+ */
+export function rowReadinessTiles(liveShown: boolean): ReadinessTileKey[] {
+  return liveShown ? ['all', 'blocked', 'warn'] : ['all', 'blocked', 'warn', 'ready', 'absent']
+}
+
+/** Filters › Readiness: every state, in the design system's words; the same key (`state`) the tiles set. */
+export function readinessFilterOptions(current: ReadinessStateFilter | ''): Array<{ value: string; label: string }> {
+  const options = [
+    { value: '', label: 'All' },
+    ...(['blocked', 'warn', 'ready', 'absent', 'notComputed'] as const).map((state) => ({ value: state, label: readinessMeta(state, 'scope').label })),
+  ]
+  // An older link's `notChecked` (both grey states at once) stays readable until it is changed.
+  return current === 'notChecked' ? [...options, { value: 'notChecked', label: 'Not set up or not computed' }] : options
+}

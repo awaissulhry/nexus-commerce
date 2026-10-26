@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { readinessMeta } from '@/design-system/grid/renderers/readiness'
-import { READINESS_TILES, listingsInView, stateForTile, tileAccent, tileCount, tileHint, tileIsLit, tileLabel, visibleTiles } from './readinessTiles'
+import { READINESS_TILES, listingsInView, readinessFilterOptions, rowReadinessTiles, stateForTile, tileAccent, tileCount, tileHint, tileIsLit, tileLabel } from './readinessTiles'
 
 const stats = { blocked: 310, warn: 420, notComputed: 30, absent: 100, ready: 380, all: 1240 }
 
@@ -27,11 +27,14 @@ describe('the tiles ⇄ the state', () => {
   it('the numbers are the API’s stats, one state per tile', () => {
     expect(READINESS_TILES.map((t) => tileCount(stats, t))).toEqual([1240, 310, 420, 380, 100, 30])
   })
-  it('Not computed shows only while it counts something, or while it is the filter in use', () => {
-    expect(visibleTiles(stats, '')).toEqual(['all', 'blocked', 'warn', 'ready', 'absent', 'notComputed'])
-    expect(visibleTiles({ ...stats, notComputed: 0 }, '')).toEqual(['all', 'blocked', 'warn', 'ready', 'absent'])
-    expect(visibleTiles({ ...stats, notComputed: 0 }, 'notComputed')).toContain('notComputed')
-    expect(visibleTiles(null, '')).toEqual(['all', 'blocked', 'warn', 'ready', 'absent'])
+  it('one row (2026-10-26): All · Blocked · Warnings with live data (Live · Errors follow); Ready and Not set up without it', () => {
+    expect(rowReadinessTiles(true)).toEqual(['all', 'blocked', 'warn'])
+    expect(rowReadinessTiles(false)).toEqual(['all', 'blocked', 'warn', 'ready', 'absent'])
+  })
+  it('Filters › Readiness offers every state in the design system’s words; an older notChecked link stays readable', () => {
+    expect(readinessFilterOptions('').map((o) => o.value)).toEqual(['', 'blocked', 'warn', 'ready', 'absent', 'notComputed'])
+    expect(readinessFilterOptions('').map((o) => o.label)).toEqual(['All', 'Blocked', 'Warnings', 'Ready', 'Not set up', 'Not computed'])
+    expect(readinessFilterOptions('notChecked').at(-1)).toEqual({ value: 'notChecked', label: 'Not set up or not computed' })
   })
   it('the toolbar counts the listings under the current state', () => {
     expect(listingsInView(stats, '')).toBe(1240)

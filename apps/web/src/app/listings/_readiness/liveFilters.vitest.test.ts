@@ -82,3 +82,37 @@ describe('Filters › Stock', () => {
     expect(stockOf(q())).toBe('')
   })
 })
+
+describe('one tile row (2026-10-26): Live · Errors in the row, Suppressed and Out of sync under Filters › Channel problem', () => {
+  it('the row keeps Live and Errors', async () => {
+    const { ROW_LIVE_TILES } = await import('./liveFilters')
+    expect(ROW_LIVE_TILES).toEqual(['live', 'error'])
+  })
+  it('Channel problem is one choice at a time, the same flags the Errors tile sets; Low stock stays', async () => {
+    const { CHANNEL_PROBLEM_OPTIONS, channelProblemOf, withChannelProblem } = await import('./liveFilters')
+    const { EMPTY_READINESS_QUERY } = await import('./readinessQuery')
+    expect(CHANNEL_PROBLEM_OPTIONS.map((o) => o.label)).toEqual(['All', 'Errors', 'Suppressed', 'Out of sync'])
+    const low = { ...EMPTY_READINESS_QUERY, flags: ['lowStock' as const], page: 3 }
+    const suppressed = withChannelProblem(low, 'suppressed')
+    expect(suppressed).toMatchObject({ flags: ['suppressed', 'lowStock'], page: 1 })
+    expect(channelProblemOf(suppressed)).toBe('suppressed')
+    expect(withChannelProblem(suppressed, 'outOfSync').flags).toEqual(['outOfSync', 'lowStock'])
+    expect(withChannelProblem(suppressed, '').flags).toEqual(['lowStock'])
+    expect(withChannelProblem(low, 'nonsense').flags).toEqual(['lowStock'])
+    expect(channelProblemOf(low)).toBe('')
+  })
+})
+
+describe('the row’s All (2026-10-26)', () => {
+  it('is lit only without a tile filter, and clears the live tiles’ filters (Low stock and other states stay)', async () => {
+    const { anyLiveTileFilter, withoutLiveTiles } = await import('./liveFilters')
+    const { EMPTY_READINESS_QUERY } = await import('./readinessQuery')
+    expect(anyLiveTileFilter({ live: [], flags: [] })).toBe(false)
+    expect(anyLiveTileFilter({ live: ['active'], flags: [] })).toBe(true)
+    expect(anyLiveTileFilter({ live: [], flags: ['suppressed'] })).toBe(true)
+    expect(anyLiveTileFilter({ live: ['paused'], flags: ['lowStock'] })).toBe(false)
+    const q = { ...EMPTY_READINESS_QUERY, live: ['active' as const], flags: ['error' as const, 'lowStock' as const], page: 4 }
+    expect(withoutLiveTiles(q)).toMatchObject({ live: [], flags: ['lowStock'], page: 1 })
+    expect(withoutLiveTiles({ ...q, live: ['paused' as const, 'ended' as const] }).live).toEqual(['paused', 'ended'])
+  })
+})
