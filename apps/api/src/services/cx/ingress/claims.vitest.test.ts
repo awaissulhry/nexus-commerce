@@ -134,6 +134,62 @@ describe('durable inbound claim ownership', () => {
     expect(await row(pending.id)).toMatchObject({ status: 'failed', attempts: 1, processingToken: null, lastError: 'auth hold' })
   })
 
+  it('clears the stored body of a handled Shopify e-mail consent delivery, and of nothing else', async () => {
+    const consent = (overrides: Partial<Prisma.WebhookEventUncheckedCreateInput> = {}) => event({
+      eventType: 'customers_email_marketing_consent/update', payload: { customer_id: 7012345678901, email_address: 'buyer.one@example.com' },
+      rawBody: Buffer.from('{"email_address":"buyer.one@example.com"}'), verificationHeaders: { 'x-shopify-topic': 'customers_email_marketing_consent/update' },
+      ...overrides,
+    })
+    expect(claims.CLEAR_BODY_WHEN_DONE.has('SHOPIFY customers_email_marketing_consent/update')).toBe(true)
+
+    // Handled: the same update that finishes it as done clears rawBody, headers and payload; the row stays.
+    const handled = await consent()
+    const handledClaim = await inWorkspace(() => claims.claimInbound(handled.id, NOW))
+    expect(await inWorkspace(() => claims.finishInboundClaim(handledClaim!, true, undefined, NOW))).toBe(true)
+    const cleared = await row(handled.id)
+    expect(cleared).toMatchObject({ status: 'done', isProcessed: true, rawBody: null, verificationHeaders: null, payload: null, eventType: 'customers_email_marketing_consent/update' })
+    expect(JSON.stringify(cleared)).not.toMatch(/example\.com/)
+
+    // Not handled: a failure keeps the body for the retry.
+    const failed = await consent()
+    const failedClaim = await inWorkspace(() => claims.claimInbound(failed.id, NOW))
+    await inWorkspace(() => claims.finishInboundClaim(failedClaim!, false, 'boom', NOW))
+    expect(await row(failed.id)).toMatchObject({ status: 'failed', payload: { email_address: 'buyer.one@example.com' } })
+    expect((await row(failed.id)).rawBody).not.toBeNull()
+
+    // Another topic finished as done keeps its body (the retention sweep clears it later, as before).
+    const order = await event({ rawBody: Buffer.from('{"id":"order_original"}') })
+    const orderClaim = await inWorkspace(() => claims.claimInbound(order.id, NOW))
+    await inWorkspace(() => claims.finishInboundClaim(orderClaim!, true, undefined, NOW))
+    expect(await row(order.id)).toMatchObject({ status: 'done', payload: { id: 'order_original', total: '19.95' } })
+    expect((await row(order.id)).rawBody).not.toBeNull()
+  })
+
+  it('the retention sweep clears an unhandled consent delivery after 7 days, whatever the policy window; nothing else early', async () => {
+    const { scrubExpiredInbound, SHORT_LIVED_INBOUND } = await import('./archive.js')
+    expect(SHORT_LIVED_INBOUND).toEqual({ channel: 'SHOPIFY', eventType: 'customers_email_marketing_consent/update', days: 7 })
+    const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000)
+    const body = { rawBody: Buffer.from('{"email_address":"buyer.one@example.com"}'), verificationHeaders: { 'x-shopify-topic': 'customers_email_marketing_consent/update' } }
+    const consent = { eventType: SHORT_LIVED_INBOUND.eventType, payload: { customer_id: 7012345678901, email_address: 'buyer.one@example.com' }, ...body }
+    const deadLetter = await event({ ...consent, status: 'dlq', attempts: 5, createdAt: daysAgo(8) })
+    const noRoute = await event({ ...consent, status: 'failed', connectionId: null, createdAt: daysAgo(8) })
+    const recent = await event({ ...consent, status: 'dlq', attempts: 5, createdAt: daysAgo(2) })
+    const leased = await event({ ...consent, processingToken: 'live-owner', processingUntil: new Date(Date.now() + 600_000), createdAt: daysAgo(8) })
+    const otherTopic = await event({ ...body, status: 'dlq', attempts: 5, createdAt: daysAgo(8) })
+
+    // A 90-day policy window: only this topic's unhandled deliveries older than 7 days are cleared.
+    expect(await inWorkspace(() => scrubExpiredInbound(90))).toEqual({ scrubbed: 2, limitReached: false })
+    for (const id of [deadLetter.id, noRoute.id]) {
+      const cleared = await row(id)
+      expect(cleared).toMatchObject({ rawBody: null, verificationHeaders: null, payload: null, eventType: SHORT_LIVED_INBOUND.eventType })
+      expect(JSON.stringify(cleared)).not.toMatch(/example\.com/)
+    }
+    expect((await row(deadLetter.id)).status).toBe('dlq') // the row stays; only its body goes
+    for (const id of [recent.id, leased.id]) expect((await row(id)).payload).toMatchObject({ email_address: 'buyer.one@example.com' })
+    expect(await row(otherTopic.id)).toMatchObject({ status: 'dlq', payload: { id: 'order_original', total: '19.95' } })
+    expect((await row(otherTopic.id)).rawBody).not.toBeNull()
+  })
+
   it('schedules a failed claim without counting completion as another attempt', async () => {
     const pending = await event()
     const claim = await inWorkspace(() => claims.claimInbound(pending.id, NOW))

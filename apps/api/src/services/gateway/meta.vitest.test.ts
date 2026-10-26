@@ -62,7 +62,7 @@ describe('the pinned version', () => {
 })
 
 describe('read only by construction', () => {
-  const ok = (url: string, extra: Partial<Parameters<typeof metaReadOnlyProblem>[0]> = {}) => metaReadOnlyProblem({ method: 'GET', url, kind: 'read', ...extra })
+  const ok = (url: string, extra: Partial<Parameters<typeof metaReadOnlyProblem>[0]> = {}, chosenPageId?: string) => metaReadOnlyProblem({ method: 'GET', url, kind: 'read', ...extra }, chosenPageId)
   it('lets a plain GET of the pinned version through', () => {
     expect(ok(`${BASE}/act_1234567890/campaigns?fields=id,name&limit=200`)).toBeNull()
     expect(ok(`${BASE}/debug_token?input_token=x`)).toBeNull()
@@ -370,7 +370,7 @@ describe('read only by construction', () => {
       `act_1234567890/website_creative_info?fields=id&link_url=${encodeURIComponent('https://shop.example.com/')}`,
       '120000000000101/video_groups?fields=id&date_range={"start":"2026-10-01","end":"2026-10-20"}',
       '120000000000010/live_videos?fields=id&broadcast_status=["VOD"]',
-      '120000000000010/feed?fields=id&include_hidden=true&show_expired=true', '120000000000010/visitor_posts?fields=id&include_hidden=true',
+      '120000000000010/feed?fields=id&include_hidden=true&show_expired=true',
       '120000000000010/published_posts?fields=id&show_expired=true',
       '120000000000010/ads_posts?fields=id&include_inline_create=true&exclude_dynamic_ads=true&since=2026-10-01&until=2026-10-20',
       '170000000000001/media?fields=id&since=2026-10-01&until=2026-10-20',
@@ -380,7 +380,8 @@ describe('read only by construction', () => {
       'act_1234567890/generatepreviews?ad_format=INSTAGRAM_STANDARD&creative={"object_story_id":"1_2"}&creative_feature=image_uncrop&dynamic_asset_label=french',
       '120000000000301/previews?ad_format=MOBILE_FEED_STANDARD&product_item_ids=["400000000000001"]&dynamic_customization={"language":"fr_XX","country":"FR"}',
       '120000000000010/canvases?fields=id&is_hidden=false&is_published=true',
-      '120000000000010_500000000000001?fields=id,message,attachments{media_type,url,subattachments}',
+      // Gap 46b — a post read asks only what Nexus reads on a post (meta-page-reads.ts POST_NODE_FIELDS).
+      '120000000000010_500000000000001?fields=id,message,attachments{media_type,type,title,description,url,unshimmed_url,media,target,subattachments}',
     ]) expect(q(path), path).toBeNull()
     // Refused anywhere else.
     for (const [path, key] of [
@@ -391,6 +392,8 @@ describe('read only by construction', () => {
       ['120000000000301/previews?ad_format=MOBILE_FEED_STANDARD&creative={}', 'creative'], ['120000000000301/previews?place_page_id=1', 'place_page_id'],
       ['act_1234567890/generatepreviews?ad_format=MOBILE_FEED_STANDARD&post={}', 'post'], ['120000000000010/canvases?fields=id&is_published=true&user_ids=[1]', 'user_ids'],
       ['120000000000010/live_videos?fields=id&source=target', 'source'], ['120000000000010/ads_posts?fields=id&include_hidden=true', 'include_hidden'],
+      // Live-probe fix EN-926 — visitor_posts is no longer read (not on the New Pages Experience): its keys are gone.
+      ['120000000000010/visitor_posts?fields=id&include_hidden=true', 'include_hidden'],
     ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
     // Round 2 (c) — the organic-insight keys only on an organic read (no field list, every metric one Nexus names); the
     // preview keys only with an ad_format of the v26 enum.
@@ -499,8 +502,8 @@ describe('read only by construction', () => {
       'id,reactions.limit(0).summary(total_count) .limit(100){id,name}', 'id,reactions.limit(0).summary(total_count) .fields(id,name)',
       'id,reactions.limit(0).summary(total_count)  .as(x)', 'id,reactions.limit(0).summary(total_count) ,shares', 'id,reactions .limit(0).summary(total_count)',
     ]) expect(f(fields), fields).toMatch(/reactions inside fields only as a count/)
-    // A count closing an expansion is one too.
-    expect(f('id,attachments{target{id},reactions.limit(0).summary(total_count)}')).toBeNull()
+    // A count closing an expansion is one too (gap 46b: on another Page's post — the chosen Page's post reads only its own list).
+    expect(ok(`${BASE}/120000000000099_500000000000001?fields=${encodeURIComponent('id,attachments{target{id},reactions.limit(0).summary(total_count)}')}`, {}, '120000000000010')).toBeNull()
   })
   it('step 12 — catalogs, items, feeds and catalog health: each key only on its own edge', () => {
     const q = (path: string) => ok(`${BASE}/${path}`)

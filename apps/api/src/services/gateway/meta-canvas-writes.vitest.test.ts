@@ -331,23 +331,26 @@ describe('made as the chosen Page, with every id checked', () => {
       h.answers.push(...answers)
       return make(params)
     }
-    // A photo of the chosen Page (from, width, height).
-    expect((await one(part('canvas_photo', { photo_id: PHOTO }), [json({ id: PHOTO, from: { id: PAGE }, width: 1080, height: 1080 }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
-    expect(await one(part('canvas_photo', { photo_id: PHOTO }), [json({ id: PHOTO, from: { id: OTHER_PAGE }, width: 1080, height: 1080 })])).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
+    // A photo of the chosen Page (from, width, height) — gap 46b (re-review FIX 2): read with the chosen Page's own token.
+    expect((await one(part('canvas_photo', { photo_id: PHOTO }), [tokenAnswer(), json({ id: PHOTO, from: { id: PAGE }, width: 1080, height: 1080 }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
+    expect([new URL(h.calls[1].url).searchParams.get('fields'), new URL(h.calls[1].url).searchParams.get('access_token')]).toEqual(['id,from{id},width,height', PAGE_TOKEN])
+    expect(await one(part('canvas_photo', { photo_id: PHOTO }), [tokenAnswer(), json({ id: PHOTO, from: { id: OTHER_PAGE }, width: 1080, height: 1080 })])).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
     // A post: <page>_<post> of the chosen Page by its id alone; a photo or video it posted by `from`.
     expect((await one(part('canvas_existing_post', { source_facebook_post_id: `${PAGE}_500000000000001` }), [tokenAnswer(), json({ id: PART })])).ok).toBe(true)
     expect(await one(part('canvas_existing_post', { source_facebook_post_id: `${OTHER_PAGE}_500000000000001` }), [])).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
-    expect((await one(part('canvas_existing_post', { source_facebook_post_id: PHOTO }), [json({ id: PHOTO, from: { id: PAGE } }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
-    expect(await one(part('canvas_existing_post', { source_facebook_post_id: PHOTO }), [json({ id: PHOTO, from: { id: OTHER_PAGE } })])).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
+    // Gap 46b (the live read of 2026-10-26) — the owner read id,from{id} goes with the chosen Page's own token (token first).
+    expect((await one(part('canvas_existing_post', { source_facebook_post_id: PHOTO }), [tokenAnswer(), json({ id: PHOTO, from: { id: PAGE } }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
+    expect(new URL(h.calls[1].url).searchParams.get('access_token')).toBe(PAGE_TOKEN)
+    expect(await one(part('canvas_existing_post', { source_facebook_post_id: PHOTO }), [tokenAnswer(), json({ id: PHOTO, from: { id: OTHER_PAGE } })])).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
     // An Instagram media of the chosen account: its owner, else its username against the account's own.
     expect((await one(part('canvas_existing_post', { source_instagram_media_id: MEDIA }), [json({ id: MEDIA, owner: { id: IG } }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
     expect((await one(part('canvas_existing_post', { source_instagram_media_id: MEDIA }), [json({ id: MEDIA, username: 'shop_a' }), json({ id: IG, username: 'Shop_A' }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
     expect(await one(part('canvas_existing_post', { source_instagram_media_id: MEDIA }), [json({ id: MEDIA, owner: { id: '17841400000000099' } })])).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
     // A video the Page posted, else one of the chosen ad account's library.
-    expect((await one(part('canvas_video', { video_id: VIDEO }), [json({ id: VIDEO, from: { id: PAGE } }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
-    expect((await one(part('canvas_video', { video_id: VIDEO }), [json({ id: VIDEO }), json({ data: [{ id: VIDEO }] }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
-    expect(sent(1).url.pathname).toBe('/v26.0/act_1234567890/advideos')
-    expect(await one(part('canvas_video', { video_id: VIDEO }), [json({ id: VIDEO, from: { id: OTHER_PAGE } }), json({ data: [] })])).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
+    expect((await one(part('canvas_video', { video_id: VIDEO }), [tokenAnswer(), json({ id: VIDEO, from: { id: PAGE } }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
+    expect((await one(part('canvas_video', { video_id: VIDEO }), [tokenAnswer(), json({ id: VIDEO }), json({ data: [{ id: VIDEO }] }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
+    expect(sent(2).url.pathname).toBe('/v26.0/act_1234567890/advideos')
+    expect(await one(part('canvas_video', { video_id: VIDEO }), [tokenAnswer(), json({ id: VIDEO, from: { id: OTHER_PAGE } }), json({ data: [] })])).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
     // A lead form of the chosen Page.
     expect((await one(part('canvas_lead_form', { leadgen_data_id: FORM }), [json({ id: FORM, page_id: PAGE, questions: [{ type: 'EMAIL' }] }), tokenAnswer(), json({ id: PART })])).ok).toBe(true)
     expect(await one(part('canvas_lead_form', { leadgen_data_id: FORM }), [json({ id: FORM, page_id: OTHER_PAGE, questions: [{ type: 'EMAIL' }] })])).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
@@ -364,7 +367,7 @@ describe('made as the chosen Page, with every id checked', () => {
     expect(h.catalog).toHaveBeenCalledWith({ connectionId: 'm-1', adAccountId: '1234567890' }, { productSetId: SET }, expect.any(Object))
     h.catalog.mockClear()
     __metaObjectLimitsTest.useMemory()
-    h.answers.push(json({ id: PHOTO, from: { id: PAGE }, width: 10, height: 10 }), tokenAnswer(), json({ id: PART }))
+    h.answers.push(tokenAnswer(), json({ id: PHOTO, from: { id: PAGE }, width: 10, height: 10 }), tokenAnswer(), json({ id: PART }))
     expect((await make(part('canvas_photo', EVERY_PART.canvas_photo))).ok).toBe(true)
     expect(h.catalog).toHaveBeenCalledWith({ connectionId: 'm-1', adAccountId: '1234567890' }, { productItemId: ITEM }, expect.any(Object))
     h.calls = []
@@ -376,8 +379,10 @@ describe('made as the chosen Page, with every id checked', () => {
     gatewayMetaStored['120000000000001'] = { adAccountId: '1234567890', kind: 'campaign' }
     const pause = () => metaWriteCall({ connectionId: 'm-1', operation: 'status.change', objectId: '120000000000001', objectKind: 'campaign', params: { status: 'PAUSED' }, check: false }).catch((e) => e)
     for (const code of [80001, 80005]) {
-      // Each round its own: Meta's one change of an object every 30 s (the pause of the round before) is not what is tested.
+      // Each round its own: Meta's one change of an object every 30 s (the pause of the round before) is not what is tested,
+      // nor the Page's own bucket the round before held (step 38 review S1: a change made as the Page pays the `page` bucket).
       __metaObjectLimitsTest.useMemory()
+      __rateTest.useMemory()
       h.calls = []
       h.answers.push(tokenAnswer(), json({ error: { code, message: 'There have been too many calls to this Page account. Wait a bit and try again.' } }, 400))
       const refused = await make(part('canvas_text', EVERY_PART.canvas_text))
@@ -390,6 +395,7 @@ describe('made as the chosen Page, with every id checked', () => {
     }
     // A real throttle on a change made as the Page (code 4, the app's own limit) still holds the bucket: the pause is not sent.
     __metaObjectLimitsTest.useMemory()
+    __rateTest.useMemory()
     h.calls = []
     h.answers.push(tokenAnswer(), json({ error: { code: 4, message: 'Application request limit reached' } }, 400))
     expect((await make(part('canvas_text', EVERY_PART.canvas_text))).ok).toBe(false)

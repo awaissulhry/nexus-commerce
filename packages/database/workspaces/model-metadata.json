@@ -2823,6 +2823,12 @@
           "relationFromFields": []
         },
         {
+          "name": "shopifyMarketingConsent",
+          "kind": "object",
+          "type": "ShopifyMarketingConsent",
+          "relationFromFields": []
+        },
+        {
           "name": "googleAccountLinks",
           "kind": "object",
           "type": "GoogleAccountLink",
@@ -5173,6 +5179,14 @@
     },
     {
       "name": "EmailSuppression",
+      "fields": []
+    },
+    {
+      "name": "ReviewSettings",
+      "fields": []
+    },
+    {
+      "name": "ReviewReplyTemplate",
       "fields": []
     },
     {
@@ -7582,6 +7596,20 @@
     },
     {
       "name": "ShopifyOrderIngest",
+      "fields": [
+        {
+          "name": "connection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "connectionId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ShopifyMarketingConsent",
       "fields": [
         {
           "name": "connection",

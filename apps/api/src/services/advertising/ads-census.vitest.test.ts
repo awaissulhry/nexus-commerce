@@ -61,6 +61,10 @@ beforeAll(async () => {
     await campaign('itOff', {})                                                        // not allowlisted
     await campaign('itArchived', { status: 'ARCHIVED' })
     await campaign('itPlanned', {})
+    // 6a — a Sponsored Display and a Sponsored Brands campaign no plan holds (an hourly plan takes neither in).
+    await campaign('itDisplay', { type: 'SD', adProduct: 'SPONSORED_DISPLAY' })
+    await campaign('itBrands', { type: 'SB', adProduct: 'SPONSORED_BRANDS' })
+    await db.amazonAdsDailyPerformance.create({ data: { profileId: 'P-TEST', marketplace: 'IT', adProduct: 'SPONSORED_DISPLAY', date: new Date(), entityType: 'CAMPAIGN', entityId: 'TEST-itDisplay', localEntityId: id.itDisplay, costMicros: 1_230_000n, currencyCode: 'EUR', reportedAt: new Date() } })
     // A floor for DE from a market policy; a disabled one for IT that must not count.
     await db.adBidPolicy.create({ data: { grain: 'MARKET', scopeId: 'DE', label: 'Germany', minBidCents: 15 } })
     await db.adBidPolicy.create({ data: { grain: 'MARKET', scopeId: 'IT', label: 'Italy', minBidCents: 15, enabled: false } })
@@ -85,7 +89,7 @@ afterAll(async () => {
 describe('campaignCensus', () => {
   it('counts every campaign, archived ones included, and says how many are archived', async () => {
     const c = await inside(() => campaignCensus())
-    expect(c).toMatchObject({ total: 6, archived: 1, allowlisted: 3, withMinBid: 1, withMaxBid: 1 })
+    expect(c).toMatchObject({ total: 8, archived: 1, allowlisted: 3, withMinBid: 1, withMaxBid: 1 })
   })
 
   it('a bid policy floor counts as a floor, a disabled policy does not, and the maximum is counted apart', async () => {
@@ -95,15 +99,15 @@ describe('campaignCensus', () => {
 
   it('narrows every count to one market', async () => {
     expect(await inside(() => campaignCensus({ marketplace: 'DE' }))).toMatchObject({ total: 1, archived: 0, allowlisted: 1 })
-    expect(await inside(() => campaignCensus({ marketplace: 'IT' }))).toMatchObject({ total: 5, archived: 1, allowlisted: 2 })
+    expect(await inside(() => campaignCensus({ marketplace: 'IT' }))).toMatchObject({ total: 7, archived: 1, allowlisted: 2 })
   })
 
   it('the Guardrails summary and the catalog scope line read it', async () => {
     const g = await inside(() => getAccountGuardrails())
-    expect(g.campaigns).toEqual({ total: 6, managed: 3, unmanaged: 3 })
+    expect(g.campaigns).toEqual({ total: 8, managed: 3, unmanaged: 5 })
     expect(g.bounds).toEqual({ withMinBid: 1, withMaxBid: 1 })
     const autoBid = await inside(() => automationAdapter('A4')!.state())
-    expect(autoBid.scope).toBe('May write to 3 of 6 campaigns (the live-write allowlist).')
+    expect(autoBid.scope).toBe('May write to 3 of 8 campaigns (the live-write allowlist).')
   })
 })
 
@@ -142,15 +146,18 @@ describe('the Rank & Dayparting coverage strip reads both', () => {
 
   it('states the same total as every screen, and a switched-off schedule is not "under rank control"', async () => {
     const c = await coverage()
-    expect(c).toMatchObject({ total: 6, archived: 1, covered: 2, governed: 1, switchedOff: 1, uncovered: 1 })
+    expect(c).toMatchObject({ total: 8, archived: 1, covered: 2, governed: 1, switchedOff: 1, uncovered: 1, notForHourlyPlans: 2, spTotal: 6 })
     // Every campaign is in exactly one bucket.
-    expect(c.covered + c.governed + c.switchedOff + c.uncovered + c.archived).toBe(c.total)
-    // The list to add from is unchanged: only campaigns that hold no schedule and no plan.
+    expect(c.covered + c.governed + c.switchedOff + c.uncovered + c.archived + c.notForHourlyPlans).toBe(c.total)
+    expect(c.spTotal).toBe(c.total - c.notForHourlyPlans)
+    // 6a — the list to add from: campaigns that hold no schedule and no plan, Sponsored Products only; the others' spend apart.
     expect(c.items.map((i: { id: string }) => i.id)).toEqual([id.itPlanned])
+    expect(c).toMatchObject({ uncoveredSpendCents: 0, notForHourlyPlansSpendCents: 123 })
   })
 
   it('one market narrows the total the same way the census does', async () => {
     const c = await coverage('?marketplace=IT')
-    expect(c).toMatchObject({ total: 5, archived: 1, covered: 2, governed: 0, switchedOff: 1, uncovered: 1 })
+    expect(c).toMatchObject({ total: 7, archived: 1, covered: 2, governed: 0, switchedOff: 1, uncovered: 1, notForHourlyPlans: 2, spTotal: 5 })
+    expect(c.covered + c.governed + c.switchedOff + c.uncovered + c.archived + c.notForHourlyPlans).toBe(c.total)
   })
 })

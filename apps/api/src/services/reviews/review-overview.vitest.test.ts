@@ -1,0 +1,231 @@
+/**
+ * Reviews Overview — the pure rules behind GET /api/reviews/area/overview and /needs-you: periods and their previous
+ * period, chart buckets, weighted averages, deltas, star spread, eBay's % positive, review rate, star impact, the
+ * products-to-watch ranking, themes from reviews and Amazon topics, and the Needs-you order. No database.
+ */
+import { describe, expect, it } from 'vitest'
+import {
+  averageRating, bucketKey, bucketKeys, buyerShort, channelMarketLabel, delta, parseOverviewPeriod, periodBounds, periodOf,
+  positiveShare, quoteOf, rankWatch, ratingIn, ratingKindOf, reviewRate, sparkValues, sparkWindows, starCounts, starImpact,
+  trendBucket, trendPoints, weightedAverage,
+} from './overviewMath.js'
+import { amazonThemes, reviewThemes, scopeCode, topThemes } from './review-overview.service.js'
+import { alertItem, parseLimit, parseOnly, rankNeedsYou, replyItem, requestItems, waitWords } from './review-needs-you.service.js'
+
+const NOW = new Date('2026-10-26T12:00:00Z')
+const DAY = 86_400_000
+const ago = (days: number) => new Date(NOW.getTime() - days * DAY)
+
+describe('period', () => {
+  it('reads a known period and falls back to 30 days', () => {
+    expect(parseOverviewPeriod('7d')).toBe('7d')
+    expect(parseOverviewPeriod(' 12M ')).toBe('12m')
+    expect(parseOverviewPeriod('week')).toBe('30d')
+    expect(parseOverviewPeriod(undefined)).toBe('30d')
+  })
+
+  it('compares against a previous period of the same length', () => {
+    const b = periodBounds('30d', NOW)
+    expect(b.to.toISOString()).toBe(NOW.toISOString())
+    expect(b.from!.toISOString()).toBe(ago(30).toISOString())
+    expect(b.prevFrom!.toISOString()).toBe(ago(60).toISOString())
+    expect(b.prevTo!.toISOString()).toBe(ago(30).toISOString())
+    expect(periodOf(ago(1), b)).toBe('now')
+    expect(periodOf(ago(45), b)).toBe('prev')
+    expect(periodOf(ago(61), b)).toBeNull()
+  })
+
+  it('12 months goes back calendar months; All time has no previous period', () => {
+    const y = periodBounds('12m', NOW)
+    expect(y.from!.toISOString().slice(0, 10)).toBe('2025-10-26')
+    expect(y.prevFrom!.toISOString().slice(0, 10)).toBe('2024-10-26')
+    const all = periodBounds('all', NOW)
+    expect(all.from).toBeNull()
+    expect(all.prevFrom).toBeNull()
+    expect(periodOf(new Date('2001-01-01'), all)).toBe('now')
+  })
+})
+
+describe('chart buckets', () => {
+  it('days for 7 and 30 days, weeks for 90, months for 12 months', () => {
+    expect(trendBucket('7d')).toBe('day')
+    expect(trendBucket('30d')).toBe('day')
+    expect(trendBucket('90d')).toBe('week')
+    expect(trendBucket('12m')).toBe('month')
+    expect(bucketKey(new Date('2026-10-29T10:00:00Z'), 'week')).toBe('2026-10-26') // a Thursday → its Monday
+    expect(bucketKey(new Date('2026-10-26T00:00:00Z'), 'week')).toBe('2026-10-26')
+    expect(bucketKey(new Date('2026-10-29T10:00:00Z'), 'month')).toBe('2026-10')
+  })
+
+  it('every day of the period is a point, a day without reviews counts 0 and has no average', () => {
+    const keys = bucketKeys(ago(6), NOW, 'day')
+    expect(keys).toHaveLength(7)
+    const points = trendPoints([{ postedAt: ago(1), rating: 5 }, { postedAt: ago(1), rating: 3 }, { postedAt: ago(1), rating: null }], keys, 'day')
+    const yesterday = points.find(p => p.day === ago(1).toISOString().slice(0, 10))!
+    expect(yesterday).toEqual({ day: ago(1).toISOString().slice(0, 10), reviews: 3, avg: 4 })
+    expect(points.filter(p => p.reviews === 0).every(p => p.avg === null)).toBe(true)
+  })
+})
+
+describe('averages and changes', () => {
+  it('weights each value and skips missing values and zero weights', () => {
+    expect(weightedAverage([{ value: 4, weight: 3 }, { value: 2, weight: 1 }])).toBe(3.5)
+    expect(weightedAverage([{ value: null, weight: 5 }, { value: 4, weight: 0 }])).toBeNull()
+    expect(averageRating([5, 4, null, 3])).toBe(4)
+    expect(averageRating([])).toBeNull()
+  })
+
+  it('a change needs both periods; it is never invented from nothing', () => {
+    expect(delta(4.5, 4.3)).toBe(0.2)
+    expect(delta(4.3, 4.4)).toBe(-0.1)
+    expect(delta(4.3, null)).toBeNull()
+    expect(delta(null, 4)).toBeNull()
+  })
+
+  it('star spread is 5 stars first, rounded to whole stars', () => {
+    expect(starCounts([5, 5, 4.4, 4.6, 1, null, 0.2])).toEqual([3, 1, 0, 0, 2])
+  })
+
+  it('eBay reads as % positive of positive + negative (neutral left out)', () => {
+    expect(positiveShare([5, 5, 5, 1, 3])).toBe(75)
+    expect(positiveShare([3, 3])).toBeNull()
+    expect(ratingKindOf('EBAY')).toBe('positive')
+    expect(ratingKindOf('AMAZON')).toBe('stars')
+    expect(ratingIn('positive', [5, 1])).toBe(50)
+    expect(ratingIn('stars', [5, 4])).toBe(4.5)
+  })
+
+  it('review rate is followed per sent; nothing sent has no rate', () => {
+    expect(reviewRate(200, 15)).toBe(0.075)
+    expect(reviewRate(0, 0)).toBeNull()
+  })
+
+  it('star impact is the theme average against the overall average', () => {
+    expect(starImpact(3.2, 4.4)).toBe(-1.2)
+    expect(starImpact(null, 4.4)).toBeNull()
+  })
+})
+
+describe('products to watch', () => {
+  const row = (key: string, before: number, now: number, kind: 'stars' | 'positive' = 'stars', countNow = 5, countBefore = 5) =>
+    ({ key, ratingBefore: before, ratingNow: now, kind, countNow, countBefore })
+
+  it('ranks the biggest drop first and leaves out rises and thin samples', () => {
+    const ranked = rankWatch([
+      row('a', 4.4, 4.2),
+      row('b', 4.6, 3.9),
+      row('c', 4.0, 4.5),
+      row('d', 4.8, 3.0, 'stars', 2, 9), // too few now
+    ])
+    expect(ranked.map(r => r.key)).toEqual(['b', 'a'])
+    expect(ranked[0].change).toBe(-0.7)
+  })
+
+  it('puts % positive drops on the star scale only to rank them', () => {
+    // −4 points ≈ −0.2 stars; −0.3 stars ranks first.
+    const ranked = rankWatch([row('ebay', 99, 95, 'positive'), row('amazon', 4.5, 4.2)])
+    expect(ranked.map(r => r.key)).toEqual(['amazon', 'ebay'])
+    expect(ranked[1].change).toBe(-4)
+  })
+
+  it('a sparkline with fewer than three readings is too few to trend', () => {
+    const windows = sparkWindows(NOW)
+    expect(windows).toHaveLength(6)
+    const thin = sparkValues('stars', [{ postedAt: ago(1), rating: 4 }, { postedAt: ago(8), rating: 5 }], windows)
+    expect(thin.tooFew).toBe(true)
+    expect(thin.values.filter(v => v != null)).toEqual([5, 4])
+    const full = sparkValues('stars', [1, 8, 15, 22].map(d => ({ postedAt: ago(d), rating: 4 })), windows)
+    expect(full.tooFew).toBe(false)
+  })
+})
+
+describe('words', () => {
+  it('names channels with their market, buyers by first name and initial, quotes short', () => {
+    expect(channelMarketLabel('EBAY', 'it')).toBe('eBay Italy')
+    expect(channelMarketLabel('SHOPIFY', null)).toBe('Shopify')
+    expect(buyerShort('First Middle Last')).toBe('First L.')
+    expect(buyerShort('  ')).toBeNull()
+    expect(quoteOf('a'.repeat(200), 20)).toHaveLength(22)
+    expect(scopeCode('ebay')).toBe('EBAY')
+    expect(scopeCode('ALL')).toBeNull()
+    expect(scopeCode('x; drop')).toBeNull()
+  })
+})
+
+describe('themes', () => {
+  const review = (id: string, label: string, categories: string[], rating: number, phrase = 'runs small') => ({
+    id, channel: 'EBAY', marketplace: 'IT', rating, postedAt: ago(Number(id)), productId: 'p', ingestSource: 'EBAY_API',
+    sentiment: { label, categories, topPhrases: [phrase] },
+  })
+
+  it('counts a theme against the positive (or negative) reviews, with its newest quote and star impact', () => {
+    const rows = [
+      review('1', 'NEGATIVE', ['FIT_SIZING'], 1, 'too small'),
+      review('2', 'NEGATIVE', ['FIT_SIZING', 'OTHER'], 2, 'order a size up'),
+      review('3', 'NEGATIVE', ['SHIPPING'], 2),
+      review('4', 'POSITIVE', ['COMFORT'], 5),
+    ]
+    const fix = reviewThemes(rows, 'NEGATIVE')
+    const fit = fix.find(t => t.key === 'FIT_SIZING')!
+    expect(fit).toMatchObject({ label: 'Fit & sizing', share: 67, mentions: 2, source: 'review', quote: '“too small”', quoteFrom: 'eBay feedback · IT' })
+    expect(fit.impact).toBe(-1)
+    expect(fix.some(t => t.key === 'OTHER')).toBe(false)
+  })
+
+  it('merges Amazon topics over products; Amazon topics never come from the Netherlands rows passed in', () => {
+    const topics = amazonThemes([
+      { marketplace: 'DE', reviewCount: 100, positiveTopics: [], negativeTopics: [{ topic: 'Fit', mentionCount: 30, ratingImpact: -0.42, snippets: ['Runs small'] }] },
+      { marketplace: 'IT', reviewCount: 50, positiveTopics: [], negativeTopics: [{ topic: 'fit', mentionCount: 10, ratingImpact: -0.2, snippets: [] }] },
+    ], 'NEGATIVE')
+    expect(topics).toHaveLength(1)
+    expect(topics[0]).toMatchObject({ key: 'amazon:fit', label: 'Fit', mentions: 40, share: 27, source: 'amazon_topic', quote: '“Runs small”', quoteFrom: 'Amazon topic · DE', impact: -0.4 })
+  })
+
+  it('keeps the four themes mentioned most', () => {
+    const t = (key: string, mentions: number) => ({ key, label: key, share: null, shareOf: 'positive' as const, mentions, source: 'review' as const, quote: null, quoteFrom: null, english: null, impact: null, market: null })
+    expect(topThemes([t('a', 1), t('b', 9), t('c', 5), t('d', 7), t('e', 3)]).map(x => x.key)).toEqual(['b', 'd', 'c', 'e'])
+  })
+})
+
+describe('needs you', () => {
+  it('reads only, limit and order: danger first, then newest', () => {
+    expect(parseOnly('reply')).toBe('reply')
+    expect(parseOnly('everything')).toBeNull()
+    expect(parseLimit('5')).toBe(5)
+    expect(parseLimit('900')).toBe(50)
+    expect(parseLimit('x')).toBe(8)
+    const ranked = rankNeedsYou([
+      { id: 'w-new', tone: 'warning' as const, at: ago(0).toISOString() },
+      { id: 'd-old', tone: 'danger' as const, at: ago(5).toISOString() },
+      { id: 'd-new', tone: 'danger' as const, at: ago(1).toISOString() },
+    ])
+    expect(ranked.map(i => i.id)).toEqual(['d-new', 'd-old', 'w-new'])
+  })
+
+  it('a negative eBay feedback asks for a reply, in words', () => {
+    const item = replyItem({
+      id: 'r1', channel: 'EBAY', marketplace: 'IT', rating: 1, body: 'Stitching came apart after a month.', authorName: 'Test Buyer',
+      postedAt: ago(3), product: { name: 'Racing gloves — S', sku: 'G-S' }, sentiment: { label: 'NEGATIVE' },
+    }, NOW)
+    expect(item).toMatchObject({ kind: 'review', tone: 'danger', label: 'Reply needed', title: 'Negative feedback, no reply for 3 days' })
+    expect(item.detail).toBe('Racing gloves — S · eBay Italy · Test B. · “Stitching came apart after a month.”')
+    expect(item.action).toEqual({ label: 'Reply', page: 'review', params: { id: 'r1', channel: 'EBAY', market: 'IT' } })
+  })
+
+  it('an alert says the theme, how much it rose and the share before and now', () => {
+    const item = alertItem({
+      id: 's1', marketplace: 'DE', category: 'FIT_SIZING', rate7dNumerator: 9, rate7dDenominator: 50, rate28dNumerator: 14,
+      rate28dDenominator: 200, spikeMultiplier: 2.57, detectedAt: ago(0.2), product: { name: 'Touring jacket', sku: null },
+    })
+    expect(item.title).toBe('Fit & sizing complaints up 2.6×')
+    expect(item.detail).toBe('Touring jacket · Germany · 18% of reviews in the last 7 days, was 7%')
+  })
+
+  it('failed and retrying requests are one item each, and none when there are none', () => {
+    const items = requestItems([{ channel: 'EBAY', count: 4, latest: ago(1) }, { channel: 'AMAZON', count: 2, latest: ago(2) }], { count: 3, latest: ago(0) }, NOW)
+    expect(items.map(i => i.title)).toEqual(['6 review requests failed in the last 7 days', '3 requests waiting to try again'])
+    expect(items[0].detail.startsWith('eBay 4 · Amazon 2')).toBe(true)
+    expect(requestItems([], { count: 0, latest: null }, NOW)).toEqual([])
+    expect(waitWords(ago(0.25), NOW)).toBe('6 h')
+  })
+})

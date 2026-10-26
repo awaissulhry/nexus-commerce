@@ -95,6 +95,23 @@ describe('meta-ads-graph-read — the chosen ad account and its own objects only
     expect(res.data).toMatchObject({ nextAfter: 'c1', answer: { data: [{ id: '1' }] } })
     expect((res.data as { answer: { paging: Record<string, unknown> } }).answer.paging.next).toBeUndefined()
   })
+  it('live-probe fix TG-038 — act_<chosen>/audience_funnel is on the allow-list (exact edge, its three SDK fields only); the gateway lets it through', async () => {
+    h.one = () => ({ data: [{ audience_type_param_name: 'website', audience_type_param_tags: [] }] })
+    const res = await run('meta-ads-graph-read', { path: 'act_1234567890/audience_funnel', fields: 'audience_type_param_name,audience_type_param_tags,custom_audience_groups_info' })
+    expect(res.ok).toBe(true)
+    expect(h.calls).toEqual([{ operation: 'graph.read.audience_funnel', path: 'act_1234567890/audience_funnel', query: { fields: 'audience_type_param_name,audience_type_param_tags,custom_audience_groups_info', limit: 100 } }])
+    expect(metaReadOnlyProblem({ method: 'GET', url: metaUrl(h.calls[0].path, h.calls[0].query as never), kind: 'read' })).toBeNull()
+    h.calls.length = 0
+    // Its default is two of its own fields; any other field, a nested list, a parameter or a near spelling is refused, no call.
+    await run('meta-ads-graph-read', { path: 'act_1234567890/audience_funnel' })
+    expect(h.calls[0]).toMatchObject({ path: 'act_1234567890/audience_funnel', query: { fields: 'audience_type_param_name,audience_type_param_tags' } })
+    h.calls.length = 0
+    for (const args of [
+      { path: 'act_1234567890/audience_funnel', fields: 'id,name' }, { path: 'act_1234567890/audience_funnel', fields: 'custom_audience_groups_info{id}' },
+      { path: 'act_1234567890/audience_funnel', params: { status: 'FINISHED' } }, { path: 'act_1234567890/audience_funnels' }, { path: 'act_1234567890/Audience_Funnel' },
+    ]) expect((await run('meta-ads-graph-read', args)).ok, JSON.stringify(args)).toBe(false)
+    expect(h.calls).toHaveLength(0)
+  })
   it('refuses another ad account, a deeper path, an odd edge, and a parameter the gateway owns — before any call', async () => {
     for (const args of [
       { path: 'act_1234567891/campaigns' }, { path: 'act_1234567890/campaigns/x' }, { path: 'act_1234567890/Campaigns' },
@@ -149,7 +166,8 @@ describe('meta-ads-graph-read — the chosen ad account and its own objects only
   })
   it.each([
     'act_1234567890/promote_pages', 'act_1234567890/instagram_accounts', 'act_1234567890/customaudiences', 'act_1234567890/adspixels',
-    'act_1234567890/users', 'act_1234567890/agencies', 'act_1234567890/audience_funnel', '120000000000010', '120000000000010/leadgen_forms',
+    // (act_<id>/audience_funnel left this list with the live-probe fix TG-038: it is on the allow-list now, test above.)
+    'act_1234567890/users', 'act_1234567890/agencies', 'act_1234567890/saved_audiences', '120000000000010', '120000000000010/leadgen_forms',
   ])('refuses the path %s (allow-list of paths)', async (path) => {
     expect((await run('meta-ads-graph-read', { path })).ok).toBe(false)
     // Also with the users permission: no people edge is read here at all.

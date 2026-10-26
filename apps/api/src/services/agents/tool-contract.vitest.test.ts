@@ -970,6 +970,11 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { audienceId: '120000000000040', fields: { name: 'List A' }, undo: { audienceId: '120000000000040', name: 'List A', existingCustomers: [] }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
         after: { audienceId: '120000000000040', fields: { name: 'List B' }, undo: null, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Consent PR 2: an add's people are taken out again (mode remove, who added, addRanAt = its run time); a replace has no undo.
+      'set-meta-audience-members': {
+        before: { mode: 'add', audienceId: '120000000000040', people: 2, batches: 1, since: '2026-10-01', accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { mode: 'add', audienceId: '120000000000040', people: 2, batches: 1, since: '2026-10-01', batchesSent: 1, ranAt: '2026-10-10T12:00:00.000Z', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-meta-audience-sharing': {
         before: { audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'], permissions: null, shared: false, accountId: 'conn-1', adAccountId: '1234567890' },
         after: { audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'], permissions: null, shared: true, accountId: 'conn-1', adAccountId: '1234567890' },
@@ -1101,6 +1106,33 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-meta-partner-access': {
         before: { op: 'share', asset: 'ad-account', nodeId: 'act_1234567890', partnerId: '120000000000070', shared: false, tasks: null },
         after: { op: 'share', asset: 'ad-account', nodeId: 'act_1234567890', partnerId: '120000000000070', shared: true, tasks: ['ANALYZE'], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 35: items go back to their earlier values (a create's items are deleted by remove-made); a feed's settings,
+      // labels and rules go back; tags moved on a post are moved back (Meta cannot remove an added tag).
+      'set-meta-catalog-items': {
+        before: { op: 'update', catalogId: '120000000000100', items: [{ sku: 'SKU-A', fields: { availability: 'out of stock', price: '49.90 EUR' } }], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'update', catalogId: '120000000000100', items: [{ sku: 'SKU-A', fields: { availability: 'in stock', price: '44.90 EUR' } }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-catalog-feed': {
+        before: { op: 'labels', catalogId: '120000000000100', feedId: '120000000000130', items: [{ sku: 'SKU-A', fields: { internal_label: ['summer'], custom_label_0: null } }], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'labels', catalogId: '120000000000100', feedId: '120000000000130', via: 'shopify-feed', items: [{ sku: 'SKU-A', fields: { internal_label: ['summer', 'sale'], custom_label_0: 'Sale' } }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-instagram-product-tags': {
+        before: { op: 'tag', mediaId: '170000000000001', targetId: '170000000000001', target: 'image', moved: [{ productId: '120000000000120', x: 0.2, y: 0.3 }], added: [] },
+        after: { op: 'tag', mediaId: '170000000000001', targetId: '170000000000001', target: 'image', moved: [{ productId: '120000000000120', x: 0.5, y: 0.8 }], added: [], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 38: a label put on a person is taken off again; a template edit's old parts go back; a profile's old values.
+      'set-meta-conversation-labels': {
+        before: { action: 'add', pageId: '120000000000010', labelId: '120000000000801', labelName: 'Label A', personId: '300000000000001', assigned: false },
+        after: { action: 'add', pageId: '120000000000010', labelId: '120000000000801', labelName: 'Label A', personId: '300000000000001', assigned: true, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-message-templates': {
+        before: { channel: 'messenger', action: 'edit', pageId: '120000000000010', templateId: '120000000000811', name: 'order_update', language: 'it_IT', parameterFormat: 'POSITIONAL', parts: { body: { text: 'Order {{1}} ships today.', examples: ['1001'] } } },
+        after: { channel: 'messenger', action: 'edit', pageId: '120000000000010', templateId: '120000000000811', name: 'order_update', language: 'it_IT', parameterFormat: 'POSITIONAL', parts: { body: { text: 'Order {{1}} ships tomorrow.', examples: ['1001'] } }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-messaging-setup': {
+        before: { section: 'profile', pageId: '120000000000010', platform: 'messenger', properties: { getStarted: { payload: 'START' }, greeting: null } },
+        after: { section: 'profile', pageId: '120000000000010', platform: 'messenger', properties: { getStarted: { payload: 'BEGIN' }, greeting: [{ locale: 'default', text: 'Welcome to Shop A' }] }, accountId: 'conn-1', adAccountId: '1234567890' },
       },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
@@ -1288,7 +1320,10 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-meta-catalog', 'set-meta-catalog', 'set-meta-catalog-access', 'set-meta-product-set', 'remove-meta-catalog-items', 'set-meta-account-settings', 'set-meta-spend-cap', 'set-meta-insights-features',
       'create-meta-instant-experience', 'set-meta-instant-experience', 'set-meta-comments',
       'create-meta-page-post', 'set-meta-page-post', 'remove-meta-page-post', 'create-meta-instagram-post',
-      'set-meta-user-access', 'set-meta-partner-access']) {
+      'set-meta-user-access', 'set-meta-partner-access',
+      'set-meta-catalog-items', 'set-meta-catalog-feed', 'set-meta-instagram-product-tags',
+      'create-meta-message', 'set-meta-conversation-labels', 'set-meta-message-templates', 'set-meta-messaging-setup',
+      'create-meta-backed-account']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

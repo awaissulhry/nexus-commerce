@@ -1,0 +1,253 @@
+/*
+ * Reviews › Settings — layout and domain content only. Every control is a design-system component; nothing here
+ * restyles one. `--nds-*` tokens only. The shell gives the page its padding; the DS Builder (`mode="page"`) gives the
+ * sticky section strip and the sections. Every row wraps, so the page never scrolls sideways (wide tables scroll inside
+ * their card).
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.page > :first-child {
+  margin-bottom: var(--nds-space-4);
+}
+
+.skeletonHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+/* ── A section ───────────────────────────────────────────── */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.lead {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.toolbar > .grow {
+  flex: 1;
+}
+
+.hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.muted {
+  color: var(--nds-text-muted);
+}
+
+.list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.pad {
+  padding: var(--nds-space-12) var(--nds-space-14);
+}
+
+.tableScroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.skeletonRows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12) var(--nds-space-14);
+}
+
+/* ── Grid cells ──────────────────────────────────────────── */
+.cellStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  padding: var(--nds-space-6) 0;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.cellLine {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.cellStrong {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+.cellSub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.cellActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-4) 0;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Sender ──────────────────────────────────────────────── */
+.senderFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  margin-top: var(--nds-space-10);
+}
+
+.alwaysOn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* ── Unsubscribe list ────────────────────────────────────── */
+.bulkNote {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.listFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-10) var(--nds-space-14);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ── Brand voice ─────────────────────────────────────────── */
+.voice {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-14) var(--nds-space-20);
+}
+
+@media (max-width: 759px) {
+  .voice {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-14);
+}
+
+/* ── Alerts ──────────────────────────────────────────────── */
+.alerts {
+  display: flex;
+  flex-direction: column;
+}
+
+.alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.8fr);
+  gap: var(--nds-space-8) var(--nds-space-16);
+  align-items: start;
+  padding: var(--nds-space-12) var(--nds-space-14);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.alert:first-child {
+  border-top: 0;
+}
+
+@media (max-width: 899px) {
+  .alert {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .alert > :nth-child(n + 3) {
+    grid-column: 2;
+  }
+}
+
+.alertName {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.alertField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fieldLabel {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.dim {
+  opacity: 0.72;
+}
+
+/* ── Template window ─────────────────────────────────────── */
+.templateForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+}
+
+.templateRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--nds-space-12);
+}
+
+@media (max-width: 599px) {
+  .templateRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.languageText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}

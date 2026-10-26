@@ -65,13 +65,16 @@ const REGISTRY: Record<string, Record<string, Loader>> = {
     'order/update': async () => (await import(SHOPIFY_WEBHOOKS)).ingestShopifyOrderUpdate,
     'fulfillment/create': async () => (await import(SHOPIFY_WEBHOOKS)).ingestShopifyFulfillmentCreate,
     'refunds/create': async () => (await import(SHOPIFY_WEBHOOKS)).ingestShopifyRefundCreate,
+    // Shopify marketing consent (2026-10-26) — a buyer's e-mail consent changed (nothing is sent anywhere).
+    'customers_email_marketing_consent/update': async () => (await import(SHOPIFY_WEBHOOKS)).handleEmailMarketingConsentUpdate,
     // P2.4 — the app lifecycle and privacy topics. `app/uninstalled` is the one that
     // most needs to be replayable: its failure leaves Nexus writing to a shop that has
     // removed the app.
     'app/uninstalled': async () => (await import(SHOPIFY_WEBHOOKS)).handleAppUninstalled,
     'app/scopes_update': async () => (await import(SHOPIFY_WEBHOOKS)).handleScopesUpdate,
     'customers/data_request': async () => (await import(SHOPIFY_WEBHOOKS)).privacyTopicHandler('customers/data_request'),
-    'customers/redact': async () => (await import(SHOPIFY_WEBHOOKS)).privacyTopicHandler('customers/redact'),
+    // customers/redact deletes the customer's marketing-consent row; other erasure stays the Owner's unit.
+    'customers/redact': async () => (await import(SHOPIFY_WEBHOOKS)).handleCustomersRedact,
     'shop/redact': async () => (await import(SHOPIFY_WEBHOOKS)).privacyTopicHandler('shop/redact'),
   },
   // P2.5 — every Etsy order event goes through one handler, which reads the receipt

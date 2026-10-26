@@ -1679,9 +1679,6 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
   align-items: center; justify-content: center; background: var(--nds-surface-sunken); border: 1px solid var(--nds-border-subtle); color: var(--nds-text-muted);
 }
 .nds-mf-swatch { flex: none; width: 14px; height: 14px; border-radius: var(--nds-radius-round); border: 1px solid var(--nds-border-strong); }
-.nds-mf-rating svg { flex: none; color: var(--nds-border-strong); }
-.nds-mf-rating svg.on { color: var(--nds-warning); fill: currentColor; }
-.nds-mf-rating svg.half { color: var(--nds-warning); fill: var(--nds-warning-soft); }
 .nds-mf-bool svg { flex: none; }
 .nds-mf-bool[data-value="yes"] svg { color: var(--nds-success-text); }
 .nds-mf-bool[data-value="no"] svg { color: var(--nds-text-muted); }

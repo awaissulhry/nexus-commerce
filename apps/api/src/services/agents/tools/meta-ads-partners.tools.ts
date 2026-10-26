@@ -146,7 +146,7 @@ const metaPartnershipContent: AgentTool = {
     + 'find creators (filters, a username, or followers overlapping a saved audience). Creator Marketplace needs Meta\'s '
     + 'App Review (Standard access answers test data only); where Meta wants a Page or person\'s token or a review, the '
     + 'answer says so in plain words. A Page or Instagram account another business in Nexus uses is its id and a flag only. '
-    + 'Read only: asking permissions, accepting invites and changing the allowlist are changes (later steps).',
+    + 'Read only: asking permissions, accepting or declining invites and changing the allowlist are set-meta-partnership-access.',
   async handler(args): Promise<ToolResult> {
     const a = args as Record<string, unknown>
     const str = (k: string) => (typeof a[k] === 'string' ? a[k] as string : null)

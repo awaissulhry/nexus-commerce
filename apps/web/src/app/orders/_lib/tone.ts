@@ -1,7 +1,7 @@
 // Shared color-tone tokens for the /orders surface. Extracted from
 // OrdersWorkspace.tsx during the O.8 monolith decomposition so each
-// extracted lens (CustomerLens, FinancialsLens, ReturnsLens,
-// ReviewsLens, GridLens) imports the same source of truth.
+// extracted lens (CustomerLens, FinancialsLens, ReturnsLens, GridLens)
+// imports the same source of truth.
 //
 // Pattern matches the rest of the app (e.g. /products _lib/) — the
 // tone strings are full Tailwind classlists for inline `<span>`

@@ -73,8 +73,9 @@
  *     has no documented values — never sent.
  *   - documentation/instagram-platform/content-publishing.md: with Facebook Login the token is a "Facebook Page access
  *     token" (instagram_basic, instagram_content_publish, pages_read_engagement; ads_management or ads_read with a Business
- *     Manager role); media on a public server; JPEG only; "Shopping tags are not supported" (product tags are step 35's:
- *     META_IG_CONTAINER_KEYS / META_IG_CONTAINER_JUDGES take them in their own hunk); 100 API posts per 24 h (the limit
+ *     Manager role); media on a public server; JPEG only; "Shopping tags are not supported" there, but the product-tagging
+ *     guide documents `product_tags` on a feed image, a reel and each carousel item (step 35's Q9 hunk below, judged by
+ *     meta-instagram-tags.ts); 100 API posts per 24 h (the limit
  *     reference: 50 — Nexus reads quota_total live); carousel ≤ 20 ("children — A comma separated list of up to 20 container
  *     IDs"); trial reels trial_params {graduation_strategy MANUAL | SS_PERFORMANCE}; is_ai_generated ("Setting this parameter
  *     on carousel children will result in an error"); partnership label branded_content_sponsor_ids (≤ 2 brands' Instagram
@@ -105,6 +106,8 @@ import type { MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
 import { META_COMMENT_TEXT, META_NAME_TEXT } from './meta-write-text.js'
 import { metaPublicLinkProblem } from './meta-media-rules.js'
 import { metaCreativeTextProblem } from './meta-creative-rules.js'
+// Step 35 (Q9) — the one Instagram product-tag judge (a leaf).
+import { metaIgProductTagIds, metaIgProductTagsProblem, type MetaIgTagTarget } from './meta-instagram-tags.js'
 
 type Params = ReadonlyMap<string, string>
 type Row = Record<string, unknown>
@@ -556,8 +559,7 @@ export function metaIgCaptionProblem(value: string): string | null {
 }
 
 /**
- * The judge of each Instagram container key. Step 35 adds `product_tags` here and to META_IG_CONTAINER_KEYS (its own
- * hunk): nothing else needs to change for it.
+ * The judge of each Instagram container key (step 35's `product_tags` at the end, judged by meta-instagram-tags.ts).
  */
 export const META_IG_CONTAINER_JUDGES: Record<string, IgJudge> = {
   image_url: (v) => linkProblem(v, 'image_url', 2_000),
@@ -582,19 +584,28 @@ export const META_IG_CONTAINER_JUDGES: Record<string, IgJudge> = {
     return isObj(t) && Object.keys(t).join() === 'graduation_strategy' && (META_IG_TRIAL_STRATEGIES as readonly string[]).includes(t.graduation_strategy as string)
       ? null : `trial_params is {"graduation_strategy":"MANUAL" | "SS_PERFORMANCE"}, as Nexus writes it`
   },
+  // Step 35 (Q9) — product tags on a new post, judged by the one tag judge (its limits and shape per target): a feed image
+  // (20, x / y), a reel (30, no place), a carousel item (5 each, x / y on an image item; product-tagging "Carousels").
+  product_tags: (v, params) => {
+    const target = IG_TAG_TARGET_OF[metaIgContainerKind(params) ?? ''] ?? null
+    return target ? metaIgProductTagsProblem(v, target, 'product_tags') : 'product_tags go on a feed image, a reel or a carousel item only (Meta: no product tags on Stories)'
+  },
 }
+/** Step 35 (Q9) — the tag target of each container kind that takes product tags. */
+const IG_TAG_TARGET_OF: Readonly<Record<string, MetaIgTagTarget>> = { image: 'image', reel: 'reel', carouselImage: 'carousel-image', carouselVideo: 'carousel-video' }
 
 /**
  * The keys each kind of container takes (ig-user/media's request syntax per kind, and its key table's "only" notes). Step
- * 35 adds `product_tags` to the image, carouselImage, carouselVideo and carousel lists in its own hunk.
+ * 35 (Q9): `product_tags` on the image, reel, carouselImage and carouselVideo lists — a carousel's tags go on its items
+ * (product-tagging "Carousels": "create tagged media containers for each tagged image or video"), never on the album.
  */
 export const META_IG_CONTAINER_KEYS: Record<'image' | 'reel' | 'storyImage' | 'storyVideo' | 'carouselImage' | 'carouselVideo' | 'carousel', string[]> = {
-  image: ['image_url', 'caption', 'alt_text', 'collaborators', 'user_tags', 'location_id', 'is_ai_generated', 'branded_content_sponsor_ids', 'is_paid_partnership'],
-  reel: ['media_type', 'video_url', 'caption', 'share_to_feed', 'collaborators', 'cover_url', 'audio_name', 'user_tags', 'location_id', 'thumb_offset', 'trial_params', 'is_ai_generated', 'branded_content_sponsor_ids', 'is_paid_partnership'],
+  image: ['image_url', 'caption', 'alt_text', 'collaborators', 'user_tags', 'location_id', 'is_ai_generated', 'branded_content_sponsor_ids', 'is_paid_partnership', 'product_tags'],
+  reel: ['media_type', 'video_url', 'caption', 'share_to_feed', 'collaborators', 'cover_url', 'audio_name', 'user_tags', 'location_id', 'thumb_offset', 'trial_params', 'is_ai_generated', 'branded_content_sponsor_ids', 'is_paid_partnership', 'product_tags'],
   storyImage: ['media_type', 'image_url', 'user_tags'],
   storyVideo: ['media_type', 'video_url', 'user_tags'],
-  carouselImage: ['image_url', 'is_carousel_item', 'alt_text', 'user_tags'],
-  carouselVideo: ['media_type', 'video_url', 'is_carousel_item', 'thumb_offset', 'user_tags'],
+  carouselImage: ['image_url', 'is_carousel_item', 'alt_text', 'user_tags', 'product_tags'],
+  carouselVideo: ['media_type', 'video_url', 'is_carousel_item', 'thumb_offset', 'user_tags', 'product_tags'],
   carousel: ['media_type', 'children', 'caption', 'collaborators', 'location_id', 'is_ai_generated', 'branded_content_sponsor_ids', 'is_paid_partnership'],
 }
 
@@ -637,6 +648,8 @@ function containerIds(params: Params): MetaWriteBodyId[] {
     ...childrenIdsOf(params.get('children')).map((id): MetaWriteBodyId => ({ id, kind: 'igcontainer' })),
     ...sponsorIdsOf(params.get('branded_content_sponsor_ids')).map((id): MetaWriteBodyId => ({ id, kind: 'igsponsor' })),
     ...(params.has('location_id') && DIGITS.test(params.get('location_id')!) ? [{ id: params.get('location_id')!, kind: 'postplace' } as MetaWriteBodyId] : []),
+    // Step 35 (Q9) — every tagged product: an item of a catalog this business may read (step 25's productitem rule).
+    ...metaIgProductTagIds(params.get('product_tags')).map((id): MetaWriteBodyId => ({ id, kind: 'productitem' })),
   ]
 }
 

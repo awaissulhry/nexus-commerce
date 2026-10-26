@@ -15,11 +15,13 @@ import {
   fetchMetaCampaignDays,
   fetchMetaChoices,
   fetchMetaConnections,
+  fetchMetaCustomerListsSwitch,
   fetchMetaEventsSwitch,
   fetchMetaOverview,
   requestMetaRead,
   saveMetaCredentials,
   saveMetaSelection,
+  setMetaCustomerListsSwitch,
   setMetaEventsSwitch,
 } from './contract'
 
@@ -82,6 +84,20 @@ describe('step 33 — the "Send sales to Meta" switch', () => {
     await expect(setMetaEventsSwitch(true, p)).resolves.toEqual({ on: true, since: '2026-10-21T08:00:00.000Z', by: 'Owner' })
     expect(p.mock.calls[0]![1]).toMatchObject({ method: 'PUT', body: '{"on":true}' })
     await expect(setMetaEventsSwitch(true, reply({ error: 'Your role may not change this switch.' }, 403))).rejects.toThrow('Your role may not change this switch.')
+  })
+})
+
+describe('consent PR 2 — the "Upload customer lists to Meta" switch', () => {
+  it('reads it, and a person PUTs on or off; a refusal keeps the server\'s sentence', async () => {
+    const r = reply({ switch: { on: false, since: null, by: null }, canChange: true })
+    await expect(fetchMetaCustomerListsSwitch(r)).resolves.toEqual({ switch: { on: false, since: null, by: null }, canChange: true })
+    await expect(fetchMetaCustomerListsSwitch(reply({ switch: { on: true, since: null, by: null } }))).resolves.toMatchObject({ canChange: false })
+    expect(r.mock.calls[0]![0]).toBe('http://localhost:8091/api/meta-ads/customer-lists')
+    const p = reply({ switch: { on: true, since: '2026-10-26T08:00:00.000Z', by: 'Owner' }, changed: true })
+    await expect(setMetaCustomerListsSwitch(true, p)).resolves.toEqual({ on: true, since: '2026-10-26T08:00:00.000Z', by: 'Owner' })
+    expect(p.mock.calls[0]![0]).toBe('http://localhost:8091/api/meta-ads/customer-lists')
+    expect(p.mock.calls[0]![1]).toMatchObject({ method: 'PUT', body: '{"on":true}' })
+    await expect(setMetaCustomerListsSwitch(true, reply({ error: 'Your role may not change this switch.' }, 403))).rejects.toThrow('Your role may not change this switch.')
   })
 })
 

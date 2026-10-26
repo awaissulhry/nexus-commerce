@@ -8,12 +8,12 @@
  *                             details, thumbnails, captions), video-ads uploads, playables, the portfolio's media
  *                             library, folders and tags, the system user's folders, website assets, a campaign's video
  *                             groups, the Page's live videos and playlists (master MD-001…MD-039, MD-901, MD-902)
- *   meta-page-posts           the chosen Page's posts (all, published, ad posts with dark posts, visitor posts), one post
+ *   meta-page-posts           the chosen Page's posts (all — visitors' too —, published, ad posts with dark posts), one post
  *                             (boostability, attachments), its sponsors and dynamic posts, the post and Instagram media
  *                             behind an ad, Page and post insights (MD-101…MD-106, MD-903, MD-904, EN-001, EN-016,
  *                             EN-926, IN-092)
  *   meta-instagram-media      Instagram accounts (portfolio, the Page's), media with carousel cards, stories, one media
- *                             (boostability, active boosts), a publish container's status, the publishing quota, events,
+ *                             (boostability, the ads that boost or boosted it), a publish container's status, the publishing quota, events,
  *                             a video's Instagram check, media and account insights (MD-118…MD-137, CR-260, IN-091)
  *   meta-ad-preview           previews of an ad, a creative or an unsaved spec per placement, Advantage+ features,
  *                             language and catalog variations, an Instant Experience, an ad's share link (CR-035…CR-038,
@@ -21,6 +21,9 @@
  *   meta-instant-experiences  the chosen Page's Instant Experiences, one of them, their parts, a template's parts
  *                             (CR-486, CR-489, CR-490)
  * No answer holds money (organic counts and media only).
+ * Live-probe fixes (2026-10-26): the Page's posts, insights and Instant Experience list go with the chosen Page's own token
+ * (gateway/meta-page-reads.ts); visitor posts are not asked (Meta: not on the New Pages Experience); the media-library
+ * and template reads Meta refuses to this app are said in words (LIVE-PROBES MD-101, MD-106, IN-092, CR-489, CR-490, ST10-03).
  */
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
@@ -81,10 +84,14 @@ const metaMediaLibrary: AgentTool = {
     + 'does not change them here; a person can in Business Settings › Media library). When another business in Nexus reads '
     + 'an ad account of the same portfolio, the portfolio is its id only and nothing of it is read. my-folders: the folders '
     + 'the system user may use. website-assets (link): what Meta pulls from a landing page by itself for Advantage+ creative; asset-urls: the '
-    + 'addresses it pulls from. campaign-videos (campaignId): a campaign\'s video groups. live-videos, playlists, '
+    + 'addresses it pulls from. campaign-videos (campaignId): a campaign\'s video groups (Meta lists the portfolio\'s library, '
+    + 'folders, tags, the system user\'s folders, website assets, asset-urls and video groups in its reference, but answers '
+    + 'this app that they do not exist: the answer then says so, with what to use instead). live-videos, playlists, '
     + 'playlist-videos: the chosen Page\'s live broadcasts (a finished one can be boosted) and video playlists. Only the '
-    + 'chosen ad account, its portfolio and the chosen Page are read. Uploading images and videos, making a folder and '
-    + 'taking back an upload are create-meta-media (a request a person approves). Read only.',
+    + 'chosen ad account, its portfolio and the chosen Page are read; whether a video is the chosen Page\'s is read with the '
+    + 'Page\'s own token (with Meta changes switched off in Nexus — NEXUS_META_ADS_WRITES — no Page token is read, so these reads wait too: a video of the ad account\'s library is still found in its '
+    + 'list). Uploading images and videos, making a folder and taking back an upload are create-meta-media (a request a '
+    + 'person approves). Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveMedia({
       connectionId: str(args.connectionId),
@@ -123,8 +130,8 @@ const metaPagePosts: AgentTool = {
     postId: postIdArg,
     adId: metaIdArg('ad-post: an ad of the chosen ad account'),
     creativeId: metaIdArg('ad-post: a creative of the chosen ad account (instead of adId)'),
-    includeHidden: z.boolean().optional().describe('feed, published, visitor: also hidden posts'),
-    showExpired: z.boolean().optional().describe('feed, published, visitor: also expired posts'),
+    includeHidden: z.boolean().optional().describe('feed, published: also hidden posts'),
+    showExpired: z.boolean().optional().describe('feed, published: also expired posts'),
     includeInlineCreated: z.boolean().optional().describe('ads-posts: with the dark posts creatives made inline (default true)'),
     excludeDynamic: z.boolean().optional().describe('ads-posts: without catalog (dynamic) ad posts'),
     from: dayArg('ads-posts, page-insights, post-insights: from'),
@@ -137,16 +144,18 @@ const metaPagePosts: AgentTool = {
   }),
   description:
     'The business\'s chosen Facebook Page\'s posts, read LIVE. view feed: every post — published, unpublished (dark) and '
-    + 'scheduled (isPublished says which; Meta answers about 600 ranked posts a year). published: published only. '
-    + 'ads-posts: the Page\'s ad posts with the dark posts creatives made inline. visitor: posts other people wrote on the '
-    + 'Page, e.g. complaints and questions (who wrote it is never copied: open its link; replying and hiding are comment '
-    + 'tools, a later Nexus step). post (postId): one post — whether and where it can be boosted (promotableId is the id '
+    + 'scheduled (isPublished says which; Meta answers about 600 ranked posts a year), and the posts other people wrote on '
+    + 'the Page, e.g. complaints and questions (postedBy: someone else — who wrote it is never copied: open its link). '
+    + 'published: published only. ads-posts: the Page\'s ad posts with the dark posts creatives made inline. visitor: Meta '
+    + 'does not answer visitor posts for a Page on the New Pages Experience, so nothing is asked (they are in feed). post (postId): one post — whether and where it can be boosted (promotableId is the id '
     + 'an ad takes, not always the post id), its photo, video, link and title (attachments, every card). post-sponsors: '
     + 'paid-partner brands tagged on it; post-dynamic: catalog ad posts made from it. ad-post (adId or creativeId): the '
     + 'Facebook post and Instagram media behind one of the chosen account\'s ads. page-insights, post-insights: Meta\'s '
     + 'organic numbers (views, reach, clicks, reactions, follows; retired metrics are not offered). Only the chosen Page '
-    + 'is read: another Page\'s post is refused before any call. Meta may answer some Page reads only to a Page token: the '
-    + 'answer then says so (the system user needs the Page assigned). Read only.',
+    + 'is read: another Page\'s post is refused before any call. The feed, published and ad posts, one post (post, and the '
+    + 'check of post-sponsors, post-dynamic, post-insights), catalog-ad posts and the insights go with the chosen Page\'s own '
+    + 'token (Meta answers them to no other; with Meta changes switched off in Nexus — NEXUS_META_ADS_WRITES — no Page token is read, so these reads wait too); when Meta refuses one, the answer says '
+    + 'what the Page needs (the system user needs the Page assigned with the task). Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => livePagePosts({
       connectionId: str(args.connectionId),
@@ -196,13 +205,13 @@ const metaInstagramMedia: AgentTool = {
     + 'business portfolio, the one connected to the chosen Page and its Page-backed one (one another business in Nexus uses '
     + 'is its id only). media: posts, reels and carousels with their cards, likes and comment counts (newest first; '
     + 'from / to). stories: the live stories (24 hours). media-detail (mediaId): one media — whether it can be boosted and '
-    + 'why not (copyrighted music, filters), the ACTIVE ads boosting it, its copyright check. media-insights, '
+    + 'why not (copyrighted music, filters), the ads that boost or boosted it (active or not), its copyright check. media-insights, '
     + 'account-insights: Meta\'s organic numbers (views, reach, likes, saves, shares, follows, demographics; impressions '
     + 'are retired; only the metrics a media\'s kind has — a story has no likes), to pick posts to boost. quota: posts '
-    + 'published through the API in 24 hours against Meta\'s limit (a publish container\'s status comes with the publish '
-    + 'step: Nexus makes no containers yet). upcoming-events: events a reminder ad can point to. '
+    + 'published through the API in 24 hours against Meta\'s limit (the state of a publish container Nexus made is in '
+    + 'create-meta-instagram-post\'s answer). upcoming-events: events a reminder ad can point to. '
     + 'video-check (videoId): whether a video meets Instagram\'s ad rules. Only the chosen Instagram account is read: '
-    + 'another account\'s media is refused. Publishing and boosting are change tools (a later Nexus step). Read only.',
+    + 'another account\'s media is refused. Publishing is create-meta-instagram-post, boosting create-meta-boost. Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveInstagram({
       connectionId: str(args.connectionId),
@@ -334,8 +343,10 @@ const metaInstantExperiences: AgentTool = {
     + 'left behind by an unfinished builder; Meta lets no published one change). one (canvasId): one with its parts. '
     + 'elements: the parts made on the Page. template: which parts one of Meta\'s templates takes (get-new-customers, '
     + 'showcase-your-business, sell-products-without-catalog, sell-products-lifestyle, sell-products-grid; the AR template '
-    + 'is Ads Manager only). meta-ad-preview view instant-experience shows one. Making or publishing one is a change tool '
-    + '(a later Nexus step). Meta may answer only to a Page token: the answer then says so. Read only.',
+    + 'is Ads Manager only). meta-ad-preview view instant-experience shows one. create-meta-instant-experience makes one '
+    + '(always unpublished); set-meta-instant-experience edits, publishes or hides it. The list goes with the chosen Page\'s own token (Meta answers it to no other). '
+    + 'So does the template read (Meta refused it to the business\'s token: insufficient permissions); if Meta refuses it to '
+    + 'the Page\'s token too, the answer says so. Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveInstantExperiences({
       connectionId: str(args.connectionId),

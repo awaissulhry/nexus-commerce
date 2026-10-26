@@ -90,6 +90,10 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 15 (2026-10-25) — meta-conversations, meta-message-templates and meta-messaging-setup read Meta live.
 // Meta ads step 4 (2026-10-25) — meta-business, meta-business-people, meta-business-assets and meta-business-partners read Meta live.
 // Meta ads step 24 (2026-10-25) — create-meta-page-post, set-meta-page-post, remove-meta-page-post and create-meta-instagram-post read Meta live and change it (as the Page).
+// Meta ads step 35 (2026-10-25) — set-meta-catalog-items, set-meta-catalog-feed and set-meta-instagram-product-tags read Meta live and change it.
+// Meta ads step 38 (2026-10-26) — create-meta-message, set-meta-conversation-labels, set-meta-message-templates and set-meta-messaging-setup read Meta live and change it (a message reaches a person).
+// Meta ads step 42 (2026-10-26) — set-meta-business-settings, set-meta-business-people and create-meta-system-user read Meta live (D1: read only; the Owner makes the change in Meta's screens).
+// Meta ads step 43 (2026-10-26) — set-meta-business-assets, remove-meta-business-asset, create-meta-ad-account, create-meta-appeal and set-meta-billing read Meta live (D1: read only); create-meta-backed-account reads Meta live and changes it.
 
 const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -101,8 +105,8 @@ const OPEN_WORLD = [
   'channel-identity-check', 'check-google-ads-build', 'close-listing', 'confirm-shipment', 'copy-google-campaign',
   'copy-google-pmax', 'copy-meta-ads', 'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
   'create-google-app-campaign', 'create-google-campaign', 'create-google-demand-gen-campaign',
-  'create-google-display-campaign', 'create-google-experiment', 'create-google-rsa', 'create-meta-ad', 'create-meta-ad-set', 'create-meta-audience', 'create-meta-boost', 'create-meta-campaign', 'create-meta-catalog',
-  'create-meta-creative', 'create-meta-dataset', 'create-meta-experiment', 'create-meta-instagram-post', 'create-meta-instant-experience', 'create-meta-lead-form', 'create-meta-media', 'create-meta-page-post', 'create-meta-reach-frequency', 'create-negative-keyword',
+  'create-google-display-campaign', 'create-google-experiment', 'create-google-rsa', 'create-meta-ad', 'create-meta-ad-account', 'create-meta-ad-set', 'create-meta-appeal', 'create-meta-audience', 'create-meta-backed-account', 'create-meta-boost', 'create-meta-campaign', 'create-meta-catalog',
+  'create-meta-creative', 'create-meta-dataset', 'create-meta-experiment', 'create-meta-instagram-post', 'create-meta-instant-experience', 'create-meta-lead-form', 'create-meta-media', 'create-meta-message', 'create-meta-page-post', 'create-meta-reach-frequency', 'create-meta-system-user', 'create-negative-keyword',
   'decide-automation-suggestions',
   'delete-listing', 'dismiss-google-recommendations', 'dispose-return-items', 'ebay-categories',
   'ebay-keywords-change', 'edit-google-assets', 'edit-google-campaign-type-ads', 'edit-google-rsa', 'email-supplier',
@@ -121,7 +125,7 @@ const OPEN_WORLD = [
   'meta-targeting-search', 'meta-value-rules', 'meta-webhooks',
   'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
-  'remove-google-conversion-actions', 'remove-google-labels', 'remove-meta-ad-rule', 'remove-meta-ads-items', 'remove-meta-alert-subscription', 'remove-meta-audience', 'remove-meta-block-list', 'remove-meta-catalog-items', 'remove-meta-page-post', 'remove-meta-signal-items', 'reopen-listing',
+  'remove-google-conversion-actions', 'remove-google-labels', 'remove-meta-ad-rule', 'remove-meta-ads-items', 'remove-meta-alert-subscription', 'remove-meta-audience', 'remove-meta-block-list', 'remove-meta-business-asset', 'remove-meta-catalog-items', 'remove-meta-page-post', 'remove-meta-signal-items', 'reopen-listing',
   'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',
   'request-review',
   'resend-prices', 'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign',
@@ -146,9 +150,9 @@ const OPEN_WORLD = [
   'set-google-user-access', 'set-google-user-lists', 'set-google-value-rules', 'set-hourly-bid-plan', 'set-listing-price',
   'set-listing-stock',
   'set-master-prices', 'set-meta-account-controls', 'set-meta-account-settings', 'set-meta-ad', 'set-meta-ad-rule', 'set-meta-ad-set', 'set-meta-alert-subscription', 'set-meta-audience',
-  'set-meta-audience-members', 'set-meta-audience-sharing', 'set-meta-block-list', 'set-meta-brand-safety', 'set-meta-budget-schedule', 'set-meta-campaign', 'set-meta-catalog',
-  'set-meta-catalog-access', 'set-meta-comments', 'set-meta-connection', 'set-meta-creative', 'set-meta-custom-conversion', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-experiment',
-  'set-meta-insights-features', 'set-meta-instant-experience', 'set-meta-labels', 'set-meta-lead-form', 'set-meta-page-post', 'set-meta-partner-access', 'set-meta-partnership-access', 'set-meta-placements', 'set-meta-product-set', 'set-meta-spend-cap', 'set-meta-status',
+  'set-meta-audience-members', 'set-meta-audience-sharing', 'set-meta-billing', 'set-meta-block-list', 'set-meta-brand-safety', 'set-meta-budget-schedule', 'set-meta-business-assets', 'set-meta-business-people', 'set-meta-business-settings', 'set-meta-campaign', 'set-meta-catalog',
+  'set-meta-catalog-access', 'set-meta-catalog-feed', 'set-meta-catalog-items', 'set-meta-comments', 'set-meta-connection', 'set-meta-conversation-labels', 'set-meta-creative', 'set-meta-custom-conversion', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-experiment',
+  'set-meta-insights-features', 'set-meta-instagram-product-tags', 'set-meta-instant-experience', 'set-meta-labels', 'set-meta-lead-form', 'set-meta-message-templates', 'set-meta-messaging-setup', 'set-meta-page-post', 'set-meta-partner-access', 'set-meta-partnership-access', 'set-meta-placements', 'set-meta-product-set', 'set-meta-spend-cap', 'set-meta-status',
   'set-meta-targeting', 'set-meta-user-access', 'set-meta-value-rules', 'set-meta-webhooks', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
   'set-promotion', 'set-sd-brand-safety', 'set-sd-budget-rule', 'set-sd-optimization-rule', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid',
   'shipping-rates', 'shopify-content', 'submit-aplus-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock',
@@ -196,6 +200,10 @@ const HARD_RULES = [
   // Meta ads step 17 (2026-10-21) — Meta changes are the …-meta-… tools (set-, create-, remove-, copy-, apply-, end-,
   // upload-meta-…; step 45, Owner "yes MCP"); a Meta app secret or token is a person's to enter in Settings, never Claude's.
   'Meta changes go through …-meta-… tools; never take a Meta app secret or token in chat',
+  // Meta ads step 46 (2026-10-26) — the D1 guides (steps 42, 43): a guide sends nothing and returns no approvalId, only the
+  // account holder's steps in Meta's screens; asked again with since, it reads what was done.
+  'Some …-meta-… tools guide acts only the account holder may do in Meta: nothing sent, no approvalId',
+  "the steps in Meta's screens; since reads the result",
 ]
 
 /**
@@ -242,6 +250,9 @@ const MOVED_TO_DESCRIPTIONS: ReadonlyArray<readonly [string, string]> = [
   ['set-hourly-bid-plan', 'A plan a person made or last changed changes by rule only where the business allowed it'],
   ['enable-ads', 'it never runs by rule'],
   ['platform-health-checks', 'Read it first in a daily run'], ['platform-health-checks', 'the watchdog itself did not run'],
+  // Meta ads step 46 (2026-10-26) — room for the Meta guide line: what business-overview holds and a plan's 200 steps are
+  // said by the tools themselves.
+  ['business-overview', 'each with the exact code tools take'], ['submit-change-plan', 'Ask for up to 200 changes'],
 ]
 
 describe('MCP.7 — every tool, as Claude sees it', () => {

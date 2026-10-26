@@ -989,6 +989,17 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // Meta step 41 (2026-10-25): people and partner access — who holds what now, the admins, the requests, where.
   'set-meta-user-access': ['basis', 'plan', 'reach'],
   'set-meta-partner-access': ['basis', 'plan', 'reach'],
+  // Meta step 35 (2026-10-25): catalog items, feeds, Instagram product tags (meta-ads-catalog-items.tools.ts).
+  'set-meta-catalog-items': ['basis', 'plan', 'reach'],
+  'set-meta-catalog-feed': ['basis', 'plan', 'reach'],
+  'set-meta-instagram-product-tags': ['basis', 'plan', 'reach'],
+  // Meta step 38 (2026-10-26): messages (the plan covers the exact words and the recipient), labels, templates, messaging setup.
+  'create-meta-message': ['basis', 'plan', 'reach'],
+  'set-meta-conversation-labels': ['basis', 'plan', 'reach'],
+  'set-meta-message-templates': ['basis', 'plan', 'reach'],
+  'set-meta-messaging-setup': ['basis', 'plan', 'reach'],
+  // Meta step 43 (2026-10-26): a backed account for the chosen Page / Instagram account.
+  'create-meta-backed-account': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

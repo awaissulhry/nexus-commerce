@@ -214,6 +214,14 @@ It only takes 2 minutes. Thank you!
   return { subject, html, text }
 }
 
+/**
+ * Reviews area PR C — the review request e-mail exactly as `sendReviewRequestEmail` sends it, for the Requests page's
+ * "Preview email" (pure: no send, no database).
+ */
+export function renderReviewRequestEmail(ctx: ReviewEmailContext, identity: BusinessIdentity): { subject: string; html: string; text: string } {
+  return renderHtml(ctx, identity)
+}
+
 export async function sendReviewRequestEmail(ctx: ReviewEmailContext): Promise<{
   ok: boolean
   dryRun: boolean

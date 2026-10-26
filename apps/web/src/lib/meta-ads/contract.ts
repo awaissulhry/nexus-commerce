@@ -403,6 +403,30 @@ export async function setMetaEventsSwitch(on: boolean, fetchImpl: FetchImpl = fe
   return (await readJson<{ switch: MetaEventsSwitch }>(res)).switch
 }
 
+/**
+ * Meta consent PR 2 (D8) — the business's "Upload customer lists to Meta" switch, a copy of the one above: off by default;
+ * a person with settings.security.manage turns it on (`canChange`: this person may). On, Claude may ASK to add or replace
+ * a customer list's people with the hashed e-mails of Shopify buyers who said yes to the business's e-mail
+ * (set-meta-audience-members); each upload is a change a person approves — or, with "Claude's changes need no approval"
+ * on, it runs about 20 s after Claude asks, in the asker's name.
+ */
+export interface MetaCustomerListsSwitch { on: boolean; since: string | null; by: string | null }
+
+export async function fetchMetaCustomerListsSwitch(fetchImpl: FetchImpl = fetch): Promise<{ switch: MetaCustomerListsSwitch; canChange: boolean }> {
+  const body = await get<{ switch: MetaCustomerListsSwitch; canChange?: boolean }>('/api/meta-ads/customer-lists', fetchImpl)
+  return { switch: body.switch, canChange: body.canChange === true }
+}
+
+export async function setMetaCustomerListsSwitch(on: boolean, fetchImpl: FetchImpl = fetch): Promise<MetaCustomerListsSwitch> {
+  const res = await fetchImpl(`${getBackendUrl()}/api/meta-ads/customer-lists`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ on }),
+  })
+  return (await readJson<{ switch: MetaCustomerListsSwitch }>(res)).switch
+}
+
 /** Save which assets Nexus reads; the server checks them against what Meta offers and queues the first read. */
 export async function saveMetaSelection(connectionId: string, body: MetaSelectionBody, fetchImpl: FetchImpl = fetch): Promise<SaveMetaSelectionResult> {
   const res = await fetchImpl(`${getBackendUrl()}/api/meta-ads/connections/${encodeURIComponent(connectionId)}/selection`, {

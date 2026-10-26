@@ -276,7 +276,7 @@ async function healthAccount(account: MetaChosenAccount) {
     notes: [
       'Meta delivers ads only in status 1 (active), 8 (pending settlement) and 9 (grace period).',
       'failedDeliveryChecks: Meta runs its delivery checks when this field is read; none means every check passed. view problems lists the campaigns, ad sets and ads that do not deliver, with Meta\'s reasons.',
-      'Appeals and Account Quality are in Meta Business Suite (no API).',
+      'Appeals and Account Quality are in Meta Business Suite: an admin of the account asks for a review there (create-meta-appeal gives the Owner\'s steps and reads the status again; Nexus sends no appeal: D1).',
     ],
   }
 }

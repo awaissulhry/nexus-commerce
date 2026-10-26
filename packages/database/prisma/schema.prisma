@@ -5172,6 +5172,12 @@ model AccountSettings {
   metaConversionsApiOnAt DateTime?
   /// Meta step 33 — the name of the person who turned it on.
   metaConversionsApiOnBy String?
+  /// Meta consent PR 2 (D8) — "Upload customer lists to Meta": when a person turned it on; null = off (the default).
+  /// set-meta-audience-members adds or replaces a customer list's people (consenting Shopify buyers' hashed e-mails) only
+  /// while it is on, and the gateway refuses those uploads while it is off.
+  metaCustomerListsOnAt DateTime?
+  /// Meta consent PR 2 — the name of the person who turned it on.
+  metaCustomerListsOnBy String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -7428,6 +7434,8 @@ model ChannelConnection {
   etsyReceiptRefusals      EtsyReceiptRefusal[]
   // Shopify order import — the start date (T0) recorded when a person switched it on for this account.
   shopifyOrderIngest       ShopifyOrderIngest[]
+  /// Shopify marketing consent (2026-10-26) — the buyers' hashed e-mail consent read through this account.
+  shopifyMarketingConsent  ShopifyMarketingConsent[]
   // Google step 1a — the Google Ads / Merchant Center / GA4 account each business picked through this login.
   googleAccountLinks       GoogleAccountLink[]
   // Meta M1 — the Meta ad account, Facebook Page and Instagram account each business picked through this system user.
@@ -13265,6 +13273,17 @@ model Review {
   // 'FIXTURE' | 'IMPORT_CSV' | 'AMAZON_VOC' | 'EBAY_API' | 'SHOPIFY_WEBHOOK' | 'MANUAL'
   ingestSource     String?
 
+  // Reviews Inbox (2026-10-26, PR B) — all optional, filled from now on (no backfill).
+  // orderId: the Nexus Order this review/feedback is about (eBay feedback: matched from its order line). A plain id, no
+  // foreign key: a deleted order leaves the review readable.
+  orderId          String?
+  // language: ISO 639-1 code of the body ('de'); bodyEnglish: the body in English, null when the body is English or
+  // not translated yet. Both come from the sentiment call at ingest, or POST /reviews/:id/translate.
+  language         String?
+  bodyEnglish      String?
+  // importBatchId: the file import that created this row (POST /reviews/import/apply), so the import can be undone.
+  importBatchId    String?
+
   // RX.2 — Response Desk triage workflow. triageStatus null is treated
   // as NEW by the app so existing rows need no backfill.
   triageStatus    String? // NEW | IN_PROGRESS | RESPONDED | RESOLVED | IGNORED
@@ -13294,6 +13313,8 @@ model Review {
   @@index([channel, ingestedAt])
   @@index([triageStatus])
   @@index([assignee])
+  @@index([orderId])
+  @@index([importBatchId])
   @@index([workspaceId])
 }
 
@@ -13408,6 +13429,10 @@ model ReviewSentiment {
   cacheWriteTokens Int      @default(0) // Anthropic prompt-cache write
   costUSD          Decimal  @default(0) @db.Decimal(10, 6)
   extractedAt      DateTime @default(now())
+  // Reviews Inbox (2026-10-26) — a person changed the mood or themes (PATCH /reviews/:id/sentiment). Set: label and
+  // categories are the person's choice, and a later AI re-read keeps them.
+  editedBy         String?
+  editedAt         DateTime?
 
   @@index([label])
   @@index([extractedAt])
@@ -13760,6 +13785,52 @@ model EmailSuppression {
 
   @@unique([workspaceId, email, channel], name: "email_channel", map: "EmailSuppression_email_channel_key")
   @@index([email])
+  @@index([workspaceId])
+}
+
+/// Reviews › Settings (2026-10-26, PR D) — how this business replies to reviews (its voice) and who hears about what
+/// (its review alerts). ONE row per business (`@@unique([workspaceId])`); no row = the defaults in
+/// services/reviews/review-settings.service.ts. Read by the AI reply drafts, the review intake (new negative review
+/// alert) and the daily digest.
+model ReviewSettings {
+  // Business ownership comes from verified database context.
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+  /// The register of every reply: WARM | NEUTRAL | FORMAL.
+  tone        String   @default("NEUTRAL")
+  /// The languages replies are written in: 'buyer' (the buyer's own language) and/or it, de, fr, es, en.
+  languages   String[] @default([])
+  /// Ends every reply ("The care team"); null = none.
+  signOff     String?
+  /// Words a reply never uses.
+  avoidWords  String[] @default([])
+  /// The review alerts: [{ key: 'negative' | 'digest', on, recipients: userId[], via: ('app' | 'email')[] }].
+  alerts      Json     @default("[]")
+  /// The person who saved last (a user id).
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId], map: "ReviewSettings_workspaceId_key")
+}
+
+/// Reviews › Settings (2026-10-26, PR D) — a saved reply the team picks in the Inbox reply box ("Templates" menu), and
+/// the AI drafts follow. One text per language.
+model ReviewReplyTemplate {
+  // Business ownership comes from verified database context.
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+  name        String
+  /// AMAZON | EBAY | SHOPIFY | ETSY; null = every channel.
+  channel     String?
+  /// { "<locale>": "<text>" } for it, de, fr, es, en — at least one.
+  bodies      Json     @default("{}")
+  /// How often a person picked it in the Inbox reply box.
+  usedCount   Int      @default(0)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, name], name: "workspace_name", map: "ReviewReplyTemplate_workspace_name_key")
   @@index([workspaceId])
 }
 
@@ -22420,6 +22491,37 @@ model ShopifyOrderIngest {
   activatedBy  String?
 
   @@unique([workspaceId, connectionId], name: "workspace_connectionId", map: "ShopifyOrderIngest_connectionId_key")
+  @@index([workspaceId])
+}
+
+/// Shopify marketing consent (2026-10-26, Owner decision D8 + follow-up (a)) — a Shopify buyer's e-mail marketing consent,
+/// copied into Nexus so a Meta customer list can later hold only buyers who said yes. One row per Shopify customer of one
+/// Shopify account, and only for a BUYER (at least one Shopify order, any date: the Owner's pick). The e-mail is never
+/// stored: only its SHA-256 after Meta's customer-list normalisation (trim, lower case; lib/customer-email-hash.ts).
+/// Written by the backfill a person runs, by the e-mail consent webhook, and once at a new buyer's first Shopify order;
+/// a customers/redact notice deletes the customer's row. Nothing here sends anything anywhere.
+model ShopifyMarketingConsent {
+  // Business ownership comes from verified database context.
+  workspaceId       String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                String    @id @default(cuid())
+  /// The SHOPIFY ChannelConnection the consent was read through: an account this business owns (its rows go with it).
+  connectionId      String
+  connection        ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  /// Shopify's customer id (digits).
+  shopifyCustomerId String
+  /// SHA-256 (lowercase hex) of the customer's e-mail, trimmed and lower-cased. Never the address itself.
+  emailSha256       String
+  /// Shopify's e-mail marketing state, upper case: SUBSCRIBED, NOT_SUBSCRIBED, PENDING, UNSUBSCRIBED, INVALID, REDACTED.
+  emailState        String
+  /// When the consent last changed at Shopify; null when it never changed. A write older than this one is not applied.
+  emailConsentAt    DateTime?
+  /// Which path wrote the row last: backfill | webhook | order.
+  source            String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([workspaceId, connectionId, shopifyCustomerId], name: "shopify_marketing_consent")
+  @@index([workspaceId, emailSha256])
   @@index([workspaceId])
 }
 

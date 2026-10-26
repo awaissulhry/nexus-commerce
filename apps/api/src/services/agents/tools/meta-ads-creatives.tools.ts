@@ -15,8 +15,8 @@ import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool, ToolChange, ToolUndo } from '../tool-types.js'
 import { metaChangePreview, metaConnectionArg, metaIdArg, metaWhyArg, META_CHANGE_RULES, recordAccount, runMetaChange, type MetaDraftBuilder, type MetaRunOutcome } from './meta-ads-kit.js'
 import {
-  CREATIVE_TOOL, creativeDraft, MAX_CREATIVE_UNDO, SET_CREATIVE_TOOL, setCreativeDraft, WELCOME_FLOWS_ANSWER,
-  type CreativeDraft, type CreativeRecordItem, type CreativeRequest, type SetCreativeRequest,
+  CREATIVE_TOOL, creativeDraft, INTRO_SOURCES, MAX_CREATIVE_UNDO, SET_CREATIVE_TOOL, setCreativeDraft, WELCOME_FLOWS_ANSWER,
+  type CreativeDraft, type CreativeRecordItem, type CreativeRequest, type IntroSource, type SetCreativeRequest,
 } from '../../marketing/meta-ads/change-creatives.js'
 import type { MetaChangeDraft, MetaChangeRequest } from '../../marketing/meta-ads/change-draft.js'
 import type { MetaChangeResult } from '../../marketing/meta-ads/write-client.js'
@@ -29,6 +29,7 @@ const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null
 /** The request as the drafts read it (zod has checked the args). */
 function requestOf(args: Record<string, unknown>): CreativeRequest {
   const partner = args.partner as Record<string, unknown> | undefined
+  const intro = args.introPost as { source?: unknown; id?: unknown } | undefined
   return {
     action: args.action === 'undo' ? 'undo' : args.action === 'welcome-flow' ? 'welcome-flow' : 'create',
     name: str(args.name),
@@ -47,6 +48,7 @@ function requestOf(args: Record<string, unknown>): CreativeRequest {
     productTags: (args.productTags as CreativeRequest['productTags']) ?? null,
     carouselAutoOrder: args.carouselAutoOrder === true,
     partner: partner ? { pageId: str(partner.pageId), instagramId: str(partner.instagramId), mainIdentity: partner.mainIdentity === 'creator' ? 'creator' : 'brand' } : null,
+    introPost: intro && typeof intro.source === 'string' && typeof intro.id === 'string' ? { source: intro.source as IntroSource, id: intro.id } : null,
     async: args.async === true,
     creatives: (args.creatives as string[] | undefined) ?? [],
   }
@@ -122,7 +124,7 @@ const createMetaCreative: AgentTool = {
   requires: [F.adsCampaignsManage],
   input: z.object({
     connectionId: metaConnectionArg,
-    action: z.enum(['create', 'undo', 'welcome-flow']).optional().describe('create (default): one new creative; undo: delete creatives an earlier create-meta-creative made new (undo-change fills it); welcome-flow: Nexus answers why it saves no Page welcome-message flow yet'),
+    action: z.enum(['create', 'undo', 'welcome-flow']).optional().describe('create (default): one new creative; undo: delete creatives an earlier create-meta-creative made new (undo-change fills it); welcome-flow: Nexus answers where a Page welcome-message flow is made (set-meta-messaging-setup)'),
     name: z.string().trim().min(1).max(META_CREATIVE_TEXT.name).optional().describe('create: the creative\'s name in the ad account (1 to 100 characters)'),
     story: spec('create: Meta\'s object_story_spec WITHOUT page_id and instagram_user_id (Nexus fills the business\'s chosen Page and Instagram account): link_data (image or link ad, carousel child_attachments 2–10, collection collection_thumbnails, messaging page_welcome_message), photo_data, video_data (video_id of the account\'s library), text_data or template_data (Advantage+ catalog); images by image_hash from create-meta-media or picture / url / image_url (a public https link Meta fetches)'),
     postId: z.string().trim().regex(/^\d{1,25}_\d{1,25}$/, 'a post id: <Page id>_<post id>').optional().describe('create: or an existing post of the chosen Page (object_story_id, meta-page-posts lists them)'),
@@ -137,7 +139,7 @@ const createMetaCreative: AgentTool = {
       format: z.enum(META_FORMAT_AUTOMATION_FORMATS).describe('the format Meta may turn the creative into'),
       dataSources: z.array(z.enum(META_FORMAT_DATA_SOURCES.filter((s) => s !== 'none') as [string, ...string[]])).min(1).max(4).describe('where Meta takes the extra media from'),
     })).max(6).optional().describe('create: format automation switched ON (every other format is sent with data_source none)'),
-    shopDestination: z.boolean().optional().describe('create: shop routing (WEBSITE_AND_SHOP) — answered in words: it names a Facebook or Instagram shop Nexus cannot confirm as the business\'s own (it comes with the catalog / commerce steps); a website creative is sent WEBSITE_AND_SHOP_OPT_OUT'),
+    shopDestination: z.boolean().optional().describe('create: shop routing (WEBSITE_AND_SHOP) — answered in words: every Meta ad sends people to the business\'s own shop, on the product\'s page, never to a Facebook or Instagram shop Meta picks (the Owner\'s rule); a website creative is sent WEBSITE_AND_SHOP_OPT_OUT'),
     autoProductTags: z.boolean().optional().describe('create: let Meta tag catalog products on a static image by itself (default false: sent opt_out)'),
     productTags: z.array(z.object({
       productId: z.string().trim().regex(/^\d{1,20}$/, 'a catalog item id (digits)').describe('the catalog item (meta-catalog-items lists them)'),
@@ -150,6 +152,11 @@ const createMetaCreative: AgentTool = {
       instagramId: metaIdArg('the partner\'s (creator\'s) Instagram account').optional(),
       mainIdentity: z.enum(['brand', 'creator']).describe('brand: this business runs the ad, the partner is named; creator: the partner runs it, this business is the sponsor'),
     }).optional().describe('create: a partnership ad (Meta asks the partner\'s permission itself)'),
+    // Gap 46b (master CR-331) — an existing post as the intro card of a partnership Advantage+ catalog ad.
+    introPost: z.object({
+      source: z.enum(INTRO_SOURCES).describe('facebook-post or instagram-media: the chosen Page\'s post or the chosen Instagram account\'s media; creator-facebook-post or creator-instagram-media: the partner\'s, which Meta\'s content discovery must list for the brand (meta-partnership-content view search) and whose author is the partner named in partner'),
+      id: z.string().trim().regex(/^[1-9]\d{0,24}(_[1-9]\d{0,24})?$/, 'a Facebook post id (<Page id>_<post id>) or an Instagram media id (digits)').describe('the post (<Page id>_<post id>) or the Instagram media id'),
+    }).optional().describe('create: a partnership Advantage+ catalog ad (carousel or collection: story.template_data with parts.product_set_id, and partner) shows this EXISTING post as its intro card (Meta\'s branded_content parent source); its catalog must be the business portfolio\'s own'),
     async: z.boolean().optional().describe('create: make it as Meta\'s asynchronous job (asyncadcreatives; Meta has no check for that edge)'),
     creatives: z.array(metaIdArg('a creative an earlier create-meta-creative made new')).min(1).max(MAX_CREATIVE_UNDO).optional().describe('undo: the creatives to delete (undo-change fills it)'),
     why: metaWhyArg,
@@ -172,10 +179,13 @@ const createMetaCreative: AgentTool = {
     + 'whose owner is no other business in Nexus — checked before the preview and again before it is sent. A '
     + 'feature generated with AI means the ad using it must start '
     + 'PAUSED and be previewed (meta-ad-preview) first. A partnership ad names its partner (partner); Meta asks the '
-    + 'partner\'s permission itself. Refused in words: political ads (banned in the EU), WhatsApp Status identities (not in '
+    + 'partner\'s permission itself. A partnership Advantage+ catalog ad (template_data with its product set) may show an '
+    + 'EXISTING post as its intro card (introPost): the chosen Page\'s post or Instagram account\'s media, or the partner\'s '
+    + 'that Meta\'s content discovery lists for the brand; its catalog is then the business portfolio\'s own (no client '
+    + 'catalog) — checked before the preview and again before it is sent. Refused in words: political ads (banned in the EU), WhatsApp Status identities (not in '
     + 'the EU), app links (Nexus has no app), retailer_item_ids (advertiser product ids the catalog rule cannot check), catalog promo-code sources, polls (gone in '
-    + 'v26), Threads ids (Threads runs through Instagram), shop routing (a shop Nexus cannot confirm), saved Page welcome flows '
-    + '(they need the Page\'s own token). A creative SPENDS NOTHING (it serves only once an ad uses it) and '
+    + 'v26), Threads ids (Threads runs through Instagram), shop routing (every ad sends people to the business\'s own shop), saved Page welcome flows '
+    + '(set-meta-messaging-setup makes them). A creative SPENDS NOTHING (it serves only once an ad uses it) and '
     + 'cannot be changed once made: a new look is a new creative swapped onto the ad, which sends an ACTIVE ad back to '
     + 'review. Meta checks it first (validate_only). If Meta already holds the same creative it answers that one: then '
     + 'nothing new is made and the undo never deletes it. action undo deletes only creatives this tool made new, while no '

@@ -44,6 +44,7 @@ import { NO_LIMITS, clampToStrategy, holdNote, limitWords, newHoldLog, strategyB
 import { brainOwnedCampaignIds } from '../services/advertising/bid-brain/live.js'
 import { leverHeldNote, readLeverHolds, type LeverHeld } from '../services/advertising/brain/engine-skips.js'
 import type { BrainLever } from '../services/advertising/brain/levers.js'
+import { adProductOf, SPONSORED_PRODUCTS } from '@nexus/shared/ads-ad-product'
 
 /**
  * ONE BRAIN AB-6 — the product-brain levers this engine's hour writes besides the keyword bids: the placement lanes and
@@ -778,7 +779,13 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
     governed.add(id)
     logger.info('[rank-defend] campaign left alone — one owner per lever', { campaignId: id, why: held.map((h) => h!.reason) })
   }
-  const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, biddingStrategy: true, acos: true, spend: true, bidsSuppressedAt: true, bidsSuppressedFloorCents: true, bidsSuppressedBy: true, deliveryReasons: true } })
+  const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, biddingStrategy: true, acos: true, spend: true, bidsSuppressedAt: true, bidsSuppressedFloorCents: true, bidsSuppressedBy: true, deliveryReasons: true, adProduct: true, type: true } })
+  // 6a — a Sponsored Brands or Display campaign is left whole: every write of this engine is an SP write the mutation layer
+  // refuses for it, and suppressCampaignBids stamps the floor and the bids' memory BEFORE that refusal, so Nexus would
+  // read it floored while Amazon never was. Governed, never written, nothing given back; the plan's next save takes it out.
+  const notSp = campaigns.filter((c) => { const p = adProductOf(c); return p != null && p !== SPONSORED_PRODUCTS }).map((c) => c.id)
+  for (const id of notSp) { leftAlone.add(id); governed.add(id) }
+  if (notSp.length) logger.warn('[rank-defend] campaigns that are not Sponsored Products left alone', { count: notSp.length, campaignIds: notSp.slice(0, 10) })
   const campById = new Map(campaigns.map((c) => [c.id, c]))
   // C1 — campaigns that do not serve (PAUSED, ARCHIVED, DRAFT): decided as a hold, never written, nothing given back.
   // They stay in `governed`, so the orphan sweep leaves their floors alone too, and they are written once enabled.

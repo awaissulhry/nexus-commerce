@@ -100,8 +100,14 @@ export function picksOutsideScope(selected: readonly PickFacts[], live: Readonly
 
 export interface PicksNotice { title: string; sentence: string; button: string }
 
+/**
+ * Who holds the picks. A rule's save is refused while they stay (4c). 6a (2026-10-26) — an hourly bid plan's save goes
+ * through and leaves them out (`notSponsoredProducts`), so its warning says that instead.
+ */
+export type PicksHolder = 'rule' | 'hourlyPlan'
+
 /** The warning and its one button, in plain words — or null when every pick is one the rule can act on. */
-export function picksOutsideNotice(o: PicksOutside, scope: PickScope): PicksNotice | null {
+export function picksOutsideNotice(o: PicksOutside, scope: PickScope, holder: PicksHolder = 'rule'): PicksNotice | null {
   const n = o.ids.length
   if (n === 0) return null
   const market = pickMarket(scope)
@@ -114,15 +120,18 @@ export function picksOutsideNotice(o: PicksOutside, scope: PickScope): PicksNoti
   }
   if (o.wrongType.length) {
     const k = o.wrongType.length
-    parts.push(`It can change ${allowed} campaigns only, and ${k} ${plural(k, 'pick is', 'picks are')} not (${tally(o.wrongType.map((c) => productName(c.adProduct)))}).`)
+    const holds = holder === 'hourlyPlan' ? `An hourly bid plan holds ${allowed} campaigns only` : `It can change ${allowed} campaigns only`
+    parts.push(`${holds}, and ${k} ${plural(k, 'pick is', 'picks are')} not (${tally(o.wrongType.map((c) => productName(c.adProduct)))}).`)
   }
-  parts.push('Nexus will not save the rule until they are removed.')
+  parts.push(holder === 'hourlyPlan' ? `A save leaves ${plural(n, 'it', 'them')} out.` : 'Nexus will not save the rule until they are removed.')
   const picks = `${n} ${plural(n, 'pick', 'picks')}`
   const button = o.outsideMarket.length && o.wrongType.length ? `Remove ${picks} it can never change`
     : o.outsideMarket.length ? `Remove ${picks} outside ${market}`
     : `Remove ${picks} that ${plural(n, 'is', 'are')} not ${allowed}`
   return {
-    title: `This rule can never change ${n} of its ${o.total} picked ${plural(o.total, 'campaign', 'campaigns')}`,
+    title: holder === 'hourlyPlan'
+      ? `A save leaves out ${n} of the ${o.total} picked ${plural(o.total, 'campaign', 'campaigns')}`
+      : `This rule can never change ${n} of its ${o.total} picked ${plural(o.total, 'campaign', 'campaigns')}`,
     sentence: parts.join(' '),
     button,
   }

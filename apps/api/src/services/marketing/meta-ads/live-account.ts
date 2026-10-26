@@ -751,7 +751,8 @@ async function billingEvents(account: MetaChosenAccount, input: { from: string; 
  * read further (its invoice groups, allocations); a line another portfolio shares into it is its id and a flag, with no
  * further call (its addresses, tax numbers, ad accounts and allocations are that portfolio's).
  */
-async function creditLines(account: MetaChosenAccount, portfolioId: string, asked: string | null): Promise<{ owned: string[]; foreign: Array<{ creditLineId: string; ownedByAnotherPortfolio: true }> }> {
+/** Step 43 reuses it (live-business-assets-change.ts): the portfolio's own credit lines, never another portfolio's. */
+export async function creditLines(account: MetaChosenAccount, portfolioId: string, asked: string | null): Promise<{ owned: string[]; foreign: Array<{ creditLineId: string; ownedByAnotherPortfolio: true }> }> {
   const read = await listPaged(account.connectionId, 'billing.creditLineIds', `${portfolioId}/extendedcredits`, { fields: 'id,owner_business{id}' }, 50)
   const lines = read.rows.map((r) => ({ id: idText(r.id), owner: idText(obj(r.owner_business)?.id) })).filter((l): l is { id: string; owner: string | null } => !!l.id)
   const split = (list: typeof lines) => ({

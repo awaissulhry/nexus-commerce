@@ -1935,6 +1935,13 @@
 .nds-secondary-nav-link:focus-visible, .nds-secondary-nav-group-label.disclosure:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -2px; }
 .nds-secondary-nav-icon, .nds-secondary-nav-link > .nds-tag { flex: none; }
 .nds-secondary-nav-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* WorkspaceSubheader pinned (Reviews, 2026-10-26): from 1024 px the navigation is a column beside the primary navigation,
+   sticky in the page scroller and scrolling inside; Collapse folds it to the 48 px toggle strip. Below 1024 px the page opens the drawer. */
+.nds-workspace-subheader.pinned { position: sticky; top: 0; align-self: flex-start; flex-direction: column; width: var(--nds-secondary-nav-w); height: var(--nds-secondary-nav-pinned-h, calc(100dvh - var(--nds-secondary-nav-top, var(--nds-topbar-h)))); border-bottom: 0; border-right: 1px solid var(--nds-border-subtle); }
+.nds-workspace-subheader.pinned.collapsed { width: var(--nds-secondary-nav-toggle-w); }
+.nds-workspace-subheader.pinned > .nds-secondary-navigation { flex: 1; min-height: 0; height: auto; }
+.nds-workspace-subheader.pinned > .nds-workspace-subheader-toggle { flex: 1 1 auto; align-items: flex-start; padding-top: var(--nds-space-8); border-right: 0; }
+@media (max-width: 1023px) { .nds-workspace-subheader.pinned { display: none; } }
 @media (max-width: 719px) {
   .nds-secondary-navigation { width: 100% !important; }
   .nds-workspace-subheader-toggle .nds-tbtn,
@@ -2137,3 +2144,64 @@
     transform: none;
   }
 }
+
+/* ── Reviews parts (2026-10-26) ──────────────────────────────────── */
+/* EditModeBar `saveShortcut`: "· Save with ⌘S" after the count. */
+.nds-actionbar-key { color: var(--nds-text-2); white-space: nowrap; }
+
+/* Builder: a focus ring on the section list's buttons (both modes) and a badge after a label. */
+.nds-builder-navitem:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -2px; }
+.nds-builder-navbadge { display: inline-flex; flex: none; }
+/* Builder `mode="page"`: in the page, not over it. The section list is a sticky strip across the top (the area's own
+   navigation takes the left); the main column and, from 1200 px, a live column on the right; the footer ends it. */
+.nds-builder.page { position: static; inset: auto; z-index: auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-16) var(--nds-space-20); align-items: start; background: transparent; }
+.nds-builder.page > .nds-builder-nav { grid-column: 1 / -1; position: sticky; top: 0; z-index: var(--nds-z-sticky); width: auto; flex-direction: row; flex-wrap: wrap; gap: var(--nds-space-4); padding: var(--nds-space-8) 0 var(--nds-space-10); overflow: visible; border-right: 0; border-bottom: 1px solid var(--nds-border-subtle); background: var(--nds-bg); }
+.nds-builder.page .nds-builder-navitem { display: inline-flex; align-items: center; gap: var(--nds-space-6); padding: var(--nds-space-6) var(--nds-space-12); }
+.nds-builder.page > .nds-builder-main { display: flex; flex-direction: column; gap: var(--nds-space-16); min-width: 0; }
+.nds-builder.page .nds-builder-section { max-width: none; margin: 0; scroll-margin-top: calc(var(--nds-builder-strip-h, 48px) + var(--nds-space-8)); }
+.nds-builder.page .nds-builder-section:focus:not(:focus-visible) { outline: none; }
+.nds-builder.page > .nds-builder-aside { display: flex; flex-direction: column; gap: var(--nds-space-16); min-width: 0; }
+.nds-builder.page > .nds-builder-footer { grid-column: 1 / -1; min-width: 0; }
+@media (min-width: 1200px) {
+  .nds-builder.page.has-aside { grid-template-columns: minmax(0, 1fr) var(--nds-builder-aside-w, 300px); }
+  .nds-builder.page > .nds-builder-aside { position: sticky; top: calc(var(--nds-builder-strip-h, 48px) + var(--nds-space-12)); max-height: calc(100dvh - var(--nds-topbar-h) - var(--nds-builder-strip-h, 48px) - var(--nds-space-24)); overflow-y: auto; }
+}
+@media (max-width: 759px) {
+  .nds-builder.page > .nds-builder-nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+  .nds-builder.page .nds-builder-navitem { flex: none; }
+}
+
+/* ReplyComposer (patterns/ReplyComposer.tsx): layout only — the field is the Textarea with its counter, the actions are
+   Buttons (the main one held with its reason), the menu is the DS Menu. */
+.nds-reply { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; padding: var(--nds-space-12) var(--nds-space-14); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg); background: var(--nds-surface); color: var(--nds-text); }
+.nds-reply-head, .nds-reply-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6) var(--nds-space-8); min-width: 0; }
+.nds-reply-head > .grow, .nds-reply-foot > .grow { flex: 1; }
+.nds-reply-title { margin: 0; font-size: var(--nds-font-size-base); font-weight: 700; color: var(--nds-text); }
+.nds-reply-rule { margin: 0; font-size: var(--nds-font-size-sm); line-height: 1.45; color: var(--nds-text-2); }
+.nds-reply-text { min-height: 92px; font-size: var(--nds-font-size-base); line-height: 1.45; }
+.nds-reply-translation { display: flex; flex-direction: column; gap: var(--nds-space-2); padding: var(--nds-space-7) var(--nds-space-10); border-radius: var(--nds-radius-md); background: var(--nds-surface-sunken); font-size: var(--nds-font-size-sm); line-height: 1.45; color: var(--nds-text); }
+.nds-reply-translation > .lbl { display: inline-flex; align-items: center; gap: var(--nds-space-5); font-weight: 600; color: var(--nds-text-2); }
+.nds-reply-count { font-size: var(--nds-font-size-sm); font-weight: 600; color: var(--nds-text-2); font-variant-numeric: tabular-nums; }
+.nds-reply-sent { display: flex; flex-direction: column; gap: var(--nds-space-6); }
+.nds-reply-sent-text { padding: var(--nds-space-8) var(--nds-space-10); border-left: 3px solid var(--nds-success); border-radius: var(--nds-radius-md); background: var(--nds-surface-sunken); font-size: var(--nds-font-size-base); line-height: 1.45; color: var(--nds-text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.nds-reply-sent-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.nds-reply > .nds-banner { margin: 0; }
+@media (max-width: 559px) { .nds-reply-foot > .grow { flex-basis: 100%; height: 0; } }
+
+/* Lightbox (patterns/Lightbox.tsx): the photo with Previous / Next over its edges, the review's words, the thumbnails,
+   the counter and the keys. */
+.nds-lightbox-body { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
+.nds-lightbox-stage { position: relative; min-width: 0; }
+.nds-lightbox-stage .nds-media-preview-stage { min-height: min(56dvh, 520px); }
+.nds-lightbox-nav { position: absolute; inset: 0 0 auto 0; height: min(56dvh, 520px); display: flex; align-items: center; justify-content: space-between; padding: 0 var(--nds-space-12); pointer-events: none; }
+.nds-lightbox-nav > * { pointer-events: auto; }
+.nds-lightbox-go.nds-btn { width: 40px; height: 40px; padding: 0; justify-content: center; border-radius: var(--nds-radius-round); box-shadow: var(--nds-shadow-card); }
+.nds-lightbox-caption { margin: 0; font-size: var(--nds-font-size-base); line-height: 1.45; color: var(--nds-text-2); overflow-wrap: anywhere; }
+.nds-lightbox-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8) var(--nds-space-14); }
+.nds-lightbox-foot > .grow { flex: 1; }
+.nds-lightbox-strip { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); margin: 0; padding: 0; list-style: none; }
+.nds-lightbox-strip > li { display: inline-flex; border-radius: var(--nds-radius-sm); box-shadow: 0 0 0 1px var(--nds-border); }
+.nds-lightbox-strip > li.is-current { box-shadow: 0 0 0 2px var(--nds-primary); }
+.nds-lightbox-count { font-size: var(--nds-font-size-base); font-weight: 600; color: var(--nds-text); font-variant-numeric: tabular-nums; }
+.nds-lightbox-keys { display: inline-flex; align-items: center; gap: var(--nds-space-4); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+@media (max-width: 759px) { .nds-lightbox-keys { display: none; } }

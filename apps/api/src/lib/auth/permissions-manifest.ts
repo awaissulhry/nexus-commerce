@@ -191,6 +191,8 @@ export const ENTRIES: Entry[] = [
   P(F.settingsIntegrationsManage, (_m, p) => p === '/api/shopify/shadow-report/:accountId'),
   // Shopify order import per account: its start date (T0, set once) and the order webhooks it registers.
   P(F.settingsIntegrationsManage, (_m, p) => p === '/api/shopify/order-import/:accountId' || p === '/api/shopify/order-import/:accountId/start'),
+  // Shopify marketing consent (2026-10-26) — the one-time backfill of buyers' e-mail consent, by the same people.
+  P(F.settingsIntegrationsManage, (_m, p) => p === '/api/shopify/marketing-consent/:accountId/backfill'),
 
   // ── Channel connect/disconnect (OAuth-adjacent, session-gated) ──
   // CX.1 — the shared connect flow. Only the browser-redirect callback is public.
@@ -217,6 +219,10 @@ export const ENTRIES: Entry[] = [
   // approval".
   P(F.settingsIntegrationsManage, (m, p) => isRead(m) && p === '/api/meta-ads/conversions-api'),
   P(F.settingsSecurityManage, (m, p) => m.toUpperCase() === 'PUT' && p === '/api/meta-ads/conversions-api'),
+  // Meta consent PR 2 — the "Upload customer lists to Meta" switch: the same split as "Send sales to Meta" (buyers' hashed
+  // e-mails leave Nexus while it is on).
+  P(F.settingsIntegrationsManage, (m, p) => isRead(m) && p === '/api/meta-ads/customer-lists'),
+  P(F.settingsSecurityManage, (m, p) => m.toUpperCase() === 'PUT' && p === '/api/meta-ads/customer-lists'),
   // Meta ads step 2 — the read-only Ads › Meta tab and its "Read now" (the ads sync permission), as Google's.
   P(F.adsView, (m, p) => isRead(m) && /^\/api\/meta-ads\/(overview|campaigns(\/[^/]+\/days)?|adsets|ads)$/.test(p)),
   P(F.adsCampaignsManage, (m, p) => m.toUpperCase() === 'POST' && p === '/api/meta-ads/sync'),

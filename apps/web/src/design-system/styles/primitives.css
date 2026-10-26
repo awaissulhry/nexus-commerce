@@ -1674,3 +1674,10 @@ button.nds-token > .t,
   color: var(--nds-text-2);
   font-variant-numeric: tabular-nums;
 }
+
+/* Textarea counter (Reviews parts, 2026-10-26): `limit` puts "312 / 500" under the field; over it the counter and the
+   field's edge turn danger and the counter says how much is too long. It counts, it never blocks typing. */
+.nds-textarea-wrap { display: flex; flex-direction: column; gap: var(--nds-space-4); width: 100%; min-width: 0; }
+.nds-textarea-count { align-self: flex-end; font-size: var(--nds-font-size-sm); font-weight: 600; color: var(--nds-text-2); font-variant-numeric: tabular-nums; }
+.nds-textarea-count.over { color: var(--nds-danger-text); }
+.nds-textarea-wrap.over > .nds-textarea { border-color: var(--nds-danger); }

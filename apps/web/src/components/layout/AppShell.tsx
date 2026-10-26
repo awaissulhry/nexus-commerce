@@ -27,6 +27,7 @@
 
 import { usePathname } from '@/lib/workspaces/navigation'
 import { readinessLockFromPath } from '@/app/listings/_readiness/readinessScope'
+import { hrefMatchesPath } from '@/app/_shared/app-rail-active'
 import type { ReactNode } from 'react'
 // Rail styles (.h10-rail / .h10-item / .h10-sub* / chrome). These used to come from
 // ads.css, which meant every non-standalone route pulled in the whole ads cockpit —
@@ -94,7 +95,8 @@ export default function AppShell({
     readinessLockFromPath(pathname) !== undefined ||
     NO_RAIL_PREFIXES.some((p) => pathname.startsWith(p)) ||
     NO_RAIL_PATTERNS.some((r) => r.test(pathname))
-  const settingsShell = pathname === '/settings' || pathname.startsWith('/settings/')
+  // Settings and Reviews own their edge-to-edge subheader and padding (Reviews: the pinned sub-sidebar column).
+  const subheaderShell = hrefMatchesPath('/settings', pathname) || hrefMatchesPath('/marketing/reviews', pathname)
 
   if (noChrome) {
     // Full-bleed: no bar, no rail, no banners, no command palette. Byte-identical to the
@@ -148,8 +150,8 @@ export default function AppShell({
             <div data-print-hide>{topBar}</div>
             <main id="main-content" className="flex-1 overflow-auto" tabIndex={-1}>
               <div data-print-hide>{banners}</div>
-              {/* Settings owns its edge-to-edge subheader and page padding. */}
-              <div className={settingsShell ? 'min-h-full flex flex-col' : 'p-3 md:p-6'}>{children}</div>
+              {/* Settings and Reviews own their edge-to-edge subheader and padding. */}
+              <div className={subheaderShell ? 'min-h-full flex flex-col' : 'p-3 md:p-6'}>{children}</div>
             </main>
           </div>
         </div>

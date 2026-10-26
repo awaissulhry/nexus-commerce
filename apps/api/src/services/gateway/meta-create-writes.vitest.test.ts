@@ -392,6 +392,11 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/marketing/meta-ads/change-posts.ts': 2, // step 24: remove-meta-page-post's delete of a Facebook post or Instagram media Nexus made (explicit ask: confirmDelete; also the undo of a dark post)
       'services/gateway/meta-access-rules.ts': 4, // step 41: a person off an asset, a partner off an asset, an agency's and a client's relationship ended (judges)
       'services/marketing/meta-ads/change-access.ts': 4, // step 41: a person off (confirmRemove), a partner off (confirmRemove; a dataset's on the query), a relationship ended (confirmRemove; no undo)
+      'services/gateway/meta-catalog-items-rules.ts': 6, // step 35: an item group's delete, the undo-delete of a feed Nexus made, a feed rule's delete (judges), and the localized batch's DELETE judge
+      'services/marketing/meta-ads/change-catalog-items.ts': 6, // step 35: the batch record's verb type, an override's removal, the undo of a create's items (step 34's items delete), an item group's delete (explicit ask), a feed Nexus made (its undo), a rule's delete (meta-catalog-items-writes test)
+      'services/gateway/meta-messaging-rules.ts': 9, // step 38: a label taken off a person, a label, a utility template, a WhatsApp template, a template group, profile properties, a person's own menu, a persona, a welcome flow (judges)
+      'services/marketing/meta-ads/change-messaging.ts': 2, // step 38: a label taken off a person (its undo too) and a label's delete (explicit ask: confirmDelete)
+      'services/marketing/meta-ads/change-messaging-setup.ts': 6, // step 38: one template (explicit ask; also a create's undo), a template group (explicit ask; also a create's undo), profile properties cleared, a person's own menu taken off, a persona (explicit ask; also a create's undo), a welcome flow (explicit ask; also a create's undo) (meta-messaging-writes test)
     })
     // A method named by a constant, a variable or a ternary: only where it is passed on.
     const computed = world.flatMap((f) => [...f.text.matchAll(/\bmethod:\s*([^,}\n]+)/g)].map((m) => m[1].trim())
@@ -468,6 +473,9 @@ const EXPECTED_COMPUTED: string[] = [
   // passed on to its sender (each literal where the request is built).
   'services/marketing/meta-ads/change-boosts.ts: \'advideos\'',
   'services/marketing/meta-ads/change-boosts.ts: call.method',
+  // Step 35 — an items / localized batch record's verb (CREATE | UPDATE | DELETE: Meta's batch method, not an HTTP method),
+  // set in ONE place (batchRecord).
+  'services/marketing/meta-ads/change-catalog-items.ts: verb',
   // Step 23 — a video's upload method again (advideos | video_ads).
   'services/marketing/meta-ads/change-media.ts: \'advideos\' | \'video_ads\' = video.method === \'video_ads\' ? \'video_ads\' : \'advideos\'',
   'services/marketing/meta-ads/change-media.ts: \'advideos\' | \'video_ads\'; new: boolean | null',

@@ -14,9 +14,11 @@
  */
 
 import { useEffect, useState } from 'react'
-import { Grid } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { ReviewsNav } from '../_shared/ReviewsNav'
+import { PageHeader } from '@/design-system/patterns'
+import { usePathname } from '@/lib/workspaces/navigation'
+import { reviewsCrumbs } from '../_shell/reviews-crumbs'
+import { ReviewsMenuButton } from '../_shell/ReviewsShell'
 import { HeatmapGrid } from './HeatmapGrid'
 
 interface HeatmapCell {
@@ -49,6 +51,7 @@ async function fetchHeatmap(): Promise<HeatmapResponse> {
 }
 
 export default function HeatmapPage() {
+  const pathname = usePathname() ?? ''
   const [data, setData] = useState<HeatmapResponse | null>(null)
 
   useEffect(() => {
@@ -64,19 +67,12 @@ export default function HeatmapPage() {
 
   return (
     <div className="px-4 py-4">
-      <div className="flex items-start gap-3 mb-3">
-        <Grid className="h-6 w-6 text-blue-500 dark:text-blue-400 mt-0.5" />
-        <div className="flex-1">
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-            Sentiment Heatmap
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Volume and negative review rate by day × category. Hotter cells indicate spikes —
-            cross-reference with the Spikes feed to see if an alert is already active.
-          </p>
-        </div>
-      </div>
-      <ReviewsNav />
+      <PageHeader
+        eyebrow={reviewsCrumbs(pathname)}
+        title="Sentiment Heatmap"
+        subtitle="Volume and negative review rate by day × category. Hotter cells indicate spikes — cross-reference with the Spikes feed to see if an alert is already active."
+        actions={<ReviewsMenuButton />}
+      />
 
       {data === null ? (
         <div aria-busy="true">

@@ -49,6 +49,7 @@ import { localFailure, MetaReadError } from './errors.js'
 import { metaChosenAccount, MetaLiveRefusal, type MetaChosenAccount } from './live.js'
 import { instagramOf, onPage, ownMedia, pageOf, pagePostId } from './live-media.js'
 import { livePartnership } from './live-partners.js'
+import { creatorContent } from './creator-content.js'
 import { listPaged } from './live-objects.js'
 import { metaReadOne } from './read-client.js'
 import { takenIds } from './taken.js'
@@ -228,52 +229,8 @@ async function ownInstagramLink(chosen: MetaChosenAccount, link: string): Promis
   return ownInstagramMedia(chosen, idText(found.id)!, 'link', permalink)
 }
 
-/** One creator content row as Meta's content discovery answers it (step 16's look-up, masked when another business's). */
-interface CreatorRow { contentId: string | null; platform: string | null; mediaType: string | null; author: { pageId: string | null; instagramId: string | null } | null; eligibility: Array<{ adEligibility: string | null; permissionStatus: string | null; errors: string[]; partner: { pageId: string | null; instagramId: string | null } | null }> }
-
-/**
- * A creator's content Meta's content discovery lists for the brand (step 16's look-up: content_ids or ad_codes, the chosen
- * Page and Instagram account): never the business's own, never another Nexus business's, of the platform asked; its
- * eligibility (ad_eligibility, eligibility_errors) said or refused before any write. The ad code goes to Meta in the
- * look-up's query only (the ledger keeps a path) and is never put in a sentence.
- */
-async function creatorContent(chosen: MetaChosenAccount, by: { contentId: string } | { adCode: string }, platform: 'INSTAGRAM' | 'FACEBOOK'): Promise<{ row: CreatorRow; warnings: string[] }> {
-  const what = 'adCode' in by ? 'the creator\'s ad code' : `content ${by.contentId}`
-  const answer = await livePartnership({ connectionId: chosen.connectionId, view: 'lookup', ...('adCode' in by ? { adCodes: [by.adCode] } : { contentIds: [by.contentId] }) }) as unknown as { items?: Array<Row> }
-  const items = Array.isArray(answer.items) ? answer.items : []
-  const match = 'adCode' in by
-    ? (items.length === 1 ? items[0] : null)
-    : items.find((r) => r.contentId === by.contentId || (by.contentId.includes('_') && r.contentId === by.contentId.split('_')[1])) ?? null
-  if (!match) throw new MetaLiveRefusal(`Meta's content discovery does not list ${what} as content the chosen Page or Instagram account may advertise${'adCode' in by && items.length > 1 ? ' (it answered more than one)' : ''}: nothing was asked of Meta. meta-partnership-content view search shows what it lists.`)
-  if (match.takenByAnotherBusiness === true) throw new MetaLiveRefusal(`${what === 'the creator\'s ad code' ? 'That content' : what} is by a Page or Instagram account another business in Nexus uses: no creative of this business boosts it.`)
-  const author = isObject(match.author) ? { pageId: idText(match.author.pageId), instagramId: idText(match.author.instagramId) } : null
-  const row: CreatorRow = {
-    contentId: text(match.contentId), platform: text(match.platform), mediaType: text(match.mediaType), author,
-    eligibility: (Array.isArray(match.partnerships) ? match.partnerships : []).filter(isObject).map((p) => ({
-      adEligibility: text(p.adEligibility), permissionStatus: text(p.permissionStatus),
-      errors: (Array.isArray(p.eligibilityErrors) ? p.eligibilityErrors : []).filter(isObject).map((e) => text(e.message) ?? text(e.code) ?? '').filter(Boolean),
-      partner: isObject(p.taggedPartner) ? { pageId: idText(p.taggedPartner.pageId), instagramId: idText(p.taggedPartner.instagramId) } : null,
-    })),
-  }
-  if (row.platform && row.platform !== platform) throw new MetaLiveRefusal(`${what === 'the creator\'s ad code' ? 'That ad code' : what} is ${row.platform === 'INSTAGRAM' ? 'Instagram' : 'Facebook'} content: ask with the ${row.platform === 'INSTAGRAM' ? 'creator-instagram' : 'creator-facebook'} source.`)
-  const pages = [author?.pageId, 'contentId' in by && by.contentId.includes('_') ? by.contentId.split('_')[0] : null].filter((v): v is string => !!v)
-  const igs = [author?.instagramId].filter((v): v is string => !!v)
-  if (!pages.length && !igs.length) throw new MetaLiveRefusal(`Meta's content discovery names no author for ${what}, so Nexus cannot confirm whose it is: nothing was asked of Meta.`)
-  if ((chosen.pageId && pages.includes(chosen.pageId)) || (chosen.instagramId && igs.includes(chosen.instagramId))) {
-    throw new MetaLiveRefusal(`${what === 'the creator\'s ad code' ? 'That content' : what} is the business's own: boost it with source facebook-post or instagram-media (a partnership boost is a creator's content).`)
-  }
-  const [takenPages, takenIgs] = await Promise.all([takenIds('PAGE', pages), takenIds('INSTAGRAM', igs)])
-  if (takenPages.size || takenIgs.size) throw new MetaLiveRefusal('That content is by a Page or Instagram account another business in Nexus uses: no creative of this business boosts it.')
-  // The eligibility Meta gives for the brand (its entry, else the first).
-  const mine = row.eligibility.find((e) => (chosen.pageId && e.partner?.pageId === chosen.pageId) || (chosen.instagramId && e.partner?.instagramId === chosen.instagramId)) ?? row.eligibility[0] ?? null
-  const warnings: string[] = []
-  if (!mine?.adEligibility) warnings.push('Meta\'s content discovery gave no ad eligibility for it: Meta\'s check (validate_only) answers before anything is made.')
-  else if (mine.adEligibility === 'INELIGIBLE' || mine.adEligibility === 'EXCLUDED') {
-    throw new MetaLiveRefusal(`Meta says it cannot be used in an ad (${mine.adEligibility}${mine.errors.length ? `: ${mine.errors.slice(0, 3).join('; ')}` : ''}) — copyrighted music, an unsupported format or a missing permission. Nothing was asked of Meta.`)
-  } else if (mine.adEligibility === 'NEEDS_ATTENTION') warnings.push(`Meta says it needs attention before it can run${mine.errors.length ? `: ${mine.errors.slice(0, 3).join('; ')}` : ''}.`)
-  if (mine?.permissionStatus && !/APPROVED|GRANTED|ACTIVE/i.test(mine.permissionStatus)) warnings.push(`The creator's permission reads ${mine.permissionStatus}: Meta keeps the ad "pending delivery" until the creator allows it (account-level permission: set-meta-partnership-access action request; or the creator's ad code).`)
-  return { row, warnings }
-}
+// Gap 46b — creatorContent (a creator's content Meta's content discovery lists for the brand) moved to creator-content.ts,
+// unchanged, so create-meta-creative's intro card (master CR-331) runs the same check.
 
 /** The brand as a creator's content's sponsor (boost-existing-post guides: the advertiser's Page and Instagram account). */
 const sponsorsOf = (chosen: MetaChosenAccount) => ({
