@@ -13,6 +13,10 @@ it('switches sections without carrying another business’s record ID or account
   expect(paths.workspaceSwitchPath('/w/business_a/products/foreign-id/edit?accountId=foreign')).toBe('/products')
   expect(paths.workspaceSwitchPath('/w/business_a/settings/channels?connectionId=foreign')).toBe('/settings/channels')
   expect(paths.workspaceSwitchPath('/settings/profile')).toBe('/dashboard/overview')
+  // Reviews: a rule or a product of the other business is left behind; the Reviews area stays.
+  expect(paths.workspaceSwitchPath('/w/business_a/marketing/reviews/requests/rules/foreign-rule')).toBe('/marketing/reviews')
+  expect(paths.workspaceSwitchPath('/w/business_a/marketing/reviews?period=7d')).toBe('/marketing/reviews')
+  expect(paths.workspaceSwitchPath('/w/business_a/marketing/reviewsx')).toBe('/dashboard/overview')
 })
 
 // 2026-09-30 — after every sign-in the address read `/profiles?next=%2Fdashboard%2Foverview%3F_rsc%3D…`: the proxy built
