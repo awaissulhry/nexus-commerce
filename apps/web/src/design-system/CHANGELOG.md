@@ -19,6 +19,10 @@ Web only: `patterns/{ReplyComposer,replyComposerModel,Lightbox,lightboxModel}`, 
   with a chevron; `minTileWidth` (px → `--nds-metrics-min`); two tiles per row under 760 px. `metricKind()`.
   `delta.tone?: 'positive'|'negative'|'neutral'` (wins over `positive`; `.dlt.neutral` = `--nds-text-2`, the same rule
   in both `components.css`): "same as the month before" is neither green nor red. `metricDeltaClass()`.
+- **`PerformanceGraph`** (`PerformanceGraph.tsx`, `performanceGraphModel.ts`, both apps, identical): `ChartSeries.domain` /
+  `ticks` fix a series' axis (a 5-star rating at 0–5; it fitted its data to 0–8; data outside still widens it), and a value
+  with no value on either side draws a dot in its series' colour (a line needs two points, so it showed nothing).
+  `isolatedPoints()`, `axisScale()`.
 - **Banner actions wrap**: `.nds-banner` wraps; `.nds-banner-action` wraps with an 8 px gap and pushes right; under 560 px it
   takes its own line (the dismiss stays on the first).
 - **`Textarea limit` / `counterLabel`**: "312 / 500" under the field (grapheme count, `Intl.Segmenter`), never blocks
