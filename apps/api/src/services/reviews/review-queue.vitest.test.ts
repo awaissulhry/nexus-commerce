@@ -27,6 +27,7 @@ import {
   type QueueRowInput,
 } from './review-queue.service.js'
 import { QUEUE_STATUSES, REASON_FACET_WORDS, queueStatusOf, reasonKeyOf, type ReasonKey } from './review-queue-words.js'
+import { COMMAND_SCOPE_ROUTES } from '../../lib/command-idempotency.js'
 
 const NOW = new Date('2026-10-26T12:00:00Z')
 const DAY = 86_400_000
@@ -285,5 +286,11 @@ describe('review queue rows and run words', () => {
     expect(testEmailWords({ ok: true, dryRun: true }, 'me@example.com')).toMatch(/switched off/)
     expect(testEmailWords({ ok: false, dryRun: false, error: 'RESEND_API_KEY not set' }, 'me@example.com')).toBe('Not sent: our email service is not set up')
     expect(testEmailWords({ ok: false, dryRun: false, suppressed: true }, 'me@example.com')).toMatch(/do-not-email/)
+  })
+})
+
+describe('review queue: one press, one command', () => {
+  it('Run now, the queue and rules bulk bars and the test e-mail keep Idempotency-Key receipts', () => {
+    expect(COMMAND_SCOPE_ROUTES).toEqual(expect.arrayContaining(['/api/review-queue/run', '/api/review-queue/bulk', '/api/review-emails/test', '/api/review-rules/bulk']))
   })
 })

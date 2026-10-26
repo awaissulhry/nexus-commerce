@@ -29,7 +29,8 @@ describe('reviews navigation', () => {
     const rows = items('/w/business_a/marketing/reviews/desk')
     expect(rows.find(item => item.label === 'Inbox')).toMatchObject({ href: '/w/business_a/marketing/reviews/desk', active: true })
     expect(rows.find(item => item.label === 'Overview')?.href).toBe('/w/business_a/marketing/reviews')
-    expect(rows.find(item => item.label === 'Rules')?.href).toBe('/w/business_a/orders/reviews/rules')
+    expect(rows.find(item => item.label === 'Rules')?.href).toBe('/w/business_a/marketing/reviews/requests/rules')
+    expect(rows.find(item => item.label === 'Timing')?.href).toBe('/w/business_a/marketing/reviews/requests/timing')
     expect(rows.filter(item => item.active)).toHaveLength(1)
     expect(items('/marketing/reviews/desk').find(item => item.label === 'Inbox')?.href).toBe('/marketing/reviews/desk')
   })
@@ -38,7 +39,7 @@ describe('reviews navigation', () => {
     const onlyReviews = (permission: string) => permission === 'pages.reviews'
     const groups = nav.buildReviewsNavigation('/w/business_a/marketing/reviews', onlyReviews)
     const labels = groups.flatMap(group => group.items).map(item => item.label)
-    expect(labels).toEqual(['Overview', 'Inbox', 'Queue', 'Themes', 'Products', 'Alerts', 'Fixes', 'Brief'])
+    expect(labels).toEqual(['Overview', 'Inbox', 'Queue', 'Rules', 'Timing', 'Themes', 'Products', 'Alerts', 'Fixes', 'Brief'])
     expect(groups.every(group => group.items.length > 0)).toBe(true)
     expect(nav.buildReviewsNavigation('/marketing/reviews', () => false)).toEqual([])
     // A row with its own permission (the Settings row PR D adds) needs it as well as the page permission.
@@ -65,8 +66,9 @@ describe('reviews navigation', () => {
     expect(active('/marketing/reviews/actions')).toEqual(['Fixes'])
     expect(active('/marketing/reviews/spotlight')).toEqual(['Brief'])
     expect(active('/marketing/reviews/import')).toEqual(['Inbox'])
-    expect(active('/marketing/reviews/inserts')).toEqual(['Queue'])
-    expect(active('/marketing/reviews/requests/test/preview')).toEqual(['Queue'])
+    expect(active('/marketing/reviews/requests/rules')).toEqual(['Rules'])
+    expect(active('/marketing/reviews/requests/rules/new')).toEqual(['Rules'])
+    expect(active('/marketing/reviews/requests/rulesx')).toEqual(['Queue'])
     expect(active('/marketing/reviews/advanced')).toEqual(['Overview'])
   })
 

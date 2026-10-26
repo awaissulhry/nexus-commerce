@@ -1,7 +1,7 @@
 /**
  * Reviews › Requests — the addresses of the Requests pages themselves (Queue, Rules, one rule, Timing), all built in
- * this PR. The Requests pages link to each other through these. Links from OTHER areas still go through
- * `_lib/reviewsLinks.ts` (`requestsHref`, `ruleHref`), which the coordinator points here when this PR is folded.
+ * this PR. The Requests pages link to each other through these. Links from OTHER areas go through
+ * `_lib/reviewsLinks.ts` (`requestsHref`, `ruleHref`), which build on these.
  * Workspace-free: render them with `Link` from `@/lib/workspaces/Link`, which adds the business.
  */
 export const REQUESTS_PATH = '/marketing/reviews/requests'
