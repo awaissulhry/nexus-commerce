@@ -238,8 +238,8 @@ export function SpotlightClient({ initial }: { initial: Spotlight | null }) {
           </div>
 
           <div className="text-[11px] text-tertiary">
-            <Link href="/marketing/reviews/desk" className="text-blue-600 dark:text-blue-400 hover:underline">
-              Open the Response Desk
+            <Link href="/marketing/reviews/inbox" className="text-blue-600 dark:text-blue-400 hover:underline">
+              Open the Inbox
             </Link>{' '}
             to act on the negative reviews behind these themes.
           </div>

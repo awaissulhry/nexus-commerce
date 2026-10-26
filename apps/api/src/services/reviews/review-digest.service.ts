@@ -119,12 +119,12 @@ function renderDigestHtml(d: ReviewDigest): string {
   <p style="margin:0 0 4px"><strong>Waiting for you</strong></p>
   <ul style="margin:0 0 16px">
     <li><strong style="color:#be123c">${d.negativesAwaiting}</strong> negative reviews to answer</li>
-    <li><strong>${d.openDeskItems}</strong> open in the Response Desk</li>
+    <li><strong>${d.openDeskItems}</strong> open in the Inbox</li>
     <li><strong>${d.openSpikes}</strong> open spikes</li>
   </ul>
   <p style="margin:0 0 4px"><strong>Top complaint categories (24h)</strong></p>
   <ul style="margin:0 0 16px">${cats}</ul>
-  <a href="${WEB_URL}/marketing/reviews/desk" style="display:inline-block;background:#0f172a;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">Open the Response Desk →</a>
+  <a href="${WEB_URL}/marketing/reviews/inbox" style="display:inline-block;background:#0f172a;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">Open the Inbox →</a>
   </body></html>`
 }
 

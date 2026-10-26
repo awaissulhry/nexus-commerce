@@ -12,6 +12,7 @@ import {
   withQuery,
   type InsightsPage,
 } from './reviewsLinks'
+import { parseInboxQuery } from '../inbox/inboxQuery'
 
 const APP = fileURLToPath(new URL('../../..', import.meta.url))
 const WEB_ROOT = fileURLToPath(new URL('../../../../..', import.meta.url))
@@ -58,9 +59,17 @@ describe('reviews links', () => {
     for (const href of hrefs) expect(isPage(href), href).toBe(true)
   })
 
-  it('keeps only the channel and market for today’s pages, which read nothing else', () => {
-    expect(inboxHref({ channel: 'EBAY', market: 'DE', stars: [1, 2], period: '7d' })).toBe('/marketing/reviews/desk?channel=EBAY&market=DE')
-    expect(inboxHref({ import: 1, channel: 'EBAY' })).toBe('/marketing/reviews/import')
+  it('hands the Inbox every filter it reads; today’s other pages keep only the channel and market', () => {
+    expect(inboxHref()).toBe('/marketing/reviews/inbox')
+    expect(inboxHref({ channel: 'EBAY', market: 'DE', stars: [1, 2], period: '7d' })).toBe('/marketing/reviews/inbox?period=7d&channel=EBAY&market=DE&stars=1%2C2')
+    expect(inboxHref({ kind: 'seller', status: 'OVERDUE', theme: 'FIT_SIZING', family: 'fam-1' })).toBe('/marketing/reviews/inbox?kind=seller&status=OVERDUE&theme=FIT_SIZING&family=fam-1')
+    expect(inboxHref({ import: 1, channel: 'EBAY' })).toBe('/marketing/reviews/inbox?channel=EBAY&import=1')
+    expect(inboxHref({ import: true })).toBe('/marketing/reviews/inbox?import=1')
+    // One review's pop-up (the Overview's Needs you › Reply): the Inbox reads it back on load.
+    const reply = inboxHref({ channel: 'EBAY', market: 'IT', review: 'rev_1' })
+    expect(reply).toBe('/marketing/reviews/inbox?channel=EBAY&market=IT&review=rev_1')
+    expect(parseInboxQuery(reply.slice(reply.indexOf('?'))).review).toBe('rev_1')
+    expect(inboxHref({ review: null })).toBe('/marketing/reviews/inbox')
     expect(insightsHref('themes', { channel: 'AMAZON', sort: 'impact' })).toBe('/marketing/reviews/heatmap?channel=AMAZON')
     expect(insightsHref('products', { product: 'a b' })).toBe('/marketing/reviews/products/a%20b')
   })

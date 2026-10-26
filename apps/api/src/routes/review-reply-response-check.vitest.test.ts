@@ -51,7 +51,7 @@ describe('reply send: a responseId must be one of this review\'s drafts', () => 
     database = await formulaDatabase()
     await inside(async () => {
       for (const key of ['one', 'two']) {
-        await database.client.review.create({ data: { id: `test-review-${key}`, channel: 'EBAY', marketplace: 'IT', externalReviewId: `TEST-FB-${key}`, rating: 3, body: 'Fine', postedAt: new Date() } as never })
+        await database.client.review.create({ data: { id: `test-review-${key}`, channel: 'EBAY', marketplace: 'IT', externalReviewId: `TEST-FB-${key}`, authorName: `test-buyer-${key}`, rating: 3, body: 'Fine', postedAt: new Date() } as never })
         await database.client.reviewResponse.create({ data: { id: `test-draft-${key}`, reviewId: `test-review-${key}`, channel: 'EBAY', body: `Draft ${key}`, status: 'DRAFT' } as never })
       }
     })

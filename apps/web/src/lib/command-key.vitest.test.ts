@@ -265,6 +265,11 @@ describe('the API’s command receipts', () => {
       '/api/review-queue/bulk',
       '/api/review-queue/run',
       '/api/review-rules/bulk',
+      // Reviews Inbox (PR B) — Send reply, "Import N reviews" and a bulk change, through reviewsSend (_lib/reviewsFetch.ts),
+      // which keys them with sendCommand.
+      '/api/reviews/:id/reply/send',
+      '/api/reviews/import/apply',
+      '/api/reviews/inbox/bulk',
     ])
   })
 

@@ -96,7 +96,7 @@ describe('07 O13 — review request and reply: the routes answer exactly as befo
       await database.client.reviewRequest.create({ data: { orderId: 'test-order-retry', channel: 'AMAZON', marketplace: 'IT', status: 'FAILED', errorMessage: 'old failure' } as never })
       await order('shopify', { channel: 'SHOPIFY', channelOrderId: 'TEST-SHOP-1', marketplace: 'IT' })
       const review = (key: string, channelName: string) => database.client.review.create({
-        data: { id: `test-review-${key}`, channel: channelName, marketplace: 'IT', externalReviewId: `TEST-FB-${key}`, rating: 2, body: 'Too small', postedAt: daysAgo(3) } as never,
+        data: { id: `test-review-${key}`, channel: channelName, marketplace: 'IT', externalReviewId: `TEST-FB-${key}`, authorName: `test-buyer-${key}`, rating: 2, body: 'Too small', postedAt: daysAgo(3) } as never,
       })
       await review('ebay', 'EBAY')
       await review('ebay-fail', 'EBAY')

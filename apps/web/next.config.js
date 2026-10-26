@@ -329,6 +329,11 @@ const nextConfig = {
       // wins over the request's (Next merges the destination's query over the request's), so no stale filter rides along.
       { source: '/marketing/ads-console/rank', has: [{ type: 'query', key: 'mode' }], destination: '/marketing/ads/rules-automation/control-room?mode=', permanent: true },
       { source: '/marketing/ads-console/rank', destination: '/marketing/ads/rules-automation/control-room', permanent: true },
+
+      // ── Reviews PR B (2026-10-26) — one Inbox for reviews and seller feedback ──
+      // The Respond desk and the old Import page are retired: the Inbox answers, and its Import window opens from ?import=1.
+      { source: '/marketing/reviews/desk', destination: '/marketing/reviews/inbox', permanent: true },
+      { source: '/marketing/reviews/import', destination: '/marketing/reviews/inbox?import=1', permanent: true },
     ];
     // Config redirects run before the workspace rewrite. Keep legacy bookmarks
     // and routed tabs working with their original business context.

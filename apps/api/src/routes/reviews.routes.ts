@@ -9,10 +9,25 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *   PATCH /api/reviews/spikes/:id          acknowledge / resolve
  *   POST /api/reviews/cron/ingest/trigger          manual trigger
  *   POST /api/reviews/cron/spike-detector/trigger  manual trigger
+ *
+ * Reviews Inbox (2026-10-26, PR B) — logic in services/reviews/review-inbox*.ts and review-detail.service.ts:
+ *   GET   /api/reviews/inbox                   the list: filters, tab and tile counts, facets, read state
+ *   GET   /api/reviews/inbox/:id               one review with order, return, buyer history, timeline, reply rules
+ *   POST  /api/reviews/inbox/bulk              Assign · Tag · Set status · Draft with AI (≤ 200 ids, drafts ≤ 50)
+ *   PATCH /api/reviews/:id/sentiment           the person's mood/themes
+ *   POST  /api/reviews/:id/translate           language + English, kept on the review
+ *   POST  /api/reviews/import/:batchId/undo    removes one import's rows, keeps the ones a person worked on
+ * Every Review read in this file shows visible rows only (fixture rows never show): `visibleReviewWhere`.
  */
 
 import type { FastifyPluginAsync } from 'fastify'
+import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
+import { requestUserId } from '../lib/auth/request-permission.js'
+import { visibleReviewWhere } from '../services/reviews/review-visibility.js'
+import { listInbox, runInboxBulk } from '../services/reviews/review-inbox.service.js'
+import { validateInboxBulk } from '../services/reviews/review-inbox-query.js'
+import { editReviewSentiment, getInboxReview, translateReview } from '../services/reviews/review-detail.service.js'
 import { logger } from '../utils/logger.js'
 import { sendEmail } from '../services/email/transport.js'
 import { triageReview } from '../services/reviews/review-triage.service.js'
@@ -28,9 +43,13 @@ import { seedReviewTemplates } from '../services/reviews/review-templates.js'
 import {
   previewReviewImport,
   applyReviewImport,
+  undoReviewImport,
+  IMPORT_SOURCES,
   type CanonicalField,
+  type ImportFileKind,
+  type ImportSource,
 } from '../services/reviews/review-import.service.js'
-import { draftReviewReply } from '../services/reviews/review-reply.service.js'
+import { createReplyDraft } from '../services/reviews/review-reply.service.js'
 import { sendReviewDigestOnce } from '../services/reviews/review-digest.service.js'
 import { generateSpotlight, getLatestSpotlight } from '../services/reviews/review-spotlight.service.js'
 import { generateActionItemsForSpike } from '../services/reviews/review-actions.service.js'
@@ -95,7 +114,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const limit = Math.min(Number(q.limit) || 100, 500)
     const items = await prisma.review.findMany({
-      where,
+      where: visibleReviewWhere(where as Prisma.ReviewWhereInput),
       orderBy: { postedAt: 'desc' },
       take: limit,
       include: {
@@ -110,8 +129,8 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/reviews/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const review = await prisma.review.findUnique({
-      where: { id },
+    const review = await prisma.review.findFirst({
+      where: visibleReviewWhere({ id }),
       include: {
         sentiment: true,
         product: { select: { id: true, sku: true, name: true, productType: true } },
@@ -124,6 +143,62 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     return { review }
   })
 
+  // ── Reviews Inbox (PR B) ────────────────────────────────────────────
+  // GET /reviews/inbox — one page of the Inbox, newest first, with tab/tile counts, facets and read state.
+  fastify.get('/reviews/inbox', async (request, reply) => {
+    const page = await listInbox((request.query ?? {}) as Record<string, unknown>)
+    reply.header('Cache-Control', 'private, no-store')
+    return page
+  })
+
+  // GET /reviews/inbox/:id — the review pop-up.
+  fastify.get<{ Params: { id: string } }>('/reviews/inbox/:id', async (request, reply) => {
+    const detail = await getInboxReview(request.params.id)
+    if (!detail) {
+      reply.code(404)
+      return { error: 'not_found' }
+    }
+    reply.header('Cache-Control', 'private, no-store')
+    return detail
+  })
+
+  // POST /reviews/inbox/bulk { ids, action: assign|tag|status|draft, value? } → { changed, skipped: {id, reason}[] }
+  fastify.post('/reviews/inbox/bulk', async (request, reply) => {
+    const valid = validateInboxBulk(request.body)
+    if ('error' in valid) {
+      reply.code(400)
+      return { error: valid.error, message: valid.words }
+    }
+    return runInboxBulk(valid.request, requestUserId(request))
+  })
+
+  // PATCH /reviews/:id/sentiment { label?, categories? } — the person's mood and themes win over the AI's.
+  fastify.patch<{ Params: { id: string }; Body: { label?: unknown; categories?: unknown } }>(
+    '/reviews/:id/sentiment',
+    async (request, reply) => {
+      const result = await editReviewSentiment(request.params.id, request.body ?? {}, requestUserId(request))
+      if ('error' in result) {
+        reply.code(result.error === 'not_found' ? 404 : 400)
+        return { error: result.error, message: result.words }
+      }
+      return result
+    },
+  )
+
+  // POST /reviews/:id/translate → { language, english } (kept on the review; a second call reads it back).
+  fastify.post<{ Params: { id: string } }>('/reviews/:id/translate', async (request, reply) => {
+    const result = await translateReview(request.params.id)
+    if ('error' in result) {
+      if (result.error === 'not_found') {
+        reply.code(404)
+        return { error: 'not_found' }
+      }
+      reply.code(503)
+      return { error: 'translation_unavailable', message: 'Nexus could not translate this review now. Try again later.' }
+    }
+    return result
+  })
+
   // ── GET /reviews/summary ────────────────────────────────────────────
   fastify.get('/reviews/summary', async (request, reply) => {
     const q = request.query as { sinceDays?: string; marketplace?: string }
@@ -133,7 +208,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     if (q.marketplace) baseWhere.marketplace = q.marketplace
 
     const byLabel = await prisma.review.findMany({
-      where: { ...baseWhere, sentiment: { isNot: null } },
+      where: visibleReviewWhere({ ...baseWhere, sentiment: { isNot: null } }),
       select: { sentiment: { select: { label: true, categories: true } } },
     })
     const counts: Record<string, number> = { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 }
@@ -156,10 +231,10 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const [pendingExtract, openSpikes, totalReviews] = await Promise.all([
       prisma.review.count({
-        where: { ...baseWhere, sentiment: { is: null } },
+        where: visibleReviewWhere({ ...baseWhere, sentiment: { is: null } }),
       }),
       prisma.reviewSpike.count({ where: { status: 'OPEN' } }),
-      prisma.review.count({ where: baseWhere }),
+      prisma.review.count({ where: visibleReviewWhere(baseWhere) }),
     ])
 
     reply.header('Cache-Control', 'private, max-age=60')
@@ -190,7 +265,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     if (q.marketplace) where.marketplace = q.marketplace
 
     const rows = await prisma.review.findMany({
-      where,
+      where: visibleReviewWhere(where),
       select: { rating: true, postedAt: true },
       orderBy: { postedAt: 'asc' },
     })
@@ -312,16 +387,19 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── POST /reviews/import/preview (RX.1) ─────────────────────────────
-  // Parse a pasted/uploaded CSV/JSON/XLSX, auto-detect the column
+  // Parse a pasted/uploaded CSV/TSV/JSON/XLSX, auto-detect the column
   // mapping, validate + dedup-check — without writing anything.
+  // Inbox (PR B): `source` (amazon | shopify_app | etsy | other) sets the channel; e-mail/IP columns are never read.
   fastify.post<{
     Body: {
       text?: string
       bytesBase64?: string
-      fileKind?: 'csv' | 'json' | 'xlsx'
+      fileKind?: ImportFileKind
+      source?: ImportSource
       channel?: string
       marketplace?: string | null
       columnMapping?: Partial<Record<CanonicalField, string>>
+      includeUnlinked?: boolean
     }
   }>('/reviews/import/preview', async (request, reply) => {
     const b = request.body ?? {}
@@ -329,14 +407,20 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(400)
       return { error: 'no_input', message: 'Provide text or bytesBase64.' }
     }
+    if (b.source !== undefined && !IMPORT_SOURCES.includes(b.source)) {
+      reply.code(400)
+      return { error: 'invalid_source', message: 'Pick Amazon export, Shopify review app, Etsy or another file.' }
+    }
     try {
       const preview = await previewReviewImport({
         text: b.text,
         bytesBase64: b.bytesBase64,
         fileKind: b.fileKind,
+        source: b.source,
         channel: b.channel ?? 'AMAZON',
         marketplace: b.marketplace ?? null,
         columnMapping: b.columnMapping,
+        includeUnlinked: b.includeUnlinked,
       })
       return { ok: true, preview }
     } catch (err) {
@@ -347,15 +431,18 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── POST /reviews/import/apply (RX.1) ───────────────────────────────
   // Ingest the validated rows through the shared sentiment pipeline.
+  // Inbox (PR B): the result carries `batchId` — POST /reviews/import/:batchId/undo removes this import again.
   fastify.post<{
     Body: {
       text?: string
       bytesBase64?: string
-      fileKind?: 'csv' | 'json' | 'xlsx'
+      fileKind?: ImportFileKind
+      source?: ImportSource
       channel?: string
       marketplace?: string | null
       columnMapping?: Partial<Record<CanonicalField, string>>
       force?: boolean
+      includeUnlinked?: boolean
     }
   }>('/reviews/import/apply', async (request, reply) => {
     const b = request.body ?? {}
@@ -363,21 +450,38 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(400)
       return { error: 'no_input', message: 'Provide text or bytesBase64.' }
     }
+    if (b.source !== undefined && !IMPORT_SOURCES.includes(b.source)) {
+      reply.code(400)
+      return { error: 'invalid_source', message: 'Pick Amazon export, Shopify review app, Etsy or another file.' }
+    }
     try {
       const result = await applyReviewImport({
         text: b.text,
         bytesBase64: b.bytesBase64,
         fileKind: b.fileKind,
+        source: b.source,
         channel: b.channel ?? 'AMAZON',
         marketplace: b.marketplace ?? null,
         columnMapping: b.columnMapping,
         force: b.force,
+        includeUnlinked: b.includeUnlinked,
       })
-      return { ok: true, result }
+      return { ok: true, result, batchId: result.batchId }
     } catch (err) {
       reply.code(400)
       return { error: 'import_failed', message: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  // ── POST /reviews/import/:batchId/undo (Inbox, PR B) ────────────────
+  // Removes the rows one import created; keeps (and names) the ones a person already worked on.
+  fastify.post<{ Params: { batchId: string } }>('/reviews/import/:batchId/undo', async (request, reply) => {
+    const result = await undoReviewImport(request.params.batchId)
+    if ('error' in result) {
+      reply.code(404)
+      return { error: 'not_found', message: 'Nothing from this import is left to undo.' }
+    }
+    return result
   })
 
   // ── GET /reviews/events (RX.3) — SSE live stream ────────────────────
@@ -434,7 +538,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     if (q.marketplace) base.marketplace = q.marketplace
     const grouped = await prisma.review.groupBy({
       by: ['triageStatus'],
-      where: base,
+      where: visibleReviewWhere(base),
       _count: { _all: true },
     })
     const counts: Record<string, number> = {
@@ -486,30 +590,14 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
   }>('/reviews/:id/reply/draft', async (request, reply) => {
     const { id } = request.params
     const b = request.body ?? {}
-    const review = await prisma.review.findUnique({ where: { id }, select: { id: true, channel: true } })
-    if (!review) {
-      reply.code(404)
-      return { error: 'not_found' }
-    }
     try {
-      const draft = await draftReviewReply({
-        reviewId: id,
-        locale: b.locale,
-        tone: (b.tone as 'auto' | 'apologetic' | 'appreciative' | 'neutral') ?? 'auto',
-        instructions: b.instructions,
-      })
-      const row = await prisma.reviewResponse.create({
-        data: {
-          reviewId: id,
-          channel: review.channel,
-          locale: draft.locale,
-          body: draft.text,
-          status: 'DRAFT',
-          isAiDrafted: draft.usedAi,
-          model: draft.model,
-        },
-      })
-      return { ok: true, response: row, usedAi: draft.usedAi, tone: draft.tone }
+      // Inbox (PR B): the draft is in the buyer's language; `englishText` is the same reply in English for the team.
+      const draft = await createReplyDraft(id, { locale: b.locale, tone: b.tone, instructions: b.instructions })
+      if ('error' in draft) {
+        reply.code(404)
+        return { error: 'not_found' }
+      }
+      return { ok: true, response: draft.response, usedAi: draft.usedAi, tone: draft.tone, englishText: draft.englishText }
     } catch (err) {
       reply.code(500)
       return { error: 'draft_failed', message: err instanceof Error ? err.message : String(err) }
@@ -656,7 +744,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     if (q.marketplace) where.marketplace = q.marketplace
 
     const reviews = await prisma.review.findMany({
-      where,
+      where: visibleReviewWhere(where),
       select: {
         productId: true,
         marketplace: true,
@@ -806,7 +894,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const recent = await prisma.review.findMany({
-      where: { productId, postedAt: { gte: since }, ...(q.marketplace ? { marketplace: q.marketplace } : {}) },
+      where: visibleReviewWhere({ productId, postedAt: { gte: since }, ...(q.marketplace ? { marketplace: q.marketplace } : {}) }),
       orderBy: { postedAt: 'desc' },
       take: 30,
       include: { sentiment: true },
@@ -1740,9 +1828,9 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     if (marketplace) rw.marketplace = marketplace
     const since = new Date(Date.now() - 90 * 86_400_000)
     const [ratingRows, recent, total] = await Promise.all([
-      prisma.review.findMany({ where: { ...rw, rating: { not: null }, postedAt: { gte: since } }, select: { rating: true, postedAt: true }, orderBy: { postedAt: 'asc' } }),
-      prisma.review.findMany({ where: rw, orderBy: { postedAt: 'desc' }, take: 20, include: { sentiment: true, product: { select: { id: true, sku: true, name: true } } } }),
-      prisma.review.count({ where: rw }),
+      prisma.review.findMany({ where: visibleReviewWhere({ ...rw, rating: { not: null }, postedAt: { gte: since } }), select: { rating: true, postedAt: true }, orderBy: { postedAt: 'asc' } }),
+      prisma.review.findMany({ where: visibleReviewWhere(rw), orderBy: { postedAt: 'desc' }, take: 20, include: { sentiment: true, product: { select: { id: true, sku: true, name: true } } } }),
+      prisma.review.count({ where: visibleReviewWhere(rw) }),
     ])
     const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
     let sum = 0, count = 0

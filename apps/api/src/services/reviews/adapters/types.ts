@@ -22,6 +22,8 @@ export interface AdapterRawReview {
   helpfulVotes?: number
   postedAt: string // ISO
   rawPayload?: unknown
+  /** Reviews Inbox — the Nexus Order this review is about, when the adapter can match it (eBay feedback). */
+  orderId?: string
 }
 
 export interface AdapterResult {

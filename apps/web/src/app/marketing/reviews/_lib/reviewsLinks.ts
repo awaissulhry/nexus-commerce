@@ -44,15 +44,17 @@ export interface InboxLinkParams {
   family?: string | null
   /** Open the Import window. */
   import?: boolean | 1 | null
+  /** Open this review's pop-up (the Inbox reads `?review=<id>` once on load). */
+  review?: string | null
 }
 
 /**
- * The Inbox. New: `/marketing/reviews/inbox` with every filter (PR B). Today: the Respond page, which reads only the
- * channel and market; Import is its own page.
+ * The Inbox, `/marketing/reviews/inbox`, with every filter it reads (inbox/inboxQuery.ts), the Import window and one
+ * review's pop-up.
  */
 export function inboxHref(params: InboxLinkParams = {}): string {
-  if (params.import) return '/marketing/reviews/import'
-  return withQuery('/marketing/reviews/desk', scopeOnly(params))
+  const { kind, period, status, channel, market, stars, theme, family, review } = params
+  return withQuery('/marketing/reviews/inbox', { kind, period, status, channel, market, stars, theme, family, import: params.import ? 1 : null, review })
 }
 
 export interface RequestsLinkParams {

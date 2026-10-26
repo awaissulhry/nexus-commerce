@@ -61,7 +61,7 @@ describe('channel table', () => {
     expect(rows[0]).toMatchObject({ label: 'Amazon Italy', noAmazonData: false, reviews: '46', sent: '372', sentNote: null, rate: '8.9%', last: '24 Oct' })
     expect(rows[1]).toMatchObject({ noAmazonData: true, reviews: '—', rate: '—' })
     expect(rows[2]).toMatchObject({ ratingKind: 'positive', sentNote: 'by email' })
-    expect(rows[0].href).toBe('/marketing/reviews/desk?channel=AMAZON&market=IT')
+    expect(rows[0].href).toBe('/marketing/reviews/inbox?channel=AMAZON&market=IT')
   })
 
   it('Etsy is a labelled placeholder with sample numbers and a dash for requests (Etsy asks buyers itself)', () => {
@@ -120,7 +120,9 @@ describe('needs you', () => {
   })
 
   it('each action opens a page that exists today (through the one link module)', () => {
-    expect(needsActionHref(item({}).action)).toBe('/marketing/reviews/desk?channel=EBAY&market=IT')
+    // Reply opens that review in the Inbox.
+    expect(needsActionHref(item({}).action)).toBe('/marketing/reviews/inbox?channel=EBAY&market=IT&review=r1')
+    expect(needsActionHref({ label: 'Open Inbox', page: 'inbox', params: { id: 'r1', channel: 'EBAY' } })).toBe('/marketing/reviews/inbox?channel=EBAY')
     expect(needsActionHref({ label: 'See alert', page: 'alerts', params: { market: 'DE' } })).toBe('/marketing/reviews/spikes?market=DE')
     expect(needsActionHref({ label: 'See requests', page: 'requests', params: { status: 'FAILED' } })).toBe('/marketing/reviews/requests?status=FAILED')
   })
@@ -139,7 +141,7 @@ describe('themes, stars and the header', () => {
     expect(themeCountWords(theme)).toBe('41% of negative reviews · 88 mentions · −0.6 stars')
     expect(themeCountWords({ ...theme, share: null, mentions: 1, impact: null })).toBe('1 mention')
     expect(themeCountWords({ ...theme, shareOf: 'amazon', source: 'amazon_topic', share: 12, impact: 0.05 })).toBe('12% of Amazon reviews · 88 mentions')
-    expect(themeHref(theme, '30d')).toBe('/marketing/reviews/desk')
+    expect(themeHref(theme, '30d')).toBe('/marketing/reviews/inbox?period=30d&theme=FIT_SIZING')
     expect(themeHref({ ...theme, source: 'amazon_topic', market: 'DE' }, '30d')).toBe('/marketing/reviews/heatmap?channel=AMAZON&market=DE')
   })
 

@@ -24,3 +24,32 @@ export async function triageReview(id: string, b: TriageInput) {
   const review = await prisma.review.update({ where: { id }, data })
   return { review }
 }
+
+/**
+ * Reviews Inbox bulk bar — Assign, Tag or Set status on the rows `planInboxBulk` kept (already checked: visible, and
+ * the action changes them). Returns how many rows changed. A tag is added to each row's own tags.
+ */
+export async function applyBulkTriage(
+  action: 'assign' | 'tag' | 'status',
+  value: string | null,
+  rows: { id: string; triageTags: string[] }[],
+): Promise<number> {
+  if (rows.length === 0) return 0
+  const triageUpdatedAt = new Date()
+  const ids = rows.map((r) => r.id)
+  if (action === 'assign') {
+    return (await prisma.review.updateMany({ where: { id: { in: ids } }, data: { assignee: value, triageUpdatedAt } })).count
+  }
+  if (action === 'status') {
+    if (!value || !(TRIAGE_STATUSES as readonly string[]).includes(value)) return 0
+    return (await prisma.review.updateMany({ where: { id: { in: ids } }, data: { triageStatus: value, triageUpdatedAt } })).count
+  }
+  if (!value) return 0
+  let changed = 0
+  for (const row of rows) {
+    if (row.triageTags.includes(value)) continue
+    await prisma.review.update({ where: { id: row.id }, data: { triageTags: [...row.triageTags, value], triageUpdatedAt } })
+    changed += 1
+  }
+  return changed
+}

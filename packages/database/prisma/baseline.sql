@@ -5978,6 +5978,10 @@ CREATE TABLE "Review" (
     "ingestedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "rawPayload" JSONB,
     "ingestSource" TEXT,
+    "orderId" TEXT,
+    "language" TEXT,
+    "bodyEnglish" TEXT,
+    "importBatchId" TEXT,
     "triageStatus" TEXT,
     "assignee" TEXT,
     "triageTags" TEXT[] DEFAULT ARRAY[]::TEXT[],
@@ -6065,6 +6069,8 @@ CREATE TABLE "ReviewSentiment" (
     "cacheWriteTokens" INTEGER NOT NULL DEFAULT 0,
     "costUSD" DECIMAL(10,6) NOT NULL DEFAULT 0,
     "extractedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "editedBy" TEXT,
+    "editedAt" TIMESTAMP(3),
 
     CONSTRAINT "ReviewSentiment_pkey" PRIMARY KEY ("id")
 );
@@ -14806,6 +14812,12 @@ CREATE INDEX "Review_triageStatus_idx" ON "Review"("triageStatus");
 
 -- CreateIndex
 CREATE INDEX "Review_assignee_idx" ON "Review"("assignee");
+
+-- CreateIndex
+CREATE INDEX "Review_orderId_idx" ON "Review"("orderId");
+
+-- CreateIndex
+CREATE INDEX "Review_importBatchId_idx" ON "Review"("importBatchId");
 
 -- CreateIndex
 CREATE INDEX "Review_workspaceId_idx" ON "Review"("workspaceId");
