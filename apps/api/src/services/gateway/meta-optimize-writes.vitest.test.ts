@@ -275,6 +275,12 @@ describe('Page video tests', () => {
     const noToken = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'ab_tests', params: video, check: false }).catch((e) => e)
     expect(noToken).toMatchObject({ code: 'META_ACCOUNT_UNCONFIRMED', message: expect.stringMatching(/^Nothing was sent to Meta: inside this change, Nexus could not read video 120000000000071, which it reads with the chosen Facebook Page's own token \(.*Meta gave Nexus no token for the business's chosen Facebook Page/) })
     expect(noToken.message).not.toMatch(/is not one the chosen Page posted/)
+    // ... and Meta refusing the Page-token read: Meta's own words (re-review mutation M14).
+    h.calls = []
+    h.answers.push(pageToken(), json({ error: { message: '(#10) This endpoint requires the pages_read_engagement permission', type: 'OAuthException', code: 10 } }, 400))
+    const refusedRead = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'ab_tests', params: video, check: false }).catch((e) => e)
+    expect(refusedRead).toMatchObject({ code: 'META_ACCOUNT_UNCONFIRMED', message: expect.stringMatching(/^Nothing was sent to Meta: inside this change, Nexus could not read video 120000000000071, which it reads with the chosen Facebook Page's own token \(.*\(#10\) This endpoint requires the pages_read_engagement permission/) })
+    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET'])
     h.calls = []
     h.answers.push(json({ id: '120000000000081', control_video_id: '120000000000071', optimization_goal: 'REELS_PLAYS' }), json({ id: PAGE }))
     expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000081', objectKind: 'pagevideotest', params: {}, check: false, method: 'DELETE' }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_UNCONFIRMED', message: expect.stringMatching(/Nexus could not read the control video of 120000000000081, which it reads with the chosen Facebook Page's own token \(.*Meta gave Nexus no token/) })

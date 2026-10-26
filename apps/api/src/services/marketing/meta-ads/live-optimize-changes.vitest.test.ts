@@ -21,7 +21,8 @@ vi.mock('./read-client.js', () => ({
   }),
 }))
 
-import { liveNewCopies, liveOpenStudies, liveStudy, studyForeignProblem, type LiveStudy } from './live-optimize-changes.js'
+import { liveNewCopies, liveOpenStudies, livePageVideo, liveStudy, studyForeignProblem, type LiveStudy } from './live-optimize-changes.js'
+import { metaPageReadOf } from '../../gateway/meta-page-reads.js'
 import type { MetaChosenAccount } from './live.js'
 
 const T = { connectionId: 'm-1', adAccountId: '1234567890' }
@@ -115,5 +116,17 @@ describe('studyForeignProblem (review A8)', () => {
     expect(h.reads[0]).toMatchObject({ path: 'act_1234567890', query: { fields: 'business{id}' } })
     expect(await studyForeignProblem(account, study({ cells: [{ id: '1', name: 'A', treatment: 50, control: 10, adAccounts: ['5555555555'], campaigns: [], adSets: [], ads: [] }] }))).toMatch(/another ad account/)
     expect(await studyForeignProblem(account, study())).toBeNull()
+  })
+})
+
+describe('gap 46b (re-review) — a Page video as a video test and a thumbnail read it', () => {
+  it('one read of its exact list, the gateway\'s own Page-token read; another Page\'s video is refused', async () => {
+    h.reads = []
+    h.answer = (path) => ({ id: path, title: 'Clip A', published: true, from: { id: '120000000000010' } })
+    expect(await livePageVideo({ connectionId: 'm-1', adAccountId: '1234567890' }, '120000000000010', '120000000000731')).toEqual({ id: '120000000000731', title: 'Clip A', published: true })
+    expect(h.reads).toEqual([{ path: '120000000000731', query: { fields: 'id,title,published,from{id}' } }])
+    expect(metaPageReadOf('120000000000731', ['120000000000731'], new URLSearchParams({ fields: 'id,title,published,from{id}' }), undefined)).toEqual({ pageId: null })
+    h.answer = (path) => ({ id: path, title: 'Clip B', published: true, from: { id: '120000000000099' } })
+    expect(await livePageVideo({ connectionId: 'm-1', adAccountId: '1234567890' }, '120000000000010', '120000000000732')).toEqual({ refusal: 'Video 120000000000732 is not one the chosen Facebook Page posted.' })
   })
 })

@@ -333,7 +333,8 @@ describe('gap 46b, the live read of 2026-10-26 — a post of the chosen Page and
       expect(verdict(`500000000000003?${f(fields)}`), fields).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: null } })
     }
     for (const query of [f('id'), f('from{id}'), f('id,from{id},length'), f('id,owner,username'), f('id,from{id},id'), f('id,from{id,name}'), f('id,from{id}.as(x)'), `${f('id,from{id}')}&limit=5`, f('id,from{id},width'), f('id,title,from{id}')]) {
-      expect(verdict(`500000000000003?${query}`).pageRead, query).toBeUndefined()
+      // Ordinary: no Page-token read AND no refusal (re-review mutation M12/M13 — an off-list read is never refused here).
+      expect(verdict(`500000000000003?${query}`), query).toEqual({ problem: null, renewalClientId: null })
     }
     expect(verdict(`500000000000003?${f('id,from{id}')}`, 'page').problem).toMatch(/a caller asks for no token/)
   })
