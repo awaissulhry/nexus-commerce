@@ -118,6 +118,18 @@ describe('runReviewMailerOnce', () => {
     expect(a2.attemptCount).toBeUndefined()
   })
 
+  it('email sending switched off: our email requests are SKIPPED in words, never SENT', async () => {
+    db.reviewRequest.findMany.mockResolvedValue([due('e1', 'EBAY', 'IT', 12), due('s1', 'SHOPIFY', null, 12)])
+    spies.sendReviewRequestEmail.mockResolvedValue({ ok: true, dryRun: true })
+    const result = await runReviewMailerOnce({ onlyIds: ['e1', 's1'] })
+    expect(result).toMatchObject({ sent: 0, skipped: 2 })
+    for (const id of ['e1', 's1']) {
+      const data = db.reviewRequest.update.mock.calls.find(([arg]) => arg.where.id === id)![0].data
+      expect(data).toMatchObject({ status: 'SKIPPED', providerResponseCode: 'EMAIL_OFF', suppressedReason: 'Email sending is off' })
+      expect(data.sentAt).toBeUndefined()
+    }
+  })
+
   it('paused: nothing is read or sent, also with onlyIds', async () => {
     spies.readReviewMailerState.mockResolvedValue({ isPaused: true, pausedReason: 'checking a rule', pausedAt: new Date(), pausedBy: 'user-1' })
     const result = await runReviewMailerOnce({ onlyIds: ['r1'] })
