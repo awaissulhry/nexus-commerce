@@ -42,7 +42,7 @@ export async function sendReviewReply(id: string, b: ReplyBody): Promise<RouteAn
   const reply = new AnswerReply()
   const review = await prisma.review.findUnique({
     where: { id },
-    select: { id: true, channel: true, externalReviewId: true, marketplace: true, postedAt: true, ingestSource: true, rawPayload: true },
+    select: { id: true, channel: true, externalReviewId: true, marketplace: true, postedAt: true, ingestSource: true, rawPayload: true, authorName: true },
   })
   if (!review) return reply.code(404).send({ error: 'not_found' })
   const text = (b.body ?? '').trim()
@@ -61,6 +61,7 @@ export async function sendReviewReply(id: string, b: ReplyBody): Promise<RouteAn
     postedAt: review.postedAt,
     imported: (review.ingestSource ?? '').toUpperCase().startsWith('IMPORT'),
     replied: sent > 0 || repliedOnChannel(review.channel, review.rawPayload),
+    buyerId: review.authorName,
   })
   const refusal = replyRefusal(rules, text)
   if (refusal) return reply.code(refusal.code === 'too_long' || refusal.code === 'empty_body' ? 400 : 409).send({ error: refusal.code, message: refusal.words })
@@ -72,7 +73,7 @@ export async function sendReviewReply(id: string, b: ReplyBody): Promise<RouteAn
   if (rules.mode === 'send' && review.channel === 'EBAY') {
     // Loaded here: the adapter builds the eBay auth service when imported, and the tool registry imports this file.
     const { respondToEbayFeedback } = await import('./adapters/ebay-feedback.adapter.js')
-    const res = await respondToEbayFeedback(review.externalReviewId, text)
+    const res = await respondToEbayFeedback(review.externalReviewId, text, review.authorName ?? '')
     ok = res.ok
     code = res.code
     errorMessage = res.error ?? null

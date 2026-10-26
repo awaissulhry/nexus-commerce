@@ -180,6 +180,7 @@ const REASON_WHERE: Record<Exclude<ReasonKey, 'not_asked_other'>, (now: Date) =>
   skipped_by_hand: () => ({ ...NOT_ASKED, providerResponseCode: 'SKIPPED_BY_HAND' }),
   already_asked: () => ({ ...NOT_ASKED, providerResponseCode: 'ALREADY_SOLICITED' }),
   amazon_off: () => ({ ...NOT_ASKED, providerResponseCode: 'NOT_IMPLEMENTED' }),
+  email_off: () => ({ ...NOT_ASKED, providerResponseCode: 'EMAIL_OFF' }),
   unknown_market: () => ({ ...NOT_ASKED, providerResponseCode: 'UNKNOWN_MARKETPLACE' }),
   window_closed: () => ({ OR: [{ ...NOT_ASKED, providerResponseCode: 'OUTSIDE_WINDOW' }, notAskedBy({ NOT: { suppressedReason: { startsWith: RULE_EXCLUSION_PREFIX } } }, sr('outside'), { OR: [sr('window'), sr('4-30'), sr('4–30')] })] }),
   do_not_email: () => ({ ...NOT_ASKED, providerResponseCode: 'SUPPRESSED' }),

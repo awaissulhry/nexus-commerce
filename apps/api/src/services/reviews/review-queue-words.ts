@@ -64,6 +64,7 @@ export const CODE_REASON: Record<string, ReasonKey> = {
   SKIPPED_BY_HAND: 'skipped_by_hand',
   ALREADY_SOLICITED: 'already_asked',
   NOT_IMPLEMENTED: 'amazon_off',
+  EMAIL_OFF: 'email_off',
   UNKNOWN_MARKETPLACE: 'unknown_market',
   OUTSIDE_WINDOW: 'window_closed',
   SUPPRESSED: 'do_not_email',
@@ -88,7 +89,7 @@ export type ReasonKey =
   // sent
   | 'sent_amazon' | 'sent_email'
   // not asked
-  | 'skipped_by_hand' | 'already_asked' | 'amazon_off' | 'unknown_market' | 'window_closed' | 'do_not_email' | 'unhappy_check'
+  | 'skipped_by_hand' | 'already_asked' | 'amazon_off' | 'email_off' | 'unknown_market' | 'window_closed' | 'do_not_email' | 'unhappy_check'
   | 'no_check_answer' | 'refunded' | 'return_open' | 'cancelled' | 'asked_recently' | 'rule_skips' | 'not_delivered'
   | 'no_order_number' | 'no_email' | 'no_request_call' | 'not_asked_other'
 
@@ -110,6 +111,7 @@ export const REASON_FACET_WORDS: Record<ReasonKey, string> = {
   skipped_by_hand: 'Skipped by a person',
   already_asked: 'Amazon: already asked for this order',
   amazon_off: 'Sending to Amazon is switched off',
+  email_off: 'Our email sending is switched off',
   unknown_market: 'Unknown Amazon market',
   window_closed: 'Past Amazon’s day 30 — too late to ask',
   do_not_email: 'Buyer is on the do-not-email list',
@@ -222,6 +224,7 @@ function reasonWords(key: ReasonKey, r: RequestFacts): string {
     case 'skipped_by_hand': return 'Skipped by a person'
     case 'already_asked': return 'Amazon: already asked for this order'
     case 'amazon_off': return 'Sending to Amazon is switched off on this server — nothing was sent'
+    case 'email_off': return 'Not sent — our email sending is switched off on this server'
     case 'unknown_market': return 'Nexus does not know this order’s Amazon market'
     case 'window_closed': return 'Past Amazon’s day 30 — too late to ask'
     case 'do_not_email': return doNotEmailWords(r.suppressedReason)

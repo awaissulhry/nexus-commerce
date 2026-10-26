@@ -28,7 +28,7 @@ export const OPEN_REVIEW_STATUSES = ['NEW', 'IN_PROGRESS'] as const
 const DAY_MS = 24 * 60 * 60 * 1000
 
 export type ReplyMode = 'send' | 'copy'
-export type ReplyHeldCode = 'already_replied' | 'window_closed'
+export type ReplyHeldCode = 'already_replied' | 'window_closed' | 'buyer_unknown'
 
 /** What the rules need to know about one review. */
 export interface ReplyRulesReview {
@@ -40,6 +40,11 @@ export interface ReplyRulesReview {
   imported?: boolean
   /** A reply already went out (sent by Nexus, marked as responded, or seen on the channel). */
   replied?: boolean
+  /**
+   * The buyer's user ID on the channel (eBay's CommentingUser). eBay's RespondToFeedback needs it as TargetUserID; when a
+   * caller passes it and it is empty, an eBay reply is held. Callers that do not know it leave it out.
+   */
+  buyerId?: string | null
 }
 
 export interface ReplyWindow {
@@ -187,6 +192,9 @@ export function reviewReplyRules(channel: string, review: ReplyRulesReview = {},
     return { ...rules, held: `This ${noun} already has a reply. ${name} allows one reply per ${noun}.`, heldCode: 'already_replied' }
   }
   if (rules.window?.closed) return { ...rules, held: rules.window.words, heldCode: 'window_closed' }
+  if (c === 'EBAY' && rules.mode === 'send' && 'buyerId' in review && !(review.buyerId ?? '').trim()) {
+    return { ...rules, held: 'eBay needs the buyer’s eBay user ID to post this reply, and this feedback has none. Reply in eBay Seller Hub instead.', heldCode: 'buyer_unknown' }
+  }
   return rules
 }
 
