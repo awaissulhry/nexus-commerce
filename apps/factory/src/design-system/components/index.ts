@@ -115,3 +115,8 @@ export { Sparkline, type SparklineProps } from './Sparkline'
 export { sparkGeometry, sparkSummary, sparkWords, SPARK_BOX, type SparkShape, type SparkValue, type SparkBox, type SparkGeometry } from './sparklineModel'
 export { EntityLinks, type EntityLinksProps, type EntityLinkComponent } from './EntityLinks'
 export { entityLinksView, entityLinksText, entityCountWords, compareEntityLinks, type EntityRef, type EntityNoun, type EntityLinksView } from './entityLinksModel'
+// Reviews parts (2026-10-26) — stars for a rating (read or pick), and how ratings spread over 5…1 stars as filter bars.
+export { StarRating, type StarRatingProps } from './StarRating'
+export { starFills, starWords, ratingCountWords, starChoiceWords, clampRating, starInputValue, starTabStop, starKeyTarget, type StarFill } from './starRatingModel'
+export { RatingBars, type RatingBarsProps } from './RatingBars'
+export { ratingBarRows, ratingPercents, ratingTotal, nextRatingFilter, defaultZeroReason, type RatingBarRow, type RatingCounts, type RatingStars } from './ratingBarsModel'

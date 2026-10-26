@@ -3621,3 +3621,59 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-entitylinks-list > li { display: flex; min-width: 0; min-height: 24px; align-items: center; }
 /* A capped list (`total`, polish round 2): what the count holds beyond the links, muted, last. */
 .nds-entitylinks-list > li.nds-entitylinks-more { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+
+/* ── Reviews parts (2026-10-26) ──────────────────────────────────── */
+/* StarRating (components/StarRating.tsx). An empty star's outline is --nds-border-strong (1.7:1), so it never carries the
+   value alone: the value is the group's name. --nds-warning is 4.79:1 on white, 3.19:1 on the dark surface. The input
+   mode's outline is the icon tier (--nds-text-3), 3:1 as a control's edge must be. */
+.nds-stars { display: inline-flex; align-items: center; gap: var(--nds-space-6); line-height: 1; --nds-star-size: 16px; --nds-star-gap: var(--nds-space-2); }
+.nds-stars.sm { --nds-star-size: 12px; --nds-star-gap: var(--nds-space-1); gap: var(--nds-space-4); }
+.nds-stars.lg { --nds-star-size: 20px; }
+.nds-stars-row { display: inline-flex; align-items: center; gap: var(--nds-star-gap); }
+.nds-star { position: relative; display: inline-flex; flex: none; width: var(--nds-star-size); height: var(--nds-star-size); }
+.nds-star > svg { display: block; width: 100%; height: 100%; }
+.nds-star > .off { color: var(--nds-border-strong); fill: none; }
+.nds-star > .on { position: absolute; inset: 0; color: var(--nds-warning); fill: currentColor; }
+.nds-star.half > .on { clip-path: inset(0 50% 0 0); }
+.nds-star.half > .on:dir(rtl) { clip-path: inset(0 0 0 50%); }
+.nds-star.empty > .on { display: none; }
+.nds-stars-count { font-size: var(--nds-font-size-sm); font-weight: 500; color: var(--nds-text-muted); font-variant-numeric: tabular-nums; }
+.nds-stars.sm .nds-stars-count { font-size: var(--nds-font-size-xs); }
+.nds-stars-input { display: inline-flex; gap: 0; }
+.nds-stars-input > button { display: inline-flex; align-items: center; justify-content: center; width: calc(var(--nds-star-size) + 8px); height: calc(var(--nds-star-size) + 8px); padding: 0; border: 0; border-radius: var(--nds-radius-sm); background: none; cursor: pointer; }
+.nds-stars-input > button:hover { background: var(--nds-surface-hover); }
+.nds-stars-input > button:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
+.nds-stars-input .nds-star > .off { color: var(--nds-text-3); }
+@media (forced-colors: active) { .nds-star > .on { color: CanvasText; } .nds-star > .off { color: GrayText; } }
+
+/* RatingBars (components/RatingBars.tsx): a bar per star, 5 first; the track is .nds-progress. A bar with no ratings is
+   held (aria-disabled + a reason), never disabled. */
+.nds-ratingbars { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.nds-ratingbars > .nds-tooltip { display: flex; width: 100%; min-width: 0; }
+.nds-ratingbars-row { display: grid; grid-template-columns: 26px minmax(40px, 1fr) 32px 34px; align-items: center; column-gap: var(--nds-space-8);
+  width: 100%; height: 22px; margin: 0; padding: 0 var(--nds-space-6); border: 1px solid transparent; border-radius: var(--nds-radius-md);
+  background: none; font: inherit; font-size: var(--nds-font-size-sm); line-height: 1; color: var(--nds-text); text-align: left; cursor: pointer; }
+.nds-ratingbars-row.static { cursor: default; }
+.nds-ratingbars-row:not(.static):hover:not([aria-disabled="true"]) { background: var(--nds-surface-hover); }
+.nds-ratingbars-row:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
+.nds-ratingbars-row[aria-pressed="true"] { background: var(--nds-tonal-bg); border-color: var(--nds-tonal-border); }
+.nds-ratingbars-row[aria-pressed="true"] .nds-ratingbars-star { color: var(--nds-tonal-fg); font-weight: 700; }
+.nds-ratingbars-row[aria-disabled="true"] { opacity: .62; cursor: default; }
+.nds-ratingbars-star { display: inline-flex; align-items: center; gap: var(--nds-space-3); font-weight: 600; color: var(--nds-text-2); font-variant-numeric: tabular-nums; }
+.nds-ratingbars-star > svg { flex: none; width: 10px; height: 10px; color: var(--nds-warning); fill: currentColor; }
+.nds-ratingbars-row .nds-progress { height: 8px; }
+.nds-ratingbars-row .nds-progress > .bar { background: var(--nds-warning); }
+.nds-ratingbars-count, .nds-ratingbars-pct { text-align: right; font-variant-numeric: tabular-nums; }
+.nds-ratingbars-count { font-weight: 600; color: var(--nds-text-2); }
+.nds-ratingbars-pct { color: var(--nds-text-muted); }
+.nds-ratingbars.compact { gap: var(--nds-space-1); }
+.nds-ratingbars.compact .nds-ratingbars-row { height: 18px; grid-template-columns: 22px minmax(32px, 1fr) 28px 30px; padding-inline: var(--nds-space-4); font-size: var(--nds-font-size-xs); }
+.nds-ratingbars.compact .nds-ratingbars-star > svg { width: 9px; height: 9px; }
+.nds-ratingbars.compact .nds-progress { height: 6px; }
+.nds-ratingbars-empty { display: flex; align-items: center; gap: var(--nds-space-10); padding: var(--nds-space-12); border: 1px dashed var(--nds-border); border-radius: var(--nds-radius-lg); background: var(--nds-surface-raised); }
+.nds-ratingbars.compact .nds-ratingbars-empty { padding: var(--nds-space-6) var(--nds-space-8); }
+.nds-ratingbars-empty > svg { flex: none; color: var(--nds-text-3); }
+.nds-ratingbars-empty-text { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.nds-ratingbars-empty-text > .t { font-size: var(--nds-font-size-base); font-weight: 600; color: var(--nds-text); }
+.nds-ratingbars-empty-text > .d { font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+@media (forced-colors: active) { .nds-ratingbars-row .nds-progress > .bar { background: CanvasText; } }
