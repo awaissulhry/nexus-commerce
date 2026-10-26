@@ -64,3 +64,9 @@ export {
   detailPosition, detailNavHeld, detailNavLabel, detailNavKey, detailBodyState, DETAIL_NAV_KEYS,
   type DetailPosition, type DetailDirection, type KeyTargetKind,
 } from './detailModalModel'
+// Reviews parts (2026-10-26) — one reply box for every channel (its limit, rule line, templates, AI draft, held send),
+// and a review's photos one at a time.
+export { ReplyComposer, type ReplyComposerProps, type ReplyTemplate, type ReplyAction } from './ReplyComposer'
+export { replyHeldReason, replyOverWords, replyLengthWords, REPLY_SENT_HELD, REPLY_EMPTY_HELD, type ReplyHeldInput } from './replyComposerModel'
+export { Lightbox, type LightboxProps, type LightboxItem } from './Lightbox'
+export { lightboxCounter, lightboxStep, lightboxHeld, lightboxKey, photoAlt, lightboxThumbLabel, type LightboxDirection } from './lightboxModel'
