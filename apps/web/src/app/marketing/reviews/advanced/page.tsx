@@ -17,7 +17,7 @@ const FEATURES: { href: string; label: string; desc: string; icon: LucideIcon }[
   { href: '/marketing/reviews/by-product', label: 'By product', desc: 'Per-SKU review rollup, sorted by negative rate.', icon: Package },
   { href: '/marketing/reviews/heatmap', label: 'Heatmap', desc: 'Day × category sentiment grid.', icon: Grid },
   { href: '/marketing/reviews/automation', label: 'Automation', desc: 'Rule-driven review automation (added disabled + dry-run).', icon: Bot },
-  { href: '/marketing/reviews/import', label: 'Import reviews', desc: 'Upload CSV / JSON / XLSX exports (Seller Central, Judge.me, Loox).', icon: Upload },
+  { href: '/marketing/reviews/inbox?import=1', label: 'Import reviews', desc: 'Upload CSV / TSV / JSON / XLSX exports (Seller Central, Judge.me, Loox).', icon: Upload },
   { href: '/orders/reviews/rules', label: 'Request rules', desc: 'Define when post-purchase review requests are sent.', icon: SlidersHorizontal },
   { href: '/orders/reviews/rules/timing', label: 'Timing defaults', desc: 'Edit the per-product-type “days after delivery” baseline.', icon: Clock },
   { href: '/orders/reviews/rules/send-times', label: 'Send times', desc: 'Best local hour to ask, per weekday + market (send-time optimization).', icon: Clock },
