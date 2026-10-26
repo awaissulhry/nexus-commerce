@@ -165,6 +165,31 @@ describe('durable inbound claim ownership', () => {
     expect((await row(order.id)).rawBody).not.toBeNull()
   })
 
+  it('the retention sweep clears an unhandled consent delivery after 7 days, whatever the policy window; nothing else early', async () => {
+    const { scrubExpiredInbound, SHORT_LIVED_INBOUND } = await import('./archive.js')
+    expect(SHORT_LIVED_INBOUND).toEqual({ channel: 'SHOPIFY', eventType: 'customers_email_marketing_consent/update', days: 7 })
+    const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000)
+    const body = { rawBody: Buffer.from('{"email_address":"buyer.one@example.com"}'), verificationHeaders: { 'x-shopify-topic': 'customers_email_marketing_consent/update' } }
+    const consent = { eventType: SHORT_LIVED_INBOUND.eventType, payload: { customer_id: 7012345678901, email_address: 'buyer.one@example.com' }, ...body }
+    const deadLetter = await event({ ...consent, status: 'dlq', attempts: 5, createdAt: daysAgo(8) })
+    const noRoute = await event({ ...consent, status: 'failed', connectionId: null, createdAt: daysAgo(8) })
+    const recent = await event({ ...consent, status: 'dlq', attempts: 5, createdAt: daysAgo(2) })
+    const leased = await event({ ...consent, processingToken: 'live-owner', processingUntil: new Date(Date.now() + 600_000), createdAt: daysAgo(8) })
+    const otherTopic = await event({ ...body, status: 'dlq', attempts: 5, createdAt: daysAgo(8) })
+
+    // A 90-day policy window: only this topic's unhandled deliveries older than 7 days are cleared.
+    expect(await inWorkspace(() => scrubExpiredInbound(90))).toEqual({ scrubbed: 2, limitReached: false })
+    for (const id of [deadLetter.id, noRoute.id]) {
+      const cleared = await row(id)
+      expect(cleared).toMatchObject({ rawBody: null, verificationHeaders: null, payload: null, eventType: SHORT_LIVED_INBOUND.eventType })
+      expect(JSON.stringify(cleared)).not.toMatch(/example\.com/)
+    }
+    expect((await row(deadLetter.id)).status).toBe('dlq') // the row stays; only its body goes
+    for (const id of [recent.id, leased.id]) expect((await row(id)).payload).toMatchObject({ email_address: 'buyer.one@example.com' })
+    expect(await row(otherTopic.id)).toMatchObject({ status: 'dlq', payload: { id: 'order_original', total: '19.95' } })
+    expect((await row(otherTopic.id)).rawBody).not.toBeNull()
+  })
+
   it('schedules a failed claim without counting completion as another attempt', async () => {
     const pending = await event()
     const claim = await inWorkspace(() => claims.claimInbound(pending.id, NOW))

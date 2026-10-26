@@ -9,8 +9,9 @@
  * Privacy: the e-mail is hashed the moment it is read (lib/customer-email-hash.ts: trim, lower case, SHA-256 — the
  * normalisation a Meta customer list needs) and only the hash is stored in this table; no plain address is logged or
  * answered, and a person reads counts only. The inbound ledger keeps each consent delivery as Shopify sent it (with
- * the plain address) only until it is handled: finishing it as done clears its body (cx/ingress/claims.ts
- * CLEAR_BODY_WHEN_DONE), so after that no plain address of anyone is kept, buyer or not.
+ * the plain address) for a short time only: finishing it as done clears its body at once (cx/ingress/claims.ts
+ * CLEAR_BODY_WHEN_DONE); a delivery never handled (failed, dead-lettered, or for a shop with no route) keeps it at most
+ * 7 days, then the retention sweep clears it (cx/ingress/archive.ts SHORT_LIVED_INBOUND).
  *
  * Own accounts only: a Shopify account another business shares with this one is never read or written here (its
  * customers' consent belongs to the business that owns the shop); the backfill refuses it, the webhook and the order
@@ -142,8 +143,12 @@ async function ownShopifyConnection(connectionId: string): Promise<boolean> {
 /**
  * Whether this account already received a customers/redact notice for this customer: the notice is in the inbound
  * ledger (Shopify's own body, HMAC-verified, routed to this account). A late or replayed consent delivery must not bring
- * a redacted customer back. Nothing new is stored for this: the notice itself is the marker, for as long as the ledger
- * keeps its body (the privacy policy's webhookEvents days); a consent delivery that old is no longer replayed.
+ * a redacted customer back. Nothing new is stored for this: the notice itself is the marker, and only for as long as
+ * the ledger keeps its body (the privacy policy's webhookEvents days, at least 7). After the retention sweep clears it,
+ * the marker can no longer protect a redacted customer from a hand-replay of a consent delivery received before the
+ * redact. That is why such a delivery's own body expires sooner: a handled one is cleared at once, an unhandled one
+ * after 7 days (archive.ts SHORT_LIVED_INBOUND) — a delivery with no body left has nothing to replay. The automatic
+ * paths (Shopify's 48-hour retries, the retry worker's 5 attempts) end long before either.
  */
 async function redactedOnThisAccount(connectionId: string, shopifyCustomerId: string): Promise<boolean> {
   const asNumber = Number(shopifyCustomerId)
@@ -198,11 +203,12 @@ export async function handleEmailConsentWebhook(payload: unknown, context?: { co
   }
   // The receiver routes a delivery to the business that owns the shop; this holds it there for any other path too.
   if (!(await ownShopifyConnection(connectionId))) return { ignored: 'not_own_account' }
-  if (await redactedOnThisAccount(connectionId, shopifyCustomerId)) return { ignored: 'redacted' }
   if (!(await hasConsentRow(connectionId, shopifyCustomerId)) && !(await knownShopifyBuyer(email))) {
     // Not a buyer Nexus knows (yet): they get no row. Should they buy, their first order reads their consent.
     return { ignored: 'not_a_known_buyer' }
   }
+  // After the buyer check (same outcome, and the ledger is read for buyers only, never for every newsletter sign-up).
+  if (await redactedOnThisAccount(connectionId, shopifyCustomerId)) return { ignored: 'redacted' }
   const written = await writeConsent({
     connectionId, shopifyCustomerId, emailSha256: emailSha256(email)!, emailState: state,
     emailConsentAt: consentTimeOf(body.email_marketing_consent?.consent_updated_at), source: 'webhook',

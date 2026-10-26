@@ -100,7 +100,8 @@ function stillOwned(claim: InboundClaim, now: Date): Prisma.WebhookEventWhereInp
  * consent change of someone who is not a buyer must leave no address behind. Cleared like the retention sweep clears
  * (archive.ts scrubExpiredInbound): an UPDATE of `rawBody`, `verificationHeaders` and `payload`, in the same update that
  * finishes the row as done; the row itself (identity, verdict, status, timings) stays. A row not handled (failed, dead
- * letter, deferred) keeps its body, so it can still be retried.
+ * letter, deferred) keeps its body, so it can still be retried — for this topic at most 7 days: then the retention
+ * sweep clears it too (archive.ts SHORT_LIVED_INBOUND).
  */
 export const CLEAR_BODY_WHEN_DONE: ReadonlySet<string> = new Set(['SHOPIFY customers_email_marketing_consent/update'])
 
