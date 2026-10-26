@@ -106,6 +106,8 @@ export interface MetaChangeRequest {
     | MetaMessagingKind
     // Step 43 — the chosen Page / Instagram account a backed account is made for.
     | MetaBusinessAssetKind
+    // Gap 46b (MD-024) — a video the chosen Page posted, its thumbnail made as the Page (create-meta-media kind thumbnail).
+    | 'ownpagevideo'
   /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */

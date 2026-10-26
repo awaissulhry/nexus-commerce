@@ -34,6 +34,8 @@ export const NEVER_IN_BULK: Readonly<Record<string, string>> = {
   'request-review': 'A review request reaches the buyer and cannot be recalled, so each one is approved on its own.',
   // Meta step 38 — gated as send-customer-message: a Messenger or Instagram message reaches a person and cannot be recalled.
   'create-meta-message': 'A Messenger or Instagram message reaches a person and cannot be recalled once it is sent, so each one is approved on its own.',
+  // Meta consent PR 2 — an add or a replace sends buyers' hashed e-mails to Meta (it reaches people's data; a replace has no undo).
+  'set-meta-audience-members': 'Adding or replacing the people of a Meta customer list sends buyers\' hashed e-mails to Meta, and a replace cannot be undone, so each change is approved on its own.',
   // Cancels.
   'cancel-order': 'Cancelling an order reaches the buyer and cannot be undone, so each one is approved on its own.',
   'cancel-purchase-order': 'Cancelling a purchase order cannot be undone, so each one is approved on its own.',

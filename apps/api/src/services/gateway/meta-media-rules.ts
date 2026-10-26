@@ -46,6 +46,16 @@
  *     create_creative_folder: name, description, parent_folder_id. Updating and deleting: "You can't perform this
  *     operation on this endpoint" — a folder Nexus makes stays (no undo). Built from the SDK; Meta's answer decides
  *     (LIVE-PROBES BM-058).
+ *   - Gap 46b (MD-024), checked 2026-10-26 (curl ≥ 3 s apart): docs/graph-api/reference/video/thumbnails (v26.0) — POST
+ *     /{video_id}/thumbnails with `source` ("The source for the thumbnail, an image file", required) and `is_preferred`
+ *     (boolean, default false: "Set to true if this thumbnail is the preferred thumbnail to be shown for this video");
+ *     "Maximum thumbnail file size 10MB"; "Thumbnails can only be created on Videos that have been associated with a
+ *     Page"; "We recommend that you use thumbnails with the same aspect ratio as the video"; Access Tokens "App or Page",
+ *     permissions pages_read_user_content, pages_manage_engagement, pages_show_list; the example names graph.facebook.com
+ *     (not the video host); returns {success} (read-after-write). docs/graph-api/reference/video-thumbnail: Updating and
+ *     Deleting "You can't perform this operation on this endpoint" — so no thumbnail can be made preferred again or taken
+ *     off: no undo. SDK advideo.py create_thumbnail (POST /thumbnails, is_preferred bool, source file); videothumbnail.py
+ *     has no api_update or api_delete. Nexus holds images to 8 MB (its one image cap), under Meta's 10 MB.
  */
 import type { MetaWriteKind, MetaWriteRule, MetaWriteVerdict } from './meta-calls.js'
 import { metaGraphApiVersion } from '../meta/api-version.js'
@@ -81,8 +91,8 @@ type Judge = (value: string, params: Params) => string | null
 
 const isDigits = (v: string, max = 20) => new RegExp(`^\\d{1,${max}}$`).test(v)
 
-/** A JPG or PNG, by the file's own first bytes (Meta's ads guide: JPG or PNG). */
-function imageTypeOf(head: Buffer): 'image/jpeg' | 'image/png' | null {
+/** A JPG or PNG, by the file's own first bytes (Meta's ads guide: JPG or PNG). Gap 46b: a thumbnail file part is typed by it. */
+export function imageTypeOf(head: Buffer): 'image/jpeg' | 'image/png' | null {
   if (head.length >= 3 && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return 'image/jpeg'
   if (head.length >= 8 && head.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png'
   return null
@@ -231,6 +241,15 @@ const audioSpec: Judge = (value) => {
 const ACCOUNT: readonly MetaWriteKind[] = ['adaccount']
 const PORTFOLIO: readonly MetaWriteKind[] = ['business']
 const LIBRARY_VIDEO: readonly MetaWriteKind[] = ['video']
+// Gap 46b (MD-024) — a video the chosen Page posted (meta-page-owner.ts: Meta's `from` is the chosen Page).
+const PAGE_VIDEO: readonly MetaWriteKind[] = ['ownpagevideo']
+/** Gap 46b — a thumbnail file's name: thumbnail.jpg or thumbnail.png, as its bytes are. */
+export const META_THUMBNAIL_FILE_NAME = /^thumbnail\.(jpg|png)$/
+const thumbnailName: Judge = (value, params) => {
+  const type = imageTypeOf(Buffer.from((params.get('source') ?? '').slice(0, 16), 'base64'))
+  const wanted = type === 'image/png' ? 'thumbnail.png' : type === 'image/jpeg' ? 'thumbnail.jpg' : null
+  return wanted && value === wanted ? null : 'source_file_name is thumbnail.jpg for a JPG and thumbnail.png for a PNG'
+}
 const VIDEO_TEXT = { name: META_MEDIA_TEXT_PATTERN, title: META_MEDIA_TEXT_PATTERN, description: META_MEDIA_TEXT_PATTERN }
 const videoText = { name: textOf(META_MEDIA_TEXT.name, 'name'), title: textOf(META_MEDIA_TEXT.title, 'title', 'bytes'), description: textOf(META_MEDIA_TEXT.description, 'description') }
 /** `default_locale`: a locale, or `none` (no default caption). */
@@ -291,6 +310,20 @@ export const META_MEDIA_WRITE_RULES: readonly MetaWriteRule[] = [
     }),
   },
   {
+    // Gap 46b (MD-024): a custom thumbnail of a video the CHOSEN Page posted, made its preferred one, sent AS that Page (its own
+    // token: `auth: 'page'`, step 36's Page token mode; the Page's rate bucket, step 38). The gateway sends `source` as an image
+    // file part (MetaWriteRule.file, Base64 in, bytes out); is_preferred is always true (master MD-024: "make it preferred").
+    // Meta has no update or delete of a thumbnail: no undo.
+    name: 'pagevideo.thumbnail', method: 'POST', path: /^\d{1,25}\/thumbnails$/, kinds: PAGE_VIDEO, auth: 'page',
+    required: ['source', 'source_file_name', 'is_preferred'], optional: [], maxBody: META_IMAGE_MAX_BODY, bulky: true, edgeCall: true, budget: false,
+    file: { key: 'source', nameKey: 'source_file_name', name: META_THUMBNAIL_FILE_NAME, contentType: 'image/jpeg', maxBytes: META_IMAGE_BASE64_MAX, judge: (text) => metaImageBytesProblem(text)?.replace(/^bytes/, 'source') ?? null, base64: { typeOf: imageTypeOf } },
+    values: judged({
+      source: () => null, // judged as the file (MetaWriteRule.file.judge)
+      source_file_name: thumbnailName,
+      is_preferred: exactly('true', 'is_preferred'),
+    }),
+  },
+  {
     // The undo of MD-026 takes the caption language off with step 22's captions.delete (locales_to_delete alone); when the
     // upload had set the default caption, the undo then puts the one before it back with this call alone (step 22's rule
     // takes no default_locale). Meta lists default_locale among the edge's own parameters; alone: LIVE-PROBES MD-027d.
@@ -302,11 +335,15 @@ export const META_MEDIA_WRITE_RULES: readonly MetaWriteRule[] = [
 
 // ── a file part the gateway encodes (MetaWriteRule.file) ──────────────────────────────────────────────────────────
 
-/** The multipart body of a judged write with a file (never stored or logged: the ledger keeps its length only). */
-export function metaMultipartBody(multipart: { fields: Array<[string, string]>; file: { key: string; filename: string; contentType: string; text: string } }): FormData {
+/**
+ * The multipart body of a judged write with a file (never stored or logged: the ledger keeps its length only). Gap 46b — a
+ * Base64 file (an image) goes as its decoded bytes.
+ */
+export function metaMultipartBody(multipart: { fields: Array<[string, string]>; file: { key: string; filename: string; contentType: string; text: string; base64?: true } }): FormData {
   const form = new FormData()
   for (const [key, value] of multipart.fields) form.append(key, value)
-  form.append(multipart.file.key, new Blob([multipart.file.text], { type: multipart.file.contentType }), multipart.file.filename)
+  const part = multipart.file.base64 ? new Uint8Array(Buffer.from(multipart.file.text, 'base64')) : multipart.file.text
+  form.append(multipart.file.key, new Blob([part], { type: multipart.file.contentType }), multipart.file.filename)
   return form
 }
 

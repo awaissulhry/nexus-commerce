@@ -331,7 +331,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   // Meta ads step 31: the audience changes read the business's chosen Meta ad account live (their own test runs them).
   'create-meta-audience': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-audience-changes.tools test)',
   'set-meta-audience': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-audience-changes.tools test)',
-  'set-meta-audience-members': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-audience-changes.tools test)',
+  // Consent PR 2 — an add or a replace reads the business's own "Upload customer lists to Meta" switch first (off by default).
+  'set-meta-audience-members': 'it reads the business\'s chosen Meta ad account live from Meta (an add or a replace the business\'s own uploads switch first, off by default), and no business here has Meta connected (meta-ads-audience-changes.tools test)',
   'set-meta-audience-sharing': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-audience-changes.tools test)',
   'remove-meta-audience': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-audience-changes.tools test)',
   // Meta ads step 26: a boost and a partnership change read the business's chosen Meta account first (meta-ads-boosts.tools test).

@@ -21,9 +21,12 @@
  *   threadsmedia    the Threads post of an ad of the CHOSEN ad account: the change names the ad (`parent`, kind `ad`), whose
  *                   `account_id` must be the chosen account and whose creative's `threads_media_id` must be this id;
  *   threadsreply    a direct reply on that post: in its `/replies` (one page of 100; more pages: not confirmed).
- * Every read goes through this gateway with the business's system-user token (its read gate, ledger and rate bucket), never
- * the Page's. Anything else — another business's Page, account, post, comment or ad, a node of another kind, an id Meta
- * cannot place — gets nothing sent, and the sentence never names the other business's asset.
+ * Every read goes through this gateway (its read gate, ledger and rate bucket). Gap 46b (Meta refuses the chosen Page's posts
+ * to the system-user token, live #10 of 2026-10-26): a read of a post of the chosen Page (`<chosen Page>_<id>`) and the exact
+ * owner read of a Page photo or video (`id,from{id}`) go with the CHOSEN Page's own token (meta-page-reads.ts), and a missing
+ * or refused one refuses the change; a comment's own read, and every other read here, keeps the business's system-user
+ * token. Anything else — another business's Page, account, post, comment or ad, a node of another kind, an id Meta cannot
+ * place — gets nothing sent, and the sentence never names the other business's asset.
  */
 import { metaChosenAdAccountOf, metaChosenInstagramOf, metaChosenPageOf } from './account.js'
 import type { MetaJudgedWrite, MetaWriteKind } from './meta-calls.js'

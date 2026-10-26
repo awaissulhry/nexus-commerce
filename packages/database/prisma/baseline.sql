@@ -2357,6 +2357,8 @@ CREATE TABLE "AccountSettings" (
     "primaryMarketplace" TEXT,
     "metaConversionsApiOnAt" TIMESTAMP(3),
     "metaConversionsApiOnBy" TEXT,
+    "metaCustomerListsOnAt" TIMESTAMP(3),
+    "metaCustomerListsOnBy" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

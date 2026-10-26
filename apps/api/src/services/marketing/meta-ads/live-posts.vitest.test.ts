@@ -56,6 +56,7 @@ vi.mock('./live-partners.js', () => ({
 import { igUsernameTaken, liveCreativesUsing, liveIgContainer, livePagePost, liveVideoPost, PAGE_POST_STATE_FIELDS } from './live-posts.js'
 import { MetaLiveRefusal } from './live.js'
 import { MetaReadError } from './errors.js'
+import { metaPageReadOf } from '../../gateway/meta-page-reads.js'
 
 const metaError = (code: string, extra: Record<string, unknown> = {}) => new MetaReadError({ origin: 'meta', httpStatus: 400, code, sentence: `Meta refused it (${code}).`, authLost: false, throttled: false, notFound: false, transient: false, permissionDenied: false, ...extra } as never, 'x', 1)
 beforeEach(() => { h.reads = []; h.bodies = {}; h.lists = {}; h.made.clear(); h.postVideos = {}; h.discovered = null })
@@ -130,6 +131,8 @@ describe('the live state of a post change', () => {
     h.bodies['160000000000001'] = { id: '160000000000001', post_id: '500000000000001', from: { id: PAGE } }
     expect(await liveVideoPost('m-1', '160000000000001')).toEqual({ pageId: PAGE, videoId: '160000000000001', postId: POST })
     expect(h.reads[0].query).toEqual({ fields: 'id,post_id,from{id}' })
+    // Gap 46b (re-review) — the draft's read is the gateway's own Page-token read of that list (the same token both ways).
+    expect(metaPageReadOf('160000000000001', ['160000000000001'], new URLSearchParams({ fields: 'id,post_id,from{id}' }), undefined)).toEqual({ pageId: null })
     h.bodies['160000000000002'] = { id: '160000000000002', from: { id: PAGE } }
     expect((await liveVideoPost('m-1', '160000000000002')).postId).toBeNull()
     h.bodies['160000000000003'] = { id: '160000000000003', post_id: '500000000000003', from: { id: '120000000000099' } }

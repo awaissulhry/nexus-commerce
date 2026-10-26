@@ -1,7 +1,7 @@
 {
   "name": "nexus",
   "displayName": "Nexus Commerce",
-  "version": "0.11.0",
+  "version": "0.11.2",
   "description": "Connects Claude to Nexus Commerce (catalog, listings, content, ids, prices, stock, suppliers, orders, returns, ads (Amazon, eBay, Google Ads and Merchant Center, Meta ads on Facebook and Instagram), automations) for one business per connection, and adds 24 skills, from a weekly channel health check to Google Ads, Meta ads, change plans and undo. Claude reads and asks for changes; each change waits for a person's approval in Nexus unless the business set that change to run by its rule or to be confirmed with an authenticator code. Google Ads and Merchant Center changes always wait for a person. Meta ads changes never run by a rule: each waits for a person, unless the business switched on \"Claude's changes need no approval\".",
   "author": {
     "name": "Nexus Commerce"

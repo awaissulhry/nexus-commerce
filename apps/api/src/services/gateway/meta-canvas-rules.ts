@@ -53,6 +53,8 @@ import type { MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
 import { META_NAME_TEXT } from './meta-write-text.js'
 import { metaPublicLinkProblem } from './meta-media-rules.js'
 import { META_OWNED_HOST, metaCreativeTextProblem } from './meta-creative-rules.js'
+// Gap 46b — the five template ids live in the leaf list (the gateway's Page-token read of a template names them too).
+import { META_IX_TEMPLATE_IDS as IX_TEMPLATE_IDS } from '../meta/meta-media-lists.js'
 
 type Params = ReadonlyMap<string, string>
 type Row = Record<string, unknown>
@@ -68,9 +70,9 @@ export type MetaCanvasElementKey = typeof META_CANVAS_ELEMENT_KEYS[number]
 
 /**
  * The template ids the instant-experiences guide names (step 10's IX_TEMPLATES holds the same five by name: a test keeps
- * them equal). The AR template is Ads Manager only.
+ * them equal). The AR template is Ads Manager only. Gap 46b: one list, services/meta/meta-media-lists.ts.
  */
-export const META_IX_TEMPLATE_IDS: readonly string[] = ['133471657203838', '1063217037112304', '424787857903852', '1369752616394017', '1932289657009030']
+export const META_IX_TEMPLATE_IDS: readonly string[] = IX_TEMPLATE_IDS
 
 export const META_CANVAS_BUTTON_STYLES = ['BUTTON_OUTLINE', 'BUTTON_FILLED'] as const
 export const META_CANVAS_ALIGNMENTS = ['LEFT', 'CENTER', 'RIGHT'] as const

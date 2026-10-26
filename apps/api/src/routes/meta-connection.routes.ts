@@ -15,6 +15,10 @@
  *                                                          and canChange (this person has settings.security.manage)
  *   PUT  /api/meta-ads/conversions-api                     { on: boolean } — a person with settings.security.manage turns it on
  *                                                          or off (Claude cannot); off by default (D2). Answers { switch, changed }.
+ *   GET  /api/meta-ads/customer-lists                      consent PR 2: the business's "Upload customer lists to Meta" switch
+ *                                                          { on, since, by }, and canChange (this person has settings.security.manage)
+ *   PUT  /api/meta-ads/customer-lists                      { on: boolean } — a person with settings.security.manage turns it on
+ *                                                          or off (Claude cannot); off by default (D8). Answers { switch, changed }.
  *
  * Disconnect is the shared POST /api/cx/connections/:id/revoke (it also lets go of this business's Meta picks).
  */
@@ -27,6 +31,7 @@ import {
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { assertRequestPermission } from '../lib/auth/request-permission.js'
 import { metaEventsSwitch, setMetaEventsSwitch } from '../services/marketing/meta-ads/events-switch.js'
+import { metaCustomerListsSwitch, setMetaCustomerListsSwitch } from '../services/marketing/meta-ads/customer-lists-switch.js'
 
 const actorOf = (request: unknown) => ({ kind: 'operator' as const, userId: (request as { authUser?: { id?: string } }).authUser?.id ?? null })
 
@@ -120,6 +125,36 @@ export default async function metaConnectionRoutes(app: FastifyInstance) {
       return reply.send(await setMetaEventsSwitch(on, { label: user.displayName?.trim() || user.email || user.id }))
     } catch (err) {
       return fail(reply, err, 'change the "Send sales to Meta" switch')
+    }
+  })
+
+  // Meta consent PR 2 (D8) — "Upload customer lists to Meta": a person's own switch, per business (customer-lists-switch.ts),
+  // checked exactly as step 33's.
+  app.get('/meta-ads/customer-lists', async (request, reply) => {
+    try {
+      const canChange = await assertRequestPermission(request, F.settingsSecurityManage).then(() => true, () => false)
+      return reply.send({ switch: await metaCustomerListsSwitch(), canChange })
+    } catch (err) {
+      return fail(reply, err, 'read the "Upload customer lists to Meta" switch')
+    }
+  })
+
+  app.put('/meta-ads/customer-lists', async (request, reply) => {
+    const on = (request.body as { on?: unknown } | null)?.on
+    if (typeof on !== 'boolean') return reply.code(400).send({ error: 'on must be true or false.' })
+    // A person's own switch: a signed-in person with settings.security.manage, checked here as well as by the RBAC hook —
+    // never an API key or Claude (Claude has no route here).
+    const user = (request as { authUser?: { id?: string; email?: string; displayName?: string | null } }).authUser
+    if (!user?.id) return reply.code(403).send({ error: 'A person signed in to Nexus turns this switch on or off.' })
+    try {
+      await assertRequestPermission(request, F.settingsSecurityManage)
+    } catch {
+      return reply.code(403).send({ error: 'Turning "Upload customer lists to Meta" on or off needs the permission to manage the business\'s security (settings.security.manage).' })
+    }
+    try {
+      return reply.send(await setMetaCustomerListsSwitch(on, { label: user.displayName?.trim() || user.email || user.id }))
+    } catch (err) {
+      return fail(reply, err, 'change the "Upload customer lists to Meta" switch')
     }
   })
 }

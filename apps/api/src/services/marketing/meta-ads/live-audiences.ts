@@ -819,7 +819,9 @@ export async function audiencesView(input: AudiencesInput) {
         customAudienceTermsSigned: tos.custom_audience_tos === 1 || tos.custom_audience_tos === '1',
         termsAccepted: plain(tos, 1) ?? {},
         personTermsAccepted: userTos,
-        termsSigned: tosList,
+        // The terms documents Meta offers this account (CustomAudiencesTOS: id, type, content), not signatures: live 2026-10-26 it listed
+        // custom_audience while tos_accepted had no custom_audience_tos. Whether one is signed is customAudienceTermsSigned / termsAccepted.
+        termsOffered: tosList,
         existingCustomerAudienceIds: existing,
         signLink: TERMS_LINK(adAccountId),
         note: 'A person (never a system user) signs the Custom Audience terms in Meta for the business that owns the ad account, at signLink; customer-list audiences work only after that. An ad account acting on behalf of another business also answers 1 — then the terms are that business\'s. Value-based lookalikes have terms of their own. personTermsAccepted is answered for a person\'s token only, so a system user may see Meta refuse it. existingCustomerAudienceIds: the audiences Advantage+ campaigns count as existing customers.',

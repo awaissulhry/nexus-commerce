@@ -88,8 +88,10 @@ const metaMediaLibrary: AgentTool = {
     + 'folders, tags, the system user\'s folders, website assets, asset-urls and video groups in its reference, but answers '
     + 'this app that they do not exist: the answer then says so, with what to use instead). live-videos, playlists, '
     + 'playlist-videos: the chosen Page\'s live broadcasts (a finished one can be boosted) and video playlists. Only the '
-    + 'chosen ad account, its portfolio and the chosen Page are read. Uploading images and videos, making a folder and '
-    + 'taking back an upload are create-meta-media (a request a person approves). Read only.',
+    + 'chosen ad account, its portfolio and the chosen Page are read; whether a video is the chosen Page\'s is read with the '
+    + 'Page\'s own token (with Meta changes switched off in Nexus — NEXUS_META_ADS_WRITES — no Page token is read, so these reads wait too: a video of the ad account\'s library is still found in its '
+    + 'list). Uploading images and videos, making a folder and taking back an upload are create-meta-media (a request a '
+    + 'person approves). Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveMedia({
       connectionId: str(args.connectionId),
@@ -150,9 +152,10 @@ const metaPagePosts: AgentTool = {
     + 'paid-partner brands tagged on it; post-dynamic: catalog ad posts made from it. ad-post (adId or creativeId): the '
     + 'Facebook post and Instagram media behind one of the chosen account\'s ads. page-insights, post-insights: Meta\'s '
     + 'organic numbers (views, reach, clicks, reactions, follows; retired metrics are not offered). Only the chosen Page '
-    + 'is read: another Page\'s post is refused before any call. The feed, published and ad posts, catalog-ad posts and '
-    + 'the insights go with the chosen Page\'s own token (Meta answers them to no other); when Meta refuses one, the answer '
-    + 'says what the Page needs (the system user needs the Page assigned with the task). Read only.',
+    + 'is read: another Page\'s post is refused before any call. The feed, published and ad posts, one post (post, and the '
+    + 'check of post-sponsors, post-dynamic, post-insights), catalog-ad posts and the insights go with the chosen Page\'s own '
+    + 'token (Meta answers them to no other; with Meta changes switched off in Nexus — NEXUS_META_ADS_WRITES — no Page token is read, so these reads wait too); when Meta refuses one, the answer says '
+    + 'what the Page needs (the system user needs the Page assigned with the task). Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => livePagePosts({
       connectionId: str(args.connectionId),
@@ -341,8 +344,9 @@ const metaInstantExperiences: AgentTool = {
     + 'elements: the parts made on the Page. template: which parts one of Meta\'s templates takes (get-new-customers, '
     + 'showcase-your-business, sell-products-without-catalog, sell-products-lifestyle, sell-products-grid; the AR template '
     + 'is Ads Manager only). meta-ad-preview view instant-experience shows one. create-meta-instant-experience makes one '
-    + '(always unpublished); set-meta-instant-experience edits, publishes or hides it. The list goes with the chosen Page\'s own token (Meta answers it to no other). Meta refuses the '
-    + 'template read to the business\'s token (insufficient permissions): the answer then says so. Read only.',
+    + '(always unpublished); set-meta-instant-experience edits, publishes or hides it. The list goes with the chosen Page\'s own token (Meta answers it to no other). '
+    + 'So does the template read (Meta refused it to the business\'s token: insufficient permissions); if Meta refuses it to '
+    + 'the Page\'s token too, the answer says so. Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveInstantExperiences({
       connectionId: str(args.connectionId),
