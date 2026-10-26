@@ -176,7 +176,7 @@ const INSIGHT_VALUES = { period: oneOf(PAGE_PERIODS), since: DAY, until: DAY, br
  */
 const POST_NODE_FIELDS = set(
   ...POST_LIST_FIELDS, 'instagram_eligibility', 'video_buying_eligibility',
-  'attachments{media_type,type,title,description,url,unshimmed_url,media,target,subattachments}', 'allowed_advertising_objects', 'promotion_status',
+  'attachments{media_type,type,title,description,url,unshimmed_url,media,target,subattachments}', 'promotion_status',
   'timeline_visibility',
   // Re-review FIX 1 — meta-comments' read of what a photo or video post is made of (live-engagement.ts COMMENT_FIELDS.PostTargets),
   // and a private reply's visitor post (live-messaging-change.ts createdOf).

@@ -511,9 +511,9 @@ export const POST_FIELDS = {
   /** SDK pagepost.py and master MD-101 (not in the v26 feed field table): asked, and asked again without when refused. */
   ListMore: 'is_inline_created',
   Eligibility: 'instagram_eligibility,video_buying_eligibility,attachments{media_type,type,title,description,url,unshimmed_url,media,target,subattachments}',
-  /** Not in the v26 feed field table (SDK pagepost.py / master MD-101); `allowed_advertising_objects` is the feed
-   * reference's name. Each is asked, and only the ones Meta refuses are dropped. */
-  More: 'is_inline_created,allowed_advertising_objects,promotion_status',
+  /** Not in the v26 feed field table (SDK pagepost.py / master MD-101). Each is asked, and only the ones Meta refuses are dropped.
+   * Not `allowed_advertising_objects` (the feed reference's name): on a post Meta answered (#100) "nonexisting field" (live, 2026-10-26). */
+  More: 'is_inline_created,promotion_status',
   Sponsor: 'id,name',
   DynamicPost: 'id,title,message,description,link,image_url,product_id,created',
   AdPost: 'id,account_id,effective_object_story_id,object_story_id,effective_instagram_media_id,instagram_permalink_url,source_instagram_media_id',
