@@ -13,6 +13,7 @@
 import prisma from '../../db.js'
 import { sendEmail } from '../email/transport.js'
 import { logger } from '../../utils/logger.js'
+import { digestFallbackRecipients, readAlert, teamMembers } from './review-settings.service.js'
 
 const WEB_URL = process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app'
 
@@ -138,13 +139,14 @@ export async function sendReviewDigestOnce(): Promise<{
   if (process.env.NEXUS_ENABLE_REVIEW_DIGEST !== '1') {
     return { sent: false, skipped: 'NEXUS_ENABLE_REVIEW_DIGEST not set', digest }
   }
+  // Reviews Settings › Alerts: the business may turn the digest off, and picks who gets it.
+  const alert = await readAlert('digest')
+  if (!alert.on) return { sent: false, skipped: 'turned off in Reviews settings', digest }
   if (digest.newReviews === 0 && digest.negativesAwaiting === 0 && digest.openSpikes === 0 && digest.pipelineWarnings.length === 0) {
     return { sent: false, skipped: 'nothing to report', digest }
   }
-  const to = (process.env.NEXUS_REVIEW_DIGEST_TO ?? process.env.NEXUS_SUPPORT_INBOX ?? 'support@xavia.it')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
+  const to = await digestRecipients(alert.recipients)
+  if (to.length === 0) return { sent: false, skipped: 'nobody to send to', digest }
   try {
     await sendEmail({
       to,
@@ -158,6 +160,13 @@ export async function sendReviewDigestOnce(): Promise<{
     })
     return { sent: false, skipped: 'send failed', digest }
   }
+}
+
+/** The addresses of the people picked under Alerts who are still members, else where the digest went before. */
+export async function digestRecipients(picked: readonly string[]): Promise<string[]> {
+  const team = await teamMembers()
+  const chosen = team.filter((m) => picked.includes(m.userId) && m.email).map((m) => m.email)
+  return chosen.length ? chosen : digestFallbackRecipients(team)
 }
 
 export function summarizeReviewDigest(r: { sent: boolean; skipped?: string; digest: ReviewDigest }): string {

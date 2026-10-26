@@ -13,6 +13,7 @@ import {
   type InsightsPage,
 } from './reviewsLinks'
 import { parseInboxQuery } from '../inbox/inboxQuery'
+import { sectionFromSearch } from '../settings/_settings/settingsModel'
 
 const APP = fileURLToPath(new URL('../../..', import.meta.url))
 const WEB_ROOT = fileURLToPath(new URL('../../../../..', import.meta.url))
@@ -53,7 +54,7 @@ describe('reviews links', () => {
       ruleHref('rule-1'),
       ...pages.map(page => insightsHref(page)),
       insightsHref('products', { product: 'product-1' }),
-      reviewsSettingsHref(), reviewsSettingsHref('automations'),
+      reviewsSettingsHref(), reviewsSettingsHref('automations'), reviewsSettingsHref('pipeline'),
       productReviewsHref('product-1'),
     ]
     for (const href of hrefs) expect(isPage(href), href).toBe(true)
@@ -82,8 +83,11 @@ describe('reviews links', () => {
     expect(ruleHref('rule 1/2')).toBe('/marketing/reviews/requests/rules/rule%201%2F2')
   })
 
-  it('sends Settings to Settings › Channels until the Reviews settings page exists', () => {
-    expect(reviewsSettingsHref('sources')).toBe('/settings/channels')
+  it('sends Settings to Reviews › Settings, scrolled to a section when asked', () => {
+    expect(reviewsSettingsHref()).toBe('/marketing/reviews/settings')
+    expect(reviewsSettingsHref(null)).toBe('/marketing/reviews/settings')
+    expect(reviewsSettingsHref('automations')).toBe('/marketing/reviews/settings?section=automations')
+    expect(reviewsSettingsHref('sources')).toBe('/marketing/reviews/settings?section=sources')
   })
 })
 
@@ -107,5 +111,29 @@ describe('old Requests addresses', () => {
       expect(isPage(destination), destination).toBe(true)
       expect(isPage(source), `${source} has no page left`).toBe(false)
     }
+  })
+})
+
+describe('old review pages retired with Reviews › Settings', () => {
+  afterEach(() => { vi.unstubAllEnvs() })
+
+  const OLD: Array<[string, string]> = [
+    ['/marketing/reviews/advanced', '/marketing/reviews'],
+    ['/marketing/reviews/automation', '/marketing/reviews/settings?section=automations'],
+    ['/performance/feedback', '/marketing/reviews/inbox?kind=seller'],
+  ]
+
+  it('land for good on the page that does their job, also inside a business', async () => {
+    vi.stubEnv('NEXT_PUBLIC_WORKSPACES_ENABLED', '1')
+    const redirects = await loadRedirects()
+    for (const [source, destination] of OLD) {
+      expect(redirects.find((r) => r.source === source && !r.has), source).toMatchObject({ destination, permanent: true })
+      expect(redirects.find((r) => r.source === `/w/:workspaceId${source}`)?.destination, source).toBe(`/w/:workspaceId${destination}`)
+      expect(isPage(destination), destination).toBe(true)
+      expect(isPage(source), `${source} has no page left`).toBe(false)
+    }
+    // The pages read what the old addresses hand them: the Inbox's Seller feedback tab, the Automations section.
+    expect(parseInboxQuery('?kind=seller').query.kind).toBe('seller')
+    expect(sectionFromSearch('?section=automations')).toBe('automations')
   })
 })

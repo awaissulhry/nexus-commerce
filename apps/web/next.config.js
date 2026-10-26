@@ -334,6 +334,12 @@ const nextConfig = {
       // The Respond desk and the old Import page are retired: the Inbox answers, and its Import window opens from ?import=1.
       { source: '/marketing/reviews/desk', destination: '/marketing/reviews/inbox', permanent: true },
       { source: '/marketing/reviews/import', destination: '/marketing/reviews/inbox?import=1', permanent: true },
+      // ── Reviews PR D (2026-10-26) — Reviews › Settings; the old review pages are retired ──
+      // Advanced was a second Overview; the review automations live in Reviews › Settings › Automations; the old
+      // seller-feedback page is the Inbox's Seller feedback tab.
+      { source: '/marketing/reviews/advanced', destination: '/marketing/reviews', permanent: true },
+      { source: '/marketing/reviews/automation', destination: '/marketing/reviews/settings?section=automations', permanent: true },
+      { source: '/performance/feedback', destination: '/marketing/reviews/inbox?kind=seller', permanent: true },
     ];
     // Config redirects run before the workspace rewrite. Keep legacy bookmarks
     // and routed tabs working with their original business context.

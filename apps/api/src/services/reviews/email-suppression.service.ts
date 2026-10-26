@@ -24,6 +24,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * cron tick.
  */
 
+import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 
 export type SuppressionSource =
@@ -100,22 +101,38 @@ export async function addSuppression(opts: {
   return { created: true }
 }
 
+/**
+ * Reviews Settings (2026-10-26): an address the BUYER put on the list — the unsubscribe link, a spam complaint, a privacy
+ * request — stays there: only the buyer can undo that, and Nexus never takes it off by hand. Bounced and hand-added
+ * addresses can be removed.
+ */
+export const BUYER_SUPPRESSION_SOURCES: ReadonlySet<string> = new Set(['UNSUBSCRIBE_LINK', 'COMPLAINT', 'GDPR_REQUEST'])
+
+export function canRemoveSuppression(source: string | null | undefined): boolean {
+  return !BUYER_SUPPRESSION_SOURCES.has((source ?? '').toUpperCase())
+}
+
+async function removeRows(where: Prisma.EmailSuppressionWhereInput): Promise<{ removed: number; kept: number }> {
+  const rows = await prisma.emailSuppression.findMany({ where, select: { id: true, source: true } })
+  const removable = rows.filter((r) => canRemoveSuppression(r.source)).map((r) => r.id)
+  const res = removable.length ? await prisma.emailSuppression.deleteMany({ where: { id: { in: removable } } }) : { count: 0 }
+  return { removed: res.count, kept: rows.length - removable.length }
+}
+
 export async function removeSuppression(opts: {
   email: string
   channel?: string | null
-}): Promise<{ removed: number }> {
+}): Promise<{ removed: number; kept: number }> {
   const lower = opts.email.trim().toLowerCase()
-  if (!lower) return { removed: 0 }
-  if (opts.channel == null) {
-    const res = await prisma.emailSuppression.deleteMany({
-      where: { email: lower, channel: null },
-    })
-    return { removed: res.count }
-  }
-  const res = await prisma.emailSuppression.deleteMany({
-    where: { email: lower, channel: opts.channel },
-  })
-  return { removed: res.count }
+  if (!lower) return { removed: 0, kept: 0 }
+  return removeRows({ email: lower, channel: opts.channel ?? null })
+}
+
+/** Removes the ticked rows a person may remove (bounced, added by hand); the buyer's own stay and are counted. */
+export async function removeSuppressionsById(ids: readonly string[]): Promise<{ removed: number; kept: number }> {
+  const clean = [...new Set(ids.filter((id) => typeof id === 'string' && id.trim()))].slice(0, 500)
+  if (clean.length === 0) return { removed: 0, kept: 0 }
+  return removeRows({ id: { in: clean } })
 }
 
 /**

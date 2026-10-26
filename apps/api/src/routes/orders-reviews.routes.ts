@@ -13,7 +13,6 @@ import { lintBuyerCopy } from '../services/comms/message-lint.js'
  *   POST   /api/review-rules/:id/dry-run    preview matching orders
  *   POST   /api/review-rules/:id/run        eagerly enqueue matches
  *
- *   GET    /api/review-requests             paginated list
  *   POST   /api/orders/:id/request-review   manual one-off
  *   POST   /api/orders/bulk-request-reviews bulk one-off
  *
@@ -578,35 +577,8 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ═══════════════════════════════════════════════════════════════════
-  // REQUESTS — list + manual one-offs
+  // REQUESTS — manual one-offs
   // ═══════════════════════════════════════════════════════════════════
-  fastify.get('/review-requests', async (request, reply) => {
-    try {
-      const q = request.query as any
-      const page = Math.max(1, parseInt(q.page ?? '1', 10) || 1)
-      const pageSize = Math.min(200, parseInt(q.pageSize ?? '50', 10) || 50)
-      const where: any = {}
-      if (q.status) where.status = q.status
-      if (q.channel) where.channel = q.channel
-      const [total, items] = await Promise.all([
-        prisma.reviewRequest.count({ where }),
-        prisma.reviewRequest.findMany({
-          where,
-          include: {
-            order: { select: { id: true, channelOrderId: true, customerEmail: true, deliveredAt: true } },
-            rule: { select: { id: true, name: true } },
-          },
-          orderBy: { createdAt: 'desc' },
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        }),
-      ])
-      return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) }
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message })
-    }
-  })
-
   fastify.post('/orders/:id/request-review', async (request, reply) => {
     const { id } = request.params as { id: string }
     const answer = await requestReviewForOrder(id, logger)

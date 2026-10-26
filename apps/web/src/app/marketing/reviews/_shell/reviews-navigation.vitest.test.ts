@@ -18,11 +18,14 @@ const active = (path: string) => items(path).filter(item => item.active).map(ite
 describe('reviews navigation', () => {
   it('provides unique, whitespace-free IDs for the disclosure labels and their panels', () => {
     const ids = nav.buildReviewsNavigation('/marketing/reviews').map(group => group.id)
-    expect(ids).toEqual(['reviews', 'requests', 'insights'])
+    expect(ids).toEqual(['reviews', 'requests', 'insights', 'settings'])
     expect(ids.every(id => /^[a-z0-9-]+$/.test(id))).toBe(true)
     expect(new Set(ids).size).toBe(ids.length)
     const groups = nav.buildReviewsNavigation('/marketing/reviews')
-    expect(groups.map(group => !!group.collapsible)).toEqual([false, true, true])
+    expect(groups.map(group => !!group.collapsible)).toEqual([false, true, true, false])
+    // Settings sits alone at the bottom, under no drawn heading (as the design draws it).
+    expect(groups.at(-1)).toMatchObject({ label: 'Reviews settings', hideLabel: true })
+    expect(groups.at(-1)?.items.map(item => item.label)).toEqual(['Settings'])
   })
 
   it('keeps the business in native links and marks exactly one row as the page', () => {
@@ -31,6 +34,7 @@ describe('reviews navigation', () => {
     expect(rows.find(item => item.label === 'Overview')?.href).toBe('/w/business_a/marketing/reviews')
     expect(rows.find(item => item.label === 'Rules')?.href).toBe('/w/business_a/marketing/reviews/requests/rules')
     expect(rows.find(item => item.label === 'Timing')?.href).toBe('/w/business_a/marketing/reviews/requests/timing')
+    expect(rows.find(item => item.label === 'Settings')?.href).toBe('/w/business_a/marketing/reviews/settings')
     expect(rows.filter(item => item.active)).toHaveLength(1)
     expect(items('/marketing/reviews/inbox').find(item => item.label === 'Inbox')?.href).toBe('/marketing/reviews/inbox')
   })
@@ -42,10 +46,14 @@ describe('reviews navigation', () => {
     expect(labels).toEqual(['Overview', 'Inbox', 'Queue', 'Rules', 'Timing', 'Themes', 'Products', 'Alerts', 'Fixes', 'Brief'])
     expect(groups.every(group => group.items.length > 0)).toBe(true)
     expect(nav.buildReviewsNavigation('/marketing/reviews', () => false)).toEqual([])
-    // A row with its own permission (the Settings row PR D adds) needs it as well as the page permission.
-    const settings = { label: 'Settings', href: '/marketing/reviews/settings', icon: Settings, permission: 'reviews.manage' }
-    expect(nav.reviewsNavItemAllowed(settings, onlyReviews)).toBe(false)
-    expect(nav.reviewsNavItemAllowed(settings, p => p === 'pages.reviews' || p === 'reviews.manage')).toBe(true)
+    // The Settings row needs "Manage reviews" as well as the page permission; without it its group goes too.
+    expect(groups.map(group => group.id)).toEqual(['reviews', 'requests', 'insights'])
+    const manager = (permission: string) => permission === 'pages.reviews' || permission === 'reviews.manage'
+    expect(nav.buildReviewsNavigation('/marketing/reviews', manager).flatMap(group => group.items).map(item => item.label).at(-1)).toBe('Settings')
+    const settings = model.REVIEWS_NAV.flatMap(group => group.items).find(item => item.label === 'Settings')
+    expect(settings).toMatchObject({ href: '/marketing/reviews/settings', icon: Settings, permission: 'reviews.manage' })
+    expect(nav.reviewsNavItemAllowed(settings!, onlyReviews)).toBe(false)
+    expect(nav.reviewsNavItemAllowed(settings!, manager)).toBe(true)
   })
 
   it('keeps nested pages selected without matching similarly named routes', () => {
@@ -56,7 +64,8 @@ describe('reviews navigation', () => {
     expect(active('/marketing/reviews')).toEqual(['Overview'])
     expect(active('/marketing/reviews/')).toEqual(['Overview'])
     expect(active('/marketing/reviewsx')).toEqual([])
-    expect(active('/marketing/reviews/automation')).toEqual([])
+    expect(active('/marketing/reviews/settings')).toEqual(['Settings'])
+    expect(active('/w/business_a/marketing/reviews/settings')).toEqual(['Settings'])
   })
 
   it('lets each row own the old addresses of its page', () => {
@@ -74,6 +83,8 @@ describe('reviews navigation', () => {
       expect(active(retired)).toEqual([])
     }
     expect(active('/marketing/reviews/advanced')).toEqual(['Overview'])
+    // The old Automation page redirects to Settings › Automations.
+    expect(active('/marketing/reviews/automation')).toEqual(['Settings'])
   })
 
   it('shows the needs-a-reply badge on the Inbox only when there is something to reply to', () => {
@@ -94,7 +105,7 @@ describe('reviews crumbs', () => {
     expect(trail('/marketing/reviews/inbox')).toBe('Marketing › Reviews › Inbox*')
     expect(trail('/marketing/reviews/requests')).toBe('Marketing › Reviews › Requests › Queue*')
     expect(trail('/marketing/reviews/heatmap')).toBe('Marketing › Reviews › Insights › Themes*')
-    expect(trail('/marketing/reviews/automation')).toBe('Marketing › Reviews')
+    expect(trail('/marketing/reviews/settings')).toBe('Marketing › Reviews › Settings*')
   })
 
   it('ends a record page on its list, as a link', () => {

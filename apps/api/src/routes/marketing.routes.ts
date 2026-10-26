@@ -16,11 +16,6 @@ const marketingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=300')
     return { items: [], count: 0 }
   })
-
-  fastify.get('/marketing/reviews', async (_request, reply) => {
-    reply.header('Cache-Control', 'private, max-age=300')
-    return { items: [], count: 0 }
-  })
 }
 
 export default marketingRoutes

@@ -14,9 +14,11 @@
  */
 
 import { useEffect, useState } from 'react'
-import { Package } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { ReviewsNav } from '../_shared/ReviewsNav'
+import { PageHeader } from '@/design-system/patterns'
+import { usePathname } from '@/lib/workspaces/navigation'
+import { reviewsCrumbs } from '../_shell/reviews-crumbs'
+import { ReviewsMenuButton } from '../_shell/ReviewsShell'
 import { ByProductClient } from './ByProductClient'
 
 interface ProductBucket {
@@ -47,6 +49,7 @@ async function fetchByProduct(): Promise<ProductBucket[]> {
 }
 
 export default function ByProductPage() {
+  const pathname = usePathname() ?? ''
   const [items, setItems] = useState<ProductBucket[] | null>(null)
 
   useEffect(() => {
@@ -59,19 +62,12 @@ export default function ByProductPage() {
 
   return (
     <div className="px-4 py-4">
-      <div className="flex items-start gap-3 mb-3">
-        <Package className="h-6 w-6 text-blue-500 dark:text-blue-400 mt-0.5" />
-        <div className="flex-1">
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-            Reviews by Product
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Aggregates for the last 30 days. Sort by % negative to surface worst-performing
-            SKUs, or by last review for recency tracking. Click a SKU to drill down.
-          </p>
-        </div>
-      </div>
-      <ReviewsNav />
+      <PageHeader
+        eyebrow={reviewsCrumbs(pathname)}
+        title="Reviews by Product"
+        subtitle="Aggregates for the last 30 days. Sort by % negative to surface worst-performing SKUs, or by last review for recency tracking. Click a SKU to drill down."
+        actions={<ReviewsMenuButton />}
+      />
       {items === null ? (
         <div aria-busy="true" className="h-64 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse" />
       ) : items.length === 0 ? (

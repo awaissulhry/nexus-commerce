@@ -13,9 +13,11 @@
  */
 
 import { useEffect, useState } from 'react'
-import { Wrench } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { ReviewsNav } from '../_shared/ReviewsNav'
+import { PageHeader } from '@/design-system/patterns'
+import { usePathname } from '@/lib/workspaces/navigation'
+import { reviewsCrumbs } from '../_shell/reviews-crumbs'
+import { ReviewsMenuButton } from '../_shell/ReviewsShell'
 import { ActionsClient, type ActionItem } from './ActionsClient'
 
 async function fetchJson<T>(url: string, fallback: T): Promise<T> {
@@ -29,6 +31,7 @@ async function fetchJson<T>(url: string, fallback: T): Promise<T> {
 }
 
 export default function ReviewActionsPage() {
+  const pathname = usePathname() ?? ''
   const [items, setItems] = useState<ActionItem[] | null>(null)
 
   useEffect(() => {
@@ -44,21 +47,12 @@ export default function ReviewActionsPage() {
 
   return (
     <div className="px-4 py-4">
-      <div className="flex items-start gap-3 mb-3">
-        <Wrench className="h-6 w-6 text-blue-500 dark:text-blue-400 mt-0.5" />
-        <div className="flex-1">
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-            Review Actions
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            When a review spike is detected, AI drafts the fix — improved listing bullets, an A+
-            module, or a recall assessment. Apply or dismiss each one here. Generate fixes from the
-            Spikes tab.
-          </p>
-        </div>
-      </div>
-
-      <ReviewsNav />
+      <PageHeader
+        eyebrow={reviewsCrumbs(pathname)}
+        title="Review Actions"
+        subtitle="When a review spike is detected, AI drafts the fix — improved listing bullets, an A+ module, or a recall assessment. Apply or dismiss each one here. Generate fixes from the Spikes page."
+        actions={<ReviewsMenuButton />}
+      />
       {items ? (
         <ActionsClient initial={items} />
       ) : (

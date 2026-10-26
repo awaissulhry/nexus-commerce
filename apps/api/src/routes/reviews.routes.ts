@@ -18,6 +18,18 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *   POST  /api/reviews/:id/translate           language + English, kept on the review
  *   POST  /api/reviews/import/:batchId/undo    removes one import's rows, keeps the ones a person worked on
  * Every Review read in this file shows visible rows only (fixture rows never show): `visibleReviewWhere`.
+ *
+ * Reviews Settings (2026-10-26, PR D) — logic in services/reviews/review-settings.service.ts and review-settings-health.ts:
+ *   GET    /api/reviews/settings                   voice, alerts (+ who), the sender (read-only), the team, templates to load
+ *   PUT    /api/reviews/settings                   { voice?, alerts? } → the settings as saved, or why not (400, in words)
+ *   GET    /api/reviews/settings/sources           each review source's state in words, and how many need a person
+ *   GET    /api/reviews/settings/pipeline          each review job's schedule, last and next run and state
+ *   GET    /api/reviews/reply-templates            ?channel= → a channel's templates and the every-channel ones
+ *   POST   /api/reviews/reply-templates            { name, channel, bodies } → the template (409 on a taken name)
+ *   PATCH  /api/reviews/reply-templates/:id        { name?, channel?, bodies? }
+ *   DELETE /api/reviews/reply-templates/:id
+ *   POST   /api/reviews/reply-templates/:id/use    a person picked it in the Inbox reply box (its "Used" count)
+ *   PATCH  /api/reviews/automation-rules/:id       { enabled } — review automations only (404 for any other rule)
  */
 
 import type { FastifyPluginAsync } from 'fastify'
@@ -56,8 +68,11 @@ import { generateActionItemsForSpike } from '../services/reviews/review-actions.
 import { sendReviewReply } from '../services/reviews/review-reply-send.service.js'
 import { sseResponseHeaders } from '../lib/sse.js'
 import { runReviewRuleEvaluatorOnce } from '../jobs/review-rule-evaluator.job.js'
-import { runReviewMailerOnce } from '../jobs/review-request-mailer.job.js'
-import { findReviewMailerState, pauseReviewMailer, readReviewMailerState, resumeReviewMailer } from '../services/reviews/review-mailer-state.service.js'
+import {
+  createReplyTemplate, deleteReplyTemplate, listReplyTemplates, markReplyTemplateUsed, readReviewSettings, saveReviewSettings,
+  setReviewAutomationEnabled, updateReplyTemplate,
+} from '../services/reviews/review-settings.service.js'
+import { readSettingsPipeline, readSettingsSources } from '../services/reviews/review-settings-health.js'
 
 // SR.3 — register review action handlers (side-effect import)
 import '../services/reviews/review-action-handlers.js'
@@ -301,91 +316,6 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // ── GET /reviews/ingest-health (RX.1) ───────────────────────────────
-  // Per-channel ingestion provenance: how many reviews per channel, by
-  // source (fixture vs real import/API), last ingest + last review date,
-  // plus the most-recent review-ingest cron run. Powers the dashboard
-  // ingest-health tile so operators can see real data is flowing in.
-  fastify.get('/reviews/ingest-health', async (_request, reply) => {
-    const CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY']
-    // Counts by (channel, source) — kept free of _max to dodge a known
-    // Prisma groupBy circular-type issue; last-dates come from cheap
-    // per-channel aggregates below.
-    const grouped = await prisma.review.groupBy({
-      by: ['channel', 'ingestSource'],
-      _count: { _all: true },
-    })
-    const allChannels = Array.from(new Set([...CHANNELS, ...grouped.map((g) => g.channel)]))
-    const [maxByChannel, lastCron] = await Promise.all([
-      Promise.all(
-        allChannels.map(async (channel) => ({
-          channel,
-          agg: await prisma.review.aggregate({
-            where: { channel },
-            _max: { ingestedAt: true, postedAt: true },
-          }),
-        })),
-      ),
-      prisma.cronRun.findFirst({
-        where: { jobName: 'review-ingest' },
-        orderBy: { startedAt: 'desc' },
-        select: { startedAt: true, finishedAt: true, status: true, outputSummary: true },
-      }),
-    ])
-    const maxMap = new Map(maxByChannel.map((m) => [m.channel, m.agg._max]))
-
-    const byChannel = allChannels.map((channel) => {
-      const rows = grouped.filter((g) => g.channel === channel)
-      const total = rows.reduce((a, r) => a + r._count._all, 0)
-      const bySource: Record<string, number> = {}
-      for (const r of rows) {
-        const src = r.ingestSource ?? 'UNKNOWN'
-        bySource[src] = (bySource[src] ?? 0) + r._count._all
-      }
-      // "Live" = anything that isn't fixture/seed data.
-      const realCount = Object.entries(bySource)
-        .filter(([src]) => src !== 'FIXTURE')
-        .reduce((a, [, n]) => a + n, 0)
-      const max = maxMap.get(channel)
-      return {
-        channel,
-        total,
-        realCount,
-        fixtureCount: bySource.FIXTURE ?? 0,
-        bySource,
-        lastIngestedAt: max?.ingestedAt ?? null,
-        lastReviewAt: max?.postedAt ?? null,
-        hasRealData: realCount > 0,
-        isCanonical: CHANNELS.includes(channel),
-      }
-    })
-
-    // D.5 — Amazon official Customer Feedback API status (distinct from the
-    // feed/import path above). OK once any insight resolves; NEEDS_ROLE when the
-    // Brand Analytics role is missing; PENDING when enabled but not yet fetched.
-    const [insightsAgg, insightsOk, insightsNeedsRole] = await Promise.all([
-      prisma.amazonReviewInsight.aggregate({ _count: { _all: true }, _max: { fetchedAt: true } }),
-      prisma.amazonReviewInsight.count({ where: { accessStatus: 'OK' } }),
-      prisma.amazonReviewInsight.count({ where: { accessStatus: 'NEEDS_BRAND_ANALYTICS_ROLE' } }),
-    ])
-    const insightsEnabled = process.env.NEXUS_ENABLE_AMAZON_REVIEW_INSIGHTS === '1'
-    const amazonInsights = insightsOk > 0 ? 'OK' : insightsNeedsRole > 0 ? 'NEEDS_ROLE' : insightsAgg._count._all > 0 ? 'ERROR' : insightsEnabled ? 'PENDING' : 'OFF'
-
-    reply.header('Cache-Control', 'private, max-age=30')
-    return {
-      channels: byChannel,
-      lastIngestCron: lastCron,
-      config: {
-        mode: process.env.NEXUS_REVIEW_INGEST_MODE === 'live' ? 'live' : 'sandbox',
-        ebayLiveEnabled: process.env.NEXUS_EBAY_REAL_API === 'true',
-        amazonFeedConfigured: Boolean(process.env.NEXUS_AMAZON_REVIEW_FEED_URL),
-        amazonInsights,
-        lastInsightsSync: insightsAgg._max.fetchedAt ?? null,
-      },
-      generatedAt: new Date().toISOString(),
-    }
-  })
-
   // ── POST /reviews/import/preview (RX.1) ─────────────────────────────
   // Parse a pasted/uploaded CSV/TSV/JSON/XLSX, auto-detect the column
   // mapping, validate + dedup-check — without writing anything.
@@ -527,34 +457,6 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     })
 
     await new Promise(() => {})
-  })
-
-  // ── GET /reviews/desk/stats (RX.2) ──────────────────────────────────
-  // Triage workqueue counters. null triageStatus counts as NEW.
-  fastify.get('/reviews/desk/stats', async (request, reply) => {
-    const q = request.query as { channel?: string; marketplace?: string }
-    const base: Record<string, unknown> = {}
-    if (q.channel) base.channel = q.channel
-    if (q.marketplace) base.marketplace = q.marketplace
-    const grouped = await prisma.review.groupBy({
-      by: ['triageStatus'],
-      where: visibleReviewWhere(base),
-      _count: { _all: true },
-    })
-    const counts: Record<string, number> = {
-      NEW: 0,
-      IN_PROGRESS: 0,
-      RESPONDED: 0,
-      RESOLVED: 0,
-      IGNORED: 0,
-    }
-    for (const g of grouped) {
-      const key = g.triageStatus ?? 'NEW'
-      counts[key] = (counts[key] ?? 0) + g._count._all
-    }
-    const open = counts.NEW + counts.IN_PROGRESS
-    reply.header('Cache-Control', 'private, max-age=15')
-    return { counts, open, total: Object.values(counts).reduce((a, b) => a + b, 0) }
   })
 
   // ── PATCH /reviews/:id/triage (RX.2) ────────────────────────────────
@@ -933,6 +835,83 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, ...result }
   })
 
+  // PATCH /reviews/automation-rules/:id { enabled } — Reviews Settings › Automations' switch; review automations only.
+  fastify.patch<{ Params: { id: string }; Body: { enabled?: unknown } }>('/reviews/automation-rules/:id', async (request, reply) => {
+    const result = await setReviewAutomationEnabled(request.params.id, request.body?.enabled)
+    if (result.ok === false) {
+      reply.code(result.code)
+      return { error: result.code === 404 ? 'not_found' : 'invalid', message: result.words }
+    }
+    return result
+  })
+
+  // ── Reviews Settings (PR D) ─────────────────────────────────────────
+  fastify.get('/reviews/settings', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, no-store')
+    return readReviewSettings()
+  })
+
+  fastify.put('/reviews/settings', async (request, reply) => {
+    const result = await saveReviewSettings(request.body, requestUserId(request))
+    if (result.ok === false) {
+      reply.code(400)
+      return { error: 'invalid', message: result.words }
+    }
+    return result.settings
+  })
+
+  fastify.get('/reviews/settings/sources', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, no-store')
+    return readSettingsSources()
+  })
+
+  fastify.get('/reviews/settings/pipeline', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, no-store')
+    return readSettingsPipeline()
+  })
+
+  fastify.get<{ Querystring: { channel?: string } }>('/reviews/reply-templates', async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store')
+    return { items: await listReplyTemplates({ channel: request.query?.channel ?? null }) }
+  })
+
+  fastify.post('/reviews/reply-templates', async (request, reply) => {
+    const result = await createReplyTemplate(request.body, requestUserId(request))
+    if (result.ok === false) {
+      reply.code(result.code)
+      return { error: result.code === 409 ? 'name_taken' : 'invalid', message: result.words }
+    }
+    reply.code(201)
+    return result.template
+  })
+
+  fastify.patch<{ Params: { id: string } }>('/reviews/reply-templates/:id', async (request, reply) => {
+    const result = await updateReplyTemplate(request.params.id, request.body)
+    if (result.ok === false) {
+      reply.code(result.code)
+      return { error: result.code === 404 ? 'not_found' : result.code === 409 ? 'name_taken' : 'invalid', message: result.words }
+    }
+    return result.template
+  })
+
+  fastify.delete<{ Params: { id: string } }>('/reviews/reply-templates/:id', async (request, reply) => {
+    const result = await deleteReplyTemplate(request.params.id)
+    if (result.ok === false) {
+      reply.code(404)
+      return { error: 'not_found', message: result.words }
+    }
+    return result
+  })
+
+  fastify.post<{ Params: { id: string } }>('/reviews/reply-templates/:id/use', async (request, reply) => {
+    const result = await markReplyTemplateUsed(request.params.id)
+    if (result.ok === false) {
+      reply.code(404)
+      return { error: 'not_found', message: result.words }
+    }
+    return result
+  })
+
   // ── Manual cron triggers ────────────────────────────────────────────
   fastify.post('/reviews/cron/ingest/trigger', async (_request, _reply) => {
     const s = await runReviewIngestOnce()
@@ -963,7 +942,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       return `heuristic=${r.heuristicUpdated}/${r.heuristicScanned} reports=${r.reports} reportUpdated=${r.ordersUpdated}`
     }).catch((e) => fastify.log.error({ err: e }, '[orders-delivered-backfill] manual trigger failed'))
     reply.header('Cache-Control', 'no-store')
-    return { ok: true, started: true, note: 'running in background; poll CronRun / ingest-health for the result' }
+    return { ok: true, started: true, note: 'running in background; poll CronRun or Reviews › Settings › Pipeline health for the result' }
   })
 
   // ── Review Spotlight (RX.4) ─────────────────────────────────────────
@@ -1050,241 +1029,6 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/reviews/cron/review-rule-evaluator/trigger', async (_request, _reply) => {
     const summary = await runReviewRuleEvaluatorOnce()
     return { ok: true, summary }
-  })
-
-  // ── SR.4 — review request mailer endpoints ──────────────────────────
-  fastify.post('/reviews/cron/review-request-mailer/trigger', async (_request, _reply) => {
-    const result = await runReviewMailerOnce()
-    return { ok: true, result }
-  })
-
-  // RV.9.6 — End-to-end test mode. Three actions an operator can run
-  // from the dashboard without touching real customer state:
-  //
-  //   action='preview-html'  — render the localized sentiment-check
-  //                            email HTML so the operator can eyeball
-  //                            it. No send, no DB write.
-  //   action='send-test'     — send a real sentiment-check email to
-  //                            `recipient` (an operator-controlled
-  //                            address) with /r/__test__/* URLs that
-  //                            land on the public pages without
-  //                            mutating ReviewRequest. Tagged
-  //                            'review-test' so it doesn't pollute
-  //                            normal logs.
-  //   action='dry-tick'      — run the mailer's tick logic over the
-  //                            current queue, but with sendEmail()
-  //                            replaced by a logging stub. Returns
-  //                            the counters that a real tick would
-  //                            have produced.
-  fastify.post<{
-    Body: {
-      action: 'preview-html' | 'send-test' | 'dry-tick'
-      recipient?: string
-      locale?: 'it' | 'de' | 'fr' | 'es' | 'en'
-      productName?: string | null
-    }
-  }>('/reviews/test', async (request, reply) => {
-    const body = request.body
-    if (!body?.action) return reply.code(400).send({ error: 'action required' })
-
-    const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '')
-    const testBaseUrl = `${webBase}/r/__test__`
-
-    if (body.action === 'preview-html') {
-      const { renderSentimentCheckPreview } = await import(
-        '../services/reviews/sentiment-check-email.service.js'
-      )
-      const html = await renderSentimentCheckPreview({
-        locale: body.locale ?? 'it',
-        productName: body.productName ?? null,
-      })
-      reply.header('content-type', 'text/html; charset=utf-8')
-      return reply.send(html)
-    }
-
-    if (body.action === 'send-test') {
-      if (!body.recipient) return reply.code(400).send({ error: 'recipient required' })
-      const { sendSentimentCheckEmail } = await import(
-        '../services/reviews/sentiment-check-email.service.js'
-      )
-      const result = await sendSentimentCheckEmail({
-        to: body.recipient,
-        customerName: 'Test Operator',
-        productName: body.productName ?? 'Casco Xavia Carbon',
-        baseUrl: testBaseUrl,
-        channelOrderId: 'TEST-' + Date.now().toString(36),
-        locale: body.locale ?? 'it',
-      })
-      return { ok: result.ok, dryRun: result.dryRun, error: result.error, suppressed: result.suppressed }
-    }
-
-    if (body.action === 'dry-tick') {
-      // Count what a real tick would do without actually doing it.
-      // We replicate the mailer's status filter + window logic but stop
-      // short of any side effect.
-      const now = new Date()
-      const dueScheduled = await prisma.reviewRequest.count({
-        where: { status: 'SCHEDULED', scheduledFor: { lte: now } },
-      })
-      const dueRetries = await prisma.reviewRequest.count({
-        where: { status: 'FAILED', nextRetryAt: { not: null, lte: now }, attemptCount: { lt: 3 } },
-      })
-      const mailerState = await findReviewMailerState()
-      return {
-        ok: true,
-        wouldProcess: dueScheduled + dueRetries,
-        breakdown: { dueScheduled, dueRetries },
-        mailerPaused: mailerState?.isPaused ?? false,
-        envEnabled: process.env.NEXUS_ENABLE_REVIEW_INGEST === '1',
-        outboundEnabled: process.env.NEXUS_ENABLE_OUTBOUND_EMAILS === 'true',
-      }
-    }
-
-    return reply.code(400).send({ error: 'unknown action' })
-  })
-
-  fastify.get('/reviews/requests/stats', async (_request, reply) => {
-    const [scheduled, sent, failed, skipped] = await Promise.all([
-      prisma.reviewRequest.count({ where: { status: 'SCHEDULED' } }),
-      prisma.reviewRequest.count({ where: { status: 'SENT' } }),
-      prisma.reviewRequest.count({ where: { status: 'FAILED' } }),
-      prisma.reviewRequest.count({ where: { status: 'SKIPPED' } }),
-    ])
-    // Breakdown of WHY requests were skipped (e.g. "Amazon already solicited a
-    // review for this order") so the Skipped KPI explains itself.
-    const skippedReasonRows = skipped > 0
-      ? await prisma.reviewRequest.groupBy({ by: ['suppressedReason'], where: { status: 'SKIPPED' }, _count: { _all: true } })
-      : []
-    const skippedReasons = skippedReasonRows
-      .map((r) => ({ reason: r.suppressedReason ?? 'Unknown', count: r._count._all }))
-      .sort((a, b) => b.count - a.count)
-    const due = await prisma.reviewRequest.count({
-      where: { status: 'SCHEDULED', scheduledFor: { lte: new Date() } },
-    })
-    // RV.3.3 — surface "retrying" count (FAILED rows scheduled for re-attempt)
-    const retrying = await prisma.reviewRequest.count({
-      where: { status: 'FAILED', nextRetryAt: { not: null }, attemptCount: { lt: 3 } },
-    })
-    // RV.6.5 — sentiment-check counts for the diversion funnel.
-    const [sentimentPending, sentimentPositive, sentimentNegative] = await Promise.all([
-      prisma.reviewSentimentCheck.count({ where: { response: 'NONE', sentimentEmailSentAt: { not: null } } }),
-      prisma.reviewSentimentCheck.count({ where: { response: 'POSITIVE' } }),
-      prisma.reviewSentimentCheck.count({ where: { response: 'NEGATIVE' } }),
-    ])
-    // RV.4.2 — include the mailer pause state so the dashboard renders the toggle correctly
-    const mailerState = await readReviewMailerState()
-
-    // RV.9.2 — pipeline health: surface stale/stuck cron rows + age of
-    // the most recent successful mailer tick. Used by the dashboard
-    // banner to warn the operator when automation has silently broken.
-    const watchedCrons = ['review-request-mailer', 'orders-delivered-backfill', 'review-rule-evaluator', 'review-attribution']
-    const recentCrons = await prisma.cronRun.findMany({
-      where: { jobName: { in: watchedCrons } },
-      orderBy: { startedAt: 'desc' },
-      take: 30,
-      select: { jobName: true, status: true, startedAt: true, finishedAt: true, errorMessage: true },
-    })
-    type CronSummary = {
-      jobName: string
-      lastRunAt: Date | null
-      lastSuccessAt: Date | null
-      lastFailureAt: Date | null
-      lastError: string | null
-      stuckRunning: boolean
-    }
-    const summaries: CronSummary[] = watchedCrons.map((name) => {
-      const rows = recentCrons.filter((r) => r.jobName === name)
-      const lastRun = rows[0] ?? null
-      const lastSuccess = rows.find((r) => r.status === 'SUCCESS') ?? null
-      const lastFailure = rows.find((r) => r.status === 'FAILED') ?? null
-      // Stuck = current run started >2h ago and still RUNNING. The
-      // separate orphan-sweeper cron should clean it up within 30 min,
-      // but surface it here in the meantime.
-      const stuckRunning =
-        !!lastRun &&
-        lastRun.status === 'RUNNING' &&
-        Date.now() - lastRun.startedAt.getTime() > 2 * 60 * 60 * 1000
-      return {
-        jobName: name,
-        lastRunAt: lastRun?.startedAt ?? null,
-        lastSuccessAt: lastSuccess?.startedAt ?? null,
-        lastFailureAt: lastFailure?.startedAt ?? null,
-        lastError: lastFailure?.errorMessage ?? null,
-        stuckRunning,
-      }
-    })
-    const mailerSummary = summaries.find((s) => s.jobName === 'review-request-mailer')!
-    // Healthy = mailer ran successfully in the last 8h (cron is every
-    // 4h, so >8h means it has missed at least one tick).
-    const mailerHealthy =
-      !!mailerSummary.lastSuccessAt &&
-      Date.now() - mailerSummary.lastSuccessAt.getTime() < 8 * 60 * 60 * 1000
-    // Output-freshness guards — catch silent stalls (a cron runs SUCCESS but
-    // produces nothing, like the deliveredAt freeze). Watches the OUTPUT, not
-    // just "did the cron tick".
-    const { computeReviewPipelineFreshness } = await import('../services/reviews/review-pipeline-health.service.js')
-    const freshness = await computeReviewPipelineFreshness()
-    const pipelineHealth = {
-      mailerHealthy,
-      hasStuckCron: summaries.some((s) => s.stuckRunning),
-      crons: summaries,
-      deliveryStale: freshness.deliveryStale,
-      schedulingStalled: freshness.schedulingStalled,
-      maxDeliveredAgeDays: freshness.maxDeliveredAgeDays,
-      overdueUndelivered: freshness.overdueUndelivered,
-      schedulingBacklog: freshness.schedulingBacklog,
-      warnings: freshness.warnings,
-    }
-    const upcoming = await prisma.reviewRequest.findMany({
-      where: { status: 'SCHEDULED', scheduledFor: { gt: new Date() } },
-      orderBy: { scheduledFor: 'asc' },
-      take: 20,
-      include: {
-        order: {
-          select: {
-            channelOrderId: true,
-            channel: true,
-            marketplace: true,
-            customerName: true,
-            items: {
-              take: 1,
-              select: { product: { select: { name: true, productType: true } } },
-            },
-          },
-        },
-      },
-    })
-    reply.header('Cache-Control', 'private, max-age=30')
-    return {
-      scheduled, sent, failed, skipped, skippedReasons, due, retrying, upcoming,
-      sentiment: {
-        pending: sentimentPending,
-        positive: sentimentPositive,
-        negative: sentimentNegative,
-      },
-      mailer: {
-        isPaused: mailerState.isPaused,
-        pausedReason: mailerState.pausedReason,
-        pausedAt: mailerState.pausedAt,
-        pausedBy: mailerState.pausedBy,
-      },
-      pipelineHealth,
-    }
-  })
-
-  // RV.4.2 — pause + resume endpoints for the mailer kill switch.
-  fastify.post<{ Body: { reason?: string; pausedBy?: string } }>(
-    '/reviews/mailer/pause',
-    async (request) => {
-      const body = (request.body ?? {}) as { reason?: string; pausedBy?: string }
-      const state = await pauseReviewMailer({ reason: body.reason, pausedBy: body.pausedBy })
-      return { ok: true, state }
-    },
-  )
-
-  fastify.post('/reviews/mailer/resume', async (_request) => {
-    const state = await resumeReviewMailer()
-    return { ok: true, state }
   })
 
   // RV.9.2 — manual cron-orphan sweep trigger. The cron runs every 30
@@ -1430,16 +1174,26 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  fastify.delete<{ Body: { email: string; channel?: string | null } }>(
+  // Reviews Settings (2026-10-26): `{ ids }` removes the ticked rows; either form removes only bounced and hand-added
+  // addresses — one a buyer unsubscribed (or complained, or asked by privacy request) stays: only the buyer can undo
+  // that. `kept` counts those.
+  fastify.delete<{ Body: { email?: string; channel?: string | null; ids?: string[] } }>(
     '/email/suppressions',
     async (request, reply) => {
       const body = request.body
+      const { removeSuppression, removeSuppressionsById } = await import('../services/reviews/email-suppression.service.js')
+      if (Array.isArray(body?.ids)) {
+        const result = await removeSuppressionsById(body.ids)
+        return { ok: true, ...result }
+      }
       if (!body?.email) return reply.code(400).send({ error: 'email required' })
-      const { removeSuppression } = await import('../services/reviews/email-suppression.service.js')
       const result = await removeSuppression({
         email: body.email,
         channel: body.channel ?? null,
       })
+      if (result.removed === 0 && result.kept > 0) {
+        return reply.code(409).send({ error: 'buyer_unsubscribed', message: 'The buyer put this address on the list. Only the buyer can undo that.' })
+      }
       return { ok: true, ...result }
     },
   )
@@ -1790,72 +1544,6 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       .catch((e) => fastify.log.error({ err: e }, '[review-insights] manual ingest failed'))
     reply.header('Cache-Control', 'no-store')
     return { ok: true, started: true, marketplace: b.marketplace, note: 'ingest running in background; poll GET /reviews/insights for results' }
-  })
-
-  // ── D.5 — Overview blend: ONE call for the kid-simple Tab 1, channel+market scoped.
-  // Amazon → official insights (themes/rating, no per-review text); eBay/import →
-  // individual reviews (rating + recent list). 'ALL' merges both.
-  fastify.get('/reviews/overview', async (request, reply) => {
-    const q = request.query as { channel?: string; marketplace?: string }
-    const channel = q.channel && q.channel !== 'ALL' ? q.channel : null
-    const marketplace = q.marketplace && q.marketplace !== 'ALL' ? q.marketplace : null
-    const wantAmazon = !channel || channel === 'AMAZON'
-
-    type Topic = { topic: string; mentionCount: number | null; ratingImpact: number | null; snippets: string[] }
-    let insights: { starRating: number | null; reviewCount: number; positiveTopics: Topic[]; negativeTopics: Topic[]; accessStatus: string; asins: number } | null = null
-    if (wantAmazon) {
-      const rows = await prisma.amazonReviewInsight.findMany({ where: marketplace ? { marketplace } : {} })
-      const merge = (key: 'positiveTopics' | 'negativeTopics') => {
-        const m = new Map<string, Topic>()
-        for (const r of rows) for (const t of (r[key] as unknown as Topic[]) ?? []) {
-          if (!t?.topic) continue
-          const e = m.get(t.topic) ?? { topic: t.topic, mentionCount: 0, ratingImpact: null, snippets: [] }
-          e.mentionCount = (e.mentionCount ?? 0) + (t.mentionCount ?? 0)
-          for (const s of t.snippets ?? []) if (e.snippets.length < 4 && !e.snippets.includes(s)) e.snippets.push(s)
-          m.set(t.topic, e)
-        }
-        return [...m.values()].sort((a, b) => (b.mentionCount ?? 0) - (a.mentionCount ?? 0)).slice(0, 6)
-      }
-      let ws = 0, w = 0, tot = 0
-      for (const r of rows) { if (r.starRating != null) { const ww = r.reviewCount ?? 1; ws += r.starRating * ww; w += ww } tot += r.reviewCount ?? 0 }
-      const anyOk = rows.some((r) => r.accessStatus === 'OK')
-      const accessStatus = rows.length === 0 ? (process.env.NEXUS_ENABLE_AMAZON_REVIEW_INSIGHTS === '1' ? 'PENDING' : 'OFF') : anyOk ? 'OK' : rows.some((r) => r.accessStatus === 'NEEDS_BRAND_ANALYTICS_ROLE') ? 'NEEDS_BRAND_ANALYTICS_ROLE' : rows[0].accessStatus
-      insights = { starRating: w > 0 ? Math.round((ws / w) * 100) / 100 : null, reviewCount: tot, positiveTopics: merge('positiveTopics'), negativeTopics: merge('negativeTopics'), accessStatus, asins: rows.length }
-    }
-
-    const rw: Record<string, unknown> = {}
-    if (channel) rw.channel = channel
-    if (marketplace) rw.marketplace = marketplace
-    const since = new Date(Date.now() - 90 * 86_400_000)
-    const [ratingRows, recent, total] = await Promise.all([
-      prisma.review.findMany({ where: visibleReviewWhere({ ...rw, rating: { not: null }, postedAt: { gte: since } }), select: { rating: true, postedAt: true }, orderBy: { postedAt: 'asc' } }),
-      prisma.review.findMany({ where: visibleReviewWhere(rw), orderBy: { postedAt: 'desc' }, take: 20, include: { sentiment: true, product: { select: { id: true, sku: true, name: true } } } }),
-      prisma.review.count({ where: visibleReviewWhere(rw) }),
-    ])
-    const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
-    let sum = 0, count = 0
-    const dayMap = new Map<string, { sum: number; count: number }>()
-    for (const r of ratingRows) {
-      if (r.rating == null) continue
-      const star = Math.min(5, Math.max(1, Math.round(r.rating)))
-      distribution[star] += 1; sum += r.rating; count += 1
-      const day = r.postedAt.toISOString().slice(0, 10)
-      const d = dayMap.get(day) ?? { sum: 0, count: 0 }; d.sum += r.rating; d.count += 1; dayMap.set(day, d)
-    }
-    const trend = [...dayMap.entries()].map(([date, v]) => ({ date, avg: v.count > 0 ? v.sum / v.count : null, count: v.count })).sort((a, b) => a.date.localeCompare(b.date))
-
-    reply.header('Cache-Control', 'private, max-age=60')
-    return {
-      channel: channel ?? 'ALL',
-      marketplace: marketplace ?? 'ALL',
-      insights,
-      reviews: { average: count > 0 ? sum / count : null, count, distribution, trend, recent, total },
-      status: {
-        amazonInsights: insights?.accessStatus ?? null,
-        ebayLiveEnabled: process.env.NEXUS_EBAY_REAL_API === 'true',
-        mode: process.env.NEXUS_REVIEW_INGEST_MODE === 'live' ? 'live' : 'sandbox',
-      },
-    }
   })
 
   // ── UX.1 — Global channel + market filter options (from the Marketplace table,

@@ -5,10 +5,10 @@
  *
  * TEMPORARY TARGETS (Phase 1, build spec §1.2): a row whose new page is not built yet points at the page doing that
  * job today, and owns its old address through `match`. The coordinator swaps the row's `href` (one line) when the PR
- * that builds the page lands. The Inbox (PR B) and the Requests rows — Queue, Rules, Timing (PR C) — are on their own
- * pages; the Insights rows wait for theirs (`/marketing/reviews/insights/<page>`, PR E). The Channels group (PR F /
- * PR I) and the Settings row (PR D, `permission: 'reviews.manage'`) are absent until their pages exist, so no row
- * names a page it is not.
+ * that builds the page lands. The Inbox (PR B), the Requests rows — Queue, Rules, Timing (PR C) — and Settings (PR D,
+ * `permission: 'reviews.manage'`, at the bottom as the design draws it) are on their own pages; the Insights rows wait
+ * for theirs (`/marketing/reviews/insights/<page>`, PR E). The Channels group (PR F / PR I) is absent until its pages
+ * exist, so no row names a page it is not.
  *
  * Framework-free (no React): the tests import it in Node.
  */
@@ -22,6 +22,7 @@ import {
   MessageSquareText,
   Package,
   Send,
+  Settings,
   Wrench,
   type LucideIcon,
 } from 'lucide-react'
@@ -87,6 +88,15 @@ export const REVIEWS_NAV: readonly ReviewsNavGroup[] = [
       { label: 'Alerts', href: `${REVIEWS_ROOT}/spikes`, icon: Bell },
       { label: 'Fixes', href: `${REVIEWS_ROOT}/actions`, icon: Wrench },
       { label: 'Brief', href: `${REVIEWS_ROOT}/spotlight`, icon: FileText },
+    ],
+  },
+  {
+    id: 'settings',
+    label: 'Reviews settings',
+    hideLabel: true,
+    items: [
+      // The old Automation page redirects here (next.config.js: `?section=automations`).
+      { label: 'Settings', href: `${REVIEWS_ROOT}/settings`, icon: Settings, match: [`${REVIEWS_ROOT}/automation`], permission: 'reviews.manage' },
     ],
   },
 ]

@@ -242,8 +242,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 67,
-      "rawColor": 1502,
-      "tailwindType": 756
+      "rawColor": 1432,
+      "tailwindType": 721
     },
     "marketing/ads": {
       "select": 0,
@@ -305,8 +305,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 66,
-      "tailwindType": 53
+      "rawColor": 26,
+      "tailwindType": 27
     },
     "po": {
       "select": 0,
