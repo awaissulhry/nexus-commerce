@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AWAITING_PAGE_SIZE, FEEDBACK_API, applyTopics, awaitingUrl, feedbackUrl, leaveEbayBuyerFeedback, leaveFeedbackBody, mediaOf,
   parseAwaitingPage, parseFeedbackPage, readItemsAwaitingFeedback, readRestFeedback, readRestTopics, respondToEbayFeedbackRest,
-  restFeedbackToReview, restReplied, topicsOf, type EbaySender,
+  restFeedbackToReview, topicsOf, type EbaySender,
 } from './ebay-feedback-rest.adapter.js'
 
 const NOW = new Date('2026-10-27T10:00:00Z')
@@ -70,9 +70,10 @@ describe('one feedback from eBay’s REST API', () => {
     expect(mediaOf({ images: 'nope' })).toEqual([])
   })
 
-  it('sees a seller reply already on eBay', () => {
-    expect(restReplied(entry({ replyComment: { commentText: 'Danke!' } }))).toBe(true)
-    expect(restReplied(entry())).toBe(false)
+  it('sees a seller reply already on eBay (REST `replyComment`), as the reply rules do', async () => {
+    const { repliedOnChannel } = await import('../review-reply-send.service.js')
+    expect(repliedOnChannel('EBAY', entry({ replyComment: { commentText: 'Danke!' } }))).toBe(true)
+    expect(repliedOnChannel('EBAY', entry())).toBe(false)
   })
 
   it('reads a page and refuses what is not eBay’s answer', () => {

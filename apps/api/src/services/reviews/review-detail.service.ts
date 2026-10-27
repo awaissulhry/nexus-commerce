@@ -5,12 +5,13 @@
  * goes through the order's channel.
  */
 import { channelLabel } from '@nexus/shared/channel-label'
-import { channelSiteDomain, reviewReplyRules, type ReplyRules } from '@nexus/shared/review-reply-rules'
+import { channelSiteDomain, revisionWords, reviewReplyRules, type ReplyRules } from '@nexus/shared/review-reply-rules'
 import prisma from '../../db.js'
 import { isImportedSource, TRIAGE_STATUS_WORDS, variantWords } from './review-inbox-query.js'
 import { repliedOnChannel } from './review-reply-send.service.js'
 import { reviewKindOf, visibleReviewWhere, type ReviewKind } from './review-visibility.js'
 import { REVIEW_CATEGORIES, SENTIMENT_LABELS, translateReviewText } from './sentiment-extraction.service.js'
+import { EBAY_TOPIC_WORDS } from './adapters/ebay-topics.js'
 
 export const THEME_WORDS: Record<string, string> = {
   FIT_SIZING: 'Fit & sizing', DURABILITY: 'Durability', SHIPPING: 'Shipping', VALUE: 'Value', DESIGN: 'Design',
@@ -58,7 +59,9 @@ export function failedReplyWords(code: string | null | undefined): string {
 export function listingHref(channel: string, market: string | null, asin: string | null, rawPayload: unknown): string | null {
   const c = channel.toUpperCase()
   if (c === 'EBAY') {
-    const itemId = rawPayload && typeof rawPayload === 'object' ? String((rawPayload as { ItemID?: unknown }).ItemID ?? '').trim() : ''
+    // Trading GetFeedback names the item `ItemID`; eBay's REST getFeedback `orderLineItemSummary.listingId`.
+    const raw = rawPayload && typeof rawPayload === 'object' ? (rawPayload as { ItemID?: unknown; orderLineItemSummary?: { listingId?: unknown } | null }) : null
+    const itemId = String(raw?.ItemID ?? raw?.orderLineItemSummary?.listingId ?? '').trim()
     return /^\d{6,}$/.test(itemId) ? `https://${channelSiteDomain('EBAY', market)}/itm/${itemId}` : null
   }
   if (c === 'AMAZON' && asin && /^[A-Z0-9]{10}$/.test(asin)) return `https://${channelSiteDomain('AMAZON', market)}/dp/${asin}`
@@ -91,6 +94,30 @@ export interface InboxDetail {
   }[]
   timeline: { at: string; words: string }[]
   reply: ReplyRules
+  /** PR G — the buyer's photos (or videos), in order; [] when none. */
+  media: { url: string; type: string; width: number | null; height: number | null; position: number }[]
+  /** PR G — eBay's AI topics with the buyer's words eBay found for each; null when eBay's topics were not read. */
+  aiTopics: { topic: string; label: string; sentiment: string | null; texts: string[] }[] | null
+  /** PR G — eBay's revision state of this feedback, in words; null when there is nothing to say. */
+  revision: { state: string | null; words: string; tone: string; since: string | null; eligible: boolean } | null
+}
+
+/** eBay's AI topics as the pop-up shows them (pure; null = not read, unknown JSON skipped). */
+export function detailTopics(raw: unknown): InboxDetail['aiTopics'] {
+  if (!Array.isArray(raw)) return null
+  const out: NonNullable<InboxDetail['aiTopics']> = []
+  for (const t of raw) {
+    const item = (t ?? {}) as { topic?: unknown; sentiment?: unknown; texts?: unknown }
+    const topic = typeof item.topic === 'string' ? item.topic.trim().toLowerCase() : ''
+    if (!topic || out.some((o) => o.topic === topic)) continue
+    out.push({
+      topic,
+      label: EBAY_TOPIC_WORDS[topic] ?? topic.charAt(0).toUpperCase() + topic.slice(1),
+      sentiment: typeof item.sentiment === 'string' ? item.sentiment.toUpperCase() : null,
+      texts: Array.isArray(item.texts) ? item.texts.filter((x): x is string => typeof x === 'string' && x.trim().length > 0).slice(0, 3) : [],
+    })
+  }
+  return out
 }
 
 /** GET /api/reviews/inbox/:id; null when the review is not in this business's Inbox. */
@@ -106,6 +133,7 @@ export async function getInboxReview(id: string, now: Date = new Date()): Promis
         },
       },
       responses: { orderBy: { createdAt: 'asc' } },
+      media: { orderBy: { position: 'asc' }, select: { url: true, type: true, width: true, height: true, position: true } },
     },
   })
   if (!r) return null
@@ -178,6 +206,9 @@ export async function getInboxReview(id: string, now: Date = new Date()): Promis
   if (r.triageUpdatedAt) {
     timeline.push({ at: r.triageUpdatedAt, words: r.triageStatus ? `Status: ${TRIAGE_STATUS_WORDS[r.triageStatus] ?? r.triageStatus}` : 'Triage changed' })
   }
+  // PR G — eBay's revision state, from when Nexus first read it (eBay gives no date for it).
+  const revisionSaid = r.channel === 'EBAY' && r.feedbackStateAt ? revisionWords(r.feedbackState, false) : null
+  if (revisionSaid) timeline.push({ at: r.feedbackStateAt!, words: `Revision request: ${revisionSaid.words.toLowerCase()} (as Nexus read it from eBay)` })
   timeline.sort((a, b) => a.at.getTime() - b.at.getTime())
 
   return {
@@ -222,6 +253,12 @@ export async function getInboxReview(id: string, now: Date = new Date()): Promis
       kind, marketplace: r.marketplace, postedAt: r.postedAt, imported, replied: sent || repliedOnChannel(r.channel, r.rawPayload),
       buyerId: r.authorName,
     }, now),
+    media: r.media.map((m) => ({ url: m.url, type: m.type, width: m.width, height: m.height, position: m.position })),
+    aiTopics: detailTopics(r.channelTopics),
+    revision: (() => {
+      const said = r.channel === 'EBAY' ? revisionWords(r.feedbackState, r.revisionEligible === true && (r.rating ?? 5) <= 3) : null
+      return said ? { state: r.feedbackState, words: said.words, tone: said.tone, since: r.feedbackStateAt?.toISOString() ?? null, eligible: r.revisionEligible === true } : null
+    })(),
   }
 }
 

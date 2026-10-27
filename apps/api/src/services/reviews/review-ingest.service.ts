@@ -32,9 +32,10 @@ import {
   persistSentiment,
   type ExtractResult,
 } from './sentiment-extraction.service.js'
-import { fetchEbayFeedback } from './adapters/ebay-feedback.adapter.js'
+import type { Prisma } from '@prisma/client'
+import { fetchEbayFeedbackPreferRest } from './adapters/ebay-feedback.adapter.js'
 import { fetchAmazonVocFeed } from './adapters/amazon-voc.adapter.js'
-import type { AdapterResult } from './adapters/types.js'
+import type { AdapterRawReview, AdapterResult } from './adapters/types.js'
 import { publishReviewEvent } from '../review-events.service.js'
 import { notifyReviewAlert } from './review-alert-notify.service.js'
 
@@ -59,6 +60,12 @@ interface RawReview {
   rawPayload?: unknown
   /** Reviews Inbox — the Nexus Order this review is about, when the source names it (eBay feedback). */
   orderId?: string
+  /** Reviews eBay REST (PR G) — photos, eBay's AI topics, eBay's state of the feedback (see adapters/types.ts). */
+  media?: AdapterRawReview['media']
+  channelTopics?: AdapterRawReview['channelTopics']
+  feedbackState?: AdapterRawReview['feedbackState']
+  revisionEligible?: AdapterRawReview['revisionEligible']
+  sameAs?: AdapterRawReview['sameAs']
 }
 
 export interface IngestSummary {
@@ -97,20 +104,70 @@ async function loadFixtures(marketplace?: string): Promise<RawReview[]> {
 }
 
 
+const EXISTING_SELECT = {
+  id: true, orderId: true, marketplace: true, channelTopics: true, feedbackState: true, revisionEligible: true,
+  media: { select: { url: true, type: true, position: true }, orderBy: { position: 'asc' } },
+} satisfies Prisma.ReviewSelect
+type ExistingReview = Prisma.ReviewGetPayload<{ select: typeof EXISTING_SELECT }>
+
+/**
+ * Reviews eBay REST (PR G) — feedback read by eBay's REST API that the older Trading read already stored under its own
+ * id: the same order line from the same buyer (Trading keeps the line as `OrderLineItemID` in the raw payload).
+ */
+async function findSameFeedback(raw: RawReview): Promise<ExistingReview | null> {
+  if (!raw.sameAs || raw.channel !== 'EBAY') return null
+  return prisma.review.findFirst({
+    where: {
+      channel: 'EBAY',
+      rawPayload: { path: ['OrderLineItemID'], equals: raw.sameAs.orderLineItemId },
+      ...(raw.sameAs.buyer ? { authorName: raw.sameAs.buyer } : {}),
+    },
+    select: EXISTING_SELECT,
+  })
+}
+
+const sameMedia = (a: readonly { url: string; position: number }[], b: readonly { url: string; position: number }[]) =>
+  a.length === b.length && a.every((m, i) => m.url === b[i].url && m.position === b[i].position)
+
+/**
+ * What a new read changes on a row Nexus already has (only what differs, so a 30-minute pass writes nothing for an
+ * unchanged feedback): the order link (and, with it, the order's market — the real one, where the Trading read used to
+ * stamp a default), eBay's AI topics, eBay's state of the feedback, and the buyer's photos (replaced as a set).
+ */
+async function refreshExisting(existing: ExistingReview, raw: RawReview, now: Date): Promise<void> {
+  const data: Prisma.ReviewUpdateInput = {}
+  // Reviews Inbox — a row stored before its order was known gets the order link on the next read.
+  if (raw.orderId && !existing.orderId) data.orderId = raw.orderId
+  if (raw.orderId && raw.marketplace && raw.marketplace !== existing.marketplace) data.marketplace = raw.marketplace
+  if (raw.channelTopics !== undefined && JSON.stringify(raw.channelTopics) !== JSON.stringify(existing.channelTopics ?? null)) {
+    data.channelTopics = raw.channelTopics as unknown as Prisma.InputJsonValue
+  }
+  if (raw.feedbackState !== undefined && raw.feedbackState !== existing.feedbackState) {
+    data.feedbackState = raw.feedbackState
+    data.feedbackStateAt = now
+  }
+  if (raw.revisionEligible !== undefined && raw.revisionEligible !== existing.revisionEligible) data.revisionEligible = raw.revisionEligible
+  if (Object.keys(data).length > 0) await prisma.review.update({ where: { id: existing.id }, data })
+  if (raw.media !== undefined && !sameMedia(existing.media, raw.media)) {
+    await prisma.$transaction([
+      prisma.reviewMedia.deleteMany({ where: { reviewId: existing.id } }),
+      prisma.reviewMedia.createMany({ data: raw.media.map((m) => ({ reviewId: existing.id, url: m.url, type: m.type, width: m.width ?? null, height: m.height ?? null, position: m.position })) }),
+    ])
+  }
+}
+
 async function findOrCreateReview(
   raw: RawReview,
   ingestSource: string,
   importBatchId?: string,
 ): Promise<{ id: string; isNew: boolean } | null> {
-  const existing = await prisma.review.findFirst({
+  const now = new Date()
+  const existing = (await prisma.review.findFirst({
     where: { channel: raw.channel, externalReviewId: raw.externalReviewId },
-    select: { id: true, orderId: true },
-  })
+    select: EXISTING_SELECT,
+  })) ?? (await findSameFeedback(raw))
   if (existing) {
-    // Reviews Inbox — a row stored before its order was known gets the order link on the next read.
-    if (raw.orderId && !existing.orderId) {
-      await prisma.review.update({ where: { id: existing.id }, data: { orderId: raw.orderId } })
-    }
+    await refreshExisting(existing, raw, now)
     return { id: existing.id, isNew: false }
   }
   // Resolve productId via ASIN or SKU when possible.
@@ -149,9 +206,17 @@ async function findOrCreateReview(
       ingestSource,
       orderId: raw.orderId ?? null,
       importBatchId: importBatchId ?? null,
+      ...(raw.channelTopics !== undefined ? { channelTopics: raw.channelTopics as unknown as Prisma.InputJsonValue } : {}),
+      ...(raw.feedbackState !== undefined ? { feedbackState: raw.feedbackState, feedbackStateAt: raw.feedbackState ? now : null } : {}),
+      ...(raw.revisionEligible !== undefined ? { revisionEligible: raw.revisionEligible } : {}),
     },
     select: { id: true },
   })
+  if (raw.media?.length) {
+    await prisma.reviewMedia.createMany({
+      data: raw.media.map((m) => ({ reviewId: row.id, url: m.url, type: m.type, width: m.width ?? null, height: m.height ?? null, position: m.position })),
+    })
+  }
   return { id: row.id, isNew: true }
 }
 
@@ -405,14 +470,15 @@ async function runLiveAdapters(
   const absorb = async (
     label: string,
     ingestSource: string,
-    run: () => Promise<AdapterResult>,
+    run: () => Promise<AdapterResult & { ingestSource?: string }>,
   ): Promise<void> => {
     try {
       const out = await run()
       if (out.note) summary.notes.push(`${label}: ${out.note}`)
       if (out.error) summary.errors.push(`${label}: ${out.error}`)
       if (out.reviews.length > 0) {
-        await ingestRawReviews(out.reviews, { ingestSource, force, summary })
+        // The eBay read says itself how the rows arrived (REST or the older Trading call).
+        await ingestRawReviews(out.reviews, { ingestSource: out.ingestSource ?? ingestSource, force, summary })
       }
     } catch (err) {
       summary.errors.push(`${label}: ${err instanceof Error ? err.message : String(err)}`)
@@ -424,8 +490,18 @@ async function runLiveAdapters(
   for (const mp of marketplaces) {
     await absorb(`amazon:${mp}`, 'AMAZON_VOC', () => fetchAmazonVocFeed({ marketplace: mp }))
   }
-  // eBay — channel-wide GetFeedback (not per Amazon marketplace).
-  await absorb('ebay', 'EBAY_API', () => fetchEbayFeedback({ maxPages: 5 }))
+  // eBay — channel-wide feedback (not per Amazon marketplace): eBay's REST Feedback API when the account has it, else
+  // Trading GetFeedback (Reviews eBay REST, PR G).
+  await absorb('ebay', 'EBAY_API', () => fetchEbayFeedbackPreferRest({ maxPages: 5 }))
+  // Reviews eBay REST (PR G) — the sales that wait for the seller's feedback for the buyer (a read; leaving it is an
+  // approval a person decides on the Reviews › eBay page).
+  try {
+    const { refreshEbayBuyerFeedback } = await import('./ebay-buyer-feedback.service.js')
+    const out = await refreshEbayBuyerFeedback()
+    if (out.note) summary.notes.push(`ebay buyer feedback: ${out.note}`)
+  } catch (err) {
+    summary.errors.push(`ebay buyer feedback: ${err instanceof Error ? err.message : String(err)}`)
+  }
 }
 
 export function summarizeReviewIngest(s: IngestSummary): string {

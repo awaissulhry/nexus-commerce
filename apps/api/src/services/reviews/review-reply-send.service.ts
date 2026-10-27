@@ -3,7 +3,8 @@
  * (POST /reviews/:id/reply/send) so the review desk and Claude's `reply-to-review` run the same code. It answers as the
  * route did (RouteAnswer), proven by routes/review-actions-parity.vitest.test.ts.
  *
- * eBay: the real RespondToFeedback (Trading API, behind NEXUS_EBAY_REAL_API; one public reply per feedback). Amazon
+ * eBay: the real RespondToFeedback (Trading API, behind NEXUS_EBAY_REAL_API; one public reply per feedback; REST
+ * respondToFeedback for feedback first read by eBay's REST Feedback API, whose id is REST's). Amazon
  * and Shopify have no public reply API: the reply is recorded MANUAL (the operator posts it on the platform). A reply
  * that went out marks the review RESPONDED and raises review.responded.
  *
@@ -23,11 +24,13 @@ export function ebayReplyMode(): 'live' | 'off' {
   return process.env.NEXUS_EBAY_REAL_API === 'true' ? 'live' : 'off'
 }
 
-/** eBay feedback read with a seller reply already on it (GetFeedback `FeedbackResponse`). */
+/** eBay feedback read with a seller reply already on it (GetFeedback `FeedbackResponse`, REST `replyComment.commentText`). */
 export function repliedOnChannel(channel: string, rawPayload: unknown): boolean {
   if (channel !== 'EBAY' || !rawPayload || typeof rawPayload !== 'object') return false
   const response = (rawPayload as { FeedbackResponse?: unknown }).FeedbackResponse
-  return typeof response === 'string' && response.trim().length > 0
+  if (typeof response === 'string' && response.trim().length > 0) return true
+  const rest = (rawPayload as { replyComment?: { commentText?: unknown } | null }).replyComment?.commentText
+  return typeof rest === 'string' && rest.trim().length > 0
 }
 
 export interface ReplyBody {
@@ -72,8 +75,11 @@ export async function sendReviewReply(id: string, b: ReplyBody): Promise<RouteAn
 
   if (rules.mode === 'send' && review.channel === 'EBAY') {
     // Loaded here: the adapter builds the eBay auth service when imported, and the tool registry imports this file.
-    const { respondToEbayFeedback } = await import('./adapters/ebay-feedback.adapter.js')
-    const res = await respondToEbayFeedback(review.externalReviewId, text, review.authorName ?? '')
+    // Feedback first read by eBay's REST API carries REST's feedback id: it is answered by REST respondToFeedback.
+    const { respondToEbayFeedback, respondToEbayFeedbackByRest } = await import('./adapters/ebay-feedback.adapter.js')
+    const res = review.ingestSource === 'EBAY_REST'
+      ? await respondToEbayFeedbackByRest(review.externalReviewId, text, review.authorName ?? '')
+      : await respondToEbayFeedback(review.externalReviewId, text, review.authorName ?? '')
     ok = res.ok
     code = res.code
     errorMessage = res.error ?? null

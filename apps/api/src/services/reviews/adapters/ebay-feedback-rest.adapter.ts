@@ -40,8 +40,6 @@ import { EBAY_BUYER_FEEDBACK_LIMIT, EBAY_REPLY_LIMIT, replyLength } from '@nexus
 import type { AdapterRawReview, ReviewMediaInput, ReviewTopic } from './types.js'
 import { EBAY_FEEDBACK_TOPICS } from './ebay-topics.js'
 
-export { EBAY_FEEDBACK_TOPICS, EBAY_TOPIC_WORDS } from './ebay-topics.js'
-
 export const FEEDBACK_API = 'https://api.ebay.com/commerce/feedback/v1'
 /** getFeedback `limit` maximum. */
 export const FEEDBACK_PAGE_SIZE = 200
@@ -176,11 +174,6 @@ export function restFeedbackToReview(entry: Json, now: Date = new Date()): Adapt
     revisionEligible: typeof entry.eligibleForRevision === 'boolean' ? entry.eligibleForRevision : null,
     ...(line.orderLineItemId ? { sameAs: { orderLineItemId: line.orderLineItemId, buyer } } : {}),
   }
-}
-
-/** A seller reply already on a REST entry (`replyComment.commentText`). */
-export function restReplied(rawPayload: unknown): boolean {
-  return !!str(obj(obj(rawPayload).replyComment).commentText)
 }
 
 export interface AwaitingLine {

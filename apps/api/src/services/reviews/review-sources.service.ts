@@ -104,6 +104,7 @@ export function arrivalWords(ingestSource: string | null): string | null {
     case 'IMPORT_CSV': return 'file import'
     case 'AMAZON_VOC': return 'review feed'
     case 'EBAY_API': return 'read from eBay'
+    case 'EBAY_REST': return 'read from eBay'
     case 'SHOPIFY_WEBHOOK': return 'sent by Shopify'
     case 'MANUAL': return 'added by hand'
     default: return null
