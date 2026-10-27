@@ -5,10 +5,10 @@
  * goes through the order's channel.
  */
 import { channelLabel } from '@nexus/shared/channel-label'
-import { channelSiteDomain, reviewAppOf, revisionWords, reviewReplyRules, type ReplyRules } from '@nexus/shared/review-reply-rules'
+import { REVIEW_APP_NAME, REVIEW_APP_REPLIES, channelSiteDomain, reviewAppOf, revisionWords, reviewReplyRules, type ReplyRules, type ReviewApp } from '@nexus/shared/review-reply-rules'
 import prisma from '../../db.js'
 import { isImportedSource, TRIAGE_STATUS_WORDS, variantWords } from './review-inbox-query.js'
-import { repliedOnChannel } from './review-reply-send.service.js'
+import { repliedOnChannel, shopDomainOf } from './review-reply-send.service.js'
 import { noReplyReason, reviewKindOf, visibleReviewWhere, type NoReplyReason, type ReviewKind } from './review-visibility.js'
 import { guessLanguage } from './review-language.js'
 import { REVIEW_CATEGORIES, SENTIMENT_LABELS, translateReviewText } from './sentiment-extraction.service.js'
@@ -45,6 +45,21 @@ export function placeWords(channel: string, market: string | null | undefined): 
   return region ? `${name} ${region}` : name
 }
 
+/** A review app's reply code in words (JUDGEME_401, OKENDO_NO_ANSWER …), or null when it is not one. */
+function appReplyWords(code: string | null | undefined): string | null {
+  const m = /^(JUDGEME|OKENDO)_(.+)$/.exec(code ?? '')
+  if (!m) return null
+  const name = REVIEW_APP_NAME[m[1] as ReviewApp]
+  const key = m[1] === 'JUDGEME' ? 'API token' : 'API key'
+  switch (m[2]) {
+    case 'NOT_CONNECTED': return `${name} is not connected to Nexus. Nothing was sent.`
+    case '401': case '403': return `${name} refused the ${key}. Paste a new one in Reviews settings. Nothing was sent.`
+    case '400': case '404': case '422': return `${name} refused the reply. Nothing was sent.`
+    case 'NO_ANSWER': return `${name} did not answer. Check in ${name} whether the reply is there before sending again.`
+    default: return null
+  }
+}
+
 /** Why a reply did not go out, in words (never a setting's name). */
 export function failedReplyWords(code: string | null | undefined): string {
   switch (code) {
@@ -53,11 +68,7 @@ export function failedReplyWords(code: string | null | undefined): string {
     case 'TOKEN': return 'The eBay sign-in needs renewing. Nothing was sent.'
     case 'TOO_LONG': return 'The reply was too long for eBay. Nothing was sent.'
     case 'FAILURE': return 'eBay refused the reply. Nothing was sent.'
-    case 'JUDGEME_NOT_CONNECTED': return 'Judge.me is not connected to Nexus. Nothing was sent.'
-    case 'JUDGEME_401': case 'JUDGEME_403': return 'Judge.me refused the API token. Paste a new one in Reviews settings. Nothing was sent.'
-    case 'JUDGEME_422': return 'Judge.me refused the reply. Nothing was sent.'
-    case 'JUDGEME_NO_ANSWER': return 'Judge.me did not answer. Check in Judge.me whether the reply is there before sending again.'
-    default: return 'The reply did not go out. Nothing was sent.'
+    default: return appReplyWords(code) ?? 'The reply did not go out. Nothing was sent.'
   }
 }
 
@@ -106,10 +117,12 @@ export interface InboxDetail {
   }[]
   timeline: { at: string; words: string }[]
   reply: ReplyRules
-  /** PR G — the buyer's photos (or videos), in order; [] when none. eBay's, Etsy's one photo and Judge.me's (PR I). */
+  /** PR G — the buyer's photos (or videos), in order; [] when none. eBay's, Etsy's one photo and the review apps' (PR I). */
   media: { url: string; type: string; width: number | null; height: number | null; position: number }[]
-  /** PR I — the review app that holds a video Nexus cannot show (Judge.me gives no video URL); null when none. */
+  /** PR I — the review app that holds a video Nexus does not show (the apps give no file Nexus can play for sure); null when none. */
   videoIn: string | null
+  /** Shopify: the review app the review was read from ("Okendo"), which keeps its photos; null otherwise. */
+  app: string | null
   /** PR G — eBay's AI topics with the buyer's words eBay found for each; null when eBay's topics were not read. */
   aiTopics: { topic: string; label: string; sentiment: string | null; texts: string[] }[] | null
   /** PR G — eBay's revision state of this feedback, in words; null when there is nothing to say. */
@@ -186,9 +199,9 @@ export async function getInboxReview(id: string, now: Date = new Date()): Promis
     : null
 
   const kind = reviewKindOf(r.channel, r.kind)
-  // Shopify via Judge.me: replies go out from here while the app is connected (reviewReplyRules decides).
+  // Shopify via Judge.me or Okendo: replies go out from here while the app is connected (reviewReplyRules decides).
   const app = r.channel === 'SHOPIFY' ? reviewAppOf(r.ingestSource) : null
-  const appConnected = app === 'JUDGEME' ? await import('./review-app-connection.service.js').then((m) => m.judgemeConnected()) : undefined
+  const appConnected = app && REVIEW_APP_REPLIES[app] ? await import('./review-app-connection.service.js').then((m) => m.reviewAppConnected(app)) : undefined
   const imported = isImportedSource(r.ingestSource)
   const sent = r.responses.some((x) => x.status === 'SENT')
   const place = placeWords(r.channel, r.marketplace)
@@ -281,10 +294,11 @@ export async function getInboxReview(id: string, now: Date = new Date()): Promis
     timeline: timeline.map((t) => ({ at: t.at.toISOString(), words: t.words })),
     reply: reviewReplyRules(r.channel, {
       kind, marketplace: r.marketplace, postedAt: r.postedAt, imported, replied: sent || repliedOnChannel(r.channel, r.rawPayload),
-      buyerId: r.authorName, lastEditedAt: r.channelEditedAt, app, appConnected,
+      buyerId: r.authorName, lastEditedAt: r.channelEditedAt, app, appConnected, shopDomain: shopDomainOf(r.rawPayload),
     }, now),
     media: r.media.map((m) => ({ url: m.url, type: m.type, width: m.width, height: m.height, position: m.position })),
-    videoIn: app === 'JUDGEME' && (r.rawPayload as { hasVideo?: unknown } | null)?.hasVideo === true ? 'Judge.me' : null,
+    videoIn: app && (r.rawPayload as { hasVideo?: unknown } | null)?.hasVideo === true ? REVIEW_APP_NAME[app] : null,
+    app: app ? REVIEW_APP_NAME[app] : null,
     aiTopics: detailTopics(r.channelTopics),
     revision: (() => {
       const said = r.channel === 'EBAY' ? revisionWords(r.feedbackState, r.revisionEligible === true && (r.rating ?? 5) <= 3) : null

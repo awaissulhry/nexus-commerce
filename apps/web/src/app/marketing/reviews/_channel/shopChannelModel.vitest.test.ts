@@ -5,9 +5,9 @@
 import { describe, expect, it } from 'vitest'
 import type { InboxRow } from '../inbox/inboxDatasource'
 import {
-  connectHeld, csvFileName, etsyReplyCell, etsySubtitle, etsyTileViews, isAnswered, isAppConnected, lastEditWords, mediaWords, reviewsCsv,
-  shopDomainOf, shopifyReplyNote, shopifySubtitle, shopifyTileViews, waitHoursWords, windowWords,
-  type EtsyRow, type ReviewAppView, type ShopifyRow,
+  appActionLabel, connectHeld, connectedApps, csvFileName, etsyReplyCell, etsySubtitle, etsyTileViews, initialValues, isAnswered, isAppConnected,
+  lastEditWords, mediaWords, namesWords, reviewsCsv, shopDomainOf, shopifyReplyNote, shopifySubtitle, shopifyTileViews, waitHoursWords, windowWords,
+  type EtsyRow, type ReviewAppField, type ReviewAppKey, type ReviewAppView, type ShopifyRow,
 } from './shopChannelModel'
 
 const base: InboxRow = {
@@ -60,26 +60,50 @@ describe('Etsy', () => {
   })
 })
 
+/** The fields each app's connect window asks for, as `GET /api/reviews/apps` gives them. */
+const FIELDS: Record<ReviewAppKey, ReviewAppField[]> = {
+  JUDGEME: [{ key: 'shopDomain', label: 'Store address', hint: '', secret: false, placeholder: null }, { key: 'apiToken', label: 'Judge.me private API token', hint: '', secret: true, placeholder: null }],
+  OKENDO: [{ key: 'userId', label: 'Okendo User ID', hint: '', secret: false, placeholder: null }, { key: 'apiKey', label: 'Okendo API key', hint: '', secret: true, placeholder: null }],
+  YOTPO: [{ key: 'storeId', label: 'Yotpo store ID (app key)', hint: '', secret: false, placeholder: null }, { key: 'apiSecret', label: 'Yotpo API secret', hint: '', secret: true, placeholder: null }],
+  LOOX: [{ key: 'storeId', label: 'Loox public store ID', hint: '', secret: false, placeholder: null }, { key: 'apiKey', label: 'Loox API key', hint: '', secret: true, placeholder: null }],
+}
+const NAMES: Record<ReviewAppKey, string> = { JUDGEME: 'Judge.me', OKENDO: 'Okendo', YOTPO: 'Yotpo', LOOX: 'Loox' }
+const app = (key: ReviewAppKey, state: ReviewAppView['state'], over: Partial<ReviewAppView> = {}): ReviewAppView => ({
+  app: key, name: NAMES[key], what: '', state, stateWords: state === 'connected' ? 'Connected' : 'Not connected', tone: 'success', words: '',
+  fields: FIELDS[key], planWords: '', storeId: state === 'not_connected' ? null : 'a-store.myshopify.com', storeWords: null, connectedAt: null,
+  lastReadAt: null, lastReadCount: null, replies: key === 'JUDGEME' || key === 'OKENDO', canReply: false, replyHref: null, ...over,
+})
+
 describe('Shopify', () => {
-  const app = (state: ReviewAppView['state']): ReviewAppView => ({
-    app: 'JUDGEME', name: 'Judge.me', what: '', state, stateWords: state === 'connected' ? 'Connected' : 'Not connected', tone: 'success', words: '',
-    shopDomain: 'a-store.myshopify.com', connectedAt: null, lastReadAt: null, lastReadCount: null, canReply: true, connectable: true,
-  })
   it('four tiles', () => {
     expect(shopifyTileViews({ average: 4.6, reviews: 318, newReviews: 24, newDelta: 6, withMedia: 64, videos: 9, needReply: 2, oldestWaitHours: 6 }).map((v) => `${v.label}: ${v.value} (${v.hint})`))
       .toEqual(['Average rating: 4.6 (318 reviews)', 'New reviews: 24 (+6 · last 30 days)', 'With photo or video: 64 (9 videos)', 'Needs a reply: 2 (oldest 6 h)'])
     expect(waitHoursWords(null)).toBe('nothing waits')
     expect(waitHoursWords(50)).toBe('oldest 2 days')
   })
-  it('who posts the reply; the app’s state', () => {
-    expect(shopifyReplyNote(shopify(), true)).toBe('Reply from Nexus')
-    expect(shopifyReplyNote(shopify(), false)).toBe('Judge.me not connected')
-    expect(shopifyReplyNote(shopify({ app: null }), true)).toBe('Copy and post in the app')
-    expect(shopifyReplyNote(shopify({ status: 'RESPONDED' }), true)).toBe('Responded')
-    expect(isAppConnected(app('waiting'))).toBe(true)
-    expect(isAppConnected(app('needs_fix'))).toBe(false)
+  it('who posts the reply: Nexus through Judge.me or Okendo while connected; Yotpo and Loox in the app', () => {
+    const apps = [app('JUDGEME', 'connected'), app('OKENDO', 'not_connected'), app('YOTPO', 'connected'), app('LOOX', 'connected')]
+    expect(shopifyReplyNote(shopify(), apps)).toBe('Reply from Nexus')
+    expect(shopifyReplyNote(shopify(), [app('JUDGEME', 'needs_fix')])).toBe('Judge.me not connected')
+    expect(shopifyReplyNote(shopify({ app: 'OKENDO' }), apps)).toBe('Okendo not connected')
+    expect(shopifyReplyNote(shopify({ app: 'OKENDO' }), [app('OKENDO', 'waiting')])).toBe('Reply from Nexus')
+    expect(shopifyReplyNote(shopify({ app: 'YOTPO' }), apps)).toBe('Reply in Yotpo')
+    expect(shopifyReplyNote(shopify({ app: 'LOOX' }), apps)).toBe('Reply in Loox')
+    expect(shopifyReplyNote(shopify({ app: null }), apps)).toBe('Copy and post in the app')
+    expect(shopifyReplyNote(shopify({ status: 'RESPONDED' }), apps)).toBe('Responded')
+    expect(isAppConnected(app('JUDGEME', 'waiting'))).toBe(true)
+    expect(isAppConnected(app('JUDGEME', 'needs_fix'))).toBe(false)
     expect(mediaWords(shopify())).toBe('1 photo · video in Judge.me')
+    expect(mediaWords(shopify({ app: 'LOOX', photoItems: [] }))).toBe('video in Loox')
+  })
+  it('the page names the connected apps', () => {
     expect(shopifySubtitle(null)).toMatch(/Shopify keeps no reviews itself/)
+    const answer = { apps: [app('JUDGEME', 'not_connected'), app('OKENDO', 'connected', { lastReadAt: '2026-10-27T09:00:00.000Z' }), app('LOOX', 'waiting', { stateWords: 'Connected · waiting for the first read' })], readOn: true, lastImportAt: null, imported: 0 }
+    expect(connectedApps(answer).map((a) => a.app)).toEqual(['OKENDO', 'LOOX'])
+    expect(shopifySubtitle(answer)).toMatch(/^Your store · Okendo and Loox · read every 30 min, last /)
+    expect(namesWords(['Judge.me', 'Okendo', 'Loox'])).toBe('Judge.me, Okendo and Loox')
+    expect(appActionLabel(app('YOTPO', 'not_connected'))).toBe('Connect Yotpo…')
+    expect(appActionLabel(app('YOTPO', 'needs_fix'))).toBe('Manage Yotpo…')
   })
 })
 
@@ -94,15 +118,28 @@ describe('export', () => {
   })
 })
 
-describe('connecting Judge.me', () => {
-  it('the store address and the token, in order; the permission first', () => {
-    const ok = { canManage: true, shopDomain: 'a-store.myshopify.com', apiToken: 'abcdefgh12345', busy: false }
+describe('connecting a review app', () => {
+  it('Judge.me: the store address and the token, in order; the permission first', () => {
+    const judge = app('JUDGEME', 'not_connected')
+    const ok = { canManage: true, app: judge, values: { shopDomain: 'a-store.myshopify.com', apiToken: 'abcdefgh12345' }, busy: false }
     expect(connectHeld(ok)).toBeNull()
     expect(connectHeld({ ...ok, canManage: false })).toMatch(/Manage reviews/)
-    expect(connectHeld({ ...ok, shopDomain: '' })).toMatch(/Shopify address first/)
-    expect(connectHeld({ ...ok, shopDomain: 'mystore.com' })).toMatch(/\.myshopify\.com/)
-    expect(connectHeld({ ...ok, apiToken: '' })).toMatch(/Paste the private API token/)
-    expect(connectHeld({ ...ok, apiToken: 'a b' })).toMatch(/does not look like/)
+    expect(connectHeld({ ...ok, values: { ...ok.values, shopDomain: '' } })).toMatch(/Shopify address first/)
+    expect(connectHeld({ ...ok, values: { ...ok.values, shopDomain: 'mystore.com' } })).toMatch(/\.myshopify\.com/)
+    expect(connectHeld({ ...ok, values: { ...ok.values, apiToken: '' } })).toBe('Paste the Judge.me private API token first.')
+    expect(connectHeld({ ...ok, values: { ...ok.values, apiToken: 'a b' } })).toMatch(/does not look like/)
     expect(shopDomainOf('https://A-Store.myshopify.com/admin')).toBe('a-store.myshopify.com')
+  })
+  it('Okendo, Yotpo and Loox: each app’s own fields, checked before the API checks again', () => {
+    const okendo = app('OKENDO', 'not_connected')
+    expect(connectHeld({ canManage: true, app: okendo, values: { userId: 'nope', apiKey: 'k'.repeat(32) }, busy: false })).toMatch(/Okendo User ID: 36 letters/)
+    expect(connectHeld({ canManage: true, app: okendo, values: { userId: '0f9d5e1a-1111-4a2b-9c3d-2e4f6a8b0c1d', apiKey: 'k'.repeat(32) }, busy: false })).toBeNull()
+    const yotpo = app('YOTPO', 'not_connected')
+    expect(connectHeld({ canManage: true, app: yotpo, values: { storeId: 'AbCdEf0123456789', apiSecret: '' }, busy: false })).toBe('Paste the Yotpo API secret first.')
+    expect(connectHeld({ canManage: true, app: yotpo, values: { storeId: 'a b', apiSecret: 'secret-123' }, busy: false })).toMatch(/does not look like a Yotpo store ID/)
+    const looxApp = app('LOOX', 'connected', { storeId: '4JG3Fn92E.37d12ab29' })
+    // Replacing the key: the store id comes back, the secret never does.
+    expect(initialValues(looxApp)).toEqual({ storeId: '4JG3Fn92E.37d12ab29', apiKey: '' })
+    expect(connectHeld({ canManage: true, app: looxApp, values: initialValues(looxApp), busy: false })).toBe('Paste the Loox API key first.')
   })
 })

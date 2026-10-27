@@ -13,15 +13,22 @@
  * already_replied), a closed reply window (409 window_closed), a reply over the limit (400 too_long). Only a rule in
  * 'send' mode posts through the channel (eBay feedback read from eBay); an imported row is recorded MANUAL.
  *
- * Reviews PR I (2026-10-27): a Shopify review read from Judge.me is answered through Judge.me (`POST /api/v1/replies`,
- * review-app-connection.service.ts) while the app is connected (otherwise it is copied and marked, MANUAL); an Etsy review's
+ * Reviews PR I (2026-10-27; Okendo 2026-10-28): a Shopify review read from Judge.me or Okendo is answered through that app
+ * (review-app-connection.service.ts `sendReviewAppReply`) while it is connected (otherwise it is copied and marked, MANUAL);
+ * Yotpo and Loox take no replies from apps, so their reviews are copied and marked too; an Etsy review's
  * 100 days count from the buyer's last edit (`channelEditedAt`) — Etsy has no reply API, so it is recorded MANUAL.
  */
 
-import { replyRefusal, reviewAppOf, reviewReplyRules } from '@nexus/shared/review-reply-rules'
+import { REVIEW_APP_REPLIES, replyRefusal, reviewAppOf, reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import prisma from '../../db.js'
 import { AnswerReply, RouteAnswer } from '../../lib/route-answer.js'
 import { reviewKindOf } from './review-visibility.js'
+
+/** The store's myshopify address a review app's answer named (Loox's product URL), for the "Reply in …" link. */
+export function shopDomainOf(rawPayload: unknown): string | null {
+  const v = rawPayload && typeof rawPayload === 'object' ? (rawPayload as { shopDomain?: unknown }).shopDomain : null
+  return typeof v === 'string' && v ? v : null
+}
 
 /** Live or off, from the switch respondToEbayFeedback reads. */
 export function ebayReplyMode(): 'live' | 'off' {
@@ -31,10 +38,15 @@ export function ebayReplyMode(): 'live' | 'off' {
 /**
  * Feedback read with a seller reply already on it: eBay's GetFeedback `FeedbackResponse` or REST `replyComment.commentText`,
  * or the "Your Response" column of Amazon's seller feedback report (amazon-seller-feedback.service.ts stores it as
- * `yourResponse`).
+ * `yourResponse`), or a Shopify review whose app already shows the store's reply (`storeReply`, Okendo and Loox).
  */
 export function repliedOnChannel(channel: string, rawPayload: unknown): boolean {
   if (!rawPayload || typeof rawPayload !== 'object') return false
+  if (channel === 'SHOPIFY') {
+    // The store's reply already on the review in its app (Okendo's and Loox's answers carry it).
+    const reply = (rawPayload as { storeReply?: unknown }).storeReply
+    return typeof reply === 'string' && reply.trim().length > 0
+  }
   if (channel === 'EBAY') {
     const response = (rawPayload as { FeedbackResponse?: unknown }).FeedbackResponse
     if (typeof response === 'string' && response.trim().length > 0) return true
@@ -72,8 +84,8 @@ export async function sendReviewReply(id: string, b: ReplyBody): Promise<RouteAn
 
   const sent = await prisma.reviewResponse.count({ where: { reviewId: id, status: 'SENT' } })
   const app = review.channel === 'SHOPIFY' ? reviewAppOf(review.ingestSource) : null
-  const appConnected = app === 'JUDGEME'
-    ? await import('./review-app-connection.service.js').then((m) => m.judgemeConnected())
+  const appConnected = app && REVIEW_APP_REPLIES[app]
+    ? await import('./review-app-connection.service.js').then((m) => m.reviewAppConnected(app))
     : undefined
   const rules = reviewReplyRules(review.channel, {
     kind: reviewKindOf(review.channel, review.kind),
@@ -85,6 +97,7 @@ export async function sendReviewReply(id: string, b: ReplyBody): Promise<RouteAn
     lastEditedAt: review.channelEditedAt,
     app,
     appConnected,
+    shopDomain: shopDomainOf(review.rawPayload),
   })
   const refusal = replyRefusal(rules, text)
   if (refusal) return reply.code(refusal.code === 'too_long' || refusal.code === 'empty_body' ? 400 : 409).send({ error: refusal.code, message: refusal.words })
@@ -104,9 +117,9 @@ export async function sendReviewReply(id: string, b: ReplyBody): Promise<RouteAn
     code = res.code
     errorMessage = res.error ?? null
   }
-  if (rules.mode === 'send' && review.channel === 'SHOPIFY' && app === 'JUDGEME') {
-    const { sendJudgemeReply } = await import('./review-app-connection.service.js')
-    const res = await sendJudgemeReply(review.externalReviewId, text)
+  if (rules.mode === 'send' && review.channel === 'SHOPIFY' && app) {
+    const { sendReviewAppReply } = await import('./review-app-connection.service.js')
+    const res = await sendReviewAppReply(app, review.externalReviewId, text)
     ok = res.ok
     code = res.code
     errorMessage = res.error ?? null

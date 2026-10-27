@@ -6,7 +6,7 @@
  * that arrive in a later update say "Coming later" (build spec ruling 3); Amazon gives topics only, never review text
  * or stars (ruling 5). Amazon seller feedback (PR H) has "Fetch now", held with its reason when this setup does not
  * fetch it, Amazon is not connected or a fetch runs. The Shopify review app's row opens "Connect your review app"
- * (Judge.me: paste the store address and a private API token; PR I) and reads the rows again after a change. No setting
+ * (Judge.me, Okendo, Yotpo or Loox: paste what that app needs; PR I) and reads the rows again after a change. No setting
  * name is ever shown.
  */
 import { useMemo, useState } from 'react'

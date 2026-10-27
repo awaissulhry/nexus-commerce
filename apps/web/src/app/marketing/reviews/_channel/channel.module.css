@@ -377,3 +377,33 @@
   max-width: 100%;
   overflow-x: auto;
 }
+
+/* The store's review apps (Shopify page and "Connect your review app"): one row each — name and what it gives, its
+   state, its button. On a phone the state and the button wrap under the name. */
+.appList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.appRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  min-width: 0;
+}
+
+.appRow > .stack {
+  flex: 1 1 220px;
+}
+
+.dialogFootStart {
+  margin-right: auto;
+}

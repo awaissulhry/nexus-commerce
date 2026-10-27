@@ -6,14 +6,16 @@
  *       → { channel, label, generatedAt, sections } — Etsy: { source, tiles, reviews }; Shopify: { app, tiles, reviews };
  *         each section `{ ok: true, data } | { ok: false, error }`
  *   GET    /api/reviews/apps                → { apps: ReviewAppView[], readOn } — never a token
- *   POST   /api/reviews/apps/judgeme        { shopDomain, apiToken } → { app } (the token is stored encrypted; 400 in words)
- *   DELETE /api/reviews/apps/:app           → { app } (the token is deleted; the reviews already read stay)
+ *   POST   /api/reviews/apps/:app           the app's fields (Judge.me { shopDomain, apiToken }, Okendo { userId, apiKey },
+ *                                           Yotpo { storeId, apiSecret }, Loox { storeId, apiKey }) → { app } (the secret is
+ *                                           stored encrypted; 400 in words, 404 for an unknown app)
+ *   DELETE /api/reviews/apps/:app           → { app } (the secret is deleted; the reviews already read stay)
  *
  * The request body of the connect call holds a secret: it is never logged here (request.log does not redact).
  */
 import type { FastifyPluginAsync } from 'fastify'
 import { requestUserId } from '../lib/auth/request-permission.js'
-import { connectJudgeme, disconnectReviewApp, listReviewApps } from '../services/reviews/review-app-connection.service.js'
+import { connectReviewApp, disconnectReviewApp, listReviewApps } from '../services/reviews/review-app-connection.service.js'
 import { reviewsShopChannel, ShopChannelInputError } from '../services/reviews/review-shop-channel.service.js'
 import { logger } from '../utils/logger.js'
 
@@ -41,17 +43,17 @@ const reviewShopChannelsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  fastify.post('/reviews/apps/judgeme', async (request, reply) => {
+  fastify.post<{ Params: { app: string } }>('/reviews/apps/:app', async (request, reply) => {
     const actor = requestUserId(request)
     try {
-      const result = await connectJudgeme(request.body, actor)
+      const result = await connectReviewApp(request.params.app, request.body, actor)
       if (result.ok === false) return reply.code(result.status).send({ error: result.error, message: result.words })
       reply.header('Cache-Control', 'private, no-store')
       return { app: result.app }
     } catch (err) {
-      // Never the body (it holds the token): the error's name only.
+      // Never the body (it holds the secret): the error's name only.
       logger.warn('[review-apps] connect failed', { error: err instanceof Error ? err.name : 'error' })
-      return reply.code(500).send({ error: 'connect_failed', message: 'Judge.me could not be connected. Nothing was saved. Try again in a moment.' })
+      return reply.code(500).send({ error: 'connect_failed', message: 'The review app could not be connected. Nothing was saved. Try again in a moment.' })
     }
   })
 

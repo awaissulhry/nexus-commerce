@@ -8,9 +8,9 @@
  *
  * Etsy: Etsy shares reviews to read only — the banner says how replies work (on Etsy.com, once, within 100 days of the
  * buyer's last edit, no edit), each row shows the one photo, the last edit and the reply window ("Day 2 of 100",
- * "4 days left", "Closed"). Shopify: the review app — "Connect your review app" until Judge.me is connected (Okendo,
- * Yotpo and Loox "Coming later", or import a file), then its reviews with photos and the video mark; a reply goes out
- * to Judge.me from the review pop-up.
+ * "4 days left", "Closed"). Shopify: the review app — "Connect your review app" (Judge.me, Okendo, Yotpo or Loox, or
+ * import a file) until one is connected, then its reviews with photos and the video mark; a reply goes out through
+ * Judge.me or Okendo from the review pop-up, and is posted in Yotpo or Loox ("Reply in …") then marked as responded.
  *
  * Read: GET /api/reviews/area/shop-channel?channel= (sections that fail alone), again when a review changes, a reply goes
  * out, an import lands or the review app is connected (this tab or another), and when a review arrives (SSE).
@@ -38,9 +38,9 @@ import { sectionData, sectionError } from './channelModel'
 import { ReviewAppConnect } from './ReviewAppConnect'
 import { ShopReviewList, type ShopListContext } from './ShopReviewList'
 import {
-  ETSY_REVIEWS_HREF, etsyReplyCell, etsySubtitle, etsyTileViews, isAppConnected, judgeme, lastEditWords, mediaWords, shopifyReplyNote,
+  ETSY_REVIEWS_HREF, appActionLabel, appName, appsNeedingFix, connectedApps, etsyReplyCell, etsySubtitle, etsyTileViews, lastEditWords, mediaWords, namesWords, shopifyReplyNote,
   shopifySubtitle, shopifyTileViews, shortTime, windowWords,
-  type EtsyRow, type EtsySections, type ShopChannel, type ShopChannelResponse, type ShopifyRow, type ShopifySections,
+  type EtsyRow, type EtsySections, type ReviewAppKey, type ReviewAppView, type ShopChannel, type ShopChannelResponse, type ShopifyRow, type ShopifySections,
 } from './shopChannelModel'
 import s from './channel.module.css'
 
@@ -52,7 +52,7 @@ type AnyResponse = ShopChannelResponse<EtsySections | ShopifySections>
 
 // ── Cells shared by both lists ───────────────────────────────────────
 
-interface CellContext extends ShopListContext { canManage: boolean; appConnected: boolean }
+interface CellContext extends ShopListContext { canManage: boolean; apps: ReviewAppView[] }
 type EtsyCell = ICellRendererParams<EtsyRow, unknown, CellContext>
 type ShopifyCell = ICellRendererParams<ShopifyRow, unknown, CellContext>
 
@@ -188,13 +188,13 @@ function EtsyPage({ data, busy, canManage, me, onRetry }: { data: EtsySections; 
 function ShopifyMediaCell({ data, context }: ShopifyCell) {
   if (!data) return null
   if (data.photoItems.length === 0 && !data.hasVideo) return <span className={s.sub}>None</span>
-  // One line: the first photo (the Lightbox has them all) and, beside it, the video mark (Judge.me gives no video URL).
+  // One line: the first photo (the Lightbox has them all) and, beside it, the video mark (the apps give no file Nexus plays).
   return (
     <span className={s.inline}>
       {data.photoItems[0] && (
         <Thumbnail src={data.photoItems[0].thumb} photoCount={data.photoItems.length} alt={`Photo from ${data.buyer ?? 'the reviewer'}`} title="Open the photos" onClick={() => context?.openPhotos(data, 0)} />
       )}
-      {data.hasVideo && <Tag tone="neutral" title="This review has a video: watch it in Judge.me"><Video size={11} aria-label="Video" /></Tag>}
+      {data.hasVideo && <Tag tone="neutral" title={`This review has a video: watch it in ${appName(data.app) ?? 'the review app'}`}><Video size={11} aria-label="Video" /></Tag>}
     </span>
   )
 }
@@ -217,7 +217,7 @@ function ShopifyStatusCell({ data }: ShopifyCell) {
 
 function ShopifyReplyCell({ data, context }: ShopifyCell) {
   if (!data) return null
-  const note = shopifyReplyNote(data, context?.appConnected ?? false)
+  const note = shopifyReplyNote(data, context?.apps ?? [])
   const held = context?.canManage ? null : 'You need ‘Manage reviews’ to reply to reviews.'
   return (
     <span className={s.stack}>
@@ -241,65 +241,73 @@ const SHOPIFY_COLUMNS: ColDef<ShopifyRow>[] = [
 const shopifyPhotos = (row: ShopifyRow) => row.photoItems.map((p) => ({ url: p.url }))
 
 function ShopifyPage({ data, busy, canManage, me, onRetry, onConnect }: {
-  data: ShopifySections; busy: boolean; canManage: boolean; me: string | null; onRetry: () => void; onConnect: () => void
+  data: ShopifySections; busy: boolean; canManage: boolean; me: string | null; onRetry: () => void; onConnect: (app?: ReviewAppKey | null) => void
 }) {
   const apps = sectionData(data.app)
-  const app = judgeme(apps)
-  const connected = isAppConnected(app)
+  const live = connectedApps(apps)
+  const fix = appsNeedingFix(apps)
+  const connected = live.length > 0
   const tiles = sectionData(data.tiles)
   const metrics = useMemo(() => (tiles ? tileMetrics(shopifyTileViews(tiles)) : null), [tiles])
   const list = sectionData(data.reviews)
-  const cellContext = useMemo(() => ({ canManage, appConnected: connected }), [canManage, connected])
+  const cellContext = useMemo(() => ({ canManage, apps: apps?.apps ?? [] }), [canManage, apps])
+  const names = namesWords(live.map((a) => a.name))
   const empty = useMemo(() => ({
     title: 'No Shopify reviews yet',
-    message: connected ? 'Reviews show here as Nexus reads them from Judge.me, every 30 minutes.' : 'Connect Judge.me, or import a file from the review app.',
-  }), [connected])
+    message: connected ? `Reviews show here as Nexus reads them from ${names}, every 30 minutes.` : 'Connect the store’s review app, or import a file from it.',
+  }), [connected, names])
+  const held = canManage ? null : 'You need ‘Manage reviews’ to connect a review app.'
 
   return (
     <>
       {sectionError(data.app) && <SectionError error={sectionError(data.app)!} onRetry={onRetry} busy={busy} />}
+      {fix.map((a) => (
+        <Banner key={a.app} tone="danger" title={`${a.name} needs a new key.`} action={<Button size="sm" variant="primary" onClick={() => onConnect(a.app)} heldReason={held}>Manage {a.name}…</Button>}>
+          {a.words}
+        </Banner>
+      ))}
       {apps && !connected && (
         <Card
-          header={<span className={s.inline}>Connect your review app <Pill tone={app?.tone ?? 'neutral'} dot>{app?.stateWords ?? 'Not connected'}</Pill></span>}
+          header={<span className={s.inline}>Connect your review app <Pill tone="neutral" dot>Not connected</Pill></span>}
           headingLevel={2}
           description={apps.imported > 0
             ? `Until then, Shopify reviews arrive only by file import (${apps.imported.toLocaleString('en')} so far${apps.lastImportAt ? `, last file ${shortTime(apps.lastImportAt)}` : ''}).`
             : 'Until then, Shopify reviews arrive only by file import.'}
-          headerAction={<Button size="sm" variant="primary" onClick={onConnect} heldReason={canManage ? null : 'You need ‘Manage reviews’ to connect a review app.'}>Connect Judge.me…</Button>}
+          headerAction={<Button size="sm" variant="primary" onClick={() => onConnect(null)} heldReason={held}>Connect a review app…</Button>}
         >
           <div className={s.stackGap}>
-            {app?.state === 'needs_fix' && <Banner tone="danger" title="Judge.me needs a new token.">{app.words}</Banner>}
-            <ul className={s.sampleList} aria-label="Review apps">
+            <ul className={s.appList} aria-label="Review apps">
               {apps.apps.map((a) => (
-                <li key={a.app} className={s.sampleRow}>
+                <li key={a.app} className={s.appRow}>
                   <span className={s.stack}><span className={s.main}>{a.name}</span><span className={s.sub}>{a.what}</span></span>
-                  {/* ⛔ KEEP — placeholders (build spec ruling 3): Okendo, Yotpo and Loox connect in a later update; their words stay. */}
-                  {a.connectable ? <Pill tone={a.tone} dot>{a.stateWords}</Pill> : <Tag tone="neutral">Coming later</Tag>}
+                  <Pill tone={a.tone} dot>{a.stateWords}</Pill>
+                  <Button size="sm" onClick={() => onConnect(a.app)} heldReason={held}>{appActionLabel(a)}</Button>
                 </li>
               ))}
-              <li className={s.sampleRow}>
-                <span className={s.stack}><span className={s.main}>Another app, or none</span><span className={s.sub}>Import a file from the app now and then. Nexus cannot read it live.</span></span>
+              <li className={s.appRow}>
+                <span className={s.stack}><span className={s.main}>Another app, or a plan without API access</span><span className={s.sub}>Export the reviews from the app now and then, and import the file. Nexus cannot read it live.</span></span>
                 <Button asChild size="sm"><Link href={inboxHref({ import: 1 })}><Upload size={13} aria-hidden /> Import reviews…</Link></Button>
               </li>
             </ul>
             <ul className={s.bullets} aria-label="What connecting does">
-              <li>Nexus reads new reviews every 30 minutes, with their photos; a video is marked (watch it in Judge.me).</li>
-              <li>Judge.me, and Okendo on its Enterprise plan, let Nexus post your reply under the review. Yotpo and Loox are read only: you copy the reply and post it there.</li>
-              <li>You paste a key from Judge.me. Nexus never sees your Shopify password.</li>
+              <li>Nexus reads new reviews every 30 minutes, with their photos; a video is marked (watch it in the app).</li>
+              <li>Judge.me and Okendo let Nexus post your reply under the review. Yotpo and Loox give apps no way to reply: the reply box opens the app, where you post it.</li>
+              <li>You paste a key from the app. Nexus stores it encrypted and never sees your Shopify password.</li>
               <li>Disconnect any time in Reviews settings; the reviews already read stay.</li>
             </ul>
           </div>
         </Card>
       )}
-      {apps && connected && app && (
+      {apps && live.map((app) => (
         <Banner
+          key={app.app}
           tone={app.tone === 'warning' ? 'warning' : app.state === 'waiting' ? 'info' : 'success'}
-          title={`Connected to Judge.me${app.shopDomain ? ` · ${app.shopDomain}` : ''}`}
-          action={<Button size="sm" onClick={onConnect}>Manage Judge.me…</Button>}
+          title={`Connected to ${app.name}${app.storeWords ? ` · ${app.storeWords}` : ''}`}
+          action={<Button size="sm" onClick={() => onConnect(app.app)}>Manage {app.name}…</Button>}
         >
           {app.words}
         </Banner>
-      )}
+      ))}
       {sectionError(data.tiles) ? (
         <SectionError error={sectionError(data.tiles)!} onRetry={onRetry} busy={busy} />
       ) : metrics && (connected || (tiles?.reviews ?? 0) > 0) ? (
@@ -321,8 +329,9 @@ function ShopifyPage({ data, busy, canManage, me, onRetry, onConnect }: {
         />
       )}
       <p className={s.footnote}>
-        Judge.me gives Nexus the review’s photos and says when it has a video; a reply sent from Nexus is posted
-        under the review on the store and e-mailed to the reviewer by Judge.me. Imported reviews are answered in the review app, then marked as responded.
+        The review app gives Nexus the review’s photos and says when it has a video. A reply sent from Nexus through Judge.me
+        or Okendo is posted under the review on the store and e-mailed to the reviewer by the app; a Yotpo or Loox review is
+        answered in Yotpo or Loox, then marked as responded. Imported reviews are answered in the review app, then marked as responded.
       </p>
     </>
   )
@@ -371,6 +380,7 @@ function ShopChannel({ channel }: { channel: ShopChannel }) {
   useReviewEvents(reload, { types: ['review.created', 'review.responded'] })
 
   const [connectOpen, setConnectOpen] = useState(false)
+  const [connectApp, setConnectApp] = useState<ReviewAppKey | null>(null)
   const data = loaded?.data ?? null
   const etsy = channel === 'ETSY' && data ? (data.sections as EtsySections) : null
   const shopify = channel === 'SHOPIFY' && data ? (data.sections as ShopifySections) : null
@@ -409,10 +419,10 @@ function ShopChannel({ channel }: { channel: ShopChannel }) {
       ) : etsy ? (
         <EtsyPage data={etsy} busy={busy} canManage={canManage} me={me} onRetry={() => void load()} />
       ) : shopify ? (
-        <ShopifyPage data={shopify} busy={busy} canManage={canManage} me={me} onRetry={() => void load()} onConnect={() => setConnectOpen(true)} />
+        <ShopifyPage data={shopify} busy={busy} canManage={canManage} me={me} onRetry={() => void load()} onConnect={(app) => { setConnectApp(app ?? null); setConnectOpen(true) }} />
       ) : null}
       {channel === 'SHOPIFY' && (
-        <ReviewAppConnect open={connectOpen} onClose={() => setConnectOpen(false)} canManage={canManage} onChanged={() => void load()} />
+        <ReviewAppConnect open={connectOpen} onClose={() => setConnectOpen(false)} canManage={canManage} initialApp={connectApp} onChanged={() => void load()} />
       )}
     </div>
   )

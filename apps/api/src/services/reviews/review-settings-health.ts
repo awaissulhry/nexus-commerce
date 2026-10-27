@@ -11,8 +11,8 @@
  * own text is shown only as a code in a tooltip, with any setting name taken out.
  *
  * Reviews PR I (2026-10-27): the Etsy row reads whether Nexus reads Etsy reviews (review-shop-channel-math.ts
- * `etsySource`), and the Shopify row the store's review app (Judge.me: connected, last read, or what went wrong; its
- * action opens the connect window on the page). Okendo, Yotpo and Loox stay "Coming later".
+ * `etsySource`), and the Shopify row the store's review apps (Judge.me, Okendo, Yotpo, Loox: connected, last read, or
+ * what went wrong; its action opens the connect window on the page).
  *
  * Pure parts exported and tested in review-settings.vitest.test.ts.
  */
@@ -78,8 +78,8 @@ export interface SourceExtraFacts {
   mailerPaused: { at: Date | null } | null
   /** Whether Nexus reads Etsy reviews (PR I). */
   etsy: EtsySource
-  /** The store's review app (Judge.me) as the Shopify page shows it (PR I). */
-  judgeme: ReviewAppView | null
+  /** The store's review apps (Judge.me, Okendo, Yotpo, Loox) as the Shopify page shows them (PR I). */
+  apps: ReviewAppView[]
   /** Amazon seller feedback fetches (PR H); left out = not read (the row says it could not be checked). */
   sellerFeedback?: SellerFeedbackState | null
 }
@@ -210,19 +210,23 @@ export function settingsSourceRows(facts: SourceFacts, extra: SourceExtraFacts, 
         : { kind: 'page', label: 'Open Etsy reviews', href: '/marketing/reviews/etsy' },
   })
 
-  // ── Shopify review app (PR I): Judge.me connects; Okendo, Yotpo and Loox later ──
+  // ── Shopify review app (PR I): Judge.me, Okendo, Yotpo or Loox ──
   const shopifyImport = lastImport('SHOPIFY')
-  const app = extra.judgeme
+  // The apps a person connected (or that need a fix); one of them is the row's state, a fix first.
+  const live = extra.apps.filter((a) => a.state === 'connected' || a.state === 'waiting' || a.state === 'needs_fix')
+  const app = live.find((a) => a.state === 'needs_fix') ?? live.find((a) => a.tone === 'warning') ?? live[0] ?? null
   const connected = app != null && (app.state === 'connected' || app.state === 'waiting')
+  const others = live.filter((a) => a !== app).map((a) => `${a.name}: ${a.stateWords.toLowerCase()}.`)
+  const lastRead = newest(live.map((a) => (a.lastReadAt ? new Date(a.lastReadAt) : null)))
   rows.push({
-    key: 'shopify-app', name: 'Shopify review app', what: 'Reviews with photos from the store’s review app · Judge.me: read and reply',
-    stateWords: app?.stateWords ?? 'Not connected',
+    key: 'shopify-app', name: 'Shopify review app', what: 'Reviews with photos from the store’s review app · Judge.me, Okendo, Yotpo or Loox',
+    stateWords: app ? `${app.name} · ${app.stateWords}` : 'Not connected',
     tone: app?.state === 'needs_fix' ? 'danger' : app?.tone === 'warning' ? 'warning' : connected ? app!.tone : 'neutral',
-    later: 'Okendo, Yotpo, Loox: coming later',
-    words: `${app?.words ?? 'Connect Judge.me to let Nexus read the store’s reviews and post replies.'}${shopifyImport ? ` A file import also works: the last one was on ${dayWords(shopifyImport)}.` : ''}`,
-    lastAt: app?.lastReadAt ?? shopifyImport?.toISOString() ?? null,
-    lastWords: app?.lastReadAt || shopifyImport ? null : 'Never read',
-    action: { kind: 'app', label: connected || app?.state === 'needs_fix' ? 'Manage Judge.me…' : 'Connect Judge.me…', href: null },
+    later: null,
+    words: `${app?.words ?? 'Connect the store’s review app — Judge.me, Okendo, Yotpo or Loox — to let Nexus read its reviews.'}${others.length ? ` ${others.join(' ')}` : ''}${shopifyImport ? ` A file import also works: the last one was on ${dayWords(shopifyImport)}.` : ''}`,
+    lastAt: lastRead?.toISOString() ?? shopifyImport?.toISOString() ?? null,
+    lastWords: lastRead || shopifyImport ? null : 'Never read',
+    action: { kind: 'app', label: app ? 'Manage review apps…' : 'Connect a review app…', href: null },
   })
 
   return { rows, problems: rows.filter((r) => r.tone === 'warning' || r.tone === 'danger').length }
@@ -303,7 +307,7 @@ export async function readSettingsSources(now: Date = new Date()): Promise<{ row
     mailerPaused: mailer?.isPaused ? { at: mailer.pausedAt ?? null } : null,
     sellerFeedback,
     etsy,
-    judgeme: apps.apps.find((a) => a.app === 'JUDGEME') ?? null,
+    apps: apps.apps,
   }, now)
   return { rows, problems, checkedAt: now.toISOString() }
 }

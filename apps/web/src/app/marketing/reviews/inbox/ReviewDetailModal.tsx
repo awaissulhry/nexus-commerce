@@ -224,7 +224,7 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
       return
     }
     emitInvalidation({ type: 'review.replied', id: reviewId })
-    toast(replyDoneWords(mode, detail.review.channel), 'success')
+    toast(replyDoneWords(mode, detail.review.channel, detail.reply.via), 'success')
   }, [detail, reply, reviewId, reread, toast])
 
   const copy = useCallback(async () => {

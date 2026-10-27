@@ -92,17 +92,23 @@ interface RawReview {
 // Header synonyms used for auto-mapping. Compared after normalisation
 // (lowercase, alphanumerics only) so "Review Body", "review_body" and
 // "reviewBody" all collapse to the same token.
+// The Shopify review apps' exports match on their own (2026-10-28), for a store whose plan has no API: Yotpo's columns
+// (https://support.yotpo.com/docs/exporting-reviews-from-yotpo: "Review ID", "Review Creation Date", "Review Score",
+// "Review Title", "Review Content", "Thumbs Up", "Reviewer Display Name", "Product SKU"), Okendo's
+// (https://support.okendo.io/en/articles/10584118-managing-data-exports: body, dateCreated, isVerifiedBuyer, name, rating,
+// sku, title, upvotes) and Loox's spreadsheet columns (https://help.loox.io/article/60-how-do-i-import-reviews-from-a-spreadsheet:
+// rating, author, body, created_at, verified_purchase). Their e-mail columns are dropped like any other.
 const FIELD_SYNONYMS: Record<CanonicalField, string[]> = {
   body: ['body', 'review', 'reviewbody', 'comment', 'commenttext', 'text', 'content', 'reviewtext', 'recensione', 'reviewcontent', 'feedback'],
   title: ['title', 'reviewtitle', 'heading', 'subject', 'titolo', 'headline'],
-  rating: ['rating', 'stars', 'star', 'score', 'rate', 'valutazione', 'overall', 'starrating'],
-  authorName: ['author', 'authorname', 'reviewer', 'reviewername', 'name', 'customer', 'customername', 'buyer', 'nickname', 'utente', 'commentinguser', 'username'],
-  postedAt: ['postedat', 'date', 'reviewdate', 'created', 'createdat', 'time', 'datetime', 'data', 'submittedat', 'commenttime'],
+  rating: ['rating', 'stars', 'star', 'score', 'rate', 'valutazione', 'overall', 'starrating', 'reviewscore'],
+  authorName: ['author', 'authorname', 'reviewer', 'reviewername', 'name', 'customer', 'customername', 'buyer', 'nickname', 'utente', 'commentinguser', 'username', 'reviewerdisplayname'],
+  postedAt: ['postedat', 'date', 'reviewdate', 'created', 'createdat', 'time', 'datetime', 'data', 'submittedat', 'commenttime', 'datecreated', 'reviewcreationdate'],
   externalReviewId: ['externalreviewid', 'reviewid', 'id', 'feedbackid', 'recordid'],
   asin: ['asin', 'amazonasin'],
-  sku: ['sku', 'sellersku', 'msku', 'merchantsku'],
-  verifiedPurchase: ['verified', 'verifiedpurchase', 'isverified', 'vp'],
-  helpfulVotes: ['helpful', 'helpfulvotes', 'votes', 'helpfulcount', 'upvotes'],
+  sku: ['sku', 'sellersku', 'msku', 'merchantsku', 'productsku'],
+  verifiedPurchase: ['verified', 'verifiedpurchase', 'isverified', 'vp', 'isverifiedbuyer'],
+  helpfulVotes: ['helpful', 'helpfulvotes', 'votes', 'helpfulcount', 'upvotes', 'thumbsup'],
   marketplace: ['marketplace', 'market', 'country', 'mkt', 'countrycode', 'site'],
 }
 

@@ -30,9 +30,9 @@ vi.mock('../services/reviews/review-app-connection.service.js', async (importOri
   return {
     ...real,
     readReviewAppsOnce: async () => {
-      if (!real.reviewAppReadOn()) return { enabled: false, apps: 0, seen: 0, inserted: 0, updated: 0, errors: [] }
+      if (!real.reviewAppReadOn()) return { enabled: false, apps: 0, seen: 0, inserted: 0, updated: 0, errors: [], results: [] }
       h.appReads++
-      return { enabled: true, apps: 1, seen: 2, inserted: 2, updated: 0, errors: [] }
+      return { enabled: true, apps: 1, seen: 2, inserted: 2, updated: 0, errors: [], results: [{ app: 'JUDGEME' as const, seen: 2, inserted: 2, updated: 0, error: null }] }
     },
   }
 })

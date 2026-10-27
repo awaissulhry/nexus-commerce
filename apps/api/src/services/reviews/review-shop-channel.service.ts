@@ -5,7 +5,7 @@
  *
  *   ETSY     source (is Etsy read, in words) · tiles (average, new, with a photo, not replied yet, window closing,
  *            window closed) · reviews (the Inbox's Etsy rows + the photo, the buyer's last edit and the reply window)
- *   SHOPIFY  app (the review apps' states: Judge.me connects, the others later) · tiles (average, new, with photo or
+ *   SHOPIFY  app (the review apps' states: Judge.me, Okendo, Yotpo, Loox) · tiles (average, new, with photo or
  *            video, needs a reply) · reviews (the Inbox's Shopify rows + photos, video and the app they came from)
  *
  * The lists are the Inbox's own rows (`listInbox`), so a row opens the same review pop-up. Every Review read goes
@@ -37,7 +37,7 @@ export interface ShopifyRow extends InboxRow {
   /** The review's photos (its stored media) with their thumbnails; the Inbox row's `photos` is their count. */
   photoItems: Array<{ url: string; thumb: string }>
   hasVideo: boolean
-  /** The review app it was read from (JUDGEME), or null for a file import. */
+  /** The review app it was read from (JUDGEME, OKENDO, YOTPO, LOOX), or null for a file import. */
   app: string | null
 }
 

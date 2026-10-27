@@ -25,10 +25,13 @@
  * - Etsy: no reply API. One public reply within 100 days of the buyer's LAST EDIT, never edited
  *   (https://help.etsy.com/hc/en-us/articles/115015808588). Nexus reads the edit time from Etsy's `update_timestamp`
  *   (`lastEditedAt`); a review without one (a file import) counts from the posted time.
- * - Shopify: Shopify keeps no reviews itself; they live in the store's review app. Judge.me lets an app post a public
- *   reply (`POST /api/v1/replies`, https://judge.me/api/docs): a review read through Nexus's Judge.me connection is
- *   answered from Nexus. Okendo replies by API on its Enterprise plan only, Yotpo and Loox have no reply API: copy the
- *   reply, post it in the app, mark it as responded. Without an app (a file import), the same.
+ * - Shopify: Shopify keeps no reviews itself; they live in the store's review app. Judge.me and Okendo let an app post a
+ *   public reply (Judge.me `POST /api/v1/replies`, https://judge.me/api/docs; Okendo `POST /reviews/{reviewId}/reply`,
+ *   https://docs.okendo.io/docs/open-api/merchant-rest-api/reply-to-a-review): a review read through Nexus's connection
+ *   to either is answered from Nexus. Yotpo and Loox give apps no reply (Yotpo's merchant API has no comment endpoint —
+ *   https://apidocs.yotpo.com/llms.txt; Loox: "Both APIs are read-only",
+ *   https://help.loox.io/support/solutions/articles/501000356871): copy the reply, "Reply in Yotpo/Loox" opens the app,
+ *   post it there, mark it as responded. Without an app (a file import), the same.
  *
  * Due: an open review (no status yet, New or In progress) that someone can answer is overdue once it is older than
  * REPLY_DUE_HOURS. The API's needs-a-reply rule (review-visibility.ts) also leaves out imported rows.
@@ -55,10 +58,42 @@ export const AMAZON_PRODUCT_NO_REPLY = 'Amazon lets nobody reply to a product re
 export type ReviewApp = 'JUDGEME' | 'OKENDO' | 'YOTPO' | 'LOOX'
 export const REVIEW_APPS: readonly ReviewApp[] = ['JUDGEME', 'OKENDO', 'YOTPO', 'LOOX']
 export const REVIEW_APP_NAME: Record<ReviewApp, string> = { JUDGEME: 'Judge.me', OKENDO: 'Okendo', YOTPO: 'Yotpo', LOOX: 'Loox' }
+/** How Nexus stores a review it read from each app (`Review.ingestSource`). */
+export const REVIEW_APP_SOURCE: Record<ReviewApp, string> = { JUDGEME: 'JUDGEME_API', OKENDO: 'OKENDO_API', YOTPO: 'YOTPO_API', LOOX: 'LOOX_API' }
+/** Whether the app lets Nexus post a reply under a review (see the channel facts above). */
+export const REVIEW_APP_REPLIES: Record<ReviewApp, boolean> = { JUDGEME: true, OKENDO: true, YOTPO: false, LOOX: false }
 
-/** The review app a Shopify review came from, by how Nexus read it ('JUDGEME_API' → Judge.me); null for a file or anything else. */
+/** The review app a Shopify review came from, by how Nexus read it ('OKENDO_API' → Okendo); null for a file or anything else. */
 export function reviewAppOf(ingestSource: string | null | undefined): ReviewApp | null {
-  return String(ingestSource ?? '').toUpperCase() === 'JUDGEME_API' ? 'JUDGEME' : null
+  const source = String(ingestSource ?? '').toUpperCase()
+  return REVIEW_APPS.find((app) => REVIEW_APP_SOURCE[app] === source) ?? null
+}
+
+/** The store's Shopify admin handle from a myshopify address ("a-store.myshopify.com" → "a-store"); null otherwise. */
+export function shopHandleOf(shopDomain: string | null | undefined): string | null {
+  const m = String(shopDomain ?? '').trim().toLowerCase().match(/^([a-z0-9][a-z0-9-]{0,62})\.myshopify\.com$/)
+  return m ? m[1] : null
+}
+
+/**
+ * Where a person answers a review in the app itself (the reply box's "Reply in …" link). Okendo's and Yotpo's moderation
+ * pages are their own sites (https://support.okendo.io/en/articles/2881122-reply-to-your-customer-reviews,
+ * https://support.yotpo.com/docs/comments); Loox opens only inside the Shopify admin
+ * (https://help.loox.io/article/68-how-do-i-reply-to-a-review), so it needs the store's myshopify address (else the
+ * Shopify admin's front page). Null for Judge.me, which Nexus answers itself.
+ */
+export function reviewAppReplyHref(app: ReviewApp, shopDomain?: string | null): string | null {
+  if (app === 'OKENDO') return 'https://reviews.okendo.io/admin/#/reviews/moderation'
+  if (app === 'YOTPO') return 'https://reviews.yotpo.com/#/moderation/reviews'
+  if (app !== 'LOOX') return null
+  const handle = shopHandleOf(shopDomain)
+  return handle ? `https://admin.shopify.com/store/${handle}/apps/loox` : 'https://admin.shopify.com'
+}
+
+/** The reply box's "Reply in …" link for an app, or null. */
+function replyInApp(app: ReviewApp, shopDomain?: string | null): { label: string; href: string } | null {
+  const href = reviewAppReplyHref(app, shopDomain)
+  return href ? { label: `Reply in ${REVIEW_APP_NAME[app]}`, href } : null
 }
 
 /** What the rules need to know about one review. */
@@ -82,6 +117,8 @@ export interface ReplyRulesReview {
   app?: ReviewApp | null
   /** Shopify: whether Nexus still holds a working connection to that app. Left out = not known (the API checks again). */
   appConnected?: boolean
+  /** Shopify: the store's myshopify address when the review says it (Loox), for the "Reply in …" link. */
+  shopDomain?: string | null
 }
 
 export interface ReplyWindow {
@@ -112,6 +149,8 @@ export interface ReplyRules {
   open: { label: string; href: string } | null
   /** Copy mode: "Mark as responded" records the reply in Nexus. */
   markAsResponded: boolean
+  /** Shopify: the review app the review was read from, which posts or keeps the reply ("Okendo"); null otherwise. */
+  via?: string | null
   window: ReplyWindow | null
   /** Why no reply can go out now, in words, or null. */
   held: string | null
@@ -178,7 +217,7 @@ export function replyWindow(postedAt: string | Date | null | undefined, days: nu
 /** How a reply to this review works on its channel. */
 export function reviewReplyRules(channel: string, review: ReplyRulesReview = {}, now: Date = new Date()): ReplyRules {
   const c = String(channel ?? '').toUpperCase()
-  const base = { channel: c, canEdit: false, sendLabel: null, open: null, markAsResponded: true, window: null, held: null, heldCode: null } as const
+  const base = { channel: c, canEdit: false, sendLabel: null, open: null, markAsResponded: true, window: null, held: null, heldCode: null, via: null } as const
   let rules: ReplyRules
 
   if (c === 'EBAY' && !review.imported) {
@@ -211,26 +250,25 @@ export function reviewReplyRules(channel: string, review: ReplyRulesReview = {},
       open: { label: 'Open reviews on Etsy', href: 'https://www.etsy.com/your/shops/me/reviews' },
       ruleLine: `Reply on Etsy.com: Etsy has no reply API, so copy the reply and open the review on Etsy. One public reply, within ${ETSY_REPLY_WINDOW_DAYS} days of the buyer’s last edit. It can’t be edited (only deleted, no second reply). After you reply the buyer can no longer change the review.`,
     }
-  } else if (c === 'SHOPIFY' && review.app === 'JUDGEME' && !review.imported && review.appConnected === false) {
-    rules = {
-      ...base, mode: 'copy', limit: null, oneReply: false, canEdit: true,
-      ruleLine: 'Judge.me is not connected to Nexus now: copy the reply, post it in Judge.me, then mark it as responded. Connect Judge.me in Reviews settings to reply from here.',
-    }
-  } else if (c === 'SHOPIFY' && review.app === 'JUDGEME' && !review.imported) {
-    rules = {
-      ...base, mode: 'send', limit: null, oneReply: true, markAsResponded: false, sendLabel: 'Send reply to Judge.me',
-      ruleLine: 'Nexus posts the reply under the review in Judge.me: public on the store’s review widget, and Judge.me also e-mails it to the reviewer. One reply from Nexus; to change it later, use Judge.me.',
-    }
-  } else if (c === 'SHOPIFY' && review.app === 'OKENDO') {
-    rules = {
-      ...base, mode: 'copy', limit: null, oneReply: false, canEdit: true,
-      ruleLine: 'Okendo lets apps post replies on its Enterprise plan only, and Nexus does not connect to Okendo yet: copy the reply, post it in Okendo, then mark it as responded.',
-    }
-  } else if (c === 'SHOPIFY' && (review.app === 'YOTPO' || review.app === 'LOOX')) {
+  } else if (c === 'SHOPIFY' && review.app && !review.imported && REVIEW_APP_REPLIES[review.app] && review.appConnected === false) {
     const name = REVIEW_APP_NAME[review.app]
     rules = {
-      ...base, mode: 'copy', limit: null, oneReply: false, canEdit: true,
-      ruleLine: `${name} gives apps no way to reply (read only): copy the reply, post it in ${name}, then mark it as responded.`,
+      ...base, mode: 'copy', limit: null, oneReply: false, canEdit: true, via: name,
+      open: replyInApp(review.app, review.shopDomain),
+      ruleLine: `${name} is not connected to Nexus now: copy the reply, post it in ${name}, then mark it as responded. Connect ${name} in Reviews settings to reply from here.`,
+    }
+  } else if (c === 'SHOPIFY' && review.app && !review.imported && REVIEW_APP_REPLIES[review.app]) {
+    const name = REVIEW_APP_NAME[review.app]
+    rules = {
+      ...base, mode: 'send', limit: null, oneReply: true, markAsResponded: false, sendLabel: `Send reply to ${name}`, via: name,
+      ruleLine: `Nexus posts the reply under the review in ${name}: public on the store’s review widget, and ${name} also e-mails it to the reviewer. One reply from Nexus; to change it later, use ${name}.`,
+    }
+  } else if (c === 'SHOPIFY' && review.app && !review.imported) {
+    const name = REVIEW_APP_NAME[review.app]
+    rules = {
+      ...base, mode: 'copy', limit: null, oneReply: false, canEdit: true, via: name,
+      open: replyInApp(review.app, review.shopDomain),
+      ruleLine: `${name} gives apps no way to reply: copy the reply, post it in ${name}, then mark it as responded.`,
     }
   } else if (c === 'SHOPIFY') {
     rules = {
@@ -247,7 +285,7 @@ export function reviewReplyRules(channel: string, review: ReplyRulesReview = {},
   }
 
   if (c === 'SHOPIFY' && rules.mode === 'send') {
-    if (review.replied) return { ...rules, held: 'This review already has a reply sent from Nexus. To change it, use Judge.me.', heldCode: 'already_replied' }
+    if (review.replied) return { ...rules, held: `This review already has a reply. To change it, use ${rules.via ?? 'the review app'}.`, heldCode: 'already_replied' }
     return rules
   }
   if (review.replied && rules.oneReply) {

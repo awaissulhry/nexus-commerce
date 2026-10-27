@@ -14,6 +14,7 @@
  * business sells on; Shopify = the store's review app, by file import. Etsy (PR I, 2026-10-27): the shop's reviews, read
  * every 30 minutes through the Etsy connection — one row once an Etsy account is connected or Etsy reviews exist.
  */
+import { REVIEW_APP_NAME, type ReviewApp } from '@nexus/shared/review-reply-rules'
 import prisma from '../../db.js'
 import { visibleReviewWhere } from './review-visibility.js'
 
@@ -83,8 +84,8 @@ export interface SourceFacts {
   /** PR I: whether this Nexus reads Etsy reviews (a deployment switch; never shown by name), and its last good read. */
   etsyReadOn?: boolean
   etsyLastReadAt?: Date | null
-  /** PR I: the store's review app (Judge.me) when a business connected it: whether it holds a token, and its last read. */
-  shopifyApp?: { connected: boolean; lastReadAt: Date | null } | null
+  /** PR I: the store's review app (Judge.me, Okendo, Yotpo, Loox) a business connected: its name, whether it holds a key, its last read. */
+  shopifyApp?: { connected: boolean; lastReadAt: Date | null; name?: string } | null
 }
 
 /** Amazon review topics exist for these markets only; never on Amazon.nl (ruling 5). */
@@ -123,6 +124,9 @@ export function arrivalWords(ingestSource: string | null): string | null {
     case 'SHOPIFY_WEBHOOK': return 'sent by Shopify'
     case 'ETSY_API': return 'read from Etsy'
     case 'JUDGEME_API': return 'read from Judge.me'
+    case 'OKENDO_API': return 'read from Okendo'
+    case 'YOTPO_API': return 'read from Yotpo'
+    case 'LOOX_API': return 'read from Loox'
     case 'MANUAL': return 'added by hand'
     case 'AMAZON_SELLER_FEEDBACK': return 'seller feedback report'
     default: return null
@@ -350,9 +354,9 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
     const lastImport = newest(facts.reviewGroups.filter(g => g.channel.toUpperCase() === 'SHOPIFY' && g.ingestSource === 'IMPORT_CSV').map(g => g.lastIngestedAt))
     sources.push({
       channel: 'SHOPIFY', market: null, state: 'ok', reason: null, since: null, reconnectHref: null, readsItself: !!app,
-      what: app ? 'Store review app (Judge.me), read every 30 min' : 'Store review app, by file import',
+      what: app ? `Store review app (${app.name ?? 'Judge.me'}), read every 30 min` : 'Store review app, by file import',
       lastNote: app
-        ? (app.lastReadAt ? `Judge.me read ${shortDay(app.lastReadAt)}` : 'Judge.me not read yet')
+        ? (app.lastReadAt ? `${app.name ?? 'Judge.me'} read ${shortDay(app.lastReadAt)}` : `${app.name ?? 'Judge.me'} not read yet`)
         : lastImport ? `last file import ${shortDay(lastImport)}` : 'no file imported yet',
       lastReviewAt: newest([shopify.lastReviewAt, ...shopifyMarketReviews.map(s => s.lastReviewAt)])?.toISOString() ?? null,
       reviews: shopifyCount,
@@ -360,6 +364,18 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
   }
 
   return { sources, setup }
+}
+
+/**
+ * The connected review apps as one fact: the names joined ("Judge.me and Okendo") and the newest read; null when none
+ * holds a key. Pure.
+ */
+export function shopifyAppFact(rows: ReadonlyArray<{ app: string; credentials: string | null; state: string; lastReadAt: Date | null }>): SourceFacts['shopifyApp'] {
+  const live = rows.filter((r) => !!r.credentials && r.state !== 'DISCONNECTED')
+  if (live.length === 0) return null
+  const names = live.map((r) => REVIEW_APP_NAME[r.app as ReviewApp] ?? r.app)
+  const name = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+  return { connected: true, lastReadAt: newest(live.map((r) => r.lastReadAt)), name }
 }
 
 /** The facts `sourcesFromFacts` needs, read in the business the request runs in. */
@@ -381,7 +397,7 @@ export async function readSourceFacts(): Promise<SourceFacts> {
     prisma.cronRun.findFirst({ where: { jobName: { in: [EBAY_READ_JOB, 'review-ingest'] }, status: 'SUCCESS' }, orderBy: [{ jobName: 'desc' }, { startedAt: 'desc' }], select: { startedAt: true, jobName: true } }),
     prisma.channelListing.groupBy({ by: ['marketplace'], where: { channel: 'EBAY', listingStatus: 'ACTIVE' } }),
     prisma.cronRun.findFirst({ where: { jobName: 'etsy-reviews-read', status: { in: ['SUCCESS', 'PARTIAL'] } }, orderBy: { startedAt: 'desc' }, select: { startedAt: true } }),
-    prisma.reviewAppConnection.findFirst({ where: { app: 'JUDGEME' }, select: { credentials: true, state: true, lastReadAt: true } }),
+    prisma.reviewAppConnection.findMany({ where: { credentials: { not: null }, state: { not: 'DISCONNECTED' } }, select: { app: true, credentials: true, state: true, lastReadAt: true } }),
   ])
   return {
     connections,
@@ -401,7 +417,7 @@ export async function readSourceFacts(): Promise<SourceFacts> {
     amazonTopicsOn: process.env.NEXUS_ENABLE_AMAZON_REVIEW_INSIGHTS === '1',
     etsyReadOn: process.env.NEXUS_ENABLE_ETSY_REVIEWS_READ === '1',
     etsyLastReadAt: etsyRead?.startedAt ?? null,
-    shopifyApp: reviewApp ? { connected: !!reviewApp.credentials && reviewApp.state !== 'DISCONNECTED', lastReadAt: reviewApp.lastReadAt } : null,
+    shopifyApp: shopifyAppFact(reviewApp),
   }
 }
 

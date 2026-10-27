@@ -4,7 +4,7 @@
  * setting names: no variable name ever reaches the screen.
  */
 import { describe, expect, it } from 'vitest'
-import { arrivalWords, connectionProblem, dayWords, sourcesFromFacts, topicStates, type SourceFacts } from './review-sources.service.js'
+import { arrivalWords, connectionProblem, dayWords, shopifyAppFact, sourcesFromFacts, topicStates, type SourceFacts } from './review-sources.service.js'
 
 const NOW = new Date('2026-10-26T12:00:00Z')
 const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3_600_000)
@@ -176,6 +176,19 @@ describe('review sources', () => {
     expect(out.sources.find(s => s.channel === 'SHOPIFY')).toMatchObject({ what: 'Store review app (Judge.me), read every 30 min', lastNote: 'Judge.me read 26 Oct' })
     expect(arrivalWords('ETSY_API')).toBe('read from Etsy')
     expect(arrivalWords('JUDGEME_API')).toBe('read from Judge.me')
+  })
+
+  it('Shopify via Okendo, Yotpo or Loox: the connected apps named, the newest read', () => {
+    const fact = shopifyAppFact([
+      { app: 'OKENDO', credentials: 'sealed', state: 'CONNECTED', lastReadAt: daysAgo(1) },
+      { app: 'LOOX', credentials: 'sealed', state: 'NEEDS_FIX', lastReadAt: daysAgo(0) },
+      { app: 'YOTPO', credentials: null, state: 'DISCONNECTED', lastReadAt: daysAgo(9) },
+    ])
+    expect(fact).toEqual({ connected: true, lastReadAt: daysAgo(0), name: 'Okendo and Loox' })
+    expect(shopifyAppFact([])).toBeNull()
+    const out = sourcesFromFacts(facts({ shopifyApp: fact }), NOW)
+    expect(out.sources.find(s => s.channel === 'SHOPIFY')).toMatchObject({ what: 'Store review app (Okendo and Loox), read every 30 min', lastNote: 'Okendo and Loox read 26 Oct' })
+    expect(['OKENDO_API', 'YOTPO_API', 'LOOX_API'].map(arrivalWords)).toEqual(['read from Okendo', 'read from Yotpo', 'read from Loox'])
   })
 
   it('names states and arrivals in words', () => {
