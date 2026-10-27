@@ -1,0 +1,140 @@
+/*
+ * Reviews › Insights — the layout the five Insights pages share. Layout and domain content only: every control is a
+ * design-system component and nothing here restyles one. `--nds-*` tokens only. Sections 14 px apart, as on the other
+ * Reviews pages; every row wraps at 390 px.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+  font-size: var(--nds-font-size-base);
+}
+
+.page > :first-child {
+  margin-bottom: var(--nds-space-4);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+@media (max-width: 599px) {
+  .actions {
+    width: 100%;
+  }
+}
+
+.footnote,
+.muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+/* A main column and an aside (Alerts, Brief): side by side from 1200 px, the aside below under it. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+.aside,
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+@media (max-width: 1199px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.skeletonRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.cardBody p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.main {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.good {
+  color: var(--nds-success-text);
+}
+
+.bad {
+  color: var(--nds-danger-text);
+}
+
+/* A wide table (the fit sample, six columns) scrolls sideways inside its card on a phone instead of breaking words. */
+.tableScroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.tableScroll > * {
+  min-width: 560px;
+}

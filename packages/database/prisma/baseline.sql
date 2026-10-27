@@ -5982,6 +5982,11 @@ CREATE TABLE "Review" (
     "language" TEXT,
     "bodyEnglish" TEXT,
     "importBatchId" TEXT,
+    "kind" TEXT,
+    "channelTopics" JSONB,
+    "feedbackState" TEXT,
+    "revisionEligible" BOOLEAN,
+    "feedbackStateAt" TIMESTAMP(3),
     "triageStatus" TEXT,
     "assignee" TEXT,
     "triageTags" TEXT[] DEFAULT ARRAY[]::TEXT[],
@@ -5992,6 +5997,48 @@ CREATE TABLE "Review" (
     "attributedAt" TIMESTAMP(3),
 
     CONSTRAINT "Review_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ReviewMedia" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "reviewId" TEXT NOT NULL,
+    "url" TEXT NOT NULL,
+    "type" TEXT NOT NULL DEFAULT 'image',
+    "width" INTEGER,
+    "height" INTEGER,
+    "position" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ReviewMedia_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "EbayBuyerFeedback" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "connectionId" TEXT NOT NULL,
+    "orderLineItemId" TEXT NOT NULL,
+    "listingId" TEXT,
+    "transactionId" TEXT,
+    "title" TEXT,
+    "price" DECIMAL(12,2),
+    "currency" TEXT,
+    "orderId" TEXT,
+    "state" TEXT NOT NULL DEFAULT 'AWAITING',
+    "approvalId" TEXT,
+    "commentText" TEXT,
+    "feedbackId" TEXT,
+    "leftBy" TEXT,
+    "leftAt" TIMESTAMP(3),
+    "lastWords" TEXT,
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "EbayBuyerFeedback_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -6020,6 +6067,7 @@ CREATE TABLE "ReviewSpotlight" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
     "productId" TEXT,
+    "channel" TEXT,
     "marketplace" TEXT,
     "windowDays" INTEGER NOT NULL DEFAULT 30,
     "reviewCount" INTEGER NOT NULL DEFAULT 0,
@@ -6045,6 +6093,7 @@ CREATE TABLE "ReviewActionItem" (
     "detail" TEXT,
     "payload" JSONB,
     "status" TEXT NOT NULL DEFAULT 'OPEN',
+    "approvalId" TEXT,
     "source" TEXT NOT NULL DEFAULT 'manual',
     "createdBy" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -6109,6 +6158,7 @@ CREATE TABLE "ReviewSpike" (
     "acknowledgedAt" TIMESTAMP(3),
     "acknowledgedBy" TEXT,
     "resolvedAt" TIMESTAMP(3),
+    "resolvedBy" TEXT,
     "detectedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ReviewSpike_pkey" PRIMARY KEY ("id")
@@ -14869,10 +14919,28 @@ CREATE INDEX "Review_orderId_idx" ON "Review"("orderId");
 CREATE INDEX "Review_importBatchId_idx" ON "Review"("importBatchId");
 
 -- CreateIndex
+CREATE INDEX "Review_kind_channel_idx" ON "Review"("kind", "channel");
+
+-- CreateIndex
 CREATE INDEX "Review_workspaceId_idx" ON "Review"("workspaceId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Review_channel_externalReviewId_key" ON "Review"("workspaceId", "channel", "externalReviewId");
+
+-- CreateIndex
+CREATE INDEX "ReviewMedia_reviewId_idx" ON "ReviewMedia"("reviewId");
+
+-- CreateIndex
+CREATE INDEX "ReviewMedia_workspaceId_idx" ON "ReviewMedia"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "EbayBuyerFeedback_state_idx" ON "EbayBuyerFeedback"("state");
+
+-- CreateIndex
+CREATE INDEX "EbayBuyerFeedback_workspaceId_idx" ON "EbayBuyerFeedback"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EbayBuyerFeedback_connectionId_orderLineItemId_key" ON "EbayBuyerFeedback"("workspaceId", "connectionId", "orderLineItemId");
 
 -- CreateIndex
 CREATE INDEX "ReviewResponse_reviewId_idx" ON "ReviewResponse"("reviewId");
@@ -14885,6 +14953,9 @@ CREATE INDEX "ReviewResponse_workspaceId_idx" ON "ReviewResponse"("workspaceId")
 
 -- CreateIndex
 CREATE INDEX "ReviewSpotlight_productId_generatedAt_idx" ON "ReviewSpotlight"("productId", "generatedAt");
+
+-- CreateIndex
+CREATE INDEX "ReviewSpotlight_channel_marketplace_generatedAt_idx" ON "ReviewSpotlight"("channel", "marketplace", "generatedAt");
 
 -- CreateIndex
 CREATE INDEX "ReviewSpotlight_generatedAt_idx" ON "ReviewSpotlight"("generatedAt");
@@ -14900,6 +14971,9 @@ CREATE INDEX "ReviewActionItem_spikeId_idx" ON "ReviewActionItem"("spikeId");
 
 -- CreateIndex
 CREATE INDEX "ReviewActionItem_productId_idx" ON "ReviewActionItem"("productId");
+
+-- CreateIndex
+CREATE INDEX "ReviewActionItem_approvalId_idx" ON "ReviewActionItem"("approvalId");
 
 -- CreateIndex
 CREATE INDEX "ReviewActionItem_workspaceId_idx" ON "ReviewActionItem"("workspaceId");
@@ -18251,6 +18325,9 @@ ALTER TABLE "Review" ADD CONSTRAINT "Review_attributedRequestId_fkey" FOREIGN KE
 
 -- AddForeignKey
 ALTER TABLE "Review" ADD CONSTRAINT "Review_attributedRuleId_fkey" FOREIGN KEY ("attributedRuleId") REFERENCES "ReviewRule"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ReviewMedia" ADD CONSTRAINT "ReviewMedia_reviewId_fkey" FOREIGN KEY ("reviewId") REFERENCES "Review"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ReviewResponse" ADD CONSTRAINT "ReviewResponse_reviewId_fkey" FOREIGN KEY ("reviewId") REFERENCES "Review"("id") ON DELETE CASCADE ON UPDATE CASCADE;

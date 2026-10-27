@@ -38,3 +38,52 @@ export function heatCellWords(
   const shown = value == null ? emptyLabel : format ? format(value) : String(value)
   return `${rowLabel}${colName ? ` · ${colName}` : ''}: ${shown}`
 }
+
+/** The row-label column's width when the caller names none (px): a weekday ("Mon") fits. */
+export const HEAT_LABEL_WIDTH = 36
+
+/**
+ * The row-label column's width (Reviews Insights, 2026-10-26): the caller's px, whole, between 24 and 240 (a theme name
+ * such as "Fit & sizing" needs about 120); none, or not a number → 36.
+ */
+export function heatLabelWidth(px: number | null | undefined): number {
+  if (px == null || !Number.isFinite(px)) return HEAT_LABEL_WIDTH
+  return Math.min(240, Math.max(24, Math.round(px)))
+}
+
+/** A cell that can be pressed: one with a measurement. A null cell (no measurement) has nothing to open. */
+export function isHeatPressable(value: number | null | undefined): boolean {
+  return value != null && Number.isFinite(value)
+}
+
+/** The first pressable cell, reading row by row — the one Tab lands on; none → null. */
+export function firstHeatCell(data: ReadonlyArray<ReadonlyArray<number | null>>): { row: number; col: number } | null {
+  for (let r = 0; r < data.length; r++) for (let c = 0; c < data[r].length; c++) if (isHeatPressable(data[r][c])) return { row: r, col: c }
+  return null
+}
+
+/**
+ * Where an arrow key moves the focus between pressable cells (one Tab stop for the whole map, the arrows inside it):
+ * ←/→ the nearest pressable cell in the row, ↑/↓ the nearest pressable cell in the column, Home/End the first/last
+ * pressable cell of the row. Nowhere to go (an edge, or a key it does not use) → null: the focus stays.
+ */
+export function heatMove(
+  data: ReadonlyArray<ReadonlyArray<number | null>>,
+  row: number,
+  col: number,
+  key: string,
+): { row: number; col: number } | null {
+  const ok = (r: number, c: number) => r >= 0 && r < data.length && c >= 0 && c < (data[r]?.length ?? 0) && isHeatPressable(data[r][c])
+  const scan = (dr: number, dc: number) => {
+    for (let r = row + dr, c = col + dc; r >= 0 && r < data.length && c >= 0 && c < (data[r]?.length ?? 0); r += dr, c += dc) if (ok(r, c)) return { row: r, col: c }
+    return null
+  }
+  if (key === 'ArrowRight') return scan(0, 1)
+  if (key === 'ArrowLeft') return scan(0, -1)
+  if (key === 'ArrowDown') return scan(1, 0)
+  if (key === 'ArrowUp') return scan(-1, 0)
+  const cells = (data[row] ?? []).map((_, c) => c).filter((c) => ok(row, c))
+  if (key === 'Home') return cells.length && cells[0] !== col ? { row, col: cells[0] } : null
+  if (key === 'End') return cells.length && cells[cells.length - 1] !== col ? { row, col: cells[cells.length - 1] } : null
+  return null
+}

@@ -1,0 +1,112 @@
+/*
+ * Reviews › Insights › Products — the product pop-up's layout and domain content (the shared layout is
+ * _shared/insights.module.css). `--nds-*` tokens only; nothing here restyles a design-system control. The pop-up's body
+ * keeps one height across its tabs, so moving between them does not make the window jump.
+ */
+
+.modalBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-height: 520px;
+  min-width: 0;
+}
+
+.modalFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-10);
+  width: 100%;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+.summaryCol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+@media (max-width: 899px) {
+  .summaryGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.bigRating {
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.themeList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.themeRow {
+  display: grid;
+  grid-template-columns: minmax(96px, 1.2fr) minmax(60px, 1fr) 44px auto;
+  align-items: center;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.themeName {
+  overflow: hidden;
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.themeQuote {
+  grid-column: 1 / -1;
+  line-height: 1.45;
+}
+
+.reviewList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reviewCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+
+.reviewCard p {
+  margin: 0;
+  color: var(--nds-text);
+  line-height: 1.5;
+}
+
+.tabHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-10);
+}

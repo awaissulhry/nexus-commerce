@@ -1,0 +1,42 @@
+/*
+ * Reviews › Insights › Themes — layout and domain content only (the shared layout is _shared/insights.module.css).
+ * `--nds-*` tokens only; nothing here restyles a design-system control.
+ */
+
+.themeLink {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.share {
+  display: grid;
+  grid-template-columns: minmax(48px, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-8);
+  width: 100%;
+}
+
+.quotes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: var(--nds-space-6) 0;
+  list-style: none;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.problems {
+  margin: var(--nds-space-6) 0 0;
+  padding-inline-start: var(--nds-space-18);
+}
+
+/* The heatmap scrolls sideways inside its card when the days do not fit (90 days on a phone). */
+.heatScroll {
+  overflow-x: auto;
+  min-width: 0;
+  padding-bottom: var(--nds-space-4);
+}

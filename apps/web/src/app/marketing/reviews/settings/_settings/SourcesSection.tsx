@@ -4,9 +4,12 @@
  * Reviews › Settings › Sources — where reviews, feedback and review requests come from, per channel (GET
  * /api/reviews/settings/sources): each source's state in words, when it last worked, and what a person can do. Sources
  * that arrive in a later update say "Coming later" (build spec ruling 3); Amazon gives topics only, never review text
- * or stars (ruling 5). No setting name is ever shown.
+ * or stars (ruling 5). Amazon seller feedback (PR H) has "Fetch now", held with its reason when this setup does not
+ * fetch it, Amazon is not connected or a fetch runs. No setting name is ever shown.
  */
 import { useMemo } from 'react'
+import { FetchNowButton } from '../../_channel/FetchNowButton'
+import { MANAGE_FETCH } from '../../_channel/sellerFeedbackModel'
 import { Card } from '@/design-system/components'
 import { NexusGrid, type ColDef, type ICellRendererParams } from '@/design-system/grid'
 import { Button, Pill, Skeleton, Tag } from '@/design-system/primitives'
@@ -46,8 +49,22 @@ function LastCell({ data }: ICellRendererParams<SourceRow>) {
   return <span className={s.cellSub}>{data.lastAt ? timeWords(data.lastAt, new Date()) : (data.lastWords ?? '—')}</span>
 }
 
-function ActionCell({ data }: ICellRendererParams<SourceRow>) {
+/** What the action cells ask of the page (AG `context`). */
+interface SourcesContext {
+  canManage: boolean
+  reload: () => void
+}
+
+function ActionCell({ data, context }: ICellRendererParams<SourceRow, unknown, SourcesContext>) {
   if (!data) return null
+  if (data.action?.kind === 'fetch') {
+    const held = context?.canManage === false ? MANAGE_FETCH : (data.action.held ?? null)
+    return (
+      <span className={s.cellActions}>
+        <FetchNowButton held={held} fetching={data.stateWords === 'Fetching'} onDone={context?.reload} />
+      </span>
+    )
+  }
   const href = sourceActionHref(data.action)
   if (data.action && href) {
     return (
@@ -79,9 +96,11 @@ const COLUMNS: ColDef<SourceRow>[] = [
 
 const getRowId = (p: { data: SourceRow }) => p.data.key
 
-export function SourcesSection({ read }: { read: SettingsRead<SourcesResponse> }) {
+export function SourcesSection({ read, canManage }: { read: SettingsRead<SourcesResponse>; canManage: boolean }) {
   const columnDefs = useMemo(() => COLUMNS, [])
   const rowData = useMemo(() => read.data?.rows ?? [], [read.data])
+  const { reload } = read
+  const context = useMemo<SourcesContext>(() => ({ canManage, reload: () => void reload() }), [canManage, reload])
   return (
     <div className={s.section}>
       <p className={s.lead}>Where reviews, feedback and review requests come from, per channel.</p>
@@ -92,7 +111,7 @@ export function SourcesSection({ read }: { read: SettingsRead<SourcesResponse> }
           <div className={s.skeletonRows} aria-hidden>{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} height={44} />)}</div>
         ) : (
           <div className={s.tableScroll}>
-            <NexusGrid<SourceRow> plain plainMaxHeight={900} density="compact" rowData={rowData} columnDefs={columnDefs} getRowId={getRowId} />
+            <NexusGrid<SourceRow> plain plainMaxHeight={900} density="compact" rowData={rowData} columnDefs={columnDefs} getRowId={getRowId} context={context} />
           </div>
         )}
       </Card>

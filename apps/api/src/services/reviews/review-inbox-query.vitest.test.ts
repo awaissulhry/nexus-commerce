@@ -32,9 +32,19 @@ function filters(where: ReturnType<typeof inboxWhere>): unknown[] {
 describe('parseInboxQuery — the address, parsed once', () => {
   it('defaults: all kinds, every status, all time, newest first, page 1 of 50', () => {
     expect(parseInboxQuery({})).toEqual({
-      kind: 'all', statuses: [], channels: [], markets: [], stars: [], moods: [], themes: [], owners: [], families: [],
+      kind: 'all', statuses: [], channels: [], markets: [], stars: [], moods: [], themes: [], owners: [], families: [], withPhotos: false,
       periodDays: null, q: null, sort: { field: 'postedAt', dir: 'desc' }, page: 1, pageSize: 50,
     })
+  })
+
+  it('"Has photos" (PR G): photos=1 keeps only reviews with the buyer’s photos; anything else is off', () => {
+    expect(parseInboxQuery({ photos: '1' }).withPhotos).toBe(true)
+    expect(parseInboxQuery({ photos: 'true' }).withPhotos).toBe(true)
+    expect(parseInboxQuery({ photos: '0' }).withPhotos).toBe(false)
+    expect(parseInboxQuery({ photos: 'maybe' }).withPhotos).toBe(false)
+    const where = JSON.stringify(inboxWhere(parseInboxQuery({ photos: '1' }), new Date('2026-10-27T00:00:00Z')))
+    expect(where).toContain('"media":{"some":{}}')
+    expect(JSON.stringify(inboxWhere(parseInboxQuery({}), new Date('2026-10-27T00:00:00Z')))).not.toContain('media')
   })
 
   it('lists, upper-cased where codes; unknown values are dropped, never guessed', () => {
@@ -72,9 +82,9 @@ describe('inboxWhere — fixture rows never show', () => {
 })
 
 describe('inboxWhere — kind', () => {
-  it('seller feedback = eBay rows; product reviews = every other channel', () => {
-    expect(filters(inboxWhere(parseInboxQuery({ kind: 'seller' }), NOW))).toEqual([{ channel: 'EBAY' }])
-    expect(filters(inboxWhere(parseInboxQuery({ kind: 'product' }), NOW))).toEqual([{ channel: { not: 'EBAY' } }])
+  it('the kind column decides; a row without it reads by channel (eBay = seller feedback, every other channel = product reviews)', () => {
+    expect(filters(inboxWhere(parseInboxQuery({ kind: 'seller' }), NOW))).toEqual([{ OR: [{ kind: 'SELLER' }, { AND: [{ kind: null }, { channel: 'EBAY' }] }] }])
+    expect(filters(inboxWhere(parseInboxQuery({ kind: 'product' }), NOW))).toEqual([{ OR: [{ kind: 'PRODUCT' }, { AND: [{ kind: null }, { channel: { not: 'EBAY' } }] }] }])
     expect(inboxWhere(parseInboxQuery({ kind: 'all' }), NOW)).toEqual(VISIBLE)
   })
 

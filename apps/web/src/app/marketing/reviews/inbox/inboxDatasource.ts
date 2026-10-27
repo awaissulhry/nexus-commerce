@@ -38,6 +38,10 @@ export interface InboxRow {
   overdue: boolean
   imported: boolean
   responses: { sent: number; draft: number }
+  /** PR G — how many photos (or videos) the buyer added. */
+  photos: number
+  /** PR G — eBay's AI topics (eBay feedback read by eBay's newer API); [] = read, none; null = never read. */
+  aiTopics: { topic: string; label: string; sentiment: string | null }[] | null
 }
 
 /** One channel × market Nexus reads reviews from, and whether that works (review-sources.service.ts). */

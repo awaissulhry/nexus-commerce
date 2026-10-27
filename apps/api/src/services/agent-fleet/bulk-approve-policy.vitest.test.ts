@@ -34,6 +34,7 @@ describe('bulkApproveRefusal — what may be approved together', () => {
       'email-supplier',
       'end-listing',
       'issue-refund',
+      'leave-buyer-feedback',
       'merge-duplicate-products',
       'relist-listing',
       'remove-draft-listings',

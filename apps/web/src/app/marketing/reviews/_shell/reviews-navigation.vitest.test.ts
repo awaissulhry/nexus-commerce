@@ -69,17 +69,22 @@ describe('reviews navigation', () => {
   })
 
   it('lets each row own the old addresses of its page', () => {
-    expect(active('/marketing/reviews/heatmap')).toEqual(['Themes'])
-    expect(active('/marketing/reviews/products/product-id')).toEqual(['Products'])
-    expect(active('/marketing/reviews/by-product')).toEqual(['Products'])
-    expect(active('/marketing/reviews/spikes')).toEqual(['Alerts'])
-    expect(active('/marketing/reviews/actions')).toEqual(['Fixes'])
-    expect(active('/marketing/reviews/spotlight')).toEqual(['Brief'])
+    expect(active('/marketing/reviews/insights/themes')).toEqual(['Themes'])
+    expect(active('/w/business_a/marketing/reviews/insights/products')).toEqual(['Products'])
+    expect(active('/marketing/reviews/insights/alerts')).toEqual(['Alerts'])
+    expect(active('/marketing/reviews/insights/fixes')).toEqual(['Fixes'])
+    expect(active('/marketing/reviews/insights/brief')).toEqual(['Brief'])
+    expect(active('/marketing/reviews/insights/briefx')).toEqual([])
     expect(active('/marketing/reviews/requests/rules')).toEqual(['Rules'])
     expect(active('/marketing/reviews/requests/rules/new')).toEqual(['Rules'])
     expect(active('/marketing/reviews/requests/rulesx')).toEqual(['Queue'])
     // The retired pages redirect (next.config.js): no row keeps a temporary claim on their addresses.
-    for (const retired of ['/marketing/reviews/desk', '/marketing/reviews/import', '/marketing/reviews/inserts', '/orders/reviews/rules']) {
+    for (const retired of [
+      '/marketing/reviews/desk', '/marketing/reviews/import', '/marketing/reviews/inserts', '/orders/reviews/rules',
+      // PR E: the old Insights pages.
+      '/marketing/reviews/heatmap', '/marketing/reviews/by-product', '/marketing/reviews/products/product-id',
+      '/marketing/reviews/spikes', '/marketing/reviews/actions', '/marketing/reviews/spotlight',
+    ]) {
       expect(active(retired)).toEqual([])
     }
     expect(active('/marketing/reviews/advanced')).toEqual(['Overview'])
@@ -123,13 +128,12 @@ describe('reviews crumbs', () => {
     expect(trail('/marketing/reviews')).toBe('Marketing › Reviews*')
     expect(trail('/marketing/reviews/inbox')).toBe('Marketing › Reviews › Inbox*')
     expect(trail('/marketing/reviews/requests')).toBe('Marketing › Reviews › Requests › Queue*')
-    expect(trail('/marketing/reviews/heatmap')).toBe('Marketing › Reviews › Insights › Themes*')
+    expect(trail('/marketing/reviews/insights/themes')).toBe('Marketing › Reviews › Insights › Themes*')
     expect(trail('/marketing/reviews/settings')).toBe('Marketing › Reviews › Settings*')
   })
 
   it('ends a record page on its list, as a link', () => {
     expect(trail('/marketing/reviews/requests/rules/rule-id')).toBe('Marketing › Reviews › Requests › Rules')
-    expect(trail('/marketing/reviews/products/product-id')).toBe('Marketing › Reviews › Insights › Products')
   })
 
   it('a channel page reads Marketing › Reviews › Amazon › Italy (no "Channels" crumb)', () => {
@@ -140,7 +144,7 @@ describe('reviews crumbs', () => {
   })
 
   it('sends a group crumb to the group’s first page', () => {
-    const crumbs = model.reviewsCrumbTrail('/marketing/reviews/spikes')
-    expect(crumbs.map(c => c.href)).toEqual(['/marketing', '/marketing/reviews', '/marketing/reviews/heatmap', '/marketing/reviews/spikes'])
+    const crumbs = model.reviewsCrumbTrail('/marketing/reviews/insights/alerts')
+    expect(crumbs.map(c => c.href)).toEqual(['/marketing', '/marketing/reviews', '/marketing/reviews/insights/themes', '/marketing/reviews/insights/alerts'])
   })
 })

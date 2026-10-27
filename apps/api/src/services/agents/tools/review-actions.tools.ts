@@ -10,6 +10,10 @@
  *     (jobs/review-request-mailer.job.ts); this tool never sends it (Reviews area PR C, B12).
  *   - reply-to-review: eBay only (RespondToFeedback: public, one reply per feedback, at most 500 characters). Amazon
  *     and Shopify have no reply call: post it there, the review desk can then record it.
+ *   - leave-buyer-feedback (Reviews eBay REST, PR G): POSITIVE feedback from the seller for the buyer of one eBay sale
+ *     that eBay lists as waiting for it (eBay's REST leaveFeedback; at most 500 characters, within 90 days of the sale,
+ *     never while the order has an open return). The Reviews › eBay page asks for it (one request, or one change plan for
+ *     several sales); Claude may ask for it too. Either way a person approves each one in Nexus.
  */
 
 import { z } from 'zod'
@@ -19,6 +23,7 @@ import { logger } from '../../../utils/logger.js'
 import { lintBuyerCopy } from '../../comms/message-lint.js'
 import { amazonSolicitationMode, requestReviewForOrder, reviewRequestCheck } from '../../reviews/review-request.service.js'
 import { ebayReplyMode, sendReviewReply } from '../../reviews/review-reply-send.service.js'
+import { EBAY_BUYER_FEEDBACK_LIMIT, buyerFeedbackDaysLeft, buyerFeedbackLineHeld, buyerFeedbackTextHeld } from '@nexus/shared/review-reply-rules'
 import { staleRefusal } from './stale-preview.js'
 import type { AgentTool, ToolContext, ToolResult } from '../tool-types.js'
 
@@ -179,4 +184,84 @@ const replyToReviewTool: AgentTool = {
   },
 }
 
-export const REVIEW_ACTION_TOOLS: AgentTool[] = [requestReviewTool, replyToReviewTool]
+// ── leave-buyer-feedback ────────────────────────────────────────────────────────────────────────────
+
+const leaveInput = z.object({
+  lineId: z.string().trim().min(1).max(64).describe('the eBay sale waiting for the seller\'s feedback (Reviews › eBay › Leave feedback for buyers)'),
+  text: z.string().trim().min(2).max(EBAY_BUYER_FEEDBACK_LIMIT).describe('the positive feedback for the buyer, as eBay will show it (at most 500 characters)'),
+})
+type LeaveArgs = z.infer<typeof leaveInput>
+
+async function previewLeave(a: LeaveArgs, now = new Date()): Promise<ToolResult> {
+  // Loaded here: the service reaches the eBay adapters, and the tool registry imports this file.
+  const { buyerFeedbackLine } = await import('../../reviews/ebay-buyer-feedback.service.js')
+  const line = await buyerFeedbackLine(a.lineId)
+  if (!line) return { ok: false, error: 'This eBay sale is not in this business’s list of sales waiting for feedback. Nothing was queued.' }
+  const which = `eBay sale ${line.orderLineItemId}${line.title ? ` (${line.title.slice(0, 60)})` : ''}`
+  // Its own waiting approval is not a reason to refuse: this preview is that approval's, or the plan's step.
+  const held = buyerFeedbackLineHeld({ state: line.state, soldAt: line.soldAt, openReturn: line.openReturn }, now)
+  if (held) return { ok: false, error: `${which}: ${held} Nothing was queued.` }
+  const textHeld = buyerFeedbackTextHeld(a.text)
+  if (textHeld) return { ok: false, error: `${which}: ${textHeld} Nothing was queued.` }
+  const daysLeft = buyerFeedbackDaysLeft(line.soldAt, now)
+  return {
+    ok: true,
+    preview: {
+      action: 'leave-buyer-feedback',
+      line: { id: line.id, orderLineItemId: line.orderLineItemId, state: line.state, title: line.title, buyer: line.buyer, order: line.order?.label ?? null, market: line.order?.market ?? null, soldAt: line.soldAt?.toISOString() ?? null },
+      rating: 'Positive (a seller can leave positive feedback only)',
+      text: a.text,
+      lint: lintBuyerCopy(a.text),
+      window: daysLeft == null ? 'Nexus does not have this order, so it cannot count the 90 days; eBay still lists the sale as waiting for feedback.' : `${daysLeft} of 90 days left to leave it`,
+      mode: ebayReplyMode() === 'live'
+        ? 'live: eBay publishes it on the buyer\'s feedback profile'
+        : 'dry run: eBay is not called (eBay posting is off on this server); approving it leaves nothing and the sale keeps waiting',
+      note: 'Feedback for a buyer cannot be changed or taken back once it is left; one follow-up can be added on eBay later.',
+    },
+  }
+}
+
+const leaveBuyerFeedbackTool: AgentTool = {
+  name: 'leave-buyer-feedback',
+  title: 'Leave feedback for an eBay buyer',
+  input: leaveInput,
+  requires: [F.reviewsManage],
+  category: 'orders',
+  riskTier: 'high',
+  readOnly: false,
+  alwaysAsk: true,
+  openWorld: true,
+  reversibility: 'none',
+  maxClaudeTrust: 'ask',
+  description:
+    'Leave positive feedback for the buyer of one eBay sale of this business that eBay lists as waiting for the seller\'s '
+    + 'feedback (at most 500 characters, within 90 days of the sale, never while the order has an open return). eBay lets '
+    + 'a seller leave positive feedback only. Always waits for a person to approve it in Nexus; it cannot be undone. If the '
+    + 'sale changes before the approval runs, nothing is left.',
+  handler: (args) => previewLeave(args as LeaveArgs),
+  async execute(args, ctx) {
+    const a = args as LeaveArgs
+    const checked = await freshOrStale(() => previewLeave(a), ctx, ['line', 'text', 'mode'], 'the sale')
+    if ('refusal' in checked) return checked.refusal
+    const [{ buyerFeedbackLine, markBuyerFeedbackLeft, markBuyerFeedbackRefused }, { leaveEbayBuyerFeedback }] = await Promise.all([
+      import('../../reviews/ebay-buyer-feedback.service.js'),
+      import('../../reviews/adapters/ebay-feedback-rest.adapter.js'),
+    ])
+    const line = await buyerFeedbackLine(a.lineId)
+    if (!line) return { ok: false, error: 'This eBay sale is no longer in the list. Nothing was left.' }
+    const answer = await leaveEbayBuyerFeedback(line.connectionId, { orderLineItemId: line.orderLineItemId, listingId: line.listingId, transactionId: line.transactionId, text: a.text })
+    if (!answer.ok) {
+      const words = answer.code === 'OPT_IN_OFF' ? answer.error ?? 'eBay posting is off. Nothing was sent.' : `eBay refused the feedback (${answer.code}): ${answer.error ?? 'no detail'}. Nothing was left.`
+      await markBuyerFeedbackRefused(line.id, words)
+      return { ok: false, error: words }
+    }
+    await markBuyerFeedbackLeft(line.id, { text: a.text, feedbackId: answer.feedbackId ?? null, by: `${ctx.via}:${ctx.userId ?? 'unknown'}` })
+    return {
+      ok: true,
+      data: { lineId: line.id, orderLineItemId: line.orderLineItemId, feedbackId: answer.feedbackId ?? null },
+      change: { before: { lineId: line.id, state: line.state }, after: { lineId: line.id, state: 'LEFT', feedbackId: answer.feedbackId ?? null } },
+    }
+  },
+}
+
+export const REVIEW_ACTION_TOOLS: AgentTool[] = [requestReviewTool, replyToReviewTool, leaveBuyerFeedbackTool]

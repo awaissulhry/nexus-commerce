@@ -4980,6 +4980,12 @@
           "relationFromFields": []
         },
         {
+          "name": "media",
+          "kind": "object",
+          "type": "ReviewMedia",
+          "relationFromFields": []
+        },
+        {
           "name": "attributedRequest",
           "kind": "object",
           "type": "ReviewRequest",
@@ -4998,6 +5004,24 @@
           "relationOnDelete": "SetNull"
         }
       ]
+    },
+    {
+      "name": "ReviewMedia",
+      "fields": [
+        {
+          "name": "review",
+          "kind": "object",
+          "type": "Review",
+          "relationFromFields": [
+            "reviewId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "EbayBuyerFeedback",
+      "fields": []
     },
     {
       "name": "ReviewResponse",
