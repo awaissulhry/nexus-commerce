@@ -1,15 +1,22 @@
 /**
  * SR.4 — Post-purchase review request email templates.
  *
- * Italian-first (Xavia primary market). productType-aware: the copy
- * emphasises different product qualities depending on what was bought.
+ * Italian for Italy, English for every other market (the only two texts there are). productType-aware: the copy
+ * names the qualities a buyer can judge for what was bought.
  *
  * Only used for non-Amazon orders (eBay, Shopify). Amazon customers are
  * reached via the Amazon Solicitations API (D.7) — sending our own email
  * to Amazon buyers violates their messaging policy.
  *
- * sendReviewRequestEmail() is the only public function; it is gated by
- * NEXUS_ENABLE_OUTBOUND_EMAILS=true (same as all other transactional mail).
+ * Neutral by rule (Owner, 2026-10-27; CHANNEL-FACTS 5a, 5b, 6): every buyer is asked the same way for an honest
+ * review. The text never asks for a positive review and never sends an unhappy buyer to us "before" a review; the
+ * support address in the footer is about the order, not about the review.
+ *
+ * The review button appears only when there is a review page for the order (the eBay site of the order's market, the
+ * business's own shop); without one the e-mail has no button and no link — never a dead `#` link.
+ *
+ * sendReviewRequestEmail() sends; renderReviewRequestEmail() is the same e-mail for the Preview (no send). Sending is
+ * switched off on a server that does not send e-mail (the transport answers a dry run).
  */
 
 import { sendEmail } from '../email/transport.js'
@@ -24,7 +31,7 @@ export interface ReviewEmailContext {
   /** Product that most benefits from a review (first item in order). */
   productName: string | null
   productType: string | null
-  /** e.g. https://www.ebay.it/usr/xavia or a Shopify product page */
+  /** Where the buyer leaves the review (review-links.service.ts): the order's eBay site, the business's own shop; null = no button. */
   reviewUrl: string | null
   locale?: 'it' | 'en'
 }
@@ -83,7 +90,10 @@ function productAngle(productType: string | null): {
 const escapeHtml = (value: string) =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
-/** O3 — rendered as `identity`, the business the order belongs to; Xavia's copy (taglines, Italian contact) is unchanged. */
+/**
+ * O3 — rendered as `identity`, the business the order belongs to (Xavia keeps its tagline and Italian support address).
+ * The button and the text's link appear only when `reviewUrl` is set.
+ */
 function renderHtml(ctx: ReviewEmailContext, identity: BusinessIdentity): { subject: string; html: string; text: string } {
   const it = (ctx.locale ?? 'it') === 'it'
   const brandName = identity.brandName
@@ -94,16 +104,26 @@ function renderHtml(ctx: ReviewEmailContext, identity: BusinessIdentity): { subj
   const tagline = (line: string) => (identity.xavia ? `<span style="color:#9b8ea8;font-size:12px;display:block;margin-top:4px">${line}</span>` : '')
   const { itAngle, enAngle } = productAngle(ctx.productType)
   const angle = it ? itAngle : enAngle
-  const firstName = ctx.customerName?.split(' ')[0]?.trim() || (it ? 'motociclista' : 'rider')
-  const productRef = ctx.productName ?? (it ? 'il tuo acquisto' : 'your purchase')
-  const reviewHref = ctx.reviewUrl ?? '#'
-
-  if (it) {
-    const subject = `Come ti trovi con ${productRef}? Lasciaci la tua opinione`
-    const html = `<!DOCTYPE html>
-<html lang="it">
+  const firstName = escapeHtml(ctx.customerName?.split(' ')[0]?.trim() || (it ? 'motociclista' : 'rider'))
+  // Without a product name: "il tuo acquisto" / "purchase" (the English lines already say "your").
+  const productText = ctx.productName ?? (it ? 'il tuo acquisto' : 'purchase')
+  const productRef = escapeHtml(productText)
+  const reviewHref = ctx.reviewUrl ? escapeHtml(ctx.reviewUrl) : null
+  const orderRef = ctx.channelOrderId ? escapeHtml(ctx.channelOrderId) : null
+  const button = (label: string) => (reviewHref
+    ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr><td align="center" style="padding-bottom:24px">
+      <a href="${reviewHref}" style="display:inline-block;background:#e63946;color:#ffffff;font-size:15px;font-weight:bold;padding:14px 32px;border-radius:6px;text-decoration:none">
+        ${label}
+      </a>
+    </td></tr>
+    </table>`
+    : '')
+  const shell = (lang: string, subject: string, taglineLine: string, body: string) => `<!DOCTYPE html>
+<html lang="${lang}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${subject}</title>
+<title>${escapeHtml(subject)}</title>
 </head>
 <body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -111,106 +131,68 @@ function renderHtml(ctx: ReviewEmailContext, identity: BusinessIdentity): { subj
 <table role="presentation" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden">
   <tr><td style="background:#1a1a2e;padding:24px 32px;text-align:center">
     <span style="color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:2px">${mark}</span>
-    ${tagline('Abbigliamento da moto')}
+    ${tagline(taglineLine)}
   </td></tr>
-  <tr><td style="padding:32px">
-    <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">Ciao ${firstName},</p>
-    <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">
-      Speriamo tu abbia avuto il tempo di provare <strong>${productRef}</strong> sulle tue uscite in moto.
-    </p>
-    <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 24px">
-      Ci farebbe molto piacere sapere cosa ne pensi — soprattutto ${angle}.
-      La tua esperienza aiuta altri motociclisti a scegliere meglio.
-    </p>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-    <tr><td align="center" style="padding-bottom:24px">
-      <a href="${reviewHref}" style="display:inline-block;background:#e63946;color:#ffffff;font-size:15px;font-weight:bold;padding:14px 32px;border-radius:6px;text-decoration:none">
-        Lascia la tua recensione →
-      </a>
-    </td></tr>
-    </table>
-    <p style="color:#666;font-size:13px;line-height:1.6;margin:0 0 8px">
-      Bastano 2 minuti. La tua opinione conta molto per noi e per la community ${brand}.
-    </p>
-    <p style="color:#999;font-size:12px;line-height:1.5;margin:24px 0 0;border-top:1px solid #eee;padding-top:16px">
-      Hai ricevuto questa email perché hai acquistato da ${brand}${ctx.channelOrderId ? ` (ordine ${ctx.channelOrderId})` : ''}.
-      Se hai dubbi o problemi con il prodotto, <a href="mailto:${supportIt}" style="color:#e63946">contattaci</a> — non lasciare
-      una recensione negativa prima di darci la possibilità di aiutarti.
-    </p>
+  <tr><td style="padding:32px">${body}
   </td></tr>
 </table>
 </td></tr>
 </table>
 </body></html>`
-    const text = `Ciao ${firstName},
 
-Speriamo tu abbia avuto il tempo di provare ${productRef} sulle tue uscite in moto.
-
-Ci farebbe molto piacere sapere cosa ne pensi — soprattutto ${angle}.
-
-Lascia la tua recensione: ${reviewHref}
-
-Bastano 2 minuti. Grazie!
-
-— Il team ${brandName}`
+  if (it) {
+    const subject = `Come ti trovi con ${productText}? Lascia una recensione sincera`
+    const html = shell('it', subject, 'Abbigliamento da moto', `
+    <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">Ciao ${firstName},</p>
+    <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">
+      Grazie per il tuo acquisto! Speriamo tu abbia avuto il tempo di provare <strong>${productRef}</strong>.
+    </p>
+    <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 24px">
+      Se ti va, condividi la tua opinione sincera lasciando una recensione (per esempio su questi aspetti: ${angle}).
+      La tua esperienza aiuta altri motociclisti a scegliere.
+    </p>${button('Lascia una recensione →')}
+    <p style="color:#999;font-size:12px;line-height:1.5;margin:24px 0 0;border-top:1px solid #eee;padding-top:16px">
+      Hai ricevuto questa email perché hai acquistato da ${brand}${orderRef ? ` (ordine ${orderRef})` : ''}.
+      Per domande sul tuo ordine scrivi a <a href="mailto:${supportIt}" style="color:#e63946">${supportIt}</a>.
+    </p>`)
+    const text = [
+      `Ciao ${ctx.customerName?.split(' ')[0]?.trim() || 'motociclista'},`,
+      '',
+      `Grazie per il tuo acquisto! Speriamo tu abbia avuto il tempo di provare ${productText}.`,
+      '',
+      `Se ti va, condividi la tua opinione sincera lasciando una recensione (per esempio su questi aspetti: ${angle}).`,
+      ...(ctx.reviewUrl ? ['', `Lascia una recensione: ${ctx.reviewUrl}`] : []),
+      '',
+      `— Il team ${brandName}`,
+    ].join('\n')
     return { subject, html, text }
   }
 
-  // English fallback
-  const subject = `How are you finding your ${productRef}? Share your review`
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${subject}</title>
-</head>
-<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-<tr><td align="center" style="padding:32px 16px">
-<table role="presentation" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden">
-  <tr><td style="background:#1a1a2e;padding:24px 32px;text-align:center">
-    <span style="color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:2px">${mark}</span>
-    ${tagline('Motorcycle Gear')}
-  </td></tr>
-  <tr><td style="padding:32px">
+  // English for every other market
+  const subject = `How is your ${productText}? Share your honest review`
+  const html = shell('en', subject, 'Motorcycle Gear', `
     <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">Hi ${firstName},</p>
     <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">
-      We hope you've had the chance to try your <strong>${productRef}</strong> out on the road.
+      Thank you for your purchase! We hope you've had the chance to try your <strong>${productRef}</strong>.
     </p>
     <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 24px">
-      We'd love to hear what you think — especially ${angle}.
-      Your experience helps other riders choose the right gear.
-    </p>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-    <tr><td align="center" style="padding-bottom:24px">
-      <a href="${reviewHref}" style="display:inline-block;background:#e63946;color:#ffffff;font-size:15px;font-weight:bold;padding:14px 32px;border-radius:6px;text-decoration:none">
-        Leave your review →
-      </a>
-    </td></tr>
-    </table>
-    <p style="color:#666;font-size:13px;line-height:1.6;margin:0 0 8px">
-      It only takes 2 minutes. Your feedback means a lot to us and the ${brand} community.
-    </p>
+      Feel free to share your honest feedback by leaving a review (for example about ${angle}).
+      Your experience helps other riders choose.
+    </p>${button('Leave a review →')}
     <p style="color:#999;font-size:12px;line-height:1.5;margin:24px 0 0;border-top:1px solid #eee;padding-top:16px">
-      You received this email because you purchased from ${brand}${ctx.channelOrderId ? ` (order ${ctx.channelOrderId})` : ''}.
-      If you have any issues with the product, <a href="mailto:${support}" style="color:#e63946">contact us first</a> —
-      we'd love to make it right before you leave a review.
-    </p>
-  </td></tr>
-</table>
-</td></tr>
-</table>
-</body></html>`
-  const text = `Hi ${firstName},
-
-We hope you've had the chance to try your ${productRef} out on the road.
-
-We'd love to hear what you think — especially ${angle}.
-
-Leave your review: ${reviewHref}
-
-It only takes 2 minutes. Thank you!
-
-— The ${brandName} Team`
+      You received this email because you purchased from ${brand}${orderRef ? ` (order ${orderRef})` : ''}.
+      Questions about your order? Write to <a href="mailto:${support}" style="color:#e63946">${support}</a>.
+    </p>`)
+  const text = [
+    `Hi ${ctx.customerName?.split(' ')[0]?.trim() || 'rider'},`,
+    '',
+    `Thank you for your purchase! We hope you've had the chance to try your ${productText}.`,
+    '',
+    `Feel free to share your honest feedback by leaving a review (for example about ${angle}).`,
+    ...(ctx.reviewUrl ? ['', `Leave a review: ${ctx.reviewUrl}`] : []),
+    '',
+    `— The ${brandName} Team`,
+  ].join('\n')
   return { subject, html, text }
 }
 
