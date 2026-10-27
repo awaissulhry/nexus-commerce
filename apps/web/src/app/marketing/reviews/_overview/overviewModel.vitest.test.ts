@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ageWords, behindWords, bucketLabel, changeView, channelViewRows, deltaView, headerSubtitle, lastWords,
-  needsActionHeld, needsActionHref, needsFooter, needsSubtitle, ratingText, sectionData, sectionError, signed, starsLinkWords,
+  ageWords, behindWords, bucketLabel, changeView, channelViewRows, deltaView, ETSY_REPLY_HREF, headerSubtitle, lastWords,
+  needsActionHeld, needsActionHref, needsExternal, needsFooter, needsSubtitle, ratingText, sectionData, sectionError, signed, starsLinkWords,
   themeCountWords, themeHref, TOO_FEW_WORDS, trendSummary, visibleSetup, watchView, zeroStarsReason,
   type NeedsYouItem, type OverviewChannelRow, type OverviewTheme, type OverviewTiles, type Section,
 } from './overviewModel'
@@ -76,6 +76,25 @@ describe('channel table', () => {
     expect(channelViewRows([row({})], NOW)).toHaveLength(1)
   })
 
+  it('Etsy with no shop connected (lane N4): Not connected and Connect, dashes not zeros, never behind', () => {
+    const unconnected = row({
+      channel: 'ETSY', market: null, label: 'Etsy', rating: null, reviews: 0, change: null, sent: null, rate: null, lastReviewAt: null,
+      state: 'not_connected', reason: 'No Etsy shop is connected', reconnectHref: '/settings/channels/etsy', what: 'Shop reviews, one photo each', lastNote: null,
+    })
+    const [v] = channelViewRows([unconnected], NOW)
+    expect(v).toMatchObject({
+      label: 'Etsy', state: 'not_connected', last: 'Not connected', lastNote: null, reviews: '—', rating: null, sent: '—', rate: '—',
+      reason: 'No Etsy shop is connected', reconnectHref: '/settings/channels/etsy', href: '/marketing/reviews/etsy',
+    })
+    expect(behindWords([v])).toBeNull()
+    // Reviews held from before keep their real number.
+    expect(channelViewRows([{ ...unconnected, reviews: 3, rating: 4.3 }], NOW)[0]).toMatchObject({ reviews: '3', rating: 4.3, last: 'Not connected' })
+    // The header names the channels reviews come from: a channel not connected and holding none is not one.
+    const tiles = { newReviews: 9 } as OverviewTiles
+    expect(headerSubtitle('30d', tiles, [row({}), unconnected])).toBe('9 reviews in the last 30 days on Amazon')
+    expect(headerSubtitle('30d', tiles, [row({}), { ...unconnected, reviews: 2 }])).toBe('9 reviews in the last 30 days on Amazon and Etsy')
+  })
+
   it('a channel that stopped shows Not updating and why, never a stale date; the card names it', () => {
     const rows = channelViewRows([
       row({ channel: 'EBAY', market: 'DE', label: 'eBay Germany', ratingKind: 'positive', state: 'not_updating', reason: 'Sign-in expired', reconnectHref: '/settings/channels/ebay' }),
@@ -130,6 +149,16 @@ describe('needs you', () => {
     expect(needsActionHref({ label: 'Open Inbox', page: 'inbox', params: { id: 'r1', channel: 'EBAY' } })).toBe('/marketing/reviews/inbox?period=all&channel=EBAY&reply=needed')
     expect(needsActionHref({ label: 'See alert', page: 'alerts', params: { market: 'DE' } })).toBe('/marketing/reviews/insights/alerts?market=DE')
     expect(needsActionHref({ label: 'See requests', page: 'requests', params: { status: 'FAILED' } })).toBe('/marketing/reviews/requests?status=FAILED')
+  })
+
+  it('an Etsy review also opens Etsy.com, where its one reply is posted; nothing else does (lane N4)', () => {
+    const etsy = item({ title: 'Etsy reply window closes in 4 days', action: { label: 'Reply', page: 'review', params: { id: 'e1', channel: 'ETSY' } } })
+    expect(needsExternal(etsy)).toEqual({ label: 'Open on Etsy', href: ETSY_REPLY_HREF })
+    expect(ETSY_REPLY_HREF).toBe('https://www.etsy.com/your/shops/me/reviews')
+    // Reply still opens the review in Nexus (write, copy, mark as responded), over the Etsy reviews that need a reply.
+    expect(needsActionHref(etsy.action)).toBe('/marketing/reviews/inbox?period=all&channel=ETSY&reply=needed&review=e1')
+    expect(needsExternal(item({}))).toBeNull()
+    expect(needsExternal(item({ kind: 'alert', action: { label: 'See alert', page: 'alerts', params: { channel: 'ETSY' } } }))).toBeNull()
   })
 
   it('a reply is held without Manage reviews, with the reason; opening a page is not', () => {

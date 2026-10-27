@@ -7,7 +7,8 @@
  * inside the card. Notes under a value wrap onto a second line and the row grows to hold them (`autoHeight`). A row
  * opens that channel's reviews. eBay reads as % positive, not stars; Amazon stars come only from imported reviews
  * ("No rating data from Amazon — import reviews" otherwise); Etsy asks its buyers itself, so its requests are "—".
- * A channel that stopped updating shows "Not updating", the reason and Reconnect — never a stale date as if fine.
+ * A channel that stopped updating shows "Not updating", the reason and Reconnect — never a stale date as if fine. A
+ * channel with no account connected (Etsy) shows "Not connected" and Connect, with only the reviews Nexus holds.
  */
 import { useCallback, useMemo } from 'react'
 import { Card, EmptyState, StarRating } from '@/design-system/components'
@@ -67,6 +68,17 @@ function SentCell({ data }: ICellRendererParams<ChannelViewRow>) {
 
 function LastCell({ data }: ICellRendererParams<ChannelViewRow>) {
   if (!data) return null
+  if (data.state === 'not_connected') {
+    return (
+      <span className={s.cellStack}>
+        <Pill tone="neutral" dot>Not connected</Pill>
+        <span className={s.cellWrap}>
+          {data.reason}
+          {data.reconnectHref && <> · <Link href={data.reconnectHref} className={s.inlineLink}>Connect</Link></>}
+        </span>
+      </span>
+    )
+  }
   if (data.state === 'not_updating') {
     return (
       <span className={s.cellStack}>

@@ -195,7 +195,8 @@ function joinWords(words: string[]): string {
 export function readStateBanners(readState: readonly InboxReadState[] | null, timeZone?: string): ReadBanner[] {
   const groups = new Map<string, InboxReadState[]>()
   for (const r of readState ?? []) {
-    if (r.ok) continue
+    // A channel with no account connected did not stop: it never started (the Etsy filter's empty state says so).
+    if (r.ok || r.connected === false) continue
     const key = `${r.reason ?? ''}|${r.reconnectHref ?? ''}`
     groups.set(key, [...(groups.get(key) ?? []), r])
   }
@@ -220,7 +221,8 @@ export function readStateBanners(readState: readonly InboxReadState[] | null, ti
 export function livePill(state: { error: boolean; updating: boolean; readState: readonly InboxReadState[] | null }): { tone: Tone; words: string } {
   if (state.error) return { tone: 'danger', words: 'Not updating' }
   if (state.updating) return { tone: 'info', words: 'Updating…' }
-  const rows = state.readState ?? []
+  // A channel with no account connected (Etsy) is neither read nor behind: the pill says nothing about it.
+  const rows = (state.readState ?? []).filter((r) => r.connected !== false)
   const behind = rows.filter((r) => !r.ok)
   if (behind.length === 1) return { tone: 'warning', words: `${channelMarketWords(behind[0].channel, behind[0].market)} behind` }
   if (behind.length > 1) return { tone: 'warning', words: `${behind.length} markets behind` }
@@ -231,6 +233,31 @@ export function livePill(state: { error: boolean; updating: boolean; readState: 
   return read.length === 0
     ? { tone: 'neutral', words: `${names(byFile)} by file only` }
     : { tone: 'success', words: `${names(read)} up to date · ${names(byFile)} by file` }
+}
+
+/** What a channel's account is called when none is connected: Etsy's is a shop. */
+const ACCOUNT_NOUN: Record<string, string> = { ETSY: 'shop' }
+
+export interface NotConnectedEmpty { title: string; message: string; action: { label: string; href: string } }
+
+/**
+ * The Inbox narrowed to one channel no account of which is connected (Etsy with no shop, lane N4): the empty list says
+ * so, with Connect (Settings › Channels), instead of "No reviews match these filters". Null otherwise.
+ */
+export function notConnectedEmpty(channels: readonly string[], readState: readonly InboxReadState[] | null): NotConnectedEmpty | null {
+  if (channels.length !== 1 || !readState) return null
+  const channel = channels[0].toUpperCase()
+  const off = readState.find((r) => r.channel.toUpperCase() === channel && r.connected === false && r.reconnectHref)
+  if (!off?.reconnectHref) return null
+  const name = channelLabel(channel)
+  const noun = ACCOUNT_NOUN[channel] ?? 'account'
+  return {
+    title: `No ${name} ${noun} is connected`,
+    message: channel === 'ETSY'
+      ? 'Etsy reviews show here once an Etsy shop is connected in Settings › Channels: Nexus then reads them every 30 minutes, each with its one photo. You reply on Etsy.com.'
+      : `${name} reviews show here once a ${name} ${noun} is connected in Settings › Channels.`,
+    action: { label: `Connect ${name}`, href: off.reconnectHref },
+  }
 }
 
 /** The header line: "1,284 reviews · last 30 days". */

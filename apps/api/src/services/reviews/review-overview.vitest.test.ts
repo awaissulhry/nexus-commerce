@@ -10,7 +10,9 @@ import {
   trendBucket, trendPoints, weightedAverage,
 } from './overviewMath.js'
 import { amazonThemes, overviewTrend, reviewThemes, scopeCode, topThemes } from './review-overview.service.js'
-import { alertItem, parseLimit, parseOnly, rankNeedsYou, replyItem, requestItems, waitWords } from './review-needs-you.service.js'
+import {
+  alertItem, closesWords, etsyClosingWhere, parseLimit, parseOnly, rankNeedsYou, replyItem, replyItems, requestItems, waitWords,
+} from './review-needs-you.service.js'
 
 const NOW = new Date('2026-10-26T12:00:00Z')
 const DAY = 86_400_000
@@ -232,6 +234,67 @@ describe('needs you', () => {
     })
     expect(item.title).toBe('Fit & sizing complaints up 2.6×')
     expect(item.detail).toBe('Touring jacket · Germany · 18% of reviews in the last 7 days, was 7%')
+  })
+
+  // Lane N4 (2026-10-27): Etsy's one reply, on Etsy.com, within 100 days of the buyer's last edit.
+  const etsy = (id: string, editedDaysAgo: number, over: Record<string, unknown> = {}) => ({
+    id, channel: 'ETSY', marketplace: null, rating: 3, body: 'Strap feels thin.', authorName: 'Test Buyer', postedAt: ago(editedDaysAgo + 5),
+    channelEditedAt: ago(editedDaysAgo), kind: 'PRODUCT', product: { name: 'Test strap', sku: 'T-1' }, sentiment: null, ...over,
+  })
+
+  it('an Etsy review whose reply window closes soon says when, from the buyer’s last edit, and leads', () => {
+    const item = replyItem(etsy('e1', 96), NOW)
+    expect(item).toMatchObject({ kind: 'review', label: 'Reply needed', tone: 'danger', title: 'Etsy reply window closes in 4 days' })
+    expect(item.detail).toBe('3-star review · Test strap · Etsy · Test B. · “Strap feels thin.” · reply on Etsy.com by 30 Oct')
+    expect(item.dueAt).toBe(new Date(ago(96).getTime() + 100 * DAY).toISOString())
+    // Reply opens the review in Nexus (write, copy, mark as responded); it is still the one Reply action.
+    expect(item.action).toEqual({ label: 'Reply', page: 'review', params: { id: 'e1', channel: 'ETSY' } })
+    // The 100 days count from the last edit, not from the posting: a review posted 200 days ago, edited 92 days ago.
+    expect(replyItem(etsy('e2', 92, { postedAt: ago(200) }), NOW).title).toBe('Etsy reply window closes in 8 days')
+    // A review never edited counts from when it was posted.
+    expect(replyItem(etsy('e3', 0, { postedAt: ago(99.5), channelEditedAt: null }), NOW).title).toBe('Etsy reply window closes within a day')
+  })
+
+  it('an Etsy review with time left keeps its own title; the deadline is detail, never a second item', () => {
+    const item = replyItem(etsy('e4', 20, { rating: 2 }), NOW)
+    expect(item).toMatchObject({ tone: 'danger', title: '2-star review, no reply for 25 days' })
+    expect(item.detail.endsWith('reply on Etsy.com · 80 days left')).toBe(true)
+    expect(item.dueAt).toBeUndefined()
+    expect(replyItem(etsy('e5', 30), NOW)).toMatchObject({ tone: 'warning' })
+    // Other channels carry no window.
+    expect(replyItem({ ...etsy('x', 96), channel: 'SHOPIFY' }, NOW)).toMatchObject({ title: '3-star review, no reply for 101 days' })
+    expect(closesWords(1)).toBe('closes within a day')
+    expect(closesWords(10)).toBe('closes in 10 days')
+  })
+
+  it('reply items: windows about to close first (soonest first), then negative, then the rest — each once', () => {
+    const items = replyItems({
+      closing: [etsy('soon-9', 91), etsy('soon-2', 98)],
+      urgent: [etsy('soon-2', 98), { ...etsy('neg', 1, { rating: 1 }), channel: 'EBAY', kind: null }],
+      other: [etsy('later', 10)],
+    }, NOW, 8)
+    expect(items.map(i => i.id)).toEqual(['soon-2', 'soon-9', 'neg', 'later'])
+    expect(replyItems({ closing: [etsy('soon-9', 91)], urgent: [], other: [etsy('later', 10)] }, NOW, 1).map(i => i.id)).toEqual(['soon-9'])
+  })
+
+  it('the mixed list: a window about to close leads its tone, soonest first', () => {
+    const ranked = rankNeedsYou([
+      { id: 'd-new', tone: 'danger' as const, at: ago(0).toISOString() },
+      { id: 'etsy-5', tone: 'danger' as const, at: ago(100).toISOString(), dueAt: ago(-5).toISOString() },
+      { id: 'etsy-1', tone: 'danger' as const, at: ago(110).toISOString(), dueAt: ago(-1).toISOString() },
+      { id: 'w', tone: 'warning' as const, at: ago(0).toISOString() },
+    ])
+    expect(ranked.map(i => i.id)).toEqual(['etsy-1', 'etsy-5', 'd-new', 'w'])
+  })
+
+  it('the closing Etsy rows: inside the last 10 days of the window, from the last edit, else the posting', () => {
+    const cut = new Date(NOW.getTime() - 90 * DAY)
+    expect(etsyClosingWhere(NOW)).toEqual({
+      AND: [
+        { channel: 'ETSY' },
+        { OR: [{ channelEditedAt: { lte: cut } }, { AND: [{ channelEditedAt: null }, { postedAt: { lte: cut } }] }] },
+      ],
+    })
   })
 
   it('failed and retrying requests are one item each, and none when there are none', () => {

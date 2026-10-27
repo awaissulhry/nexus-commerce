@@ -65,6 +65,12 @@ export interface InboxReadState {
   reconnectHref: string | null
   /** Its reviews arrive only by file import (Amazon's product reviews, a store app not connected): never "up to date". */
   byFile: boolean
+  /**
+   * False when no account of this channel is connected at all (Etsy, lane N4): not a channel that stopped (no banner,
+   * not "behind"), not one that is read; the Inbox filtered to it says so, with Connect (`reconnectHref`). Left out
+   * otherwise.
+   */
+  connected?: false
 }
 
 export interface InboxPage {
@@ -230,20 +236,21 @@ async function inboxFacets(): Promise<InboxPage['facets']> {
  * it, where (Settings › Channels).
  */
 export async function inboxReadState(now: Date = new Date()): Promise<InboxReadState[]> {
-  const { sources } = await reviewSources(now)
-  return readStateFromSources(sources)
+  const { sources, notConnected } = await reviewSources(now)
+  return readStateFromSources([...sources, ...notConnected])
 }
 
-/** The Inbox's read state from the review sources (pure). */
+/** The Inbox's read state from the review sources (pure). A channel with no account connected is `connected: false`. */
 export function readStateFromSources(sources: readonly ReviewSource[]): InboxReadState[] {
   return sources.map((s) => ({
     channel: s.channel,
     market: s.market,
-    ok: s.state === 'ok',
+    ok: s.state !== 'not_updating',
     since: s.since,
     reason: s.reason,
     reconnectHref: s.reconnectHref,
     byFile: !s.readsItself,
+    ...(s.state === 'not_connected' ? { connected: false as const } : {}),
   }))
 }
 
