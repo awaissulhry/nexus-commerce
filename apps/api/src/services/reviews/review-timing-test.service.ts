@@ -20,9 +20,12 @@
  * While a test runs, the scheduler (review-scheduler.service.ts) puts each new order it covers in a group by its order
  * number (review-timing-test-math.ts assignArm); the holdout group's request is SKIPPED (not asked on purpose), the other
  * groups use their first-try day (TIMING) or their rule (AB). The counts per group come from those requests; reviews
- * per group from the attribution (a review linked to the group's request) and, for the holdout, a review for the same
- * product in the same market within 21 days of the day it would have been asked. Amazon does not say who wrote a review,
- * so every rate is an estimate, and the words say so.
+ * per group are counted as the ONE review rate counts them (review-rate.service.ts): a visible review the attribution
+ * linked to the group's request; for the holdout (never sent, so never linked) the attribution's own rule applied to
+ * the day it would have been asked — a review naming the order, else one for the same product in the same channel and
+ * market — within the same 30 days (ATTRIBUTION_DAYS). Where no review can follow in the test's channel and market
+ * (`rateMeasurable`: e.g. no Amazon review of that market imported) the result says "Not measurable" in the rate's own
+ * words, never a 0 %. Amazon does not say who wrote a review, so every rate is an estimate, and the words say so.
  */
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
@@ -58,6 +61,7 @@ import {
   type TestResult,
 } from './review-timing-test-math.js'
 import { visibleReviewWhere } from './review-visibility.js'
+import { notMeasurableWords, rateKey, rateMeasurable, readRateFacts, type RateFacts } from './review-rate.service.js'
 
 /** The approved tools (agents/tools/review-timing-tests.tools.ts). */
 export const START_TOOL = 'start-review-timing-test'
@@ -71,8 +75,8 @@ const AB_LAST_TRY_DAY = 30
 const SCOPE_CHANNEL: Record<string, string> = {
   AMAZON_PER_MARKETPLACE: 'AMAZON', AMAZON_GLOBAL: 'AMAZON', EBAY: 'EBAY', SHOPIFY: 'SHOPIFY', WOOCOMMERCE: 'WOOCOMMERCE', ETSY: 'ETSY', MANUAL: 'MANUAL',
 }
-/** The channels the scheduler asks (an A/B split of another channel's rule would split nothing). */
-const ASKED_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY']
+/** The channels the scheduler asks (an A/B split of another channel's rule would split nothing; eBay asks its own buyers). */
+const ASKED_CHANNELS = ['AMAZON', 'SHOPIFY']
 
 export class TimingTestInputError extends Error {
   readonly statusCode: number
@@ -188,7 +192,7 @@ export async function readArmCounts(test: TestRow, now = new Date()): Promise<Ar
     ? await prisma.reviewRequest.findMany({
         where: { timingTestArmId: { in: armIds } },
         select: {
-          id: true, status: true, timingTestArmId: true, scheduledFor: true, channel: true, marketplace: true,
+          id: true, orderId: true, status: true, timingTestArmId: true, scheduledFor: true, channel: true, marketplace: true,
           order: { select: { deliveredAt: true, items: { take: 1, select: { productId: true } } } },
         },
         take: 50_000,
@@ -205,30 +209,44 @@ export async function readArmCounts(test: TestRow, now = new Date()): Promise<Ar
     for (const l of linked) if (l.attributedRequestId) reviewed.add(l.attributedRequestId)
   }
 
-  // The holdout: a review no request explains, for the same product in the same market, within the answer days of the
-  // day the order would have been asked. Each review counts for one order at most.
+  // The holdout (never sent, so never linked): the attribution's own rule (review-attribution.service.ts) applied to the
+  // day the order would have been asked — a review naming the order (eBay feedback, Amazon seller feedback), else a review
+  // no request explains for the same product in the same channel and market — within the same window. Each review counts
+  // for one order at most.
   const holdoutIds = new Set(test.arms.filter((a) => a.holdout).map((a) => a.id))
   const held = rows
     .filter((r) => r.timingTestArmId && holdoutIds.has(r.timingTestArmId))
-    .map((r) => ({ id: r.id, channel: r.channel, market: r.marketplace, productId: r.order?.items[0]?.productId ?? null, start: r.scheduledFor ?? r.order?.deliveredAt ?? null }))
-    .filter((r): r is { id: string; channel: string; market: string | null; productId: string; start: Date } => !!r.productId && !!r.start)
+    .map((r) => ({ id: r.id, orderId: r.orderId, channel: r.channel, market: r.marketplace, productId: r.order?.items[0]?.productId ?? null, start: r.scheduledFor ?? r.order?.deliveredAt ?? null }))
+    .filter((r): r is { id: string; orderId: string; channel: string; market: string | null; productId: string | null; start: Date } => !!r.start)
     .sort((a, b) => a.start.getTime() - b.start.getTime())
   if (held.length) {
     const from = held[0].start
     const to = new Date(held[held.length - 1].start.getTime() + ANSWER_DAYS * DAY_MS)
-    const candidates: Array<{ id: string; productId: string | null; channel: string; marketplace: string | null; postedAt: Date }> = []
-    for (const ids of chunks([...new Set(held.map((h) => h.productId))], 1000)) {
-      candidates.push(...await prisma.review.findMany({
-        where: visibleReviewWhere({ attributedRequestId: null, productId: { in: ids }, postedAt: { gte: from, lte: to } }),
-        select: { id: true, productId: true, channel: true, marketplace: true, postedAt: true },
+    type Candidate = { id: string; orderId: string | null; productId: string | null; channel: string; marketplace: string | null; postedAt: Date }
+    const select = { id: true, orderId: true, productId: true, channel: true, marketplace: true, postedAt: true } as const
+    const byOrder: Candidate[] = []
+    for (const ids of chunks([...new Set(held.map((h) => h.orderId))], 1000)) {
+      byOrder.push(...await prisma.review.findMany({
+        where: visibleReviewWhere({ orderId: { in: ids }, postedAt: { gte: from, lte: to } }),
+        select,
+        orderBy: { postedAt: 'asc' },
+      }))
+    }
+    const byProduct: Candidate[] = []
+    for (const ids of chunks([...new Set(held.map((h) => h.productId).filter((v): v is string => !!v))], 1000)) {
+      byProduct.push(...await prisma.review.findMany({
+        where: visibleReviewWhere({ attributedRequestId: null, orderId: null, productId: { in: ids }, postedAt: { gte: from, lte: to } }),
+        select,
         orderBy: { postedAt: 'asc' },
       }))
     }
     const used = new Set<string>()
+    const inWindow = (c: Candidate, h: (typeof held)[number]) => c.postedAt.getTime() >= h.start.getTime() && c.postedAt.getTime() <= h.start.getTime() + ANSWER_DAYS * DAY_MS
     for (const h of held) {
-      const end = h.start.getTime() + ANSWER_DAYS * DAY_MS
-      const hit = candidates.find((c) => !used.has(c.id) && c.productId === h.productId && c.channel === h.channel
-        && (c.marketplace ?? '') === (h.market ?? '') && c.postedAt.getTime() >= h.start.getTime() && c.postedAt.getTime() <= end)
+      const hit = byOrder.find((c) => !used.has(c.id) && c.orderId === h.orderId && inWindow(c, h))
+        ?? (h.productId
+          ? byProduct.find((c) => !used.has(c.id) && c.productId === h.productId && c.channel === h.channel && (c.marketplace ?? '') === (h.market ?? '') && inWindow(c, h))
+          : undefined)
       if (hit) {
         used.add(hit.id)
         reviewed.add(h.id)
@@ -261,11 +279,33 @@ async function storeArmCounts(test: TestRow, counts: readonly ArmCounts[]): Prom
 /** "in Germany" for a TIMING test (null for an A/B split, which names its sides instead). */
 const whereWords = (test: Pick<TestRow, 'kind' | 'market'>) => (test.kind === 'TIMING' && marketWords(test.market) ? `in ${marketWords(test.market)}` : undefined)
 
+/**
+ * Can a review follow this test's requests at all — the ONE review rate's `rateMeasurable` for its channel and market
+ * (an A/B split of an all-markets rule: any market of its channel).
+ */
+export function testMeasurable(test: Pick<TestRow, 'channel' | 'market'>, facts: RateFacts): boolean {
+  if (test.market !== '*') return rateMeasurable(test.channel, test.market, facts)
+  if (test.channel.toUpperCase() === 'EBAY') return facts.ebayLinked
+  const prefix = rateKey(test.channel, '') // "AMAZON|": every market of the channel
+  return [...facts.reviewedKeys].some((k) => k.startsWith(prefix))
+}
+
+/** The result when no review can follow: no leader, no rates, the ONE rate's words (never a 0 %). */
+export function notMeasurableResult(test: Pick<TestRow, 'channel'>, arms: readonly ArmCounts[], base: TestResult): TestResult {
+  return {
+    ...base,
+    tooEarly: true, leaderId: null, sure: null, liftPct: null, sureWords: null,
+    rates: Object.fromEntries(arms.map((a) => [a.id, null])),
+    words: notMeasurableWords([{ channel: test.channel }]),
+  }
+}
+
 /** The result of one test now (counts read, counters kept). */
 export async function resultOf(test: TestRow, now = new Date()): Promise<{ arms: ArmCounts[]; result: TestResult }> {
-  const arms = await readArmCounts(test, now)
+  const [arms, facts] = await Promise.all([readArmCounts(test, now), readRateFacts()])
   await storeArmCounts(test, arms).catch(() => undefined)
-  return { arms, result: testResult(arms, { where: whereWords(test), kind: test.kind as TestKind, ended: test.status === 'STOPPED' || test.status === 'DONE' }) }
+  const result = testResult(arms, { where: whereWords(test), kind: test.kind as TestKind, ended: test.status === 'STOPPED' || test.status === 'DONE' })
+  return { arms, result: testMeasurable(test, facts) ? result : notMeasurableResult(test, arms, result) }
 }
 
 // ── The end of a test ────────────────────────────────────────────────────────────────────────────────────────────
@@ -468,7 +508,7 @@ async function viewOf(t: TestRow, names: Map<string, { name: string; isActive: b
       return { ...c, delayDays: a.delayDays, ruleId: a.ruleId, ruleName: a.ruleId ? names.get(a.ruleId)?.name ?? null : null, rate: read.result.rates[a.id] ?? null }
     }),
     result: read.result,
-    countedWords: `Counted: orders whose time to answer is over (delivered more than ${horizonDays(t)} days ago). Reviews and the rate are for counted orders; newer orders count as their time ends. Amazon does not say who wrote a review, so rates are estimates.`,
+    countedWords: `Counted: orders whose time to answer is over (delivered more than ${horizonDays(t)} days ago). A group's rate is its reviews per counted order (the holdout is never asked, so orders are compared, not requests), each review matched as the review rate matches it; newer orders count as their time ends. Amazon does not say who wrote a review, so rates are estimates.`,
     approval: approvalId ? { id: approvalId, what: t.status === 'WAITING_APPROVAL' ? 'start' : 'apply' } : null,
     applied: stored.applied ?? null,
     kept: stored.kept ?? null,

@@ -6,7 +6,9 @@
  *     a person approves; only the approved tool's run starts it; a stale approval changes nothing;
  *   - a declined start goes back to "not started", with who declined it; a second test on the same orders is held;
  *   - "Stop test" ends it at once (no approval) and withdraws a request still waiting;
- *   - the counts per group (orders, sent, counted, reviews — the holdout's review found by product, market and window);
+ *   - the counts per group (orders, sent, counted, reviews — counted as the ONE review rate counts them: the attribution's
+ *     link for a sent request; for the holdout a review naming its order, else one by product, market and window, within
+ *     the rate's 30 days); "Not measurable" (never 0 %) where no review can follow in the test's market;
  *   - "Apply winner" asks for approval and changes no rule before; the approved tool adds the rule, its undo turns it off.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -161,6 +163,10 @@ describe('counts per group, and Apply winner', () => {
       }
       // A review no request explains, within the window of a holdout order: it counts for the holdout once.
       await c.review.create({ data: { channel: 'AMAZON', marketplace: 'IT', externalReviewId: 'rv-free', body: 'Fine', rating: 4, postedAt: daysAgo(60 - 5), productId: 'prod-glove' } as never })
+      // Seller feedback naming a holdout order (the attribution links such a review by its order): it counts for that order.
+      await c.review.create({ data: { channel: 'AMAZON', marketplace: 'IT', kind: 'SELLER', externalReviewId: 'rv-seller', body: 'Late', rating: 3, postedAt: daysAgo(60 - 20), orderId: 'ord-250' } as never })
+      // Seller feedback naming a holdout order more than 30 days after the day it would have been asked: it does not count.
+      await c.review.create({ data: { channel: 'AMAZON', marketplace: 'IT', kind: 'SELLER', externalReviewId: 'rv-late', body: 'Late', rating: 3, postedAt: daysAgo(60 - 40), orderId: 'ord-251' } as never })
       // A sample review (FIXTURE) never counts.
       await c.review.create({ data: { channel: 'AMAZON', marketplace: 'IT', externalReviewId: 'rv-fixture', body: 'Sample', rating: 4, postedAt: daysAgo(60 - 5), productId: 'prod-glove', ingestSource: 'FIXTURE' } as never })
     })
@@ -172,7 +178,7 @@ describe('counts per group, and Apply winner', () => {
     expect(by).toEqual({
       'it-d4': { orders: 120, sent: 120, counted: 120, reviews: 6 },
       'it-d7': { orders: 123, sent: 123, counted: 120, reviews: 18 },
-      'it-hold': { orders: 12, sent: 0, counted: 12, reviews: 1 },
+      'it-hold': { orders: 12, sent: 0, counted: 12, reviews: 2 },
     })
     expect(view.result).toMatchObject({ tooEarly: false, leaderId: 'it-d7', controlId: 'it-d4', liftPct: 200 })
     expect(view.result.sure).toBeGreaterThanOrEqual(95)
@@ -180,7 +186,7 @@ describe('counts per group, and Apply winner', () => {
     expect(view.held).toMatchObject({ apply: null, keep: null, start: 'This test has ended. Make a new one to test again.' })
     // The counters are kept on the groups.
     const arms = await inside(() => database.client.reviewTimingTestArm.findMany({ where: { testId }, orderBy: { position: 'asc' } }))
-    expect(arms.map((a) => [a.orders, a.sent, a.reviews])).toEqual([[120, 120, 6], [123, 123, 18], [12, 0, 1]])
+    expect(arms.map((a) => [a.orders, a.sent, a.reviews])).toEqual([[120, 120, 6], [123, 123, 18], [12, 0, 2]])
   })
 
   it('Apply winner asks for approval and changes no rule before a person approves', async () => {
@@ -210,5 +216,35 @@ describe('counts per group, and Apply winner', () => {
     expect(await inside(() => database.client.reviewRule.findFirst({ where: { name: 'Italy glove' } }))).toMatchObject({ isActive: false, sendDelayDays: 7 })
     // And the undo of the undo applies the winner again.
     expect(apply.undo!.request(undone.change as never)).toEqual({ tool: 'apply-review-timing-winner', args: { testId, armId: 'it-d7' } })
+  })
+})
+
+describe('the ONE review rate decides what can be measured (PR J on main\'s review-rate.service.ts)', () => {
+  it('a review counts within the rate\'s own 30 days', async () => {
+    const { ANSWER_DAYS } = await import('./review-timing-test-math.js')
+    const { ATTRIBUTION_DAYS } = await import('./review-rate.service.js')
+    expect(ANSWER_DAYS).toBe(ATTRIBUTION_DAYS)
+  })
+
+  it('no review can follow in the test\'s market: "Not measurable" in the rate\'s words, no rate, no leader — never 0 %', async () => {
+    await inside(async () => {
+      const c = database.client
+      await c.reviewTimingTest.create({
+        data: {
+          id: 'test-fr', kind: 'TIMING', channel: 'AMAZON', market: 'FR', holdoutPct: 0, status: 'DONE', startedAt: daysAgo(90), endedAt: daysAgo(2),
+          arms: { create: [{ id: 'fr-d4', label: 'Day 4 (now)', position: 0, delayDays: 4 }, { id: 'fr-d7', label: 'Day 7', position: 1, delayDays: 7 }] },
+        },
+      })
+      for (const [i, arm] of ['fr-d4', 'fr-d7'].entries()) {
+        const id = `ord-fr-${i}`
+        await c.order.create({ data: { id, channel: 'AMAZON', channelOrderId: `407-${i}`, marketplace: 'FR', status: 'DELIVERED', totalPrice: '30.00', customerName: 'Test', customerEmail: `${id}@example.test`, shippingAddress: {}, deliveredAt: daysAgo(60), items: { create: [{ sku: 'TEST-GLOVE', quantity: 1, price: '30.00', productId: 'prod-glove' }] } } as never })
+        await c.reviewRequest.create({ data: { orderId: id, channel: 'AMAZON', marketplace: 'FR', status: 'SENT', timingTestArmId: arm, scheduledFor: daysAgo(56), sentAt: daysAgo(56) } as never })
+      }
+    })
+    const view = (await inside(() => svc.listTimingTests({ kind: 'TIMING' }, NOW))).tests.find((t) => t.id === 'test-fr')!
+    expect(view.arms.map((a) => [a.id, a.counted, a.rate])).toEqual([['fr-d4', 1, null], ['fr-d7', 1, null]])
+    expect(view.result).toMatchObject({ leaderId: null, sure: null, rates: { 'fr-d4': null, 'fr-d7': null } })
+    expect(view.result.words).toBe('Not measurable: Amazon gives no review count — import this market’s reviews to estimate it.')
+    expect(view.held.apply).toBe('Too early to call — there is no winner yet.')
   })
 })

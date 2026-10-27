@@ -11,8 +11,9 @@
  *   testResult()    the leader, how sure, the lift over the group in place now, and the words. "Too early to call" while
  *                   any asked group has fewer than MIN_COUNTED_PER_ARM orders whose time to answer is over.
  *
- * A review counts for an order when it arrives for the same product in the same market within ANSWER_DAYS of the
- * request (the attribution's window): Amazon does not say who wrote a review, so every rate is an estimate.
+ * A review counts for an order the way the ONE review rate counts it (review-rate.service.ts): linked to its request by
+ * the attribution within ANSWER_DAYS (= ATTRIBUTION_DAYS) of the request. Amazon does not say who wrote a review, so
+ * every rate is an estimate; where no review can follow at all, the service says "Not measurable" instead of a 0 %.
  */
 import { createHash } from 'node:crypto'
 
@@ -38,8 +39,12 @@ export const DEFAULT_MAX_DAYS = 56
 export const MAX_DAYS_MIN = 14
 export const MAX_DAYS_MAX = 84
 
-/** Days after a request in which a review still counts for it (review-attribution.service.ts's default window). */
-export const ANSWER_DAYS = 21
+/**
+ * Days after a request in which a review still counts for it: the ONE review rate's attribution window
+ * (review-rate.service.ts ATTRIBUTION_DAYS, which review-attribution.service.ts links with). Kept here as a number so this
+ * file stays pure; review-timing-test.vitest.test.ts holds the two equal.
+ */
+export const ANSWER_DAYS = 30
 /** Orders per asked group, with their time to answer over, before a test may be called. */
 export const MIN_COUNTED_PER_ARM = 100
 /** How sure a winner must be before it may be applied. */
