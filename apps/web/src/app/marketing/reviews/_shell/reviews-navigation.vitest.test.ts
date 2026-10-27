@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { Settings } from 'lucide-react'
+import type { WorkspaceNavItem } from '@/design-system/patterns/WorkspaceSubheader'
 
 let nav: typeof import('./reviews-navigation')
 let model: typeof import('./reviews-nav')
@@ -11,8 +12,10 @@ beforeAll(async () => {
 })
 afterAll(() => vi.unstubAllEnvs())
 
+// Every row, the market rows under a channel included.
+const everyRow = (rows: readonly WorkspaceNavItem[]): WorkspaceNavItem[] => rows.flatMap(row => [row, ...(row.children ?? [])])
 const items = (path: string, has?: (p: string) => boolean, counts?: { needReply?: number }) =>
-  nav.buildReviewsNavigation(path, has, counts).flatMap(group => group.items)
+  everyRow(nav.buildReviewsNavigation(path, has, counts).flatMap(group => group.items))
 const active = (path: string) => items(path).filter(item => item.active).map(item => item.label)
 
 describe('reviews navigation', () => {
@@ -91,24 +94,62 @@ describe('reviews navigation', () => {
     }
   })
 
-  it('lists a row per channel market under Amazon and eBay, and marks the market page itself', () => {
+  it('puts each channel market under Amazon and eBay (rows behind a chevron), and marks the market page itself', () => {
     const markets = { AMAZON: ['IT', 'de', 'GB', 'bad1'], EBAY: ['IT'] }
     const channels = nav.buildReviewsNavigation('/w/business_a/marketing/reviews/amazon/it', undefined, undefined, markets).find(group => group.id === 'channels')!
-    expect(channels.items.map(item => item.label)).toEqual(['Amazon', 'Amazon Italy', 'Amazon Germany', 'Amazon United Kingdom', 'eBay', 'eBay Italy', 'Shopify', 'Etsy'])
+    // The channels stay four rows; Shopify and Etsy (one page each) have no rows under them, so no chevron.
+    expect(channels.items.map(item => item.label)).toEqual(['Amazon', 'eBay', 'Shopify', 'Etsy'])
     expect(channels.items.map(item => item.href)).toEqual([
-      '/w/business_a/marketing/reviews/amazon', '/w/business_a/marketing/reviews/amazon/it', '/w/business_a/marketing/reviews/amazon/de',
-      '/w/business_a/marketing/reviews/amazon/uk', '/w/business_a/marketing/reviews/ebay', '/w/business_a/marketing/reviews/ebay/it',
+      '/w/business_a/marketing/reviews/amazon', '/w/business_a/marketing/reviews/ebay',
       '/w/business_a/marketing/reviews/shopify', '/w/business_a/marketing/reviews/etsy',
     ])
-    expect(channels.items.filter(item => item.active).map(item => item.label)).toEqual(['Amazon Italy'])
-    const activeWith = (path: string) => nav.buildReviewsNavigation(path, undefined, undefined, markets).flatMap(group => group.items).filter(item => item.active).map(item => item.label)
+    const [amazon, ebay, shopify, etsy] = channels.items
+    expect(amazon.childrenLabel).toBe('markets')
+    expect(amazon.children!.map(item => item.label)).toEqual(['Italy', 'Germany', 'United Kingdom'])
+    expect(amazon.children!.map(item => item.ariaLabel)).toEqual(['Amazon Italy', 'Amazon Germany', 'Amazon United Kingdom'])
+    expect(amazon.children!.map(item => item.href)).toEqual([
+      '/w/business_a/marketing/reviews/amazon/it', '/w/business_a/marketing/reviews/amazon/de', '/w/business_a/marketing/reviews/amazon/uk',
+    ])
+    // A market row has no icon: it sits under the channel's guide line.
+    expect(amazon.children!.every(item => item.icon === undefined)).toBe(true)
+    expect(amazon.icon).toBeDefined()
+    expect(ebay.children!.map(item => [item.label, item.ariaLabel, item.href])).toEqual([['Italy', 'eBay Italy', '/w/business_a/marketing/reviews/ebay/it']])
+    expect(shopify.children).toBeUndefined()
+    expect(etsy.children).toBeUndefined()
+    // Exactly one current row: the market, not its channel.
+    expect(everyRow(channels.items).filter(item => item.active).map(item => item.ariaLabel ?? item.label)).toEqual(['Amazon Italy'])
+    const activeWith = (path: string) => everyRow(nav.buildReviewsNavigation(path, undefined, undefined, markets).flatMap(group => group.items))
+      .filter(item => item.active).map(item => item.ariaLabel ?? item.label)
     expect(activeWith('/marketing/reviews/amazon')).toEqual(['Amazon'])
     expect(activeWith('/marketing/reviews/ebay/it')).toEqual(['eBay Italy'])
     expect(activeWith('/marketing/reviews/amazon/gb')).toEqual(['Amazon United Kingdom'])
+    expect(activeWith('/w/business_a/marketing/reviews/inbox')).toEqual(['Inbox'])
     // A market without a row (not sold there yet) keeps its channel's row current; no markets read → the channel rows only.
     expect(activeWith('/marketing/reviews/ebay/de')).toEqual(['eBay'])
     expect(active('/marketing/reviews/amazon/fr')).toEqual(['Amazon'])
     expect(items('/marketing/reviews').filter(item => /^(Amazon|eBay)/.test(item.label)).map(item => item.label)).toEqual(['Amazon', 'eBay'])
+    expect(items('/marketing/reviews').some(item => item.children)).toBe(false)
+    // A channel with no market read keeps no rows (no chevron).
+    const amazonOnly = nav.buildReviewsNavigation('/marketing/reviews', undefined, undefined, { AMAZON: ['IT'] }).find(group => group.id === 'channels')!
+    expect(amazonOnly.items.map(item => !!item.children)).toEqual([true, false, false, false])
+  })
+
+  it('finds a market row as the ONE row of its page, in the model too', () => {
+    const markets = { AMAZON: ['IT', 'GB'] }
+    expect(model.findReviewsNavItem('/marketing/reviews/amazon/it', markets)).toMatchObject({ label: 'Italy', ariaLabel: 'Amazon Italy', href: '/marketing/reviews/amazon/it' })
+    expect(model.findReviewsNavItem('/marketing/reviews/amazon/gb', markets)?.href).toBe('/marketing/reviews/amazon/uk')
+    expect(model.findReviewsNavItem('/marketing/reviews/amazon', markets)?.label).toBe('Amazon')
+    expect(model.findReviewsNavItem('/marketing/reviews/amazon/it')?.label).toBe('Amazon')
+  })
+
+  it('checks a market row with the same permissions as every row', () => {
+    const markets = { AMAZON: ['IT'] }
+    const onlyReviews = (permission: string) => permission === 'pages.reviews'
+    const amazon = nav.buildReviewsNavigation('/marketing/reviews', onlyReviews, undefined, markets).flatMap(group => group.items).find(item => item.label === 'Amazon')!
+    expect(amazon.children?.map(item => item.ariaLabel)).toEqual(['Amazon Italy'])
+    const italy = model.reviewsNav(markets).flatMap(group => group.items).find(item => item.label === 'Amazon')!.children![0]
+    expect(nav.reviewsNavItemAllowed(italy, onlyReviews)).toBe(true)
+    expect(nav.reviewsNavItemAllowed(italy, () => false)).toBe(false)
   })
 
   it('shows the needs-a-reply badge on the Inbox only when there is something to reply to', () => {

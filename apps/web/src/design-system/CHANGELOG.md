@@ -1,3 +1,19 @@
+## Sub-sidebar rows can hold rows under a chevron — 2026-10-27
+
+Owner-approved board "Sidebar · channel rows with markets". Both apps, identical: `patterns/{WorkspaceSubheader.tsx,
+secondaryNavTree.ts}`; the same block in both `styles/patterns.css`. Web only: catalog `#workspace-subheader-example`
+("Sample channels"), `patterns/README.md`.
+- **`WorkspaceNavItem.children?: readonly WorkspaceNavItem[]`**: the row keeps its own link and gets a chevron button
+  at its end (`.nds-secondary-nav-parent`, `.nds-secondary-nav-toggle`, 28 px, 40 px under 720 px; turns 90° when open,
+  no motion under reduced motion) that shows or hides its rows (`.nds-secondary-nav-children`, `role="group"`, indented
+  under the icon with a 1 px guide line; rows 32 px, 40 px under 720 px, regular weight, semibold when current).
+  **`childrenLabel?`** names them ("Show Amazon markets"; default "items"); **`ariaLabel?`** gives a short row its full
+  name ("Italy" → "Amazon Italy").
+- Open state (`secondaryNavTree.ts`, pure, tested): a parent opens when the person arrives on one of its rows' pages;
+  every other parent starts closed; the person's choice is remembered per navigation in localStorage. A closed parent
+  holding the current page is semibold with a dot (`.has-current`, `.nds-secondary-nav-current-dot`, `--nds-primary`)
+  and visually hidden words. Without `children` every row renders as before.
+
 ## A grid cell that clips its value — 2026-10-27
 
 `grid/theme/grid.css` (both apps, identical). **`nds-ag-cell-clip`** (a column's `cellClass`): the cell's value shrinks to
