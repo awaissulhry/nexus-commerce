@@ -286,6 +286,8 @@ describe('the API’s command receipts', () => {
       '/api/reviews/action-items/bulk',
       // Reviews › Amazon seller feedback (Phase 3) — "Fetch now".
       '/api/reviews/amazon/seller-feedback/fetch',
+      // Reviews › eBay (PR G) — "Send for approval" in Leave feedback for buyers, through reviewsSend with `idempotent`.
+      '/api/reviews/area/ebay/buyer-feedback/send',
       '/api/reviews/import/apply',
       '/api/reviews/inbox/bulk',
       '/api/reviews/spikes/bulk',

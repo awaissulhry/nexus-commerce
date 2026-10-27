@@ -14,7 +14,9 @@
  * eBay: the score, % positive, counts by type and the four detailed seller ratings are eBay's own (Trading GetFeedback,
  * at most once an hour per account: ebay-feedback-summary.service.ts); the list is the Inbox's seller-feedback rows
  * (review-inbox.service.ts), so a row opens the same review pop-up; read state per market from review-sources.service.ts.
- * Revision requests and leaving feedback for buyers come in Phase 3.
+ * PR G (eBay REST): eBay's AI topics and the revision requests (ebay-feedback-extras.service.ts) are two more sections;
+ * leaving feedback for buyers has its own read and send (ebay-buyer-feedback.service.ts), and its queue's counts are the
+ * "Buyers to rate" tile.
  *
  * Every Review read goes through `visibleReviewWhere` (fixtures never count). The arithmetic is pure, in
  * review-channel-math.ts and overviewMath.ts.
@@ -33,6 +35,8 @@ import { reasonKeyOf } from './review-queue-words.js'
 import { ratingOf } from './review-rating.js'
 import { rateOf as oneRate, ratePercent, readRateFacts, readRateRequests } from './review-rate.service.js'
 import { readEbayFeedbackSummary, type SummaryRead } from './ebay-feedback-summary.service.js'
+import { ebayRevisionsSection, ebayTopicsSection, type EbayRevisions, type EbayTopics } from './ebay-feedback-extras.service.js'
+import { buyersToRate, type BuyersToRate } from './ebay-buyer-feedback.service.js'
 import { combineSummaries, positivePercent, yearPeriod, type EbayDetailedRating, type EbayFeedbackPeriod } from './adapters/ebay-feedback-summary.js'
 import {
   averageRating, bucketKeys, channelMarketLabel, daysBetween, marketWords, periodBounds, periodOf, round,
@@ -177,6 +181,8 @@ export interface EbayTiles extends FeedbackTypeCounts {
   positiveFrom: 'ebay' | 'nexus'
   needReply: number
   oldestWaitDays: number | null
+  /** PR G — the "Leave feedback for buyers" queue's counts; null when it could not be read. */
+  buyersToRate: BuyersToRate | null
 }
 
 export interface EbaySummary {
@@ -206,6 +212,10 @@ export interface EbaySections {
   tiles: Section<EbayTiles>
   summary: Section<EbaySummary>
   feedback: Section<EbayFeedbackList>
+  /** PR G — eBay's AI topics of the feedback in scope and period. */
+  topics: Section<EbayTopics>
+  /** PR G — revision requests (eBay's state of each feedback) and eBay's yearly allowance. */
+  revisions: Section<EbayRevisions>
 }
 
 export interface ChannelPage {
@@ -230,6 +240,8 @@ const SECTION_ERROR: Record<string, string> = {
   readState: 'Nexus could not check whether eBay is read.',
   summary: 'eBay’s feedback summary could not be read.',
   feedback: 'The feedback could not be read.',
+  ebayTopics: 'eBay’s topics could not be read.',
+  revisions: 'The revision requests could not be read.',
 }
 
 async function section<T>(name: string, run: () => Promise<T>): Promise<Section<T>> {
@@ -573,7 +585,7 @@ async function ebaySections(market: string | null, period: ChannelPeriod, bounds
     return summaryFrom(reads, accountWide)
   })
 
-  const [readState, tiles, summarySection, feedback] = await Promise.all([
+  const [readState, tiles, summarySection, feedback, topics, revisions] = await Promise.all([
     section('readState', async (): Promise<EbayReadState[]> => {
       const { sources } = await reviewSources(now)
       return sources
@@ -582,7 +594,7 @@ async function ebaySections(market: string | null, period: ChannelPeriod, bounds
     }),
 
     section('tiles', async (): Promise<EbayTiles> => {
-      const [ratings, needReply, oldest, sum] = await Promise.all([
+      const [ratings, needReply, oldest, sum, buyers] = await Promise.all([
         prisma.review.findMany({
           where: visibleReviewWhere({ ...scope, postedAt: { ...(bounds.from ? { gte: bounds.from } : {}), lte: bounds.to } }),
           select: { rating: true },
@@ -591,6 +603,10 @@ async function ebaySections(market: string | null, period: ChannelPeriod, bounds
         prisma.review.count({ where: { AND: [needsReplyWhere(), scope] } }),
         prisma.review.findFirst({ where: { AND: [needsReplyWhere(), scope] }, orderBy: { postedAt: 'asc' }, select: { postedAt: true } }),
         summary().catch(() => null),
+        buyersToRate(market, now).catch((err) => {
+          logger.warn('[reviews-channel] buyers to rate failed', { error: err instanceof Error ? err.message : String(err) })
+          return null
+        }),
       ])
       const counts = feedbackTypeCounts(ratings.map(r => r.rating))
       const year = sum && sum.state !== 'not_read' && sum.state !== 'no_account' ? yearPeriod(sum) : null
@@ -602,6 +618,7 @@ async function ebaySections(market: string | null, period: ChannelPeriod, bounds
         positiveFrom: ebayPct != null ? 'ebay' : 'nexus',
         needReply,
         oldestWaitDays: oldest ? daysBetween(oldest.postedAt, now) : null,
+        buyersToRate: buyers,
       }
     }),
 
@@ -611,9 +628,13 @@ async function ebaySections(market: string | null, period: ChannelPeriod, bounds
       const page = await listInbox({ kind: 'seller', channel: 'EBAY', ...(market ? { market } : {}), period: inboxPeriod(period), page: 1, pageSize: 200 }, now)
       return { rows: page.rows, total: page.total, owners: page.facets.owners }
     }),
+
+    section('ebayTopics', () => ebayTopicsSection(scope, bounds)),
+
+    section('revisions', () => ebayRevisionsSection(scope, now)),
   ])
 
-  return { readState, tiles, summary: summarySection, feedback }
+  return { readState, tiles, summary: summarySection, feedback, topics, revisions }
 }
 
 // ── Markets ──────────────────────────────────────────────────────────

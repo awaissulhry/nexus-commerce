@@ -3,7 +3,7 @@
  * (`?kind=product|seller`), the period (`?period=7d`; 30 days is the default and leaves the address; `all` = All time),
  * the status tile (`?status=OVERDUE`), "Needs a reply" (`?reply=needed`: only the reviews someone can answer that wait for it —
  * the number on the rail and sub-sidebar badges and the Overview tile, which link here with it and `period=all`), every Filters field (`channel`, `market`, `stars`, `mood`, `theme`, `owner`,
- * `family` — comma lists; `owner=none` = nobody), the search (`?q=`), the order (`?sort=rating:asc`) and the pager
+ * `family` — comma lists; `owner=none` = nobody; "Has photos" = `?photos=1`), the search (`?q=`), the order (`?sort=rating:asc`) and the pager
  * (`?page=2&pageSize=100`). Two one-time flags are read on mount and then left out of the address: `?import=1` opens
  * the Import window, `?review=<id>` opens that review's pop-up (and stays while it is open).
  *
@@ -55,6 +55,8 @@ export interface InboxQuery {
   needsReply: boolean
   /** `product=<id>`: one product's reviews (and its variants'), from an alert's "See the reviews". */
   product: string | null
+  /** "Has photos" (PR G): only reviews with the buyer's photos. */
+  photos: boolean
   q: string
   sort: InboxSort
   page: number
@@ -78,6 +80,7 @@ export const EMPTY_INBOX_QUERY: InboxQuery = {
   families: [],
   needsReply: false,
   product: null,
+  photos: false,
   q: '',
   sort: DEFAULT_INBOX_SORT,
   page: 1,
@@ -128,6 +131,7 @@ export function parseInboxQuery(search: string | URLSearchParams): InboxAddress 
   const stars = list(p.get('stars')).map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 5)
   const review = (p.get('review') ?? '').trim()
   const importFlag = (p.get('import') ?? '').trim().toLowerCase()
+  const photosFlag = (p.get('photos') ?? '').trim().toLowerCase()
   return {
     query: {
       kind: (INBOX_KINDS as readonly string[]).includes(kind) ? (kind as InboxKind) : 'all',
@@ -142,6 +146,7 @@ export function parseInboxQuery(search: string | URLSearchParams): InboxAddress 
       families: list(p.get('family')).filter((f) => ID.test(f)),
       needsReply: (p.get('reply') ?? '').trim().toLowerCase() === 'needed',
       product: ID.test((p.get('product') ?? '').trim()) ? (p.get('product') ?? '').trim() : null,
+      photos: photosFlag === '1' || photosFlag === 'true',
       q: (p.get('q') ?? '').trim().slice(0, 200),
       sort: (INBOX_SORTS as readonly string[]).includes(sort) ? (sort as InboxSort) : DEFAULT_INBOX_SORT,
       page: positiveInt(p.get('page'), 1),
@@ -167,6 +172,7 @@ export function serializeInboxQuery(q: InboxQuery, open: { review?: string | nul
   if (q.families.length) p.set('family', q.families.join(','))
   if (q.needsReply) p.set('reply', 'needed')
   if (q.product) p.set('product', q.product)
+  if (q.photos) p.set('photos', '1')
   if (q.q) p.set('q', q.q)
   if (q.sort !== DEFAULT_INBOX_SORT) p.set('sort', q.sort)
   if (q.page > 1) p.set('page', String(q.page))
@@ -196,6 +202,7 @@ export function inboxApiParams(q: InboxQuery, page: number = q.page, sort: Inbox
     family: q.families,
     reply: q.needsReply ? 'needed' : null,
     product: q.product,
+    photos: q.photos ? '1' : null,
     q: q.q || null,
     sort,
     page,
@@ -250,6 +257,11 @@ export function withoutValue(q: InboxQuery, key: InboxFilterKey, value: string |
   return { ...q, [key]: current.filter((v) => String(v) !== String(value)), page: 1 }
 }
 
+/** "Has photos" on or off. */
+export function withPhotos(q: InboxQuery, on: boolean): InboxQuery {
+  return on === q.photos ? q : { ...q, photos: on, page: 1 }
+}
+
 export function withSearch(q: InboxQuery, text: string): InboxQuery {
   const next = text.trim().slice(0, 200)
   return next === q.q ? q : { ...q, q: next, page: 1 }
@@ -269,7 +281,7 @@ export function withPage(q: InboxQuery, page: number, pageSize: number = q.pageS
 
 /** "Clear" (and "Clear all filters"): every filter, the search and the period go; the tab and the order stay. */
 export function clearFilters(q: InboxQuery): InboxQuery {
-  return { ...q, statuses: [], channels: [], markets: [], stars: [], moods: [], themes: [], owners: [], families: [], needsReply: false, product: null, q: '', period: 'all', page: 1 }
+  return { ...q, statuses: [], channels: [], markets: [], stars: [], moods: [], themes: [], owners: [], families: [], needsReply: false, product: null, photos: false, q: '', period: 'all', page: 1 }
 }
 
 /** One product's reviews, or every product (its chip's ×). */
@@ -282,9 +294,9 @@ export function withNeedsReply(q: InboxQuery, on: boolean): InboxQuery {
   return q.needsReply === on ? q : { ...q, needsReply: on, page: 1 }
 }
 
-/** How many Filters fields are on (the bar's "3 on"; the status tile counts as the Status field). */
+/** How many Filters fields are on (the bar's "3 on"; the status tile counts as the Status field; "Has photos" is one). */
 export function activeFilterCount(q: InboxQuery): number {
-  return FILTER_KEYS.filter((key) => (q[key] as readonly unknown[]).length > 0).length
+  return FILTER_KEYS.filter((key) => (q[key] as readonly unknown[]).length > 0).length + (q.photos ? 1 : 0)
 }
 
 /** Any filter, the search or a period narrows the rows: an empty answer is "nothing matches", not "no reviews". */

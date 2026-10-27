@@ -16,7 +16,7 @@ import { Pill, Tag } from '@/design-system/primitives'
 import type { PreferencesColumnSpec, PreferencesValue } from '@/design-system/patterns'
 import { MOOD_WORD, STATUS_WORD, channelMarketWords, themeWord } from '../_lib/reviewWords'
 import type { InboxRow } from './inboxDatasource'
-import { MOOD_TONE, STATUS_TONE, agoWords, dayWords, dueWords, hasTranslation, kindWords, languageWords, productWords } from './inboxTiles'
+import { MOOD_TONE, STATUS_TONE, agoWords, dayWords, dueWords, hasTranslation, kindWords, languageWords, photoWords, productWords } from './inboxTiles'
 import s from './inbox.module.css'
 
 type Cell = ICellRendererParams<InboxRow>
@@ -52,7 +52,7 @@ const ReviewCell = memo(function ReviewCell({ data }: Cell) {
   const body = (
     <span className={s.stack}>
       <span className={s.snippet}>{data.snippet || 'No text'}</span>
-      <span className={s.sub}>{[language, data.buyer].filter(Boolean).join(' · ') || 'Buyer not named'}</span>
+      <span className={s.sub}>{[language, data.buyer, photoWords(data)].filter(Boolean).join(' · ') || 'Buyer not named'}</span>
     </span>
   )
   return hasTranslation(data) ? <HoverCard text={`In English: ${data.english}`}>{body}</HoverCard> : body

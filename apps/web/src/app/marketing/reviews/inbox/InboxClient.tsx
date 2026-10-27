@@ -9,7 +9,8 @@
  *   Tiles       New · In progress · Responded · Resolved · Ignored · Overdue (open > 48 h, the API's rule): a press
  *               filters, a second press clears; the filter shows as a chip
  *   Banners     a channel × market Nexus is not reading, with Reconnect when a person can fix it
- *   Filters     channel, market, stars, mood, theme, status, owner, product family ("Has photos": Coming later)
+ *   Filters     channel, market, stars, mood, theme, status, owner, has photos (PR G: the buyer's photos Nexus reads),
+ *               product family
  *   The list    a grid card — search (300 ms) or, while rows are ticked, the bulk bar (Assign · Tag · Set status ·
  *               Draft with AI · Clear), density, Customise, Views, the live pill — newest first; a row (or Enter)
  *               opens the review pop-up. Below 760 px: cards with "Load 50 more" and long-press ticking.
@@ -51,7 +52,7 @@ import { createInboxDatasource, type InboxPage, type InboxRow } from './inboxDat
 import {
   EMPTY_INBOX_QUERY, INBOX_PAGE_SIZES, INBOX_PERIOD_CHOICES, INBOX_STATUSES, NO_OWNER, activeFilterCount, clearFilters, gridSortOf,
   inboxApiParams, isFiltered, litTile, parseInboxQuery, querySignature, serializeInboxQuery, sortFromGrid, toggleStatusTile, withFilter,
-  withKind, withNeedsReply, withPage, withPeriod, withSearch, withSort, type InboxFilterKey, type InboxQuery, type InboxSort,
+  withKind, withNeedsReply, withPage, withPeriod, withPhotos, withSearch, withSort, type InboxFilterKey, type InboxQuery, type InboxSort,
 } from './inboxQuery'
 import {
   TILE_ORDER, headerSubtitle, inboxChips, livePill, needsReplyWords, periodShort, readStateBanners, tabItems, tileAccent, tileHint,
@@ -399,6 +400,8 @@ function InboxInner() {
         options: [{ value: NO_OWNER, label: 'Nobody' }, ...(facets?.owners ?? []).map((o) => ({ value: o, label: o }))],
         value: q.owners, onChange: (v) => setFilter('owners', v),
       },
+      // PR G — only reviews with the buyer's photos (eBay's REST feedback read keeps them).
+      { key: 'photos', label: 'Has photos', kind: 'toggle', value: q.photos, onChange: (on) => setQuery((prev) => withPhotos(prev, on)) },
       {
         key: 'family', label: 'Product family', kind: 'multiselect', placeholder: 'All', searchable: true, wide: true,
         options: (facets?.families ?? []).map((f) => ({ value: f.id, label: f.label })),
@@ -406,7 +409,7 @@ function InboxInner() {
         heldReason: !facets ? 'The list is still loading.' : facets.families.length === 0 ? 'No product families yet.' : null,
       },
     ]
-  }, [q, facets, marketCodes, setFilter])
+  }, [q, facets, marketCodes, setFilter, setQuery])
   const filterCount = activeFilterCount(q)
   const chips = inboxChips(q, facets)
   const banners = readStateBanners(top?.readState ?? null)
@@ -481,14 +484,6 @@ function InboxInner() {
         dimensions={dimensions}
         onClear={() => { setQuery(clearFilters); setSearchDraft('') }}
         activeCount={filterCount + (q.q ? 1 : 0) + (q.period !== 'all' ? 1 : 0)}
-        presets={(
-          // ⛔ KEEP — placeholder (build spec ruling 3): "Has photos" filters by buyers' photos, which Nexus reads from
-          // Phase 3 (eBay REST, review apps). Held with its reason until then, never hidden.
-          <span className={s.placeholder}>
-            <Button size="sm" heldReason="Coming later: Nexus does not read buyers’ photos yet, so there is nothing to filter by.">Has photos</Button>
-            <Pill tone="info">Coming later</Pill>
-          </span>
-        )}
       />
 
       {chips.length > 0 && (
@@ -620,11 +615,11 @@ function InboxInner() {
         </GridCard>
       )}
 
-      {/* ⛔ KEEP — placeholder (build spec ruling 3): Etsy reviews (PR I) and eBay photos (PR G) are not read yet. A
-          labelled sample row shows where they will appear; it is not a review. (Amazon seller feedback is read since PR H
-          and shows in the list above, under Seller feedback.) */}
+      {/* ⛔ KEEP — placeholder (build spec ruling 3): Etsy reviews (PR I) are not read yet. A labelled sample row shows
+          where they will appear; it is not a review. (Amazon seller feedback is read since PR H and shows in the list
+          above, under Seller feedback; eBay photos are real since PR G: the "Has photos" filter above.) */}
       <Card header="Coming later" headerAction={<Pill tone="neutral">Sample</Pill>}>
-        <p className={s.hint}>Etsy reviews and eBay photos arrive in later updates. This row shows how they will look; it is a sample, not your review.</p>
+        <p className={s.hint}>Etsy reviews arrive in a later update. This row shows how they will look; it is a sample, not your review.</p>
         <ul className={s.sampleList}>
           <li className={s.sampleRow}>
             <StarRating value={5} size="sm" label="5 stars (sample)" />

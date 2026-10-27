@@ -5,8 +5,9 @@
  * Nexus is not reading (when a reconnect fixes it, replies there are held until then), tiles, eBay's own detailed seller ratings and
  * feedback by type (Trading GetFeedback, asked at most once an hour per account), the feedback list (the Inbox's seller
  * feedback rows: ticks, select-all and a bulk bar — Assign · Set status · Mark as responded; a row opens the Inbox's
- * review pop-up, where a reply of up to 500 characters is written), and the later parts as labelled samples (eBay's AI
- * topics and photos, revision requests, leaving feedback for buyers).
+ * review pop-up, where a reply of up to 500 characters is written). PR G (eBay's REST Feedback API): eBay's AI topics,
+ * the buyers' photos in the list, revision requests (EbayRevisions.tsx) and leaving feedback for buyers
+ * (EbayBuyerFeedback.tsx, each send an approval a person decides).
  */
 import { memo, useCallback, useMemo, useState, type ComponentProps, type ReactNode } from 'react'
 import { ChevronDown, ListChecks, MessageSquareReply, Search, UserPlus } from 'lucide-react'
@@ -32,8 +33,11 @@ import {
   BULK_LABEL, SETTABLE_STATUSES, bulkActionHeld, bulkApplyHeld, bulkApplyLabel, bulkBody, bulkReach, bulkResultWords, bulkSkipWords,
   ownerChoices, type BulkAction, type BulkRow,
 } from '../inbox/inboxBulk'
-import { agoWords, dayWords, hasTranslation, languageWords, productWords, readStateBanners } from '../inbox/inboxTiles'
+import { agoWords, dayWords, hasTranslation, languageWords, photoWords, productWords, readStateBanners } from '../inbox/inboxTiles'
 import { tileMetrics } from './AmazonTools'
+import { EbayBuyerFeedback, LEAVE_FEEDBACK_ID } from './EbayBuyerFeedback'
+import { EbayRevisions, REVISIONS_ID } from './EbayRevisions'
+import { topicTags } from './ebayToolsModel'
 import {
   TYPE_TONE, TYPE_WORD, dsrRows, ebayTiles, feedbackTypeOf, filterFeedback, lockedLinks, periodLabel, plural, replyHeld, replyNote,
   sectionData, sectionError, sellerHubHref, summaryNote, typeChartRows, typeChartWords, typeOptions,
@@ -49,11 +53,20 @@ const TILE_MIN_PX = 132
 export function EbayToolsMenu({ lock }: { lock: ReviewsLock }) {
   const [open, setOpen] = useState(false)
   const market = lockParams(lock).market
+  // PR G — both sections are on this page: the menu takes the person there (and to its heading, for the keyboard). After
+  // the menu has closed and handed the focus back to its button, or that hand-back would scroll the page up again.
+  const goTo = (id: string) => () => {
+    window.setTimeout(() => {
+      const section = document.getElementById(id)
+      if (!section) return
+      const heading = section.querySelector<HTMLElement>('h2, h3')
+      if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }) }
+      section.scrollIntoView({ block: 'start' })
+    }, 60)
+  }
   const items: MenuItemDef[] = [
-    // ⛔ KEEP — placeholders (build spec ruling 3): leaving feedback for buyers and revision requests come with eBay's
-    // REST Feedback API in Phase 3 (PR G). Shown, held with their reason, never hidden.
-    { id: 'leave', label: 'Leave feedback for buyers', description: 'Coming later · positive only, each send waits for approval', disabled: true },
-    { id: 'revisions', label: 'Feedback revision requests', description: 'Coming later · 5 per calendar year, plus 5 per 1,000 feedback', disabled: true },
+    { id: 'leave', label: 'Leave feedback for buyers', description: 'Positive only · each send waits for approval in Nexus', onSelect: goTo(LEAVE_FEEDBACK_ID) },
+    { id: 'revisions', label: 'Feedback revision requests', description: '5 a calendar year, plus 5 per 1,000 feedback · asked in eBay Seller Hub', onSelect: goTo(REVISIONS_ID) },
     { id: 'hub', label: 'Open eBay Seller Hub', description: `${market ? scopeTitleWords(lock) : 'eBay'} · opens a new tab`, href: sellerHubHref(market), target: '_blank' },
   ]
   return <Menu label={<>eBay tools <ChevronDown size={11} aria-hidden /></>} items={items} open={open} onOpenChange={setOpen} align="right" />
@@ -103,10 +116,9 @@ export function EbaySections({ lock, period, sections, busy, canManage, me, onRe
 
       <FeedbackList lock={lock} period={period} sections={sections} busy={busy} canManage={canManage} me={me} onRetry={onRetry} />
 
-      <div className={s.row}>
-        <RevisionSample />
-        <LeaveFeedbackSample />
-      </div>
+      <EbayRevisions lock={lock} sections={sections} busy={busy} onRetry={onRetry} />
+
+      <EbayBuyerFeedback lock={lock} canManage={canManage} />
 
       <p className={s.footnote}>
         Where the numbers come from: the feedback score, the share of positive, the counts by period and the detailed seller ratings are eBay’s own,
@@ -170,15 +182,10 @@ function SummaryCards({ lock, sections, busy, onRetry }: Pick<EbaySectionsProps,
             <div className={s.stackGap}>
               <PerformanceGraph data={typeRows as unknown as Array<Record<string, number | string>>} xKey="when" left={left} right={right} height={210} />
               <p className="nds-vh">{typeChartWords(typeRows)}</p>
-              {/* ⛔ KEEP — placeholder (build spec ruling 3): eBay's AI topics arrive with eBay's REST Feedback API (Phase 3, PR G). */}
-              <div className={s.sampleBlock}>
-                <span className={s.inline}><span className={s.main}>Topics eBay’s AI found in the feedback</span><Tag tone="neutral">Coming later</Tag><Pill tone="neutral">Sample</Pill></span>
-                <span className={s.inline}>
-                  {['Fast shipping · 96', 'Quality · 41', 'Fit & sizing · 22', 'Packaging · 9'].map((t) => <Tag key={t} tone="neutral">{t}</Tag>)}
-                </span>
-              </div>
             </div>
           ))}
+          {/* PR G — the topics are the feedback Nexus read, so they show whether or not eBay's own counts were read. */}
+          <EbayTopicsBlock sections={sections} />
           {note && <p className={s.note}>{note}</p>}
         </Card>
       </div>
@@ -212,10 +219,27 @@ const CommentCell = memo(function CommentCell({ data }: Cell) {
   const body = (
     <span className={s.stack}>
       <span className={s.snippet}>{data.snippet || 'No comment'}</span>
-      <span className={s.sub}>{[data.buyer, languageWords(data.language)].filter(Boolean).join(' · ') || 'Buyer not named'}</span>
+      <span className={s.sub}>{[data.buyer, languageWords(data.language), photoWords(data)].filter(Boolean).join(' · ') || 'Buyer not named'}</span>
     </span>
   )
   return hasTranslation(data) ? <HoverCard text={`In English: ${data.english}`}>{body}</HoverCard> : body
+})
+
+/** PR G — eBay's AI topics of one feedback (eBay's newer feedback read), the first two and "+n". */
+const TopicsCell = memo(function TopicsCell({ data }: Cell) {
+  if (!data) return null
+  if (data.aiTopics == null) return <span className={s.sub} title="eBay’s topics are read for feedback read by eBay’s newer feedback API">Not read</span>
+  const topics = data.aiTopics
+  if (topics.length === 0) return <span className={s.sub}>None</span>
+  const [first, second, ...rest] = topics
+  const tone = (sentiment: string | null) => (sentiment === 'NEGATIVE' ? 'danger' : sentiment === 'POSITIVE' ? 'success' : 'neutral')
+  return (
+    <span className={s.inline}>
+      <Tag tone={tone(first.sentiment)}>{first.label}</Tag>
+      {second && <Tag tone={tone(second.sentiment)}>{second.label}</Tag>}
+      {rest.length > 0 && <span className={s.sub} title={rest.map((t) => t.label).join(', ')}>+{rest.length}</span>}
+    </span>
+  )
 })
 
 const ItemCell = memo(function ItemCell({ data }: Cell) {
@@ -251,6 +275,7 @@ const FEEDBACK_COLUMNS: ColDef<InboxRow>[] = [
   { colId: 'received', headerName: 'Received', width: 132, minWidth: 120, cellRenderer: ReceivedCell },
   { colId: 'type', headerName: 'Type', width: 108, cellRenderer: TypeCell },
   { colId: 'comment', headerName: 'Comment', minWidth: 220, flex: 1, cellRenderer: CommentCell },
+  { colId: 'topics', headerName: 'AI topics', width: 170, cellRenderer: TopicsCell },
   { colId: 'item', headerName: 'Item · order', width: 190, cellRenderer: ItemCell },
   { colId: 'reply', headerName: 'Reply', width: 190, cellRenderer: ReplyCell },
   { colId: 'status', headerName: 'Status · owner', width: 130, cellRenderer: StatusCell },
@@ -326,8 +351,6 @@ function FeedbackList({ lock, period, sections, busy, canManage, me, onRetry }: 
                     <SegmentedControl size="sm" ariaLabel="Type" options={options} value={type} onChange={(v) => setType(v as FeedbackFilter)} />
                   </div>
                   <Button asChild size="sm"><Link href={links.inbox({ kind: 'seller' })}>Open in the Inbox</Link></Button>
-                  {/* ⛔ KEEP — placeholder (ruling 3): buyers' photos and eBay's AI topics come with eBay's REST Feedback API (PR G). */}
-                  <Tag tone="neutral" title="Buyer photos and eBay’s AI topics arrive with eBay’s new feedback data in a later update">Photos and AI topics: coming later</Tag>
                 </>
               )}
             >
@@ -476,47 +499,25 @@ function BulkDialog({ action, rows, canManage, owners, me, onClose, onDone }: Bu
   )
 }
 
-// ── Later parts (labelled samples) ───────────────────────────────────
+// ── eBay's AI topics (PR G) ──────────────────────────────────────────
 
-/** ⛔ KEEP — placeholder (build spec ruling 3): feedback revision requests come with eBay's REST Feedback API (PR G). */
-function RevisionSample() {
+/** The topics eBay's AI found in the feedback of this page's scope and period; why none show, in words. */
+function EbayTopicsBlock({ sections }: { sections: EbayData }) {
+  const topics = sectionData(sections.topics)
+  const error = sectionError(sections.topics)
+  const tags = topicTags(topics)
   return (
-    <Card
-      className={s.half}
-      header={<span className={s.inline}>Feedback revision requests <Tag tone="neutral">Coming later</Tag></span>}
-      headingLevel={2}
-      description="5 per calendar year, plus 5 for every 1,000 feedback received that year · sample"
-    >
-      <div className={s.stackGap}>
-        <ul className={s.sampleList} aria-label="Sample revision requests">
-          <li className={s.sampleRow}><span className={s.stack}><span className={s.main}>A buyer · negative</span><span className={s.sub}>asked 24 Oct · the buyer has 10 days</span></span><Pill tone="info">Waiting for the buyer</Pill><Pill tone="neutral">Sample</Pill></li>
-          <li className={s.sampleRow}><span className={s.stack}><span className={s.main}>A buyer · neutral</span><span className={s.sub}>asked 2 Sep</span></span><Pill tone="success">Revised to positive</Pill><Pill tone="neutral">Sample</Pill></li>
-        </ul>
-        <span className={s.inline}>
-          <Button size="sm" heldReason="Coming later: Nexus cannot ask eBay for a revision yet.">Request a revision…</Button>
-          <span className={s.sub}>Only for feedback under 30 days old, once per feedback; the buyer has 10 days. Tip: resolve the problem first, then ask.</span>
+    <div className={s.sampleBlock}>
+      <span className={s.inline}><span className={s.main}>Topics eBay’s AI found in the feedback</span>{topics && topics.read > 0 && <span className={s.sub}>{`${topics.read.toLocaleString('en')} feedback read`}</span>}</span>
+      {error ? (
+        <span className={s.sub}>{error}</span>
+      ) : tags.length > 0 ? (
+        <span className={s.inline} role="group" aria-label="eBay’s AI topics">
+          {tags.map((t) => <Tag key={t.key} tone={t.tone} title={t.title}>{t.text}</Tag>)}
         </span>
-      </div>
-    </Card>
+      ) : (
+        <span className={s.sub}>{topics?.words ?? 'eBay’s topics show here once eBay’s feedback is read.'}</span>
+      )}
+    </div>
   )
 }
-
-/** ⛔ KEEP — placeholder (build spec ruling 3): leaving feedback for buyers comes with eBay's REST Feedback API (PR G). */
-function LeaveFeedbackSample() {
-  return (
-    <Card
-      className={s.half}
-      header={<span className={s.inline}>Leave feedback for buyers <Tag tone="neutral">Coming later</Tag></span>}
-      headingLevel={2}
-      description="Positive only, up to 500 characters, within 90 days of the completed sale · each send waits for approval in Nexus · sample"
-      headerAction={<Button size="sm" variant="primary" heldReason="Coming later: Nexus cannot leave feedback for buyers yet.">Leave positive feedback…</Button>}
-    >
-      <ul className={s.sampleList} aria-label="Sample buyers to rate">
-        <li className={s.sampleRow}><span className={s.stack}><span className={s.main}>A buyer · Thermal base layer — M</span><span className={s.sub}>delivered 24 Oct · eBay IT</span></span><Pill tone="neutral">Sample</Pill></li>
-        <li className={s.sampleRow}><span className={s.stack}><span className={s.main}>A buyer · Racing gloves — S</span><span className={s.sub}>delivered 21 Oct · eBay IT</span></span><Pill tone="neutral">Sample</Pill></li>
-      </ul>
-      <p className={s.note}>Feedback for a buyer cannot be changed after it is sent; you can add one follow-up later. Buyers with an open return or case are left out until it closes.</p>
-    </Card>
-  )
-}
-

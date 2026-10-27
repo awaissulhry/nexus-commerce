@@ -12,6 +12,7 @@
 import { channelSiteDomain, reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import { inboxHref, insightsHref, needsReplyHref, requestsHref } from '../_lib/reviewsLinks'
 import type { InboxRow } from '../inbox/inboxDatasource'
+import type { BuyersToRate, EbayRevisions, EbayTopics } from './ebayToolsModel'
 import { channelPath, lockParams, marketWord, scopeTitleWords, type ReviewsChannel, type ReviewsLock } from './reviewsScope'
 import { sellerFeedbackTile, type AmazonSellerFeedback } from './sellerFeedbackModel'
 
@@ -166,6 +167,8 @@ export interface EbayTiles {
   positiveFrom: 'ebay' | 'nexus'
   needReply: number
   oldestWaitDays: number | null
+  /** PR G — the "Leave feedback for buyers" queue's counts; null when it could not be read. */
+  buyersToRate: BuyersToRate | null
 }
 
 export interface EbayPeriodCounts { days: number; positive: number; neutral: number; negative: number }
@@ -188,6 +191,10 @@ export interface EbaySections {
   tiles: Section<EbayTiles>
   summary: Section<EbaySummary>
   feedback: Section<{ rows: InboxRow[]; total: number; owners: string[] }>
+  /** PR G — eBay's AI topics of the feedback in scope (an older answer has none). */
+  topics?: Section<EbayTopics>
+  /** PR G — revision requests and eBay's yearly allowance (an older answer has none). */
+  revisions?: Section<EbayRevisions>
 }
 
 export interface ChannelResponse<S> {
@@ -308,8 +315,6 @@ export interface TileView {
   hint: string
   href?: string
   accent?: string
-  /** A Phase 3 tile (ruling 3): shown, labelled, never a number. */
-  later?: boolean
 }
 
 /** Amazon's six tiles (the board): rating from imports, topics to fix, 1–3 star feedback, reply, requests, rate. */
@@ -358,7 +363,7 @@ export function amazonTiles(t: AmazonTiles, lock: ReviewsLock, period: ChannelPe
   ]
 }
 
-/** eBay's six tiles: score, % positive, neutral, negative, reply, buyers to rate (later). */
+/** eBay's six tiles: score, % positive, neutral, negative, reply, buyers to rate (the leave-feedback queue). */
 export function ebayTiles(t: EbayTiles, summary: EbaySummary | null, lock: ReviewsLock, period: ChannelPeriod): TileView[] {
   const links = lockedLinks(lock, period)
   const wide = summary?.accountWide ? 'whole eBay account' : 'eBay’s number'
@@ -387,8 +392,24 @@ export function ebayTiles(t: EbayTiles, summary: EbaySummary | null, lock: Revie
       href: links.needsReply(),
       accent: t.needReply > 0 ? 'var(--nds-danger)' : undefined,
     },
-    { key: 'buyers', label: 'Buyers to rate', value: 'Coming later', hint: 'Leave feedback for buyers · sample below', later: true },
+    { key: 'buyers', label: 'Buyers to rate', ...buyersTile(t.buyersToRate) },
   ]
+}
+
+/**
+ * "Buyers to rate": the sales eBay lists as waiting for the seller's feedback, from the queue of "Leave feedback for
+ * buyers" below. No number when eBay's list was never read; an old number says so when Nexus does not read eBay now.
+ */
+export function buyersTile(b: BuyersToRate | null | undefined): Pick<TileView, 'value' | 'hint'> {
+  if (!b) return { value: '—', hint: 'The list could not be read' }
+  if (!b.readAt) return { value: '—', hint: b.reading ? 'eBay’s list not read yet' : 'Nexus does not read eBay here' }
+  if (!b.reading) return { value: count(b.awaiting), hint: `as read ${dayMonth(b.readAt)} · eBay not read now` }
+  if (b.awaiting === 0) return { value: '0', hint: 'No sale waits for your feedback' }
+  const parts = [
+    b.ready > 0 ? `${count(b.ready)} ready to send` : null,
+    b.waitingApproval > 0 ? `${count(b.waitingApproval)} waiting for approval` : null,
+  ].filter((p): p is string => p != null)
+  return { value: count(b.awaiting), hint: parts.length > 0 ? parts.join(' · ') : 'All held · the list below says why' }
 }
 
 // ── Amazon: requests, topics, products to watch ─────────────────────

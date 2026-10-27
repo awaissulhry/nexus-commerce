@@ -32,7 +32,7 @@ function filters(where: ReturnType<typeof inboxWhere>): unknown[] {
 describe('parseInboxQuery — the address, parsed once', () => {
   it('defaults: all kinds, every status, all time, newest first, page 1 of 50', () => {
     expect(parseInboxQuery({})).toEqual({
-      kind: 'all', statuses: [], channels: [], markets: [], stars: [], moods: [], themes: [], owners: [], families: [],
+      kind: 'all', statuses: [], channels: [], markets: [], stars: [], moods: [], themes: [], owners: [], families: [], withPhotos: false,
       periodDays: null, periodMonths: null, needsReply: false, product: null, q: null, sort: { field: 'postedAt', dir: 'desc' }, page: 1, pageSize: 50,
     })
   })
@@ -45,6 +45,16 @@ describe('parseInboxQuery — the address, parsed once', () => {
     const yearBefore = NOW.toISOString().replace(/^\d{4}/, String(NOW.getUTCFullYear() - 1))
     expect(JSON.stringify(where)).toContain(`"postedAt":{"gte":"${yearBefore}"}`)
     expect(JSON.stringify(where)).toContain('IN_PROGRESS')
+  })
+
+  it('"Has photos" (PR G): photos=1 keeps only reviews with the buyer’s photos; anything else is off', () => {
+    expect(parseInboxQuery({ photos: '1' }).withPhotos).toBe(true)
+    expect(parseInboxQuery({ photos: 'true' }).withPhotos).toBe(true)
+    expect(parseInboxQuery({ photos: '0' }).withPhotos).toBe(false)
+    expect(parseInboxQuery({ photos: 'maybe' }).withPhotos).toBe(false)
+    const where = JSON.stringify(inboxWhere(parseInboxQuery({ photos: '1' }), new Date('2026-10-27T00:00:00Z')))
+    expect(where).toContain('"media":{"some":{}}')
+    expect(JSON.stringify(inboxWhere(parseInboxQuery({}), new Date('2026-10-27T00:00:00Z')))).not.toContain('media')
   })
 
   it('lists, upper-cased where codes; unknown values are dropped, never guessed', () => {

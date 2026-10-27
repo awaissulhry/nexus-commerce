@@ -32,6 +32,8 @@ export interface InboxQuery {
   themes: string[]
   owners: string[]
   families: string[]
+  /** PR G — only reviews with the buyer's photos (`photos=1`). */
+  withPhotos: boolean
   /** null = all time. */
   periodDays: number | null
   /** "12m": twelve calendar months back (the Overview's and Insights' rule, overviewMath.ts `periodBounds`); null = days. */
@@ -93,6 +95,7 @@ export function parseInboxQuery(raw: Record<string, unknown> = {}): InboxQuery {
     themes: upperList(raw.theme),
     owners: list(raw.owner),
     families: list(raw.family),
+    withPhotos: ['1', 'true', 'yes'].includes(String(raw.photos ?? '').trim().toLowerCase()),
     periodDays: parseInboxPeriod(raw.period),
     periodMonths: parseInboxMonths(raw.period),
     needsReply: raw.reply === 'needed',
@@ -152,6 +155,7 @@ export function inboxWhere(q: InboxQuery, now: Date, omit: { kind?: boolean; sta
   }
   if (q.needsReply) and.push(needsReplyWhere(now))
   if (q.product) and.push({ OR: [{ productId: q.product }, { product: { is: { parentId: q.product } } }] })
+  if (q.withPhotos) and.push({ media: { some: {} } })
   if (q.periodMonths != null) and.push({ postedAt: { gte: monthsBefore(now, q.periodMonths) } })
   else if (q.periodDays != null) and.push({ postedAt: { gte: new Date(now.getTime() - q.periodDays * 24 * 60 * 60 * 1000) } })
   if (q.q) {

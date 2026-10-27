@@ -132,6 +132,18 @@ describe('Reviews channel pages (real SQL)', () => {
   })
 
   it("eBay Germany: eBay's numbers for the whole account (one sign-in for every site), the feedback list, read once", async () => {
+    // PR G — the leave-feedback queue: one sale waits in Germany, one in Italy; the German page's tile counts one.
+    await inside(async () => {
+      const c = database.client
+      for (const market of ['DE', 'IT']) {
+        await c.order.create({ data: {
+          id: `ebay-o-${market}`, channel: 'EBAY', channelOrderId: `12-00000-0000${market === 'DE' ? 1 : 2}`, marketplace: market, status: 'DELIVERED',
+          currencyCode: 'EUR', totalPrice: '40.00', customerName: 'Test Buyer', customerEmail: `ebay-${market}@example.test`,
+          shippingAddress: { city: 'Testville' }, purchaseDate: daysAgo(10),
+        } as never })
+        await c.ebayBuyerFeedback.create({ data: { connectionId: 'test-ebay-account', orderLineItemId: `TEST-LINE-${market}`, orderId: `ebay-o-${market}`, lastSeenAt: NOW } as never })
+      }
+    })
     const { reviewsChannel } = await import('./review-channel.service.js')
     const page = await inside(() => reviewsChannel({ channel: 'EBAY', market: 'DE', period: '12m', now: NOW }))
     const s = page.sections as import('./review-channel.service.js').EbaySections
@@ -140,6 +152,7 @@ describe('Reviews channel pages (real SQL)', () => {
     expect(s.summary.data.dsr.map(d => d.rating)).toEqual([4.9, 5, 4.8, 4.9])
     // eBay's 12-month % positive (115 ÷ 116), not the two rows Nexus holds for Germany.
     expect(s.tiles.data).toMatchObject({ score: 1786, positivePct: 99.1, positiveFrom: 'ebay', positive: 1, neutral: 0, negative: 1, needReply: 1 })
+    expect(s.tiles.data.buyersToRate).toMatchObject({ awaiting: 1, ready: 1, waitingApproval: 0, readAt: NOW.toISOString() })
     expect(s.feedback.data.rows.map(r => r.id).sort()).toEqual(['ebay-de-1', 'ebay-de-2'])
     expect(s.feedback.data.rows.find(r => r.id === 'ebay-de-2')).toMatchObject({ kind: 'seller', status: 'RESPONDED' })
     expect(s.readState.data.map(r => r.market)).toEqual(['DE'])

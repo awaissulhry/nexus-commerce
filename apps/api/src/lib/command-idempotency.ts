@@ -140,6 +140,9 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/review-queue/pause': 'review-queue-pause',
   '/api/review-queue/resume': 'review-queue-resume',
   '/api/review-requests/:id/unsuppress': 'review-request-allow-again',
+  // Reviews › eBay (PR G) — one approval request (one sale, or ONE change plan for the ticked sales) per "Send for
+  // approval" press of "Leave feedback for buyers", even when the answer is lost and the page sends it again.
+  '/api/reviews/area/ebay/buyer-feedback/send': 'review-ebay-buyer-feedback-send',
 }
 
 /** The POST routes whose Idempotency-Key is honoured (for the tests that hold a route to it). */

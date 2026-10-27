@@ -207,7 +207,7 @@
 }
 
 .topicList,
-.sampleList,
+.itemList,
 .feedbackList,
 .pipeline,
 .dsrList,
@@ -230,8 +230,8 @@
   border-bottom: 0;
 }
 
-/* ── Samples (labelled "Coming later") ───────────────────── */
-.sampleRow,
+/* ── List rows (revision requests, seller feedback) ──────── */
+.itemRow,
 .feedbackRow {
   display: flex;
   flex-wrap: wrap;
@@ -242,18 +242,17 @@
   font-size: var(--nds-font-size-sm);
 }
 
-.sampleRow:last-child,
+.itemRow:last-child,
 .feedbackRow:last-child {
   border-bottom: 0;
 }
 
-.sampleRow > .stack,
+.itemRow > .stack,
 .feedbackRow > .stack {
   flex: 1 1 200px;
 }
 
 /* A row with two stacks (stars and date, then the comment): the first keeps its own width, the comment takes the rest. */
-.sampleRow > .stack:has(+ .stack),
 .feedbackRow > .stack:has(+ .stack) {
   flex: 0 0 auto;
 }

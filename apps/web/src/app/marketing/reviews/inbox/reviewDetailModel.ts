@@ -10,11 +10,12 @@
  * (`removalView`): whether asking Amazon in Feedback Manager may work. Pure, tested in reviewDetailModel.vitest.test.ts.
  */
 import { reviewDueAt, type ReplyRules } from '@nexus/shared/review-reply-rules'
+import { photoAlt, type LightboxItem } from '@/design-system/patterns'
 import type { Tone } from '@/design-system/primitives'
 import { MOOD_WORD, STATUS_WORD, THEME_LABEL, channelMarketWords, themeWord } from '../_lib/reviewWords'
 import { SETTABLE_STATUSES } from './inboxBulk'
 import { inboxPageHref } from './inboxQuery'
-import { count } from './inboxTiles'
+import { count, plural } from './inboxTiles'
 import type { RemovalCheck } from '../_channel/sellerFeedbackModel'
 
 /** `GET /api/reviews/inbox/:id` (review-detail.service.ts `InboxDetail`). */
@@ -60,6 +61,12 @@ export interface InboxDetail {
   }[]
   timeline: { at: string; words: string }[]
   reply: ReplyRules
+  /** PR G — the buyer's photos (or videos), in order. */
+  media?: { url: string; type: string; width: number | null; height: number | null; position: number }[]
+  /** PR G — eBay's AI topics with the buyer's words eBay found; null when eBay's topics were not read. */
+  aiTopics?: { topic: string; label: string; sentiment: string | null; texts: string[] }[] | null
+  /** PR G — eBay's revision state of this feedback, in words; null when there is nothing to say. */
+  revision?: { state: string | null; words: string; tone: string; since: string | null; eligible: boolean } | null
   /**
    * Amazon seller feedback only (PR H): the removal check and the rules it reads. Nexus never asks Amazon to remove
    * feedback (no API for it): the reply box's "Open Feedback Manager" is where a person asks. Null (or absent) otherwise.
@@ -358,6 +365,59 @@ export function historySteps(d: InboxDetail): StepView[] {
 export function recentSteps(d: InboxDetail, n = 4): StepView[] {
   const all = historySteps(d)
   return all.slice(Math.max(0, all.length - n))
+}
+
+// ── Photos, eBay's topics, revision (PR G) ───────────────────────────
+
+/** Channels whose buyers' photos Nexus reads (eBay's REST feedback read). Others still show the Coming-later sample. */
+export const PHOTO_CHANNELS: readonly string[] = ['EBAY']
+
+/** The buyer's photos as the DS Lightbox takes them: in order, each named "Photo 2 of 3 from <buyer>". */
+export function reviewPhotos(detail: Pick<InboxDetail, 'media' | 'review'>): LightboxItem[] {
+  const media = [...(detail.media ?? [])].sort((a, b) => a.position - b.position).filter((m) => /^https?:\/\//i.test(m.url))
+  return media.map((m, i) => ({ url: m.url, alt: photoAlt(i, media.length, detail.review.buyer), type: m.type === 'video' ? 'VIDEO' : 'IMAGE' }))
+}
+
+export type PhotosView =
+  | { kind: 'photos'; count: string; items: LightboxItem[] }
+  | { kind: 'none'; words: string }
+  /** ⛔ KEEP — the labelled sample (build spec ruling 3) for channels whose photos Nexus does not read yet. */
+  | { kind: 'later' }
+
+/** What the pop-up's "Photos from the buyer" card shows. */
+export function photosView(detail: Pick<InboxDetail, 'media' | 'review'>): PhotosView {
+  const items = reviewPhotos(detail)
+  if (items.length > 0) return { kind: 'photos', count: plural(items.length, 'photo', 'photos'), items }
+  if (PHOTO_CHANNELS.includes(detail.review.channel.toUpperCase())) {
+    return { kind: 'none', words: detail.review.imported ? 'This feedback came from a file: its photos are not in Nexus.' : 'No photos with this feedback. eBay buyers can add up to 5.' }
+  }
+  return { kind: 'later' }
+}
+
+/** The Lightbox's head: who and where, and the item where it lives on the channel ("Open on eBay"). */
+export function lightboxHead(detail: Pick<InboxDetail, 'review' | 'listingHref'>, timeZone?: string): { meta: string; external: { label: string; href: string } | null } {
+  const r = detail.review
+  const meta = [r.buyer ?? 'Buyer not named', channelMarketWords(r.channel, r.market), dateWords(r.postedAt, timeZone)].filter(Boolean).join(' · ')
+  const external = detail.listingHref && r.channel.toUpperCase() === 'EBAY' ? { label: 'Open on eBay', href: detail.listingHref } : null
+  return { meta, external }
+}
+
+/** eBay's topics as chips: the label and a tone from eBay's mood for it. */
+export function topicChips(detail: Pick<InboxDetail, 'aiTopics'>): { key: string; label: string; tone: Tone; texts: string[] }[] {
+  return (detail.aiTopics ?? []).map((t) => ({
+    key: t.topic,
+    label: t.label,
+    tone: t.sentiment === 'POSITIVE' ? 'success' : t.sentiment === 'NEGATIVE' ? 'danger' : 'neutral',
+    texts: t.texts,
+  }))
+}
+
+/** eBay's revision words for the pop-up, with since when Nexus saw the state. Null when there is nothing to say. */
+export function revisionLine(detail: Pick<InboxDetail, 'revision'>, timeZone?: string): { words: string; tone: Tone; since: string | null } | null {
+  const r = detail.revision
+  if (!r) return null
+  const tone: Tone = r.tone === 'success' ? 'success' : r.tone === 'info' ? 'info' : r.tone === 'warning' ? 'warning' : 'neutral'
+  return { words: r.words, tone, since: r.since ? `seen ${dateWords(r.since, timeZone)}` : null }
 }
 
 // ── Amazon seller feedback: the removal check ────────────────────────

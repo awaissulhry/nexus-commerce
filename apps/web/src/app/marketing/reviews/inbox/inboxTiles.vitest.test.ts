@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { InboxRow } from './inboxDatasource'
 import { EMPTY_INBOX_QUERY } from './inboxQuery'
 import {
-  TILE_ORDER, agoWords, dueWords, hasTranslation, headerSubtitle, inboxChips, kindWords, livePill, productWords,
+  TILE_ORDER, agoWords, dueWords, hasTranslation, headerSubtitle, inboxChips, kindWords, livePill, photoWords, productWords,
   readStateBanners, tabItems, tileHint, tileLabel, tileValue,
 } from './inboxTiles'
 
@@ -13,7 +13,7 @@ const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   id: 'r1', postedAt: '2026-10-26T07:00:00Z', channel: 'EBAY', market: 'DE', kind: 'seller', rating: 3, snippet: 'Fällt klein aus',
   english: 'Runs small', language: 'de', buyer: 'buyer-one', product: { id: 'p', name: 'Over-trousers', sku: 'OT', variant: 'XL' },
   order: { id: 'o', label: '12-1' }, mood: 'NEUTRAL', themes: ['FIT_SIZING'], status: 'NEW', assignee: null,
-  dueAt: '2026-10-28T07:00:00Z', overdue: false, imported: false, responses: { sent: 0, draft: 0 }, ...over,
+  dueAt: '2026-10-28T07:00:00Z', overdue: false, imported: false, responses: { sent: 0, draft: 0 }, photos: 0, aiTopics: [], ...over,
 })
 
 describe('Inbox tabs and tiles', () => {
@@ -103,5 +103,14 @@ describe('Inbox row words', () => {
     expect(dueWords(row(), NOW, 'UTC')).toEqual({ text: 'Due 28 Oct', kind: 'ok' })
     expect(dueWords(row({ responses: { sent: 1, draft: 0 } }), NOW)).toEqual({ text: 'Replied', kind: 'done' })
     expect(dueWords(row({ status: 'RESOLVED', dueAt: null }), NOW)).toEqual({ text: 'No reply needed', kind: 'done' })
+  })
+
+  it('photos (PR G): the count in words, and "Has photos" as a removable chip', () => {
+    expect(photoWords(row())).toBeNull()
+    expect(photoWords(row({ photos: 1 }))).toBe('1 photo')
+    expect(photoWords(row({ photos: 3 }))).toBe('3 photos')
+    expect(photoWords({})).toBeNull()
+    const chips = inboxChips({ ...EMPTY_INBOX_QUERY, period: 'all', photos: true })
+    expect(chips).toEqual([{ key: 'photos', label: 'Has photos', removeLabel: 'Show reviews with or without photos', next: { ...EMPTY_INBOX_QUERY, period: 'all', photos: false, page: 1 } }])
   })
 })

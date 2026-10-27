@@ -24,6 +24,34 @@ export interface AdapterRawReview {
   rawPayload?: unknown
   /** Reviews Inbox — the Nexus Order this review is about, when the adapter can match it (eBay feedback). */
   orderId?: string
+  /** Reviews eBay REST (PR G) — the buyer's photos, in order; undefined = the source says nothing about photos. */
+  media?: ReviewMediaInput[]
+  /** eBay's AI topics; undefined = not read this pass (stored topics are kept), [] = none. */
+  channelTopics?: ReviewTopic[]
+  /** eBay's state of the feedback (REVISION_OPEN …) and its eligibleForRevision; undefined = not given. */
+  feedbackState?: string | null
+  revisionEligible?: boolean | null
+  /**
+   * Feedback read by eBay's REST API that the older Trading read may have stored under its own id: the order line and
+   * buyer it is about, so the ingest finds that row instead of storing the feedback twice.
+   */
+  sameAs?: { orderLineItemId: string; buyer: string | null }
+}
+
+export interface ReviewMediaInput {
+  url: string
+  type: 'image' | 'video'
+  width?: number | null
+  height?: number | null
+  position: number
+}
+
+export interface ReviewTopic {
+  /** eBay's coarse topic ("shipping", "quality", …). */
+  topic: string
+  sentiment: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE' | null
+  /** The buyer's own words eBay found for it (at most 3). */
+  texts: string[]
 }
 
 export interface AdapterResult {

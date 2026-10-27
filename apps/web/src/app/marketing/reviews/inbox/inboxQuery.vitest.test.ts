@@ -3,7 +3,7 @@ import { withQuery } from '../_lib/reviewsLinks'
 import {
   EMPTY_INBOX_QUERY, activeFilterCount, clearFilters, gridSortOf, inboxApiParams, inboxPageHref, isFiltered, litTile, parseInboxQuery,
   querySignature, serializeInboxQuery, sortFromGrid, toggleStatusTile, withFilter, withKind, withNeedsReply, withPage, withPeriod,
-  withProduct, withSearch, withSort, withoutValue,
+  withPhotos, withProduct, withSearch, withSort, withoutValue,
 } from './inboxQuery'
 
 describe('Inbox address', () => {
@@ -108,5 +108,20 @@ describe('Inbox address', () => {
   it('builds links into the Inbox', () => {
     expect(inboxPageHref({ themes: ['FIT_SIZING'], period: 'all' })).toBe('/marketing/reviews/inbox?period=all&theme=FIT_SIZING')
     expect(inboxPageHref()).toBe('/marketing/reviews/inbox')
+  })
+
+  it('"Has photos" (PR G): ?photos=1 in the address and to the API, one filter on, cleared with the rest', () => {
+    const q = parseInboxQuery('?photos=1&channel=EBAY').query
+    expect(q.photos).toBe(true)
+    expect(parseInboxQuery('?photos=0').query.photos).toBe(false)
+    expect(serializeInboxQuery(q)).toBe('?channel=EBAY&photos=1')
+    expect(inboxApiParams(q).photos).toBe('1')
+    expect(inboxApiParams(EMPTY_INBOX_QUERY).photos).toBeNull()
+    expect(activeFilterCount(q)).toBe(2)
+    expect(isFiltered({ ...EMPTY_INBOX_QUERY, period: 'all', photos: true })).toBe(true)
+    expect(clearFilters(q).photos).toBe(false)
+    expect(withPhotos({ ...q, page: 3 }, false)).toMatchObject({ photos: false, page: 1 })
+    const same = withPhotos(q, true)
+    expect(same).toBe(q)
   })
 })

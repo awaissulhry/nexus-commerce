@@ -329,8 +329,10 @@ export const EDIT_SPECS: Record<string, SpecEntry> = {
   'graduate-keyword': { arg: 'bidCents', kind: 'money', unit: 'cents', min: 0.05, max: 10, label: 'Starting bid', line: /^new exact keyword$/i, linePattern: / at ((?:[€£$]|[A-Z]{3} )?\d+(?:\.\d+)?)$/ },
   'set-campaign-budget': { arg: 'dailyBudgetCents', kind: 'money', unit: 'cents', min: 0.01, max: 100_000, label: 'New daily budget', line: /^daily budget$/i },
   'set-ebay-campaign-budget': { arg: 'dailyBudgetCents', kind: 'money', unit: 'cents', min: 1, max: 100_000, label: 'New daily budget', line: /^daily budget$/i },
-  // Text: a public eBay reply (2–80 characters) and a product's SKU in Nexus.
-  'reply-to-review': { arg: 'body', kind: 'text', minLength: 2, maxLength: 80, label: 'Your reply', fromArgs: (a) => a.body },
+  // Text: a public eBay reply and feedback for an eBay buyer (2–500 characters, eBay's limit for both), and a product's
+  // SKU in Nexus.
+  'reply-to-review': { arg: 'body', kind: 'text', minLength: 2, maxLength: 500, label: 'Your reply', fromArgs: (a) => a.body },
+  'leave-buyer-feedback': { arg: 'text', kind: 'text', minLength: 2, maxLength: 500, label: 'Feedback for the buyer', fromArgs: (a) => a.text },
   'set-product-sku': { arg: 'sku', kind: 'text', minLength: 1, maxLength: 100, label: 'New SKU', line: /^sku$/i, fromArgs: (a) => a.sku },
   // The Matrix: only "set a price" carries one price; adjust-by-percent, copy and sale do not.
   'set-listing-price': {
