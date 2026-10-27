@@ -13,6 +13,7 @@ import { channelSiteDomain, reviewReplyRules } from '@nexus/shared/review-reply-
 import { inboxHref, insightsHref, requestsHref } from '../_lib/reviewsLinks'
 import type { InboxRow } from '../inbox/inboxDatasource'
 import { channelPath, lockParams, marketWord, scopeTitleWords, type ReviewsChannel, type ReviewsLock } from './reviewsScope'
+import { sellerFeedbackTile, type AmazonSellerFeedback } from './sellerFeedbackModel'
 
 // ── The address: the period ──────────────────────────────────────────
 
@@ -78,6 +79,10 @@ export interface AmazonTiles {
   oldestWaitDays: number | null
   requestsSent: number
   reviewRate: number | null
+  /** Amazon seller feedback (1–3 stars) of the last 90 days and the 90 days before (PR H). */
+  sellerFeedback90: number
+  sellerFeedbackPrev90: number
+  sellerFeedbackOn: boolean
 }
 
 export interface AmazonTopic {
@@ -135,6 +140,7 @@ export interface AmazonSections {
   topics: Section<AmazonTopics>
   requests: Section<AmazonRequests>
   watch: Section<AmazonWatchRow[]>
+  sellerFeedback: Section<AmazonSellerFeedback>
 }
 
 export interface EbayReadState {
@@ -258,14 +264,14 @@ export function sellerHubHref(market: string | null): string {
 
 // ── Header ───────────────────────────────────────────────────────────
 
-/** Amazon's header line: products with topics · topics week · stars from imports · seller feedback later. */
+/** Amazon's header line: products with topics · topics week · stars from imports · seller feedback fetched on request. */
 export function amazonSubtitle(tiles: AmazonTiles | null, topics: AmazonTopics | null): string {
   const parts: string[] = []
   if (topics && topics.state === 'ok') parts.push(`${plural(topics.productCount, 'product', 'products')} with Amazon topics`)
   if (topics?.weekOf) parts.push(`topics weekly, week of ${dayMonth(topics.weekOf)}`)
   else if (topics?.state === 'not_on_market') parts.push('no Amazon topics on this market')
   if (tiles) parts.push(tiles.lastImportAt ? `stars from reviews imported ${dayMonth(tiles.lastImportAt)}` : 'no reviews imported yet')
-  parts.push('seller feedback coming later')
+  parts.push('seller feedback fetched on request')
   return parts.join(' · ')
 }
 
@@ -300,7 +306,7 @@ export interface TileView {
   later?: boolean
 }
 
-/** Amazon's six tiles (the board): rating from imports, topics to fix, 1–3 star feedback (later), reply, requests, rate. */
+/** Amazon's six tiles (the board): rating from imports, topics to fix, 1–3 star feedback, reply, requests, rate. */
 export function amazonTiles(t: AmazonTiles, lock: ReviewsLock, period: ChannelPeriod): TileView[] {
   const links = lockedLinks(lock, period)
   return [
@@ -320,7 +326,12 @@ export function amazonTiles(t: AmazonTiles, lock: ReviewsLock, period: ChannelPe
       hint: t.topicsToFix == null ? 'No Amazon topics here' : `Amazon topics${t.topicsWeekOf ? `, week of ${dayMonth(t.topicsWeekOf)}` : ''}`,
       href: links.insights('themes'),
     },
-    { key: 'seller', label: '1–3 star feedback', value: 'Coming later', hint: 'Amazon seller feedback · sample below', later: true },
+    {
+      key: 'seller',
+      label: '1–3 star feedback',
+      ...sellerFeedbackTile(t),
+      href: links.inbox({ kind: 'seller', period: '90d' }),
+    },
     {
       key: 'reply',
       label: 'Needs a reply',

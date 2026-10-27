@@ -65,21 +65,25 @@ describe('links carry the lock', () => {
 const AMAZON_TILES: AmazonTiles = {
   importedRating: 4.2, importedInPeriod: 486, importedTotal: 900, lastImportAt: '2026-10-24T08:00:00Z', topicsToFix: 3,
   topicsWeekOf: '2026-10-20T00:00:00Z', needReply: 3, oldestWaitDays: 1, requestsSent: 372, reviewRate: 8.9,
+  sellerFeedback90: 7, sellerFeedbackPrev90: 5, sellerFeedbackOn: true,
 }
 
 describe('Amazon', () => {
-  it('six tiles: stars only from imports, 1–3 star feedback is "Coming later", links filtered to Amazon Italy', () => {
+  it('six tiles: stars only from imports, 1–3 star seller feedback of 90 days, links filtered to Amazon Italy', () => {
     const tiles = amazonTiles(AMAZON_TILES, IT, '30d')
     expect(tiles.map((t) => [t.label, t.value, t.hint])).toEqual([
       ['Rating · imported', '4.2', '486 reviews, file of 24 Oct'],
       ['Topics to fix', '3', 'Amazon topics, week of 20 Oct'],
-      ['1–3 star feedback', 'Coming later', 'Amazon seller feedback · sample below'],
+      ['1–3 star feedback', '7', 'last 90 days · +2 on the 90 days before'],
       ['Needs a reply', '3', 'oldest waits 1 day'],
       ['Requests sent', '372', 'last 30 days'],
       ['Review rate', '8.9%', 'estimate, from imported reviews'],
     ])
-    expect(tiles.find((t) => t.key === 'seller')).toMatchObject({ later: true })
-    expect(tiles.find((t) => t.key === 'seller')?.href).toBeUndefined()
+    expect(tiles.find((t) => t.key === 'seller')?.later).toBeUndefined()
+    expect(tiles.find((t) => t.key === 'seller')?.href).toBe('/marketing/reviews/inbox?kind=seller&period=90d&channel=AMAZON&market=IT')
+    // Not fetched in this setup and nothing stored: no number, and the hint says why.
+    expect(amazonTiles({ ...AMAZON_TILES, sellerFeedback90: 0, sellerFeedbackPrev90: 0, sellerFeedbackOn: false }, IT, '30d')[2])
+      .toMatchObject({ value: '—', hint: 'Not fetched in this setup yet' })
     expect(tiles.find((t) => t.key === 'reply')?.href).toBe('/marketing/reviews/inbox?period=30d&status=NEW%2CIN_PROGRESS&channel=AMAZON&market=IT')
   })
 
@@ -93,8 +97,8 @@ describe('Amazon', () => {
 
   it('the header says where the stars and topics come from', () => {
     const topics = { state: 'ok', productCount: 12, weekOf: '2026-10-20T00:00:00Z' } as AmazonTopics
-    expect(amazonSubtitle(AMAZON_TILES, topics)).toBe('12 products with Amazon topics · topics weekly, week of 20 Oct · stars from reviews imported 24 Oct · seller feedback coming later')
-    expect(amazonSubtitle(null, { ...topics, state: 'not_on_market', weekOf: null, productCount: 0 })).toBe('no Amazon topics on this market · seller feedback coming later')
+    expect(amazonSubtitle(AMAZON_TILES, topics)).toBe('12 products with Amazon topics · topics weekly, week of 20 Oct · stars from reviews imported 24 Oct · seller feedback fetched on request')
+    expect(amazonSubtitle(null, { ...topics, state: 'not_on_market', weekOf: null, productCount: 0 })).toBe('no Amazon topics on this market · seller feedback fetched on request')
   })
 
   it('requests by Amazon’s answer, then the review rate as an estimate', () => {

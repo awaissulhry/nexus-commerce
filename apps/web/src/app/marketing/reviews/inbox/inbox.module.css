@@ -599,3 +599,23 @@
   flex-direction: column;
   gap: var(--nds-space-4);
 }
+
+/* Amazon seller feedback: the removal check's words and its rules (PR H). */
+.removalWords {
+  margin: 0 0 var(--nds-space-8);
+  font-size: var(--nds-font-size-base);
+  line-height: 1.5;
+  color: var(--nds-text);
+}
+
+.ruleList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}

@@ -208,6 +208,7 @@
 
 .topicList,
 .sampleList,
+.feedbackList,
 .pipeline,
 .dsrList,
 .bullets {
@@ -230,7 +231,8 @@
 }
 
 /* ── Samples (labelled "Coming later") ───────────────────── */
-.sampleRow {
+.sampleRow,
+.feedbackRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -240,16 +242,19 @@
   font-size: var(--nds-font-size-sm);
 }
 
-.sampleRow:last-child {
+.sampleRow:last-child,
+.feedbackRow:last-child {
   border-bottom: 0;
 }
 
-.sampleRow > .stack {
+.sampleRow > .stack,
+.feedbackRow > .stack {
   flex: 1 1 200px;
 }
 
 /* A row with two stacks (stars and date, then the comment): the first keeps its own width, the comment takes the rest. */
-.sampleRow > .stack:has(+ .stack) {
+.sampleRow > .stack:has(+ .stack),
+.feedbackRow > .stack:has(+ .stack) {
   flex: 0 0 auto;
 }
 

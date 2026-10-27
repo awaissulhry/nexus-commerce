@@ -6,7 +6,8 @@
  * The reply, per channel (build spec rulings 5 and 6): eBay feedback read from eBay is SENT by Nexus (500 characters, one
  * reply, never edited). Everywhere else Nexus posts nothing: the person copies the reply, opens the channel's own page
  * (Seller Central / Feedback Manager on Amazon — no removal action —, Etsy, the review app) and then marks it as
- * responded, which records it in Nexus and sets Responded. Pure, tested in reviewDetailModel.vitest.test.ts.
+ * responded, which records it in Nexus and sets Responded. Amazon seller feedback also carries the removal check
+ * (`removalView`): whether asking Amazon in Feedback Manager may work. Pure, tested in reviewDetailModel.vitest.test.ts.
  */
 import { reviewDueAt, type ReplyRules } from '@nexus/shared/review-reply-rules'
 import type { Tone } from '@/design-system/primitives'
@@ -14,6 +15,7 @@ import { MOOD_WORD, STATUS_WORD, THEME_LABEL, channelMarketWords, themeWord } fr
 import { SETTABLE_STATUSES } from './inboxBulk'
 import { inboxPageHref } from './inboxQuery'
 import { count } from './inboxTiles'
+import type { RemovalCheck } from '../_channel/sellerFeedbackModel'
 
 /** `GET /api/reviews/inbox/:id` (review-detail.service.ts `InboxDetail`). */
 export interface InboxDetail {
@@ -58,6 +60,11 @@ export interface InboxDetail {
   }[]
   timeline: { at: string; words: string }[]
   reply: ReplyRules
+  /**
+   * Amazon seller feedback only (PR H): the removal check and the rules it reads. Nexus never asks Amazon to remove
+   * feedback (no API for it): the reply box's "Open Feedback Manager" is where a person asks. Null (or absent) otherwise.
+   */
+  removal?: (RemovalCheck & { rules: string[] }) | null
 }
 
 export const MANAGE_REPLY = "You need 'Manage reviews' to reply to reviews."
@@ -351,4 +358,21 @@ export function historySteps(d: InboxDetail): StepView[] {
 export function recentSteps(d: InboxDetail, n = 4): StepView[] {
   const all = historySteps(d)
   return all.slice(Math.max(0, all.length - n))
+}
+
+// ── Amazon seller feedback: the removal check ────────────────────────
+
+export interface RemovalView {
+  label: string
+  tone: RemovalCheck['tone']
+  why: string
+  words: string
+  rules: string[]
+}
+
+/** The pop-up's removal check for Amazon seller feedback; null for every other review. */
+export function removalView(d: Pick<InboxDetail, 'removal' | 'review'>): RemovalView | null {
+  const r = d.removal
+  if (!r || d.review.channel.toUpperCase() !== 'AMAZON' || d.review.kind !== 'seller') return null
+  return { label: r.label, tone: r.tone, why: r.why, words: r.words, rules: r.rules }
 }
