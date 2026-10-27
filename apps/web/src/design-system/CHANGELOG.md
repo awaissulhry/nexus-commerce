@@ -1,3 +1,14 @@
+## Heatmap label width and pressable cells — 2026-10-26
+
+Reviews Insights (PR E, lane L11). Both apps, identical: `components/{Heatmap.tsx,heatmapModel.ts}`; the same block appended
+to `styles/components.css`. Catalog `#review-parts-example` ("Heatmap · theme names, cells open their reviews").
+- **`labelWidth?: number`** (px → `--nds-heat-lbl-w`, 24–240, default 36): theme names ("Fit & sizing") need about 120;
+  the column headers start after it; a long label ends in an ellipsis with its full name as the tooltip.
+  `heatLabelWidth()`, `HEAT_LABEL_WIDTH`.
+- **`onCellClick?: (row, col) => void`** (+ `label?` for the map's name): every measured cell becomes a `<button>` named
+  by its words (`cellWords`); a null cell has nothing to open and stays plain. One Tab stop for the map: ←/→ ↑/↓ move
+  to the nearest measured cell, Home / End to a row's ends, Enter / Space press. `isHeatPressable()`, `firstHeatCell()`,
+  `heatMove()`. Without the props nothing changes.
 ## PerformanceGraph bars and stacked bars — 2026-10-26
 
 Reviews channel pages (PR F, lane L12). Both apps, identical: `components/{PerformanceGraph.tsx, performanceGraphSeries.ts}`;

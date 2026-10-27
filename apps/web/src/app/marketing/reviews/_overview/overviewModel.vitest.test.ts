@@ -96,7 +96,7 @@ describe('products to watch', () => {
 
   it('too few readings say so instead of a line', () => {
     const v = watchView(watch)
-    expect(v).toMatchObject({ now: '95.0%', before: 'was 99.0%', change: '−4.0 pts', reviews: '22 feedback in this period', tooFew: true, href: '/marketing/reviews/products/p1' })
+    expect(v).toMatchObject({ now: '95.0%', before: 'was 99.0%', change: '−4.0 pts', reviews: '22 feedback in this period', tooFew: true, href: '/marketing/reviews/insights/products?product=p1' })
     expect(TOO_FEW_WORDS).toBe('Too few to trend')
     expect(watchView({ ...watch, kind: 'stars', ratingNow: 3.9, ratingBefore: 4.4, change: -0.5, tooFew: false }).sparkLabel).toBe('Average rating, 6 weeks')
   })
@@ -125,7 +125,7 @@ describe('needs you', () => {
     // Reply opens that review in the Inbox.
     expect(needsActionHref(item({}).action)).toBe('/marketing/reviews/inbox?channel=EBAY&market=IT&review=r1')
     expect(needsActionHref({ label: 'Open Inbox', page: 'inbox', params: { id: 'r1', channel: 'EBAY' } })).toBe('/marketing/reviews/inbox?channel=EBAY')
-    expect(needsActionHref({ label: 'See alert', page: 'alerts', params: { market: 'DE' } })).toBe('/marketing/reviews/spikes?market=DE')
+    expect(needsActionHref({ label: 'See alert', page: 'alerts', params: { market: 'DE' } })).toBe('/marketing/reviews/insights/alerts?market=DE')
     expect(needsActionHref({ label: 'See requests', page: 'requests', params: { status: 'FAILED' } })).toBe('/marketing/reviews/requests?status=FAILED')
   })
 
@@ -144,7 +144,7 @@ describe('themes, stars and the header', () => {
     expect(themeCountWords({ ...theme, share: null, mentions: 1, impact: null })).toBe('1 mention')
     expect(themeCountWords({ ...theme, shareOf: 'amazon', source: 'amazon_topic', share: 12, impact: 0.05 })).toBe('12% of Amazon reviews · 88 mentions')
     expect(themeHref(theme, '30d')).toBe('/marketing/reviews/inbox?period=30d&theme=FIT_SIZING')
-    expect(themeHref({ ...theme, source: 'amazon_topic', market: 'DE' }, '30d')).toBe('/marketing/reviews/heatmap?channel=AMAZON&market=DE')
+    expect(themeHref({ ...theme, source: 'amazon_topic', market: 'DE' }, '30d')).toBe('/marketing/reviews/insights/themes?channel=AMAZON&market=DE')
   })
 
   it('a rating bar offers its reviews, or says why it cannot', () => {

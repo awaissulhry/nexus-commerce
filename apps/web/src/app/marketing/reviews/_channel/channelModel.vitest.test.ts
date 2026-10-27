@@ -48,7 +48,7 @@ describe('links carry the lock', () => {
     const links = lockedLinks(IT, '30d')
     expect(links.inbox({ status: 'NEW,IN_PROGRESS' })).toBe('/marketing/reviews/inbox?period=30d&status=NEW%2CIN_PROGRESS&channel=AMAZON&market=IT')
     expect(links.requests({ status: 'SENT' })).toBe('/marketing/reviews/requests?status=SENT&channel=AMAZON&market=IT')
-    expect(links.insights('themes')).toBe('/marketing/reviews/heatmap?channel=AMAZON&market=IT')
+    expect(links.insights('themes')).toBe('/marketing/reviews/insights/themes?channel=AMAZON&market=IT')
     expect(lockedLinks(EBAY_ALL, '12m').inbox({ kind: 'seller' })).toBe('/marketing/reviews/inbox?kind=seller&period=12m&channel=EBAY')
   })
 

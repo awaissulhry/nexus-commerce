@@ -268,8 +268,14 @@ describe('the API’s command receipts', () => {
       // Reviews Inbox (PR B) — Send reply, "Import N reviews" and a bulk change, through reviewsSend (_lib/reviewsFetch.ts),
       // which keys them with sendCommand.
       '/api/reviews/:id/reply/send',
+      // Reviews › Insights (PR E) — Send for approval (one fix, or the ticked ones), Generate a brief and a bulk change of
+      // the ticked alerts, through reviewsSend with `idempotent`.
+      '/api/reviews/action-items/:id/propose',
+      '/api/reviews/action-items/bulk',
       '/api/reviews/import/apply',
       '/api/reviews/inbox/bulk',
+      '/api/reviews/spikes/bulk',
+      '/api/reviews/spotlight/generate',
     ])
   })
 

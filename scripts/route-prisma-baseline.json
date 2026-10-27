@@ -113,7 +113,7 @@
     "apps/api/src/routes/returns.routes.ts": 76,
     "apps/api/src/routes/review-inserts.routes.ts": 3,
     "apps/api/src/routes/review-send-windows.routes.ts": 7,
-    "apps/api/src/routes/reviews.routes.ts": 37,
+    "apps/api/src/routes/reviews.routes.ts": 30,
     "apps/api/src/routes/saved-view-alerts.routes.ts": 11,
     "apps/api/src/routes/scheduled-image-publishes.routes.ts": 5,
     "apps/api/src/routes/sendcloud-webhooks.routes.ts": 13,

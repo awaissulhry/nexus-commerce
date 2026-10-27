@@ -1,0 +1,90 @@
+/*
+ * Reviews › Insights › Fixes — the fix cards' layout (the shared layout is _shared/insights.module.css). `--nds-*` tokens
+ * only; nothing here restyles a design-system control. Every row wraps at 390 px.
+ */
+
+.tabsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.toolbar {
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10);
+}
+
+.headMain {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  line-height: 1.35;
+}
+
+.proposal {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+}
+
+.proposal p {
+  margin: var(--nds-space-4) 0 0;
+  color: var(--nds-text);
+  line-height: 1.5;
+}
+
+.bullets {
+  margin: var(--nds-space-4) 0 0;
+  padding-inline-start: var(--nds-space-18);
+  color: var(--nds-text);
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-8);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.grow {
+  flex: 1;
+}

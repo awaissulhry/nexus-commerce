@@ -5,8 +5,8 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *   GET  /api/reviews                      ?marketplace, ?category, ?label, ?productId, ?limit
  *   GET  /api/reviews/:id                  drawer w/ sentiment + linked product
  *   GET  /api/reviews/summary              dashboard KPIs (counts by label, top categories)
- *   GET  /api/reviews/spikes               open spike feed
- *   PATCH /api/reviews/spikes/:id          acknowledge / resolve
+ *   GET  /api/reviews/spikes               alerts (Reviews Insights, below)
+ *   PATCH /api/reviews/spikes/:id          acknowledge / resolve / reopen
  *   POST /api/reviews/cron/ingest/trigger          manual trigger
  *   POST /api/reviews/cron/spike-detector/trigger  manual trigger
  *
@@ -30,9 +30,27 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *   DELETE /api/reviews/reply-templates/:id
  *   POST   /api/reviews/reply-templates/:id/use    a person picked it in the Inbox reply box (its "Used" count)
  *   PATCH  /api/reviews/automation-rules/:id       { enabled } — review automations only (404 for any other rule)
+ *
+ * Reviews Insights (2026-10-26, PR E) — logic in services/reviews/review-{themes,products,alerts,fix-plan,spotlight}*.ts:
+ *   GET    /api/reviews/insights/themes            ?channel&market&period&sort → themes, summary, Amazon topic states
+ *   GET    /api/reviews/insights/products          ?channel&market&period&page&pageSize&q&theme&… → families + tiles
+ *   GET    /api/reviews/insights/products/:id      one product: rating per market (with its source words), themes, returns
+ *   GET    /api/reviews/heatmap                    ?sinceDays|period&market&channel&metric=mentions|negativeShare
+ *   GET    /api/reviews/spikes                     ?status&channel&market&productId&theme → alerts, counts, time to resolve
+ *   PATCH  /api/reviews/spikes/:id                 { status: ACKNOWLEDGED | RESOLVED | REOPEN } — actor = signed-in person
+ *   POST   /api/reviews/spikes/bulk                { ids ≤ 200, action: acknowledge | resolve | suggest (≤ 5) } → { changed, held }
+ *   GET    /api/reviews/action-items               ?status&kind&productId&spikeId → fixes (each says why it cannot be sent)
+ *   PATCH  /api/reviews/action-items/:id           { status: OPEN | DISMISSED } or an edit of the proposal
+ *   POST   /api/reviews/action-items/suggest       { productId } — AI fixes for one product
+ *   POST   /api/reviews/action-items/:id/propose   ONE change plan (approved on the Approvals page); a Task without approval
+ *   POST   /api/reviews/action-items/bulk          { ids ≤ 200, action: propose | dismiss } → { changed, held, sent?, tasks? }
+ *   POST   /api/reviews/action-items/:id/withdraw  takes the waiting plan back
+ *   POST   /api/reviews/action-items/:id/task      a task: no approval, nothing reaches a channel
+ *   GET    /api/reviews/spotlight                  ?channel&marketplace&id · /history · /scopes
+ *   POST   /api/reviews/spotlight/generate         { channel?, marketplace?, period? } — 20 reviews at least, 10 a day
  */
 
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { requestUserId } from '../lib/auth/request-permission.js'
@@ -63,8 +81,17 @@ import {
 } from '../services/reviews/review-import.service.js'
 import { createReplyDraft } from '../services/reviews/review-reply.service.js'
 import { sendReviewDigestOnce } from '../services/reviews/review-digest.service.js'
-import { generateSpotlight, getLatestSpotlight } from '../services/reviews/review-spotlight.service.js'
-import { generateActionItemsForSpike } from '../services/reviews/review-actions.service.js'
+import {
+  generateSpotlight, getLatestSpotlight, spotlightHistory, spotlightScope, spotlightScopes, SpotlightHeldError,
+} from '../services/reviews/review-spotlight.service.js'
+import { generateActionItemsForSpike, suggestFixesForProduct } from '../services/reviews/review-actions.service.js'
+import { bulkAlerts, decideAlert, listAlerts, parseDecision } from '../services/reviews/review-alerts.service.js'
+import { insightsHeatmap, insightsThemes } from '../services/reviews/review-themes.service.js'
+import { insightsProductDetail, insightsProducts } from '../services/reviews/review-products.service.js'
+import {
+  bulkFixes, createFixTask, listFixes, proposeFixes, updateFix, withdrawFix,
+} from '../services/reviews/review-fix-plan.service.js'
+import type { UserPrincipal } from '../services/agents/call-tool.js'
 import { sendReviewReply } from '../services/reviews/review-reply-send.service.js'
 import { sseResponseHeaders } from '../lib/sse.js'
 import { runReviewRuleEvaluatorOnce } from '../jobs/review-rule-evaluator.job.js'
@@ -76,6 +103,30 @@ import { readSettingsPipeline, readSettingsSources } from '../services/reviews/r
 
 // SR.3 — register review action handlers (side-effect import)
 import '../services/reviews/review-action-handlers.js'
+
+/** A refusal in words: a 4xx error's own status and message; anything else is a 500, logged. */
+function fail(reply: FastifyReply, err: unknown, what: string) {
+  const status = typeof (err as { statusCode?: unknown })?.statusCode === 'number' ? (err as { statusCode: number }).statusCode : 500
+  if (status >= 400 && status < 500) return reply.code(status).send({ error: err instanceof Error ? err.message : String(err) })
+  logger.error(`[reviews] ${what} failed`, { error: err instanceof Error ? err.message : String(err) })
+  return reply.code(500).send({ error: `${what} failed`, message: err instanceof Error ? err.message : String(err) })
+}
+
+/** The signed-in person as the approval door needs them (an API key has no person: refused with 403, in words). */
+async function personOf(request: FastifyRequest): Promise<UserPrincipal> {
+  const { requestPrincipal } = await import('../services/agents/call-tool.js')
+  return requestPrincipal(request)
+}
+
+/** A brief's window: the period picker's value (7d, 30d, 90d, 12m), or windowDays; 30 days by default. */
+function windowDaysOf(period: unknown, windowDays: unknown): number {
+  const byPeriod: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '12m': 365 }
+  if (typeof period === 'string' && byPeriod[period]) return byPeriod[period]
+  const n = Number(windowDays)
+  return Number.isFinite(n) && n >= 1 ? Math.min(Math.trunc(n), 365) : 30
+}
+
+const FIX_NOT_FOUND_WORDS = 'Not found in this business’s fixes.'
 
 const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
   // ── GET /reviews ────────────────────────────────────────────────────
@@ -518,114 +569,75 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(answer.status).send(answer.body)
   })
 
-  // ── GET /reviews/spikes ─────────────────────────────────────────────
+  // ── Reviews Insights › Alerts (PR E) — logic in services/reviews/review-alerts.service.ts ──
+  // GET /reviews/spikes?status&channel&market&productId&theme&limit → { items, count, counts, timeToResolve, check }
   fastify.get('/reviews/spikes', async (request, reply) => {
-    const q = request.query as {
-      status?: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED'
-      marketplace?: string
-      limit?: string
+    try {
+      reply.header('Cache-Control', 'private, max-age=15')
+      return await listAlerts((request.query ?? {}) as Record<string, unknown>)
+    } catch (err) {
+      return fail(reply, err, 'spikes')
     }
-    const where: Record<string, unknown> = {}
-    if (q.status) where.status = q.status
-    if (q.marketplace) where.marketplace = q.marketplace
-    const limit = Math.min(Number(q.limit) || 50, 200)
-    const items = await prisma.reviewSpike.findMany({
-      where,
-      orderBy: { detectedAt: 'desc' },
-      take: limit,
-      include: {
-        product: { select: { id: true, sku: true, name: true } },
-      },
-    })
-    reply.header('Cache-Control', 'private, max-age=15')
-    return { items, count: items.length }
   })
 
-  fastify.patch('/reviews/spikes/:id', async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const body = request.body as {
-      status?: 'ACKNOWLEDGED' | 'RESOLVED'
-      actor?: string
+  // PATCH /reviews/spikes/:id { status: ACKNOWLEDGED | RESOLVED | REOPEN } — the actor is the signed-in person.
+  fastify.patch<{ Params: { id: string }; Body: { status?: unknown } }>('/reviews/spikes/:id', async (request, reply) => {
+    try {
+      const actor = requestUserId(request)
+      return await decideAlert(request.params.id, parseDecision(request.body?.status), actor)
+    } catch (err) {
+      return fail(reply, err, 'spike decide')
     }
-    const existing = await prisma.reviewSpike.findUnique({ where: { id } })
-    if (!existing) {
-      reply.code(404)
-      return { error: 'not_found' }
-    }
-    const data: Record<string, unknown> = {}
-    if (body.status === 'ACKNOWLEDGED') {
-      data.status = 'ACKNOWLEDGED'
-      data.acknowledgedAt = new Date()
-      data.acknowledgedBy = body.actor ?? 'user:anonymous'
-    } else if (body.status === 'RESOLVED') {
-      data.status = 'RESOLVED'
-      data.resolvedAt = new Date()
-    }
-    const spike = await prisma.reviewSpike.update({ where: { id }, data })
-    return { spike }
   })
 
-  // ── GET /reviews/heatmap (SR.2) ─────────────────────────────────────
-  // Day × category cube. Each cell carries total + per-label counts so
-  // the UI can render either "volume" or "negative rate" without a
-  // second round-trip.
+  // POST /reviews/spikes/bulk { ids ≤ 200, action: acknowledge | resolve | suggest (≤ 5) } → { changed, held, fixes? }
+  fastify.post('/reviews/spikes/bulk', async (request, reply) => {
+    try {
+      const actor = requestUserId(request)
+      return await bulkAlerts(request.body, actor, (spikeId, by) => generateActionItemsForSpike(spikeId, by))
+    } catch (err) {
+      return fail(reply, err, 'spikes bulk')
+    }
+  })
+
+  // ── GET /reviews/heatmap (SR.2; PR E: + channel, metric=negativeShare) ──
+  // Day × theme from the visible reviews (services/reviews/review-themes.service.ts insightsHeatmap). Each cell carries
+  // total + per-label counts and `value` (the chosen metric); a day without reviews has no cell (drawn striped).
   fastify.get('/reviews/heatmap', async (request, reply) => {
-    const q = request.query as { sinceDays?: string; marketplace?: string }
-    const sinceDays = Math.min(Math.max(Number(q.sinceDays) || 30, 7), 90)
-    const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000)
-    const where: Record<string, unknown> = { date: { gte: since } }
-    if (q.marketplace) where.marketplace = q.marketplace
-
-    // ReviewCategoryRate is already day-aggregated; sum across products
-    // to get the cube the UI needs.
-    const rows = await prisma.reviewCategoryRate.findMany({
-      where,
-      orderBy: [{ date: 'asc' }, { category: 'asc' }],
-      select: {
-        category: true,
-        date: true,
-        total: true,
-        positive: true,
-        neutral: true,
-        negative: true,
-      },
-    })
-
-    // Aggregate per (date × category) — sum across product rows.
-    const cellMap = new Map<
-      string,
-      { date: string; category: string; total: number; positive: number; neutral: number; negative: number }
-    >()
-    for (const r of rows) {
-      const day = r.date.toISOString().slice(0, 10)
-      const key = `${day}::${r.category}`
-      const cell = cellMap.get(key) ?? {
-        date: day,
-        category: r.category,
-        total: 0,
-        positive: 0,
-        neutral: 0,
-        negative: 0,
-      }
-      cell.total += r.total
-      cell.positive += r.positive
-      cell.neutral += r.neutral
-      cell.negative += r.negative
-      cellMap.set(key, cell)
+    try {
+      reply.header('Cache-Control', 'private, max-age=120')
+      return await insightsHeatmap((request.query ?? {}) as Record<string, unknown>)
+    } catch (err) {
+      return fail(reply, err, 'heatmap')
     }
-    const cells = Array.from(cellMap.values())
-    const dates: string[] = []
-    {
-      const d = new Date(since)
-      const end = new Date()
-      while (d <= end) {
-        dates.push(d.toISOString().slice(0, 10))
-        d.setUTCDate(d.getUTCDate() + 1)
-      }
+  })
+
+  // ── Reviews Insights › Themes and Products (PR E) — services/reviews/review-themes.service.ts, review-products.service.ts ──
+  fastify.get('/reviews/insights/themes', async (request, reply) => {
+    try {
+      reply.header('Cache-Control', 'private, max-age=60')
+      return await insightsThemes((request.query ?? {}) as Record<string, unknown>)
+    } catch (err) {
+      return fail(reply, err, 'insights themes')
     }
-    const categories = Array.from(new Set(cells.map((c) => c.category))).sort()
-    reply.header('Cache-Control', 'private, max-age=120')
-    return { dates, categories, cells, sinceDays, marketplace: q.marketplace ?? null }
+  })
+
+  fastify.get('/reviews/insights/products', async (request, reply) => {
+    try {
+      reply.header('Cache-Control', 'private, max-age=60')
+      return await insightsProducts((request.query ?? {}) as Record<string, unknown>)
+    } catch (err) {
+      return fail(reply, err, 'insights products')
+    }
+  })
+
+  fastify.get<{ Params: { productId: string } }>('/reviews/insights/products/:productId', async (request, reply) => {
+    try {
+      reply.header('Cache-Control', 'private, max-age=60')
+      return await insightsProductDetail(request.params.productId, (request.query ?? {}) as Record<string, unknown>)
+    } catch (err) {
+      return fail(reply, err, 'insights product')
+    }
   })
 
   // ── GET /reviews/by-product (SR.2) ──────────────────────────────────
@@ -945,84 +957,153 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, started: true, note: 'running in background; poll CronRun or Reviews › Settings › Pipeline health for the result' }
   })
 
-  // ── Review Spotlight (RX.4) ─────────────────────────────────────────
-  fastify.get<{
-    Querystring: { productId?: string; marketplace?: string }
-  }>('/reviews/spotlight', async (request, reply) => {
-    const q = request.query ?? {}
-    const latest = await getLatestSpotlight({
-      productId: q.productId ?? null,
-      marketplace: q.marketplace ?? null,
-    })
-    reply.header('Cache-Control', 'private, max-age=60')
-    return { spotlight: latest }
+  // ── Review Spotlight (RX.4) — Reviews Insights › Brief (PR E): services/reviews/review-spotlight.service.ts ──
+  // GET /reviews/spotlight?channel&marketplace|market&productId&id → the newest brief of exactly that scope (or one by id)
+  fastify.get('/reviews/spotlight', async (request, reply) => {
+    try {
+      const q = (request.query ?? {}) as Record<string, unknown>
+      const scope = spotlightScope(q)
+      const latest = await getLatestSpotlight({
+        productId: typeof q.productId === 'string' && q.productId ? q.productId : null,
+        channel: scope.channel,
+        marketplace: scope.market,
+        id: typeof q.id === 'string' && q.id ? q.id : null,
+      })
+      reply.header('Cache-Control', 'private, max-age=60')
+      return { spotlight: latest }
+    } catch (err) {
+      return fail(reply, err, 'spotlight')
+    }
   })
 
-  // ── Review action items (RX.5) — closed SR.3 loop ───────────────────
-  fastify.get<{
-    Querystring: { status?: string; spikeId?: string; productId?: string; limit?: string }
-  }>('/reviews/action-items', async (request, reply) => {
-    const q = request.query ?? {}
-    const where: Record<string, unknown> = {}
-    if (q.status) where.status = q.status
-    if (q.spikeId) where.spikeId = q.spikeId
-    if (q.productId) where.productId = q.productId
-    const items = await prisma.reviewActionItem.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: Math.min(Number(q.limit) || 100, 300),
-    })
-    reply.header('Cache-Control', 'private, max-age=15')
-    return { items, count: items.length }
+  // GET /reviews/spotlight/history?channel&marketplace&limit → earlier briefs, newest first (read-only)
+  fastify.get('/reviews/spotlight/history', async (request, reply) => {
+    try {
+      reply.header('Cache-Control', 'private, max-age=30')
+      return await spotlightHistory((request.query ?? {}) as Record<string, unknown>)
+    } catch (err) {
+      return fail(reply, err, 'spotlight history')
+    }
   })
 
-  fastify.post<{ Params: { id: string }; Body: { actor?: string } }>(
-    '/reviews/spikes/:id/generate-actions',
-    async (request, reply) => {
-      const { id } = request.params
-      try {
-        const result = await generateActionItemsForSpike(id, request.body?.actor ?? 'user:anonymous')
-        return { ok: true, ...result }
-      } catch (err) {
-        reply.code(err instanceof Error && err.message === 'spike not found' ? 404 : 500)
-        return { error: 'generate_failed', message: err instanceof Error ? err.message : String(err) }
-      }
-    },
-  )
+  // GET /reviews/spotlight/scopes?period → the "Brief for" options (each says whether a brief exists), today's limit
+  fastify.get('/reviews/spotlight/scopes', async (request, reply) => {
+    try {
+      const q = (request.query ?? {}) as Record<string, unknown>
+      reply.header('Cache-Control', 'private, max-age=30')
+      return await spotlightScopes({ windowDays: windowDaysOf(q.period, q.windowDays) })
+    } catch (err) {
+      return fail(reply, err, 'spotlight scopes')
+    }
+  })
 
-  fastify.patch<{ Params: { id: string }; Body: { status?: string } }>(
-    '/reviews/action-items/:id',
-    async (request, reply) => {
-      const { id } = request.params
-      const status = request.body?.status
-      if (!status || !['OPEN', 'APPLIED', 'DISMISSED'].includes(status)) {
-        reply.code(400)
-        return { error: 'invalid_status' }
-      }
-      const existing = await prisma.reviewActionItem.findUnique({ where: { id }, select: { id: true } })
-      if (!existing) {
+  // ── Review action items (RX.5) — Reviews Insights › Fixes (PR E): services/reviews/review-fix-plan.service.ts ──
+  // GET /reviews/action-items?status&kind&productId&spikeId&limit → { items, count, counts } (Sent fixes follow their plan)
+  fastify.get('/reviews/action-items', async (request, reply) => {
+    try {
+      reply.header('Cache-Control', 'private, max-age=15')
+      return await listFixes((request.query ?? {}) as Record<string, unknown>)
+    } catch (err) {
+      return fail(reply, err, 'fixes')
+    }
+  })
+
+  // POST /reviews/spikes/:id/generate-actions — "Suggest fixes" for one alert; the actor is the signed-in person.
+  fastify.post<{ Params: { id: string } }>('/reviews/spikes/:id/generate-actions', async (request, reply) => {
+    const { id } = request.params
+    try {
+      const result = await generateActionItemsForSpike(id, requestUserId(request))
+      return { ok: true, ...result }
+    } catch (err) {
+      if (err instanceof Error && err.message === 'spike not found') {
         reply.code(404)
-        return { error: 'not_found' }
+        return { error: 'generate_failed', message: 'No alert with this id in this business.' }
       }
-      const item = await prisma.reviewActionItem.update({ where: { id }, data: { status } })
-      return { ok: true, item }
-    },
-  )
+      return fail(reply, err, 'generate actions')
+    }
+  })
 
+  // POST /reviews/action-items/suggest { productId } — the product pop-up's "Suggest a fix" (AI; changes nothing).
+  fastify.post<{ Body: { productId?: unknown } }>('/reviews/action-items/suggest', async (request, reply) => {
+    try {
+      const actor = requestUserId(request)
+      const productId = typeof request.body?.productId === 'string' ? request.body.productId.trim() : ''
+      if (!productId) return reply.code(400).send({ error: 'productId: name the product.' })
+      return { ok: true, ...(await suggestFixesForProduct(productId, actor)) }
+    } catch (err) {
+      return fail(reply, err, 'suggest fixes')
+    }
+  })
+
+  // POST /reviews/action-items/bulk { ids ≤ 200, action: propose | dismiss } → { changed, held, sent?, tasks? }
+  fastify.post('/reviews/action-items/bulk', async (request, reply) => {
+    try {
+      const person = await personOf(request)
+      return await bulkFixes(request.body, person)
+    } catch (err) {
+      return fail(reply, err, 'fixes bulk')
+    }
+  })
+
+  // POST /reviews/action-items/:id/propose — "Send for approval": ONE change plan (a Task is created instead).
+  fastify.post<{ Params: { id: string } }>('/reviews/action-items/:id/propose', async (request, reply) => {
+    try {
+      const person = await personOf(request)
+      const out = await proposeFixes([request.params.id], person)
+      if (out.changed === 0 && out.held.length) return reply.code(out.held[0].words === FIX_NOT_FOUND_WORDS ? 404 : 409).send({ error: out.held[0].words, ...out })
+      return out
+    } catch (err) {
+      return fail(reply, err, 'propose fix')
+    }
+  })
+
+  // POST /reviews/action-items/:id/withdraw — takes the waiting change plan back; its fixes are Open again.
+  fastify.post<{ Params: { id: string } }>('/reviews/action-items/:id/withdraw', async (request, reply) => {
+    try {
+      return await withdrawFix(request.params.id, requestUserId(request))
+    } catch (err) {
+      return fail(reply, err, 'withdraw fix')
+    }
+  })
+
+  // POST /reviews/action-items/:id/task { assignee? } — "Create task": no approval, nothing reaches a channel.
+  fastify.post<{ Params: { id: string }; Body: { assignee?: unknown } }>('/reviews/action-items/:id/task', async (request, reply) => {
+    try {
+      const assignee = typeof request.body?.assignee === 'string' && request.body.assignee.trim() ? request.body.assignee.trim().slice(0, 64) : null
+      return await createFixTask(request.params.id, requestUserId(request), assignee)
+    } catch (err) {
+      return fail(reply, err, 'fix task')
+    }
+  })
+
+  // PATCH /reviews/action-items/:id { status: OPEN | DISMISSED } or an edit of the proposal (no direct Apply).
+  fastify.patch<{ Params: { id: string } }>('/reviews/action-items/:id', async (request, reply) => {
+    try {
+      requestUserId(request)
+      return await updateFix(request.params.id, request.body)
+    } catch (err) {
+      return fail(reply, err, 'fix update')
+    }
+  })
+
+  // POST /reviews/spotlight/generate { channel?, marketplace?, period? | windowDays? } — held (409 too few, 429 10 a day)
   fastify.post<{
-    Body: { productId?: string | null; marketplace?: string | null; windowDays?: number }
+    Body: { productId?: string | null; channel?: unknown; marketplace?: unknown; market?: unknown; windowDays?: unknown; period?: unknown }
   }>('/reviews/spotlight/generate', async (request, reply) => {
     const b = request.body ?? {}
     try {
+      requestUserId(request)
+      const scope = spotlightScope(b)
       const spotlight = await generateSpotlight({
-        productId: b.productId ?? null,
-        marketplace: b.marketplace ?? null,
-        windowDays: b.windowDays,
+        productId: typeof b.productId === 'string' && b.productId ? b.productId : null,
+        channel: scope.channel,
+        marketplace: scope.market,
+        windowDays: windowDaysOf(b.period, b.windowDays),
       })
       return { ok: true, spotlight }
     } catch (err) {
-      reply.code(500)
-      return { error: 'generate_failed', message: err instanceof Error ? err.message : String(err) }
+      if (err instanceof SpotlightHeldError) return reply.code(err.statusCode).send({ error: err.message, held: true, reason: err.reason })
+      return fail(reply, err, 'spotlight generate')
     }
   })
 

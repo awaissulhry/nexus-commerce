@@ -146,6 +146,9 @@ export type InvalidationType =
   | 'review.mailer.changed' // sending paused, resumed or run now
   | 'review.rule.changed' // review-request rules, first-try timing, send hours
   | 'review.settings.changed' // Reviews settings
+  | 'review.alert.changed' // Insights › Alerts: acknowledged, resolved, reopened (one or a bulk), fixes suggested
+  | 'review.fix.changed' // Insights › Fixes: sent for approval, withdrawn, made a task, edited, dismissed, brought back
+  | 'review.brief.generated' // Insights › Brief: a new brief written
 
 export interface InvalidationEvent {
   type: InvalidationType

@@ -13355,16 +13355,20 @@ model ReviewSpotlight {
   workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   id          String   @id @default(cuid())
   productId   String? // null = global
+  // Reviews Insights (2026-10-26, PR E) — the brief's scope: a channel ('AMAZON' | 'EBAY' | 'SHOPIFY' | 'ETSY'), or
+  // null for every channel; with `marketplace`, one market of it. Older briefs have no channel (every channel).
+  channel     String?
   marketplace String? // null = all markets
   windowDays  Int      @default(30)
   reviewCount Int      @default(0)
   headline    String?
-  content     Json // structured brief: { sentiment, complaints[], praises[], emerging[], recommendations[] }
+  content     Json // structured brief: { sentiment, complaints[], praises[], emerging[], recommendations[], findings[]?, changes[]?, sources? }
   model       String?
   usedAi      Boolean  @default(false)
   generatedAt DateTime @default(now())
 
   @@index([productId, generatedAt])
+  @@index([channel, marketplace, generatedAt])
   @@index([generatedAt])
   @@index([workspaceId])
 }
@@ -13384,7 +13388,12 @@ model ReviewActionItem {
   title       String
   detail      String?
   payload     Json?
-  status      String   @default("OPEN") // OPEN | APPLIED | DISMISSED
+  // OPEN | SENT (in a change plan that waits for a person) | APPLIED | DISMISSED
+  status      String   @default("OPEN")
+  // Reviews Insights (2026-10-26, PR E) — the change plan (AgentApproval.id) this fix was sent in for approval. Several
+  // fixes sent together share one plan. Set while SENT and kept when the plan ran (APPLIED links to it); cleared when
+  // the plan is declined, withdrawn or expires (the fix is Open again).
+  approvalId  String?
   source      String   @default("manual") // manual | automation
   createdBy   String?
   createdAt   DateTime @default(now())
@@ -13393,6 +13402,7 @@ model ReviewActionItem {
   @@index([status, createdAt])
   @@index([spikeId])
   @@index([productId])
+  @@index([approvalId])
   @@index([workspaceId])
 }
 
@@ -13491,6 +13501,9 @@ model ReviewSpike {
   acknowledgedAt     DateTime?
   acknowledgedBy     String?
   resolvedAt         DateTime?
+  // Reviews Insights (2026-10-26, PR E) — who resolved it (the signed-in person's id), shown as "Resolved by … on …".
+  // Cleared, with the acknowledgement, when someone reopens it.
+  resolvedBy         String?
   detectedAt         DateTime  @default(now())
 
   @@index([productId, marketplace, category, detectedAt(sort: Desc)])

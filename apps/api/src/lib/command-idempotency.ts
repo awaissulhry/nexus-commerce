@@ -118,6 +118,13 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/review-queue/bulk': 'review-queue-bulk',
   '/api/review-emails/test': 'review-email-test',
   '/api/review-rules/bulk': 'review-rules-bulk',
+  // Reviews › Insights (PR E) — one change plan per "Send for approval" press (one fix, or the ticked fixes), one
+  // brief per Generate (10 a day, an AI call), one acknowledge / resolve / "Suggest fixes" of the ticked alerts, even
+  // when the answer is lost and the page sends it again.
+  '/api/reviews/action-items/:id/propose': 'review-fix-propose',
+  '/api/reviews/action-items/bulk': 'review-fix-bulk',
+  '/api/reviews/spotlight/generate': 'review-brief-generate',
+  '/api/reviews/spikes/bulk': 'review-alert-bulk',
 }
 
 /** The POST routes whose Idempotency-Key is honoured (for the tests that hold a route to it). */
