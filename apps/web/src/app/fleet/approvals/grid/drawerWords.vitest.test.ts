@@ -258,8 +258,13 @@ describe('edit, then approve: the edit-spec table', () => {
     const field = formOf(detail({ toolName: 'reply-to-review' }), { body: 'Thank you!', reviewId: 'r1' })
     expect(field.initial).toBe('Thank you!')
     expect(parseEditInput(field, 'x')).toMatchObject({ ok: false, error: 'Write at least 2 characters.' })
-    expect(parseEditInput(field, 'y'.repeat(81))).toMatchObject({ ok: false })
+    // eBay allows 500 characters for a reply (RespondToFeedback / respondToFeedback); the drawer holds the same limit.
+    expect(parseEditInput(field, 'y'.repeat(500))).toEqual({ ok: true, value: 'y'.repeat(500) })
+    expect(parseEditInput(field, 'y'.repeat(501))).toMatchObject({ ok: false })
     expect(parseEditInput(field, 'Thanks a lot')).toEqual({ ok: true, value: 'Thanks a lot' })
+    const feedback = formOf(detail({ toolName: 'leave-buyer-feedback' }), { lineId: 'l1', text: 'Great buyer!' })
+    expect(feedback.initial).toBe('Great buyer!')
+    expect(parseEditInput(feedback, 'z'.repeat(501))).toMatchObject({ ok: false })
   })
 
   it('every entry names the argument the server patches', () => {

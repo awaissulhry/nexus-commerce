@@ -79,6 +79,8 @@ interface Seeded {
   returnId: string; returnableOrderId: string; returnableLineId: string; inspectedReturnId: string
   /** 07 O13 — an Amazon order delivered 10 days ago (a review may be asked for). */
   reviewableOrderId: string
+  /** Reviews eBay REST (PR G) — an eBay sale waiting for the seller's feedback for the buyer. */
+  buyerFeedbackLineId: string
   /** 07 O17 — an eBay account, inactive until sync-orders-now runs (ENV_AND_ROWS below), so no other tool reaches it. */
   syncAccountId: string
   /** 08 S6–S13 — two stock locations (codes), a count, a pricing rule (integration: `ruleId` is P7's alert rule), a
@@ -1024,6 +1026,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // 07 O13 — previews only (an eBay reply needs eBay replies on: ENV below).
   'request-review': (ids) => ({ orderId: ids.reviewableOrderId }),
   'reply-to-review': (ids) => ({ reviewId: ids.reviewId, body: 'Thank you for your feedback' }),
+  // Reviews eBay REST (PR G) — preview only (a dry run while eBay posting is off).
+  'leave-buyer-feedback': (ids) => ({ lineId: ids.buyerFeedbackLineId, text: 'Thank you, great buyer' }),
   // 07 O14 — preview only (the company identity is seeded below).
   'issue-fiscal-document': (ids) => ({ orderIds: [ids.returnableOrderId] }),
   // 07 O17 — previews only (the pickup carrier is MANUAL; the account is switched on for its runs only).
@@ -1497,6 +1501,7 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
     }
     const fbaPlan = await db.fbaInboundPlanV2.create({ data: { name: `${mark} FBA plan`, planId: `${mark}-PLAN-1`, status: 'WAITING_FOR_CHOICE', currentStep: 'CONFIRM', source: 'matrix', marketplaceId: 'TEST-MKT-IT', options: fbaOptions as never } })
     // MCP full control P9 — a finished bulk price job (19.90 is what it wrote and what is stored), so its undo previews.
+    const buyerLine = await db.ebayBuyerFeedback.create({ data: { connectionId: connection.id, orderLineItemId: `${mark}-LINE-1`, title: `${mark} gloves` } as never })
     const bulkJob = await db.bulkActionJob.create({
       data: { jobName: `${mark} price rise`, actionType: 'PRICING_UPDATE', targetProductIds: [product.id], targetVariationIds: [], actionPayload: {}, status: 'COMPLETED', totalItems: 1, completedAt: new Date('2026-09-30T08:00:00Z') },
     })
@@ -1514,6 +1519,7 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
       freeOrderId: freeOrder.id, draftShipmentId: draftShipment.id, parcelShipmentId: labelled.id, messageOrderId: messageOrder.id,
       returnId: ret.id, returnableOrderId: returnable.id, returnableLineId: (returnable as unknown as { items: Array<{ id: string }> }).items[0].id, inspectedReturnId: inspected.id,
       reviewableOrderId: reviewable.id,
+      buyerFeedbackLineId: buyerLine.id,
       syncAccountId: syncAccount.id,
       location: warehouse.code, second: second.code, countId: count.id, pricingRuleId: pricingRule.id, promotionId: promotion.id,
       scheduledId: scheduled.id, supplierId: supplier.id, purchaseOrderId: purchaseOrder.id, inboundShipmentId: inboundShipment.id,

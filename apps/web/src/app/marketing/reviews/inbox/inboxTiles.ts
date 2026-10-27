@@ -11,7 +11,7 @@ import { COUNTRY_NAMES } from '@/app/_shared/app-nav'
 import { channelLabel } from '@/app/listings/_readiness/marketChips'
 import type { InboxFacets, InboxReadState, InboxRow, InboxStatusCounts, InboxTabCounts } from './inboxDatasource'
 import {
-  NO_OWNER, toggleStatusTile, withPeriod, withSearch, withoutValue, type InboxFilterKey, type InboxKind, type InboxPeriod,
+  NO_OWNER, toggleStatusTile, withPeriod, withPhotos, withSearch, withoutValue, type InboxFilterKey, type InboxKind, type InboxPeriod,
   type InboxQuery, type InboxStatus,
 } from './inboxQuery'
 
@@ -147,6 +147,7 @@ export function inboxChips(q: InboxQuery, facets: InboxFacets | null = null): In
       })
     }
   }
+  if (q.photos) chips.push({ key: 'photos', label: 'Has photos', removeLabel: 'Show reviews with or without photos', next: withPhotos(q, false) })
   if (q.q) chips.push({ key: 'q', label: `Search: “${q.q}”`, removeLabel: 'Clear the search', next: withSearch(q, '') })
   return chips
 }
@@ -242,6 +243,12 @@ export function agoWords(iso: string, now: number): string {
 /** "Seller feedback", "Product review · imported". */
 export function kindWords(row: Pick<InboxRow, 'kind' | 'imported'>): string {
   return `${row.kind === 'seller' ? 'Seller feedback' : 'Product review'}${row.imported ? ' · imported' : ''}`
+}
+
+/** PR G — "2 photos", "1 photo"; null when the buyer added none (or an older answer has no count). */
+export function photoWords(row: Partial<Pick<InboxRow, 'photos'>>): string | null {
+  const n = typeof row.photos === 'number' ? row.photos : 0
+  return n > 0 ? `${n} ${n === 1 ? 'photo' : 'photos'}` : null
 }
 
 export type DueKind = 'late' | 'soon' | 'ok' | 'done'

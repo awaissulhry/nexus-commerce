@@ -3,10 +3,21 @@
  * these rules refuse) and the web (the review pop-up passes them to the DS ReplyComposer). Pure: no I/O.
  *
  * Channel facts (checked 2026-10-26):
- * - eBay: Nexus posts the reply (Trading API RespondToFeedback). One reply per feedback, up to 500 characters
- *   (RespondToFeedback `ResponseText`, "Max length: 500":
- *   https://developer.ebay.com/devzone/xml/docs/reference/ebay/RespondToFeedback.html), can't be edited or removed.
- *   An imported eBay row has no eBay feedback id Nexus can answer, so it is copied and posted by hand.
+ * - eBay: Nexus posts the reply (Trading API RespondToFeedback; REST respondToFeedback for feedback read by eBay's REST
+ *   Feedback API). One reply per feedback, up to 500 characters (RespondToFeedback `ResponseText`, "Max length: 500":
+ *   https://developer.ebay.com/devzone/xml/docs/reference/ebay/RespondToFeedback.html; REST `responseText`, "Maximum
+ *   length: 500": https://developer.ebay.com/api-docs/commerce/feedback/resources/respond_to_feedback/methods/respondToFeedback),
+ *   can't be edited or removed. An imported eBay row has no eBay feedback id Nexus can answer, so it is copied and
+ *   posted by hand.
+ * - eBay, feedback FOR a buyer (the seller's side, `buyerFeedbackHeld`): positive only, up to 500 characters, within 90
+ *   days of the completed sale (REST leaveFeedback `commentText` "Maximum length: 500",
+ *   https://developer.ebay.com/api-docs/commerce/feedback/resources/feedback/methods/leaveFeedback; the 90 days:
+ *   https://www.ebay.com/help/selling/leaving-feedback-buyers/leaving-feedback-buyers?id=4078). Nexus sends it only
+ *   after a person approves it.
+ * - eBay revision requests (`revisionWords`): 5 per calendar year plus 5 for every 1,000 feedback received that year,
+ *   only for feedback under 30 days old, once per feedback, the buyer has 10 days
+ *   (https://www.ebay.com/help/selling/leaving-feedback-buyers/viewing-responding-feedback-buyers?id=4102). eBay has no
+ *   API to ask for one: it is asked in eBay Seller Hub.
  * - Amazon: no reply API. Copy the reply, open Seller Central (Feedback Manager for seller feedback), mark it as
  *   responded. No feedback-removal action from Nexus.
  * - Etsy: no reply API. One public reply within 100 days of the buyer's last edit, never edited. Nexus knows when the
@@ -226,4 +237,81 @@ export function isReviewOverdue(review: { status?: string | null; postedAt: stri
   if (!isReviewOpen(review.status)) return false
   const due = reviewDueAt(review.postedAt).getTime()
   return Number.isFinite(due) && due < now.getTime()
+}
+
+// ── eBay: feedback the seller leaves for a buyer ─────────────────────────────────────────────────────────────────────
+
+/** eBay leaveFeedback `commentText` limit, in characters (REST and Trading LeaveFeedback alike). */
+export const EBAY_BUYER_FEEDBACK_LIMIT = 500
+/** eBay: a seller may leave feedback for a buyer for up to this many days from when the sale was completed. */
+export const EBAY_BUYER_FEEDBACK_DAYS = 90
+/** The rule line shown wherever feedback for buyers is written. */
+export const EBAY_BUYER_FEEDBACK_RULE = `Positive only, up to ${EBAY_BUYER_FEEDBACK_LIMIT} characters, within ${EBAY_BUYER_FEEDBACK_DAYS} days of the completed sale. It can’t be changed after it is sent; you can add one follow-up on eBay later.`
+
+/** What the rules need to know about one eBay order line waiting for the seller's feedback. */
+export interface BuyerFeedbackLine {
+  /** AWAITING (eBay lists it) | LEFT (left from Nexus) | GONE (eBay no longer lists it). */
+  state: string
+  /** An approval for it waits for a person. */
+  waiting?: boolean
+  /** When the sale was made (the Nexus order's purchase date); null when Nexus does not have the order. */
+  soldAt?: string | Date | null
+  /** The Nexus order has a return or case that is still open. */
+  openReturn?: boolean
+}
+
+/** Days left to leave feedback for this sale (0 once the window closed); null when the sale date is unknown. */
+export function buyerFeedbackDaysLeft(soldAt: string | Date | null | undefined, now: Date = new Date()): number | null {
+  const from = asDate(soldAt)
+  if (!from) return null
+  const elapsed = Math.floor((now.getTime() - from.getTime()) / DAY_MS)
+  return Math.max(0, EBAY_BUYER_FEEDBACK_DAYS - elapsed)
+}
+
+/** Why feedback cannot be sent for this order line now, in words, or null when it may be asked for. */
+export function buyerFeedbackLineHeld(line: BuyerFeedbackLine, now: Date = new Date()): string | null {
+  if (line.state === 'LEFT') return 'Feedback was already left for this buyer from Nexus. eBay allows one feedback per sale.'
+  if (line.state === 'GONE') return 'eBay no longer lists this sale as waiting for feedback: it was left on eBay, or the time ran out.'
+  if (line.waiting) return 'Already sent for approval: it waits on the Approvals page.'
+  const from = asDate(line.soldAt)
+  if (from && now.getTime() - from.getTime() > EBAY_BUYER_FEEDBACK_DAYS * DAY_MS) {
+    return `Sold on ${dayWords(from)}: eBay allows feedback for a buyer only within ${EBAY_BUYER_FEEDBACK_DAYS} days of the sale.`
+  }
+  if (line.openReturn) return 'This order has an open return or case: leave feedback once it is closed.'
+  return null
+}
+
+/** Why this feedback text cannot be sent, in words, or null when it may go. eBay takes positive feedback only. */
+export function buyerFeedbackTextHeld(text: string | null | undefined): string | null {
+  const trimmed = (text ?? '').trim()
+  if (!trimmed) return 'Write the feedback first.'
+  const over = replyLength(trimmed) - EBAY_BUYER_FEEDBACK_LIMIT
+  if (over > 0) return `Cut ${over} ${over === 1 ? 'character' : 'characters'} (eBay allows ${EBAY_BUYER_FEEDBACK_LIMIT}).`
+  return null
+}
+
+// ── eBay: revision requests ──────────────────────────────────────────────────────────────────────────────────────
+
+/** eBay's revision-request rules, in words. */
+export const EBAY_REVISION_RULE = '5 per calendar year, plus 5 for every 1,000 feedback received that year. Only for feedback under 30 days old, once per feedback. The buyer has 10 days to answer.'
+/** "Resolve the problem first" is eBay's advice, not a rule. */
+export const EBAY_REVISION_TIP = 'Tip: resolve the problem first, then ask.'
+/** Why Nexus cannot ask itself. */
+export const EBAY_REVISION_NO_API = 'eBay has no API to ask for a revision: Nexus opens eBay Seller Hub, where you ask.'
+
+export type RevisionTone = 'info' | 'success' | 'neutral' | 'warning'
+
+/**
+ * eBay's state of a feedback (REST getFeedback `feedbackState`) and its `eligibleForRevision`, in words. Null when there
+ * is nothing to say about a revision (a feedback that stands, not eligible, or one never read by eBay's REST API).
+ */
+export function revisionWords(state: string | null | undefined, eligible: boolean | null | undefined): { words: string; tone: RevisionTone } | null {
+  switch ((state ?? '').toUpperCase()) {
+    case 'REVISION_OPEN': return { words: 'Waiting for the buyer', tone: 'info' }
+    case 'REVISED': return { words: 'Revised by the buyer', tone: 'success' }
+    case 'REVISION_DECLINED_OR_EXPIRED': return { words: 'Buyer said no, or 10 days passed', tone: 'neutral' }
+    case 'WITHDRAWN': return { words: 'Withdrawn', tone: 'neutral' }
+    case 'HIDDEN': return { words: 'Hidden by eBay', tone: 'neutral' }
+    default: return eligible ? { words: 'Can be asked in Seller Hub', tone: 'warning' } : null
+  }
 }

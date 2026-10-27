@@ -14,7 +14,7 @@ import { EmptyState, PressableRow, StarRating } from '@/design-system/components
 import { Button, Pill, Skeleton } from '@/design-system/primitives'
 import { STATUS_WORD, channelMarketWords } from '../_lib/reviewWords'
 import type { InboxRow } from './inboxDatasource'
-import { STATUS_TONE, agoWords, dueWords, plural, productWords } from './inboxTiles'
+import { STATUS_TONE, agoWords, dueWords, photoWords, plural, productWords } from './inboxTiles'
 import s from './inbox.module.css'
 
 const LONG_PRESS_MS = 550
@@ -125,6 +125,7 @@ export function InboxCards({
                   <Pill tone={STATUS_TONE[row.status] ?? 'neutral'}>{STATUS_WORD[row.status] ?? row.status}</Pill>
                   <span>{channelMarketWords(row.channel, row.market, 'short')}</span>
                   {row.buyer && <span>{row.buyer}</span>}
+                  {photoWords(row) && <span>{photoWords(row)}</span>}
                   <span>{agoWords(row.postedAt, now)}</span>
                 </span>
                 <span className={s.cardMeta}>
