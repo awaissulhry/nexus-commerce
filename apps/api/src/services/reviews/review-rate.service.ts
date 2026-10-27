@@ -70,6 +70,9 @@ export function notMeasurableWords(rows: ReadonlyArray<Pick<RateRequest, 'channe
   if (channels.size === 1 && channels.has('AMAZON')) {
     return 'Not measurable: Amazon gives no review count — import this market’s reviews to estimate it.'
   }
+  if (channels.size === 1 && channels.has('SHOPIFY')) {
+    return 'Not measurable: no Shopify review is in Nexus yet — Shopify keeps none itself; connect the store’s review app to count them.'
+  }
   return 'Not measurable: no review that could follow these requests is in Nexus yet.'
 }
 

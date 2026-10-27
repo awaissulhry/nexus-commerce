@@ -316,3 +316,100 @@ describe('"Queue these" while a timing test runs (PR J)', () => {
     expect(rows.every((r) => r.status === 'SCHEDULED' && r.timingTestArmId === undefined)).toBe(true)
   })
 })
+
+describe('a Shopify timing test (lane N6) — the scheduler and "Queue these"', () => {
+  const now = Date.now()
+  // The send hours the Timing table sets for every market: 10:00 on every day of the week (#801's rules stay).
+  const tenOClock = Array.from({ length: 7 }, (_, dayOfWeek) => ({ marketplace: '*', dayOfWeek, hourLocal: 10, dayRank: 1, isActive: true }))
+  const shopifyRule = rule('shop', { scope: 'SHOPIFY', sendDelayDays: 12, minDaysSinceDelivery: 2, maxDaysSinceDelivery: 25, useSentimentDiversion: true, exclusions: ['has_refund'] })
+  const order = (id: string, over: Record<string, unknown> = {}) => ({
+    id, channel: 'SHOPIFY', channelOrderId: `5${id.replace(/\D/g, '').padStart(9, '0')}`, marketplace: null, deliveredAt: new Date(now - 2 * DAY), shippedAt: null, purchaseDate: null,
+    customerEmail: `${id}@example.com`, customerId: null, totalPrice: 80, fulfillmentMethod: null, status: 'DELIVERED', cancelledAt: null,
+    items: [{ product: { productType: 'Gloves touring' } }], returns: [], financialTransactions: [], ...over,
+  })
+  // A Shopify test covers the whole store: market "*".
+  const timing = {
+    id: 'tt-shop', kind: 'TIMING', channel: 'SHOPIFY', market: '*', productType: 'glove', ruleId: null, holdoutPct: 20, startedAt: new Date(now - 5 * DAY),
+    arms: [
+      { id: 's12', position: 0, holdout: false, delayDays: 12, ruleId: null },
+      { id: 's4', position: 1, holdout: false, delayDays: 4, ruleId: null },
+      { id: 's-hold', position: 2, holdout: true, delayDays: null, ruleId: null },
+    ],
+  }
+  const orders = Array.from({ length: 40 }, (_, i) => order(`s${i}`))
+  const created = () => db.reviewRequest.create.mock.calls.map(([arg]) => arg.data)
+  const romeHour = (d: Date) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }).format(d))
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    db.reviewRequest.findMany.mockResolvedValue([])
+    db.reviewRule.findMany.mockResolvedValue([shopifyRule])
+    db.reviewRule.findUnique.mockResolvedValue(shopifyRule)
+    db.reviewSendWindow.findMany.mockResolvedValue(tenOClock as never)
+    db.order.findMany.mockResolvedValue(orders)
+    running.tests = [timing]
+  })
+
+  it('each Shopify order goes to its group by order number; the holdout gets no e-mail and no "How was it?" check', async () => {
+    const result = await schedulePendingOrders()
+    const rows = created()
+    expect(rows).toHaveLength(orders.length)
+    let held = 0
+    for (const o of orders) {
+      const arm = assignArm(timing as never, o.channelOrderId)!
+      const row = rows.find((r) => r.orderId === o.id)!
+      expect(row.timingTestArmId).toBe(arm.id)
+      if (arm.holdout) {
+        held += 1
+        expect(row).toMatchObject({ channel: 'SHOPIFY', marketplace: null, status: 'SKIPPED', suppressedReason: 'timing_test_holdout', providerResponseCode: 'TIMING_TEST_HOLDOUT', ruleId: 'shop' })
+      } else {
+        expect(row).toMatchObject({ channel: 'SHOPIFY', status: 'SCHEDULED', ruleId: 'shop' })
+        // The group's own day after delivery (not the rule's 12 for group "4"), at the Timing table's send hour.
+        const days = (row.scheduledFor.getTime() - o.deliveredAt.getTime()) / DAY
+        expect(Math.abs(days - arm.delayDays!)).toBeLessThan(1)
+        expect(romeHour(row.scheduledFor)).toBe(10)
+      }
+    }
+    expect(held).toBeGreaterThan(0)
+    expect(new Set(rows.map((r) => r.timingTestArmId))).toEqual(new Set(['s12', 's4', 's-hold']))
+    expect(result).toMatchObject({ inTests: orders.length, heldOut: held, scheduled: orders.length - held })
+    // The rule asks "How was it?" first: every asked order gets its check, no holdout order does.
+    const checks = db.reviewSentimentCheck.create.mock.calls.map(([arg]) => arg.data.orderId)
+    expect(checks).toHaveLength(orders.length - held)
+    for (const id of checks) expect(rows.find((r) => r.orderId === id)!.status).toBe('SCHEDULED')
+  })
+
+  it('"Skip when" decides first; Amazon and eBay orders of the same run are not in the Shopify test', async () => {
+    db.order.findMany.mockResolvedValue([
+      order('refunded1', { financialTransactions: [{ id: 'f1' }] }),
+      order('jacket1', { items: [{ product: { productType: 'Jacket' } }] }),
+      { ...order('amazon1'), channel: 'AMAZON', channelOrderId: '305-0000001', marketplace: 'DE' },
+      { ...order('ebay1'), channel: 'EBAY', channelOrderId: '11-00001-00001', marketplace: 'IT' },
+    ])
+    await schedulePendingOrders()
+    const rows = created()
+    expect(rows.find((r) => r.orderId === 'refunded1')).toMatchObject({ status: 'SUPPRESSED', suppressedReason: 'rule_exclusion:has_refund' })
+    for (const id of ['refunded1', 'jacket1', 'amazon1', 'ebay1']) expect(rows.find((r) => r.orderId === id).timingTestArmId).toBeUndefined()
+    expect(rows.find((r) => r.orderId === 'ebay1')).toMatchObject({ status: 'SKIPPED', providerResponseCode: 'EBAY_ASKS' })
+  })
+
+  it('"Queue these" of the Shopify rule puts each order in the group the scheduler would pick; the holdout is never queued', async () => {
+    const out = await queueOrdersForRule('shop')
+    const rows = created()
+    expect(rows).toHaveLength(orders.length)
+    let held = 0
+    for (const o of orders) {
+      const arm = assignArm(timing as never, o.channelOrderId)!
+      const row = rows.find((r) => r.orderId === o.id)!
+      expect(row.timingTestArmId).toBe(arm.id)
+      if (arm.holdout) {
+        held += 1
+        expect(row).toMatchObject({ status: 'SKIPPED', providerResponseCode: 'TIMING_TEST_HOLDOUT', ruleId: 'shop' })
+      } else {
+        expect(row).toMatchObject({ status: 'SCHEDULED', ruleId: 'shop' })
+      }
+    }
+    expect(out).toEqual({ enqueued: orders.length - held, skipped: 0, decidedElsewhere: 0, heldOut: held, totalMatches: orders.length })
+    expect(db.reviewSentimentCheck.create).toHaveBeenCalledTimes(orders.length - held)
+  })
+})
