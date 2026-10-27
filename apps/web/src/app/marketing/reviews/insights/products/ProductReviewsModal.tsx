@@ -8,7 +8,9 @@
  *
  * Tabs Summary · Reviews · Themes · Returns · Sizes; the body keeps its height so the tabs do not jump. Rating per channel
  * and market says where each comes from (ruling 5: Amazon stars only from imported reviews, else "No rating data from
- * Amazon — import reviews"; eBay as % positive). Sizes is Coming later (sample rows). "Open in product studio" opens the
+ * Amazon — import reviews"; eBay as % positive). Size fit (Summary) and Sizes: the family's fit per size and per size
+ * and colour, from reviews that say how it fits and returns marked "too small" / "too large" (`fit`, a size needs 5
+ * mentions before it gets a verdict; fewer is "Too few", never a verdict). "Open in product studio" opens the
  * studio; "Suggest a fix" asks the AI for fixes (`POST /api/reviews/action-items/suggest`, nothing reaches a channel)
  * and opens Fixes for this product.
  */
@@ -23,6 +25,7 @@ import { useRouter } from '@/lib/workspaces/navigation'
 import { reviewsSend } from '../../_lib/reviewsFetch'
 import { inboxHref, insightsHref } from '../../_lib/reviewsLinks'
 import { periodWords, scopeApiParams, type InsightsScope } from '../_shared/insightsScope'
+import { fitHeaderWords, fitShare, fitVerdictPill, type FitCell, type ProductFit } from '../_shared/fitView'
 import { useInsightsRead } from '../_shared/useInsights'
 import {
   allReviewsHref,
@@ -60,14 +63,6 @@ export interface ProductReviewsModalProps {
   onGo: (productId: string) => void
   onClose: () => void
 }
-
-// ⛔ KEEP — Coming later placeholder (Owner ruling 3): fit per size needs the Phase 3 fit data (PR J). Sample rows only.
-const SIZE_SAMPLE_COLUMNS = ['Size', 'Runs small', 'True to size', 'Runs large', 'Verdict']
-const SIZE_SAMPLE_ROWS = [
-  { id: 's', cells: ['S (sample)', '48%', '44%', '8%', 'Runs small'] },
-  { id: 'm', cells: ['M (sample)', '41%', '52%', '7%', 'Runs small'] },
-  { id: 'l', cells: ['L (sample)', '12%', '80%', '8%', 'True to size'] },
-]
 
 interface SuggestAnswer { ok: boolean; created: unknown[]; theme: string | null; market: string | null; words: string | null }
 
@@ -145,7 +140,7 @@ export function ProductReviewsModal({ productId, ids, scope, canManage, onGo, on
           {tab === 'reviews' && <ReviewsTab detail={detail} scope={scope} />}
           {tab === 'themes' && <ThemesTab detail={detail} scope={scope} />}
           {tab === 'returns' && <ReturnsTab detail={detail} />}
-          {tab === 'sizes' && <SizesTab detail={detail} />}
+          {tab === 'sizes' && <SizesTab detail={detail} scope={scope} />}
         </div>
       )}
     </DetailModal>
@@ -248,9 +243,10 @@ function SummaryTab({ detail, scope }: { detail: ProductDetail; scope: InsightsS
         <Card header="Themes" description="Share of reviews · star impact against this product’s average">
           <ThemeList detail={detail} scope={scope} limit={5} />
         </Card>
-        {/* ⛔ KEEP — Coming later placeholder (Owner ruling 3): size fit needs the Phase 3 fit data. */}
-        <Card header={<span className={shared.line}>Size fit <Pill tone="neutral">Coming later</Pill> <Tag tone="neutral">Sample</Tag></span>}>
-          <p className={shared.muted}>{detail.fitWords} The Sizes tab shows a sample of how it will look.</p>
+        <Card header="Size fit" description={detail.fit ? fitHeaderWords(detail.fit) : undefined}>
+          <div className={shared.cardBody}>
+            <FitBySize fit={detail.fit} />
+          </div>
         </Card>
       </div>
     </div>
@@ -307,15 +303,88 @@ function ReturnsTab({ detail }: { detail: ProductDetail }) {
   )
 }
 
-function SizesTab({ detail }: { detail: ProductDetail }) {
+const FIT_COLUMNS = ['Runs small', 'True to size', 'Runs large']
+
+function FitMeter({ cell, direction, name }: { cell: FitCell; direction: 'small' | 'true' | 'large'; name: string }) {
+  const share = fitShare(cell, direction)
+  const what = direction === 'small' ? 'it runs small' : direction === 'large' ? 'it runs large' : 'it is true to size'
+  return (
+    <span className={s.fitMeter}>
+      <ProgressBar value={share} height={6} ariaLabel={share == null ? `${name}: too few mentions to measure` : `${name}: ${share}% say ${what}`} />
+      <span className={s.fitNum}>{share == null ? '—' : `${share}%`}</span>
+    </span>
+  )
+}
+
+function FitVerdict({ cell, minimum }: { cell: FitCell; minimum: number }) {
+  const v = fitVerdictPill(cell, minimum)
+  return (
+    <span title={cell.words}>
+      <Pill tone={v.tone}>{v.text}</Pill>
+      {v.note && <span className="nds-summary-sub">{v.note}</span>}
+    </span>
+  )
+}
+
+interface FitRow { id: string; name: string; cell: FitCell }
+
+/** One fit table: a row per size, or per size and colour, with the three shares, the mentions and the verdict. */
+function FitRows({ rows, first, label, minimum, mentions }: { rows: readonly FitRow[]; first: string; label: string; minimum: number; mentions?: boolean }) {
+  return (
+    <SummaryTable
+      label={label}
+      stackOnPhone
+      columns={[first, ...FIT_COLUMNS, ...(mentions ? ['Mentions'] : []), 'Verdict']}
+      align={[undefined, undefined, undefined, undefined, ...(mentions ? ['right' as const] : []), 'left']}
+      widths={[mentions ? '22%' : '10%', undefined, undefined, undefined, ...(mentions ? ['11%'] : []), mentions ? '24%' : '34%']}
+      rows={rows.map(({ id, name, cell }) => ({
+        id,
+        cells: [
+          <span key="n" className={shared.main}>{name}</span>,
+          <FitMeter key="s" cell={cell} direction="small" name={name} />,
+          <FitMeter key="t" cell={cell} direction="true" name={name} />,
+          <FitMeter key="l" cell={cell} direction="large" name={name} />,
+          ...(mentions ? [<span key="m" className={shared.num}>{cell.total}</span>] : []),
+          <FitVerdict key="v" cell={cell} minimum={minimum} />,
+        ],
+      }))}
+    />
+  )
+}
+
+const sizeRows = (fit: ProductFit): FitRow[] => fit.sizes.map((c) => ({ id: c.size, name: c.size, cell: c }))
+
+/** The family's fit per size with what to tell buyers; or why there is none. */
+function FitBySize({ fit, mentions }: { fit: ProductFit | null; mentions?: boolean }) {
+  if (!fit) return <p className={shared.muted}>This product’s family is no longer in Nexus.</p>
+  if (fit.sizes.length === 0) return <p className={shared.muted}>This family has no sizes: fit per size does not apply.</p>
+  return (
+    <>
+      <FitRows rows={sizeRows(fit)} first="Size" label="Fit per size" minimum={fit.minimum} mentions={mentions} />
+      <p className={shared.muted}><b>What to tell buyers:</b> {fit.advice}</p>
+    </>
+  )
+}
+
+function SizesTab({ detail, scope }: { detail: ProductDetail; scope: InsightsScope }) {
+  const fit = detail.fit
   return (
     <div className={shared.cardBody}>
-      {/* ⛔ KEEP — Coming later placeholder (Owner ruling 3): fit per size and colour needs the Phase 3 fit data. */}
-      <span className={shared.line}><Pill tone="neutral">Coming later</Pill> <Tag tone="neutral">Sample</Tag></span>
-      <p className={shared.muted}>{detail.fitWords} It will read reviews that mention fit and returns marked “too small” or “too large”, per size and colour. The rows below are a sample, not this product.</p>
-      <div className={shared.tableScroll}>
-        <SummaryTable label="Fit per size (sample)" columns={SIZE_SAMPLE_COLUMNS} rows={SIZE_SAMPLE_ROWS} />
-      </div>
+      <p className={shared.muted}>
+        Fit per size and colour of {fit && fit.family.id !== detail.product.id ? `its family, ${fit.family.name}` : 'this family'}, {periodWords(scope.period).label}, from reviews that say how it fits and from
+        returns marked “too small” or “too large”{fit ? ` — ${fitHeaderWords(fit)}` : ''}.
+      </p>
+      <Card header="By size">
+        <div className={shared.cardBody}><FitBySize fit={fit} mentions /></div>
+      </Card>
+      {fit && fit.variants.length > 0 && (
+        <Card header="By size and colour" description={`Each variant on its own; it too needs ${fit.minimum} mentions for a verdict.`}>
+          <div className={shared.cardBody}>
+            <FitRows rows={fit.variants.map((v) => ({ id: v.productId, name: v.label, cell: v }))} first="Product" label="Fit per size and colour" minimum={fit.minimum} mentions />
+          </div>
+        </Card>
+      )}
+      {fit && <p className={shared.footnote}>{fit.words}</p>}
     </div>
   )
 }

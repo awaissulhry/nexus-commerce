@@ -110,3 +110,18 @@
   justify-content: space-between;
   gap: var(--nds-space-10);
 }
+
+/* Fit by size: a share as a bar with its number beside it (the Size fit table and the Sizes tab). */
+.fitMeter {
+  display: grid;
+  grid-template-columns: minmax(40px, 1fr) minmax(4.5ch, auto);
+  align-items: center;
+  gap: var(--nds-space-6);
+  width: 100%;
+}
+
+.fitNum {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
