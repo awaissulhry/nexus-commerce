@@ -243,13 +243,24 @@ export function testResult(arms: readonly ArmCounts[], opts: { where?: string; k
   return { ...base, tooEarly, leaderId: leader.id, sure, liftPct, words, sureWords: sure == null ? null : sureWords(sure) }
 }
 
-/** Why the winner may not be applied, or null. Only a finished timing test whose leader is not the group in place. */
+/**
+ * Why the winner may not be applied, or null. A timing test: only once it finished, and only a leader that is not the
+ * group in place. An A/B split (N3): as soon as it has a result — the same "too early" and the same "how sure" rule — and
+ * only when B leads (A is what is in place); applying ends the split.
+ */
 export function applyHeld(test: { kind: string; status: string }, result: Pick<TestResult, 'tooEarly' | 'leaderId' | 'controlId' | 'sure'>): string | null {
-  if (test.kind === 'AB') return 'An A/B split ends with End test; change rule A yourself, or turn B on in its place.'
-  if (test.status === 'RUNNING' || test.status === 'WAITING_APPROVAL' || test.status === 'DRAFT') return 'The test has not finished: stop it, or wait until it ends.'
+  const ab = test.kind === 'AB'
+  if (test.status === 'WAITING_APPROVAL' || test.status === 'DRAFT') return ab ? 'The split has not started.' : 'The test has not finished: stop it, or wait until it ends.'
+  if (!ab && test.status === 'RUNNING') return 'The test has not finished: stop it, or wait until it ends.'
   if (result.tooEarly || !result.leaderId) return 'Too early to call — there is no winner yet.'
-  if (result.leaderId === result.controlId) return 'The day in place now is the best: there is nothing to apply. Keep it instead.'
-  if ((result.sure ?? 0) < APPLY_MIN_SURE) return `Only ${result.sure ?? 0}% sure — a winner can be applied at ${APPLY_MIN_SURE}% or more. Keep the day in place, or run a new test.`
+  if (result.leaderId === result.controlId) {
+    return ab
+      ? 'A — the rule as it is — is the best: there is nothing to apply. End the test to keep A as it is.'
+      : 'The day in place now is the best: there is nothing to apply. Keep it instead.'
+  }
+  if ((result.sure ?? 0) < APPLY_MIN_SURE) {
+    return `Only ${result.sure ?? 0}% sure — a winner can be applied at ${APPLY_MIN_SURE}% or more. ${ab ? 'Let the split run on, or end it to keep A.' : 'Keep the day in place, or run a new test.'}`
+  }
   return null
 }
 

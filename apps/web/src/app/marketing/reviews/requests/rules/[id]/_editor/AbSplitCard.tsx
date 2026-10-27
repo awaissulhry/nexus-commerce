@@ -2,13 +2,17 @@
 
 /**
  * Reviews › Requests › the rule editor — the A/B split (build spec B22, PR J). A rule and its "Duplicate as A/B" copy B
- * split the orders rule A decides, 50 / 50 by order number: half are asked by A, half get B's timing and sentiment check.
+ * split the orders rule A decides, 50 / 50 by order number: half are asked by A, half get B's timing, "How was it?"
+ * check and — on a Shopify rule — B's own e-mail text (N3).
  *
  *   no copy yet      says how to make one (Duplicate as A/B, top of the page)
  *   copy, no split   what each side does; "Start A/B test — send for approval" (held with why: A on, B off, B differs,
  *                    saved) → `reviewsSend('POST', '/review-timing-tests/ab')`; a person approves the start on the Approvals page
  *   waiting          Open Approvals, End test…
  *   running / ended  Side · Sent · Counted · Rate, the result in words, how sure (a bar), Open B (or Open A), End test…
+ *                    N3: "Apply winner — send for approval" once the API's result allows it (the SAME too-early and
+ *                    how-sure rules as a timing test; held with why) → `reviewsSend('POST', '/review-timing-tests/<id>/apply')`
+ *                    → waiting for approval (Open Approvals) → applied: rule A took B's settings and the split ended.
  * End test needs no approval: it only stops the split (it asks first, and says what happens).
  */
 import { useCallback, useEffect, useState } from 'react'
@@ -20,10 +24,12 @@ import { reviewsGet, reviewsSend } from '../../../../_lib/reviewsFetch'
 import { rulePath } from '../../../requestsPaths'
 import {
   APPROVALS_PATH,
+  abAppliedWords,
   abPartner,
   abRows,
   abStartHeld,
   abTestOf,
+  isAbApplied,
   needMoreWords,
   sideTimingWords,
   splitTests,
@@ -83,7 +89,10 @@ export function AbSplitCard({ rule, rules, canManage, unsaved }: AbSplitCardProp
       title: 'End this A/B test?',
       confirmLabel: 'End test',
       consequences: t.status === 'RUNNING'
-        ? ['Rule A asks all of its orders again from the next run', 'Requests already queued keep their day', 'B stays off', 'The result so far stays on this card']
+        ? [
+            'Rule A asks all of its orders again from the next run, as it is', 'Requests already queued keep their day', 'B stays off', 'The result so far stays on this card',
+            ...(t.approval?.what === 'apply' ? ['Its “Apply winner” request on the Approvals page is withdrawn — you can send it again from the result'] : []),
+          ]
         : [t.status === 'WAITING_APPROVAL' ? 'Its request on the Approvals page is withdrawn' : 'It is never sent for approval', 'Nothing was changed by it'],
     })
     if (!ok) return
@@ -93,6 +102,18 @@ export function AbSplitCard({ rule, rules, canManage, unsaved }: AbSplitCardProp
     emitInvalidation({ type: 'review.rule.changed' })
     void load()
   }, [confirm, toast, load])
+
+  // N3 — "Apply winner — send for approval": nothing changes before a person approves it on the Approvals page.
+  const apply = useCallback(async (t: TimingTest) => {
+    setSending(true)
+    const res = await reviewsSend<AskAnswer>('POST', `/review-timing-tests/${encodeURIComponent(t.id)}/apply`, undefined, { idempotent: true, what: 'apply' })
+    setSending(false)
+    if (res.error || !res.data) toast(res.error ?? 'Nexus could not ask to apply the winner.', 'danger')
+    else if (!res.data.approval) toast(res.data.words ?? 'It was not sent for approval.', 'danger')
+    else toast('Sent for approval — rule A takes the winner’s settings and the split ends once a person approves it', 'success')
+    emitInvalidation({ type: 'review.rule.changed' })
+    void load()
+  }, [toast, load])
 
   if (!rule) return <p className={s.hint}>Save the rule first. Then “Duplicate as A/B” makes a copy B to change and test against it.</p>
   if (!pair) {
@@ -115,7 +136,10 @@ export function AbSplitCard({ rule, rules, canManage, unsaved }: AbSplitCardProp
       {!answer && <Skeleton height={90} />}
       {answer && (!test || !live) && (
         <>
-          <p className={s.hint}>Split 50 / 50 by order number: half of the orders “{pair.a.name}” decides are asked by A, half get B’s timing and sentiment check. Who is asked and “Skip when” stay A’s.</p>
+          <p className={s.hint}>
+            Split 50 / 50 by order number: half of the orders “{pair.a.name}” decides are asked by A, half get B’s timing, “How was it?” check
+            {pair.a.scope === 'SHOPIFY' ? ' and e-mail text' : ''}. Who is asked and “Skip when” stay A’s.
+          </p>
           <SummaryTable
             label="The two sides"
             columns={['Side', 'What it does']}
@@ -131,13 +155,13 @@ export function AbSplitCard({ rule, rules, canManage, unsaved }: AbSplitCardProp
           <p className={s.hint}>It changes when real buyers are asked, so a person approves it first.</p>
         </>
       )}
-      {test && <AbTestBody test={test} ruleId={rule.id} bOn={test.status === 'RUNNING' && pair.b.isActive} other={other} otherSide={other.id === pair.b.id ? 'B' : 'A'} manage={manage} onEnd={end} onStart={() => void start()} sending={sending} />}
+      {test && <AbTestBody test={test} ruleId={rule.id} bOn={test.status === 'RUNNING' && pair.b.isActive} other={other} otherSide={other.id === pair.b.id ? 'B' : 'A'} manage={manage} onEnd={end} onStart={() => void start()} onApply={(t) => void apply(t)} sending={sending} />}
       {confirm.element}
     </div>
   )
 }
 
-function AbTestBody({ test, ruleId, bOn, other, otherSide, manage, onEnd, onStart, sending }: {
+function AbTestBody({ test, ruleId, bOn, other, otherSide, manage, onEnd, onStart, onApply, sending }: {
   test: TimingTest
   ruleId: string
   bOn: boolean
@@ -146,10 +170,13 @@ function AbTestBody({ test, ruleId, bOn, other, otherSide, manage, onEnd, onStar
   manage: string | null
   onEnd: (t: TimingTest) => void
   onStart: () => void
+  onApply: (t: TimingTest) => void
   sending: boolean
 }) {
   const pill = statusPill(test)
   const ended = test.status === 'DONE' || test.status === 'STOPPED'
+  const applied = isAbApplied(test.applied) ? test.applied : null
+  const applyWaits = test.approval?.what === 'apply'
   return (
     <div className={s.when}>
       <p className={s.whenLine}>
@@ -168,11 +195,23 @@ function AbTestBody({ test, ruleId, bOn, other, otherSide, manage, onEnd, onStar
           <p className={s.hint}>
             {[test.result.words.includes('more orders') ? null : needMoreWords(test), test.endsWords + '.', test.result.sureWords, test.countedWords].filter(Boolean).join(' ')}
           </p>
+          {applied ? (
+            <p className={s.okText}><Pill tone="success" dot>Applied</Pill> {abAppliedWords(applied)}</p>
+          ) : applyWaits ? (
+            <p className={s.row}>
+              <Pill tone="warning" dot size="md">Waiting for approval</Pill>
+              <span className={s.hint}>Applying the winner waits on the Approvals page. Nothing changes before a person approves it.</span>
+            </p>
+          ) : null}
+          {test.applyWords ? <p className={s.hint}>{test.applyWords}</p> : null}
         </>
       )}
       <div className={s.row}>
         {test.status === 'DRAFT' && <Button size="sm" variant="primary" onClick={onStart} heldReason={manage ?? (sending ? 'Sending…' : test.held.start)}>Send for approval again</Button>}
-        {test.status === 'WAITING_APPROVAL' && <Button asChild size="sm"><Link href={APPROVALS_PATH}>Open Approvals</Link></Button>}
+        {(test.status === 'RUNNING' || ended) && !applied && !applyWaits && (
+          <Button size="sm" variant="primary" onClick={() => onApply(test)} heldReason={manage ?? (sending ? 'Sending…' : test.held.apply)}>Apply winner — send for approval</Button>
+        )}
+        {(test.status === 'WAITING_APPROVAL' || applyWaits) && <Button asChild size="sm"><Link href={APPROVALS_PATH}>Open Approvals</Link></Button>}
         <Button asChild size="sm"><Link href={rulePath(other.id)}>Open {otherSide}</Link></Button>
         {!ended && <Button size="sm" variant="danger-outline" onClick={() => onEnd(test)} heldReason={manage ?? test.held.stop}>End test…</Button>}
       </div>

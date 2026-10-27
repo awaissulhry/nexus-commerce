@@ -3,7 +3,9 @@
  * out what the API answers; this proves the form, the held reasons, the rows and the marks.
  */
 import { describe, expect, it } from 'vitest'
+import { STANDARD_REQUEST_TEXT } from '@nexus/shared/review-request-text'
 import {
+  abAppliedWords,
   NEW_TEST_FORM,
   abBadge,
   abPartner,
@@ -13,6 +15,8 @@ import {
   abTestOf,
   abTile,
   armProgress,
+  isAbApplied,
+  sideTimingWords,
   armRows,
   daysHint,
   keepLabel,
@@ -144,5 +148,27 @@ describe('A/B splits', () => {
       ['“Germany jackets” · A/B split', '186 sent · 7.5%', '180 sent · 8.9%', 'Too early to call — B leads, 71% sure.'],
       ['“Germany jackets” · A/B split', '186 sent · 7.5%', '180 sent · 8.9%', 'Ended — Too early to call — B leads, 71% sure.'],
     ])
+  })
+
+  it('N3 — a Shopify split may differ by B’s own e-mail text only; the words say what each side sends', () => {
+    const ctx = { canManage: true, unsaved: 0, live: null, sending: false }
+    const own = { en: { subject: 'How is it?', body: 'Hi {first_name}\n\n{review_button}\n\n{unsubscribe_link}' } }
+    const shopA = rule('SA', 'Shop', { scope: 'SHOPIFY', marketplace: null })
+    const shopB = rule('SB', 'Shop (variant 1)', { scope: 'SHOPIFY', marketplace: null, isActive: false, emailText: own })
+    expect(abStartHeld({ a: shopA, b: shopB }, ctx)).toBeNull()
+    expect(abStartHeld({ a: shopA, b: { ...shopB, emailText: { it: STANDARD_REQUEST_TEXT.it } } }, ctx))
+      .toBe('“Shop (variant 1)” has the same timing and e-mail text as A. Change B’s e-mail text, first try, send hour or window first.')
+    // An Amazon pair is compared by its timing only (Amazon sends its own e-mail).
+    expect(abStartHeld({ a, b: { ...b, sendDelayDays: 4, emailText: own } }, ctx)).toMatch(/same timing as A\./)
+    expect(sideTimingWords(shopB)).toBe('Day 4 · window day 4–25 · own English text')
+    expect(sideTimingWords(shopA)).toBe('Day 4 · window day 4–25 · standard e-mail text')
+    expect(sideTimingWords(a)).toBe('Day 4 · window day 4–25')
+  })
+
+  it('N3 — an applied A/B winner in words', () => {
+    const applied = { kind: 'AB' as const, armId: 'b', label: 'B', ruleId: 'SA', ruleName: 'Shop', winnerRuleName: 'Shop (variant 1)', changed: ['E-mail text in English', 'First try'], at: '2026-10-27T10:00:00Z', by: 'app:u' }
+    expect(isAbApplied(applied)).toBe(true)
+    expect(isAbApplied({ armId: 'x', label: 'Day 7', delayDays: 7, ruleId: 'r', ruleName: 'R', created: false, at: '2026-10-27T10:00:00Z', by: null })).toBe(false)
+    expect(abAppliedWords(applied)).toBe('Applied 27 Oct: “Shop” took B’s e-mail text in English, first try. The split ended; “Shop (variant 1)” stays off.')
   })
 })
