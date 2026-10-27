@@ -4,7 +4,7 @@ import {
   ALL_PRODUCTS, NO_RATING_WORDS, amazonSubtitle, amazonTiles, buyersTile, dsrRows, ebaySubtitle, ebayTiles, feedbackManagerHref, feedbackTypeOf,
   filterFeedback, lockedLinks, marketTabs, parseChannelPeriod, periodDaysWords, periodOptions, periodSearch, replyHeld, replyNote,
   requestRows, sectionData, sectionError, sellerCentralHref, sellerHubHref, summaryNote, topicColumns, topicProductOptions, topicView,
-  typeChartRows, typeChartWords, typeOptions, watchView, type AmazonTiles, type AmazonTopics, type EbayReadState, type EbaySummary,
+  typeChartRows, typeChartWords, typeOptions, watchView, type AmazonTiles, type AmazonTopic, type AmazonTopics, type EbayReadState, type EbaySummary,
   type EbayTiles,
 } from './channelModel'
 
@@ -118,19 +118,28 @@ describe('Amazon', () => {
     expect(notMeasurable.at(-1)?.note).toMatch(/^Not measurable: Amazon gives no review count/)
   })
 
-  const topic = (label: string, mentions: number, impact: number | null, share: number | null = 18) => ({
-    key: `amazon:${label.toLowerCase()}`, label, mentions, impact, share, quote: `“about ${label}”`, market: 'IT', trend: null,
+  const topic = (label: string, mentions: number, impact: number | null, share: number | null = 18, trend: AmazonTopic['trend'] = { state: 'none' }): AmazonTopic => ({
+    key: `amazon:${label.toLowerCase()}`, label, mentions, impact, share, quote: `“about ${label}”`, market: 'IT', trend,
   })
+  const RISING: AmazonTopic['trend'] = { state: 'ok', reads: 1, products: 1, markets: 1, points: [
+    { month: '2026-05', share: 4 }, { month: '2026-06', share: 5 }, { month: '2026-07', share: 5 },
+    { month: '2026-08', share: 6 }, { month: '2026-09', share: 8 }, { month: '2026-10', share: 9 },
+  ] }
   const TOPICS: AmazonTopics = {
     state: 'ok', words: null, where: '…', weekOf: null, productCount: 2,
-    like: [topic('Waterproof', 214, 0.2)], dislike: [topic('Runs small', 88, -0.3, 7), topic('Zip', 41, null, null)],
+    like: [topic('Waterproof', 214, 0.2)], dislike: [topic('Runs small', 88, -0.3, 7, RISING), topic('Zip', 41, null, null, null)],
     products: [{ key: 'p1', name: 'Gloves', like: [], dislike: [topic('Seams', 9, -0.1)] }],
   }
 
-  it('a topic: mentions, share, star effect with its sign; the 6-month trend comes later', () => {
-    expect(topicView(TOPICS.dislike[0])).toMatchObject({ mentions: '88 mentions', share: '7% of reviews', impact: '−0.3 stars', impactTone: 'down', trend: '6-month trend: coming later' })
-    expect(topicView(TOPICS.like[0])).toMatchObject({ impact: '+0.2 stars', impactTone: 'up' })
-    expect(topicView(TOPICS.dislike[1])).toMatchObject({ impact: '—', share: '', impactTone: 'flat' })
+  it("a topic: mentions, share, star effect with its sign, and Amazon's 6-month trend — never “coming later”", () => {
+    expect(topicView(TOPICS.dislike[0])).toMatchObject({
+      mentions: '88 mentions', share: '7% of reviews', impact: '−0.3 stars', impactTone: 'down',
+      trend: { values: [4, 5, 5, 6, 8, 9], from: 'May', to: 'Oct 2026', words: 'Rose from 4% to 9% of reviews over 6 months' },
+    })
+    expect(topicView(TOPICS.like[0])).toMatchObject({ impact: '+0.2 stars', impactTone: 'up', trend: { values: null, words: '6-month trend: Amazon gives none for this topic' } })
+    // An answer from before trends were read (null) says so.
+    expect(topicView(TOPICS.dislike[1])).toMatchObject({ impact: '—', share: '', impactTone: 'flat', trend: { values: null, words: '6-month trend: not read yet — Nexus reads it with the weekly topics' } })
+    for (const t of [...TOPICS.like, ...TOPICS.dislike]) expect(JSON.stringify(topicView(t))).not.toMatch(/coming later/i)
   })
 
   it('the product picker: all products, then each; a product shows its own topics', () => {
