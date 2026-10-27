@@ -717,7 +717,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
         // Walk recent ReviewSentimentCheck rows + ReviewRequest rows for
         // candidate emails. Caps at 1000 to keep latency bounded.
         const candidates = await prisma.order.findMany({
-          where: { customerEmail: { not: null } },
+          where: { customerEmail: { not: '' } },
           select: { customerEmail: true },
           orderBy: { createdAt: 'desc' },
           take: 1000,
@@ -767,7 +767,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
         resolvedEmail = body.email.trim().toLowerCase()
       } else if (body.token) {
         const candidates = await prisma.order.findMany({
-          where: { customerEmail: { not: null } },
+          where: { customerEmail: { not: '' } },
           select: { customerEmail: true },
           orderBy: { createdAt: 'desc' },
           take: 1000,
