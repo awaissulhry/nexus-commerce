@@ -6,11 +6,12 @@
  * Everything outside is mocked: the database is a fake, Amazon's "Request a Review" and our e-mail are spies.
  * Nothing is sent.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const db = vi.hoisted(() => ({
   reviewRequest: { updateMany: vi.fn(async () => ({ count: 0 })), findMany: vi.fn(async () => []), update: vi.fn(async () => ({})) },
   reviewSentimentCheck: { update: vi.fn(async () => ({})) },
+  reviewSendWindow: { findMany: vi.fn(async () => [] as unknown[]) },
 }))
 const spies = vi.hoisted(() => ({
   schedulePendingOrders: vi.fn(async () => ({ examined: 0, scheduled: 0, skipped: 0, errors: 0 })),
@@ -55,6 +56,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   spies.readReviewMailerState.mockResolvedValue({ isPaused: false, pausedReason: null, pausedAt: null, pausedBy: null })
   db.reviewRequest.findMany.mockResolvedValue([])
+  db.reviewSendWindow.findMany.mockResolvedValue([])
 })
 
 describe('runReviewMailerOnce', () => {
@@ -155,5 +157,68 @@ describe('runReviewMailerOnce', () => {
     expect(db.reviewRequest.findMany).not.toHaveBeenCalled()
     expect(spies.sendAmazonSolicitation).not.toHaveBeenCalled()
     expect(spies.sendReviewRequestEmail).not.toHaveBeenCalled()
+  })
+})
+
+// Live audit B05 — many Amazon requests went out between 22:00 and 06:00, every one a retry: the hourly run sent a
+// due row at whatever hour it ran, and "too early" retries were set to now + 24 h (an hour later each day).
+describe('send hours (live audit B05)', () => {
+  // Every day 19:00 Rome (the Timing table), Mon 26 Oct 2026 — Rome is UTC+1.
+  const WINDOWS = [0, 1, 2, 3, 4, 5, 6].map((d) => ({ marketplace: '*', dayOfWeek: d, hourLocal: 19, dayRank: 1, isActive: true }))
+  const at = (iso: string) => vi.setSystemTime(new Date(iso))
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    db.reviewSendWindow.findMany.mockResolvedValue(WINDOWS)
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('the hourly run sends inside the send hours; a request due at night waits for the next send hour', async () => {
+    at('2026-10-26T23:00:00Z') // Tue 00:00 Rome
+    db.reviewRequest.findMany.mockResolvedValue([due('n1', 'AMAZON', 'IT', 8)])
+    const result = await runReviewMailerOnce({ sendHours: true })
+    expect(spies.sendAmazonSolicitation).not.toHaveBeenCalled()
+    expect(db.reviewRequest.update).toHaveBeenCalledWith({ where: { id: 'n1' }, data: { scheduledFor: new Date('2026-10-27T18:00:00Z') } })
+    expect(result).toMatchObject({ sent: 0, waitingForSendHour: 1 })
+
+    vi.clearAllMocks()
+    db.reviewSendWindow.findMany.mockResolvedValue(WINDOWS)
+    at('2026-10-27T18:00:30Z') // Tue 19:00 Rome
+    db.reviewRequest.findMany.mockResolvedValue([due('n1', 'AMAZON', 'IT', 9)])
+    spies.sendAmazonSolicitation.mockResolvedValue({ ok: true, errorCode: 'OK' })
+    expect(await runReviewMailerOnce({ sendHours: true })).toMatchObject({ sent: 1, waitingForSendHour: 0 })
+  })
+
+  it('a person’s run sends what is due at once, whatever the hour', async () => {
+    at('2026-10-26T23:00:00Z')
+    db.reviewRequest.findMany.mockResolvedValue([due('p1', 'AMAZON', 'IT', 8)])
+    spies.sendAmazonSolicitation.mockResolvedValue({ ok: true, errorCode: 'OK' })
+    expect(await runReviewMailerOnce()).toMatchObject({ sent: 1 })
+    expect(await runReviewMailerOnce({ onlyIds: ['p1'] })).toMatchObject({ sent: 1 })
+  })
+
+  it('Amazon’s "too early" is tried again at tomorrow’s send hour, not now + 24 h', async () => {
+    at('2026-10-26T18:00:40Z') // Mon 19:00:40 Rome
+    db.reviewRequest.findMany.mockResolvedValue([due('t1', 'AMAZON', 'IT', 5)])
+    spies.sendAmazonSolicitation.mockResolvedValue({ ok: false, errorCode: 'OUTSIDE_WINDOW', errorMessage: TOO_EARLY })
+    await runReviewMailerOnce({ sendHours: true })
+    const data = db.reviewRequest.update.mock.calls.find(([arg]) => arg.where.id === 't1')![0].data
+    expect(data).toMatchObject({ status: 'SCHEDULED', scheduledFor: new Date('2026-10-27T18:00:00Z') })
+  })
+
+  it('a request whose next send hour would pass Amazon’s last day goes now: the hour never costs a request', async () => {
+    at('2026-10-26T23:00:00Z')
+    // Delivered 29.99 days ago: day 30 ends before tomorrow's 19:00.
+    db.reviewRequest.findMany.mockResolvedValue([due('l1', 'AMAZON', 'IT', 29.99)])
+    spies.sendAmazonSolicitation.mockResolvedValue({ ok: true, errorCode: 'OK' })
+    expect(await runReviewMailerOnce({ sendHours: true })).toMatchObject({ sent: 1, waitingForSendHour: 0 })
+  })
+
+  it('a failed send comes back at the send hour after its back-off, never at night', async () => {
+    at('2026-10-26T18:30:00Z') // Mon 19:30 Rome; +4 h = 23:30 → Tue 19:00
+    db.reviewRequest.findMany.mockResolvedValue([due('f1', 'AMAZON', 'IT', 8)])
+    spies.sendAmazonSolicitation.mockResolvedValue({ ok: false, errorCode: 'HTTP_500', errorMessage: 'Amazon did not answer' })
+    await runReviewMailerOnce({ sendHours: true })
+    const data = db.reviewRequest.update.mock.calls.find(([arg]) => arg.where.id === 'f1')![0].data
+    expect(data).toMatchObject({ status: 'FAILED', nextRetryAt: new Date('2026-10-27T18:00:00Z') })
   })
 })

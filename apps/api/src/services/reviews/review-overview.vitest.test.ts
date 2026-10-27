@@ -9,7 +9,7 @@ import {
   positiveShare, quoteOf, rankWatch, ratingIn, ratingKindOf, sparkValues, sparkWindows, starCounts, starImpact,
   trendBucket, trendPoints, weightedAverage,
 } from './overviewMath.js'
-import { amazonThemes, reviewThemes, scopeCode, topThemes } from './review-overview.service.js'
+import { amazonThemes, overviewTrend, reviewThemes, scopeCode, topThemes } from './review-overview.service.js'
 import { alertItem, parseLimit, parseOnly, rankNeedsYou, replyItem, requestItems, waitWords } from './review-needs-you.service.js'
 
 const NOW = new Date('2026-10-26T12:00:00Z')
@@ -64,6 +64,17 @@ describe('chart buckets', () => {
     const yesterday = points.find(p => p.day === ago(1).toISOString().slice(0, 10))!
     expect(yesterday).toEqual({ day: ago(1).toISOString().slice(0, 10), reviews: 3, avg: 4 })
     expect(points.filter(p => p.reviews === 0).every(p => p.avg === null)).toBe(true)
+  })
+
+  it('the bars count every review (eBay feedback too); the line is product-review stars only', () => {
+    const keys = bucketKeys(ago(6), NOW, 'day')
+    const row = (channel: string, rating: number, ingestSource: string) => ({ id: `${channel}${rating}`, channel, marketplace: 'IT', rating, postedAt: ago(1), productId: null, ingestSource, kind: null, sentiment: null })
+    const points = overviewTrend([row('EBAY', 5, 'EBAY_API'), row('EBAY', 1, 'EBAY_API'), row('SHOPIFY', 4, 'JUDGEME_API')], keys, 'day')
+    expect(points.find(p => p.day === ago(1).toISOString().slice(0, 10))).toEqual({ day: ago(1).toISOString().slice(0, 10), reviews: 3, avg: 4 })
+    // eBay feedback only: the bars still show it, with no star line (never "No reviews" beside the feedback).
+    const ebayOnly = overviewTrend([row('EBAY', 5, 'EBAY_API')], keys, 'day')
+    expect(ebayOnly.reduce((n, p) => n + p.reviews, 0)).toBe(1)
+    expect(ebayOnly.every(p => p.avg === null)).toBe(true)
   })
 })
 

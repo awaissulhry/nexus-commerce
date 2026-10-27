@@ -259,9 +259,13 @@ function Products() {
 
   const pageCount = data && query ? Math.max(1, Math.ceil(data.total.families / query.pageSize)) : 1
   const filtered = !!query && (chips.length > 0)
+  // Live audit C10: at the longest period and every channel the advice to widen it was wrong — say why instead.
+  const widest = !scope?.channel && !scope?.market && scope?.period === '12m'
   const noRows = useMemo(() => (filtered
     ? { title: 'No products match these filters', message: 'Remove a chip, or Clear the filters.' }
-    : { title: 'No product has reviews in this period', message: 'Pick a longer period, or every channel and market.' }), [filtered])
+    : widest
+      ? { title: 'No review is linked to a product yet', message: 'A review shows here once Nexus knows its product: eBay feedback through its listing (linked as Nexus reads eBay), Amazon from reviews you import.' }
+      : { title: 'No product has reviews in this period', message: 'Pick a longer period, or every channel and market.' }), [filtered, widest])
   const subtitle = !scope || read.loading
     ? 'Loading…'
     : data ? `What buyers say about your products · ${data.total.products.toLocaleString('en-IE')} products in ${data.total.families.toLocaleString('en-IE')} ${data.total.families === 1 ? 'family' : 'families'} · ${periodWords(scope.period).label}` : 'What buyers say about your products'

@@ -280,7 +280,7 @@ export function ThemesClient() {
         { label: 'Reviews read', value: tiles.read, hint: tiles.readHint },
         { label: 'Negative share', value: tiles.negative, delta: tiles.negativeDelta ?? undefined, hint: 'reviews with 1 or 2 stars' },
         { label: 'Biggest riser', value: tiles.riser, delta: tiles.riserDelta ?? undefined, hint: tiles.riserHint, accent: data?.summary.biggestRiser ? 'var(--nds-danger)' : undefined },
-        { label: 'Themes', value: tiles.themes, hint: 'and “Other”' },
+        { label: 'Themes', value: tiles.themes, hint: tiles.themes === '0' ? 'no named theme in this period' : 'named themes, not counting “Other”' },
       ]
     : []
   const banner = data && scope ? topicsBanner(data, scope) : null

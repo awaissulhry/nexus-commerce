@@ -4,7 +4,12 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  automaticFeedbackWhere,
   canTakeReply,
+  isAutomaticFeedback,
+  isPositiveReview,
+  noReplyReason,
+  notAutomaticWhere,
   countsInRating,
   FIXTURE_SOURCE,
   needsReplyWhere,
@@ -16,30 +21,60 @@ import {
   visibleReviewWhere,
 } from './review-visibility.js'
 
-type Row = { channel: string; ingestSource: string | null; triageStatus: string | null; rating?: number | null; kind?: string | null; postedAt?: Date; channelEditedAt?: Date | null }
-
-/** A tiny evaluator for the shapes these builders produce (AND / OR / equals / not / in / null), SQL style. */
-function matches(where: any, row: Record<string, unknown>): boolean {
-  if (!where || typeof where !== 'object') return true
-  return Object.entries(where).every(([key, cond]) => {
-    if (key === 'AND') return (cond as any[]).every(c => matches(c, row))
-    if (key === 'OR') return (cond as any[]).some(c => matches(c, row))
-    // SQL's NOT (…): a NULL inside stays unknown, so only a clear "true" inside excludes the row (good enough for these shapes).
-    if (key === 'NOT') return !(Array.isArray(cond) ? cond.some(c => matches(c, row)) : matches(cond, row))
-    const value = row[key] ?? null
-    if (cond === null) return value === null
-    if (typeof cond !== 'object' || cond instanceof Date) return value === cond
-    const c = cond as Record<string, unknown>
-    if ('not' in c) return value !== null && value !== c.not
-    if ('in' in c) return value !== null && (c.in as unknown[]).includes(value)
-    if ('equals' in c) return value === c.equals
-    if ('startsWith' in c) return value !== null && String(value).toUpperCase().startsWith(String(c.startsWith).toUpperCase())
-    if ('lt' in c) return value !== null && (value as Date).getTime() < (c.lt as Date).getTime()
-    throw new Error(`unexpected condition on ${key}`)
-  })
+type Row = {
+  channel: string; ingestSource: string | null; triageStatus: string | null; rating?: number | null; kind?: string | null
+  postedAt?: Date; channelEditedAt?: Date | null; body?: string; sentiment?: { label: string } | null
 }
 
-const row = (patch: Partial<Row>): Row => ({ channel: 'AMAZON', ingestSource: 'AMAZON_VOC', triageStatus: null, ...patch })
+/**
+ * A tiny evaluator for the shapes these builders produce, with SQL's three values: a comparison with NULL is unknown
+ * (null), NOT unknown stays unknown, and a row counts only when the whole where is TRUE — so a `NOT (…)` over a NULL
+ * column drops the row here exactly as PostgreSQL drops it.
+ */
+function ev(where: any, row: Record<string, unknown>): boolean | null {
+  if (!where || typeof where !== 'object') return true
+  const parts = Object.entries(where).map(([key, cond]): boolean | null => {
+    if (key === 'AND') return and((cond as any[]).map(c => ev(c, row)))
+    if (key === 'OR') return or((cond as any[]).map(c => ev(c, row)))
+    if (key === 'NOT') {
+      const inner = Array.isArray(cond) ? or(cond.map(c => ev(c, row))) : ev(cond, row)
+      return inner == null ? null : !inner
+    }
+    const value = row[key] ?? null
+    if (key === 'sentiment') {
+      const is = (cond as { is: unknown }).is
+      if (is === null) return value === null
+      return value === null ? false : ev(is, value as Record<string, unknown>)
+    }
+    if (cond === null) return value === null
+    if (typeof cond !== 'object' || cond instanceof Date) return value === null ? null : value === cond
+    const c = cond as Record<string, unknown>
+    const insensitive = c.mode === 'insensitive'
+    const norm = (v: unknown) => (insensitive && typeof v === 'string' ? v.toLowerCase() : v)
+    if (value === null) return null
+    if ('not' in c) return norm(value) !== norm(c.not)
+    if ('in' in c) return (c.in as unknown[]).includes(value)
+    if ('equals' in c) return norm(value) === norm(c.equals)
+    if ('startsWith' in c) return String(value).toUpperCase().startsWith(String(c.startsWith).toUpperCase())
+    if ('lt' in c) return typeof value === 'number' ? value < (c.lt as number) : (value as Date).getTime() < (c.lt as Date).getTime()
+    if ('gte' in c) return typeof value === 'number' ? value >= (c.gte as number) : (value as Date).getTime() >= (c.gte as Date).getTime()
+    throw new Error(`unexpected condition on ${key}`)
+  })
+  return and(parts)
+}
+function and(values: Array<boolean | null>): boolean | null {
+  if (values.some(v => v === false)) return false
+  return values.some(v => v === null) ? null : true
+}
+function or(values: Array<boolean | null>): boolean | null {
+  if (values.some(v => v === true)) return true
+  return values.some(v => v === null) ? null : false
+}
+const matches = (where: any, row: Record<string, unknown>): boolean => ev(where, row) === true
+
+const row = (patch: Partial<Row>): Row => ({ channel: 'AMAZON', ingestSource: 'AMAZON_VOC', triageStatus: null, rating: null, body: 'Text', sentiment: null, channelEditedAt: null, kind: null, ...patch })
+/** The pure rule's view of a row (the mood is the sentiment's label). */
+const facts = (r: Row) => ({ ...r, mood: r.sentiment?.label ?? null })
 
 describe('visibleReviewWhere', () => {
   it('hides fixture rows and keeps rows with no source', () => {
@@ -96,7 +131,7 @@ describe('needs a reply — ONE rule (Owner 2026-10-27, audit B3/C1)', () => {
   const NOW = new Date('2026-10-27T12:00:00Z')
   const days = (n: number) => new Date(NOW.getTime() - n * 86_400_000)
   const ebay = (patch: Partial<Row> = {}): Row => row({ channel: 'EBAY', ingestSource: 'EBAY_API', kind: null, postedAt: days(1), ...patch })
-  const agree = (r: Row) => expect(matches(needsReplyWhere(NOW), r)).toBe(reviewNeedsReply(r, NOW))
+  const agree = (r: Row) => expect(matches(needsReplyWhere(NOW), r)).toBe(reviewNeedsReply(facts(r), NOW))
 
   it('counts open rows only: no status yet, New or In progress', () => {
     const where = needsReplyWhere(NOW)
@@ -148,9 +183,65 @@ describe('needs a reply — ONE rule (Owner 2026-10-27, audit B3/C1)', () => {
         for (const ingestSource of [null, 'IMPORT_CSV', 'EBAY_API', FIXTURE_SOURCE]) {
           for (const triageStatus of [null, 'NEW', 'RESOLVED']) {
             for (const postedAt of [days(1), days(120)]) {
-              for (const channelEditedAt of [null, days(2), days(110)]) agree({ channel, kind, ingestSource, triageStatus, postedAt, channelEditedAt })
+              for (const channelEditedAt of [null, days(2), days(110)]) agree(row({ channel, kind, ingestSource, triageStatus, postedAt, channelEditedAt }))
             }
           }
+        }
+      }
+    }
+  })
+
+  it('positive reviews and feedback never need a reply: 4–5 stars, eBay positive; with no stars a POSITIVE mood (Owner 2026-10-27)', () => {
+    const where = needsReplyWhere(NOW)
+    expect(matches(where, ebay({ rating: 5, body: 'Venditore serio' }))).toBe(false)
+    expect(matches(where, ebay({ rating: 3, body: 'Buono ma non eccellente' }))).toBe(true)
+    expect(matches(where, ebay({ rating: 1, body: 'Taglia sbagliata' }))).toBe(true)
+    expect(matches(where, row({ channel: 'SHOPIFY', ingestSource: 'JUDGEME_API', rating: 4 }))).toBe(false)
+    expect(matches(where, row({ channel: 'SHOPIFY', ingestSource: 'JUDGEME_API', rating: null, sentiment: { label: 'POSITIVE' } }))).toBe(false)
+    expect(matches(where, row({ channel: 'SHOPIFY', ingestSource: 'JUDGEME_API', rating: null, sentiment: { label: 'NEGATIVE' } }))).toBe(true)
+    // No stars and no mood read yet: it waits (never hidden for a missing reading).
+    expect(matches(where, row({ channel: 'SHOPIFY', ingestSource: 'JUDGEME_API', rating: null, sentiment: null }))).toBe(true)
+    // The stars decide when there are any: a 2-star review the AI read as happy still waits.
+    expect(matches(where, row({ channel: 'SHOPIFY', ingestSource: 'JUDGEME_API', rating: 2, sentiment: { label: 'POSITIVE' } }))).toBe(true)
+    expect(isPositiveReview({ rating: 2, mood: 'POSITIVE' })).toBe(false)
+    expect(isPositiveReview({ rating: null, mood: 'positive' })).toBe(true)
+  })
+
+  it("eBay's automatic feedback never needs a reply, in any letter case or with a full stop; a buyer's own words do", () => {
+    const where = needsReplyWhere(NOW)
+    for (const body of ['Order delivered on time with no issues', 'order delivered on time with no issues.', ' Order delivered on time with no issues ']) {
+      expect(isAutomaticFeedback({ channel: 'EBAY', body })).toBe(true)
+      // Stored neutral or with no rating, it still is eBay's text, not the buyer's.
+      expect(matches(where, ebay({ rating: null, body: body.trim() }))).toBe(false)
+    }
+    expect(isAutomaticFeedback({ channel: 'SHOPIFY', body: 'Order delivered on time with no issues' })).toBe(false)
+    expect(isAutomaticFeedback({ channel: 'EBAY', body: 'Order delivered on time with no issues but the zip broke' })).toBe(false)
+    expect(matches(automaticFeedbackWhere(), ebay({ body: 'ORDER DELIVERED ON TIME WITH NO ISSUES' }))).toBe(true)
+    expect(matches(notAutomaticWhere(), ebay({ body: 'ORDER DELIVERED ON TIME WITH NO ISSUES' }))).toBe(false)
+    expect(matches(notAutomaticWhere(), row({ channel: 'SHOPIFY', body: 'Order delivered on time with no issues' }))).toBe(true)
+  })
+
+  it('says why a row needs no reply, the same rule the where counts', () => {
+    expect(noReplyReason(facts(ebay({ rating: 1 })), NOW)).toBeNull()
+    expect(noReplyReason(facts(ebay({ rating: 5 })), NOW)).toBe('positive')
+    expect(noReplyReason(facts(ebay({ rating: 5, body: 'Order delivered on time with no issues' })), NOW)).toBe('automatic')
+    expect(noReplyReason(facts(ebay({ ingestSource: 'IMPORT_CSV' })), NOW)).toBe('imported')
+    expect(noReplyReason(facts(row({ channel: 'AMAZON', kind: 'PRODUCT' })), NOW)).toBe('no_reply')
+    expect(noReplyReason(facts(row({ channel: 'ETSY', ingestSource: 'ETSY_API', postedAt: days(101) })), NOW)).toBe('window_closed')
+    expect(noReplyReason(facts(ebay({ triageStatus: 'RESOLVED' })), NOW)).toBe('closed')
+  })
+
+  it('a NULL column never drops a row that needs a reply (the where is written NULL-safe)', () => {
+    // An Etsy review with no edit date inside its window, a row with no kind, no rating and no mood: all still count.
+    expect(matches(needsReplyWhere(NOW), row({ channel: 'ETSY', ingestSource: 'ETSY_API', postedAt: days(5), channelEditedAt: null }))).toBe(true)
+    expect(matches(needsReplyWhere(NOW), row({ channel: 'SHOPIFY', ingestSource: null, kind: null, rating: null, sentiment: null, postedAt: days(1) }))).toBe(true)
+  })
+
+  it('the pure rule agrees with the where for ratings, moods and texts too', () => {
+    for (const channel of ['EBAY', 'SHOPIFY', 'AMAZON']) {
+      for (const rating of [null, 1, 3, 4, 5]) {
+        for (const sentiment of [null, { label: 'POSITIVE' }, { label: 'NEGATIVE' }]) {
+          for (const body of ['Order delivered on time with no issues', 'Taglia sbagliata']) agree(row({ channel, kind: channel === 'AMAZON' ? 'SELLER' : null, ingestSource: 'EBAY_API', rating, sentiment, body, postedAt: days(3) }))
         }
       }
     }

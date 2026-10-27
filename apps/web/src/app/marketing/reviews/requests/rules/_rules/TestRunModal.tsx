@@ -79,8 +79,8 @@ export function TestRunModal({ rules, onClose, canManage }: TestRunModalProps) {
       title: `Queue ${matches} ${matches === 1 ? 'order' : 'orders'} for “${rule.name}”?`,
       confirmLabel: `Queue ${matches}`,
       consequences: [
-        `Adds up to ${matches} ${matches === 1 ? 'order' : 'orders'} to the queue, each on its “First try” day (a day already past goes at the next run)`,
-        'Where the rule asks “How was it?”, that email goes first, as for every order the rule decides',
+        `Adds up to ${matches} ${matches === 1 ? 'order' : 'orders'} to the queue, each on its “First try” day (a day already past goes at the next send hour)`,
+        'Where the rule asks “How was it?” and Nexus has the buyer’s e-mail, that email goes first — never on Amazon: Amazon gives Nexus no buyer e-mail',
         'They go out with the sender (every hour), unless sending is paused',
         'Left out: orders that already have a request (one per order) and orders a more specific rule decides',
       ],

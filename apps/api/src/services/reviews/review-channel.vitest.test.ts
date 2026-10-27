@@ -73,6 +73,8 @@ describe('Amazon topics', () => {
     expect(topicsWords('ok', 'IT', s.lastOkAt)).toBeNull()
     expect(topicsState(null, []).state).toBe('none')
     expect(topicsWords('none', null, null)).toMatch(/weekly, per product/)
+    // Never read here, refused elsewhere for the account's missing role: the same role blocks it (live audit B07).
+    expect(topicsWords('none', 'FR', null, ['DE', 'IT'])).toBe('No topics read yet: Amazon refused the read for Germany and Italy because the Selling Partner Insights role is missing — a role of the whole Amazon account, so this market needs it too.')
     expect(mondayOf(new Date('2026-10-26T23:00:00Z')).toISOString().slice(0, 10)).toBe('2026-10-26')
   })
 
@@ -90,6 +92,13 @@ describe('Amazon requests by Amazon’s answer', () => {
       'first_try_waits', 'due_now', 'refunded', 'unhappy_check', 'skipped_by_hand',
     ])).toEqual({ sent: 2, tooEarly: 1, alreadyAsked: 1, notAllowed: 2, failed: 1, skipped: 3, waiting: 2 })
     expect(amazonRequestCounts([])).toEqual({ sent: 0, tooEarly: 0, alreadyAsked: 0, notAllowed: 0, failed: 0, skipped: 0, waiting: 0 })
+  })
+
+  it('a request with no try left is "Failed", as on Requests and the Overview, whatever Amazon said (live audit B01)', () => {
+    expect(amazonRequestCounts([
+      { key: 'amazon_refused', status: 'FAILED' }, { key: 'amazon_no_answer', status: 'FAILED' }, { key: 'amazon_no_answer', status: 'RETRYING' },
+      { key: 'amazon_too_early', status: 'RETRYING' }, { key: 'window_closed', status: 'SKIPPED' },
+    ])).toMatchObject({ failed: 2, waiting: 1, tooEarly: 1, notAllowed: 1 })
   })
 })
 

@@ -17,6 +17,8 @@ export interface QueueRow {
   buyer: string
   channel: string
   market: string | null
+  /** The order line's SKU: the row's label (one kind of label for every row). */
+  sku?: string | null
   product: string | null
   productType: string | null
   deliveredAt: string | null

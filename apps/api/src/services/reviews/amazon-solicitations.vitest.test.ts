@@ -48,6 +48,15 @@ describe('outsideWindowUpdate', () => {
     expect(outsideWindowUpdate(delivered, REFUSED, new Date(delivered.getTime() + 29 * DAY)).status).toBe('SCHEDULED')
   })
 
+  it('the retry goes at tomorrow\'s send hour when given; past the last day the plain "tomorrow" keeps its last try (live audit B05)', () => {
+    const now = new Date(delivered.getTime() + 5.3 * DAY)
+    const sendHour = new Date(delivered.getTime() + 6 * DAY + 7 * 60 * 60 * 1000)
+    expect(outsideWindowUpdate(delivered, REFUSED, now, sendHour)).toMatchObject({ status: 'SCHEDULED', scheduledFor: sendHour })
+    const day29 = new Date(delivered.getTime() + 29 * DAY - 60 * 60 * 1000)
+    const pastLast = new Date(delivered.getTime() + 30 * DAY + 60 * 60 * 1000)
+    expect(outsideWindowUpdate(delivered, REFUSED, day29, pastLast)).toMatchObject({ status: 'SCHEDULED', scheduledFor: new Date(day29.getTime() + DAY) })
+  })
+
   it('day 29.5: tomorrow is past day 30, SKIPPED with the reason', () => {
     const update = outsideWindowUpdate(delivered, REFUSED, new Date(delivered.getTime() + 29.5 * DAY))
     expect(update).toMatchObject({ status: 'SKIPPED', suppressedReason: 'Outside Amazon window: Amazon refused every day until day 30', nextRetryAt: null })

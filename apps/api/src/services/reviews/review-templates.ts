@@ -24,7 +24,7 @@ export const REVIEW_TEMPLATES: ReviewRuleTemplate[] = [
   {
     name: 'Alert team on negative review spike',
     description:
-      'Notifies the operator whenever a negative review spike is detected for any product × marketplace × category combination. Fires on any spike; customize conditions to filter by category or spike multiplier.',
+      'Tells the team when the spike check finds complaints about one theme rising fast for a product in one market. You can narrow it to a theme, or to how fast complaints must rise.',
     trigger: 'REVIEW_SPIKE_DETECTED',
     conditions: [],
     actions: [
@@ -42,7 +42,7 @@ export const REVIEW_TEMPLATES: ReviewRuleTemplate[] = [
   {
     name: 'Auto-update bullets on quality spike',
     description:
-      'When a review spike is detected, uses AI (Claude Haiku) to draft 5 improved product bullet points that address the spike category. Output is stored in the execution log — operator reviews and applies manually. In live mode, also creates an A+ Content DRAFT record.',
+      'When complaints about one theme rise fast, the AI drafts five new bullet points that answer them. A person reads them and applies them; nothing changes on a channel by itself. Out of trial run, it also saves them as an A+ draft in Nexus.',
     trigger: 'REVIEW_SPIKE_DETECTED',
     conditions: [],
     actions: [
@@ -64,7 +64,7 @@ export const REVIEW_TEMPLATES: ReviewRuleTemplate[] = [
   {
     name: 'Create A+ module from review spike',
     description:
-      'When a significant review spike is detected (multiplier ≥ 2.5×), uses AI (Claude Haiku) to draft an A+ content module that proactively addresses the spike category. Stored as an A+ Content DRAFT in live mode. Operators approve before publishing.',
+      'When complaints about one theme rise 2.5 times faster than usual or more, the AI drafts an A+ module that answers them and saves it as an A+ draft in Nexus. A person approves it before anything is published.',
     trigger: 'REVIEW_SPIKE_DETECTED',
     conditions: [
       { field: 'spike.spikeMultiplier', op: 'gte', value: 2.5 },

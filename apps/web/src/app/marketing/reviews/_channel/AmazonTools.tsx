@@ -52,7 +52,11 @@ export function tileMetrics(tiles: readonly TileView[]): Metric[] {
 
 // ── Tools menu ───────────────────────────────────────────────────────
 
-export function AmazonToolsMenu({ lock }: { lock: ReviewsLock }) {
+/**
+ * `sellerFeedbackOn`: whether this setup fetches Amazon's 1–3 star seller feedback (the page's tiles say); while it is
+ * off the removal helper has nothing to check, so it says so instead of opening an empty list (live audit C03).
+ */
+export function AmazonToolsMenu({ lock, sellerFeedbackOn = null }: { lock: ReviewsLock; sellerFeedbackOn?: boolean | null }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const scope = lockParams(lock)
@@ -63,12 +67,19 @@ export function AmazonToolsMenu({ lock }: { lock: ReviewsLock }) {
     // The removal helper: the 1–3 star seller feedback in the Inbox, each with its removal check in the pop-up. Nexus
     // never asks Amazon to remove feedback (no API for it, ruling 5): the helper only checks, the person asks in
     // Feedback Manager.
-    {
-      id: 'removal',
-      label: 'Seller feedback removal helper',
-      description: 'Checks 1–3 star feedback against Amazon’s rules · you ask in Feedback Manager',
-      href: workspaceHref(browserWorkspaceId(), removal),
-    },
+    sellerFeedbackOn === false
+      ? {
+          id: 'removal',
+          label: 'Seller feedback removal helper',
+          description: 'Off in this setup: Nexus does not fetch Amazon’s 1–3 star feedback, so there is nothing to check',
+          disabled: true,
+        }
+      : {
+          id: 'removal',
+          label: 'Seller feedback removal helper',
+          description: 'Checks 1–3 star feedback against Amazon’s rules · you ask in Feedback Manager',
+          href: workspaceHref(browserWorkspaceId(), removal),
+        },
     { id: 'inserts', label: 'Package inserts', description: 'A card for the box, as a PDF · opens in Requests', href: workspaceHref(browserWorkspaceId(), inserts) },
     { id: 'feedback-manager', label: 'Open Feedback Manager', description: `Seller Central, ${where} · opens a new tab`, href: feedbackManagerHref(scope.market), target: '_blank' },
   ]

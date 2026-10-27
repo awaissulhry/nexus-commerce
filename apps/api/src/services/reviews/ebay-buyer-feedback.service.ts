@@ -177,6 +177,22 @@ function marketOf(raw: string | null | undefined): string | null {
   return code === 'GB' ? 'UK' : code
 }
 
+/** The market of each eBay listing, where the listing is on exactly one market (Nexus's own listings). */
+async function listingMarkets(listingIds: readonly string[]): Promise<Map<string, string>> {
+  if (listingIds.length === 0) return new Map()
+  const listings = await prisma.channelListing.findMany({
+    where: { channel: 'EBAY', externalListingId: { in: [...listingIds] } },
+    select: { externalListingId: true, marketplace: true },
+  })
+  const seen = new Map<string, Set<string>>()
+  for (const l of listings) {
+    const m = marketOf(l.marketplace)
+    if (!l.externalListingId || !m) continue
+    seen.set(l.externalListingId, (seen.get(l.externalListingId) ?? new Set()).add(m))
+  }
+  return new Map([...seen.entries()].filter(([, ms]) => ms.size === 1).map(([id, ms]) => [id, [...ms][0]]))
+}
+
 /** Whether Nexus reads eBay in this setup; when it does not, the list does not update. */
 const readsEbay = () => process.env.NEXUS_EBAY_REAL_API === 'true'
 
@@ -207,11 +223,15 @@ export async function listEbayBuyerFeedback(input: { market?: unknown; now?: Dat
   ])
   const orderById = new Map(orders.map((o) => [o.id, o]))
   const openReturn = new Set(returns.map((r) => r.orderId).filter((id): id is string => !!id))
+  // A sale Nexus could not match to an order takes its listing's market (live audit B09: two Italian sales counted under
+  // "eBay (whole account)", so eBay Italy said "0 buyers to rate" while all markets said 2).
+  const unmatched = [...new Set(rows.filter((r) => !marketOf(r.orderId ? orderById.get(r.orderId)?.marketplace : null)).map((r) => r.listingId).filter((id): id is string => !!id))]
+  const listingMarket = await listingMarkets(unmatched)
 
   const out: BuyerFeedbackRow[] = []
   for (const r of rows) {
     const order = r.orderId ? orderById.get(r.orderId) : undefined
-    const rowMarket = marketOf(order?.marketplace)
+    const rowMarket = marketOf(order?.marketplace) ?? (r.listingId ? listingMarket.get(r.listingId) ?? null : null)
     if (market && rowMarket !== market) continue
     const soldAt = order ? order.purchaseDate ?? order.createdAt : null
     const state = (r.state === 'LEFT' || r.state === 'GONE' ? r.state : 'AWAITING') as BuyerFeedbackRow['state']

@@ -78,8 +78,15 @@ export function mondayOf(at: Date): Date {
   return d
 }
 
+const MARKET_NAMES: Record<string, string> = { UK: 'the UK', DE: 'Germany', FR: 'France', IT: 'Italy', ES: 'Spain' }
+
+function listMarkets(codes: readonly string[]): string {
+  const names = [...new Set(codes.map((c) => MARKET_NAMES[c.toUpperCase()] ?? c.toUpperCase()))]
+  return names.length <= 1 ? names[0] ?? '' : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
 /** Words for a topics state (null when topics show). */
-export function topicsWords(state: TopicsState, market: string | null, lastOkAt: Date | null): string | null {
+export function topicsWords(state: TopicsState, market: string | null, lastOkAt: Date | null, refusedElsewhere: readonly string[] = []): string | null {
   switch (state) {
     case 'ok': return null
     case 'not_on_market':
@@ -89,6 +96,11 @@ export function topicsWords(state: TopicsState, market: string | null, lastOkAt:
     case 'role_missing':
       return `Amazon refused this week's read: Nexus needs the Selling Partner Insights role. ${lastOkAt ? 'The topics below are from the last read that worked.' : 'No topics show until the account owner adds the role in Seller Central and connects Amazon again.'}`
     case 'none':
+      // Live audit B07: the role belongs to the Amazon account, not to one market — a market never read while another
+      // was refused for it is blocked by the same missing role.
+      if (refusedElsewhere.length > 0) {
+        return `No topics read yet: Amazon refused the read for ${listMarkets(refusedElsewhere)} because the Selling Partner Insights role is missing — a role of the whole Amazon account, so this market needs it too.`
+      }
       return 'No topics read yet. Amazon updates them weekly, per product, once a product has enough reviews.'
   }
 }
@@ -102,9 +114,12 @@ export interface AmazonRequestCounts {
   tooEarly: number
   /** Asked before for this order (from Seller Central or by Nexus). */
   alreadyAsked: number
-  /** Amazon said no, or Amazon's day 30 passed. */
+  /** Amazon's day 30 passed (or, counted by reason alone, Amazon said no). */
   notAllowed: number
-  /** Amazon did not answer. */
+  /**
+   * No try left — Amazon refused or did not answer: the same requests as the Requests page's Failed tile and the
+   * Overview's "N failed" (live audit B01: the Amazon page called them "Not allowed").
+   */
   failed: number
   /** Left out by a rule, the "How was it?" check or a person. */
   skipped: number
@@ -124,10 +139,18 @@ const REQUEST_BUCKET: Partial<Record<ReasonKey, keyof AmazonRequestCounts>> = {
   check_sent: 'waiting',
 }
 
-/** Requests by Amazon's answer: each row's reason (review-queue-words.ts `reasonKeyOf`) into one of the buckets. */
-export function amazonRequestCounts(reasons: readonly ReasonKey[]): AmazonRequestCounts {
+/**
+ * Requests by Amazon's answer: each row's reason (review-queue-words.ts `reasonKeyOf`) into one of the buckets. With the
+ * row's queue status, a request with no try left is "Failed" whatever Amazon said — as on the Requests page and the
+ * Overview — and one that tries again on its own is waiting.
+ */
+export function amazonRequestCounts(rows: ReadonlyArray<ReasonKey | { key: ReasonKey; status: string }>): AmazonRequestCounts {
   const out: AmazonRequestCounts = { sent: 0, tooEarly: 0, alreadyAsked: 0, notAllowed: 0, failed: 0, skipped: 0, waiting: 0 }
-  for (const key of reasons) out[REQUEST_BUCKET[key] ?? 'skipped'] += 1
+  for (const row of rows) {
+    const { key, status } = typeof row === 'string' ? { key: row, status: null } : row
+    const bucket = status === 'FAILED' ? 'failed' : status === 'RETRYING' && key !== 'amazon_too_early' ? 'waiting' : REQUEST_BUCKET[key] ?? 'skipped'
+    out[bucket] += 1
+  }
   return out
 }
 

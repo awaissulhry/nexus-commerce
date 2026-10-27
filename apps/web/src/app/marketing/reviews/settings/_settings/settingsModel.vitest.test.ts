@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  addressProblem, automationLastRun, canRemove, loadTemplatesButton, maskEmail, pipelineSummary, removePlan, removedWords, sectionFlag,
+  addressProblem, automationLastRun, automationWords, canRemove, everyLocal, loadTemplatesButton, maskEmail, pipelineSummary, removePlan, removedWords, sectionFlag,
   sectionFromSearch, sourceActionHref, sourceLaterHeld, suppressionScope, suppressionWhy, suppressionsCsv, templateLanguagesWords, timeWords,
   visibleSuppressions, type PipelineJob, type SuppressionRow,
 } from './settingsModel'
@@ -125,3 +125,21 @@ describe('the unsubscribe list', () => {
     expect(addressProblem(' a@b.it ')).toBeNull()
   })
 })
+
+describe('plain words (live audit D05, D12)', () => {
+  it("a job's schedule in the viewer's time, like its last and next run", () => {
+    const winter = new Date('2026-11-02T12:00:00Z')
+    expect(everyLocal('Daily 03:30 UTC', winter, 'Europe/Rome')).toBe('Daily 04:30')
+    expect(everyLocal('Mondays 06:00 UTC', winter, 'Europe/Rome')).toBe('Mondays 07:00')
+    expect(everyLocal('Every 30 min', winter, 'Europe/Rome')).toBe('Every 30 min')
+  })
+
+  it('what an automation does, without model names or system words', () => {
+    for (const name of ['Alert team on negative review spike', 'Auto-update bullets on quality spike', 'Create A+ module from review spike']) {
+      expect(automationWords({ name, description: 'uses AI (Claude Haiku) … execution log … A+ Content DRAFT in live mode' })).not.toMatch(/Claude|Haiku|execution log|DRAFT|live mode|×/)
+    }
+    expect(automationWords({ name: 'My own rule', description: 'Does my thing' })).toBe('Does my thing')
+    expect(automationWords({ name: 'My own rule', description: null })).toBe('—')
+  })
+})
+

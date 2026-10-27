@@ -533,7 +533,8 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const channel = b.scope === 'EBAY' ? 'EBAY' : b.scope === 'SHOPIFY' ? 'SHOPIFY' : 'AMAZON'
     const marketplace = b.marketplace ?? 'IT'
-    const productType = b.productType ?? 'casco'
+    // The rule's own product type; none = an order of any type (live audit D03: an Italian "casco" stood in before).
+    const productType: string | null = typeof b.productType === 'string' && b.productType.trim() ? b.productType.trim() : null
     const r = resolveSendTiming(
       { channel, marketplace, deliveredAt: now, shippedAt: now, purchaseDate: now, productType },
       previewRule,

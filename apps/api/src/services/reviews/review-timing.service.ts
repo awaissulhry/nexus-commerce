@@ -68,6 +68,77 @@ export function windowHourFor(marketplace: string | null | undefined, weekday: n
   return global ? global.hourLocal : null
 }
 
+// ── Send hours: WHEN a due request may go out (live audit B05) ──
+//
+// Every first try is pinned to its send hour (below), but the hourly sender sent a due row at whatever hour it ran:
+// Amazon's "too early" retries were set to now + 24 h, and because a row due at 19:00:00.4 is only picked at the next
+// hourly run, each daily retry slid about an hour later — through the evening into the night (many sent between
+// 22:00 and 06:00, every one a retry). Failed sends also came back 4, 8 and 16 hours later at any hour. So the
+// scheduled run sends a request only inside its send hours, and every retry is planned for the next send hour. This
+// changes WHEN a request goes out, never WHETHER: a request whose next send hour would pass Amazon's last day goes now.
+
+/** A request may go out from its day's send hour for this many hours. */
+export const SEND_BAND_HOURS = 3
+/** On a day with no send hour of its own, a request may go out from this local hour … */
+export const DAY_FROM_HOUR = 8
+/** … until this one; the night (22:00–06:00) is never a send hour unless a rule names one. */
+export const NIGHT_FROM_HOUR = 22
+
+/** What decides a request's send hours: its market, its rule's fixed hour, the Timing table. */
+export interface SendHourContext {
+  marketplace: string | null | undefined
+  /** The rule's fixed send hour (`ReviewRule.sendHourLocal`), which beats the Timing table. */
+  ruleHour?: number | null
+  windows: SendWindowRow[]
+}
+
+/** Whether any send hour applies at all: without one (no rule hour, no Timing row) nothing is held, as before. */
+export function hasSendHours(ctx: SendHourContext): boolean {
+  if (ctx.ruleHour != null) return true
+  const code = (ctx.marketplace || '').toUpperCase()
+  return ctx.windows.some((w) => w.isActive && (w.marketplace === '*' || (!!code && w.marketplace.toUpperCase() === code)))
+}
+
+/** [from, to) local hours a request may go out on a weekday. Pure. */
+export function sendBandFor(weekday: number, ctx: SendHourContext): { from: number; to: number } {
+  const hour = ctx.ruleHour ?? windowHourFor(ctx.marketplace, weekday, ctx.windows)
+  if (hour == null) return { from: DAY_FROM_HOUR, to: NIGHT_FROM_HOUR }
+  return { from: hour, to: Math.min(hour + SEND_BAND_HOURS, hour < NIGHT_FROM_HOUR ? NIGHT_FROM_HOUR : 24) }
+}
+
+/** Whether `at` is inside its local day's send hours (always, when no send hour applies). Pure. */
+export function inSendHours(at: Date, ctx: SendHourContext): boolean {
+  if (!hasSendHours(ctx)) return true
+  const tz = timezoneForMarketplace(ctx.marketplace)
+  const z = zoneParts(at, tz)
+  const band = sendBandFor(DOW[z.weekday as keyof typeof DOW] ?? 0, ctx)
+  return z.hour >= band.from && z.hour < band.to
+}
+
+/** The first moment at or after `from` inside send hours: `from` itself when it already is (or no send hour applies). Pure. */
+export function nextSendSlot(from: Date, ctx: SendHourContext): Date {
+  if (inSendHours(from, ctx)) return from
+  const tz = timezoneForMarketplace(ctx.marketplace)
+  const z = zoneParts(from, tz)
+  for (let d = 0; d <= 7; d++) {
+    // Noon of the local day d days on (noon: a daylight-saving change never moves it to another day).
+    const noon = zonedDateTime(z.y, z.m - 1, z.d + d, 12, tz)
+    const day = zoneParts(noon, tz)
+    const band = sendBandFor(DOW[day.weekday as keyof typeof DOW] ?? 0, ctx)
+    const start = zonedDateTime(day.y, day.m - 1, day.d, band.from, tz)
+    if (start.getTime() >= from.getTime()) return start
+  }
+  return from
+}
+
+/** The send hour of the next local day (a daily retry): tomorrow's band start; now + 24 h when no send hour applies. Pure. */
+export function nextDaySendSlot(now: Date, ctx: SendHourContext): Date {
+  if (!hasSendHours(ctx)) return new Date(now.getTime() + DAY)
+  const tz = timezoneForMarketplace(ctx.marketplace)
+  const z = zoneParts(now, tz)
+  return nextSendSlot(zonedDateTime(z.y, z.m - 1, z.d + 1, 0, tz), ctx)
+}
+
 /** Weekday → effective dayRank (lower = better); a per-market row beats the global '*'. */
 export function rankByWeekday(marketplace: string | null | undefined, windows: SendWindowRow[]): Map<number, number> {
   const code = (marketplace || '').toUpperCase()
@@ -213,6 +284,15 @@ export function resolveSendTiming(
   if (sendHour != null) {
     const z = zoneParts(scheduled, tz)
     scheduled = zonedDateTime(z.y, z.m - 1, z.d, sendHour, tz)
+    // The send hour on Amazon's first day can fall before the legal minimum (delivered at 21:00, sent at 19:00): then
+    // the send hour of the next day, not the minimum's own time of day — which put first tries at night (live audit
+    // B05). Inside the window only; legality still beats the hour nicety.
+    if (order.channel === 'AMAZON' && order.deliveredAt && scheduled.getTime() < order.deliveredAt.getTime() + AMAZON_MIN_DAYS * DAY) {
+      const next = zoneParts(new Date(scheduled.getTime() + DAY), tz)
+      const nextHour = rule?.sendHourLocal ?? windowHourFor(order.marketplace, DOW[next.weekday as keyof typeof DOW] ?? 0, sendWindows) ?? sendHour
+      const candidate = zonedDateTime(next.y, next.m - 1, next.d, nextHour, tz)
+      if (amazonClamp(candidate).getTime() === candidate.getTime()) scheduled = candidate
+    }
     // legality re-assert: an earlier hour on the min day (or later on the max day)
     // must not cross Amazon's window — legality beats the hour nicety here.
     scheduled = amazonClamp(scheduled)

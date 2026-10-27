@@ -44,7 +44,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { reviewsSend } from '../../_lib/reviewsFetch'
-import { channelMarketWords } from '../../_lib/reviewWords'
+import { channelMarketWords, productTypeWords } from '../../_lib/reviewWords'
 import { reviewsCrumbs } from '../../_shell/reviews-crumbs'
 import { ReviewsMenuButton } from '../../_shell/ReviewsShell'
 import { useGridCustomise } from '../gridCustomise'
@@ -281,7 +281,7 @@ function Queue() {
         key: 'rule', label: 'Rule', kind: 'select', value: q.rule ?? '', onChange: (v) => setFilter('rule', v),
         options: [ALL, ...(facets?.rules ?? []).map((r) => ({ value: r.id, label: `${r.name}${r.isActive ? '' : ' (off)'}` })), { value: 'none', label: 'No rule (default timing)' }],
       },
-      { key: 'productType', label: 'Product type', kind: 'select', value: q.productType ?? '', onChange: (v) => setFilter('productType', v), options: [ALL, ...(facets?.productTypes ?? []).map((t) => ({ value: t, label: t }))] },
+      { key: 'productType', label: 'Product type', kind: 'select', value: q.productType ?? '', onChange: (v) => setFilter('productType', v), options: [ALL, ...(facets?.productTypes ?? []).map((t) => ({ value: t, label: productTypeWords(t) || t }))] },
       { key: 'reason', label: 'Reason', kind: 'select', value: q.reason ?? '', onChange: (v) => setFilter('reason', v), options: [ALL, ...(facets?.reasons ?? []).map((r) => ({ value: r.key, label: r.words }))] },
     ]
   }, [query, facets, setFilter])

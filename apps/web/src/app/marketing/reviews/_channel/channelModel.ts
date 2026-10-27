@@ -11,6 +11,7 @@
  */
 import { channelSiteDomain, reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import { inboxHref, insightsHref, needsReplyHref, requestsHref } from '../_lib/reviewsLinks'
+import { NOT_MEASURABLE, rateNotMeasurable } from '../_lib/reviewWords'
 import type { InboxRow } from '../inbox/inboxDatasource'
 import type { BuyersToRate, EbayRevisions, EbayTopics } from './ebayToolsModel'
 import { channelPath, lockParams, marketWord, scopeTitleWords, type ReviewsChannel, type ReviewsLock } from './reviewsScope'
@@ -356,7 +357,7 @@ export function amazonTiles(t: AmazonTiles, lock: ReviewsLock, period: ChannelPe
     {
       key: 'rate',
       label: 'Review rate',
-      value: percent(t.reviewRate),
+      value: rateNotMeasurable(t.reviewRate, t.rateWords) ? NOT_MEASURABLE : percent(t.reviewRate),
       hint: t.rateWords ?? (t.reviewRate == null ? 'nothing sent in this period' : 'estimate, from imported reviews'),
       href: links.requests(),
     },
@@ -422,14 +423,15 @@ export function requestRows(r: AmazonRequests): RequestRow[] {
     { key: 'sent', label: 'Sent — Amazon accepted', value: count(r.sent), note: 'Amazon sends its own email, in the buyer’s language', tone: 'success' },
     { key: 'early', label: 'Too early — tried again daily', value: count(r.tooEarly), note: 'Amazon’s 5–30 day window has not opened yet; stops at day 30', tone: 'warning' },
     { key: 'asked', label: 'Already asked', value: count(r.alreadyAsked), note: 'Asked before, from Seller Central or by Nexus — one request per order', tone: 'neutral' },
-    { key: 'refused', label: 'Not allowed', value: count(r.notAllowed), note: 'Amazon said no, or Amazon’s day 30 passed', tone: 'neutral' },
-    { key: 'failed', label: 'Failed', value: count(r.failed), note: 'Amazon did not answer; Nexus tries again', tone: 'danger' },
+    { key: 'refused', label: 'Not allowed', value: count(r.notAllowed), note: 'Amazon’s day 30 passed — too late to ask', tone: 'neutral' },
+    // The same requests as Requests › Failed and the Overview's "failed" (live audit B01).
+    { key: 'failed', label: 'Failed', value: count(r.failed), note: 'No try left: Amazon refused or did not answer — Requests says which', tone: 'danger' },
     { key: 'skipped', label: 'Skipped', value: count(r.skipped), note: 'Left out by a rule or a person (refunded, returned, cancelled …)', tone: 'neutral' },
-    { key: 'waiting', label: 'Waiting', value: count(r.waiting), note: 'Waiting for the first try', tone: 'info' },
+    { key: 'waiting', label: 'Waiting', value: count(r.waiting), note: 'Waiting for the first try, or for Nexus to try again', tone: 'info' },
     {
       key: 'rate',
       label: 'Review rate',
-      value: percent(r.reviewRate),
+      value: rateNotMeasurable(r.reviewRate, r.rateWords) ? NOT_MEASURABLE : percent(r.reviewRate),
       note: r.rateWords ?? (r.reviewRate == null ? 'Nothing sent in this period' : 'Reviews that followed ÷ requests sent · an estimate: Amazon gives no review count'),
       tone: 'info',
     },

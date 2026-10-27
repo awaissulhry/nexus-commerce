@@ -60,6 +60,8 @@ interface RawReview {
   rawPayload?: unknown
   /** Reviews Inbox — the Nexus Order this review is about, when the source names it (eBay feedback). */
   orderId?: string
+  /** The Nexus product it is about, when the source can tell (eBay feedback: its listing's product; adapters/types.ts). */
+  productId?: string
   /** Reviews eBay REST (PR G) — photos, eBay's AI topics, eBay's state of the feedback (see adapters/types.ts). */
   media?: AdapterRawReview['media']
   channelTopics?: AdapterRawReview['channelTopics']
@@ -107,7 +109,7 @@ async function loadFixtures(marketplace?: string): Promise<RawReview[]> {
 
 
 const EXISTING_SELECT = {
-  id: true, orderId: true, marketplace: true, channelTopics: true, feedbackState: true, revisionEligible: true,
+  id: true, orderId: true, productId: true, marketplace: true, channelTopics: true, feedbackState: true, revisionEligible: true,
   media: { select: { url: true, type: true, position: true }, orderBy: { position: 'asc' } },
 } satisfies Prisma.ReviewSelect
 type ExistingReview = Prisma.ReviewGetPayload<{ select: typeof EXISTING_SELECT }>
@@ -158,6 +160,9 @@ async function refreshExisting(existing: ExistingReview, raw: RawReview, now: Da
   const data: Prisma.ReviewUpdateInput = {}
   // Reviews Inbox — a row stored before its order was known gets the order link on the next read.
   if (raw.orderId && !existing.orderId) data.orderId = raw.orderId
+  // A row stored before its product was known gets it on the next read (live audit B13); a product a person or an
+  // earlier read set is never replaced.
+  if (raw.productId && !existing.productId) data.product = { connect: { id: raw.productId } }
   if (raw.orderId && raw.marketplace && raw.marketplace !== existing.marketplace) data.marketplace = raw.marketplace
   if (raw.channelTopics !== undefined && JSON.stringify(raw.channelTopics) !== JSON.stringify(existing.channelTopics ?? null)) {
     data.channelTopics = raw.channelTopics as unknown as Prisma.InputJsonValue
@@ -185,7 +190,7 @@ async function findOrCreateReview(
     await refreshExisting(existing, raw, now)
     return { id: existing.id, isNew: false }
   }
-  // Resolve productId via ASIN or SKU when possible.
+  // Resolve productId via ASIN or SKU when possible, else the product the source named (eBay: the listing's).
   let productId: string | null = null
   if (raw.asin) {
     const p = await prisma.product.findFirst({
@@ -201,6 +206,7 @@ async function findOrCreateReview(
     })
     productId = p?.id ?? null
   }
+  if (!productId && raw.productId) productId = raw.productId
   const row = await prisma.review.create({
     data: {
       channel: raw.channel,

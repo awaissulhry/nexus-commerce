@@ -328,7 +328,13 @@ function Timing() {
                     )
                   })}
                 </ul>
-                <p className={s.muted}>Rank decides where “Shift to the best day” moves a try (1 = best). A rule with a fixed send hour ignores this table.</p>
+                <p className={s.muted}>Rank decides where “Shift to the best day” moves a try (1 = best; two days with the same rank are a tie). Ranks are set here, by hand — no review data ranks the days. A rule with a fixed send hour ignores this table.</p>
+                <p className={s.muted}>
+                  A request goes out at its day’s send hour or in the 3 hours after it (on a day that is off: between 08:00 and 22:00). One that falls
+                  due at another time — a try again after “too early”, a failed send, a late delivery date — waits for the next send hour, never past
+                  Amazon’s day 30. “Send now” and “Run now” send at once. Before this rule, tries again could go out at any hour: past sends at night
+                  show under Conversion by send time.
+                </p>
               </>
             )}
           </div>

@@ -42,6 +42,7 @@ import {
 import { sendSentimentCheckEmail, resolveLocaleForMarketplace } from '../services/reviews/sentiment-check-email.service.js'
 import { readReviewMailerState } from '../services/reviews/review-mailer-state.service.js'
 import { EBAY_ASKS_CODE, EBAY_ASKS_WORDS, MAX_TRIES, RETRY_BACKOFF_HOURS } from '../services/reviews/review-queue-words.js'
+import { nextDaySendSlot, nextSendSlot, type SendHourContext, type SendWindowRow } from '../services/reviews/review-timing.service.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -56,10 +57,25 @@ let lastSummary: string | null = null
 //   attempt 3 → terminal: row stays FAILED, no nextRetryAt
 const MAX_RETRIES = MAX_TRIES
 const BACKOFF_HOURS = RETRY_BACKOFF_HOURS
-function backoffNextRetryAt(attemptCount: number): Date | null {
+function backoffNextRetryAt(attemptCount: number, sendHours?: { ctx: SendHourContext; latest: Date | null }): Date | null {
   if (attemptCount >= MAX_RETRIES) return null
   const hours = BACKOFF_HOURS[attemptCount] ?? 24
-  return new Date(Date.now() + hours * 60 * 60 * 1000)
+  const plain = new Date(Date.now() + hours * 60 * 60 * 1000)
+  if (!sendHours) return plain
+  // Live audit B05: the retry waits for the send hour after its back-off (never a night), unless that passes the
+  // request's last day — then the plain back-off keeps its try.
+  const slot = nextSendSlot(plain, sendHours.ctx)
+  return !sendHours.latest || slot <= sendHours.latest ? slot : plain
+}
+
+/** The business's Timing table (active rows), read once per run; none = no send hour holds anything. */
+async function readSendWindows(): Promise<SendWindowRow[]> {
+  try {
+    return await prisma.reviewSendWindow.findMany({ where: { isActive: true }, select: { marketplace: true, dayOfWeek: true, hourLocal: true, dayRank: true, isActive: true } })
+  } catch (err) {
+    logger.warn('[review-mailer] send hours could not be read (nothing held for the hour)', { error: err instanceof Error ? err.message : String(err) })
+    return []
+  }
 }
 
 /** What a run did with the requests of one channel or one market. `tooEarly` stay queued (Amazon's day 5 not reached). */
@@ -82,9 +98,17 @@ export interface MailerTickResult {
   byChannel: Record<string, MailerOutcome>
   /** Per channel and market ('AMAZON:IT', 'EBAY:DE', 'SHOPIFY:'). */
   byMarket: Record<string, MailerOutcome>
+  /** Due outside their send hours: moved to the next send hour (the hourly run only). */
+  waitingForSendHour?: number
 }
 
 export interface MailerRunOptions {
+  /**
+   * The hourly run: a due request goes out only inside its send hours (the rule's fixed hour, else Timing's hour for
+   * that weekday, and the 3 hours after it); one due at another time waits for the next send hour (live audit B05).
+   * A person's run ("Run now", "Send now", the order page, Claude) sends what is due at once.
+   */
+  sendHours?: boolean
   /**
    * Only these requests (the Requests page's "Send now", which first makes them due). The run then neither sweeps
    * delivery dates, nor schedules new orders, nor brings other failed requests back: it sends these, if due.
@@ -206,12 +230,14 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
       // its response before firing Solicitations / writing emails.
       sentimentCheck: true,
       // RX.6 — the rule's no-response fallback preference.
-      rule: { select: { fallbackOnNoResponse: true } },
+      rule: { select: { fallbackOnNoResponse: true, sendHourLocal: true } },
     },
     take: 200,
   })
 
-  let sent = 0, failed = 0, skipped = 0, tooEarly = 0
+  let sent = 0, failed = 0, skipped = 0, tooEarly = 0, waitingForSendHour = 0
+  const windows = due.length > 0 ? await readSendWindows() : []
+  const DAY_MS = 24 * 60 * 60 * 1000
   let sentimentEmailsSent = 0
   // The business's own shop review page, read once per run when a Shopify buyer is e-mailed (review-links.service.ts).
   let shopPage: ShopReviewPage | null = null
@@ -224,6 +250,10 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
     const order = req.order
     const attemptCount = req.attemptCount + 1
     const sentimentCheck = req.sentimentCheck
+    const hourCtx: SendHourContext = { marketplace: order.marketplace, ruleHour: req.rule?.sendHourLocal ?? null, windows }
+    // Amazon's last day (our day 30): no send hour may push a request past it.
+    const latest = order.channel === 'AMAZON' && order.deliveredAt ? new Date(order.deliveredAt.getTime() + AMAZON_SOLICITATION_MAX_DAYS * DAY_MS) : null
+    const retryHours = { ctx: hourCtx, latest }
 
     // Nexus e-mails no eBay buyer (Owner, 2026-10-27): eBay asks them for feedback itself. A request queued before that
     // (or one put back by hand) ends not asked here, before any e-mail — the "How was it?" check included.
@@ -235,6 +265,18 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
       skipped += 1
       tally(order, 'skipped')
       continue
+    }
+
+    // Live audit B05 — the hourly run sends only inside the request's send hours; a request due at another time (a
+    // retry, a late catch-up) waits for the next one. Never past Amazon's last day: then it goes now.
+    if (opts.sendHours) {
+      const now = new Date()
+      const slot = nextSendSlot(now, hourCtx)
+      if (slot.getTime() > now.getTime() && (!latest || slot <= latest)) {
+        await prisma.reviewRequest.update({ where: { id: req.id }, data: { scheduledFor: slot } })
+        waitingForSendHour += 1
+        continue
+      }
     }
 
     // RV.6.4 — sentiment diversion branch. Fires BEFORE any Solicitations
@@ -316,7 +358,7 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
               continue
             } else {
               // Sentiment email failed → retry on backoff like any other send.
-              const nextRetryAt = backoffNextRetryAt(attemptCount)
+              const nextRetryAt = backoffNextRetryAt(attemptCount, retryHours)
               await prisma.reviewRequest.update({
                 where: { id: req.id },
                 data: {
@@ -362,10 +404,12 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
           ? (Date.now() - order.deliveredAt.getTime()) / (24 * 60 * 60 * 1000)
           : Infinity
         if (daysSinceDelivery < AMAZON_SOLICITATION_MIN_DAYS) {
-          // Too early (the delivery date moved later): wait for day 4.
+          // Too early (the delivery date moved later): wait for day 4 — at its send hour (live audit B05).
+          const day4 = new Date(order.deliveredAt!.getTime() + AMAZON_SOLICITATION_MIN_DAYS * DAY_MS)
+          const at = nextSendSlot(day4, hourCtx)
           await prisma.reviewRequest.update({
             where: { id: req.id },
-            data: { scheduledFor: new Date(order.deliveredAt!.getTime() + AMAZON_SOLICITATION_MIN_DAYS * 24 * 60 * 60 * 1000) },
+            data: { scheduledFor: latest && at > latest ? day4 : at },
           })
           skipped += 1 // stays SCHEDULED
           tooEarly += 1
@@ -410,7 +454,7 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
           tally(order, 'sent')
         } else if (result.errorCode === 'OUTSIDE_WINDOW') {
           // Amazon's delivery date can be later than ours: tomorrow again, until our day 30.
-          const update = outsideWindowUpdate(order.deliveredAt!, result.errorMessage)
+          const update = outsideWindowUpdate(order.deliveredAt!, result.errorMessage, new Date(), nextDaySendSlot(new Date(), hourCtx))
           await prisma.reviewRequest.update({
             where: { id: req.id },
             data: update,
@@ -438,7 +482,7 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
           tally(order, 'skipped')
         } else {
           // Genuine failure → schedule a retry if we haven't exhausted attempts.
-          const nextRetryAt = backoffNextRetryAt(attemptCount)
+          const nextRetryAt = backoffNextRetryAt(attemptCount, retryHours)
           await prisma.reviewRequest.update({
             where: { id: req.id },
             data: {
@@ -518,7 +562,7 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
           skipped += 1
           tally(order, 'skipped')
         } else {
-          const nextRetryAt = backoffNextRetryAt(attemptCount)
+          const nextRetryAt = backoffNextRetryAt(attemptCount, retryHours)
           await prisma.reviewRequest.update({
             where: { id: req.id },
             data: {
@@ -573,14 +617,15 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
   const durationMs = Date.now() - startedAt
   lastRunAt = new Date()
   const retried = retriedRows.count
-  lastSummary = `deliverySwept=${deliverySwept} scheduled=${scheduleResult.scheduled} retried=${retried} due=${due.length} sent=${sent} sentimentEmails=${sentimentEmailsSent} failed=${failed} skipped=${skipped} tooEarly=${tooEarly}${onlyIds ? ` only=${onlyIds.length}` : ''} durationMs=${durationMs}${pipelineWarn}`
-  return { deliverySwept, scheduled: scheduleResult.scheduled, retried, due: due.length, sent, sentimentEmails: sentimentEmailsSent, failed, skipped, tooEarly, durationMs, byChannel, byMarket }
+  lastSummary = `deliverySwept=${deliverySwept} scheduled=${scheduleResult.scheduled} retried=${retried} due=${due.length} sent=${sent} sentimentEmails=${sentimentEmailsSent} failed=${failed} skipped=${skipped} tooEarly=${tooEarly} waitingForSendHour=${waitingForSendHour}${onlyIds ? ` only=${onlyIds.length}` : ''} durationMs=${durationMs}${pipelineWarn}`
+  return { deliverySwept, scheduled: scheduleResult.scheduled, retried, due: due.length, sent, sentimentEmails: sentimentEmailsSent, failed, skipped, tooEarly, durationMs, byChannel, byMarket, waitingForSendHour }
 }
 
 export async function runReviewMailerCron(): Promise<void> {
   try {
     await recordCronRun('review-request-mailer', async () => {
-      const result = await runReviewMailerOnce()
+      // The hourly run keeps to the send hours (live audit B05).
+      const result = await runReviewMailerOnce({ sendHours: true })
       logger.info('review-request-mailer cron: completed', { result })
       return lastSummary ?? 'no-summary'
     })

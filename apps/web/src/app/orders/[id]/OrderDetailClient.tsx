@@ -186,6 +186,15 @@ export default function OrderDetailClient({ id }: { id: string }) {
 
   const addr = order.shippingAddress ?? {}
   const lastReview = order.reviewRequests?.[0]
+  // Live audit C08: once the one request per order went out (or on eBay, where Nexus asks nobody), the button says why
+  // it is held instead of offering a request that cannot go.
+  const requestHeld: string | null = !order.deliveredAt
+    ? 'Order must be delivered first'
+    : order.channel === 'EBAY'
+      ? 'eBay asks its buyers for feedback itself: Nexus e-mails no eBay buyer.'
+      : lastReview?.status === 'SENT'
+        ? `Already asked${lastReview.sentAt ? ` on ${new Date(lastReview.sentAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}: one review request per order.`
+        : null
 
   return (
     <div className="space-y-5">
@@ -225,8 +234,8 @@ export default function OrderDetailClient({ id }: { id: string }) {
             )}
             <button
               onClick={requestReviewNow}
-              disabled={reviewBusy || !order.deliveredAt}
-              title={!order.deliveredAt ? 'Order must be delivered first' : REQUEST_REVIEW_TIP}
+              disabled={reviewBusy || !!requestHeld}
+              title={requestHeld ?? REQUEST_REVIEW_TIP}
               className="h-8 px-3 text-base bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900 rounded hover:bg-amber-100 dark:hover:bg-amber-900/60 disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               <Star size={12} className={reviewBusy ? 'animate-pulse' : ''} /> Request review
@@ -315,8 +324,8 @@ export default function OrderDetailClient({ id }: { id: string }) {
           </Link>
           <button
             onClick={requestReviewNow}
-            disabled={reviewBusy || !order.deliveredAt}
-            title={!order.deliveredAt ? 'Order must be delivered first' : REQUEST_REVIEW_TIP}
+            disabled={reviewBusy || !!requestHeld}
+            title={requestHeld ?? REQUEST_REVIEW_TIP}
             className="h-8 px-3 text-sm font-medium border border-slate-300 dark:border-slate-600 rounded-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
           >
             <Star size={12} className={reviewBusy ? 'animate-pulse' : ''} /> Request a review
@@ -1700,16 +1709,16 @@ function BuyerProfileDrawer({ email, excludeOrderId, onClose }: { email: string;
 }
 
 /**
- * OX.11 — Manage Feedback sidebar card. Amazon's "Manage Feedback"
- * surface shows the buyer's seller rating + comment if they've left
- * one, otherwise an empty-state. We don't ingest per-order seller
- * feedback yet (SellerFeedback model exists but is unwired), so this
- * card defaults to empty-state with a Seller-Central deep-link so
- * operators can chase it externally.
+ * OX.11 — Manage Feedback sidebar card: the buyer's seller feedback for this order when Nexus holds it (eBay feedback,
+ * Amazon's 1–3 star seller feedback), else what Nexus can know, in the API's words (`order.feedback`), with a link to
+ * the channel's own feedback page.
  */
 function ManageFeedbackCard({ order }: { order: any }) {
-  // OX.13 — channel-specific feedback deep-links. Shopify has no
-  // seller-feedback concept, so the card collapses to empty-state-only.
+  // OX.13 — channel-specific feedback deep-links. Live audit A10: the card says only what Nexus knows
+  // (`order.feedback`, review-order-feedback.ts) — never "has not left you feedback" where Nexus does not read it — and a
+  // channel with no seller feedback (Shopify, Etsy) shows no card.
+  const facts = order.feedback as { channel: string; read: boolean; words: string; feedback: { id: string; postedAt: string; rating: number | null; text: string } | null } | undefined
+  if (facts && facts.channel === 'none') return null
   let feedbackUrl: string | null = null
   let feedbackLabel = 'Open in Seller Central →'
   if (order.channel === 'AMAZON' && order.marketplace) {
@@ -1718,11 +1727,21 @@ function ManageFeedbackCard({ order }: { order: any }) {
     feedbackUrl = `https://www.ebay.${order.marketplace?.toLowerCase() === 'uk' ? 'co.uk' : (order.marketplace?.toLowerCase() ?? 'com')}/fdbk/feedback_left_for_others`
     feedbackLabel = 'Open in eBay Feedback →'
   }
+  const fb = facts?.feedback ?? null
+  const type = fb ? (order.channel === 'EBAY' ? (fb.rating == null ? 'Feedback' : fb.rating >= 4 ? 'Positive feedback' : fb.rating <= 2 ? 'Negative feedback' : 'Neutral feedback') : `${fb.rating ?? '—'}-star feedback`) : null
   return (
     <Card title="Manage Feedback">
-      <div className="text-sm text-slate-600 dark:text-slate-400">
-        {order.customerName ?? 'Buyer'} has not left you feedback for this order yet.
-      </div>
+      {fb ? (
+        <div className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
+          <div><span className="font-medium text-slate-900 dark:text-slate-100">{type}</span> · {new Date(fb.postedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+          <div>“{fb.text}”</div>
+          <Link href={`/marketing/reviews/inbox?period=all&review=${encodeURIComponent(fb.id)}`} className="inline-flex text-blue-600 dark:text-blue-400 hover:underline">Open it in Reviews →</Link>
+        </div>
+      ) : (
+        <div className="text-sm text-slate-600 dark:text-slate-400">
+          {facts?.words ?? 'Nexus cannot say whether this buyer left feedback.'}
+        </div>
+      )}
       {feedbackUrl && (
         <a
           href={feedbackUrl}

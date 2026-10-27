@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ruleRateWords,
   abMark,
   channelWords,
   duplicateHeld,
@@ -81,6 +82,10 @@ describe('rules tiles', () => {
     expect(rulesTiles(rules, true, { sent30: 400, rate30: 0.07, rateWords: null })).toEqual({ on: 2, total: 3, sent30: 400, matched30: 36, rate30: 0.07, rateWords: null })
     expect(rulesTiles(rules, true, { sent30: 400, rate30: null, rateWords: 'Not measurable: x' })).toMatchObject({ rate30: null, rateWords: 'Not measurable: x' })
     expect(rulesTiles([rule('a')], false)).toEqual({ on: 1, total: 1, sent30: null, matched30: null, rate30: null, rateWords: null })
+    // A rule's Rate: "Not measurable" where its requests went out but no review can follow them (live audit A02).
+    expect(ruleRateWords({ rate30: null, rateWords: 'Not measurable: Amazon gives no review count — import this market’s reviews to estimate it.' })).toBe('Not measurable')
+    expect(ruleRateWords({ rate30: null, rateWords: null })).toBe('—')
+    expect(ruleRateWords({ rate30: 0.074, rateWords: null })).toBe('7.4%')
   })
 })
 

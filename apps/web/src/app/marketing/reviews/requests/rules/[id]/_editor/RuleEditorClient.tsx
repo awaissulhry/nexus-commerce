@@ -243,7 +243,7 @@ function RuleEditor({ id }: { id: string }) {
           <Field label="Rule name" required>
             <Input value={form.name} onChange={(e) => update({ name: e.target.value })} placeholder="e.g. Germany jackets" maxLength={120} />
           </Field>
-          <Field label="Notes" hint="Checked for words a buyer message may not use (a reward, a request for a good rating).">
+          <Field label="Notes" hint="For your team only — buyers never see it.">
             <Textarea value={form.notes} onChange={(e) => update({ notes: e.target.value })} rows={3} limit={500} />
           </Field>
           {lint.length > 0 && (
@@ -340,7 +340,10 @@ function RuleEditor({ id }: { id: string }) {
               {amazon && <span className={s.hint}>Amazon counts from delivery, so an Amazon rule always does too.</span>}
             </div>
           </Field>
-          <Field label="Allowed window" hint={`Orders delivered day ${WINDOW_MIN}–${WINDOW_MAX} ago. Amazon allows day 5–30 after its own delivery date; Nexus counts from its own, so day 4 is the earliest.`}>
+          <Field
+            label="Allowed window"
+            hint={`This rule asks orders delivered ${form.windowFrom}–${form.windowTo} days ago (it can be day ${WINDOW_MIN}–${WINDOW_MAX}).${amazon ? ' Amazon allows day 5–30 after its own delivery date; Nexus counts from its own, so day 4 is the earliest. When Amazon answers “too early”, Nexus tries again daily until day 30.' : ''}`}
+          >
             <span className={s.row}>
               <NumberStepper value={form.windowFrom} onChange={(n) => update((f) => withWindow(f, n, f.windowTo))} min={WINDOW_MIN} max={WINDOW_MAX} size="sm" decrementLabel="First day earlier" incrementLabel="First day later" aria-label="First day of the window" />
               <span>to</span>
@@ -427,17 +430,29 @@ function RuleEditor({ id }: { id: string }) {
             <Toggle checked={form.useSentimentDiversion} onChange={(v) => update({ useSentimentDiversion: v })} aria-label="Ask “How was it?” first" />
             <div className={s.toggleText}>
               <strong>Ask “How was it?” first</strong>
-              <span className={s.hint}>
-                Before the review request, the buyer gets our “How was it?” email with two buttons. A happy answer goes on to the review
-                request; an unhappy one goes to your support inbox{amazon ? ', and Amazon’s request is then not sent for that order' : ', and our review email is then not sent'}.
-              </span>
+              {amazon ? (
+                // Live audit A01 (Owner: keep the behaviour, make the words true). Amazon gives Nexus no buyer e-mail
+                // (amazon-orders.service.ts reads none), so the scheduler pairs no "How was it?" check with an Amazon
+                // request: on an Amazon rule this switch changes nothing today.
+                <span className={s.hint}>
+                  On an Amazon rule this changes nothing today: Amazon gives Nexus no buyer e-mail, so no Amazon buyer gets our “How was
+                  it?” email, and Amazon’s own request goes on its planned day, {form.useSentimentDiversion ? 'with this switch on' : 'on or off'}.
+                </span>
+              ) : (
+                <span className={s.hint}>
+                  Before the review request, the buyer gets our “How was it?” email with two buttons. A happy answer goes on to the review
+                  request; an unhappy one goes to your support inbox, and our review email is then not sent.
+                </span>
+              )}
               <span className={s.hint}>
                 Ask every buyer the same way: asking only happy buyers, or sending unhappy buyers elsewhere, is not allowed.
               </span>
-              <span className={s.hint}>
-                Timing: the “How was it?” email goes on day {form.windowFrom} after delivery. With no answer in 5 days, the switch
-                below decides.
-              </span>
+              {!amazon && (
+                <span className={s.hint}>
+                  Timing: the “How was it?” email goes on day {form.windowFrom} after delivery. With no answer in 5 days, the switch
+                  below decides.
+                </span>
+              )}
             </div>
           </div>
           {form.useSentimentDiversion && (
@@ -446,8 +461,9 @@ function RuleEditor({ id }: { id: string }) {
               <div className={s.toggleText}>
                 <strong>Ask anyway when there is no answer in 5 days</strong>
                 <span className={s.hint}>
-                  On — the review request goes after 5 days without an answer (default). Off — a buyer who did not answer
-                  “How was it?” is not asked.
+                  {amazon
+                    ? 'Applies only where our “How was it?” email goes — so not on an Amazon rule today.'
+                    : 'On — the review request goes after 5 days without an answer (default). Off — a buyer who did not answer “How was it?” is not asked.'}
                 </span>
               </div>
             </div>

@@ -375,6 +375,7 @@ exports[`07 O4 — order reads: the routes answer exactly as before the move > d
       "attemptCount": 0,
       "lastAttemptAt": null,
       "nextRetryAt": null,
+      "timingTestArmId": null,
       "createdAt": "<clock>",
       "updatedAt": "<clock>",
       "rule": null,
@@ -407,7 +408,13 @@ exports[`07 O4 — order reads: the routes answer exactly as before the move > d
       "purchaseDate": "2026-04-05T10:00:00.000Z",
       "createdAt": "<clock>"
     }
-  ]
+  ],
+  "feedback": {
+    "channel": "AMAZON",
+    "words": "Not read: Nexus does not read Amazon seller feedback in this setup, so it cannot say whether this buyer left feedback. Feedback Manager in Seller Central shows it.",
+    "read": false,
+    "feedback": null
+  }
 }"
 `;
 
@@ -507,7 +514,13 @@ exports[`07 O4 — order reads: the routes answer exactly as before the move > d
   "tags": [],
   "routingDecisions": [],
   "fiscalInvoice": null,
-  "customerHistory": []
+  "customerHistory": [],
+  "feedback": {
+    "channel": "EBAY",
+    "words": "Not read: Nexus does not read eBay feedback in this setup, so it cannot say whether this buyer left feedback.",
+    "read": false,
+    "feedback": null
+  }
 }"
 `;
 
@@ -619,7 +632,13 @@ exports[`07 O4 — order reads: the routes answer exactly as before the move > d
   "tags": [],
   "routingDecisions": [],
   "fiscalInvoice": null,
-  "customerHistory": []
+  "customerHistory": [],
+  "feedback": {
+    "channel": "AMAZON",
+    "words": "Not read: Nexus does not read Amazon seller feedback in this setup, so it cannot say whether this buyer left feedback. Feedback Manager in Seller Central shows it.",
+    "read": false,
+    "feedback": null
+  }
 }"
 `;
 

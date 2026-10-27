@@ -24,6 +24,11 @@ export interface AdapterRawReview {
   rawPayload?: unknown
   /** Reviews Inbox — the Nexus Order this review is about, when the adapter can match it (eBay feedback). */
   orderId?: string
+  /**
+   * The Nexus product it is about, when the adapter can tell (eBay feedback names no product: its listing's product,
+   * else its matched order's). Live audit B13: no eBay feedback reached a product's reviews.
+   */
+  productId?: string
   /** Reviews eBay REST (PR G) — the buyer's photos, in order; undefined = the source says nothing about photos. */
   media?: ReviewMediaInput[]
   /** eBay's AI topics; undefined = not read this pass (stored topics are kept), [] = none. */

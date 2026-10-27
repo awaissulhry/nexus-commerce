@@ -14,7 +14,7 @@ import { Button, InfoTip, Pill, Tag } from '@/design-system/primitives'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import Link from '@/lib/workspaces/Link'
 import { reviewsSend } from '../../_lib/reviewsFetch'
-import { EBAY_ASKS_WORDS, channelMarketWords } from '../../_lib/reviewWords'
+import { EBAY_ASKS_WORDS, channelMarketWords, productTypeWords } from '../../_lib/reviewWords'
 import { rulePath } from '../requestsPaths'
 import { readRequestDetail, type RequestDetail } from './queueDatasource'
 import { bulkResultWords, type SnoozeDays } from './queueBulk'
@@ -214,7 +214,7 @@ function RequestTab({ detail, now }: { detail: RequestDetail; now: Date }) {
           { label: 'Order', value: r.orderLabel },
           { label: 'Buyer', value: r.buyer, hint: 'first name and initial only' },
           { label: 'Channel', value: channelMarketWords(r.channel, r.market) },
-          { label: 'Product', value: r.product ?? '—', hint: r.productType ?? undefined },
+          { label: 'Product', value: r.product ?? '—', hint: r.productType ? productTypeWords(r.productType) : undefined },
           { label: 'Fulfilment', value: detail.order.fulfilment ?? '—' },
           { label: 'Delivered (ours)', value: win.delivered, hint: win.deliveredHint ?? undefined },
           ...(win.amazon
@@ -234,7 +234,8 @@ function RequestTab({ detail, now }: { detail: RequestDetail; now: Date }) {
           {
             label: 'Made by rule',
             value: r.rule ? <Link href={rulePath(r.rule.id)}>{r.rule.name}</Link> : 'No rule matched — default timing',
-            hint: r.rule?.howWasIt ? 'asks “How was it?” first' : undefined,
+            // An Amazon buyer gets no "How was it?" e-mail (Amazon gives Nexus no buyer e-mail), whatever the rule's switch.
+            hint: r.rule?.howWasIt ? (r.channel === 'AMAZON' ? '“How was it?” on — no effect on Amazon orders' : 'asks “How was it?” first') : undefined,
           },
           {
             label: 'Message',

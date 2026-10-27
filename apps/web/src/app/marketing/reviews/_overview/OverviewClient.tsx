@@ -21,7 +21,7 @@ import { usePathname } from '@/lib/workspaces/navigation'
 import { reviewsGet } from '../_lib/reviewsFetch'
 import { inboxHref, insightsHref, requestsHref } from '../_lib/reviewsLinks'
 import { useReviewEvents } from '../_lib/useReviewEvents'
-import { channelMarketWords } from '../_lib/reviewWords'
+import { NOT_MEASURABLE, channelMarketWords, rateNotMeasurable } from '../_lib/reviewWords'
 import { reviewsCrumbs } from '../_shell/reviews-crumbs'
 import { ReviewsMenuButton } from '../_shell/ReviewsShell'
 import { ChannelTable } from './ChannelTable'
@@ -176,7 +176,8 @@ export function OverviewClient() {
         label: 'New reviews',
         value: count(tiles.newReviews),
         delta: deltaView(tiles.newDelta, 'count', period) ?? undefined,
-        hint: 'opens the Inbox',
+        // The tile's own period (live audit D07: "opens the Inbox" said nothing about the number).
+        hint: words.label,
         href: newReviewsHref(period, channel, market),
       },
       {
@@ -197,7 +198,7 @@ export function OverviewClient() {
       },
       {
         label: 'Review rate',
-        value: rateText(tiles.reviewRate),
+        value: rateNotMeasurable(tiles.reviewRate, tiles.rateWords) ? NOT_MEASURABLE : rateText(tiles.reviewRate),
         delta: deltaView(tiles.rateDelta, 'points', period) ?? undefined,
         hint: tiles.rateWords ?? (tiles.reviewRate == null ? 'nothing sent in this period' : 'reviews per request sent'),
         href: requestsHref({ channel, market, period }),
@@ -324,7 +325,7 @@ export function OverviewClient() {
 
       <p className={s.footnote}>
         Where the numbers come from: Amazon — review topics per product, updated weekly, for the UK, Germany, France, Italy and Spain (not
-        available on Amazon.nl); 1–3 star seller feedback fetched on request (coming later); stars only from reviews you import, because
+        available on Amazon.nl); 1–3 star seller feedback from Amazon’s report, fetched daily and on request where it is switched on; stars only from reviews you import, because
         Amazon gives no review text and no rating by API. eBay — seller feedback, read every 30 minutes. Shopify — your store’s review app,
         Judge.me read every 30 minutes once connected, or by file import. Etsy — shop reviews with their one photo, read every 30 minutes.
       </p>

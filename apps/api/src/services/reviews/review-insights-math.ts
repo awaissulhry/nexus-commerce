@@ -11,7 +11,8 @@
  */
 import { averageRating, channelWords, marketWords, periodBounds, round, themeWords, type PeriodBounds } from './overviewMath.js'
 import { isImportedSource } from './review-inbox-query.js'
-import { countsInRating } from './review-visibility.js'
+import { countsAsStars } from './review-rating.js'
+import { isAutomaticFeedback } from './review-visibility.js'
 
 // ── Scope ────────────────────────────────────────────────────────────
 
@@ -103,10 +104,15 @@ export function pct(n: number, of: number, digits = 1): number | null {
   return of > 0 ? round((n / of) * 100, digits) : null
 }
 
-/** How many stars the rated reviews that mention a theme sit above or below the overall average (two decimals). */
-export function themeStarImpact(withTheme: ReadonlyArray<number | null>, overall: number | null, minRated = MIN_THEME_MENTIONS): number | null {
+/**
+ * How many stars the rated reviews that mention a theme sit above or below the overall average (two decimals). Not
+ * measurable (null) when every rating of the period is the same (live audit B11: all 5 stars read "0.00 ★"): no theme
+ * can sit above or below then. `allRated` = every star rating of the period; left out, only the theme's own count.
+ */
+export function themeStarImpact(withTheme: ReadonlyArray<number | null>, overall: number | null, minRated = MIN_THEME_MENTIONS, allRated?: ReadonlyArray<number | null>): number | null {
   const rated = withTheme.filter((r): r is number => r != null)
   if (rated.length < minRated || overall == null) return null
+  if (allRated && new Set(allRated.filter((r): r is number => r != null)).size < 2) return null
   const avg = averageRating(rated)
   return avg == null ? null : round(avg - overall, 2)
 }
@@ -304,8 +310,13 @@ export function buildThemes(input: {
   topics: ReadonlyArray<ParsedTopic>
   now: Date
 }): InsightTheme[] {
-  const { rows, prevRows, trendRows, topics, now } = input
-  const overall = averageRating(rows.filter(countsInRating).map((r) => r.rating))
+  // eBay's automatic feedback is eBay's text, not the buyer's: never a buyer theme (live audit B10).
+  const buyers = (list: ReadonlyArray<ThemeReviewRow>) => list.filter((r) => !isAutomaticFeedback(r))
+  const { topics, now } = input
+  const [rows, prevRows, trendRows] = [buyers(input.rows), buyers(input.prevRows), buyers(input.trendRows)]
+  // Stars of product reviews only (review-rating.ts — eBay feedback is never stars, Amazon's only from imported reviews).
+  const starRatings = rows.filter(countsAsStars).map((r) => r.rating)
+  const overall = averageRating(starRatings)
   const out: InsightTheme[] = []
   for (const key of THEME_KEYS) {
     const mentioning = rows.filter((r) => r.sentiment?.categories.includes(key))
@@ -323,7 +334,7 @@ export function buildThemes(input: {
     // The reviews' own share when they mention it; a theme only Amazon's topics name shows Amazon's share of reviews.
     const share = mentioning.length > 0 || amazonShare == null ? reviewShare : amazonShare
 
-    const reviewImpact = tooFew ? null : themeStarImpact(mentioning.filter(countsInRating).map((r) => r.rating), overall)
+    const reviewImpact = tooFew ? null : themeStarImpact(mentioning.filter(countsAsStars).map((r) => r.rating), overall, MIN_THEME_MENTIONS, starRatings)
     const amazonImpact = tooFew ? null : weighted(amazon.map((t) => ({ value: t.starEffect, weight: t.mentions })), 2)
     const starImpact = reviewImpact ?? amazonImpact
     const starImpactFrom = reviewImpact != null ? 'reviews' : amazonImpact != null ? 'amazon_topic' : null

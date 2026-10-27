@@ -9,7 +9,8 @@ import { channelSiteDomain, reviewAppOf, revisionWords, reviewReplyRules, type R
 import prisma from '../../db.js'
 import { isImportedSource, TRIAGE_STATUS_WORDS, variantWords } from './review-inbox-query.js'
 import { repliedOnChannel } from './review-reply-send.service.js'
-import { reviewKindOf, visibleReviewWhere, type ReviewKind } from './review-visibility.js'
+import { noReplyReason, reviewKindOf, visibleReviewWhere, type NoReplyReason, type ReviewKind } from './review-visibility.js'
+import { guessLanguage } from './review-language.js'
 import { REVIEW_CATEGORIES, SENTIMENT_LABELS, translateReviewText } from './sentiment-extraction.service.js'
 import { EBAY_TOPIC_WORDS } from './adapters/ebay-topics.js'
 import { feedbackRemovalCheck, fulfilmentOf, REMOVAL_RULES, type RemovalCheck } from './review-feedback-removal.js'
@@ -82,7 +83,13 @@ export interface InboxDetail {
   }
   english: string | null
   language: string | null
+  /** "Italian"; "Italian (from the text)" when the AI never read it and the words say so; null when not known. */
   languageWords: string | null
+  /**
+   * Why this review needs no reply (review-visibility.ts `noReplyReason`: imported, nobody can answer, Etsy's window
+   * closed, positive, eBay's automatic feedback, closed by a person); null while it needs one. The badges count the same.
+   */
+  noReply: NoReplyReason | null
   product: { id: string; name: string; sku: string } | null
   variant: { id: string; name: string; sku: string; words: string | null } | null
   order: {
@@ -230,6 +237,8 @@ export async function getInboxReview(id: string, now: Date = new Date()): Promis
   const revisionSaid = r.channel === 'EBAY' && r.feedbackStateAt ? revisionWords(r.feedbackState, false) : null
   if (revisionSaid) timeline.push({ at: r.feedbackStateAt!, words: `Revision request: ${revisionSaid.words.toLowerCase()} (as Nexus read it from eBay)` })
   timeline.sort((a, b) => a.at.getTime() - b.at.getTime())
+  // C04 — a row the AI never read has no language: guess it from the words, so English text is not offered a translation.
+  const guessed = r.language ? null : guessLanguage(r.body)
 
   return {
     review: {
@@ -240,8 +249,9 @@ export async function getInboxReview(id: string, now: Date = new Date()): Promis
       sku: r.sku, asin: r.asin,
     },
     english: r.bodyEnglish,
-    language: r.language,
-    languageWords: languageWords(r.language),
+    language: r.language ?? guessed,
+    languageWords: r.language ? languageWords(r.language) : guessed ? `${languageWords(guessed)} (from the text)` : null,
+    noReply: noReplyReason({ ...r, mood: r.sentiment?.label ?? null }, now),
     product,
     variant,
     order: order

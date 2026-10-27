@@ -234,7 +234,7 @@ export function topicsBanner(answer: ThemesAnswer, scope: Pick<InsightsScope, 'c
     tone: 'info',
     title: 'Amazon topics are weekly and in English only.',
     text:
-      'Amazon gives no review text and no star rating. Its topics for the UK, Germany, France, Italy and Spain — mentions, share of reviews, effect on stars and short English snippets — are updated weekly; not available on Amazon.nl. Themes from eBay, Shopify and imported reviews come from the review text in its own language, with an English translation. Etsy reviews and the Shopify review app come in a later step.',
+      'Amazon gives no review text and no star rating. Its topics for the UK, Germany, France, Italy and Spain — mentions, share of reviews, effect on stars and short English snippets — are updated weekly; not available on Amazon.nl. Themes from eBay, Etsy, Shopify (Judge.me) and imported reviews come from the review text in its own language, with an English translation; eBay’s automatic feedback is not counted.',
     problems: answer.amazon.markets.filter((m) => m.state !== 'ok').map((m) => `${m.label}: ${m.words}`),
   }
 }

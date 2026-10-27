@@ -63,6 +63,8 @@ export interface InboxReadState {
   since: string | null
   reason: string | null
   reconnectHref: string | null
+  /** Its reviews arrive only by file import (Amazon's product reviews, a store app not connected): never "up to date". */
+  byFile: boolean
 }
 
 export interface InboxPage {
@@ -148,6 +150,7 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
   const rows: InboxRow[] = items.map((r) => {
     const status = r.triageStatus ?? 'NEW'
     const order = r.orderId ? orderById.get(r.orderId) : undefined
+    const replyFacts = { ...r, mood: r.sentiment?.label ?? null }
     return {
       id: r.id,
       postedAt: r.postedAt.toISOString(),
@@ -167,9 +170,10 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
       themes: r.sentiment?.categories ?? [],
       status,
       assignee: r.assignee,
-      // Due and overdue only for a review that needs a reply (answerable, not imported: review-visibility.ts).
-      dueAt: reviewNeedsReply(r, now) ? reviewDueAt(r.postedAt).toISOString() : null,
-      overdue: reviewOverdue(r, now),
+      // Due and overdue only for a review that needs a reply (answerable, not imported, not positive, not eBay's
+      // automatic feedback: review-visibility.ts).
+      dueAt: reviewNeedsReply(replyFacts, now) ? reviewDueAt(r.postedAt).toISOString() : null,
+      overdue: reviewOverdue(replyFacts, now),
       imported: isImportedSource(r.ingestSource),
       responses: responses.get(r.id) ?? { sent: 0, draft: 0 },
       photos: r._count.media,
@@ -239,6 +243,7 @@ export function readStateFromSources(sources: readonly ReviewSource[]): InboxRea
     since: s.since,
     reason: s.reason,
     reconnectHref: s.reconnectHref,
+    byFile: !s.readsItself,
   }))
 }
 

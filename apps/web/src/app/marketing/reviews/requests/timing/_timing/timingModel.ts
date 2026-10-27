@@ -12,8 +12,19 @@ import type { RuleItem } from '../../rules/_rules/rulesModel'
 
 export interface TimingDefault { id?: string; pattern: string; label: string; delayDays: number; sortOrder: number; isActive: boolean }
 export interface SendWindow { marketplace: string; dayOfWeek: number; hourLocal: number; dayRank: number; isActive: boolean }
-export interface ConversionCell { dayOfWeek: number; hour: number; sent: number; converted: number }
-export interface ConversionReport { windowDays: number; marketplace: string | null; totalSent: number; totalConverted: number; hasReviews: boolean; cells: ConversionCell[] }
+/**
+ * One weekday × hour: every request sent then (`sent`), the ones a review can follow (`measured`, the rate's base) and
+ * those a review followed. An older answer has no `measured`: then every sent request counted.
+ */
+export interface ConversionCell { dayOfWeek: number; hour: number; sent: number; measured?: number; converted: number }
+export interface ConversionReport {
+  windowDays: number; marketplace: string | null; totalSent: number; totalMeasured?: number; totalConverted: number; hasReviews: boolean
+  /** "Not measurable: …" when no review can follow these requests; why some are left out; null when all count. */
+  words?: string | null
+  cells: ConversionCell[]
+}
+
+const measuredOf = (c: Pick<ConversionCell, 'sent' | 'measured'>) => c.measured ?? c.sent
 
 export const GLOBAL_MARKET = '*'
 export const TIMING_MARKETS = [
@@ -175,7 +186,7 @@ export function heatView(report: ConversionReport | null, rows: readonly WindowR
   const cells = new Map((report?.cells ?? []).map((c) => [`${c.dayOfWeek}:${c.hour}`, c]))
   const data = WEEKDAYS.map(({ dow }) => Array.from({ length: 24 }, (_, h) => {
     const c = cells.get(`${dow}:${h}`)
-    return c && c.sent > 0 ? c.converted / c.sent : null
+    return c && measuredOf(c) > 0 ? c.converted / measuredOf(c) : null
   }))
   const marked = new Set<string>()
   WEEKDAYS.forEach(({ dow }, r) => {
@@ -192,7 +203,11 @@ export function heatView(report: ConversionReport | null, rows: readonly WindowR
       const day = WEEKDAYS[r]
       const c = day ? cells.get(`${day.dow}:${col}`) : undefined
       const head = `${day?.short ?? ''} ${hourWords(col)}`
-      const body = c && c.sent > 0 ? `${c.sent} sent · ${c.converted} ${c.converted === 1 ? 'review' : 'reviews'} after · ${pct(c.converted / c.sent)}` : 'none sent'
+      const body = !c || c.sent === 0
+        ? 'none sent'
+        : measuredOf(c) === 0
+          ? `${c.sent} sent · review rate not measurable`
+          : `${c.sent} sent · ${c.converted} ${c.converted === 1 ? 'review' : 'reviews'} after · ${pct(c.converted / measuredOf(c))}`
       return `${head} · ${body}${marked.has(`${r}:${col}`) ? ' · we send at this hour' : ''}`
     },
   }
@@ -205,26 +220,38 @@ const PARTS = [
   { label: 'Night · 22–6', from: 22, to: 30 },
 ]
 
-/** Sent, reviews after and the rate per part of the day. */
+/**
+ * Sent, reviews after and the rate per part of the day. Every request sent counts in "Sent"; the rate is over the ones a
+ * review can follow — "Not measurable" when there are none, never "0.0%" (live audit A02).
+ */
 export function dayParts(report: ConversionReport | null): { label: string; sent: number; reviews: number; rate: string }[] {
   return PARTS.map((p) => {
     let sent = 0
+    let measured = 0
     let reviews = 0
     for (const c of report?.cells ?? []) {
       const h = c.hour < 6 ? c.hour + 24 : c.hour
       if (h >= p.from && h < p.to) {
         sent += c.sent
+        measured += measuredOf(c)
         reviews += c.converted
       }
     }
-    return { label: p.label, sent, reviews, rate: sent > 0 ? pct(reviews / sent) : 'not sent' }
+    return { label: p.label, sent, reviews, rate: measured > 0 ? pct(reviews / measured) : sent > 0 ? 'Not measurable' : 'not sent' }
   })
+}
+
+/** No request of the period can be followed by a review: the rate is not measurable (the API's words say why). */
+export function rateNotMeasurableHere(report: ConversionReport | null): boolean {
+  return !!report && report.totalSent > 0 && (report.totalMeasured ?? report.totalSent) === 0
 }
 
 /** The note under the numbers: how many requests, and how much the differences can be trusted. */
 export function sampleWords(report: ConversionReport | null): string {
   const total = report?.totalSent ?? 0
   const head = `${total.toLocaleString('en-IE')} ${total === 1 ? 'request' : 'requests'} in ${report?.windowDays ?? 90} days.`
-  const trust = total < SMALL_SAMPLE ? 'Too few to compare hours yet: the differences can be luck.' : 'Differences under 1 point can be luck.'
-  return `${head} ${trust} Amazon does not say who wrote a review, so rates are estimates.`
+  if (rateNotMeasurableHere(report)) return `${head} ${report?.words ?? 'Not measurable: no review that could follow these requests is in Nexus yet.'}`
+  const trust = (report?.totalMeasured ?? total) < SMALL_SAMPLE ? 'Too few to compare hours yet: the differences can be luck.' : 'Differences under 1 point can be luck.'
+  const left = report?.words ? ` ${report.words}` : ''
+  return `${head} ${trust}${left} Amazon does not say who wrote a review, so rates are estimates.`
 }

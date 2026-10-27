@@ -8,7 +8,7 @@
  */
 import { Banner, Heatmap } from '@/design-system/components'
 import { Button, Skeleton } from '@/design-system/primitives'
-import { heatView, type ConversionReport, type WindowRow } from './timingModel'
+import { heatView, rateNotMeasurableHere, type ConversionReport, type WindowRow } from './timingModel'
 import s from './timing.module.css'
 
 export interface SendHourHeatmapProps {
@@ -48,7 +48,9 @@ export function SendHourHeatmap({ report, rows, error, onRetry }: SendHourHeatma
         <li><span className={`${s.swatch} ${s.swatchNone}`} aria-hidden /> none sent at that hour</li>
         <li><span className={`${s.swatch} ${s.swatchMarked}`} aria-hidden /> we send at this hour</li>
       </ul>
-      {!report.hasReviews && <p className={s.muted}>No reviews in these 90 days yet: every hour shows the same until reviews arrive.</p>}
+      {rateNotMeasurableHere(report)
+        ? <p className={s.muted}>{report.words ?? 'Not measurable: no review that could follow these requests is in Nexus yet.'} No hour is shaded until then.</p>
+        : !report.hasReviews && <p className={s.muted}>No reviews in these 90 days yet: every hour shows the same until reviews arrive.</p>}
     </div>
   )
 }

@@ -5,6 +5,7 @@
  * `dueAt` and `overdue`, this file only words them. Pure, tested in inboxTiles.vitest.test.ts.
  */
 import { REPLY_DUE_HOURS } from '@nexus/shared/review-reply-rules'
+import { ago } from '@/design-system/grid/renderers/format'
 import type { Tone } from '@/design-system/primitives'
 import { STATUS_WORD, MOOD_WORD, channelMarketWords, themeWord } from '../_lib/reviewWords'
 import { COUNTRY_NAMES } from '@/app/_shared/app-nav'
@@ -212,14 +213,24 @@ export function readStateBanners(readState: readonly InboxReadState[] | null, ti
   })
 }
 
-/** The toolbar's live pill. */
+/**
+ * The toolbar's live pill. A channel whose reviews arrive only by file import (Amazon's product reviews, a store app
+ * not connected) is never "up to date" (live audit A06): the pill names what Nexus reads and what comes by file.
+ */
 export function livePill(state: { error: boolean; updating: boolean; readState: readonly InboxReadState[] | null }): { tone: Tone; words: string } {
   if (state.error) return { tone: 'danger', words: 'Not updating' }
   if (state.updating) return { tone: 'info', words: 'Updating…' }
-  const behind = (state.readState ?? []).filter((r) => !r.ok)
+  const rows = state.readState ?? []
+  const behind = rows.filter((r) => !r.ok)
   if (behind.length === 1) return { tone: 'warning', words: `${channelMarketWords(behind[0].channel, behind[0].market)} behind` }
   if (behind.length > 1) return { tone: 'warning', words: `${behind.length} markets behind` }
-  return { tone: 'success', words: 'Up to date' }
+  const names = (list: readonly InboxReadState[]) => joinWords([...new Set(list.map((r) => channelLabel(r.channel)))])
+  const byFile = rows.filter((r) => r.byFile)
+  if (byFile.length === 0) return { tone: 'success', words: 'Up to date' }
+  const read = rows.filter((r) => !r.byFile)
+  return read.length === 0
+    ? { tone: 'neutral', words: `${names(byFile)} by file only` }
+    : { tone: 'success', words: `${names(read)} up to date · ${names(byFile)} by file` }
 }
 
 /** The header line: "1,284 reviews · last 30 days". */
@@ -236,21 +247,18 @@ export function headerSubtitle(total: number | null, period: InboxPeriod, state:
 
 // ── One row in words ─────────────────────────────────────────────────
 
-/** "just now", "12 min ago", "5 h ago", "1 day ago", "3 months ago". */
+/**
+ * "just now", "12 min ago", "5 h ago"; from a day on, the same rounding as the review pop-up and every "… ago" of the
+ * design system ("2 days ago", "3 weeks ago", "2 years ago") — live audit D04: the list said "1 year ago" where the
+ * pop-up said "2 years ago" for the same review.
+ */
 export function agoWords(iso: string, now: number): string {
   const ms = now - new Date(iso).getTime()
   if (!Number.isFinite(ms)) return ''
   if (ms < 60_000) return 'just now'
   if (ms < HOUR) return `${Math.floor(ms / 60_000)} min ago`
   if (ms < DAY) return `${Math.floor(ms / HOUR)} h ago`
-  const days = Math.floor(ms / DAY)
-  if (days < 30) return `${days} ${days === 1 ? 'day' : 'days'} ago`
-  if (days < 365) {
-    const months = Math.floor(days / 30)
-    return `${months} ${months === 1 ? 'month' : 'months'} ago`
-  }
-  const years = Math.floor(days / 365)
-  return `${years} ${years === 1 ? 'year' : 'years'} ago`
+  return ago(iso, now)
 }
 
 /** "Seller feedback", "Product review · imported". */

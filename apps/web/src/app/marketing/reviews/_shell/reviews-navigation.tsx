@@ -1,6 +1,7 @@
 import type { WorkspaceNavGroup } from '@/design-system/patterns/WorkspaceSubheader'
 import { navPagePermission } from '@/lib/auth/nav-permissions'
 import { withoutWorkspace, workspaceFromPath, workspaceHref } from '@/lib/workspaces/paths'
+import { needsReplyHref } from '../_lib/reviewsLinks'
 import { findReviewsNavItem, reviewsNav, type ReviewsChannelMarkets, type ReviewsNavItem } from './reviews-nav'
 
 /** The Reviews counts the sub-sidebar shows (GET /api/sidebar/counts → `reviews`). */
@@ -46,9 +47,12 @@ export function buildReviewsNavigation(
       .filter(item => !hasPermission || reviewsNavItemAllowed(item, hasPermission))
       .map(item => {
         const Icon = item.icon
+        // A row with a needs-a-reply number opens the reviews it counts, every date (live audit A08: the Inbox's default
+        // 30 days showed "0 reviews" under a badge of 57). With no number it opens the Inbox as it is.
+        const opens = badge(item) ? needsReplyHref() : item.href
         return {
           id: item.href,
-          href: workspaceHref(workspaceId, item.href),
+          href: workspaceHref(workspaceId, opens),
           label: item.label,
           icon: <Icon size={16} aria-hidden />,
           // By address: market rows are made per call, so the same row is a new object each time.

@@ -299,11 +299,27 @@ export function buyerShort(name: string | null | undefined): string {
   return parts.length > 1 ? `${first} ${parts[parts.length - 1][0].toUpperCase()}.` : first
 }
 
-/** "day 6" after delivery ("not delivered yet" without a delivery date). */
-export function dayWords(deliveredAt: Date | null | undefined, now: Date): string {
+/**
+ * Which day after delivery a row is about, in words. A sent row: the day it was sent; a row tried and stopped: the day of
+ * its last try; a waiting row: the day it is planned for ("goes on day 4"); otherwise today's day. Live audit B04/D06:
+ * every row said today's day, so a failed request read "day 32" as if Amazon had been asked after day 30, and a new one
+ * "day 0".
+ */
+export function dayWords(
+  deliveredAt: Date | null | undefined,
+  now: Date,
+  at: { status?: string | null; sentAt?: Date | null; lastAttemptAt?: Date | null; plannedAt?: Date | null } = {},
+): string {
   if (!deliveredAt) return 'not delivered yet'
-  const d = Math.floor((now.getTime() - deliveredAt.getTime()) / DAY_MS)
-  return d < 0 ? 'delivery expected' : `day ${d}`
+  const dayOf = (t: Date) => Math.floor((t.getTime() - deliveredAt.getTime()) / DAY_MS)
+  if (at.sentAt) return `sent on day ${dayOf(at.sentAt)}`
+  if (at.plannedAt) {
+    const planned = dayOf(at.plannedAt)
+    return planned < 0 ? 'delivery expected' : `goes on day ${planned}`
+  }
+  if (at.lastAttemptAt && at.status !== 'SCHEDULED') return `last try on day ${dayOf(at.lastAttemptAt)}`
+  const d = dayOf(now)
+  return d < 0 ? 'delivery expected' : `day ${d} after delivery`
 }
 
 /** "21 Oct" in the market's own time zone. */
@@ -326,14 +342,16 @@ export function runResultWords(r: { sent: number; failed: number; skipped?: numb
  * The failures banner ("2 requests failed in the last 7 days" + what they were): failed for good, no try left — the
  * rows "Show failed" lists. Requests that still try again on their own are named apart (`retrying`).
  */
-export function failuresWords(f: { count: number; bounced: number; noAnswer: number; retrying?: number }): string {
+export function failuresWords(f: { count: number; bounced: number; noAnswer: number; refused?: number; retrying?: number }): string {
   const again = f.retrying ? `${f.retrying} more ${f.retrying === 1 ? 'request tries' : 'requests try'} again on their own after ${RETRY_BACKOFF_HOURS.join(', ').replace(/, (\d+)$/, ' and $1')} hours` : null
   if (f.count === 0) return again ? `No request failed for good in the last 7 days: ${again}` : 'No request failed in the last 7 days'
   const head = `${f.count} ${f.count === 1 ? 'request' : 'requests'} failed in the last 7 days, no try left`
   const parts: string[] = []
   if (f.bounced) parts.push(`${f.bounced} ${f.bounced === 1 ? 'email' : 'emails'} bounced (the address does not exist)`)
   if (f.noAnswer) parts.push(`${f.noAnswer} ${f.noAnswer === 1 ? 'time' : 'times'} Amazon did not answer`)
-  const other = f.count - f.bounced - f.noAnswer
+  // Live audit B01: the banner names Amazon's "no" instead of "1 other".
+  if (f.refused) parts.push(`${f.refused} refused by Amazon`)
+  const other = f.count - f.bounced - f.noAnswer - (f.refused ?? 0)
   if (other > 0) parts.push(`${other} other`)
   if (again) parts.push(again)
   return parts.length ? `${head}: ${parts.join(' · ')}` : head

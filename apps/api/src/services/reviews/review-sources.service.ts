@@ -41,6 +41,12 @@ export interface ReviewSource {
   lastReviewAt: string | null
   /** Visible reviews held from it (all time). */
   reviews: number
+  /**
+   * Nexus reads new reviews from it by itself (eBay, Etsy, Judge.me). False where reviews arrive only when a person
+   * imports a file: Amazon's product reviews (no API gives them) and a store review app that is not connected. Live
+   * audit A06: such a source is never called "up to date".
+   */
+  readsItself: boolean
 }
 
 export interface SetupProblem {
@@ -210,7 +216,7 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
       : `${facts.amazonTopicsOn || topicsRead ? 'Topics · ' : ''}${stars ? 'stars from imported reviews' : 'no reviews imported'}${feedback}`
     const notes = [s.lastArrival, topicsRead ? `topics ${shortDay(t!.lastOkAt!)}` : null].filter(Boolean)
     sources.push({
-      channel: 'AMAZON', market, state: 'ok', reason: null, since: null, reconnectHref: null,
+      channel: 'AMAZON', market, state: 'ok', reason: null, since: null, reconnectHref: null, readsItself: false,
       what: what.charAt(0).toUpperCase() + what.slice(1),
       lastNote: notes.length ? notes.join(' · ') : null,
       lastReviewAt: s.lastReviewAt?.toISOString() ?? null, reviews: s.count,
@@ -302,7 +308,7 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
       since = facts.lastReadAt
     }
     sources.push({
-      channel: 'EBAY', market, state, reason, since: since?.toISOString() ?? null, reconnectHref,
+      channel: 'EBAY', market, state, reason, since: since?.toISOString() ?? null, reconnectHref, readsItself: true,
       what: 'Seller feedback',
       lastNote: state === 'ok' ? 'read every 30 min' : s.lastArrival,
       lastReviewAt: s.lastReviewAt?.toISOString() ?? null, reviews: s.count,
@@ -322,7 +328,7 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
       // Reviews with no market belong to the shop as a whole: the first row counts them too.
       const here = [summary('ETSY', market), ...(market !== null && market === etsyRows[0] ? [summary('ETSY', null)] : [])]
       sources.push({
-        channel: 'ETSY', market,
+        channel: 'ETSY', market, readsItself: true,
         state: broken || off ? 'not_updating' : 'ok',
         reason: broken ?? (off ? 'Nexus does not read Etsy reviews in this setup yet' : null),
         since: broken ? conn?.lastErrorAt?.toISOString() ?? null : null,
@@ -343,7 +349,7 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
   if (shopifyCount > 0 || active('SHOPIFY').length > 0 || app) {
     const lastImport = newest(facts.reviewGroups.filter(g => g.channel.toUpperCase() === 'SHOPIFY' && g.ingestSource === 'IMPORT_CSV').map(g => g.lastIngestedAt))
     sources.push({
-      channel: 'SHOPIFY', market: null, state: 'ok', reason: null, since: null, reconnectHref: null,
+      channel: 'SHOPIFY', market: null, state: 'ok', reason: null, since: null, reconnectHref: null, readsItself: !!app,
       what: app ? 'Store review app (Judge.me), read every 30 min' : 'Store review app, by file import',
       lastNote: app
         ? (app.lastReadAt ? `Judge.me read ${shortDay(app.lastReadAt)}` : 'Judge.me not read yet')

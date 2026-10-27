@@ -123,7 +123,7 @@ function ChannelPage({ lock }: { lock: ReviewsLock }) {
       {period && (
         <SegmentedControl size="sm" ariaLabel="Period" options={periodOptions(lock.channel)} value={period} onChange={(p) => setPeriod(p as ChannelPeriod)} />
       )}
-      {lock.channel === 'AMAZON' ? <AmazonToolsMenu lock={lock} /> : <EbayToolsMenu lock={lock} />}
+      {lock.channel === 'AMAZON' ? <AmazonToolsMenu lock={lock} sellerFeedbackOn={amazon ? sectionData(amazon.tiles)?.sellerFeedbackOn ?? null : null} /> : <EbayToolsMenu lock={lock} />}
     </div>
   )
   const retry = () => void load()

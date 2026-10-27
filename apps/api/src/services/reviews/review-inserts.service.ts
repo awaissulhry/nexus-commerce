@@ -5,8 +5,13 @@
  * box. A business with no identity for buyers is refused in words (nothing is printed).
  *
  *   GET  /api/review-inserts/count          how many products would print
+ *   GET  /api/review-inserts/products       the families to pick from, each with its ASIN and the cards it prints
  *   GET  /api/review-inserts/product/:id    one card (inline preview)
  *   POST /api/review-inserts/bulk           one card per product (download)
+ *
+ * A family prints one card per product of it with an ASIN — the family itself and each variation — the same cards
+ * "Every product with an ASIN" prints for it, so the rows add up to that total (live audit A05: the picker read the
+ * catalogue list, whose rows never carry an ASIN, and showed "no ASIN — no card" for every family).
  *
  * The routes (routes/review-inserts.routes.ts) hold no database call.
  */
@@ -41,6 +46,51 @@ export async function insertsCount(): Promise<{ count: number; cap: number }> {
   return { count, cap: INSERTS_BULK_CAP }
 }
 
+export interface InsertFamily {
+  id: string
+  name: string
+  sku: string
+  /** The family's own ASIN, else its first variation's (the one its preview card shows); null when none has one. */
+  asin: string | null
+  /** Variations under it; 0 for a single product. */
+  childCount: number
+  /** Cards it prints: itself and each variation with an ASIN. */
+  cards: number
+}
+
+const FAMILIES_PAGE = 200
+
+/** The cards of one family (pure): its own ASIN and each variation's. */
+export function familyCards(row: { amazonAsin: string | null; children: ReadonlyArray<{ amazonAsin: string | null }> }): { asin: string | null; cards: number } {
+  const own = row.amazonAsin?.trim() || null
+  const kids = row.children.map((c) => c.amazonAsin?.trim() || null).filter((a): a is string => !!a)
+  return { asin: own ?? kids[0] ?? null, cards: (own ? 1 : 0) + kids.length }
+}
+
+/** GET /api/review-inserts/products — the families (top-level products), A–Z, searched by name or SKU. */
+export async function insertFamilies(query: { search?: unknown; limit?: unknown } = {}): Promise<{ products: InsertFamily[]; total: number }> {
+  const search = typeof query.search === 'string' ? query.search.trim().slice(0, 100) : ''
+  const limit = Math.min(Math.max(Number(query.limit) || FAMILIES_PAGE, 1), FAMILIES_PAGE)
+  const where = {
+    parentId: null,
+    deletedAt: null,
+    ...(search ? { OR: [{ name: { contains: search, mode: 'insensitive' as const } }, { sku: { contains: search, mode: 'insensitive' as const } }] } : {}),
+  }
+  const [rows, total] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      select: { id: true, name: true, sku: true, amazonAsin: true, children: { where: { deletedAt: null }, select: { amazonAsin: true } } },
+      orderBy: { name: 'asc' },
+      take: limit,
+    }),
+    prisma.product.count({ where }),
+  ])
+  return {
+    products: rows.map((r) => ({ id: r.id, name: r.name, sku: r.sku, childCount: r.children.length, ...familyCards(r) })),
+    total,
+  }
+}
+
 export async function oneInsertPdf(productId: string, marketRaw: unknown): Promise<Buffer> {
   const marketplace = insertMarket(marketRaw)
   const product = await prisma.product.findUnique({ where: { id: productId }, select: { name: true, amazonAsin: true } })
@@ -53,8 +103,10 @@ export async function bulkInsertsPdf(body: { marketplace?: unknown; productIds?:
   const marketplace = insertMarket(body.marketplace)
   const ids = Array.isArray(body.productIds) ? body.productIds.filter((v): v is string => typeof v === 'string' && !!v.trim()) : []
   const brand = await cardBrand()
+  // A picked family prints its own card and each variation's, as "every product" does for it.
+  const picked = ids.slice(0, INSERTS_BULK_CAP)
   const products = await prisma.product.findMany({
-    where: { amazonAsin: { not: null }, deletedAt: null, ...(ids.length ? { id: { in: ids.slice(0, INSERTS_BULK_CAP) } } : {}) },
+    where: { amazonAsin: { not: null }, deletedAt: null, ...(picked.length ? { OR: [{ id: { in: picked } }, { parentId: { in: picked } }] } : {}) },
     select: { name: true, amazonAsin: true },
     orderBy: { name: 'asc' },
     take: INSERTS_BULK_CAP,

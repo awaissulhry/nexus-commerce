@@ -281,7 +281,8 @@ describe('review queue rows and run words', () => {
     const row = toQueueRow(input(), NOW)
     expect(row).toMatchObject({
       status: 'RETRYING', reasonKey: 'amazon_too_early', reasonWords: 'Amazon: too early — tries again tomorrow', buyer: 'Sample B.',
-      orderLabel: '405-0000000-0000000', product: 'Mesh jacket — Grey — L', productType: 'jacket', deliveredEstimate: true, dayWords: 'day 6',
+      // The planned day of the next try (tomorrow = day 7), never today's "day 6"; the SKU as the row's label (D02).
+      orderLabel: '405-0000000-0000000', sku: 'SKU-1', product: 'Mesh jacket — Grey — L', productType: 'jacket', deliveredEstimate: true, dayWords: 'goes on day 7',
       ruleName: 'Amazon — all markets', tries: 0, market: 'DE',
     })
     expect(row.sendNowHeld).toMatch(/said too early today/)

@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Copy, ExternalLink, Languages } from 'lucide-react'
 import {
-  AsOf, Banner, Card, Disclosure, Field, KeyValue, Listbox, StarRating, Thumbnail, Timeline, useToast, type KeyValueItem,
+  AsOf, Banner, Card, Disclosure, Field, KeyValue, Listbox, Thumbnail, Timeline, useToast, type KeyValueItem,
 } from '@/design-system/components'
 import { DetailModal, Lightbox, ReplyComposer, type ReplyAction } from '@/design-system/patterns'
 import { Button, Pill, SegmentedControl, Spinner, Tag, TagInput, Textarea, TokenChip } from '@/design-system/primitives'
@@ -31,6 +31,7 @@ import { MOOD_WORD, STATUS_WORD, themeWord } from '../_lib/reviewWords'
 import { useReplyTemplates } from '../settings/_settings/useReplyTemplates'
 import { studioHref } from '../insights/products/productModalModel'
 import { ownerChoices } from './inboxBulk'
+import { RatingMark } from './inboxColumns'
 import {
   MANAGE_MOOD, MANAGE_TRIAGE, MOOD_OPTIONS, MOOD_TONE, STATUS_OPTIONS, buyerFacts, composerView, dateWords, detailSubtitle, detailTabs,
   detailTitle, draftResponseId, historySteps, initialReplyText, lightboxHead, nextHeld, nextId, orderFacts, photosView, recentSteps,
@@ -247,7 +248,7 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
 
   const header = detail ? (
     <>
-      <StarRating value={detail.review.rating} size="md" />
+      <RatingMark channel={detail.review.channel} rating={detail.review.rating} size="md" long />
       {detail.sentiment.label && <Pill tone={MOOD_TONE[detail.sentiment.label] ?? 'neutral'}>{MOOD_WORD[detail.sentiment.label] ?? detail.sentiment.label}</Pill>}
       {returnOpen(detail) && <Pill tone="danger" dot>Return open</Pill>}
       {detail.review.imported && <Pill tone="neutral">Imported</Pill>}
@@ -506,7 +507,7 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
                   <ul className={s.historyList}>
                     {detail.buyerHistory.map((h) => (
                       <li key={h.id}>
-                        <StarRating value={h.rating} size="sm" />
+                        <RatingMark channel={detail.review.channel} rating={h.rating} />
                         <span className={s.historyText}>{h.snippet || 'No text'}</span>
                         <span className={s.sub}>{dateWords(h.postedAt)}</span>
                       </li>

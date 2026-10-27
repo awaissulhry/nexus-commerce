@@ -119,6 +119,12 @@ describe('reviews navigation', () => {
     expect(inbox(undefined)).toBeUndefined()
     expect(items('/marketing/reviews', undefined, { needReply: 5 }).filter(item => item.badge != null).map(item => item.label)).toEqual(['Inbox'])
   })
+
+  it('a badge opens the reviews it counts, every date; no badge opens the Inbox as it is (live audit A08)', () => {
+    const inbox = (needReply?: number) => items('/w/business_a/marketing/reviews/inbox', undefined, { needReply }).find(item => item.label === 'Inbox')
+    expect(inbox(3)).toMatchObject({ href: '/w/business_a/marketing/reviews/inbox?period=all&reply=needed', badge: '3', active: true })
+    expect(inbox(0)?.href).toBe('/w/business_a/marketing/reviews/inbox')
+  })
 })
 
 describe('reviews crumbs', () => {
