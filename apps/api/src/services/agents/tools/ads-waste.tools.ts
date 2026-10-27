@@ -95,7 +95,7 @@ const adWaste: AgentTool = {
     + 'keyword\'s own place that blocks EVERY search it can serve (a negative exact or phrase of its words over our exact keyword, '
     + 'a negative phrase of its words over our phrase keyword, a negative product over our product target; never a negative exact '
     + 'over our phrase or broad keyword nor a negative phrase over our broad one: that is the funnel, on purpose), a negative that '
-    + 'blocks a term that sold here (never a funnel negative), a keyword turned on outside Nexus — skipped, protected: exactly the rows show protected lists); criteria: the bar in force and the days it reads. view stopped: '
+    + 'blocks a term that sold here (never a funnel negative nor Harvest\'s source negative), a keyword turned on outside Nexus — skipped, protected: exactly the rows show protected lists); criteria: the bar in force and the days it reads. view stopped: '
     + 'kept-paused and paused keywords (kw:) and standing negatives (neg:) in places that run, each with who stopped it (Brain '
     + 'funnel, Brain, Harvest, Playbook, a rule, a person by name, Claude, Amazon, Unknown), since when, the spend in the 30 days before, '
     + 'its state (KEPT_PAUSED, PAUSED, NEGATED, TURNED_ON_ELSEWHERE — kept paused but switched on outside Nexus — '

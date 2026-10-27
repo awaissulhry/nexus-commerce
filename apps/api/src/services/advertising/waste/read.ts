@@ -1432,7 +1432,10 @@ export function buildWasteRows(f: WasteFacts, s: ResolvedScope): WasteRow[] {
       ...(state === 'PROTECTED' ? { protection: rowProtectionOf(f, holding, verbFor({ ...verbFacts, protectedBy: null }).held) } : {}),
       ...followUpOf(f, id),
       // HONEST 5 — a funnel negative (our keyword's own words here, narrower than it) hands the sale on purpose: no clash.
-      clash: state === 'NEGATED' && win.n.orders > 0 && blockers.some((n) => !funnelHere(f, n, p.adGroupId)) ? { kind: 'BLOCKS_SOLD', label: CLASH_LABELS.BLOCKS_SOLD } : null,
+      // The Owner's pick "A" (2026-10-27): nor does Harvest's — it negates the source on purpose, once the term that sold
+      // has a keyword of its own. A Brain funnel negative that blocks a term that sold stays a clash: a term that sells in a
+      // looser group keeps running there until its tighter home sells (the Owner, 2026-10-09).
+      clash: state === 'NEGATED' && win.n.orders > 0 && blockers.some((n) => !funnelHere(f, n, p.adGroupId) && ownerOfNegative(f, n).kind !== 'HARVEST') ? { kind: 'BLOCKS_SOLD', label: CLASH_LABELS.BLOCKS_SOLD } : null,
       // HONEST 13 — the negative that blocks it here, in its own words, match and level (the one its owner is read from).
       ...(state === 'NEGATED' && blockers.length ? { blockedBy: negativeRef(f, blockers[0]) } : {}),
     })
