@@ -4,6 +4,10 @@
  * Suggest fixes, at most 5) that counts what it changes and names why it holds, and the toast after a change in the
  * server's count. Mirrors the API's own rules (`review-alerts.service.ts` `decisionHeld`, `bulkAlerts`), so a button
  * says before the press what the server would answer. Pure, tested in alertsModel.vitest.test.ts.
+ *
+ * Two kinds of alert share the page: a complaint spike (a theme comes up more often) and a rating drop (Phase 3: a
+ * product family's average stars fell in one market, opened when "Rating drop" is on in Reviews settings). A rating drop
+ * names no single complaint, so "Suggest fixes" holds for it with why.
  */
 import { inboxHref } from '../../_lib/reviewsLinks'
 import type { InsightsScope } from '../_shared/insightsScope'
@@ -16,6 +20,10 @@ export type AlertStatus = (typeof ALERT_STATUSES)[number]
 export interface AlertItem {
   id: string
   status: AlertStatus
+  /** 'complaint' = a theme comes up more often; 'rating_drop' = a product family's average stars fell in one market. */
+  kind: 'complaint' | 'rating_drop'
+  /** A rating drop's stars: the 28 days before, the last 7 days, the change; null for a complaint. */
+  rating: { before: number | null; now: number | null; change: number | null } | null
   theme: { key: string; label: string }
   product: { id: string; sku: string; name: string } | null
   market: string
@@ -150,14 +158,25 @@ export function checkWords(check: AlertsAnswer['check'], now: number): { tone: '
 
 // ── One alert ───────────────────────────────────────────────────────
 
-/** "Fit & sizing comes up 3× as often". */
-export function alertTitle(a: Pick<AlertItem, 'theme' | 'multiplier'>): string {
+/** Why a rating drop takes no "Suggest fixes" (the API's words). */
+export const RATING_DROP_NO_SUGGEST = 'A rating drop names no single complaint: open the product and use Suggest a fix there.'
+
+const isDrop = (a: Pick<AlertItem, 'kind'>) => a.kind === 'rating_drop'
+const stars = (n: number | null | undefined) => (n == null ? '—' : n.toFixed(1))
+
+/** "Fit & sizing comes up 3× as often"; a rating drop: "Rating fell 0.5 stars". */
+export function alertTitle(a: Pick<AlertItem, 'theme' | 'multiplier' | 'kind' | 'rating'>): string {
+  if (isDrop(a)) {
+    const change = a.rating?.change
+    return change == null ? 'Rating fell' : `Rating fell ${Math.abs(change).toFixed(1)} ${Math.abs(change) === 1 ? 'star' : 'stars'}`
+  }
   const times = a.multiplier == null ? 'more often' : `${a.multiplier % 1 === 0 ? a.multiplier : a.multiplier.toFixed(1)}× as often`
   return `${a.theme.label} comes up ${times}`
 }
 
-/** "8% → 18% of reviews (9 of 50 reviews in 7 days)". */
-export function riseWords(a: Pick<AlertItem, 'from' | 'to' | 'basis'>): string {
+/** "8% → 18% of reviews (9 of 50 reviews in 7 days)"; a rating drop: "4.4 → 3.9 stars (6 rated reviews in 7 days · …)". */
+export function riseWords(a: Pick<AlertItem, 'from' | 'to' | 'basis' | 'kind' | 'rating'>): string {
+  if (isDrop(a)) return `${stars(a.rating?.before)} → ${stars(a.rating?.now)} stars (${a.basis})`
   const pct = (n: number | null) => (n == null ? '—' : `${n}%`)
   return `${pct(a.from)} → ${pct(a.to)} of reviews (${a.basis})`
 }
@@ -179,23 +198,29 @@ export function fixWords(a: Pick<AlertItem, 'fixes'>): string | null {
   return `${n} ${n === 1 ? 'fix' : 'fixes'} in Fixes`
 }
 
-/** Which of an alert's own buttons show (the API refuses the rest with the same reasons). */
-export function alertActions(a: Pick<AlertItem, 'status' | 'fixes'>): { acknowledge: boolean; resolve: boolean; reopen: boolean; suggest: boolean } {
+/**
+ * Which of an alert's own buttons show (the API refuses the rest with the same reasons). A rating drop shows "Suggest
+ * fixes" held with why (`suggestHeld`).
+ */
+export function alertActions(a: Pick<AlertItem, 'status' | 'fixes' | 'kind'>): { acknowledge: boolean; resolve: boolean; reopen: boolean; suggest: boolean; suggestHeld: string | null } {
   return {
     acknowledge: a.status === 'OPEN',
     resolve: a.status !== 'RESOLVED',
     reopen: a.status !== 'OPEN',
     suggest: a.status !== 'RESOLVED' && liveFixes(a) === 0,
+    suggestHeld: isDrop(a) ? RATING_DROP_NO_SUGGEST : null,
   }
 }
 
 /**
  * "See the reviews": the Inbox on the alert's own reviews (audit A5) — negative, on its theme, its market, its product
  * (by id, its variants too; a review matched by ASIN has no SKU) — over the shortest Inbox period that still holds the
- * alert's 7 days. The label names the count only when that period is exactly those 7 days.
+ * alert's 7 days. The label names the count only when that period is exactly those 7 days. A rating drop has no theme
+ * and no mood: every review of its product in its market; its label never names a count (the Inbox lists every review,
+ * the drop counted only the rated product reviews).
  */
 export function alertReviewsLink(
-  a: Pick<AlertItem, 'theme' | 'market' | 'product' | 'channels' | 'count' | 'detectedAt'>,
+  a: Pick<AlertItem, 'theme' | 'market' | 'product' | 'channels' | 'count' | 'detectedAt' | 'kind'>,
   scope: Pick<InsightsScope, 'channel'>,
   now: number = Date.now(),
 ): { href: string; label: string } {
@@ -203,14 +228,16 @@ export function alertReviewsLink(
   const from = new Date(a.detectedAt).getTime() - 7 * DAY
   const daysBack = Number.isFinite(from) ? (now - from) / DAY : Infinity
   const period = daysBack <= 7 ? '7d' : daysBack <= 30 ? '30d' : daysBack <= 90 ? '90d' : 'all'
+  const drop = isDrop(a)
   const href = inboxHref({
-    theme: a.theme.key,
-    mood: 'NEGATIVE',
+    theme: drop ? null : a.theme.key,
+    mood: drop ? null : 'NEGATIVE',
     market: a.market,
     channel: a.channels.length === 1 ? a.channels[0] : scope.channel,
     product: a.product?.id ?? null,
     period,
   })
+  if (drop) return { href, label: 'See the product’s reviews' }
   const exact = period === '7d' && now - new Date(a.detectedAt).getTime() < DAY
   return { href, label: exact ? `See the ${a.count} ${a.count === 1 ? 'review' : 'reviews'}` : 'See the negative reviews' }
 }
@@ -227,7 +254,7 @@ export interface BulkPlan {
 }
 
 /** Why one alert cannot take a bulk action (the API's words); null = it can. */
-export function bulkHeldFor(a: Pick<AlertItem, 'status' | 'fixes'>, action: AlertBulkAction): string | null {
+export function bulkHeldFor(a: Pick<AlertItem, 'status' | 'fixes' | 'kind'>, action: AlertBulkAction): string | null {
   if (action === 'acknowledge') {
     if (a.status === 'ACKNOWLEDGED') return 'Already acknowledged.'
     if (a.status === 'RESOLVED') return 'Already resolved: reopen it first.'
@@ -235,6 +262,7 @@ export function bulkHeldFor(a: Pick<AlertItem, 'status' | 'fixes'>, action: Aler
   }
   if (action === 'resolve') return a.status === 'RESOLVED' ? 'Already resolved.' : null
   if (a.status === 'RESOLVED') return 'Resolved: reopen it to ask for fixes.'
+  if (isDrop(a)) return RATING_DROP_NO_SUGGEST
   if (liveFixes(a) > 0) return 'It has fixes already: they are on the Fixes page.'
   return null
 }
@@ -265,6 +293,9 @@ export function bulkHeld(canManage: boolean, action: AlertBulkAction, selectedCo
   if (selectedCount === 0) return 'Tick at least one alert.'
   if (action === 'acknowledge') return 'Every ticked alert is already acknowledged or resolved.'
   if (action === 'resolve') return 'Every ticked alert is already resolved.'
+  const reasons = new Set(plan.held.map((h) => h.words))
+  if (reasons.size === 1 && reasons.has(RATING_DROP_NO_SUGGEST)) return RATING_DROP_NO_SUGGEST
+  if (reasons.has(RATING_DROP_NO_SUGGEST)) return 'No ticked alert can ask for fixes: each is resolved, has fixes already, or is a rating drop.'
   return 'No ticked alert can ask for fixes: each is resolved or has fixes already.'
 }
 
@@ -278,9 +309,10 @@ export function bulkResultWords(action: AlertBulkAction, changed: number, held: 
 }
 
 /** The toast after one alert's own button. */
-export function decisionWords(decision: 'ACKNOWLEDGED' | 'RESOLVED' | 'REOPEN', a: Pick<AlertItem, 'theme' | 'where'>): string {
+export function decisionWords(decision: 'ACKNOWLEDGED' | 'RESOLVED' | 'REOPEN', a: Pick<AlertItem, 'theme' | 'where' | 'kind'>): string {
   const what = `${a.theme.label} · ${a.where}`
   if (decision === 'ACKNOWLEDGED') return `Acknowledged: ${what}. Others see that you are on it.`
+  if (decision === 'RESOLVED' && isDrop(a)) return `Resolved: ${what}. If the drop is still there 7 days from now, a new alert opens.`
   if (decision === 'RESOLVED') return `Resolved: ${what}. If the share stays high for 7 more days, a new alert opens.`
   return `Reopened: ${what}.`
 }

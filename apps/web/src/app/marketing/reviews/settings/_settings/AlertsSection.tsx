@@ -6,14 +6,17 @@
  *   New negative review   a new review of 1–2 stars or negative feedback: in Nexus (the bell) and/or by e-mail, to the
  *                         people picked (nobody picked = the business's owners). Imported files never alert.
  *   Daily digest          the morning e-mail: on/off and who gets it (nobody picked = where it went before).
+ *   Rating drop           (Phase 3) a product family's average stars fall in one market — the rule in words, from the
+ *                         API (`ratingDropRule`); off until switched on; opens an alert in Insights › Alerts and tells
+ *                         the people picked, in Nexus and/or by e-mail.
  *
- * "Rating drop" and "Complaint spike" are labelled placeholders (ruling 3): the hourly spike check already opens alerts on
- * Insights › Alerts; a notice for them, and a rating-drop check, come later.
+ * "Complaint spike" is a labelled placeholder (ruling 3): the hourly spike check already opens alerts on Insights › Alerts;
+ * a notice for them comes later.
  */
 import { Card, MultiSelect } from '@/design-system/components'
 import { Button, Checkbox, Pill, Skeleton, Tag, Toggle } from '@/design-system/primitives'
 import { ReadFailed } from './ReadFailed'
-import { ALERT_NAME, ALERT_WHEN, recipientsHint, type AlertForm, type AlertKey, type AlertVia } from './settingsForm'
+import { ALERT_NAME, ALERT_WHEN, ALERTS_WITH_VIA, ratingDropWords, recipientsHint, type AlertForm, type AlertKey, type AlertVia, type RatingDropRule } from './settingsForm'
 import s from './settings.module.css'
 
 export interface AlertsSectionProps {
@@ -22,6 +25,8 @@ export interface AlertsSectionProps {
   onRetry: () => void
   team: Array<{ userId: string; name: string; owner: boolean }>
   digestFallback: string[]
+  /** When "Rating drop" opens an alert (null while the settings are read). */
+  ratingDropRule: RatingDropRule | null
   onOn: (key: AlertKey, on: boolean) => void
   onRecipients: (key: AlertKey, ids: string[]) => void
   onVia: (key: AlertKey, via: AlertVia, on: boolean) => void
@@ -29,11 +34,10 @@ export interface AlertsSectionProps {
 
 /** ⛔ KEEP — placeholders (build spec ruling 3): these alerts arrive with Insights in Phase 2 (PR E). */
 const LATER: ReadonlyArray<{ name: string; when: string }> = [
-  { name: 'Rating drop', when: 'A product’s average falls 0.3 stars or more in 7 days, in one market.' },
   { name: 'Complaint spike', when: 'A theme suddenly shows up in many more reviews than usual.' },
 ]
 
-export function AlertsSection({ alerts, error, onRetry, team, digestFallback, onOn, onRecipients, onVia }: AlertsSectionProps) {
+export function AlertsSection({ alerts, error, onRetry, team, digestFallback, ratingDropRule, onOn, onRecipients, onVia }: AlertsSectionProps) {
   const options = team.map((m) => ({ value: m.userId, label: m.owner ? `${m.name} (owner)` : m.name }))
   return (
     <div className={s.section}>
@@ -51,6 +55,7 @@ export function AlertsSection({ alerts, error, onRetry, team, digestFallback, on
                 <div className={`${s.alertName} ${a.on ? '' : s.dim}`}>
                   <span className={s.cellStrong}>{ALERT_NAME[a.key]}</span>
                   <span className={s.cellSub}>{ALERT_WHEN[a.key]}</span>
+                  {a.key === 'ratingDrop' && ratingDropRule && ratingDropWords(ratingDropRule).map((line) => <span key={line} className={s.cellSub}>{line}</span>)}
                 </div>
                 <div className={`${s.alertField} ${a.on ? '' : s.dim}`}>
                   <span className={s.fieldLabel} id={`alert-who-${a.key}`}>Who</span>
@@ -68,7 +73,7 @@ export function AlertsSection({ alerts, error, onRetry, team, digestFallback, on
                 </div>
                 <div className={`${s.alertField} ${a.on ? '' : s.dim}`}>
                   <span className={s.fieldLabel}>How</span>
-                  {a.key === 'negative' ? (
+                  {ALERTS_WITH_VIA.includes(a.key) ? (
                     <div className={s.choices} role="group" aria-label={`How “${ALERT_NAME[a.key]}” arrives`}>
                       <Checkbox label="In Nexus" checked={a.via.includes('app')} onChange={(e) => onVia(a.key, 'app', e.target.checked)} />
                       <Checkbox label="By e-mail" checked={a.via.includes('email')} onChange={(e) => onVia(a.key, 'email', e.target.checked)} />
@@ -79,8 +84,8 @@ export function AlertsSection({ alerts, error, onRetry, team, digestFallback, on
                 </div>
               </div>
             ))}
-            {/* ⛔ KEEP — placeholders (build spec ruling 3): "Rating drop" and "Complaint spike" arrive with Insights
-                (Phase 2, PR E). Shown labelled, never hidden: the switch is held until then. */}
+            {/* ⛔ KEEP — placeholders (build spec ruling 3): "Complaint spike" arrives with Insights (Phase 2, PR E).
+                Shown labelled, never hidden: the switch is held until then. */}
             {LATER.map((l) => (
               <div key={l.name} className={s.alert}>
                 <Button size="sm" heldReason={`Coming later: “${l.name}” arrives with the new Insights pages.`}>Off</Button>

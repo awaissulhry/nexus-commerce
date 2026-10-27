@@ -9,7 +9,7 @@
 
 export type Tone = 'WARM' | 'NEUTRAL' | 'FORMAL'
 export type ReplyLanguage = 'buyer' | 'it' | 'de' | 'fr' | 'es' | 'en'
-export type AlertKey = 'negative' | 'digest'
+export type AlertKey = 'negative' | 'digest' | 'ratingDrop'
 export type AlertVia = 'app' | 'email'
 
 export interface SenderView {
@@ -32,8 +32,19 @@ export interface SettingsResponse {
   team: Array<{ userId: string; name: string; owner: boolean }>
   digestFallback: string[]
   automationTemplates: { total: number; missing: number }
+  /** When "Rating drop" opens an alert (the API's rating-drop-math.ts). */
+  ratingDropRule: RatingDropRule
   updatedAt: string | null
   updatedBy: string | null
+}
+
+/** The API's rule for "Rating drop": windows in days, the fewest rated reviews in each, the fewest stars it must fall. */
+export interface RatingDropRule {
+  recentDays: number
+  beforeDays: number
+  minRated: number
+  dropAtLeast: number
+  reopenAfterDays: number
 }
 
 export interface VoiceForm {
@@ -78,10 +89,27 @@ export const LANGUAGE_OPTIONS: ReadonlyArray<{ value: ReplyLanguage; label: stri
   { value: 'en', label: 'English' },
 ]
 
-export const ALERT_NAME: Record<AlertKey, string> = { negative: 'New negative review', digest: 'Daily digest' }
+export const ALERT_NAME: Record<AlertKey, string> = { negative: 'New negative review', digest: 'Daily digest', ratingDrop: 'Rating drop' }
 export const ALERT_WHEN: Record<AlertKey, string> = {
   negative: 'A new review of 1 or 2 stars, or negative feedback, on any channel. Imported files never alert.',
   digest: 'Every morning at 08:00 UTC: new reviews, what waits for a reply, open spikes and pipeline problems.',
+  ratingDrop: 'A product’s average stars fall in one market. Opens an alert in Insights › Alerts.',
+}
+
+/** The alerts a person picks how they arrive (the digest is always an e-mail). */
+export const ALERTS_WITH_VIA: readonly AlertKey[] = ['negative', 'ratingDrop']
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+/**
+ * "Rating drop" in words, from the API's rule: when it opens, what counts, and how often. Each line is one sentence.
+ */
+export function ratingDropWords(rule: RatingDropRule): string[] {
+  return [
+    `A product family’s average falls ${rule.dropAtLeast} stars or more in one market: the last ${plural(rule.recentDays, 'day')} against the ${plural(rule.beforeDays, 'day')} before, with at least ${plural(rule.minRated, 'rated review')} in each.`,
+    'Only product reviews with stars count: never seller feedback or eBay feedback, and Amazon only from imported reviews.',
+    `Checked every hour. One alert per product and market until it is resolved; after a resolve, a new one opens only if the drop is still there ${plural(rule.reopenAfterDays, 'day')} later.`,
+  ]
 }
 
 export function formFromSettings(s: Pick<SettingsResponse, 'voice' | 'alerts'>): SettingsForm {
@@ -182,8 +210,9 @@ export function saveHeldReason(draft: SettingsForm): string | null {
   if (draft.voice.languages.length === 0) return 'Pick at least one reply language.'
   const signOff = draft.voice.signOff.trim()
   if (signOff.length > SIGN_OFF_MAX) return `Keep the sign-off to ${SIGN_OFF_MAX} characters (it has ${signOff.length}).`
-  const negative = draft.alerts.find((a) => a.key === 'negative')
-  if (negative?.on && negative.via.length === 0) return 'Choose how “New negative review” arrives: in Nexus, by e-mail or both.'
+  for (const a of draft.alerts) {
+    if (ALERTS_WITH_VIA.includes(a.key) && a.on && a.via.length === 0) return `Choose how “${ALERT_NAME[a.key]}” arrives: in Nexus, by e-mail or both.`
+  }
   return null
 }
 

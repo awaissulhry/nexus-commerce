@@ -381,7 +381,7 @@ export function needsFooter(shown: number, total: number, show: NeedsFilter | nu
 
 export function needsEmptyWords(show: NeedsFilter | null): { title: string; description: string } {
   if (show === 'reply') return { title: 'No review needs a reply', description: 'New reviews that need a reply show here as they arrive.' }
-  if (show === 'alerts') return { title: 'No open alerts', description: 'An alert opens when complaints about one theme rise fast.' }
+  if (show === 'alerts') return { title: 'No open alerts', description: 'An alert opens when complaints about one theme rise fast, or a product’s rating drops.' }
   if (show === 'requests') return { title: 'No request problems', description: 'Failed review requests and requests waiting to try again show here.' }
   return { title: 'Nothing needs you', description: 'No review waits for a reply, no alert is open and no review request failed.' }
 }

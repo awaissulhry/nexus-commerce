@@ -283,6 +283,8 @@ const COUNTRY: Record<string, string> = {
 const THEME: Record<string, string> = {
   FIT_SIZING: 'Fit & sizing', DURABILITY: 'Durability', SHIPPING: 'Shipping', VALUE: 'Value', DESIGN: 'Design',
   QUALITY: 'Quality', SAFETY: 'Safety', COMFORT: 'Comfort', OTHER: 'Other',
+  // Not a theme: the category of a "Rating drop" alert (rating-drop-math.ts), named where alerts are listed.
+  RATING_DROP: 'Rating drop',
 }
 
 export function themeWords(key: string): string {
