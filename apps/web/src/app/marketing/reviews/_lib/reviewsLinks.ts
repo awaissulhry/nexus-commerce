@@ -36,9 +36,10 @@ export interface InboxLinkParams {
   family?: string | null
   /**
    * Only the reviews that need a reply (the badges' number: `needsReplyHref`); `closing`: of those, only the Etsy reviews
-   * whose reply window closes within 10 days (`etsyClosingHref`).
+   * whose reply window closes within 10 days (`etsyClosingHref`); `closed`: the Etsy reviews that needed a reply but whose
+   * window ran out (`etsyClosedHref`).
    */
-  reply?: 'needed' | 'closing' | null
+  reply?: 'needed' | 'closing' | 'closed' | null
   /** One product's reviews (and its variants'). */
   product?: string | null
   mood?: string | null
@@ -75,6 +76,14 @@ export function needsReplyHref(scope: { channel?: string | null; market?: string
  */
 export function etsyClosingHref(): string {
   return inboxHref({ reply: 'closing', period: 'all', channel: 'ETSY' })
+}
+
+/**
+ * The Etsy reviews that needed a reply by the one rule (not positive, not imported, not answered) but whose 100-day
+ * window ran out: the Etsy page's "Window closed" tile, `reply=closed`, every date.
+ */
+export function etsyClosedHref(): string {
+  return inboxHref({ reply: 'closed', period: 'all', channel: 'ETSY' })
 }
 
 export interface RequestsLinkParams {

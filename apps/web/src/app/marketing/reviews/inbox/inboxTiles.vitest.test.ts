@@ -13,7 +13,7 @@ const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   id: 'r1', postedAt: '2026-10-26T07:00:00Z', channel: 'EBAY', market: 'DE', kind: 'seller', rating: 3, snippet: 'Fällt klein aus',
   english: 'Runs small', language: 'de', buyer: 'buyer-one', product: { id: 'p', name: 'Over-trousers', sku: 'OT', variant: 'XL' },
   order: { id: 'o', label: '12-1' }, mood: 'NEUTRAL', themes: ['FIT_SIZING'], status: 'NEW', assignee: null,
-  dueAt: '2026-10-28T07:00:00Z', overdue: false, imported: false, responses: { sent: 0, draft: 0 }, photos: 0, aiTopics: [], ...over,
+  dueAt: '2026-10-28T07:00:00Z', noReply: null, overdue: false, imported: false, responses: { sent: 0, draft: 0 }, photos: 0, aiTopics: [], ...over,
 })
 
 describe('Inbox tabs and tiles', () => {
@@ -42,12 +42,15 @@ describe('Inbox tabs and tiles', () => {
     expect(inboxChips({ ...EMPTY_INBOX_QUERY, period: 'all' })).toEqual([])
   })
 
-  it('"Needs a reply" and the Etsy page\'s "Window closing" (`reply=closing`): one chip, whose × shows every review', () => {
-    const needed = inboxChips({ ...EMPTY_INBOX_QUERY, period: 'all', needsReply: true })
+  it('"Needs a reply" and the Etsy page\'s "Window closing" / "Window closed" (`reply=`): one chip, whose × shows every review', () => {
+    const needed = inboxChips({ ...EMPTY_INBOX_QUERY, period: 'all', reply: 'needed' })
     expect(needed.map((c) => c.label)).toEqual(['Needs a reply'])
-    const closing = inboxChips({ ...EMPTY_INBOX_QUERY, period: 'all', needsReply: true, replyClosing: true, channels: ['ETSY'] })
+    const closing = inboxChips({ ...EMPTY_INBOX_QUERY, period: 'all', reply: 'closing', channels: ['ETSY'] })
     expect(closing.map((c) => c.label)).toEqual(['Needs a reply: Etsy window closing', 'Channel: Etsy'])
-    expect(closing[0].next).toMatchObject({ needsReply: false, replyClosing: false, channels: ['ETSY'] })
+    expect(closing[0].next).toMatchObject({ reply: null, channels: ['ETSY'] })
+    const closed = inboxChips({ ...EMPTY_INBOX_QUERY, period: 'all', reply: 'closed', channels: ['ETSY'] })
+    expect(closed.map((c) => c.label)).toEqual(['Etsy window closed, no reply', 'Channel: Etsy'])
+    expect(closed[0].next.reply).toBeNull()
   })
 })
 

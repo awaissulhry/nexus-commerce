@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { withQuery } from '../_lib/reviewsLinks'
 import {
   EMPTY_INBOX_QUERY, activeFilterCount, clearFilters, gridSortOf, inboxApiParams, inboxPageHref, isFiltered, litTile, parseInboxQuery,
-  querySignature, serializeInboxQuery, sortFromGrid, toggleStatusTile, withFilter, withKind, withNeedsReply, withPage, withPeriod,
+  querySignature, serializeInboxQuery, sortFromGrid, toggleStatusTile, withFilter, withKind, withPage, withPeriod, withReply,
   withPhotos, withProduct, withSearch, withSort, withoutValue,
 } from './inboxQuery'
 
@@ -45,25 +45,28 @@ describe('Inbox address', () => {
 
   it('"Needs a reply" and one product: read, written back, cleared, and handed to the API (A4, A5)', () => {
     const { query } = parseInboxQuery('?reply=needed&period=all&product=p-1')
-    expect(query).toMatchObject({ needsReply: true, period: 'all', product: 'p-1' })
+    expect(query).toMatchObject({ reply: 'needed', period: 'all', product: 'p-1' })
     expect(serializeInboxQuery(query)).toBe('?period=all&reply=needed&product=p-1')
     expect(inboxApiParams(query)).toMatchObject({ reply: 'needed', product: 'p-1', period: 'all' })
-    expect(isFiltered({ ...EMPTY_INBOX_QUERY, period: 'all', needsReply: true })).toBe(true)
-    expect(clearFilters(query)).toMatchObject({ needsReply: false, product: null })
-    expect(withNeedsReply(query, false).needsReply).toBe(false)
+    expect(isFiltered({ ...EMPTY_INBOX_QUERY, period: 'all', reply: 'needed' })).toBe(true)
+    expect(clearFilters(query)).toMatchObject({ reply: null, product: null })
+    expect(withReply(query, null).reply).toBeNull()
     expect(withProduct(query, null).product).toBeNull()
   })
 
-  it('"Etsy window closing" (`reply=closing`, the Etsy page\'s tile): read, written back, handed to the API, and its × ends it', () => {
-    const { query } = parseInboxQuery('?reply=closing&period=all&channel=ETSY')
-    expect(query).toMatchObject({ needsReply: true, replyClosing: true, period: 'all', channels: ['ETSY'] })
-    expect(serializeInboxQuery(query)).toBe('?period=all&channel=ETSY&reply=closing')
-    expect(inboxApiParams(query)).toMatchObject({ reply: 'closing', channel: ['ETSY'], period: 'all' })
-    expect(withNeedsReply(query, false)).toMatchObject({ needsReply: false, replyClosing: false })
-    expect(withNeedsReply(query, true)).toBe(query)
-    expect(clearFilters(query)).toMatchObject({ needsReply: false, replyClosing: false })
-    expect(parseInboxQuery('?reply=needed').query.replyClosing).toBe(false)
-    expect(parseInboxQuery('?reply=soon').query).toMatchObject({ needsReply: false, replyClosing: false })
+  it('the Etsy page\'s "Window closing" and "Window closed" (`reply=closing|closed`): read, written back, handed to the API; × ends them', () => {
+    for (const reply of ['closing', 'closed'] as const) {
+      const { query } = parseInboxQuery(`?reply=${reply}&period=all&channel=ETSY`)
+      expect(query).toMatchObject({ reply, period: 'all', channels: ['ETSY'] })
+      expect(serializeInboxQuery(query)).toBe(`?period=all&channel=ETSY&reply=${reply}`)
+      expect(inboxApiParams(query)).toMatchObject({ reply, channel: ['ETSY'], period: 'all' })
+      expect(withReply(query, null).reply).toBeNull()
+      expect(withReply(query, reply)).toBe(query)
+      expect(clearFilters(query).reply).toBeNull()
+      expect(isFiltered({ ...EMPTY_INBOX_QUERY, period: 'all', reply })).toBe(true)
+    }
+    expect(parseInboxQuery('?reply=needed').query.reply).toBe('needed')
+    expect(parseInboxQuery('?reply=soon').query.reply).toBeNull()
   })
 
   it('a status tile shows that status alone; pressing it again shows every status', () => {

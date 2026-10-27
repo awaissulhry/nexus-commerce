@@ -1,13 +1,14 @@
 /**
  * Reviews channel pages — every reply tile counts the rows its link opens in the Inbox (lane N8, 2026-10-28), against
- * real SQL (PGlite with the production schema and policies). The Etsy page's "Not replied yet" and "Window closing" and
- * the Shopify page's "Needs a reply" follow the ONE needs-a-reply rule (review-visibility.ts): a positive review (4–5
- * stars, or no stars and a happy mood), an answered, imported or fixture row, and an Etsy review whose 100-day window
- * (from the buyer's last edit) closed never count — so the Inbox the tile links to shows exactly the tile's number. The
- * Amazon and eBay pages' "Needs a reply" are held to the same. Nothing leaves this machine: no channel is called.
+ * real SQL (PGlite with the production schema and policies). The Etsy page's "Not replied yet", "Window closing" and
+ * "Window closed" and the Shopify page's "Needs a reply" follow the ONE needs-a-reply rule (review-visibility.ts): a
+ * positive review (4–5 stars, or no stars and a happy mood), an answered, imported or fixture row never count, and an
+ * Etsy review whose 100-day window (from the buyer's last edit) closed counts only under "Window closed" — so the Inbox
+ * the tile links to shows exactly the tile's number. The Amazon and eBay pages' "Needs a reply" are held to the same.
+ * Each list row says why it needs no reply by the same rule (`noReply`). Nothing leaves this machine: no channel is called.
  *
- * The links are the literal addresses the web builds (reviewsLinks.ts `needsReplyHref`, `etsyClosingHref`; the web's
- * shopChannelModel/channelModel tests assert the same strings).
+ * The links are the literal addresses the web builds (reviewsLinks.ts `needsReplyHref`, `etsyClosingHref`,
+ * `etsyClosedHref`; the web's shopChannelModel and reviewsLinks tests assert the same strings).
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../test-support/formula-database.js'
@@ -49,6 +50,7 @@ const linkParams = (href: string) => Object.fromEntries(new URLSearchParams(href
 const LINKS = {
   etsyNotReplied: '/marketing/reviews/inbox?period=all&channel=ETSY&reply=needed',
   etsyClosing: '/marketing/reviews/inbox?period=all&channel=ETSY&reply=closing',
+  etsyClosed: '/marketing/reviews/inbox?period=all&channel=ETSY&reply=closed',
   shopifyNeedReply: '/marketing/reviews/inbox?period=all&channel=SHOPIFY&reply=needed',
   amazonItNeedReply: '/marketing/reviews/inbox?period=all&channel=AMAZON&market=IT&reply=needed',
   ebayItNeedReply: '/marketing/reviews/inbox?period=all&channel=EBAY&market=IT&reply=needed',
@@ -80,7 +82,13 @@ describe('channel reply tiles = the Inbox rows they link to (real SQL)', () => {
       await etsy('etsy-answered', { rating: 2, postedAt: daysAgo(3), triageStatus: 'RESPONDED' })
       await etsy('etsy-imported', { rating: 1, postedAt: daysAgo(4), ingestSource: 'IMPORT_CSV' })
       await etsy('etsy-fixture', { rating: 1, postedAt: daysAgo(4), ingestSource: 'FIXTURE' })
+      // Etsy — needed a reply, but the 100 days from the last edit ran out ("Window closed").
       await etsy('etsy-closed', { rating: 1, postedAt: daysAgo(130), channelEditedAt: daysAgo(120) })
+      await etsy('etsy-closed-noedit', { rating: 3, postedAt: daysAgo(101), channelEditedAt: null })
+      // Etsy — window closed, but never needed a reply: positive, answered, imported.
+      await etsy('etsy-closed-happy', { rating: 5, postedAt: daysAgo(140), channelEditedAt: daysAgo(110) })
+      await etsy('etsy-closed-answered', { rating: 2, postedAt: daysAgo(150), triageStatus: 'RESPONDED' })
+      await etsy('etsy-closed-imported', { rating: 1, postedAt: daysAgo(150), ingestSource: 'IMPORT_CSV' })
 
       const shop = (id: string, data: Record<string, unknown>) => review(id, { channel: 'SHOPIFY', marketplace: null, ingestSource: 'JUDGEME', ...data })
       // Shopify — needs a reply: a 2-star review three days old (the oldest that waits).
@@ -110,10 +118,11 @@ describe('channel reply tiles = the Inbox rows they link to (real SQL)', () => {
     const { REPLY_TILE_LINKS } = await import('./review-shop-channel.service.js')
     expect(REPLY_TILE_LINKS.etsyNotReplied).toEqual(linkParams(LINKS.etsyNotReplied))
     expect(REPLY_TILE_LINKS.etsyClosing).toEqual(linkParams(LINKS.etsyClosing))
+    expect(REPLY_TILE_LINKS.etsyClosed).toEqual(linkParams(LINKS.etsyClosed))
     expect(REPLY_TILE_LINKS.shopifyNeedReply).toEqual(linkParams(LINKS.shopifyNeedReply))
   })
 
-  it('Etsy: "Not replied yet" and "Window closing" are the Inbox rows they open — positive reviews never count', async () => {
+  it('Etsy: "Not replied yet", "Window closing" and "Window closed" are the Inbox rows they open — positive reviews never count', async () => {
     const { reviewsShopChannel } = await import('./review-shop-channel.service.js')
     const page = await inside(() => reviewsShopChannel({ channel: 'ETSY', now: NOW }))
     const s = page.sections as import('./review-shop-channel.service.js').EtsySections
@@ -129,11 +138,33 @@ describe('channel reply tiles = the Inbox rows they link to (real SQL)', () => {
     expect(s.tiles.data.closing).toBe(closing.total)
     expect(closing.total).toBe(2)
 
-    // "Window closed" (no link): the unanswered rows whose 100 days from the last edit ran out — only `etsy-closed`
-    // (the 4-star review posted 130 days ago was edited 95 days ago: its window is still open).
-    expect(s.tiles.data.closed).toBe(1)
+    // Needed a reply, the window ran out: never the positive, answered or imported ones whose window closed too.
+    const closed = await inboxRows(LINKS.etsyClosed)
+    expect(closed.ids).toEqual(['etsy-closed', 'etsy-closed-noedit'])
+    expect(s.tiles.data.closed).toBe(closed.total)
+    expect(closed.total).toBe(2)
+
     // The page's own count of reviews is every visible Etsy row (the fixture never shows).
-    expect(s.tiles.data.reviews).toBe(8)
+    expect(s.tiles.data.reviews).toBe(12)
+  })
+
+  it('Etsy and Shopify lists: each row says why it needs no reply, by the same rule (null = needs one)', async () => {
+    const { reviewsShopChannel } = await import('./review-shop-channel.service.js')
+    const etsy = (await inside(() => reviewsShopChannel({ channel: 'ETSY', now: NOW }))).sections as import('./review-shop-channel.service.js').EtsySections
+    if (!etsy.reviews.ok) throw new Error(JSON.stringify(etsy.reviews))
+    const why = new Map(etsy.reviews.data.rows.map((r) => [r.id, r.noReply]))
+    expect(Object.fromEntries(['etsy-open-2', 'etsy-closing-1', 'etsy-happy-5', 'etsy-happy-4-closing', 'etsy-answered', 'etsy-imported', 'etsy-closed', 'etsy-closed-happy'].map((id) => [id, why.get(id)])))
+      .toEqual({
+        'etsy-open-2': null, 'etsy-closing-1': null, 'etsy-happy-5': 'positive', 'etsy-happy-4-closing': 'positive',
+        'etsy-answered': 'closed', 'etsy-imported': 'imported', 'etsy-closed': 'window_closed', 'etsy-closed-happy': 'window_closed',
+      })
+    // Exactly the rows "Not replied yet" opens need a reply.
+    expect(etsy.reviews.data.rows.filter((r) => r.noReply == null).map((r) => r.id).sort()).toEqual((await inboxRows(LINKS.etsyNotReplied)).ids)
+
+    const shop = (await inside(() => reviewsShopChannel({ channel: 'SHOPIFY', now: NOW }))).sections as import('./review-shop-channel.service.js').ShopifySections
+    if (!shop.reviews.ok) throw new Error(JSON.stringify(shop.reviews))
+    expect(Object.fromEntries(shop.reviews.data.rows.map((r) => [r.id, r.noReply])))
+      .toEqual({ 'shop-low': null, 'shop-happy': 'positive', 'shop-mood-happy': 'positive', 'shop-answered': 'closed', 'shop-imported': 'imported' })
   })
 
   it('Etsy: the Inbox`s reply=closing is Needs you`s closing list — one rule, never a second count', async () => {

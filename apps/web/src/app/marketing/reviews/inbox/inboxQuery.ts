@@ -2,8 +2,8 @@
  * Reviews › Inbox — what the page shows, kept in the address so a reload or a shared link shows the same thing: the tab
  * (`?kind=product|seller`), the period (`?period=7d`; 30 days is the default and leaves the address; `all` = All time),
  * the status tile (`?status=OVERDUE`), "Needs a reply" (`?reply=needed`: only the reviews someone can answer that wait for it —
- * the number on the rail and sub-sidebar badges and the Overview tile, which link here with it and `period=all`; `?reply=closing`:
- * of those, the Etsy reviews whose reply window closes within 10 days — the Etsy page's "Window closing"), every Filters field (`channel`, `market`, `stars`, `mood`, `theme`, `owner`,
+ * the number on the rail and sub-sidebar badges and the Overview tile, which link here with it and `period=all`; `?reply=closing`
+ * and `?reply=closed`: the Etsy page's "Window closing" and "Window closed", INBOX_REPLY_FILTERS), every Filters field (`channel`, `market`, `stars`, `mood`, `theme`, `owner`,
  * `family` — comma lists; `owner=none` = nobody; "Has photos" = `?photos=1`), the search (`?q=`), the order (`?sort=rating:asc`) and the pager
  * (`?page=2&pageSize=100`). Two one-time flags are read on mount and then left out of the address: `?import=1` opens
  * the Import window, `?review=<id>` opens that review's pop-up (and stays while it is open).
@@ -38,6 +38,15 @@ export const INBOX_PAGE_SIZES = [50, 100, 200] as const
 export type InboxPageSize = (typeof INBOX_PAGE_SIZES)[number]
 export const DEFAULT_INBOX_PAGE_SIZE: InboxPageSize = 50
 
+/**
+ * `reply=` (the API's INBOX_REPLY_FILTERS): `needed` — the reviews that need a reply (the API's one rule: answerable, not
+ * imported, open, not positive); `closing` — of those, the Etsy reviews whose reply window closes within 10 days (the
+ * Etsy page's "Window closing"); `closed` — the Etsy reviews that needed a reply but whose window ran out ("Window
+ * closed").
+ */
+export const INBOX_REPLY_FILTERS = ['needed', 'closing', 'closed'] as const
+export type InboxReplyFilter = (typeof INBOX_REPLY_FILTERS)[number]
+
 /** `owner=none`: nobody is assigned (the API's word). */
 export const NO_OWNER = 'none'
 
@@ -52,10 +61,8 @@ export interface InboxQuery {
   themes: string[]
   owners: string[]
   families: string[]
-  /** `reply=needed`: only the reviews that need a reply (the API's one rule: answerable, not imported, open). */
-  needsReply: boolean
-  /** `reply=closing` (with `needsReply`): of those, the Etsy reviews whose reply window closes within 10 days. */
-  replyClosing: boolean
+  /** `reply=needed|closing|closed` (INBOX_REPLY_FILTERS); null = every review. */
+  reply: InboxReplyFilter | null
   /** `product=<id>`: one product's reviews (and its variants'), from an alert's "See the reviews". */
   product: string | null
   /** "Has photos" (PR G): only reviews with the buyer's photos. */
@@ -81,8 +88,7 @@ export const EMPTY_INBOX_QUERY: InboxQuery = {
   themes: [],
   owners: [],
   families: [],
-  needsReply: false,
-  replyClosing: false,
+  reply: null,
   product: null,
   photos: false,
   q: '',
@@ -149,8 +155,7 @@ export function parseInboxQuery(search: string | URLSearchParams): InboxAddress 
       themes: codes(p.get('theme')),
       owners: list(p.get('owner')).filter((o) => o.length <= 120),
       families: list(p.get('family')).filter((f) => ID.test(f)),
-      needsReply: reply === 'needed' || reply === 'closing',
-      replyClosing: reply === 'closing',
+      reply: (INBOX_REPLY_FILTERS as readonly string[]).includes(reply) ? (reply as InboxReplyFilter) : null,
       product: ID.test((p.get('product') ?? '').trim()) ? (p.get('product') ?? '').trim() : null,
       photos: photosFlag === '1' || photosFlag === 'true',
       q: (p.get('q') ?? '').trim().slice(0, 200),
@@ -176,7 +181,7 @@ export function serializeInboxQuery(q: InboxQuery, open: { review?: string | nul
   if (q.themes.length) p.set('theme', q.themes.join(','))
   if (q.owners.length) p.set('owner', q.owners.join(','))
   if (q.families.length) p.set('family', q.families.join(','))
-  if (q.needsReply) p.set('reply', q.replyClosing ? 'closing' : 'needed')
+  if (q.reply) p.set('reply', q.reply)
   if (q.product) p.set('product', q.product)
   if (q.photos) p.set('photos', '1')
   if (q.q) p.set('q', q.q)
@@ -206,7 +211,7 @@ export function inboxApiParams(q: InboxQuery, page: number = q.page, sort: Inbox
     theme: q.themes,
     owner: q.owners,
     family: q.families,
-    reply: q.needsReply ? (q.replyClosing ? 'closing' : 'needed') : null,
+    reply: q.reply,
     product: q.product,
     photos: q.photos ? '1' : null,
     q: q.q || null,
@@ -287,7 +292,7 @@ export function withPage(q: InboxQuery, page: number, pageSize: number = q.pageS
 
 /** "Clear" (and "Clear all filters"): every filter, the search and the period go; the tab and the order stay. */
 export function clearFilters(q: InboxQuery): InboxQuery {
-  return { ...q, statuses: [], channels: [], markets: [], stars: [], moods: [], themes: [], owners: [], families: [], needsReply: false, replyClosing: false, product: null, photos: false, q: '', period: 'all', page: 1 }
+  return { ...q, statuses: [], channels: [], markets: [], stars: [], moods: [], themes: [], owners: [], families: [], reply: null, product: null, photos: false, q: '', period: 'all', page: 1 }
 }
 
 /** One product's reviews, or every product (its chip's ×). */
@@ -295,10 +300,9 @@ export function withProduct(q: InboxQuery, product: string | null): InboxQuery {
   return q.product === product ? q : { ...q, product, page: 1 }
 }
 
-/** "Needs a reply" on or off (its chip's ×); off also ends "Etsy window closing", which narrows it. */
-export function withNeedsReply(q: InboxQuery, on: boolean): InboxQuery {
-  if (on) return q.needsReply ? q : { ...q, needsReply: true, page: 1 }
-  return q.needsReply || q.replyClosing ? { ...q, needsReply: false, replyClosing: false, page: 1 } : q
+/** A `reply=` filter on, or off with null (its chip's ×). */
+export function withReply(q: InboxQuery, reply: InboxReplyFilter | null): InboxQuery {
+  return q.reply === reply ? q : { ...q, reply, page: 1 }
 }
 
 /** How many Filters fields are on (the bar's "3 on"; the status tile counts as the Status field; "Has photos" is one). */
@@ -308,7 +312,7 @@ export function activeFilterCount(q: InboxQuery): number {
 
 /** Any filter, the search or a period narrows the rows: an empty answer is "nothing matches", not "no reviews". */
 export function isFiltered(q: InboxQuery): boolean {
-  return activeFilterCount(q) > 0 || q.q !== '' || q.period !== 'all' || q.needsReply || q.product != null
+  return activeFilterCount(q) > 0 || q.q !== '' || q.period !== 'all' || q.reply != null || q.product != null
 }
 
 /** The grid's sort (its header click) as the API's: Received → postedAt, Stars → rating; none → the query's own. */

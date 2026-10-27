@@ -5,11 +5,12 @@
  * review from what Nexus stored, and whether Etsy is read, in words. No database, no clock of its own: tested in
  * review-shop-channel.vitest.test.ts.
  *
- * The reply tiles ("Not replied yet", "Window closing", "Needs a reply") are NOT counted here: the service counts them
- * with the Inbox's own `where` for the tile's link (the one needs-a-reply rule, review-visibility.ts), so a tile's
- * number is the rows its link opens (lane N8, 2026-10-28). They come in as `ReplyTileCounts`.
+ * The reply tiles ("Not replied yet", "Window closing", "Window closed", "Needs a reply") are NOT counted here: the
+ * service counts them with the Inbox's own `where` for the tile's link (the one needs-a-reply rule, review-visibility.ts),
+ * so a tile's number is the rows its link opens (lane N8, 2026-10-28). They come in as `EtsyReplyCounts` /
+ * `ShopifyReplyCounts`.
  */
-import { isReviewOpen, reviewReplyRules } from '@nexus/shared/review-reply-rules'
+import { reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import { averageRating } from './overviewMath.js'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -30,26 +31,12 @@ export function etsyWindow(review: { postedAt: Date | string; editedAt: Date | s
   return w ? { days: w.days, day: w.day, daysLeft: w.daysLeft, closed: w.closed, endsAt: w.endsAt } : null
 }
 
-/** A review counts as answered once a reply was recorded (sent or marked) or its status says so. */
-export function answered(row: { status: string | null; sentReplies: number }): boolean {
-  return row.sentReplies > 0 || row.status === 'RESPONDED'
-}
-
+/** What the tiles other than the reply tiles read of each visible review. */
 export interface TileFacts {
   rating: number | null
   postedAt: Date
-  editedAt: Date | null
-  status: string | null
-  sentReplies: number
   hasPhoto: boolean
   hasVideo?: boolean
-  /** Read in from a file: old history, never waiting for a reply (review-visibility.ts, the one needs-a-reply rule). */
-  imported?: boolean
-}
-
-/** No reply recorded, open and not imported: once Etsy's window ran out, the "Window closed" tile counts it. */
-function unansweredOpen(r: TileFacts): boolean {
-  return !answered(r) && isReviewOpen(r.status) && !r.imported
 }
 
 /** The reply tiles, counted by the service with the Inbox's `where` for each tile's link (never here). */
@@ -58,6 +45,8 @@ export interface EtsyReplyCounts {
   notReplied: number
   /** The Inbox's `reply=closing&channel=ETSY`: of those, the windows that close within CLOSING_DAYS. */
   closing: number
+  /** The Inbox's `reply=closed&channel=ETSY`: needed a reply by the same rule, but the window ran out. */
+  closed: number
 }
 
 export interface ShopifyReplyCounts {
@@ -77,7 +66,7 @@ export interface EtsyTiles {
   notReplied: number
   /** …of those, at most CLOSING_DAYS left (the Inbox's `reply=closing`). */
   closing: number
-  /** No reply recorded and not closed by a person, but the window closed: no reply is possible any more. */
+  /** Needed a reply by the same rule, but the window ran out unanswered (the Inbox's `reply=closed`). */
   closed: number
 }
 
@@ -94,10 +83,9 @@ function newCounts(rows: readonly TileFacts[], now: Date): { now: number; before
   return { now: a, before: b }
 }
 
-/** The Etsy page's six tiles; the two reply tiles are the Inbox's counts (`reply`). */
+/** The Etsy page's six tiles; the three reply tiles are the Inbox's counts (`reply`). */
 export function etsyTiles(rows: readonly TileFacts[], now: Date, reply: EtsyReplyCounts): EtsyTiles {
   const fresh = newCounts(rows, now)
-  const closed = rows.filter((r) => unansweredOpen(r) && etsyWindow({ postedAt: r.postedAt, editedAt: r.editedAt }, now)?.closed === true).length
   return {
     average: averageRating(rows.map((r) => r.rating)),
     reviews: rows.length,
@@ -106,7 +94,7 @@ export function etsyTiles(rows: readonly TileFacts[], now: Date, reply: EtsyRepl
     withPhoto: rows.filter((r) => r.hasPhoto).length,
     notReplied: reply.notReplied,
     closing: reply.closing,
-    closed,
+    closed: reply.closed,
   }
 }
 

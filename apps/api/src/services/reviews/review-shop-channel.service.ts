@@ -13,7 +13,8 @@
  *
  * The reply tiles (lane N8, 2026-10-28) count with the Inbox's own `where` for the link the tile opens
  * (`REPLY_TILE_LINKS`): the one needs-a-reply rule (review-visibility.ts — positive reviews and closed windows never
- * count) and, for "Window closing", Needs you's `etsyClosingWhere`. So the tile's number is the rows its link shows.
+ * count), for "Window closing" Needs you's `etsyClosingWhere`, for "Window closed" the same rule with the window run
+ * out (`missedReplyWhere`). So the tile's number is the rows its link shows.
  */
 import type { Prisma } from '@prisma/client'
 import { reviewAppOf } from '@nexus/shared/review-reply-rules'
@@ -21,7 +22,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { listInbox, type InboxRow } from './review-inbox.service.js'
 import { inboxWhere, parseInboxQuery } from './review-inbox-query.js'
-import { isImportedSource, visibleReviewWhere } from './review-visibility.js'
+import { visibleReviewWhere } from './review-visibility.js'
 import { listReviewApps, type ReviewAppView } from './review-app-connection.service.js'
 import {
   etsyTiles, etsyWindow, shopifyTiles, storedMediaOf,
@@ -101,6 +102,8 @@ export const REPLY_TILE_LINKS = {
   etsyNotReplied: { reply: 'needed', period: 'all', channel: 'ETSY' },
   /** Etsy "Window closing". */
   etsyClosing: { reply: 'closing', period: 'all', channel: 'ETSY' },
+  /** Etsy "Window closed". */
+  etsyClosed: { reply: 'closed', period: 'all', channel: 'ETSY' },
   /** Shopify "Needs a reply". */
   shopifyNeedReply: { reply: 'needed', period: 'all', channel: 'SHOPIFY' },
 } as const satisfies Record<string, Record<string, string>>
@@ -114,26 +117,15 @@ function linkedWhere(link: Record<string, string>, now: Date): Prisma.ReviewWher
 async function tileFacts(channel: 'ETSY' | 'SHOPIFY'): Promise<TileFacts[]> {
   const rows = await prisma.review.findMany({
     where: visibleReviewWhere({ channel }),
-    select: {
-      id: true, rating: true, postedAt: true, channelEditedAt: true, triageStatus: true, rawPayload: true, ingestSource: true,
-      _count: { select: { media: true } },
-    },
+    select: { rating: true, postedAt: true, rawPayload: true, _count: { select: { media: true } } },
     take: 50_000,
   })
-  const sent = rows.length
-    ? await prisma.reviewResponse.groupBy({ by: ['reviewId'], where: { reviewId: { in: rows.map((r) => r.id) }, status: 'SENT' }, _count: { _all: true } })
-    : []
-  const sentBy = new Map(sent.map((g) => [g.reviewId, g._count._all]))
   return rows.map((r) => ({
     rating: r.rating,
     postedAt: r.postedAt,
-    editedAt: r.channelEditedAt,
-    status: r.triageStatus,
-    sentReplies: sentBy.get(r.id) ?? 0,
     // The photos are the review's stored media (ReviewMedia); a Judge.me video is a mark in rawPayload.
     hasPhoto: r._count.media > 0,
     hasVideo: channel === 'SHOPIFY' && storedMediaOf([], r.rawPayload).hasVideo,
-    imported: isImportedSource(r.ingestSource),
   }))
 }
 
@@ -159,12 +151,13 @@ async function etsySections(now: Date): Promise<EtsySections> {
       return readEtsySource()
     }),
     section('tiles', async () => {
-      const [facts, notReplied, closing] = await Promise.all([
+      const [facts, notReplied, closing, closed] = await Promise.all([
         tileFacts('ETSY'),
         prisma.review.count({ where: linkedWhere(REPLY_TILE_LINKS.etsyNotReplied, now) }),
         prisma.review.count({ where: linkedWhere(REPLY_TILE_LINKS.etsyClosing, now) }),
+        prisma.review.count({ where: linkedWhere(REPLY_TILE_LINKS.etsyClosed, now) }),
       ])
-      return etsyTiles(facts, now, { notReplied, closing })
+      return etsyTiles(facts, now, { notReplied, closing, closed })
     }),
     section('reviews', async (): Promise<ReviewList<EtsyRow>> => {
       const { page, extra } = await listOf('ETSY', now)

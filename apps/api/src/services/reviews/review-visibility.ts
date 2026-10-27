@@ -17,7 +17,8 @@
  *   an Etsy review whose 100-day reply window closed cannot be answered (the 100 days count from the buyer's last edit,
  *   `channelEditedAt`, else from when it was posted — the reply rules' own window); a row a person imported from a
  *   file is old history read in, never work. Shopify reviews (Judge.me answered from Nexus, the other apps by copy)
- *   and Etsy reviews inside their window count. Overdue = the same rows, open for more than REPLY_DUE_HOURS.
+ *   and Etsy reviews inside their window count. Overdue = the same rows, open for more than REPLY_DUE_HOURS. Missed
+ *   (the Etsy page's "Window closed") = the same rule with Etsy's window closed: needed a reply, too late now.
  * - Positive (Owner, 2026-10-27 — mode A): 4 or 5 stars, or eBay's positive feedback (stored as 5); a review with no
  *   rating is positive when its mood is POSITIVE. The stars decide whenever there are any, so a 1–3 star review the AI
  *   read as happy still waits for a reply. Positive reviews still show in the Inbox; they only do not count as work.
@@ -181,28 +182,59 @@ export function reviewNeedsReply(row: NeedsReplyRow, now: Date = new Date()): bo
 }
 
 /**
+ * The needs-a-reply rule in its parts, in order, with Etsy's reply window as `etsyWindow`: open (no triage status yet,
+ * New, In progress), not imported, not an Amazon product review, the Etsy window, not positive, not eBay's automatic
+ * feedback. `needsReplyWhere` asks for the window open; `missedReplyWhere` for it closed — the same rule otherwise.
+ */
+function replyRuleParts(etsyWindow: Prisma.ReviewWhereInput): Prisma.ReviewWhereInput[] {
+  return [
+    { OR: [{ triageStatus: null }, { triageStatus: { in: [...OPEN_TRIAGE_STATUSES] } }] },
+    { OR: [{ ingestSource: null }, { NOT: importedWhere() }] },
+    // Amazon's product reviews: nobody can reply (`channel` is never NULL, `reviewKindWhere` is NULL-safe).
+    { OR: [{ channel: { not: 'AMAZON' } }, reviewKindWhere('seller')] },
+    etsyWindow,
+    notPositiveWhere(),
+    notAutomaticWhere(),
+  ]
+}
+
+/** Etsy's window counts 100 days from the buyer's last edit, else from when it was posted: it is open from this time. */
+function etsyWindowCutoff(now: Date): Date {
+  return new Date(now.getTime() - ETSY_REPLY_WINDOW_DAYS * DAY_MS)
+}
+
+/**
  * Visible rows that still need a reply: open (no triage status yet, New, In progress), answerable, not imported, not
  * positive, not eBay's automatic feedback.
  */
 export function needsReplyWhere(now: Date = new Date()): Prisma.ReviewWhereInput {
-  const etsyCutoff = new Date(now.getTime() - ETSY_REPLY_WINDOW_DAYS * DAY_MS)
+  const etsyCutoff = etsyWindowCutoff(now)
   return visibleReviewWhere({
-    AND: [
-      { OR: [{ triageStatus: null }, { triageStatus: { in: [...OPEN_TRIAGE_STATUSES] } }] },
-      { OR: [{ ingestSource: null }, { NOT: importedWhere() }] },
-      // Amazon's product reviews: nobody can reply (`channel` is never NULL, `reviewKindWhere` is NULL-safe).
-      { OR: [{ channel: { not: 'AMAZON' } }, reviewKindWhere('seller')] },
+    AND: replyRuleParts({
       // Etsy: open while inside 100 days of the buyer's last edit, else of when it was posted.
-      {
-        OR: [
-          { channel: { not: 'ETSY' } },
-          { channelEditedAt: { gte: etsyCutoff } },
-          { AND: [{ channelEditedAt: null }, { postedAt: { gte: etsyCutoff } }] },
-        ],
-      },
-      notPositiveWhere(),
-      notAutomaticWhere(),
-    ],
+      OR: [
+        { channel: { not: 'ETSY' } },
+        { channelEditedAt: { gte: etsyCutoff } },
+        { AND: [{ channelEditedAt: null }, { postedAt: { gte: etsyCutoff } }] },
+      ],
+    }),
+  })
+}
+
+/**
+ * The Etsy reviews that NEEDED a reply by the one rule (open, not imported, not positive, not automatic) but whose
+ * 100-day window ran out before anyone replied: the Etsy page's "Window closed" tile and the Inbox's `reply=closed`.
+ * The same rule as `needsReplyWhere`, with the window closed instead of open (NULL-safe: `postedAt` is never NULL).
+ */
+export function missedReplyWhere(now: Date = new Date()): Prisma.ReviewWhereInput {
+  const etsyCutoff = etsyWindowCutoff(now)
+  return visibleReviewWhere({
+    AND: replyRuleParts({
+      AND: [
+        { channel: 'ETSY' },
+        { OR: [{ channelEditedAt: { lt: etsyCutoff } }, { AND: [{ channelEditedAt: null }, { postedAt: { lt: etsyCutoff } }] }] },
+      ],
+    }),
   })
 }
 

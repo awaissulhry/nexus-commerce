@@ -1,51 +1,45 @@
 /**
- * Reviews PR I — the Etsy and Shopify pages' pure rules: tiles (reply windows from the buyer's last edit: closed; the
- * reply tiles are the Inbox's own counts — review-channel-reply-tiles.vitest.test.ts proves them against real SQL), the
- * media Nexus stored, and whether Etsy is read, in words (never a setting name).
+ * Reviews PR I — the Etsy and Shopify pages' pure rules: tiles (the reply tiles are the Inbox's own counts —
+ * review-channel-reply-tiles.vitest.test.ts proves them against real SQL), each Etsy review's reply window from the
+ * buyer's last edit, the media Nexus stored, and whether Etsy is read, in words (never a setting name).
  */
 import { describe, expect, it } from 'vitest'
 import { etsySource, etsyTiles, etsyWindow, shopifyTiles, storedMediaOf, type TileFacts } from './review-shop-channel-math.js'
 
 const NOW = new Date('2026-10-27T12:00:00Z')
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000)
-const fact = (over: Partial<TileFacts> = {}): TileFacts => ({ rating: 5, postedAt: daysAgo(5), editedAt: null, status: null, sentReplies: 0, hasPhoto: false, ...over })
+const fact = (over: Partial<TileFacts> = {}): TileFacts => ({ rating: 5, postedAt: daysAgo(5), hasPhoto: false, ...over })
 
 describe('Etsy tiles', () => {
-  it('closed windows from the last edit; answered and closed-by-a-person rows do not count; the reply tiles are the Inbox’s counts', () => {
+  it('average, new and with a photo from the reviews; the three reply tiles are the Inbox’s counts, as given', () => {
     const tiles = etsyTiles([
-      fact({ postedAt: daysAgo(2), hasPhoto: true }), // day 3 of 100 — not replied yet
-      fact({ postedAt: daysAgo(200), editedAt: daysAgo(95) }), // edited 95 days ago — 5 days left: closing
-      fact({ postedAt: daysAgo(120) }), // never edited, 120 days — closed
-      fact({ postedAt: daysAgo(3), status: 'RESPONDED' }), // marked as responded
-      fact({ postedAt: daysAgo(4), sentReplies: 1 }), // a reply recorded
-      fact({ postedAt: daysAgo(4), status: 'IGNORED' }), // a person said no reply is needed
+      fact({ postedAt: daysAgo(2), hasPhoto: true }),
+      fact({ postedAt: daysAgo(3) }),
+      fact({ postedAt: daysAgo(4) }),
+      fact({ postedAt: daysAgo(5) }),
       fact({ postedAt: daysAgo(40), rating: 3 }), // previous 30 days
-    ], NOW, { notReplied: 2, closing: 1 })
-    expect(tiles).toMatchObject({ reviews: 7, notReplied: 2, closing: 1, closed: 1, withPhoto: 1, newReviews: 4, newDelta: 3 })
-    expect(tiles.average).toBeCloseTo(4.7, 1)
+    ], NOW, { notReplied: 2, closing: 1, closed: 4 })
+    expect(tiles).toMatchObject({ reviews: 5, notReplied: 2, closing: 1, closed: 4, withPhoto: 1, newReviews: 4, newDelta: 3 })
+    expect(tiles.average).toBeCloseTo(4.6, 1)
   })
   it('the window itself: day and days left', () => {
     expect(etsyWindow({ postedAt: daysAgo(150), editedAt: daysAgo(1) }, NOW)).toMatchObject({ day: 2, daysLeft: 99, closed: false })
     expect(etsyWindow({ postedAt: daysAgo(96), editedAt: null }, NOW)).toMatchObject({ day: 97, daysLeft: 4, closed: false })
   })
   it('no reviews: no average, nothing waits', () => {
-    expect(etsyTiles([], NOW, { notReplied: 0, closing: 0 })).toMatchObject({ average: null, reviews: 0, newDelta: null, notReplied: 0, closed: 0 })
+    expect(etsyTiles([], NOW, { notReplied: 0, closing: 0, closed: 0 })).toMatchObject({ average: null, reviews: 0, newDelta: null, notReplied: 0, closed: 0 })
   })
 })
 
 describe('Shopify tiles', () => {
-  it('photo or video, videos, needs a reply and how long the oldest waits', () => {
+  it('photo or video, videos; needs a reply and how long the oldest of those waits, from the Inbox’s count', () => {
     const tiles = shopifyTiles([
       fact({ postedAt: new Date(NOW.getTime() - 6 * 60 * 60 * 1000), hasPhoto: true }),
       fact({ postedAt: daysAgo(1), hasVideo: true }),
-      fact({ postedAt: daysAgo(2), status: 'RESPONDED', hasPhoto: true, hasVideo: true }),
+      fact({ postedAt: daysAgo(2), hasPhoto: true, hasVideo: true }),
     ], NOW, { needReply: 1, oldestPostedAt: daysAgo(1) })
     expect(tiles).toMatchObject({ reviews: 3, withMedia: 3, videos: 2, needReply: 1, oldestWaitHours: 24 })
     expect(shopifyTiles([], NOW, { needReply: 0, oldestPostedAt: null })).toMatchObject({ needReply: 0, oldestWaitHours: null })
-  })
-
-  it('an imported review is never counted as closed unanswered on Etsy (old history, never work)', () => {
-    expect(etsyTiles([fact({ postedAt: daysAgo(120) }), fact({ postedAt: daysAgo(130), imported: true })], NOW, { notReplied: 0, closing: 0 })).toMatchObject({ closed: 1, reviews: 2 })
   })
 })
 

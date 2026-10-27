@@ -12,6 +12,7 @@ import {
   notAutomaticWhere,
   countsInRating,
   FIXTURE_SOURCE,
+  missedReplyWhere,
   needsReplyWhere,
   overdueWhere,
   reviewKindOf,
@@ -229,6 +230,34 @@ describe('needs a reply — ONE rule (Owner 2026-10-27, audit B3/C1)', () => {
     expect(noReplyReason(facts(row({ channel: 'AMAZON', kind: 'PRODUCT' })), NOW)).toBe('no_reply')
     expect(noReplyReason(facts(row({ channel: 'ETSY', ingestSource: 'ETSY_API', postedAt: days(101) })), NOW)).toBe('window_closed')
     expect(noReplyReason(facts(ebay({ triageStatus: 'RESOLVED' })), NOW)).toBe('closed')
+  })
+
+  it('missed (the Etsy page\'s "Window closed"): the same rule with Etsy\'s window run out — never a positive, imported or answered one', () => {
+    const where = missedReplyWhere(NOW)
+    const etsy = (patch: Partial<Row>) => row({ channel: 'ETSY', ingestSource: 'ETSY_API', rating: 2, ...patch })
+    expect(matches(where, etsy({ postedAt: days(130), channelEditedAt: days(120) }))).toBe(true)
+    expect(matches(where, etsy({ postedAt: days(101), channelEditedAt: null }))).toBe(true)
+    // Edited within 100 days: still open (needs a reply, not missed).
+    expect(matches(where, etsy({ postedAt: days(130), channelEditedAt: days(95) }))).toBe(false)
+    expect(matches(where, etsy({ postedAt: days(101), rating: 5 }))).toBe(false)
+    expect(matches(where, etsy({ postedAt: days(101), triageStatus: 'RESPONDED' }))).toBe(false)
+    expect(matches(where, etsy({ postedAt: days(101), ingestSource: 'IMPORT_CSV' }))).toBe(false)
+    expect(matches(where, etsy({ postedAt: days(101), ingestSource: FIXTURE_SOURCE }))).toBe(false)
+    expect(matches(where, ebay({ postedAt: days(400), rating: 1 }))).toBe(false)
+    // The pure rule's reason agrees: the window closed, and it would otherwise need a reply.
+    for (const channel of ['EBAY', 'SHOPIFY', 'ETSY']) {
+      for (const rating of [null, 1, 3, 5]) {
+        for (const triageStatus of [null, 'IN_PROGRESS', 'RESPONDED']) {
+          for (const postedAt of [days(5), days(101)]) {
+            for (const channelEditedAt of [null, days(50), days(105)]) {
+              const r = row({ channel, ingestSource: 'API', rating, triageStatus, postedAt, channelEditedAt })
+              const f = facts(r)
+              expect(matches(where, r)).toBe(noReplyReason(f, NOW) === 'window_closed' && !isPositiveReview(f) && !isAutomaticFeedback(f))
+            }
+          }
+        }
+      }
+    }
   })
 
   it('a NULL column never drops a row that needs a reply (the where is written NULL-safe)', () => {

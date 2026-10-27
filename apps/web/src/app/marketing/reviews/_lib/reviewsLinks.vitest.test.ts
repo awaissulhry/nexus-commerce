@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   channelHref,
+  etsyClosedHref,
   etsyClosingHref,
   inboxHref,
   needsReplyHref,
@@ -65,7 +66,7 @@ describe('reviews links', () => {
       productReviewsHref('product-1'),
       channelHref('AMAZON'), channelHref('AMAZON', 'IT'), channelHref('EBAY'), channelHref('EBAY', 'GB'), channelHref('ETSY'), channelHref('SHOPIFY'),
       rulesHref(), timingHref(),
-      needsReplyHref({ channel: 'ETSY' }), etsyClosingHref(),
+      needsReplyHref({ channel: 'ETSY' }), etsyClosingHref(), etsyClosedHref(),
     ]
     for (const href of hrefs) expect(isPage(href), href).toBe(true)
   })
@@ -125,7 +126,10 @@ describe('reviews links', () => {
     expect(needsReplyHref({ channel: 'EBAY', market: 'DE' })).toBe('/marketing/reviews/inbox?period=all&channel=EBAY&market=DE&reply=needed')
     // The Etsy page's "Window closing": of those, the Etsy windows closing within 10 days (the API counts this address).
     expect(etsyClosingHref()).toBe('/marketing/reviews/inbox?period=all&channel=ETSY&reply=closing')
-    expect(parseInboxQuery(etsyClosingHref().slice(etsyClosingHref().indexOf('?'))).query).toMatchObject({ needsReply: true, replyClosing: true, channels: ['ETSY'], period: 'all' })
+    expect(parseInboxQuery(etsyClosingHref().slice(etsyClosingHref().indexOf('?'))).query).toMatchObject({ reply: 'closing', channels: ['ETSY'], period: 'all' })
+    // "Window closed": the Etsy reviews that needed a reply but whose window ran out.
+    expect(etsyClosedHref()).toBe('/marketing/reviews/inbox?period=all&channel=ETSY&reply=closed')
+    expect(parseInboxQuery(etsyClosedHref().slice(etsyClosedHref().indexOf('?'))).query).toMatchObject({ reply: 'closed', channels: ['ETSY'], period: 'all' })
     expect(requestsHref({ inserts: 1 })).toBe('/marketing/reviews/requests?inserts=1')
     expect(requestsHref({ preview: true, channel: 'SHOPIFY' })).toBe('/marketing/reviews/requests?channel=SHOPIFY&preview=1')
     expect(ruleHref('rule 1/2')).toBe('/marketing/reviews/requests/rules/rule%201%2F2')
