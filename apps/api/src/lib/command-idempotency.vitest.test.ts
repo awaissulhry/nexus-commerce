@@ -347,6 +347,9 @@ describe('Reviews commands the pages send a key for (audit A11)', () => {
       '/api/review-rules', '/api/review-rules/:id/duplicate', '/api/review-rules/:id/run', '/api/review-rules/import',
       '/api/review-rules/seed-default', '/api/review-timing-defaults/seed', '/api/review-send-windows/seed',
       '/api/review-queue/pause', '/api/review-queue/resume', '/api/review-requests/:id/unsuppress',
+      // PR J — a timing test or A/B split, its Start, Stop, Apply winner and Keep.
+      '/api/review-timing-tests', '/api/review-timing-tests/ab', '/api/review-timing-tests/:id/start',
+      '/api/review-timing-tests/:id/stop', '/api/review-timing-tests/:id/apply', '/api/review-timing-tests/:id/keep',
     ]) expect(COMMAND_SCOPE_ROUTES).toContain(route)
   })
 })

@@ -6,7 +6,7 @@
  *
  *   no copy yet      says how to make one (Duplicate as A/B, top of the page)
  *   copy, no split   what each side does; "Start A/B test — send for approval" (held with why: A on, B off, B differs,
- *                    saved) → `POST /api/review-timing-tests/ab`; a person approves the start on the Approvals page
+ *                    saved) → `reviewsSend('POST', '/review-timing-tests/ab')`; a person approves the start on the Approvals page
  *   waiting          Open Approvals, End test…
  *   running / ended  Side · Sent · Counted · Rate, the result in words, how sure (a bar), Open B (or Open A), End test…
  * End test needs no approval: it only stops the split (it asks first, and says what happens).

@@ -6,7 +6,7 @@
  *
  *   New timing test   market, product type, the days to compare (2–4), the holdout % that gets no request, when it ends
  *                     (at this market's pace). "Start test — send for approval": the test is made and a person approves
- *                     its start on the Approvals page — nothing changes before (`POST /api/review-timing-tests`).
+ *                     its start on the Approvals page — nothing changes before (`reviewsSend('POST', '/review-timing-tests')`).
  *   A test's card     not started (why, send again) · waiting for approval · running (each group's progress, "too early
  *                     to call" or the leader and how sure, Stop test…) · finished or stopped (the result in words, the
  *                     table per group, Apply winner — send for approval, Keep day N).

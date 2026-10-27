@@ -7,8 +7,8 @@
  *
  *   Header   New rule (the rule editor page), Import / Export (a JSON file), Seed defaults (asks first: it turns a rule on)
  *   Banners  a rule that matches no orders (no market, a channel Nexus does not ask, none in 30 days) → "Fix the rule"
- *   Tiles    rules on · A/B tests (running, from `GET /api/review-timing-tests?kind=AB`) · orders decided · sent · review
- *            rate (30 days, estimate)
+ *   Tiles    rules on · A/B tests (running, from `reviewsGet('/review-timing-tests', { kind: 'AB' })`) · orders decided
+ *            · sent · review rate (30 days, estimate)
  *   Grid     every rule (`reviewsGet('/review-rules', { withStats: 1 })`), tick boxes and select-all; the bulk bar: Turn on, Turn off,
  *            Test run, Export, Delete…, Clear — what an action cannot change is counted and named (ruling 7). On is a
  *            switch (saved at once); Edit opens the editor; ⋯ Duplicate as A/B, Test run, Delete….

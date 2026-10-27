@@ -140,6 +140,15 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/review-queue/pause': 'review-queue-pause',
   '/api/review-queue/resume': 'review-queue-resume',
   '/api/review-requests/:id/unsuppress': 'review-request-allow-again',
+  // Reviews › Requests timing tests and A/B splits (PR J) — one new test or split per "Start test — send for approval"
+  // (made, then ONE approval asked), one "Start test" again, one Stop, one "Apply winner — send for approval" and one
+  // "Keep day N" per press, even when the answer is lost and the page sends it again.
+  '/api/review-timing-tests': 'review-timing-test-create',
+  '/api/review-timing-tests/ab': 'review-ab-test-create',
+  '/api/review-timing-tests/:id/start': 'review-timing-test-start',
+  '/api/review-timing-tests/:id/stop': 'review-timing-test-stop',
+  '/api/review-timing-tests/:id/apply': 'review-timing-test-apply',
+  '/api/review-timing-tests/:id/keep': 'review-timing-test-keep',
   // Reviews › eBay (PR G) — one approval request (one sale, or ONE change plan for the ticked sales) per "Send for
   // approval" press of "Leave feedback for buyers", even when the answer is lost and the page sends it again.
   '/api/reviews/area/ebay/buyer-feedback/send': 'review-ebay-buyer-feedback-send',

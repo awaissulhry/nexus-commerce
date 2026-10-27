@@ -24,7 +24,7 @@ export interface RulesHandlers {
   remove: (row: RuleItem) => void
   /** Every rule (the A/B marks read it). */
   rules: readonly RuleItem[]
-  /** PR J — the A/B splits (`GET /api/review-timing-tests?kind=AB`): the mark says whether one runs. */
+  /** PR J — the A/B splits (`reviewsGet('/review-timing-tests', { kind: 'AB' })`): the mark says whether one runs. */
   abTests: readonly TimingTest[]
   canManage: boolean
 }

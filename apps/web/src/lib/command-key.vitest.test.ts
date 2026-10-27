@@ -277,6 +277,14 @@ describe('the API’s command receipts', () => {
       '/api/review-rules/seed-default',
       '/api/review-send-windows/seed',
       '/api/review-timing-defaults/seed',
+      // Reviews › Requests timing tests and A/B splits (PR J) — a new test or split, Start, Stop, Apply winner and Keep,
+      // through reviewsSend with `idempotent`.
+      '/api/review-timing-tests',
+      '/api/review-timing-tests/:id/apply',
+      '/api/review-timing-tests/:id/keep',
+      '/api/review-timing-tests/:id/start',
+      '/api/review-timing-tests/:id/stop',
+      '/api/review-timing-tests/ab',
       // Reviews Inbox (PR B) — Send reply, "Import N reviews" and a bulk change, through reviewsSend (_lib/reviewsFetch.ts),
       // which keys them with sendCommand.
       '/api/reviews/:id/reply/send',

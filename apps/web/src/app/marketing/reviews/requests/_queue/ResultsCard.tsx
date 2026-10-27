@@ -5,7 +5,8 @@
  * followed within 30 days and the rate, by market, by product type and by rule, for 7, 30 or 90 days — the ONE review
  * rate the Overview and the channel pages show. Where no review can follow a request (no eBay feedback linked to its
  * order, no Amazon review imported) the rate says "Not measurable", never 0 %. The A/B rows (PR J) are the rules' A/B
- * splits (`GET /api/review-timing-tests?kind=AB`): each side's sent and rate, and the result in words with how sure.
+ * splits (`reviewsGet('/review-timing-tests', { kind: 'AB' })`): each side's sent and rate, and the result in words
+ * with how sure.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Banner, Card, MetricStrip, SummaryTable, type Metric } from '@/design-system/components'

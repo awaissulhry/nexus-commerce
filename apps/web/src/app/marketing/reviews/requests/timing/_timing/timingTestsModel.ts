@@ -1,5 +1,5 @@
 /**
- * Reviews › Requests — timing tests and A/B splits (build spec B22, PR J): the shapes `GET /api/review-timing-tests`
+ * Reviews › Requests — timing tests and A/B splits (build spec B22, PR J): the shapes `reviewsGet('/review-timing-tests')`
  * answers, the "New timing test" form, and the words and rows the Timing page, the rule editor's A/B card, the Rules
  * page and the Queue's results show. Pure: no fetch, no clock of its own. Every number and sentence about a result comes
  * from the API (how sure, too early, the words); this file only lays it out.
