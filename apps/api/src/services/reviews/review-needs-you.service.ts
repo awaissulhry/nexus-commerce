@@ -6,11 +6,20 @@
  * so a page that moves needs no API change.
  *
  * Fixture rows never count (review-visibility.ts). The order rule (`rankNeedsYou`) is pure and tested.
+ *
+ * Etsy (lane N4, 2026-10-27): an Etsy review takes ONE reply, on Etsy.com, within 100 days of the buyer's last edit
+ * (`Review.channelEditedAt`; `reviewReplyRules('ETSY')`). Its items are the same needs-a-reply rows — never a second
+ * count — with the deadline as detail; one whose window closes within CLOSING_DAYS (the Etsy page's "Window closing")
+ * reads "Etsy reply window closes in 4 days", is fetched on its own (it is old, so the newest-first lists would miss it)
+ * and leads the list, soonest first.
  */
 import type { Prisma } from '@prisma/client'
+import { ETSY_REPLY_WINDOW_DAYS, reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import prisma from '../../db.js'
 import { needsReplyWhere, reviewKindOf } from './review-visibility.js'
 import { statusWhere } from './review-queue.service.js'
+import { CLOSING_DAYS } from './review-shop-channel-math.js'
+import { shortDay } from './review-sources.service.js'
 import { buyerShort, channelMarketLabel, channelWords, daysBetween, marketWords, quoteOf, round, themeWords } from './overviewMath.js'
 import { RATING_DROP_CATEGORY, ratingDropChangeWords, ratingDropTitle } from './rating-drop-math.js'
 
@@ -27,6 +36,11 @@ export interface NeedsYouItem {
   detail: string
   /** When it started waiting (ISO). */
   at: string
+  /**
+   * When the chance to reply ends (ISO), set while that is near: an Etsy review whose 100-day reply window closes within
+   * CLOSING_DAYS. Such an item ranks before others of its tone, soonest first.
+   */
+  dueAt?: string
   action: { label: string; page: 'inbox' | 'review' | 'requests' | 'alerts'; params: Record<string, string | number> }
 }
 
@@ -46,10 +60,14 @@ export function parseLimit(raw: unknown, fallback = 8): number {
   return Number.isInteger(n) && n > 0 ? Math.min(n, 50) : fallback
 }
 
-/** Most urgent first: a danger before a warning, then the one that started waiting most recently. Pure. */
-export function rankNeedsYou<T extends Pick<NeedsYouItem, 'tone' | 'at' | 'id'>>(items: readonly T[]): T[] {
+/**
+ * Most urgent first: a danger before a warning; inside a tone, a reply window about to close (`dueAt`, soonest first)
+ * before the rest; then the one that started waiting most recently. Pure.
+ */
+export function rankNeedsYou<T extends Pick<NeedsYouItem, 'tone' | 'at' | 'id' | 'dueAt'>>(items: readonly T[]): T[] {
   const weight = (t: T) => (t.tone === 'danger' ? 0 : 1)
-  return [...items].sort((a, b) => weight(a) - weight(b) || b.at.localeCompare(a.at) || a.id.localeCompare(b.id))
+  const due = (a: T, b: T) => (a.dueAt && b.dueAt ? a.dueAt.localeCompare(b.dueAt) : a.dueAt ? -1 : b.dueAt ? 1 : 0)
+  return [...items].sort((a, b) => weight(a) - weight(b) || due(a, b) || b.at.localeCompare(a.at) || a.id.localeCompare(b.id))
 }
 
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -72,13 +90,20 @@ type ReplyRow = {
   body: string
   authorName: string | null
   postedAt: Date
+  /** Etsy: the buyer's last edit; the 100-day reply window counts from it (else from `postedAt`). */
+  channelEditedAt?: Date | null
   /** `Review.kind`; null on older rows (review-visibility.ts). */
   kind?: string | null
   product: { name: string | null; sku: string | null } | null
   sentiment: { label: string } | null
 }
 
-/** One review that waits for a reply, in words. */
+/** "closes in 4 days"; within the last day "closes within a day". */
+export function closesWords(daysLeft: number): string {
+  return daysLeft <= 1 ? 'closes within a day' : `closes in ${daysLeft.toLocaleString('en')} days`
+}
+
+/** One review that waits for a reply, in words; an Etsy review with its reply window (lane N4). */
 export function replyItem(r: ReplyRow, now: Date): NeedsYouItem {
   const seller = reviewKindOf(r.channel, r.kind) === 'seller'
   const negative = (r.rating != null && r.rating <= 2) || r.sentiment?.label === 'NEGATIVE'
@@ -86,23 +111,59 @@ export function replyItem(r: ReplyRow, now: Date): NeedsYouItem {
   const what = seller
     ? `${r.rating == null ? '' : r.rating >= 4 ? 'Positive ' : r.rating <= 2 ? 'Negative ' : 'Neutral '}feedback`.trim()
     : r.rating != null ? `${r.rating}-star review` : 'Review'
-  const title = `${what.charAt(0).toUpperCase()}${what.slice(1)}, no reply for ${wait}`
+  // Etsy: one reply, on Etsy.com, within 100 days of the buyer's last edit (the one window rule, @nexus/shared).
+  const window = r.channel.toUpperCase() === 'ETSY'
+    ? reviewReplyRules('ETSY', { postedAt: r.postedAt, lastEditedAt: r.channelEditedAt ?? null }, now).window
+    : null
+  const open = window && !window.closed ? window : null
+  const closing = open != null && open.daysLeft <= CLOSING_DAYS
+  const title = closing
+    ? `Etsy reply window ${closesWords(open.daysLeft)}`
+    : `${what.charAt(0).toUpperCase()}${what.slice(1)}, no reply for ${wait}`
   const detail = [
+    closing ? what.charAt(0).toUpperCase() + what.slice(1) : null,
     r.product?.name ?? r.product?.sku ?? null,
     channelMarketLabel(r.channel, r.marketplace),
     buyerShort(r.authorName),
     quoteOf(r.body),
+    open ? (closing ? `reply on Etsy.com by ${shortDay(new Date(open.endsAt))}` : `reply on Etsy.com · ${open.daysLeft.toLocaleString('en')} days left`) : null,
   ].filter(Boolean).join(' · ')
   return {
     kind: 'review',
     id: r.id,
     label: 'Reply needed',
-    tone: negative ? 'danger' : 'warning',
+    tone: negative || closing ? 'danger' : 'warning',
     title,
     detail,
     at: r.postedAt.toISOString(),
+    ...(closing ? { dueAt: open.endsAt } : {}),
     action: { label: 'Reply', page: 'review', params: { id: r.id, channel: r.channel.toUpperCase(), ...(r.marketplace ? { market: r.marketplace.toUpperCase() } : {}) } },
   }
+}
+
+const DAY_MS = 86_400_000
+
+/**
+ * The Etsy reviews whose reply window closes within CLOSING_DAYS (the window counts from the buyer's last edit, else
+ * from when it was posted). Narrows the needs-a-reply rows; never a count of its own.
+ */
+export function etsyClosingWhere(now: Date): Prisma.ReviewWhereInput {
+  const cut = new Date(now.getTime() - (ETSY_REPLY_WINDOW_DAYS - CLOSING_DAYS) * DAY_MS)
+  return {
+    AND: [
+      { channel: 'ETSY' },
+      { OR: [{ channelEditedAt: { lte: cut } }, { AND: [{ channelEditedAt: null }, { postedAt: { lte: cut } }] }] },
+    ],
+  }
+}
+
+/** Reply items in the list's own order: windows about to close first (soonest first), then the rest; each once. Pure. */
+export function replyItems(rows: { closing: readonly ReplyRow[]; urgent: readonly ReplyRow[]; other: readonly ReplyRow[] }, now: Date, limit: number): NeedsYouItem[] {
+  const seen = new Set<string>()
+  const once = (list: readonly ReplyRow[]) => list.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true))).map((r) => replyItem(r, now))
+  const closing = once(rows.closing)
+  const soon = closing.filter((i) => i.dueAt).sort((a, b) => a.dueAt!.localeCompare(b.dueAt!))
+  return [...soon, ...closing.filter((i) => !i.dueAt), ...once(rows.urgent), ...once(rows.other)].slice(0, limit)
 }
 
 type SpikeRow = {
@@ -190,7 +251,7 @@ export function requestItems(
 }
 
 const REPLY_SELECT = {
-  id: true, channel: true, marketplace: true, rating: true, body: true, authorName: true, postedAt: true, kind: true,
+  id: true, channel: true, marketplace: true, rating: true, body: true, authorName: true, postedAt: true, kind: true, channelEditedAt: true,
   product: { select: { name: true, sku: true } },
   sentiment: { select: { label: true } },
 } satisfies Prisma.ReviewSelect
@@ -232,8 +293,13 @@ export async function reviewNeedsYou(input: { only?: unknown; limit?: unknown; c
     ...(openInChannel ? { id: { in: openInChannel } } : {}),
   }
 
-  const [replyCount, urgentReplies, otherReplies, alertCount, spikes, failedGroups, retrying] = await Promise.all([
+  // Etsy reviews whose one reply must be posted soon (within CLOSING_DAYS) — only where the scope can hold Etsy.
+  const wantClosing = want('reply') && (!channel || channel === 'ETSY')
+  const [replyCount, closingReplies, urgentReplies, otherReplies, alertCount, spikes, failedGroups, retrying] = await Promise.all([
     prisma.review.count({ where: replyWhere }),
+    wantClosing
+      ? prisma.review.findMany({ where: { AND: [replyWhere, etsyClosingWhere(now)] }, orderBy: [{ channelEditedAt: 'asc' }, { postedAt: 'asc' }], take: limit, select: REPLY_SELECT })
+      : Promise.resolve([]),
     want('reply') ? prisma.review.findMany({ where: { AND: [replyWhere, urgent] }, orderBy: { postedAt: 'desc' }, take: limit, select: REPLY_SELECT }) : Promise.resolve([]),
     want('reply') ? prisma.review.findMany({ where: { AND: [replyWhere, { NOT: urgent }] }, orderBy: { postedAt: 'desc' }, take: limit, select: REPLY_SELECT }) : Promise.resolve([]),
     prisma.reviewSpike.count({ where: { status: 'OPEN', ...spikeScope } }),
@@ -257,8 +323,9 @@ export async function reviewNeedsYou(input: { only?: unknown; limit?: unknown; c
   )
   const counts = { reply: replyCount, requests: requests.length, alerts: alertCount }
 
-  // Negative reviews first, then the rest: each list is newest first, so a new one-star review leads.
-  const replies = [...urgentReplies, ...otherReplies].slice(0, limit).map(r => replyItem(r, now))
+  // Etsy windows about to close first, then negative reviews, then the rest: each of the last two is newest first, so a
+  // new one-star review leads them. The closing ones are part of `replyCount` already (the one rule).
+  const replies = replyItems({ closing: closingReplies, urgent: urgentReplies, other: otherReplies }, now, limit)
   const alerts = spikes.map(alertItem)
   const pool = [...(want('reply') ? replies : []), ...(want('alerts') ? alerts : []), ...(want('requests') ? requests : [])]
   // A single kind keeps its own order (replies: negative first); a mix is ranked by urgency.

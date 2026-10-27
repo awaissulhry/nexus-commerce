@@ -30,6 +30,11 @@ import { scopePublicToken } from '../../lib/workspace-public-links.js'
  * delivery; side B of a split gets B's timing and sentiment check; the holdout group gets NO request: its row is SKIPPED
  * with the reason "Holdout of a timing test — not asked on purpose". "Skip when" still decides first: an order the rule
  * skips is not in the test.
+ *
+ * Lane N6 — a TIMING test may cover the Shopify store (testForOrder: market "*", every Shopify order of its product
+ * type): its orders go to groups by the same hash, a first-try group gets Nexus's review e-mail on its own day (counted
+ * from what the order's rule counts from, at the send hours that rule and the Timing table set), and the holdout gets
+ * no e-mail and no "How was it?" check — the same rows, so every way back in refuses it as it does an Amazon one.
  */
 
 import { randomBytes } from 'node:crypto'

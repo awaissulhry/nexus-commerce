@@ -12,7 +12,11 @@
  * reviews a person imports (no API gives Amazon stars, build spec ruling 5); eBay = seller feedback read every 30 min,
  * which belongs to the seller account, not to one eBay site: an account with no market covers every eBay market the
  * business sells on; Shopify = the store's review app, by file import. Etsy (PR I, 2026-10-27): the shop's reviews, read
- * every 30 minutes through the Etsy connection — one row once an Etsy account is connected or Etsy reviews exist.
+ * every 30 minutes through the Etsy connection — one row once an Etsy account is connected. With no Etsy account at all
+ * (lane N4, 2026-10-27) Etsy is `notConnected` instead: one row ("Not connected", with Connect), or one per market of
+ * Etsy reviews held from before — never "read every 30 minutes", never sample numbers. `notConnected` is kept apart
+ * from `sources` so a reader that lists what Nexus reads (Settings, the eBay page) does not list Etsy; the Overview's
+ * channel table and the Inbox (its Etsy empty state) read both.
  */
 import prisma from '../../db.js'
 import { visibleReviewWhere } from './review-visibility.js'
@@ -21,7 +25,8 @@ import { visibleReviewWhere } from './review-visibility.js'
 export const EBAY_READ_JOB = 'review-ingest-ebay'
 import { channelMarketLabel, marketWords } from './overviewMath.js'
 
-export type SourceStateKind = 'ok' | 'not_updating'
+/** `not_connected`: no account of this channel is connected at all, so nothing reads it (Etsy; `notConnected`). */
+export type SourceStateKind = 'ok' | 'not_updating' | 'not_connected'
 
 export interface ReviewSource {
   channel: string
@@ -174,8 +179,15 @@ export function marketCode(raw: string | null | undefined): string | null {
   return code === 'GB' ? 'UK' : code
 }
 
+export interface ReviewSources {
+  sources: ReviewSource[]
+  setup: SetupProblem[]
+  /** Channels Nexus can read but no account of which is connected (Etsy), as "Not connected" rows with Connect. */
+  notConnected: ReviewSource[]
+}
+
 /** States for every channel × market Nexus knows reviews for, and the problems a person can fix. Pure. */
-export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: ReviewSource[]; setup: SetupProblem[] } {
+export function sourcesFromFacts(facts: SourceFacts, now: Date): ReviewSources {
   const groups = new Map<string, SourceFacts['reviewGroups']>()
   for (const g of facts.reviewGroups) {
     const k = key(g.channel.toUpperCase(), g.marketplace?.toUpperCase() ?? null)
@@ -188,6 +200,7 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
 
   const sources: ReviewSource[] = []
   const setup: SetupProblem[] = []
+  const notConnected: ReviewSource[] = []
   const summary = (channel: string, market: string | null) => {
     const rows = reviewsOf(channel, market)
     const latest = rows.reduce<SourceFacts['reviewGroups'][number] | null>((best, g) => (!best || (g.lastIngestedAt ?? 0) > (best.lastIngestedAt ?? 0) ? g : best), null)
@@ -319,26 +332,29 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
   // One shop, one state: a row per market its reviews came from (the order's market), else one row for Etsy.
   const etsyAll = facts.connections.filter(c => c.channelType.toUpperCase() === 'ETSY')
   const etsyMarkets = [...marketsOf('ETSY')].sort()
-  const etsyRows: Array<string | null> = etsyMarkets.length ? etsyMarkets : (etsyAll.length > 0 || summary('ETSY', null).count > 0 ? [null] : [])
-  if (etsyRows.length > 0) {
-    const conn = etsyAll.find(c => c.isActive && c.isPrimary) ?? etsyAll.find(c => c.isActive) ?? etsyAll[0]
-    const broken = etsyAll.length > 0 ? connectionProblem(conn, 'Etsy') : null
-    const off = !broken && !facts.etsyReadOn
-    for (const market of etsyRows) {
-      // Reviews with no market belong to the shop as a whole: the first row counts them too.
-      const here = [summary('ETSY', market), ...(market !== null && market === etsyRows[0] ? [summary('ETSY', null)] : [])]
-      sources.push({
-        channel: 'ETSY', market, readsItself: true,
-        state: broken || off ? 'not_updating' : 'ok',
-        reason: broken ?? (off ? 'Nexus does not read Etsy reviews in this setup yet' : null),
-        since: broken ? conn?.lastErrorAt?.toISOString() ?? null : null,
-        reconnectHref: broken ? settingsHref('ETSY') : null,
-        what: 'Shop reviews, one photo each',
-        lastNote: broken || off ? null : facts.etsyLastReadAt ? `read every 30 min · last ${shortDay(facts.etsyLastReadAt)}` : 'read every 30 min',
-        lastReviewAt: newest(here.map(s => s.lastReviewAt))?.toISOString() ?? null,
-        reviews: here.reduce((n, s) => n + s.count, 0),
-      })
+  const etsyRows: Array<string | null> = etsyMarkets.length ? etsyMarkets : [null]
+  const etsyConn = etsyAll.find(c => c.isActive && c.isPrimary) ?? etsyAll.find(c => c.isActive) ?? etsyAll[0]
+  // No Etsy account at all: nothing reads Etsy. "Not connected" with Connect — the reviews held from before keep their
+  // real numbers (lane N4).
+  const noShop = etsyAll.length === 0
+  const etsyBroken = noShop ? null : connectionProblem(etsyConn, 'Etsy')
+  const etsyOff = !noShop && !etsyBroken && !facts.etsyReadOn
+  for (const market of etsyRows) {
+    // Reviews with no market belong to the shop as a whole: the first row counts them too.
+    const here = [summary('ETSY', market), ...(market !== null && market === etsyRows[0] ? [summary('ETSY', null)] : [])]
+    const row: ReviewSource = {
+      channel: 'ETSY', market, readsItself: !noShop,
+      state: noShop ? 'not_connected' : etsyBroken || etsyOff ? 'not_updating' : 'ok',
+      reason: noShop ? 'No Etsy shop is connected' : etsyBroken ?? (etsyOff ? 'Nexus does not read Etsy reviews in this setup yet' : null),
+      since: etsyBroken ? etsyConn?.lastErrorAt?.toISOString() ?? null : null,
+      reconnectHref: noShop || etsyBroken ? settingsHref('ETSY') : null,
+      what: 'Shop reviews, one photo each',
+      lastNote: noShop || etsyBroken || etsyOff ? null : facts.etsyLastReadAt ? `read every 30 min · last ${shortDay(facts.etsyLastReadAt)}` : 'read every 30 min',
+      lastReviewAt: newest(here.map(s => s.lastReviewAt))?.toISOString() ?? null,
+      reviews: here.reduce((n, s) => n + s.count, 0),
     }
+    if (noShop) notConnected.push(row)
+    else sources.push(row)
   }
 
   // ── Shopify: the store's review app, by file import for now ──
@@ -359,7 +375,7 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
     })
   }
 
-  return { sources, setup }
+  return { sources, setup, notConnected }
 }
 
 /** The facts `sourcesFromFacts` needs, read in the business the request runs in. */
@@ -406,6 +422,6 @@ export async function readSourceFacts(): Promise<SourceFacts> {
 }
 
 /** Every review source's state and the setup problems, now. */
-export async function reviewSources(now: Date = new Date()): Promise<{ sources: ReviewSource[]; setup: SetupProblem[] }> {
+export async function reviewSources(now: Date = new Date()): Promise<ReviewSources> {
   return sourcesFromFacts(await readSourceFacts(), now)
 }

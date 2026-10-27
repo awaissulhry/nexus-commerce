@@ -54,6 +54,8 @@ export interface InboxReadState {
   reconnectHref: string | null
   /** Its reviews arrive only by file import (Amazon's product reviews, a store app not connected). */
   byFile?: boolean
+  /** False when no account of the channel is connected at all (Etsy): not "behind", not read; Connect is `reconnectHref`. */
+  connected?: false
 }
 
 export interface InboxStatusCounts {

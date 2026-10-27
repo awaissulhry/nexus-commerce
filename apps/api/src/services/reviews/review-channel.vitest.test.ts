@@ -17,7 +17,7 @@ const DAY = 86_400_000
 const ago = (days: number) => new Date(NOW.getTime() - days * DAY)
 
 describe('the address', () => {
-  it('a page is Amazon or eBay; Shopify and Etsy pages come later', () => {
+  it('a page here is Amazon or eBay; Shopify and Etsy have their own pages', () => {
     expect(parseChannel('amazon')).toBe('AMAZON')
     expect(parseChannel(' EBAY ')).toBe('EBAY')
     expect(parseChannel('SHOPIFY')).toBeNull()

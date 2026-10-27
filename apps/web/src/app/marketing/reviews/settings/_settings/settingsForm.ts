@@ -9,7 +9,7 @@
 
 export type Tone = 'WARM' | 'NEUTRAL' | 'FORMAL'
 export type ReplyLanguage = 'buyer' | 'it' | 'de' | 'fr' | 'es' | 'en'
-export type AlertKey = 'negative' | 'digest' | 'ratingDrop'
+export type AlertKey = 'negative' | 'digest' | 'ratingDrop' | 'complaintSpike'
 export type AlertVia = 'app' | 'email'
 
 export interface SenderView {
@@ -34,6 +34,8 @@ export interface SettingsResponse {
   automationTemplates: { total: number; missing: number }
   /** When "Rating drop" opens an alert (the API's rating-drop-math.ts). */
   ratingDropRule: RatingDropRule
+  /** When the hourly spike check opens a "Complaint spike" alert (the API's complaint-spike-math.ts). */
+  complaintSpikeRule: ComplaintSpikeRule
   updatedAt: string | null
   updatedBy: string | null
 }
@@ -44,6 +46,20 @@ export interface RatingDropRule {
   beforeDays: number
   minRated: number
   dropAtLeast: number
+  reopenAfterDays: number
+}
+
+/**
+ * The API's rule for "Complaint spike": the windows in days (the baseline includes the recent days), the fewest negative
+ * reviews about the theme in the recent window, the fewest reviews about it in the baseline, how many times the
+ * baseline's negative share the recent one must reach, and how long a resolve holds a new alert.
+ */
+export interface ComplaintSpikeRule {
+  recentDays: number
+  baselineDays: number
+  minNegative: number
+  minReviews: number
+  multiplier: number
   reopenAfterDays: number
 }
 
@@ -89,15 +105,18 @@ export const LANGUAGE_OPTIONS: ReadonlyArray<{ value: ReplyLanguage; label: stri
   { value: 'en', label: 'English' },
 ]
 
-export const ALERT_NAME: Record<AlertKey, string> = { negative: 'New negative review', digest: 'Daily digest', ratingDrop: 'Rating drop' }
+export const ALERT_NAME: Record<AlertKey, string> = {
+  negative: 'New negative review', digest: 'Daily digest', ratingDrop: 'Rating drop', complaintSpike: 'Complaint spike',
+}
 export const ALERT_WHEN: Record<AlertKey, string> = {
   negative: 'A new review of 1 or 2 stars, or negative feedback, on any channel. Imported files never alert.',
   digest: 'Every morning at 08:00 UTC: new reviews, what waits for a reply, open spikes and pipeline problems.',
   ratingDrop: 'A product’s average stars fall in one market. Opens an alert in Insights › Alerts.',
+  complaintSpike: 'Complaints about one theme rise fast for a product in one market. The hourly check opens these alerts in Insights › Alerts whether this is on or off; on, the people picked hear about each new one.',
 }
 
 /** The alerts a person picks how they arrive (the digest is always an e-mail). */
-export const ALERTS_WITH_VIA: readonly AlertKey[] = ['negative', 'ratingDrop']
+export const ALERTS_WITH_VIA: readonly AlertKey[] = ['negative', 'ratingDrop', 'complaintSpike']
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
@@ -109,6 +128,21 @@ export function ratingDropWords(rule: RatingDropRule): string[] {
     `A product family’s average falls ${rule.dropAtLeast} stars or more in one market: the last ${plural(rule.recentDays, 'day')} against the ${plural(rule.beforeDays, 'day')} before, with at least ${plural(rule.minRated, 'rated review')} in each.`,
     'Only product reviews with stars count: never seller feedback or eBay feedback, and Amazon only from imported reviews.',
     `Checked every hour. One alert per product and market until it is resolved; after a resolve, a new one opens only if the drop is still there ${plural(rule.reopenAfterDays, 'day')} later.`,
+  ]
+}
+
+/** "2×", "2.5×". */
+const times = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)}×`
+
+/**
+ * "Complaint spike" in words, from the API's rule (the spike check's own numbers): when it opens, what counts, and how
+ * often. Each line is one sentence.
+ */
+export function complaintSpikeWords(rule: ComplaintSpikeRule): string[] {
+  return [
+    `For one product in one market, the share of negative reviews about a theme reaches ${times(rule.multiplier)} its usual share or more: the last ${plural(rule.recentDays, 'day')} against the last ${plural(rule.baselineDays, 'day')}, with at least ${plural(rule.minNegative, 'negative review')} about it in the ${plural(rule.recentDays, 'day')} and ${plural(rule.minReviews, 'review')} about it in the ${plural(rule.baselineDays, 'day')}.`,
+    'Themes are the ones AI read in each review when it arrived. Every channel counts, and imported files too; a review with no product or no market does not.',
+    `Checked every hour. One alert per product, market and theme while it is open or acknowledged; after a resolve, a new one opens only if the rise is still there ${plural(rule.reopenAfterDays, 'day')} later.`,
   ]
 }
 

@@ -4,6 +4,7 @@
  * requests, "Too few to trend", the Needs-you footer, theme counts and the links each item opens. Pure (no React), so
  * overviewModel.vitest.test.ts checks the words. A section the API could not read stays an error here — never zeros.
  */
+import { reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import {
   channelHref, inboxHref, insightsHref, productReviewsHref, requestsHref, type InboxLinkParams,
 } from '../_lib/reviewsLinks'
@@ -52,7 +53,8 @@ export interface OverviewChannelRow {
   /** "Not measurable: …" when no review can follow these requests. */
   rateWords?: string | null
   lastReviewAt: string | null
-  state: 'ok' | 'not_updating'
+  /** `not_connected`: no account of the channel is connected (Etsy) — "Not connected" and Connect, never numbers made up. */
+  state: 'ok' | 'not_updating' | 'not_connected'
   reason: string | null
   since: string | null
   reconnectHref: string | null
@@ -117,6 +119,8 @@ export interface NeedsYouItem {
   title: string
   detail: string
   at: string
+  /** When the chance to reply ends (ISO), while that is near: an Etsy review whose 100-day window closes soon. */
+  dueAt?: string
   action: { label: string; page: NeedsPage; params: Record<string, string | number> }
 }
 
@@ -235,7 +239,8 @@ function listWords(items: readonly string[]): string {
 export function headerSubtitle(period: OverviewPeriod, tiles: OverviewTiles | null, channels: readonly OverviewChannelRow[] | null): string {
   const { label } = PERIOD_WORDS[period]
   if (!tiles) return label.charAt(0).toUpperCase() + label.slice(1)
-  const names = [...new Set((channels ?? []).map(c => CHANNEL_NAMES[c.channel] ?? c.channel))]
+  // A channel that is not connected and holds no review is not where reviews come from.
+  const names = [...new Set((channels ?? []).filter(c => c.state !== 'not_connected' || c.reviews > 0).map(c => CHANNEL_NAMES[c.channel] ?? c.channel))]
   const where = names.length ? ` on ${listWords(names)}` : ''
   return `${count(tiles.newReviews)} ${tiles.newReviews === 1 ? 'review' : 'reviews'} in the ${label}${where}`
 }
@@ -311,7 +316,7 @@ export interface ChannelViewRow {
   sent: string
   sentNote: string | null
   rate: string
-  state: 'ok' | 'not_updating'
+  state: 'ok' | 'not_updating' | 'not_connected'
   last: string
   lastNote: string | null
   reason: string | null
@@ -324,6 +329,8 @@ export function channelViewRows(rows: readonly OverviewChannelRow[], now: number
     const amazon = r.channel === 'AMAZON'
     const etsy = r.channel === 'ETSY'
     const ebay = r.channel === 'EBAY'
+    // No account connected (Etsy): only the reviews Nexus already holds count; none is "—", never a 0 that reads as read.
+    const unconnected = r.state === 'not_connected'
     return {
       id: `${r.channel}|${r.market ?? ''}`,
       label: channelMarketWords(r.channel, r.market),
@@ -332,7 +339,7 @@ export function channelViewRows(rows: readonly OverviewChannelRow[], now: number
       ratingKind: r.ratingKind,
       rating: r.rating,
       noAmazonData: amazon && r.rating == null,
-      reviews: amazon && r.rating == null && r.reviews === 0 ? '—' : count(r.reviews),
+      reviews: (amazon && r.rating == null && r.reviews === 0) || (unconnected && r.reviews === 0) ? '—' : count(r.reviews),
       change: changeView(r.change, r.ratingKind),
       sent: r.sent == null || (ebay && r.sent === 0) ? '—' : count(r.sent),
       // eBay asks its buyers itself: Nexus e-mails no eBay buyer (Owner, 2026-10-27); a number is e-mails sent before.
@@ -340,7 +347,7 @@ export function channelViewRows(rows: readonly OverviewChannelRow[], now: number
       // No rate where no review can follow (the API's words): "Not measurable", never a 0 %.
       rate: r.rate == null && (r.sent ?? 0) > 0 && r.rateWords ? 'Not measurable' : rateText(r.rate),
       state: r.state,
-      last: r.state === 'ok' ? lastWords(r.lastReviewAt, now) : 'Not updating',
+      last: r.state === 'ok' ? lastWords(r.lastReviewAt, now) : unconnected ? 'Not connected' : 'Not updating',
       lastNote: r.state === 'ok' ? r.lastNote : null,
       reason: r.reason,
       reconnectHref: r.reconnectHref,
@@ -408,6 +415,19 @@ export function needsActionHref(action: NeedsYouItem['action']): string {
     case 'alerts':
       return insightsHref('alerts', { channel: text(p, 'channel'), market: text(p, 'market') })
   }
+}
+
+/** Where Etsy reviews are answered (Etsy has no reply API): the one link of the reply rules. */
+export const ETSY_REPLY_HREF = reviewReplyRules('ETSY').open?.href ?? 'https://www.etsy.com/your/shops/me/reviews'
+
+/**
+ * A second way out of an item, on the channel's own site: an Etsy review is answered on Etsy.com ("Open on Etsy"), while
+ * Reply opens it in Nexus to write, copy and mark as responded. Null for every other item.
+ */
+export function needsExternal(item: Pick<NeedsYouItem, 'kind' | 'action'>): { label: string; href: string } | null {
+  return item.kind === 'review' && String(item.action.params?.channel ?? '').toUpperCase() === 'ETSY'
+    ? { label: 'Open on Etsy', href: ETSY_REPLY_HREF }
+    : null
 }
 
 /** A reply is a change: it needs "Manage reviews". Opening a page does not. */

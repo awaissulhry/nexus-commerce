@@ -272,7 +272,7 @@ export interface ChannelInput {
 /** GET /api/reviews/area/channel. A channel other than Amazon or eBay, or a market that is not two letters, is refused. */
 export async function reviewsChannel(input: ChannelInput): Promise<ChannelPage> {
   const channel = parseChannel(input.channel)
-  if (!channel) throw new ChannelInputError('This page is for Amazon or eBay. Shopify and Etsy pages come later.')
+  if (!channel) throw new ChannelInputError('This page is for Amazon or eBay. Shopify and Etsy have their own pages.')
   const rawMarket = scopeCode(input.market)
   const market = rawMarket ? parseMarket(rawMarket) : null
   if (rawMarket && !market) throw new ChannelInputError('A market is two letters, such as IT or DE.')

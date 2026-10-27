@@ -61,10 +61,28 @@ describe('a fix becomes its steps (pure)', () => {
     expect(stepsForFix(fix({ type: 'APLUS', marketplace: 'ES' }), facts({ asin: null }))).toEqual({ held: expect.stringMatching(/no live listing on Amazon Spain/) })
     expect(stepsForFix(fix({ type: 'APLUS', marketplace: 'IT' }), facts({ amazonMarket: false }))).toEqual({ held: expect.stringMatching(/not one of this business’s Amazon markets/) })
     expect(stepsForFix(fix({ type: 'APLUS', marketplace: null }), facts({}))).toEqual({ held: expect.stringMatching(/names none/) })
-    expect(stepsForFix(fix({ type: 'SIZE_GUIDE' }), facts({}))).toEqual({ held: expect.stringMatching(/come later/) })
+    expect(stepsForFix(fix({ type: 'SIZE_GUIDE' }), facts({ bullets: { language: 'it', current: ['A'] } }))).toEqual({ held: expect.stringMatching(/^Write the sizing bullet point in Italian \(Edit the proposal\)/) })
     expect(stepsForFix(fix({}), facts({ product: null }))).toEqual({ held: expect.stringMatching(/no longer in Nexus/) })
     expect(stepsForFix(fix({}), facts({ text: { bulletPoints: ['Lauf klein'], english: null } }))).toEqual({ held: expect.stringMatching(/in English/) })
     expect(stepsForFix(fix({}), facts({ textProblem: 'Nexus could not translate the text into German (down).' }))).toEqual({ held: expect.stringMatching(/could not translate/) })
+  })
+
+  it('Size guide → set-content: the family’s bullets as they are + the sizing bullet; held with the way out', () => {
+    const line = 'Fällt klein aus: wir empfehlen, eine Größe größer zu bestellen.'
+    const sg = (payload: Record<string, unknown> = {}) => fix({ type: 'SIZE_GUIDE', marketplace: null, payload: { direction: 'small', language: 'de', line, english: 'Runs small: we suggest ordering one size up.', ...payload } })
+    const bullets = (current: string[], language = 'de') => facts({ language: null, bullets: { language, current } })
+    expect(stepsForFix(sg(), bullets(['Test shell', 'Test pockets']))).toEqual({
+      steps: [{ tool: 'set-content', args: { product: 'p', language: 'de', bulletPoints: ['Test shell', 'Test pockets', line], englishMeaning: { bulletPoints: 'The 2 bullet points as they are, then a new last one: “Runs small: we suggest ordering one size up.”' } } }],
+    })
+    expect(stepsForFix(sg({ language: 'en', line: 'Runs small: order one size up.' }), bullets(['Test shell'], 'en'))).toEqual({
+      steps: [{ tool: 'set-content', args: { product: 'p', language: 'en', bulletPoints: ['Test shell', 'Runs small: order one size up.'] } }],
+    })
+    expect(stepsForFix(sg(), bullets([]))).toEqual({ held: expect.stringMatching(/TEST-P keeps no bullet points in Nexus.*Create a task instead/) })
+    expect(stepsForFix(sg(), bullets(['Test shell', ` ${line.replace('Fällt', 'FÄLLT')} `]))).toEqual({ held: 'Its bullet points already say this: dismiss this fix.' })
+    expect(stepsForFix(sg(), bullets(Array.from({ length: 10 }, (_, i) => `Point ${i}`)))).toEqual({ held: expect.stringMatching(/has 10 bullet points already: make room in the product sheet, or create a task instead/) })
+    expect(stepsForFix(sg(), bullets(['A'], 'it'))).toEqual({ held: expect.stringMatching(/Write the sizing bullet point in Italian/) })
+    expect(stepsForFix(sg({ english: null }), bullets(['A']))).toEqual({ held: expect.stringMatching(/means in English \(Edit the proposal\)/) })
+    expect(stepsForFix(sg(), { ...bullets(['A']), product: null })).toEqual({ held: expect.stringMatching(/no longer in Nexus/) })
   })
 
   it('Recall check holds stock in OWN warehouses only — never Amazon FBA', () => {
