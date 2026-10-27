@@ -49,6 +49,8 @@ describe('parseEtsyReview', () => {
     expect(p.raw.postedAt).toBe(new Date(secAgo(40) * 1000).toISOString())
     expect(p).toMatchObject({ transactionId: '9001', listingId: '555', language: 'en' })
     expect(p.raw.rawPayload).toMatchObject({ source: 'etsy', image_url_fullxfull: 'https://i.etsystatic.com/review/abc_fullxfull.jpg', listing_id: 555 })
+    // The one photo is the review's media (ReviewMedia), shown in the Inbox pop-up's Lightbox like eBay's.
+    expect(p.raw.media).toEqual([{ url: 'https://i.etsystatic.com/review/abc_fullxfull.jpg', type: 'image', position: 0 }])
   })
 
   it('the buyer’s last edit is the update time when it is after the creation, else the creation', () => {
@@ -64,6 +66,7 @@ describe('parseEtsyReview', () => {
     expect(p.raw.authorId).toBeUndefined()
     expect(p.raw.body).toBe('')
     expect((p.raw.rawPayload as { image_url_fullxfull: unknown }).image_url_fullxfull).toBeNull()
+    expect(p.raw.media).toEqual([])
   })
 
   it('refuses what cannot be a review: no transaction, no date, a rating outside 1–5, a non-https photo', () => {
@@ -72,6 +75,7 @@ describe('parseEtsyReview', () => {
     expect(parseEtsyReview(etsyReview({ rating: 6 }))).toBeNull()
     expect(parseEtsyReview(null)).toBeNull()
     expect((parseEtsyReview(etsyReview({ image_url_fullxfull: 'http://x/y.jpg' }))!.raw.rawPayload as { image_url_fullxfull: unknown }).image_url_fullxfull).toBeNull()
+    expect(parseEtsyReview(etsyReview({ image_url_fullxfull: 'http://x/y.jpg' }))!.raw.media).toEqual([])
   })
 })
 

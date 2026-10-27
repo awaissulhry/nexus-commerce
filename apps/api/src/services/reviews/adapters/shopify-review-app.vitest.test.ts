@@ -77,9 +77,12 @@ describe('parseJudgemeReview', () => {
     expect(stored).not.toContain('+100000000')
   })
   it('published photos (original + thumbnail) and the video mark; hidden photos are left out', () => {
-    const payload = parseJudgemeReview(jmReview())!.raw.rawPayload as { photos: unknown; hasVideo: boolean }
+    const parsed = parseJudgemeReview(jmReview())!
+    const payload = parsed.raw.rawPayload as { photos: unknown; hasVideo: boolean }
     expect(payload.photos).toEqual([{ url: 'https://img.judge.me/o.jpg', thumb: 'https://img.judge.me/c.jpg' }])
     expect(payload.hasVideo).toBe(true)
+    // The photos are the review's media (ReviewMedia), in order; a video is a mark only (Judge.me gives no video URL).
+    expect(parsed.raw.media).toEqual([{ url: 'https://img.judge.me/o.jpg', type: 'image', position: 0 }])
   })
   it('an archived (hidden) review, or one without an id or date, is not a review', () => {
     expect(parseJudgemeReview(jmReview({ hidden: true }))).toBeNull()

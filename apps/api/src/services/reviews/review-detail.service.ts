@@ -99,8 +99,10 @@ export interface InboxDetail {
   }[]
   timeline: { at: string; words: string }[]
   reply: ReplyRules
-  /** PR G — the buyer's photos (or videos), in order; [] when none. */
+  /** PR G — the buyer's photos (or videos), in order; [] when none. eBay's, Etsy's one photo and Judge.me's (PR I). */
   media: { url: string; type: string; width: number | null; height: number | null; position: number }[]
+  /** PR I — the review app that holds a video Nexus cannot show (Judge.me gives no video URL); null when none. */
+  videoIn: string | null
   /** PR G — eBay's AI topics with the buyer's words eBay found for each; null when eBay's topics were not read. */
   aiTopics: { topic: string; label: string; sentiment: string | null; texts: string[] }[] | null
   /** PR G — eBay's revision state of this feedback, in words; null when there is nothing to say. */
@@ -272,6 +274,7 @@ export async function getInboxReview(id: string, now: Date = new Date()): Promis
       buyerId: r.authorName, lastEditedAt: r.channelEditedAt, app, appConnected,
     }, now),
     media: r.media.map((m) => ({ url: m.url, type: m.type, width: m.width, height: m.height, position: m.position })),
+    videoIn: app === 'JUDGEME' && (r.rawPayload as { hasVideo?: unknown } | null)?.hasVideo === true ? 'Judge.me' : null,
     aiTopics: detailTopics(r.channelTopics),
     revision: (() => {
       const said = r.channel === 'EBAY' ? revisionWords(r.feedbackState, r.revisionEligible === true && (r.rating ?? 5) <= 3) : null

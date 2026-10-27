@@ -49,6 +49,8 @@ vi.mock('./review-ingest.service.js', () => ({
     db.ingested.push(...raws)
     return { reviewsInserted: raws.length, errors: [] }
   },
+  // The photos of an edited review (real SQL: shop-review-media.vitest.test.ts).
+  replaceReviewMedia: async () => false,
 }))
 
 const svc = await import('./review-app-connection.service.js')

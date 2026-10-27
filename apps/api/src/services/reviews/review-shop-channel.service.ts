@@ -18,7 +18,7 @@ import { listInbox, type InboxRow } from './review-inbox.service.js'
 import { visibleReviewWhere } from './review-visibility.js'
 import { listReviewApps, type ReviewAppView } from './review-app-connection.service.js'
 import {
-  appMediaOf, etsyPhotoOf, etsyTiles, etsyWindow, shopifyTiles,
+  etsyTiles, etsyWindow, shopifyTiles, storedMediaOf,
   type EtsySource, type EtsyTiles, type ShopifyTiles, type TileFacts, type WindowView,
 } from './review-shop-channel-math.js'
 
@@ -34,7 +34,7 @@ export interface EtsyRow extends InboxRow {
 }
 
 export interface ShopifyRow extends InboxRow {
-  /** The review's photos with their thumbnails; the Inbox row's `photos` is their count. */
+  /** The review's photos (its stored media) with their thumbnails; the Inbox row's `photos` is their count. */
   photoItems: Array<{ url: string; thumb: string }>
   hasVideo: boolean
   /** The review app it was read from (JUDGEME), or null for a file import. */
@@ -90,32 +90,39 @@ async function section<T>(name: string, run: () => Promise<T>): Promise<Section<
 async function tileFacts(channel: 'ETSY' | 'SHOPIFY'): Promise<TileFacts[]> {
   const rows = await prisma.review.findMany({
     where: visibleReviewWhere({ channel }),
-    select: { id: true, rating: true, postedAt: true, channelEditedAt: true, triageStatus: true, rawPayload: true },
+    select: {
+      id: true, rating: true, postedAt: true, channelEditedAt: true, triageStatus: true, rawPayload: true,
+      _count: { select: { media: true } },
+    },
     take: 50_000,
   })
   const sent = rows.length
     ? await prisma.reviewResponse.groupBy({ by: ['reviewId'], where: { reviewId: { in: rows.map((r) => r.id) }, status: 'SENT' }, _count: { _all: true } })
     : []
   const sentBy = new Map(sent.map((g) => [g.reviewId, g._count._all]))
-  return rows.map((r) => {
-    const media = channel === 'SHOPIFY' ? appMediaOf(r.rawPayload) : null
-    return {
-      rating: r.rating,
-      postedAt: r.postedAt,
-      editedAt: r.channelEditedAt,
-      status: r.triageStatus,
-      sentReplies: sentBy.get(r.id) ?? 0,
-      hasPhoto: channel === 'ETSY' ? etsyPhotoOf(r.rawPayload) != null : (media?.photos.length ?? 0) > 0,
-      hasVideo: media?.hasVideo ?? false,
-    }
-  })
+  return rows.map((r) => ({
+    rating: r.rating,
+    postedAt: r.postedAt,
+    editedAt: r.channelEditedAt,
+    status: r.triageStatus,
+    sentReplies: sentBy.get(r.id) ?? 0,
+    // The photos are the review's stored media (ReviewMedia); a Judge.me video is a mark in rawPayload.
+    hasPhoto: r._count.media > 0,
+    hasVideo: channel === 'SHOPIFY' && storedMediaOf([], r.rawPayload).hasVideo,
+  }))
 }
 
 /** The Inbox's rows for the channel (newest 200) with what this page adds from the stored review. */
 async function listOf(channel: 'ETSY' | 'SHOPIFY', now: Date) {
   const page = await listInbox({ channel, page: 1, pageSize: 200 }, now)
   const extra = page.rows.length
-    ? await prisma.review.findMany({ where: { id: { in: page.rows.map((r) => r.id) } }, select: { id: true, channelEditedAt: true, rawPayload: true, ingestSource: true } })
+    ? await prisma.review.findMany({
+        where: { id: { in: page.rows.map((r) => r.id) } },
+        select: {
+          id: true, channelEditedAt: true, rawPayload: true, ingestSource: true,
+          media: { select: { url: true, type: true, position: true }, orderBy: { position: 'asc' } },
+        },
+      })
     : []
   return { page, extra: new Map(extra.map((e) => [e.id, e])) }
 }
@@ -135,7 +142,8 @@ async function etsySections(now: Date): Promise<EtsySections> {
         rows: page.rows.map((row) => {
           const more = extra.get(row.id)
           const editedAt = more?.channelEditedAt ?? null
-          return { ...row, photoUrl: etsyPhotoOf(more?.rawPayload), editedAt: editedAt?.toISOString() ?? null, window: etsyWindow({ postedAt: row.postedAt, editedAt }, now) }
+          const photoUrl = storedMediaOf(more?.media, null).photos[0]?.url ?? null
+          return { ...row, photoUrl, editedAt: editedAt?.toISOString() ?? null, window: etsyWindow({ postedAt: row.postedAt, editedAt }, now) }
         }),
       }
     }),
@@ -160,7 +168,7 @@ async function shopifySections(now: Date): Promise<ShopifySections> {
         owners: page.facets.owners,
         rows: page.rows.map((row) => {
           const more = extra.get(row.id)
-          const media = appMediaOf(more?.rawPayload)
+          const media = storedMediaOf(more?.media, more?.rawPayload)
           return { ...row, photoItems: media.photos, hasVideo: media.hasVideo, app: reviewAppOf(more?.ingestSource) }
         }),
       }

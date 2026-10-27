@@ -3,7 +3,7 @@
  * yet, closing in ≤ 10 days, closed), the media Nexus stored, and whether Etsy is read, in words (never a setting name).
  */
 import { describe, expect, it } from 'vitest'
-import { appMediaOf, etsyPhotoOf, etsySource, etsyTiles, etsyWindow, shopifyTiles, type TileFacts } from './review-shop-channel-math.js'
+import { etsySource, etsyTiles, etsyWindow, shopifyTiles, storedMediaOf, type TileFacts } from './review-shop-channel-math.js'
 
 const NOW = new Date('2026-10-27T12:00:00Z')
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000)
@@ -44,15 +44,19 @@ describe('Shopify tiles', () => {
 })
 
 describe('media from what Nexus stored', () => {
-  it('Etsy’s one photo, https only', () => {
-    expect(etsyPhotoOf({ image_url_fullxfull: 'https://i.etsystatic.com/x.jpg' })).toBe('https://i.etsystatic.com/x.jpg')
-    expect(etsyPhotoOf({ image_url_fullxfull: 'javascript:alert(1)' })).toBeNull()
-    expect(etsyPhotoOf(null)).toBeNull()
+  const image = (url: string, position: number) => ({ url, type: 'image', position })
+  it('Etsy’s one photo: the stored media, https images only', () => {
+    expect(storedMediaOf([image('https://i.etsystatic.com/x.jpg', 0)], { image_url_fullxfull: 'https://i.etsystatic.com/x.jpg' }))
+      .toEqual({ photos: [{ url: 'https://i.etsystatic.com/x.jpg', thumb: 'https://i.etsystatic.com/x.jpg' }], hasVideo: false })
+    expect(storedMediaOf([image('javascript:alert(1)', 0)], null).photos).toEqual([])
+    expect(storedMediaOf(null, null)).toEqual({ photos: [], hasVideo: false })
   })
-  it('Judge.me photos and the video mark', () => {
-    expect(appMediaOf({ photos: [{ url: 'https://img.judge.me/o.jpg', thumb: 'https://img.judge.me/c.jpg' }, { url: 'data:x' }], hasVideo: true }))
-      .toEqual({ photos: [{ url: 'https://img.judge.me/o.jpg', thumb: 'https://img.judge.me/c.jpg' }], hasVideo: true })
-    expect(appMediaOf(undefined)).toEqual({ photos: [], hasVideo: false })
+  it('Judge.me photos in order with Judge.me’s thumbnails, and the video mark (no video URL, so never media)', () => {
+    const raw = { photos: [{ url: 'https://img.judge.me/o.jpg', thumb: 'https://img.judge.me/c.jpg' }, { url: 'data:x' }], hasVideo: true }
+    expect(storedMediaOf([image('https://img.judge.me/p.jpg', 1), image('https://img.judge.me/o.jpg', 0), { url: 'https://v.example/v.mp4', type: 'video', position: 2 }], raw))
+      .toEqual({ photos: [{ url: 'https://img.judge.me/o.jpg', thumb: 'https://img.judge.me/c.jpg' }, { url: 'https://img.judge.me/p.jpg', thumb: 'https://img.judge.me/p.jpg' }], hasVideo: true })
+    // Photos come only from the stored media: rawPayload alone shows none.
+    expect(storedMediaOf([], raw)).toEqual({ photos: [], hasVideo: true })
   })
 })
 

@@ -246,12 +246,18 @@ export function judgemeChanges(stored: { rating: number | null; title: string | 
   }
 }
 
-/** Stores Judge.me reviews: new ones through the shared ingest, edited ones updated in place. */
+/** Stores Judge.me reviews: new ones through the shared ingest, edited ones updated in place (photos replaced as a set). */
 export async function storeJudgemeReviews(parsed: JudgemeParsed[]): Promise<{ inserted: number; updated: number; errors: string[] }> {
   if (parsed.length === 0) return { inserted: 0, updated: 0, errors: [] }
   const ids = parsed.map((p) => p.raw.externalReviewId)
   const [existing, products] = await Promise.all([
-    prisma.review.findMany({ where: { channel: 'SHOPIFY', externalReviewId: { in: ids } }, select: { id: true, externalReviewId: true, rating: true, title: true, body: true, rawPayload: true } }),
+    prisma.review.findMany({
+      where: { channel: 'SHOPIFY', externalReviewId: { in: ids } },
+      select: {
+        id: true, externalReviewId: true, rating: true, title: true, body: true, rawPayload: true,
+        media: { select: { url: true, position: true }, orderBy: { position: 'asc' } },
+      },
+    }),
     prisma.product.findMany({
       where: { shopifyProductId: { in: [...new Set(parsed.map((p) => p.productExternalId).filter((x): x is string => !!x))] } },
       select: { shopifyProductId: true, sku: true },
@@ -259,6 +265,7 @@ export async function storeJudgemeReviews(parsed: JudgemeParsed[]): Promise<{ in
   ])
   const skuOf = new Map(products.map((p) => [p.shopifyProductId, p.sku]))
   const known = new Map(existing.map((r) => [r.externalReviewId, r]))
+  const { ingestRawReviews, replaceReviewMedia } = await import('./review-ingest.service.js')
   let updated = 0
   const errors: string[] = []
   const fresh = parsed.filter((p) => !known.has(p.raw.externalReviewId)).map((p) => ({ ...p.raw, sku: p.productExternalId ? skuOf.get(p.productExternalId) ?? undefined : undefined }))
@@ -266,15 +273,15 @@ export async function storeJudgemeReviews(parsed: JudgemeParsed[]): Promise<{ in
     const stored = known.get(p.raw.externalReviewId)
     if (!stored) continue
     const change = judgemeChanges(stored, p)
-    if (!change) continue
     try {
-      await prisma.review.update({ where: { id: stored.id }, data: change })
-      updated++
+      if (change) await prisma.review.update({ where: { id: stored.id }, data: change })
+      // The photos as stored media (also for a review stored before Nexus kept media): replaced only when they differ.
+      const mediaChanged = await replaceReviewMedia(stored.id, stored.media ?? [], p.raw.media ?? [])
+      if (change || mediaChanged) updated++
     } catch (err) {
       errors.push(`review ${p.raw.externalReviewId}: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
-  const { ingestRawReviews } = await import('./review-ingest.service.js')
   const summary = await ingestRawReviews(fresh, { ingestSource: REVIEW_APP_INGEST_SOURCE })
   return { inserted: summary.reviewsInserted, updated, errors: [...errors, ...summary.errors] }
 }

@@ -148,10 +148,12 @@ export function productReviewsHref(productId: string, scope: { channel?: string 
 
 /**
  * A channel's Reviews page (PR F): `/marketing/reviews/amazon`, `/marketing/reviews/amazon/it`, `/marketing/reviews/ebay/de`
- * (`GB` is the UK's `uk`). Shopify and Etsy pages come later (PR I): until then their reviews open in the Inbox, scoped.
+ * (`GB` is the UK's `uk`). Etsy and Shopify (PR I) have one page each, with no market pages: `/marketing/reviews/etsy`,
+ * `/marketing/reviews/shopify`. Any other channel's reviews open in the Inbox, scoped.
  */
 export function channelHref(channel: string, market?: string | null): string {
   const c = channel.trim().toUpperCase()
+  if (c === 'ETSY' || c === 'SHOPIFY') return `/marketing/reviews/${c.toLowerCase()}`
   if (c !== 'AMAZON' && c !== 'EBAY') return inboxHref({ channel: c, market })
   const code = market?.trim().toUpperCase()
   const segment = code && /^[A-Z]{2}$/.test(code) ? (code === 'GB' ? 'uk' : code.toLowerCase()) : null

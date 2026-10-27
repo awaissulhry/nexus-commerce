@@ -129,27 +129,32 @@ export function shopifyTiles(rows: readonly TileFacts[], now: Date): ShopifyTile
 
 // ── Media from what Nexus stored ─────────────────────────────────────
 
-/** The Etsy review's one photo (Etsy's `image_url_fullxfull`, kept in rawPayload), or null. */
-export function etsyPhotoOf(rawPayload: unknown): string | null {
-  if (!rawPayload || typeof rawPayload !== 'object') return null
-  const url = (rawPayload as { image_url_fullxfull?: unknown }).image_url_fullxfull
-  return typeof url === 'string' && /^https:\/\//.test(url) ? url : null
-}
+/** One stored photo of a review (`ReviewMedia`). */
+export interface StoredMedia { url: string; type: string; position: number }
 
 export interface MediaView { photos: Array<{ url: string; thumb: string }>; hasVideo: boolean }
 
-/** A Judge.me review's photos and whether it has a video (Judge.me gives no video URL), from rawPayload. */
-export function appMediaOf(rawPayload: unknown): MediaView {
-  if (!rawPayload || typeof rawPayload !== 'object') return { photos: [], hasVideo: false }
-  const p = rawPayload as { photos?: unknown; hasVideo?: unknown }
-  const photos = Array.isArray(p.photos)
-    ? p.photos.flatMap((x) => {
-        if (!x || typeof x !== 'object') return []
-        const { url, thumb } = x as { url?: unknown; thumb?: unknown }
-        return typeof url === 'string' && /^https:\/\//.test(url) ? [{ url, thumb: typeof thumb === 'string' && /^https:\/\//.test(thumb) ? thumb : url }] : []
-      })
-    : []
-  return { photos, hasVideo: p.hasVideo === true }
+const https = (v: unknown): v is string => typeof v === 'string' && /^https:\/\//.test(v)
+
+/**
+ * A review's photos from its stored media (`ReviewMedia`: Etsy's one photo, Judge.me's photos — https images only, in
+ * order), each with the small copy Judge.me gives (kept in rawPayload) as its thumbnail when there is one; and whether
+ * Judge.me marks a video (it gives no video URL, so a video is never media).
+ */
+export function storedMediaOf(media: readonly StoredMedia[] | null | undefined, rawPayload: unknown): MediaView {
+  const raw = rawPayload && typeof rawPayload === 'object' ? rawPayload as { photos?: unknown; hasVideo?: unknown } : {}
+  const thumbs = new Map<string, string>()
+  if (Array.isArray(raw.photos)) {
+    for (const x of raw.photos) {
+      const { url, thumb } = (x && typeof x === 'object' ? x : {}) as { url?: unknown; thumb?: unknown }
+      if (https(url) && https(thumb)) thumbs.set(url, thumb)
+    }
+  }
+  const photos = [...(media ?? [])]
+    .filter((m) => m.type === 'image' && https(m.url))
+    .sort((a, b) => a.position - b.position)
+    .map((m) => ({ url: m.url, thumb: thumbs.get(m.url) ?? m.url }))
+  return { photos, hasVideo: raw.hasVideo === true }
 }
 
 // ── Is Etsy read? ────────────────────────────────────────────────────

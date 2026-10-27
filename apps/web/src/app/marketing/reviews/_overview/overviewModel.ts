@@ -310,7 +310,7 @@ export interface ChannelViewRow {
   reconnectHref: string | null
 }
 
-/** The channel table's rows in words; each opens that channel's reviews (Amazon and eBay: their channel page). */
+/** The channel table's rows in words; each opens that channel's Reviews page (`channelHref`). */
 export function channelViewRows(rows: readonly OverviewChannelRow[], now: number): ChannelViewRow[] {
   return rows.map((r): ChannelViewRow => {
     const amazon = r.channel === 'AMAZON'

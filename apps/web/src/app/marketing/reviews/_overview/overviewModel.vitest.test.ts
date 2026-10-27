@@ -63,13 +63,13 @@ describe('channel table', () => {
     expect(rows[2]).toMatchObject({ ratingKind: 'positive', sentNote: 'by email' })
     expect(rows[0].href).toBe('/marketing/reviews/amazon/it')
     expect(rows[2].href).toBe('/marketing/reviews/ebay/it')
-    expect(channelViewRows([row({ channel: 'SHOPIFY', market: null })], NOW)[0].href).toBe('/marketing/reviews/inbox?channel=SHOPIFY')
+    expect(channelViewRows([row({ channel: 'SHOPIFY', market: null })], NOW)[0].href).toBe('/marketing/reviews/shopify')
   })
 
   it('Etsy is a real row (PR I): a dash for requests (Etsy asks buyers itself), no sample row added', () => {
     const rows = channelViewRows([row({}), row({ channel: 'ETSY', market: null, sent: null })], NOW)
     expect(rows).toHaveLength(2)
-    expect(rows[1]).toMatchObject({ label: 'Etsy', sent: '—', sentNote: 'Etsy asks buyers itself' })
+    expect(rows[1]).toMatchObject({ label: 'Etsy', sent: '—', sentNote: 'Etsy asks buyers itself', href: '/marketing/reviews/etsy' })
     expect(channelViewRows([row({})], NOW)).toHaveLength(1)
   })
 

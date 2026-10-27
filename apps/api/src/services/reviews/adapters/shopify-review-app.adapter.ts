@@ -21,8 +21,9 @@
  * logged, never returned and never put in an error; an answer's body is never logged either (it holds buyers' e-mails).
  *
  * What Nexus keeps of a review: the text, stars, the reviewer's NAME (never the e-mail or IP address), the product,
- * the photo URLs and whether it has a video (Judge.me gives no video URL) in `rawPayload`. Archived reviews (hidden)
- * are left out.
+ * the published photos as the review's `ReviewMedia` images (in Judge.me's order; the Inbox pop-up shows them in the
+ * Lightbox, like eBay's), and in `rawPayload` the photo URLs with their thumbnails and whether it has a video (Judge.me
+ * gives no video URL, so a video is a mark, never media). Archived reviews (hidden) are left out.
  */
 import { logger } from '../../../utils/logger.js'
 import type { AdapterRawReview } from './types.js'
@@ -195,6 +196,7 @@ export function parseJudgemeReview(input: unknown): JudgemeParsed | null {
       verifiedPurchase: verified ? VERIFIED.has(verified) : false,
       postedAt,
       rawPayload: payload,
+      media: photos.map((photo, position) => ({ url: photo.url, type: 'image' as const, position })),
     },
     productExternalId,
     editedAt: payload.updatedAt,

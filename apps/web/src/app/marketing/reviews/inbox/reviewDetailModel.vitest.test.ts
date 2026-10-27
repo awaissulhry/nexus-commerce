@@ -162,7 +162,24 @@ describe('the buyer’s photos and the Lightbox (PR G)', () => {
       { url: 'https://i.ebayimg.example/1.jpg', alt: 'Photo 1 of 2 from buyer-one', type: 'IMAGE' },
       { url: 'https://i.ebayimg.example/2.jpg', alt: 'Photo 2 of 2 from buyer-one', type: 'IMAGE' },
     ])
-    expect(photosView(detail({ media }))).toMatchObject({ kind: 'photos', count: '2 photos' })
+    expect(photosView(detail({ media }))).toMatchObject({ kind: 'photos', count: '2 photos', hint: 'Press a photo to see it large. eBay keeps the photos; Nexus shows them from eBay.' })
+  })
+
+  it('Etsy’s one photo and Judge.me’s photos open the same way (PR I); a Judge.me video is said, never hidden', () => {
+    const one = [{ url: 'https://i.etsystatic.com/review/abc_fullxfull.jpg', type: 'image', width: null, height: null, position: 0 }]
+    const etsy = detail({ media: one }, { channel: 'ETSY', kind: 'product' })
+    expect(photosView(etsy)).toMatchObject({ kind: 'photos', count: '1 photo', hint: 'Press a photo to see it large. Etsy keeps the photos; Nexus shows them from Etsy.' })
+    expect(reviewPhotos(etsy)).toEqual([{ url: one[0].url, alt: 'Photo 1 of 1 from buyer-one', type: 'IMAGE' }])
+    expect(photosView(detail({ media: [] }, { channel: 'ETSY', kind: 'product' }))).toEqual({ kind: 'none', words: 'No photo with this review. Etsy buyers can add one.' })
+    const jm = [{ url: 'https://img.judge.me/o.jpg', type: 'image', width: null, height: null, position: 0 }]
+    expect(photosView(detail({ media: jm, videoIn: 'Judge.me' }, { channel: 'SHOPIFY', kind: 'product' }))).toMatchObject({
+      kind: 'photos',
+      hint: 'Press a photo to see it large. Judge.me keeps the photos; Nexus shows them from Judge.me. The buyer also added a video: watch it in Judge.me (it does not share videos with Nexus).',
+    })
+    expect(photosView(detail({ media: [], videoIn: 'Judge.me' }, { channel: 'SHOPIFY', kind: 'product' }))).toEqual({
+      kind: 'none', words: 'No photos with this review. The buyer added a video: watch it in Judge.me (it does not share videos with Nexus).',
+    })
+    expect(photosView(detail({ media: [] }, { channel: 'SHOPIFY', kind: 'product', imported: true }))).toEqual({ kind: 'none', words: 'This review came from a file: its photos are not in Nexus.' })
   })
 
   it('Prev is held on the first photo, Next on the last; the counter reads "2 of 2"', () => {
@@ -176,7 +193,7 @@ describe('the buyer’s photos and the Lightbox (PR G)', () => {
   it('says when there are none (eBay), keeps the labelled sample where Nexus does not read photos yet', () => {
     expect(photosView(detail({ media: [] }))).toEqual({ kind: 'none', words: 'No photos with this feedback. eBay buyers can add up to 5.' })
     expect(photosView(detail({ media: [] }, { imported: true }))).toEqual({ kind: 'none', words: 'This feedback came from a file: its photos are not in Nexus.' })
-    expect(photosView(detail({}, { channel: 'SHOPIFY' }))).toEqual({ kind: 'later' })
+    expect(photosView(detail({}, { channel: 'AMAZON', kind: 'product' }))).toEqual({ kind: 'later' })
   })
 
   it('the Lightbox head: who, where, when, and the listing on eBay', () => {

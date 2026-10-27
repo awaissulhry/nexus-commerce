@@ -13,12 +13,14 @@
  *   `Review.channelEditedAt` for `reviewReplyRules('ETSY', { lastEditedAt })`.
  *
  * Every call goes through the account-scoped reader (`read-client.ts` → the channel gateway: the account's state, rate
- * bucket and call ledger), like the receipts read. The photo URL stays in `rawPayload` (`image_url_fullxfull`); there is
- * no ReviewMedia table yet. The product comes from the listing (ChannelListing.externalListingId), the order from the
- * transaction (OrderItem.externalLineItemId), the market from that order, else the connection's own market.
+ * bucket and call ledger), like the receipts read. The photo is stored as the review's one `ReviewMedia` image (the
+ * Inbox pop-up shows it in the Lightbox, like eBay's); its URL also stays in `rawPayload` (`image_url_fullxfull`). The
+ * product comes from the listing (ChannelListing.externalListingId), the order from the transaction
+ * (OrderItem.externalLineItemId), the market from that order, else the connection's own market.
  *
- * A new review goes through the shared ingest (dedupe on channel + transaction id, sentiment, live events, alerts); a
- * review the buyer edited since (rating, text, photo or edit time changed) is updated in place.
+ * A new review goes through the shared ingest (dedupe on channel + transaction id, sentiment, live events, alerts, the
+ * photo); a review the buyer edited since (rating, text, photo or edit time changed) is updated in place, its photo
+ * replaced when it changed (`replaceReviewMedia`).
  */
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
@@ -104,6 +106,8 @@ export function parseEtsyReview(input: unknown): EtsyParsedReview | null {
       verifiedPurchase: true,
       postedAt: created.toISOString(),
       rawPayload: payload,
+      // The one photo as the review's media (none = Etsy shows none: the buyer added none, or keeps it private).
+      media: image ? [{ url: image, type: 'image', position: 0 }] : [],
     },
     transactionId: String(transactionId),
     listingId: payload.listing_id != null ? String(payload.listing_id) : null,
@@ -187,7 +191,13 @@ export async function storeEtsyReviews(parsed: EtsyParsedReview[], ctx: { connec
   const listingIds = [...new Set(parsed.map((p) => p.listingId).filter((x): x is string => !!x))]
   const txIds = [...new Set(parsed.map((p) => p.transactionId).filter((x): x is string => !!x))]
   const [existing, listings, lines] = await Promise.all([
-    prisma.review.findMany({ where: { channel: 'ETSY', externalReviewId: { in: ids } }, select: { id: true, externalReviewId: true, rating: true, body: true, channelEditedAt: true, rawPayload: true } }),
+    prisma.review.findMany({
+      where: { channel: 'ETSY', externalReviewId: { in: ids } },
+      select: {
+        id: true, externalReviewId: true, rating: true, body: true, channelEditedAt: true, rawPayload: true,
+        media: { select: { url: true, position: true }, orderBy: { position: 'asc' } },
+      },
+    }),
     listingIds.length
       ? prisma.channelListing.findMany({ where: { channel: 'ETSY', externalListingId: { in: listingIds } }, select: { externalListingId: true, product: { select: { sku: true } } } })
       : Promise.resolve([]),
@@ -203,6 +213,7 @@ export async function storeEtsyReviews(parsed: EtsyParsedReview[], ctx: { connec
     return /^[A-Z]{2}$/.test(code) ? (code === 'GB' ? 'UK' : code) : null
   }
 
+  const { ingestRawReviews, replaceReviewMedia } = await import('../reviews/review-ingest.service.js')
   const errors: string[] = []
   let updated = 0
   const fresh: EtsyParsedReview[] = []
@@ -225,16 +236,16 @@ export async function storeEtsyReviews(parsed: EtsyParsedReview[], ctx: { connec
       continue
     }
     const change = etsyChanges(stored, p)
-    if (!change) continue
     try {
-      await prisma.review.update({ where: { id: stored.id }, data: change })
-      updated++
+      if (change) await prisma.review.update({ where: { id: stored.id }, data: change })
+      // The photo as stored media (also for a review stored before Nexus kept media): replaced only when it differs.
+      const mediaChanged = await replaceReviewMedia(stored.id, stored.media, p.raw.media ?? [])
+      if (change || mediaChanged) updated++
     } catch (err) {
       errors.push(`review ${p.raw.externalReviewId}: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
-  const { ingestRawReviews } = await import('../reviews/review-ingest.service.js')
   const summary = await ingestRawReviews(fresh.map((p) => p.raw), { ingestSource: ETSY_REVIEWS_INGEST_SOURCE })
   // The edit time and Etsy's own language on the rows just made (the shared ingest does not know them).
   for (const p of fresh) {
