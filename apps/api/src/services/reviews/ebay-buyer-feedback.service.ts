@@ -5,6 +5,7 @@
  *                                (REST getItemsAwaitingFeedback, a read through the gateway) → EbayBuyerFeedback rows,
  *                                each matched to its Nexus order (buyer, market, sale date come from that order).
  *   listEbayBuyerFeedback()      GET  /api/reviews/area/ebay/buyer-feedback?market=   the queue with why each line is held
+ *   buyersToRate()               the eBay page's "Buyers to rate" tile: the same queue's counts, read only
  *   sendEbayBuyerFeedback()      POST /api/reviews/area/ebay/buyer-feedback/send { ids ≤ 200, text }
  *
  * Nexus never leaves feedback by itself. "Send for approval" asks through the same door as every other change
@@ -176,11 +177,19 @@ function marketOf(raw: string | null | undefined): string | null {
   return code === 'GB' ? 'UK' : code
 }
 
-/** The queue, newest first: what waits (and why some are held) and what was left from Nexus lately. */
-export async function listEbayBuyerFeedback(input: { market?: unknown; now?: Date } = {}): Promise<BuyerFeedbackPage> {
+/** Whether Nexus reads eBay in this setup; when it does not, the list does not update. */
+const readsEbay = () => process.env.NEXUS_EBAY_REAL_API === 'true'
+
+/**
+ * The queue, newest first: what waits (and why some are held) and what was left from Nexus lately. `sync: false` reads
+ * only (the tile): the lines keep the approval state the last read of the list gave them.
+ */
+export async function listEbayBuyerFeedback(input: { market?: unknown; now?: Date; sync?: boolean } = {}): Promise<BuyerFeedbackPage> {
   const now = input.now ?? new Date()
   const market = typeof input.market === 'string' ? marketOf(input.market) : null
-  await syncBuyerFeedbackApprovals().catch((error) => logger.warn('[ebay-buyer-feedback] sync with approvals failed', { error: error instanceof Error ? error.message : String(error) }))
+  if (input.sync !== false) {
+    await syncBuyerFeedbackApprovals().catch((error) => logger.warn('[ebay-buyer-feedback] sync with approvals failed', { error: error instanceof Error ? error.message : String(error) }))
+  }
   const rows = await prisma.ebayBuyerFeedback.findMany({
     where: { OR: [{ state: 'AWAITING' }, { state: 'LEFT', leftAt: { gte: new Date(now.getTime() - LEFT_SHOWN_DAYS * DAY_MS) } }] },
     orderBy: [{ firstSeenAt: 'desc' }, { id: 'desc' }],
@@ -227,7 +236,7 @@ export async function listEbayBuyerFeedback(input: { market?: unknown; now?: Dat
   }
   const awaiting = out.filter((r) => r.state === 'AWAITING')
   const readAt = lastRead._max.lastSeenAt
-  const readWords = process.env.NEXUS_EBAY_REAL_API !== 'true'
+  const readWords = !readsEbay()
     ? 'Nexus does not read eBay in this setup, so this list does not update.'
     : !readAt
       ? 'eBay’s list of sales waiting for your feedback has not been read yet. Nexus reads it every 30 minutes.'
@@ -246,6 +255,25 @@ export async function listEbayBuyerFeedback(input: { market?: unknown; now?: Dat
     rule: EBAY_BUYER_FEEDBACK_RULE,
     limit: EBAY_BUYER_FEEDBACK_LIMIT,
   }
+}
+
+/** The eBay page's "Buyers to rate" tile (review-channel.service.ts): the list's own counts. */
+export interface BuyersToRate {
+  /** Sales eBay lists as waiting for the seller's feedback for the buyer (the page's market only, when it has one). */
+  awaiting: number
+  /** Of those, the ones a person may send for approval now. */
+  ready: number
+  waitingApproval: number
+  /** When eBay's list was last read for this business (ISO); null when it never was. */
+  readAt: string | null
+  /** False when Nexus does not read eBay in this setup: the list does not update. */
+  reading: boolean
+}
+
+/** The tile's numbers, from the same queue the "Leave feedback for buyers" list shows. Read only. */
+export async function buyersToRate(market: string | null, now = new Date()): Promise<BuyersToRate> {
+  const page = await listEbayBuyerFeedback({ market: market ?? undefined, now, sync: false })
+  return { awaiting: page.counts.awaiting, ready: page.counts.ready, waitingApproval: page.counts.waitingApproval, readAt: page.readAt, reading: readsEbay() }
 }
 
 // ── Send for approval ────────────────────────────────────────────────

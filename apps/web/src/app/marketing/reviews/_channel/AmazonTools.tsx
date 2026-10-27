@@ -15,7 +15,7 @@ import {
   type ChartSeries, type MenuItemDef, type Metric, type RatingStars,
 } from '@/design-system/components'
 import { NexusGrid, numericColumn, type ColDef, type ICellRendererParams } from '@/design-system/grid'
-import { Button, Pill, Skeleton, Tag } from '@/design-system/primitives'
+import { Button, Pill, Skeleton } from '@/design-system/primitives'
 import { chart } from '@/design-system/tokens'
 import Link from '@/lib/workspaces/Link'
 import { useRouter } from '@/lib/workspaces/navigation'
@@ -42,10 +42,10 @@ function plainClick(event: MouseEvent<HTMLAnchorElement>): boolean {
   return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
 }
 
-/** Tiles from the model: a Phase 3 tile shows "Coming later", never a number. */
+/** Tiles from the model, as the DS MetricStrip takes them. */
 export function tileMetrics(tiles: readonly TileView[]): Metric[] {
   return tiles.map((t) => {
-    const base = { label: t.label, value: t.later ? <Tag tone="neutral">{t.value}</Tag> : t.value, hint: t.hint, accent: t.accent }
+    const base = { label: t.label, value: t.value, hint: t.hint, accent: t.accent }
     return t.href ? { ...base, href: t.href } : base
   })
 }

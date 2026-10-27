@@ -69,6 +69,17 @@ export interface BuyerFeedbackPage {
   limit: number
 }
 
+/** The eBay page's "Buyers to rate" tile (`EbayTiles.buyersToRate`): the counts of the same queue. */
+export interface BuyersToRate {
+  awaiting: number
+  ready: number
+  waitingApproval: number
+  /** When eBay's list was last read (ISO); null when it never was. */
+  readAt: string | null
+  /** False when Nexus does not read eBay in this setup: the list does not update. */
+  reading: boolean
+}
+
 export interface BuyerFeedbackSendAnswer {
   changed: number
   held: Array<{ id: string; words: string }>
