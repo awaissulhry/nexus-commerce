@@ -147,7 +147,8 @@ describe('eBay REST feedback, stored (real SQL)', () => {
     const page = await inside(() => listInbox({ photos: '1' }))
     expect(page.rows.map((r) => r.id).sort()).toEqual(['trading-row', (await inside(() => database.client.review.findFirst({ where: { externalReviewId: 'rest-a' } })))!.id].sort())
     const all = await inside(() => listInbox({}))
-    expect(all.rows.find((r) => r.buyer === 'buyer-rest-b')).toMatchObject({ photos: 0, aiTopics: [] })
+    // Topics never read for this feedback: null (the list says "Not read"), not [] (read, none).
+    expect(all.rows.find((r) => r.buyer === 'buyer-rest-b')).toMatchObject({ photos: 0, aiTopics: null })
     const withTopics = all.rows.find((r) => r.buyer === 'buyer-rest-a')!
     expect(withTopics).toMatchObject({ photos: 1, aiTopics: [{ topic: 'fit', label: 'Fit & sizing', sentiment: 'NEGATIVE' }], market: null })
 

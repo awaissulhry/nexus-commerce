@@ -11,11 +11,17 @@
  *       → { channel, market, label, period, generatedAt, markets, sections } — Amazon: { tiles, trend, spread, topics,
  *         requests, watch }; eBay: { readState, tiles, summary, feedback }; each section `{ ok, data } | { ok: false, error }`
  *   GET /api/reviews/area/channel-markets → { AMAZON: { code, label }[], EBAY: { code, label }[] } (the sub-sidebar's rows)
+ *   GET /api/reviews/area/ebay/buyer-feedback?market=IT   (PR G) → the sales waiting for the seller's feedback for the
+ *       buyer, why each is held, what waits for approval and what was left (ebay-buyer-feedback.service.ts)
+ *   POST /api/reviews/area/ebay/buyer-feedback/send { ids ≤ 200, text }   (PR G, reviews.manage by the manifest's rule)
+ *       → { changed, held: { id, words }[], sent: { approvalId, kind: request | plan, lines, expiresAt } | null } — ONE
+ *       approval a person decides on the Approvals page; nothing reaches eBay here
  */
 import type { FastifyPluginAsync } from 'fastify'
 import { reviewsOverview } from '../services/reviews/review-overview.service.js'
 import { reviewNeedsYou } from '../services/reviews/review-needs-you.service.js'
 import { ChannelInputError, reviewChannelMarkets, reviewsChannel } from '../services/reviews/review-channel.service.js'
+import { BuyerFeedbackInputError, listEbayBuyerFeedback, sendEbayBuyerFeedback } from '../services/reviews/ebay-buyer-feedback.service.js'
 import { logger } from '../utils/logger.js'
 
 const reviewsAreaRoutes: FastifyPluginAsync = async (fastify) => {
@@ -53,6 +59,34 @@ const reviewsAreaRoutes: FastifyPluginAsync = async (fastify) => {
       if (err instanceof ChannelInputError) return reply.code(400).send({ error: err.message })
       logger.warn('[reviews-area] channel failed', { error: err instanceof Error ? err.message : String(err) })
       return reply.code(500).send({ error: 'This channel page could not be read. Try again in a moment.' })
+    }
+  })
+
+  fastify.get('/reviews/area/ebay/buyer-feedback', async (request, reply) => {
+    const q = (request.query ?? {}) as { market?: string }
+    try {
+      const page = await listEbayBuyerFeedback({ market: q.market })
+      reply.header('Cache-Control', 'private, no-store')
+      return page
+    } catch (err) {
+      logger.warn('[reviews-area] buyer feedback failed', { error: err instanceof Error ? err.message : String(err) })
+      return reply.code(500).send({ error: 'The sales waiting for your feedback could not be read. Try again in a moment.' })
+    }
+  })
+
+  fastify.post('/reviews/area/ebay/buyer-feedback/send', async (request, reply) => {
+    try {
+      const { requestPrincipal } = await import('../services/agents/call-tool.js')
+      const person = await requestPrincipal(request)
+      const out = await sendEbayBuyerFeedback(request.body, person)
+      if (out.changed === 0 && out.held.length > 0) return reply.code(409).send({ error: out.held[0].words, ...out })
+      return out
+    } catch (err) {
+      if (err instanceof BuyerFeedbackInputError) return reply.code(400).send({ error: err.message })
+      const status = typeof (err as { statusCode?: unknown })?.statusCode === 'number' ? (err as { statusCode: number }).statusCode : 500
+      if (status >= 400 && status < 500) return reply.code(status).send({ error: err instanceof Error ? err.message : String(err) })
+      logger.warn('[reviews-area] buyer feedback send failed', { error: err instanceof Error ? err.message : String(err) })
+      return reply.code(500).send({ error: 'The feedback could not be sent for approval. Try again in a moment.' })
     }
   })
 
