@@ -91,7 +91,7 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
       take: q.pageSize,
       select: {
         id: true, postedAt: true, channel: true, marketplace: true, rating: true, title: true, body: true,
-        bodyEnglish: true, language: true, authorName: true, orderId: true, ingestSource: true,
+        bodyEnglish: true, language: true, authorName: true, orderId: true, ingestSource: true, kind: true,
         triageStatus: true, assignee: true,
         sentiment: { select: { label: true, categories: true } },
         product: { select: { id: true, name: true, sku: true, parentId: true, variantAttributes: true } },
@@ -131,7 +131,7 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
       postedAt: r.postedAt.toISOString(),
       channel: r.channel,
       market: r.marketplace,
-      kind: reviewKindOf(r.channel, r.ingestSource),
+      kind: reviewKindOf(r.channel, r.kind),
       rating: r.rating,
       snippet: snippet(r.title ? `${r.title} — ${r.body}` : r.body),
       english: r.bodyEnglish ? snippet(r.bodyEnglish) : null,
@@ -157,11 +157,11 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
 
 /** Each tab counts what it would show with every other filter kept. */
 async function inboxTabCounts(q: InboxQuery, now: Date): Promise<InboxPage['tabCounts']> {
-  const groups = await prisma.review.groupBy({ by: ['channel'], where: inboxWhere(q, now, { kind: true }), _count: { _all: true } })
+  const groups = await prisma.review.groupBy({ by: ['channel', 'kind'], where: inboxWhere(q, now, { kind: true }), _count: { _all: true } })
   const counts = { all: 0, product: 0, seller: 0 }
   for (const g of groups) {
     counts.all += g._count._all
-    counts[reviewKindOf(g.channel)] += g._count._all
+    counts[reviewKindOf(g.channel, g.kind)] += g._count._all
   }
   return counts
 }
@@ -228,7 +228,7 @@ export async function runInboxBulk(
   const found = await prisma.review.findMany({
     where: visibleReviewWhere({ id: { in: request.ids } }),
     select: {
-      id: true, channel: true, marketplace: true, postedAt: true, ingestSource: true,
+      id: true, channel: true, marketplace: true, postedAt: true, ingestSource: true, kind: true,
       assignee: true, triageStatus: true, triageTags: true,
     },
   })

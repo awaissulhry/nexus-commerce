@@ -23,10 +23,15 @@ export function ebayReplyMode(): 'live' | 'off' {
   return process.env.NEXUS_EBAY_REAL_API === 'true' ? 'live' : 'off'
 }
 
-/** eBay feedback read with a seller reply already on it (GetFeedback `FeedbackResponse`). */
+/**
+ * Feedback read with a seller reply already on it: eBay's GetFeedback `FeedbackResponse`, or the "Your Response" column
+ * of Amazon's seller feedback report (amazon-seller-feedback.service.ts stores it as `yourResponse`).
+ */
 export function repliedOnChannel(channel: string, rawPayload: unknown): boolean {
-  if (channel !== 'EBAY' || !rawPayload || typeof rawPayload !== 'object') return false
-  const response = (rawPayload as { FeedbackResponse?: unknown }).FeedbackResponse
+  if (!rawPayload || typeof rawPayload !== 'object') return false
+  const key = channel === 'EBAY' ? 'FeedbackResponse' : channel === 'AMAZON' ? 'yourResponse' : null
+  if (!key) return false
+  const response = (rawPayload as Record<string, unknown>)[key]
   return typeof response === 'string' && response.trim().length > 0
 }
 
@@ -42,7 +47,7 @@ export async function sendReviewReply(id: string, b: ReplyBody): Promise<RouteAn
   const reply = new AnswerReply()
   const review = await prisma.review.findUnique({
     where: { id },
-    select: { id: true, channel: true, externalReviewId: true, marketplace: true, postedAt: true, ingestSource: true, rawPayload: true, authorName: true },
+    select: { id: true, channel: true, externalReviewId: true, marketplace: true, postedAt: true, ingestSource: true, kind: true, rawPayload: true, authorName: true },
   })
   if (!review) return reply.code(404).send({ error: 'not_found' })
   const text = (b.body ?? '').trim()
@@ -56,7 +61,7 @@ export async function sendReviewReply(id: string, b: ReplyBody): Promise<RouteAn
 
   const sent = await prisma.reviewResponse.count({ where: { reviewId: id, status: 'SENT' } })
   const rules = reviewReplyRules(review.channel, {
-    kind: reviewKindOf(review.channel, review.ingestSource),
+    kind: reviewKindOf(review.channel, review.kind),
     marketplace: review.marketplace,
     postedAt: review.postedAt,
     imported: (review.ingestSource ?? '').toUpperCase().startsWith('IMPORT'),

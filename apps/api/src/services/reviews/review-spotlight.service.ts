@@ -21,7 +21,7 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { visibleReviewWhere } from './review-visibility.js'
+import { countsInRating, visibleReviewWhere } from './review-visibility.js'
 import { isImportedSource } from './review-inbox-query.js'
 import { averageRating, channelWords, marketWords, round } from './overviewMath.js'
 import { amazonTopicMarkets, parseInsightScope, parseTopicRows, pct, THEME_KEYS, type InsightScope, type ParsedTopic } from './review-insights-math.js'
@@ -172,7 +172,7 @@ async function gather(opts: SpotlightOptions) {
   const now = opts.now ?? new Date()
   const since = new Date(now.getTime() - windowDays * DAY)
   const before = new Date(since.getTime() - windowDays * DAY)
-  const counted = { channel: true, ingestSource: true, rating: true, triageStatus: true, sentiment: { select: { label: true, categories: true } } } as const
+  const counted = { channel: true, ingestSource: true, kind: true, rating: true, triageStatus: true, sentiment: { select: { label: true, categories: true } } } as const
   const markets = amazonTopicMarkets({ channel: opts.channel ?? null, market: opts.marketplace ?? null })
   const inWindow = visibleReviewWhere({ ...scopeWhere(opts), postedAt: { gte: since, lte: now } })
   const [all, prev, textRows, topicRows] = await Promise.all([
@@ -271,7 +271,7 @@ function heuristicBrief(reviews: Gathered['reviews']): SpotlightContent {
 
 // ── Findings and the before / now table (pure) ──────────────────────
 
-type CountRow = { rating: number | null; triageStatus: string | null; sentiment: { label: string; categories: string[] } | null }
+type CountRow = { channel?: string; kind?: string | null; rating: number | null; triageStatus: string | null; sentiment: { label: string; categories: string[] } | null }
 
 const has = (r: CountRow, label: string, theme: string) => r.sentiment?.label === label && r.sentiment.categories.includes(theme)
 
@@ -283,7 +283,8 @@ export function topicMentions(topics: readonly ParsedTopic[]): number {
 /** The window against the one before it: average stars, negative share, the top complaint, replies, reviews. */
 export function briefChanges(now: readonly CountRow[], before: readonly CountRow[]): SpotlightChange[] {
   const avg = (rows: readonly CountRow[]) => {
-    const a = averageRating(rows.map((r) => r.rating))
+    // Amazon's 1–3 star seller feedback is counted, never averaged (review-visibility.ts).
+    const a = averageRating(rows.filter((r) => countsInRating({ channel: r.channel ?? '', kind: r.kind })).map((r) => r.rating))
     return a == null ? null : round(a, 2)
   }
   const negative = (rows: readonly CountRow[]) => {

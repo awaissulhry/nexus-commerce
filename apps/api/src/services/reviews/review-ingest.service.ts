@@ -59,6 +59,8 @@ interface RawReview {
   rawPayload?: unknown
   /** Reviews Inbox — the Nexus Order this review is about, when the source names it (eBay feedback). */
   orderId?: string
+  /** What the row is about ('SELLER' = feedback about the seller); left out = decided by the channel (review-visibility.ts). */
+  kind?: 'SELLER' | 'PRODUCT'
 }
 
 export interface IngestSummary {
@@ -149,6 +151,7 @@ async function findOrCreateReview(
       ingestSource,
       orderId: raw.orderId ?? null,
       importBatchId: importBatchId ?? null,
+      kind: raw.kind ?? null,
     },
     select: { id: true },
   })

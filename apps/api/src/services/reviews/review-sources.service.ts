@@ -106,6 +106,7 @@ export function arrivalWords(ingestSource: string | null): string | null {
     case 'EBAY_API': return 'read from eBay'
     case 'SHOPIFY_WEBHOOK': return 'sent by Shopify'
     case 'MANUAL': return 'added by hand'
+    case 'AMAZON_SELLER_FEEDBACK': return 'seller feedback report'
     default: return null
   }
 }
@@ -177,6 +178,8 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
       lastReviewAt: newest(rows.map(g => g.lastPostedAt)),
       lastArrival: latest ? arrivalWords(latest.ingestSource) : null,
       imported: rows.some(g => g.ingestSource === 'IMPORT_CSV' && g.count > 0),
+      // Amazon's 1–3 star seller feedback (PR H) is held but gives no product stars.
+      sellerFeedback: rows.filter(g => g.ingestSource === 'AMAZON_SELLER_FEEDBACK').reduce((n, g) => n + g.count, 0),
     }
   }
 
@@ -188,9 +191,11 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
     const t = topics.get(market)
     const noTopics = NO_TOPICS_MARKETS.has(market)
     const topicsRead = !noTopics && t?.lastOkAt != null
+    const stars = s.imported || s.count - s.sellerFeedback > 0
+    const feedback = s.sellerFeedback > 0 ? ' · seller feedback 1–3 stars' : ''
     const what = noTopics
-      ? `${s.imported || s.count > 0 ? 'Stars from imported reviews' : 'No reviews imported'} · no topics on Amazon.${market.toLowerCase()}`
-      : `${facts.amazonTopicsOn || topicsRead ? 'Topics · ' : ''}${s.count > 0 ? 'stars from imported reviews' : 'no reviews imported'}`
+      ? `${stars ? 'Stars from imported reviews' : 'No reviews imported'} · no topics on Amazon.${market.toLowerCase()}${feedback}`
+      : `${facts.amazonTopicsOn || topicsRead ? 'Topics · ' : ''}${stars ? 'stars from imported reviews' : 'no reviews imported'}${feedback}`
     const notes = [s.lastArrival, topicsRead ? `topics ${shortDay(t!.lastOkAt!)}` : null].filter(Boolean)
     sources.push({
       channel: 'AMAZON', market, state: 'ok', reason: null, since: null, reconnectHref: null,
