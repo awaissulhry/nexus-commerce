@@ -21,7 +21,8 @@ export interface SourceRow {
   later: string | null
   lastAt: string | null
   lastWords: string | null
-  action: { kind: 'rules' | 'reconnect' | 'connect' | 'import'; label: string; href: string | null } | null
+  /** app = the review app's connect window (PR I); page = a Reviews page at `href`. */
+  action: { kind: 'rules' | 'reconnect' | 'connect' | 'import' | 'app' | 'page'; label: string; href: string | null } | null
 }
 
 export interface SourcesResponse {
@@ -117,6 +118,8 @@ export function sourceActionHref(action: SourceRow['action']): string | null {
   if (!action) return null
   if (action.kind === 'rules') return requestsHref()
   if (action.kind === 'import') return inboxHref({ import: 1 })
+  // The review app opens its connect window on the page (SourcesSection), not a link.
+  if (action.kind === 'app') return null
   return action.href
 }
 

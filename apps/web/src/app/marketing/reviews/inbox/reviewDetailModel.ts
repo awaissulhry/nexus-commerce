@@ -179,13 +179,25 @@ export interface ComposerView {
 
 const CHANNEL_NAME: Record<string, string> = { EBAY: 'eBay', AMAZON: 'Amazon', ETSY: 'Etsy', SHOPIFY: 'your store' }
 
+/** Where a reply goes: the channel, or — a Shopify review read from Judge.me — Judge.me, which posts it (PR I). */
+export function replyPlace(channel: string, mode: 'send' | 'copy' | 'mark'): string {
+  const c = channel.toUpperCase()
+  if (c === 'SHOPIFY' && mode === 'send') return 'Judge.me'
+  return CHANNEL_NAME[c] ?? 'the channel'
+}
+
+/** The reply box's title: "Reply on eBay", "Reply on Judge.me" when Nexus posts it; "Reply" when a person does. */
+export function replyTitle(rules: { channel: string; mode: 'send' | 'copy' }): string {
+  return rules.mode === 'send' ? `Reply on ${replyPlace(rules.channel, 'send')}` : 'Reply'
+}
+
 /** The reply box for this review: what the channel allows, what is held and why, what was sent. */
 export function composerView(d: InboxDetail, ctx: { canManage: boolean }, timeZone?: string): ComposerView {
   const rules = d.reply
   const sent = [...d.responses].reverse().find((r) => r.status === 'SENT') ?? null
   const failed = [...d.responses].reverse().find((r) => r.status === 'FAILED') ?? null
   const refused = failed && (!sent || failed.createdAt > sent.createdAt) ? failed.failedWords : null
-  const where = CHANNEL_NAME[rules.channel] ?? 'the channel'
+  const where = replyPlace(rules.channel, rules.mode)
   const held = !ctx.canManage ? MANAGE_REPLY : rules.held
   return {
     limit: rules.limit,
@@ -200,7 +212,8 @@ export function composerView(d: InboxDetail, ctx: { canManage: boolean }, timeZo
       ? {
           at: `${rules.mode === 'send' ? 'Sent' : 'Marked'} ${dateTimeWords(sent.sentAt ?? sent.createdAt, timeZone)}`,
           text: sent.body,
-          note: rules.mode === 'send' ? `· public on ${where} · cannot be undone or edited` : '· marked as responded in Nexus',
+          note: rules.mode !== 'send' ? '· marked as responded in Nexus'
+            : where === 'Judge.me' ? '· public under the review on the store · change it in Judge.me' : `· public on ${where} · cannot be undone or edited`,
         }
       : null,
     refused,
@@ -221,7 +234,7 @@ export function draftResponseId(d: InboxDetail): string | null {
 
 /** The toast after a send or a mark. */
 export function replyDoneWords(mode: 'send' | 'mark', channel: string): string {
-  const where = CHANNEL_NAME[channel.toUpperCase()] ?? 'the channel'
+  const where = replyPlace(channel, mode)
   return mode === 'send' ? `Reply sent to ${where}. The review is Responded.` : 'Marked as responded. The review is Responded.'
 }
 

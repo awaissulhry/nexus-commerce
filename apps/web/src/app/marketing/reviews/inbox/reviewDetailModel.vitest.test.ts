@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import {
   MANAGE_DRAFT, MANAGE_REPLY, buyerFacts, composerView, detailSubtitle, detailTabs, detailTitle, draftResponseId, historySteps,
-  initialReplyText, navIds, navPlace, nextHeld, nextId, orderFacts, replyDoneWords, replyTargetWords, returnOpen, sameThemeLink,
+  initialReplyText, navIds, navPlace, nextHeld, nextId, orderFacts, replyDoneWords, replyTargetWords, replyTitle, returnOpen, sameThemeLink,
   textView, themeChoices, type InboxDetail,
 } from './reviewDetailModel'
 import { detailPosition } from '@/design-system/patterns/detailModalModel'
@@ -99,6 +99,11 @@ describe('the reply box from the channel rules', () => {
     expect(initialReplyText(drafted)).toBe('Hallo')
     expect(draftResponseId(drafted)).toBe('d1')
     expect(replyDoneWords('send', 'EBAY')).toBe('Reply sent to eBay. The review is Responded.')
+    // PR I: a Shopify review read from Judge.me is answered through Judge.me.
+    expect(replyDoneWords('send', 'SHOPIFY')).toBe('Reply sent to Judge.me. The review is Responded.')
+    expect(replyTitle({ channel: 'SHOPIFY', mode: 'send' })).toBe('Reply on Judge.me')
+    expect(replyTitle({ channel: 'EBAY', mode: 'send' })).toBe('Reply on eBay')
+    expect(replyTitle({ channel: 'ETSY', mode: 'copy' })).toBe('Reply')
   })
 
   it('a refusal newer than any sent reply shows in words', () => {

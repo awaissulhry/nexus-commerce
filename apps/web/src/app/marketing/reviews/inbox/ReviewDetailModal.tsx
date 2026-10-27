@@ -30,7 +30,7 @@ import { MOOD_WORD, STATUS_WORD, themeWord } from '../_lib/reviewWords'
 import { useReplyTemplates } from '../settings/_settings/useReplyTemplates'
 import { ownerChoices } from './inboxBulk'
 import {
-  MANAGE_MOOD, MANAGE_TRIAGE, MOOD_OPTIONS, MOOD_TONE, STATUS_OPTIONS, buyerFacts, composerView, dateWords, detailSubtitle, detailTabs,
+  MANAGE_MOOD, MANAGE_TRIAGE, MOOD_OPTIONS, MOOD_TONE, STATUS_OPTIONS, buyerFacts, composerView, dateWords, detailSubtitle, detailTabs, replyTitle,
   detailTitle, draftResponseId, historySteps, initialReplyText, nextHeld, nextId, orderFacts, recentSteps, replyDoneWords,
   replyTargetWords, returnOpen, returnWords, sameThemeLink, textView, themeChoices, type DetailTab, type InboxDetail,
 } from './reviewDetailModel'
@@ -373,7 +373,7 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
                 </Card>
 
                 <ReplyComposer
-                  title={detail.reply.mode === 'send' ? 'Reply on eBay' : 'Reply'}
+                  title={replyTitle(detail.reply)}
                   label={`Reply to ${detail.review.buyer ?? 'the buyer'}`}
                   value={reply}
                   onChange={setReply}
