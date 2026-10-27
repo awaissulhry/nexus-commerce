@@ -5,8 +5,9 @@
  * Tests: review-inbox-query.vitest.test.ts.
  */
 import type { Prisma } from '@prisma/client'
-import { OPEN_REVIEW_STATUSES, REPLY_DUE_HOURS, reviewReplyRules } from '@nexus/shared/review-reply-rules'
-import { reviewKindOf, reviewKindWhere, visibleReviewWhere, type ReviewKind } from './review-visibility.js'
+import { reviewReplyRules } from '@nexus/shared/review-reply-rules'
+import { monthsBefore } from './overviewMath.js'
+import { isImportedSource, needsReplyWhere, overdueWhere, reviewKindOf, reviewKindWhere, visibleReviewWhere, type ReviewKind } from './review-visibility.js'
 
 export const INBOX_STATUSES = ['NEW', 'IN_PROGRESS', 'RESPONDED', 'RESOLVED', 'IGNORED', 'OVERDUE'] as const
 export type InboxStatus = (typeof INBOX_STATUSES)[number]
@@ -35,6 +36,12 @@ export interface InboxQuery {
   withPhotos: boolean
   /** null = all time. */
   periodDays: number | null
+  /** "12m": twelve calendar months back (the Overview's and Insights' rule, overviewMath.ts `periodBounds`); null = days. */
+  periodMonths: number | null
+  /** `reply=needed`: only the reviews that need a reply (review-visibility.ts `needsReplyWhere`, the badges' number). */
+  needsReply: boolean
+  /** `product=<id>`: one product's reviews, its variants' too (an alert's "See the reviews"). */
+  product: string | null
   q: string | null
   sort: { field: 'postedAt' | 'rating'; dir: 'asc' | 'desc' }
   page: number
@@ -63,6 +70,13 @@ export function parseInboxPeriod(v: unknown): number | null {
   return days > 0 ? days : null
 }
 
+/** "12m" → 12 (calendar months, as the Overview counts them); anything else → null. */
+export function parseInboxMonths(v: unknown): number | null {
+  const m = String(v ?? '').trim().toLowerCase().match(/^(\d{1,2})m$/)
+  const months = m ? Number(m[1]) : 0
+  return months > 0 ? months : null
+}
+
 /** The address's query string → one InboxQuery. Unknown values are dropped, never guessed. */
 export function parseInboxQuery(raw: Record<string, unknown> = {}): InboxQuery {
   const kind = raw.kind === 'product' || raw.kind === 'seller' ? raw.kind : 'all'
@@ -83,6 +97,9 @@ export function parseInboxQuery(raw: Record<string, unknown> = {}): InboxQuery {
     families: list(raw.family),
     withPhotos: ['1', 'true', 'yes'].includes(String(raw.photos ?? '').trim().toLowerCase()),
     periodDays: parseInboxPeriod(raw.period),
+    periodMonths: parseInboxMonths(raw.period),
+    needsReply: raw.reply === 'needed',
+    product: typeof raw.product === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(raw.product.trim()) ? raw.product.trim() : null,
     q,
     sort: { field: sortField === 'rating' ? 'rating' : 'postedAt', dir: sortDir === 'asc' ? 'asc' : 'desc' },
     page: positiveInt(raw.page, 1),
@@ -90,16 +107,13 @@ export function parseInboxQuery(raw: Record<string, unknown> = {}): InboxQuery {
   }
 }
 
-const openWhere = (): Prisma.ReviewWhereInput => ({
-  OR: [{ triageStatus: null }, { triageStatus: { in: [...OPEN_REVIEW_STATUSES] } }],
-})
-
-/** One status tile as a `where`. New includes rows never triaged; Overdue = open and older than REPLY_DUE_HOURS. */
+/**
+ * One status tile as a `where`. New includes rows never triaged; Overdue = the rows that need a reply (answerable, not
+ * imported: review-visibility.ts) and have waited more than REPLY_DUE_HOURS — the same set as every badge.
+ */
 export function inboxStatusWhere(status: InboxStatus, now: Date): Prisma.ReviewWhereInput {
   if (status === 'NEW') return { OR: [{ triageStatus: null }, { triageStatus: 'NEW' }] }
-  if (status === 'OVERDUE') {
-    return { AND: [openWhere(), { postedAt: { lt: new Date(now.getTime() - REPLY_DUE_HOURS * 60 * 60 * 1000) } }] }
-  }
+  if (status === 'OVERDUE') return overdueWhere(now)
   return { triageStatus: status }
 }
 
@@ -139,8 +153,11 @@ export function inboxWhere(q: InboxQuery, now: Date, omit: { kind?: boolean; sta
       product: { is: { OR: [{ familyId: { in: q.families } }, { parent: { is: { familyId: { in: q.families } } } }] } },
     })
   }
+  if (q.needsReply) and.push(needsReplyWhere(now))
+  if (q.product) and.push({ OR: [{ productId: q.product }, { product: { is: { parentId: q.product } } }] })
   if (q.withPhotos) and.push({ media: { some: {} } })
-  if (q.periodDays != null) and.push({ postedAt: { gte: new Date(now.getTime() - q.periodDays * 24 * 60 * 60 * 1000) } })
+  if (q.periodMonths != null) and.push({ postedAt: { gte: monthsBefore(now, q.periodMonths) } })
+  else if (q.periodDays != null) and.push({ postedAt: { gte: new Date(now.getTime() - q.periodDays * 24 * 60 * 60 * 1000) } })
   if (q.q) {
     const contains = { contains: q.q, mode: 'insensitive' as const }
     and.push({ OR: [{ title: contains }, { body: contains }, { bodyEnglish: contains }, { authorName: contains }, { sku: contains }] })
@@ -219,9 +236,7 @@ export interface InboxBulkRow {
 
 export const BULK_NOT_FOUND = 'Not found in this business’s Inbox.'
 
-export function isImportedSource(ingestSource: string | null | undefined): boolean {
-  return (ingestSource ?? '').toUpperCase().startsWith('IMPORT')
-}
+export { isImportedSource }
 
 /** Which ticked rows the action changes, and why it skips the others (in the order the person ticked them). */
 export function planInboxBulk(

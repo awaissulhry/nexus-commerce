@@ -16,6 +16,13 @@ export const INSERT_MARKETS = [
 
 export type InsertMarket = (typeof INSERT_MARKETS)[number]['code']
 
+/** The market the window opens on: the page's market when cards exist for it (GB is the UK), else Italy (audit C5). */
+export function insertStartMarket(market: string | null | undefined): InsertMarket {
+  const code = (market ?? '').trim().toUpperCase()
+  const wanted = code === 'GB' ? 'UK' : code
+  return INSERT_MARKETS.find((m) => m.code === wanted)?.code ?? 'IT'
+}
+
 export const CARDS_PER_SHEET = 4
 export const MAX_COPIES = 50
 /** The PDF holds at most this many products (the API's cap). */

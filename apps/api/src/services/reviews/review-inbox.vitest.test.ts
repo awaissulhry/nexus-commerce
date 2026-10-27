@@ -88,8 +88,11 @@ describe('Reviews Inbox services (real SQL)', () => {
     expect(ids).not.toContain('fixture-1')
     expect(page.total).toBe(7)
     expect(page.tabCounts).toEqual({ all: 7, product: 5, seller: 2 })
-    // Open and older than 48 h: ebay-1 (3 days), amz-2 (10 days), etsy-old; amz-4 is open but a day old.
-    expect(page.statusCounts).toEqual({ NEW: 5, IN_PROGRESS: 1, RESPONDED: 0, RESOLVED: 1, IGNORED: 0, OVERDUE: 3 })
+    // Overdue = needs a reply (answerable, not imported) and older than 48 h: ebay-1 (3 days) only — amz-2 is an
+    // imported Amazon product review (nobody can reply), etsy-old is past Etsy's 100-day window (audit B3).
+    expect(page.statusCounts).toEqual({ NEW: 5, IN_PROGRESS: 1, RESPONDED: 0, RESOLVED: 1, IGNORED: 0, OVERDUE: 1 })
+    // The badges' number, every channel and date: the one needs-a-reply rule.
+    expect(page.needsReply).toBe(1)
     expect(ids[0]).toBe('amz-1') // newest first
     const row = page.rows.find((r) => r.id === 'ebay-1')!
     expect(row).toMatchObject({
@@ -97,7 +100,7 @@ describe('Reviews Inbox services (real SQL)', () => {
       product: { id: 'test-child', sku: 'TEST-CHILD-XL', variant: 'XL' }, order: { id: 'test-order-1', label: '12-00000-00001' },
       mood: 'NEUTRAL', themes: ['FIT_SIZING', 'QUALITY'], status: 'NEW', overdue: true, imported: false, responses: { sent: 0, draft: 0 },
     })
-    expect(page.rows.find((r) => r.id === 'amz-1')).toMatchObject({ imported: true, overdue: false, kind: 'product' })
+    expect(page.rows.find((r) => r.id === 'amz-1')).toMatchObject({ imported: true, overdue: false, kind: 'product', dueAt: null })
     expect(page.rows.find((r) => r.id === 'ebay-2')).toMatchObject({ status: 'RESOLVED', dueAt: null, overdue: false })
     expect(page.facets.families).toEqual([{ id: familyId, label: 'Test trousers' }])
     expect(page.facets.owners).toEqual(['owner-a'])
@@ -125,7 +128,10 @@ describe('Reviews Inbox services (real SQL)', () => {
     const { listInbox } = await import('./review-inbox.service.js')
     const ids = async (query: Record<string, unknown>) => (await inside(() => listInbox(query))).rows.map((r) => r.id).sort()
     expect(await ids({ kind: 'seller' })).toEqual(['ebay-1', 'ebay-2'])
-    expect(await ids({ status: 'OVERDUE' })).toEqual(['amz-2', 'ebay-1', 'etsy-old'])
+    expect(await ids({ status: 'OVERDUE' })).toEqual(['ebay-1'])
+    // "Needs a reply" (the badges' link): the same rule, every date (audit A4, C1).
+    expect(await ids({ reply: 'needed' })).toEqual(['ebay-1'])
+    expect(await ids({ product: 'test-parent' })).toEqual(['ebay-1'])
     expect(await ids({ mood: 'NEUTRAL', theme: 'FIT_SIZING' })).toEqual(['ebay-1'])
     expect(await ids({ family: familyId })).toEqual(['ebay-1'])
     expect(await ids({ owner: 'owner-a' })).toEqual(['amz-4'])
@@ -169,10 +175,14 @@ describe('Reviews Inbox services (real SQL)', () => {
       { id: 'amz-1', assignee: 'owner-a', triageTags: ['size chart'], triageStatus: 'RESOLVED' },
       { id: 'etsy-old', assignee: null, triageTags: ['size chart'], triageStatus: null },
     ])
-    const draft = await inside(() => runInboxBulk({ ids: ['amz-2', 'etsy-old'], action: 'draft', value: null }, 'user-1'))
+    const draft = await inside(() => runInboxBulk({ ids: ['amz-2', 'etsy-old', 'ebay-2'], action: 'draft', value: null }, 'user-1'))
     expect(draft.changed).toBe(1)
-    expect(draft.skipped).toEqual([{ id: 'etsy-old', reason: expect.stringMatching(/^The reply window on Etsy closed on /) }])
-    const drafts = await inside(() => database.client.reviewResponse.findMany({ where: { reviewId: 'amz-2' }, select: { status: true, createdBy: true } }))
+    expect(draft.skipped).toEqual([
+      // Amazon lets nobody reply to a product review (audit B3): nothing to draft.
+      { id: 'amz-2', reason: 'Amazon lets nobody reply to a product review. Read it, act on what it says, then resolve it.' },
+      { id: 'etsy-old', reason: expect.stringMatching(/^The reply window on Etsy closed on /) },
+    ])
+    const drafts = await inside(() => database.client.reviewResponse.findMany({ where: { reviewId: 'ebay-2' }, select: { status: true, createdBy: true } }))
     expect(drafts).toEqual([{ status: 'DRAFT', createdBy: 'user-1' }])
   })
 
@@ -258,10 +268,10 @@ describe('Reviews Inbox services (real SQL)', () => {
     const late = await inside(() => sendReviewReply('etsy-old', { body: 'Thank you' }))
     expect(late.status).toBe(409)
     expect(late.body).toMatchObject({ error: 'window_closed' })
-    // An imported Amazon review: recorded as responded by hand, never sent anywhere.
-    const manual = await inside(() => sendReviewReply('amz-2', { body: 'Thank you' }))
-    expect(manual.status).toBe(200)
-    expect(manual.body).toMatchObject({ ok: true, code: 'MANUAL' })
+    // An Amazon product review: Amazon lets nobody reply, so nothing is sent or recorded (audit B3).
+    const amazon = await inside(() => sendReviewReply('amz-2', { body: 'Thank you' }))
+    expect(amazon.status).toBe(409)
+    expect(amazon.body).toMatchObject({ error: 'no_reply' })
     expect(ebay.replies).toEqual(['TEST-ebay-1'])
   })
 })

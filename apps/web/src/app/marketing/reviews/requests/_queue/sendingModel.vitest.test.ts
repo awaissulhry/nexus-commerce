@@ -8,7 +8,7 @@ const ON: SendingState = {
   nextRunAt: '2026-10-26T13:00:00Z',
   hourly: 'Runs every hour',
   lastRun: { at: '2026-10-26T12:00:00Z', by: 'the hourly sender', ok: true, sent: 12, failed: 0, skipped: 3, tooEarly: 3, words: '12 sent, 3 too early (they try again tomorrow), 0 failed' },
-  due: { amazon: { total: 12, byMarket: { DE: 3, IT: 7, FR: 2 } }, email: { total: 6, byChannel: { SHOPIFY: 2, EBAY: 4 } } },
+  due: { amazon: { total: 12, byMarket: { DE: 3, IT: 7, FR: 2 } }, email: { total: 6, byChannel: { SHOPIFY: 6 } } },
   runHeld: null,
 }
 
@@ -43,11 +43,27 @@ describe('run now', () => {
     expect(c.confirmLabel).toBe('Run now — 18 requests')
     expect(c.consequences).toEqual([
       'Asks Amazon to send 12 review requests (Italy 7, Germany 3, France 2)',
-      'Sends our email to 6 buyers (eBay 4, Shopify 2)',
+      'Sends our review email to 6 buyers (Shopify 6)',
       'Adds orders delivered since the last run to the queue',
       'A sent request cannot be taken back.',
     ])
     expect(c.sideEffects).toEqual(['Amazon may answer “too early” for some — they try again tomorrow', 'The sender also runs on its own every hour — next at 14:00'])
+  })
+
+  it('counts the requests whose rule asks “How was it?” first apart: that e-mail goes, not the request (B19)', () => {
+    const c = runConfirm({ ...ON, due: { amazon: { ...ON.due.amazon, checkFirst: 2 }, email: { ...ON.due.email, checkFirst: 1 } } }, TZ)
+    expect(c.consequences.slice(0, 3)).toEqual([
+      'Asks Amazon to send 10 review requests',
+      'Sends our review email to 5 buyers',
+      'Sends our “How was it?” email first to 3 buyers — their review request follows their answer, or 5 days',
+    ])
+  })
+
+  it('eBay requests still waiting are closed without an email, never sent (Owner, 2026-10-27)', () => {
+    const c = runConfirm({ ...ON, due: { amazon: { total: 0, byMarket: {} }, email: { total: 0, byChannel: {} }, ebay: 3 } }, TZ)
+    expect(c.consequences[0]).toBe('Closes 3 eBay requests without an email — eBay asks the buyer for feedback itself')
+    expect(c.consequences).not.toContain('Nothing is due right now')
+    expect(c.confirmLabel).toBe('Run now')
   })
 
   it('says when nothing is due', () => {

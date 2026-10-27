@@ -9,7 +9,7 @@ import type { RuleItem } from '../../_rules/rulesModel'
 export const RULE_SCOPES = [
   { value: 'AMAZON_PER_MARKETPLACE', title: 'Amazon — one market', description: 'Pick the market. A rule for one market wins over “all markets”.' },
   { value: 'AMAZON_GLOBAL', title: 'Amazon — all markets', description: 'Every Amazon market at once.' },
-  { value: 'EBAY', title: 'eBay', description: 'Our own review email, once per order.' },
+  { value: 'EBAY', title: 'eBay', description: 'Not e-mailed: eBay asks its buyers for feedback itself.' },
   { value: 'SHOPIFY', title: 'Shopify', description: 'Our own review email, once per order.' },
 ] as const
 
@@ -194,7 +194,7 @@ export const MANAGE_RULE_HELD = "You need 'Manage reviews' to change review-requ
 export function saveHeld(form: RuleForm, opts: { canManage: boolean; lint: readonly LintIssue[] }): string | null {
   if (!opts.canManage) return MANAGE_RULE_HELD
   if (!form.name.trim()) return 'Give the rule a name first.'
-  if (!RULE_SCOPES.some((s) => s.value === form.scope)) return 'Pick Amazon, eBay or Shopify — Nexus asks only those buyers.'
+  if (!RULE_SCOPES.some((s) => s.value === form.scope)) return 'Pick Amazon or Shopify — Nexus asks only those buyers (eBay asks its buyers itself).'
   if (form.scope === 'AMAZON_PER_MARKETPLACE' && !form.marketplace) return 'Pick the market first: an Amazon rule for one market needs one.'
   if (form.windowFrom > form.windowTo) return `The window’s first day (${form.windowFrom}) is after its last day (${form.windowTo}).`
   if (Number.isNaN(minTotalCents(form.minOrderTotal))) return 'The minimum order total is not an amount — type it like 49.90, or leave it empty.'

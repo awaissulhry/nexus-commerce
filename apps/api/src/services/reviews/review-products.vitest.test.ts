@@ -97,14 +97,15 @@ describe('Reviews Insights › Products (real SQL)', () => {
     expect(returnRateOf(['nobody'], { returns: new Map(), reasons: new Map(), orders: new Map(), returnOrder: new Map() })).toBeNull()
   })
 
-  it('families with variants: mixed rating (eBay as 5/3/1), change, top complaint, words — fixtures never count', async () => {
+  it('families with variants: the one rating (product reviews; eBay apart), change, top complaint, words — fixtures never count', async () => {
     const out = await inside(() => insightsProducts({ now: NOW }))
     const jacket = out.families.find((f) => f.familyId === 'test-jacket')!
     expect(jacket.variants.map((v) => v.productId)).toEqual(['test-jacket-l', 'test-jacket-m'])
     const m = jacket.variants.find((v) => v.productId === 'test-jacket-m')!
-    // (5+5+1+4+4+2+2+3)/8 = 3.25; before 5 → −1.75, to one decimal −1.7
-    expect(m).toMatchObject({ rating: 3.25, count: 8, change: -1.7, variant: 'M · Black', tooFew: false })
-    expect(m.ratingWords).toBe('stars from every channel; eBay feedback counts as 5, 3 or 1 star; Amazon from imported reviews')
+    // The one rating (audit C3): stars of product reviews only — eBay feedback (5, 5, 1) is % positive, never stars:
+    // (4+4+2+2+3)/5 = 3.0; before 5 → −2.0. The count is every review of the period (8).
+    expect(m).toMatchObject({ rating: 3, count: 8, change: -2, variant: 'M · Black', tooFew: false })
+    expect(m.ratingWords).toBe('stars from product reviews; Amazon from imported reviews; eBay feedback counts as % positive, not in the stars')
     expect(m.topNegativeTheme).toMatchObject({ key: 'FIT_SIZING', count: 3, from: 'reviews' })
     const l = jacket.variants.find((v) => v.productId === 'test-jacket-l')!
     expect(l).toMatchObject({ rating: 5, count: 3, ratingWords: 'stars from reviews' })
@@ -140,7 +141,8 @@ describe('Reviews Insights › Products (real SQL)', () => {
     expect(byLabel['Amazon Germany']).toMatchObject({ kind: 'stars', rating: 2.33, count: 3, words: 'stars from imported reviews' })
     expect(byLabel['eBay Italy']).toMatchObject({ kind: 'positive', rating: 66.7, count: 3, words: 'seller feedback, % positive' })
     expect(byLabel.Shopify).toMatchObject({ rating: 4, count: 2, change: -1 })
-    expect(d.spread).toEqual([2, 2, 1, 2, 1])
+    // The spread counts the stars the rating counts: eBay's 5, 5, 1 feedback is not in it.
+    expect(d.spread).toEqual([0, 2, 1, 2, 0])
     // Fit: the family's sizes; one "too small" return on M (the fit reviews here say no way) — too few for a verdict.
     expect(d.fit).toMatchObject({ family: { id: 'test-jacket' }, reviews: 0, returns: 1 })
     expect(d.fit!.sizes.map((c) => [c.size, c.verdict, c.total])).toEqual([['M', 'too_few', 1], ['L', 'too_few', 0]])

@@ -48,12 +48,17 @@ export interface QueueTiles {
   reviewRate: number | null
   /** Change against the 30 days before, as a fraction (0.006 = +0.6 points). */
   rateDelta: number | null
+  /** Why the rate leaves requests out or has none ("Not measurable: …"). */
+  rateWords?: string | null
 }
 
 export interface QueueFailures {
+  /** Failed for good (no try left) in 7 days: the rows "Show failed" lists. */
   count: number
   bounced: number
   noAnswer: number
+  /** Failed but still trying again on their own (not in `count`). */
+  retrying?: number
   words: string
 }
 
@@ -90,8 +95,11 @@ export interface SendingState {
     words: string
   } | null
   due: {
-    amazon: { total: number; byMarket: Record<string, number> }
-    email: { total: number; byChannel: Record<string, number> }
+    /** `checkFirst`: of those, due ones whose rule asks “How was it?” first (that e-mail goes, not the request). */
+    amazon: { total: number; byMarket: Record<string, number>; checkFirst?: number }
+    email: { total: number; byChannel: Record<string, number>; checkFirst?: number }
+    /** eBay requests still waiting from before Nexus stopped e-mailing eBay buyers: the run closes them unasked. */
+    ebay?: number
   }
   /** Why "Run now" is held (paused, a run going on), or null. */
   runHeld: string | null

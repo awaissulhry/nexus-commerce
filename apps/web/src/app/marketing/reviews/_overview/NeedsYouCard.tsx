@@ -10,7 +10,7 @@
 import { Card, EmptyState } from '@/design-system/components'
 import { Button, Pill, Skeleton, Tag, TokenChip } from '@/design-system/primitives'
 import Link from '@/lib/workspaces/Link'
-import { inboxHref, insightsHref, requestsHref } from '../_lib/reviewsLinks'
+import { inboxHref, insightsHref, needsReplyHref, requestsHref } from '../_lib/reviewsLinks'
 import {
   ageWords, NEEDS_WORDS, needsActionHeld, needsActionHref, needsEmptyWords, needsFooter, needsSubtitle,
   type NeedsYouResponse,
@@ -26,11 +26,14 @@ export interface NeedsYouCardProps {
   show: NeedsFilter | null
   canManage: boolean
   now: number
+  /** The Overview's scope: the "All …" links keep it. */
+  channel?: string | null
+  market?: string | null
   onClearShow: () => void
   onRetry: () => void
 }
 
-export function NeedsYouCard({ needs, error, loading, show, canManage, now, onClearShow, onRetry }: NeedsYouCardProps) {
+export function NeedsYouCard({ needs, error, loading, show, canManage, now, channel = null, market = null, onClearShow, onRetry }: NeedsYouCardProps) {
   const shown = needs?.items.length ?? 0
   const total = needs?.total ?? 0
   const footer = needs ? needsFooter(shown, total, show) : ''
@@ -103,9 +106,9 @@ export function NeedsYouCard({ needs, error, loading, show, canManage, now, onCl
           )}
           <div className={s.needsFoot}>
             <span className={s.grow}>{footer}</span>
-            <Button asChild variant="link" size="sm"><Link href={inboxHref()}>All reviews that need a reply</Link></Button>
-            <Button asChild variant="link" size="sm"><Link href={insightsHref('alerts')}>All alerts</Link></Button>
-            <Button asChild variant="link" size="sm"><Link href={requestsHref()}>All requests</Link></Button>
+            <Button asChild variant="link" size="sm"><Link href={needsReplyHref({ channel, market })}>All reviews that need a reply</Link></Button>
+            <Button asChild variant="link" size="sm"><Link href={insightsHref('alerts', { channel, market })}>All alerts</Link></Button>
+            <Button asChild variant="link" size="sm"><Link href={requestsHref({ channel, market })}>All requests</Link></Button>
           </div>
         </>
       )}

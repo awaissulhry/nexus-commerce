@@ -24,3 +24,20 @@ export async function assertRequestPermission(request: FastifyRequest, permissio
     })
   }
 }
+
+/**
+ * One of `permissions` (an action two pages offer: the Orders page's "Request review" is a review action, so
+ * reviews.manage, and stays open to orders.edit, as the Orders page always allowed). The manifest maps such a route to
+ * the weaker read permission; the route then calls this. Enforced in shadow mode too.
+ */
+export async function assertAnyRequestPermission(request: FastifyRequest, permissions: readonly string[]): Promise<void> {
+  await ensureLoaded(request)
+  requestUserId(request)
+  const resolved = request.__rbacResolved ?? await resolvePermissions(request.authUser!)
+  request.__rbacResolved = resolved
+  if (!permissions.some((p) => hasPermission(resolved, p))) {
+    throw Object.assign(new Error(`This operation requires ${permissions.join(' or ')}.`), {
+      statusCode: 403, code: 'forbidden', required: permissions[0],
+    })
+  }
+}

@@ -1,7 +1,8 @@
 /**
  * Reviews › Requests › Queue — the page's address, read once on mount and written back with `replaceState` on every
- * change: the filters (status, channel, market, rule, product type, reason, search), the sort, the page, the results
- * period and the request open in the pop-up. `?inserts=1` and `?preview=1` (links from elsewhere, and the redirects of
+ * change: the filters (status, channel, market, rule, product type, reason, search), the period of the rows (a link from
+ * the Overview or a channel page keeps its own period; 30 days by default), the sort, the page, the results period and
+ * the request open in the pop-up. `?inserts=1` and `?preview=1` (links from elsewhere, and the redirects of
  * the old Package inserts and e-mail test pages) open their window once and are never written back. Pure; tested in
  * queueQuery.vitest.test.ts.
  */
@@ -17,12 +18,16 @@ export const QUEUE_MARKETS = ['IT', 'DE', 'FR', 'ES', 'UK', 'NL', 'BE', 'PL', 'S
 export type ResultsPeriod = '7d' | '30d' | '90d'
 export const RESULTS_PERIODS: readonly ResultsPeriod[] = ['7d', '30d', '90d']
 
+/** The rows' period (GET /api/review-queue `period`): what changed in it, plus everything still waiting. */
+export type QueuePeriod = '7d' | '30d' | '90d' | '12m' | 'all'
+export const QUEUE_PERIODS: readonly QueuePeriod[] = ['7d', '30d', '90d', '12m', 'all']
+export const DEFAULT_QUEUE_PERIOD: QueuePeriod = '30d'
+
 /** The API's sort fields, by grid column. */
 export const QUEUE_SORT_FIELDS = {
   next: 'nextTry',
   delivered: 'deliveredAt',
   tries: 'tries',
-  status: 'status',
 } as const
 export type QueueSortColumn = keyof typeof QUEUE_SORT_FIELDS
 export interface QueueSort { column: QueueSortColumn; dir: 'asc' | 'desc' }
@@ -35,6 +40,7 @@ export interface QueueQuery {
   productType: string | null
   reason: string | null
   q: string
+  period: QueuePeriod
   sort: QueueSort | null
   page: number
   pageSize: number
@@ -51,6 +57,7 @@ export const EMPTY_QUEUE_QUERY: QueueQuery = {
   productType: null,
   reason: null,
   q: '',
+  period: DEFAULT_QUEUE_PERIOD,
   sort: null,
   page: 1,
   pageSize: DEFAULT_QUEUE_PAGE_SIZE,
@@ -80,6 +87,7 @@ export function parseQueueQuery(search: string): { query: QueueQuery; flags: Que
   const status = upperOrNull(p.get('status'))
   const pageSize = Number(p.get('pageSize'))
   const results = text(p.get('results')) as ResultsPeriod
+  const period = text(p.get('period')).toLowerCase() as QueuePeriod
   const query: QueueQuery = {
     status: status && (QUEUE_STATUSES as readonly string[]).includes(status) ? (status as QueueStatus) : null,
     channel: upperOrNull(p.get('channel')),
@@ -88,6 +96,7 @@ export function parseQueueQuery(search: string): { query: QueueQuery; flags: Que
     productType: text(p.get('productType')) || null,
     reason: text(p.get('reason')) || null,
     q: text(p.get('q')).slice(0, 100),
+    period: QUEUE_PERIODS.includes(period) ? period : DEFAULT_QUEUE_PERIOD,
     sort: parseSort(p.get('sort')),
     page: Math.max(1, Math.floor(Number(p.get('page')) || 1)),
     pageSize: (QUEUE_PAGE_SIZES as readonly number[]).includes(pageSize) ? pageSize : DEFAULT_QUEUE_PAGE_SIZE,
@@ -107,6 +116,7 @@ export function serializeQueueQuery(q: QueueQuery): string {
   if (q.productType) p.set('productType', q.productType)
   if (q.reason) p.set('reason', q.reason)
   if (q.q.trim()) p.set('q', q.q.trim())
+  if (q.period !== DEFAULT_QUEUE_PERIOD) p.set('period', q.period)
   if (q.sort) p.set('sort', `${q.sort.column}:${q.sort.dir}`)
   if (q.page > 1) p.set('page', String(q.page))
   if (q.pageSize !== DEFAULT_QUEUE_PAGE_SIZE) p.set('pageSize', String(q.pageSize))
@@ -116,7 +126,7 @@ export function serializeQueueQuery(q: QueueQuery): string {
   return s ? `?${s}` : ''
 }
 
-/** What `GET /api/review-queue` is asked: the last 30 days and everything still waiting. */
+/** What `GET /api/review-queue` is asked: the rows' period (30 days by default) and everything still waiting. */
 export function queueApiParams(q: QueueQuery): LinkParams {
   return {
     status: q.status,
@@ -129,7 +139,7 @@ export function queueApiParams(q: QueueQuery): LinkParams {
     sort: q.sort ? `${QUEUE_SORT_FIELDS[q.sort.column]}:${q.sort.dir}` : null,
     page: q.page,
     pageSize: q.pageSize,
-    period: '30d',
+    period: q.period,
   }
 }
 
@@ -150,19 +160,24 @@ export function toggleStatus(q: QueueQuery, status: QueueStatus): QueueQuery {
   return { ...q, status: q.status === status ? null : status, page: 1 }
 }
 
+/** The rows' period (a period chip's ×: back to 30 days); back to page 1. */
+export function withPeriod(q: QueueQuery, period: QueuePeriod): QueueQuery {
+  return { ...q, period: QUEUE_PERIODS.includes(period) ? period : DEFAULT_QUEUE_PERIOD, page: 1 }
+}
+
 /** The search box. */
 export function withSearch(q: QueueQuery, text: string): QueueQuery {
   return { ...q, q: text.slice(0, 100), page: 1 }
 }
 
-/** Every filter and the search off; sort, page size and the results period kept. */
+/** Every filter and the search off, the rows' period back to 30 days; sort, page size and the results period kept. */
 export function clearFilters(q: QueueQuery): QueueQuery {
-  return { ...q, status: null, channel: null, market: null, rule: null, productType: null, reason: null, q: '', page: 1 }
+  return { ...q, status: null, channel: null, market: null, rule: null, productType: null, reason: null, q: '', period: DEFAULT_QUEUE_PERIOD, page: 1 }
 }
 
-/** How many filters are on (the filter bar's Clear). The search counts. */
+/** How many filters are on (the filter bar's Clear). The search and a period other than 30 days count. */
 export function activeFilterCount(q: QueueQuery): number {
-  return [q.status, q.channel, q.market, q.rule, q.productType, q.reason, q.q.trim() || null].filter(Boolean).length
+  return [q.status, q.channel, q.market, q.rule, q.productType, q.reason, q.q.trim() || null, q.period !== DEFAULT_QUEUE_PERIOD || null].filter(Boolean).length
 }
 
 /** A header click: the column's sort, or none for a column the server cannot sort by. */

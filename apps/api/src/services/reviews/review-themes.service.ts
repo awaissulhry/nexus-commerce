@@ -61,7 +61,7 @@ export interface ThemesAnswer {
 
 const STATE_WORDS: Record<AmazonTopicState, string> = {
   ok: 'Topics are read every week, in English.',
-  needs_role: 'Amazon refused the topics: the Selling Partner account needs the Brand Analytics role for this market.',
+  needs_role: 'Amazon refused the topics: Nexus needs the Selling Partner Insights role for this market.',
   error: 'Amazon’s topics could not be read last time; Nexus tries again next week.',
   no_data: 'No topics from Amazon yet for this market.',
 }

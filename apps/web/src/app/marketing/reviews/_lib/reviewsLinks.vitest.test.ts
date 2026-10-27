@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   channelHref,
   inboxHref,
+  needsReplyHref,
   rulesHref,
   timingHref,
   insightsHref,
@@ -61,19 +62,24 @@ describe('reviews links', () => {
       '/marketing/reviews/insights',
       reviewsSettingsHref(), reviewsSettingsHref('automations'), reviewsSettingsHref('pipeline'),
       productReviewsHref('product-1'),
-      channelHref('AMAZON'), channelHref('AMAZON', 'IT'), channelHref('EBAY'), channelHref('EBAY', 'GB'), rulesHref(), timingHref(),
+      channelHref('AMAZON'), channelHref('AMAZON', 'IT'), channelHref('EBAY'), channelHref('EBAY', 'GB'), channelHref('ETSY'), channelHref('SHOPIFY'),
+      rulesHref(), timingHref(),
     ]
     for (const href of hrefs) expect(isPage(href), href).toBe(true)
   })
 
-  it('sends a channel to its Reviews page (Amazon and eBay; GB is the UK); other channels to the Inbox, scoped', () => {
+  it('sends a channel to its Reviews page (Amazon and eBay; GB is the UK; Etsy and Shopify); other channels to the Inbox, scoped', () => {
     expect(channelHref('amazon')).toBe('/marketing/reviews/amazon')
     expect(channelHref('AMAZON', 'IT')).toBe('/marketing/reviews/amazon/it')
     expect(channelHref('EBAY', 'gb')).toBe('/marketing/reviews/ebay/uk')
     expect(channelHref('EBAY', 'DEFAULT')).toBe('/marketing/reviews/ebay')
     expect(channelHref('EBAY', null)).toBe('/marketing/reviews/ebay')
-    expect(channelHref('SHOPIFY')).toBe('/marketing/reviews/inbox?channel=SHOPIFY')
-    expect(channelHref('ETSY', 'IT')).toBe('/marketing/reviews/inbox?channel=ETSY&market=IT')
+    // PR I: one page each, no market pages — a market never makes a path.
+    expect(channelHref('SHOPIFY')).toBe('/marketing/reviews/shopify')
+    expect(channelHref('shopify', 'IT')).toBe('/marketing/reviews/shopify')
+    expect(channelHref('ETSY', 'IT')).toBe('/marketing/reviews/etsy')
+    expect(channelHref('etsy', null)).toBe('/marketing/reviews/etsy')
+    expect(channelHref('WOOCOMMERCE', 'DE')).toBe('/marketing/reviews/inbox?channel=WOOCOMMERCE&market=DE')
   })
 
   it('hands the Inbox every filter it reads', () => {
@@ -109,7 +115,12 @@ describe('reviews links', () => {
 
   it('sends the Requests links to the Queue, its windows and one rule’s editor, filters and all', () => {
     expect(requestsHref()).toBe('/marketing/reviews/requests')
-    expect(requestsHref({ status: 'FAILED', channel: 'EBAY', market: 'DE', period: '7d' })).toBe('/marketing/reviews/requests?status=FAILED&channel=EBAY&market=DE')
+    // A link keeps its page's period (audit A3); the Queue's own default (30 days) leaves the address.
+    expect(requestsHref({ status: 'FAILED', channel: 'EBAY', market: 'DE', period: '7d' })).toBe('/marketing/reviews/requests?period=7d&status=FAILED&channel=EBAY&market=DE')
+    expect(requestsHref({ status: 'SENT', period: '30d' })).toBe('/marketing/reviews/requests?status=SENT')
+    // The badges' number: the one needs-a-reply rule, every date (audit A4, C1).
+    expect(needsReplyHref()).toBe('/marketing/reviews/inbox?period=all&reply=needed')
+    expect(needsReplyHref({ channel: 'EBAY', market: 'DE' })).toBe('/marketing/reviews/inbox?period=all&channel=EBAY&market=DE&reply=needed')
     expect(requestsHref({ inserts: 1 })).toBe('/marketing/reviews/requests?inserts=1')
     expect(requestsHref({ preview: true, channel: 'SHOPIFY' })).toBe('/marketing/reviews/requests?channel=SHOPIFY&preview=1')
     expect(ruleHref('rule 1/2')).toBe('/marketing/reviews/requests/rules/rule%201%2F2')

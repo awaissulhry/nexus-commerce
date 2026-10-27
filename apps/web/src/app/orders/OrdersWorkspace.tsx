@@ -57,6 +57,8 @@ type ReviewRequest = {
   status: 'ELIGIBLE' | 'SCHEDULED' | 'SENT' | 'SUPPRESSED' | 'FAILED' | 'SKIPPED'
   sentAt: string | null
   scheduledFor: string | null
+  /** The Requests page's words for the status. */
+  statusWords?: string
 }
 
 type Order = {

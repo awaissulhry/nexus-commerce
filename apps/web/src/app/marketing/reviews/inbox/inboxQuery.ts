@@ -1,7 +1,8 @@
 /**
  * Reviews › Inbox — what the page shows, kept in the address so a reload or a shared link shows the same thing: the tab
  * (`?kind=product|seller`), the period (`?period=7d`; 30 days is the default and leaves the address; `all` = All time),
- * the status tile (`?status=OVERDUE`), every Filters field (`channel`, `market`, `stars`, `mood`, `theme`, `owner`,
+ * the status tile (`?status=OVERDUE`), "Needs a reply" (`?reply=needed`: only the reviews someone can answer that wait for it —
+ * the number on the rail and sub-sidebar badges and the Overview tile, which link here with it and `period=all`), every Filters field (`channel`, `market`, `stars`, `mood`, `theme`, `owner`,
  * `family` — comma lists; `owner=none` = nobody; "Has photos" = `?photos=1`), the search (`?q=`), the order (`?sort=rating:asc`) and the pager
  * (`?page=2&pageSize=100`). Two one-time flags are read on mount and then left out of the address: `?import=1` opens
  * the Import window, `?review=<id>` opens that review's pop-up (and stays while it is open).
@@ -50,6 +51,10 @@ export interface InboxQuery {
   themes: string[]
   owners: string[]
   families: string[]
+  /** `reply=needed`: only the reviews that need a reply (the API's one rule: answerable, not imported, open). */
+  needsReply: boolean
+  /** `product=<id>`: one product's reviews (and its variants'), from an alert's "See the reviews". */
+  product: string | null
   /** "Has photos" (PR G): only reviews with the buyer's photos. */
   photos: boolean
   q: string
@@ -73,6 +78,8 @@ export const EMPTY_INBOX_QUERY: InboxQuery = {
   themes: [],
   owners: [],
   families: [],
+  needsReply: false,
+  product: null,
   photos: false,
   q: '',
   sort: DEFAULT_INBOX_SORT,
@@ -137,6 +144,8 @@ export function parseInboxQuery(search: string | URLSearchParams): InboxAddress 
       themes: codes(p.get('theme')),
       owners: list(p.get('owner')).filter((o) => o.length <= 120),
       families: list(p.get('family')).filter((f) => ID.test(f)),
+      needsReply: (p.get('reply') ?? '').trim().toLowerCase() === 'needed',
+      product: ID.test((p.get('product') ?? '').trim()) ? (p.get('product') ?? '').trim() : null,
       photos: photosFlag === '1' || photosFlag === 'true',
       q: (p.get('q') ?? '').trim().slice(0, 200),
       sort: (INBOX_SORTS as readonly string[]).includes(sort) ? (sort as InboxSort) : DEFAULT_INBOX_SORT,
@@ -161,6 +170,8 @@ export function serializeInboxQuery(q: InboxQuery, open: { review?: string | nul
   if (q.themes.length) p.set('theme', q.themes.join(','))
   if (q.owners.length) p.set('owner', q.owners.join(','))
   if (q.families.length) p.set('family', q.families.join(','))
+  if (q.needsReply) p.set('reply', 'needed')
+  if (q.product) p.set('product', q.product)
   if (q.photos) p.set('photos', '1')
   if (q.q) p.set('q', q.q)
   if (q.sort !== DEFAULT_INBOX_SORT) p.set('sort', q.sort)
@@ -171,9 +182,9 @@ export function serializeInboxQuery(q: InboxQuery, open: { review?: string | nul
   return text ? `?${text}` : ''
 }
 
-/** The API's period: 12 months is 365 days (the API counts days); every other one as it is. */
+/** The API's period, as it is: the API counts 12 months as calendar months, as the Overview does. */
 export function apiPeriod(period: InboxPeriod): string {
-  return period === '12m' ? '365' : period
+  return period
 }
 
 /** `GET /api/reviews/inbox`'s parameters for one page of this query (the grid's sort wins when it has one). */
@@ -189,6 +200,8 @@ export function inboxApiParams(q: InboxQuery, page: number = q.page, sort: Inbox
     theme: q.themes,
     owner: q.owners,
     family: q.families,
+    reply: q.needsReply ? 'needed' : null,
+    product: q.product,
     photos: q.photos ? '1' : null,
     q: q.q || null,
     sort,
@@ -268,7 +281,17 @@ export function withPage(q: InboxQuery, page: number, pageSize: number = q.pageS
 
 /** "Clear" (and "Clear all filters"): every filter, the search and the period go; the tab and the order stay. */
 export function clearFilters(q: InboxQuery): InboxQuery {
-  return { ...q, statuses: [], channels: [], markets: [], stars: [], moods: [], themes: [], owners: [], families: [], photos: false, q: '', period: 'all', page: 1 }
+  return { ...q, statuses: [], channels: [], markets: [], stars: [], moods: [], themes: [], owners: [], families: [], needsReply: false, product: null, photos: false, q: '', period: 'all', page: 1 }
+}
+
+/** One product's reviews, or every product (its chip's ×). */
+export function withProduct(q: InboxQuery, product: string | null): InboxQuery {
+  return q.product === product ? q : { ...q, product, page: 1 }
+}
+
+/** "Needs a reply" on or off (its chip's ×). */
+export function withNeedsReply(q: InboxQuery, on: boolean): InboxQuery {
+  return q.needsReply === on ? q : { ...q, needsReply: on, page: 1 }
 }
 
 /** How many Filters fields are on (the bar's "3 on"; the status tile counts as the Status field; "Has photos" is one). */
@@ -278,7 +301,7 @@ export function activeFilterCount(q: InboxQuery): number {
 
 /** Any filter, the search or a period narrows the rows: an empty answer is "nothing matches", not "no reviews". */
 export function isFiltered(q: InboxQuery): boolean {
-  return activeFilterCount(q) > 0 || q.q !== '' || q.period !== 'all'
+  return activeFilterCount(q) > 0 || q.q !== '' || q.period !== 'all' || q.needsReply || q.product != null
 }
 
 /** The grid's sort (its header click) as the API's: Received → postedAt, Stars → rating; none → the query's own. */

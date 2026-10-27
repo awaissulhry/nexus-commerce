@@ -101,8 +101,7 @@ export async function sendAmazonSolicitation(args: {
     return {
       ok: false,
       errorCode: 'NOT_IMPLEMENTED',
-      errorMessage:
-        'SP-API Solicitations gated by env (NEXUS_ENABLE_AMAZON_SOLICITATIONS=true)',
+      errorMessage: 'Sending to Amazon is switched off on this server',
     }
   }
 
@@ -186,7 +185,8 @@ export function isBenignFailure(errorCode: string | null | undefined): boolean {
 export function benignSuppressedReason(errorCode: string | null | undefined): string | null {
   switch (errorCode) {
     case 'NOT_IMPLEMENTED':
-      return 'Amazon Solicitations gated by env (NEXUS_ENABLE_AMAZON_SOLICITATIONS)'
+      // Shown on the order page and in the queue's code tip: words only, never the setting's name (audit B10).
+      return 'Sending to Amazon is switched off on this server — nothing was sent'
     case 'UNKNOWN_MARKETPLACE':
       return 'Order has no recognised Amazon marketplace short code'
     case 'ALREADY_SOLICITED':

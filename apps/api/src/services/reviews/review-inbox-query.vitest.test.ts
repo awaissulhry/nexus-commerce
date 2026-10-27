@@ -16,7 +16,7 @@ import {
   variantWords,
   type InboxBulkRow,
 } from './review-inbox-query.js'
-import { visibleReviewWhere } from './review-visibility.js'
+import { overdueWhere, visibleReviewWhere } from './review-visibility.js'
 
 const NOW = new Date('2026-10-26T12:00:00Z')
 const HOUR = 60 * 60 * 1000
@@ -33,8 +33,18 @@ describe('parseInboxQuery — the address, parsed once', () => {
   it('defaults: all kinds, every status, all time, newest first, page 1 of 50', () => {
     expect(parseInboxQuery({})).toEqual({
       kind: 'all', statuses: [], channels: [], markets: [], stars: [], moods: [], themes: [], owners: [], families: [], withPhotos: false,
-      periodDays: null, q: null, sort: { field: 'postedAt', dir: 'desc' }, page: 1, pageSize: 50,
+      periodDays: null, periodMonths: null, needsReply: false, product: null, q: null, sort: { field: 'postedAt', dir: 'desc' }, page: 1, pageSize: 50,
     })
+  })
+
+  it('12 months are calendar months (as the Overview counts them); reply=needed; one product (audit C9, A4, A5)', () => {
+    expect(parseInboxQuery({ period: '12m' })).toMatchObject({ periodDays: null, periodMonths: 12 })
+    expect(parseInboxQuery({ reply: 'needed', product: 'prod_1' })).toMatchObject({ needsReply: true, product: 'prod_1' })
+    expect(parseInboxQuery({ reply: 'yes', product: 'bad id!' })).toMatchObject({ needsReply: false, product: null })
+    const where = inboxWhere(parseInboxQuery({ period: '12m', reply: 'needed' }), NOW)
+    const yearBefore = NOW.toISOString().replace(/^\d{4}/, String(NOW.getUTCFullYear() - 1))
+    expect(JSON.stringify(where)).toContain(`"postedAt":{"gte":"${yearBefore}"}`)
+    expect(JSON.stringify(where)).toContain('IN_PROGRESS')
   })
 
   it('"Has photos" (PR G): photos=1 keeps only reviews with the buyer’s photos; anything else is off', () => {
@@ -100,13 +110,9 @@ describe('inboxWhere — status tiles and OVERDUE', () => {
     expect(inboxStatusWhere('RESOLVED', NOW)).toEqual({ triageStatus: 'RESOLVED' })
   })
 
-  it('Overdue = open (none, New, In progress) and posted more than 48 hours ago', () => {
-    expect(inboxStatusWhere('OVERDUE', NOW)).toEqual({
-      AND: [
-        { OR: [{ triageStatus: null }, { triageStatus: { in: ['NEW', 'IN_PROGRESS'] } }] },
-        { postedAt: { lt: new Date(NOW.getTime() - 48 * HOUR) } },
-      ],
-    })
+  it('Overdue = the reviews that need a reply (the badges\' rule) and were posted more than 48 hours ago', () => {
+    expect(inboxStatusWhere('OVERDUE', NOW)).toEqual(overdueWhere(NOW))
+    expect(JSON.stringify(inboxStatusWhere('OVERDUE', NOW))).toContain(new Date(NOW.getTime() - 48 * HOUR).toISOString())
   })
 
   it('several tiles: any of them; the tile counts leave the status out', () => {
@@ -193,9 +199,10 @@ describe('bulk bar — which ticked rows change, and the held words for the othe
     const rows = [
       row('ebay-replied', { channel: 'EBAY', ingestSource: 'EBAY_API', sentReplies: 1 }),
       row('etsy-late', { channel: 'ETSY', postedAt: new Date(NOW.getTime() - 120 * 24 * HOUR) }),
-      row('has-draft', { draftReplies: 1 }),
+      row('has-draft', { channel: 'SHOPIFY', draftReplies: 1 }),
       row('shopify-sent', { channel: 'SHOPIFY', sentReplies: 1 }),
-      row('fresh'),
+      row('amazon-product'),
+      row('fresh', { channel: 'SHOPIFY' }),
     ]
     const plan = planInboxBulk({ ids: rows.map((r) => r.id), action: 'draft', value: null }, rows, NOW)
     expect(plan.apply.map((r) => r.id)).toEqual(['fresh'])
@@ -204,6 +211,8 @@ describe('bulk bar — which ticked rows change, and the held words for the othe
       { id: 'etsy-late', reason: expect.stringMatching(/^The reply window on Etsy closed on /) },
       { id: 'has-draft', reason: 'A reply draft is already saved.' },
       { id: 'shopify-sent', reason: 'A reply was already sent.' },
+      // Amazon lets nobody reply to a product review (audit B3): nothing to draft.
+      { id: 'amazon-product', reason: 'Amazon lets nobody reply to a product review. Read it, act on what it says, then resolve it.' },
     ])
   })
 

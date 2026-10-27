@@ -1,11 +1,12 @@
 /**
  * MCP full control 07 O13 — the review request (POST /orders/:id/request-review) and the review reply
- * (POST /reviews/:id/reply/send) move into services/reviews/review-request.service.ts and
- * services/reviews/review-reply-send.service.ts with NO change to what the routes do and answer. The snapshots in
- * __snapshots__/review-actions-parity.vitest.test.ts.snap were written by the route code BEFORE the move: every
- * refusal (not delivered, the 4–30 day window, an active return, a refund, already sent, an unknown market), Amazon
- * live / dry run / failure / retry, a channel without a request API; the reply on eBay (sent, failed), on Amazon
- * (recorded MANUAL), into a draft — with the rows they leave and the events they raise.
+ * (POST /reviews/:id/reply/send) run services/reviews/review-request.service.ts and
+ * services/reviews/review-reply-send.service.ts. Audit 2026-10-27 (Owner-approved): the request goes through the ONE
+ * sender (askForReviews → runReviewQueueNow({ onlyIds })): every refusal in words (not delivered, Amazon's 5–30 days,
+ * an active return, a refund, already sent, an unknown market), held while sending is paused, Amazon live / dry run /
+ * failure / retry, and a Shopify buyer gets our review e-mail (here: e-mail switched off, so "not sent") instead of a
+ * permanent skip; the reply on eBay (sent, failed), refused on an Amazon product review (nobody can reply), into a
+ * draft — with the rows they leave and the events they raise. The actor is the signed-in person, never a body field.
  *
  * Real SQL (PGlite with the production schema) and the real route plugins; Amazon's Solicitations call and eBay's
  * RespondToFeedback are mocked (nothing leaves the machine). Ids and times are masked.
@@ -43,6 +44,12 @@ vi.mock('../services/reviews/adapters/ebay-feedback.adapter.js', async (importOr
     return channel.reply[feedbackId] ?? { ok: true, code: 'Success' }
   }),
 }))
+// The route checks reviews.manage or orders.edit itself (the app here has no sign-in): every caller may.
+vi.mock('../lib/auth/request-permission.js', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  assertAnyRequestPermission: vi.fn(async () => {}),
+  requestUserId: vi.fn(() => 'test-user'),
+}))
 vi.mock('../services/review-events.service.js', () => ({
   publishReviewEvent: vi.fn((event: Record<string, unknown>) => { channel.events.push({ ...event, ts: '<made>' }) }),
   subscribeReviewEvents: vi.fn(() => () => {}),
@@ -52,11 +59,13 @@ vi.mock('../services/review-events.service.js', () => ({
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: ['OWNER'] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
-const MADE = new Set(['id', 'createdAt', 'updatedAt', 'workspaceId', 'sentAt', 'triageUpdatedAt', 'ingestedAt', 'postedAt', 'deliveredAt', 'lastAttemptAt'])
-const stable = (value: unknown) => JSON.parse(JSON.stringify(value, (key, v) => (MADE.has(key) && v !== null ? '<made>' : v)))
+const MADE = new Set(['id', 'requestId', 'createdAt', 'updatedAt', 'workspaceId', 'sentAt', 'triageUpdatedAt', 'ingestedAt', 'postedAt', 'deliveredAt', 'lastAttemptAt'])
+// Words name days relative to today ("Already sent on 26 Oct"): masked, so the snapshot does not change with the date.
+const DAY_WORDS = /\b\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/g
+const stable = (value: unknown) => JSON.parse(JSON.stringify(value, (key, v) => (MADE.has(key) && v !== null ? '<made>' : typeof v === 'string' ? v.replace(DAY_WORDS, '<day>') : v)))
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000)
 
-describe('07 O13 — review request and reply: the routes answer exactly as before the move', () => {
+describe('07 O13 — review request (the one sender) and reply', () => {
   let app: FastifyInstance
   const post = async (url: string, payload: unknown = {}) => {
     const response = await app.inject({ method: 'POST', url: `/api${url}`, payload: payload as object })
@@ -149,6 +158,40 @@ describe('07 O13 — review request and reply: the routes answer exactly as befo
       await requestsOf('test-order-shopify'),
       channel.solicitations,
     ]).toMatchSnapshot()
+  })
+
+  it('request-review: held while sending is paused — nothing is written, nobody is asked (audit B12)', async () => {
+    await inside(async () => {
+      await database.client.order.create({
+        data: {
+          id: 'test-order-paused', channel: 'AMAZON', channelOrderId: 'TEST-AMZ-paused', marketplace: 'IT', status: 'DELIVERED', currencyCode: 'EUR', totalPrice: '20.00',
+          customerName: 'Test Buyer', customerEmail: 'buyer@example.test', shippingAddress: { city: 'Testville' }, fulfillmentMethod: 'MFN', deliveredAt: daysAgo(10),
+        } as never,
+      })
+      await database.client.reviewMailerState.upsert({ where: { id: 'default' }, update: { isPaused: true }, create: { id: 'default', isPaused: true } as never })
+    })
+    const before = channel.solicitations.length
+    const one = await post('/orders/test-order-paused/request-review')
+    const bulk = await post('/orders/bulk-request-reviews', { orderIds: ['test-order-paused'] })
+    await inside(() => database.client.reviewMailerState.update({ where: { id: 'default' }, data: { isPaused: false } }))
+    expect(one.status).toBe(409)
+    expect(one.body.error).toBe('Sending is paused on Reviews › Requests — nothing goes out until someone resumes it. Nothing was sent.')
+    expect(bulk.body).toMatchObject({ counts: { held: 1, sent: 0 }, words: '1 held' })
+    expect(await requestsOf('test-order-paused')).toEqual([])
+    expect(channel.solicitations.length).toBe(before)
+  })
+
+  it('"Seed defaults" turns an existing rule on and never switches its "How was it?" check back on (audit E2)', async () => {
+    await inside(() => database.client.reviewRule.create({
+      data: { id: 'test-rule-global', name: 'Test all markets', scope: 'AMAZON_GLOBAL', isActive: false, useSentimentDiversion: false, minDaysSinceDelivery: 7, maxDaysSinceDelivery: 25 } as never,
+    }))
+    const seeded = await post('/review-rules/seed-default?scope=AMAZON_GLOBAL')
+    expect(seeded.body).toMatchObject({ ok: true, action: 'existing-activated', rule: { isActive: true, useSentimentDiversion: false } })
+    // A business without one gets a new rule named for what it covers (never another business's name).
+    await inside(() => database.client.reviewRule.delete({ where: { id: 'test-rule-global' } }))
+    const made = await post('/review-rules/seed-default?scope=AMAZON_GLOBAL')
+    expect(made.body).toMatchObject({ ok: true, action: 'created', rule: { name: 'All Amazon markets', isActive: true } })
+    await inside(() => database.client.reviewRule.deleteMany({ where: { scope: 'AMAZON_GLOBAL' } }))
   })
 
   it('reply: refusals; eBay sent and failed; Amazon recorded; a draft sent', async () => {

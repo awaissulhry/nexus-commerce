@@ -25,6 +25,10 @@ const DAY_MS = 24 * 60 * 60 * 1000
 /** What the queue calls a request's state (the status filter and the tiles). */
 export type QueueStatus = 'SCHEDULED' | 'DUE' | 'RETRYING' | 'SENT' | 'FAILED' | 'SKIPPED' | 'SUPPRESSED'
 export const QUEUE_STATUSES: readonly QueueStatus[] = ['SCHEDULED', 'DUE', 'RETRYING', 'SENT', 'FAILED', 'SKIPPED', 'SUPPRESSED']
+/** A queue status in words — the same words as the Requests page's status cells (web requests/_queue/queueTiles.ts). */
+export const QUEUE_STATUS_WORDS: Record<QueueStatus, string> = {
+  SCHEDULED: 'Scheduled', DUE: 'Due now', RETRYING: 'Retrying', SENT: 'Sent', FAILED: 'Failed', SKIPPED: 'Skipped', SUPPRESSED: 'Blocked',
+}
 
 /** The fields of a ReviewRequest (and its order) the words read. */
 export interface RequestFacts {
@@ -59,12 +63,24 @@ export function queueStatusOf(r: Pick<RequestFacts, 'status' | 'scheduledFor' | 
   }
 }
 
+/**
+ * eBay buyers get no review e-mail from Nexus (Owner, 2026-10-27): eBay's rules restrict contacting buyers outside eBay,
+ * and eBay asks its buyers for feedback itself. An eBay request ends not asked with this code (the scheduler and the
+ * sender), "Send now" and "Allow again" are held with these words, and the Orders page and Claude answer them too.
+ * Shopify buyers still get our e-mail; Amazon is unchanged.
+ */
+export const EBAY_ASKS_CODE = 'EBAY_ASKS'
+export const EBAY_ASKS_WORDS = 'Not sent — eBay asks the buyer for feedback itself'
+/** What an eBay rule says, wherever a rule is shown or run: it e-mails nobody, and no rule can change that. */
+export const EBAY_RULE_WORDS = 'eBay buyers are not e-mailed — eBay asks its buyers for feedback itself, so no rule can e-mail them.'
+
 /** The provider / Nexus codes a row can carry in `providerResponseCode` that decide its reason on their own. */
 export const CODE_REASON: Record<string, ReasonKey> = {
   SKIPPED_BY_HAND: 'skipped_by_hand',
   ALREADY_SOLICITED: 'already_asked',
   NOT_IMPLEMENTED: 'amazon_off',
   EMAIL_OFF: 'email_off',
+  EBAY_ASKS: 'ebay_asks',
   UNKNOWN_MARKETPLACE: 'unknown_market',
   OUTSIDE_WINDOW: 'window_closed',
   SUPPRESSED: 'do_not_email',
@@ -89,7 +105,7 @@ export type ReasonKey =
   // sent
   | 'sent_amazon' | 'sent_email'
   // not asked
-  | 'skipped_by_hand' | 'already_asked' | 'amazon_off' | 'email_off' | 'unknown_market' | 'window_closed' | 'do_not_email' | 'unhappy_check'
+  | 'skipped_by_hand' | 'already_asked' | 'amazon_off' | 'email_off' | 'ebay_asks' | 'unknown_market' | 'window_closed' | 'do_not_email' | 'unhappy_check'
   | 'no_check_answer' | 'refunded' | 'return_open' | 'cancelled' | 'asked_recently' | 'rule_skips' | 'not_delivered'
   | 'no_order_number' | 'no_email' | 'no_request_call' | 'not_asked_other'
 
@@ -112,6 +128,7 @@ export const REASON_FACET_WORDS: Record<ReasonKey, string> = {
   already_asked: 'Amazon: already asked for this order',
   amazon_off: 'Sending to Amazon is switched off',
   email_off: 'Our email sending is switched off',
+  ebay_asks: 'eBay asks the buyer itself — not e-mailed',
   unknown_market: 'Unknown Amazon market',
   window_closed: 'Past Amazon’s day 30 — too late to ask',
   do_not_email: 'Buyer is on the do-not-email list',
@@ -131,6 +148,7 @@ export const REASON_FACET_WORDS: Record<ReasonKey, string> = {
 
 const daysBetween = (from: Date, to: Date) => Math.round((to.getTime() - from.getTime()) / DAY_MS)
 const isAmazon = (channel: string) => channel === 'AMAZON'
+const isEbay = (channel: string) => (channel ?? '').toUpperCase() === 'EBAY'
 const triesLeft = (r: RequestFacts) => r.nextRetryAt != null && (r.attemptCount ?? 0) < MAX_TRIES
 
 /** The do-not-email list's source, as the mailer wrote it ("Suppressed: suppressed (BOUNCE_HARD)"), in words. */
@@ -225,6 +243,7 @@ function reasonWords(key: ReasonKey, r: RequestFacts): string {
     case 'already_asked': return 'Amazon: already asked for this order'
     case 'amazon_off': return 'Sending to Amazon is switched off on this server — nothing was sent'
     case 'email_off': return 'Not sent — our email sending is switched off on this server'
+    case 'ebay_asks': return EBAY_ASKS_WORDS
     case 'unknown_market': return 'Nexus does not know this order’s Amazon market'
     case 'window_closed': return 'Past Amazon’s day 30 — too late to ask'
     case 'do_not_email': return doNotEmailWords(r.suppressedReason)
@@ -299,15 +318,20 @@ export function runResultWords(r: { sent: number; failed: number; skipped?: numb
   return parts.join(', ')
 }
 
-/** The failures banner ("6 requests failed in the last 7 days" + what they were). */
-export function failuresWords(f: { count: number; bounced: number; noAnswer: number }): string {
-  if (f.count === 0) return 'No request failed in the last 7 days'
-  const head = `${f.count} ${f.count === 1 ? 'request' : 'requests'} failed in the last 7 days`
+/**
+ * The failures banner ("2 requests failed in the last 7 days" + what they were): failed for good, no try left — the
+ * rows "Show failed" lists. Requests that still try again on their own are named apart (`retrying`).
+ */
+export function failuresWords(f: { count: number; bounced: number; noAnswer: number; retrying?: number }): string {
+  const again = f.retrying ? `${f.retrying} more ${f.retrying === 1 ? 'request tries' : 'requests try'} again on their own after ${RETRY_BACKOFF_HOURS.join(', ').replace(/, (\d+)$/, ' and $1')} hours` : null
+  if (f.count === 0) return again ? `No request failed for good in the last 7 days: ${again}` : 'No request failed in the last 7 days'
+  const head = `${f.count} ${f.count === 1 ? 'request' : 'requests'} failed in the last 7 days, no try left`
   const parts: string[] = []
   if (f.bounced) parts.push(`${f.bounced} ${f.bounced === 1 ? 'email' : 'emails'} bounced (the address does not exist)`)
-  if (f.noAnswer) parts.push(`${f.noAnswer} ${f.noAnswer === 1 ? 'time' : 'times'} Amazon did not answer — those try again on their own after ${RETRY_BACKOFF_HOURS.join(', ').replace(/, (\d+)$/, ' and $1')} hours`)
+  if (f.noAnswer) parts.push(`${f.noAnswer} ${f.noAnswer === 1 ? 'time' : 'times'} Amazon did not answer`)
   const other = f.count - f.bounced - f.noAnswer
   if (other > 0) parts.push(`${other} other`)
+  if (again) parts.push(again)
   return parts.length ? `${head}: ${parts.join(' · ')}` : head
 }
 
@@ -330,6 +354,7 @@ export function sendNowHeldFor(r: HeldFacts, now: Date): string | null {
     const when = r.sentAt ? ` on ${shortDate(r.sentAt, tz(r.marketplace))}` : ''
     return isAmazon(r.channel) ? `Already sent${when}. Amazon allows one request per order.` : `Already sent${when}. One request per order.`
   }
+  if (isEbay(r.channel)) return EBAY_ASKS_WORDS
   if (status === 'SKIPPED' || status === 'SUPPRESSED') return 'Not in the queue — use Allow again first'
   if (status === 'SCHEDULED' && r.sentimentCheck?.sentimentEmailSentAt && r.sentimentCheck.response === 'NONE') {
     return 'Waits for the buyer’s answer to “How was it?” (up to 5 days) — the rule asks after that'
@@ -352,6 +377,7 @@ export function sendNowHeldFor(r: HeldFacts, now: Date): string | null {
 export function snoozeHeldFor(r: HeldFacts, now: Date, days = 1): string | null {
   const status = queueStatusOf(r, now)
   if (status === 'SENT') return 'Already sent — nothing to snooze'
+  if (isEbay(r.channel)) return EBAY_ASKS_WORDS
   if (status === 'SKIPPED' || status === 'SUPPRESSED') return 'Not in the queue — use Allow again first'
   if (isAmazon(r.channel) && r.deliveredAt) {
     const from = snoozeFrom(r, now)
@@ -380,6 +406,7 @@ export function skipHeldFor(r: HeldFacts, now: Date): string | null {
 export function allowAgainHeldFor(r: HeldFacts, now: Date): string | null {
   const status = queueStatusOf(r, now)
   if (status !== 'SKIPPED' && status !== 'SUPPRESSED') return 'Only a request that was not asked can be allowed again'
+  if (isEbay(r.channel)) return EBAY_ASKS_WORDS
   const key = reasonKeyOf(r, now)
   if (key === 'already_asked') return 'Amazon already asked this buyer — one request per order'
   if (key === 'do_not_email') return 'The buyer is on the do-not-email list — only they can undo that'

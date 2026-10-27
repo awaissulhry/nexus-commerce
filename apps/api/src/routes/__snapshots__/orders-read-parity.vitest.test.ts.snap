@@ -377,7 +377,9 @@ exports[`07 O4 — order reads: the routes answer exactly as before the move > d
       "nextRetryAt": null,
       "createdAt": "<clock>",
       "updatedAt": "<clock>",
-      "rule": null
+      "rule": null,
+      "statusWords": "Sent",
+      "reasonWords": "Amazon accepted — it sends its own email"
     }
   ],
   "tags": [
@@ -892,7 +894,11 @@ exports[`07 O4 — order reads: the routes answer exactly as before the move > l
           "channel": "AMAZON",
           "status": "SENT",
           "sentAt": "2026-04-09T10:00:00.000Z",
-          "scheduledFor": null
+          "scheduledFor": null,
+          "providerResponseCode": null,
+          "nextRetryAt": null,
+          "attemptCount": 0,
+          "statusWords": "Sent"
         }
       ],
       "items": [
@@ -1025,7 +1031,11 @@ exports[`07 O4 — order reads: the routes answer exactly as before the move > l
           "channel": "AMAZON",
           "status": "SENT",
           "sentAt": "2026-04-09T10:00:00.000Z",
-          "scheduledFor": null
+          "scheduledFor": null,
+          "providerResponseCode": null,
+          "nextRetryAt": null,
+          "attemptCount": 0,
+          "statusWords": "Sent"
         }
       ],
       "items": [
@@ -1169,7 +1179,11 @@ exports[`07 O4 — order reads: the routes answer exactly as before the move > l
           "channel": "AMAZON",
           "status": "SENT",
           "sentAt": "2026-04-09T10:00:00.000Z",
-          "scheduledFor": null
+          "scheduledFor": null,
+          "providerResponseCode": null,
+          "nextRetryAt": null,
+          "attemptCount": 0,
+          "statusWords": "Sent"
         }
       ],
       "items": [
@@ -1248,7 +1262,11 @@ exports[`07 O4 — order reads: the routes answer exactly as before the move > l
           "channel": "AMAZON",
           "status": "SENT",
           "sentAt": "2026-04-09T10:00:00.000Z",
-          "scheduledFor": null
+          "scheduledFor": null,
+          "providerResponseCode": null,
+          "nextRetryAt": null,
+          "attemptCount": 0,
+          "statusWords": "Sent"
         }
       ],
       "items": [

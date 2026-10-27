@@ -1,13 +1,11 @@
 #!/usr/bin/env node
-// SR.2 — Verifies the heatmap + by-product aggregation endpoints.
+// SR.2 — Verifies the heatmap aggregation endpoint (the old by-product endpoint is gone: Insights › Products).
 //
 //   1. Pick a real Product
 //   2. Seed ReviewCategoryRate cells spanning 4 days × 2 categories ×
 //      mixed positive/negative counts
 //   3. Hit GET /api/reviews/heatmap → assert cells match expected
 //      (date, category) keys with summed values
-//   4. Hit GET /api/reviews/by-product → assert the product shows up
-//      with correct negative pct
 
 import dotenv from 'dotenv'
 import path from 'path'

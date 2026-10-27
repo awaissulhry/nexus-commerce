@@ -7,7 +7,8 @@
  *                         people picked (nobody picked = the business's owners). Imported files never alert.
  *   Daily digest          the morning e-mail: on/off and who gets it (nobody picked = where it went before).
  *
- * "Rating drop" and "Complaint spike" join in Phase 2 (build spec §3.6): shown now as labelled placeholders (ruling 3).
+ * "Rating drop" and "Complaint spike" are labelled placeholders (ruling 3): the hourly spike check already opens alerts on
+ * Insights › Alerts; a notice for them, and a rating-drop check, come later.
  */
 import { Card, MultiSelect } from '@/design-system/components'
 import { Button, Checkbox, Pill, Skeleton, Tag, Toggle } from '@/design-system/primitives'
