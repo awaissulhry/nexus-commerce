@@ -4,8 +4,10 @@
  * Reviews › Insights › Fixes — "Edit the proposal" (the Fixes board): change an open fix's text before it is sent. Title
  * for every kind; Bullets: the bullet points (one per line, 10 at most, 500 characters each), their language and what
  * they mean in English; A+ content: the headline, the text (2,000 characters), the language and the English; Recall
- * check: how many days the hold lasts. Saves only what changed (`PATCH /api/reviews/action-items/:id`); nothing reaches
- * a channel — the fix is still sent for approval afterwards. Translations into the market's language are made when it is
+ * check: how many days the hold lasts; Size guide: the sizing bullet point (in the language the product's text is kept
+ * in) and what it means in English — Nexus keeps a person's words while the evidence names the same sizes. Saves only
+ * what changed (`PATCH /api/reviews/action-items/:id`); nothing reaches a channel — the fix is still sent for approval
+ * afterwards. Translations into the market's language are made when it is
  * sent, and show in the change plan.
  */
 import { useId, useState } from 'react'
@@ -40,7 +42,7 @@ export function FixEditModal({ fix, canManage, onClose }: { fix: FixItem; canMan
     onClose()
   }
 
-  const english = (fix.kind === 'BULLETS' || fix.kind === 'APLUS') && form.language !== 'en'
+  const english = ((fix.kind === 'BULLETS' || fix.kind === 'APLUS') && form.language !== 'en') || (fix.kind === 'SIZE_GUIDE' && fix.proposal.language !== 'en')
   return (
     <Modal
       open
@@ -76,6 +78,16 @@ export function FixEditModal({ fix, canManage, onClose }: { fix: FixItem; canMan
             </Field>
           </>
         )}
+        {fix.kind === 'SIZE_GUIDE' && (
+          <Field
+            label={`Sizing bullet point (${languageWords(fix.proposal.language)})`}
+            htmlFor={`${id}-line`}
+            hint={`Added as the product’s last bullet point, in ${languageWords(fix.proposal.language)}: the language its text is kept in. 500 characters at most.`}
+            required
+          >
+            <Textarea id={`${id}-line`} rows={3} limit={500} value={form.line} onChange={(e) => set({ line: e.target.value })} />
+          </Field>
+        )}
         {(fix.kind === 'BULLETS' || fix.kind === 'APLUS') && (
           <Field label="Language of the text" hint="When it differs from the market’s language, Nexus translates it when it is sent; the translation shows in the change plan.">
             <Listbox ariaLabel="Language of the text" options={LANGUAGE_OPTIONS} value={form.language} onChange={(v) => set({ language: v })} />
@@ -83,7 +95,7 @@ export function FixEditModal({ fix, canManage, onClose }: { fix: FixItem; canMan
         )}
         {english && (
           <Field label="What it says in English" htmlFor={`${id}-english`} hint="The person who approves reads this." required>
-            <Textarea id={`${id}-english`} rows={fix.kind === 'BULLETS' ? 5 : 4} value={form.english} onChange={(e) => set({ english: e.target.value })} />
+            <Textarea id={`${id}-english`} rows={fix.kind === 'BULLETS' ? 5 : fix.kind === 'SIZE_GUIDE' ? 3 : 4} value={form.english} onChange={(e) => set({ english: e.target.value })} />
           </Field>
         )}
         {fix.kind === 'RECALL_FLAG' && (
