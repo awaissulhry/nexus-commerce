@@ -7,6 +7,7 @@ import { DetailHeader } from '../patterns/DetailHeader'
 import { WorkspaceSubheader, type WorkspaceSubheaderProps } from '../patterns/WorkspaceSubheader'
 
 const sampleViews = ['Sheet', 'Images', 'Analytics & Ads', 'Activity', 'Errors & Sync']
+const sampleMarkets = ['Italy', 'Germany', 'France']
 
 /** Local specimen destinations: selection changes only this example, never catalog data. */
 export function WorkspaceSubheaderExample() {
@@ -19,8 +20,15 @@ export function WorkspaceSubheaderExample() {
   }), [])
   const item = (label: string) => ({ id: label, label, href: '#workspace-subheader-example', active: label === selected })
   const views = sampleViews.map(item)
+  // A row with rows under it: the row opens its own page, the chevron shows or hides its markets. A market row shows
+  // the short word and is named in full for a screen reader.
+  const market = (word: string) => ({ ...item(`Marketplace ${word}`), label: word, ariaLabel: `Marketplace ${word}` })
+  const channels = [
+    { ...item('Marketplace'), childrenLabel: 'markets', children: sampleMarkets.map(market) },
+    item('Web shop'),
+  ]
   return <div id="workspace-subheader-example">
-    <p>Open the navigation or the menu beside the title. The content below keeps its full width.</p>
+    <p>Open the navigation or the menu beside the title. The content below keeps its full width. Under Sample channels, the chevron beside Marketplace shows or hides its markets; open a market, then close Marketplace to see the dot.</p>
     <Checkbox label="Include long labels and 32 sample collections" checked={stress} onChange={event => setStress(event.target.checked)} />
     <div style={{ marginTop: 'var(--nds-space-12)', border: '1px solid var(--nds-border)' }}>
       <WorkspaceSubheader
@@ -30,6 +38,7 @@ export function WorkspaceSubheaderExample() {
         chrome={chrome}
         groups={[
           { id: 'views', label: 'Product views', items: views },
+          { id: 'channels', label: 'Sample channels', collapsible: true, items: channels },
           { id: 'collections', label: 'Sample collections', collapsible: true, items: stress ? Array.from({ length: 32 }, (_, index) => ({
             ...item(`Waterproof motorcycle jackets — international catalogue collection ${index + 1}`), badge: index === 0 ? 12 : undefined,
           })) : [] },

@@ -1309,6 +1309,25 @@
 .nds-secondary-nav-link:focus-visible, .nds-secondary-nav-group-label.disclosure:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -2px; }
 .nds-secondary-nav-icon, .nds-secondary-nav-link > .nds-tag { flex: none; }
 .nds-secondary-nav-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* A row with rows under it (`WorkspaceNavItem.children`, 2026-10-27 board "Sidebar · channel rows with markets"): the row's
+   own link, then a chevron button at its end that shows or hides the rows (it turns 90° when open). The rows are
+   indented under the parent's icon with a 1 px guide line (15 px: the link's 8 px padding + half the 16 px icon, less
+   the line); a closed parent that holds the current page is bold with a dot (its words for a screen reader sit
+   in `.nds-vh`). Under 720 px the rows and the chevron are 40 px, as the links are. */
+.nds-secondary-nav-parent { display: flex; align-items: center; gap: var(--nds-space-2); }
+.nds-secondary-nav-parent > .nds-secondary-nav-link { flex: 1 1 auto; min-width: 0; }
+.nds-secondary-nav-toggle { flex: none; display: inline-flex; align-items: center; justify-content: center; width: var(--nds-control-h-sm); height: var(--nds-control-h-sm); padding: 0; border: 0; border-radius: var(--nds-radius-sm); background: transparent; color: var(--nds-text-2); cursor: pointer; }
+.nds-secondary-nav-toggle:hover { background: var(--nds-surface-hover); color: var(--nds-text); }
+.nds-secondary-nav-toggle:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -2px; }
+.nds-secondary-nav-toggle svg { display: block; transition: transform 150ms var(--nds-easing-standard); }
+.nds-secondary-nav-toggle[aria-expanded='true'] svg { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .nds-secondary-nav-toggle svg { transition: none; } }
+.nds-secondary-nav-children { display: flex; flex-direction: column; gap: var(--nds-space-1); margin: var(--nds-space-2) 0 var(--nds-space-6) 15px; padding-left: var(--nds-space-8); border-left: 1px solid var(--nds-border-subtle); }
+.nds-secondary-nav-children[hidden] { display: none; }
+.nds-secondary-nav-children .nds-secondary-nav-link { min-height: var(--nds-space-32); padding: var(--nds-space-4) var(--nds-space-8); font-weight: var(--nds-font-weight-normal); }
+.nds-secondary-nav-children .nds-secondary-nav-link[aria-current='page'],
+.nds-secondary-nav-parent.has-current > .nds-secondary-nav-link { font-weight: var(--nds-font-weight-semibold); }
+.nds-secondary-nav-current-dot { flex: none; width: var(--nds-space-6); height: var(--nds-space-6); border-radius: var(--nds-radius-full); background: var(--nds-primary); }
 /* WorkspaceSubheader pinned (Reviews, 2026-10-26): from 1024 px the navigation is a column beside the primary navigation,
    sticky in the page scroller and scrolling inside; Collapse folds it to the 48 px toggle strip. Below 1024 px the page opens the drawer. */
 .nds-workspace-subheader.pinned { position: sticky; top: 0; align-self: flex-start; flex-direction: column; width: var(--nds-secondary-nav-w); height: var(--nds-secondary-nav-pinned-h, calc(100dvh - var(--nds-secondary-nav-top, var(--nds-topbar-h)))); border-bottom: 0; border-right: 1px solid var(--nds-border-subtle); }
@@ -1320,7 +1339,9 @@
   .nds-secondary-navigation { width: 100% !important; }
   .nds-workspace-subheader-toggle .nds-tbtn,
   .nds-secondary-navigation .nds-tbtn { width: var(--nds-space-40); height: var(--nds-space-40); }
-  .nds-secondary-nav-link { min-height: var(--nds-space-40); }
+  .nds-secondary-nav-link,
+  .nds-secondary-nav-children .nds-secondary-nav-link { min-height: var(--nds-space-40); }
+  .nds-secondary-nav-toggle { width: var(--nds-space-40); height: var(--nds-space-40); }
   .nds-workspace-subheader .nds-detailhdr.dense { height: auto; }
   .nds-workspace-subheader .nds-detailhdr.dense .nds-detailhdr-row { height: auto; min-height: var(--nds-space-48); flex-wrap: wrap; padding-block: var(--nds-space-8); gap: var(--nds-space-8); }
   .nds-workspace-subheader .nds-detailhdr.dense .nds-detailhdr-title { flex: 1 0 100%; flex-wrap: wrap; }
