@@ -299,6 +299,7 @@
     "ReviewReplyTemplate",
     "ReviewMedia",
     "EbayBuyerFeedback",
+    "ReviewAppConnection",
     "OrderTag",
     "AiUsageLog",
     "AiFeatureModelPref",

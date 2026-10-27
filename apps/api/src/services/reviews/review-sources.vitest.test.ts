@@ -157,6 +157,27 @@ describe('review sources', () => {
     expect(out.sources[0]).toMatchObject({ channel: 'SHOPIFY', market: null, state: 'ok', what: 'Store review app, by file import', lastNote: 'last file import 26 Oct', reviews: 18 })
   })
 
+  it('Etsy (PR I): one row once an account is connected; off, broken or read every 30 minutes', () => {
+    const etsy = (over: Partial<SourceFacts>) => sourcesFromFacts(facts(over), NOW).sources.find(s => s.channel === 'ETSY')
+    expect(etsy({})).toBeUndefined()
+    const conn = { id: 'e1', channelType: 'ETSY', marketplace: null, isActive: true, authStatus: 'connected', lastErrorAt: null, isPrimary: true }
+    expect(etsy({ connections: [conn] })).toMatchObject({ state: 'not_updating', reason: 'Nexus does not read Etsy reviews in this setup yet' })
+    expect(etsy({ connections: [conn], etsyReadOn: true, etsyLastReadAt: daysAgo(0) })).toMatchObject({ state: 'ok', what: 'Shop reviews, one photo each', lastNote: 'read every 30 min · last 26 Oct' })
+    expect(etsy({ connections: [{ ...conn, authStatus: 'needs_reauth' }], etsyReadOn: true })).toMatchObject({ state: 'not_updating', reason: 'Sign-in expired', reconnectHref: '/settings/channels/etsy' })
+
+    // Reviews from Italian and German orders: one row per market, no extra market-less row.
+    const markets = sourcesFromFacts(facts({ connections: [conn], etsyReadOn: true, reviewGroups: [group('ETSY', 'IT', 'ETSY_API', 4, daysAgo(1)), group('ETSY', 'DE', 'ETSY_API', 1, daysAgo(9))] }), NOW)
+      .sources.filter(s => s.channel === 'ETSY')
+    expect(markets.map(s => [s.market, s.reviews])).toEqual([['DE', 1], ['IT', 4]])
+  })
+
+  it('Shopify via Judge.me (PR I): the row says the app is read', () => {
+    const out = sourcesFromFacts(facts({ shopifyApp: { connected: true, lastReadAt: daysAgo(0) } }), NOW)
+    expect(out.sources.find(s => s.channel === 'SHOPIFY')).toMatchObject({ what: 'Store review app (Judge.me), read every 30 min', lastNote: 'Judge.me read 26 Oct' })
+    expect(arrivalWords('ETSY_API')).toBe('read from Etsy')
+    expect(arrivalWords('JUDGEME_API')).toBe('read from Judge.me')
+  })
+
   it('names states and arrivals in words', () => {
     expect(connectionProblem(undefined, 'eBay')).toBe('No eBay account is connected')
     expect(connectionProblem({ isActive: false, authStatus: 'connected' }, 'eBay')).toBe('The eBay account is switched off in Nexus')

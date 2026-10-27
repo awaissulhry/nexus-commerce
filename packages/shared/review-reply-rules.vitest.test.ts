@@ -16,6 +16,7 @@ import {
   replyLength,
   replyRefusal,
   reviewDueAt,
+  reviewAppOf,
   reviewReplyRules,
 } from './review-reply-rules'
 
@@ -70,6 +71,44 @@ describe('reviewReplyRules — one reply rule per channel (Reviews Inbox, 2026-1
   it('Shopify: copy and mark as responded until the review app is connected; a second reply is not held', () => {
     const r = reviewReplyRules('SHOPIFY', { replied: true }, NOW)
     expect(r).toMatchObject({ mode: 'copy', oneReply: false, held: null, open: null })
+  })
+
+  it('Etsy: the 100 days count from the buyer’s last edit when Etsy gives it (PR I)', () => {
+    // Posted 150 days ago, edited 11 days ago: the window is open, day 12 of 100.
+    const edited = reviewReplyRules('ETSY', { postedAt: daysAgo(150), lastEditedAt: daysAgo(11) }, NOW)
+    expect(edited).toMatchObject({ held: null, window: { day: 12, daysLeft: 89, closed: false } })
+    // No edit time (a file import): the window counts from the posted time.
+    expect(reviewReplyRules('ETSY', { postedAt: daysAgo(20), lastEditedAt: null }, NOW).window).toMatchObject({ day: 21, daysLeft: 80 })
+    const late = reviewReplyRules('ETSY', { postedAt: daysAgo(300), lastEditedAt: daysAgo(104) }, NOW)
+    expect(late.heldCode).toBe('window_closed')
+    expect(late.window?.endsAt).toBe(new Date(daysAgo(104).getTime() + 100 * 24 * 60 * 60 * 1000).toISOString())
+    // Already replied on Etsy: held, whatever the window.
+    expect(reviewReplyRules('ETSY', { postedAt: daysAgo(2), replied: true }, NOW).heldCode).toBe('already_replied')
+  })
+
+  it('Shopify via Judge.me: Nexus sends one reply, held once replied; without the connection, or from a file, it is copied', () => {
+    const r = reviewReplyRules('SHOPIFY', { app: 'JUDGEME' }, NOW)
+    expect(r).toMatchObject({ mode: 'send', sendLabel: 'Send reply to Judge.me', markAsResponded: false, limit: null, oneReply: true, held: null })
+    expect(r.ruleLine).toMatch(/public on the store’s review widget/)
+    expect(reviewReplyRules('SHOPIFY', { app: 'JUDGEME', replied: true }, NOW)).toMatchObject({ heldCode: 'already_replied' })
+    const off = reviewReplyRules('SHOPIFY', { app: 'JUDGEME', appConnected: false }, NOW)
+    expect(off).toMatchObject({ mode: 'copy', markAsResponded: true, held: null })
+    expect(off.ruleLine).toMatch(/^Judge\.me is not connected to Nexus now/)
+    expect(replyRefusal(off, 'Thank you')).toBeNull()
+    expect(reviewReplyRules('SHOPIFY', { app: 'JUDGEME', imported: true }, NOW)).toMatchObject({ mode: 'copy', held: null })
+    expect(reviewReplyRules('SHOPIFY', { imported: true }, NOW).ruleLine).toMatch(/came from a file/)
+  })
+
+  it('Shopify via Okendo, Yotpo or Loox: copy, with each app’s own words', () => {
+    expect(reviewReplyRules('SHOPIFY', { app: 'OKENDO' }, NOW).ruleLine).toMatch(/Enterprise plan only/)
+    expect(reviewReplyRules('SHOPIFY', { app: 'YOTPO' }, NOW)).toMatchObject({ mode: 'copy', held: null })
+    expect(reviewReplyRules('SHOPIFY', { app: 'LOOX' }, NOW).ruleLine).toMatch(/^Loox gives apps no way to reply/)
+  })
+
+  it('reviewAppOf: Judge.me reads only', () => {
+    expect(reviewAppOf('JUDGEME_API')).toBe('JUDGEME')
+    expect(reviewAppOf('IMPORT_CSV')).toBeNull()
+    expect(reviewAppOf(null)).toBeNull()
   })
 
   it('an unknown channel: copy and mark as responded', () => {

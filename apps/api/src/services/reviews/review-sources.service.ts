@@ -11,7 +11,8 @@
  * Phase 1 sources: Amazon = review topics per product (Customer Feedback API, weekly; not on Amazon.nl) + stars only from
  * reviews a person imports (no API gives Amazon stars, build spec ruling 5); eBay = seller feedback read every 30 min,
  * which belongs to the seller account, not to one eBay site: an account with no market covers every eBay market the
- * business sells on; Shopify = the store's review app, by file import. Etsy is read from Phase 3.
+ * business sells on; Shopify = the store's review app, by file import. Etsy (PR I, 2026-10-27): the shop's reviews, read
+ * every 30 minutes through the Etsy connection — one row once an Etsy account is connected or Etsy reviews exist.
  */
 import prisma from '../../db.js'
 import { visibleReviewWhere } from './review-visibility.js'
@@ -73,6 +74,11 @@ export interface SourceFacts {
   /** Whether this Nexus reads eBay feedback and Amazon topics at all (deployment switches; never shown by name). */
   ebayFeedbackOn: boolean
   amazonTopicsOn: boolean
+  /** PR I: whether this Nexus reads Etsy reviews (a deployment switch; never shown by name), and its last good read. */
+  etsyReadOn?: boolean
+  etsyLastReadAt?: Date | null
+  /** PR I: the store's review app (Judge.me) when a business connected it: whether it holds a token, and its last read. */
+  shopifyApp?: { connected: boolean; lastReadAt: Date | null } | null
 }
 
 /** Amazon review topics exist for these markets only; never on Amazon.nl (ruling 5). */
@@ -109,6 +115,8 @@ export function arrivalWords(ingestSource: string | null): string | null {
     case 'EBAY_API': return 'read from eBay'
     case 'EBAY_REST': return 'read from eBay'
     case 'SHOPIFY_WEBHOOK': return 'sent by Shopify'
+    case 'ETSY_API': return 'read from Etsy'
+    case 'JUDGEME_API': return 'read from Judge.me'
     case 'MANUAL': return 'added by hand'
     case 'AMAZON_SELLER_FEEDBACK': return 'seller feedback report'
     default: return null
@@ -301,16 +309,45 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
     })
   }
 
+  // ── Etsy (PR I): the shop's reviews, read every 30 minutes through the Etsy connection ──
+  // One shop, one state: a row per market its reviews came from (the order's market), else one row for Etsy.
+  const etsyAll = facts.connections.filter(c => c.channelType.toUpperCase() === 'ETSY')
+  const etsyMarkets = [...marketsOf('ETSY')].sort()
+  const etsyRows: Array<string | null> = etsyMarkets.length ? etsyMarkets : (etsyAll.length > 0 || summary('ETSY', null).count > 0 ? [null] : [])
+  if (etsyRows.length > 0) {
+    const conn = etsyAll.find(c => c.isActive && c.isPrimary) ?? etsyAll.find(c => c.isActive) ?? etsyAll[0]
+    const broken = etsyAll.length > 0 ? connectionProblem(conn, 'Etsy') : null
+    const off = !broken && !facts.etsyReadOn
+    for (const market of etsyRows) {
+      // Reviews with no market belong to the shop as a whole: the first row counts them too.
+      const here = [summary('ETSY', market), ...(market !== null && market === etsyRows[0] ? [summary('ETSY', null)] : [])]
+      sources.push({
+        channel: 'ETSY', market,
+        state: broken || off ? 'not_updating' : 'ok',
+        reason: broken ?? (off ? 'Nexus does not read Etsy reviews in this setup yet' : null),
+        since: broken ? conn?.lastErrorAt?.toISOString() ?? null : null,
+        reconnectHref: broken ? settingsHref('ETSY') : null,
+        what: 'Shop reviews, one photo each',
+        lastNote: broken || off ? null : facts.etsyLastReadAt ? `read every 30 min · last ${shortDay(facts.etsyLastReadAt)}` : 'read every 30 min',
+        lastReviewAt: newest(here.map(s => s.lastReviewAt))?.toISOString() ?? null,
+        reviews: here.reduce((n, s) => n + s.count, 0),
+      })
+    }
+  }
+
   // ── Shopify: the store's review app, by file import for now ──
   const shopify = summary('SHOPIFY', null)
   const shopifyMarketReviews = [...marketsOf('SHOPIFY')].map(m => summary('SHOPIFY', m))
   const shopifyCount = shopify.count + shopifyMarketReviews.reduce((n, s) => n + s.count, 0)
-  if (shopifyCount > 0 || active('SHOPIFY').length > 0) {
-    const lastImport = newest(facts.reviewGroups.filter(g => g.channel.toUpperCase() === 'SHOPIFY').map(g => g.lastIngestedAt))
+  const app = facts.shopifyApp?.connected ? facts.shopifyApp : null
+  if (shopifyCount > 0 || active('SHOPIFY').length > 0 || app) {
+    const lastImport = newest(facts.reviewGroups.filter(g => g.channel.toUpperCase() === 'SHOPIFY' && g.ingestSource === 'IMPORT_CSV').map(g => g.lastIngestedAt))
     sources.push({
       channel: 'SHOPIFY', market: null, state: 'ok', reason: null, since: null, reconnectHref: null,
-      what: 'Store review app, by file import',
-      lastNote: lastImport ? `last file import ${shortDay(lastImport)}` : 'no file imported yet',
+      what: app ? 'Store review app (Judge.me), read every 30 min' : 'Store review app, by file import',
+      lastNote: app
+        ? (app.lastReadAt ? `Judge.me read ${shortDay(app.lastReadAt)}` : 'Judge.me not read yet')
+        : lastImport ? `last file import ${shortDay(lastImport)}` : 'no file imported yet',
       lastReviewAt: newest([shopify.lastReviewAt, ...shopifyMarketReviews.map(s => s.lastReviewAt)])?.toISOString() ?? null,
       reviews: shopifyCount,
     })
@@ -321,9 +358,9 @@ export function sourcesFromFacts(facts: SourceFacts, now: Date): { sources: Revi
 
 /** The facts `sourcesFromFacts` needs, read in the business the request runs in. */
 export async function readSourceFacts(): Promise<SourceFacts> {
-  const [connections, topics, grouped, lastRead, ebayListings] = await Promise.all([
+  const [connections, topics, grouped, lastRead, ebayListings, etsyRead, reviewApp] = await Promise.all([
     prisma.channelConnection.findMany({
-      where: { channelType: { in: ['AMAZON', 'EBAY', 'SHOPIFY'] } },
+      where: { channelType: { in: ['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY'] } },
       select: { id: true, channelType: true, marketplace: true, isActive: true, authStatus: true, lastErrorAt: true, isPrimary: true },
     }),
     prisma.amazonReviewInsight.findMany({ select: { marketplace: true, accessStatus: true, fetchedAt: true } }),
@@ -337,6 +374,8 @@ export async function readSourceFacts(): Promise<SourceFacts> {
     // Until the first recorded eBay read, the job's last success stands in.
     prisma.cronRun.findFirst({ where: { jobName: { in: [EBAY_READ_JOB, 'review-ingest'] }, status: 'SUCCESS' }, orderBy: [{ jobName: 'desc' }, { startedAt: 'desc' }], select: { startedAt: true, jobName: true } }),
     prisma.channelListing.groupBy({ by: ['marketplace'], where: { channel: 'EBAY', listingStatus: 'ACTIVE' } }),
+    prisma.cronRun.findFirst({ where: { jobName: 'etsy-reviews-read', status: { in: ['SUCCESS', 'PARTIAL'] } }, orderBy: { startedAt: 'desc' }, select: { startedAt: true } }),
+    prisma.reviewAppConnection.findFirst({ where: { app: 'JUDGEME' }, select: { credentials: true, state: true, lastReadAt: true } }),
   ])
   return {
     connections,
@@ -354,6 +393,9 @@ export async function readSourceFacts(): Promise<SourceFacts> {
     // Deployment switches, read here and never named on screen.
     ebayFeedbackOn: process.env.NEXUS_EBAY_REAL_API === 'true' && process.env.NEXUS_REVIEW_INGEST_MODE === 'live',
     amazonTopicsOn: process.env.NEXUS_ENABLE_AMAZON_REVIEW_INSIGHTS === '1',
+    etsyReadOn: process.env.NEXUS_ENABLE_ETSY_REVIEWS_READ === '1',
+    etsyLastReadAt: etsyRead?.startedAt ?? null,
+    shopifyApp: reviewApp ? { connected: !!reviewApp.credentials && reviewApp.state !== 'DISCONNECTED', lastReadAt: reviewApp.lastReadAt } : null,
   }
 }
 

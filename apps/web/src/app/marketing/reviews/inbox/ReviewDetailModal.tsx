@@ -34,8 +34,8 @@ import { ownerChoices } from './inboxBulk'
 import {
   MANAGE_MOOD, MANAGE_TRIAGE, MOOD_OPTIONS, MOOD_TONE, STATUS_OPTIONS, buyerFacts, composerView, dateWords, detailSubtitle, detailTabs,
   detailTitle, draftResponseId, historySteps, initialReplyText, lightboxHead, nextHeld, nextId, orderFacts, photosView, recentSteps,
-  removalView, replyDoneWords, replyTargetWords, returnOpen, returnWords, revisionLine, sameThemeLink, textView, themeChoices, topicChips,
-  type DetailTab, type InboxDetail,
+  removalView, replyDoneWords, replyTargetWords, replyTitle, returnOpen, returnWords, revisionLine, sameThemeLink, textView, themeChoices,
+  topicChips, type DetailTab, type InboxDetail,
 } from './reviewDetailModel'
 import s from './inbox.module.css'
 
@@ -328,8 +328,8 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
                 </Card>
 
                 {photos?.kind === 'later' ? (
-                  // ⛔ KEEP — placeholder (build spec ruling 3): this channel's photos arrive with a later update (review
-                  // apps, Etsy). Until then a labelled sample, never hidden. eBay's photos are real since PR G.
+                  // ⛔ KEEP — placeholder (build spec ruling 3): this channel's photos arrive with a later update. Until
+                  // then a labelled sample, never hidden. eBay's photos are real since PR G; Etsy's and Judge.me's since PR I.
                   <Card header="Photos from the buyer" headerAction={<span className={s.pills}><Pill tone="info">Coming later</Pill><Pill tone="neutral">Sample</Pill></span>}>
                     <div className={s.photoStrip} aria-label="Sample photos">
                       {[1, 2, 3].map((n) => <Thumbnail key={n} src={null} alt={`Sample photo ${n}`} />)}
@@ -345,7 +345,7 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
                             <Thumbnail key={`${i}:${item.url}`} src={item.url} alt={item.alt} photoCount={photos.items.length} hoverPreview={false} title={`Open ${item.alt}`} onClick={() => setPhoto(i)} />
                           ))}
                         </div>
-                        <p className={s.hint}>Press a photo to see it large. eBay keeps the photos; Nexus shows them from eBay.</p>
+                        <p className={s.hint}>{photos.hint}</p>
                       </>
                     ) : (
                       <p className={s.hint}>{photos.words}</p>
@@ -442,7 +442,7 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
                 )}
 
                 <ReplyComposer
-                  title={detail.reply.mode === 'send' ? 'Reply on eBay' : 'Reply'}
+                  title={replyTitle(detail.reply)}
                   label={`Reply to ${detail.review.buyer ?? 'the buyer'}`}
                   value={reply}
                   onChange={setReply}

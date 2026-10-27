@@ -5,8 +5,8 @@
  *
  * Every row points at its own page. The Channels group: Amazon and eBay, each "all markets" plus one row per market the
  * business sells on (`reviewsNav(markets)`; the markets come from GET /api/reviews/area/channel-markets). Shopify and Etsy
- * rows join with their pages (Phase 3). Old addresses (Advanced, Automation, the old Insights pages) are redirects in
- * next.config.js, so no row claims them.
+ * (PR I) are one page each: no market rows. Old addresses (Advanced, Automation, the old Insights pages) are redirects
+ * in next.config.js, so no row claims them.
  *
  * Framework-free (no React): the tests import it in Node.
  */
@@ -20,9 +20,11 @@ import {
   ListChecks,
   MessageSquareText,
   Package,
+  Palette,
   Send,
   Settings,
   ShoppingBag,
+  ShoppingCart,
   Store,
   Wrench,
   type LucideIcon,
@@ -106,6 +108,9 @@ export const REVIEWS_NAV: readonly ReviewsNavGroup[] = [
       // Each channel's "all markets" page; reviewsNav(markets) adds a row per market under it.
       { label: 'Amazon', href: `${REVIEWS_ROOT}/amazon`, icon: Store, marketPages: true },
       { label: 'eBay', href: `${REVIEWS_ROOT}/ebay`, icon: ShoppingBag, marketPages: true },
+      // PR I (2026-10-27): the store's review app (Judge.me) and the Etsy shop — one page each.
+      { label: 'Shopify', href: `${REVIEWS_ROOT}/shopify`, icon: ShoppingCart },
+      { label: 'Etsy', href: `${REVIEWS_ROOT}/etsy`, icon: Palette },
     ],
   },
   {

@@ -16,7 +16,7 @@ import {
   visibleReviewWhere,
 } from './review-visibility.js'
 
-type Row = { channel: string; ingestSource: string | null; triageStatus: string | null; rating?: number | null; kind?: string | null; postedAt?: Date }
+type Row = { channel: string; ingestSource: string | null; triageStatus: string | null; rating?: number | null; kind?: string | null; postedAt?: Date; channelEditedAt?: Date | null }
 
 /** A tiny evaluator for the shapes these builders produce (AND / OR / equals / not / in / null), SQL style. */
 function matches(where: any, row: Record<string, unknown>): boolean {
@@ -130,12 +130,26 @@ describe('needs a reply — ONE rule (Owner 2026-10-27, audit B3/C1)', () => {
     expect(matches(needsReplyWhere(NOW), row({ channel: 'ETSY', ingestSource: 'ETSY_API', postedAt: days(101) }))).toBe(false)
   })
 
+  it('Etsy\'s 100 days count from the buyer\'s last edit (#796), as the reply rules count them; Shopify reviews count', () => {
+    const edited = row({ channel: 'ETSY', ingestSource: 'ETSY_API', postedAt: days(150), channelEditedAt: days(10) })
+    expect(matches(needsReplyWhere(NOW), edited)).toBe(true)
+    expect(reviewNeedsReply(edited, NOW)).toBe(true)
+    const editedLongAgo = row({ channel: 'ETSY', ingestSource: 'ETSY_API', postedAt: days(150), channelEditedAt: days(120) })
+    expect(matches(needsReplyWhere(NOW), editedLongAgo)).toBe(false)
+    expect(reviewNeedsReply(editedLongAgo, NOW)).toBe(false)
+    // A review read through Judge.me (answered from Nexus) needs a reply like any other open, answerable review.
+    expect(matches(needsReplyWhere(NOW), row({ channel: 'SHOPIFY', ingestSource: 'JUDGEME_API', postedAt: days(3) }))).toBe(true)
+    expect(reviewOverdue({ channel: 'SHOPIFY', kind: 'PRODUCT', ingestSource: 'JUDGEME_API', triageStatus: null, postedAt: days(3) }, NOW)).toBe(true)
+  })
+
   it('the pure rule for one row says what the where says', () => {
     for (const channel of ['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY']) {
       for (const kind of [null, 'SELLER', 'PRODUCT']) {
         for (const ingestSource of [null, 'IMPORT_CSV', 'EBAY_API', FIXTURE_SOURCE]) {
           for (const triageStatus of [null, 'NEW', 'RESOLVED']) {
-            for (const postedAt of [days(1), days(120)]) agree({ channel, kind, ingestSource, triageStatus, postedAt })
+            for (const postedAt of [days(1), days(120)]) {
+              for (const channelEditedAt of [null, days(2), days(110)]) agree({ channel, kind, ingestSource, triageStatus, postedAt, channelEditedAt })
+            }
           }
         }
       }

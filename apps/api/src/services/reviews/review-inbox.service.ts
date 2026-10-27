@@ -112,7 +112,7 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
       select: {
         id: true, postedAt: true, channel: true, marketplace: true, rating: true, title: true, body: true,
         bodyEnglish: true, language: true, authorName: true, orderId: true, ingestSource: true, kind: true,
-        triageStatus: true, assignee: true, channelTopics: true,
+        triageStatus: true, assignee: true, channelTopics: true, channelEditedAt: true,
         _count: { select: { media: true } },
         sentiment: { select: { label: true, categories: true } },
         product: { select: { id: true, name: true, sku: true, parentId: true, variantAttributes: true } },
