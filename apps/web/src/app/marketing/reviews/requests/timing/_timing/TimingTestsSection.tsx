@@ -33,6 +33,7 @@ import {
   daysHint,
   estimateQuery,
   holdoutHint,
+  isAbApplied,
   keepLabel,
   needMoreWords,
   newTestBody,
@@ -295,7 +296,7 @@ function ResultBody({ test, manage, onApply, onKeep }: { test: TimingTest; manag
         {test.result.sureWords ? `${test.result.sureWords} ` : ''}{test.countedWords}
       </p>
       {test.status === 'STOPPED' && test.lastWords ? <p className={s.muted}>{test.lastWords}</p> : null}
-      {test.applied ? (
+      {test.applied && !isAbApplied(test.applied) ? (
         <p className={s.applied}>
           <Pill tone="success" dot>Applied</Pill> {appliedWords(test.applied)}
         </p>

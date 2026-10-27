@@ -9,7 +9,10 @@
  *   startTimingTest()     POST /api/review-timing-tests/:id/start "Start test": asks for approval again (a declined one)
  *   stopTimingTest()      POST /api/review-timing-tests/:id/stop  "Stop test" / "End test": ends it AT ONCE (no approval:
  *                                                                   it only stops a test; nothing new is sent by it)
- *   applyTimingWinner()   POST /api/review-timing-tests/:id/apply "Apply winner": asks for approval
+ *   applyTimingWinner()   POST /api/review-timing-tests/:id/apply "Apply winner": asks for approval (a timing test:
+ *                                                                   `apply-review-timing-winner`; an A/B split, N3:
+ *                                                                   `apply-review-ab-winner` — B's text and timing go
+ *                                                                   into rule A and the split ends)
  *   keepCurrentDay()      POST /api/review-timing-tests/:id/keep  "Keep day 4": records the decision, changes nothing
  *   listTimingTests()     GET  /api/review-timing-tests           every test with its groups, counts, result and words
  *   estimateTimingTest()  GET  /api/review-timing-tests/estimate  the day in place now and the pace of a market (or the store)
@@ -17,7 +20,12 @@
  * A test changes which buyers are asked and when, so it RUNS only after a person approved "Start test" on the Approvals
  * page (the tool `start-review-timing-test`, agents/tools/review-timing-tests.tools.ts, through approval-gate.service.ts
  * requestApproval — the same door as every other change). Applying a winner changes a rule, so it is approved too
- * (`apply-review-timing-winner`). Nothing changes before a person approves.
+ * (`apply-review-timing-winner`; an A/B split's `apply-review-ab-winner`). Nothing changes before a person approves.
+ *
+ * N3 (2026-10-27) — an A/B split compares rule A with its copy B: their timing, their "How was it?" check and, on a
+ * Shopify rule, their own e-mail text. Its winner is called with the SAME "too early" and "how sure" rules as a timing
+ * test (review-timing-test-math.ts testResult / applyHeld); it may be applied while the split runs. Applying makes B's
+ * settings A's own (its e-mail text per language and its timing) and ends the split; B stays off.
  *
  * While a test runs, the scheduler (review-scheduler.service.ts) puts each new order it covers in a group by its order
  * number (review-timing-test-math.ts assignArm); the holdout group's request is SKIPPED (not asked on purpose), the other
@@ -36,7 +44,7 @@
  * rule counts from shipping), so the group in place now is exactly what happens today. Shopify reviews come from the
  * store's review app and name no order: they are matched by product, as the review rate matches them.
  */
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import type { UserPrincipal } from '../agents/call-tool.js'
@@ -75,10 +83,13 @@ import {
 } from './review-timing-test-math.js'
 import { visibleReviewWhere } from './review-visibility.js'
 import { notMeasurableWords, rateKey, rateMeasurable, readRateFacts, type RateFacts } from './review-rate.service.js'
+import { REQUEST_TEXT_LANGUAGES, REQUEST_TEXT_LANGUAGE_NAMES, readRuleEmailText, sameRuleEmailText, type RuleEmailText } from '@nexus/shared/review-request-text'
 
 /** The approved tools (agents/tools/review-timing-tests.tools.ts). */
 export const START_TOOL = 'start-review-timing-test'
 export const APPLY_TOOL = 'apply-review-timing-winner'
+/** N3 — the approved change that applies an A/B split's winner. */
+export const AB_APPLY_TOOL = 'apply-review-ab-winner'
 /** The arm id `apply-review-timing-winner` takes to put back what was there before a winner was applied. */
 export const BEFORE_ARM = 'before'
 
@@ -113,7 +124,7 @@ export interface StoredResult {
   applyApprovalId?: string | null
   /** Why the last "Apply winner" did not go through, in words. */
   applyWords?: string | null
-  applied?: AppliedWinner | null
+  applied?: AppliedWinner | AppliedAbWinner | null
   kept?: { at: string; by: string | null } | null
 }
 
@@ -132,6 +143,27 @@ export interface AppliedWinner {
   at: string
   by: string | null
 }
+
+/** N3 — an A/B split's applied winner: rule A took the winning side's settings; the split ended. */
+export interface AppliedAbWinner {
+  kind: 'AB'
+  armId: string
+  /** "B". */
+  label: string
+  /** Rule A, which took the winner's settings. */
+  ruleId: string
+  ruleName: string
+  /** The winning side's rule (B). */
+  winnerRuleName: string
+  /** What changed on rule A, in words ("E-mail text in Italian", "First try"). */
+  changed: string[]
+  /** Rule A's compared settings before (an undo puts them back). */
+  before: AbValues
+  at: string
+  by: string | null
+}
+
+export const isAbApplied = (a: StoredResult['applied']): a is AppliedAbWinner => !!a && (a as AppliedAbWinner).kind === 'AB'
 
 export const storedOf = (row: { result: unknown }): StoredResult => ((row.result ?? {}) as StoredResult)
 const asJson = (v: unknown) => v as Prisma.InputJsonValue
@@ -403,7 +435,8 @@ const approvalWords = (a: { status: string; reason: string | null; decidedBy: st
  * is cleared with why. Returns how many tests moved.
  */
 export async function syncTimingTestApprovals(): Promise<number> {
-  const rows = (await prisma.reviewTimingTest.findMany({ where: { status: { in: ['WAITING_APPROVAL', 'DONE', 'STOPPED'] } }, include: testInclude, take: 200 }))
+  // RUNNING too: an A/B split's "Apply winner" may wait while the split runs (N3).
+  const rows = (await prisma.reviewTimingTest.findMany({ where: { status: { in: ['WAITING_APPROVAL', 'RUNNING', 'DONE', 'STOPPED'] } }, include: testInclude, take: 200 }))
     .filter((r) => (r.status === 'WAITING_APPROVAL' && !!r.approvalId) || !!storedOf(r).applyApprovalId)
   const ids = [...new Set(rows.flatMap((r) => [r.status === 'WAITING_APPROVAL' ? r.approvalId : null, storedOf(r).applyApprovalId ?? null]).filter((v): v is string => !!v))]
   if (ids.length === 0) return 0
@@ -471,7 +504,7 @@ export interface TimingTestView {
   /** "Counted: orders whose time to answer is over (delivered more than 35 days ago) …". */
   countedWords: string
   approval: { id: string; what: 'start' | 'apply' } | null
-  applied: AppliedWinner | null
+  applied: AppliedWinner | AppliedAbWinner | null
   kept: { at: string; by: string | null } | null
   lastWords: string | null
   applyWords: string | null
@@ -504,11 +537,14 @@ function heldOf(t: TestRow, stored: StoredResult, result: TestResult, overlap: s
     : t.status !== 'DRAFT' ? (ended ? 'This test has ended. Make a new one to test again.' : 'The test is running.') : overlap
   const stop = ended ? 'This test has ended.' : null
   let apply: string | null
-  if (stored.applied) apply = `Applied ${shortDate(new Date(stored.applied.at))}: “${stored.applied.ruleName}” asks on day ${stored.applied.delayDays}.`
+  if (isAbApplied(stored.applied)) apply = `Applied ${shortDate(new Date(stored.applied.at))}: “${stored.applied.ruleName}” took B’s ${stored.applied.changed.map((w) => w.charAt(0).toLowerCase() + w.slice(1)).join(', ')}.`
+  else if (stored.applied) apply = `Applied ${shortDate(new Date(stored.applied.at))}: “${stored.applied.ruleName}” asks on day ${stored.applied.delayDays}.`
   else if (stored.kept) apply = `You kept the day in place on ${shortDate(new Date(stored.kept.at))}.`
   else if (stored.applyApprovalId) apply = 'Waits for approval on the Approvals page.'
   else apply = applyHeld(t, result)
-  const keep = !ended ? 'The test has not finished.' : stored.applied ? 'The winner was applied.' : stored.kept ? 'Already kept.' : stored.applyApprovalId ? 'Applying the winner waits for approval.' : null
+  const keep = t.kind === 'AB'
+    ? 'An A/B split keeps A as it is when it ends.'
+    : !ended ? 'The test has not finished.' : stored.applied ? 'The winner was applied.' : stored.kept ? 'Already kept.' : stored.applyApprovalId ? 'Applying the winner waits for approval.' : null
   return { start, stop, apply, keep }
 }
 
@@ -755,12 +791,25 @@ export async function abPair(ruleId: string): Promise<{ a: Prisma.ReviewRuleGetP
 /** The timing fields that make B different from A (an A/B split of two equal rules compares nothing). */
 const TIMING_FIELDS = ['sendDelayDays', 'anchor', 'sendHourLocal', 'skipWeekends', 'shiftToBestDay', 'minDaysSinceDelivery', 'maxDaysSinceDelivery', 'useSentimentDiversion', 'fallbackOnNoResponse'] as const
 
+/** N3 — a rule whose buyers get OUR review e-mail (its own text matters); Amazon sends its own, eBay none. */
+export const emailScope = (scope: string) => SCOPE_CHANNEL[scope] === 'SHOPIFY'
+
+/** Does B differ from A in what a split compares: the timing, and on an e-mail rule the e-mail text (N3)? */
+export function abDiffers(a: { scope: string } & Record<string, unknown>, b: Record<string, unknown>): boolean {
+  if (TIMING_FIELDS.some((f) => JSON.stringify(a[f] ?? null) !== JSON.stringify(b[f] ?? null))) return true
+  return emailScope(a.scope) && !sameRuleEmailText(a.emailText, b.emailText)
+}
+
 /** Why an A/B split of this pair may not start, or null. */
 export function abHeld(a: { isActive: boolean; scope: string; name: string } & Record<string, unknown>, b: { isActive: boolean; name: string } & Record<string, unknown>): string | null {
   if (!ASKED_CHANNELS.includes(SCOPE_CHANNEL[a.scope] ?? '')) return `“${a.name}” asks no buyers Nexus can ask, so a split would compare nothing.`
   if (!a.isActive) return `Turn “${a.name}” (side A) on first: the split takes the orders it decides.`
   if (b.isActive) return `Turn “${b.name}” (side B) off first: during the split it gets half of A’s orders, and while it is on it decides orders by itself.`
-  if (TIMING_FIELDS.every((f) => JSON.stringify(a[f] ?? null) === JSON.stringify(b[f] ?? null))) return `“${b.name}” has the same timing as A. Change B’s first try, send hour or window first.`
+  if (!abDiffers(a, b)) {
+    return emailScope(a.scope)
+      ? `“${b.name}” has the same timing and e-mail text as A. Change B’s e-mail text, first try, send hour or window first.`
+      : `“${b.name}” has the same timing as A. Change B’s first try, send hour or window first.`
+  }
   return null
 }
 
@@ -850,8 +899,13 @@ export async function applyTimingWinner(id: string, person: UserPrincipal, opts:
   const { result } = await resultOf(row, now)
   const held = applyHeld(row, result)
   if (held) throw new TimingTestInputError(held, 409)
+  // N3 — an A/B split's winner: B's settings into rule A (its own tool, checked again when it runs).
+  if (row.kind === 'AB') {
+    const facts = await abApplyFacts(row, result.leaderId!)
+    if ('refusal' in facts) throw new TimingTestInputError(facts.refusal, 409)
+  }
   const ask = opts.requester ?? (await defaultRequester())
-  const asked = await ask(APPLY_TOOL, { testId: id, armId: result.leaderId }, person)
+  const asked = await ask(row.kind === 'AB' ? AB_APPLY_TOOL : APPLY_TOOL, { testId: id, armId: result.leaderId }, person)
   if (asked.ok && asked.mode === 'queued' && asked.approvalId) {
     await prisma.reviewTimingTest.updateMany({ where: { id }, data: { result: asJson({ ...storedOf(await testRow(id)), applyApprovalId: asked.approvalId, applyWords: null }) } })
     return { test: await oneView(id, now), approval: { id: asked.approvalId, expiresAt: asked.expiresAt ? new Date(asked.expiresAt).toISOString() : null }, words: null }
@@ -865,6 +919,7 @@ export async function applyTimingWinner(id: string, person: UserPrincipal, opts:
 export async function keepCurrentDay(id: string, actor: string | null, now = new Date()): Promise<TimingTestView> {
   const row = await testRow(id)
   const stored = storedOf(row)
+  if (row.kind === 'AB') throw new TimingTestInputError('An A/B split keeps A as it is when it ends: use End test.', 409)
   if (row.status !== 'STOPPED' && row.status !== 'DONE') throw new TimingTestInputError('The test has not finished.', 409)
   if (stored.applied) throw new TimingTestInputError('The winner was applied.', 409)
   if (stored.applyApprovalId) throw new TimingTestInputError('Applying the winner waits for approval. Decline it on the Approvals page first.', 409)
@@ -1015,7 +1070,7 @@ export async function applyWinnerToRule(row: TestRow, armId: string, by: string 
 export async function putBackBeforeWinner(row: TestRow, now = new Date()): Promise<{ before: Record<string, unknown>; after: Record<string, unknown> }> {
   const stored = storedOf(row)
   const applied = stored.applied
-  if (!applied) throw new TimingTestInputError('No winner of this test is applied, so there is nothing to put back.')
+  if (!applied || isAbApplied(applied)) throw new TimingTestInputError('No winner of this test is applied, so there is nothing to put back.')
   const rule = await prisma.reviewRule.findUnique({ where: { id: applied.ruleId } })
   if (!rule) throw new TimingTestInputError(`The rule “${applied.ruleName}” was deleted, so there is nothing to put back.`)
   const before = { testId: row.id, armId: applied.armId, ruleId: rule.id, created: applied.created, sendDelayDays: rule.sendDelayDays, minDays: rule.minDaysSinceDelivery, maxDays: rule.maxDaysSinceDelivery, isActive: rule.isActive }
@@ -1034,13 +1089,164 @@ export async function putBackBeforeWinner(row: TestRow, now = new Date()): Promi
 export async function winnerRuleNow(testId: string, ruleId: string | null): Promise<Record<string, unknown> | null> {
   const row = await prisma.reviewTimingTest.findUnique({ where: { id: testId } })
   if (!row) return null
-  const applied = storedOf(row).applied
+  const stored = storedOf(row).applied
+  const applied = stored && !isAbApplied(stored) ? stored : null
   const id = ruleId ?? applied?.ruleId ?? null
   const rule = id ? await prisma.reviewRule.findUnique({ where: { id } }) : null
   return {
     testId, armId: applied?.armId ?? BEFORE_ARM, ruleId: rule?.id ?? null, created: applied?.created ?? false,
     sendDelayDays: rule?.sendDelayDays ?? null, minDays: rule?.minDaysSinceDelivery ?? null, maxDays: rule?.maxDaysSinceDelivery ?? null, isActive: rule?.isActive ?? false,
   }
+}
+
+// ── N3 — an A/B split's winner ───────────────────────────────────────────────────────────────────────────────────
+
+/** Rule A's settings an A/B split compares, and so the ones its winner replaces. */
+export interface AbValues {
+  sendDelayDays: number | null
+  anchor: string
+  sendHourLocal: number | null
+  skipWeekends: boolean
+  shiftToBestDay: boolean
+  minDaysSinceDelivery: number
+  maxDaysSinceDelivery: number
+  useSentimentDiversion: boolean
+  fallbackOnNoResponse: boolean
+  /** The rule's own e-mail text per language (null = the standard text). */
+  emailText: RuleEmailText | null
+}
+
+type RuleRow = Prisma.ReviewRuleGetPayload<object>
+
+export function abValuesOf(rule: RuleRow): AbValues {
+  return {
+    sendDelayDays: rule.sendDelayDays, anchor: rule.anchor, sendHourLocal: rule.sendHourLocal, skipWeekends: rule.skipWeekends,
+    shiftToBestDay: rule.shiftToBestDay, minDaysSinceDelivery: rule.minDaysSinceDelivery, maxDaysSinceDelivery: rule.maxDaysSinceDelivery,
+    useSentimentDiversion: rule.useSentimentDiversion, fallbackOnNoResponse: rule.fallbackOnNoResponse, emailText: readRuleEmailText(rule.emailText),
+  }
+}
+
+/** What a rule update writes for these settings; the e-mail text only on a rule whose buyers get our e-mail. */
+function abRuleData(v: AbValues, withText: boolean): Prisma.ReviewRuleUpdateInput {
+  return {
+    sendDelayDays: v.sendDelayDays, anchor: v.anchor, sendHourLocal: v.sendHourLocal, skipWeekends: v.skipWeekends, shiftToBestDay: v.shiftToBestDay,
+    minDaysSinceDelivery: v.minDaysSinceDelivery, maxDaysSinceDelivery: v.maxDaysSinceDelivery,
+    useSentimentDiversion: v.useSentimentDiversion, fallbackOnNoResponse: v.fallbackOnNoResponse,
+    ...(withText ? { emailText: v.emailText ? asJson(v.emailText) : Prisma.DbNull } : {}),
+  }
+}
+
+/** One setting the winner changes on rule A, in words. */
+export interface AbChange { field: string; what: string; from: string; to: string }
+
+const firstTryWords = (d: number | null) => (d == null ? 'the product-type table' : `day ${d}`)
+const anchorWords = (a: string) => (a === 'SHIP' ? 'shipping' : a === 'PURCHASE' ? 'the order' : 'delivery')
+const hourWords = (h: number | null) => (h == null ? 'the best hour from Timing' : `${String(h).padStart(2, '0')}:00`)
+const onOff = (v: boolean) => (v ? 'on' : 'off')
+
+/** What applying B's settings to A changes, setting by setting (only what differs; the text only on an e-mail rule). */
+export function abChanges(a: RuleRow, b: RuleRow): AbChange[] {
+  const av = abValuesOf(a)
+  const bv = abValuesOf(b)
+  const out: AbChange[] = []
+  if (emailScope(a.scope)) {
+    for (const lang of REQUEST_TEXT_LANGUAGES) {
+      const from = av.emailText?.[lang] ?? null
+      const to = bv.emailText?.[lang] ?? null
+      if (JSON.stringify(from) === JSON.stringify(to)) continue
+      const words = (t: typeof from) => (t ? `its own text, subject “${t.subject}”` : 'the standard text')
+      const fromWords = words(from)
+      const toWords = words(to)
+      out.push({ field: `emailText.${lang}`, what: `E-mail text in ${REQUEST_TEXT_LANGUAGE_NAMES[lang]}`, from: fromWords, to: toWords === fromWords ? `${toWords} (other words)` : toWords })
+    }
+  }
+  const add = (field: string, what: string, from: string, to: string) => { if (from !== to) out.push({ field, what, from, to }) }
+  add('sendDelayDays', 'First try', firstTryWords(av.sendDelayDays), firstTryWords(bv.sendDelayDays))
+  add('anchor', 'Counts from', anchorWords(av.anchor), anchorWords(bv.anchor))
+  add('sendHourLocal', 'Send hour', hourWords(av.sendHourLocal), hourWords(bv.sendHourLocal))
+  add('skipWeekends', 'Skip weekends', onOff(av.skipWeekends), onOff(bv.skipWeekends))
+  add('shiftToBestDay', 'Shift to the best day', onOff(av.shiftToBestDay), onOff(bv.shiftToBestDay))
+  add('window', 'Window', `day ${av.minDaysSinceDelivery}–${av.maxDaysSinceDelivery}`, `day ${bv.minDaysSinceDelivery}–${bv.maxDaysSinceDelivery}`)
+  add('useSentimentDiversion', '“How was it?” first', onOff(av.useSentimentDiversion), onOff(bv.useSentimentDiversion))
+  add('fallbackOnNoResponse', 'Ask anyway after 5 days without an answer', onOff(av.fallbackOnNoResponse), onOff(bv.fallbackOnNoResponse))
+  return out
+}
+
+/** The rules and changes of applying an A/B split's winner, or why it cannot be applied (the tool's preview and run). */
+export async function abApplyFacts(row: TestRow, armId: string): Promise<{ a: RuleRow; b: RuleRow; arm: ArmRow; changes: AbChange[] } | { refusal: string }> {
+  if (row.kind !== 'AB') return { refusal: 'This is a timing test, not an A/B split.' }
+  const arm = row.arms.find((x) => x.id === armId)
+  if (!arm || arm.holdout || !arm.ruleId) return { refusal: 'That is not a side of this split.' }
+  if (arm.ruleId === row.ruleId) return { refusal: 'A is the rule in place: there is nothing to apply.' }
+  const [a, b] = await Promise.all([
+    row.ruleId ? prisma.reviewRule.findUnique({ where: { id: row.ruleId } }) : Promise.resolve(null),
+    prisma.reviewRule.findUnique({ where: { id: arm.ruleId } }),
+  ])
+  if (!a) return { refusal: 'Rule A of this split was deleted, so there is no rule to apply the winner to.' }
+  if (!b) return { refusal: 'The winning side’s rule was deleted, so its settings cannot be read.' }
+  const changes = abChanges(a, b)
+  if (changes.length === 0) return { refusal: `“${a.name}” already has every setting of “${b.name}”: there is nothing to apply.` }
+  return { a, b, arm, changes }
+}
+
+/**
+ * Applies an approved A/B winner: rule A takes the winning side's settings (its own e-mail text per language and its
+ * timing), and a split still running ends (DONE); B stays off. Returns rule A's settings before and after.
+ */
+export async function applyAbWinner(row: TestRow, armId: string, by: string | null, now = new Date()): Promise<{ before: Record<string, unknown>; after: Record<string, unknown> }> {
+  const facts = await abApplyFacts(row, armId)
+  if ('refusal' in facts) throw new TimingTestInputError(facts.refusal)
+  const { a, b, arm, changes } = facts
+  const before = abValuesOf(a)
+  const next = await prisma.reviewRule.update({ where: { id: a.id }, data: abRuleData(abValuesOf(b), emailScope(a.scope)) })
+  const stored = storedOf(row)
+  const ending = row.status === 'RUNNING'
+  const last = ending ? await resultOf(row, now).catch(() => null) : null
+  const applied: AppliedAbWinner = {
+    kind: 'AB', armId, label: arm.label, ruleId: a.id, ruleName: a.name, winnerRuleName: b.name, changed: changes.map((c) => c.what), before, at: now.toISOString(), by,
+  }
+  await prisma.reviewTimingTest.updateMany({
+    where: { id: row.id },
+    data: {
+      ...(ending ? { status: 'DONE', endedAt: now, lastWords: `Ended when its winner was applied: “${a.name}” asks every order it decides again, with B’s settings.` } : {}),
+      result: asJson({ ...stored, ...(last ? { last: { at: now.toISOString(), ...last } } : {}), applied, applyApprovalId: null, applyWords: null }),
+    },
+  })
+  return {
+    before: { testId: row.id, armId: BEFORE_ARM, ruleId: a.id, ...before },
+    after: { testId: row.id, armId, ruleId: a.id, ...abValuesOf(next) },
+  }
+}
+
+/** Puts rule A's settings back as they were before the A/B winner was applied (the split stays ended). */
+export async function putBackBeforeAbWinner(row: TestRow, now = new Date()): Promise<{ before: Record<string, unknown>; after: Record<string, unknown> }> {
+  const stored = storedOf(row)
+  const applied = stored.applied
+  if (!isAbApplied(applied)) throw new TimingTestInputError('No winner of this split is applied, so there is nothing to put back.')
+  const rule = await prisma.reviewRule.findUnique({ where: { id: applied.ruleId } })
+  if (!rule) throw new TimingTestInputError(`The rule “${applied.ruleName}” was deleted, so there is nothing to put back.`)
+  const now_ = abValuesOf(rule)
+  const next = await prisma.reviewRule.update({ where: { id: rule.id }, data: abRuleData(applied.before, emailScope(rule.scope)) })
+  await prisma.reviewTimingTest.updateMany({
+    where: { id: row.id },
+    data: { result: asJson({ ...stored, applied: null, applyWords: `Put back ${shortDate(now)}: “${rule.name}” has its settings from before the winner again. The split stays ended.` }) },
+  })
+  return {
+    before: { testId: row.id, armId: applied.armId, ruleId: rule.id, ...now_ },
+    after: { testId: row.id, armId: BEFORE_ARM, ruleId: rule.id, ...abValuesOf(next) },
+  }
+}
+
+/** Rule A's compared settings now, in the shape of `apply-review-ab-winner`'s change (undo's `current`). */
+export async function abWinnerRuleNow(testId: string, ruleId: string | null): Promise<Record<string, unknown> | null> {
+  const row = await prisma.reviewTimingTest.findUnique({ where: { id: testId } })
+  if (!row) return null
+  const applied = storedOf(row).applied
+  const ab = isAbApplied(applied) ? applied : null
+  const id = ruleId ?? ab?.ruleId ?? row.ruleId ?? null
+  const rule = id ? await prisma.reviewRule.findUnique({ where: { id } }) : null
+  if (!rule) return { testId, armId: ab?.armId ?? BEFORE_ARM, ruleId: null }
+  return { testId, armId: ab?.armId ?? BEFORE_ARM, ruleId: rule.id, ...abValuesOf(rule) }
 }
 
 export { DAY_CHOICES }

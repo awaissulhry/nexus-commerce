@@ -24,6 +24,7 @@ import { lintBuyerCopy } from '../services/comms/message-lint.js'
  *   POST   /api/review-queue/pause|resume   the business's switch; the actor is the signed-in person
  *   POST   /api/review-queue/bulk           snooze / skip / send now
  *   GET    /api/review-emails/preview       the review e-mail as a buyer gets it (no send)
+ *   POST   /api/review-emails/preview       the same with the rule editor's unsaved text (N3; checked, no send)
  *   POST   /api/review-emails/test          one real e-mail to the signed-in person
  *   GET    /api/review-rules?withStats=1    + sent30, rate30, matched30 per rule
  *   POST   /api/review-rules/bulk           on / off / delete, held rules in words
@@ -38,7 +39,8 @@ import { lintBuyerCopy } from '../services/comms/message-lint.js'
  *   POST   /api/review-timing-tests/ab              an A/B split of a rule and its copy: made, then sent for approval
  *   POST   /api/review-timing-tests/:id/start       send a test that is not started for approval again
  *   POST   /api/review-timing-tests/:id/stop        Stop test / End test: at once, no approval (it only stops a test)
- *   POST   /api/review-timing-tests/:id/apply       Apply winner: sent for approval
+ *   POST   /api/review-timing-tests/:id/apply       Apply winner: sent for approval (an A/B split's: its winning side's
+ *                                                   text and timing into rule A, and the split ends — N3)
  *   POST   /api/review-timing-tests/:id/keep        Keep the day in place: records the decision, changes nothing
  *
  * POST /api/review-engine/tick is gone (B9): it sent without the pause switch and the "How was it?" check and marked
@@ -49,12 +51,14 @@ import { lintBuyerCopy } from '../services/comms/message-lint.js'
  */
 
 import type { FastifyPluginAsync } from 'fastify'
+import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { askForReviews, askSummaryWords } from '../services/reviews/review-request.service.js'
 import { FEATURES } from '@nexus/shared/permissions'
 import { findOrdersMatchingRule, queueOrdersForRule } from '../services/reviews/review-scheduler.service.js'
 import { EBAY_RULE_WORDS } from '../services/reviews/review-queue-words.js'
+import { emailTextForSave, storedEmailText } from '../services/reviews/review-rule-text.js'
 import { assertAnyRequestPermission, requestUserId } from '../lib/auth/request-permission.js'
 import {
   bulkReviewQueue,
@@ -141,6 +145,8 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
           sendHourLocal: r.sendHourLocal,
           skipWeekends: r.skipWeekends,
           shiftToBestDay: r.shiftToBestDay,
+          // N3 — the rule's own e-mail text per language (null = the standard text).
+          emailText: storedEmailText(r.emailText),
           requestCount: r._count.requests,
           updatedAt: r.updatedAt,
         })),
@@ -159,6 +165,8 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
       if (body.scope === 'AMAZON_PER_MARKETPLACE' && !body.marketplace) {
         return reply.status(400).send({ error: 'marketplace required for AMAZON_PER_MARKETPLACE scope' })
       }
+      // N3 — the rule's own e-mail text, checked (refused in words, nothing saved).
+      const emailText = emailTextForSave(body.emailText)
       const created = await prisma.reviewRule.create({
         data: {
           name: body.name.trim(),
@@ -173,6 +181,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
           useSentimentDiversion: body.useSentimentDiversion === true,
           fallbackOnNoResponse: body.fallbackOnNoResponse !== false,
           ...timingFieldsFromBody(body),
+          ...(emailText !== undefined ? { emailText } : {}),
           // The signed-in person (audit E6), never a fixed "default-user".
           createdBy: requestUserId(request),
         },
@@ -225,6 +234,9 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
       if (body.useSentimentDiversion !== undefined) data.useSentimentDiversion = body.useSentimentDiversion === true
       if (body.fallbackOnNoResponse !== undefined) data.fallbackOnNoResponse = body.fallbackOnNoResponse === true
       Object.assign(data, timingFieldsFromBody(body)) // RRT.4 — timing fields
+      // N3 — the rule's own e-mail text per language: checked by the editor's own check; a refusal is a 400 in words.
+      const emailText = emailTextForSave(body.emailText)
+      if (emailText !== undefined) data.emailText = emailText
       // RV.9.1 follow-up — surface the (name, scope, marketplace) unique
       // violation as a 409 with a useful message; this used to bubble up
       // as a plain 500.
@@ -240,7 +252,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
         throw err
       }
     } catch (err: any) {
-      return reply.status(500).send({ error: err.message })
+      return sendFailure(reply, err)
     }
   })
 
@@ -311,6 +323,8 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
 
           useSentimentDiversion: r.useSentimentDiversion === true,
           fallbackOnNoResponse: r.fallbackOnNoResponse !== false,
+          // N3 — the rule's own e-mail text, checked as a save checks it (a refused text skips the rule, in words).
+          ...(r.emailText !== undefined ? { emailText: emailTextForSave(r.emailText) } : {}),
         }
         const existing = await prisma.reviewRule.findFirst({
           where: { name: data.name, scope: data.scope, marketplace: data.marketplace },
@@ -371,6 +385,8 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
         skipWeekends: src.skipWeekends,
         // Every timing field, so the copy sends on the same days (audit C10).
         shiftToBestDay: src.shiftToBestDay,
+        // N3 — and the same e-mail text, so B starts as A and the person changes what B tests.
+        ...(storedEmailText(src.emailText) ? { emailText: storedEmailText(src.emailText) as unknown as Prisma.InputJsonValue } : {}),
         createdBy: 'ab-variant',
       },
     })
@@ -668,6 +684,17 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       reply.header('Cache-Control', 'no-store')
       return await reviewEmailPreview((request.query ?? {}) as Record<string, unknown>)
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  // N3 — the same preview with the rule editor's unsaved text for the language shown (`draft: true`, `text`: the
+  // subject and text, or null for the standard text). The text is checked as a save checks it; nothing is sent.
+  fastify.post('/review-emails/preview', async (request, reply) => {
+    try {
+      reply.header('Cache-Control', 'no-store')
+      return await reviewEmailPreview((request.body ?? {}) as Record<string, unknown>)
     } catch (err: any) {
       return sendFailure(reply, err)
     }

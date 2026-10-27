@@ -115,6 +115,9 @@ describe('permission manifest ordering', () => {
     ['POST', '/api/review-rules/preview-timing', 'reviews.view'],
     ['POST', '/api/review-rules/lint', 'reviews.view'],
     ['POST', '/api/review-inserts/bulk', 'reviews.view'],
+    // N3 — the rule editor's Preview email with its unsaved text sends nothing: a read.
+    ['POST', '/api/review-emails/preview', 'reviews.view'],
+    ['POST', '/api/review-emails/test', 'reviews.manage'],
     ['POST', '/api/review-rules/:id/run', 'reviews.manage'],
     ['POST', '/api/orders/:id/request-review', 'orders.view'],
     ['POST', '/api/orders/bulk-request-reviews', 'orders.view'],

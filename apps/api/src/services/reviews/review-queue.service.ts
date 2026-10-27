@@ -8,6 +8,7 @@
  *   pause / resume       POST /api/review-queue/pause|resume  the business's switch, actor = the signed-in person
  *   bulkReviewQueue      POST /api/review-queue/bulk       snooze / skip / send now, held rows in words
  *   reviewEmailPreview   GET  /api/review-emails/preview   the e-mail as a buyer gets it (no send)
+ *                        POST /api/review-emails/preview   the same with the rule editor's unsaved text (N3)
  *   sendReviewEmailTest  POST /api/review-emails/test      one real e-mail to the signed-in person, no order touched
  *   ruleStats / bulkReviewRules / exportReviewRules         the Rules page
  *
@@ -44,6 +45,17 @@ import {
 } from './review-queue-words.js'
 import { amazonLastAnswer, deliveryIsEstimate, requestTimeline, requestWindow, type AmazonTry } from './review-request-timeline.js'
 import { findReviewMailerState, pauseReviewMailer, resumeReviewMailer } from './review-mailer-state.service.js'
+import {
+  REQUEST_TEXT_LANGUAGE_NAMES,
+  checkRequestText,
+  cleanRequestText,
+  isStandardRequestText,
+  readRuleEmailText,
+  requestTextLanguageFor,
+  ruleTextFor,
+  type RequestText,
+  type RequestTextLanguage,
+} from '@nexus/shared/review-request-text'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const ACTIVE_RETURN_STATUSES = ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING']
@@ -990,6 +1002,8 @@ export async function exportReviewRules(idsRaw?: unknown) {
       shiftToBestDay: r.shiftToBestDay,
       useSentimentDiversion: r.useSentimentDiversion,
       fallbackOnNoResponse: r.fallbackOnNoResponse,
+      // N3 — the rule's own e-mail text per language (null = the standard text); an import checks it again.
+      emailText: readRuleEmailText(r.emailText),
     })),
   }
 }
@@ -1000,7 +1014,35 @@ export type ReviewEmailKind = 'request' | 'check'
 const CHECK_LOCALES = ['it', 'de', 'fr', 'es', 'en'] as const
 type CheckLocale = (typeof CHECK_LOCALES)[number]
 
-export interface EmailPick { kind: ReviewEmailKind; channel: 'AMAZON' | 'EBAY' | 'SHOPIFY'; market: string | null; locale: string; ruleId: string | null }
+export interface EmailPick {
+  kind: ReviewEmailKind
+  channel: 'AMAZON' | 'EBAY' | 'SHOPIFY'
+  market: string | null
+  locale: string
+  ruleId: string | null
+  /**
+   * N3 — the review request's own subject and text for this language: the rule editor's unsaved text (`draft: true`,
+   * `text`: { subject, body }, or null for the standard text), else the picked rule's saved one. Null = the standard
+   * e-mail. Checked: a text the check refuses is refused here in words, never shown or sent.
+   */
+  ruleText: RequestText | null
+  /** "This rule's own Italian text" / "The standard text" — what the preview shows, in words. */
+  textWords: string | null
+}
+
+/** The rule editor's unsaved text for the language shown (null = the standard text); refused in words. */
+function draftText(raw: Record<string, unknown>, locale: string): RequestText | null {
+  const t = raw.text
+  if (t == null) return null
+  if (typeof t !== 'object' || typeof (t as { subject?: unknown }).subject !== 'string' || typeof (t as { body?: unknown }).body !== 'string') {
+    throw new QueueInputError('The text to preview needs a subject and a text.')
+  }
+  const text = cleanRequestText(t as RequestText)
+  if (isStandardRequestText(locale as RequestTextLanguage, text)) return null
+  const issue = checkRequestText(text)[0]
+  if (issue) throw new QueueInputError(`${issue.where === 'subject' ? 'The subject' : 'The text'} cannot be shown: ${issue.words}`)
+  return text
+}
 
 /** The preview's / test's choices, checked; the rule (when given) sets the channel and market. */
 export async function resolveEmailPick(raw: Record<string, unknown>): Promise<EmailPick> {
@@ -1009,11 +1051,13 @@ export async function resolveEmailPick(raw: Record<string, unknown>): Promise<Em
   const ruleId = text(raw.ruleId) || null
   let channel = (text(raw.channel).toUpperCase() || 'SHOPIFY') as EmailPick['channel']
   let market = text(raw.market).toUpperCase() || null
+  let savedText: unknown = null
   if (ruleId) {
-    const rule = await prisma.reviewRule.findUnique({ where: { id: ruleId }, select: { scope: true, marketplace: true } })
+    const rule = await prisma.reviewRule.findUnique({ where: { id: ruleId }, select: { scope: true, marketplace: true, emailText: true } })
     if (!rule) throw new QueueInputError('That rule does not exist any more.')
     channel = rule.scope === 'SHOPIFY' ? 'SHOPIFY' : rule.scope === 'EBAY' ? 'EBAY' : 'AMAZON'
     if (rule.marketplace && !market) market = rule.marketplace
+    savedText = rule.emailText
   }
   if (!['AMAZON', 'EBAY', 'SHOPIFY'].includes(channel)) throw new QueueInputError('Pick Amazon, eBay or Shopify.')
   // eBay buyers get no e-mail from Nexus (Owner, 2026-10-27): nothing to preview or test.
@@ -1021,9 +1065,21 @@ export async function resolveEmailPick(raw: Record<string, unknown>): Promise<Em
   const { resolveLocaleForMarketplace } = await import('./sentiment-check-email.service.js')
   const askedLocale = text(raw.locale).toLowerCase()
   const locale = kind === 'request'
-    ? (askedLocale === 'it' || askedLocale === 'en' ? askedLocale : (market ?? 'IT') === 'IT' ? 'it' : 'en')
+    ? (askedLocale === 'it' || askedLocale === 'en' ? askedLocale : requestTextLanguageFor(market))
     : ((CHECK_LOCALES as readonly string[]).includes(askedLocale) ? askedLocale : resolveLocaleForMarketplace(market))
-  return { kind, channel, market, locale, ruleId }
+  // N3 — the review request's text: our e-mail only (Amazon sends its own; the "How was it?" check has no own text).
+  let ruleText: RequestText | null = null
+  let textWords: string | null = null
+  if (kind === 'request' && channel !== 'AMAZON') {
+    const lang = locale as RequestTextLanguage
+    const draft = raw.draft === true || raw.draft === 'true'
+    ruleText = draft ? draftText(raw, lang) : ruleTextFor(savedText, lang)
+    const language = REQUEST_TEXT_LANGUAGE_NAMES[lang]
+    textWords = ruleText
+      ? `${draft ? 'This rule’s own text (not saved yet)' : 'This rule’s own text'} in ${language}`
+      : ruleId || draft ? `The standard text — this rule has no own text in ${language}` : 'The standard text'
+  }
+  return { kind, channel, market, locale, ruleId, ruleText, textWords }
 }
 
 /** A real product of a recent order on that channel / market, so the preview reads as a buyer would see it. */
@@ -1064,6 +1120,8 @@ export async function reviewEmailPreview(raw: Record<string, unknown>) {
         to: sampleTo, customerName: null, channelOrderId: 'PREVIEW', channel: pick.channel, marketplace: pick.market,
         productName: product.name, productType: product.productType, reviewUrl: link,
         locale: locale as 'it' | 'en',
+        // N3 — the rule's own words for the language shown.
+        ruleText: locale === pick.locale ? pick.ruleText : null,
       }, identity)
     }
     const { renderSentimentCheckEmail } = await import('./sentiment-check-email.service.js')
@@ -1073,7 +1131,8 @@ export async function reviewEmailPreview(raw: Record<string, unknown>) {
     }, identity)
   }
   const shown = await render(pick.locale)
-  const english = pick.locale === 'en' ? shown : await render('en')
+  // A rule's own words have no English copy: the line "In English" is left out for them (never the standard English).
+  const english = pick.locale === 'en' ? shown : pick.ruleText ? null : await render('en')
   return {
     kind: pick.kind,
     channel: pick.channel,
@@ -1082,8 +1141,9 @@ export async function reviewEmailPreview(raw: Record<string, unknown>) {
     from: identity.emailFrom ?? defaultFrom(),
     subject: shown.subject,
     html: shown.html,
-    englishSubject: english.subject,
-    englishSummary: english.text,
+    englishSubject: english?.subject ?? null,
+    englishSummary: english?.text ?? null,
+    textWords: pick.textWords,
     note: pick.kind === 'request' && pick.channel === 'AMAZON'
       ? 'Amazon buyers never get this email: Amazon sends its own standard request, once per order.'
       : pick.kind === 'request' && pick.channel === 'SHOPIFY' && !link
@@ -1108,6 +1168,7 @@ export async function sendReviewEmailTest(raw: Record<string, unknown>, to: stri
       to: address, customerName: null, channelOrderId: 'TEST', channel: pick.channel, marketplace: pick.market,
       productName: product.name, productType: product.productType, reviewUrl: await previewLink(pick),
       locale: pick.locale as 'it' | 'en',
+      ruleText: pick.ruleText,
     })
   } else {
     const { sendSentimentCheckEmail } = await import('./sentiment-check-email.service.js')

@@ -6,18 +6,20 @@
  * the middle, the live column on the right ("When it sends", Test run), and the save bar (⌘S) at the end.
  *
  *   Name · Who (channel, market, shipped by, product types, minimum total) · When (first try, window, send hour, skip
- *   weekends, best day) · Skip when · Message (Amazon's own fixed message; our email shown, its own text per rule comes
- *   later) · Sentiment check (kept exactly as it was, Owner ruling 2) · A/B split (PR J: AbSplitCard.tsx — start, results,
- *   how sure, End test).
+ *   weekends, best day) · Skip when · Message (Amazon's own standard e-mail and eBay's none, in words; a Shopify rule's
+ *   own subject and text per language, checked as it is typed — N3: RuleTextSection.tsx) · Sentiment check (kept
+ *   exactly as it was, Owner ruling 2) · A/B split (PR J: AbSplitCard.tsx — start, results, how sure, Apply winner (N3),
+ *   End test).
  *
  * Saving: POST (new) or PATCH the whole rule; Save is held with the first thing to fix (ruleForm.ts `saveHeld`). The
- * notes are checked for buyer-copy problems (`POST /api/review-rules/lint`); an error holds Save.
+ * notes are checked for buyer-copy problems (`POST /api/review-rules/lint`); an error holds Save. The e-mail text is
+ * checked in the page by the API's own check (@nexus/shared/review-request-text); the API refuses the same words.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ArrowLeft, Copy, Mail, TestTube2 } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Copy, TestTube2 } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, Listbox, SummaryTable, ToastProvider, useToast, type ListboxOption } from '@/design-system/components'
 import { Builder, EditModeBar, PageHeader, type BuilderSection } from '@/design-system/patterns'
-import { Button, Checkbox, Input, NumberStepper, Pill, RadioCard, SegmentedControl, Skeleton, TagInput, Textarea, Toggle } from '@/design-system/primitives'
+import { Button, Checkbox, Input, NumberStepper, RadioCard, SegmentedControl, Skeleton, TagInput, Textarea, Toggle } from '@/design-system/primitives'
 import { COUNTRY_NAMES } from '@/app/_shared/app-nav'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
@@ -39,6 +41,8 @@ import {
   WINDOW_MAX,
   WINDOW_MIN,
   changedFields,
+  emailTextBody,
+  emailsBuyers,
   formFromRule,
   isAmazon,
   ruleBody,
@@ -55,6 +59,7 @@ import {
 } from './ruleForm'
 import { previewBody, whenItSends, type TimingPreview } from './whenItSends'
 import { AbSplitCard } from './AbSplitCard'
+import { RuleTextSection } from './RuleTextSection'
 import s from './editor.module.css'
 
 const PREVIEW_DEBOUNCE_MS = 400
@@ -399,25 +404,16 @@ function RuleEditor({ id }: { id: string }) {
       label: 'Message',
       title: 'Message',
       content: amazon ? (
-        <Banner tone="info" title="Amazon sends its own fixed message">
-          {AMAZON_EMAIL_WORDS} Nobody can change its text — this rule only picks the day.
+        <Banner tone="info" title="Amazon sends its own standard e-mail">
+          {AMAZON_EMAIL_WORDS} Nexus cannot change its words — this rule only picks the day. A text of a rule’s own is for
+          Shopify rules, whose buyers get our e-mail.
         </Banner>
       ) : form.scope === 'EBAY' ? (
-        <Banner tone="info" title="No message: eBay asks the buyer itself">{EBAY_NOT_EMAILED}</Banner>
+        <Banner tone="info" title="No e-mail: eBay asks the buyer itself">{EBAY_NOT_EMAILED} So this rule has no text to write.</Banner>
+      ) : emailsBuyers(form.scope) ? (
+        <RuleTextSection form={form} update={update} channel={channelWords(form)} onPreview={() => setPreviewOpen(true)} />
       ) : (
-        <div className={s.fields}>
-          <p className={s.hint}>
-            {channelWords(form)} buyers get our review email — Italian for Italy, English for every other market — asking for an
-            honest review, with an unsubscribe link. Every rule sends the same text today.
-          </p>
-          <div>
-            <Button size="sm" onClick={() => setPreviewOpen(true)}><Mail size={13} aria-hidden /> Preview email</Button>
-          </div>
-          {/* ⛔ KEEP — Coming later placeholder (Owner ruling 3): this rule's own subject and text per language (Phase 3). */}
-          <p className={s.placeholder}>
-            <Pill tone="neutral">Coming later</Pill> This rule’s own subject and text per language, with a live check of the words.
-          </p>
-        </div>
+        <p className={s.hint}>This rule matches no orders, so it sends no e-mail. Pick Shopify above to give it a text of its own.</p>
       ),
     },
     {
@@ -564,7 +560,14 @@ function RuleEditor({ id }: { id: string }) {
       )}
       <Builder mode="page" sections={sections} aside={aside} asideLabel="When it sends and test run" footer={footer} navLabel="Rule sections" />
       {testOpen && savedRule && <TestRunModal rules={[{ id: savedRule.id, name: savedRule.name, isActive: savedRule.isActive }]} onClose={() => setTestOpen(false)} canManage={canManage} />}
-      {previewOpen && <EmailPreviewModal onClose={() => setPreviewOpen(false)} canManage={canManage} sending={null} />}
+      {previewOpen && (
+        <EmailPreviewModal
+          onClose={() => setPreviewOpen(false)}
+          canManage={canManage}
+          sending={null}
+          draft={{ ruleId: savedRule?.id ?? null, name: form.name.trim() || savedRule?.name || 'New rule', text: emailTextBody(form.emailText) }}
+        />
+      )}
     </div>
   )
 }
