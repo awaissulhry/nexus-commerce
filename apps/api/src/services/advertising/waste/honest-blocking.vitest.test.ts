@@ -131,6 +131,28 @@ describe('HONEST 5 — negativeClashesWith: every match type', () => {
   })
 })
 
+describe('HONEST 5 — Harvest\'s source negative is never "Blocks a term that sold here" (the Owner\'s pick A, 2026-10-27)', () => {
+  // A term that sold, then Harvest made it a keyword and negated it at its source: on purpose. Another negative of the same
+  // kind over a term that sold stays a clash.
+  const f = factsOf({
+    campaigns: [{ id: 'c1' }],
+    groups: [{ id: 'ga', campaignId: 'c1' }],
+    targets: [kw('kb', 'ga', 'boots', 'BROAD'), neg('nh', 'ga', 'boots women', 'EXACT'), neg('nx', 'ga', 'boots men', 'EXACT')],
+    terms: [
+      { adGroupId: 'ga', text: 'boots women', via: ['kb'], orders: 2 },
+      { adGroupId: 'ga', text: 'boots men', via: ['kb'], orders: 1 },
+    ],
+  })
+  ;(f.harvestSources as Set<string>).add('nh')
+  const rows = rowsOf(f)
+  it('Harvest\'s negative: blocked, no clash', () => {
+    expect(rows.get(termId('ga', 'boots women'))).toMatchObject({ state: 'NEGATED', clash: null })
+  })
+  it('anyone else\'s negative over a term that sold: still a clash', () => {
+    expect(rows.get(termId('ga', 'boots men'))).toMatchObject({ state: 'NEGATED', clash: { kind: 'BLOCKS_SOLD' } })
+  })
+})
+
 describe('HONEST 5 — the Owner\'s funnel is never a clash, nor offered for removal; a real clash still is', () => {
   // The funnel (saved rule 2026-10-09): "rain jacket" in exact, phrase and broad; the phrase ad group holds a negative
   // exact, the broad one a negative exact and a negative phrase. Both of the phrase and broad terms sold before it.
