@@ -41,12 +41,6 @@
   gap: var(--nds-space-6);
 }
 
-.placeholder {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-6);
-}
-
 .pills {
   display: inline-flex;
   align-items: center;
@@ -326,6 +320,14 @@
 
 .moodRow {
   margin-bottom: var(--nds-space-10);
+}
+
+.revisionLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0 0 var(--nds-space-8);
 }
 
 .themeRow {

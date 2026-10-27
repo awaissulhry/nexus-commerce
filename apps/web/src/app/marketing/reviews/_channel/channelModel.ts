@@ -12,6 +12,7 @@
 import { channelSiteDomain, reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import { inboxHref, insightsHref, requestsHref } from '../_lib/reviewsLinks'
 import type { InboxRow } from '../inbox/inboxDatasource'
+import type { EbayRevisions, EbayTopics } from './ebayToolsModel'
 import { channelPath, lockParams, marketWord, scopeTitleWords, type ReviewsChannel, type ReviewsLock } from './reviewsScope'
 
 // ── The address: the period ──────────────────────────────────────────
@@ -178,6 +179,10 @@ export interface EbaySections {
   tiles: Section<EbayTiles>
   summary: Section<EbaySummary>
   feedback: Section<{ rows: InboxRow[]; total: number; owners: string[] }>
+  /** PR G — eBay's AI topics of the feedback in scope (an older answer has none). */
+  topics?: Section<EbayTopics>
+  /** PR G — revision requests and eBay's yearly allowance (an older answer has none). */
+  revisions?: Section<EbayRevisions>
 }
 
 export interface ChannelResponse<S> {

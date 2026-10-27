@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MANAGE_BUYER_FEEDBACK, buyerResultWords, buyerRowHeld, buyerRowView, buyerSendHeld, buyerSendLabel, buyerSendNote, buyerSendReach,
-  ebayWhere, feedbackCount, revisionSummary, revisionView, topicTags, type BuyerFeedbackRow, type EbayRevisions,
+  ebayWhere, revisionSummary, revisionView, topicTags, type BuyerFeedbackRow, type EbayRevisions,
 } from './ebayToolsModel'
 
 const TZ = 'UTC'
@@ -86,7 +86,6 @@ describe('leave feedback for buyers', () => {
     expect(buyerSendHeld({ canManage: true, rows: [row('1')], text })).toBeNull()
     expect(buyerRowHeld(row('1'), false)).toBe(MANAGE_BUYER_FEEDBACK)
     expect(buyerRowHeld(waiting, true)).toBe(waiting.held)
-    expect(feedbackCount('  Great buyer!  ')).toBe('12 / 500')
   })
 
   it('the result in the server’s numbers', () => {

@@ -208,6 +208,7 @@
 
 .topicList,
 .sampleList,
+.itemList,
 .pipeline,
 .dsrList,
 .bullets {
@@ -230,7 +231,8 @@
 }
 
 /* ── Samples (labelled "Coming later") ───────────────────── */
-.sampleRow {
+.sampleRow,
+.itemRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -240,11 +242,13 @@
   font-size: var(--nds-font-size-sm);
 }
 
-.sampleRow:last-child {
+.sampleRow:last-child,
+.itemRow:last-child {
   border-bottom: 0;
 }
 
-.sampleRow > .stack {
+.sampleRow > .stack,
+.itemRow > .stack {
   flex: 1 1 200px;
 }
 

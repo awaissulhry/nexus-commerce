@@ -139,7 +139,7 @@ export function EbayBuyerFeedback({ lock, canManage }: { lock: ReviewsLock; canM
         description={`${page?.rule ?? 'Positive only, up to 500 characters, within 90 days of the completed sale.'} Each send waits for approval in Nexus.`}
         headerAction={(
           <Button size="sm" variant="primary" heldReason={allHeld} onClick={() => setDialog(ready)}>
-            {`Leave positive feedback for all ${ready.length.toLocaleString('en')}…`}
+            {ready.length > 0 ? `Leave positive feedback for all ${ready.length.toLocaleString('en')}…` : 'Leave positive feedback…'}
           </Button>
         )}
       >
@@ -156,7 +156,7 @@ export function EbayBuyerFeedback({ lock, canManage }: { lock: ReviewsLock; canM
               toolbar={(
                 <GridToolbar
                   count={ticked.length > 0 ? <><b>{ticked.length.toLocaleString('en')}</b> selected</> : <><b>{rows.length.toLocaleString('en')}</b> sales</>}
-                  right={page.counts.waitingApproval > 0 ? <Button asChild size="sm"><Link href="/fleet/approvals">Open Approvals ({page.counts.waitingApproval})</Link></Button> : undefined}
+                  right={page.counts.waitingApproval > 0 ? <Button asChild size="sm"><Link href="/fleet/approvals">Open Approvals</Link></Button> : undefined}
                 >
                   {ticked.length > 0 ? (
                     <GridSelectionActions>
@@ -187,7 +187,7 @@ export function EbayBuyerFeedback({ lock, canManage }: { lock: ReviewsLock; canM
               />
             </GridCard>
           )}
-          <p className={s.note}>Feedback for a buyer cannot be changed after it is sent; you can add one follow-up on eBay later. Buyers with an open return or case are held until it closes.</p>
+          <p className={s.note}>Buyers with an open return or case are held until it closes. Sales Nexus has no order for show no buyer or date: eBay names neither.</p>
         </div>
       </Card>
 
@@ -239,7 +239,7 @@ function LeaveDialog({ rows, canManage, onClose, onDone }: LeaveDialogProps) {
       open
       onClose={onClose}
       size="md"
-      title={first ? `Positive feedback for ${first.who}` : `Positive feedback for ${rows.length.toLocaleString('en')} buyers`}
+      title={first ? `Positive feedback for ${first.who}` : `Positive feedback for ${Math.max(sendable, 1).toLocaleString('en')} ${sendable === 1 ? 'buyer' : 'buyers'}`}
       subtitle={first ? `${first.item} · ${first.order} · ${first.where}` : undefined}
       footer={(
         <div className={s.dialogFoot}>
@@ -249,7 +249,7 @@ function LeaveDialog({ rows, canManage, onClose, onDone }: LeaveDialogProps) {
       )}
     >
       <div className={s.stackGap}>
-        <Pill tone="success">Positive · eBay lets a seller leave positive feedback only</Pill>
+        <span><Pill tone="success">Positive · eBay lets a seller leave positive feedback only</Pill></span>
         <Field label="Feedback text" hint={`eBay allows ${BUYER_FEEDBACK_LIMIT} characters. No links, phone numbers or e-mail addresses.`}>
           <Textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} limit={BUYER_FEEDBACK_LIMIT} />
         </Field>

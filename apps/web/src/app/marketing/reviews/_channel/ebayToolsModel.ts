@@ -7,9 +7,7 @@
  * under 30 days old, once per feedback, the buyer has 10 days — and eBay has no API to ask, so Nexus opens Seller Hub.
  * Pure (no React), tested in ebayToolsModel.vitest.test.ts.
  */
-import {
-  EBAY_BUYER_FEEDBACK_LIMIT, buyerFeedbackTextHeld, replyLength,
-} from '@nexus/shared/review-reply-rules'
+import { EBAY_BUYER_FEEDBACK_LIMIT, buyerFeedbackTextHeld } from '@nexus/shared/review-reply-rules'
 import type { Tone } from '@/design-system/primitives'
 import { marketWord } from './reviewsScope'
 
@@ -229,9 +227,4 @@ export function buyerResultWords(answer: BuyerFeedbackSendAnswer): { words: stri
     : 'Sent for approval.'
   const held = answer.held.length ? ` ${plural(answer.held.length, 'sale was', 'sales were')} not sent: ${answer.held[0].words}` : ''
   return { words: `${what} A person approves it on the Approvals page.${held}`, tone: answer.held.length ? 'warning' : 'success' }
-}
-
-/** "312 / 500" — the counter the DS Textarea shows, for tests and screen readers. */
-export function feedbackCount(text: string): string {
-  return `${replyLength(text.trim())} / ${EBAY_BUYER_FEEDBACK_LIMIT}`
 }
