@@ -12,6 +12,9 @@
  *   apply-review-timing-winner   the winning first-try day goes into the rule for exactly that market (or the Shopify
  *                                store) and product type
  *                                (or a new rule is added for them); `armId: "before"` puts back what was there (its undo).
+ *   apply-review-ab-winner       N3 — an A/B split's winner: rule A takes the winning side's settings (its own e-mail
+ *                                text per language and its timing) and the split ends; B stays off. Called with the same
+ *                                "too early" and "how sure" rules as a timing test; `armId: "before"` puts A back.
  */
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
@@ -44,7 +47,7 @@ async function previewStart(a: StartArgs): Promise<ToolResult> {
   const test = testSummary(row, names)
   if (refusal) return { ok: false, error: `${test.title}: ${refusal} Nothing was started.` }
   const effect = row.kind === 'AB'
-    ? 'From the next scheduler run, the new orders rule A decides are split 50 / 50 by order number: half are asked by A, half get B’s timing and sentiment check.'
+    ? 'From the next scheduler run, the new orders rule A decides are split 50 / 50 by order number: half are asked by A, half get B’s timing, “How was it?” check and, on a Shopify rule, its own e-mail text.'
     : row.channel === 'SHOPIFY'
       ? `From the next scheduler run, new Shopify orders${row.productType ? ` of ${row.productType}` : ''} are split by order number: each group gets Nexus’s review e-mail on its day after delivery (or after what the order’s rule counts from)${row.holdoutPct > 0 ? `, and ${row.holdoutPct}% of the orders (the holdout) get no review e-mail and no “How was it?” check from Nexus` : ''}.`
       : `From the next scheduler run, new ${test.title.split(' · ')[0]} orders${row.productType ? ` of ${row.productType}` : ''} are split by order number: each group is first asked on its day after delivery${row.holdoutPct > 0 ? `, and ${row.holdoutPct}% of the orders (the holdout) get no review request at all` : ''}.`
@@ -104,16 +107,17 @@ const applyInput = z.object({
 type ApplyArgs = z.infer<typeof applyInput>
 
 async function previewApply(a: ApplyArgs): Promise<ToolResult> {
-  const { timingTestFacts, testSummary, resultOf, storedOf, winnerTarget } = await svc()
+  const { timingTestFacts, testSummary, resultOf, storedOf, winnerTarget, isAbApplied } = await svc()
   const { applyHeld } = await import('../../reviews/review-timing-test-math.js')
   const facts = await timingTestFacts(a.testId)
   if (!facts) return { ok: false, error: 'This timing test is not in this business. Nothing was changed.' }
   const { row, names } = facts
   const test = testSummary(row, names)
+  if (row.kind === 'AB') return { ok: false, error: `${test.title}: this is an A/B split — its winner is applied by apply-review-ab-winner. Nothing was changed.` }
   const stored = storedOf(row)
   if (a.armId === BEFORE) {
     const applied = stored.applied
-    if (!applied) return { ok: false, error: `${test.title}: no winner of this test is applied, so there is nothing to put back. Nothing was changed.` }
+    if (!applied || isAbApplied(applied)) return { ok: false, error: `${test.title}: no winner of this test is applied, so there is nothing to put back. Nothing was changed.` }
     return {
       ok: true,
       preview: {
@@ -130,7 +134,7 @@ async function previewApply(a: ApplyArgs): Promise<ToolResult> {
   }
   const arm = row.arms.find((x) => x.id === a.armId)
   if (!arm || arm.holdout || arm.delayDays == null) return { ok: false, error: `${test.title}: that group is not a first-try day of this test. Nothing was changed.` }
-  if (stored.applied) return { ok: false, error: `${test.title}: its winner was applied already (“${stored.applied.ruleName}”, day ${stored.applied.delayDays}). Nothing was changed.` }
+  if (stored.applied && !isAbApplied(stored.applied)) return { ok: false, error: `${test.title}: its winner was applied already (“${stored.applied.ruleName}”, day ${stored.applied.delayDays}). Nothing was changed.` }
   const { result } = await resultOf(row)
   const held = applyHeld(row, result)
   if (held) return { ok: false, error: `${test.title}: ${held} Nothing was changed.` }
@@ -205,4 +209,115 @@ const applyTool: AgentTool = {
   },
 }
 
-export const REVIEW_TIMING_TEST_TOOLS: AgentTool[] = [startTool, applyTool]
+// ── apply-review-ab-winner (N3) ─────────────────────────────────────────────────────────────────────────────────────
+
+const abApplyInput = z.object({
+  testId: z.string().trim().min(1).max(64).describe('the A/B split of a review-request rule (the rule editor’s A/B split card)'),
+  armId: z.string().trim().min(1).max(64).describe('the winning side of the split; "before" puts rule A back as it was before its winner was applied'),
+})
+type AbApplyArgs = z.infer<typeof abApplyInput>
+
+async function previewAbApply(a: AbApplyArgs): Promise<ToolResult> {
+  const { timingTestFacts, testSummary, resultOf, storedOf, isAbApplied, abApplyFacts, abValuesOf } = await svc()
+  const { applyHeld } = await import('../../reviews/review-timing-test-math.js')
+  const facts = await timingTestFacts(a.testId)
+  if (!facts) return { ok: false, error: 'This A/B split is not in this business. Nothing was changed.' }
+  const { row, names } = facts
+  const test = testSummary(row, names)
+  if (row.kind !== 'AB') return { ok: false, error: `${test.title}: this is a timing test — its winner is applied by apply-review-timing-winner. Nothing was changed.` }
+  const stored = storedOf(row)
+  if (a.armId === BEFORE) {
+    const applied = stored.applied
+    if (!isAbApplied(applied)) return { ok: false, error: `${test.title}: no winner of this split is applied, so there is nothing to put back. Nothing was changed.` }
+    const rules = facts.rules
+    const rule = rules.get(applied.ruleId)
+    if (!rule) return { ok: false, error: `${test.title}: the rule “${applied.ruleName}” was deleted, so there is nothing to put back. Nothing was changed.` }
+    return {
+      ok: true,
+      preview: {
+        action: 'apply-review-ab-winner',
+        summary: `Put “${applied.ruleName}” back as it was before the A/B split’s winner`,
+        test,
+        winner: { label: BEFORE },
+        rule: { id: applied.ruleId, name: applied.ruleName },
+        changes: applied.changed.map((what) => ({ what, to: 'as it was before the winner' })),
+        before: applied.before,
+        now: abValuesOf(rule as never),
+        note: 'Changes Nexus only: rule A’s e-mail text and timing go back to what they were. The split stays ended. E-mails already sent cannot be taken back.',
+      },
+    }
+  }
+  if (isAbApplied(stored.applied)) return { ok: false, error: `${test.title}: its winner was applied already (“${stored.applied.ruleName}” took B’s settings). Nothing was changed.` }
+  const { result } = await resultOf(row)
+  const held = applyHeld(row, result)
+  if (held) return { ok: false, error: `${test.title}: ${held} Nothing was changed.` }
+  if (result.leaderId !== a.armId) return { ok: false, error: `${test.title}: that side is not the winner. Nothing was changed.` }
+  const found = await abApplyFacts(row, a.armId)
+  if ('refusal' in found) return { ok: false, error: `${test.title}: ${found.refusal} Nothing was changed.` }
+  const { a: ruleA, b: ruleB, arm, changes } = found
+  return {
+    ok: true,
+    preview: {
+      action: 'apply-review-ab-winner',
+      summary: `“${ruleA.name}” takes the settings of “${ruleB.name}”, and the split ends`,
+      test,
+      winner: { label: arm.label, rule: ruleB.name },
+      result: { words: result.words, sure: result.sure, sureWords: result.sureWords },
+      rule: { id: ruleA.id, name: ruleA.name },
+      changes,
+      note: `Changes Nexus only. From the next scheduler run “${ruleA.name}” asks every order it decides with these settings${changes.some((c) => c.field.startsWith('emailText')) ? ', and its e-mails carry this text from the next one sent (a request already queued is sent with its rule’s text of that moment)' : ''}. ${row.status === 'RUNNING' ? 'The split ends; ' : ''}“${ruleB.name}” stays off. Undo puts “${ruleA.name}” back; e-mails already sent cannot be taken back.`,
+    },
+  }
+}
+
+const abApplyTool: AgentTool = {
+  name: 'apply-review-ab-winner',
+  title: 'Apply an A/B split’s winner',
+  input: abApplyInput,
+  requires: [F.reviewsManage],
+  category: 'orders',
+  riskTier: 'high',
+  readOnly: false,
+  alwaysAsk: true,
+  openWorld: false,
+  reversibility: 'partial',
+  maxClaudeTrust: 'ask',
+  description:
+    'Apply the winner of an A/B split of a review-request rule of this business: rule A takes the winning side B’s '
+    + 'settings — its own review e-mail text per language (Shopify buyers) and its timing — and the split ends; B stays '
+    + 'off. Only a winner at least 80% sure, once each side has enough counted orders (the same rules as a timing test). '
+    + 'armId "before" puts rule A back as it was. A person approves it in Nexus first; it changes Nexus only.',
+  handler: (args) => previewAbApply(args as AbApplyArgs),
+  async execute(args, ctx) {
+    const a = args as AbApplyArgs
+    const checked = await freshOrStale(() => previewAbApply(a), ctx, ['test', 'winner', 'rule', 'changes'], 'the split')
+    if ('refusal' in checked) return checked.refusal
+    const { timingTestFacts, applyAbWinner, putBackBeforeAbWinner } = await svc()
+    const facts = await timingTestFacts(a.testId)
+    if (!facts) return { ok: false, error: 'This A/B split is gone. Nothing was changed.' }
+    const by = `${ctx.via}:${ctx.userId ?? 'unknown'}`
+    const change = a.armId === BEFORE ? await putBackBeforeAbWinner(facts.row) : await applyAbWinner(facts.row, a.armId, by)
+    return { ok: true, data: change.after, change }
+  },
+  undo: {
+    async current(change: ToolChange) {
+      const after = (change.after ?? {}) as { testId?: string; ruleId?: string | null }
+      if (!after.testId) return null
+      const { abWinnerRuleNow } = await svc()
+      return abWinnerRuleNow(after.testId, after.ruleId ?? null)
+    },
+    request(change: ToolChange) {
+      const before = (change.before ?? {}) as { armId?: string }
+      const after = (change.after ?? {}) as { testId?: string; armId?: string }
+      if (!after.testId) return { refusal: 'This change does not name its A/B split.' }
+      if (after.armId === BEFORE) {
+        return before.armId && before.armId !== BEFORE
+          ? { tool: 'apply-review-ab-winner', args: { testId: after.testId, armId: before.armId } }
+          : { refusal: 'This change does not name the winner it took back.' }
+      }
+      return { tool: 'apply-review-ab-winner', args: { testId: after.testId, armId: BEFORE } }
+    },
+  },
+}
+
+export const REVIEW_TIMING_TEST_TOOLS: AgentTool[] = [startTool, applyTool, abApplyTool]

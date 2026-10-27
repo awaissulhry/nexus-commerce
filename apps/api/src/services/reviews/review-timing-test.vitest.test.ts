@@ -406,3 +406,114 @@ describe('a Shopify test’s result (lane N6): the ONE review rate and its attri
     expect(await inside(() => database.client.reviewRule.findFirst({ where: { name: 'Shopify glove' } }))).toMatchObject({ isActive: false })
   })
 })
+
+// ── N3 — after the Shopify timing tests (lane N6): this block adds Shopify reviews and A/B splits of its own ─────────
+
+describe('N3 — an A/B split of a rule’s own e-mail text, and Apply winner', () => {
+  const ownEn = { subject: 'How is your {product}?', body: 'Hi {first_name},\n\nTell other riders what you think.\n\n{review_button}\n\nStop these e-mails? {unsubscribe_link}' }
+  const testId = 'test-ab-shop'
+  beforeAll(async () => {
+    await inside(async () => {
+      const c = database.client
+      await c.reviewRule.create({ data: { id: 'rule-shop-a', name: 'Shop', scope: 'SHOPIFY', isActive: true, minDaysSinceDelivery: 7, maxDaysSinceDelivery: 25, exclusions: [] } })
+      await c.reviewRule.create({ data: { id: 'rule-shop-b', name: 'Shop (variant 1)', scope: 'SHOPIFY', isActive: false, minDaysSinceDelivery: 7, maxDaysSinceDelivery: 25, exclusions: [], emailText: { en: ownEn } } })
+      await c.reviewTimingTest.create({
+        data: {
+          id: testId, kind: 'AB', channel: 'SHOPIFY', market: '*', ruleId: 'rule-shop-a', holdoutPct: 0, status: 'RUNNING', startedAt: daysAgo(80),
+          endsWhen: { ordersPerArm: 2000, maxDays: 84 },
+          arms: { create: [{ id: 'ab-a', label: 'A', position: 0, ruleId: 'rule-shop-a' }, { id: 'ab-b', label: 'B', position: 1, ruleId: 'rule-shop-b' }] },
+        },
+      })
+      // 110 orders per side delivered 70 days ago (their time to answer is over): A brings 5 reviews, B 20.
+      let n = 0
+      for (const [arm, reviews] of [['ab-a', 5], ['ab-b', 20]] as const) {
+        for (let i = 0; i < 110; i++) {
+          n += 1
+          const id = `ord-ab-${n}`
+          await c.order.create({ data: { id, channel: 'SHOPIFY', channelOrderId: `TEST-AB-${n}`, marketplace: 'DE', status: 'DELIVERED', totalPrice: '30.00', customerName: 'Test', customerEmail: `${id}@example.test`, shippingAddress: {}, deliveredAt: daysAgo(70), items: { create: [{ sku: 'TEST-GLOVE', quantity: 1, price: '30.00', productId: 'prod-glove' }] } } as never })
+          await c.reviewRequest.create({ data: { id: `req-ab-${n}`, orderId: id, channel: 'SHOPIFY', marketplace: 'DE', status: 'SENT', ruleId: arm === 'ab-a' ? 'rule-shop-a' : 'rule-shop-b', timingTestArmId: arm, scheduledFor: daysAgo(63), sentAt: daysAgo(63) } as never })
+          if (i < reviews) await c.review.create({ data: { channel: 'SHOPIFY', marketplace: 'DE', externalReviewId: `rv-ab-${n}`, body: 'Fine', rating: 4, postedAt: daysAgo(60), productId: 'prod-glove', attributedRequestId: `req-ab-${n}` } as never })
+        }
+      }
+    })
+  }, 180_000)
+
+  it('B that differs from A only by its own e-mail text may be split; the same text and timing may not', async () => {
+    const a = await inside(() => database.client.reviewRule.findUniqueOrThrow({ where: { id: 'rule-shop-a' } }))
+    const b = await inside(() => database.client.reviewRule.findUniqueOrThrow({ where: { id: 'rule-shop-b' } }))
+    expect(svc.abHeld(a as never, b as never)).toBeNull()
+    expect(svc.abHeld(a as never, { ...b, emailText: null } as never)).toBe('“Shop (variant 1)” has the same timing and e-mail text as A. Change B’s e-mail text, first try, send hour or window first.')
+    // On an Amazon rule the text is not compared: Amazon sends its own e-mail.
+    expect(svc.abHeld({ ...a, scope: 'AMAZON_GLOBAL' } as never, { ...b, scope: 'AMAZON_GLOBAL' } as never)).toMatch(/has the same timing as A\./)
+  })
+
+  it('the running split has a result by the SAME rules as a timing test: B leads, how sure; Apply winner is offered', async () => {
+    const view = (await inside(() => svc.listTimingTests({ kind: 'AB', ruleId: 'rule-shop-a' }, NOW))).tests.find((t) => t.id === testId)!
+    expect(view.arms.map((x) => [x.id, x.counted, x.reviews])).toEqual([['ab-a', 110, 5], ['ab-b', 110, 20]])
+    expect(view.result).toMatchObject({ tooEarly: false, leaderId: 'ab-b', controlId: 'ab-a' })
+    expect(view.result.sure).toBeGreaterThanOrEqual(80)
+    expect(view.held.apply).toBeNull()
+  })
+
+  it('Apply winner asks for approval (apply-review-ab-winner) and changes nothing before a person approves', async () => {
+    const before = await inside(() => database.client.reviewRule.findMany({ where: { scope: 'SHOPIFY' }, orderBy: { name: 'asc' } }))
+    const out = await inside(() => svc.applyTimingWinner(testId, person, { requester, now: NOW }))
+    expect(asks.at(-1)).toMatchObject({ tool: 'apply-review-ab-winner', args: { testId, armId: 'ab-b' } })
+    expect(out.test).toMatchObject({ status: 'RUNNING', approval: { what: 'apply' }, held: { apply: 'Waits for approval on the Approvals page.' } })
+    expect(await inside(() => database.client.reviewRule.findMany({ where: { scope: 'SHOPIFY' }, orderBy: { name: 'asc' } }))).toEqual(before)
+    await expect(inside(() => svc.applyTimingWinner(testId, person, { requester, now: NOW }))).rejects.toThrow(/already waits for approval/)
+  })
+
+  it('the approved tool makes B’s text A’s own and ends the split; B stays off; its undo puts A back', async () => {
+    const apply = tool('apply-review-ab-winner')
+    const approvalId = asks.at(-1)!.id
+    const preview = await inside(() => apply.handler({ testId, armId: 'ab-b' }, ctxFor(approvalId, undefined)))
+    expect(preview).toMatchObject({ ok: true, preview: { rule: { id: 'rule-shop-a', name: 'Shop' }, winner: { label: 'B', rule: 'Shop (variant 1)' } } })
+    expect((preview.preview as { changes: unknown[] }).changes).toEqual([
+      { field: 'emailText.en', what: 'E-mail text in English', from: 'the standard text', to: 'its own text, subject “How is your {product}?”' },
+    ])
+    // The timing test tool refuses an A/B split (and the other way round).
+    expect((await inside(() => tool('apply-review-timing-winner').handler({ testId, armId: 'ab-b' }, ctxFor('x', undefined)))).error).toMatch(/A\/B split — its winner is applied by apply-review-ab-winner/)
+    const ran = await inside(() => apply.execute!({ testId, armId: 'ab-b' }, ctxFor(approvalId, preview.preview)))
+    expect(ran.ok).toBe(true)
+    const a = await inside(() => database.client.reviewRule.findUniqueOrThrow({ where: { id: 'rule-shop-a' } }))
+    expect(a).toMatchObject({ isActive: true, emailText: { en: ownEn } })
+    expect(await inside(() => database.client.reviewRule.findUniqueOrThrow({ where: { id: 'rule-shop-b' } }))).toMatchObject({ isActive: false })
+    const row = await inside(() => database.client.reviewTimingTest.findUniqueOrThrow({ where: { id: testId } }))
+    expect(row.status).toBe('DONE')
+    const view = (await inside(() => svc.listTimingTests({ kind: 'AB', ruleId: 'rule-shop-a' }, NOW))).tests.find((t) => t.id === testId)!
+    expect(view.applied).toMatchObject({ kind: 'AB', ruleName: 'Shop', winnerRuleName: 'Shop (variant 1)', changed: ['E-mail text in English'] })
+    expect(view.held.apply).toMatch(/^Applied .*: “Shop” took B’s e-mail text in English\.$/)
+    expect(await inside(() => svc.runningTimingTests(NOW))).not.toContainEqual(expect.objectContaining({ id: testId }))
+
+    const undo = apply.undo!.request(ran.change as never)
+    expect(undo).toEqual({ tool: 'apply-review-ab-winner', args: { testId, armId: 'before' } })
+    expect(await inside(() => apply.undo!.current(ran.change as never))).toEqual(ran.change!.after)
+    const back = await inside(() => apply.handler((undo as { args: Record<string, unknown> }).args, ctxFor('u', undefined)))
+    expect(back.ok).toBe(true)
+    const undone = await inside(() => apply.execute!((undo as { args: Record<string, unknown> }).args, ctxFor('u', back.preview)))
+    expect(undone.ok).toBe(true)
+    expect(await inside(() => database.client.reviewRule.findUniqueOrThrow({ where: { id: 'rule-shop-a' } }))).toMatchObject({ emailText: null })
+    expect((await inside(() => database.client.reviewTimingTest.findUniqueOrThrow({ where: { id: testId } }))).status).toBe('DONE')
+    expect(apply.undo!.request(undone.change as never)).toEqual({ tool: 'apply-review-ab-winner', args: { testId, armId: 'ab-b' } })
+  })
+
+  afterAll(async () => {
+    // Nothing of this block may hold another test of this file: the splits it left running end here.
+    await inside(() => database.client.reviewTimingTest.updateMany({ where: { id: { in: [testId, 'test-ab-early'] }, status: 'RUNNING' }, data: { status: 'STOPPED', endedAt: new Date() } }))
+  })
+
+  it('too early (under 100 counted orders per side, the timing tests’ own line): Apply winner is held in words', async () => {
+    await inside(async () => {
+      const c = database.client
+      await c.reviewRule.create({ data: { id: 'rule-shop2-a', name: 'Shop two', scope: 'SHOPIFY', isActive: true, exclusions: [] } })
+      await c.reviewRule.create({ data: { id: 'rule-shop2-b', name: 'Shop two (variant 1)', scope: 'SHOPIFY', isActive: false, exclusions: [], emailText: { en: ownEn } } })
+      await c.reviewTimingTest.create({
+        data: { id: 'test-ab-early', kind: 'AB', channel: 'SHOPIFY', market: '*', ruleId: 'rule-shop2-a', status: 'RUNNING', startedAt: daysAgo(5), arms: { create: [{ id: 'ab2-a', label: 'A', position: 0, ruleId: 'rule-shop2-a' }, { id: 'ab2-b', label: 'B', position: 1, ruleId: 'rule-shop2-b' }] } },
+      })
+    })
+    await expect(inside(() => svc.applyTimingWinner('test-ab-early', person, { requester, now: NOW }))).rejects.toThrow('Too early to call — there is no winner yet.')
+    const view = (await inside(() => svc.listTimingTests({ kind: 'AB', ruleId: 'rule-shop2-a' }, NOW))).tests[0]
+    expect(view.held.apply).toBe('Too early to call — there is no winner yet.')
+  })
+})

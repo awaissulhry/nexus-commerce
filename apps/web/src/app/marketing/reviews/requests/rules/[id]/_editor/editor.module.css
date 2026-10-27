@@ -112,14 +112,105 @@
   font-size: var(--nds-font-size-sm);
 }
 
-.placeholder {
+.okText {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  margin: 0;
+  color: var(--nds-success-text);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.okText > svg {
+  flex: none;
+  margin-top: var(--nds-space-2);
+}
+
+/* ── Message: the e-mail text per language (N3) ─────────── */
+.language {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+}
+
+.languageHead {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--nds-space-6);
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.languageTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4);
   margin: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.languageTitle > .hint {
+  display: inline;
+  font-weight: var(--nds-font-weight-normal);
+}
+
+.standardText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.textLine,
+.textBody {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.textLine > strong {
+  margin-right: var(--nds-space-6);
+  color: var(--nds-text);
+}
+
+.textBody {
+  white-space: pre-wrap;
+}
+
+.parts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.partList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  margin: 0;
+  padding-left: var(--nds-space-18);
   color: var(--nds-text-muted);
   font-size: var(--nds-font-size-sm);
+}
+
+.token {
+  color: var(--nds-text);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
 }
 
 /* ── The live column ────────────────────────────────────── */

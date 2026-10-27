@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'vitest'
+import { STANDARD_REQUEST_TEXT } from '@nexus/shared/review-request-text'
 import type { RuleItem } from '../../_rules/rulesModel'
 import {
   NEW_RULE_FORM,
   changedFields,
   formFromRule,
+  languageIssues,
   minTotalCents,
+  previewText,
   ruleBody,
   saveHeld,
   toggleSkip,
   unsavedWords,
   withFirstTryDays,
   withScope,
+  withStandardWords,
+  withText,
+  withTextMode,
   withWindow,
 } from './ruleForm'
 
@@ -37,7 +43,7 @@ describe('rule form ⇄ API', () => {
       name: 'Germany jackets', notes: 'Only jackets', isActive: true, scope: 'AMAZON_PER_MARKETPLACE', marketplace: 'DE',
       minDaysSinceDelivery: 4, maxDaysSinceDelivery: 30, exclusions: ['has_refund', 'fbm_only', 'legacy_flag'], minOrderTotalCents: 4990,
       productTypes: ['jacket'], sendDelayDays: 7, anchor: 'DELIVERY', sendHourLocal: 10, skipWeekends: true, shiftToBestDay: false,
-      useSentimentDiversion: true, fallbackOnNoResponse: false,
+      useSentimentDiversion: true, fallbackOnNoResponse: false, emailText: null,
     })
     expect(changedFields(formFromRule(RULE), formFromRule(RULE))).toEqual([])
   })
@@ -96,5 +102,59 @@ describe('held save', () => {
     expect(minTotalCents('49,90')).toBe(4990)
     expect(minTotalCents('')).toBeNull()
     expect(minTotalCents('-1')).toBeNaN()
+  })
+})
+
+describe('N3 — the rule’s own e-mail text per language, checked as it is typed', () => {
+  const SHOP: RuleItem = { ...RULE, scope: 'SHOPIFY', marketplace: null, exclusions: [], sendHourLocal: null }
+  const ownEn = { subject: 'How is your {product}?', body: 'Hi {first_name}\n\n{review_button}\n\nStop? {unsubscribe_link}' }
+
+  it('default: every language on the standard text, and a save sends no text of its own (no buyer’s e-mail changes)', () => {
+    const f = formFromRule(SHOP)
+    expect(f.emailText.it).toEqual({ mode: 'standard', ...STANDARD_REQUEST_TEXT.it })
+    expect(f.emailText.en.mode).toBe('standard')
+    expect(ruleBody(f).emailText).toBeNull()
+    expect(ruleBody(NEW_RULE_FORM).emailText).toBeNull()
+    // Picking "own" and saving the standard words unchanged is still the standard text.
+    expect(ruleBody(withTextMode(f, 'it', 'own')).emailText).toBeNull()
+    expect(changedFields(f, withTextMode(f, 'it', 'own'))).toEqual([])
+  })
+
+  it('a language’s own words go into the save; the other stays standard; back to standard drops them', () => {
+    const f = withText(withText(formFromRule(SHOP), 'en', { subject: ownEn.subject }), 'en', { body: ownEn.body })
+    expect(ruleBody(f).emailText).toEqual({ en: ownEn })
+    expect(changedFields(formFromRule(SHOP), f)).toEqual(['emailText'])
+    expect(previewText(f.emailText, 'en')).toEqual(ownEn)
+    expect(previewText(f.emailText, 'it')).toBeNull()
+    expect(ruleBody(withTextMode(f, 'en', 'standard')).emailText).toBeNull()
+    // The words stay in the editor while "Standard" is picked, and come back with "own".
+    expect(withTextMode(withTextMode(f, 'en', 'standard'), 'en', 'own').emailText.en).toEqual({ mode: 'own', ...ownEn })
+    expect(withStandardWords(f, 'en').emailText.en).toEqual({ mode: 'own', ...STANDARD_REQUEST_TEXT.en })
+  })
+
+  it('a saved text comes back as that language’s own text', () => {
+    const f = formFromRule({ ...SHOP, emailText: { en: ownEn } })
+    expect(f.emailText.en).toEqual({ mode: 'own', ...ownEn })
+    expect(f.emailText.it.mode).toBe('standard')
+    expect(ruleBody(f).emailText).toEqual({ en: ownEn })
+  })
+
+  it('the live check holds Save with the reason in words; the standard text has nothing to fix', () => {
+    const f = formFromRule(SHOP)
+    expect(languageIssues(f.emailText.it)).toEqual([])
+    const bad = withText(f, 'it', { body: `${STANDARD_REQUEST_TEXT.it.body}\n\nUn buono sconto per la tua recensione!` })
+    expect(languageIssues(bad.emailText.it).map((i) => i.code)).toEqual(['incentive'])
+    expect(saveHeld(bad, OK)).toBe('Fix the Italian e-mail text first: It offers something for a review. Nothing may be given or promised for a review — no discount, gift, refund or free product.')
+    const noButton = withText(f, 'en', { body: STANDARD_REQUEST_TEXT.en.body.replace('{review_button}', '') })
+    expect(saveHeld(noButton, OK)).toMatch(/^Fix the English e-mail text first: The review button is missing/)
+    // Standard again: nothing to fix.
+    expect(saveHeld(withTextMode(bad, 'it', 'standard'), OK)).toBeNull()
+  })
+
+  it('an Amazon or eBay rule shows no text: its hidden words never hold Save, and only sendable words are kept', () => {
+    const bad = withText(formFromRule(SHOP), 'en', { subject: 'Free gift for 5 stars' })
+    const amazon = withScope(bad, 'AMAZON_GLOBAL')
+    expect(saveHeld(amazon, OK)).toBeNull()
+    expect(ruleBody(amazon).emailText).toBeNull()
   })
 })

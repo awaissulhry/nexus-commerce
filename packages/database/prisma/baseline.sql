@@ -6234,6 +6234,7 @@ CREATE TABLE "ReviewRule" (
     "sendHourLocal" INTEGER,
     "skipWeekends" BOOLEAN NOT NULL DEFAULT false,
     "shiftToBestDay" BOOLEAN NOT NULL DEFAULT false,
+    "emailText" JSONB,
 
     CONSTRAINT "ReviewRule_pkey" PRIMARY KEY ("id")
 );

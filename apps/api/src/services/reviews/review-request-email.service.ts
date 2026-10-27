@@ -17,8 +17,15 @@
  *
  * sendReviewRequestEmail() sends; renderReviewRequestEmail() is the same e-mail for the Preview (no send). Sending is
  * switched off on a server that does not send e-mail (the transport answers a dry run).
+ *
+ * Reviews N3 (2026-10-27) — a rule's own text. When the rule that asks has its own subject and text for the buyer's
+ * language (`ruleText`, checked by @nexus/shared/review-request-text), the e-mail carries those words in the same frame
+ * (the business's mark, the review button where `{review_button}` stands, the unsubscribe link where `{unsubscribe_link}`
+ * stands, the same footer about the order). Without one — every rule until a person writes and saves one — the
+ * standard e-mail below goes out exactly as before.
  */
 
+import { checkRequestText, fillRequestText, requestTextSegments, type RequestText } from '@nexus/shared/review-request-text'
 import { sendEmail } from '../email/transport.js'
 import { resolveBusinessIdentity, type BusinessIdentity } from '../business-identity.service.js'
 
@@ -34,6 +41,13 @@ export interface ReviewEmailContext {
   /** Where the buyer leaves the review (review-links.service.ts): the business's own shop; null = no button. */
   reviewUrl: string | null
   locale?: 'it' | 'en'
+  /**
+   * N3 — the asking rule's own subject and text for this language (null/absent = the standard e-mail). Used only when
+   * it passes the check; the sender reads it with `ruleTextFor`.
+   */
+  ruleText?: RequestText | null
+  /** N3 — where `{unsubscribe_link}` points (the sender's one-click link); none in a preview. */
+  unsubscribeUrl?: string | null
 }
 
 // ── productType → review-angle copy ───────────────────────────────────────
@@ -102,6 +116,10 @@ function renderHtml(ctx: ReviewEmailContext, identity: BusinessIdentity): { subj
   const support = escapeHtml(identity.supportEmail)
   const supportIt = identity.xavia ? 'assistenza@xavia.it' : support
   const tagline = (line: string) => (identity.xavia ? `<span style="color:#9b8ea8;font-size:12px;display:block;margin-top:4px">${line}</span>` : '')
+  // N3 — the rule's own words in the same frame, only when they pass the check (a stored text that does not is never sent).
+  if (ctx.ruleText && checkRequestText(ctx.ruleText).length === 0) {
+    return renderRuleText(ctx, ctx.ruleText, identity, { support, supportIt, tagline: tagline(it ? 'Abbigliamento da moto' : 'Motorcycle Gear') })
+  }
   const { itAngle, enAngle } = productAngle(ctx.productType)
   const angle = it ? itAngle : enAngle
   const firstName = escapeHtml(ctx.customerName?.split(' ')[0]?.trim() || (it ? 'motociclista' : 'rider'))
@@ -197,6 +215,96 @@ function renderHtml(ctx: ReviewEmailContext, identity: BusinessIdentity): { subj
 }
 
 /**
+ * N3 — the e-mail with a rule's own subject and text: the standard e-mail's frame and footer, the rule's words in it.
+ * `{first_name}`, `{product}` and `{aspects}` are filled as the standard e-mail fills them; `{review_button}` is the
+ * button (nothing without a review page — never a dead link); `{unsubscribe_link}` is the one-click link.
+ */
+function renderRuleText(
+  ctx: ReviewEmailContext,
+  own: RequestText,
+  identity: BusinessIdentity,
+  frame: { support: string; supportIt: string; tagline: string },
+): { subject: string; html: string; text: string } {
+  const it = (ctx.locale ?? 'it') === 'it'
+  const { itAngle, enAngle } = productAngle(ctx.productType)
+  const values = {
+    firstName: ctx.customerName?.split(' ')[0]?.trim() || (it ? 'motociclista' : 'rider'),
+    product: ctx.productName ?? (it ? 'il tuo acquisto' : 'purchase'),
+    aspects: it ? itAngle : enAngle,
+  }
+  const subject = fillRequestText(own.subject, values).replace(/\s+/g, ' ').trim()
+  const brand = escapeHtml(identity.brandName)
+  const mark = escapeHtml(identity.brandMark)
+  const { support, supportIt } = frame
+  const reviewHref = ctx.reviewUrl ? escapeHtml(ctx.reviewUrl) : null
+  const unsubHref = ctx.unsubscribeUrl ? escapeHtml(ctx.unsubscribeUrl) : null
+  const orderRef = ctx.channelOrderId ? escapeHtml(ctx.channelOrderId) : null
+  const buttonLabel = it ? 'Lascia una recensione →' : 'Leave a review →'
+  const unsubLabel = it ? 'Annulla l’iscrizione' : 'Unsubscribe'
+  // Escaped, then the buyer's and the catalogue's words filled in escaped, line breaks kept.
+  const words = (t: string) => escapeHtml(fillRequestText(t, values)).replace(/\n/g, '<br>')
+  const segments = requestTextSegments(own.body)
+  const body = segments.map((seg) => {
+    if (seg.kind === 'button') {
+      return reviewHref
+        ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr><td align="center" style="padding:8px 0 24px">
+      <a href="${reviewHref}" style="display:inline-block;background:#e63946;color:#ffffff;font-size:15px;font-weight:bold;padding:14px 32px;border-radius:6px;text-decoration:none">
+        ${buttonLabel}
+      </a>
+    </td></tr>
+    </table>`
+        : ''
+    }
+    const inner = seg.pieces.map((p) => (p.kind === 'text'
+      ? words(p.text)
+      : unsubHref ? `<a href="${unsubHref}" style="color:#999">${unsubLabel}</a>` : `<span style="text-decoration:underline">${unsubLabel}</span>`)).join('')
+    return seg.footer
+      ? `
+    <p style="color:#999;font-size:12px;line-height:1.5;margin:0 0 8px">${inner}</p>`
+      : `
+    <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">${inner}</p>`
+  }).join('')
+  const footer = it
+    ? `Hai ricevuto questa email perché hai acquistato da ${brand}${orderRef ? ` (ordine ${orderRef})` : ''}.
+      Per domande sul tuo ordine scrivi a <a href="mailto:${supportIt}" style="color:#e63946">${supportIt}</a>.`
+    : `You received this email because you purchased from ${brand}${orderRef ? ` (order ${orderRef})` : ''}.
+      Questions about your order? Write to <a href="mailto:${support}" style="color:#e63946">${support}</a>.`
+  const html = `<!DOCTYPE html>
+<html lang="${it ? 'it' : 'en'}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+<tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden">
+  <tr><td style="background:#1a1a2e;padding:24px 32px;text-align:center">
+    <span style="color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:2px">${mark}</span>
+    ${frame.tagline}
+  </td></tr>
+  <tr><td style="padding:32px">${body}
+    <p style="color:#999;font-size:12px;line-height:1.5;margin:24px 0 0;border-top:1px solid #eee;padding-top:16px">
+      ${footer}
+    </p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`
+  const text = segments.flatMap((seg) => {
+    if (seg.kind === 'button') return ctx.reviewUrl ? [`${it ? 'Lascia una recensione' : 'Leave a review'}: ${ctx.reviewUrl}`] : []
+    const line = seg.pieces.map((p) => (p.kind === 'text' ? fillRequestText(p.text, values) : ctx.unsubscribeUrl ? `${unsubLabel}: ${ctx.unsubscribeUrl}` : unsubLabel)).join('').trim()
+    return line ? [line] : []
+  }).join('\n\n')
+  const footerText = it
+    ? `Hai ricevuto questa email perché hai acquistato da ${identity.brandName}${ctx.channelOrderId ? ` (ordine ${ctx.channelOrderId})` : ''}.`
+    : `You received this email because you purchased from ${identity.brandName}${ctx.channelOrderId ? ` (order ${ctx.channelOrderId})` : ''}.`
+  return { subject, html, text: `${text}\n\n${footerText}` }
+}
+
+/**
  * Reviews area PR C — the review request e-mail exactly as `sendReviewRequestEmail` sends it, for the Requests page's
  * "Preview email" (pure: no send, no database).
  */
@@ -222,7 +330,7 @@ export async function sendReviewRequestEmail(ctx: ReviewEmailContext): Promise<{
   const identity = found.identity
   const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '')
   const unsubUrl = `${webBase}/api/email/unsubscribe?token=${unsubscribeTokenFor(ctx.to)}&channel=review-request`
-  const rendered = renderHtml(ctx, identity)
+  const rendered = renderHtml({ ...ctx, unsubscribeUrl: unsubUrl }, identity)
   const result = await sendEmail({
     to: ctx.to,
     subject: rendered.subject,
