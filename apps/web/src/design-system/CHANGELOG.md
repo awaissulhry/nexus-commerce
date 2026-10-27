@@ -1,3 +1,12 @@
+## Sparkline fixed axis — 2026-10-28
+
+Reviews › Amazon topics (lane N5b). Both apps, identical: `components/{Sparkline.tsx, sparklineModel.ts, index.ts}`.
+- **`Sparkline domain?: SparkDomain`** (`readonly [low: number | null, high: number | null]`): the axis the line always
+  spans; an end left `null` is the readings' own; a reading outside it widens it, so nothing is cut off. `[0, null]` draws
+  from zero to the highest reading, so a share that moves 11 → 11.2 % stays flat instead of filling the box. Without it
+  the line spans the readings' own low and high, as before. `sparkGeometry(values, shape, box, domain?)`; its `min` /
+  `max` stay the readings' own. Accessible name and hover words unchanged. First used by the Amazon topics' 6-month trend.
+
 ## Sub-sidebar rows can hold rows under a chevron — 2026-10-27
 
 Owner-approved board "Sidebar · channel rows with markets". Both apps, identical: `patterns/{WorkspaceSubheader.tsx,

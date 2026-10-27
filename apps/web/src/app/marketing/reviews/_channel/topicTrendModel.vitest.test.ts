@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { sparkSummary } from '@/design-system/components/sparklineModel'
-import { monthsSpanned, monthWord, shareWords, topicTrendView, TREND_NONE, TREND_NOT_READ, TREND_REFUSED, type TopicTrend } from './topicTrendModel'
+import { sparkGeometry, sparkSummary } from '@/design-system/components/sparklineModel'
+import { monthsSpanned, monthWord, SHARE_AXIS, shareWords, topicTrendView, TREND_NONE, TREND_NOT_READ, TREND_REFUSED, type TopicTrend } from './topicTrendModel'
 
 // 2026-10-27 — Reviews › Amazon: a topic's 6-month trend (Amazon's getItemReviewTrends, read with the weekly topics).
 const months = (shares: Array<number | null>, start = 5, year = 2026) => shares.map((share, i) => {
@@ -23,6 +23,17 @@ describe('a topic’s 6-month trend', () => {
     const view = topicTrendView(ok([4, 5, 5, 6, 8, 9]))
     expect(sparkSummary(view.label, view.values ?? [], shareWords))
       .toBe('Rose from 4% to 9% of reviews over 6 months, May–Oct 2026: 6 readings, low 4%, high 9%, now 9%')
+  })
+
+  it('the line runs from 0 % to the highest month: "held at 11%" draws flat, 4 → 9 % climbs', () => {
+    const ys = (values: number[]) => {
+      const g = sparkGeometry(values, 'line', undefined, SHARE_AXIS)
+      return [...g.path.matchAll(/[ML] [\d.]+ ([\d.]+)/g)].map((m) => Number(m[1]))
+    }
+    const held = ys([11, 11.2, 10.8, 11, 11.1, 11])
+    expect(Math.max(...held) - Math.min(...held)).toBeLessThan(1) // under a pixel in the 22 px line
+    const rose = ys([4, 5, 5, 6, 8, 9])
+    expect(rose[0] - rose[rose.length - 1]).toBeGreaterThan(9) // more than half the 18 px drawing height
   })
 
   it('fell, held, a missing month, a year boundary', () => {

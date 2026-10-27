@@ -97,3 +97,9 @@ A moment in time: `DateField` + a time `Listbox` + the viewer's zone ("Europe/Ro
 ### DateField calendar — 2026-09-19
 
 The calendar is portalled (fixed coordinates, like `Listbox`), so a `Modal` or a scrolling panel no longer cuts it off. Opening moves focus to the chosen day (else today); Tab stays inside the calendar; Escape closes only the calendar and returns to the field. It carries `ag-custom-component-popup`, so it works inside an AG Grid cell editor. Verify inside a `Modal`: keyboard open, Tab, Escape (the modal stays open), pick a day.
+
+### Sparkline fixed axis — 2026-10-28
+
+`Sparkline` scales its line to the readings' own low and high by default (a bid, spend a week). For a value whose size
+matters — a share of reviews — pass `domain={[0, null]}`: the line then runs from zero to the highest reading, so 11 →
+11.2 % draws flat and 4 → 9 % climbs. Either end may be fixed (`[0, 100]`); a reading outside the axis widens it.

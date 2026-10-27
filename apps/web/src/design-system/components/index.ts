@@ -113,7 +113,7 @@ export { Timeline, type TimelineProps, type TimelineStep } from './Timeline'
 // Bid page DS lane (2026-10-10) — a small step chart (promoted from the parked BidSpark), and what a row works on as links.
 export { Sparkline, type SparklineProps } from './Sparkline'
 export { RecordLayout, type RecordLayoutProps } from './RecordLayout'
-export { sparkGeometry, sparkSummary, sparkWords, SPARK_BOX, type SparkShape, type SparkValue, type SparkBox, type SparkGeometry } from './sparklineModel'
+export { sparkGeometry, sparkSummary, sparkWords, SPARK_BOX, type SparkDomain, type SparkShape, type SparkValue, type SparkBox, type SparkGeometry } from './sparklineModel'
 export { EntityLinks, type EntityLinksProps, type EntityLinkComponent } from './EntityLinks'
 export { entityLinksView, entityLinksText, entityCountWords, compareEntityLinks, type EntityRef, type EntityNoun, type EntityLinksView } from './entityLinksModel'
 // Reviews parts (2026-10-26) — stars for a rating (read or pick), and how ratings spread over 5…1 stars as filter bars.
