@@ -19,7 +19,7 @@ import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import Link from '@/lib/workspaces/Link'
 import { moneyText, relWords, whenWords } from '../../bid/_shared/format'
 import { WAITING_PAGE, fetchWaitingRows } from './wasteRulesApi'
-import { askWhat, plural, waitingAsksOf, waitingGap, type WaitingAsk, type WasteRuleRow } from './wasteRulesModel'
+import { askRowsTag, askWhat, plural, waitingAsksOf, waitingGap, type WaitingAsk, type WasteRuleRow } from './wasteRulesModel'
 import { KindMark, MatchChip } from '../waste/marks'
 import { xCpaText } from '../waste/wasteModel'
 import type { Match } from '../waste/wasteTypes'
@@ -74,7 +74,7 @@ export function WasteWaitingTab({ row, market, phone, reloadKey, decideHeld, onD
             <KindMark kind={first.kind} match={first.match as Match} />
             <span className={styles.ellipsis} title={first.text}>{first.text}</span>
             <MatchChip match={first.match as Match} />
-            {a.rows.length > 1 && <HintTag label={`${a.rows.length} places`} hint={a.rows.map((x) => x.adGroup.name).join(' · ')} />}
+            {askRowsTag(a) && <HintTag label={askRowsTag(a)!.label} hint={askRowsTag(a)!.hint} />}
           </span>
           <span className={styles.line}>
             <EntityPath items={[first.campaign, first.adGroup]} linkAs={WorkspaceLink} label="Where" />

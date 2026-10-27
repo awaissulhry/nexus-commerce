@@ -1,6 +1,7 @@
 /**
  * Negative Targeting page (NREAD) — ONE owner per row, pure (the Bid page's bid-owner.ts pattern). Kinds: Brain · Rule ·
- * Harvest · You (PERSON) · Claude · — (NONE). read.ts gives the facts; each is read where its writer keeps it.
+ * Harvest · a person by name (PERSON; "You" only for the person looking: viewerNamed, HONEST 19) · Claude · — (NONE).
+ * read.ts gives the facts; each is read where its writer keeps it.
  *
  * A row that RUNS or is PAUSED (a keyword, or a search term not negated in its place), first that applies:
  *   1. kept paused         the hold's holder (AdTarget.keptPausedBy — NWRITE's columns, read defensively in read.ts)
@@ -31,7 +32,17 @@ export interface OwnerNames {
   rules: ReadonlyMap<string, string>
   /** Change sets (AgentApproval ids) asked for through Claude: a person's write inside one is Claude's. */
   claudeChangeSets: ReadonlySet<string>
+  /** HONEST 19 — a person's name by their actor (`user:<id>`, hold.ts actorNames: the profile's name, else e-mail). */
+  people?: ReadonlyMap<string, string>
 }
+
+/** HONEST 19 — a person Nexus has no name for (no record of who, or no profile): never "You". */
+export const UNNAMED_PERSON = 'A person'
+
+/** A person as an owner: their own name (never "You": only the person looking reads "You" — viewerNamed). */
+export const personOwner = (id: string | null, names?: Pick<OwnerNames, 'people'> | null): Owner => ({
+  kind: 'PERSON', name: (id ? names?.people?.get(`user:${id}`) : null) ?? UNNAMED_PERSON, id,
+})
 
 const stripLegacy = (actor: string | null | undefined): string | null => {
   let a = actor ?? null
@@ -41,7 +52,8 @@ const stripLegacy = (actor: string | null | undefined): string | null => {
 
 /**
  * Who one recorded write was, as an owner: the brain's writers are the Brain (its harvest writer is Harvest), a rule is
- * the rule by name, a harvest actor is Harvest, a person inside a Claude change set is Claude, else the person (You).
+ * the rule by name, a harvest actor is Harvest, a person inside a Claude change set is Claude, else the person by their
+ * own name (names.people; "A person" when Nexus has none).
  * An engine this page has no kind for keeps its own name under — (NONE); no actor, or a rule since deleted, is Unknown.
  */
 export function ownerOfActor(actor: string | null | undefined, names: OwnerNames, executionId?: string | null): Owner {
@@ -60,9 +72,27 @@ export function ownerOfActor(actor: string | null | undefined, names: OwnerNames
   if (c.kind === 'person') {
     if (executionId && names.claudeChangeSets.has(executionId)) return { kind: 'CLAUDE', name: 'Claude', id: executionId }
     const id = a!.startsWith('user:') ? a!.slice(5) : a!
-    return { kind: 'PERSON', name: 'You', id }
+    return personOwner(id, names)
   }
   return { ...UNKNOWN }
+}
+
+/**
+ * HONEST 19 — "You" only for the person looking: a copy of an answer where every person `viewerId` names (an owner of
+ * kind PERSON, or a `by` ref with their id) reads "You"; every other person keeps their own name. Pure; no viewer: as is.
+ */
+export function viewerNamed<T>(payload: T, viewerId: string | null | undefined): T {
+  if (!viewerId) return payload
+  const walk = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(walk)
+    if (!v || typeof v !== 'object' || Object.getPrototypeOf(v) !== Object.prototype) return v
+    const o = v as Record<string, unknown>
+    const out: Record<string, unknown> = {}
+    for (const [k, x] of Object.entries(o)) out[k] = walk(x)
+    if (o.id === viewerId && typeof o.name === 'string' && (o.kind === undefined || o.kind === 'PERSON')) out.name = 'You'
+    return out
+  }
+  return walk(payload) as T
 }
 
 /** An owner as a Ref (a change's `by`). */
@@ -85,7 +115,7 @@ export interface RowOwnerFacts {
 }
 
 export function rowOwner(f: RowOwnerFacts, now: number, names: OwnerNames): Owner {
-  if (f.hold) return f.hold.by ? ownerOfActor(f.hold.by, names) : { kind: 'PERSON', name: 'You', id: null }
+  if (f.hold) return f.hold.by ? ownerOfActor(f.hold.by, names) : personOwner(null)
   const recent = f.lastWriter && now - f.lastWriter.at <= 7 * 86_400_000 ? f.lastWriter.owner : null
   // What waits is newer news than an older change; a change made after the ask is newer than the ask.
   if (f.waitingBy && !(recent && f.lastWriter!.at > (f.waitingAt ?? 0))) return f.waitingBy
@@ -107,7 +137,7 @@ const ORIGINS: Record<string, Owner> = {
   BRAIN: { kind: 'BRAIN', name: 'Brain', id: 'brain' },
   PLAYBOOK: { kind: 'PERSON', name: 'Playbook', id: 'playbook' },
   CLAUDE: { kind: 'CLAUDE', name: 'Claude', id: null },
-  PERSON: { kind: 'PERSON', name: 'You', id: null },
+  PERSON: { kind: 'PERSON', name: UNNAMED_PERSON, id: null },
   AMAZON: { kind: 'NONE', name: 'Amazon', id: null },
 }
 
@@ -122,7 +152,7 @@ export interface NegativeFacts {
   create?: { actor: string | null; executionId: string | null; evidence: unknown } | null
 }
 
-/** Who made a standing negative (one owner, the names of the contract: Brain funnel, Brain, Harvest, Playbook, a rule, You, Claude, Amazon, Unknown). */
+/** Who made a standing negative (one owner, the names of the contract: Brain funnel, Brain, Harvest, Playbook, a rule, a person by name, Claude, Amazon, Unknown). */
 export function negativeOwner(f: NegativeFacts, names: OwnerNames): Owner {
   const origin = String(f.origin ?? '').trim().toUpperCase()
   if (origin === 'RULE') {
@@ -133,7 +163,7 @@ export function negativeOwner(f: NegativeFacts, names: OwnerNames): Owner {
   if (origin && ORIGINS[origin]) {
     const o = { ...ORIGINS[origin] }
     if (origin === 'CLAUDE' && f.create?.executionId) o.id = f.create.executionId
-    if (origin === 'PERSON' && f.create?.actor) o.id = String(f.create.actor).replace(/^user:/, '')
+    if (origin === 'PERSON' && f.create?.actor) return personOwner(String(f.create.actor).replace(/^user:/, ''), names)
     return o
   }
   if (f.harvestSource) return { ...HARVEST_OWNER }

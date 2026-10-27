@@ -302,7 +302,7 @@ export function wasteColumns(phone: boolean): ColDef<WasteGridRow>[] {
     { colId: 'spend90', headerName: L.spend90, valueGetter: (p) => p.data?.d90?.spendCents ?? null, valueFormatter: moneyOf, width: 112, cellClass: num, ...numeric, sortable: false },
     { colId: 'trend', headerName: L.trend, valueGetter: (p) => p.data?.spark ?? null, cellRenderer: TrendCell, width: 104, cellClass: 'nds-ag-cell', sortable: false, getQuickFilterText: () => '', valueFormatter: () => '' },
     { ...integerColumn<WasteGridRow>('stockOutDays'), colId: 'stockOut', headerName: L.stockOut, width: 120, sortable: false, headerTooltip: 'Days left out: the product was out of stock' },
-    { ...integerColumn<WasteGridRow>('stillServesIn'), colId: 'stillServes', headerName: L.stillServes, width: 128, sortable: false, headerTooltip: 'Other ad groups where these words still spend' },
+    { ...integerColumn<WasteGridRow>('stillServesIn'), colId: 'stillServes', headerName: L.stillServes, width: 128, sortable: false, headerTooltip: 'Other ad groups where these words spent in the window, not blocked there now' },
     actionsColumn<WasteGridRow>({
       primary: (row) => verbOf(wasteVerb(row)) as never,
       prefsLabel: 'Action',
@@ -364,7 +364,7 @@ export function stoppedColumns(phone: boolean): ColDef<StoppedGridRow>[] {
     { colId: 'spendBefore', headerName: L.spendBefore, valueGetter: (p) => p.data?.spendBeforeCents ?? null, valueFormatter: moneyOf, cellRenderer: SpendBeforeCell, width: 112, cellClass: num, ...numeric, headerTooltip: SPEND_BEFORE_WORDS },
     { colId: 'saved', headerName: L.saved, valueGetter: (p) => (p.data ? savedView(p.data).cents : null), valueFormatter: (p) => (p.data ? savedView(p.data).text : ''), cellRenderer: SavedCell, width: 100, cellClass: num, ...numeric, headerTooltip: SAVED_WORDS },
     { colId: 'state', headerName: L.state, valueGetter: (p) => (p.data ? stateChip(p.data).word : ''), cellRenderer: StoppedStateCell, width: 150, minWidth: 130, cellClass: 'nds-ag-cell' },
-    { ...integerColumn<StoppedGridRow>('stillServesIn'), colId: 'stillServes', headerName: L.stillServes, width: 128, headerTooltip: 'Other ad groups where these words still spend' },
+    { ...integerColumn<StoppedGridRow>('stillServesIn'), colId: 'stillServes', headerName: L.stillServes, width: 128, headerTooltip: 'Other ad groups where these words spent since the stop, not blocked there now' },
     actionsColumn<StoppedGridRow>({ primary: (row) => verbOf(stoppedVerb(row)) as never, prefsLabel: 'Action', pinned: !phone }),
   ]
   // Every column but the verbs is ordered by the server (`?sort=`), as on the Wasting view.

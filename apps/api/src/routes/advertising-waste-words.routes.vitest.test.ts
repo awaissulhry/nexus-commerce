@@ -309,7 +309,10 @@ describe('Block word — POST /waste/preview | apply: one negative phrase per pl
     expect(await inA(() => commitScheduledApproval(body.changeSetId))).toMatchObject({ ok: true })
     const made = await inA(() => database.client.adTarget.findMany({ where: { isNegative: true, expressionValue: 'cheap' }, orderBy: { adGroupId: 'asc' } }))
     expect(made.map((n) => [n.adGroupId, n.expressionType, n.negativeLevel])).toEqual([['g-a', 'NEGATIVE_PHRASE', 'AD_GROUP'], ['g-c', 'NEGATIVE_PHRASE', 'AD_GROUP']])
-    // The word now reads blocked in that place too; a second Block word has nothing to send there.
+    // HONEST 6 — the sandbox gave it no Amazon id: it stands in Nexus but blocks nothing, so the place is not blocked yet.
+    expect(wordOf((await words()).rows, 'cheap')).toMatchObject({ places: { blocked: 1, open: 1 }, state: 'PARTLY_BLOCKED' })
+    // Once Amazon holds it, the word reads blocked in that place too; a second Block word has nothing to send there.
+    await inA(() => database.client.adTarget.updateMany({ where: { isNegative: true, expressionValue: 'cheap', adGroupId: 'g-a' }, data: { externalTargetId: 'EXT-neg-cheap-g-a' } }))
     const cheap = wordOf((await words()).rows, 'cheap')
     expect(cheap).toMatchObject({ places: { blocked: 2, open: 0 }, state: 'PARTLY_BLOCKED' })
     const again = (await post('/preview', { items })).json()

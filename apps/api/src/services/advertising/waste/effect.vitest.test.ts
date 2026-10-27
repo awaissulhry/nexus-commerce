@@ -45,13 +45,17 @@ describe('stopEffect', () => {
     expect(stopEffect({ since: ago(30), now: NOW, spend: { before: 4500, after: 0 }, stillIn: 0 })).toMatchObject({ verdict: 'SAVED', beforePerDayCents: 150, savedCents: 150 * 27, words: 'No spend here in the 27 days since the stop' })
   })
 
-  it('it spends as much as before (a saving below 0 is said, never hidden); it spent nothing before nor since', () => {
-    expect(stopEffect({ since: ago(20), now: NOW, spend: { before: 2000, after: 2500 }, stillIn: 0 })).toMatchObject({ verdict: 'SAVED', savedCents: 100 * 17 - 2500, words: 'Spends as much here as before, in the 17 days since the stop' })
+  it('it spends more than before (HONEST 14: a saving below 0 is said as more, never "as much"); as much; nothing before nor since', () => {
+    expect(stopEffect({ since: ago(20), now: NOW, spend: { before: 2000, after: 2500 }, stillIn: 0 })).toMatchObject({ verdict: 'SAVED', savedCents: 100 * 17 - 2500, words: 'Spends more here in the 17 days since the stop than before it' })
+    // 1700 over the 20 days before = 85 a day × 17 days = 1445: spent exactly that since, so it saved 0.
+    expect(stopEffect({ since: ago(20), now: NOW, spend: { before: 1700, after: 1445 }, stillIn: 0 })).toMatchObject({ savedCents: 0, words: 'Spends as much here as before, in the 17 days since the stop' })
+    // Nothing before, something since: more, never "as much".
+    expect(stopEffect({ since: ago(20), now: NOW, spend: { before: 0, after: 300 }, stillIn: 0 })!.words).toBe('Spends more here in the 17 days since the stop than before it')
     expect(stopEffect({ since: ago(20), now: NOW, spend: { before: 0, after: 0 }, stillIn: 0 })).toMatchObject({ savedCents: 0, words: 'It spent nothing in the 20 days before the stop, nor in the 17 days since' })
   })
 
-  it('still spends: its words spend in another place; the saving here is still said', () => {
-    expect(stopEffect({ since: ago(40), now: NOW, spend: { before: 9000, after: 0 }, stillIn: 2 })).toMatchObject({ verdict: 'STILL_SPENDS', savedCents: 300 * 37, words: 'Stopped here, but its words still spend in 2 other ad groups' })
+  it('still spends: its words spent in another place since the stop (HONEST 18b); the saving here is still said', () => {
+    expect(stopEffect({ since: ago(40), now: NOW, spend: { before: 9000, after: 0 }, stillIn: 2 })).toMatchObject({ verdict: 'STILL_SPENDS', savedCents: 300 * 37, words: 'Stopped here, but its words spent in 2 other ad groups since the stop' })
   })
 
   it('no before held by Nexus, or no spend read: no effect (never a guess)', () => {

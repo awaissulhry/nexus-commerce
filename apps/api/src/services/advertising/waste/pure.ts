@@ -76,6 +76,10 @@ export interface RowTest {
   clicksNeeded: number
   spendBarCents: number | null
   xCpaBar: number | null
+  /** HONEST 15 — false: the row is listed only for an ask (askOnly), the test never ran on it; absent: it was judged. */
+  judged?: false
+  /** HONEST 18c — the last day whose clicks and spend the window counts (YYYY-MM-DD, 3 days ago): "60 days to 24 Oct". */
+  settledThrough?: string
 }
 
 export interface RowNumbers {
@@ -120,10 +124,32 @@ export interface WasteRow {
     approvalId: string; by: Ref; at: string; expiresAt: string | null; rows: number
     /** NFIX — the ask is a change plan: its steps (decided whole) and how many are not on this page. */
     plan?: { steps: number; offPage: number }
+    /**
+     * HONEST 10 — the ask's OWN change at this row, never the row's verb: its action, the negative's match (our keyword's
+     * own for a pause), where it lands (a negative's ad group or whole campaign; null for a pause), its words, and for a
+     * pause whether it keeps it paused. Absent on an older answer.
+     */
+    action?: VerbAction
+    match?: Match | null
+    level?: 'AD_GROUP' | 'CAMPAIGN' | null
+    text?: string | null
+    keepPaused?: boolean
+    /** HONEST 18d — a removal: whether Amazon holds the negative (false: it changes Nexus only, nothing is archived). */
+    atAmazon?: boolean
+    /** HONEST 11 — how many of this page's changes the ask holds, in every market (1: one change, which may still cover several rows). */
+    changes?: number
   }
   skipped: null | { until: string; by: string | null; at: string | null }
-  /** TERM: other live ad groups where the term still served in the window, not blocked there; KEYWORD: where its text did. */
+  /**
+   * TERM: other live ad groups where the term spent in the window (to its settled day), not blocked there now; KEYWORD:
+   * where its text did (HONEST 18b: spend, never impressions alone).
+   */
   stillServesIn: number
+  /**
+   * HONEST 13 — a NEGATED term: the standing negative that blocks it here (its own words, match and level — never the
+   * match of the keyword that bought the term). Absent on every other row.
+   */
+  blockedBy?: { rowId: string; text: string; match: 'EXACT' | 'PHRASE' | 'ASIN'; level: 'AD_GROUP' | 'CAMPAIGN'; campaign: Ref; adGroup: Ref | null; owner: Owner }
   lastChange: null | { action: string; at: string; by: Ref; changeId: string | null }
   /**
    * NFIX (2026-10-11) — a row that is listed ONLY because something waits on it here (the Brain's, a rule's, Claude's or a
@@ -169,8 +195,9 @@ export interface RowProtection {
 }
 
 /**
- * TURNED_ON — kept paused, but switched on outside Nexus · NEG_OVER_OWN_KEYWORD — a negative over our own live keyword in its own
- * place · BLOCKS_SOLD — a negative blocks a search term that sold in this place in the window.
+ * TURNED_ON — kept paused, but switched on outside Nexus · NEG_OVER_OWN_KEYWORD — a negative in our own live keyword's place
+ * that blocks now every search it can serve (negativeClashesWith; never the Owner's funnel) · BLOCKS_SOLD — a negative that
+ * blocks now a search term which sold in this place in the window (never a funnel negative: it hands the sale on purpose).
  */
 export type ClashKind = 'TURNED_ON' | 'NEG_OVER_OWN_KEYWORD' | 'BLOCKS_SOLD'
 export const CLASH_LABELS: Readonly<Record<ClashKind, string>> = {
@@ -189,6 +216,8 @@ export interface WasteTotals {
   wastingSpendByCurrency: Record<string, number>
   /** Why the spend is not one number (several currencies); null when it is. */
   wastingSpendNote: string | null
+  /** HONEST 18c — the windows (days) of the rows the wasting spend sums, lowest first: one, or several (30, 60, 90). */
+  wastingWindows?: number[]
   keywords: number
   terms: number
   waiting: number
@@ -287,6 +316,34 @@ export function negativeBlocksTerm(term: string, negative: { text: string; match
   if (!n || !term) return false
   if (negative.match === 'PHRASE') return padded(term).includes(padded(n))
   return n === term
+}
+
+/**
+ * HONEST 5 — is this standing negative a CLASH with our keyword or product target: does it block EVERY search ours can
+ * serve? Our EXACT keyword: a negative exact of its words, or a negative phrase its words hold (whole, in order). Our
+ * PHRASE keyword: a negative phrase its words hold. Our product target: a negative product of the same ASIN. Never a
+ * broad keyword, an auto or category target, nor a negative product over a keyword: a negative exact over our phrase or
+ * broad keyword, and a negative phrase over our broad one, block only some of its searches (the Owner's funnel).
+ */
+export function negativeClashesWith(ours: { text: string; match: Match }, negative: { text: string; match: 'EXACT' | 'PHRASE' | 'ASIN' }): boolean {
+  const key = termKeyOf(ours.text)
+  if (!key) return false
+  if (ours.match === 'ASIN') return negative.match === 'ASIN' && isAsinText(key) && negativeBlocksTerm(key, negative)
+  if (negative.match === 'ASIN') return false
+  if (ours.match === 'EXACT') return negativeBlocksTerm(key, negative)
+  if (ours.match === 'PHRASE') return negative.match === 'PHRASE' && negativeBlocksTerm(key, negative)
+  return false
+}
+
+/**
+ * HONEST 5 — the Owner's funnel (his saved rule, 2026-10-09): a negative of our own keyword's very words in its place,
+ * narrower than it — a negative exact over our phrase or broad keyword, a negative phrase over our broad one. It hands
+ * those searches to the narrower keyword's place on purpose: never a clash.
+ */
+export function isFunnelNegative(ours: { text: string; match: Match }, negative: { text: string; match: 'EXACT' | 'PHRASE' | 'ASIN' }): boolean {
+  const key = termKeyOf(ours.text)
+  if (!key || key !== termKeyOf(negative.text)) return false
+  return (negative.match === 'EXACT' && (ours.match === 'PHRASE' || ours.match === 'BROAD')) || (negative.match === 'PHRASE' && ours.match === 'BROAD')
 }
 
 // ── The window ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -518,6 +575,7 @@ export function totalsOf(rows: readonly WasteRow[], show: ShowFilter, extra: { n
   // Waiting counts asks (an approval or a rule card), not rows: one ask may cover several places.
   const asks = new Set<string>()
   const byCurrency: Record<string, number> = {}
+  const windows = new Set<number>()
   // A search term's spend is part of the keyword that bought it: when that keyword's row wastes too, the money is
   // counted once (on the keyword), never twice.
   const wastingKeywords = new Set(rows.filter((r) => r.kind !== 'TERM' && isWasting(r)).map((r) => r.id.slice(3)))
@@ -530,7 +588,11 @@ export function totalsOf(rows: readonly WasteRow[], show: ShowFilter, extra: { n
     }
     if (isWasting(r)) {
       wasting++
-      if (!(r.kind === 'TERM' && r.via && wastingKeywords.has(r.via.id))) byCurrency[r.currency] = (byCurrency[r.currency] ?? 0) + (r.d?.spendCents ?? 0)
+      if (!(r.kind === 'TERM' && r.via && wastingKeywords.has(r.via.id))) {
+        byCurrency[r.currency] = (byCurrency[r.currency] ?? 0) + (r.d?.spendCents ?? 0)
+        // HONEST 18c — the tile says the window of the rows it sums, never the market's default alone.
+        windows.add(r.test.windowDays)
+      }
     }
     if (r.waiting) asks.add(r.waiting.approvalId)
     if (r.state === 'KEPT_PAUSED') keptPaused++
@@ -548,6 +610,7 @@ export function totalsOf(rows: readonly WasteRow[], show: ShowFilter, extra: { n
     currency: currencies.length === 1 ? currencies[0] : currencies.length === 0 && rowCurrencies.length === 1 ? rowCurrencies[0] : null,
     wastingSpendByCurrency: byCurrency,
     wastingSpendNote: several ? `The wasting spend is in ${currencies.length} currencies (${currencies.join(', ')}): see it per currency; it is never added up.` : null,
+    wastingWindows: [...windows].sort((a, b) => a - b),
     // The Clashes tile counts exactly the rows show=clashes answers (Bid audit M1).
     keywords, terms, waiting: asks.size, keptPaused, turnedOn, negated: extra.negated, clashes: rows.filter((r) => r.clash != null).length, skipped,
     // Step 4 — the Protected tile counts exactly the rows show=protected answers.

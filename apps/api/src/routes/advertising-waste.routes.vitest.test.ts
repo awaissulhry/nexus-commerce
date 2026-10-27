@@ -40,6 +40,8 @@ const ago = (days: number) => new Date(NOW - days * DAY)
 const dayAgo = (days: number) => new Date(Math.floor(NOW / DAY) * DAY - days * DAY)
 let app: FastifyInstance
 let permissions: ResolvedPermissions = { isOwner: true, permissions: new Set() }
+/** HONEST 19 — the person looking (the session's user); null: no one signed in. */
+let viewerId: string | null = null
 
 beforeAll(async () => {
   database = await formulaDatabase()
@@ -52,6 +54,8 @@ beforeAll(async () => {
   await withWorkspace(business(A), async () => {
     const c = database.client as any
     await c.adsAutomationState.create({ data: { id: 'singleton', defaultTargetAcosPct: 20 } })
+    // HONEST 19 — u1 has a profile (a name); every other person on record has none ("a person").
+    await c.userProfile.create({ data: { id: 'u1', displayName: 'Test person one', email: 'u1@example.test' } })
     await c.product.create({ data: { id: 'p-root', sku: 'TST-JACKET', name: 'Test jacket', basePrice: '80.00', isParent: true } })
     for (const s of ['M', 'L']) await c.product.create({ data: { id: `p-${s}`, sku: `TST-JACKET-${s}`, name: `Test jacket ${s}`, basePrice: '80.00', parentId: 'p-root' } })
     await c.amazonAdsPortfolio.create({ data: { profileId: 'P-IT', externalPortfolioId: 'PF-1', name: 'Test portfolio' } })
@@ -132,7 +136,7 @@ beforeAll(async () => {
     await negative('n-unknown', 'g-broad2', 'jacket old')
     await negative('n-gone', 'g-broad2', 'jacket gone', { status: 'ARCHIVED', retiredAt: ago(2), retireReason: 'test' })
     await c.advertisingActionLog.create({ data: { userId: 'user:u1', actionType: 'retire_negative', entityType: 'AD_TARGET', entityId: 'n-gone', payloadBefore: { status: 'ENABLED' }, payloadAfter: { status: 'ARCHIVED' }, amazonResponseStatus: 'SUCCESS', createdAt: ago(2) } })
-    // Our live broad keyword blocked by a negative in its own place: a clash.
+    // HONEST 5 — the Owner's funnel: a negative exact of our live broad keyword's own words in its place (on purpose: not a clash).
     await negative('n-clash', 'g-broad2', 'jacket')
     // A negative over a term that sold in its place in the window: a clash too ("Blocks a term that sold here").
     await negative('n-sold', 'g-broad1', 'jacket men')
@@ -185,6 +189,7 @@ beforeAll(async () => {
   app = Fastify()
   app.addHook('preHandler', (request, _reply, done) => {
     request.__rbacResolved = permissions
+    if (viewerId) (request as unknown as { authUser: { id: string } }).authUser = { id: viewerId }
     withWorkspace(business(A), done)
   })
   await app.register(routes, { prefix: '/api' })
@@ -301,8 +306,23 @@ describe('GET /api/advertising/waste/rows — the wasting rows', () => {
 
   it('a negated term reads NEGATED with the negative\'s author; a paused keyword is its stopper\'s', async () => {
     const rows = byId((await rowsOf()).rows)
-    expect(rows.get(termId('g-broad2', 'jacket blue'))).toMatchObject({ state: 'NEGATED', owner: { kind: 'PERSON', name: 'You', id: 'u1' } })
-    expect(rows.get('kw:k-paused')).toMatchObject({ state: 'PAUSED', owner: { kind: 'PERSON', name: 'You', id: 'u1' } })
+    // HONEST 19 — a person by their own name; "You" only for the person looking (below).
+    expect(rows.get(termId('g-broad2', 'jacket blue'))).toMatchObject({ state: 'NEGATED', owner: { kind: 'PERSON', name: 'Test person one', id: 'u1' } })
+    expect(rows.get('kw:k-paused')).toMatchObject({ state: 'PAUSED', owner: { kind: 'PERSON', name: 'Test person one', id: 'u1' } })
+    // HONEST 13 — the blocked term names the negative that blocks it (its own match and level), not its buying keyword's.
+    expect(rows.get(termId('g-broad2', 'jacket blue')).blockedBy).toMatchObject({ rowId: 'neg:n-person', text: 'jacket blue', match: 'EXACT', level: 'AD_GROUP' })
+    expect(rows.get(termId('g-broad2', 'jacket blue')).test.settledThrough).toBe(new Date(Math.floor(NOW / DAY) * DAY - 3 * DAY).toISOString().slice(0, 10))
+  })
+
+  it('HONEST 19 — "You" is the person looking only; anyone else keeps their name, a person with no profile reads "a person"', async () => {
+    viewerId = 'u1'
+    try {
+      const rows = byId((await rowsOf('show=all&pageSize=200')).rows)
+      expect(rows.get('kw:k-paused').owner).toMatchObject({ kind: 'PERSON', name: 'You', id: 'u1' })
+      expect(rows.get('kw:k-broad')).toMatchObject({ owner: { kind: 'PERSON', name: 'A person', id: 'u2' }, lastChange: { by: { id: 'u2', name: 'A person' } } })
+    } finally {
+      viewerId = null
+    }
   })
 
   it('the tiles come from the same rows (Bid audit M1); show=wasting answers exactly the Wasting tile', async () => {
@@ -318,7 +338,7 @@ describe('GET /api/advertising/waste/rows — the wasting rows', () => {
     expect([all.totals.waiting, waiting.total]).toEqual([2, 3])
     expect(byId(waiting.rows).get(termId('g-broad2', 'jacket kids')).waiting.rows).toBe(2)
     expect(byId(waiting.rows).get('kw:k-waste').waiting.rows).toBe(1)
-    expect(all.totals).toMatchObject({ negated: 6, clashes: 2, keptPaused: 0, skipped: 0 })
+    expect(all.totals).toMatchObject({ negated: 6, clashes: 1, keptPaused: 0, skipped: 0 })
     expect(all.criteria).toMatchObject({ source: 'default', windowDays: 60 })
     const ids = await get('rows/ids', 'show=wasting')
     expect(ids.json()).toMatchObject({ total: all.total, truncated: false })
@@ -334,19 +354,41 @@ describe('GET /api/advertising/waste/rows — the wasting rows', () => {
       checked++
     }
     expect(checked).toBeGreaterThan(0)
-    expect(byId(rows).get('kw:k-broad')).toMatchObject({ owner: { kind: 'PERSON', name: 'You', id: 'u2' }, lastChange: { action: 'turned_on', by: { id: 'u2', name: 'You' } } })
+    expect(byId(rows).get('kw:k-broad')).toMatchObject({ owner: { kind: 'PERSON', name: 'A person', id: 'u2' }, lastChange: { action: 'turned_on', by: { id: 'u2', name: 'A person' } } })
   })
 
   it('show=clashes lists exactly the rows the Clashes tile counts, each with why in plain words', async () => {
     const res = await rowsOf('show=clashes&pageSize=200')
     expect(res.total).toBe(res.totals.clashes)
-    expect(res.rows.map((r: Row) => `${r.id} ${r.clash.kind}`).sort()).toEqual([`kw:k-broad2 NEG_OVER_OWN_KEYWORD`, `${termId('g-broad1', 'jacket men')} BLOCKS_SOLD`].sort())
-    // A negative over our own keyword: the clash names it, and the fix is to remove it (not to pause the keyword).
-    const own = byId(res.rows).get('kw:k-broad2')
-    expect(own.clash.negative).toMatchObject({ rowId: 'neg:n-clash', text: 'jacket', match: 'EXACT', level: 'AD_GROUP', adGroup: { id: 'g-broad2' }, campaign: { id: 'c-broad' }, owner: { name: 'Unknown' } })
-    // It does not waste: the fix is to remove the negative (not to pause the keyword).
-    expect(own.test.met).toBe(false)
-    expect(own.verb).toEqual({ action: 'REMOVE_NEGATIVE', targetRowId: 'neg:n-clash', where: 'adGroup', held: null })
+    expect(res.rows.map((r: Row) => `${r.id} ${r.clash.kind}`)).toEqual([`${termId('g-broad1', 'jacket men')} BLOCKS_SOLD`])
+    // HONEST 5 — the Owner's funnel: a negative exact of our broad keyword's own words in its place blocks only that one
+    // search, on purpose. Never a clash, never a Remove.
+    const funnel = byId((await rowsOf()).rows).get('kw:k-broad2')
+    expect(funnel.clash).toBeNull()
+    expect(funnel.verb.action).toBe('PAUSE')
+    // A negative that blocks every search our keyword serves (an exact over our exact keyword) is a clash: it names the
+    // negative, and while the keyword does not waste the fix is to remove it (not to pause the keyword).
+    await withWorkspace(business(A), async () => {
+      const c = database.client as any
+      await c.adTarget.create({ data: { id: 'k-c1', adGroupId: 'g-broad2', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'jacket clash', bidCents: 40, externalTargetId: 'EXT-k-c1' } })
+      await c.adTarget.create({ data: { id: 'n-c1', adGroupId: 'g-broad2', kind: 'KEYWORD', expressionType: 'NEGATIVE_EXACT', expressionValue: 'jacket clash', bidCents: 0, isNegative: true, negativeLevel: 'AD_GROUP', externalTargetId: 'EXT-n-c1' } })
+    })
+    try {
+      const clashes = await rowsOf('show=clashes&pageSize=200')
+      expect(clashes.total).toBe(clashes.totals.clashes)
+      const own = byId(clashes.rows).get('kw:k-c1')
+      expect(own.clash).toMatchObject({ kind: 'NEG_OVER_OWN_KEYWORD', label: 'Negative over our own keyword' })
+      expect(own.clash.negative).toMatchObject({ rowId: 'neg:n-c1', text: 'jacket clash', match: 'EXACT', level: 'AD_GROUP', adGroup: { id: 'g-broad2' }, campaign: { id: 'c-broad' }, owner: { name: 'Unknown' } })
+      expect(own.test.met).toBe(false)
+      expect(own.verb).toEqual({ action: 'REMOVE_NEGATIVE', targetRowId: 'neg:n-c1', where: 'adGroup', held: null })
+      // Kept by Harvest: the verb stays, held with Harvest's reason.
+      await withWorkspace(business(A), () => (database.client as any).adTarget.update({ where: { id: 'n-c1' }, data: { negativeOrigin: 'HARVEST' } }))
+      const held = byId((await rowsOf('show=clashes')).rows).get('kw:k-c1')
+      expect(held.verb).toMatchObject({ action: 'REMOVE_NEGATIVE', held: { label: 'Harvest keeps it' } })
+      expect(held.clash.negative.owner.kind).toBe('HARVEST')
+    } finally {
+      await withWorkspace(business(A), () => (database.client as any).adTarget.deleteMany({ where: { id: { in: ['k-c1', 'n-c1'] } } }))
+    }
     // N1 — a keyword that wastes and has a negative over it keeps Pause; the clash (with its negative) stays on the row.
     await withWorkspace(business(A), async () => {
       const c = database.client as any
@@ -366,16 +408,6 @@ describe('GET /api/advertising/waste/rows — the wasting rows', () => {
         await c.adTarget.deleteMany({ where: { id: { in: ['k-n1', 'n-n1'] } } })
       })
     }
-    // Kept by Harvest: the verb stays, held with Harvest's reason.
-    await withWorkspace(business(A), () => (database.client as any).adTarget.update({ where: { id: 'n-clash' }, data: { negativeOrigin: 'HARVEST' } }))
-    try {
-      const held = byId((await rowsOf('show=clashes')).rows).get('kw:k-broad2')
-      expect(held.verb).toMatchObject({ action: 'REMOVE_NEGATIVE', held: { label: 'Harvest keeps it' } })
-      expect(held.clash.negative.owner.kind).toBe('HARVEST')
-    } finally {
-      await withWorkspace(business(A), () => (database.client as any).adTarget.update({ where: { id: 'n-clash' }, data: { negativeOrigin: null } }))
-    }
-    expect(byId(res.rows).get('kw:k-broad2').clash.label).toBe('Negative over our own keyword')
     expect(byId(res.rows).get(termId('g-broad1', 'jacket men')).clash.label).toBe('Blocks a term that sold here')
     expect((await get('rows/ids', 'show=clashes')).json().total).toBe(res.totals.clashes)
     // The tile honours the owner and text filters like the rows.
@@ -450,7 +482,7 @@ describe('step 4 — the Protected tile: wasting rows a protected term keeps saf
       const after = await rowsOf('show=protected&pageSize=200')
       expect([after.total, after.totals.protected]).toEqual([1, 1])
       const skipped = byId((await rowsOf('show=skipped&pageSize=200')).rows).get(kids)
-      expect(skipped).toMatchObject({ state: 'PROTECTED', skipped: { by: 'user:u1' }, protection: { terms: [{ term: 'kids' }, { term: 'jacket kids' }] } })
+      expect(skipped).toMatchObject({ state: 'PROTECTED', skipped: { by: 'Test person one' }, protection: { terms: [{ term: 'kids' }, { term: 'jacket kids' }] } })
     } finally {
       await withWorkspace(business(A), async () => {
         const c = database.client as any
@@ -557,7 +589,7 @@ describe('GET /api/advertising/waste/stopped', () => {
     const res = await get('stopped', 'pageSize=200')
     expect(res.statusCode, res.body).toBe(200)
     const rows = byId(res.json().rows)
-    expect(rows.get('neg:n-person')).toMatchObject({ state: 'NEGATED', owner: { kind: 'PERSON', name: 'You' }, level: 'AD_GROUP', actions: { removeNegative: { allowed: true } } })
+    expect(rows.get('neg:n-person')).toMatchObject({ state: 'NEGATED', owner: { kind: 'PERSON', name: 'Test person one' }, level: 'AD_GROUP', actions: { removeNegative: { allowed: true } } })
     expect(rows.get('neg:n-funnel')).toMatchObject({ owner: { kind: 'BRAIN', name: 'Brain funnel' }, actions: { removeNegative: { allowed: false } } })
     expect(rows.get('neg:n-funnel').actions.removeNegative.why).toMatch(/The Brain keeps this negative/)
     expect(rows.get('neg:n-harvest')).toMatchObject({ owner: { kind: 'HARVEST', name: 'Harvest' }, actions: { removeNegative: { allowed: false } } })
@@ -575,7 +607,7 @@ describe('GET /api/advertising/waste/stopped', () => {
     expect((await rowsOf('show=wasting&owner=PERSON')).totals.negated).toBe(1)
     expect((await rowsOf('show=wasting&q=blue')).totals.negated).toBe(1)
     expect((await rowsOf('show=wasting&q=nothing-like-this')).totals).toMatchObject({ negated: 0, clashes: 0, wasting: 0 })
-    expect((await rowsOf('show=wasting&q=jacket')).totals.clashes).toBe(2)
+    expect((await rowsOf('show=wasting&q=jacket')).totals.clashes).toBe(1)
     expect((await rowsOf('show=wasting&owner=RULE')).totals.clashes).toBe(0)
   })
 
@@ -593,7 +625,7 @@ describe('GET /api/advertising/waste/history and /row/:id', () => {
     expect(res.statusCode, res.body).toBe(200)
     const rows: Row[] = res.json().rows
     const of = (action: string, text: string) => rows.find((r) => r.action === action && r.text === text)
-    expect(of('paused', 'old jacket')).toMatchObject({ by: { name: 'You' }, delivery: 'LIVE', undo: { available: false } })
+    expect(of('paused', 'old jacket')).toMatchObject({ by: { name: 'Test person one' }, delivery: 'LIVE', undo: { available: false } })
     expect(of('paused', 'old jacket').undo.why).toMatch(/undo window/)
     expect(of('negated', 'jacket blue')).toMatchObject({ kind: 'TERM', delivery: 'LIVE', undo: { available: false } })
     expect(of('removed', 'jacket gone')).toMatchObject({ undo: { available: false } })
@@ -613,6 +645,10 @@ describe('GET /api/advertising/waste/history and /row/:id', () => {
     const neg = await get(`row/${encodeURIComponent('neg:n-person')}`)
     expect(neg.statusCode, neg.body).toBe(200)
     expect(neg.json().blockedIn.map((p: Row) => p.rowId)).toEqual(['neg:n-person'])
+    // HONEST 18a — a term blocked in its own place: its negative is listed, but no OTHER ad group is blocked.
+    const blue = (await get(`row/${encodeURIComponent(termId('g-broad2', 'jacket blue'))}`)).json()
+    expect([blue.blockedIn.length, blue.blockedAdGroups]).toEqual([1, 0])
+    expect(blue.settledThrough).toBe(new Date(Math.floor(NOW / DAY) * DAY - 3 * DAY).toISOString().slice(0, 10))
     expect((await get('row/kw:nope')).statusCode).toBe(404)
     expect((await get('row/xyz')).statusCode).toBe(400)
   })
@@ -628,7 +664,7 @@ describe('NWRITE\'s columns: the hold, the stored author, the skip', () => {
       await c.adTarget.update({ where: { id: 'n-funnel' }, data: { negativeOrigin: 'RULE' } })
     })
     const stopped = byId((await get('stopped', 'pageSize=200')).json().rows)
-    expect(stopped.get('kw:k-paused')).toMatchObject({ state: 'KEPT_PAUSED', owner: { kind: 'PERSON', id: 'u7' }, sinceSource: 'hold', keptPaused: { by: { name: 'You' }, reason: 'wastes', until: null }, actions: { release: { allowed: true }, turnOn: { allowed: true } } })
+    expect(stopped.get('kw:k-paused')).toMatchObject({ state: 'KEPT_PAUSED', owner: { kind: 'PERSON', id: 'u7' }, sinceSource: 'hold', keptPaused: { by: { name: 'A person' }, reason: 'wastes', until: null }, actions: { release: { allowed: true }, turnOn: { allowed: true } } })
     expect(stopped.get('neg:n-unknown').owner.kind).toBe('HARVEST')
     expect(stopped.get('neg:n-unknown').actions.removeNegative.allowed).toBe(false)
     expect(stopped.get('neg:n-funnel').owner).toEqual({ kind: 'RULE', name: 'Rule', id: null })
@@ -660,13 +696,14 @@ describe('NWRITE\'s columns: the hold, the stored author, the skip', () => {
     expect(after.totals).toMatchObject({ wasting: before.totals.wasting - 1, skipped: 1 })
     const skipped = await rowsOf('show=skipped')
     expect(skipped.rows.map((r: Row) => r.id)).toEqual(['kw:k-waste'])
-    expect(skipped.rows[0].skipped).toMatchObject({ by: 'user:u1' })
+    // HONEST 19 — who skipped it, by name (never a raw id).
+    expect(skipped.rows[0].skipped).toMatchObject({ by: 'Test person one' })
     const history: Row[] = (await get('history', 'kind=all')).json().rows
     expect(history.filter((h) => h.action === 'skipped').map((h) => h.rowId).sort()).toEqual(['kw:k-waste', termId('g-broad1', 'jacket kids')].sort())
     // M5 — the skip an Unskip ended reads UNDONE (no Undo); the one that holds reads LIVE.
     const skips = new Map(history.filter((h) => h.action === 'skipped').map((h) => [h.rowId, h]))
     expect(skips.get(termId('g-broad1', 'jacket kids'))).toMatchObject({ delivery: 'UNDONE', undo: { available: false }, text: 'jacket kids' })
-    expect(skips.get(termId('g-broad1', 'jacket kids')).why).toMatch(/unskipped .* by You/)
+    expect(skips.get(termId('g-broad1', 'jacket kids')).why).toMatch(/unskipped .* by Test person one/)
     expect(skips.get('kw:k-waste')).toMatchObject({ delivery: 'LIVE', undo: { available: true } })
     await withWorkspace(business(A), () => (database.client as any).adsWasteSkip.deleteMany({}))
   })
@@ -694,7 +731,7 @@ describe('NWRITE\'s columns: the hold, the stored author, the skip', () => {
     const rows: Row[] = (await get('history', 'kind=keyword')).json().rows
     const recent = rows.filter((r) => r.action === 'refused' && r.text === 'old jacket' && Date.parse(r.at) > NOW - 0.75 * DAY)
     expect(recent).toHaveLength(1)
-    expect(recent[0]).toMatchObject({ by: { id: 'u8', name: 'You' }, why: 'Kept paused — not turned on', delivery: 'REFUSED', undo: { available: false }, rowId: 'kw:k-paused' })
+    expect(recent[0]).toMatchObject({ by: { id: 'u8', name: 'A person' }, why: 'Kept paused — not turned on', delivery: 'REFUSED', undo: { available: false }, rowId: 'kw:k-paused' })
     // The row's own History says the same.
     const detail = (await get(`row/${encodeURIComponent('kw:k-paused')}`)).json()
     expect(detail.history.filter((h: Row) => h.action === 'refused' && Date.parse(h.at) > NOW - 0.75 * DAY)).toHaveLength(1)
@@ -987,6 +1024,14 @@ describe('NFIX — "Since" is the day a negative was added; "Waiting for you" li
     expect(rows.get('term:DE|EXT-g-de1|cheap de').test.sentence).toBe('Asked by Brain: Ads brain: ngram (made up)')
     expect(rows.get('neg:n-single')).toMatchObject({ askOnly: true, state: 'NEGATED', verb: { action: 'REMOVE_NEGATIVE', targetRowId: 'neg:n-single' }, waiting: { approvalId: 'appr-brain-de' } })
     expect(rows.get('kw:k-de-idle')).toMatchObject({ askOnly: true, kind: 'KEYWORD', state: 'RUNNING', owner: { kind: 'PERSON' }, verb: { action: 'PAUSE' }, waiting: { approvalId: 'appr-pause-de' } })
+    // HONEST 10 / 11 — each row carries the ask's own change there (never the row's verb), and how many changes the ask holds.
+    expect(rows.get('term:DE|EXT-g-de2|de wasted term').waiting).toMatchObject({ action: 'NEGATE_EXACT', match: 'EXACT', level: 'AD_GROUP', text: 'de wasted term', changes: 3 })
+    expect(rows.get('term:DE|EXT-g-de1|cheap de').waiting).toMatchObject({ action: 'NEGATE_PHRASE', match: 'PHRASE', level: 'AD_GROUP', text: 'cheap de', changes: 3 })
+    expect(rows.get('neg:n-single').waiting).toMatchObject({ action: 'REMOVE_NEGATIVE', match: 'EXACT', level: 'AD_GROUP', text: 'de single', changes: 3 })
+    expect(rows.get('kw:k-de-idle').waiting).toMatchObject({ action: 'PAUSE', match: 'EXACT', level: null, text: 'de idle jacket', keepPaused: false, changes: 1 })
+    // HONEST 15 — a row listed only for its ask was never judged by the page's test; a row of the page was.
+    for (const id of ['term:DE|EXT-g-de1|cheap de', 'neg:n-single', 'kw:k-de-idle']) expect(rows.get(id).test.judged, id).toBe(false)
+    expect(rows.get('term:DE|EXT-g-de2|de wasted term').test.judged).toBeUndefined()
     // The same count in every view of the rows (Bid audit M1); the ask-only rows show nowhere else.
     const all = await rowsOf(`${DE}&show=all&pageSize=200`)
     expect(all.totals.waiting).toBe(2)
@@ -1036,6 +1081,8 @@ describe('step 4 — "Did it work?" on the Stopped view: the money saved since t
       await st('g-fr1', 'fr boots', 20, 500)
       // Another place that runs still buys "fr gloves", not blocked there: it still spends.
       await st('g-fr2', 'fr gloves', 10, 800)
+      // HONEST 18b — "fr boots" spent in that place only BEFORE its stop (45 days ago): it does not still spend there.
+      await st('g-fr2', 'fr boots', 45, 400)
       // Our keyword, paused 30 days ago (the pause on record): 3 × 15.00 of its own spend before, none since.
       await c.adTarget.create({ data: { id: 'k-fr', adGroupId: 'g-fr2', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'fr jacket', bidCents: 40, externalTargetId: 'EXT-k-fr', status: 'PAUSED' } })
       await c.advertisingActionLog.create({ data: { userId: 'user:u1', actionType: 'AD_ENTITY_STATE_UPDATE', entityType: 'AD_TARGET', entityId: 'k-fr', payloadBefore: { status: 'ENABLED' }, payloadAfter: { status: 'PAUSED' }, amazonResponseStatus: 'SUCCESS', createdAt: ago(30) } })
@@ -1051,7 +1098,8 @@ describe('step 4 — "Did it work?" on the Stopped view: the money saved since t
     expect(rows.get('neg:n-fr-saved').effect).toEqual({ since: ago(40).toISOString(), days: 40, verdict: 'SAVED', beforePerDayCents: 300, afterCents: 500, savedCents: 300 * 37 - 500, words: 'Spends less here in the 37 days since the stop' })
     // The same 30 days the "Spend before" reads.
     expect(rows.get('neg:n-fr-saved').spendBeforeCents).toBe(300 * 30)
-    expect(rows.get('neg:n-fr-still').effect).toMatchObject({ verdict: 'STILL_SPENDS', beforePerDayCents: 300, afterCents: 0, savedCents: 300 * 37, words: 'Stopped here, but its words still spend in 1 other ad group' })
+    expect(rows.get('neg:n-fr-still').effect).toMatchObject({ verdict: 'STILL_SPENDS', beforePerDayCents: 300, afterCents: 0, savedCents: 300 * 37, words: 'Stopped here, but its words spent in 1 other ad group since the stop' })
+    expect([rows.get('neg:n-fr-still').stillServesIn, rows.get('neg:n-fr-saved').stillServesIn]).toEqual([1, 0])
     expect(rows.get('neg:n-fr-early').effect).toEqual({ since: ago(9).toISOString(), days: 9, verdict: 'TOO_EARLY', beforePerDayCents: null, afterCents: null, savedCents: null, words: 'Stopped 9 days ago, checked from 14 days' })
     expect(rows.get('kw:k-fr').effect).toMatchObject({ verdict: 'SAVED', days: 30, beforePerDayCents: 150, afterCents: 0, savedCents: 150 * 27, words: 'No spend here in the 27 days since the stop' })
   })
