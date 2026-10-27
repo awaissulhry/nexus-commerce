@@ -77,6 +77,7 @@ import { FIELDS } from '@nexus/shared/permissions'
 import { financialPayloadCopy } from '../lib/auth/field-filter.js'
 import type { ResolvedPermissions } from '../lib/auth/rbac.js'
 import { readHistory } from '../services/advertising/waste/history.js'
+import { viewerNamed } from '../services/advertising/waste/owner.js'
 import { isMoneySort, MAX_PAGE_SIZE, WASTE_MONEY } from '../services/advertising/waste/pure.js'
 import { invalidateWasteFacts, readWasteRowIds, readWasteRows } from '../services/advertising/waste/read.js'
 import { readRowDetail } from '../services/advertising/waste/row.js'
@@ -107,10 +108,14 @@ function seesAdSpend(request: FastifyRequest): boolean {
   return resolved.isOwner || resolved.permissions.has(FIELDS.financialsView) || resolved.permissions.has(FIELDS.financialsAdspendView)
 }
 
-/** The answer's money keys, stripped under the same switch as the response filter. */
+/**
+ * The answer as this person reads it: the money keys stripped under the same switch as the response filter, and (HONEST
+ * 19) "You" only for the person looking — every other person keeps their own name (owner.ts viewerNamed).
+ */
 function withoutHiddenMoney<T>(request: FastifyRequest, payload: T): T {
-  if (!moneyFiltered()) return payload
-  return financialPayloadCopy(payload, request.__rbacResolved ?? NO_PERMISSIONS, WASTE_MONEY)
+  const named = viewerNamed(payload, request.authUser?.id ?? null)
+  if (!moneyFiltered()) return named
+  return financialPayloadCopy(named, request.__rbacResolved ?? NO_PERMISSIONS, WASTE_MONEY)
 }
 
 function badQuery(reply: FastifyReply, error: z.ZodError) {

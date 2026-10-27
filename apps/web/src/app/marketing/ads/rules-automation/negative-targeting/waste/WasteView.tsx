@@ -231,7 +231,8 @@ export function WasteView(props: WasteViewProps) {
     setSelectingAll(true)
     try {
       const all: Array<Picked<AnyRow>> = wasting
-        ? (await readRowIds(query)).ids.map((id) => byId.get(id) ?? { id })
+        // HONEST 8 — the full rows (never bare ids): the bulk counts and plans read each row's state and hold.
+        ? (await readAllRows({ ...query, page: undefined, pageSize: undefined })).map(wasteGridRow)
         : (await readAllStopped({ ...query, page: undefined, pageSize: undefined })).map(stoppedGridRow)
       setPicked(new Map(all.map((r) => [r.id, r])))
       const api = apiRef.current
@@ -239,7 +240,7 @@ export function WasteView(props: WasteViewProps) {
     } catch (e) {
       toast(`Not selected: ${e instanceof Error ? e.message : String(e)}`, 'danger')
     } finally { setSelectingAll(false) }
-  }, [wasting, query, byId, toast])
+  }, [wasting, query, toast])
   const pickedList = useMemo(() => [...picked.values()], [picked])
 
   /* ── the review ── */
@@ -326,12 +327,9 @@ export function WasteView(props: WasteViewProps) {
   const cellContext = handlers as CellContext
   const specs = wasting ? WASTE_COLUMN_SPECS : STOPPED_COLUMN_SPECS
   const columnDefs = useMemo(() => {
-    const base = wasting ? wasteColumns(phone) : stoppedColumns(phone)
-    // Waiting rows carry the longest state chip ("Waiting · asked by Brain"): the State column is wider there (the
-    // board's waiting column set), so the chip is never cut.
-    const cols = wasting && show === 'waiting' && !phone ? base.map((c) => (c.colId === 'state' ? { ...c, width: 214 } : c)) : base
+    const cols = wasting ? wasteColumns(phone) : stoppedColumns(phone)
     return withVerbHandler(cols as never, cellContext, wasting ? 'waste' : 'stopped') as NexusGridProps<AnyRow>['columnDefs']
-  }, [phone, wasting, show === 'waiting']) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phone, wasting]) // eslint-disable-line react-hooks/exhaustive-deps
   const bridge = useMemo<PrefsBridgeOptions>(() => ({ columns: specs.map((c) => ({ key: c.key, locked: c.locked })) }), [specs])
   const preferenceSpecs = useMemo(() => specs.map((c) => ({ key: c.key, label: c.label, locked: c.locked })), [specs])
   const defaultPrefs = useMemo<PreferencesValue>(() => ({
@@ -449,9 +447,12 @@ export function WasteView(props: WasteViewProps) {
   const unprotectPerms = [usePermission(UNPROTECT_PERMISSIONS[0]), usePermission(UNPROTECT_PERMISSIONS[1]), usePermission(UNPROTECT_PERMISSIONS[2]), usePermission(UNPROTECT_PERMISSIONS[3])]
   const unprotect = { write: canWrite, unprotect: unprotectPerms.every(Boolean) }
   const removeCount = useMemo(() => (wasting ? removeProtectionBulkCount(pickedList as Array<Picked<WasteRow>>, unprotect) : 0), [wasting, pickedList, unprotect.write, unprotect.unprotect]) // eslint-disable-line react-hooks/exhaustive-deps
-  const bulkWaste = (verb: WasteBulk) => {
-    const plan = wasteBulkPlan(pickedList as Array<Picked<WasteRow>>, verb)
-    askFrom({ kind: 'change', items: plan.items, left: plan.left })
+  const bulkWaste = async (verb: WasteBulk) => {
+    // HONEST 8 — planned from the full rows (a row ticked by "Select all" is read first), so a held row is left out with why.
+    try {
+      const plan = wasteBulkPlan(await fullPicked() as Array<Picked<WasteRow>>, verb)
+      askFrom({ kind: 'change', items: plan.items, left: plan.left })
+    } catch (e) { toast(`Not read: ${e instanceof Error ? e.message : String(e)}`, 'danger') }
   }
   /** Step 4 — one review: one removal per protected term across the ticked rows, then each row's own verb. */
   const bulkRemoveProtection = async () => {

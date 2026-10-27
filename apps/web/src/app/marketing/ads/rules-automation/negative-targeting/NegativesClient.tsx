@@ -144,7 +144,8 @@ function NegativesPage() {
 
   const tiles = useMemo(() => tilesOf({
     waste: wasteTotals, stopped: stoppedTotals, view, wastingShow, stoppedShow, currency: currencyOf(market), windowDays: facts.criteria?.windowDays ?? null,
-  }), [wasteTotals, stoppedTotals, view, wastingShow, stoppedShow, market, facts.criteria?.windowDays])
+    through: facts.criteria?.settledThrough ?? null,
+  }), [wasteTotals, stoppedTotals, view, wastingShow, stoppedShow, market, facts.criteria?.windowDays, facts.criteria?.settledThrough])
   const metrics: Metric[] = tiles
     .filter((t) => !(phone && PHONE_HIDDEN.has(t.id)))
     .map((t) => ({

@@ -9,8 +9,10 @@
  *   states      KEPT_PAUSED (NWRITE's hold, paused) · PAUSED · TURNED_ON_ELSEWHERE (held, but ENABLED: someone turned it
  *               on outside Nexus) · NEGATED (Amazon holds it, on, campaign running) · NOT_AT_AMAZON (Amazon never gave
  *               it an id) · a negative switched off reads PAUSED
- *   show        kept · negated · turned-on · still-bought (a paused EXACT keyword whose words still spend in another
- *               place of the market, not blocked there: "Still bought elsewhere") · all (default)
+ *   show        kept · negated · turned-on · still-bought (a paused EXACT keyword whose words spent in another place
+ *               of the market since its stop, not blocked there now: "Still bought elsewhere") · all (default)
+ *   still       stillServesIn: the other live places where its words SPENT since the stop (HONEST 18b; the page's window
+ *               when the stop day is not on record), not blocked there now — never impressions alone
  *   since       a keyword: the hold's time, else the pause on record, else unknown; a negative: when it was added
  *               (since.ts — its create record, the Brain's write, Harvest's landing, else the day Nexus's sync first saw
  *               it, unknown when that sync stored a crowd at once); `sinceSource` says which, `sinceWhy` says it in words
@@ -27,10 +29,10 @@ import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { labelFor } from '../bid-grid.service.js'
 import { EFFECT_MIN_DAYS, effectWindows, stopEffect, type StopEffect } from './effect.js'
-import { negativeKeptBy, NO_OWNER, ownerOfActor, refOfOwner } from './owner.js'
+import { negativeKeptBy, NO_OWNER, ownerOfActor, personOwner, refOfOwner } from './owner.js'
 import { NO_PAUSE_RECORD, type SinceSource } from './since.js'
 import {
-  DAY_MS, keywordRowId, plainWords, romeDay, negativeBlocksTerm, negativeMatch, negRowId, ownerMatches, pageOf, targetMatch, termKeyOf,
+  DAY_MS, dayIndex, keywordRowId, plainWords, romeDay, negativeBlocksTerm, negativeMatch, negRowId, ownerMatches, pageOf, targetMatch, termKeyOf,
   type Match, type Owner, type Ref,
 } from './pure.js'
 import {
@@ -135,7 +137,8 @@ const FINAL = 'Final: Amazon archives a removed negative; it can only be added a
 export function buildStoppedRows(f: WasteFacts, s: ResolvedScope): { rows: StoppedRow[]; idle: StoppedRow[] } {
   const rows: StoppedRow[] = []
   const idle: StoppedRow[] = []
-  const holdRef = (by: string | null): Ref => (by ? refOfOwner(ownerOfActor(by, f.names)) : { id: 'person', name: 'You' })
+  // HONEST 19 — a person by their own name ("You" only for the person looking: the route's viewerNamed).
+  const holdRef = (by: string | null): Ref => refOfOwner(by ? ownerOfActor(by, f.names) : personOwner(null))
 
   // Our keywords and targets that are stopped.
   for (const t of f.targets) {
@@ -148,7 +151,7 @@ export function buildStoppedRows(f: WasteFacts, s: ResolvedScope): { rows: Stopp
     const into = f.adGroups.get(t.adGroupId)!.live || s.idle ? rows : idle
     const pause = f.lastPause.get(t.id) ?? null
     const state: StoppedState = hold ? (t.status === 'PAUSED' ? 'KEPT_PAUSED' : 'TURNED_ON_ELSEWHERE') : 'PAUSED'
-    const owner: Owner = hold ? (hold.by ? ownerOfActor(hold.by, f.names) : { kind: 'PERSON', name: 'You', id: null })
+    const owner: Owner = hold ? (hold.by ? ownerOfActor(hold.by, f.names) : personOwner(null))
       : pause ? ownerOfActor(pause.actor, f.names, pause.executionId) : { kind: 'NONE', name: 'Unknown', id: null }
     const since = hold?.at ?? pause?.at ?? null
     const refs = placeRefs(f, t.adGroupId, { tab: 'targets', value: t.id })
@@ -162,7 +165,8 @@ export function buildStoppedRows(f: WasteFacts, s: ResolvedScope): { rows: Stopp
       keptPaused: hold ? { by: holdRef(hold.by), at: hold.at.toISOString(), until: hold.until?.toISOString() ?? null, reason: plainWords(hold.reason) } : null,
       spendBeforeCents: f.keywords.get(t.id)?.spendBefore ?? null,
       state,
-      stillServesIn: tm.rowKind === 'KEYWORD' ? servingPlaces(f, key, t.adGroupId).length : 0,
+      // HONEST 18b — where its words spent since the stop (the page's window when the stop day is not on record).
+      stillServesIn: tm.rowKind === 'KEYWORD' ? servingPlaces(f, key, t.adGroupId, since ? dayIndex(since) : null).length : 0,
       places: 1,
       actions: {
         turnOn: state === 'TURNED_ON_ELSEWHERE'
@@ -207,7 +211,7 @@ export function buildStoppedRows(f: WasteFacts, s: ResolvedScope): { rows: Stopp
       keptPaused: null,
       spendBeforeCents: f.negativeSpendBefore.get(n.id) ?? null,
       state,
-      stillServesIn: servingPlaces(f, k, campaignLevel ? null : n.adGroupId).filter((id) => !campaignLevel || f.adGroups.get(id)?.campaignId !== g.campaignId).length,
+      stillServesIn: servingPlaces(f, k, campaignLevel ? null : n.adGroupId, added?.at ? dayIndex(added.at) : null).filter((id) => !campaignLevel || f.adGroups.get(id)?.campaignId !== g.campaignId).length,
       places: placesOf.get(key(n)) ?? 1,
       actions: {
         turnOn: { allowed: false, why: 'A negative is not turned on: remove it instead.' },

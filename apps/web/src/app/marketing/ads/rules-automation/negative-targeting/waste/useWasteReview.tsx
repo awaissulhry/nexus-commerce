@@ -15,8 +15,9 @@
  *            (`WASTE_REVIEW_SIZE`): a full-screen sheet on a phone, each change a stacked card.
  *   skip     Skip 7 d / 30 d, Unskip — Nexus only; Undo is the other one.
  *   decide   Approve / Reject what waits for you — through the Approvals page's path. Undo of an approve: back to
- *            waiting inside its window; a reject does not come back (said, never a silent button).
- *   undo     one row of a History tab.
+ *            waiting inside its 20 s window; a reject does not come back (said, never a silent button). A rule's card is
+ *            the Suggestions page's own apply: it runs at once, as the rule, with no window (HONEST 12, said per kind).
+ *   undo     one row of a History tab; a skip's is the page's own Unskip of its row, Nexus only (HONEST 17).
  *   reach    step 4 — every negative says what it would block ("Blocks 14 terms · €32.00 · 0 orders", the
  *            server's `reach`), the sent ones together once, "Shows the last 60 days" once, and a red warning naming the
  *            terms that sold it would block (`lead`: a host passes it to the review, above the table).
@@ -37,11 +38,11 @@ import {
 import { AlsoKeepsLead, ProtectionScope } from './protection'
 import { followUpLine, followUpWaitWords, followUpWords, KEEP_PROTECTED_REASON, protectionMatchWord, stepOrderNote, watchFollowUp } from './protectionModel'
 import {
-  ackWords, appliedWords, decideLines, decideSummary, deliveryView, doneLine, historyWord, isAsinText, isFinal, keepWord, landsWord, olderKeep, plural, previewSummary,
+  ackWords, appliedWords, decideAfterWords, decideLines, decideNoUndo, decideSummary, deliveryView, doneLine, historyWord, isAsinText, isFinal, keepWord, landsWord, olderKeep, plural, previewSummary,
   reachLine, reachTotalLine, reachWindowWords, saveWords, showsTogether, shownSteps, soldItems, soldNotes, stepStateWord, undoWords, unknownAction, verbLabel,
   type BulkPlan, type DecideLine, type SoldItem, type Waiting,
 } from './wasteModel'
-import { ranResult } from './recordModel'
+import { ranResult, skipUndoRow } from './recordModel'
 import type { ApplyAnswer, FollowUpView, HistoryItem, PreviewAnswer, PreviewStep, ReachTotal, Ref, WaitingSteps, WasteItem } from './wasteTypes'
 import styles from './record.module.css'
 
@@ -119,13 +120,8 @@ const decideChange = (l: DecideLine): ReviewChange => ({
   note: l.note,
 })
 
-/** The decide review's words for what happens after (the request's own path; a rule's card comes back on Undo). */
-function decideWords(a: Extract<WasteAsk, { kind: 'decide' }>): string {
-  if (a.decide === 'approve') return 'Runs as you after a short window in which you can undo it.'
-  return a.waits.every((w) => isCard(w.approvalId)) ? 'Nothing is sent. Undo brings it back to waiting.'
-    : a.waits.some((w) => isCard(w.approvalId)) ? 'Nothing is sent. A rule\'s ask can come back to waiting; the others do not.'
-      : 'Nothing is sent. A rejected request does not come back.'
-}
+/** The decide review's words for what happens after, per kind (HONEST 12: a rule's card applies now, with no window). */
+const decideWords = (a: Extract<WasteAsk, { kind: 'decide' }>): string => decideAfterWords(a.decide, a.waits.map((w) => w.approvalId))
 
 /** Step 4 — a negative's What: its verb and words, and on a second line what it would block (red when it is sent and a
  *  term sold: a left-out step blocks nothing). */
@@ -281,7 +277,10 @@ export function useWasteReview({ market, after }: { market: string | null; after
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const ask = useCallback((a: WasteAsk) => {
+  const ask = useCallback((asked: WasteAsk) => {
+    // HONEST 17 — a skip's History Undo is the page's own Unskip of its row (Nexus only), never a change at Amazon.
+    const skipRow = asked.kind === 'undo' ? skipUndoRow(asked.item) : null
+    const a: WasteAsk = skipRow ? { kind: 'unskip', rows: [skipRow] } : asked
     setStepUp(null)
     const base = { ask: a, problems: [] as string[], undo: null, undoLabel: null, noUndo: null, undoing: false, preview: null, sendItems: null }
     if (a.kind === 'change') {
@@ -550,7 +549,8 @@ export function useWasteReview({ market, after }: { market: string | null; after
           return Object.fromEntries(back.flatMap((r, i) => linesOf(r.approvalId).map((id) => [id, { ok: res[i].ok, words: res[i].ok ? 'Waiting again' : res[i].error ?? 'Not undone', verb: 'undone' }])))
         }
       } else if (out.some((r) => r.ok)) {
-        noUndo = a.decide === 'reject' ? 'A rejected request does not come back' : 'Undo it from the row\'s History'
+        // HONEST 12 — an approve with nothing to take back is a rule's card: it ran at once, with no window.
+        noUndo = decideNoUndo(a.decide, out.filter((r) => r.ok).map((r) => r.approvalId))
       }
     } else if (a.kind === 'undo') {
       const it = a.item

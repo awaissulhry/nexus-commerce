@@ -110,7 +110,8 @@ export const unarchiveLabel = (count: number): string => `Unarchive ${plural(cou
 
 /**
  * A rule's waiting asks as the page's ONE decide review takes them (`waste/useWasteReview.tsx`, the Wasting record's):
- * one line per ask (an ask over two ad groups says "2 places"), what it does, where (links), who asked.
+ * one line per ask (its reach — the ad groups one negative covers, or its request's changes — said by decideLines),
+ * what it does, where (links), who asked.
  */
 const pageRef = (x: { id: string; name: string; href?: string | null } | null): { id: string; name: string; href?: string } | null =>
   (x ? { id: x.id, name: x.name, ...(x.href ? { href: x.href } : {}) } : null)
@@ -119,10 +120,13 @@ export function waitsOf(asks: readonly WaitingAsk[]): Waiting[] {
   return asks.flatMap((a) => {
     const r = a.rows[0]
     if (!r) return []
+    // HONEST 10 / 11 — the ask's own words; how far it reaches goes to the review as counts (decideLines words them).
+    const w = r.waiting
     return [{
       rowId: r.id, approvalId: a.approvalId,
-      text: a.rows.length > 1 ? `${r.text} · ${a.rows.length} places` : r.text,
-      by: r.waiting?.by.name ?? '', what: askWhat(a), place: [r.portfolio, r.campaign, r.adGroup].map(pageRef),
+      text: (w?.text ?? '').trim() || r.text, places: a.rows.length,
+      ...(w?.changes != null ? { changes: w.changes } : {}), ...(w?.level !== undefined ? { level: w.level } : {}),
+      by: w?.by.name ?? '', what: askWhat(a), place: [r.portfolio, r.campaign, r.adGroup].map(pageRef),
     }]
   })
 }

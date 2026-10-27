@@ -48,6 +48,12 @@ const item = (over: Partial<HistoryItem> = {}): HistoryItem => ({
   ...over,
 })
 
+describe('the header tag reads as a sentence', () => {
+  it('"A person" (no name known) is lower case inside it', () => {
+    expect(lookedAfter({ kind: 'PERSON', name: 'A person', id: null } as never)?.label).toBe('Looked after by a person')
+  })
+})
+
 describe('the header', () => {
   it('names what the record is, in plain words', () => {
     expect(kindLead(term())).toBe('Shopper\'s search term')
@@ -114,27 +120,27 @@ describe('the banner', () => {
     expect(b.desc).toBe('By the page\'s test it would count as wasting: €77.00 in 60 days, 198 clicks, 0 orders. 2 protected terms keep it safe, so to stop it the protection goes first.')
   })
 
-  it('a waiting ask: what is asked, where, and that one answer covers every place', () => {
-    const b = wasteBanner(term({ text: 'rain cover', verb: { action: 'NEGATE_PHRASE', where: 'adGroup', held: null }, waiting: { approvalId: 'a1', by: ref('brain', 'Brain'), at: new Date(Date.now() - 2 * 3_600_000).toISOString(), expiresAt: new Date(Date.now() + 6 * 86_400_000 + 60_000).toISOString(), rows: 2 } }))
+  it('a waiting ask: what is asked, where (the ask\'s own words, HONEST 10), and what one answer covers (HONEST 11)', () => {
+    const b = wasteBanner(term({ text: 'rain cover', verb: { action: 'NEGATE_PHRASE', where: 'adGroup', held: null }, waiting: { approvalId: 'a1', by: ref('brain', 'Brain'), at: new Date(Date.now() - 2 * 3_600_000).toISOString(), expiresAt: new Date(Date.now() + 6 * 86_400_000 + 60_000).toISOString(), rows: 2, changes: 1, action: 'NEGATE_PHRASE', match: 'PHRASE', level: 'CAMPAIGN', text: 'rain cover' } }))
     expect(b.tone).toBe('warning')
-    expect(b.title).toBe('Brain asks to add a negative phrase "rain cover" in 2 ad groups')
-    expect(b.desc).toBe('It waits for your answer: asked 2 h ago, it expires in 6 d. One answer covers both places.')
+    expect(b.title).toBe('Brain asks to add a negative phrase "rain cover" in the whole campaign')
+    expect(b.desc).toBe('It waits for your answer: asked 2 h ago, it expires in 6 d. One negative in the whole campaign: it covers this term in both ad groups listed.')
   })
 
   it('no data is never "not wasting"', () => {
-    expect(wasteBanner(term({ d: null }))).toMatchObject({ tone: 'info', title: 'No data in the last 60 days' })
+    expect(wasteBanner(term({ d: null }))).toMatchObject({ tone: 'info', title: 'No data in 60 days' })
   })
 
   it('a term under the limit says which check is not true yet', () => {
     const b = wasteBanner(term({ test: { ...term().test, met: false }, d: { impressions: 1, clicks: 46, orders: 0, spendCents: 1840 } }))
-    expect(b).toEqual({ tone: 'info', title: 'Not wasting by this page\'s test', desc: 'In the last 60 days the clicks are still under the limit and the spend is still under the limit, so it does not count as wasting yet.' })
+    expect(b).toEqual({ tone: 'info', title: 'Not wasting by this page\'s test', desc: 'In 60 days the clicks are still under the limit and the spend is still under the limit, so it does not count as wasting yet.' })
   })
 })
 
 describe('the tiles', () => {
   it('Spend · Clicks · Orders · Cost against target, with plain lines and a bad value marked', () => {
     expect(wasteMetrics(term())).toEqual([
-      { id: 'spend', label: 'Spend', value: '€160.00', hint: 'last 60 days' },
+      { id: 'spend', label: 'Spend', value: '€160.00', hint: '60 days' },
       { id: 'clicks', label: 'Clicks', value: '400', hint: '€0.40 a click' },
       { id: 'orders', label: 'Orders', value: '0', hint: 'up to today' },
       { id: 'xcpa', label: 'Cost against target', value: '8.1×', hint: 'the limit is 1.5×', tone: 'bad' },
@@ -146,8 +152,8 @@ describe('the tiles', () => {
     expect(wasteMetrics(term({ d: { impressions: 1, clicks: 400, orders: 0 } }))[0]).toMatchObject({ value: '—', hint: 'You cannot see ad spend' })
   })
 
-  it('an ask over two places shows Places', () => {
-    expect(wasteMetrics(term({ waiting: { approvalId: 'a1', by: ref('brain', 'Brain'), at: '2026-10-26T07:00:00Z', expiresAt: null, rows: 2 } }))[3]).toEqual({ id: 'places', label: 'Places', value: '2', hint: 'one answer for both' })
+  it('an ask over two rows (an older answer: not which kind) says how far one answer reaches, never "places"', () => {
+    expect(wasteMetrics(term({ waiting: { approvalId: 'a1', by: ref('brain', 'Brain'), at: '2026-10-26T07:00:00Z', expiresAt: null, rows: 2 } }))[3]).toEqual({ id: 'places', label: 'Rows', value: '2', hint: 'one answer for both' })
   })
 })
 
@@ -155,14 +161,14 @@ describe('the page\'s test as three checks', () => {
   it('every check, its limit and its result; the verdict; where the limits come from', () => {
     const c = wasteChecks(term())!
     expect(c.title).toBe('Why it counts as wasting')
-    expect(c.verdict).toBe('All 3 checks are true in the last 60 days')
+    expect(c.verdict).toBe('All 3 checks are true in 60 days')
     expect(c.column).toBe('This term')
     expect(c.rows.map((r) => [r.check, r.value, r.limit, r.result.word])).toEqual([
       ['Orders', '0', '0 orders', 'No orders'],
       ['Clicks', '400', '72 clicks or more', 'Past the limit'],
       ['Spend', '€160.00', '€29.73 or more', 'Past the limit'],
     ])
-    expect(c.note).toBe('The limits come from this page\'s default test. 72 clicks is enough for 1 order at the product\'s 4.10 % conversion (never under 20). €29.73 is 1.5 × the target cost per order.')
+    expect(c.note).toBe('The limits come from this page\'s default test. 0 orders in 72 clicks: it very likely converts below the product\'s 4.10 % (95 % sure). €29.73 is 1.5 × the target cost per order.')
   })
 
   it('a fixed limit, a rule\'s limits, a check under the limit', () => {
@@ -199,8 +205,8 @@ describe('the page\'s test as three checks', () => {
 describe('what Approve does', () => {
   it('the change, now and after, and what Approve and Reject do', () => {
     const a = approveView(term({ text: 'rain cover', verb: { action: 'NEGATE_PHRASE', where: 'adGroup', held: null }, waiting: { approvalId: 'a1', by: ref('brain', 'Brain'), at: '2026-10-26T07:00:00Z', expiresAt: null, rows: 2 } }))!
-    expect(a.desc).toBe('It adds the negative phrase "rain cover" in both places, so the term stops there')
-    expect([a.change, a.now, a.after, a.others]).toEqual(['Negative phrase · rain cover', 'Running', 'Blocked', 1])
+    expect(a.desc).toBe('It adds the negative phrase "rain cover" in Auto group, so the term stops there')
+    expect([a.change, a.now, a.after, a.reach]).toEqual(['Negative phrase · rain cover', 'Running', 'Blocked', 'One answer decides both rows it is on.'])
     expect(a.foot).toContain('Reject sends nothing, and the request does not come back.')
     expect(approveView(term({ waiting: { approvalId: 'suggestion:s1', by: ref('r1', 'Stop waste'), at: '2026-10-26T07:00:00Z', expiresAt: null } }))!.foot).toContain('its Undo brings it back to waiting')
     expect(approveView(term())).toBeNull()
@@ -216,8 +222,8 @@ describe('a stop: did it work?', () => {
 
   it('amber when it saved here but its words still spend elsewhere, with where and the fix', () => {
     expect(stoppedBanner(stopped(), others)).toEqual({
-      tone: 'warning', title: 'It saved €2.40 so far, but its words still spend in 1 other ad group',
-      desc: 'Before the stop it cost €0.13 a day here, and €0.00 since. The same words still spend in Broad group: €3.10 and 0 orders. A negative exact there stops the rest; its button is on the Where it runs tab.',
+      tone: 'warning', title: 'It saved €2.40 so far, but its words spent in 1 other ad group since the stop',
+      desc: 'Before the stop it cost €0.13 a day here, and €0.00 since. In Broad group the same words spent €3.10 with 0 orders. A negative exact there stops the rest; its button is on the Where it runs tab.',
     })
   })
 
@@ -242,7 +248,7 @@ describe('a stop: did it work?', () => {
     const sum = savingSum(stopped())!
     expect(sum.rows.map((r) => [r.part, r.value])).toEqual([['A day before the stop', '€0.13'], ['Spent since the stop', '€0.00'], ['Saved', '€2.40']])
     expect(sum.rows[2].how).toBe('€0.13 a day × the days since − €0.00')
-    expect(sum.note).toContain('It counts this ad group only. Its words still spend elsewhere, so the answer is amber, not green.')
+    expect(sum.note).toContain('It counts this ad group only. Its words spent elsewhere since the stop, so the answer is amber, not green.')
     expect(savingSum(stopped({ effect: { since: '2026-10-20', days: 6, verdict: 'TOO_EARLY', words: 'x' } }))).toBeNull()
   })
 })
@@ -294,7 +300,7 @@ describe('Where it runs', () => {
     expect(negativeWords('EXACT')).toBe('Negative exact')
     expect(addedByWords({ kind: 'BRAIN', name: 'Brain', id: 'brain' })).toBe('Brain')
     expect(addedByWords({ kind: 'RULE', name: 'Old auto negatives', id: 'r1' })).toBe('Old auto negatives')
-    expect(whereWords(term()).intro).toBe('Where this search term spends, and where a negative already blocks it. Last 60 days.')
+    expect(whereWords(term()).intro).toBe('Where this search term spends, and where a negative already blocks it. Numbers in 60 days.')
     expect(whereWords(stopped()).intro).toBe('Where the words of this keyword still spend, and where a negative blocks them.')
   })
 })

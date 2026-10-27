@@ -17,7 +17,7 @@
  * Every number, name and day comes from what the record reads (wasteTypes.ts); a fact the API does not give is left out.
  */
 import { dayWords, money, relWords, whenWords } from '../../bid/_shared/format'
-import { chipOwner, isAsinText, isFinal, matchWord, moneyOr, planWords, plural, savedView, stateSentence, verbLabel, verbSentence } from './wasteModel'
+import { askChangeOf, askReachOf, chipOwner, isAsinText, isFinal, isRuleCard, matchWord, moneyOr, planWords, plural, savedView, stateSentence, verbLabel, verbSentence } from './wasteModel'
 import type {
   HistoryItem, Owner, Place, PreviewStep, RowKind, StoppedRow, VerbAction, WasteAction, WasteRow, Where,
 } from './wasteTypes'
@@ -32,6 +32,13 @@ const xNum = (x: number) => (x >= 10 ? String(Math.round(x)) : x.toFixed(1))
 const sentence = (s: string) => { const t = s.trim(); return !t ? t : /[.!?]$/.test(t) ? t : `${t}.` }
 const capital = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s)
 const hasMoney = (c: number | null | undefined): c is number => typeof c === 'number' && Number.isFinite(c)
+/**
+ * HONEST 18c — a row's window in true words: its clicks and spend end 3 days ago, so never "the last 60 days". "in the 60
+ * days to 24 Oct" (the server's settledThrough), else "in 60 days".
+ */
+export const inWindow = (t: Pick<WasteRow['test'], 'windowDays' | 'settledThrough'>) => (t.settledThrough ? `in the ${t.windowDays} days to ${dayWords(t.settledThrough)}` : `in ${t.windowDays} days`)
+/** The same window as a short hint: "60 days to 24 Oct", else "60 days". */
+export const windowSpan = (t: Pick<WasteRow['test'], 'windowDays' | 'settledThrough'>) => `${t.windowDays} days${t.settledThrough ? ` to ${dayWords(t.settledThrough)}` : ''}`
 /** "−€3.00" for a saving below 0 (a real minus sign). */
 const signedMoney = (cents: number, currency: string) => (cents < 0 ? `−${money(-cents, currency)}` : money(cents, currency))
 
@@ -107,7 +114,11 @@ export function lookedAfter(o: Owner): { label: string; title: string; ruleId: s
     case 'RULE': return { label: name ? `Looked after by the rule "${name}"` : 'Looked after by a rule', title: name ? `The rule "${name}" looks after it` : 'A rule looks after it', ruleId: c.ruleId }
     case 'HARVEST': return { label: 'Looked after by Harvest', title: 'Harvest keeps it', ruleId: null }
     case 'CLAUDE': return { label: 'Looked after by Claude', title: 'Claude looks after it', ruleId: null }
-    default: return { label: `Looked after by ${c.label}`, title: `${c.label} ${c.label === 'You' ? 'look' : 'looks'} after it`, ruleId: null }
+    // "A person" (no name known) reads in a sentence as "a person": "Looked after by a person".
+    default: {
+      const who = c.label === 'A person' ? 'a person' : c.label
+      return { label: `Looked after by ${who}`, title: `${c.label} ${c.label === 'You' ? 'look' : 'looks'} after it`, ruleId: null }
+    }
   }
 }
 
@@ -173,41 +184,64 @@ function notTrueWords(checks: readonly CheckRow[]): string | null {
 /** The main number in a sentence: "It spent €160.00 in 60 days and sold nothing". */
 function spentTitle(r: WasteRow): string {
   const d = r.d!
-  const days = r.test.windowDays
+  const span = inWindow(r.test)
   const sold = d.orders === 0 ? 'sold nothing' : `sold only ${plural(d.orders, 'order')}`
-  return hasMoney(d.spendCents) ? `It spent ${money(d.spendCents, r.currency)} in ${days} days and ${sold}` : `It got ${plural(d.clicks, 'click')} in ${days} days and ${sold}`
+  return hasMoney(d.spendCents) ? `It spent ${money(d.spendCents, r.currency)} ${span} and ${sold}` : `It got ${plural(d.clicks, 'click')} ${span} and ${sold}`
 }
 
 /** The ask that waits, in words: "Brain asks to add a negative phrase “rain cover” in 2 ad groups". */
 export function askWords(r: WasteRow): string {
   const w = r.waiting!
-  const rows = Math.max(1, w.rows ?? 1)
-  const known = !(r.verb.action === 'REMOVE_NEGATIVE' && !r.askOnly)
-  const a = r.verb.action
-  const where = rows > 1 ? (a.startsWith('NEGATE') && r.verb.where !== 'campaign' ? `in ${plural(rows, 'ad group')}` : `in ${plural(rows, 'place')}`)
-    : a.startsWith('NEGATE') ? `in ${placeWords(r.verb.where, r.adGroup?.name)}` : ''
-  const what = !known ? `asks for a change to "${r.text}"`
-    : a === 'PAUSE' ? `asks to pause "${r.text}"`
-      : a === 'REMOVE_NEGATIVE' ? `asks to remove the negative "${r.text}"`
-        : `asks to add a ${verbLabel(a).toLowerCase()} "${r.text}"`
+  // HONEST 10 — the ask's own change at this row (its action, match, place and words), never the row's verb.
+  const c = askChangeOf(r)
+  if (!c) return `${w.by.name} asks for a change to "${r.text}"`
+  const where = c.action === 'PAUSE' ? '' : c.action === 'NEGATE_ASIN' ? `in ${r.adGroup?.name || 'this ad group'}` : `in ${placeWords(c.where, r.adGroup?.name)}`
+  const what = c.action === 'PAUSE' ? `asks to pause "${c.text}"${c.keepPaused ? ' and keep it paused' : ''}`
+    : c.action === 'REMOVE_NEGATIVE' ? `asks to remove the ${c.match ? negativeWords(c.match).toLowerCase() : 'negative'} "${c.text}"`
+      : `asks to add a ${verbLabel(c.action).toLowerCase()} "${c.text}"`
   return [`${w.by.name} ${what}`, where].filter(Boolean).join(' ')
 }
 
+/**
+ * HONEST 11 — how far one answer reaches past this row, in the record's words; null when it decides this row only. A
+ * request's other changes are never "places" of this term.
+ */
+function askReachWords(w: NonNullable<WasteRow['waiting']>, tail: 'decides' | 'lists'): string | null {
+  const reach = askReachOf(w)
+  if (!reach) return null
+  const n = reach.n
+  if (reach.kind === 'changes') return `It is one of ${n} changes in this request: ${tail === 'decides' ? 'one answer decides them all' : 'the review lists each one first'}.`
+  const all = (noun: string) => (n === 2 ? `both ${noun}` : `all ${n} ${noun}`)
+  if (reach.kind === 'adGroups') return tail === 'decides' ? `One negative in the whole campaign: it covers this term in ${all('ad groups')} listed.` : `One negative in the whole campaign covers this term in ${all('ad groups')} listed.`
+  return `One answer decides ${all('rows')} it is on.`
+}
+
+/** HONEST 11 — the "About this ask" line for its reach past this row; null when it decides this row only. */
+export function askReachItem(w: NonNullable<WasteRow['waiting']>): { label: string; value: string; hint: string } | null {
+  const reach = askReachOf(w)
+  if (!reach) return null
+  if (reach.kind === 'changes') return { label: 'In this request', value: plural(reach.n, 'change'), hint: 'One answer decides them all' }
+  if (reach.kind === 'adGroups') return { label: 'Covers', value: plural(reach.n, 'ad group'), hint: 'One negative in the whole campaign' }
+  return { label: 'Also on', value: plural(reach.n - 1, 'other row'), hint: 'One answer decides every row' }
+}
+
+/** HONEST 15 — a row listed only for its ask: the page's test never ran on it (no checks; the banner says so). */
+const notJudged = (r: Pick<WasteRow, 'test'> & Partial<Pick<WasteRow, 'askOnly'>>) => r.test.judged === false || r.askOnly === true
+
 /** A Wasting-view row's banner (RECORD-SPEC R4): the answer in one look, in the state's tone. */
 export function wasteBanner(r: WasteRow, mainVerb?: { action: WasteAction; where: Where | null; held: string | null } | null): BannerView {
-  const days = r.test.windowDays
   if (r.waiting) {
     const w = r.waiting
-    const rows = Math.max(1, w.rows ?? 1)
+    const reach = askReachWords(w, 'decides')
     return {
       tone: 'warning', title: askWords(r),
-      desc: `It waits for your answer: asked ${relWords(w.at)}${w.expiresAt ? `, it expires ${relWords(w.expiresAt)}` : ''}.${rows > 1 ? ` One answer covers ${rows === 2 ? 'both places' : `all ${rows} places`}.` : ''}`,
+      desc: `It waits for your answer: asked ${relWords(w.at)}${w.expiresAt ? `, it expires ${relWords(w.expiresAt)}` : ''}.${reach ? ` ${reach}` : ''}${notJudged(r) ? ' It is listed for this ask only: the page\'s test did not judge it.' : ''}`,
     }
   }
   if (r.state === 'PROTECTED') {
     const n = r.protection?.terms.length ?? 0
     const noun = r.kind === 'TERM' ? 'term' : 'keyword'
-    const facts = r.d ? `${hasMoney(r.d.spendCents) ? `${money(r.d.spendCents, r.currency)} in ${days} days, ` : `in ${days} days: `}${plural(r.d.clicks, 'click')}, ${plural(r.d.orders, 'order')}` : null
+    const facts = r.d ? `${hasMoney(r.d.spendCents) ? `${money(r.d.spendCents, r.currency)} ${inWindow(r.test)}, ` : `${inWindow(r.test)}: `}${plural(r.d.clicks, 'click')}, ${plural(r.d.orders, 'order')}` : null
     const test = facts ? `By the page's test it ${r.test.met ? 'would count as wasting' : 'does not count as wasting'}: ${facts}. ` : ''
     const keeps = n > 1 ? `${n} protected terms keep it safe` : n === 1 ? `"${r.protection!.terms[0].term}" keeps it safe` : 'A protected term keeps it safe'
     const follow = r.followUp ? ` ${sentence(r.followUp.status === 'WAITING' ? 'Its protection is being removed: Nexus sends its negative once it is' : `Not stopped after the protection was removed: ${(r.followUp.why ?? 'refused').replace(/\.$/, '')}`)}` : ''
@@ -220,11 +254,11 @@ export function wasteBanner(r: WasteRow, mainVerb?: { action: WasteAction; where
     return { tone: 'info', title: 'Its protection is being removed', desc: 'Nexus sends its negative once it is.' }
   }
   if (r.state === 'TURNED_ON_ELSEWHERE') {
-    const spent = r.d && hasMoney(r.d.spendCents) ? ` In the last ${days} days it spent ${money(r.d.spendCents, r.currency)} with ${plural(r.d.orders, 'order')}.` : ''
+    const spent = r.d && hasMoney(r.d.spendCents) ? ` ${capital(inWindow(r.test))} it spent ${money(r.d.spendCents, r.currency)} with ${plural(r.d.orders, 'order')}.` : ''
     return { tone: 'danger', title: 'It was kept paused, but someone turned it on outside Nexus', desc: `Amazon serves it again.${spent} Pause again pauses it and keeps it paused.` }
   }
   if (r.state !== 'RUNNING') return { tone: 'info', title: capital(stateSentence(r)), desc: null }
-  if (!r.d) return { tone: 'info', title: `No data in the last ${days} days`, desc: 'Amazon reported nothing for it in the window, so it is not judged.' }
+  if (!r.d) return { tone: 'info', title: `No data ${inWindow(r.test)}`, desc: 'Amazon reported nothing for it in the window, so it is not judged.' }
   const verb = mainVerb ? (mainVerb.held ? `${verbPhrase(mainVerb.action, mainVerb.where, r.adGroup?.name).label} is held: ${sentence(mainVerb.held)}` : verbStops(mainVerb.action, mainVerb.where, r.adGroup?.name)) : ''
   const ownClash = r.clash?.kind === 'NEG_OVER_OWN_KEYWORD'
   if (r.test.met) {
@@ -240,7 +274,7 @@ export function wasteBanner(r: WasteRow, mainVerb?: { action: WasteAction; where
   const why = notTrueWords(wasteChecks(r)?.rows ?? [])
   return {
     tone: 'info', title: 'Not wasting by this page\'s test',
-    desc: [why ? `In the last ${days} days ${why}, so it does not count as wasting yet.` : null, r.clash ? sentence(r.clash.label) : null].filter(Boolean).join(' ') || null,
+    desc: [why ? `${capital(inWindow(r.test))} ${why}, so it does not count as wasting yet.` : null, r.clash ? sentence(r.clash.label) : null].filter(Boolean).join(' ') || null,
   }
 }
 
@@ -253,13 +287,18 @@ const NO_SPEND = 'You cannot see ad spend'
 /** A Wasting-view row's four tiles: Spend · Clicks · Orders · Cost against target (a waiting ask over places: Places). */
 export function wasteMetrics(r: WasteRow): MetricView[] {
   const d = r.d
-  const days = r.test.windowDays
   const spendKnown = !!d && hasMoney(d.spendCents)
   const stock = r.stockOutDays ? `, ${plural(r.stockOutDays, 'day')} out of stock left out` : ''
-  const rows = Math.max(1, r.waiting?.rows ?? 1)
+  // HONEST 11 — an ask's reach past this row: its request's changes, or the ad groups one campaign negative covers.
+  const reach = askReachOf(r.waiting)
+  const both = (n: number, what: string) => (n === 2 ? `${what} both` : `${what} all ${n}`)
   const x = d?.xCpa
-  const fourth: MetricView = r.waiting && rows > 1
-    ? { id: 'places', label: 'Places', value: String(rows), hint: rows === 2 ? 'one answer for both' : `one answer for all ${rows}` }
+  const fourth: MetricView = reach
+    ? reach.kind === 'changes' ? { id: 'changes', label: 'Changes', value: String(reach.n), hint: `one answer for all ${reach.n}` }
+      : reach.kind === 'adGroups' ? { id: 'places', label: 'Ad groups', value: String(reach.n), hint: both(reach.n, 'one negative covers') }
+        : { id: 'places', label: 'Rows', value: String(reach.n), hint: both(reach.n, 'one answer for') }
+    // HONEST 15 — listed for its ask only: no cost against target is worked out for it (never "no target set").
+    : notJudged(r) ? { id: 'xcpa', label: 'Cost against target', value: '—', hint: 'not judged: listed for its ask' }
     : {
       id: 'xcpa', label: 'Cost against target', value: typeof x === 'number' && Number.isFinite(x) ? `${xNum(x)}×` : '—',
       hint: !d ? 'nothing reported' : typeof x === 'number' && Number.isFinite(x) ? (r.test.xCpaBar ? `the limit is ${xNum(r.test.xCpaBar)}×` : undefined)
@@ -267,7 +306,7 @@ export function wasteMetrics(r: WasteRow): MetricView[] {
       ...(typeof x === 'number' && r.test.xCpaBar != null && x >= r.test.xCpaBar ? { tone: 'bad' as const } : {}),
     }
   return [
-    { id: 'spend', label: 'Spend', value: d ? moneyOr(d.spendCents, r.currency) : '—', hint: !d ? 'nothing reported' : spendKnown ? `last ${days} days${stock}` : NO_SPEND },
+    { id: 'spend', label: 'Spend', value: d ? moneyOr(d.spendCents, r.currency) : '—', hint: !d ? 'nothing reported' : spendKnown ? `${windowSpan(r.test)}${stock}` : NO_SPEND },
     { id: 'clicks', label: 'Clicks', value: d ? d.clicks.toLocaleString('en-IE') : '—', hint: d && hasMoney(d.cpcCents) ? `${money(d.cpcCents, r.currency)} a click` : undefined },
     { id: 'orders', label: 'Orders', value: d ? d.orders.toLocaleString('en-IE') : '—', hint: 'up to today' },
     fourth,
@@ -295,7 +334,9 @@ function limitsNote(r: WasteRow): string {
   const out = [by ? (by.id === 'strategy' ? `The limits come from ${by.name}.` : `The limits come from the rule "${by.name}".`) : 'The limits come from this page\'s default test.']
   const cr = /pooled ([\d.]+ ?%) conversion, never under (\d+)/.exec(t.sentence ?? '')
   const noCr = /no conversion rate known, never under (\d+)/.exec(t.sentence ?? '')
-  if (cr) out.push(`${plural(t.clicksNeeded, 'click')} is enough for 1 order at the product's ${cr[1]} conversion (never under ${cr[2]}).`)
+  // HONEST 16 — what the clicks limit means: N ≈ ln 0.05 ÷ ln(1 − CR) ≈ 3 ÷ CR clicks with no order say, 95 % sure, it
+  // converts below the product's rate (never "enough for 1 order"); at the floor the limit is higher, so surer still.
+  if (cr) out.push(`0 orders in ${plural(t.clicksNeeded, 'click')}: it very likely converts below the product's ${cr[1]} (${t.clicksNeeded > Number(cr[2]) ? '95 % sure' : `at least 95 % sure: the limit is never under ${cr[2]} clicks`}).`)
   else if (noCr) out.push(`${plural(t.clicksNeeded, 'click')} is the floor: no conversion rate is known for the product.`)
   if (hasMoney(t.spendBarCents)) {
     if (t.xCpaBar) out.push(`${money(t.spendBarCents, r.currency)} is ${xNum(t.xCpaBar)} × the target cost per order.`)
@@ -310,7 +351,8 @@ function limitsNote(r: WasteRow): string {
 /** The page's test as three checks (RECORD-SPEC R6); null when there are no numbers (no data). */
 export function wasteChecks(r: WasteRow): ChecksView | null {
   const d = r.d
-  if (!d) return null
+  // HONEST 15 — listed only for its ask: the test never ran on it, so no checks (never "0 clicks or more · Past the limit").
+  if (!d || notJudged(r)) return null
   const t = r.test
   const maxOrders = orderLimitOf(t)
   const ordersOk = d.orders <= maxOrders
@@ -336,7 +378,7 @@ export function wasteChecks(r: WasteRow): ChecksView | null {
   ]
   const trueCount = rows.filter((c) => c.holds === true).length
   const sold = /(\d+ search terms?) under it sold/.exec(t.sentence ?? '')
-  const verdict = t.met ? `All 3 checks are true in the last ${t.windowDays} days`
+  const verdict = t.met ? `All 3 checks are true ${inWindow(t)}`
     : trueCount === 3 && sold ? `All 3 checks are true, but ${sold[1]} under it sold: not wasting`
       : r.waiting ? `${trueCount} of 3 checks are true: not wasting by this page's test`
         : `${trueCount} of 3 checks are true: not wasting yet`
@@ -348,25 +390,29 @@ export function wasteChecks(r: WasteRow): ChecksView | null {
 // ── a waiting ask: what Approve does ────────────────────────────────────────────────────────────────────────────────
 
 /** "What Approve does": the ask's change at this row, and what Approve and Reject do (the decide review's own rules). */
-export function approveView(r: WasteRow): { desc: string; change: string; now: string; after: string; others: number; foot: string } | null {
+export function approveView(r: WasteRow): { desc: string; change: string; now: string; after: string; reach: string | null; foot: string } | null {
   const w = r.waiting
   if (!w) return null
-  const rows = Math.max(1, w.rows ?? 1)
-  const a = r.verb.action
-  const known = !(a === 'REMOVE_NEGATIVE' && !r.askOnly)
+  // HONEST 10 — the ask's own change at this row (never the row's verb); 11 — how far the answer reaches, in true words;
+  // 12 — what Approve really does, per kind: a request runs as the approver after its 20 s window, a rule's card at once.
+  const c = askChangeOf(r)
   const noun = r.kind === 'TERM' ? 'term' : r.kind === 'TARGET' ? 'target' : 'keyword'
-  const places = rows === 1 ? `in ${placeWords(r.verb.where, r.adGroup?.name)}` : rows === 2 ? 'in both places' : `in all ${rows} places`
-  const desc = !known ? `It runs the change ${w.by.name} asked for` : a === 'PAUSE' ? `It pauses "${r.text}" and keeps it paused`
-    : a === 'REMOVE_NEGATIVE' ? `It removes the negative "${r.text}": Amazon archives it, final`
-      : `It adds the ${verbLabel(a).toLowerCase()} "${r.text}" ${places}, so the ${noun} stops there`
-  const card = w.approvalId.startsWith('suggestion:')
+  const place = c?.action === 'NEGATE_ASIN' ? r.adGroup?.name || 'this ad group' : placeWords(c?.where, r.adGroup?.name)
+  const desc = !c ? `It runs the change ${w.by.name} asked for`
+    : c.action === 'PAUSE' ? `It pauses "${c.text}"${c.keepPaused ? ' and keeps it paused' : ''}`
+      // HONEST 18d — a negative Amazon never had: removing it changes Nexus only; not known: said as not known.
+      : c.action === 'REMOVE_NEGATIVE' ? `It removes the ${c.match ? negativeWords(c.match).toLowerCase() : 'negative'} "${c.text}": ${w.atAmazon === false ? 'Amazon never had it, so it changes Nexus only' : w.atAmazon ? 'Amazon archives it, final' : 'if Amazon holds it, Amazon archives it, final'}`
+        : `It adds the ${verbLabel(c.action).toLowerCase()} "${c.text}" in ${place}, so the ${noun} stops there`
+  const after = isRuleCard(w.approvalId)
+    ? 'it applies now, as the rule\'s own change: there is no window to undo it. Reject sends nothing; its Undo brings it back to waiting.'
+    : 'it runs as you after a 20-second window in which you can undo it. Reject sends nothing, and the request does not come back.'
   return {
     desc,
-    change: known ? `${verbLabel(a, a === 'PAUSE' || a === 'NEGATE_ASIN' || a === 'REMOVE_NEGATIVE' ? null : r.verb.where)} · ${r.text}` : r.text,
+    change: c ? `${verbLabel(c.action, c.where)} · ${c.text}` : r.text,
     now: r.state === 'RUNNING' ? 'Running' : capital(stateSentence(r)),
-    after: !known ? 'Approved' : a === 'PAUSE' ? 'Kept paused' : a === 'REMOVE_NEGATIVE' ? 'Removed' : 'Blocked',
-    others: rows - 1,
-    foot: `Approve shows the review first. After you approve, you can undo it for a short time. ${card ? 'Reject sends nothing; its Undo brings it back to waiting.' : 'Reject sends nothing, and the request does not come back.'}${w.plan ? ` ${planWords(w.plan)}: Approve and Reject decide every step together.` : ''}`,
+    after: !c ? 'Approved' : c.action === 'PAUSE' ? (c.keepPaused ? 'Kept paused' : 'Paused') : c.action === 'REMOVE_NEGATIVE' ? 'Removed' : 'Blocked',
+    reach: askReachWords(w, 'lists'),
+    foot: `Approve shows the review first. After you approve, ${after}${w.plan ? ` ${planWords(w.plan)}: Approve and Reject decide every step together.` : ''}`,
   }
 }
 
@@ -377,7 +423,7 @@ export const stillSpendsPlaces = (r: Pick<StoppedRow, 'id'>, runsIn: readonly Pl
   (runsIn ?? []).filter((p) => p.rowId !== r.id && p.state === 'RUNNING')
 
 /** A stopped row's banner: "Did it work?" — success when it saved, warning when part still spends, info too early. */
-export function stoppedBanner(r: StoppedRow, others: readonly Place[] = []): BannerView {
+export function stoppedBanner(r: StoppedRow, others: readonly Place[] = [], through?: string | null): BannerView {
   if (r.state === 'TURNED_ON_ELSEWHERE') return { tone: 'danger', title: 'Someone turned it on outside Nexus', desc: 'It was kept paused, but Amazon serves it again. Pause again pauses it and keeps it paused.' }
   if (r.state === 'NOT_AT_AMAZON') return { tone: 'warning', title: 'Amazon never took it: it blocks nothing', desc: r.sinceWhy ? sentence(r.sinceWhy) : null }
   const e = r.effect
@@ -386,20 +432,25 @@ export function stoppedBanner(r: StoppedRow, others: readonly Place[] = []): Ban
   if (!hasMoney(e.savedCents)) return { tone: 'info', title: capital(e.words), desc: null }
   const saved = e.savedCents
   const facts = hasMoney(e.beforePerDayCents) && hasMoney(e.afterCents) ? `Before the stop it cost ${money(e.beforePerDayCents, r.currency)} a day here, and ${money(e.afterCents, r.currency)} since.` : null
+  // HONEST 14 — one true sentence: below 0 it spends MORE than before (its minus says by how much), never "as much".
+  const more = saved < 0 ? `Saved so far: ${signedMoney(saved, r.currency)}.` : null
   if (e.verdict === 'STILL_SPENDS') {
-    const n = r.stillServesIn || others.length
-    const where = n ? `in ${plural(n, 'other ad group')}` : 'elsewhere'
+    // HONEST 18b — the places where its words spent since the stop (the server's count), never the window's places.
+    const n = r.stillServesIn
+    const where = n ? `in ${plural(n, 'other ad group')} since the stop` : 'elsewhere since the stop'
     const first = others[0]
-    const there = first?.d ? `The same words still spend in ${first.adGroup?.name ?? first.campaign.name}: ${moneyOr(first.d.spendCents, r.currency)} and ${plural(first.d.orders, 'order')}.` : null
+    const span = first?.windowDays ? ` in the ${first.windowDays} days${through ? ` to ${dayWords(through)}` : ''}` : ''
+    const there = first?.d ? `In ${first.adGroup?.name ?? first.campaign.name} the same words spent ${moneyOr(first.d.spendCents, r.currency)} with ${plural(first.d.orders, 'order')}${span}.` : null
     const fix = others.some((p) => p.rowId?.startsWith('term:')) ? 'A negative exact there stops the rest; its button is on the Where it runs tab.' : null
     return {
       tone: 'warning',
-      title: saved > 0 ? `It saved ${money(saved, r.currency)} so far, but its words still spend ${where}` : `It saved nothing so far, and its words still spend ${where}`,
-      desc: [facts, there, fix].filter(Boolean).join(' ') || null,
+      title: saved > 0 ? `It saved ${money(saved, r.currency)} so far, but its words spent ${where}`
+        : saved < 0 ? `It spends more here than before, and its words spent ${where}` : `It saved nothing so far, and its words spent ${where}`,
+      desc: [more, facts, there, fix].filter(Boolean).join(' ') || null,
     }
   }
   if (saved > 0) return { tone: 'success', title: `It saved ${money(saved, r.currency)} so far`, desc: facts }
-  if (saved < 0) return { tone: 'warning', title: `It spends more here than before: ${signedMoney(saved, r.currency)}`, desc: [sentence(e.words), facts].filter(Boolean).join(' ') }
+  if (saved < 0) return { tone: 'warning', title: 'It spends more here than before the stop', desc: [more, facts].filter(Boolean).join(' ') }
   return { tone: 'warning', title: 'It saved nothing so far', desc: sentence(e.words) }
 }
 
@@ -432,7 +483,7 @@ export function savingSum(r: StoppedRow): { rows: Array<{ id: string; part: stri
       { id: 'after', part: 'Spent since the stop', value: money(e.afterCents, r.currency), how: `In ${place}, since ${day}` },
       { id: 'saved', part: 'Saved', value: signedMoney(e.savedCents, r.currency), how: `${money(e.beforePerDayCents, r.currency)} a day × the days since − ${money(e.afterCents, r.currency)}` },
     ],
-    note: `It counts ${place} only.${e.verdict === 'STILL_SPENDS' ? ' Its words still spend elsewhere, so the answer is amber, not green.' : ''} ${sentence(e.words)}`,
+    note: `It counts ${place} only.${e.verdict === 'STILL_SPENDS' ? ' Its words spent elsewhere since the stop, so the answer is amber, not green.' : ''} ${sentence(e.words)}`,
   }
 }
 
@@ -521,6 +572,15 @@ export function lastChangeWords(c: { action: string; at: string; by: { name: str
 /** "26 Oct, 07:00" and "2 h ago" — an ask's time. */
 export const askedWords = (iso: string, now: number = Date.now()) => ({ value: whenWords(iso), hint: relWords(iso, now) })
 
+/**
+ * HONEST 17 — a skip that still holds: its History Undo is the page's own Unskip of its row (Nexus only; a skip has no
+ * change id). The row to name in that review, or null for any other change (it keeps its own Undo).
+ */
+export function skipUndoRow(it: HistoryItem): { id: string; text: string; place: HistoryItem['campaign'][] } | null {
+  if (it.action !== 'skipped' || !it.undo.available || !it.rowId) return null
+  return { id: it.rowId, text: it.text, place: [it.campaign, ...(it.adGroup ? [it.adGroup] : [])] }
+}
+
 /** The intro line of History. */
 export const historyIntro = (noun: string, undoable: boolean) =>
   `Every change to this ${noun} in the last 90 days, newest first.${undoable ? ' A change you can still undo has an Undo button.' : ''}`
@@ -543,6 +603,18 @@ export function placePill(p: Pick<Place, 'state' | 'rowId'>, current: WasteRow |
 /** A blocking negative in words: "Negative exact", "Negative phrase", "Negative product". */
 export const negativeWords = (match: Place['match']) => `Negative ${matchWord(match).toLowerCase()}`
 
+/** HONEST 18a — a listed negative that blocks nothing now, in words (the Blocked here table); null: it blocks now. */
+export function blockedNote(p: Pick<Place, 'state'>): string | null {
+  if (p.state === 'NEGATED') return null
+  return p.state === 'NOT_AT_AMAZON' ? 'Not at Amazon: blocks nothing' : 'Paused: blocks nothing now'
+}
+
+/** HONEST 18c — a place whose numbers cover another window than this record's says its own ("in 90 days"); null else. */
+export function placeWindowNote(p: Pick<Place, 'd' | 'windowDays'>, current: WasteRow | StoppedRow): string | null {
+  if (!p.d || !p.windowDays) return null
+  return isStoppedRow(current) || p.windowDays !== current.test.windowDays ? `in ${p.windowDays} days` : null
+}
+
 /** Who added a negative (the Blocked here table): Brain, You, the rule's name; a dash when nobody is known. */
 export function addedByWords(o: Owner): string {
   const c = chipOwner(o)
@@ -553,8 +625,8 @@ export function addedByWords(o: Owner): string {
 /** Where it runs: the intro line and each list's line. */
 export function whereWords(r: WasteRow | StoppedRow): { intro: string; spends: string; blocked: string } {
   const term = r.kind === 'TERM' && !r.id.startsWith('neg:')
-  const days = isStoppedRow(r) ? null : r.test.windowDays
-  const tail = days ? ` Last ${days} days.` : ''
+  // HONEST 18c — the real window ("in the 60 days to 24 Oct"), never "last"; a place on another window says its own.
+  const tail = isStoppedRow(r) ? '' : ` Numbers ${inWindow(r.test)}.`
   return term
     ? { intro: `Where this search term spends, and where a negative already blocks it.${tail}`, spends: 'Shoppers who searched it saw your ad here', blocked: 'A negative stops your ad for this search here' }
     : { intro: `Where the words of this ${recordNoun(r)} still spend, and where a negative blocks them.${tail}`, spends: 'Shoppers who search these words still see your ad here', blocked: 'A negative stops your ad for these words here' }

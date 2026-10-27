@@ -6,7 +6,8 @@
  *   what      exact: that search term in its place; phrase: every search term of the place holding the words, whole and
  *             in order (pure.ts negativeBlocksTerm, the rule every read of this page blocks by); product: that ASIN. Its
  *             place is one ad group, or every ad group of a campaign (a campaign negative). A term a standing negative
- *             blocks there already is not counted: this negative changes nothing for it.
+ *             blocks there now is not counted: this negative changes nothing for it (one switched off, or that Amazon
+ *             never took, blocks nothing: it is counted).
  *   numbers   the page's own numbers over the page's window (read.ts criteriaOf: 60 days, or the ads strategy's): clicks
  *             and spend to 3 days ago with the days out of stock left out, orders and sales to today — the same sums the
  *             rows show, from the market's facts the page just read (read.ts marketWasteFacts, reused a short while)
@@ -23,7 +24,7 @@
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { isAsinText, negativeBlocksTerm } from './pure.js'
-import { blockersOf, criteriaOf, marketCode, marketWasteFacts, placeRefs, windowOf, type WasteFacts } from './read.js'
+import { blockersNow, criteriaOf, marketCode, marketWasteFacts, placeRefs, windowOf, type WasteFacts } from './read.js'
 
 /** The most terms that sold one reach names. */
 export const MAX_SOLD = 10
@@ -156,7 +157,8 @@ export function placeTerms(f: WasteFacts, n: ReachNegative, windowDays: number):
     return {
       adGroupId: p.adGroupId, key: p.key, text: isAsinText(p.key) ? p.key.toUpperCase() : p.text,
       impressions: s.impressions, clicks: s.clicks, spendCents: s.spendCents, orders: s.orders, salesCents: s.salesCents,
-      blocked: blockersOf(f, p.adGroupId, p.key).length > 0,
+      // HONEST 6 — blocked there now (a negative switched off, or one Amazon never took, blocks nothing).
+      blocked: blockersNow(f, p.adGroupId, p.key).length > 0,
     }
   })
 }

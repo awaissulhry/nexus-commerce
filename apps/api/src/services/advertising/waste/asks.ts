@@ -15,6 +15,8 @@
  *                 campaign negative), the negative to remove (`neg:`); its numbers where Nexus holds them
  * A row carries one ask; a second ask on the very same row stays with the first (it is decided with it on the Approvals
  * page) — never counted here without its row.
+ * HONEST 10 / 11 / 15 — the `waiting` a row carries is the ask's own change there (waitAskOf: action, match, level, words)
+ * and how many changes the ask holds; a row of its own is not judged by the page's test (`test.judged: false`).
  */
 import { labelFor } from '../bid-grid.service.js'
 import {
@@ -22,7 +24,7 @@ import {
   type Match, type RowNumbers, type RowState, type RowKind, type VerbAction, type WasteRow,
 } from './pure.js'
 import { idIn } from '../ads-scope-lists.js'
-import { blockersOf, inScope, numbersOf, placeRefs, waitingOfFact, type ResolvedScope, type WaitItem, type WasteFacts, type WasteScope } from './read.js'
+import { blockersNow, inScope, numbersOf, placeRefs, waitingOfFact, type ResolvedScope, type TargetFact, type WaitingAsk, type WaitItem, type WasteFacts, type WasteScope } from './read.js'
 
 const NO_NUMBERS: RowNumbers = Object.freeze({ impressions: 0, clicks: 0, orders: 0, spendCents: 0, salesCents: 0, acosPct: null, cpcCents: null, xCpa: null })
 
@@ -67,6 +69,26 @@ function placeOf(f: WasteFacts, it: WaitItem, s: WasteScope & { adGroupId?: stri
 }
 
 const VERB_MATCH: Readonly<Record<string, Match>> = { NEGATE_EXACT: 'EXACT', NEGATE_PHRASE: 'PHRASE', NEGATE_ASIN: 'ASIN' }
+
+/**
+ * HONEST 10 — one change of an ask as the row it lands on carries it (`waiting`): its own action, the negative's match
+ * (our keyword's own for a pause), where it lands (a negative's ad group or whole campaign, the removed negative's own;
+ * null for a pause) and its own words — never the row's verb. A pause says whether it keeps the keyword paused (the
+ * request's `keepPaused`, a rule card's unless it opts out). A target Nexus no longer holds: what is not known is null.
+ */
+export function waitAskOf(it: Pick<WaitItem, 'action' | 'targetId' | 'adGroupId' | 'campaignId' | 'text'>, targetById: ReadonlyMap<string, TargetFact>, keepPaused?: boolean): WaitingAsk {
+  const keep = it.action === 'PAUSE' && keepPaused !== undefined ? { keepPaused } : {}
+  if (it.action === 'PAUSE' || it.action === 'REMOVE_NEGATIVE') {
+    const t = it.targetId ? targetById.get(it.targetId) : undefined
+    if (!t) return { action: it.action, match: null, level: null, text: null, ...keep }
+    if (it.action === 'PAUSE') return { action: 'PAUSE', match: targetMatch(t.kind, t.expressionType)?.match ?? null, level: null, text: labelFor(t.expressionValue, t.kind || 'UNKNOWN', t.expressionType).label, ...keep }
+    const m = negativeMatch(t.kind, t.expressionType)
+    // HONEST 18d — Amazon never had it (no id): removing it changes Nexus only, nothing is archived at Amazon.
+    return { action: 'REMOVE_NEGATIVE', match: m, level: t.negativeLevel === 'CAMPAIGN' ? 'CAMPAIGN' : 'AD_GROUP', text: m === 'ASIN' ? t.expressionValue.toUpperCase() : t.expressionValue, atAmazon: !!t.externalTargetId }
+  }
+  const text = it.text ?? null
+  return { action: it.action, match: VERB_MATCH[it.action] ?? null, level: it.adGroupId ? 'AD_GROUP' : 'CAMPAIGN', text: text && it.action === 'NEGATE_ASIN' ? text.toUpperCase() : text }
+}
 
 /** A row of its own for a change no row of the page carries. */
 function askRow(f: WasteFacts, it: WaitItem, p: ItemPlace, id: string): WasteRow | null {
@@ -118,7 +140,8 @@ function askRow(f: WasteFacts, it: WaitItem, p: ItemPlace, id: string): WasteRow
       stockOutDays = win.stockOutDays
     }
     if (it.action === 'NEGATE_ASIN') text = text.toUpperCase()
-    state = blockersOf(f, p.adGroupId, p.key).length ? 'NEGATED' : 'RUNNING'
+    // HONEST 6 — NEGATED only by a negative that blocks now.
+    state = blockersNow(f, p.adGroupId, p.key).length ? 'NEGATED' : 'RUNNING'
   }
   const refs = placeRefs(f, p.adGroupId, { tab, value: focusValue })
   const action: VerbAction = it.action
@@ -127,8 +150,9 @@ function askRow(f: WasteFacts, it: WaitItem, p: ItemPlace, id: string): WasteRow
     portfolio: refs.portfolio, campaign: refs.campaign, adGroup: refs.adGroup, product: refs.product, productCount: refs.productCount, via: null,
     state, owner: { ...it.fact.by },
     verb: { action, where: p.level === 'CAMPAIGN' ? 'campaign' : 'adGroup', held: null, ...(action === 'REMOVE_NEGATIVE' ? { targetRowId: id } : {}) },
+    // HONEST 15 — listed for its ask only: the page's test never ran on it (no checks are drawn), `judged: false`.
     test: {
-      met: false, by: null, windowDays: WASTE_WINDOW_DAYS, clicksNeeded: 0, spendBarCents: null, xCpaBar: null,
+      met: false, judged: false, by: null, windowDays: WASTE_WINDOW_DAYS, clicksNeeded: 0, spendBarCents: null, xCpaBar: null,
       sentence: it.why ? `Asked by ${it.fact.by.name}: ${it.why}` : `Asked by ${it.fact.by.name}: it waits for your answer`,
     },
     d, d90, spark, stockOutDays,
