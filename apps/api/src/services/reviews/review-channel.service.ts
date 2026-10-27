@@ -302,7 +302,7 @@ export async function reviewsChannel(input: ChannelInput): Promise<ChannelPage> 
 // ── Amazon ───────────────────────────────────────────────────────────
 
 type AmazonRow = { id: string; rating: number | null; postedAt: Date; productId: string | null }
-type InsightRow = { asin: string; marketplace: string; productId: string | null; reviewCount: number | null; positiveTopics: unknown; negativeTopics: unknown; trend: unknown; accessStatus: string; fetchedAt: Date }
+type InsightRow = { asin: string; marketplace: string; productId: string | null; positiveTopics: unknown; negativeTopics: unknown; trend: unknown; accessStatus: string; fetchedAt: Date }
 
 /** Amazon's topics of some reads, most mentioned first, each with its 6-month trend over the same reads. */
 function topicsOf(rows: InsightRow[], polarity: TopicPolarity): AmazonTopic[] {
@@ -333,7 +333,7 @@ async function amazonSections(market: string | null, period: ChannelPeriod, boun
   })
   const insights = once(async (): Promise<InsightRow[]> => prisma.amazonReviewInsight.findMany({
     where: market ? { marketplace: market } : {},
-    select: { asin: true, marketplace: true, productId: true, reviewCount: true, positiveTopics: true, negativeTopics: true, trend: true, accessStatus: true, fetchedAt: true },
+    select: { asin: true, marketplace: true, productId: true, positiveTopics: true, negativeTopics: true, trend: true, accessStatus: true, fetchedAt: true },
     take: 2_000,
   }))
   // The markets whose newest topic read Amazon refused for the missing role (every market, not only this page's).

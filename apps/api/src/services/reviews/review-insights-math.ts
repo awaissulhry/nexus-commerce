@@ -299,6 +299,18 @@ function weighted(items: ReadonlyArray<{ value: number | null; weight: number }>
 }
 
 /**
+ * Amazon's share of reviews for a topic — the ONE calculation every Reviews page uses (channel page, Overview themes,
+ * Insights › Themes, products to watch). It is Amazon's own `occurrencePercentage` ("the percentage of customer reviews
+ * that mention the topic", Customer Feedback API v2024-06-01), stored on each topic as `share`. A topic that several
+ * reads give (several products, or one product in several markets) is weighted by its mentions in each. Amazon gives no
+ * review count, so a share is never worked out from one. One decimal; null when no read sent a share.
+ */
+export function amazonTopicShare(parts: ReadonlyArray<{ share: number | null; mentions: number }>): number | null {
+  const share = weighted(parts.map((p) => ({ value: p.share, weight: p.mentions })), 1)
+  return share == null ? null : Math.min(100, Math.max(0, share))
+}
+
+/**
  * The Themes board: one row per theme with mentions, from the period's reviews (`rows`) and the Amazon topics in
  * scope (`topics`). `prevRows` is the period before (for the change), `trendRows` the last 8 weeks (for the line).
  * A review can mention several themes. Themes with no mention are left out.
@@ -330,7 +342,7 @@ export function buildThemes(input: {
     const tooFew = mentions < MIN_THEME_MENTIONS
 
     const reviewShare = pct(mentioning.length, rows.length)
-    const amazonShare = weighted(amazon.map((t) => ({ value: t.share, weight: t.mentions })), 1)
+    const amazonShare = amazonTopicShare(amazon)
     // The reviews' own share when they mention it; a theme only Amazon's topics name shows Amazon's share of reviews.
     const share = mentioning.length > 0 || amazonShare == null ? reviewShare : amazonShare
 
