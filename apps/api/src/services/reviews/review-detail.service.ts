@@ -5,7 +5,7 @@
  * goes through the order's channel.
  */
 import { channelLabel } from '@nexus/shared/channel-label'
-import { channelSiteDomain, reviewReplyRules, type ReplyRules } from '@nexus/shared/review-reply-rules'
+import { channelSiteDomain, reviewAppOf, reviewReplyRules, type ReplyRules } from '@nexus/shared/review-reply-rules'
 import prisma from '../../db.js'
 import { isImportedSource, TRIAGE_STATUS_WORDS, variantWords } from './review-inbox-query.js'
 import { repliedOnChannel } from './review-reply-send.service.js'
@@ -50,6 +50,10 @@ export function failedReplyWords(code: string | null | undefined): string {
     case 'TOKEN': return 'The eBay sign-in needs renewing. Nothing was sent.'
     case 'TOO_LONG': return 'The reply was too long for eBay. Nothing was sent.'
     case 'FAILURE': return 'eBay refused the reply. Nothing was sent.'
+    case 'JUDGEME_NOT_CONNECTED': return 'Judge.me is not connected to Nexus. Nothing was sent.'
+    case 'JUDGEME_401': case 'JUDGEME_403': return 'Judge.me refused the API token. Paste a new one in Reviews settings. Nothing was sent.'
+    case 'JUDGEME_422': return 'Judge.me refused the reply. Nothing was sent.'
+    case 'JUDGEME_NO_ANSWER': return 'Judge.me did not answer. Check in Judge.me whether the reply is there before sending again.'
     default: return 'The reply did not go out. Nothing was sent.'
   }
 }
@@ -139,6 +143,9 @@ export async function getInboxReview(id: string, now: Date = new Date()): Promis
     : null
 
   const kind = reviewKindOf(r.channel, r.ingestSource)
+  // Shopify via Judge.me: replies go out from here while the app is connected (reviewReplyRules decides).
+  const app = r.channel === 'SHOPIFY' ? reviewAppOf(r.ingestSource) : null
+  const appConnected = app === 'JUDGEME' ? await import('./review-app-connection.service.js').then((m) => m.judgemeConnected()) : undefined
   const imported = isImportedSource(r.ingestSource)
   const sent = r.responses.some((x) => x.status === 'SENT')
   const place = placeWords(r.channel, r.marketplace)
@@ -220,7 +227,7 @@ export async function getInboxReview(id: string, now: Date = new Date()): Promis
     timeline: timeline.map((t) => ({ at: t.at.toISOString(), words: t.words })),
     reply: reviewReplyRules(r.channel, {
       kind, marketplace: r.marketplace, postedAt: r.postedAt, imported, replied: sent || repliedOnChannel(r.channel, r.rawPayload),
-      buyerId: r.authorName,
+      buyerId: r.authorName, lastEditedAt: r.channelEditedAt, app, appConnected,
     }, now),
   }
 }

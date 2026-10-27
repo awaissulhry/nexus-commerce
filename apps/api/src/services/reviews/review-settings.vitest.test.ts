@@ -17,6 +17,7 @@ import {
   everyWords, freshnessProblems, nextCronRun, pipelineJobDefs, pipelineJobs, scrubCode, settingsSourceRows, type CronRunFact,
 } from './review-settings-health.js'
 import type { SourceFacts } from './review-sources.service.js'
+import { etsySource } from './review-shop-channel-math.js'
 
 let database: Awaited<ReturnType<typeof formulaDatabase>>
 vi.mock('../../db.js', () => ({
@@ -186,6 +187,7 @@ describe('pipeline jobs', () => {
 })
 
 describe('sources', () => {
+  const ETSY_OFF = etsySource({ connections: [{ id: 'e1', isActive: true, authStatus: 'connected', shopName: 'Shop' }], readOn: false, lastRun: null, lastOkAt: null, reviews: 0 })
   const facts = (over: Partial<SourceFacts> = {}): SourceFacts => ({
     connections: [], topics: [], reviewGroups: [], lastReadAt: hoursAgo(0.3), ebayListingMarkets: [], ebayFeedbackOn: true, amazonTopicsOn: true, ...over,
   })
@@ -196,7 +198,7 @@ describe('sources', () => {
     const { rows, problems } = settingsSourceRows(facts({
       connections: [conn('AMAZON', 'IT'), conn('EBAY', 'IT'), conn('EBAY', 'DE', 'needs_reauth')],
       topics: [{ marketplace: 'IT', accessStatus: 'OK', fetchedAt: daysAgo(13) }, { marketplace: 'IT', accessStatus: 'NEEDS_BRAND_ANALYTICS_ROLE', fetchedAt: daysAgo(6) }],
-    }), { amazonSent30: [{ marketplace: 'IT', count: 40 }, { marketplace: 'DE', count: 12 }], amazonLastSentAt: hoursAgo(1), mailerPaused: null }, NOW)
+    }), { amazonSent30: [{ marketplace: 'IT', count: 40 }, { marketplace: 'DE', count: 12 }], amazonLastSentAt: hoursAgo(1), mailerPaused: null, etsy: ETSY_OFF, judgeme: null }, NOW)
     const by = (key: string) => rows.find((r) => r.key === key)!
     expect(by('amazon-requests')).toMatchObject({ stateWords: 'On', words: 'Sending in 2 markets · 52 in 30 days', action: { kind: 'rules' } })
     expect(by('amazon-topics')).toMatchObject({ stateWords: 'Needs a fix', tone: 'warning', lastWords: 'Last worked Tue 13 Oct', action: { kind: 'reconnect', href: '/settings/channels/amazon' } })
@@ -205,7 +207,9 @@ describe('sources', () => {
     expect(by('ebay-feedback')).toMatchObject({ stateWords: 'Needs a fix', action: { kind: 'reconnect', label: 'Reconnect eBay Germany' } })
     expect(by('ebay-feedback').words).toMatch(/eBay Italy is fine\./)
     expect(by('amazon-seller-feedback').later).toBe('Coming later')
-    expect(by('etsy-reviews').later).toBe('Coming later')
+    // PR I: Etsy and the Shopify review app are real rows now; only the apps not built yet say "coming later".
+    expect(by('etsy-reviews')).toMatchObject({ later: null, stateWords: 'Connected · not read yet', action: { kind: 'page', href: '/marketing/reviews/etsy' } })
+    expect(by('shopify-app')).toMatchObject({ stateWords: 'Not connected', later: 'Okendo, Yotpo, Loox: coming later', action: { kind: 'app', label: 'Connect Judge.me…' } })
     expect(by('amazon-review-text')).toMatchObject({ stateWords: 'Not available', action: { kind: 'import' } })
     expect(by('amazon-review-text').words).toMatch(/no review text and no star rating by API/)
     expect(problems).toBe(2)
@@ -213,7 +217,7 @@ describe('sources', () => {
   })
 
   it('a paused mailer and no eBay account', () => {
-    const { rows } = settingsSourceRows(facts(), { amazonSent30: [], amazonLastSentAt: null, mailerPaused: { at: daysAgo(2) } }, NOW)
+    const { rows } = settingsSourceRows(facts(), { amazonSent30: [], amazonLastSentAt: null, mailerPaused: { at: daysAgo(2) }, etsy: ETSY_OFF, judgeme: null }, NOW)
     expect(rows.find((r) => r.key === 'amazon-requests')).toMatchObject({ stateWords: 'Paused', tone: 'warning' })
     expect(rows.find((r) => r.key === 'ebay-feedback')).toMatchObject({ stateWords: 'Not connected', action: { kind: 'connect' } })
   })

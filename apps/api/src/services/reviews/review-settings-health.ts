@@ -10,12 +10,19 @@
  * output-freshness guard (review-pipeline-health.service.ts) adds what a job that "ran fine" did not do. A failure's
  * own text is shown only as a code in a tooltip, with any setting name taken out.
  *
+ * Reviews PR I (2026-10-27): the Etsy row reads whether Nexus reads Etsy reviews (review-shop-channel-math.ts
+ * `etsySource`), and the Shopify row the store's review app (Judge.me: connected, last read, or what went wrong; its
+ * action opens the connect window on the page). Okendo, Yotpo and Loox stay "Coming later".
+ *
  * Pure parts exported and tested in review-settings.vitest.test.ts.
  */
 import prisma from '../../db.js'
 import { channelMarketLabel, marketWords } from './overviewMath.js'
 import { computeReviewPipelineFreshness, type PipelineFreshness } from './review-pipeline-health.service.js'
 import { readAlert } from './review-settings.service.js'
+import { visibleReviewWhere } from './review-visibility.js'
+import { etsySource, type EtsySource } from './review-shop-channel-math.js'
+import type { ReviewAppView } from './review-app-connection.service.js'
 import {
   NO_TOPICS_MARKETS, dayWords, readSourceFacts, settingsHref, sourcesFromFacts, topicStates, type SourceFacts,
 } from './review-sources.service.js'
@@ -31,8 +38,11 @@ export type SourceRowKey =
 export type SourceTone = 'success' | 'warning' | 'danger' | 'neutral' | 'info'
 
 export interface SourceAction {
-  /** rules = the request rules / queue; reconnect / connect = Settings › Channels; import = the Inbox's Import window. */
-  kind: 'rules' | 'reconnect' | 'connect' | 'import'
+  /**
+   * rules = the request rules / queue; reconnect / connect = Settings › Channels; import = the Inbox's Import window;
+   * app = the review app's connect window on the page; page = a Reviews page (`href`).
+   */
+  kind: 'rules' | 'reconnect' | 'connect' | 'import' | 'app' | 'page'
   label: string
   /** Set for reconnect / connect (Settings › Channels › the channel); the page builds the Reviews links itself. */
   href: string | null
@@ -62,6 +72,10 @@ export interface SourceExtraFacts {
   amazonLastSentAt: Date | null
   /** The review-request mailer's pause, when a person paused it. */
   mailerPaused: { at: Date | null } | null
+  /** Whether Nexus reads Etsy reviews (PR I). */
+  etsy: EtsySource
+  /** The store's review app (Judge.me) as the Shopify page shows it (PR I). */
+  judgeme: ReviewAppView | null
 }
 
 const TOPIC_MARKETS_WORDS = 'Topics exist for the UK, Germany, France, Italy and Spain — not on Amazon.nl.'
@@ -179,39 +193,74 @@ export function settingsSourceRows(facts: SourceFacts, extra: SourceExtraFacts, 
   }
   rows.push(ebayRow)
 
-  // ── Etsy reviews (Phase 3) ──
+  // ── Etsy reviews (PR I): read every 30 minutes through the Etsy channel connection ──
+  const etsy = extra.etsy
   rows.push({
     key: 'etsy-reviews', name: 'Etsy reviews', what: 'Reviews of 1 to 5 stars with text and one photo',
-    stateWords: 'Not connected', tone: 'neutral', later: 'Coming later', lastAt: null, lastWords: '—', action: null,
-    words: 'Read only: you reply on Etsy.com, once, within 100 days of the buyer’s last edit, and the reply can’t be edited after.',
+    stateWords: etsy.stateWords, tone: etsy.tone, later: null,
+    words: `${etsy.words} Read only: you reply on Etsy.com, once, within 100 days of the buyer’s last edit, and the reply can’t be edited after.`,
+    lastAt: etsy.lastReadAt, lastWords: etsy.lastReadAt ? null : 'Never read',
+    action: etsy.state === 'not_connected'
+      ? { kind: 'connect', label: 'Connect Etsy', href: etsy.reconnectHref }
+      : etsy.state === 'needs_fix'
+        ? { kind: 'reconnect', label: 'Reconnect Etsy', href: etsy.reconnectHref }
+        : { kind: 'page', label: 'Open Etsy reviews', href: '/marketing/reviews/etsy' },
   })
 
-  // ── Shopify review app: by file import until the live link (Phase 3) ──
+  // ── Shopify review app (PR I): Judge.me connects; Okendo, Yotpo and Loox later ──
   const shopifyImport = lastImport('SHOPIFY')
+  const app = extra.judgeme
+  const connected = app != null && (app.state === 'connected' || app.state === 'waiting')
   rows.push({
-    key: 'shopify-app', name: 'Shopify review app', what: 'Reviews with photos and video from the store',
-    stateWords: 'Import only', tone: 'info', later: 'Live link: coming later',
-    words: 'No live link to the store’s review app yet — its reviews arrive by file import.',
-    lastAt: shopifyImport?.toISOString() ?? null, lastWords: shopifyImport ? null : 'Nothing imported',
-    action: { kind: 'import', label: 'Import reviews…', href: null },
+    key: 'shopify-app', name: 'Shopify review app', what: 'Reviews with photos from the store’s review app · Judge.me: read and reply',
+    stateWords: app?.stateWords ?? 'Not connected',
+    tone: app?.state === 'needs_fix' ? 'danger' : app?.tone === 'warning' ? 'warning' : connected ? app!.tone : 'neutral',
+    later: 'Okendo, Yotpo, Loox: coming later',
+    words: `${app?.words ?? 'Connect Judge.me to let Nexus read the store’s reviews and post replies.'}${shopifyImport ? ` A file import also works: the last one was on ${dayWords(shopifyImport)}.` : ''}`,
+    lastAt: app?.lastReadAt ?? shopifyImport?.toISOString() ?? null,
+    lastWords: app?.lastReadAt || shopifyImport ? null : 'Never read',
+    action: { kind: 'app', label: connected || app?.state === 'needs_fix' ? 'Manage Judge.me…' : 'Connect Judge.me…', href: null },
   })
 
   return { rows, problems: rows.filter((r) => r.tone === 'warning' || r.tone === 'danger').length }
 }
 
+/** Whether Nexus reads Etsy reviews for the business the request runs in (the Etsy page shows the same answer). */
+export async function readEtsySource(): Promise<EtsySource> {
+  const { etsyReviewsReadOn, ETSY_REVIEWS_JOB } = await import('../etsy/reviews-read.js')
+  const { isOwnConnection } = await import('../connection-resolver.service.js')
+  const [connections, lastRun, lastOk, count] = await Promise.all([
+    prisma.channelConnection.findMany({ where: { channelType: 'ETSY' }, select: { id: true, isActive: true, authStatus: true, displayName: true, workspaceId: true } }),
+    prisma.cronRun.findFirst({ where: { jobName: ETSY_REVIEWS_JOB }, orderBy: { startedAt: 'desc' }, select: { status: true, startedAt: true, errorMessage: true } }),
+    prisma.cronRun.findFirst({ where: { jobName: ETSY_REVIEWS_JOB, status: { in: ['SUCCESS', 'PARTIAL'] } }, orderBy: { startedAt: 'desc' }, select: { startedAt: true } }),
+    prisma.review.count({ where: visibleReviewWhere({ channel: 'ETSY' }) }),
+  ])
+  return etsySource({
+    connections: connections.filter((c) => isOwnConnection(c)).map((c) => ({ id: c.id, isActive: c.isActive, authStatus: c.authStatus, shopName: c.displayName })),
+    readOn: etsyReviewsReadOn(),
+    lastRun: lastRun ?? null,
+    lastOkAt: lastOk?.startedAt ?? null,
+    reviews: count,
+  })
+}
+
 /** GET /api/reviews/settings/sources. */
 export async function readSettingsSources(now: Date = new Date()): Promise<{ rows: SettingsSourceRow[]; problems: number; checkedAt: string }> {
   const since = new Date(now.getTime() - 30 * DAY)
-  const [facts, sent, last, mailer] = await Promise.all([
+  const [facts, sent, last, mailer, etsy, apps] = await Promise.all([
     readSourceFacts(),
     prisma.reviewRequest.groupBy({ by: ['marketplace'], where: { channel: 'AMAZON', status: 'SENT', sentAt: { gte: since } }, _count: { _all: true } }),
     prisma.reviewRequest.aggregate({ where: { channel: 'AMAZON', status: 'SENT' }, _max: { sentAt: true } }),
     prisma.reviewMailerState.findFirst({ select: { isPaused: true, pausedAt: true } }),
+    readEtsySource(),
+    import('./review-app-connection.service.js').then((m) => m.listReviewApps(now)),
   ])
   const { rows, problems } = settingsSourceRows(facts, {
     amazonSent30: sent.map((g) => ({ marketplace: g.marketplace, count: g._count._all })),
     amazonLastSentAt: last._max.sentAt ?? null,
     mailerPaused: mailer?.isPaused ? { at: mailer.pausedAt ?? null } : null,
+    etsy,
+    judgeme: apps.apps.find((a) => a.app === 'JUDGEME') ?? null,
   }, now)
   return { rows, problems, checkedAt: now.toISOString() }
 }
@@ -237,6 +286,9 @@ export function pipelineJobDefs(env: Record<string, string | undefined> = proces
     { key: 'review-spike-detector', name: 'Spike check', what: 'Finds sudden rises in complaints', schedule: env.NEXUS_REVIEW_SPIKE_SCHEDULE ?? '17 * * * *' },
     { key: 'amazon-review-insights', name: 'Amazon topics', what: 'Weekly review topics per product from Amazon', schedule: env.NEXUS_AMAZON_REVIEW_INSIGHTS_SCHEDULE ?? '0 6 * * 1' },
     { key: 'review-digest', name: 'Daily digest', what: 'Morning e-mail about the day before', schedule: env.NEXUS_REVIEW_DIGEST_SCHEDULE ?? '0 8 * * *' },
+    // PR I (2026-10-27) — jobs/shop-reviews-read.job.ts.
+    { key: 'etsy-reviews-read', name: 'Etsy reviews', what: 'Reads new and edited Etsy reviews', schedule: env.NEXUS_ETSY_REVIEWS_SCHEDULE ?? '*/30 * * * *' },
+    { key: 'review-app-read', name: 'Review app', what: 'Reads new reviews from the store’s review app (Judge.me)', schedule: env.NEXUS_REVIEW_APP_SCHEDULE ?? '*/30 * * * *' },
   ]
 }
 
@@ -350,7 +402,7 @@ function hoursWords(ms: number): string {
 }
 
 /** Each job's state from its latest run (newest first in `runs`), its schedule and the digest switch. Pure. */
-export function pipelineJobs(defs: PipelineJobDef[], runs: CronRunFact[], opts: { now: Date; digestOff: boolean }): PipelineJobView[] {
+export function pipelineJobs(defs: PipelineJobDef[], runs: CronRunFact[], opts: { now: Date; digestOff: boolean; offJobs?: readonly string[] }): PipelineJobView[] {
   const { now } = opts
   return defs.map((def) => {
     const latest = runs.filter((r) => r.jobName === def.key).sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0] ?? null
@@ -364,6 +416,9 @@ export function pipelineJobs(defs: PipelineJobDef[], runs: CronRunFact[], opts: 
     }
     if (def.key === 'review-digest' && opts.digestOff) {
       return { ...view, state: 'off', stateWords: 'Off', tone: 'neutral', nextRunAt: null, words: 'Turned off under Alerts.' }
+    }
+    if (opts.offJobs?.includes(def.key)) {
+      return { ...view, state: 'off', stateWords: 'Off', tone: 'neutral', nextRunAt: null, words: 'Nexus does not run it in this setup yet.' }
     }
     if (!latest) return { ...view, state: 'never', stateWords: 'Not run yet', tone: 'neutral', words: 'It has not run for this business yet.' }
     const age = now.getTime() - latest.startedAt.getTime()
@@ -420,7 +475,12 @@ export async function readSettingsPipeline(now: Date = new Date()): Promise<Pipe
     readAlert('digest'),
     computeReviewPipelineFreshness(),
   ])
-  const jobs = pipelineJobs(defs, latest.filter((r): r is CronRunFact => r != null), { now, digestOff: !digest.on })
+  // PR I: the two reads run only where their deployment switches are on (never named on screen).
+  const offJobs = [
+    ...(process.env.NEXUS_ENABLE_ETSY_REVIEWS_READ === '1' ? [] : ['etsy-reviews-read']),
+    ...(process.env.NEXUS_ENABLE_REVIEW_APP_READ === '1' ? [] : ['review-app-read']),
+  ]
+  const jobs = pipelineJobs(defs, latest.filter((r): r is CronRunFact => r != null), { now, digestOff: !digest.on, offJobs })
   return {
     jobs,
     problems: freshnessProblems(freshness),

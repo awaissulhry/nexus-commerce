@@ -11,9 +11,13 @@
  * refuses what they refuse, before anything is posted or stored: a second reply where the channel allows one (409
  * already_replied), a closed reply window (409 window_closed), a reply over the limit (400 too_long). Only a rule in
  * 'send' mode posts through the channel (eBay feedback read from eBay); an imported row is recorded MANUAL.
+ *
+ * Reviews PR I (2026-10-27): a Shopify review read from Judge.me is answered through Judge.me (`POST /api/v1/replies`,
+ * review-app-connection.service.ts) while the app is connected (otherwise it is copied and marked, MANUAL); an Etsy review's
+ * 100 days count from the buyer's last edit (`channelEditedAt`) — Etsy has no reply API, so it is recorded MANUAL.
  */
 
-import { replyRefusal, reviewReplyRules } from '@nexus/shared/review-reply-rules'
+import { replyRefusal, reviewAppOf, reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import prisma from '../../db.js'
 import { AnswerReply, RouteAnswer } from '../../lib/route-answer.js'
 import { reviewKindOf } from './review-visibility.js'
@@ -42,7 +46,7 @@ export async function sendReviewReply(id: string, b: ReplyBody): Promise<RouteAn
   const reply = new AnswerReply()
   const review = await prisma.review.findUnique({
     where: { id },
-    select: { id: true, channel: true, externalReviewId: true, marketplace: true, postedAt: true, ingestSource: true, rawPayload: true, authorName: true },
+    select: { id: true, channel: true, externalReviewId: true, marketplace: true, postedAt: true, ingestSource: true, rawPayload: true, authorName: true, channelEditedAt: true },
   })
   if (!review) return reply.code(404).send({ error: 'not_found' })
   const text = (b.body ?? '').trim()
@@ -55,6 +59,10 @@ export async function sendReviewReply(id: string, b: ReplyBody): Promise<RouteAn
   }
 
   const sent = await prisma.reviewResponse.count({ where: { reviewId: id, status: 'SENT' } })
+  const app = review.channel === 'SHOPIFY' ? reviewAppOf(review.ingestSource) : null
+  const appConnected = app === 'JUDGEME'
+    ? await import('./review-app-connection.service.js').then((m) => m.judgemeConnected())
+    : undefined
   const rules = reviewReplyRules(review.channel, {
     kind: reviewKindOf(review.channel, review.ingestSource),
     marketplace: review.marketplace,
@@ -62,6 +70,9 @@ export async function sendReviewReply(id: string, b: ReplyBody): Promise<RouteAn
     imported: (review.ingestSource ?? '').toUpperCase().startsWith('IMPORT'),
     replied: sent > 0 || repliedOnChannel(review.channel, review.rawPayload),
     buyerId: review.authorName,
+    lastEditedAt: review.channelEditedAt,
+    app,
+    appConnected,
   })
   const refusal = replyRefusal(rules, text)
   if (refusal) return reply.code(refusal.code === 'too_long' || refusal.code === 'empty_body' ? 400 : 409).send({ error: refusal.code, message: refusal.words })
@@ -78,7 +89,15 @@ export async function sendReviewReply(id: string, b: ReplyBody): Promise<RouteAn
     code = res.code
     errorMessage = res.error ?? null
   }
-  // Amazon/Shopify: no public reply API — stored as MANUAL (operator posts on-platform and confirms here).
+  if (rules.mode === 'send' && review.channel === 'SHOPIFY' && app === 'JUDGEME') {
+    const { sendJudgemeReply } = await import('./review-app-connection.service.js')
+    const res = await sendJudgemeReply(review.externalReviewId, text)
+    ok = res.ok
+    code = res.code
+    errorMessage = res.error ?? null
+  }
+  // Amazon, Etsy, Shopify without a connected app: no public reply API — stored as MANUAL (a person posts it on the
+  // platform and confirms here).
 
   const baseData = {
     channel: review.channel,
