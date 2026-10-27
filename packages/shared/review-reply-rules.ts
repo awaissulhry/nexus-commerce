@@ -9,9 +9,13 @@
  *   An imported eBay row has no eBay feedback id Nexus can answer, so it is copied and posted by hand.
  * - Amazon: no reply API. Copy the reply, open Seller Central (Feedback Manager for seller feedback), mark it as
  *   responded. No feedback-removal action from Nexus.
- * - Etsy: no reply API. One public reply within 100 days of the buyer's last edit, never edited. Nexus knows when the
- *   review was posted, not when the buyer last edited it, so the window is counted from the posted time.
- * - Shopify: replies live in the store's review app; until Nexus is connected to it, copy and mark as responded.
+ * - Etsy: no reply API. One public reply within 100 days of the buyer's LAST EDIT, never edited
+ *   (https://help.etsy.com/hc/en-us/articles/115015808588). Nexus reads the edit time from Etsy's `update_timestamp`
+ *   (`lastEditedAt`); a review without one (a file import) counts from the posted time.
+ * - Shopify: Shopify keeps no reviews itself; they live in the store's review app. Judge.me lets an app post a public
+ *   reply (`POST /api/v1/replies`, https://judge.me/api/docs): a review read through Nexus's Judge.me connection is
+ *   answered from Nexus. Okendo replies by API on its Enterprise plan only, Yotpo and Loox have no reply API: copy the
+ *   reply, post it in the app, mark it as responded. Without an app (a file import), the same.
  *
  * Due: an open review (no status yet, New or In progress) is overdue once it is older than REPLY_DUE_HOURS.
  */
@@ -30,6 +34,16 @@ const DAY_MS = 24 * 60 * 60 * 1000
 export type ReplyMode = 'send' | 'copy'
 export type ReplyHeldCode = 'already_replied' | 'window_closed' | 'buyer_unknown'
 
+/** The store review apps a Shopify review can come from. */
+export type ReviewApp = 'JUDGEME' | 'OKENDO' | 'YOTPO' | 'LOOX'
+export const REVIEW_APPS: readonly ReviewApp[] = ['JUDGEME', 'OKENDO', 'YOTPO', 'LOOX']
+export const REVIEW_APP_NAME: Record<ReviewApp, string> = { JUDGEME: 'Judge.me', OKENDO: 'Okendo', YOTPO: 'Yotpo', LOOX: 'Loox' }
+
+/** The review app a Shopify review came from, by how Nexus read it ('JUDGEME_API' → Judge.me); null for a file or anything else. */
+export function reviewAppOf(ingestSource: string | null | undefined): ReviewApp | null {
+  return String(ingestSource ?? '').toUpperCase() === 'JUDGEME_API' ? 'JUDGEME' : null
+}
+
 /** What the rules need to know about one review. */
 export interface ReplyRulesReview {
   /** 'seller' = seller feedback (eBay today), 'product' = a product review. */
@@ -45,6 +59,12 @@ export interface ReplyRulesReview {
    * caller passes it and it is empty, an eBay reply is held. Callers that do not know it leave it out.
    */
   buyerId?: string | null
+  /** Etsy: when the buyer last edited the review (Etsy's `update_timestamp`); the 100 days count from it. Null → postedAt. */
+  lastEditedAt?: string | Date | null
+  /** Shopify: the review app the review was read from through Nexus (`reviewAppOf`); null for a file import. */
+  app?: ReviewApp | null
+  /** Shopify: whether Nexus still holds a working connection to that app. Left out = not known (the API checks again). */
+  appConnected?: boolean
 }
 
 export interface ReplyWindow {
@@ -168,16 +188,39 @@ export function reviewReplyRules(channel: string, review: ReplyRulesReview = {},
       ruleLine: 'Amazon has no reply API: copy the reply, answer in Seller Central where Amazon allows it, then mark it as responded.',
     }
   } else if (c === 'ETSY') {
-    const window = replyWindow(review.postedAt, ETSY_REPLY_WINDOW_DAYS, 'Etsy', now)
+    const window = replyWindow(review.lastEditedAt ?? review.postedAt, ETSY_REPLY_WINDOW_DAYS, 'Etsy', now)
     rules = {
       ...base, mode: 'copy', limit: null, oneReply: true, window,
       open: { label: 'Open reviews on Etsy', href: 'https://www.etsy.com/your/shops/me/reviews' },
       ruleLine: `Reply on Etsy.com: Etsy has no reply API, so copy the reply and open the review on Etsy. One public reply, within ${ETSY_REPLY_WINDOW_DAYS} days of the buyer’s last edit. It can’t be edited (only deleted, no second reply). After you reply the buyer can no longer change the review.`,
     }
+  } else if (c === 'SHOPIFY' && review.app === 'JUDGEME' && !review.imported && review.appConnected === false) {
+    rules = {
+      ...base, mode: 'copy', limit: null, oneReply: false, canEdit: true,
+      ruleLine: 'Judge.me is not connected to Nexus now: copy the reply, post it in Judge.me, then mark it as responded. Connect Judge.me in Reviews settings to reply from here.',
+    }
+  } else if (c === 'SHOPIFY' && review.app === 'JUDGEME' && !review.imported) {
+    rules = {
+      ...base, mode: 'send', limit: null, oneReply: true, markAsResponded: false, sendLabel: 'Send reply to Judge.me',
+      ruleLine: 'Nexus posts the reply under the review in Judge.me: public on the store’s review widget, and Judge.me also e-mails it to the reviewer. One reply from Nexus; to change it later, use Judge.me.',
+    }
+  } else if (c === 'SHOPIFY' && review.app === 'OKENDO') {
+    rules = {
+      ...base, mode: 'copy', limit: null, oneReply: false, canEdit: true,
+      ruleLine: 'Okendo lets apps post replies on its Enterprise plan only, and Nexus does not connect to Okendo yet: copy the reply, post it in Okendo, then mark it as responded.',
+    }
+  } else if (c === 'SHOPIFY' && (review.app === 'YOTPO' || review.app === 'LOOX')) {
+    const name = REVIEW_APP_NAME[review.app]
+    rules = {
+      ...base, mode: 'copy', limit: null, oneReply: false, canEdit: true,
+      ruleLine: `${name} gives apps no way to reply (read only): copy the reply, post it in ${name}, then mark it as responded.`,
+    }
   } else if (c === 'SHOPIFY') {
     rules = {
       ...base, mode: 'copy', limit: null, oneReply: false, canEdit: true,
-      ruleLine: 'Reply in your review app: Nexus is not connected to it yet, so copy the reply, post it there, then mark it as responded.',
+      ruleLine: review.imported
+        ? 'This review came from a file, so Nexus cannot post to it: copy the reply, post it in your review app, then mark it as responded.'
+        : 'Reply in your review app: Nexus is not connected to it, so copy the reply, post it there, then mark it as responded.',
     }
   } else {
     rules = {
@@ -186,6 +229,10 @@ export function reviewReplyRules(channel: string, review: ReplyRulesReview = {},
     }
   }
 
+  if (c === 'SHOPIFY' && rules.mode === 'send') {
+    if (review.replied) return { ...rules, held: 'This review already has a reply sent from Nexus. To change it, use Judge.me.', heldCode: 'already_replied' }
+    return rules
+  }
   if (review.replied && rules.oneReply) {
     const name = c === 'EBAY' ? 'eBay' : c === 'AMAZON' ? 'Amazon' : c === 'ETSY' ? 'Etsy' : 'This channel'
     const noun = c === 'EBAY' || review.kind === 'seller' ? 'feedback' : 'review'

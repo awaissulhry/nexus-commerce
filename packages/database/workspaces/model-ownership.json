@@ -297,6 +297,7 @@
     "EmailSuppression",
     "ReviewSettings",
     "ReviewReplyTemplate",
+    "ReviewAppConnection",
     "OrderTag",
     "AiUsageLog",
     "AiFeatureModelPref",

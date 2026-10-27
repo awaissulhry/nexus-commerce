@@ -5982,6 +5982,7 @@ CREATE TABLE "Review" (
     "language" TEXT,
     "bodyEnglish" TEXT,
     "importBatchId" TEXT,
+    "channelEditedAt" TIMESTAMP(3),
     "triageStatus" TEXT,
     "assignee" TEXT,
     "triageTags" TEXT[] DEFAULT ARRAY[]::TEXT[],
@@ -6296,6 +6297,27 @@ CREATE TABLE "ReviewReplyTemplate" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "ReviewReplyTemplate_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ReviewAppConnection" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "app" TEXT NOT NULL,
+    "shopDomain" TEXT NOT NULL,
+    "credentials" TEXT,
+    "credentialsKeyId" TEXT,
+    "state" TEXT NOT NULL DEFAULT 'CONNECTED',
+    "lastReadAt" TIMESTAMP(3),
+    "lastReadCount" INTEGER,
+    "lastError" TEXT,
+    "lastErrorAt" TIMESTAMP(3),
+    "createdBy" TEXT,
+    "updatedBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ReviewAppConnection_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -15038,6 +15060,12 @@ CREATE INDEX "ReviewReplyTemplate_workspaceId_idx" ON "ReviewReplyTemplate"("wor
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ReviewReplyTemplate_workspace_name_key" ON "ReviewReplyTemplate"("workspaceId", "name");
+
+-- CreateIndex
+CREATE INDEX "ReviewAppConnection_workspaceId_idx" ON "ReviewAppConnection"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ReviewAppConnection_workspace_app_key" ON "ReviewAppConnection"("workspaceId", "app");
 
 -- CreateIndex
 CREATE INDEX "OrderTag_orderId_idx" ON "OrderTag"("orderId");
