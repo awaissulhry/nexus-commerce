@@ -258,6 +258,11 @@
   flex: 0 0 auto;
 }
 
+/* A removal check that wraps under a long comment stays on the right, where the other rows show it. */
+.feedbackRow > .stackEnd {
+  margin-left: auto;
+}
+
 .sampleBlock {
   display: flex;
   flex-direction: column;
