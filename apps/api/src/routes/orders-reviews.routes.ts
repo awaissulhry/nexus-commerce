@@ -29,6 +29,16 @@ import { lintBuyerCopy } from '../services/comms/message-lint.js'
  *   POST   /api/review-rules/bulk           on / off / delete, held rules in words
  *   GET    /api/review-rules/export?ids=    the chosen rules (all without ids)
  *
+ * Reviews PR J — timing tests and A/B splits (services/reviews/review-timing-test.service.ts; no database call here):
+ *   GET    /api/review-timing-tests                 every test: groups, counts, how sure, words (?kind=, ?ruleId=)
+ *   GET    /api/review-timing-tests/estimate        the day in place now and a market's pace (New timing test)
+ *   POST   /api/review-timing-tests                 a timing test: made, then sent for approval (it RUNS once approved)
+ *   POST   /api/review-timing-tests/ab              an A/B split of a rule and its copy: made, then sent for approval
+ *   POST   /api/review-timing-tests/:id/start       send a test that is not started for approval again
+ *   POST   /api/review-timing-tests/:id/stop        Stop test / End test: at once, no approval (it only stops a test)
+ *   POST   /api/review-timing-tests/:id/apply       Apply winner: sent for approval
+ *   POST   /api/review-timing-tests/:id/keep        Keep the day in place: records the decision, changes nothing
+ *
  * POST /api/review-engine/tick is gone (B9): it sent without the pause switch and the "How was it?" check and marked
  * every non-Amazon request skipped. "Run now" is POST /api/review-queue/run, the same sender as the hourly cron.
  *
@@ -65,6 +75,16 @@ import {
   runReviewQueueNow,
   sendReviewEmailTest,
 } from '../services/reviews/review-queue.service.js'
+import {
+  applyTimingWinner,
+  createAbTest,
+  createTimingTest,
+  estimateTimingTest,
+  keepCurrentDay,
+  listTimingTests,
+  startTimingTest,
+  stopTimingTest,
+} from '../services/reviews/review-timing-test.service.js'
 
 const ACTIVE_RETURN_STATUSES = ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING'] as const
 
@@ -768,6 +788,85 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err: any) {
       logger.error('[ORDERS API] backfill failed', { message: err.message })
       return reply.status(500).send({ error: err.message })
+    }
+  })
+
+  // ═══════════════════════════════════════════════════════════════════
+  // PR J — TIMING TESTS and A/B SPLITS (no database call here)
+  // ═══════════════════════════════════════════════════════════════════
+  const actorOf = async (request: any): Promise<string | null> => {
+    const { requestPrincipal } = await import('../services/agents/call-tool.js')
+    return (await requestPrincipal(request).catch(() => null))?.label ?? requestUserId(request) ?? null
+  }
+  const personOf = async (request: any) => {
+    const { requestPrincipal } = await import('../services/agents/call-tool.js')
+    return requestPrincipal(request)
+  }
+
+  fastify.get('/review-timing-tests', async (request, reply) => {
+    try {
+      const q = (request.query ?? {}) as { kind?: string; ruleId?: string }
+      reply.header('Cache-Control', 'private, no-store')
+      return await listTimingTests({ kind: q.kind, ruleId: q.ruleId })
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  fastify.get('/review-timing-tests/estimate', async (request, reply) => {
+    try {
+      reply.header('Cache-Control', 'private, no-store')
+      return await estimateTimingTest((request.query ?? {}) as Record<string, string>)
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  fastify.post('/review-timing-tests', async (request, reply) => {
+    try {
+      return await createTimingTest(request.body, await personOf(request))
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  fastify.post('/review-timing-tests/ab', async (request, reply) => {
+    try {
+      return await createAbTest(request.body, await personOf(request))
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  fastify.post('/review-timing-tests/:id/start', async (request, reply) => {
+    try {
+      return await startTimingTest((request.params as { id: string }).id, await personOf(request))
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  fastify.post('/review-timing-tests/:id/stop', async (request, reply) => {
+    try {
+      return { test: await stopTimingTest((request.params as { id: string }).id, await actorOf(request)) }
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  fastify.post('/review-timing-tests/:id/apply', async (request, reply) => {
+    try {
+      return await applyTimingWinner((request.params as { id: string }).id, await personOf(request))
+    } catch (err: any) {
+      return sendFailure(reply, err)
+    }
+  })
+
+  fastify.post('/review-timing-tests/:id/keep', async (request, reply) => {
+    try {
+      return { test: await keepCurrentDay((request.params as { id: string }).id, await actorOf(request)) }
+    } catch (err: any) {
+      return sendFailure(reply, err)
     }
   })
 

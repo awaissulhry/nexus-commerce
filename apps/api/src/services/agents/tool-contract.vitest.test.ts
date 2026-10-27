@@ -1261,6 +1261,11 @@ describe('C1 — every registered tool keeps the contract', () => {
         after: { op: 'update', market: 'IT', ruleId: 'b1', campaignId: null, attached: null, rule: { name: 'Weekend', type: 'schedule', state: 'active', increasePct: 30, startDate: '2099-01-01', endDate: null, event: null, recurrence: 'weekly', daysOfWeek: ['saturday'], hours: null, condition: null } },
       },
       'set-sd-brand-safety': { before: { op: 'add', market: 'IT', count: 0, added: [] }, after: { op: 'add', market: 'IT', count: null, added: ['example.com'] } },
+      // Reviews PR J — a timing test's winner put back through the same tool (armId "before").
+      'apply-review-timing-winner': {
+        before: { testId: 't1', armId: 'before', ruleId: 'r1', created: false, sendDelayDays: 4, minDays: 4, maxDays: 25, isActive: true },
+        after: { testId: 't1', armId: 'a2', ruleId: 'r1', created: false, sendDelayDays: 7, minDays: 4, maxDays: 25, isActive: true },
+      },
     }
     const withUndo = listTools().filter((t) => t.undo)
     expect(withUndo.map((t) => t.name).sort()).toEqual(Object.keys(sample).sort())

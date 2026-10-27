@@ -5158,6 +5158,31 @@
       "fields": []
     },
     {
+      "name": "ReviewTimingTest",
+      "fields": [
+        {
+          "name": "arms",
+          "kind": "object",
+          "type": "ReviewTimingTestArm",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "ReviewTimingTestArm",
+      "fields": [
+        {
+          "name": "test",
+          "kind": "object",
+          "type": "ReviewTimingTest",
+          "relationFromFields": [
+            "testId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
       "name": "ReviewSentimentCheck",
       "fields": [
         {

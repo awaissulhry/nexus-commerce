@@ -299,6 +299,8 @@
     "ReviewReplyTemplate",
     "ReviewMedia",
     "EbayBuyerFeedback",
+    "ReviewTimingTest",
+    "ReviewTimingTestArm",
     "OrderTag",
     "AiUsageLog",
     "AiFeatureModelPref",

@@ -144,7 +144,7 @@ export function statusFilterWhere(status: QueueStatus, now: Date): Record<string
 }
 
 const NOT_ASKED = { status: { in: ['SKIPPED', 'SUPPRESSED'] } }
-const CODE_KEYS = ['SKIPPED_BY_HAND', 'ALREADY_SOLICITED', 'NOT_IMPLEMENTED', 'UNKNOWN_MARKETPLACE', 'OUTSIDE_WINDOW', 'SUPPRESSED', 'DIVERTED_NEGATIVE', 'NO_RESPONSE_NO_FALLBACK']
+const CODE_KEYS = ['SKIPPED_BY_HAND', 'ALREADY_SOLICITED', 'NOT_IMPLEMENTED', 'UNKNOWN_MARKETPLACE', 'OUTSIDE_WINDOW', 'SUPPRESSED', 'DIVERTED_NEGATIVE', 'NO_RESPONSE_NO_FALLBACK', 'TIMING_TEST_HOLDOUT']
 const NO_DECIDING_CODE = { OR: [{ providerResponseCode: null }, { providerResponseCode: { notIn: CODE_KEYS } }] }
 const sr = (contains: string) => ({ suppressedReason: { contains, mode: 'insensitive' } })
 const notAskedBy = (...conds: Record<string, unknown>[]) => ({ AND: [NOT_ASKED, NO_DECIDING_CODE, ...conds] })
@@ -186,6 +186,7 @@ const REASON_WHERE: Record<Exclude<ReasonKey, 'not_asked_other'>, (now: Date) =>
   do_not_email: () => ({ ...NOT_ASKED, providerResponseCode: 'SUPPRESSED' }),
   unhappy_check: () => ({ ...NOT_ASKED, providerResponseCode: 'DIVERTED_NEGATIVE' }),
   no_check_answer: () => ({ ...NOT_ASKED, providerResponseCode: 'NO_RESPONSE_NO_FALLBACK' }),
+  holdout: () => ({ ...NOT_ASKED, providerResponseCode: 'TIMING_TEST_HOLDOUT' }),
   refunded: () => ({ OR: [notAskedBy(exclusion('has_refund')), notAskedBy({ NOT: { suppressedReason: { startsWith: RULE_EXCLUSION_PREFIX } } }, { NOT: { AND: [sr('outside'), { OR: [sr('window'), sr('4-30'), sr('4–30')] }] } }, sr('refund'))] }),
   return_open: () => ({ OR: [notAskedBy(exclusion('has_active_return')), notAskedBy({ NOT: { suppressedReason: { startsWith: RULE_EXCLUSION_PREFIX } } }, { NOT: sr('refund') }, sr('active return'))] }),
   cancelled: () => notAskedBy(exclusion('is_cancelled')),
