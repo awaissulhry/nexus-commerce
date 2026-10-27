@@ -280,10 +280,22 @@ export function sameThemeLink(d: InboxDetail): { label: string; href: string } |
   return { label, href: inboxPageHref({ themes: [theme], period: 'all' }) }
 }
 
+/**
+ * Whether this review can wait for a reply at all — the API's one needs-a-reply rule (review-visibility.ts): never a
+ * review no one can answer (an Amazon product review, an Etsy review past its window), never an imported one.
+ */
+export function takesReply(d: Pick<InboxDetail, 'review' | 'reply'>): boolean {
+  if (d.review.imported) return false
+  return d.reply.heldCode !== 'no_reply' && d.reply.heldCode !== 'window_closed'
+}
+
 /** "Reply target: 28 Oct" while the review is open; "Replied" once a reply went out. */
 export function replyTargetWords(d: InboxDetail, now: number, timeZone?: string): string {
   if (d.responses.some((r) => r.status === 'SENT')) return 'Replied'
   if (!['NEW', 'IN_PROGRESS'].includes(d.review.status)) return 'No reply needed'
+  // Never "Overdue" where the badges and the Overdue tile do not count it (one rule, audit B3).
+  if (d.review.imported) return 'Imported from a file: no reply target'
+  if (!takesReply(d)) return 'No reply target: nobody can answer it'
   const due = reviewDueAt(d.review.postedAt)
   const day = due.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone })
   return due.getTime() < now ? `Overdue since ${day}` : `Reply target: ${day}`
@@ -356,7 +368,7 @@ function stepTone(words: string): Tone {
 /** Everything that happened, oldest first; "Replied — not yet" closes it while the review waits for a reply. */
 export function historySteps(d: InboxDetail): StepView[] {
   const steps: StepView[] = d.timeline.map((t, i) => ({ key: `${i}:${t.at}`, label: t.words, tone: stepTone(t.words), at: t.at }))
-  const waiting = !d.responses.some((r) => r.status === 'SENT') && ['NEW', 'IN_PROGRESS'].includes(d.review.status)
+  const waiting = !d.responses.some((r) => r.status === 'SENT') && ['NEW', 'IN_PROGRESS'].includes(d.review.status) && takesReply(d)
   if (waiting) steps.push({ key: 'reply', label: 'Replied', tone: 'neutral', at: null })
   return steps
 }
