@@ -69,6 +69,11 @@ describe('orderAskPlan', () => {
       kind: 'held',
       words: 'Not asked before (Holdout of a timing test — not asked on purpose): Held out by a timing test on purpose — it stays not asked, so the test’s result holds.',
     })
+    // Lane N6 — a Shopify test's holdout: no review e-mail by hand either.
+    expect(orderAskPlan(order({ channel: 'SHOPIFY', marketplace: null }), request('SKIPPED', { channel: 'SHOPIFY', marketplace: null, providerResponseCode: 'TIMING_TEST_HOLDOUT', suppressedReason: 'timing_test_holdout', scheduledFor: days(6) }), NOW)).toEqual({
+      kind: 'held',
+      words: 'Not asked before (Holdout of a timing test — not asked on purpose): Held out by a timing test on purpose — it stays not asked, so the test’s result holds.',
+    })
   })
 })
 

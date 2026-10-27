@@ -6,7 +6,8 @@
  *
  *   Banner   a fix never changes a listing by itself
  *   Tabs     Open · Sent for approval · Applied · Dismissed (`?status=`), kind chips (`?kind=`), one product (`?product=`)
- *   Cards    why (the theme, the alert or the reviews it came from), what it proposes (and in English), where it goes, and
+ *   Cards    why (the theme, the alert or the reviews it came from), what it proposes (and in English), a size guide's
+ *            evidence per size (fit by size, made by Nexus, never the AI), where it goes, and
  *            per status: Send for approval / Create task / Edit the proposal / Dismiss (Open; a held Send says why and
  *            offers the way out) · Withdraw and Open Approvals (Sent) · its change plan (Applied) · Bring back (Dismissed)
  *   Bulk     Open tab: tick fixes (or Select all): "Send N for approval" = ONE change plan a person approves on the
@@ -34,14 +35,17 @@ import {
   FIXES_READ_LIMIT,
   KIND_CHIPS,
   MANAGE_FIXES,
+  SIZE_GUIDE_PERIOD,
   STATUS_PILL,
   STATUS_TABS,
   WAY_OUT_LABEL,
   dismissBulkHeld,
   dismissResultWords,
   doneWords,
+  emptyHelp,
   emptyTitle,
   englishLines,
+  evidenceLines,
   evidenceLink,
   filterFixes,
   fixesApiParams,
@@ -204,6 +208,7 @@ function Fixes() {
     ? 'Loading…'
     : `What to change because of what buyers say · ${counts.OPEN} open · ${counts.SENT} waiting for approval${scope.market ? ` · fixes for this market and for every market` : ''}`
   const filtered = kinds.length > 0
+  const empty = emptyHelp(tab ?? 'OPEN', kinds)
 
   return (
     <div className={shared.page}>
@@ -262,9 +267,13 @@ function Fixes() {
             <Card padded>
               <EmptyState
                 icon={<Wrench size={20} aria-hidden />}
-                title={emptyTitle(tab ?? 'OPEN', filtered)}
-                description="Fixes come from alerts and themes. Open an alert and press “Suggest fixes” to get new ones."
-                action={(
+                title={emptyTitle(tab ?? 'OPEN', filtered, kinds)}
+                description={empty.description}
+                action={empty.link === 'themes' ? (
+                  <Button asChild size="sm">
+                    <Link href={insightsHref('themes', { period: SIZE_GUIDE_PERIOD })}>Open fit by size</Link>
+                  </Button>
+                ) : (
                   <Button asChild size="sm">
                     <Link href={insightsHref('alerts', { channel: scope?.channel, market: scope?.market, period: scope?.period })}>Open alerts</Link>
                   </Button>
@@ -302,8 +311,9 @@ function Fixes() {
 
       <p className={shared.footnote}>
         Fixes are written by AI from the reviews and Amazon topics shown under “Why”. Read them before you send them: translations into the
-        market’s language are made when you send, and show in the change plan. A recall check holds stock in your own warehouses only, never
-        Amazon FBA stock.
+        market’s language are made when you send, and show in the change plan. Size-guide fixes are not written by AI: Nexus makes them from
+        fit by size, keeps one open per product and direction, and closes it when the evidence is gone. A recall check holds stock in your own
+        warehouses only, never Amazon FBA stock.
       </p>
 
       {editing && <FixEditModal fix={editing} canManage={canManage} onClose={() => setEditing(null)} />}
@@ -331,6 +341,7 @@ function FixCard({ fix: f, ticked, onTick, canManage, busy, evidence, themeHref,
   const pill = STATUS_PILL[f.status]
   const proposal = proposalLines(f)
   const english = englishLines(f)
+  const evidenceList = evidenceLines(f)
   const held = !canManage ? MANAGE_FIXES : busy ? 'Wait for the change on its way.' : null
   const out = f.held ? wayOut(f.held) : null
   return (
@@ -364,6 +375,12 @@ function FixCard({ fix: f, ticked, onTick, canManage, busy, evidence, themeHref,
               <div>
                 <div className={shared.sub}>In English</div>
                 {english.length > 1 ? <ul className={s.bullets}>{english.map((l, i) => <li key={i}>{l}</li>)}</ul> : <p>{english[0]}</p>}
+              </div>
+            )}
+            {evidenceList && (
+              <div>
+                <div className={shared.sub}>{evidenceList.heading}</div>
+                <ul className={s.bullets}>{evidenceList.lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
               </div>
             )}
           </div>

@@ -1521,13 +1521,14 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
         result: { applied: { armId: 'arm-day-7', label: 'Day 7', delayDays: 7, ruleId: 'rule-applied', ruleName: `${mark} France boots`, created: true, before: { sendDelayDays: null, minDays: 4, maxDays: 25, isActive: false }, at: '2026-09-21T08:00:00.000Z', by: 'app:someone' } },
       },
     } as never) as unknown as { id: string }
-    // Reviews N3 — a Shopify rule A and its copy B; their finished A/B split, B's settings applied to A.
-    const abA = await db.reviewRule.create({ data: { name: `${mark} shop`, scope: 'SHOPIFY', isActive: true, emailText: { en: { subject: `${mark} how is it?`, body: 'Hi {first_name}\n\n{review_button}\n\n{unsubscribe_link}' } } } as never })
-    const abB = await db.reviewRule.create({ data: { name: `${mark} shop (variant 1)`, scope: 'SHOPIFY', isActive: false } as never })
+    // Reviews N3 — a Shopify rule A and its copy B; their finished A/B split, B's settings applied to A. Fixed ids: these
+    // rows take no generated id, so every later row keeps the id it gets without them (the money check reads ids as text).
+    const abA = await db.reviewRule.create({ data: { id: `${mark}-n3-rule-a`, name: `${mark} shop`, scope: 'SHOPIFY', isActive: true, emailText: { en: { subject: `${mark} how is it?`, body: 'Hi {first_name}\n\n{review_button}\n\n{unsubscribe_link}' } } } as never })
+    const abB = await db.reviewRule.create({ data: { id: `${mark}-n3-rule-b`, name: `${mark} shop (variant 1)`, scope: 'SHOPIFY', isActive: false } as never })
     const doneAbTest = await db.reviewTimingTest.create({
       data: {
-        kind: 'AB', channel: 'SHOPIFY', market: '*', ruleId: abA.id, status: 'DONE', startedAt: new Date('2026-08-01T00:00:00Z'), endedAt: new Date('2026-09-20T00:00:00Z'),
-        arms: { create: [{ label: 'A', position: 0, ruleId: abA.id }, { label: 'B', position: 1, ruleId: abB.id }] },
+        id: `${mark}-n3-ab`, kind: 'AB', channel: 'SHOPIFY', market: '*', ruleId: abA.id, status: 'DONE', startedAt: new Date('2026-08-01T00:00:00Z'), endedAt: new Date('2026-09-20T00:00:00Z'),
+        arms: { create: [{ id: `${mark}-n3-arm-a`, label: 'A', position: 0, ruleId: abA.id }, { id: `${mark}-n3-arm-b`, label: 'B', position: 1, ruleId: abB.id }] },
         result: { applied: { kind: 'AB', armId: 'arm-b', label: 'B', ruleId: abA.id, ruleName: `${mark} shop`, winnerRuleName: `${mark} shop (variant 1)`, changed: ['E-mail text in English'], before: { sendDelayDays: null, anchor: 'DELIVERY', sendHourLocal: null, skipWeekends: false, shiftToBestDay: false, minDaysSinceDelivery: 7, maxDaysSinceDelivery: 25, useSentimentDiversion: false, fallbackOnNoResponse: true, emailText: null }, at: '2026-09-21T08:00:00.000Z', by: 'app:someone' } },
       },
     } as never) as unknown as { id: string }

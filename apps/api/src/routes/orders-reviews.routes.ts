@@ -32,8 +32,10 @@ import { lintBuyerCopy } from '../services/comms/message-lint.js'
  *
  * Reviews PR J — timing tests and A/B splits (services/reviews/review-timing-test.service.ts; no database call here):
  *   GET    /api/review-timing-tests                 every test: groups, counts, how sure, words (?kind=, ?ruleId=)
- *   GET    /api/review-timing-tests/estimate        the day in place now and a market's pace (New timing test)
- *   POST   /api/review-timing-tests                 a timing test: made, then sent for approval (it RUNS once approved)
+ *   GET    /api/review-timing-tests/estimate        the day in place now and a market's pace (New timing test; ?channel=
+ *                                                    AMAZON&market= or ?channel=SHOPIFY for the store)
+ *   POST   /api/review-timing-tests                 a timing test of an Amazon market or Shopify: made, then sent for
+ *                                                    approval (it RUNS once approved); eBay and Etsy refused in words
  *   POST   /api/review-timing-tests/ab              an A/B split of a rule and its copy: made, then sent for approval
  *   POST   /api/review-timing-tests/:id/start       send a test that is not started for approval again
  *   POST   /api/review-timing-tests/:id/stop        Stop test / End test: at once, no approval (it only stops a test)

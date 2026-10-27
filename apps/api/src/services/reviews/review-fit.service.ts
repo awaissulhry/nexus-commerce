@@ -8,7 +8,8 @@
  *            has exactly one such size, else it names no size;
  *   returns  return lines on a product with a reason, not rejected; the reason (and, for "does not fit", the buyer's
  *            comment) gives the way.
- * Sizes come from each variant's own size axis. Nothing here writes.
+ * Sizes come from each variant's own size axis. Nothing here writes. The same reads feed the size-guide fixes
+ * (`fitFindingsFor`, review-size-guide.service.ts): every family, not only the table's first FIT_FAMILY_LIMIT.
  */
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
@@ -16,8 +17,8 @@ import { visibleReviewWhere } from './review-visibility.js'
 import { variantWords } from './review-inbox-query.js'
 import type { InsightScope } from './review-insights-math.js'
 import {
-  buildFitTable, buildProductFit, fitDirectionOfReview, returnFitDirection, sizeKey, sizeOfVariant,
-  type FitFamilyInfo, type FitSignal, type FitTable, type ProductFit,
+  buildFitTable, buildProductFit, fitDirectionOfReview, fitFindings, returnFitDirection, sizeKey, sizeOfVariant,
+  type FitFamilyInfo, type FitFinding, type FitSignal, type FitTable, type ProductFit,
 } from './review-fit.js'
 
 type FitProductRow = { id: string; sku: string; name: string; parentId: string | null; variantAttributes: unknown; categoryAttributes: unknown }
@@ -161,6 +162,12 @@ export async function fitTable(input: { scope: InsightScope; from: Date; now: Da
   const g = await gatherFit(input)
   const unclearReturns = [...g.unclear.values()].reduce((n, v) => n + v, 0)
   return buildFitTable({ signals: g.signals, families: g.families, unclearReturns })
+}
+
+/** Every family whose sizes run small or large in the scope and period (the size-guide fixes), by the same rule. */
+export async function fitFindingsFor(input: { scope: InsightScope; from: Date; now: Date }): Promise<FitFinding[]> {
+  const g = await gatherFit(input)
+  return fitFindings({ signals: g.signals, families: g.families })
 }
 
 /**

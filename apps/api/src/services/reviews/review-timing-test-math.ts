@@ -24,7 +24,21 @@ export type TestStatus = (typeof TEST_STATUSES)[number]
 /** A test that still holds its market: nobody may start another one there. */
 export const LIVE_STATUSES: readonly TestStatus[] = ['DRAFT', 'WAITING_APPROVAL', 'RUNNING']
 
-/** The first-try days a timing test may compare (Amazon: day 4 at the earliest, the scheduler's cap is day 25). */
+/**
+ * The channels a TIMING test may cover: an Amazon market (Amazon's own request), or Shopify (Nexus's own review e-mail).
+ * A Shopify test covers the whole store — its orders carry no market — stored as EVERY_MARKET, as an A/B split of an
+ * all-markets rule is.
+ */
+export const TIMING_CHANNELS = ['AMAZON', 'SHOPIFY'] as const
+export type TimingChannel = (typeof TIMING_CHANNELS)[number]
+export const EVERY_MARKET = '*'
+/** Why a channel is not offered for a timing test, in words (Owner, 2026-10-27: Nexus asks no eBay buyer). */
+export const NOT_OFFERED_WORDS: Readonly<Record<string, string>> = {
+  EBAY: 'eBay is not offered: Nexus asks no eBay buyer — eBay asks its buyers for feedback itself.',
+  ETSY: 'Etsy is not offered: Nexus sends Etsy buyers no review request, so there is no day to test.',
+}
+
+/** The first-try days a timing test may compare (Amazon: day 4 at the earliest, the scheduler's cap is day 25; Shopify the same). */
 export const FIRST_DAY = 4
 export const LAST_DAY = 25
 export const DAY_CHOICES = [4, 7, 10, 14, 21] as const

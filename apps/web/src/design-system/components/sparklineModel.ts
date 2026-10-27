@@ -14,6 +14,13 @@
 export type SparkShape = 'step' | 'line'
 export type SparkValue = number | null | undefined
 
+/**
+ * A fixed axis (2026-10-28): `[low, high]` the drawing always spans; either end `null` = the readings' own. A reading
+ * outside it widens it, so nothing is cut off. `[0, null]` draws from zero to the highest reading: a share that moves
+ * 11 → 11.2 % stays flat instead of filling the box. Without it the line spans the readings' own low and high.
+ */
+export type SparkDomain = readonly [low: number | null, high: number | null]
+
 export interface SparkBox { width: number; height: number; pad: number }
 export const SPARK_BOX: SparkBox = { width: 88, height: 22, pad: 2 }
 
@@ -25,6 +32,7 @@ export interface SparkGeometry {
   /** The last reading — drawn as a dot: it is the value in force now. */
   last: { x: number; y: number } | null
   count: number
+  /** The readings' own low and high (not the axis's). */
   min: number | null
   max: number | null
 }
@@ -32,16 +40,19 @@ export interface SparkGeometry {
 const finite = (v: SparkValue): v is number => typeof v === 'number' && Number.isFinite(v)
 const r1 = (n: number) => Math.round(n * 10) / 10
 
-export function sparkGeometry(values: ReadonlyArray<SparkValue>, shape: SparkShape = 'step', box: SparkBox = SPARK_BOX): SparkGeometry {
+export function sparkGeometry(values: ReadonlyArray<SparkValue>, shape: SparkShape = 'step', box: SparkBox = SPARK_BOX, domain?: SparkDomain): SparkGeometry {
   const readings = values.map((v, i) => (finite(v) ? { i, v } : null))
   const known = readings.filter((r): r is { i: number; v: number } => r !== null)
   if (!known.length) return { path: '', dots: [], last: null, count: 0, min: null, max: null }
   const min = Math.min(...known.map((r) => r.v))
   const max = Math.max(...known.map((r) => r.v))
-  const span = max - min
+  const [axisLow, axisHigh] = domain ?? [null, null]
+  const low = finite(axisLow) ? Math.min(axisLow, min) : min
+  const high = finite(axisHigh) ? Math.max(axisHigh, max) : max
+  const span = high - low
   const inner = { w: box.width - box.pad * 2, h: box.height - box.pad * 2 }
   const x = (i: number) => r1(box.pad + (values.length === 1 ? inner.w / 2 : (i / (values.length - 1)) * inner.w))
-  const y = (v: number) => r1(span === 0 ? box.height / 2 : box.height - box.pad - ((v - min) / span) * inner.h)
+  const y = (v: number) => r1(span === 0 ? box.height / 2 : box.height - box.pad - ((v - low) / span) * inner.h)
 
   const parts: string[] = []
   const dots: Array<{ x: number; y: number }> = []

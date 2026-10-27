@@ -6,9 +6,11 @@
  * The status tabs and kind chips in the address, each fix's card (why, what it proposes, where it goes, what it waits
  * for), the way out of a held fix, the bulk bar (Send N for approval, held while a ticked fix cannot be sent — naming
  * it — Dismiss), and the toasts in the server's count. The held reasons are the API's (`review-fix-plan.service.ts`
- * `listHeld`, `statusHeld`). Pure, tested in fixesModel.vitest.test.ts.
+ * `listHeld`, `statusHeld`). A size-guide fix comes from fit by size, never the AI (`review-size-guide.ts`): what is
+ * wrong, the change (a new last bullet point, and the same advice for the size guide, by hand) and the evidence per size.
+ * Pure, tested in fixesModel.vitest.test.ts.
  */
-import { inboxHref, insightsHref } from '../../_lib/reviewsLinks'
+import { inboxHref, insightsHref, productReviewsHref } from '../../_lib/reviewsLinks'
 import { channelMarketWords } from '../../_lib/reviewWords'
 import type { InsightsScope } from '../_shared/insightsScope'
 
@@ -18,6 +20,21 @@ export const FIX_KINDS = ['BULLETS', 'APLUS', 'SIZE_GUIDE', 'RECALL_FLAG', 'TASK
 export type FixKind = (typeof FIX_KINDS)[number]
 export const FIX_STATUSES = ['OPEN', 'SENT', 'APPLIED', 'DISMISSED'] as const
 export type FixStatus = (typeof FIX_STATUSES)[number]
+
+/** A size-guide fix's proposal (the API's `SizeGuideProposal`). */
+export interface SizeGuideProposal {
+  direction: 'small' | 'large'
+  sizes: string[]
+  allSizes: boolean
+  reviews: number
+  returns: number
+  /** "Tell buyers to order one size up in sizes M–L: in the size guide and in the listing text." */
+  advice: string
+  /** The new last bullet point, in `proposal.language`; null = none yet. */
+  line: string | null
+  /** Each judged size's verdict in words. */
+  evidence: string[]
+}
 
 export interface FixItem {
   id: string
@@ -30,12 +47,14 @@ export interface FixItem {
   market: string | null
   theme: { key: string; label: string } | null
   spikeId: string | null
-  proposal: { bullets?: string[]; module?: { headline: string; body: string } | null; language: string; english?: unknown; days?: number }
+  proposal: { bullets?: string[]; module?: { headline: string; body: string } | null; language: string; english?: unknown; days?: number; sizeGuide?: SizeGuideProposal }
   held: string | null
   plan: { approvalId: string; state: string; words: string; sentBy: string | null; sentAt: string | null; expiresAt: string | null } | null
   task: { createdBy: string | null; createdAt: string | null; assignee: string | null } | null
   applied: { words: string; at: string | null; approvalId: string | null } | null
   lastSend: { words: string; at: string | null } | null
+  /** Closed by the size-guide re-check (its evidence is gone), with why. */
+  closed?: { words: string; at: string | null } | null
   source: string
   createdBy: string | null
   createdAt: string
@@ -77,8 +96,7 @@ export function parseKinds(raw: string | null | undefined): FixKind[] {
 export const KIND_CHIPS: Array<{ kind: FixKind; label: string }> = [
   { kind: 'BULLETS', label: 'Bullets' },
   { kind: 'APLUS', label: 'A+ content' },
-  // Audit A7: nothing makes a size-guide fix yet (Phase 3 fit data), so the chip says so instead of filtering to nothing.
-  { kind: 'SIZE_GUIDE', label: 'Size guide · coming later' },
+  { kind: 'SIZE_GUIDE', label: 'Size guide' },
   { kind: 'RECALL_FLAG', label: 'Recall check' },
   { kind: 'TASK', label: 'Task' },
 ]
@@ -135,7 +153,7 @@ export function targetWords(fix: Pick<FixItem, 'kind' | 'market' | 'proposal'>):
   if (fix.kind === 'BULLETS') return [`Product text · ${languageWords(fix.proposal.language)}`, 'every channel that shows these bullets']
   if (fix.kind === 'APLUS') return [market ? `${market} · A+ content` : 'Amazon · A+ content', 'a draft Amazon checks']
   if (fix.kind === 'RECALL_FLAG') return ['Stock hold · your own warehouses only', 'never Amazon FBA stock']
-  if (fix.kind === 'SIZE_GUIDE') return ['Size guide · coming later']
+  if (fix.kind === 'SIZE_GUIDE') return [`Product text · ${languageWords(fix.proposal.language)}`, 'every channel that shows these bullets', 'Size guide: by hand, outside Nexus']
   return ['A task: nothing changes on a channel']
 }
 
@@ -145,7 +163,25 @@ export function proposalLines(fix: Pick<FixItem, 'kind' | 'proposal' | 'detail'>
   if (fix.kind === 'BULLETS') return { heading: `Proposed bullets (${languageWords(p.language)})`, lines: p.bullets?.length ? p.bullets : ['No bullet points yet: edit the proposal.'] }
   if (fix.kind === 'APLUS') return { heading: `Proposed A+ text (${languageWords(p.language)})`, lines: p.module ? [p.module.headline, p.module.body].filter(Boolean) : ['No headline or text yet: edit the proposal.'] }
   if (fix.kind === 'RECALL_FLAG') return { heading: 'Proposed stock hold', lines: [`Hold the available units in your own warehouses for ${p.days ?? 14} days, while the complaint is checked. Amazon FBA stock is never held from here.`] }
+  if (fix.kind === 'SIZE_GUIDE') {
+    const g = p.sizeGuide
+    return {
+      heading: 'Proposed change',
+      lines: [
+        g?.advice || 'Tell buyers which size to order: in the size guide and in the listing text.',
+        g?.line ? `New last bullet point (${languageWords(p.language)}): “${g.line}”` : `No bullet point in ${languageWords(p.language)} yet: edit the proposal.`,
+        'The size guide is not kept in Nexus: add the same advice to it by hand.',
+      ],
+    }
+  }
   return { heading: fix.kind === 'TASK' ? 'The task' : 'Proposed', lines: [fix.detail ?? 'No details.'] }
+}
+
+/** A size-guide fix's evidence: each size's verdict, over the last 12 months (null for other kinds). */
+export function evidenceLines(fix: Pick<FixItem, 'kind' | 'proposal'>): { heading: string; lines: string[] } | null {
+  if (fix.kind !== 'SIZE_GUIDE' || !fix.proposal.sizeGuide) return null
+  const lines = fix.proposal.sizeGuide.evidence
+  return { heading: 'Evidence · last 12 months', lines: lines.length ? lines : ['No size has a verdict any more.'] }
 }
 
 /** What the text means in English, when it is in another language (the person who approves reads it). */
@@ -160,12 +196,14 @@ export function englishLines(fix: Pick<FixItem, 'proposal'>): string[] | null {
 export function metaWords(fix: Pick<FixItem, 'source' | 'createdAt'>, now: number): string {
   const days = Math.floor((now - new Date(fix.createdAt).getTime()) / 86_400_000)
   const when = days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`
-  const who = /ai|auto|spike|suggest/i.test(fix.source) ? 'Written by AI from the reviews' : 'Added by a person'
+  const who = fix.source === SIZE_GUIDE_SOURCE ? 'Found by Nexus in fit by size' : /ai|auto|spike|suggest/i.test(fix.source) ? 'Written by AI from the reviews' : 'Added by a person'
   return `${who} · ${when}`
 }
 
-/** The evidence link: the alert it came from (Alerts), or the theme's reviews (the Inbox). */
-export function evidenceLink(fix: Pick<FixItem, 'spikeId' | 'theme' | 'market' | 'product'>, scope: Pick<InsightsScope, 'channel' | 'market' | 'period'>): { label: string; href: string } | null {
+/** The evidence link: the alert it came from (Alerts), the product's fit per size (a size guide), or the theme's reviews. */
+export function evidenceLink(fix: Pick<FixItem, 'spikeId' | 'theme' | 'market' | 'product'> & { kind?: FixKind }, scope: Pick<InsightsScope, 'channel' | 'market' | 'period'>): { label: string; href: string } | null {
+  // A size guide rests on every channel and market over 12 months: the pop-up opens on that, not on the page's scope.
+  if (fix.kind === 'SIZE_GUIDE' && fix.product) return { label: 'Its fit per size', href: productReviewsHref(fix.product.id, { period: SIZE_GUIDE_PERIOD }) }
   if (fix.spikeId) return { label: 'The alert it came from', href: insightsHref('alerts', { status: 'ALL', product: fix.product?.id ?? null, channel: scope.channel, market: fix.market ?? scope.market, period: scope.period }) }
   if (fix.theme) return { label: `Reviews about ${fix.theme.label}`, href: inboxHref({ theme: fix.theme.key, market: fix.market, q: fix.product?.sku ?? null, period: scope.period }) }
   return null
@@ -206,22 +244,41 @@ export function sentWords(fix: Pick<FixItem, 'plan'>): string {
   return parts.join(' · ')
 }
 
+const day = (at: string) => new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+
 /** An Applied or Dismissed fix's line. */
-export function doneWords(fix: Pick<FixItem, 'status' | 'applied' | 'task'>): string {
-  if (fix.status === 'APPLIED') {
-    const at = fix.applied?.at ? ` · ${new Date(fix.applied.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''
-    return `${fix.applied?.words ?? 'Applied'}${at}`
-  }
+export function doneWords(fix: Pick<FixItem, 'status' | 'applied' | 'task'> & { closed?: FixItem['closed'] }): string {
+  if (fix.status === 'APPLIED') return `${fix.applied?.words ?? 'Applied'}${fix.applied?.at ? ` · ${day(fix.applied.at)}` : ''}`
+  if (fix.closed?.words) return `${fix.closed.words}${fix.closed.at ? ` · ${day(fix.closed.at)}` : ''}`
   return 'Dismissed: nothing was sent'
 }
 
+/** Size-guide fixes: what makes one, in the Fixes words (the API's rule, review-size-guide.ts). */
+export const SIZE_GUIDE_SOURCE = 'fit-by-size'
+export const SIZE_GUIDE_PERIOD = '12m'
+export const SIZE_GUIDE_RULE = 'A size-guide fix appears by itself when a product’s sizes run small or large in the last 12 months: a size needs 5 fit mentions (reviews, or returns marked too small or too large), and at least half of them saying one way.'
+
 /** The tab's empty title. */
-export function emptyTitle(status: FixStatus, filtered: boolean): string {
+export function emptyTitle(status: FixStatus, filtered: boolean, kinds: readonly FixKind[] = []): string {
+  if (kinds.length === 1 && kinds[0] === 'SIZE_GUIDE') return status === 'OPEN' ? 'No size runs small or large' : 'No size-guide fixes here'
   if (filtered) return 'No fixes of these kinds here'
   if (status === 'OPEN') return 'No open fixes'
   if (status === 'SENT') return 'Nothing waits for approval'
   if (status === 'APPLIED') return 'No fix applied yet'
   return 'No dismissed fixes'
+}
+
+/** The empty list's words and its way on: Alerts for AI fixes, fit by size (Themes) for size-guide fixes. */
+export function emptyHelp(status: FixStatus, kinds: readonly FixKind[]): { description: string; link: 'alerts' | 'themes' } {
+  if (kinds.length === 1 && kinds[0] === 'SIZE_GUIDE') {
+    return {
+      description: status === 'OPEN'
+        ? `${SIZE_GUIDE_RULE} No product meets that now; Nexus checks again when this page reads.`
+        : `${SIZE_GUIDE_RULE} None is ${status === 'SENT' ? 'waiting for approval' : status === 'APPLIED' ? 'applied' : 'dismissed'}.`,
+      link: 'themes',
+    }
+  }
+  return { description: 'Fixes come from alerts, a product’s “Suggest a fix” and fit by size. Open an alert and press “Suggest fixes” to get new ones; size-guide fixes appear by themselves.', link: 'alerts' }
 }
 
 // ── The bulk bar (Open tab, ruling 7) ───────────────────────────────
@@ -316,6 +373,8 @@ export interface FixForm {
   /** What the text says in English (bullets: one per line). */
   english: string
   days: number
+  /** Size guide: the new last bullet point. */
+  line: string
 }
 
 /** The edit window's fields, from the fix as it is. */
@@ -330,6 +389,7 @@ export function fixForm(fix: Pick<FixItem, 'title' | 'proposal'>): FixForm {
     language: p.language,
     english: Array.isArray(e) ? e.filter((x) => typeof x === 'string').join('\n') : typeof e === 'string' ? e : '',
     days: p.days ?? 14,
+    line: p.sizeGuide?.line ?? '',
   }
 }
 
@@ -345,6 +405,16 @@ export function fixEditBody(fix: Pick<FixItem, 'kind' | 'title' | 'proposal'>, f
   const title = form.title.trim()
   if (!title || title.length > 200) return { body: null, error: 'The title needs 1 to 200 characters.' }
   if (title !== before.title.trim()) body.title = title
+  if (fix.kind === 'SIZE_GUIDE') {
+    const line = form.line.trim()
+    if (!line || line.length > 500) return { body: null, error: 'The bullet point needs 1 to 500 characters.' }
+    if (line !== before.line.trim()) body.line = line
+    const english = form.english.trim()
+    if (fix.proposal.language !== 'en' && english !== before.english.trim()) {
+      if (!english) return { body: null, error: 'Say what the bullet point means in English: the person who approves reads it.' }
+      body.english = english
+    }
+  }
   if (fix.kind === 'BULLETS' || fix.kind === 'APLUS') {
     if (form.language !== before.language) body.language = form.language
     const english = fix.kind === 'BULLETS' ? lines(form.english) : form.english.trim()

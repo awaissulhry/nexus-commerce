@@ -23,7 +23,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { AlertTriangle, ListChecks, Search, SlidersHorizontal, Sparkles, Tag as TagIcon, UserPlus } from 'lucide-react'
 import {
-  Banner, Card, EmptyState, Field, Listbox, MetricStrip, Modal, StarRating, Tabs, ToastProvider, useNarrow, useToast, type Metric,
+  Banner, EmptyState, Field, Listbox, MetricStrip, Modal, Tabs, ToastProvider, useNarrow, useToast, type Metric,
 } from '@/design-system/components'
 import {
   GridCard, GridDensityProvider, GridDensityToggle, GridNoRowsOverlay, GridPager, GridSearchSlot, GridSelectionActions, GridToolbar,
@@ -55,8 +55,8 @@ import {
   withKind, withNeedsReply, withPage, withPeriod, withPhotos, withSearch, withSort, type InboxFilterKey, type InboxQuery, type InboxSort,
 } from './inboxQuery'
 import {
-  TILE_ORDER, headerSubtitle, inboxChips, livePill, needsReplyWords, periodShort, readStateBanners, tabItems, tileAccent, tileHint,
-  tileLabel, tileValue, valueWord,
+  TILE_ORDER, headerSubtitle, inboxChips, livePill, needsReplyWords, notConnectedEmpty, periodShort, readStateBanners, tabItems, tileAccent,
+  tileHint, tileLabel, tileValue, valueWord,
 } from './inboxTiles'
 import { ImportModal } from './ImportModal'
 import { InboxCards } from './InboxCards'
@@ -416,9 +416,13 @@ function InboxInner() {
   const pill = livePill({ error: !!listError, updating, readState: top?.readState ?? null })
   const subtitle = headerSubtitle(top?.total ?? null, q.period, listError && !top ? 'error' : top ? 'ready' : 'loading')
 
-  const noRowsParams = useMemo(() => (isFiltered(q)
-    ? { title: 'No reviews match these filters', message: 'Clear a filter to see more. New reviews still arrive while filters are on.', action: { label: 'Clear all filters', onClick: () => setQuery(clearFilters) } }
-    : { title: 'No reviews yet', message: 'Reviews arrive here as Nexus reads them, or when you import a file.' }), [q, setQuery])
+  // Filtered to a channel with no account connected (Etsy with no shop): the empty list says so, with Connect.
+  const unconnected = useMemo(() => notConnectedEmpty(q.channels, top?.readState ?? null), [q.channels, top?.readState])
+  const noRowsParams = useMemo(() => (unconnected
+    ? { title: unconnected.title, message: unconnected.message, action: <Button asChild size="sm" variant="secondary"><Link href={unconnected.action.href}>{unconnected.action.label}</Link></Button> }
+    : isFiltered(q)
+      ? { title: 'No reviews match these filters', message: 'Clear a filter to see more. New reviews still arrive while filters are on.', action: { label: 'Clear all filters', onClick: () => setQuery(clearFilters) } }
+      : { title: 'No reviews yet', message: 'Reviews arrive here as Nexus reads them, or when you import a file.' }), [q, setQuery, unconnected])
 
   // ── The pop-up's Prev / Next: the rows on screen ──
   const navIds = useMemo(() => (narrow ? (cards ?? []) : pageRows.current.get(pager.page) ?? top?.rows ?? []).map((r) => r.id),
@@ -527,6 +531,7 @@ function InboxInner() {
             moreHeld={null}
             filtered={isFiltered(q)}
             onClearFilters={() => { setQuery(clearFilters); setSearchDraft('') }}
+            unconnected={unconnected}
           />
           <BulkActionBar count={cardTicks.size} onClear={stopSelecting} noun={cardTicks.size === 1 ? 'review ticked' : 'reviews ticked'} className={s.phoneBar}>
             {bulkButtons(false)}
@@ -614,20 +619,6 @@ function InboxInner() {
           </GridDensityProvider>
         </GridCard>
       )}
-
-      {/* ⛔ KEEP — placeholder (build spec ruling 3): a labelled sample row shows where Etsy reviews appear; it is not a
-          review. Etsy reviews are read since PR I (#796), so only its untrue words were corrected (live audit, Owner rule:
-          "Coming later" blocks stay, untrue words are corrected): no "later update", Etsy's one photo. */}
-      <Card header="Etsy reviews" headerAction={<Pill tone="neutral">Sample</Pill>}>
-        <p className={s.hint}>Etsy reviews show in the list above once an Etsy shop is connected and Nexus reads it. This row shows how one looks; it is a sample, not your review.</p>
-        <ul className={s.sampleList}>
-          <li className={s.sampleRow}>
-            <StarRating value={5} size="sm" label="5 stars (sample)" />
-            <span className={s.stack}><span className={s.main}>Etsy · Product review · 1 photo</span><span className={s.sub}>“Beautiful stitching, fits true to size and keeps me warm.”</span></span>
-            <Pill tone="neutral">Sample</Pill>
-          </li>
-        </ul>
-      </Card>
 
       {prefsOpen && (
         <PreferencesModal

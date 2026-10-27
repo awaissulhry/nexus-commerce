@@ -3,12 +3,14 @@
  * (services/reviews/review-timing-test.service.ts). The Reviews › Requests › Timing page and a rule's A/B card ask for
  * them; Claude may ask too. Either way a person approves each one in Nexus first: nothing changes before.
  *
- *   start-review-timing-test     a test RUNS: from the next scheduler run, new orders of its market are split by order
- *                                number between its groups (first-try days, or rule A and its copy B), and its holdout
- *                                group gets no review request at all. Stopping it (no approval: it only stops a split)
+ *   start-review-timing-test     a test RUNS: from the next scheduler run, new orders of its Amazon market or Shopify
+ *                                store are split by order number between its groups (first-try days, or rule A and its
+ *                                copy B), and its holdout group gets no review request at all (a Shopify buyer: no
+ *                                review e-mail and no "How was it?" check from Nexus). Stopping it (no approval: it only stops a split)
  *                                does not ask the held-out buyers later, and sent requests cannot be taken back, so the
  *                                start itself cannot be put back.
- *   apply-review-timing-winner   the winning first-try day goes into the rule for exactly that market and product type
+ *   apply-review-timing-winner   the winning first-try day goes into the rule for exactly that market (or the Shopify
+ *                                store) and product type
  *                                (or a new rule is added for them); `armId: "before"` puts back what was there (its undo).
  *   apply-review-ab-winner       N3 — an A/B split's winner: rule A takes the winning side's settings (its own e-mail
  *                                text per language and its timing) and the split ends; B stays off. Called with the same
@@ -46,7 +48,9 @@ async function previewStart(a: StartArgs): Promise<ToolResult> {
   if (refusal) return { ok: false, error: `${test.title}: ${refusal} Nothing was started.` }
   const effect = row.kind === 'AB'
     ? 'From the next scheduler run, the new orders rule A decides are split 50 / 50 by order number: half are asked by A, half get B’s timing, “How was it?” check and, on a Shopify rule, its own e-mail text.'
-    : `From the next scheduler run, new ${test.title.split(' · ')[0]} orders${row.productType ? ` of ${row.productType}` : ''} are split by order number: each group is first asked on its day after delivery${row.holdoutPct > 0 ? `, and ${row.holdoutPct}% of the orders (the holdout) get no review request at all` : ''}.`
+    : row.channel === 'SHOPIFY'
+      ? `From the next scheduler run, new Shopify orders${row.productType ? ` of ${row.productType}` : ''} are split by order number: each group gets Nexus’s review e-mail on its day after delivery (or after what the order’s rule counts from)${row.holdoutPct > 0 ? `, and ${row.holdoutPct}% of the orders (the holdout) get no review e-mail and no “How was it?” check from Nexus` : ''}.`
+      : `From the next scheduler run, new ${test.title.split(' · ')[0]} orders${row.productType ? ` of ${row.productType}` : ''} are split by order number: each group is first asked on its day after delivery${row.holdoutPct > 0 ? `, and ${row.holdoutPct}% of the orders (the holdout) get no review request at all` : ''}.`
   return {
     ok: true,
     preview: {
@@ -74,7 +78,7 @@ const startTool: AgentTool = {
   maxClaudeTrust: 'ask',
   description:
     'Start a timing test or an A/B split of this business\'s review requests (made on Reviews › Requests › Timing, or a '
-    + 'rule\'s A/B split card): from the next scheduler run, new orders of its market are split by order number between '
+    + 'rule\'s A/B split card): from the next scheduler run, new orders of its Amazon market or Shopify store are split by order number between '
     + 'its groups — different first-try days after delivery, or rule A and its copy B — and a holdout group gets no review '
     + 'request at all. It changes when real buyers are asked, so a person approves it in Nexus before it starts. Stopping '
     + 'it needs no approval; the buyers it held out are not asked later and sent requests cannot be taken back.',
@@ -140,7 +144,7 @@ async function previewApply(a: ApplyArgs): Promise<ToolResult> {
     ok: true,
     preview: {
       action: 'apply-review-timing-winner',
-      summary: `${target.mode === 'create' ? 'Add the rule' : 'Change the rule'} “${target.name}”: first try on day ${arm.delayDays} after delivery`,
+      summary: `${target.mode === 'create' ? 'Add the rule' : 'Change the rule'} “${target.name}”: first try on day ${arm.delayDays} after ${target.countsFrom}`,
       test,
       winner: { label: arm.label, delayDays: arm.delayDays },
       result: { words: result.words, sure: result.sure, sureWords: result.sureWords },
@@ -148,7 +152,7 @@ async function previewApply(a: ApplyArgs): Promise<ToolResult> {
       from: { delayDays: target.fromDays, words: target.fromWords },
       to: { delayDays: arm.delayDays },
       note: target.mode === 'create'
-        ? `Adds the rule “${target.name}” (Amazon ${test.market}${row.productType ? `, ${row.productType}` : ''}) with the first try on day ${arm.delayDays} and the other settings of the rule that decides these orders now; other products keep their rule. Changes Nexus only, from the next scheduler run.`
+        ? `Adds the rule “${target.name}” (${row.channel === 'SHOPIFY' ? 'Shopify' : `Amazon ${test.market}`}${row.productType ? `, ${row.productType}` : ''}) with the first try on day ${arm.delayDays} and the other settings of the rule that decides these orders now; other products keep their rule. Changes Nexus only, from the next scheduler run.`
         : `Changes the first try of “${target.name}” to day ${arm.delayDays}. Changes Nexus only, from the next scheduler run; requests already queued keep their day.`,
     },
   }
@@ -168,7 +172,7 @@ const applyTool: AgentTool = {
   maxClaudeTrust: 'ask',
   description:
     'Apply the winning first-try day of a finished review timing test of this business: the rule for exactly that Amazon '
-    + 'market and product type asks on that day after delivery, or such a rule is added with the other settings of the '
+    + 'market (or the Shopify store) and product type asks on that day, or such a rule is added with the other settings of the '
     + 'rule that decides those orders now. Only a winner at least 80% sure, after the test has enough counted orders. '
     + 'armId "before" puts back what was there before (a rule it added is turned off, not deleted). A person approves it '
     + 'in Nexus first; it changes Nexus only, from the next scheduler run.',

@@ -193,6 +193,49 @@ describe('request-review (07 O13, audit E5)', () => {
     vi.unstubAllEnvs()
   })
 
+  it('lane N6 — a Shopify test’s holdout is refused the same way: its not-asked row, and an order a running Shopify test holds out; no e-mail', async () => {
+    const words = /Held out by a timing test on purpose — it stays not asked, so the test’s result holds\. Nothing was queued\.$/
+    const heldRow = await order({ channel: 'SHOPIFY', marketplace: null })
+    await inside(() => database.client.reviewRequest.create({ data: { orderId: heldRow, channel: 'SHOPIFY', status: 'SKIPPED', scheduledFor: daysAgo(6), suppressedReason: 'timing_test_holdout', providerResponseCode: 'TIMING_TEST_HOLDOUT' } as never }))
+    expect((await dryRun('request-review', { orderId: heldRow })).error).toMatch(words)
+    expect(await requestsOf(heldRow)).toEqual([{ status: 'SKIPPED' }])
+
+    // A running Shopify test covers the whole store (market "*"): an order it puts in its holdout is held before the
+    // scheduler made its row — also when the request was previewed before the test started and approved after.
+    const arms = [
+      { id: 'tt-o13-shop-d7', label: 'Day 7 (now)', position: 0, delayDays: 7, holdout: false },
+      { id: 'tt-o13-shop-d4', label: 'Day 4', position: 1, delayDays: 4, holdout: false },
+      { id: 'tt-o13-shop-hold', label: 'Not asked (holdout)', position: 2, holdout: true },
+    ]
+    let n = 0
+    let number = ''
+    do number = `TEST-O13-SHOP-HOLD-${++n}`
+    while (assignArm({ id: 'tt-o13-shop', holdoutPct: 20, arms }, number)?.holdout !== true)
+    const heldOut = await order({ channel: 'SHOPIFY', marketplace: null, channelOrderId: number })
+    const before = await dryRun('request-review', { orderId: heldOut })
+    expect(before.ok, before.error).toBe(true)
+    await inside(() => database.client.reviewTimingTest.create({ data: {
+      id: 'tt-o13-shop', kind: 'TIMING', channel: 'SHOPIFY', market: '*', holdoutPct: 20, status: 'RUNNING', startedAt: daysAgo(3), endsWhen: { ordersPerArm: 300, maxDays: 56 },
+      arms: { create: arms },
+    } as never }))
+    try {
+      expect((await dryRun('request-review', { orderId: heldOut })).error).toMatch(words)
+      expect((await run('request-review', { orderId: heldOut }, before.preview)).ok).toBe(false)
+      expect(await requestsOf(heldOut)).toEqual([])
+      // An order the test puts in an asked group is still asked (our review e-mail; switched off on this server).
+      let m = 0
+      let asked = ''
+      do asked = `TEST-O13-SHOP-ASK-${++m}`
+      while (assignArm({ id: 'tt-o13-shop', holdoutPct: 20, arms }, asked)?.holdout !== false)
+      const askedId = await order({ channel: 'SHOPIFY', marketplace: null, channelOrderId: asked })
+      const ask = await dryRun('request-review', { orderId: askedId })
+      expect(ask.ok, ask.error).toBe(true)
+      expect((await run('request-review', { orderId: askedId }, ask.preview)).data).toMatchObject({ outcome: 'not_sent', words: 'Not sent — our email sending is switched off on this server' })
+    } finally {
+      await inside(() => database.client.reviewTimingTest.update({ where: { id: 'tt-o13-shop' }, data: { status: 'STOPPED', endedAt: new Date() } }))
+    }
+  })
+
   it('needs reviews.manage (a review action); never confirmed in Claude or auto; cannot be undone', async () => {
     const id = await order()
     await expect(callTool(person(Object.values(FEATURES).filter((f) => f !== FEATURES.reviewsManage)), 'request-review', { orderId: id })).rejects.toBeInstanceOf(ToolAccessError)

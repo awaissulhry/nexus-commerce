@@ -1,3 +1,9 @@
+## Sparkline fixed axis — 2026-10-28
+
+Mirrored from `apps/web`. `components/{Sparkline.tsx, sparklineModel.ts, index.ts}` (both apps, identical).
+- **`Sparkline domain?: SparkDomain`** (`[low, high]`, either end `null` = the readings' own; a reading outside widens
+  it): `[0, null]` draws from zero, so a small change looks small. Without it nothing changes.
+
 ## The row under an open family is a DS part — 2026-10-23
 
 Mirrored from `apps/web`. `grid/toolbars/FamilyFooterFrame.tsx` and `grid/theme/grid.css` (both apps, identical); exported from `grid` (web).

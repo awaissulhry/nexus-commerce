@@ -1,8 +1,10 @@
 /**
  * Reviews PR J (2026-10-27, build spec B22) — timing tests and the A/B split of review requests.
  *
- *   createTimingTest()    POST /api/review-timing-tests           a TIMING test (Amazon market, product type, 2–4 first-try
- *                                                                   days, holdout %) — made, then sent for approval
+ *   createTimingTest()    POST /api/review-timing-tests           a TIMING test (an Amazon market or the Shopify store,
+ *                                                                   product type, 2–4 first-try days, holdout %) — made,
+ *                                                                   then sent for approval (eBay and Etsy are refused in
+ *                                                                   words: Nexus asks no eBay buyer, and no Etsy buyer)
  *   createAbTest()        POST /api/review-timing-tests/ab        an A/B split of rule A and its copy B — made, then sent
  *   startTimingTest()     POST /api/review-timing-tests/:id/start "Start test": asks for approval again (a declined one)
  *   stopTimingTest()      POST /api/review-timing-tests/:id/stop  "Stop test" / "End test": ends it AT ONCE (no approval:
@@ -13,7 +15,7 @@
  *                                                                   into rule A and the split ends)
  *   keepCurrentDay()      POST /api/review-timing-tests/:id/keep  "Keep day 4": records the decision, changes nothing
  *   listTimingTests()     GET  /api/review-timing-tests           every test with its groups, counts, result and words
- *   estimateTimingTest()  GET  /api/review-timing-tests/estimate  the day in place now and the pace of a market
+ *   estimateTimingTest()  GET  /api/review-timing-tests/estimate  the day in place now and the pace of a market (or the store)
  *
  * A test changes which buyers are asked and when, so it RUNS only after a person approved "Start test" on the Approvals
  * page (the tool `start-review-timing-test`, agents/tools/review-timing-tests.tools.ts, through approval-gate.service.ts
@@ -34,17 +36,25 @@
  * market — within the same 30 days (ATTRIBUTION_DAYS). Where no review can follow in the test's channel and market
  * (`rateMeasurable`: e.g. no Amazon review of that market imported) the result says "Not measurable" in the rate's own
  * words, never a 0 %. Amazon does not say who wrote a review, so every rate is an estimate, and the words say so.
+ *
+ * Shopify (lane N6, 2026-10-27): a TIMING test may cover the Shopify store too — Nexus's own review e-mail. Its orders
+ * carry no market, so the test covers the whole store (market EVERY_MARKET) and its product type; the scheduler puts
+ * them in groups the same way, "Skip when" decides first, the send hours stay, and a holdout order gets no e-mail and
+ * no "How was it?" check. Each group's day counts from what the order's rule counts from (delivery unless a Shopify
+ * rule counts from shipping), so the group in place now is exactly what happens today. Shopify reviews come from the
+ * store's review app and name no order: they are matched by product, as the review rate matches them.
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import type { UserPrincipal } from '../agents/call-tool.js'
-import { channelMarketLabel, marketWords } from './overviewMath.js'
+import { channelMarketLabel, channelWords, marketWords } from './overviewMath.js'
 import { shortDate } from './review-queue-words.js'
 import { DEFAULT_DELAY_DAYS, lookupTimingTable, type TimingDefaultRow } from './review-timing.service.js'
 import {
   ANSWER_DAYS,
   DAY_CHOICES,
+  EVERY_MARKET,
   FIRST_DAY,
   HOLDOUT_MAX,
   LAST_DAY,
@@ -53,8 +63,10 @@ import {
   MAX_DAYS_MAX,
   MAX_DAYS_MIN,
   MIN_ARMS,
+  NOT_OFFERED_WORDS,
   ORDERS_PER_ARM_MAX,
   ORDERS_PER_ARM_MIN,
+  TIMING_CHANNELS,
   applyHeld,
   endsWhenOf,
   endsWords,
@@ -67,6 +79,7 @@ import {
   type EndsWhen,
   type TestKind,
   type TestResult,
+  type TimingChannel,
 } from './review-timing-test-math.js'
 import { visibleReviewWhere } from './review-visibility.js'
 import { notMeasurableWords, rateKey, rateMeasurable, readRateFacts, type RateFacts } from './review-rate.service.js'
@@ -123,6 +136,8 @@ export interface AppliedWinner {
   ruleName: string
   /** True when applying added the rule (an undo turns it off); false when it changed a rule's first try. */
   created: boolean
+  /** What the rule's first try counts from, in words: 'delivery' (always on Amazon), 'shipping' or 'the order'. */
+  countsFrom?: string
   /** The rule as it was before: an undo puts it back. */
   before: { sendDelayDays: number | null; minDays: number; maxDays: number; isActive: boolean }
   at: string
@@ -195,7 +210,8 @@ export function testForOrder(tests: readonly RunningTest[], order: { channel: st
       continue
     }
     if (t.channel !== order.channel) continue
-    if ((order.marketplace ?? '').toUpperCase() !== t.market.toUpperCase()) continue
+    // A Shopify test covers the whole store (its orders carry no market).
+    if (t.market !== EVERY_MARKET && (order.marketplace ?? '').toUpperCase() !== t.market.toUpperCase()) continue
     if (!typeCovers(t.productType, order.productType)) continue
     return t
   }
@@ -308,8 +324,25 @@ async function storeArmCounts(test: TestRow, counts: readonly ArmCounts[]): Prom
   }
 }
 
-/** "in Germany" for a TIMING test (null for an A/B split, which names its sides instead). */
-const whereWords = (test: Pick<TestRow, 'kind' | 'market'>) => (test.kind === 'TIMING' && marketWords(test.market) ? `in ${marketWords(test.market)}` : undefined)
+/** "in Germany", "on Shopify" for a TIMING test (null for an A/B split, which names its sides instead). */
+function whereWords(test: Pick<TestRow, 'kind' | 'channel' | 'market'>): string | undefined {
+  if (test.kind !== 'TIMING') return undefined
+  if (test.market === EVERY_MARKET) return `on ${channelWords(test.channel)}`
+  return marketWords(test.market) ? `in ${marketWords(test.market)}` : undefined
+}
+
+/** Why a test's rates are estimates, by channel. */
+const ESTIMATE_WORDS: Readonly<Record<string, string>> = {
+  AMAZON: 'Amazon does not say who wrote a review, so rates are estimates.',
+  SHOPIFY: 'A Shopify review comes from the store’s review app and names no order, so it is matched by its product: rates are estimates.',
+}
+
+const ANCHOR_WORDS: Readonly<Record<string, string>> = { DELIVERY: 'delivery', SHIP: 'shipping', PURCHASE: 'the order' }
+/** What a rule's first try counts from, in words: Amazon always from delivery (review-timing.service.ts). */
+export function countsFromWords(channel: string, rule: { anchor?: string | null } | null): string {
+  if (channel.toUpperCase() === 'AMAZON') return 'delivery'
+  return ANCHOR_WORDS[rule?.anchor ?? 'DELIVERY'] ?? 'delivery'
+}
 
 /**
  * Can a review follow this test's requests at all — the ONE review rate's `rateMeasurable` for its channel and market
@@ -480,7 +513,7 @@ export interface TimingTestView {
 
 function titleOf(t: Pick<TestRow, 'kind' | 'channel' | 'market' | 'productType'>, ruleName: string | null): string {
   if (t.kind === 'AB') return ruleName ? `“${ruleName}” · A/B split` : 'A/B split'
-  const where = channelMarketLabel(t.channel, t.market)
+  const where = t.market === EVERY_MARKET ? channelWords(t.channel) : channelMarketLabel(t.channel, t.market)
   return t.productType ? `${where} · ${t.productType}` : `${where} · every product`
 }
 
@@ -544,7 +577,7 @@ async function viewOf(t: TestRow, names: Map<string, { name: string; isActive: b
       return { ...c, delayDays: a.delayDays, ruleId: a.ruleId, ruleName: a.ruleId ? names.get(a.ruleId)?.name ?? null : null, rate: read.result.rates[a.id] ?? null }
     }),
     result: read.result,
-    countedWords: `Counted: orders whose time to answer is over (delivered more than ${horizonDays(t)} days ago). A group's rate is its reviews per counted order (the holdout is never asked, so orders are compared, not requests), each review matched as the review rate matches it; newer orders count as their time ends. Amazon does not say who wrote a review, so rates are estimates.`,
+    countedWords: `Counted: orders whose time to answer is over (delivered more than ${horizonDays(t)} days ago). A group's rate is its reviews per counted order (the holdout is never asked, so orders are compared, not requests), each review matched as the review rate matches it; newer orders count as their time ends.${ESTIMATE_WORDS[t.channel.toUpperCase()] ? ` ${ESTIMATE_WORDS[t.channel.toUpperCase()]}` : ''}`,
     approval: approvalId ? { id: approvalId, what: t.status === 'WAITING_APPROVAL' ? 'start' : 'apply' } : null,
     applied: stored.applied ?? null,
     kept: stored.kept ?? null,
@@ -572,31 +605,46 @@ export async function listTimingTests(filter: { kind?: string; ruleId?: string }
 
 // ── The day in place now (and the pace of a market) ──────────────────────────────────────────────────────────────
 
-/** The first try an Amazon order of this market and product type gets now: its rule's own day, else the table's. */
-export async function currentFirstTry(market: string, productType: string | null): Promise<{ days: number; words: string }> {
+/**
+ * The first try an order of this channel, market and product type gets now: its rule's own day, else the table's.
+ * Amazon: inside its day 4–25; Shopify (the store, no market): inside the rule's own window, counted from what the
+ * rule counts from (delivery unless it counts from shipping — the words say so).
+ */
+export async function currentFirstTry(channel: string, market: string, productType: string | null): Promise<{ days: number; words: string; countsFrom: string }> {
   const { decideRuleForOrder } = await import('./review-scheduler.service.js')
   const [rules, table] = await Promise.all([
     prisma.reviewRule.findMany({ where: { isActive: true } }),
     prisma.reviewTimingDefault.findMany({ where: { isActive: true } }) as Promise<TimingDefaultRow[]>,
   ])
-  const { rule } = decideRuleForOrder(rules, { channel: 'AMAZON', marketplace: market, totalPrice: 1e9, fulfillmentMethod: null, hasActiveReturn: false, hasRefund: false, productType })
+  const amazon = channel === 'AMAZON'
+  const { rule } = decideRuleForOrder(rules, { channel, marketplace: market === EVERY_MARKET ? null : market, totalPrice: 1e9, fulfillmentMethod: null, hasActiveReturn: false, hasRefund: false, productType })
   const fromTable = lookupTimingTable(productType, table)
   const raw = rule?.sendDelayDays ?? fromTable ?? DEFAULT_DELAY_DAYS
-  const lo = Math.max(FIRST_DAY, rule?.minDaysSinceDelivery ?? FIRST_DAY)
-  const hi = Math.min(LAST_DAY, rule?.maxDaysSinceDelivery ?? LAST_DAY)
-  const days = Math.min(hi, Math.max(lo, raw))
+  let days: number
+  if (amazon) {
+    const lo = Math.max(FIRST_DAY, rule?.minDaysSinceDelivery ?? FIRST_DAY)
+    const hi = Math.min(LAST_DAY, rule?.maxDaysSinceDelivery ?? LAST_DAY)
+    days = Math.min(hi, Math.max(lo, raw))
+  } else {
+    // As the timing resolver clamps a Shopify first try: into the rule's window only (when it has a sane one).
+    const lo = rule?.minDaysSinceDelivery ?? null
+    const hi = rule?.maxDaysSinceDelivery ?? null
+    days = lo != null && hi != null && lo <= hi ? Math.min(hi, Math.max(lo, raw)) : raw
+  }
+  const countsFrom = countsFromWords(channel, rule)
+  const after = countsFrom === 'delivery' ? '' : ` (after ${countsFrom}, as that rule counts)`
   const words = rule?.sendDelayDays != null
-    ? `Day ${days} now, from the rule “${rule.name}”`
-    : `Day ${days} now, from the ${fromTable != null ? 'product-type table' : 'built-in default'}${rule ? ` (rule “${rule.name}”)` : ''}`
-  return { days, words }
+    ? `Day ${days} now, from the rule “${rule.name}”${after}`
+    : `Day ${days} now, from the ${fromTable != null ? 'product-type table' : 'built-in default'}${rule ? ` (rule “${rule.name}”)` : ''}${after}`
+  return { days, words, countsFrom }
 }
 
-/** Orders per day in a market (and product type), delivered in the last 28 days: the pace a test would run at. */
-async function marketPace(market: string, productType: string | null, now: Date): Promise<number> {
+/** Orders per day in a market or the Shopify store (and product type), delivered in the last 28 days: a test's pace. */
+async function marketPace(channel: string, market: string, productType: string | null, now: Date): Promise<number> {
   const since = new Date(now.getTime() - 28 * DAY_MS)
   const n = await prisma.order.count({
     where: {
-      channel: 'AMAZON', marketplace: market, deliveredAt: { gte: since },
+      channel: channel as never, ...(market === EVERY_MARKET ? {} : { marketplace: market }), deliveredAt: { gte: since },
       ...(productType ? { items: { some: { product: { productType: { contains: productType, mode: 'insensitive' } } } } } : {}),
     },
   })
@@ -605,20 +653,30 @@ async function marketPace(market: string, productType: string | null, now: Date)
 
 export interface TimingEstimate { currentDays: number; currentWords: string; ordersPerDay: number; endsWords: string }
 
+/** The channel a "New timing test" names: Amazon (the default, as before Shopify was offered) or Shopify; eBay and Etsy refused in words. */
+function timingChannelOf(raw: unknown): TimingChannel {
+  const channel = typeof raw === 'string' && raw.trim() ? raw.trim().toUpperCase() : 'AMAZON'
+  if (NOT_OFFERED_WORDS[channel]) throw new TimingTestInputError(NOT_OFFERED_WORDS[channel])
+  if (!(TIMING_CHANNELS as readonly string[]).includes(channel)) throw new TimingTestInputError('Pick an Amazon market or Shopify to test.')
+  return channel as TimingChannel
+}
+
 /** For the "New timing test" card: the day in place now, and how long a test would take at this market's pace. */
-export async function estimateTimingTest(q: { market?: string; productType?: string; days?: string; holdout?: string; ordersPerArm?: string; maxWeeks?: string }, now = new Date()): Promise<TimingEstimate> {
-  const market = (q.market ?? '').trim().toUpperCase()
-  if (!/^[A-Z]{2}$/.test(market)) throw new TimingTestInputError('Pick a market.')
+export async function estimateTimingTest(q: { channel?: string; market?: string; productType?: string; days?: string; holdout?: string; ordersPerArm?: string; maxWeeks?: string }, now = new Date()): Promise<TimingEstimate> {
+  const channel = timingChannelOf(q.channel)
+  const market = channel === 'SHOPIFY' ? EVERY_MARKET : (q.market ?? '').trim().toUpperCase()
+  if (channel === 'AMAZON' && !/^[A-Z]{2}$/.test(market)) throw new TimingTestInputError('Pick a market.')
   const productType = q.productType?.trim() ? q.productType.trim().toLowerCase() : null
   const days = (q.days ?? '').split(',').map((d) => Number(d)).filter((d) => Number.isFinite(d) && d > 0)
   const holdout = Math.min(HOLDOUT_MAX, Math.max(0, Number(q.holdout ?? 0) || 0))
   const ends = endsWhenOf({ ordersPerArm: Number(q.ordersPerArm) || undefined, maxDays: Number(q.maxWeeks) ? Number(q.maxWeeks) * 7 : undefined })
-  const [current, pace] = await Promise.all([currentFirstTry(market, productType), marketPace(market, productType, now)])
+  const [current, pace] = await Promise.all([currentFirstTry(channel, market, productType), marketPace(channel, market, productType, now)])
   const groups = Math.max(MIN_ARMS, days.length)
   const perGroupPerDay = pace * (1 - holdout / 100) / groups
-  const name = marketWords(market) ?? market
+  const name = channel === 'SHOPIFY' ? 'the store' : marketWords(market) ?? market
+  const orders = channel === 'SHOPIFY' ? 'Shopify' : `Amazon ${name}`
   let paceWords: string
-  if (perGroupPerDay <= 0) paceWords = `no Amazon ${name} orders were delivered in the last 4 weeks, so it would end after ${Math.round(ends.maxDays / 7)} weeks`
+  if (perGroupPerDay <= 0) paceWords = `no ${orders} orders were delivered in the last 4 weeks, so it would end after ${Math.round(ends.maxDays / 7)} weeks`
   else {
     const weeks = Math.ceil(Math.min(ends.maxDays, ends.ordersPerArm / perGroupPerDay) / 7)
     paceWords = `about ${weeks} ${weeks === 1 ? 'week' : 'weeks'} at ${name}’s pace (${Math.round(pace * 7)} orders a week)`
@@ -646,25 +704,29 @@ function overlapHeld(t: Pick<TestRow, 'kind' | 'channel' | 'market' | 'productTy
   return null
 }
 
-export interface NewTimingTestBody { market?: unknown; productType?: unknown; days?: unknown; holdoutPct?: unknown; ordersPerArm?: unknown; maxWeeks?: unknown }
+export interface NewTimingTestBody { channel?: unknown; market?: unknown; productType?: unknown; days?: unknown; holdoutPct?: unknown; ordersPerArm?: unknown; maxWeeks?: unknown }
 
-/** Validates "New timing test" (throws TimingTestInputError with the first thing to fix). */
-export function parseTimingBody(body: unknown): { market: string; productType: string | null; days: number[]; holdoutPct: number; endsWhen: EndsWhen } {
+/**
+ * Validates "New timing test" (throws TimingTestInputError with the first thing to fix). `channel` is AMAZON (the
+ * default) with a market, or SHOPIFY (the whole store); eBay and Etsy are refused with the reason in words.
+ */
+export function parseTimingBody(body: unknown): { channel: TimingChannel; market: string; productType: string | null; days: number[]; holdoutPct: number; endsWhen: EndsWhen } {
   const b = (body ?? {}) as NewTimingTestBody
-  const market = typeof b.market === 'string' ? b.market.trim().toUpperCase() : ''
-  if (!/^[A-Z]{2}$/.test(market)) throw new TimingTestInputError('Pick the Amazon market to test.')
+  const channel = timingChannelOf(b.channel)
+  const market = channel === 'SHOPIFY' ? EVERY_MARKET : typeof b.market === 'string' ? b.market.trim().toUpperCase() : ''
+  if (channel === 'AMAZON' && !/^[A-Z]{2}$/.test(market)) throw new TimingTestInputError('Pick the Amazon market to test.')
   const productType = typeof b.productType === 'string' && b.productType.trim() ? b.productType.trim().toLowerCase().slice(0, 60) : null
   const days = Array.isArray(b.days) ? [...new Set(b.days.map((d) => Math.round(Number(d))).filter((d) => Number.isFinite(d)))].sort((x, y) => x - y) : []
   if (days.length < MIN_ARMS) throw new TimingTestInputError(`Pick at least ${MIN_ARMS} days to compare.`)
   if (days.length > MAX_ARMS) throw new TimingTestInputError(`Compare at most ${MAX_ARMS} days at once.`)
-  if (days.some((d) => d < FIRST_DAY || d > LAST_DAY)) throw new TimingTestInputError(`Each day must be between day ${FIRST_DAY} and day ${LAST_DAY} after delivery (Amazon's window).`)
+  if (days.some((d) => d < FIRST_DAY || d > LAST_DAY)) throw new TimingTestInputError(`Each day must be between day ${FIRST_DAY} and day ${LAST_DAY} after delivery${channel === 'AMAZON' ? " (Amazon's window)" : ''}.`)
   const holdoutPct = Math.round(Number(b.holdoutPct ?? 0))
   if (!Number.isFinite(holdoutPct) || holdoutPct < 0 || holdoutPct > HOLDOUT_MAX) throw new TimingTestInputError(`The holdout is 0–${HOLDOUT_MAX}% of the orders.`)
   const opa = b.ordersPerArm == null ? undefined : Number(b.ordersPerArm)
   if (opa != null && (!Number.isFinite(opa) || opa < ORDERS_PER_ARM_MIN || opa > ORDERS_PER_ARM_MAX)) throw new TimingTestInputError(`A group ends at ${ORDERS_PER_ARM_MIN}–${ORDERS_PER_ARM_MAX} orders.`)
   const weeks = b.maxWeeks == null ? undefined : Number(b.maxWeeks)
   if (weeks != null && (!Number.isFinite(weeks) || weeks * 7 < MAX_DAYS_MIN || weeks * 7 > MAX_DAYS_MAX)) throw new TimingTestInputError(`A test runs ${MAX_DAYS_MIN / 7}–${MAX_DAYS_MAX / 7} weeks at most.`)
-  return { market, productType, days, holdoutPct, endsWhen: endsWhenOf({ ordersPerArm: opa, maxDays: weeks != null ? weeks * 7 : undefined }) }
+  return { channel, market, productType, days, holdoutPct, endsWhen: endsWhenOf({ ordersPerArm: opa, maxDays: weeks != null ? weeks * 7 : undefined }) }
 }
 
 export interface AskAnswer { test: TimingTestView; approval: { id: string; expiresAt: string | null } | null; words: string | null }
@@ -697,13 +759,13 @@ export async function createTimingTest(body: unknown, person: UserPrincipal, opt
   const now = opts.now ?? new Date()
   const input = parseTimingBody(body)
   const live = await prisma.reviewTimingTest.findMany({ where: { status: { in: [...LIVE_STATUSES] } }, include: testInclude })
-  const draft = { kind: 'TIMING', channel: 'AMAZON', market: input.market, productType: input.productType, ruleId: null, arms: [] as Array<{ ruleId: string | null }> }
+  const draft = { kind: 'TIMING', channel: input.channel, market: input.market, productType: input.productType, ruleId: null, arms: [] as Array<{ ruleId: string | null }> }
   const overlap = overlapHeld(draft, live, await ruleNames(live.flatMap((t) => [t.ruleId]).filter((v): v is string => !!v)))
   if (overlap) throw new TimingTestInputError(overlap, 409)
-  const current = await currentFirstTry(input.market, input.productType)
+  const current = await currentFirstTry(input.channel, input.market, input.productType)
   const created = await prisma.reviewTimingTest.create({
     data: {
-      kind: 'TIMING', channel: 'AMAZON', market: input.market, productType: input.productType, holdoutPct: input.holdoutPct,
+      kind: 'TIMING', channel: input.channel, market: input.market, productType: input.productType, holdoutPct: input.holdoutPct,
       status: 'DRAFT', endsWhen: asJson(input.endsWhen), createdBy: person.label,
       arms: { create: timingArms(input.days, current.days, input.holdoutPct) },
     },
@@ -925,19 +987,26 @@ export async function markTestRunning(id: string, approvalId: string | null, now
   return done.count > 0
 }
 
-/** The rule a winner goes into: the active rule for exactly this market and product type, or a new one. */
-export async function winnerTarget(row: TestRow): Promise<{ mode: 'update' | 'create'; ruleId: string | null; name: string; fromDays: number | null; fromWords: string; base: Prisma.ReviewRuleGetPayload<object> | null }> {
+/** The rule scope and market a TIMING test's winner goes into: an Amazon market rule, or a Shopify rule (no market). */
+function winnerScope(row: Pick<TestRow, 'channel' | 'market'>): { scope: 'AMAZON_PER_MARKETPLACE' | 'SHOPIFY'; marketplace: string | null } {
+  return row.channel === 'SHOPIFY' ? { scope: 'SHOPIFY', marketplace: null } : { scope: 'AMAZON_PER_MARKETPLACE', marketplace: row.market }
+}
+
+/** The rule a winner goes into: the active rule for exactly this market (or the Shopify store) and product type, or a new one. */
+export async function winnerTarget(row: TestRow): Promise<{ mode: 'update' | 'create'; ruleId: string | null; name: string; fromDays: number | null; fromWords: string; countsFrom: string; base: Prisma.ReviewRuleGetPayload<object> | null }> {
   const { decideRuleForOrder } = await import('./review-scheduler.service.js')
   const rules = await prisma.reviewRule.findMany({ where: { isActive: true } })
   const type = row.productType?.toLowerCase() ?? null
-  const exact = rules.find((r) => r.scope === 'AMAZON_PER_MARKETPLACE' && (r.marketplace ?? '').toUpperCase() === row.market.toUpperCase()
+  const { scope, marketplace } = winnerScope(row)
+  const exact = rules.find((r) => r.scope === scope && (marketplace == null || (r.marketplace ?? '').toUpperCase() === marketplace.toUpperCase())
     && (type ? r.productTypes.length === 1 && r.productTypes[0].toLowerCase() === type : r.productTypes.length === 0))
-  const current = await currentFirstTry(row.market, row.productType)
-  if (exact) return { mode: 'update', ruleId: exact.id, name: exact.name, fromDays: current.days, fromWords: current.words, base: exact }
-  const { rule: base } = decideRuleForOrder(rules, { channel: 'AMAZON', marketplace: row.market, totalPrice: 1e9, fulfillmentMethod: null, hasActiveReturn: false, hasRefund: false, productType: row.productType })
-  const plain = `${marketWords(row.market) ?? row.market}${row.productType ? ` ${row.productType}` : ''}`
-  const taken = await prisma.reviewRule.findFirst({ where: { name: plain, scope: 'AMAZON_PER_MARKETPLACE', marketplace: row.market }, select: { id: true } })
-  return { mode: 'create', ruleId: null, name: taken ? `${plain} (timing test)` : plain, fromDays: current.days, fromWords: current.words, base }
+  const current = await currentFirstTry(row.channel, row.market, row.productType)
+  if (exact) return { mode: 'update', ruleId: exact.id, name: exact.name, fromDays: current.days, fromWords: current.words, countsFrom: countsFromWords(row.channel, exact), base: exact }
+  const { rule: base } = decideRuleForOrder(rules, { channel: row.channel, marketplace, totalPrice: 1e9, fulfillmentMethod: null, hasActiveReturn: false, hasRefund: false, productType: row.productType })
+  const where = scope === 'SHOPIFY' ? channelWords(row.channel) : marketWords(row.market) ?? row.market
+  const plain = `${where}${row.productType ? ` ${row.productType}` : ''}`
+  const taken = await prisma.reviewRule.findFirst({ where: { name: plain, scope, marketplace }, select: { id: true } })
+  return { mode: 'create', ruleId: null, name: taken ? `${plain} (timing test)` : plain, fromDays: current.days, fromWords: current.words, countsFrom: countsFromWords(row.channel, base), base }
 }
 
 /**
@@ -962,18 +1031,22 @@ export async function applyWinnerToRule(row: TestRow, armId: string, by: string 
   } else {
     const b = target.base
     const sure = stored.last?.result.sure ?? null
+    const { scope, marketplace } = winnerScope(row)
+    const amazon = scope === 'AMAZON_PER_MARKETPLACE'
     const made = await prisma.reviewRule.create({
       data: {
-        name: target.name, scope: 'AMAZON_PER_MARKETPLACE', marketplace: row.market, isActive: true,
+        name: target.name, scope, marketplace, isActive: true,
         productTypes: row.productType ? [row.productType] : [],
         sendDelayDays: days,
-        minDaysSinceDelivery: Math.max(FIRST_DAY, Math.min(b?.minDaysSinceDelivery ?? FIRST_DAY, days)),
+        // Amazon: never before its day 4. Shopify: the base rule's window, widened to hold the day.
+        minDaysSinceDelivery: amazon ? Math.max(FIRST_DAY, Math.min(b?.minDaysSinceDelivery ?? FIRST_DAY, days)) : Math.max(0, Math.min(b?.minDaysSinceDelivery ?? days, days)),
         maxDaysSinceDelivery: Math.max(b?.maxDaysSinceDelivery ?? LAST_DAY, days),
         exclusions: b?.exclusions ?? ['has_refund', 'has_active_return'],
         minOrderTotalCents: b?.minOrderTotalCents ?? null,
         useSentimentDiversion: b?.useSentimentDiversion ?? false,
         fallbackOnNoResponse: b?.fallbackOnNoResponse ?? true,
-        anchor: 'DELIVERY',
+        // The groups counted from what the deciding rule counts from (Amazon: always delivery): the new rule does too.
+        anchor: amazon ? 'DELIVERY' : b?.anchor ?? 'DELIVERY',
         sendHourLocal: b?.sendHourLocal ?? null,
         skipWeekends: b?.skipWeekends ?? false,
         shiftToBestDay: b?.shiftToBestDay ?? false,
@@ -985,7 +1058,7 @@ export async function applyWinnerToRule(row: TestRow, armId: string, by: string 
     before = { sendDelayDays: null, minDays: made.minDaysSinceDelivery, maxDays: made.maxDaysSinceDelivery, isActive: false }
   }
   const rule = await prisma.reviewRule.findUnique({ where: { id: ruleId } })
-  const applied: AppliedWinner = { armId, label: arm.label, delayDays: days, ruleId, ruleName: rule?.name ?? target.name, created: target.mode === 'create', before, at: now.toISOString(), by }
+  const applied: AppliedWinner = { armId, label: arm.label, delayDays: days, ruleId, ruleName: rule?.name ?? target.name, created: target.mode === 'create', countsFrom: countsFromWords(row.channel, rule), before, at: now.toISOString(), by }
   await prisma.reviewTimingTest.updateMany({ where: { id: row.id }, data: { result: asJson({ ...stored, applied, applyApprovalId: null, applyWords: null }) } })
   return {
     before: { testId: row.id, armId: BEFORE_ARM, ruleId: target.mode === 'update' ? ruleId : null, created: false, sendDelayDays: before.sendDelayDays, minDays: before.minDays, maxDays: before.maxDays, isActive: before.isActive },

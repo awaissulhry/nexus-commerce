@@ -1,9 +1,14 @@
 /**
- * SR.1 — Review spike detector.
+ * SR.1 — Review spike detector ("Complaint spike").
  *
  * Compares 7-day vs 28-day negative-rate per (productId, marketplace,
- * category). When 7d rate > THRESHOLD_MULTIPLIER × 28d baseline AND
- * absolute count ≥ MIN_NEGATIVE_7D, writes an OPEN ReviewSpike row.
+ * category). The rule (thresholds, windows, once per cohort) lives in
+ * complaint-spike-math.ts — ONE source for this check, the Settings page's
+ * words and the notice. When a cohort spikes and no alert holds it, writes
+ * an OPEN ReviewSpike row (Insights › Alerts) and, when the business switched
+ * "Complaint spike" on in Reviews › Settings › Alerts, tells the people it
+ * picked once for that alert, in Nexus and/or by e-mail
+ * (review-alert-notify.service.ts `notifyComplaintSpike`).
  *
  * Reads ReviewCategoryRate counters maintained by review-ingest. The
  * counters are already pre-aggregated per-day, so this scan is cheap
@@ -17,15 +22,20 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { publishReviewEvent } from '../review-events.service.js'
+import { COMPLAINT_SPIKE_RULE, complaintSpikeHeld, complaintSpikeVerdict } from './complaint-spike-math.js'
+import { notifyComplaintSpike } from './review-alert-notify.service.js'
+import { readAlert, type AlertSetting } from './review-settings.service.js'
+import { visibleReviewWhere } from './review-visibility.js'
 
-const SPIKE_MULTIPLIER = Number(process.env.NEXUS_REVIEW_SPIKE_MULTIPLIER ?? 2.0)
-const MIN_NEGATIVE_7D = Number(process.env.NEXUS_REVIEW_SPIKE_MIN_7D ?? 3)
-const MIN_BASELINE_28D = Number(process.env.NEXUS_REVIEW_SPIKE_MIN_BASELINE ?? 5)
+const DAY = 86_400_000
 
 interface DetectionSummary {
   cohortsScanned: number
   spikesDetected: number
-  spikesSkippedDuplicate: number // open spike already exists for this cohort
+  spikesSkippedDuplicate: number // open or acknowledged spike already exists for this cohort
+  spikesSkippedResolved: number // its alert was resolved less than reopenAfterDays ago
+  /** Notices delivered for the spikes opened (bell notices + e-mail recipients); 0 while the alert is off. */
+  notified: number
   errors: string[]
 }
 
@@ -50,8 +60,8 @@ async function aggregateRates(
   key: CohortKey,
   today: Date,
 ): Promise<CohortStats> {
-  const day7 = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
-  const day28 = new Date(today.getTime() - 28 * 24 * 60 * 60 * 1000)
+  const day7 = new Date(today.getTime() - COMPLAINT_SPIKE_RULE.recentDays * DAY)
+  const day28 = new Date(today.getTime() - COMPLAINT_SPIKE_RULE.baselineDays * DAY)
   const [r7, r28] = await Promise.all([
     prisma.reviewCategoryRate.aggregate({
       where: {
@@ -78,20 +88,6 @@ async function aggregateRates(
     rate28dNumerator: r28._sum.negative ?? 0,
     rate28dDenominator: r28._sum.total ?? 0,
   }
-}
-
-function isSpike(stats: CohortStats): { spike: boolean; multiplier: number | null } {
-  if (stats.rate7dNumerator < MIN_NEGATIVE_7D) return { spike: false, multiplier: null }
-  if (stats.rate28dDenominator < MIN_BASELINE_28D) return { spike: false, multiplier: null }
-  const rate7d = stats.rate7dNumerator / Math.max(1, stats.rate7dDenominator)
-  const rate28d = stats.rate28dNumerator / Math.max(1, stats.rate28dDenominator)
-  if (rate28d === 0) {
-    // Pure-novelty signal: no historic negatives but ≥MIN_NEGATIVE_7D in
-    // the last 7 days — that's itself a spike.
-    return { spike: true, multiplier: 99 }
-  }
-  const multiplier = rate7d / rate28d
-  return { spike: multiplier >= SPIKE_MULTIPLIER, multiplier }
 }
 
 async function collectSampleTopPhrases(key: CohortKey): Promise<string[]> {
@@ -123,17 +119,36 @@ async function collectSampleTopPhrases(key: CohortKey): Promise<string[]> {
   return phrases
 }
 
-async function hasOpenSpike(key: CohortKey): Promise<boolean> {
-  const existing = await prisma.reviewSpike.findFirst({
+/** The alerts that may hold this cohort: open or acknowledged, or resolved within reopenAfterDays. */
+async function heldBy(key: CohortKey, now: Date): Promise<'open' | 'resolved recently' | null> {
+  const existing = await prisma.reviewSpike.findMany({
     where: {
       productId: key.productId,
       marketplace: key.marketplace,
       category: key.category,
-      status: 'OPEN',
+      OR: [
+        { status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
+        { status: 'RESOLVED', resolvedAt: { gte: new Date(now.getTime() - COMPLAINT_SPIKE_RULE.reopenAfterDays * DAY) } },
+      ],
     },
-    select: { id: true },
+    select: { status: true, resolvedAt: true },
   })
-  return !!existing
+  return complaintSpikeHeld(existing, now)
+}
+
+/** The channels of the recent window's negative reviews about the theme (for the notice's "where"). */
+async function cohortChannels(key: CohortKey, since: Date): Promise<string[]> {
+  const rows = await prisma.review.findMany({
+    where: visibleReviewWhere({
+      productId: key.productId,
+      marketplace: key.marketplace,
+      postedAt: { gte: since },
+      sentiment: { is: { label: 'NEGATIVE', categories: { has: key.category } } },
+    }),
+    select: { channel: true },
+    distinct: ['channel'],
+  })
+  return [...new Set(rows.map((r) => r.channel.toUpperCase()))].sort()
 }
 
 /**
@@ -141,15 +156,19 @@ async function hasOpenSpike(key: CohortKey): Promise<boolean> {
  * activity in the last 7 days and evaluate it. Returns the count
  * detected + audit rows already persisted.
  */
-export async function runSpikeDetectorOnce(): Promise<DetectionSummary> {
+export async function runSpikeDetectorOnce(now: Date = new Date()): Promise<DetectionSummary> {
   const summary: DetectionSummary = {
     cohortsScanned: 0,
     spikesDetected: 0,
     spikesSkippedDuplicate: 0,
+    spikesSkippedResolved: 0,
+    notified: 0,
     errors: [],
   }
-  const today = utcMidnight(new Date())
-  const day7 = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+  const today = utcMidnight(now)
+  const day7 = new Date(today.getTime() - COMPLAINT_SPIKE_RULE.recentDays * DAY)
+  // "Complaint spike" in Settings › Alerts, read once per run when the first spike opens.
+  let alert: AlertSetting | null = null
 
   // Find active cohorts in last 7d.
   const rows = await prisma.reviewCategoryRate.findMany({
@@ -162,10 +181,16 @@ export async function runSpikeDetectorOnce(): Promise<DetectionSummary> {
   for (const row of rows) {
     try {
       const stats = await aggregateRates(row, today)
-      const { spike, multiplier } = isSpike(stats)
+      const { spike, multiplier } = complaintSpikeVerdict(stats)
       if (!spike) continue
-      if (await hasOpenSpike(row)) {
+      // Once per cohort: an open or acknowledged alert holds it, and a resolve holds it for reopenAfterDays.
+      const held = await heldBy(row, now)
+      if (held === 'open') {
         summary.spikesSkippedDuplicate += 1
+        continue
+      }
+      if (held === 'resolved recently') {
+        summary.spikesSkippedResolved += 1
         continue
       }
       const sampleTopPhrases = await collectSampleTopPhrases(row)
@@ -181,6 +206,7 @@ export async function runSpikeDetectorOnce(): Promise<DetectionSummary> {
           spikeMultiplier: multiplier,
           sampleTopPhrases,
           status: 'OPEN',
+          detectedAt: now,
         },
         select: { id: true },
       })
@@ -195,6 +221,25 @@ export async function runSpikeDetectorOnce(): Promise<DetectionSummary> {
         multiplier: typeof multiplier === 'number' ? multiplier : Number(multiplier) || null,
         ts: Date.now(),
       })
+      // The notice: once, for this new alert, as Settings › Alerts › "Complaint spike" says (off by default).
+      alert ??= await readAlert('complaintSpike')
+      if (alert.on) {
+        const [product, channels] = await Promise.all([
+          prisma.product.findUnique({ where: { id: row.productId }, select: { name: true } }),
+          cohortChannels(row, day7),
+        ])
+        const told = await notifyComplaintSpike({
+          spikeId: created.id,
+          productId: row.productId,
+          market: row.marketplace,
+          theme: row.category,
+          channels,
+          productName: product?.name ?? null,
+          phrases: sampleTopPhrases,
+          ...stats,
+        }, alert)
+        summary.notified += told.created + told.emailed
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       summary.errors.push(`${row.productId}/${row.marketplace}/${row.category}: ${msg}`)
@@ -210,6 +255,8 @@ export function summarizeSpikeDetector(s: DetectionSummary): string {
     `cohorts=${s.cohortsScanned}`,
     `spikes+=${s.spikesDetected}`,
     s.spikesSkippedDuplicate > 0 ? `dedup=${s.spikesSkippedDuplicate}` : null,
+    s.spikesSkippedResolved > 0 ? `resolved recently=${s.spikesSkippedResolved}` : null,
+    s.notified > 0 ? `notified=${s.notified}` : null,
     s.errors.length > 0 ? `errors=${s.errors.length}` : null,
   ]
     .filter(Boolean)

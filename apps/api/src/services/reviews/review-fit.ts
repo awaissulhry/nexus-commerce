@@ -556,3 +556,61 @@ export function buildProductFit(input: {
     minimum: min,
   }
 }
+
+// ── Findings for the size-guide fixes ───────────────────────────────
+
+/**
+ * A family whose sizes run one way with enough evidence — Reviews › Fixes › Size guide (review-size-guide.ts). The
+ * sizes are exactly the ones `fitCell` gives that verdict (the rule above: MIN_FIT_SIGNALS signals, the leader with at
+ * least half, no tie); nothing here judges a size a second way.
+ */
+export interface FitFinding {
+  familyId: string
+  name: string
+  sku: string
+  direction: 'small' | 'large'
+  /** The sizes with that verdict, in wearing order. */
+  sizes: string[]
+  /** Every size of the family (the sizes it sells, and any size with a signal), in wearing order. */
+  familySizes: string[]
+  /** Of the signals in those sizes that say this way: how many are reviews, how many returns. */
+  reviews: number
+  returns: number
+  /** Each of those sizes' verdict in words (`fitCell`). */
+  cells: Array<{ size: string; words: string }>
+}
+
+/** Every family whose sizes run small, and every family whose sizes run large (a family can do both, in other sizes). */
+export function fitFindings(input: { signals: readonly FitSignal[]; families: ReadonlyMap<string, FitFamilyInfo>; minimum?: number }): FitFinding[] {
+  const byFamily = new Map<string, FitSignal[]>()
+  for (const s of input.signals) {
+    const list = byFamily.get(s.familyId)
+    if (list) list.push(s)
+    else byFamily.set(s.familyId, [s])
+  }
+  const out: FitFinding[] = []
+  for (const family of input.families.values()) {
+    const signals = byFamily.get(family.id) ?? []
+    if (signals.length === 0) continue
+    const fit = buildProductFit({ signals, family, minimum: input.minimum })
+    for (const direction of ['small', 'large'] as const) {
+      const cells = fit.sizes.filter((c) => c.verdict === direction)
+      if (cells.length === 0) continue
+      const keys = new Set(cells.map((c) => sizeKey(c.size)))
+      const behind = signals.filter((s) => s.direction === direction && s.size && keys.has(sizeKey(s.size)))
+      out.push({
+        familyId: family.id,
+        name: family.name,
+        sku: family.sku,
+        direction,
+        sizes: cells.map((c) => c.size),
+        familySizes: fit.sizes.map((c) => c.size),
+        reviews: behind.filter((s) => s.source === 'review').length,
+        returns: behind.filter((s) => s.source === 'return').length,
+        cells: cells.map((c) => ({ size: c.size, words: c.words })),
+      })
+    }
+  }
+  const order = { small: 0, large: 1 } as const
+  return out.sort((a, b) => a.name.localeCompare(b.name) || a.familyId.localeCompare(b.familyId) || order[a.direction] - order[b.direction])
+}

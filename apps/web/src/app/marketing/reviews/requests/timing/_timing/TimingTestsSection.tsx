@@ -1,19 +1,21 @@
 'use client'
 
 /**
- * Reviews › Requests › Timing — the "Timing tests" section (build spec B22, PR J): try different first-try days on real
- * Amazon orders and keep the one that brings more reviews.
+ * Reviews › Requests › Timing — the "Timing tests" section (build spec B22, PR J; Shopify: lane N6): try different
+ * first-try days on real Amazon or Shopify orders and keep the one that brings more reviews.
  *
- *   New timing test   market, product type, the days to compare (2–4), the holdout % that gets no request, when it ends
- *                     (at this market's pace). "Start test — send for approval": the test is made and a person approves
- *                     its start on the Approvals page — nothing changes before (`reviewsSend('POST', '/review-timing-tests')`).
+ *   New timing test   where (an Amazon market, or the Shopify store — Nexus's own review e-mail; eBay and Etsy are
+ *                     listed as not offered, with why), product type, the days to compare (2–4), the holdout % that gets
+ *                     no request, when it ends (at this market's or the store's pace). "Start test — send for approval":
+ *                     the test is made and a person approves its start on the Approvals page — nothing changes before
+ *                     (`reviewsSend('POST', '/review-timing-tests')`).
  *   A test's card     not started (why, send again) · waiting for approval · running (each group's progress, "too early
  *                     to call" or the leader and how sure, Stop test…) · finished or stopped (the result in words, the
  *                     table per group, Apply winner — send for approval, Keep day N).
  * Stop test needs no approval: it only stops a split (it asks first, and says what happens).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Banner, Card, Field, Listbox, ProgressBar, SummaryTable, useActionConfirm, useToast, type ListboxOption } from '@/design-system/components'
+import { Banner, Card, Field, Listbox, ProgressBar, SummaryTable, useActionConfirm, useToast, type ListboxOption, type ListboxPanelOption } from '@/design-system/components'
 import { Button, FilterChip, NumberStepper, Pill, Skeleton } from '@/design-system/primitives'
 import { useInvalidationChannel, emitInvalidation } from '@/lib/sync/invalidation-channel'
 import Link from '@/lib/workspaces/Link'
@@ -23,11 +25,14 @@ import {
   DAY_CHOICES,
   HOLDOUT_MAX,
   NEW_TEST_FORM,
-  TEST_MARKETS,
+  NOT_OFFERED_WORDS,
+  appliedWords,
   armLine,
   armProgress,
   armRows,
   daysHint,
+  estimateQuery,
+  holdoutHint,
   isAbApplied,
   keepLabel,
   needMoreWords,
@@ -36,6 +41,7 @@ import {
   splitTests,
   statusPill,
   toggleDay,
+  whereOptions,
   type AskAnswer,
   type NewTestForm,
   type TimingEstimate,
@@ -44,7 +50,8 @@ import {
 } from './timingTestsModel'
 import s from './timing.module.css'
 
-const MARKET_OPTIONS: ListboxOption[] = TEST_MARKETS.map((m) => ({ value: m.value, label: m.label }))
+/** Amazon markets and Shopify; eBay and Etsy reachable but held, each saying why it is not offered. */
+const WHERE_OPTIONS: ListboxPanelOption[] = whereOptions()
 
 export interface TimingTestsSectionProps {
   canManage: boolean
@@ -118,8 +125,8 @@ export function TimingTestsSection({ canManage, patterns }: TimingTestsSectionPr
       <div className={s.testsHead}>
         <h2 id="timing-tests-title" className={s.sectionTitle}>Timing tests</h2>
         <p className={s.muted}>
-          Try different first-try days on real orders and keep the one that brings more reviews. Each buyer is still asked only once.
-          A test starts only after a person approves it, and you set how many orders get no request at all.
+          Try different first-try days on real Amazon or Shopify orders and keep the one that brings more reviews. Each buyer is still
+          asked only once. A test starts only after a person approves it, and you set how many orders get no request at all.
         </p>
       </div>
       {answer?.error && !answer.data ? (
@@ -144,11 +151,11 @@ function NewTimingTest({ canManage, patterns, onSent }: { canManage: boolean; pa
   const [sending, setSending] = useState(false)
   const [estimate, setEstimate] = useState<{ key: string; data: TimingEstimate | null; error: string | null } | null>(null)
   const typeOptions: ListboxOption[] = useMemo(() => [{ value: '', label: 'Every product' }, ...[...new Set(patterns)].sort().map((p) => ({ value: p, label: p }))], [patterns])
-  const key = JSON.stringify([form.market, form.productType, form.days, form.holdoutPct])
+  const key = JSON.stringify([form.where, form.productType, form.days, form.holdoutPct])
   useEffect(() => {
     let alive = true
     const t = window.setTimeout(() => {
-      void reviewsGet<TimingEstimate>('/review-timing-tests/estimate', { market: form.market, productType: form.productType || undefined, days: form.days.join(','), holdout: form.holdoutPct }).then((res) => {
+      void reviewsGet<TimingEstimate>('/review-timing-tests/estimate', estimateQuery(form)).then((res) => {
         if (alive) setEstimate({ key, data: res.data, error: res.error })
       })
     }, 300)
@@ -156,7 +163,7 @@ function NewTimingTest({ canManage, patterns, onSent }: { canManage: boolean; pa
       alive = false
       window.clearTimeout(t)
     }
-  }, [key, form.market, form.productType, form.days, form.holdoutPct])
+  }, [key, form])
   const est = estimate?.key === key ? estimate : null
   const held = newTestHeld(form, { canManage, sending })
 
@@ -173,8 +180,8 @@ function NewTimingTest({ canManage, patterns, onSent }: { canManage: boolean; pa
     <Card header="New timing test" description="Splits new orders by order number" headingLevel={3}>
       <div className={s.stack}>
         <div className={s.formRow}>
-          <Field label="Market">
-            <Listbox options={MARKET_OPTIONS} value={form.market} onChange={(v) => setForm((f) => ({ ...f, market: v }))} ariaLabel="Market" width={200} />
+          <Field label="Where" hint={NOT_OFFERED_WORDS}>
+            <Listbox options={WHERE_OPTIONS} value={form.where} onChange={(v) => setForm((f) => ({ ...f, where: v }))} ariaLabel="Where to test" width={200} />
           </Field>
           <Field label="Product type">
             <Listbox options={typeOptions} value={form.productType} onChange={(v) => setForm((f) => ({ ...f, productType: v }))} ariaLabel="Product type" width={200} />
@@ -189,13 +196,13 @@ function NewTimingTest({ canManage, patterns, onSent }: { canManage: boolean; pa
         </Field>
         {est?.data ? <p className={s.muted}>{est.data.currentWords}.</p> : null}
         <div className={s.formRow}>
-          <Field label="Holdout — not asked" hint="Shows what asking adds at all. These buyers get no request.">
+          <Field label="Holdout — not asked" hint={holdoutHint(form)}>
             <div className={s.stepperBox}>
               <NumberStepper size="sm" value={form.holdoutPct} min={0} max={HOLDOUT_MAX} suffix="%" onChange={(v) => setForm((f) => ({ ...f, holdoutPct: v }))} aria-label="Holdout, percent of the orders not asked" decrementLabel="Smaller holdout" incrementLabel="Bigger holdout" />
             </div>
           </Field>
           <Field label="Ends">
-            <span className={s.endsText}>{est?.error ? est.error : est?.data ? est.data.endsWords : 'Reading the pace of this market…'}</span>
+            <span className={s.endsText}>{est?.error ? est.error : est?.data ? est.data.endsWords : 'Reading the pace of these orders…'}</span>
           </Field>
         </div>
         <div className={s.sendRow}>
@@ -291,7 +298,7 @@ function ResultBody({ test, manage, onApply, onKeep }: { test: TimingTest; manag
       {test.status === 'STOPPED' && test.lastWords ? <p className={s.muted}>{test.lastWords}</p> : null}
       {test.applied && !isAbApplied(test.applied) ? (
         <p className={s.applied}>
-          <Pill tone="success" dot>Applied</Pill> “{test.applied.ruleName}” asks on day {test.applied.delayDays} after delivery.
+          <Pill tone="success" dot>Applied</Pill> {appliedWords(test.applied)}
         </p>
       ) : test.kept ? (
         <p className={s.applied}><Pill tone="neutral">Kept</Pill> The day in place stays. Nothing was changed.</p>

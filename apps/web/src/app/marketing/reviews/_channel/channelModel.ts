@@ -16,6 +16,7 @@ import type { InboxRow } from '../inbox/inboxDatasource'
 import type { BuyersToRate, EbayRevisions, EbayTopics } from './ebayToolsModel'
 import { channelPath, lockParams, marketWord, scopeTitleWords, type ReviewsChannel, type ReviewsLock } from './reviewsScope'
 import { sellerFeedbackTile, type AmazonSellerFeedback } from './sellerFeedbackModel'
+import { topicTrendView, type TopicTrend, type TopicTrendView } from './topicTrendModel'
 
 // ── The address: the period ──────────────────────────────────────────
 
@@ -97,7 +98,8 @@ export interface AmazonTopic {
   quote: string | null
   impact: number | null
   market: string | null
-  trend: null
+  /** Amazon's 6-month trend of the topic (topicTrendModel.ts); null from an answer made before trends were read. */
+  trend: TopicTrend | null
 }
 
 export type TopicsState = 'ok' | 'role_missing' | 'not_on_market' | 'none'
@@ -438,9 +440,9 @@ export function requestRows(r: AmazonRequests): RequestRow[] {
   ]
 }
 
-export interface TopicView { key: string; label: string; quote: string | null; mentions: string; share: string; impact: string; impactTone: 'up' | 'down' | 'flat'; trend: string }
+export interface TopicView { key: string; label: string; quote: string | null; mentions: string; share: string; impact: string; impactTone: 'up' | 'down' | 'flat'; trend: TopicTrendView }
 
-/** One topic row: mentions, share of reviews, star effect (±), its English snippet; the 6-month trend comes later. */
+/** One topic row: mentions, share of reviews, star effect (±), its English snippet and Amazon's 6-month trend. */
 export function topicView(t: AmazonTopic): TopicView {
   const impact = t.impact == null ? '—' : `${signed(t.impact)} stars`
   return {
@@ -451,7 +453,7 @@ export function topicView(t: AmazonTopic): TopicView {
     share: t.share == null ? '' : `${t.share}% of reviews`,
     impact,
     impactTone: t.impact == null || Math.abs(t.impact) < 0.05 ? 'flat' : t.impact > 0 ? 'up' : 'down',
-    trend: '6-month trend: coming later',
+    trend: topicTrendView(t.trend),
   }
 }
 

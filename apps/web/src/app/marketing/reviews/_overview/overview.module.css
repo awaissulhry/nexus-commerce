@@ -229,17 +229,6 @@
   justify-content: center;
 }
 
-.needsLater {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-8);
-  padding: var(--nds-space-10) var(--nds-space-16);
-  border-bottom: 1px solid var(--nds-border-subtle);
-  font-size: var(--nds-font-size-sm-plus);
-  color: var(--nds-text-2);
-}
-
 .needsFoot {
   display: flex;
   flex-wrap: wrap;
