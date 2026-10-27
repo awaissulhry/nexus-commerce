@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../test-support/formula-database.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import {
-  countsForRatingDrop, isRatingDrop, RATING_DROP_CATEGORY, RATING_DROP_NO_SUGGEST, RATING_DROP_RULE, ratingDropBasis,
+  countsForRatingDrop, ratingDropVerdict, RATING_DROP_CATEGORY, RATING_DROP_NO_SUGGEST, RATING_DROP_RULE, ratingDropBasis,
   ratingDropHeld, ratingDropNoticeWords, ratingDropStats, ratingDropTitle, ratingDropWindows, storedDropRating, windowOf,
   type RatingDropRow,
 } from './rating-drop-math.js'
@@ -71,20 +71,20 @@ describe('the windows', () => {
 describe('when it opens', () => {
   it('needs the minimum sample in EACH window', () => {
     const rule = RATING_DROP_RULE
-    expect(isRatingDrop({ recentCount: rule.minRated - 1, beforeCount: 30, change: -2 })).toEqual({ drop: false, why: 'fewer than 5 rated reviews in the last 7 days' })
-    expect(isRatingDrop({ recentCount: 30, beforeCount: rule.minRated - 1, change: -2 })).toEqual({ drop: false, why: 'fewer than 5 rated reviews in the 28 days before' })
-    expect(isRatingDrop({ recentCount: rule.minRated, beforeCount: rule.minRated, change: -2 })).toEqual({ drop: true })
+    expect(ratingDropVerdict({ recentCount: rule.minRated - 1, beforeCount: 30, change: -2 })).toEqual({ drop: false, why: 'fewer than 5 rated reviews in the last 7 days' })
+    expect(ratingDropVerdict({ recentCount: 30, beforeCount: rule.minRated - 1, change: -2 })).toEqual({ drop: false, why: 'fewer than 5 rated reviews in the 28 days before' })
+    expect(ratingDropVerdict({ recentCount: rule.minRated, beforeCount: rule.minRated, change: -2 })).toEqual({ drop: true })
   })
 
   it('needs a fall of at least 0.3 stars', () => {
-    expect(isRatingDrop({ recentCount: 5, beforeCount: 5, change: -0.29 })).toMatchObject({ drop: false })
-    expect(isRatingDrop({ recentCount: 5, beforeCount: 5, change: -0.3 })).toEqual({ drop: true })
-    expect(isRatingDrop({ recentCount: 5, beforeCount: 5, change: 0.5 })).toMatchObject({ drop: false })
-    expect(isRatingDrop({ recentCount: 5, beforeCount: 5, change: null })).toMatchObject({ drop: false })
+    expect(ratingDropVerdict({ recentCount: 5, beforeCount: 5, change: -0.29 })).toMatchObject({ drop: false })
+    expect(ratingDropVerdict({ recentCount: 5, beforeCount: 5, change: -0.3 })).toEqual({ drop: true })
+    expect(ratingDropVerdict({ recentCount: 5, beforeCount: 5, change: 0.5 })).toMatchObject({ drop: false })
+    expect(ratingDropVerdict({ recentCount: 5, beforeCount: 5, change: null })).toMatchObject({ drop: false })
     // 4.4 → 4.1 is a fall of exactly 0.3 (floating point does not hide it).
     const [s] = ratingDropStats([...rows([5, 5, 4, 4, 4], { postedAt: ago(20) }), ...rows([5, 4, 4, 4, 4, 4, 4, 4, 4, 4], { postedAt: ago(1) })], family, NOW)
     expect(s.change).toBe(-0.3)
-    expect(isRatingDrop(s)).toEqual({ drop: true })
+    expect(ratingDropVerdict(s)).toEqual({ drop: true })
   })
 
   it('once per family and market until resolved; a resolved one waits 7 days', () => {
@@ -119,7 +119,7 @@ describe('what counts', () => {
       ...rows([1, 1, 1, 1, 1], { postedAt: ago(2), channel: 'EBAY', ingestSource: 'EBAY_API' }),
     ], family, NOW)
     expect(s).toMatchObject({ recentCount: 5, change: 0, channels: ['SHOPIFY'] })
-    expect(isRatingDrop(s)).toMatchObject({ drop: false })
+    expect(ratingDropVerdict(s)).toMatchObject({ drop: false })
   })
 })
 

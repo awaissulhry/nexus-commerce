@@ -5,22 +5,25 @@
  *
  *   Windows     recent = the last 7 days up to now; before = the 28 days before that (they never overlap).
  *   Sample      at least RATING_DROP_RULE.minRated rated reviews in EACH window, else it is noise.
- *   Threshold   the average fell RATING_DROP_RULE.dropAtLeast stars or more (two decimals, so 0.3 is 0.3).
- *   Counts      product reviews with stars only, the rule every Reviews page uses (review-visibility.ts): never seller
- *               feedback (eBay feedback, Amazon's 1–3 star seller feedback), never eBay's positive/negative scale, and an
- *               Amazon star only from a review a person imported (hub ruling 5: no Amazon API gives stars). A review with
- *               no market belongs to no market, as in the complaint-spike check.
+ *   Threshold   the ONE "the rating dropped" rule (overviewMath.ts `isRatingDrop`, re-exported by review-rating.ts): the
+ *               average fell RATING_DROP_STARS (0.3) stars or more — the Overview's products to watch, Insights ›
+ *               Products' "Rating dropped" and this alert agree.
+ *   Counts      the ONE rating calculation (review-rating.ts): only rows `countsAsStars` lets in — never seller feedback
+ *               (eBay feedback, Amazon's 1–3 star seller feedback), an Amazon star only from a review a person imported
+ *               (ruling 5: no Amazon API gives stars) — and never an eBay row (eBay's measure is % positive, never stars).
+ *               The averages are `ratingOf(...).stars`. A review with no market belongs to no market, as in the
+ *               complaint-spike check.
  *   Once        one alert per family and market until it is resolved: an open or acknowledged one stops a second; a
  *               resolved one stops a new one for RATING_DROP_RULE.reopenAfterDays (a new alert then needs the drop to
  *               be there in reviews written after it was resolved).
  *
- * The averages are the Overview's own (`averageRating`, `delta` in overviewMath.ts). No database and no clock of its own:
+ * The change is `delta` of the two `ratingOf` averages (two decimals). No database and no clock of its own:
  * every function takes `now`, so rating-drop.vitest.test.ts checks each rule with plain numbers. The hourly alerts check
  * runs it (rating-drop.service.ts), stores an alert as a ReviewSpike row with category RATING_DROP_CATEGORY.
  */
-import { averageRating, channelMarketLabel, delta, marketWords, ratingKindOf, round } from './overviewMath.js'
-import { isImportedSource } from './review-inbox-query.js'
-import { countsInRating, FIXTURE_SOURCE, reviewKindOf } from './review-visibility.js'
+import { channelMarketLabel, delta, marketWords, ratingKindOf, round } from './overviewMath.js'
+import { countsAsStars, isRatingDrop, RATING_DROP_STARS, ratingOf } from './review-rating.js'
+import { FIXTURE_SOURCE, reviewKindOf } from './review-visibility.js'
 
 /** `ReviewSpike.category` of a rating-drop alert (every other alert's category is a review theme). */
 export const RATING_DROP_CATEGORY = 'RATING_DROP'
@@ -32,8 +35,8 @@ export const RATING_DROP_RULE = {
   beforeDays: 28,
   /** The fewest rated reviews in EACH window. */
   minRated: 5,
-  /** The fewest stars the average must fall. */
-  dropAtLeast: 0.3,
+  /** The fewest stars the average must fall: the ONE rule's RATING_DROP_STARS (for the words; the check is `isRatingDrop`). */
+  dropAtLeast: RATING_DROP_STARS,
   /** After a resolve, no new alert for the same family and market for this many days. */
   reopenAfterDays: 7,
 } as const
@@ -79,10 +82,11 @@ export function countsForRatingDrop(row: Omit<RatingDropRow, 'postedAt'>): { cou
   if (!row.productId) return { counts: false, why: 'no product' }
   if (!row.marketplace?.trim()) return { counts: false, why: 'no market' }
   if ((row.ingestSource ?? '').toUpperCase() === FIXTURE_SOURCE) return { counts: false, why: 'sample row' }
-  if (reviewKindOf(row.channel, row.kind) === 'seller' || !countsInRating(row)) return { counts: false, why: 'seller feedback' }
+  // The ONE rating calculation decides (review-rating.ts); eBay's own measure is % positive, never stars.
+  if (countsAsStars(row) && ratingKindOf(row.channel) === 'stars') return { counts: true }
+  if (reviewKindOf(row.channel, row.kind) === 'seller') return { counts: false, why: 'seller feedback' }
   if (ratingKindOf(row.channel) !== 'stars') return { counts: false, why: 'no stars on this channel' }
-  if (row.channel.toUpperCase() === 'AMAZON' && !isImportedSource(row.ingestSource)) return { counts: false, why: 'Amazon stars only from imported reviews' }
-  return { counts: true }
+  return { counts: false, why: 'Amazon stars only from imported reviews' }
 }
 
 export interface RatingDropStats {
@@ -109,7 +113,7 @@ export interface RatingDropStats {
  */
 export function ratingDropStats(rows: readonly RatingDropRow[], familyOf: (productId: string) => string | null, now: Date, rule: RatingDropRule = RATING_DROP_RULE): RatingDropStats[] {
   const w = ratingDropWindows(now, rule)
-  const groups = new Map<string, { familyId: string; market: string; channels: Set<string>; recent: number[]; before: number[]; low: RatingDropRow[] }>()
+  const groups = new Map<string, { familyId: string; market: string; channels: Set<string>; recent: RatingDropRow[]; before: RatingDropRow[]; low: RatingDropRow[] }>()
   for (const row of rows) {
     if (!countsForRatingDrop(row).counts) continue
     const side = windowOf(row.postedAt, w)
@@ -120,13 +124,16 @@ export function ratingDropStats(rows: readonly RatingDropRow[], familyOf: (produ
     const key = `${familyId}|${market}`
     const g = groups.get(key) ?? { familyId, market, channels: new Set<string>(), recent: [], before: [], low: [] }
     g.channels.add(row.channel.toUpperCase())
-    g[side].push(row.rating!)
+    g[side].push(row)
     if (side === 'recent' && (row.rating! <= 2 || row.sentiment?.label === 'NEGATIVE')) g.low.push(row)
     groups.set(key, g)
   }
   return [...groups.values()].map((g) => {
-    const recentAvg = averageRating(g.recent)
-    const beforeAvg = averageRating(g.before)
+    // The ONE rating calculation (review-rating.ts): the same rows give the same stars as every Reviews page.
+    const recent = ratingOf(g.recent)
+    const before = ratingOf(g.before)
+    const recentAvg = recent.stars
+    const beforeAvg = before.stars
     const phrases: string[] = []
     for (const r of [...g.low].sort((a, b) => b.postedAt.getTime() - a.postedAt.getTime())) {
       for (const p of r.sentiment?.topPhrases ?? []) {
@@ -138,10 +145,10 @@ export function ratingDropStats(rows: readonly RatingDropRow[], familyOf: (produ
       familyId: g.familyId,
       market: g.market,
       channels: [...g.channels].sort(),
-      recentSum: g.recent.reduce((n, r) => n + r, 0),
-      recentCount: g.recent.length,
-      beforeSum: g.before.reduce((n, r) => n + r, 0),
-      beforeCount: g.before.length,
+      recentSum: g.recent.reduce((n, r) => n + r.rating!, 0),
+      recentCount: recent.starsFrom,
+      beforeSum: g.before.reduce((n, r) => n + r.rating!, 0),
+      beforeCount: before.starsFrom,
       recentAvg,
       beforeAvg,
       change: delta(recentAvg, beforeAvg, 2),
@@ -150,11 +157,14 @@ export function ratingDropStats(rows: readonly RatingDropRow[], familyOf: (produ
   })
 }
 
-/** Whether a family's market dropped: enough rated reviews in both windows and a fall of at least the threshold. */
-export function isRatingDrop(s: Pick<RatingDropStats, 'recentCount' | 'beforeCount' | 'change'>, rule: RatingDropRule = RATING_DROP_RULE): { drop: true } | { drop: false; why: string } {
+/**
+ * Whether a family's market dropped: enough rated reviews in both windows and a fall by the ONE rule (`isRatingDrop`,
+ * RATING_DROP_STARS or more).
+ */
+export function ratingDropVerdict(s: Pick<RatingDropStats, 'recentCount' | 'beforeCount' | 'change'>, rule: RatingDropRule = RATING_DROP_RULE): { drop: true } | { drop: false; why: string } {
   if (s.recentCount < rule.minRated) return { drop: false, why: `fewer than ${rule.minRated} rated reviews in the last ${rule.recentDays} days` }
   if (s.beforeCount < rule.minRated) return { drop: false, why: `fewer than ${rule.minRated} rated reviews in the ${rule.beforeDays} days before` }
-  if (s.change == null || s.change > -rule.dropAtLeast) return { drop: false, why: `the average fell less than ${rule.dropAtLeast} stars` }
+  if (!isRatingDrop(s.change, 'stars')) return { drop: false, why: `the average fell less than ${RATING_DROP_STARS} stars` }
   return { drop: true }
 }
 

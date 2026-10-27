@@ -18,7 +18,7 @@ import { notifyRatingDrop } from './review-alert-notify.service.js'
 import { readAlert } from './review-settings.service.js'
 import { reviewKindWhere, visibleReviewWhere } from './review-visibility.js'
 import {
-  isRatingDrop, RATING_DROP_CATEGORY, RATING_DROP_RULE, ratingDropHeld, ratingDropStats, ratingDropWindows,
+  RATING_DROP_CATEGORY, RATING_DROP_RULE, ratingDropHeld, ratingDropStats, ratingDropVerdict, ratingDropWindows,
   type RatingDropRow,
 } from './rating-drop-math.js'
 
@@ -65,7 +65,7 @@ export async function runRatingDropCheckOnce(now = new Date()): Promise<RatingDr
   const familyOf = new Map(products.map((p) => [p.id, p.parentId ?? p.id]))
   const stats = ratingDropStats(rows, (id) => familyOf.get(id) ?? null, now)
   summary.checked = stats.length
-  const drops = stats.filter((s) => isRatingDrop(s).drop)
+  const drops = stats.filter((s) => ratingDropVerdict(s).drop)
   summary.dropped = drops.length
   if (drops.length === 0) return summary
 
