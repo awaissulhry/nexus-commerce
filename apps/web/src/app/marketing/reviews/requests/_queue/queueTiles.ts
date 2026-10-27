@@ -5,7 +5,7 @@
  */
 import type { Tone } from '@/design-system/primitives'
 import { COUNTRY_NAMES } from '@/app/_shared/app-nav'
-import { channelMarketWords } from '../../_lib/reviewWords'
+import { NOT_MEASURABLE, channelMarketWords, productTypeWords, rateNotMeasurable } from '../../_lib/reviewWords'
 import type { QueueFacets, QueueStatus, QueueTiles } from './queueDatasource'
 import { DEFAULT_QUEUE_PERIOD, type QueueFilterKey, type QueuePeriod, type QueueQuery } from './queueQuery'
 
@@ -98,7 +98,7 @@ export function queueTileViews(tiles: QueueTiles, active: QueueStatus | null, pe
     {
       key: 'rate',
       label: 'Review rate',
-      value: rateText(tiles.reviewRate),
+      value: rateNotMeasurable(tiles.reviewRate, tiles.rateWords) ? NOT_MEASURABLE : rateText(tiles.reviewRate),
       hint: tiles.rateWords ?? (tiles.reviewRate == null ? 'nothing sent in this period' : `${PERIOD_WORDS[period]}, estimate`),
       status: null,
       active: false,
@@ -130,7 +130,7 @@ export function filterChips(q: QueueQuery, facets: QueueFacets | null): FilterCh
     const name = q.rule === 'none' ? 'No rule' : facets?.rules.find((r) => r.id === q.rule)?.name ?? 'a rule'
     chips.push({ key: 'rule', words: `Rule: ${name}`, removeLabel: 'Show requests of every rule' })
   }
-  if (q.productType) chips.push({ key: 'productType', words: `Product type: ${q.productType}`, removeLabel: 'Show every product type' })
+  if (q.productType) chips.push({ key: 'productType', words: `Product type: ${productTypeWords(q.productType)}`, removeLabel: 'Show every product type' })
   if (q.reason) {
     const words = facets?.reasons.find((r) => r.key === q.reason)?.words ?? q.reason
     chips.push({ key: 'reason', words: `Reason: ${words}`, removeLabel: 'Show every reason' })

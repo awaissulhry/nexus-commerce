@@ -45,6 +45,11 @@ export interface InboxDetail {
   english: string | null
   language: string | null
   languageWords: string | null
+  /**
+   * Why this review needs no reply (the API's one needs-a-reply rule, review-visibility.ts); null while it needs one.
+   * Optional: an answer from before the API sent it reads by the older rule (`takesReply`).
+   */
+  noReply?: 'fixture' | 'closed' | 'imported' | 'no_reply' | 'window_closed' | 'positive' | 'automatic' | null
   product: { id: string; name: string; sku: string } | null
   variant: { id: string; name: string; sku: string; words: string | null } | null
   order: {
@@ -299,20 +304,35 @@ export function sameThemeLink(d: InboxDetail): { label: string; href: string } |
  * Whether this review can wait for a reply at all — the API's one needs-a-reply rule (review-visibility.ts): never a
  * review no one can answer (an Amazon product review, an Etsy review past its window), never an imported one.
  */
-export function takesReply(d: Pick<InboxDetail, 'review' | 'reply'>): boolean {
+export function takesReply(d: Pick<InboxDetail, 'review' | 'reply' | 'noReply'>): boolean {
+  if (d.noReply !== undefined) return d.noReply == null || d.noReply === 'closed'
   if (d.review.imported) return false
   return d.reply.heldCode !== 'no_reply' && d.reply.heldCode !== 'window_closed'
+}
+
+/** Why a review has no reply target, in words (the badges leave the same reviews out). */
+const NO_TARGET_WORDS: Record<string, string> = {
+  imported: 'Imported from a file: no reply target',
+  no_reply: 'No reply target: nobody can answer it',
+  window_closed: 'No reply target: Etsy’s reply window closed',
+  positive: 'No reply needed: positive — reply only if you want to',
+  automatic: 'No reply needed: eBay left this feedback by itself',
+  fixture: 'No reply target',
 }
 
 /** "Reply target: 28 Oct" while the review is open; "Replied" once a reply went out. */
 export function replyTargetWords(d: InboxDetail, now: number, timeZone?: string): string {
   if (d.responses.some((r) => r.status === 'SENT')) return 'Replied'
   if (!['NEW', 'IN_PROGRESS'].includes(d.review.status)) return 'No reply needed'
-  // Never "Overdue" where the badges and the Overdue tile do not count it (one rule, audit B3).
-  if (d.review.imported) return 'Imported from a file: no reply target'
-  if (!takesReply(d)) return 'No reply target: nobody can answer it'
+  // Never "Overdue" where the badges and the Overdue tile do not count it (one rule, audit B3; positive and eBay's
+  // automatic feedback are left out too, Owner 2026-10-27).
+  if (d.noReply && d.noReply !== 'closed') return NO_TARGET_WORDS[d.noReply] ?? 'No reply target'
+  if (d.review.imported) return NO_TARGET_WORDS.imported
+  if (!takesReply(d)) return NO_TARGET_WORDS.no_reply
   const due = reviewDueAt(d.review.postedAt)
-  const day = due.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone })
+  // The year when it is not this year's (live audit D04: "Overdue since 16 Feb" was a year and a half ago).
+  const sameYear = new Date(now).getFullYear() === due.getFullYear()
+  const day = due.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }), timeZone })
   return due.getTime() < now ? `Overdue since ${day}` : `Reply target: ${day}`
 }
 
@@ -348,7 +368,8 @@ export function orderFacts(d: InboxDetail, timeZone?: string): Fact[] {
     { label: 'Order', value: o.label },
     { label: 'Where', value: channelMarketWords(o.channel, o.market) },
     { label: 'Placed', value: dateWords(o.placedAt, timeZone) || '—' },
-    { label: 'Delivered', value: o.deliveredAt ? dateWords(o.deliveredAt, timeZone) : 'Not yet' },
+    // No delivery date in Nexus is not "not delivered" (live audit B12: eBay orders carry none, next to "Order delivered on time").
+    { label: 'Delivered', value: o.deliveredAt ? dateWords(o.deliveredAt, timeZone) : 'Not recorded', hint: o.deliveredAt ? undefined : 'Nexus has no delivery date for this order' },
     { label: 'Paid', value: money(o.total, o.currency) },
   ]
   if (d.return) {

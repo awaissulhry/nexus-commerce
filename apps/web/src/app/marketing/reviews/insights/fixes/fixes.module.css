@@ -12,6 +12,12 @@
   min-width: 0;
 }
 
+/* The status tabs scroll inside their own row on a phone instead of pushing the page sideways (live audit D09). */
+.tabsRow > :first-child {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .toolbar {
   border: 1px solid var(--nds-border);
   border-radius: var(--nds-radius-lg);

@@ -10,9 +10,10 @@
  */
 import { useCallback, useRef } from 'react'
 import { AlertTriangle } from 'lucide-react'
-import { EmptyState, PressableRow, StarRating } from '@/design-system/components'
+import { EmptyState, PressableRow } from '@/design-system/components'
 import { Button, Pill, Skeleton } from '@/design-system/primitives'
 import { STATUS_WORD, channelMarketWords } from '../_lib/reviewWords'
+import { RatingMark } from './inboxColumns'
 import type { InboxRow } from './inboxDatasource'
 import { STATUS_TONE, agoWords, dueWords, photoWords, plural, productWords } from './inboxTiles'
 import s from './inbox.module.css'
@@ -115,7 +116,7 @@ export function InboxCards({
             >
               <PressableRow
                 label={<span className={s.cardText}>{row.snippet || 'No text'}</span>}
-                leading={<StarRating value={row.rating} size="sm" />}
+                leading={<RatingMark channel={row.channel} rating={row.rating} />}
                 onClick={() => tap(row.id)}
                 active={selecting ? ticked : undefined}
                 description={selecting ? (ticked ? 'Ticked. Tap to untick.' : 'Tap to tick.') : 'Opens the review. Press and hold to tick.'}

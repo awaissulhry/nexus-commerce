@@ -315,3 +315,31 @@ export function addressProblem(email: string): string | null {
   if (!t) return 'Type the e-mail address.'
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t) ? null : 'This does not look like an e-mail address.'
 }
+
+/**
+ * What a review automation does, in plain words (live audit D12: the stored descriptions said "Claude Haiku", "execution
+ * log", "A+ Content DRAFT in live mode", "product × marketplace × category combination"). The three templates are known
+ * by name — a rule loaded before keeps its old stored text — and any other rule shows its own description.
+ */
+const AUTOMATION_WORDS: Record<string, string> = {
+  'Alert team on negative review spike': 'Tells the team when the spike check finds complaints about one theme rising fast for a product in one market. You can narrow it to a theme, or to how fast complaints must rise.',
+  'Auto-update bullets on quality spike': 'When complaints about one theme rise fast, the AI drafts five new bullet points that answer them. A person reads them and applies them; nothing changes on a channel by itself. Out of trial run, it also saves them as an A+ draft in Nexus.',
+  'Create A+ module from review spike': 'When complaints about one theme rise 2.5 times faster than usual or more, the AI drafts an A+ module that answers them and saves it as an A+ draft in Nexus. A person approves it before anything is published.',
+}
+
+export function automationWords(rule: Pick<AutomationRule, 'name' | 'description'>): string {
+  return AUTOMATION_WORDS[rule.name] ?? rule.description ?? '—'
+}
+
+/**
+ * A job's schedule in the viewer's own time, like its last and next run beside it (live audit D05: "Daily 03:30 UTC"
+ * next to "Today 04:30"). "Daily 03:30 UTC" → "Daily 04:30" in Rome in winter; anything else as it is. `timeZone` for
+ * tests.
+ */
+export function everyLocal(every: string, now: Date, timeZone?: string): string {
+  const m = /^(.*?)(\d{2}):(\d{2}) UTC$/.exec(every)
+  if (!m) return every
+  const at = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), Number(m[2]), Number(m[3])))
+  return `${m[1]}${at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone })}`
+}
+

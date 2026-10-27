@@ -9,7 +9,7 @@
 import { memo } from 'react'
 import { IdentityCell, integerColumn, statusColumn, type ColDef, type ICellRendererParams } from '@/design-system/grid'
 import Link from '@/lib/workspaces/Link'
-import { channelMarketWords } from '../../_lib/reviewWords'
+import { channelMarketWords, productTypeWords } from '../../_lib/reviewWords'
 import { rulePath } from '../requestsPaths'
 import type { GridColumnSpec } from '../gridCustomise'
 import type { QueueRow } from './queueDatasource'
@@ -33,7 +33,9 @@ const OrderCell = memo(function OrderCell({ data }: Cell) {
 
 const ProductCell = memo(function ProductCell({ data }: Cell) {
   if (!data) return null
-  return <IdentityCell noImage title={data.product ?? 'No product on the order'} titleAttr={data.product ?? undefined} sub={data.productType ? <span>{data.productType}</span> : undefined} />
+  // One kind of label per row: the SKU, the product's name on hover (live audit D02); the product type in words (D01).
+  const label = data.sku ?? data.product
+  return <IdentityCell noImage title={label ?? 'No product on the order'} titleAttr={data.product ?? undefined} sub={data.productType ? <span>{productTypeWords(data.productType)}</span> : undefined} />
 })
 
 const NextCell = memo(function NextCell({ data }: Cell) {

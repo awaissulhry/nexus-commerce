@@ -200,11 +200,15 @@ export function benignSuppressedReason(errorCode: string | null | undefined): st
  * The ReviewRequest update after Amazon answered OUTSIDE_WINDOW. While tomorrow is still inside our 30 days after
  * delivery, the row stays SCHEDULED for tomorrow; such a refusal does not use up a retry. After that it is SKIPPED.
  */
-export function outsideWindowUpdate(deliveredAt: Date, errorMessage: string | null | undefined, now: Date = new Date()) {
+export function outsideWindowUpdate(deliveredAt: Date, errorMessage: string | null | undefined, now: Date = new Date(), retryAt?: Date | null) {
   const tomorrow = new Date(now.getTime() + DAY_MS)
   const lastDay = new Date(deliveredAt.getTime() + AMAZON_SOLICITATION_MAX_DAYS * DAY_MS)
+  // Live audit B05: the retry goes at tomorrow's send hour (`retryAt`, review-timing.service.ts nextDaySendSlot) —
+  // now + 24 h slid an hour later every day, into the night. When that hour would pass the last day, the old
+  // "tomorrow, same time" still gets its last try: the hour never costs a request.
+  const next = retryAt && retryAt.getTime() > now.getTime() && retryAt <= lastDay ? retryAt : tomorrow
   const common = { providerResponseCode: 'OUTSIDE_WINDOW', errorMessage: errorMessage ?? null, lastAttemptAt: now, nextRetryAt: null }
-  return tomorrow <= lastDay
-    ? { ...common, status: 'SCHEDULED' as const, scheduledFor: tomorrow }
+  return next <= lastDay
+    ? { ...common, status: 'SCHEDULED' as const, scheduledFor: next }
     : { ...common, status: 'SKIPPED' as const, suppressedReason: 'Outside Amazon window: Amazon refused every day until day 30' }
 }

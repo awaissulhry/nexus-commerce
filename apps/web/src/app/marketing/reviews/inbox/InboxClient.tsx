@@ -615,15 +615,15 @@ function InboxInner() {
         </GridCard>
       )}
 
-      {/* ⛔ KEEP — placeholder (build spec ruling 3): Etsy reviews (PR I) are not read yet. A labelled sample row shows
-          where they will appear; it is not a review. (Amazon seller feedback is read since PR H and shows in the list
-          above, under Seller feedback; eBay photos are real since PR G: the "Has photos" filter above.) */}
-      <Card header="Coming later" headerAction={<Pill tone="neutral">Sample</Pill>}>
-        <p className={s.hint}>Etsy reviews arrive in a later update. This row shows how they will look; it is a sample, not your review.</p>
+      {/* ⛔ KEEP — placeholder (build spec ruling 3): a labelled sample row shows where Etsy reviews appear; it is not a
+          review. Etsy reviews are read since PR I (#796), so only its untrue words were corrected (live audit, Owner rule:
+          "Coming later" blocks stay, untrue words are corrected): no "later update", Etsy's one photo. */}
+      <Card header="Etsy reviews" headerAction={<Pill tone="neutral">Sample</Pill>}>
+        <p className={s.hint}>Etsy reviews show in the list above once an Etsy shop is connected and Nexus reads it. This row shows how one looks; it is a sample, not your review.</p>
         <ul className={s.sampleList}>
           <li className={s.sampleRow}>
             <StarRating value={5} size="sm" label="5 stars (sample)" />
-            <span className={s.stack}><span className={s.main}>Etsy · Product review · 2 photos</span><span className={s.sub}>“Beautiful stitching, fits true to size and keeps me warm.”</span></span>
+            <span className={s.stack}><span className={s.main}>Etsy · Product review · 1 photo</span><span className={s.sub}>“Beautiful stitching, fits true to size and keeps me warm.”</span></span>
             <Pill tone="neutral">Sample</Pill>
           </li>
         </ul>

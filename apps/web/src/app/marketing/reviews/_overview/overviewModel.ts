@@ -267,6 +267,8 @@ export function trendSummary(points: readonly TrendPoint[], bucket: TrendBucket,
   if (rated.length === 0) return `${head}; no star ratings.`
   const lo = Math.min(...rated).toFixed(1)
   const hi = Math.max(...rated).toFixed(1)
+  // Live audit D07: "between 5.0 and 5.0" — one value is said once.
+  if (lo === hi) return `${head}; average rating ${lo} throughout.`
   return `${head}; average rating between ${lo} and ${hi}, latest ${rated[rated.length - 1].toFixed(1)}.`
 }
 
@@ -396,10 +398,11 @@ export function needsActionHref(action: NeedsYouItem['action']): string {
   const p = action.params ?? {}
   switch (action.page) {
     case 'review':
-      // Reply: the Inbox, with that review's pop-up open.
-      return inboxHref({ channel: text(p, 'channel'), market: text(p, 'market'), status: text(p, 'status'), review: text(p, 'id') } satisfies InboxLinkParams)
+      // Reply: the Inbox on the reviews that need a reply, every date (the list the item came from: live audit A08 —
+      // never the default 30 days, which left the pop-up over an empty list), with that review's pop-up open.
+      return inboxHref({ reply: 'needed', period: 'all', channel: text(p, 'channel'), market: text(p, 'market'), status: text(p, 'status'), review: text(p, 'id') } satisfies InboxLinkParams)
     case 'inbox':
-      return inboxHref({ channel: text(p, 'channel'), market: text(p, 'market'), status: text(p, 'status') } satisfies InboxLinkParams)
+      return inboxHref({ reply: 'needed', period: 'all', channel: text(p, 'channel'), market: text(p, 'market'), status: text(p, 'status') } satisfies InboxLinkParams)
     case 'requests':
       return requestsHref({ status: text(p, 'status'), channel: text(p, 'channel'), market: text(p, 'market') })
     case 'alerts':

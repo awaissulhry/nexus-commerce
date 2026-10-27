@@ -12,7 +12,7 @@ import { NexusGrid, type ColDef, type ICellRendererParams } from '@/design-syste
 import { Button, InfoTip, Pill, Skeleton } from '@/design-system/primitives'
 import { reviewsSend } from '../../_lib/reviewsFetch'
 import { ReadFailed } from './ReadFailed'
-import { NO_STUCK_JOB, pipelineSummary, timeWords, type PipelineJob, type PipelineResponse } from './settingsModel'
+import { NO_STUCK_JOB, everyLocal, pipelineSummary, timeWords, type PipelineJob, type PipelineResponse } from './settingsModel'
 import type { SettingsRead } from './useSettingsRead'
 import s from './settings.module.css'
 
@@ -29,7 +29,7 @@ function JobCell({ data }: ICellRendererParams<PipelineJob>) {
 }
 
 function RunsCell({ data }: ICellRendererParams<PipelineJob>) {
-  return data ? <span className={s.cellSub}>{data.every}</span> : null
+  return data ? <span className={s.cellSub}>{everyLocal(data.every, new Date())}</span> : null
 }
 
 function LastCell({ data }: ICellRendererParams<PipelineJob>) {

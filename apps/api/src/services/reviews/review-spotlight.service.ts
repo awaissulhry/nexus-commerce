@@ -21,7 +21,8 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { countsInRating, visibleReviewWhere } from './review-visibility.js'
+import { notAutomaticWhere, visibleReviewWhere } from './review-visibility.js'
+import { countsAsStars } from './review-rating.js'
 import { isImportedSource } from './review-inbox-query.js'
 import { averageRating, channelWords, marketWords, round } from './overviewMath.js'
 import { amazonTopicMarkets, parseInsightScope, parseTopicRows, pct, THEME_KEYS, type InsightScope, type ParsedTopic } from './review-insights-math.js'
@@ -161,10 +162,12 @@ export function mayReadText(row: { channel: string; ingestSource: string | null 
   return row.channel.toUpperCase() !== 'AMAZON' || isImportedSource(row.ingestSource)
 }
 
+// eBay's automatic feedback is eBay's text, not the buyer's voice: never in a brief (live audit B10).
 const scopeWhere = (opts: SpotlightOptions): Prisma.ReviewWhereInput => ({
   ...(opts.productId ? { productId: opts.productId } : {}),
   ...(opts.channel ? { channel: opts.channel } : {}),
   ...(opts.marketplace ? { marketplace: opts.marketplace } : {}),
+  AND: [notAutomaticWhere()],
 })
 
 async function gather(opts: SpotlightOptions) {
@@ -185,7 +188,7 @@ async function gather(opts: SpotlightOptions) {
       orderBy: { postedAt: 'desc' },
       take: 300,
       select: {
-        id: true, channel: true, marketplace: true, rating: true, body: true, ingestSource: true, postedAt: true,
+        id: true, channel: true, marketplace: true, rating: true, body: true, ingestSource: true, kind: true, postedAt: true,
         sentiment: { select: { label: true, categories: true, topPhrases: true } },
         product: { select: { sku: true, name: true } },
       },
@@ -213,7 +216,8 @@ function heuristicBrief(reviews: Gathered['reviews']): SpotlightContent {
   let ratingSum = 0
   let ratingN = 0
   for (const r of reviews) {
-    if (r.rating != null) {
+    // Stars of product reviews only: eBay feedback is never stars (review-rating.ts).
+    if (r.rating != null && countsAsStars({ channel: r.channel, kind: r.kind, ingestSource: r.ingestSource })) {
       ratingSum += r.rating
       ratingN += 1
     }
@@ -271,7 +275,7 @@ function heuristicBrief(reviews: Gathered['reviews']): SpotlightContent {
 
 // ── Findings and the before / now table (pure) ──────────────────────
 
-type CountRow = { channel?: string; kind?: string | null; rating: number | null; triageStatus: string | null; sentiment: { label: string; categories: string[] } | null }
+type CountRow = { channel?: string; kind?: string | null; ingestSource?: string | null; rating: number | null; triageStatus: string | null; sentiment: { label: string; categories: string[] } | null }
 
 const has = (r: CountRow, label: string, theme: string) => r.sentiment?.label === label && r.sentiment.categories.includes(theme)
 
@@ -283,8 +287,9 @@ export function topicMentions(topics: readonly ParsedTopic[]): number {
 /** The window against the one before it: average stars, negative share, the top complaint, replies, reviews. */
 export function briefChanges(now: readonly CountRow[], before: readonly CountRow[]): SpotlightChange[] {
   const avg = (rows: readonly CountRow[]) => {
-    // Amazon's 1–3 star seller feedback is counted, never averaged (review-visibility.ts).
-    const a = averageRating(rows.filter((r) => countsInRating({ channel: r.channel ?? '', kind: r.kind })).map((r) => r.rating))
+    // Stars of product reviews only (review-rating.ts): eBay feedback is never stars, Amazon's 1–3 star seller feedback
+    // never averaged, Amazon stars only from imported reviews.
+    const a = averageRating(rows.filter((r) => countsAsStars({ channel: r.channel ?? '', kind: r.kind, ingestSource: r.ingestSource ?? null })).map((r) => r.rating))
     return a == null ? null : round(a, 2)
   }
   const negative = (rows: readonly CountRow[]) => {

@@ -285,7 +285,8 @@ export interface QueueRowInput {
 
 export interface QueueRow {
   id: string; orderId: string; orderLabel: string; buyer: string; channel: string; market: string | null
-  product: string | null; productType: string | null; deliveredAt: string | null; deliveredEstimate: boolean; dayWords: string
+  /** The order line's SKU (one kind of label for every row, live audit D02), and the product's name for its tooltip. */
+  sku: string | null; product: string | null; productType: string | null; deliveredAt: string | null; deliveredEstimate: boolean; dayWords: string
   nextTryAt: string | null; sentAt: string | null; status: QueueStatus; tries: number
   reasonKey: ReasonKey; reasonWords: string; ruleId: string | null; ruleName: string | null; sendNowHeld: string | null
 }
@@ -316,11 +317,12 @@ export function toQueueRow(r: QueueRowInput, now: Date): QueueRow {
     buyer: buyerShort(r.order.customerName),
     channel: r.channel,
     market: r.marketplace ?? r.order.marketplace ?? null,
+    sku: item?.sku ?? null,
     product: item?.product?.name ?? item?.sku ?? null,
     productType: item?.product?.productType ?? null,
     deliveredAt: iso(r.order.deliveredAt),
     deliveredEstimate: r.order.deliveredAt ? deliveryIsEstimate(r.order.deliveredAtSource) : false,
-    dayWords: dayWords(r.order.deliveredAt, now),
+    dayWords: dayWords(r.order.deliveredAt, now, { status, sentAt: r.sentAt, lastAttemptAt: r.lastAttemptAt, plannedAt: waiting ? (r.status === 'FAILED' ? r.nextRetryAt : r.scheduledFor) : null }),
     nextTryAt: waiting ? iso(r.status === 'FAILED' ? r.nextRetryAt : r.scheduledFor) : null,
     sentAt: iso(r.sentAt),
     status,
@@ -392,13 +394,14 @@ async function failuresLast7Days(now: Date) {
     }),
     prisma.reviewRequest.count({ where: { AND: [{ status: 'FAILED' }, statusWhere('RETRYING', now), { updatedAt: { gte: weekAgo } }] } as any }),
   ])
-  let bounced = 0, noAnswer = 0
+  let bounced = 0, noAnswer = 0, refused = 0
   for (const r of rows) {
     const key = reasonKeyOf(r, now)
     if (key === 'email_bounced') bounced += 1
     else if (key === 'amazon_no_answer') noAnswer += 1
+    else if (key === 'amazon_refused') refused += 1
   }
-  const f = { count: rows.length, bounced, noAnswer, retrying }
+  const f = { count: rows.length, bounced, noAnswer, refused, retrying }
   return { ...f, words: failuresWords(f) }
 }
 

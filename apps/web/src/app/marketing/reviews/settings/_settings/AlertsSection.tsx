@@ -88,7 +88,9 @@ export function AlertsSection({ alerts, error, onRetry, team, digestFallback, ra
                 Shown labelled, never hidden: the switch is held until then. */}
             {LATER.map((l) => (
               <div key={l.name} className={s.alert}>
-                <Button size="sm" heldReason={`Coming later: “${l.name}” arrives with the new Insights pages.`}>Off</Button>
+                {/* Live audit C09: the Insights pages exist and the hourly spike check already opens alerts there; only the
+                    notice for them is still to come (the true words; the placeholder itself stays, ruling 3). */}
+                <Button size="sm" heldReason={`Coming later: a notice for a “${l.name}”. The hourly spike check already opens these alerts on Insights › Alerts; the automation “Alert team on negative review spike” tells you once it is on (Automations, below).`}>Off</Button>
                 <div className={`${s.alertName} ${s.dim}`}>
                   <span className={s.cellLine}><span className={s.cellStrong}>{l.name}</span><Tag tone="neutral">Coming later</Tag><Pill tone="neutral">Sample</Pill></span>
                   <span className={s.cellSub}>{l.when}</span>

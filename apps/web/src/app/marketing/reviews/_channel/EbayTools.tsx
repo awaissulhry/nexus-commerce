@@ -122,8 +122,9 @@ export function EbaySections({ lock, period, sections, busy, canManage, me, onRe
 
       <p className={s.footnote}>
         Where the numbers come from: the feedback score, the share of positive, the counts by period and the detailed seller ratings are eBay’s own,
-        for the whole eBay account, asked at most once an hour. Neutral, negative and the list are the feedback Nexus reads every 30 minutes. A
-        reply is public, one per feedback, up to 500 characters, and can’t be edited or removed.
+        for the whole eBay account, asked at most once an hour. Neutral, negative and the list are the feedback Nexus reads every 30 minutes. eBay’s
+        own counts can be higher than the list: Nexus keeps only the feedback buyers left you as a seller, with words, and eBay’s newer read leaves
+        out the feedback eBay leaves by itself. A reply is public, one per feedback, up to 500 characters, and can’t be edited or removed.
       </p>
     </>
   )
@@ -162,6 +163,9 @@ function SummaryCards({ lock, sections, busy, onRetry }: Pick<EbaySectionsProps,
         <Card className={s.half} header="Detailed seller ratings" headingLevel={2} description={`eBay’s 1–5 ratings from buyers · ${summary?.dsrPeriod === 'ThirtyDays' ? 'last 30 days' : 'last 12 months'} · ${scopeTitleWords(lock)}`}>
           {body(notRead || !summary?.dsr.length ? (
             <EmptyState title="No ratings from eBay" description="eBay’s detailed seller ratings show here once eBay is read." />
+          ) : summary!.dsr.every((d) => d.count === 0) ? (
+            // Live audit C02: four rows of "No ratings" said one thing four times.
+            <EmptyState title="No detailed ratings yet" description={`eBay has no detailed seller ratings from buyers for ${summary?.dsrPeriod === 'ThirtyDays' ? 'the last 30 days' : 'the last 12 months'}.`} />
           ) : (
             <ul className={s.dsrList} aria-label="Detailed seller ratings">
               {dsrRows(summary!).map((d) => (

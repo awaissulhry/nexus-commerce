@@ -10,7 +10,7 @@
 import { Card, EmptyState } from '@/design-system/components'
 import { Button, Pill, Skeleton, Tag, TokenChip } from '@/design-system/primitives'
 import Link from '@/lib/workspaces/Link'
-import { inboxHref, insightsHref, needsReplyHref, requestsHref } from '../_lib/reviewsLinks'
+import { insightsHref, needsReplyHref, requestsHref } from '../_lib/reviewsLinks'
 import {
   ageWords, NEEDS_WORDS, needsActionHeld, needsActionHref, needsEmptyWords, needsFooter, needsSubtitle,
   type NeedsYouResponse,
@@ -47,7 +47,7 @@ export function NeedsYouCard({ needs, error, loading, show, canManage, now, chan
       description={needs ? needsSubtitle(shown, total, show) : 'Loading…'}
       headerAction={
         <Button asChild variant="link" size="sm">
-          <Link href={inboxHref()}>Open Inbox</Link>
+          <Link href={needsReplyHref({ channel, market })}>Open Inbox</Link>
         </Button>
       }
       padded={false}
@@ -100,7 +100,8 @@ export function NeedsYouCard({ needs, error, loading, show, canManage, now, chan
           {(show == null || show === 'reply') && (
             <div className={s.needsLater}>
               <Tag tone="neutral">Coming later</Tag>
-              <span>Etsy reply windows (“Etsy reply window closes in 4 days”) and 1–3 star Amazon seller feedback will show here too.</span>
+              {/* Amazon's 1–3 star seller feedback already shows above as "Reply needed" (#793): only the Etsy part is to come. */}
+              <span>Etsy reply windows (“Etsy reply window closes in 4 days”) will show here too.</span>
               <Tag tone="neutral">Sample</Tag>
             </div>
           )}

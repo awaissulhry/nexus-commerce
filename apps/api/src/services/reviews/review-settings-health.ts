@@ -170,8 +170,9 @@ export function settingsSourceRows(facts: SourceFacts, extra: SourceExtraFacts, 
   // ── eBay feedback ──
   const ebay = sources.filter((s) => s.channel === 'EBAY')
   const ebayRow: SettingsSourceRow = {
-    key: 'ebay-feedback', name: 'eBay feedback', what: 'Seller feedback; one public reply of up to 500 characters',
-    stateWords: 'Not connected', tone: 'neutral', later: 'Photos and AI topics: coming later', lastAt: null, lastWords: '—',
+    // Photos and eBay's AI topics are read since #795 (eBay's REST feedback read): no longer "coming later" (live audit).
+    key: 'ebay-feedback', name: 'eBay feedback', what: 'Seller feedback, with the buyer’s photos and eBay’s AI topics where eBay’s newer feedback read works; one public reply of up to 500 characters',
+    stateWords: 'Not connected', tone: 'neutral', later: null, lastAt: null, lastWords: '—',
     words: 'No eBay account is connected to Nexus.', action: { kind: 'connect', label: 'Connect eBay', href: settingsHref('EBAY') },
   }
   if (ebay.length) {
@@ -484,6 +485,28 @@ export function pipelineJobs(defs: PipelineJobDef[], runs: CronRunFact[], opts: 
   })
 }
 
+/**
+ * The Amazon topics job's row, in the Sources row's own facts (live audit B06: Sources said "Needs a fix — refused for
+ * Germany and Italy" while this row said "Not run yet"). The newest topic read decides: refused for the missing role →
+ * "Failed" with the role's words; read → when. A job switched off in this setup stays "Off" and says what the last read
+ * found. Pure.
+ */
+export function withTopicReads(job: PipelineJobView, topics: SourceFacts['topics']): PipelineJobView {
+  const usable = topics.filter((t) => !NO_TOPICS_MARKETS.has(t.marketplace.toUpperCase()))
+  if (job.key !== 'amazon-review-insights' || usable.length === 0) return job
+  const states = [...topicStates(usable).entries()]
+  const denied = states.filter(([, t]) => t.roleMissing).map(([m]) => marketWords(m) ?? m).sort()
+  const lastAt = usable.reduce<Date | null>((best, t) => (!best || t.fetchedAt > best ? t.fetchedAt : best), null)!
+  const read = denied.length
+    ? `The last read, on ${dayWords(lastAt)}, was refused for ${listWords(denied)}: the Selling Partner Insights role is missing. Fix it under Sources.`
+    : `The last read worked on ${dayWords(lastAt)}.`
+  if (job.state === 'off') return { ...job, words: `${job.words} ${read}` }
+  if (job.state !== 'never') return job
+  return denied.length
+    ? { ...job, state: 'failed', stateWords: 'Failed', tone: 'danger', lastRunAt: lastAt.toISOString(), words: read }
+    : { ...job, state: 'healthy', stateWords: 'Healthy', tone: 'success', lastRunAt: lastAt.toISOString(), words: read }
+}
+
 /** What the freshness guard found, in words (never a setting name). */
 export function freshnessProblems(f: Pick<PipelineFreshness, 'deliveryStale' | 'overdueUndelivered' | 'schedulingStalled' | 'schedulingBacklog'>): string[] {
   const out: string[] = []
@@ -509,7 +532,7 @@ export interface PipelineView {
 /** GET /api/reviews/settings/pipeline. */
 export async function readSettingsPipeline(now: Date = new Date()): Promise<PipelineView> {
   const defs = pipelineJobDefs()
-  const [latest, digest, freshness] = await Promise.all([
+  const [latest, digest, freshness, topicReads] = await Promise.all([
     Promise.all(defs.map((d) => prisma.cronRun.findFirst({
       where: { jobName: d.key },
       orderBy: { startedAt: 'desc' },
@@ -517,15 +540,18 @@ export async function readSettingsPipeline(now: Date = new Date()): Promise<Pipe
     }))),
     readAlert('digest'),
     computeReviewPipelineFreshness(),
+    prisma.amazonReviewInsight.findMany({ select: { marketplace: true, accessStatus: true, fetchedAt: true } }),
   ])
   // PR H: seller feedback; PR I: the Etsy and review-app reads — each runs only where its deployment switch is on (never
   // named on screen).
   const offKeys = new Set([
     ...(sellerFeedbackOn() ? [] : [SELLER_FEEDBACK_JOB]),
+    // The weekly topics read runs only where it is switched on (runtime/scheduler.ts).
+    ...(process.env.NEXUS_ENABLE_AMAZON_REVIEW_INSIGHTS === '1' ? [] : ['amazon-review-insights']),
     ...(process.env.NEXUS_ENABLE_ETSY_REVIEWS_READ === '1' ? [] : ['etsy-reviews-read']),
     ...(process.env.NEXUS_ENABLE_REVIEW_APP_READ === '1' ? [] : ['review-app-read']),
   ])
-  const jobs = pipelineJobs(defs, latest.filter((r): r is CronRunFact => r != null), { now, digestOff: !digest.on, offKeys })
+  const jobs = pipelineJobs(defs, latest.filter((r): r is CronRunFact => r != null), { now, digestOff: !digest.on, offKeys }).map((j) => withTopicReads(j, topicReads))
   return {
     jobs,
     problems: freshnessProblems(freshness),

@@ -17,11 +17,12 @@ function review(over: Partial<ThemeReviewRow> & { themes?: string[]; label?: str
   seq += 1
   return {
     id: `r${seq}`,
-    channel: 'EBAY',
+    // A product review with stars (the store's review app): eBay feedback is never stars (review-rating.ts).
+    channel: 'SHOPIFY',
     marketplace: 'IT',
     rating: 5,
     postedAt: daysAgo(2),
-    ingestSource: 'EBAY_API',
+    ingestSource: 'JUDGEME_API',
     body: 'Fine',
     bodyEnglish: null,
     language: 'en',
@@ -129,11 +130,38 @@ describe('the Themes board', () => {
   })
 
   it('a translated review is quoted with its English; the source is named', () => {
-    const rows = [review({ themes: ['DURABILITY'], label: 'NEGATIVE', body: 'La zip si è rotta dopo due mesi', bodyEnglish: 'The zip broke after two months', language: 'it' })]
+    const rows = [review({ channel: 'EBAY', ingestSource: 'EBAY_API', themes: ['DURABILITY'], label: 'NEGATIVE', body: 'La zip si è rotta dopo due mesi', bodyEnglish: 'The zip broke after two months', language: 'it' })]
     const [t] = buildThemes({ rows, prevRows: [], trendRows: rows, topics: [], now: NOW })
     expect(t.snippets[0]).toMatchObject({ text: 'La zip si è rotta dopo due mesi', english: 'The zip broke after two months', from: 'eBay feedback · IT', source: 'review' })
     const imported = review({ channel: 'AMAZON', marketplace: 'FR', ingestSource: 'IMPORT_CSV', themes: ['QUALITY'], sentiment: { label: 'NEGATIVE', categories: ['QUALITY'], topPhrases: ['Le velcro se décolle'] } })
     expect(buildThemes({ rows: [imported], prevRows: [], trendRows: [], topics: [], now: NOW })[0].snippets[0].from).toBe('Imported review · Amazon · FR')
+  })
+
+  it('star impact counts product-review stars only and is not measurable when every rating is the same (live audit B11)', () => {
+    // eBay feedback (5 / 3 / 1 in the database) is never stars: it gives no star impact.
+    const ebay = (n: number, rating: number, themes: string[]) => Array.from({ length: n }, () => review({ channel: 'EBAY', ingestSource: 'EBAY_API', rating, themes }))
+    const fromEbay = buildThemes({ rows: [...ebay(5, 1, ['FIT_SIZING']), ...ebay(6, 5, ['SHIPPING'])], prevRows: [], trendRows: [], topics: [], now: NOW })
+    expect(fromEbay.every((t) => t.starImpact == null)).toBe(true)
+    // Every review 5 stars: no theme can sit above or below the average — "—", never "0.00".
+    const allFive = buildThemes({ rows: Array.from({ length: 6 }, () => review({ rating: 5, themes: ['SHIPPING'] })), prevRows: [], trendRows: [], topics: [], now: NOW })
+    expect(allFive[0].starImpact).toBeNull()
+    expect(themeStarImpact([5, 5, 5, 5, 5], 5, 5, [5, 5, 5, 5, 5, 5])).toBeNull()
+    expect(themeStarImpact([2, 2, 2, 2, 2], 4, 5, [2, 2, 2, 2, 2, 5, 5])).toBe(-2)
+  })
+
+  it("eBay's automatic feedback is no buyer theme: the same text never counts under Shipping or Other (live audit B10)", () => {
+    const auto = Array.from({ length: 6 }, (_, i) => review({ channel: 'EBAY', ingestSource: 'EBAY_API', body: 'Order delivered on time with no issues', themes: [i % 2 ? 'SHIPPING' : 'OTHER'] }))
+    const own = Array.from({ length: 5 }, () => review({ channel: 'EBAY', ingestSource: 'EBAY_API', body: 'Spedizione velocissima', themes: ['SHIPPING'] }))
+    const themes = buildThemes({ rows: [...auto, ...own], prevRows: [], trendRows: [], topics: [], now: NOW })
+    expect(themes.map((t) => [t.key, t.mentions])).toEqual([['SHIPPING', 5]])
+  })
+
+  it('a market never read while another was refused for the account\'s missing role says the same role blocks it (live audit B07)', () => {
+    const at = daysAgo(3)
+    const states = topicStates([{ marketplace: 'DE', accessStatus: 'NEEDS_BRAND_ANALYTICS_ROLE', fetchedAt: at }, { marketplace: 'IT', accessStatus: 'NEEDS_BRAND_ANALYTICS_ROLE', fetchedAt: at }], ['DE', 'FR'])
+    expect(states.map((t) => t.state)).toEqual(['needs_role', 'no_data'])
+    expect(states[1].words).toMatch(/^Not read yet: Amazon refused the read for Germany, Italy because the account lacks the Selling Partner Insights role/)
+    expect(topicStates([], ['FR'])[0].words).toBe('No topics from Amazon yet for this market.')
   })
 
   it('sorts by mentions, by star impact (most harmful first) or by change (biggest rise first); unknowns last', () => {

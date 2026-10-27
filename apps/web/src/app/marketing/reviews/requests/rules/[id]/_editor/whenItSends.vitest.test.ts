@@ -21,7 +21,7 @@ describe('when it sends', () => {
     const w = whenItSends(AMAZON)
     expect(w.line).toBe('Delivered Mon 26 Oct → first try Fri 30 Oct 10:00 → daily until day 30')
     expect(w.steps).toEqual([
-      { label: 'Delivered', when: 'Mon 26 Oct', detail: 'today, for this preview — a jacket order' },
+      { label: 'Delivered', when: 'Mon 26 Oct', detail: 'today, for this preview — a “Jacket” order' },
       { label: 'First try', when: 'Fri 30 Oct 10:00', detail: 'delivery + 4 days · this rule’s own day · this rule’s fixed hour' },
       { label: 'If Amazon says too early', when: 'daily until day 30', detail: 'the last day is Wed 25 Nov' },
     ])
@@ -31,9 +31,15 @@ describe('when it sends', () => {
   it('says where the day comes from for an email rule counted from shipping', () => {
     const w = whenItSends({ ...AMAZON, channel: 'EBAY', anchorUsed: 'SHIP', source: 'timing-table', sendHourSource: 'window', effectiveDelayDays: 14 })
     expect(w.line).toBe('Shipped Mon 26 Oct → first try Fri 30 Oct 10:00 → one email, once per order')
-    expect(w.steps[1].detail).toBe('shipping + 14 days · the product-type table (“jacket”) · the best hour of that weekday (Timing)')
+    expect(w.steps[1].detail).toBe('shipping + 14 days · the product-type table (“Jacket”) · the best hour of that weekday (Timing)')
     expect(w.steps[2]).toEqual({ label: 'If our email fails', when: 'again after 4, 8 and 16 hours', detail: 'three tries in all, once per order' })
     expect(whenItSends({ ...AMAZON, source: 'default', sendHourSource: 'none' }).steps[1].detail).toBe('delivery + 4 days · the built-in default (no row of the product-type table matched)')
+  })
+
+  it('a rule with no product type previews an order of any type — never an example in another language (live audit D03)', () => {
+    const w = whenItSends({ ...AMAZON, productType: null, source: 'default', sendHourSource: 'none' })
+    expect(w.steps[0].detail).toBe('today, for this preview — an order of any product type')
+    expect(w.steps[1].detail).toBe('delivery + 4 days · the built-in default — each order’s own product type can pick its day from the product-type table')
   })
 
   it('says so when there is no date to count from', () => {

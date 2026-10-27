@@ -4,6 +4,7 @@
  * words — delivered Mon 26 Oct → first try Fri 30 Oct 10:00 → daily until day 30 (Amazon) or tried again after 4, 8 and
  * 16 hours (our email). Times are the buyer's local time (the answer's `tz`). Pure; tested in whenItSends.vitest.test.ts.
  */
+import { productTypeWords } from '../../../../_lib/reviewWords'
 import { isAmazon, type RuleForm } from './ruleForm'
 
 export interface TimingPreview {
@@ -16,7 +17,8 @@ export interface TimingPreview {
   sendHour: number | null
   sendHourSource: 'rule' | 'window' | 'none'
   tz: string
-  productType: string
+  /** The rule's first product type; null = an order of any product type. */
+  productType: string | null
   channel: string
 }
 
@@ -50,7 +52,8 @@ export interface WhenItSends { line: string; steps: WhenStep[]; note: string }
 
 function sourceWords(p: TimingPreview): string {
   if (p.source === 'rule-override') return 'this rule’s own day'
-  if (p.source === 'timing-table') return `the product-type table (“${p.productType}”)`
+  if (p.source === 'timing-table') return `the product-type table (“${productTypeWords(p.productType) || p.productType}”)`
+  if (!p.productType) return 'the built-in default — each order’s own product type can pick its day from the product-type table'
   return 'the built-in default (no row of the product-type table matched)'
 }
 
@@ -71,7 +74,7 @@ export function whenItSends(p: TimingPreview): WhenItSends {
   const anchorLabel = ANCHOR_LABEL[p.anchorUsed]
   const first = `${day(p.scheduledFor, tz)} ${time(p.scheduledFor, tz)}`
   const steps: WhenStep[] = [
-    { label: anchorLabel, when: day(p.anchorDate, tz), detail: `today, for this preview — a ${p.productType} order` },
+    { label: anchorLabel, when: day(p.anchorDate, tz), detail: p.productType ? `today, for this preview — a “${productTypeWords(p.productType)}” order` : 'today, for this preview — an order of any product type' },
     { label: 'First try', when: first, detail: `${ANCHOR_WORD[p.anchorUsed]} + ${p.effectiveDelayDays ?? p.delayDays} days · ${sourceWords(p)}${hourWords(p)}` },
   ]
   if (amazon) {

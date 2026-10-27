@@ -133,6 +133,9 @@ describe('the review tab, order, buyer and history', () => {
       'Order: 12-34567', 'Where: eBay Germany', 'Placed: 18 Oct 2026', 'Delivered: 21 Oct 2026', 'Paid: €89.90', 'Return: Requested 25 Oct 2026',
     ])
     expect(orderFacts(detail({ order: null }))).toEqual([])
+    // No delivery date in Nexus is "not recorded", never "not yet" next to "Order delivered on time" (live audit B12).
+    const noDate = detail({ order: { ...d.order!, deliveredAt: null } })
+    expect(orderFacts(noDate, 'UTC').find((f) => f.label === 'Delivered')).toEqual({ label: 'Delivered', value: 'Not recorded', hint: 'Nexus has no delivery date for this order' })
     const buyer = buyerFacts(d)
     expect(buyer.find((f) => f.label === 'Contact')?.value).toBe('Through eBay messages only')
     expect(JSON.stringify(buyer)).not.toMatch(/@/)
@@ -158,6 +161,16 @@ describe('the review tab, order, buyer and history', () => {
     expect(historySteps(imported).map((st) => st.label)).not.toContain('Replied')
     // eBay feedback read by Nexus still waits for its reply.
     expect(historySteps(detail()).map((st) => st.label)).toContain('Replied')
+  })
+
+  it("positive and eBay's automatic feedback have no reply target — the badges leave them out (Owner 2026-10-27)", () => {
+    const positive = detail({ noReply: 'positive' }, { rating: 5, postedAt: '2026-10-20T08:00:00Z' })
+    expect(replyTargetWords(positive, NOW.getTime(), 'UTC')).toBe('No reply needed: positive — reply only if you want to')
+    expect(historySteps(positive).map((st) => st.label)).not.toContain('Replied')
+    const automatic = detail({ noReply: 'automatic' }, { rating: 5, body: 'Order delivered on time with no issues' })
+    expect(replyTargetWords(automatic, NOW.getTime(), 'UTC')).toBe('No reply needed: eBay left this feedback by itself')
+    // The API says it needs a reply: the target, with the year when it is not this year's (live audit D04).
+    expect(replyTargetWords(detail({ noReply: null }, { postedAt: '2025-02-14T08:00:00Z' }), NOW.getTime(), 'UTC')).toBe('Overdue since 16 Feb 2025')
   })
 })
 

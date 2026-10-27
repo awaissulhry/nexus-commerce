@@ -15,7 +15,7 @@ import { Button, InfoTip, Skeleton, Tag, Toggle } from '@/design-system/primitiv
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { reviewsSend } from '../../_lib/reviewsFetch'
 import { ReadFailed } from './ReadFailed'
-import { automationLastRun, loadTemplatesButton, type AutomationRule } from './settingsModel'
+import { automationLastRun, automationWords, loadTemplatesButton, type AutomationRule } from './settingsModel'
 import type { SettingsRead } from './useSettingsRead'
 import s from './settings.module.css'
 
@@ -48,7 +48,7 @@ function NameCell({ data }: ICellRendererParams<AutomationRule>) {
 }
 
 function DoesCell({ data }: ICellRendererParams<AutomationRule>) {
-  return data ? <span className={s.cellStack}><span className={s.cellSub}>{data.description ?? '—'}</span></span> : null
+  return data ? <span className={s.cellStack}><span className={s.cellSub}>{automationWords(data)}</span></span> : null
 }
 
 function LastCell({ data }: ICellRendererParams<AutomationRule>) {

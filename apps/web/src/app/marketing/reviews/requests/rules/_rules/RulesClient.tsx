@@ -39,6 +39,7 @@ import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidatio
 import Link from '@/lib/workspaces/Link'
 import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { reviewsGet, reviewsSend } from '../../../_lib/reviewsFetch'
+import { NOT_MEASURABLE, rateNotMeasurable } from '../../../_lib/reviewWords'
 import { reviewsCrumbs } from '../../../_shell/reviews-crumbs'
 import { ReviewsMenuButton } from '../../../_shell/ReviewsShell'
 import { useGridCustomise } from '../../gridCustomise'
@@ -227,7 +228,7 @@ function Rules() {
       confirmLabel: 'Seed defaults',
       consequences: [
         'Adds a rule for every Amazon market — or turns the existing one on, leaving its settings as they are',
-        'A new rule: first try from the product-type table, inside day 7–25 after delivery; refunded orders and open returns are skipped; it asks “How was it?” first, as the rules did until now',
+        'A new rule: first try from the product-type table, inside day 7–25 after delivery; refunded orders and open returns are skipped; its “How was it?” switch is on, as the rules had it — Amazon buyers get no such e-mail (Amazon gives Nexus no buyer e-mail)',
         'The rule is on: delivered Amazon orders join the queue from the next run',
       ],
     })
@@ -329,7 +330,7 @@ function Rules() {
       : { label: 'A/B tests', value: abTests ? abTileOf.value : '…', hint: abTests ? abTileOf.hint : 'reading…' },
     { label: 'Orders decided', value: tiles.matched30 == null ? '—' : tiles.matched30.toLocaleString('en-IE'), hint: 'by a rule, last 30 days' },
     { label: 'Sent', value: tiles.sent30 == null ? '—' : tiles.sent30.toLocaleString('en-IE'), hint: 'last 30 days' },
-    { label: 'Review rate', value: tiles.rate30 == null ? '—' : `${(tiles.rate30 * 100).toFixed(1)}%`, hint: tiles.rateWords ?? '30 days, estimate' },
+    { label: 'Review rate', value: rateNotMeasurable(tiles.rate30, tiles.rateWords) ? NOT_MEASURABLE : tiles.rate30 == null ? '—' : `${(tiles.rate30 * 100).toFixed(1)}%`, hint: tiles.rateWords ?? '30 days, estimate' },
   ]
   const warnings = noMatchWarnings(rules, statsRead)
   const noneOn = rules.length > 0 && tiles.on === 0
@@ -432,7 +433,8 @@ function Rules() {
 
       <p className={s.footnote}>
         One rule decides each order: a rule for one market wins over “all markets”; between two rules for the same orders, the one
-        changed last takes every order (no rule splits orders yet). Etsy is not listed: Etsy asks its buyers for a review itself. A
+        changed last takes every order — only a running A/B split divides orders between a rule and its B copy. Etsy is not
+        listed: Etsy asks its buyers for a review itself. A
         rule that is off still shows in a Test run, but never sends.
       </p>
 

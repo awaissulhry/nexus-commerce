@@ -150,8 +150,9 @@ describe('Reviews channel pages (real SQL)', () => {
     if (!s.tiles.ok || !s.summary.ok || !s.feedback.ok || !s.readState.ok) throw new Error(JSON.stringify(s))
     expect(s.summary.data).toMatchObject({ state: 'read', accountWide: true, accounts: 1, score: 1786 })
     expect(s.summary.data.dsr.map(d => d.rating)).toEqual([4.9, 5, 4.8, 4.9])
-    // eBay's 12-month % positive (115 ÷ 116), not the two rows Nexus holds for Germany.
-    expect(s.tiles.data).toMatchObject({ score: 1786, positivePct: 99.1, positiveFrom: 'ebay', positive: 1, neutral: 0, negative: 1, needReply: 1 })
+    // eBay's 12-month % positive (115 ÷ 116), not the two rows Nexus holds for Germany. Needs a reply: none — the
+    // positive feedback needs none (Owner 2026-10-27) and the negative one was answered.
+    expect(s.tiles.data).toMatchObject({ score: 1786, positivePct: 99.1, positiveFrom: 'ebay', positive: 1, neutral: 0, negative: 1, needReply: 0 })
     expect(s.tiles.data.buyersToRate).toMatchObject({ awaiting: 1, ready: 1, waitingApproval: 0, readAt: NOW.toISOString() })
     expect(s.feedback.data.rows.map(r => r.id).sort()).toEqual(['ebay-de-1', 'ebay-de-2'])
     expect(s.feedback.data.rows.find(r => r.id === 'ebay-de-2')).toMatchObject({ kind: 'seller', status: 'RESPONDED' })

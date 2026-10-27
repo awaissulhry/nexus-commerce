@@ -6,6 +6,7 @@ import {
   defaultsChanges,
   defaultsHeld,
   heatView,
+  rateNotMeasurableHere,
   moveRow,
   removeRow,
   rowsFromDefaults,
@@ -119,5 +120,25 @@ describe('send-hour heatmap', () => {
     ])
     expect(sampleWords(REPORT)).toBe('150 requests in 90 days. Too few to compare hours yet: the differences can be luck. Amazon does not say who wrote a review, so rates are estimates.')
     expect(sampleWords({ ...REPORT, totalSent: 914 })).toMatch(/^914 requests in 90 days\. Differences under 1 point can be luck\./)
+  })
+
+  it('every send stays on its hour; where no review can follow, the rate says "Not measurable", never 0.0% (live audit A02)', () => {
+    const words = 'Not measurable: Amazon gives no review count — import this market’s reviews to estimate it.'
+    const none: ConversionReport = {
+      windowDays: 90, marketplace: 'IT', totalSent: 291, totalMeasured: 0, totalConverted: 0, hasReviews: false, words,
+      cells: [{ dayOfWeek: 1, hour: 19, sent: 196, measured: 0, converted: 0 }, { dayOfWeek: 1, hour: 23, sent: 95, measured: 0, converted: 0 }],
+    }
+    expect(dayParts(none).map((p) => `${p.label}=${p.sent}/${p.rate}`)).toEqual([
+      'Morning · 6–12=0/not sent', 'Afternoon · 12–18=0/not sent', 'Evening · 18–22=196/Not measurable', 'Night · 22–6=95/Not measurable',
+    ])
+    expect(rateNotMeasurableHere(none)).toBe(true)
+    expect(sampleWords(none)).toBe(`291 requests in 90 days. ${words}`)
+    const v = heatView(none, windowsFor(WINDOWS, '*').rows)
+    expect(v.data[0][19]).toBeNull()
+    expect(v.cellWords(0, 23, null)).toBe('Mon 23:00 · 95 sent · review rate not measurable')
+    // Part measurable: the rate is over the measured ones only.
+    const part: ConversionReport = { ...none, totalMeasured: 10, totalConverted: 1, words: '286 of 291 sent where no review can be matched yet — left out of the rate.', cells: [{ dayOfWeek: 1, hour: 19, sent: 196, measured: 10, converted: 1 }] }
+    expect(dayParts(part)[2]).toEqual({ label: 'Evening · 18–22', sent: 196, reviews: 1, rate: '10.0%' })
+    expect(rateNotMeasurableHere(part)).toBe(false)
   })
 })

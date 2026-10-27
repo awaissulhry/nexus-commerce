@@ -14,7 +14,7 @@ import {
   voiceFromRow, voicePromptLines, withSignOff, type AlertSetting, type VoiceSettings,
 } from './review-settings.service.js'
 import {
-  everyWords, freshnessProblems, nextCronRun, pipelineJobDefs, pipelineJobs, scrubCode, sellerFeedbackRow, settingsSourceRows, type CronRunFact,
+  everyWords, freshnessProblems, nextCronRun, pipelineJobDefs, pipelineJobs, scrubCode, sellerFeedbackRow, settingsSourceRows, withTopicReads, type CronRunFact,
 } from './review-settings-health.js'
 import type { SellerFeedbackState } from './amazon-seller-feedback.service.js'
 import type { SourceFacts } from './review-sources.service.js'
@@ -191,6 +191,22 @@ describe('pipeline jobs', () => {
     expect(by('review-digest')).toMatchObject({ state: 'off', words: 'Turned off under Alerts.', nextRunAt: null })
     expect(by('amazon-seller-feedback')).toMatchObject({ every: 'Daily 06:00 UTC', state: 'never' })
     for (const j of jobs) expect(`${j.words} ${j.stateWords} ${j.every} ${j.code ?? ''}`).not.toMatch(SETTING_NAME)
+  })
+
+  it('Amazon topics: the job row says what Sources says — refused for the missing role, or off with the last read (live audit B06)', () => {
+    const topics = [
+      { marketplace: 'DE', accessStatus: 'NEEDS_BRAND_ANALYTICS_ROLE', fetchedAt: hoursAgo(30) },
+      { marketplace: 'IT', accessStatus: 'NEEDS_BRAND_ANALYTICS_ROLE', fetchedAt: hoursAgo(30) },
+    ]
+    const job = (state: 'never' | 'off') => pipelineJobs(pipelineJobDefs({}), [], { now: NOW, digestOff: false, offKeys: new Set(state === 'off' ? ['amazon-review-insights'] : []) }).find((j) => j.key === 'amazon-review-insights')!
+    const never = withTopicReads(job('never'), topics)
+    expect(never).toMatchObject({ state: 'failed', stateWords: 'Failed', tone: 'danger' })
+    expect(never.words).toMatch(/was refused for Germany and Italy: the Selling Partner Insights role is missing/)
+    const off = withTopicReads(job('off'), topics)
+    expect(off).toMatchObject({ state: 'off', stateWords: 'Off' })
+    expect(off.words).toMatch(/^Off in this setup \(see Sources\)\. The last read, on .*, was refused for Germany and Italy/)
+    // No topic read at all: the job row is left as it is.
+    expect(withTopicReads(job('never'), [])).toMatchObject({ state: 'never', stateWords: 'Not run yet' })
   })
 
   it('what the freshness guard found, never a setting name', () => {

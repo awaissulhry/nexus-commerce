@@ -6,7 +6,7 @@
  * (review-queue.service.ts `rulesBulkPlan`). Pure; tested in rulesModel.vitest.test.ts.
  */
 import { COUNTRY_NAMES } from '@/app/_shared/app-nav'
-import { EBAY_NOT_EMAILED } from '../../../_lib/reviewWords'
+import { EBAY_NOT_EMAILED, NOT_MEASURABLE, rateNotMeasurable } from '../../../_lib/reviewWords'
 
 export interface RuleItem {
   id: string
@@ -207,4 +207,14 @@ export function rulesBulkLabel(base: string, plan: RulesPlan): string {
 export function rulesBulkResultWords(action: 'on' | 'off' | 'delete', changed: number, held: readonly { words: string }[]): string {
   const what = `${changed} ${changed === 1 ? 'rule' : 'rules'} ${VERB[action]}`
   return held.length ? `${what} · ${held.length} left out: ${held[0].words}` : what
+}
+
+/**
+ * A rule's 30-day review rate: "7.4%", "Not measurable" when its requests went out but no review can follow them (live
+ * audit A02 — never "0.0%"), "—" when it sent nothing.
+ */
+export function ruleRateWords(r: Pick<RuleItem, 'rate30' | 'rateWords'> | undefined | null): string {
+  if (!r) return ''
+  if (rateNotMeasurable(r.rate30, r.rateWords)) return NOT_MEASURABLE
+  return r.rate30 == null ? '—' : `${(r.rate30 * 100).toFixed(1)}%`
 }

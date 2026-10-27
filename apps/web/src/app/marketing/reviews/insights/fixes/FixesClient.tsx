@@ -220,6 +220,7 @@ function Fixes() {
           tabs={STATUS_TABS.map((t) => ({ id: t.id, label: t.label, count: data ? counts[t.id] : null }))}
           active={tab ?? 'OPEN'}
           onChange={(id) => setTab(parseFixStatus(id))}
+          overflow="scroll"
         />
         <div className={shared.chips} role="group" aria-label="Kind of fix">
           {KIND_CHIPS.map((k) => (

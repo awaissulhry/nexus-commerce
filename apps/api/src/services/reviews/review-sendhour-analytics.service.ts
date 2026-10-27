@@ -14,7 +14,7 @@
  */
 
 import { timezoneForMarketplace } from './review-timing.service.js'
-import { rateMeasurable, readRateFacts, readRateRequests } from './review-rate.service.js'
+import { rateMeasurable, rateOf, readRateFacts, readRateRequests } from './review-rate.service.js'
 
 const DAY = 24 * 60 * 60 * 1000
 const DOW: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
@@ -25,14 +25,26 @@ function localWeekdayHour(d: Date, tz: string): { weekday: number; hour: number 
   return { weekday: DOW[g('weekday')] ?? 0, hour: Number(g('hour')) % 24 }
 }
 
-export interface SendHourCell { dayOfWeek: number; hour: number; sent: number; converted: number }
+export interface SendHourCell {
+  dayOfWeek: number
+  hour: number
+  /** Every request sent at that hour (live audit B05: the send hours as they really were). */
+  sent: number
+  /** Of those, the ones a review can follow (review-rate.service.ts `rateMeasurable`): the rate's base. */
+  measured: number
+  converted: number
+}
 export interface SendHourReport {
   windowDays: number
   /** PR C (B11) — the market read (null = every market). */
   marketplace: string | null
   totalSent: number
+  /** Sent where a review can follow; 0 = the rate is not measurable (`words` says why). */
+  totalMeasured: number
   totalConverted: number
   hasReviews: boolean
+  /** Why the rate leaves requests out, or why there is none ("Not measurable: …"); null when every request counts. */
+  words: string | null
   cells: SendHourCell[]
 }
 
@@ -43,27 +55,33 @@ export async function computeSendHourConversion(opts: { windowDays?: number; att
   const since = new Date(now.getTime() - windowDays * DAY)
 
   // The ONE review rate (review-rate.service.ts, audit C2/B20): sent requests, the reviews the attribution job linked
-  // to them (visible rows only), counted only where a review can follow.
+  // to them (visible rows only), counted only where a review can follow. Every sent request is placed on its hour
+  // (live audit A02/B05: "Not measurable" where no review can follow — never 0 % — and the real send hours).
   const [rows, facts] = await Promise.all([readRateRequests({ from: since, to: now, market: marketplace }), readRateFacts()])
-  const measured = rows.filter((r) => rateMeasurable(r.channel, r.marketplace, facts))
+  const rate = rateOf(rows, facts)
 
   const cells = new Map<string, SendHourCell>()
-  for (const req of measured) {
+  for (const req of rows) {
     if (!req.sentAt) continue
     const { weekday, hour } = localWeekdayHour(req.sentAt, timezoneForMarketplace(req.marketplace))
     const k = `${weekday}-${hour}`
-    const cell = cells.get(k) ?? { dayOfWeek: weekday, hour, sent: 0, converted: 0 }
+    const cell = cells.get(k) ?? { dayOfWeek: weekday, hour, sent: 0, measured: 0, converted: 0 }
     cell.sent += 1
-    if (req.followed) cell.converted += 1
+    if (rateMeasurable(req.channel, req.marketplace, facts)) {
+      cell.measured += 1
+      if (req.followed) cell.converted += 1
+    }
     cells.set(k, cell)
   }
 
   return {
     windowDays,
     marketplace,
-    totalSent: measured.length,
-    totalConverted: measured.filter((r) => r.followed).length,
-    hasReviews: measured.length > 0 || [...facts.reviewedKeys].some((k) => !marketplace || k.endsWith(`|${marketplace}`)),
+    totalSent: rate.sent,
+    totalMeasured: rate.measured,
+    totalConverted: rate.followed,
+    hasReviews: rate.measured > 0 || [...facts.reviewedKeys].some((k) => !marketplace || k.endsWith(`|${marketplace}`)),
+    words: rate.words,
     cells: [...cells.values()].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.hour - b.hour),
   }
 }

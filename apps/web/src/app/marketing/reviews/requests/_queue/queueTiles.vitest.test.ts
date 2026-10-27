@@ -34,6 +34,12 @@ describe('queue tiles', () => {
     expect(rate.hint).toBe('nothing sent in this period')
   })
 
+  it('says “Not measurable” when requests went out but no review can follow them — never 0.0% (live audit A02)', () => {
+    const rate = queueTileViews({ ...TILES, reviewRate: null, rateDelta: null, rateWords: 'Not measurable: Amazon gives no review count — import this market’s reviews to estimate it.' }, null)[6]
+    expect(rate.value).toBe('Not measurable')
+    expect(rate.hint).toMatch(/^Not measurable: Amazon gives no review count/)
+  })
+
   it('writes rates and point changes', () => {
     expect(rateText(0.0891)).toBe('8.9%')
     expect(rateText(null)).toBe('—')

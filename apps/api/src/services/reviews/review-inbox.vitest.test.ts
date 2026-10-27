@@ -116,11 +116,12 @@ describe('Reviews Inbox services (real SQL)', () => {
   it('the read state maps each review source: ok, reason, since and where to fix it', async () => {
     const { readStateFromSources } = await import('./review-inbox.service.js')
     expect(readStateFromSources([
-      { channel: 'EBAY', market: 'DE', state: 'not_updating', reason: 'Sign-in expired', since: '2026-10-23T09:00:00.000Z', reconnectHref: '/settings/channels/ebay', what: 'Seller feedback', lastNote: null, lastReviewAt: null, reviews: 3 },
-      { channel: 'AMAZON', market: 'IT', state: 'ok', reason: null, since: null, reconnectHref: null, what: 'Topics', lastNote: null, lastReviewAt: null, reviews: 0 },
+      { channel: 'EBAY', market: 'DE', state: 'not_updating', reason: 'Sign-in expired', since: '2026-10-23T09:00:00.000Z', reconnectHref: '/settings/channels/ebay', what: 'Seller feedback', lastNote: null, lastReviewAt: null, reviews: 3, readsItself: true },
+      { channel: 'AMAZON', market: 'IT', state: 'ok', reason: null, since: null, reconnectHref: null, what: 'Topics', lastNote: null, lastReviewAt: null, reviews: 0, readsItself: false },
     ])).toEqual([
-      { channel: 'EBAY', market: 'DE', ok: false, since: '2026-10-23T09:00:00.000Z', reason: 'Sign-in expired', reconnectHref: '/settings/channels/ebay' },
-      { channel: 'AMAZON', market: 'IT', ok: true, since: null, reason: null, reconnectHref: null },
+      { channel: 'EBAY', market: 'DE', ok: false, since: '2026-10-23T09:00:00.000Z', reason: 'Sign-in expired', reconnectHref: '/settings/channels/ebay', byFile: false },
+      // Amazon's product reviews arrive only by file: never "up to date" (live audit A06).
+      { channel: 'AMAZON', market: 'IT', ok: true, since: null, reason: null, reconnectHref: null, byFile: true },
     ])
   })
 
@@ -273,5 +274,32 @@ describe('Reviews Inbox services (real SQL)', () => {
     expect(amazon.status).toBe(409)
     expect(amazon.body).toMatchObject({ error: 'no_reply' })
     expect(ebay.replies).toEqual(['TEST-ebay-1'])
+  })
+
+  it("needs a reply in SQL: positive and eBay's automatic feedback are left out; NULL columns never drop a review that waits", async () => {
+    const { needsReplyWhere } = await import('./review-visibility.js')
+    const ids = ['nr-auto', 'nr-pos', 'nr-neg', 'nr-mood', 'nr-none', 'nr-etsy']
+    await inside(async () => {
+      const c = database.client
+      const review = (id: string, data: Record<string, unknown>) => c.review.create({
+        data: { id, marketplace: 'IT', externalReviewId: `TEST-${id}`, body: 'Fine', postedAt: daysAgo(4), ...data } as never,
+      })
+      await review('nr-auto', { channel: 'EBAY', rating: 5, body: 'Order delivered on time with no issues', ingestSource: 'EBAY_API' })
+      await review('nr-pos', { channel: 'EBAY', rating: 5, body: 'Venditore serio', ingestSource: 'EBAY_API' })
+      await review('nr-neg', { channel: 'EBAY', rating: 1, body: 'Taglia sbagliata', ingestSource: 'EBAY_API' })
+      await review('nr-mood', { channel: 'SHOPIFY', rating: null, body: 'Love it', ingestSource: 'JUDGEME_API' })
+      await review('nr-none', { channel: 'SHOPIFY', rating: null, body: 'Arrived', ingestSource: null })
+      await review('nr-etsy', { channel: 'ETSY', marketplace: null, rating: 2, body: 'Too small', ingestSource: 'ETSY_API', channelEditedAt: null })
+      await c.reviewSentiment.create({ data: { reviewId: 'nr-mood', label: 'POSITIVE', score: 0.9, categories: [], model: 'test' } as never })
+    })
+    try {
+      const waiting = await inside(() => database.client.review.findMany({ where: { AND: [needsReplyWhere(NOW), { id: { in: ids } }] }, select: { id: true } }))
+      expect(waiting.map((r: { id: string }) => r.id).sort()).toEqual(['nr-etsy', 'nr-neg', 'nr-none'])
+    } finally {
+      await inside(async () => {
+        await database.client.reviewSentiment.deleteMany({ where: { reviewId: { in: ids } } })
+        await database.client.review.deleteMany({ where: { id: { in: ids } } })
+      })
+    }
   })
 })

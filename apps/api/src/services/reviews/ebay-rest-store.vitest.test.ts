@@ -175,6 +175,14 @@ describe('eBay REST feedback, stored (real SQL)', () => {
     expect(byLine.get('11004-20004')).toMatchObject({ buyer: null, market: null, soldAt: null, daysLeft: null, held: null })
     expect(page.counts).toMatchObject({ awaiting: 4, ready: 2, held: 2, waitingApproval: 0 })
     expect((await inside(() => svc.listEbayBuyerFeedback({ market: 'DE', now: NOW }))).rows.map((r) => r.orderLineItemId)).toEqual(['11001-20001'])
+    // No Nexus order, but Nexus's own listing is on eBay Italy: the sale counts on eBay Italy's page (live audit B09).
+    await inside(async () => {
+      await database.client.product.create({ data: { id: 'test-b09', sku: 'TEST-B09', name: 'Test knee slider', basePrice: 10 } as never })
+      await database.client.channelListing.create({ data: { productId: 'test-b09', channelMarket: 'EBAY_IT', channel: 'EBAY', region: 'IT', marketplace: 'IT', listingStatus: 'ACTIVE', externalListingId: '11004' } as never })
+    })
+    expect((await inside(() => svc.listEbayBuyerFeedback({ now: NOW }))).rows.find((r) => r.orderLineItemId === '11004-20004')).toMatchObject({ market: 'IT', order: null })
+    expect((await inside(() => svc.listEbayBuyerFeedback({ market: 'IT', now: NOW }))).rows.map((r) => r.orderLineItemId)).toContain('11004-20004')
+    expect((await inside(() => svc.listEbayBuyerFeedback({ market: 'DE', now: NOW }))).rows.map((r) => r.orderLineItemId)).toEqual(['11001-20001'])
 
     // The text is checked before anything is asked.
     await expect(inside(() => svc.sendEbayBuyerFeedback({ ids: [byLine.get('11001-20001')!.id], text: 'x'.repeat(501) }, person))).rejects.toThrow('Cut 1 character (eBay allows 500).')
@@ -224,4 +232,24 @@ describe('eBay REST feedback, stored (real SQL)', () => {
     expect(last.rows.some((r) => r.orderLineItemId === '11002-20002')).toBe(false)
     expect(last.rows.find((r) => r.state === 'LEFT')!.held).toMatch(/already left/)
   })
+
+  it("eBay feedback reaches its product: the listing's family, else its order's (live audit B13)", async () => {
+    const { linkEbayFeedbackProducts } = await import('./adapters/ebay-feedback.adapter.js')
+    await inside(async () => {
+      const c = database.client
+      await c.product.create({ data: { id: 'test-b13-fam', sku: 'TEST-B13', name: 'Test slider family', basePrice: 10, isParent: true } as never })
+      await c.product.create({ data: { id: 'test-b13-s', sku: 'TEST-B13-S', name: 'Test slider S', basePrice: 10, parentId: 'test-b13-fam' } as never })
+      await c.product.create({ data: { id: 'test-b13-m', sku: 'TEST-B13-M', name: 'Test slider M', basePrice: 10, parentId: 'test-b13-fam' } as never })
+      for (const id of ['test-b13-s', 'test-b13-m']) {
+        await c.channelListing.create({ data: { productId: id, channelMarket: 'EBAY_IT', channel: 'EBAY', region: 'IT', marketplace: 'IT', listingStatus: 'ACTIVE', externalListingId: '777001' } as never })
+      }
+    })
+    const reviews = [
+      { externalReviewId: 'b13-a', channel: 'EBAY', body: 'Ottimi slider', postedAt: NOW.toISOString(), rawPayload: { ItemID: '777001', TransactionID: '1' } },
+      { externalReviewId: 'b13-b', channel: 'EBAY', body: 'Unknown item', postedAt: NOW.toISOString(), rawPayload: { ItemID: '999999', TransactionID: '2' } },
+    ] as Array<{ externalReviewId: string; channel: string; body: string; postedAt: string; rawPayload: unknown; productId?: string }>
+    await inside(() => linkEbayFeedbackProducts(reviews))
+    expect(reviews.map((r) => r.productId ?? null)).toEqual(['test-b13-fam', null])
+  })
 })
+

@@ -37,13 +37,17 @@ export function qrTarget(market: string, asin: string | null): string {
   return `${insertMarket(market).site}/review/create-review?asin=${asin ?? '…'}`
 }
 
+/** One family (or single product) to pick (`GET /api/review-inserts/products`). */
 export interface InsertProduct {
   id: string
   name: string
   sku: string
-  amazonAsin: string | null
+  /** Its own ASIN, else its first variation's; null when none has one. */
+  asin: string | null
   /** Variations under it (a family); 0 for a single product. */
   childCount: number
+  /** Cards it prints: itself and each variation with an ASIN (what "every product" prints for it). */
+  cards: number
 }
 
 export interface CardsPlan {
@@ -73,11 +77,18 @@ export interface InsertsPick {
   picked: readonly string[]
 }
 
-/** How many products get a card: all with an ASIN, or the picked ones that have one. */
+/** How many cards (products with an ASIN) print: all of them, or the picked families' own and their variations'. */
 export function cardProducts(pick: InsertsPick, products: readonly InsertProduct[], countWithAsin: number | null): number | null {
   if (pick.all) return countWithAsin == null ? null : Math.min(countWithAsin, MAX_PRODUCTS)
   const set = new Set(pick.picked)
-  return products.filter((p) => set.has(p.id) && p.amazonAsin).length
+  return Math.min(products.filter((p) => set.has(p.id)).reduce((n, p) => n + p.cards, 0), MAX_PRODUCTS)
+}
+
+/** A family's row in words: "20 variations · ASIN B0… · 20 cards", or "no ASIN — no card". */
+export function familyWords(p: InsertProduct): string {
+  const variations = p.childCount > 0 ? `${n(p.childCount)} ${p.childCount === 1 ? 'variation' : 'variations'} · ` : ''
+  if (!p.asin || p.cards === 0) return `${variations}no ASIN — no card`
+  return `${variations}ASIN ${p.asin} · ${n(p.cards)} ${p.cards === 1 ? 'card' : 'cards'}`
 }
 
 /** Why Download PDF is held, or null. */
@@ -85,7 +96,7 @@ export function downloadHeld(pick: InsertsPick, products: readonly InsertProduct
   if (!pick.all && pick.picked.length === 0) return 'Pick at least one product family.'
   const count = cardProducts(pick, products, countWithAsin)
   if (count === 0) {
-    return pick.all ? 'No product has an Amazon ASIN yet — there is nothing to print.' : 'None of the picked products has an Amazon ASIN — they get no card.'
+    return pick.all ? 'No product has an Amazon ASIN yet — there is nothing to print.' : 'None of the picked families has an Amazon ASIN — they get no card.'
   }
   return null
 }
@@ -95,7 +106,7 @@ export function pickedWords(pick: InsertsPick, products: readonly InsertProduct[
   if (pick.all) return countWithAsin == null ? 'Every product with an ASIN' : `Every product with an ASIN (${n(Math.min(countWithAsin, MAX_PRODUCTS))})`
   const set = new Set(pick.picked)
   const picked = products.filter((p) => set.has(p.id))
-  const missing = picked.filter((p) => !p.amazonAsin).length
+  const missing = picked.filter((p) => p.cards === 0).length
   const head = `${n(picked.length)} of ${n(products.length)} picked`
   return missing ? `${head} · ${n(missing)} without an ASIN ${missing === 1 ? 'gets' : 'get'} no card` : head
 }

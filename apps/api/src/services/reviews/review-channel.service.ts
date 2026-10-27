@@ -28,10 +28,10 @@ import { needsReplyWhere, reviewKindWhere, visibleReviewWhere } from './review-v
 import { readSellerFeedbackState, sellerFeedbackOn, type SellerFeedbackState } from './amazon-seller-feedback.service.js'
 import { feedbackRemovalCheck, fulfilmentOf, REMOVAL_RULES, type RemovalCheck } from './review-feedback-removal.js'
 import { FEEDBACK_WINDOW_DAYS } from './amazon-seller-feedback-report.js'
-import { reviewSources } from './review-sources.service.js'
+import { reviewSources, topicStates } from './review-sources.service.js'
 import { amazonThemes, scopeCode, type OverviewTheme, type Section } from './review-overview.service.js'
 import { listInbox, type InboxRow } from './review-inbox.service.js'
-import { reasonKeyOf } from './review-queue-words.js'
+import { queueStatusOf, reasonKeyOf } from './review-queue-words.js'
 import { ratingOf } from './review-rating.js'
 import { rateOf as oneRate, ratePercent, readRateFacts, readRateRequests } from './review-rate.service.js'
 import { readEbayFeedbackSummary, type SummaryRead } from './ebay-feedback-summary.service.js'
@@ -331,6 +331,11 @@ async function amazonSections(market: string | null, period: ChannelPeriod, boun
     select: { asin: true, marketplace: true, productId: true, reviewCount: true, positiveTopics: true, negativeTopics: true, accessStatus: true, fetchedAt: true },
     take: 2_000,
   }))
+  // The markets whose newest topic read Amazon refused for the missing role (every market, not only this page's).
+  const refusedTopicMarkets = once(async () => {
+    const reads = await prisma.amazonReviewInsight.findMany({ select: { marketplace: true, accessStatus: true, fetchedAt: true }, take: 5_000 })
+    return [...topicStates(reads.filter(r => TOPIC_MARKETS.has(r.marketplace.toUpperCase()))).entries()].filter(([, t]) => t.roleMissing).map(([m]) => m).sort()
+  })
   const topicFacts = once(async () => {
     const all = await insights()
     // Amazon.nl and markets outside the five give no topics: their rows (if any) never count.
@@ -435,7 +440,7 @@ async function amazonSections(market: string | null, period: ChannelPeriod, boun
       }
       return {
         state: state.state,
-        words: topicsWords(state.state, market, state.lastOkAt),
+        words: topicsWords(state.state, market, state.lastOkAt, state.state === 'none' ? await refusedTopicMarkets() : []),
         where: TOPICS_WHERE_WORDS,
         weekOf: iso(state.weekOf),
         productCount: byProduct.size,
@@ -449,7 +454,7 @@ async function amazonSections(market: string | null, period: ChannelPeriod, boun
 
     section('requests', async (): Promise<AmazonRequests> => {
       const [reqs, rate] = await Promise.all([requests(), rateOf()])
-      return { ...amazonRequestCounts(reqs.map(r => reasonKeyOf(r, now))), reviewRate: rate.rate, rateWords: rate.words }
+      return { ...amazonRequestCounts(reqs.map(r => ({ key: reasonKeyOf(r, now), status: queueStatusOf(r, now) }))), reviewRate: rate.rate, rateWords: rate.words }
     }),
 
     section('watch', async (): Promise<AmazonWatchRow[]> => {

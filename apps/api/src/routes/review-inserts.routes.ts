@@ -2,6 +2,7 @@
  * Review-insert PDF endpoints — compliant Amazon in-box review cards (services/reviews/review-inserts.service.ts).
  *
  * - GET  /api/review-inserts/count               → how many products would print
+ * - GET  /api/review-inserts/products            → the families to pick, each with its ASIN and cards
  * - GET  /api/review-inserts/product/:id         → one card (inline preview)
  * - POST /api/review-inserts/bulk                 → one card per product (download)
  *
@@ -10,7 +11,7 @@
  */
 
 import type { FastifyInstance, FastifyReply } from 'fastify'
-import { InsertsRefusal, bulkInsertsPdf, insertsCount, oneInsertPdf } from '../services/reviews/review-inserts.service.js'
+import { InsertsRefusal, bulkInsertsPdf, insertFamilies, insertsCount, oneInsertPdf } from '../services/reviews/review-inserts.service.js'
 import { logger } from '../utils/logger.js'
 
 function safeName(s: string): string {
@@ -26,6 +27,9 @@ function refused(reply: FastifyReply, err: unknown) {
 export default async function reviewInsertsRoutes(app: FastifyInstance) {
   // how many products have an ASIN (drives the UI count + "print all")
   app.get('/review-inserts/count', async (_req, reply) => reply.send(await insertsCount()))
+
+  // the families to pick from: each with its ASIN and the cards it prints (live audit A05)
+  app.get('/review-inserts/products', async (req, reply) => reply.send(await insertFamilies((req.query ?? {}) as { search?: unknown; limit?: unknown })))
 
   // single-product card, inline so the browser previews it
   app.get('/review-inserts/product/:id', async (req, reply) => {

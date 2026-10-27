@@ -233,10 +233,16 @@ describe('review queue words', () => {
       '2 requests failed in the last 7 days, no try left: 2 times Amazon did not answer · 3 more requests try again on their own after 4, 8 and 16 hours',
     )
     expect(failuresWords({ count: 0, bounced: 0, noAnswer: 0 })).toBe('No request failed in the last 7 days')
+    // Amazon's "no" is named, never "1 other" (live audit B01).
+    expect(failuresWords({ count: 1, bounced: 0, noAnswer: 0, refused: 1 })).toBe('1 request failed in the last 7 days, no try left: 1 refused by Amazon')
     expect(buyerShort('test buyer example')).toBe('Test E.')
     expect(buyerShort('Amazon Customer')).toBe('')
     expect(buyerShort('')).toBe('')
-    expect(dayWords(daysAgo(6.5), NOW)).toBe('day 6')
+    expect(dayWords(daysAgo(6.5), NOW)).toBe('day 6 after delivery')
     expect(dayWords(null, NOW)).toBe('not delivered yet')
+    // The day of what happened, not today's (live audit B04/D06: a failed request read "day 32", a new one "day 0").
+    expect(dayWords(daysAgo(33), NOW, { status: 'FAILED', lastAttemptAt: daysAgo(28) })).toBe('last try on day 5')
+    expect(dayWords(daysAgo(33), NOW, { status: 'SENT', sentAt: daysAgo(29) })).toBe('sent on day 4')
+    expect(dayWords(daysAgo(0.2), NOW, { status: 'SCHEDULED', plannedAt: new Date(NOW.getTime() + 4 * 86_400_000) })).toBe('goes on day 4')
   })
 })

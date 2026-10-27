@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Banner, Card, MetricStrip, SummaryTable, type Metric } from '@/design-system/components'
 import { Button, SegmentedControl, Skeleton } from '@/design-system/primitives'
 import { reviewsGet } from '../../_lib/reviewsFetch'
+import { productTypeWords } from '../../_lib/reviewWords'
 import { abResultRows, type TimingTestsAnswer } from '../timing/_timing/timingTestsModel'
 import type { ResultsPeriod } from './queueQuery'
 import { marketName, rateText } from './queueTiles'
@@ -106,7 +107,7 @@ export function ResultsCard({ period, onPeriod }: ResultsCardProps) {
             <SummaryTable
               label="By product type"
               columns={['By product type', 'Sent', 'Rate']}
-              rows={bySent(a.perProductType).map((r) => ({ id: r.productType, cells: [r.productType, n(r.sent), rate(r)] }))}
+              rows={bySent(a.perProductType).map((r) => ({ id: r.productType, cells: [productTypeWords(r.productType) || r.productType, n(r.sent), rate(r)] }))}
             />
             <SummaryTable
               label="By rule"

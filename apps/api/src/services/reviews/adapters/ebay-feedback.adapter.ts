@@ -180,6 +180,54 @@ export async function linkEbayFeedbackOrders(reviews: AdapterRawReview[]): Promi
   })
 }
 
+/**
+ * The Nexus product of each feedback (live audit B13: eBay feedback names no product, so no product's reviews showed
+ * any). From the feedback's listing (ItemID → Nexus's eBay listing → its product; a listing whose rows are variations of
+ * one family gives the family), else the first line of its matched order. No match, or more than one product: none.
+ */
+export async function linkEbayFeedbackProducts(reviews: AdapterRawReview[]): Promise<void> {
+  const itemOf = reviews.map((r) => ebayFeedbackOrderRef((r.rawPayload ?? {}) as Record<string, unknown>).itemId)
+  const itemIds = [...new Set(itemOf.filter((v): v is string => !!v))]
+  const orderIds = [...new Set(reviews.map((r) => r.orderId).filter((v): v is string => !!v))]
+  const [listings, lines] = await Promise.all([
+    itemIds.length
+      ? prisma.channelListing.findMany({ where: { channel: 'EBAY', externalListingId: { in: itemIds } }, select: { externalListingId: true, productId: true, product: { select: { parentId: true } } } })
+      : Promise.resolve([] as Array<{ externalListingId: string | null; productId: string; product: { parentId: string | null } | null }>),
+    orderIds.length
+      ? prisma.orderItem.findMany({ where: { orderId: { in: orderIds }, productId: { not: null } }, select: { orderId: true, productId: true, product: { select: { parentId: true } } } })
+      : Promise.resolve([] as Array<{ orderId: string; productId: string | null; product: { parentId: string | null } | null }>),
+  ])
+  // A variation counts as its family: one listing of several sizes is one product's feedback.
+  const familyOf = (productId: string | null, parentId: string | null | undefined) => parentId ?? productId
+  const byItem = new Map<string, Set<string>>()
+  for (const l of listings) {
+    if (!l.externalListingId) continue
+    const id = familyOf(l.productId, l.product?.parentId)
+    if (id) byItem.set(l.externalListingId, (byItem.get(l.externalListingId) ?? new Set()).add(id))
+  }
+  const byOrder = new Map<string, Set<string>>()
+  for (const line of lines) {
+    const id = familyOf(line.productId, line.product?.parentId)
+    if (id) byOrder.set(line.orderId, (byOrder.get(line.orderId) ?? new Set()).add(id))
+  }
+  reviews.forEach((review, i) => {
+    if (review.productId) return
+    const fromListing = itemOf[i] ? byItem.get(itemOf[i]!) : undefined
+    const fromOrder = review.orderId ? byOrder.get(review.orderId) : undefined
+    const one = fromListing?.size === 1 ? [...fromListing][0] : fromOrder?.size === 1 ? [...fromOrder][0] : null
+    if (one) review.productId = one
+  })
+}
+
+/** The product link is a convenience too: the feedback is stored without it. */
+async function linkProductsQuietly(reviews: AdapterRawReview[]): Promise<void> {
+  try {
+    await linkEbayFeedbackProducts(reviews)
+  } catch (err) {
+    logger.warn('[ebay-feedback] product link failed', { error: err instanceof Error ? err.message : String(err) })
+  }
+}
+
 export type EbayOrderLineRef = ReturnType<typeof ebayFeedbackOrderRef>
 
 /**
@@ -381,6 +429,7 @@ export async function fetchEbayFeedback(opts: EbayFeedbackOptions = {}): Promise
     // The order link is a convenience: the feedback is stored without it.
     logger.warn('[ebay-feedback] order link failed', { error: err instanceof Error ? err.message : String(err) })
   }
+  await linkProductsQuietly(reviews)
   logger.info('[ebay-feedback] fetched', { count: reviews.length })
   return { reviews }
 }
@@ -428,6 +477,7 @@ export async function fetchEbayFeedbackPreferRest(opts: { maxPages?: number } = 
   } catch (err) {
     logger.warn('[ebay-feedback] order link failed', { error: err instanceof Error ? err.message : String(err) })
   }
+  await linkProductsQuietly(reviews)
   logger.info('[ebay-feedback] fetched by REST', { count: reviews.length })
   return { reviews, ingestSource: 'EBAY_REST', connectionId: connection.id }
 }

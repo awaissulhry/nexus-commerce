@@ -11,7 +11,7 @@ import type { MenuItemDef } from '@/design-system/components'
 import { Tag } from '@/design-system/primitives'
 import type { GridColumnSpec } from '../../gridCustomise'
 import { abBadge, type TimingTest } from '../../timing/_timing/timingTestsModel'
-import { abMark, channelWords, duplicateHeld, firstTryWords, marketsWords, skipsWords, turnOnHeld, windowWords, type RuleItem } from './rulesModel'
+import { abMark, channelWords, duplicateHeld, firstTryWords, marketsWords, ruleRateWords, skipsWords, turnOnHeld, windowWords, type RuleItem } from './rulesModel'
 
 export const MANAGE_RULES = "You need 'Manage reviews' to change review-request rules."
 
@@ -58,7 +58,7 @@ const AbCell = memo(function AbCell({ data, context }: Cell) {
   return <Tag tone={cell.tone}>{cell.words}</Tag>
 })
 
-const rate = (v: number | null | undefined) => (v == null ? '—' : `${(v * 100).toFixed(1)}%`)
+
 
 export const RULE_COLUMN_SPECS: readonly GridColumnSpec[] = [
   { key: 'isActive', label: 'On' },
@@ -99,7 +99,7 @@ export function rulesColumns(handlers: RefObject<RulesHandlers>): ColDef<RuleIte
     { colId: 'window', headerName: 'Window', valueGetter: (p) => (p.data ? windowWords(p.data) : ''), minWidth: 110, hide: hidden('window') },
     { colId: 'skips', headerName: 'Skips', valueGetter: (p) => (p.data ? skipsWords(p.data) : ''), minWidth: 200, flex: 1, hide: hidden('skips') },
     { colId: 'sent30', headerName: 'Sent 30 days', ...integerColumn<RuleItem>('sent30'), minWidth: 110 },
-    { colId: 'rate30', headerName: 'Rate', field: 'rate30', valueFormatter: (p) => rate(p.value as number | null | undefined), type: 'rightAligned', minWidth: 90 },
+    { colId: 'rate30', headerName: 'Rate', field: 'rate30', valueFormatter: (p) => ruleRateWords(p.data), tooltipValueGetter: (p) => p.data?.rateWords ?? null, type: 'rightAligned', minWidth: 120 },
     { colId: 'ab', headerName: 'A/B', valueGetter: (p) => (p.data ? abCellWords(p.data, h()?.rules ?? [], h()?.abTests ?? [])?.words ?? '' : ''), cellRenderer: AbCell, minWidth: 130 },
     actionsColumn<RuleItem>({
       prefsLabel: 'Actions',

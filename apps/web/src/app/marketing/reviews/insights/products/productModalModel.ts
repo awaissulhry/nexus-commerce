@@ -5,7 +5,7 @@
  * fix" is held. Pure, tested in productModalModel.vitest.test.ts. The numbers are the API's
  * (`GET /api/reviews/insights/products/:productId`).
  */
-import { channelMarketWords, starsWord } from '../../_lib/reviewWords'
+import { channelMarketWords, feedbackWords, starsWord } from '../../_lib/reviewWords'
 import { inboxHref } from '../../_lib/reviewsLinks'
 import type { InsightsScope } from '../_shared/insightsScope'
 import { fitMentions, type ProductFit } from '../_shared/fitView'
@@ -224,13 +224,8 @@ export function whenWords(iso: string, now: Date): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
-/** eBay feedback in words (5 = positive, 3 = neutral, 1 = negative). */
-export function feedbackWords(rating: number | null): { text: string; tone: 'success' | 'neutral' | 'danger' } {
-  if (rating == null) return { text: 'Feedback', tone: 'neutral' }
-  if (rating >= 4) return { text: 'Positive feedback', tone: 'success' }
-  if (rating <= 2) return { text: 'Negative feedback', tone: 'danger' }
-  return { text: 'Neutral feedback', tone: 'neutral' }
-}
+/** eBay feedback in words — the one helper in _lib/reviewWords.ts. */
+export { feedbackWords }
 
 /** "Buyer K. · Amazon Germany · imported from a file". */
 export function reviewByline(r: ProductDetailReview): string {

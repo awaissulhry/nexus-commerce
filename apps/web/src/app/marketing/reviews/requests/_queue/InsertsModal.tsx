@@ -4,8 +4,9 @@
  * Reviews › Requests › "Package inserts" — a printed card for the box, with a QR code to the product's Amazon review
  * page. The market sets the QR code's Amazon site and the card's language; products are picked by family (only a
  * product with an ASIN gets a card); copies and A4 sheets are counted (insertsModel.ts). The card text is fixed and
- * honest. `POST /api/review-inserts/bulk` makes the PDF (nothing is sent to anyone); the products are read from the
- * catalogue (`GET /api/products`, top-level products: a family or a single product).
+ * honest. `POST /api/review-inserts/bulk` makes the PDF (nothing is sent to anyone); the families come from
+ * `GET /api/review-inserts/products` with their ASIN and the cards each prints (itself and each variation with an ASIN), so
+ * the rows add up to "every product with an ASIN" (live audit A05: the catalogue list carries no ASIN).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Download, Search } from 'lucide-react'
@@ -18,6 +19,7 @@ import {
   cardProducts,
   cardsPlan,
   downloadHeld,
+  familyWords,
   insertMarket,
   insertStartMarket,
   pickedWords,
@@ -78,8 +80,7 @@ export function InsertsModal({ onClose, market: startMarket = null }: { onClose:
     const controller = new AbortController()
     abort.current = controller
     try {
-      // `includeSales` makes the list read the live rows: the cached catalogue list carries no ASIN (list-products.service.ts).
-      const res = await reviewsGet<ProductsAnswer>('/products', { limit: 200, sort: 'name', includeSales: 1, salesDays: 1, search: text.trim() || null }, { signal: controller.signal })
+      const res = await reviewsGet<ProductsAnswer>('/review-inserts/products', { limit: 200, search: text.trim() || null }, { signal: controller.signal })
       if (controller.signal.aborted) return
       setProducts({ key: text, rows: res.data?.products ?? null, total: res.data?.total ?? 0, error: res.error })
     } catch {
@@ -97,11 +98,12 @@ export function InsertsModal({ onClose, market: startMarket = null }: { onClose:
   const productCount = cardProducts(pick, rows, count.value)
   const plan = cardsPlan(productCount ?? 0, copies)
   const held = downloadHeld(pick, rows, count.value) ?? (busy ? 'Making the PDF…' : null)
-  const first = pick.all ? rows.find((p) => p.amazonAsin) : rows.find((p) => pick.picked.includes(p.id) && p.amazonAsin)
+  const first = pick.all ? rows.find((p) => p.asin) : rows.find((p) => pick.picked.includes(p.id) && p.asin)
 
   const download = useCallback(async () => {
     setBusy(true)
-    const body = pick.all ? { marketplace: market } : { marketplace: market, productIds: rows.filter((p) => pick.picked.includes(p.id) && p.amazonAsin).map((p) => p.id) }
+    // A picked family prints its own card and each variation's (the API expands it).
+    const body = pick.all ? { marketplace: market } : { marketplace: market, productIds: rows.filter((p) => pick.picked.includes(p.id) && p.cards > 0).map((p) => p.id) }
     const error = await downloadPdf('/review-inserts/bulk', body, `review-inserts-${market}.pdf`)
     setBusy(false)
     if (error) toast(error, 'danger')
@@ -165,10 +167,7 @@ export function InsertsModal({ onClose, market: startMarket = null }: { onClose:
                       label={(
                         <span className={s.pickLabel}>
                           <span>{p.name}</span>
-                          <span className={s.muted}>
-                            {p.childCount > 0 ? `${p.childCount} variations · ` : ''}
-                            {p.amazonAsin ? `ASIN ${p.amazonAsin}` : 'no ASIN — no card'}
-                          </span>
+                          <span className={s.muted}>{familyWords(p)}</span>
                         </span>
                       )}
                     />
@@ -202,7 +201,7 @@ export function InsertsModal({ onClose, market: startMarket = null }: { onClose:
             <div className={s.cardPreview}>
               <strong>{first?.name ?? 'Your product'}</strong>
               <span>An honest-review request, in {m.language}</span>
-              <span className={s.muted}>QR code → {qrTarget(market, first?.amazonAsin ?? null)}</span>
+              <span className={s.muted}>QR code → {qrTarget(market, first?.asin ?? null)}</span>
               <span className={s.muted}>No stars, no offer, no contact details.</span>
             </div>
           </Card>

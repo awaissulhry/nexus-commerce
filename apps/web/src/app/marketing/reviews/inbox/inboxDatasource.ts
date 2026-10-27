@@ -52,6 +52,8 @@ export interface InboxReadState {
   since: string | null
   reason: string | null
   reconnectHref: string | null
+  /** Its reviews arrive only by file import (Amazon's product reviews, a store app not connected). */
+  byFile?: boolean
 }
 
 export interface InboxStatusCounts {

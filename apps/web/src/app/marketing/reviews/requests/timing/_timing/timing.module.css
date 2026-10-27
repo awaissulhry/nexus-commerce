@@ -118,6 +118,12 @@
 }
 
 @media (max-width: 479px) {
+  /* The header row's four fixed columns (432px) pushed the page sideways on a phone (live audit D09): the rule above
+     shows it again after the 759px rule hid it, so it is hidden here, where the rows wrap to two columns. */
+  .dayHead {
+    display: none;
+  }
+
   .dayRow {
     grid-template-columns: minmax(0, 1fr) 100px;
   }

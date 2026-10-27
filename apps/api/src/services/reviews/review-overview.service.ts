@@ -14,7 +14,7 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { needsReplyWhere, reviewKindOf, visibleReviewWhere } from './review-visibility.js'
+import { automaticFeedbackWhere, needsReplyWhere, reviewKindOf, visibleReviewWhere } from './review-visibility.js'
 import { countsAsStars, ratingInMeasure, ratingOf } from './review-rating.js'
 import { readRateFacts, readRateRequests, rateKey, rateOf, ratePercent } from './review-rate.service.js'
 import { openAlertIds } from './review-needs-you.service.js'
@@ -207,6 +207,18 @@ function quoted(text: string): string {
   return /^[“"]/.test(clean) ? clean : `“${clean}”`
 }
 
+/**
+ * The trend: every review of the period in the bars — seller feedback too, the same reviews the "New reviews" tile
+ * counts — and the stars of product reviews only in the line (review-rating.ts). Found in the local check of the live
+ * audit fixes: counting only star rows left the chart saying "No reviews in the last 12 months" beside 34 eBay
+ * feedback. Pure.
+ */
+export function overviewTrend(rows: ReadonlyArray<ReviewRow>, keys: readonly string[], bucket: TrendBucket): TrendPoint[] {
+  const all = trendPoints(rows, keys, bucket)
+  const stars = trendPoints(rows.filter(countsAsStars), keys, bucket)
+  return all.map((p, i) => ({ ...p, avg: stars[i]?.avg ?? null }))
+}
+
 /** Review themes from the sentiment of the period's reviews, as a share of the positive (or negative) reviews. */
 export function reviewThemes(rows: readonly ReviewRow[], polarity: 'POSITIVE' | 'NEGATIVE'): OverviewTheme[] {
   const overall = averageRating(rows.filter(countsAsStars).map(r => r.rating))
@@ -377,7 +389,7 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
       const bucket = trendBucket(period)
       const earliest = rowsNow.length ? rowsNow[rowsNow.length - 1].postedAt : new Date(now.getTime() - 30 * 86_400_000)
       const from = bounds.from ?? earliest
-      return { bucket, points: trendPoints(rowsNow.filter(countsAsStars), bucketKeys(from, bounds.to, bucket), bucket) }
+      return { bucket, points: overviewTrend(rowsNow, bucketKeys(from, bounds.to, bucket), bucket) }
     }),
 
     section('spread', async (): Promise<OverviewSpread> => {
@@ -453,7 +465,15 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
     }),
 
     section('themes', async () => {
-      const { now: rowsNow } = await split()
+      const { now: all } = await split()
+      // eBay's automatic feedback ("Order delivered on time with no issues") is eBay's text, not the buyer's: never a
+      // buyer theme (live audit B10). Its rows are few; they are found by their text and left out here.
+      const automatic = new Set((await prisma.review.findMany({
+        where: visibleReviewWhere({ AND: [scope, automaticFeedbackWhere(), { postedAt: { ...(bounds.from ? { gte: bounds.from } : {}), lte: bounds.to } }] }),
+        select: { id: true },
+        take: 100_000,
+      })).map(r => r.id))
+      const rowsNow = all.filter(r => !automatic.has(r.id))
       const wantAmazon = (!channel || channel === 'AMAZON') && !(market && NO_TOPICS_MARKETS.has(market))
       const topics = wantAmazon
         ? await prisma.amazonReviewInsight.findMany({

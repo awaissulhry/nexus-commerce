@@ -13,6 +13,7 @@
  */
 
 import { QUEUE_STATUS_WORDS, queueStatusOf, reasonOf } from '../reviews/review-queue-words.js'
+import { orderFeedback } from '../reviews/review-order-feedback.js'
 import prisma from '../../db.js'
 
 export function safeNum(v: unknown, fallback?: number): number | undefined {
@@ -444,6 +445,8 @@ export async function orderDetail(id: string) {
       statusWords: QUEUE_STATUS_WORDS[queueStatusOf(rr, now)],
       reasonWords: reasonOf({ ...rr, deliveredAt: order.deliveredAt }, now).words,
     })),
+    // Live audit A10 — the buyer's feedback as far as Nexus knows it ("Manage Feedback"); never "not left" when unread.
+    feedback: await orderFeedback(order),
   }
 }
 

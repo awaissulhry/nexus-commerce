@@ -74,6 +74,11 @@ describe('Inbox read state', () => {
     expect(livePill({ error: false, updating: false, readState: [{ channel: 'EBAY', market: 'DE', ok: false, since: null, reason: 'x', reconnectHref: null }] }))
       .toEqual({ tone: 'warning', words: 'eBay Germany behind' })
     expect(livePill({ error: false, updating: false, readState: [] }).words).toBe('Up to date')
+    // Live audit A06: Amazon's product reviews arrive only by file — never "Up to date".
+    const ok = (channel: string, market: string | null, byFile = false) => ({ channel, market, ok: true, since: null, reason: null, reconnectHref: null, byFile })
+    expect(livePill({ error: false, updating: false, readState: [ok('EBAY', 'IT'), ok('AMAZON', 'DE', true), ok('AMAZON', 'IT', true)] }))
+      .toEqual({ tone: 'success', words: 'eBay up to date · Amazon by file' })
+    expect(livePill({ error: false, updating: false, readState: [ok('AMAZON', 'IT', true)] })).toEqual({ tone: 'neutral', words: 'Amazon by file only' })
   })
 
   it('the header line', () => {
@@ -89,6 +94,8 @@ describe('Inbox row words', () => {
     expect(agoWords('2026-10-26T07:00:00Z', NOW)).toBe('5 h ago')
     expect(agoWords('2026-10-26T11:59:30Z', NOW)).toBe('just now')
     expect(agoWords('2026-10-24T07:00:00Z', NOW)).toBe('2 days ago')
+    // The pop-up's rounding (live audit D04: 14 Feb 2025 read "1 year ago" in the list, "2 years ago" in the pop-up).
+    expect(agoWords('2025-02-14T08:00:00Z', Date.parse('2026-10-27T12:00:00Z'))).toBe('2 years ago')
     expect(kindWords({ kind: 'product', imported: true })).toBe('Product review · imported')
     expect(productWords(row())).toBe('Over-trousers — XL')
     expect(productWords(row({ product: null }))).toBeNull()

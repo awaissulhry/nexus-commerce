@@ -11,7 +11,7 @@
  */
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
-import { visibleReviewWhere } from './review-visibility.js'
+import { isAutomaticFeedback, notAutomaticWhere, visibleReviewWhere } from './review-visibility.js'
 import { marketWords } from './overviewMath.js'
 import { fitTable } from './review-fit.service.js'
 import type { FitTable } from './review-fit.js'
@@ -61,19 +61,24 @@ export interface ThemesAnswer {
 
 const STATE_WORDS: Record<AmazonTopicState, string> = {
   ok: 'Topics are read every week, in English.',
-  needs_role: 'Amazon refused the topics: Nexus needs the Selling Partner Insights role for this market.',
+  needs_role: 'Amazon refused the topics: the Amazon account lacks the Selling Partner Insights role (a role of the whole account, not of one market).',
   error: 'Amazon’s topics could not be read last time; Nexus tries again next week.',
   no_data: 'No topics from Amazon yet for this market.',
 }
 
 /** Each Amazon market's topic state, from the rows the weekly read left (one per ASIN). */
 export function topicStates(rows: ReadonlyArray<{ marketplace: string; accessStatus: string; fetchedAt: Date }>, markets: readonly string[]): AmazonTopicMarket[] {
+  // The role belongs to the Amazon account (live audit B07): a market never read while another was refused for it says so.
+  const refused = [...new Set(rows.filter((r) => r.accessStatus === 'NEEDS_BRAND_ANALYTICS_ROLE').map((r) => r.marketplace.toUpperCase()))]
   return markets.map((market) => {
     const mine = rows.filter((r) => r.marketplace.toUpperCase() === market)
     const ok = mine.filter((r) => r.accessStatus === 'OK')
     const state: AmazonTopicState = ok.length > 0 ? 'ok' : mine.some((r) => r.accessStatus === 'NEEDS_BRAND_ANALYTICS_ROLE') ? 'needs_role' : mine.some((r) => r.accessStatus === 'ERROR') ? 'error' : 'no_data'
     const latest = ok.reduce<Date | null>((acc, r) => (!acc || r.fetchedAt > acc ? r.fetchedAt : acc), null)
-    return { market, label: `Amazon ${marketWords(market) ?? market}`, state, words: STATE_WORDS[state], topicsAt: latest?.toISOString() ?? null }
+    const words = state === 'no_data' && refused.length > 0
+      ? `Not read yet: Amazon refused the read for ${refused.map((m) => marketWords(m) ?? m).join(', ')} because the account lacks the Selling Partner Insights role, so this market needs it too.`
+      : STATE_WORDS[state]
+    return { market, label: `Amazon ${marketWords(market) ?? market}`, state, words, topicsAt: latest?.toISOString() ?? null }
   })
 }
 
@@ -109,7 +114,8 @@ export async function insightsThemes(input: ThemesInput = {}): Promise<ThemesAns
     fitTable({ scope, from: bounds.from, now }),
   ])
 
-  const rows = reviews as ThemeReviewRow[]
+  // eBay's automatic feedback is eBay's text, not the buyer's: never a buyer theme (live audit B10).
+  const rows = (reviews as ThemeReviewRow[]).filter((r) => !isAutomaticFeedback(r))
   const inPeriod = rows.filter((r) => r.postedAt >= bounds.from)
   const before = rows.filter((r) => r.postedAt >= bounds.prevFrom && r.postedAt < bounds.prevTo)
   const trendRows = rows.filter((r) => r.postedAt >= trendFrom)
@@ -179,6 +185,7 @@ export async function insightsHeatmap(input: { sinceDays?: unknown; period?: unk
       ...(scope.market ? { marketplace: scope.market } : {}),
       postedAt: { gte: since, lte: now },
       sentiment: { isNot: null },
+      AND: [notAutomaticWhere()],
     }),
     select: { postedAt: true, sentiment: { select: { label: true, categories: true } } },
   })

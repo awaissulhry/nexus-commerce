@@ -5,7 +5,7 @@
  * `deliveredAt + delay` exactly.
  */
 import { describe, it, expect } from 'vitest'
-import { resolveSendTiming, lookupTimingTable, windowHourFor, type TimingDefaultRow, type TimingRuleInput, type SendWindowRow } from './review-timing.service.js'
+import { inSendHours, nextDaySendSlot, nextSendSlot, resolveSendTiming, lookupTimingTable, windowHourFor, type TimingDefaultRow, type TimingRuleInput, type SendWindowRow } from './review-timing.service.js'
 
 const DAY = 86_400_000
 const DELIV = new Date('2026-06-10T08:00:00.000Z')
@@ -156,5 +156,58 @@ describe('lookupTimingTable', () => {
     expect(lookupTimingTable('Guanti Pelle', TABLE)).toBe(10)
     expect(lookupTimingTable('Unknown', TABLE)).toBeNull()
     expect(lookupTimingTable(null, TABLE)).toBeNull()
+  })
+})
+
+// Live audit B05 — WHEN a due request may go out: its send hour (rule, else Timing) and the 3 hours after it.
+describe('send hours (live audit B05)', () => {
+  // The audit's table: Mon–Thu 19:00, Fri 18:00, Sat/Sun 11:00 (global).
+  const windows: SendWindowRow[] = [0, 1, 2, 3, 4, 5, 6].map((d) => ({ marketplace: '*', dayOfWeek: d, hourLocal: d === 0 || d === 6 ? 11 : d === 5 ? 18 : 19, dayRank: 1, isActive: true }))
+  const ctx = { marketplace: 'IT', windows }
+  // Mon 26 Oct 2026, Rome is UTC+1 (winter time).
+  const at = (iso: string) => new Date(iso)
+
+  it('inside the day’s send hour and the 3 hours after it; never in the night', () => {
+    expect(inSendHours(at('2026-10-26T18:30:00Z'), ctx)).toBe(true) // Mon 19:30
+    expect(inSendHours(at('2026-10-26T20:59:00Z'), ctx)).toBe(true) // Mon 21:59
+    expect(inSendHours(at('2026-10-26T21:00:00Z'), ctx)).toBe(false) // Mon 22:00
+    expect(inSendHours(at('2026-10-26T23:00:00Z'), ctx)).toBe(false) // Tue 00:00
+    expect(inSendHours(at('2026-10-26T13:00:00Z'), ctx)).toBe(false) // Mon 14:00
+  })
+
+  it('the next send hour: later today, else the next day’s (its own weekday’s hour)', () => {
+    expect(nextSendSlot(at('2026-10-26T13:00:00Z'), ctx).toISOString()).toBe('2026-10-26T18:00:00.000Z') // Mon 14:00 → Mon 19:00
+    expect(nextSendSlot(at('2026-10-26T22:00:00Z'), ctx).toISOString()).toBe('2026-10-27T18:00:00.000Z') // Mon 23:00 → Tue 19:00
+    expect(nextSendSlot(at('2026-10-29T23:30:00Z'), ctx).toISOString()).toBe('2026-10-30T17:00:00.000Z') // Fri 00:30 → Fri 18:00
+    expect(nextSendSlot(at('2026-10-30T21:30:00Z'), ctx).toISOString()).toBe('2026-10-31T10:00:00.000Z') // Fri 22:30 → Sat 11:00
+    const inside = at('2026-10-26T19:10:00Z')
+    expect(nextSendSlot(inside, ctx)).toBe(inside)
+  })
+
+  it('a daily retry goes at the next day’s send hour — never now + 24 h, which slid an hour later every day', () => {
+    // A retry decided at Mon 20:00:01 goes Tue 19:00, then Wed 19:00 … never 21:00, 22:00, 23:00.
+    expect(nextDaySendSlot(at('2026-10-26T19:00:01Z'), ctx).toISOString()).toBe('2026-10-27T18:00:00.000Z')
+    expect(nextDaySendSlot(at('2026-10-29T19:00:00Z'), ctx).toISOString()).toBe('2026-10-30T17:00:00.000Z') // Thu → Fri 18:00
+  })
+
+  it('the rule’s fixed hour beats the table; with no send hour at all nothing is held (as before)', () => {
+    expect(nextSendSlot(at('2026-10-26T13:00:00Z'), { ...ctx, ruleHour: 10 }).toISOString()).toBe('2026-10-27T09:00:00.000Z')
+    const none = { marketplace: 'IT', windows: [] }
+    expect(inSendHours(at('2026-10-26T23:00:00Z'), none)).toBe(true)
+    expect(nextDaySendSlot(at('2026-10-26T23:00:00Z'), none).toISOString()).toBe('2026-10-27T23:00:00.000Z')
+  })
+
+  it('a day switched off in Timing sends in the daytime (08:00–22:00), not at night', () => {
+    const off = windows.map((w) => (w.dayOfWeek === 2 ? { ...w, isActive: false } : w))
+    expect(inSendHours(at('2026-10-27T08:00:00Z'), { marketplace: 'IT', windows: off })).toBe(true) // Tue 09:00
+    expect(nextSendSlot(at('2026-10-27T03:00:00Z'), { marketplace: 'IT', windows: off }).toISOString()).toBe('2026-10-27T07:00:00.000Z') // Tue 08:00
+  })
+
+  it('Amazon’s first day: a send hour before the legal minimum moves to the next day’s send hour, not the minimum’s time of day', () => {
+    // Delivered Mon 26 Oct 21:00 Rome; day 4 = Fri 30 Oct 21:00. Fri's send hour 18:00 is before it → Sat 11:00.
+    const delivered = at('2026-10-26T20:00:00Z')
+    const r = resolveSendTiming({ channel: 'AMAZON', marketplace: 'IT', deliveredAt: delivered, shippedAt: null, purchaseDate: null, productType: null }, rule({ sendDelayDays: 4, minDaysSinceDelivery: 4 }), TABLE, windows)
+    expect(r.scheduledFor?.toISOString()).toBe('2026-10-31T10:00:00.000Z')
+    expect(inSendHours(r.scheduledFor!, ctx)).toBe(true)
   })
 })

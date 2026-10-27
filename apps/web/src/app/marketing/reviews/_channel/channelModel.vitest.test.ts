@@ -95,9 +95,9 @@ describe('Amazon', () => {
     expect(tiles[0]).toMatchObject({ value: '—', hint: NO_RATING_WORDS })
     expect(tiles[1]).toMatchObject({ value: '—', hint: 'No Amazon topics here' })
     expect(tiles[5]).toMatchObject({ value: '—', hint: 'nothing sent in this period' })
-    // No review can follow (the API's one rate): its words, never a 0 %.
+    // No review can follow (the API's one rate): "Not measurable" with its words, never a 0 % (live audit A02).
     expect(amazonTiles({ ...AMAZON_TILES, reviewRate: null, rateWords: 'Not measurable: Amazon gives no review count — import this market’s reviews to estimate it.' }, IT, '30d')[5])
-      .toMatchObject({ value: '—', hint: expect.stringMatching(/^Not measurable/) })
+      .toMatchObject({ value: 'Not measurable', hint: expect.stringMatching(/^Not measurable/) })
     expect(amazonTiles({ ...AMAZON_TILES, importedRating: null, importedInPeriod: 0 }, IT, '7d')[0].hint).toBe('No imported review in the last 7 days')
   })
 

@@ -124,9 +124,10 @@ describe('needs you', () => {
   })
 
   it('each action opens a page that exists today (through the one link module)', () => {
-    // Reply opens that review in the Inbox.
-    expect(needsActionHref(item({}).action)).toBe('/marketing/reviews/inbox?channel=EBAY&market=IT&review=r1')
-    expect(needsActionHref({ label: 'Open Inbox', page: 'inbox', params: { id: 'r1', channel: 'EBAY' } })).toBe('/marketing/reviews/inbox?channel=EBAY')
+    // Reply opens that review over the list it came from: the reviews that need a reply, every date (live audit A08 —
+    // never the Inbox's default 30 days, which left the pop-up over an empty list).
+    expect(needsActionHref(item({}).action)).toBe('/marketing/reviews/inbox?period=all&channel=EBAY&market=IT&reply=needed&review=r1')
+    expect(needsActionHref({ label: 'Open Inbox', page: 'inbox', params: { id: 'r1', channel: 'EBAY' } })).toBe('/marketing/reviews/inbox?period=all&channel=EBAY&reply=needed')
     expect(needsActionHref({ label: 'See alert', page: 'alerts', params: { market: 'DE' } })).toBe('/marketing/reviews/insights/alerts?market=DE')
     expect(needsActionHref({ label: 'See requests', page: 'requests', params: { status: 'FAILED' } })).toBe('/marketing/reviews/requests?status=FAILED')
   })
@@ -165,6 +166,8 @@ describe('themes, stars and the header', () => {
     expect(trendSummary([{ day: '2026-10-25', reviews: 3, avg: 4.5 }, { day: '2026-10-26', reviews: 1, avg: null }, { day: '2026-10-24', reviews: 2, avg: 4.2 }], 'day', '7d'))
       .toBe('Reviews per day and average rating, last 7 days: 6 reviews in all; average rating between 4.2 and 4.5, latest 4.2.')
     expect(trendSummary([{ day: '2026-10', reviews: 0, avg: null }], 'month', '12m')).toBe('Reviews per month and average rating, last 12 months: 0 reviews in all; no star ratings.')
+    // One value is said once (live audit D07: "between 5.0 and 5.0, latest 5.0").
+    expect(trendSummary([{ day: '2026-10', reviews: 3, avg: 5 }, { day: '2026-09', reviews: 2, avg: 5 }], 'month', '12m')).toBe('Reviews per month and average rating, last 12 months: 5 reviews in all; average rating 5.0 throughout.')
     expect(bucketLabel('2026-10-20', 'week')).toBe('20 Oct')
     expect(bucketLabel('2026-10', 'month')).toBe('Oct 2026')
   })

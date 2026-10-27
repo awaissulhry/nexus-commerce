@@ -14,7 +14,7 @@ import { HoverCard, StarRating } from '@/design-system/components'
 import { statusColumn, type ColDef, type ICellRendererParams } from '@/design-system/grid'
 import { Pill, Tag } from '@/design-system/primitives'
 import type { PreferencesColumnSpec, PreferencesValue } from '@/design-system/patterns'
-import { MOOD_WORD, STATUS_WORD, channelMarketWords, themeWord } from '../_lib/reviewWords'
+import { MOOD_WORD, STATUS_WORD, channelMarketWords, feedbackWords, ratedAsFeedback, themeWord } from '../_lib/reviewWords'
 import type { InboxRow } from './inboxDatasource'
 import { MOOD_TONE, STATUS_TONE, agoWords, dayWords, dueWords, hasTranslation, kindWords, languageWords, photoWords, productWords } from './inboxTiles'
 import s from './inbox.module.css'
@@ -41,9 +41,22 @@ const ChannelCell = memo(function ChannelCell({ data }: Cell) {
   )
 })
 
+/**
+ * A review's rating as its channel counts it: stars, or eBay's feedback type in words (eBay counts positive, neutral and
+ * negative, never stars — live audit B02). The Inbox list, its cards and the review pop-up all draw it here.
+ */
+export function RatingMark({ channel, rating, size = 'sm', long = false }: { channel: string; rating: number | null; size?: 'sm' | 'md'; long?: boolean }) {
+  if (ratedAsFeedback(channel)) {
+    const fb = feedbackWords(rating)
+    // `long`: "Positive feedback" where a mood pill ("Positive") sits beside it (the review pop-up's header).
+    return <Pill tone={fb.tone}>{long ? fb.text : fb.text.replace(/ feedback$/, '')}</Pill>
+  }
+  return <StarRating value={rating} size={size} />
+}
+
 const StarsCell = memo(function StarsCell({ data }: Cell) {
   if (!data) return null
-  return <StarRating value={data.rating} size="sm" />
+  return <RatingMark channel={data.channel} rating={data.rating} />
 })
 
 const ReviewCell = memo(function ReviewCell({ data }: Cell) {
@@ -105,7 +118,7 @@ const STATUS_TONES = Object.fromEntries(Object.entries(STATUS_WORD).map(([key, l
 const COLUMNS: readonly InboxColumn[] = [
   { key: 'received', label: 'Received', shown: true, def: { colId: 'received', headerName: 'Received', field: 'postedAt', width: 124, minWidth: 120, sortable: true, cellRenderer: ReceivedCell } },
   { key: 'channel', label: 'Channel', shown: true, def: { colId: 'channel', headerName: 'Channel', width: 150, sortable: false, cellRenderer: ChannelCell } },
-  { key: 'stars', label: 'Stars', shown: true, def: { colId: 'stars', headerName: 'Stars', field: 'rating', width: 104, sortable: true, cellRenderer: StarsCell } },
+  { key: 'stars', label: 'Stars', shown: true, def: { colId: 'stars', headerName: 'Stars', headerTooltip: 'Stars, or eBay’s feedback: positive, neutral or negative', field: 'rating', width: 104, sortable: true, cellRenderer: StarsCell } },
   { key: 'review', label: 'Review', shown: true, def: { colId: 'review', headerName: 'Review', minWidth: 200, flex: 1, sortable: false, cellRenderer: ReviewCell } },
   { key: 'product', label: 'Product · order', shown: true, def: { colId: 'product', headerName: 'Product · order', width: 184, sortable: false, cellRenderer: ProductCell } },
   { key: 'mood', label: 'Mood · themes', shown: false, def: { colId: 'mood', headerName: 'Mood · themes', width: 200, sortable: false, cellRenderer: MoodCell } },
