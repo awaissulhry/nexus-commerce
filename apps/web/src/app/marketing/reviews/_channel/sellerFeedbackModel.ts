@@ -21,7 +21,7 @@ export interface MarketFetchState {
   words: string
 }
 
-/** GET /api/reviews/amazon/seller-feedback (and the Amazon page's `sellerFeedback.fetch`). */
+/** GET /reviews/amazon/seller-feedback (and the Amazon page's `sellerFeedback.fetch`). */
 export interface SellerFeedbackState {
   on: boolean
   every: string
@@ -69,7 +69,7 @@ export interface AmazonSellerFeedback {
   rules: string[]
 }
 
-/** POST /api/reviews/amazon/seller-feedback/fetch → 202. */
+/** POST /reviews/amazon/seller-feedback/fetch → 202. */
 export interface FetchNowAnswer {
   ok: true
   words: string

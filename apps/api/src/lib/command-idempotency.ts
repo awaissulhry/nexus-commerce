@@ -125,6 +125,8 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/reviews/action-items/bulk': 'review-fix-bulk',
   '/api/reviews/spotlight/generate': 'review-brief-generate',
   '/api/reviews/spikes/bulk': 'review-alert-bulk',
+  // Reviews › Amazon seller feedback (Phase 3) — one "Fetch now" per press.
+  '/api/reviews/amazon/seller-feedback/fetch': 'review-seller-feedback-fetch',
 }
 
 /** The POST routes whose Idempotency-Key is honoured (for the tests that hold a route to it). */

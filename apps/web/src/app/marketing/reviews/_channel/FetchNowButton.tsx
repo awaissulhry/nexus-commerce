@@ -2,7 +2,7 @@
 
 /**
  * "Fetch now" for Amazon's seller feedback report (PR H) — the Amazon page's seller-feedback card and Settings › Sources.
- * POST /api/reviews/amazon/seller-feedback/fetch with an Idempotency-Key (a double press asks Amazon once). The API
+ * POST /reviews/amazon/seller-feedback/fetch with an Idempotency-Key (a double press asks Amazon once). The API
  * starts the fetch in the background and answers at once; Amazon takes a few minutes to make the report, so the button
  * then shows the fetching state from the next read. Held, with its reason (`held`, from `fetchHeldWords` or the
  * Sources row), when the person may not manage reviews, this setup does not fetch seller feedback, Amazon is not
