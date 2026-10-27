@@ -133,7 +133,7 @@ describe('Reviews Insights › Products (real SQL)', () => {
     expect(paged.families).toHaveLength(1)
   })
 
-  it('the product pop-up: rating per channel and market with its source words, spread, themes, fit coming later, latest, returns', async () => {
+  it('the product pop-up: rating per channel and market with its source words, spread, themes, fit per size, latest, returns', async () => {
     const d = await inside(() => insightsProductDetail('test-jacket-m', { now: NOW }))
     expect(d.product).toMatchObject({ id: 'test-jacket-m', family: { id: 'test-jacket' }, variant: 'M · Black' })
     const byLabel = Object.fromEntries(d.markets.map((m) => [m.label, m]))
@@ -141,8 +141,9 @@ describe('Reviews Insights › Products (real SQL)', () => {
     expect(byLabel['eBay Italy']).toMatchObject({ kind: 'positive', rating: 66.7, count: 3, words: 'seller feedback, % positive' })
     expect(byLabel.Shopify).toMatchObject({ rating: 4, count: 2, change: -1 })
     expect(d.spread).toEqual([2, 2, 1, 2, 1])
-    expect(d.fit).toBeNull()
-    expect(d.fitWords).toMatch(/comes later/)
+    // Fit: the family's sizes; one "too small" return on M (the fit reviews here say no way) — too few for a verdict.
+    expect(d.fit).toMatchObject({ family: { id: 'test-jacket' }, reviews: 0, returns: 1 })
+    expect(d.fit!.sizes.map((c) => [c.size, c.verdict, c.total])).toEqual([['M', 'too_few', 1], ['L', 'too_few', 0]])
     expect(d.latest).toHaveLength(3)
     expect(d.returns).toMatchObject({ windowDays: 30, rate: { rate: 25, returns: 1, orders: 4 }, topReason: { reason: 'Too small', share: 100 } })
     expect(d.themes.find((t) => t.key === 'FIT_SIZING')).toMatchObject({ mentions: 3, share: 38 })
@@ -160,6 +161,8 @@ describe('Reviews Insights › Products (real SQL)', () => {
     expect(durability).toMatchObject({ mentions: 9, share: 8, starImpactFrom: 'amazon_topic', starImpact: -0.7, sources: { reviews: 0, amazonTopics: 9 } })
     expect(out.amazon.markets).toEqual([expect.objectContaining({ market: 'DE', state: 'ok' })])
     expect(JSON.stringify(out)).not.toMatch(/"starRating"|"reviewCount"/)
+    // The one size return is a Shopify return: not in Amazon Germany's fit table.
+    expect(out.fit).toMatchObject({ families: [], summary: { reviews: 0, returns: 0 } })
     const nl = await inside(() => insightsThemes({ channel: 'AMAZON', market: 'NL', now: NOW }))
     expect(nl.amazon.notOffered).toMatch(/Amazon\.nl/)
     expect(nl.themes).toEqual([])
