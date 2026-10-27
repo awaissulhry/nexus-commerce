@@ -128,7 +128,7 @@ export function sourceActionHref(action: SourceRow['action']): string | null {
 }
 
 /**
- * The held "Connect" of a source Nexus reads only from a later update (Etsy): its reason in
+ * The held "Connect" of a source Nexus reads only from a later update: its reason in
  * words. Null for a source read today — also one that needs a fix but has no fix link (its words already say what is
  * wrong), and one whose later part is only an extra (eBay's photos and AI topics).
  */

@@ -14,7 +14,7 @@ import type { ReasonKey } from './review-queue-words.js'
 export type ReviewChannel = 'AMAZON' | 'EBAY'
 export const CHANNEL_PAGES: readonly ReviewChannel[] = ['AMAZON', 'EBAY']
 
-/** The channel of a page; anything else (Shopify and Etsy pages come later) → null. */
+/** The channel of a page; anything else → null (Shopify and Etsy have their own pages: review-shop-channel.service.ts). */
 export function parseChannel(raw: unknown): ReviewChannel | null {
   const value = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
   return (CHANNEL_PAGES as readonly string[]).includes(value) ? (value as ReviewChannel) : null
