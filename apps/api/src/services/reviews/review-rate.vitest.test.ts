@@ -35,6 +35,9 @@ describe('rateOf', () => {
     expect(ebay.words).toMatch(/^Not measurable: no eBay feedback in Nexus is linked to its order yet/)
     expect(rateOf([sent('AMAZON', 'IT')], facts([])).words).toMatch(/^Not measurable: Amazon gives no review count/)
     expect(notMeasurableWords([{ channel: 'AMAZON' }, { channel: 'EBAY' }])).toMatch(/^Not measurable: no review that could follow/)
+    // Lane N6 — Shopify keeps no reviews itself: they come from the store's review app.
+    expect(rateOf([sent('SHOPIFY', null)], facts(['AMAZON|IT'])).words).toBe('Not measurable: no Shopify review is in Nexus yet — Shopify keeps none itself; connect the store’s review app to count them.')
+    expect(rateOf([sent('SHOPIFY', null, true)], facts(['SHOPIFY|']))).toMatchObject({ measured: 1, followed: 1, rate: 1, words: null })
     expect(rateOf([], facts([]))).toEqual({ sent: 0, measured: 0, followed: 0, rate: null, words: null })
   })
 })

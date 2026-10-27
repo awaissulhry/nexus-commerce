@@ -59,6 +59,12 @@ describe('allowRequestAgain', () => {
       statusCode: 409,
       message: 'Held out by a timing test on purpose — it stays not asked, so the test’s result holds',
     })
+    // Lane N6 — a Shopify test's holdout the same: no review e-mail is put back.
+    db.row = row({ channel: 'SHOPIFY', marketplace: null, suppressedReason: 'timing_test_holdout', providerResponseCode: 'TIMING_TEST_HOLDOUT', scheduledFor: days(6), order: { ...row({}).order, marketplace: null } })
+    await expect(allowRequestAgain('r1', NOW)).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'Held out by a timing test on purpose — it stays not asked, so the test’s result holds',
+    })
     expect(db.updates).toEqual([])
   })
 

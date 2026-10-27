@@ -232,6 +232,12 @@ describe('review queue: bulk held rules', () => {
       expect(queueBulkPlan(['h', 'a'], [holdout, amazon('a')], action, 1, NOW)).toEqual({ apply: ['a'], held: [{ id: 'h', words }] })
     }
     expect(queueBulkPlan(['h'], [holdout], 'skip', 1, NOW)).toEqual({ apply: [], held: [{ id: 'h', words: 'Already skipped' }] })
+    // Lane N6 — a Shopify test's holdout row: never e-mailed now or later by the bulk bar either.
+    const shopifyHeld = amazon('sh', { channel: 'SHOPIFY', marketplace: null, customerEmail: 'buyer@example.test', status: 'SKIPPED', suppressedReason: 'timing_test_holdout', providerResponseCode: 'TIMING_TEST_HOLDOUT', scheduledFor: daysAgo(4) })
+    const shopifyAsked = amazon('sa', { channel: 'SHOPIFY', marketplace: null, customerEmail: 'buyer@example.test' })
+    for (const action of ['send-now', 'snooze'] as const) {
+      expect(queueBulkPlan(['sh', 'sa'], [shopifyHeld, shopifyAsked], action, 1, NOW)).toEqual({ apply: ['sa'], held: [{ id: 'sh', words }] })
+    }
   })
 })
 
