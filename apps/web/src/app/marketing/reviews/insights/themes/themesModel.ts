@@ -10,6 +10,7 @@
 import { inboxHref } from '../../_lib/reviewsLinks'
 import { themeWord } from '../../_lib/reviewWords'
 import { amazonTopicsInScope, periodWords, type InsightsPeriod, type InsightsScope } from '../_shared/insightsScope'
+import type { FitTable } from '../_shared/fitView'
 
 // ── The API's answers ───────────────────────────────────────────────
 
@@ -61,6 +62,8 @@ export interface ThemesAnswer {
   }
   themes: InsightTheme[]
   amazon: { markets: AmazonTopicMarket[]; notOffered: string | null }
+  /** Fit by family and size (runs small / true to size / runs large; 5 mentions a size). */
+  fit: FitTable
   generatedAt: string
 }
 

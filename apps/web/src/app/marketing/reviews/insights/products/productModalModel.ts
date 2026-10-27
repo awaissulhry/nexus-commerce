@@ -8,6 +8,7 @@
 import { channelMarketWords, starsWord } from '../../_lib/reviewWords'
 import { inboxHref } from '../../_lib/reviewsLinks'
 import type { InsightsScope } from '../_shared/insightsScope'
+import { fitMentions, type ProductFit } from '../_shared/fitView'
 
 // ── The API's answer ────────────────────────────────────────────────
 
@@ -62,8 +63,8 @@ export interface ProductDetail {
   markets: ProductMarketRating[]
   spread: [number, number, number, number, number]
   themes: ProductDetailTheme[]
-  fit: null
-  fitWords: string
+  /** Its family's fit per size and per variant (null only when the family is gone). */
+  fit: ProductFit | null
   latest: ProductDetailReview[]
   returns: {
     windowDays: number
@@ -86,14 +87,14 @@ export function parseProductTab(raw: string | null | undefined): ProductTab {
   return (PRODUCT_TABS as readonly string[]).includes(raw ?? '') ? (raw as ProductTab) : 'summary'
 }
 
-/** The tabs with their counts (Sizes: Coming later, no count). */
+/** The tabs with their counts (Sizes: fit mentions placed on a size). */
 export function productTabs(detail: ProductDetail | null): Array<{ id: ProductTab; label: string; count?: number | null; badge?: string }> {
   return [
     { id: 'summary', label: 'Summary' },
     { id: 'reviews', label: 'Reviews', count: detail ? detail.summary.reviews : null },
     { id: 'themes', label: 'Themes', count: detail ? detail.themes.length : null },
     { id: 'returns', label: 'Returns', count: detail ? detail.returns.reasons.reduce((n, r) => n + r.count, 0) : null },
-    { id: 'sizes', label: 'Sizes', badge: 'Coming later' },
+    { id: 'sizes', label: 'Sizes', count: detail ? fitMentions(detail.fit) : null },
   ]
 }
 

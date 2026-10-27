@@ -40,3 +40,30 @@
   min-width: 0;
   padding-bottom: var(--nds-space-4);
 }
+
+/* The fit table: one column per size, so on a wide screen it keeps a readable width and scrolls sideways inside its
+   card when the sizes do not fit; on a phone it stacks (the table's own phone form) and never scrolls. */
+.fitScroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+/* A family's name (often a long marketplace title) keeps to two lines; the whole name is its title. */
+.fitFamily {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.fitInner {
+  min-width: var(--fit-min, 0);
+}
+
+@media (max-width: 760px) {
+  .fitInner {
+    min-width: 0;
+  }
+}

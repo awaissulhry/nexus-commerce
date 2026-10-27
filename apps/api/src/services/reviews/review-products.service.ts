@@ -7,8 +7,8 @@
  *         top return reason).
  *   GET /api/reviews/insights/products/:productId?channel&market&period
  *       → one product (a family: all its variants): rating per channel and market with the words its source is shown
- *         with, the star spread, themes with star impact, fit per size (Phase 3: null, "coming later"), the 3 latest
- *         reviews with their translations, and returns by reason.
+ *         with, the star spread, themes with star impact, its family's fit per size and per variant in the period
+ *         (review-fit.ts), the 3 latest reviews with their translations, and returns by reason.
  *
  * Ratings are the stars of product reviews across every channel and market (review-rating.ts); eBay feedback reads as
  * "% positive" per channel and market, never as stars. An Amazon star comes only from reviews a person imported: Amazon gives no rating by API (ruling 5),
@@ -19,6 +19,8 @@ import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { visibleReviewWhere } from './review-visibility.js'
 import { variantWords } from './review-inbox-query.js'
+import { productFit } from './review-fit.service.js'
+import type { ProductFit } from './review-fit.js'
 import {
   averageRating, buyerShort, delta, RATING_DROP_STARS, ratingKindOf, round, sparkValues, sparkWindows, starCounts, themeWords,
   type RatingKind,
@@ -592,9 +594,8 @@ export interface ProductDetail {
   /** Stars per star, 5 first, in the period. */
   spread: [number, number, number, number, number]
   themes: ProductDetailTheme[]
-  /** Fit per size: Phase 3 (ruling 3) — always null for now, never invented. */
-  fit: null
-  fitWords: string
+  /** Its family's fit per size and per variant (review-fit.ts); null only when the family is gone. */
+  fit: ProductFit | null
   latest: ProductDetailReview[]
   returns: {
     windowDays: number
@@ -627,7 +628,7 @@ export async function insightsProductDetail(productId: string, input: { channel?
   const g = await gather(input, [...new Set([...ids, ...familyIds])])
   const s = slices(g, ids)
   const scopeW = scopeWhere(g.scope)
-  const [latestRows, allTime, listings, insightRows] = await Promise.all([
+  const [latestRows, allTime, listings, insightRows, fit] = await Promise.all([
     prisma.review.findMany({
       where: visibleReviewWhere({ ...scopeW, productId: { in: ids } }),
       orderBy: [{ postedAt: 'desc' }, { id: 'desc' }],
@@ -640,6 +641,7 @@ export async function insightsProductDetail(productId: string, input: { channel?
     prisma.review.count({ where: visibleReviewWhere({ ...scopeW, productId: { in: ids } }) }),
     prisma.channelListing.findMany({ where: { productId: { in: ids }, listingStatus: 'ACTIVE' }, select: { channel: true, marketplace: true }, distinct: ['channel', 'marketplace'] }),
     prisma.amazonReviewInsight.findMany({ where: { productId: { in: ids } }, select: { marketplace: true, accessStatus: true, fetchedAt: true } }),
+    productFit({ familyId: parent?.id ?? product.id, familyIds, scope: g.scope, from: g.bounds.from, now: g.now }),
   ])
 
   // Rating per channel and market: every place with reviews, and every Amazon market it sells on or has topics for.
@@ -766,8 +768,7 @@ export async function insightsProductDetail(productId: string, input: { channel?
     markets,
     spread: starCounts(s.now.filter(countsAsStars).map((r) => r.rating)),
     themes,
-    fit: null,
-    fitWords: 'Fit per size comes later: it needs fit mentions and size returns per family and size.',
+    fit,
     latest: latestRows.map((r) => ({
       id: r.id,
       channel: r.channel,
