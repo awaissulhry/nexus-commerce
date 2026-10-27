@@ -861,7 +861,8 @@ export async function allowRequestAgain(id: string, now = new Date()) {
   const held = allowAgainHeldFor(againFactsOf(row), now)
   if (held) throw new AllowAgainRefused(held)
   const done = await prisma.reviewRequest.updateMany({
-    where: { id, status: { in: ['SKIPPED', 'SUPPRESSED'] } },
+    // A timing test's holdout row is never put back (PR J), even if it changed after the read above.
+    where: { id, status: { in: ['SKIPPED', 'SUPPRESSED'] }, OR: [{ providerResponseCode: null }, { providerResponseCode: { not: 'TIMING_TEST_HOLDOUT' } }] },
     data: { ...ALLOW_AGAIN_DATA, scheduledFor: now },
   })
   if (done.count === 0) throw new AllowAgainRefused('Only a request that was not asked can be allowed again')

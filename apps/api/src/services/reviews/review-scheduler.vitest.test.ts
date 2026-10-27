@@ -7,16 +7,18 @@
  *   - an order no rule covers keeps the default timing;
  *   - an eBay order is never asked (Owner, 2026-10-27): eBay asks its buyers itself, so it gets a SKIPPED request with
  *     that reason, whatever rule covers it, and no "How was it?" check.
+ *   - PR J: while a timing test runs, the scheduler AND a rule's "Queue these" put each covered order in its group; the
+ *     holdout is never asked.
  * The database is a fake: nothing is read or written for real, nothing is sent.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const db = vi.hoisted(() => ({
-  reviewRule: { findMany: vi.fn() },
+  reviewRule: { findMany: vi.fn(), findUnique: vi.fn() },
   reviewTimingDefault: { findMany: vi.fn(async () => []) },
   reviewSendWindow: { findMany: vi.fn(async () => []) },
   order: { findMany: vi.fn() },
-  reviewRequest: { findMany: vi.fn(async () => []), create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: `rq-${data.orderId}`, ...data })) },
+  reviewRequest: { findMany: vi.fn(async () => []), findUnique: vi.fn(async () => null), create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: `rq-${data.orderId}`, ...data })) },
   reviewSentimentCheck: { create: vi.fn() },
 }))
 vi.mock('../../db.js', () => ({ default: db }))
@@ -28,7 +30,7 @@ vi.mock('./review-timing-test.service.js', async (importOriginal) => ({
   runningTimingTests: vi.fn(async () => running.tests),
 }))
 
-import { createScheduledRequest, decideRuleForOrder, findOrdersMatchingRule, schedulePendingOrders, type MatchableOrder } from './review-scheduler.service.js'
+import { createScheduledRequest, decideRuleForOrder, findOrdersMatchingRule, queueOrdersForRule, schedulePendingOrders, type MatchableOrder } from './review-scheduler.service.js'
 import { assignArm } from './review-timing-test-math.js'
 
 const DAY = 86_400_000
@@ -255,5 +257,62 @@ describe('schedulePendingOrders — a running timing test (PR J)', () => {
     const result = await schedulePendingOrders()
     expect(created().every((r) => r.timingTestArmId === undefined && r.status === 'SCHEDULED')).toBe(true)
     expect(result.inTests).toBeUndefined()
+  })
+})
+
+describe('"Queue these" while a timing test runs (PR J)', () => {
+  const now = Date.now()
+  const germany = rule('germany', { scope: 'AMAZON_PER_MARKETPLACE', marketplace: 'DE', sendDelayDays: 12, minDaysSinceDelivery: 1, maxDaysSinceDelivery: 25 })
+  const order = (id: string) => ({
+    id, channel: 'AMAZON', channelOrderId: `306-${id}`, marketplace: 'DE', deliveredAt: new Date(now - 2 * DAY), shippedAt: null, purchaseDate: null,
+    customerEmail: `${id}@example.com`, customerId: null, totalPrice: 80, fulfillmentMethod: 'FBM', status: 'DELIVERED', cancelledAt: null,
+    items: [{ product: { productType: 'Gloves touring' } }], returns: [], financialTransactions: [],
+  })
+  const timing = {
+    id: 'tt-q', kind: 'TIMING', channel: 'AMAZON', market: 'DE', productType: 'glove', ruleId: null, holdoutPct: 20, startedAt: new Date(now - 5 * DAY),
+    arms: [
+      { id: 'q4', position: 0, holdout: false, delayDays: 4, ruleId: null },
+      { id: 'q10', position: 1, holdout: false, delayDays: 10, ruleId: null },
+      { id: 'q-hold', position: 2, holdout: true, delayDays: null, ruleId: null },
+    ],
+  }
+  const orders = Array.from({ length: 30 }, (_, i) => order(`q${i}`))
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    db.reviewRule.findUnique.mockResolvedValue(germany)
+    db.reviewRule.findMany.mockResolvedValue([germany])
+    db.order.findMany.mockResolvedValue(orders)
+    running.tests = [timing]
+  })
+
+  it('each order goes to the group the scheduler would pick; a holdout order is recorded as not asked, never queued', async () => {
+    const out = await queueOrdersForRule('germany')
+    const rows = db.reviewRequest.create.mock.calls.map(([arg]) => arg.data)
+    expect(rows).toHaveLength(orders.length)
+    let held = 0
+    for (const o of orders) {
+      const arm = assignArm(timing as never, o.channelOrderId)!
+      const row = rows.find((r) => r.orderId === o.id)!
+      expect(row.timingTestArmId).toBe(arm.id)
+      if (arm.holdout) {
+        held += 1
+        expect(row).toMatchObject({ status: 'SKIPPED', suppressedReason: 'timing_test_holdout', providerResponseCode: 'TIMING_TEST_HOLDOUT', ruleId: 'germany' })
+      } else {
+        expect(row).toMatchObject({ status: 'SCHEDULED', ruleId: 'germany' })
+        expect(Math.round((row.scheduledFor.getTime() - o.deliveredAt.getTime()) / DAY)).toBe(arm.delayDays)
+      }
+    }
+    expect(held).toBeGreaterThan(0)
+    expect(out).toEqual({ enqueued: orders.length - held, skipped: 0, decidedElsewhere: 0, heldOut: held, totalMatches: orders.length })
+    expect(db.reviewSentimentCheck.create).not.toHaveBeenCalled()
+  })
+
+  it('no test running: queued on the rule’s own day, in no group', async () => {
+    running.tests = []
+    const out = await queueOrdersForRule('germany')
+    const rows = db.reviewRequest.create.mock.calls.map(([arg]) => arg.data)
+    expect(out).toMatchObject({ enqueued: orders.length, heldOut: 0 })
+    expect(rows.every((r) => r.status === 'SCHEDULED' && r.timingTestArmId === undefined)).toBe(true)
   })
 })

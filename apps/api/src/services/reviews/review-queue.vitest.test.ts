@@ -224,6 +224,15 @@ describe('review queue: bulk held rules', () => {
     expect(snooze.apply).toEqual(['a'])
     expect(snooze.held[0]).toMatchObject({ id: 'd', words: expect.stringMatching(/past Amazon’s day 30/) })
   })
+
+  it('PR J — a timing test’s holdout row is never sent now, snoozed or skipped again by the server: held, in words', () => {
+    const holdout = amazon('h', { status: 'SKIPPED', suppressedReason: 'timing_test_holdout', providerResponseCode: 'TIMING_TEST_HOLDOUT', scheduledFor: daysAgo(4) })
+    const words = 'Held out by a timing test on purpose — it stays not asked, so the test’s result holds'
+    for (const action of ['send-now', 'snooze'] as const) {
+      expect(queueBulkPlan(['h', 'a'], [holdout, amazon('a')], action, 1, NOW)).toEqual({ apply: ['a'], held: [{ id: 'h', words }] })
+    }
+    expect(queueBulkPlan(['h'], [holdout], 'skip', 1, NOW)).toEqual({ apply: [], held: [{ id: 'h', words: 'Already skipped' }] })
+  })
 })
 
 describe('rules bulk held rules', () => {

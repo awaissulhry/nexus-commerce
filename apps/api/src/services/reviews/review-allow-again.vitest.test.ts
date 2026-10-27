@@ -53,10 +53,23 @@ describe('allowRequestAgain', () => {
     expect(db.updates).toEqual([])
   })
 
+  it('PR J — refuses the holdout of a timing test (409, in words): it stays not asked, so the test holds', async () => {
+    db.row = row({ suppressedReason: 'timing_test_holdout', providerResponseCode: 'TIMING_TEST_HOLDOUT', scheduledFor: days(6) })
+    await expect(allowRequestAgain('r1', NOW)).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'Held out by a timing test on purpose — it stays not asked, so the test’s result holds',
+    })
+    expect(db.updates).toEqual([])
+  })
+
   it('puts a skipped request back, due now with a fresh set of tries; an unknown id is null', async () => {
     db.row = row({ suppressedReason: 'rule_exclusion:asked_buyer_90d', attemptCount: 2 })
     await allowRequestAgain('r1', NOW)
-    expect(db.updates).toEqual([{ where: { id: 'r1', status: { in: ['SKIPPED', 'SUPPRESSED'] } }, data: expect.objectContaining({ status: 'SCHEDULED', scheduledFor: NOW, attemptCount: 0, suppressedReason: null }) }])
+    expect(db.updates).toEqual([{
+      // The write itself never puts a timing test's holdout row back, even if the row changed after the read (PR J).
+      where: { id: 'r1', status: { in: ['SKIPPED', 'SUPPRESSED'] }, OR: [{ providerResponseCode: null }, { providerResponseCode: { not: 'TIMING_TEST_HOLDOUT' } }] },
+      data: expect.objectContaining({ status: 'SCHEDULED', scheduledFor: NOW, attemptCount: 0, suppressedReason: null }),
+    }])
     db.row = null
     expect(await allowRequestAgain('nope', NOW)).toBeNull()
   })

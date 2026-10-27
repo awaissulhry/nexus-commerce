@@ -351,7 +351,7 @@ export interface HeldFacts extends RequestFacts {
 const dayOf = (r: HeldFacts, now: Date) => (r.deliveredAt ? (now.getTime() - r.deliveredAt.getTime()) / DAY_MS : null)
 const tz = timezoneForMarketplace
 /** PR J — a timing test's holdout row is never sent, snoozed or allowed again: that would spoil the test's result. */
-const HOLDOUT_HELD = 'Held out by a timing test on purpose — it stays not asked, so the test’s result holds'
+export const HOLDOUT_HELD = 'Held out by a timing test on purpose — it stays not asked, so the test’s result holds'
 const isHoldout = (r: RequestFacts) => r.providerResponseCode === 'TIMING_TEST_HOLDOUT'
 
 /** Why "Send now" is held for a row, or null when it may go. */
