@@ -50,23 +50,23 @@ import { sourceLabel } from '../ads-strategy/terms.js'
 import { readOwnerTargets } from '../ads-target-acos-resolver.js'
 import { productFamily, resolveCampaignOwnership, type CampaignOwnership } from '../brain/ownership.js'
 import { termsDue } from '../brain/terms-shadow.js'
-import { keptLabel, negativeKeptBy, negativeOwner, NO_OWNER, ownerOfActor, refOfOwner, rowOwner, type OwnerNames } from './owner.js'
+import { keptLabel, negativeKeptBy, negativeOwner, NO_OWNER, ownerOfActor, personOwner, refOfOwner, rowOwner, type OwnerNames } from './owner.js'
 import {
   adGroupHref, campaignHref, compareRows, D90_DAYS, DAY_MS, dayIndex, isAsinText, isoDay, keywordRowId, kindMatches,
   LAST_CHANGE_DAYS, MAX_IDS, negativeBlocksTerm, negativeMatch, outOfStockDays, ownerMatches, pageOf, portfolioHref,
   productHref, READ_DAYS, showMatches, SPARK_WEEKS, targetMatch, termKeyOf, termRowId, textMatches, totalsOf, WASTE_WINDOW_DAYS,
-  wasteWindow, CLASH_LABELS, negRowId, withAskCounts, plainWords, WASTE_TOOLS,
+  wasteWindow, CLASH_LABELS, negRowId, withAskCounts, plainWords, WASTE_TOOLS, isFunnelNegative, negativeClashesWith,
   type KindFilter, type Match, type Owner, type Verb, type Ref, type RowNumbers, type RowState, type ShowFilter, type WasteCriteria,
   type WasteRow, type WasteTotals,
 } from './pure.js'
 import { barFor, wasteTest, xCpaOf, type OwnerBar, type ProductFacts } from './test.js'
 import { verbFor } from './verb.js'
-import { HOLD_SELECT, holdOf } from './hold.js'
+import { actorNames, HOLD_SELECT, holdOf } from './hold.js'
 import { activeSkips } from './skip.js'
 import { buildStoppedRows, filterStopped } from './stopped.js'
 import { NEGATIVE_ORIGINS } from '../ads-negative-kw.service.js'
 import { crowdSizes, negativeAdded, type AddedFact } from './since.js'
-import { withAskRows } from './asks.js'
+import { waitAskOf, withAskRows } from './asks.js'
 import { protectedTermHit } from '../ads-negation-policy.js'
 import { protectionsHolding, protectionsInScope, rowProtectionOf, type Protection } from './protect.js'
 import { readFollowUpRows, rowFollowUp, type FollowUpView } from './follow-up.js'
@@ -163,14 +163,20 @@ interface TermPlaceFacts {
   matchType: string | null
   /** Clicks over the whole read (93 days): a row needs one. */
   clicks93: number
-  /** Clicks, and clicks + impressions, in the page's default window, every day (who still serves it; the campaign rule). */
+  /** Clicks in the page's default window, every day (the campaign rule). */
   clicksDefault: number
-  servedDefault: number
+  /**
+   * HONEST 18b — the last day (day index) it spent here, to the settled day (3 days ago); null: no spend in the read. Who
+   * still spends it (servingPlaces): in the window, or since a stop — never impressions alone.
+   */
+  lastSpendDay: number | null
   win: Record<WindowDays, WindowSums>
   d90: { clicks: number; orders: number; spendCents: number }
   spark: number[]
   /** Per keyword or target that bought it (Amazon's external id): its 93-day clicks (who bought it most) and orders in the default window. */
   vias: Map<string, ViaSums>
+  /** HONEST 9 — some of its days name no keyword or target that bought it: who buys it is not wholly known. */
+  unknownVia?: boolean
 }
 
 /** One keyword's share of a search term in one place: who bought it most, what sold, and its own sums (a keyword with no
@@ -189,15 +195,31 @@ export interface ChangeFact {
   id: string; entityId: string; actionType: string; actor: string | null; executionId: string | null; at: Date
   status: string | null; rolledBackAt: Date | null; before: Record<string, unknown>; after: Record<string, unknown>; evidence: unknown
 }
+/** HONEST 10 — one change of an ask, as the row it lands on carries it (asks.ts waitAskOf). */
+export interface WaitingAsk {
+  action: WaitItem['action']
+  match: Match | null
+  level: 'AD_GROUP' | 'CAMPAIGN' | null
+  text: string | null
+  keepPaused?: boolean
+  /** HONEST 18d — a removal: whether Amazon holds the negative (false: removing it changes Nexus only). */
+  atAmazon?: boolean
+}
 export interface WaitingFact {
   approvalId: string; by: Owner; at: Date; expiresAt: Date | null
   /** NFIX — a change plan: how many steps it holds and how many are not this page's (it is decided whole). */
   plan?: { steps: number; offPage: number } | null
+  /** HONEST 10 — the ask's own change where this fact lands (each change of an ask has its own copy). */
+  ask?: WaitingAsk
+  /** HONEST 11 — how many of this page's changes the ask holds, in every market. */
+  changes?: number
 }
 /** A waiting fact as a row carries it (`rows` is set over the listed rows: pure.ts withAskCounts). */
 export const waitingOfFact = (w: WaitingFact): NonNullable<WasteRow['waiting']> => ({
   approvalId: w.approvalId, by: refOfOwner(w.by), at: w.at.toISOString(), expiresAt: w.expiresAt?.toISOString() ?? null, rows: 1,
   ...(w.plan ? { plan: w.plan } : {}),
+  ...(w.ask ? { action: w.ask.action, match: w.ask.match, level: w.ask.level, text: w.ask.text, ...(w.ask.keepPaused !== undefined ? { keepPaused: w.ask.keepPaused } : {}), ...(w.ask.atAmazon !== undefined ? { atAmazon: w.ask.atAmazon } : {}) } : {}),
+  ...(w.changes != null ? { changes: w.changes } : {}),
 })
 /**
  * NFIX — one change an ask holds (an approval's step, or a rule's card): pause our keyword (`targetId`), add a negative
@@ -488,7 +510,7 @@ export async function loadWasteFacts(market: string, now: Date = new Date(), foc
     )
     SELECT x.c, x.g, x.q, x.via, MAX(x.mt) AS mt, SUM(x.k)::int AS k93,
            SUM(CASE WHEN x.d BETWEEN ${since[60]} AND ${clicksThrough} THEN x.k ELSE 0 END)::int AS "kDef",
-           SUM(CASE WHEN x.d BETWEEN ${since[60]} AND ${clicksThrough} THEN x.k + x.i ELSE 0 END)::int AS "servedDef",
+           MAX(CASE WHEN x.m > 0 AND x.d <= ${clicksThrough} THEN x.d END)::int AS "lastSpend",
            ${sumCols(since[30], '30', true)},
            ${sumCols(since[60], '60', true)},
            ${sumCols(since[90], '90', true)},
@@ -511,7 +533,7 @@ export async function loadWasteFacts(market: string, now: Date = new Date(), foc
     let p = termPlaces.get(k)
     if (!p) {
       p = {
-        adGroupId, campaignId, key, text: query.trim().replace(/\s+/g, ' '), matchType: null, clicks93: 0, clicksDefault: 0, servedDefault: 0,
+        adGroupId, campaignId, key, text: query.trim().replace(/\s+/g, ' '), matchType: null, clicks93: 0, clicksDefault: 0, lastSpendDay: null,
         win: { 30: NO_SUMS, 60: NO_SUMS, 90: NO_SUMS }, d90: { clicks: 0, orders: 0, spendCents: 0 }, spark: new Array<number>(SPARK_WEEKS).fill(0), vias: new Map(),
       }
       termPlaces.set(k, p)
@@ -519,7 +541,7 @@ export async function loadWasteFacts(market: string, now: Date = new Date(), foc
     p.matchType = p.matchType ?? (r.mt == null ? null : String(r.mt))
     p.clicks93 += num(r.k93)
     p.clicksDefault += num(r.kDef)
-    p.servedDefault += num(r.servedDef)
+    if (r.lastSpend != null) p.lastSpendDay = Math.max(p.lastSpendDay ?? -Infinity, num(r.lastSpend))
     for (const d of WINDOWS) p.win[d] = addSums(p.win[d], sumsOf(r, String(d)))
     p.d90 = { clicks: p.d90.clicks + num(r.k90d), orders: p.d90.orders + num(r.o90d), spendCents: p.d90.spendCents + cents(r.m90d) }
     const spark = sparkOfRow(r)
@@ -532,7 +554,7 @@ export async function loadWasteFacts(market: string, now: Date = new Date(), foc
         d90: { clicks: v.d90.clicks + num(r.k90d), orders: v.d90.orders + num(r.o90d), spendCents: v.d90.spendCents + cents(r.m90d) },
         spark: v.spark.map((x, i) => x + spark[i]),
       })
-    }
+    } else p.unknownVia = true
   }
   const placesByKey = new Map<string, TermPlaceFacts[]>()
   const placesByGroup = new Map<string, TermPlaceFacts[]>()
@@ -837,13 +859,21 @@ export async function loadWasteFacts(market: string, now: Date = new Date(), foc
     const a = l.userId?.replace(/^automation:(automation:)*/, '')
     if (l.userId?.startsWith('automation:') && a) ruleIdsSeen.add(a.replace(/^rule-/, ''))
   }
-  const [ruleNames, claudeSets] = await Promise.all([
+  // HONEST 19 — every person a change, a hold or an ask names, by their own name (never "You": the route says "You" to
+  // the person looking only).
+  const personActors = [
+    ...[...stateRows, ...createRows, ...retireRows, ...pauseRows].map((l) => l.userId), ...targetRows.map((t) => t.keptPausedBy ?? null),
+    ...pending.map((p) => (p.agentRun?.userId ? `user:${p.agentRun.userId}` : null)),
+  ].filter((a): a is string => !!a && a.startsWith('user:'))
+  const [ruleNames, claudeSets, people] = await Promise.all([
     prisma.automationRule.findMany({ where: { id: { in: [...ruleIdsSeen] } }, select: { id: true, name: true } }),
     executionIds.length ? prisma.agentApproval.findMany({ where: { id: { in: executionIds }, agentRun: { via: 'claude' } }, select: { id: true } }) : Promise.resolve([]),
+    personActors.length ? actorNames(personActors) : Promise.resolve(new Map<string, string>()),
   ])
   const names: OwnerNames = {
     rules: new Map([...ruleNames.map((r) => [r.id, r.name] as const), ...cards.filter((c) => c.ruleName).map((c) => [c.ruleId, c.ruleName!] as const)]),
     claudeChangeSets: new Set([...claudeSets.map((a) => a.id), ...pending.filter((p) => p.agentRun?.via === 'claude').map((p) => p.id)]),
+    people,
   }
 
   const waitingKw = new Map<string, WaitingFact>()
@@ -852,10 +882,18 @@ export async function loadWasteFacts(market: string, now: Date = new Date(), foc
   // the Rules view's Waiting and the list they open.
   const waitItems: WaitItem[] = []
   const negMatchOfArg = (m: unknown): 'NEGATE_EXACT' | 'NEGATE_PHRASE' => (/PHRASE/i.test(String(m ?? '')) ? 'NEGATE_PHRASE' : 'NEGATE_EXACT')
+  // HONEST 10 — each change of an ask gets its own copy of the ask's fact, carrying that change (asks.ts waitAskOf); every
+  // copy learns how many changes its ask holds once all are read (HONEST 11).
+  const askCopies: WaitingFact[] = []
+  const askFact = (fact: WaitingFact, x: Omit<WaitItem, 'fact' | 'why'>, keepPaused?: boolean): WaitingFact => {
+    const copy: WaitingFact = { ...fact, ask: waitAskOf(x, targetById, keepPaused) }
+    askCopies.push(copy)
+    return copy
+  }
   for (const a of pending) {
     const by: Owner = brainAsks.has(a.id) ? { kind: 'BRAIN', name: 'Brain', id: 'brain' }
       : a.agentRun?.via === 'claude' ? { kind: 'CLAUDE', name: 'Claude', id: a.id }
-        : { kind: 'PERSON', name: 'You', id: a.agentRun?.userId ?? null }
+        : personOwner(a.agentRun?.userId ?? null, names)
     const isPlan = a.toolName === 'submit-change-plan'
     const fact: WaitingFact = {
       approvalId: a.id, by, at: a.requestedAt, expiresAt: a.expiresAt,
@@ -865,42 +903,48 @@ export async function loadWasteFacts(market: string, now: Date = new Date(), foc
     for (const s of steps) {
       const args = jsonObj(s.args)
       const why = typeof args.why === 'string' && args.why.trim() ? plainWords(args.why) : null
-      const item = (x: Omit<WaitItem, 'fact' | 'why'>) => waitItems.push({ fact, why, ...x })
+      const item = (x: Omit<WaitItem, 'fact' | 'why'>, keepPaused?: boolean): WaitItem => {
+        const it: WaitItem = { fact: askFact(fact, x, keepPaused), why, ...x }
+        waitItems.push(it)
+        return it
+      }
       const str = (v: unknown) => (typeof v === 'string' && v ? v : null)
       if (s.toolName === 'pause-ads') {
         for (const id of Array.isArray(args.targetIds) ? args.targetIds : []) {
           if (typeof id !== 'string') continue
-          if (!waitingKw.has(id)) waitingKw.set(id, fact)
-          item({ action: 'PAUSE', targetId: id, adGroupId: null, campaignId: null, text: null })
+          // pause-ads keeps a keyword paused only when it asks keepPaused: true.
+          const it = item({ action: 'PAUSE', targetId: id, adGroupId: null, campaignId: null, text: null }, args.keepPaused === true)
+          if (!waitingKw.has(id)) waitingKw.set(id, it.fact)
         }
       } else if (s.toolName === 'add-negative-targets') {
         for (const n of Array.isArray(args.negatives) ? args.negatives as Array<Record<string, unknown>> : []) {
           const text = typeof n.text === 'string' ? n.text : typeof n.asin === 'string' ? n.asin : null
-          if (text) waitingTerm.push({ fact, adGroupId: typeof n.adGroupId === 'string' ? n.adGroupId : null, campaignId: typeof n.campaignId === 'string' ? n.campaignId : null, key: termKeyOf(text) })
-          if (text) item({ action: typeof n.asin === 'string' && typeof n.text !== 'string' ? 'NEGATE_ASIN' : negMatchOfArg(n.matchType), targetId: null, adGroupId: str(n.adGroupId), campaignId: str(n.adGroupId) ? null : str(n.campaignId), text })
+          if (!text) continue
+          const it = item({ action: typeof n.asin === 'string' && typeof n.text !== 'string' ? 'NEGATE_ASIN' : negMatchOfArg(n.matchType), targetId: null, adGroupId: str(n.adGroupId), campaignId: str(n.adGroupId) ? null : str(n.campaignId), text })
+          waitingTerm.push({ fact: it.fact, adGroupId: typeof n.adGroupId === 'string' ? n.adGroupId : null, campaignId: typeof n.campaignId === 'string' ? n.campaignId : null, key: termKeyOf(text) })
         }
-        const texts = [...(Array.isArray(args.keywords) ? (args.keywords as Array<{ text?: unknown }>).map((k) => k?.text) : []), ...(Array.isArray(args.asins) ? args.asins : [])].filter((t): t is string => typeof t === 'string')
         const campaignScope = args.scope === 'CAMPAIGN'
-        for (const text of texts) {
-          for (const g of campaignScope ? [] : (Array.isArray(args.adGroupIds) ? args.adGroupIds : [])) if (typeof g === 'string') waitingTerm.push({ fact, adGroupId: g, campaignId: null, key: termKeyOf(text) })
-          for (const c of campaignScope ? (Array.isArray(args.campaignIds) ? args.campaignIds : []) : []) if (typeof c === 'string') waitingTerm.push({ fact, adGroupId: null, campaignId: c, key: termKeyOf(text) })
-        }
         const places = (campaignScope ? (Array.isArray(args.campaignIds) ? args.campaignIds : []) : (Array.isArray(args.adGroupIds) ? args.adGroupIds : [])).filter((x): x is string => typeof x === 'string')
-        for (const k of Array.isArray(args.keywords) ? args.keywords as Array<{ text?: unknown; matchType?: unknown }> : []) {
-          if (typeof k?.text !== 'string') continue
-          for (const p of places) item({ action: negMatchOfArg(k.matchType), targetId: null, adGroupId: campaignScope ? null : p, campaignId: campaignScope ? p : null, text: k.text })
-        }
-        if (!campaignScope) for (const asin of Array.isArray(args.asins) ? args.asins : []) {
-          if (typeof asin === 'string') for (const p of places) item({ action: 'NEGATE_ASIN', targetId: null, adGroupId: p, campaignId: null, text: asin })
+        const asked = [
+          ...(Array.isArray(args.keywords) ? args.keywords as Array<{ text?: unknown; matchType?: unknown }> : []).filter((k) => typeof k?.text === 'string').map((k) => ({ action: negMatchOfArg(k.matchType), text: k.text as string })),
+          ...(Array.isArray(args.asins) ? args.asins : []).filter((t): t is string => typeof t === 'string').map((text) => ({ action: 'NEGATE_ASIN' as const, text })),
+        ]
+        for (const k of asked) {
+          for (const p of places) {
+            const x = { action: k.action, targetId: null, adGroupId: campaignScope ? null : p, campaignId: campaignScope ? p : null, text: k.text }
+            // A product is negated only inside an ad group: a campaign-wide one is no change of this page's (its rows still say what waits).
+            const at = k.action === 'NEGATE_ASIN' && campaignScope ? askFact(fact, x) : item(x).fact
+            waitingTerm.push({ fact: at, adGroupId: x.adGroupId, campaignId: x.campaignId, key: termKeyOf(k.text) })
+          }
         }
       } else if (s.toolName === 'create-negative-keyword') {
         const text = typeof args.keywordText === 'string' ? args.keywordText : null
         const ext = typeof args.externalAdGroupId === 'string' ? args.externalAdGroupId : null
         const extC = typeof args.externalCampaignId === 'string' ? args.externalCampaignId : null
         const g = ext ? [...adGroups.values()].find((x) => x.externalAdGroupId === ext && (!extC || campaigns.get(x.campaignId)?.externalCampaignId === extC)) : undefined
-        if (text && g) waitingTerm.push({ fact, adGroupId: g.id, campaignId: null, key: termKeyOf(text) })
         const c = !g && extC ? campaignOfExt.get(extC) ?? null : null
-        if (text && (g || c)) item({ action: negMatchOfArg(args.matchType), targetId: null, adGroupId: g?.id ?? null, campaignId: g ? null : c, text })
+        const it = text && (g || c) ? item({ action: negMatchOfArg(args.matchType), targetId: null, adGroupId: g?.id ?? null, campaignId: g ? null : c, text }) : null
+        if (text && g && it) waitingTerm.push({ fact: it.fact, adGroupId: g.id, campaignId: null, key: termKeyOf(text) })
       } else if (s.toolName === 'retire-negatives') {
         // A negative's removal: by its id, or by its place and words (the standing negative there).
         for (const id of Array.isArray(args.negativeIds) ? args.negativeIds : []) if (typeof id === 'string') item({ action: 'REMOVE_NEGATIVE', targetId: id, adGroupId: null, campaignId: null, text: null })
@@ -918,21 +962,36 @@ export async function loadWasteFacts(market: string, now: Date = new Date(), foc
     const type = String(jsonObj(c.proposedAction).type ?? '')
     const by: Owner = { kind: 'RULE', name: c.ruleName ?? names.rules.get(c.ruleId) ?? 'Rule', id: c.ruleId }
     const fact: WaitingFact = { approvalId: `suggestion:${c.id}`, by, at: c.createdAt, expiresAt: null }
-    if (c.entityType === 'AD_TARGET' && type === 'pause_target' && !waitingKw.has(c.entityId)) waitingKw.set(c.entityId, fact)
-    if (c.entityType === 'AD_TARGET' && type === 'pause_target') waitItems.push({ fact, why: null, action: 'PAUSE', targetId: c.entityId, adGroupId: null, campaignId: null, text: null })
+    if (c.entityType === 'AD_TARGET' && type === 'pause_target') {
+      // A rule's pause keeps the keyword paused unless its action opts out (automation-action-handlers pause_target).
+      const x = { action: 'PAUSE' as const, targetId: c.entityId, adGroupId: null, campaignId: null, text: null }
+      const at = askFact(fact, x, jsonObj(c.proposedAction).keepPaused !== false)
+      if (!waitingKw.has(c.entityId)) waitingKw.set(c.entityId, at)
+      waitItems.push({ fact: at, why: null, ...x })
+    }
     if (c.entityType === 'SEARCH_TERM' && (type === 'add_negative_exact' || type === 'add_negative_phrase')) {
       const at = c.entityId.indexOf(':')
       if (at <= 0) continue
       const ext = c.entityId.slice(0, at)
       const campaignId = campaignOfExt.get(ext) ?? null
       const adGroupId = typeof jsonObj(c.proposedAction).adGroupId === 'string' ? String(jsonObj(c.proposedAction).adGroupId) : null
-      if (campaignId) waitingTerm.push({ fact, adGroupId, campaignId: adGroupId ? null : campaignId, key: termKeyOf(c.entityId.slice(at + 1)) })
-      if (campaignId) waitItems.push({ fact, why: null, action: type === 'add_negative_phrase' ? 'NEGATE_PHRASE' : 'NEGATE_EXACT', targetId: null, adGroupId, campaignId: adGroupId ? null : campaignId, text: c.entityId.slice(at + 1) })
+      if (!campaignId) continue
+      const x = { action: type === 'add_negative_phrase' ? 'NEGATE_PHRASE' as const : 'NEGATE_EXACT' as const, targetId: null, adGroupId, campaignId: adGroupId ? null : campaignId, text: c.entityId.slice(at + 1) }
+      const card = askFact(fact, x)
+      waitingTerm.push({ fact: card, adGroupId, campaignId: adGroupId ? null : campaignId, key: termKeyOf(x.text) })
+      waitItems.push({ fact: card, why: null, ...x })
     }
   }
+  // HONEST 11 — every copy says how many of this page's changes its ask holds (a rule's card: one).
+  const changesOf = new Map<string, number>()
+  for (const it of waitItems) changesOf.set(it.fact.approvalId, (changesOf.get(it.fact.approvalId) ?? 0) + 1)
+  for (const w of askCopies) w.changes = Math.max(1, changesOf.get(w.approvalId) ?? 0)
 
   const skips = new Map<string, SkipFacts>([...(await activeSkips(undefined, now))].map(([k, v]) => [k, { until: v.until, by: v.by, at: v.at }]))
   const followUps = await readFollowUpRows(retiredSince)
+  // HONEST 19 — who skipped a row, and who asked a follow-up, by name too (one read, only for people not named yet).
+  const laterPeople = [...[...skips.values()].map((s) => s.by), ...followUps.map((fu) => fu.by)].filter((a): a is string => !!a && a.startsWith('user:') && !people.has(a))
+  if (laterPeople.length) for (const [k, v] of await actorNames(laterPeople)) people.set(k, v)
 
   return {
     now, markets, focus, campaigns, adGroups, adGroupOfExt, ownership, products, portfolioNames, targets, positivesByGroup, negByGroup, negByCampaign, targetByExt, targetById,
@@ -1021,6 +1080,30 @@ export function blockersOf(f: WasteFacts, adGroupId: string, key: string): Targe
   })
 }
 
+/**
+ * HONEST 6 — of those, the ones that block NOW (blocksNow: Amazon holds it, it is on, its campaign runs). A negative
+ * that is switched off or that Amazon never took blocks nothing: every "blocked", "negated" and "still serves" reads this.
+ */
+export function blockersNow(f: WasteFacts, adGroupId: string, key: string): TargetFact[] {
+  return blockersOf(f, adGroupId, key).filter((n) => blocksNow(f, n))
+}
+
+/**
+ * HONEST 9 — our keyword that bought this term in its place, when EVERY keyword or target that bought it there is paused
+ * (Amazon does not buy it now); null when one of them runs, or one is not known (a day that names none, or one Nexus does
+ * not hold).
+ */
+export function pausedBuyerOf(f: WasteFacts, p: { adGroupId: string; vias: ReadonlyMap<string, unknown>; unknownVia?: boolean }): TargetFact | null {
+  if (p.unknownVia || !p.vias.size) return null
+  let first: TargetFact | null = null
+  for (const ext of p.vias.keys()) {
+    const t = (f.targetByExt.get(ext) ?? []).find((x) => x.adGroupId === p.adGroupId && !x.isNegative) ?? null
+    if (!t || t.status !== 'PAUSED') return null
+    first ??= t
+  }
+  return first
+}
+
 /** Who made this standing negative. */
 export function ownerOfNegative(f: WasteFacts, n: TargetFact): Owner {
   return negativeOwner({ origin: f.origins.get(n.id) ?? null, harvestSource: f.harvestSources.has(n.id), brainReason: f.brainReasons.get(n.id) ?? null, create: f.negativeCreates.get(n.id) ?? null }, f.names)
@@ -1070,39 +1153,131 @@ export function inScope(f: WasteFacts, adGroupId: string, s: ResolvedScope): boo
   return true
 }
 
-/** Live ad groups (other than `except`) where this term had clicks or impressions in the window and nothing blocks it. */
-export function servingPlaces(f: WasteFacts, key: string, except: string | null): string[] {
+/**
+ * Live ad groups (other than `except`) where this term SPENT and nothing blocks it now. HONEST 18b — spend, never
+ * impressions alone; after `afterDay` (a stop's day: "since the stop"), else in the page's window, to the settled day.
+ */
+export function servingPlaces(f: WasteFacts, key: string, except: string | null, afterDay?: number | null): string[] {
   const out: string[] = []
+  const after = afterDay ?? dayIndex(wasteWindow(f.now).since) - 1
   for (const p of f.placesByKey.get(key) ?? []) {
     if (p.adGroupId === except || !f.adGroups.get(p.adGroupId)?.live) continue
-    if (!(p.servedDefault > 0)) continue
-    if (blockersOf(f, p.adGroupId, key).length) continue
+    if (!(p.lastSpendDay != null && p.lastSpendDay > after)) continue
+    // HONEST 6, 9 — blocked there NOW, or every keyword that bought it there is paused: it does not serve there now.
+    if (blockersNow(f, p.adGroupId, key).length || pausedBuyerOf(f, p)) continue
     out.push(p.adGroupId)
   }
   return out
+}
+
+/** A place as its rows are judged: its campaign, product, the product's facts and bar, shared or not, the Brain, its age. */
+export function placeFacts(f: WasteFacts, adGroupId: string) {
+  const g = f.adGroups.get(adGroupId)!
+  const c = f.campaigns.get(g.campaignId)!
+  const own = f.ownership.get(c.id)
+  const root = own?.owner.kind === 'product' ? own.owner.productId : null
+  const key = root ? `${c.market}|${root}` : null
+  return {
+    g, c, root,
+    facts: (key && f.productFacts.get(key)) || f.marketFacts.get(c.market) || { cr: null, targetCpaCents: null, targetSource: null },
+    negateBar: (key && f.negateBar.get(key)) || f.marketNegateBar.get(c.market) || null,
+    shared: own?.owner.kind !== 'product',
+    brain: !!root && f.brainProducts.has(`${c.market}|${root}`),
+    ageDays: g.firstDay == null ? null : dayIndex(f.now) - g.firstDay,
+  }
+}
+
+/** Days since a harvest made these words a keyword (any of the product's); null: never harvested. */
+export const harvestedDaysAgoOf = (f: WasteFacts, key: string): number | null => (f.harvestedAt.has(key) ? (f.now.getTime() - f.harvestedAt.get(key)!) / DAY_MS : null)
+
+/** Our keyword's search terms that sold in the window (orders to today), through it in its ad group. */
+export function termsSoldOf(f: WasteFacts, adGroupId: string, externalTargetId: string | null): number {
+  let n = 0
+  if (externalTargetId) for (const p of f.placesByGroup.get(adGroupId) ?? []) if ((p.vias.get(externalTargetId)?.orders ?? 0) > 0) n++
+  return n
+}
+
+/** Our own keyword or target with these words in this ad group (any match, paused ones too: a negative would block it). */
+export const ownKeywordIn = (f: WasteFacts, adGroupId: string, key: string): boolean =>
+  (f.positivesByGroup.get(adGroupId) ?? []).some((t) => t.status !== 'ARCHIVED' && termKeyOf(t.expressionValue) === key)
+
+const ownByCampaignMemo = new WeakMap<WasteFacts, Map<string, Set<string>>>()
+/**
+ * HONEST 7 — another ad group of this campaign (paused ones too: a campaign negative lands in every one) where the words
+ * sold in the read (Nexus keeps 90 days: what add-negative-targets reads too), or that holds our own keyword of them.
+ */
+export function campaignSiblings(f: WasteFacts, campaignId: string, adGroupId: string, key: string): { soldInSibling: boolean; ownKeywordInSibling: boolean } {
+  let byCampaign = ownByCampaignMemo.get(f)
+  if (!byCampaign) {
+    byCampaign = new Map()
+    for (const [gid, list] of f.positivesByGroup) {
+      const c = f.adGroups.get(gid)?.campaignId
+      if (!c) continue
+      for (const t of list) {
+        if (t.status === 'ARCHIVED') continue
+        const k = `${c}|${termKeyOf(t.expressionValue)}`
+        byCampaign.set(k, (byCampaign.get(k) ?? new Set()).add(gid))
+      }
+    }
+    ownByCampaignMemo.set(f, byCampaign)
+  }
+  const soldInSibling = (f.placesByKey.get(key) ?? []).some((p) => p.campaignId === campaignId && p.adGroupId !== adGroupId && (p.win[90].orders > 0 || p.d90.orders > 0))
+  const ownKeywordInSibling = [...(byCampaign.get(`${campaignId}|${key}`) ?? [])].some((gid) => gid !== adGroupId)
+  return { soldInSibling, ownKeywordInSibling }
+}
+
+/** HONEST 5 — a negative here that is the Owner's funnel over one of our keywords of this ad group (isFunnelNegative). */
+function funnelHere(f: WasteFacts, n: TargetFact, adGroupId: string): boolean {
+  const m = negativeMatch(n.kind, n.expressionType)
+  if (!m) return false
+  return (f.positivesByGroup.get(adGroupId) ?? []).some((t) => {
+    if (t.status === 'ARCHIVED') return false
+    const tm = targetMatch(t.kind, t.expressionType)
+    return !!tm && tm.rowKind === 'KEYWORD' && isFunnelNegative({ text: t.expressionValue, match: tm.match }, { text: n.expressionValue, match: m })
+  })
+}
+
+/**
+ * HONEST 8 — the hold on one stop, as the row's verb has it, read again by the server for every preview and write (the
+ * page's buttons and bulk plans are not the guard). `pause`: our keyword or target (its pause's own hold, whatever the
+ * row's verb is); `negate`: words negated in one ad group (the term's facts there, a row of its own or not).
+ * `protectedToo` false: a protected term is not asked here (the same review removes it, or the negative's own tool
+ * refuses it). Null: not held, or a place this page does not read.
+ */
+export function stopHold(f: WasteFacts, s: { kind: 'pause'; targetId: string } | { kind: 'negate'; adGroupId: string; text: string }, opts: { protectedToo: boolean }): Verb['held'] {
+  if (s.kind === 'pause') {
+    const t = f.targetById.get(s.targetId)
+    if (!t || t.isNegative || t.status === 'ARCHIVED' || !f.adGroups.has(t.adGroupId)) return null
+    const tm = targetMatch(t.kind, t.expressionType)
+    if (!tm) return null
+    const x = placeFacts(f, t.adGroupId)
+    const text = labelFor(t.expressionValue, t.kind || 'UNKNOWN', t.expressionType).label
+    const prot = opts.protectedToo && tm.rowKind === 'KEYWORD' ? protectedBy(f, x.c.id, t.expressionValue, false) : null
+    return verbFor({
+      kind: tm.rowKind, match: tm.match, text, protectedBy: prot, harvestedDaysAgo: harvestedDaysAgoOf(f, termKeyOf(t.expressionValue || text)),
+      placeAgeDays: x.ageDays, sharedCampaign: x.shared, termsSold: termsSoldOf(f, t.adGroupId, t.externalTargetId),
+    }).held
+  }
+  if (!f.adGroups.has(s.adGroupId)) return null
+  const key = termKeyOf(s.text)
+  if (!key) return null
+  const x = placeFacts(f, s.adGroupId)
+  return verbFor({
+    kind: 'TERM', match: 'AUTO', text: s.text, isAsinTerm: isAsinText(key),
+    protectedBy: opts.protectedToo ? protectedBy(f, x.c.id, s.text, true) : null,
+    ownKeywordHere: ownKeywordIn(f, s.adGroupId, key), harvestedDaysAgo: harvestedDaysAgoOf(f, key), placeAgeDays: x.ageDays, sharedCampaign: x.shared,
+  }).held
 }
 
 /** Every row the facts hold for places that run inside the scope (no show, kind, owner or text filter yet). */
 export function buildWasteRows(f: WasteFacts, s: ResolvedScope): WasteRow[] {
   const now = f.now.getTime()
   const rows: WasteRow[] = []
-  const factsFor = (adGroupId: string) => {
-    const g = f.adGroups.get(adGroupId)!
-    const c = f.campaigns.get(g.campaignId)!
-    const own = f.ownership.get(c.id)
-    const root = own?.owner.kind === 'product' ? own.owner.productId : null
-    const key = root ? `${c.market}|${root}` : null
-    return {
-      g, c, root,
-      facts: (key && f.productFacts.get(key)) || f.marketFacts.get(c.market) || { cr: null, targetCpaCents: null, targetSource: null },
-      negateBar: (key && f.negateBar.get(key)) || f.marketNegateBar.get(c.market) || null,
-      shared: own?.owner.kind !== 'product',
-      brain: !!root && f.brainProducts.has(`${c.market}|${root}`),
-      ageDays: g.firstDay == null ? null : dayIndex(f.now) - g.firstDay,
-    }
-  }
-  const waitingFor = (adGroupId: string, campaignId: string, key: string) => f.waitingTerm.find((x) => x.key === key && (x.adGroupId === adGroupId || x.campaignId === campaignId))?.fact ?? null
-  const harvestedDaysAgo = (key: string) => (f.harvestedAt.has(key) ? (now - f.harvestedAt.get(key)!) / DAY_MS : null)
+  const factsFor = (adGroupId: string) => placeFacts(f, adGroupId)
+  // HONEST 10 — the ask's own change at this term (its fact carries action, match, level, words): an ad group's negative
+  // waits in that ad group only, a whole campaign's in each of its ad groups.
+  const waitingFor = (adGroupId: string, campaignId: string, key: string) => f.waitingTerm.find((x) => x.key === key && (x.adGroupId ? x.adGroupId === adGroupId : x.campaignId === campaignId))?.fact ?? null
+  const harvestedDaysAgo = (key: string) => harvestedDaysAgoOf(f, key)
 
   // ── Our keywords and targets ──
   for (const [adGroupId, list] of f.positivesByGroup) {
@@ -1122,8 +1297,7 @@ export function buildWasteRows(f: WasteFacts, s: ResolvedScope): WasteRow[] {
       const bar = barFor('KEYWORD', x.facts, WASTE_WINDOW_DAYS)
       const win = agg ? numbersOf(f, agg.win, adGroupId, WASTE_WINDOW_DAYS) : null
       // Its search terms that sold in the window (orders to today), through this keyword in this ad group.
-      let termsSold = 0
-      if (t.externalTargetId) for (const p of f.placesByGroup.get(adGroupId) ?? []) if ((p.vias.get(t.externalTargetId)?.orders ?? 0) > 0) termsSold++
+      const termsSold = termsSoldOf(f, adGroupId, t.externalTargetId)
       const test = wasteTest('KEYWORD', win?.n ?? null, bar, { termsSold, stockOutDays: win?.stockOutDays ?? 0 })
       const hold = f.holds.get(t.id) ?? null
       const holding = tm.rowKind === 'KEYWORD' ? protectionsOn(f, x.c.id, t.expressionValue, false) : []
@@ -1168,7 +1342,7 @@ export function buildWasteRows(f: WasteFacts, s: ResolvedScope): WasteRow[] {
         spark: agg ? agg.spark : new Array<number>(SPARK_WEEKS).fill(0),
         stockOutDays: win?.stockOutDays ?? 0,
         waiting: waiting ? waitingOfFact(waiting) : null,
-        skipped: skip ? { until: skip.until.toISOString(), by: skip.by, at: skip.at?.toISOString() ?? null } : null,
+        skipped: skip ? { until: skip.until.toISOString(), by: skip.by ? ownerOfActor(skip.by, f.names).name : null, at: skip.at?.toISOString() ?? null } : null,
         stillServesIn: tm.rowKind === 'KEYWORD' ? servingPlaces(f, key, adGroupId).length : 0,
         lastChange: last ? { action: stateWord(last.after.status, last), at: last.at.toISOString(), by: refOfOwner(lastOwner!), changeId: last.id } : null,
         // Step 4 — which protected terms keep it safe, and what holds the pause once they are gone.
@@ -1205,11 +1379,14 @@ export function buildWasteRows(f: WasteFacts, s: ResolvedScope): WasteRow[] {
     const bar = barFor('TERM', x.facts, x.negateBar?.windowDays ?? WASTE_WINDOW_DAYS, x.negateBar)
     const win = numbersOf(f, p.win[windowOf(bar.windowDays)], p.adGroupId, bar.windowDays)
     const test = wasteTest('TERM', win.n, bar, { stockOutDays: win.stockOutDays })
-    const blockers = blockersOf(f, p.adGroupId, p.key)
+    // HONEST 6 — NEGATED only by a negative that blocks now (one switched off or never taken by Amazon blocks nothing).
+    const blockers = blockersNow(f, p.adGroupId, p.key)
     const holding = protectionsOn(f, x.c.id, p.text, true)
     const prot = holding[0]?.term ?? null
-    const state: RowState = blockers.length ? 'NEGATED' : prot ? 'PROTECTED' : 'RUNNING'
-    const ownHere = (f.positivesByGroup.get(p.adGroupId) ?? []).some((t) => t.status !== 'ARCHIVED' && termKeyOf(t.expressionValue) === p.key)
+    // HONEST 9 — every keyword that bought it here is paused: Amazon does not buy it now, so it is not running nor wasting.
+    const pausedBuyer = blockers.length ? null : pausedBuyerOf(f, p)
+    const state: RowState = blockers.length ? 'NEGATED' : pausedBuyer ? 'PAUSED' : prot ? 'PROTECTED' : 'RUNNING'
+    const ownHere = ownKeywordIn(f, p.adGroupId, p.key)
     const waiting = blockers.length ? null : waitingFor(p.adGroupId, x.c.id, p.key)
     // A negative of this text removed here (or in its campaign) in the last 30 days.
     const retire = f.retires.filter((r) => {
@@ -1232,7 +1409,10 @@ export function buildWasteRows(f: WasteFacts, s: ResolvedScope): WasteRow[] {
     const id = termRowId(refs.market, g.externalAdGroupId ?? g.id, p.key)
     const skip = f.skips.get(id) ?? null
     const isAsinTerm = isAsinText(p.key)
-    const verbFacts = { kind: 'TERM' as const, match, text: p.text, isAsinTerm, adGroupsInCampaign: groupsOfTermInCampaign.get(`${x.c.id}|${p.key}`)?.size ?? 1, protectedBy: prot, ownKeywordHere: ownHere, harvestedDaysAgo: harvestedDaysAgo(p.key), placeAgeDays: x.ageDays, sharedCampaign: x.shared }
+    const adGroupsInCampaign = groupsOfTermInCampaign.get(`${x.c.id}|${p.key}`)?.size ?? 1
+    // HONEST 7 — the whole campaign only when no other ad group of it sold the words or holds our keyword of them.
+    const siblings = adGroupsInCampaign >= 2 ? campaignSiblings(f, x.c.id, p.adGroupId, p.key) : {}
+    const verbFacts = { kind: 'TERM' as const, match, text: p.text, isAsinTerm, adGroupsInCampaign, ...siblings, protectedBy: prot, ownKeywordHere: ownHere, harvestedDaysAgo: harvestedDaysAgo(p.key), placeAgeDays: x.ageDays, sharedCampaign: x.shared }
     rows.push({
       id, kind: 'TERM', text: isAsinTerm ? p.key.toUpperCase() : p.text, match, channel: 'AMAZON', market: refs.market, currency: refs.currency,
       portfolio: refs.portfolio, campaign: refs.campaign, adGroup: refs.adGroup, product: refs.product, productCount: refs.productCount,
@@ -1245,15 +1425,21 @@ export function buildWasteRows(f: WasteFacts, s: ResolvedScope): WasteRow[] {
       spark: p.spark,
       stockOutDays: win.stockOutDays,
       waiting: waiting ? waitingOfFact(waiting) : null,
-      skipped: skip ? { until: skip.until.toISOString(), by: skip.by, at: skip.at?.toISOString() ?? null } : null,
+      skipped: skip ? { until: skip.until.toISOString(), by: skip.by ? ownerOfActor(skip.by, f.names).name : null, at: skip.at?.toISOString() ?? null } : null,
       stillServesIn: servingPlaces(f, p.key, p.adGroupId).length,
       lastChange: lastLog ? { action: lastLog.actionType === 'retire_negative' ? 'removed' : 'negated', at: lastLog.at.toISOString(), by: refOfOwner(lastOwner!), changeId: lastLog.id } : null,
       // Step 4 — which protected terms keep it safe, and what holds the negative once they are gone.
       ...(state === 'PROTECTED' ? { protection: rowProtectionOf(f, holding, verbFor({ ...verbFacts, protectedBy: null }).held) } : {}),
       ...followUpOf(f, id),
-      clash: state === 'NEGATED' && win.n.orders > 0 ? { kind: 'BLOCKS_SOLD', label: CLASH_LABELS.BLOCKS_SOLD } : null,
+      // HONEST 5 — a funnel negative (our keyword's own words here, narrower than it) hands the sale on purpose: no clash.
+      clash: state === 'NEGATED' && win.n.orders > 0 && blockers.some((n) => !funnelHere(f, n, p.adGroupId)) ? { kind: 'BLOCKS_SOLD', label: CLASH_LABELS.BLOCKS_SOLD } : null,
+      // HONEST 13 — the negative that blocks it here, in its own words, match and level (the one its owner is read from).
+      ...(state === 'NEGATED' && blockers.length ? { blockedBy: negativeRef(f, blockers[0]) } : {}),
     })
   }
+  // HONEST 18c — each judged row says the real last day its clicks and spend count ("60 days to 24 Oct"), never "last".
+  const settledThrough = isoDay(wasteWindow(f.now).clicksThrough)
+  for (const r of rows) r.test = { ...r.test, settledThrough }
   // NFIX — every ask waiting here is listed: one no row carries is put on its row, or listed as a row of its own (asks.ts).
   return withAskRows(f, s, rows)
 }
@@ -1273,11 +1459,19 @@ export function negativesInScope(f: WasteFacts, s: ResolvedScope): TargetFact[] 
 /** A standing negative that blocks now: Amazon holds it (an id), it is on, and its campaign runs. */
 export const blocksNow = (f: WasteFacts, n: TargetFact) => n.status === 'ENABLED' && !!n.externalTargetId && !!f.campaigns.get(f.adGroups.get(n.adGroupId)!.campaignId)?.live
 
-/** The standing negatives that block this keyword (or product target) of ours in its own place (its ad group or campaign). */
+/**
+ * The standing negatives that CLASH with this keyword (or product target) of ours in its own place (its ad group or
+ * campaign): HONEST 5 — those that block now every search it can serve (pure.ts negativeClashesWith). The Owner's funnel
+ * (a negative exact over our phrase or broad keyword, a negative phrase over our broad one) is never one.
+ */
 export function ownPlaceBlockers(f: WasteFacts, t: TargetFact): TargetFact[] {
   const tm = targetMatch(t.kind, t.expressionType)
   if (!tm || (tm.rowKind === 'TARGET' && tm.match !== 'ASIN')) return []
-  return blockersOf(f, t.adGroupId, termKeyOf(t.expressionValue)).filter((n) => (negativeMatch(n.kind, n.expressionType) === 'ASIN') === (tm.match === 'ASIN'))
+  const ours = { text: t.expressionValue, match: tm.match }
+  return blockersNow(f, t.adGroupId, termKeyOf(t.expressionValue)).filter((n) => {
+    const m = negativeMatch(n.kind, n.expressionType)
+    return !!m && negativeClashesWith(ours, { text: n.expressionValue, match: m })
+  })
 }
 
 /** A standing negative as a clash names it: its row, words, match, level, place and who made it. */
@@ -1314,18 +1508,22 @@ export function criteriaOf(f: WasteFacts, market: string | null): WasteCriteria 
   const w = wasteWindow(f.now)
   const m = market ?? (f.markets.length === 1 ? f.markets[0] : null)
   const strategy = m ? f.marketNegateBar.get(m) ?? null : null
-  const stock = 'days half or more of a place\'s advertised products were out of stock are left out of clicks and spend'
-  const late = `clicks and spend to ${dayWords(w.clicksThrough)}, orders to ${dayWords(w.ordersThrough)} (a late order can only save a row)`
+  const stock = STOCK_WORDS
+  const late = lateWords(w)
   return {
     source: strategy ? 'strategy' : 'default',
     windowDays: strategy?.windowDays ?? WASTE_WINDOW_DAYS,
     settledThrough: isoDay(w.clicksThrough),
     ordersThrough: isoDay(w.ordersThrough),
     sentence: strategy
-      ? `Search terms follow ${strategy.by.name}: ${plural(strategy.minClicks, 'click')} or more, spend at its minimum, at most ${plural(strategy.maxOrders, 'order')}, ${strategy.windowDays} days; a product's own group wins. Keywords: 0 orders, clicks at least max(20, 3 ÷ the product's conversion rate), spend at least 2 × its target cost per order, and no search term under it sold, ${WASTE_WINDOW_DAYS} days. ${late}; ${stock}.`
-      : `Search terms: 0 orders, clicks at least max(20, 3 ÷ the product's conversion rate), spend at least 1.5 × its target cost per order. Keywords: the same with 2 × and no search term under it sold. ${WASTE_WINDOW_DAYS} days; ${late}; ${stock}. No target ACoS set: a fixed bar.`,
+      ? `Search terms follow ${strategy.by.name}: ${plural(strategy.minClicks, 'click')} or more, spend at its minimum, at most ${plural(strategy.maxOrders, 'order')}, ${strategy.windowDays} days; a product's own group wins. ${KEYWORD_BAR_WORDS} ${late}; ${stock}.`
+      : `Search terms: 0 orders, clicks at least max(20, 3 ÷ the product's conversion rate), spend at least 1.5 × its target cost per order. Keywords: the same with 2 × and no search term under it sold. ${WASTE_WINDOW_DAYS} days; ${late}; ${stock}. Where no target ACoS is set: a fixed bar.`,
   }
 }
+
+const STOCK_WORDS = 'days half or more of a place\'s advertised products were out of stock are left out of clicks and spend'
+const lateWords = (w: ReturnType<typeof wasteWindow>) => `clicks and spend to ${dayWords(w.clicksThrough)}, orders to ${dayWords(w.ordersThrough)} (a late order can only save a row)`
+const KEYWORD_BAR_WORDS = `Keywords: 0 orders, clicks at least max(20, 3 ÷ the product's conversion rate), spend at least 2 × its target cost per order, and no search term under it sold, ${WASTE_WINDOW_DAYS} days.`
 
 // ── The answers ─────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -1363,18 +1561,27 @@ async function scopedRows(q: WasteQuery, now: Date): Promise<{ ok: true; facts: 
 }
 
 /** Several markets' criteria in one: the shared window; the bar of each market (a strategy where one names it). */
-function criteriaOfAll(facts: readonly WasteFacts[], market: string | null): WasteCriteria {
+export function criteriaOfAll(facts: readonly WasteFacts[], market: string | null): WasteCriteria {
   if (facts.length === 1) return criteriaOf(facts[0], market ?? facts[0].markets[0])
   const each = facts.map((f) => criteriaOf(f, f.markets[0]))
   const w = wasteWindow(facts[0]?.now ?? new Date())
-  const base = criteriaOf(facts[0] ?? ({ now: new Date(), markets: [], marketNegateBar: new Map() } as unknown as WasteFacts), null)
-  const strategyMarkets = facts.filter((f, i) => each[i].source === 'strategy').map((f) => f.markets[0])
+  // HONEST 18c — "elsewhere" is the page's own default bar, never the first market's (that may be its ads strategy's);
+  // each market whose ads strategy names the search-term bar says its own.
+  const base = criteriaOf({ now: facts[0]?.now ?? new Date(), markets: [], marketNegateBar: new Map() } as unknown as WasteFacts, null)
+  const named = facts.flatMap((f, i) => {
+    const bar = each[i].source === 'strategy' ? f.marketNegateBar.get(f.markets[0]) : null
+    return bar ? [`${f.markets[0]}: search terms follow ${bar.by.name}: ${plural(bar.minClicks, 'click')} or more, spend at its minimum, at most ${plural(bar.maxOrders, 'order')}, ${bar.windowDays} days`] : []
+  })
+  const everyNamed = named.length === facts.length
+  const late = lateWords(w)
   return {
     ...base,
-    source: strategyMarkets.length ? 'strategy' : 'default',
+    source: named.length ? 'strategy' : 'default',
     settledThrough: isoDay(w.clicksThrough),
     ordersThrough: isoDay(w.ordersThrough),
-    sentence: `Every market (${facts.map((f) => f.markets[0]).join(', ') || 'none'}): each row is judged by its own market's bar. ${strategyMarkets.length ? `The ads strategy names the search-term bar in ${strategyMarkets.join(', ')}; elsewhere: ` : ''}${base.sentence}`,
+    sentence: `Every market (${facts.map((f) => f.markets[0]).join(', ') || 'none'}): each row is judged by its own market's bar. ${!named.length ? base.sentence
+      : everyNamed ? `${named.join('; ')}; a product's own group wins. ${KEYWORD_BAR_WORDS} ${late.charAt(0).toUpperCase()}${late.slice(1)}; ${STOCK_WORDS}.`
+        : `${named.join('; ')}; a product's own group wins. Elsewhere: ${base.sentence}`}`,
   }
 }
 

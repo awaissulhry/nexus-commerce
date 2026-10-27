@@ -125,6 +125,11 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/reviews/action-items/bulk': 'review-fix-bulk',
   '/api/reviews/spotlight/generate': 'review-brief-generate',
   '/api/reviews/spikes/bulk': 'review-alert-bulk',
+  // Reviews › Amazon seller feedback (Phase 3) — one "Fetch now" per press.
+  '/api/reviews/amazon/seller-feedback/fetch': 'review-seller-feedback-fetch',
+  // Reviews › eBay (PR G) — one approval request (one sale, or ONE change plan for the ticked sales) per "Send for
+  // approval" press of "Leave feedback for buyers", even when the answer is lost and the page sends it again.
+  '/api/reviews/area/ebay/buyer-feedback/send': 'review-ebay-buyer-feedback-send',
 }
 
 /** The POST routes whose Idempotency-Key is honoured (for the tests that hold a route to it). */

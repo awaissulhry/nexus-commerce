@@ -14,14 +14,14 @@ const base: InboxRow = {
   id: 'r1', postedAt: '2026-10-20T10:00:00.000Z', channel: 'ETSY', market: null, kind: 'product', rating: 5, snippet: 'Lovely, fits well',
   english: null, language: 'en', buyer: 'A. Buyer', product: { id: 'p1', name: 'Racing gloves', sku: 'GLV-1', variant: 'M' },
   order: { id: 'o1', label: '3456789' }, mood: null, themes: [], status: 'NEW', assignee: null, dueAt: null, overdue: false, imported: false,
-  responses: { sent: 0, draft: 0 },
+  responses: { sent: 0, draft: 0 }, photos: 1, aiTopics: null,
 }
 const etsy = (over: Partial<EtsyRow> = {}): EtsyRow => ({
   ...base, photoUrl: 'https://i.etsystatic.com/x.jpg', editedAt: '2026-10-25T10:00:00.000Z',
   window: { days: 100, day: 3, daysLeft: 98, closed: false, endsAt: '2027-02-02T10:00:00.000Z' }, ...over,
 })
 const shopify = (over: Partial<ShopifyRow> = {}): ShopifyRow => ({
-  ...base, channel: 'SHOPIFY', photos: [{ url: 'https://img.judge.me/o.jpg', thumb: 'https://img.judge.me/c.jpg' }], hasVideo: true, app: 'JUDGEME', ...over,
+  ...base, channel: 'SHOPIFY', photoItems: [{ url: 'https://img.judge.me/o.jpg', thumb: 'https://img.judge.me/c.jpg' }], hasVideo: true, app: 'JUDGEME', ...over,
 })
 
 describe('Etsy', () => {

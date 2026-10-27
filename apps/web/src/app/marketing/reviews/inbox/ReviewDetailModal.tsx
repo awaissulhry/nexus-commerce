@@ -8,9 +8,10 @@
  *
  * Header: the product, who · where · what · when, the stars, the mood, "Return open"; Status and Owner save at once
  * (`PATCH /api/reviews/:id/triage`). Tabs: Review · Order · Buyer · History. The Review tab: what the buyer wrote and its
- * English, the buyer's photos (Coming later — a labelled sample), product / order / return / listing links, the mood and
- * themes (AI-set, editable: `PATCH /api/reviews/:id/sentiment`), the reply (DS `ReplyComposer` with the channel's rules),
- * and beside it the team's triage (tags, a note saved 800 ms after typing) and what happened.
+ * English, the buyer's photos (PR G: eBay's photos open the DS `Lightbox`; channels whose photos Nexus does not read yet
+ * keep the labelled sample), eBay's AI topics and the revision state, product / order / return / listing links, the
+ * mood and themes (AI-set, editable: `PATCH /api/reviews/:id/sentiment`), the reply (DS `ReplyComposer` with the
+ * channel's rules), and beside it the team's triage (tags, a note saved 800 ms after typing) and what happened.
  *
  * No optimistic changes: every save is the call, then `emitInvalidation` (the Inbox and any other tab read again), then
  * this review is read again, then a toast in the server's words. Without "Manage reviews" every change is held and says
@@ -19,9 +20,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Copy, ExternalLink, Languages } from 'lucide-react'
 import {
-  AsOf, Banner, Card, Field, KeyValue, Listbox, StarRating, Thumbnail, Timeline, useToast, type KeyValueItem,
+  AsOf, Banner, Card, Disclosure, Field, KeyValue, Listbox, StarRating, Thumbnail, Timeline, useToast, type KeyValueItem,
 } from '@/design-system/components'
-import { DetailModal, ReplyComposer, type ReplyAction } from '@/design-system/patterns'
+import { DetailModal, Lightbox, ReplyComposer, type ReplyAction } from '@/design-system/patterns'
 import { Button, Pill, SegmentedControl, Spinner, Tag, TagInput, Textarea, TokenChip } from '@/design-system/primitives'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import Link from '@/lib/workspaces/Link'
@@ -30,9 +31,10 @@ import { MOOD_WORD, STATUS_WORD, themeWord } from '../_lib/reviewWords'
 import { useReplyTemplates } from '../settings/_settings/useReplyTemplates'
 import { ownerChoices } from './inboxBulk'
 import {
-  MANAGE_MOOD, MANAGE_TRIAGE, MOOD_OPTIONS, MOOD_TONE, STATUS_OPTIONS, buyerFacts, composerView, dateWords, detailSubtitle, detailTabs, replyTitle,
-  detailTitle, draftResponseId, historySteps, initialReplyText, nextHeld, nextId, orderFacts, recentSteps, replyDoneWords,
-  replyTargetWords, returnOpen, returnWords, sameThemeLink, textView, themeChoices, type DetailTab, type InboxDetail,
+  MANAGE_MOOD, MANAGE_TRIAGE, MOOD_OPTIONS, MOOD_TONE, STATUS_OPTIONS, buyerFacts, composerView, dateWords, detailSubtitle, detailTabs,
+  detailTitle, draftResponseId, historySteps, initialReplyText, lightboxHead, nextHeld, nextId, orderFacts, photosView, recentSteps,
+  removalView, replyDoneWords, replyTargetWords, replyTitle, returnOpen, returnWords, revisionLine, sameThemeLink, textView, themeChoices,
+  topicChips, type DetailTab, type InboxDetail,
 } from './reviewDetailModel'
 import s from './inbox.module.css'
 
@@ -61,6 +63,8 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<DetailTab>('review')
+  /** PR G — the photo open in the Lightbox (index), or null. */
+  const [photo, setPhoto] = useState<number | null>(null)
   const abort = useRef<AbortController | null>(null)
 
   // ── Read the review ──
@@ -89,6 +93,7 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
   const shownId = useRef<string | null>(null)
   useEffect(() => {
     setTab('review')
+    setPhoto(null)
     setDetail(null)
     void load(reviewId)
     return () => abort.current?.abort()
@@ -233,6 +238,10 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
   const nextHold = nextHeld(ids, reviewId, place)
   const view = detail ? composerView(detail, { canManage }) : null
   const text = detail ? textView(detail) : null
+  const photos = detail ? photosView(detail) : null
+  const topics = detail ? topicChips(detail) : []
+  const revision = detail ? revisionLine(detail) : null
+  const removal = detail ? removalView(detail) : null
 
   const header = detail ? (
     <>
@@ -316,14 +325,63 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
                   ) : null}
                 </Card>
 
-                {/* ⛔ KEEP — placeholder (build spec ruling 3): buyers' photos arrive with Phase 3 (eBay REST, review apps);
-                    the strip then opens the DS Lightbox. Until then a labelled sample, never hidden. */}
-                <Card header="Photos from the buyer" headerAction={<span className={s.pills}><Pill tone="info">Coming later</Pill><Pill tone="neutral">Sample</Pill></span>}>
-                  <div className={s.photoStrip} aria-label="Sample photos">
-                    {[1, 2, 3].map((n) => <Thumbnail key={n} src={null} alt={`Sample photo ${n}`} />)}
-                  </div>
-                  <p className={s.hint}>Nexus will show the photos buyers add on eBay and in your review app here. These tiles are a sample.</p>
-                </Card>
+                {photos?.kind === 'later' ? (
+                  // ⛔ KEEP — placeholder (build spec ruling 3): this channel's photos arrive with a later update (review
+                  // apps, Etsy). Until then a labelled sample, never hidden. eBay's photos are real since PR G.
+                  <Card header="Photos from the buyer" headerAction={<span className={s.pills}><Pill tone="info">Coming later</Pill><Pill tone="neutral">Sample</Pill></span>}>
+                    <div className={s.photoStrip} aria-label="Sample photos">
+                      {[1, 2, 3].map((n) => <Thumbnail key={n} src={null} alt={`Sample photo ${n}`} />)}
+                    </div>
+                    <p className={s.hint}>Nexus will show the photos buyers add on eBay and in your review app here. These tiles are a sample.</p>
+                  </Card>
+                ) : photos ? (
+                  <Card header="Photos from the buyer" headerAction={photos.kind === 'photos' ? <Tag tone="neutral">{photos.count}</Tag> : undefined}>
+                    {photos.kind === 'photos' ? (
+                      <>
+                        <div className={s.photoStrip} role="group" aria-label="Photos from the buyer">
+                          {photos.items.map((item, i) => (
+                            <Thumbnail key={`${i}:${item.url}`} src={item.url} alt={item.alt} photoCount={photos.items.length} hoverPreview={false} title={`Open ${item.alt}`} onClick={() => setPhoto(i)} />
+                          ))}
+                        </div>
+                        <p className={s.hint}>Press a photo to see it large. eBay keeps the photos; Nexus shows them from eBay.</p>
+                      </>
+                    ) : (
+                      <p className={s.hint}>{photos.words}</p>
+                    )}
+                  </Card>
+                ) : null}
+                {photos?.kind === 'photos' && photo != null && (
+                  <Lightbox
+                    open
+                    onClose={() => setPhoto(null)}
+                    items={photos.items}
+                    index={photo}
+                    onIndex={setPhoto}
+                    meta={lightboxHead(detail).meta}
+                    caption={text.body}
+                    external={lightboxHead(detail).external ?? undefined}
+                  />
+                )}
+
+                {(topics.length > 0 || revision || detail.aiTopics) && (
+                  <Card header="What eBay says about it">
+                    {revision && (
+                      <p className={s.revisionLine}>
+                        <span className={s.muted}>Revision request</span>
+                        <Pill tone={revision.tone}>{revision.words}</Pill>
+                        {revision.since && <span className={s.muted}>{revision.since}</span>}
+                      </p>
+                    )}
+                    <div className={s.themeRow} role="group" aria-label="Topics eBay’s AI found">
+                      {topics.length === 0
+                        ? <span className={s.muted}>{detail.aiTopics ? 'eBay’s AI found no topics in this feedback.' : 'eBay’s AI topics are read for the feedback of the last 30 days.'}</span>
+                        : topics.map((t) => (
+                            <Tag key={t.key} tone={t.tone} title={t.texts.length ? `The buyer: “${t.texts.join('”, “')}”` : undefined}>{t.label}</Tag>
+                          ))}
+                    </div>
+                    <p className={s.hint}>Topics come from eBay’s AI and cannot be changed here; the themes below are Nexus’s own and can.</p>
+                  </Card>
+                )}
 
                 <Card header="Product, order and return">
                   <KeyValue items={productItems(detail)} labelCase="sentence" />
@@ -371,6 +429,15 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
                       : 'AI set these from the text. Change them and Insights counts your choice from now on.'}
                   </p>
                 </Card>
+
+                {removal && (
+                  <Card header="Removal check" headerAction={<Pill tone={removal.tone} dot>{removal.label}</Pill>}>
+                    <p className={s.removalWords}>{removal.words}</p>
+                    <Disclosure summary="How the removal check decides">
+                      <ul className={s.ruleList}>{removal.rules.map((rule) => <li key={rule}>{rule}</li>)}</ul>
+                    </Disclosure>
+                  </Card>
+                )}
 
                 <ReplyComposer
                   title={replyTitle(detail.reply)}

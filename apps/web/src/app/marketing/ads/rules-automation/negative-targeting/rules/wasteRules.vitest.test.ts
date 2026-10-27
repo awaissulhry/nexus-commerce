@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  actionWord, autoLockOf, changeFromTo, decidedElsewhere, harvestWaitingHref, heldStep, isPseudo, last7Parts, last7Tab, last7Text, modeLock, negativeWord, ownerOf, partHolds, previewParts, refusalWhy,
+  actionWord, askRowsTag, askWhat, autoLockOf, changeFromTo, decidedElsewhere, harvestWaitingHref, heldStep, isPseudo, last7Parts, last7Tab, last7Text, modeLock, negativeWord, ownerOf, partHolds, previewParts, refusalWhy,
   rowMatchesSearch, RULES_NOTE, scopeCount, sharedWhy, scopeLevel, scopePath, scopeText, testWords, verbWords, visibleRows, waitingAsksOf, waitingGap, whoWord,
   type WaitingRow, type WasteRuleRow,
 } from './wasteRulesModel'
@@ -167,8 +167,27 @@ describe('waiting asks', () => {
   it('as the page\'s one decide review takes them: one line per ask, places said, the path as links', () => {
     const rows = [w('kids', 'suggestion:k', 'r1', '2026-10-02T00:00:00Z'), w('kids', 'suggestion:k', 'r1', '2026-10-02T00:00:00Z', 'g2'), w('pink', 'a2', 'r1', '2026-10-01T00:00:00Z')]
     const waits = waitsOf(waitingAsksOf(rows, 'r1'))
-    expect(waits.map((x) => [x.approvalId, x.text, x.what, x.by])).toEqual([['a2', 'pink', 'Negative exact · campaign', 'r1'], ['suggestion:k', 'kids · 2 places', 'Negative exact · campaign', 'r1']])
+    expect(waits.map((x) => [x.approvalId, x.text, x.what, x.by, x.places])).toEqual([['a2', 'pink', 'Negative exact · campaign', 'r1', 1], ['suggestion:k', 'kids', 'Negative exact · campaign', 'r1', 2]])
     expect(waits[0].place?.map((p) => p?.id ?? null)).toEqual([null, 'c1', 'g1'])
+  })
+  it('HONEST 10 / 11 — the ask\'s own change, never the row\'s verb; different changes are never "N places"', () => {
+    const own = (row: WaitingRow, ask: Partial<NonNullable<WaitingRow['waiting']>>): WaitingRow => ({ ...row, waiting: { ...row.waiting!, ...ask } })
+    // A keyword whose own verb is the clash's Remove, asked to be paused (without keeping it paused).
+    const kw = own({ ...w('rain jacket', 'a7', 'brain', '2026-10-02T00:00:00Z'), kind: 'KEYWORD', verb: { action: 'REMOVE_NEGATIVE', where: 'adGroup', held: null } }, { action: 'PAUSE', level: null, text: 'rain jacket', keepPaused: false, changes: 1 })
+    expect(askWhat(waitingAsksOf([kw], 'brain')[0])).toBe('Pause keyword')
+    const kept = own(kw, { keepPaused: true })
+    expect(askWhat(waitingAsksOf([kept], 'brain')[0])).toBe('Pause keyword, keep it paused')
+    // A phrase in an ad group, on a row whose own verb is an exact in the whole campaign.
+    const phrase = own(w('rain', 'a8', 'brain', '2026-10-02T00:00:00Z'), { action: 'NEGATE_PHRASE', level: 'AD_GROUP', text: 'rain', changes: 1 })
+    expect(askWhat(waitingAsksOf([phrase], 'brain')[0])).toBe('Negative phrase')
+    // The Brain's plan: two different terms, three changes in all.
+    const plan = [own(w('cheap', 'p1', 'brain', '2026-10-02T00:00:00Z'), { action: 'NEGATE_EXACT', level: 'AD_GROUP', text: 'cheap', changes: 3 }), own(w('free', 'p1', 'brain', '2026-10-02T00:00:00Z', 'g2'), { action: 'NEGATE_EXACT', level: 'AD_GROUP', text: 'free', changes: 3 })]
+    expect(askRowsTag(waitingAsksOf(plan, 'brain')[0])).toEqual({ label: '3 changes', hint: 'One answer decides them all: cheap in g1 · free in g2 · and 1 more' })
+    // One card over the same words in two ad groups.
+    const card = [own(w('kids', 'suggestion:k', 'r1', '2026-10-02T00:00:00Z'), { action: 'NEGATE_EXACT', level: 'CAMPAIGN', text: 'kids', changes: 1 }), own(w('kids', 'suggestion:k', 'r1', '2026-10-02T00:00:00Z', 'g2'), { action: 'NEGATE_EXACT', level: 'CAMPAIGN', text: 'kids', changes: 1 })]
+    expect(askRowsTag(waitingAsksOf(card, 'r1')[0])).toEqual({ label: '2 ad groups', hint: 'g1 · g2' })
+    expect(waitsOf(waitingAsksOf(card, 'r1'))[0]).toMatchObject({ text: 'kids', places: 2, changes: 1, level: 'CAMPAIGN' })
+    expect(askRowsTag(waitingAsksOf([phrase], 'brain')[0])).toBeNull()
   })
 })
 

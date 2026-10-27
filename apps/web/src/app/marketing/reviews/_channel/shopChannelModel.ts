@@ -28,7 +28,8 @@ export interface EtsyRow extends InboxRow {
 }
 
 export interface ShopifyRow extends InboxRow {
-  photos: Array<{ url: string; thumb: string }>
+  /** The review's photos with their thumbnails; the Inbox row's `photos` is their count. */
+  photoItems: Array<{ url: string; thumb: string }>
   hasVideo: boolean
   /** JUDGEME when read through Nexus's connection; null for a file import. */
   app: string | null
@@ -211,8 +212,8 @@ export function shopifyReplyNote(row: Pick<ShopifyRow, 'app' | 'status' | 'respo
 }
 
 /** "3 photos · video", "1 photo", "". */
-export function mediaWords(row: Pick<ShopifyRow, 'photos' | 'hasVideo'>): string {
-  return [row.photos.length ? plural(row.photos.length, 'photo', 'photos') : null, row.hasVideo ? 'video in Judge.me' : null].filter(Boolean).join(' · ')
+export function mediaWords(row: Pick<ShopifyRow, 'photoItems' | 'hasVideo'>): string {
+  return [row.photoItems.length ? plural(row.photoItems.length, 'photo', 'photos') : null, row.hasVideo ? 'video in Judge.me' : null].filter(Boolean).join(' · ')
 }
 
 // ── Header lines ─────────────────────────────────────────────────────
@@ -263,7 +264,7 @@ export function reviewsCsv(channel: ShopChannel, rows: ReadonlyArray<EtsyRow | S
       return [e.postedAt.slice(0, 10), (e.editedAt ?? e.postedAt).slice(0, 10), e.rating, e.snippet, e.buyer, product, e.order?.label, `${w.label} (${w.note})`, e.status, e.assignee, e.photoUrl]
     }
     const s = r as ShopifyRow
-    return [s.postedAt.slice(0, 10), s.rating, s.snippet, s.buyer, product, s.order?.label, s.photos.map((p) => p.url).join(' '), s.hasVideo ? 'yes' : '', s.status, s.assignee]
+    return [s.postedAt.slice(0, 10), s.rating, s.snippet, s.buyer, product, s.order?.label, s.photoItems.map((p) => p.url).join(' '), s.hasVideo ? 'yes' : '', s.status, s.assignee]
   })
   return [head, ...lines].map((line) => line.map(csvCell).join(',')).join('\r\n') + '\r\n'
 }

@@ -34,13 +34,13 @@ import { dayWords, money, relWords } from '../../bid/_shared/format'
 import { KindMark } from './marks'
 import { readRow } from './wasteApi'
 import {
-  isAsinText, matchWord, moneyOr, NO_WRITE, NOT_KEPT, pathOf, plural, productWords, sinceView, stoppedVerb, verbLabel, verbSentence, waitingOf,
+  isAsinText, matchWord, moneyOr, NO_WRITE, NOT_KEPT, pathOf, placeNegateHeld, plural, productWords, sinceView, stoppedVerb, verbLabel, verbSentence, waitingOf,
   wasteVerb, type DetailTab,
 } from './wasteModel'
 import type { WasteAsk } from './useWasteReview'
 import { KEEP_PROTECTED_DAYS, KEEP_PROTECTED_HINT, protectsView, removeProtectionHeld, removeProtectionItems, UNPROTECT_PERMISSIONS } from './protectionModel'
 import {
-  addedByWords, approveView, askedWords, historyIntro, historyStep, isStoppedRow, keepUntilWords, kindLead, lastChangeWords, lookedAfter,
+  addedByWords, approveView, askedWords, askReachItem, blockedNote, historyIntro, historyStep, inWindow, isStoppedRow, placeWindowNote, keepUntilWords, kindLead, lastChangeWords, lookedAfter,
   negativeWords, otherNegativeWords, ownerWords, placePill, recordNoun, REVIEW_FIRST, savingSum, skipWords, sparkWords, statePill,
   stillSpendsPlaces, stoppedBanner, stoppedMetrics, verbPhrase, wasteBanner, wasteChecks, wasteMetrics, whereWords,
   type BannerView, type MetricView, type PillGlyph, type StatePillView,
@@ -147,8 +147,8 @@ export function RowDetail({ id, listRow, tab, onTab, nav, canWrite, version, onA
       footer={row ? <Footer row={row} held={held} onAsk={onAsk} /> : undefined}
     >
       {row && tab === 'overview' && (isStoppedRow(row)
-        ? <StoppedOverview row={row} runsIn={runsIn} onWhere={() => onTab('where')} />
-        : <WasteOverview row={row} blockedIn={blockedIn} ruleHref={ruleHref} onWhere={() => onTab('where')} onOpen={onOpen} />)}
+        ? <StoppedOverview row={row} runsIn={runsIn} through={answer?.settledThrough ?? null} onWhere={() => onTab('where')} />
+        : <WasteOverview row={row} blockedAdGroups={answer?.blockedAdGroups ?? null} ruleHref={ruleHref} onWhere={() => onTab('where')} onOpen={onOpen} />)}
       {row && tab === 'where' && (
         err && !answer ? notRead : !answer ? reading_
           : <WhereTab row={row} runsIn={answer.runsIn} blockedIn={answer.blockedIn} onOpen={onOpen} held={held} onAsk={onAsk} />
@@ -410,7 +410,7 @@ function ProtectedFooter({ row, held, onAsk }: { row: WasteRow; held: string | n
 
 const linkTo = (ref: Ref | null | undefined, fallback: string): ReactNode => (ref?.href ? <Link href={ref.href} className="nds-entitylink">{ref.name}</Link> : ref?.name ?? fallback)
 
-function WasteOverview({ row, blockedIn, ruleHref, onWhere, onOpen }: { row: WasteRow; blockedIn: Place[] | null; ruleHref(id: string): string; onWhere(): void; onOpen(id: string): void }) {
+function WasteOverview({ row, blockedAdGroups, ruleHref, onWhere, onOpen }: { row: WasteRow; blockedAdGroups: number | null; ruleHref(id: string): string; onWhere(): void; onOpen(id: string): void }) {
   const narrow = useNarrow()
   const v = wasteVerb(row)
   const banner = wasteBanner(row, v ? { action: v.action, where: v.where, held: v.held } : null)
@@ -419,14 +419,16 @@ function WasteOverview({ row, blockedIn, ruleHref, onWhere, onOpen }: { row: Was
   const approve = approveView(row)
   const trend = row.spark && row.spark.length ? sparkWords(row.spark, row.currency) : null
   const noun = recordNoun(row)
-  const neg = row.clash?.negative ?? null
+  // A clash: the negative over our own keyword; HONEST 13 — a blocked term: the negative that blocks it here.
+  const neg = row.clash?.negative ?? row.blockedBy ?? null
 
   const about: KeyValueItem[] = row.waiting ? [
     { label: 'Asked by', value: row.waiting.by.name },
     { label: 'Asked', value: askedWords(row.waiting.at).value, hint: askedWords(row.waiting.at).hint },
     ...(row.waiting.expiresAt ? [{ label: 'Expires', value: relWords(row.waiting.expiresAt) }] : []),
     { label: 'Product', value: row.product ? linkTo(row.product, '—') : productWords(row) },
-    ...((row.waiting.rows ?? 1) > 1 ? [{ label: 'Also asked in', value: plural((row.waiting.rows ?? 1) - 1, 'other place'), hint: 'One answer decides every place' }] : []),
+    // HONEST 11 — its request's other changes, or the ad groups one campaign negative covers (never "other places").
+    ...(askReachItem(row.waiting) ? [askReachItem(row.waiting)!] : []),
     ...(row.lastChange ? [{ label: 'Last change', ...lastChangeWords(row.lastChange, row.kind)! }] : []),
   ] : [
     // A clash: the negative that blocks our own keyword (it opens its record).
@@ -441,8 +443,10 @@ function WasteOverview({ row, blockedIn, ruleHref, onWhere, onOpen }: { row: Was
     { label: 'Product', value: row.product ? linkTo(row.product, '—') : productWords(row) },
     { label: 'Looked after by', value: row.owner.kind === 'RULE' && row.owner.id ? <Link href={ruleHref(row.owner.id)} className="nds-entitylink">{row.owner.name}</Link> : ownerWords(row.owner) },
     ...(row.lastChange ? [{ label: 'Last change', ...lastChangeWords(row.lastChange, row.kind)! }] : []),
-    ...(blockedIn?.length ? [{ label: 'Already blocked in', value: <Button variant="link" inline onClick={onWhere}>{plural(blockedIn.length, 'other ad group')}</Button> }] : []),
-    ...(row.stillServesIn ? [{ label: 'Still spends in', value: <Button variant="link" inline onClick={onWhere}>{plural(row.stillServesIn, 'other ad group')}</Button> }] : []),
+    // HONEST 18a — the other ad groups a negative blocks NOW (the server's count of ad groups, never of negatives).
+    ...(blockedAdGroups ? [{ label: 'Already blocked in', value: <Button variant="link" inline onClick={onWhere}>{plural(blockedAdGroups, 'other ad group')}</Button>, hint: 'A negative there blocks it now' }] : []),
+    // HONEST 18b — where its words spent in the window (spend, never impressions alone), not blocked there now.
+    ...(row.stillServesIn ? [{ label: 'Also spends in', value: <Button variant="link" inline onClick={onWhere}>{plural(row.stillServesIn, 'other ad group')}</Button>, hint: `Spent ${inWindow(row.test)}, not blocked there` }] : []),
     ...(!trend && row.d90 ? [{ label: 'Last 90 days', value: `${moneyOr(row.d90.spendCents, row.currency)} · ${plural(row.d90.orders, 'order')}` }] : []),
   ]
 
@@ -478,7 +482,7 @@ function WasteOverview({ row, blockedIn, ruleHref, onWhere, onOpen }: { row: Was
               ],
             }]}
           />
-          <p className={s.note}>{approve.others ? `It covers ${plural(approve.others, 'other place')} too: the review lists each one first. ` : ''}{approve.foot}</p>
+          <p className={s.note}>{approve.reach ? `${approve.reach} ` : ''}{approve.foot}</p>
         </Card>
       )}
       {checks && (
@@ -526,12 +530,11 @@ function WasteOverview({ row, blockedIn, ruleHref, onWhere, onOpen }: { row: Was
 
 /* ── Overview: a stopped row (did it work?) ──────────────────────────────────────────────────────────────────────── */
 
-function StoppedOverview({ row, runsIn, onWhere }: { row: StoppedRow; runsIn: Place[] | null; onWhere(): void }) {
+function StoppedOverview({ row, runsIn, through, onWhere }: { row: StoppedRow; runsIn: Place[] | null; through: string | null; onWhere(): void }) {
   const others = stillSpendsPlaces(row, runsIn)
   const sum = savingSum(row)
   const noun = recordNoun(row)
   const since = sinceView(row)
-  const first = others[0]
   const about: KeyValueItem[] = [
     ...(row.keptPaused ? [
       { label: 'Kept paused by', value: row.keptPaused.by.name, hint: `Since ${dayWords(row.keptPaused.at)}. ${row.keptPaused.reason ? row.keptPaused.reason.replace(/\.?$/, '.') : 'No rule, Brain or plan turns it on.'}` },
@@ -541,7 +544,8 @@ function StoppedOverview({ row, runsIn, onWhere }: { row: StoppedRow; runsIn: Pl
     ...(row.stillServesIn ? [{
       label: 'Still spends in',
       value: <Button variant="link" inline onClick={onWhere}>{plural(row.stillServesIn, 'other ad group')}</Button>,
-      hint: first?.d ? `${first.adGroup?.name ?? first.campaign.name} · ${moneyOr(first.d.spendCents, row.currency)}` : undefined,
+      // HONEST 18b — the server counts where its words spent since the stop (the window when the stop day is unknown).
+      hint: row.since ? 'Spent there since the stop, not blocked there' : 'Spent there in the window, not blocked there',
     }] : []),
     { label: 'Product', value: row.product ? linkTo(row.product, '—') : '—' },
     ...(row.id.startsWith('neg:')
@@ -551,7 +555,7 @@ function StoppedOverview({ row, runsIn, onWhere }: { row: StoppedRow; runsIn: Pl
   ]
   const main = (
     <div className={s.col}>
-      <RecordBanner view={stoppedBanner(row, others)} />
+      <RecordBanner view={stoppedBanner(row, others, through)} />
       <RecordMetrics metrics={stoppedMetrics(row)} />
       {sum && (
         <Card header="How the saving is counted" description="Spend a day before the stop, times the days since, minus what it spent since" headingLevel={3}>
@@ -614,13 +618,13 @@ function WhereTab({ row, runsIn, blockedIn, onOpen, held, onAsk }: { row: WasteR
                   placePath(p),
                   matchWord(p.match),
                   <Pill key="s" tone={pill.tone}>{pill.word}</Pill>,
-                  <span key="sp" className={s.num}>{p.d ? moneyOr(p.d.spendCents, row.currency) : '—'}</span>,
+                  <span key="sp" className={s.num}>{p.d ? moneyOr(p.d.spendCents, row.currency) : '—'}{placeWindowNote(p, row) && <span className="nds-summary-sub">{placeWindowNote(p, row)}</span>}</span>,
                   <span key="o" className={s.num}>{p.d ? p.d.orders.toLocaleString('en-IE') : '—'}</span>,
                   p.rowId === row.id ? <span key="a" className={s.quiet}>This record</span> : (
                     <span key="a" className={s.actions}>
                       {/* Still bought here: one click adds the negative exact in this ad group (audit S17); the review says what. */}
                       {p.rowId?.startsWith('term:') && p.state === 'RUNNING' && (
-                        <Button size="sm" heldReason={held} aria-label={`Add a negative exact in ${p.adGroup?.name ?? 'this ad group'}`}
+                        <Button size="sm" heldReason={placeNegateHeld(p, held)} aria-label={`Add a negative exact in ${p.adGroup?.name ?? 'this ad group'}`}
                           onClick={() => onAsk({ kind: 'change', items: [{ rowId: p.rowId!, action: 'NEGATE_EXACT', where: 'adGroup' }] })}>Add negative exact</Button>
                       )}
                       {open(p, 'search term')}
@@ -644,7 +648,8 @@ function WhereTab({ row, runsIn, blockedIn, onOpen, held, onAsk }: { row: WasteR
               id: `${i}:${p.rowId ?? p.campaign.id}`,
               cells: [
                 placePath(p),
-                negativeWords(p.match),
+                // HONEST 18a — a negative that blocks nothing now says so (never counted as a block).
+                <span key="n">{negativeWords(p.match)}{blockedNote(p) && <span className="nds-summary-sub">{blockedNote(p)}</span>}</span>,
                 addedByWords(p.owner),
                 p.rowId === row.id ? <span key="a" className={s.quiet}>This record</span> : <span key="a" className={s.actions}>{open(p, 'negative')}</span>,
               ],

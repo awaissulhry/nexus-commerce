@@ -34,7 +34,8 @@ export interface EtsyRow extends InboxRow {
 }
 
 export interface ShopifyRow extends InboxRow {
-  photos: Array<{ url: string; thumb: string }>
+  /** The review's photos with their thumbnails; the Inbox row's `photos` is their count. */
+  photoItems: Array<{ url: string; thumb: string }>
   hasVideo: boolean
   /** The review app it was read from (JUDGEME), or null for a file import. */
   app: string | null
@@ -160,7 +161,7 @@ async function shopifySections(now: Date): Promise<ShopifySections> {
         rows: page.rows.map((row) => {
           const more = extra.get(row.id)
           const media = appMediaOf(more?.rawPayload)
-          return { ...row, photos: media.photos, hasVideo: media.hasVideo, app: reviewAppOf(more?.ingestSource) }
+          return { ...row, photoItems: media.photos, hasVideo: media.hasVideo, app: reviewAppOf(more?.ingestSource) }
         }),
       }
     }),

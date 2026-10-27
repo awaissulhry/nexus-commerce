@@ -187,12 +187,12 @@ function EtsyPage({ data, busy, canManage, me, onRetry }: { data: EtsySections; 
 
 function ShopifyMediaCell({ data, context }: ShopifyCell) {
   if (!data) return null
-  if (data.photos.length === 0 && !data.hasVideo) return <span className={s.sub}>None</span>
+  if (data.photoItems.length === 0 && !data.hasVideo) return <span className={s.sub}>None</span>
   // One line: the first photo (the Lightbox has them all) and, beside it, the video mark (Judge.me gives no video URL).
   return (
     <span className={s.inline}>
-      {data.photos[0] && (
-        <Thumbnail src={data.photos[0].thumb} photoCount={data.photos.length} alt={`Photo from ${data.buyer ?? 'the reviewer'}`} title="Open the photos" onClick={() => context?.openPhotos(data, 0)} />
+      {data.photoItems[0] && (
+        <Thumbnail src={data.photoItems[0].thumb} photoCount={data.photoItems.length} alt={`Photo from ${data.buyer ?? 'the reviewer'}`} title="Open the photos" onClick={() => context?.openPhotos(data, 0)} />
       )}
       {data.hasVideo && <Tag tone="neutral" title="This review has a video: watch it in Judge.me"><Video size={11} aria-label="Video" /></Tag>}
     </span>
@@ -238,7 +238,7 @@ const SHOPIFY_COLUMNS: ColDef<ShopifyRow>[] = [
   { colId: 'reply', headerName: 'Reply', width: 170, cellRenderer: ShopifyReplyCell },
 ]
 
-const shopifyPhotos = (row: ShopifyRow) => row.photos.map((p) => ({ url: p.url }))
+const shopifyPhotos = (row: ShopifyRow) => row.photoItems.map((p) => ({ url: p.url }))
 
 function ShopifyPage({ data, busy, canManage, me, onRetry, onConnect }: {
   data: ShopifySections; busy: boolean; canManage: boolean; me: string | null; onRetry: () => void; onConnect: () => void

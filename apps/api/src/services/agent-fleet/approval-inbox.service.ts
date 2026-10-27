@@ -1247,6 +1247,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // 07 O13 — the order, any earlier request and Amazon's live/dry-run mode; the review, the reply and eBay's mode.
   'request-review': ['order', 'earlier', 'mode'],
   'reply-to-review': ['review', 'reply', 'mode'],
+  // Reviews eBay REST (PR G) — the sale (its state, buyer, order, sale date), the feedback text and eBay's live/dry-run mode.
+  'leave-buyer-feedback': ['line', 'text', 'mode'],
   // 07 O14 — the series and, per document, whether a new number is taken.
   'issue-fiscal-document': ['series', 'invoices', 'creditNotes'],
   // 07 O17 — the pickup (carrier, day, warehouse) and Sendcloud's live/dry-run mode; the channel and its accounts.

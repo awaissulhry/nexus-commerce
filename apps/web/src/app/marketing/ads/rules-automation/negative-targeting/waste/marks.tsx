@@ -6,7 +6,7 @@
  * and the match chip (E · P · B · A · PT · C). No emoji (Owner 2026-10-07).
  *
  * The redesign (2026-10-26, BRIEF D6): a state is ONE chip — the DS Pill with its mark and a word in a tone ("Wasting",
- * "Waiting · asked by Brain", "Blocked"), never a mark alone — and a smaller line under it for a clash, a follow-up or a
+ * "Waiting", "Blocked"), never a mark alone — and a smaller line under it for a clash, a follow-up or a
  * skip (`StateChip`, `StateSub`; their words: wasteModel.ts stateChip / stateSub). The icon-only state marks are gone.
  *
  *   running Play · paused / kept paused Pause · negative Ban · protected ShieldCheck · turned on outside Nexus
@@ -71,7 +71,7 @@ export function ChipGlyph({ mark }: { mark: ChipMark }) {
 
 /**
  * A row's state as the DS Pill: its mark and one word in a tone; the code's sentence on hover and, after the word, for a
- * screen reader. A long word ("Waiting · asked by Brain") ends in "…" inside the cell (Pill `truncate`).
+ * screen reader. A long word ("Turned on elsewhere") ends in "…" inside the cell (Pill `truncate`).
  */
 export function StateChip({ chip }: { chip: StateChipView }) {
   return (

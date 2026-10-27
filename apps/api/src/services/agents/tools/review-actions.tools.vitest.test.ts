@@ -8,6 +8,9 @@
  *                     refuses the run and Amazon is not called; never confirm or auto; cannot be undone.
  *   reply-to-review — eBay only, at most 500 characters, one reply per feedback, refused while eBay replies are off;
  *                     the copy checks shown; a reply posted meanwhile refuses the run.
+ *   leave-buyer-feedback (PR G) — positive feedback for the buyer of one eBay sale eBay lists as waiting; at most 500
+ *                     characters, within 90 days of the sale, never with an open return; a dry run while eBay posting
+ *                     is off; the sale left (or gone) meanwhile refuses the run.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
@@ -23,7 +26,7 @@ vi.mock('../../../lib/queue.js', () => ({
   searchIndexQueue: null, readCacheQueue: null, readinessQueue: null,
   addJobSafely: vi.fn(async () => ({ enqueued: false })),
 }))
-const channel = vi.hoisted(() => ({ solicitations: [] as string[], replies: [] as string[] }))
+const channel = vi.hoisted(() => ({ solicitations: [] as string[], replies: [] as string[], left: [] as Array<{ connectionId: string; orderLineItemId: string; text: string }> }))
 vi.mock('../../reviews/amazon-solicitations.service.js', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   sendAmazonSolicitation: vi.fn(async (args: { amazonOrderId: string }) => {
@@ -37,6 +40,15 @@ vi.mock('../../reviews/adapters/ebay-feedback.adapter.js', async (importOriginal
   respondToEbayFeedback: vi.fn(async (feedbackId: string) => {
     channel.replies.push(feedbackId)
     return { ok: true, code: 'Success' }
+  }),
+}))
+
+vi.mock('../../reviews/adapters/ebay-feedback-rest.adapter.js', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  leaveEbayBuyerFeedback: vi.fn(async (connectionId: string, input: { orderLineItemId: string; text: string }) => {
+    if (process.env.NEXUS_EBAY_REAL_API !== 'true') return { ok: false, code: 'OPT_IN_OFF', error: 'Nexus does not post to eBay in this setup. Nothing was sent.' }
+    channel.left.push({ connectionId, orderLineItemId: input.orderLineItemId, text: input.text })
+    return { ok: true, code: 'Success', feedbackId: `fb-${channel.left.length}` }
   }),
 }))
 
@@ -156,5 +168,63 @@ describe('reply-to-review (07 O13)', () => {
     expect((await run('reply-to-review', { reviewId: id, body: 'Thanks for the feedback' }, asked.preview)).error).toMatch(/it was answered already/)
     expect(channel.replies).toEqual([])
     vi.unstubAllEnvs()
+  })
+})
+
+describe('leave-buyer-feedback (PR G)', () => {
+  const inNexus: UserPrincipal = { ...everything, via: 'app' }
+  const dryRunApp = async (args: Record<string, unknown>) => (await callTool(inNexus, 'leave-buyer-feedback', args)).raw as Out
+  const runApp = async (args: Record<string, unknown>, approvedPreview: unknown) => (await executeTool(inNexus, 'leave-buyer-feedback', args, { approvedPreview })).raw as Out
+  const line = (data: Record<string, unknown> = {}) => inside(async () => (await database.client.ebayBuyerFeedback.create({
+    data: { connectionId: 'conn-ebay', orderLineItemId: `11000${++seq}-22000${seq}`, listingId: `11000${seq}`, transactionId: `22000${seq}`, title: 'Test gloves', ...data } as never,
+  })).id)
+
+  it('live: eBay is asked once, POSITIVE, and the sale is left; a second run is refused', async () => {
+    vi.stubEnv('NEXUS_EBAY_REAL_API', 'true')
+    const sold = await order({ channel: 'EBAY', purchaseDate: daysAgo(10) })
+    const id = await line({ orderId: sold })
+    const asked = await dryRunApp({ lineId: id, text: 'Great buyer, quick payment.' })
+    expect(asked.ok, asked.error).toBe(true)
+    expect(asked.preview).toMatchObject({ rating: expect.stringMatching(/^Positive/), window: '80 of 90 days left to leave it', mode: expect.stringMatching(/^live/) })
+    channel.left.length = 0
+    const done = await runApp({ lineId: id, text: 'Great buyer, quick payment.' }, asked.preview)
+    expect(done.ok, done.error).toBe(true)
+    expect(channel.left).toEqual([{ connectionId: 'conn-ebay', orderLineItemId: expect.stringMatching(/^11000/), text: 'Great buyer, quick payment.' }])
+    expect(await inside(() => database.client.ebayBuyerFeedback.findUnique({ where: { id }, select: { state: true, feedbackId: true, commentText: true } }))).toEqual({ state: 'LEFT', feedbackId: 'fb-1', commentText: 'Great buyer, quick payment.' })
+    expect((await dryRunApp({ lineId: id, text: 'Again' })).error).toMatch(/already left .*Nothing was queued/)
+    vi.unstubAllEnvs()
+  })
+
+  it('holds a sale older than 90 days, one with an open return, and text over 500 characters', async () => {
+    const old = await line({ orderId: await order({ channel: 'EBAY', purchaseDate: daysAgo(100) }) })
+    expect((await dryRunApp({ lineId: old, text: 'Thanks!' })).error).toMatch(/only within 90 days of the sale\. Nothing was queued/)
+    const returning = await order({ channel: 'EBAY', purchaseDate: daysAgo(5) })
+    await inside(() => database.client.return.create({ data: { orderId: returning, channel: 'EBAY', rmaNumber: `TEST-G-RMA-${++seq}`, status: 'REQUESTED' } as never }))
+    expect((await dryRunApp({ lineId: await line({ orderId: returning }), text: 'Thanks!' })).error).toMatch(/open return or case/)
+    expect(getTool('leave-buyer-feedback')!.input.safeParse({ lineId: 'x', text: 'x'.repeat(500) }).success).toBe(true)
+    expect(getTool('leave-buyer-feedback')!.input.safeParse({ lineId: 'x', text: 'x'.repeat(501) }).success).toBe(false)
+  })
+
+  it('a dry run while eBay posting is off: nothing is left and the sale keeps waiting, with why', async () => {
+    const id = await line()
+    const asked = await dryRunApp({ lineId: id, text: 'Thank you!' })
+    expect(asked.preview).toMatchObject({ mode: expect.stringMatching(/^dry run: eBay is not called/), window: expect.stringMatching(/cannot count the 90 days/) })
+    channel.left.length = 0
+    expect((await runApp({ lineId: id, text: 'Thank you!' }, asked.preview)).error).toMatch(/Nothing was sent/)
+    expect(channel.left).toEqual([])
+    expect(await inside(() => database.client.ebayBuyerFeedback.findUnique({ where: { id }, select: { state: true, lastWords: true } }))).toEqual({ state: 'AWAITING', lastWords: expect.stringMatching(/Nothing was sent/) })
+  })
+
+  it('a sale eBay no longer lists refuses the run (stale); needs reviews.manage; never confirmed in Claude or auto; cannot be undone', async () => {
+    vi.stubEnv('NEXUS_EBAY_REAL_API', 'true')
+    const id = await line()
+    const asked = await dryRunApp({ lineId: id, text: 'Thank you!' })
+    await inside(() => database.client.ebayBuyerFeedback.update({ where: { id }, data: { state: 'GONE' } }))
+    channel.left.length = 0
+    expect((await runApp({ lineId: id, text: 'Thank you!' }, asked.preview)).error).toMatch(/no longer lists this sale/)
+    expect(channel.left).toEqual([])
+    vi.unstubAllEnvs()
+    expect(getTool('leave-buyer-feedback')).toMatchObject({ alwaysAsk: true, maxClaudeTrust: 'ask', reversibility: 'none', openWorld: true, requires: [FEATURES.reviewsManage] })
+    await expect(callTool(person(Object.values(FEATURES).filter((f) => f !== FEATURES.reviewsManage)), 'leave-buyer-feedback', { lineId: id, text: 'Thanks' })).rejects.toBeInstanceOf(ToolAccessError)
   })
 })

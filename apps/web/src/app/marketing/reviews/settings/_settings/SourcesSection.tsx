@@ -4,14 +4,17 @@
  * Reviews › Settings › Sources — where reviews, feedback and review requests come from, per channel (GET
  * /api/reviews/settings/sources): each source's state in words, when it last worked, and what a person can do. Sources
  * that arrive in a later update say "Coming later" (build spec ruling 3); Amazon gives topics only, never review text
- * or stars (ruling 5). No setting name is ever shown. The Shopify review app's row opens "Connect your review app"
- * (Judge.me: paste the store address and a private API token; PR I) and reads the rows again after a change.
+ * or stars (ruling 5). Amazon seller feedback (PR H) has "Fetch now", held with its reason when this setup does not
+ * fetch it, Amazon is not connected or a fetch runs. The Shopify review app's row opens "Connect your review app"
+ * (Judge.me: paste the store address and a private API token; PR I) and reads the rows again after a change. No setting
+ * name is ever shown.
  */
 import { useMemo, useState } from 'react'
+import { FetchNowButton } from '../../_channel/FetchNowButton'
+import { MANAGE_FETCH } from '../../_channel/sellerFeedbackModel'
 import { Card } from '@/design-system/components'
 import { NexusGrid, type ColDef, type ICellRendererParams } from '@/design-system/grid'
 import { Button, Pill, Skeleton, Tag } from '@/design-system/primitives'
-import { useAuth } from '@/lib/auth/AuthProvider'
 import Link from '@/lib/workspaces/Link'
 import { ReviewAppConnect } from '../../_channel/ReviewAppConnect'
 import { ReadFailed } from './ReadFailed'
@@ -49,10 +52,23 @@ function LastCell({ data }: ICellRendererParams<SourceRow>) {
   return <span className={s.cellSub}>{data.lastAt ? timeWords(data.lastAt, new Date()) : (data.lastWords ?? '—')}</span>
 }
 
-interface SourcesContext { openApp: () => void }
+/** What the action cells ask of the page (AG `context`). */
+interface SourcesContext {
+  canManage: boolean
+  reload: () => void
+  openApp: () => void
+}
 
 function ActionCell({ data, context }: ICellRendererParams<SourceRow, unknown, SourcesContext>) {
   if (!data) return null
+  if (data.action?.kind === 'fetch') {
+    const held = context?.canManage === false ? MANAGE_FETCH : (data.action.held ?? null)
+    return (
+      <span className={s.cellActions}>
+        <FetchNowButton held={held} fetching={data.stateWords === 'Fetching'} onDone={context?.reload} />
+      </span>
+    )
+  }
   if (data.action?.kind === 'app') {
     return (
       <span className={s.cellActions}>
@@ -91,13 +107,15 @@ const COLUMNS: ColDef<SourceRow>[] = [
 
 const getRowId = (p: { data: SourceRow }) => p.data.key
 
-export function SourcesSection({ read }: { read: SettingsRead<SourcesResponse> }) {
+export function SourcesSection({ read, canManage }: { read: SettingsRead<SourcesResponse>; canManage: boolean }) {
   const columnDefs = useMemo(() => COLUMNS, [])
   const rowData = useMemo(() => read.data?.rows ?? [], [read.data])
-  const { status, has } = useAuth()
-  const canManage = status !== 'authed' || has('reviews.manage')
+  const { reload } = read
   const [appOpen, setAppOpen] = useState(false)
-  const context = useMemo<SourcesContext>(() => ({ openApp: () => setAppOpen(true) }), [])
+  const context = useMemo<SourcesContext>(
+    () => ({ canManage, reload: () => void reload(), openApp: () => setAppOpen(true) }),
+    [canManage, reload],
+  )
   return (
     <div className={s.section}>
       <p className={s.lead}>Where reviews, feedback and review requests come from, per channel.</p>

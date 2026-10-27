@@ -113,7 +113,7 @@ const OPEN_WORLD = [
   'enable-ads', 'enable-google-pmax-brand-guidelines', 'end-google-experiment', 'end-listing', 'end-meta-experiment', 'google-ads-experiments', 'google-ads-live',
   'google-ads-numbers', 'google-ads-query', 'google-merchant-live', 'graduate-google-experiment', 'graduate-keyword',
   'harvest-search-term',
-  'import-catalog', 'issue-refund', 'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock',
+  'import-catalog', 'issue-refund', 'leave-buyer-feedback', 'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock',
   'meta-account-access', 'meta-account-health', 'meta-activity-log', 'meta-ad-account', 'meta-ad-accounts', 'meta-ad-details', 'meta-ad-library',
   'meta-ad-preview', 'meta-ad-rules', 'meta-ad-sets', 'meta-ads-graph-read', 'meta-ads-live', 'meta-ads-numbers', 'meta-ads-report',
   'meta-ads-saved-reports', 'meta-audiences', 'meta-billing', 'meta-brand-safety',

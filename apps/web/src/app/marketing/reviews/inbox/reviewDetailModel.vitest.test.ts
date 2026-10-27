@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import {
   MANAGE_DRAFT, MANAGE_REPLY, buyerFacts, composerView, detailSubtitle, detailTabs, detailTitle, draftResponseId, historySteps,
-  initialReplyText, navIds, navPlace, nextHeld, nextId, orderFacts, replyDoneWords, replyTargetWords, replyTitle, returnOpen, sameThemeLink,
-  textView, themeChoices, type InboxDetail,
+  initialReplyText, lightboxHead, navIds, navPlace, nextHeld, nextId, orderFacts, photosView, replyDoneWords, replyTargetWords, replyTitle,
+  returnOpen, reviewPhotos, revisionLine, sameThemeLink, textView, themeChoices, topicChips, type InboxDetail,
 } from './reviewDetailModel'
+import { lightboxCounter, lightboxHeld, lightboxStep } from '@/design-system/patterns/lightboxModel'
 import { detailPosition } from '@/design-system/patterns/detailModalModel'
 
 const NOW = new Date('2026-10-26T12:00:00Z')
@@ -146,5 +147,54 @@ describe('the review tab, order, buyer and history', () => {
     expect(historySteps(detail({}, { status: 'RESOLVED' }))).toHaveLength(3)
     expect(replyTargetWords(detail(), NOW.getTime(), 'UTC')).toBe('Reply target: 28 Oct')
     expect(replyTargetWords(detail({}, { postedAt: '2026-10-20T08:00:00Z' }), NOW.getTime(), 'UTC')).toBe('Overdue since 22 Oct')
+  })
+})
+
+describe('the buyer’s photos and the Lightbox (PR G)', () => {
+  const media = [
+    { url: 'https://i.ebayimg.example/2.jpg', type: 'image', width: null, height: null, position: 1 },
+    { url: 'https://i.ebayimg.example/1.jpg', type: 'image', width: null, height: null, position: 0 },
+    { url: 'javascript:alert(1)', type: 'image', width: null, height: null, position: 2 },
+  ]
+
+  it('opens the photos in order, each named for the buyer; a link that is not a web address is left out', () => {
+    expect(reviewPhotos(detail({ media }))).toEqual([
+      { url: 'https://i.ebayimg.example/1.jpg', alt: 'Photo 1 of 2 from buyer-one', type: 'IMAGE' },
+      { url: 'https://i.ebayimg.example/2.jpg', alt: 'Photo 2 of 2 from buyer-one', type: 'IMAGE' },
+    ])
+    expect(photosView(detail({ media }))).toMatchObject({ kind: 'photos', count: '2 photos' })
+  })
+
+  it('Prev is held on the first photo, Next on the last; the counter reads "2 of 2"', () => {
+    const items = reviewPhotos(detail({ media }))
+    expect(lightboxHeld(0, items.length, -1)).toBe('This is the first photo.')
+    expect(lightboxStep(0, items.length, 1)).toBe(1)
+    expect(lightboxHeld(1, items.length, 1)).toBe('This is the last photo.')
+    expect(lightboxCounter(1, items.length)).toBe('2 of 2')
+  })
+
+  it('says when there are none (eBay), keeps the labelled sample where Nexus does not read photos yet', () => {
+    expect(photosView(detail({ media: [] }))).toEqual({ kind: 'none', words: 'No photos with this feedback. eBay buyers can add up to 5.' })
+    expect(photosView(detail({ media: [] }, { imported: true }))).toEqual({ kind: 'none', words: 'This feedback came from a file: its photos are not in Nexus.' })
+    expect(photosView(detail({}, { channel: 'SHOPIFY' }))).toEqual({ kind: 'later' })
+  })
+
+  it('the Lightbox head: who, where, when, and the listing on eBay', () => {
+    expect(lightboxHead(detail({ listingHref: 'https://www.ebay.de/itm/110012345678' }), 'UTC')).toEqual({
+      meta: 'buyer-one · eBay Germany · 26 Oct 2026', external: { label: 'Open on eBay', href: 'https://www.ebay.de/itm/110012345678' },
+    })
+    expect(lightboxHead(detail(), 'UTC').external).toBeNull()
+  })
+})
+
+describe('eBay’s topics and revision state (PR G)', () => {
+  it('topics as chips toned by eBay’s mood; revision words with when Nexus saw them', () => {
+    expect(topicChips(detail({ aiTopics: [{ topic: 'fit', label: 'Fit & sizing', sentiment: 'NEGATIVE', texts: ['Zu klein'] }, { topic: 'shipping', label: 'Shipping', sentiment: 'POSITIVE', texts: [] }] }))).toEqual([
+      { key: 'fit', label: 'Fit & sizing', tone: 'danger', texts: ['Zu klein'] },
+      { key: 'shipping', label: 'Shipping', tone: 'success', texts: [] },
+    ])
+    expect(topicChips(detail({ aiTopics: null }))).toEqual([])
+    expect(revisionLine(detail({ revision: { state: 'REVISION_OPEN', words: 'Waiting for the buyer', tone: 'info', since: '2026-10-24T09:00:00Z', eligible: false } }), 'UTC')).toEqual({ words: 'Waiting for the buyer', tone: 'info', since: 'seen 24 Oct 2026' })
+    expect(revisionLine(detail())).toBeNull()
   })
 })

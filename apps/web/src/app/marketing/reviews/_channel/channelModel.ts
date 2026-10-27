@@ -12,7 +12,9 @@
 import { channelSiteDomain, reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import { inboxHref, insightsHref, requestsHref } from '../_lib/reviewsLinks'
 import type { InboxRow } from '../inbox/inboxDatasource'
+import type { BuyersToRate, EbayRevisions, EbayTopics } from './ebayToolsModel'
 import { channelPath, lockParams, marketWord, scopeTitleWords, type ReviewsChannel, type ReviewsLock } from './reviewsScope'
+import { sellerFeedbackTile, type AmazonSellerFeedback } from './sellerFeedbackModel'
 
 // ── The address: the period ──────────────────────────────────────────
 
@@ -78,6 +80,10 @@ export interface AmazonTiles {
   oldestWaitDays: number | null
   requestsSent: number
   reviewRate: number | null
+  /** Amazon seller feedback (1–3 stars) of the last 90 days and the 90 days before (PR H). */
+  sellerFeedback90: number
+  sellerFeedbackPrev90: number
+  sellerFeedbackOn: boolean
 }
 
 export interface AmazonTopic {
@@ -135,6 +141,7 @@ export interface AmazonSections {
   topics: Section<AmazonTopics>
   requests: Section<AmazonRequests>
   watch: Section<AmazonWatchRow[]>
+  sellerFeedback: Section<AmazonSellerFeedback>
 }
 
 export interface EbayReadState {
@@ -156,6 +163,8 @@ export interface EbayTiles {
   positiveFrom: 'ebay' | 'nexus'
   needReply: number
   oldestWaitDays: number | null
+  /** PR G — the "Leave feedback for buyers" queue's counts; null when it could not be read. */
+  buyersToRate: BuyersToRate | null
 }
 
 export interface EbayPeriodCounts { days: number; positive: number; neutral: number; negative: number }
@@ -178,6 +187,10 @@ export interface EbaySections {
   tiles: Section<EbayTiles>
   summary: Section<EbaySummary>
   feedback: Section<{ rows: InboxRow[]; total: number; owners: string[] }>
+  /** PR G — eBay's AI topics of the feedback in scope (an older answer has none). */
+  topics?: Section<EbayTopics>
+  /** PR G — revision requests and eBay's yearly allowance (an older answer has none). */
+  revisions?: Section<EbayRevisions>
 }
 
 export interface ChannelResponse<S> {
@@ -258,14 +271,14 @@ export function sellerHubHref(market: string | null): string {
 
 // ── Header ───────────────────────────────────────────────────────────
 
-/** Amazon's header line: products with topics · topics week · stars from imports · seller feedback later. */
+/** Amazon's header line: products with topics · topics week · stars from imports · seller feedback fetched on request. */
 export function amazonSubtitle(tiles: AmazonTiles | null, topics: AmazonTopics | null): string {
   const parts: string[] = []
   if (topics && topics.state === 'ok') parts.push(`${plural(topics.productCount, 'product', 'products')} with Amazon topics`)
   if (topics?.weekOf) parts.push(`topics weekly, week of ${dayMonth(topics.weekOf)}`)
   else if (topics?.state === 'not_on_market') parts.push('no Amazon topics on this market')
   if (tiles) parts.push(tiles.lastImportAt ? `stars from reviews imported ${dayMonth(tiles.lastImportAt)}` : 'no reviews imported yet')
-  parts.push('seller feedback coming later')
+  parts.push('seller feedback fetched on request')
   return parts.join(' · ')
 }
 
@@ -296,11 +309,9 @@ export interface TileView {
   hint: string
   href?: string
   accent?: string
-  /** A Phase 3 tile (ruling 3): shown, labelled, never a number. */
-  later?: boolean
 }
 
-/** Amazon's six tiles (the board): rating from imports, topics to fix, 1–3 star feedback (later), reply, requests, rate. */
+/** Amazon's six tiles (the board): rating from imports, topics to fix, 1–3 star feedback, reply, requests, rate. */
 export function amazonTiles(t: AmazonTiles, lock: ReviewsLock, period: ChannelPeriod): TileView[] {
   const links = lockedLinks(lock, period)
   return [
@@ -320,7 +331,12 @@ export function amazonTiles(t: AmazonTiles, lock: ReviewsLock, period: ChannelPe
       hint: t.topicsToFix == null ? 'No Amazon topics here' : `Amazon topics${t.topicsWeekOf ? `, week of ${dayMonth(t.topicsWeekOf)}` : ''}`,
       href: links.insights('themes'),
     },
-    { key: 'seller', label: '1–3 star feedback', value: 'Coming later', hint: 'Amazon seller feedback · sample below', later: true },
+    {
+      key: 'seller',
+      label: '1–3 star feedback',
+      ...sellerFeedbackTile(t),
+      href: links.inbox({ kind: 'seller', period: '90d' }),
+    },
     {
       key: 'reply',
       label: 'Needs a reply',
@@ -340,7 +356,7 @@ export function amazonTiles(t: AmazonTiles, lock: ReviewsLock, period: ChannelPe
   ]
 }
 
-/** eBay's six tiles: score, % positive, neutral, negative, reply, buyers to rate (later). */
+/** eBay's six tiles: score, % positive, neutral, negative, reply, buyers to rate (the leave-feedback queue). */
 export function ebayTiles(t: EbayTiles, summary: EbaySummary | null, lock: ReviewsLock, period: ChannelPeriod): TileView[] {
   const links = lockedLinks(lock, period)
   const wide = summary?.accountWide ? 'whole eBay account' : 'eBay’s number'
@@ -369,8 +385,24 @@ export function ebayTiles(t: EbayTiles, summary: EbaySummary | null, lock: Revie
       href: links.inbox({ kind: 'seller', status: 'NEW,IN_PROGRESS' }),
       accent: t.needReply > 0 ? 'var(--nds-danger)' : undefined,
     },
-    { key: 'buyers', label: 'Buyers to rate', value: 'Coming later', hint: 'Leave feedback for buyers · sample below', later: true },
+    { key: 'buyers', label: 'Buyers to rate', ...buyersTile(t.buyersToRate) },
   ]
+}
+
+/**
+ * "Buyers to rate": the sales eBay lists as waiting for the seller's feedback, from the queue of "Leave feedback for
+ * buyers" below. No number when eBay's list was never read; an old number says so when Nexus does not read eBay now.
+ */
+export function buyersTile(b: BuyersToRate | null | undefined): Pick<TileView, 'value' | 'hint'> {
+  if (!b) return { value: '—', hint: 'The list could not be read' }
+  if (!b.readAt) return { value: '—', hint: b.reading ? 'eBay’s list not read yet' : 'Nexus does not read eBay here' }
+  if (!b.reading) return { value: count(b.awaiting), hint: `as read ${dayMonth(b.readAt)} · eBay not read now` }
+  if (b.awaiting === 0) return { value: '0', hint: 'No sale waits for your feedback' }
+  const parts = [
+    b.ready > 0 ? `${count(b.ready)} ready to send` : null,
+    b.waitingApproval > 0 ? `${count(b.waitingApproval)} waiting for approval` : null,
+  ].filter((p): p is string => p != null)
+  return { value: count(b.awaiting), hint: parts.length > 0 ? parts.join(' · ') : 'All held · the list below says why' }
 }
 
 // ── Amazon: requests, topics, products to watch ─────────────────────

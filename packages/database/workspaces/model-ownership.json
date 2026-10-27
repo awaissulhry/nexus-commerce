@@ -297,6 +297,8 @@
     "EmailSuppression",
     "ReviewSettings",
     "ReviewReplyTemplate",
+    "ReviewMedia",
+    "EbayBuyerFeedback",
     "ReviewAppConnection",
     "OrderTag",
     "AiUsageLog",

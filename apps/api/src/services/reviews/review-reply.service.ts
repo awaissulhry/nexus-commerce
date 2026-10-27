@@ -159,7 +159,7 @@ export async function draftReviewReply(input: DraftReplyInput): Promise<DraftRep
   const buyerLocale: Locale = reviewLocale ?? (resolveLocaleForMarketplace(review.marketplace) as Locale)
   const locale: Locale = input.locale ?? replyLocale(voice.languages, buyerLocale)
   const limit = reviewReplyRules(review.channel, {
-    kind: reviewKindOf(review.channel, review.ingestSource),
+    kind: reviewKindOf(review.channel, review.kind),
     imported: (review.ingestSource ?? '').toUpperCase().startsWith('IMPORT'),
   }).limit
   const langName = LANG_NAME[locale] ?? 'English'

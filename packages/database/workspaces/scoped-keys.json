@@ -7351,6 +7351,32 @@
     "compound": {},
     "relations": []
   },
+  "ReviewMedia": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "review",
+        "model": "Review",
+        "from": [
+          "reviewId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EbayBuyerFeedback": {
+    "scalar": {},
+    "compound": {
+      "connectionId_orderLineItemId": [
+        "connectionId",
+        "orderLineItemId"
+      ]
+    },
+    "relations": []
+  },
   "ReviewAppConnection": {
     "scalar": {
       "app": "workspace_app"

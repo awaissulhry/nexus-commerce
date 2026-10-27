@@ -164,7 +164,7 @@ function SettingsInner() {
   const sections: BuilderSection[] = [
     {
       id: 'sources', label: 'Sources', badge: flag('sources'), title: 'Sources',
-      content: <SourcesSection read={sources} />,
+      content: <SourcesSection read={sources} canManage={canManage} />,
     },
     {
       id: 'emails', label: 'Emails & unsubscribes', title: 'Emails & unsubscribes',

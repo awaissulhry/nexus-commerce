@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  countsInRating,
   FIXTURE_SOURCE,
   needsReplyWhere,
   reviewKindOf,
@@ -52,18 +53,34 @@ describe('visibleReviewWhere', () => {
 })
 
 describe('review kind', () => {
-  it('reads eBay as seller feedback and every other channel as a product review', () => {
-    expect(reviewKindOf('EBAY', 'EBAY_API')).toBe('seller')
-    expect(reviewKindOf('ebay')).toBe('seller')
-    for (const channel of ['AMAZON', 'SHOPIFY', 'ETSY', '', null, undefined]) expect(reviewKindOf(channel)).toBe('product')
+  it('reads the kind column first', () => {
+    expect(reviewKindOf('AMAZON', 'SELLER')).toBe('seller')
+    expect(reviewKindOf('EBAY', 'PRODUCT')).toBe('product')
+    expect(reviewKindOf('amazon', 'seller')).toBe('seller')
   })
 
-  it('selects the same rows as reviewKindOf', () => {
+  it('falls back to the old channel rule when the column is empty: eBay is seller feedback, every other channel a product review', () => {
+    expect(reviewKindOf('EBAY', null)).toBe('seller')
+    expect(reviewKindOf('ebay')).toBe('seller')
+    for (const channel of ['AMAZON', 'SHOPIFY', 'ETSY', '', null, undefined]) expect(reviewKindOf(channel, null)).toBe('product')
+  })
+
+  it('selects the same rows as reviewKindOf, with and without the column', () => {
     for (const channel of ['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY']) {
-      const r = row({ channel })
-      expect(matches(reviewKindWhere('seller'), r)).toBe(reviewKindOf(channel) === 'seller')
-      expect(matches(reviewKindWhere('product'), r)).toBe(reviewKindOf(channel) === 'product')
+      for (const kind of [null, 'SELLER', 'PRODUCT']) {
+        const r = { ...row({ channel }), kind }
+        expect(matches(reviewKindWhere('seller'), r)).toBe(reviewKindOf(channel, kind) === 'seller')
+        expect(matches(reviewKindWhere('product'), r)).toBe(reviewKindOf(channel, kind) === 'product')
+      }
     }
+  })
+
+  it('never averages Amazon seller feedback (only 1–3 stars), and averages everything else as before', () => {
+    expect(countsInRating({ channel: 'AMAZON', kind: 'SELLER' })).toBe(false)
+    expect(countsInRating({ channel: 'AMAZON', kind: null })).toBe(true)
+    expect(countsInRating({ channel: 'AMAZON', kind: 'PRODUCT' })).toBe(true)
+    expect(countsInRating({ channel: 'EBAY', kind: null })).toBe(true)
+    expect(countsInRating({ channel: 'EBAY', kind: 'SELLER' })).toBe(true)
   })
 })
 
