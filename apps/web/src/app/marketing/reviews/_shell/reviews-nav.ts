@@ -3,9 +3,10 @@
  * page shows in its PageHeader (ReviewsShell.tsx `reviewsCrumbs`) and the page a path belongs to. Add or move a page
  * here and the sub-sidebar and crumbs follow.
  *
- * Every row points at its own page. The Channels group: Amazon and eBay, each "all markets" plus one row per market the
- * business sells on (`reviewsNav(markets)`; the markets come from GET /api/reviews/area/channel-markets). Shopify and Etsy
- * (PR I) are one page each: no market rows. Old addresses (Advanced, Automation, the old Insights pages) are redirects
+ * Every row points at its own page. The Channels group: Amazon and eBay, each "all markets" with a row per market the
+ * business sells on under it, behind a chevron (`reviewsNav(markets)`; the markets come from GET
+ * /api/reviews/area/channel-markets; the DS draws them: WorkspaceNavItem `children`). Shopify and Etsy (PR I) are one
+ * page each: no market rows. Old addresses (Advanced, Automation, the old Insights pages) are redirects
  * in next.config.js, so no row claims them.
  *
  * Framework-free (no React): the tests import it in Node.
@@ -13,7 +14,6 @@
 import {
   Bell,
   Clock,
-  CornerDownRight,
   FileText,
   Inbox,
   LayoutDashboard,
@@ -37,7 +37,8 @@ export interface ReviewsNavItem {
   label: string
   /** Where the row goes (workspace-free). */
   href: string
-  icon: LucideIcon
+  /** Every row has one, except a market row under its channel (drawn without an icon, under the guide line). */
+  icon?: LucideIcon
   /** `href` is this row's page only, never an ancestor of other pages (Overview). */
   exact?: boolean
   /** Other paths (and the pages under them) this row owns: old addresses of its page, its records. */
@@ -48,6 +49,12 @@ export interface ReviewsNavItem {
   permission?: string
   /** `href/<market>` (two letters) is this page for one market: the crumbs add the market (the channel pages). */
   marketPages?: boolean
+  /** The full name for a screen reader when the label is short: the market row "Italy" is "Amazon Italy". */
+  ariaLabel?: string
+  /** Rows under this row (a channel's markets, `reviewsNav(markets)`): the sub-sidebar shows them under a chevron. */
+  children?: readonly ReviewsNavItem[]
+  /** What the rows under it are, for the chevron's name ("Show Amazon markets"). */
+  childrenLabel?: string
 }
 
 export interface ReviewsNavGroup {
@@ -105,7 +112,7 @@ export const REVIEWS_NAV: readonly ReviewsNavGroup[] = [
     collapsible: true,
     noCrumb: true,
     items: [
-      // Each channel's "all markets" page; reviewsNav(markets) adds a row per market under it.
+      // Each channel's "all markets" page; reviewsNav(markets) puts a row per market under it (behind a chevron).
       { label: 'Amazon', href: `${REVIEWS_ROOT}/amazon`, icon: Store, marketPages: true },
       { label: 'eBay', href: `${REVIEWS_ROOT}/ebay`, icon: ShoppingBag, marketPages: true },
       // PR I (2026-10-27): the store's review app (Judge.me) and the Etsy shop — one page each.
@@ -143,34 +150,44 @@ export type ReviewsChannelMarkets = Partial<Record<ReviewsChannel, readonly stri
 const CHANNEL_OF_HREF: Record<string, ReviewsChannel> = { [`${REVIEWS_ROOT}/amazon`]: 'AMAZON', [`${REVIEWS_ROOT}/ebay`]: 'EBAY' }
 
 /**
- * The navigation with a row per market under each channel ("Amazon Italy" under "Amazon"). The label names the channel
- * too: the sub-sidebar has no nesting, and "Italy" twice (Amazon and eBay) would be two links of the same name.
+ * The navigation with each channel's markets as rows under it (Owner-approved board "Sidebar · channel rows with
+ * markets", 2026-10-27): "Italy" under "Amazon", behind the channel's chevron. The row shows the market only; its
+ * accessible name names the channel too ("Amazon Italy"), so "Italy" under Amazon and under eBay are two names. A
+ * channel without a market keeps no rows (no chevron).
  */
 export function reviewsNav(markets?: ReviewsChannelMarkets): readonly ReviewsNavGroup[] {
   if (!markets) return REVIEWS_NAV
   return REVIEWS_NAV.map(group => group.id !== 'channels' ? group : {
     ...group,
-    items: group.items.flatMap(item => {
+    items: group.items.map(item => {
       const channel = CHANNEL_OF_HREF[item.href]
       const codes = [...new Set((channel ? markets[channel] ?? [] : []).map(code => marketOfSegment(code)).filter((c): c is string => !!c))]
-      return [item, ...codes.map(code => ({
-        label: `${item.label} ${marketWord(code)}`,
-        href: `${item.href}/${code.toLowerCase()}`,
-        icon: CornerDownRight,
-        // `…/gb` is the UK's page too (marketOfSegment): its row stays current there.
-        ...(code === 'UK' ? { match: [`${item.href}/gb`] } : {}),
-      }))]
+      if (codes.length === 0) return item
+      return {
+        ...item,
+        childrenLabel: 'markets',
+        children: codes.map(code => ({
+          label: marketWord(code),
+          ariaLabel: `${item.label} ${marketWord(code)}`,
+          href: `${item.href}/${code.toLowerCase()}`,
+          // `…/gb` is the UK's page too (marketOfSegment): its row stays current there.
+          ...(code === 'UK' ? { match: [`${item.href}/gb`] } : {}),
+        })),
+      }
     }),
   })
 }
 
-/** The ONE row a (workspace-free) path belongs to: the longest matching address wins. None → undefined. */
+/**
+ * The ONE row a (workspace-free) path belongs to, a market row under its channel included: the longest matching address
+ * wins. None → undefined.
+ */
 export function findReviewsNavItem(path: string, markets?: ReviewsChannelMarkets): ReviewsNavItem | undefined {
   const clean = path.split(/[?#]/)[0].replace(/\/+$/, '') || '/'
   let best: ReviewsNavItem | undefined
   let bestLength = -1
   for (const group of reviewsNav(markets)) {
-    for (const item of group.items) {
+    for (const item of group.items.flatMap(row => [row, ...(row.children ?? [])])) {
       const length = claim(item, clean)
       if (length > bestLength) {
         best = item
