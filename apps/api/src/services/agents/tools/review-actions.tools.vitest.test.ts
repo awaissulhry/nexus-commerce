@@ -3,9 +3,11 @@
  * PostgreSQL with the production schema and policies (PGlite). Amazon's Solicitations call and eBay's RespondToFeedback
  * are MOCKED: nothing leaves the machine.
  *
- *   request-review  — Amazon only, 4–30 days after delivery, never with an open return, once per order; dry run or
- *                     live as the switch says; eBay buyers refused (decision O-2); a return opened after the approval
- *                     refuses the run and Amazon is not called; never confirm or auto; cannot be undone.
+ *   request-review  — through the ONE sender (audit E5): Amazon 5–30 days after its delivery date (Nexus tries from
+ *                     day 4 of its own), never with an open return, once per order; dry run or live as the switch
+ *                     says; eBay and Shopify buyers get our review e-mail (no longer refused); held while sending is
+ *                     paused; a return opened after the approval refuses the run and Amazon is not called; needs
+ *                     reviews.manage only; never confirm or auto; cannot be undone.
  *   reply-to-review — eBay only, at most 500 characters, one reply per feedback, refused while eBay replies are off;
  *                     the copy checks shown; a reply posted meanwhile refuses the run.
  */
@@ -73,12 +75,13 @@ afterAll(async () => {
   await database?.close()
 }, 30_000)
 
-describe('request-review (07 O13)', () => {
-  it('a dry run records it skipped; live, Amazon is asked once; again, it is refused', async () => {
+describe('request-review (07 O13, audit E5)', () => {
+  it('a dry run records it not sent; live, Amazon is asked once; again, it is refused', async () => {
     const dry = await order()
     const asked = await dryRun('request-review', { orderId: dry })
-    expect(asked.preview).toMatchObject({ deliveredDaysAgo: 10, earlier: null, mode: expect.stringMatching(/^dry run: Amazon is not called/) })
-    expect((await run('request-review', { orderId: dry }, asked.preview)).data).toMatchObject({ status: 'SKIPPED' })
+    expect(asked.preview).toMatchObject({ deliveredDaysAgo: 10, earlier: null, mode: expect.stringMatching(/^dry run: sending to Amazon is switched off on this server/) })
+    expect(JSON.stringify(asked.preview)).not.toMatch(/NEXUS_/)
+    expect((await run('request-review', { orderId: dry }, asked.preview)).data).toMatchObject({ outcome: 'not_sent', status: 'SKIPPED' })
     vi.stubEnv('NEXUS_ENABLE_AMAZON_SOLICITATIONS', 'true')
     const live = await order()
     const askedLive = await dryRun('request-review', { orderId: live })
@@ -86,21 +89,37 @@ describe('request-review (07 O13)', () => {
     channel.solicitations.length = 0
     const done = await run('request-review', { orderId: live }, askedLive.preview)
     expect(done.ok, done.error).toBe(true)
+    expect(done.data).toMatchObject({ outcome: 'sent', words: 'Amazon accepted — it sends its own email' })
     expect(await requestsOf(live)).toEqual([{ status: 'SENT' }])
     expect(channel.solicitations).toHaveLength(1)
-    expect((await dryRun('request-review', { orderId: live })).error).toMatch(/a review was asked for already \(SENT\)/)
+    expect((await dryRun('request-review', { orderId: live })).error).toMatch(/Already sent on .*Amazon allows one request per order/)
     vi.unstubAllEnvs()
   })
 
-  it('the 4–30 day window, an open return, an eBay buyer, a channel without a request call', async () => {
-    expect((await dryRun('request-review', { orderId: await order({ deliveredAt: daysAgo(2) }) })).error).toMatch(/delivered less than 4 days ago/)
-    expect((await dryRun('request-review', { orderId: await order({ deliveredAt: daysAgo(40) }) })).error).toMatch(/delivered more than 30 days ago/)
-    expect((await dryRun('request-review', { orderId: await order({ deliveredAt: null }) })).error).toMatch(/it is not delivered yet/)
+  it('Amazon\'s 5–30 days, an open return, and eBay and Shopify buyers get our review e-mail (no longer refused)', async () => {
+    expect((await dryRun('request-review', { orderId: await order({ deliveredAt: daysAgo(2) }) })).error).toMatch(/Too early: Amazon allows a request 5–30 days after its delivery date/)
+    expect((await dryRun('request-review', { orderId: await order({ deliveredAt: daysAgo(40) }) })).error).toMatch(/Past Amazon’s day 30/)
+    expect((await dryRun('request-review', { orderId: await order({ deliveredAt: null }) })).error).toMatch(/Not delivered yet/)
     const returning = await order()
     await inside(() => database.client.return.create({ data: { orderId: returning, channel: 'AMAZON', rmaNumber: `TEST-O13-RMA-${++seq}`, status: 'AUTHORIZED' } as never }))
-    expect((await dryRun('request-review', { orderId: returning })).error).toMatch(/it has an open return/)
-    expect((await dryRun('request-review', { orderId: await order({ channel: 'EBAY' }) })).error).toMatch(/is an eBay order: its buyer is written to only through eBay/)
-    expect((await dryRun('request-review', { orderId: await order({ channel: 'SHOPIFY' }) })).error).toMatch(/only through Amazon's Request a Review/)
+    expect((await dryRun('request-review', { orderId: returning })).error).toMatch(/A return is open/)
+    const ebay = await dryRun('request-review', { orderId: await order({ channel: 'EBAY' }) })
+    expect(ebay.preview).toMatchObject({ request: expect.stringMatching(/^Nexus's review e-mail/), mode: expect.stringMatching(/^dry run: e-mail sending is switched off/) })
+    const shopifyId = await order({ channel: 'SHOPIFY' })
+    const shopify = await dryRun('request-review', { orderId: shopifyId })
+    expect(shopify.preview.request).toMatch(/honest review/)
+    // E-mail switched off here: the request is recorded as not sent, never as "wire a third-party app first".
+    expect((await run('request-review', { orderId: shopifyId }, shopify.preview)).data).toMatchObject({ outcome: 'not_sent', words: 'Not sent — our email sending is switched off on this server' })
+    expect((await dryRun('request-review', { orderId: await order({ channel: 'EBAY', customerEmail: '' }) })).error).toMatch(/no buyer e-mail/)
+  })
+
+  it('held while sending is paused on Reviews › Requests: nothing is queued (audit B12)', async () => {
+    const id = await order()
+    await inside(() => database.client.reviewMailerState.upsert({ where: { id: 'default' }, update: { isPaused: true }, create: { id: 'default', isPaused: true } as never }))
+    const asked = await dryRun('request-review', { orderId: id })
+    await inside(() => database.client.reviewMailerState.update({ where: { id: 'default' }, data: { isPaused: false } }))
+    expect(asked.error).toMatch(/Sending is paused on Reviews › Requests/)
+    expect(await requestsOf(id)).toEqual([])
   })
 
   it('a return opened after the approval refuses the run; Amazon is not asked', async () => {
@@ -109,15 +128,15 @@ describe('request-review (07 O13)', () => {
     const asked = await dryRun('request-review', { orderId: id })
     await inside(() => database.client.return.create({ data: { orderId: id, channel: 'AMAZON', rmaNumber: `TEST-O13-RMA-${++seq}`, status: 'REQUESTED' } as never }))
     channel.solicitations.length = 0
-    expect((await run('request-review', { orderId: id }, asked.preview)).error).toMatch(/it has an open return/)
+    expect((await run('request-review', { orderId: id }, asked.preview)).error).toMatch(/A return is open/)
     expect(channel.solicitations).toEqual([])
     vi.unstubAllEnvs()
   })
 
-  it('needs reviews.manage; never confirmed in Claude or auto; cannot be undone', async () => {
+  it('needs reviews.manage (a review action); never confirmed in Claude or auto; cannot be undone', async () => {
     const id = await order()
     await expect(callTool(person(Object.values(FEATURES).filter((f) => f !== FEATURES.reviewsManage)), 'request-review', { orderId: id })).rejects.toBeInstanceOf(ToolAccessError)
-    expect(getTool('request-review')).toMatchObject({ alwaysAsk: true, maxClaudeTrust: 'ask', reversibility: 'none', openWorld: true })
+    expect(getTool('request-review')).toMatchObject({ alwaysAsk: true, maxClaudeTrust: 'ask', reversibility: 'none', openWorld: true, requires: [FEATURES.reviewsManage] })
   })
 })
 

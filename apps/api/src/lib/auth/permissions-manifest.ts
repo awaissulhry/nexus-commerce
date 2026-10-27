@@ -510,8 +510,15 @@ export const ENTRIES: Entry[] = [
   P(F.ordersCancel, (m, p) => p.startsWith('/api/orders') && has('/cancel')(m, p)),
   P(F.ordersRoutingManage, pfx('/api/orders-routing')),
   P(F.ordersRoutingManage, pfx('/api/orders/routing')),
+  // Audit E4 (2026-10-27) — the Orders page's "Request review" (one order and bulk) asks a buyer for a review: a review
+  // action. The route itself requires reviews.manage OR orders.edit (assertAnyRequestPermission), so a person who may
+  // only edit orders keeps the button and one who may manage reviews gets it too; the manifest asks for orders.view.
+  P(F.ordersView, (m, p) => !isRead(m) && (p === '/api/orders/:id/request-review' || p === '/api/orders/bulk-request-reviews')),
   RW(F.ordersView, F.ordersEdit, pfx('/api/orders')),
   RW(F.ordersView, F.ordersEdit, pfx('/api/ebay/orders')),
+  // Audit A12 (2026-10-27) — POSTs of the review pages that write nothing are reads: a rule's Test run (dry-run), the
+  // rule editor's timing line and copy check, and the package-insert PDF. A person who may only view reviews uses them.
+  P(F.reviewsView, (m, p) => m.toUpperCase() === 'POST' && ['/api/review-rules/:id/dry-run', '/api/review-rules/preview-timing', '/api/review-rules/lint', '/api/review-inserts/bulk'].includes(p)),
   RW(F.reviewsView, F.reviewsManage, pfx('/api/reviews')),
   RW(F.reviewsView, F.reviewsManage, pfx('/api/orders-reviews')),
   RW(F.reviewsView, F.reviewsManage, pfx('/api/review-')),

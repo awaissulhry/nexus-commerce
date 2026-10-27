@@ -38,7 +38,8 @@ import {
 } from '../_lib/tone'
 
 type Tag = { id: string; name: string; color: string | null }
-type ReviewRequest = { id: string; channel: string; status: string; sentAt: string | null; scheduledFor: string | null }
+/** `statusWords`: the Requests page's own words for the status ("Due now", "Blocked"); older answers lack it. */
+type ReviewRequest = { id: string; channel: string; status: string; sentAt: string | null; scheduledFor: string | null; statusWords?: string }
 
 export type GridOrder = {
   id: string
@@ -858,7 +859,7 @@ function OrderCell({
         <span
           className={`inline-block text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${REVIEW_STATUS_TONE[rr.status] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-default dark:border-slate-700'}`}
         >
-          {rr.status.slice(0, 4)}
+          {rr.statusWords ?? rr.status}
         </span>
       )
     }

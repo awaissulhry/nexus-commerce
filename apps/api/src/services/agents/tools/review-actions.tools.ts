@@ -5,9 +5,11 @@
  * (never confirm, never auto), the preview says whether the channel call is live, and a run whose approval no longer
  * describes the order or the review is refused (stale).
  *
- *   - request-review: Amazon's "Request a Review" (Solicitations), delivered 4–30 days ago, no active return, no
- *     refund, once per order. eBay and Shopify buyers get Nexus's own review e-mail from the review rules' schedule
- *     (jobs/review-request-mailer.job.ts); this tool never sends it (Reviews area PR C, B12).
+ *   - request-review: asks the order's buyer NOW through the ONE sender (review-request.service.ts askForReviews, as the
+ *     Orders page does; audit E5, 2026-10-27): Amazon's own "Request a Review" (5–30 days after Amazon's delivery date;
+ *     Nexus first tries on day 4 of its own), Nexus's review e-mail for eBay and Shopify buyers (the rules' text), the
+ *     rule's "How was it?" check first where the rule has one. Held while sending is paused on Reviews › Requests; never
+ *     with an open return or a refund; once per order.
  *   - reply-to-review: eBay only (RespondToFeedback: public, one reply per feedback, at most 500 characters). Amazon
  *     and Shopify have no reply call: post it there, the review desk can then record it.
  */
@@ -15,17 +17,12 @@
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
-import { logger } from '../../../utils/logger.js'
 import { lintBuyerCopy } from '../../comms/message-lint.js'
-import { amazonSolicitationMode, requestReviewForOrder, reviewRequestCheck } from '../../reviews/review-request.service.js'
+import { amazonSolicitationMode, askForReviews, askPreview, reviewEmailMode } from '../../reviews/review-request.service.js'
+import { sendHeldNow } from '../../reviews/review-queue.service.js'
 import { ebayReplyMode, sendReviewReply } from '../../reviews/review-reply-send.service.js'
 import { staleRefusal } from './stale-preview.js'
 import type { AgentTool, ToolContext, ToolResult } from '../tool-types.js'
-
-const toolLog = {
-  warn: (...args: unknown[]) => logger.warn('[review actions]', { detail: String(args[1] ?? args[0]) }),
-  error: (...args: unknown[]) => logger.error('[review actions]', { detail: JSON.stringify(args[1] ?? args[0]) }),
-}
 
 async function freshOrStale(preview: () => Promise<ToolResult>, ctx: ToolContext, fields: string[], what: string) {
   const fresh = await preview()
@@ -37,42 +34,41 @@ async function freshOrStale(preview: () => Promise<ToolResult>, ctx: ToolContext
 // ── request-review ──────────────────────────────────────────────────────────────────────────────────
 
 const requestInput = z.object({
-  orderId: z.string().trim().min(1).max(64).describe('Nexus order id (from order-search): an Amazon order delivered 4–30 days ago'),
+  orderId: z.string().trim().min(1).max(64).describe('Nexus order id (from order-search): an Amazon, eBay or Shopify order that was delivered'),
 })
 type RequestArgs = z.infer<typeof requestInput>
-
-/** The route's refusal in a sentence for the person. */
-const REQUEST_REFUSAL: Record<string, string> = {
-  'Order not yet delivered': 'it is not delivered yet (Amazon allows a request 4–30 days after delivery)',
-  'Too soon — Amazon requires ≥4 days post-delivery': 'it was delivered less than 4 days ago (Amazon allows a request 4–30 days after delivery)',
-  'Too late — Amazon blocks requests after 30 days': 'it was delivered more than 30 days ago (Amazon allows a request 4–30 days after delivery)',
-  'Order has an active return — solicitation suppressed': 'it has an open return, so no review is asked for',
-  'Order has a refund — solicitation suppressed': 'it was refunded, so no review is asked for',
-  'Missing amazonOrderId or unknown marketplace': 'Nexus does not know its Amazon marketplace',
-}
 
 async function previewRequest(a: RequestArgs): Promise<ToolResult> {
   const order = await prisma.order.findFirst({ where: { id: a.orderId, deletedAt: null }, select: { id: true, channel: true, channelOrderId: true, marketplace: true } })
   if (!order) return { ok: false, error: 'Order not found' }
   const which = `Order ${order.channelOrderId}`
-  if (order.channel === 'EBAY') return { ok: false, error: `${which} is an eBay order: its buyer is written to only through eBay, which asks for feedback itself. Nothing was queued.` }
-  if (order.channel !== 'AMAZON') return { ok: false, error: `${which} is a ${order.channel} order: Nexus asks for a review only through Amazon's Request a Review (the review e-mails of the review rules cover the other channels). Nothing was queued.` }
-  const checked = await reviewRequestCheck(order.id)
-  if (checked.ok === false) {
-    const why = checked.status === 409 ? `a review was asked for already (${checked.error.replace('Already ', '')})` : REQUEST_REFUSAL[checked.error] ?? checked.error
-    return { ok: false, error: `${which}: ${why}. Nothing was queued.` }
-  }
-  const mode = amazonSolicitationMode()
+  const blocked = await sendHeldNow()
+  if (blocked) return { ok: false, error: `${which}: ${blocked.replace(/\.$/, '')}. Nothing was queued.` }
+  const asked = await askPreview(order.id)
+  if (!asked) return { ok: false, error: 'Order not found' }
+  if (asked.plan.kind === 'held') return { ok: false, error: `${which}: ${asked.plan.words.replace(/\.$/, '')}. Nothing was queued.` }
+  const amazon = order.channel === 'AMAZON'
+  const existing = asked.order.reviewRequests.find((r) => r.channel === order.channel) ?? null
+  const live = amazon ? amazonSolicitationMode() === 'live' : reviewEmailMode() === 'live'
+  const check = asked.rule?.useSentimentDiversion
+    ? `The rule “${asked.rule.name}” asks “How was it?” first: the buyer gets that e-mail now, and the review request after their answer (or after 5 days).`
+    : null
   return {
     ok: true,
     preview: {
       action: 'request-review',
       order: { id: order.id, channel: order.channel, marketplace: order.marketplace, channelOrderId: order.channelOrderId },
-      deliveredDaysAgo: checked.daysSinceDelivery,
-      earlier: checked.existing ? checked.existing.status : null,
-      request: 'Amazon\'s "Request a Review" e-mail (product review and seller feedback), written and sent by Amazon in the buyer\'s language',
-      mode: mode === 'live' ? 'live: Amazon sends it to the buyer' : 'dry run: Amazon is not called (NEXUS_ENABLE_AMAZON_SOLICITATIONS off); Nexus records the request as skipped',
-      note: 'Amazon allows one request per order; it cannot be taken back.',
+      deliveredDaysAgo: asked.order.deliveredAt ? Math.floor((Date.now() - asked.order.deliveredAt.getTime()) / 86_400_000) : null,
+      earlier: existing ? existing.status : null,
+      request: amazon
+        ? 'Amazon\'s "Request a Review" e-mail (product review and seller feedback), written and sent by Amazon in the buyer\'s language'
+        : 'Nexus\'s review e-mail (the review rules\' text: Italian for Italy, English for every other market), asking for an honest review',
+      ...(asked.rule ? { rule: asked.rule.name } : {}),
+      ...(check ? { check } : {}),
+      mode: amazon
+        ? (live ? 'live: Amazon sends it to the buyer' : 'dry run: sending to Amazon is switched off on this server; Nexus records the request as not sent')
+        : (live ? 'live: Nexus e-mails the buyer' : 'dry run: e-mail sending is switched off on this server; Nexus records the request as not sent'),
+      note: 'Goes through Reviews › Requests (the same sender as "Send now"): one request per order; it cannot be taken back.',
     },
   }
 }
@@ -81,7 +77,7 @@ const requestReviewTool: AgentTool = {
   name: 'request-review',
   title: 'Ask a buyer for a review',
   input: requestInput,
-  requires: [F.ordersEdit, F.reviewsManage],
+  requires: [F.reviewsManage],
   category: 'orders',
   riskTier: 'high',
   readOnly: false,
@@ -90,10 +86,11 @@ const requestReviewTool: AgentTool = {
   reversibility: 'none',
   maxClaudeTrust: 'ask',
   description:
-    'Ask the buyer of an Amazon order of this business for a review, through Amazon\'s "Request a Review" (Amazon writes '
-    + 'and sends it; live or a dry run, as the preview says). Amazon orders only: 4–30 days after delivery, never with an '
-    + 'open return or a refund, once per order. eBay and Shopify buyers are asked by Nexus\'s own e-mail on the review '
-    + 'rules\' schedule (Reviews › Requests); this tool does not send those. '
+    'Ask the buyer of an order of this business for a review now, through Reviews › Requests (the same sender as its '
+    + '"Send now"): Amazon orders get Amazon\'s own "Request a Review" (Amazon writes and sends it; 5–30 days after its '
+    + 'delivery date), eBay and Shopify orders get Nexus\'s review e-mail (an honest-review request, the rules\' text). '
+    + 'Where the order\'s rule asks "How was it?" first, that e-mail goes first. Held while sending is paused; never with '
+    + 'an open return or a refund; once per order; live or a dry run, as the preview says. '
     + 'Always waits for a person to approve it in Nexus; it cannot be undone.',
   handler: (args) => previewRequest(args as RequestArgs),
   async execute(args, ctx) {
@@ -101,14 +98,15 @@ const requestReviewTool: AgentTool = {
     const checked = await freshOrStale(() => previewRequest(a), ctx, ['order', 'earlier', 'mode'], 'the order')
     if ('refusal' in checked) return checked.refusal
     const before = (checked.fresh.preview as { earlier: string | null }).earlier
-    const answer = await requestReviewForOrder(a.orderId, toolLog)
-    if (!answer.ok) return { ok: false, error: answer.body?.error ?? `not asked (${answer.status})` }
-    const row = answer.body as { status: string; providerResponseCode: string | null; errorMessage: string | null; suppressedReason: string | null }
-    if (row.status === 'FAILED') return { ok: false, error: `Amazon refused the request (${row.providerResponseCode ?? 'error'}): ${row.errorMessage ?? 'no detail'}. Nothing reached the buyer; it shows as failed on the order.` }
+    const { results } = await askForReviews([a.orderId])
+    const one = results[0]
+    if (one.outcome === 'held') return { ok: false, error: `${one.words.replace(/\.$/, '')}. Nothing was sent.` }
+    if (one.outcome === 'failed') return { ok: false, error: `${one.words}. Nothing reached the buyer; it shows as failed on Reviews › Requests.` }
+    const row = one.requestId ? await prisma.reviewRequest.findUnique({ where: { id: one.requestId }, select: { status: true } }) : null
     return {
       ok: true,
-      data: { orderId: a.orderId, status: row.status, providerResponseCode: row.providerResponseCode, suppressedReason: row.suppressedReason },
-      change: { before: { orderId: a.orderId, request: before }, after: { orderId: a.orderId, request: row.status } },
+      data: { orderId: a.orderId, outcome: one.outcome, words: one.words, status: row?.status ?? null },
+      change: { before: { orderId: a.orderId, request: before }, after: { orderId: a.orderId, request: row?.status ?? null } },
     }
   },
 }
