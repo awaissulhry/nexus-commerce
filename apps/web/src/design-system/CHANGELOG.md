@@ -1,3 +1,9 @@
+## A grid cell that clips its value — 2026-10-27
+
+`grid/theme/grid.css` (both apps, identical). **`nds-ag-cell-clip`** (a column's `cellClass`): the cell's value shrinks to
+the cell (`min-width: 0`, `overflow: hidden`), so no-wrap lines (an EntityPath) draw their ellipsis instead of spilling
+over the next column at a narrow or saved width. Opt-in; every other cell is unchanged.
+
 ## PerformanceGraph bars and stacked bars — 2026-10-26
 
 Reviews channel pages (PR F, lane L12). Both apps, identical: `components/{PerformanceGraph.tsx, performanceGraphSeries.ts}`;

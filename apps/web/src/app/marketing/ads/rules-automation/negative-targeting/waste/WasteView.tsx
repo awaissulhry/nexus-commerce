@@ -575,8 +575,10 @@ export function WasteView(props: WasteViewProps) {
   )
   const toolbar = (
     <GridToolbar
+      // A narrow desktop card: the right-hand group moves to a line of its own, whole and right-aligned (DS `wrap`).
+      wrap
       right={(
-        <>
+        <span className={phone ? styles.toolbarRightPhone : styles.toolbarRight}>
           {/* Density steps aside while rows are ticked: the bulk actions need the room (Listings). */}
           {!phone && !bulkActions && <GridDensityToggle value={density} onChange={pickDensity} />}
           {!phone && <Button size="sm" onClick={openCustomise}><SlidersHorizontal size={13} aria-hidden /> Customise</Button>}
@@ -584,7 +586,7 @@ export function WasteView(props: WasteViewProps) {
           {status}
           {/* A phone: the search takes its own line under the bar (the card's narrow rule). */}
           {phone && search}
-        </>
+        </span>
       )}
     >
       {viewSwitch}
