@@ -20,18 +20,22 @@ vi.mock('./outbound-api-call-log.service.js', () => ({ recordGatewayCall: vi.fn(
 vi.mock('./amazon-report-registry.service.js', () => ({
   startReportRun: vi.fn(async () => null), completeReportRun: vi.fn(async () => {}), failReportRun: vi.fn(async () => {}),
 }))
-vi.mock('../lib/amazon-sp-client.js', () => ({
-  getAmazonRegion: async () => 'eu',
-  amazonSpClient: () => ({
-    callAPI: vi.fn(async (req: any) => {
-      h.calls.push({ operation: req.operation, at: Date.now() })
-      const answer = h.answers.shift()
-      if (!answer) throw new Error(`test: no answer queued for ${req.operation}`)
-      return answer()
+vi.mock('../lib/amazon-sp-client.js', async () => {
+  const { Readable } = await import('node:stream')
+  return {
+    getAmazonRegion: async () => 'eu',
+    amazonSpClient: () => ({
+      callAPI: vi.fn(async (req: any) => {
+        h.calls.push({ operation: req.operation, at: Date.now() })
+        const answer = h.answers.shift()
+        if (!answer) throw new Error(`test: no answer queued for ${req.operation}`)
+        return answer()
+      }),
+      // The document download: the storage answer, its bytes and its Content-Type.
+      downloadStream: vi.fn(async () => Object.assign(Readable.from([Buffer.from('{"rows":[1,2]}')]), { headers: { 'content-type': 'application/json' } })),
     }),
-    download: vi.fn(async () => '{"rows":[1,2]}'),
-  }),
-}))
+  }
+})
 
 import { GatewayRefusal } from './gateway/gateway.js'
 import { isGatewayRateRefusal, sendWithRateRetry, RATE_RETRY_DEFAULT_RETRIES, RATE_RETRY_MAX_WAIT_MS } from './sp-api-rate-retry.js'
@@ -85,5 +89,6 @@ describe('fetchSpApiReport — createReport', () => {
     expect(h.calls.map((c) => c.operation)).toEqual(['createReport', 'createReport', 'getReport', 'getReportDocument'])
     expect(h.calls[1].at - h.calls[0].at).toBe(41_000)
     expect(r.reportId).toBe('r-1')
+    expect(r.payload).toEqual({ rows: [1, 2] })
   })
 })

@@ -29,8 +29,14 @@ export const FETCH_STALE_MS = 20 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
 
 export class FeedbackReportShapeError extends Error {
-  constructor(readonly missing: string[]) {
-    super(`Amazon's feedback report has no ${missing.join(', ')} column, so Nexus could not read it.`)
+  /**
+   * @param missing the columns found neither by name nor by contents ("Date", "Rating", "Order ID")
+   * @param headers the report's column titles, for the log (titles are not personal data; a cell that looks like a value
+   *   is already hidden, see `headerForLog`). Never row values.
+   */
+  constructor(readonly missing: string[], readonly headers: string[] = []) {
+    const seen = headers.length ? ` Columns seen: ${headers.slice(0, 12).map((h) => `“${h}”`).join(', ')}.` : ''
+    super(`Amazon's feedback report has no ${missing.join(', ')} column Nexus could find by name or by its contents, so Nexus could not read it.${seen}`)
     this.name = 'FeedbackReportShapeError'
   }
 }
@@ -53,20 +59,47 @@ export interface ParseResult {
   rows: ParsedFeedback[]
   /** Lines that could not be read, with the reason in words (1-based line numbers, header = 1). */
   skipped: Array<{ line: number; reason: string }>
+  /** How the columns were found when the report had feedback lines: by their names, or by what they hold. */
+  columnsFrom?: 'names' | 'contents'
 }
 
-/** A header as a key: lower case, letters and digits only ("Order ID" → "orderid"). */
-function headerKey(h: string): string {
-  return h.replace(/^﻿/, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+const BOM = /^\uFEFF/
+
+/** A header as a key: accents folded, lower case, letters and digits only ("Order ID" → "orderid", "Évaluation" → "evaluation"). */
+export function headerKey(h: string): string {
+  return h.replace(BOM, '').normalize('NFD').replace(/\p{M}+/gu, '').toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
-const COLUMN_KEYS: Record<'date' | 'rating' | 'comments' | 'response' | 'orderId', string[]> = {
+type Column = 'date' | 'rating' | 'comments' | 'response' | 'orderId' | 'raterEmail'
+
+/**
+ * Column names Nexus knows, as keys (`headerKey`) — only names with a source:
+ * - English: Amazon's own list (report-type-values-performance, above): Date, Rating, Comments, Your Response, Order ID,
+ *   Rater Email (plus the spellings Nexus read before 2026-10-27).
+ * - Every other language (IT, DE, FR, ES, NL, PL, SV, TR): no source publishes Amazon's localized header texts (searched
+ *   2026-10-27: Amazon's docs list the English names only; seller forums, GitHub code and issues give none). What open
+ *   source readers do say: Airbyte's connector (github.com/airbytehq/airbyte, source-amazon-seller-partner/components.py,
+ *   `SellerFeedbackReportsGzipCsvDecoder`) — the header names "differ per marketplace (are localized to marketplace
+ *   language) but columns come in the same order", so it reads them by position; wimoor (github.com/wimoor-erp/wimoor,
+ *   ReportAmzFeedbackServiceImpl.java) reads positions 0–5 too. So a header Nexus does not know is read by what its
+ *   columns hold (`findColumns`), never by a guessed translation.
+ */
+const COLUMN_KEYS: Record<Column, readonly string[]> = {
   date: ['date', 'feedbackdate'],
   rating: ['rating'],
   comments: ['comments', 'comment'],
   response: ['yourresponse', 'response'],
   orderId: ['orderid', 'amazonorderid'],
+  raterEmail: ['rateremail'],
 }
+
+/** Amazon's documented column order (report-type-values-performance), the same in every market (Airbyte, above). */
+const DOCUMENTED_ORDER: readonly Column[] = ['date', 'rating', 'comments', 'response', 'orderId', 'raterEmail']
+
+/** Amazon's order id: 3, 7 and 7 digits. */
+const AMAZON_ORDER_ID = /^\d{3}-\d{7}-\d{7}$/
+
+const REQUIRED_LABEL: Record<'date' | 'rating' | 'orderId', string> = { date: 'Date', rating: 'Rating', orderId: 'Order ID' }
 
 /** One TSV field: surrounding quotes taken off and doubled quotes made single. */
 function field(raw: string | undefined): string {
@@ -94,7 +127,9 @@ function utcDate(y: number, m: number, d: number): Date | null {
 
 /**
  * The report's date → a UTC day. Amazon's docs give no format, so every form a flat file uses is read: ISO
- * ("2026-10-25", with or without a time), and day/month/year with "/", "." or "-" and a 2- or 4-digit year. A date
+ * ("2026-10-25", with or without a time), and day/month/year with "/", "." or "-" and a 2- or 4-digit year. (Airbyte's
+ * connector, `SellerFeedbackReportsTypeTransformer.MARKETPLACE_DATE_FORMAT_MAP`, reads this report as d.m.yy in DE,
+ * yyyy-mm-dd in SE and d/m/yy in the other European markets — all read here.) A date
  * whose first or second part is over 12 is read the only way it can be; otherwise the market decides (day first in
  * Europe, month first in the US, Canada and Mexico). Null when it is not a real date.
  */
@@ -129,31 +164,101 @@ export function feedbackExternalId(amazonOrderId: string): string {
   return `amazon-feedback:${amazonOrderId.trim()}`
 }
 
+/** A header cell fit for a log line. Titles are not personal data; a cell that looks like a value (digits, an e-mail, long
+ *  text) is hidden all the same, in case the first line of a file was a feedback line. */
+function headerForLog(cell: string): string {
+  const t = field(cell.replace(BOM, ''))
+  if (!t) return '(empty)'
+  return t.length > 40 || /[\d@]/.test(t) ? '(hidden)' : t
+}
+
+interface FeedbackColumns {
+  date: number
+  rating: number
+  orderId: number
+  /** -1 when the report has none. */
+  comments: number
+  response: number
+  from: 'names' | 'contents'
+}
+
 /**
- * Amazon's tab-delimited report → feedback rows. Throws `FeedbackReportShapeError` when the Date, Rating or Order ID
- * column is missing (the file is not this report). A row without an order id, a real date or a 1–5 rating is skipped
+ * Where each column is. First by name (`COLUMN_KEYS`). When the Date, Rating or Order ID name is not one Nexus knows (a
+ * report in the market's language), by what the feedback lines hold: the order id is the column of Amazon order ids
+ * (3-7-7 digits), the date the column `parseFeedbackDate` reads for this market, the stars the column of whole numbers
+ * 1–5 — each the column where at least half of the lines fit, most first. When two columns fit equally (a comment that is
+ * just "3"), Amazon's documented order decides, and only when the report has its column count (6, or 5 without the
+ * deprecated Rater Email) and that column is one that fits. Comments and the seller's response, when their names are
+ * unknown too, are the columns beside them in that order: the comment right after the stars, the response right
+ * before the order id. Throws `FeedbackReportShapeError` with the column titles when Date, Rating or Order ID is still
+ * not found.
+ */
+function findColumns(headerCells: readonly string[], rows: readonly string[][], market?: string | null): FeedbackColumns {
+  const keys = headerCells.map(headerKey)
+  const at: Partial<Record<Column, number>> = {}
+  for (const name of DOCUMENTED_ORDER) {
+    const i = keys.findIndex((k) => COLUMN_KEYS[name].includes(k))
+    if (i !== -1) at[name] = i
+  }
+  const named = at.date != null && at.rating != null && at.orderId != null
+  if (!named) {
+    const taken = new Set(Object.values(at))
+    const width = Math.max(headerCells.length, ...rows.map((r) => r.length))
+    const documentedCount = headerCells.length === DOCUMENTED_ORDER.length || headerCells.length === DOCUMENTED_ORDER.length - 1
+    const fits: Record<'date' | 'rating' | 'orderId', (v: string) => boolean> = {
+      orderId: (v) => AMAZON_ORDER_ID.test(v),
+      date: (v) => parseFeedbackDate(v, market) != null,
+      rating: (v) => parseFeedbackRating(v) != null,
+    }
+    // The most telling first: an order id fits nothing else, a date never looks like stars.
+    for (const name of ['orderId', 'date', 'rating'] as const) {
+      if (at[name] != null) continue
+      const counts: Array<{ i: number; n: number }> = []
+      for (let i = 0; i < width; i++) {
+        if (taken.has(i)) continue
+        const n = rows.filter((r) => fits[name](field(r[i]))).length
+        if (n > 0 && n * 2 >= rows.length) counts.push({ i, n })
+      }
+      const most = Math.max(0, ...counts.map((c) => c.n))
+      const best = counts.filter((c) => c.n === most)
+      const documented = DOCUMENTED_ORDER.indexOf(name)
+      const pick = best.length === 1 ? best[0].i : documentedCount && best.some((c) => c.i === documented) ? documented : null
+      if (pick != null) { at[name] = pick; taken.add(pick) }
+    }
+  }
+  const missing = (['date', 'rating', 'orderId'] as const).filter((name) => at[name] == null)
+  if (missing.length) throw new FeedbackReportShapeError(missing.map((name) => REQUIRED_LABEL[name]), headerCells.map(headerForLog))
+
+  const rating = at.rating!
+  const orderId = at.orderId!
+  const used = new Set(Object.values(at))
+  const free = (i: number) => i >= 0 && i < headerCells.length && !used.has(i)
+  const comments = at.comments ?? (free(rating + 1) ? rating + 1 : -1)
+  const response = at.response ?? (free(orderId - 1) && orderId - 1 !== comments ? orderId - 1 : -1)
+  return { date: at.date!, rating, orderId, comments, response, from: named ? 'names' : 'contents' }
+}
+
+/**
+ * Amazon's tab-delimited report → feedback rows. A report with a header line and no feedback line is no feedback (Amazon
+ * only reports 1–3 stars, and a market without any is normal), whatever its header says. The columns are found by
+ * name, else by what they hold (`findColumns`); `FeedbackReportShapeError` when the Date, Rating or Order ID column is
+ * still not found (the file is not this report). A row without an order id, a real date or a 1–5 rating is skipped
  * with its reason. The same order twice keeps the newest line.
  */
 export function parseSellerFeedbackReport(text: string, market?: string | null): ParseResult {
-  const lines = String(text ?? '').replace(/^﻿/, '').split(/\r?\n/)
+  const lines = String(text ?? '').replace(BOM, '').split(/\r?\n/)
   const headerIndex = lines.findIndex((l) => l.trim().length > 0)
   if (headerIndex === -1) return { rows: [], skipped: [] }
-  const headers = lines[headerIndex].split('\t').map(headerKey)
-  const col = (name: keyof typeof COLUMN_KEYS) => headers.findIndex((h) => COLUMN_KEYS[name].includes(h))
-  const at = { date: col('date'), rating: col('rating'), comments: col('comments'), response: col('response'), orderId: col('orderId') }
-  const missing = [
-    at.date === -1 ? 'Date' : null,
-    at.rating === -1 ? 'Rating' : null,
-    at.orderId === -1 ? 'Order ID' : null,
-  ].filter((m): m is string => m != null)
-  if (missing.length) throw new FeedbackReportShapeError(missing)
+  const feedbackLines: Array<{ line: number; cells: string[] }> = []
+  for (let i = headerIndex + 1; i < lines.length; i++) {
+    if (lines[i].trim()) feedbackLines.push({ line: i + 1, cells: lines[i].split('\t') })
+  }
+  if (feedbackLines.length === 0) return { rows: [], skipped: [] }
+  const at = findColumns(lines[headerIndex].split('\t'), feedbackLines.map((l) => l.cells), market)
 
   const byKey = new Map<string, ParsedFeedback>()
   const skipped: ParseResult['skipped'] = []
-  for (let i = headerIndex + 1; i < lines.length; i++) {
-    if (!lines[i].trim()) continue
-    const cells = lines[i].split('\t')
-    const line = i + 1
+  for (const { line, cells } of feedbackLines) {
     const orderId = field(cells[at.orderId])
     const rawDate = field(cells[at.date])
     const postedAt = parseFeedbackDate(rawDate, market)
@@ -174,7 +279,7 @@ export function parseSellerFeedbackReport(text: string, market?: string | null):
     const before = byKey.get(row.externalReviewId)
     if (!before || row.postedAt >= before.postedAt) byKey.set(row.externalReviewId, row)
   }
-  return { rows: [...byKey.values()].sort((x, y) => y.postedAt.getTime() - x.postedAt.getTime()), skipped }
+  return { rows: [...byKey.values()].sort((x, y) => y.postedAt.getTime() - x.postedAt.getTime()), skipped, columnsFrom: at.from }
 }
 
 // ── Upserts ──────────────────────────────────────────────────────────────────────────────────────────────────────
