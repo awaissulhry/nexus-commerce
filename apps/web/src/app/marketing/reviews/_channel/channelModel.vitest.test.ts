@@ -17,8 +17,8 @@ const NOW = new Date('2026-10-26T12:00:00Z')
 const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   id: 'r1', postedAt: '2026-10-24T09:00:00Z', channel: 'EBAY', market: 'IT', kind: 'seller', rating: 5, snippet: 'Ottimo venditore',
   english: 'Great seller', language: 'it', buyer: 'buyer-one', product: { id: 'p1', name: 'Touring jacket', sku: 'TJ-M', variant: 'M' },
-  order: { id: 'o1', label: '12-34567-89013' }, mood: null, themes: [], status: 'NEW', assignee: null, dueAt: null, overdue: false,
-  imported: false, responses: { sent: 0, draft: 0 }, photos: 0, aiTopics: [], ...over,
+  order: { id: 'o1', label: '12-34567-89013' }, mood: null, themes: [], status: 'NEW', assignee: null, dueAt: null, noReply: 'positive',
+  overdue: false, imported: false, responses: { sent: 0, draft: 0 }, photos: 0, aiTopics: [], ...over,
 })
 
 describe('the period in the address', () => {

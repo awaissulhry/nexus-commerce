@@ -114,7 +114,7 @@ function EtsyReplyCell({ data, context }: EtsyCell) {
           <a href={ETSY_REVIEWS_HREF} target="_blank" rel="noopener noreferrer" aria-label="Open on Etsy (opens a new tab)">Open on Etsy <ExternalLink size={11} aria-hidden /></a>
         </Button>
       </span>
-      <span className={s.sub}>{cell.note === 'Responded' ? 'Marked as responded' : STATUS_WORD[data.status] ?? data.status}{data.assignee ? ` · ${data.assignee}` : ''}</span>
+      <span className={s.sub}>{cell.sub}</span>
     </span>
   )
 }

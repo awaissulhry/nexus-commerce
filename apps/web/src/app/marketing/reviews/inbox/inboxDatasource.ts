@@ -13,6 +13,9 @@ import type { IServerSideDatasource, IServerSideGetRowsParams } from '@/design-s
 import { reviewsGet } from '../_lib/reviewsFetch'
 import { inboxApiParams, sortFromGrid, type InboxQuery } from './inboxQuery'
 
+/** Why the API's one needs-a-reply rule says a review needs no reply (review-visibility.ts `noReplyReason`). */
+export type NoReplyReason = 'fixture' | 'closed' | 'imported' | 'no_reply' | 'window_closed' | 'positive' | 'automatic'
+
 /** One row of `GET /api/reviews/inbox` (review-inbox.service.ts `InboxRow`). */
 export interface InboxRow {
   id: string
@@ -35,6 +38,8 @@ export interface InboxRow {
   assignee: string | null
   /** When a reply is due, while the review is open. */
   dueAt: string | null
+  /** Why the one needs-a-reply rule says it needs no reply (positive, imported, Etsy's window closed…); null = needs one. */
+  noReply: NoReplyReason | null
   overdue: boolean
   imported: boolean
   responses: { sent: number; draft: number }

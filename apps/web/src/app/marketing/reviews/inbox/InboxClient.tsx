@@ -52,7 +52,7 @@ import { createInboxDatasource, type InboxPage, type InboxRow } from './inboxDat
 import {
   EMPTY_INBOX_QUERY, INBOX_PAGE_SIZES, INBOX_PERIOD_CHOICES, INBOX_STATUSES, NO_OWNER, activeFilterCount, clearFilters, gridSortOf,
   inboxApiParams, isFiltered, litTile, parseInboxQuery, querySignature, serializeInboxQuery, sortFromGrid, toggleStatusTile, withFilter,
-  withKind, withNeedsReply, withPage, withPeriod, withPhotos, withSearch, withSort, type InboxFilterKey, type InboxQuery, type InboxSort,
+  withKind, withPage, withPeriod, withPhotos, withReply, withSearch, withSort, type InboxFilterKey, type InboxQuery, type InboxSort,
 } from './inboxQuery'
 import {
   TILE_ORDER, headerSubtitle, inboxChips, livePill, needsReplyWords, notConnectedEmpty, periodShort, readStateBanners, tabItems, tileAccent,
@@ -450,8 +450,8 @@ function InboxInner() {
       <ReviewsMenuButton />
       <SegmentedControl size="sm" ariaLabel="Period" options={PERIOD_OPTIONS} value={q.period} onChange={(p) => setQuery((prev) => withPeriod(prev, p))} />
       {/* The badges' number (the one needs-a-reply rule, all time): one press shows exactly those reviews. */}
-      {!q.needsReply && (top?.needsReply ?? 0) > 0 && (
-        <Button size="sm" onClick={() => setQuery((prev) => withNeedsReply(withPeriod(prev, 'all'), true))}>
+      {q.reply == null && (top?.needsReply ?? 0) > 0 && (
+        <Button size="sm" onClick={() => setQuery((prev) => withReply(withPeriod(prev, 'all'), 'needed'))}>
           {needsReplyWords(top!.needsReply!)}
         </Button>
       )}
