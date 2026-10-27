@@ -3,12 +3,14 @@
 /**
  * Reviews › Requests › Queue — "What requests brought" (`GET /api/reviews/analytics`): requests sent, the reviews that
  * followed within 30 days and the rate, by market, by product type and by rule, for 7, 30 or 90 days. Every rate is an
- * estimate: Amazon does not say which buyer wrote a review. The A/B rows are a later part, shown as a labelled sample.
+ * estimate: Amazon does not say which buyer wrote a review. The A/B rows (PR J) are the rules' A/B splits
+ * (`GET /api/review-timing-tests?kind=AB`): each side's sent and rate, and the result in words with how sure.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Banner, Card, MetricStrip, SummaryTable, type Metric } from '@/design-system/components'
-import { Button, Pill, SegmentedControl, Skeleton } from '@/design-system/primitives'
+import { Button, SegmentedControl, Skeleton } from '@/design-system/primitives'
 import { reviewsGet } from '../../_lib/reviewsFetch'
+import { abResultRows, type TimingTestsAnswer } from '../timing/_timing/timingTestsModel'
 import type { ResultsPeriod } from './queueQuery'
 import { marketName, rateText } from './queueTiles'
 import s from './queue.module.css'
@@ -56,6 +58,11 @@ export function ResultsCard({ period, onPeriod }: ResultsCardProps) {
     void load()
     return () => abort.current?.abort()
   }, [load])
+  const [ab, setAb] = useState<{ data: TimingTestsAnswer | null; error: string | null } | null>(null)
+  useEffect(() => {
+    void reviewsGet<TimingTestsAnswer>('/review-timing-tests', { kind: 'AB' }).then((res) => setAb({ data: res.data, error: res.error }))
+  }, [])
+  const abRows = ab?.data ? abResultRows(ab.data.tests) : []
 
   const current = answer && answer.period === period ? answer : null
   const a = current?.data ?? null
@@ -103,10 +110,15 @@ export function ResultsCard({ period, onPeriod }: ResultsCardProps) {
               rows={bySent(a.perRule).map((r) => ({ id: r.ruleId ?? 'none', cells: [`${r.ruleName}${r.ruleActive ? '' : ' (off)'}`, n(r.sent), rate(r)] }))}
             />
           </div>
-          {/* ⛔ KEEP — Coming later placeholder (Owner ruling 3): A/B results need the test model (Phase 3, PR J). */}
-          <p className={s.placeholderLine}>
-            <Pill tone="neutral">Coming later</Pill> <Pill tone="info">Sample</Pill> A/B results: side A against side B of a rule, with how sure the difference is.
-          </p>
+          {abRows.length > 0 ? (
+            <SummaryTable label="A/B splits" columns={['A/B split', 'Side A', 'Side B', 'Result']} rows={abRows} stackOnPhone />
+          ) : (
+            <p className={s.muted}>
+              {ab?.error
+                ? `The A/B splits could not be read: ${ab.error}`
+                : 'No A/B split has run yet. On a rule, use “Duplicate as A/B”, change B, then start the split from the rule’s A/B card.'}
+            </p>
+          )}
         </div>
       )}
     </Card>

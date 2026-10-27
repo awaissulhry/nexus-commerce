@@ -259,16 +259,6 @@
   overflow-x: auto;
 }
 
-.placeholderLine {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-6);
-  margin: 0;
-  color: var(--nds-text-muted);
-  font-size: var(--nds-font-size-sm);
-}
-
 .headerSkeleton {
   display: flex;
   flex-direction: column;

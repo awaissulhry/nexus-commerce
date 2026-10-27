@@ -7,7 +7,8 @@
  *
  *   Name · Who (channel, market, shipped by, product types, minimum total) · When (first try, window, send hour, skip
  *   weekends, best day) · Skip when · Message (Amazon's own fixed message; our email shown, its own text per rule comes
- *   later) · Sentiment check (kept exactly as it was, Owner ruling 2) · A/B split (coming later, sample).
+ *   later) · Sentiment check (kept exactly as it was, Owner ruling 2) · A/B split (PR J: AbSplitCard.tsx — start, results,
+ *   how sure, End test).
  *
  * Saving: POST (new) or PATCH the whole rule; Save is held with the first thing to fix (ruleForm.ts `saveHeld`). The
  * notes are checked for buyer-copy problems (`POST /api/review-rules/lint`); an error holds Save.
@@ -52,6 +53,7 @@ import {
   type ShippedBy,
 } from './ruleForm'
 import { previewBody, whenItSends, type TimingPreview } from './whenItSends'
+import { AbSplitCard } from './AbSplitCard'
 import s from './editor.module.css'
 
 const PREVIEW_DEBOUNCE_MS = 400
@@ -447,15 +449,7 @@ function RuleEditor({ id }: { id: string }) {
       id: 'ab',
       label: 'A/B split',
       title: 'A/B split',
-      badge: <Pill tone="neutral">Coming later</Pill>,
-      content: (
-        // ⛔ KEEP — Coming later placeholder (Owner ruling 3): the A/B split needs the test model (Phase 3, PR J). Sample numbers.
-        <div className={s.fields}>
-          <p className={s.placeholder}><Pill tone="neutral">Coming later</Pill> <Pill tone="info">Sample</Pill> Germany jackets · split 50 / 50 by order number</p>
-          <SummaryTable label="A/B split (sample)" columns={['Side', 'Sent', 'Rate']} rows={[{ id: 'a', cells: ['A · day 4 (this)', '186', '7.5%'] }, { id: 'b', cells: ['B · day 7', '180', '8.9%'] }]} />
-          <p className={s.hint}>B ahead — 71% sure; ends at 300 orders per side. Amazon does not say who wrote a review, so rates are estimates.</p>
-        </div>
-      ),
+      content: <AbSplitCard rule={savedRule} rules={allRules} canManage={canManage} unsaved={count} />,
     },
   ]
 
