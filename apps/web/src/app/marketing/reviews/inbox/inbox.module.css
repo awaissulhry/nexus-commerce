@@ -41,12 +41,6 @@
   gap: var(--nds-space-6);
 }
 
-.pills {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-6);
-}
-
 /* An element kept mounted but out of sight (the grid while a failed first read shows its message). */
 .offstage {
   position: absolute;

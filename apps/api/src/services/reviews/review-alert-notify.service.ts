@@ -14,7 +14,8 @@
  * carries this business's own sender (business-identity.service.ts); without one, no e-mail is sent.
  *
  * "Rating drop" (Phase 3) uses the same delivery: when the hourly check opens a rating-drop alert, the people picked
- * for it hear once per alert, in Nexus and/or by e-mail as Settings says (`notifyRatingDrop`).
+ * for it hear once per alert, in Nexus and/or by e-mail as Settings says (`notifyRatingDrop`). So does "Complaint
+ * spike": when the hourly spike check opens a complaint alert, once per alert (`notifyComplaintSpike`).
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
@@ -23,6 +24,7 @@ import { resolveBusinessIdentity } from '../business-identity.service.js'
 import { sendEmail } from '../email/transport.js'
 import { channelMarketLabel } from './overviewMath.js'
 import { ratingDropNoticeWords, type StoredDrop } from './rating-drop-math.js'
+import { complaintSpikeNoticeWords, type ComplaintSpikeNoticeInput } from './complaint-spike-math.js'
 import { readAlert, teamMembers, type AlertSetting, type TeamMember } from './review-settings.service.js'
 
 export const NEGATIVE_REVIEW_ALERT_TYPE = 'review-negative'
@@ -173,6 +175,50 @@ export async function notifyRatingDrop(input: RatingDropNoticeInput, saved?: Ale
     })
   } catch (error) {
     logger.warn('[review-alert-notify] rating drop failed', { error: String(error).slice(0, 160) })
+    return none('failed')
+  }
+}
+
+// ── "Complaint spike" ───────────────────────────────────────────────
+
+export const COMPLAINT_SPIKE_ALERT_TYPE = 'review-complaint-spike'
+
+export interface ComplaintSpikeAlertInput extends ComplaintSpikeNoticeInput {
+  /** The ReviewSpike row the hourly spike check just opened. */
+  spikeId: string
+  productId: string
+}
+
+/** Insights › Alerts on the alert's market, theme and product (a bare path: the bell's router adds the business). */
+export function complaintSpikeAlertsHref(input: { market: string; theme: string; productId: string }): string {
+  const q = new URLSearchParams({ market: input.market, theme: input.theme, product: input.productId })
+  return `/marketing/reviews/insights/alerts?${q.toString()}`
+}
+
+/**
+ * Tell the picked people about a complaint spike the hourly check just opened, as the business's "Complaint spike"
+ * alert says: in Nexus and/or by e-mail, once per alert per person. `saved` is the alert as the check read it (read
+ * again when missing). Never throws.
+ */
+export async function notifyComplaintSpike(input: ComplaintSpikeAlertInput, saved?: AlertSetting): Promise<AlertNotifyResult> {
+  const none = (skipped: string): AlertNotifyResult => ({ created: 0, deduped: 0, emailed: 0, skipped })
+  try {
+    const alert = saved ?? (await readAlert('complaintSpike'))
+    if (!alert.on) return none('off')
+    const recipients = alertRecipients(alert, await teamMembers())
+    if (recipients.length === 0) return none('nobody')
+    return await deliverAlert(alert, recipients, {
+      type: COMPLAINT_SPIKE_ALERT_TYPE,
+      entityType: 'ReviewSpike',
+      entityId: input.spikeId,
+      words: complaintSpikeNoticeWords(input),
+      href: complaintSpikeAlertsHref({ market: input.market, theme: input.theme, productId: input.productId }),
+      meta: { marketplace: input.market, theme: input.theme, channels: [...input.channels] },
+      tag: 'review-complaint-spike-alert',
+      linkWords: 'Open it in Insights › Alerts',
+    })
+  } catch (error) {
+    logger.warn('[review-alert-notify] complaint spike failed', { error: String(error).slice(0, 160) })
     return none('failed')
   }
 }

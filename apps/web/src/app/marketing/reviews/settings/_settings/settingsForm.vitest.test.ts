@@ -4,8 +4,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  dirtyCount, formFromSettings, ratingDropWords, recipientsHint, saveHeldReason, setAlertOn, setAlertRecipients, setAvoidWords, setSignOff,
-  setTone, settingsPayload, toggleAlertVia, toggleLanguage, type SettingsResponse,
+  ALERT_NAME, ALERT_WHEN, ALERTS_WITH_VIA, complaintSpikeWords, dirtyCount, formFromSettings, ratingDropWords, recipientsHint, saveHeldReason,
+  setAlertOn, setAlertRecipients, setAvoidWords, setSignOff, setTone, settingsPayload, toggleAlertVia, toggleLanguage, type SettingsResponse,
 } from './settingsForm'
 
 const answer: Pick<SettingsResponse, 'voice' | 'alerts'> = {
@@ -14,6 +14,7 @@ const answer: Pick<SettingsResponse, 'voice' | 'alerts'> = {
     { key: 'negative', on: true, recipients: [], via: ['app'] },
     { key: 'digest', on: true, recipients: [{ userId: 'u1', name: 'Person one' }], via: ['email'] },
     { key: 'ratingDrop', on: false, recipients: [], via: ['app'] },
+    { key: 'complaintSpike', on: false, recipients: [], via: ['app'] },
   ],
 }
 
@@ -93,6 +94,19 @@ describe('Save held', () => {
     expect(recipientsHint(on.alerts[2], [])).toBe('Nobody picked: the business’s owners get it.')
   })
 
+  it('"Complaint spike": a real alert like "Rating drop" — off by default, who, how, saved with the page', () => {
+    expect(saved.alerts[3]).toEqual({ key: 'complaintSpike', on: false, recipients: [], via: ['app'] })
+    expect(ALERTS_WITH_VIA).toContain('complaintSpike')
+    const on = setAlertOn(saved, 'complaintSpike', true)
+    expect(dirtyCount(saved, on)).toBe(1)
+    expect(saveHeldReason(on)).toBeNull()
+    expect(saveHeldReason(toggleAlertVia(on, 'complaintSpike', 'app', false))).toBe('Choose how “Complaint spike” arrives: in Nexus, by e-mail or both.')
+    const picked = setAlertRecipients(toggleAlertVia(on, 'complaintSpike', 'email', true), 'complaintSpike', ['u1'])
+    expect(settingsPayload(saved, picked)).toEqual({ alerts: [{ key: 'complaintSpike', on: true, recipients: ['u1'], via: ['app', 'email'] }] })
+    expect(recipientsHint(on.alerts[3], [])).toBe('Nobody picked: the business’s owners get it.')
+    expect(`${ALERT_NAME.complaintSpike} ${ALERT_WHEN.complaintSpike}`).not.toMatch(/coming later|sample/i)
+  })
+
   it('says who gets an alert when nobody is picked', () => {
     expect(recipientsHint(saved.alerts[0], [])).toBe('Nobody picked: the business’s owners get it.')
     expect(recipientsHint({ ...saved.alerts[1], recipients: [] }, ['care@example.test'])).toBe('Nobody picked: it goes to care@example.test, as today.')
@@ -110,5 +124,21 @@ describe('"Rating drop" in words', () => {
     expect(ratingDropWords({ recentDays: 1, beforeDays: 1, minRated: 1, dropAtLeast: 0.5, reopenAfterDays: 1 })[0]).toBe(
       'A product family’s average falls 0.5 stars or more in one market: the last 1 day against the 1 day before, with at least 1 rated review in each.',
     )
+  })
+})
+
+describe('"Complaint spike" in words', () => {
+  it('says the spike check’s real rule from the API: the share, the windows, the minimums, what counts and how often', () => {
+    expect(complaintSpikeWords({ recentDays: 7, baselineDays: 28, minNegative: 3, minReviews: 5, multiplier: 2, reopenAfterDays: 7 })).toEqual([
+      'For one product in one market, the share of negative reviews about a theme reaches 2× its usual share or more: the last 7 days against the last 28 days, with at least 3 negative reviews about it in the 7 days and 5 reviews about it in the 28 days.',
+      'Themes are the ones AI read in each review when it arrived. Every channel counts, and imported files too; a review with no product or no market does not.',
+      'Checked every hour. One alert per product, market and theme while it is open or acknowledged; after a resolve, a new one opens only if the rise is still there 7 days later.',
+    ])
+    // A deployment that tunes the check: the words follow its numbers.
+    expect(complaintSpikeWords({ recentDays: 7, baselineDays: 28, minNegative: 1, minReviews: 1, multiplier: 2.5, reopenAfterDays: 1 })).toEqual([
+      'For one product in one market, the share of negative reviews about a theme reaches 2.5× its usual share or more: the last 7 days against the last 28 days, with at least 1 negative review about it in the 7 days and 1 review about it in the 28 days.',
+      expect.any(String),
+      'Checked every hour. One alert per product, market and theme while it is open or acknowledged; after a resolve, a new one opens only if the rise is still there 1 day later.',
+    ])
   })
 })
