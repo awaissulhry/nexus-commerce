@@ -188,7 +188,7 @@
 /* ── Amazon topics: like | dislike ───────────────────────── */
 .topicCols {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
   gap: var(--nds-space-16);
 }
 
@@ -221,13 +221,34 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: var(--nds-space-12);
+  gap: var(--nds-space-6) var(--nds-space-12);
   padding: var(--nds-space-8) 0;
   border-bottom: 1px solid var(--nds-border-subtle);
 }
 
 .topicRow:last-child {
   border-bottom: 0;
+}
+
+/* A topic's 6-month trend: a full-width line under the row — first month, the line, last month, the words. */
+.topicTrend {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+
+/* Phone: the topic keeps its width — mentions over the star effect on the right, the trend below. */
+@media (max-width: 599px) {
+  .topicRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .topicRow > :first-child {
+    grid-row: span 2;
+  }
 }
 
 /* ── List rows (revision requests, seller feedback) ──────── */

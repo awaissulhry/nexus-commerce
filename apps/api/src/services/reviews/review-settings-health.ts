@@ -131,7 +131,7 @@ export function settingsSourceRows(facts: SourceFacts, extra: SourceExtraFacts, 
   const working = topics.filter(([, t]) => t.lastOkAt && !t.roleMissing).map(([m]) => m).sort()
   const lastOk = newest(topics.map(([, t]) => t.lastOkAt))
   const topicRow: SettingsSourceRow = {
-    key: 'amazon-topics', name: 'Amazon topics', what: 'Topics buyers mention, their share of reviews and star effect, per product',
+    key: 'amazon-topics', name: 'Amazon topics', what: 'Topics buyers mention, their share of reviews, star effect and 6-month trend, per product',
     stateWords: 'Off', tone: 'neutral', later: null, lastAt: lastOk?.toISOString() ?? null, lastWords: lastOk ? null : '—', action: null,
     words: `Nexus does not read Amazon topics in this setup yet. They need the Selling Partner Insights role on the Amazon connection. ${TOPIC_MARKETS_WORDS}`,
   }

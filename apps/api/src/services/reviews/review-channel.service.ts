@@ -6,7 +6,8 @@
  *
  * Amazon (ruling 5): no API gives Amazon's star rating, average or review count, so every star here comes from reviews a
  * person IMPORTED (`ingestSource = IMPORT_CSV`); topics come from the Customer Feedback API (AmazonReviewInsight: weekly,
- * English, UK/DE/FR/IT/ES only, never Amazon.nl, needs the Selling Partner Insights role); requests are ReviewRequest rows
+ * English, UK/DE/FR/IT/ES only, never Amazon.nl, needs the Selling Partner Insights role), each with Amazon's 6-month trend
+ * of its share of reviews (amazon-review-trends.ts); requests are ReviewRequest rows
  * by Amazon's answer (review-queue-words.ts). Seller feedback (PR H): Amazon's 1–3 star feedback report, fetched by
  * Nexus (amazon-seller-feedback.service.ts), rows with `kind = 'SELLER'`, each with the removal check
  * (review-feedback-removal.ts) — counted and listed, never averaged into the stars.
@@ -30,6 +31,7 @@ import { feedbackRemovalCheck, fulfilmentOf, REMOVAL_RULES, type RemovalCheck } 
 import { FEEDBACK_WINDOW_DAYS } from './amazon-seller-feedback-report.js'
 import { reviewSources, topicStates } from './review-sources.service.js'
 import { amazonThemes, scopeCode, type OverviewTheme, type Section } from './review-overview.service.js'
+import { topicTrend, type TopicPolarity, type TopicTrend } from './amazon-review-trends.js'
 import { listInbox, type InboxRow } from './review-inbox.service.js'
 import { queueStatusOf, reasonKeyOf } from './review-queue-words.js'
 import { ratingOf } from './review-rating.js'
@@ -83,8 +85,8 @@ export interface AmazonTiles {
 }
 
 export interface AmazonTopic extends OverviewTheme {
-  /** Amazon's 6-month trend of the topic — not read by Nexus yet (null). */
-  trend: null
+  /** Amazon's 6-month trend of the topic's share of reviews, or why there is none (amazon-review-trends.ts). */
+  trend: TopicTrend
 }
 
 export interface AmazonTopics {
@@ -300,10 +302,13 @@ export async function reviewsChannel(input: ChannelInput): Promise<ChannelPage> 
 // ── Amazon ───────────────────────────────────────────────────────────
 
 type AmazonRow = { id: string; rating: number | null; postedAt: Date; productId: string | null }
-type InsightRow = { asin: string; marketplace: string; productId: string | null; reviewCount: number | null; positiveTopics: unknown; negativeTopics: unknown; accessStatus: string; fetchedAt: Date }
+type InsightRow = { asin: string; marketplace: string; productId: string | null; reviewCount: number | null; positiveTopics: unknown; negativeTopics: unknown; trend: unknown; accessStatus: string; fetchedAt: Date }
 
-function asTopics(list: OverviewTheme[]): AmazonTopic[] {
-  return list.sort((a, b) => b.mentions - a.mentions || a.label.localeCompare(b.label)).map(t => ({ ...t, trend: null }))
+/** Amazon's topics of some reads, most mentioned first, each with its 6-month trend over the same reads. */
+function topicsOf(rows: InsightRow[], polarity: TopicPolarity): AmazonTopic[] {
+  return amazonThemes(rows, polarity)
+    .sort((a, b) => b.mentions - a.mentions || a.label.localeCompare(b.label))
+    .map(t => ({ ...t, trend: topicTrend(rows, polarity, t.label) }))
 }
 
 async function amazonSections(market: string | null, period: ChannelPeriod, bounds: PeriodBounds, now: Date): Promise<AmazonSections> {
@@ -328,7 +333,7 @@ async function amazonSections(market: string | null, period: ChannelPeriod, boun
   })
   const insights = once(async (): Promise<InsightRow[]> => prisma.amazonReviewInsight.findMany({
     where: market ? { marketplace: market } : {},
-    select: { asin: true, marketplace: true, productId: true, reviewCount: true, positiveTopics: true, negativeTopics: true, accessStatus: true, fetchedAt: true },
+    select: { asin: true, marketplace: true, productId: true, reviewCount: true, positiveTopics: true, negativeTopics: true, trend: true, accessStatus: true, fetchedAt: true },
     take: 2_000,
   }))
   // The markets whose newest topic read Amazon refused for the missing role (every market, not only this page's).
@@ -444,10 +449,10 @@ async function amazonSections(market: string | null, period: ChannelPeriod, boun
         where: TOPICS_WHERE_WORDS,
         weekOf: iso(state.weekOf),
         productCount: byProduct.size,
-        like: asTopics(amazonThemes(ok, 'POSITIVE')),
-        dislike: asTopics(amazonThemes(ok, 'NEGATIVE')),
+        like: topicsOf(ok, 'POSITIVE'),
+        dislike: topicsOf(ok, 'NEGATIVE'),
         products: [...byProduct.entries()]
-          .map(([key, p]) => ({ key, name: p.name, like: asTopics(amazonThemes(p.rows, 'POSITIVE')), dislike: asTopics(amazonThemes(p.rows, 'NEGATIVE')) }))
+          .map(([key, p]) => ({ key, name: p.name, like: topicsOf(p.rows, 'POSITIVE'), dislike: topicsOf(p.rows, 'NEGATIVE') }))
           .sort((a, b) => a.name.localeCompare(b.name)),
       }
     }),

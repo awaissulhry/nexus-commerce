@@ -65,6 +65,11 @@ describe('Reviews channel pages (real SQL)', () => {
       await c.amazonReviewInsight.create({ data: {
         asin: 'B0TEST0001', marketplace: 'IT', productId: 'test-jacket', reviewCount: 100, accessStatus: 'OK', fetchedAt: daysAgo(3),
         positiveTopics: [topic('Waterproof', 18, 0.2)], negativeTopics: [topic('Runs small', 9, -0.3), topic('Zip quality', 4, -0.2)],
+        // Amazon's 6-month trend (getItemReviewTrends), as the weekly read stores it: a line for "Runs small" only.
+        trend: { read: 'OK', at: daysAgo(3).toISOString(), topics: [{ topic: 'Runs small ', polarity: 'NEGATIVE', points: [
+          { month: '2026-05', share: 4 }, { month: '2026-06', share: 5 }, { month: '2026-07', share: null },
+          { month: '2026-08', share: 6 }, { month: '2026-09', share: 8 }, { month: '2026-10', share: 9 },
+        ] }] },
       } as never })
       await c.amazonReviewInsight.create({ data: {
         asin: 'B0TEST0001', marketplace: 'NL', productId: 'test-jacket', reviewCount: 50, accessStatus: 'OK', fetchedAt: daysAgo(3),
@@ -107,6 +112,14 @@ describe('Reviews channel pages (real SQL)', () => {
     expect(s.topics.data).toMatchObject({ state: 'ok', words: null, productCount: 1 })
     expect(s.topics.data.dislike.map(t => [t.label, t.mentions, t.share, t.impact])).toEqual([['Runs small', 9, 9, -0.3], ['Zip quality', 4, 4, -0.2]])
     expect(s.topics.data.like.map(t => t.label)).toEqual(['Waterproof'])
+    // Each topic carries Amazon's 6-month trend, or why it has none.
+    expect(s.topics.data.dislike[0].trend).toEqual({ state: 'ok', reads: 1, products: 1, markets: 1, points: [
+      { month: '2026-05', share: 4 }, { month: '2026-06', share: 5 }, { month: '2026-07', share: null },
+      { month: '2026-08', share: 6 }, { month: '2026-09', share: 8 }, { month: '2026-10', share: 9 },
+    ] })
+    expect(s.topics.data.dislike[1].trend).toEqual({ state: 'none' })
+    expect(s.topics.data.like[0].trend).toEqual({ state: 'none' })
+    expect(s.topics.data.products[0].dislike[0].trend).toMatchObject({ state: 'ok', reads: 1 })
     expect(s.topics.data.products).toEqual([expect.objectContaining({ key: 'test-jacket', name: 'Test jacket' })])
     expect(s.topics.data.where).toMatch(/not on Amazon\.nl/)
 
