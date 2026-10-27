@@ -22,6 +22,7 @@ import { REVIEW_CATEGORIES } from './sentiment-extraction.service.js'
 import { reviewSources, type ReviewSource } from './review-sources.service.js'
 import { applyBulkTriage } from './review-triage.service.js'
 import { createReplyDraft } from './review-reply.service.js'
+import { EBAY_TOPIC_WORDS } from './adapters/ebay-topics.js'
 
 export interface InboxRow {
   id: string
@@ -48,6 +49,10 @@ export interface InboxRow {
   overdue: boolean
   imported: boolean
   responses: { sent: number; draft: number }
+  /** PR G — how many photos (or videos) the buyer added. */
+  photos: number
+  /** PR G — eBay's AI topics (eBay feedback read by eBay's REST API); [] = read, none; null = never read. */
+  aiTopics: { topic: string; label: string; sentiment: string | null }[] | null
 }
 
 export interface InboxReadState {
@@ -78,6 +83,19 @@ function snippet(text: string | null | undefined): string {
   return t.length > SNIPPET ? `${t.slice(0, SNIPPET - 1)}…` : t
 }
 
+/** eBay's AI topics as the list shows them (pure; null = never read; unknown JSON is skipped). */
+export function topicChips(raw: unknown): InboxRow['aiTopics'] {
+  if (!Array.isArray(raw)) return null
+  const out: NonNullable<InboxRow['aiTopics']> = []
+  for (const t of raw) {
+    const topic = typeof (t as { topic?: unknown })?.topic === 'string' ? (t as { topic: string }).topic.trim().toLowerCase() : ''
+    if (!topic || out.some((o) => o.topic === topic)) continue
+    const sentiment = typeof (t as { sentiment?: unknown }).sentiment === 'string' ? String((t as { sentiment: string }).sentiment).toUpperCase() : null
+    out.push({ topic, label: EBAY_TOPIC_WORDS[topic] ?? topic.charAt(0).toUpperCase() + topic.slice(1), sentiment })
+  }
+  return out
+}
+
 /** GET /api/reviews/inbox. */
 export async function listInbox(rawQuery: Record<string, unknown>, now: Date = new Date()): Promise<InboxPage> {
   const q: InboxQuery = parseInboxQuery(rawQuery)
@@ -91,8 +109,9 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
       take: q.pageSize,
       select: {
         id: true, postedAt: true, channel: true, marketplace: true, rating: true, title: true, body: true,
-        bodyEnglish: true, language: true, authorName: true, orderId: true, ingestSource: true,
-        triageStatus: true, assignee: true,
+        bodyEnglish: true, language: true, authorName: true, orderId: true, ingestSource: true, kind: true,
+        triageStatus: true, assignee: true, channelTopics: true,
+        _count: { select: { media: true } },
         sentiment: { select: { label: true, categories: true } },
         product: { select: { id: true, name: true, sku: true, parentId: true, variantAttributes: true } },
       },
@@ -131,7 +150,7 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
       postedAt: r.postedAt.toISOString(),
       channel: r.channel,
       market: r.marketplace,
-      kind: reviewKindOf(r.channel, r.ingestSource),
+      kind: reviewKindOf(r.channel, r.kind),
       rating: r.rating,
       snippet: snippet(r.title ? `${r.title} — ${r.body}` : r.body),
       english: r.bodyEnglish ? snippet(r.bodyEnglish) : null,
@@ -149,6 +168,8 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
       overdue: isReviewOverdue({ status: r.triageStatus, postedAt: r.postedAt }, now),
       imported: isImportedSource(r.ingestSource),
       responses: responses.get(r.id) ?? { sent: 0, draft: 0 },
+      photos: r._count.media,
+      aiTopics: topicChips(r.channelTopics),
     }
   })
 
@@ -157,11 +178,11 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
 
 /** Each tab counts what it would show with every other filter kept. */
 async function inboxTabCounts(q: InboxQuery, now: Date): Promise<InboxPage['tabCounts']> {
-  const groups = await prisma.review.groupBy({ by: ['channel'], where: inboxWhere(q, now, { kind: true }), _count: { _all: true } })
+  const groups = await prisma.review.groupBy({ by: ['channel', 'kind'], where: inboxWhere(q, now, { kind: true }), _count: { _all: true } })
   const counts = { all: 0, product: 0, seller: 0 }
   for (const g of groups) {
     counts.all += g._count._all
-    counts[reviewKindOf(g.channel)] += g._count._all
+    counts[reviewKindOf(g.channel, g.kind)] += g._count._all
   }
   return counts
 }
@@ -228,7 +249,7 @@ export async function runInboxBulk(
   const found = await prisma.review.findMany({
     where: visibleReviewWhere({ id: { in: request.ids } }),
     select: {
-      id: true, channel: true, marketplace: true, postedAt: true, ingestSource: true,
+      id: true, channel: true, marketplace: true, postedAt: true, ingestSource: true, kind: true,
       assignee: true, triageStatus: true, triageTags: true,
     },
   })

@@ -14,8 +14,9 @@ import {
   voiceFromRow, voicePromptLines, withSignOff, type AlertSetting, type VoiceSettings,
 } from './review-settings.service.js'
 import {
-  everyWords, freshnessProblems, nextCronRun, pipelineJobDefs, pipelineJobs, scrubCode, settingsSourceRows, type CronRunFact,
+  everyWords, freshnessProblems, nextCronRun, pipelineJobDefs, pipelineJobs, scrubCode, sellerFeedbackRow, settingsSourceRows, type CronRunFact,
 } from './review-settings-health.js'
+import type { SellerFeedbackState } from './amazon-seller-feedback.service.js'
 import type { SourceFacts } from './review-sources.service.js'
 
 let database: Awaited<ReturnType<typeof formulaDatabase>>
@@ -175,6 +176,7 @@ describe('pipeline jobs', () => {
     expect(by('review-rule-evaluator')).toMatchObject({ state: 'running' })
     expect(by('orders-delivered-backfill')).toMatchObject({ state: 'never', stateWords: 'Not run yet' })
     expect(by('review-digest')).toMatchObject({ state: 'off', words: 'Turned off under Alerts.', nextRunAt: null })
+    expect(by('amazon-seller-feedback')).toMatchObject({ every: 'Daily 06:00 UTC', state: 'never' })
     for (const j of jobs) expect(`${j.words} ${j.stateWords} ${j.every} ${j.code ?? ''}`).not.toMatch(SETTING_NAME)
   })
 
@@ -204,12 +206,35 @@ describe('sources', () => {
     expect(by('amazon-topics').words).toMatch(/not on Amazon\.nl/)
     expect(by('ebay-feedback')).toMatchObject({ stateWords: 'Needs a fix', action: { kind: 'reconnect', label: 'Reconnect eBay Germany' } })
     expect(by('ebay-feedback').words).toMatch(/eBay Italy is fine\./)
-    expect(by('amazon-seller-feedback').later).toBe('Coming later')
+    expect(by('amazon-seller-feedback')).toMatchObject({ later: null, action: { kind: 'fetch', label: 'Fetch now' } })
     expect(by('etsy-reviews').later).toBe('Coming later')
     expect(by('amazon-review-text')).toMatchObject({ stateWords: 'Not available', action: { kind: 'import' } })
     expect(by('amazon-review-text').words).toMatch(/no review text and no star rating by API/)
     expect(problems).toBe(2)
     for (const r of rows) expect(`${r.words} ${r.what} ${r.stateWords} ${r.later ?? ''}`).not.toMatch(SETTING_NAME)
+  })
+
+  it('Amazon seller feedback: off, on and fetched, a market refused, a sign-in to fix — in words, never a setting name', () => {
+    const state = (over: Partial<SellerFeedbackState> = {}): SellerFeedbackState => ({
+      on: true, every: 'Daily 06:00 UTC', markets: [], canFetch: true, held: null, fixHref: null, fetching: false, lastFetchAt: null, lastOkAt: null, ...over,
+    })
+    const market = (m: string, s: 'ok' | 'failed' | 'never' | 'fetching', rows: number | null, words = ''): SellerFeedbackState['markets'][number] =>
+      ({ market: m, state: s, lastFetchAt: null, lastOkAt: s === 'ok' ? hoursAgo(5).toISOString() : null, rows, words })
+    const off = sellerFeedbackRow(state({ on: false, canFetch: false, held: 'Nexus does not fetch Amazon seller feedback in this setup yet.' }))
+    expect(off).toMatchObject({ stateWords: 'Off', tone: 'neutral', later: null, action: { kind: 'fetch', held: 'Nexus does not fetch Amazon seller feedback in this setup yet.' } })
+    expect(off.words).toMatch(/^Off in this setup\. When it is on, Nexus asks Amazon for it daily at 06:00 UTC, and “Fetch now” asks at once\./)
+    expect(off.words).toMatch(/only feedback of 1 to 3 stars/)
+    const on = sellerFeedbackRow(state({ markets: [market('IT', 'ok', 7), market('DE', 'ok', 2)], lastOkAt: hoursAgo(5).toISOString() }))
+    expect(on).toMatchObject({ stateWords: 'On', tone: 'success', words: 'Fetched daily at 06:00 UTC for Italy and Germany · 9 feedback of 1–3 stars in the last 90 days.', action: { kind: 'fetch', held: null } })
+    const refused = sellerFeedbackRow(state({ markets: [market('IT', 'ok', 7), market('ES', 'failed', null, 'Amazon refused: the Amazon connection needs the Selling Partner Insights or Amazon Fulfillment role.')] }))
+    expect(refused).toMatchObject({ stateWords: 'Needs a fix', tone: 'warning' })
+    expect(refused.words).toMatch(/^Spain: Amazon refused/)
+    expect(refused.words).toMatch(/Italy is fine\.$/)
+    const signIn = sellerFeedbackRow(state({ markets: [market('IT', 'never', null)], canFetch: false, held: 'Sign-in expired. Nexus cannot ask Amazon for the report until someone connects Amazon again.', fixHref: '/settings/channels/amazon' }))
+    expect(signIn).toMatchObject({ stateWords: 'Needs a fix', tone: 'danger', action: { kind: 'reconnect', href: '/settings/channels/amazon' } })
+    expect(sellerFeedbackRow(state({ markets: [market('IT', 'never', null)] }))).toMatchObject({ stateWords: 'Waiting', tone: 'info' })
+    expect(sellerFeedbackRow(state({ markets: [market('IT', 'fetching', null)], fetching: true }))).toMatchObject({ stateWords: 'Fetching', tone: 'info' })
+    for (const r of [off, on, refused, signIn]) expect(`${r.words} ${r.stateWords} ${r.action?.held ?? ''}`).not.toMatch(SETTING_NAME)
   })
 
   it('a paused mailer and no eBay account', () => {

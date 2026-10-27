@@ -13,7 +13,7 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { needsReplyWhere, reviewKindOf, visibleReviewWhere } from './review-visibility.js'
+import { countsInRating, needsReplyWhere, reviewKindOf, visibleReviewWhere } from './review-visibility.js'
 import { NO_TOPICS_MARKETS, reviewSources, type ReviewSource, type SetupProblem } from './review-sources.service.js'
 import {
   averageRating, bucketKeys, channelMarketLabel, channelWords, daysBetween, delta, parseOverviewPeriod, periodBounds,
@@ -172,6 +172,7 @@ type ReviewRow = {
   postedAt: Date
   productId: string | null
   ingestSource: string | null
+  kind: string | null
   sentiment: { label: string; categories: string[]; topPhrases: string[] } | null
 }
 
@@ -187,7 +188,7 @@ const FALLBACK_WHAT: Record<string, string> = {
 function quoteSource(row: ReviewRow): string {
   const where = row.marketplace ? ` · ${row.marketplace.toUpperCase()}` : ''
   if (row.ingestSource === 'IMPORT_CSV') return `Imported review · ${channelMarketLabel(row.channel, null)}${where}`
-  return `${channelWords(row.channel)} ${reviewKindOf(row.channel) === 'seller' ? 'feedback' : 'review'}${where}`
+  return `${channelWords(row.channel)} ${reviewKindOf(row.channel, row.kind) === 'seller' ? 'feedback' : 'review'}${where}`
 }
 
 function quoted(text: string): string {
@@ -300,7 +301,7 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
   const reviews = once(async (): Promise<ReviewRow[]> => prisma.review.findMany({
     where: visibleReviewWhere({ ...scope, postedAt: { ...(lowerBound ? { gte: lowerBound } : {}), lte: bounds.to } }),
     select: {
-      id: true, channel: true, marketplace: true, rating: true, postedAt: true, productId: true, ingestSource: true,
+      id: true, channel: true, marketplace: true, rating: true, postedAt: true, productId: true, ingestSource: true, kind: true,
       sentiment: { select: { label: true, categories: true, topPhrases: true } },
     },
     orderBy: { postedAt: 'desc' },
@@ -343,8 +344,9 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
         prisma.reviewSpike.count({ where: { status: 'OPEN', detectedAt: { gte: startOfUtcDay(now) }, ...(market ? { marketplace: market } : {}) } }),
       ])
       const hasPrev = bounds.prevFrom != null
-      const avgNow = averageRating(rowsNow.map(r => r.rating))
-      const avgPrev = hasPrev ? averageRating(rowsPrev.map(r => r.rating)) : null
+      // Amazon's 1–3 star seller feedback is counted, never averaged (review-visibility.ts `countsInRating`).
+      const avgNow = averageRating(rowsNow.filter(countsInRating).map(r => r.rating))
+      const avgPrev = hasPrev ? averageRating(rowsPrev.filter(countsInRating).map(r => r.rating)) : null
       const followed = (rows: Array<{ _count: { attributedReviews: number } }>) => rows.filter(r => r._count.attributedReviews > 0).length
       const rateNow = reviewRate(reqs.now.length, followed(reqs.now))
       const ratePrev = hasPrev ? reviewRate(reqs.prev.length, followed(reqs.prev)) : null
@@ -369,16 +371,16 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
       const bucket = trendBucket(period)
       const earliest = rowsNow.length ? rowsNow[rowsNow.length - 1].postedAt : new Date(now.getTime() - 30 * 86_400_000)
       const from = bounds.from ?? earliest
-      return { bucket, points: trendPoints(rowsNow, bucketKeys(from, bounds.to, bucket), bucket) }
+      return { bucket, points: trendPoints(rowsNow.filter(countsInRating), bucketKeys(from, bounds.to, bucket), bucket) }
     }),
 
     section('spread', async (): Promise<OverviewSpread> => {
       const { now: rowsNow } = await split()
       const unrated = rowsNow.filter(r => r.rating == null).length
       return {
-        counts: starCounts(rowsNow.map(r => r.rating)),
-        product: rowsNow.filter(r => reviewKindOf(r.channel) === 'product').length,
-        seller: rowsNow.filter(r => reviewKindOf(r.channel) === 'seller').length,
+        counts: starCounts(rowsNow.filter(countsInRating).map(r => r.rating)),
+        product: rowsNow.filter(r => reviewKindOf(r.channel, r.kind) === 'product').length,
+        seller: rowsNow.filter(r => reviewKindOf(r.channel, r.kind) === 'seller').length,
         note: unrated > 0 ? `${unrated.toLocaleString('en')} ${unrated === 1 ? 'review has' : 'reviews have'} no star rating, so ${unrated === 1 ? 'it is' : 'they are'} not in the spread.` : null,
       }
     }),
@@ -403,7 +405,7 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
         const mine = rowsNow.filter(r => rowKey(r.channel, r.marketplace) === k)
         const before = rowsPrev.filter(r => rowKey(r.channel, r.marketplace) === k)
         const kind = ratingKindOf(ch)
-        const rating = ratingIn(kind, mine.map(r => r.rating))
+        const rating = ratingIn(kind, mine.filter(countsInRating).map(r => r.rating))
         const sent = reqs.now.filter(r => rowKey(r.channel, r.marketplace) === k)
         const rate = reviewed.has(k) ? reviewRate(sent.length, sent.filter(r => r._count.attributedReviews > 0).length) : null
         const src = sourceOf.get(k)
@@ -415,7 +417,7 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
           ratingKind: kind,
           rating,
           reviews: mine.length,
-          change: hasPrev ? delta(rating, ratingIn(kind, before.map(r => r.rating)), 1) : null,
+          change: hasPrev ? delta(rating, ratingIn(kind, before.filter(countsInRating).map(r => r.rating)), 1) : null,
           // Etsy asks its buyers itself: Nexus sends no requests there.
           sent: ch === 'ETSY' ? null : sent.length,
           rate: ch === 'ETSY' || rate == null ? null : round(rate * 100, 1),

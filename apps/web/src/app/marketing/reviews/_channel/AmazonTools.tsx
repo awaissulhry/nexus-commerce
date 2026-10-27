@@ -4,8 +4,9 @@
  * Reviews › Amazon (build spec §3.5, ruling 5) — the Amazon tools menu and the page's sections: tiles, the "no review
  * text" banner, the rating trend and spread from IMPORTED reviews only (Amazon gives no rating, average or count by API),
  * Amazon's topics (Customer Feedback API: weekly, English, UK/DE/FR/IT/ES, never Amazon.nl, needs the Selling Partner
- * Insights role), seller feedback (Phase 3: a labelled sample), asking for reviews by Amazon's answer, products to watch.
- * Nexus never asks Amazon to remove feedback (no API for it): "Open Feedback Manager" in Seller Central.
+ * Insights role), seller feedback (Amazon's 1–3 star report, fetched by Nexus, with the removal check per feedback),
+ * asking for reviews by Amazon's answer, products to watch. Nexus never asks Amazon to remove feedback (no API for it):
+ * "Open Feedback Manager" in Seller Central.
  */
 import { useCallback, useMemo, useState, type MouseEvent } from 'react'
 import { ChevronDown, ExternalLink } from 'lucide-react'
@@ -14,7 +15,7 @@ import {
   type ChartSeries, type MenuItemDef, type Metric, type RatingStars,
 } from '@/design-system/components'
 import { NexusGrid, numericColumn, type ColDef, type ICellRendererParams } from '@/design-system/grid'
-import { Button, Pill, Skeleton, Tag } from '@/design-system/primitives'
+import { Button, Pill, Skeleton } from '@/design-system/primitives'
 import { chart } from '@/design-system/tokens'
 import Link from '@/lib/workspaces/Link'
 import { useRouter } from '@/lib/workspaces/navigation'
@@ -29,6 +30,8 @@ import {
   type AmazonSections as AmazonData, type ChannelPeriod, type TileView, type TopicView, type WatchView,
 } from './channelModel'
 import { lockParams, scopeTitleWords, type ReviewsLock } from './reviewsScope'
+import { FetchNowButton } from './FetchNowButton'
+import { failedFetchWords, feedbackCardLine, feedbackRowView, fetchHeldWords, REMOVAL_RULES } from './sellerFeedbackModel'
 import s from './channel.module.css'
 
 const TILE_MIN_PX = 132
@@ -39,10 +42,10 @@ function plainClick(event: MouseEvent<HTMLAnchorElement>): boolean {
   return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
 }
 
-/** Tiles from the model: a Phase 3 tile shows "Coming later", never a number. */
+/** Tiles from the model, as the DS MetricStrip takes them. */
 export function tileMetrics(tiles: readonly TileView[]): Metric[] {
   return tiles.map((t) => {
-    const base = { label: t.label, value: t.later ? <Tag tone="neutral">{t.value}</Tag> : t.value, hint: t.hint, accent: t.accent }
+    const base = { label: t.label, value: t.value, hint: t.hint, accent: t.accent }
     return t.href ? { ...base, href: t.href } : base
   })
 }
@@ -54,16 +57,17 @@ export function AmazonToolsMenu({ lock }: { lock: ReviewsLock }) {
   const [open, setOpen] = useState(false)
   const scope = lockParams(lock)
   const inserts = requestsHref({ ...scope, inserts: 1 })
+  const removal = inboxHref({ kind: 'seller', channel: 'AMAZON', market: scope.market, period: '90d' })
   const where = scopeTitleWords(lock)
   const items: MenuItemDef[] = [
-    // ⛔ KEEP — placeholder (build spec ruling 3): the removal helper reads Amazon's 1–3 star seller feedback, which
-    // Nexus fetches from Phase 3 (PR H). Shown, held with its reason, never hidden. Nexus never asks Amazon to remove
-    // feedback (no API for it, ruling 5): the helper only checks, the person asks in Feedback Manager.
+    // The removal helper: the 1–3 star seller feedback in the Inbox, each with its removal check in the pop-up. Nexus
+    // never asks Amazon to remove feedback (no API for it, ruling 5): the helper only checks, the person asks in
+    // Feedback Manager.
     {
       id: 'removal',
       label: 'Seller feedback removal helper',
-      description: 'Coming later · checks 1–3 star feedback against Amazon’s rules; you ask in Feedback Manager',
-      disabled: true,
+      description: 'Checks 1–3 star feedback against Amazon’s rules · you ask in Feedback Manager',
+      href: workspaceHref(browserWorkspaceId(), removal),
     },
     { id: 'inserts', label: 'Package inserts', description: 'A card for the box, as a PDF · opens in Requests', href: workspaceHref(browserWorkspaceId(), inserts) },
     { id: 'feedback-manager', label: 'Open Feedback Manager', description: `Seller Central, ${where} · opens a new tab`, href: feedbackManagerHref(scope.market), target: '_blank' },
@@ -76,9 +80,9 @@ export function AmazonToolsMenu({ lock }: { lock: ReviewsLock }) {
       onOpenChange={setOpen}
       align="right"
       onNavigate={(event, item) => {
-        if (item.id !== 'inserts' || !plainClick(event)) return
+        if ((item.id !== 'inserts' && item.id !== 'removal') || !plainClick(event)) return
         event.preventDefault()
-        router.push(inserts)
+        router.push(item.id === 'inserts' ? inserts : removal)
       }}
     />
   )
@@ -120,7 +124,7 @@ export function AmazonSections({ lock, period, sections, busy, canManage, onRetr
         )}
       >
         Amazon gives no star rating, average or review count by API: stars on this page come only from reviews you imported.
-        Topics are updated weekly per product, in English. Seller feedback comes only as 1–3 star feedback (coming later).
+        Topics are updated weekly per product, in English. Seller feedback comes only as 1–3 star feedback, fetched on request.
         Nobody can reply to a product review on Amazon.
       </Banner>
 
@@ -132,7 +136,7 @@ export function AmazonSections({ lock, period, sections, busy, canManage, onRetr
       <TopicsCard lock={lock} sections={sections} busy={busy} onRetry={onRetry} />
 
       <div className={s.row}>
-        <SellerFeedbackSample lock={lock} />
+        <SellerFeedbackCard lock={lock} sections={sections} busy={busy} canManage={canManage} onRetry={onRetry} />
         <RequestsCard lock={lock} period={period} sections={sections} busy={busy} onRetry={onRetry} />
       </div>
 
@@ -319,60 +323,75 @@ function TopicsCard({ lock, sections, busy, onRetry }: Omit<CardProps, 'period' 
   )
 }
 
-/** ⛔ KEEP — placeholder (build spec ruling 3): Amazon seller feedback (1–3 stars) and the removal check come in Phase 3 (PR H). */
-const SELLER_SAMPLE = [
-  { id: 's1', stars: 2, date: '25 Oct', text: 'The gloves arrived with an open seam on the thumb.', who: 'A buyer · you shipped it', check: 'May qualify', tone: 'info' as const, why: 'Entirely about the product, not your service' },
-  { id: 's2', stars: 1, date: '19 Oct', text: 'Delivery a week late.', who: 'A buyer · Amazon shipped it (FBA)', check: 'Struck through, not removed', tone: 'success' as const, why: 'Only about FBA delivery: Amazon strikes it through' },
-  { id: 's3', stars: 1, date: '12 Jul', text: 'Terrible product, I would not buy it again.', who: 'A buyer · you shipped it', check: 'Too old to ask', tone: 'warning' as const, why: '106 days old: removal requests go within 90 days (per Amazon staff guidance)' },
-]
+/**
+ * Amazon seller feedback (PR H): Amazon's report holds only 1–3 star feedback and Amazon cannot schedule it, so Nexus
+ * asks for it daily and on "Fetch now". Each feedback shows the removal check (may qualify / struck through, not removed
+ * / does not qualify / too old). Nexus never asks Amazon to remove feedback (no API for it, ruling 5): "Open Feedback
+ * Manager" in Seller Central, a new tab; a row opens the review pop-up, where "Mark as responded" records a reply.
+ */
+const FEEDBACK_SHOWN = 6
 
-function SellerFeedbackSample({ lock }: { lock: ReviewsLock }) {
-  const market = lockParams(lock).market
+function SellerFeedbackCard({ lock, sections, busy, canManage, onRetry }: Omit<CardProps, 'period'>) {
+  const feedback = sectionData(sections.sellerFeedback)
+  const error = sectionError(sections.sellerFeedback)
+  const scope = lockParams(lock)
+  const rows = useMemo(() => (feedback?.rows ?? []).slice(0, FEEDBACK_SHOWN).map(feedbackRowView), [feedback])
+  const failed = feedback ? failedFetchWords(feedback.fetch) : null
+  const inbox = inboxHref({ kind: 'seller', channel: 'AMAZON', market: scope.market, period: '90d' })
+
   return (
     <Card
       className={s.half}
-      header={<span className={s.inline}>Seller feedback · 1–3 stars <Tag tone="neutral">Coming later</Tag></span>}
+      header="Seller feedback · 1–3 stars"
       headingLevel={2}
-      description="Sample · Amazon’s report holds only 1–3 star feedback and is fetched on request; Nexus reads it in a later update."
-      headerAction={(
-        // ⛔ KEEP — placeholder (ruling 3): "Fetch now" asks Amazon for the seller-feedback report from Phase 3 (PR H).
-        <Button size="sm" heldReason="Coming later: Nexus does not fetch Amazon’s seller feedback report yet.">Fetch now</Button>
-      )}
+      description={feedback ? feedbackCardLine(feedback) : 'Amazon’s report holds only 1–3 star feedback and is fetched on request (it can’t be scheduled)'}
+      headerAction={<FetchNowButton held={fetchHeldWords(feedback?.fetch ?? null, canManage)} fetching={feedback?.fetch.fetching} onDone={onRetry} />}
     >
-      <div className={s.stackGap}>
-        <ul className={s.sampleList} aria-label="Sample seller feedback">
-          {SELLER_SAMPLE.map((f) => (
-            <li key={f.id} className={s.sampleRow}>
-              <span className={s.stack}>
-                <StarRating value={f.stars} size="sm" label={`${f.stars} stars (sample)`} />
-                <span className={s.sub}>{f.date}</span>
-              </span>
-              <span className={s.stack}>
-                <span className={s.main}>{f.text}</span>
-                <span className={s.sub}>{f.who}</span>
-              </span>
-              <span className={s.stackEnd}>
-                <Pill tone={f.tone} dot>{f.check}</Pill>
-                <span className={s.sub}>{f.why}</span>
-              </span>
-              <Pill tone="neutral">Sample</Pill>
-            </li>
-          ))}
-        </ul>
-        <Disclosure summary="How the removal check decides">
-          <ul className={s.bullets}>
-            <li>You can ask Amazon to remove feedback that is obscene, contains personal details, or is entirely a product review — within 90 days, in Feedback Manager (per Amazon staff guidance).</li>
-            <li>Complaints only about FBA delivery (or a late order you shipped on time with Buy Shipping) are struck through, not removed.</li>
-            <li>Reply in Seller Central (Feedback Manager). Public, one reply, can’t be edited; if you delete it you can’t reply again.</li>
-            <li>Nexus only checks. You ask in Feedback Manager, and Amazon decides.</li>
-          </ul>
-        </Disclosure>
-        <span>
-          <Button asChild size="sm">
-            <a href={feedbackManagerHref(market)} target="_blank" rel="noopener noreferrer">Open Feedback Manager <ExternalLink size={12} aria-hidden /></a>
-          </Button>
-        </span>
-      </div>
+      {error ? (
+        <SectionError error={error} onRetry={onRetry} busy={busy} />
+      ) : !feedback ? (
+        <Skeleton height={200} />
+      ) : (
+        <div className={s.stackGap}>
+          {failed && <Banner tone="warning" title="Amazon’s report did not arrive for every market.">{failed}</Banner>}
+          {!feedback.fetch.on && feedback.rows.length === 0 ? (
+            <EmptyState title="No seller feedback fetched yet" description={feedback.fetch.held ?? 'Nexus asks Amazon for the report every day.'} />
+          ) : rows.length === 0 ? (
+            <EmptyState title="No 1–3 star feedback" description="Amazon’s report had no feedback of 1 to 3 stars here. Feedback of 4 and 5 stars is never in it." />
+          ) : (
+            <ul className={s.feedbackList} aria-label={`Seller feedback, ${scopeTitleWords(lock)}`}>
+              {rows.map((f) => (
+                <li key={f.id} className={s.feedbackRow}>
+                  <span className={s.stack}>
+                    <StarRating value={f.stars} size="sm" label={f.stars == null ? 'No stars' : `${f.stars} ${f.stars === 1 ? 'star' : 'stars'}`} />
+                    <span className={s.sub}>{f.day}</span>
+                  </span>
+                  <span className={s.stack}>
+                    <Link href={inboxHref({ kind: 'seller', channel: 'AMAZON', market: scope.market, period: 'all', review: f.id })} className={s.cellLink}>{f.text}</Link>
+                    {f.english && <span className={s.sub} lang="en">{f.english}</span>}
+                    <span className={s.sub}>{f.who}</span>
+                  </span>
+                  <span className={s.stackEnd}>
+                    <Pill tone={f.check.tone} dot>{f.check.label}</Pill>
+                    <span className={s.sub}>{f.check.why}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Disclosure summary="How the removal check decides">
+            <ul className={s.bullets}>
+              {(feedback.rules.length ? feedback.rules : REMOVAL_RULES).map((rule) => <li key={rule}>{rule}</li>)}
+            </ul>
+          </Disclosure>
+          <div className={s.buttons}>
+            <Button asChild size="sm">
+              <a href={feedbackManagerHref(scope.market)} target="_blank" rel="noopener noreferrer">Open Feedback Manager <ExternalLink size={12} aria-hidden /></a>
+            </Button>
+            <Button asChild size="sm" variant="link"><Link href={inbox}>All seller feedback in the Inbox</Link></Button>
+          </div>
+        </div>
+      )}
     </Card>
   )
 }

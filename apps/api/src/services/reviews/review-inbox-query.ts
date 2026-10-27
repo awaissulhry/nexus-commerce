@@ -31,6 +31,8 @@ export interface InboxQuery {
   themes: string[]
   owners: string[]
   families: string[]
+  /** PR G — only reviews with the buyer's photos (`photos=1`). */
+  withPhotos: boolean
   /** null = all time. */
   periodDays: number | null
   q: string | null
@@ -79,6 +81,7 @@ export function parseInboxQuery(raw: Record<string, unknown> = {}): InboxQuery {
     themes: upperList(raw.theme),
     owners: list(raw.owner),
     families: list(raw.family),
+    withPhotos: ['1', 'true', 'yes'].includes(String(raw.photos ?? '').trim().toLowerCase()),
     periodDays: parseInboxPeriod(raw.period),
     q,
     sort: { field: sortField === 'rating' ? 'rating' : 'postedAt', dir: sortDir === 'asc' ? 'asc' : 'desc' },
@@ -136,6 +139,7 @@ export function inboxWhere(q: InboxQuery, now: Date, omit: { kind?: boolean; sta
       product: { is: { OR: [{ familyId: { in: q.families } }, { parent: { is: { familyId: { in: q.families } } } }] } },
     })
   }
+  if (q.withPhotos) and.push({ media: { some: {} } })
   if (q.periodDays != null) and.push({ postedAt: { gte: new Date(now.getTime() - q.periodDays * 24 * 60 * 60 * 1000) } })
   if (q.q) {
     const contains = { contains: q.q, mode: 'insensitive' as const }
@@ -203,6 +207,8 @@ export interface InboxBulkRow {
   marketplace: string | null
   postedAt: Date
   ingestSource: string | null
+  /** `Review.kind` ('SELLER' | 'PRODUCT'), null on older rows (review-visibility.ts). */
+  kind?: string | null
   assignee: string | null
   triageStatus: string | null
   triageTags: string[]
@@ -252,7 +258,7 @@ function bulkSkipReason(request: InboxBulkRequest, row: InboxBulkRow, now: Date)
     }
     case 'draft': {
       const rules = reviewReplyRules(row.channel, {
-        kind: reviewKindOf(row.channel, row.ingestSource),
+        kind: reviewKindOf(row.channel, row.kind),
         marketplace: row.marketplace,
         postedAt: row.postedAt,
         imported: isImportedSource(row.ingestSource),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { InboxRow } from '../inbox/inboxDatasource'
 import {
-  ALL_PRODUCTS, NO_RATING_WORDS, amazonSubtitle, amazonTiles, dsrRows, ebaySubtitle, ebayTiles, feedbackManagerHref, feedbackTypeOf,
+  ALL_PRODUCTS, NO_RATING_WORDS, amazonSubtitle, amazonTiles, buyersTile, dsrRows, ebaySubtitle, ebayTiles, feedbackManagerHref, feedbackTypeOf,
   filterFeedback, lockedLinks, marketTabs, parseChannelPeriod, periodDaysWords, periodOptions, periodSearch, replyHeld, replyNote,
   requestRows, sectionData, sectionError, sellerCentralHref, sellerHubHref, summaryNote, topicColumns, topicProductOptions, topicView,
   typeChartRows, typeChartWords, typeOptions, watchView, type AmazonTiles, type AmazonTopics, type EbayReadState, type EbaySummary,
@@ -18,7 +18,7 @@ const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   id: 'r1', postedAt: '2026-10-24T09:00:00Z', channel: 'EBAY', market: 'IT', kind: 'seller', rating: 5, snippet: 'Ottimo venditore',
   english: 'Great seller', language: 'it', buyer: 'buyer-one', product: { id: 'p1', name: 'Touring jacket', sku: 'TJ-M', variant: 'M' },
   order: { id: 'o1', label: '12-34567-89013' }, mood: null, themes: [], status: 'NEW', assignee: null, dueAt: null, overdue: false,
-  imported: false, responses: { sent: 0, draft: 0 }, ...over,
+  imported: false, responses: { sent: 0, draft: 0 }, photos: 0, aiTopics: [], ...over,
 })
 
 describe('the period in the address', () => {
@@ -48,7 +48,7 @@ describe('links carry the lock', () => {
     const links = lockedLinks(IT, '30d')
     expect(links.inbox({ status: 'NEW,IN_PROGRESS' })).toBe('/marketing/reviews/inbox?period=30d&status=NEW%2CIN_PROGRESS&channel=AMAZON&market=IT')
     expect(links.requests({ status: 'SENT' })).toBe('/marketing/reviews/requests?status=SENT&channel=AMAZON&market=IT')
-    expect(links.insights('themes')).toBe('/marketing/reviews/heatmap?channel=AMAZON&market=IT')
+    expect(links.insights('themes')).toBe('/marketing/reviews/insights/themes?channel=AMAZON&market=IT')
     expect(lockedLinks(EBAY_ALL, '12m').inbox({ kind: 'seller' })).toBe('/marketing/reviews/inbox?kind=seller&period=12m&channel=EBAY')
   })
 
@@ -65,21 +65,24 @@ describe('links carry the lock', () => {
 const AMAZON_TILES: AmazonTiles = {
   importedRating: 4.2, importedInPeriod: 486, importedTotal: 900, lastImportAt: '2026-10-24T08:00:00Z', topicsToFix: 3,
   topicsWeekOf: '2026-10-20T00:00:00Z', needReply: 3, oldestWaitDays: 1, requestsSent: 372, reviewRate: 8.9,
+  sellerFeedback90: 7, sellerFeedbackPrev90: 5, sellerFeedbackOn: true,
 }
 
 describe('Amazon', () => {
-  it('six tiles: stars only from imports, 1–3 star feedback is "Coming later", links filtered to Amazon Italy', () => {
+  it('six tiles: stars only from imports, 1–3 star seller feedback of 90 days, links filtered to Amazon Italy', () => {
     const tiles = amazonTiles(AMAZON_TILES, IT, '30d')
     expect(tiles.map((t) => [t.label, t.value, t.hint])).toEqual([
       ['Rating · imported', '4.2', '486 reviews, file of 24 Oct'],
       ['Topics to fix', '3', 'Amazon topics, week of 20 Oct'],
-      ['1–3 star feedback', 'Coming later', 'Amazon seller feedback · sample below'],
+      ['1–3 star feedback', '7', 'last 90 days · +2 on the 90 days before'],
       ['Needs a reply', '3', 'oldest waits 1 day'],
       ['Requests sent', '372', 'last 30 days'],
       ['Review rate', '8.9%', 'estimate, from imported reviews'],
     ])
-    expect(tiles.find((t) => t.key === 'seller')).toMatchObject({ later: true })
-    expect(tiles.find((t) => t.key === 'seller')?.href).toBeUndefined()
+    expect(tiles.find((t) => t.key === 'seller')?.href).toBe('/marketing/reviews/inbox?kind=seller&period=90d&channel=AMAZON&market=IT')
+    // Not fetched in this setup and nothing stored: no number, and the hint says why.
+    expect(amazonTiles({ ...AMAZON_TILES, sellerFeedback90: 0, sellerFeedbackPrev90: 0, sellerFeedbackOn: false }, IT, '30d')[2])
+      .toMatchObject({ value: '—', hint: 'Not fetched in this setup yet' })
     expect(tiles.find((t) => t.key === 'reply')?.href).toBe('/marketing/reviews/inbox?period=30d&status=NEW%2CIN_PROGRESS&channel=AMAZON&market=IT')
   })
 
@@ -93,8 +96,8 @@ describe('Amazon', () => {
 
   it('the header says where the stars and topics come from', () => {
     const topics = { state: 'ok', productCount: 12, weekOf: '2026-10-20T00:00:00Z' } as AmazonTopics
-    expect(amazonSubtitle(AMAZON_TILES, topics)).toBe('12 products with Amazon topics · topics weekly, week of 20 Oct · stars from reviews imported 24 Oct · seller feedback coming later')
-    expect(amazonSubtitle(null, { ...topics, state: 'not_on_market', weekOf: null, productCount: 0 })).toBe('no Amazon topics on this market · seller feedback coming later')
+    expect(amazonSubtitle(AMAZON_TILES, topics)).toBe('12 products with Amazon topics · topics weekly, week of 20 Oct · stars from reviews imported 24 Oct · seller feedback fetched on request')
+    expect(amazonSubtitle(null, { ...topics, state: 'not_on_market', weekOf: null, productCount: 0 })).toBe('no Amazon topics on this market · seller feedback fetched on request')
   })
 
   it('requests by Amazon’s answer, then the review rate as an estimate', () => {
@@ -142,11 +145,14 @@ const SUMMARY: EbaySummary = {
   dsr: [{ key: 'ItemAsDescribed', label: 'Item as described', rating: 4.9, count: 176 }, { key: 'Communication', label: 'Communication', rating: null, count: 0 }],
   dsrPeriod: 'FiftyTwoWeeks',
 }
-const EBAY_TILES: EbayTiles = { positive: 171, neutral: 7, negative: 3, score: 2431, positivePct: 98.3, positiveFrom: 'ebay', needReply: 5, oldestWaitDays: 2 }
+const EBAY_TILES: EbayTiles = {
+  positive: 171, neutral: 7, negative: 3, score: 2431, positivePct: 98.3, positiveFrom: 'ebay', needReply: 5, oldestWaitDays: 2,
+  buyersToRate: { awaiting: 4, ready: 3, waitingApproval: 1, readAt: '2026-10-26T10:30:00Z', reading: true },
+}
 const DE_BEHIND: EbayReadState = { channel: 'EBAY', market: 'DE', label: 'eBay Germany', ok: false, reason: 'Sign-in expired', since: null, reconnectHref: '/settings/channels/ebay' }
 
 describe('eBay', () => {
-  it("six tiles: eBay's score and % positive, neutral and negative open the Inbox, buyers to rate comes later", () => {
+  it("six tiles: eBay's score and % positive, neutral and negative open the Inbox, buyers to rate from the queue", () => {
     const tiles = ebayTiles(EBAY_TILES, SUMMARY, EBAY_DE, '12m')
     expect(tiles.map((t) => [t.label, t.value, t.hint])).toEqual([
       ['Feedback score', '2,431', 'whole eBay account'],
@@ -154,12 +160,22 @@ describe('eBay', () => {
       ['Neutral', '7', 'last 12 months'],
       ['Negative', '3', 'last 12 months'],
       ['Needs a reply', '5', 'oldest waits 2 days'],
-      ['Buyers to rate', 'Coming later', 'Leave feedback for buyers · sample below'],
+      ['Buyers to rate', '4', '3 ready to send · 1 waiting for approval'],
     ])
     expect(tiles[3].href).toBe('/marketing/reviews/inbox?kind=seller&period=12m&channel=EBAY&market=DE&stars=1%2C2')
     const unread = ebayTiles({ ...EBAY_TILES, score: null, positivePct: 50, positiveFrom: 'nexus' }, null, EBAY_ALL, '30d')
     expect(unread[0]).toMatchObject({ value: '—', hint: 'eBay was not read' })
     expect(unread[1].hint).toBe('last 30 days, feedback Nexus read')
+  })
+
+  it('buyers to rate: the queue\'s count, and no number when eBay\'s list was never read', () => {
+    const read = { awaiting: 2, ready: 0, waitingApproval: 0, readAt: '2026-10-26T10:30:00Z', reading: true }
+    expect(buyersTile(null)).toEqual({ value: '—', hint: 'The list could not be read' })
+    expect(buyersTile({ ...read, readAt: null })).toEqual({ value: '—', hint: 'eBay’s list not read yet' })
+    expect(buyersTile({ ...read, readAt: null, reading: false })).toEqual({ value: '—', hint: 'Nexus does not read eBay here' })
+    expect(buyersTile({ ...read, reading: false })).toEqual({ value: '2', hint: 'as read 26 Oct · eBay not read now' })
+    expect(buyersTile({ ...read, awaiting: 0 })).toEqual({ value: '0', hint: 'No sale waits for your feedback' })
+    expect(buyersTile(read)).toEqual({ value: '2', hint: 'All held · the list below says why' })
   })
 
   it('the header names the markets that are not read', () => {

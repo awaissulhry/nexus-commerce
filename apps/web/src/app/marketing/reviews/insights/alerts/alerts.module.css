@@ -1,0 +1,65 @@
+/*
+ * Reviews › Insights › Alerts — the alert list's layout (the shared layout is _shared/insights.module.css). `--nds-*`
+ * tokens only; nothing here restyles a design-system control. On a phone an alert's buttons move under its text.
+ */
+
+.pad {
+  padding: var(--nds-space-14) var(--nds-space-16);
+}
+
+.selectAll {
+  display: flex;
+  align-items: center;
+  padding: var(--nds-space-8) var(--nds-space-16);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--nds-space-12);
+  align-items: start;
+  padding: var(--nds-space-14) var(--nds-space-16);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.tick {
+  padding-top: var(--nds-space-2);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--nds-space-6);
+  max-width: 300px;
+}
+
+@media (max-width: 759px) {
+  .row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .actions {
+    grid-column: 2;
+    justify-content: flex-start;
+    max-width: none;
+  }
+}

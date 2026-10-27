@@ -21,7 +21,8 @@ export interface SourceRow {
   later: string | null
   lastAt: string | null
   lastWords: string | null
-  action: { kind: 'rules' | 'reconnect' | 'connect' | 'import'; label: string; href: string | null } | null
+  /** `fetch` = "Fetch now" for Amazon's seller feedback report (PR H); `held` = why it cannot run now, in words. */
+  action: { kind: 'rules' | 'reconnect' | 'connect' | 'import' | 'fetch'; label: string; href: string | null; held?: string | null } | null
 }
 
 export interface SourcesResponse {
@@ -117,11 +118,12 @@ export function sourceActionHref(action: SourceRow['action']): string | null {
   if (!action) return null
   if (action.kind === 'rules') return requestsHref()
   if (action.kind === 'import') return inboxHref({ import: 1 })
+  if (action.kind === 'fetch') return null
   return action.href
 }
 
 /**
- * The held "Connect" of a source Nexus reads only from a later update (Amazon seller feedback, Etsy): its reason in
+ * The held "Connect" of a source Nexus reads only from a later update (Etsy): its reason in
  * words. Null for a source read today — also one that needs a fix but has no fix link (its words already say what is
  * wrong), and one whose later part is only an extra (eBay's photos and AI topics).
  */

@@ -22,6 +22,8 @@ import {
  *  - Banner: two actions wrap inside their slot; at 390 px they take their own line and the dismiss stays up top.
  *  - Textarea: the counter counts, never blocks; over 500 it turns red and says how much is too long.
  *  - Heatmap: the outlined cells are the hours we send; hover a cell for its words.
+ *  - Heatmap with theme names (Insights): the 120 px label column fits "Fit & sizing"; the cells are buttons — one Tab
+ *    stop, the arrows move between measured days (striped days are skipped), Enter says which cell was pressed.
  *  - WorkspaceSubheader pinned: from 1024 px a column with Collapse (48 px strip); below, the "Reviews" button opens the
  *    drawer. The top group has no label on screen.
  *  - Builder page mode: the strip sticks while the page scrolls and marks the section on screen; a click scrolls there.
@@ -39,6 +41,9 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const SEND_AT = [9, 10, 9, 18, 9, 11, 19]
 const HEAT: Array<Array<number | null>> = DAYS.map((_, d) => HOURS.map((__, h) => (h < 6 ? null : ((h * 7 + d * 5) % 23) / 100)))
 const MARKED = new Set(SEND_AT.map((h, d) => heatKey(d, h)))
+const THEMES = ['Fit & sizing', 'Durability', 'Comfort', 'Shipping']
+const THEME_DAYS = Array.from({ length: 14 }, (_, i) => `${i + 13} Oct`)
+const THEME_HEAT: Array<Array<number | null>> = THEMES.map((_, t) => THEME_DAYS.map((__, d) => ((d + t) % 5 === 0 ? null : ((d * 3 + t * 7) % 9))))
 
 const TEMPLATES: ReplyTemplate[] = [
   { id: 'size', label: 'Size advice — runs small', description: 'Fit & sizing', body: 'Thank you for the feedback! This jacket runs small: we suggest one size up. Write to us if you want to exchange it.' },
@@ -82,6 +87,7 @@ const TYPE_LINE: ChartSeries = { key: 'pct', label: '% positive', color: chart.a
 export function ReviewPartsExample() {
   const [stars, setStars] = useState<number | null>(4)
   const [bar, setBar] = useState<RatingStars | null>(null)
+  const [heatPick, setHeatPick] = useState<string | null>(null)
   const [tile, setTile] = useState<'reply' | 'alerts' | null>(null)
   const [note, setNote] = useState('')
   const [page, setPage] = useState('overview')
@@ -171,6 +177,22 @@ export function ReviewPartsExample() {
           emptyLabel="none sent at that hour"
           cellWords={(r, c, v) => `${DAYS[r]} ${HOUR_TITLES[c]}: ${v == null ? 'none sent at that hour' : `${Math.round(v * 100)}% left a review`}${MARKED.has(heatKey(r, c)) ? ' · we send at this hour' : ''}`}
         />
+      </div>
+
+      <div style={card}>
+        <h4>Heatmap · theme names, cells open their reviews</h4>
+        <Heatmap
+          data={THEME_HEAT}
+          rowLabels={THEMES}
+          colLabels={THEME_DAYS.map((d, i) => (i % 3 === 0 ? d : ''))}
+          colTitles={THEME_DAYS}
+          labelWidth={120}
+          label="When themes come up"
+          emptyLabel="no reviews that day"
+          cellWords={(r, c, v) => `${THEMES[r]}, ${THEME_DAYS[c]}: ${v == null ? 'no reviews that day' : `${v} mentions — open these reviews`}`}
+          onCellClick={(r, c) => setHeatPick(`${THEMES[r]}, ${THEME_DAYS[c]}`)}
+        />
+        <p>{heatPick ? `Pressed: ${heatPick}` : 'Press a cell (or Tab to the map, then the arrows and Enter).'}</p>
       </div>
 
       <div style={card}>

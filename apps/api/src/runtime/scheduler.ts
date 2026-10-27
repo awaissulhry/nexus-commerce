@@ -1012,6 +1012,14 @@ export async function startScheduler(): Promise<void> {
     startAmazonReviewInsightsCron();
   }
 
+  // Reviews PR H (B20) — Amazon seller feedback: Amazon's 1–3 star feedback report, requested once a day per Amazon
+  // market in Europe (Amazon cannot schedule this report itself). Independently gated: opt in via
+  // NEXUS_ENABLE_AMAZON_SELLER_FEEDBACK=1 (the same switch holds "Fetch now"; Settings › Sources says it in words).
+  if (process.env.NEXUS_ENABLE_AMAZON_SELLER_FEEDBACK === '1') {
+    const { startAmazonSellerFeedbackCron } = await import('../jobs/amazon-seller-feedback.job.js');
+    startAmazonSellerFeedbackCron();
+  }
+
   // RV.9.2 — Stale CronRun sweeper. Always-on (not gated). Marks
   // status='RUNNING' rows stuck for >2h as FAILED so the dashboard
   // doesn't show false-positive "still running" states after a crash.

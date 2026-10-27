@@ -21,6 +21,11 @@
  * Reviews › eBay page (2026-10-26, B18): `fetchEbayFeedbackSummary` reads eBay's own summary for one account — the
  * feedback score, counts by type per period and the four detailed seller ratings (GetFeedback, a read on the gateway);
  * pages call it through ebay-feedback-summary.service.ts, at most once an hour per account.
+ *
+ * Reviews eBay REST (2026-10-27, B19): the review pass reads by eBay's REST Feedback API first
+ * (`fetchEbayFeedbackPreferRest`, ebay-feedback-rest.adapter.ts) and falls back to the Trading read here. Neither read
+ * stamps a default market any more: a feedback's market is its Nexus order's (or the account's, when it is connected for
+ * one market only), else none.
  */
 
 import { ebayTradingSend } from '../../gateway/ebay.js'
@@ -33,6 +38,7 @@ import { ebayAuthService } from '../../ebay-auth.service.js'
 import type { AdapterRawReview, AdapterResult } from './types.js'
 import { tryResolveConnection } from '../../connection-resolver.service.js'
 import { ebayFeedbackSummaryRequest, parseEbayFeedbackSummary, type EbayFeedbackSummary } from './ebay-feedback-summary.js'
+import { applyTopics, readRestFeedback, readRestTopics, respondToEbayFeedbackRest, type RestDeps } from './ebay-feedback-rest.adapter.js'
 
 const TRADING_ENDPOINT =
   process.env.EBAY_SANDBOX === 'true'
@@ -129,38 +135,76 @@ function asArray<T>(v: T | T[] | undefined | null): T[] {
   return Array.isArray(v) ? v : [v]
 }
 
-/** The order line a feedback is about, as GetFeedback names it (masked ids such as "11111111-0" are dropped). */
+/**
+ * The order line a feedback is about (masked ids such as "11111111-0" are dropped): as Trading GetFeedback names it
+ * (`OrderLineItemID`, `TransactionID`, `ItemID`), or as eBay's REST getFeedback does (`orderLineItemSummary.orderLineItemId`
+ * "<listingId>-<transactionId>", `listingId`).
+ */
 export function ebayFeedbackOrderRef(detail: Record<string, unknown>): { orderLineItemId: string | null; transactionId: string | null; itemId: string | null } {
   const text = (v: unknown) => {
     const s = v == null ? '' : String(v).trim()
     return s && !/^1+(-0)?$/.test(s) && s !== '0' ? s : null
   }
+  const summary = detail.orderLineItemSummary
+  if (summary && typeof summary === 'object' && !Array.isArray(summary)) {
+    const line = text((summary as Record<string, unknown>).orderLineItemId)
+    const [item, transaction] = line && /^\d+-\d+$/.test(line) ? line.split('-') : [null, null]
+    return { orderLineItemId: line, transactionId: text(transaction), itemId: text((summary as Record<string, unknown>).listingId) ?? text(item) }
+  }
   return { orderLineItemId: text(detail.OrderLineItemID), transactionId: text(detail.TransactionID), itemId: text(detail.ItemID) }
+}
+
+/** A market code as the Reviews pages use it (two letters, GB as UK); anything else null. */
+function marketOf(raw: string | null | undefined): string | null {
+  const code = raw?.trim().toUpperCase() ?? ''
+  if (!/^[A-Z]{2}$/.test(code)) return null
+  return code === 'GB' ? 'UK' : code
 }
 
 /**
  * The Nexus order of each feedback, when exactly one order matches its order line: an eBay order stored under the
  * legacy order-line id ("ItemID-TransactionID"), or an order line whose eBay line id is the feedback's TransactionID
  * (and whose listing, when stored, is the feedback's ItemID). No match, or more than one: no link.
+ *
+ * Reviews eBay REST (PR G): the feedback's market is that order's market — eBay gives none with the feedback (it belongs
+ * to the account, not to a site). Without a matched order the market stays as the adapter set it (never a guess).
  */
 export async function linkEbayFeedbackOrders(reviews: AdapterRawReview[]): Promise<void> {
   const refs = reviews.map((r) => ebayFeedbackOrderRef((r.rawPayload ?? {}) as Record<string, unknown>))
+  const found = await matchEbayOrderLines(refs)
+  reviews.forEach((review, i) => {
+    const match = found[i]
+    if (!match) return
+    review.orderId = match.orderId
+    if (match.market) review.marketplace = match.market
+  })
+}
+
+export type EbayOrderLineRef = ReturnType<typeof ebayFeedbackOrderRef>
+
+/**
+ * The Nexus order of each eBay order line (feedback, or a sale waiting for the seller's feedback), when exactly one
+ * matches (the rule above), with that order's market; null otherwise. One read for all of them.
+ */
+export async function matchEbayOrderLines(refs: readonly EbayOrderLineRef[]): Promise<Array<{ orderId: string; market: string | null } | null>> {
   const lineIds = [...new Set(refs.map((r) => r.orderLineItemId).filter((v): v is string => !!v))]
   const transactionIds = [...new Set(refs.map((r) => r.transactionId).filter((v): v is string => !!v))]
-  if (lineIds.length === 0 && transactionIds.length === 0) return
+  if (lineIds.length === 0 && transactionIds.length === 0) return refs.map(() => null)
   const [orders, items] = await Promise.all([
     lineIds.length > 0
-      ? prisma.order.findMany({ where: { channel: 'EBAY', channelOrderId: { in: lineIds } }, select: { id: true, channelOrderId: true } })
-      : Promise.resolve([] as { id: string; channelOrderId: string }[]),
+      ? prisma.order.findMany({ where: { channel: 'EBAY', channelOrderId: { in: lineIds } }, select: { id: true, channelOrderId: true, marketplace: true } })
+      : Promise.resolve([] as { id: string; channelOrderId: string; marketplace: string | null }[]),
     transactionIds.length > 0
       ? prisma.orderItem.findMany({
           where: { externalLineItemId: { in: transactionIds }, order: { channel: 'EBAY' } },
-          select: { orderId: true, externalLineItemId: true, ebayMetadata: true },
+          select: { orderId: true, externalLineItemId: true, ebayMetadata: true, order: { select: { marketplace: true } } },
         })
-      : Promise.resolve([] as { orderId: string; externalLineItemId: string | null; ebayMetadata: unknown }[]),
+      : Promise.resolve([] as { orderId: string; externalLineItemId: string | null; ebayMetadata: unknown; order: { marketplace: string | null } }[]),
   ])
-  reviews.forEach((review, i) => {
-    const ref = refs[i]
+  const marketOfOrder = new Map<string, string | null>()
+  for (const o of orders) marketOfOrder.set(o.id, marketOf(o.marketplace))
+  for (const item of items) marketOfOrder.set(item.orderId, marketOf(item.order?.marketplace))
+  return refs.map((ref) => {
     const matches = new Set<string>()
     for (const o of orders) if (ref.orderLineItemId && o.channelOrderId === ref.orderLineItemId) matches.add(o.id)
     for (const item of items) {
@@ -169,7 +213,9 @@ export async function linkEbayFeedbackOrders(reviews: AdapterRawReview[]): Promi
       if (ref.itemId && typeof listing === 'string' && listing && listing !== ref.itemId) continue
       matches.add(item.orderId)
     }
-    if (matches.size === 1) review.orderId = [...matches][0]
+    if (matches.size !== 1) return null
+    const orderId = [...matches][0]
+    return { orderId, market: marketOfOrder.get(orderId) ?? null }
   })
 }
 
@@ -257,7 +303,10 @@ export async function fetchEbayFeedback(opts: EbayFeedbackOptions = {}): Promise
   const siteId = process.env.EBAY_SITE_ID || '101' // 101 = Italy
   const entriesPerPage = Math.min(opts.entriesPerPage ?? 200, 200)
   const maxPages = Math.min(opts.maxPages ?? 5, 50)
-  const marketplace = opts.marketplace ?? connection.marketplace ?? 'IT'
+  // Reviews eBay REST (PR G): feedback belongs to the eBay account, not to a site, and eBay names no market with it. The
+  // market comes from the feedback's Nexus order (linkEbayFeedbackOrders); before that, only an account connected for
+  // ONE market gives one. Never a default market (it stamped every feedback 'IT' before).
+  const marketplace = marketOf(opts.marketplace) ?? marketOf(connection.marketplace) ?? undefined
 
   const parser = new XMLParser({ ignoreAttributes: true, parseTagValue: false })
   const reviews: AdapterRawReview[] = []
@@ -334,4 +383,64 @@ export async function fetchEbayFeedback(opts: EbayFeedbackOptions = {}): Promise
   }
   logger.info('[ebay-feedback] fetched', { count: reviews.length })
   return { reviews }
+}
+
+export interface EbayIngestRead extends AdapterResult {
+  /** How the rows arrived: eBay's REST Feedback API, or the older Trading GetFeedback read. */
+  ingestSource: 'EBAY_REST' | 'EBAY_API'
+  /** The eBay account read (the primary one), when there is one. */
+  connectionId: string | null
+}
+
+/**
+ * Reviews eBay REST (2026-10-27, B19 / PR G) — the 30-minute feedback read. eBay's REST Feedback API when it works for
+ * the account (photos, eBay's AI topics, revision state; ebay-feedback-rest.adapter.ts), else — no eBay user name on the
+ * account, or a sign-in without the feedback permission — the Trading GetFeedback read as before. Same gates as before;
+ * never throws.
+ */
+export async function fetchEbayFeedbackPreferRest(opts: { maxPages?: number } = {}, deps: RestDeps = {}): Promise<EbayIngestRead> {
+  if (process.env.NEXUS_EBAY_REAL_API !== 'true' && !deps.enabled) {
+    return { reviews: [], note: 'NEXUS_EBAY_REAL_API not enabled', ingestSource: 'EBAY_API', connectionId: null }
+  }
+  const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
+  if (!connection) return { reviews: [], note: 'no active eBay connection', ingestSource: 'EBAY_API', connectionId: null }
+  const ids = await prisma.channelConnection.findUnique({ where: { id: connection.id }, select: { ebaySignInName: true, externalAccountId: true } })
+  const account = { connectionId: connection.id, sellerId: ids?.ebaySignInName?.trim() || ids?.externalAccountId?.trim() || null }
+  const maxPages = opts.maxPages ?? 5
+  const read = await readRestFeedback(account, { maxPages }, deps)
+  if (read.ok === false) {
+    const refused = read as Extract<typeof read, { ok: false }>
+    if (!refused.fallback) return { reviews: [], error: `REST: ${refused.words}`, ingestSource: 'EBAY_REST', connectionId: connection.id }
+    const trading = await fetchEbayFeedback({ maxPages })
+    return {
+      ...trading,
+      note: [trading.note, `REST not available (${refused.words}); read by the Trading call instead`].filter(Boolean).join(' · '),
+      ingestSource: 'EBAY_API',
+      connectionId: connection.id,
+    }
+  }
+  const reviews = (read as Extract<typeof read, { ok: true }>).reviews
+  const fixed = marketOf(connection.marketplace)
+  if (fixed) for (const r of reviews) r.marketplace = fixed
+  applyTopics(reviews, await readRestTopics(account, deps))
+  try {
+    await linkEbayFeedbackOrders(reviews)
+  } catch (err) {
+    logger.warn('[ebay-feedback] order link failed', { error: err instanceof Error ? err.message : String(err) })
+  }
+  logger.info('[ebay-feedback] fetched by REST', { count: reviews.length })
+  return { reviews, ingestSource: 'EBAY_REST', connectionId: connection.id }
+}
+
+/**
+ * The public reply to a feedback first read by eBay's REST API (its id is REST's): REST respondToFeedback for the primary
+ * eBay account. Same answer shape and gates as `respondToEbayFeedback`; never throws.
+ */
+export async function respondToEbayFeedbackByRest(feedbackId: string, responseText: string, targetUserId: string, deps: RestDeps = {}): Promise<{ ok: boolean; code: string; error?: string }> {
+  if (!targetUserId?.trim()) return { ok: false, code: 'NO_BUYER_ID', error: 'eBay needs the buyer’s user ID to post a reply' }
+  if (process.env.NEXUS_EBAY_REAL_API !== 'true' && !deps.enabled) return { ok: false, code: 'OPT_IN_OFF', error: 'NEXUS_EBAY_REAL_API not enabled' }
+  const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
+  if (!connection) return { ok: false, code: 'NO_CONNECTION', error: 'no active eBay connection' }
+  const answer = await respondToEbayFeedbackRest(connection.id, feedbackId, responseText, targetUserId, deps)
+  return { ok: answer.ok, code: answer.code, ...(answer.error ? { error: answer.error } : {}) }
 }

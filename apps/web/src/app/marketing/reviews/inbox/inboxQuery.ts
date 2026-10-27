@@ -2,7 +2,7 @@
  * Reviews › Inbox — what the page shows, kept in the address so a reload or a shared link shows the same thing: the tab
  * (`?kind=product|seller`), the period (`?period=7d`; 30 days is the default and leaves the address; `all` = All time),
  * the status tile (`?status=OVERDUE`), every Filters field (`channel`, `market`, `stars`, `mood`, `theme`, `owner`,
- * `family` — comma lists; `owner=none` = nobody), the search (`?q=`), the order (`?sort=rating:asc`) and the pager
+ * `family` — comma lists; `owner=none` = nobody; "Has photos" = `?photos=1`), the search (`?q=`), the order (`?sort=rating:asc`) and the pager
  * (`?page=2&pageSize=100`). Two one-time flags are read on mount and then left out of the address: `?import=1` opens
  * the Import window, `?review=<id>` opens that review's pop-up (and stays while it is open).
  *
@@ -50,6 +50,8 @@ export interface InboxQuery {
   themes: string[]
   owners: string[]
   families: string[]
+  /** "Has photos" (PR G): only reviews with the buyer's photos. */
+  photos: boolean
   q: string
   sort: InboxSort
   page: number
@@ -71,6 +73,7 @@ export const EMPTY_INBOX_QUERY: InboxQuery = {
   themes: [],
   owners: [],
   families: [],
+  photos: false,
   q: '',
   sort: DEFAULT_INBOX_SORT,
   page: 1,
@@ -121,6 +124,7 @@ export function parseInboxQuery(search: string | URLSearchParams): InboxAddress 
   const stars = list(p.get('stars')).map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 5)
   const review = (p.get('review') ?? '').trim()
   const importFlag = (p.get('import') ?? '').trim().toLowerCase()
+  const photosFlag = (p.get('photos') ?? '').trim().toLowerCase()
   return {
     query: {
       kind: (INBOX_KINDS as readonly string[]).includes(kind) ? (kind as InboxKind) : 'all',
@@ -133,6 +137,7 @@ export function parseInboxQuery(search: string | URLSearchParams): InboxAddress 
       themes: codes(p.get('theme')),
       owners: list(p.get('owner')).filter((o) => o.length <= 120),
       families: list(p.get('family')).filter((f) => ID.test(f)),
+      photos: photosFlag === '1' || photosFlag === 'true',
       q: (p.get('q') ?? '').trim().slice(0, 200),
       sort: (INBOX_SORTS as readonly string[]).includes(sort) ? (sort as InboxSort) : DEFAULT_INBOX_SORT,
       page: positiveInt(p.get('page'), 1),
@@ -156,6 +161,7 @@ export function serializeInboxQuery(q: InboxQuery, open: { review?: string | nul
   if (q.themes.length) p.set('theme', q.themes.join(','))
   if (q.owners.length) p.set('owner', q.owners.join(','))
   if (q.families.length) p.set('family', q.families.join(','))
+  if (q.photos) p.set('photos', '1')
   if (q.q) p.set('q', q.q)
   if (q.sort !== DEFAULT_INBOX_SORT) p.set('sort', q.sort)
   if (q.page > 1) p.set('page', String(q.page))
@@ -183,6 +189,7 @@ export function inboxApiParams(q: InboxQuery, page: number = q.page, sort: Inbox
     theme: q.themes,
     owner: q.owners,
     family: q.families,
+    photos: q.photos ? '1' : null,
     q: q.q || null,
     sort,
     page,
@@ -237,6 +244,11 @@ export function withoutValue(q: InboxQuery, key: InboxFilterKey, value: string |
   return { ...q, [key]: current.filter((v) => String(v) !== String(value)), page: 1 }
 }
 
+/** "Has photos" on or off. */
+export function withPhotos(q: InboxQuery, on: boolean): InboxQuery {
+  return on === q.photos ? q : { ...q, photos: on, page: 1 }
+}
+
 export function withSearch(q: InboxQuery, text: string): InboxQuery {
   const next = text.trim().slice(0, 200)
   return next === q.q ? q : { ...q, q: next, page: 1 }
@@ -256,12 +268,12 @@ export function withPage(q: InboxQuery, page: number, pageSize: number = q.pageS
 
 /** "Clear" (and "Clear all filters"): every filter, the search and the period go; the tab and the order stay. */
 export function clearFilters(q: InboxQuery): InboxQuery {
-  return { ...q, statuses: [], channels: [], markets: [], stars: [], moods: [], themes: [], owners: [], families: [], q: '', period: 'all', page: 1 }
+  return { ...q, statuses: [], channels: [], markets: [], stars: [], moods: [], themes: [], owners: [], families: [], photos: false, q: '', period: 'all', page: 1 }
 }
 
-/** How many Filters fields are on (the bar's "3 on"; the status tile counts as the Status field). */
+/** How many Filters fields are on (the bar's "3 on"; the status tile counts as the Status field; "Has photos" is one). */
 export function activeFilterCount(q: InboxQuery): number {
-  return FILTER_KEYS.filter((key) => (q[key] as readonly unknown[]).length > 0).length
+  return FILTER_KEYS.filter((key) => (q[key] as readonly unknown[]).length > 0).length + (q.photos ? 1 : 0)
 }
 
 /** Any filter, the search or a period narrows the rows: an empty answer is "nothing matches", not "no reviews". */
