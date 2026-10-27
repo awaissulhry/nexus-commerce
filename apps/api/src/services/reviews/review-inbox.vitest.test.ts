@@ -110,6 +110,11 @@ describe('Reviews Inbox services (real SQL)', () => {
       ok: false, reason: 'No eBay account is connected', reconnectHref: '/settings/channels/ebay',
     })
     expect(page.readState.find((r) => r.channel === 'AMAZON' && r.market === 'IT')).toMatchObject({ ok: true, reason: null })
+    // No Etsy shop is connected (lane N4): Etsy is "not connected" — not behind, so no banner — with where to connect.
+    expect(page.readState.filter((r) => r.channel === 'ETSY')).toEqual([{
+      channel: 'ETSY', market: null, ok: true, since: null, reason: 'No Etsy shop is connected', reconnectHref: '/settings/channels/etsy',
+      byFile: true, connected: false,
+    }])
     for (const r of page.readState) expect(r.reason ?? '').not.toMatch(/NEXUS_|[A-Z]{3,}_[A-Z]{3,}/)
   })
 
@@ -122,6 +127,12 @@ describe('Reviews Inbox services (real SQL)', () => {
       { channel: 'EBAY', market: 'DE', ok: false, since: '2026-10-23T09:00:00.000Z', reason: 'Sign-in expired', reconnectHref: '/settings/channels/ebay', byFile: false },
       // Amazon's product reviews arrive only by file: never "up to date" (live audit A06).
       { channel: 'AMAZON', market: 'IT', ok: true, since: null, reason: null, reconnectHref: null, byFile: true },
+    ])
+    // A channel with no account connected (Etsy): not behind (ok), and `connected: false` for the Inbox's Etsy empty state.
+    expect(readStateFromSources([
+      { channel: 'ETSY', market: null, state: 'not_connected', reason: 'No Etsy shop is connected', since: null, reconnectHref: '/settings/channels/etsy', what: 'Shop reviews, one photo each', lastNote: null, lastReviewAt: null, reviews: 0, readsItself: false },
+    ])).toEqual([
+      { channel: 'ETSY', market: null, ok: true, since: null, reason: 'No Etsy shop is connected', reconnectHref: '/settings/channels/etsy', byFile: true, connected: false },
     ])
   })
 

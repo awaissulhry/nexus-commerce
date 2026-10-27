@@ -75,7 +75,8 @@ export interface OverviewChannelRow {
   /** Why there is no rate ("Not measurable: …"), or why it leaves requests out; null otherwise. */
   rateWords: string | null
   lastReviewAt: string | null
-  state: 'ok' | 'not_updating'
+  /** `not_connected`: no account of the channel is connected (Etsy): "Not connected" and Connect (`reconnectHref`). */
+  state: 'ok' | 'not_updating' | 'not_connected'
   reason: string | null
   since: string | null
   reconnectHref: string | null
@@ -412,7 +413,10 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
     }),
 
     section('channels', async (): Promise<OverviewChannelRow[]> => {
-      const [{ now: rowsNow, prev: rowsPrev }, reqs, { sources: known }, facts] = await Promise.all([split(), requestSplit(), sources(), rateFacts()])
+      const [{ now: rowsNow, prev: rowsPrev }, reqs, { sources: read, notConnected }, facts] = await Promise.all([split(), requestSplit(), sources(), rateFacts()])
+      // A channel no account of which is connected (Etsy) is a row of its own: "Not connected" with Connect, its
+      // numbers only the reviews Nexus already holds — never sample numbers (lane N4).
+      const known = [...read, ...notConnected]
       const keys = new Map<string, { channel: string; market: string | null }>()
       const add = (c: string, m: string | null) => {
         const ch = c.toUpperCase()

@@ -128,30 +128,6 @@
   font-size: var(--nds-font-size-sm);
 }
 
-/* ── Coming later (samples) ──────────────────────────────── */
-.sampleList {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-8);
-  margin: var(--nds-space-10) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.sampleRow {
-  display: flex;
-  align-items: center;
-  gap: var(--nds-space-12);
-  padding: var(--nds-space-8) var(--nds-space-10);
-  border: 1px dashed var(--nds-border);
-  border-radius: var(--nds-radius-lg);
-  min-width: 0;
-}
-
-.sampleRow > .stack {
-  flex: 1;
-}
-
 /* ── Phone: tools and cards (< 760 px) ───────────────────── */
 .phoneTools {
   display: flex;
