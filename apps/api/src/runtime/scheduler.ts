@@ -1003,6 +1003,13 @@ export async function startScheduler(): Promise<void> {
     startReviewAttributionCron();
   }
 
+  // Reviews PR I (2026-10-27) — Etsy shop reviews and the store's review app (Judge.me), every 30 minutes, each behind
+  // its own switch (NEXUS_ENABLE_ETSY_REVIEWS_READ=1 / NEXUS_ENABLE_REVIEW_APP_READ=1); both off by default.
+  {
+    const { startShopReviewReads } = await import('../jobs/shop-reviews-read.job.js');
+    startShopReviewReads();
+  }
+
   // D.4 — Amazon official Customer Feedback API insights. Independently gated
   // (needs the SP-API Brand Analytics role, not the general review ingest) —
   // opt in via NEXUS_ENABLE_AMAZON_REVIEW_INSIGHTS=1. Stays dark until the role

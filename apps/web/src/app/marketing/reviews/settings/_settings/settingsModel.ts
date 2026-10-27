@@ -21,8 +21,11 @@ export interface SourceRow {
   later: string | null
   lastAt: string | null
   lastWords: string | null
-  /** `fetch` = "Fetch now" for Amazon's seller feedback report (PR H); `held` = why it cannot run now, in words. */
-  action: { kind: 'rules' | 'reconnect' | 'connect' | 'import' | 'fetch'; label: string; href: string | null; held?: string | null } | null
+  /**
+   * `fetch` = "Fetch now" for Amazon's seller feedback report (PR H); `held` = why it cannot run now, in words.
+   * `app` = the review app's connect window (PR I); `page` = a Reviews page at `href`.
+   */
+  action: { kind: 'rules' | 'reconnect' | 'connect' | 'import' | 'fetch' | 'app' | 'page'; label: string; href: string | null; held?: string | null } | null
 }
 
 export interface SourcesResponse {
@@ -119,6 +122,8 @@ export function sourceActionHref(action: SourceRow['action']): string | null {
   if (action.kind === 'rules') return requestsHref()
   if (action.kind === 'import') return inboxHref({ import: 1 })
   if (action.kind === 'fetch') return null
+  // The review app opens its connect window on the page (SourcesSection), not a link.
+  if (action.kind === 'app') return null
   return action.href
 }
 

@@ -303,43 +303,16 @@ export interface ChannelViewRow {
   sent: string
   sentNote: string | null
   rate: string
-  state: 'ok' | 'not_updating' | 'later'
+  state: 'ok' | 'not_updating'
   last: string
   lastNote: string | null
   reason: string | null
   reconnectHref: string | null
-  /** A labelled placeholder with sample numbers (a channel Nexus reads from a later phase). */
-  sample: boolean
 }
 
-/**
- * ⛔ KEEP — build spec §8 ruling 3: Etsy reviews arrive in Phase 3 (PR I). Until then its row stays in the table as a
- * labelled placeholder ("Coming later", "sample numbers"); the placeholders are the roadmap. Never real data.
- */
-export const ETSY_SAMPLE_ROW: ChannelViewRow = {
-  id: 'ETSY|sample',
-  label: 'Etsy',
-  what: 'Shop reviews · sample',
-  href: null,
-  ratingKind: 'stars',
-  rating: 4.8,
-  noAmazonData: false,
-  reviews: '12',
-  change: { text: '—', tone: 'flat' },
-  sent: '—',
-  sentNote: 'Etsy asks buyers itself',
-  rate: '—',
-  state: 'later',
-  last: 'Coming later',
-  lastNote: 'sample numbers',
-  reason: null,
-  reconnectHref: null,
-  sample: true,
-}
-
-/** The channel table's rows in words; each opens that channel's reviews (Amazon and eBay: their channel page). */
-export function channelViewRows(rows: readonly OverviewChannelRow[], now: number, withSample = true): ChannelViewRow[] {
-  const out = rows.map((r): ChannelViewRow => {
+/** The channel table's rows in words; each opens that channel's Reviews page (`channelHref`). */
+export function channelViewRows(rows: readonly OverviewChannelRow[], now: number): ChannelViewRow[] {
+  return rows.map((r): ChannelViewRow => {
     const amazon = r.channel === 'AMAZON'
     const etsy = r.channel === 'ETSY'
     return {
@@ -360,10 +333,8 @@ export function channelViewRows(rows: readonly OverviewChannelRow[], now: number
       lastNote: r.state === 'ok' ? r.lastNote : null,
       reason: r.reason,
       reconnectHref: r.reconnectHref,
-      sample: false,
     }
   })
-  return withSample && !rows.some(r => r.channel === 'ETSY') ? [...out, ETSY_SAMPLE_ROW] : out
 }
 
 /** The card's warning: "eBay Germany behind", "2 channels behind"; none → null. */

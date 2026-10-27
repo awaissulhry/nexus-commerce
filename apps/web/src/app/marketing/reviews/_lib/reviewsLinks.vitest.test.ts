@@ -61,19 +61,24 @@ describe('reviews links', () => {
       '/marketing/reviews/insights',
       reviewsSettingsHref(), reviewsSettingsHref('automations'), reviewsSettingsHref('pipeline'),
       productReviewsHref('product-1'),
-      channelHref('AMAZON'), channelHref('AMAZON', 'IT'), channelHref('EBAY'), channelHref('EBAY', 'GB'), rulesHref(), timingHref(),
+      channelHref('AMAZON'), channelHref('AMAZON', 'IT'), channelHref('EBAY'), channelHref('EBAY', 'GB'), channelHref('ETSY'), channelHref('SHOPIFY'),
+      rulesHref(), timingHref(),
     ]
     for (const href of hrefs) expect(isPage(href), href).toBe(true)
   })
 
-  it('sends a channel to its Reviews page (Amazon and eBay; GB is the UK); other channels to the Inbox, scoped', () => {
+  it('sends a channel to its Reviews page (Amazon and eBay; GB is the UK; Etsy and Shopify); other channels to the Inbox, scoped', () => {
     expect(channelHref('amazon')).toBe('/marketing/reviews/amazon')
     expect(channelHref('AMAZON', 'IT')).toBe('/marketing/reviews/amazon/it')
     expect(channelHref('EBAY', 'gb')).toBe('/marketing/reviews/ebay/uk')
     expect(channelHref('EBAY', 'DEFAULT')).toBe('/marketing/reviews/ebay')
     expect(channelHref('EBAY', null)).toBe('/marketing/reviews/ebay')
-    expect(channelHref('SHOPIFY')).toBe('/marketing/reviews/inbox?channel=SHOPIFY')
-    expect(channelHref('ETSY', 'IT')).toBe('/marketing/reviews/inbox?channel=ETSY&market=IT')
+    // PR I: one page each, no market pages — a market never makes a path.
+    expect(channelHref('SHOPIFY')).toBe('/marketing/reviews/shopify')
+    expect(channelHref('shopify', 'IT')).toBe('/marketing/reviews/shopify')
+    expect(channelHref('ETSY', 'IT')).toBe('/marketing/reviews/etsy')
+    expect(channelHref('etsy', null)).toBe('/marketing/reviews/etsy')
+    expect(channelHref('WOOCOMMERCE', 'DE')).toBe('/marketing/reviews/inbox?channel=WOOCOMMERCE&market=DE')
   })
 
   it('hands the Inbox every filter it reads', () => {

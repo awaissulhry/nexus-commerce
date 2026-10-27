@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ageWords, behindWords, bucketLabel, changeView, channelViewRows, deltaView, ETSY_SAMPLE_ROW, headerSubtitle, lastWords,
+  ageWords, behindWords, bucketLabel, changeView, channelViewRows, deltaView, headerSubtitle, lastWords,
   needsActionHeld, needsActionHref, needsFooter, needsSubtitle, ratingText, sectionData, sectionError, signed, starsLinkWords,
   themeCountWords, themeHref, TOO_FEW_WORDS, trendSummary, visibleSetup, watchView, zeroStarsReason,
   type NeedsYouItem, type OverviewChannelRow, type OverviewTheme, type OverviewTiles, type Section,
@@ -63,21 +63,20 @@ describe('channel table', () => {
     expect(rows[2]).toMatchObject({ ratingKind: 'positive', sentNote: 'by email' })
     expect(rows[0].href).toBe('/marketing/reviews/amazon/it')
     expect(rows[2].href).toBe('/marketing/reviews/ebay/it')
-    expect(channelViewRows([row({ channel: 'SHOPIFY', market: null })], NOW, false)[0].href).toBe('/marketing/reviews/inbox?channel=SHOPIFY')
+    expect(channelViewRows([row({ channel: 'SHOPIFY', market: null })], NOW)[0].href).toBe('/marketing/reviews/shopify')
   })
 
-  it('Etsy is a labelled placeholder with sample numbers and a dash for requests (Etsy asks buyers itself)', () => {
-    const rows = channelViewRows([row({})], NOW)
-    const etsy = rows[rows.length - 1]
-    expect(etsy).toBe(ETSY_SAMPLE_ROW)
-    expect(etsy).toMatchObject({ sample: true, state: 'later', sent: '—', sentNote: 'Etsy asks buyers itself', last: 'Coming later', lastNote: 'sample numbers', href: null })
-    expect(channelViewRows([row({})], NOW, false)).toHaveLength(1)
+  it('Etsy is a real row (PR I): a dash for requests (Etsy asks buyers itself), no sample row added', () => {
+    const rows = channelViewRows([row({}), row({ channel: 'ETSY', market: null, sent: null })], NOW)
+    expect(rows).toHaveLength(2)
+    expect(rows[1]).toMatchObject({ label: 'Etsy', sent: '—', sentNote: 'Etsy asks buyers itself', href: '/marketing/reviews/etsy' })
+    expect(channelViewRows([row({})], NOW)).toHaveLength(1)
   })
 
   it('a channel that stopped shows Not updating and why, never a stale date; the card names it', () => {
     const rows = channelViewRows([
       row({ channel: 'EBAY', market: 'DE', label: 'eBay Germany', ratingKind: 'positive', state: 'not_updating', reason: 'Sign-in expired', reconnectHref: '/settings/channels/ebay' }),
-    ], NOW, false)
+    ], NOW)
     expect(rows[0]).toMatchObject({ label: 'eBay Germany', last: 'Not updating', lastNote: null, reason: 'Sign-in expired', reconnectHref: '/settings/channels/ebay' })
     expect(behindWords(rows)).toBe('eBay Germany behind')
     expect(behindWords([...rows, { ...rows[0], id: 'x' }])).toBe('2 channels behind')

@@ -9,7 +9,7 @@
  * `permission: 'reviews.manage'`, at the bottom as the design draws it) and the Insights rows (PR E,
  * `/marketing/reviews/insights/<page>`) are on their own pages. The Channels group (PR F): Amazon and eBay, each "all
  * markets" plus one row per market the business sells on (`reviewsNav(markets)`; the markets come from
- * GET /api/reviews/area/channel-markets). Shopify and Etsy rows join with their pages (PR I).
+ * GET /api/reviews/area/channel-markets). Shopify and Etsy (PR I) are one page each: no market rows.
  *
  * Framework-free (no React): the tests import it in Node.
  */
@@ -23,9 +23,11 @@ import {
   ListChecks,
   MessageSquareText,
   Package,
+  Palette,
   Send,
   Settings,
   ShoppingBag,
+  ShoppingCart,
   Store,
   Wrench,
   type LucideIcon,
@@ -109,6 +111,9 @@ export const REVIEWS_NAV: readonly ReviewsNavGroup[] = [
       // Each channel's "all markets" page; reviewsNav(markets) adds a row per market under it.
       { label: 'Amazon', href: `${REVIEWS_ROOT}/amazon`, icon: Store, marketPages: true },
       { label: 'eBay', href: `${REVIEWS_ROOT}/ebay`, icon: ShoppingBag, marketPages: true },
+      // PR I (2026-10-27): the store's review app (Judge.me) and the Etsy shop — one page each.
+      { label: 'Shopify', href: `${REVIEWS_ROOT}/shopify`, icon: ShoppingCart },
+      { label: 'Etsy', href: `${REVIEWS_ROOT}/etsy`, icon: Palette },
     ],
   },
   {
