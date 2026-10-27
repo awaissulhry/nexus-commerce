@@ -1,6 +1,6 @@
 'use client'
 
-import { SPARK_BOX, sparkGeometry, sparkSummary, type SparkShape, type SparkValue } from './sparklineModel'
+import { SPARK_BOX, sparkGeometry, sparkSummary, type SparkDomain, type SparkShape, type SparkValue } from './sparklineModel'
 
 export interface SparklineProps {
   /** Readings in time order, oldest first. A null keeps its place and breaks the line. */
@@ -9,6 +9,11 @@ export interface SparklineProps {
   label: string
   /** `step` (default): the value holds until the next reading — a bid. `line`: it moves between readings. */
   shape?: SparkShape
+  /**
+   * A fixed axis (2026-10-28): `[low, high]` the line always spans, either end `null` = the readings' own; a reading
+   * outside it widens it. `[0, null]` draws from zero, so a small change looks small. Default: the readings' low and high.
+   */
+  domain?: SparkDomain
   /** How a reading is said: `(n) => €${n.toFixed(2)}`. */
   format?: (n: number) => string
   /** Said, and drawn as a dotted rule, when there is nothing to draw. Default "No changes". */
@@ -30,9 +35,9 @@ export interface SparklineProps {
  * accessible name says what it is and its low, high and latest reading; the drawing itself is hidden from assistive
  * technology. The model and its rules (step by default, nothing to draw is a mark) are `sparklineModel.ts`.
  */
-export function Sparkline({ values, label, shape = 'step', format, emptyLabel = 'No changes', width = SPARK_BOX.width, height = SPARK_BOX.height, fluid = false, className }: SparklineProps) {
+export function Sparkline({ values, label, shape = 'step', domain, format, emptyLabel = 'No changes', width = SPARK_BOX.width, height = SPARK_BOX.height, fluid = false, className }: SparklineProps) {
   const box = { width, height, pad: SPARK_BOX.pad }
-  const g = sparkGeometry(values, shape, box)
+  const g = sparkGeometry(values, shape, box, domain)
   const name = sparkSummary(label, values, format, emptyLabel)
   const cls = ['nds-spark', g.count === 0 ? 'is-empty' : '', fluid ? 'is-fluid' : '', className ?? ''].filter(Boolean).join(' ')
   return (

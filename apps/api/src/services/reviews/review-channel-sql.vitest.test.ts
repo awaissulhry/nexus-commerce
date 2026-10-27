@@ -61,10 +61,12 @@ describe('Reviews channel pages (real SQL)', () => {
       await review('ebay-de-2', { channel: 'EBAY', marketplace: 'DE', rating: 1, ingestSource: 'EBAY_API', authorName: 'buyer-b', triageStatus: 'RESPONDED' })
       await review('ebay-it-1', { channel: 'EBAY', marketplace: 'IT', rating: 3, ingestSource: 'EBAY_API', authorName: 'buyer-c', postedAt: daysAgo(200) })
 
-      const topic = (name: string, mentions: number, impact: number) => ({ topic: name, mentionCount: mentions, ratingImpact: impact, snippets: [`about ${name.toLowerCase()}`] })
+      // `share`: Amazon's own percentage of reviews that mention the topic. The row's reviewCount (never given by Amazon)
+      // is set here only to prove it is not read: the shares shown are 7.5 and 3.2, not 9 and 4 out of 100.
+      const topic = (name: string, mentions: number, impact: number, share: number | null = null) => ({ topic: name, mentionCount: mentions, ratingImpact: impact, share, snippets: [`about ${name.toLowerCase()}`] })
       await c.amazonReviewInsight.create({ data: {
         asin: 'B0TEST0001', marketplace: 'IT', productId: 'test-jacket', reviewCount: 100, accessStatus: 'OK', fetchedAt: daysAgo(3),
-        positiveTopics: [topic('Waterproof', 18, 0.2)], negativeTopics: [topic('Runs small', 9, -0.3), topic('Zip quality', 4, -0.2)],
+        positiveTopics: [topic('Waterproof', 18, 0.2)], negativeTopics: [topic('Runs small', 9, -0.3, 7.5), topic('Zip quality', 4, -0.2, 3.2)],
         // Amazon's 6-month trend (getItemReviewTrends), as the weekly read stores it: a line for "Runs small" only.
         trend: { read: 'OK', at: daysAgo(3).toISOString(), topics: [{ topic: 'Runs small ', polarity: 'NEGATIVE', points: [
           { month: '2026-05', share: 4 }, { month: '2026-06', share: 5 }, { month: '2026-07', share: null },
@@ -110,7 +112,9 @@ describe('Reviews channel pages (real SQL)', () => {
     expect(s.trend.data.points.reduce((n, p) => n + p.reviews, 0)).toBe(3)
 
     expect(s.topics.data).toMatchObject({ state: 'ok', words: null, productCount: 1 })
-    expect(s.topics.data.dislike.map(t => [t.label, t.mentions, t.share, t.impact])).toEqual([['Runs small', 9, 9, -0.3], ['Zip quality', 4, 4, -0.2]])
+    expect(s.topics.data.dislike.map(t => [t.label, t.mentions, t.share, t.impact])).toEqual([['Runs small', 9, 7.5, -0.3], ['Zip quality', 4, 3.2, -0.2]])
+    // A topic Amazon sent no share for shows none (never one worked out from a review count).
+    expect(s.topics.data.like[0]).toMatchObject({ label: 'Waterproof', share: null })
     expect(s.topics.data.like.map(t => t.label)).toEqual(['Waterproof'])
     // Each topic carries Amazon's 6-month trend, or why it has none.
     expect(s.topics.data.dislike[0].trend).toEqual({ state: 'ok', reads: 1, products: 1, markets: 1, points: [
@@ -128,7 +132,7 @@ describe('Reviews channel pages (real SQL)', () => {
     // The variant's imported stars dropped from 5.0 to 4.0 (three on each side).
     expect(s.watch.data[0]).toMatchObject({ productId: 'test-jacket-m', ratingNow: 4, ratingBefore: 5, change: -1, imported: 3 })
     // The parent has topics but no imported review: "No rating data from Amazon", last.
-    expect(s.watch.data.find(r => r.productId === 'test-jacket')).toMatchObject({ ratingNow: null, topTopic: 'Runs small', topShare: 9 })
+    expect(s.watch.data.find(r => r.productId === 'test-jacket')).toMatchObject({ ratingNow: null, topTopic: 'Runs small', topShare: 7.5 })
 
     // The chips: markets with reviews, topics or Amazon's participation.
     expect(page.markets.map(m => m.code)).toEqual(['IT', 'FR', 'NL'])

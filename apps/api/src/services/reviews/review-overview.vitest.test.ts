@@ -187,13 +187,16 @@ describe('themes', () => {
     expect(fit).toMatchObject({ quoteFrom: 'eBay feedback · IT', impact: null })
   })
 
-  it('merges Amazon topics over products; Amazon topics never come from the Netherlands rows passed in', () => {
+  it("merges Amazon topics over products; the share is Amazon's own, weighted by mentions", () => {
     const topics = amazonThemes([
-      { marketplace: 'DE', reviewCount: 100, positiveTopics: [], negativeTopics: [{ topic: 'Fit', mentionCount: 30, ratingImpact: -0.42, snippets: ['Runs small'] }] },
-      { marketplace: 'IT', reviewCount: 50, positiveTopics: [], negativeTopics: [{ topic: 'fit', mentionCount: 10, ratingImpact: -0.2, snippets: [] }] },
+      { marketplace: 'DE', positiveTopics: [], negativeTopics: [{ topic: 'Fit', mentionCount: 30, ratingImpact: -0.42, share: 30, snippets: ['Runs small'] }] },
+      { marketplace: 'IT', positiveTopics: [], negativeTopics: [{ topic: 'fit', mentionCount: 10, ratingImpact: -0.2, share: 20, snippets: [] }] },
     ], 'NEGATIVE')
     expect(topics).toHaveLength(1)
-    expect(topics[0]).toMatchObject({ key: 'amazon:fit', label: 'Fit', mentions: 40, share: 27, source: 'amazon_topic', quote: '“Runs small”', quoteFrom: 'Amazon topic · DE', impact: -0.4 })
+    // (30 × 30 + 20 × 10) / 40 = 27.5
+    expect(topics[0]).toMatchObject({ key: 'amazon:fit', label: 'Fit', mentions: 40, share: 27.5, source: 'amazon_topic', quote: '“Runs small”', quoteFrom: 'Amazon topic · DE', impact: -0.4 })
+    // No share from Amazon → none shown.
+    expect(amazonThemes([{ marketplace: 'DE', positiveTopics: [{ topic: 'Warm', mentionCount: 5 }], negativeTopics: [] }], 'POSITIVE')[0].share).toBeNull()
   })
 
   it('keeps the four themes mentioned most', () => {

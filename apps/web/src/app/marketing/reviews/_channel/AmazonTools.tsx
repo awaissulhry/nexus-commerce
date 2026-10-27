@@ -31,7 +31,7 @@ import {
 } from './channelModel'
 import { lockParams, scopeTitleWords, type ReviewsLock } from './reviewsScope'
 import { FetchNowButton } from './FetchNowButton'
-import { shareWords, type TopicTrendView } from './topicTrendModel'
+import { SHARE_AXIS, shareWords, type TopicTrendView } from './topicTrendModel'
 import { failedFetchWords, feedbackCardLine, feedbackRowView, fetchHeldWords, REMOVAL_RULES } from './sellerFeedbackModel'
 import s from './channel.module.css'
 
@@ -271,7 +271,7 @@ function TopicTrendLine({ trend }: { trend: TopicTrendView }) {
   return (
     <span className={s.topicTrend}>
       <span className={s.sub} aria-hidden="true">{trend.from}</span>
-      <Sparkline values={trend.values} label={trend.label} shape="line" format={shareWords} />
+      <Sparkline values={trend.values} label={trend.label} shape="line" domain={SHARE_AXIS} format={shareWords} />
       <span className={s.sub} aria-hidden="true">{trend.to}</span>
       <span className={s.sub} aria-hidden="true">· {trend.words}</span>
     </span>

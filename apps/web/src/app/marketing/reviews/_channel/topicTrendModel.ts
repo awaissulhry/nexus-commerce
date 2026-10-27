@@ -8,8 +8,15 @@
  * words: not read yet, Amazon did not send it, or Amazon gives none for this topic. Pure, tested in
  * topicTrendModel.vitest.test.ts.
  */
+import type { SparkDomain } from '@/design-system/components/sparklineModel'
 
 export interface TopicTrendPoint { month: string; share: number | null }
+
+/**
+ * The line's axis: from 0 % to at least the highest month, so a share that moves 11 → 11.2 % draws flat and 4 → 9 %
+ * climbs — the DS Sparkline's fixed axis (`domain`), not the readings' own low and high.
+ */
+export const SHARE_AXIS: SparkDomain = [0, null]
 
 export type TopicTrend =
   | { state: 'ok'; points: TopicTrendPoint[]; reads: number; products: number; markets: number }

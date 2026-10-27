@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  amazonTopicMarkets, amazonTopicTheme, buildThemes, MIN_THEME_MENTIONS, parseInsightPeriod, parseInsightScope, parseTopicRows,
+  amazonTopicMarkets, amazonTopicShare, amazonTopicTheme, buildThemes, MIN_THEME_MENTIONS, parseInsightPeriod, parseInsightScope, parseTopicRows,
   sortThemes, themeMood, themesSummary, themeStarImpact, weeklyCounts, type ThemeReviewRow,
 } from './review-insights-math.js'
 import { heatmapCells, topicStates } from './review-themes.service.js'
@@ -119,6 +119,22 @@ describe('the Themes board', () => {
     expect(f.sources).toEqual({ reviews: 0, amazonTopics: 30 })
     expect(f.snippets).toEqual([{ text: 'Order one size up', english: null, source: 'amazon_topic', channel: 'AMAZON', market: 'DE', from: 'Amazon topic · DE', reviewId: null }])
     expect(JSON.stringify(themes)).not.toMatch(/starRating|reviewCount|average/)
+  })
+
+  it("Amazon's share of reviews — the one calculation every page uses: its own percentage, weighted by mentions", () => {
+    expect(amazonTopicShare([{ share: 17.31, mentions: 36 }])).toBe(17.3)
+    // Two products: (30 × 30 + 20 × 10) / 40.
+    expect(amazonTopicShare([{ share: 30, mentions: 30 }, { share: 20, mentions: 10 }])).toBe(27.5)
+    // A read without a share, or with no mentions, does not count; none at all → null (never a share from a review count).
+    expect(amazonTopicShare([{ share: null, mentions: 50 }, { share: 12, mentions: 5 }, { share: 90, mentions: 0 }])).toBe(12)
+    expect(amazonTopicShare([{ share: null, mentions: 50 }])).toBeNull()
+    expect(amazonTopicShare([])).toBeNull()
+    // Two markets of one theme on the Themes board: the same weighting.
+    const topics = parseTopicRows([
+      { marketplace: 'DE', fetchedAt: daysAgo(6), positiveTopics: [], negativeTopics: [{ topic: 'Runs small', mentionCount: 30, share: 30 }] },
+      { marketplace: 'IT', fetchedAt: daysAgo(6), positiveTopics: [], negativeTopics: [{ topic: 'Runs small', mentionCount: 10, share: 20 }] },
+    ])
+    expect(buildThemes({ rows: [], prevRows: [], trendRows: [], topics, now: NOW }).find((t) => t.key === 'FIT_SIZING')).toMatchObject({ share: 27.5 })
   })
 
   it('reviews and topics together: review share and stars first, Amazon’s mentions added', () => {
