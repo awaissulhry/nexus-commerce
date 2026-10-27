@@ -188,7 +188,7 @@
 /* ── Amazon topics: like | dislike ───────────────────────── */
 .topicCols {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
   gap: var(--nds-space-16);
 }
 
@@ -238,6 +238,17 @@
   align-items: center;
   gap: var(--nds-space-4) var(--nds-space-8);
   min-width: 0;
+}
+
+/* Phone: the topic keeps its width — mentions over the star effect on the right, the trend below. */
+@media (max-width: 599px) {
+  .topicRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .topicRow > :first-child {
+    grid-row: span 2;
+  }
 }
 
 /* ── List rows (revision requests, seller feedback) ──────── */
