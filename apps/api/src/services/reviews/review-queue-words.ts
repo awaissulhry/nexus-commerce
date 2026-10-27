@@ -63,12 +63,24 @@ export function queueStatusOf(r: Pick<RequestFacts, 'status' | 'scheduledFor' | 
   }
 }
 
+/**
+ * eBay buyers get no review e-mail from Nexus (Owner, 2026-10-27): eBay's rules restrict contacting buyers outside eBay,
+ * and eBay asks its buyers for feedback itself. An eBay request ends not asked with this code (the scheduler and the
+ * sender), "Send now" and "Allow again" are held with these words, and the Orders page and Claude answer them too.
+ * Shopify buyers still get our e-mail; Amazon is unchanged.
+ */
+export const EBAY_ASKS_CODE = 'EBAY_ASKS'
+export const EBAY_ASKS_WORDS = 'Not sent — eBay asks the buyer for feedback itself'
+/** What an eBay rule says, wherever a rule is shown or run: it e-mails nobody, and no rule can change that. */
+export const EBAY_RULE_WORDS = 'eBay buyers are not e-mailed — eBay asks its buyers for feedback itself, so no rule can e-mail them.'
+
 /** The provider / Nexus codes a row can carry in `providerResponseCode` that decide its reason on their own. */
 export const CODE_REASON: Record<string, ReasonKey> = {
   SKIPPED_BY_HAND: 'skipped_by_hand',
   ALREADY_SOLICITED: 'already_asked',
   NOT_IMPLEMENTED: 'amazon_off',
   EMAIL_OFF: 'email_off',
+  EBAY_ASKS: 'ebay_asks',
   UNKNOWN_MARKETPLACE: 'unknown_market',
   OUTSIDE_WINDOW: 'window_closed',
   SUPPRESSED: 'do_not_email',
@@ -93,7 +105,7 @@ export type ReasonKey =
   // sent
   | 'sent_amazon' | 'sent_email'
   // not asked
-  | 'skipped_by_hand' | 'already_asked' | 'amazon_off' | 'email_off' | 'unknown_market' | 'window_closed' | 'do_not_email' | 'unhappy_check'
+  | 'skipped_by_hand' | 'already_asked' | 'amazon_off' | 'email_off' | 'ebay_asks' | 'unknown_market' | 'window_closed' | 'do_not_email' | 'unhappy_check'
   | 'no_check_answer' | 'refunded' | 'return_open' | 'cancelled' | 'asked_recently' | 'rule_skips' | 'not_delivered'
   | 'no_order_number' | 'no_email' | 'no_request_call' | 'not_asked_other'
 
@@ -116,6 +128,7 @@ export const REASON_FACET_WORDS: Record<ReasonKey, string> = {
   already_asked: 'Amazon: already asked for this order',
   amazon_off: 'Sending to Amazon is switched off',
   email_off: 'Our email sending is switched off',
+  ebay_asks: 'eBay asks the buyer itself — not e-mailed',
   unknown_market: 'Unknown Amazon market',
   window_closed: 'Past Amazon’s day 30 — too late to ask',
   do_not_email: 'Buyer is on the do-not-email list',
@@ -135,6 +148,7 @@ export const REASON_FACET_WORDS: Record<ReasonKey, string> = {
 
 const daysBetween = (from: Date, to: Date) => Math.round((to.getTime() - from.getTime()) / DAY_MS)
 const isAmazon = (channel: string) => channel === 'AMAZON'
+const isEbay = (channel: string) => (channel ?? '').toUpperCase() === 'EBAY'
 const triesLeft = (r: RequestFacts) => r.nextRetryAt != null && (r.attemptCount ?? 0) < MAX_TRIES
 
 /** The do-not-email list's source, as the mailer wrote it ("Suppressed: suppressed (BOUNCE_HARD)"), in words. */
@@ -229,6 +243,7 @@ function reasonWords(key: ReasonKey, r: RequestFacts): string {
     case 'already_asked': return 'Amazon: already asked for this order'
     case 'amazon_off': return 'Sending to Amazon is switched off on this server — nothing was sent'
     case 'email_off': return 'Not sent — our email sending is switched off on this server'
+    case 'ebay_asks': return EBAY_ASKS_WORDS
     case 'unknown_market': return 'Nexus does not know this order’s Amazon market'
     case 'window_closed': return 'Past Amazon’s day 30 — too late to ask'
     case 'do_not_email': return doNotEmailWords(r.suppressedReason)
@@ -339,6 +354,7 @@ export function sendNowHeldFor(r: HeldFacts, now: Date): string | null {
     const when = r.sentAt ? ` on ${shortDate(r.sentAt, tz(r.marketplace))}` : ''
     return isAmazon(r.channel) ? `Already sent${when}. Amazon allows one request per order.` : `Already sent${when}. One request per order.`
   }
+  if (isEbay(r.channel)) return EBAY_ASKS_WORDS
   if (status === 'SKIPPED' || status === 'SUPPRESSED') return 'Not in the queue — use Allow again first'
   if (status === 'SCHEDULED' && r.sentimentCheck?.sentimentEmailSentAt && r.sentimentCheck.response === 'NONE') {
     return 'Waits for the buyer’s answer to “How was it?” (up to 5 days) — the rule asks after that'
@@ -361,6 +377,7 @@ export function sendNowHeldFor(r: HeldFacts, now: Date): string | null {
 export function snoozeHeldFor(r: HeldFacts, now: Date, days = 1): string | null {
   const status = queueStatusOf(r, now)
   if (status === 'SENT') return 'Already sent — nothing to snooze'
+  if (isEbay(r.channel)) return EBAY_ASKS_WORDS
   if (status === 'SKIPPED' || status === 'SUPPRESSED') return 'Not in the queue — use Allow again first'
   if (isAmazon(r.channel) && r.deliveredAt) {
     const from = snoozeFrom(r, now)
@@ -389,6 +406,7 @@ export function skipHeldFor(r: HeldFacts, now: Date): string | null {
 export function allowAgainHeldFor(r: HeldFacts, now: Date): string | null {
   const status = queueStatusOf(r, now)
   if (status !== 'SKIPPED' && status !== 'SUPPRESSED') return 'Only a request that was not asked can be allowed again'
+  if (isEbay(r.channel)) return EBAY_ASKS_WORDS
   const key = reasonKeyOf(r, now)
   if (key === 'already_asked') return 'Amazon already asked this buyer — one request per order'
   if (key === 'do_not_email') return 'The buyer is on the do-not-email list — only they can undo that'

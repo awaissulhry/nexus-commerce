@@ -23,6 +23,7 @@ import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import Link from '@/lib/workspaces/Link'
 import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { reviewsGet, reviewsSend } from '../../../../_lib/reviewsFetch'
+import { EBAY_NOT_EMAILED } from '../../../../_lib/reviewWords'
 import { reviewsCrumbs } from '../../../../_shell/reviews-crumbs'
 import { ReviewsMenuButton } from '../../../../_shell/ReviewsShell'
 import { AMAZON_EMAIL_WORDS, EmailPreviewModal } from '../../../_queue/EmailPreviewModal'
@@ -263,7 +264,12 @@ function RuleEditor({ id }: { id: string }) {
         <div className={s.fields}>
           {!knownScope && (
             <Banner tone="warning" title={`This rule is for ${channelWords(form)}: it matches no orders`}>
-              Nexus asks only Amazon, eBay and Shopify buyers. Pick one of them, or delete the rule.
+              Nexus asks only Amazon and Shopify buyers. Pick one of them, or delete the rule.
+            </Banner>
+          )}
+          {form.scope === 'EBAY' && (
+            <Banner tone="warning" title="eBay buyers are not e-mailed">
+              {EBAY_NOT_EMAILED} Pick Amazon or Shopify, or delete the rule.
             </Banner>
           )}
           <div className={s.scopes} role="radiogroup" aria-label="Channel">
@@ -391,6 +397,8 @@ function RuleEditor({ id }: { id: string }) {
         <Banner tone="info" title="Amazon sends its own fixed message">
           {AMAZON_EMAIL_WORDS} Nobody can change its text — this rule only picks the day.
         </Banner>
+      ) : form.scope === 'EBAY' ? (
+        <Banner tone="info" title="No message: eBay asks the buyer itself">{EBAY_NOT_EMAILED}</Banner>
       ) : (
         <div className={s.fields}>
           <p className={s.hint}>

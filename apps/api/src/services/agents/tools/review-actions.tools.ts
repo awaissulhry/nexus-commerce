@@ -7,8 +7,9 @@
  *
  *   - request-review: asks the order's buyer NOW through the ONE sender (review-request.service.ts askForReviews, as the
  *     Orders page does; audit E5, 2026-10-27): Amazon's own "Request a Review" (5–30 days after Amazon's delivery date;
- *     Nexus first tries on day 4 of its own), Nexus's review e-mail for eBay and Shopify buyers (the rules' text), the
- *     rule's "How was it?" check first where the rule has one. Held while sending is paused on Reviews › Requests; never
+ *     Nexus first tries on day 4 of its own), Nexus's review e-mail for Shopify buyers (the rules' text), the rule's
+ *     "How was it?" check first where the rule has one. Held for an eBay order: Nexus e-mails no eBay buyer, eBay asks
+ *     its buyers for feedback itself (Owner, 2026-10-27). Held while sending is paused on Reviews › Requests; never
  *     with an open return or a refund; once per order.
  *   - reply-to-review: eBay only (RespondToFeedback: public, one reply per feedback, at most 500 characters). Amazon
  *     and Shopify have no reply call: post it there, the review desk can then record it.
@@ -39,7 +40,7 @@ async function freshOrStale(preview: () => Promise<ToolResult>, ctx: ToolContext
 // ── request-review ──────────────────────────────────────────────────────────────────────────────────
 
 const requestInput = z.object({
-  orderId: z.string().trim().min(1).max(64).describe('Nexus order id (from order-search): an Amazon, eBay or Shopify order that was delivered'),
+  orderId: z.string().trim().min(1).max(64).describe('Nexus order id (from order-search): an Amazon or Shopify order that was delivered (eBay asks its buyers itself)'),
 })
 type RequestArgs = z.infer<typeof requestInput>
 
@@ -93,7 +94,8 @@ const requestReviewTool: AgentTool = {
   description:
     'Ask the buyer of an order of this business for a review now, through Reviews › Requests (the same sender as its '
     + '"Send now"): Amazon orders get Amazon\'s own "Request a Review" (Amazon writes and sends it; 5–30 days after its '
-    + 'delivery date), eBay and Shopify orders get Nexus\'s review e-mail (an honest-review request, the rules\' text). '
+    + 'delivery date), Shopify orders get Nexus\'s review e-mail (an honest-review request, the rules\' text). eBay '
+    + 'orders are not asked: eBay asks its buyers for feedback itself, and Nexus e-mails no eBay buyer. '
     + 'Where the order\'s rule asks "How was it?" first, that e-mail goes first. Held while sending is paused; never with '
     + 'an open return or a refund; once per order; live or a dry run, as the preview says. '
     + 'Always waits for a person to approve it in Nexus; it cannot be undone.',

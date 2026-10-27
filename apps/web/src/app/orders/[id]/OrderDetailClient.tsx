@@ -24,7 +24,7 @@ import { formatOrderTotal } from '../_lib/money'
 import { FulfillmentPill } from '../_lenses/GridLens'
 
 /** The Request review buttons' tip (audit A1, B11): one sender for every channel, Amazon's window in Amazon's words. */
-const REQUEST_REVIEW_TIP = 'Ask this buyer for a review now, through Reviews › Requests: Amazon’s own request (5–30 days after its delivery date) or our review e-mail for eBay and Shopify buyers. Held while sending is paused.'
+const REQUEST_REVIEW_TIP = 'Ask this buyer for a review now, through Reviews › Requests: Amazon’s own request (5–30 days after its delivery date) or our review e-mail for Shopify buyers. eBay buyers are not asked: eBay asks them for feedback itself. Held while sending is paused.'
 
 const CHANNEL_TONE: Record<string, string> = {
   AMAZON: 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-900',
@@ -91,9 +91,14 @@ export default function OrderDetailClient({ id }: { id: string }) {
     setReviewBusy(true)
     try {
       // The ONE sender (Reviews › Requests): held while sending is paused; Amazon's own request, or our review e-mail
-      // for eBay and Shopify buyers; the answer is in words (what happened, or why nothing was sent).
+      // for Shopify buyers (an eBay order is held: eBay asks its buyers itself); the answer is in words (what happened,
+      // or why nothing was sent). A held order is an answer, not an error.
       const res = await fetch(`${getBackendUrl()}/api/orders/${id}/request-review`, { method: 'POST' })
       const data = await res.json()
+      if (!res.ok && data.held) {
+        toast.info(`Review request: ${data.error}`)
+        return
+      }
       if (!res.ok) throw new Error(data.error)
       toast[data.outcome === 'sent' ? 'success' : 'info'](`Review request: ${data.words}`)
       refresh()
@@ -578,7 +583,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
 
           {/* `#review`: the Orders grid's row menu "Request a review" opens the order here. */}
           <div id="review">
-          <Card title="Review request" description={order.channel === 'AMAZON' ? 'Amazon’s own request' : 'Our review e-mail'}>
+          <Card title="Review request" description={order.channel === 'AMAZON' ? 'Amazon’s own request' : order.channel === 'EBAY' ? 'eBay asks the buyer itself' : 'Our review e-mail'}>
             {!lastReview ? (
               <div className="text-base text-slate-500 dark:text-slate-400">No request yet.</div>
             ) : (
@@ -593,7 +598,9 @@ export default function OrderDetailClient({ id }: { id: string }) {
                 ? 'Wait until order is delivered before requesting.'
                 : order.channel === 'AMAZON'
                   ? 'Amazon allows one request per order, 5–30 days after its delivery date, with no custom message. Nexus first tries on day 4 of its own delivery date.'
-                  : 'One review e-mail per order, asking for an honest review. Pausing sending on Reviews › Requests holds it.'}
+                  : order.channel === 'EBAY'
+                    ? 'Nexus sends eBay buyers no review e-mail: eBay asks them for feedback itself.'
+                    : 'One review e-mail per order, asking for an honest review. Pausing sending on Reviews › Requests holds it.'}
             </div>
           </Card>
           </div>

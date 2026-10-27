@@ -182,8 +182,11 @@ describe('review queue words', () => {
     expect(sendNowHeldFor(amazon({ deliveredAt: daysAgo(31) }), NOW)).toMatch(/day 30/)
     expect(sendNowHeldFor(amazon({ deliveredAt: daysAgo(6), providerResponseCode: 'OUTSIDE_WINDOW', lastAttemptAt: daysAgo(0.2) }), NOW)).toMatch(/said too early today/)
     expect(sendNowHeldFor(amazon({ status: 'SENT', sentAt: daysAgo(5) }), NOW)).toMatch(/^Already sent on .*one request per order/)
-    expect(sendNowHeldFor({ status: 'SCHEDULED', channel: 'EBAY', scheduledFor: inDays(2), customerEmail: '' }, NOW)).toBe('The order has no buyer email')
-    expect(sendNowHeldFor({ status: 'SCHEDULED', channel: 'EBAY', scheduledFor: inDays(2), customerEmail: 'a@b.c' }, NOW)).toBeNull()
+    expect(sendNowHeldFor({ status: 'SCHEDULED', channel: 'SHOPIFY', scheduledFor: inDays(2), customerEmail: '' }, NOW)).toBe('The order has no buyer email')
+    expect(sendNowHeldFor({ status: 'SCHEDULED', channel: 'SHOPIFY', scheduledFor: inDays(2), customerEmail: 'a@b.c' }, NOW)).toBeNull()
+    // Nexus e-mails no eBay buyer (Owner, 2026-10-27): a waiting eBay request is held in the queue's words.
+    expect(sendNowHeldFor({ status: 'SCHEDULED', channel: 'EBAY', scheduledFor: inDays(2), customerEmail: 'a@b.c' }, NOW)).toBe('Not sent — eBay asks the buyer for feedback itself')
+    expect(snoozeHeldFor({ status: 'SCHEDULED', channel: 'EBAY', scheduledFor: inDays(2) }, NOW, 1)).toBe('Not sent — eBay asks the buyer for feedback itself')
     expect(sendNowHeldFor(amazon({ deliveredAt: daysAgo(8), sentimentCheck: { sentimentEmailSentAt: daysAgo(1), response: 'NONE' } }), NOW)).toMatch(/How was it/)
     expect(sendNowHeldFor({ status: 'SUPPRESSED', channel: 'AMAZON' }, NOW)).toMatch(/Allow again/)
 
@@ -198,6 +201,14 @@ describe('review queue words', () => {
     expect(allowAgainHeldFor({ ...notAsked, deliveredAt: daysAgo(31) }, NOW)).toMatch(/day 30/)
     expect(allowAgainHeldFor({ status: 'SKIPPED', channel: 'AMAZON', providerResponseCode: 'ALREADY_SOLICITED', deliveredAt: daysAgo(8) }, NOW)).toMatch(/one request per order/)
     expect(allowAgainHeldFor({ status: 'SENT', channel: 'AMAZON' }, NOW)).toMatch(/Only a request that was not asked/)
+    expect(allowAgainHeldFor({ status: 'SKIPPED', channel: 'EBAY', providerResponseCode: 'EBAY_ASKS' }, NOW)).toBe('Not sent — eBay asks the buyer for feedback itself')
+    expect(allowAgainHeldFor({ status: 'SUPPRESSED', channel: 'EBAY', suppressedReason: 'rule_exclusion:has_refund' }, NOW)).toBe('Not sent — eBay asks the buyer for feedback itself')
+  })
+
+  it('an eBay request that was not asked says why in words, never its code (Owner, 2026-10-27)', () => {
+    const r = reasonOf({ status: 'SKIPPED', channel: 'EBAY', providerResponseCode: 'EBAY_ASKS', suppressedReason: 'Not sent — eBay asks the buyer for feedback itself' }, NOW)
+    expect(r).toEqual({ key: 'ebay_asks', words: 'Not sent — eBay asks the buyer for feedback itself' })
+    expectPlainWords(r.words)
   })
 
   it('run, failures, buyer and day words', () => {

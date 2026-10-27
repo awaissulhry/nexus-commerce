@@ -1,13 +1,12 @@
 'use client'
 
 /**
- * Reviews › Settings › Emails & unsubscribes — our review e-mails to eBay and Shopify buyers (Amazon sends its own and
+ * Reviews › Settings › Emails & unsubscribes — our review e-mails to Shopify buyers (Amazon sends its own and
  * keeps its own opt-out list).
  *
  * The sender name, address and reply-to are the business identity every buyer e-mail carries (build spec ruling 4):
  * shown read-only here, changed in Settings › Company only ("Change in Settings › Company", a new tab), so
- * there is one edit path. The review button of each e-mail goes to the buyer's own eBay site or this business's own
- * shop (review-links.service.ts); a business with no shop sends Shopify buyers no button, and this page says so. The unsubscribe link is always on (no control: every marketing e-mail must let the buyer opt
+ * there is one edit path. The review button of each e-mail goes to this business's own shop (review-links.service.ts); a business with no shop sends Shopify buyers no button, and this page says so. The unsubscribe link is always on (no control: every marketing e-mail must let the buyer opt
  * out). Then the unsubscribe list (UnsubscribeList.tsx).
  */
 import { ExternalLink } from 'lucide-react'
@@ -32,7 +31,7 @@ export interface EmailsSectionProps {
 export function EmailsSection({ sender, senderError, onRetrySender, suppressions }: EmailsSectionProps) {
   return (
     <div className={s.section}>
-      <p className={s.lead}>Our review e-mails to eBay and Shopify buyers. Amazon sends its own and keeps its own opt-out list.</p>
+      <p className={s.lead}>Our review e-mails to Shopify buyers. Amazon sends its own and keeps its own opt-out list; eBay asks its buyers itself, so Nexus e-mails no eBay buyer.</p>
 
       <Card header="Sender" headingLevel={3} description="Who our review e-mails come from, and where replies go.">
         {senderError && !sender ? (
@@ -51,7 +50,7 @@ export function EmailsSection({ sender, senderError, onRetrySender, suppressions
                 { label: 'Sender address', value: sender.address ?? '—' },
                 { label: 'Replies go to', value: sender.replyTo ?? '—' },
                 { label: 'Review button (Shopify)', value: sender.shopReviewPage ?? 'None' },
-                { label: 'Review button (eBay)', value: 'The buyer’s own eBay site' },
+                { label: 'eBay buyers', value: 'No e-mail — eBay asks them itself' },
               ]}
             />
             <div className={s.senderFoot}>

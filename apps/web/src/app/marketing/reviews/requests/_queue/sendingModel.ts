@@ -103,7 +103,10 @@ export function runConfirm(s: SendingState, timeZone?: string): RunConfirm {
   if (amazonCheck + emailCheck > 0) {
     consequences.push(`Sends our “How was it?” email first to ${plural(amazonCheck + emailCheck, 'buyer', 'buyers')} — their review request follows their answer, or 5 days`)
   }
-  if (total === 0) consequences.push('Nothing is due right now')
+  // Nexus e-mails no eBay buyer (Owner, 2026-10-27): eBay requests still waiting are closed, never sent.
+  const ebay = s.due.ebay ?? 0
+  if (ebay > 0) consequences.push(`Closes ${plural(ebay, 'eBay request', 'eBay requests')} without an email — eBay asks the buyer for feedback itself`)
+  if (total === 0 && ebay === 0) consequences.push('Nothing is due right now')
   consequences.push('Adds orders delivered since the last run to the queue')
   consequences.push('A sent request cannot be taken back.')
   const sideEffects: string[] = []

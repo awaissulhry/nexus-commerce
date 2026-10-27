@@ -98,6 +98,8 @@ export interface SendingState {
     /** `checkFirst`: of those, due ones whose rule asks “How was it?” first (that e-mail goes, not the request). */
     amazon: { total: number; byMarket: Record<string, number>; checkFirst?: number }
     email: { total: number; byChannel: Record<string, number>; checkFirst?: number }
+    /** eBay requests still waiting from before Nexus stopped e-mailing eBay buyers: the run closes them unasked. */
+    ebay?: number
   }
   /** Why "Run now" is held (paused, a run going on), or null. */
   runHeld: string | null

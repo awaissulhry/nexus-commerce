@@ -14,7 +14,7 @@ import { Button, InfoTip, Pill, Tag } from '@/design-system/primitives'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import Link from '@/lib/workspaces/Link'
 import { reviewsSend } from '../../_lib/reviewsFetch'
-import { channelMarketWords } from '../../_lib/reviewWords'
+import { EBAY_ASKS_WORDS, channelMarketWords } from '../../_lib/reviewWords'
 import { rulePath } from '../requestsPaths'
 import { readRequestDetail, type RequestDetail } from './queueDatasource'
 import { bulkResultWords, type SnoozeDays } from './queueBulk'
@@ -236,7 +236,12 @@ function RequestTab({ detail, now }: { detail: RequestDetail; now: Date }) {
             value: r.rule ? <Link href={rulePath(r.rule.id)}>{r.rule.name}</Link> : 'No rule matched — default timing',
             hint: r.rule?.howWasIt ? 'asks “How was it?” first' : undefined,
           },
-          { label: 'Message', value: amazon ? 'Amazon’s own standard email (its text is fixed)' : 'Our review email (Preview email shows it)' },
+          {
+            label: 'Message',
+            value: amazon
+              ? 'Amazon’s own standard email (its text is fixed)'
+              : r.channel === 'EBAY' ? `None. ${EBAY_ASKS_WORDS}.` : 'Our review email (Preview email shows it)',
+          },
         ]}
       />
       <div>

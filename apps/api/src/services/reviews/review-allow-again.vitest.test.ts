@@ -41,8 +41,11 @@ describe('allowRequestAgain', () => {
   })
 
   it('refuses a buyer on the do-not-email list, a refund, and Amazon past day 30', async () => {
-    db.row = row({ channel: 'EBAY', providerResponseCode: 'SUPPRESSED', suppressedReason: 'Suppressed: suppressed (UNSUBSCRIBE)' })
+    db.row = row({ channel: 'SHOPIFY', providerResponseCode: 'SUPPRESSED', suppressedReason: 'Suppressed: suppressed (UNSUBSCRIBE)' })
     await expect(allowRequestAgain('r1', NOW)).rejects.toMatchObject({ statusCode: 409, message: expect.stringMatching(/do-not-email list/) })
+    // Nexus e-mails no eBay buyer (Owner, 2026-10-27): an eBay request is never put back.
+    db.row = row({ channel: 'EBAY', providerResponseCode: 'EBAY_ASKS', suppressedReason: 'Not sent — eBay asks the buyer for feedback itself' })
+    await expect(allowRequestAgain('r1', NOW)).rejects.toMatchObject({ statusCode: 409, message: 'Not sent — eBay asks the buyer for feedback itself' })
     db.row = row({ order: { ...row({}).order, financialTransactions: [{ id: 'f' }] } })
     await expect(allowRequestAgain('r1', NOW)).rejects.toMatchObject({ statusCode: 409, message: expect.stringMatching(/refunded/) })
     db.row = row({ order: { ...row({}).order, deliveredAt: days(35) } })

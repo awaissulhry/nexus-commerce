@@ -482,7 +482,7 @@ exports[`O3 — Xavia: every buyer-facing output is byte-identical to before > s
           <p style="margin:0 0 8px;">We hope <strong>Test Jacket</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
           <ul style="font-size:12px;color:#888;padding-left:18px;margin:8px 0;">
             <li><strong>😊 Adoro / 😊 Love it</strong> — we&#39;ll send a short review invitation.</li>
-            <li><strong>😕 Qualcosa non va / 😕 Something&#39;s wrong</strong> — we&#39;ll fix it within 24h.</li>
+            <li><strong>😕 Qualcosa non va / 😕 Something&#39;s wrong</strong> — we&#39;ll reply as soon as we can.</li>
           </ul>
         </td></tr>
 
@@ -575,7 +575,7 @@ Annulla iscrizione: https://nexus-commerce-web.up.railway.app/api/email/unsubscr
           <p style="margin:0 0 8px;">We hope <strong>Test Jacket</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
           <ul style="font-size:12px;color:#888;padding-left:18px;margin:8px 0;">
             <li><strong>😊 Top / 😊 Love it</strong> — we&#39;ll send a short review invitation.</li>
-            <li><strong>😕 Etwas stimmt nicht / 😕 Something&#39;s wrong</strong> — we&#39;ll fix it within 24h.</li>
+            <li><strong>😕 Etwas stimmt nicht / 😕 Something&#39;s wrong</strong> — we&#39;ll reply as soon as we can.</li>
           </ul>
         </td></tr>
 
@@ -668,7 +668,7 @@ Abmelden: https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=
           <p style="margin:0 0 8px;">We hope <strong>Test Jacket</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
           <ul style="font-size:12px;color:#888;padding-left:18px;margin:8px 0;">
             <li><strong>😊 J&#39;adore / 😊 Love it</strong> — we&#39;ll send a short review invitation.</li>
-            <li><strong>😕 Un souci / 😕 Something&#39;s wrong</strong> — we&#39;ll fix it within 24h.</li>
+            <li><strong>😕 Un souci / 😕 Something&#39;s wrong</strong> — we&#39;ll reply as soon as we can.</li>
           </ul>
         </td></tr>
 
@@ -761,7 +761,7 @@ Se désinscrire: https://nexus-commerce-web.up.railway.app/api/email/unsubscribe
           <p style="margin:0 0 8px;">We hope <strong>Test Jacket</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
           <ul style="font-size:12px;color:#888;padding-left:18px;margin:8px 0;">
             <li><strong>😊 Me encanta / 😊 Love it</strong> — we&#39;ll send a short review invitation.</li>
-            <li><strong>😕 Algo va mal / 😕 Something&#39;s wrong</strong> — we&#39;ll fix it within 24h.</li>
+            <li><strong>😕 Algo va mal / 😕 Something&#39;s wrong</strong> — we&#39;ll reply as soon as we can.</li>
           </ul>
         </td></tr>
 
@@ -933,7 +933,7 @@ exports[`O3 — Xavia: every buyer-facing output is byte-identical to before > s
           <p style="margin:0 0 8px;">We hope <strong>Casco Xavia Carbon</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
           <ul style="font-size:12px;color:#888;padding-left:18px;margin:8px 0;">
             <li><strong>😊 Adoro / 😊 Love it</strong> — we&#39;ll send a short review invitation.</li>
-            <li><strong>😕 Qualcosa non va / 😕 Something&#39;s wrong</strong> — we&#39;ll fix it within 24h.</li>
+            <li><strong>😕 Qualcosa non va / 😕 Something&#39;s wrong</strong> — we&#39;ll reply as soon as we can.</li>
           </ul>
         </td></tr>
 

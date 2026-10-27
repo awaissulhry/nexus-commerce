@@ -18,6 +18,9 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 import {
+  CODE_REASON,
+  EBAY_ASKS_CODE,
+  EBAY_RULE_WORDS,
   MAX_TRIES,
   QUEUE_STATUSES,
   REASON_FACET_WORDS,
@@ -145,7 +148,8 @@ export function statusFilterWhere(status: QueueStatus, now: Date): Record<string
 }
 
 const NOT_ASKED = { status: { in: ['SKIPPED', 'SUPPRESSED'] } }
-const CODE_KEYS = ['SKIPPED_BY_HAND', 'ALREADY_SOLICITED', 'NOT_IMPLEMENTED', 'UNKNOWN_MARKETPLACE', 'OUTSIDE_WINDOW', 'SUPPRESSED', 'DIVERTED_NEGATIVE', 'NO_RESPONSE_NO_FALLBACK']
+/** Every code that decides a row's reason on its own (`CODE_REASON`, the same list `reasonKeyOf` reads). */
+const CODE_KEYS = Object.keys(CODE_REASON)
 const NO_DECIDING_CODE = { OR: [{ providerResponseCode: null }, { providerResponseCode: { notIn: CODE_KEYS } }] }
 const sr = (contains: string) => ({ suppressedReason: { contains, mode: 'insensitive' } })
 const notAskedBy = (...conds: Record<string, unknown>[]) => ({ AND: [NOT_ASKED, NO_DECIDING_CODE, ...conds] })
@@ -182,6 +186,7 @@ const REASON_WHERE: Record<Exclude<ReasonKey, 'not_asked_other'>, (now: Date) =>
   already_asked: () => ({ ...NOT_ASKED, providerResponseCode: 'ALREADY_SOLICITED' }),
   amazon_off: () => ({ ...NOT_ASKED, providerResponseCode: 'NOT_IMPLEMENTED' }),
   email_off: () => ({ ...NOT_ASKED, providerResponseCode: 'EMAIL_OFF' }),
+  ebay_asks: () => ({ ...NOT_ASKED, providerResponseCode: EBAY_ASKS_CODE }),
   unknown_market: () => ({ ...NOT_ASKED, providerResponseCode: 'UNKNOWN_MARKETPLACE' }),
   window_closed: () => ({ OR: [{ ...NOT_ASKED, providerResponseCode: 'OUTSIDE_WINDOW' }, notAskedBy({ NOT: { suppressedReason: { startsWith: RULE_EXCLUSION_PREFIX } } }, sr('outside'), { OR: [sr('window'), sr('4-30'), sr('4–30')] })] }),
   do_not_email: () => ({ ...NOT_ASKED, providerResponseCode: 'SUPPRESSED' }),
@@ -610,16 +615,19 @@ export async function reviewSendingState(now = new Date()) {
   const checkFirst = { amazon: 0, email: 0 }
   for (const g of checkFirstGroups) {
     if (g.channel === 'AMAZON') checkFirst.amazon += g._count._all
-    else checkFirst.email += g._count._all
+    else if (g.channel !== 'EBAY') checkFirst.email += g._count._all
   }
   const paused = state?.isPaused
     ? { by: await personName(state.pausedBy), at: iso(state.pausedAt), reason: state.pausedReason ?? null }
     : null
   const amazonByMarket: Record<string, number> = {}
   const emailByChannel: Record<string, number> = {}
+  // eBay requests still waiting from before eBay buyers stopped getting our e-mail: the run closes them unasked.
+  let ebayDue = 0
   for (const g of due) {
     const n = g._count._all
     if (g.channel === 'AMAZON') amazonByMarket[g.marketplace ?? '—'] = (amazonByMarket[g.marketplace ?? '—'] ?? 0) + n
+    else if (g.channel === 'EBAY') ebayDue += n
     else emailByChannel[g.channel] = (emailByChannel[g.channel] ?? 0) + n
   }
   const total = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0)
@@ -647,6 +655,7 @@ export async function reviewSendingState(now = new Date()) {
     due: {
       amazon: { total: total(amazonByMarket), byMarket: amazonByMarket, checkFirst: checkFirst.amazon },
       email: { total: total(emailByChannel), byChannel: emailByChannel, checkFirst: checkFirst.email },
+      ebay: ebayDue,
     },
     runHeld: paused ? PAUSED_HELD : running ? RUNNING_HELD : null,
   }
@@ -898,7 +907,7 @@ export async function ruleStats(now = new Date()): Promise<{ byRule: Map<string,
 }
 
 export type RulesBulkAction = 'on' | 'off' | 'delete'
-const SCOPES_NEXUS_ASKS = ['AMAZON_PER_MARKETPLACE', 'AMAZON_GLOBAL', 'EBAY', 'SHOPIFY']
+const SCOPES_NEXUS_ASKS = ['AMAZON_PER_MARKETPLACE', 'AMAZON_GLOBAL', 'SHOPIFY']
 
 /** Which rules a bulk action changes and which it holds (with words). Pure. */
 export function rulesBulkPlan(
@@ -915,7 +924,8 @@ export function rulesBulkPlan(
     if (action === 'on') {
       if (r.isActive) { held.push({ id, words: `“${r.name}” is already on` }); continue }
       if (r.scope === 'AMAZON_PER_MARKETPLACE' && !r.marketplace) { held.push({ id, words: `“${r.name}” matches no orders: it has no market. Open it and pick one.` }); continue }
-      if (!SCOPES_NEXUS_ASKS.includes(r.scope)) { held.push({ id, words: `“${r.name}” matches no orders: Nexus asks only Amazon, eBay and Shopify buyers.` }); continue }
+      if (r.scope === 'EBAY') { held.push({ id, words: `“${r.name}” asks nobody: ${EBAY_RULE_WORDS}` }); continue }
+      if (!SCOPES_NEXUS_ASKS.includes(r.scope)) { held.push({ id, words: `“${r.name}” matches no orders: Nexus asks only Amazon and Shopify buyers.` }); continue }
     }
     if (action === 'off' && !r.isActive) { held.push({ id, words: `“${r.name}” is already off` }); continue }
     apply.push(id)
@@ -992,7 +1002,7 @@ export async function resolveEmailPick(raw: Record<string, unknown>): Promise<Em
   const kind = (text(raw.kind) || 'request') as ReviewEmailKind
   if (kind !== 'request' && kind !== 'check') throw new QueueInputError('Pick the review request email or the “How was it?” check.')
   const ruleId = text(raw.ruleId) || null
-  let channel = (text(raw.channel).toUpperCase() || 'EBAY') as EmailPick['channel']
+  let channel = (text(raw.channel).toUpperCase() || 'SHOPIFY') as EmailPick['channel']
   let market = text(raw.market).toUpperCase() || null
   if (ruleId) {
     const rule = await prisma.reviewRule.findUnique({ where: { id: ruleId }, select: { scope: true, marketplace: true } })
@@ -1001,6 +1011,8 @@ export async function resolveEmailPick(raw: Record<string, unknown>): Promise<Em
     if (rule.marketplace && !market) market = rule.marketplace
   }
   if (!['AMAZON', 'EBAY', 'SHOPIFY'].includes(channel)) throw new QueueInputError('Pick Amazon, eBay or Shopify.')
+  // eBay buyers get no e-mail from Nexus (Owner, 2026-10-27): nothing to preview or test.
+  if (channel === 'EBAY') throw new QueueInputError(EBAY_RULE_WORDS)
   const { resolveLocaleForMarketplace } = await import('./sentiment-check-email.service.js')
   const askedLocale = text(raw.locale).toLowerCase()
   const locale = kind === 'request'
@@ -1022,11 +1034,11 @@ async function sampleProduct(channel: string, market: string | null): Promise<{ 
 
 const webBase = () => (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '')
 
-/** The review button of the previewed e-mail: the market's eBay site, this business's own shop (review-links.service.ts). */
+/** The review button of the previewed e-mail: this business's own shop (review-links.service.ts). */
 async function previewLink(pick: EmailPick): Promise<string | null> {
   const { readShopReviewPage, reviewLinkFor } = await import('./review-links.service.js')
   const shop = pick.channel === 'SHOPIFY' ? await readShopReviewPage() : { url: null, source: null }
-  return reviewLinkFor(pick.channel, pick.market, shop)
+  return reviewLinkFor(pick.channel, shop)
 }
 
 /** GET /review-emails/preview — the e-mail a buyer would get, rendered (nothing is sent, nothing is written). */

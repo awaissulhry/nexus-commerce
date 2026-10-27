@@ -42,6 +42,7 @@ import { logger } from '../utils/logger.js'
 import { askForReviews, askSummaryWords } from '../services/reviews/review-request.service.js'
 import { FEATURES } from '@nexus/shared/permissions'
 import { findOrdersMatchingRule, queueOrdersForRule } from '../services/reviews/review-scheduler.service.js'
+import { EBAY_RULE_WORDS } from '../services/reviews/review-queue-words.js'
 import { assertAnyRequestPermission, requestUserId } from '../lib/auth/request-permission.js'
 import {
   bulkReviewQueue,
@@ -468,6 +469,8 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
       const sendWindows = await prisma.reviewSendWindow.findMany({ where: { isActive: true } })
       return {
         rule: { id: rule.id, name: rule.name, scope: rule.scope, marketplace: rule.marketplace },
+        // An eBay rule asks nobody (Owner, 2026-10-27): the Test run says why it lists no order.
+        held: rule.scope === 'EBAY' ? EBAY_RULE_WORDS : null,
         matchCount: matches.length,
         sample: matches.slice(0, 25).map((m: any) => {
           const r = resolveSendTiming(
@@ -539,8 +542,8 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
   // REQUESTS — manual one-offs
   // ═══════════════════════════════════════════════════════════════════
   // The Orders page's "Request review" (one order) and "Request reviews" (bulk): the ONE sender
-  // (review-request.service.ts askForReviews) — held while sending is paused, the rule's "How was it?" first, eBay and
-  // Shopify buyers get the rules' review e-mail. A review action: reviews.manage, or orders.edit as the Orders page
+  // (review-request.service.ts askForReviews) — held while sending is paused, the rule's "How was it?" first, Shopify
+  // buyers get the rules' review e-mail; an eBay order is held (eBay asks its buyers for feedback itself). A review action: reviews.manage, or orders.edit as the Orders page
   // always allowed (the manifest maps both to orders.view; this checks one of the two).
   fastify.post('/orders/:id/request-review', async (request, reply) => {
     try {

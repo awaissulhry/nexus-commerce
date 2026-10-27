@@ -550,9 +550,9 @@ function Queue() {
       </GridCard>
 
       <p className={s.footnote}>
-        {AMAZON_EMAIL_WORDS} Its text is fixed — Nexus only picks the day, and a “too early” answer is tried again each day. eBay and
-        Shopify buyers get our own email (<Button variant="link" inline onClick={() => setPreviewOpen(true)}>Preview email</Button>), also
-        once per order.
+        {AMAZON_EMAIL_WORDS} Its text is fixed — Nexus only picks the day, and a “too early” answer is tried again each day. Shopify
+        buyers get our own email (<Button variant="link" inline onClick={() => setPreviewOpen(true)}>Preview email</Button>), also once
+        per order. eBay buyers get no email from Nexus: eBay asks them for feedback itself.
       </p>
 
       {query && <ResultsCard period={query.results} onPeriod={onResults} />}

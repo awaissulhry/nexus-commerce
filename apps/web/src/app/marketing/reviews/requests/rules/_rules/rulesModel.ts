@@ -6,6 +6,7 @@
  * (review-queue.service.ts `rulesBulkPlan`). Pure; tested in rulesModel.vitest.test.ts.
  */
 import { COUNTRY_NAMES } from '@/app/_shared/app-nav'
+import { EBAY_NOT_EMAILED } from '../../../_lib/reviewWords'
 
 export interface RuleItem {
   id: string
@@ -46,8 +47,8 @@ export interface RulesAnswer {
   statsAll?: { sent30: number; rate30: number | null; rateWords: string | null } | null
 }
 
-/** The channels Nexus asks buyers on. Etsy asks its buyers itself. */
-export const ASKED_SCOPES = ['AMAZON_PER_MARKETPLACE', 'AMAZON_GLOBAL', 'EBAY', 'SHOPIFY'] as const
+/** The channels Nexus asks buyers on. Etsy and eBay ask their buyers themselves (eBay: Owner, 2026-10-27). */
+export const ASKED_SCOPES = ['AMAZON_PER_MARKETPLACE', 'AMAZON_GLOBAL', 'SHOPIFY'] as const
 
 const SCOPE_CHANNEL: Record<string, string> = {
   AMAZON_PER_MARKETPLACE: 'Amazon',
@@ -132,20 +133,23 @@ export function duplicateHeld(rule: Pick<RuleItem, 'name'>, rules: readonly Pick
 export function turnOnHeld(rule: Pick<RuleItem, 'name' | 'scope' | 'marketplace' | 'isActive'>): string | null {
   if (rule.isActive) return `“${rule.name}” is already on`
   if (isBroken(rule)) return `“${rule.name}” matches no orders: it has no market. Open it and pick one.`
-  if (!(ASKED_SCOPES as readonly string[]).includes(rule.scope)) return `“${rule.name}” matches no orders: Nexus asks only Amazon, eBay and Shopify buyers.`
+  if (rule.scope === 'EBAY') return `“${rule.name}” asks nobody: ${EBAY_NOT_EMAILED}`
+  if (!(ASKED_SCOPES as readonly string[]).includes(rule.scope)) return `“${rule.name}” matches no orders: Nexus asks only Amazon and Shopify buyers.`
   return null
 }
 
 export interface RuleWarning { id: string; title: string; detail: string }
 
-/** A warning per rule that matches no orders (no market, a channel Nexus does not ask, or none in 30 days). */
+/** A warning per rule that matches no orders (no market, a channel Nexus does not ask, or none in 30 days); every eBay rule. */
 export function noMatchWarnings(rules: readonly RuleItem[], statsRead: boolean): RuleWarning[] {
   const out: RuleWarning[] = []
   for (const r of rules) {
-    if (isBroken(r)) {
+    if (r.scope === 'EBAY') {
+      out.push({ id: r.id, title: `“${r.name}” is for eBay — eBay buyers are not e-mailed`, detail: `${EBAY_NOT_EMAILED} ${r.isActive ? 'Turn it off or delete it.' : 'Delete it, or keep it off.'}` })
+    } else if (isBroken(r)) {
       out.push({ id: r.id, title: `“${r.name}” has no market set — it matches no orders`, detail: 'Pick its market, or delete it if a rule for all markets already covers that market.' })
     } else if (r.isActive && !(ASKED_SCOPES as readonly string[]).includes(r.scope)) {
-      out.push({ id: r.id, title: `“${r.name}” is for ${channelWords(r)} — it matches no orders`, detail: 'Nexus asks only Amazon, eBay and Shopify buyers. Turn it off or delete it.' })
+      out.push({ id: r.id, title: `“${r.name}” is for ${channelWords(r)} — it matches no orders`, detail: 'Nexus asks only Amazon and Shopify buyers. Turn it off or delete it.' })
     } else if (r.isActive && statsRead && r.matched30 === 0) {
       out.push({ id: r.id, title: `“${r.name}” matched no orders in the last 30 days`, detail: 'Check its channel, market, product types and skips — or whether another rule wins its orders.' })
     }

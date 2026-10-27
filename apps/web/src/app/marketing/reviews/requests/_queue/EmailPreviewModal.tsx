@@ -1,11 +1,12 @@
 'use client'
 
 /**
- * Reviews › Requests › "Preview email" — our email to eBay and Shopify buyers, as the buyer sees it
+ * Reviews › Requests › "Preview email" — our email to Shopify buyers, as the buyer sees it
  * (`GET /api/review-emails/preview`: nothing is sent, nothing is written). Pickers: rule, market, language, and which
  * email (the review request, or the "How was it?" check). "Send a test to me" sends ONE real email to the signed-in
  * person (asks first; no order is touched). "Dry run" lists what the next run would send now (nothing is sent).
- * Amazon buyers never get this email: Amazon sends its own.
+ * Amazon buyers never get this email: Amazon sends its own. eBay buyers get no email from Nexus (Owner, 2026-10-27):
+ * an eBay rule or order shows that note instead of an email.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Mail, Play } from 'lucide-react'
@@ -13,7 +14,7 @@ import { Banner, Field, KeyValue, Listbox, Modal, SummaryTable, useActionConfirm
 import { Button, SegmentedControl, Skeleton } from '@/design-system/primitives'
 import Link from '@/lib/workspaces/Link'
 import { reviewsGet, reviewsSend } from '../../_lib/reviewsFetch'
-import { channelMarketWords } from '../../_lib/reviewWords'
+import { EBAY_NOT_EMAILED, channelMarketWords } from '../../_lib/reviewWords'
 import { rulePath } from '../requestsPaths'
 import { readQueuePage, type QueueRow, type SendingState } from './queueDatasource'
 import { marketName } from './queueTiles'
@@ -50,7 +51,7 @@ export function EmailPreviewModal({ onClose, canManage, sending }: EmailPreviewM
   const { toast } = useToast()
   const confirm = useActionConfirm()
   const [rules, setRules] = useState<RuleItem[] | null>(null)
-  const [pickRule, setPickRule] = useState<string>(NO_RULE_EBAY)
+  const [pickRule, setPickRule] = useState<string>(NO_RULE_SHOPIFY)
   const [market, setMarket] = useState('IT')
   const [kind, setKind] = useState<Kind>('request')
   const [locale, setLocale] = useState('it')
@@ -65,19 +66,24 @@ export function EmailPreviewModal({ onClose, canManage, sending }: EmailPreviewM
       if (!alive) return
       const email = (res.data?.items ?? []).filter((r) => r.scope === 'EBAY' || r.scope === 'SHOPIFY')
       setRules(email)
-      if (email.length) setPickRule(email.find((r) => r.isActive)?.id ?? email[0].id)
+      // Start on a Shopify rule: eBay buyers get no email from Nexus.
+      const shopify = email.filter((r) => r.scope === 'SHOPIFY')
+      if (shopify.length) setPickRule(shopify.find((r) => r.isActive)?.id ?? shopify[0].id)
     })
     return () => { alive = false }
   }, [])
 
   const rule = rules?.find((r) => r.id === pickRule) ?? null
-  const channel = rule ? rule.scope : pickRule === NO_RULE_SHOPIFY ? 'SHOPIFY' : 'EBAY'
+  const channel = rule ? rule.scope : pickRule === NO_RULE_EBAY ? 'EBAY' : 'SHOPIFY'
+  /** Nexus e-mails no eBay buyer: nothing to preview, test or dry-run for eBay. */
+  const ebay = channel === 'EBAY'
   const languages = LANGUAGES[kind]
   const lang = languages.some((l) => l.value === locale) ? locale : languages[0].value
   const key = `${kind}|${rule?.id ?? channel}|${market}|${lang}`
 
   const load = useCallback(async () => {
     abort.current?.abort()
+    if (ebay) return
     const controller = new AbortController()
     abort.current = controller
     try {
@@ -86,7 +92,7 @@ export function EmailPreviewModal({ onClose, canManage, sending }: EmailPreviewM
     } catch {
       // aborted
     }
-  }, [kind, rule, channel, market, lang, key])
+  }, [kind, rule, channel, market, lang, key, ebay])
   useEffect(() => {
     void load()
     return () => abort.current?.abort()
@@ -94,8 +100,8 @@ export function EmailPreviewModal({ onClose, canManage, sending }: EmailPreviewM
 
   const ruleOptions = useMemo(() => [
     ...(rules ?? []).map((r) => ({ value: r.id, label: `${r.name}${r.isActive ? '' : ' (off)'}` })),
-    { value: NO_RULE_EBAY, label: 'No rule — an eBay order' },
     { value: NO_RULE_SHOPIFY, label: 'No rule — a Shopify order' },
+    { value: NO_RULE_EBAY, label: 'No rule — an eBay order (no email)' },
   ], [rules])
 
   const sendTest = useCallback(async () => {
@@ -122,7 +128,7 @@ export function EmailPreviewModal({ onClose, canManage, sending }: EmailPreviewM
 
   const current = preview && preview.key === key ? preview : null
   const p = current?.data ?? null
-  const testHeld = !canManage ? "You need 'Manage reviews' to send a test email." : busy === 'test' ? 'Sending…' : !p ? 'The preview is still loading.' : null
+  const testHeld = ebay ? EBAY_NOT_EMAILED : !canManage ? "You need 'Manage reviews' to send a test email." : busy === 'test' ? 'Sending…' : !p ? 'The preview is still loading.' : null
 
   return (
     <>
@@ -131,7 +137,7 @@ export function EmailPreviewModal({ onClose, canManage, sending }: EmailPreviewM
       onClose={onClose}
       size="xl"
       title="Preview email"
-      subtitle="Our email to eBay and Shopify buyers, as the buyer sees it"
+      subtitle="Our email to Shopify buyers, as the buyer sees it"
       footer={(
         <>
           {rule && (
@@ -164,7 +170,9 @@ export function EmailPreviewModal({ onClose, canManage, sending }: EmailPreviewM
           {AMAZON_EMAIL_WORDS} Its text cannot be changed or previewed here.
         </Banner>
 
-        {current?.error ? (
+        {ebay ? (
+          <Banner tone="info" title="eBay buyers get no email from Nexus">{EBAY_NOT_EMAILED}</Banner>
+        ) : current?.error ? (
           <Banner tone="danger" title="Could not show this email" action={<Button size="sm" onClick={() => void load()}>Try again</Button>}>
             {current.error}
           </Banner>
@@ -201,10 +209,10 @@ export function EmailPreviewModal({ onClose, canManage, sending }: EmailPreviewM
           <section className={s.tool} aria-label="Dry run">
             <h3 className={s.sectionHead}>Dry run</h3>
             <p className={s.muted}>What the next run would send now on {channelMarketWords(channel)} — nothing is sent.</p>
-            <Button size="sm" onClick={() => void dryRun()} heldReason={busy === 'dry' ? 'Reading…' : null}>
+            <Button size="sm" onClick={() => void dryRun()} heldReason={ebay ? EBAY_NOT_EMAILED : busy === 'dry' ? 'Reading…' : null}>
               <Play size={13} aria-hidden /> Run
             </Button>
-            {dry && (dry.error ? (
+            {dry && !ebay && (dry.error ? (
               <p className={s.errorText}>{dry.error}</p>
             ) : (
               <>

@@ -64,6 +64,14 @@ describe('rules that match no orders', () => {
     ])
     expect(noMatchWarnings(rules, false)).toHaveLength(2)
   })
+
+  it('every eBay rule says eBay buyers are not e-mailed, on or off (Owner, 2026-10-27)', () => {
+    const warnings = noMatchWarnings([rule('on', { name: 'eBay on', scope: 'EBAY' }), rule('off', { name: 'eBay off', scope: 'EBAY', isActive: false })], true)
+    expect(warnings.map((w) => w.title)).toEqual(['“eBay on” is for eBay — eBay buyers are not e-mailed', '“eBay off” is for eBay — eBay buyers are not e-mailed'])
+    expect(warnings[0].detail).toBe('eBay buyers are not e-mailed — eBay asks its buyers for feedback itself, so no rule can e-mail them. Turn it off or delete it.')
+    expect(warnings[1].detail).toMatch(/Delete it, or keep it off\.$/)
+    expect(turnOnHeld(rule('x', { isActive: false, scope: 'EBAY', name: 'eBay' }))).toBe('“eBay” asks nobody: eBay buyers are not e-mailed — eBay asks its buyers for feedback itself, so no rule can e-mail them.')
+  })
 })
 
 describe('rules tiles', () => {
@@ -92,7 +100,7 @@ describe('rules bulk bar', () => {
     const off = rulesBulkPlan([rule('a', { isActive: false }), rule('b', { isActive: false })], 'off')
     expect(rulesBulkHeld(off, 'off')).toBe('Nothing to be turned off: “Rule a” is already off (and 1 more)')
     expect(rulesBulkPlan([rule('a'), rule('b')], 'delete').apply).toEqual(['a', 'b'])
-    expect(turnOnHeld(rule('x', { isActive: false, scope: 'ETSY', name: 'Etsy' }))).toBe('“Etsy” matches no orders: Nexus asks only Amazon, eBay and Shopify buyers.')
+    expect(turnOnHeld(rule('x', { isActive: false, scope: 'ETSY', name: 'Etsy' }))).toBe('“Etsy” matches no orders: Nexus asks only Amazon and Shopify buyers.')
   })
 
   it('says what the server changed', () => {

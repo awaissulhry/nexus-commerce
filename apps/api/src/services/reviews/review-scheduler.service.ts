@@ -29,7 +29,7 @@ import { randomBytes } from 'node:crypto'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { resolveSendTiming, type TimingDefaultRow, type SendWindowRow } from './review-timing.service.js'
-import { RULE_EXCLUSION_PREFIX } from './review-queue-words.js'
+import { EBAY_ASKS_CODE, EBAY_ASKS_WORDS, RULE_EXCLUSION_PREFIX } from './review-queue-words.js'
 
 // Active-return statuses suppress review requests — mirrored from
 // orders-reviews.routes.ts. Refunds suppress too (financialTransactions).
@@ -228,6 +228,23 @@ function pickBestRule(rules: any[], order: MatchableOrder): any | null {
 }
 
 /**
+ * The request an eBay order gets (Owner, 2026-10-27): not asked, with its reason. Nexus e-mails no eBay buyer — eBay's
+ * rules restrict contacting buyers outside eBay, and eBay asks its buyers for feedback itself — so no rule and no
+ * "How was it?" check applies. Shown on Reviews › Requests as "Not sent — eBay asks the buyer for feedback itself".
+ */
+export function ebayNotAskedData(order: { id: string; channel: string; marketplace: string | null }, ruleId: string | null = null) {
+  return {
+    orderId: order.id,
+    channel: order.channel as any,
+    marketplace: order.marketplace,
+    status: 'SKIPPED' as const,
+    providerResponseCode: EBAY_ASKS_CODE,
+    suppressedReason: EBAY_ASKS_WORDS,
+    ruleId,
+  }
+}
+
+/**
  * The request the scheduler makes for an order: SCHEDULED at `scheduledFor`, linked to the deciding rule, and — when
  * that rule asks "How was it?" first and the order has a buyer e-mail — the paired check the sender sends before the
  * request (RV.6.4). Also used by the Orders page's "Request review" and Claude's `request-review`
@@ -238,6 +255,11 @@ export async function createScheduledRequest(
   rule: { id: string; useSentimentDiversion?: boolean | null } | null,
   scheduledFor: Date,
 ): Promise<{ id: string; diversion: boolean }> {
+  // An eBay order is never asked by e-mail (ebayNotAskedData): recorded as not asked, whoever asks.
+  if (order.channel === 'EBAY') {
+    const skipped = await prisma.reviewRequest.create({ data: ebayNotAskedData(order, rule?.id ?? null) })
+    return { id: skipped.id, diversion: false }
+  }
   const diversion = rule?.useSentimentDiversion === true && !!order.customerEmail
   const created = await prisma.reviewRequest.create({
     data: {
@@ -315,7 +337,7 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
     where: {
       deliveredAt: { gte: since, not: null },
       reviewRequests: { none: {} },
-      // Only channels we can action — Amazon (Solicitations) + eBay/Shopify (email)
+      // Amazon (Solicitations), Shopify (our e-mail), and eBay — recorded as not asked: eBay asks its buyers itself.
       channel: { in: ['AMAZON', 'EBAY', 'SHOPIFY'] },
     },
     select: {
@@ -356,6 +378,14 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
     result.examined += 1
     try {
       if (!order.deliveredAt) {
+        result.skipped += 1
+        continue
+      }
+
+      // Owner, 2026-10-27: Nexus e-mails no eBay buyer — eBay asks them for feedback itself. The order's request is
+      // recorded as not asked, with that reason, before any rule (no rule and no "How was it?" check can change it).
+      if (order.channel === 'EBAY') {
+        await prisma.reviewRequest.create({ data: ebayNotAskedData(order) })
         result.skipped += 1
         continue
       }
@@ -459,6 +489,8 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
  * It does not ask whether a more specific rule would decide the order instead.
  */
 export async function findOrdersMatchingRule(rule: any) {
+  // An eBay rule asks nobody: Nexus e-mails no eBay buyer (Owner, 2026-10-27; review-queue-words.ts EBAY_RULE_WORDS).
+  if (rule.scope === 'EBAY') return []
   let channelClause: any = {}
   switch (rule.scope) {
     case 'AMAZON_GLOBAL': channelClause = { channel: 'AMAZON' }; break

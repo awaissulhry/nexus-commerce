@@ -5,7 +5,8 @@
  *
  *   request-review  — through the ONE sender (audit E5): Amazon 5–30 days after its delivery date (Nexus tries from
  *                     day 4 of its own), never with an open return, once per order; dry run or live as the switch
- *                     says; eBay and Shopify buyers get our review e-mail (no longer refused); held while sending is
+ *                     says; Shopify buyers get our review e-mail (no longer refused); an eBay order is held — Nexus
+ *                     e-mails no eBay buyer, eBay asks itself (Owner, 2026-10-27), nothing written; held while sending is
  *                     paused; a return opened after the approval refuses the run and Amazon is not called; needs
  *                     reviews.manage only; never confirm or auto; cannot be undone.
  *   reply-to-review — eBay only, at most 500 characters, one reply per feedback, refused while eBay replies are off;
@@ -108,21 +109,26 @@ describe('request-review (07 O13, audit E5)', () => {
     vi.unstubAllEnvs()
   })
 
-  it('Amazon\'s 5–30 days, an open return, and eBay and Shopify buyers get our review e-mail (no longer refused)', async () => {
+  it('Amazon\'s 5–30 days, an open return, Shopify buyers get our review e-mail, eBay buyers none', async () => {
     expect((await dryRun('request-review', { orderId: await order({ deliveredAt: daysAgo(2) }) })).error).toMatch(/Too early: Amazon allows a request 5–30 days after its delivery date/)
     expect((await dryRun('request-review', { orderId: await order({ deliveredAt: daysAgo(40) }) })).error).toMatch(/Past Amazon’s day 30/)
     expect((await dryRun('request-review', { orderId: await order({ deliveredAt: null }) })).error).toMatch(/Not delivered yet/)
     const returning = await order()
     await inside(() => database.client.return.create({ data: { orderId: returning, channel: 'AMAZON', rmaNumber: `TEST-O13-RMA-${++seq}`, status: 'AUTHORIZED' } as never }))
     expect((await dryRun('request-review', { orderId: returning })).error).toMatch(/A return is open/)
-    const ebay = await dryRun('request-review', { orderId: await order({ channel: 'EBAY' }) })
-    expect(ebay.preview).toMatchObject({ request: expect.stringMatching(/^Nexus's review e-mail/), mode: expect.stringMatching(/^dry run: e-mail sending is switched off/) })
+    // Nexus e-mails no eBay buyer (Owner, 2026-10-27): held in the queue's words, nothing written.
+    const ebayId = await order({ channel: 'EBAY' })
+    const ebay = await dryRun('request-review', { orderId: ebayId })
+    expect(ebay.ok).toBe(false)
+    expect(ebay.error).toMatch(/^Order .*: Not sent — eBay asks the buyer for feedback itself\. Nothing was queued\.$/)
+    expect(await requestsOf(ebayId)).toEqual([])
     const shopifyId = await order({ channel: 'SHOPIFY' })
     const shopify = await dryRun('request-review', { orderId: shopifyId })
     expect(shopify.preview.request).toMatch(/honest review/)
     // E-mail switched off here: the request is recorded as not sent, never as "wire a third-party app first".
     expect((await run('request-review', { orderId: shopifyId }, shopify.preview)).data).toMatchObject({ outcome: 'not_sent', words: 'Not sent — our email sending is switched off on this server' })
-    expect((await dryRun('request-review', { orderId: await order({ channel: 'EBAY', customerEmail: '' }) })).error).toMatch(/no buyer e-mail/)
+    expect((await dryRun('request-review', { orderId: await order({ channel: 'SHOPIFY', customerEmail: '' }) })).error).toMatch(/no buyer e-mail/)
+    expect(getTool('request-review')?.description).toMatch(/eBay orders are not asked: eBay asks its buyers for feedback itself/)
   })
 
   it('held while sending is paused on Reviews › Requests: nothing is queued (audit B12)', async () => {

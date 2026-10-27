@@ -7,9 +7,11 @@
  *   1. Schedule any newly-delivered orders that have no ReviewRequest yet
  *      (delegates to review-scheduler.service.ts).
  *   2. Find ReviewRequest rows with status='SCHEDULED' and scheduledFor ≤ now().
- *   3. For non-Amazon channels (eBay, Shopify): send the email template
- *      and mark SENT (or FAILED). Its review button goes to the order's own eBay site or the business's own shop
- *      (review-links.service.ts); without a shop it has no button.
+ *   3. For Shopify: send the email template and mark SENT (or FAILED). Its review button goes to the business's own
+ *      shop (review-links.service.ts); without a shop it has no button.
+ *      eBay: never e-mailed (Owner, 2026-10-27 — eBay's rules restrict contacting buyers outside eBay, and eBay asks
+ *      its buyers for feedback itself): an eBay request ends not asked (EBAY_ASKS) before any e-mail, the "How was
+ *      it?" check included.
  *   4. For Amazon: fire the Solicitations API call; check the 4-30d window
  *      is still valid first (before day 4 the row waits for day 4).
  *
@@ -39,7 +41,7 @@ import {
 } from '../services/reviews/amazon-solicitations.service.js'
 import { sendSentimentCheckEmail, resolveLocaleForMarketplace } from '../services/reviews/sentiment-check-email.service.js'
 import { readReviewMailerState } from '../services/reviews/review-mailer-state.service.js'
-import { MAX_TRIES, RETRY_BACKOFF_HOURS } from '../services/reviews/review-queue-words.js'
+import { EBAY_ASKS_CODE, EBAY_ASKS_WORDS, MAX_TRIES, RETRY_BACKOFF_HOURS } from '../services/reviews/review-queue-words.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -213,15 +215,27 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
   let sentimentEmailsSent = 0
   // The business's own shop review page, read once per run when a Shopify buyer is e-mailed (review-links.service.ts).
   let shopPage: ShopReviewPage | null = null
-  const reviewLink = async (channel: string, marketplace: string | null) => {
+  const reviewLink = async (channel: string) => {
     if (channel === 'SHOPIFY' && !shopPage) shopPage = await readShopReviewPage().catch(() => ({ url: null, source: null }))
-    return reviewLinkFor(channel, marketplace, shopPage ?? { url: null, source: null })
+    return reviewLinkFor(channel, shopPage ?? { url: null, source: null })
   }
 
   for (const req of due) {
     const order = req.order
     const attemptCount = req.attemptCount + 1
     const sentimentCheck = req.sentimentCheck
+
+    // Nexus e-mails no eBay buyer (Owner, 2026-10-27): eBay asks them for feedback itself. A request queued before that
+    // (or one put back by hand) ends not asked here, before any e-mail — the "How was it?" check included.
+    if (order.channel === 'EBAY') {
+      await prisma.reviewRequest.update({
+        where: { id: req.id },
+        data: { status: 'SKIPPED', providerResponseCode: EBAY_ASKS_CODE, suppressedReason: EBAY_ASKS_WORDS, nextRetryAt: null },
+      })
+      skipped += 1
+      tally(order, 'skipped')
+      continue
+    }
 
     // RV.6.4 — sentiment diversion branch. Fires BEFORE any Solicitations
     // call. State machine:
@@ -440,7 +454,7 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
           tally(order, 'failed')
         }
       } else {
-        // eBay / Shopify — send our own email
+        // Shopify — send our own email (eBay never gets here: above)
         if (!order.customerEmail) {
           await prisma.reviewRequest.update({
             where: { id: req.id },
@@ -459,7 +473,7 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
           marketplace: order.marketplace,
           productName: firstProduct?.name ?? null,
           productType: firstProduct?.productType ?? null,
-          reviewUrl: await reviewLink(order.channel, order.marketplace),
+          reviewUrl: await reviewLink(order.channel),
           locale: (order.marketplace ?? 'IT').toUpperCase() === 'IT' ? 'it' : 'en',
         })
         if (result.dryRun) {

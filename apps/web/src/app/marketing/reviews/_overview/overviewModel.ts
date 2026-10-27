@@ -348,6 +348,7 @@ export function channelViewRows(rows: readonly OverviewChannelRow[], now: number
   const out = rows.map((r): ChannelViewRow => {
     const amazon = r.channel === 'AMAZON'
     const etsy = r.channel === 'ETSY'
+    const ebay = r.channel === 'EBAY'
     return {
       id: `${r.channel}|${r.market ?? ''}`,
       label: channelMarketWords(r.channel, r.market),
@@ -358,8 +359,9 @@ export function channelViewRows(rows: readonly OverviewChannelRow[], now: number
       noAmazonData: amazon && r.rating == null,
       reviews: amazon && r.rating == null && r.reviews === 0 ? '—' : count(r.reviews),
       change: changeView(r.change, r.ratingKind),
-      sent: r.sent == null ? '—' : count(r.sent),
-      sentNote: etsy ? 'Etsy asks buyers itself' : !amazon && (r.sent ?? 0) > 0 ? 'by email' : null,
+      sent: r.sent == null || (ebay && r.sent === 0) ? '—' : count(r.sent),
+      // eBay asks its buyers itself: Nexus e-mails no eBay buyer (Owner, 2026-10-27); a number is e-mails sent before.
+      sentNote: etsy ? 'Etsy asks buyers itself' : ebay ? ((r.sent ?? 0) > 0 ? 'earlier e-mails; eBay asks buyers itself' : 'eBay asks buyers itself') : !amazon && (r.sent ?? 0) > 0 ? 'by email' : null,
       // No rate where no review can follow (the API's words): "Not measurable", never a 0 %.
       rate: r.rate == null && (r.sent ?? 0) > 0 && r.rateWords ? 'Not measurable' : rateText(r.rate),
       state: r.state,

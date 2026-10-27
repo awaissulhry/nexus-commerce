@@ -164,7 +164,7 @@ export function ChannelTable({ rows, error, loading, period, onRetry }: ChannelT
         </div>
       )}
       <p className={s.footnote}>
-        Etsy sends its own review reminder, so Nexus sends no requests there. eBay shows the share of positive feedback, not stars. Amazon stars come only from reviews you imported.
+        Etsy and eBay ask their buyers for feedback themselves, so Nexus sends no requests there. eBay shows the share of positive feedback, not stars. Amazon stars come only from reviews you imported.
       </p>
     </Card>
   )

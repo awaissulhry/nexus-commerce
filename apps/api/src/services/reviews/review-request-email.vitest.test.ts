@@ -1,5 +1,5 @@
 /**
- * Reviews — our review e-mail to eBay and Shopify buyers asks every buyer the same way for an HONEST review (Owner,
+ * Reviews — our review e-mail to Shopify buyers asks every buyer the same way for an HONEST review (Owner,
  * 2026-10-27; audit E1; CHANNEL-FACTS 5a, 5b, 6). Never "contact us first", never "don't leave a negative review",
  * never a positive-only ask; no button (and no `#`) without a review page. Pure renderer.
  */
@@ -8,8 +8,8 @@ import { xaviaIdentity, type BusinessIdentity } from '../business-identity.servi
 import { renderReviewRequestEmail, type ReviewEmailContext } from './review-request-email.service.js'
 
 const other: BusinessIdentity = { ...xaviaIdentity(), xavia: false, workspaceId: 'b', brandName: 'Test Moto', brandMark: 'TEST MOTO', supportEmail: 'help@testmoto.example', unsubscribeEmail: 'help@testmoto.example' }
-const ctx = (locale: 'it' | 'en', reviewUrl: string | null = 'https://www.ebay.de/fdbk/leave_feedback'): ReviewEmailContext => ({
-  to: 'buyer@example.test', customerName: 'Test Buyer', channelOrderId: 'TEST-1', channel: 'EBAY', marketplace: 'DE',
+const ctx = (locale: 'it' | 'en', reviewUrl: string | null = 'https://shop.example.test/pages/reviews'): ReviewEmailContext => ({
+  to: 'buyer@example.test', customerName: 'Test Buyer', channelOrderId: 'TEST-1', channel: 'SHOPIFY', marketplace: 'DE',
   productName: 'Test Jacket', productType: 'giacca', reviewUrl, locale,
 })
 const FORBIDDEN = [/contact us first/i, /before you leave a review/i, /contattaci/i, /non lasciare/i, /negativ/i, /positive review/i, /5[- ]star/i, /recensione positiva/i, /href="#"/]
@@ -21,7 +21,7 @@ describe('review request e-mail', () => {
         const mail = renderReviewRequestEmail(ctx(locale), identity)
         for (const text of [mail.subject, mail.html, mail.text]) for (const bad of FORBIDDEN) expect(text).not.toMatch(bad)
         expect(mail.html).toMatch(locale === 'it' ? /opinione sincera/ : /share your honest feedback by leaving a review/)
-        expect(mail.html).toContain('href="https://www.ebay.de/fdbk/leave_feedback"')
+        expect(mail.html).toContain('href="https://shop.example.test/pages/reviews"')
         expect(mail.html).toContain(locale === 'it' ? 'Per domande sul tuo ordine' : 'Questions about your order?')
         expect(mail.html).toContain(identity.brandMark)
       })

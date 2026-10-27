@@ -4,16 +4,16 @@
  * Italian for Italy, English for every other market (the only two texts there are). productType-aware: the copy
  * names the qualities a buyer can judge for what was bought.
  *
- * Only used for non-Amazon orders (eBay, Shopify). Amazon customers are
- * reached via the Amazon Solicitations API (D.7) — sending our own email
- * to Amazon buyers violates their messaging policy.
+ * Only used for Shopify orders. Amazon customers are reached via the Amazon Solicitations API (D.7) — sending our
+ * own email to Amazon buyers violates their messaging policy. eBay buyers get no e-mail from Nexus (Owner,
+ * 2026-10-27): eBay's rules restrict contacting buyers outside eBay, and eBay asks them for feedback itself.
  *
  * Neutral by rule (Owner, 2026-10-27; CHANNEL-FACTS 5a, 5b, 6): every buyer is asked the same way for an honest
  * review. The text never asks for a positive review and never sends an unhappy buyer to us "before" a review; the
  * support address in the footer is about the order, not about the review.
  *
- * The review button appears only when there is a review page for the order (the eBay site of the order's market, the
- * business's own shop); without one the e-mail has no button and no link — never a dead `#` link.
+ * The review button appears only when there is a review page for the order (the business's own shop); without one the
+ * e-mail has no button and no link — never a dead `#` link.
  *
  * sendReviewRequestEmail() sends; renderReviewRequestEmail() is the same e-mail for the Preview (no send). Sending is
  * switched off on a server that does not send e-mail (the transport answers a dry run).
@@ -31,7 +31,7 @@ export interface ReviewEmailContext {
   /** Product that most benefits from a review (first item in order). */
   productName: string | null
   productType: string | null
-  /** Where the buyer leaves the review (review-links.service.ts): the order's eBay site, the business's own shop; null = no button. */
+  /** Where the buyer leaves the review (review-links.service.ts): the business's own shop; null = no button. */
   reviewUrl: string | null
   locale?: 'it' | 'en'
 }

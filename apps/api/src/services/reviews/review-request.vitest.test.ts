@@ -20,9 +20,17 @@ describe('orderAskPlan', () => {
     expect(orderAskPlan(order({ channel: 'SHOPIFY', marketplace: null }), null, NOW)).toEqual({ kind: 'create' })
   })
 
-  it('eBay and Shopify buyers get our e-mail — never a permanent "skipped" (A1); only a missing e-mail holds it', () => {
-    expect(orderAskPlan(order({ channel: 'EBAY', deliveredAt: days(60) }), null, NOW)).toEqual({ kind: 'create' })
+  it('Shopify buyers get our e-mail — never a permanent "skipped" (A1); only a missing e-mail holds it', () => {
+    expect(orderAskPlan(order({ channel: 'SHOPIFY', deliveredAt: days(60) }), null, NOW)).toEqual({ kind: 'create' })
     expect(orderAskPlan(order({ channel: 'SHOPIFY', customerEmail: ' ' }), null, NOW)).toEqual({ kind: 'held', words: 'The order has no buyer e-mail, so our review e-mail cannot go.' })
+  })
+
+  it('an eBay order is held in the queue\'s words, whatever its state: eBay asks the buyer itself (Owner, 2026-10-27)', () => {
+    const words = 'Not sent — eBay asks the buyer for feedback itself.'
+    expect(orderAskPlan(order({ channel: 'EBAY', deliveredAt: days(10) }), null, NOW)).toEqual({ kind: 'held', words })
+    expect(orderAskPlan(order({ channel: 'EBAY', customerEmail: null }), null, NOW)).toEqual({ kind: 'held', words })
+    expect(orderAskPlan(order({ channel: 'EBAY' }), request('SCHEDULED', { channel: 'EBAY', scheduledFor: days(-3) }), NOW)).toEqual({ kind: 'held', words })
+    expect(orderAskPlan(order({ channel: 'EBAY' }), request('SKIPPED', { channel: 'EBAY', providerResponseCode: 'EBAY_ASKS' }), NOW)).toEqual({ kind: 'held', words })
   })
 
   it('Amazon in Amazon\'s words: 5–30 days after its delivery date; Nexus first tries on day 4 (B11)', () => {
@@ -37,7 +45,7 @@ describe('orderAskPlan', () => {
     expect(orderAskPlan(order({ hasRefund: true }), null, NOW)).toMatchObject({ kind: 'held', words: 'The order was refunded — refunded buyers are not asked.' })
     expect(orderAskPlan(order({ isCancelled: true }), null, NOW)).toMatchObject({ kind: 'held' })
     expect(orderAskPlan(order({ deliveredAt: null }), null, NOW)).toMatchObject({ kind: 'held', words: 'Not delivered yet — a review is asked for after delivery.' })
-    expect(orderAskPlan(order({ channel: 'ETSY' }), null, NOW)).toMatchObject({ kind: 'held', words: 'Nexus asks for reviews only on Amazon, eBay and Shopify orders.' })
+    expect(orderAskPlan(order({ channel: 'ETSY' }), null, NOW)).toMatchObject({ kind: 'held', words: 'Nexus asks for reviews only on Amazon and Shopify orders.' })
   })
 
   it('one request per order: a sent one holds; a waiting one is made due; a "How was it?" check waiting holds', () => {
@@ -54,7 +62,7 @@ describe('orderAskPlan', () => {
       .toEqual({ kind: 'again', requestId: 'r1' })
     expect(orderAskPlan(order(), request('SKIPPED', { providerResponseCode: 'ALREADY_SOLICITED' }), NOW))
       .toMatchObject({ kind: 'held', words: expect.stringMatching(/Amazon already asked this buyer — one request per order/) })
-    expect(orderAskPlan(order({ channel: 'EBAY' }), request('SKIPPED', { channel: 'EBAY', providerResponseCode: 'SUPPRESSED', suppressedReason: 'Suppressed: suppressed (UNSUBSCRIBE)' }), NOW))
+    expect(orderAskPlan(order({ channel: 'SHOPIFY' }), request('SKIPPED', { channel: 'SHOPIFY', providerResponseCode: 'SUPPRESSED', suppressedReason: 'Suppressed: suppressed (UNSUBSCRIBE)' }), NOW))
       .toMatchObject({ kind: 'held', words: expect.stringMatching(/do-not-email list/) })
   })
 })

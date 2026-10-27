@@ -86,7 +86,8 @@ export function ResultsCard({ period, onPeriod }: ResultsCardProps) {
           <MetricStrip metrics={metrics} minTileWidth={150} />
           <p className={s.muted}>
             Amazon gives no review count and does not say which buyer wrote a review, so its rate counts the reviews you imported and
-            is an estimate. eBay feedback counts when Nexus has linked it to its order. “—” where nothing was sent; “Not measurable”
+            is an estimate. eBay buyers get no request from Nexus (eBay asks them itself); feedback after an earlier e-mail counts
+            when Nexus has linked it to its order. “—” where nothing was sent; “Not measurable”
             where no review can be matched yet.{a.overall.words ? ` ${a.overall.words}` : ''}
           </p>
           <div className={s.resultTables}>

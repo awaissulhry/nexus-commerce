@@ -26,6 +26,8 @@ export interface DryRunSample {
 
 export interface DryRun {
   rule: { id: string; name: string }
+  /** Why this rule asks nobody (an eBay rule: eBay asks its buyers itself); null otherwise. */
+  held?: string | null
   matchCount: number
   sample: DryRunSample[]
 }
@@ -111,6 +113,8 @@ export function TestRunModal({ rules, onClose, canManage }: TestRunModalProps) {
                   <Banner tone="danger" title="The test run failed" action={<Button size="sm" onClick={() => void run(rule.id)}>Try again</Button>}>{result.error}</Banner>
                 ) : !data ? (
                   <Skeleton height={120} />
+                ) : data.held ? (
+                  <Banner tone="info" title="This rule asks nobody">{data.held}</Banner>
                 ) : (
                   <>
                     <p className={s.bigNumber}>

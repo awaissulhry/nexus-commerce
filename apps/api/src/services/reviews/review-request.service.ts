@@ -5,15 +5,16 @@
  * None of them calls Amazon or sends an e-mail itself any more. Each:
  *   1. is held, with nothing written, while sending is paused on Reviews › Requests or a run is going on;
  *   2. checks the order in words (`orderAskPlan`): delivered, not cancelled, no open return, no refund; Amazon 5–30
- *      days after ITS delivery date (Nexus first tries on day 4 of its own estimate, as the queue does); eBay and
- *      Shopify need a buyer e-mail; one request per order;
+ *      days after ITS delivery date (Nexus first tries on day 4 of its own estimate, as the queue does); Shopify needs
+ *      a buyer e-mail; one request per order. An eBay order is held, with nothing written: Nexus e-mails no eBay buyer
+ *      (Owner, 2026-10-27 — eBay asks its buyers for feedback itself);
  *   3. queues the order's request due now — a request already waiting is made due; a request that was not asked is
  *      allowed again only where "Allow again" would allow it; a new one is made as the scheduler makes it, by the
  *      rule that decides the order (its "Skip when" holds it, its "How was it?" check goes first);
  *   4. runs the sender for exactly those requests (`runReviewQueueNow({ onlyIds })`, as "Send now" does) and answers
  *      what happened to each, in words (`reasonOf`): Amazon accepted, our e-mail went out, "How was it?" sent first,
  *      sending switched off on this server, …
- * So eBay and Shopify buyers get the rules' review e-mail instead of a permanent "skipped", and the pause switch, the
+ * So Shopify buyers get the rules' review e-mail instead of a permanent "skipped", and the pause switch, the
  * rule's check and the do-not-email list apply to every way in.
  *
  * `suppressReviewRequestsForRefund` (a refund in Nexus stops the order's waiting requests) lives here too.
@@ -24,6 +25,7 @@ import { amazonMarketplaceIdFor } from './amazon-solicitations.service.js'
 import {
   AMAZON_FIRST_DAY,
   AMAZON_LAST_DAY,
+  EBAY_ASKS_WORDS,
   EXCLUSION_REASON,
   REASON_FACET_WORDS,
   allowAgainHeldFor,
@@ -49,8 +51,8 @@ export const ACTIVE_RETURN_STATUSES = ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 
 export const PENDING_REVIEW_REQUEST_STATUSES = ['ELIGIBLE', 'SCHEDULED', 'FAILED'] as const
 /** Orders one bulk "Request reviews" may ask at once. */
 const ASK_MAX_ORDERS = 200
-/** The channels Nexus asks buyers on: Amazon (its own request), eBay and Shopify (our review e-mail). */
-const ASKED_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY'] as const
+/** The channels Nexus asks buyers on: Amazon (its own request) and Shopify (our review e-mail). eBay asks its own. */
+const ASKED_CHANNELS = ['AMAZON', 'SHOPIFY'] as const
 
 /**
  * A return of this order was refunded in Nexus: its review requests that have not gone out are suppressed (2026-10-02;
@@ -104,7 +106,9 @@ const NOT_ASKED = new Set(['SKIPPED', 'SUPPRESSED'])
 export function orderAskPlan(order: AskOrderFacts, existing: (HeldFacts & { id: string }) | null, now: Date): AskPlan {
   const held = (words: string): AskPlan => ({ kind: 'held', words })
   const channel = order.channel.toUpperCase()
-  if (!(ASKED_CHANNELS as readonly string[]).includes(channel)) return held('Nexus asks for reviews only on Amazon, eBay and Shopify orders.')
+  // Nexus e-mails no eBay buyer (Owner, 2026-10-27): the same words as the queue's, held, nothing written.
+  if (channel === 'EBAY') return held(`${EBAY_ASKS_WORDS}.`)
+  if (!(ASKED_CHANNELS as readonly string[]).includes(channel)) return held('Nexus asks for reviews only on Amazon and Shopify orders.')
   if (order.isCancelled) return held('The order is cancelled — no review is asked for.')
   if (!order.deliveredAt) return held('Not delivered yet — a review is asked for after delivery.')
   if (order.hasOpenReturn) return held('A return is open — no review is asked for.')
