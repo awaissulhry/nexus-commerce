@@ -614,16 +614,12 @@ function InboxInner() {
         </GridCard>
       )}
 
-      {/* ⛔ KEEP — placeholder (build spec ruling 3): Amazon seller feedback (Phase 3, PR H), Etsy reviews (PR I) and eBay
-          photos (PR G) are not read yet. Two labelled sample rows show where they will appear; they are not reviews. */}
+      {/* ⛔ KEEP — placeholder (build spec ruling 3): Etsy reviews (PR I) and eBay photos (PR G) are not read yet. A
+          labelled sample row shows where they will appear; it is not a review. (Amazon seller feedback is read since PR H
+          and shows in the list above, under Seller feedback.) */}
       <Card header="Coming later" headerAction={<Pill tone="neutral">Sample</Pill>}>
-        <p className={s.hint}>Amazon seller feedback, Etsy reviews and eBay photos arrive in later updates. These rows show how they will look; they are samples, not your reviews.</p>
+        <p className={s.hint}>Etsy reviews and eBay photos arrive in later updates. This row shows how they will look; it is a sample, not your review.</p>
         <ul className={s.sampleList}>
-          <li className={s.sampleRow}>
-            <StarRating value={2} size="sm" label="2 stars (sample)" />
-            <span className={s.stack}><span className={s.main}>Amazon IT · Seller feedback</span><span className={s.sub}>“The gloves arrived with an open seam on the thumb.”</span></span>
-            <Pill tone="neutral">Sample</Pill>
-          </li>
           <li className={s.sampleRow}>
             <StarRating value={5} size="sm" label="5 stars (sample)" />
             <span className={s.stack}><span className={s.main}>Etsy · Product review · 2 photos</span><span className={s.sub}>“Beautiful stitching, fits true to size and keeps me warm.”</span></span>

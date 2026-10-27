@@ -91,7 +91,7 @@ export async function insightsThemes(input: ThemesInput = {}): Promise<ThemesAns
     prisma.review.findMany({
       where: visibleReviewWhere(scoped),
       select: {
-        id: true, channel: true, marketplace: true, rating: true, postedAt: true, ingestSource: true, body: true, bodyEnglish: true, language: true,
+        id: true, channel: true, marketplace: true, rating: true, postedAt: true, ingestSource: true, kind: true, body: true, bodyEnglish: true, language: true,
         sentiment: { select: { label: true, categories: true, topPhrases: true } },
       },
     }),

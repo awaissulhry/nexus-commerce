@@ -72,9 +72,9 @@ describe('inboxWhere — fixture rows never show', () => {
 })
 
 describe('inboxWhere — kind', () => {
-  it('seller feedback = eBay rows; product reviews = every other channel', () => {
-    expect(filters(inboxWhere(parseInboxQuery({ kind: 'seller' }), NOW))).toEqual([{ channel: 'EBAY' }])
-    expect(filters(inboxWhere(parseInboxQuery({ kind: 'product' }), NOW))).toEqual([{ channel: { not: 'EBAY' } }])
+  it('the kind column decides; a row without it reads by channel (eBay = seller feedback, every other channel = product reviews)', () => {
+    expect(filters(inboxWhere(parseInboxQuery({ kind: 'seller' }), NOW))).toEqual([{ OR: [{ kind: 'SELLER' }, { AND: [{ kind: null }, { channel: 'EBAY' }] }] }])
+    expect(filters(inboxWhere(parseInboxQuery({ kind: 'product' }), NOW))).toEqual([{ OR: [{ kind: 'PRODUCT' }, { AND: [{ kind: null }, { channel: { not: 'EBAY' } }] }] }])
     expect(inboxWhere(parseInboxQuery({ kind: 'all' }), NOW)).toEqual(VISIBLE)
   })
 

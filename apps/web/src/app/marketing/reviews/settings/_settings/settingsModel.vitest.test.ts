@@ -35,7 +35,8 @@ describe('sources and times', () => {
     expect(sourceActionHref({ kind: 'reconnect', label: 'Reconnect eBay Germany', href: '/settings/channels/ebay' })).toBe('/settings/channels/ebay')
     expect(sourceActionHref(null)).toBeNull()
     // Only a source read from a later update holds its Connect, named as the channel writes it.
-    expect(sourceLaterHeld({ name: 'Amazon seller feedback', tone: 'neutral', later: 'Coming later', action: null })).toBe('Coming later: Nexus reads Amazon seller feedback in a later update.')
+    expect(sourceLaterHeld({ name: 'Etsy reviews', tone: 'neutral', later: 'Coming later', action: null })).toBe('Coming later: Nexus reads Etsy reviews in a later update.')
+    expect(sourceActionHref({ kind: 'fetch', label: 'Fetch now', href: null, held: null })).toBeNull()
     // eBay feedback is read today (only photos and AI topics come later): a fix without a link shows no Connect.
     expect(sourceLaterHeld({ name: 'eBay feedback', tone: 'warning', later: 'Photos and AI topics: coming later', action: null })).toBeNull()
     expect(sourceLaterHeld({ name: 'Shopify review app', tone: 'neutral', later: 'Live link: coming later', action: { kind: 'import', label: 'Import reviews…', href: null } })).toBeNull()

@@ -11,6 +11,7 @@
  */
 import { averageRating, channelWords, marketWords, periodBounds, round, themeWords, type PeriodBounds } from './overviewMath.js'
 import { isImportedSource } from './review-inbox-query.js'
+import { countsInRating } from './review-visibility.js'
 
 // ── Scope ────────────────────────────────────────────────────────────
 
@@ -216,6 +217,8 @@ export interface ThemeReviewRow {
   rating: number | null
   postedAt: Date
   ingestSource: string | null
+  /** `Review.kind`; null on older rows. Amazon's 1–3 star seller feedback never counts in an average. */
+  kind?: string | null
   body: string
   bodyEnglish: string | null
   language: string | null
@@ -302,7 +305,7 @@ export function buildThemes(input: {
   now: Date
 }): InsightTheme[] {
   const { rows, prevRows, trendRows, topics, now } = input
-  const overall = averageRating(rows.map((r) => r.rating))
+  const overall = averageRating(rows.filter(countsInRating).map((r) => r.rating))
   const out: InsightTheme[] = []
   for (const key of THEME_KEYS) {
     const mentioning = rows.filter((r) => r.sentiment?.categories.includes(key))
@@ -320,7 +323,7 @@ export function buildThemes(input: {
     // The reviews' own share when they mention it; a theme only Amazon's topics name shows Amazon's share of reviews.
     const share = mentioning.length > 0 || amazonShare == null ? reviewShare : amazonShare
 
-    const reviewImpact = tooFew ? null : themeStarImpact(mentioning.map((r) => r.rating), overall)
+    const reviewImpact = tooFew ? null : themeStarImpact(mentioning.filter(countsInRating).map((r) => r.rating), overall)
     const amazonImpact = tooFew ? null : weighted(amazon.map((t) => ({ value: t.starEffect, weight: t.mentions })), 2)
     const starImpact = reviewImpact ?? amazonImpact
     const starImpactFrom = reviewImpact != null ? 'reviews' : amazonImpact != null ? 'amazon_topic' : null

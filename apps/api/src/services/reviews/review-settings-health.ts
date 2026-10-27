@@ -16,6 +16,7 @@ import prisma from '../../db.js'
 import { channelMarketLabel, marketWords } from './overviewMath.js'
 import { computeReviewPipelineFreshness, type PipelineFreshness } from './review-pipeline-health.service.js'
 import { readAlert } from './review-settings.service.js'
+import { readSellerFeedbackState, SELLER_FEEDBACK_JOB, sellerFeedbackOn, sellerFeedbackSchedule, type SellerFeedbackState } from './amazon-seller-feedback.service.js'
 import {
   NO_TOPICS_MARKETS, dayWords, readSourceFacts, settingsHref, sourcesFromFacts, topicStates, type SourceFacts,
 } from './review-sources.service.js'
@@ -31,11 +32,16 @@ export type SourceRowKey =
 export type SourceTone = 'success' | 'warning' | 'danger' | 'neutral' | 'info'
 
 export interface SourceAction {
-  /** rules = the request rules / queue; reconnect / connect = Settings › Channels; import = the Inbox's Import window. */
-  kind: 'rules' | 'reconnect' | 'connect' | 'import'
+  /**
+   * rules = the request rules / queue; reconnect / connect = Settings › Channels; import = the Inbox's Import window;
+   * fetch = "Fetch now" (POST /api/reviews/amazon/seller-feedback/fetch).
+   */
+  kind: 'rules' | 'reconnect' | 'connect' | 'import' | 'fetch'
   label: string
   /** Set for reconnect / connect (Settings › Channels › the channel); the page builds the Reviews links itself. */
   href: string | null
+  /** Why the action cannot run now, in words (a held button says it); null when it can. */
+  held?: string | null
 }
 
 export interface SettingsSourceRow {
@@ -62,6 +68,8 @@ export interface SourceExtraFacts {
   amazonLastSentAt: Date | null
   /** The review-request mailer's pause, when a person paused it. */
   mailerPaused: { at: Date | null } | null
+  /** Amazon seller feedback fetches (PR H); left out = not read (the row says it could not be checked). */
+  sellerFeedback?: SellerFeedbackState | null
 }
 
 const TOPIC_MARKETS_WORDS = 'Topics exist for the UK, Germany, France, Italy and Spain — not on Amazon.nl.'
@@ -134,12 +142,8 @@ export function settingsSourceRows(facts: SourceFacts, extra: SourceExtraFacts, 
   }
   rows.push(topicRow)
 
-  // ── Amazon seller feedback (Phase 3) ──
-  rows.push({
-    key: 'amazon-seller-feedback', name: 'Amazon seller feedback', what: 'Feedback of 1 to 3 stars about the seller',
-    stateWords: 'Not connected', tone: 'neutral', later: 'Coming later', lastAt: null, lastWords: '—', action: null,
-    words: 'Amazon’s report holds only feedback of 1 to 3 stars and is fetched on request — it can’t be scheduled. Reading it arrives in a later update.',
-  })
+  // ── Amazon seller feedback (PR H): Amazon's 1–3 star report, fetched by Nexus daily and on "Fetch now" ──
+  rows.push(sellerFeedbackRow(extra.sellerFeedback ?? null))
 
   // ── Amazon review text: no API gives it (ruling 5) ──
   const amazonImport = lastImport('AMAZON')
@@ -199,19 +203,59 @@ export function settingsSourceRows(facts: SourceFacts, extra: SourceExtraFacts, 
   return { rows, problems: rows.filter((r) => r.tone === 'warning' || r.tone === 'danger').length }
 }
 
+const listMarkets = (codes: string[]) => listWords(codes.map((m) => marketWords(m) ?? m))
+
+/** The Amazon seller feedback row from its fetch state. Pure. */
+export function sellerFeedbackRow(state: SellerFeedbackState | null): SettingsSourceRow {
+  const when = state?.every.startsWith('Daily') ? state.every.replace(/^Daily/, 'daily at') : 'every day'
+  const report = 'Amazon’s report holds only feedback of 1 to 3 stars, and Amazon can’t schedule it, so Nexus asks for it'
+  const row: SettingsSourceRow = {
+    key: 'amazon-seller-feedback', name: 'Amazon seller feedback', what: 'Feedback of 1 to 3 stars about the seller',
+    stateWords: 'Off', tone: 'neutral', later: null, lastAt: state?.lastOkAt ?? null, lastWords: state?.lastOkAt ? null : '—',
+    words: `${report}. Nexus could not check the fetches just now.`,
+    action: { kind: 'fetch', label: 'Fetch now', href: null, held: state ? state.held : 'Nexus could not check the fetches just now.' },
+  }
+  if (!state) return row
+  if (!state.on) {
+    return { ...row, words: `Off in this setup. When it is on, Nexus asks Amazon for it ${when}, and “Fetch now” asks at once. ${report}.` }
+  }
+  const failed = state.markets.filter((m) => m.state === 'failed')
+  const fine = state.markets.filter((m) => m.state === 'ok').map((m) => m.market)
+  const fetched = state.markets.filter((m) => m.state === 'ok').reduce((n, m) => n + (m.rows ?? 0), 0)
+  if (state.fixHref && state.held) {
+    return { ...row, stateWords: 'Needs a fix', tone: 'danger', words: state.held, action: { kind: 'reconnect', label: 'Reconnect Amazon', href: state.fixHref } }
+  }
+  if (state.markets.length === 0) return { ...row, stateWords: 'Not used', words: state.held ?? `${report}.` }
+  if (failed.length) {
+    const lines = failed.map((m) => `${marketWords(m.market) ?? m.market}: ${m.words}`)
+    if (fine.length) lines.push(`${listMarkets(fine)} ${fine.length === 1 ? 'is' : 'are'} fine.`)
+    return { ...row, stateWords: 'Needs a fix', tone: 'warning', words: lines.join(' '), lastWords: state.lastOkAt ? null : 'Never worked' }
+  }
+  if (state.fetching) return { ...row, stateWords: 'Fetching', tone: 'info', words: 'Nexus is asking Amazon for the report now. It shows in a few minutes.' }
+  if (fine.length === 0) {
+    return { ...row, stateWords: 'Waiting', tone: 'info', words: `Nexus asks Amazon ${when} for ${listMarkets(state.markets.map((m) => m.market))}; nothing fetched yet. “Fetch now” asks at once.` }
+  }
+  return {
+    ...row, stateWords: 'On', tone: 'success',
+    words: `Fetched ${when} for ${listMarkets(fine)} · ${fetched} feedback of 1–3 stars in the last 90 days.`,
+  }
+}
+
 /** GET /api/reviews/settings/sources. */
 export async function readSettingsSources(now: Date = new Date()): Promise<{ rows: SettingsSourceRow[]; problems: number; checkedAt: string }> {
   const since = new Date(now.getTime() - 30 * DAY)
-  const [facts, sent, last, mailer] = await Promise.all([
+  const [facts, sent, last, mailer, sellerFeedback] = await Promise.all([
     readSourceFacts(),
     prisma.reviewRequest.groupBy({ by: ['marketplace'], where: { channel: 'AMAZON', status: 'SENT', sentAt: { gte: since } }, _count: { _all: true } }),
     prisma.reviewRequest.aggregate({ where: { channel: 'AMAZON', status: 'SENT' }, _max: { sentAt: true } }),
     prisma.reviewMailerState.findFirst({ select: { isPaused: true, pausedAt: true } }),
+    readSellerFeedbackState(now).catch(() => null),
   ])
   const { rows, problems } = settingsSourceRows(facts, {
     amazonSent30: sent.map((g) => ({ marketplace: g.marketplace, count: g._count._all })),
     amazonLastSentAt: last._max.sentAt ?? null,
     mailerPaused: mailer?.isPaused ? { at: mailer.pausedAt ?? null } : null,
+    sellerFeedback,
   }, now)
   return { rows, problems, checkedAt: now.toISOString() }
 }
@@ -236,6 +280,7 @@ export function pipelineJobDefs(env: Record<string, string | undefined> = proces
     { key: 'review-attribution', name: 'Review matching', what: 'Links reviews to the requests that asked for them', schedule: env.NEXUS_REVIEW_ATTRIBUTION_SCHEDULE ?? '0 */6 * * *' },
     { key: 'review-spike-detector', name: 'Spike check', what: 'Finds sudden rises in complaints', schedule: env.NEXUS_REVIEW_SPIKE_SCHEDULE ?? '17 * * * *' },
     { key: 'amazon-review-insights', name: 'Amazon topics', what: 'Weekly review topics per product from Amazon', schedule: env.NEXUS_AMAZON_REVIEW_INSIGHTS_SCHEDULE ?? '0 6 * * 1' },
+    { key: SELLER_FEEDBACK_JOB, name: 'Amazon seller feedback', what: 'Asks Amazon for its 1–3 star seller feedback report', schedule: sellerFeedbackSchedule(env) },
     { key: 'review-digest', name: 'Daily digest', what: 'Morning e-mail about the day before', schedule: env.NEXUS_REVIEW_DIGEST_SCHEDULE ?? '0 8 * * *' },
   ]
 }
@@ -350,7 +395,7 @@ function hoursWords(ms: number): string {
 }
 
 /** Each job's state from its latest run (newest first in `runs`), its schedule and the digest switch. Pure. */
-export function pipelineJobs(defs: PipelineJobDef[], runs: CronRunFact[], opts: { now: Date; digestOff: boolean }): PipelineJobView[] {
+export function pipelineJobs(defs: PipelineJobDef[], runs: CronRunFact[], opts: { now: Date; digestOff: boolean; offKeys?: ReadonlySet<string> }): PipelineJobView[] {
   const { now } = opts
   return defs.map((def) => {
     const latest = runs.filter((r) => r.jobName === def.key).sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0] ?? null
@@ -364,6 +409,9 @@ export function pipelineJobs(defs: PipelineJobDef[], runs: CronRunFact[], opts: 
     }
     if (def.key === 'review-digest' && opts.digestOff) {
       return { ...view, state: 'off', stateWords: 'Off', tone: 'neutral', nextRunAt: null, words: 'Turned off under Alerts.' }
+    }
+    if (opts.offKeys?.has(def.key)) {
+      return { ...view, state: 'off', stateWords: 'Off', tone: 'neutral', nextRunAt: null, words: 'Off in this setup (see Sources).' }
     }
     if (!latest) return { ...view, state: 'never', stateWords: 'Not run yet', tone: 'neutral', words: 'It has not run for this business yet.' }
     const age = now.getTime() - latest.startedAt.getTime()
@@ -420,7 +468,9 @@ export async function readSettingsPipeline(now: Date = new Date()): Promise<Pipe
     readAlert('digest'),
     computeReviewPipelineFreshness(),
   ])
-  const jobs = pipelineJobs(defs, latest.filter((r): r is CronRunFact => r != null), { now, digestOff: !digest.on })
+  const jobs = pipelineJobs(defs, latest.filter((r): r is CronRunFact => r != null), {
+    now, digestOff: !digest.on, offKeys: new Set(sellerFeedbackOn() ? [] : [SELLER_FEEDBACK_JOB]),
+  })
   return {
     jobs,
     problems: freshnessProblems(freshness),

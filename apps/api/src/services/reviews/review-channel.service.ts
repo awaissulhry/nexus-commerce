@@ -7,8 +7,9 @@
  * Amazon (ruling 5): no API gives Amazon's star rating, average or review count, so every star here comes from reviews a
  * person IMPORTED (`ingestSource = IMPORT_CSV`); topics come from the Customer Feedback API (AmazonReviewInsight: weekly,
  * English, UK/DE/FR/IT/ES only, never Amazon.nl, needs the Selling Partner Insights role); requests are ReviewRequest rows
- * by Amazon's answer (review-queue-words.ts). Seller feedback (1–3 stars) comes in Phase 3: the page shows a labelled
- * sample, this service sends nothing for it.
+ * by Amazon's answer (review-queue-words.ts). Seller feedback (PR H): Amazon's 1–3 star feedback report, fetched by
+ * Nexus (amazon-seller-feedback.service.ts), rows with `kind = 'SELLER'`, each with the removal check
+ * (review-feedback-removal.ts) — counted and listed, never averaged into the stars.
  *
  * eBay: the score, % positive, counts by type and the four detailed seller ratings are eBay's own (Trading GetFeedback,
  * at most once an hour per account: ebay-feedback-summary.service.ts); the list is the Inbox's seller-feedback rows
@@ -21,7 +22,10 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { needsReplyWhere, visibleReviewWhere } from './review-visibility.js'
+import { needsReplyWhere, reviewKindWhere, visibleReviewWhere } from './review-visibility.js'
+import { readSellerFeedbackState, sellerFeedbackOn, type SellerFeedbackState } from './amazon-seller-feedback.service.js'
+import { feedbackRemovalCheck, fulfilmentOf, REMOVAL_RULES, type RemovalCheck } from './review-feedback-removal.js'
+import { FEEDBACK_WINDOW_DAYS } from './amazon-seller-feedback-report.js'
 import { reviewSources } from './review-sources.service.js'
 import { amazonThemes, scopeCode, type OverviewTheme, type Section } from './review-overview.service.js'
 import { listInbox, type InboxRow } from './review-inbox.service.js'
@@ -63,6 +67,11 @@ export interface AmazonTiles {
   requestsSent: number
   /** Percent, one decimal; null when nothing can be matched (no imported reviews here). */
   reviewRate: number | null
+  /** Amazon seller feedback (1–3 stars) left in the last 90 days, and in the 90 days before. */
+  sellerFeedback90: number
+  sellerFeedbackPrev90: number
+  /** Whether Nexus fetches Amazon's seller feedback report in this setup. */
+  sellerFeedbackOn: boolean
 }
 
 export interface AmazonTopic extends OverviewTheme {
@@ -104,8 +113,38 @@ export interface AmazonWatchRow {
   topMentions: number | null
 }
 
+export interface AmazonSellerFeedbackRow {
+  id: string
+  rating: number | null
+  postedAt: string
+  text: string
+  english: string | null
+  language: string | null
+  /** Amazon's order id, from the report. */
+  amazonOrderId: string | null
+  /** The Nexus order, when Nexus has it. */
+  orderId: string | null
+  /** "Amazon shipped it (FBA)", "you shipped it", or null when unknown. */
+  fulfilmentWords: string | null
+  status: string
+  /** A reply was seen in Amazon's report, or a person marked it as responded. */
+  replied: boolean
+  check: RemovalCheck
+}
+
+export interface AmazonSellerFeedback {
+  fetch: SellerFeedbackState
+  /** Feedback left in the last 90 days, in this scope. */
+  total90: number
+  /** The newest feedback (at most 20). */
+  rows: AmazonSellerFeedbackRow[]
+  /** The removal check's rules, in words. */
+  rules: readonly string[]
+}
+
 export interface AmazonSections {
   tiles: Section<AmazonTiles>
+  sellerFeedback: Section<AmazonSellerFeedback>
   trend: Section<{ bucket: TrendBucket; points: TrendPoint[] }>
   spread: Section<{ counts: [number, number, number, number, number]; average: number | null; rated: number; lastImportAt: string | null }>
   topics: Section<AmazonTopics>
@@ -182,6 +221,7 @@ const SECTION_ERROR: Record<string, string> = {
   topics: 'Amazon’s topics could not be read.',
   requests: 'The review requests could not be read.',
   watch: 'The products to watch could not be read.',
+  sellerFeedback: 'The seller feedback could not be read.',
   readState: 'Nexus could not check whether eBay is read.',
   summary: 'eBay’s feedback summary could not be read.',
   feedback: 'The feedback could not be read.',
@@ -306,9 +346,22 @@ async function amazonSections(market: string | null, period: ChannelPeriod, boun
     return rate == null ? null : round(rate * 100, 1)
   }
 
-  const [tiles, trend, spread, topics, requestSection, watch] = await Promise.all([
+  // Amazon seller feedback (kind SELLER): counted per 90 days and listed; never in the imported stars above.
+  const sellerScope: Prisma.ReviewWhereInput = { AND: [scope, reviewKindWhere('seller')] }
+  const sellerCounts = once(async () => {
+    const from = new Date(now.getTime() - FEEDBACK_WINDOW_DAYS * 86_400_000)
+    const before = new Date(from.getTime() - FEEDBACK_WINDOW_DAYS * 86_400_000)
+    const [last, prev] = await Promise.all([
+      prisma.review.count({ where: visibleReviewWhere({ AND: [sellerScope, { postedAt: { gte: from, lte: now } }] }) }),
+      prisma.review.count({ where: visibleReviewWhere({ AND: [sellerScope, { postedAt: { gte: before, lt: from } }] }) }),
+    ])
+    return { last, prev }
+  })
+  const sellerState = once(() => readSellerFeedbackState(now))
+
+  const [tiles, trend, spread, topics, requestSection, watch, sellerFeedback] = await Promise.all([
     section('tiles', async (): Promise<AmazonTiles> => {
-      const [{ now: rowsNow }, facts, topicsNow, needReply, oldest, reqs, rate] = await Promise.all([
+      const [{ now: rowsNow }, facts, topicsNow, needReply, oldest, reqs, rate, seller] = await Promise.all([
         split(),
         importFacts(),
         topicFacts(),
@@ -316,6 +369,7 @@ async function amazonSections(market: string | null, period: ChannelPeriod, boun
         prisma.review.findFirst({ where: { AND: [needsReplyWhere(), scope] }, orderBy: { postedAt: 'asc' }, select: { postedAt: true } }),
         requests(),
         rateOf(),
+        sellerCounts(),
       ])
       const avg = averageRating(rowsNow.map(r => r.rating))
       const dislikes = topicsNow.ok.length ? amazonThemes(topicsNow.ok, 'NEGATIVE').length : null
@@ -330,6 +384,9 @@ async function amazonSections(market: string | null, period: ChannelPeriod, boun
         oldestWaitDays: oldest ? daysBetween(oldest.postedAt, now) : null,
         requestsSent: reqs.filter(r => r.status === 'SENT').length,
         reviewRate: rate,
+        sellerFeedback90: seller.last,
+        sellerFeedbackPrev90: seller.prev,
+        sellerFeedbackOn: sellerFeedbackOn(),
       }
     }),
 
@@ -411,9 +468,56 @@ async function amazonSections(market: string | null, period: ChannelPeriod, boun
         }
       })
     }),
+
+    section('sellerFeedback', async (): Promise<AmazonSellerFeedback> => {
+      const [state, counts, rows] = await Promise.all([
+        sellerState(),
+        sellerCounts(),
+        prisma.review.findMany({
+          where: visibleReviewWhere(sellerScope),
+          orderBy: { postedAt: 'desc' },
+          take: 20,
+          select: {
+            id: true, rating: true, postedAt: true, body: true, bodyEnglish: true, language: true, orderId: true, triageStatus: true,
+            rawPayload: true, sentiment: { select: { categories: true } },
+            _count: { select: { responses: { where: { status: 'SENT' } } } },
+          },
+        }),
+      ])
+      const orderIds = [...new Set(rows.map(r => r.orderId).filter((id): id is string => !!id))]
+      const orders = orderIds.length
+        ? await prisma.order.findMany({ where: { id: { in: orderIds } }, select: { id: true, fulfillmentMethod: true } })
+        : []
+      const fulfilmentOfOrder = new Map(orders.map(o => [o.id, fulfilmentOf(o.fulfillmentMethod)]))
+      const marketStates = market ? state.markets.filter(m => m.market === market) : state.markets
+      return {
+        fetch: { ...state, markets: marketStates },
+        total90: counts.last,
+        rows: rows.map(r => {
+          const payload = (r.rawPayload && typeof r.rawPayload === 'object' ? r.rawPayload : {}) as Record<string, unknown>
+          const fulfilment = r.orderId ? fulfilmentOfOrder.get(r.orderId) ?? null : null
+          const response = typeof payload.yourResponse === 'string' && payload.yourResponse.trim() ? payload.yourResponse : null
+          return {
+            id: r.id,
+            rating: r.rating,
+            postedAt: r.postedAt.toISOString(),
+            text: r.body,
+            english: r.bodyEnglish,
+            language: r.language,
+            amazonOrderId: typeof payload.amazonOrderId === 'string' ? payload.amazonOrderId : null,
+            orderId: r.orderId,
+            fulfilmentWords: fulfilment === 'amazon' ? 'Amazon shipped it (FBA)' : fulfilment === 'seller' ? 'you shipped it' : null,
+            status: r.triageStatus ?? 'NEW',
+            replied: response != null || r._count.responses > 0 || r.triageStatus === 'RESPONDED',
+            check: feedbackRemovalCheck({ text: r.body, english: r.bodyEnglish, themes: r.sentiment?.categories ?? null, postedAt: r.postedAt, fulfilment, now }),
+          }
+        }),
+        rules: REMOVAL_RULES,
+      }
+    }),
   ])
 
-  return { tiles, trend, spread, topics, requests: requestSection, watch }
+  return { tiles, trend, spread, topics, requests: requestSection, watch, sellerFeedback }
 }
 
 // ── eBay ─────────────────────────────────────────────────────────────
