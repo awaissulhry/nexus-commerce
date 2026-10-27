@@ -12,12 +12,16 @@
  *
  * The e-mail goes through the shared transport (sendEmail), which sends nothing unless outbound e-mail is on, and
  * carries this business's own sender (business-identity.service.ts); without one, no e-mail is sent.
+ *
+ * "Rating drop" (Phase 3) uses the same delivery: when the hourly check opens a rating-drop alert, the people picked
+ * for it hear once per alert, in Nexus and/or by e-mail as Settings says (`notifyRatingDrop`).
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { resolveBusinessIdentity } from '../business-identity.service.js'
 import { sendEmail } from '../email/transport.js'
 import { channelMarketLabel } from './overviewMath.js'
+import { ratingDropNoticeWords, type StoredDrop } from './rating-drop-math.js'
 import { readAlert, teamMembers, type AlertSetting, type TeamMember } from './review-settings.service.js'
 
 export const NEGATIVE_REVIEW_ALERT_TYPE = 'review-negative'
@@ -93,59 +97,133 @@ export async function notifyReviewAlert(input: NegativeReviewInput): Promise<Ale
     const recipients = alertRecipients(alert, await teamMembers())
     if (recipients.length === 0) return none('nobody')
     const words = negativeAlertWords(input)
-    const href = inboxReviewHref(input.reviewId)
-    const result: AlertNotifyResult = { created: 0, deduped: 0, emailed: 0 }
-
-    if (alert.via.includes('app')) {
-      for (const person of recipients) {
-        const unread = await prisma.notification.findFirst({
-          where: { userId: person.userId, type: NEGATIVE_REVIEW_ALERT_TYPE, entityType: 'Review', entityId: input.reviewId, readAt: null },
-          select: { id: true },
-        })
-        if (unread) {
-          result.deduped++
-          continue
-        }
-        await prisma.notification.create({
-          data: {
-            userId: person.userId,
-            type: NEGATIVE_REVIEW_ALERT_TYPE,
-            severity: 'warn',
-            title: words.title,
-            body: words.body,
-            entityType: 'Review',
-            entityId: input.reviewId,
-            // A bare path: the bell's router adds the business, so the link cannot open another business.
-            href,
-            meta: { channel: input.channel, marketplace: input.marketplace, rating: input.rating },
-          },
-        })
-        result.created++
-      }
-    }
-
-    if (alert.via.includes('email')) {
-      const to = recipients.map((m) => m.email).filter(Boolean)
-      const identity = await resolveBusinessIdentity()
-      if (to.length && identity.ok) {
-        const webBase = (process.env.NEXUS_WEB_URL ?? '').replace(/\/$/, '')
-        // The same address the daily digest links to; the web app opens it in the signed-in person's business.
-        const link = webBase ? `${webBase}${href}` : null
-        const sent = await sendEmail({
-          to,
-          from: identity.identity.emailFrom,
-          subject: words.title,
-          html: `<p><strong>${escapeHtml(words.title)}</strong></p><p>${escapeHtml(words.body)}</p>${link ? `<p><a href="${escapeHtml(link)}">Open it in the Inbox</a></p>` : ''}`,
-          text: `${words.title}\n\n${words.body}${link ? `\n\nOpen it in the Inbox: ${link}` : ''}`,
-          tag: 'review-negative-alert',
-        })
-        if (sent.ok) result.emailed = to.length
-        else logger.warn('[review-alert-notify] e-mail not sent', { error: (sent.error ?? '').slice(0, 160) })
-      }
-    }
-    return result
+    return await deliverAlert(alert, recipients, {
+      type: NEGATIVE_REVIEW_ALERT_TYPE,
+      entityType: 'Review',
+      entityId: input.reviewId,
+      words,
+      href: inboxReviewHref(input.reviewId),
+      meta: { channel: input.channel, marketplace: input.marketplace, rating: input.rating },
+      tag: 'review-negative-alert',
+      linkWords: 'Open it in the Inbox',
+    })
   } catch (error) {
     logger.warn('[review-alert-notify] failed', { error: String(error).slice(0, 160) })
     return none('failed')
   }
+}
+
+// ── "Rating drop" (Phase 3) ─────────────────────────────────────────
+
+export const RATING_DROP_ALERT_TYPE = 'review-rating-drop'
+
+export interface RatingDropNoticeInput extends StoredDrop {
+  /** The ReviewSpike row the hourly check just opened. */
+  spikeId: string
+  market: string
+  channels: readonly string[]
+  productName: string | null
+}
+
+/** Insights › Alerts on the alert's market (a bare path: the bell's router adds the business). */
+export function ratingDropAlertsHref(market: string): string {
+  return `/marketing/reviews/insights/alerts?market=${encodeURIComponent(market)}`
+}
+
+/**
+ * Tell the picked people about a rating drop the hourly check just opened, as the business's "Rating drop" alert says:
+ * in Nexus and/or by e-mail, once per alert per person. `saved` is the alert as the check read it (read again when
+ * missing). Never throws.
+ */
+export async function notifyRatingDrop(input: RatingDropNoticeInput, saved?: AlertSetting): Promise<AlertNotifyResult> {
+  const none = (skipped: string): AlertNotifyResult => ({ created: 0, deduped: 0, emailed: 0, skipped })
+  try {
+    const alert = saved ?? (await readAlert('ratingDrop'))
+    if (!alert.on) return none('off')
+    const recipients = alertRecipients(alert, await teamMembers())
+    if (recipients.length === 0) return none('nobody')
+    return await deliverAlert(alert, recipients, {
+      type: RATING_DROP_ALERT_TYPE,
+      entityType: 'ReviewSpike',
+      entityId: input.spikeId,
+      words: ratingDropNoticeWords(input),
+      href: ratingDropAlertsHref(input.market),
+      meta: { marketplace: input.market, channels: [...input.channels] },
+      tag: 'review-rating-drop-alert',
+      linkWords: 'Open it in Insights › Alerts',
+    })
+  } catch (error) {
+    logger.warn('[review-alert-notify] rating drop failed', { error: String(error).slice(0, 160) })
+    return none('failed')
+  }
+}
+
+// ── Delivery (one path for every review alert) ──────────────────────
+
+interface AlertNotice {
+  type: string
+  entityType: string
+  entityId: string
+  words: { title: string; body: string }
+  /** A bare path; the bell's router adds the business, so the link cannot open another business. */
+  href: string
+  meta: Record<string, unknown>
+  /** The e-mail's tag at the transport. */
+  tag: string
+  /** The e-mail's link words. */
+  linkWords: string
+}
+
+/** The bell notice (one unread per entity per person) and, when the alert says so, the e-mail. */
+async function deliverAlert(alert: AlertSetting, recipients: readonly TeamMember[], notice: AlertNotice): Promise<AlertNotifyResult> {
+  const result: AlertNotifyResult = { created: 0, deduped: 0, emailed: 0 }
+  const { words, href } = notice
+
+  if (alert.via.includes('app')) {
+    for (const person of recipients) {
+      const unread = await prisma.notification.findFirst({
+        where: { userId: person.userId, type: notice.type, entityType: notice.entityType, entityId: notice.entityId, readAt: null },
+        select: { id: true },
+      })
+      if (unread) {
+        result.deduped++
+        continue
+      }
+      await prisma.notification.create({
+        data: {
+          userId: person.userId,
+          type: notice.type,
+          severity: 'warn',
+          title: words.title,
+          body: words.body,
+          entityType: notice.entityType,
+          entityId: notice.entityId,
+          href,
+          meta: notice.meta as object,
+        },
+      })
+      result.created++
+    }
+  }
+
+  if (alert.via.includes('email')) {
+    const to = recipients.map((m) => m.email).filter(Boolean)
+    const identity = await resolveBusinessIdentity()
+    if (to.length && identity.ok) {
+      const webBase = (process.env.NEXUS_WEB_URL ?? '').replace(/\/$/, '')
+      // The same address the daily digest links to; the web app opens it in the signed-in person's business.
+      const link = webBase ? `${webBase}${href}` : null
+      const sent = await sendEmail({
+        to,
+        from: identity.identity.emailFrom,
+        subject: words.title,
+        html: `<p><strong>${escapeHtml(words.title)}</strong></p><p>${escapeHtml(words.body)}</p>${link ? `<p><a href="${escapeHtml(link)}">${escapeHtml(notice.linkWords)}</a></p>` : ''}`,
+        text: `${words.title}\n\n${words.body}${link ? `\n\n${notice.linkWords}: ${link}` : ''}`,
+        tag: notice.tag,
+      })
+      if (sent.ok) result.emailed = to.length
+      else logger.warn('[review-alert-notify] e-mail not sent', { error: (sent.error ?? '').slice(0, 160) })
+    }
+  }
+  return result
 }

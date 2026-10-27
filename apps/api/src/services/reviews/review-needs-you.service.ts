@@ -11,6 +11,7 @@ import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { needsReplyWhere, reviewKindOf } from './review-visibility.js'
 import { buyerShort, channelMarketLabel, channelWords, daysBetween, marketWords, quoteOf, round, themeWords } from './overviewMath.js'
+import { RATING_DROP_CATEGORY, ratingDropChangeWords, ratingDropTitle } from './rating-drop-math.js'
 
 export type NeedsYouOnly = 'reply' | 'requests' | 'alerts'
 export type NeedsYouKind = 'review' | 'alert' | 'request'
@@ -116,8 +117,20 @@ type SpikeRow = {
   product: { name: string | null; sku: string | null } | null
 }
 
-/** One open review alert, in words: "Fit & sizing complaints up 2.6×". */
+/** One open review alert, in words: "Fit & sizing complaints up 2.6×", or a rating drop: "Rating fell 0.5 stars". */
 export function alertItem(s: SpikeRow): NeedsYouItem {
+  if (s.category === RATING_DROP_CATEGORY) {
+    return {
+      kind: 'alert',
+      id: s.id,
+      label: 'Alert',
+      tone: 'warning',
+      title: ratingDropTitle(s),
+      detail: [s.product?.name ?? s.product?.sku ?? null, marketWords(s.marketplace), ratingDropChangeWords(s)].filter(Boolean).join(' · '),
+      at: s.detectedAt.toISOString(),
+      action: { label: 'See alert', page: 'alerts', params: { market: s.marketplace.toUpperCase() } },
+    }
+  }
   const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : null)
   const now7 = pct(s.rate7dNumerator, s.rate7dDenominator)
   const was = pct(s.rate28dNumerator, s.rate28dDenominator)

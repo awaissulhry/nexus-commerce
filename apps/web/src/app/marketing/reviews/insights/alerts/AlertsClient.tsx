@@ -2,7 +2,8 @@
 
 /**
  * Reviews › Insights › Alerts (`/marketing/reviews/insights/alerts`, build spec §3.4 + ruling 7, the Alerts board): a
- * theme that suddenly comes up more often for one product in one market (`GET /api/reviews/spikes`, checked hourly).
+ * theme that suddenly comes up more often for one product in one market, or (Phase 3, when "Rating drop" is on in
+ * Reviews settings) a product family whose average stars fell in one market (`GET /api/reviews/spikes`, checked hourly).
  *
  *   Tiles    Open (the default) · Acknowledged · Resolved filter the list (`?status=`, a removable chip) · time to resolve
  *   Filters  theme, product
@@ -65,7 +66,7 @@ import shared from '../_shared/insights.module.css'
 import s from './alerts.module.css'
 
 const EVENTS = ['review.alert.changed', 'review.fix.changed'] as const
-const THEME_OPTIONS = [{ value: '', label: 'All' }, ...Object.entries(THEME_LABEL).map(([value, label]) => ({ value, label }))]
+const THEME_OPTIONS = [{ value: '', label: 'All' }, ...Object.entries(THEME_LABEL).map(([value, label]) => ({ value, label })), { value: 'RATING_DROP', label: 'Rating drop' }]
 
 interface BulkAnswer { changed: number; held: Array<{ id: string; words: string }>; fixes?: number }
 
@@ -196,7 +197,7 @@ function Alerts() {
 
   const subtitle = !scope || read.loading
     ? 'Loading…'
-    : data ? `A theme that suddenly comes up more often for one product in one market · ${data.counts.open} open · checked every hour` : 'A theme that suddenly comes up more often'
+    : data ? `A theme that suddenly comes up more often, or a rating that drops, for one product in one market · ${data.counts.open} open · checked every hour` : 'A theme that suddenly comes up more often, or a rating that drops'
 
   return (
     <div className={shared.page}>
@@ -240,7 +241,7 @@ function Alerts() {
                 <EmptyState
                   icon={<Bell size={20} aria-hidden />}
                   title={emptyTitle(filter ?? 'OPEN')}
-                  description={filter === 'OPEN' ? 'Nexus checks every hour. Resolved alerts stay under “Resolved”.' : 'Nexus checks every hour. An alert opens when a theme suddenly comes up more often for one product in one market.'}
+                  description={filter === 'OPEN' ? 'Nexus checks every hour. Resolved alerts stay under “Resolved”.' : 'Nexus checks every hour. An alert opens when a theme suddenly comes up more often for one product in one market, or its rating drops.'}
                   action={filter !== 'ALL' ? <Button size="sm" onClick={() => setFilter('ALL')}>Show every alert</Button> : undefined}
                 />
               ) : (
@@ -284,6 +285,8 @@ function Alerts() {
             <div className={shared.cardBody}>
               <p>For one product in one market, a theme’s share of reviews in the last 7 days is at least <b>2×</b> its share over 28 days, with at least <b>5 reviews</b> in those 7 days.</p>
               <p className={shared.muted}>Amazon topics count once a week, when Amazon’s report arrives. Resolving does not hide it for good: if the share stays high for 7 more days, a new alert opens.</p>
+              <p>A <b>rating drop</b>: a product family’s average stars in one market fall <b>0.3</b> or more, the last 7 days against the 28 days before, with at least <b>5 rated reviews</b> in each — when “Rating drop” is on in Reviews settings.</p>
+              <p className={shared.muted}>Only product reviews with stars count: never seller feedback, and Amazon only from imported reviews.</p>
               <Button asChild size="sm" variant="link"><Link href={reviewsSettingsHref('alerts')}>Who is told, in Reviews settings</Link></Button>
             </div>
           </Card>
@@ -355,7 +358,7 @@ function AlertRow({ alert: a, ticked, onTick, canManage, busy, now, reviewsHref,
         {can.acknowledge && <Button size="sm" heldReason={held} onClick={() => onDecide('ACKNOWLEDGED')}><CheckCheck size={13} aria-hidden /> Acknowledge</Button>}
         {can.resolve && <Button size="sm" heldReason={held} onClick={() => onDecide('RESOLVED')}><CircleCheck size={13} aria-hidden /> Resolve</Button>}
         {can.reopen && <Button size="sm" heldReason={held} onClick={() => onDecide('REOPEN')}><RotateCcw size={13} aria-hidden /> Reopen</Button>}
-        {can.suggest && <Button size="sm" variant="primary" heldReason={held} onClick={onSuggest}><Sparkles size={13} aria-hidden /> Suggest fixes</Button>}
+        {can.suggest && <Button size="sm" variant="primary" heldReason={held ?? can.suggestHeld} onClick={onSuggest}><Sparkles size={13} aria-hidden /> Suggest fixes</Button>}
         {fixes && <Button asChild size="sm" variant="tonal"><Link href={fixesHref}>{fixes}</Link></Button>}
       </div>
     </li>

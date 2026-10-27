@@ -11,6 +11,11 @@
  * forgets both. A bulk action changes only the ticked alerts it applies to and names why it skipped each other one
  * (ruling 7); "suggest" asks the AI for fixes, at most 5 alerts at a time. A spike has a market, not a channel: its
  * channels are read from the negative reviews of its 7 days.
+ *
+ * Two kinds share the list and its flow: a complaint spike (a theme comes up more often) and, from Phase 3, a rating
+ * drop (rating-drop.service.ts: a product family's average stars fell in one market; category RATING_DROP). A rating
+ * drop's channels are read from the rated product reviews of its family in its 7 days; it names no single complaint, so
+ * "Suggest fixes" holds for it with why.
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
@@ -18,6 +23,7 @@ import { marketWords, themeWords } from './overviewMath.js'
 import { visibleReviewWhere } from './review-visibility.js'
 import { median, parseBulk, parseInsightScope, pct, SUGGEST_MAX, whereWords, InsightsInputError } from './review-insights-math.js'
 import { nextCronRun, pipelineJobDefs } from './review-settings-health.js'
+import { countsForRatingDrop, RATING_DROP_CATEGORY, RATING_DROP_NO_SUGGEST, ratingDropBasis, ratingDropWhere, storedDropRating } from './rating-drop-math.js'
 
 const DAY = 86_400_000
 const RESOLVED_DAYS = 30
@@ -42,6 +48,10 @@ export async function peopleNames(ids: ReadonlyArray<string | null | undefined>)
 export interface AlertItem {
   id: string
   status: AlertStatus
+  /** 'complaint' = a theme comes up more often; 'rating_drop' = a family's average stars fell in one market. */
+  kind: 'complaint' | 'rating_drop'
+  /** A rating drop's stars: the 28 days before, the last 7 days (one decimal) and the change (two); null otherwise. */
+  rating: { before: number | null; now: number | null; change: number | null } | null
   theme: { key: string; label: string }
   product: { id: string; sku: string; name: string } | null
   market: string
@@ -98,21 +108,47 @@ export async function listAlerts(input: { status?: unknown; channel?: unknown; m
 
   // Channels of each alert: the negative reviews of its 7 days, for its product, market and theme.
   const channelsOf = new Map<string, string[]>()
-  if (rows.length) {
-    const oldest = rows.reduce((d, r) => (r.detectedAt < d ? r.detectedAt : d), now)
+  const complaints = rows.filter((r) => r.category !== RATING_DROP_CATEGORY)
+  const drops = rows.filter((r) => r.category === RATING_DROP_CATEGORY)
+  if (complaints.length) {
+    const oldest = complaints.reduce((d, r) => (r.detectedAt < d ? r.detectedAt : d), now)
     const reviews = await prisma.review.findMany({
       where: visibleReviewWhere({
-        productId: { in: [...new Set(rows.map((r) => r.productId).filter((id): id is string => !!id))] },
+        productId: { in: [...new Set(complaints.map((r) => r.productId).filter((id): id is string => !!id))] },
         postedAt: { gte: new Date(oldest.getTime() - 7 * DAY) },
         sentiment: { is: { label: 'NEGATIVE' } },
       }),
       select: { productId: true, marketplace: true, channel: true, postedAt: true, sentiment: { select: { categories: true } } },
     })
-    for (const r of rows) {
+    for (const r of complaints) {
       const from = r.detectedAt.getTime() - 7 * DAY
       const set = new Set(
         reviews
           .filter((v) => v.productId === r.productId && (v.marketplace ?? '') === r.marketplace && v.sentiment?.categories.includes(r.category) && v.postedAt.getTime() >= from && v.postedAt.getTime() <= r.detectedAt.getTime() + DAY)
+          .map((v) => v.channel.toUpperCase()),
+      )
+      channelsOf.set(r.id, [...set].sort())
+    }
+  }
+  // A rating drop's channels: the rated product reviews of its family (the product and its variants) in its 7 days.
+  if (drops.length) {
+    const families = [...new Set(drops.map((r) => r.productId).filter((id): id is string => !!id))]
+    const oldest = drops.reduce((d, r) => (r.detectedAt < d ? r.detectedAt : d), now)
+    const reviews = families.length
+      ? await prisma.review.findMany({
+          where: visibleReviewWhere({
+            OR: [{ productId: { in: families } }, { product: { parentId: { in: families } } }],
+            rating: { not: null },
+            postedAt: { gte: new Date(oldest.getTime() - 7 * DAY) },
+          }),
+          select: { productId: true, channel: true, marketplace: true, rating: true, kind: true, ingestSource: true, postedAt: true, product: { select: { parentId: true } } },
+        })
+      : []
+    for (const r of drops) {
+      const from = r.detectedAt.getTime() - 7 * DAY
+      const set = new Set(
+        reviews
+          .filter((v) => (v.product?.parentId ?? v.productId) === r.productId && (v.marketplace ?? '').toUpperCase() === r.marketplace && v.postedAt.getTime() >= from && v.postedAt.getTime() <= r.detectedAt.getTime() && countsForRatingDrop(v).counts)
           .map((v) => v.channel.toUpperCase()),
       )
       channelsOf.set(r.id, [...set].sort())
@@ -157,9 +193,38 @@ export async function listAlerts(input: { status?: unknown; channel?: unknown; m
 
   const items: AlertItem[] = shown.map((r) => {
     const channels = channelsOf.get(r.id) ?? []
+    const who = {
+      acknowledged: r.acknowledgedBy || r.acknowledgedAt ? { by: names.get(r.acknowledgedBy ?? '') ?? 'someone', at: r.acknowledgedAt?.toISOString() ?? null } : null,
+      resolved: r.status === 'RESOLVED' && r.resolvedAt ? { by: r.resolvedBy ? names.get(r.resolvedBy) ?? 'someone' : null, at: r.resolvedAt.toISOString() } : null,
+    }
+    if (r.category === RATING_DROP_CATEGORY) {
+      return {
+        id: r.id,
+        status: r.status as AlertStatus,
+        kind: 'rating_drop' as const,
+        rating: storedDropRating(r),
+        theme: { key: r.category, label: themeWords(r.category) },
+        product: r.product,
+        market: r.marketplace,
+        channels,
+        where: ratingDropWhere(r.marketplace, channels),
+        from: null,
+        to: null,
+        multiplier: null,
+        basis: ratingDropBasis(r),
+        count: r.rate7dDenominator,
+        phrases: r.sampleTopPhrases,
+        detectedAt: r.detectedAt.toISOString(),
+        newToday: r.detectedAt.getTime() >= startOfDay,
+        ...who,
+        fixes: fixes.get(r.id) ?? { open: 0, sent: 0, applied: 0, dismissed: 0 },
+      }
+    }
     return {
       id: r.id,
       status: r.status as AlertStatus,
+      kind: 'complaint' as const,
+      rating: null,
       theme: { key: r.category, label: themeWords(r.category) },
       product: r.product,
       market: r.marketplace,
@@ -173,8 +238,7 @@ export async function listAlerts(input: { status?: unknown; channel?: unknown; m
       phrases: r.sampleTopPhrases,
       detectedAt: r.detectedAt.toISOString(),
       newToday: r.detectedAt.getTime() >= startOfDay,
-      acknowledged: r.acknowledgedBy || r.acknowledgedAt ? { by: names.get(r.acknowledgedBy ?? '') ?? 'someone', at: r.acknowledgedAt?.toISOString() ?? null } : null,
-      resolved: r.status === 'RESOLVED' && r.resolvedAt ? { by: r.resolvedBy ? names.get(r.resolvedBy) ?? 'someone' : null, at: r.resolvedAt.toISOString() } : null,
+      ...who,
       fixes: fixes.get(r.id) ?? { open: 0, sent: 0, applied: 0, dismissed: 0 },
     }
   })
@@ -254,7 +318,7 @@ export async function bulkAlerts(
   if (action === 'suggest' && ids.length > SUGGEST_MAX) {
     return { changed: 0, held: ids.map((id) => ({ id, words: `Suggest fixes works on up to ${SUGGEST_MAX} alerts at a time: untick ${ids.length - SUGGEST_MAX}.` })) }
   }
-  const rows = await prisma.reviewSpike.findMany({ where: { id: { in: ids } }, select: { id: true, status: true } })
+  const rows = await prisma.reviewSpike.findMany({ where: { id: { in: ids } }, select: { id: true, status: true, category: true } })
   const byId = new Map(rows.map((r) => [r.id, r]))
   const held: BulkHeld[] = []
   const apply: string[] = []
@@ -277,6 +341,7 @@ export async function bulkAlerts(
       continue
     }
     if (row.status === 'RESOLVED') held.push({ id, words: 'Resolved: reopen it to ask for fixes.' })
+    else if (row.category === RATING_DROP_CATEGORY) held.push({ id, words: RATING_DROP_NO_SUGGEST })
     else if (withFixes.has(id)) held.push({ id, words: 'It has fixes already: they are on the Fixes page.' })
     else apply.push(id)
   }

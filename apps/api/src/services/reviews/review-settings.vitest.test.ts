@@ -86,7 +86,19 @@ describe('what a save may hold', () => {
     expect(r.ok && r.alerts).toEqual([
       { key: 'negative', on: false, recipients: [], via: [] },
       { key: 'digest', on: true, recipients: ['u2'], via: ['email'] },
+      { key: 'ratingDrop', on: false, recipients: [], via: ['app'] },
     ])
+  })
+
+  it('"Rating drop" is off until switched on, and arrives in Nexus, by e-mail or both', () => {
+    expect(alertsFromJson(null).find((a) => a.key === 'ratingDrop')).toEqual({ key: 'ratingDrop', on: false, recipients: [], via: ['app'] })
+    const on = validateSettingsInput({ alerts: [{ key: 'ratingDrop', on: true, via: ['app', 'email'], recipients: ['u2'] }] }, ctx)
+    expect(on.ok && on.alerts.find((a) => a.key === 'ratingDrop')).toEqual({ key: 'ratingDrop', on: true, recipients: ['u2'], via: ['app', 'email'] })
+    const words = (body: unknown) => {
+      const r = validateSettingsInput(body, ctx)
+      return r.ok ? null : r.words
+    }
+    expect(words({ alerts: [{ key: 'ratingDrop', on: true, via: [] }] })).toBe('Choose how “Rating drop” arrives: in Nexus, by e-mail or both.')
   })
 })
 
@@ -257,7 +269,8 @@ describe('against real SQL', () => {
   it('no row reads the defaults; a save makes the one row and a second save updates it', async () => {
     const first = await inside(() => svc.readReviewSettings())
     expect(first.voice).toEqual(DEFAULT_VOICE)
-    expect(first.alerts.map((a) => [a.key, a.on])).toEqual([['negative', true], ['digest', true]])
+    expect(first.alerts.map((a) => [a.key, a.on])).toEqual([['negative', true], ['digest', true], ['ratingDrop', false]])
+    expect(first.ratingDropRule).toEqual({ recentDays: 7, beforeDays: 28, minRated: 5, dropAtLeast: 0.3, reopenAfterDays: 7 })
     expect(first.sender.editHref).toBe('/settings/company')
     expect(first.automationTemplates).toEqual({ total: 3, missing: 3 })
 

@@ -278,7 +278,7 @@ export function pipelineJobDefs(env: Record<string, string | undefined> = proces
     { key: 'orders-delivered-backfill', name: 'Delivered dates', what: 'Fills in delivery dates for the request queue', schedule: env.NEXUS_ORDERS_DELIVERED_BACKFILL_SCHEDULE ?? '30 3 * * *' },
     { key: 'review-request-mailer', name: 'Request sender', what: 'Sends the review requests that are due', schedule: env.NEXUS_REVIEW_MAILER_SCHEDULE ?? '0 * * * *' },
     { key: 'review-attribution', name: 'Review matching', what: 'Links reviews to the requests that asked for them', schedule: env.NEXUS_REVIEW_ATTRIBUTION_SCHEDULE ?? '0 */6 * * *' },
-    { key: 'review-spike-detector', name: 'Spike check', what: 'Finds sudden rises in complaints', schedule: env.NEXUS_REVIEW_SPIKE_SCHEDULE ?? '17 * * * *' },
+    { key: 'review-spike-detector', name: 'Spike check', what: 'Finds sudden rises in complaints, and rating drops when that alert is on', schedule: env.NEXUS_REVIEW_SPIKE_SCHEDULE ?? '17 * * * *' },
     { key: 'amazon-review-insights', name: 'Amazon topics', what: 'Weekly review topics per product from Amazon', schedule: env.NEXUS_AMAZON_REVIEW_INSIGHTS_SCHEDULE ?? '0 6 * * 1' },
     { key: SELLER_FEEDBACK_JOB, name: 'Amazon seller feedback', what: 'Asks Amazon for its 1–3 star seller feedback report', schedule: sellerFeedbackSchedule(env) },
     { key: 'review-digest', name: 'Daily digest', what: 'Morning e-mail about the day before', schedule: env.NEXUS_REVIEW_DIGEST_SCHEDULE ?? '0 8 * * *' },

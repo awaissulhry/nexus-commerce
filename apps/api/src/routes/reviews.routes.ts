@@ -8,7 +8,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *   GET  /api/reviews/spikes               alerts (Reviews Insights, below)
  *   PATCH /api/reviews/spikes/:id          acknowledge / resolve / reopen
  *   POST /api/reviews/cron/ingest/trigger          manual trigger
- *   POST /api/reviews/cron/spike-detector/trigger  manual trigger
+ *   POST /api/reviews/cron/spike-detector/trigger  manual trigger (complaint spikes, then rating drops)
  *
  * Reviews Inbox (2026-10-26, PR B) — logic in services/reviews/review-inbox*.ts and review-detail.service.ts:
  *   GET   /api/reviews/inbox                   the list: filters, tab and tile counts, facets, read state
@@ -69,6 +69,7 @@ import {
   runSpikeDetectorOnce,
   summarizeSpikeDetector,
 } from '../services/reviews/spike-detector.service.js'
+import { runRatingDropCheckOnce, summarizeRatingDrop } from '../services/reviews/rating-drop.service.js'
 import { seedReviewTemplates } from '../services/reviews/review-templates.js'
 import {
   previewReviewImport,
@@ -932,7 +933,9 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/reviews/cron/spike-detector/trigger', async (_request, _reply) => {
     const s = await runSpikeDetectorOnce()
-    return { ok: true, summary: summarizeSpikeDetector(s), detail: s }
+    // The hourly check's second half: rating drops (off unless switched on in Settings › Alerts).
+    const drop = await runRatingDropCheckOnce()
+    return { ok: true, summary: `${summarizeSpikeDetector(s)} · ${summarizeRatingDrop(drop)}`, detail: s, ratingDrop: drop }
   })
 
   // RX.3 — manual digest trigger (also previews the digest payload).

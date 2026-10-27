@@ -17,6 +17,7 @@ import { ACTION_HANDLERS } from '../automation-rule.service.js'
 import { logger } from '../../utils/logger.js'
 import { visibleReviewWhere } from './review-visibility.js'
 import { AMAZON_TOPIC_MARKETS, parseTopicRows } from './review-insights-math.js'
+import { RATING_DROP_CATEGORY, RATING_DROP_NO_SUGGEST } from './rating-drop-math.js'
 // Side-effect import: registers update_product_bullets_from_review +
 // create_aplus_module_from_review on ACTION_HANDLERS.
 import './review-action-handlers.js'
@@ -70,6 +71,8 @@ export async function generateActionItemsForSpike(
     include: { product: { select: { id: true, sku: true, name: true, productType: true } } },
   })
   if (!spike) throw new Error('spike not found')
+  // A rating drop names no single complaint for the AI to answer (rating-drop-math.ts): refused with why.
+  if (spike.category === RATING_DROP_CATEGORY) throw Object.assign(new Error(RATING_DROP_NO_SUGGEST), { statusCode: 409 })
 
   const context = {
     trigger: 'REVIEW_SPIKE_DETECTED',

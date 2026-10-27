@@ -195,6 +195,7 @@ function SettingsInner() {
           onRetry={retrySettings}
           team={settings.data?.team ?? []}
           digestFallback={settings.data?.digestFallback ?? []}
+          ratingDropRule={settings.data?.ratingDropRule ?? null}
           onOn={(key, on) => edit((f) => setAlertOn(f, key, on))}
           onRecipients={(key, ids) => edit((f) => setAlertRecipients(f, key, ids))}
           onVia={(key, via, on) => edit((f) => toggleAlertVia(f, key, via, on))}
