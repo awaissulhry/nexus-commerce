@@ -22,10 +22,22 @@ import {
   SUBJECT_MAX,
   STANDARD_REQUEST_TEXT,
   isStandardRequestText,
+  type RequestTextIssue,
   type RequestTextLanguage,
 } from '@nexus/shared/review-request-text'
 import { languageIssues, withStandardWords, withText, withTextMode, type RuleForm } from './ruleForm'
 import s from './editor.module.css'
+
+/**
+ * The standard text as the standard e-mail shows it: its body has no unsubscribe line — buyers unsubscribe from their
+ * mail app (the one-click List-Unsubscribe header every review e-mail carries). A rule's own text keeps the link.
+ */
+const standardBody = (lang: RequestTextLanguage) => STANDARD_REQUEST_TEXT[lang].body.split('\n\n').filter((p) => !p.includes('{unsubscribe_link}')).join('\n\n')
+
+/** One field's problems in one sentence each, with the words that matched. */
+const issueWords = (issues: RequestTextIssue[]) => (issues.length
+  ? issues.map((i) => `${i.words}${i.match && !i.words.includes(i.match) ? ` (“${i.match}”)` : ''}`).join(' ')
+  : undefined)
 
 const MODE_OPTIONS = [
   { value: 'standard', label: 'Standard text' },
@@ -71,8 +83,8 @@ function LanguageBlock({ lang, form, update }: { lang: RequestTextLanguage; form
   const name = REQUEST_TEXT_LANGUAGE_NAMES[lang]
   const own = text.mode === 'own'
   const issues = languageIssues(text)
-  const subjectIssue = issues.find((i) => i.where === 'subject')
-  const bodyIssue = issues.find((i) => i.where === 'body')
+  const subjectError = issueWords(issues.filter((i) => i.where === 'subject'))
+  const bodyError = issueWords(issues.filter((i) => i.where === 'body'))
   const same = own && isStandardRequestText(lang, text)
   const titleId = `rule-text-${lang}`
   return (
@@ -92,24 +104,21 @@ function LanguageBlock({ lang, form, update }: { lang: RequestTextLanguage; form
       {!own ? (
         <div className={s.standardText} aria-label={`The standard ${name} text`}>
           <p className={s.textLine}><strong>Subject</strong> {STANDARD_REQUEST_TEXT[lang].subject}</p>
-          <p className={s.textBody}>{STANDARD_REQUEST_TEXT[lang].body}</p>
+          <p className={s.textBody}>{standardBody(lang)}</p>
+          <p className={s.hint}>Buyers unsubscribe from their mail app’s own button. A text of this rule’s own also carries the link {'{unsubscribe_link}'}.</p>
         </div>
       ) : (
         <>
-          <Field label="Subject" error={subjectIssue?.words}>
+          <Field label="Subject" error={subjectError}>
             <Input value={text.subject} onChange={(e) => update((f) => withText(f, lang, { subject: e.target.value }))} maxLength={SUBJECT_MAX} />
           </Field>
-          <Field label="Text" hint="A blank line starts a new paragraph." error={bodyIssue?.words}>
+          <Field label="Text" hint="A blank line starts a new paragraph." error={bodyError}>
             <Textarea value={text.body} onChange={(e) => update((f) => withText(f, lang, { body: e.target.value }))} rows={11} limit={BODY_MAX} />
           </Field>
           {issues.length > 0 ? (
-            <ul className={s.lint} aria-label={`Problems in the ${name} text`}>
-              {issues.map((issue, i) => (
-                <li key={`${issue.code}-${issue.where}-${i}`} className={s.lintError}>
-                  Not allowed in the {issue.where === 'subject' ? 'subject' : 'text'}: {issue.words}{issue.match && !issue.words.includes(issue.match) ? ` (“${issue.match}”)` : ''}
-                </li>
-              ))}
-            </ul>
+            <p className={s.errorText} role="status">
+              Save waits: {issues.length === 1 ? 'one thing' : `${issues.length} things`} in the {name} {issues.every((i) => i.where === 'subject') ? 'subject' : issues.every((i) => i.where === 'body') ? 'text' : 'subject and text'} {issues.length === 1 ? 'is' : 'are'} not allowed (above).
+            </p>
           ) : (
             <p className={s.okText}>
               <CheckCircle2 size={14} aria-hidden />

@@ -119,8 +119,9 @@ export function AbSplitCard({ rule, rules, canManage, unsaved }: AbSplitCardProp
   if (!pair) {
     return (
       <p className={s.hint}>
-        No A/B copy of this rule yet. “Duplicate as A/B” (at the top) makes B, off: change its day or hour, then start the split here.
-        It splits this rule’s orders 50 / 50 by order number.
+        No A/B copy of this rule yet. “Duplicate as A/B” (at the top) makes B, off:{' '}
+        {rule.scope === 'SHOPIFY' ? 'change its day, hour or e-mail text' : 'change its day or hour'}, then start the split here. It splits this
+        rule’s orders 50 / 50 by order number.
       </p>
     )
   }
