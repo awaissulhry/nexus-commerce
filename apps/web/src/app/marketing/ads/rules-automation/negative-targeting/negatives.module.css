@@ -291,3 +291,16 @@
   align-items: stretch;
   gap: var(--nds-space-12);
 }
+
+/* The toolbar's right-hand group (density · Customise · Views · status): one group that never breaks apart; on a narrow
+   card it takes the next line, right-aligned (GridToolbar `wrap`). On a phone the group is no box at all, so the bar's
+   own phone rules (the search on a line of its own) see its controls as before. */
+.toolbarRight {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.toolbarRightPhone {
+  display: contents;
+}

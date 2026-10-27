@@ -8,6 +8,8 @@
  *   runsIn     every place of the market that runs where the words served as a search term in the window and nothing
  *              blocks them, and every keyword of ours with the same words that runs — each with its owner and numbers
  *   blockedIn  every standing negative of the market (in campaigns that run) that blocks the words, with who made it
+ *              (NEGATED; PAUSED or NOT_AT_AMAZON: it blocks nothing now); `blockedAdGroups` counts the live ad groups, other than the
+ *              row's own, a negative blocks NOW (HONEST 18a: ad groups, not negatives)
  *   history    the row's own history (history.ts), 90 days
  *   effect     a standing negative's "Did it work?" (step 4: stopped.ts withEffects), as on its Stopped row
  * A row in a place that does not run is still answered (its detail), but its runsIn reads only places that run.
@@ -15,7 +17,7 @@
 import prisma from '../../../db.js'
 import { historyItems, type HistoryItem } from './history.js'
 import { NO_OWNER } from './owner.js'
-import { negativeMatch, parseRowId, termKeyOf, type Match, type Owner, type Ref, type RowNumbers, type WasteRow } from './pure.js'
+import { isoDay, negativeMatch, parseRowId, termKeyOf, wasteWindow, type Match, type Owner, type Ref, type RowNumbers, type WasteRow } from './pure.js'
 import { blockersOf, blocksNow, buildWasteRows, loadWasteFacts, marketCode, ownerOfNegative, placeRefs, type WasteFacts } from './read.js'
 import { buildStoppedRows, withEffects, type StoppedRow } from './stopped.js'
 
@@ -28,12 +30,25 @@ export interface Place {
   owner: Owner
   /** The words' numbers there (a search term's, or our keyword's); null where none are held. */
   d: RowNumbers | null
+  /** HONEST 18c — the days `d` covers, to the answer's settledThrough; absent where `d` is null. */
+  windowDays?: number
   /** The row there, when it is one (kw:/term:). */
   rowId: string | null
+  /** HONEST 8 — runsIn: why the row's own verb there may not run (its hold, as the server re-checks it); absent: it may. */
+  held?: { label: string; reason: string }
 }
 
 export type RowDetailAnswer =
-  | { ok: true; row: WasteRow | StoppedRow; runsIn: Place[]; blockedIn: Place[]; history: HistoryItem[] }
+  | {
+    ok: true; row: WasteRow | StoppedRow; runsIn: Place[]; blockedIn: Place[]; history: HistoryItem[]
+    /**
+     * HONEST 18a — the live ad groups, other than the row's own, where a negative blocks these words NOW (Amazon holds
+     * it, it is on, its campaign runs): ad groups, never a count of negatives (blockedIn lists every negative, each state).
+     */
+    blockedAdGroups: number
+    /** HONEST 18c — the last day the numbers' clicks and spend count (YYYY-MM-DD, 3 days ago). */
+    settledThrough: string
+  }
   | { ok: false; status: 400 | 404; error: string }
 
 /** The market and the place a row id names, or why not. */
@@ -54,7 +69,7 @@ async function locate(id: string): Promise<{ market: string; adGroupId: string; 
   return { market, adGroupId: t.adGroupId, key: termKeyOf(t.expressionValue), kind: parsed.kind, targetId: t.id }
 }
 
-const placeOf = (f: WasteFacts, r: WasteRow): Place => ({ portfolio: r.portfolio, campaign: r.campaign, adGroup: r.adGroup, match: r.match, state: r.state, owner: r.owner, d: r.d, rowId: r.id })
+const placeOf = (f: WasteFacts, r: WasteRow): Place => ({ portfolio: r.portfolio, campaign: r.campaign, adGroup: r.adGroup, match: r.match, state: r.state, owner: r.owner, d: r.d, ...(r.d ? { windowDays: r.test.windowDays } : {}), rowId: r.id, ...(r.verb.held ? { held: r.verb.held } : {}) })
 
 export async function readRowDetail(id: string, now: Date = new Date()): Promise<RowDetailAnswer> {
   const at = await locate(id)
@@ -88,14 +103,19 @@ export async function readRowDetail(id: string, now: Date = new Date()): Promise
       blockedIn.push({
         portfolio: refs.portfolio, campaign: refs.campaign, adGroup: n.negativeLevel === 'CAMPAIGN' ? null : refs.adGroup,
         match: m === 'ASIN' ? 'ASIN' : m ?? 'EXACT',
-        state: blocksNow(f, n) ? 'NEGATED' : 'NOT_AT_AMAZON', owner: ownerOfNegative(f, n) ?? NO_OWNER, d: termHere?.d ?? null, rowId: `neg:${n.id}`,
+        // A negative Amazon holds but that is off (or whose campaign does not run) blocks nothing now either: PAUSED.
+        state: blocksNow(f, n) ? 'NEGATED' : !n.externalTargetId ? 'NOT_AT_AMAZON' : 'PAUSED', owner: ownerOfNegative(f, n) ?? NO_OWNER, d: termHere?.d ?? null,
+        ...(termHere?.d ? { windowDays: termHere.test.windowDays } : {}), rowId: `neg:${n.id}`,
       })
     }
   }
+  // HONEST 18a — "Already blocked in N other ad groups": the live ad groups (not the row's own) blocked NOW.
+  let blockedAdGroups = 0
+  for (const g of f.adGroups.values()) if (g.live && g.id !== at.adGroupId && blockersOf(f, g.id, at.key).some((n) => blocksNow(f, n))) blockedAdGroups++
 
   const g = f.adGroups.get(at.adGroupId)!
   const history = await historyItems(f, { market: at.market, campaignId: g.campaignId }, 90, 'all', at.kind === 'term'
     ? { termKey: at.key, adGroupIds: new Set([at.adGroupId]), campaignIds: new Set([g.campaignId]) }
     : { targetIds: new Set([at.targetId!]) })
-  return { ok: true, row, runsIn, blockedIn, history: history.rows }
+  return { ok: true, row, runsIn, blockedIn, history: history.rows, blockedAdGroups, settledThrough: isoDay(wasteWindow(now).clicksThrough) }
 }

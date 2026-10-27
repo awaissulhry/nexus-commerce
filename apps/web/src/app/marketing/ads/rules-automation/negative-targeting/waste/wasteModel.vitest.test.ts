@@ -348,7 +348,7 @@ describe('NFIX — a request is decided whole: the review lists every step of a 
     expect(lines.every((l) => l.approvalId === 'plan1' && l.note?.startsWith('Approved together · 3 steps · Brain'))).toBe(true)
     expect(lines[1]).toMatchObject({ offPage: true, whereLink: { name: 'Boots exact' }, note: expect.stringMatching(/not on this page$/) })
     expect(lines[3].note).toMatch(/Its details need the permissions/)
-    expect(decideSummary([wait('plan1')], new Map([['plan1', plan]]), 'approve')).toBe('This request is approved whole: every step below runs together, 1 step not on this page included.')
+    expect(decideSummary([wait('plan1')], new Map([['plan1', plan]]), 'approve')).toBe('This request is approved whole: every change below runs together, 1 step not on this page included.')
     expect(decideLines([wait('plan1')], new Map([['plan1', plan]]), 'reject')[0].note).toMatch(/^Rejected together/)
   })
 
@@ -357,7 +357,7 @@ describe('NFIX — a request is decided whole: the review lists every step of a 
     const steps = new Map<string, WaitingSteps | null>([['one', single]])
     expect(decideLines([wait('one', { what: 'Pause', text: 'rain jacket' }), wait('suggestion:c1', { what: undefined, text: 'kids', places: 2 })], steps, 'approve')).toEqual([
       expect.objectContaining({ id: 'one', what: 'Pause · rain jacket', now: 'Waiting · Brain', next: 'Approved' }),
-      expect.objectContaining({ id: 'suggestion:c1', what: 'kids', note: '2 places' }),
+      expect.objectContaining({ id: 'suggestion:c1', what: 'kids', note: 'One answer · 2 rows here' }),
     ])
     expect(decideSummary([wait('one')], steps, 'approve')).toBeNull()
   })
@@ -431,9 +431,9 @@ describe('the redesign (2026-10-26): the frame\'s words, the chips, the rows\' �
 
   it('D12: a waiting row says who asked; a rule\'s card is "Rule", its name in the hover', () => {
     const waiting = { approvalId: 'suggestion:c1', by: ref('r1', 'Stop wasting glove terms'), at: '2026-10-26T05:00:00Z', expiresAt: '2026-11-01T10:00:00Z' }
-    expect(stateChip(term({ waiting }), NOW)).toEqual({ word: 'Waiting · asked by Rule', tone: 'warning', mark: 'hourglass', title: 'Waiting for you · asked by Stop wasting glove terms 5 h ago · expires in 6 d' })
-    expect(stateChip(term({ waiting: { ...waiting, approvalId: 'a1', by: ref('brain', 'Brain') } }), NOW).word).toBe('Waiting · asked by Brain')
-    expect(decideAria('approve', term({ text: 'rain cover', waiting: { ...waiting, rows: 2 } }))).toBe('Approve rain cover · 2 places')
+    expect(stateChip(term({ waiting }), NOW)).toEqual({ word: 'Waiting', tone: 'warning', mark: 'hourglass', title: 'Waiting for you · asked by Stop wasting glove terms 5 h ago · expires in 6 d' })
+    expect(stateChip(term({ waiting: { ...waiting, approvalId: 'a1', by: ref('brain', 'Brain') } }), NOW).word).toBe('Waiting')
+    expect(decideAria('approve', term({ text: 'rain cover', waiting: { ...waiting, rows: 2 } }))).toBe('Approve rain cover · 2 rows')
     expect(decideAria('reject', term({ text: 'glove liner', waiting }))).toBe('Reject glove liner')
   })
 

@@ -392,7 +392,11 @@ export interface WaitingRow {
   product: Ref | null
   verb: { action: string; where: 'adGroup' | 'campaign'; held: null | { label: string; reason: string } }
   d: { clicks: number; orders: number; spendCents?: number; xCpa?: number | null }
-  waiting: null | { approvalId: string; by: { id: string | null; name: string }; at: string; expiresAt: string | null }
+  /** HONEST 10 / 11 — `action` … `keepPaused`: the ask's own change at this row; `changes`: how many its ask holds. */
+  waiting: null | {
+    approvalId: string; by: { id: string | null; name: string }; at: string; expiresAt: string | null
+    action?: string; level?: 'AD_GROUP' | 'CAMPAIGN' | null; text?: string | null; keepPaused?: boolean; changes?: number
+  }
 }
 
 /** One decision: an approval (or a rule's card), and every row it covers (a card can cover a term in two ad groups). */
@@ -416,12 +420,35 @@ export function waitingAsksOf(rows: readonly WaitingRow[], ownerId: string): Wai
   return [...by.values()].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
 }
 
-/** What an ask would do, in words: its verb and where ("Negative exact · campaign"). */
+/**
+ * What an ask would do, in words: its change and where ("Negative exact · campaign"). HONEST 10 — the ask's own change
+ * (the server's `waiting.action` and `level`; a pause that does not keep it paused says so), never the row's verb; an
+ * older answer without them: the row's verb.
+ */
 export function askWhat(a: WaitingAsk): string {
+  const w = a.rows[0]?.waiting
+  if (w?.action) {
+    if (w.action === 'PAUSE') return w.keepPaused === false ? 'Pause keyword' : ACTION_WORD.PAUSE
+    return w.level === 'CAMPAIGN' ? `${actionWord(w.action)} · campaign` : actionWord(w.action)
+  }
   const v = a.rows[0]?.verb
   if (!v) return '—'
   const word = actionWord(v.action)
   return v.action !== 'PAUSE' && v.where === 'campaign' ? `${word} · campaign` : word
+}
+
+/**
+ * HONEST 11 — an ask over several rows, as its tag says it: the same words in N ad groups (one negative there), or N
+ * different changes, all decided by one answer (never "N places" for different terms). Null: one row, one change.
+ */
+export function askRowsTag(a: WaitingAsk): { label: string; hint: string } | null {
+  const wordsOf = (x: WaitingRow) => (x.waiting?.text ?? '').trim() || x.text
+  const changes = a.rows[0]?.waiting?.changes ?? 0
+  if (a.rows.length > 1 && new Set(a.rows.map((x) => wordsOf(x).toLowerCase())).size === 1) return { label: `${a.rows.length} ad groups`, hint: a.rows.map((x) => x.adGroup.name).join(' · ') }
+  const n = Math.max(a.rows.length, changes)
+  if (n < 2) return null
+  const more = n - a.rows.length
+  return { label: `${n} changes`, hint: `One answer decides them all: ${[...a.rows.map((x) => `${wordsOf(x)} in ${x.adGroup.name}`), ...(more > 0 ? [`and ${more} more`] : [])].join(' · ')}` }
 }
 
 /** How many the rule says wait, against how many the page lists (a row the page hides — a paused campaign — is not listed). */

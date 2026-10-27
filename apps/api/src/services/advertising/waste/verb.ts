@@ -8,7 +8,8 @@
  *   a product / category target → Pause.
  *   a shopper's ASIN term     → negative product target in the ad group.
  *   a shopper's search term   → negative exact, in the ad group; in the whole campaign when it served in 2+ ad groups of it
- *                               (the brain's rule, brain/negatives.ts).
+ *                               (the brain's rule, brain/negatives.ts) and no other ad group of it sold those words or
+ *                               holds our own keyword of them (HONEST 7: else it stays in the ad group).
  *   held (first that applies) protected term · our own keyword in this ad group (a negative would block it: L1) · a term
  *                               harvested in the last 30 days · a place younger than 14 days · a shared campaign with no
  *                               owner · (keywords) its search terms sell.
@@ -25,6 +26,13 @@ export interface VerbFacts {
   isAsinTerm?: boolean
   /** TERM: ad groups of this campaign the term served in over the window. */
   adGroupsInCampaign?: number
+  /**
+   * HONEST 7 — TERM: another ad group of this campaign (any, paused ones too: a campaign negative lands in all) where the
+   * same words sold in the read, or holds our own keyword or target of those words. Either keeps the negative in this ad
+   * group: a campaign negative would block that sale or that keyword (add-negative-targets refuses it).
+   */
+  soldInSibling?: boolean
+  ownKeywordInSibling?: boolean
   /** A protected term (AdKeywordProtection) hits it: the protection's words. */
   protectedBy?: string | null
   /** TERM: the same text is our own keyword or target in this ad group (any match, paused ones too). */
@@ -48,7 +56,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 export function verbFor(f: VerbFacts): Verb {
   const isTerm = f.kind === 'TERM'
   const action: Verb['action'] = !isTerm ? 'PAUSE' : f.isAsinTerm ? 'NEGATE_ASIN' : 'NEGATE_EXACT'
-  const where: Verb['where'] = isTerm && !f.isAsinTerm && (f.adGroupsInCampaign ?? 0) >= 2 ? 'campaign' : 'adGroup'
+  const where: Verb['where'] = isTerm && !f.isAsinTerm && (f.adGroupsInCampaign ?? 0) >= 2 && !f.soldInSibling && !f.ownKeywordInSibling ? 'campaign' : 'adGroup'
   return { action, where, held: heldFor(f) }
 }
 

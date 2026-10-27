@@ -10,7 +10,7 @@
  *   undo     a state change: Undo (POST /advertising/changes/:changeId/undo) while it landed, is not undone, carries what it
  *            replaced and is inside its window (rollback.service.ts rollbackWindowMsFor); a negative made inside a change
  *            set: the Undo of `changeSetId` retires it; a removed negative: never (Amazon archives it); a skip an Unskip
- *            ended reads UNDONE
+ *            ended reads UNDONE; a skip that holds: the page's own Unskip of its `rowId` (Nexus only, no change id)
  *   words    `by` is a plain name (You, a rule's name, Brain, Claude, Harvest, Unknown); stored words pass plainWords (no
  *            raw ids, no tool names, Rome times)
  */
@@ -19,7 +19,7 @@ import prisma from '../../../db.js'
 import { rollbackWindowLabel, rollbackWindowMsFor } from '../rollback.service.js'
 import { labelFor } from '../bid-grid.service.js'
 import { negativeKeptBy, ownerOfActor, refOfOwner } from './owner.js'
-import { HOLD_ACTIONS, KEPT_PAUSED_DENIED_AT } from './hold.js'
+import { actorNames, HOLD_ACTIONS, KEPT_PAUSED_DENIED_AT } from './hold.js'
 import { DAY_MS, deliveryOf, negativeMatch, plainWords, romeDay, romeTime, targetMatch, termKeyOf, type Delivery, type Ref } from './pure.js'
 import { inScope, ownerOfNegative, placeRefs, readSkipRows, scopedFacts, type ResolvedScope, type WasteFacts, type WasteScope } from './read.js'
 
@@ -108,7 +108,11 @@ export async function historyItems(f: WasteFacts, s: ResolvedScope, days: number
     sets.length ? prisma.agentApproval.findMany({ where: { id: { in: sets }, agentRun: { via: 'claude' } }, select: { id: true } }) : Promise.resolve([]),
   ])
   const approvalIds = new Set(approvals.map((a) => a.id))
-  const names = { rules: f.names.rules, claudeChangeSets: new Set([...f.names.claudeChangeSets, ...claude.map((a) => a.id)]) }
+  // HONEST 19 — every person by their own name: the facts' people, and those only this history names (its changes, skips).
+  const unnamed = [...logs.map((l) => l.actor), ...(await readSkipRows(since)).flatMap((s) => [s.by, s.endedBy]), ...(f.followUps ?? []).map((fu) => fu.by)]
+    .filter((a): a is string => !!a && a.startsWith('user:') && !f.names.people?.has(a))
+  const people = new Map([...(f.names.people ?? []), ...(unnamed.length ? await actorNames(unnamed) : [])])
+  const names = { rules: f.names.rules, claudeChangeSets: new Set([...f.names.claudeChangeSets, ...claude.map((a) => a.id)]), people }
   const missingRules = [...new Set(logs.map((l) => (l.actor ?? '').replace(/^automation:(automation:)*/, '').replace(/^rule-/, '')).filter((id) => id && l_isRule(id) && !names.rules.has(id)))]
   if (missingRules.length) for (const r of await prisma.automationRule.findMany({ where: { id: { in: missingRules } }, select: { id: true, name: true } })) (names.rules as Map<string, string>).set(r.id, r.name)
 
@@ -255,7 +259,8 @@ export async function historyItems(f: WasteFacts, s: ResolvedScope, days: number
       by: refOfOwner(ownerOfActor(skip.by, names)),
       why: `${ended ? `Skipped until ${romeDay(skip.until)}; unskipped ${romeTime(skip.endedAt!)}${skip.endedBy ? ` by ${ownerOfActor(skip.endedBy, names).name}` : ''}.` : over ? `Skipped until ${romeDay(skip.until)}: it has ended.` : `Skipped until ${romeDay(skip.until)}: it comes back with fresh numbers.`}${reason ? ` ${reason}` : ''}`,
       changeId: null, changeSetId: null, delivery: ended ? 'UNDONE' : 'LIVE',
-      undo: ended ? { available: false, why: 'Already undone.' } : over ? { available: false, why: 'The skip has ended.' } : { available: true, why: 'Unskip brings it back now.' },
+      // HONEST 17 — its Undo is the page's own Unskip of `rowId` (POST /waste/unskip): Nexus only, no change id.
+      undo: ended ? { available: false, why: 'Already undone.' } : over ? { available: false, why: 'The skip has ended.' } : { available: true, why: 'Unskip shows it again now: Nexus only.' },
     })
   }
 

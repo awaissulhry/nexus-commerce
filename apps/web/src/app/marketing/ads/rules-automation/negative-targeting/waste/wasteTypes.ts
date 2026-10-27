@@ -26,6 +26,10 @@ export interface RowTest {
   clicksNeeded: number
   spendBarCents?: number | null
   xCpaBar: number | null
+  /** HONEST 15 — false: listed only for an ask, the page's test never ran on it (no checks are drawn). */
+  judged?: false
+  /** HONEST 18c — the last day its clicks and spend count (YYYY-MM-DD, 3 days ago): "60 days to 24 Oct". */
+  settledThrough?: string
 }
 
 export interface RowNumbers {
@@ -66,10 +70,28 @@ export interface WasteRow {
     approvalId: string; by: Ref; at: string; expiresAt: string | null; rows?: number
     /** NFIX — the ask is a change plan: its steps (approved together) and how many are not on this page. */
     plan?: { steps: number; offPage: number }
+    /**
+     * HONEST 10 — the ask's OWN change at this row (never the row's verb): its action, the negative's match (our keyword's
+     * own for a pause), where it lands (null for a pause), its words, and for a pause whether it keeps it paused.
+     * Absent on an older answer.
+     */
+    action?: VerbAction
+    match?: Match | null
+    level?: 'AD_GROUP' | 'CAMPAIGN' | null
+    text?: string | null
+    keepPaused?: boolean
+    /** HONEST 18d — a removal: whether Amazon holds the negative (false: removing it changes Nexus only). */
+    atAmazon?: boolean
+    /** HONEST 11 — how many of this page's changes the ask holds (1: one change, which may cover several rows). */
+    changes?: number
   }
+  /** `by`: the person's name (HONEST 19). */
   skipped: null | { until: string; by: string | null; at: string | null }
+  /** HONEST 18b — other live ad groups where its words SPENT in the window, not blocked there now. */
   stillServesIn: number
   lastChange: null | { action: string; at: string; by: Ref; changeId: string | null }
+  /** HONEST 13 — a NEGATED term: the negative that blocks it here (its own words, match and level). */
+  blockedBy?: ClashNegative | null
   /** Step 4 — a PROTECTED row: every protected term that keeps it safe (the page names the first) and what holds its verb
    *  once they are removed (`then`, null: it can stop). */
   protection?: RowProtection
@@ -118,6 +140,8 @@ export interface WasteTotals {
   currency?: string | null
   wastingSpendByCurrency?: Record<string, number>
   wastingSpendNote?: string | null
+  /** HONEST 18c — the windows (days) of the rows the wasting spend sums, lowest first. Absent from an older server. */
+  wastingWindows?: number[]
   /** Kept paused, but switched on outside Nexus. */
   turnedOn?: number
   keywords: number
@@ -169,6 +193,7 @@ export interface StoppedRow {
   keptPaused: null | { by: Ref; at: string; until: string | null; reason: string | null }
   spendBeforeCents?: number | null
   state: StoppedState
+  /** HONEST 18b — other live ad groups where its words SPENT since the stop (the window when the stop day is unknown). */
   stillServesIn: number
   places: number
   actions: { turnOn: ActionGate; removeNegative: ActionGate; release: ActionGate }
@@ -209,10 +234,20 @@ export interface Place {
   state: PlaceState
   owner: Owner
   d: RowNumbers | null
+  /** HONEST 18c — the days `d` covers, to the answer's settledThrough. */
+  windowDays?: number
   rowId: string | null
+  /** HONEST 8 — Spends here: why the row's own verb there may not run (the server re-checks it on send); absent: it may. */
+  held?: { label: string; reason: string }
 }
 
-export interface RowDetail { row: WasteRow | StoppedRow; runsIn: Place[]; blockedIn: Place[]; history: HistoryItem[] }
+export interface RowDetail {
+  row: WasteRow | StoppedRow; runsIn: Place[]; blockedIn: Place[]; history: HistoryItem[]
+  /** HONEST 18a — the live ad groups, other than the row's own, a negative blocks NOW (ad groups, not negatives). */
+  blockedAdGroups?: number
+  /** HONEST 18c — the last day the numbers' clicks and spend count (YYYY-MM-DD). */
+  settledThrough?: string
+}
 
 // ── writes ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 

@@ -17,7 +17,7 @@ import { dayWords, money, relWords } from '../../bid/_shared/format'
 import { addApiParams, type ScopeApi } from '../../_shared/scopeFilter/scopeFilterModel'
 import { MARKET_NAME } from '../../../_shell/adsMarkets'
 import type {
-  ActionGate, ApplyAnswer, Delivery, HistoryAction, Match, Owner, PreviewAnswer, PreviewStep, Reach, ReachTotal, Ref, RowKind, RowState, StoppedRow, StoppedState,
+  ActionGate, ApplyAnswer, ClashNegative, Delivery, HistoryAction, Match, Owner, PreviewAnswer, PreviewStep, Reach, ReachTotal, Ref, RowKind, RowState, StoppedRow, StoppedState,
   StoppedTotals, VerbAction, WaitingSteps, WasteAction, WasteCriteria, WasteFreshness, WasteItem, WasteRow, WasteTotals, Where,
 } from './wasteTypes'
 
@@ -136,15 +136,33 @@ const STATE: Readonly<Record<AnyState, string>> = {
 }
 export const stateWord = (s: AnyState) => STATE[s] ?? s
 
+/** HONEST 9 — why a shopper's search term reads PAUSED: every keyword or target that bought it here is paused. */
+export const KEYWORD_PAUSED = 'Its keyword is paused: Amazon does not buy this search term now, so it is not wasting now'
+/**
+ * A shopper's search-term row (`term:`) whose buying keywords are all paused (the server's PAUSED on it) — never a
+ * Stopped row's negative switched off (`neg:`, PAUSED too).
+ */
+export const isPausedTerm = (r: { state: AnyState }): boolean => r.state === 'PAUSED' && 'id' in r && String((r as { id?: unknown }).id).startsWith('term:')
+
 /** The full name of a row's state mark (its tooltip and its accessible name). */
-export function stateSentence(r: { state: AnyState; match?: Match; level?: 'AD_GROUP' | 'CAMPAIGN' | null; keptPaused?: StoppedRow['keptPaused']; protection?: WasteRow['protection'] }): string {
+/** Words as a negative compares them: lower case, one space. */
+const termKey = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+
+export function stateSentence(r: { state: AnyState; match?: Match; level?: 'AD_GROUP' | 'CAMPAIGN' | null; keptPaused?: StoppedRow['keptPaused']; protection?: WasteRow['protection']; blockedBy?: Pick<ClashNegative, 'match' | 'level' | 'text'> | null; text?: string }): string {
   if (r.state === 'KEPT_PAUSED') {
     const by = r.keptPaused?.by.name
     return `Kept paused${by ? ` by ${by}` : ''}: no rule, Brain or plan turns it on`
   }
+  // HONEST 9 — a shopper's term is "paused" only through its keyword: every keyword that bought it here is paused.
+  if (isPausedTerm(r)) return KEYWORD_PAUSED
   if (r.state === 'NEGATED') {
-    const m = r.match === 'PHRASE' ? 'phrase' : r.match === 'ASIN' ? 'product' : 'exact'
-    return `Negative ${m}${r.level === 'CAMPAIGN' ? ' in the whole campaign' : r.level === 'AD_GROUP' ? ' in this ad group' : ''}`
+    // HONEST 13 — a blocked term names the negative that blocks it (`blockedBy`), never the match of the keyword that
+    // bought it; a negative's own row (Stopped: it has `level`) is that negative. Neither known: no match is guessed.
+    const neg = r.blockedBy ?? ('level' in r ? { match: r.match, level: r.level ?? null, text: null } : null)
+    if (!neg) return 'Blocked here by a negative'
+    const m = neg.match === 'PHRASE' ? 'phrase' : neg.match === 'ASIN' ? 'product' : 'exact'
+    const words = neg.text && r.blockedBy && termKey(neg.text) !== termKey(r.text ?? '') ? ` "${neg.text}"` : ''
+    return `Negative ${m}${words}${neg.level === 'CAMPAIGN' ? ' in the whole campaign' : neg.level === 'AD_GROUP' ? ' in this ad group' : ''}`
   }
   if (r.state === 'TURNED_ON_ELSEWHERE') return 'Kept paused, but turned on outside Nexus: it spends again'
   if (r.state === 'NOT_AT_AMAZON') return 'Amazon never took it: it blocks nothing'
@@ -242,7 +260,8 @@ export function chipOwner(o: Owner): ChipOwner {
     case 'RULE': return { kind: 'RULE', label: 'Rule', hint: name ? `Rule: ${name}` : 'A rule', locked: false, ruleId: o.id }
     case 'HARVEST': return { kind: 'HARVEST', label: 'Harvest', hint: 'Harvest keeps it', locked: true, ruleId: null }
     case 'CLAUDE': return { kind: 'CLAUDE', label: 'Claude', hint: 'Claude', locked: false, ruleId: null }
-    case 'PERSON': return { kind: 'PERSON', label: name && name !== 'You' ? name : 'You', hint: name && name !== 'You' ? name : 'A person', locked: false, ruleId: null }
+    // HONEST 19 — the person's own name; "You" only when the server says it is the person looking; none: "A person".
+    case 'PERSON': return { kind: 'PERSON', label: name || 'A person', hint: name || 'A person', locked: false, ruleId: null }
     default: return { kind: 'NONE', label: '—', hint: name && name !== '—' ? name : 'Nobody', locked: false, ruleId: null }
   }
 }
@@ -317,7 +336,8 @@ export function wasteVerb(r: Pick<WasteRow, 'state' | 'verb' | 'kind'> & Partial
 /** A stopped row's verb and its gate (the server's own allowed / why). */
 export function stoppedVerb(r: Pick<StoppedRow, 'state' | 'kind' | 'actions' | 'id'>): RowVerbView {
   const gate = (g: ActionGate) => (g.allowed ? null : g.why || 'Not allowed here')
-  if (r.id.startsWith('neg:')) return { action: 'REMOVE_NEGATIVE', where: null, label: 'Remove…', short: 'Remove…', sentence: verbSentence('REMOVE_NEGATIVE'), held: gate(r.actions.removeNegative), primary: false }
+  // HONEST 18d — a negative Amazon never had is removed in Nexus only: nothing is archived at Amazon.
+  if (r.id.startsWith('neg:')) return { action: 'REMOVE_NEGATIVE', where: null, label: 'Remove…', short: 'Remove…', sentence: r.state === 'NOT_AT_AMAZON' ? NEXUS_ONLY_REMOVAL : verbSentence('REMOVE_NEGATIVE'), held: gate(r.actions.removeNegative), primary: false }
   if (r.state === 'TURNED_ON_ELSEWHERE') return { action: 'RELEASE', where: null, label: 'Release', short: 'Release', sentence: verbSentence('RELEASE'), held: gate(r.actions.release), primary: false }
   return { action: 'TURN_ON', where: null, label: 'Turn on…', short: 'Turn on…', sentence: verbSentence('TURN_ON'), held: gate(r.actions.turnOn), primary: false }
 }
@@ -366,6 +386,7 @@ export function wasteBulkPlan(picked: ReadonlyArray<Picked<WasteRow>>, verb: Was
     const kind = loaded(p) ? (p.kind === 'TERM' ? 'term' : 'kw') : idKind(p.id)
     const leave = (why: string) => left.push({ id: p.id, text: textOf(p), why })
     if (loaded(p)) {
+      if (isPausedTerm(p)) { leave(KEYWORD_PAUSED); continue }
       const runs = p.state === 'RUNNING' || (verb === 'pause' && p.state === 'TURNED_ON_ELSEWHERE')
       if (!runs) { leave(p.state === 'PROTECTED' ? 'Protected: never negated' : p.state === 'TURNED_ON_ELSEWHERE' ? 'Turned on outside Nexus: pause it again' : `${stateWord(p.state)} already`); continue }
       // A keyword with a negative over it may be paused (audit N1); its verb's hold is the removal's, not the pause's.
@@ -386,6 +407,13 @@ export function wasteBulkPlan(picked: ReadonlyArray<Picked<WasteRow>>, verb: Was
   }
   return { items, left }
 }
+
+/**
+ * HONEST 8 — the Where tab's "Add negative exact" in a place where the term still spends: held when the person may not
+ * write (`writeHeld`), or when the term's own verb there is held (the server's reason; it refuses the same on send).
+ */
+export const placeNegateHeld = (p: { held?: { label: string; reason: string } | null }, writeHeld: string | null): string | null =>
+  writeHeld ?? (p.held ? p.held.reason || p.held.label : null)
 
 /** How many ticked rows each wasting verb fits (the bulk buttons' counts). */
 export function wasteBulkCounts(picked: ReadonlyArray<Picked<WasteRow>>): Record<WasteBulk, number> {
@@ -464,10 +492,49 @@ export interface Waiting {
   by: string
   what?: string
   place?: Array<Ref | null>
-  /** How many places this one ask covers ("2 places"); absent = one. */
+  /** How many listed rows this one ask covers; absent = one. */
   places?: number
+  /** HONEST 11 — how many changes the ask holds (the server's count); absent on an older answer. */
+  changes?: number
+  /** HONEST 11 — where its change lands at this row (a whole campaign's negative covers its term's ad groups). */
+  level?: 'AD_GROUP' | 'CAMPAIGN' | null
 }
-/** The asks behind the ticked rows: ONE per ask (an ask may cover several rows), with how many places it covers. */
+
+/** A rule's Ask-me card (`suggestion:<id>`): decided through the Suggestions page's own apply and dismiss. */
+export const isRuleCard = (approvalId: string) => approvalId.startsWith('suggestion:')
+
+/** HONEST 10 — the ask's own change at a waiting row, as the page words it. */
+export interface AskChange { action: VerbAction; where: Where | null; text: string; match: Match | null; keepPaused: boolean | null }
+/**
+ * HONEST 10 — what the row's ask changes there: the server's `waiting.action / match / level / text` (never the row's own
+ * verb). An older answer without them: the row's verb, except a clash row's Remove (its ask is not that) — null.
+ */
+export function askChangeOf(r: Pick<WasteRow, 'text' | 'verb' | 'waiting'> & Partial<Pick<WasteRow, 'askOnly'>>): AskChange | null {
+  const w = r.waiting
+  if (!w) return null
+  if (w.action) {
+    const placed = w.action !== 'PAUSE'
+    return { action: w.action, where: placed ? (w.level === 'CAMPAIGN' && w.action !== 'NEGATE_ASIN' ? 'campaign' : 'adGroup') : null, text: (w.text ?? '').trim() || r.text, match: w.match ?? null, keepPaused: w.keepPaused ?? null }
+  }
+  if (r.verb.action === 'REMOVE_NEGATIVE' && !r.askOnly) return null
+  return { action: r.verb.action, where: r.verb.action === 'PAUSE' ? null : r.verb.where, text: r.text, match: null, keepPaused: null }
+}
+
+/**
+ * HONEST 11 — how far one answer reaches past this row: the other changes of its request (`changes`), or the ad groups
+ * one negative in a whole campaign covers (one change, several listed rows); `rows` when an older answer cannot say
+ * which. Null: it decides this row only.
+ */
+export type AskReach = { kind: 'changes' | 'adGroups' | 'rows'; n: number }
+export function askReachOf(w: { rows?: number; changes?: number; level?: 'AD_GROUP' | 'CAMPAIGN' | null } | null | undefined): AskReach | null {
+  if (!w) return null
+  if ((w.changes ?? 0) > 1) return { kind: 'changes', n: w.changes! }
+  const rows = Math.max(1, w.rows ?? 1)
+  if (rows <= 1) return null
+  return { kind: w.changes === 1 && w.level === 'CAMPAIGN' ? 'adGroups' : 'rows', n: rows }
+}
+
+/** The asks behind the ticked rows: ONE per ask (an ask may cover several rows), in the ask's own words (HONEST 10). */
 export function waitingOf(rows: ReadonlyArray<Picked<WasteRow>>): Waiting[] {
   const out = new Map<string, Waiting>()
   const seen = new Map<string, number>()
@@ -477,10 +544,12 @@ export function waitingOf(rows: ReadonlyArray<Picked<WasteRow>>): Waiting[] {
     seen.set(r.waiting.approvalId, n)
     const cur = out.get(r.waiting.approvalId)
     if (cur) { cur.places = Math.max(n, r.waiting.rows ?? 1); continue }
+    const ask = askChangeOf(r)
     out.set(r.waiting.approvalId, {
-      rowId: r.id, approvalId: r.waiting.approvalId, text: r.text, by: r.waiting.by.name, places: Math.max(1, r.waiting.rows ?? 1),
-      // A clash row's Remove is not what its ask does (the ask pauses it); a row listed for its ask has the ask's verb.
-      what: r.verb.action === 'REMOVE_NEGATIVE' && !r.askOnly ? undefined : verbLabel(r.verb.action, r.verb.action === 'PAUSE' || r.verb.action === 'REMOVE_NEGATIVE' ? null : r.verb.where), place: pathOf(r),
+      rowId: r.id, approvalId: r.waiting.approvalId, text: ask?.text ?? r.text, by: r.waiting.by.name, places: Math.max(1, r.waiting.rows ?? 1),
+      ...(r.waiting.changes != null ? { changes: r.waiting.changes } : {}),
+      ...(r.waiting.level !== undefined ? { level: r.waiting.level } : {}),
+      what: ask ? verbLabel(ask.action, ask.where) : undefined, place: pathOf(r),
     })
   }
   return [...out.values()]
@@ -518,12 +587,14 @@ export function decideLines(waits: readonly Waiting[], steps: ReadonlyMap<string
   const out: DecideLine[] = []
   for (const w of waits) {
     const s = steps.get(w.approvalId) ?? null
-    const single = !s || (!s.plan && s.steps.length <= 1 && s.offPage === 0)
-    if (single) {
-      out.push({ id: w.approvalId, approvalId: w.approvalId, what: w.what ? `${w.what} · ${w.text}` : w.text, place: w.place, now: `Waiting · ${w.by}`, next: done, note: (w.places ?? 1) > 1 ? `${w.places} places` : undefined })
+    // HONEST 11 — one line only for ONE change (a rule's card, or a request whose one step makes at most one change).
+    if (!s || !decidedWhole(s)) {
+      const reach = askReachOf({ rows: w.places, changes: w.changes, level: w.level })
+      const note = !reach ? undefined : reach.kind === 'adGroups' ? `One negative · covers ${reach.n} ad groups here` : `One answer · ${plural(reach.n, 'row')} here`
+      out.push({ id: w.approvalId, approvalId: w.approvalId, what: w.what ? `${w.what} · ${w.text}` : w.text, place: w.place, now: `Waiting · ${w.by}`, next: done, note })
       continue
     }
-    const of = `${together} · ${plural(s.steps.length, 'step')} · ${w.by}`
+    const of = s.plan || s.steps.length > 1 ? `${together} · ${plural(s.steps.length, 'step')} · ${w.by}` : `${together} · ${plural(s.steps[0]?.changeCount ?? 0, 'change')} · ${w.by}`
     for (const step of s.steps) {
       const note = `${of}${step.onPage ? '' : ' · not on this page'}`
       const base = { approvalId: w.approvalId, whereLink: step.where ?? undefined, offPage: !step.onPage || undefined }
@@ -539,13 +610,42 @@ export function decideLines(waits: readonly Waiting[], steps: ReadonlyMap<string
   return out
 }
 
+/** HONEST 11 — a request its review lists line by line: a plan, several steps, a step this page does not show, or one step with several changes. */
+const decidedWhole = (s: WaitingSteps) => s.plan || s.steps.length > 1 || s.offPage > 0 || (s.steps[0]?.changeCount ?? 0) > 1
+
 /** The decide review's summary: what is decided whole, and how many changes are not on this page. */
 export function decideSummary(waits: readonly Waiting[], steps: ReadonlyMap<string, WaitingSteps | null>, decide: 'approve' | 'reject'): string | null {
-  const plans = waits.map((w) => steps.get(w.approvalId)).filter((s): s is WaitingSteps => !!s && (s.plan || s.steps.length > 1 || s.offPage > 0))
+  const plans = waits.map((w) => steps.get(w.approvalId)).filter((s): s is WaitingSteps => !!s && decidedWhole(s))
   if (!plans.length) return null
   const off = plans.reduce((n, s) => n + s.offPage, 0)
   const verb = decide === 'approve' ? 'approved' : 'rejected'
-  return `${plans.length === 1 ? 'This request' : `${plans.length} requests`} ${plans.length === 1 ? 'is' : 'are'} ${verb} whole: every step below ${decide === 'approve' ? 'runs' : 'is dropped'} together${off ? `, ${plural(off, 'step')} not on this page included` : ''}.`
+  return `${plans.length === 1 ? 'This request' : `${plans.length} requests`} ${plans.length === 1 ? 'is' : 'are'} ${verb} whole: every change below ${decide === 'approve' ? 'runs' : 'is dropped'} together${off ? `, ${plural(off, 'step')} not on this page included` : ''}.`
+}
+
+/**
+ * HONEST 12 — what a decide does after Save, per kind (the server's own paths, waste/write.ts decideWaiting):
+ *   a request (a person's, Claude's, the Brain's; a change plan whole)  approve: scheduled, it runs AS the approver once
+ *        the 20 s window ends (approval-inbox scheduleApproval · commitScheduledApproval), its Undo inside the window
+ *        puts it back to waiting; reject: rejected, it does not come back
+ *   a rule's Ask-me card  approve: the Suggestions page's apply runs the rule's change at once, as the rule (no window,
+ *        no Undo here); reject: dismissed, its Undo restores it to waiting
+ */
+export function decideAfterWords(decide: 'approve' | 'reject', approvalIds: readonly string[]): string {
+  const cards = approvalIds.filter(isRuleCard).length
+  const requests = approvalIds.length - cards
+  if (decide === 'approve') {
+    if (!cards) return 'Runs as you after a 20-second window in which you can undo it.'
+    if (!requests) return 'Applies now, as the rule\'s own change: there is no window to undo it.'
+    return 'A request runs as you after a 20-second window in which you can undo it; a rule\'s ask applies now, as the rule\'s own change, with no window to undo it.'
+  }
+  if (!requests) return 'Nothing is sent. Undo brings it back to waiting.'
+  if (cards) return 'Nothing is sent. A rule\'s ask can come back to waiting; the others do not.'
+  return 'Nothing is sent. A rejected request does not come back.'
+}
+/** HONEST 12 — Done's line when a decide has no Undo (`decided`: the asks it decided): an approved rule's card ran at once; a rejected request is final. */
+export function decideNoUndo(decide: 'approve' | 'reject', decided: readonly string[]): string {
+  if (decide === 'reject') return 'A rejected request does not come back'
+  return decided.length && decided.every(isRuleCard) ? 'A rule\'s ask ran at once: there is no window to undo it' : 'Undo it from the row\'s History'
 }
 
 // ── the review ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -558,13 +658,20 @@ export function landsWord(s: Pick<PreviewStep, 'lands' | 'refusal' | 'needsCode'
   if (isFinal(s)) return 'Archived at Amazon — final, cannot come back'
   if (s.needsCode) return 'Needs your code'
   if (s.lands === 'amazon') return 'Sends to Amazon'
-  if (s.lands === 'nexus') return 'Nexus only'
+  // HONEST 18d — a removal that lands in Nexus only (Amazon never had it): it changes Nexus only, nothing is archived.
+  if (s.lands === 'nexus') return s.action === 'REMOVE_NEGATIVE' ? 'Nexus only — nothing changes at Amazon' : 'Nexus only'
   if (s.lands === 'approval') return 'Waits for approval'
   return '—'
 }
 
-/** A removal that Amazon archives (it cannot come back): the server says `final`; an older answer, the action. */
-export const isFinal = (s: Pick<PreviewStep, 'action' | 'final' | 'lands'>) => (s.final ?? (s.action === 'REMOVE_NEGATIVE' && s.lands !== 'nexus')) === true
+/** HONEST 18d — the words of removing a negative Amazon never had. */
+export const NEXUS_ONLY_REMOVAL = 'Remove the negative: Amazon never had it, so this changes Nexus only'
+
+/**
+ * A removal that Amazon archives (it cannot come back): the server says `final`; an older answer, the action. HONEST 18d
+ * — one that lands in Nexus only is never final at Amazon, whatever an older server said.
+ */
+export const isFinal = (s: Pick<PreviewStep, 'action' | 'final' | 'lands'>) => s.lands !== 'nexus' && (s.final ?? s.action === 'REMOVE_NEGATIVE') === true
 
 /**
  * The review's one line: the market, then how many go where, then how many are left out — the steps the server leaves
@@ -737,14 +844,23 @@ export function tilesOf(args: {
   currency: string
   /** The redesign (D3): the page's window ("€754.50 in 60 days"), from the server's criteria; absent = the money only. */
   windowDays?: number | null
+  /** HONEST 18c — the last day the window counts (criteria.settledThrough): the tile's hover says "to 24 Oct". */
+  through?: string | null
 }): TileView[] {
-  const { waste, stopped, view, wastingShow, stoppedShow, currency, windowDays } = args
+  const { waste, stopped, view, wastingShow, stoppedShow, currency, windowDays, through } = args
   const hint = waste?.wasting ? spendHint(waste, currency) : null
+  // HONEST 18c — the windows of the rows the money sums (the server's own), never the market's default alone; an older
+  // server: the criteria's window.
+  const windows = waste?.wastingWindows ?? (windowDays ? [windowDays] : [])
+  const days = windows.length === 1 ? `${windows[0]} days` : windows.length > 1 ? `${windows[0]}–${windows[windows.length - 1]} days` : null
+  const to = through ? ` to ${dayWords(through)}` : ''
   // D3 — every tile has a hint line, so the six are one height: the money and its window, the asks, else a short form of
   // the tile's own title.
-  const spend = hint ? `${hint.text}${windowDays ? ` in ${windowDays} days` : ''}` : 'wasting now'
+  // HONEST 18c — the visible line names the window's last day too, as the records do ("€754.50 in 60 days to 24 Oct").
+  const spend = hint ? `${hint.text}${days ? ` in ${days}${to}` : ''}` : 'wasting now'
+  const spendTitle = `Wasting now${days ? `: their spend in ${windows.length > 1 ? `each row's own window (${days})` : `the ${days}`}${to}` : ''}. The spend counts each euro once: search terms inside a wasting keyword are not added again`
   return [
-    { id: 'wasting', label: 'Wasting', short: 'Wasting', value: waste?.wasting ?? null, hint: spend, active: view === 'wasting' && wastingShow === 'wasting', clickable: true, title: hint?.note ?? 'Wasting now. The spend counts each euro once: search terms inside a wasting keyword are not added again' },
+    { id: 'wasting', label: 'Wasting', short: 'Wasting', value: waste?.wasting ?? null, hint: spend, active: view === 'wasting' && wastingShow === 'wasting', clickable: true, title: hint?.note ?? spendTitle },
     { id: 'waiting', label: 'Waiting for you', short: 'Waiting', value: waste?.waiting ?? null, hint: typeof waste?.waiting === 'number' ? plural(waste.waiting, 'ask') : 'waiting for your approval', active: view === 'wasting' && wastingShow === 'waiting', clickable: !!waste?.waiting, title: 'Asks waiting for your approval (one ask may cover several places)' },
     { id: 'kept', label: 'Kept paused', short: 'Kept paused', value: stopped?.kept ?? null, hint: 'nothing turns them on', active: view === 'stopped' && stoppedShow === 'kept', clickable: !!stopped?.kept, title: 'Kept paused: no rule, Brain or plan turns them on' },
     { id: 'blocked', label: 'Blocked', short: 'Blocked', value: stopped?.negated ?? null, hint: 'negatives that block now', active: view === 'stopped' && stoppedShow === 'negated', clickable: !!stopped?.negated, title: 'Negatives that block now' },
@@ -798,7 +914,7 @@ export function stoppedChips(t: StoppedTotals | null): Array<{ id: StoppedShow; 
     { id: 'kept', label: 'Kept paused', count: t?.kept ?? null, title: 'Kept paused: no rule, Brain or plan turns them on' },
     { id: 'negated', label: 'Blocked', count: t?.negated ?? null, title: 'Negatives that block now' },
     { id: 'turned-on', label: 'Turned on', count: t?.turnedOn ?? null, title: 'Kept paused, but turned on outside Nexus' },
-    { id: 'still-bought', label: 'Still bought', count: t?.stillBought ?? null, title: 'Paused exact keywords whose words still spend in another ad group' },
+    { id: 'still-bought', label: 'Still bought', count: t?.stillBought ?? null, title: 'Paused exact keywords whose words spent in another ad group since the stop' },
   ]
 }
 
@@ -858,8 +974,11 @@ export function reachTotalLine(t: ReachTotal): string {
   return [`Together: blocks ${plural(t.terms, 'term')}`, spend, plural(t.orders, 'order')].filter(Boolean).join(' · ')
 }
 
-/** "Shows the last 60 days" — said once in the review (each market's own when they differ). */
-export const reachWindowWords = (days: number | null | undefined) => (days ? `Shows the last ${days} days` : 'Shows each market\'s own window')
+/**
+ * "Shows 60 days to 3 days ago" — said once in the review (each market's own when they differ). HONEST 18c — the window's
+ * clicks and spend end 3 days ago (the late-order-safe rule), so never "the last 60 days".
+ */
+export const reachWindowWords = (days: number | null | undefined) => (days ? `Shows ${days} days to 3 days ago` : 'Shows each market\'s own window')
 
 export interface SoldItem { key: string; text: string; orders: number; where: string; leftOut: boolean }
 
@@ -1022,11 +1141,14 @@ const CHIP: Readonly<Record<AnyState, Omit<StateChipView, 'title'>>> = {
  * (D12: "Waiting · asked by Brain").
  */
 export function stateChip(
-  r: { state: AnyState; match?: Match; level?: 'AD_GROUP' | 'CAMPAIGN' | null; keptPaused?: StoppedRow['keptPaused']; protection?: WasteRow['protection']; test?: { met: boolean } | null; waiting?: WasteRow['waiting'] },
+  r: { state: AnyState; match?: Match; level?: 'AD_GROUP' | 'CAMPAIGN' | null; keptPaused?: StoppedRow['keptPaused']; protection?: WasteRow['protection']; test?: { met: boolean } | null; waiting?: WasteRow['waiting']; blockedBy?: WasteRow['blockedBy']; text?: string },
   now?: number,
 ): StateChipView {
-  if (r.waiting) return { word: `Waiting · asked by ${askerWord(r.waiting)}`, tone: 'warning', mark: 'hourglass', title: waitingSentence(r.waiting, now) }
+  // In the grid the chip says "Waiting": the Who column beside it already names the asker, and the long form ("Waiting ·
+  // asked by Brain") was cut under the pinned verbs at 1440 px. The whole sentence stays its hover and its spoken words.
+  if (r.waiting) return { word: 'Waiting', tone: 'warning', mark: 'hourglass', title: waitingSentence(r.waiting, now) }
   if (r.state === 'RUNNING' && r.test?.met) return { word: 'Wasting', tone: 'danger', mark: 'play', title: 'Running' }
+  if (isPausedTerm(r)) return { word: 'Keyword paused', tone: 'neutral', mark: 'pause', title: KEYWORD_PAUSED }
   const base = CHIP[r.state] ?? { word: stateWord(r.state), tone: 'neutral' as const, mark: 'play' as const }
   return { ...base, title: stateSentence(r) }
 }
@@ -1046,10 +1168,14 @@ export function stateSub(
   return null
 }
 
-/** D12 — a waiting row's two verbs, each through its review: "Approve rain cover · 2 places" for a screen reader. */
-export function decideAria(decide: 'approve' | 'reject', r: { text: string; waiting: { rows?: number } | null }): string {
-  const places = Math.max(1, r.waiting?.rows ?? 1)
-  return `${decide === 'approve' ? 'Approve' : 'Reject'} ${r.text}${places > 1 ? ` · ${places} places` : ''}`
+/**
+ * D12 — a waiting row's two verbs, each through its review, for a screen reader: "Approve rain cover · 1 of 3 changes",
+ * "… · whole campaign, 2 ad groups" (HONEST 11: never "2 places" for different changes); the ask's own words (HONEST 10).
+ */
+export function decideAria(decide: 'approve' | 'reject', r: { text: string; waiting: { rows?: number; changes?: number; level?: 'AD_GROUP' | 'CAMPAIGN' | null; text?: string | null } | null }): string {
+  const reach = askReachOf(r.waiting)
+  const tail = !reach ? '' : reach.kind === 'changes' ? ` · 1 of ${reach.n} changes` : reach.kind === 'adGroups' ? ` · whole campaign, ${reach.n} ad groups` : ` · ${reach.n} rows`
+  return `${decide === 'approve' ? 'Approve' : 'Reject'} ${(r.waiting?.text ?? '').trim() || r.text}${tail}`
 }
 
 /** What a ⋯ entry asks the view: a skip of the row, its unskip, one change (with a Keep paused's old end), its record. */

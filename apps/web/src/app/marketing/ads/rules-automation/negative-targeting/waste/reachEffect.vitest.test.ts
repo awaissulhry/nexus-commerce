@@ -30,7 +30,7 @@ describe('the review: what each negative would block', () => {
       .toBe('Together: blocks 3 terms · €5.00 + £3.00 · 1 order')
     // Without ad spend: counts only.
     expect(reachTotalLine({ windowDays: 60, currency: 'EUR', terms: 2, clicks: 3, orders: 0, currencies: [{ currency: 'EUR' }] })).toBe('Together: blocks 2 terms · 0 orders')
-    expect(reachWindowWords(60)).toBe('Shows the last 60 days')
+    expect(reachWindowWords(60)).toBe('Shows 60 days to 3 days ago')
     expect(reachWindowWords(null)).toBe('Shows each market\'s own window')
   })
 

@@ -23,7 +23,8 @@ describe('owner — one per row', () => {
     expect(ownerOfActor('automation:auto-harvest', names)).toEqual({ kind: 'HARVEST', name: 'Harvest', id: 'harvest' })
     expect(ownerOfActor('automation:r-stop', names)).toEqual({ kind: 'RULE', name: 'Stop waste — terms', id: 'r-stop' })
     expect(ownerOfActor('automation:r-gone', names)).toEqual({ kind: 'NONE', name: 'Unknown', id: null })
-    expect(ownerOfActor('user:u1', names)).toEqual({ kind: 'PERSON', name: 'You', id: 'u1' })
+    // HONEST 19 — a person by name; none known: "A person" (never "You": only the person looking reads that).
+    expect(ownerOfActor('user:u1', names)).toEqual({ kind: 'PERSON', name: 'A person', id: 'u1' })
     expect(ownerOfActor('user:u1', names, 'appr-claude')).toEqual({ kind: 'CLAUDE', name: 'Claude', id: 'appr-claude' })
     expect(ownerOfActor(null, names)).toEqual({ kind: 'NONE', name: 'Unknown', id: null })
   })
@@ -32,7 +33,7 @@ describe('owner — one per row', () => {
     const now = NOW.getTime()
     const person = { kind: 'PERSON' as const, name: 'You', id: 'u1' }
     const rule = { id: 'r-stop', name: 'Stop waste — terms' }
-    expect(rowOwner({ hold: { by: 'user:u9' }, waitingBy: person, rule }, now, names)).toEqual({ kind: 'PERSON', name: 'You', id: 'u9' })
+    expect(rowOwner({ hold: { by: 'user:u9' }, waitingBy: person, rule }, now, names)).toEqual({ kind: 'PERSON', name: 'A person', id: 'u9' })
     expect(rowOwner({ waitingBy: { kind: 'BRAIN', name: 'Brain', id: 'brain' }, rule }, now, names).kind).toBe('BRAIN')
     // An ask is newer news than an older change; a change made after the ask is newer than the ask.
     const brain = { kind: 'BRAIN' as const, name: 'Brain', id: 'brain' }
@@ -211,7 +212,7 @@ describe('tiles and rows come from one set (Bid audit M1)', () => {
       row('i', { state: 'TURNED_ON_ELSEWHERE', kind: 'KEYWORD', clash: { kind: 'TURNED_ON', label: 'Turned on outside Nexus' } }),
     ]
     const t = totalsOf(rows, 'wasting', { negated: 4 })
-    expect(t).toEqual({ wasting: 4, wastingSpendCents: 2000, currency: 'EUR', wastingSpendByCurrency: { EUR: 2000 }, wastingSpendNote: null, keywords: 1, terms: 3, waiting: 1, keptPaused: 1, turnedOn: 1, negated: 4, clashes: 1, skipped: 1, protected: 1 })
+    expect(t).toEqual({ wasting: 4, wastingSpendCents: 2000, currency: 'EUR', wastingSpendByCurrency: { EUR: 2000 }, wastingSpendNote: null, wastingWindows: [60], keywords: 1, terms: 3, waiting: 1, keptPaused: 1, turnedOn: 1, negated: 4, clashes: 1, skipped: 1, protected: 1 })
     expect(rows.filter((r) => showMatches(r, 'clashes')).length).toBe(t.clashes)
     // Step 4 — the Protected tile: the rows show=protected answers.
     expect(rows.filter((r) => showMatches(r, 'protected')).map((r) => r.id)).toEqual(['h'])

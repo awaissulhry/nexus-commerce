@@ -9,8 +9,8 @@
  *             group of its campaign) — never older than the days Nexus keeps (READ_DAYS)
  *   after     the same spend after the stop day, to the last settled day (3 days ago: the page's late-order-safe rule)
  *   saved     before per day × the days counted after − after (it may be below 0: it spends more than before)
- *   still     STILL_SPENDS when its words keep spending in another place, not blocked there (the Stopped view's own
- *             still-bought facts: stopped.ts stillBought, stillServesIn) — the saving here is still said
+ *   still     STILL_SPENDS when its words spent in another place since the stop, not blocked there now (the Stopped
+ *             view's own still-bought facts: stopped.ts stillBought, stillServesIn) — the saving here is still said
  *   words     one plain line with no money in it (the money sits under its keys, stripped for a person who may not see it)
  * The stop day itself is in neither window: the stop came some time that day.
  */
@@ -75,12 +75,15 @@ export function stopEffect(input: { since: string; now: Date; spend: { before: n
   const perDay = input.spend.before / w.before.days
   const saved = Math.round(perDay * w.after.days) - input.spend.after
   const counted = plural(w.after.days, 'day')
+  // HONEST 14 — one true sentence: below 0 it spends more than before, never "as much". HONEST 18b — `stillIn` counts the
+  // places where the words spent since the stop (stopped.ts), so the words say exactly that.
   const words = input.stillIn > 0
-    ? `Stopped here, but its words still spend in ${plural(input.stillIn, 'other ad group')}`
+    ? `Stopped here, but its words spent in ${plural(input.stillIn, 'other ad group')} since the stop`
     : input.spend.before === 0 && input.spend.after === 0 ? `It spent nothing in the ${plural(w.before.days, 'day')} before the stop, nor in the ${counted} since`
       : input.spend.after === 0 ? `No spend here in the ${counted} since the stop`
         : saved > 0 ? `Spends less here in the ${counted} since the stop`
-          : `Spends as much here as before, in the ${counted} since the stop`
+          : saved < 0 ? `Spends more here in the ${counted} since the stop than before it`
+            : `Spends as much here as before, in the ${counted} since the stop`
   return {
     since: input.since, days: w.days, verdict: input.stillIn > 0 ? 'STILL_SPENDS' : 'SAVED',
     beforePerDayCents: Math.round(perDay), afterCents: input.spend.after, savedCents: saved, words,

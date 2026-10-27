@@ -13,7 +13,7 @@
  *             totals in that product's places (each product its own pooled conversion rate and target, as the brain's
  *             n-grams: brain/negatives.ts), and only across 2 terms or more there. The row's test is met when one
  *             product's is; its sentence is the product that spent most (a met one first).
- *   places    every ad group where its terms spent: BLOCKED (a negative phrase over the word stands there, or in its
+ *   places    every ad group where its terms spent: BLOCKED (a negative phrase over the word blocks there now, or in its
  *             campaign) · HELD (verb.ts's never-list on the word — a protected term, our own keyword that HOLDS the word
  *             there (ads-winner-lock.ts blockedPositive, the write service's L1), a term holding it harvested in the
  *             last 30 days, a place under 14 days, a shared campaign — then a term holding it that sold there in the
@@ -31,7 +31,7 @@ import {
   WASTE_WINDOW_DAYS, type Ref, type RowNumbers, type RowState, type RowTest, type WasteCriteria, type WasteRow,
 } from './pure.js'
 import {
-  blockersOf, buildWasteRows, criteriaOf, protectedBy, scopedFacts, windowOf, type ResolvedScope, type TargetFact,
+  blockersNow, blocksNow, buildWasteRows, criteriaOf, protectedBy, scopedFacts, windowOf, type ResolvedScope, type TargetFact,
   type WasteFacts, type WasteFreshness, type WasteScope,
 } from './read.js'
 import { barFor, wasteTest, xCpaOf, type OwnerBar, type ProductFacts } from './test.js'
@@ -211,12 +211,15 @@ function heldAt(f: WasteFacts, word: string, at: { campaignId: string; adGroupId
   return null
 }
 
-/** The standing negative phrase over the word in this ad group (or its campaign), or the campaign's own for a campaign. */
+/**
+ * The standing negative phrase over the word in this ad group (or its campaign), or the campaign's own for a campaign —
+ * HONEST 6: one that blocks now (switched off, or never taken by Amazon, it blocks nothing: the place is not BLOCKED).
+ */
 function blockerAt(f: WasteFacts, word: string, at: { campaignId: string; adGroupId: string | null }): WordPlace['blockedBy'] {
   const phrase = (n: TargetFact) => negativeMatch(n.kind, n.expressionType) === 'PHRASE'
   const n = at.adGroupId
-    ? blockersOf(f, at.adGroupId, word).find(phrase)
-    : (f.negByCampaign.get(at.campaignId) ?? []).find((x) => phrase(x) && negativeBlocksTerm(word, { text: x.expressionValue, match: 'PHRASE' }))
+    ? blockersNow(f, at.adGroupId, word).find(phrase)
+    : (f.negByCampaign.get(at.campaignId) ?? []).find((x) => phrase(x) && blocksNow(f, x) && negativeBlocksTerm(word, { text: x.expressionValue, match: 'PHRASE' }))
   return n ? { rowId: negRowId(n.id), text: n.expressionValue, level: n.negativeLevel === 'CAMPAIGN' ? 'CAMPAIGN' : 'AD_GROUP' } : null
 }
 

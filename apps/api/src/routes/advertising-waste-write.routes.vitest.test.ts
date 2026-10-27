@@ -170,10 +170,12 @@ describe('POST /advertising/waste/preview — the page\'s rows as the MCP tools\
     const by = (i: number) => body.steps[i]
     // M1 — a campaign negative: level CAMPAIGN, its place ends at the campaign.
     expect(by(0)).toMatchObject({ level: 'CAMPAIGN', final: false, refusal: null, place: { campaign: { id: 'c-it' }, adGroup: null } })
-    // M2 — a removal is final.
-    expect(by(1)).toMatchObject({ action: 'REMOVE_NEGATIVE', level: 'AD_GROUP', final: true, refusal: null, tool: 'retire-negatives', text: 'free' })
-    // M9 — from our keyword's row, the negative over it; not one that is not over it.
-    expect(by(2)).toMatchObject({ rowId: 'kw:t-it', action: 'REMOVE_NEGATIVE', final: true, refusal: null, tool: 'retire-negatives', text: 'free', place: { adGroup: { id: 'g-c-it' } } })
+    // M2 — a removal is final at Amazon; HONEST 18d — here (a sandbox) it lands in Nexus only: never "archived at Amazon",
+    // and it lets nothing spend again.
+    expect(by(1)).toMatchObject({ action: 'REMOVE_NEGATIVE', level: 'AD_GROUP', lands: 'nexus', final: false, raise: false, refusal: null, tool: 'retire-negatives', text: 'free' })
+    // M9 — from our keyword's row, only a clash's negative (HONEST 5): "free" stands in its place but does not block
+    // "race jacket", so it is not removed from there; one that is not over it at all is refused as before.
+    expect(by(2)).toMatchObject({ rowId: 'kw:t-it', action: 'REMOVE_NEGATIVE', refusal: { code: 'not_a_clash' }, tool: null, text: 'free' })
     expect(by(3)).toMatchObject({ refusal: { code: 'not_over_keyword' } })
     // S17 — a named ad group: refused where the term never ran, where another product is advertised, and our keyword's text
     // in another ad group of its product where it does not run.
@@ -677,5 +679,69 @@ describe('step 4 — Remove protection and stop: the protected term removed thro
     // A row no protected term holds: nothing to remove.
     expect((await post('/preview', { items: [{ rowId: 'kw:t-sup', action: 'UNPROTECT' }] })).json().steps[0]).toMatchObject({ refusal: { code: 'not_protected' } })
     await inA(() => database.client.adKeywordProtection.deleteMany({ where: { id: p.id } }))
+  })
+})
+
+describe('HONEST 5 and 8 — the server is the guard: a clash only, and no held stop, whatever the client sends', () => {
+  const fresh = async () => (await import('../services/advertising/waste/read.js')).invalidateWasteFacts()
+
+  it('a clash\'s negative is removed from our keyword\'s row; the Owner\'s funnel negative is not', async () => {
+    await inA(async () => {
+      const c = database.client
+      // A negative exact over our exact keyword: it blocks its every search (a clash).
+      await c.adTarget.create({ data: { id: 'n-race', adGroupId: 'g-c-it', kind: 'KEYWORD', expressionType: 'NEGATIVE_EXACT', expressionValue: 'race jacket', bidCents: 0, isNegative: true, negativeLevel: 'AD_GROUP', externalTargetId: 'EXT-n-race' } })
+      // The funnel: our phrase keyword and a negative exact of its own words in its place.
+      await c.adTarget.create({ data: { id: 'k-coat', adGroupId: 'g-c-it', kind: 'KEYWORD', expressionType: 'PHRASE', expressionValue: 'race coat', bidCents: 40, externalTargetId: 'EXT-k-coat' } })
+      await c.adTarget.create({ data: { id: 'n-coat', adGroupId: 'g-c-it', kind: 'KEYWORD', expressionType: 'NEGATIVE_EXACT', expressionValue: 'race coat', bidCents: 0, isNegative: true, negativeLevel: 'AD_GROUP', externalTargetId: 'EXT-n-coat' } })
+    })
+    await fresh()
+    try {
+      const body = (await post('/preview', { items: [
+        { rowId: 'kw:t-it', action: 'REMOVE_NEGATIVE', targetRowId: 'neg:n-race' },
+        { rowId: 'kw:k-coat', action: 'REMOVE_NEGATIVE', targetRowId: 'neg:n-coat' },
+      ] })).json()
+      expect(body.steps[0]).toMatchObject({ refusal: null, tool: 'retire-negatives', text: 'race jacket', place: { adGroup: { id: 'g-c-it' } } })
+      expect(body.steps[1]).toMatchObject({ refusal: { code: 'not_a_clash', label: expect.stringMatching(/^Not a clash/) }, tool: null })
+    } finally {
+      await inA(() => database.client.adTarget.deleteMany({ where: { id: { in: ['n-race', 'k-coat', 'n-coat'] } } }))
+      await fresh()
+    }
+  })
+
+  it('a held negative or pause is left out in the preview and the write, with the hold\'s reason', async () => {
+    const day = (n: number) => new Date(Date.now() - n * 86_400_000)
+    // Harvest made "made up shoes" a keyword 4 days ago: Harvest judges it for 30 days. "race jacket" is a protected term.
+    await inA(async () => {
+      const c = database.client as any
+      await c.adsBrainHarvest.create({ data: {
+        productId: 'neg-jacket', marketplace: 'IT', term: 'made up shoes', status: 'LANDED', level: 'AUTO', destinationKind: 'EXACT', landedAt: day(4),
+        sources: [], why: 'made up', evidence: {}, digest: 'd', runId: 'run-h1', decidedAt: day(4), checkedAt: day(1), changedAt: day(4),
+      } })
+      await c.adKeywordProtection.create({ data: { mode: 'WHITELIST', term: 'race jacket', matchType: 'EXACT', createdBy: 'user:made-up' } })
+    })
+    await fresh()
+    try {
+      // What any client may send: the term's own place, the keyword's pause, a named place (the Where tab).
+      const items = [NEGATE, PAUSE]
+      const asked = await inA(() => database.client.agentApproval.count())
+      const preview = (await post('/preview', { items })).json()
+      expect(preview.steps.map((s: Row) => s.refusal?.code)).toEqual(['held', 'held'])
+      expect(preview.steps[0].refusal.label).toMatch(/^Harvest made "made up shoes" a keyword 4 days ago/)
+      expect(preview.steps[1].refusal.label).toMatch(/"race jacket" is a protected term/)
+      const named = (await post('/preview', { items: [{ rowId: NEGATE.rowId, action: 'NEGATE_EXACT', adGroupId: 'g-it2' }] })).json()
+      expect(named.steps[0]).toMatchObject({ place: { adGroup: { id: 'g-it2' } }, refusal: { code: 'held', label: expect.stringMatching(/^Harvest made/) } })
+      // The write re-reads the same: nothing is sent.
+      const apply = await post('/apply', { items, planHash: preview.planHash })
+      expect(apply.statusCode, apply.body).toBe(400)
+      expect(apply.json()).toMatchObject({ blocked: 2 })
+      expect(await inA(() => database.client.agentApproval.count())).toBe(asked)
+    } finally {
+      await inA(async () => {
+        const c = database.client as any
+        await c.adsBrainHarvest.deleteMany({ where: { runId: 'run-h1' } })
+        await c.adKeywordProtection.deleteMany({ where: { term: 'race jacket' } })
+      })
+      await fresh()
+    }
   })
 })

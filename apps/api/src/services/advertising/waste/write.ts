@@ -14,7 +14,8 @@
  *   NEGATE_ASIN       a shopper's ASIN term   add-negative-targets { negatives: [{ adGroupId, asin }] }
  *   REMOVE_NEGATIVE   a standing negative     retire-negatives { negativeIds } — Amazon archives it (final); Harvest's and the
  *                                             brain funnel's are refused by the tool (the page never forces). Polish M9 — also
- *                                             from our keyword's row with `targetRowId: 'neg:<id>'`: the negative over it (a clash)
+ *                                             from our keyword's row with `targetRowId: 'neg:<id>'`: the negative over it, only
+ *                                             a clash's (HONEST 5: one that blocks every search it serves — never the funnel's)
  *   KEEP_UNTIL        a paused keyword        pause-ads { keepPaused: true, keepUntil? } — the hold's end only (null = Always);
  *                                             its Undo puts the old end back (polish M3)
  *   NEGATE_* + adGroupId                      the term (or our keyword's text) negated in a named ad group of the same product
@@ -34,13 +35,16 @@
  *                                             read with (the same places the person saw)
  *
  * Every step also says its `level` (AD_GROUP / CAMPAIGN: a campaign negative's place ends at its campaign) and `final`
- * (a removal is archived at Amazon and cannot come back: its Done has no Undo) — polish M1, M2. Step 4 —
+ * (a removal is archived at Amazon and cannot come back: its Done has no Undo; HONEST 18d — false for one that lands in
+ * Nexus only: Amazon never had it, nothing is archived there) — polish M1, M2. Step 4 —
  * every NEGATE_* step says what it would block (`reach`: terms, spend, clicks, orders, sales over the page's window, and
  * the terms that sold), and the preview the total of the steps it sends: one call at the end (reach.ts withReach), after
  * the items are expanded into steps. A warning, never a refusal; apply re-checks nothing new (the planHash stands).
  *
  * preview  writes nothing: every row's step, where it lands, its refusal (the tool's own words), whether it raises spend,
- *          and a planHash over the rows, the requests and the facts they stand on.
+ *          and a planHash over the rows, the requests and the facts they stand on. HONEST 8 — the server is the guard: a
+ *          pause or a negative its row's own verb holds (harvested lately, a new place, a shared campaign, our keyword
+ *          there, its terms sell, protected) is left out with the hold's reason, whatever the client sent (read.ts stopHold).
  * apply    the same preview again; a different planHash is 409 (something moved: preview again). The rows that are not
  *          refused become ONE request — the tool itself for one row, else one change plan (submit-change-plan), one step
  *          per row (so each row has its own change and Undo) — asked as the person and approved by the same person at
@@ -71,7 +75,9 @@ import { decideFleetApproval } from '../../agent-fleet/approval-inbox.service.js
 import { isAsin } from '../ads-negation-policy.js'
 import { ID_LIST } from '../ads-scope-lists.js'
 import { HOLD_SELECT, holdActive, holdStateOf, keepUntilOf, type HoldColumns } from './hold.js'
-import { WASTE_TOOLS } from './pure.js'
+import { negativeClashesWith, negativeMatch, targetMatch, WASTE_TOOLS } from './pure.js'
+import { marketCode, marketWasteFacts, stopHold, type WasteFacts } from './read.js'
+import { logger } from '../../../utils/logger.js'
 import { withReach, type Reach, type ReachTotal } from './reach.js'
 import { isUnprotectArgs, linkRemovals, protectionContext, stopAfterRemovals, unprotectStep, type StepProtection, type StopRefusal, type Waits } from './protect.js'
 import { followUpItems } from './follow-up.js'
@@ -136,7 +142,7 @@ export interface PreviewStep {
   raise: boolean
   /** Polish M1 — where a negative lands: one ad group, or the whole campaign (its place then ends at the campaign). */
   level: 'AD_GROUP' | 'CAMPAIGN' | null
-  /** Polish M2 — a removal: archived at Amazon, it cannot come back (its Done has no Undo). */
+  /** Polish M2 — a removal: archived at Amazon, it cannot come back (its Done has no Undo). False when it lands in Nexus only. */
   final: boolean
   needsCode: boolean
   tool: string | null
@@ -204,7 +210,11 @@ export function actionRefusal(ref: RowRef, item: Pick<WasteItem, 'action' | 'whe
 }
 
 /** What a keyword row is now, for its step. */
-export interface TargetFacts { id: string; text: string; status: string; isNegative: boolean; hold: HoldColumns; negativeLevel?: string | null }
+export interface TargetFacts {
+  id: string; text: string; status: string; isNegative: boolean; hold: HoldColumns; negativeLevel?: string | null
+  /** HONEST 5 — its kind and match as stored (a clash is read from both: pure.ts negativeClashesWith). */
+  kind?: string | null; expressionType?: string | null
+}
 
 /** The tool request one row is (pure), or why not. `why` goes to the approver and the ads audit. */
 export function requestFor(item: WasteItem, ref: RowRef, facts: { target?: TargetFacts; adGroupId?: string; campaignId?: string; negative?: TargetFacts }, why: string):
@@ -333,7 +343,7 @@ async function termGroup(ref: Extract<RowRef, { kind: 'term' }>): Promise<GroupR
 type Resolved = { ref: RowRef; target?: TargetFacts; group?: GroupRow }
 
 const TARGET_SELECT = {
-  id: true, expressionValue: true, status: true, isNegative: true, negativeLevel: true, ...HOLD_SELECT,
+  id: true, kind: true, expressionType: true, expressionValue: true, status: true, isNegative: true, negativeLevel: true, ...HOLD_SELECT,
   adGroup: { select: { id: true, name: true, externalAdGroupId: true, campaign: { select: CAMPAIGN_REF_SELECT } } },
 } as const
 
@@ -343,7 +353,7 @@ async function targetOf(id: string): Promise<{ target: TargetFacts; group: Group
   if (!row) return null
   const hold: HoldColumns = { keptPausedAt: row.keptPausedAt, keptPausedBy: row.keptPausedBy, keptPausedUntil: row.keptPausedUntil, keptPausedReason: row.keptPausedReason }
   return {
-    target: { id: row.id, text: row.expressionValue, status: String(row.status), isNegative: row.isNegative, hold, negativeLevel: row.negativeLevel },
+    target: { id: row.id, text: row.expressionValue, status: String(row.status), isNegative: row.isNegative, hold, negativeLevel: row.negativeLevel, kind: row.kind, expressionType: row.expressionType },
     group: row.adGroup as unknown as GroupRow,
   }
 }
@@ -387,11 +397,61 @@ async function namedPlace(adGroupId: string, own: GroupRow | undefined, text: st
 
 const PAGE_WHY = 'Negative Targeting page'
 
+/** HONEST 8 — each market's facts for the hold checks, read once per preview (read.ts marketWasteFacts: the page's own). */
+export type FactsReader = (marketplace: string | null) => Promise<WasteFacts | null>
+export function factsReader(): FactsReader {
+  const memo = new Map<string, Promise<WasteFacts>>()
+  return (marketplace) => {
+    const m = marketCode(marketplace)
+    if (!m) return Promise.resolve(null)
+    let facts = memo.get(m)
+    if (!facts) memo.set(m, (facts = marketWasteFacts(m)))
+    return facts
+  }
+}
+/** `facts`: the hold checks' reader; `removing`: the same review removes this row's protected terms first. */
+interface StepOpts { facts?: FactsReader; removing?: boolean }
+
+const HOLD_UNREAD = 'Nexus could not read what holds this row just now, so it is not sent: try again.'
+
+/**
+ * HONEST 8 — the hold on this step, read on the server (read.ts stopHold, the rows' own rule): a pause of our keyword or
+ * target; a negative of a shopper's term in its ad group, or of a term or our keyword's words in a named one. A protected
+ * term is not asked for a negative (its tool's negation policy refuses it; a removal in the same review makes it wait),
+ * nor for a pause whose protection the same review removes. A place the page does not read holds nothing here.
+ */
+async function holdOn(item: WasteItem, ref: RowRef, target: TargetFacts | undefined, g: GroupRow | undefined, opts: StepOpts): Promise<{ code: string; label: string } | null> {
+  const pause = item.action === 'PAUSE' && ref.kind === 'kw' && !!target && !target.isNegative
+  const negate = item.action.startsWith('NEGATE_') && (ref.kind === 'term' || !!item.adGroupId)
+  if ((!pause && !negate) || !g || !opts.facts) return null
+  let f: WasteFacts | null
+  try {
+    f = await opts.facts(g.campaign.marketplace)
+  } catch (error) {
+    logger.warn('[waste] the holds could not be read; the step is left out', { rowId: item.rowId, error: error instanceof Error ? error.message : String(error) })
+    return { code: 'hold_unread', label: HOLD_UNREAD }
+  }
+  if (!f) return null
+  const hold = pause
+    ? stopHold(f, { kind: 'pause', targetId: target!.id }, { protectedToo: !opts.removing })
+    : stopHold(f, { kind: 'negate', adGroupId: g.id, text: ref.kind === 'term' ? ref.text : target?.text ?? '' }, { protectedToo: false })
+  return hold ? { code: 'held', label: hold.reason || hold.label } : null
+}
+
+const NOT_A_CLASH = 'Not a clash: this negative blocks only some of the keyword\'s searches (a negative exact over a phrase or broad keyword, or a negative phrase over a broad one), so it stays.'
+
+/** HONEST 5 — does this negative block every search our keyword (or product target) can serve (pure.ts negativeClashesWith)? */
+function clashesOver(ours: TargetFacts, negative: TargetFacts): boolean {
+  const tm = targetMatch(ours.kind, ours.expressionType)
+  const m = negativeMatch(negative.kind, negative.expressionType)
+  return !!tm && !!m && negativeClashesWith({ text: ours.text, match: tm.match }, { text: negative.text, match: m })
+}
+
 /**
  * One row's step, dry-run as the person: what it would do, where it lands, or why not. `waitFor` (step 4): a stop after
  * its row's UNPROTECT — when its tool refuses it only for the terms being removed, the step waits for the removal.
  */
-async function stepOf(item: WasteItem, person: UserPrincipal, why: string, portfolios: Map<string, Ref>, waitFor?: (r: StopRefusal) => Promise<Waits | null>): Promise<StepOut> {
+async function stepOf(item: WasteItem, person: UserPrincipal, why: string, portfolios: Map<string, Ref>, waitFor?: (r: StopRefusal) => Promise<Waits | null>, opts: StepOpts = {}): Promise<StepOut> {
   const ref = parseRowId(item.rowId)
   const empty: Place = { portfolio: null, campaign: null, adGroup: null }
   const final = item.action === 'REMOVE_NEGATIVE'
@@ -416,6 +476,9 @@ async function stepOf(item: WasteItem, person: UserPrincipal, why: string, portf
     const over = n && n.target.isNegative && n.target.status !== 'ARCHIVED'
       && (n.group.id === g!.id || (n.target.negativeLevel === 'CAMPAIGN' && n.group.campaign.id === g!.campaign.id))
     if (!n || !over) return refused('not_over_keyword', 'That negative is not over this keyword (or no longer stands).', { text })
+    // HONEST 5 — only a clash's negative goes from our keyword's row: one that blocks every search it can serve. The
+    // Owner's funnel (a negative exact over our phrase or broad keyword, a negative phrase over our broad one) never does.
+    if (!clashesOver(r.target!, n.target)) return refused('not_a_clash', NOT_A_CLASH, { text: n.target.text, ...fromto })
     negative = n.target
     g = n.group
     text = n.target.text
@@ -440,6 +503,10 @@ async function stepOf(item: WasteItem, person: UserPrincipal, why: string, portf
       adGroup: level === 'CAMPAIGN' ? null : groupRef(g, g.campaign.id, tab, focus),
     }
     : empty
+  // HONEST 8 — the server is the guard: a stop its row's own verb holds is left out with the hold's reason, whatever the
+  // client sent (bare ids from "Select all", the Where tab, an older page).
+  const held = await holdOn(item, ref, r.target, g, opts)
+  if (held) return refused(held.code, held.label, { text, place, level, ...fromto })
   const asked = requestFor(item, ref, { target: r.target, adGroupId: g?.id, campaignId: g?.campaign.id, negative }, why)
   if ('refusal' in asked) return refused(asked.refusal.code, asked.refusal.label, { text, place, level, ...fromto })
   const raise = item.action === 'REMOVE_NEGATIVE' || (item.action === 'TURN_ON' && r.target?.status !== 'ENABLED')
@@ -460,6 +527,14 @@ async function stepOf(item: WasteItem, person: UserPrincipal, why: string, portf
 type StepBase = Pick<PreviewStep, 'rowId' | 'action' | 'text' | 'place' | 'from' | 'to' | 'raise' | 'level' | 'final'>
 
 /**
+ * HONEST 18d — a removal that lands in Nexus only (Amazon never had the negative — retire-negatives then sends nothing —
+ * or a sandbox) is never "archived at Amazon": not final there, and it lets nothing spend again. Pure.
+ */
+export function removalLands(base: Pick<PreviewStep, 'action' | 'final' | 'raise'>, lands: PreviewStep['lands']): Pick<PreviewStep, 'final' | 'raise'> {
+  return base.action === 'REMOVE_NEGATIVE' && lands === 'nexus' ? { final: false, raise: false } : { final: base.final, raise: base.raise }
+}
+
+/**
  * One step's request, dry-run as the person (callTool: permissions, business, arguments, the tool's own refusals).
  * `onRefused` (step 4): a stop after its row's UNPROTECT may wait for the removal instead of being refused.
  */
@@ -475,7 +550,7 @@ async function dryRun(person: UserPrincipal, asked: { tool: string; args: Record
     const needsCode = raw.stepUp != null
     const lands = needsCode ? 'approval' : raw.reach?.reach === 'live' ? 'amazon' : 'nexus'
     const summary = typeof shown.effect === 'string' ? shown.effect : typeof shown.summary === 'string' ? shown.summary : null
-    return { step: { ...base, lands, runsAt: null, refusal: null, needsCode, tool: asked.tool, summary }, request: asked, basis: raw.basis ?? null }
+    return { step: { ...base, lands, runsAt: null, refusal: null, needsCode, tool: asked.tool, summary, ...removalLands(base, lands) }, request: asked, basis: raw.basis ?? null }
   } catch (error) {
     if (!(error instanceof ToolAccessError)) throw error
     return refused(error.code === 'forbidden' ? 'forbidden' : 'refused', error.message, false)
@@ -536,6 +611,8 @@ export async function previewWaste(items: readonly WasteItem[], person: UserPrin
   const seen = new Set<string>()
   // Step 4 — a review that removes protected terms reads its rows once, and links each stop to its removals.
   const ctx = await protectionContext(items)
+  // HONEST 8 — the holds are read again here, each market's facts once (the guard is the server, not the page).
+  const facts = factsReader()
   for (const [index, item] of items.entries()) {
     // The same row named twice is one change: the second is refused, so a plan never runs a row twice. Step 4 — a row's
     // UNPROTECT is not its change ("Remove protection and stop" names both), and one protected term is removed once.
@@ -552,8 +629,8 @@ export async function previewWaste(items: readonly WasteItem[], person: UserPrin
     if (parseWordId(key)) { const ws = await wordStepsOf(item, person, `${reason} — block word`); wordSteps.set(index, ws); out.push(ws[0]); continue }
     const removals = ctx?.links.get(index) ?? []
     out.push(ctx && removals.length
-      ? await stopAfterRemovals(item, removals.map((i) => out[i]), ctx, (waitFor) => stepOf(item, person, stepWhy, portfolios, waitFor))
-      : await stepOf(item, person, stepWhy, portfolios))
+      ? await stopAfterRemovals(item, removals.map((i) => out[i]), ctx, (waitFor) => stepOf(item, person, stepWhy, portfolios, waitFor, { facts, removing: true }))
+      : await stepOf(item, person, stepWhy, portfolios, undefined, { facts }))
   }
   // Step 4 — a removal left out leaves its stops out; one whose every stop is left out stays as it is.
   if (ctx) linkRemovals(out, ctx.links)
