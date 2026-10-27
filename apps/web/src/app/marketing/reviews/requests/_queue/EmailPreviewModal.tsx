@@ -136,7 +136,7 @@ export function EmailPreviewModal({ onClose, canManage, sending }: EmailPreviewM
         <>
           {rule && (
             <Button asChild size="md">
-              <Link href={rulePath(rule.id)}>Edit this rule’s message</Link>
+              <Link href={rulePath(rule.id)}>Open this rule</Link>
             </Button>
           )}
           <span className="grow" />
@@ -152,7 +152,7 @@ export function EmailPreviewModal({ onClose, canManage, sending }: EmailPreviewM
           <Field label="Market">
             <Listbox options={MARKETS.map((m) => ({ value: m, label: marketName(m) }))} value={market} onChange={setMarket} ariaLabel="Market" />
           </Field>
-          <Field label="Language" hint="The buyer gets the language of their market.">
+          <Field label="Language" hint={kind === 'check' ? 'Italian, German, French or Spanish for those markets, English for the UK and Ireland, Italian for any other.' : 'Italian for Italy, English for every other market.'}>
             <Listbox options={languages} value={lang} onChange={setLocale} ariaLabel="Language" />
           </Field>
           <Field label="Email">
@@ -181,6 +181,8 @@ export function EmailPreviewModal({ onClose, canManage, sending }: EmailPreviewM
                 { label: 'Subject', value: p.subject },
               ]}
             />
+            {/* The server's own note (a Shopify e-mail with no review button: the business has no shop). */}
+            {p.note && p.channel !== 'AMAZON' && <Banner tone="info" title="No review button">{p.note}</Banner>}
             <iframe className={s.emailFrame} sandbox="" srcDoc={p.html} title="The email as the buyer sees it" />
             {lang !== 'en' && (
               <p className={s.muted}>In English: {p.englishSubject} — {p.englishSummary}</p>
@@ -206,7 +208,7 @@ export function EmailPreviewModal({ onClose, canManage, sending }: EmailPreviewM
               <p className={s.errorText}>{dry.error}</p>
             ) : (
               <>
-                <p>{dry.total === 0 ? 'Nothing is due now.' : `Would send ${dry.total} ${dry.total === 1 ? 'email' : 'emails'} now.`}</p>
+                <p>{dry.total === 0 ? 'Nothing is due now.' : `${dry.total} ${dry.total === 1 ? 'request is' : 'requests are'} due now: each gets an email at the next run — the review email, or “How was it?” first where its rule asks that.`}</p>
                 {dry.rows.length > 0 && (
                   <SummaryTable label="Due now" columns={['Order', 'Buyer', 'Market']} rows={dry.rows.map((r) => ({ id: r.id, cells: [r.orderLabel, r.buyer, r.market ? marketName(r.market) : '—'] }))} />
                 )}

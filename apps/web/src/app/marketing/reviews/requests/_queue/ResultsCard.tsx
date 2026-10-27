@@ -2,8 +2,10 @@
 
 /**
  * Reviews › Requests › Queue — "What requests brought" (`GET /api/reviews/analytics`): requests sent, the reviews that
- * followed within 30 days and the rate, by market, by product type and by rule, for 7, 30 or 90 days. Every rate is an
- * estimate: Amazon does not say which buyer wrote a review. The A/B rows are a later part, shown as a labelled sample.
+ * followed within 30 days and the rate, by market, by product type and by rule, for 7, 30 or 90 days — the ONE review
+ * rate the Overview and the channel pages show. Where no review can follow a request (no eBay feedback linked to its
+ * order, no Amazon review imported) the rate says "Not measurable", never 0 %. The A/B rows are a later part, shown as a
+ * labelled sample.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Banner, Card, MetricStrip, SummaryTable, type Metric } from '@/design-system/components'
@@ -13,7 +15,7 @@ import type { ResultsPeriod } from './queueQuery'
 import { marketName, rateText } from './queueTiles'
 import s from './queue.module.css'
 
-interface Rollup { sent: number; reviewedAfter: number; conversionRate: number }
+interface Rollup { sent: number; reviewedAfter: number; conversionRate: number | null; words?: string | null }
 interface Analytics {
   overall: Rollup
   perMarketplace: Array<Rollup & { marketplace: string }>
@@ -29,7 +31,7 @@ const PERIODS = [
 const DAYS: Record<ResultsPeriod, number> = { '7d': 7, '30d': 30, '90d': 90 }
 
 const n = (v: number) => v.toLocaleString('en-IE')
-const rate = (r: Rollup) => (r.sent > 0 ? rateText(r.conversionRate) : '—')
+const rate = (r: Rollup) => (r.sent === 0 ? '—' : r.conversionRate == null ? 'Not measurable' : rateText(r.conversionRate))
 const bySent = <T extends Rollup>(rows: T[]) => [...rows].sort((a, b) => b.sent - a.sent)
 
 export interface ResultsCardProps {
@@ -63,14 +65,14 @@ export function ResultsCard({ period, onPeriod }: ResultsCardProps) {
     ? [
         { label: 'Sent', value: n(a.overall.sent), hint: `last ${DAYS[period]} days` },
         { label: 'Reviews after', value: n(a.overall.reviewedAfter), hint: 'within 30 days of the request' },
-        { label: 'Review rate', value: rate(a.overall), hint: 'estimate' },
+        { label: 'Review rate', value: rate(a.overall), hint: a.overall.conversionRate == null && a.overall.sent > 0 ? 'no review can be matched yet' : 'estimate' },
       ]
     : null
 
   return (
     <Card
       header={`What requests brought — last ${DAYS[period]} days`}
-      description="A review counts when a new review for the same product and market arrives within 30 days of the request."
+      description="A review counts when it arrives within 30 days of the request: feedback that names its order by that order, a product review by its product and market."
       headerAction={<SegmentedControl size="sm" ariaLabel="Period of the results" options={PERIODS} value={period} onChange={(v) => onPeriod(v as ResultsPeriod)} />}
     >
       {current?.error ? (
@@ -84,7 +86,8 @@ export function ResultsCard({ period, onPeriod }: ResultsCardProps) {
           <MetricStrip metrics={metrics} minTileWidth={150} />
           <p className={s.muted}>
             Amazon gives no review count and does not say which buyer wrote a review, so its rate counts the reviews you imported and
-            is an estimate (“—” where nothing was sent). eBay counts feedback left after our email.
+            is an estimate. eBay feedback counts when Nexus has linked it to its order. “—” where nothing was sent; “Not measurable”
+            where no review can be matched yet.{a.overall.words ? ` ${a.overall.words}` : ''}
           </p>
           <div className={s.resultTables}>
             <SummaryTable

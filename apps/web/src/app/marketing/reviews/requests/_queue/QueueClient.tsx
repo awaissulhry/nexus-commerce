@@ -58,6 +58,7 @@ import { QUEUE_COLUMN_SPECS, queueColumns } from './queueColumns'
 import { readQueuePage, readSending, type QueueAnswer, type QueueRow, type QueueStatus, type SendingState } from './queueDatasource'
 import { SNOOZE_CHOICES, bulkHeldReason, bulkLabel, bulkResultWords, leftOutLines, queueBulkPlan, type QueueBulkAction, type SnoozeDays } from './queueBulk'
 import {
+  DEFAULT_QUEUE_PERIOD,
   EMPTY_QUEUE_QUERY,
   QUEUE_CHANNELS,
   QUEUE_MARKETS,
@@ -73,6 +74,7 @@ import {
   withFilter,
   withPage,
   withPageSize,
+  withPeriod,
   withSearch,
   withSort,
   type QueueFilterKey,
@@ -262,10 +264,10 @@ function Queue() {
   const pressTile = useCallback((status: QueueStatus) => setQuery((q) => toggleStatus(q, status)), [setQuery])
   const metrics = useMemo<Metric[] | null>(() => {
     if (!answer) return null
-    return queueTileViews(answer.tiles, query?.status ?? null).map((t) => (t.status
+    return queueTileViews(answer.tiles, query?.status ?? null, query?.period).map((t) => (t.status
       ? { label: t.label, value: t.value, hint: t.hint, accent: t.accent, active: t.active, onClick: () => pressTile(t.status!) }
       : { label: t.label, value: t.value, hint: t.hint, ...(t.delta ? { delta: t.delta } : {}) }))
-  }, [answer, query?.status, pressTile])
+  }, [answer, query?.status, query?.period, pressTile])
 
   const setFilter = useCallback((key: QueueFilterKey, value: string) => setQuery((q) => withFilter(q, key, value || null)), [setQuery])
   const facets = answer?.facets ?? null
@@ -284,11 +286,12 @@ function Queue() {
     ]
   }, [query, facets, setFilter])
   const chips = useMemo(() => (query ? filterChips(query, facets) : []), [query, facets])
-  const removeChip = useCallback((key: QueueFilterKey | 'q') => {
+  const removeChip = useCallback((key: QueueFilterKey | 'q' | 'period') => {
     if (key === 'q') {
       setSearchDraft('')
       setQuery((q) => withSearch(q, ''))
-    } else setQuery((q) => withFilter(q, key, null))
+    } else if (key === 'period') setQuery((q) => withPeriod(q, DEFAULT_QUEUE_PERIOD))
+    else setQuery((q) => withFilter(q, key, null))
   }, [setQuery])
   const clearAll = useCallback(() => {
     setSearchDraft('')
@@ -463,7 +466,7 @@ function Queue() {
         <Banner
           tone="danger"
           title={failures.title}
-          action={<Button size="sm" onClick={() => setQuery((q) => withFilter(q, 'status', 'FAILED'))}>Show failed</Button>}
+          action={<Button size="sm" onClick={() => setQuery((q) => withPeriod(withFilter(q, 'status', 'FAILED'), '7d'))}>Show failed</Button>}
         >
           {failures.detail}
         </Banner>
@@ -484,7 +487,7 @@ function Queue() {
       <GridCard
         toolbar={(
           <GridToolbar
-            count={selected.length ? <>Selected <b>{selected.length}</b> of {rows.length} on this page</> : failed ? 'Not read' : answer ? countWords(total, filtered) : 'Reading…'}
+            count={selected.length ? <>Selected <b>{selected.length}</b> of {rows.length} on this page</> : failed ? 'Not read' : answer ? countWords(total, filtered, query?.period) : 'Reading…'}
             right={(
               <>
                 <GridViewsMenu views={gridState} />
@@ -558,13 +561,15 @@ function Queue() {
         <RequestDetailModal
           id={openId}
           ids={rowIds}
+          offset={query ? (query.page - 1) * query.pageSize : 0}
+          total={answer?.total}
           onGo={openRequest}
           onClose={closeRequest}
           canManage={canManage}
           returnFocusTo={focusRow}
         />
       )}
-      {insertsOpen && <InsertsModal onClose={() => setInsertsOpen(false)} />}
+      {insertsOpen && <InsertsModal market={query?.market ?? null} onClose={() => setInsertsOpen(false)} />}
       {previewOpen && <EmailPreviewModal onClose={() => setPreviewOpen(false)} canManage={canManage} sending={sending?.data ?? null} />}
       {customise.modal}
       {confirm.element}

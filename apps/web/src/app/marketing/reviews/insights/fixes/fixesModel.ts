@@ -77,7 +77,8 @@ export function parseKinds(raw: string | null | undefined): FixKind[] {
 export const KIND_CHIPS: Array<{ kind: FixKind; label: string }> = [
   { kind: 'BULLETS', label: 'Bullets' },
   { kind: 'APLUS', label: 'A+ content' },
-  { kind: 'SIZE_GUIDE', label: 'Size guide' },
+  // Audit A7: nothing makes a size-guide fix yet (Phase 3 fit data), so the chip says so instead of filtering to nothing.
+  { kind: 'SIZE_GUIDE', label: 'Size guide · coming later' },
   { kind: 'RECALL_FLAG', label: 'Recall check' },
   { kind: 'TASK', label: 'Task' },
 ]

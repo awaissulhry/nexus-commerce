@@ -68,9 +68,11 @@ describe('rules that match no orders', () => {
 
 describe('rules tiles', () => {
   it('counts the rules on and weights the rate by requests sent', () => {
-    const t = rulesTiles([rule('a', { sent30: 100, rate30: 0.1 }), rule('b', { sent30: 300, rate30: 0.05, isActive: false }), rule('c', { sent30: 0, rate30: null })], true)
-    expect(t).toEqual({ on: 2, total: 3, sent30: 400, matched30: 36, rate30: 0.0625 })
-    expect(rulesTiles([rule('a')], false)).toEqual({ on: 1, total: 1, sent30: null, matched30: null, rate30: null })
+    const rules = [rule('a', { sent30: 100, rate30: 0.1 }), rule('b', { sent30: 300, rate30: 0.05, isActive: false }), rule('c', { sent30: 0, rate30: null })]
+    // The rate is the API's one rate for every request a rule sent, never an average of the rules' rates (audit C2).
+    expect(rulesTiles(rules, true, { sent30: 400, rate30: 0.07, rateWords: null })).toEqual({ on: 2, total: 3, sent30: 400, matched30: 36, rate30: 0.07, rateWords: null })
+    expect(rulesTiles(rules, true, { sent30: 400, rate30: null, rateWords: 'Not measurable: x' })).toMatchObject({ rate30: null, rateWords: 'Not measurable: x' })
+    expect(rulesTiles([rule('a')], false)).toEqual({ on: 1, total: 1, sent30: null, matched30: null, rate30: null, rateWords: null })
   })
 })
 

@@ -12,6 +12,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { Card, EmptyState, useToast } from '@/design-system/components'
 import { NexusGrid, type ColDef, type ICellRendererParams } from '@/design-system/grid'
 import { Button, InfoTip, Skeleton, Tag, Toggle } from '@/design-system/primitives'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { reviewsSend } from '../../_lib/reviewsFetch'
 import { ReadFailed } from './ReadFailed'
 import { automationLastRun, loadTemplatesButton, type AutomationRule } from './settingsModel'
@@ -97,6 +98,7 @@ export function AutomationsSection({ rules, templates, manageHeld, onTemplatesLo
       return
     }
     await rules.reload()
+    emitInvalidation({ type: 'review.settings.changed' })
     toast(`“${res.data?.rule.name ?? rule.name}” is ${res.data?.rule.enabled ? 'on' : 'off'}.`, 'success')
   }, [rules, toast])
 
@@ -114,6 +116,7 @@ export function AutomationsSection({ rules, templates, manageHeld, onTemplatesLo
     }
     await rules.reload()
     onTemplatesLoaded()
+    emitInvalidation({ type: 'review.settings.changed' })
     const n = res.data?.created.length ?? 0
     toast(n === 0 ? 'Every template was already loaded.' : `Loaded ${n} ${n === 1 ? 'template' : 'templates'}. ${n === 1 ? 'It starts' : 'They start'} off, in trial run.`, 'success')
   }

@@ -67,12 +67,12 @@ export function evaluatePipelineFreshness(input: PipelineFreshnessInput): Pipeli
   const warnings: string[] = []
   if (deliveryStale) {
     warnings.push(
-      `${overdueUndelivered} Amazon orders shipped ≥${DELIVERY_OVERDUE_DAYS}d ago still have no deliveredAt — the delivery sweep that feeds the review scheduler has stalled. It runs hourly inside the review-request-mailer; check that cron + NEXUS_ENABLE_REVIEW_INGEST.`,
+      `${overdueUndelivered} Amazon orders shipped ≥${DELIVERY_OVERDUE_DAYS}d ago still have no deliveredAt — the delivery sweep that feeds the review scheduler has stalled. It runs hourly inside the review request sender.`,
     )
   }
   if (schedulingStalled) {
     warnings.push(
-      `${schedulingBacklog} delivered orders (in the 4–30d request window) have no review request — scheduling may be stalled. Trigger the mailer or check NEXUS_ENABLE_REVIEW_INGEST.`,
+      `${schedulingBacklog} delivered orders (in the 4–30d request window) have no review request — scheduling may be stalled.`,
     )
   }
 

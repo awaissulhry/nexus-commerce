@@ -30,8 +30,10 @@ export interface RuleItem {
   updatedAt?: string
   /** `?withStats=1`: requests sent in 30 days. */
   sent30?: number
-  /** Their review rate (0..1, an estimate); null when none was sent. */
+  /** Their review rate (0..1, the one review rate); null when nothing measurable was sent. */
   rate30?: number | null
+  /** Why the rate leaves requests out or has none ("Not measurable: …"), in words. */
+  rateWords?: string | null
   /** Orders the rule decided in 30 days. */
   matched30?: number
 }
@@ -40,6 +42,8 @@ export interface RulesAnswer {
   items: RuleItem[]
   /** Set when the 30-day numbers could not be read (the rules still are). */
   statsError?: string | null
+  /** Every request a rule sent in 30 days, as ONE rate (the API's review rate, never an average of the rules' rates). */
+  statsAll?: { sent30: number; rate30: number | null; rateWords: string | null } | null
 }
 
 /** The channels Nexus asks buyers on. Etsy asks its buyers itself. */
@@ -149,21 +153,19 @@ export function noMatchWarnings(rules: readonly RuleItem[], statsRead: boolean):
   return out
 }
 
-export interface RulesTiles { on: number; total: number; sent30: number | null; matched30: number | null; rate30: number | null }
+export interface RulesTiles { on: number; total: number; sent30: number | null; matched30: number | null; rate30: number | null; rateWords: string | null }
 
-/** Rules on, and the 30-day numbers summed (the rate weighted by requests sent). */
-export function rulesTiles(rules: readonly RuleItem[], statsRead: boolean): RulesTiles {
+/** Rules on, the 30-day numbers summed, and the rules' review rate as the API counts it (`all`). */
+export function rulesTiles(rules: readonly RuleItem[], statsRead: boolean, all: RulesAnswer['statsAll'] = null): RulesTiles {
   const on = rules.filter((r) => r.isActive).length
-  if (!statsRead) return { on, total: rules.length, sent30: null, matched30: null, rate30: null }
+  if (!statsRead) return { on, total: rules.length, sent30: null, matched30: null, rate30: null, rateWords: null }
   let sent = 0
-  let reviewed = 0
   let matched = 0
   for (const r of rules) {
     sent += r.sent30 ?? 0
     matched += r.matched30 ?? 0
-    if (r.rate30 != null) reviewed += r.rate30 * (r.sent30 ?? 0)
   }
-  return { on, total: rules.length, sent30: sent, matched30: matched, rate30: sent > 0 ? reviewed / sent : null }
+  return { on, total: rules.length, sent30: sent, matched30: matched, rate30: all?.rate30 ?? null, rateWords: all?.rateWords ?? null }
 }
 
 export type RulesBulkAction = 'on' | 'off' | 'delete' | 'test' | 'export'

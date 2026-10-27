@@ -93,7 +93,9 @@ export function queueColumns(): ColDef<QueueRow>[] {
       headerName: 'Status',
       ...statusColumn<QueueRow>('status', { tones: Object.fromEntries(Object.entries(STATUS_WORDS).map(([k, label]) => [k, { tone: STATUS_TONES[k as keyof typeof STATUS_TONES], label }])) }),
       minWidth: 120,
-      comparator: serverOrder,
+      // Not sortable (audit A14): the cell shows a derived status ("Due now", "Retrying", "Blocked") the server cannot
+      // sort by, so a sort by the stored status looked random. Filter by status with the tiles instead.
+      sortable: false,
     },
     { colId: 'tries', headerName: 'Tries', ...integerColumn<QueueRow>('tries'), minWidth: 90, comparator: serverOrder, hide: hidden('tries') },
     { colId: 'reason', headerName: 'Reason', field: 'reasonWords', cellRenderer: ReasonCell, minWidth: 220, flex: 1.6, sortable: false },

@@ -25,6 +25,10 @@ const DAY_MS = 24 * 60 * 60 * 1000
 /** What the queue calls a request's state (the status filter and the tiles). */
 export type QueueStatus = 'SCHEDULED' | 'DUE' | 'RETRYING' | 'SENT' | 'FAILED' | 'SKIPPED' | 'SUPPRESSED'
 export const QUEUE_STATUSES: readonly QueueStatus[] = ['SCHEDULED', 'DUE', 'RETRYING', 'SENT', 'FAILED', 'SKIPPED', 'SUPPRESSED']
+/** A queue status in words — the same words as the Requests page's status cells (web requests/_queue/queueTiles.ts). */
+export const QUEUE_STATUS_WORDS: Record<QueueStatus, string> = {
+  SCHEDULED: 'Scheduled', DUE: 'Due now', RETRYING: 'Retrying', SENT: 'Sent', FAILED: 'Failed', SKIPPED: 'Skipped', SUPPRESSED: 'Blocked',
+}
 
 /** The fields of a ReviewRequest (and its order) the words read. */
 export interface RequestFacts {
@@ -299,15 +303,20 @@ export function runResultWords(r: { sent: number; failed: number; skipped?: numb
   return parts.join(', ')
 }
 
-/** The failures banner ("6 requests failed in the last 7 days" + what they were). */
-export function failuresWords(f: { count: number; bounced: number; noAnswer: number }): string {
-  if (f.count === 0) return 'No request failed in the last 7 days'
-  const head = `${f.count} ${f.count === 1 ? 'request' : 'requests'} failed in the last 7 days`
+/**
+ * The failures banner ("2 requests failed in the last 7 days" + what they were): failed for good, no try left — the
+ * rows "Show failed" lists. Requests that still try again on their own are named apart (`retrying`).
+ */
+export function failuresWords(f: { count: number; bounced: number; noAnswer: number; retrying?: number }): string {
+  const again = f.retrying ? `${f.retrying} more ${f.retrying === 1 ? 'request tries' : 'requests try'} again on their own after ${RETRY_BACKOFF_HOURS.join(', ').replace(/, (\d+)$/, ' and $1')} hours` : null
+  if (f.count === 0) return again ? `No request failed for good in the last 7 days: ${again}` : 'No request failed in the last 7 days'
+  const head = `${f.count} ${f.count === 1 ? 'request' : 'requests'} failed in the last 7 days, no try left`
   const parts: string[] = []
   if (f.bounced) parts.push(`${f.bounced} ${f.bounced === 1 ? 'email' : 'emails'} bounced (the address does not exist)`)
-  if (f.noAnswer) parts.push(`${f.noAnswer} ${f.noAnswer === 1 ? 'time' : 'times'} Amazon did not answer — those try again on their own after ${RETRY_BACKOFF_HOURS.join(', ').replace(/, (\d+)$/, ' and $1')} hours`)
+  if (f.noAnswer) parts.push(`${f.noAnswer} ${f.noAnswer === 1 ? 'time' : 'times'} Amazon did not answer`)
   const other = f.count - f.bounced - f.noAnswer
   if (other > 0) parts.push(`${other} other`)
+  if (again) parts.push(again)
   return parts.length ? `${head}: ${parts.join(' · ')}` : head
 }
 

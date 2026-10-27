@@ -3,7 +3,7 @@
 /**
  * Reviews area — the live review stream (SSE `GET /api/reviews/events`, published by review ingest, the spike
  * detector and reply send). The Overview's "Needs you" card and the Inbox call it to re-read when a review arrives,
- * turns negative or gets a reply. The browser reconnects a dropped stream by itself; when the server closes it for
+ * turns negative or gets a reply; Insights › Alerts and the Overview's alert tile when the spike check opens an alert. The browser reconnects a dropped stream by itself; when the server closes it for
  * good (an error answer), this hook opens it again after a growing wait, so a page left open keeps updating.
  *
  * Against a local API the stream is off unless dev streams are on (lib/sync/dev-stream-gate.ts): an open stream holds
@@ -13,7 +13,8 @@ import { useEffect, useRef } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { streamsEnabled } from '@/lib/sync/dev-stream-gate'
 
-export type ReviewEventType = 'review.created' | 'review.negative' | 'review.responded'
+/** `review.spike.detected`: the hourly spike check opened an alert (Insights › Alerts and the Overview re-read on it). */
+export type ReviewEventType = 'review.created' | 'review.negative' | 'review.responded' | 'review.spike.detected'
 
 export interface ReviewEvent {
   type: ReviewEventType

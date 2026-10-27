@@ -5,7 +5,7 @@
  *   GET /api/reviews/area/overview?period=7d|30d|90d|12m|all&channel=&market=
  *       → { period, generatedAt, sections: { tiles, trend, spread, channels, themes, watch, setup } },
  *         each section `{ ok: true, data } | { ok: false, error }` (one failed read shows only in its card)
- *   GET /api/reviews/area/needs-you?only=reply|requests|alerts&limit=8
+ *   GET /api/reviews/area/needs-you?only=reply|requests|alerts&limit=8&channel=EBAY&market=IT (the Overview's scope)
  *       → { items, total, counts }
  *   GET /api/reviews/area/channel?channel=AMAZON|EBAY&market=IT&period=7d|30d|90d|12m   (PR F, build spec §3.5)
  *       → { channel, market, label, period, generatedAt, markets, sections } — Amazon: { tiles, trend, spread, topics,
@@ -38,9 +38,9 @@ const reviewsAreaRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   fastify.get('/reviews/area/needs-you', async (request, reply) => {
-    const q = (request.query ?? {}) as { only?: string; limit?: string }
+    const q = (request.query ?? {}) as { only?: string; limit?: string; channel?: string; market?: string }
     try {
-      const needs = await reviewNeedsYou({ only: q.only, limit: q.limit })
+      const needs = await reviewNeedsYou({ only: q.only, limit: q.limit, channel: q.channel, market: q.market })
       reply.header('Cache-Control', 'private, no-store')
       return needs
     } catch (err) {
@@ -88,7 +88,7 @@ const reviewsAreaRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const answer = await requestSellerFeedbackFetch()
       // A held press answers 409 with its reason as the error sentence (the web shows it; nothing was asked of Amazon).
-      return answer.ok ? reply.code(202).send(answer) : reply.code(409).send({ ...answer, error: answer.held })
+      return answer.ok === true ? reply.code(202).send(answer) : reply.code(409).send({ ...answer, error: (answer as { held: string }).held })
     } catch (err) {
       logger.warn('[reviews-area] seller feedback fetch failed', { error: err instanceof Error ? err.message : String(err) })
       return reply.code(500).send({ error: 'Nexus could not ask Amazon for the report. Nothing was fetched. Try again in a moment.' })

@@ -35,6 +35,9 @@ export interface RequestDetailModalProps {
   id: string
   /** The requests of the grid page, in the order shown. */
   ids: readonly string[]
+  /** Where that page starts in the whole list ((page − 1) × page size) and the list's length: the counter counts the list. */
+  offset?: number
+  total?: number
   onGo: (id: string) => void
   onClose: () => void
   canManage: boolean
@@ -43,7 +46,7 @@ export interface RequestDetailModalProps {
 
 interface BulkAnswer { changed: number; held: { id: string; words: string }[] }
 
-export function RequestDetailModal({ id, ids, onGo, onClose, canManage, returnFocusTo }: RequestDetailModalProps) {
+export function RequestDetailModal({ id, ids, offset, total, onGo, onClose, canManage, returnFocusTo }: RequestDetailModalProps) {
   const { toast } = useToast()
   const confirm = useActionConfirm()
   const [tab, setTab] = useState<Tab>('request')
@@ -170,7 +173,7 @@ export function RequestDetailModal({ id, ids, onGo, onClose, canManage, returnFo
         activeTab={tab}
         onTabChange={(t) => setTab(t as Tab)}
         tabsLabel="Request sections"
-        nav={ids.includes(id) ? { ids, current: id, onGo, noun: 'request' } : undefined}
+        nav={ids.includes(id) ? { ids, current: id, onGo, noun: 'request', offset, total } : undefined}
         loading={!current}
         error={current?.error ?? undefined}
         onRetry={() => void load()}
