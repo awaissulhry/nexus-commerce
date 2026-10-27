@@ -84,12 +84,11 @@ describe('reviews navigation', () => {
       // PR E: the old Insights pages.
       '/marketing/reviews/heatmap', '/marketing/reviews/by-product', '/marketing/reviews/products/product-id',
       '/marketing/reviews/spikes', '/marketing/reviews/actions', '/marketing/reviews/spotlight',
+      // Advanced (→ Overview) and Automation (→ Settings › Automations) redirect too (audit D3).
+      '/marketing/reviews/advanced', '/marketing/reviews/automation',
     ]) {
       expect(active(retired)).toEqual([])
     }
-    expect(active('/marketing/reviews/advanced')).toEqual(['Overview'])
-    // The old Automation page redirects to Settings › Automations.
-    expect(active('/marketing/reviews/automation')).toEqual(['Settings'])
   })
 
   it('lists a row per channel market under Amazon and eBay, and marks the market page itself', () => {

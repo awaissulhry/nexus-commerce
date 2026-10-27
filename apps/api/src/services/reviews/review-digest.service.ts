@@ -8,12 +8,19 @@
  * Gated by NEXUS_ENABLE_REVIEW_DIGEST=1 (and the global outbound-email
  * flag inside sendEmail). Skips sending when there's nothing to report
  * so a quiet day doesn't generate noise.
+ *
+ * Audit 2026-10-27: every number is the one the pages show — visible rows only (fixtures never count), the ONE rating
+ * (review-rating.ts), the ONE needs-a-reply rule (review-visibility.ts) — the pipeline warnings are the words Settings
+ * shows (never a setting's name), and the link opens the Inbox inside this business.
  */
 
 import prisma from '../../db.js'
 import { sendEmail } from '../email/transport.js'
 import { logger } from '../../utils/logger.js'
 import { digestFallbackRecipients, readAlert, teamMembers } from './review-settings.service.js'
+import { needsReplyWhere, visibleReviewWhere } from './review-visibility.js'
+import { ratingOf } from './review-rating.js'
+import { businessWebLink } from './review-alert-notify.service.js'
 
 const WEB_URL = process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app'
 
@@ -45,13 +52,11 @@ export interface ReviewDigest {
 export async function buildReviewDigest(windowHours = 24): Promise<ReviewDigest> {
   const since = new Date(Date.now() - windowHours * 3600 * 1000)
   const recent = await prisma.review.findMany({
-    where: { ingestedAt: { gte: since } },
-    select: { rating: true, sentiment: { select: { label: true, categories: true } } },
+    where: visibleReviewWhere({ ingestedAt: { gte: since } }),
+    select: { channel: true, kind: true, ingestSource: true, rating: true, sentiment: { select: { label: true, categories: true } } },
   })
   const counts = { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 }
   const negCats: Record<string, number> = {}
-  let ratingSum = 0
-  let ratingN = 0
   for (const r of recent) {
     if (r.sentiment) {
       counts[r.sentiment.label as keyof typeof counts] =
@@ -60,11 +65,8 @@ export async function buildReviewDigest(windowHours = 24): Promise<ReviewDigest>
         for (const c of r.sentiment.categories) negCats[c] = (negCats[c] ?? 0) + 1
       }
     }
-    if (r.rating != null) {
-      ratingSum += r.rating
-      ratingN += 1
-    }
   }
+  const rating = ratingOf(recent)
   const topNegativeCategories = Object.entries(negCats)
     .map(([category, count]) => ({ category, count }))
     .sort((a, b) => b.count - a.count)
@@ -72,30 +74,25 @@ export async function buildReviewDigest(windowHours = 24): Promise<ReviewDigest>
 
   const [openSpikes, openDeskItems, negativesAwaiting] = await Promise.all([
     prisma.reviewSpike.count({ where: { status: 'OPEN' } }),
-    prisma.review.count({
-      where: { OR: [{ triageStatus: 'NEW' }, { triageStatus: null }, { triageStatus: 'IN_PROGRESS' }] },
-    }),
-    prisma.review.count({
-      where: {
-        sentiment: { is: { label: 'NEGATIVE' } },
-        NOT: { triageStatus: { in: ['RESPONDED', 'RESOLVED', 'IGNORED'] } },
-      },
-    }),
+    // The badges' number: reviews that need a reply (answerable, not imported, open).
+    prisma.review.count({ where: needsReplyWhere() }),
+    prisma.review.count({ where: { AND: [needsReplyWhere(), { sentiment: { is: { label: 'NEGATIVE' } } }] } }),
   ])
 
   const { computeReviewPipelineFreshness } = await import('./review-pipeline-health.service.js')
+  const { freshnessProblems } = await import('./review-settings-health.js')
   const freshness = await computeReviewPipelineFreshness()
 
   return {
     windowHours,
     newReviews: recent.length,
     counts,
-    avgRating: ratingN > 0 ? ratingSum / ratingN : null,
+    avgRating: rating.stars,
     topNegativeCategories,
     openDeskItems,
     negativesAwaiting,
     openSpikes,
-    pipelineWarnings: freshness.warnings,
+    pipelineWarnings: freshnessProblems(freshness),
   }
 }
 
@@ -105,7 +102,7 @@ function renderDigestHtml(d: ReviewDigest): string {
       ? d.topNegativeCategories
           .map((c) => `<li>${CATEGORY_LABEL[c.category] ?? c.category} — ${c.count}</li>`)
           .join('')
-      : '<li>None 🎉</li>'
+      : '<li>None</li>'
   return `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a;max-width:560px;margin:0 auto;padding:16px">
   <h2 style="margin:0 0 4px">Daily review digest</h2>
   <p style="color:#64748b;margin:0 0 16px">Last ${d.windowHours}h across Amazon · eBay · Shopify</p>
@@ -113,19 +110,19 @@ function renderDigestHtml(d: ReviewDigest): string {
   <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
     <tr>
       <td style="padding:8px;border:1px solid #e2e8f0"><strong>${d.newReviews}</strong><br>new reviews</td>
-      <td style="padding:8px;border:1px solid #e2e8f0"><strong>${d.avgRating != null ? d.avgRating.toFixed(2) + '★' : '—'}</strong><br>avg rating</td>
+      <td style="padding:8px;border:1px solid #e2e8f0"><strong>${d.avgRating != null ? d.avgRating.toFixed(1) + '★' : '—'}</strong><br>average stars (product reviews; Amazon from imported reviews)</td>
       <td style="padding:8px;border:1px solid #e2e8f0;color:#be123c"><strong>${d.counts.NEGATIVE}</strong><br>negative</td>
     </tr>
   </table>
   <p style="margin:0 0 4px"><strong>Waiting for you</strong></p>
   <ul style="margin:0 0 16px">
     <li><strong style="color:#be123c">${d.negativesAwaiting}</strong> negative reviews to answer</li>
-    <li><strong>${d.openDeskItems}</strong> open in the Inbox</li>
+    <li><strong>${d.openDeskItems}</strong> reviews need a reply</li>
     <li><strong>${d.openSpikes}</strong> open spikes</li>
   </ul>
   <p style="margin:0 0 4px"><strong>Top complaint categories (24h)</strong></p>
   <ul style="margin:0 0 16px">${cats}</ul>
-  <a href="${WEB_URL}/marketing/reviews/inbox" style="display:inline-block;background:#0f172a;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">Open the Inbox →</a>
+  <a href="${businessWebLink('/marketing/reviews/inbox?reply=needed&period=all', WEB_URL) ?? ''}" style="display:inline-block;background:#0f172a;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">Open the Inbox →</a>
   </body></html>`
 }
 

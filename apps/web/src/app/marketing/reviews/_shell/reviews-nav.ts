@@ -3,13 +3,10 @@
  * page shows in its PageHeader (ReviewsShell.tsx `reviewsCrumbs`) and the page a path belongs to. Add or move a page
  * here and the sub-sidebar and crumbs follow.
  *
- * TEMPORARY TARGETS (build spec §1.2): a row whose new page is not built yet points at the page doing that job today,
- * and owns its old address through `match`. The coordinator swaps the row's `href` (one line) when the PR that builds
- * the page lands. The Inbox (PR B), the Requests rows — Queue, Rules, Timing (PR C) —, Settings (PR D,
- * `permission: 'reviews.manage'`, at the bottom as the design draws it) and the Insights rows (PR E,
- * `/marketing/reviews/insights/<page>`) are on their own pages. The Channels group (PR F): Amazon and eBay, each "all
- * markets" plus one row per market the business sells on (`reviewsNav(markets)`; the markets come from
- * GET /api/reviews/area/channel-markets). Shopify and Etsy (PR I) are one page each: no market rows.
+ * Every row points at its own page. The Channels group: Amazon and eBay, each "all markets" plus one row per market the
+ * business sells on (`reviewsNav(markets)`; the markets come from GET /api/reviews/area/channel-markets). Shopify and Etsy
+ * (PR I) are one page each: no market rows. Old addresses (Advanced, Automation, the old Insights pages) are redirects
+ * in next.config.js, so no row claims them.
  *
  * Framework-free (no React): the tests import it in Node.
  */
@@ -72,7 +69,7 @@ export const REVIEWS_NAV: readonly ReviewsNavGroup[] = [
     label: 'Reviews',
     hideLabel: true,
     items: [
-      { label: 'Overview', href: REVIEWS_ROOT, icon: LayoutDashboard, exact: true, match: [`${REVIEWS_ROOT}/advanced`] },
+      { label: 'Overview', href: REVIEWS_ROOT, icon: LayoutDashboard, exact: true },
       { label: 'Inbox', href: `${REVIEWS_ROOT}/inbox`, icon: Inbox, badge: 'needReply' },
     ],
   },
@@ -122,7 +119,7 @@ export const REVIEWS_NAV: readonly ReviewsNavGroup[] = [
     hideLabel: true,
     items: [
       // The old Automation page redirects here (next.config.js: `?section=automations`).
-      { label: 'Settings', href: `${REVIEWS_ROOT}/settings`, icon: Settings, match: [`${REVIEWS_ROOT}/automation`], permission: 'reviews.manage' },
+      { label: 'Settings', href: `${REVIEWS_ROOT}/settings`, icon: Settings, permission: 'reviews.manage' },
     ],
   },
 ]

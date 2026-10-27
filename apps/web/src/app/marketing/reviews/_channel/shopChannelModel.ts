@@ -10,7 +10,7 @@
  * Pure (no React), tested in shopChannelModel.vitest.test.ts.
  */
 import { reviewReplyRules, ETSY_REPLY_WINDOW_DAYS } from '@nexus/shared/review-reply-rules'
-import { inboxHref } from '../_lib/reviewsLinks'
+import { inboxHref, needsReplyHref } from '../_lib/reviewsLinks'
 import type { InboxRow } from '../inbox/inboxDatasource'
 import { count, dayMonth, plural, type Section, type TileView } from './channelModel'
 
@@ -110,7 +110,8 @@ export const ETSY_REVIEWS_HREF = reviewReplyRules('ETSY').open?.href ?? 'https:/
 
 /** The Etsy page's six tiles (the board): average, new, with a photo, not replied yet, window closing, window closed. */
 export function etsyTileViews(t: EtsyTiles): TileView[] {
-  const open = inboxHref({ channel: 'ETSY', status: 'NEW,IN_PROGRESS' })
+  // The one needs-a-reply list (open, inside Etsy's window, not imported): the Inbox shows this same number.
+  const open = needsReplyHref({ channel: 'ETSY' })
   return [
     { key: 'average', label: 'Average rating', value: average(t.average), hint: plural(t.reviews, 'review', 'reviews') },
     {
@@ -143,7 +144,8 @@ export function shopifyTileViews(t: ShopifyTiles): TileView[] {
     { key: 'media', label: 'With photo or video', value: count(t.withMedia), hint: t.videos > 0 ? plural(t.videos, 'video', 'videos') : 'no videos' },
     {
       key: 'reply', label: 'Needs a reply', value: count(t.needReply), hint: waitHoursWords(t.oldestWaitHours),
-      href: inboxHref({ channel: 'SHOPIFY', status: 'NEW,IN_PROGRESS' }), accent: t.needReply > 0 ? 'var(--nds-danger)' : undefined,
+      // The one needs-a-reply list (audit A4): the Inbox shows this same number.
+      href: needsReplyHref({ channel: 'SHOPIFY' }), accent: t.needReply > 0 ? 'var(--nds-danger)' : undefined,
     },
   ]
 }

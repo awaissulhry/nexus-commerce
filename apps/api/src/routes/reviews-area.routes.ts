@@ -5,7 +5,7 @@
  *   GET /api/reviews/area/overview?period=7d|30d|90d|12m|all&channel=&market=
  *       → { period, generatedAt, sections: { tiles, trend, spread, channels, themes, watch, setup } },
  *         each section `{ ok: true, data } | { ok: false, error }` (one failed read shows only in its card)
- *   GET /api/reviews/area/needs-you?only=reply|requests|alerts&limit=8
+ *   GET /api/reviews/area/needs-you?only=reply|requests|alerts&limit=8&channel=EBAY&market=IT (the Overview's scope)
  *       → { items, total, counts }
  *   GET /api/reviews/area/channel?channel=AMAZON|EBAY&market=IT&period=7d|30d|90d|12m   (PR F, build spec §3.5)
  *       → { channel, market, label, period, generatedAt, markets, sections } — Amazon: { tiles, trend, spread, topics,
@@ -44,9 +44,9 @@ const reviewsAreaRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   fastify.get('/reviews/area/needs-you', async (request, reply) => {
-    const q = (request.query ?? {}) as { only?: string; limit?: string }
+    const q = (request.query ?? {}) as { only?: string; limit?: string; channel?: string; market?: string }
     try {
-      const needs = await reviewNeedsYou({ only: q.only, limit: q.limit })
+      const needs = await reviewNeedsYou({ only: q.only, limit: q.limit, channel: q.channel, market: q.market })
       reply.header('Cache-Control', 'private, no-store')
       return needs
     } catch (err) {

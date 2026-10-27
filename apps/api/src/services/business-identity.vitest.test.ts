@@ -201,6 +201,8 @@ describe('O3 — Xavia: every buyer-facing output is byte-identical to before', 
     expect(h.sent).toMatchSnapshot()
   })
 
+  // Owner 2026-10-27 (audit E1): the review e-mail's text changed on purpose — an honest-review request only, no
+  // "contact us first" before a review. The snapshot holds the new text; the identity in it is unchanged.
   it('review request e-mails, Italian and English', async () => {
     for (const locale of ['it', 'en'] as const) await xavia(() => sendReviewRequestEmail(reviewContext(locale)))
     expect(h.sent).toHaveLength(2)

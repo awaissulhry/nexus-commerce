@@ -125,7 +125,7 @@ export function AmazonSections({ lock, period, sections, busy, canManage, onRetr
       >
         Amazon gives no star rating, average or review count by API: stars on this page come only from reviews you imported.
         Topics are updated weekly per product, in English. Seller feedback comes only as 1–3 star feedback, fetched on request.
-        Nobody can reply to a product review on Amazon.
+        Amazon lets nobody reply to a product review, so they never wait for a reply here.
       </Banner>
 
       <div className={s.row}>

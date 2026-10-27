@@ -19,7 +19,11 @@ describe('queue tiles', () => {
     expect(views.filter((v) => v.active).map((v) => v.key)).toEqual(['FAILED'])
     const rate = views[6]
     expect(rate.status).toBeNull()
-    expect(rate.hint).toBe('30 days, estimate')
+    expect(rate.hint).toBe('last 30 days, estimate')
+    expect(views[3].hint).toBe('last 30 days')
+    const year = queueTileViews(TILES, null, '12m')
+    expect(year[3].hint).toBe('last 12 months')
+    expect(year[6].hint).toBe('last 12 months, estimate')
     expect(rate.delta).toEqual({ value: '+0.6', positive: true })
   })
 
@@ -27,7 +31,7 @@ describe('queue tiles', () => {
     const rate = queueTileViews({ ...TILES, reviewRate: null, rateDelta: null }, null)[6]
     expect(rate.value).toBe('—')
     expect(rate.delta).toBeUndefined()
-    expect(rate.hint).toBe('nothing sent yet · estimate')
+    expect(rate.hint).toBe('nothing sent in this period')
   })
 
   it('writes rates and point changes', () => {

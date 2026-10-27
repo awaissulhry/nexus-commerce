@@ -11,7 +11,8 @@ import { COUNTRY_NAMES } from '@/app/_shared/app-nav'
 import { channelLabel } from '@/app/listings/_readiness/marketChips'
 import type { InboxFacets, InboxReadState, InboxRow, InboxStatusCounts, InboxTabCounts } from './inboxDatasource'
 import {
-  NO_OWNER, toggleStatusTile, withPeriod, withPhotos, withSearch, withoutValue, type InboxFilterKey, type InboxKind, type InboxPeriod,
+  NO_OWNER, toggleStatusTile, withNeedsReply, withPeriod, withPhotos, withProduct, withSearch, withoutValue, type InboxFilterKey, type InboxKind,
+  type InboxPeriod,
   type InboxQuery, type InboxStatus,
 } from './inboxQuery'
 
@@ -49,7 +50,7 @@ const TILE_HINT: Record<InboxStatus, string> = {
   RESPONDED: 'a reply went out',
   RESOLVED: 'no reply needed',
   IGNORED: 'hidden from New',
-  OVERDUE: `open for more than ${REPLY_DUE_HOURS} h`,
+  OVERDUE: `needs a reply for more than ${REPLY_DUE_HOURS} h`,
 }
 
 export function tileHint(status: InboxStatus): string {
@@ -130,6 +131,12 @@ export function inboxChips(q: InboxQuery, facets: InboxFacets | null = null): In
   if (q.period !== 'all') {
     chips.push({ key: 'period', label: `Received in the last ${PERIOD_SHORT[q.period]}`, removeLabel: 'Show reviews from any date', next: withPeriod(q, 'all') })
   }
+  if (q.product) {
+    chips.push({ key: 'product', label: 'One product (and its variants)', removeLabel: 'Show the reviews of every product', next: withProduct(q, null) })
+  }
+  if (q.needsReply) {
+    chips.push({ key: 'needsReply', label: 'Needs a reply', removeLabel: 'Show every review, not only the ones that need a reply', next: withNeedsReply(q, false) })
+  }
   if (q.statuses.length === 1) {
     const s = q.statuses[0]
     chips.push({ key: `statuses:${s}`, label: statusChipWord(s), removeLabel: `Show every status, not only ${tileLabel(s)}`, next: toggleStatusTile(q, null) })
@@ -197,7 +204,8 @@ export function readStateBanners(readState: readonly InboxReadState[] | null, ti
     const since = rows.length === 1 && rows[0].since ? dayWords(rows[0].since, timeZone) : ''
     const title = since ? `${where} has not been read since ${since}.` : `${where} ${rows.length === 1 ? 'is' : 'are'} not being read.`
     const reason = rows[0].reason ? sentence(rows[0].reason) : ''
-    const body = `${reason ? `${reason} ` : ''}New reviews from ${rows.length === 1 ? where : 'these markets'} are missing here; the other channels are up to date.`
+    // Only what is known (audit B1): this place is not read. Nothing is claimed about the other channels.
+    const body = `${reason ? `${reason} ` : ''}New reviews from ${rows.length === 1 ? where : 'these markets'} are missing here until Nexus reads ${rows.length === 1 ? 'it' : 'them'} again.`
     const href = rows[0].reconnectHref
     const action = href ? { label: rows.length === 1 ? `Reconnect ${where}` : `Reconnect ${channelLabel(rows[0].channel)}`, href } : null
     return { key, title, body, action }
@@ -215,6 +223,11 @@ export function livePill(state: { error: boolean; updating: boolean; readState: 
 }
 
 /** The header line: "1,284 reviews · last 30 days". */
+/** "37 need a reply" — the badges' number on the button that shows them. */
+export function needsReplyWords(n: number): string {
+  return `${count(n)} ${n === 1 ? 'needs' : 'need'} a reply`
+}
+
 export function headerSubtitle(total: number | null, period: InboxPeriod, state: 'loading' | 'error' | 'ready'): string {
   if (state === 'loading' || (state === 'ready' && total == null)) return 'Loading…'
   if (state === 'error' || total == null) return `Could not load · ${periodSentence(period)}`

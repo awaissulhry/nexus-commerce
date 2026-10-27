@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   channelHref,
   inboxHref,
+  needsReplyHref,
   rulesHref,
   timingHref,
   insightsHref,
@@ -114,7 +115,12 @@ describe('reviews links', () => {
 
   it('sends the Requests links to the Queue, its windows and one rule’s editor, filters and all', () => {
     expect(requestsHref()).toBe('/marketing/reviews/requests')
-    expect(requestsHref({ status: 'FAILED', channel: 'EBAY', market: 'DE', period: '7d' })).toBe('/marketing/reviews/requests?status=FAILED&channel=EBAY&market=DE')
+    // A link keeps its page's period (audit A3); the Queue's own default (30 days) leaves the address.
+    expect(requestsHref({ status: 'FAILED', channel: 'EBAY', market: 'DE', period: '7d' })).toBe('/marketing/reviews/requests?period=7d&status=FAILED&channel=EBAY&market=DE')
+    expect(requestsHref({ status: 'SENT', period: '30d' })).toBe('/marketing/reviews/requests?status=SENT')
+    // The badges' number: the one needs-a-reply rule, every date (audit A4, C1).
+    expect(needsReplyHref()).toBe('/marketing/reviews/inbox?period=all&reply=needed')
+    expect(needsReplyHref({ channel: 'EBAY', market: 'DE' })).toBe('/marketing/reviews/inbox?period=all&channel=EBAY&market=DE&reply=needed')
     expect(requestsHref({ inserts: 1 })).toBe('/marketing/reviews/requests?inserts=1')
     expect(requestsHref({ preview: true, channel: 'SHOPIFY' })).toBe('/marketing/reviews/requests?channel=SHOPIFY&preview=1')
     expect(ruleHref('rule 1/2')).toBe('/marketing/reviews/requests/rules/rule%201%2F2')

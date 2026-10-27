@@ -295,7 +295,9 @@ function Fixes() {
         </>
       )}
       {read.error && data && <p className={shared.muted} role="status">Not updating: {read.error}</p>}
-      {data && data.count >= FIXES_READ_LIMIT && <p className={shared.muted}>Showing the newest {FIXES_READ_LIMIT} fixes.</p>}
+      {data && data.count >= FIXES_READ_LIMIT && <p className={shared.muted}>Showing the newest {FIXES_READ_LIMIT} fixes: the tabs and kind counts cover those {FIXES_READ_LIMIT} only.</p>}
+      {/* Audit A10: a fix belongs to a product and a market, never to a channel — say so instead of filtering silently. */}
+      {scope?.channel && <p className={shared.muted}>Fixes are per product and market, not per channel: every channel’s fixes{scope.market ? ' of this market' : ''} are listed.</p>}
 
       <p className={shared.footnote}>
         Fixes are written by AI from the reviews and Amazon topics shown under “Why”. Read them before you send them: translations into the

@@ -91,13 +91,22 @@ export function runConfirm(s: SendingState, timeZone?: string): RunConfirm {
   const email = s.due.email
   const total = amazon.total + email.total
   const consequences: string[] = []
-  if (amazon.total > 0) {
-    consequences.push(`Asks Amazon to send ${plural(amazon.total, 'review request', 'review requests')} (${splitWords(amazon.byMarket, marketName)})`)
+  // Due requests whose rule asks "How was it?" first get that e-mail now, not the request (audit B19).
+  const amazonCheck = Math.min(amazon.checkFirst ?? 0, amazon.total)
+  const emailCheck = Math.min(email.checkFirst ?? 0, email.total)
+  if (amazon.total - amazonCheck > 0) {
+    consequences.push(`Asks Amazon to send ${plural(amazon.total - amazonCheck, 'review request', 'review requests')}${amazonCheck ? '' : ` (${splitWords(amazon.byMarket, marketName)})`}`)
   }
-  if (email.total > 0) {
-    consequences.push(`Sends our email to ${plural(email.total, 'buyer', 'buyers')} (${splitWords(email.byChannel, channelLabel)})`)
+  if (email.total - emailCheck > 0) {
+    consequences.push(`Sends our review email to ${plural(email.total - emailCheck, 'buyer', 'buyers')}${emailCheck ? '' : ` (${splitWords(email.byChannel, channelLabel)})`}`)
   }
-  if (total === 0) consequences.push('Nothing is due right now')
+  if (amazonCheck + emailCheck > 0) {
+    consequences.push(`Sends our “How was it?” email first to ${plural(amazonCheck + emailCheck, 'buyer', 'buyers')} — their review request follows their answer, or 5 days`)
+  }
+  // Nexus e-mails no eBay buyer (Owner, 2026-10-27): eBay requests still waiting are closed, never sent.
+  const ebay = s.due.ebay ?? 0
+  if (ebay > 0) consequences.push(`Closes ${plural(ebay, 'eBay request', 'eBay requests')} without an email — eBay asks the buyer for feedback itself`)
+  if (total === 0 && ebay === 0) consequences.push('Nothing is due right now')
   consequences.push('Adds orders delivered since the last run to the queue')
   consequences.push('A sent request cannot be taken back.')
   const sideEffects: string[] = []

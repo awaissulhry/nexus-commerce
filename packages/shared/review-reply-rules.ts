@@ -18,8 +18,10 @@
  *   only for feedback under 30 days old, once per feedback, the buyer has 10 days
  *   (https://www.ebay.com/help/selling/leaving-feedback-buyers/viewing-responding-feedback-buyers?id=4102). eBay has no
  *   API to ask for one: it is asked in eBay Seller Hub.
- * - Amazon: no reply API. Copy the reply, open Seller Central (Feedback Manager for seller feedback), mark it as
- *   responded. No feedback-removal action from Nexus.
+ * - Amazon seller feedback: no reply API. Copy the reply, open Feedback Manager, mark it as responded. No
+ *   feedback-removal action from Nexus.
+ * - Amazon product reviews: Amazon lets nobody reply to them (the Amazon page says the same). Nothing to post or mark:
+ *   the review is read and resolved; it never needs a reply and is never overdue (audit B3, 2026-10-27).
  * - Etsy: no reply API. One public reply within 100 days of the buyer's LAST EDIT, never edited
  *   (https://help.etsy.com/hc/en-us/articles/115015808588). Nexus reads the edit time from Etsy's `update_timestamp`
  *   (`lastEditedAt`); a review without one (a file import) counts from the posted time.
@@ -28,7 +30,8 @@
  *   answered from Nexus. Okendo replies by API on its Enterprise plan only, Yotpo and Loox have no reply API: copy the
  *   reply, post it in the app, mark it as responded. Without an app (a file import), the same.
  *
- * Due: an open review (no status yet, New or In progress) is overdue once it is older than REPLY_DUE_HOURS.
+ * Due: an open review (no status yet, New or In progress) that someone can answer is overdue once it is older than
+ * REPLY_DUE_HOURS. The API's needs-a-reply rule (review-visibility.ts) also leaves out imported rows.
  */
 
 /** A review waits at most this long for a reply before it counts as overdue. */
@@ -43,7 +46,10 @@ export const OPEN_REVIEW_STATUSES = ['NEW', 'IN_PROGRESS'] as const
 const DAY_MS = 24 * 60 * 60 * 1000
 
 export type ReplyMode = 'send' | 'copy'
-export type ReplyHeldCode = 'already_replied' | 'window_closed' | 'buyer_unknown'
+export type ReplyHeldCode = 'already_replied' | 'window_closed' | 'buyer_unknown' | 'no_reply'
+
+/** The one sentence for Amazon product reviews, on the review pop-up and the Amazon page alike. */
+export const AMAZON_PRODUCT_NO_REPLY = 'Amazon lets nobody reply to a product review. Read it, act on what it says, then resolve it.'
 
 /** The store review apps a Shopify review can come from. */
 export type ReviewApp = 'JUDGEME' | 'OKENDO' | 'YOTPO' | 'LOOX'
@@ -193,10 +199,10 @@ export function reviewReplyRules(channel: string, review: ReplyRulesReview = {},
       ruleLine: 'Reply in Seller Central (Feedback Manager): Amazon has no reply API, so copy the reply and open Feedback Manager. Public, one reply, can’t be edited; if you delete it you can’t reply again.',
     }
   } else if (c === 'AMAZON') {
-    rules = {
-      ...base, mode: 'copy', limit: null, oneReply: false,
-      open: { label: 'Open in Seller Central', href: `${sellerCentral(review.marketplace)}/home` },
-      ruleLine: 'Amazon has no reply API: copy the reply, answer in Seller Central where Amazon allows it, then mark it as responded.',
+    // Amazon lets nobody reply to a product review: no button, nothing to mark — only Resolve.
+    return {
+      ...base, mode: 'copy', limit: null, oneReply: false, markAsResponded: false,
+      ruleLine: AMAZON_PRODUCT_NO_REPLY, held: AMAZON_PRODUCT_NO_REPLY, heldCode: 'no_reply',
     }
   } else if (c === 'ETSY') {
     const window = replyWindow(review.lastEditedAt ?? review.postedAt, ETSY_REPLY_WINDOW_DAYS, 'Etsy', now)
@@ -279,9 +285,20 @@ export function reviewDueAt(postedAt: string | Date): Date {
   return new Date(posted.getTime() + REPLY_DUE_HOURS * 60 * 60 * 1000)
 }
 
-/** Open and older than REPLY_DUE_HOURS. */
-export function isReviewOverdue(review: { status?: string | null; postedAt: string | Date }, now: Date = new Date()): boolean {
+/**
+ * Open, answerable and older than REPLY_DUE_HOURS. Pass `channel` (and `kind`) so a review no one can answer (an Amazon
+ * product review, an Etsy review past its window) is never overdue; `imported` rows never are either.
+ */
+export function isReviewOverdue(
+  review: { status?: string | null; postedAt: string | Date; channel?: string | null; kind?: 'product' | 'seller' | null; imported?: boolean; lastEditedAt?: string | Date | null },
+  now: Date = new Date(),
+): boolean {
   if (!isReviewOpen(review.status)) return false
+  if (review.imported) return false
+  if (review.channel != null) {
+    const rules = reviewReplyRules(review.channel, { kind: review.kind ?? null, postedAt: review.postedAt, lastEditedAt: review.lastEditedAt ?? null }, now)
+    if (rules.heldCode === 'no_reply' || rules.heldCode === 'window_closed') return false
+  }
   const due = reviewDueAt(review.postedAt).getTime()
   return Number.isFinite(due) && due < now.getTime()
 }

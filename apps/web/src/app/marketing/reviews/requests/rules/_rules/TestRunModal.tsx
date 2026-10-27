@@ -3,7 +3,8 @@
 /**
  * Reviews › Requests › Rules — "Test run": which orders a rule would ask today (`POST /api/review-rules/:id/dry-run`).
  * Nothing is sent and nothing is written. A rule that is off still shows, but never sends. "Queue these N…" asks first,
- * then adds the orders to the queue (`POST /api/review-rules/:id/run`): they go at the next run of the sender.
+ * then adds the orders to the queue (`POST /api/review-rules/:id/run`) as the scheduler would: each on its "First try"
+ * day, the rule's "How was it?" check first, only the orders this rule decides.
  * Several ticked rules show one after another.
  */
 import { useCallback, useEffect, useState } from 'react'
@@ -25,6 +26,8 @@ export interface DryRunSample {
 
 export interface DryRun {
   rule: { id: string; name: string }
+  /** Why this rule asks nobody (an eBay rule: eBay asks its buyers itself); null otherwise. */
+  held?: string | null
   matchCount: number
   sample: DryRunSample[]
 }
@@ -75,18 +78,20 @@ export function TestRunModal({ rules, onClose, canManage }: TestRunModalProps) {
       title: `Queue ${matches} ${matches === 1 ? 'order' : 'orders'} for “${rule.name}”?`,
       confirmLabel: `Queue ${matches}`,
       consequences: [
-        `Adds ${matches} ${matches === 1 ? 'order' : 'orders'} to the queue as due now`,
-        'They go out at the next run of the sender (every hour), unless sending is paused',
-        'Orders that already have a request are left out (one request per order)',
+        `Adds up to ${matches} ${matches === 1 ? 'order' : 'orders'} to the queue, each on its “First try” day (a day already past goes at the next run)`,
+        'Where the rule asks “How was it?”, that email goes first, as for every order the rule decides',
+        'They go out with the sender (every hour), unless sending is paused',
+        'Left out: orders that already have a request (one per order) and orders a more specific rule decides',
       ],
       sideEffects: rule.isActive ? [] : ['The rule is off: queued requests still go out'],
     })
     if (!ok) return
     setBusy(rule.id)
-    const res = await reviewsSend<{ enqueued: number; skipped: number }>('POST', `/review-rules/${encodeURIComponent(rule.id)}/run`, undefined, { idempotent: true, what: 'queue' })
+    const res = await reviewsSend<{ enqueued: number; skipped: number; decidedElsewhere?: number }>('POST', `/review-rules/${encodeURIComponent(rule.id)}/run`, undefined, { idempotent: true, what: 'queue' })
     setBusy(null)
     if (res.error || !res.data) return toast(res.error ?? 'Nexus could not queue them.', 'danger')
-    toast(`${res.data.enqueued} added to the queue · ${res.data.skipped} already had a request`, 'success')
+    const elsewhere = res.data.decidedElsewhere ?? 0
+    toast(`${res.data.enqueued} added to the queue · ${res.data.skipped} already had a request or are skipped${elsewhere ? ` · ${elsewhere} left to a more specific rule` : ''}`, 'success')
     emitInvalidation({ type: 'review.request.updated', meta: { count: res.data.enqueued } })
     void run(rule.id)
   }, [confirm, toast, run])
@@ -108,6 +113,8 @@ export function TestRunModal({ rules, onClose, canManage }: TestRunModalProps) {
                   <Banner tone="danger" title="The test run failed" action={<Button size="sm" onClick={() => void run(rule.id)}>Try again</Button>}>{result.error}</Banner>
                 ) : !data ? (
                   <Skeleton height={120} />
+                ) : data.held ? (
+                  <Banner tone="info" title="This rule asks nobody">{data.held}</Banner>
                 ) : (
                   <>
                     <p className={s.bigNumber}>

@@ -239,7 +239,9 @@ export function readReviews(reviews: AnalyticsPayload['reviews'] | null | undefi
   if (reviews.reviewCount === 0 && byChannel.every(c => c.count === 0)) return { empty: true, stats: [] }
   const stats: Array<{ label: string; value: string }> = []
   if (reviews.reviewCount > 0) {
-    stats.push({ label: 'Rating', value: reviews.avgRating?.toFixed(1) ?? '—' })
+    // Amazon gives no rating by API: its stars here are only the reviews a person imported (Reviews ruling 5).
+    const amazonStars = byChannel.some(c => c.channel === 'AMAZON' && c.kind === 'stars' && c.count > 0)
+    stats.push({ label: amazonStars ? 'Rating · Amazon from imported reviews' : 'Rating', value: reviews.avgRating?.toFixed(1) ?? '—' })
     stats.push({ label: 'Reviews', value: reviews.reviewCount.toLocaleString('en') })
   }
   if (byChannel.length > 1 || byChannel.some(c => c.kind === 'positive')) {
@@ -248,9 +250,10 @@ export function readReviews(reviews: AnalyticsPayload['reviews'] | null | undefi
       const name = channelLabel(c.channel)
       stats.push(c.kind === 'positive'
         ? { label: `${name} positive · ${c.count.toLocaleString('en')} feedback`, value: c.rating == null ? '—' : `${c.rating.toFixed(1)}%` }
-        : { label: `${name} · ${c.count.toLocaleString('en')} ${c.count === 1 ? 'review' : 'reviews'}`, value: c.rating?.toFixed(1) ?? '—' })
+        : { label: `${name} · ${c.count.toLocaleString('en')} ${c.count === 1 ? 'review' : 'reviews'}${c.channel === 'AMAZON' ? ' imported' : ''}`, value: c.rating?.toFixed(1) ?? '—' })
     }
   }
-  stats.push({ label: 'Recent spike', value: String(reviews.recentSpikeCount) })
+  // The product's open review alerts (any age), as Insights › Alerts counts them.
+  stats.push({ label: 'Open alerts', value: String(reviews.recentSpikeCount) })
   return { empty: false, stats }
 }

@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Banner, Field, Listbox, Modal } from '@/design-system/components'
 import { Button, Input, SegmentedControl, Textarea } from '@/design-system/primitives'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { reviewsSend } from '../../_lib/reviewsFetch'
 import type { ReplyTemplateRow } from './settingsModel'
 import {
@@ -67,6 +68,8 @@ export function TemplateModal({ open, template, names, manageHeld, onClose, onSa
       setError(res.error ?? 'Nexus could not save the template. Try again in a moment.')
       return
     }
+    // Other tabs' reply boxes and Settings read the templates again (audit A8).
+    emitInvalidation({ type: 'review.settings.changed' })
     onSaved(res.data, !template)
   }
 

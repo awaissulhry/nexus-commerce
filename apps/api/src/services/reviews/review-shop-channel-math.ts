@@ -41,6 +41,13 @@ export interface TileFacts {
   sentReplies: number
   hasPhoto: boolean
   hasVideo?: boolean
+  /** Read in from a file: old history, never waiting for a reply (review-visibility.ts, the one needs-a-reply rule). */
+  imported?: boolean
+}
+
+/** Waits for a reply by the one needs-a-reply rule: open, not answered, not imported (Etsy: its window, below). */
+function waitsForReply(r: TileFacts): boolean {
+  return !answered(r) && isReviewOpen(r.status) && !r.imported
 }
 
 export interface EtsyTiles {
@@ -77,7 +84,7 @@ export function etsyTiles(rows: readonly TileFacts[], now: Date): EtsyTiles {
   let closing = 0
   let closed = 0
   for (const r of rows) {
-    if (answered(r) || !isReviewOpen(r.status)) continue
+    if (!waitsForReply(r)) continue
     const w = etsyWindow({ postedAt: r.postedAt, editedAt: r.editedAt }, now)
     if (!w) continue
     if (w.closed) closed++
@@ -113,7 +120,7 @@ export interface ShopifyTiles {
 /** The Shopify page's four tiles. */
 export function shopifyTiles(rows: readonly TileFacts[], now: Date): ShopifyTiles {
   const fresh = newCounts(rows, now)
-  const waiting = rows.filter((r) => !answered(r) && isReviewOpen(r.status))
+  const waiting = rows.filter(waitsForReply)
   const oldest = waiting.reduce<number | null>((min, r) => (min == null || r.postedAt.getTime() < min ? r.postedAt.getTime() : min), null)
   return {
     average: averageRating(rows.map((r) => r.rating)),

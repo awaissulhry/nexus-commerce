@@ -148,6 +148,17 @@ describe('the review tab, order, buyer and history', () => {
     expect(replyTargetWords(detail(), NOW.getTime(), 'UTC')).toBe('Reply target: 28 Oct')
     expect(replyTargetWords(detail({}, { postedAt: '2026-10-20T08:00:00Z' }), NOW.getTime(), 'UTC')).toBe('Overdue since 22 Oct')
   })
+
+  it('never "Overdue" or "Replied — not yet" where nobody can answer, or for an imported review (the badges\' one rule)', () => {
+    const amazonProduct = detail({ reply: reviewReplyRules('AMAZON', { kind: 'product', marketplace: 'IT' }, NOW) }, { channel: 'AMAZON', market: 'IT', kind: 'product', postedAt: '2026-10-20T08:00:00Z' })
+    expect(replyTargetWords(amazonProduct, NOW.getTime(), 'UTC')).toBe('No reply target: nobody can answer it')
+    expect(historySteps(amazonProduct).map((st) => st.label)).not.toContain('Replied')
+    const imported = detail({}, { imported: true, postedAt: '2026-10-20T08:00:00Z' })
+    expect(replyTargetWords(imported, NOW.getTime(), 'UTC')).toBe('Imported from a file: no reply target')
+    expect(historySteps(imported).map((st) => st.label)).not.toContain('Replied')
+    // eBay feedback read by Nexus still waits for its reply.
+    expect(historySteps(detail()).map((st) => st.label)).toContain('Replied')
+  })
 })
 
 describe('the buyer’s photos and the Lightbox (PR G)', () => {

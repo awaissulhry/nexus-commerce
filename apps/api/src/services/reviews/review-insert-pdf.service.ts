@@ -133,7 +133,8 @@ function drawCard(doc: PDFKit.PDFDocument, brand: string, p: InsertProduct, qr: 
 }
 
 export async function buildReviewInsertPdf(input: ReviewInsertInput): Promise<Buffer> {
-  const brand = input.brand?.trim() || 'Xavia'
+  // The business's own name (review-inserts.service.ts reads it from its identity); never another business's.
+  const brand = input.brand.trim()
   const products = input.products.filter((p) => p.asin && p.asin.trim())
   // Resolve before opening a PDF stream: missing reviewed copy must not leave it open.
   const languages = new Map<string, Lang>()

@@ -16,6 +16,9 @@
  */
 import prisma from '../../db.js'
 import { visibleReviewWhere } from './review-visibility.js'
+
+/** The CronRun the eBay feedback read records (review-ingest.service.ts): SUCCESS only when eBay answered. */
+export const EBAY_READ_JOB = 'review-ingest-ebay'
 import { channelMarketLabel, marketWords } from './overviewMath.js'
 
 export type SourceStateKind = 'ok' | 'not_updating'
@@ -367,7 +370,9 @@ export async function readSourceFacts(): Promise<SourceFacts> {
       _count: { _all: true },
       _max: { postedAt: true, ingestedAt: true },
     }),
-    prisma.cronRun.findFirst({ where: { jobName: 'review-ingest', status: 'SUCCESS' }, orderBy: { startedAt: 'desc' }, select: { startedAt: true } }),
+    // eBay's own read (audit B1): the job's SUCCESS said nothing about eBay — it finished even when eBay refused.
+    // Until the first recorded eBay read, the job's last success stands in.
+    prisma.cronRun.findFirst({ where: { jobName: { in: [EBAY_READ_JOB, 'review-ingest'] }, status: 'SUCCESS' }, orderBy: [{ jobName: 'desc' }, { startedAt: 'desc' }], select: { startedAt: true, jobName: true } }),
     prisma.channelListing.groupBy({ by: ['marketplace'], where: { channel: 'EBAY', listingStatus: 'ACTIVE' } }),
     prisma.cronRun.findFirst({ where: { jobName: 'etsy-reviews-read', status: { in: ['SUCCESS', 'PARTIAL'] } }, orderBy: { startedAt: 'desc' }, select: { startedAt: true } }),
     prisma.reviewAppConnection.findFirst({ where: { app: 'JUDGEME' }, select: { credentials: true, state: true, lastReadAt: true } }),

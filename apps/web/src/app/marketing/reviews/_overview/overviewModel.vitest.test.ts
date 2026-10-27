@@ -60,7 +60,10 @@ describe('channel table', () => {
     ], NOW)
     expect(rows[0]).toMatchObject({ label: 'Amazon Italy', noAmazonData: false, reviews: '46', sent: '372', sentNote: null, rate: '8.9%', last: '24 Oct' })
     expect(rows[1]).toMatchObject({ noAmazonData: true, reviews: '—', rate: '—' })
-    expect(rows[2]).toMatchObject({ ratingKind: 'positive', sentNote: 'by email' })
+    // Nexus e-mails no eBay buyer (Owner, 2026-10-27): a number is e-mails sent before, and it says so.
+    expect(rows[2]).toMatchObject({ ratingKind: 'positive', sent: '64', sentNote: 'earlier e-mails; eBay asks buyers itself' })
+    expect(channelViewRows([row({ channel: 'EBAY', market: 'DE', ratingKind: 'positive', sent: 0 })], NOW)[0]).toMatchObject({ sent: '—', sentNote: 'eBay asks buyers itself' })
+    expect(channelViewRows([row({ channel: 'SHOPIFY', market: null, sent: 5 })], NOW)[0]).toMatchObject({ sent: '5', sentNote: 'by email' })
     expect(rows[0].href).toBe('/marketing/reviews/amazon/it')
     expect(rows[2].href).toBe('/marketing/reviews/ebay/it')
     expect(channelViewRows([row({ channel: 'SHOPIFY', market: null })], NOW)[0].href).toBe('/marketing/reviews/shopify')

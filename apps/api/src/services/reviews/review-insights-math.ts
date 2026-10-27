@@ -435,15 +435,14 @@ export function reasonWords(reason: string | null | undefined): string | null {
 }
 
 /**
- * The words a rating is shown with, per channel (ruling 5): an Amazon star comes only from reviews a person
- * imported (or a licensed review feed); with none, Amazon has no rating to show. eBay is "% positive" feedback.
+ * The words a rating is shown with, per channel (ruling 5; the ONE rating, review-rating.ts): an Amazon star comes only
+ * from reviews a person imported; with none, Amazon has no rating to show. eBay is "% positive" feedback.
  */
 export function ratingSourceWords(channel: string, ingestSources: ReadonlyArray<string | null>): string {
   const ch = channel.toUpperCase()
   if (ch === 'AMAZON') {
-    if (ingestSources.length === 0) return 'No rating data from Amazon — import reviews'
-    if (ingestSources.every((s) => isImportedSource(s))) return 'stars from imported reviews'
-    return 'stars from imported reviews and a review feed'
+    if (!ingestSources.some((s) => isImportedSource(s))) return 'No rating data from Amazon — import reviews'
+    return 'stars from imported reviews'
   }
   if (ch === 'EBAY') return 'seller feedback, % positive'
   return 'stars from reviews'

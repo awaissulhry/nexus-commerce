@@ -15,7 +15,7 @@ import { reviewAppOf } from '@nexus/shared/review-reply-rules'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { listInbox, type InboxRow } from './review-inbox.service.js'
-import { visibleReviewWhere } from './review-visibility.js'
+import { isImportedSource, visibleReviewWhere } from './review-visibility.js'
 import { listReviewApps, type ReviewAppView } from './review-app-connection.service.js'
 import {
   etsyTiles, etsyWindow, shopifyTiles, storedMediaOf,
@@ -91,7 +91,7 @@ async function tileFacts(channel: 'ETSY' | 'SHOPIFY'): Promise<TileFacts[]> {
   const rows = await prisma.review.findMany({
     where: visibleReviewWhere({ channel }),
     select: {
-      id: true, rating: true, postedAt: true, channelEditedAt: true, triageStatus: true, rawPayload: true,
+      id: true, rating: true, postedAt: true, channelEditedAt: true, triageStatus: true, rawPayload: true, ingestSource: true,
       _count: { select: { media: true } },
     },
     take: 50_000,
@@ -109,6 +109,7 @@ async function tileFacts(channel: 'ETSY' | 'SHOPIFY'): Promise<TileFacts[]> {
     // The photos are the review's stored media (ReviewMedia); a Judge.me video is a mark in rawPayload.
     hasPhoto: r._count.media > 0,
     hasVideo: channel === 'SHOPIFY' && storedMediaOf([], r.rawPayload).hasVideo,
+    imported: isImportedSource(r.ingestSource),
   }))
 }
 

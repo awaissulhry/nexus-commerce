@@ -35,7 +35,7 @@ describe('Etsy', () => {
       ['Window closing', '1', '10 days or less left'],
       ['Window closed', '3', 'no reply possible'],
     ])
-    expect(views[3].href).toBe('/marketing/reviews/inbox?status=NEW%2CIN_PROGRESS&channel=ETSY')
+    expect(views[3].href).toBe('/marketing/reviews/inbox?period=all&channel=ETSY&reply=needed')
   })
 
   it('the window in words', () => {

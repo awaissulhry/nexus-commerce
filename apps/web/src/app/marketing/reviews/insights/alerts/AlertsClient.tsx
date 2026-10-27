@@ -26,6 +26,7 @@ import { useAuth } from '@/lib/auth/AuthProvider'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import Link from '@/lib/workspaces/Link'
 import { reviewsSend } from '../../_lib/reviewsFetch'
+import { useReviewEvents } from '../../_lib/useReviewEvents'
 import { insightsHref, productReviewsHref, reviewsSettingsHref } from '../../_lib/reviewsLinks'
 import { THEME_LABEL } from '../../_lib/reviewWords'
 import { InsightsHeader } from '../_shared/InsightsHeader'
@@ -37,7 +38,7 @@ import {
   alertActions,
   alertApiStatus,
   alertFilterParam,
-  alertReviewsHref,
+  alertReviewsLink,
   alertTiles,
   alertTitle,
   bulkHeld,
@@ -101,6 +102,8 @@ function Alerts() {
     [...EVENTS],
     { keep: scope ? `${scope.channel}|${scope.market}` : null },
   )
+  // The hourly spike check opened an alert (audit A9): the list shows it without a reload.
+  useReviewEvents(() => void read.reload(), { types: ['review.spike.detected'] })
   const choices = useScopeChoices(scope?.period ?? null)
   const data = read.data
   const items = useMemo(() => data?.items ?? [], [data])
@@ -263,7 +266,7 @@ function Alerts() {
                         canManage={canManage}
                         busy={busy}
                         now={now}
-                        reviewsHref={alertReviewsHref(a, { channel: scope?.channel ?? null })}
+                        reviews={alertReviewsLink(a, { channel: scope?.channel ?? null }, now)}
                         productHref={a.product ? productReviewsHref(a.product.id, { channel: scope?.channel, market: scope?.market, period: scope?.period }) : null}
                         fixesHref={insightsHref('fixes', { product: a.product?.id ?? null, channel: scope?.channel, market: scope?.market, period: scope?.period })}
                         onDecide={(d) => void decide(a, d)}
@@ -312,14 +315,15 @@ interface AlertRowProps {
   canManage: boolean
   busy: string | null
   now: number
-  reviewsHref: string
+  /** "See the reviews": where it goes and its words (alertsModel.ts). */
+  reviews: { href: string; label: string }
   productHref: string | null
   fixesHref: string
   onDecide: (decision: 'ACKNOWLEDGED' | 'RESOLVED' | 'REOPEN') => void
   onSuggest: () => void
 }
 
-function AlertRow({ alert: a, ticked, onTick, canManage, busy, now, reviewsHref, productHref, fixesHref, onDecide, onSuggest }: AlertRowProps) {
+function AlertRow({ alert: a, ticked, onTick, canManage, busy, now, reviews, productHref, fixesHref, onDecide, onSuggest }: AlertRowProps) {
   const can = alertActions(a)
   const st = STATUS_WORDS[a.status]
   const who = whoWords(a, now)
@@ -347,7 +351,7 @@ function AlertRow({ alert: a, ticked, onTick, canManage, busy, now, reviewsHref,
         <div className={shared.line}>
           {a.phrases.length > 0 && <span className={shared.sub}>Buyers say:</span>}
           {a.phrases.slice(0, 3).map((p) => <Tag key={p} tone="neutral">“{p}”</Tag>)}
-          <Button asChild size="sm" variant="link"><Link href={reviewsHref}>See the {a.count} {a.count === 1 ? 'review' : 'reviews'}</Link></Button>
+          <Button asChild size="sm" variant="link"><Link href={reviews.href}>{reviews.label}</Link></Button>
         </div>
         {who && <span className={shared.sub}>{who}</span>}
       </div>

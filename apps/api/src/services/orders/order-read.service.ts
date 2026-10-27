@@ -12,6 +12,7 @@
  * Every read runs in the caller's business (row-level security); an order of another business is not found.
  */
 
+import { QUEUE_STATUS_WORDS, queueStatusOf, reasonOf } from '../reviews/review-queue-words.js'
 import prisma from '../../db.js'
 
 export function safeNum(v: unknown, fallback?: number): number | undefined {
@@ -233,6 +234,7 @@ export function orderListScope(q: any): OrderListScope {
 /** One page of the order list, exactly as GET /api/orders answers it. */
 export async function listOrders(q: any) {
   const { where, orderBy, page, pageSize, hasReturn, hasRefund } = orderListScope(q)
+  const listNow = new Date()
 
   const [total, rawOrders] = await Promise.all([
     prisma.order.count({ where }),
@@ -263,7 +265,7 @@ export async function listOrders(q: any) {
           },
         },
         tags: { include: { tag: { select: { id: true, name: true, color: true } } } },
-        reviewRequests: { select: { id: true, channel: true, status: true, sentAt: true, scheduledFor: true } },
+        reviewRequests: { select: { id: true, channel: true, status: true, sentAt: true, scheduledFor: true, providerResponseCode: true, nextRetryAt: true, attemptCount: true } },
         _count: { select: { items: true, shipments: true, returns: true, financialTransactions: true } },
       },
     }),
@@ -342,7 +344,8 @@ export async function listOrders(q: any) {
         hasRefund: hasRefundSet.has(o.id),
         customerOrderCount: customerOrderCountMap.get(o.customerEmail) ?? 1,
         tags: o.tags.map((t: any) => t.tag),
-        reviewRequests: o.reviewRequests,
+        // Audit C7: the Requests page's own status words, never a raw code ("SCHE", "SUPP").
+        reviewRequests: o.reviewRequests.map((rr) => ({ ...rr, statusWords: QUEUE_STATUS_WORDS[queueStatusOf(rr, listNow)] })),
         items: o.items.map((it) => ({
           id: it.id,
           sku: it.sku,
@@ -375,6 +378,7 @@ export async function listOrders(q: any) {
 
 /** GET /api/orders/:id — the order with its relations and the buyer's last 10 other orders; null when not found. */
 export async function orderDetail(id: string) {
+  const now = new Date()
   const order = await prisma.order.findUnique({
     where: { id },
     include: {
@@ -434,6 +438,12 @@ export async function orderDetail(id: string) {
     })),
     tags: order.tags.map((t: any) => t.tag),
     customerHistory: history.map((h) => ({ ...h, totalPrice: Number(h.totalPrice) })),
+    // Audit B10/C7 — the order's review request in the queue's own words (never a raw status, code or setting name).
+    reviewRequests: order.reviewRequests.map((rr) => ({
+      ...rr,
+      statusWords: QUEUE_STATUS_WORDS[queueStatusOf(rr, now)],
+      reasonWords: reasonOf({ ...rr, deliveredAt: order.deliveredAt }, now).words,
+    })),
   }
 }
 

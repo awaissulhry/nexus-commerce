@@ -117,17 +117,21 @@ export function BulkActionBar({
       )
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      // Open the drill-down modal whenever ANYTHING was skipped or failed
-      // (aggregate-only summary hides which orders need attention).
-      if ((data.skipped ?? 0) > 0 || (data.failed ?? 0) > 0) {
+      // The ONE sender (Reviews › Requests): every order answered in words — sent, waiting (a "How was it?" check went
+      // first, Amazon said too early), not sent (sending switched off here), failed, or held and why.
+      type Result = { orderId: string; channelOrderId: string | null; outcome: 'sent' | 'waiting' | 'not_sent' | 'failed' | 'held'; words: string }
+      const results: Result[] = Array.isArray(data.results) ? data.results : []
+      const counts = data.counts ?? {}
+      const notSent = results.filter((r) => r.outcome !== 'sent')
+      if (notSent.length > 0) {
         setBulkReviewResult({
-          sent: data.sent ?? 0,
-          skipped: data.skipped ?? 0,
-          failed: data.failed ?? 0,
-          errors: Array.isArray(data.errors) ? data.errors : [],
+          sent: counts.sent ?? 0,
+          skipped: (counts.held ?? 0) + (counts.not_sent ?? 0) + (counts.waiting ?? 0),
+          failed: counts.failed ?? 0,
+          errors: notSent.map((r) => ({ orderId: r.channelOrderId ?? r.orderId, reason: r.words })),
         })
       }
-      return `Sent ${data.sent}, skipped ${data.skipped}, failed ${data.failed}`
+      return data.words ?? 'Done'
     })
 
   // OX.5 — open a single browser tab containing N packing slips
@@ -384,7 +388,7 @@ export function BulkActionBar({
                 <div className="text-lg font-semibold text-emerald-700 dark:text-emerald-300 tabular-nums">{bulkReviewResult.sent}</div>
               </div>
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-slate-500">Skipped</div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-500">Not sent now</div>
                 <div className="text-lg font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{bulkReviewResult.skipped}</div>
               </div>
               <div>
@@ -394,7 +398,7 @@ export function BulkActionBar({
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-3">
               {bulkReviewResult.errors.length === 0 ? (
-                <p className="text-xs text-slate-500">No per-order details (all sent successfully).</p>
+                <p className="text-xs text-slate-500">Every order was sent.</p>
               ) : (
                 <>
                   <div className="flex items-center justify-between mb-2">

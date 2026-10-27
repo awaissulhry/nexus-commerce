@@ -101,7 +101,8 @@ export function EbaySections({ lock, period, sections, busy, canManage, me, onRe
           title={b.title}
           action={b.action ? <Button asChild size="sm"><Link href={b.action.href}>{b.action.label}</Link></Button> : undefined}
         >
-          {b.body}{b.action ? ' Replies there are held until the account is connected again.' : ''}
+          {/* Audit B18: nothing holds a reply here — say what really happens. */}
+          {b.body}{b.action ? ' A reply sent before the account is connected again fails: eBay refuses it.' : ''}
         </Banner>
       ))}
 

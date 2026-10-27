@@ -189,15 +189,30 @@ export function alertActions(a: Pick<AlertItem, 'status' | 'fixes'>): { acknowle
   }
 }
 
-/** "See the 9 reviews": the Inbox on the alert's theme, market, product (its SKU) and the last 7 days. */
-export function alertReviewsHref(a: Pick<AlertItem, 'theme' | 'market' | 'product' | 'channels'>, scope: Pick<InsightsScope, 'channel'>): string {
-  return inboxHref({
+/**
+ * "See the reviews": the Inbox on the alert's own reviews (audit A5) — negative, on its theme, its market, its product
+ * (by id, its variants too; a review matched by ASIN has no SKU) — over the shortest Inbox period that still holds the
+ * alert's 7 days. The label names the count only when that period is exactly those 7 days.
+ */
+export function alertReviewsLink(
+  a: Pick<AlertItem, 'theme' | 'market' | 'product' | 'channels' | 'count' | 'detectedAt'>,
+  scope: Pick<InsightsScope, 'channel'>,
+  now: number = Date.now(),
+): { href: string; label: string } {
+  const DAY = 86_400_000
+  const from = new Date(a.detectedAt).getTime() - 7 * DAY
+  const daysBack = Number.isFinite(from) ? (now - from) / DAY : Infinity
+  const period = daysBack <= 7 ? '7d' : daysBack <= 30 ? '30d' : daysBack <= 90 ? '90d' : 'all'
+  const href = inboxHref({
     theme: a.theme.key,
+    mood: 'NEGATIVE',
     market: a.market,
     channel: a.channels.length === 1 ? a.channels[0] : scope.channel,
-    q: a.product?.sku ?? null,
-    period: '7d',
+    product: a.product?.id ?? null,
+    period,
   })
+  const exact = period === '7d' && now - new Date(a.detectedAt).getTime() < DAY
+  return { href, label: exact ? `See the ${a.count} ${a.count === 1 ? 'review' : 'reviews'}` : 'See the negative reviews' }
 }
 
 // ── The bulk bar (ruling 7) ─────────────────────────────────────────

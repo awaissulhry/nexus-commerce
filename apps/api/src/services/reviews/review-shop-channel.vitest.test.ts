@@ -41,6 +41,11 @@ describe('Shopify tiles', () => {
     ], NOW)
     expect(tiles).toMatchObject({ reviews: 3, withMedia: 3, videos: 2, needReply: 2, oldestWaitHours: 24 })
   })
+
+  it('an imported review never waits for a reply, on Shopify or Etsy (the badges\' one rule)', () => {
+    expect(shopifyTiles([fact({ postedAt: daysAgo(1) }), fact({ postedAt: daysAgo(9), imported: true })], NOW)).toMatchObject({ needReply: 1, oldestWaitHours: 24 })
+    expect(etsyTiles([fact({ postedAt: daysAgo(2) }), fact({ postedAt: daysAgo(3), imported: true })], NOW)).toMatchObject({ notReplied: 1, reviews: 2 })
+  })
 })
 
 describe('media from what Nexus stored', () => {
