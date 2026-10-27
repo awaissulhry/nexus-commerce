@@ -28,11 +28,16 @@ export interface KeyValueProps {
   dense?: boolean
   /** `sentence`: the terms as written ("Changes 7 d"), not the default small caps ("CHANGES 7 D"). Default `upper`. */
   labelCase?: KeyValueLabelCase
+  /**
+   * Columns kept below 760px (2026-10-26): 1 (default, today: every count collapses to one) or 2 — short pairs (Spend,
+   * Clicks, Orders) that read better side by side on a phone. Only applies when `columns` is 2 or 3.
+   */
+  phoneColumns?: 1 | 2
 }
 
-export function KeyValue({ items, columns, className, dense, labelCase }: KeyValueProps) {
+export function KeyValue({ items, columns, className, dense, labelCase, phoneColumns }: KeyValueProps) {
   return (
-    <dl {...keyValueRootProps({ columns, dense, className, labelCase })}>
+    <dl {...keyValueRootProps({ columns, dense, className, labelCase, phoneColumns })}>
       {items.map((item, i) => (
         <div key={i} className="nds-kv-item">
           <dt>{item.label}</dt>

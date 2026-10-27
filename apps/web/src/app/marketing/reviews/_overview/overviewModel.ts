@@ -5,7 +5,7 @@
  * overviewModel.vitest.test.ts checks the words. A section the API could not read stays an error here — never zeros.
  */
 import {
-  inboxHref, insightsHref, productReviewsHref, requestsHref, type InboxLinkParams,
+  channelHref, inboxHref, insightsHref, productReviewsHref, requestsHref, type InboxLinkParams,
 } from '../_lib/reviewsLinks'
 import { channelMarketWords } from '../_lib/reviewWords'
 import type { NeedsFilter, OverviewPeriod, StarsFilter } from './overviewQuery'
@@ -337,7 +337,7 @@ export const ETSY_SAMPLE_ROW: ChannelViewRow = {
   sample: true,
 }
 
-/** The channel table's rows in words; each opens that channel's reviews. */
+/** The channel table's rows in words; each opens that channel's reviews (Amazon and eBay: their channel page). */
 export function channelViewRows(rows: readonly OverviewChannelRow[], now: number, withSample = true): ChannelViewRow[] {
   const out = rows.map((r): ChannelViewRow => {
     const amazon = r.channel === 'AMAZON'
@@ -346,7 +346,7 @@ export function channelViewRows(rows: readonly OverviewChannelRow[], now: number
       id: `${r.channel}|${r.market ?? ''}`,
       label: channelMarketWords(r.channel, r.market),
       what: r.what,
-      href: inboxHref({ channel: r.channel, market: r.market }),
+      href: channelHref(r.channel, r.market),
       ratingKind: r.ratingKind,
       rating: r.rating,
       noAmazonData: amazon && r.rating == null,

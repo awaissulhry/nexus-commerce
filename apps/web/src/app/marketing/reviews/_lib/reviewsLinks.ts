@@ -10,7 +10,7 @@
  * that every target is a real page.
  */
 
-import { REQUESTS_PATH, rulePath } from '../requests/requestsPaths'
+import { REQUESTS_PATH, RULES_PATH, rulePath, timingPath } from '../requests/requestsPaths'
 
 type ParamValue = string | number | boolean | readonly (string | number)[] | null | undefined
 export type LinkParams = Record<string, ParamValue>
@@ -84,6 +84,16 @@ export function ruleHref(id: string): string {
   return rulePath(id)
 }
 
+/** Reviews › Requests › Rules (every rule). */
+export function rulesHref(): string {
+  return RULES_PATH
+}
+
+/** Reviews › Requests › Timing. */
+export function timingHref(): string {
+  return timingPath()
+}
+
 export type InsightsPage = 'themes' | 'products' | 'alerts' | 'fixes' | 'brief'
 
 export interface InsightsLinkParams {
@@ -134,4 +144,16 @@ export function reviewsSettingsHref(section?: ReviewsSettingsSection | null): st
 /** One product's reviews: the product pop-up over Insights › Products (`?product=<id>`). */
 export function productReviewsHref(productId: string, scope: { channel?: string | null; market?: string | null; period?: string | null } = {}): string {
   return insightsHref('products', { ...scope, product: productId })
+}
+
+/**
+ * A channel's Reviews page (PR F): `/marketing/reviews/amazon`, `/marketing/reviews/amazon/it`, `/marketing/reviews/ebay/de`
+ * (`GB` is the UK's `uk`). Shopify and Etsy pages come later (PR I): until then their reviews open in the Inbox, scoped.
+ */
+export function channelHref(channel: string, market?: string | null): string {
+  const c = channel.trim().toUpperCase()
+  if (c !== 'AMAZON' && c !== 'EBAY') return inboxHref({ channel: c, market })
+  const code = market?.trim().toUpperCase()
+  const segment = code && /^[A-Z]{2}$/.test(code) ? (code === 'GB' ? 'uk' : code.toLowerCase()) : null
+  return `/marketing/reviews/${c.toLowerCase()}${segment ? `/${segment}` : ''}`
 }

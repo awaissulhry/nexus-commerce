@@ -40,11 +40,12 @@
   --nds-rail-chip-bg: var(--nds-grey-150); --nds-rail-chip-active-bg: #dce8fb; --nds-rail-chip-active-fg: var(--nds-blue-600);
   --nds-rail-ft: var(--nds-grey-400);
   /* The rail rules also consume these (tokenized in the P1 rail refactor): the
-     active item background (--nds-primary), the nav count badge (--nds-danger),
+     active item background (--nds-primary), the nav count badge (--nds-rail-badge-bg, red-700: 5.44:1 under white),
      and the hover-expand shadow (--nds-shadow-rail). Pin them here too — values
      identical to .app-rail-host — so this standalone light shell never depends on
      tokens.css being loaded or on the app-wide .app-rail-host scope. */
   --nds-primary: var(--nds-blue-600); --nds-danger: var(--nds-red-500); --nds-warning: var(--nds-amber-600);
+  --nds-rail-badge-bg: var(--nds-red-700);
   --nds-shadow-rail: 8px 0 30px rgba(20, 28, 38, 0.13);
   color-scheme: light;
 }
@@ -70,6 +71,7 @@
   --nds-rail-chip-bg: var(--nds-grey-150); --nds-rail-chip-active-bg: #dce8fb; --nds-rail-chip-active-fg: var(--nds-blue-600);
   --nds-rail-ft: var(--nds-grey-400);
   --nds-primary: var(--nds-blue-600); --nds-danger: var(--nds-red-500); --nds-warning: var(--nds-amber-600);
+  --nds-rail-badge-bg: var(--nds-red-700);
   --nds-shadow-rail: 8px 0 30px rgba(20, 28, 38, 0.13);
 }
 .dark .nds-chrome-host,
@@ -283,7 +285,7 @@
 /* Positioned over the icon's top-right corner. left:29 + max width ("99+",
    ~25px) + 2px ring lands at ~64px — inside the 66px collapsed rail, so the
    full count is always visible. */
-.h10-nav-badge { position: absolute; left: 29px; top: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--nds-danger); color: var(--nds-white); font-size: 10px; font-weight: 800; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px var(--nds-rail-bg); z-index: 1; }
+.h10-nav-badge { position: absolute; left: 29px; top: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--nds-rail-badge-bg); color: var(--nds-white); font-size: 10px; font-weight: 800; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px var(--nds-rail-bg); z-index: 1; }
 .h10-item.on .h10-nav-badge { box-shadow: 0 0 0 2px var(--nds-primary); }
 .h10-item .ico { flex: 0 0 50px; display: flex; align-items: center; justify-content: center; }
 .h10-item .ico svg { color: var(--nds-rail-icon); transition: color .12s; }

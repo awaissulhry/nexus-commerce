@@ -11,11 +11,15 @@
  *   - Inventory: StockLevel.available (sum)
  *   - Pricing:   ChannelListing + BuyBoxHistory + RepricingDecision
  *   - Quality:   ListingQualitySnapshot (latest per channel, from PA.2)
- *   - Reviews:   ReviewSpike (OPEN count)
+ *   - Reviews:   Review (visible rows of the product and its variants: average + count per channel — Amazon stars only
+ *                from reviews a person imported, eBay seller feedback as % positive) + ReviewSpike (OPEN count)
  */
 
 import type { PrismaClient } from '@nexus/database'
 import { Prisma } from '@prisma/client'
+import { averageRating, positiveShare } from './reviews/overviewMath.js'
+import { IMPORTED_SOURCE } from './reviews/review-channel-math.js'
+import { reviewKindOf, visibleReviewWhere } from './reviews/review-visibility.js'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -60,9 +64,48 @@ export interface ProductAnalytics {
     byChannel: Array<{ channel: string; score: number; dimensions: Record<string, number> }>
   }
   reviews: {
+    /** Average stars of the product's reviews (not eBay seller feedback; Amazon only from imported reviews). */
     avgRating: number | null
+    /** The reviews that average counts. */
     reviewCount: number
     recentSpikeCount: number
+    /** Per channel: stars (product reviews) or % positive (eBay seller feedback). Absent where nothing was read. */
+    byChannel?: ProductReviewChannel[]
+  }
+}
+
+export interface ProductReviewChannel {
+  channel: string
+  kind: 'stars' | 'positive'
+  /** Stars (one decimal) or % positive (one decimal); null when no rated row. */
+  rating: number | null
+  count: number
+}
+
+/**
+ * The studio card's review numbers from the product's visible Review rows (2026-10-26, Reviews PR F). Amazon gives no
+ * rating by API (Reviews ruling 5): an Amazon row counts only when a person imported it. eBay rows are seller feedback
+ * (5 / 3 / 1 for positive / neutral / negative): listed per channel as % positive, never mixed into the star average.
+ */
+export function productReviewSummary(rows: ReadonlyArray<{ channel: string; rating: number | null; ingestSource: string | null }>): { avgRating: number | null; reviewCount: number; byChannel: ProductReviewChannel[] } {
+  const counted = rows.filter(r => r.channel.toUpperCase() !== 'AMAZON' || r.ingestSource === IMPORTED_SOURCE)
+  const byChannel = new Map<string, Array<number | null>>()
+  for (const r of counted) {
+    const channel = r.channel.toUpperCase()
+    byChannel.set(channel, [...(byChannel.get(channel) ?? []), r.rating])
+  }
+  const product = counted.filter(r => reviewKindOf(r.channel) === 'product')
+  const avg = averageRating(product.map(r => r.rating))
+  return {
+    avgRating: avg == null ? null : Math.round(avg * 10) / 10,
+    reviewCount: product.length,
+    byChannel: [...byChannel.entries()]
+      .map(([channel, ratings]) => {
+        const kind = reviewKindOf(channel) === 'seller' ? 'positive' as const : 'stars' as const
+        const value = kind === 'positive' ? positiveShare(ratings) : averageRating(ratings)
+        return { channel, kind, rating: value == null ? null : Math.round(value * 10) / 10, count: ratings.length }
+      })
+      .sort((a, b) => b.count - a.count || a.channel.localeCompare(b.channel)),
   }
 }
 
@@ -227,9 +270,15 @@ export async function getProductAnalytics(
     : null
 
   // ── Reviews ──────────────────────────────────────────────────────────────
-  const [spikeCount] = await Promise.all([
+  const [spikeCount, reviewRows] = await Promise.all([
     prisma.reviewSpike.count({
       where: { productId, status: 'OPEN' },
+    }),
+    // The product's own reviews and its variants' (reviews are often imported per SKU); fixtures never count.
+    prisma.review.findMany({
+      where: visibleReviewWhere({ OR: [{ productId }, { product: { parentId: productId } }] }),
+      select: { channel: true, rating: true, ingestSource: true },
+      take: 50_000,
     }),
   ])
 
@@ -245,7 +294,7 @@ export async function getProductAnalytics(
       latestScoreAt: latestSnap?.createdAt.toISOString() ?? null,
       byChannel: qualityByChannel,
     },
-    reviews: { avgRating: null, reviewCount: 0, recentSpikeCount: spikeCount },
+    reviews: { ...productReviewSummary(reviewRows), recentSpikeCount: spikeCount },
   }
 }
 

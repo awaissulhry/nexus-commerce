@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BODY_PINNED_BY, LIGHT_PINNED, opensDark } from './opens-dark'
+import { BODY_PINNED_BY, FOLLOWS_THEME, LIGHT_PINNED, opensDark } from './opens-dark'
 
 /** An element with (or without) a `.dark` ancestor and a light-pinned ancestor. */
 const el = (inDark: boolean, inLightPin: boolean) =>
@@ -38,5 +38,28 @@ describe('opensDark — opened with the focus on <body> (a deep link, a reload)'
   })
   it('dark when nothing in the page pins light', () => {
     expect(opensDark(bodyOf(false))).toBe(true)
+  })
+})
+
+describe('opensDark — a theme-following page inside a light pin (Negative Targeting in the ads shell)', () => {
+  /** An element under `.dark`, inside a pin, inside or outside a `.nds-theme-responsive` section that the pin contains. */
+  const inPage = (followsInsidePin: boolean | 'same') => {
+    const pin = { contains: (x: unknown) => followsInsidePin === true && x === follows }
+    const follows = followsInsidePin === 'same' ? pin : {}
+    return { closest: (sel: string) => (sel === '.dark' ? ({} as Element) : sel === LIGHT_PINNED ? pin : sel === FOLLOWS_THEME && followsInsidePin !== false ? follows : null) } as unknown as Element
+  }
+  it('follows the theme when the section that follows it sits inside the pin', () => {
+    expect(opensDark(inPage(true))).toBe(true)
+  })
+  it('stays light with no such section, or when the pin itself carries both classes (the product sheet)', () => {
+    expect(opensDark(inPage(false))).toBe(false)
+    expect(opensDark(inPage('same'))).toBe(false)
+  })
+  it('opened from <body>: follows the theme when the shell holds such a section', () => {
+    const doc = {} as { body: unknown; documentElement: unknown }
+    const body = { ownerDocument: doc, closest: (sel: string) => (sel === '.dark' ? ({} as Element) : null), querySelector: (sel: string) => (sel === BODY_PINNED_BY || sel === `${BODY_PINNED_BY} ${FOLLOWS_THEME}` ? ({} as Element) : null) }
+    doc.body = body
+    doc.documentElement = {}
+    expect(opensDark(body as unknown as Element)).toBe(true)
   })
 })

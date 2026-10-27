@@ -432,6 +432,59 @@
   }
 }
 
+/* ── FilterBar layout="inline" (2026-10-26, the Negative Targeting page top) ──────────────────
+   No panel head, no collapse: the fields in ONE row that wraps only when it must, Clear at the row's end on the
+   controls' line (the fields' labels sit above their controls, so the row aligns to its bottom edge). A phone gets one
+   "Filters (n)" button (`.nds-fbar-phone`; the row is hidden) and the fields in the DS full-screen sheet. */
+/* The same frame as the panel (`.nds-fpanel`), so a page's top reads as one family; a phone keeps only the button. */
+.nds-fbar-inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  padding: var(--nds-space-14) var(--nds-space-18) var(--nds-space-16);
+}
+.nds-fbar-inline .nds-fpanel-presets { margin-bottom: 0; }
+.nds-fbar-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+.nds-fbar-fields {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--nds-space-11) var(--nds-space-14);
+}
+.nds-fbar-clear { flex: none; }
+.nds-fbar-phone { display: none; }
+@media (max-width: 760px) {
+  .nds-fbar-inline > .nds-fbar-row,
+  .nds-fbar-inline > .nds-fpanel-presets { display: none; }
+  .nds-fbar-inline { padding: 0; border: 0; background: none; }
+  .nds-fbar-inline > .nds-fbar-phone { display: flex; }
+}
+.nds-fbar-sheet-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+}
+.nds-fbar-sheet-fields .nds-fpanel-field.wide { grid-column: auto; }
+/* A `listbox` field fills its cell, as the other controls do. */
+.nds-fpanel-field > .nds-listbox {
+  display: flex;
+  width: 100%;
+}
+.nds-fpanel-field .nds-listbox-btn {
+  width: 100%;
+  min-width: 0;
+}
+
 /* ── FilterBar range field (min/max with optional €/% addon) ─────── */
 /* A ROW of two fields, never a field itself. The wrapper also carried the text-field class,
    which paints a border, a radius and a background of its own, so each min/max box rendered
@@ -1078,6 +1131,29 @@
 }
 .nds-review-table .nds-summary-table :is(th, td):last-child {
   padding-right: 0;
+}
+
+/* The review on a phone (2026-10-26): one card per change, each column on its own line, nothing wider than the dialog.
+   The panel draws both forms; below 760 px the table goes and the cards come (`display: none` hides either from a
+   screen reader as well). */
+.nds-review-cards {
+  display: none;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-review-card {
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+.nds-review-card .nds-kv dd { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .nds-review-table > .nds-summary-table { display: none; }
+  .nds-review-table > .nds-review-cards { display: grid; }
 }
 
 /* ── DetailModal (bid page polish round 2, 2026-10-10): a row's detail in a centered dialog ── */

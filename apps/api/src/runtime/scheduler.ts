@@ -1030,6 +1030,13 @@ export async function startScheduler(): Promise<void> {
     startApprovalMaintenanceCron();
   }
 
+  // Negative Targeting step 4 — the negatives that wait for a protected term's removal, sent once it ran, as the person
+  // who approved it. Always-on for the same reason as above: it finishes a decision a person already took.
+  {
+    const { startWasteFollowUpCron } = await import('../jobs/waste-follow-up.job.js');
+    startWasteFollowUpCron();
+  }
+
   // MB.1 — Brand Brain embedding ingester. Gated by NEXUS_ENABLE_BRAND_BRAIN=1.
   if (process.env.NEXUS_ENABLE_BRAND_BRAIN === '1') {
     const { startEmbeddingIngesterCron } = await import('../jobs/embedding-ingester.job.js');

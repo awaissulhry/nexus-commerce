@@ -162,7 +162,8 @@ export function WasteRuleModal(p: WasteRuleModalProps) {
     <DetailModal
       open
       onClose={p.onClose}
-      title={<span className={styles.panelTitle}><RuleMark row={r} size={16} />{r.name}</span>}
+      // The kind mark as every record's (13 px, the DS cell glyph); the name ends in "…" when it does not fit.
+      title={<span className={styles.panelTitle}><RuleMark row={r} size={13} glyph /><span className={styles.ellipsis} title={r.name}>{r.name}</span></span>}
       subtitle={r.sentence}
       meta={meta}
       tabs={tabs.map((t) => ({ id: t.id, label: t.label, ...(t.count !== undefined ? { count: t.count } : {}) }))}

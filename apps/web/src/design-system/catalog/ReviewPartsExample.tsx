@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import { BarChart3, Clock, Inbox, LayoutDashboard, ListChecks, Settings } from 'lucide-react'
 
 import { Button, Checkbox, Pill, Textarea } from '../primitives'
-import { Banner, Heatmap, MetricStrip, RatingBars, StarRating, heatKey, type Metric, type RatingStars } from '../components'
+import { Banner, Heatmap, MetricStrip, PerformanceGraph, RatingBars, StarRating, heatKey, type ChartSeries, type Metric, type RatingStars } from '../components'
+import { chart } from '../tokens'
 import {
   Builder, EditModeBar, Lightbox, ReplyComposer, WorkspaceSubheader, photoAlt,
   type LightboxItem, type ReplyTemplate, type WorkspaceNavGroup, type WorkspaceSubheaderProps,
@@ -29,6 +30,8 @@ import {
  *    The aside sits on the right from 1200 px. ⌘S / Ctrl+S saves (not while held); leaving asks first while dirty.
  *  - ReplyComposer: type past 500 — the send is held "Cut N characters…"; Templates fills the text; Draft with AI shows
  *    the English line. Lightbox: ←/→ move, held at the ends with words; photo 3 fails and says so; Esc gives focus back.
+ *  - PerformanceGraph bars: bars sit under the line; the legend's bar swatches are squares; hover names each stacked
+ *    part (Positive, Neutral, Negative) in its colour. At 390 px the legend wraps.
  *  - Light and dark, 390 px and 1280 px.
  */
 
@@ -59,6 +62,27 @@ const PHOTOS: LightboxItem[] = [
 ]
 
 const NAV_ICON = { size: 16, 'aria-hidden': true } as const
+
+// PerformanceGraph bars (2026-10-26, lane L12): imported reviews per week as bars under the average line; eBay feedback
+// by type as stacked bars with the share of positive on the right axis.
+const WEEKS = [['1 Sep', 9, 4.4], ['8 Sep', 14, 4.3], ['15 Sep', 6, 4.5], ['22 Sep', 0, null], ['29 Sep', 11, 4.1], ['6 Oct', 17, 4.2]] as const
+const WEEK_ROWS = WEEKS.map(([when, reviews, avg]) => ({ when, reviews, avg: avg ?? Number.NaN }))
+const WEEK_BARS: ChartSeries = { key: 'reviews', label: 'Imported reviews per week', color: chart.reference, axis: 'left', shape: 'bar', axisLabel: 'Reviews per week' }
+const WEEK_LINE: ChartSeries = { key: 'avg', label: 'Average rating', color: chart.actual, axis: 'right', axisLabel: 'Average rating', domain: [3, 5], ticks: [3, 3.5, 4, 4.5, 5], format: (v) => v.toFixed(1) }
+const TYPE_ROWS = [
+  { when: 'Last 30 days', positive: 18, neutral: 1, negative: 0, pct: 100 },
+  { when: 'Last 6 months', positive: 90, neutral: 4, negative: 2, pct: 97.8 },
+  { when: 'Last 12 months', positive: 171, neutral: 7, negative: 3, pct: 98.3 },
+]
+const TYPE_STACK: ChartSeries = {
+  key: 'feedback', label: 'Feedback', color: chart.reference, axis: 'left', axisLabel: 'Feedback',
+  stack: [
+    { key: 'positive', label: 'Positive', color: chart.positive },
+    { key: 'neutral', label: 'Neutral', color: chart.neutral },
+    { key: 'negative', label: 'Negative', color: chart.negative },
+  ],
+}
+const TYPE_LINE: ChartSeries = { key: 'pct', label: '% positive', color: chart.actual, axis: 'right', axisLabel: '% positive', domain: [90, 100], format: (v) => `${v.toFixed(1)}%` }
 
 export function ReviewPartsExample() {
   const [stars, setStars] = useState<number | null>(4)
@@ -259,6 +283,17 @@ export function ReviewPartsExample() {
           ruleLine="One reply per feedback, up to 500 characters, can't be edited or removed."
           sent={{ at: 'Sent 26 Oct 2026, 10:42', text: 'Thank you, Felix! Glad everything fitted. Ride safe!', note: '· public · cannot be undone or edited' }}
         />
+      </div>
+
+      <div style={row}>
+        <div style={{ ...card, flex: '2 1 360px' }}>
+          <h4>PerformanceGraph · bars under a line (a week without reviews is a gap in the line)</h4>
+          <PerformanceGraph data={WEEK_ROWS} xKey="when" left={WEEK_BARS} right={WEEK_LINE} height={200} />
+        </div>
+        <div style={{ ...card, flex: '1 1 300px' }}>
+          <h4>PerformanceGraph · stacked bars by type</h4>
+          <PerformanceGraph data={TYPE_ROWS} xKey="when" left={TYPE_STACK} right={TYPE_LINE} height={200} />
+        </div>
       </div>
 
       <div style={row}>

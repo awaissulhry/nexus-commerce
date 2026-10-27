@@ -1,0 +1,143 @@
+/*
+ * Negative Targeting page, step 4 — the protected term's chip, its panel and the review's lead. Layout
+ * and domain content only; DS tokens only. The chip is the DS Pill inside the DS DetailPopover's trigger.
+ */
+
+.chipWrap {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The trigger keeps the DS reset (nds-detailpop-trigger); here only its room in a cell. */
+.chipButton {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chipText {
+  display: inline-block;
+  min-width: 0;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.more {
+  margin-left: var(--nds-space-4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The panel (redone 2026-10-26, the Wasting board): the head with the shield and the count, each term on its own under a
+   hairline (words + match, where, why), then the rule and Open record under a hairline. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 320px;
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.headMark {
+  flex: none;
+  color: var(--nds-info-text);
+}
+
+.term {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-8) 0;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.termHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+
+.termWords {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--nds-text-strong);
+}
+
+.panelLine {
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.panelLine .scope {
+  color: inherit;
+}
+
+.foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  padding-top: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.footText {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.scope {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.reason {
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.keeps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin-top: var(--nds-space-6);
+}
+
+.keepsHead {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.keepsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 136px;
+  overflow-y: auto;
+}
+
+.moreLine {
+  align-self: center;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}

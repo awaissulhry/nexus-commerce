@@ -26,6 +26,10 @@
  *   pin                     setting AND lifting a pin are loosenings (lead decision, W3-2 review): a pin stops every
  *                           automatic write of its part, cuts included (ads-authority-pins.ts; only a stop with low bids
  *                           passes a bids pin), so it can hold spend up; lifting lets engines write it again
+ * Protected terms (Negative Targeting step 4): a removal records the term whole — match, scope, its reason and who set
+ * it — and its undo (`restoreChangeId`, the removal's own AgentChange) puts it back exactly that way: the reason and the
+ * author come from the recorded change, never from the request, so no caller can name another author.
+ *
  * The ads strategy (W1) stays the outer band: the write gate adds its band to the campaign's bounds (or, on a side the
  * campaign leaves empty, the bid policy's) and the stricter one binds — the lower highest bid, the higher lowest bid
  * (effectiveBidBounds); the step clamp takes the lower largest change (ads-strategy/bids.ts stepClamp). So a campaign
@@ -61,6 +65,8 @@ export interface GuardrailInput {
   matchType?: string
   marketplace?: string | null
   campaignId?: string | null
+  /** protected-term set: the AgentChange of the removal it puts back (an undo) — its match, reason and author come back. */
+  restoreChangeId?: string
   // W3-2 — a campaign's own guardrails (campaign-bid-bounds also takes minBidCents / maxBidCents, cpc-ceiling `enabled`,
   // pin `note`).
   minBudgetCents?: number | null
@@ -123,6 +129,8 @@ function diff(before: Record<string, unknown> | null, after: Record<string, unkn
 }
 
 const TERM_KEYS = ['term', 'matchType', 'marketplace', 'campaignId']
+/** A protected term as a removal records it: whole, so its undo puts back the reason and who set it (step 4). */
+const TERM_RECORD_KEYS = [...TERM_KEYS, 'isPrefix', 'reason', 'createdBy']
 
 /** W3-2 — what each campaign kind holds, named as set-ad-guardrail takes it (so an undo sets it back as it was). */
 export const CAMPAIGN_KEYS: Readonly<Record<CampaignGuardrailKind, readonly string[]>> = {
@@ -163,7 +171,28 @@ function campaignState(kind: CampaignGuardrailKind, c: GuardedCampaign): Record<
 /** A guardrail row as a change records it (and its undo compares): its settings only. */
 export function guardrailState(kind: GuardrailKind, row: Record<string, unknown> | null): Record<string, unknown> | null {
   if (isCampaignKind(kind)) return pick(row, [...CAMPAIGN_KEYS[kind]])
-  return pick(row, kind === 'protected-term' ? TERM_KEYS : kind === 'spend-ceiling' ? CEILING_KEYS : POLICY_KEYS)
+  return pick(row, kind === 'protected-term' ? TERM_RECORD_KEYS : kind === 'spend-ceiling' ? CEILING_KEYS : POLICY_KEYS)
+}
+
+/** What is stored now, in the shape a change recorded (`after`): its own fields only, so an older record still compares. */
+export function stateLike(now: Record<string, unknown> | null, recorded: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!now || !recorded) return now
+  return Object.fromEntries(Object.keys(recorded).map((k) => [k, now[k] ?? null]))
+}
+
+/**
+ * Step 4 — the protected term a removal took away, as its AgentChange recorded it, when `changeId` is the removal of
+ * this very term in this scope; else why not. The undo's match, reason and author come from here.
+ */
+async function removedTerm(changeId: string, key: { term: string; marketplace: string | null; campaignId: string | null }): Promise<{ row: Record<string, unknown> } | { error: string }> {
+  const { normaliseTerm } = await import('./ads-write-gate.js')
+  const rec = await prisma.agentChange.findUnique({ where: { id: changeId }, select: { toolName: true, before: true, after: true } })
+  const before = (rec?.before ?? null) as unknown as GuardrailState | null
+  const after = (rec?.after ?? null) as unknown as GuardrailState | null
+  const same = !!before?.row && after?.row == null && rec?.toolName === 'set-ad-guardrail' && before.kind === 'protected-term'
+    && normaliseTerm(String(before.key.term ?? before.row.term ?? '')) === normaliseTerm(key.term)
+    && (before.key.marketplace ?? null) === key.marketplace && (before.key.campaignId ?? null) === key.campaignId
+  return same ? { row: before!.row! } : { error: `restoreChangeId ${changeId}: not the removal of “${key.term}” in this scope.` }
 }
 
 /** Read the guardrail a key names, now (the whole row; a campaign kind: its values). */
@@ -412,7 +441,14 @@ export async function planGuardrail(input: GuardrailInput): Promise<{ ok: true; 
     if (input.op === 'remove' && !existing) return { ok: false, error: `“${input.term}” is not a protected term here (not found).` }
     if (input.op === 'set' && existing) return { ok: false, error: `“${existing.term}” is already protected.` }
     const { normaliseTerm } = await import('./ads-write-gate.js')
-    const after = input.op === 'set' ? { term: normaliseTerm(input.term), matchType: input.matchType ? input.matchType.trim().toUpperCase() : null, marketplace: key.marketplace, campaignId: key.campaignId } : null
+    // Step 4 — an undo of a removal puts the term back exactly as that removal recorded it.
+    if (input.restoreChangeId && input.op !== 'set') return { ok: false, error: 'restoreChangeId: only to set a removed protected term back.' }
+    const restored = input.restoreChangeId ? await removedTerm(input.restoreChangeId, key) : null
+    if (restored && 'error' in restored) return { ok: false, error: restored.error }
+    const was = restored && 'row' in restored ? restored.row : null
+    const after = input.op !== 'set' ? null : was
+      ? { term: normaliseTerm(input.term), matchType: (was.matchType as string | null) ?? null, marketplace: key.marketplace, campaignId: key.campaignId, isPrefix: was.isPrefix ?? false, reason: was.reason ?? null, createdBy: was.createdBy ?? null }
+      : { term: normaliseTerm(input.term), matchType: input.matchType ? input.matchType.trim().toUpperCase() : null, marketplace: key.marketplace, campaignId: key.campaignId }
     const tighten = input.op === 'set'
     return {
       ok: true,
@@ -422,7 +458,8 @@ export async function planGuardrail(input: GuardrailInput): Promise<{ ok: true; 
         action: 'set-ad-guardrail', kind: 'protected-term', op: input.op, direction: tighten ? 'tighten' : 'loosen',
         why: tighten ? 'a new protected term: no rule may negate it' : 'removing a protected term lets rules negate it again',
         label: `“${input.term}”`, changes: { protected: { from: !!existing, to: tighten } }, basis: null,
-        effect: tighten ? `Protects “${input.term}” from negation${key.marketplace ? ` in ${key.marketplace}` : ''}.` : `Removes the protection of “${input.term}”.`,
+        effect: was ? `Puts back the protection of “${input.term}” as it was: its match, reason and who set it.`
+          : tighten ? `Protects “${input.term}” from negation${key.marketplace ? ` in ${key.marketplace}` : ''}.` : `Removes the protection of “${input.term}”.`,
       },
     }
   }
@@ -498,8 +535,12 @@ export async function applyGuardrail(input: GuardrailInput, actorUserId: string 
   if (isCampaignKind(input.kind)) {
     out = await applyCampaignGuardrail(planned, actor)
   } else if (input.kind === 'protected-term') {
+    const back = input.restoreChangeId && row ? row : null
     out = input.op === 'set'
-      ? await svc.addKeywordProtection({ mode: 'WHITELIST', term: input.term, matchType: input.matchType, marketplace: key.marketplace, campaignId: key.campaignId, reason: input.note ?? 'protected by Claude' }, actor)
+      ? back
+        // Step 4 — the undo of a removal: the term as it was (match, reason, author from the recorded change).
+        ? await svc.addKeywordProtection({ mode: 'WHITELIST', term: input.term, matchType: (back.matchType as string | null) ?? undefined, isPrefix: back.isPrefix === true, marketplace: key.marketplace, campaignId: key.campaignId, reason: (back.reason as string | null) ?? null }, actor, { createdBy: (back.createdBy as string | null) ?? null })
+        : await svc.addKeywordProtection({ mode: 'WHITELIST', term: input.term, matchType: input.matchType, marketplace: key.marketplace, campaignId: key.campaignId, reason: input.note ?? 'protected by Claude' }, actor)
       : await svc.removeKeywordProtection(String((await readGuardrail('protected-term', key))!.id), actor)
   } else if (input.op === 'remove') {
     out = input.kind === 'spend-ceiling' ? await svc.deleteSpendCeiling(key, actor) : await svc.deleteBidPolicy(key, actor)

@@ -121,9 +121,10 @@ export interface KeywordProtectionInput {
 
 /**
  * POST /advertising/keyword-protections — moved unchanged from advertising.routes.ts (R13). New here: an audit row
- * (`add_keyword_protection`), which the route never wrote.
+ * (`add_keyword_protection`), which the route never wrote. Step 4 — `opts.createdBy`: the undo of a removal puts back who
+ * set the term (from the recorded removal, set-ad-guardrail restoreChangeId); the route never passes it.
  */
-export async function addKeywordProtection(b: KeywordProtectionInput, actor: string): Promise<ServiceOutcome<{ ok: true; item: AdKeywordProtection }>> {
+export async function addKeywordProtection(b: KeywordProtectionInput, actor: string, opts: { createdBy?: string | null } = {}): Promise<ServiceOutcome<{ ok: true; item: AdKeywordProtection }>> {
   // Ads fix 5c (review 7.2, Owner D3) — "Always negate" (BLACKLIST) is removed: it was saved and counted but no engine
   // ever negated anything for it. Refused in any letter case: 'blacklist' used to be stored as WHITELIST, the opposite.
   if (typeof b.mode === 'string' && b.mode.trim().toUpperCase() === 'BLACKLIST') {
@@ -171,7 +172,7 @@ export async function addKeywordProtection(b: KeywordProtectionInput, actor: str
     data: {
       mode, term, isPrefix: matchType ? matchType === 'PREFIX' : !!b.isPrefix, matchType,
       marketplace: b.marketplace ?? null, campaignId: b.campaignId ?? null,
-      reason: b.reason ?? null, createdBy: actor,
+      reason: b.reason ?? null, createdBy: 'createdBy' in opts ? opts.createdBy ?? null : actor,
     },
   })
   await audit(actor, 'add_keyword_protection', 'KEYWORD_PROTECTION', row.id, {}, protectionConfig(row), `${row.mode} “${row.term}” added`)

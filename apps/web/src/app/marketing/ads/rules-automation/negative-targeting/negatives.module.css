@@ -1,17 +1,56 @@
 /*
  * Negative Targeting page (2026-10-11) — layout only, design-system tokens only. Every control is the design system's
- * own; light only, like the rest of the ads console (_shared/shared-shell.css).
+ * own. The redesign (2026-10-26, BRIEF D1–D8, D16, D17): the platform's list page (Listings), and this page follows the
+ * theme while the rest of the ads console stays light.
  */
 
+/*
+ * D17 — the page's own ground. Its root is the DS's responsive scope (`nds-theme-responsive`: dark tokens under `.dark`,
+ * and its own `--nds-bg` ground); the ads shell paints a light ground around it (`.h10-shell`, shared-shell.css) and
+ * `.h10-main`'s padding is the gutter. So the ground reaches over that padding, and a dark page has no light frame. The
+ * 26px is `.h10-main`'s top and bottom padding; its sides are `--h10-gutter-x` (30px, 16px on a phone).
+ */
+.root {
+  box-sizing: border-box;
+  margin: calc(-1 * 26px) calc(-1 * var(--h10-gutter-x, 30px));
+  padding: 26px var(--h10-gutter-x, 30px);
+  min-height: calc(100% + 52px);
+}
+
+/* While Ask AI floats, the shell ends with its footprint of room (shared-shell.css): the ground covers that too. */
+:global(:root:has([data-nds-fab])) .root {
+  margin-bottom: calc(-1 * var(--nds-fab-reserve-block));
+  padding-bottom: var(--nds-fab-reserve-block);
+  min-height: calc(100% + 26px + var(--nds-fab-reserve-block));
+}
+
+/* The header's actions: the market picker and Export (Listings' `.acts`). */
+.acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* A market Nexus only reads: its banner keeps the header's gap above the tab strip (as RulesHeader's). */
+.readOnly {
+  margin-bottom: var(--nds-space-18);
+}
+
+/* D1 — tiles · banners · the filter bar · its chips · the grid card · the note, one column. The tab bar above keeps its
+   own 16px under its hairline. */
 .page {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-12);
   min-width: 0;
-  margin-top: var(--nds-space-12);
   /* Room under the last control for Ask AI, which floats at the bottom right (Bid audit M7, audit S16): its height and
      its inset, so the last row's verb can always scroll clear of it. */
   padding-bottom: calc(var(--nds-space-48) + var(--nds-space-48));
+}
+
+.filters {
+  min-width: 0;
 }
 
 .stack {
@@ -50,12 +89,32 @@
   min-width: 0;
 }
 
+/* D4 — the picks as removable chips under the filter bar (Listings' "This page shows only" row). */
 .chips {
-  display: inline-flex;
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--nds-space-6);
+  gap: var(--nds-space-8);
   min-width: 0;
+}
+
+/* The grid card and its note line. */
+.cardWrap {
+  min-width: 0;
+}
+
+/* D8 — one note under the card (Listings' `.note`). */
+.note {
+  margin: var(--nds-space-12) 0 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+/* D7 — the pager's line ("1–9 of 9"). */
+.pagerWords {
+  font-size: var(--nds-font-size-base);
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-2);
 }
 
 /* A row opens its record on click: the cursor says so (controls keep theirs). */
@@ -180,99 +239,37 @@
 .tone_muted { color: var(--nds-text-2); }
 .tone_info { color: var(--nds-info-text); }
 
-/* ── the record ──────────────────────────────────────────────────────────────────────────────────────────────────── */
+/* A saved amount (green) or one that still spends (amber) reads as a number that matters. */
+.strong { font-weight: var(--nds-font-weight-semibold); }
 
-.detailTitle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-8);
-  min-width: 0;
-  max-width: 100%;
-}
-
-.detailPath {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-6);
-  min-width: 0;
-  max-width: 100%;
-}
-
-.sep {
-  color: var(--nds-text-3);
-}
-
-.footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-8);
-  width: 100%;
-}
-
-.overview {
+/* D6 — the State cell: the chip, and a smaller line under it (a clash, a follow-up, a skip). */
+.stateCell {
   display: flex;
   flex-direction: column;
-  gap: var(--nds-space-20);
+  justify-content: center;
+  align-items: flex-start;
+  gap: var(--nds-space-3);
   min-width: 0;
+  max-width: 100%;
+  height: 100%;
 }
 
-.numbers {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-24);
-}
-
-.numbers > :first-child {
-  flex: 1 1 420px;
-  min-width: 0;
-}
-
-.spark {
+.stateSub {
   display: inline-flex;
-  flex: none;
-}
-
-.whereTab {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-20);
-  min-width: 0;
-}
-
-.h3 {
-  display: flex;
   align-items: center;
-  gap: var(--nds-space-8);
-  margin: 0 0 var(--nds-space-8);
-  font-size: var(--nds-font-size-base);
+  gap: var(--nds-space-4);
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: var(--nds-font-size-xs-plus);
   font-weight: var(--nds-font-weight-semibold);
+  line-height: 1.2;
 }
 
-.quiet {
-  margin: 0;
-  color: var(--nds-text-2);
-  font-size: var(--nds-font-size-sm);
-}
-
-.quietInline {
+.stateSubText {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--nds-text-2);
-}
-
-.why {
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
-}
-
-.cant {
-  font-size: var(--nds-font-size-sm);
-  color: var(--nds-text-2);
-  white-space: nowrap;
 }
 
 /* ── phone: four tiles in two rows of two, so the table starts on the first screen (Bid audit M8) ─────────────────── */
@@ -284,51 +281,6 @@
 
   .page {
     padding-bottom: var(--nds-space-48);
-  }
-}
-
-/* ── Where it runs: one line per place (the path takes the room) ─────────────────────────────────────────────────── */
-
-.places {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.place {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 140px auto;
-  align-items: center;
-  gap: var(--nds-space-12);
-  min-height: 40px;
-  padding: var(--nds-space-4) 0;
-  border-bottom: 1px solid var(--nds-border-subtle);
-}
-
-.placePath {
-  display: flex;
-  min-width: 0;
-}
-
-.placeNum {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.placeOpen {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--nds-space-8);
-  min-width: 56px;
-}
-
-@media (max-width: 760px) {
-  .place {
-    grid-template-columns: minmax(0, 1fr) auto;
   }
 }
 

@@ -26,7 +26,7 @@ import { apiGet } from '../images/api'
 import { useStudioProduct, useStudioScope } from '../contracts'
 import { adsHeadline, adsQuery, money, readAds, readEfficiency } from './analytics/readAds'
 import {
-  joinPriceRows, readAvailable, readDaysOfInventory, readSales, readStockoutRisk, readTrend,
+  joinPriceRows, readAvailable, readDaysOfInventory, readReviews, readSales, readStockoutRisk, readTrend,
   sparklinePath,
 } from './analytics/readAnalytics'
 import type { AdCampaign, AdSearchTerm, AnalyticsPayload, ProductAdsPayload, TrendPoint } from './analytics/types'
@@ -225,6 +225,7 @@ function ProductPerformance() {
   const available = readAvailable(inventory?.totalAvailable)
   const cover = inventory ? readDaysOfInventory(inventory.daysOfInventory) : null
   const risk = inventory ? readStockoutRisk(inventory.stockoutRisk) : null
+  const reviews = readReviews(analytics?.reviews)
 
   return (
     <div className={styles.page}>
@@ -334,13 +335,11 @@ function ProductPerformance() {
 
           <section className={styles.card}>
             <h3 className={styles.cardTitle}>Reviews</h3>
-            {analytics.reviews.reviewCount === 0 ? (
+            {reviews.empty ? (
               <p className={styles.unknown}>No reviews have been recorded for this product.</p>
             ) : (
               <dl className={styles.stats}>
-                <div><dt>Rating</dt><dd>{analytics.reviews.avgRating?.toFixed(1) ?? '—'}</dd></div>
-                <div><dt>Reviews</dt><dd>{analytics.reviews.reviewCount}</dd></div>
-                <div><dt>Recent spike</dt><dd>{analytics.reviews.recentSpikeCount}</dd></div>
+                {reviews.stats.map((row) => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}
               </dl>
             )}
           </section>

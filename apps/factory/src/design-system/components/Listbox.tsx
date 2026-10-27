@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, type ReactNode } from 'react'
+import { useId, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
 import { useClickAway } from './useClickAway'
@@ -107,6 +107,11 @@ export interface ListboxProps {
   actions?: readonly ListboxPanelAction[]
   /** The actions' group name for a screen reader. Default "Actions". */
   actionsLabel?: string
+  /**
+   * id of the visible label that names the field (2026-10-26, the FilterBar `listbox` field). The trigger is then named
+   * by that label and the value it shows ("Status Wasting"), as `MultiSelect labelledBy` is. Wins over `ariaLabel`.
+   */
+  labelledBy?: string
 }
 
 /** Past this many options a picker gets a search box without being asked. */
@@ -119,8 +124,9 @@ export interface ListboxProps {
  * banned from native selects; this is what they migrate to.
  */
 export function Listbox({ size = 'md', options, value, onChange, placeholder = 'Select…', ariaLabel, id, 'aria-describedby': describedBy, className, disabled,
-  width, searchable, searchPlaceholder = 'Search…', emptyLabel, emptyIsPlaceholder = false, portalTo, actions, actionsLabel }: ListboxProps) {
+  width, searchable, searchPlaceholder = 'Search…', emptyLabel, emptyIsPlaceholder = false, portalTo, actions, actionsLabel, labelledBy }: ListboxProps) {
   const [open, setOpen] = useState(false)
+  const valueId = useId()
   const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const { popRef, style: popStyle } = usePopoverPosition(open, ref, { width: 'anchor' })
@@ -132,10 +138,11 @@ export function Listbox({ size = 'md', options, value, onChange, placeholder = '
 
   return (
     <div className={['nds-listbox', size === 'md' ? '' : size, className].filter(Boolean).join(' ')} style={width != null ? { width } : undefined} ref={ref}>
-      <button ref={triggerRef} type="button" id={id} aria-describedby={describedBy} className="nds-listbox-btn" disabled={disabled} aria-haspopup={actions?.length ? 'dialog' : 'listbox'} aria-expanded={open} aria-label={ariaLabel}
+      <button ref={triggerRef} type="button" id={id} aria-describedby={describedBy} className="nds-listbox-btn" disabled={disabled} aria-haspopup={actions?.length ? 'dialog' : 'listbox'} aria-expanded={open}
+        aria-label={labelledBy ? undefined : ariaLabel} aria-labelledby={labelledBy ? `${labelledBy} ${valueId}` : undefined}
         onClick={() => setOpen((o) => !o)}>
         {selected?.leading != null && <span className="nds-listbox-lead">{selected.leading}</span>}
-        <span className={selected == null && (emptyIsPlaceholder || emptyLabel == null) ? 'ph' : undefined}>{selected?.label ?? emptyLabel ?? placeholder}</span>
+        <span id={labelledBy ? valueId : undefined} className={selected == null && (emptyIsPlaceholder || emptyLabel == null) ? 'ph' : undefined}>{selected?.label ?? emptyLabel ?? placeholder}</span>
         <ChevronDown size={15} className="chev" aria-hidden />
       </button>
       {open && (

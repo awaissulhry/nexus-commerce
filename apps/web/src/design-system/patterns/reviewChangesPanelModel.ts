@@ -7,6 +7,7 @@
  * did not: the table split into tabs ("Keywords 3 · Negatives 6 · New campaign 1"; each change names its tab in
  * `group`, an empty tab is left out) and a Result that carries its own tone ("Waiting" is not a success).
  */
+import type { ReactNode } from 'react'
 import type { ReviewChange, ReviewResult } from './reviewChangesModel'
 
 /** A change of the panel: a review change, optionally in a tab (`group` = a tab's id). */
@@ -56,3 +57,33 @@ export function changesIn<C extends Pick<ReviewPanelChange, 'group'>>(changes: r
 export function resultTone(result: ReviewPanelResult): NonNullable<ReviewPanelResult['tone']> {
   return result.tone ?? (result.ok ? 'success' : 'danger')
 }
+
+/**
+ * One line of a change's phone card (2026-10-26, the review on a phone): a column and its cell, or `Now → New` as one
+ * line holding both values.
+ */
+export type ReviewCardField =
+  | { key: string; kind: 'value'; label: string; value: ReactNode }
+  | { key: 'now-new'; kind: 'change'; now: ReactNode; next: ReactNode }
+
+/** A cell with nothing to say: an empty string, null, undefined or false. */
+const blank = (v: ReactNode): boolean => v === '' || v === null || v === undefined || v === false
+
+/**
+ * A change's card below 760 px: the table's columns in order, each on its own line, with Now and New joined into one
+ * `Now → New` line, and a column whose cell is empty for this change left out (one change has a Note, another not).
+ * PURE: the same columns and cells the table draws, so the two forms can never say different things.
+ */
+export function reviewCardFields(columns: readonly string[], cells: readonly ReactNode[]): ReviewCardField[] {
+  const nowAt = columns.indexOf('Now')
+  const nextAt = columns.indexOf('New')
+  const out: ReviewCardField[] = []
+  columns.forEach((column, i) => {
+    if (i === nowAt && nextAt >= 0) { out.push({ key: 'now-new', kind: 'change', now: cells[nowAt], next: cells[nextAt] }); return }
+    if (i === nextAt && nowAt >= 0) return
+    if (blank(cells[i])) return
+    out.push({ key: column, kind: 'value', label: column, value: cells[i] })
+  })
+  return out
+}
+

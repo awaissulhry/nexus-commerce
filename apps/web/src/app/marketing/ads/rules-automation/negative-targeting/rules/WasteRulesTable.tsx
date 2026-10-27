@@ -12,14 +12,18 @@
  *
  * Keyboard: Enter on a row's Rule cell opens its detail; on Scope it follows the path's last link (← / → walk the links)
  * or opens the campaign list; on Last 7 d it opens the detail where its chips point; on Waiting the asks; on ⋯ the menu.
+ *
+ * The redesign (2026-10-26, BRIEF D5, D7, D15, D16): two-line rows at the page's density, the DS skeleton while it reads
+ * and a DS EmptyState when nothing shows, the pager under it (the Brain and Harvest rows are pinned and not paged); a
+ * phone draws the same columns scrolling sideways in the card, the Rule first (150 px), the ⋯ last and unpinned.
  */
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
 import { ArrowUpRight, Brain, Crosshair, ShieldAlert, ShieldCheck, Sprout, TextSearch } from 'lucide-react'
 import { Button, Tag, Tooltip } from '@/design-system/primitives'
 import { EntityLinks, EntityPath, type EntityLinkComponent, type MenuItemDef } from '@/design-system/components'
 import {
-  CELL_DETAIL_TRIGGER, GridNoRowsOverlay, ModeCell, NexusGrid, actionsColumn, entityPathColumn, entityPathKeys, gridSelection, keepFromGrid, modeColumn,
-  type ColDef, type ICellRendererParams, type ModeCellParams, type NexusGridProps,
+  CELL_DETAIL_TRIGGER, GridLoadingOverlay, ModeCell, NexusGrid, actionsColumn, entityPathColumn, entityPathKeys, gridSelection, keepFromGrid, modeColumn,
+  type ColDef, type GridDensityName, type ICellRendererParams, type ModeCellParams, type NexusGridProps,
 } from '@/design-system/grid'
 import Link from '@/lib/workspaces/Link'
 import { relWords } from '../../bid/_shared/format'
@@ -67,15 +71,17 @@ const CAMPAIGNS = { one: 'campaign', many: 'campaigns' }
 
 const KIND_ICON: Readonly<Record<WasteKind, typeof Crosshair>> = { PAUSE_KEYWORD: Crosshair, NEGATE_TERM: TextSearch }
 
-/** The row's mark: the Brain or Harvest (who owns it), else what it stops (our keyword, a shopper's search term). */
-export function RuleMark({ row, size = 14 }: { row: Pick<WasteRuleRow, 'source' | 'readOnly' | 'kind'>; size?: number }) {
+/** The row's mark: the Brain or Harvest (who owns it), else what it stops (our keyword, a shopper's search term). `glyph`:
+ *  the records' title mark (13 px, the DS cell glyph), as every other record of the page. */
+export function RuleMark({ row, size = 14, glyph = false }: { row: Pick<WasteRuleRow, 'source' | 'readOnly' | 'kind'>; size?: number; glyph?: boolean }) {
   const owner = ownerOf(row)
+  const cls = glyph ? 'nds-cell-glyph' : undefined
   if (owner) {
     const Icon = row.source === 'brain' ? Brain : Sprout
-    return <Tooltip label={owner.lock} portal><span className={styles.ownerIcon} role="img" aria-label={owner.word}><Icon size={size} aria-hidden /></span></Tooltip>
+    return <Tooltip label={owner.lock} portal><span className={styles.ownerIcon} role="img" aria-label={owner.word}><Icon size={size} aria-hidden className={cls} /></span></Tooltip>
   }
   const Icon = KIND_ICON[row.kind]
-  return <Tooltip label={KIND_WORD[row.kind]} portal><span className={styles.icon} role="img" aria-label={KIND_WORD[row.kind]}><Icon size={size} aria-hidden /></span></Tooltip>
+  return <Tooltip label={KIND_WORD[row.kind]} portal><span className={styles.icon} role="img" aria-label={KIND_WORD[row.kind]}><Icon size={size} aria-hidden className={cls} /></span></Tooltip>
 }
 
 // ── cells ───────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -92,22 +98,6 @@ const RuleCell = memo(function RuleCell({ data, context }: Cell) {
         {!isPseudo(r) && !r.market && context.current.market !== 'all' && <Tag>All markets</Tag>}
       </span>
       <span className={styles.sub}>{r.sentence}</span>
-    </span>
-  )
-})
-
-/** The phone's one cell: the rule (and how many asks wait), and where it acts as its second line. */
-const PhoneRuleCell = memo(function PhoneRuleCell({ data }: Cell) {
-  if (!data) return null
-  const r = data.row
-  return (
-    <span className={styles.two} title={`${r.name} · ${scopeText(r)}`}>
-      <span className={styles.main}>
-        <RuleMark row={r} />
-        <span className={styles.ellipsis}>{r.name}</span>
-        {r.waiting > 0 && <span className={styles.phoneWaiting} role="img" aria-label={`${r.waiting} waiting`}><Tag tone="warning">{r.waiting}</Tag></span>}
-      </span>
-      <span className={styles.sub}>{scopeText(r)}</span>
     </span>
   )
 })
@@ -250,6 +240,7 @@ function menuItems(g: GridRow): MenuItemDef[] {
     { id: 'preview', label: 'Preview', onSelect: open('preview') },
     { id: 'history', label: 'History', onSelect: open('history') },
     { id: 'settings', label: 'Settings', onSelect: open('settings') },
+    { id: 'sep-archive', separator: true },
     r.archived
       ? { id: 'unarchive', label: 'Unarchive…', disabled: !!held, description: held ?? undefined, onSelect: () => h.unarchive(r) }
       : { id: 'archive', label: 'Archive…', tone: 'danger', disabled: !!held, description: held ?? undefined, onSelect: () => h.archive(r) },
@@ -273,7 +264,7 @@ function actionsKeys(p: KeyParams): boolean {
 
 const STEPS = MODES.map((m) => ({ value: m, label: MODE_WORD[m], note: WASTE_MODE_MEANS[m] }))
 
-// Widths at 1440 (card 1312 px): tick 44 + rule 300 + scope (flex, ≥ 240) + mode 172 + last 7 d 220 + waiting 100 + ⋯ 56.
+// Widths at 1440 (card 1312 px): tick 43 + rule 300 + scope (flex, ≥ 240) + mode 172 + last 7 d 220 + waiting 100 + ⋯ 56.
 const RULE: ColDef<GridRow> = {
   colId: 'rule', headerName: 'Rule', pinned: 'left', width: 300, minWidth: 200,
   valueGetter: (p) => p.data?.row.name ?? '',
@@ -354,13 +345,16 @@ const plain = (c: ColDef<GridRow>): ColDef<GridRow> => ({ ...c, suppressHeaderMe
 export const RULE_COLUMNS: ColDef<GridRow>[] = [RULE, SCOPE, MODE, LAST7, WAITING, LAST_RUN, NEXT_RUN, MARKET, ACTIONS].map(plain)
 
 /**
- * A phone (264 px of card): the rule (with how many asks wait) and where it acts as line 2, then its mode. A tap opens
- * the full-screen detail; nothing is pinned (audit M8).
+ * A phone (D16): the same columns, scrolling sideways in the card — the Rule first and pinned (150 px: its name over its
+ * sentence), Scope 200, the ⋯ last and unpinned (two pinned columns leave no room). A tap opens the full-screen detail.
  */
-const PHONE_RULE: ColDef<GridRow> = { ...RULE, pinned: null, lockPinned: false, width: undefined, flex: 1, minWidth: 140, cellRenderer: PhoneRuleCell }
-/** The phone's Mode: the DS cell alone (the holds are in the detail, a tap away: no room for the shield). */
-const PHONE_MODE: ColDef<GridRow> = { ...MODE_BASE, width: 108, headerTooltip: MODE.headerTooltip }
-export const RULE_PHONE_COLUMNS: ColDef<GridRow>[] = [PHONE_RULE, PHONE_MODE].map(plain)
+const PHONE_RULE: ColDef<GridRow> = { ...RULE, width: 150, minWidth: 150 }
+const PHONE_SCOPE: ColDef<GridRow> = { ...SCOPE, flex: undefined, width: 200, minWidth: 200 }
+const PHONE_ACTIONS: ColDef<GridRow> = {
+  ...actionsColumn<GridRow>({ items: menuItems, menuLabel: (g) => `Actions for ${g.row.name}`, pinned: false }),
+  suppressKeyboardEvent: actionsKeys as ColDef<GridRow>['suppressKeyboardEvent'],
+}
+export const RULE_PHONE_COLUMNS: ColDef<GridRow>[] = [PHONE_RULE, PHONE_SCOPE, MODE, LAST7, WAITING, LAST_RUN, NEXT_RUN, MARKET, PHONE_ACTIONS].map(plain)
 
 /** The columns Customise lists (the ⋯ column is not one of them). */
 export const RULE_PREFERENCE_COLUMNS: ReadonlyArray<{ key: string; label: string; locked?: boolean; hidden?: boolean }> = [
@@ -377,22 +371,33 @@ export const RULE_PREFERENCE_COLUMNS: ReadonlyArray<{ key: string; label: string
 const ROW_ID: NonNullable<NexusGridProps<GridRow>['getRowId']> = (p) => p.data.id
 const SELECTION = gridSelection<GridRow>({ selectAll: 'filtered', isRowSelectable: (n) => !n.rowPinned && !!n.data && !isPseudo(n.data.row) }) as NexusGridProps<GridRow>['rowSelection']
 
+/** The skeleton draws the rows' own height (two lines) at the grid's density. */
+const LOADING_PARAMS = { rows: 8, rowKind: 'two-line' as const }
+
 export function WasteRulesTable(p: {
   rows: GridRow[]
   pinned: GridRow[]
   context: HandlersRef
   phone: boolean
   selectable: boolean
-  noRowsParams: NexusGridProps<GridRow>['noRowsOverlayComponentParams']
+  /** The first read: the grid's skeleton rows. */
+  loading: boolean
+  /** What the grid draws with no rows (a DS EmptyState). */
+  emptyState: ReactNode
+  density: GridDensityName
+  /** Rows per page (the pinned Brain and Harvest rows are not paged). */
+  pageSize: number
   initialState: NexusGridProps<GridRow>['initialState']
   columnDialog: NexusGridProps<GridRow>['columnDialog']
   onGridReady: NonNullable<NexusGridProps<GridRow>['onGridReady']>
   onRowClicked: NonNullable<NexusGridProps<GridRow>['onRowClicked']>
   onCellKeyDown: NonNullable<NexusGridProps<GridRow>['onCellKeyDown']>
   onSelectionChanged: NonNullable<NexusGridProps<GridRow>['onSelectionChanged']>
+  onPaginationChanged: NonNullable<NexusGridProps<GridRow>['onPaginationChanged']>
 }) {
   return (
     <NexusGrid<GridRow>
+      key={p.phone ? 'phone' : 'desk'}
       domLayout="autoHeight"
       rowClass={styles.clickRow}
       suppressCellFocus={false}
@@ -402,14 +407,24 @@ export function WasteRulesTable(p: {
       columnDefs={p.phone ? RULE_PHONE_COLUMNS : RULE_COLUMNS}
       rowSelection={p.selectable ? SELECTION : undefined}
       context={p.context}
-      noRowsOverlayComponent={GridNoRowsOverlay}
-      noRowsOverlayComponentParams={p.noRowsParams}
+      density={p.density}
+      rows="two-line"
+      loading={p.loading}
+      loadingOverlayComponent={GridLoadingOverlay}
+      loadingOverlayComponentParams={LOADING_PARAMS}
+      emptyState={p.emptyState}
+      pagination
+      paginationPageSize={p.pageSize}
+      // The footer under the card is the page-size control (GridPager); AG's own panel is off.
+      paginationPageSizeSelector={false}
+      suppressPaginationPanel
       initialState={p.initialState}
       columnDialog={p.columnDialog}
       onGridReady={p.onGridReady}
       onRowClicked={p.onRowClicked}
       onCellKeyDown={p.onCellKeyDown}
       onSelectionChanged={p.onSelectionChanged}
+      onPaginationChanged={p.onPaginationChanged}
     />
   )
 }

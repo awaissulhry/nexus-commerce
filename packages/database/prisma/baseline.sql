@@ -10286,6 +10286,25 @@ CREATE TABLE "AdsWasteSkip" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsWasteFollowUp" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "approvalId" TEXT NOT NULL,
+    "items" JSONB NOT NULL,
+    "rowIds" TEXT[],
+    "by" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'WAITING',
+    "changeSetId" TEXT,
+    "results" JSONB,
+    "why" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "endedAt" TIMESTAMP(3),
+
+    CONSTRAINT "AdsWasteFollowUp_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdWriteRefusal" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -16948,6 +16967,15 @@ CREATE INDEX "AdsWasteSkip_until_idx" ON "AdsWasteSkip"("until");
 
 -- CreateIndex
 CREATE INDEX "AdsWasteSkip_workspaceId_idx" ON "AdsWasteSkip"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AdsWasteFollowUp_approvalId_idx" ON "AdsWasteFollowUp"("approvalId");
+
+-- CreateIndex
+CREATE INDEX "AdsWasteFollowUp_status_createdAt_idx" ON "AdsWasteFollowUp"("status", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "AdsWasteFollowUp_workspaceId_idx" ON "AdsWasteFollowUp"("workspaceId");
 
 -- CreateIndex
 CREATE INDEX "AdWriteRefusal_deniedAt_createdAt_idx" ON "AdWriteRefusal"("deniedAt", "createdAt");

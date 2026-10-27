@@ -13,19 +13,43 @@
  * host's own Done line when counting results cannot say it: "Asked · waits for approval") and `lead` (a form above it
  * all, whose table the host recomputes as it is filled in: the Bid page's Change bid). Rules:
  * `reviewChangesPanelModel.ts`.
+ *
+ * On a phone (≤ 760 px, 2026-10-26) the table is a list of cards, one per change: Where, What, Now → New, Note and Result
+ * each on their own line, so nothing scrolls sideways (`reviewCardFields`). Automatic; the words are the table's.
  */
 import { useId, useState, type ReactNode } from 'react'
 
 import { Button, Checkbox, Tag } from '../primitives'
 import { Banner } from '../components/Banner'
 import { MetricStrip, type Metric } from '../components/MetricStrip'
+import { KeyValue } from '../components/KeyValue'
 import { SummaryTable } from '../components/SummaryTable'
 import { Tabs, tabPanelProps } from '../components/Tabs'
 import { ackWords, doneSummary, raiseCount, resultWords, reviewColumns, reviewNote, reviewTitle, type ReviewState } from './reviewChangesModel'
 import {
-  activeGroup, changesIn, groupCounts, resultTone,
+  activeGroup, changesIn, groupCounts, resultTone, reviewCardFields,
   type ReviewGroup, type ReviewPanelChange, type ReviewPanelResult,
 } from './reviewChangesPanelModel'
+
+/** "Now → New", with the arrow said as "to". */
+const NowToNew = ({ now, next }: { now: ReactNode; next: ReactNode }) => (
+  <>{now} <span aria-hidden="true">→</span><span className="nds-vh"> to </span> {next}</>
+)
+
+/** The review's changes on a phone: one card per change, each column on its own line (`reviewCardFields`). */
+function ReviewCards({ label, columns, rows }: { label: string; columns: readonly string[]; rows: ReadonlyArray<{ id: string; cells: readonly ReactNode[] }> }) {
+  return (
+    <ul className="nds-review-cards" aria-label={label}>
+      {rows.map((row) => (
+        <li key={row.id} className="nds-review-card">
+          <KeyValue dense items={reviewCardFields(columns, row.cells).map((f) => f.kind === 'change'
+            ? { label: <NowToNew now="Now" next="New" />, value: <NowToNew now={f.now} next={f.next} /> }
+            : { label: f.label, value: f.value })} />
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 export interface ReviewChangesPanelProps {
   changes: readonly ReviewPanelChange[]
@@ -80,7 +104,11 @@ export function ReviewChangesPanel({
     return { id: c.id, cells: [...(hasWhere ? [c.where ?? ''] : []), c.what, c.now, c.next, ...(hasLast ? [last] : [])] }
   })
   const tableLabel = done ? `What was ${doneVerb}` : label ?? reviewTitle(count)
-  const table = <SummaryTable label={tableLabel} columns={columns} rows={rows} />
+  // Both forms, the stylesheet shows one (≤ 760 px: the cards); the hidden one is out of the accessibility tree too.
+  const table = <>
+    <SummaryTable label={tableLabel} columns={columns} rows={rows} />
+    <ReviewCards label={tableLabel} columns={columns} rows={rows} />
+  </>
 
   return (
     <div className="nds-review">

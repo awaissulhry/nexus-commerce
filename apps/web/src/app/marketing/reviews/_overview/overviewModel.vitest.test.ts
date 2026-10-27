@@ -61,7 +61,9 @@ describe('channel table', () => {
     expect(rows[0]).toMatchObject({ label: 'Amazon Italy', noAmazonData: false, reviews: '46', sent: '372', sentNote: null, rate: '8.9%', last: '24 Oct' })
     expect(rows[1]).toMatchObject({ noAmazonData: true, reviews: '—', rate: '—' })
     expect(rows[2]).toMatchObject({ ratingKind: 'positive', sentNote: 'by email' })
-    expect(rows[0].href).toBe('/marketing/reviews/inbox?channel=AMAZON&market=IT')
+    expect(rows[0].href).toBe('/marketing/reviews/amazon/it')
+    expect(rows[2].href).toBe('/marketing/reviews/ebay/it')
+    expect(channelViewRows([row({ channel: 'SHOPIFY', market: null })], NOW, false)[0].href).toBe('/marketing/reviews/inbox?channel=SHOPIFY')
   })
 
   it('Etsy is a labelled placeholder with sample numbers and a dash for requests (Etsy asks buyers itself)', () => {

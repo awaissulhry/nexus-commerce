@@ -1,9 +1,9 @@
 'use client'
 
-import { useId, type ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { FilterPanel, FilterField } from './FilterPanel'
-import { MultiSelect, Combobox } from '../components'
-import { Toggle } from '../primitives'
+import { MultiSelect, Combobox, Listbox, Modal } from '../components'
+import { Button, Toggle } from '../primitives'
 
 /**
  * FilterBar — the ONE declarative, config-driven filter bar for every grid
@@ -18,6 +18,11 @@ import { Toggle } from '../primitives'
  * selected"); a multiselect may be HELD with its reason (`heldReason`: focusable, says why, does not open); an option
  * drawn with a count still searches by its words (`searchText`, default its label); while collapsed the header says what
  * is filtered (`filterSummary`) and offers Clear; `open` / `onOpenChange` let a page remember the panel for the person.
+ *
+ * 2026-10-26 (the Negative Targeting redesign): `layout="inline"` draws the fields in ONE row with no panel head, Clear at
+ * the row's end (held at 0 active); on a phone (≤ 760 px) one "Filters (n)" button opens the fields in the DS
+ * full-screen sheet with Clear and Done. A `listbox` dimension is a single pick drawn with each option's count; the
+ * `select` and `listbox` controls are named by their field's label.
  */
 
 export interface FilterBarOption {
@@ -62,6 +67,17 @@ export type FilterDimension =
   | {
       key: string
       label: ReactNode
+      /** A single pick from a short list (a DS `Listbox`): each option's `count` drawn muted after its label ("Wasting 9"). */
+      kind: 'listbox'
+      options: FilterBarOption[]
+      value: string
+      onChange: (next: string) => void
+      placeholder?: string
+      wide?: boolean
+    }
+  | {
+      key: string
+      label: ReactNode
       kind: 'range'
       min: string
       max: string
@@ -78,7 +94,16 @@ export type FilterDimension =
       wide?: boolean
     }
 
+/**
+ * `panel` (default): the collapsible panel with its head, a 6-column field grid and a footer Clear. `inline`: no head and
+ * no collapse — the fields in one row (`repeat(auto-fit, minmax(170px, 1fr))`) and Clear at its end; on a phone one
+ * "Filters" button that opens them in a full-screen sheet.
+ */
+export type FilterBarLayout = 'panel' | 'inline'
+
 export interface FilterBarProps {
+  /** `panel` (default, unchanged) or `inline` — see `FilterBarLayout`. */
+  layout?: FilterBarLayout
   /** Panel title (default "Filters"). */
   title?: ReactNode
   /** Declarative filter dimensions, rendered in order across the 6-col grid. */
@@ -111,7 +136,7 @@ export function filterSummary(dimensions: readonly FilterDimension[]): string {
     if (d.kind === 'multiselect' && d.value.length) {
       const first = d.options.find((o) => o.value === d.value[0])
       say(first ? `${first.label}${d.value.length > 1 ? ` +${d.value.length - 1}` : ''}` : `${d.value.length} selected`)
-    } else if (d.kind === 'select' && d.value) {
+    } else if ((d.kind === 'select' || d.kind === 'listbox') && d.value) {
       say(d.options.find((o) => o.value === d.value)?.label ?? d.value)
     } else if (d.kind === 'range' && (d.min || d.max)) {
       say(d.min && d.max ? `${d.min}–${d.max}` : d.min ? `≥ ${d.min}` : `≤ ${d.max}`)
@@ -125,10 +150,13 @@ export function filterSummary(dimensions: readonly FilterDimension[]): string {
 /** How many dimensions filter now (the collapsed header on a phone: "2 on"). PURE. */
 export function filtersOn(dimensions: readonly FilterDimension[]): number {
   return dimensions.filter((d) => (d.kind === 'multiselect' ? d.value.length > 0
-    : d.kind === 'select' ? !!d.value
+    : d.kind === 'select' || d.kind === 'listbox' ? !!d.value
       : d.kind === 'range' ? !!(d.min || d.max)
         : d.value)).length
 }
+
+/** The phone trigger of an inline bar: "Filters", or "Filters (2)" while two fields filter. PURE. */
+export const filtersButtonWords = (on: number): string => (on > 0 ? `Filters (${on})` : 'Filters')
 
 /** A multiselect filter's trigger once something is picked: "1 selected", "3 selected" — never "All". */
 export const pickedWords = (value: readonly string[]): string => `${value.length} selected`
@@ -205,6 +233,22 @@ function DimensionControl<T extends FilterDimension>({ d, labelId }: { d: T; lab
           value={d.value}
           onChange={d.onChange}
           placeholder={d.placeholder ?? 'All'}
+          labelledBy={labelId}
+        />
+      )
+    case 'listbox':
+      return (
+        <Listbox
+          options={d.options.map((o) => ({
+            value: o.value,
+            label: o.label,
+            searchText: o.searchText,
+            trailing: o.count == null ? undefined : String(o.count),
+          }))}
+          value={d.value}
+          onChange={d.onChange}
+          placeholder={d.placeholder ?? 'All'}
+          labelledBy={labelId}
         />
       )
     case 'range':
@@ -228,7 +272,40 @@ function DimensionField({ d }: { d: FilterDimension }) {
   )
 }
 
-export function FilterBar({ title, dimensions, presets, onClear, activeCount, defaultOpen = true, open, onOpenChange }: FilterBarProps) {
+/** The clear button's refusal at 0 active (a held control says why). */
+const NOTHING_TO_CLEAR = 'No filter is on'
+
+/**
+ * `layout="inline"`: the fields in one row and Clear at its end; on a phone one "Filters (n)" button and a sheet. Both are
+ * drawn and the stylesheet shows one (≤ 760 px: the button), so the first paint is right on every screen.
+ */
+function InlineFilterBar({ dimensions, presets, onClear, activeCount }: FilterBarProps) {
+  const [sheet, setSheet] = useState(false)
+  const on = filtersOn(dimensions)
+  const held = activeCount === 0 ? NOTHING_TO_CLEAR : null
+  const clear = () => onClear && <Button className="nds-fbar-clear" onClick={onClear} heldReason={held}>Clear</Button>
+  return (
+    <div className="nds-fbar-inline">
+      {presets != null && <div className="nds-fpanel-presets">{presets}</div>}
+      <div className="nds-fbar-row">
+        <div className="nds-fbar-fields">{dimensions.map((d) => <DimensionField key={d.key} d={d} />)}</div>
+        {clear()}
+      </div>
+      <div className="nds-fbar-phone">
+        <Button onClick={() => setSheet(true)} aria-haspopup="dialog" aria-expanded={sheet}>{filtersButtonWords(on)}</Button>
+      </div>
+      <Modal open={sheet} onClose={() => setSheet(false)} title="Filters" size="detail"
+        footer={<>{clear()}<span className="grow" /><Button variant="primary" onClick={() => setSheet(false)}>Done</Button></>}>
+        {presets != null && <div className="nds-fpanel-presets">{presets}</div>}
+        <div className="nds-fbar-sheet-fields">{dimensions.map((d) => <DimensionField key={d.key} d={d} />)}</div>
+      </Modal>
+    </div>
+  )
+}
+
+export function FilterBar(props: FilterBarProps) {
+  if (props.layout === 'inline') return <InlineFilterBar {...props} />
+  const { title, dimensions, presets, onClear, activeCount, defaultOpen = true, open, onOpenChange } = props
   return (
     <FilterPanel
       title={title}

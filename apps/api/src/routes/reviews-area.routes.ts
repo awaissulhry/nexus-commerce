@@ -7,10 +7,15 @@
  *         each section `{ ok: true, data } | { ok: false, error }` (one failed read shows only in its card)
  *   GET /api/reviews/area/needs-you?only=reply|requests|alerts&limit=8
  *       → { items, total, counts }
+ *   GET /api/reviews/area/channel?channel=AMAZON|EBAY&market=IT&period=7d|30d|90d|12m   (PR F, build spec §3.5)
+ *       → { channel, market, label, period, generatedAt, markets, sections } — Amazon: { tiles, trend, spread, topics,
+ *         requests, watch }; eBay: { readState, tiles, summary, feedback }; each section `{ ok, data } | { ok: false, error }`
+ *   GET /api/reviews/area/channel-markets → { AMAZON: { code, label }[], EBAY: { code, label }[] } (the sub-sidebar's rows)
  */
 import type { FastifyPluginAsync } from 'fastify'
 import { reviewsOverview } from '../services/reviews/review-overview.service.js'
 import { reviewNeedsYou } from '../services/reviews/review-needs-you.service.js'
+import { ChannelInputError, reviewChannelMarkets, reviewsChannel } from '../services/reviews/review-channel.service.js'
 import { logger } from '../utils/logger.js'
 
 const reviewsAreaRoutes: FastifyPluginAsync = async (fastify) => {
@@ -35,6 +40,30 @@ const reviewsAreaRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err) {
       logger.warn('[reviews-area] needs-you failed', { error: err instanceof Error ? err.message : String(err) })
       return reply.code(500).send({ error: 'What needs you could not be read. Try again in a moment.' })
+    }
+  })
+
+  fastify.get('/reviews/area/channel', async (request, reply) => {
+    const q = (request.query ?? {}) as { channel?: string; market?: string; period?: string }
+    try {
+      const page = await reviewsChannel({ channel: q.channel, market: q.market, period: q.period })
+      reply.header('Cache-Control', 'private, no-store')
+      return page
+    } catch (err) {
+      if (err instanceof ChannelInputError) return reply.code(400).send({ error: err.message })
+      logger.warn('[reviews-area] channel failed', { error: err instanceof Error ? err.message : String(err) })
+      return reply.code(500).send({ error: 'This channel page could not be read. Try again in a moment.' })
+    }
+  })
+
+  fastify.get('/reviews/area/channel-markets', async (_request, reply) => {
+    try {
+      const markets = await reviewChannelMarkets()
+      reply.header('Cache-Control', 'private, no-store')
+      return markets
+    } catch (err) {
+      logger.warn('[reviews-area] channel markets failed', { error: err instanceof Error ? err.message : String(err) })
+      return reply.code(500).send({ error: 'The channel markets could not be read. Try again in a moment.' })
     }
   })
 }

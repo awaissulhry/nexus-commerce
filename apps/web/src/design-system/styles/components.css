@@ -1843,6 +1843,17 @@ body.nds-drawer-resizing * {
   height: 2px;
   border-radius: 2px;
 }
+/* A bar series' swatch is a filled square (PerformanceGraph `shape: 'bar'` / `stack`, 2026-10-26); a line's stays a
+   line. Four or more parts wrap on a phone. */
+.nds-chart-legend {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.nds-chart-legend .bx {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
 /* An axis's name above it (`axisLabel`): left over the left axis, right over the right one, each with its line's colour. */
 .nds-chart-axes {
   display: flex;
@@ -3625,6 +3636,40 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-entitylinks-list > li { display: flex; min-width: 0; min-height: 24px; align-items: center; }
 /* A capped list (`total`, polish round 2): what the count holds beyond the links, muted, last. */
 .nds-entitylinks-list > li.nds-entitylinks-more { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+
+/* ── Negative Targeting redesign additions (2026-10-26) ─────────────────────────────────────────────────────────────── */
+/* SummaryTable: per-column `align` (overrides the last-column-right rule), `roomy` rows for rows with buttons, a muted
+   second line in a cell, and `stackOnPhone`: below 760px each row a block, each cell on its own line after its column's
+   label (the label is drawn, not read: the header row stays for a screen reader). */
+.nds-summary-table th[data-align='left'], .nds-summary-table td[data-align='left'] { text-align: left; }
+.nds-summary-table th[data-align='right'], .nds-summary-table td[data-align='right'] { text-align: right; }
+.nds-summary-table.roomy td { height: 44px; padding-top: var(--nds-space-4); padding-bottom: var(--nds-space-4); }
+.nds-summary-sub { display: block; font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-2); }
+@media (max-width: 760px) {
+  .nds-summary-table.stack-phone, .nds-summary-table.stack-phone tbody, .nds-summary-table.stack-phone tr { display: block; width: 100%; }
+  .nds-summary-table.stack-phone thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .nds-summary-table.stack-phone tr { padding: var(--nds-space-8) 0; border-bottom: 1px solid var(--nds-border-subtle); }
+  .nds-summary-table.stack-phone td {
+    display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--nds-space-8); align-items: baseline;
+    height: auto; padding: var(--nds-space-2) 0; border-bottom: 0; text-align: left;
+  }
+  .nds-summary-table.stack-phone td::before { content: attr(data-label); content: attr(data-label) / ''; color: var(--nds-text-2); font-weight: 500; }
+}
+/* Timeline: a step's control (Undo) at the end of its head line. */
+.nds-timeline-action { display: inline-flex; align-self: center; margin-left: auto; }
+/* Sparkline `fluid`: the drawing fills the container's width; the dots are round caps on zero-length strokes, so a
+   stretched viewBox never draws them as ellipses. */
+.nds-spark.is-fluid { display: flex; width: 100%; }
+.nds-spark.is-fluid svg { width: 100%; }
+.nds-spark-cap { fill: none; stroke: currentColor; stroke-width: 3.6px; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+/* RecordLayout: a record's main column and its 260–300px side panel; one column on a phone, the side panel after. */
+.nds-record-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 300px); gap: var(--nds-space-20); align-items: start; min-width: 0; }
+.nds-record-layout-main, .nds-record-layout-aside { min-width: 0; }
+@media (max-width: 760px) {
+  .nds-record-layout { grid-template-columns: minmax(0, 1fr); }
+  /* KeyValue `phoneColumns={2}`: short pairs stay side by side on a phone (after the 640px collapse above). */
+  .nds-kv[data-phone-columns='2'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 /* ── Reviews parts (2026-10-26) ──────────────────────────────────── */
 /* StarRating (components/StarRating.tsx). An empty star's outline is --nds-border-strong (1.7:1), so it never carries the

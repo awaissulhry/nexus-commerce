@@ -70,6 +70,11 @@ export interface WasteRow {
   skipped: null | { until: string; by: string | null; at: string | null }
   stillServesIn: number
   lastChange: null | { action: string; at: string; by: Ref; changeId: string | null }
+  /** Step 4 — a PROTECTED row: every protected term that keeps it safe (the page names the first) and what holds its verb
+   *  once they are removed (`then`, null: it can stop). */
+  protection?: RowProtection
+  /** Step 4 — Remove protection and stop, still finishing on the server (WAITING), or not stopped and why (REFUSED). */
+  followUp?: { status: 'WAITING' | 'REFUSED'; why: string | null; at: string }
   /** A clash the Owner should see (the Clashes tile lists exactly these rows), with why in plain words. */
   clash?: null | { kind: 'TURNED_ON' | 'NEG_OVER_OWN_KEYWORD' | 'BLOCKS_SOLD'; label: string; negative?: ClashNegative | null }
   /**
@@ -78,6 +83,21 @@ export interface WasteRow {
    */
   askOnly?: true
 }
+
+/** Step 4 — one protected term (the Control Room's protected terms) that keeps a row safe. */
+export interface ProtectionTerm {
+  id: string
+  term: string
+  match: 'EXACT' | 'PREFIX' | 'CONTAINS'
+  /** null: every market. */
+  market: string | null
+  /** null: every campaign. */
+  campaign: Ref | null
+  reason: string | null
+}
+export interface RowProtection { terms: ProtectionTerm[]; then: { label: string; reason: string } | null }
+/** What else a protected term keeps safe over its scope (counts, no money). */
+export interface AlsoKeeps { count: number; terms: Array<{ text: string; kind: RowKind; places: number; wasting: boolean }> }
 
 /** The negative that blocks our own keyword (a clash): the fix is to remove it. */
 export interface ClashNegative {
@@ -107,6 +127,8 @@ export interface WasteTotals {
   negated: number
   clashes: number
   skipped: number
+  /** Step 4 — wasting rows a protected term keeps safe (show=protected). Absent from an older server. */
+  protected?: number
 }
 
 export interface WasteCriteria { sentence: string; source: 'rule' | 'strategy' | 'default'; windowDays: number; settledThrough: string; ordersThrough: string }
@@ -150,6 +172,8 @@ export interface StoppedRow {
   stillServesIn: number
   places: number
   actions: { turnOn: ActionGate; removeNegative: ActionGate; release: ActionGate }
+  /** Step 4 — "Did it work?"; null when the stop day is not known or the days before it are older than Nexus keeps. */
+  effect?: StopEffect | null
 }
 
 export interface StoppedTotals { all: number; kept: number; paused: number; negated: number; turnedOn: number; stillBought: number; notAtAmazon: number; inactive: number }
@@ -192,10 +216,14 @@ export interface RowDetail { row: WasteRow | StoppedRow; runsIn: Place[]; blocke
 
 // ── writes ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** KEEP_UNTIL: a kept-paused keyword's end date (null = Always); its Undo puts the old end back. */
-export type WasteAction = 'PAUSE' | 'NEGATE_EXACT' | 'NEGATE_PHRASE' | 'NEGATE_ASIN' | 'TURN_ON' | 'REMOVE_NEGATIVE' | 'RELEASE' | 'KEEP_UNTIL'
-/** `adGroupId`: a negative in a named ad group of the same product ("Still bought elsewhere"). */
-export interface WasteItem { rowId: string; action: WasteAction; where?: Where; keepUntil?: string | null; adGroupId?: string; targetRowId?: string }
+/** KEEP_UNTIL: a kept-paused keyword's end date (null = Always); its Undo puts the old end back. UNPROTECT (step 4): one
+ *  protected term that keeps the row safe is removed (`protectionId`), before the row's own verb. */
+export type WasteAction = 'PAUSE' | 'NEGATE_EXACT' | 'NEGATE_PHRASE' | 'NEGATE_ASIN' | 'TURN_ON' | 'REMOVE_NEGATIVE' | 'RELEASE' | 'KEEP_UNTIL' | 'UNPROTECT'
+/**
+ * `adGroupId`: a negative in a named ad group of the same product ("Still bought elsewhere"). Words view: `rowId` a word
+ * (`word:<market>|<word>`), NEGATE_PHRASE, one step per place; `scope` the filter-bar lists its row was read with.
+ */
+export interface WasteItem { rowId: string; action: WasteAction; where?: Where; keepUntil?: string | null; adGroupId?: string; targetRowId?: string; protectionId?: string; scope?: Readonly<Record<string, string | undefined>> }
 
 export interface PreviewStep {
   rowId: string
@@ -215,9 +243,31 @@ export interface PreviewStep {
   level?: 'AD_GROUP' | 'CAMPAIGN' | null
   /** Archived at Amazon: it cannot come back (a removal). */
   final?: boolean
+  /** Step 4 — a NEGATE_* step: what it would block; null where its place cannot be read; absent on other steps. */
+  reach?: Reach | null
+  /** Step 4 — UNPROTECT: the protected term it removes, and what else it keeps safe. */
+  protection?: ProtectionTerm & { alsoKeeps?: AlsoKeeps }
+  /** Step 4 — it waits for its row's UNPROTECT (a negative of a protected term): sent once the removal ran. */
+  after?: 'UNPROTECT'
 }
 
-export interface PreviewAnswer { steps: PreviewStep[]; blocked: number; planHash: string }
+/** `reach`: the steps that are sent, together (each term once); null when none adds a negative. */
+export interface PreviewAnswer { steps: PreviewStep[]; blocked: number; planHash: string; reach?: ReachTotal | null }
+
+/** Step 4 — the negatives that wait for a protected term's removal: the server sends them once it ran, as the approver. */
+export interface FollowUpView {
+  approvalId: string
+  status: 'WAITING' | 'SENDING' | 'SENT' | 'REFUSED' | 'CANCELLED'
+  changeSetId: string | null
+  rowIds: string[]
+  /** Per row: asked and approved (`sent`), where it lands then (Amazon, or Nexus only), or why not. */
+  results: Array<{ rowId: string; sent: boolean; why: string | null; lands?: 'amazon' | 'nexus' | null }>
+  why: string | null
+  createdAt: string
+  endedAt: string | null
+  /** The negatives' change set now: in its undo window (scheduled), or ran (executed). */
+  changeSet?: { status: string; executeAfter: string | null } | null
+}
 
 export interface ApplyAnswer {
   changeSetId?: string | null
@@ -231,6 +281,8 @@ export interface ApplyAnswer {
   error?: string
   code?: string
   planHash?: string
+  /** Step 4 — the removal's follow-up: the negatives Nexus sends once the protection is removed. */
+  followUp?: FollowUpView
 }
 
 export interface DecideResult { approvalId: string; decide: 'approve' | 'reject'; ok: boolean; status?: string; executeAfter?: string; code?: string; error?: string }
@@ -252,3 +304,42 @@ export interface WaitingStep {
   hidden: string | null
 }
 export interface WaitingSteps { approvalId: string; status: string; plan: boolean; title: string | null; steps: WaitingStep[]; offPage: number }
+
+// ── step 4: what a negative blocks, what a stop saved ─────────────────────────────────────────────────
+
+/** What one negative would block over the page's window (apps/api … waste/reach.ts). Money is absent without ad spend. */
+export interface Reach {
+  windowDays: number
+  currency: string
+  terms: number
+  spendCents?: number
+  clicks: number
+  orders: number
+  salesCents?: number
+  /** Terms with an order in the window that it would block, the most orders first (at most 10). */
+  sold: Array<{ text: string; orders: number }>
+}
+
+/** Several negatives together: each term once; money per currency when there are several (`currency` null). */
+export interface ReachTotal {
+  windowDays: number | null
+  currency: string | null
+  terms: number
+  spendCents?: number | null
+  clicks: number
+  orders: number
+  salesCents?: number | null
+  currencies: Array<{ currency: string; spendCents?: number; salesCents?: number }>
+}
+
+export type EffectVerdict = 'TOO_EARLY' | 'SAVED' | 'STILL_SPENDS'
+/** "Did it work?" (apps/api … waste/effect.ts): no money before 14 days; `words` never hold money. */
+export interface StopEffect {
+  since: string
+  days: number
+  verdict: EffectVerdict
+  beforePerDayCents?: number | null
+  afterCents?: number | null
+  savedCents?: number | null
+  words: string
+}

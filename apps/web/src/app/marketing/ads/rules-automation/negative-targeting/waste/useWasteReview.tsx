@@ -9,26 +9,41 @@
  *            keep paused until — POST /waste/preview (writes nothing) → Save → POST /waste/apply: ONE change set,
  *            approved by the person who clicks (a step the API says `needsCode` for asks the authenticator code in the DS
  *            StepUpModal; none does since 2026-10-12). Undo: inside the 20 s window the approve is taken back and the request rejected; after it,
- *            the set is undone (undo-change), or one history row (POST /advertising/changes/:id/undo).
+ *            the set is undone (undo-change), or one history row (POST /advertising/changes/:id/undo). A removed negative
+ *            is final: "Stop it (20 s)" in its window; once it ends the line, the rows and the count say so ("Archived at
+ *            Amazon", never "1 sending" any more — recordModel.ts ranResult). The review is the DS detail size
+ *            (`WASTE_REVIEW_SIZE`): a full-screen sheet on a phone, each change a stacked card.
  *   skip     Skip 7 d / 30 d, Unskip — Nexus only; Undo is the other one.
  *   decide   Approve / Reject what waits for you — through the Approvals page's path. Undo of an approve: back to
  *            waiting inside its window; a reject does not come back (said, never a silent button).
  *   undo     one row of a History tab.
+ *   reach    step 4 — every negative says what it would block ("Blocks 14 terms · €32.00 · 0 orders", the
+ *            server's `reach`), the sent ones together once, "Shows the last 60 days" once, and a red warning naming the
+ *            terms that sold it would block (`lead`: a host passes it to the review, above the table).
+ *   protect  step 4 — Keep protected: the Skip for 30 d of a protected row, in its own words. Remove
+ *            protection and stop: the protected terms' removals (UNPROTECT, Nexus only) in order before the row's verb, with
+ *            what else each keeps safe above the table; a pause goes with them as one change set, a negative waits for
+ *            them (`after`): Nexus sends it once they ran, as the approver (the server's follow-up) — the page only
+ *            watches (protectionModel.ts watchFollowUp). Undo cancels or undoes the negatives, then puts the term back.
  */
-import { useCallback, useState, type ReactNode } from 'react'
-import { EntityPath, type EntityLinkComponent } from '@/design-system/components'
+import { Fragment, useCallback, useRef, useState, type ReactNode } from 'react'
+import { Banner, EntityPath, useToast, type EntityLinkComponent } from '@/design-system/components'
 import type { ReviewChange, ReviewResult, ReviewState } from '@/design-system/patterns'
 import Link from '@/lib/workspaces/Link'
 import { dayWords, relWords } from '../../bid/_shared/format'
 import {
-  applyWaste, decideWaiting, previewWaste, readWaitingSteps, restoreCard, skipRows, takeBackApproval, undoActionLog, undoChangeSet, unskipRows,
+  applyWaste, cancelFollowUp, commitApproval, decideWaiting, previewWaste, readWaitingSteps, restoreCard, runFollowUp, skipRows, takeBackApproval, undoActionLog, undoChangeSet, unskipRows,
 } from './wasteApi'
+import { AlsoKeepsLead, ProtectionScope } from './protection'
+import { followUpLine, followUpWaitWords, followUpWords, KEEP_PROTECTED_REASON, protectionMatchWord, stepOrderNote, watchFollowUp } from './protectionModel'
 import {
-  ackWords, appliedWords, decideLines, decideSummary, deliveryView, doneLine, historyWord, isAsinText, isFinal, keepWord, landsWord, olderKeep, plural, previewSummary, saveWords,
-  shownSteps, stepStateWord, undoWords, unknownAction, verbLabel, type BulkPlan, type DecideLine, type Waiting,
+  ackWords, appliedWords, decideLines, decideSummary, deliveryView, doneLine, historyWord, isAsinText, isFinal, keepWord, landsWord, olderKeep, plural, previewSummary,
+  reachLine, reachTotalLine, reachWindowWords, saveWords, showsTogether, shownSteps, soldItems, soldNotes, stepStateWord, undoWords, unknownAction, verbLabel,
+  type BulkPlan, type DecideLine, type SoldItem, type Waiting,
 } from './wasteModel'
-import type { ApplyAnswer, HistoryItem, PreviewAnswer, PreviewStep, Ref, WaitingSteps, WasteItem } from './wasteTypes'
-import styles from '../negatives.module.css'
+import { ranResult } from './recordModel'
+import type { ApplyAnswer, FollowUpView, HistoryItem, PreviewAnswer, PreviewStep, ReachTotal, Ref, WaitingSteps, WasteItem } from './wasteTypes'
+import styles from './record.module.css'
 
 const WorkspaceLink = Link as unknown as EntityLinkComponent
 /** A rule's Ask-me card (`suggestion:<id>`): rejecting it dismisses it, and Undo restores it. */
@@ -41,7 +56,8 @@ export interface AskRow { id: string; text: string; place?: Array<Ref | null> }
 export type WasteAsk =
   /** `keepFrom`: each kept-paused row's end before a Keep paused (null = Always): the review's "Now" and its Undo. */
   | { kind: 'change'; items: WasteItem[]; left?: BulkPlan['left']; keepFrom?: Record<string, string | null>; texts?: Record<string, string> }
-  | { kind: 'skip'; rows: AskRow[]; days: 7 | 30 }
+  /** `keep: 'protected'` (step 4): Keep protected — the same skip, its words say the protection stays. */
+  | { kind: 'skip'; rows: AskRow[]; days: 7 | 30; keep?: 'protected' }
   | { kind: 'unskip'; rows: AskRow[] }
   | { kind: 'decide'; decide: 'approve' | 'reject'; waits: Waiting[] }
   | { kind: 'undo'; item: HistoryItem }
@@ -66,7 +82,15 @@ export interface WasteReview {
   sendItems: WasteItem[] | null
   /** NFIX — a decide review's lines (every step of a request decided whole), for its results and its Undo. */
   lines?: DecideLine[]
+  /** Step 4 — above the table: what else a removed protected term keeps safe; the terms that sold it would block (red), the sent negatives together, the window. */
+  lead?: ReactNode
 }
+
+/**
+ * The review's size (2026-10-26): the DS detail size, so on a phone the review is the full-screen sheet with each change
+ * as a stacked card (the DS draws them below 760 px); the hosts pass it to `ReviewChangesModal`.
+ */
+export const WASTE_REVIEW_SIZE = 'detail' as const
 
 /** The authenticator code asked on top of the review, when the API says a step needs it (`needsCode`). */
 export interface StepUpAsk { busy: boolean; error: string | null; approvalId: string | null }
@@ -103,18 +127,68 @@ function decideWords(a: Extract<WasteAsk, { kind: 'decide' }>): string {
       : 'Nothing is sent. A rejected request does not come back.'
 }
 
+/** Step 4 — a negative's What: its verb and words, and on a second line what it would block (red when it is sent and a
+ *  term sold: a left-out step blocks nothing). */
+function stepWhat(s: PreviewStep, label: string): ReactNode {
+  if (!s.reach) return label
+  return (
+    <span className={styles.stepWhat}>
+      <span>{label}</span>
+      <span className={s.reach.sold.length && !s.refusal ? styles.reachSold : styles.reachLine}>{reachLine(s.reach)}</span>
+    </span>
+  )
+}
+
+/** Step 4 — the review's lead: what a removed protection also keeps safe first (it goes first), then what the negatives block. */
+function leadOf(...parts: ReactNode[]): ReactNode {
+  const shown = parts.filter((p) => p != null && p !== false)
+  return shown.length > 1 ? <>{shown.map((p, i) => <Fragment key={i}>{p}</Fragment>)}</> : shown[0]
+}
+
+/** The terms that sold in a note: its words, orders and place each. */
+function SoldList({ items }: { items: readonly SoldItem[] }) {
+  const shown = items.slice(0, 8)
+  return (
+    <ul className="nds-review-list">
+      {shown.map((i) => <li key={i.key}>“{i.text}” · {plural(i.orders, 'order')} · {i.where}</li>)}
+      {items.length > shown.length && <li>and {items.length - shown.length} more</li>}
+    </ul>
+  )
+}
+
+/**
+ * Step 4 — above the table: red only when a sent negative blocks a term that sold; a calm note when such a negative is
+ * left out (nothing that sold is blocked); the sent negatives together (two or more); the window once.
+ */
+function reachLead(steps: readonly PreviewStep[], total: ReachTotal | null | undefined): ReactNode {
+  const read = steps.filter((s) => s.reach)
+  if (!read.length) return undefined
+  const notes = soldNotes(soldItems(steps))
+  return (
+    <div className={styles.reach}>
+      {notes.danger && <Banner tone="danger" title={notes.danger.title}><SoldList items={notes.danger.items} /></Banner>}
+      {notes.calm && <Banner tone="info" title={notes.calm.title}><SoldList items={notes.calm.items} /></Banner>}
+      <p className="nds-review-line">{total && showsTogether(steps) ? `${reachTotalLine(total)} · ` : ''}{reachWindowWords(total ? total.windowDays : read[0].reach!.windowDays)}</p>
+    </div>
+  )
+}
+
 function previewChanges(steps: readonly PreviewStep[], a: Extract<WasteAsk, { kind: 'change' }>): ReviewChange[] {
   return [
     ...steps.map((s, i) => {
       const item = a.items[i]
       const keep = s.action === 'KEEP_UNTIL'
+      // Step 4 — a protected term's removal: where it binds (its market, its campaign), its words and match. (A stop after
+      // it reads "Protected" now: the server's `from`.)
+      const unprotect = s.action === 'UNPROTECT'
       return {
         id: `${i}:${s.rowId}`,
-        where: where(s, item),
-        what: `${verbLabel(s.action, campaignWide(s, item) ? 'campaign' : null)} · ${stepText(s, a.texts)}`,
+        where: unprotect && s.protection ? <ProtectionScope term={s.protection} /> : where(s, item),
+        what: stepWhat(s, unprotect ? `${verbLabel(s.action)} · "${s.protection?.term ?? s.text ?? ''}"${s.protection ? ` (${protectionMatchWord(s.protection.match).toLowerCase()})` : ''}`
+          : `${verbLabel(s.action, campaignWide(s, item) ? 'campaign' : null)} · ${stepText(s, a.texts)}`),
         now: keep ? keepWord(s.from) : stepStateWord(s.from),
         next: s.refusal ? '—' : keep ? keepWord(s.to) : stepStateWord(s.to),
-        note: landsWord(s),
+        note: stepOrderNote(steps, i, landsWord(s)),
         raise: !s.refusal && (s.raise || isFinal(s)),
       }
     }),
@@ -122,8 +196,25 @@ function previewChanges(steps: readonly PreviewStep[], a: Extract<WasteAsk, { ki
   ]
 }
 
+/** Step 4 — undo one change set: inside its window take the approve back and reject it, after it, its undo. */
+async function undoSet(id: string): Promise<{ ok: boolean; words: string }> {
+  const back = await takeBackApproval(id)
+  if (back.ok) {
+    const [r] = await decideWaiting([{ approvalId: id, decide: 'reject' }])
+    return { ok: !!r?.ok, words: r?.ok ? 'Undone: not sent' : r?.error ?? 'Not undone' }
+  }
+  const u = await undoChangeSet(id)
+  return { ok: u.ok, words: u.ok ? 'Undone' : u.error ?? 'Not undone' }
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => { window.setTimeout(resolve, ms) })
+
 export function useWasteReview({ market, after }: { market: string | null; after: () => Promise<void> | void }) {
+  const { toast } = useToast()
   const [review, setReview] = useState<WasteReview | null>(null)
+  // Step 4 — the review on screen now, for a follow-up that ends after its Done (still open: its lines; else a toast).
+  const shownReview = useRef<WasteReview | null>(null)
+  shownReview.current = review
   const [stepUp, setStepUp] = useState<StepUpAsk | null>(null)
   const close = useCallback(() => { setReview(null); setStepUp(null) }, [])
   const patch = (a: WasteAsk, next: Partial<WasteReview>) => setReview((v) => (v && v.ask === a ? { ...v, ...next } : v))
@@ -144,12 +235,14 @@ export function useWasteReview({ market, after }: { market: string | null; after
       }
       const steps = shownSteps(p, a, legacy)
       const sendable = steps.filter((s) => !s.refusal).length
+      const unprotect = steps.some((s) => s.action === 'UNPROTECT')
       patch(a, {
         preview: { ...p, steps },
         sendItems,
         changes: previewChanges(steps, a),
         title: `Review ${plural(sendable, 'change')}`,
-        summary: previewSummary(steps, market),
+        summary: unprotect ? `${previewSummary(steps, market, a.left?.length)} · in order: the protection first` : previewSummary(steps, market, a.left?.length),
+        lead: leadOf(unprotect ? <AlsoKeepsLead steps={steps} /> : undefined, reachLead(steps, p.reach)),
         problems: sendable ? [] : ['Nothing to send: every row is left out (each says why).'],
         saveLabel: saveWords(steps),
         ackLabel: ackWords(steps),
@@ -194,6 +287,20 @@ export function useWasteReview({ market, after }: { market: string | null; after
     if (a.kind === 'change') {
       setReview({ ...base, title: `Review ${plural(a.items.length, 'change')}`, changes: [], state: { phase: 'reading' }, summary: 'Reading what each change does…', saveLabel: 'Send', doneVerb: 'sent' })
       void runPreview(a, false)
+      return
+    }
+    if (a.kind === 'skip' && a.keep === 'protected') {
+      // Step 4 — Keep protected: the protection stays, the row is out of view until the day.
+      const until = dayWords(new Date(Date.now() + a.days * 86_400_000).toISOString())
+      setReview({
+        ...base,
+        title: `Review ${plural(a.rows.length, 'change')}`,
+        changes: a.rows.map((r) => ({ id: r.id, where: r.place ? pathNode(r.place) : '—', what: r.text, now: 'Protected', next: `Kept protected to ${until}` })),
+        state: { phase: 'ready' },
+        summary: `Nexus only: the protection stays. ${a.rows.length === 1 ? 'It comes' : 'They come'} back on ${until} with fresh numbers.`,
+        saveLabel: `Keep ${a.rows.length} protected`,
+        doneVerb: 'kept',
+      })
       return
     }
     if (a.kind === 'skip' || a.kind === 'unskip') {
@@ -256,6 +363,59 @@ export function useWasteReview({ market, after }: { market: string | null; after
     let noUndo: string | null = null
     const final = sent.some((s) => s.action === 'REMOVE_NEGATIVE')
     const amazon = sent.some((s) => s.lands === 'amazon' || s.lands === 'approval')
+    // Step 4 — negatives that wait for their protection's removal: the removal is this change set; Nexus sends them once
+    // it ran, as this person (the server's follow-up). The page only watches; leaving it changes nothing. Undo cancels
+    // the follow-up (or undoes the negatives it sent), then puts the protection back.
+    const waits = steps.filter((s) => !s.refusal && s.after)
+    if (waits.length && id && answer.followUp && answer.status === 'queued') {
+      const keyOf = (s: PreviewStep) => `${steps.indexOf(s)}:${s.rowId}`
+      const removals = sent.filter((s) => !s.after)
+      const waiting = followUpWaitWords(waits)
+      for (const s of waits) results[keyOf(s)] = { ok: true, words: waiting.row(s), verb: 'saved' }
+      const watch = { stopped: false }
+      const stopUndo = async (): Promise<Record<string, ReviewResult>> => {
+        watch.stopped = true
+        const follow = await cancelFollowUp(id)
+        const negatives = follow?.changeSetId ? await undoSet(follow.changeSetId) : { ok: true, words: 'Not sent' }
+        const removal = await undoSet(id)
+        return Object.fromEntries([
+          ...waits.map((s) => [keyOf(s), { ...negatives, verb: 'undone' }] as const),
+          ...removals.map((s) => [keyOf(s), { ...removal, words: removal.ok && removal.words === 'Undone' ? 'Protected again' : removal.words, verb: 'undone' }] as const),
+        ])
+      }
+      patch(a, {
+        state: { phase: 'done', results },
+        summary: waiting.line,
+        undo: stopUndo,
+        undoLabel: undoWords(sent.map((s) => s.action)),
+        noUndo: null,
+      })
+      await after()
+      // The page's own words (never "Sent" for a Nexus-only change; "Sending" in the negatives' 20 s window; "Sent" once
+      // it ran): shown when the negatives are asked, and again once their change set ran.
+      const show = (view: FollowUpView | null, ended: boolean) => {
+        const line = followUpLine(view)
+        const open = shownReview.current?.ask === a && shownReview.current.state.phase === 'done'
+        if (!open) { if (ended) toast(line, view?.status === 'SENT' ? 'success' : 'warning'); return }
+        setReview((cur) => {
+          if (!cur || cur.ask !== a || cur.state.phase !== 'done' || watch.stopped) return cur
+          const next = { ...cur.state.results }
+          if (view) {
+            for (const s of waits) next[keyOf(s)] = followUpWords(view, s.rowId)
+            for (const s of removals) next[keyOf(s)] = { ok: true, words: 'Protection removed', verb: 'saved' }
+          }
+          return { ...cur, summary: line, state: { phase: 'done', results: next } }
+        })
+      }
+      void watchFollowUp({ removalId: id, executeAfter: answer.executeAfter, stopped: () => watch.stopped }, {
+        commit: commitApproval, run: runFollowUp, sleep, now: () => Date.now(), sent: (view) => { show(view, false); void after() },
+      }).then((outcome) => {
+        if (outcome.kind === 'stopped') return
+        show(outcome.kind === 'done' ? outcome.view : null, true)
+        void after()
+      })
+      return
+    }
     if (final) {
       // Final once it runs (audit M2); in its 20 s window it can still be stopped (audit N2): "Stop it (20 s)" takes the
       // approve back and rejects it, then the button goes and the line says it is final.
@@ -268,9 +428,13 @@ export function useWasteReview({ market, after }: { market: string | null; after
           return Object.fromEntries(sent.map((s) => [`${steps.indexOf(s)}:${s.rowId}`, { ok, words: ok ? 'Stopped: not sent' : back.error ?? r?.error ?? 'Too late to stop', verb: 'stopped' }]))
         }
         const ms = answer.executeAfter ? Math.max(0, Date.parse(answer.executeAfter) - Date.now()) : 20_000
-        window.setTimeout(() => setReview((cur) => (cur && cur.ask === a && cur.state.phase === 'done' && cur.undo && !cur.undoing
-          ? { ...cur, undo: null, undoLabel: null, summary: amazon ? 'Removed at Amazon — final' : 'Removed in Nexus — final' }
-          : cur)), ms)
+        // Once the window ended it is final: the line, the rows' results and the count say so (no more "1 sending").
+        window.setTimeout(() => setReview((cur) => {
+          if (!cur || cur.ask !== a || cur.state.phase !== 'done' || !cur.undo || cur.undoing) return cur
+          const ran = { ...cur.state.results }
+          for (const s of sent) { const key = `${steps.indexOf(s)}:${s.rowId}`; const r = ranResult(s, ran[key]); if (r) ran[key] = r }
+          return { ...cur, undo: null, undoLabel: null, summary: amazon ? 'Removed at Amazon — final' : 'Removed in Nexus — final', state: { phase: 'done', results: ran } }
+        }), ms)
       }
     } else if (id && (answer.status === 'queued' || answer.status === 'waiting')) {
       undo = async () => {
@@ -343,8 +507,9 @@ export function useWasteReview({ market, after }: { market: string | null; after
     let noUndo: string | null = null
     let undoLabel: string | null = null
     if (a.kind === 'skip') {
-      const out = await skipRows(a.rows.map((r) => r.id), { days: a.days })
-      for (const r of a.rows) results[r.id] = { ok: out.ok, words: out.ok ? 'Skipped' : out.error ?? 'Not skipped', verb: 'skipped' }
+      const kept = a.keep === 'protected'
+      const out = await skipRows(a.rows.map((r) => r.id), { days: a.days, ...(kept ? { reason: KEEP_PROTECTED_REASON } : {}) })
+      for (const r of a.rows) results[r.id] = { ok: out.ok, words: out.ok ? (kept ? 'Kept protected' : 'Skipped') : out.error ?? (kept ? 'Not kept' : 'Not skipped'), verb: kept ? 'kept' : 'skipped' }
       if (out.ok) {
         undoLabel = `Undo: show ${a.rows.length} again`
         undo = async () => {
@@ -426,5 +591,5 @@ export function useWasteReview({ market, after }: { market: string | null; after
     setReview((v) => (v && v.state.phase === 'saving' ? { ...v, state: { phase: 'ready' } } : v))
   }, [])
 
-  return { review, stepUp, ask, save, submitCode, cancelCode, undoSaved, retry, close }
+  return { review, stepUp, ask, save, submitCode, cancelCode, undoSaved, retry, close, size: WASTE_REVIEW_SIZE }
 }

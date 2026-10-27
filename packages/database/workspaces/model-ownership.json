@@ -524,6 +524,7 @@
     "PlatformHealthCheck",
     "AmazonSalesRank",
     "AdsWasteSkip",
+    "AdsWasteFollowUp",
     "GoogleAccountLink",
     "GoogleAdsCustomer",
     "GoogleAdsCampaign",

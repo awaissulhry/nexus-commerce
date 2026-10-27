@@ -16,6 +16,8 @@ export interface TimelineStep {
   at?: string | null
   /** A muted line under the label: a reference, a count, the channel's sentence. */
   detail?: ReactNode
+  /** A control at the end of the step's head line (2026-10-26): an Undo button. Name it for its step ("Undo Added"). */
+  action?: ReactNode
 }
 
 export interface TimelineProps {
@@ -42,7 +44,7 @@ export function Timeline({ steps, label, now, className }: TimelineProps) {
   return (
     <ol className={`nds-timeline${className ? ` ${className}` : ''}`} aria-label={label}>
       {steps.map(step => (
-        <li key={step.key} className={`nds-timeline-step tone-${step.tone}${step.at === null ? ' is-pending' : ''}`}>
+        <li key={step.key} className={`nds-timeline-step tone-${step.tone}${step.at === null ? ' is-pending' : ''}${step.action != null ? ' has-action' : ''}`}>
           <span className="nds-timeline-dot" aria-hidden="true" />
           <span className="nds-timeline-body">
             <span className="nds-timeline-head">
@@ -53,6 +55,7 @@ export function Timeline({ steps, label, now, className }: TimelineProps) {
               {step.at === null
                 ? <span className="nds-as-of">not yet</span>
                 : step.at !== undefined && <AsOf at={step.at} kind="event" now={now} />}
+              {step.action != null && <span className="nds-timeline-action">{step.action}</span>}
             </span>
             {step.detail != null && <span className="nds-timeline-detail">{step.detail}</span>}
           </span>

@@ -17,6 +17,7 @@ import { Button } from '@/design-system/primitives'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { buildReviewsNavigation } from './reviews-navigation'
+import { useReviewsChannelMarkets } from './useReviewsChannelMarkets'
 import { useReviewsCounts } from './useReviewsCounts'
 import styles from './reviews-shell.module.css'
 
@@ -33,6 +34,7 @@ export function ReviewsShell({ children }: { children: ReactNode }) {
   const router = useRouter()
   const { status, has } = useAuth()
   const counts = useReviewsCounts()
+  const markets = useReviewsChannelMarkets()
   const navigationId = `reviews-navigation-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
@@ -63,7 +65,7 @@ export function ReviewsShell({ children }: { children: ReactNode }) {
           navigationLabel="Reviews navigation"
           title="Reviews"
           subtitle="All channels"
-          groups={buildReviewsNavigation(pathname, status === 'authed' ? has : undefined, counts)}
+          groups={buildReviewsNavigation(pathname, status === 'authed' ? has : undefined, counts, markets)}
           onNavigate={navigate}
           navigationOpen={open}
           onNavigationOpenChange={setOpen}

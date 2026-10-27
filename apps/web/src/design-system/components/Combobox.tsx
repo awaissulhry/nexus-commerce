@@ -17,10 +17,12 @@ export interface ComboboxProps {
   onChange: (value: string) => void
   placeholder?: string
   className?: string
+  /** id of the visible label that names the field (a filter field's label, 2026-10-26). The input is otherwise unnamed. */
+  labelledBy?: string
 }
 
 /** Single-select typeahead (H10 `.h10-combo`): filter-as-you-type + pick. */
-export function Combobox({ options, value, onChange, placeholder = 'Search…', className }: ComboboxProps) {
+export function Combobox({ options, value, onChange, placeholder = 'Search…', className, labelledBy }: ComboboxProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
@@ -34,6 +36,7 @@ export function Combobox({ options, value, onChange, placeholder = 'Search…', 
     <div className={`nds-combo${className ? ` ${className}` : ''}`} ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
       <input
         className="nds-combo-in"
+        aria-labelledby={labelledBy}
         value={open ? query : selected?.label ?? ''}
         placeholder={placeholder}
         onFocus={() => setOpen(true)}
