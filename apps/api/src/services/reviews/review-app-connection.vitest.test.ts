@@ -156,7 +156,7 @@ describe('the state in words', () => {
       [['storeId', false], ['apiKey', true]],
     ])
     expect(views.map((v) => v.replies)).toEqual([true, true, false, false])
-    expect(views[2].planWords).toMatch(/Premium plan.*export the reviews as a CSV file in Yotpo and import the file here/)
+    expect(views[2].planWords).toBe('Yotpo’s API comes with its Premium plan. On another plan, export the reviews as a CSV file in Yotpo and import the file here (Inbox › Import reviews).')
     expect(views[3].planWords).toMatch(/Convert and Unlimited plans/)
     expect(views[2].replyHref).toBe('https://reviews.yotpo.com/#/moderation/reviews')
     expect(views[0].replyHref).toBeNull()

@@ -127,7 +127,7 @@ const SPECS: Record<ReviewApp, AppSpec> = {
     secretKey: 'apiToken',
     secretWords: 'the API token',
     notConnected: 'Paste the store’s domain and a private API token from Judge.me to let Nexus read the reviews and post replies.',
-    planWords: 'Judge.me gives every plan a private API token.',
+    planWords: 'Without a token, export the reviews from Judge.me as a CSV file and import the file here (Inbox › Import reviews).',
     storeWords: (id) => id,
   },
   OKENDO: {
@@ -139,7 +139,7 @@ const SPECS: Record<ReviewApp, AppSpec> = {
     secretKey: 'apiKey',
     secretWords: 'the API key',
     notConnected: 'Paste the User ID and the API key from Okendo’s integration settings to let Nexus read the reviews and post replies.',
-    planWords: `Okendo shares reviews by API with its API access: on the Growth plan and up, or as an add-on on Essentials. ${CSV('Okendo')}`,
+    planWords: `Okendo’s API comes with its Growth plan and up, or as an add-on on Essentials. ${CSV('Okendo')}`,
     storeWords: (id) => `User ID ${shortId(id)}`,
   },
   YOTPO: {
@@ -151,7 +151,7 @@ const SPECS: Record<ReviewApp, AppSpec> = {
     secretKey: 'apiSecret',
     secretWords: 'the API secret',
     notConnected: 'Paste the store ID and the API secret from Yotpo to let Nexus read the reviews. Yotpo gives apps no way to reply: replies are posted in Yotpo.',
-    planWords: `Yotpo shares reviews by API on its Premium plan. ${CSV('Yotpo')}`,
+    planWords: `Yotpo’s API comes with its Premium plan. ${CSV('Yotpo')}`,
     storeWords: (id) => `Store ID ${shortId(id)}`,
   },
   LOOX: {
@@ -163,7 +163,7 @@ const SPECS: Record<ReviewApp, AppSpec> = {
     secretKey: 'apiKey',
     secretWords: 'the API key',
     notConnected: 'Paste the public store ID and an API key from Loox to let Nexus read the reviews. Loox gives apps no way to reply: replies are posted in Loox.',
-    planWords: `Loox shares reviews by API on its Convert and Unlimited plans. ${CSV('Loox')}`,
+    planWords: `Loox’s API comes with its Convert and Unlimited plans. ${CSV('Loox')}`,
     storeWords: (id) => `Store ID ${shortId(id)}`,
   },
 }
