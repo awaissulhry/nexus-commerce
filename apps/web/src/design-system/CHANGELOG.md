@@ -1,3 +1,9 @@
+## A grid cell that clips its value — 2026-10-27
+
+`grid/theme/grid.css` (both apps, identical). **`nds-ag-cell-clip`** (a column's `cellClass`): the cell's value shrinks to
+the cell (`min-width: 0`, `overflow: hidden`), so no-wrap lines (an EntityPath) draw their ellipsis instead of spilling
+over the next column at a narrow or saved width. Opt-in; every other cell is unchanged.
+
 ## Heatmap label width and pressable cells — 2026-10-26
 
 Reviews Insights (PR E, lane L11). Both apps, identical: `components/{Heatmap.tsx,heatmapModel.ts}`; the same block appended

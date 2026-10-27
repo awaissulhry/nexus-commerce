@@ -165,6 +165,16 @@
   min-width: 0;
 }
 
+/* `nds-ag-cell-clip` (a column's cellClass, 2026-10-27): the cell's value may never be wider than the cell. A value is a
+   flex item whose least width is its content's, so a renderer of no-wrap lines (an EntityPath: "campaign › ad group")
+   kept its whole length at a narrow (or saved) column width and spilled over the next column. With it the value shrinks
+   to the cell and the lines draw their own ellipsis. Opt-in: a cell that pops a bubble out (PN.1 below) must not clip. */
+.nds-ag-wrap .ag-cell.nds-ag-cell-clip .ag-cell-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
 /* PN.1 — DS tooltips inside cells.
  *
  * The DS `Tooltip` is CSS-only: an absolutely positioned bubble that pops above its trigger on

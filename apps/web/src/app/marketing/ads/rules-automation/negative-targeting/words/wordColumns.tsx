@@ -180,7 +180,7 @@ export function wordColumns(phone: boolean, handlers: WordCellContext): ColDef<W
     { ...integerColumn<WordGridRow>('d.orders'), colId: 'orders', headerName: L.orders, width: 84, ...DESC_FIRST, ...serverSort, headerTooltip: 'Orders up to today: a late order can only save a word' },
     { colId: 'places', headerName: L.places, valueGetter: (p) => p.data?.places.adGroups ?? null, cellRenderer: PlacesCell, width: 130, cellClass: 'nds-ag-cell', ...DESC_FIRST, ...serverSort, ...keys, headerTooltip: 'Ad groups where its terms spent. Enter: show where' },
     { colId: 'products', headerName: L.products, valueGetter: (p) => (p.data ? productsWords(p.data) : ''), cellRenderer: ProductsCell, ...(phone ? { width: 140 } : { flex: 1, minWidth: 140 }), cellClass: 'nds-ag-cell', ...serverSort, ...keys },
-    { colId: 'state', headerName: L.state, valueGetter: (p) => (p.data ? wordStateWord(p.data.state) : ''), cellRenderer: StateCell, width: 150, cellClass: 'nds-ag-cell', ...serverSort },
+    { colId: 'state', headerName: L.state, valueGetter: (p) => (p.data ? wordStateWord(p.data.state) : ''), cellRenderer: StateCell, width: 150, minWidth: 130, cellClass: 'nds-ag-cell', ...serverSort },
     { ...integerColumn<WordGridRow>('d.impressions'), colId: 'impressions', headerName: L.impressions, width: 116, sortable: false },
     { colId: 'acos', headerName: L.acos, valueGetter: (p) => p.data?.d.acosPct ?? null, valueFormatter: (p) => acosText(p.value as number | null), width: 92, cellClass: num, ...numeric, sortable: false },
     { colId: 'cpc', headerName: L.cpc, valueGetter: (p) => p.data?.d.cpcCents ?? null, valueFormatter: moneyOf, width: 88, cellClass: num, ...numeric, sortable: false },

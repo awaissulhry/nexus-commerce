@@ -78,6 +78,9 @@ const KIND_ORDER: readonly KindFilter[] = ['all', 'keyword', 'term']
 const showOptions = (chips: ReadonlyArray<{ id: string; label: string; count?: number | null }>, fallback: string): FilterBarOption[] =>
   chips.map((c) => ({ value: c.id === fallback ? '' : c.id, label: c.label, ...(typeof c.count === 'number' ? { count: c.count } : {}) }))
 
+/** Six tiles on one row down to a ~1,000 px window (the content is then ~930 px wide); a phone keeps two per row (DS). */
+const TILE_MIN = 140
+
 export function NegativesClient() {
   return <ToastProvider><NegativesPage /></ToastProvider>
 }
@@ -229,7 +232,7 @@ function NegativesPage() {
       )}
       {!building && <RulesTabs active="negative-targeting" />}
       <div className={styles.page}>
-        {!building && <MetricStrip className={styles.tiles} metrics={metrics} />}
+        {!building && <MetricStrip className={styles.tiles} metrics={metrics} minTileWidth={TILE_MIN} />}
         {!building && (
           <div className={styles.filters}>
             <AdsScopeFilter filter={filter} layout="inline" extraDimensions={ownFields.dims} extraActive={ownFields.active} clearExtra={clearOwn} />
