@@ -13742,6 +13742,10 @@ model ReviewRule {
   // STO.6 — shift the send forward (within the Amazon window) to the best-ranked
   // weekday in ReviewSendWindow.dayRank, then pin that day's hour. Off by default.
   shiftToBestDay Boolean  @default(false)
+  // Reviews N3 (2026-10-27) — this rule's own subject and text per language for OUR review e-mail (Shopify buyers):
+  // { "it"?: { subject, body }, "en"?: { subject, body } }. Null, or a language left out = the standard text, unchanged.
+  // Checked by @nexus/shared/review-request-text on every save; Amazon and eBay buyers never get it.
+  emailText      Json?
 
   @@unique([workspaceId, name, scope, marketplace], name: "name_scope_marketplace", map: "ReviewRule_name_scope_marketplace_key")
   @@index([scope, isActive])
