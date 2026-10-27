@@ -5982,6 +5982,7 @@ CREATE TABLE "Review" (
     "language" TEXT,
     "bodyEnglish" TEXT,
     "importBatchId" TEXT,
+    "kind" TEXT,
     "channelTopics" JSONB,
     "feedbackState" TEXT,
     "revisionEligible" BOOLEAN,
@@ -14916,6 +14917,9 @@ CREATE INDEX "Review_orderId_idx" ON "Review"("orderId");
 
 -- CreateIndex
 CREATE INDEX "Review_importBatchId_idx" ON "Review"("importBatchId");
+
+-- CreateIndex
+CREATE INDEX "Review_kind_channel_idx" ON "Review"("kind", "channel");
 
 -- CreateIndex
 CREATE INDEX "Review_workspaceId_idx" ON "Review"("workspaceId");

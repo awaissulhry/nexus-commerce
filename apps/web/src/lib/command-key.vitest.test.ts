@@ -272,6 +272,8 @@ describe('the API’s command receipts', () => {
       // the ticked alerts, through reviewsSend with `idempotent`.
       '/api/reviews/action-items/:id/propose',
       '/api/reviews/action-items/bulk',
+      // Reviews › Amazon seller feedback (Phase 3) — "Fetch now".
+      '/api/reviews/amazon/seller-feedback/fetch',
       '/api/reviews/import/apply',
       '/api/reviews/inbox/bulk',
       '/api/reviews/spikes/bulk',

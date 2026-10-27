@@ -70,13 +70,15 @@ type ReplyRow = {
   body: string
   authorName: string | null
   postedAt: Date
+  /** `Review.kind`; null on older rows (review-visibility.ts). */
+  kind?: string | null
   product: { name: string | null; sku: string | null } | null
   sentiment: { label: string } | null
 }
 
 /** One review that waits for a reply, in words. */
 export function replyItem(r: ReplyRow, now: Date): NeedsYouItem {
-  const seller = reviewKindOf(r.channel) === 'seller'
+  const seller = reviewKindOf(r.channel, r.kind) === 'seller'
   const negative = (r.rating != null && r.rating <= 2) || r.sentiment?.label === 'NEGATIVE'
   const wait = waitWords(r.postedAt, now)
   const what = seller
@@ -174,7 +176,7 @@ export function requestItems(
 }
 
 const REPLY_SELECT = {
-  id: true, channel: true, marketplace: true, rating: true, body: true, authorName: true, postedAt: true,
+  id: true, channel: true, marketplace: true, rating: true, body: true, authorName: true, postedAt: true, kind: true,
   product: { select: { name: true, sku: true } },
   sentiment: { select: { label: true } },
 } satisfies Prisma.ReviewSelect

@@ -5,8 +5,10 @@
  *
  * - Visible: every row except fixture/seed rows (`ingestSource = 'FIXTURE'`). Existing fixture rows stay in place;
  *   they are only kept out of every screen and count. A null `ingestSource` (rows older than RX.1) is visible.
- * - Kind: until the `Review.kind` column lands (Phase 3), an eBay row is seller feedback and every other row is a
- *   product review. Phase 3 switches `reviewKindOf` / `reviewKindWhere` to the column here, and nowhere else.
+ * - Kind: the `Review.kind` column ('SELLER' | 'PRODUCT', Phase 3 PR H) says what a row is about — Amazon's seller
+ *   feedback is an Amazon row about the seller. A row with no kind (stored before the column) reads by the old channel
+ *   rule: an eBay row is seller feedback and every other row is a product review. No row is rewritten; a later contract
+ *   step may backfill the column. `reviewKindOf` and `reviewKindWhere` are the only places that decide it.
  * - Needs a reply: a visible row whose triage status is open (none yet, New or In progress).
  */
 import type { Prisma } from '@prisma/client'
@@ -26,14 +28,31 @@ export function visibleReviewWhere(extra?: Prisma.ReviewWhereInput): Prisma.Revi
   return extra ? { AND: [visible, extra] } : visible
 }
 
-/** The kind of one row. `ingestSource` is unused until Phase 3 adds seller feedback from other channels. */
-export function reviewKindOf(channel: string | null | undefined, _ingestSource?: string | null): ReviewKind {
+/** The values `Review.kind` holds. */
+export const REVIEW_KIND_VALUE: Record<ReviewKind, 'SELLER' | 'PRODUCT'> = { seller: 'SELLER', product: 'PRODUCT' }
+
+/** The kind of one row: its `kind` column when set, else the old channel rule (eBay = seller feedback). */
+export function reviewKindOf(channel: string | null | undefined, kind?: string | null): ReviewKind {
+  const k = (kind ?? '').toUpperCase()
+  if (k === 'SELLER') return 'seller'
+  if (k === 'PRODUCT') return 'product'
   return (channel ?? '').toUpperCase() === 'EBAY' ? 'seller' : 'product'
 }
 
-/** The rows of one kind (the same rule as `reviewKindOf`). */
+/** The rows of one kind (the same rule as `reviewKindOf`): the column, or the channel rule where the column is empty. */
 export function reviewKindWhere(kind: ReviewKind): Prisma.ReviewWhereInput {
-  return kind === 'seller' ? { channel: 'EBAY' } : { channel: { not: 'EBAY' } }
+  return kind === 'seller'
+    ? { OR: [{ kind: 'SELLER' }, { AND: [{ kind: null }, { channel: 'EBAY' }] }] }
+    : { OR: [{ kind: 'PRODUCT' }, { AND: [{ kind: null }, { channel: { not: 'EBAY' } }] }] }
+}
+
+/**
+ * Whether a row's stars may count in an average, a spread or a trend. Amazon's seller feedback report holds ONLY
+ * feedback of 1 to 3 stars (Amazon gives no 4–5 star feedback by API), so averaging it would drag every number down:
+ * those rows are counted and listed, never averaged.
+ */
+export function countsInRating(row: { channel: string | null | undefined; kind?: string | null }): boolean {
+  return !((row.channel ?? '').toUpperCase() === 'AMAZON' && reviewKindOf(row.channel, row.kind) === 'seller')
 }
 
 /** Visible rows that still need a reply: no triage status yet, New, or In progress. */

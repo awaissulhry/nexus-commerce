@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Copy, ExternalLink, Languages } from 'lucide-react'
 import {
-  AsOf, Banner, Card, Field, KeyValue, Listbox, StarRating, Thumbnail, Timeline, useToast, type KeyValueItem,
+  AsOf, Banner, Card, Disclosure, Field, KeyValue, Listbox, StarRating, Thumbnail, Timeline, useToast, type KeyValueItem,
 } from '@/design-system/components'
 import { DetailModal, Lightbox, ReplyComposer, type ReplyAction } from '@/design-system/patterns'
 import { Button, Pill, SegmentedControl, Spinner, Tag, TagInput, Textarea, TokenChip } from '@/design-system/primitives'
@@ -33,7 +33,7 @@ import { ownerChoices } from './inboxBulk'
 import {
   MANAGE_MOOD, MANAGE_TRIAGE, MOOD_OPTIONS, MOOD_TONE, STATUS_OPTIONS, buyerFacts, composerView, dateWords, detailSubtitle, detailTabs,
   detailTitle, draftResponseId, historySteps, initialReplyText, lightboxHead, nextHeld, nextId, orderFacts, photosView, recentSteps,
-  replyDoneWords, replyTargetWords, returnOpen, returnWords, revisionLine, sameThemeLink, textView, themeChoices, topicChips,
+  removalView, replyDoneWords, replyTargetWords, returnOpen, returnWords, revisionLine, sameThemeLink, textView, themeChoices, topicChips,
   type DetailTab, type InboxDetail,
 } from './reviewDetailModel'
 import s from './inbox.module.css'
@@ -241,6 +241,7 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
   const photos = detail ? photosView(detail) : null
   const topics = detail ? topicChips(detail) : []
   const revision = detail ? revisionLine(detail) : null
+  const removal = detail ? removalView(detail) : null
 
   const header = detail ? (
     <>
@@ -428,6 +429,15 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
                       : 'AI set these from the text. Change them and Insights counts your choice from now on.'}
                   </p>
                 </Card>
+
+                {removal && (
+                  <Card header="Removal check" headerAction={<Pill tone={removal.tone} dot>{removal.label}</Pill>}>
+                    <p className={s.removalWords}>{removal.words}</p>
+                    <Disclosure summary="How the removal check decides">
+                      <ul className={s.ruleList}>{removal.rules.map((rule) => <li key={rule}>{rule}</li>)}</ul>
+                    </Disclosure>
+                  </Card>
+                )}
 
                 <ReplyComposer
                   title={detail.reply.mode === 'send' ? 'Reply on eBay' : 'Reply'}

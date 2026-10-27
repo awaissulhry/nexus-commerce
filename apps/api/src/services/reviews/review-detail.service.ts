@@ -12,6 +12,7 @@ import { repliedOnChannel } from './review-reply-send.service.js'
 import { reviewKindOf, visibleReviewWhere, type ReviewKind } from './review-visibility.js'
 import { REVIEW_CATEGORIES, SENTIMENT_LABELS, translateReviewText } from './sentiment-extraction.service.js'
 import { EBAY_TOPIC_WORDS } from './adapters/ebay-topics.js'
+import { feedbackRemovalCheck, fulfilmentOf, REMOVAL_RULES, type RemovalCheck } from './review-feedback-removal.js'
 
 export const THEME_WORDS: Record<string, string> = {
   FIT_SIZING: 'Fit & sizing', DURABILITY: 'Durability', SHIPPING: 'Shipping', VALUE: 'Value', DESIGN: 'Design',
@@ -100,6 +101,11 @@ export interface InboxDetail {
   aiTopics: { topic: string; label: string; sentiment: string | null; texts: string[] }[] | null
   /** PR G — eBay's revision state of this feedback, in words; null when there is nothing to say. */
   revision: { state: string | null; words: string; tone: string; since: string | null; eligible: boolean } | null
+  /**
+   * Amazon seller feedback only (PR H): whether asking Amazon to remove it may work, in words, and the rules it checks.
+   * Nexus never asks Amazon (no API): the person opens Feedback Manager. Null for every other review.
+   */
+  removal: (RemovalCheck & { rules: readonly string[] }) | null
 }
 
 /** eBay's AI topics as the pop-up shows them (pure; null = not read, unknown JSON skipped). */
@@ -145,7 +151,7 @@ export async function getInboxReview(id: string, now: Date = new Date()): Promis
           where: { id: r.orderId },
           select: {
             id: true, channelOrderId: true, channel: true, marketplace: true, purchaseDate: true, createdAt: true,
-            deliveredAt: true, totalPrice: true, currencyCode: true, status: true,
+            deliveredAt: true, totalPrice: true, currencyCode: true, status: true, fulfillmentMethod: true,
           },
         })
       : Promise.resolve(null),
@@ -166,7 +172,7 @@ export async function getInboxReview(id: string, now: Date = new Date()): Promis
       })
     : null
 
-  const kind = reviewKindOf(r.channel, r.ingestSource)
+  const kind = reviewKindOf(r.channel, r.kind)
   const imported = isImportedSource(r.ingestSource)
   const sent = r.responses.some((x) => x.status === 'SENT')
   const place = placeWords(r.channel, r.marketplace)
@@ -187,6 +193,11 @@ export async function getInboxReview(id: string, now: Date = new Date()): Promis
   if (ret) timeline.push({ at: ret.createdAt, words: ret.reason ? `Return requested — ${ret.reason}` : 'Return requested' })
   timeline.push({ at: r.postedAt, words: kind === 'seller' ? `Feedback left on ${place}` : `Review posted on ${place}` })
   timeline.push({ at: r.ingestedAt, words: imported ? 'Imported from a file' : `Received from ${place}` })
+  // Amazon seller feedback: the seller's public reply as Amazon's report shows it ("Your Response"), when there is one.
+  const amazonReply = r.channel.toUpperCase() === 'AMAZON' && repliedOnChannel('AMAZON', r.rawPayload)
+    ? String((r.rawPayload as Record<string, unknown>).yourResponse).replace(/\s+/g, ' ').trim()
+    : null
+  if (amazonReply) timeline.push({ at: r.ingestedAt, words: `Your reply on ${place}, as Amazon’s report shows it: “${amazonReply.length > 200 ? `${amazonReply.slice(0, 199)}…` : amazonReply}”` })
   if (r.sentiment && r.sentiment.model !== 'person') {
     const themes = r.sentiment.categories.map((c) => THEME_WORDS[c] ?? c).join(', ')
     timeline.push({ at: r.sentiment.extractedAt, words: `AI read it: mood ${MOOD_WORDS[r.sentiment.label] ?? r.sentiment.label}${themes ? ` · ${themes}` : ''}` })
@@ -259,6 +270,15 @@ export async function getInboxReview(id: string, now: Date = new Date()): Promis
       const said = r.channel === 'EBAY' ? revisionWords(r.feedbackState, r.revisionEligible === true && (r.rating ?? 5) <= 3) : null
       return said ? { state: r.feedbackState, words: said.words, tone: said.tone, since: r.feedbackStateAt?.toISOString() ?? null, eligible: r.revisionEligible === true } : null
     })(),
+    removal: r.channel.toUpperCase() === 'AMAZON' && kind === 'seller'
+      ? {
+          ...feedbackRemovalCheck({
+            text: r.body, english: r.bodyEnglish, themes: r.sentiment?.categories ?? null, postedAt: r.postedAt,
+            fulfilment: fulfilmentOf(order?.fulfillmentMethod), now,
+          }),
+          rules: REMOVAL_RULES,
+        }
+      : null,
   }
 }
 

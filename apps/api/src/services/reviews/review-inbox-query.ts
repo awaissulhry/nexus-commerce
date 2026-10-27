@@ -207,6 +207,8 @@ export interface InboxBulkRow {
   marketplace: string | null
   postedAt: Date
   ingestSource: string | null
+  /** `Review.kind` ('SELLER' | 'PRODUCT'), null on older rows (review-visibility.ts). */
+  kind?: string | null
   assignee: string | null
   triageStatus: string | null
   triageTags: string[]
@@ -256,7 +258,7 @@ function bulkSkipReason(request: InboxBulkRequest, row: InboxBulkRow, now: Date)
     }
     case 'draft': {
       const rules = reviewReplyRules(row.channel, {
-        kind: reviewKindOf(row.channel, row.ingestSource),
+        kind: reviewKindOf(row.channel, row.kind),
         marketplace: row.marketplace,
         postedAt: row.postedAt,
         imported: isImportedSource(row.ingestSource),

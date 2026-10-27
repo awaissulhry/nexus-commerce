@@ -66,6 +66,8 @@ interface RawReview {
   feedbackState?: AdapterRawReview['feedbackState']
   revisionEligible?: AdapterRawReview['revisionEligible']
   sameAs?: AdapterRawReview['sameAs']
+  /** What the row is about ('SELLER' = feedback about the seller); left out = decided by the channel (review-visibility.ts). */
+  kind?: 'SELLER' | 'PRODUCT'
 }
 
 export interface IngestSummary {
@@ -209,6 +211,7 @@ async function findOrCreateReview(
       ...(raw.channelTopics !== undefined ? { channelTopics: raw.channelTopics as unknown as Prisma.InputJsonValue } : {}),
       ...(raw.feedbackState !== undefined ? { feedbackState: raw.feedbackState, feedbackStateAt: raw.feedbackState ? now : null } : {}),
       ...(raw.revisionEligible !== undefined ? { revisionEligible: raw.revisionEligible } : {}),
+      kind: raw.kind ?? null,
     },
     select: { id: true },
   })
