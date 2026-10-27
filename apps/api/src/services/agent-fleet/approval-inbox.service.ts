@@ -1249,6 +1249,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'reply-to-review': ['review', 'reply', 'mode'],
   // Reviews eBay REST (PR G) — the sale (its state, buyer, order, sale date), the feedback text and eBay's live/dry-run mode.
   'leave-buyer-feedback': ['line', 'text', 'mode'],
+  // Reviews PR J — a timing test as approved (never its status or counts, which move while it waits); a winner and the rule.
+  'start-review-timing-test': ['test'],
+  'apply-review-timing-winner': ['test', 'winner', 'rule', 'from', 'to'],
   // 07 O14 — the series and, per document, whether a new number is taken.
   'issue-fiscal-document': ['series', 'invoices', 'creditNotes'],
   // 07 O17 — the pickup (carrier, day, warehouse) and Sendcloud's live/dry-run mode; the channel and its accounts.

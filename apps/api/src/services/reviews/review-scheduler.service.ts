@@ -23,6 +23,13 @@ import { scopePublicToken } from '../../lib/workspace-public-links.js'
  * last 90 days) then decide whether that order is asked at all: a skipped order gets a SUPPRESSED request with the
  * reason `rule_exclusion:<key>` (shown in words in the queue; "Allow again" can put it back) instead of falling through
  * to another rule or the default timing, which asked it anyway. An order no active rule covers keeps the default timing.
+ *
+ * Reviews PR J — timing tests and A/B splits. While a test RUNS (a person approved its start), each new order it covers
+ * (a TIMING test: its market and product type; an A/B split: the orders its rule A decides) goes to a group by its order
+ * number (a stable hash, review-timing-test-math.ts assignArm). A first-try group is asked on its own day after
+ * delivery; side B of a split gets B's timing and sentiment check; the holdout group gets NO request: its row is SKIPPED
+ * with the reason "Holdout of a timing test — not asked on purpose". "Skip when" still decides first: an order the rule
+ * skips is not in the test.
  */
 
 import { randomBytes } from 'node:crypto'
@@ -30,6 +37,8 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { resolveSendTiming, type TimingDefaultRow, type SendWindowRow } from './review-timing.service.js'
 import { EBAY_ASKS_CODE, EBAY_ASKS_WORDS, RULE_EXCLUSION_PREFIX } from './review-queue-words.js'
+import { HOLDOUT_CODE, HOLDOUT_REASON, assignArm } from './review-timing-test-math.js'
+import { runningTimingTests, testForOrder, type RunningTest } from './review-timing-test.service.js'
 
 // Active-return statuses suppress review requests — mirrored from
 // orders-reviews.routes.ts. Refunds suppress too (financialTransactions).
@@ -61,6 +70,87 @@ export interface ScheduleResult {
   errors: number
   /** B10 — orders the deciding rule skips ("Skip when"); counted in `skipped` too. */
   excluded?: number
+  /** PR J — orders a running timing test or A/B split put in a group (the holdout included). */
+  inTests?: number
+  /** PR J — of those, the holdout: not asked on purpose (counted in `skipped` too). */
+  heldOut?: number
+}
+
+// ── PR J — the group of an order in a running test ─────────────────────────────────────────────────────────────────
+
+/** The rule an order's group asks with: side B's rule, or the deciding rule with the group's first-try day. */
+export function ruleForGroup(
+  arm: RunningTest['arms'][number],
+  decidingRule: any | null,
+  rulesById: ReadonlyMap<string, any>,
+): any | null {
+  if (arm.ruleId) return rulesById.get(arm.ruleId) ?? decidingRule
+  if (arm.delayDays == null) return decidingRule
+  const days = arm.delayDays
+  if (!decidingRule) {
+    // No rule decides the order: the default timing, with the group's day (and no window but that day).
+    return { sendDelayDays: days, anchor: 'DELIVERY', sendHourLocal: null, skipWeekends: false, shiftToBestDay: false, minDaysSinceDelivery: days, maxDaysSinceDelivery: days }
+  }
+  return {
+    ...decidingRule,
+    sendDelayDays: days,
+    minDaysSinceDelivery: Math.min(decidingRule.minDaysSinceDelivery ?? days, days),
+    maxDaysSinceDelivery: Math.max(decidingRule.maxDaysSinceDelivery ?? days, days),
+  }
+}
+
+/** The group a test puts an order in (by its order number), with the rule the order is asked with. */
+export function groupForOrder(
+  tests: readonly RunningTest[],
+  order: { id: string; channel: string; channelOrderId: string | null; marketplace: string | null; productType: string | null },
+  decidingRule: any | null,
+  rulesById: ReadonlyMap<string, any>,
+): { test: RunningTest; arm: RunningTest['arms'][number]; rule: any | null } | null {
+  const test = testForOrder(tests, order, decidingRule?.id ?? null)
+  if (!test) return null
+  const arm = assignArm(test, order.channelOrderId || order.id)
+  if (!arm) return null
+  // The holdout is not asked: the day it would have been asked (for its reviews' window) is the group in place now.
+  const asked = arm.holdout ? [...test.arms].filter((a) => !a.holdout).sort((a, b) => a.position - b.position)[0] ?? null : arm
+  return { test, arm, rule: asked ? ruleForGroup(asked, decidingRule, rulesById) : decidingRule }
+}
+
+/**
+ * The running tests and every rule their groups ask with (side B's rules are off, so not among the active ones), read
+ * once per run by the scheduler, a rule's "Queue these" and the Orders page's / Claude's "Request review". A test that
+ * cannot be read puts no order in a group (the run goes on).
+ */
+export async function runningTestsWithRules(activeRules: readonly any[]): Promise<{ tests: RunningTest[]; rulesById: Map<string, any> }> {
+  const tests = await runningTimingTests().catch((err) => {
+    logger.warn('[review-scheduler] could not read the running timing tests — no order is put in a test this run', { error: err instanceof Error ? err.message : String(err) })
+    return [] as RunningTest[]
+  })
+  const groupRuleIds = [...new Set(tests.flatMap((t) => t.arms.map((a) => a.ruleId)).filter((v): v is string => !!v))]
+  const groupRules = groupRuleIds.length ? await prisma.reviewRule.findMany({ where: { id: { in: groupRuleIds } } }) : []
+  return { tests, rulesById: new Map<string, any>([...activeRules, ...groupRules].map((r: any) => [r.id, r])) }
+}
+
+/**
+ * The request a holdout order gets: not asked on purpose (SKIPPED, no "How was it?" e-mail), in its group, with the day
+ * the group in place would have asked (the window its reviews are looked for in). The scheduler and "Queue these" write it.
+ */
+export function holdoutRequestData(
+  order: { id: string; channel: string; marketplace: string | null },
+  armId: string,
+  scheduledFor: Date | null,
+  ruleId: string | null,
+) {
+  return {
+    orderId: order.id,
+    channel: order.channel as any,
+    marketplace: order.marketplace,
+    status: 'SKIPPED' as const,
+    scheduledFor,
+    suppressedReason: HOLDOUT_REASON,
+    providerResponseCode: HOLDOUT_CODE,
+    ruleId,
+    timingTestArmId: armId,
+  }
 }
 
 // ── B10 — "asked this buyer in the last 90 days" ──────────────────────────────────────────────────────────
@@ -249,18 +339,20 @@ export function ebayNotAskedData(order: { id: string; channel: string; marketpla
  * that rule asks "How was it?" first and the order has a buyer e-mail — the paired check the sender sends before the
  * request (RV.6.4). Also used by the Orders page's "Request review" and Claude's `request-review`
  * (review-request.service.ts) and a rule's "Queue these" (`queueOrdersForRule`), so every way in asks the same way.
+ * PR J — `timingTestArmId`: the group of a running timing test or A/B split the order is asked in (counted there).
  */
 export async function createScheduledRequest(
   order: { id: string; channel: string; marketplace: string | null; customerEmail: string | null },
-  rule: { id: string; useSentimentDiversion?: boolean | null } | null,
+  rule: { id?: string | null; useSentimentDiversion?: boolean | null } | null,
   scheduledFor: Date,
+  timingTestArmId: string | null = null,
 ): Promise<{ id: string; diversion: boolean }> {
   // An eBay order is never asked by e-mail (ebayNotAskedData): recorded as not asked, whoever asks.
   if (order.channel === 'EBAY') {
     const skipped = await prisma.reviewRequest.create({ data: ebayNotAskedData(order, rule?.id ?? null) })
     return { id: skipped.id, diversion: false }
   }
-  const diversion = rule?.useSentimentDiversion === true && !!order.customerEmail
+  const diversion = rule?.useSentimentDiversion === true && !!rule.id && !!order.customerEmail
   const created = await prisma.reviewRequest.create({
     data: {
       orderId: order.id,
@@ -269,6 +361,7 @@ export async function createScheduledRequest(
       status: 'SCHEDULED',
       scheduledFor,
       ruleId: rule?.id ?? null,
+      ...(timingTestArmId ? { timingTestArmId } : {}),
     },
   })
   if (diversion) {
@@ -276,7 +369,7 @@ export async function createScheduledRequest(
       data: {
         token: newSentimentToken(),
         orderId: order.id,
-        ruleId: rule!.id,
+        ruleId: rule!.id as string,
         reviewRequestId: created.id,
         expiresAt: new Date(scheduledFor.getTime() + 30 * 24 * 60 * 60 * 1000),
       },
@@ -323,6 +416,8 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
   const timingDefaults: TimingDefaultRow[] = await prisma.reviewTimingDefault.findMany({ where: { isActive: true } })
   // STO.3 — load the per-weekday send-time windows once for the batch.
   const sendWindows: SendWindowRow[] = await prisma.reviewSendWindow.findMany({ where: { isActive: true } })
+  // PR J — the running timing tests and A/B splits, and side B's rules (off: they never decide an order by themselves).
+  const { tests, rulesById } = await runningTestsWithRules(activeRules)
 
   // Find delivered orders in the last 30 days with no ReviewRequest yet.
   // RV.2.5 — key off deliveredAt alone, not status. The deliveredAt field
@@ -427,11 +522,17 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
         continue
       }
 
+      // PR J — a running test that covers the order puts it in a group (by its order number).
+      const group = tests.length
+        ? groupForOrder(tests, { id: order.id, channel: order.channel, channelOrderId: order.channelOrderId, marketplace: order.marketplace, productType }, matchedRule, rulesById)
+        : null
+      const askingRule = group ? group.rule : matchedRule
+
       // RRT.2 — delegate timing to the shared resolver (delay table / rule
       // override → anchor → preferred hour → weekend skip → Amazon clamp).
       const resolved = resolveSendTiming(
         { channel: order.channel, marketplace: order.marketplace, deliveredAt: order.deliveredAt, shippedAt: order.shippedAt, purchaseDate: order.purchaseDate, productType },
-        matchedRule,
+        askingRule,
         timingDefaults,
         sendWindows,
       )
@@ -449,6 +550,16 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
         }
       }
 
+      // PR J — the holdout of a test: recorded as not asked on purpose, with the day its group in place would have
+      // asked (the window its reviews are looked for in). No request, no "How was it?" e-mail.
+      if (group?.arm.holdout) {
+        await prisma.reviewRequest.create({ data: holdoutRequestData(order, group.arm.id, scheduledFor, matchedRule?.id ?? null) })
+        result.skipped += 1
+        result.inTests = (result.inTests ?? 0) + 1
+        result.heldOut = (result.heldOut ?? 0) + 1
+        continue
+      }
+
       // RV.6.4 — when the matched rule has sentiment diversion enabled
       // (and we have a customer email to send the "How was it?" mail to),
       // create both the ReviewRequest and a paired ReviewSentimentCheck.
@@ -456,7 +567,10 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
       // ever hitting the Amazon Solicitations API. Diversion only runs on
       // channels we can actually email — Amazon orders have the customer
       // email via SP-API too, so this works there.
-      const { diversion: useDiversion } = await createScheduledRequest(order, matchedRule, scheduledFor)
+      // PR J — in a group of a test, the rule the order is asked with (side B's own timing and "How was it?" check),
+      // and the group it is counted in.
+      const { diversion: useDiversion } = await createScheduledRequest(order, askingRule, scheduledFor, group?.arm.id ?? null)
+      if (group) result.inTests = (result.inTests ?? 0) + 1
       result.scheduled += 1
       addBuyer(askedNow, buyer)
       logger.info('[review-scheduler] scheduled', {
@@ -464,9 +578,10 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
         channel: order.channel,
         delayDays,
         scheduledFor,
-        ruleName: matchedRule?.name ?? null,
+        ruleName: askingRule?.name ?? null,
         ruleScope: matchedRule?.scope ?? null,
         diversion: useDiversion,
+        ...(group ? { timingTest: group.test.id, group: group.arm.id } : {}),
       })
     } catch (err) {
       result.errors += 1
@@ -571,8 +686,11 @@ export async function findOrdersMatchingRule(rule: any) {
  * queues them — on the day the rule's timing picks (the Test run's "First try"; a day already past is due now), with
  * the rule's "How was it?" check first where it asks one, and only the orders THIS rule decides (a more specific rule's
  * orders are left to it). A rule that is off still queues them when a person asks (the confirm says so).
+ * PR J — an order a running timing test or A/B split covers goes to its group exactly as the scheduler puts it: a
+ * first-try group (or side B) is queued with its own timing and counted in its group; a holdout order is recorded as not
+ * asked on purpose and never asked (`heldOut`).
  */
-export async function queueOrdersForRule(ruleId: string): Promise<{ enqueued: number; skipped: number; decidedElsewhere: number; totalMatches: number } | null> {
+export async function queueOrdersForRule(ruleId: string): Promise<{ enqueued: number; skipped: number; decidedElsewhere: number; heldOut: number; totalMatches: number } | null> {
   const rule = await prisma.reviewRule.findUnique({ where: { id: ruleId } })
   if (!rule) return null
   const [matches, activeRules, timingDefaults, sendWindows] = await Promise.all([
@@ -582,7 +700,8 @@ export async function queueOrdersForRule(ruleId: string): Promise<{ enqueued: nu
     prisma.reviewSendWindow.findMany({ where: { isActive: true } }),
   ])
   const candidates = [...activeRules.filter((r: any) => r.id !== rule.id), { ...rule, isActive: true }]
-  let enqueued = 0, skipped = 0, decidedElsewhere = 0
+  const { tests, rulesById } = matches.length ? await runningTestsWithRules(candidates) : { tests: [] as RunningTest[], rulesById: new Map<string, any>() }
+  let enqueued = 0, skipped = 0, decidedElsewhere = 0, heldOut = 0
   for (const order of matches as any[]) {
     const existing = await prisma.reviewRequest.findUnique({
       where: { orderId_channel: workspaceKey({ orderId: order.id, channel: order.channel }) },
@@ -592,15 +711,24 @@ export async function queueOrdersForRule(ruleId: string): Promise<{ enqueued: nu
     const decided = decideRuleForOrder(candidates, matchableOrderOf(order))
     if (!decided.rule || decided.rule.id !== rule.id) { decidedElsewhere++; continue }
     if (decided.skip) { skipped++; continue }
+    const productType = order.items?.[0]?.product?.productType ?? null
+    const group = tests.length
+      ? groupForOrder(tests, { id: order.id, channel: order.channel, channelOrderId: order.channelOrderId, marketplace: order.marketplace, productType }, rule, rulesById)
+      : null
     const resolved = resolveSendTiming(
-      { channel: order.channel, marketplace: order.marketplace, deliveredAt: order.deliveredAt, shippedAt: order.shippedAt, purchaseDate: order.purchaseDate, productType: order.items?.[0]?.product?.productType ?? null },
-      rule,
+      { channel: order.channel, marketplace: order.marketplace, deliveredAt: order.deliveredAt, shippedAt: order.shippedAt, purchaseDate: order.purchaseDate, productType },
+      group ? group.rule : rule,
       timingDefaults,
       sendWindows,
     )
     if (!resolved.scheduledFor) { skipped++; continue }
-    await createScheduledRequest(order, rule, resolved.scheduledFor)
+    if (group?.arm.holdout) {
+      await prisma.reviewRequest.create({ data: holdoutRequestData(order, group.arm.id, resolved.scheduledFor, rule.id) })
+      heldOut++
+      continue
+    }
+    await createScheduledRequest(order, group ? group.rule : rule, resolved.scheduledFor, group?.arm.id ?? null)
     enqueued++
   }
-  return { enqueued, skipped, decidedElsewhere, totalMatches: matches.length }
+  return { enqueued, skipped, decidedElsewhere, heldOut, totalMatches: matches.length }
 }

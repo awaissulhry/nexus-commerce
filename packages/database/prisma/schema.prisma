@@ -13656,6 +13656,10 @@ model ReviewRequest {
   lastAttemptAt DateTime?
   nextRetryAt   DateTime?
 
+  // Reviews PR J (2026-10-27) — the timing test group (ReviewTimingTestArm.id) the scheduler put this order in while a
+  // timing or A/B test ran; null outside a test. A holdout group's request is SKIPPED: that buyer is not asked.
+  timingTestArmId String?
+
   order             Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
   rule              ReviewRule?           @relation(fields: [ruleId], references: [id], onDelete: SetNull)
   sentimentCheck    ReviewSentimentCheck?
@@ -13672,6 +13676,7 @@ model ReviewRequest {
   @@index([scheduledFor])
   @@index([sentAt])
   @@index([workspaceId])
+  @@index([timingTestArmId])
 }
 
 model ReviewRule {
@@ -13789,6 +13794,80 @@ model ReviewSendWindow {
 
   @@unique([workspaceId, marketplace, dayOfWeek], name: "marketplace_dayOfWeek", map: "ReviewSendWindow_marketplace_dayOfWeek_key")
   @@index([marketplace, isActive])
+  @@index([workspaceId])
+}
+
+// Reviews PR J (2026-10-27) — a timing test or an A/B split of review requests.
+//
+// TIMING: new orders of one channel market (and product type, when set) are split by order number into groups that
+// are first asked on different days after delivery; a holdout group (holdoutPct of the orders) gets no request at all.
+// AB: the orders rule A (ruleId) decides are split between A and its "Duplicate as A/B" copy B (an arm's ruleId).
+// A test changes which buyers are asked and when, so it RUNS only after a person approved "Start test" (approvalId);
+// Stop test ends it at once. services/reviews/review-timing-test.service.ts.
+model ReviewTimingTest {
+  // Business ownership comes from verified database context.
+  workspaceId String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String    @id @default(cuid())
+  /// 'TIMING' | 'AB'
+  kind        String    @default("TIMING")
+  /// 'AMAZON' | 'EBAY' | 'SHOPIFY'
+  channel     String    @default("AMAZON")
+  /// Marketplace code ('DE', 'IT', …).
+  market      String
+  /// A word of the product type (case-insensitive, as a rule's product types); null = every product.
+  productType String?
+  /// AB: side A, the rule whose orders are split. TIMING: null.
+  ruleId      String?
+  /// Percent of the orders that are not asked at all (0–20).
+  holdoutPct  Int       @default(0)
+  /// 'DRAFT' | 'WAITING_APPROVAL' | 'RUNNING' | 'STOPPED' | 'DONE'
+  status      String    @default("DRAFT")
+  /// The approval "Start test" asked for (agent approvals); kept after it ran.
+  approvalId  String?
+  /// Why the test is back at DRAFT or stopped, in words (declined, expired, a rule deleted).
+  lastWords   String?
+  startedAt   DateTime?
+  endedAt     DateTime?
+  /// When it ends by itself: { ordersPerArm, maxDays }.
+  endsWhen    Json      @default("{}")
+  /// The last result read (per group counts, how sure, words) and the decision on it (applied / kept).
+  result      Json?
+  createdBy   String?
+  stoppedBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  arms ReviewTimingTestArm[]
+
+  @@index([status])
+  @@index([workspaceId])
+}
+
+// Reviews PR J — one group of a timing test: a first-try day (TIMING), a rule (AB), or the holdout (no request).
+// orders / sent / reviews are the counts last read from the requests the scheduler put in this group.
+model ReviewTimingTestArm {
+  // Business ownership comes from verified database context.
+  workspaceId String           @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String           @id @default(cuid())
+  testId      String
+  test        ReviewTimingTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+  /// 'Day 4', 'A', 'B', 'Not asked (holdout)'
+  label       String
+  /// 0-based, the order the groups are shown in; the first asked group is the one in place now (the control).
+  position    Int
+  /// TIMING: days after delivery of the first try.
+  delayDays   Int?
+  /// AB: the rule whose timing this group gets.
+  ruleId      String?
+  /// The holdout: these buyers get no request.
+  holdout     Boolean          @default(false)
+  orders      Int              @default(0)
+  sent        Int              @default(0)
+  reviews     Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([testId])
   @@index([workspaceId])
 }
 

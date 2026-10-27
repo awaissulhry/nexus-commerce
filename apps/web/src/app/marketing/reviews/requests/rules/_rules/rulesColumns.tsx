@@ -10,6 +10,7 @@ import { IdentityCell, actionsColumn, integerColumn, switchColumn, type ColDef, 
 import type { MenuItemDef } from '@/design-system/components'
 import { Tag } from '@/design-system/primitives'
 import type { GridColumnSpec } from '../../gridCustomise'
+import { abBadge, type TimingTest } from '../../timing/_timing/timingTestsModel'
 import { abMark, channelWords, duplicateHeld, firstTryWords, marketsWords, skipsWords, turnOnHeld, windowWords, type RuleItem } from './rulesModel'
 
 export const MANAGE_RULES = "You need 'Manage reviews' to change review-request rules."
@@ -23,7 +24,17 @@ export interface RulesHandlers {
   remove: (row: RuleItem) => void
   /** Every rule (the A/B marks read it). */
   rules: readonly RuleItem[]
+  /** PR J — the A/B splits (`reviewsGet('/review-timing-tests', { kind: 'AB' })`): the mark says whether one runs. */
+  abTests: readonly TimingTest[]
   canManage: boolean
+}
+
+/** "A · running", "B · waiting for approval", or the copy mark alone ("A side", "B copy") when it never had a split. */
+export function abCellWords(rule: RuleItem, rules: readonly RuleItem[], tests: readonly TimingTest[]): { words: string; tone: 'info' | 'warning' | 'neutral' } | null {
+  const badge = abBadge(rule.id, tests)
+  if (badge) return { words: `${badge.side} · ${badge.state}`, tone: badge.tone === 'info' || badge.tone === 'warning' ? badge.tone : 'neutral' }
+  const mark = abMark(rule, rules)
+  return mark ? { words: mark === 'A' ? 'A side' : 'B copy', tone: 'neutral' } : null
 }
 
 type Cell = ICellRendererParams<RuleItem>
@@ -41,10 +52,10 @@ const FirstTryCell = memo(function FirstTryCell({ data }: Cell) {
 
 const AbCell = memo(function AbCell({ data, context }: Cell) {
   if (!data) return null
-  const rules = (context as RefObject<RulesHandlers> | undefined)?.current?.rules ?? []
-  const mark = abMark(data, rules)
-  if (!mark) return null
-  return <Tag>{mark === 'A' ? 'A side' : 'B copy'}</Tag>
+  const h = (context as RefObject<RulesHandlers> | undefined)?.current
+  const cell = abCellWords(data, h?.rules ?? [], h?.abTests ?? [])
+  if (!cell) return null
+  return <Tag tone={cell.tone}>{cell.words}</Tag>
 })
 
 const rate = (v: number | null | undefined) => (v == null ? '—' : `${(v * 100).toFixed(1)}%`)
@@ -89,7 +100,7 @@ export function rulesColumns(handlers: RefObject<RulesHandlers>): ColDef<RuleIte
     { colId: 'skips', headerName: 'Skips', valueGetter: (p) => (p.data ? skipsWords(p.data) : ''), minWidth: 200, flex: 1, hide: hidden('skips') },
     { colId: 'sent30', headerName: 'Sent 30 days', ...integerColumn<RuleItem>('sent30'), minWidth: 110 },
     { colId: 'rate30', headerName: 'Rate', field: 'rate30', valueFormatter: (p) => rate(p.value as number | null | undefined), type: 'rightAligned', minWidth: 90 },
-    { colId: 'ab', headerName: 'A/B', valueGetter: (p) => (p.data ? abMark(p.data, h()?.rules ?? []) ?? '' : ''), cellRenderer: AbCell, minWidth: 90 },
+    { colId: 'ab', headerName: 'A/B', valueGetter: (p) => (p.data ? abCellWords(p.data, h()?.rules ?? [], h()?.abTests ?? [])?.words ?? '' : ''), cellRenderer: AbCell, minWidth: 130 },
     actionsColumn<RuleItem>({
       prefsLabel: 'Actions',
       primary: { label: 'Edit', onClick: (r) => h()?.edit(r), ariaLabel: (r) => `Edit the rule “${r.name}”` },

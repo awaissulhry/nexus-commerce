@@ -86,6 +86,8 @@ export const CODE_REASON: Record<string, ReasonKey> = {
   SUPPRESSED: 'do_not_email',
   DIVERTED_NEGATIVE: 'unhappy_check',
   NO_RESPONSE_NO_FALLBACK: 'no_check_answer',
+  // PR J — the holdout group of a timing test (review-scheduler.service.ts): not asked on purpose.
+  TIMING_TEST_HOLDOUT: 'holdout',
 }
 
 /** The rule's "Skip when" boxes, as the scheduler stores them in `suppressedReason` (`rule_exclusion:<key>`). */
@@ -106,7 +108,7 @@ export type ReasonKey =
   | 'sent_amazon' | 'sent_email'
   // not asked
   | 'skipped_by_hand' | 'already_asked' | 'amazon_off' | 'email_off' | 'ebay_asks' | 'unknown_market' | 'window_closed' | 'do_not_email' | 'unhappy_check'
-  | 'no_check_answer' | 'refunded' | 'return_open' | 'cancelled' | 'asked_recently' | 'rule_skips' | 'not_delivered'
+  | 'no_check_answer' | 'refunded' | 'return_open' | 'cancelled' | 'asked_recently' | 'rule_skips' | 'not_delivered' | 'holdout'
   | 'no_order_number' | 'no_email' | 'no_request_call' | 'not_asked_other'
 
 /** Words for a reason without the row's own numbers: the Reason filter's options. */
@@ -140,6 +142,7 @@ export const REASON_FACET_WORDS: Record<ReasonKey, string> = {
   asked_recently: 'Buyer asked in the last 90 days',
   rule_skips: 'The rule skips this order',
   not_delivered: 'Not delivered',
+  holdout: 'Holdout of a timing test — not asked on purpose',
   no_order_number: 'No Amazon order number',
   no_email: 'No buyer email on the order',
   no_request_call: 'No request Nexus can send on this channel',
@@ -255,6 +258,7 @@ function reasonWords(key: ReasonKey, r: RequestFacts): string {
     case 'asked_recently': return 'This buyer was asked in the last 90 days — the rule asks once'
     case 'rule_skips': return 'The rule skips this order'
     case 'not_delivered': return 'Not delivered yet'
+    case 'holdout': return 'Holdout of a timing test — not asked on purpose'
     case 'no_order_number': return 'The order has no Amazon order number'
     case 'no_email': return 'The order has no buyer email'
     case 'no_request_call': return 'This channel has no request Nexus can send'
@@ -346,6 +350,9 @@ export interface HeldFacts extends RequestFacts {
 
 const dayOf = (r: HeldFacts, now: Date) => (r.deliveredAt ? (now.getTime() - r.deliveredAt.getTime()) / DAY_MS : null)
 const tz = timezoneForMarketplace
+/** PR J — a timing test's holdout row is never sent, snoozed or allowed again: that would spoil the test's result. */
+export const HOLDOUT_HELD = 'Held out by a timing test on purpose — it stays not asked, so the test’s result holds'
+const isHoldout = (r: RequestFacts) => r.providerResponseCode === 'TIMING_TEST_HOLDOUT'
 
 /** Why "Send now" is held for a row, or null when it may go. */
 export function sendNowHeldFor(r: HeldFacts, now: Date): string | null {
@@ -354,6 +361,7 @@ export function sendNowHeldFor(r: HeldFacts, now: Date): string | null {
     const when = r.sentAt ? ` on ${shortDate(r.sentAt, tz(r.marketplace))}` : ''
     return isAmazon(r.channel) ? `Already sent${when}. Amazon allows one request per order.` : `Already sent${when}. One request per order.`
   }
+  if (isHoldout(r)) return HOLDOUT_HELD
   if (isEbay(r.channel)) return EBAY_ASKS_WORDS
   if (status === 'SKIPPED' || status === 'SUPPRESSED') return 'Not in the queue — use Allow again first'
   if (status === 'SCHEDULED' && r.sentimentCheck?.sentimentEmailSentAt && r.sentimentCheck.response === 'NONE') {
@@ -377,6 +385,7 @@ export function sendNowHeldFor(r: HeldFacts, now: Date): string | null {
 export function snoozeHeldFor(r: HeldFacts, now: Date, days = 1): string | null {
   const status = queueStatusOf(r, now)
   if (status === 'SENT') return 'Already sent — nothing to snooze'
+  if (isHoldout(r)) return HOLDOUT_HELD
   if (isEbay(r.channel)) return EBAY_ASKS_WORDS
   if (status === 'SKIPPED' || status === 'SUPPRESSED') return 'Not in the queue — use Allow again first'
   if (isAmazon(r.channel) && r.deliveredAt) {
@@ -408,6 +417,7 @@ export function allowAgainHeldFor(r: HeldFacts, now: Date): string | null {
   if (status !== 'SKIPPED' && status !== 'SUPPRESSED') return 'Only a request that was not asked can be allowed again'
   if (isEbay(r.channel)) return EBAY_ASKS_WORDS
   const key = reasonKeyOf(r, now)
+  if (key === 'holdout') return HOLDOUT_HELD
   if (key === 'already_asked') return 'Amazon already asked this buyer — one request per order'
   if (key === 'do_not_email') return 'The buyer is on the do-not-email list — only they can undo that'
   if (r.isCancelled || key === 'cancelled') return 'The order is cancelled'

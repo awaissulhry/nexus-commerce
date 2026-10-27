@@ -7377,6 +7377,27 @@
     },
     "relations": []
   },
+  "ReviewTimingTest": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ReviewTimingTestArm": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "test",
+        "model": "ReviewTimingTest",
+        "from": [
+          "testId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
   "ReviewAppConnection": {
     "scalar": {
       "app": "workspace_app"

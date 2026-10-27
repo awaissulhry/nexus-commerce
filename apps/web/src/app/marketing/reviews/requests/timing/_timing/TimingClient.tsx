@@ -10,14 +10,14 @@
  *                               review rate by hour (the hour we send outlined) and the seven days' hour, rank and on/off.
  *                               `?section=send-hours` scrolls here.
  *   Conversion by send time     the parts of the day, with how far the numbers can be trusted.
- *   Timing tests                coming later (a labelled sample).
+ *   Timing tests                (PR J) a new test, the running ones, the results: TimingTestsSection.tsx.
  * One save bar (⌘S) saves both tables: `PUT /api/review-timing-defaults` and `PUT /api/review-send-windows` per market.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { Banner, Card, Listbox, SummaryTable, ToastProvider, useActionConfirm, useToast, type ListboxOption } from '@/design-system/components'
 import { EditModeBar, PageHeader } from '@/design-system/patterns'
-import { Button, Input, NumberStepper, Pill, SegmentedControl, Skeleton, Toggle, ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, NumberStepper, SegmentedControl, Skeleton, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import Link from '@/lib/workspaces/Link'
@@ -28,6 +28,7 @@ import { ReviewsMenuButton } from '../../../_shell/ReviewsShell'
 import { RULES_PATH } from '../../requestsPaths'
 import type { RuleItem } from '../../rules/_rules/rulesModel'
 import { SendHourHeatmap } from './SendHourHeatmap'
+import { TimingTestsSection } from './TimingTestsSection'
 import {
   BUILT_IN_DEFAULT_DAYS,
   DELAY_MAX,
@@ -220,6 +221,8 @@ function Timing() {
   }, [market, confirm, toast, loadWindows])
 
   const manageHeld = canManage ? null : MANAGE_TIMING
+  // The product-type words a timing test may pick (the saved table's).
+  const patternWords = useMemo(() => (defaults?.rows ?? []).map((r) => r.pattern).filter(Boolean), [defaults])
   const actions = (
     <div className={s.actions}>
       <ReviewsMenuButton />
@@ -349,23 +352,7 @@ function Timing() {
         )}
       </Card>
 
-      {/* ⛔ KEEP — Coming later placeholder (Owner ruling 3): timing tests need the test model (Phase 3, PR J). Sample numbers. */}
-      <Card header={<span className={s.headerWithPill}>Timing tests <Pill tone="neutral">Coming later</Pill></span>} description="Try different first-try days on real orders and keep the one that brings more reviews. Each buyer is still asked only once.">
-        <div className={s.stack}>
-          <p className={s.placeholder}><Pill tone="info">Sample</Pill> Amazon Germany · Gloves · day 4 vs 7 vs 10 · 10% holdout — finished at 300 orders per day</p>
-          <SummaryTable
-            label="Timing test (sample)"
-            columns={['First try', 'Orders', 'Reviews', 'Rate']}
-            rows={[
-              { id: 'd4', cells: ['Day 4 (now)', '300', '23', '7.6%'] },
-              { id: 'd7', cells: ['Day 7', '300', '27', '9.0%'] },
-              { id: 'd10', cells: ['Day 10', '300', '24', '8.1%'] },
-              { id: 'hold', cells: ['Not asked (holdout)', '100', '1', '1.2%'] },
-            ]}
-          />
-          <p className={s.muted}>Sample: “Day 7 gets 18% more reviews — 92% sure”. Starting a test or applying a winner will be sent for approval.</p>
-        </div>
-      </Card>
+      <TimingTestsSection canManage={canManage} patterns={patternWords} />
 
       {count > 0 && (
         <EditModeBar

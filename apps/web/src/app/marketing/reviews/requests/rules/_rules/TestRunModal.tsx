@@ -4,7 +4,8 @@
  * Reviews › Requests › Rules — "Test run": which orders a rule would ask today (`POST /api/review-rules/:id/dry-run`).
  * Nothing is sent and nothing is written. A rule that is off still shows, but never sends. "Queue these N…" asks first,
  * then adds the orders to the queue (`POST /api/review-rules/:id/run`) as the scheduler would: each on its "First try"
- * day, the rule's "How was it?" check first, only the orders this rule decides.
+ * day, the rule's "How was it?" check first, only the orders this rule decides; an order a running timing test covers
+ * goes to its group, and its holdout is recorded as not asked (PR J).
  * Several ticked rules show one after another.
  */
 import { useCallback, useEffect, useState } from 'react'
@@ -87,11 +88,12 @@ export function TestRunModal({ rules, onClose, canManage }: TestRunModalProps) {
     })
     if (!ok) return
     setBusy(rule.id)
-    const res = await reviewsSend<{ enqueued: number; skipped: number; decidedElsewhere?: number }>('POST', `/review-rules/${encodeURIComponent(rule.id)}/run`, undefined, { idempotent: true, what: 'queue' })
+    const res = await reviewsSend<{ enqueued: number; skipped: number; decidedElsewhere?: number; heldOut?: number }>('POST', `/review-rules/${encodeURIComponent(rule.id)}/run`, undefined, { idempotent: true, what: 'queue' })
     setBusy(null)
     if (res.error || !res.data) return toast(res.error ?? 'Nexus could not queue them.', 'danger')
     const elsewhere = res.data.decidedElsewhere ?? 0
-    toast(`${res.data.enqueued} added to the queue · ${res.data.skipped} already had a request or are skipped${elsewhere ? ` · ${elsewhere} left to a more specific rule` : ''}`, 'success')
+    const heldOut = res.data.heldOut ?? 0
+    toast(`${res.data.enqueued} added to the queue · ${res.data.skipped} already had a request or are skipped${elsewhere ? ` · ${elsewhere} left to a more specific rule` : ''}${heldOut ? ` · ${heldOut} held out by a timing test (not asked on purpose)` : ''}`, 'success')
     emitInvalidation({ type: 'review.request.updated', meta: { count: res.data.enqueued } })
     void run(rule.id)
   }, [confirm, toast, run])

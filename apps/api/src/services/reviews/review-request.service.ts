@@ -10,7 +10,9 @@
  *      (Owner, 2026-10-27 — eBay asks its buyers for feedback itself);
  *   3. queues the order's request due now — a request already waiting is made due; a request that was not asked is
  *      allowed again only where "Allow again" would allow it; a new one is made as the scheduler makes it, by the
- *      rule that decides the order (its "Skip when" holds it, its "How was it?" check goes first);
+ *      rule that decides the order (its "Skip when" holds it, its "How was it?" check goes first). An order a running
+ *      timing test holds out (Reviews PR J) is held, with nothing written: asking it would spoil the test's result —
+ *      the same as "Allow again" of its not-asked row;
  *   4. runs the sender for exactly those requests (`runReviewQueueNow({ onlyIds })`, as "Send now" does) and answers
  *      what happened to each, in words (`reasonOf`): Amazon accepted, our e-mail went out, "How was it?" sent first,
  *      sending switched off on this server, …
@@ -27,6 +29,7 @@ import {
   AMAZON_LAST_DAY,
   EBAY_ASKS_WORDS,
   EXCLUSION_REASON,
+  HOLDOUT_HELD,
   REASON_FACET_WORDS,
   allowAgainHeldFor,
   reasonOf,
@@ -41,8 +44,11 @@ import {
   buyersAskedSince,
   createScheduledRequest,
   decideRuleForOrder,
+  groupForOrder,
   matchableOrderOf,
+  runningTestsWithRules,
 } from './review-scheduler.service.js'
+import { HOLDOUT_CODE } from './review-timing-test-math.js'
 import { timezoneForMarketplace } from './review-timing.service.js'
 
 /** Returns in these states suppress a review request. */
@@ -227,7 +233,10 @@ export async function askPreview(orderId: string, now = new Date()): Promise<{ o
   return { order, plan, rule }
 }
 
-/** The deciding rule of each order to be made (the scheduler's choice), and the words when that rule skips it. */
+/**
+ * The deciding rule of each order to be made (the scheduler's choice), and the words when that rule skips it — or when
+ * a running timing test puts the order in its holdout (PR J: held, never asked; the scheduler records it as not asked).
+ */
 async function decideFor(orders: OrderRow[]): Promise<Map<string, { rule: any | null; held: string | null }>> {
   const out = new Map<string, { rule: any | null; held: string | null }>()
   if (orders.length === 0) return out
@@ -235,10 +244,16 @@ async function decideFor(orders: OrderRow[]): Promise<Map<string, { rule: any | 
   const asked = rules.some((r) => (r.exclusions ?? []).includes('asked_buyer_90d'))
     ? await buyersAskedSince(orders, new Date(Date.now() - ASKED_BUYER_DAYS * DAY_MS))
     : null
+  const { tests, rulesById } = await runningTestsWithRules(rules)
   for (const o of orders) {
     const recently = asked ? buyerAskedIn(asked, { customerId: o.customerId, customerEmail: o.customerEmail }) : false
-    const { rule, skip } = decideRuleForOrder(rules, matchableOrderOf(o, recently))
-    const held = rule && skip ? `The rule “${rule.name}” skips this order: ${REASON_FACET_WORDS[EXCLUSION_REASON[skip] ?? 'rule_skips'].toLowerCase()}.` : null
+    const matchable = matchableOrderOf(o, recently)
+    const { rule, skip } = decideRuleForOrder(rules, matchable)
+    let held = rule && skip ? `The rule “${rule.name}” skips this order: ${REASON_FACET_WORDS[EXCLUSION_REASON[skip] ?? 'rule_skips'].toLowerCase()}.` : null
+    if (!held && tests.length) {
+      const group = groupForOrder(tests, { id: o.id, channel: o.channel, channelOrderId: o.channelOrderId, marketplace: o.marketplace, productType: matchable.productType }, rule, rulesById)
+      if (group?.arm.holdout) held = `${HOLDOUT_HELD}.`
+    }
     out.set(o.id, { rule, held })
   }
   return out
@@ -294,7 +309,8 @@ export async function askForReviews(orderIdsRaw: unknown, now = new Date()): Pro
       else requestIds.set(orderId, plan.requestId)
     } else if (plan.kind === 'again') {
       const done = await prisma.reviewRequest.updateMany({
-        where: { id: plan.requestId, status: { in: ['SKIPPED', 'SUPPRESSED'] } },
+        // A timing test's holdout row is never put back (PR J), even if it changed after the plan was read.
+        where: { id: plan.requestId, status: { in: ['SKIPPED', 'SUPPRESSED'] }, OR: [{ providerResponseCode: null }, { providerResponseCode: { not: HOLDOUT_CODE } }] },
         data: { ...ALLOW_AGAIN_DATA, scheduledFor: now },
       })
       if (done.count === 0) hold(orderId, 'The request changed meanwhile — open the order again.', plan.requestId)

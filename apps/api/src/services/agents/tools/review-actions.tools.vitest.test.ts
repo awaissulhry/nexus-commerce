@@ -8,7 +8,8 @@
  *                     says; Shopify buyers get our review e-mail (no longer refused); an eBay order is held — Nexus
  *                     e-mails no eBay buyer, eBay asks itself (Owner, 2026-10-27), nothing written; held while sending is
  *                     paused; a return opened after the approval refuses the run and Amazon is not called; needs
- *                     reviews.manage only; never confirm or auto; cannot be undone.
+ *                     reviews.manage only; never confirm or auto; cannot be undone. A timing test's holdout (PR J) is
+ *                     never asked: its not-asked row, and an order a running test holds out, are refused in words.
  *   reply-to-review — eBay only, at most 500 characters, one reply per feedback, refused while eBay replies are off;
  *                     the copy checks shown; a reply posted meanwhile refuses the run.
  *   leave-buyer-feedback (PR G) — positive feedback for the buyer of one eBay sale eBay lists as waiting; at most 500
@@ -57,6 +58,7 @@ vi.mock('../../reviews/adapters/ebay-feedback-rest.adapter.js', async (importOri
 
 import { callTool, executeTool, ToolAccessError, type UserPrincipal } from '../call-tool.js'
 import { getTool } from '../tool-registry.js'
+import { assignArm } from '../../reviews/review-timing-test-math.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const person = (permissions: string[]): UserPrincipal => ({
@@ -147,6 +149,46 @@ describe('request-review (07 O13, audit E5)', () => {
     await inside(() => database.client.return.create({ data: { orderId: id, channel: 'AMAZON', rmaNumber: `TEST-O13-RMA-${++seq}`, status: 'REQUESTED' } as never }))
     channel.solicitations.length = 0
     expect((await run('request-review', { orderId: id }, asked.preview)).error).toMatch(/A return is open/)
+    expect(channel.solicitations).toEqual([])
+    vi.unstubAllEnvs()
+  })
+
+  it('PR J — a timing test’s holdout is refused: its not-asked row, and an order a running test holds out; Amazon is not asked', async () => {
+    vi.stubEnv('NEXUS_ENABLE_AMAZON_SOLICITATIONS', 'true')
+    channel.solicitations.length = 0
+    const words = /Held out by a timing test on purpose — it stays not asked, so the test’s result holds\. Nothing was queued\.$/
+    // The scheduler's holdout row: never put back by hand.
+    const heldRow = await order()
+    await inside(() => database.client.reviewRequest.create({ data: { orderId: heldRow, channel: 'AMAZON', marketplace: 'IT', status: 'SKIPPED', scheduledFor: daysAgo(6), suppressedReason: 'timing_test_holdout', providerResponseCode: 'TIMING_TEST_HOLDOUT' } as never }))
+    expect((await dryRun('request-review', { orderId: heldRow })).error).toMatch(words)
+    expect(await requestsOf(heldRow)).toEqual([{ status: 'SKIPPED' }])
+
+    // An order a RUNNING test puts in its holdout, before the scheduler made its row: held, nothing written — also when
+    // the request was previewed before the test started and approved after.
+    const arms = [
+      { id: 'tt-o13-d4', label: 'Day 4 (now)', position: 0, delayDays: 4, holdout: false },
+      { id: 'tt-o13-d7', label: 'Day 7', position: 1, delayDays: 7, holdout: false },
+      { id: 'tt-o13-hold', label: 'Not asked (holdout)', position: 2, holdout: true },
+    ]
+    let n = 0
+    let number = ''
+    do number = `TEST-O13-HOLD-${++n}`
+    while (assignArm({ id: 'tt-o13', holdoutPct: 20, arms }, number)?.holdout !== true)
+    const heldOut = await order({ channelOrderId: number })
+    const before = await dryRun('request-review', { orderId: heldOut })
+    expect(before.ok).toBe(true)
+    await inside(() => database.client.reviewTimingTest.create({ data: {
+      id: 'tt-o13', kind: 'TIMING', channel: 'AMAZON', market: 'IT', holdoutPct: 20, status: 'RUNNING', startedAt: daysAgo(3), endsWhen: { ordersPerArm: 300, maxDays: 56 },
+      arms: { create: arms },
+    } as never }))
+    try {
+      expect((await dryRun('request-review', { orderId: heldOut })).error).toMatch(words)
+      expect((await run('request-review', { orderId: heldOut }, before.preview)).ok).toBe(false)
+      expect(await requestsOf(heldOut)).toEqual([])
+    } finally {
+      // The other tests of this file ask Italian Amazon orders: the test ends here.
+      await inside(() => database.client.reviewTimingTest.update({ where: { id: 'tt-o13' }, data: { status: 'STOPPED', endedAt: new Date() } }))
+    }
     expect(channel.solicitations).toEqual([])
     vi.unstubAllEnvs()
   })

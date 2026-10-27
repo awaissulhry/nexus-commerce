@@ -7,22 +7,31 @@
  *   - an order no rule covers keeps the default timing;
  *   - an eBay order is never asked (Owner, 2026-10-27): eBay asks its buyers itself, so it gets a SKIPPED request with
  *     that reason, whatever rule covers it, and no "How was it?" check.
+ *   - PR J: while a timing test runs, the scheduler AND a rule's "Queue these" put each covered order in its group; the
+ *     holdout is never asked.
  * The database is a fake: nothing is read or written for real, nothing is sent.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const db = vi.hoisted(() => ({
-  reviewRule: { findMany: vi.fn() },
+  reviewRule: { findMany: vi.fn(), findUnique: vi.fn() },
   reviewTimingDefault: { findMany: vi.fn(async () => []) },
   reviewSendWindow: { findMany: vi.fn(async () => []) },
   order: { findMany: vi.fn() },
-  reviewRequest: { findMany: vi.fn(async () => []), create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: `rq-${data.orderId}`, ...data })) },
+  reviewRequest: { findMany: vi.fn(async () => []), findUnique: vi.fn(async () => null), create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: `rq-${data.orderId}`, ...data })) },
   reviewSentimentCheck: { create: vi.fn() },
 }))
 vi.mock('../../db.js', () => ({ default: db }))
 vi.mock('../../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
+// PR J — the running timing tests the scheduler reads (none unless a test says so); which test covers an order stays real.
+const running = vi.hoisted(() => ({ tests: [] as unknown[] }))
+vi.mock('./review-timing-test.service.js', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  runningTimingTests: vi.fn(async () => running.tests),
+}))
 
-import { createScheduledRequest, decideRuleForOrder, findOrdersMatchingRule, schedulePendingOrders, type MatchableOrder } from './review-scheduler.service.js'
+import { createScheduledRequest, decideRuleForOrder, findOrdersMatchingRule, queueOrdersForRule, schedulePendingOrders, type MatchableOrder } from './review-scheduler.service.js'
+import { assignArm } from './review-timing-test-math.js'
 
 const DAY = 86_400_000
 const rule = (id: string, over: Record<string, unknown> = {}) => ({
@@ -67,6 +76,7 @@ describe('schedulePendingOrders (B10)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     db.reviewRequest.findMany.mockResolvedValue([])
+    running.tests = []
   })
 
   it('a cancelled order is not asked when the deciding rule skips cancelled orders: SUPPRESSED with the reason', async () => {
@@ -146,5 +156,163 @@ describe('schedulePendingOrders (B10)', () => {
     // An eBay rule's Test run lists no order to ask.
     expect(await findOrdersMatchingRule(rule('ebay', { scope: 'EBAY' }))).toEqual([])
     expect(db.order.findMany).not.toHaveBeenCalled()
+  })
+})
+
+describe('schedulePendingOrders — a running timing test (PR J)', () => {
+  const now = Date.now()
+  const order = (id: string, over: Record<string, unknown> = {}) => ({
+    id, channel: 'AMAZON', channelOrderId: `305-${id}`, marketplace: 'DE', deliveredAt: new Date(now - 2 * DAY), shippedAt: null, purchaseDate: null,
+    customerEmail: `${id}@example.com`, customerId: null, totalPrice: 80, fulfillmentMethod: 'FBM', status: 'DELIVERED', cancelledAt: null,
+    items: [{ product: { productType: 'Gloves touring' } }], returns: [], financialTransactions: [], ...over,
+  })
+  const timing = {
+    id: 'tt-1', kind: 'TIMING', channel: 'AMAZON', market: 'DE', productType: 'glove', ruleId: null, holdoutPct: 20, startedAt: new Date(now - 5 * DAY),
+    arms: [
+      { id: 'd4', position: 0, holdout: false, delayDays: 4, ruleId: null },
+      { id: 'd10', position: 1, holdout: false, delayDays: 10, ruleId: null },
+      { id: 'hold', position: 2, holdout: true, delayDays: null, ruleId: null },
+    ],
+  }
+  const orders = Array.from({ length: 40 }, (_, i) => order(`o${i}`))
+  const created = () => db.reviewRequest.create.mock.calls.map(([arg]) => arg.data)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    db.reviewRequest.findMany.mockResolvedValue([])
+    db.reviewRule.findMany.mockResolvedValue([rule('germany', { scope: 'AMAZON_PER_MARKETPLACE', marketplace: 'DE', sendDelayDays: 12, minDaysSinceDelivery: 7, maxDaysSinceDelivery: 25 })])
+    db.order.findMany.mockResolvedValue(orders)
+    running.tests = [timing]
+  })
+
+  it('each order goes to the group its order number picks; the holdout gets NO request (SKIPPED, with the reason)', async () => {
+    const result = await schedulePendingOrders()
+    const rows = created()
+    expect(rows).toHaveLength(orders.length)
+    for (const o of orders) {
+      const arm = assignArm(timing as never, o.channelOrderId)!
+      const row = rows.find((r) => r.orderId === o.id)!
+      expect(row.timingTestArmId).toBe(arm.id)
+      if (arm.holdout) {
+        expect(row).toMatchObject({ status: 'SKIPPED', suppressedReason: 'timing_test_holdout', providerResponseCode: 'TIMING_TEST_HOLDOUT', ruleId: 'germany' })
+      } else {
+        expect(row).toMatchObject({ status: 'SCHEDULED', ruleId: 'germany' })
+        // The group's own first-try day after delivery, not the rule's 12.
+        const days = Math.round((row.scheduledFor.getTime() - o.deliveredAt.getTime()) / DAY)
+        expect(days).toBe(arm.delayDays)
+      }
+    }
+    const held = rows.filter((r) => r.status === 'SKIPPED').length
+    expect(held).toBeGreaterThan(0)
+    expect(result).toMatchObject({ inTests: orders.length, heldOut: held, scheduled: orders.length - held })
+    // A holdout order gets no "How was it?" e-mail either.
+    expect(db.reviewSentimentCheck.create).not.toHaveBeenCalled()
+  })
+
+  it('the same orders land in the same groups on the next run', async () => {
+    await schedulePendingOrders()
+    const first = created().map((r) => [r.orderId, r.timingTestArmId])
+    vi.clearAllMocks()
+    await schedulePendingOrders()
+    expect(created().map((r) => [r.orderId, r.timingTestArmId])).toEqual(first)
+  })
+
+  it('"Skip when" decides first, and orders the test does not cover are asked as before', async () => {
+    db.reviewRule.findMany.mockResolvedValue([rule('germany', { scope: 'AMAZON_PER_MARKETPLACE', marketplace: 'DE', exclusions: ['is_cancelled'], sendDelayDays: 12 })])
+    db.order.findMany.mockResolvedValue([
+      order('c1', { status: 'CANCELLED' }),
+      order('it1', { marketplace: 'IT' }),
+      order('jk1', { items: [{ product: { productType: 'Jacket' } }] }),
+    ])
+    await schedulePendingOrders()
+    const rows = created()
+    expect(rows.find((r) => r.orderId === 'c1')).toMatchObject({ status: 'SUPPRESSED', suppressedReason: 'rule_exclusion:is_cancelled' })
+    expect(rows.find((r) => r.orderId === 'c1').timingTestArmId).toBeUndefined()
+    expect(rows.find((r) => r.orderId === 'it1').timingTestArmId).toBeUndefined()
+    expect(rows.find((r) => r.orderId === 'jk1').timingTestArmId).toBeUndefined()
+  })
+
+  it('an A/B split: the orders rule A decides go to A or to B (B is off, and asks with its own timing)', async () => {
+    const a = rule('A', { scope: 'AMAZON_PER_MARKETPLACE', marketplace: 'DE', sendDelayDays: 4 })
+    const b = rule('B', { scope: 'AMAZON_PER_MARKETPLACE', marketplace: 'DE', name: 'A (variant 1)', isActive: false, sendDelayDays: 9 })
+    db.reviewRule.findMany.mockImplementation(async ({ where }: { where: { isActive?: boolean; id?: { in: string[] } } }) => (where.isActive ? [a] : where.id ? [b] : []))
+    running.tests = [{ id: 'ab-1', kind: 'AB', channel: 'AMAZON', market: 'DE', productType: null, ruleId: 'A', holdoutPct: 0, startedAt: new Date(), arms: [
+      { id: 'side-a', position: 0, holdout: false, delayDays: null, ruleId: 'A' },
+      { id: 'side-b', position: 1, holdout: false, delayDays: null, ruleId: 'B' },
+    ] }]
+    await schedulePendingOrders()
+    const rows = created()
+    const sides = new Set(rows.map((r) => r.timingTestArmId))
+    expect(sides).toEqual(new Set(['side-a', 'side-b']))
+    for (const r of rows) {
+      const o = orders.find((x) => x.id === r.orderId)!
+      const days = Math.round((r.scheduledFor.getTime() - o.deliveredAt.getTime()) / DAY)
+      expect(r.status).toBe('SCHEDULED')
+      expect([r.timingTestArmId, r.ruleId, days]).toEqual(r.timingTestArmId === 'side-a' ? ['side-a', 'A', 4] : ['side-b', 'B', 9])
+    }
+  })
+
+  it('no test running: nothing is put in a group', async () => {
+    running.tests = []
+    const result = await schedulePendingOrders()
+    expect(created().every((r) => r.timingTestArmId === undefined && r.status === 'SCHEDULED')).toBe(true)
+    expect(result.inTests).toBeUndefined()
+  })
+})
+
+describe('"Queue these" while a timing test runs (PR J)', () => {
+  const now = Date.now()
+  const germany = rule('germany', { scope: 'AMAZON_PER_MARKETPLACE', marketplace: 'DE', sendDelayDays: 12, minDaysSinceDelivery: 1, maxDaysSinceDelivery: 25 })
+  const order = (id: string) => ({
+    id, channel: 'AMAZON', channelOrderId: `306-${id}`, marketplace: 'DE', deliveredAt: new Date(now - 2 * DAY), shippedAt: null, purchaseDate: null,
+    customerEmail: `${id}@example.com`, customerId: null, totalPrice: 80, fulfillmentMethod: 'FBM', status: 'DELIVERED', cancelledAt: null,
+    items: [{ product: { productType: 'Gloves touring' } }], returns: [], financialTransactions: [],
+  })
+  const timing = {
+    id: 'tt-q', kind: 'TIMING', channel: 'AMAZON', market: 'DE', productType: 'glove', ruleId: null, holdoutPct: 20, startedAt: new Date(now - 5 * DAY),
+    arms: [
+      { id: 'q4', position: 0, holdout: false, delayDays: 4, ruleId: null },
+      { id: 'q10', position: 1, holdout: false, delayDays: 10, ruleId: null },
+      { id: 'q-hold', position: 2, holdout: true, delayDays: null, ruleId: null },
+    ],
+  }
+  const orders = Array.from({ length: 30 }, (_, i) => order(`q${i}`))
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    db.reviewRule.findUnique.mockResolvedValue(germany)
+    db.reviewRule.findMany.mockResolvedValue([germany])
+    db.order.findMany.mockResolvedValue(orders)
+    running.tests = [timing]
+  })
+
+  it('each order goes to the group the scheduler would pick; a holdout order is recorded as not asked, never queued', async () => {
+    const out = await queueOrdersForRule('germany')
+    const rows = db.reviewRequest.create.mock.calls.map(([arg]) => arg.data)
+    expect(rows).toHaveLength(orders.length)
+    let held = 0
+    for (const o of orders) {
+      const arm = assignArm(timing as never, o.channelOrderId)!
+      const row = rows.find((r) => r.orderId === o.id)!
+      expect(row.timingTestArmId).toBe(arm.id)
+      if (arm.holdout) {
+        held += 1
+        expect(row).toMatchObject({ status: 'SKIPPED', suppressedReason: 'timing_test_holdout', providerResponseCode: 'TIMING_TEST_HOLDOUT', ruleId: 'germany' })
+      } else {
+        expect(row).toMatchObject({ status: 'SCHEDULED', ruleId: 'germany' })
+        expect(Math.round((row.scheduledFor.getTime() - o.deliveredAt.getTime()) / DAY)).toBe(arm.delayDays)
+      }
+    }
+    expect(held).toBeGreaterThan(0)
+    expect(out).toEqual({ enqueued: orders.length - held, skipped: 0, decidedElsewhere: 0, heldOut: held, totalMatches: orders.length })
+    expect(db.reviewSentimentCheck.create).not.toHaveBeenCalled()
+  })
+
+  it('no test running: queued on the rule’s own day, in no group', async () => {
+    running.tests = []
+    const out = await queueOrdersForRule('germany')
+    const rows = db.reviewRequest.create.mock.calls.map(([arg]) => arg.data)
+    expect(out).toMatchObject({ enqueued: orders.length, heldOut: 0 })
+    expect(rows.every((r) => r.status === 'SCHEDULED' && r.timingTestArmId === undefined)).toBe(true)
   })
 })

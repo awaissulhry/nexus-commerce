@@ -6203,6 +6203,7 @@ CREATE TABLE "ReviewRequest" (
     "attemptCount" INTEGER NOT NULL DEFAULT 0,
     "lastAttemptAt" TIMESTAMP(3),
     "nextRetryAt" TIMESTAMP(3),
+    "timingTestArmId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -6265,6 +6266,50 @@ CREATE TABLE "ReviewSendWindow" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "ReviewSendWindow_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ReviewTimingTest" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "kind" TEXT NOT NULL DEFAULT 'TIMING',
+    "channel" TEXT NOT NULL DEFAULT 'AMAZON',
+    "market" TEXT NOT NULL,
+    "productType" TEXT,
+    "ruleId" TEXT,
+    "holdoutPct" INTEGER NOT NULL DEFAULT 0,
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "approvalId" TEXT,
+    "lastWords" TEXT,
+    "startedAt" TIMESTAMP(3),
+    "endedAt" TIMESTAMP(3),
+    "endsWhen" JSONB NOT NULL DEFAULT '{}',
+    "result" JSONB,
+    "createdBy" TEXT,
+    "stoppedBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ReviewTimingTest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ReviewTimingTestArm" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "testId" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "position" INTEGER NOT NULL,
+    "delayDays" INTEGER,
+    "ruleId" TEXT,
+    "holdout" BOOLEAN NOT NULL DEFAULT false,
+    "orders" INTEGER NOT NULL DEFAULT 0,
+    "sent" INTEGER NOT NULL DEFAULT 0,
+    "reviews" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ReviewTimingTestArm_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -15058,6 +15103,9 @@ CREATE INDEX "ReviewRequest_sentAt_idx" ON "ReviewRequest"("sentAt");
 CREATE INDEX "ReviewRequest_workspaceId_idx" ON "ReviewRequest"("workspaceId");
 
 -- CreateIndex
+CREATE INDEX "ReviewRequest_timingTestArmId_idx" ON "ReviewRequest"("timingTestArmId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "ReviewRequest_orderId_channel_key" ON "ReviewRequest"("workspaceId", "orderId", "channel");
 
 -- CreateIndex
@@ -15086,6 +15134,18 @@ CREATE INDEX "ReviewSendWindow_workspaceId_idx" ON "ReviewSendWindow"("workspace
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ReviewSendWindow_marketplace_dayOfWeek_key" ON "ReviewSendWindow"("workspaceId", "marketplace", "dayOfWeek");
+
+-- CreateIndex
+CREATE INDEX "ReviewTimingTest_status_idx" ON "ReviewTimingTest"("status");
+
+-- CreateIndex
+CREATE INDEX "ReviewTimingTest_workspaceId_idx" ON "ReviewTimingTest"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "ReviewTimingTestArm_testId_idx" ON "ReviewTimingTestArm"("testId");
+
+-- CreateIndex
+CREATE INDEX "ReviewTimingTestArm_workspaceId_idx" ON "ReviewTimingTestArm"("workspaceId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ReviewSentimentCheck_reviewRequestId_key" ON "ReviewSentimentCheck"("reviewRequestId");
@@ -18374,6 +18434,9 @@ ALTER TABLE "ReviewRequest" ADD CONSTRAINT "ReviewRequest_orderId_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "ReviewRequest" ADD CONSTRAINT "ReviewRequest_ruleId_fkey" FOREIGN KEY ("ruleId") REFERENCES "ReviewRule"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ReviewTimingTestArm" ADD CONSTRAINT "ReviewTimingTestArm_testId_fkey" FOREIGN KEY ("testId") REFERENCES "ReviewTimingTest"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ReviewSentimentCheck" ADD CONSTRAINT "ReviewSentimentCheck_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE CASCADE ON UPDATE CASCADE;

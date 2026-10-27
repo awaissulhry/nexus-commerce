@@ -7,7 +7,8 @@
  *
  *   Header   New rule (the rule editor page), Import / Export (a JSON file), Seed defaults (asks first: it turns a rule on)
  *   Banners  a rule that matches no orders (no market, a channel Nexus does not ask, none in 30 days) → "Fix the rule"
- *   Tiles    rules on · A/B tests (coming later, sample) · orders decided · sent · review rate (30 days, estimate)
+ *   Tiles    rules on · A/B tests (running, from `reviewsGet('/review-timing-tests', { kind: 'AB' })`) · orders decided
+ *            · sent · review rate (30 days, estimate)
  *   Grid     every rule (`reviewsGet('/review-rules', { withStats: 1 })`), tick boxes and select-all; the bulk bar: Turn on, Turn off,
  *            Test run, Export, Delete…, Clear — what an action cannot change is counted and named (ruling 7). On is a
  *            switch (saved at once); Edit opens the editor; ⋯ Duplicate as A/B, Test run, Delete….
@@ -43,6 +44,7 @@ import { ReviewsMenuButton } from '../../../_shell/ReviewsShell'
 import { useGridCustomise } from '../../gridCustomise'
 import { NEW_RULE_ID, rulePath } from '../../requestsPaths'
 import { MANAGE_RULES, RULE_COLUMN_SPECS, rulesColumns, type RulesHandlers } from './rulesColumns'
+import { abTile, type TimingTest, type TimingTestsAnswer } from '../../timing/_timing/timingTestsModel'
 import {
   abMark,
   noMatchWarnings,
@@ -108,7 +110,14 @@ function Rules() {
     setAnswer((prev) => (res.error && prev?.data ? { ...prev, error: res.error } : { data: res.data, error: res.error, at: Date.now() }))
   }, [])
   useEffect(() => { void load() }, [load])
-  useInvalidationChannel(['review.rule.changed'], () => void load())
+  // PR J — the A/B splits (the A/B tile and marks).
+  const [abTests, setAbTests] = useState<{ tests: TimingTest[]; error: string | null } | null>(null)
+  const loadAb = useCallback(async () => {
+    const res = await reviewsGet<TimingTestsAnswer>('/review-timing-tests', { kind: 'AB' })
+    setAbTests({ tests: res.data?.tests ?? [], error: res.error })
+  }, [])
+  useEffect(() => { void loadAb() }, [loadAb])
+  useInvalidationChannel(['review.rule.changed'], () => { void load(); void loadAb() })
 
   const rules = useMemo(() => answer?.data?.items ?? [], [answer])
   const statsRead = !!answer?.data && !answer.data.statsError
@@ -161,7 +170,7 @@ function Rules() {
   const [testRules, setTestRules] = useState<RuleItem[] | null>(null)
 
   // ── Grid ──
-  const handlers = useRef<RulesHandlers>({ edit: () => {}, duplicate: () => {}, testRun: () => {}, remove: () => {}, rules: [], canManage: false })
+  const handlers = useRef<RulesHandlers>({ edit: () => {}, duplicate: () => {}, testRun: () => {}, remove: () => {}, rules: [], abTests: [], canManage: false })
   handlers.current = {
     onSwitch: canManage ? (row, next) => void patchActive(row, next) : undefined,
     edit: (row) => router.push(rulePath(row.id)),
@@ -169,10 +178,13 @@ function Rules() {
     testRun: (row) => setTestRules([row]),
     remove: (row) => void remove(row),
     rules,
+    abTests: abTests?.tests ?? [],
     canManage,
   }
   const columnDefs = useMemo(() => rulesColumns(handlers), [])
   const apiRef = useRef<GridApi<RuleItem> | null>(null)
+  // The A/B marks read the splits through the handlers: draw that column again when they arrive.
+  useEffect(() => { apiRef.current?.refreshCells({ columns: ['ab'], force: true }) }, [abTests])
   const customise = useGridCustomise(apiRef, RULE_COLUMN_SPECS)
   const gridState = useGridState<Record<string, never>>({
     surface: 'reviews-requests-rules',
@@ -309,10 +321,12 @@ function Rules() {
 
   // ── Tiles, warnings ──
   const tiles = rulesTiles(rules, statsRead, answer?.data?.statsAll ?? null)
+  const abTileOf = abTile(abTests?.tests ?? [])
   const metrics: Metric[] = [
     { label: 'Rules on', value: `${tiles.on}`, hint: `of ${tiles.total}`, accent: tiles.on ? 'var(--nds-success)' : 'var(--nds-warning)' },
-    // ⛔ KEEP — Coming later placeholder (Owner ruling 3): A/B tests need the test model (Phase 3, PR J). Sample number.
-    { label: <>A/B tests <Pill tone="neutral">Coming later</Pill></>, value: '1', hint: 'sample · one market, day 4 against day 7' },
+    abTests?.error && !abTests.tests.length
+      ? { label: 'A/B tests', value: '—', hint: 'could not be read' }
+      : { label: 'A/B tests', value: abTests ? abTileOf.value : '…', hint: abTests ? abTileOf.hint : 'reading…' },
     { label: 'Orders decided', value: tiles.matched30 == null ? '—' : tiles.matched30.toLocaleString('en-IE'), hint: 'by a rule, last 30 days' },
     { label: 'Sent', value: tiles.sent30 == null ? '—' : tiles.sent30.toLocaleString('en-IE'), hint: 'last 30 days' },
     { label: 'Review rate', value: tiles.rate30 == null ? '—' : `${(tiles.rate30 * 100).toFixed(1)}%`, hint: tiles.rateWords ?? '30 days, estimate' },

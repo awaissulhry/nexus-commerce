@@ -81,6 +81,8 @@ interface Seeded {
   reviewableOrderId: string
   /** Reviews eBay REST (PR G) — an eBay sale waiting for the seller's feedback for the buyer. */
   buyerFeedbackLineId: string
+  /** Reviews PR J — a timing test not started yet; a finished one whose winner was applied (its undo previews). */
+  timingTestId: string; doneTimingTestId: string
   /** 07 O17 — an eBay account, inactive until sync-orders-now runs (ENV_AND_ROWS below), so no other tool reaches it. */
   syncAccountId: string
   /** 08 S6–S13 — two stock locations (codes), a count, a pricing rule (integration: `ruleId` is P7's alert rule), a
@@ -1028,6 +1030,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'reply-to-review': (ids) => ({ reviewId: ids.reviewId, body: 'Thank you for your feedback' }),
   // Reviews eBay REST (PR G) — preview only (a dry run while eBay posting is off).
   'leave-buyer-feedback': (ids) => ({ lineId: ids.buyerFeedbackLineId, text: 'Thank you, great buyer' }),
+  'start-review-timing-test': (ids) => ({ testId: ids.timingTestId }),
+  'apply-review-timing-winner': (ids) => ({ testId: ids.doneTimingTestId, armId: 'before' }),
   // 07 O14 — preview only (the company identity is seeded below).
   'issue-fiscal-document': (ids) => ({ orderIds: [ids.returnableOrderId] }),
   // 07 O17 — previews only (the pickup carrier is MANUAL; the account is switched on for its runs only).
@@ -1502,6 +1506,18 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
     const fbaPlan = await db.fbaInboundPlanV2.create({ data: { name: `${mark} FBA plan`, planId: `${mark}-PLAN-1`, status: 'WAITING_FOR_CHOICE', currentStep: 'CONFIRM', source: 'matrix', marketplaceId: 'TEST-MKT-IT', options: fbaOptions as never } })
     // MCP full control P9 — a finished bulk price job (19.90 is what it wrote and what is stored), so its undo previews.
     const buyerLine = await db.ebayBuyerFeedback.create({ data: { connectionId: connection.id, orderLineItemId: `${mark}-LINE-1`, title: `${mark} gloves` } as never })
+    // Reviews PR J — a timing test not started yet (the start and the winner tools read it).
+    const timingTest = await db.reviewTimingTest.create({
+      data: { kind: 'TIMING', channel: 'AMAZON', market: 'DE', productType: `${mark.toLowerCase()} gloves`, holdoutPct: 10, arms: { create: [{ label: 'Day 4 (now)', position: 0, delayDays: 4 }, { label: 'Day 7', position: 1, delayDays: 7 }, { label: 'Not asked (holdout)', position: 2, holdout: true }] } },
+      include: { arms: { orderBy: { position: 'asc' } } },
+    } as never) as unknown as { id: string; arms: Array<{ id: string }> }
+    const doneTimingTest = await db.reviewTimingTest.create({
+      data: {
+        kind: 'TIMING', channel: 'AMAZON', market: 'FR', productType: `${mark.toLowerCase()} boots`, status: 'DONE', startedAt: new Date('2026-08-01T00:00:00Z'), endedAt: new Date('2026-09-20T00:00:00Z'),
+        arms: { create: [{ label: 'Day 4 (now)', position: 0, delayDays: 4 }, { label: 'Day 7', position: 1, delayDays: 7 }] },
+        result: { applied: { armId: 'arm-day-7', label: 'Day 7', delayDays: 7, ruleId: 'rule-applied', ruleName: `${mark} France boots`, created: true, before: { sendDelayDays: null, minDays: 4, maxDays: 25, isActive: false }, at: '2026-09-21T08:00:00.000Z', by: 'app:someone' } },
+      },
+    } as never) as unknown as { id: string }
     const bulkJob = await db.bulkActionJob.create({
       data: { jobName: `${mark} price rise`, actionType: 'PRICING_UPDATE', targetProductIds: [product.id], targetVariationIds: [], actionPayload: {}, status: 'COMPLETED', totalItems: 1, completedAt: new Date('2026-09-30T08:00:00Z') },
     })
@@ -1520,6 +1536,7 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
       returnId: ret.id, returnableOrderId: returnable.id, returnableLineId: (returnable as unknown as { items: Array<{ id: string }> }).items[0].id, inspectedReturnId: inspected.id,
       reviewableOrderId: reviewable.id,
       buyerFeedbackLineId: buyerLine.id,
+      timingTestId: timingTest.id, doneTimingTestId: doneTimingTest.id,
       syncAccountId: syncAccount.id,
       location: warehouse.code, second: second.code, countId: count.id, pricingRuleId: pricingRule.id, promotionId: promotion.id,
       scheduledId: scheduled.id, supplierId: supplier.id, purchaseOrderId: purchaseOrder.id, inboundShipmentId: inboundShipment.id,

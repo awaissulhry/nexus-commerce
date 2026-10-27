@@ -211,6 +211,17 @@ describe('review queue words', () => {
     expectPlainWords(r.words)
   })
 
+  it('PR J — a timing test’s holdout: not asked on purpose, and never sent, snoozed or allowed again', () => {
+    const held = { status: 'SKIPPED', channel: 'AMAZON', suppressedReason: 'timing_test_holdout', providerResponseCode: 'TIMING_TEST_HOLDOUT', deliveredAt: daysAgo(8), scheduledFor: daysAgo(4) }
+    expect(reasonOf(held, NOW)).toEqual({ key: 'holdout', words: 'Holdout of a timing test — not asked on purpose' })
+    expect(REASON_FACET_WORDS.holdout).toBe('Holdout of a timing test — not asked on purpose')
+    expect(queueStatusOf(held, NOW)).toBe('SKIPPED')
+    for (const why of [sendNowHeldFor(held, NOW), snoozeHeldFor(held, NOW, 1), allowAgainHeldFor(held, NOW)]) {
+      expect(why).toBe('Held out by a timing test on purpose — it stays not asked, so the test’s result holds')
+    }
+    expect(skipHeldFor(held, NOW)).toBe('Already skipped')
+  })
+
   it('run, failures, buyer and day words', () => {
     expect(runResultWords({ sent: 12, failed: 0, skipped: 3, tooEarly: 3 })).toBe('12 sent, 3 too early (they try again tomorrow), 0 failed')
     expect(runResultWords({ sent: 0, failed: 0, paused: true })).toMatch(/paused/)

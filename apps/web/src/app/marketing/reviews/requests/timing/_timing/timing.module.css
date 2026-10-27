@@ -37,20 +37,6 @@
   line-height: 1.5;
 }
 
-.placeholder,
-.headerWithPill {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-6);
-  margin: 0;
-}
-
-.placeholder {
-  color: var(--nds-text-muted);
-  font-size: var(--nds-font-size-sm);
-}
-
 .anchor {
   scroll-margin-top: var(--nds-space-16);
 }
@@ -193,4 +179,123 @@
 .swatchMarked {
   outline: 2px solid var(--nds-text);
   outline-offset: -2px;
+}
+
+/* ── Timing tests (PR J) ────────────────────────────────── */
+.tests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.testsHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-bold);
+}
+
+/* Cards of different heights flow down two columns (no gaps under the short ones); one column on a narrow screen. */
+.testGrid {
+  columns: 2 480px;
+  column-gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.testGrid > * {
+  break-inside: avoid;
+  margin-bottom: var(--nds-space-14);
+}
+
+.formRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-12) var(--nds-space-20);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+.stepperBox {
+  width: 140px;
+}
+
+.endsText {
+  display: block;
+  max-width: 280px;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.sendRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+
+.armList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armRow {
+  display: grid;
+  grid-template-columns: minmax(96px, 150px) minmax(80px, 1fr) minmax(120px, auto);
+  align-items: center;
+  gap: var(--nds-space-10);
+  font-size: var(--nds-font-size-base);
+}
+
+.armLabel {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.armCount {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 479px) {
+  .armRow {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .armCount {
+    grid-column: 1 / -1;
+  }
+}
+
+.headline {
+  margin: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 1.35;
+}
+
+.applied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  font-size: var(--nds-font-size-base);
 }

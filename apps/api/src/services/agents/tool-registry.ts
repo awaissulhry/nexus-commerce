@@ -195,6 +195,7 @@ import { SHIPPING_TOOLS } from './tools/shipping.tools.js'
 import { ORDER_ACTION_TOOLS } from './tools/order-actions.tools.js'
 import { RETURN_TOOLS } from './tools/return.tools.js'
 import { REVIEW_ACTION_TOOLS } from './tools/review-actions.tools.js'
+import { REVIEW_TIMING_TEST_TOOLS } from './tools/review-timing-tests.tools.js'
 import { FISCAL_TOOLS } from './tools/fiscal.tools.js'
 import { STOCK_CHANGE_TOOLS } from './tools/stock.tools.js'
 import { STOCK_SYNC_TOOLS } from './tools/stock-sync.tools.js'
@@ -235,6 +236,8 @@ const ALL: AgentTool[] = [
   ...ORDER_ACTION_TOOLS,
   ...RETURN_TOOLS,
   ...REVIEW_ACTION_TOOLS,
+  // Reviews PR J — start a timing test or A/B split; apply its winner (each approved by a person).
+  ...REVIEW_TIMING_TEST_TOOLS,
   ...FISCAL_TOOLS,
   ...ANALYTICS_TOOLS,
   ...DRAFT_TOOLS,

@@ -64,6 +64,11 @@ describe('orderAskPlan', () => {
       .toMatchObject({ kind: 'held', words: expect.stringMatching(/Amazon already asked this buyer — one request per order/) })
     expect(orderAskPlan(order({ channel: 'SHOPIFY' }), request('SKIPPED', { channel: 'SHOPIFY', providerResponseCode: 'SUPPRESSED', suppressedReason: 'Suppressed: suppressed (UNSUBSCRIBE)' }), NOW))
       .toMatchObject({ kind: 'held', words: expect.stringMatching(/do-not-email list/) })
+    // PR J — a timing test's holdout is never asked by hand (Orders, Claude): it would spoil the test's result.
+    expect(orderAskPlan(order(), request('SKIPPED', { providerResponseCode: 'TIMING_TEST_HOLDOUT', suppressedReason: 'timing_test_holdout', scheduledFor: days(6) }), NOW)).toEqual({
+      kind: 'held',
+      words: 'Not asked before (Holdout of a timing test — not asked on purpose): Held out by a timing test on purpose — it stays not asked, so the test’s result holds.',
+    })
   })
 })
 

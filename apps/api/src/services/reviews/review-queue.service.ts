@@ -192,6 +192,7 @@ const REASON_WHERE: Record<Exclude<ReasonKey, 'not_asked_other'>, (now: Date) =>
   do_not_email: () => ({ ...NOT_ASKED, providerResponseCode: 'SUPPRESSED' }),
   unhappy_check: () => ({ ...NOT_ASKED, providerResponseCode: 'DIVERTED_NEGATIVE' }),
   no_check_answer: () => ({ ...NOT_ASKED, providerResponseCode: 'NO_RESPONSE_NO_FALLBACK' }),
+  holdout: () => ({ ...NOT_ASKED, providerResponseCode: 'TIMING_TEST_HOLDOUT' }),
   refunded: () => ({ OR: [notAskedBy(exclusion('has_refund')), notAskedBy({ NOT: { suppressedReason: { startsWith: RULE_EXCLUSION_PREFIX } } }, { NOT: { AND: [sr('outside'), { OR: [sr('window'), sr('4-30'), sr('4–30')] }] } }, sr('refund'))] }),
   return_open: () => ({ OR: [notAskedBy(exclusion('has_active_return')), notAskedBy({ NOT: { suppressedReason: { startsWith: RULE_EXCLUSION_PREFIX } } }, { NOT: sr('refund') }, sr('active return'))] }),
   cancelled: () => notAskedBy(exclusion('is_cancelled')),
@@ -860,7 +861,8 @@ export async function allowRequestAgain(id: string, now = new Date()) {
   const held = allowAgainHeldFor(againFactsOf(row), now)
   if (held) throw new AllowAgainRefused(held)
   const done = await prisma.reviewRequest.updateMany({
-    where: { id, status: { in: ['SKIPPED', 'SUPPRESSED'] } },
+    // A timing test's holdout row is never put back (PR J), even if it changed after the read above.
+    where: { id, status: { in: ['SKIPPED', 'SUPPRESSED'] }, OR: [{ providerResponseCode: null }, { providerResponseCode: { not: 'TIMING_TEST_HOLDOUT' } }] },
     data: { ...ALLOW_AGAIN_DATA, scheduledFor: now },
   })
   if (done.count === 0) throw new AllowAgainRefused('Only a request that was not asked can be allowed again')
