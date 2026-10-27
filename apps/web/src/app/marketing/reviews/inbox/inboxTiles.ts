@@ -135,7 +135,9 @@ export function inboxChips(q: InboxQuery, facets: InboxFacets | null = null): In
   if (q.product) {
     chips.push({ key: 'product', label: 'One product (and its variants)', removeLabel: 'Show the reviews of every product', next: withProduct(q, null) })
   }
-  if (q.needsReply) {
+  if (q.needsReply && q.replyClosing) {
+    chips.push({ key: 'needsReply', label: 'Needs a reply: Etsy window closing', removeLabel: 'Show every review, not only the Etsy ones whose reply window closes within 10 days', next: withNeedsReply(q, false) })
+  } else if (q.needsReply) {
     chips.push({ key: 'needsReply', label: 'Needs a reply', removeLabel: 'Show every review, not only the ones that need a reply', next: withNeedsReply(q, false) })
   }
   if (q.statuses.length === 1) {

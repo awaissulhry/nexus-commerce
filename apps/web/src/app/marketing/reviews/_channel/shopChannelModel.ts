@@ -10,7 +10,7 @@
  * Pure (no React), tested in shopChannelModel.vitest.test.ts.
  */
 import { reviewReplyRules, ETSY_REPLY_WINDOW_DAYS } from '@nexus/shared/review-reply-rules'
-import { inboxHref, needsReplyHref } from '../_lib/reviewsLinks'
+import { etsyClosingHref, inboxHref, needsReplyHref } from '../_lib/reviewsLinks'
 import type { InboxRow } from '../inbox/inboxDatasource'
 import { count, dayMonth, plural, type Section, type TileView } from './channelModel'
 
@@ -110,7 +110,9 @@ export const ETSY_REVIEWS_HREF = reviewReplyRules('ETSY').open?.href ?? 'https:/
 
 /** The Etsy page's six tiles (the board): average, new, with a photo, not replied yet, window closing, window closed. */
 export function etsyTileViews(t: EtsyTiles): TileView[] {
-  // The one needs-a-reply list (open, inside Etsy's window, not imported): the Inbox shows this same number.
+  // Each reply tile links to the Inbox rows it counts (the API counts with the Inbox's own query for the same address):
+  // the one needs-a-reply list for Etsy (open, inside the window, not imported, not positive), and of it the windows
+  // that close within 10 days.
   const open = needsReplyHref({ channel: 'ETSY' })
   return [
     { key: 'average', label: 'Average rating', value: average(t.average), hint: plural(t.reviews, 'review', 'reviews') },
@@ -120,7 +122,7 @@ export function etsyTileViews(t: EtsyTiles): TileView[] {
     },
     { key: 'photo', label: 'With a photo', value: count(t.withPhoto), hint: 'one per review' },
     { key: 'open', label: 'Not replied yet', value: count(t.notReplied), hint: 'window still open', href: open, accent: t.notReplied > 0 ? 'var(--nds-warning)' : undefined },
-    { key: 'closing', label: 'Window closing', value: count(t.closing), hint: '10 days or less left', href: open, accent: t.closing > 0 ? 'var(--nds-danger)' : undefined },
+    { key: 'closing', label: 'Window closing', value: count(t.closing), hint: '10 days or less left', href: etsyClosingHref(), accent: t.closing > 0 ? 'var(--nds-danger)' : undefined },
     { key: 'closed', label: 'Window closed', value: count(t.closed), hint: 'no reply possible' },
   ]
 }

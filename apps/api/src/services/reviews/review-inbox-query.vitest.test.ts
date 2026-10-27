@@ -16,7 +16,7 @@ import {
   variantWords,
   type InboxBulkRow,
 } from './review-inbox-query.js'
-import { overdueWhere, visibleReviewWhere } from './review-visibility.js'
+import { etsyClosingWhere, needsReplyWhere, overdueWhere, visibleReviewWhere } from './review-visibility.js'
 
 const NOW = new Date('2026-10-26T12:00:00Z')
 const HOUR = 60 * 60 * 1000
@@ -33,8 +33,19 @@ describe('parseInboxQuery — the address, parsed once', () => {
   it('defaults: all kinds, every status, all time, newest first, page 1 of 50', () => {
     expect(parseInboxQuery({})).toEqual({
       kind: 'all', statuses: [], channels: [], markets: [], stars: [], moods: [], themes: [], owners: [], families: [], withPhotos: false,
-      periodDays: null, periodMonths: null, needsReply: false, product: null, q: null, sort: { field: 'postedAt', dir: 'desc' }, page: 1, pageSize: 50,
+      periodDays: null, periodMonths: null, needsReply: false, replyClosing: false, product: null, q: null, sort: { field: 'postedAt', dir: 'desc' }, page: 1, pageSize: 50,
     })
+  })
+
+  it('reply=closing (the Etsy page\'s "Window closing" tile): the needs-a-reply rows AND Needs you\'s closing Etsy rows', () => {
+    expect(parseInboxQuery({ reply: 'closing' })).toMatchObject({ needsReply: true, replyClosing: true })
+    expect(parseInboxQuery({ reply: 'needed' })).toMatchObject({ needsReply: true, replyClosing: false })
+    expect(parseInboxQuery({ reply: 'Closing' })).toMatchObject({ needsReply: false, replyClosing: false })
+    expect(filters(inboxWhere(parseInboxQuery({ reply: 'closing', channel: 'ETSY' }), NOW))).toEqual([
+      { channel: { in: ['ETSY'] } },
+      needsReplyWhere(NOW),
+      etsyClosingWhere(NOW),
+    ])
   })
 
   it('12 months are calendar months (as the Overview counts them); reply=needed; one product (audit C9, A4, A5)', () => {

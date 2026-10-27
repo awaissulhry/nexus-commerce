@@ -10,11 +10,17 @@
  *
  * The lists are the Inbox's own rows (`listInbox`), so a row opens the same review pop-up. Every Review read goes
  * through `visibleReviewWhere` (fixtures never count); the arithmetic is pure, in review-shop-channel-math.ts.
+ *
+ * The reply tiles (lane N8, 2026-10-28) count with the Inbox's own `where` for the link the tile opens
+ * (`REPLY_TILE_LINKS`): the one needs-a-reply rule (review-visibility.ts — positive reviews and closed windows never
+ * count) and, for "Window closing", Needs you's `etsyClosingWhere`. So the tile's number is the rows its link shows.
  */
+import type { Prisma } from '@prisma/client'
 import { reviewAppOf } from '@nexus/shared/review-reply-rules'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { listInbox, type InboxRow } from './review-inbox.service.js'
+import { inboxWhere, parseInboxQuery } from './review-inbox-query.js'
 import { isImportedSource, visibleReviewWhere } from './review-visibility.js'
 import { listReviewApps, type ReviewAppView } from './review-app-connection.service.js'
 import {
@@ -86,6 +92,24 @@ async function section<T>(name: string, run: () => Promise<T>): Promise<Section<
   }
 }
 
+/**
+ * The Inbox address each reply tile links to — the web builds the same links (`needsReplyHref`, `etsyClosingHref` in
+ * apps/web/…/reviews/_lib/reviewsLinks.ts). Every date (`period=all`), as the badges count.
+ */
+export const REPLY_TILE_LINKS = {
+  /** Etsy "Not replied yet". */
+  etsyNotReplied: { reply: 'needed', period: 'all', channel: 'ETSY' },
+  /** Etsy "Window closing". */
+  etsyClosing: { reply: 'closing', period: 'all', channel: 'ETSY' },
+  /** Shopify "Needs a reply". */
+  shopifyNeedReply: { reply: 'needed', period: 'all', channel: 'SHOPIFY' },
+} as const satisfies Record<string, Record<string, string>>
+
+/** The rows a tile's link opens: the Inbox's own `where` for that address (never a second count). */
+function linkedWhere(link: Record<string, string>, now: Date): Prisma.ReviewWhereInput {
+  return inboxWhere(parseInboxQuery(link), now)
+}
+
 /** The facts behind the tiles for one channel's visible reviews. */
 async function tileFacts(channel: 'ETSY' | 'SHOPIFY'): Promise<TileFacts[]> {
   const rows = await prisma.review.findMany({
@@ -134,7 +158,14 @@ async function etsySections(now: Date): Promise<EtsySections> {
       const { readEtsySource } = await import('./review-settings-health.js')
       return readEtsySource()
     }),
-    section('tiles', async () => etsyTiles(await tileFacts('ETSY'), now)),
+    section('tiles', async () => {
+      const [facts, notReplied, closing] = await Promise.all([
+        tileFacts('ETSY'),
+        prisma.review.count({ where: linkedWhere(REPLY_TILE_LINKS.etsyNotReplied, now) }),
+        prisma.review.count({ where: linkedWhere(REPLY_TILE_LINKS.etsyClosing, now) }),
+      ])
+      return etsyTiles(facts, now, { notReplied, closing })
+    }),
     section('reviews', async (): Promise<ReviewList<EtsyRow>> => {
       const { page, extra } = await listOf('ETSY', now)
       return {
@@ -161,7 +192,15 @@ async function shopifySections(now: Date): Promise<ShopifySections> {
       ])
       return { ...apps, imported: imports._count._all, lastImportAt: imports._max.ingestedAt?.toISOString() ?? null }
     }),
-    section('tiles', async () => shopifyTiles(await tileFacts('SHOPIFY'), now)),
+    section('tiles', async () => {
+      const waiting = linkedWhere(REPLY_TILE_LINKS.shopifyNeedReply, now)
+      const [facts, needReply, oldest] = await Promise.all([
+        tileFacts('SHOPIFY'),
+        prisma.review.count({ where: waiting }),
+        prisma.review.findFirst({ where: waiting, orderBy: { postedAt: 'asc' }, select: { postedAt: true } }),
+      ])
+      return shopifyTiles(facts, now, { needReply, oldestPostedAt: oldest?.postedAt ?? null })
+    }),
     section('reviews', async (): Promise<ReviewList<ShopifyRow>> => {
       const { page, extra } = await listOf('SHOPIFY', now)
       return {

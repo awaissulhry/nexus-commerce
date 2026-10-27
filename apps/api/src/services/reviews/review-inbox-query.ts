@@ -7,7 +7,7 @@
 import type { Prisma } from '@prisma/client'
 import { reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import { monthsBefore } from './overviewMath.js'
-import { isImportedSource, needsReplyWhere, overdueWhere, reviewKindOf, reviewKindWhere, visibleReviewWhere, type ReviewKind } from './review-visibility.js'
+import { etsyClosingWhere, isImportedSource, needsReplyWhere, overdueWhere, reviewKindOf, reviewKindWhere, visibleReviewWhere, type ReviewKind } from './review-visibility.js'
 
 export const INBOX_STATUSES = ['NEW', 'IN_PROGRESS', 'RESPONDED', 'RESOLVED', 'IGNORED', 'OVERDUE'] as const
 export type InboxStatus = (typeof INBOX_STATUSES)[number]
@@ -38,8 +38,16 @@ export interface InboxQuery {
   periodDays: number | null
   /** "12m": twelve calendar months back (the Overview's and Insights' rule, overviewMath.ts `periodBounds`); null = days. */
   periodMonths: number | null
-  /** `reply=needed`: only the reviews that need a reply (review-visibility.ts `needsReplyWhere`, the badges' number). */
+  /**
+   * `reply=needed`: only the reviews that need a reply (review-visibility.ts `needsReplyWhere`, the badges' number).
+   * `reply=closing` sets it too.
+   */
   needsReply: boolean
+  /**
+   * `reply=closing`: of those, only the Etsy reviews whose reply window closes within CLOSING_DAYS
+   * (`etsyClosingWhere`, the Etsy page's "Window closing" tile and Needs you's Etsy items).
+   */
+  replyClosing: boolean
   /** `product=<id>`: one product's reviews, its variants' too (an alert's "See the reviews"). */
   product: string | null
   q: string | null
@@ -98,7 +106,8 @@ export function parseInboxQuery(raw: Record<string, unknown> = {}): InboxQuery {
     withPhotos: ['1', 'true', 'yes'].includes(String(raw.photos ?? '').trim().toLowerCase()),
     periodDays: parseInboxPeriod(raw.period),
     periodMonths: parseInboxMonths(raw.period),
-    needsReply: raw.reply === 'needed',
+    needsReply: raw.reply === 'needed' || raw.reply === 'closing',
+    replyClosing: raw.reply === 'closing',
     product: typeof raw.product === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(raw.product.trim()) ? raw.product.trim() : null,
     q,
     sort: { field: sortField === 'rating' ? 'rating' : 'postedAt', dir: sortDir === 'asc' ? 'asc' : 'desc' },
@@ -154,6 +163,7 @@ export function inboxWhere(q: InboxQuery, now: Date, omit: { kind?: boolean; sta
     })
   }
   if (q.needsReply) and.push(needsReplyWhere(now))
+  if (q.replyClosing) and.push(etsyClosingWhere(now))
   if (q.product) and.push({ OR: [{ productId: q.product }, { product: { is: { parentId: q.product } } }] })
   if (q.withPhotos) and.push({ media: { some: {} } })
   if (q.periodMonths != null) and.push({ postedAt: { gte: monthsBefore(now, q.periodMonths) } })

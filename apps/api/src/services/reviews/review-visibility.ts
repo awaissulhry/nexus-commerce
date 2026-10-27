@@ -206,6 +206,24 @@ export function needsReplyWhere(now: Date = new Date()): Prisma.ReviewWhereInput
   })
 }
 
+/** "Window closing" (the Etsy page's tile, Needs you's Etsy items) = at most this many days left of Etsy's reply window. */
+export const CLOSING_DAYS = 10
+
+/**
+ * The Etsy reviews whose reply window closes within CLOSING_DAYS (the window counts from the buyer's last edit, else
+ * from when it was posted). Narrows the needs-a-reply rows (`needsReplyWhere`); never a count of its own. Used by Needs
+ * you, the Inbox's `reply=closing` and so the Etsy page's "Window closing" tile.
+ */
+export function etsyClosingWhere(now: Date): Prisma.ReviewWhereInput {
+  const cut = new Date(now.getTime() - (ETSY_REPLY_WINDOW_DAYS - CLOSING_DAYS) * DAY_MS)
+  return {
+    AND: [
+      { channel: 'ETSY' },
+      { OR: [{ channelEditedAt: { lte: cut } }, { AND: [{ channelEditedAt: null }, { postedAt: { lte: cut } }] }] },
+    ],
+  }
+}
+
 /** The rows that need a reply and have waited more than REPLY_DUE_HOURS since they were posted. */
 export function overdueWhere(now: Date = new Date()): Prisma.ReviewWhereInput {
   return { AND: [needsReplyWhere(now), { postedAt: { lt: new Date(now.getTime() - REPLY_DUE_HOURS * HOUR_MS) } }] }

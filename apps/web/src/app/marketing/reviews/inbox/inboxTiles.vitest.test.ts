@@ -41,6 +41,14 @@ describe('Inbox tabs and tiles', () => {
     expect(chips[1].removeLabel).toBe('Show every status, not only Overdue')
     expect(inboxChips({ ...EMPTY_INBOX_QUERY, period: 'all' })).toEqual([])
   })
+
+  it('"Needs a reply" and the Etsy page\'s "Window closing" (`reply=closing`): one chip, whose × shows every review', () => {
+    const needed = inboxChips({ ...EMPTY_INBOX_QUERY, period: 'all', needsReply: true })
+    expect(needed.map((c) => c.label)).toEqual(['Needs a reply'])
+    const closing = inboxChips({ ...EMPTY_INBOX_QUERY, period: 'all', needsReply: true, replyClosing: true, channels: ['ETSY'] })
+    expect(closing.map((c) => c.label)).toEqual(['Needs a reply: Etsy window closing', 'Channel: Etsy'])
+    expect(closing[0].next).toMatchObject({ needsReply: false, replyClosing: false, channels: ['ETSY'] })
+  })
 })
 
 describe('Inbox read state', () => {

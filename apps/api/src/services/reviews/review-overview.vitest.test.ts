@@ -11,8 +11,9 @@ import {
 } from './overviewMath.js'
 import { amazonThemes, overviewTrend, reviewThemes, scopeCode, topThemes } from './review-overview.service.js'
 import {
-  alertItem, closesWords, etsyClosingWhere, parseLimit, parseOnly, rankNeedsYou, replyItem, replyItems, requestItems, waitWords,
+  alertItem, closesWords, parseLimit, parseOnly, rankNeedsYou, replyItem, replyItems, requestItems, waitWords,
 } from './review-needs-you.service.js'
+import { etsyClosingWhere } from './review-visibility.js'
 
 const NOW = new Date('2026-10-26T12:00:00Z')
 const DAY = 86_400_000

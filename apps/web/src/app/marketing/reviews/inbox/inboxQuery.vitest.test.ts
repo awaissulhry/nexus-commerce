@@ -54,6 +54,18 @@ describe('Inbox address', () => {
     expect(withProduct(query, null).product).toBeNull()
   })
 
+  it('"Etsy window closing" (`reply=closing`, the Etsy page\'s tile): read, written back, handed to the API, and its × ends it', () => {
+    const { query } = parseInboxQuery('?reply=closing&period=all&channel=ETSY')
+    expect(query).toMatchObject({ needsReply: true, replyClosing: true, period: 'all', channels: ['ETSY'] })
+    expect(serializeInboxQuery(query)).toBe('?period=all&channel=ETSY&reply=closing')
+    expect(inboxApiParams(query)).toMatchObject({ reply: 'closing', channel: ['ETSY'], period: 'all' })
+    expect(withNeedsReply(query, false)).toMatchObject({ needsReply: false, replyClosing: false })
+    expect(withNeedsReply(query, true)).toBe(query)
+    expect(clearFilters(query)).toMatchObject({ needsReply: false, replyClosing: false })
+    expect(parseInboxQuery('?reply=needed').query.replyClosing).toBe(false)
+    expect(parseInboxQuery('?reply=soon').query).toMatchObject({ needsReply: false, replyClosing: false })
+  })
+
   it('a status tile shows that status alone; pressing it again shows every status', () => {
     const on = toggleStatusTile({ ...EMPTY_INBOX_QUERY, page: 3 }, 'OVERDUE')
     expect(on.statuses).toEqual(['OVERDUE'])

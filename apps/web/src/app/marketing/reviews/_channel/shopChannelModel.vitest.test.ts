@@ -25,7 +25,7 @@ const shopify = (over: Partial<ShopifyRow> = {}): ShopifyRow => ({
 })
 
 describe('Etsy', () => {
-  it('six tiles in the board’s order; open and closing link to the Inbox filtered to Etsy', () => {
+  it('six tiles in the board’s order; "Not replied yet" and "Window closing" each link to the Inbox rows it counts', () => {
     const views = etsyTileViews({ average: 4.8, reviews: 96, newReviews: 7, newDelta: 3, withPhoto: 22, notReplied: 5, closing: 1, closed: 3 })
     expect(views.map((v) => [v.label, v.value, v.hint])).toEqual([
       ['Average rating', '4.8', '96 reviews'],
@@ -35,7 +35,10 @@ describe('Etsy', () => {
       ['Window closing', '1', '10 days or less left'],
       ['Window closed', '3', 'no reply possible'],
     ])
+    // The same addresses the API counts with (review-channel-reply-tiles.vitest.test.ts): the tile = the Inbox rows.
     expect(views[3].href).toBe('/marketing/reviews/inbox?period=all&channel=ETSY&reply=needed')
+    expect(views[4].href).toBe('/marketing/reviews/inbox?period=all&channel=ETSY&reply=closing')
+    expect(views[5].href).toBeUndefined()
   })
 
   it('the window in words', () => {
@@ -68,6 +71,9 @@ describe('Shopify', () => {
   it('four tiles', () => {
     expect(shopifyTileViews({ average: 4.6, reviews: 318, newReviews: 24, newDelta: 6, withMedia: 64, videos: 9, needReply: 2, oldestWaitHours: 6 }).map((v) => `${v.label}: ${v.value} (${v.hint})`))
       .toEqual(['Average rating: 4.6 (318 reviews)', 'New reviews: 24 (+6 · last 30 days)', 'With photo or video: 64 (9 videos)', 'Needs a reply: 2 (oldest 6 h)'])
+    // The address the API counts "Needs a reply" with (review-channel-reply-tiles.vitest.test.ts).
+    expect(shopifyTileViews({ average: null, reviews: 0, newReviews: 0, newDelta: null, withMedia: 0, videos: 0, needReply: 0, oldestWaitHours: null })[3].href)
+      .toBe('/marketing/reviews/inbox?period=all&channel=SHOPIFY&reply=needed')
     expect(waitHoursWords(null)).toBe('nothing waits')
     expect(waitHoursWords(50)).toBe('oldest 2 days')
   })
