@@ -1,14 +1,15 @@
 /**
  * SR.4 — Post-purchase review request mailer cron.
  *
- * Runs every 4 hours under NEXUS_ENABLE_REVIEW_INGEST=1.
+ * Runs every hour (NEXUS_REVIEW_MAILER_SCHEDULE) under NEXUS_ENABLE_REVIEW_INGEST=1.
  *
  * Tick:
  *   1. Schedule any newly-delivered orders that have no ReviewRequest yet
  *      (delegates to review-scheduler.service.ts).
  *   2. Find ReviewRequest rows with status='SCHEDULED' and scheduledFor ≤ now().
  *   3. For non-Amazon channels (eBay, Shopify): send the email template
- *      and mark SENT (or FAILED).
+ *      and mark SENT (or FAILED). Its review button goes to the order's own eBay site or the business's own shop
+ *      (review-links.service.ts); without a shop it has no button.
  *   4. For Amazon: fire the Solicitations API call; check the 4-30d window
  *      is still valid first (before day 4 the row waits for day 4).
  *
@@ -16,8 +17,8 @@
  * (D.7 gate). Non-Amazon email is gated by NEXUS_ENABLE_OUTBOUND_EMAILS=true.
  *
  * Reviews area PR C (B9) — this is the ONE sender. The hourly cron, the Requests page's "Run now"
- * (POST /review-queue/run) and its "Send now" (POST /review-queue/bulk, `onlyIds`) all run
- * runReviewMailerOnce(); the old POST /review-engine/tick (no pause, no "How was it?" check, every
+ * (POST /review-queue/run), its "Send now" (POST /review-queue/bulk, `onlyIds`), the Orders page's "Request review"
+ * (single and bulk) and Claude's `request-review` (review-request.service.ts, `onlyIds`) all run runReviewMailerOnce(); the old POST /review-engine/tick (no pause, no "How was it?" check, every
  * non-Amazon request marked skipped) is gone. Each run says what it did per channel and per market.
  */
 
@@ -25,10 +26,8 @@ import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import {
-  schedulePendingOrders,
-  buildReviewUrl,
-} from '../services/reviews/review-scheduler.service.js'
+import { schedulePendingOrders } from '../services/reviews/review-scheduler.service.js'
+import { readShopReviewPage, reviewLinkFor, type ShopReviewPage } from '../services/reviews/review-links.service.js'
 import { sendReviewRequestEmail } from '../services/reviews/review-request-email.service.js'
 import {
   AMAZON_SOLICITATION_MAX_DAYS,
@@ -212,6 +211,12 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
 
   let sent = 0, failed = 0, skipped = 0, tooEarly = 0
   let sentimentEmailsSent = 0
+  // The business's own shop review page, read once per run when a Shopify buyer is e-mailed (review-links.service.ts).
+  let shopPage: ShopReviewPage | null = null
+  const reviewLink = async (channel: string, marketplace: string | null) => {
+    if (channel === 'SHOPIFY' && !shopPage) shopPage = await readShopReviewPage().catch(() => ({ url: null, source: null }))
+    return reviewLinkFor(channel, marketplace, shopPage ?? { url: null, source: null })
+  }
 
   for (const req of due) {
     const order = req.order
@@ -454,7 +459,7 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
           marketplace: order.marketplace,
           productName: firstProduct?.name ?? null,
           productType: firstProduct?.productType ?? null,
-          reviewUrl: buildReviewUrl(order.channel, order.channelOrderId),
+          reviewUrl: await reviewLink(order.channel, order.marketplace),
           locale: (order.marketplace ?? 'IT').toUpperCase() === 'IT' ? 'it' : 'en',
         })
         if (result.dryRun) {

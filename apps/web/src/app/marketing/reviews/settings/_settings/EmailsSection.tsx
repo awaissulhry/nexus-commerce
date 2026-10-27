@@ -5,8 +5,9 @@
  * keeps its own opt-out list).
  *
  * The sender name, address and reply-to are the business identity every buyer e-mail carries (build spec ruling 4):
- * shown read-only here, changed in Settings › Company & fiscal only ("Change in Business settings", a new tab), so
- * there is one edit path. The unsubscribe link is always on (no control: every marketing e-mail must let the buyer opt
+ * shown read-only here, changed in Settings › Company only ("Change in Settings › Company", a new tab), so
+ * there is one edit path. The review button of each e-mail goes to the buyer's own eBay site or this business's own
+ * shop (review-links.service.ts); a business with no shop sends Shopify buyers no button, and this page says so. The unsubscribe link is always on (no control: every marketing e-mail must let the buyer opt
  * out). Then the unsubscribe list (UnsubscribeList.tsx).
  */
 import { ExternalLink } from 'lucide-react'
@@ -41,6 +42,7 @@ export function EmailsSection({ sender, senderError, onRetrySender, suppressions
         ) : (
           <>
             {sender.problem && <Banner tone="warning" title="Buyers get no review e-mail from this business yet.">{sender.problem}</Banner>}
+            {sender.shopReviewHeld && <Banner tone="info" title="No review button for Shopify buyers.">{sender.shopReviewHeld}</Banner>}
             <KeyValue
               columns={3}
               labelCase="sentence"
@@ -48,13 +50,15 @@ export function EmailsSection({ sender, senderError, onRetrySender, suppressions
                 { label: 'Sender name', value: sender.name ?? '—' },
                 { label: 'Sender address', value: sender.address ?? '—' },
                 { label: 'Replies go to', value: sender.replyTo ?? '—' },
+                { label: 'Review button (Shopify)', value: sender.shopReviewPage ?? 'None' },
+                { label: 'Review button (eBay)', value: 'The buyer’s own eBay site' },
               ]}
             />
             <div className={s.senderFoot}>
-              <span className={s.hint}>From your business settings. The sender is changed there only, for every e-mail of this business.</span>
+              <span className={s.hint}>From Settings › Company. The sender is changed there only, for every e-mail of this business.</span>
               <Button size="sm" asChild>
                 <Link href={sender.editHref} target="_blank" rel="noopener noreferrer">
-                  Change in Business settings <ExternalLink size={13} aria-hidden focusable={false} />
+                  Change in Settings › Company <ExternalLink size={13} aria-hidden focusable={false} />
                 </Link>
               </Button>
             </div>
