@@ -9,9 +9,15 @@
  *   feedback is an Amazon row about the seller. A row with no kind (stored before the column) reads by the old channel
  *   rule: an eBay row is seller feedback and every other row is a product review. No row is rewritten; a later contract
  *   step may backfill the column. `reviewKindOf` and `reviewKindWhere` are the only places that decide it.
- * - Needs a reply: a visible row whose triage status is open (none yet, New or In progress).
+ * - Needs a reply (Owner, 2026-10-27 — ONE definition, used by the rail and sub-sidebar badges, the Inbox's "Needs a
+ *   reply" filter and its Overdue tile, the Overview tile, the channel pages, Needs you and the digest): a visible row
+ *   whose triage status is open (none yet, New or In progress) AND that someone can answer AND that was not imported.
+ *   Amazon's product reviews never need a reply — Amazon lets nobody reply to them (@nexus/shared review-reply-rules);
+ *   an Etsy review whose 100-day reply window closed cannot be answered; a row a person imported from a file is old
+ *   history read in, never work. Overdue = the same rows, open for more than REPLY_DUE_HOURS.
  */
 import type { Prisma } from '@prisma/client'
+import { ETSY_REPLY_WINDOW_DAYS, REPLY_DUE_HOURS } from '@nexus/shared/review-reply-rules'
 
 export type ReviewKind = 'product' | 'seller'
 
@@ -55,7 +61,64 @@ export function countsInRating(row: { channel: string | null | undefined; kind?:
   return !((row.channel ?? '').toUpperCase() === 'AMAZON' && reviewKindOf(row.channel, row.kind) === 'seller')
 }
 
-/** Visible rows that still need a reply: no triage status yet, New, or In progress. */
-export function needsReplyWhere(): Prisma.ReviewWhereInput {
-  return visibleReviewWhere({ OR: [{ triageStatus: null }, { triageStatus: { in: [...OPEN_TRIAGE_STATUSES] } }] })
+/** A row a person imported from a file (`IMPORT_CSV`): read in as history, its channel id unknown. */
+export function isImportedSource(ingestSource: string | null | undefined): boolean {
+  return (ingestSource ?? '').toUpperCase().startsWith('IMPORT')
+}
+
+/** The imported rows (the same rule as `isImportedSource`). */
+function importedWhere(): Prisma.ReviewWhereInput {
+  return { ingestSource: { startsWith: 'IMPORT', mode: 'insensitive' } }
+}
+
+const HOUR_MS = 60 * 60 * 1000
+const DAY_MS = 24 * HOUR_MS
+
+/** Whether anyone can answer this review at all: never Amazon's product reviews; Etsy within its reply window. Pure. */
+export function canTakeReply(row: { channel: string | null | undefined; kind?: string | null; postedAt?: Date | string | null }, now: Date = new Date()): boolean {
+  const channel = (row.channel ?? '').toUpperCase()
+  if (channel === 'AMAZON' && reviewKindOf(channel, row.kind) === 'product') return false
+  if (channel === 'ETSY' && row.postedAt != null) {
+    const posted = new Date(row.postedAt).getTime()
+    if (Number.isFinite(posted) && now.getTime() - posted > ETSY_REPLY_WINDOW_DAYS * DAY_MS) return false
+  }
+  return true
+}
+
+/** One row: does it need a reply (the same rule as `needsReplyWhere`)? Pure. */
+export function reviewNeedsReply(
+  row: { channel: string | null | undefined; kind?: string | null; ingestSource?: string | null; triageStatus?: string | null; postedAt?: Date | string | null },
+  now: Date = new Date(),
+): boolean {
+  if (row.ingestSource === FIXTURE_SOURCE) return false
+  if (row.triageStatus != null && !(OPEN_TRIAGE_STATUSES as readonly string[]).includes(row.triageStatus)) return false
+  if (isImportedSource(row.ingestSource)) return false
+  return canTakeReply(row, now)
+}
+
+/** Visible rows that still need a reply: open (no triage status yet, New, In progress), answerable, not imported. */
+export function needsReplyWhere(now: Date = new Date()): Prisma.ReviewWhereInput {
+  return visibleReviewWhere({
+    AND: [
+      { OR: [{ triageStatus: null }, { triageStatus: { in: [...OPEN_TRIAGE_STATUSES] } }] },
+      { OR: [{ ingestSource: null }, { NOT: importedWhere() }] },
+      { NOT: { AND: [{ channel: 'AMAZON' }, reviewKindWhere('product')] } },
+      { NOT: { AND: [{ channel: 'ETSY' }, { postedAt: { lt: new Date(now.getTime() - ETSY_REPLY_WINDOW_DAYS * DAY_MS) } }] } },
+    ],
+  })
+}
+
+/** The rows that need a reply and have waited more than REPLY_DUE_HOURS since they were posted. */
+export function overdueWhere(now: Date = new Date()): Prisma.ReviewWhereInput {
+  return { AND: [needsReplyWhere(now), { postedAt: { lt: new Date(now.getTime() - REPLY_DUE_HOURS * HOUR_MS) } }] }
+}
+
+/** One row: needs a reply and is older than REPLY_DUE_HOURS (the same rule as `overdueWhere`). Pure. */
+export function reviewOverdue(
+  row: { channel: string | null | undefined; kind?: string | null; ingestSource?: string | null; triageStatus?: string | null; postedAt: Date | string },
+  now: Date = new Date(),
+): boolean {
+  if (!reviewNeedsReply(row, now)) return false
+  const posted = new Date(row.postedAt).getTime()
+  return Number.isFinite(posted) && posted + REPLY_DUE_HOURS * HOUR_MS < now.getTime()
 }

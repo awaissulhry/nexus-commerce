@@ -5,6 +5,7 @@ import {
   REPLY_DUE_HOURS,
   channelSiteDomain,
   isReviewOpen,
+  AMAZON_PRODUCT_NO_REPLY,
   isReviewOverdue,
   replyLength,
   replyRefusal,
@@ -36,10 +37,14 @@ describe('reviewReplyRules — one reply rule per channel (Reviews Inbox, 2026-1
     expect(replyRefusal(r, 'Thanks again')).toEqual({ code: 'already_replied', words: r.held })
   })
 
-  it('Amazon: no reply API — copy, open Seller Central, mark as responded; never a send button', () => {
+  it('Amazon: nobody can reply to a product review — no button, nothing to mark, the Amazon page\'s own words (audit B3)', () => {
     const product = reviewReplyRules('AMAZON', { kind: 'product', marketplace: 'DE' }, NOW)
-    expect(product).toMatchObject({ mode: 'copy', sendLabel: null, markAsResponded: true, limit: null })
-    expect(product.open).toEqual({ label: 'Open in Seller Central', href: 'https://sellercentral.amazon.de/home' })
+    expect(product).toMatchObject({ sendLabel: null, markAsResponded: false, open: null, limit: null, heldCode: 'no_reply', held: AMAZON_PRODUCT_NO_REPLY, ruleLine: AMAZON_PRODUCT_NO_REPLY })
+    expect(AMAZON_PRODUCT_NO_REPLY).toMatch(/^Amazon lets nobody reply to a product review\./)
+    expect(replyRefusal(product, 'Thanks')).toEqual({ code: 'no_reply', words: AMAZON_PRODUCT_NO_REPLY })
+  })
+
+  it('Amazon seller feedback: no reply API — copy, open Feedback Manager, mark as responded; never a send button', () => {
     const seller = reviewReplyRules('AMAZON', { kind: 'seller', marketplace: 'IT', replied: true }, NOW)
     expect(seller.open?.label).toBe('Open Feedback Manager')
     expect(seller.heldCode).toBe('already_replied')
@@ -77,7 +82,7 @@ describe('replyRefusal — what reply/send refuses', () => {
     expect(replyRefusal(ebay, 'x'.repeat(538))?.words).toBe('Cut 38 characters to send it (the limit is 500).')
   })
   it('no limit: any length passes', () => {
-    expect(replyRefusal(reviewReplyRules('AMAZON', {}, NOW), 'x'.repeat(5000))).toBeNull()
+    expect(replyRefusal(reviewReplyRules('SHOPIFY', {}, NOW), 'x'.repeat(5000))).toBeNull()
   })
   it('characters are counted as a person sees them', () => {
     expect(replyLength('Grazie 🙏🏽')).toBe(8)
@@ -92,6 +97,13 @@ describe('due and overdue', () => {
     expect(isReviewOverdue({ status: 'IN_PROGRESS', postedAt: daysAgo(3) }, NOW)).toBe(true)
     expect(isReviewOverdue({ status: 'NEW', postedAt: daysAgo(1) }, NOW)).toBe(false)
   })
+  it('a review nobody can answer, or one read in from a file, is never overdue (the API\'s needs-a-reply rule)', () => {
+    expect(isReviewOverdue({ status: null, postedAt: daysAgo(3), channel: 'AMAZON', kind: 'product' }, NOW)).toBe(false)
+    expect(isReviewOverdue({ status: null, postedAt: daysAgo(3), channel: 'AMAZON', kind: 'seller' }, NOW)).toBe(true)
+    expect(isReviewOverdue({ status: null, postedAt: daysAgo(120), channel: 'ETSY' }, NOW)).toBe(false)
+    expect(isReviewOverdue({ status: null, postedAt: daysAgo(3), channel: 'EBAY', imported: true }, NOW)).toBe(false)
+  })
+
   it('a closed review is never overdue', () => {
     for (const status of ['RESPONDED', 'RESOLVED', 'IGNORED']) {
       expect(isReviewOpen(status)).toBe(false)

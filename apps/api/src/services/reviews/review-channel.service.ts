@@ -30,10 +30,12 @@ import { reviewSources } from './review-sources.service.js'
 import { amazonThemes, scopeCode, type OverviewTheme, type Section } from './review-overview.service.js'
 import { listInbox, type InboxRow } from './review-inbox.service.js'
 import { reasonKeyOf } from './review-queue-words.js'
+import { ratingOf } from './review-rating.js'
+import { rateOf as oneRate, ratePercent, readRateFacts, readRateRequests } from './review-rate.service.js'
 import { readEbayFeedbackSummary, type SummaryRead } from './ebay-feedback-summary.service.js'
 import { combineSummaries, positivePercent, yearPeriod, type EbayDetailedRating, type EbayFeedbackPeriod } from './adapters/ebay-feedback-summary.js'
 import {
-  averageRating, bucketKeys, channelMarketLabel, daysBetween, marketWords, periodBounds, periodOf, reviewRate, round,
+  averageRating, bucketKeys, channelMarketLabel, daysBetween, marketWords, periodBounds, periodOf, round,
   starCounts, trendPoints, type PeriodBounds, type TrendBucket, type TrendPoint,
 } from './overviewMath.js'
 import {
@@ -65,8 +67,10 @@ export interface AmazonTiles {
   needReply: number
   oldestWaitDays: number | null
   requestsSent: number
-  /** Percent, one decimal; null when nothing can be matched (no imported reviews here). */
+  /** Percent, one decimal; null when nothing can be matched (the one rate, review-rate.service.ts). */
   reviewRate: number | null
+  /** "Not measurable: …" when no review can follow these requests; null otherwise. */
+  rateWords: string | null
   /** Amazon seller feedback (1–3 stars) left in the last 90 days, and in the 90 days before. */
   sellerFeedback90: number
   sellerFeedbackPrev90: number
@@ -95,8 +99,9 @@ export interface AmazonTopics {
 }
 
 export interface AmazonRequests extends AmazonRequestCounts {
-  /** Percent, one decimal; null when no imported review can be matched here. */
+  /** Percent, one decimal; null when no review can be matched here (the one rate). */
   reviewRate: number | null
+  rateWords: string | null
 }
 
 export interface AmazonWatchRow {
@@ -291,11 +296,12 @@ function asTopics(list: OverviewTheme[]): AmazonTopic[] {
 
 async function amazonSections(market: string | null, period: ChannelPeriod, bounds: PeriodBounds, now: Date): Promise<AmazonSections> {
   const scope: Prisma.ReviewWhereInput = { channel: 'AMAZON', ...(market ? { marketplace: market } : {}) }
-  const imported: Prisma.ReviewWhereInput = { ...scope, ingestSource: IMPORTED_SOURCE }
+  // The ONE rating's Amazon rows (review-rating.ts): product reviews a person imported.
+  const imported: Prisma.ReviewWhereInput = { AND: [{ ...scope, ingestSource: IMPORTED_SOURCE }, reviewKindWhere('product')] }
   const readFrom = bounds.prevFrom ?? bounds.from
 
   const rows = once(async (): Promise<AmazonRow[]> => prisma.review.findMany({
-    where: visibleReviewWhere({ ...imported, postedAt: { ...(readFrom ? { gte: readFrom } : {}), lte: bounds.to } }),
+    where: visibleReviewWhere({ AND: [imported, { postedAt: { ...(readFrom ? { gte: readFrom } : {}), lte: bounds.to } }] }),
     select: { id: true, rating: true, postedAt: true, productId: true },
     orderBy: { postedAt: 'desc' },
     take: 50_000,
@@ -333,18 +339,15 @@ async function amazonSections(market: string | null, period: ChannelPeriod, boun
     select: {
       status: true, channel: true, marketplace: true, providerResponseCode: true, suppressedReason: true, errorMessage: true,
       scheduledFor: true, sentAt: true, nextRetryAt: true, attemptCount: true,
-      _count: { select: { attributedReviews: { where: visibleReviewWhere() } } },
     },
     take: 20_000,
   }))
-  const rateOf = async () => {
-    const [reqs, facts] = await Promise.all([requests(), importFacts()])
-    const sent = reqs.filter(r => r.status === 'SENT')
-    // No imported review here: a request cannot be matched to one, so there is no rate (not a rate of 0).
-    if (facts.total === 0) return null
-    const rate = reviewRate(sent.length, sent.filter(r => r._count.attributedReviews > 0).length)
-    return rate == null ? null : round(rate * 100, 1)
-  }
+  // The ONE review rate (review-rate.service.ts): where no Amazon review of this market is in Nexus, "not measurable".
+  const rateOf = once(async () => {
+    const [sent, facts] = await Promise.all([readRateRequests({ from: bounds.from, to: bounds.to, channel: 'AMAZON', market }), readRateFacts()])
+    const r = oneRate(sent, facts)
+    return { rate: ratePercent(r), words: r.words }
+  })
 
   // Amazon seller feedback (kind SELLER): counted per 90 days and listed; never in the imported stars above.
   const sellerScope: Prisma.ReviewWhereInput = { AND: [scope, reviewKindWhere('seller')] }
@@ -365,13 +368,13 @@ async function amazonSections(market: string | null, period: ChannelPeriod, boun
         split(),
         importFacts(),
         topicFacts(),
-        prisma.review.count({ where: { AND: [needsReplyWhere(), scope] } }),
-        prisma.review.findFirst({ where: { AND: [needsReplyWhere(), scope] }, orderBy: { postedAt: 'asc' }, select: { postedAt: true } }),
+        prisma.review.count({ where: { AND: [needsReplyWhere(now), scope] } }),
+        prisma.review.findFirst({ where: { AND: [needsReplyWhere(now), scope] }, orderBy: { postedAt: 'asc' }, select: { postedAt: true } }),
         requests(),
         rateOf(),
         sellerCounts(),
       ])
-      const avg = averageRating(rowsNow.map(r => r.rating))
+      const avg = ratingOf(rowsNow.map(r => ({ channel: 'AMAZON', kind: 'PRODUCT', ingestSource: IMPORTED_SOURCE, rating: r.rating }))).stars
       const dislikes = topicsNow.ok.length ? amazonThemes(topicsNow.ok, 'NEGATIVE').length : null
       return {
         importedRating: avg == null ? null : round(avg, 1),
@@ -383,7 +386,8 @@ async function amazonSections(market: string | null, period: ChannelPeriod, boun
         needReply,
         oldestWaitDays: oldest ? daysBetween(oldest.postedAt, now) : null,
         requestsSent: reqs.filter(r => r.status === 'SENT').length,
-        reviewRate: rate,
+        reviewRate: rate.rate,
+        rateWords: rate.words,
         sellerFeedback90: seller.last,
         sellerFeedbackPrev90: seller.prev,
         sellerFeedbackOn: sellerFeedbackOn(),
@@ -433,7 +437,7 @@ async function amazonSections(market: string | null, period: ChannelPeriod, boun
 
     section('requests', async (): Promise<AmazonRequests> => {
       const [reqs, rate] = await Promise.all([requests(), rateOf()])
-      return { ...amazonRequestCounts(reqs.map(r => reasonKeyOf(r, now))), reviewRate: rate }
+      return { ...amazonRequestCounts(reqs.map(r => reasonKeyOf(r, now))), reviewRate: rate.rate, rateWords: rate.words }
     }),
 
     section('watch', async (): Promise<AmazonWatchRow[]> => {

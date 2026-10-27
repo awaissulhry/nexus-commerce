@@ -10,6 +10,7 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { needsReplyWhere, reviewKindOf } from './review-visibility.js'
+import { statusWhere } from './review-queue.service.js'
 import { buyerShort, channelMarketLabel, channelWords, daysBetween, marketWords, quoteOf, round, themeWords } from './overviewMath.js'
 
 export type NeedsYouOnly = 'reply' | 'requests' | 'alerts'
@@ -155,9 +156,9 @@ export function requestItems(
       label: 'Requests failed',
       tone: 'danger',
       title: `${plural(total, 'review request')} failed in the last 7 days`,
-      detail: `${byChannel.join(' · ')}${retrying.count > 0 ? ' · the ones with tries left try again on their own' : ''}`,
+      detail: `${byChannel.join(' · ')} · no tries left`,
       at: latest.toISOString(),
-      action: { label: 'See requests', page: 'requests', params: { status: 'FAILED' } },
+      action: { label: 'See requests', page: 'requests', params: { status: 'FAILED', period: '7d' } },
     })
   }
   if (retrying.count > 0) {
@@ -181,22 +182,50 @@ const REPLY_SELECT = {
   sentiment: { select: { label: true } },
 } satisfies Prisma.ReviewSelect
 
-/** The things that need a person now, most urgent first. */
-export async function reviewNeedsYou(input: { only?: unknown; limit?: unknown; now?: Date } = {}): Promise<NeedsYou> {
+/** The open alerts of one channel (and market), by Insights › Alerts' rule: the channels of the alert's negative reviews. */
+export async function openAlertIds(channel: string, market: string | null): Promise<string[]> {
+  const { listAlerts } = await import('./review-alerts.service.js')
+  const answer = await listAlerts({ status: 'OPEN', channel, market, limit: 200 })
+  return answer.items.map((a) => a.id)
+}
+
+/** A channel or market code from the query string (the Overview's scope), upper case; anything else is no filter. */
+function scopeCode(raw: unknown): string | null {
+  const value = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
+  return value && value !== 'ALL' && /^[A-Z_]{2,20}$/.test(value) ? value : null
+}
+
+/**
+ * The things that need a person now, most urgent first — inside the Overview's scope (`channel`, `market`) when it has
+ * one, so the list and its counts agree with the Overview's tiles (audit C1). Replies follow the one needs-a-reply rule;
+ * failed requests are the ones with no try left, as the Requests page's "Failed" filter shows them (audit A6).
+ */
+export async function reviewNeedsYou(input: { only?: unknown; limit?: unknown; channel?: unknown; market?: unknown; now?: Date } = {}): Promise<NeedsYou> {
   const now = input.now ?? new Date()
   const only = parseOnly(input.only)
   const limit = parseLimit(input.limit)
+  const channel = scopeCode(input.channel)
+  const market = scopeCode(input.market)
   const want = (kind: NeedsYouOnly) => only == null || only === kind
   const weekAgo = new Date(now.getTime() - 7 * 86_400_000)
   const urgent: Prisma.ReviewWhereInput = { OR: [{ rating: { lte: 2 } }, { sentiment: { is: { label: 'NEGATIVE' } } }] }
+  const reviewScope: Prisma.ReviewWhereInput = { ...(channel ? { channel } : {}), ...(market ? { marketplace: market } : {}) }
+  const replyWhere: Prisma.ReviewWhereInput = { AND: [needsReplyWhere(now), reviewScope] }
+  const requestScope = { ...(channel ? { channel } : {}), ...(market ? { marketplace: market } : {}) } as Prisma.ReviewRequestWhereInput
+  // An alert has one market; its channels are those of its negative reviews (Insights › Alerts' own rule, listAlerts).
+  const openInChannel = channel ? (await openAlertIds(channel, market)) : null
+  const spikeScope: Prisma.ReviewSpikeWhereInput = {
+    ...(market ? { marketplace: market } : {}),
+    ...(openInChannel ? { id: { in: openInChannel } } : {}),
+  }
 
   const [replyCount, urgentReplies, otherReplies, alertCount, spikes, failedGroups, retrying] = await Promise.all([
-    prisma.review.count({ where: needsReplyWhere() }),
-    want('reply') ? prisma.review.findMany({ where: { AND: [needsReplyWhere(), urgent] }, orderBy: { postedAt: 'desc' }, take: limit, select: REPLY_SELECT }) : Promise.resolve([]),
-    want('reply') ? prisma.review.findMany({ where: { AND: [needsReplyWhere(), { NOT: urgent }] }, orderBy: { postedAt: 'desc' }, take: limit, select: REPLY_SELECT }) : Promise.resolve([]),
-    prisma.reviewSpike.count({ where: { status: 'OPEN' } }),
+    prisma.review.count({ where: replyWhere }),
+    want('reply') ? prisma.review.findMany({ where: { AND: [replyWhere, urgent] }, orderBy: { postedAt: 'desc' }, take: limit, select: REPLY_SELECT }) : Promise.resolve([]),
+    want('reply') ? prisma.review.findMany({ where: { AND: [replyWhere, { NOT: urgent }] }, orderBy: { postedAt: 'desc' }, take: limit, select: REPLY_SELECT }) : Promise.resolve([]),
+    prisma.reviewSpike.count({ where: { status: 'OPEN', ...spikeScope } }),
     want('alerts') ? prisma.reviewSpike.findMany({
-      where: { status: 'OPEN' },
+      where: { status: 'OPEN', ...spikeScope },
       orderBy: { detectedAt: 'desc' },
       take: limit,
       select: {
@@ -204,8 +233,8 @@ export async function reviewNeedsYou(input: { only?: unknown; limit?: unknown; n
         rate28dDenominator: true, spikeMultiplier: true, detectedAt: true, product: { select: { name: true, sku: true } },
       },
     }) : Promise.resolve([]),
-    prisma.reviewRequest.groupBy({ by: ['channel'], where: { status: 'FAILED', updatedAt: { gte: weekAgo } }, _count: { _all: true }, _max: { updatedAt: true } }),
-    prisma.reviewRequest.aggregate({ where: { status: 'FAILED', nextRetryAt: { not: null }, attemptCount: { lt: 3 } }, _count: { _all: true }, _max: { updatedAt: true } }),
+    prisma.reviewRequest.groupBy({ by: ['channel'], where: { AND: [statusWhere('FAILED', now) as Prisma.ReviewRequestWhereInput, requestScope, { updatedAt: { gte: weekAgo } }] }, _count: { _all: true }, _max: { updatedAt: true } }),
+    prisma.reviewRequest.aggregate({ where: { AND: [statusWhere('RETRYING', now) as Prisma.ReviewRequestWhereInput, requestScope, { status: 'FAILED' }] }, _count: { _all: true }, _max: { updatedAt: true } }),
   ])
 
   const requests = requestItems(

@@ -10,7 +10,7 @@
  * Pure (no React), tested in channelModel.vitest.test.ts.
  */
 import { channelSiteDomain, reviewReplyRules } from '@nexus/shared/review-reply-rules'
-import { inboxHref, insightsHref, requestsHref } from '../_lib/reviewsLinks'
+import { inboxHref, insightsHref, needsReplyHref, requestsHref } from '../_lib/reviewsLinks'
 import type { InboxRow } from '../inbox/inboxDatasource'
 import { channelPath, lockParams, marketWord, scopeTitleWords, type ReviewsChannel, type ReviewsLock } from './reviewsScope'
 import { sellerFeedbackTile, type AmazonSellerFeedback } from './sellerFeedbackModel'
@@ -79,6 +79,8 @@ export interface AmazonTiles {
   oldestWaitDays: number | null
   requestsSent: number
   reviewRate: number | null
+  /** "Not measurable: …" when no review can follow these requests (the API's one rate). */
+  rateWords?: string | null
   /** Amazon seller feedback (1–3 stars) of the last 90 days and the 90 days before (PR H). */
   sellerFeedback90: number
   sellerFeedbackPrev90: number
@@ -118,6 +120,8 @@ export interface AmazonRequests {
   skipped: number
   waiting: number
   reviewRate: number | null
+  /** "Not measurable: …" when no review can follow these requests (the API's one rate). */
+  rateWords?: string | null
 }
 
 export interface AmazonWatchRow {
@@ -241,7 +245,9 @@ export function lockedLinks(lock: ReviewsLock, period: ChannelPeriod) {
   const scope = lockParams(lock)
   return {
     inbox: (more: Parameters<typeof inboxHref>[0] = {}) => inboxHref({ ...scope, period, ...more }),
-    requests: (more: Parameters<typeof requestsHref>[0] = {}) => requestsHref({ ...scope, ...more }),
+    /** The reviews of this page that need a reply, every date (the tile's own number). */
+    needsReply: () => needsReplyHref(scope),
+    requests: (more: Parameters<typeof requestsHref>[0] = {}) => requestsHref({ ...scope, period, ...more }),
     insights: (page: Parameters<typeof insightsHref>[0], more: Parameters<typeof insightsHref>[1] = {}) => insightsHref(page, { ...scope, period, ...more }),
   }
 }
@@ -337,7 +343,8 @@ export function amazonTiles(t: AmazonTiles, lock: ReviewsLock, period: ChannelPe
       label: 'Needs a reply',
       value: count(t.needReply),
       hint: waitWords(t.oldestWaitDays),
-      href: links.inbox({ status: 'NEW,IN_PROGRESS' }),
+      // The one needs-a-reply rule, every date: the Inbox shows this same number (audit A4).
+      href: links.needsReply(),
       accent: t.needReply > 0 ? 'var(--nds-danger)' : undefined,
     },
     { key: 'sent', label: 'Requests sent', value: count(t.requestsSent), hint: periodLabel(period), href: links.requests({ status: 'SENT' }) },
@@ -345,7 +352,7 @@ export function amazonTiles(t: AmazonTiles, lock: ReviewsLock, period: ChannelPe
       key: 'rate',
       label: 'Review rate',
       value: percent(t.reviewRate),
-      hint: t.reviewRate == null ? 'needs imported reviews to match' : 'estimate, from imported reviews',
+      hint: t.rateWords ?? (t.reviewRate == null ? 'nothing sent in this period' : 'estimate, from imported reviews'),
       href: links.requests(),
     },
   ]
@@ -377,7 +384,7 @@ export function ebayTiles(t: EbayTiles, summary: EbaySummary | null, lock: Revie
       label: 'Needs a reply',
       value: count(t.needReply),
       hint: waitWords(t.oldestWaitDays),
-      href: links.inbox({ kind: 'seller', status: 'NEW,IN_PROGRESS' }),
+      href: links.needsReply(),
       accent: t.needReply > 0 ? 'var(--nds-danger)' : undefined,
     },
     { key: 'buyers', label: 'Buyers to rate', value: 'Coming later', hint: 'Leave feedback for buyers · sample below', later: true },
@@ -402,7 +409,7 @@ export function requestRows(r: AmazonRequests): RequestRow[] {
       key: 'rate',
       label: 'Review rate',
       value: percent(r.reviewRate),
-      note: r.reviewRate == null ? 'Import reviews to estimate it: Amazon gives no review count' : 'Imported reviews ÷ requests sent · an estimate: Amazon gives no review count',
+      note: r.rateWords ?? (r.reviewRate == null ? 'Nothing sent in this period' : 'Reviews that followed ÷ requests sent · an estimate: Amazon gives no review count'),
       tone: 'info',
     },
   ]

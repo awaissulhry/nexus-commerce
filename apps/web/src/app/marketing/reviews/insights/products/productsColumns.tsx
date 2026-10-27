@@ -63,6 +63,8 @@ export interface ProductsAnswer {
   }
   families: ProductFamilyRow[]
   total: { families: number; products: number }
+  /** The pop-up's walk (families and their variants): this page's start in it and its length. */
+  nav?: { offset: number; total: number }
   page: number
   pageSize: number
   generatedAt: string

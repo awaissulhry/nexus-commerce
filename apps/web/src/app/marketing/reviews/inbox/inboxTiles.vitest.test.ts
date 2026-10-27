@@ -26,7 +26,7 @@ describe('Inbox tabs and tiles', () => {
     expect(TILE_ORDER.map(tileLabel)).toEqual(['New', 'In progress', 'Responded', 'Resolved', 'Ignored', 'Overdue'])
     expect(tileValue(null, 'NEW')).toBe('—')
     expect(tileValue({ NEW: 9, IN_PROGRESS: 3, RESPONDED: 1642, RESOLVED: 0, IGNORED: 2, OVERDUE: 4 }, 'RESPONDED')).toBe('1,642')
-    expect(tileHint('OVERDUE')).toBe('open for more than 48 h')
+    expect(tileHint('OVERDUE')).toBe('needs a reply for more than 48 h')
   })
 
   it('one removable chip per filter on, each removing only itself', () => {
@@ -52,7 +52,7 @@ describe('Inbox read state', () => {
     expect(banners).toEqual([{
       key: 'Sign-in expired|/settings/channels/ebay',
       title: 'eBay Germany has not been read since 23 Oct.',
-      body: 'Sign-in expired. New reviews from eBay Germany are missing here; the other channels are up to date.',
+      body: 'Sign-in expired. New reviews from eBay Germany are missing here until Nexus reads it again.',
       action: { label: 'Reconnect eBay Germany', href: '/settings/channels/ebay' },
     }])
   })

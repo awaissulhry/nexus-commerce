@@ -19,6 +19,8 @@ export type TrendBucket = 'day' | 'week' | 'month'
 export interface OverviewTiles {
   avgRating: number | null
   avgDelta: number | null
+  /** Where the rating's stars come from (the API's one rating): "12 reviews · Amazon: from imported reviews". */
+  ratingWords?: string
   newReviews: number
   newDelta: number | null
   needReply: number
@@ -27,6 +29,8 @@ export interface OverviewTiles {
   requestsFailed: number
   reviewRate: number | null
   rateDelta: number | null
+  /** Why the rate leaves requests out or has none ("Not measurable: …"). */
+  rateWords?: string | null
   openAlerts: number
   newAlertsToday: number
 }
@@ -45,6 +49,8 @@ export interface OverviewChannelRow {
   change: number | null
   sent: number | null
   rate: number | null
+  /** "Not measurable: …" when no review can follow these requests. */
+  rateWords?: string | null
   lastReviewAt: string | null
   state: 'ok' | 'not_updating'
   reason: string | null
@@ -354,7 +360,8 @@ export function channelViewRows(rows: readonly OverviewChannelRow[], now: number
       change: changeView(r.change, r.ratingKind),
       sent: r.sent == null ? '—' : count(r.sent),
       sentNote: etsy ? 'Etsy asks buyers itself' : !amazon && (r.sent ?? 0) > 0 ? 'by email' : null,
-      rate: rateText(r.rate),
+      // No rate where no review can follow (the API's words): "Not measurable", never a 0 %.
+      rate: r.rate == null && (r.sent ?? 0) > 0 && r.rateWords ? 'Not measurable' : rateText(r.rate),
       state: r.state,
       last: r.state === 'ok' ? lastWords(r.lastReviewAt, now) : 'Not updating',
       lastNote: r.state === 'ok' ? r.lastNote : null,

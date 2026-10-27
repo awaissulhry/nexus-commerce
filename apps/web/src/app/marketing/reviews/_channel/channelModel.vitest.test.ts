@@ -84,14 +84,21 @@ describe('Amazon', () => {
     // Not fetched in this setup and nothing stored: no number, and the hint says why.
     expect(amazonTiles({ ...AMAZON_TILES, sellerFeedback90: 0, sellerFeedbackPrev90: 0, sellerFeedbackOn: false }, IT, '30d')[2])
       .toMatchObject({ value: '—', hint: 'Not fetched in this setup yet' })
-    expect(tiles.find((t) => t.key === 'reply')?.href).toBe('/marketing/reviews/inbox?period=30d&status=NEW%2CIN_PROGRESS&channel=AMAZON&market=IT')
+    // The one needs-a-reply rule, every date: the Inbox shows this tile's own number (audit A4).
+    expect(tiles.find((t) => t.key === 'reply')?.href).toBe('/marketing/reviews/inbox?period=all&channel=AMAZON&market=IT&reply=needed')
+    // A link into Requests keeps the page's period (audit A3).
+    expect(tiles.find((t) => t.key === 'sent')?.href).toBe('/marketing/reviews/requests?status=SENT&channel=AMAZON&market=IT')
+    expect(amazonTiles(AMAZON_TILES, IT, '90d').find((t) => t.key === 'sent')?.href).toBe('/marketing/reviews/requests?period=90d&status=SENT&channel=AMAZON&market=IT')
   })
 
   it('no import: no rating, and says where a rating comes from — never an Amazon number', () => {
     const tiles = amazonTiles({ ...AMAZON_TILES, importedRating: null, importedInPeriod: 0, importedTotal: 0, lastImportAt: null, topicsToFix: null, reviewRate: null }, IT, '30d')
     expect(tiles[0]).toMatchObject({ value: '—', hint: NO_RATING_WORDS })
     expect(tiles[1]).toMatchObject({ value: '—', hint: 'No Amazon topics here' })
-    expect(tiles[5]).toMatchObject({ value: '—', hint: 'needs imported reviews to match' })
+    expect(tiles[5]).toMatchObject({ value: '—', hint: 'nothing sent in this period' })
+    // No review can follow (the API's one rate): its words, never a 0 %.
+    expect(amazonTiles({ ...AMAZON_TILES, reviewRate: null, rateWords: 'Not measurable: Amazon gives no review count — import this market’s reviews to estimate it.' }, IT, '30d')[5])
+      .toMatchObject({ value: '—', hint: expect.stringMatching(/^Not measurable/) })
     expect(amazonTiles({ ...AMAZON_TILES, importedRating: null, importedInPeriod: 0 }, IT, '7d')[0].hint).toBe('No imported review in the last 7 days')
   })
 
@@ -107,7 +114,9 @@ describe('Amazon', () => {
       ['Sent — Amazon accepted', '372'], ['Too early — tried again daily', '11'], ['Already asked', '6'], ['Not allowed', '2'],
       ['Failed', '1'], ['Skipped', '4'], ['Waiting', '9'], ['Review rate', '—'],
     ])
-    expect(rows.at(-1)?.note).toMatch(/Amazon gives no review count/)
+    expect(rows.at(-1)?.note).toBe('Nothing sent in this period')
+    const notMeasurable = requestRows({ sent: 3, tooEarly: 0, alreadyAsked: 0, notAllowed: 0, failed: 0, skipped: 0, waiting: 0, reviewRate: null, rateWords: 'Not measurable: Amazon gives no review count — import this market’s reviews to estimate it.' })
+    expect(notMeasurable.at(-1)?.note).toMatch(/^Not measurable: Amazon gives no review count/)
   })
 
   const topic = (label: string, mentions: number, impact: number | null, share: number | null = 18) => ({

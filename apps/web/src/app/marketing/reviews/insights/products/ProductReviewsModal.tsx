@@ -55,6 +55,9 @@ export interface ProductReviewsModalProps {
   productId: string
   /** The products on the page, in order, for K / J. */
   ids: readonly string[]
+  /** Where the page starts in the whole list and its length, so the counter counts the list (audit A2). */
+  offset?: number
+  total?: number
   scope: InsightsScope
   canManage: boolean
   onGo: (productId: string) => void
@@ -71,7 +74,7 @@ const SIZE_SAMPLE_ROWS = [
 
 interface SuggestAnswer { ok: boolean; created: unknown[]; theme: string | null; market: string | null; words: string | null }
 
-export function ProductReviewsModal({ productId, ids, scope, canManage, onGo, onClose }: ProductReviewsModalProps) {
+export function ProductReviewsModal({ productId, ids, offset, total, scope, canManage, onGo, onClose }: ProductReviewsModalProps) {
   const router = useRouter()
   const { toast } = useToast()
   const [tab, setTab] = useState<ProductTab>('summary')
@@ -132,7 +135,7 @@ export function ProductReviewsModal({ productId, ids, scope, canManage, onGo, on
       activeTab={tab}
       onTabChange={(id) => setTab(id as ProductTab)}
       tabsLabel="Product sections"
-      nav={{ ids, current: productId, onGo, noun: 'product' }}
+      nav={{ ids, current: productId, onGo, noun: 'product', offset, total }}
       loading={read.loading}
       error={!detail && read.error ? read.error : undefined}
       onRetry={read.reload}

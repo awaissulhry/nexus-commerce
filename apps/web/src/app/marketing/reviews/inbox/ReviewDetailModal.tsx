@@ -28,6 +28,7 @@ import Link from '@/lib/workspaces/Link'
 import { reviewsGet, reviewsSend } from '../_lib/reviewsFetch'
 import { MOOD_WORD, STATUS_WORD, themeWord } from '../_lib/reviewWords'
 import { useReplyTemplates } from '../settings/_settings/useReplyTemplates'
+import { studioHref } from '../insights/products/productModalModel'
 import { ownerChoices } from './inboxBulk'
 import {
   MANAGE_MOOD, MANAGE_TRIAGE, MOOD_OPTIONS, MOOD_TONE, STATUS_OPTIONS, buyerFacts, composerView, dateWords, detailSubtitle, detailTabs,
@@ -161,7 +162,8 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
     }
     emitInvalidation({ type: 'review.updated', id: reviewId })
     reread()
-    toast('Saved. Insights counts your choice from now on.', 'success')
+    // Audit B14: Themes and Products read the edited mood and themes; the spike check keeps the rates it counted.
+    toast('Saved. Themes and Products count your choice from now on; alerts already counted do not change.', 'success')
   }, [reviewId, reread, toast])
 
   const [translating, setTranslating] = useState(false)
@@ -369,7 +371,7 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
                   <p className={s.hint}>
                     {detail.sentiment.edited
                       ? `Set by a person on ${dateWords(detail.sentiment.editedAt)}. Insights counts this choice.`
-                      : 'AI set these from the text. Change them and Insights counts your choice from now on.'}
+                      : 'AI set these from the text. Change them and Themes and Products count your choice from now on (alerts already counted do not change).'}
                   </p>
                 </Card>
 
@@ -475,7 +477,8 @@ function productItems(d: InboxDetail): KeyValueItem[] {
   const items: KeyValueItem[] = []
   items.push({
     label: 'Product',
-    value: d.product ? <Link href={`/products/${encodeURIComponent(d.product.id)}`}>{d.product.name}</Link> : 'No product link',
+    // The product studio, as Insights' product pop-up opens it (audit C12): one target for "the product".
+    value: d.product ? <Link href={studioHref(d.product.id)}>{d.product.name}</Link> : 'No product link',
     hint: d.product ? d.product.sku : d.review.imported ? 'The file named no product Nexus knows' : undefined,
   })
   if (d.variant?.words) items.push({ label: 'Size and colour', value: d.variant.words, hint: d.variant.sku })
