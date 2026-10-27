@@ -16,6 +16,7 @@ import { amazonSpClient } from '../lib/amazon-sp-client.js'
  */
 
 import type { SellingPartner } from 'amazon-sp-api'
+import { gunzipSync } from 'node:zlib'
 import { logger } from '../utils/logger.js'
 import { sendWithRateRetry } from './sp-api-rate-retry.js'
 import {
@@ -103,6 +104,51 @@ export function deriveRowCount(payload: unknown): number | null {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function windows1252(bytes: Uint8Array): string {
+  try {
+    return new TextDecoder('windows-1252').decode(bytes)
+  } catch {
+    return Buffer.from(bytes).toString('latin1') // a Node without that table: the same letters, bar € and a few signs
+  }
+}
+
+/**
+ * A report document's bytes → text (2026-10-27). Amazon's docs name no character set for flat-file reports, and the
+ * European ones are not always UTF-8: Airbyte's SP-API connector (github.com/airbytehq/airbyte,
+ * source-amazon-seller-partner/components.py) decodes them as ISO-8859-1. The SDK's `download` read the Content-Type
+ * charset but fell back to UTF-8, so a Windows-1252 file without one lost every é, ü or à to "�". Now: the charset the
+ * Content-Type names, when it names one other than UTF-8 ("Cp1252", "ISO-8859-1",
+ * "Shift_JIS" — WHATWG labels); otherwise UTF-8 when the bytes are valid UTF-8, and Windows-1252 (which holds
+ * ISO-8859-1's letters) when they are not. A UTF-8 byte-order mark is dropped.
+ */
+export function decodeReportDocument(bytes: Uint8Array, contentType?: string | null): string {
+  const label = /charset\s*=\s*["']?([^"';\s]+)/i.exec(contentType ?? '')?.[1]
+  if (label && !/^utf-?8$/i.test(label)) {
+    try {
+      return new TextDecoder(label).decode(bytes)
+    } catch { /* a charset TextDecoder does not know: read the bytes as below */ }
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch {
+    return windows1252(bytes)
+  }
+}
+
+/**
+ * Download a report document as text. The document is a pre-signed storage URL, not the SP-API, so it is outside the
+ * channel gateway by design (services/gateway/amazon-sdk.ts); it still goes through the SDK client of the same account
+ * (its stream download checks the answer's status). Unzipped here rather than by the SDK, so the answer keeps its
+ * Content-Type for `decodeReportDocument`.
+ */
+async function downloadReportText(sp: any, doc: { url?: string; compressionAlgorithm?: string }): Promise<string> {
+  const res = await sp.downloadStream(doc, { unzip: false })
+  const chunks: Buffer[] = []
+  for await (const chunk of res) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  const raw = Buffer.concat(chunks)
+  return decodeReportDocument(doc.compressionAlgorithm === 'GZIP' ? gunzipSync(raw) : raw, res.headers?.['content-type'])
 }
 
 /**
@@ -257,11 +303,11 @@ async function doFetchSpApiReport<T = unknown>(
     path: { reportDocumentId },
   })
   // The amazon-sp-api library can either return a string directly OR a
-  // metadata object that needs sp.download() to fetch + decompress.
+  // metadata object (url + compressionAlgorithm) to download, decompress and decode.
   let raw: string =
     typeof docRes === 'string'
       ? docRes
-      : await (sp as any).download(docRes)
+      : await downloadReportText(sp, docRes)
 
   // Try to parse as JSON first (Sales & Traffic comes back as JSON).
   // Fall back to returning the string for flat-file reports — the caller

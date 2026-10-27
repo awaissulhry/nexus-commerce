@@ -70,9 +70,10 @@ vi.mock('../sp-api-reports.service.js', () => {
 vi.mock('../../utils/cron-observability.js', () => ({ recordCronRun: vi.fn(async (_name: string, handler: () => Promise<unknown>) => handler()) }))
 
 import {
-  feedbackExternalId, FeedbackReportShapeError, marketFetchStates, parseFeedbackDate, parseFeedbackRating, parseSellerFeedbackReport,
+  feedbackExternalId, FeedbackReportShapeError, headerKey, marketFetchStates, parseFeedbackDate, parseFeedbackRating, parseSellerFeedbackReport,
   planFeedbackUpserts, SELLER_FEEDBACK_SOURCE, type FeedbackRunFact,
 } from './amazon-seller-feedback-report.js'
+import { logger } from '../../utils/logger.js'
 import {
   fetchSellerFeedbackForMarket, readSellerFeedbackState, requestSellerFeedbackFetch, sellerFeedbackMarkets, upsertSellerFeedback,
 } from './amazon-seller-feedback.service.js'
@@ -165,9 +166,90 @@ describe('reading the report', () => {
 
   it('refuses a file that is not this report, and reads an empty report as no feedback', () => {
     expect(() => parseSellerFeedbackReport('sku\tprice\nA\t1', 'IT')).toThrow(FeedbackReportShapeError)
-    expect(() => parseSellerFeedbackReport('sku\tprice\nA\t1', 'IT')).toThrow(/Date, Rating, Order ID/)
+    // "price" holds a 1, which could be stars; nothing holds a date or an order id.
+    expect(() => parseSellerFeedbackReport('sku\tprice\nA\t1', 'IT')).toThrow(/no Date, Order ID column .* Columns seen: “sku”, “price”\.$/)
     expect(parseSellerFeedbackReport('', 'IT')).toEqual({ rows: [], skipped: [] })
     expect(parseSellerFeedbackReport(HEADER, 'IT')).toEqual({ rows: [], skipped: [] })
+  })
+})
+
+// Amazon publishes the English header only (COLUMN_KEYS in amazon-seller-feedback-report.ts). These headers are
+// stand-ins in each market's language — not Amazon's texts — with the date form Airbyte's connector reads for that
+// market: the columns are found by what they hold, never by a guessed translation. Order ids and comments are made up.
+const STAND_INS: Array<{ market: string; header: string[]; date: string; day: string; comment: string }> = [
+  { market: 'IT', header: ['Data', 'Valutazione', 'Commenti', 'La tua risposta', 'Numero ordine', 'Email del valutatore'], date: '25/10/26', day: '2026-10-25', comment: 'Arrivato in ritardo, però la qualità è buona.' },
+  { market: 'DE', header: ['Datum', 'Bewertung', 'Kommentare', 'Ihre Antwort', 'Bestellnummer', 'E-Mail des Bewerters'], date: '25.10.26', day: '2026-10-25', comment: 'Größe fällt klein aus.' },
+  { market: 'FR', header: ['Date', 'Évaluation', 'Commentaires', 'Votre réponse', 'Numéro de commande', 'E-mail de l’évaluateur'], date: '05/10/26', day: '2026-10-05', comment: 'Colis abîmé à l’arrivée.' },
+  { market: 'ES', header: ['Fecha', 'Calificación', 'Comentarios', 'Tu respuesta', 'Número de pedido', 'Correo del evaluador'], date: '05/10/26', day: '2026-10-05', comment: 'Llegó sin la etiqueta de tallas.' },
+  { market: 'SE', header: ['Datum', 'Betyg', 'Kommentarer', 'Ditt svar', 'Ordernummer', 'Bedömarens e-post'], date: '2026-10-25', day: '2026-10-25', comment: 'Långsam leverans.' },
+]
+
+describe('reading the report in the market’s language', () => {
+  it('folds accents and case in a header name', () => {
+    expect(headerKey('Évaluation')).toBe('evaluation')
+    expect(headerKey('Número de pedido')).toBe('numerodepedido')
+    expect(headerKey(`${String.fromCharCode(0xfeff)}Order ID`)).toBe('orderid')
+    expect(headerKey('Your Response')).toBe('yourresponse')
+  })
+
+  for (const s of STAND_INS) {
+    it(`reads a ${s.market} report by what its columns hold`, () => {
+      const text = [
+        line(...s.header),
+        line(s.date, '2', s.comment, 'Ci dispiace / Sorry.', '000-0000000-0000001', 'no-reply@amazon.com'),
+        line(s.date, '1', '', '', '000-0000000-0000002', 'no-reply@amazon.com'),
+        '',
+      ].join('\r\n')
+      const parsed = parseSellerFeedbackReport(text, s.market)
+      expect(parsed.columnsFrom).toBe('contents')
+      expect(parsed.skipped).toEqual([])
+      expect(parsed.rows.map((r) => [r.amazonOrderId, r.rating, r.comment, r.response, r.postedAt.toISOString().slice(0, 10)])).toEqual([
+        ['000-0000000-0000001', 2, s.comment, 'Ci dispiace / Sorry.', s.day],
+        ['000-0000000-0000002', 1, '', null, s.day],
+      ])
+      expect(JSON.stringify(parsed.rows)).not.toMatch(/no-reply@amazon\.com/)
+    })
+  }
+
+  it('reads columns in another order by their contents; the comment beside the stars, the response before the order id', () => {
+    const text = [
+      line('Sterne', 'Text', 'Antwort', 'Bestellung', 'Tag'),
+      line('1', 'Kaputt angekommen.', 'Ersatz ist unterwegs.', '000-0000000-0000021', '20.10.26'),
+      line('2', '', '', '000-0000000-0000022', '21.10.26'),
+    ].join('\n')
+    const { rows, columnsFrom } = parseSellerFeedbackReport(text, 'DE')
+    expect(columnsFrom).toBe('contents')
+    expect(rows.map((r) => [r.amazonOrderId, r.rating, r.comment, r.response, r.postedAt.toISOString().slice(0, 10)])).toEqual([
+      ['000-0000000-0000022', 2, '', null, '2026-10-21'],
+      ['000-0000000-0000021', 1, 'Kaputt angekommen.', 'Ersatz ist unterwegs.', '2026-10-20'],
+    ])
+  })
+
+  it('a comment that is just a digit does not become the stars: Amazon’s documented order decides, when the column count fits', () => {
+    const header = line('Kolumna 1', 'Kolumna 2', 'Kolumna 3', 'Kolumna 4', 'Kolumna 5', 'Kolumna 6')
+    const row = line('24/10/26', '2', '3', '', '000-0000000-0000011', 'no-reply@amazon.com')
+    const { rows } = parseSellerFeedbackReport(`${header}\n${row}`, 'PL')
+    expect(rows[0]).toMatchObject({ rating: 2, comment: '3', amazonOrderId: '000-0000000-0000011' })
+    // Four columns is not Amazon's layout: two columns could be the stars, so Nexus refuses rather than guess.
+    expect(() => parseSellerFeedbackReport(`${line('A', 'B', 'C', 'D')}\n${line('24/10/26', '2', '3', '000-0000000-0000011')}`, 'PL')).toThrow(/no Rating column/)
+  })
+
+  it('a header line and no feedback line is no feedback, whatever the header says', () => {
+    expect(parseSellerFeedbackReport(`${line(...STAND_INS[0].header)}\r\n`, 'IT')).toEqual({ rows: [], skipped: [] })
+    expect(parseSellerFeedbackReport(`${line('Kolumna 1', 'Kolumna 2')}\n\n`, 'PL')).toEqual({ rows: [], skipped: [] })
+  })
+
+  it('a report it still cannot read names the column titles it saw, never a row’s values', () => {
+    const text = [line('Spalte A', 'Spalte B', 'Spalte C'), line('gestern', 'sehr schlecht', 'irgendwas')].join('\n')
+    let err: unknown
+    try { parseSellerFeedbackReport(text, 'DE') } catch (e) { err = e }
+    expect(err).toBeInstanceOf(FeedbackReportShapeError)
+    expect((err as FeedbackReportShapeError).headers).toEqual(['Spalte A', 'Spalte B', 'Spalte C'])
+    expect((err as Error).message).toBe('Amazon\'s feedback report has no Date, Rating, Order ID column Nexus could find by name or by its contents, so Nexus could not read it. Columns seen: “Spalte A”, “Spalte B”, “Spalte C”.')
+    expect((err as Error).message).not.toMatch(/gestern|sehr schlecht|irgendwas/)
+    // A first line that looks like values (a feedback line, not titles) is hidden in the message.
+    const noTitles = [line('24/10/26', 'Bewertung', 'buyer@example.invalid'), line('kein Datum', 'viel', 'nichts')].join('\n')
+    expect(() => parseSellerFeedbackReport(noTitles, 'DE')).toThrow(/Columns seen: “\(hidden\)”, “Bewertung”, “\(hidden\)”\.$/)
   })
 })
 
@@ -242,6 +324,30 @@ describe('fetching one market', () => {
     expect(refused.ok).toBe(false)
     expect(refused.error).toMatch(/403/)
     expect(db.reviews).toHaveLength(0)
+  })
+
+  it('reads a report in the market’s language, and a header with no feedback line as no feedback', async () => {
+    const s = STAND_INS[0]
+    const report = (payload: string) => async () => ({ reportId: 'rep-3', reportDocumentId: 'doc-3', payload, region: 'eu', durationMs: 1 })
+    amazon.answer = report([line(...s.header), line(s.date, '2', s.comment, '', '000-0000000-0000001', 'no-reply@amazon.com')].join('\n'))
+    expect(await fetchSellerFeedbackForMarket(IT, NOW)).toMatchObject({ ok: true, reportRows: 1, created: 1, error: null })
+    expect(db.reviews[0]).toMatchObject({ marketplace: 'IT', rating: 2, body: s.comment, externalReviewId: 'amazon-feedback:000-0000000-0000001' })
+    amazon.answer = report(`${line(...s.header)}\r\n`)
+    expect(await fetchSellerFeedbackForMarket(IT, NOW)).toMatchObject({ ok: true, reportRows: 0, created: 0, error: null })
+  })
+
+  it('a report it cannot read fails, and the log names its column titles, never a row', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
+    try {
+      amazon.answer = async () => ({ reportId: 'rep-5', reportDocumentId: 'doc-5', payload: [line('Spalte A', 'Spalte B'), line('gestern', 'irgendwas')].join('\n'), region: 'eu', durationMs: 1 })
+      const result = await fetchSellerFeedbackForMarket(IT, NOW)
+      expect(result).toMatchObject({ ok: false, created: 0 })
+      expect(result.error).toMatch(/Columns seen: “Spalte A”, “Spalte B”\.$/)
+      expect(warn).toHaveBeenCalledWith('[amazon-seller-feedback] reading the report failed', expect.objectContaining({ market: 'IT', columns: ['Spalte A', 'Spalte B'] }))
+      expect(JSON.stringify(warn.mock.calls)).not.toMatch(/gestern|irgendwas/)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('reads only the active Amazon markets in Europe, with Amazon’s marketplace id', async () => {

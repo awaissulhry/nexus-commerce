@@ -160,11 +160,15 @@ export async function fetchSellerFeedbackForMarket(m: FeedbackMarket, now: Date 
   }
   try {
     const parsed = parseSellerFeedbackReport(text, m.code)
+    // Counts and how the columns were found only — never a row's values.
+    if (parsed.columnsFrom) logger.info('[amazon-seller-feedback] report read', { market: m.code, columnsFrom: parsed.columnsFrom, rows: parsed.rows.length, skipped: parsed.skipped.length })
     const written = await upsertSellerFeedback(parsed.rows, m.code, reportId, now)
     return { ...out, ok: true, reportRows: parsed.rows.length + parsed.skipped.length, created: written.created, updated: written.updated, skipped: parsed.skipped.length }
   } catch (err) {
-    out.error = err instanceof FeedbackReportShapeError ? err.message : err instanceof Error ? err.message : String(err)
-    logger.warn('[amazon-seller-feedback] reading the report failed', { market: m.code, error: out.error })
+    out.error = err instanceof Error ? err.message : String(err)
+    // A report Nexus could not read: its column titles (not personal data), never a row's values.
+    const columns = err instanceof FeedbackReportShapeError ? err.headers : undefined
+    logger.warn('[amazon-seller-feedback] reading the report failed', { market: m.code, error: out.error, ...(columns ? { columns } : {}) })
     return out
   }
 }
