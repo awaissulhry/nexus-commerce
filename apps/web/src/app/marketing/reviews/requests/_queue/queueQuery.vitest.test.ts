@@ -12,17 +12,30 @@ import {
   withFilter,
   withPage,
   withPageSize,
+  withPeriod,
   withSort,
 } from './queueQuery'
 
 describe('queue address', () => {
   it('reads every filter, the sort, the page and the open request', () => {
-    const { query, flags } = parseQueueQuery('?status=retrying&channel=amazon&market=de&rule=r1&productType=Jacket&reason=amazon_too_early&q=405-&sort=next:asc&page=3&pageSize=100&results=7d&request=req-9')
+    const { query, flags } = parseQueueQuery('?status=retrying&channel=amazon&market=de&rule=r1&productType=Jacket&reason=amazon_too_early&q=405-&period=90d&sort=next:asc&page=3&pageSize=100&results=7d&request=req-9')
     expect(query).toEqual({
-      status: 'RETRYING', channel: 'AMAZON', market: 'DE', rule: 'r1', productType: 'Jacket', reason: 'amazon_too_early', q: '405-',
+      status: 'RETRYING', channel: 'AMAZON', market: 'DE', rule: 'r1', productType: 'Jacket', reason: 'amazon_too_early', q: '405-', period: '90d',
       sort: { column: 'next', dir: 'asc' }, page: 3, pageSize: 100, results: '7d', request: 'req-9',
     })
     expect(flags).toEqual({ inserts: false, preview: false })
+  })
+
+  it('keeps the period a link brings, asks the API for it, and words it as a removable chip (audit A3)', () => {
+    const { query } = parseQueueQuery('?period=12m&status=SENT')
+    expect(query.period).toBe('12m')
+    expect(serializeQueueQuery(query)).toBe('?status=SENT&period=12m')
+    expect(queueApiParams(query)).toMatchObject({ period: '12m', status: 'SENT' })
+    expect(parseQueueQuery('?period=5y').query.period).toBe('30d')
+    expect(activeFilterCount(query)).toBe(2)
+    expect(clearFilters(query).period).toBe('30d')
+    expect(withPeriod(query, '30d').period).toBe('30d')
+    expect(withSort(query, 'status', 'asc').sort).toBeNull() // Status is not sortable (A14)
   })
 
   it('falls back to everything for unknown values', () => {
@@ -62,7 +75,7 @@ describe('queue address', () => {
   })
 
   it('counts and clears the filters, keeping sort and page size', () => {
-    const q = { ...EMPTY_QUEUE_QUERY, status: 'SENT' as const, rule: 'r1', q: 'x', pageSize: 200, sort: { column: 'status' as const, dir: 'asc' as const } }
+    const q = { ...EMPTY_QUEUE_QUERY, status: 'SENT' as const, rule: 'r1', q: 'x', pageSize: 200, sort: { column: 'tries' as const, dir: 'asc' as const } }
     expect(activeFilterCount(q)).toBe(3)
     expect(clearFilters(q)).toEqual({ ...EMPTY_QUEUE_QUERY, pageSize: 200, sort: q.sort })
   })

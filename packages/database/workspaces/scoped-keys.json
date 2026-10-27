@@ -7397,5 +7397,12 @@
         ]
       }
     ]
+  },
+  "ReviewAppConnection": {
+    "scalar": {
+      "app": "workspace_app"
+    },
+    "compound": {},
+    "relations": []
   }
 }

@@ -13299,6 +13299,9 @@ model Review {
   feedbackState    String?
   revisionEligible Boolean?
   feedbackStateAt  DateTime?
+  // Etsy (2026-10-27, Reviews PR I): when the buyer last edited the review on the channel (Etsy `update_timestamp`).
+  // Etsy allows one reply within 100 days of that edit (`reviewReplyRules`). Null when the channel does not say.
+  channelEditedAt  DateTime?
 
   // RX.2 — Response Desk triage workflow. triageStatus null is treated
   // as NEW by the app so existing rows need no backfill.
@@ -14005,6 +14008,39 @@ model ReviewReplyTemplate {
   updatedAt   DateTime @updatedAt
 
   @@unique([workspaceId, name], name: "workspace_name", map: "ReviewReplyTemplate_workspace_name_key")
+  @@index([workspaceId])
+}
+
+/// Reviews (2026-10-27, PR I) — the store's review app a business connected to Nexus (Shopify keeps no reviews itself:
+/// they live in the store's review app). One row per business and app. Nexus reads the app's reviews every 30 minutes and,
+/// where the app allows it (Judge.me), posts a person's reply. The key is stored encrypted and never shown back.
+model ReviewAppConnection {
+  // Business ownership comes from verified database context.
+  workspaceId      String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id               String    @id @default(cuid())
+  /// JUDGEME | OKENDO | YOTPO | LOOX (only Judge.me connects today).
+  app              String
+  /// The store's address the app knows it by ("example.myshopify.com").
+  shopDomain       String
+  /// encryptCredentials blob of { apiToken }; null once disconnected. Never returned by the API, never logged.
+  credentials      String?
+  /// The KMS key that wrapped `credentials`, or 'env'.
+  credentialsKeyId String?
+  /// CONNECTED | NEEDS_FIX (the app refused the key) | DISCONNECTED.
+  state            String    @default("CONNECTED")
+  /// The last read that finished, and how many reviews it saw.
+  lastReadAt       DateTime?
+  lastReadCount    Int?
+  /// Why the last read or reply failed, in words (no key, no response body); null after a read that worked.
+  lastError        String?
+  lastErrorAt      DateTime?
+  /// The person who connected it (a user id), and who changed it last.
+  createdBy        String?
+  updatedBy        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([workspaceId, app], name: "workspace_app", map: "ReviewAppConnection_workspace_app_key")
   @@index([workspaceId])
 }
 

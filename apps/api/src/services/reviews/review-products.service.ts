@@ -7,11 +7,11 @@
  *         top return reason).
  *   GET /api/reviews/insights/products/:productId?channel&market&period
  *       → one product (a family: all its variants): rating per channel and market with the words its source is shown
- *         with, the star spread, themes with star impact, fit per size (Phase 3: null, "coming later"), the 3 latest
- *         reviews with their translations, and returns by reason.
+ *         with, the star spread, themes with star impact, its family's fit per size and per variant in the period
+ *         (review-fit.ts), the 3 latest reviews with their translations, and returns by reason.
  *
- * Ratings mix every channel and market; eBay feedback counts as 5, 3 or 1 star (per channel and market eBay reads as
- * "% positive"). An Amazon star comes only from reviews a person imported: Amazon gives no rating by API (ruling 5),
+ * Ratings are the stars of product reviews across every channel and market (review-rating.ts); eBay feedback reads as
+ * "% positive" per channel and market, never as stars. An Amazon star comes only from reviews a person imported: Amazon gives no rating by API (ruling 5),
  * so a product Amazon knows only by its topics has no rating, and says so. Return rate = returns with a reason over
  * orders, last 30 days. Every Review read is visible rows only (review-visibility.ts).
  */
@@ -19,8 +19,10 @@ import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { visibleReviewWhere } from './review-visibility.js'
 import { variantWords } from './review-inbox-query.js'
+import { productFit } from './review-fit.service.js'
+import type { ProductFit } from './review-fit.js'
 import {
-  averageRating, buyerShort, delta, ratingIn, ratingKindOf, round, sparkValues, sparkWindows, starCounts, themeWords,
+  averageRating, buyerShort, delta, RATING_DROP_STARS, ratingKindOf, round, sparkValues, sparkWindows, starCounts, themeWords,
   type RatingKind,
 } from './overviewMath.js'
 import {
@@ -28,12 +30,13 @@ import {
   parseTopicRows, pct, ratingSourceWords, reasonWords, returnRate, snippetFrom, themeStarImpact, whereWords, THEME_KEYS,
   type InsightPeriod, type InsightScope, type ParsedTopic, type ThemeKey,
 } from './review-insights-math.js'
+import { countsAsStars, ratingInMeasure } from './review-rating.js'
 
 const DAY = 86_400_000
 const SPARK_DAYS = 42
 const RETURN_DAYS = 30
-/** A rating this much lower than the period before is a drop ("Rating dropped" tile). */
-export const DROP_AT = -0.3
+/** A rating this much lower than the period before is a drop ("Rating dropped" tile): the ONE rule (overviewMath.ts). */
+export const DROP_AT = -RATING_DROP_STARS
 const DEFAULT_PAGE_SIZE = 50
 const MAX_PAGE_SIZE = 200
 
@@ -45,6 +48,8 @@ type ReviewFact = {
   rating: number | null
   postedAt: Date
   ingestSource: string | null
+  /** `Review.kind` (null on older rows): the one rating counts product reviews only (review-rating.ts). */
+  kind?: string | null
   sentiment: { label: string; categories: string[] } | null
 }
 
@@ -96,6 +101,8 @@ export interface ProductsAnswer {
   }
   families: ProductFamilyRow[]
   total: { families: number; products: number }
+  /** The pop-up's walk (families and their variants): this page's start in it and its length. */
+  nav: { offset: number; total: number }
   page: number
   pageSize: number
   generatedAt: string
@@ -218,13 +225,14 @@ export function topComplaint(rows: readonly ReviewFact[], topics: readonly Parse
   return topAmazon && topAmazon[1] > 0 ? { key: topAmazon[0], label: themeWords(topAmazon[0]), count: topAmazon[1], from: 'amazon_topic' } : null
 }
 
-/** The words a mixed rating is shown with. */
+/** The words a product's rating is shown with — the ONE rating's rules (review-rating.ts): stars of product reviews. */
 export function mixedRatingWords(rows: readonly ReviewFact[], amazonKnown: boolean): string {
   const channels = [...new Set(rows.map((r) => r.channel.toUpperCase()))]
   if (channels.length === 0) return amazonKnown ? ratingSourceWords('AMAZON', []) : 'No reviews in this period'
   if (channels.length === 1) return ratingSourceWords(channels[0], rows.map((r) => r.ingestSource))
-  const amazon = rows.filter((r) => r.channel.toUpperCase() === 'AMAZON')
-  return `stars from every channel${channels.includes('EBAY') ? '; eBay feedback counts as 5, 3 or 1 star' : ''}${amazon.length ? '; Amazon from imported reviews' : ''}`
+  const amazon = channels.includes('AMAZON')
+  const ebay = channels.includes('EBAY')
+  return `stars from product reviews${amazon ? '; Amazon from imported reviews' : ''}${ebay ? '; eBay feedback counts as % positive, not in the stars' : ''}`
 }
 
 export function metricsOf(input: {
@@ -238,12 +246,13 @@ export function metricsOf(input: {
   alerts: ReadonlyArray<{ id: string; category: string; marketplace: string }>
   sparkNow: Date
 }): ProductMetrics {
-  const ratedNow = input.now.filter((r) => r.rating != null)
-  const ratedBefore = input.before.filter((r) => r.rating != null)
+  // The ONE rating (review-rating.ts): stars of product reviews, Amazon's only imported; eBay feedback is not stars.
+  const ratedNow = input.now.filter((r) => r.rating != null && countsAsStars(r))
+  const ratedBefore = input.before.filter((r) => r.rating != null && countsAsStars(r))
   const tooFew = ratedNow.length < MIN_PRODUCT_RATINGS
   const avgNow = averageRating(ratedNow.map((r) => r.rating))
   const avgBefore = averageRating(ratedBefore.map((r) => r.rating))
-  const spark = sparkValues('stars', input.spark, sparkWindows(input.sparkNow, 6, 7))
+  const spark = sparkValues('stars', input.spark.filter(countsAsStars), sparkWindows(input.sparkNow, 6, 7))
   const alert = input.alerts[0]
   return {
     productId: input.product.id,
@@ -266,7 +275,7 @@ export function metricsOf(input: {
 export function belowFourSomewhere(rows: readonly ReviewFact[]): boolean {
   const groups = new Map<string, number[]>()
   for (const r of rows) {
-    if (r.rating == null || ratingKindOf(r.channel) !== 'stars') continue
+    if (r.rating == null || !countsAsStars(r)) continue
     const key = `${r.channel}|${r.marketplace ?? ''}`
     groups.set(key, [...(groups.get(key) ?? []), r.rating])
   }
@@ -321,7 +330,7 @@ async function gather(input: { channel?: unknown; market?: unknown; marketplace?
     prisma.review.findMany({
       where: visibleReviewWhere({ ...scopeWhere(scope), productId: only ? { in: only } : { not: null }, postedAt: { gte: readFrom, lte: now } }),
       select: {
-        id: true, productId: true, channel: true, marketplace: true, rating: true, postedAt: true, ingestSource: true,
+        id: true, productId: true, channel: true, marketplace: true, rating: true, postedAt: true, ingestSource: true, kind: true,
         sentiment: { select: { label: true, categories: true } },
       },
     }),
@@ -346,7 +355,8 @@ async function gather(input: { channel?: unknown; market?: unknown; marketplace?
     readReturnFacts([...ids], scope, now),
     ids.size
       ? prisma.reviewSpike.findMany({
-          where: { productId: { in: [...ids] }, status: { in: ['OPEN', 'ACKNOWLEDGED'] }, ...(scope.market ? { marketplace: scope.market } : {}) },
+          // "Has an open alert" = OPEN, as the Overview's "Open alerts" and Insights › Alerts count it (audit C6).
+          where: { productId: { in: [...ids] }, status: 'OPEN', ...(scope.market ? { marketplace: scope.market } : {}) },
           orderBy: { detectedAt: 'desc' },
           select: { id: true, productId: true, category: true, marketplace: true, status: true },
         })
@@ -508,6 +518,13 @@ export async function insightsProducts(input: ProductsInput = {}): Promise<Produ
   const pageSize = Math.min(Math.max(Math.trunc(num(input.pageSize) ?? DEFAULT_PAGE_SIZE), 1), MAX_PAGE_SIZE)
   const page = Math.max(Math.trunc(num(input.page) ?? 1), 1)
   const products = families.reduce((n, f) => n + (f.variants.length || 1), 0)
+  // The pop-up's K / J walk a page's family rows and their variants (web productModalModel.ts `navIds`): where this page
+  // starts in that walk and how long the whole walk is, so its counter counts the list, not the page (audit A2).
+  const walk = (f: ProductFamilyRow) => 1 + new Set(f.variants.map((v) => v.productId).filter((id) => id !== f.productId)).size
+  const nav = {
+    offset: families.slice(0, (page - 1) * pageSize).reduce((n, f) => n + walk(f), 0),
+    total: families.reduce((n, f) => n + walk(f), 0),
+  }
   return {
     scope: { ...g.scope, period: g.period },
     tiles: {
@@ -519,6 +536,7 @@ export async function insightsProducts(input: ProductsInput = {}): Promise<Produ
     },
     families: families.slice((page - 1) * pageSize, page * pageSize),
     total: { families: families.length, products },
+    nav,
     page,
     pageSize,
     generatedAt: g.now.toISOString(),
@@ -576,9 +594,8 @@ export interface ProductDetail {
   /** Stars per star, 5 first, in the period. */
   spread: [number, number, number, number, number]
   themes: ProductDetailTheme[]
-  /** Fit per size: Phase 3 (ruling 3) — always null for now, never invented. */
-  fit: null
-  fitWords: string
+  /** Its family's fit per size and per variant (review-fit.ts); null only when the family is gone. */
+  fit: ProductFit | null
   latest: ProductDetailReview[]
   returns: {
     windowDays: number
@@ -611,7 +628,7 @@ export async function insightsProductDetail(productId: string, input: { channel?
   const g = await gather(input, [...new Set([...ids, ...familyIds])])
   const s = slices(g, ids)
   const scopeW = scopeWhere(g.scope)
-  const [latestRows, allTime, listings, insightRows] = await Promise.all([
+  const [latestRows, allTime, listings, insightRows, fit] = await Promise.all([
     prisma.review.findMany({
       where: visibleReviewWhere({ ...scopeW, productId: { in: ids } }),
       orderBy: [{ postedAt: 'desc' }, { id: 'desc' }],
@@ -624,6 +641,7 @@ export async function insightsProductDetail(productId: string, input: { channel?
     prisma.review.count({ where: visibleReviewWhere({ ...scopeW, productId: { in: ids } }) }),
     prisma.channelListing.findMany({ where: { productId: { in: ids }, listingStatus: 'ACTIVE' }, select: { channel: true, marketplace: true }, distinct: ['channel', 'marketplace'] }),
     prisma.amazonReviewInsight.findMany({ where: { productId: { in: ids } }, select: { marketplace: true, accessStatus: true, fetchedAt: true } }),
+    productFit({ familyId: parent?.id ?? product.id, familyIds, scope: g.scope, from: g.bounds.from, now: g.now }),
   ])
 
   // Rating per channel and market: every place with reviews, and every Amazon market it sells on or has topics for.
@@ -649,11 +667,11 @@ export async function insightsProductDetail(productId: string, input: { channel?
   }
   const topicMarkets = new Set(insightRows.filter((r) => r.accessStatus === 'OK').map((r) => r.marketplace.toUpperCase()))
   const markets: ProductMarketRating[] = [...groups.values()].map((grp) => {
+    // The ONE rating per channel and market (review-rating.ts): eBay as % positive, stars of product reviews,
+    // Amazon's only from imported reviews.
     const kind = ratingKindOf(grp.channel)
-    const nowRatings = grp.now.map((r) => r.rating)
-    const rated = nowRatings.filter((r) => r != null).length
-    const rating = rated > 0 ? ratingIn(kind, nowRatings) : null
-    const before = grp.before.filter((r) => r.rating != null).length > 0 ? ratingIn(kind, grp.before.map((r) => r.rating)) : null
+    const rating = ratingInMeasure(grp.now, kind)
+    const before = ratingInMeasure(grp.before, kind)
     let words = ratingSourceWords(grp.channel, grp.now.map((r) => r.ingestSource))
     if (grp.channel === 'AMAZON' && grp.now.length === 0) words = topicMarkets.has(grp.market ?? '') ? 'topics only — No rating data from Amazon; import reviews' : 'No rating data from Amazon — import reviews'
     return {
@@ -669,7 +687,7 @@ export async function insightsProductDetail(productId: string, input: { channel?
   }).sort((a, b) => a.channel.localeCompare(b.channel) || b.count - a.count || (a.market ?? '').localeCompare(b.market ?? ''))
 
   // Themes of this product: its reviews' themes and its Amazon topics, with star impact against its own average.
-  const overall = averageRating(s.now.map((r) => r.rating))
+  const overall = averageRating(s.now.filter(countsAsStars).map((r) => r.rating))
   const reviewQuotes = await prisma.review.findMany({
     where: visibleReviewWhere({ ...scopeW, productId: { in: ids }, postedAt: { gte: g.bounds.from, lte: g.now } }),
     orderBy: { postedAt: 'desc' },
@@ -682,7 +700,7 @@ export async function insightsProductDetail(productId: string, input: { channel?
     const amazon = s.topics.filter((t) => t.theme === k)
     const mentions = mentioning.length + amazon.reduce((n, t) => n + t.mentions, 0)
     if (mentions === 0) continue
-    const reviewImpact = mentions >= MIN_THEME_MENTIONS ? themeStarImpact(mentioning.map((r) => r.rating), overall) : null
+    const reviewImpact = mentions >= MIN_THEME_MENTIONS ? themeStarImpact(mentioning.filter(countsAsStars).map((r) => r.rating), overall) : null
     const amazonWeight = amazon.reduce((n, t) => n + (t.starEffect != null ? t.mentions : 0), 0)
     const amazonImpact = mentions >= MIN_THEME_MENTIONS && amazonWeight > 0 ? round(amazon.reduce((n, t) => n + (t.starEffect ?? 0) * (t.starEffect != null ? t.mentions : 0), 0) / amazonWeight, 2) : null
     const quoteRow = reviewQuotes.find((r) => r.sentiment?.categories.includes(k))
@@ -748,10 +766,9 @@ export async function insightsProductDetail(productId: string, input: { channel?
     },
     openAlerts: s.alerts.map((a) => ({ id: a.id, theme: themeWords(a.category), market: a.marketplace, status: a.status })),
     markets,
-    spread: starCounts(s.now.map((r) => r.rating)),
+    spread: starCounts(s.now.filter(countsAsStars).map((r) => r.rating)),
     themes,
-    fit: null,
-    fitWords: 'Fit per size comes later: it needs fit mentions and size returns per family and size.',
+    fit,
     latest: latestRows.map((r) => ({
       id: r.id,
       channel: r.channel,

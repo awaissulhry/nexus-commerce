@@ -17,9 +17,8 @@
 
 import type { PrismaClient } from '@nexus/database'
 import { Prisma } from '@prisma/client'
-import { averageRating, positiveShare } from './reviews/overviewMath.js'
-import { IMPORTED_SOURCE } from './reviews/review-channel-math.js'
-import { reviewKindOf, visibleReviewWhere } from './reviews/review-visibility.js'
+import { countsAsStars, ratingInMeasure, ratingMeasureOf, ratingOf } from './reviews/review-rating.js'
+import { visibleReviewWhere } from './reviews/review-visibility.js'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -68,6 +67,7 @@ export interface ProductAnalytics {
     avgRating: number | null
     /** The reviews that average counts. */
     reviewCount: number
+    /** Open review alerts of the product (any age) — the card says "Open alerts". */
     recentSpikeCount: number
     /** Per channel: stars (product reviews) or % positive (eBay seller feedback). Absent where nothing was read. */
     byChannel?: ProductReviewChannel[]
@@ -83,27 +83,29 @@ export interface ProductReviewChannel {
 }
 
 /**
- * The studio card's review numbers from the product's visible Review rows (2026-10-26, Reviews PR F). Amazon gives no
- * rating by API (Reviews ruling 5): an Amazon row counts only when a person imported it. eBay rows are seller feedback
- * (5 / 3 / 1 for positive / neutral / negative): listed per channel as % positive, never mixed into the star average.
+ * The studio card's review numbers from the product's visible Review rows — the ONE rating (reviews/review-rating.ts,
+ * audit C3): stars of product reviews, Amazon's only from reviews a person imported (no API gives Amazon's rating);
+ * eBay seller feedback listed per channel as % positive, never mixed into the star average; Amazon's 1–3 star seller
+ * feedback never averaged.
  */
-export function productReviewSummary(rows: ReadonlyArray<{ channel: string; rating: number | null; ingestSource: string | null }>): { avgRating: number | null; reviewCount: number; byChannel: ProductReviewChannel[] } {
-  const counted = rows.filter(r => r.channel.toUpperCase() !== 'AMAZON' || r.ingestSource === IMPORTED_SOURCE)
-  const byChannel = new Map<string, Array<number | null>>()
-  for (const r of counted) {
-    const channel = r.channel.toUpperCase()
-    byChannel.set(channel, [...(byChannel.get(channel) ?? []), r.rating])
+export function productReviewSummary(rows: ReadonlyArray<{ channel: string; rating: number | null; ingestSource: string | null; kind?: string | null }>): { avgRating: number | null; reviewCount: number; byChannel: ProductReviewChannel[] } {
+  const rating = ratingOf(rows)
+  const byChannel = new Map<string, { kind: 'stars' | 'positive'; rows: typeof rows[number][] }>()
+  for (const r of rows) {
+    const measure = ratingMeasureOf(r)
+    if (!measure) continue
+    const key = `${r.channel.toUpperCase()}|${measure}`
+    const slot = byChannel.get(key) ?? { kind: measure, rows: [] }
+    slot.rows.push(r)
+    byChannel.set(key, slot)
   }
-  const product = counted.filter(r => reviewKindOf(r.channel) === 'product')
-  const avg = averageRating(product.map(r => r.rating))
   return {
-    avgRating: avg == null ? null : Math.round(avg * 10) / 10,
-    reviewCount: product.length,
+    avgRating: rating.stars == null ? null : Math.round(rating.stars * 10) / 10,
+    reviewCount: rows.filter(countsAsStars).length,
     byChannel: [...byChannel.entries()]
-      .map(([channel, ratings]) => {
-        const kind = reviewKindOf(channel) === 'seller' ? 'positive' as const : 'stars' as const
-        const value = kind === 'positive' ? positiveShare(ratings) : averageRating(ratings)
-        return { channel, kind, rating: value == null ? null : Math.round(value * 10) / 10, count: ratings.length }
+      .map(([key, slot]) => {
+        const value = ratingInMeasure(slot.rows, slot.kind)
+        return { channel: key.split('|')[0], kind: slot.kind, rating: value == null ? null : Math.round(value * 10) / 10, count: slot.rows.length }
       })
       .sort((a, b) => b.count - a.count || a.channel.localeCompare(b.channel)),
   }
@@ -277,7 +279,7 @@ export async function getProductAnalytics(
     // The product's own reviews and its variants' (reviews are often imported per SKU); fixtures never count.
     prisma.review.findMany({
       where: visibleReviewWhere({ OR: [{ productId }, { product: { parentId: productId } }] }),
-      select: { channel: true, rating: true, ingestSource: true },
+      select: { channel: true, rating: true, ingestSource: true, kind: true },
       take: 50_000,
     }),
   ])

@@ -19,6 +19,7 @@ import {
   cardsPlan,
   downloadHeld,
   insertMarket,
+  insertStartMarket,
   pickedWords,
   qrTarget,
   togglePick,
@@ -52,9 +53,10 @@ async function downloadPdf(path: string, body: unknown, fileName: string): Promi
   }
 }
 
-export function InsertsModal({ onClose }: { onClose: () => void }) {
+/** `market`: the page's market (an Amazon market page opens it on that market, audit C5); Italy when none. */
+export function InsertsModal({ onClose, market: startMarket = null }: { onClose: () => void; market?: string | null }) {
   const { toast } = useToast()
-  const [market, setMarket] = useState<string>('IT')
+  const [market, setMarket] = useState<string>(() => insertStartMarket(startMarket))
   const [pick, setPick] = useState<InsertsPick>({ all: true, picked: [] })
   const [copies, setCopies] = useState(1)
   const [count, setCount] = useState<{ value: number | null; error: string | null }>({ value: null, error: null })

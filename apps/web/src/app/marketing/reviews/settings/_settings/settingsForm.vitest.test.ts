@@ -4,8 +4,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  dirtyCount, formFromSettings, recipientsHint, saveHeldReason, setAlertOn, setAlertRecipients, setAvoidWords, setSignOff, setTone,
-  settingsPayload, toggleAlertVia, toggleLanguage, type SettingsResponse,
+  dirtyCount, formFromSettings, ratingDropWords, recipientsHint, saveHeldReason, setAlertOn, setAlertRecipients, setAvoidWords, setSignOff,
+  setTone, settingsPayload, toggleAlertVia, toggleLanguage, type SettingsResponse,
 } from './settingsForm'
 
 const answer: Pick<SettingsResponse, 'voice' | 'alerts'> = {
@@ -13,6 +13,7 @@ const answer: Pick<SettingsResponse, 'voice' | 'alerts'> = {
   alerts: [
     { key: 'negative', on: true, recipients: [], via: ['app'] },
     { key: 'digest', on: true, recipients: [{ userId: 'u1', name: 'Person one' }], via: ['email'] },
+    { key: 'ratingDrop', on: false, recipients: [], via: ['app'] },
   ],
 }
 
@@ -83,9 +84,31 @@ describe('Save held', () => {
     expect(saveHeldReason(setAlertOn(toggleAlertVia(saved, 'negative', 'app', false), 'negative', false))).toBeNull()
   })
 
+  it('"Rating drop": switched on, it needs a way to arrive; on and how it arrives go in the PUT', () => {
+    const on = setAlertOn(saved, 'ratingDrop', true)
+    expect(saveHeldReason(on)).toBeNull()
+    expect(saveHeldReason(toggleAlertVia(on, 'ratingDrop', 'app', false))).toBe('Choose how “Rating drop” arrives: in Nexus, by e-mail or both.')
+    expect(saveHeldReason(toggleAlertVia(saved, 'ratingDrop', 'app', false))).toBeNull()
+    expect(settingsPayload(saved, toggleAlertVia(on, 'ratingDrop', 'email', true))).toEqual({ alerts: [{ key: 'ratingDrop', on: true, recipients: [], via: ['app', 'email'] }] })
+    expect(recipientsHint(on.alerts[2], [])).toBe('Nobody picked: the business’s owners get it.')
+  })
+
   it('says who gets an alert when nobody is picked', () => {
     expect(recipientsHint(saved.alerts[0], [])).toBe('Nobody picked: the business’s owners get it.')
     expect(recipientsHint({ ...saved.alerts[1], recipients: [] }, ['care@example.test'])).toBe('Nobody picked: it goes to care@example.test, as today.')
     expect(recipientsHint(saved.alerts[1], [])).toBe('Goes to 1 person.')
+  })
+})
+
+describe('"Rating drop" in words', () => {
+  it('says the threshold, the windows, the minimum in each, what counts and how often, from the API’s rule', () => {
+    expect(ratingDropWords({ recentDays: 7, beforeDays: 28, minRated: 5, dropAtLeast: 0.3, reopenAfterDays: 7 })).toEqual([
+      'A product family’s average falls 0.3 stars or more in one market: the last 7 days against the 28 days before, with at least 5 rated reviews in each.',
+      'Only product reviews with stars count: never seller feedback or eBay feedback, and Amazon only from imported reviews.',
+      'Checked every hour. One alert per product and market until it is resolved; after a resolve, a new one opens only if the drop is still there 7 days later.',
+    ])
+    expect(ratingDropWords({ recentDays: 1, beforeDays: 1, minRated: 1, dropAtLeast: 0.5, reopenAfterDays: 1 })[0]).toBe(
+      'A product family’s average falls 0.5 stars or more in one market: the last 1 day against the 1 day before, with at least 1 rated review in each.',
+    )
   })
 })

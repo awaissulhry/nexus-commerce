@@ -9,7 +9,7 @@
  *   Banners  a rule that matches no orders (no market, a channel Nexus does not ask, none in 30 days) → "Fix the rule"
  *   Tiles    rules on · A/B tests (running, from `GET /api/review-timing-tests?kind=AB`) · orders decided · sent · review
  *            rate (30 days, estimate)
- *   Grid     every rule (`GET /api/review-rules?withStats=1`), tick boxes and select-all; the bulk bar: Turn on, Turn off,
+ *   Grid     every rule (`reviewsGet('/review-rules', { withStats: 1 })`), tick boxes and select-all; the bulk bar: Turn on, Turn off,
  *            Test run, Export, Delete…, Clear — what an action cannot change is counted and named (ruling 7). On is a
  *            switch (saved at once); Edit opens the editor; ⋯ Duplicate as A/B, Test run, Delete….
  */
@@ -226,9 +226,8 @@ function Rules() {
       title: 'Seed the default rule?',
       confirmLabel: 'Seed defaults',
       consequences: [
-        'Adds a rule for every Amazon market — or turns the existing one on',
-        'First try from the product-type table, inside day 7–25 after delivery; refunded orders and open returns are skipped',
-        'It asks “How was it?” first, as the rules did until now',
+        'Adds a rule for every Amazon market — or turns the existing one on, leaving its settings as they are',
+        'A new rule: first try from the product-type table, inside day 7–25 after delivery; refunded orders and open returns are skipped; it asks “How was it?” first, as the rules did until now',
         'The rule is on: delivered Amazon orders join the queue from the next run',
       ],
     })
@@ -321,7 +320,7 @@ function Rules() {
   })()
 
   // ── Tiles, warnings ──
-  const tiles = rulesTiles(rules, statsRead)
+  const tiles = rulesTiles(rules, statsRead, answer?.data?.statsAll ?? null)
   const abTileOf = abTile(abTests?.tests ?? [])
   const metrics: Metric[] = [
     { label: 'Rules on', value: `${tiles.on}`, hint: `of ${tiles.total}`, accent: tiles.on ? 'var(--nds-success)' : 'var(--nds-warning)' },
@@ -330,7 +329,7 @@ function Rules() {
       : { label: 'A/B tests', value: abTests ? abTileOf.value : '…', hint: abTests ? abTileOf.hint : 'reading…' },
     { label: 'Orders decided', value: tiles.matched30 == null ? '—' : tiles.matched30.toLocaleString('en-IE'), hint: 'by a rule, last 30 days' },
     { label: 'Sent', value: tiles.sent30 == null ? '—' : tiles.sent30.toLocaleString('en-IE'), hint: 'last 30 days' },
-    { label: 'Review rate', value: tiles.rate30 == null ? '—' : `${(tiles.rate30 * 100).toFixed(1)}%`, hint: '30 days, estimate' },
+    { label: 'Review rate', value: tiles.rate30 == null ? '—' : `${(tiles.rate30 * 100).toFixed(1)}%`, hint: tiles.rateWords ?? '30 days, estimate' },
   ]
   const warnings = noMatchWarnings(rules, statsRead)
   const noneOn = rules.length > 0 && tiles.on === 0
@@ -432,8 +431,9 @@ function Rules() {
       )}
 
       <p className={s.footnote}>
-        One rule decides each order: a rule for one market wins over “all markets”. An A/B pair splits that market’s orders by order
-        number. Etsy is not listed: Etsy asks its buyers for a review itself. A rule that is off still shows in a Test run, but never sends.
+        One rule decides each order: a rule for one market wins over “all markets”; between two rules for the same orders, the one
+        changed last takes every order (no rule splits orders yet). Etsy is not listed: Etsy asks its buyers for a review itself. A
+        rule that is off still shows in a Test run, but never sends.
       </p>
 
       {importOpen && (

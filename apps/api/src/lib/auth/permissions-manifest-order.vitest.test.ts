@@ -109,6 +109,16 @@ describe('permission manifest ordering', () => {
     ['POST', '/api/fulfillment/replenishment/automation/rules/:id/test', 'replenishment.run'],
     ['POST', '/api/fulfillment/replenishment/automation/emergency-disable-all', 'replenishment.run'],
     ['GET', '/api/reviews/automation-rules', 'reviews.view'],
+    // Audit A12/E4 (2026-10-27): reads that are POSTs; the Orders page's "Request review" checks reviews.manage or
+    // orders.edit itself (orders-reviews.routes.ts), the manifest asks for orders.view.
+    ['POST', '/api/review-rules/:id/dry-run', 'reviews.view'],
+    ['POST', '/api/review-rules/preview-timing', 'reviews.view'],
+    ['POST', '/api/review-rules/lint', 'reviews.view'],
+    ['POST', '/api/review-inserts/bulk', 'reviews.view'],
+    ['POST', '/api/review-rules/:id/run', 'reviews.manage'],
+    ['POST', '/api/orders/:id/request-review', 'orders.view'],
+    ['POST', '/api/orders/bulk-request-reviews', 'orders.view'],
+    ['POST', '/api/orders/:id/mark-delivered', 'orders.edit'],
     ['POST', '/api/reviews/automation-rules/seed-templates', 'reviews.manage'],
     ['POST', '/api/fulfillment/returns/automation/apply', 'returns.process'],
     // The ads automation routes keep theirs (control).

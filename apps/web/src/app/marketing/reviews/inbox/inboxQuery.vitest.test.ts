@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { withQuery } from '../_lib/reviewsLinks'
 import {
   EMPTY_INBOX_QUERY, activeFilterCount, clearFilters, gridSortOf, inboxApiParams, inboxPageHref, isFiltered, litTile, parseInboxQuery,
-  querySignature, serializeInboxQuery, sortFromGrid, toggleStatusTile, withFilter, withKind, withPage, withPeriod, withPhotos, withSearch,
-  withSort, withoutValue,
+  querySignature, serializeInboxQuery, sortFromGrid, toggleStatusTile, withFilter, withKind, withNeedsReply, withPage, withPeriod,
+  withPhotos, withProduct, withSearch, withSort, withoutValue,
 } from './inboxQuery'
 
 describe('Inbox address', () => {
@@ -36,11 +36,22 @@ describe('Inbox address', () => {
     expect(parseInboxQuery(text).query).toEqual(q)
   })
 
-  it('hands the API the same names; 12 months is 365 days; the grid sort wins', () => {
+  it('hands the API the same names; 12 months as calendar months, as the Overview counts them (C9); the grid sort wins', () => {
     const q = { ...EMPTY_INBOX_QUERY, period: '12m' as const, channels: ['EBAY'], owners: ['none'] }
-    expect(inboxApiParams(q)).toMatchObject({ kind: null, period: '365', channel: ['EBAY'], owner: ['none'], sort: 'postedAt:desc', page: 1, pageSize: 50 })
+    expect(inboxApiParams(q)).toMatchObject({ kind: null, period: '12m', channel: ['EBAY'], owner: ['none'], sort: 'postedAt:desc', page: 1, pageSize: 50, reply: null, product: null })
     expect(inboxApiParams(q, 4, 'rating:asc')).toMatchObject({ page: 4, sort: 'rating:asc' })
     expect(inboxApiParams({ ...q, kind: 'seller' }).kind).toBe('seller')
+  })
+
+  it('"Needs a reply" and one product: read, written back, cleared, and handed to the API (A4, A5)', () => {
+    const { query } = parseInboxQuery('?reply=needed&period=all&product=p-1')
+    expect(query).toMatchObject({ needsReply: true, period: 'all', product: 'p-1' })
+    expect(serializeInboxQuery(query)).toBe('?period=all&reply=needed&product=p-1')
+    expect(inboxApiParams(query)).toMatchObject({ reply: 'needed', product: 'p-1', period: 'all' })
+    expect(isFiltered({ ...EMPTY_INBOX_QUERY, period: 'all', needsReply: true })).toBe(true)
+    expect(clearFilters(query)).toMatchObject({ needsReply: false, product: null })
+    expect(withNeedsReply(query, false).needsReply).toBe(false)
+    expect(withProduct(query, null).product).toBeNull()
   })
 
   it('a status tile shows that status alone; pressing it again shows every status', () => {

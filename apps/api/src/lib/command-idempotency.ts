@@ -127,6 +127,19 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/reviews/spikes/bulk': 'review-alert-bulk',
   // Reviews › Amazon seller feedback (Phase 3) — one "Fetch now" per press.
   '/api/reviews/amazon/seller-feedback/fetch': 'review-seller-feedback-fetch',
+  // Reviews › Requests (audit A11, 2026-10-27) — the pages already send a key for these: one new rule, one copy ("Duplicate
+  // as A/B"), one "Queue these N", one rules import, one "Seed defaults", one timing / send-hour reset, one pause or
+  // resume, one "Allow again", even when the answer is lost and the page sends it again.
+  '/api/review-rules': 'review-rule-create',
+  '/api/review-rules/:id/duplicate': 'review-rule-duplicate',
+  '/api/review-rules/:id/run': 'review-rule-queue',
+  '/api/review-rules/import': 'review-rules-import',
+  '/api/review-rules/seed-default': 'review-rules-seed',
+  '/api/review-timing-defaults/seed': 'review-timing-seed',
+  '/api/review-send-windows/seed': 'review-send-windows-seed',
+  '/api/review-queue/pause': 'review-queue-pause',
+  '/api/review-queue/resume': 'review-queue-resume',
+  '/api/review-requests/:id/unsuppress': 'review-request-allow-again',
   // Reviews › eBay (PR G) — one approval request (one sale, or ONE change plan for the ticked sales) per "Send for
   // approval" press of "Leave feedback for buyers", even when the answer is lost and the page sends it again.
   '/api/reviews/area/ebay/buyer-feedback/send': 'review-ebay-buyer-feedback-send',

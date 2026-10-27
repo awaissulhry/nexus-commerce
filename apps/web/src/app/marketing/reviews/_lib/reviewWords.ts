@@ -6,6 +6,13 @@
 import { channelLabel } from '@/app/listings/_readiness/marketChips'
 import { COUNTRY_NAMES } from '@/app/_shared/app-nav'
 
+/**
+ * Nexus e-mails no eBay buyer (Owner, 2026-10-27): eBay's rules restrict contacting buyers outside eBay, and eBay asks
+ * its buyers for feedback itself. The API's words (review-queue-words.ts EBAY_RULE_WORDS / EBAY_ASKS_WORDS).
+ */
+export const EBAY_NOT_EMAILED = 'eBay buyers are not e-mailed — eBay asks its buyers for feedback itself, so no rule can e-mail them.'
+export const EBAY_ASKS_WORDS = 'Not sent — eBay asks the buyer for feedback itself'
+
 /** Review themes (ReviewSentiment.categories), in the words the boards use. */
 export const THEME_LABEL: Record<string, string> = {
   FIT_SIZING: 'Fit & sizing',

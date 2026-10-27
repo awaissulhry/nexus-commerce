@@ -2,7 +2,8 @@
  * SR.1 — Cron wrappers for the review pipeline.
  *
  *   review-ingest          every 30 min — pulls reviews + sentiment
- *   review-spike-detector  every 60 min — scans for category spikes
+ *   review-spike-detector  every 60 min — scans for category spikes, then for rating drops (when the business
+ *                          switched "Rating drop" on in Reviews › Settings › Alerts; rating-drop.service.ts)
  *
  * Both gated by NEXUS_ENABLE_REVIEW_INGEST=1. Default off so a fresh
  * install doesn't immediately spawn LLM calls.
@@ -20,6 +21,10 @@ import {
   runSpikeDetectorOnce,
   summarizeSpikeDetector,
 } from '../services/reviews/spike-detector.service.js'
+import {
+  runRatingDropCheckOnce,
+  summarizeRatingDrop,
+} from '../services/reviews/rating-drop.service.js'
 import {
   sendReviewDigestOnce,
   summarizeReviewDigest,
@@ -82,7 +87,9 @@ export async function runReviewSpikeDetectorCron(): Promise<void> {
   try {
     await recordCronRun('review-spike-detector', async () => {
       const s = await runSpikeDetectorOnce()
-      const summary = summarizeSpikeDetector(s)
+      // The same hourly alerts check opens rating-drop alerts (off unless the business switched them on).
+      const drop = await runRatingDropCheckOnce()
+      const summary = `${summarizeSpikeDetector(s)} · ${summarizeRatingDrop(drop)}`
       logger.info('review-spike-detector cron: completed', { summary })
       return summary
     })

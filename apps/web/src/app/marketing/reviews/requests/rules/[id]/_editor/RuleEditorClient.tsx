@@ -24,6 +24,7 @@ import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import Link from '@/lib/workspaces/Link'
 import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { reviewsGet, reviewsSend } from '../../../../_lib/reviewsFetch'
+import { EBAY_NOT_EMAILED } from '../../../../_lib/reviewWords'
 import { reviewsCrumbs } from '../../../../_shell/reviews-crumbs'
 import { ReviewsMenuButton } from '../../../../_shell/ReviewsShell'
 import { AMAZON_EMAIL_WORDS, EmailPreviewModal } from '../../../_queue/EmailPreviewModal'
@@ -265,7 +266,12 @@ function RuleEditor({ id }: { id: string }) {
         <div className={s.fields}>
           {!knownScope && (
             <Banner tone="warning" title={`This rule is for ${channelWords(form)}: it matches no orders`}>
-              Nexus asks only Amazon, eBay and Shopify buyers. Pick one of them, or delete the rule.
+              Nexus asks only Amazon and Shopify buyers. Pick one of them, or delete the rule.
+            </Banner>
+          )}
+          {form.scope === 'EBAY' && (
+            <Banner tone="warning" title="eBay buyers are not e-mailed">
+              {EBAY_NOT_EMAILED} Pick Amazon or Shopify, or delete the rule.
             </Banner>
           )}
           <div className={s.scopes} role="radiogroup" aria-label="Channel">
@@ -393,11 +399,13 @@ function RuleEditor({ id }: { id: string }) {
         <Banner tone="info" title="Amazon sends its own fixed message">
           {AMAZON_EMAIL_WORDS} Nobody can change its text — this rule only picks the day.
         </Banner>
+      ) : form.scope === 'EBAY' ? (
+        <Banner tone="info" title="No message: eBay asks the buyer itself">{EBAY_NOT_EMAILED}</Banner>
       ) : (
         <div className={s.fields}>
           <p className={s.hint}>
-            {channelWords(form)} buyers get our review email, in the language of their market (English when there is none), with an
-            unsubscribe link. Every rule sends the same text today.
+            {channelWords(form)} buyers get our review email — Italian for Italy, English for every other market — asking for an
+            honest review, with an unsubscribe link. Every rule sends the same text today.
           </p>
           <div>
             <Button size="sm" onClick={() => setPreviewOpen(true)}><Mail size={13} aria-hidden /> Preview email</Button>
@@ -416,28 +424,30 @@ function RuleEditor({ id }: { id: string }) {
       content: (
         <div className={s.fields}>
           <div className={s.toggleRow}>
-            <Toggle checked={form.useSentimentDiversion} onChange={(v) => update({ useSentimentDiversion: v })} aria-label="Use negative-feedback diversion (review funnel)" />
+            <Toggle checked={form.useSentimentDiversion} onChange={(v) => update({ useSentimentDiversion: v })} aria-label="Ask “How was it?” first" />
             <div className={s.toggleText}>
-              <strong>Use negative-feedback diversion (review funnel)</strong>
+              <strong>Ask “How was it?” first</strong>
               <span className={s.hint}>
-                Before the Amazon Solicitations API call, send a branded “How was it?” email with two buttons. Happy customers proceed
-                to the normal review request; unhappy ones are routed to your support inbox before they leave a public 1-star.
-                Standard rating-lift technique used by major sellers.
+                Before the review request, the buyer gets our “How was it?” email with two buttons. A happy answer goes on to the review
+                request; an unhappy one goes to your support inbox{amazon ? ', and Amazon’s request is then not sent for that order' : ', and our review email is then not sent'}.
               </span>
               <span className={s.hint}>
-                Timing: sentiment email fires at delivered + {form.windowFrom}d. If no response within 5d, behaviour depends on the
-                fallback toggle below.
+                Ask every buyer the same way: asking only happy buyers, or sending unhappy buyers elsewhere, is not allowed.
+              </span>
+              <span className={s.hint}>
+                Timing: the “How was it?” email goes on day {form.windowFrom} after delivery. With no answer in 5 days, the switch
+                below decides.
               </span>
             </div>
           </div>
           {form.useSentimentDiversion && (
             <div className={s.toggleRow}>
-              <Toggle checked={form.fallbackOnNoResponse} onChange={(v) => update({ fallbackOnNoResponse: v })} aria-label="Fall back to a direct request if no response in 5d" />
+              <Toggle checked={form.fallbackOnNoResponse} onChange={(v) => update({ fallbackOnNoResponse: v })} aria-label="Ask anyway when there is no answer in 5 days" />
               <div className={s.toggleText}>
-                <strong>Fallback: fall back to a direct request if no response in 5d</strong>
+                <strong>Ask anyway when there is no answer in 5 days</strong>
                 <span className={s.hint}>
-                  On — solicit anyway after the silent window (default). Off — skip entirely; never solicit a customer who didn’t
-                  engage with the “How was it?” email.
+                  On — the review request goes after 5 days without an answer (default). Off — a buyer who did not answer
+                  “How was it?” is not asked.
                 </span>
               </div>
             </div>

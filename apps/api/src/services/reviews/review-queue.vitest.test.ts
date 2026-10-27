@@ -89,7 +89,7 @@ const matches = (where: Record<string, unknown>, row: Record<string, unknown>) =
 // ── The rows: every state the senders and the scheduler leave ───────────────────────────────────────────────────
 function rows(): Array<Record<string, unknown>> {
   const out: Array<Record<string, unknown>> = []
-  const codes = [null, 'OUTSIDE_WINDOW', 'ALREADY_SOLICITED', 'NOT_IMPLEMENTED', 'UNKNOWN_MARKETPLACE', 'SUPPRESSED', 'DIVERTED_NEGATIVE', 'NO_RESPONSE_NO_FALLBACK', 'SKIPPED_BY_HAND', 'HTTP_403', 'HTTP_429', 'HTTP_500', 'EXCEPTION']
+  const codes = [null, 'OUTSIDE_WINDOW', 'ALREADY_SOLICITED', 'NOT_IMPLEMENTED', 'UNKNOWN_MARKETPLACE', 'SUPPRESSED', 'DIVERTED_NEGATIVE', 'NO_RESPONSE_NO_FALLBACK', 'SKIPPED_BY_HAND', 'EMAIL_OFF', 'EBAY_ASKS', 'HTTP_403', 'HTTP_429', 'HTTP_500', 'EXCEPTION']
   const reasons = [null, 'has refund', 'active return', 'not delivered', 'Outside Amazon 4-30d window (34d)', 'Order refunded in Nexus — no review is asked for', 'No customer email on order', 'No channelOrderId for Amazon solicitation', 'non-Amazon — track-only', 'rule_exclusion:has_refund', 'rule_exclusion:has_active_return', 'rule_exclusion:is_cancelled', 'rule_exclusion:asked_buyer_90d', 'rule_exclusion:other', 'Suppressed: suppressed (BOUNCE_HARD)', 'something else']
   const errors = [null, 'RESEND_API_KEY not set', 'Invalid `to` field', 'sentiment_email: boom', 'This business has no identity for buyers yet', 'boom']
   const checks = [null, { sentimentEmailSentAt: daysAgo(1), response: 'NONE' }, { sentimentEmailSentAt: null, response: 'NONE' }, { sentimentEmailSentAt: daysAgo(3), response: 'POSITIVE' }]
@@ -190,18 +190,21 @@ describe('review queue: bulk held rules', () => {
   const amazon = (id: string, over: Record<string, unknown> = {}) => ({ id, status: 'SCHEDULED', channel: 'AMAZON', scheduledFor: inDays(2), deliveredAt: daysAgo(8), ...over })
 
   it('send now: too early for Amazon, already sent, waiting for "How was it?" are held with their reason; the rest go', () => {
-    const plan = queueBulkPlan(['r1', 'r2', 'r3', 'r4', 'r5', 'gone'], [
+    const plan = queueBulkPlan(['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'gone'], [
       amazon('r1'),
       amazon('r2', { deliveredAt: daysAgo(2) }),
       amazon('r3', { status: 'SENT', sentAt: daysAgo(1) }),
-      { id: 'r4', status: 'FAILED', channel: 'EBAY', nextRetryAt: inDays(1), attemptCount: 1, customerEmail: 'buyer@example.com' },
+      { id: 'r4', status: 'FAILED', channel: 'SHOPIFY', nextRetryAt: inDays(1), attemptCount: 1, customerEmail: 'buyer@example.com' },
       amazon('r5', { sentimentCheck: { sentimentEmailSentAt: daysAgo(1), response: 'NONE' } }),
+      // Nexus e-mails no eBay buyer (Owner, 2026-10-27): a waiting eBay request is never sent by hand either.
+      { id: 'r6', status: 'FAILED', channel: 'EBAY', nextRetryAt: inDays(1), attemptCount: 1, customerEmail: 'buyer@example.com' },
     ], 'send-now', 1, NOW)
     expect(plan.apply).toEqual(['r1', 'r4'])
     expect(plan.held).toEqual([
       { id: 'r2', words: expect.stringMatching(/^Too early for Amazon \(before its day 5\)/) },
       { id: 'r3', words: expect.stringMatching(/^Already sent on .* Amazon allows one request per order\.$/) },
       { id: 'r5', words: expect.stringMatching(/How was it/) },
+      { id: 'r6', words: 'Not sent — eBay asks the buyer for feedback itself' },
       { id: 'gone', words: 'Not found — it may have been removed' },
     ])
   })
@@ -227,17 +230,20 @@ describe('rules bulk held rules', () => {
   const rule = (id: string, over: Record<string, unknown> = {}) => ({ id, name: `Rule ${id}`, scope: 'AMAZON_GLOBAL', marketplace: null, isActive: false, ...over })
 
   it('turning on: a rule without a market or on a channel Nexus never asks is held ("matches no orders"); an on rule says so', () => {
-    const plan = rulesBulkPlan(['a', 'b', 'c', 'd', 'x'], [
+    const plan = rulesBulkPlan(['a', 'b', 'c', 'd', 'e', 's', 'x'], [
       rule('a'),
       rule('b', { scope: 'AMAZON_PER_MARKETPLACE', marketplace: null }),
       rule('c', { scope: 'ETSY' }),
       rule('d', { isActive: true }),
+      rule('e', { scope: 'EBAY' }),
+      rule('s', { scope: 'SHOPIFY' }),
     ], 'on')
-    expect(plan.apply).toEqual(['a'])
+    expect(plan.apply).toEqual(['a', 's'])
     expect(plan.held).toEqual([
       { id: 'b', words: '“Rule b” matches no orders: it has no market. Open it and pick one.' },
-      { id: 'c', words: '“Rule c” matches no orders: Nexus asks only Amazon, eBay and Shopify buyers.' },
+      { id: 'c', words: '“Rule c” matches no orders: Nexus asks only Amazon and Shopify buyers.' },
       { id: 'd', words: '“Rule d” is already on' },
+      { id: 'e', words: '“Rule e” asks nobody: eBay buyers are not e-mailed — eBay asks its buyers for feedback itself, so no rule can e-mail them.' },
       { id: 'x', words: 'Not found — it may have been deleted' },
     ])
   })

@@ -182,8 +182,11 @@ describe('review queue words', () => {
     expect(sendNowHeldFor(amazon({ deliveredAt: daysAgo(31) }), NOW)).toMatch(/day 30/)
     expect(sendNowHeldFor(amazon({ deliveredAt: daysAgo(6), providerResponseCode: 'OUTSIDE_WINDOW', lastAttemptAt: daysAgo(0.2) }), NOW)).toMatch(/said too early today/)
     expect(sendNowHeldFor(amazon({ status: 'SENT', sentAt: daysAgo(5) }), NOW)).toMatch(/^Already sent on .*one request per order/)
-    expect(sendNowHeldFor({ status: 'SCHEDULED', channel: 'EBAY', scheduledFor: inDays(2), customerEmail: '' }, NOW)).toBe('The order has no buyer email')
-    expect(sendNowHeldFor({ status: 'SCHEDULED', channel: 'EBAY', scheduledFor: inDays(2), customerEmail: 'a@b.c' }, NOW)).toBeNull()
+    expect(sendNowHeldFor({ status: 'SCHEDULED', channel: 'SHOPIFY', scheduledFor: inDays(2), customerEmail: '' }, NOW)).toBe('The order has no buyer email')
+    expect(sendNowHeldFor({ status: 'SCHEDULED', channel: 'SHOPIFY', scheduledFor: inDays(2), customerEmail: 'a@b.c' }, NOW)).toBeNull()
+    // Nexus e-mails no eBay buyer (Owner, 2026-10-27): a waiting eBay request is held in the queue's words.
+    expect(sendNowHeldFor({ status: 'SCHEDULED', channel: 'EBAY', scheduledFor: inDays(2), customerEmail: 'a@b.c' }, NOW)).toBe('Not sent — eBay asks the buyer for feedback itself')
+    expect(snoozeHeldFor({ status: 'SCHEDULED', channel: 'EBAY', scheduledFor: inDays(2) }, NOW, 1)).toBe('Not sent — eBay asks the buyer for feedback itself')
     expect(sendNowHeldFor(amazon({ deliveredAt: daysAgo(8), sentimentCheck: { sentimentEmailSentAt: daysAgo(1), response: 'NONE' } }), NOW)).toMatch(/How was it/)
     expect(sendNowHeldFor({ status: 'SUPPRESSED', channel: 'AMAZON' }, NOW)).toMatch(/Allow again/)
 
@@ -198,6 +201,14 @@ describe('review queue words', () => {
     expect(allowAgainHeldFor({ ...notAsked, deliveredAt: daysAgo(31) }, NOW)).toMatch(/day 30/)
     expect(allowAgainHeldFor({ status: 'SKIPPED', channel: 'AMAZON', providerResponseCode: 'ALREADY_SOLICITED', deliveredAt: daysAgo(8) }, NOW)).toMatch(/one request per order/)
     expect(allowAgainHeldFor({ status: 'SENT', channel: 'AMAZON' }, NOW)).toMatch(/Only a request that was not asked/)
+    expect(allowAgainHeldFor({ status: 'SKIPPED', channel: 'EBAY', providerResponseCode: 'EBAY_ASKS' }, NOW)).toBe('Not sent — eBay asks the buyer for feedback itself')
+    expect(allowAgainHeldFor({ status: 'SUPPRESSED', channel: 'EBAY', suppressedReason: 'rule_exclusion:has_refund' }, NOW)).toBe('Not sent — eBay asks the buyer for feedback itself')
+  })
+
+  it('an eBay request that was not asked says why in words, never its code (Owner, 2026-10-27)', () => {
+    const r = reasonOf({ status: 'SKIPPED', channel: 'EBAY', providerResponseCode: 'EBAY_ASKS', suppressedReason: 'Not sent — eBay asks the buyer for feedback itself' }, NOW)
+    expect(r).toEqual({ key: 'ebay_asks', words: 'Not sent — eBay asks the buyer for feedback itself' })
+    expectPlainWords(r.words)
   })
 
   it('PR J — a timing test’s holdout: not asked on purpose, and never sent, snoozed or allowed again', () => {
@@ -214,8 +225,12 @@ describe('review queue words', () => {
   it('run, failures, buyer and day words', () => {
     expect(runResultWords({ sent: 12, failed: 0, skipped: 3, tooEarly: 3 })).toBe('12 sent, 3 too early (they try again tomorrow), 0 failed')
     expect(runResultWords({ sent: 0, failed: 0, paused: true })).toMatch(/paused/)
+    // Audit A6: the count is the rows "Show failed" lists (no try left); the ones still trying are named apart.
     expect(failuresWords({ count: 6, bounced: 4, noAnswer: 2 })).toBe(
-      '6 requests failed in the last 7 days: 4 emails bounced (the address does not exist) · 2 times Amazon did not answer — those try again on their own after 4, 8 and 16 hours',
+      '6 requests failed in the last 7 days, no try left: 4 emails bounced (the address does not exist) · 2 times Amazon did not answer',
+    )
+    expect(failuresWords({ count: 2, bounced: 0, noAnswer: 2, retrying: 3 })).toBe(
+      '2 requests failed in the last 7 days, no try left: 2 times Amazon did not answer · 3 more requests try again on their own after 4, 8 and 16 hours',
     )
     expect(failuresWords({ count: 0, bounced: 0, noAnswer: 0 })).toBe('No request failed in the last 7 days')
     expect(buyerShort('test buyer example')).toBe('Test E.')

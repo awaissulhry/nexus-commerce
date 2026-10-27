@@ -4,7 +4,9 @@
  *     product types and the minimum total say what a rule covers);
  *   - cancelled orders and buyers asked in the last 90 days (or twice in one run) are not asked when the deciding rule
  *     says so: they get a SUPPRESSED request with the reason, never another rule's or the default timing;
- *   - an order no rule covers keeps the default timing.
+ *   - an order no rule covers keeps the default timing;
+ *   - an eBay order is never asked (Owner, 2026-10-27): eBay asks its buyers itself, so it gets a SKIPPED request with
+ *     that reason, whatever rule covers it, and no "How was it?" check.
  * The database is a fake: nothing is read or written for real, nothing is sent.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -26,7 +28,7 @@ vi.mock('./review-timing-test.service.js', async (importOriginal) => ({
   runningTimingTests: vi.fn(async () => running.tests),
 }))
 
-import { decideRuleForOrder, schedulePendingOrders, type MatchableOrder } from './review-scheduler.service.js'
+import { createScheduledRequest, decideRuleForOrder, findOrdersMatchingRule, schedulePendingOrders, type MatchableOrder } from './review-scheduler.service.js'
 import { assignArm } from './review-timing-test-math.js'
 
 const DAY = 86_400_000
@@ -128,6 +130,30 @@ describe('schedulePendingOrders (B10)', () => {
     const result = await schedulePendingOrders()
     expect(result).toMatchObject({ scheduled: 1 })
     expect(db.reviewRequest.create.mock.calls[0][0].data).toMatchObject({ orderId: 'o1', status: 'SCHEDULED', ruleId: null })
+  })
+
+  it('an eBay order is recorded as not asked, with the reason, whatever rule covers it — never e-mailed, no check', async () => {
+    db.reviewRule.findMany.mockResolvedValue([rule('ebay', { scope: 'EBAY', useSentimentDiversion: true })])
+    db.order.findMany.mockResolvedValue([order('o1', { channel: 'EBAY', marketplace: 'DE' }), order('o2', { channel: 'SHOPIFY', marketplace: null })])
+    const result = await schedulePendingOrders()
+    expect(result).toMatchObject({ examined: 2, scheduled: 1, skipped: 1 })
+    const created = db.reviewRequest.create.mock.calls.map(([arg]) => arg.data)
+    expect(created[0]).toEqual({
+      orderId: 'o1', channel: 'EBAY', marketplace: 'DE', status: 'SKIPPED', providerResponseCode: 'EBAY_ASKS',
+      suppressedReason: 'Not sent — eBay asks the buyer for feedback itself', ruleId: null,
+    })
+    expect(created[1]).toMatchObject({ orderId: 'o2', channel: 'SHOPIFY', status: 'SCHEDULED' })
+    expect(db.reviewSentimentCheck.create).not.toHaveBeenCalled()
+  })
+
+  it('every other way in (Orders, Claude, a rule\'s "Queue these") makes the same not-asked request for an eBay order', async () => {
+    const made = await createScheduledRequest({ id: 'o9', channel: 'EBAY', marketplace: 'IT', customerEmail: 'b@example.com' }, { id: 'r1', useSentimentDiversion: true }, new Date(now))
+    expect(made).toEqual({ id: 'rq-o9', diversion: false })
+    expect(db.reviewRequest.create.mock.calls[0][0].data).toMatchObject({ status: 'SKIPPED', providerResponseCode: 'EBAY_ASKS', ruleId: 'r1' })
+    expect(db.reviewSentimentCheck.create).not.toHaveBeenCalled()
+    // An eBay rule's Test run lists no order to ask.
+    expect(await findOrdersMatchingRule(rule('ebay', { scope: 'EBAY' }))).toEqual([])
+    expect(db.order.findMany).not.toHaveBeenCalled()
   })
 })
 

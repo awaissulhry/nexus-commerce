@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { parseInboxQuery } from '../../inbox/inboxQuery'
 import {
   MANAGE_ALERTS,
+  RATING_DROP_NO_SUGGEST,
   agoWords,
   alertActions,
   alertApiStatus,
   alertFilterParam,
-  alertReviewsHref,
+  alertReviewsLink,
   alertTiles,
   alertTitle,
   bulkHeld,
@@ -14,6 +15,7 @@ import {
   bulkPlan,
   bulkResultWords,
   checkWords,
+  decisionWords,
   emptyTitle,
   filterChip,
   fixWords,
@@ -32,6 +34,8 @@ const NOW = Date.parse('2026-10-26T10:34:00Z')
 const alert = (over: Partial<AlertItem> = {}): AlertItem => ({
   id: 'a-1',
   status: 'OPEN',
+  kind: 'complaint',
+  rating: null,
   theme: { key: 'FIT_SIZING', label: 'Fit & sizing' },
   product: { id: 'p-1', sku: 'TJ-BLK', name: 'Touring jacket' },
   market: 'DE',
@@ -119,18 +123,56 @@ describe('one alert', () => {
   })
 
   it('shows only the buttons that can work', () => {
-    expect(alertActions(alert())).toEqual({ acknowledge: true, resolve: true, reopen: false, suggest: true })
-    expect(alertActions(alert({ status: 'ACKNOWLEDGED' }))).toEqual({ acknowledge: false, resolve: true, reopen: true, suggest: true })
-    expect(alertActions(alert({ status: 'RESOLVED' }))).toEqual({ acknowledge: false, resolve: false, reopen: true, suggest: false })
+    expect(alertActions(alert())).toEqual({ acknowledge: true, resolve: true, reopen: false, suggest: true, suggestHeld: null })
+    expect(alertActions(alert({ status: 'ACKNOWLEDGED' }))).toEqual({ acknowledge: false, resolve: true, reopen: true, suggest: true, suggestHeld: null })
+    expect(alertActions(alert({ status: 'RESOLVED' }))).toEqual({ acknowledge: false, resolve: false, reopen: true, suggest: false, suggestHeld: null })
     expect(alertActions(alert({ fixes: { open: 1, sent: 0, applied: 0, dismissed: 0 } })).suggest).toBe(false)
   })
 
-  it('opens its reviews in the Inbox: theme, market, the product’s SKU, the last 7 days', () => {
-    const href = alertReviewsHref(alert(), { channel: null })
-    expect(href).toBe('/marketing/reviews/inbox?period=7d&channel=AMAZON&market=DE&theme=FIT_SIZING&q=TJ-BLK')
-    const q = parseInboxQuery(href.slice(href.indexOf('?'))).query
-    expect(q).toMatchObject({ period: '7d', channels: ['AMAZON'], markets: ['DE'], themes: ['FIT_SIZING'], q: 'TJ-BLK' })
-    expect(alertReviewsHref(alert({ channels: ['AMAZON', 'EBAY'], product: null }), { channel: 'EBAY' })).toBe('/marketing/reviews/inbox?period=7d&channel=EBAY&market=DE&theme=FIT_SIZING')
+  it('opens its own reviews in the Inbox: negative, theme, market, the product by id, the period holding its 7 days (A5)', () => {
+    const detected = Date.parse(alert().detectedAt)
+    const atOnce = alertReviewsLink(alert(), { channel: null }, detected)
+    expect(atOnce.href).toBe('/marketing/reviews/inbox?period=7d&channel=AMAZON&market=DE&mood=NEGATIVE&theme=FIT_SIZING&product=p-1')
+    expect(atOnce.label).toBe('See the 9 reviews')
+    const q = parseInboxQuery(atOnce.href.slice(atOnce.href.indexOf('?'))).query
+    expect(q).toMatchObject({ period: '7d', channels: ['AMAZON'], markets: ['DE'], moods: ['NEGATIVE'], themes: ['FIT_SIZING'], product: 'p-1' })
+    // Later, the Inbox's shortest period that still holds the alert's 7 days is 30 days: the label no longer names a count.
+    const later = alertReviewsLink(alert(), { channel: null }, detected + 3 * 86_400_000)
+    expect(later.href).toContain('period=30d')
+    expect(later.label).toBe('See the negative reviews')
+    expect(alertReviewsLink(alert({ channels: ['AMAZON', 'EBAY'], product: null }), { channel: 'EBAY' }, detected).href).toBe('/marketing/reviews/inbox?period=7d&channel=EBAY&market=DE&mood=NEGATIVE&theme=FIT_SIZING')
+  })
+})
+
+describe('a rating drop', () => {
+  const drop = alert({
+    id: 'd-1', kind: 'rating_drop', rating: { before: 4.4, now: 3.9, change: -0.47 }, theme: { key: 'RATING_DROP', label: 'Rating drop' },
+    channels: ['SHOPIFY'], where: 'Shopify Germany', from: null, to: null, multiplier: null, basis: '6 rated reviews in 7 days · 22 in the 28 days before', count: 6,
+  })
+
+  it('says how far the stars fell, from what to what', () => {
+    expect(alertTitle(drop)).toBe('Rating fell 0.5 stars')
+    expect(alertTitle({ ...drop, rating: { before: 4, now: 3, change: -1 } })).toBe('Rating fell 1.0 star')
+    expect(riseWords(drop)).toBe('4.4 → 3.9 stars (6 rated reviews in 7 days · 22 in the 28 days before)')
+    expect(decisionWords('RESOLVED', drop)).toBe('Resolved: Rating drop · Shopify Germany. If the drop is still there 7 days from now, a new alert opens.')
+  })
+
+  it('opens every review of its product (by id) in its market: no theme, no mood, never a count', () => {
+    const detected = Date.parse(drop.detectedAt)
+    expect(alertReviewsLink(drop, { channel: null }, detected)).toEqual({
+      href: '/marketing/reviews/inbox?period=7d&channel=SHOPIFY&market=DE&product=p-1',
+      label: 'See the product’s reviews',
+    })
+    expect(alertReviewsLink(drop, { channel: null }, detected + 3 * 86_400_000).href).toContain('period=30d')
+  })
+
+  it('takes Acknowledge and Resolve like any alert; Suggest fixes holds with why', () => {
+    expect(alertActions(drop)).toEqual({ acknowledge: true, resolve: true, reopen: false, suggest: true, suggestHeld: RATING_DROP_NO_SUGGEST })
+    expect(bulkPlan([drop], 'acknowledge').apply).toEqual(['d-1'])
+    const plan = bulkPlan([drop], 'suggest')
+    expect(plan).toEqual({ apply: [], held: [{ id: 'd-1', words: RATING_DROP_NO_SUGGEST }] })
+    expect(bulkHeld(true, 'suggest', 1, plan)).toBe(RATING_DROP_NO_SUGGEST)
+    expect(bulkHeld(true, 'suggest', 2, bulkPlan([drop, alert({ id: 'r', status: 'RESOLVED' })], 'suggest'))).toBe('No ticked alert can ask for fixes: each is resolved, has fixes already, or is a rating drop.')
   })
 })
 

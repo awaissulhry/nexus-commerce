@@ -295,7 +295,7 @@ exports[`O3 — Xavia: every buyer-facing output is byte-identical to before > r
     "html": "<!DOCTYPE html>
 <html lang="it">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Come ti trovi con Test Jacket? Lasciaci la tua opinione</title>
+<title>Come ti trovi con Test Jacket? Lascia una recensione sincera</title>
 </head>
 <body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -308,43 +308,37 @@ exports[`O3 — Xavia: every buyer-facing output is byte-identical to before > r
   <tr><td style="padding:32px">
     <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">Ciao Mario,</p>
     <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">
-      Speriamo tu abbia avuto il tempo di provare <strong>Test Jacket</strong> sulle tue uscite in moto.
+      Grazie per il tuo acquisto! Speriamo tu abbia avuto il tempo di provare <strong>Test Jacket</strong>.
     </p>
     <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 24px">
-      Ci farebbe molto piacere sapere cosa ne pensi — soprattutto la vestibilità e la protezione della giacca.
-      La tua esperienza aiuta altri motociclisti a scegliere meglio.
+      Se ti va, condividi la tua opinione sincera lasciando una recensione (per esempio su questi aspetti: la vestibilità e la protezione della giacca).
+      La tua esperienza aiuta altri motociclisti a scegliere.
     </p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr><td align="center" style="padding-bottom:24px">
       <a href="https://shop.example.test/review" style="display:inline-block;background:#e63946;color:#ffffff;font-size:15px;font-weight:bold;padding:14px 32px;border-radius:6px;text-decoration:none">
-        Lascia la tua recensione →
+        Lascia una recensione →
       </a>
     </td></tr>
     </table>
-    <p style="color:#666;font-size:13px;line-height:1.6;margin:0 0 8px">
-      Bastano 2 minuti. La tua opinione conta molto per noi e per la community Xavia.
-    </p>
     <p style="color:#999;font-size:12px;line-height:1.5;margin:24px 0 0;border-top:1px solid #eee;padding-top:16px">
       Hai ricevuto questa email perché hai acquistato da Xavia (ordine TEST-ORDER-1001).
-      Se hai dubbi o problemi con il prodotto, <a href="mailto:assistenza@xavia.it" style="color:#e63946">contattaci</a> — non lasciare
-      una recensione negativa prima di darci la possibilità di aiutarti.
+      Per domande sul tuo ordine scrivi a <a href="mailto:assistenza@xavia.it" style="color:#e63946">assistenza@xavia.it</a>.
     </p>
   </td></tr>
 </table>
 </td></tr>
 </table>
 </body></html>",
-    "subject": "Come ti trovi con Test Jacket? Lasciaci la tua opinione",
+    "subject": "Come ti trovi con Test Jacket? Lascia una recensione sincera",
     "tag": "review-request",
     "text": "Ciao Mario,
 
-Speriamo tu abbia avuto il tempo di provare Test Jacket sulle tue uscite in moto.
+Grazie per il tuo acquisto! Speriamo tu abbia avuto il tempo di provare Test Jacket.
 
-Ci farebbe molto piacere sapere cosa ne pensi — soprattutto la vestibilità e la protezione della giacca.
+Se ti va, condividi la tua opinione sincera lasciando una recensione (per esempio su questi aspetti: la vestibilità e la protezione della giacca).
 
-Lascia la tua recensione: https://shop.example.test/review
-
-Bastano 2 minuti. Grazie!
+Lascia una recensione: https://shop.example.test/review
 
 — Il team Xavia",
     "to": "buyer@example.test",
@@ -357,7 +351,7 @@ Bastano 2 minuti. Grazie!
     "html": "<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>How are you finding your Test Jacket? Share your review</title>
+<title>How is your Test Jacket? Share your honest review</title>
 </head>
 <body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -370,43 +364,37 @@ Bastano 2 minuti. Grazie!
   <tr><td style="padding:32px">
     <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">Hi Mario,</p>
     <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 16px">
-      We hope you've had the chance to try your <strong>Test Jacket</strong> out on the road.
+      Thank you for your purchase! We hope you've had the chance to try your <strong>Test Jacket</strong>.
     </p>
     <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 24px">
-      We'd love to hear what you think — especially the fit and protection of the jacket.
-      Your experience helps other riders choose the right gear.
+      Feel free to share your honest feedback by leaving a review (for example about the fit and protection of the jacket).
+      Your experience helps other riders choose.
     </p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr><td align="center" style="padding-bottom:24px">
       <a href="https://shop.example.test/review" style="display:inline-block;background:#e63946;color:#ffffff;font-size:15px;font-weight:bold;padding:14px 32px;border-radius:6px;text-decoration:none">
-        Leave your review →
+        Leave a review →
       </a>
     </td></tr>
     </table>
-    <p style="color:#666;font-size:13px;line-height:1.6;margin:0 0 8px">
-      It only takes 2 minutes. Your feedback means a lot to us and the Xavia community.
-    </p>
     <p style="color:#999;font-size:12px;line-height:1.5;margin:24px 0 0;border-top:1px solid #eee;padding-top:16px">
       You received this email because you purchased from Xavia (order TEST-ORDER-1001).
-      If you have any issues with the product, <a href="mailto:support@xavia.it" style="color:#e63946">contact us first</a> —
-      we'd love to make it right before you leave a review.
+      Questions about your order? Write to <a href="mailto:support@xavia.it" style="color:#e63946">support@xavia.it</a>.
     </p>
   </td></tr>
 </table>
 </td></tr>
 </table>
 </body></html>",
-    "subject": "How are you finding your Test Jacket? Share your review",
+    "subject": "How is your Test Jacket? Share your honest review",
     "tag": "review-request",
     "text": "Hi Mario,
 
-We hope you've had the chance to try your Test Jacket out on the road.
+Thank you for your purchase! We hope you've had the chance to try your Test Jacket.
 
-We'd love to hear what you think — especially the fit and protection of the jacket.
+Feel free to share your honest feedback by leaving a review (for example about the fit and protection of the jacket).
 
-Leave your review: https://shop.example.test/review
-
-It only takes 2 minutes. Thank you!
+Leave a review: https://shop.example.test/review
 
 — The Xavia Team",
     "to": "buyer@example.test",
@@ -494,7 +482,7 @@ exports[`O3 — Xavia: every buyer-facing output is byte-identical to before > s
           <p style="margin:0 0 8px;">We hope <strong>Test Jacket</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
           <ul style="font-size:12px;color:#888;padding-left:18px;margin:8px 0;">
             <li><strong>😊 Adoro / 😊 Love it</strong> — we&#39;ll send a short review invitation.</li>
-            <li><strong>😕 Qualcosa non va / 😕 Something&#39;s wrong</strong> — we&#39;ll fix it within 24h.</li>
+            <li><strong>😕 Qualcosa non va / 😕 Something&#39;s wrong</strong> — we&#39;ll reply as soon as we can.</li>
           </ul>
         </td></tr>
 
@@ -587,7 +575,7 @@ Annulla iscrizione: https://nexus-commerce-web.up.railway.app/api/email/unsubscr
           <p style="margin:0 0 8px;">We hope <strong>Test Jacket</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
           <ul style="font-size:12px;color:#888;padding-left:18px;margin:8px 0;">
             <li><strong>😊 Top / 😊 Love it</strong> — we&#39;ll send a short review invitation.</li>
-            <li><strong>😕 Etwas stimmt nicht / 😕 Something&#39;s wrong</strong> — we&#39;ll fix it within 24h.</li>
+            <li><strong>😕 Etwas stimmt nicht / 😕 Something&#39;s wrong</strong> — we&#39;ll reply as soon as we can.</li>
           </ul>
         </td></tr>
 
@@ -680,7 +668,7 @@ Abmelden: https://nexus-commerce-web.up.railway.app/api/email/unsubscribe?token=
           <p style="margin:0 0 8px;">We hope <strong>Test Jacket</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
           <ul style="font-size:12px;color:#888;padding-left:18px;margin:8px 0;">
             <li><strong>😊 J&#39;adore / 😊 Love it</strong> — we&#39;ll send a short review invitation.</li>
-            <li><strong>😕 Un souci / 😕 Something&#39;s wrong</strong> — we&#39;ll fix it within 24h.</li>
+            <li><strong>😕 Un souci / 😕 Something&#39;s wrong</strong> — we&#39;ll reply as soon as we can.</li>
           </ul>
         </td></tr>
 
@@ -773,7 +761,7 @@ Se désinscrire: https://nexus-commerce-web.up.railway.app/api/email/unsubscribe
           <p style="margin:0 0 8px;">We hope <strong>Test Jacket</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
           <ul style="font-size:12px;color:#888;padding-left:18px;margin:8px 0;">
             <li><strong>😊 Me encanta / 😊 Love it</strong> — we&#39;ll send a short review invitation.</li>
-            <li><strong>😕 Algo va mal / 😕 Something&#39;s wrong</strong> — we&#39;ll fix it within 24h.</li>
+            <li><strong>😕 Algo va mal / 😕 Something&#39;s wrong</strong> — we&#39;ll reply as soon as we can.</li>
           </ul>
         </td></tr>
 
@@ -945,7 +933,7 @@ exports[`O3 — Xavia: every buyer-facing output is byte-identical to before > s
           <p style="margin:0 0 8px;">We hope <strong>Casco Xavia Carbon</strong> is everything you needed. Your opinion helps us improve and helps other riders choose well.</p>
           <ul style="font-size:12px;color:#888;padding-left:18px;margin:8px 0;">
             <li><strong>😊 Adoro / 😊 Love it</strong> — we&#39;ll send a short review invitation.</li>
-            <li><strong>😕 Qualcosa non va / 😕 Something&#39;s wrong</strong> — we&#39;ll fix it within 24h.</li>
+            <li><strong>😕 Qualcosa non va / 😕 Something&#39;s wrong</strong> — we&#39;ll reply as soon as we can.</li>
           </ul>
         </td></tr>
 

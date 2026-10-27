@@ -13,6 +13,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { Card, EmptyState, Field, Modal, useToast } from '@/design-system/components'
 import { NexusGrid, numericColumn, type ColDef, type ICellRendererParams } from '@/design-system/grid'
 import { Button, Checkbox, Input, SegmentedControl, Skeleton, TagInput } from '@/design-system/primitives'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { reviewsSend } from '../../_lib/reviewsFetch'
 import { ReadFailed } from './ReadFailed'
 import { LANGUAGE_OPTIONS, SIGN_OFF_MAX, TONE_HINT, TONE_OPTIONS, type ReplyLanguage, type Tone, type VoiceForm } from './settingsForm'
@@ -103,6 +104,7 @@ export function TemplatesSection({ templates, voice, voiceError, onRetryVoice, m
     }
     setDeleting(null)
     await templates.reload()
+    emitInvalidation({ type: 'review.settings.changed' })
     toast(`Template “${res.data?.name ?? deleting.name}” deleted.`, 'success')
   }, [deleting, templates, toast])
 

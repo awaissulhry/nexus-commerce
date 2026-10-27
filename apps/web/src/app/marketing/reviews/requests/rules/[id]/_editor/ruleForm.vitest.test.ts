@@ -82,7 +82,7 @@ describe('held save', () => {
     const f = formFromRule(RULE)
     expect(saveHeld(f, { canManage: false, lint: [] })).toBe("You need 'Manage reviews' to change review-request rules.")
     expect(saveHeld({ ...f, name: ' ' }, OK)).toBe('Give the rule a name first.')
-    expect(saveHeld({ ...f, scope: 'ETSY' }, OK)).toBe('Pick Amazon, eBay or Shopify — Nexus asks only those buyers.')
+    expect(saveHeld({ ...f, scope: 'ETSY' }, OK)).toBe('Pick Amazon or Shopify — Nexus asks only those buyers (eBay asks its buyers itself).')
     expect(saveHeld({ ...f, marketplace: null }, OK)).toBe('Pick the market first: an Amazon rule for one market needs one.')
     expect(saveHeld({ ...f, windowFrom: 20, windowTo: 10 }, OK)).toBe('The window’s first day (20) is after its last day (10).')
     expect(saveHeld({ ...f, minOrderTotal: 'ten' }, OK)).toMatch(/^The minimum order total is not an amount/)

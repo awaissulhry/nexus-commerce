@@ -11,10 +11,12 @@ import {
   revisionWords,
   channelSiteDomain,
   isReviewOpen,
+  AMAZON_PRODUCT_NO_REPLY,
   isReviewOverdue,
   replyLength,
   replyRefusal,
   reviewDueAt,
+  reviewAppOf,
   reviewReplyRules,
 } from './review-reply-rules'
 
@@ -42,10 +44,14 @@ describe('reviewReplyRules — one reply rule per channel (Reviews Inbox, 2026-1
     expect(replyRefusal(r, 'Thanks again')).toEqual({ code: 'already_replied', words: r.held })
   })
 
-  it('Amazon: no reply API — copy, open Seller Central, mark as responded; never a send button', () => {
+  it('Amazon: nobody can reply to a product review — no button, nothing to mark, the Amazon page\'s own words (audit B3)', () => {
     const product = reviewReplyRules('AMAZON', { kind: 'product', marketplace: 'DE' }, NOW)
-    expect(product).toMatchObject({ mode: 'copy', sendLabel: null, markAsResponded: true, limit: null })
-    expect(product.open).toEqual({ label: 'Open in Seller Central', href: 'https://sellercentral.amazon.de/home' })
+    expect(product).toMatchObject({ sendLabel: null, markAsResponded: false, open: null, limit: null, heldCode: 'no_reply', held: AMAZON_PRODUCT_NO_REPLY, ruleLine: AMAZON_PRODUCT_NO_REPLY })
+    expect(AMAZON_PRODUCT_NO_REPLY).toMatch(/^Amazon lets nobody reply to a product review\./)
+    expect(replyRefusal(product, 'Thanks')).toEqual({ code: 'no_reply', words: AMAZON_PRODUCT_NO_REPLY })
+  })
+
+  it('Amazon seller feedback: no reply API — copy, open Feedback Manager, mark as responded; never a send button', () => {
     const seller = reviewReplyRules('AMAZON', { kind: 'seller', marketplace: 'IT', replied: true }, NOW)
     expect(seller.open?.label).toBe('Open Feedback Manager')
     expect(seller.heldCode).toBe('already_replied')
@@ -67,6 +73,44 @@ describe('reviewReplyRules — one reply rule per channel (Reviews Inbox, 2026-1
     expect(r).toMatchObject({ mode: 'copy', oneReply: false, held: null, open: null })
   })
 
+  it('Etsy: the 100 days count from the buyer’s last edit when Etsy gives it (PR I)', () => {
+    // Posted 150 days ago, edited 11 days ago: the window is open, day 12 of 100.
+    const edited = reviewReplyRules('ETSY', { postedAt: daysAgo(150), lastEditedAt: daysAgo(11) }, NOW)
+    expect(edited).toMatchObject({ held: null, window: { day: 12, daysLeft: 89, closed: false } })
+    // No edit time (a file import): the window counts from the posted time.
+    expect(reviewReplyRules('ETSY', { postedAt: daysAgo(20), lastEditedAt: null }, NOW).window).toMatchObject({ day: 21, daysLeft: 80 })
+    const late = reviewReplyRules('ETSY', { postedAt: daysAgo(300), lastEditedAt: daysAgo(104) }, NOW)
+    expect(late.heldCode).toBe('window_closed')
+    expect(late.window?.endsAt).toBe(new Date(daysAgo(104).getTime() + 100 * 24 * 60 * 60 * 1000).toISOString())
+    // Already replied on Etsy: held, whatever the window.
+    expect(reviewReplyRules('ETSY', { postedAt: daysAgo(2), replied: true }, NOW).heldCode).toBe('already_replied')
+  })
+
+  it('Shopify via Judge.me: Nexus sends one reply, held once replied; without the connection, or from a file, it is copied', () => {
+    const r = reviewReplyRules('SHOPIFY', { app: 'JUDGEME' }, NOW)
+    expect(r).toMatchObject({ mode: 'send', sendLabel: 'Send reply to Judge.me', markAsResponded: false, limit: null, oneReply: true, held: null })
+    expect(r.ruleLine).toMatch(/public on the store’s review widget/)
+    expect(reviewReplyRules('SHOPIFY', { app: 'JUDGEME', replied: true }, NOW)).toMatchObject({ heldCode: 'already_replied' })
+    const off = reviewReplyRules('SHOPIFY', { app: 'JUDGEME', appConnected: false }, NOW)
+    expect(off).toMatchObject({ mode: 'copy', markAsResponded: true, held: null })
+    expect(off.ruleLine).toMatch(/^Judge\.me is not connected to Nexus now/)
+    expect(replyRefusal(off, 'Thank you')).toBeNull()
+    expect(reviewReplyRules('SHOPIFY', { app: 'JUDGEME', imported: true }, NOW)).toMatchObject({ mode: 'copy', held: null })
+    expect(reviewReplyRules('SHOPIFY', { imported: true }, NOW).ruleLine).toMatch(/came from a file/)
+  })
+
+  it('Shopify via Okendo, Yotpo or Loox: copy, with each app’s own words', () => {
+    expect(reviewReplyRules('SHOPIFY', { app: 'OKENDO' }, NOW).ruleLine).toMatch(/Enterprise plan only/)
+    expect(reviewReplyRules('SHOPIFY', { app: 'YOTPO' }, NOW)).toMatchObject({ mode: 'copy', held: null })
+    expect(reviewReplyRules('SHOPIFY', { app: 'LOOX' }, NOW).ruleLine).toMatch(/^Loox gives apps no way to reply/)
+  })
+
+  it('reviewAppOf: Judge.me reads only', () => {
+    expect(reviewAppOf('JUDGEME_API')).toBe('JUDGEME')
+    expect(reviewAppOf('IMPORT_CSV')).toBeNull()
+    expect(reviewAppOf(null)).toBeNull()
+  })
+
   it('an unknown channel: copy and mark as responded', () => {
     expect(reviewReplyRules('OTHER', {}, NOW)).toMatchObject({ mode: 'copy', markAsResponded: true, held: null })
   })
@@ -83,7 +127,7 @@ describe('replyRefusal — what reply/send refuses', () => {
     expect(replyRefusal(ebay, 'x'.repeat(538))?.words).toBe('Cut 38 characters to send it (the limit is 500).')
   })
   it('no limit: any length passes', () => {
-    expect(replyRefusal(reviewReplyRules('AMAZON', {}, NOW), 'x'.repeat(5000))).toBeNull()
+    expect(replyRefusal(reviewReplyRules('SHOPIFY', {}, NOW), 'x'.repeat(5000))).toBeNull()
   })
   it('characters are counted as a person sees them', () => {
     expect(replyLength('Grazie 🙏🏽')).toBe(8)
@@ -98,6 +142,13 @@ describe('due and overdue', () => {
     expect(isReviewOverdue({ status: 'IN_PROGRESS', postedAt: daysAgo(3) }, NOW)).toBe(true)
     expect(isReviewOverdue({ status: 'NEW', postedAt: daysAgo(1) }, NOW)).toBe(false)
   })
+  it('a review nobody can answer, or one read in from a file, is never overdue (the API\'s needs-a-reply rule)', () => {
+    expect(isReviewOverdue({ status: null, postedAt: daysAgo(3), channel: 'AMAZON', kind: 'product' }, NOW)).toBe(false)
+    expect(isReviewOverdue({ status: null, postedAt: daysAgo(3), channel: 'AMAZON', kind: 'seller' }, NOW)).toBe(true)
+    expect(isReviewOverdue({ status: null, postedAt: daysAgo(120), channel: 'ETSY' }, NOW)).toBe(false)
+    expect(isReviewOverdue({ status: null, postedAt: daysAgo(3), channel: 'EBAY', imported: true }, NOW)).toBe(false)
+  })
+
   it('a closed review is never overdue', () => {
     for (const status of ['RESPONDED', 'RESOLVED', 'IGNORED']) {
       expect(isReviewOpen(status)).toBe(false)

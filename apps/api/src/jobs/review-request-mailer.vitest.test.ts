@@ -89,8 +89,7 @@ describe('runReviewMailerOnce', () => {
     ])
     spies.sendAmazonSolicitation.mockImplementation(async ({ amazonOrderId }: { amazonOrderId: string }) =>
       amazonOrderId === 'ORDER-a2' ? { ok: false, errorCode: 'OUTSIDE_WINDOW', errorMessage: TOO_EARLY } : { ok: true, errorCode: 'OK' })
-    spies.sendReviewRequestEmail.mockImplementation(async ({ channel }: { channel: string }) =>
-      channel === 'EBAY' ? { ok: true, dryRun: false } : { ok: false, dryRun: false, error: 'boom' })
+    spies.sendReviewRequestEmail.mockResolvedValue({ ok: false, dryRun: false, error: 'boom' })
 
     const result = await runReviewMailerOnce()
 
@@ -100,16 +99,19 @@ describe('runReviewMailerOnce', () => {
     expect(db.reviewRequest.findMany.mock.calls[0][0].where.id).toBeUndefined()
     // a3 is before our day 4: not sent, waits.
     expect(spies.sendAmazonSolicitation).toHaveBeenCalledTimes(2)
-    expect(result).toMatchObject({ sent: 2, failed: 1, skipped: 2, tooEarly: 2 })
+    // e1 (eBay) is not e-mailed: eBay asks the buyer itself (Owner, 2026-10-27). Only s1 (Shopify) gets our e-mail.
+    expect(spies.sendReviewRequestEmail).toHaveBeenCalledTimes(1)
+    expect(spies.sendReviewRequestEmail.mock.calls[0][0]).toMatchObject({ channel: 'SHOPIFY' })
+    expect(result).toMatchObject({ sent: 1, failed: 1, skipped: 3, tooEarly: 2 })
     expect(result.byChannel).toEqual({
       AMAZON: { sent: 1, failed: 0, skipped: 0, tooEarly: 2 },
-      EBAY: { sent: 1, failed: 0, skipped: 0, tooEarly: 0 },
+      EBAY: { sent: 0, failed: 0, skipped: 1, tooEarly: 0 },
       SHOPIFY: { sent: 0, failed: 1, skipped: 0, tooEarly: 0 },
     })
     expect(result.byMarket).toEqual({
       'AMAZON:IT': { sent: 1, failed: 0, skipped: 0, tooEarly: 0 },
       'AMAZON:DE': { sent: 0, failed: 0, skipped: 0, tooEarly: 2 },
-      'EBAY:IT': { sent: 1, failed: 0, skipped: 0, tooEarly: 0 },
+      'EBAY:IT': { sent: 0, failed: 0, skipped: 1, tooEarly: 0 },
       'SHOPIFY:': { sent: 0, failed: 1, skipped: 0, tooEarly: 0 },
     })
     // Amazon's "too early" stays queued for tomorrow; it uses up no try.
@@ -119,14 +121,30 @@ describe('runReviewMailerOnce', () => {
   })
 
   it('email sending switched off: our email requests are SKIPPED in words, never SENT', async () => {
-    db.reviewRequest.findMany.mockResolvedValue([due('e1', 'EBAY', 'IT', 12), due('s1', 'SHOPIFY', null, 12)])
+    db.reviewRequest.findMany.mockResolvedValue([due('s1', 'SHOPIFY', null, 12), due('s2', 'SHOPIFY', 'IT', 12)])
     spies.sendReviewRequestEmail.mockResolvedValue({ ok: true, dryRun: true })
-    const result = await runReviewMailerOnce({ onlyIds: ['e1', 's1'] })
+    const result = await runReviewMailerOnce({ onlyIds: ['s1', 's2'] })
     expect(result).toMatchObject({ sent: 0, skipped: 2 })
-    for (const id of ['e1', 's1']) {
+    for (const id of ['s1', 's2']) {
       const data = db.reviewRequest.update.mock.calls.find(([arg]) => arg.where.id === id)![0].data
       expect(data).toMatchObject({ status: 'SKIPPED', providerResponseCode: 'EMAIL_OFF', suppressedReason: 'Email sending is off' })
       expect(data.sentAt).toBeUndefined()
+    }
+  })
+
+  it('eBay: never e-mailed (Owner, 2026-10-27) — a waiting eBay request ends not asked, before any e-mail, the "How was it?" check included', async () => {
+    const check = { id: 'c1', token: 'TOKEN', response: 'NONE', sentimentEmailSentAt: null }
+    db.reviewRequest.findMany.mockResolvedValue([due('e1', 'EBAY', 'DE', 12), due('e2', 'EBAY', 'IT', 12, { sentimentCheck: check })])
+    spies.sendReviewRequestEmail.mockResolvedValue({ ok: true, dryRun: false })
+    spies.sendSentimentCheckEmail.mockResolvedValue({ ok: true, dryRun: false })
+    const result = await runReviewMailerOnce({ onlyIds: ['e1', 'e2'] })
+    expect(spies.sendReviewRequestEmail).not.toHaveBeenCalled()
+    expect(spies.sendSentimentCheckEmail).not.toHaveBeenCalled()
+    expect(db.reviewSentimentCheck.update).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ sent: 0, failed: 0, skipped: 2, sentimentEmails: 0 })
+    for (const id of ['e1', 'e2']) {
+      const data = db.reviewRequest.update.mock.calls.find(([arg]) => arg.where.id === id)![0].data
+      expect(data).toEqual({ status: 'SKIPPED', providerResponseCode: 'EBAY_ASKS', suppressedReason: 'Not sent — eBay asks the buyer for feedback itself', nextRetryAt: null })
     }
   })
 

@@ -117,7 +117,7 @@ export function OverviewClient() {
   const show = query?.show ?? null
   const [needs, setNeeds] = useState<Loaded<NeedsYouResponse> | null>(null)
   const [needsBusy, setNeedsBusy] = useState(false)
-  const needsKey = query ? `needs|${show ?? ''}` : null
+  const needsKey = query ? `needs|${show ?? ''}|${channel ?? ''}|${market ?? ''}` : null
   const needsAbort = useRef<AbortController | null>(null)
   const loadNeeds = useCallback(async () => {
     if (!needsKey) return
@@ -126,7 +126,8 @@ export function OverviewClient() {
     needsAbort.current = controller
     setNeedsBusy(true)
     try {
-      const res = await reviewsGet<NeedsYouResponse>('/reviews/area/needs-you', { only: show, limit: needsLimit(show) }, { signal: controller.signal })
+      // The Overview's scope too, so the list agrees with the tiles above it.
+      const res = await reviewsGet<NeedsYouResponse>('/reviews/area/needs-you', { only: show, limit: needsLimit(show), channel, market }, { signal: controller.signal })
       if (controller.signal.aborted) return
       // A failed refresh keeps the list it has; the error shows only when there is nothing to show.
       setNeeds((prev) => (res.error && prev?.key === needsKey && prev.data ? prev : { key: needsKey, data: res.data, error: res.error, at: Date.now() }))
@@ -135,7 +136,7 @@ export function OverviewClient() {
     } finally {
       if (needsAbort.current === controller) setNeedsBusy(false)
     }
-  }, [needsKey, show])
+  }, [needsKey, show, channel, market])
   useEffect(() => {
     void loadNeeds()
     const id = window.setInterval(() => void loadNeeds(), NEEDS_POLL_MS)
@@ -144,7 +145,11 @@ export function OverviewClient() {
       needsAbort.current?.abort()
     }
   }, [loadNeeds])
-  useReviewEvents(() => void loadNeeds(), { types: ['review.created', 'review.negative'] })
+  // One stream: a new or negative review re-reads Needs you; a new alert (audit A9) also the "Open alerts" tile.
+  useReviewEvents((event) => {
+    void loadNeeds()
+    if (event.type === 'review.spike.detected') void loadOverview()
+  }, { types: ['review.created', 'review.negative', 'review.spike.detected'] })
   // Another tab (or this one) changed, replied to or imported reviews: both reads are stale.
   useInvalidationChannel(['review.updated', 'review.replied', 'review.imported'], () => {
     void loadNeeds()
@@ -163,7 +168,8 @@ export function OverviewClient() {
         label: 'Average rating',
         value: tiles.avgRating == null ? '—' : tiles.avgRating.toFixed(1),
         delta: deltaView(tiles.avgDelta, 'stars', period) ?? undefined,
-        hint: tiles.avgRating == null ? 'No ratings in this period' : <StarRating value={tiles.avgRating} size="sm" />,
+        // The source words of the one rating (Amazon stars only from imported reviews, eBay as % positive).
+        hint: tiles.ratingWords ?? (tiles.avgRating == null ? 'No ratings in this period' : <StarRating value={tiles.avgRating} size="sm" />),
         href: insightsHref('products', { sort: 'rating', channel, market }),
       },
       {
@@ -186,15 +192,15 @@ export function OverviewClient() {
         value: count(tiles.requestsSent),
         delta: tiles.requestsFailed > 0 ? { value: `${count(tiles.requestsFailed)} failed`, tone: 'negative' } : undefined,
         hint: words.label,
-        active: show === 'requests',
-        onClick: () => pressTile('requests'),
+        // Opens the requests it counts (sent, this scope and period), not the problems list.
+        href: requestsHref({ status: 'SENT', channel, market, period }),
       },
       {
         label: 'Review rate',
         value: rateText(tiles.reviewRate),
         delta: deltaView(tiles.rateDelta, 'points', period) ?? undefined,
-        hint: tiles.reviewRate == null ? 'no reviews to match yet' : 'reviews per request sent',
-        href: requestsHref({ channel, market }),
+        hint: tiles.rateWords ?? (tiles.reviewRate == null ? 'nothing sent in this period' : 'reviews per request sent'),
+        href: requestsHref({ channel, market, period }),
       },
       {
         label: 'Open alerts',
@@ -210,7 +216,7 @@ export function OverviewClient() {
   const channelRows = useMemo(() => {
     const rows = sectionData(sections?.channels)
     // The Etsy placeholder row stays unless the page is scoped to another channel.
-    return rows ? channelViewRows(rows, current?.at ?? 0, !channel || channel === 'ETSY') : null
+    return rows ? channelViewRows(rows, current?.at ?? 0) : null
   }, [sections, current?.at, channel])
   const watchRows = useMemo(() => {
     const rows = sectionData(sections?.watch)
@@ -302,6 +308,8 @@ export function OverviewClient() {
         show={show}
         canManage={canManage}
         now={needsNow?.at ?? 0}
+        channel={channel}
+        market={market}
         onClearShow={() => setQuery((q) => toggleShow(q, null))}
         onRetry={retryNeeds}
       />
@@ -318,7 +326,7 @@ export function OverviewClient() {
         Where the numbers come from: Amazon — review topics per product, updated weekly, for the UK, Germany, France, Italy and Spain (not
         available on Amazon.nl); 1–3 star seller feedback fetched on request (coming later); stars only from reviews you import, because
         Amazon gives no review text and no rating by API. eBay — seller feedback, read every 30 minutes. Shopify — your store’s review app,
-        by file import for now. Etsy — shop reviews, coming later.
+        Judge.me read every 30 minutes once connected, or by file import. Etsy — shop reviews with their one photo, read every 30 minutes.
       </p>
     </div>
   )

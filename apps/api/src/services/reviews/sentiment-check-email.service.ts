@@ -76,7 +76,7 @@ const COPY: Record<SentimentEmailLocale, LocaleCopy> = {
     orderLabel: 'Ordine',
     enHint: {
       positive: "we'll send a short review invitation",
-      negative: "we'll fix it within 24h",
+      negative: "we'll reply as soon as we can",
     },
     footer: "Xavia — abbigliamento moto Made in Italy.\nQuesta è un'email automatica. Non rispondere — usa i pulsanti sopra.",
     textPrompt: "Come è andata con {product}?",
@@ -92,7 +92,7 @@ const COPY: Record<SentimentEmailLocale, LocaleCopy> = {
     orderLabel: 'Bestellung',
     enHint: {
       positive: "we'll send a short review invitation",
-      negative: "we'll fix it within 24h",
+      negative: "we'll reply as soon as we can",
     },
     footer: 'Xavia — italienische Motorradausrüstung.\nDies ist eine automatisch versendete E-Mail. Bitte nicht antworten — nutze die Buttons oben.',
     textPrompt: 'Wie war es mit {product}?',
@@ -108,7 +108,7 @@ const COPY: Record<SentimentEmailLocale, LocaleCopy> = {
     orderLabel: 'Commande',
     enHint: {
       positive: "we'll send a short review invitation",
-      negative: "we'll fix it within 24h",
+      negative: "we'll reply as soon as we can",
     },
     footer: "Xavia — équipement moto italien.\nCeci est un e-mail automatique. Ne pas répondre — utilise les boutons ci-dessus.",
     textPrompt: "Comment s'est passé {product} ?",
@@ -124,7 +124,7 @@ const COPY: Record<SentimentEmailLocale, LocaleCopy> = {
     orderLabel: 'Pedido',
     enHint: {
       positive: "we'll send a short review invitation",
-      negative: "we'll fix it within 24h",
+      negative: "we'll reply as soon as we can",
     },
     footer: 'Xavia — equipamiento moto italiano.\nEste es un correo automático. No respondas — usa los botones de arriba.',
     textPrompt: '¿Qué tal con {product}?',
@@ -140,7 +140,7 @@ const COPY: Record<SentimentEmailLocale, LocaleCopy> = {
     orderLabel: 'Order',
     enHint: {
       positive: "we'll send a short review invitation",
-      negative: "we'll fix it within 24h",
+      negative: "we'll reply as soon as we can",
     },
     footer: 'Xavia — Italian motorcycle gear.\nThis is an automated email. Don\'t reply — use the buttons above.',
     textPrompt: 'How was {product}?',

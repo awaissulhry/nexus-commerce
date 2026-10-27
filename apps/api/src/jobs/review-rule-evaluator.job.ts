@@ -46,7 +46,8 @@ interface ReviewSpikeContext {
 
 async function buildReviewSpikeContexts(): Promise<ReviewSpikeContext[]> {
   const spikes = await prisma.reviewSpike.findMany({
-    where: { status: 'OPEN' },
+    // A "Rating drop" alert (category RATING_DROP, Reviews Phase 3) is not a complaint spike: no spike rule runs on it.
+    where: { status: 'OPEN', category: { not: 'RATING_DROP' } },
     orderBy: { detectedAt: 'desc' },
     take: 500,
     select: {

@@ -36,8 +36,10 @@ const detail = (over: Partial<ProductDetail> = {}): ProductDetail => ({
   ],
   spread: [98, 40, 20, 12, 18],
   themes: [{ key: 'FIT_SIZING', label: 'Fit & sizing', mentions: 40, share: 21, starImpact: -0.84, starImpactFrom: 'reviews', quote: null }],
-  fit: null,
-  fitWords: 'Fit per size comes later.',
+  fit: {
+    family: { id: 'p-1', name: 'Touring jacket' }, sizes: [], variants: [], reviews: 9, returns: 3, unclearReturns: 0, noSize: 0,
+    advice: 'Too few fit mentions per size to tell buyers anything yet.', words: 'From 9 reviews …', minimum: 5,
+  },
   latest: [],
   returns: { windowDays: 30, rate: { rate: 16, returns: 34, orders: 212 }, family: { rate: 14.2, returns: 40, orders: 280 }, withReview: 11, topReason: { reason: 'Too small', share: 41 }, reasons: [{ reason: 'Too small', count: 14, share: 41 }, { reason: 'Too large', count: 6, share: 18 }] },
   topicsAt: null,
@@ -61,8 +63,9 @@ describe('the pop-up header and tabs', () => {
     expect(headerPills(detail({ summary: { ...detail().summary, rating: null, ratingWords: 'too few to rate', change: null }, openAlerts: [] }), 'last 7 days')).toEqual([{ text: 'too few to rate', tone: 'neutral' }])
   })
 
-  it('counts each tab; Sizes is coming later', () => {
-    expect(productTabs(detail()).map((t) => [t.id, t.count ?? t.badge ?? null])).toEqual([['summary', null], ['reviews', 188], ['themes', 1], ['returns', 20], ['sizes', 'Coming later']])
+  it('counts each tab; Sizes counts the fit mentions placed on a size', () => {
+    expect(productTabs(detail()).map((t) => [t.id, t.count ?? t.badge ?? null])).toEqual([['summary', null], ['reviews', 188], ['themes', 1], ['returns', 20], ['sizes', 12]])
+    expect(productTabs(detail({ fit: null })).find((t) => t.id === 'sizes')?.count).toBeNull()
     expect(parseProductTab('returns')).toBe('returns')
     expect(parseProductTab('nope')).toBe('summary')
   })

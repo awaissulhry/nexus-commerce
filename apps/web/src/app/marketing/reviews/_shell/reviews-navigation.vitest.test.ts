@@ -43,7 +43,7 @@ describe('reviews navigation', () => {
     const onlyReviews = (permission: string) => permission === 'pages.reviews'
     const groups = nav.buildReviewsNavigation('/w/business_a/marketing/reviews', onlyReviews)
     const labels = groups.flatMap(group => group.items).map(item => item.label)
-    expect(labels).toEqual(['Overview', 'Inbox', 'Queue', 'Rules', 'Timing', 'Themes', 'Products', 'Alerts', 'Fixes', 'Brief', 'Amazon', 'eBay'])
+    expect(labels).toEqual(['Overview', 'Inbox', 'Queue', 'Rules', 'Timing', 'Themes', 'Products', 'Alerts', 'Fixes', 'Brief', 'Amazon', 'eBay', 'Shopify', 'Etsy'])
     expect(groups.every(group => group.items.length > 0)).toBe(true)
     expect(nav.buildReviewsNavigation('/marketing/reviews', () => false)).toEqual([])
     // The Settings row needs "Manage reviews" as well as the page permission; without it its group goes too.
@@ -84,21 +84,21 @@ describe('reviews navigation', () => {
       // PR E: the old Insights pages.
       '/marketing/reviews/heatmap', '/marketing/reviews/by-product', '/marketing/reviews/products/product-id',
       '/marketing/reviews/spikes', '/marketing/reviews/actions', '/marketing/reviews/spotlight',
+      // Advanced (→ Overview) and Automation (→ Settings › Automations) redirect too (audit D3).
+      '/marketing/reviews/advanced', '/marketing/reviews/automation',
     ]) {
       expect(active(retired)).toEqual([])
     }
-    expect(active('/marketing/reviews/advanced')).toEqual(['Overview'])
-    // The old Automation page redirects to Settings › Automations.
-    expect(active('/marketing/reviews/automation')).toEqual(['Settings'])
   })
 
   it('lists a row per channel market under Amazon and eBay, and marks the market page itself', () => {
     const markets = { AMAZON: ['IT', 'de', 'GB', 'bad1'], EBAY: ['IT'] }
     const channels = nav.buildReviewsNavigation('/w/business_a/marketing/reviews/amazon/it', undefined, undefined, markets).find(group => group.id === 'channels')!
-    expect(channels.items.map(item => item.label)).toEqual(['Amazon', 'Amazon Italy', 'Amazon Germany', 'Amazon United Kingdom', 'eBay', 'eBay Italy'])
+    expect(channels.items.map(item => item.label)).toEqual(['Amazon', 'Amazon Italy', 'Amazon Germany', 'Amazon United Kingdom', 'eBay', 'eBay Italy', 'Shopify', 'Etsy'])
     expect(channels.items.map(item => item.href)).toEqual([
       '/w/business_a/marketing/reviews/amazon', '/w/business_a/marketing/reviews/amazon/it', '/w/business_a/marketing/reviews/amazon/de',
       '/w/business_a/marketing/reviews/amazon/uk', '/w/business_a/marketing/reviews/ebay', '/w/business_a/marketing/reviews/ebay/it',
+      '/w/business_a/marketing/reviews/shopify', '/w/business_a/marketing/reviews/etsy',
     ])
     expect(channels.items.filter(item => item.active).map(item => item.label)).toEqual(['Amazon Italy'])
     const activeWith = (path: string) => nav.buildReviewsNavigation(path, undefined, undefined, markets).flatMap(group => group.items).filter(item => item.active).map(item => item.label)
@@ -134,6 +134,12 @@ describe('reviews crumbs', () => {
 
   it('ends a record page on its list, as a link', () => {
     expect(trail('/marketing/reviews/requests/rules/rule-id')).toBe('Marketing › Reviews › Requests › Rules')
+  })
+
+  it('Shopify and Etsy are one page each: their row is current there, crumbs end on the channel (PR I)', () => {
+    expect(trail('/marketing/reviews/etsy')).toBe('Marketing › Reviews › Etsy*')
+    expect(trail('/marketing/reviews/shopify')).toBe('Marketing › Reviews › Shopify*')
+    expect(model.findReviewsNavItem('/marketing/reviews/etsy')?.label).toBe('Etsy')
   })
 
   it('a channel page reads Marketing › Reviews › Amazon › Italy (no "Channels" crumb)', () => {

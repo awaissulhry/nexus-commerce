@@ -167,12 +167,13 @@ describe('heatmap and Amazon topic states', () => {
     expect(share.cells.some((c) => c.date === '2026-10-22')).toBe(false)
   })
 
-  it('a market without the Brand Analytics role says so; no rows is "no topics yet"', () => {
+  it('a market without the Selling Partner Insights role says so; no rows is "no topics yet"', () => {
     const states = topicStates([
       { marketplace: 'DE', accessStatus: 'OK', fetchedAt: daysAgo(6) },
       { marketplace: 'ES', accessStatus: 'NEEDS_BRAND_ANALYTICS_ROLE', fetchedAt: daysAgo(6) },
     ], ['DE', 'ES', 'FR'])
     expect(states.map((s) => [s.market, s.state])).toEqual([['DE', 'ok'], ['ES', 'needs_role'], ['FR', 'no_data']])
-    expect(states[1].words).toMatch(/Brand Analytics role/)
+    // One name for the role everywhere (audit B16): sellers need Selling Partner Insights (Brand Analytics is the vendors').
+    expect(states[1].words).toMatch(/Selling Partner Insights role/)
   })
 })

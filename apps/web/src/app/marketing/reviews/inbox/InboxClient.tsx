@@ -52,10 +52,10 @@ import { createInboxDatasource, type InboxPage, type InboxRow } from './inboxDat
 import {
   EMPTY_INBOX_QUERY, INBOX_PAGE_SIZES, INBOX_PERIOD_CHOICES, INBOX_STATUSES, NO_OWNER, activeFilterCount, clearFilters, gridSortOf,
   inboxApiParams, isFiltered, litTile, parseInboxQuery, querySignature, serializeInboxQuery, sortFromGrid, toggleStatusTile, withFilter,
-  withKind, withPage, withPeriod, withPhotos, withSearch, withSort, type InboxFilterKey, type InboxQuery, type InboxSort,
+  withKind, withNeedsReply, withPage, withPeriod, withPhotos, withSearch, withSort, type InboxFilterKey, type InboxQuery, type InboxSort,
 } from './inboxQuery'
 import {
-  TILE_ORDER, headerSubtitle, inboxChips, livePill, periodShort, readStateBanners, tabItems, tileAccent, tileHint,
+  TILE_ORDER, headerSubtitle, inboxChips, livePill, needsReplyWords, periodShort, readStateBanners, tabItems, tileAccent, tileHint,
   tileLabel, tileValue, valueWord,
 } from './inboxTiles'
 import { ImportModal } from './ImportModal'
@@ -445,6 +445,12 @@ function InboxInner() {
     <div className={s.actions}>
       <ReviewsMenuButton />
       <SegmentedControl size="sm" ariaLabel="Period" options={PERIOD_OPTIONS} value={q.period} onChange={(p) => setQuery((prev) => withPeriod(prev, p))} />
+      {/* The badges' number (the one needs-a-reply rule, all time): one press shows exactly those reviews. */}
+      {!q.needsReply && (top?.needsReply ?? 0) > 0 && (
+        <Button size="sm" onClick={() => setQuery((prev) => withNeedsReply(withPeriod(prev, 'all'), true))}>
+          {needsReplyWords(top!.needsReply!)}
+        </Button>
+      )}
       <Button size="sm" onClick={() => setImportOpen(true)} heldReason={canManage ? null : MANAGE_IMPORT}>Import reviews…</Button>
     </div>
   )

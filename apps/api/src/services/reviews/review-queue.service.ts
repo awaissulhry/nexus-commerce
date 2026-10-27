@@ -13,10 +13,14 @@
  *
  * Status, reasons and held reasons are in words (review-queue-words.ts); the routes hold no database call.
  */
+import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 import {
+  CODE_REASON,
+  EBAY_ASKS_CODE,
+  EBAY_RULE_WORDS,
   MAX_TRIES,
   QUEUE_STATUSES,
   REASON_FACET_WORDS,
@@ -144,7 +148,8 @@ export function statusFilterWhere(status: QueueStatus, now: Date): Record<string
 }
 
 const NOT_ASKED = { status: { in: ['SKIPPED', 'SUPPRESSED'] } }
-const CODE_KEYS = ['SKIPPED_BY_HAND', 'ALREADY_SOLICITED', 'NOT_IMPLEMENTED', 'UNKNOWN_MARKETPLACE', 'OUTSIDE_WINDOW', 'SUPPRESSED', 'DIVERTED_NEGATIVE', 'NO_RESPONSE_NO_FALLBACK', 'TIMING_TEST_HOLDOUT']
+/** Every code that decides a row's reason on its own (`CODE_REASON`, the same list `reasonKeyOf` reads). */
+const CODE_KEYS = Object.keys(CODE_REASON)
 const NO_DECIDING_CODE = { OR: [{ providerResponseCode: null }, { providerResponseCode: { notIn: CODE_KEYS } }] }
 const sr = (contains: string) => ({ suppressedReason: { contains, mode: 'insensitive' } })
 const notAskedBy = (...conds: Record<string, unknown>[]) => ({ AND: [NOT_ASKED, NO_DECIDING_CODE, ...conds] })
@@ -181,6 +186,7 @@ const REASON_WHERE: Record<Exclude<ReasonKey, 'not_asked_other'>, (now: Date) =>
   already_asked: () => ({ ...NOT_ASKED, providerResponseCode: 'ALREADY_SOLICITED' }),
   amazon_off: () => ({ ...NOT_ASKED, providerResponseCode: 'NOT_IMPLEMENTED' }),
   email_off: () => ({ ...NOT_ASKED, providerResponseCode: 'EMAIL_OFF' }),
+  ebay_asks: () => ({ ...NOT_ASKED, providerResponseCode: EBAY_ASKS_CODE }),
   unknown_market: () => ({ ...NOT_ASKED, providerResponseCode: 'UNKNOWN_MARKETPLACE' }),
   window_closed: () => ({ OR: [{ ...NOT_ASKED, providerResponseCode: 'OUTSIDE_WINDOW' }, notAskedBy({ NOT: { suppressedReason: { startsWith: RULE_EXCLUSION_PREFIX } } }, sr('outside'), { OR: [sr('window'), sr('4-30'), sr('4–30')] })] }),
   do_not_email: () => ({ ...NOT_ASKED, providerResponseCode: 'SUPPRESSED' }),
@@ -329,51 +335,70 @@ export function toQueueRow(r: QueueRowInput, now: Date): QueueRow {
 
 // ── GET /review-queue ───────────────────────────────────────────────────────────────────────────────────────────
 
-/** The review rate of the last 30 days and its change against the 30 days before (an estimate; cached a minute). */
-const rateCache = new Map<string, { at: number; value: { rate: number | null; delta: number | null } }>()
-async function reviewRate30(now: Date): Promise<{ rate: number | null; delta: number | null }> {
-  const key = workspaceIdForQuery()
+/**
+ * The review rate of the page's period and its change against the period before ("All time": no change), for the page's
+ * channel, market and rule filters — the ONE rate (review-rate.service.ts), the same number as the Overview's tile for
+ * the same period and scope. Cached a minute.
+ */
+const rateCache = new Map<string, { at: number; value: { rate: number | null; delta: number | null; words: string | null } }>()
+async function reviewRateOf(now: Date, q: QueueQuery): Promise<{ rate: number | null; delta: number | null; words: string | null }> {
+  const days = PERIOD_DAYS[q.period]
+  const scope = {
+    channel: q.channel || null,
+    market: q.market && q.market !== 'NONE' ? q.market : null,
+    ruleId: q.rule && q.rule !== 'none' ? q.rule : null,
+  }
+  const key = `${workspaceIdForQuery()}|${days ?? 'all'}|${scope.channel ?? ''}|${scope.market ?? ''}|${scope.ruleId ?? ''}`
   const hit = rateCache.get(key)
   if (hit && now.getTime() - hit.at < 60_000) return hit.value
-  const { computeReviewAnalytics } = await import('./review-analytics.service.js')
-  const a = await computeReviewAnalytics({ windowDays: 60, attributionWindowDays: 30 })
-  const cut = new Date(now.getTime() - 30 * DAY_MS).toISOString().slice(0, 10)
-  const sum = (rows: typeof a.daily) => rows.reduce((t, d) => ({ sent: t.sent + d.sent, reviewed: t.reviewed + d.reviewedAfter }), { sent: 0, reviewed: 0 })
-  const recent = sum(a.daily.filter((d) => d.date >= cut))
-  const before = sum(a.daily.filter((d) => d.date < cut))
-  const rate = recent.sent > 0 ? recent.reviewed / recent.sent : null
-  const prev = before.sent > 0 ? before.reviewed / before.sent : null
-  const value = { rate, delta: rate != null && prev != null ? rate - prev : null }
+  const { readRateFacts, readRateRequests, rateOf } = await import('./review-rate.service.js')
+  const cut = days == null ? null : new Date(now.getTime() - days * DAY_MS)
+  const [recentRows, beforeRows, facts] = await Promise.all([
+    readRateRequests({ from: cut, to: now, ...scope }),
+    cut && days != null ? readRateRequests({ from: new Date(cut.getTime() - days * DAY_MS), to: cut, ...scope }) : Promise.resolve([]),
+    readRateFacts(),
+  ])
+  const recent = rateOf(recentRows, facts)
+  const before = cut ? rateOf(beforeRows, facts) : null
+  const value = { rate: recent.rate, delta: recent.rate != null && before?.rate != null ? recent.rate - before.rate : null, words: recent.words }
   rateCache.set(key, { at: now.getTime(), value })
   return value
 }
 
-async function queueTiles(base: Record<string, unknown>, now: Date) {
+async function queueTiles(base: Record<string, unknown>, now: Date, q: QueueQuery) {
   // Each tile counts exactly what pressing it filters (statusFilterWhere): Skipped includes the blocked requests.
   const count = (status: QueueStatus) => prisma.reviewRequest.count({ where: { AND: [base, statusFilterWhere(status, now)] } as any })
   const [scheduled, dueNow, retrying, sent, failed, skipped, rate] = await Promise.all([
     count('SCHEDULED'), count('DUE'), count('RETRYING'), count('SENT'), count('FAILED'), count('SKIPPED'),
-    reviewRate30(now).catch((err) => {
+    reviewRateOf(now, q).catch((err) => {
       logger.warn('[review-queue] review rate failed', { error: err instanceof Error ? err.message : String(err) })
-      return { rate: null, delta: null }
+      return { rate: null, delta: null, words: 'The review rate could not be read just now.' }
     }),
   ])
-  return { scheduled, dueNow, retrying, sent, failed, skipped, reviewRate: rate.rate, rateDelta: rate.delta }
+  return { scheduled, dueNow, retrying, sent, failed, skipped, reviewRate: rate.rate, rateDelta: rate.delta, rateWords: rate.words }
 }
 
+/**
+ * The failures banner (audit A6): requests that failed for good (no try left — what "Show failed" shows, with the
+ * period set to 7 days) in the last 7 days, and apart from them the ones that still try again on their own.
+ */
 async function failuresLast7Days(now: Date) {
-  const rows = await prisma.reviewRequest.findMany({
-    where: { status: 'FAILED', OR: [{ lastAttemptAt: { gte: new Date(now.getTime() - 7 * DAY_MS) } }, { lastAttemptAt: null, updatedAt: { gte: new Date(now.getTime() - 7 * DAY_MS) } }] },
-    select: { status: true, channel: true, providerResponseCode: true, errorMessage: true, suppressedReason: true, nextRetryAt: true, attemptCount: true },
-    take: 2000,
-  })
+  const weekAgo = new Date(now.getTime() - 7 * DAY_MS)
+  const [rows, retrying] = await Promise.all([
+    prisma.reviewRequest.findMany({
+      where: { AND: [statusWhere('FAILED', now), { updatedAt: { gte: weekAgo } }] } as any,
+      select: { status: true, channel: true, providerResponseCode: true, errorMessage: true, suppressedReason: true, nextRetryAt: true, attemptCount: true },
+      take: 2000,
+    }),
+    prisma.reviewRequest.count({ where: { AND: [{ status: 'FAILED' }, statusWhere('RETRYING', now), { updatedAt: { gte: weekAgo } }] } as any }),
+  ])
   let bounced = 0, noAnswer = 0
   for (const r of rows) {
     const key = reasonKeyOf(r, now)
     if (key === 'email_bounced') bounced += 1
     else if (key === 'amazon_no_answer') noAnswer += 1
   }
-  const f = { count: rows.length, bounced, noAnswer }
+  const f = { count: rows.length, bounced, noAnswer, retrying }
   return { ...f, words: failuresWords(f) }
 }
 
@@ -407,7 +432,7 @@ export async function listReviewQueue(raw: Record<string, unknown>, now = new Da
       skip: (q.page - 1) * q.pageSize,
       take: q.pageSize,
     }),
-    queueTiles(base, now),
+    queueTiles(base, now, q),
     failuresLast7Days(now),
     queueFacets(),
   ])
@@ -559,6 +584,17 @@ async function runningNow(now: Date) {
 const PAUSED_HELD = 'Sending is paused. Resume first, then run.'
 const RUNNING_HELD = 'The sender is running now — try again in a minute.'
 
+/**
+ * Why nothing may be sent by hand right now (sending paused, or a run going on), in words; null when it may. The
+ * Orders page's "Request review" and Claude's `request-review` ask this BEFORE they write anything.
+ */
+export async function sendHeldNow(now = new Date()): Promise<string | null> {
+  const state = await findReviewMailerState()
+  if (state?.isPaused) return 'Sending is paused on Reviews › Requests — nothing goes out until someone resumes it'
+  if (await runningNow(now)) return RUNNING_HELD
+  return null
+}
+
 export async function reviewSendingState(now = new Date()) {
   const [state, last, lastCron, running, due] = await Promise.all([
     findReviewMailerState(),
@@ -571,14 +607,28 @@ export async function reviewSendingState(now = new Date()) {
     runningNow(now),
     prisma.reviewRequest.groupBy({ by: ['channel', 'marketplace'], where: dueWhere(now) as any, _count: { _all: true } }),
   ])
+  // Due requests whose rule asks "How was it?" first (audit B19): the run sends that e-mail, not the request.
+  const checkFirstGroups = await prisma.reviewRequest.groupBy({
+    by: ['channel'],
+    where: { AND: [dueWhere(now) as Prisma.ReviewRequestWhereInput, { sentimentCheck: { is: { sentimentEmailSentAt: null, response: 'NONE' } } }, { order: { customerEmail: { not: '' } } }] },
+    _count: { _all: true },
+  })
+  const checkFirst = { amazon: 0, email: 0 }
+  for (const g of checkFirstGroups) {
+    if (g.channel === 'AMAZON') checkFirst.amazon += g._count._all
+    else if (g.channel !== 'EBAY') checkFirst.email += g._count._all
+  }
   const paused = state?.isPaused
     ? { by: await personName(state.pausedBy), at: iso(state.pausedAt), reason: state.pausedReason ?? null }
     : null
   const amazonByMarket: Record<string, number> = {}
   const emailByChannel: Record<string, number> = {}
+  // eBay requests still waiting from before eBay buyers stopped getting our e-mail: the run closes them unasked.
+  let ebayDue = 0
   for (const g of due) {
     const n = g._count._all
     if (g.channel === 'AMAZON') amazonByMarket[g.marketplace ?? '—'] = (amazonByMarket[g.marketplace ?? '—'] ?? 0) + n
+    else if (g.channel === 'EBAY') ebayDue += n
     else emailByChannel[g.channel] = (emailByChannel[g.channel] ?? 0) + n
   }
   const total = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0)
@@ -604,8 +654,9 @@ export async function reviewSendingState(now = new Date()) {
         }
       : null,
     due: {
-      amazon: { total: total(amazonByMarket), byMarket: amazonByMarket },
-      email: { total: total(emailByChannel), byChannel: emailByChannel },
+      amazon: { total: total(amazonByMarket), byMarket: amazonByMarket, checkFirst: checkFirst.amazon },
+      email: { total: total(emailByChannel), byChannel: emailByChannel, checkFirst: checkFirst.email },
+      ebay: ebayDue,
     },
     runHeld: paused ? PAUSED_HELD : running ? RUNNING_HELD : null,
   }
@@ -757,31 +808,107 @@ export async function bulkReviewQueue(body: unknown, now = new Date()) {
   return { changed: due.count, held: plan.held, result: ran.result }
 }
 
+// ── POST /review-requests/:id/unsuppress ("Allow again") ──────────────────────────────────────────────────────────
+
+/** A request the server will not allow again, with the words why (the route answers 409). */
+class AllowAgainRefused extends Error {
+  readonly statusCode = 409
+}
+
+/** The facts "Allow again" (and the Orders page's "Request review" of a not-asked order) is held by. */
+const AGAIN_SELECT = {
+  ...HELD_SELECT,
+  order: {
+    select: {
+      deliveredAt: true, customerEmail: true, marketplace: true, status: true, cancelledAt: true,
+      returns: { select: { status: true } },
+      financialTransactions: { where: { transactionType: 'Refund' }, select: { id: true } },
+    },
+  },
+} as const
+
+function againFactsOf(r: {
+  status: string; channel: string; marketplace: string | null; scheduledFor: Date | null; sentAt: Date | null
+  providerResponseCode: string | null; errorMessage: string | null; suppressedReason: string | null; attemptCount: number
+  lastAttemptAt: Date | null; nextRetryAt: Date | null; sentimentCheck: { sentimentEmailSentAt: Date | null; response: string } | null
+  order: { deliveredAt: Date | null; customerEmail: string | null; marketplace: string | null; status: string; cancelledAt: Date | null; returns: Array<{ status: string }>; financialTransactions: unknown[] }
+}): HeldFacts {
+  return {
+    status: r.status, channel: r.channel, marketplace: r.marketplace ?? r.order.marketplace,
+    scheduledFor: r.scheduledFor, sentAt: r.sentAt, providerResponseCode: r.providerResponseCode, errorMessage: r.errorMessage,
+    suppressedReason: r.suppressedReason, attemptCount: r.attemptCount, lastAttemptAt: r.lastAttemptAt, nextRetryAt: r.nextRetryAt,
+    deliveredAt: r.order.deliveredAt, customerEmail: r.order.customerEmail, sentimentCheck: r.sentimentCheck,
+    hasOpenReturn: r.order.returns.some((x) => ACTIVE_RETURN_STATUSES.includes(x.status)),
+    hasRefund: r.order.financialTransactions.length > 0 || r.order.returns.some((x) => x.status === 'REFUNDED'),
+    isCancelled: r.order.status === 'CANCELLED' || r.order.cancelledAt != null,
+  }
+}
+
+/** The fields "Allow again" resets: queued now, with a fresh set of tries. */
+export const ALLOW_AGAIN_DATA = {
+  status: 'SCHEDULED', suppressedReason: null, errorMessage: null, providerResponseCode: null,
+  attemptCount: 0, lastAttemptAt: null, nextRetryAt: null,
+} as const
+
+/**
+ * "Allow again": a request that was not asked goes back into the queue, due now. Refused (409, in words) when
+ * `allowAgainHeldFor` holds it — already sent, on the do-not-email list, refunded, past Amazon's day 30… — so a stale
+ * page or a direct call can never ask a buyer twice.
+ */
+export async function allowRequestAgain(id: string, now = new Date()) {
+  const row = await prisma.reviewRequest.findUnique({ where: { id }, select: AGAIN_SELECT })
+  if (!row) return null
+  const held = allowAgainHeldFor(againFactsOf(row), now)
+  if (held) throw new AllowAgainRefused(held)
+  const done = await prisma.reviewRequest.updateMany({
+    where: { id, status: { in: ['SKIPPED', 'SUPPRESSED'] } },
+    data: { ...ALLOW_AGAIN_DATA, scheduledFor: now },
+  })
+  if (done.count === 0) throw new AllowAgainRefused('Only a request that was not asked can be allowed again')
+  return prisma.reviewRequest.findUnique({ where: { id } })
+}
+
 // ── Rules: stats, bulk, export ──────────────────────────────────────────────────────────────────────────────────
 
-/** Per rule: requests sent in 30 days, their review rate (estimate; null when none sent), orders it decided in 30 days. */
-export async function ruleStats(now = new Date()): Promise<Map<string, { sent30: number; rate30: number | null; matched30: number }>> {
-  const { computeReviewAnalytics } = await import('./review-analytics.service.js')
-  const [analytics, decided] = await Promise.all([
-    computeReviewAnalytics({ windowDays: 30, attributionWindowDays: 30 }),
-    prisma.reviewRequest.groupBy({ by: ['ruleId'], where: { createdAt: { gte: new Date(now.getTime() - 30 * DAY_MS) }, ruleId: { not: null } }, _count: { _all: true } }),
+/**
+ * Per rule: requests sent in 30 days, their review rate (the ONE rate, review-rate.service.ts; null when nothing
+ * measurable was sent, with its words), and the orders it decided in 30 days.
+ */
+export interface RuleStat { sent30: number; rate30: number | null; rateWords: string | null; matched30: number }
+
+export async function ruleStats(now = new Date()): Promise<{ byRule: Map<string, RuleStat>; all: { sent30: number; rate30: number | null; rateWords: string | null } }> {
+  const { readRateFacts, readRateRequests, rateOf } = await import('./review-rate.service.js')
+  const since = new Date(now.getTime() - 30 * DAY_MS)
+  const [rows, facts, decided] = await Promise.all([
+    readRateRequests({ from: since, to: now }),
+    readRateFacts(),
+    prisma.reviewRequest.groupBy({ by: ['ruleId'], where: { createdAt: { gte: since }, ruleId: { not: null } }, _count: { _all: true } }),
   ])
-  const stats = new Map<string, { sent30: number; rate30: number | null; matched30: number }>()
-  for (const r of analytics.perRule) {
+  const byRule = new Map<string, typeof rows>()
+  for (const r of rows) {
     if (!r.ruleId) continue
-    stats.set(r.ruleId, { sent30: r.sent, rate30: r.sent > 0 ? r.conversionRate : null, matched30: 0 })
+    const list = byRule.get(r.ruleId) ?? []
+    list.push(r)
+    byRule.set(r.ruleId, list)
+  }
+  const stats = new Map<string, RuleStat>()
+  for (const [ruleId, list] of byRule) {
+    const r = rateOf(list, facts)
+    stats.set(ruleId, { sent30: r.sent, rate30: r.rate, rateWords: r.words, matched30: 0 })
   }
   for (const g of decided) {
     if (!g.ruleId) continue
-    const s = stats.get(g.ruleId) ?? { sent30: 0, rate30: null, matched30: 0 }
+    const s = stats.get(g.ruleId) ?? { sent30: 0, rate30: null, rateWords: null, matched30: 0 }
     s.matched30 = g._count._all
     stats.set(g.ruleId, s)
   }
-  return stats
+  // The Rules page's tile: every request a rule sent, as one rate (never an average of the rules' rates).
+  const total = rateOf(rows.filter((r) => r.ruleId), facts)
+  return { byRule: stats, all: { sent30: total.sent, rate30: total.rate, rateWords: total.words } }
 }
 
 export type RulesBulkAction = 'on' | 'off' | 'delete'
-const SCOPES_NEXUS_ASKS = ['AMAZON_PER_MARKETPLACE', 'AMAZON_GLOBAL', 'EBAY', 'SHOPIFY']
+const SCOPES_NEXUS_ASKS = ['AMAZON_PER_MARKETPLACE', 'AMAZON_GLOBAL', 'SHOPIFY']
 
 /** Which rules a bulk action changes and which it holds (with words). Pure. */
 export function rulesBulkPlan(
@@ -798,7 +925,8 @@ export function rulesBulkPlan(
     if (action === 'on') {
       if (r.isActive) { held.push({ id, words: `“${r.name}” is already on` }); continue }
       if (r.scope === 'AMAZON_PER_MARKETPLACE' && !r.marketplace) { held.push({ id, words: `“${r.name}” matches no orders: it has no market. Open it and pick one.` }); continue }
-      if (!SCOPES_NEXUS_ASKS.includes(r.scope)) { held.push({ id, words: `“${r.name}” matches no orders: Nexus asks only Amazon, eBay and Shopify buyers.` }); continue }
+      if (r.scope === 'EBAY') { held.push({ id, words: `“${r.name}” asks nobody: ${EBAY_RULE_WORDS}` }); continue }
+      if (!SCOPES_NEXUS_ASKS.includes(r.scope)) { held.push({ id, words: `“${r.name}” matches no orders: Nexus asks only Amazon and Shopify buyers.` }); continue }
     }
     if (action === 'off' && !r.isActive) { held.push({ id, words: `“${r.name}” is already off` }); continue }
     apply.push(id)
@@ -875,7 +1003,7 @@ export async function resolveEmailPick(raw: Record<string, unknown>): Promise<Em
   const kind = (text(raw.kind) || 'request') as ReviewEmailKind
   if (kind !== 'request' && kind !== 'check') throw new QueueInputError('Pick the review request email or the “How was it?” check.')
   const ruleId = text(raw.ruleId) || null
-  let channel = (text(raw.channel).toUpperCase() || 'EBAY') as EmailPick['channel']
+  let channel = (text(raw.channel).toUpperCase() || 'SHOPIFY') as EmailPick['channel']
   let market = text(raw.market).toUpperCase() || null
   if (ruleId) {
     const rule = await prisma.reviewRule.findUnique({ where: { id: ruleId }, select: { scope: true, marketplace: true } })
@@ -884,6 +1012,8 @@ export async function resolveEmailPick(raw: Record<string, unknown>): Promise<Em
     if (rule.marketplace && !market) market = rule.marketplace
   }
   if (!['AMAZON', 'EBAY', 'SHOPIFY'].includes(channel)) throw new QueueInputError('Pick Amazon, eBay or Shopify.')
+  // eBay buyers get no e-mail from Nexus (Owner, 2026-10-27): nothing to preview or test.
+  if (channel === 'EBAY') throw new QueueInputError(EBAY_RULE_WORDS)
   const { resolveLocaleForMarketplace } = await import('./sentiment-check-email.service.js')
   const askedLocale = text(raw.locale).toLowerCase()
   const locale = kind === 'request'
@@ -905,6 +1035,13 @@ async function sampleProduct(channel: string, market: string | null): Promise<{ 
 
 const webBase = () => (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-web.up.railway.app').replace(/\/$/, '')
 
+/** The review button of the previewed e-mail: this business's own shop (review-links.service.ts). */
+async function previewLink(pick: EmailPick): Promise<string | null> {
+  const { readShopReviewPage, reviewLinkFor } = await import('./review-links.service.js')
+  const shop = pick.channel === 'SHOPIFY' ? await readShopReviewPage() : { url: null, source: null }
+  return reviewLinkFor(pick.channel, shop)
+}
+
 /** GET /review-emails/preview — the e-mail a buyer would get, rendered (nothing is sent, nothing is written). */
 export async function reviewEmailPreview(raw: Record<string, unknown>) {
   const pick = await resolveEmailPick(raw)
@@ -915,13 +1052,13 @@ export async function reviewEmailPreview(raw: Record<string, unknown>) {
   const { defaultFrom } = await import('../email/transport.js')
   const product = await sampleProduct(pick.channel, pick.market)
   const sampleTo = 'buyer@example.com'
+  const link = pick.kind === 'request' ? await previewLink(pick) : null
   const render = async (locale: string) => {
     if (pick.kind === 'request') {
       const { renderReviewRequestEmail } = await import('./review-request-email.service.js')
-      const { buildReviewUrl } = await import('./review-scheduler.service.js')
       return renderReviewRequestEmail({
         to: sampleTo, customerName: null, channelOrderId: 'PREVIEW', channel: pick.channel, marketplace: pick.market,
-        productName: product.name, productType: product.productType, reviewUrl: buildReviewUrl(pick.channel, 'PREVIEW'),
+        productName: product.name, productType: product.productType, reviewUrl: link,
         locale: locale as 'it' | 'en',
       }, identity)
     }
@@ -945,7 +1082,9 @@ export async function reviewEmailPreview(raw: Record<string, unknown>) {
     englishSummary: english.text,
     note: pick.kind === 'request' && pick.channel === 'AMAZON'
       ? 'Amazon buyers never get this email: Amazon sends its own standard request, once per order.'
-      : null,
+      : pick.kind === 'request' && pick.channel === 'SHOPIFY' && !link
+        ? 'This e-mail has no review button: this business has no Shopify store connected and no website in Settings › Company.'
+        : null,
   }
 }
 
@@ -961,10 +1100,9 @@ export async function sendReviewEmailTest(raw: Record<string, unknown>, to: stri
   let sent: { ok: boolean; dryRun: boolean; error?: string; suppressed?: boolean }
   if (pick.kind === 'request') {
     const { sendReviewRequestEmail } = await import('./review-request-email.service.js')
-    const { buildReviewUrl } = await import('./review-scheduler.service.js')
     sent = await sendReviewRequestEmail({
       to: address, customerName: null, channelOrderId: 'TEST', channel: pick.channel, marketplace: pick.market,
-      productName: product.name, productType: product.productType, reviewUrl: buildReviewUrl(pick.channel, 'TEST'),
+      productName: product.name, productType: product.productType, reviewUrl: await previewLink(pick),
       locale: pick.locale as 'it' | 'en',
     })
   } else {

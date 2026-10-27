@@ -10,12 +10,14 @@
  *   Board    one row per theme (`GET /api/reviews/insights/themes`): mentions, share, star impact, change, 8 weeks,
  *            two quotes that name their source; sort Mentions / Star impact / Change (`?sort=`). A theme opens its
  *            reviews in the Inbox.
- *   Fit      runs small / true / large per family and size — Coming later (Phase 3), shown with sample rows.
+ *   Fit      runs small / true to size / runs large per family and size (`fit` of the same read): from reviews that say how
+ *            it fits and returns marked "too small" / "too large"; a size needs 5 mentions before it gets a verdict, fewer
+ *            is "Too few". "Size-guide fixes" opens Fixes on the Size guide kind.
  *   Heatmap  theme × day (`GET /api/reviews/heatmap`), Mentions / Negative share (`?metric=`); a cell opens the Inbox on
  *            that theme over the shortest period that holds the day.
  * Everything re-reads every 60 s and when this or another tab changes a review.
  */
-import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { AsOf, Banner, Card, Heatmap, MetricStrip, ProgressBar, Sparkline, SummaryTable, type Metric } from '@/design-system/components'
 import {
@@ -40,6 +42,7 @@ import { insightsHref } from '../../_lib/reviewsLinks'
 import { useGridCustomise, type GridColumnSpec } from '../../requests/gridCustomise'
 import { InsightsHeader } from '../_shared/InsightsHeader'
 import { periodWords, scopeApiParams, type InsightsScope } from '../_shared/insightsScope'
+import { familyMentions, fitPill, fitTableFootnote, type FitTable } from '../_shared/fitView'
 import { useAddressSync, useInsightsRead, useInsightsScope, useScopeChoices } from '../_shared/useInsights'
 import {
   HEAT_METRIC_OPTIONS,
@@ -171,14 +174,42 @@ const COLUMNS: ColDef<InsightTheme>[] = [
   { colId: 'say', headerName: 'What buyers say', flex: 1, minWidth: 260, sortable: false, cellRenderer: SayCell, cellClass: 'nds-ag-cell', autoHeight: true, wrapText: true },
 ]
 
-// ⛔ KEEP — Coming later placeholder (Owner ruling 3): fit per family and size needs the Phase 3 fit data (themes ×
-// size returns, PR J). Sample rows, labelled "Sample"; never computed from real reviews until then.
-const FIT_SAMPLE_COLUMNS = ['Family', 'S', 'M', 'L', 'XL', 'What to tell buyers']
-const FIT_SAMPLE_ROWS = [
-  { id: 'jacket', cells: ['Touring jacket (sample)', 'Runs small', 'Runs small', 'True to size', 'True to size', 'Pick one size up below L'] },
-  { id: 'pants', cells: ['Over-pants (sample)', 'True to size', 'True to size', 'Runs large', 'Runs large', 'Pick your usual size; L and XL are roomy'] },
-  { id: 'gloves', cells: ['Summer gloves (sample)', 'Too few', 'True to size', 'True to size', 'Too few', 'True to size'] },
-]
+/** The fit table: a family per row (its name opens its pop-up on Products), a column per size, what to tell buyers. */
+function FitTableView({ fit, scope }: { fit: FitTable; scope: InsightsScope | null }) {
+  const min = fit.summary.minimum
+  return (
+    <div className={s.fitScroll}>
+      <div className={s.fitInner} style={{ '--fit-min': `${420 + fit.sizes.length * 130}px` } as CSSProperties}>
+        <SummaryTable
+          label="Fit by product family and size"
+          stackOnPhone
+          columns={['Family', ...fit.sizes, 'What to tell buyers']}
+          align={['left', ...fit.sizes.map(() => 'left' as const), 'left']}
+          widths={['180px', ...fit.sizes.map(() => undefined), '240px']}
+          rows={fit.families.map((f) => ({
+            id: f.familyId,
+            cells: [
+              <span key="f" className={shared.stack}>
+                <Link className={`${s.themeLink} ${s.fitFamily}`} title={f.name} href={insightsHref('products', { product: f.familyId, channel: scope?.channel, market: scope?.market, period: scope?.period })}>{f.name}</Link>
+                <span className="nds-summary-sub">{familyMentions(f)}</span>
+              </span>,
+              ...f.cells.map((c) => {
+                const v = fitPill(c, min)
+                return (
+                  <span key={c.size} title={v.words}>
+                    <Pill tone={v.tone}>{v.text}</Pill>
+                    <span className="nds-summary-sub">{v.note}</span>
+                  </span>
+                )
+              }),
+              <span key="a">{f.advice}</span>,
+            ],
+          }))}
+        />
+      </div>
+    </div>
+  )
+}
 
 export function ThemesClient() {
   const router = useRouter()
@@ -313,9 +344,8 @@ export function ThemesClient() {
         reviews in the Inbox.
       </p>
 
-      {/* ⛔ KEEP — Coming later placeholder (Owner ruling 3): the fit table needs the Phase 3 fit data. */}
       <Card
-        header={<span className={shared.line}>Fit: runs small or large <Pill tone="neutral">Coming later</Pill> <Tag tone="neutral">Sample</Tag></span>}
+        header="Fit: runs small or large"
         description={`What buyers say about the fit, per product family and size · ${periodWords(scope?.period ?? '30d').label}`}
         headerAction={(
           <Button asChild size="sm">
@@ -324,13 +354,19 @@ export function ThemesClient() {
         )}
       >
         <div className={shared.cardBody}>
-          <p className={shared.muted}>
-            Coming later: Nexus will read the fit from reviews that mention it and from returns marked “too small” or “too large”, per family
-            and size (a size needs 5 mentions before it gets a verdict). The rows below are a sample, not your products.
-          </p>
-          <div className={shared.tableScroll}>
-            <SummaryTable label="Fit by product family and size (sample)" columns={FIT_SAMPLE_COLUMNS} rows={FIT_SAMPLE_ROWS} />
-          </div>
+          {!data ? (
+            <p className={shared.muted}>{themes.error ? 'Not read: see the error above.' : 'Reading…'}</p>
+          ) : data.fit.families.length === 0 ? (
+            <p className={shared.muted}>
+              No review or return in this scope and period says how a size fits yet. Nexus reads reviews that say a size runs small, true
+              to size or large, and returns marked “too small” or “too large”. Pick a longer period, or every channel.
+            </p>
+          ) : (
+            <>
+              <FitTableView fit={data.fit} scope={scope} />
+              <p className={shared.muted}>{fitTableFootnote(data.fit)}</p>
+            </>
+          )}
         </div>
       </Card>
 

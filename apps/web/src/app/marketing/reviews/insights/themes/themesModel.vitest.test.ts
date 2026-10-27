@@ -26,6 +26,7 @@ const answer = (over: Partial<ThemesAnswer> = {}): ThemesAnswer => ({
   summary: { reviewsRead: 1284, negativeShare: 14.2, negativeShareChange: -2.4, biggestRiser: { key: 'FIT_SIZING', label: 'Fit & sizing', change: 6.2 }, themeCount: 8, amazonTopicMarkets: 5, amazonTopicsAt: '2026-10-20T06:00:00Z' },
   themes: [],
   amazon: { markets: [], notOffered: null },
+  fit: { sizes: [], families: [], moreFamilies: 0, summary: { reviews: 0, returns: 0, unclearReturns: 0, noSize: 0, minimum: 5 }, words: '' },
   generatedAt: '2026-10-26T10:00:00Z',
   ...over,
 })

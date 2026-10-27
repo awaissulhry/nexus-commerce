@@ -85,6 +85,8 @@ export interface InboxPage {
   statusCounts: InboxStatusCounts
   facets: InboxFacets
   readState: InboxReadState[]
+  /** The reviews that need a reply, all time, every channel: the same number as the badges. */
+  needsReply?: number
 }
 
 export interface InboxDatasourceOptions {

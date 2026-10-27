@@ -5,7 +5,7 @@
  *
  *   ReviewSettings       one row per business; no row = the defaults below, which are today's behaviour: replies in
  *                        the buyer's language, neutral, no sign-off; "New negative review" in Nexus to the business's
- *                        owners; the daily digest to the address it uses today.
+ *                        owners; the daily digest to the address it uses today; "Rating drop" off until switched on.
  *   ReviewReplyTemplate  saved replies, one text per language; the Inbox reply box offers them and the AI drafts follow
  *                        them (review-reply.service.ts).
  *
@@ -21,6 +21,8 @@ import { LEGACY_WORKSPACE_ID, workspaceIdForQuery } from '../../lib/workspace-co
 import { resolveBusinessIdentity } from '../business-identity.service.js'
 import { defaultFrom } from '../email/transport.js'
 import { REVIEW_TEMPLATES } from './review-templates.js'
+import { RATING_DROP_RULE, type RatingDropRule } from './rating-drop-math.js'
+import { readShopReviewPage, shopReviewHeld } from './review-links.service.js'
 
 // ── Vocabulary ────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -34,7 +36,7 @@ export type ReplyLocale = (typeof REPLY_LOCALES)[number]
 export const REPLY_LANGUAGES = ['buyer', ...REPLY_LOCALES] as const
 export type ReplyLanguage = (typeof REPLY_LANGUAGES)[number]
 
-export const ALERT_KEYS = ['negative', 'digest'] as const
+export const ALERT_KEYS = ['negative', 'digest', 'ratingDrop'] as const
 export type AlertKey = (typeof ALERT_KEYS)[number]
 
 export const ALERT_VIAS = ['app', 'email'] as const
@@ -71,10 +73,12 @@ export const DEFAULT_VOICE: VoiceSettings = { tone: 'NEUTRAL', languages: ['buye
 export const DEFAULT_ALERTS: readonly AlertSetting[] = [
   { key: 'negative', on: true, recipients: [], via: ['app'] },
   { key: 'digest', on: true, recipients: [], via: ['email'] },
+  // Off until a person switches it on (Phase 3): the hourly check opens nothing while it is off.
+  { key: 'ratingDrop', on: false, recipients: [], via: ['app'] },
 ]
 
 const LANGUAGE_NAME: Record<ReplyLocale, string> = { it: 'Italian', de: 'German', fr: 'French', es: 'Spanish', en: 'English' }
-const ALERT_NAME: Record<AlertKey, string> = { negative: 'New negative review', digest: 'Daily digest' }
+const ALERT_NAME: Record<AlertKey, string> = { negative: 'New negative review', digest: 'Daily digest', ratingDrop: 'Rating drop' }
 
 type Problem = { ok: false; words: string }
 const problem = (words: string): Problem => ({ ok: false, words })
@@ -372,6 +376,10 @@ export interface SenderView {
   editHref: string
   /** Why this business's buyers get no e-mail yet; null when it has an identity. */
   problem: string | null
+  /** Where the review button of a Shopify buyer's e-mail goes (this business's own shop); null = no button. */
+  shopReviewPage: string | null
+  /** Why Shopify buyers' review e-mails have no button, in words; null when they have one. */
+  shopReviewHeld: string | null
 }
 
 /** "Name <address>" → its parts. */
@@ -385,10 +393,13 @@ export function splitFrom(from: string): { name: string | null; address: string 
 /** The sender every review e-mail of this business carries (business-identity.service.ts), read-only. */
 export async function senderIdentity(): Promise<SenderView> {
   const editHref = '/settings/company'
-  const found = await resolveBusinessIdentity()
-  if (found.ok === false) return { name: null, address: null, replyTo: null, editHref, problem: found.reason }
+  const [found, shop] = await Promise.all([resolveBusinessIdentity(), readShopReviewPage().catch(() => null)])
+  const shopFacts = shop
+    ? { shopReviewPage: shop.url, shopReviewHeld: shopReviewHeld(shop) }
+    : { shopReviewPage: null, shopReviewHeld: 'Nexus could not check this business’s shop just now.' }
+  if (found.ok === false) return { name: null, address: null, replyTo: null, editHref, problem: found.reason, ...shopFacts }
   const from = splitFrom(found.identity.emailFrom ?? defaultFrom())
-  return { name: from.name ?? found.identity.brandName, address: from.address, replyTo: found.identity.supportEmail || null, editHref, problem: null }
+  return { name: from.name ?? found.identity.brandName, address: from.address, replyTo: found.identity.supportEmail || null, editHref, problem: null, ...shopFacts }
 }
 
 /**
@@ -415,6 +426,8 @@ export interface ReviewSettingsView {
   digestFallback: string[]
   /** The three review automation templates and how many are not loaded yet. */
   automationTemplates: { total: number; missing: number }
+  /** When "Rating drop" opens an alert (rating-drop-math.ts), for the page to say in words. */
+  ratingDropRule: RatingDropRule
   updatedAt: string | null
   updatedBy: string | null
 }
@@ -442,6 +455,7 @@ export async function readReviewSettings(): Promise<ReviewSettingsView> {
     team: team.map((m) => ({ userId: m.userId, name: m.name, owner: m.owner })),
     digestFallback: await digestFallbackRecipients(team),
     automationTemplates: { total: REVIEW_TEMPLATES.length, missing: REVIEW_TEMPLATES.filter((t) => !loaded.has(t.name)).length },
+    ratingDropRule: { ...RATING_DROP_RULE },
     updatedAt: saved.updatedAt?.toISOString() ?? null,
     updatedBy: saved.updatedBy ? (names.get(saved.updatedBy) ?? null) : null,
   }

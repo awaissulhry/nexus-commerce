@@ -1,10 +1,9 @@
 /**
  * STO.5 — descriptive "conversion by send hour × weekday" report.
  *
- * For every SENT review request in the window, buckets it by the LOCAL weekday
- * and hour it was sent (in its marketplace timezone) and marks it converted if an
- * attributed review followed — reusing the same (channel, marketplace, productId)
- * + attribution-window heuristic as review-analytics.service.
+ * For every SENT review request in the window where a review can follow, buckets it by the LOCAL weekday and hour it
+ * was sent (in its marketplace timezone) and marks it converted when a review followed — the ONE review rate's own
+ * link (review-rate.service.ts: the attribution job's Review.attributedRequestId, visible rows only).
  *
  * This is descriptive only (the operator nudges the send-time table from it); it
  * is NOT auto-applied. At low review volume it will be sparse — `hasReviews`
@@ -14,8 +13,8 @@
  * and its reviews only.
  */
 
-import prisma from '../../db.js'
 import { timezoneForMarketplace } from './review-timing.service.js'
+import { rateMeasurable, readRateFacts, readRateRequests } from './review-rate.service.js'
 
 const DAY = 24 * 60 * 60 * 1000
 const DOW: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
@@ -39,69 +38,32 @@ export interface SendHourReport {
 
 export async function computeSendHourConversion(opts: { windowDays?: number; attributionWindowDays?: number; marketplace?: string | null } = {}): Promise<SendHourReport> {
   const windowDays = Math.max(7, Math.min(365, opts.windowDays ?? 90))
-  const attributionWindowDays = opts.attributionWindowDays ?? 30
   const marketplace = opts.marketplace ? opts.marketplace.toUpperCase() : null
   const now = new Date()
   const since = new Date(now.getTime() - windowDays * DAY)
 
-  const sentRequests = await prisma.reviewRequest.findMany({
-    where: { sentAt: { gte: since, lte: now }, ...(marketplace ? { marketplace } : {}) },
-    select: {
-      id: true, channel: true, marketplace: true, sentAt: true,
-      order: { select: { items: { select: { productId: true }, take: 1 } } },
-    },
-  })
-
-  const reviewSince = new Date(since.getTime() - attributionWindowDays * DAY)
-  const reviews = await prisma.review.findMany({
-    where: { postedAt: { gte: reviewSince, lte: now }, channel: { in: ['AMAZON', 'EBAY', 'SHOPIFY'] }, ...(marketplace ? { marketplace } : {}) },
-    select: { channel: true, marketplace: true, productId: true, postedAt: true },
-  })
-
-  // attribution: latest matching SENT request whose sentAt ≤ postedAt within the window
-  const byKey = new Map<string, typeof sentRequests>()
-  for (const r of sentRequests) {
-    const productId = r.order?.items[0]?.productId ?? '_none'
-    const key = `${r.channel}|${r.marketplace ?? ''}|${productId}`
-    const arr = byKey.get(key) ?? []
-    arr.push(r)
-    byKey.set(key, arr)
-  }
-  for (const arr of byKey.values()) arr.sort((a, b) => (b.sentAt?.getTime() ?? 0) - (a.sentAt?.getTime() ?? 0))
-
-  const attributionMs = attributionWindowDays * DAY
-  const converted = new Set<string>()
-  for (const rv of reviews) {
-    if (!rv.productId) continue
-    const bucket = byKey.get(`${rv.channel}|${rv.marketplace ?? ''}|${rv.productId}`)
-    if (!bucket) continue
-    const postedMs = rv.postedAt.getTime()
-    for (const req of bucket) {
-      if (!req.sentAt || converted.has(req.id)) continue
-      const sentMs = req.sentAt.getTime()
-      if (sentMs <= postedMs && postedMs - sentMs <= attributionMs) { converted.add(req.id); break }
-    }
-  }
+  // The ONE review rate (review-rate.service.ts, audit C2/B20): sent requests, the reviews the attribution job linked
+  // to them (visible rows only), counted only where a review can follow.
+  const [rows, facts] = await Promise.all([readRateRequests({ from: since, to: now, market: marketplace }), readRateFacts()])
+  const measured = rows.filter((r) => rateMeasurable(r.channel, r.marketplace, facts))
 
   const cells = new Map<string, SendHourCell>()
-  let totalSent = 0
-  for (const req of sentRequests) {
+  for (const req of measured) {
     if (!req.sentAt) continue
     const { weekday, hour } = localWeekdayHour(req.sentAt, timezoneForMarketplace(req.marketplace))
     const k = `${weekday}-${hour}`
     const cell = cells.get(k) ?? { dayOfWeek: weekday, hour, sent: 0, converted: 0 }
     cell.sent += 1
-    if (converted.has(req.id)) cell.converted += 1
+    if (req.followed) cell.converted += 1
     cells.set(k, cell)
-    totalSent += 1
   }
 
   return {
     windowDays,
     marketplace,
-    totalSent,
-    totalConverted: converted.size,
-    hasReviews: reviews.length > 0,
+    totalSent: measured.length,
+    totalConverted: measured.filter((r) => r.followed).length,
+    hasReviews: measured.length > 0 || [...facts.reviewedKeys].some((k) => !marketplace || k.endsWith(`|${marketplace}`)),
     cells: [...cells.values()].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.hour - b.hour),
   }
 }

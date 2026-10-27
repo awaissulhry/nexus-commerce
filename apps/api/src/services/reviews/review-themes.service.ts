@@ -6,12 +6,15 @@
  * name their source. Reviews are the visible Review rows (fixtures never count, review-visibility.ts) with their
  * sentiment themes; Amazon adds its Customer Feedback API topics (AmazonReviewInsight, weekly, English, never
  * Amazon.nl) — topics only: no Amazon star rating, average or count is read or shown (ruling 5). The arithmetic is pure,
- * in review-insights-math.ts.
+ * in review-insights-math.ts. `fit` is the fit table (runs small / true to size / runs large per family and size, from
+ * reviews and size returns in the period; review-fit.ts, reads in review-fit.service.ts).
  */
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { visibleReviewWhere } from './review-visibility.js'
 import { marketWords } from './overviewMath.js'
+import { fitTable } from './review-fit.service.js'
+import type { FitTable } from './review-fit.js'
 import {
   amazonTopicMarkets, buildThemes, insightBounds, parseInsightPeriod, parseInsightScope, parseThemeSort, parseTopicRows,
   sortThemes, themesSummary, THEME_KEYS, type InsightPeriod, type InsightScope, type InsightTheme, type ThemeReviewRow, type ThemeSort,
@@ -51,12 +54,14 @@ export interface ThemesAnswer {
     /** Set when the scope is an Amazon market Amazon gives no topics for (Amazon.nl). */
     notOffered: string | null
   }
+  /** Fit by family and size in the period (review-fit.ts): runs small / true to size / runs large, 5 signals a size. */
+  fit: FitTable
   generatedAt: string
 }
 
 const STATE_WORDS: Record<AmazonTopicState, string> = {
   ok: 'Topics are read every week, in English.',
-  needs_role: 'Amazon refused the topics: the Selling Partner account needs the Brand Analytics role for this market.',
+  needs_role: 'Amazon refused the topics: Nexus needs the Selling Partner Insights role for this market.',
   error: 'Amazon’s topics could not be read last time; Nexus tries again next week.',
   no_data: 'No topics from Amazon yet for this market.',
 }
@@ -87,7 +92,7 @@ export async function insightsThemes(input: ThemesInput = {}): Promise<ThemesAns
     postedAt: { gte: readFrom, lte: now },
   }
   const markets = amazonTopicMarkets(scope)
-  const [reviews, insightRows] = await Promise.all([
+  const [reviews, insightRows, fit] = await Promise.all([
     prisma.review.findMany({
       where: visibleReviewWhere(scoped),
       select: {
@@ -101,6 +106,7 @@ export async function insightsThemes(input: ThemesInput = {}): Promise<ThemesAns
           select: { marketplace: true, productId: true, accessStatus: true, fetchedAt: true, positiveTopics: true, negativeTopics: true },
         })
       : Promise.resolve([]),
+    fitTable({ scope, from: bounds.from, now }),
   ])
 
   const rows = reviews as ThemeReviewRow[]
@@ -123,6 +129,7 @@ export async function insightsThemes(input: ThemesInput = {}): Promise<ThemesAns
         ? 'Amazon gives no review topics for Amazon.nl: its themes come only from reviews you import.'
         : null,
     },
+    fit,
     generatedAt: now.toISOString(),
   }
 }

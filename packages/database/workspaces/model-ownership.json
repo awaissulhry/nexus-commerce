@@ -301,6 +301,7 @@
     "EbayBuyerFeedback",
     "ReviewTimingTest",
     "ReviewTimingTestArm",
+    "ReviewAppConnection",
     "OrderTag",
     "AiUsageLog",
     "AiFeatureModelPref",
