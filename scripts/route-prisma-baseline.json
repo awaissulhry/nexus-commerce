@@ -1,7 +1,7 @@
 {
   "note": "Direct DB calls per route file. This may only FALL. A file absent here is held at ZERO — new logic belongs in a service that the route calls. See the script header.",
   "updatedAt": "2026-08-31",
-  "total": 3416,
+  "total": 3386,
   "files": {
     "apps/api/src/routes/accounts.routes.ts": 19,
     "apps/api/src/routes/admin.ts": 19,
@@ -83,7 +83,7 @@
     "apps/api/src/routes/marketplaces.routes.ts": 25,
     "apps/api/src/routes/mfa.routes.ts": 10,
     "apps/api/src/routes/notifications.routes.ts": 5,
-    "apps/api/src/routes/orders-reviews.routes.ts": 41,
+    "apps/api/src/routes/orders-reviews.routes.ts": 33,
     "apps/api/src/routes/orders-routing.routes.ts": 2,
     "apps/api/src/routes/orders.routes.ts": 81,
     "apps/api/src/routes/outbound-latency.routes.ts": 1,
@@ -111,9 +111,8 @@
     "apps/api/src/routes/reconciliation.routes.ts": 3,
     "apps/api/src/routes/repricing-rules.routes.ts": 7,
     "apps/api/src/routes/returns.routes.ts": 76,
-    "apps/api/src/routes/review-inserts.routes.ts": 3,
     "apps/api/src/routes/review-send-windows.routes.ts": 7,
-    "apps/api/src/routes/reviews.routes.ts": 30,
+    "apps/api/src/routes/reviews.routes.ts": 11,
     "apps/api/src/routes/saved-view-alerts.routes.ts": 11,
     "apps/api/src/routes/scheduled-image-publishes.routes.ts": 5,
     "apps/api/src/routes/sendcloud-webhooks.routes.ts": 13,

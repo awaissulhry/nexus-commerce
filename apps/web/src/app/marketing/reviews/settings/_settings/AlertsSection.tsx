@@ -10,7 +10,8 @@
  *                         API (`ratingDropRule`); off until switched on; opens an alert in Insights › Alerts and tells
  *                         the people picked, in Nexus and/or by e-mail.
  *
- * "Complaint spike" is still a labelled placeholder (build spec ruling 3).
+ * "Complaint spike" is a labelled placeholder (ruling 3): the hourly spike check already opens alerts on Insights › Alerts;
+ * a notice for them comes later.
  */
 import { Card, MultiSelect } from '@/design-system/components'
 import { Button, Checkbox, Pill, Skeleton, Tag, Toggle } from '@/design-system/primitives'

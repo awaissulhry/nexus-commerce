@@ -12,7 +12,7 @@
 import { useCallback, useMemo } from 'react'
 import { Card, EmptyState, StarRating } from '@/design-system/components'
 import { NexusGrid, numericColumn, type ColDef, type ICellRendererParams } from '@/design-system/grid'
-import { Pill, Skeleton, Tag } from '@/design-system/primitives'
+import { Pill, Skeleton } from '@/design-system/primitives'
 import Link from '@/lib/workspaces/Link'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { inboxHref } from '../_lib/reviewsLinks'
@@ -26,8 +26,7 @@ function NameCell({ data }: ICellRendererParams<ChannelViewRow>) {
   return (
     <span className={s.cellStack}>
       <span className={s.cellLine}>
-        {data.href && !data.sample ? <Link href={data.href} className={s.cellLink}>{data.label}</Link> : <span className={s.cellStrong}>{data.label}</span>}
-        {data.sample && <Tag tone="neutral">Sample</Tag>}
+        {data.href ? <Link href={data.href} className={s.cellLink}>{data.label}</Link> : <span className={s.cellStrong}>{data.label}</span>}
       </span>
       <span className={s.cellSub}>{data.what}</span>
     </span>
@@ -68,14 +67,6 @@ function SentCell({ data }: ICellRendererParams<ChannelViewRow>) {
 
 function LastCell({ data }: ICellRendererParams<ChannelViewRow>) {
   if (!data) return null
-  if (data.state === 'later') {
-    return (
-      <span className={s.cellStack}>
-        <Tag tone="neutral">Coming later</Tag>
-        <span className={s.cellWrap}>{data.lastNote}</span>
-      </span>
-    )
-  }
   if (data.state === 'not_updating') {
     return (
       <span className={s.cellStack}>
@@ -127,7 +118,7 @@ export function ChannelTable({ rows, error, loading, period, onRetry }: ChannelT
   const onRowClicked = useCallback((e: { data?: ChannelViewRow; event?: Event | null }) => {
     // A click on a link inside the row (the name, Reconnect, import reviews) follows that link.
     if (e.event?.target instanceof Element && e.event.target.closest('a')) return
-    if (e.data?.href && !e.data.sample) router.push(e.data.href)
+    if (e.data?.href) router.push(e.data.href)
   }, [router])
   const words = overviewPeriodWords(period)
   const behind = rows ? behindWords(rows) : null
@@ -164,7 +155,7 @@ export function ChannelTable({ rows, error, loading, period, onRetry }: ChannelT
         </div>
       )}
       <p className={s.footnote}>
-        Etsy sends its own review reminder, so Nexus sends no requests there. eBay shows the share of positive feedback, not stars. Amazon stars come only from reviews you imported.
+        Etsy and eBay ask their buyers for feedback themselves, so Nexus sends no requests there. eBay shows the share of positive feedback, not stars. Amazon stars come only from reviews you imported.
       </p>
     </Card>
   )

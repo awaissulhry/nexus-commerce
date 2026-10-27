@@ -18,6 +18,10 @@ export interface SenderView {
   replyTo: string | null
   editHref: string
   problem: string | null
+  /** Where a Shopify buyer's review button goes (this business's own shop); null = the e-mail has no button. */
+  shopReviewPage?: string | null
+  /** Why Shopify buyers' review e-mails have no button, in words. */
+  shopReviewHeld?: string | null
 }
 
 /** GET /api/reviews/settings. */

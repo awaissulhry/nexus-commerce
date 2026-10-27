@@ -339,3 +339,14 @@ describe('durable API command idempotency', () => {
     expect(await receipts()).toHaveLength(1)
   })
 })
+
+describe('Reviews commands the pages send a key for (audit A11)', () => {
+  it('honours the key on every review command a double press must not run twice', async () => {
+    const { COMMAND_SCOPE_ROUTES } = await import('./command-idempotency.js')
+    for (const route of [
+      '/api/review-rules', '/api/review-rules/:id/duplicate', '/api/review-rules/:id/run', '/api/review-rules/import',
+      '/api/review-rules/seed-default', '/api/review-timing-defaults/seed', '/api/review-send-windows/seed',
+      '/api/review-queue/pause', '/api/review-queue/resume', '/api/review-requests/:id/unsuppress',
+    ]) expect(COMMAND_SCOPE_ROUTES).toContain(route)
+  })
+})

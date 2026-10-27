@@ -263,8 +263,20 @@ describe('the API’s command receipts', () => {
       // picked rules, through reviewsSend with `idempotent`, which keys them with sendCommand.
       '/api/review-emails/test',
       '/api/review-queue/bulk',
+      // Audit A11 (2026-10-27) — Pause and Resume, "Allow again", a new rule, "Duplicate as A/B", "Queue these N", a rules
+      // import, "Seed defaults" and the timing / send-hour resets: the pages already sent a key through reviewsSend.
+      '/api/review-queue/pause',
+      '/api/review-queue/resume',
       '/api/review-queue/run',
+      '/api/review-requests/:id/unsuppress',
+      '/api/review-rules',
+      '/api/review-rules/:id/duplicate',
+      '/api/review-rules/:id/run',
       '/api/review-rules/bulk',
+      '/api/review-rules/import',
+      '/api/review-rules/seed-default',
+      '/api/review-send-windows/seed',
+      '/api/review-timing-defaults/seed',
       // Reviews Inbox (PR B) — Send reply, "Import N reviews" and a bulk change, through reviewsSend (_lib/reviewsFetch.ts),
       // which keys them with sendCommand.
       '/api/reviews/:id/reply/send',

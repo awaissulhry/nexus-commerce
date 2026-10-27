@@ -318,13 +318,14 @@ describe('readReviews — the Reviews card', () => {
 
   it('one star channel: the average and the count, no repeated channel line', () => {
     const r = readReviews(reviews({ avgRating: 4.25, reviewCount: 12, byChannel: [{ channel: 'AMAZON', kind: 'stars', rating: 4.3, count: 12 }] }))
-    expect(r.stats).toEqual([{ label: 'Rating', value: '4.3' }, { label: 'Reviews', value: '12' }, { label: 'Recent spike', value: '0' }])
+    // Amazon's stars say where they come from (audit B13): only reviews a person imported.
+    expect(r.stats).toEqual([{ label: 'Rating · Amazon from imported reviews', value: '4.3' }, { label: 'Reviews', value: '12' }, { label: 'Open alerts', value: '0' }])
   })
 
   it('eBay seller feedback alone is a % positive, never stars, and never "no reviews"', () => {
     const r = readReviews(reviews({ byChannel: [{ channel: 'EBAY', kind: 'positive', rating: 98.5, count: 40 }] }))
     expect(r.empty).toBe(false)
-    expect(r.stats).toEqual([{ label: 'eBay positive · 40 feedback', value: '98.5%' }, { label: 'Recent spike', value: '0' }])
+    expect(r.stats).toEqual([{ label: 'eBay positive · 40 feedback', value: '98.5%' }, { label: 'Open alerts', value: '0' }])
   })
 
   it('several channels: one line each', () => {
@@ -332,6 +333,6 @@ describe('readReviews — the Reviews card', () => {
       avgRating: 4.4, reviewCount: 13, recentSpikeCount: 1,
       byChannel: [{ channel: 'AMAZON', kind: 'stars', rating: 4.3, count: 12 }, { channel: 'SHOPIFY', kind: 'stars', rating: 5, count: 1 }],
     }))
-    expect(r.stats.map((s) => `${s.label}: ${s.value}`)).toEqual(['Rating: 4.4', 'Reviews: 13', 'Amazon · 12 reviews: 4.3', 'Shopify · 1 review: 5.0', 'Recent spike: 1'])
+    expect(r.stats.map((s) => `${s.label}: ${s.value}`)).toEqual(['Rating · Amazon from imported reviews: 4.4', 'Reviews: 13', 'Amazon · 12 reviews imported: 4.3', 'Shopify · 1 review: 5.0', 'Open alerts: 1'])
   })
 })

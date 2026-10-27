@@ -2,13 +2,14 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * SR.1 — Sentient Review Loop routes.
  *
- *   GET  /api/reviews                      ?marketplace, ?category, ?label, ?productId, ?limit
- *   GET  /api/reviews/:id                  drawer w/ sentiment + linked product
- *   GET  /api/reviews/summary              dashboard KPIs (counts by label, top categories)
  *   GET  /api/reviews/spikes               alerts (Reviews Insights, below)
  *   PATCH /api/reviews/spikes/:id          acknowledge / resolve / reopen
- *   POST /api/reviews/cron/ingest/trigger          manual trigger
- *   POST /api/reviews/cron/spike-detector/trigger  manual trigger (complaint spikes, then rating drops)
+ *
+ * Audit D1 sweep (2026-10-27): the endpoints nothing called any more are gone — the old list, one review, summary,
+ * ratings, responses, by-product, a product's timeline, the manual cron triggers, the attribution run, the request
+ * snooze (the queue's bulk snoozes), the raw Amazon insight rows and their roll-up, the filter options. Kept with no
+ * page calling them: POST /reviews/insights/probe, GET /reviews/insights/debug, POST /reviews/insights/ingest — the
+ * Owner's steps to switch Amazon topics on.
  *
  * Reviews Inbox (2026-10-26, PR B) — logic in services/reviews/review-inbox*.ts and review-detail.service.ts:
  *   GET   /api/reviews/inbox                   the list: filters, tab and tile counts, facets, read state
@@ -17,7 +18,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *   PATCH /api/reviews/:id/sentiment           the person's mood/themes
  *   POST  /api/reviews/:id/translate           language + English, kept on the review
  *   POST  /api/reviews/import/:batchId/undo    removes one import's rows, keeps the ones a person worked on
- * Every Review read in this file shows visible rows only (fixture rows never show): `visibleReviewWhere`.
+ * Every Review read behind these routes shows visible rows only (fixture rows never show): `visibleReviewWhere`.
  *
  * Reviews Settings (2026-10-26, PR D) — logic in services/reviews/review-settings.service.ts and review-settings-health.ts:
  *   GET    /api/reviews/settings                   voice, alerts (+ who), the sender (read-only), the team, templates to load
@@ -51,25 +52,14 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  */
 
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
-import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { requestUserId } from '../lib/auth/request-permission.js'
-import { visibleReviewWhere } from '../services/reviews/review-visibility.js'
 import { listInbox, runInboxBulk } from '../services/reviews/review-inbox.service.js'
 import { validateInboxBulk } from '../services/reviews/review-inbox-query.js'
 import { editReviewSentiment, getInboxReview, translateReview } from '../services/reviews/review-detail.service.js'
 import { logger } from '../utils/logger.js'
 import { sendEmail } from '../services/email/transport.js'
 import { triageReview } from '../services/reviews/review-triage.service.js'
-import {
-  runReviewIngestOnce,
-  summarizeReviewIngest,
-} from '../services/reviews/review-ingest.service.js'
-import {
-  runSpikeDetectorOnce,
-  summarizeSpikeDetector,
-} from '../services/reviews/spike-detector.service.js'
-import { runRatingDropCheckOnce, summarizeRatingDrop } from '../services/reviews/rating-drop.service.js'
 import { seedReviewTemplates } from '../services/reviews/review-templates.js'
 import {
   previewReviewImport,
@@ -81,7 +71,6 @@ import {
   type ImportSource,
 } from '../services/reviews/review-import.service.js'
 import { createReplyDraft } from '../services/reviews/review-reply.service.js'
-import { sendReviewDigestOnce } from '../services/reviews/review-digest.service.js'
 import {
   generateSpotlight, getLatestSpotlight, spotlightHistory, spotlightScope, spotlightScopes, SpotlightHeldError,
 } from '../services/reviews/review-spotlight.service.js'
@@ -95,7 +84,6 @@ import {
 import type { UserPrincipal } from '../services/agents/call-tool.js'
 import { sendReviewReply } from '../services/reviews/review-reply-send.service.js'
 import { sseResponseHeaders } from '../lib/sse.js'
-import { runReviewRuleEvaluatorOnce } from '../jobs/review-rule-evaluator.job.js'
 import {
   createReplyTemplate, deleteReplyTemplate, listReplyTemplates, markReplyTemplateUsed, readReviewSettings, saveReviewSettings,
   setReviewAutomationEnabled, updateReplyTemplate,
@@ -130,86 +118,6 @@ function windowDaysOf(period: unknown, windowDays: unknown): number {
 const FIX_NOT_FOUND_WORDS = 'Not found in this business’s fixes.'
 
 const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
-  // ── GET /reviews ────────────────────────────────────────────────────
-  fastify.get('/reviews', async (request, reply) => {
-    const q = request.query as {
-      marketplace?: string
-      category?: string
-      label?: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE'
-      productId?: string
-      sinceDays?: string
-      search?: string
-      limit?: string
-      channel?: string
-      triageStatus?: string
-      assignee?: string
-    }
-    const where: Record<string, unknown> = {}
-    if (q.marketplace) where.marketplace = q.marketplace
-    if (q.channel) where.channel = q.channel
-    if (q.productId) where.productId = q.productId
-    if (q.assignee) where.assignee = q.assignee
-    if (q.triageStatus) {
-      // null triageStatus is treated as NEW. Prisma's `in` can't contain null
-      // (throws "Expected ListStringFieldRefInput or Null"), so express the NEW
-      // case as an OR — held in AND so it doesn't collide with the search OR below.
-      if (q.triageStatus === 'NEW') {
-        where.AND = [{ OR: [{ triageStatus: 'NEW' }, { triageStatus: null }] }]
-      } else {
-        where.triageStatus = q.triageStatus
-      }
-    }
-    if (q.sinceDays) {
-      const d = Number(q.sinceDays)
-      if (Number.isFinite(d) && d > 0) {
-        where.postedAt = { gte: new Date(Date.now() - d * 24 * 60 * 60 * 1000) }
-      }
-    }
-    if (q.search) {
-      where.OR = [
-        { title: { contains: q.search, mode: 'insensitive' } },
-        { body: { contains: q.search, mode: 'insensitive' } },
-      ]
-    }
-    if (q.label || q.category) {
-      where.sentiment = {
-        is: {
-          ...(q.label ? { label: q.label } : {}),
-          ...(q.category ? { categories: { has: q.category } } : {}),
-        },
-      }
-    }
-    const limit = Math.min(Number(q.limit) || 100, 500)
-    const items = await prisma.review.findMany({
-      where: visibleReviewWhere(where as Prisma.ReviewWhereInput),
-      orderBy: { postedAt: 'desc' },
-      take: limit,
-      include: {
-        sentiment: true,
-        product: { select: { id: true, sku: true, name: true, productType: true } },
-        _count: { select: { responses: true } },
-      },
-    })
-    reply.header('Cache-Control', 'private, max-age=30')
-    return { items, count: items.length }
-  })
-
-  fastify.get('/reviews/:id', async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const review = await prisma.review.findFirst({
-      where: visibleReviewWhere({ id }),
-      include: {
-        sentiment: true,
-        product: { select: { id: true, sku: true, name: true, productType: true } },
-      },
-    })
-    if (!review) {
-      reply.code(404)
-      return { error: 'not_found' }
-    }
-    return { review }
-  })
-
   // ── Reviews Inbox (PR B) ────────────────────────────────────────────
   // GET /reviews/inbox — one page of the Inbox, newest first, with tab/tile counts, facets and read state.
   fastify.get('/reviews/inbox', async (request, reply) => {
@@ -264,108 +172,6 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       return { error: 'translation_unavailable', message: 'Nexus could not translate this review now. Try again later.' }
     }
     return result
-  })
-
-  // ── GET /reviews/summary ────────────────────────────────────────────
-  fastify.get('/reviews/summary', async (request, reply) => {
-    const q = request.query as { sinceDays?: string; marketplace?: string }
-    const sinceDays = Math.min(Number(q.sinceDays) || 30, 365)
-    const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000)
-    const baseWhere: Record<string, unknown> = { postedAt: { gte: since } }
-    if (q.marketplace) baseWhere.marketplace = q.marketplace
-
-    const byLabel = await prisma.review.findMany({
-      where: visibleReviewWhere({ ...baseWhere, sentiment: { isNot: null } }),
-      select: { sentiment: { select: { label: true, categories: true } } },
-    })
-    const counts: Record<string, number> = { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 }
-    const categoryNegatives: Record<string, number> = {}
-    let total = 0
-    for (const r of byLabel) {
-      if (!r.sentiment) continue
-      counts[r.sentiment.label] = (counts[r.sentiment.label] ?? 0) + 1
-      total += 1
-      if (r.sentiment.label === 'NEGATIVE') {
-        for (const c of r.sentiment.categories) {
-          categoryNegatives[c] = (categoryNegatives[c] ?? 0) + 1
-        }
-      }
-    }
-    const topCategories = Object.entries(categoryNegatives)
-      .map(([category, count]) => ({ category, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10)
-
-    const [pendingExtract, openSpikes, totalReviews] = await Promise.all([
-      prisma.review.count({
-        where: visibleReviewWhere({ ...baseWhere, sentiment: { is: null } }),
-      }),
-      prisma.reviewSpike.count({ where: { status: 'OPEN' } }),
-      prisma.review.count({ where: visibleReviewWhere(baseWhere) }),
-    ])
-
-    reply.header('Cache-Control', 'private, max-age=60')
-    return {
-      sinceDays,
-      marketplace: q.marketplace ?? null,
-      totalReviews,
-      pendingExtract,
-      counts,
-      negativePct: total > 0 ? counts.NEGATIVE / total : null,
-      topCategories,
-      openSpikes,
-    }
-  })
-
-  // ── GET /reviews/ratings (RX.0) ─────────────────────────────────────
-  // Star-rating distribution (1–5) + period average + daily average
-  // trend. The one basic analytics surface the SR dashboards lacked —
-  // every review tool leads with average rating + a 1–5 histogram.
-  fastify.get('/reviews/ratings', async (request, reply) => {
-    const q = request.query as { sinceDays?: string; marketplace?: string }
-    const sinceDays = Math.min(Math.max(Number(q.sinceDays) || 30, 7), 365)
-    const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000)
-    const where: Record<string, unknown> = {
-      postedAt: { gte: since },
-      rating: { not: null },
-    }
-    if (q.marketplace) where.marketplace = q.marketplace
-
-    const rows = await prisma.review.findMany({
-      where: visibleReviewWhere(where),
-      select: { rating: true, postedAt: true },
-      orderBy: { postedAt: 'asc' },
-    })
-
-    const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
-    let sum = 0
-    let count = 0
-    const dayMap = new Map<string, { sum: number; count: number }>()
-    for (const r of rows) {
-      if (r.rating == null) continue
-      const star = Math.min(5, Math.max(1, Math.round(r.rating)))
-      distribution[star] = (distribution[star] ?? 0) + 1
-      sum += r.rating
-      count += 1
-      const day = r.postedAt.toISOString().slice(0, 10)
-      const d = dayMap.get(day) ?? { sum: 0, count: 0 }
-      d.sum += r.rating
-      d.count += 1
-      dayMap.set(day, d)
-    }
-    const trend = Array.from(dayMap.entries())
-      .map(([date, v]) => ({ date, avg: v.count > 0 ? v.sum / v.count : null, count: v.count }))
-      .sort((a, b) => a.date.localeCompare(b.date))
-
-    reply.header('Cache-Control', 'private, max-age=60')
-    return {
-      sinceDays,
-      marketplace: q.marketplace ?? null,
-      average: count > 0 ? sum / count : null,
-      count,
-      distribution,
-      trend,
-    }
   })
 
   // ── POST /reviews/import/preview (RX.1) ─────────────────────────────
@@ -526,16 +332,6 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     return { review: result.review }
   })
 
-  // ── GET /reviews/:id/responses (RX.2) ───────────────────────────────
-  fastify.get<{ Params: { id: string } }>('/reviews/:id/responses', async (request) => {
-    const { id } = request.params
-    const items = await prisma.reviewResponse.findMany({
-      where: { reviewId: id },
-      orderBy: { createdAt: 'desc' },
-    })
-    return { items, count: items.length }
-  })
-
   // ── POST /reviews/:id/reply/draft (RX.2) ────────────────────────────
   // AI-draft a reply and persist it as a DRAFT ReviewResponse.
   fastify.post<{
@@ -559,14 +355,16 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── POST /reviews/:id/reply/send (RX.2) ─────────────────────────────
-  // eBay → real RespondToFeedback. Amazon/Shopify → no public reply API,
-  // so the operator posts manually and this records it (MANUAL) and
-  // marks the review RESPONDED.
+  // eBay → real RespondToFeedback. Amazon seller feedback / Shopify → no public reply API, so the operator posts
+  // manually and this records it (MANUAL) and marks the review RESPONDED. The reply is recorded as the signed-in
+  // person's (audit E6): never a body field, never "anonymous".
   fastify.post<{
     Params: { id: string }
-    Body: { body?: string; responseId?: string; actor?: string }
+    Body: { body?: string; responseId?: string }
   }>('/reviews/:id/reply/send', async (request, reply) => {
-    const answer = await sendReviewReply(request.params.id, request.body ?? {})
+    const actor = request.authUser?.id ? `user:${request.authUser.id}` : 'user:unknown'
+    const { body, responseId } = request.body ?? {}
+    const answer = await sendReviewReply(request.params.id, { body, responseId, actor })
     return reply.code(answer.status).send(answer.body)
   })
 
@@ -638,196 +436,6 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       return await insightsProductDetail(request.params.productId, (request.query ?? {}) as Record<string, unknown>)
     } catch (err) {
       return fail(reply, err, 'insights product')
-    }
-  })
-
-  // ── GET /reviews/by-product (SR.2) ──────────────────────────────────
-  fastify.get('/reviews/by-product', async (request, reply) => {
-    const q = request.query as {
-      marketplace?: string
-      sinceDays?: string
-      sort?: 'negativePct' | 'totalReviews' | 'lastReview'
-      limit?: string
-    }
-    const sinceDays = Math.min(Math.max(Number(q.sinceDays) || 30, 1), 365)
-    const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000)
-
-    const where: Record<string, unknown> = {
-      productId: { not: null },
-      postedAt: { gte: since },
-    }
-    if (q.marketplace) where.marketplace = q.marketplace
-
-    const reviews = await prisma.review.findMany({
-      where: visibleReviewWhere(where),
-      select: {
-        productId: true,
-        marketplace: true,
-        postedAt: true,
-        sentiment: { select: { label: true, categories: true } },
-      },
-    })
-
-    interface Bucket {
-      productId: string
-      marketplaces: Set<string>
-      total: number
-      positive: number
-      neutral: number
-      negative: number
-      categoryNegatives: Record<string, number>
-      lastReviewAt: Date | null
-    }
-    const buckets = new Map<string, Bucket>()
-    for (const r of reviews) {
-      if (!r.productId) continue
-      const b = buckets.get(r.productId) ?? {
-        productId: r.productId,
-        marketplaces: new Set<string>(),
-        total: 0,
-        positive: 0,
-        neutral: 0,
-        negative: 0,
-        categoryNegatives: {},
-        lastReviewAt: null,
-      }
-      b.total += 1
-      if (r.marketplace) b.marketplaces.add(r.marketplace)
-      if (r.sentiment?.label === 'POSITIVE') b.positive += 1
-      else if (r.sentiment?.label === 'NEGATIVE') {
-        b.negative += 1
-        for (const c of r.sentiment.categories) {
-          b.categoryNegatives[c] = (b.categoryNegatives[c] ?? 0) + 1
-        }
-      } else b.neutral += 1
-      if (!b.lastReviewAt || r.postedAt > b.lastReviewAt) b.lastReviewAt = r.postedAt
-      buckets.set(r.productId, b)
-    }
-
-    const productIds = Array.from(buckets.keys())
-    const products = await prisma.product.findMany({
-      where: { id: { in: productIds } },
-      select: { id: true, sku: true, name: true, productType: true },
-    })
-    const productById = new Map(products.map((p) => [p.id, p]))
-
-    let items = Array.from(buckets.values()).map((b) => {
-      const negativePct = b.total > 0 ? b.negative / b.total : 0
-      const topCategories = Object.entries(b.categoryNegatives)
-        .map(([category, count]) => ({ category, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 3)
-      const product = productById.get(b.productId) ?? null
-      return {
-        productId: b.productId,
-        product,
-        marketplaces: Array.from(b.marketplaces).sort(),
-        total: b.total,
-        positive: b.positive,
-        neutral: b.neutral,
-        negative: b.negative,
-        negativePct,
-        topCategories,
-        lastReviewAt: b.lastReviewAt?.toISOString() ?? null,
-      }
-    })
-
-    const sortKey = q.sort ?? 'negativePct'
-    items = items.sort((a, b) => {
-      if (sortKey === 'totalReviews') return b.total - a.total
-      if (sortKey === 'lastReview') {
-        if (!a.lastReviewAt && !b.lastReviewAt) return 0
-        if (!a.lastReviewAt) return 1
-        if (!b.lastReviewAt) return -1
-        return new Date(b.lastReviewAt).getTime() - new Date(a.lastReviewAt).getTime()
-      }
-      // default: negativePct desc, tiebreak total desc
-      if (b.negativePct === a.negativePct) return b.total - a.total
-      return b.negativePct - a.negativePct
-    })
-    const limit = Math.min(Number(q.limit) || 100, 500)
-    items = items.slice(0, limit)
-
-    reply.header('Cache-Control', 'private, max-age=120')
-    return { items, count: items.length, sinceDays, marketplace: q.marketplace ?? null }
-  })
-
-  // ── GET /reviews/products/:productId/timeline (SR.2) ────────────────
-  fastify.get('/reviews/products/:productId/timeline', async (request, reply) => {
-    const { productId } = request.params as { productId: string }
-    const q = request.query as { sinceDays?: string; marketplace?: string }
-    const sinceDays = Math.min(Math.max(Number(q.sinceDays) || 90, 7), 365)
-    const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000)
-    const where: Record<string, unknown> = { productId, date: { gte: since } }
-    if (q.marketplace) where.marketplace = q.marketplace
-
-    const rates = await prisma.reviewCategoryRate.findMany({
-      where,
-      orderBy: { date: 'asc' },
-    })
-    // Per-day rollup across categories.
-    const dayMap = new Map<
-      string,
-      { date: string; total: number; positive: number; neutral: number; negative: number }
-    >()
-    for (const r of rates) {
-      const day = r.date.toISOString().slice(0, 10)
-      const cell = dayMap.get(day) ?? {
-        date: day,
-        total: 0,
-        positive: 0,
-        neutral: 0,
-        negative: 0,
-      }
-      cell.total += r.total
-      cell.positive += r.positive
-      cell.neutral += r.neutral
-      cell.negative += r.negative
-      dayMap.set(day, cell)
-    }
-
-    // Per-category 30d totals.
-    const catMap = new Map<
-      string,
-      { category: string; total: number; positive: number; neutral: number; negative: number }
-    >()
-    const last30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    for (const r of rates) {
-      if (r.date < last30) continue
-      const cell = catMap.get(r.category) ?? {
-        category: r.category,
-        total: 0,
-        positive: 0,
-        neutral: 0,
-        negative: 0,
-      }
-      cell.total += r.total
-      cell.positive += r.positive
-      cell.neutral += r.neutral
-      cell.negative += r.negative
-      catMap.set(r.category, cell)
-    }
-
-    const recent = await prisma.review.findMany({
-      where: visibleReviewWhere({ productId, postedAt: { gte: since }, ...(q.marketplace ? { marketplace: q.marketplace } : {}) }),
-      orderBy: { postedAt: 'desc' },
-      take: 30,
-      include: { sentiment: true },
-    })
-
-    const product = await prisma.product.findUnique({
-      where: { id: productId },
-      select: { id: true, sku: true, name: true, productType: true },
-    })
-
-    reply.header('Cache-Control', 'private, max-age=60')
-    return {
-      product,
-      timeline: Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date)),
-      categories: Array.from(catMap.values()).sort((a, b) => b.negative - a.negative),
-      recent,
-      sinceDays,
-      marketplace: q.marketplace ?? null,
     }
   })
 
@@ -923,41 +531,6 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       return { error: 'not_found', message: result.words }
     }
     return result
-  })
-
-  // ── Manual cron triggers ────────────────────────────────────────────
-  fastify.post('/reviews/cron/ingest/trigger', async (_request, _reply) => {
-    const s = await runReviewIngestOnce()
-    return { ok: true, summary: summarizeReviewIngest(s), detail: s }
-  })
-
-  fastify.post('/reviews/cron/spike-detector/trigger', async (_request, _reply) => {
-    const s = await runSpikeDetectorOnce()
-    // The hourly check's second half: rating drops (off unless switched on in Settings › Alerts).
-    const drop = await runRatingDropCheckOnce()
-    return { ok: true, summary: `${summarizeSpikeDetector(s)} · ${summarizeRatingDrop(drop)}`, detail: s, ratingDrop: drop }
-  })
-
-  // RX.3 — manual digest trigger (also previews the digest payload).
-  fastify.post('/reviews/cron/digest/trigger', async (_request, _reply) => {
-    const r = await sendReviewDigestOnce()
-    return { ok: true, sent: r.sent, skipped: r.skipped, digest: r.digest }
-  })
-
-  // RV.7.3 — manual orders-delivered-backfill trigger (runs the FBA+FBM delivery
-  // heuristic that unblocks the review scheduler). Returns the run result.
-  // Fire-and-forget + recorded as a CronRun, so the manual trigger (a) returns
-  // instantly instead of timing out on the synchronous heuristic, and (b) updates
-  // the orders-delivered-backfill cron status (clears a lingering FAILED).
-  fastify.post('/reviews/cron/orders-delivered-backfill/trigger', async (_request, reply) => {
-    const { runOrdersDeliveredBackfill } = await import('../services/reviews/orders-delivered-backfill.service.js')
-    const { recordCronRun } = await import('../utils/cron-observability.js')
-    void recordCronRun('orders-delivered-backfill', async () => {
-      const r = await runOrdersDeliveredBackfill({})
-      return `heuristic=${r.heuristicUpdated}/${r.heuristicScanned} reports=${r.reports} reportUpdated=${r.ordersUpdated}`
-    }).catch((e) => fastify.log.error({ err: e }, '[orders-delivered-backfill] manual trigger failed'))
-    reply.header('Cache-Control', 'no-store')
-    return { ok: true, started: true, note: 'running in background; poll CronRun or Reviews › Settings › Pipeline health for the result' }
   })
 
   // ── Review Spotlight (RX.4) — Reviews Insights › Brief (PR E): services/reviews/review-spotlight.service.ts ──
@@ -1110,11 +683,6 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  fastify.post('/reviews/cron/review-rule-evaluator/trigger', async (_request, _reply) => {
-    const summary = await runReviewRuleEvaluatorOnce()
-    return { ok: true, summary }
-  })
-
   // RV.9.2 — manual cron-orphan sweep trigger. The cron runs every 30
   // min on its own, but operators can poke it from the health banner.
   fastify.post('/reviews/pipeline/sweep-stuck-crons', async () => {
@@ -1122,16 +690,6 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     const result = await runCronOrphanSweepOnce()
     return { ok: true, ...result }
   })
-
-  // RV.9.7 — manual review-attribution trigger.
-  fastify.post<{ Body: { windowDays?: number; attributionWindowDays?: number; limit?: number } }>(
-    '/reviews/attribution/run',
-    async (request) => {
-      const { runReviewAttributionOnce } = await import('../services/reviews/review-attribution.service.js')
-      const result = await runReviewAttributionOnce(request.body ?? {})
-      return { ok: true, ...result }
-    },
-  )
 
   // RV.9.5 — Public unsubscribe endpoint (no auth — token authenticates
   // intent). Supports GET (the link in the email; renders a confirmation
@@ -1159,7 +717,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
         // Walk recent ReviewSentimentCheck rows + ReviewRequest rows for
         // candidate emails. Caps at 1000 to keep latency bounded.
         const candidates = await prisma.order.findMany({
-          where: { customerEmail: { not: null } },
+          where: { customerEmail: { not: '' } },
           select: { customerEmail: true },
           orderBy: { createdAt: 'desc' },
           take: 1000,
@@ -1209,7 +767,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
         resolvedEmail = body.email.trim().toLowerCase()
       } else if (body.token) {
         const candidates = await prisma.order.findMany({
-          where: { customerEmail: { not: null } },
+          where: { customerEmail: { not: '' } },
           select: { customerEmail: true },
           orderBy: { createdAt: 'desc' },
           take: 1000,
@@ -1286,57 +844,15 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: string } }>(
     '/review-requests/:id/unsuppress',
     async (request, reply) => {
+      // "Allow again": refused server-side (409, in words) for a request that was sent, or that may not be asked
+      // (review-queue.service.ts allowRequestAgain → allowAgainHeldFor); the attempt counter starts again.
       try {
-        const { id } = request.params
-        const updated = await prisma.reviewRequest.update({
-          where: { id },
-          data: {
-            status: 'SCHEDULED',
-            scheduledFor: new Date(),
-            suppressedReason: null,
-            errorMessage: null,
-            providerResponseCode: null,
-            // Reset attempt counter so the row gets a fresh shot (operator
-            // explicitly chose to re-queue — don't penalize prior failures).
-            attemptCount: 0,
-            lastAttemptAt: null,
-            nextRetryAt: null,
-          },
-        })
+        const { allowRequestAgain } = await import('../services/reviews/review-queue.service.js')
+        const updated = await allowRequestAgain(request.params.id)
+        if (!updated) return reply.code(404).send({ error: 'Request not found' })
         return { ok: true, request: updated }
       } catch (error: any) {
-        if (error.code === 'P2025') return reply.code(404).send({ error: 'Request not found' })
-        return reply.code(500).send({ error: error.message })
-      }
-    },
-  )
-
-  fastify.post<{ Params: { id: string }; Body: { hours?: number } }>(
-    '/review-requests/:id/snooze',
-    async (request, reply) => {
-      try {
-        const { id } = request.params
-        const body = (request.body ?? {}) as { hours?: number }
-        const hours = Math.min(Math.max(body.hours ?? 24, 1), 24 * 14) // 1h to 14d
-        const current = await prisma.reviewRequest.findUnique({ where: { id } })
-        if (!current) return reply.code(404).send({ error: 'Request not found' })
-        // Snooze pushes scheduledFor forward from now (not from existing
-        // scheduledFor, which may already be in the past). Caller intent
-        // is "don't try this for the next N hours", regardless of history.
-        const newScheduledFor = new Date(Date.now() + hours * 60 * 60 * 1000)
-        const updated = await prisma.reviewRequest.update({
-          where: { id },
-          data: {
-            // If currently FAILED → re-queue. If currently SCHEDULED → just defer.
-            status: 'SCHEDULED',
-            scheduledFor: newScheduledFor,
-            // Clear retry state — operator explicitly took control.
-            nextRetryAt: null,
-          },
-        })
-        return { ok: true, request: updated, snoozedUntil: newScheduledFor }
-      } catch (error: any) {
-        if (error.code === 'P2025') return reply.code(404).send({ error: 'Request not found' })
+        if (error?.statusCode === 409) return reply.code(409).send({ error: error.message })
         return reply.code(500).send({ error: error.message })
       }
     },
@@ -1565,60 +1081,8 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     return insightsDebugState
   })
 
-  // ── D.4 — Amazon insights: read + rollup + manual ingest ──
-  // GET /api/reviews/insights?productId&marketplace&asin — raw insight rows.
-  fastify.get('/reviews/insights', async (request, reply) => {
-    const q = request.query as { productId?: string; marketplace?: string; asin?: string }
-    const where: Record<string, unknown> = {}
-    if (q.productId) where.productId = q.productId
-    if (q.marketplace) where.marketplace = q.marketplace
-    if (q.asin) where.asin = q.asin
-    reply.header('Cache-Control', 'private, max-age=120')
-    const items = await prisma.amazonReviewInsight.findMany({ where, orderBy: { fetchedAt: 'desc' }, take: 300 })
-    return { items, count: items.length }
-  })
-
-  // GET /api/reviews/insights/rollup?marketplace — merged Overview signal:
-  // review-weighted avg rating + total count + merged top topics + worst access.
-  fastify.get('/reviews/insights/rollup', async (request, reply) => {
-    const q = request.query as { marketplace?: string }
-    const rows = await prisma.amazonReviewInsight.findMany({ where: q.marketplace ? { marketplace: q.marketplace } : {} })
-    type Topic = { topic: string; mentionCount: number | null; ratingImpact: number | null; snippets: string[] }
-    const mergeTopics = (key: 'positiveTopics' | 'negativeTopics') => {
-      const m = new Map<string, Topic>()
-      for (const r of rows) {
-        for (const t of (r[key] as unknown as Topic[]) ?? []) {
-          if (!t?.topic) continue
-          const e = m.get(t.topic) ?? { topic: t.topic, mentionCount: 0, ratingImpact: null, snippets: [] }
-          e.mentionCount = (e.mentionCount ?? 0) + (t.mentionCount ?? 0)
-          if (t.ratingImpact != null && (e.ratingImpact == null || Math.abs(t.ratingImpact) > Math.abs(e.ratingImpact))) e.ratingImpact = t.ratingImpact
-          for (const s of t.snippets ?? []) if (e.snippets.length < 4 && !e.snippets.includes(s)) e.snippets.push(s)
-          m.set(t.topic, e)
-        }
-      }
-      return [...m.values()].sort((a, b) => (b.mentionCount ?? 0) - (a.mentionCount ?? 0)).slice(0, 6)
-    }
-    let weightedSum = 0, weight = 0, totalReviews = 0
-    for (const r of rows) {
-      if (r.starRating != null) { const w = r.reviewCount ?? 1; weightedSum += r.starRating * w; weight += w }
-      totalReviews += r.reviewCount ?? 0
-    }
-    const anyOk = rows.some((r) => r.accessStatus === 'OK')
-    const accessStatus = rows.length === 0 ? 'NO_DATA' : anyOk ? 'OK' : rows.some((r) => r.accessStatus === 'NEEDS_BRAND_ANALYTICS_ROLE') ? 'NEEDS_BRAND_ANALYTICS_ROLE' : rows[0].accessStatus
-    reply.header('Cache-Control', 'private, max-age=120')
-    return {
-      marketplace: q.marketplace ?? null,
-      asins: rows.length,
-      starRating: weight > 0 ? Math.round((weightedSum / weight) * 100) / 100 : null,
-      reviewCount: totalReviews,
-      positiveTopics: mergeTopics('positiveTopics'),
-      negativeTopics: mergeTopics('negativeTopics'),
-      accessStatus,
-      lastFetchedAt: rows.reduce<string | null>((acc, r) => (!acc || r.fetchedAt > new Date(acc) ? r.fetchedAt.toISOString() : acc), null),
-    }
-  })
-
-  // POST /api/reviews/insights/ingest { marketplace, limit } — fire-and-forget.
+  // POST /api/reviews/insights/ingest { marketplace, limit } — fire-and-forget. Kept with the probe and the debug read:
+  // the Owner's steps to switch Amazon topics on (audit D1 sweep, 2026-10-27).
   fastify.post('/reviews/insights/ingest', async (request, reply) => {
     const b = (request.body ?? {}) as { marketplace?: string; limit?: number }
     if (!b.marketplace) { reply.status(400); return { error: 'marketplace required' } }
@@ -1627,22 +1091,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       .then((r) => fastify.log.info({ insights: r }, '[review-insights] manual ingest complete'))
       .catch((e) => fastify.log.error({ err: e }, '[review-insights] manual ingest failed'))
     reply.header('Cache-Control', 'no-store')
-    return { ok: true, started: true, marketplace: b.marketplace, note: 'ingest running in background; poll GET /reviews/insights for results' }
-  })
-
-  // ── UX.1 — Global channel + market filter options (from the Marketplace table,
-  // not hardcoded). Channels limited to the active review scope (Amazon + eBay).
-  fastify.get('/reviews/filter-options', async (_request, reply) => {
-    const rows = await prisma.marketplace.findMany({
-      where: { channel: { in: ['AMAZON', 'EBAY'] }, isActive: true },
-      select: { channel: true, code: true, name: true },
-      orderBy: [{ channel: 'asc' }, { code: 'asc' }],
-    })
-    const channels = [...new Set(rows.map((r) => r.channel))]
-    // Distinct market codes (a market can exist on >1 channel); skip GLOBAL/aggregate codes.
-    const markets = [...new Map(rows.filter((r) => r.code && r.code !== 'GLOBAL').map((r) => [r.code, { code: r.code, name: r.name }])).values()]
-    reply.header('Cache-Control', 'private, max-age=300')
-    return { channels, markets }
+    return { ok: true, started: true, marketplace: b.marketplace, note: 'ingest running in background; the topics show on the Amazon page and in Reviews › Settings › Sources' }
   })
 }
 

@@ -22,6 +22,7 @@ import { resolveBusinessIdentity } from '../business-identity.service.js'
 import { defaultFrom } from '../email/transport.js'
 import { REVIEW_TEMPLATES } from './review-templates.js'
 import { RATING_DROP_RULE, type RatingDropRule } from './rating-drop-math.js'
+import { readShopReviewPage, shopReviewHeld } from './review-links.service.js'
 
 // ── Vocabulary ────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -375,6 +376,10 @@ export interface SenderView {
   editHref: string
   /** Why this business's buyers get no e-mail yet; null when it has an identity. */
   problem: string | null
+  /** Where the review button of a Shopify buyer's e-mail goes (this business's own shop); null = no button. */
+  shopReviewPage: string | null
+  /** Why Shopify buyers' review e-mails have no button, in words; null when they have one. */
+  shopReviewHeld: string | null
 }
 
 /** "Name <address>" → its parts. */
@@ -388,10 +393,13 @@ export function splitFrom(from: string): { name: string | null; address: string 
 /** The sender every review e-mail of this business carries (business-identity.service.ts), read-only. */
 export async function senderIdentity(): Promise<SenderView> {
   const editHref = '/settings/company'
-  const found = await resolveBusinessIdentity()
-  if (found.ok === false) return { name: null, address: null, replyTo: null, editHref, problem: found.reason }
+  const [found, shop] = await Promise.all([resolveBusinessIdentity(), readShopReviewPage().catch(() => null)])
+  const shopFacts = shop
+    ? { shopReviewPage: shop.url, shopReviewHeld: shopReviewHeld(shop) }
+    : { shopReviewPage: null, shopReviewHeld: 'Nexus could not check this business’s shop just now.' }
+  if (found.ok === false) return { name: null, address: null, replyTo: null, editHref, problem: found.reason, ...shopFacts }
   const from = splitFrom(found.identity.emailFrom ?? defaultFrom())
-  return { name: from.name ?? found.identity.brandName, address: from.address, replyTo: found.identity.supportEmail || null, editHref, problem: null }
+  return { name: from.name ?? found.identity.brandName, address: from.address, replyTo: found.identity.supportEmail || null, editHref, problem: null, ...shopFacts }
 }
 
 /**

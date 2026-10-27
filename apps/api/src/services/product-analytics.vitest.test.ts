@@ -28,6 +28,14 @@ describe('the studio card’s reviews', () => {
     })
   })
 
+  it('Amazon seller feedback (1–3 stars) is never averaged; the kind column wins over the channel rule', () => {
+    const summary = productReviewSummary([
+      { channel: 'AMAZON', rating: 1, ingestSource: 'AMAZON_SELLER_FEEDBACK', kind: 'SELLER' },
+      { channel: 'AMAZON', rating: 5, ingestSource: 'IMPORT_CSV', kind: 'PRODUCT' },
+    ])
+    expect(summary).toEqual({ avgRating: 5, reviewCount: 1, byChannel: [{ channel: 'AMAZON', kind: 'stars', rating: 5, count: 1 }] })
+  })
+
   it('nothing to count: no rating (never 0) and no channels', () => {
     expect(productReviewSummary([])).toEqual({ avgRating: null, reviewCount: 0, byChannel: [] })
     expect(productReviewSummary([{ channel: 'AMAZON', rating: 5, ingestSource: null }])).toEqual({ avgRating: null, reviewCount: 0, byChannel: [] })

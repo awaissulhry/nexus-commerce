@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 import { scopePublicToken } from '../../lib/workspace-public-links.js'
 /**
  * SR.4 — productType-aware review request scheduler.
@@ -28,7 +29,7 @@ import { randomBytes } from 'node:crypto'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { resolveSendTiming, type TimingDefaultRow, type SendWindowRow } from './review-timing.service.js'
-import { RULE_EXCLUSION_PREFIX } from './review-queue-words.js'
+import { EBAY_ASKS_CODE, EBAY_ASKS_WORDS, RULE_EXCLUSION_PREFIX } from './review-queue-words.js'
 
 // Active-return statuses suppress review requests — mirrored from
 // orders-reviews.routes.ts. Refunds suppress too (financialTransactions).
@@ -49,21 +50,7 @@ function newSentimentToken(): string {
 // The hardcoded per-product defaults moved to the editable ReviewTimingDefault DB
 // table (RRT.1). This file just matches the rule and asks the resolver for a date.
 
-// ── Review URL builders ───────────────────────────────────────────────────
-
-function buildReviewUrl(channel: string, channelOrderId: string | null): string | null {
-  if (!channelOrderId) return null
-  if (channel === 'EBAY') {
-    // eBay feedback link — buyer leaves feedback for seller
-    return `https://www.ebay.it/fdbk/leave_feedback`
-  }
-  if (channel === 'SHOPIFY') {
-    // Shopify review app landing — operator sets their review domain
-    const reviewDomain = process.env.SHOPIFY_REVIEW_DOMAIN ?? null
-    return reviewDomain ? `https://${reviewDomain}/pages/reviews` : null
-  }
-  return null
-}
+// The review link of an order's e-mail (the order's eBay site, the business's own shop) is review-links.service.ts.
 
 // ── Batch scheduler ───────────────────────────────────────────────────────
 
@@ -240,6 +227,92 @@ function pickBestRule(rules: any[], order: MatchableOrder): any | null {
   return candidates[0]
 }
 
+/**
+ * The request an eBay order gets (Owner, 2026-10-27): not asked, with its reason. Nexus e-mails no eBay buyer — eBay's
+ * rules restrict contacting buyers outside eBay, and eBay asks its buyers for feedback itself — so no rule and no
+ * "How was it?" check applies. Shown on Reviews › Requests as "Not sent — eBay asks the buyer for feedback itself".
+ */
+export function ebayNotAskedData(order: { id: string; channel: string; marketplace: string | null }, ruleId: string | null = null) {
+  return {
+    orderId: order.id,
+    channel: order.channel as any,
+    marketplace: order.marketplace,
+    status: 'SKIPPED' as const,
+    providerResponseCode: EBAY_ASKS_CODE,
+    suppressedReason: EBAY_ASKS_WORDS,
+    ruleId,
+  }
+}
+
+/**
+ * The request the scheduler makes for an order: SCHEDULED at `scheduledFor`, linked to the deciding rule, and — when
+ * that rule asks "How was it?" first and the order has a buyer e-mail — the paired check the sender sends before the
+ * request (RV.6.4). Also used by the Orders page's "Request review" and Claude's `request-review`
+ * (review-request.service.ts) and a rule's "Queue these" (`queueOrdersForRule`), so every way in asks the same way.
+ */
+export async function createScheduledRequest(
+  order: { id: string; channel: string; marketplace: string | null; customerEmail: string | null },
+  rule: { id: string; useSentimentDiversion?: boolean | null } | null,
+  scheduledFor: Date,
+): Promise<{ id: string; diversion: boolean }> {
+  // An eBay order is never asked by e-mail (ebayNotAskedData): recorded as not asked, whoever asks.
+  if (order.channel === 'EBAY') {
+    const skipped = await prisma.reviewRequest.create({ data: ebayNotAskedData(order, rule?.id ?? null) })
+    return { id: skipped.id, diversion: false }
+  }
+  const diversion = rule?.useSentimentDiversion === true && !!order.customerEmail
+  const created = await prisma.reviewRequest.create({
+    data: {
+      orderId: order.id,
+      channel: order.channel as any,
+      marketplace: order.marketplace,
+      status: 'SCHEDULED',
+      scheduledFor,
+      ruleId: rule?.id ?? null,
+    },
+  })
+  if (diversion) {
+    await prisma.reviewSentimentCheck.create({
+      data: {
+        token: newSentimentToken(),
+        orderId: order.id,
+        ruleId: rule!.id,
+        reviewRequestId: created.id,
+        expiresAt: new Date(scheduledFor.getTime() + 30 * 24 * 60 * 60 * 1000),
+      },
+    })
+  }
+  return { id: created.id, diversion }
+}
+
+/** The facts a rule's "Who" and "Skip when" read, from an order row (its first item's product type). */
+export function matchableOrderOf(
+  order: {
+    channel: string; marketplace: string | null; totalPrice: unknown; fulfillmentMethod: string | null
+    status?: string | null; cancelledAt?: Date | null
+    returns: Array<{ status: string }>; financialTransactions: unknown[]
+    items: Array<{ product: { productType: string | null } | null }>
+  },
+  askedBuyerRecently = false,
+): MatchableOrder {
+  return {
+    channel: order.channel,
+    marketplace: order.marketplace,
+    totalPrice: order.totalPrice as MatchableOrder['totalPrice'],
+    fulfillmentMethod: order.fulfillmentMethod,
+    hasActiveReturn: order.returns.some((r) => (ACTIVE_RETURN_STATUSES as readonly string[]).includes(r.status)),
+    hasRefund: order.financialTransactions.length > 0 || order.returns.some((r) => r.status === 'REFUNDED'),
+    productType: order.items[0]?.product?.productType ?? null,
+    isCancelled: order.status === 'CANCELLED' || order.cancelledAt != null,
+    askedBuyerRecently,
+  }
+}
+
+/** Whether `buyer` is in a set read by `buyersAskedSince` (one of its customer ids or e-mails). */
+export function buyerAskedIn(set: Awaited<ReturnType<typeof buyersAskedSince>>, buyer: { customerId: string | null; customerEmail: string | null }): boolean {
+  return buyerIn(set, buyer)
+}
+
 export async function schedulePendingOrders(): Promise<ScheduleResult> {
   const result: ScheduleResult = { examined: 0, scheduled: 0, skipped: 0, errors: 0 }
 
@@ -264,7 +337,7 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
     where: {
       deliveredAt: { gte: since, not: null },
       reviewRequests: { none: {} },
-      // Only channels we can action — Amazon (Solicitations) + eBay/Shopify (email)
+      // Amazon (Solicitations), Shopify (our e-mail), and eBay — recorded as not asked: eBay asks its buyers itself.
       channel: { in: ['AMAZON', 'EBAY', 'SHOPIFY'] },
     },
     select: {
@@ -305,6 +378,14 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
     result.examined += 1
     try {
       if (!order.deliveredAt) {
+        result.skipped += 1
+        continue
+      }
+
+      // Owner, 2026-10-27: Nexus e-mails no eBay buyer — eBay asks them for feedback itself. The order's request is
+      // recorded as not asked, with that reason, before any rule (no rule and no "How was it?" check can change it).
+      if (order.channel === 'EBAY') {
+        await prisma.reviewRequest.create({ data: ebayNotAskedData(order) })
         result.skipped += 1
         continue
       }
@@ -375,29 +456,7 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
       // ever hitting the Amazon Solicitations API. Diversion only runs on
       // channels we can actually email — Amazon orders have the customer
       // email via SP-API too, so this works there.
-      const useDiversion = matchedRule?.useSentimentDiversion === true && !!order.customerEmail
-      const newRequest = await prisma.reviewRequest.create({
-        data: {
-          orderId: order.id,
-          channel: order.channel,
-          marketplace: order.marketplace,
-          status: 'SCHEDULED',
-          scheduledFor,
-          ruleId: matchedRule?.id ?? null,
-        },
-      })
-      if (useDiversion) {
-        const expiresAt = new Date(scheduledFor.getTime() + 30 * 24 * 60 * 60 * 1000)
-        await prisma.reviewSentimentCheck.create({
-          data: {
-            token: newSentimentToken(),
-            orderId: order.id,
-            ruleId: matchedRule.id,
-            reviewRequestId: newRequest.id,
-            expiresAt,
-          },
-        })
-      }
+      const { diversion: useDiversion } = await createScheduledRequest(order, matchedRule, scheduledFor)
       result.scheduled += 1
       addBuyer(askedNow, buyer)
       logger.info('[review-scheduler] scheduled', {
@@ -430,6 +489,8 @@ export async function schedulePendingOrders(): Promise<ScheduleResult> {
  * It does not ask whether a more specific rule would decide the order instead.
  */
 export async function findOrdersMatchingRule(rule: any) {
+  // An eBay rule asks nobody: Nexus e-mails no eBay buyer (Owner, 2026-10-27; review-queue-words.ts EBAY_RULE_WORDS).
+  if (rule.scope === 'EBAY') return []
   let channelClause: any = {}
   switch (rule.scope) {
     case 'AMAZON_GLOBAL': channelClause = { channel: 'AMAZON' }; break
@@ -483,6 +544,10 @@ export async function findOrdersMatchingRule(rule: any) {
       totalPrice: true, customerEmail: true, customerId: true, deliveredAt: true,
       // RRT.6 — extra fields so dry-run can preview the resolved scheduledFor.
       shippedAt: true, purchaseDate: true,
+      // E7 — what the deciding rule reads ("Queue these" asks the way the scheduler does).
+      fulfillmentMethod: true, status: true, cancelledAt: true,
+      returns: { select: { status: true } },
+      financialTransactions: { where: { transactionType: 'Refund' }, select: { id: true } },
       items: { take: 1, select: { product: { select: { productType: true } } } },
     },
     orderBy: { deliveredAt: 'asc' },
@@ -501,6 +566,41 @@ export async function findOrdersMatchingRule(rule: any) {
   return kept
 }
 
-// ── Re-export helpers needed by the mailer job ────────────────────────────
-
-export { buildReviewUrl }
+/**
+ * A rule's "Queue these N" (POST /review-rules/:id/run, audit E7): its Test run's orders, queued the way the scheduler
+ * queues them — on the day the rule's timing picks (the Test run's "First try"; a day already past is due now), with
+ * the rule's "How was it?" check first where it asks one, and only the orders THIS rule decides (a more specific rule's
+ * orders are left to it). A rule that is off still queues them when a person asks (the confirm says so).
+ */
+export async function queueOrdersForRule(ruleId: string): Promise<{ enqueued: number; skipped: number; decidedElsewhere: number; totalMatches: number } | null> {
+  const rule = await prisma.reviewRule.findUnique({ where: { id: ruleId } })
+  if (!rule) return null
+  const [matches, activeRules, timingDefaults, sendWindows] = await Promise.all([
+    findOrdersMatchingRule(rule),
+    prisma.reviewRule.findMany({ where: { isActive: true } }),
+    prisma.reviewTimingDefault.findMany({ where: { isActive: true } }),
+    prisma.reviewSendWindow.findMany({ where: { isActive: true } }),
+  ])
+  const candidates = [...activeRules.filter((r: any) => r.id !== rule.id), { ...rule, isActive: true }]
+  let enqueued = 0, skipped = 0, decidedElsewhere = 0
+  for (const order of matches as any[]) {
+    const existing = await prisma.reviewRequest.findUnique({
+      where: { orderId_channel: workspaceKey({ orderId: order.id, channel: order.channel }) },
+      select: { id: true },
+    })
+    if (existing) { skipped++; continue }
+    const decided = decideRuleForOrder(candidates, matchableOrderOf(order))
+    if (!decided.rule || decided.rule.id !== rule.id) { decidedElsewhere++; continue }
+    if (decided.skip) { skipped++; continue }
+    const resolved = resolveSendTiming(
+      { channel: order.channel, marketplace: order.marketplace, deliveredAt: order.deliveredAt, shippedAt: order.shippedAt, purchaseDate: order.purchaseDate, productType: order.items?.[0]?.product?.productType ?? null },
+      rule,
+      timingDefaults,
+      sendWindows,
+    )
+    if (!resolved.scheduledFor) { skipped++; continue }
+    await createScheduledRequest(order, rule, resolved.scheduledFor)
+    enqueued++
+  }
+  return { enqueued, skipped, decidedElsewhere, totalMatches: matches.length }
+}

@@ -23,6 +23,9 @@ import { deepLinkForOrder } from '../_lib/deep-links'
 import { formatOrderTotal } from '../_lib/money'
 import { FulfillmentPill } from '../_lenses/GridLens'
 
+/** The Request review buttons' tip (audit A1, B11): one sender for every channel, Amazon's window in Amazon's words. */
+const REQUEST_REVIEW_TIP = 'Ask this buyer for a review now, through Reviews › Requests: Amazon’s own request (5–30 days after its delivery date) or our review e-mail for Shopify buyers. eBay buyers are not asked: eBay asks them for feedback itself. Held while sending is paused.'
+
 const CHANNEL_TONE: Record<string, string> = {
   AMAZON: 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-900',
   EBAY: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900',
@@ -87,12 +90,17 @@ export default function OrderDetailClient({ id }: { id: string }) {
   const requestReviewNow = async () => {
     setReviewBusy(true)
     try {
+      // The ONE sender (Reviews › Requests): held while sending is paused; Amazon's own request, or our review e-mail
+      // for Shopify buyers (an eBay order is held: eBay asks its buyers itself); the answer is in words (what happened,
+      // or why nothing was sent). A held order is an answer, not an error.
       const res = await fetch(`${getBackendUrl()}/api/orders/${id}/request-review`, { method: 'POST' })
       const data = await res.json()
+      if (!res.ok && data.held) {
+        toast.info(`Review request: ${data.error}`)
+        return
+      }
       if (!res.ok) throw new Error(data.error)
-      const tone = data.status === 'SENT' || data.status === 'OK' ? 'success' : 'info'
-      const msg = `Review request: ${data.status}${data.errorMessage ? ` — ${data.errorMessage}` : ''}`
-      toast[tone === 'success' ? 'success' : 'info'](msg)
+      toast[data.outcome === 'sent' ? 'success' : 'info'](`Review request: ${data.words}`)
       refresh()
     } catch (e: any) {
       toast.error(e.message)
@@ -218,7 +226,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
             <button
               onClick={requestReviewNow}
               disabled={reviewBusy || !order.deliveredAt}
-              title={!order.deliveredAt ? 'Order must be delivered first' : 'Send Amazon review request now (4-30d window)'}
+              title={!order.deliveredAt ? 'Order must be delivered first' : REQUEST_REVIEW_TIP}
               className="h-8 px-3 text-base bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900 rounded hover:bg-amber-100 dark:hover:bg-amber-900/60 disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               <Star size={12} className={reviewBusy ? 'animate-pulse' : ''} /> Request review
@@ -308,7 +316,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
           <button
             onClick={requestReviewNow}
             disabled={reviewBusy || !order.deliveredAt}
-            title={!order.deliveredAt ? 'Order must be delivered first' : 'Send Amazon review request (4–30 days post-delivery)'}
+            title={!order.deliveredAt ? 'Order must be delivered first' : REQUEST_REVIEW_TIP}
             className="h-8 px-3 text-sm font-medium border border-slate-300 dark:border-slate-600 rounded-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
           >
             <Star size={12} className={reviewBusy ? 'animate-pulse' : ''} /> Request a review
@@ -573,23 +581,29 @@ export default function OrderDetailClient({ id }: { id: string }) {
               orders — strictly more information than the old 8-row
               widget could fit in the sidebar. */}
 
-          <Card title="Review request" description="Amazon Solicitations">
+          {/* `#review`: the Orders grid's row menu "Request a review" opens the order here. */}
+          <div id="review">
+          <Card title="Review request" description={order.channel === 'AMAZON' ? 'Amazon’s own request' : order.channel === 'EBAY' ? 'eBay asks the buyer itself' : 'Our review e-mail'}>
             {!lastReview ? (
               <div className="text-base text-slate-500 dark:text-slate-400">No request yet.</div>
             ) : (
               <div className="space-y-1">
-                <Badge variant="info" size="sm">{lastReview.status}</Badge>
+                <Badge variant="info" size="sm">{lastReview.statusWords ?? lastReview.status}</Badge>
                 {lastReview.sentAt && <div className="text-xs text-slate-500 dark:text-slate-400">Sent {new Date(lastReview.sentAt).toLocaleString()}</div>}
-                {lastReview.errorMessage && <div className="text-xs text-rose-600 dark:text-rose-400">{lastReview.errorMessage}</div>}
-                {lastReview.suppressedReason && <div className="text-xs text-slate-500 dark:text-slate-400">{lastReview.suppressedReason}</div>}
+                {lastReview.reasonWords && <div className="text-xs text-slate-500 dark:text-slate-400">{lastReview.reasonWords}</div>}
               </div>
             )}
             <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
               {!order.deliveredAt
                 ? 'Wait until order is delivered before requesting.'
-                : 'Amazon allows one request per order, between 4–30 days post-delivery, with no custom message.'}
+                : order.channel === 'AMAZON'
+                  ? 'Amazon allows one request per order, 5–30 days after its delivery date, with no custom message. Nexus first tries on day 4 of its own delivery date.'
+                  : order.channel === 'EBAY'
+                    ? 'Nexus sends eBay buyers no review e-mail: eBay asks them for feedback itself.'
+                    : 'One review e-mail per order, asking for an honest review. Pausing sending on Reviews › Requests holds it.'}
             </div>
           </Card>
+          </div>
 
           {order.tags && order.tags.length > 0 && (
             <Card title="Tags">

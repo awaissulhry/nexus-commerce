@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cardProducts, cardsPlan, downloadHeld, insertMarket, pickedWords, qrTarget, togglePick, type InsertProduct } from './insertsModel'
+import { cardProducts, cardsPlan, downloadHeld, insertMarket, insertStartMarket, pickedWords, qrTarget, togglePick, type InsertProduct } from './insertsModel'
 
 const PRODUCTS: InsertProduct[] = [
   { id: 'a', name: 'Touring jacket', sku: 'TJ', amazonAsin: 'B0A', childCount: 12 },
@@ -35,5 +35,14 @@ describe('package inserts', () => {
     expect(togglePick({ all: false, picked: ['a'] }, 'a')).toEqual({ all: false, picked: [] })
     expect(qrTarget('DE', 'B0A')).toBe('amazon.de/review/create-review?asin=B0A')
     expect(insertMarket('XX').code).toBe('IT')
+  })
+})
+
+describe('the market the window opens on (audit C5)', () => {
+  it('is the page’s market when cards exist for it, Italy otherwise', () => {
+    expect(insertStartMarket('DE')).toBe('DE')
+    expect(insertStartMarket('gb')).toBe('UK')
+    expect(insertStartMarket('NL')).toBe('IT')
+    expect(insertStartMarket(null)).toBe('IT')
   })
 })

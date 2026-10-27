@@ -64,13 +64,23 @@ describe('rules that match no orders', () => {
     ])
     expect(noMatchWarnings(rules, false)).toHaveLength(2)
   })
+
+  it('every eBay rule says eBay buyers are not e-mailed, on or off (Owner, 2026-10-27)', () => {
+    const warnings = noMatchWarnings([rule('on', { name: 'eBay on', scope: 'EBAY' }), rule('off', { name: 'eBay off', scope: 'EBAY', isActive: false })], true)
+    expect(warnings.map((w) => w.title)).toEqual(['“eBay on” is for eBay — eBay buyers are not e-mailed', '“eBay off” is for eBay — eBay buyers are not e-mailed'])
+    expect(warnings[0].detail).toBe('eBay buyers are not e-mailed — eBay asks its buyers for feedback itself, so no rule can e-mail them. Turn it off or delete it.')
+    expect(warnings[1].detail).toMatch(/Delete it, or keep it off\.$/)
+    expect(turnOnHeld(rule('x', { isActive: false, scope: 'EBAY', name: 'eBay' }))).toBe('“eBay” asks nobody: eBay buyers are not e-mailed — eBay asks its buyers for feedback itself, so no rule can e-mail them.')
+  })
 })
 
 describe('rules tiles', () => {
   it('counts the rules on and weights the rate by requests sent', () => {
-    const t = rulesTiles([rule('a', { sent30: 100, rate30: 0.1 }), rule('b', { sent30: 300, rate30: 0.05, isActive: false }), rule('c', { sent30: 0, rate30: null })], true)
-    expect(t).toEqual({ on: 2, total: 3, sent30: 400, matched30: 36, rate30: 0.0625 })
-    expect(rulesTiles([rule('a')], false)).toEqual({ on: 1, total: 1, sent30: null, matched30: null, rate30: null })
+    const rules = [rule('a', { sent30: 100, rate30: 0.1 }), rule('b', { sent30: 300, rate30: 0.05, isActive: false }), rule('c', { sent30: 0, rate30: null })]
+    // The rate is the API's one rate for every request a rule sent, never an average of the rules' rates (audit C2).
+    expect(rulesTiles(rules, true, { sent30: 400, rate30: 0.07, rateWords: null })).toEqual({ on: 2, total: 3, sent30: 400, matched30: 36, rate30: 0.07, rateWords: null })
+    expect(rulesTiles(rules, true, { sent30: 400, rate30: null, rateWords: 'Not measurable: x' })).toMatchObject({ rate30: null, rateWords: 'Not measurable: x' })
+    expect(rulesTiles([rule('a')], false)).toEqual({ on: 1, total: 1, sent30: null, matched30: null, rate30: null, rateWords: null })
   })
 })
 
@@ -90,7 +100,7 @@ describe('rules bulk bar', () => {
     const off = rulesBulkPlan([rule('a', { isActive: false }), rule('b', { isActive: false })], 'off')
     expect(rulesBulkHeld(off, 'off')).toBe('Nothing to be turned off: “Rule a” is already off (and 1 more)')
     expect(rulesBulkPlan([rule('a'), rule('b')], 'delete').apply).toEqual(['a', 'b'])
-    expect(turnOnHeld(rule('x', { isActive: false, scope: 'ETSY', name: 'Etsy' }))).toBe('“Etsy” matches no orders: Nexus asks only Amazon, eBay and Shopify buyers.')
+    expect(turnOnHeld(rule('x', { isActive: false, scope: 'ETSY', name: 'Etsy' }))).toBe('“Etsy” matches no orders: Nexus asks only Amazon and Shopify buyers.')
   })
 
   it('says what the server changed', () => {

@@ -14,7 +14,7 @@ import { Button, InfoTip, Pill, Tag } from '@/design-system/primitives'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import Link from '@/lib/workspaces/Link'
 import { reviewsSend } from '../../_lib/reviewsFetch'
-import { channelMarketWords } from '../../_lib/reviewWords'
+import { EBAY_ASKS_WORDS, channelMarketWords } from '../../_lib/reviewWords'
 import { rulePath } from '../requestsPaths'
 import { readRequestDetail, type RequestDetail } from './queueDatasource'
 import { bulkResultWords, type SnoozeDays } from './queueBulk'
@@ -35,6 +35,9 @@ export interface RequestDetailModalProps {
   id: string
   /** The requests of the grid page, in the order shown. */
   ids: readonly string[]
+  /** Where that page starts in the whole list ((page − 1) × page size) and the list's length: the counter counts the list. */
+  offset?: number
+  total?: number
   onGo: (id: string) => void
   onClose: () => void
   canManage: boolean
@@ -43,7 +46,7 @@ export interface RequestDetailModalProps {
 
 interface BulkAnswer { changed: number; held: { id: string; words: string }[] }
 
-export function RequestDetailModal({ id, ids, onGo, onClose, canManage, returnFocusTo }: RequestDetailModalProps) {
+export function RequestDetailModal({ id, ids, offset, total, onGo, onClose, canManage, returnFocusTo }: RequestDetailModalProps) {
   const { toast } = useToast()
   const confirm = useActionConfirm()
   const [tab, setTab] = useState<Tab>('request')
@@ -170,7 +173,7 @@ export function RequestDetailModal({ id, ids, onGo, onClose, canManage, returnFo
         activeTab={tab}
         onTabChange={(t) => setTab(t as Tab)}
         tabsLabel="Request sections"
-        nav={ids.includes(id) ? { ids, current: id, onGo, noun: 'request' } : undefined}
+        nav={ids.includes(id) ? { ids, current: id, onGo, noun: 'request', offset, total } : undefined}
         loading={!current}
         error={current?.error ?? undefined}
         onRetry={() => void load()}
@@ -233,7 +236,12 @@ function RequestTab({ detail, now }: { detail: RequestDetail; now: Date }) {
             value: r.rule ? <Link href={rulePath(r.rule.id)}>{r.rule.name}</Link> : 'No rule matched — default timing',
             hint: r.rule?.howWasIt ? 'asks “How was it?” first' : undefined,
           },
-          { label: 'Message', value: amazon ? 'Amazon’s own standard email (its text is fixed)' : 'Our review email (Preview email shows it)' },
+          {
+            label: 'Message',
+            value: amazon
+              ? 'Amazon’s own standard email (its text is fixed)'
+              : r.channel === 'EBAY' ? `None. ${EBAY_ASKS_WORDS}.` : 'Our review email (Preview email shows it)',
+          },
         ]}
       />
       <div>

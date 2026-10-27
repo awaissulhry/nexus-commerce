@@ -31,12 +31,12 @@ export default async function NegativeLandingPage({
         Ci dispiace molto.
       </h1>
       <p style={{ fontSize: '16px', lineHeight: 1.5, color: '#555', marginBottom: '24px', textAlign: 'center' }}>
-        Vogliamo sistemare le cose. Dicci cosa è andato storto e ti risponderemo entro 24 ore.
+        Vogliamo sistemare le cose. Dicci cosa è andato storto e ti risponderemo il prima possibile.
       </p>
       <NegativeForm token={token} />
       <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '32px 0 16px' }} />
       <p style={{ fontSize: '12px', lineHeight: 1.5, color: '#999', textAlign: 'center' }}>
-        We&apos;re sorry. Tell us what went wrong and we&apos;ll reach out within 24 hours.
+        We&apos;re sorry. Tell us what went wrong and we&apos;ll reply as soon as we can.
       </p>
     </main>
   )

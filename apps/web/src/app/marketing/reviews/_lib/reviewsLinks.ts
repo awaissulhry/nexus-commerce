@@ -1,9 +1,6 @@
 /**
- * Reviews area — the ONLY place a Reviews page builds a link to another Reviews page (or to the page that does that
- * job today). Each function returns a page that exists NOW: while the new page is still being built, it points at the
- * page doing that job today (the "today" lines below), and the coordinator switches the one function when the PR that
- * builds the new page lands. So no PR ships a link to a page that does not exist yet (scripts/check-link-targets.mjs),
- * and no page has to change when a link moves.
+ * Reviews area — the ONLY place a Reviews page builds a link to another Reviews page. Each function returns a page that
+ * exists (scripts/check-link-targets.mjs), so no page has to change when a link moves.
  *
  * Paths are workspace-free: render them with `Link` from `@/lib/workspaces/Link` (or `useRouter` from
  * `@/lib/workspaces/navigation`), which adds the business. Tested in reviewsLinks.vitest.test.ts, which also checks
@@ -37,6 +34,11 @@ export interface InboxLinkParams {
   status?: string | null
   theme?: string | null
   family?: string | null
+  /** Only the reviews that need a reply (the badges' number: `needsReplyHref`). */
+  reply?: 'needed' | null
+  /** One product's reviews (and its variants'). */
+  product?: string | null
+  mood?: string | null
   /** Search text: the review, the buyer or the SKU (a product's reviews: its SKU). */
   q?: string | null
   /** Open the Import window. */
@@ -50,8 +52,17 @@ export interface InboxLinkParams {
  * review's pop-up.
  */
 export function inboxHref(params: InboxLinkParams = {}): string {
-  const { kind, period, status, channel, market, stars, theme, family, q, review } = params
-  return withQuery('/marketing/reviews/inbox', { kind, period, status, channel, market, stars, theme, family, q, import: params.import ? 1 : null, review })
+  const { kind, period, status, channel, market, stars, mood, theme, family, reply, product, q, review } = params
+  return withQuery('/marketing/reviews/inbox', { kind, period, status, channel, market, stars, mood, theme, family, reply, product, q, import: params.import ? 1 : null, review })
+}
+
+/**
+ * The reviews that need a reply (the rail and sub-sidebar badges, the Overview's "Needs a reply" tile, a channel page's
+ * tile): every date (`period=all`) and only the reviews the one needs-a-reply rule counts, so the Inbox shows the same
+ * number the badge shows.
+ */
+export function needsReplyHref(scope: { channel?: string | null; market?: string | null } = {}): string {
+  return inboxHref({ reply: 'needed', period: 'all', channel: scope.channel, market: scope.market })
 }
 
 export interface RequestsLinkParams {
@@ -66,11 +77,13 @@ export interface RequestsLinkParams {
 }
 
 /**
- * The request queue: `/marketing/reviews/requests` with its status, channel and market filters, and `inserts=1` /
- * `preview=1` to open Package inserts or Preview email once (the Queue reads them: `requests/_queue/queueQuery.ts`).
+ * The request queue: `/marketing/reviews/requests` with its status, channel, market and period (a link from a page keeps
+ * that page's period: 7d, 30d — the Queue's default, left out —, 90d, 12m or all), and `inserts=1` / `preview=1` to open
+ * Package inserts or Preview email once (the Queue reads them: `requests/_queue/queueQuery.ts`).
  */
 export function requestsHref(params: RequestsLinkParams = {}): string {
   return withQuery(REQUESTS_PATH, {
+    period: params.period === '30d' ? null : params.period,
     status: params.status,
     channel: params.channel,
     market: params.market,
@@ -148,10 +161,12 @@ export function productReviewsHref(productId: string, scope: { channel?: string 
 
 /**
  * A channel's Reviews page (PR F): `/marketing/reviews/amazon`, `/marketing/reviews/amazon/it`, `/marketing/reviews/ebay/de`
- * (`GB` is the UK's `uk`). Shopify and Etsy pages come later (PR I): until then their reviews open in the Inbox, scoped.
+ * (`GB` is the UK's `uk`). Etsy and Shopify (PR I) have one page each, with no market pages: `/marketing/reviews/etsy`,
+ * `/marketing/reviews/shopify`. Any other channel's reviews open in the Inbox, scoped.
  */
 export function channelHref(channel: string, market?: string | null): string {
   const c = channel.trim().toUpperCase()
+  if (c === 'ETSY' || c === 'SHOPIFY') return `/marketing/reviews/${c.toLowerCase()}`
   if (c !== 'AMAZON' && c !== 'EBAY') return inboxHref({ channel: c, market })
   const code = market?.trim().toUpperCase()
   const segment = code && /^[A-Z]{2}$/.test(code) ? (code === 'GB' ? 'uk' : code.toLowerCase()) : null

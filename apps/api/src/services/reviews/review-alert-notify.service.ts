@@ -18,6 +18,7 @@
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 import { resolveBusinessIdentity } from '../business-identity.service.js'
 import { sendEmail } from '../email/transport.js'
 import { channelMarketLabel } from './overviewMath.js'
@@ -79,6 +80,24 @@ export function negativeAlertWords(input: Pick<NegativeReviewInput, 'channel' | 
 
 export function inboxReviewHref(reviewId: string): string {
   return `/marketing/reviews/inbox?review=${encodeURIComponent(reviewId)}`
+}
+
+/**
+ * An e-mailed link into the web app, inside THIS business (`/w/<business id>/…`, audit E9): a person who belongs to
+ * several businesses lands in the one the e-mail is about, not in whichever they used last. Without business profiles
+ * (or a business context) the bare path. null when the web address is unknown (`base` overrides it).
+ */
+export function businessWebLink(path: string, base: string | null = process.env.NEXUS_WEB_URL ?? null): string | null {
+  const webBase = (base ?? '').replace(/\/$/, '')
+  if (!webBase) return null
+  if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') return `${webBase}${path}`
+  let id: string | null = null
+  try {
+    id = workspaceIdForQuery()
+  } catch {
+    id = null
+  }
+  return id ? `${webBase}/w/${encodeURIComponent(id)}${path}` : `${webBase}${path}`
 }
 
 const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -210,9 +229,8 @@ async function deliverAlert(alert: AlertSetting, recipients: readonly TeamMember
     const to = recipients.map((m) => m.email).filter(Boolean)
     const identity = await resolveBusinessIdentity()
     if (to.length && identity.ok) {
-      const webBase = (process.env.NEXUS_WEB_URL ?? '').replace(/\/$/, '')
-      // The same address the daily digest links to; the web app opens it in the signed-in person's business.
-      const link = webBase ? `${webBase}${href}` : null
+      // Inside this business (E9), as the daily digest's link.
+      const link = businessWebLink(href)
       const sent = await sendEmail({
         to,
         from: identity.identity.emailFrom,

@@ -7,7 +7,7 @@ import type { Tone } from '@/design-system/primitives'
 import { COUNTRY_NAMES } from '@/app/_shared/app-nav'
 import { channelMarketWords } from '../../_lib/reviewWords'
 import type { QueueFacets, QueueStatus, QueueTiles } from './queueDatasource'
-import type { QueueFilterKey, QueueQuery } from './queueQuery'
+import { DEFAULT_QUEUE_PERIOD, type QueueFilterKey, type QueuePeriod, type QueueQuery } from './queueQuery'
 
 export const STATUS_WORDS: Record<QueueStatus, string> = {
   SCHEDULED: 'Scheduled',
@@ -76,8 +76,8 @@ export interface QueueTileView {
   delta?: { value: string; positive: boolean }
 }
 
-/** The six status tiles (filters) and the review rate (an estimate). */
-export function queueTileViews(tiles: QueueTiles, active: QueueStatus | null): QueueTileView[] {
+/** The six status tiles (filters) and the review rate (an estimate) of the page's period. */
+export function queueTileViews(tiles: QueueTiles, active: QueueStatus | null, period: QueuePeriod = DEFAULT_QUEUE_PERIOD): QueueTileView[] {
   const tile = (status: QueueStatus, value: number, hint: string, accent?: string): QueueTileView => ({
     key: status,
     label: STATUS_WORDS[status],
@@ -92,14 +92,14 @@ export function queueTileViews(tiles: QueueTiles, active: QueueStatus | null): Q
     tile('SCHEDULED', tiles.scheduled, 'waiting for their first try'),
     tile('DUE', tiles.dueNow, 'go at the next run', 'var(--nds-info)'),
     tile('RETRYING', tiles.retrying, 'tried again on their own', 'var(--nds-warning)'),
-    tile('SENT', tiles.sent, 'last 30 days', 'var(--nds-success)'),
+    tile('SENT', tiles.sent, PERIOD_WORDS[period], 'var(--nds-success)'),
     tile('FAILED', tiles.failed, 'no try left', 'var(--nds-danger)'),
     tile('SKIPPED', tiles.skipped, 'not asked, with the reason'),
     {
       key: 'rate',
       label: 'Review rate',
       value: rateText(tiles.reviewRate),
-      hint: tiles.reviewRate == null ? 'nothing sent yet · estimate' : '30 days, estimate',
+      hint: tiles.rateWords ?? (tiles.reviewRate == null ? 'nothing sent in this period' : `${PERIOD_WORDS[period]}, estimate`),
       status: null,
       active: false,
       ...(rate ? { delta: rate } : {}),
@@ -108,9 +108,16 @@ export function queueTileViews(tiles: QueueTiles, active: QueueStatus | null): Q
 }
 
 export interface FilterChip {
-  key: QueueFilterKey | 'q'
+  key: QueueFilterKey | 'q' | 'period'
   words: string
   removeLabel: string
+}
+
+const PERIOD_WORDS: Record<QueuePeriod, string> = { '7d': 'last 7 days', '30d': 'last 30 days', '90d': 'last 90 days', '12m': 'last 12 months', all: 'all time' }
+
+/** "last 90 days", "all time". */
+export function queuePeriodWords(period: QueuePeriod): string {
+  return PERIOD_WORDS[period]
 }
 
 /** The filters that are on, as removable chips. A rule or reason not in the facets shows by its key. */
@@ -129,13 +136,16 @@ export function filterChips(q: QueueQuery, facets: QueueFacets | null): FilterCh
     chips.push({ key: 'reason', words: `Reason: ${words}`, removeLabel: 'Show every reason' })
   }
   if (q.q.trim()) chips.push({ key: 'q', words: `Search: “${q.q.trim()}”`, removeLabel: 'Clear the search' })
+  if (q.period !== DEFAULT_QUEUE_PERIOD) {
+    chips.push({ key: 'period', words: `Period: ${PERIOD_WORDS[q.period]} and upcoming`, removeLabel: 'Show the last 30 days' })
+  }
   return chips
 }
 
 /** "1,461 requests · last 30 days and upcoming" (with a filter: "37 requests match"). */
-export function countWords(total: number, filtered: boolean): string {
+export function countWords(total: number, filtered: boolean, period: QueuePeriod = DEFAULT_QUEUE_PERIOD): string {
   const n = `${count(total)} ${total === 1 ? 'request' : 'requests'}`
-  return filtered ? `${n} match` : `${n} · last 30 days and upcoming`
+  return filtered ? `${n} match` : `${n} · ${PERIOD_WORDS[period]} and upcoming`
 }
 
 /** The failures banner's two lines from the API's sentence ("6 requests failed…: 4 emails bounced · …"). */

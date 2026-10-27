@@ -7,7 +7,7 @@ import {
   alertActions,
   alertApiStatus,
   alertFilterParam,
-  alertReviewsHref,
+  alertReviewsLink,
   alertTiles,
   alertTitle,
   bulkHeld,
@@ -129,12 +129,18 @@ describe('one alert', () => {
     expect(alertActions(alert({ fixes: { open: 1, sent: 0, applied: 0, dismissed: 0 } })).suggest).toBe(false)
   })
 
-  it('opens its reviews in the Inbox: theme, market, the product’s SKU, the last 7 days', () => {
-    const href = alertReviewsHref(alert(), { channel: null })
-    expect(href).toBe('/marketing/reviews/inbox?period=7d&channel=AMAZON&market=DE&theme=FIT_SIZING&q=TJ-BLK')
-    const q = parseInboxQuery(href.slice(href.indexOf('?'))).query
-    expect(q).toMatchObject({ period: '7d', channels: ['AMAZON'], markets: ['DE'], themes: ['FIT_SIZING'], q: 'TJ-BLK' })
-    expect(alertReviewsHref(alert({ channels: ['AMAZON', 'EBAY'], product: null }), { channel: 'EBAY' })).toBe('/marketing/reviews/inbox?period=7d&channel=EBAY&market=DE&theme=FIT_SIZING')
+  it('opens its own reviews in the Inbox: negative, theme, market, the product by id, the period holding its 7 days (A5)', () => {
+    const detected = Date.parse(alert().detectedAt)
+    const atOnce = alertReviewsLink(alert(), { channel: null }, detected)
+    expect(atOnce.href).toBe('/marketing/reviews/inbox?period=7d&channel=AMAZON&market=DE&mood=NEGATIVE&theme=FIT_SIZING&product=p-1')
+    expect(atOnce.label).toBe('See the 9 reviews')
+    const q = parseInboxQuery(atOnce.href.slice(atOnce.href.indexOf('?'))).query
+    expect(q).toMatchObject({ period: '7d', channels: ['AMAZON'], markets: ['DE'], moods: ['NEGATIVE'], themes: ['FIT_SIZING'], product: 'p-1' })
+    // Later, the Inbox's shortest period that still holds the alert's 7 days is 30 days: the label no longer names a count.
+    const later = alertReviewsLink(alert(), { channel: null }, detected + 3 * 86_400_000)
+    expect(later.href).toContain('period=30d')
+    expect(later.label).toBe('See the negative reviews')
+    expect(alertReviewsLink(alert({ channels: ['AMAZON', 'EBAY'], product: null }), { channel: 'EBAY' }, detected).href).toBe('/marketing/reviews/inbox?period=7d&channel=EBAY&market=DE&mood=NEGATIVE&theme=FIT_SIZING')
   })
 })
 
@@ -151,8 +157,13 @@ describe('a rating drop', () => {
     expect(decisionWords('RESOLVED', drop)).toBe('Resolved: Rating drop · Shopify Germany. If the drop is still there 7 days from now, a new alert opens.')
   })
 
-  it('opens every review of its product in its market, no theme', () => {
-    expect(alertReviewsHref(drop, { channel: null })).toBe('/marketing/reviews/inbox?period=7d&channel=SHOPIFY&market=DE&q=TJ-BLK')
+  it('opens every review of its product (by id) in its market: no theme, no mood, never a count', () => {
+    const detected = Date.parse(drop.detectedAt)
+    expect(alertReviewsLink(drop, { channel: null }, detected)).toEqual({
+      href: '/marketing/reviews/inbox?period=7d&channel=SHOPIFY&market=DE&product=p-1',
+      label: 'See the product’s reviews',
+    })
+    expect(alertReviewsLink(drop, { channel: null }, detected + 3 * 86_400_000).href).toContain('period=30d')
   })
 
   it('takes Acknowledge and Resolve like any alert; Suggest fixes holds with why', () => {

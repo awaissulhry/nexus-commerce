@@ -7,15 +7,13 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * rolling ReviewCategoryRate counters.
  *
  * Channel sources:
- *   AMAZON   — Amazon's customer-review text isn't directly exposed
- *              via SP-API. Brand Analytics has a "Catalog Performance"
- *              feed with star averages but not review bodies. Real
- *              implementations either (a) scrape via authenticated
- *              session (TOS-grey) or (b) use a third-party feed
- *              (Helium10/Jungle Scout) under license. This service
- *              ships with sandbox fixtures so the loop runs end-to-end;
- *              the live HTTP path is intentionally stubbed.
- *   EBAY/SHOPIFY — webhook-driven (future). Stub returns no rows.
+ *   AMAZON   — Amazon gives sellers no review text and no stars by API (only topics: amazon-review-insights). Product
+ *              reviews arrive by file import (review-import.service.ts) or a licensed feed (AMAZON_VOC, off unless
+ *              configured); the seller feedback report arrives through amazon-seller-feedback.service.ts. Sandbox
+ *              fixtures (ingestSource FIXTURE) never show or count anywhere.
+ *   EBAY     — live: GetFeedback every 30 minutes (adapters/ebay-feedback.adapter.ts); its own read is recorded as
+ *              CronRun `review-ingest-ebay` so the sources say eBay is read only when that read worked.
+ *   SHOPIFY  — by file import until the review app's live link (Phase 3).
  *
  * Idempotent on (channel, externalReviewId) — re-running the cron is
  * safe. New reviews flow through sentiment extraction; existing rows
@@ -35,7 +33,9 @@ import {
 import type { Prisma } from '@prisma/client'
 import { fetchEbayFeedbackPreferRest } from './adapters/ebay-feedback.adapter.js'
 import { fetchAmazonVocFeed } from './adapters/amazon-voc.adapter.js'
-import type { AdapterRawReview, AdapterResult } from './adapters/types.js'
+import { FIXTURE_SOURCE } from './review-visibility.js'
+import type { AdapterRawReview, AdapterResult, ReviewMediaInput } from './adapters/types.js'
+import { EBAY_READ_JOB } from './review-sources.service.js'
 import { publishReviewEvent } from '../review-events.service.js'
 import { notifyReviewAlert } from './review-alert-notify.service.js'
 
@@ -132,6 +132,24 @@ const sameMedia = (a: readonly { url: string; position: number }[], b: readonly 
   a.length === b.length && a.every((m, i) => m.url === b[i].url && m.position === b[i].position)
 
 /**
+ * A review's photos as one set: replaced when the new read differs from what Nexus stored (`stored` in position
+ * order), untouched otherwise. True when it wrote. Used here and by the Etsy and Judge.me reads (PR I) for a review the
+ * buyer edited.
+ */
+export async function replaceReviewMedia(
+  reviewId: string,
+  stored: readonly { url: string; position: number }[],
+  next: readonly ReviewMediaInput[],
+): Promise<boolean> {
+  if (sameMedia(stored, next)) return false
+  await prisma.$transaction([
+    prisma.reviewMedia.deleteMany({ where: { reviewId } }),
+    prisma.reviewMedia.createMany({ data: next.map((m) => ({ reviewId, url: m.url, type: m.type, width: m.width ?? null, height: m.height ?? null, position: m.position })) }),
+  ])
+  return true
+}
+
+/**
  * What a new read changes on a row Nexus already has (only what differs, so a 30-minute pass writes nothing for an
  * unchanged feedback): the order link (and, with it, the order's market — the real one, where the Trading read used to
  * stamp a default), eBay's AI topics, eBay's state of the feedback, and the buyer's photos (replaced as a set).
@@ -150,12 +168,7 @@ async function refreshExisting(existing: ExistingReview, raw: RawReview, now: Da
   }
   if (raw.revisionEligible !== undefined && raw.revisionEligible !== existing.revisionEligible) data.revisionEligible = raw.revisionEligible
   if (Object.keys(data).length > 0) await prisma.review.update({ where: { id: existing.id }, data })
-  if (raw.media !== undefined && !sameMedia(existing.media, raw.media)) {
-    await prisma.$transaction([
-      prisma.reviewMedia.deleteMany({ where: { reviewId: existing.id } }),
-      prisma.reviewMedia.createMany({ data: raw.media.map((m) => ({ reviewId: existing.id, url: m.url, type: m.type, width: m.width ?? null, height: m.height ?? null, position: m.position })) }),
-    ])
-  }
+  if (raw.media !== undefined) await replaceReviewMedia(existing.id, existing.media, raw.media)
 }
 
 async function findOrCreateReview(
@@ -227,9 +240,11 @@ async function updateCategoryRates(reviewId: string, result: ExtractResult): Pro
   // Find the review to get productId + marketplace + postedAt.
   const review = await prisma.review.findUnique({
     where: { id: reviewId },
-    select: { productId: true, marketplace: true, postedAt: true },
+    select: { productId: true, marketplace: true, postedAt: true, ingestSource: true },
   })
   if (!review?.productId || !review.marketplace) return
+  // Fixture (sample) rows never count anywhere — not in the rates the spike check reads either (audit B20).
+  if (review.ingestSource === FIXTURE_SOURCE) return
   const day = new Date(
     Date.UTC(
       review.postedAt.getUTCFullYear(),
@@ -494,8 +509,9 @@ async function runLiveAdapters(
     await absorb(`amazon:${mp}`, 'AMAZON_VOC', () => fetchAmazonVocFeed({ marketplace: mp }))
   }
   // eBay — channel-wide feedback (not per Amazon marketplace): eBay's REST Feedback API when the account has it, else
-  // Trading GetFeedback (Reviews eBay REST, PR G).
-  await absorb('ebay', 'EBAY_API', () => fetchEbayFeedbackPreferRest({ maxPages: 5 }))
+  // Trading GetFeedback (Reviews eBay REST, PR G). Its own read is recorded on its own (audit B1), so the review sources
+  // say eBay is read only when THIS read worked — not whenever the whole job finished.
+  await absorb('ebay', 'EBAY_API', () => recordEbayRead(() => fetchEbayFeedbackPreferRest({ maxPages: 5 })))
   // Reviews eBay REST (PR G) — the sales that wait for the seller's feedback for the buyer (a read; leaving it is an
   // approval a person decides on the Reviews › eBay page).
   try {
@@ -505,6 +521,22 @@ async function runLiveAdapters(
   } catch (err) {
     summary.errors.push(`ebay buyer feedback: ${err instanceof Error ? err.message : String(err)}`)
   }
+}
+
+/** Run the eBay read and record it; what it read (also a partial read with an error) still goes on to be ingested. */
+async function recordEbayRead(run: () => Promise<AdapterResult>): Promise<AdapterResult> {
+  let out: AdapterResult | null = null
+  try {
+    const { recordCronRun } = await import('../../utils/cron-observability.js')
+    await recordCronRun(EBAY_READ_JOB, async () => {
+      out = await run()
+      if (out.error) throw new Error(out.error)
+      return `seen=${out.reviews.length}`
+    })
+  } catch (err) {
+    if (!out) return { reviews: [], error: err instanceof Error ? err.message : String(err) }
+  }
+  return out ?? { reviews: [], error: 'eBay was not read' }
 }
 
 export function summarizeReviewIngest(s: IngestSummary): string {

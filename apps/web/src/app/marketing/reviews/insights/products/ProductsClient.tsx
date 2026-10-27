@@ -368,13 +368,15 @@ function Products() {
       <p className={shared.footnote}>
         Ratings mix every channel and market; open a product to see each one. Amazon stars come only from reviews you imported: Amazon gives
         no rating by API. Return rate = returns with a reason, over orders, last 30 days; Amazon returns arrive with a delay of about 2 days.
-        eBay feedback counts as 5, 3 or 1 star.
+        eBay feedback shows as % positive, never as stars.
       </p>
 
       {openId && scope && (
         <ProductReviewsModal
           productId={openId}
           ids={ids.includes(openId) ? ids : [openId]}
+          offset={ids.includes(openId) ? data?.nav?.offset : undefined}
+          total={ids.includes(openId) ? data?.nav?.total : undefined}
           scope={scope}
           canManage={canManage}
           onGo={setOpenId}

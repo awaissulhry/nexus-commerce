@@ -14,6 +14,7 @@ import { Banner, Card, EmptyState, Field, Modal, useToast } from '@/design-syste
 import { NexusGrid, type ColDef, type GridApi, type ICellRendererParams } from '@/design-system/grid'
 import { BulkActionBar } from '@/design-system/patterns'
 import { Button, Input, Skeleton } from '@/design-system/primitives'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { reviewsSend } from '../../_lib/reviewsFetch'
 import { ReadFailed } from './ReadFailed'
 import {
@@ -122,6 +123,7 @@ export function UnsubscribeList({ read }: UnsubscribeListProps) {
     setConfirm(null)
     clear()
     await read?.reload()
+    emitInvalidation({ type: 'review.settings.changed' })
     toast(removedWords(res.data?.removed ?? 0, (res.data?.kept ?? 0) + confirm.kept), 'success')
   }, [confirm, clear, read, toast])
 
@@ -144,6 +146,7 @@ export function UnsubscribeList({ read }: UnsubscribeListProps) {
     setWhy('')
     setAddError(null)
     await read?.reload()
+    emitInvalidation({ type: 'review.settings.changed' })
     toast(res.data?.created === false ? 'This address was already on the list.' : 'Added to the unsubscribe list.', 'success')
   }, [email, why, read, toast])
 

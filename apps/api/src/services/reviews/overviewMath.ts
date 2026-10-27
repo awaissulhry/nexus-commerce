@@ -1,7 +1,7 @@
 /**
  * Reviews Overview — the pure arithmetic behind GET /api/reviews/area/overview (review-overview.service.ts): the dates a
  * period covers and the period before it, the chart's buckets, weighted averages, deltas, star spreads, eBay's share of
- * positive feedback, review rates, star impact and the "products to watch" ranking. No database, no clock of its own
+ * positive feedback, star impact and the "products to watch" ranking (the review rate is review-rate.service.ts). No database, no clock of its own
  * (every function takes `now`), so review-overview.vitest.test.ts checks every rule with plain numbers.
  */
 
@@ -26,7 +26,8 @@ export interface PeriodBounds {
 
 const DAY = 86_400_000
 
-function monthsBefore(date: Date, months: number): Date {
+/** The same day `months` calendar months earlier (the last day of a shorter month). */
+export function monthsBefore(date: Date, months: number): Date {
   const d = new Date(date.getTime())
   const day = d.getUTCDate()
   d.setUTCDate(1)
@@ -193,11 +194,6 @@ export function ratingIn(kind: RatingKind, ratings: ReadonlyArray<number | null 
   return avg == null ? null : round(avg, 2)
 }
 
-/** Reviews that followed a request, per request sent (0…1); nothing sent → null. */
-export function reviewRate(sent: number, followed: number): number | null {
-  return sent > 0 ? Math.min(1, followed / sent) : null
-}
-
 /** How far the average rating of the reviews that mention a theme sits from the overall average (stars). */
 export function starImpact(avgWithTheme: number | null, overall: number | null): number | null {
   return delta(avgWithTheme, overall, 1)
@@ -207,6 +203,20 @@ export function starImpact(avgWithTheme: number | null, overall: number | null):
 
 /** The fewest rated reviews in EACH period before a change counts: fewer and the change is noise. */
 export const WATCH_MIN_RATINGS = 3
+
+/**
+ * The ONE rule for "the rating dropped" (audit C8): the Overview's products to watch, Insights › Products' "Rating
+ * dropped" filter and the Settings line all use it. A drop of at least RATING_DROP_STARS stars (or RATING_DROP_POINTS
+ * points of eBay's % positive: 100 points = 5 stars), with at least WATCH_MIN_RATINGS ratings on each side.
+ */
+export const RATING_DROP_STARS = 0.3
+export const RATING_DROP_POINTS = RATING_DROP_STARS * 20
+
+/** Is `change` (now − before, in the measure's own unit) a drop? */
+export function isRatingDrop(change: number | null | undefined, kind: RatingKind): boolean {
+  if (change == null || !Number.isFinite(change)) return false
+  return kind === 'positive' ? change <= -RATING_DROP_POINTS + 1e-9 : change <= -RATING_DROP_STARS + 1e-9
+}
 
 export interface WatchCandidate {
   key: string
@@ -218,8 +228,8 @@ export interface WatchCandidate {
 }
 
 /**
- * The biggest rating drops first. Only real drops count (change < 0), and only with at least WATCH_MIN_RATINGS rated
- * reviews in both periods. A change in "% positive" points is put on the star scale (÷ 20: 100 points = 5 stars) only to
+ * The biggest rating drops first. Only drops by the one rule count (`isRatingDrop`: 0.3 stars or more), and only with
+ * at least WATCH_MIN_RATINGS rated reviews in both periods. A change in "% positive" points is put on the star scale (÷ 20: 100 points = 5 stars) only to
  * rank it beside star drops; each row keeps its own measure.
  */
 export function rankWatch<T extends WatchCandidate>(rows: readonly T[], limit = 5, minRatings = WATCH_MIN_RATINGS): Array<T & { change: number }> {
@@ -227,7 +237,7 @@ export function rankWatch<T extends WatchCandidate>(rows: readonly T[], limit = 
   for (const row of rows) {
     if (row.countNow < minRatings || row.countBefore < minRatings) continue
     const change = delta(row.ratingNow, row.ratingBefore, 1)
-    if (change == null || change >= 0) continue
+    if (change == null || !isRatingDrop(change, row.kind)) continue
     out.push({ ...row, change, score: row.kind === 'positive' ? change / 20 : change })
   }
   out.sort((a, b) => a.score - b.score || b.countNow - a.countNow || a.key.localeCompare(b.key))

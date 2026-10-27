@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   averageRating, bucketKey, bucketKeys, buyerShort, channelMarketLabel, delta, parseOverviewPeriod, periodBounds, periodOf,
-  positiveShare, quoteOf, rankWatch, ratingIn, ratingKindOf, reviewRate, sparkValues, sparkWindows, starCounts, starImpact,
+  positiveShare, quoteOf, rankWatch, ratingIn, ratingKindOf, sparkValues, sparkWindows, starCounts, starImpact,
   trendBucket, trendPoints, weightedAverage,
 } from './overviewMath.js'
 import { amazonThemes, reviewThemes, scopeCode, topThemes } from './review-overview.service.js'
@@ -95,11 +95,6 @@ describe('averages and changes', () => {
     expect(ratingIn('stars', [5, 4])).toBe(4.5)
   })
 
-  it('review rate is followed per sent; nothing sent has no rate', () => {
-    expect(reviewRate(200, 15)).toBe(0.075)
-    expect(reviewRate(0, 0)).toBeNull()
-  })
-
   it('star impact is the theme average against the overall average', () => {
     expect(starImpact(3.2, 4.4)).toBe(-1.2)
     expect(starImpact(null, 4.4)).toBeNull()
@@ -110,22 +105,23 @@ describe('products to watch', () => {
   const row = (key: string, before: number, now: number, kind: 'stars' | 'positive' = 'stars', countNow = 5, countBefore = 5) =>
     ({ key, ratingBefore: before, ratingNow: now, kind, countNow, countBefore })
 
-  it('ranks the biggest drop first and leaves out rises and thin samples', () => {
+  it('ranks the biggest drop first and leaves out rises, small drops and thin samples', () => {
     const ranked = rankWatch([
-      row('a', 4.4, 4.2),
+      row('a', 4.4, 4.1),
       row('b', 4.6, 3.9),
       row('c', 4.0, 4.5),
       row('d', 4.8, 3.0, 'stars', 2, 9), // too few now
+      row('e', 4.4, 4.2), // −0.2: below the one "rating dropped" rule (0.3 stars, audit C8)
     ])
     expect(ranked.map(r => r.key)).toEqual(['b', 'a'])
     expect(ranked[0].change).toBe(-0.7)
   })
 
-  it('puts % positive drops on the star scale only to rank them', () => {
-    // −4 points ≈ −0.2 stars; −0.3 stars ranks first.
-    const ranked = rankWatch([row('ebay', 99, 95, 'positive'), row('amazon', 4.5, 4.2)])
-    expect(ranked.map(r => r.key)).toEqual(['amazon', 'ebay'])
-    expect(ranked[1].change).toBe(-4)
+  it('puts % positive drops on the star scale only to rank them; a drop counts from 6 points (= 0.3 stars)', () => {
+    // −7 points ≈ −0.35 stars ranks before −0.3 stars; −4 points is not a drop.
+    const ranked = rankWatch([row('ebay', 99, 92, 'positive'), row('amazon', 4.5, 4.2), row('small', 99, 95, 'positive')])
+    expect(ranked.map(r => r.key)).toEqual(['ebay', 'amazon'])
+    expect(ranked[0].change).toBe(-7)
   })
 
   it('a sparkline with fewer than three readings is too few to trend', () => {
@@ -153,8 +149,8 @@ describe('words', () => {
 })
 
 describe('themes', () => {
-  const review = (id: string, label: string, categories: string[], rating: number, phrase = 'runs small') => ({
-    id, channel: 'EBAY', marketplace: 'IT', rating, postedAt: ago(Number(id)), productId: 'p', ingestSource: 'EBAY_API',
+  const review = (id: string, label: string, categories: string[], rating: number, phrase = 'runs small', channel = 'SHOPIFY') => ({
+    id, channel, marketplace: 'IT', rating, postedAt: ago(Number(id)), productId: 'p', ingestSource: 'SHOPIFY_APP', kind: null,
     sentiment: { label, categories, topPhrases: [phrase] },
   })
 
@@ -167,9 +163,15 @@ describe('themes', () => {
     ]
     const fix = reviewThemes(rows, 'NEGATIVE')
     const fit = fix.find(t => t.key === 'FIT_SIZING')!
-    expect(fit).toMatchObject({ label: 'Fit & sizing', share: 67, mentions: 2, source: 'review', quote: '“too small”', quoteFrom: 'eBay feedback · IT' })
+    expect(fit).toMatchObject({ label: 'Fit & sizing', share: 67, mentions: 2, source: 'review', quote: '“too small”', quoteFrom: 'Shopify review · IT' })
     expect(fit.impact).toBe(-1)
     expect(fix.some(t => t.key === 'OTHER')).toBe(false)
+  })
+
+  it('eBay feedback is % positive, never stars: its themes carry no star impact (the one rating, audit C3)', () => {
+    const rows = [review('1', 'NEGATIVE', ['FIT_SIZING'], 1, 'too small', 'EBAY'), review('4', 'POSITIVE', ['COMFORT'], 5, 'great', 'EBAY')]
+    const fit = reviewThemes(rows, 'NEGATIVE').find(t => t.key === 'FIT_SIZING')!
+    expect(fit).toMatchObject({ quoteFrom: 'eBay feedback · IT', impact: null })
   })
 
   it('merges Amazon topics over products; Amazon topics never come from the Netherlands rows passed in', () => {

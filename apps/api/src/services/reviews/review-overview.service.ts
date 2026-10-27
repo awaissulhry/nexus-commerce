@@ -5,19 +5,24 @@
  *
  * Sources (build spec §3.1): visible Review rows only (fixtures never count, review-visibility.ts); Amazon stars come
  * only from imported reviews, never a live Amazon number (ruling 5); Amazon themes are the Customer Feedback API topics
- * (AmazonReviewInsight, not on Amazon.nl); requests and the review rate are ReviewRequest rows with the reviews the
- * attribution job tied to them (the review-analytics heuristic, persisted on Review.attributedRequestId); alerts are
- * open ReviewSpike rows; channel state and setup problems come from review-sources.service.ts. The arithmetic is pure,
- * in overviewMath.ts.
+ * (AmazonReviewInsight, not on Amazon.nl); the rating is the ONE rating (review-rating.ts: stars from product reviews,
+ * Amazon's only from imported ones, eBay as % positive); the review rate is the ONE rate (review-rate.service.ts);
+ * "needs a reply" is the one rule (review-visibility.ts); alerts are open ReviewSpike rows, scoped to a channel by
+ * Insights › Alerts' own rule; channel state and setup problems come from review-sources.service.ts. The arithmetic is
+ * pure, in overviewMath.ts.
  */
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { countsInRating, needsReplyWhere, reviewKindOf, visibleReviewWhere } from './review-visibility.js'
+import { needsReplyWhere, reviewKindOf, visibleReviewWhere } from './review-visibility.js'
+import { countsAsStars, ratingInMeasure, ratingOf } from './review-rating.js'
+import { readRateFacts, readRateRequests, rateKey, rateOf, ratePercent } from './review-rate.service.js'
+import { openAlertIds } from './review-needs-you.service.js'
+import { statusWhere } from './review-queue.service.js'
 import { NO_TOPICS_MARKETS, reviewSources, type ReviewSource, type SetupProblem } from './review-sources.service.js'
 import {
   averageRating, bucketKeys, channelMarketLabel, channelWords, daysBetween, delta, parseOverviewPeriod, periodBounds,
-  periodOf, rankWatch, ratingIn, ratingKindOf, reviewRate, round, sparkValues, sparkWindows, starCounts, starImpact,
+  periodOf, rankWatch, ratingIn, ratingKindOf, round, sparkValues, sparkWindows, starCounts, starImpact,
   themeWords, trendBucket, trendPoints, type OverviewPeriod, type PeriodBounds, type RatingKind, type TrendBucket,
   type TrendPoint,
 } from './overviewMath.js'
@@ -27,16 +32,20 @@ export type Section<T> = { ok: true; data: T } | { ok: false; error: string }
 export interface OverviewTiles {
   avgRating: number | null
   avgDelta: number | null
+  /** Where the rating's stars come from, in words (review-rating.ts): "12 reviews · Amazon: from imported reviews". */
+  ratingWords: string
   newReviews: number
   newDelta: number | null
   needReply: number
   oldestWaitDays: number | null
   requestsSent: number
   requestsFailed: number
-  /** Percent, one decimal. */
+  /** Percent, one decimal; null when nothing measurable was sent (`rateWords` says why). */
   reviewRate: number | null
   /** Percentage points against the period before. */
   rateDelta: number | null
+  /** Why the rate leaves requests out or has none, in words; null when every sent request counts. */
+  rateWords: string | null
   openAlerts: number
   newAlertsToday: number
 }
@@ -61,8 +70,10 @@ export interface OverviewChannelRow {
   change: number | null
   /** Requests sent; null where Nexus sends none. */
   sent: number | null
-  /** Percent, one decimal. */
+  /** Percent, one decimal; null when nothing measurable was sent. */
   rate: number | null
+  /** Why there is no rate ("Not measurable: …"), or why it leaves requests out; null otherwise. */
+  rateWords: string | null
   lastReviewAt: string | null
   state: 'ok' | 'not_updating'
   reason: string | null
@@ -198,7 +209,7 @@ function quoted(text: string): string {
 
 /** Review themes from the sentiment of the period's reviews, as a share of the positive (or negative) reviews. */
 export function reviewThemes(rows: readonly ReviewRow[], polarity: 'POSITIVE' | 'NEGATIVE'): OverviewTheme[] {
-  const overall = averageRating(rows.map(r => r.rating))
+  const overall = averageRating(rows.filter(countsAsStars).map(r => r.rating))
   const pool = rows.filter(r => r.sentiment?.label === polarity)
   const byTheme = new Map<string, { mentions: number; latest: ReviewRow | null }>()
   for (const r of pool) {
@@ -223,7 +234,7 @@ export function reviewThemes(rows: readonly ReviewRow[], polarity: 'POSITIVE' | 
       quoteFrom: slot.latest ? quoteSource(slot.latest) : null,
       // Translations arrive with the Inbox (PR B); until then the quote stands in its own language.
       english: null,
-      impact: starImpact(averageRating(withTheme.map(r => r.rating)), overall),
+      impact: starImpact(averageRating(withTheme.filter(countsAsStars).map(r => r.rating)), overall),
       market: null,
     }
   })
@@ -311,56 +322,51 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
     const rows = await reviews()
     return { now: rows.filter(r => periodOf(r.postedAt, bounds) === 'now'), prev: rows.filter(r => periodOf(r.postedAt, bounds) === 'prev'), all: rows }
   })
-  const requests = once(async () => prisma.reviewRequest.findMany({
-    where: { ...requestScope, status: 'SENT', sentAt: { ...(readFrom ? { gte: readFrom } : {}), lte: bounds.to } },
-    select: { channel: true, marketplace: true, sentAt: true, _count: { select: { attributedReviews: { where: visibleReviewWhere() } } } },
-  }))
+  // The ONE review rate (review-rate.service.ts): sent requests of the period and the one before, and where a review
+  // can follow a request at all (a request where none can is "not measurable", never a 0 %).
+  const requests = once(async () => readRateRequests({ from: readFrom, to: bounds.to, channel, market }))
+  const rateFacts = once(() => readRateFacts())
   const requestSplit = once(async () => {
     const rows = await requests()
     const tag = (at: Date | null) => (at ? periodOf(at, bounds) : null)
     return { now: rows.filter(r => tag(r.sentAt) === 'now'), prev: rows.filter(r => tag(r.sentAt) === 'prev') }
   })
   const sources = once(() => reviewSources(now))
-  // Where reviews can arrive at all (any visible review, any time): a request sent where no review ever arrives — Amazon
-  // before a person imports reviews — cannot be matched, so it has no rate rather than a rate of 0.
-  const reviewedKeys = once(async () => {
-    const groups = await prisma.review.groupBy({ by: ['channel', 'marketplace'], where: visibleReviewWhere(scope) })
-    return new Set(groups.map(g => rowKey(g.channel, g.marketplace)))
-  })
-
   const [tiles, trend, spread, channels, themes, watch, setup] = await Promise.all([
     section('tiles', async (): Promise<OverviewTiles> => {
-      const [{ now: rowsNow, prev: rowsPrev }, reqs, needReply, oldest, failed, openAlerts, newAlertsToday] = await Promise.all([
+      const alertIds = channel ? await openAlertIds(channel, market) : null
+      const alertScope = { ...(market ? { marketplace: market } : {}), ...(alertIds ? { id: { in: alertIds } } : {}) }
+      const [{ now: rowsNow, prev: rowsPrev }, reqs, facts, needReply, oldest, failed, openAlerts, newAlertsToday] = await Promise.all([
         split(),
-        requestSplit().then(async r => {
-          const keys = await reviewedKeys()
-          const matchable = (rows: typeof r.now) => rows.filter(x => keys.has(rowKey(x.channel, x.marketplace)))
-          return { now: matchable(r.now), prev: matchable(r.prev), sentNow: r.now.length }
-        }),
-        prisma.review.count({ where: { AND: [needsReplyWhere(), scope] } }),
-        prisma.review.findFirst({ where: { AND: [needsReplyWhere(), scope] }, orderBy: { postedAt: 'asc' }, select: { postedAt: true } }),
-        prisma.reviewRequest.count({ where: { ...requestScope, status: 'FAILED', updatedAt: { ...(bounds.from ? { gte: bounds.from } : {}), lte: bounds.to } } }),
-        prisma.reviewSpike.count({ where: { status: 'OPEN', ...(market ? { marketplace: market } : {}) } }),
-        prisma.reviewSpike.count({ where: { status: 'OPEN', detectedAt: { gte: startOfUtcDay(now) }, ...(market ? { marketplace: market } : {}) } }),
+        requestSplit(),
+        rateFacts(),
+        prisma.review.count({ where: { AND: [needsReplyWhere(now), scope] } }),
+        prisma.review.findFirst({ where: { AND: [needsReplyWhere(now), scope] }, orderBy: { postedAt: 'asc' }, select: { postedAt: true } }),
+        // Failed = no try left, as the Requests page's Failed filter shows them (audit A6).
+        prisma.reviewRequest.count({ where: { AND: [statusWhere('FAILED', now) as Prisma.ReviewRequestWhereInput, requestScope, { updatedAt: { ...(bounds.from ? { gte: bounds.from } : {}), lte: bounds.to } }] } }),
+        prisma.reviewSpike.count({ where: { status: 'OPEN', ...alertScope } }),
+        prisma.reviewSpike.count({ where: { status: 'OPEN', detectedAt: { gte: startOfUtcDay(now) }, ...alertScope } }),
       ])
       const hasPrev = bounds.prevFrom != null
-      // Amazon's 1–3 star seller feedback is counted, never averaged (review-visibility.ts `countsInRating`).
-      const avgNow = averageRating(rowsNow.filter(countsInRating).map(r => r.rating))
-      const avgPrev = hasPrev ? averageRating(rowsPrev.filter(countsInRating).map(r => r.rating)) : null
-      const followed = (rows: Array<{ _count: { attributedReviews: number } }>) => rows.filter(r => r._count.attributedReviews > 0).length
-      const rateNow = reviewRate(reqs.now.length, followed(reqs.now))
-      const ratePrev = hasPrev ? reviewRate(reqs.prev.length, followed(reqs.prev)) : null
+      // The ONE rating (review-rating.ts): stars of product reviews, Amazon's only from imported reviews.
+      const ratingNow = ratingOf(rowsNow)
+      const avgNow = ratingNow.stars
+      const avgPrev = hasPrev ? ratingOf(rowsPrev).stars : null
+      const rateNow = rateOf(reqs.now, facts)
+      const ratePrev = hasPrev ? rateOf(reqs.prev, facts) : null
       return {
         avgRating: avgNow == null ? null : round(avgNow, 1),
         avgDelta: delta(avgNow, avgPrev, 1),
+        ratingWords: ratingNow.starsSource,
         newReviews: rowsNow.length,
         newDelta: hasPrev ? rowsNow.length - rowsPrev.length : null,
         needReply,
         oldestWaitDays: oldest ? daysBetween(oldest.postedAt, now) : null,
-        requestsSent: reqs.sentNow,
+        requestsSent: reqs.now.length,
         requestsFailed: failed,
-        reviewRate: rateNow == null ? null : round(rateNow * 100, 1),
-        rateDelta: rateNow == null || ratePrev == null ? null : round((rateNow - ratePrev) * 100, 1),
+        reviewRate: ratePercent(rateNow),
+        rateDelta: rateNow.rate == null || ratePrev?.rate == null ? null : round((rateNow.rate - ratePrev.rate) * 100, 1),
+        rateWords: rateNow.words,
         openAlerts,
         newAlertsToday,
       }
@@ -371,22 +377,30 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
       const bucket = trendBucket(period)
       const earliest = rowsNow.length ? rowsNow[rowsNow.length - 1].postedAt : new Date(now.getTime() - 30 * 86_400_000)
       const from = bounds.from ?? earliest
-      return { bucket, points: trendPoints(rowsNow.filter(countsInRating), bucketKeys(from, bounds.to, bucket), bucket) }
+      return { bucket, points: trendPoints(rowsNow.filter(countsAsStars), bucketKeys(from, bounds.to, bucket), bucket) }
     }),
 
     section('spread', async (): Promise<OverviewSpread> => {
       const { now: rowsNow } = await split()
-      const unrated = rowsNow.filter(r => r.rating == null).length
+      // The spread counts the stars the rating counts (review-rating.ts); seller feedback and Amazon reviews not
+      // imported are counted above it, not spread.
+      const starRows = rowsNow.filter(countsAsStars)
+      const unrated = starRows.filter(r => r.rating == null).length
+      const notStars = rowsNow.length - starRows.length
+      const notes = [
+        unrated > 0 ? `${unrated.toLocaleString('en')} ${unrated === 1 ? 'review has' : 'reviews have'} no star rating.` : null,
+        notStars > 0 ? `${notStars.toLocaleString('en')} seller feedback or Amazon ${notStars === 1 ? 'review' : 'reviews'} not imported ${notStars === 1 ? 'is' : 'are'} counted, not spread.` : null,
+      ].filter(Boolean)
       return {
-        counts: starCounts(rowsNow.filter(countsInRating).map(r => r.rating)),
+        counts: starCounts(starRows.map(r => r.rating)),
         product: rowsNow.filter(r => reviewKindOf(r.channel, r.kind) === 'product').length,
         seller: rowsNow.filter(r => reviewKindOf(r.channel, r.kind) === 'seller').length,
-        note: unrated > 0 ? `${unrated.toLocaleString('en')} ${unrated === 1 ? 'review has' : 'reviews have'} no star rating, so ${unrated === 1 ? 'it is' : 'they are'} not in the spread.` : null,
+        note: notes.length ? notes.join(' ') : null,
       }
     }),
 
     section('channels', async (): Promise<OverviewChannelRow[]> => {
-      const [{ now: rowsNow, prev: rowsPrev }, reqs, { sources: known }, reviewed] = await Promise.all([split(), requestSplit(), sources(), reviewedKeys()])
+      const [{ now: rowsNow, prev: rowsPrev }, reqs, { sources: known }, facts] = await Promise.all([split(), requestSplit(), sources(), rateFacts()])
       const keys = new Map<string, { channel: string; market: string | null }>()
       const add = (c: string, m: string | null) => {
         const ch = c.toUpperCase()
@@ -405,9 +419,9 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
         const mine = rowsNow.filter(r => rowKey(r.channel, r.marketplace) === k)
         const before = rowsPrev.filter(r => rowKey(r.channel, r.marketplace) === k)
         const kind = ratingKindOf(ch)
-        const rating = ratingIn(kind, mine.filter(countsInRating).map(r => r.rating))
-        const sent = reqs.now.filter(r => rowKey(r.channel, r.marketplace) === k)
-        const rate = reviewed.has(k) ? reviewRate(sent.length, sent.filter(r => r._count.attributedReviews > 0).length) : null
+        const rating = ratingInMeasure(mine, kind)
+        const sent = reqs.now.filter(r => rateKey(r.channel, r.marketplace) === k)
+        const rate = rateOf(sent, facts)
         const src = sourceOf.get(k)
         const newestHere = mine.reduce<Date | null>((best, r) => (!best || r.postedAt > best ? r.postedAt : best), null)
         return {
@@ -417,10 +431,11 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
           ratingKind: kind,
           rating,
           reviews: mine.length,
-          change: hasPrev ? delta(rating, ratingIn(kind, before.filter(countsInRating).map(r => r.rating)), 1) : null,
+          change: hasPrev ? delta(rating, ratingInMeasure(before, kind), 1) : null,
           // Etsy asks its buyers itself: Nexus sends no requests there.
           sent: ch === 'ETSY' ? null : sent.length,
-          rate: ch === 'ETSY' || rate == null ? null : round(rate * 100, 1),
+          rate: ch === 'ETSY' ? null : ratePercent(rate),
+          rateWords: ch === 'ETSY' ? null : rate.words,
           lastReviewAt: src?.lastReviewAt ?? newestHere?.toISOString() ?? null,
           state: src?.state ?? 'ok',
           reason: src?.reason ?? null,
@@ -458,7 +473,8 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
       type Group = { key: string; productId: string; channel: string; market: string | null; now: ReviewRow[]; before: ReviewRow[] }
       const groups = new Map<string, Group>()
       const put = (r: ReviewRow, side: 'now' | 'before') => {
-        if (!r.productId || r.rating == null) return
+        // The rating's own rows (review-rating.ts): stars of product reviews, Amazon's only imported.
+        if (!r.productId || r.rating == null || !countsAsStars(r)) return
         const k = `${r.productId}|${rowKey(r.channel, r.marketplace)}`
         const g = groups.get(k) ?? { key: k, productId: r.productId, channel: r.channel.toUpperCase(), market: r.marketplace?.toUpperCase() ?? null, now: [], before: [] }
         g[side].push(r)
@@ -481,7 +497,7 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
           for (const cat of r.sentiment?.categories ?? []) if (!NOT_A_THEME.has(cat)) complaints.set(cat, (complaints.get(cat) ?? 0) + 1)
         }
         const top = [...complaints.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
-        const sparkRows = all.filter(r => r.productId === g.productId && rowKey(r.channel, r.marketplace) === rowKey(g.channel, g.market))
+        const sparkRows = all.filter(r => r.productId === g.productId && countsAsStars(r) && rowKey(r.channel, r.marketplace) === rowKey(g.channel, g.market))
         const spark = sparkValues(g.kind, sparkRows, windows)
         const product = productOf.get(g.productId)
         return {

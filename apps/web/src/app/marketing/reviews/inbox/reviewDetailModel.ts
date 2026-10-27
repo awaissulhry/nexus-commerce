@@ -61,8 +61,10 @@ export interface InboxDetail {
   }[]
   timeline: { at: string; words: string }[]
   reply: ReplyRules
-  /** PR G — the buyer's photos (or videos), in order. */
+  /** PR G — the buyer's photos (or videos), in order: eBay's, Etsy's one photo and Judge.me's (PR I). */
   media?: { url: string; type: string; width: number | null; height: number | null; position: number }[]
+  /** PR I — the review app that holds a video Nexus cannot show (Judge.me gives no video URL); null when none. */
+  videoIn?: string | null
   /** PR G — eBay's AI topics with the buyer's words eBay found; null when eBay's topics were not read. */
   aiTopics?: { topic: string; label: string; sentiment: string | null; texts: string[] }[] | null
   /** PR G — eBay's revision state of this feedback, in words; null when there is nothing to say. */
@@ -193,13 +195,25 @@ export interface ComposerView {
 
 const CHANNEL_NAME: Record<string, string> = { EBAY: 'eBay', AMAZON: 'Amazon', ETSY: 'Etsy', SHOPIFY: 'your store' }
 
+/** Where a reply goes: the channel, or — a Shopify review read from Judge.me — Judge.me, which posts it (PR I). */
+export function replyPlace(channel: string, mode: 'send' | 'copy' | 'mark'): string {
+  const c = channel.toUpperCase()
+  if (c === 'SHOPIFY' && mode === 'send') return 'Judge.me'
+  return CHANNEL_NAME[c] ?? 'the channel'
+}
+
+/** The reply box's title: "Reply on eBay", "Reply on Judge.me" when Nexus posts it; "Reply" when a person does. */
+export function replyTitle(rules: { channel: string; mode: 'send' | 'copy' }): string {
+  return rules.mode === 'send' ? `Reply on ${replyPlace(rules.channel, 'send')}` : 'Reply'
+}
+
 /** The reply box for this review: what the channel allows, what is held and why, what was sent. */
 export function composerView(d: InboxDetail, ctx: { canManage: boolean }, timeZone?: string): ComposerView {
   const rules = d.reply
   const sent = [...d.responses].reverse().find((r) => r.status === 'SENT') ?? null
   const failed = [...d.responses].reverse().find((r) => r.status === 'FAILED') ?? null
   const refused = failed && (!sent || failed.createdAt > sent.createdAt) ? failed.failedWords : null
-  const where = CHANNEL_NAME[rules.channel] ?? 'the channel'
+  const where = replyPlace(rules.channel, rules.mode)
   const held = !ctx.canManage ? MANAGE_REPLY : rules.held
   return {
     limit: rules.limit,
@@ -214,7 +228,8 @@ export function composerView(d: InboxDetail, ctx: { canManage: boolean }, timeZo
       ? {
           at: `${rules.mode === 'send' ? 'Sent' : 'Marked'} ${dateTimeWords(sent.sentAt ?? sent.createdAt, timeZone)}`,
           text: sent.body,
-          note: rules.mode === 'send' ? `· public on ${where} · cannot be undone or edited` : '· marked as responded in Nexus',
+          note: rules.mode !== 'send' ? '· marked as responded in Nexus'
+            : where === 'Judge.me' ? '· public under the review on the store · change it in Judge.me' : `· public on ${where} · cannot be undone or edited`,
         }
       : null,
     refused,
@@ -235,7 +250,7 @@ export function draftResponseId(d: InboxDetail): string | null {
 
 /** The toast after a send or a mark. */
 export function replyDoneWords(mode: 'send' | 'mark', channel: string): string {
-  const where = CHANNEL_NAME[channel.toUpperCase()] ?? 'the channel'
+  const where = replyPlace(channel, mode)
   return mode === 'send' ? `Reply sent to ${where}. The review is Responded.` : 'Marked as responded. The review is Responded.'
 }
 
@@ -280,10 +295,22 @@ export function sameThemeLink(d: InboxDetail): { label: string; href: string } |
   return { label, href: inboxPageHref({ themes: [theme], period: 'all' }) }
 }
 
+/**
+ * Whether this review can wait for a reply at all — the API's one needs-a-reply rule (review-visibility.ts): never a
+ * review no one can answer (an Amazon product review, an Etsy review past its window), never an imported one.
+ */
+export function takesReply(d: Pick<InboxDetail, 'review' | 'reply'>): boolean {
+  if (d.review.imported) return false
+  return d.reply.heldCode !== 'no_reply' && d.reply.heldCode !== 'window_closed'
+}
+
 /** "Reply target: 28 Oct" while the review is open; "Replied" once a reply went out. */
 export function replyTargetWords(d: InboxDetail, now: number, timeZone?: string): string {
   if (d.responses.some((r) => r.status === 'SENT')) return 'Replied'
   if (!['NEW', 'IN_PROGRESS'].includes(d.review.status)) return 'No reply needed'
+  // Never "Overdue" where the badges and the Overdue tile do not count it (one rule, audit B3).
+  if (d.review.imported) return 'Imported from a file: no reply target'
+  if (!takesReply(d)) return 'No reply target: nobody can answer it'
   const due = reviewDueAt(d.review.postedAt)
   const day = due.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone })
   return due.getTime() < now ? `Overdue since ${day}` : `Reply target: ${day}`
@@ -356,7 +383,7 @@ function stepTone(words: string): Tone {
 /** Everything that happened, oldest first; "Replied — not yet" closes it while the review waits for a reply. */
 export function historySteps(d: InboxDetail): StepView[] {
   const steps: StepView[] = d.timeline.map((t, i) => ({ key: `${i}:${t.at}`, label: t.words, tone: stepTone(t.words), at: t.at }))
-  const waiting = !d.responses.some((r) => r.status === 'SENT') && ['NEW', 'IN_PROGRESS'].includes(d.review.status)
+  const waiting = !d.responses.some((r) => r.status === 'SENT') && ['NEW', 'IN_PROGRESS'].includes(d.review.status) && takesReply(d)
   if (waiting) steps.push({ key: 'reply', label: 'Replied', tone: 'neutral', at: null })
   return steps
 }
@@ -369,8 +396,21 @@ export function recentSteps(d: InboxDetail, n = 4): StepView[] {
 
 // ── Photos, eBay's topics, revision (PR G) ───────────────────────────
 
-/** Channels whose buyers' photos Nexus reads (eBay's REST feedback read). Others still show the Coming-later sample. */
-export const PHOTO_CHANNELS: readonly string[] = ['EBAY']
+/**
+ * Channels whose buyers' photos Nexus reads: eBay (the REST feedback read, PR G), Etsy's one photo and the store's review
+ * app, Judge.me (PR I). Others still show the Coming-later sample.
+ */
+export const PHOTO_CHANNELS: readonly string[] = ['EBAY', 'ETSY', 'SHOPIFY']
+
+/** Where the photos live (Nexus shows them from there), per channel. */
+const PHOTOS_HOME: Record<string, string> = { EBAY: 'eBay', ETSY: 'Etsy', SHOPIFY: 'Judge.me' }
+
+/** "No photos" in words, per channel. */
+const NO_PHOTOS: Record<string, string> = {
+  EBAY: 'No photos with this feedback. eBay buyers can add up to 5.',
+  ETSY: 'No photo with this review. Etsy buyers can add one.',
+  SHOPIFY: 'No photos with this review.',
+}
 
 /** The buyer's photos as the DS Lightbox takes them: in order, each named "Photo 2 of 3 from <buyer>". */
 export function reviewPhotos(detail: Pick<InboxDetail, 'media' | 'review'>): LightboxItem[] {
@@ -379,17 +419,26 @@ export function reviewPhotos(detail: Pick<InboxDetail, 'media' | 'review'>): Lig
 }
 
 export type PhotosView =
-  | { kind: 'photos'; count: string; items: LightboxItem[] }
+  | { kind: 'photos'; count: string; items: LightboxItem[]; hint: string }
   | { kind: 'none'; words: string }
   /** ⛔ KEEP — the labelled sample (build spec ruling 3) for channels whose photos Nexus does not read yet. */
   | { kind: 'later' }
 
 /** What the pop-up's "Photos from the buyer" card shows. */
-export function photosView(detail: Pick<InboxDetail, 'media' | 'review'>): PhotosView {
+export function photosView(detail: Pick<InboxDetail, 'media' | 'review' | 'videoIn'>): PhotosView {
   const items = reviewPhotos(detail)
-  if (items.length > 0) return { kind: 'photos', count: plural(items.length, 'photo', 'photos'), items }
-  if (PHOTO_CHANNELS.includes(detail.review.channel.toUpperCase())) {
-    return { kind: 'none', words: detail.review.imported ? 'This feedback came from a file: its photos are not in Nexus.' : 'No photos with this feedback. eBay buyers can add up to 5.' }
+  const channel = detail.review.channel.toUpperCase()
+  // A video Nexus cannot show (Judge.me gives no video URL): said, never hidden.
+  const video = (also: boolean) =>
+    detail.videoIn ? ` The buyer ${also ? 'also ' : ''}added a video: watch it in ${detail.videoIn} (it does not share videos with Nexus).` : ''
+  if (items.length > 0) {
+    const home = PHOTOS_HOME[channel]
+    const where = home ? ` ${home} keeps the photos; Nexus shows them from ${home}.` : ''
+    return { kind: 'photos', count: plural(items.length, 'photo', 'photos'), items, hint: `Press a photo to see it large.${where}${video(true)}` }
+  }
+  if (PHOTO_CHANNELS.includes(channel)) {
+    const what = detail.review.kind === 'seller' ? 'feedback' : 'review'
+    return { kind: 'none', words: detail.review.imported ? `This ${what} came from a file: its photos are not in Nexus.` : `${NO_PHOTOS[channel]}${video(false)}` }
   }
   return { kind: 'later' }
 }

@@ -3,7 +3,7 @@
  * the bulk plan are pure (review-inbox-query.ts); this file runs the reads and writes. Every Review read goes through
  * `inboxWhere` → `visibleReviewWhere`, so fixture rows never show or count.
  */
-import { isReviewOverdue, reviewDueAt, isReviewOpen } from '@nexus/shared/review-reply-rules'
+import { reviewDueAt } from '@nexus/shared/review-reply-rules'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import {
@@ -17,7 +17,7 @@ import {
   type InboxBulkRow,
   type InboxQuery,
 } from './review-inbox-query.js'
-import { reviewKindOf, visibleReviewWhere, type ReviewKind } from './review-visibility.js'
+import { needsReplyWhere, reviewKindOf, reviewNeedsReply, reviewOverdue, visibleReviewWhere, type ReviewKind } from './review-visibility.js'
 import { REVIEW_CATEGORIES } from './sentiment-extraction.service.js'
 import { reviewSources, type ReviewSource } from './review-sources.service.js'
 import { applyBulkTriage } from './review-triage.service.js'
@@ -74,6 +74,8 @@ export interface InboxPage {
   statusCounts: { NEW: number; IN_PROGRESS: number; RESPONDED: number; RESOLVED: number; IGNORED: number; OVERDUE: number }
   facets: { owners: string[]; themes: string[]; families: { id: string; label: string }[] }
   readState: InboxReadState[]
+  /** The reviews that need a reply, all time, every channel — the badges' number (review-visibility.ts). */
+  needsReply: number
 }
 
 const SNIPPET = 200
@@ -101,7 +103,7 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
   const q: InboxQuery = parseInboxQuery(rawQuery)
   const where = inboxWhere(q, now)
 
-  const [items, total, tabCounts, statusCounts, facets, readState] = await Promise.all([
+  const [items, total, tabCounts, statusCounts, facets, readState, needsReply] = await Promise.all([
     prisma.review.findMany({
       where,
       orderBy: inboxOrderBy(q),
@@ -110,7 +112,7 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
       select: {
         id: true, postedAt: true, channel: true, marketplace: true, rating: true, title: true, body: true,
         bodyEnglish: true, language: true, authorName: true, orderId: true, ingestSource: true, kind: true,
-        triageStatus: true, assignee: true, channelTopics: true,
+        triageStatus: true, assignee: true, channelTopics: true, channelEditedAt: true,
         _count: { select: { media: true } },
         sentiment: { select: { label: true, categories: true } },
         product: { select: { id: true, name: true, sku: true, parentId: true, variantAttributes: true } },
@@ -121,6 +123,7 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
     inboxStatusCounts(q, now),
     inboxFacets(),
     inboxReadState(now),
+    prisma.review.count({ where: needsReplyWhere(now) }),
   ])
 
   const ids = items.map((r) => r.id)
@@ -164,8 +167,9 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
       themes: r.sentiment?.categories ?? [],
       status,
       assignee: r.assignee,
-      dueAt: isReviewOpen(r.triageStatus) ? reviewDueAt(r.postedAt).toISOString() : null,
-      overdue: isReviewOverdue({ status: r.triageStatus, postedAt: r.postedAt }, now),
+      // Due and overdue only for a review that needs a reply (answerable, not imported: review-visibility.ts).
+      dueAt: reviewNeedsReply(r, now) ? reviewDueAt(r.postedAt).toISOString() : null,
+      overdue: reviewOverdue(r, now),
       imported: isImportedSource(r.ingestSource),
       responses: responses.get(r.id) ?? { sent: 0, draft: 0 },
       photos: r._count.media,
@@ -173,7 +177,7 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
     }
   })
 
-  return { rows, total, page: q.page, pageSize: q.pageSize, tabCounts, statusCounts, facets, readState }
+  return { rows, total, page: q.page, pageSize: q.pageSize, tabCounts, statusCounts, facets, readState, needsReply }
 }
 
 /** Each tab counts what it would show with every other filter kept. */

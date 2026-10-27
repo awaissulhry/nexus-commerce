@@ -6,6 +6,7 @@
  * (review-queue.service.ts `rulesBulkPlan`). Pure; tested in rulesModel.vitest.test.ts.
  */
 import { COUNTRY_NAMES } from '@/app/_shared/app-nav'
+import { EBAY_NOT_EMAILED } from '../../../_lib/reviewWords'
 
 export interface RuleItem {
   id: string
@@ -30,8 +31,10 @@ export interface RuleItem {
   updatedAt?: string
   /** `?withStats=1`: requests sent in 30 days. */
   sent30?: number
-  /** Their review rate (0..1, an estimate); null when none was sent. */
+  /** Their review rate (0..1, the one review rate); null when nothing measurable was sent. */
   rate30?: number | null
+  /** Why the rate leaves requests out or has none ("Not measurable: …"), in words. */
+  rateWords?: string | null
   /** Orders the rule decided in 30 days. */
   matched30?: number
 }
@@ -40,10 +43,12 @@ export interface RulesAnswer {
   items: RuleItem[]
   /** Set when the 30-day numbers could not be read (the rules still are). */
   statsError?: string | null
+  /** Every request a rule sent in 30 days, as ONE rate (the API's review rate, never an average of the rules' rates). */
+  statsAll?: { sent30: number; rate30: number | null; rateWords: string | null } | null
 }
 
-/** The channels Nexus asks buyers on. Etsy asks its buyers itself. */
-export const ASKED_SCOPES = ['AMAZON_PER_MARKETPLACE', 'AMAZON_GLOBAL', 'EBAY', 'SHOPIFY'] as const
+/** The channels Nexus asks buyers on. Etsy and eBay ask their buyers themselves (eBay: Owner, 2026-10-27). */
+export const ASKED_SCOPES = ['AMAZON_PER_MARKETPLACE', 'AMAZON_GLOBAL', 'SHOPIFY'] as const
 
 const SCOPE_CHANNEL: Record<string, string> = {
   AMAZON_PER_MARKETPLACE: 'Amazon',
@@ -128,20 +133,23 @@ export function duplicateHeld(rule: Pick<RuleItem, 'name'>, rules: readonly Pick
 export function turnOnHeld(rule: Pick<RuleItem, 'name' | 'scope' | 'marketplace' | 'isActive'>): string | null {
   if (rule.isActive) return `“${rule.name}” is already on`
   if (isBroken(rule)) return `“${rule.name}” matches no orders: it has no market. Open it and pick one.`
-  if (!(ASKED_SCOPES as readonly string[]).includes(rule.scope)) return `“${rule.name}” matches no orders: Nexus asks only Amazon, eBay and Shopify buyers.`
+  if (rule.scope === 'EBAY') return `“${rule.name}” asks nobody: ${EBAY_NOT_EMAILED}`
+  if (!(ASKED_SCOPES as readonly string[]).includes(rule.scope)) return `“${rule.name}” matches no orders: Nexus asks only Amazon and Shopify buyers.`
   return null
 }
 
 export interface RuleWarning { id: string; title: string; detail: string }
 
-/** A warning per rule that matches no orders (no market, a channel Nexus does not ask, or none in 30 days). */
+/** A warning per rule that matches no orders (no market, a channel Nexus does not ask, or none in 30 days); every eBay rule. */
 export function noMatchWarnings(rules: readonly RuleItem[], statsRead: boolean): RuleWarning[] {
   const out: RuleWarning[] = []
   for (const r of rules) {
-    if (isBroken(r)) {
+    if (r.scope === 'EBAY') {
+      out.push({ id: r.id, title: `“${r.name}” is for eBay — eBay buyers are not e-mailed`, detail: `${EBAY_NOT_EMAILED} ${r.isActive ? 'Turn it off or delete it.' : 'Delete it, or keep it off.'}` })
+    } else if (isBroken(r)) {
       out.push({ id: r.id, title: `“${r.name}” has no market set — it matches no orders`, detail: 'Pick its market, or delete it if a rule for all markets already covers that market.' })
     } else if (r.isActive && !(ASKED_SCOPES as readonly string[]).includes(r.scope)) {
-      out.push({ id: r.id, title: `“${r.name}” is for ${channelWords(r)} — it matches no orders`, detail: 'Nexus asks only Amazon, eBay and Shopify buyers. Turn it off or delete it.' })
+      out.push({ id: r.id, title: `“${r.name}” is for ${channelWords(r)} — it matches no orders`, detail: 'Nexus asks only Amazon and Shopify buyers. Turn it off or delete it.' })
     } else if (r.isActive && statsRead && r.matched30 === 0) {
       out.push({ id: r.id, title: `“${r.name}” matched no orders in the last 30 days`, detail: 'Check its channel, market, product types and skips — or whether another rule wins its orders.' })
     }
@@ -149,21 +157,19 @@ export function noMatchWarnings(rules: readonly RuleItem[], statsRead: boolean):
   return out
 }
 
-export interface RulesTiles { on: number; total: number; sent30: number | null; matched30: number | null; rate30: number | null }
+export interface RulesTiles { on: number; total: number; sent30: number | null; matched30: number | null; rate30: number | null; rateWords: string | null }
 
-/** Rules on, and the 30-day numbers summed (the rate weighted by requests sent). */
-export function rulesTiles(rules: readonly RuleItem[], statsRead: boolean): RulesTiles {
+/** Rules on, the 30-day numbers summed, and the rules' review rate as the API counts it (`all`). */
+export function rulesTiles(rules: readonly RuleItem[], statsRead: boolean, all: RulesAnswer['statsAll'] = null): RulesTiles {
   const on = rules.filter((r) => r.isActive).length
-  if (!statsRead) return { on, total: rules.length, sent30: null, matched30: null, rate30: null }
+  if (!statsRead) return { on, total: rules.length, sent30: null, matched30: null, rate30: null, rateWords: null }
   let sent = 0
-  let reviewed = 0
   let matched = 0
   for (const r of rules) {
     sent += r.sent30 ?? 0
     matched += r.matched30 ?? 0
-    if (r.rate30 != null) reviewed += r.rate30 * (r.sent30 ?? 0)
   }
-  return { on, total: rules.length, sent30: sent, matched30: matched, rate30: sent > 0 ? reviewed / sent : null }
+  return { on, total: rules.length, sent30: sent, matched30: matched, rate30: all?.rate30 ?? null, rateWords: all?.rateWords ?? null }
 }
 
 export type RulesBulkAction = 'on' | 'off' | 'delete' | 'test' | 'export'

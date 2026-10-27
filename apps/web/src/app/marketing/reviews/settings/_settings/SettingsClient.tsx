@@ -17,6 +17,7 @@ import { ToastProvider, useToast } from '@/design-system/components'
 import { Builder, EditModeBar, PageHeader, type BuilderSection } from '@/design-system/patterns'
 import { Tag } from '@/design-system/primitives'
 import { useAuth } from '@/lib/auth/AuthProvider'
+import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { usePathname } from '@/lib/workspaces/navigation'
 import { reviewsSend } from '../../_lib/reviewsFetch'
 import { reviewsCrumbs } from '../../_shell/reviews-crumbs'
@@ -65,6 +66,14 @@ function SettingsInner() {
   const templates = useSettingsRead<{ items: ReplyTemplateRow[] }>('/reviews/reply-templates')
   const automations = useSettingsRead<{ items: AutomationRule[] }>('/reviews/automation-rules')
   const suppressions = useSettingsRead<{ rows: SuppressionRow[] }>('/email/suppressions', canPrivacy)
+  // Another tab saved a setting, a template, an automation or the unsubscribe list: read them again; this tab's
+  // unsaved edits stay (the draft is kept on a fresh read).
+  useInvalidationChannel('review.settings.changed', () => {
+    void settings.reload()
+    void templates.reload()
+    void automations.reload()
+    if (canPrivacy) void suppressions.reload()
+  })
 
   // ── The draft: brand voice + alerts ──
   const [saved, setSaved] = useState<SettingsForm | null>(null)
@@ -94,6 +103,8 @@ function SettingsInner() {
     const form = formFromSettings(res.data)
     setSaved(form)
     setDraft(form)
+    // Other tabs (an open Inbox reply box, another Settings tab) read the saved settings again (audit A8).
+    emitInvalidation({ type: 'review.settings.changed' })
     void settings.reload()
     if (body.alerts) void pipeline.reload()
     toast(dirty === 1 ? 'Saved 1 change.' : `Saved ${dirty} changes.`, 'success')

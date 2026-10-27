@@ -75,7 +75,7 @@ export function SpreadCard({ spread, avgRating, error, loading, period, stars, c
           />
           {spread.note && <p className={s.note}>{spread.note}</p>}
           <p className={s.note}>
-            eBay feedback counts as 5 (positive), 3 (neutral) or 1 star (negative). Amazon stars come only from reviews you imported: Amazon gives no rating by API.
+            Only the stars of product reviews are spread here; eBay feedback shows as % positive, never as stars. Amazon stars come only from reviews you imported: Amazon gives no rating by API.
           </p>
         </div>
       )}
