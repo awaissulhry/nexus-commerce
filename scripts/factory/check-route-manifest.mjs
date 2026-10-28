@@ -14,12 +14,16 @@
  *   3. A file that registers routes calls `defineRoutes(` and finds each route as a key `'METHOD /path'` in itself or
  *      in the `manifest.ts` beside it.
  *   4. Every key of a `manifest.ts` is a route of a file in the same folder (no entry without a route).
+ *   5. Routes are registered only where the app loads them: `platform/<name>/routes.ts`, `modules/<name>/routes.ts`
+ *      (found by `routesFiles()` of src/core/autoload.ts, the same function the app and build.mjs use) and the core
+ *      routes in `core/app.ts`. A route in any other file would never be served.
  *
  * Run: node scripts/factory/check-route-manifest.mjs [folder] — exit 1 on any violation, listed as file:line and rule.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { tsImport } from 'tsx/esm/api'
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const SOURCE = resolve(process.argv[2] ?? join(ROOT, 'apps/factory-api/src'))
@@ -27,6 +31,10 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'testing', 'generated'])
 const TEST = /\.(test|spec)\.[cm]?tsx?$/
 const KNOWN_RECEIVERS = /^(app|fastify|instance|server|router|core|routes)$/
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+
+const { ROUTE_ROOTS, routesFiles } = await tsImport('../../apps/factory-api/src/core/autoload.ts', import.meta.url)
+const LOADED = new Set([...routesFiles(SOURCE), join(SOURCE, 'core', 'app.ts')])
+const WHERE = `${ROUTE_ROOTS.map((root) => `${root}/<name>/routes.ts`).join(', ')} or core/app.ts`
 
 const posix = (path) => path.split(sep).join('/')
 const shown = (file) => posix(relative(file.startsWith(ROOT) ? ROOT : SOURCE, file))
@@ -134,6 +142,9 @@ for (const file of sources) {
   const routes = routesOf(file, code)
   if (routes.length === 0) continue
   routeCount += routes.length
+  if (!LOADED.has(file)) {
+    report(file, code, routes[0].index, `rule 5: routes are registered only in ${WHERE}; the app never loads this file`)
+  }
   const folder = dirname(file)
   routesByFolder.set(folder, [...(routesByFolder.get(folder) ?? []), ...routes.map((route) => route.key)])
   if (!/\bdefineRoutes\s*\(/.test(code)) {

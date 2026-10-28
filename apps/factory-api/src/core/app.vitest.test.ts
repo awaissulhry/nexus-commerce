@@ -12,6 +12,7 @@ import type { Grant } from '@nexus/factory-domain/core/permissions'
 import { fixedClock } from '@nexus/factory-domain/core/time'
 import { LOCAL_COOKIE_SECRET } from '../env'
 import { buildApp, type AppConfig, type AppDependencies } from './app'
+import { routesFiles } from './autoload'
 import { requireContext, testAuthenticator, type SessionContext } from './context'
 import { defineManifest, defineRoutes, PUBLIC, SIGNED_IN } from './manifest'
 
@@ -183,11 +184,11 @@ describe('the route manifest stops the boot', () => {
   })
 })
 
-describe('module routes from a folder', () => {
+describe('routes from src/platform and src/modules', () => {
   const manifestModule = fileURLToPath(new URL('./manifest.ts', import.meta.url))
 
-  function modules(files: Record<string, string>): string {
-    const root = mkdtempSync(join(tmpdir(), 'factory-modules-'))
+  function tree(files: Record<string, string>): string {
+    const root = mkdtempSync(join(tmpdir(), 'factory-routes-'))
     folders.push(root)
     for (const [path, content] of Object.entries(files)) {
       mkdirSync(join(root, path, '..'), { recursive: true })
@@ -195,28 +196,68 @@ describe('module routes from a folder', () => {
     }
     return root
   }
-
-  it('registers each module routes file, with its manifest', async () => {
-    const dir = modules({
-      'gauges/manifest.ts': `import { defineManifest } from ${JSON.stringify(manifestModule)}
-export const manifest = defineManifest({ 'GET /gauges': { audiences: 'public', permission: 'public', scope: 'none' } })`,
-      'gauges/routes.ts': `import { defineRoutes } from ${JSON.stringify(manifestModule)}
+  const routesModule = (name: string, path: string, body: string) => ({
+    [`${name}/manifest.ts`]: `import { defineManifest } from ${JSON.stringify(manifestModule)}
+export const manifest = defineManifest({ 'GET ${path}': { audiences: 'public', permission: 'public', scope: 'none' } })`,
+    [`${name}/routes.ts`]: `import { defineRoutes } from ${JSON.stringify(manifestModule)}
 import { manifest } from './manifest'
-export default defineRoutes('gauges', manifest, async (app) => { app.get('/gauges', async () => ({ gauges: 3 })) })`,
-      'gauges/routes.vitest.test.ts': 'throw new Error("a test file is never loaded as routes")',
-      'gauges/service.ts': 'throw new Error("only routes files are loaded")',
+export default defineRoutes(${JSON.stringify(name)}, manifest, async (app) => { app.get('${path}', async () => (${body})) })`,
+  })
+
+  it('registers every routes file of both roots, with its manifest', async () => {
+    const root = tree({
+      ...routesModule('platform/numbering', '/numbering', '{ from: "platform" }'),
+      ...routesModule('modules/gauges', '/gauges', '{ from: "modules" }'),
+      'modules/gauges/routes.vitest.test.ts': 'throw new Error("a test file is never loaded as routes")',
+      'modules/gauges/service.ts': 'throw new Error("only routes files are loaded")',
+      'modules/gauges/deeper/routes.ts': 'throw new Error("only one folder level is loaded")',
+      'elsewhere/stray/routes.ts': 'throw new Error("only platform and modules are route roots")',
     })
-    const app = await boot({ modulesDir: dir })
-    expect((await app.inject({ method: 'GET', url: '/gauges' })).json()).toEqual({ gauges: 3 })
+    const app = await boot({ routesRoot: root })
+    expect((await app.inject({ method: 'GET', url: '/numbering' })).json()).toEqual({ from: 'platform' })
+    expect((await app.inject({ method: 'GET', url: '/gauges' })).json()).toEqual({ from: 'modules' })
+  })
+
+  it('finds the files platform first, each root in name order', () => {
+    const root = tree({
+      'modules/b/routes.ts': '',
+      'modules/a/routes.ts': '',
+      'platform/z/routes.ts': '',
+      'platform/auth/routes.js': '',
+    })
+    expect(routesFiles(root).map((file) => file.slice(root.length + 1))).toEqual([
+      join('platform', 'auth', 'routes.js'),
+      join('platform', 'z', 'routes.ts'),
+      join('modules', 'a', 'routes.ts'),
+      join('modules', 'b', 'routes.ts'),
+    ])
+  })
+
+  it('refuses a folder with two routes files', () => {
+    const root = tree({ 'platform/auth/routes.ts': '', 'platform/auth/routes.js': '' })
+    expect(() => routesFiles(root)).toThrow(/platform\/auth has more than one routes file/)
   })
 
   it('refuses a routes file that does not export defineRoutes', async () => {
-    const dir = modules({ 'loose/routes.ts': 'export default async function loose() {}' })
-    await expect(boot({ modulesDir: dir })).rejects.toThrow(/must default-export defineRoutes/)
+    const root = tree({ 'platform/loose/routes.ts': 'export default async function loose() {}' })
+    await expect(boot({ routesRoot: root })).rejects.toThrow(/must default-export defineRoutes/)
   })
 
-  it('treats a missing folder as no module', async () => {
-    const app = await boot({ modulesDir: join(tmpdir(), 'factory-modules-missing') })
+  it('a route of a module without its entry stops the boot', async () => {
+    const root = tree({
+      ...routesModule('modules/quotes', '/quotes', '{}'),
+      'modules/quotes/routes.ts': `import { defineRoutes } from ${JSON.stringify(manifestModule)}
+import { manifest } from './manifest'
+export default defineRoutes('quotes', manifest, async (app) => {
+  app.get('/quotes', async () => ({}))
+  app.post('/quotes', async () => ({}))
+})`,
+    })
+    await expect(boot({ routesRoot: root })).rejects.toThrow(/POST \/quotes has no manifest entry/)
+  })
+
+  it('treats missing roots as no routes', async () => {
+    const app = await boot({ routesRoot: tree({}) })
     expect((await app.inject({ method: 'GET', url: '/health' })).statusCode).toBe(200)
   })
 })

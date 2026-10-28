@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url'
 import Fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify'
 import cookie from '@fastify/cookie'
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod'
@@ -6,19 +7,20 @@ import type { FactoryDatabase } from '@nexus/factory-db'
 import { healthContract, readyContract } from '@nexus/factory-domain/core/contracts'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { FactoryEnv } from '../env'
-import { registerModuleRoutes } from './autoload'
+import { routesFiles } from './autoload'
 import { isTestAuthenticator, noSessions, withContextClient, type Authenticator } from './context'
 import { installErrorHandling } from './errors'
 import { requestIdFor } from './ids'
 import { loggerOptions, type LoggerSettings } from './logger'
-import { CORE_MANIFEST, defineRoutes, installRouteManifest } from './manifest'
+import { CORE_MANIFEST, defineRoutes, installRouteManifest, isRoutesPlugin, RouteManifestError } from './manifest'
 import { BODY_LIMIT_BYTES, registerSecurity } from './security'
 import { serverClock, type Clock } from './time'
 
 /**
  * The factory API application (plan A1 §3.1, §3.2). `buildApp` returns a ready instance: the error mapping, the
  * redacting logger, request ids, the security baseline, the zod contracts, the route manifest with its access check,
- * the core routes `/health` (the process is up) and `/ready` (the database and Redis answer), and the module routes.
+ * the core routes `/health` (the process is up) and `/ready` (the database and Redis answer), and the routes of
+ * `platform/*` and `modules/*` (core/autoload.ts).
  * It rejects, so the process does not start, when a route has no manifest entry or an entry has no route.
  *
  * Writes go through `command()` (the next step); a route reaches the database only through `request.withClient`,
@@ -53,8 +55,8 @@ export interface AppDependencies {
   readonly redis?: Redis | undefined
   /** Reads the session of a request. Default: no sessions (every route that is not public answers 401). */
   readonly authenticate?: Authenticator
-  /** The folder of the module routes (`src/modules`, or `dist/modules` in a build). */
-  readonly modulesDir?: string
+  /** The folder that holds `platform/` and `modules/`: `src/` under tsx and vitest, `dist/` in a build. */
+  readonly routesRoot?: string
   /** More route plugins, each made with defineRoutes (tests). */
   readonly routes?: readonly FastifyPluginAsync[]
   /** Log settings; false (the default) logs nothing. */
@@ -89,6 +91,18 @@ async function probe(
     return 'failed'
   } finally {
     clearTimeout(timer)
+  }
+}
+
+/** Imports and registers every routes file under the root (core/autoload.ts finds them). */
+async function registerRoutesFiles(app: FastifyInstance, root: string): Promise<void> {
+  for (const file of routesFiles(root)) {
+    // The import runs in our own code, so vitest, tsx and the bundle load it the same way (one module instance each).
+    const loaded = (await import(pathToFileURL(file).href)) as { default?: unknown }
+    if (!isRoutesPlugin(loaded.default)) {
+      throw new RouteManifestError(`${file} must default-export defineRoutes(name, manifest, plugin)`)
+    }
+    await app.register(loaded.default)
   }
 }
 
@@ -153,7 +167,7 @@ export async function buildApp(config: AppConfig, dependencies: AppDependencies 
     }),
   )
 
-  if (dependencies.modulesDir) await registerModuleRoutes(app, dependencies.modulesDir)
+  if (dependencies.routesRoot) await registerRoutesFiles(app, dependencies.routesRoot)
   for (const routes of dependencies.routes ?? []) await app.register(routes)
 
   await app.ready()

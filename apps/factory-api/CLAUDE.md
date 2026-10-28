@@ -12,20 +12,26 @@ later steps.
     npm run typecheck -w @nexus/factory-api
     cd apps/factory-api && npx vitest run       # needs FACTORY_DATABASE_URL: factory_test… or factory_<branch>
     node scripts/factory/run-pg-tests.mjs apps/factory-api   # the *.pg.vitest.test.ts files, on throwaway databases
-    npm run build -w @nexus/factory-api         # prisma generate, then the esbuild bundle (build.mjs) → dist/index.js
+    npm run build -w @nexus/factory-api         # prisma generate, then esbuild (build.mjs) → dist/ (index + routes files)
     node scripts/factory/run-guards.mjs         # includes check-route-manifest
 
 ## The core (`src/core/`)
 - `app.ts`: `buildApp(config, dependencies)` returns a ready instance, or rejects (the process does not start).
   `appConfig(env)` maps the env. Dependencies: `database` (`openFactoryDatabase`), `redis` (ioredis),
-  `authenticate`, `modulesDir`, `routes` (tests), `logger`, `clock`.
+  `authenticate`, `routesRoot` (`src/` or `dist/`), `routes` (tests), `logger`, `clock`.
 - `context.ts`: the request context per audience (office, floor, partner, link, platform; system for jobs), its
   factory-db scope (`scopeForContext`) and its actor for `can()` (`actorOf`). A route reaches the database only
   through `request.withClient(work)` (= `withContextClient`): no context → 401 before any query.
-- `manifest.ts` + `autoload.ts`: every route has a manifest entry `{ audiences, permission, scope }`. A module puts
-  `routes.ts` (default export `defineRoutes(name, manifest, plugin)`) and `manifest.ts` (`defineManifest({...})`)
-  in `src/modules/<module>/`; they are loaded by folder. Write full paths (no prefixes). A route without an entry,
-  an entry without a route, or a bad entry stops the boot; `check-route-manifest.mjs` checks the same statically.
+- `manifest.ts` + `autoload.ts`: every route has a manifest entry `{ audiences, permission, scope }`. Routes live
+  ONLY in `src/platform/<name>/routes.ts` (auth, admin, outbox, numbering, …) and `src/modules/<name>/routes.ts`
+  (sales, product, …), each with `manifest.ts` beside it: `routes.ts` default-exports
+  `defineRoutes(name, manifest, plugin)`, `manifest.ts` holds `defineManifest({...})`. One level of folders; write
+  full paths (no prefixes). `routesFiles()` (autoload.ts) finds them for the app, `build.mjs` and the guard alike.
+  A route without an entry, an entry without a route, a bad entry, or a route anywhere else stops the boot or fails
+  `check-route-manifest.mjs`.
+- `build.mjs`: entry points `src/index.ts` + every routes file, ESM with code splitting, so shared code is one
+  instance (the build fails if a source file lands in two outputs). `dist/` mirrors `src/`
+  (`dist/platform/<name>/routes.js`, chunks beside `dist/index.js`).
 - The access check runs before the body is read: session (none → 401) → audience → permission → scope
   (`company`/`site`/`party` from the context; `record` = the handler uses `can()` and `scopeWhere()` from
   `@nexus/factory-domain/core/permissions`).

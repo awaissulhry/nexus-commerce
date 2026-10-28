@@ -36,8 +36,8 @@ try {
     database,
     redis,
     authenticate: noSessions,
-    // src/modules under tsx; dist/modules next to the bundle.
-    modulesDir: fileURLToPath(new URL('./modules', import.meta.url)),
+    // src/{platform,modules} under tsx; dist/{platform,modules} next to the bundle (build.mjs).
+    routesRoot: fileURLToPath(new URL('.', import.meta.url)),
     logger: { level: env.FACTORY_ENV === 'test' ? 'warn' : 'info' },
   })
 } catch (error) {

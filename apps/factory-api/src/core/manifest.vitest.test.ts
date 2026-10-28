@@ -92,7 +92,7 @@ describe('scripts/factory/check-route-manifest.mjs', () => {
     expect(status).toBe(0)
   })
 
-  it('passes on a module whose routes and manifest agree', () => {
+  it('passes on platform and module folders whose routes and manifests agree', () => {
     const dir = plant({
       'modules/quotes/manifest.ts': `export const manifest = defineManifest({
   'GET /quotes': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },
@@ -105,9 +105,14 @@ export default defineRoutes('quotes', manifest, async (app) => {
   app.post("/quotes/:quoteId/send", { schema }, handler)
 })`,
       'modules/quotes/routes.vitest.test.ts': `app.get('/only-in-a-test', handler)`,
+      'platform/numbering/routes.ts': `export default defineRoutes('numbering', defineManifest({
+  'POST /numbering/allocate': { audiences: ['office'], permission: 'numbering.allocate', scope: 'company' },
+}), async (app) => {
+  app.post('/numbering/allocate', handler)
+})`,
     })
     const { status, output } = run(dir)
-    expect(output).toMatch(/ok \(2 route\(s\)/)
+    expect(output).toMatch(/ok \(3 route\(s\)/)
     expect(status).toBe(0)
   })
 
@@ -124,11 +129,26 @@ export default defineRoutes('quotes', manifest, async (app) => {
       'modules/loose/routes.ts': `export default async function (app) {
   app.get('/loose', handler)
 }`,
-      'modules/odd/routes.ts': `export default defineRoutes('odd', {}, async (app) => {
+      'platform/odd/routes.ts': `export default defineRoutes('odd', {}, async (app) => {
   app.get(PATH, handler)
   app.all('/everything', handler)
   app.get(\`/tpl/\${id}\`, handler)
   app.route({ method: ['GET', 'POST'], url: '/both', handler })
+})`,
+      'modules/quotes/extra.ts': `export const more = defineRoutes('extra', defineManifest({
+  'GET /quotes/extra': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },
+}), async (app) => {
+  app.get('/quotes/extra', handler)
+})`,
+      'modules/quotes/deep/routes.ts': `export default defineRoutes('deep', defineManifest({
+  'GET /deep': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },
+}), async (app) => {
+  app.get('/deep', handler)
+})`,
+      'services/stray/routes.ts': `export default defineRoutes('stray', defineManifest({
+  'GET /stray': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },
+}), async (app) => {
+  app.get('/stray', handler)
 })`,
     })
     const { status, output } = run(dir)
@@ -137,11 +157,15 @@ export default defineRoutes('quotes', manifest, async (app) => {
     expect(output).toContain('modules/quotes/manifest.ts:3  rule 4: DELETE /quotes/:quoteId has a manifest entry but no route')
     expect(output).toContain('modules/loose/routes.ts:2  rule 3: a file that registers routes wraps them in defineRoutes')
     expect(output).toContain('modules/loose/routes.ts:2  rule 3: GET /loose has no manifest entry')
-    expect(output).toContain('modules/odd/routes.ts:2  rule 1: app.get() needs its path as a string literal')
-    expect(output).toContain("modules/odd/routes.ts:3  rule 2: app.all('/everything')")
-    expect(output).toContain('modules/odd/routes.ts:4  rule 1: app.get() needs its path as a string literal')
-    expect(output).toContain('modules/odd/routes.ts:5  rule 1: .route({ … }) needs method and url as string literals')
+    expect(output).toContain('platform/odd/routes.ts:2  rule 1: app.get() needs its path as a string literal')
+    expect(output).toContain("platform/odd/routes.ts:3  rule 2: app.all('/everything')")
+    expect(output).toContain('platform/odd/routes.ts:4  rule 1: app.get() needs its path as a string literal')
+    expect(output).toContain('platform/odd/routes.ts:5  rule 1: .route({ … }) needs method and url as string literals')
+    expect(output).toContain('modules/quotes/extra.ts:4  rule 5: routes are registered only in platform/<name>/routes.ts, modules/<name>/routes.ts or core/app.ts')
+    expect(output).toContain('modules/quotes/deep/routes.ts:4  rule 5')
+    expect(output).toContain('services/stray/routes.ts:4  rule 5')
     expect(output).not.toContain('GET /quotes has no')
-    expect(output).toMatch(/8 violation\(s\)/)
+    expect(output).not.toContain('GET /quotes/extra has no')
+    expect(output).toMatch(/11 violation\(s\)/)
   })
 })
