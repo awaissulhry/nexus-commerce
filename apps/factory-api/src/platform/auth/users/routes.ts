@@ -12,10 +12,9 @@ import { manifest } from './manifest'
  * POST /auth/users/:userId/require-password-reset    sessions end; the next sign-in asks for a new password
  */
 export default defineRoutes('auth-users', manifest, async (app) => {
-  app.get('/auth/users', { schema: listUsersContract }, (request) => listUsers(request))
-
   // Paths stay literal, one call each (scripts/factory/check-route-manifest.mjs reads them).
   const auth = () => officeAuthOf(app)
+  app.get('/auth/users', { schema: listUsersContract }, (request) => listUsers(auth(), request))
   app.post('/auth/users/:userId/suspend', { schema: userChangeContract }, (request) =>
     changeUser(auth(), request, request.params.userId, request.body, 'suspend'),
   )

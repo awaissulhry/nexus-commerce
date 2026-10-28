@@ -4,6 +4,7 @@ import cookie from '@fastify/cookie'
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod'
 import type { Redis } from 'ioredis'
 import type { FactoryDatabase } from '@nexus/factory-db'
+import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { healthContract, readyContract } from '@nexus/factory-domain/core/contracts'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { FactoryEnv } from '../env'
@@ -13,16 +14,19 @@ import { isTestAuthenticator, noSessions, withContextClient, type Authenticator 
 import { installErrorHandling } from './errors'
 import { requestIdFor } from './ids'
 import { loggerOptions, type LoggerSettings } from './logger'
-import { CORE_MANIFEST, defineRoutes, installRouteManifest, isRoutesPlugin, RouteManifestError } from './manifest'
+import { installGrainFilter } from '../platform/auth/roles/grain-filter'
+import { CORE_MANIFEST, defineRoutes, installRouteManifest, isRoutesPlugin, manifestOfRoutes, RouteManifestError, undeclaredPermissions } from './manifest'
 import { BODY_LIMIT_BYTES, registerSecurity } from './security'
 import { serverClock, type Clock } from './time'
 
 /**
  * The factory API application (plan A1 §3.1, §3.2). `buildApp` returns a ready instance: the error mapping, the
  * redacting logger, request ids, the security baseline, the zod contracts, the route manifest with its access check,
- * the core routes `/health` (the process is up) and `/ready` (the database and Redis answer), and the routes of
- * `platform/*` and `modules/*` (core/autoload.ts).
- * It rejects, so the process does not start, when a route has no manifest entry or an entry has no route.
+ * the money-grain filter of answers and requests (platform/auth/roles/grain-filter.ts), the core routes `/health`
+ * (the process is up) and `/ready` (the database and Redis answer), and the routes of `platform/*` and `modules/*`
+ * (core/autoload.ts).
+ * It rejects, so the process does not start, when a route has no manifest entry, an entry has no route, or a routes
+ * file names a permission the registry does not declare (test routes passed in `routes` are not checked).
  *
  * Writes go through `command()` (core/command.ts); a route reaches the database only through `request.withClient`,
  * which needs a session context (core/context.ts).
@@ -108,6 +112,12 @@ async function registerRoutesFiles(app: FastifyInstance, root: string): Promise<
     if (!isRoutesPlugin(loaded.default)) {
       throw new RouteManifestError(`${file} must default-export defineRoutes(name, manifest, plugin)`)
     }
+    const undeclared = undeclaredPermissions(manifestOfRoutes(loaded.default), FACTORY_PERMISSIONS.isDeclared)
+    if (undeclared.length > 0) {
+      throw new RouteManifestError(
+        `${file} names permissions that are not declared (factory-domain auth/permissions/catalogue): ${undeclared.join(', ')}`,
+      )
+    }
     await app.register(loaded.default)
   }
 }
@@ -146,6 +156,7 @@ export async function buildApp(config: AppConfig, dependencies: AppDependencies 
   })
   await app.register(cookie, { secret: config.cookieSecret })
   installRouteManifest(app, authenticate)
+  installGrainFilter(app)
   app.decorate('officeAuth', dependencies.officeAuth ?? null)
   app.decorateRequest('withClient', function withClient(work) {
     return withContextClient(database, this.factoryContext, work)

@@ -1,33 +1,41 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { hashPassword, passwordProblems } from '@nexus/factory-domain/auth/password/password'
-import { ConflictError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { ADMIN_PERMISSION } from '@nexus/factory-domain/auth/roles/roles'
+import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
+import { holds } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
-import { requireContext, type OfficeContext } from '../../../core/context'
+import { actorOf, requireContext, type OfficeContext } from '../../../core/context'
 import { requireStepUp } from '../office/account'
 import { signedIn } from '../office/sign-in'
+import { assignmentAudit, createAssignment, endAllAssignments } from '../roles/assignments'
 import { assertCsrf } from '../sessions/cookies'
+import { requiresMfa } from '../sessions/grants'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { mintToken, parseToken, tokenHash } from '../sessions/secrets'
 import { startSession } from '../sessions/session-store'
 import { emailOrThrow } from '../users/email'
-import { ownerFacts, userStatus } from '../users/status'
+import { adminFacts, userStatus } from '../users/status'
 import type { AcceptInvitationBody, InviteBody } from './contract'
 
 /**
  * Invitations by email (feature PLT-015), ported from Commerce's invitation routes (apps/api/src/routes/auth.routes.ts):
  *
- *   invite    an administrator (users.invite, with a step-up) names an address and a display name. The user row is
- *             made INVITED at once (or an earlier invited or deactivated one is reused, so history keeps one person);
+ *   invite    an administrator (users.invite, with a step-up) names an address, a display name and the person's
+ *             first roles with their scopes (naming any also needs roles.assign). The user row is made INVITED at once
+ *             (or an earlier invited or deactivated one is reused, so history keeps one person) with those role
+ *             assignments (an earlier invitation's are ended: the newest invitation says what the person gets);
  *             earlier open invitations of the person stop; the link (72 hours) goes to the mail seam after the commit.
  *             An address that is already an active or suspended user is refused.
- *   revoke    the open invitation stops; the invited user becomes DEACTIVATED (and can be invited again).
+ *   revoke    the open invitation stops; the invited user becomes DEACTIVATED (and can be invited again), and the
+ *             roles it gave end.
  *   preview   what the accept page shows (tenant, address, name), for a valid link only.
  *   accept    once: the invitation is claimed by compare-and-set, the password set (the rules of factory-domain's
  *             auth/password), the user ACTIVE (status machine), a session started; all in one command. Two-factor is set
  *             up next on that session when the person needs it (office/account.ts): until then it holds no permission.
  *
- * An invitation names its role in the roles step (A1: roleIds); today an invited user starts with no permission.
+ * The assignments give nothing before the invitation is accepted (an invited person has no session); a role that
+ * requires two-factor gives nothing until it is set up and proved on a session.
  */
 
 export const INVITATION_TTL_MS = 72 * 60 * 60_000
@@ -40,6 +48,9 @@ export async function invite(auth: OfficeAuth, request: FastifyRequest, body: In
   requireStepUp(auth, request)
   const email = emailOrThrow(body.email)
   const locale = body.locale ?? 'it'
+  if (body.roles.length > 0 && !holds(actorOf(context), ADMIN_PERMISSION)) {
+    throw new ForbiddenError(`Giving roles with an invitation also needs ${ADMIN_PERMISSION}.`)
+  }
   const existing = await request.withClient((client) =>
     client.user.findUnique({ where: { tenantId_email: { tenantId: context.tenantId, email } }, select: { id: true, status: true, version: true } }),
   )
@@ -53,21 +64,28 @@ export async function invite(auth: OfficeAuth, request: FastifyRequest, body: In
 
   let outcome
   try {
-    outcome = await auth.command(context, { name: 'users.invite', input: { email, displayName: body.displayName, locale }, ...(record ? { record } : {}) }, async ({ tx, now, audit }) => {
+    outcome = await auth.command(context, { name: 'users.invite', input: { email, displayName: body.displayName, locale, roles: body.roles }, ...(record ? { record } : {}) }, async ({ tx, now, audit }) => {
       if (existing) {
         await tx.user.update({ where: { id: userId }, data: { displayName: body.displayName, locale } })
         const revoked = await tx.invitation.updateMany({ where: { userId, acceptedAt: null, revokedAt: null }, data: { revokedAt: now } })
-        audit({ recordType: 'User', recordId: userId, before: { status: existing.status }, after: { status: 'INVITED', displayName: body.displayName, invitationsRevoked: revoked.count } })
+        const assignmentsEnded = await endAllAssignments(tx, userId, { now, endedById: context.actorId })
+        audit({ recordType: 'User', recordId: userId, before: { status: existing.status }, after: { status: 'INVITED', displayName: body.displayName, invitationsRevoked: revoked.count, assignmentsEnded } })
       } else {
         await tx.user.create({ data: { id: userId, email, displayName: body.displayName, locale, status: 'INVITED', createdAt: now, createdById: context.actorId } })
         audit({ recordType: 'User', recordId: userId, after: { email, displayName: body.displayName, status: 'INVITED' } })
+      }
+      const roleIds: string[] = []
+      for (const [index, role] of body.roles.entries()) {
+        const view = await createAssignment(tx, role, { userId, now, grantedById: context.actorId, assignerGrants: context.grants, path: `roles/${index}/` })
+        audit({ recordType: 'RoleAssignment', recordId: view.id, after: assignmentAudit(view) })
+        roleIds.push(view.roleId)
       }
       const token = mintToken(context.tenantId, userId)
       const id = newId()
       const expiresAt = toUtcIso(new Date(now.getTime() + INVITATION_TTL_MS))
       await tx.invitation.create({ data: { id, userId, email, tokenHash: tokenHash(token.value), invitedById: context.actorId, createdAt: now, expiresAt } })
-      audit({ recordType: 'Invitation', recordId: id, after: { userId, email, expiresAt } })
-      return { invitation: { id, userId, email, expiresAt }, token: token.value }
+      audit({ recordType: 'Invitation', recordId: id, after: { userId, email, expiresAt, roleIds } })
+      return { invitation: { id, userId, email, expiresAt, roleIds }, token: token.value }
     })
   } catch (error) {
     if (isUniqueViolation(error)) throw new ConflictError('This address was just invited by someone else. Reload the list.')
@@ -103,13 +121,16 @@ export async function revokeInvitation(auth: OfficeAuth, request: FastifyRequest
     {
       name: 'users.revokeInvitation',
       input: { invitationId },
-      ...(stillInvited ? { record: { type: 'User' as const, id: invitation.userId, transition: { machine: userStatus, to: 'DEACTIVATED' as const, facts: ownerFacts(invitation.userId) } } } : {}),
+      ...(stillInvited ? { record: { type: 'User' as const, id: invitation.userId, transition: { machine: userStatus, to: 'DEACTIVATED' as const, facts: adminFacts(invitation.userId, auth.clock.now()) } } } : {}),
     },
     async ({ tx, now, audit }) => {
       const { count } = await tx.invitation.updateMany({ where: { id: invitationId, acceptedAt: null, revokedAt: null }, data: { revokedAt: now } })
       if (count !== 1) throw new InvalidStateError('This invitation was already accepted or revoked.')
       audit({ recordType: 'Invitation', recordId: invitationId, after: { revokedAt: toUtcIso(now) } })
-      if (stillInvited) audit({ recordType: 'User', recordId: invitation.userId, before: { status: 'INVITED' }, after: { status: 'DEACTIVATED' } })
+      if (stillInvited) {
+        const assignmentsEnded = await endAllAssignments(tx, invitation.userId, { now, endedById: context.actorId })
+        audit({ recordType: 'User', recordId: invitation.userId, before: { status: 'INVITED' }, after: { status: 'DEACTIVATED', assignmentsEnded } })
+      }
       return { id: invitationId, revokedAt: toUtcIso(now) }
     },
   )
@@ -131,7 +152,7 @@ async function openInvitation(auth: OfficeAuth, text: string) {
         expiresAt: true,
         acceptedAt: true,
         revokedAt: true,
-        user: { select: { status: true, email: true, displayName: true, locale: true, isOwner: true, requireMfa: true, tenant: { select: { status: true } } } },
+        user: { select: { status: true, email: true, displayName: true, locale: true, requireMfa: true, tenant: { select: { status: true } } } },
       },
     }),
   )
@@ -187,5 +208,6 @@ export async function acceptInvitation(auth: OfficeAuth, request: FastifyRequest
       return session
     },
   )
-  return signedIn(reply, result, { id: token.userId, email: invitation.user.email, displayName, locale: invitation.user.locale, isOwner: invitation.user.isOwner, requireMfa: invitation.user.requireMfa, totpConfirmedAt: null }, false)
+  const requireMfa = await auth.inTenant(token.tenantId, token.userId, (client) => requiresMfa(client, { id: token.userId, requireMfa: invitation.user.requireMfa }, auth.clock.now()))
+  return signedIn(reply, result, { id: token.userId, email: invitation.user.email, displayName, locale: invitation.user.locale, requireMfa, totpConfirmedAt: null }, false)
 }

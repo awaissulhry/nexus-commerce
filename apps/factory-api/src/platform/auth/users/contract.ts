@@ -12,7 +12,20 @@ export const userView = output({
   displayName: z.string(),
   locale: z.string(),
   status: z.enum(USER_STATUSES),
-  isOwner: z.boolean(),
+  /** The live role assignments (platform/auth/roles). */
+  roles: z.array(
+    output({
+      assignmentId: id(),
+      roleId: id(),
+      roleKey: z.string(),
+      roleName: z.string(),
+      allCompanies: z.boolean(),
+      companyIds: z.array(id()),
+      siteIds: z.array(id()),
+      partyIds: z.array(id()),
+      validTo: instant().nullable(),
+    }),
+  ),
   /** Two-factor is set up. */
   mfaEnabled: z.boolean(),
   lastSignInAt: instant().nullable(),

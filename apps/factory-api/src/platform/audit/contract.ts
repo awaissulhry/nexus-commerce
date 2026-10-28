@@ -1,9 +1,11 @@
 import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { grainedJson } from '@nexus/factory-domain/money/marked'
 
 /**
  * `GET /audit/:recordType/:recordId`: the audit history of one record, newest first (features PLT-072, PLT-077 in
- * part). `before` and `after` are what the command recorded.
+ * part). `before` and `after` are what the command recorded, shaped for the caller's money grains: a value the
+ * command marked with `markMoney` is shown only with its grain (factory-domain money; the app's grain filter).
  */
 
 export const AUDIT_AUDIENCES = ['OFFICE', 'FLOOR', 'PARTNER', 'LINK', 'SYSTEM'] as const
@@ -24,8 +26,8 @@ export const auditEntry = output({
   action: z.string(),
   recordType: z.string(),
   recordId: id(),
-  before: z.unknown(),
-  after: z.unknown(),
+  before: grainedJson(),
+  after: grainedJson(),
   reason: z.string().nullable(),
   requestId: z.string(),
 })

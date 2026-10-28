@@ -1,16 +1,26 @@
 import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { signedInBody, tokenText } from '../office/contract'
+import { assignmentInput } from '../roles/contract'
 
 /** Invitations by email (feature PLT-015). The link's token travels in bodies only. */
 
-const invitationView = output({ id: id(), userId: id(), email: z.string(), expiresAt: instant() })
+const invitationView = output({
+  id: id(),
+  userId: id(),
+  email: z.string(),
+  expiresAt: instant(),
+  /** The roles the person was given with the invitation (their assignments exist from now on, live once accepted). */
+  roleIds: z.array(id()),
+})
 
 export const inviteContract = defineContract({
   body: input({
     email: z.string().trim().min(3).max(320),
     displayName: z.string().trim().min(1).max(200),
     locale: z.string().regex(/^[a-z]{2}(?:-[A-Z]{2})?$/).optional(),
+    /** The person's first roles, each with its scope. Naming any needs roles.assign as well. */
+    roles: z.array(assignmentInput).max(20).default([]),
   }),
   /** The link goes to the mail seam (sessions/mail.ts), never into this answer. */
   response: { 200: output({ invitation: invitationView }) },
