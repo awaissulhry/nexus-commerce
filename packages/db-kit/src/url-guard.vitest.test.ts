@@ -19,7 +19,7 @@ describe('isLoopbackUrl', () => {
     'postgresql://postgres@127.0.0.1:5442/factory_test',
     'postgresql://user:secret@localhost:5442/factory_w9_01?schema=public',
     'postgresql://postgres@[::1]:5442/factory_test',
-    'redis://127.0.0.1:6389',
+    'redis://127.0.0.1:6399',
     'postgresql://postgres@127.0.0.1:5442/factory_test?host=127.0.0.1',
   ])('accepts %s', (url) => {
     expect(isLoopbackUrl(url)).toBe(true)
