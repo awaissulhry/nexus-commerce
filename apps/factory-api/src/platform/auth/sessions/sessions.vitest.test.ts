@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { FactoryDatabase } from '@nexus/factory-db'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
-import { grantsOf, mfaSatisfied, OWNER_PERMISSIONS } from './grants'
+import { mfaSatisfied } from './grants'
 import { holdAuthMail, memoryAuthMailer } from './mail'
 import { createOfficeAuth } from './office-auth'
 import { authSecrets, mintToken, parseToken, sameSecret, shortenIp, tokenHash } from './secrets'
 import { idleExpiryAt, SESSION_LIFETIME } from './session-store'
 
 // Ported from Commerce's apps/api/src/lib/auth/auth.vitest.test.ts (opaque tokens, IP truncation, CSRF compare),
-// plus the factory's token layout, the sealed TOTP secrets and the grants placeholder.
+// plus the factory's token layout, the sealed TOTP secrets and the two-factor rule of the grants.
 const TENANT = '01a18208-e882-70ce-8bb6-0d4afb932bc1'
 const USER = '01a18208-e882-70ce-8bb6-0d4afb932bc2'
 
@@ -99,21 +99,14 @@ describe('session lifetime', () => {
   })
 })
 
-describe('grants placeholder', () => {
+describe('two-factor on the session', () => {
   const NO_MFA = { mfaAt: null }
   const PROVED = { mfaAt: new Date() }
 
-  it('gives an owner the platform permissions only once two-factor is proved on the session', () => {
-    expect(grantsOf({ isOwner: true, requireMfa: false }, NO_MFA)).toEqual([])
-    expect(grantsOf({ isOwner: true, requireMfa: false }, PROVED)).toEqual([{ permissions: OWNER_PERMISSIONS, companies: 'all', sites: 'all', parties: 'all' }])
-    expect(OWNER_PERMISSIONS).toContain('audit.read')
-  })
-
-  it('gives everyone else nothing yet (the roles step adds it)', () => {
-    expect(grantsOf({ isOwner: false, requireMfa: false }, NO_MFA)).toEqual([])
-    expect(grantsOf({ isOwner: false, requireMfa: true }, PROVED)).toEqual([])
-    expect(mfaSatisfied({ isOwner: false, requireMfa: true }, NO_MFA)).toBe(false)
-    expect(mfaSatisfied({ isOwner: false, requireMfa: false }, NO_MFA)).toBe(true)
+  it('is satisfied when not required, or proved on the session (the role grants: auth/roles tests)', () => {
+    expect(mfaSatisfied({ requireMfa: true }, NO_MFA)).toBe(false)
+    expect(mfaSatisfied({ requireMfa: true }, PROVED)).toBe(true)
+    expect(mfaSatisfied({ requireMfa: false }, NO_MFA)).toBe(true)
   })
 })
 

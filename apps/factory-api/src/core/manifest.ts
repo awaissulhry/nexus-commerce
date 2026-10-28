@@ -160,6 +160,7 @@ declare module 'fastify' {
 }
 
 const ROUTES_PLUGIN = Symbol('factory.routesPlugin')
+const ROUTES_MANIFEST = Symbol('factory.routesManifest')
 
 /**
  * A module's routes with their manifest. The entries join the app's registry before the routes register, so each
@@ -175,7 +176,24 @@ export function defineRoutes(name: string, manifest: RouteManifest, routes: Fast
   }
   Object.defineProperty(plugin, 'name', { value: `routes:${name}` })
   Object.defineProperty(plugin, ROUTES_PLUGIN, { value: name })
+  Object.defineProperty(plugin, ROUTES_MANIFEST, { value: manifest })
   return plugin
+}
+
+/** The manifest a defineRoutes plugin declares (the boot checks its permissions against the registry). */
+export function manifestOfRoutes(plugin: FastifyPluginAsync): RouteManifest {
+  return (plugin as unknown as Record<symbol, RouteManifest>)[ROUTES_MANIFEST] ?? {}
+}
+
+/**
+ * The permissions of a manifest that the registry does not declare (plan A1 §3.11, feature PLT-029: every permission
+ * is declared once, in factory-domain auth/permissions). The app refuses to boot a routes file that names one.
+ */
+export function undeclaredPermissions(manifest: RouteManifest, isDeclared: (permission: string) => boolean): string[] {
+  const named = Object.values(manifest)
+    .map((entry) => entry.permission)
+    .filter((permission) => permission !== PUBLIC && permission !== SIGNED_IN)
+  return [...new Set(named.filter((permission) => !isDeclared(permission)))].sort()
 }
 
 /** True for a plugin made by defineRoutes. */

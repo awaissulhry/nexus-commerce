@@ -4,8 +4,8 @@ The factory's Fastify 5 API: a separate product from Commerce, with its own data
 Today the API core: context, contracts, route manifest, security baseline, `GET /health` and `GET /ready`, and
 `command()` (`src/core/command.ts`): the ONLY way to write — one transaction for the change, its audit rows, its events
 and the idempotency receipt; the outbox (events → BullMQ → handlers and live screens); and the worker and scheduler
-(`src/background.ts worker|scheduler`). Office sign-in lives in `src/platform/auth/` (below). Roles, floor, portal and
-link sign-in, the modules and the adapters come in later steps.
+(`src/background.ts worker|scheduler`). Office sign-in, roles and money grains live in `src/platform/auth/` (below).
+Floor, portal and link sign-in, the modules and the adapters come in later steps.
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>
@@ -79,13 +79,37 @@ link sign-in, the modules and the adapters come in later steps.
   of a cookie session, and sign-in, sign-out and invitation accept, send `x-csrf-token` = the CSRF cookie
   (`GET /auth/csrf` makes one). Idle 8 h (slid at most once a minute), absolute 7 days, user and tenant ACTIVE.
 - Writes go through command() on the auth object's clock (`auth.command`); the idle slide is the one unaudited write.
-- Grants are a placeholder until the roles step: an owner (`User.isOwner`) holds `OWNER_PERMISSIONS` once two-factor is
-  proved on the session; everyone else holds none. Risky routes call `requireStepUp(auth, request)` (a TOTP code on
-  this session in the last 5 minutes; 403 with issue path `stepUp` otherwise).
+- Grants come from the person's live role assignments (below), read on every request (`sessions/grants.ts`). Risky
+  routes call `requireStepUp(auth, request)` (a TOTP code on this session in the last 5 minutes; 403 with issue path
+  `stepUp` otherwise): every permission declared with risk `stepUp` does.
 - Links never leave the API in an answer or a log: the `AuthMailer` seam (`sessions/mail.ts`, `holdAuthMail` until the
   email step); tests read them from `memoryAuthMailer()` (refused unless FACTORY_ENV=test).
 - PostgreSQL tests: `sessions/testing/harness.ts` (`startHarness`, `Browser` cookie jar, `movableClock`, `enrolTotp`,
   `stepUp`). Keep a test file's clock moving forward once a TOTP code was used: an older step is a replay.
+
+## Roles, permissions and money grains (`src/platform/auth/roles/`, plan A1 §2.3, §2.6, §3.11)
+- Every permission is declared once in `@nexus/factory-domain/auth/permissions` (`definePermissions('<area>', {…})`,
+  assembled in `catalogue.ts` with a description and a risk: read, write, stepUp). The app refuses to boot a routes
+  file whose manifest names an undeclared one (`core/app.ts`; test routes passed in `routes` are not checked). A module
+  that adds routes declares its permissions in the same PR and gives them to the templates that need them.
+- Role templates (`@nexus/factory-domain/auth/roles/templates`): owner, admin, finance, sales, planner, buyer,
+  warehouse, production_manager, quality_inspector, floor_supervisor, read_only. Each tenant has them as system Role
+  rows (`syncSystemRoles`: tenant set-up, the seed, `POST /auth/roles/sync-templates` after a deploy that changed one,
+  one audit row per changed role). Custom roles (`custom.<key>`) are copies the tenant edits; a template change never
+  widens them (the list shows `templateAdds`).
+- RoleAssignment: one role for one person over every company or a list, optional sites and parties, from/to; ended,
+  never deleted. A session holds the union (one Grant per live assignment); a role with `requireMfa` gives nothing
+  until two-factor is proved on the session. Nobody gives themselves a role or edits one they hold; the tenant keeps an
+  administrator (an ACTIVE person with `roles.assign` over every company): users' suspend/deactivate, ending an
+  assignment and editing a role all refuse to remove the last one.
+- Money grains (price, cost, margin, wages) travel in grants as the permissions `money.<grain>`; floor sessions hold at
+  most wages, partner and link sessions at most price. A contract field that carries money is `money.<grain>(schema)`
+  (`@nexus/factory-domain/money/marked`: optional, typed `Money<grain>`; return it with `asMoney`); free JSON holding
+  money uses `markMoney(grain, value)` (audit before/after) inside a `grainedJson()` field. `roles/grain-filter.ts`
+  (installed by `core/app.ts`) drops unheld marked fields from every answer and refuses a body that sends one.
+  `check-money-grains` fails on an unmarked money-looking contract field, audit value or Prisma column.
+- PostgreSQL tests: the harness's `addTenant` gives a tenant its system roles, `addUser({ isOwner: true })` and
+  `addRole(h, tenant, userId, key)` give roles. `User.isOwner` is no longer read.
 
 ## Rules
 - Configuration only through `src/env.ts`. It reads ONLY `apps/factory-api/.env`, by explicit path, and ONLY

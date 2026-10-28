@@ -5,6 +5,7 @@ import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
+import { seed as seedRoles } from '../seed/roles'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels } from './ownership'
 import { PLATFORM_ROLE, POLICY_KEYS, RUNTIME_LOGIN, RUNTIME_ROLES, WALL, type PolicyKeyName, type RuntimeRole } from './roles'
@@ -83,6 +84,8 @@ beforeAll(async () => {
   await seedNumbering({ db: factory, namespace: 'iso-b' })
   await seedOutbox({ db: factory, namespace: 'iso-a' })
   await seedOutbox({ db: factory, namespace: 'iso-b' })
+  await seedRoles({ db: factory, namespace: 'iso-a' })
+  await seedRoles({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -101,6 +104,8 @@ it('covers every classified table and every runtime role', () => {
     'NumberSeries',
     'OutboxEvent',
     'PasswordReset',
+    'Role',
+    'RoleAssignment',
     'Session',
     'Site',
     'Station',

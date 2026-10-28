@@ -1,0 +1,77 @@
+// Roles and their assignments (plan A1 §2.3, §3.11; features PLT-029, PLT-030, PLT-032, PLT-034): what each person of
+// a tenant may do, in which companies, sites and parties, and which money they see. apps/factory-api's
+// platform/auth/roles keeps them through command(); the session's grants are built from the live assignments
+// (platform/auth/sessions/grants.ts). Permission names, grains and the system templates live in
+// @nexus/factory-domain (auth/permissions, auth/grains, auth/roles).
+//
+// Identity is per tenant (auth.prisma): an assignment names the tenant's User directly.
+
+/// A bundle of permissions and money grains. A system role (`system`) is one of the templates of factory-domain
+/// auth/roles, kept equal to it by the API's syncSystemRoles; nobody edits it. A custom role belongs to the tenant: it
+/// is created (often as a copy of a template) and edited through the roles routes, and a later change of its template
+/// never changes it by itself.
+model Role {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The template's key for a system role (`owner`, `sales`…); `custom.<slug>` for a custom role. Unique in the tenant.
+  key         String
+  name        String
+  description String?
+  system      Boolean      @default(false)
+  /// The template a custom role was copied from, if any (its later additions are shown, never applied by themselves).
+  basedOn     String?
+  /// Who it is for. Office only in W0; the floor step adds FLOOR roles.
+  audience    RoleAudience @default(OFFICE)
+  /// A session holds none of this role's permissions until two-factor was proved on it.
+  requireMfa  Boolean      @default(false)
+  /// Declared `<area>.<action>` permissions (factory-domain auth/permissions), sorted; never a `money.*` one.
+  permissions String[]     @default([])
+  /// The money grains it sees: price, cost, margin, wages (factory-domain auth/grains).
+  grains      String[]     @default([])
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  assignments RoleAssignment[]
+
+  @@unique([tenantId, key])
+  // The target of the tenant-safe references from the assignments.
+  @@unique([tenantId, id])
+}
+
+enum RoleAudience {
+  OFFICE
+}
+
+/// One role given to one person, limited to some companies, sites and parties, for a time. Never deleted: ending an
+/// assignment sets endedAt, so the history says who could do what, when.
+model RoleAssignment {
+  id           String    @id @db.Uuid
+  tenantId     String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  userId       String    @db.Uuid
+  roleId       String    @db.Uuid
+  /// Every company of the tenant, also those added later. Otherwise exactly companyIds (never empty then).
+  allCompanies Boolean   @default(false)
+  companyIds   String[]  @default([]) @db.Uuid
+  /// Empty: no site limit (every site of the companies reached).
+  siteIds      String[]  @default([]) @db.Uuid
+  /// Empty: no party limit. Otherwise only the records of these customers or suppliers (a sales rep's accounts).
+  partyIds     String[]  @default([]) @db.Uuid
+  validFrom    DateTime  @db.Timestamptz(3)
+  /// A planned end (cover during a holiday); null: until ended.
+  validTo      DateTime? @db.Timestamptz(3)
+  grantedById  String?   @db.Uuid
+  endedAt      DateTime? @db.Timestamptz(3)
+  endedById    String?   @db.Uuid
+  version      Int       @default(1)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  role Role @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, userId])
+  @@index([tenantId, roleId])
+}

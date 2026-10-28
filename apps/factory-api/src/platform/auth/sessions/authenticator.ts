@@ -5,7 +5,7 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { Authenticator, SessionContext } from '../../../core/context'
 import type { Clock } from '../../../core/time'
 import { assertCsrf, isUnsafeMethod, sessionCookieOf } from './cookies'
-import { grantsOf } from './grants'
+import { sessionAccess } from './grants'
 import { parseToken, tokenHash, type AuthToken } from './secrets'
 import { idleExpiryAt, SESSION_LIFETIME } from './session-store'
 
@@ -20,7 +20,8 @@ import { idleExpiryAt, SESSION_LIFETIME } from './session-store'
  *   4. the company: the `x-factory-company` header (a company id or code of the tenant, active), else the session's
  *      starting company; an unknown company is a 403;
  *   5. the idle expiry slides forward (at most once a minute; bookkeeping, not audited);
- *   6. the context: office, tenant, user, company, and the grants (sessions/grants.ts, the roles step's placeholder).
+ *   6. the context: office, tenant, user, company, and the grants of the person's live role assignments
+ *      (sessions/grants.ts; a role that requires two-factor gives nothing until it was proved on the session).
  * No cookie, or a cookie that opens nothing: no session (401). Floor devices, portal and link sessions are not read
  * here; their steps add them, until then they get no session.
  */
@@ -42,7 +43,9 @@ export interface OfficeSession {
     readonly email: string
     readonly displayName: string
     readonly locale: string
+    /** Holds the owner system role now. */
     readonly isOwner: boolean
+    /** Two-factor is required now: the person's own flag or a role they hold. */
     readonly requireMfa: boolean
     readonly totpEnabled: boolean
   }
@@ -70,7 +73,7 @@ const SESSION_SELECT = {
   revokedAt: true,
   company: { select: { status: true } },
   user: {
-    select: { email: true, displayName: true, locale: true, status: true, isOwner: true, requireMfa: true, totpConfirmedAt: true, tenant: { select: { status: true } } },
+    select: { email: true, displayName: true, locale: true, status: true, requireMfa: true, totpConfirmedAt: true, tenant: { select: { status: true } } },
   },
 } as const
 
@@ -107,6 +110,7 @@ export function officeAuthenticator(core: { readonly database: FactoryDatabase; 
       if (!row) return null
       if (isUnsafeMethod(request.method)) assertCsrf(request)
       const companyId = await companyOf(client, request, row)
+      const access = await sessionAccess(client, { id: token.userId, requireMfa: row.user.requireMfa }, row, now)
 
       let idleExpiresAt = row.idleExpiresAt
       if (now.getTime() - row.lastSeenAt.getTime() >= SESSION_LIFETIME.slideEveryMs) {
@@ -128,8 +132,8 @@ export function officeAuthenticator(core: { readonly database: FactoryDatabase; 
           email: row.user.email,
           displayName: row.user.displayName,
           locale: row.user.locale,
-          isOwner: row.user.isOwner,
-          requireMfa: row.user.requireMfa,
+          isOwner: access.isOwner,
+          requireMfa: access.requireMfa,
           totpEnabled: row.user.totpConfirmedAt !== null,
         },
       })
@@ -138,7 +142,7 @@ export function officeAuthenticator(core: { readonly database: FactoryDatabase; 
         tenantId: token.tenantId,
         actorId: token.userId,
         ...(companyId ? { companyId } : {}),
-        grants: grantsOf(row.user, row),
+        grants: access.grants,
       }
     })
   }

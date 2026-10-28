@@ -49,11 +49,13 @@ model User {
   createdById          String?    @db.Uuid
 
   // A suspended tenant's people cannot sign in, and their sessions stop (sessions/authenticator.ts).
-  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   sessions        Session[]
-  invitations     Invitation[]    @relation("InvitedUser")
-  sentInvitations Invitation[]    @relation("InvitedBy")
+  invitations     Invitation[]     @relation("InvitedUser")
+  sentInvitations Invitation[]     @relation("InvitedBy")
   passwordResets  PasswordReset[]
+  // roles.prisma: the roles the person holds, with their scopes.
+  roleAssignments RoleAssignment[]
 
   @@unique([tenantId, email])
   // The target of the tenant-safe references from the auth rows.

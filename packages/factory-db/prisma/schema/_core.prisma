@@ -28,6 +28,8 @@ model Tenant {
   companies Company[]
   // auth.prisma: the people of the tenant.
   users     User[]
+  // roles.prisma: the tenant's system and custom roles.
+  roles     Role[]
 }
 
 enum TenantStatus {

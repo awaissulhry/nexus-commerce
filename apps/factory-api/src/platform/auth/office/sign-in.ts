@@ -5,7 +5,7 @@ import { ForbiddenError, UnauthenticatedError } from '@nexus/factory-domain/core
 import type { CommandTx } from '../../../core/command'
 import { liveSession } from '../sessions/authenticator'
 import { assertCsrf, clearSessionCookies, sessionCookieOf, setSessionCookies } from '../sessions/cookies'
-import { mfaRequired } from '../sessions/grants'
+import { mfaRequired, requiresMfa } from '../sessions/grants'
 import { PRE_SESSION_ACTOR_ID, type OfficeAuth } from '../sessions/office-auth'
 import { parseToken } from '../sessions/secrets'
 import { SESSION_LIFETIME, startSession, type StartedSession } from '../sessions/session-store'
@@ -35,7 +35,6 @@ const USER_SELECT = {
   displayName: true,
   locale: true,
   status: true,
-  isOwner: true,
   requireMfa: true,
   passwordHash: true,
   mustChangePassword: true,
@@ -52,7 +51,7 @@ export interface SignedInUser {
   readonly email: string
   readonly displayName: string
   readonly locale: string
-  readonly isOwner: boolean
+  /** Two-factor is required now: the person's own flag or a role they hold (sessions/grants.ts requiresMfa). */
   readonly requireMfa: boolean
   readonly totpConfirmedAt: Date | null
 }
@@ -152,7 +151,8 @@ export async function signIn(auth: OfficeAuth, request: FastifyRequest, reply: F
     audit({ recordType: 'Session', recordId: session.id, after: { userId: user.id, secondFactor: proof?.kind ?? null, companyId: session.companyId } })
     return session
   })
-  return signedIn(reply, result, user, proof !== null)
+  const requireMfa = await auth.inTenant(tenant.id, user.id, (client) => requiresMfa(client, user, auth.clock.now()))
+  return signedIn(reply, result, { ...user, requireMfa }, proof !== null)
 }
 
 /** Ends the session of the cookie, if it is live, and clears the cookies whatever it was. */
