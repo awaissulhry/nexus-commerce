@@ -18,6 +18,7 @@ describe('model ownership', () => {
       'Company',
       'IdempotencyReceipt',
       'Line',
+      'OutboxEvent',
       'Site',
       'Station',
       'Tenant',

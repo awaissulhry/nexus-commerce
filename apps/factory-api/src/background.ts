@@ -1,0 +1,105 @@
+import { fileURLToPath } from 'node:url'
+import { openFactoryDatabase, type FactoryDatabase } from '@nexus/factory-db'
+import { checkTestDatabaseUrl, readWorktree, worktreeDatabaseNames } from '@nexus/factory-db/test-database'
+import { startCrons, type CronJob } from './core/cron'
+import { redact } from './core/logger'
+import { openQueues, queueConnection, queuePrefixFrom, type Log } from './core/queue'
+import { loadFactoryEnv, readFactoryVariables } from './env'
+import { startEventWorkers, type EventHandler } from './platform/outbox/dispatch'
+import { outboxLagCron } from './platform/outbox/lag'
+import { queuePublisher, startRelay } from './platform/outbox/relay'
+
+/**
+ * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
+ *
+ *   node dist/background.js worker      the outbox relay (relay.ts), the events dispatcher and the handler runner
+ *                                       (dispatch.ts); npm run dev:worker -w @nexus/factory-api under tsx
+ *   node dist/background.js scheduler   the clustered crons (core/cron.ts): each tick runs on one replica only;
+ *                                       npm run dev:scheduler -w @nexus/factory-api
+ *
+ * Commerce hard rule 2, for the factory: a local worker or scheduler starts every consumer and every cron, so before
+ * anything connects it refuses
+ *   - a wrong environment (env.ts: local and test only on loopback, staging and production only on Railway);
+ *   - with FACTORY_ENV local or test, a database that is not this worktree's own (factory_<branch>, factory_<step>) or a
+ *     throwaway factory_test…: never a shared one;
+ *   - with FACTORY_ENV local or test, a missing FACTORY_QUEUE_PREFIX: the local Redis is shared by every worktree.
+ * Then the database login is audited (openFactoryDatabase), as at the API's boot.
+ */
+
+const MODES = ['worker', 'scheduler'] as const
+type Mode = (typeof MODES)[number]
+
+/** The handlers of published events, one list for the worker. Modules add theirs here (dispatch.ts defineHandler). */
+const HANDLERS: readonly EventHandler[] = []
+
+const mode = process.argv[2] as Mode
+if (!MODES.includes(mode)) {
+  console.error(`usage: background.js <${MODES.join('|')}> (got ${JSON.stringify(process.argv[2] ?? '')})`)
+  process.exit(2)
+}
+
+/** JSON lines on standard output, every field redacted like the API's log (core/logger.ts). */
+function lineLog(name: Mode): Log {
+  const write =
+    (level: 'info' | 'warn' | 'error') =>
+    (fields: Record<string, unknown>, message: string): void => {
+      const line = { level, time: new Date().toISOString(), process: name, msg: message, ...(redact(fields) as Record<string, unknown>) }
+      process.stdout.write(`${JSON.stringify(line)}\n`)
+    }
+  return { info: write('info'), warn: write('warn'), error: write('error') }
+}
+const log = lineLog(mode)
+
+function refuse(reason: string): never {
+  console.error(`factory-${mode}: refused to start: ${reason}`)
+  process.exit(1)
+}
+
+let env: ReturnType<typeof loadFactoryEnv>
+let prefix: string
+try {
+  env = loadFactoryEnv()
+  prefix = queuePrefixFrom(readFactoryVariables().FACTORY_QUEUE_PREFIX, env.FACTORY_ENV)
+} catch (error) {
+  refuse((error as Error).message)
+}
+if (env.FACTORY_ENV === 'local' || env.FACTORY_ENV === 'test') {
+  const own = checkTestDatabaseUrl(env.FACTORY_DATABASE_URL, worktreeDatabaseNames(readWorktree(fileURLToPath(new URL('.', import.meta.url)))))
+  if (!own.ok) refuse(`${own.reason}; a local ${mode} runs only against this worktree's own database`)
+}
+
+let database: FactoryDatabase
+try {
+  database = await openFactoryDatabase({ connectionString: env.FACTORY_DATABASE_URL, pool: { max: 8 } })
+} catch (error) {
+  refuse(`the database refused the boot: ${(error as Error).message}`)
+}
+const redis = queueConnection(env.FACTORY_REDIS_URL)
+redis.on('error', (error) => log.warn({ err: error }, 'redis is unreachable'))
+const kit = openQueues({ connection: redis, prefix })
+
+const stops: Array<() => Promise<void>> = []
+if (mode === 'worker') {
+  const relay = startRelay({ database, publish: queuePublisher(kit), log })
+  const workers = startEventWorkers({ kit, handlers: HANDLERS, database, live: redis, log })
+  stops.push(() => relay.stop(), () => workers.close())
+} else {
+  const crons: CronJob[] = [outboxLagCron({ database, kit, log })]
+  const scheduler = startCrons(crons, { redis, prefix, log })
+  stops.push(() => scheduler.stop())
+}
+log.info({ prefix, environment: env.FACTORY_ENV }, `factory-${mode} started`)
+
+let closing = false
+async function shutdown(signal: string): Promise<void> {
+  if (closing) return
+  closing = true
+  log.info({ signal }, `factory-${mode} shutting down`)
+  for (const stop of stops) await stop().catch((error) => log.error({ err: error }, 'a part did not stop cleanly'))
+  await kit.close()
+  redis.disconnect()
+  await database.close()
+  process.exit(0)
+}
+process.once('SIGTERM', () => void shutdown('SIGTERM'))
+process.once('SIGINT', () => void shutdown('SIGINT'))
