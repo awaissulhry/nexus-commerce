@@ -1,0 +1,193 @@
+/*
+ * DS floor kit — QuantityPad (gap G6). The digit keys are the PIN pad's (`.nds-floor-pin-keys` / `.nds-floor-pin-key`
+ * in `../floor.css`), so both pads look and size alike. Every size here reads `--nds-density-*`; colours are semantic
+ * `--nds-*` roles, paired as the contrast gate measures them.
+ */
+
+/* A size container: the number beside the pad from 40 rem of its own width, stacked under it below. The PIN keys'
+   own container query (under 340 px) reads this container too, so on a phone the keys shrink as the PIN pad's do. */
+.nds-floor-qty {
+  container: nds-floor-qty / inline-size;
+  width: 100%;
+  min-width: 0;
+}
+.nds-floor-qty-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-density-target-gap);
+  justify-items: stretch;
+}
+.nds-floor-qty-pad {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+@container nds-floor-qty (min-width: 40rem) {
+  .nds-floor-qty-body[data-pad='true'] {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+  }
+  /* Beside the pad, Confirm sits level with the bottom row of keys: bottom right, under the thumb. */
+  .nds-floor-qty-body[data-pad='true'] .nds-floor-qty-confirm {
+    margin-top: auto;
+  }
+}
+
+.nds-floor-qty-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+.nds-floor-qty-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-density-gap);
+}
+.nds-floor-qty-label {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-floor-qty-expected {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+/* − [ number ] + : the steppers are squares the height of the PIN keys. */
+.nds-floor-qty-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: var(--nds-density-gap);
+}
+.nds-floor-qty-step.nds-floor-btn {
+  width: calc(var(--nds-density-control-h-primary) * 1.25);
+  min-height: calc(var(--nds-density-control-h-primary) * 1.25);
+  padding: 0;
+}
+.nds-floor-qty-step .nds-floor-icon {
+  width: calc(var(--nds-density-icon) * 1.25);
+  height: calc(var(--nds-density-icon) * 1.25);
+}
+.nds-floor-qty-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: calc(var(--nds-density-control-h-primary) * 1.25);
+  padding: var(--nds-space-4) var(--nds-density-pad-x);
+  border: 2px solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  overflow: hidden;
+  cursor: default;
+  transition: border-color 0.12s ease;
+}
+.nds-floor-qty-display:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-primary);
+  outline-offset: var(--nds-density-focus-offset);
+}
+.nds-floor-qty-display[data-invalid='true'] {
+  border-color: var(--nds-warning);
+}
+/* The number and its unit on one baseline, centred in the box. */
+.nds-floor-qty-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.nds-floor-qty-number {
+  min-width: 0;
+  font-size: calc(var(--nds-density-font-numeral) * 1.5);
+  font-weight: var(--nds-font-weight-extrabold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* A number the person did not type (the default, a step, a quick value) is marked like selected text: the first digit
+   replaces it. */
+.nds-floor-qty-display[data-fresh='true'][data-empty='false'] .nds-floor-qty-number {
+  padding: 0 0.08em;
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-wash-primary);
+}
+.nds-floor-qty-display[data-empty='true'] .nds-floor-qty-number {
+  color: var(--nds-text-3);
+}
+.nds-floor-qty-unit {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+  white-space: nowrap;
+}
+
+/* Too narrow for − number + on one line (a phone column under 20 rem): the number takes the first line, − and + share
+   the second. */
+@container nds-floor-qty (max-width: 19.99rem) {
+  .nds-floor-qty-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .nds-floor-qty-display {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .nds-floor-qty-step.nds-floor-btn {
+    width: auto;
+  }
+}
+
+/* Quick values and (with decimals) Clear: separate targets, 8 mm apart. */
+.nds-floor-qty-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-gap) var(--nds-density-target-gap);
+}
+.nds-floor-qty-quick > .nds-floor-btn {
+  flex: 0 1 auto;
+}
+.nds-floor-qty-quick > .nds-floor-btn[aria-pressed='true']:not(.quiet) {
+  border-color: var(--nds-primary);
+  background: var(--nds-primary-soft);
+  color: var(--nds-text);
+}
+
+.nds-floor-qty-notice {
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-space-14);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-floor-qty-notice[data-tone='danger'] {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-floor-qty-notice[data-tone='warning'] {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.nds-floor-qty-notice[data-tone='info'] {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+.nds-floor-qty-notice[data-tone='success'] {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+
+.nds-floor-qty-confirm {
+  margin-top: var(--nds-space-4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nds-floor-qty-display {
+    transition: none;
+  }
+}

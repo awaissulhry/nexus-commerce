@@ -1,0 +1,166 @@
+/*
+ * DS — SignBlock (gap G12). Sized by the page density (`--nds-density-*`): a link page's comfortable tier gets 44 px
+ * fields with 16 px text and 44 px ticks; at standard every size equals the console's own (the field's 30 px and 13 px),
+ * so the block looks like any console form there. Colours are semantic `--nds-*` roles, paired as the contrast gate
+ * measures them.
+ */
+.nds-sign {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+  line-height: 1.45;
+}
+.nds-sign-title {
+  font-size: calc(var(--nds-density-font-body) * 1.25);
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 1.25;
+}
+.nds-sign-summary {
+  min-width: 0;
+}
+.nds-sign-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+  margin: 0;
+}
+
+/* What accepting means: set apart, readable, never small print. */
+.nds-sign-legal {
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-inline-start: var(--nds-space-4) solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+}
+.nds-sign-legal > :first-child {
+  margin-top: 0;
+}
+.nds-sign-legal > :last-child {
+  margin-bottom: 0;
+}
+
+.nds-sign-acks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+.nds-sign-ack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+/* The whole line is the tick's target: at least the density's smallest target tall. */
+.nds-sign-ack > .nds-check {
+  align-items: center;
+  min-height: var(--nds-density-target-min);
+  font-size: var(--nds-density-font-body);
+  cursor: pointer;
+}
+.nds-sign-ack > .nds-check > input {
+  /* The console's 15 px box at standard, larger on the touch tiers. */
+  width: max(15px, calc(var(--nds-density-icon) * 0.9));
+  height: max(15px, calc(var(--nds-density-icon) * 0.9));
+  flex-shrink: 0;
+}
+.nds-sign-ack[data-invalid='true'] > .nds-check {
+  color: var(--nds-danger-text);
+}
+.nds-sign-error {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-danger-text);
+}
+
+/* The name and email fields: the density's control height and body text (16 px on comfortable: no phone zoom). */
+.nds-sign .nds-sign-input {
+  display: flex;
+  min-height: var(--nds-density-control-h);
+}
+.nds-sign .nds-sign-input > input {
+  font-size: var(--nds-density-font-body);
+  padding-inline: var(--nds-density-pad-x);
+}
+.nds-sign .nds-field-lbl {
+  font-size: var(--nds-density-font-label);
+}
+/* The console's 11.5 px at standard, a step under the label on the touch tiers. */
+.nds-sign :is(.nds-field-hint, .nds-field-error) {
+  font-size: max(var(--nds-font-size-xs-plus), calc(var(--nds-density-font-label) - 1px));
+}
+
+.nds-sign-message {
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-space-14);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-sign-message[data-tone='danger'] {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-sign-message[data-tone='warning'] {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.nds-sign-message[data-tone='info'] {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+.nds-sign-message[data-tone='success'] {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+
+/* Decline, then Accept last (the end of the row, the thumb's side); each fills the row on a phone-narrow block. */
+.nds-sign-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--nds-density-gap);
+}
+.nds-sign-actions > .nds-floor-btn {
+  flex: 0 1 12rem;
+}
+.nds-sign-actions > .nds-floor-btn:last-child {
+  flex: 1 1 16rem;
+  max-width: 24rem;
+}
+
+.nds-sign-done {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-16) var(--nds-density-pad-x);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+  font-size: var(--nds-density-font-body);
+}
+.nds-sign-done-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: var(--nds-density-icon);
+  height: var(--nds-density-icon);
+}
+.nds-sign-done-icon > svg {
+  width: 100%;
+  height: 100%;
+}
+.nds-sign-done-body {
+  min-width: 0;
+}
+.nds-sign-done-body > :first-child {
+  margin-top: 0;
+}
+.nds-sign-done-body > :last-child {
+  margin-bottom: 0;
+}

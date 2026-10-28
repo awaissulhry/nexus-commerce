@@ -126,3 +126,5 @@ export { heatKey, isHeatMarked, heatMax, heatAlpha, heatCellWords } from './heat
 // W0 parts (2026-10-28) — the phone bottom bar + More sheet (G14), the PDF viewer (G18) and the QR code (G7) are NOT
 // re-exported here: the web pulls this barrel into every page, so anything exported from it reaches every page's first
 // load. Each has an entry point of its own — `components/BottomBar`, `components/PdfViewer`, `components/QrCode`.
+// Factory gaps G11 G12 (2026-10-28) — the label preview (+ Code128) and the sign / accept block are NOT re-exported here
+// either, for the same reason: each has its own entry point — `components/LabelPreview`, `components/SignBlock`.

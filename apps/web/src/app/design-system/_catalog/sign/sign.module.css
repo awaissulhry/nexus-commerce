@@ -1,0 +1,64 @@
+/* Layout of the sign / accept catalogue examples: link pages drawn inside the catalogue. The block styles itself
+   (`packages/ui/src/components/SignBlock`). */
+
+.kit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-24);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.note {
+  margin: 0;
+  max-width: 72rem;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24.375rem), 1fr));
+  gap: var(--nds-space-16);
+  align-items: start;
+  margin-bottom: var(--nds-space-24);
+}
+
+.example {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.caption {
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nds-text-3);
+}
+
+/* A link page: the page ground, a 16 px gutter. */
+.page {
+  min-width: 0;
+  padding: var(--nds-space-16);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-bg);
+}
+
+.phone {
+  width: 100%;
+  max-width: 24.375rem;
+}
+
+.desktop {
+  max-width: 45rem;
+}
