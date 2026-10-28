@@ -78,6 +78,7 @@ model Company {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   sites  Site[]
   numberSeries NumberSeries[]
+  integrationAccounts IntegrationAccount[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.

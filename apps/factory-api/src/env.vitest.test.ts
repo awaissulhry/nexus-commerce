@@ -19,7 +19,12 @@ const RAILWAY = {
   FACTORY_REDIS_URL: REMOTE_REDIS,
   FACTORY_WEB_ORIGIN: 'https://factory.example.com',
   FACTORY_COOKIE_SECRET: 'a-random-secret-of-at-least-thirty-two-chars',
+  FACTORY_KMS_KEY_ID: 'arn:aws:kms:eu-south-1:000000000000:key/00000000-0000-0000-0000-000000000000',
+  FACTORY_AWS_ACCESS_KEY_ID: 'AKIAEXAMPLEEXAMPLE00',
+  FACTORY_AWS_SECRET_ACCESS_KEY: 'not-a-real-secret-access-key-for-tests',
 }
+/** A made-up master key (32 bytes of 0x01), never a real one. */
+const TEST_MASTER_KEY = Buffer.alloc(32, 1).toString('base64')
 
 const folders: string[] = []
 function variablesFile(content: string): string {
@@ -136,6 +141,29 @@ describe('refusals', () => {
     expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_TRUST_PROXY_HOPS: 'all' }, undefined)).toThrow(/FACTORY_TRUST_PROXY_HOPS/)
   })
 
+  it.each(['production', 'staging'])('refuses a local master key with FACTORY_ENV=%s, and needs the KMS key and its AWS keys', (name) => {
+    expect(() => parseFactoryEnv({ ...RAILWAY, FACTORY_ENV: name, FACTORY_SECRETS_MASTER_KEY: TEST_MASTER_KEY }, 'production')).toThrow(
+      /FACTORY_SECRETS_MASTER_KEY \(a local master key\) is refused/,
+    )
+    for (const key of ['FACTORY_KMS_KEY_ID', 'FACTORY_AWS_ACCESS_KEY_ID', 'FACTORY_AWS_SECRET_ACCESS_KEY'] as const) {
+      const { [key]: _unused, ...rest } = RAILWAY
+      expect(() => parseFactoryEnv({ ...rest, FACTORY_ENV: name }, 'production'), key).toThrow(new RegExp(`${key} must be set`))
+    }
+  })
+
+  it.each(['local', 'test'])('refuses KMS and AWS variables with FACTORY_ENV=%s (nothing local reaches AWS)', (name) => {
+    for (const key of ['FACTORY_KMS_KEY_ID', 'FACTORY_AWS_ACCESS_KEY_ID', 'FACTORY_AWS_SECRET_ACCESS_KEY'] as const) {
+      expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_ENV: name, [key]: RAILWAY[key] }, undefined), key).toThrow(new RegExp(`${key} is for staging and production only`))
+    }
+  })
+
+  it('refuses a master key that is not 32 bytes in base64', () => {
+    for (const key of ['short', Buffer.alloc(16, 1).toString('base64'), Buffer.alloc(48, 1).toString('base64'), `${TEST_MASTER_KEY.slice(0, -1)}!`]) {
+      expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_SECRETS_MASTER_KEY: key }, undefined), key).toThrow(/FACTORY_SECRETS_MASTER_KEY/)
+    }
+    expect(parseFactoryEnv({ ...LOCAL, FACTORY_SECRETS_MASTER_KEY: TEST_MASTER_KEY }, undefined).FACTORY_SECRETS_MASTER_KEY).toBe(TEST_MASTER_KEY)
+  })
+
   it('does not let the file pretend to be Railway', () => {
     const file = variablesFile(
       `FACTORY_ENV=production\nFACTORY_DATABASE_URL=${REMOTE_DATABASE}\nFACTORY_REDIS_URL=${REMOTE_REDIS}\nRAILWAY_ENVIRONMENT=production`,
@@ -153,6 +181,7 @@ describe('accepted', () => {
       FACTORY_WEB_ORIGIN: 'http://localhost:3200',
       FACTORY_COOKIE_SECRET: LOCAL_COOKIE_SECRET,
       FACTORY_TRUST_PROXY_HOPS: 0,
+      FACTORY_AWS_REGION: 'eu-south-1',
     })
   })
 

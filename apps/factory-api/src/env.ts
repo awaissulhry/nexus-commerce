@@ -20,12 +20,21 @@ import { describeUrlHost, isLoopbackUrl } from '@nexus/db-kit/url-guard'
  *   FACTORY_WEB_ORIGIN        the factory web's origin, the only one allowed cross-origin (local: http://localhost:3200)
  *   FACTORY_COOKIE_SECRET     signs cookies; local and test fall back to a fixed placeholder
  *   FACTORY_TRUST_PROXY_HOPS  proxies in front of the API whose X-Forwarded-For is trusted (default 0)
+ *   FACTORY_SECRETS_MASTER_KEY  local and test only: the master key that wraps the data keys of sealed secrets
+ *                             (platform/secrets), 32 random bytes in base64 (`openssl rand -base64 32`); optional (sealing
+ *                             and opening fail without it)
+ *   FACTORY_KMS_KEY_ID        staging and production only, and required there: the AWS KMS key that wraps them instead
+ *   FACTORY_AWS_REGION        default eu-south-1
+ *   FACTORY_AWS_ACCESS_KEY_ID, FACTORY_AWS_SECRET_ACCESS_KEY
+ *                             staging and production only, and required there: the IAM user for KMS (passed to the AWS
+ *                             client explicitly, so it never falls back to a profile or another variable)
  *
  * Refusals:
  *   - FACTORY_ENV local or test: the database and Redis must be on this machine (loopback), and FACTORY_QUEUE_PREFIX
- *     must be set;
+ *     must be set; no KMS or AWS variable (nothing local reaches AWS);
  *   - FACTORY_ENV staging or production: only on Railway (RAILWAY_ENVIRONMENT set by the platform, never by the file),
- *     with an https web origin and a real cookie secret of at least 32 characters (never the local placeholder).
+ *     with an https web origin, a real cookie secret of at least 32 characters (never the local placeholder), the KMS key
+ *     and its AWS keys, and no local master key.
  */
 export const FACTORY_ENV_FILE = fileURLToPath(new URL('../.env', import.meta.url))
 
@@ -69,6 +78,16 @@ const schema = z.object({
   FACTORY_WEB_ORIGIN: origin.optional(),
   FACTORY_COOKIE_SECRET: z.string().min(1).optional(),
   FACTORY_TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+  FACTORY_SECRETS_MASTER_KEY: z
+    .string()
+    .refine((value) => /^[A-Za-z0-9+/]{43}=$/.test(value) && Buffer.from(value, 'base64').length === 32, {
+      message: 'must be 32 random bytes in base64 (openssl rand -base64 32)',
+    })
+    .optional(),
+  FACTORY_KMS_KEY_ID: z.string().min(1).optional(),
+  FACTORY_AWS_REGION: z.string().regex(/^[a-z]{2}(-[a-z]+)+-\d$/, { message: 'must be an AWS region such as eu-south-1' }).default('eu-south-1'),
+  FACTORY_AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
+  FACTORY_AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
 })
 
 export type FactoryEnv = Readonly<
@@ -114,6 +133,11 @@ export function parseFactoryEnv(variables: Record<string, string>, railwayEnviro
         `FACTORY_QUEUE_PREFIX is required with FACTORY_ENV=${env.FACTORY_ENV}: the local Redis is shared by every worktree, so name this worktree's own (e.g. w0_12)`,
       )
     }
+    for (const key of ['FACTORY_KMS_KEY_ID', 'FACTORY_AWS_ACCESS_KEY_ID', 'FACTORY_AWS_SECRET_ACCESS_KEY'] as const) {
+      if (env[key] !== undefined) {
+        throw new FactoryEnvError(`${key} is for staging and production only; with FACTORY_ENV=${env.FACTORY_ENV} secrets use FACTORY_SECRETS_MASTER_KEY`)
+      }
+    }
   } else if (railwayEnvironment === undefined || railwayEnvironment === '') {
     throw new FactoryEnvError(
       `FACTORY_ENV=${env.FACTORY_ENV} runs only on Railway (RAILWAY_ENVIRONMENT is not set); use local or test here`,
@@ -127,6 +151,12 @@ export function parseFactoryEnv(variables: Record<string, string>, railwayEnviro
       throw new FactoryEnvError(
         `FACTORY_COOKIE_SECRET must be a random secret of at least 32 characters with FACTORY_ENV=${env.FACTORY_ENV} (not the local placeholder)`,
       )
+    }
+    if (env.FACTORY_SECRETS_MASTER_KEY !== undefined) {
+      throw new FactoryEnvError(`FACTORY_SECRETS_MASTER_KEY (a local master key) is refused with FACTORY_ENV=${env.FACTORY_ENV}; secrets are wrapped by AWS KMS there`)
+    }
+    for (const key of ['FACTORY_KMS_KEY_ID', 'FACTORY_AWS_ACCESS_KEY_ID', 'FACTORY_AWS_SECRET_ACCESS_KEY'] as const) {
+      if (env[key] === undefined) throw new FactoryEnvError(`${key} must be set with FACTORY_ENV=${env.FACTORY_ENV}: secrets are wrapped by AWS KMS there`)
     }
   }
   return Object.freeze({
