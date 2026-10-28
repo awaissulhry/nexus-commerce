@@ -31,7 +31,7 @@ Each app and package below has its own CLAUDE.md; it loads when you open a file 
     node scripts/run-real-postgres-tests.mjs  # race/end-to-end suites on a throwaway Docker PostgreSQL 17
     cd apps/web && npx playwright test pressable-row   # needs the web dev server on :3000
     npm run check:drift                       # every Prisma model and column has a migration
-    npm run tokens:gen                        # after editing apps/web/src/design-system/tokens/*.ts
+    npm run tokens:gen                        # after editing packages/ui/src/tokens/*.ts
 
 - There is no linter. `npm run lint` fails: Next 16 removed `next lint` and there is no ESLint config.
 - API tests refuse to start unless `DATABASE_URL` is loopback and names `nexus_development` or a `*test*` database,
@@ -55,8 +55,8 @@ Each app and package below has its own CLAUDE.md; it loads when you open a file 
 - `npm run typecheck -w <workspace>` passes for every workspace you changed.
 - The tests of the changed area pass (the file or directory, not the whole suite).
 - Schema changed → a migration in the same PR and `npm run check:drift` passes (packages/database/CLAUDE.md).
-- UI: design-system components, and no new Tailwind classes (apps/web/CLAUDE.md). Check it by keyboard, and in
-  light and dark at phone and desktop widths.
+- UI: design-system components, and no new Tailwind classes (apps/web/CLAUDE.md, packages/ui/CLAUDE.md). Check it
+  by keyboard, and in light and dark at phone and desktop widths.
 
 ## Hard rules
 1. **Nothing from this machine touches production.** On this machine the root `.env` holds the production
@@ -75,5 +75,5 @@ Each app and package below has its own CLAUDE.md; it loads when you open a file 
    migration history does not replay from zero. The local dev database is shared with other sessions.
 7. **Schedule crons only through `apps/api/src/lib/cron/clustered.ts`.** A plain `node-cron` job runs once per replica.
 8. **Declare every event type in `packages/events/catalog.ts`.** An undeclared publish throws inside the mutation.
-9. **Never hand-edit generated files:** `apps/web/src/design-system/styles/tokens*.css` (`npm run tokens:gen`) and
+9. **Never hand-edit generated files:** `packages/ui/src/styles/tokens*.css` (`npm run tokens:gen`) and
    `packages/database/*.js` (`npm run build -w @nexus/database`).

@@ -100,5 +100,5 @@ cd ~/nexus-commerce && ./scripts/vault-refresh.sh
 - `/products/amazon-flat-file` and `/products/ebay-flat-file` pages/routes are **untouchable** — sync via shared store only
 - Operators read **English only** — Italian is for customer-facing listing content
 - No local Docker/scratch DBs for verification — commit → push → Railway/Vercel live
-- Design system (`apps/web/src/design-system`) is **mandatory** for all new UI — no hand-rolled components
+- Design system (`packages/ui/src`, `@nexus/ui`) is **mandatory** for all new UI — no hand-rolled components
 - Typesense dormant by choice — Postgres FTS is sufficient at current scale

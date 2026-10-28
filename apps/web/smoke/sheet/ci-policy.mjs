@@ -20,8 +20,8 @@ export function ciPassed(needs) {
 export function selfTest() {
   for (const path of [
     'apps/web/src/app/products/[id]/edit/_studio/sheet/master/columns.tsx',
-    'apps/web/src/design-system/components/ListboxPanel.tsx', 'apps/web/src/lib/auth/install-fetch.ts',
-    'apps/web/src/design-system/grid/editors/shapeColumn.ts', 'apps/web/smoke/sheet/drivers.ts',
+    'packages/ui/src/components/ListboxPanel.tsx', 'apps/web/src/lib/auth/install-fetch.ts',
+    'packages/ui/src/grid/editors/shapeColumn.ts', 'apps/web/smoke/sheet/drivers.ts',
     'apps/api/src/services/products/bulk-edit.service.ts', 'apps/api/src/lib/workspace-hook.ts',
     'apps/api/src/services/pim/channel-specs/ebay.ts', 'packages/database/workspace-adapter.ts',
     'packages/shared/src/sheet-cell-wire.ts', 'packages/events/catalog.ts',

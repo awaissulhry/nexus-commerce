@@ -19,7 +19,7 @@ test('every gate declares its watched files, parsed from its own source (positiv
 
 test('🔴 path scope: a watched file runs its gate; an unwatched push runs nothing', () => {
   assert.deepEqual(gatesToRun(['apps/api/src/services/foo.ts', 'docs/x.md'], stamps), [])
-  assert.deepEqual(gatesToRun(['apps/web/src/design-system/grid/NexusGrid.tsx'], stamps).map((g) => g.id).sort(), ['editor-open', 'grid-chrome'])
+  assert.deepEqual(gatesToRun(['packages/ui/src/grid/NexusGrid.tsx'], stamps).map((g) => g.id).sort(), ['editor-open', 'grid-chrome'])
   assert.deepEqual(gatesToRun(['apps/web/src/app/products/[id]/edit/_studio/sheet/master/columns.tsx'], stamps).map((g) => g.id).sort(), ['control-census', 'editor-open'])
   assert.deepEqual(gatesToRun(['scripts/studio-gate-session.mjs'], stamps).map((g) => g.id), GATES.map((g) => g.id)) // COMMON runs all
   assert.equal(watches('apps/web/src/lib/workspaces/', 'apps/web/src/lib/workspaces/paths.ts'), true)

@@ -4,7 +4,7 @@
  *
  * Opens /design/grid-lab?tab=gds (every scenario, frozen fixtures, no API), calls the page's
  * `window.__gdsProbe()` at each density, in both themes, at a laptop and a monitor width, and holds
- * what the grids actually computed against `apps/web/src/design-system/grid/spec.json`:
+ * what the grids actually computed against `packages/ui/src/grid/spec.json`:
  * row / header / strip / totals heights, partition width and height, selection column, thumbnail,
  * header/cell colours, row rule, hover/selected variables. The spec is the same table `GRID.md`
  * prints, so a number in the doc is a number a browser has confirmed.
@@ -37,16 +37,16 @@ const PAGE_BASE = WORKSPACE ? `${BASE}/w/${encodeURIComponent(WORKSPACE)}` : BAS
 /** Every file whose change can invalidate this reading — read by `scripts/run-browser-gates.mjs` to decide whether a push
  *  must run this gate. A path ending `/` covers everything under it. */
 const STAMP_FILES = [
-  'apps/web/src/design-system/grid/',
-  'apps/web/src/design-system/styles/',
-  'apps/web/src/design-system/tokens/',
+  'packages/ui/src/grid/',
+  'packages/ui/src/styles/',
+  'packages/ui/src/tokens/',
   'apps/web/src/app/design/grid-lab/',
   'scripts/check-grid-chrome.mjs',
   'scripts/studio-browser-auth.mjs',
   'scripts/lib/gate-write-guard.mjs',
 ]
 const STRICT = process.argv.includes('--strict')
-const spec = JSON.parse(readFileSync('apps/web/src/design-system/grid/spec.json', 'utf8'))
+const spec = JSON.parse(readFileSync('packages/ui/src/grid/spec.json', 'utf8'))
 
 // 🔴 60s, not 8s (hub #522). A cold Turbopack route under load is a COMPILE WAIT, not a down
 // server: on 2026-09-02 with the machine at load 23 and six concurrent tsc runs, :3000 was

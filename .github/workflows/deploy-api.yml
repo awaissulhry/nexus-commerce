@@ -41,6 +41,8 @@ on:
       - 'packages/database/**'
       - 'packages/shared/**'
       - 'packages/events/**'
+      # The design system (@nexus/ui), which the web compiles from source.
+      - 'packages/ui/**'
       - 'package.json'
       - 'package-lock.json'
       - 'patches/**'

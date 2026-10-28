@@ -8,7 +8,7 @@
  * nothing would have noticed a third.
  *
  * ALLOWED, and why:
- *   design-system/grid/                            the engine itself — the seam (GDS).
+ *   packages/ui/src/grid/ (@nexus/ui)              the engine itself — the seam (GDS).
  *   app/design/grid-lab/                           the labs. Design-system routes, no product
  *                                                  surface depends on them, and the feature lab
  *                                                  exists precisely to use APIs the engine's
@@ -24,7 +24,7 @@ import ts from 'typescript'
 import { stripComments } from './lib/strip-comments.mjs'
 
 const ALLOWED = [
-  'apps/web/src/design-system/grid/',
+  'packages/ui/src/grid/',
   'apps/factory/src/design-system/grid/', // The required factory mirror is the same engine boundary.
   'apps/web/src/app/design/grid-lab/',
 ]
@@ -34,8 +34,8 @@ const IMPORT = /(?:^|\n)\s*(?:import[\s\S]{0,200}?from\s*|import\s*|export[\s\S]
 
 // The current migration is intentionally local and includes untracked adapters.
 const files = [...new Set([
-  ...execSync('git ls-files "apps/**/*.ts" "apps/**/*.tsx"', { encoding: 'utf8' }).split('\n'),
-  ...execSync('git ls-files --others --exclude-standard "apps/**/*.ts" "apps/**/*.tsx"', { encoding: 'utf8' }).split('\n'),
+  ...execSync('git ls-files "apps/**/*.ts" "apps/**/*.tsx" "packages/ui/**/*.ts" "packages/ui/**/*.tsx"', { encoding: 'utf8' }).split('\n'),
+  ...execSync('git ls-files --others --exclude-standard "apps/**/*.ts" "apps/**/*.tsx" "packages/ui/**/*.ts" "packages/ui/**/*.tsx"', { encoding: 'utf8' }).split('\n'),
 ])].filter(Boolean)
 
 const offenders = []
@@ -73,15 +73,15 @@ for (const f of files) {
 // route stylesheet are in scope; the engine's own `design-system/grid/theme/grid.css` is the one
 // place those selectors live. Tracked AND untracked, so a sheet a session just wrote counts.
 const cssFiles = [...new Set([
-  ...execSync('git ls-files "apps/web/src/**/*.css"', { encoding: 'utf8' }).split('\n'),
-  ...execSync('git ls-files --others --exclude-standard "apps/web/src/**/*.css"', { encoding: 'utf8' }).split('\n'),
+  ...execSync('git ls-files "apps/web/src/**/*.css" "packages/ui/src/**/*.css"', { encoding: 'utf8' }).split('\n'),
+  ...execSync('git ls-files --others --exclude-standard "apps/web/src/**/*.css" "packages/ui/src/**/*.css"', { encoding: 'utf8' }).split('\n'),
 ])].filter(Boolean)
 // `.nds-cell-*` is the cell library; `.nds-grid-{pager,footstrip,card,panel,skel,noRows}` the hosts and
 // toolbars. (`.nds-grid`, `.nds-grid-wrap/-sub/-kid/-empty/-prefsbar` are the RETIRING DS DataGrid's,
 // defined in components.css until wave 1 — deliberately not in scope.)
 const SELECTOR_LINE = /^[^/*{}]*\.(ag-[a-z]|nds-ag-|nds-cell-|nds-grid-(pager|footstrip|card|panel|sheet|skel|noRows|selbar|search))[\w-]*[^{};]*\{/
 for (const f of cssFiles) {
-  if (f.startsWith('apps/web/src/design-system/grid/')) continue
+  if (f.startsWith('packages/ui/src/grid/')) continue
   let src
   try { src = readFileSync(f, 'utf8') } catch { continue }
   if (!/\.(ag-[a-z]|nds-ag-|nds-cell-|nds-grid-(pager|footstrip|card|panel|sheet|skel|noRows|selbar|search))/.test(src)) continue
@@ -94,7 +94,7 @@ if (offenders.length) {
   console.error(`\n❌ ag-grid import boundary: ${offenders.length} file(s) import AG Grid outside the engine and the labs:\n`)
   for (const o of offenders) console.error(`   ${o}`)
   console.error(`\n   The engine is the migration's seam — `)
-  console.error(`   apps/web/src/design-system/grid/NexusGrid.tsx.`)
+  console.error(`   packages/ui/src/grid/NexusGrid.tsx.`)
   console.error(`   A page hands NexusGrid AG's own ColDef[] and options through the DS barrel, never imports AG directly,`)
   console.error(`   so that swapping or reverting the engine stays one file.\n`)
   process.exit(1)

@@ -109,7 +109,7 @@ User action (save product / publish listing)
 | **SSE over WebSocket** | Simpler for one-way server push; 5 active streams |
 | **BullMQ for all async** | Unified queue abstraction; 102 cron + 8 workers |
 | **Prisma for all DB** | Single schema source of truth; 310 migrations tracked |
-| **Design system mandatory** | All UI from `apps/web/src/design-system` primitives |
+| **Design system mandatory** | All UI from `packages/ui/src` (`@nexus/ui`) primitives |
 
 ---
 

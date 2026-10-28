@@ -41,17 +41,17 @@ const BUILDERS = [
   `${STUDIO}/sheet/master/columns.tsx`,
   `${STUDIO}/media/productMediaColumn.tsx`,
   `${STUDIO}/shopify/ShopifyDraftCell.tsx`,
-  'apps/web/src/design-system/grid/editors/shapeColumn.ts',
-  'apps/web/src/design-system/grid/editors/slotListColumn.ts',
-  'apps/web/src/design-system/grid/editors/SelectCellEditor.tsx',
-  'apps/web/src/design-system/grid/editors/sheet.ts',
-  'apps/web/src/design-system/grid/editors/FormulaCellEditor.tsx',
+  'packages/ui/src/grid/editors/shapeColumn.ts',
+  'packages/ui/src/grid/editors/slotListColumn.ts',
+  'packages/ui/src/grid/editors/SelectCellEditor.tsx',
+  'packages/ui/src/grid/editors/sheet.ts',
+  'packages/ui/src/grid/editors/FormulaCellEditor.tsx',
 ]
 /** Components a builder names that are not editors of their own: they wrap the editor that holds the value. */
 const WRAPPERS = { FormulaAwareEditor: 'wraps the column\'s own editor to catch a typed `=`; the editor inside is the one tested' }
 const UNIT_TEST = `${STUDIO}/sheet/sheetEditorKeys.vitest.test.ts`
 const SWEEP = 'apps/web/smoke/sheet/drivers.ts'
-const OPEN_GESTURE = 'apps/web/src/design-system/grid/editors/openGesture.ts'
+const OPEN_GESTURE = 'packages/ui/src/grid/editors/openGesture.ts'
 const API_KINDS = 'apps/api/src/services/pim/sheet-columns.service.ts'
 const WEB_KINDS = [`${STUDIO}/sheet/master/types.ts`, `${STUDIO}/sheet/channel/types.ts`, `${STUDIO}/drawer/types.ts`]
 const BASELINE = process.env.SHEET_EDITOR_COVERAGE_BASELINE ?? join(ROOT, 'scripts/sheet-editor-coverage-baseline.json')

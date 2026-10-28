@@ -9,7 +9,7 @@ patterns, and the tokenized stylesheets. Everything must resolve through a token
 is excepted (it *defines* the palette); `catalog/` is out of scope (a demo).
 
 ```bash
-node apps/web/src/design-system/tools/token-guard.mjs
+node packages/ui/src/tools/token-guard.mjs
 ```
 
 **Enforce it:** add that line to `.githooks/pre-push` (next to the existing P3

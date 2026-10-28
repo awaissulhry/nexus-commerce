@@ -87,7 +87,7 @@ describe('🔴 the sequence is NOT reimplemented here (#124)', () => {
 describe('🔴 the slide-over cannot hide the confirmation it raises', () => {
   const css = () =>
     readFileSync(
-      join(__dirname, '..', '..', '..', '..', '..', '..', 'design-system', 'styles', 'components.css'),
+      join(__dirname, '..', '..', '..', '..', '..', '..', '..', '..', '..', 'packages', 'ui', 'src', 'styles', 'components.css'),
       'utf8',
     )
 
@@ -122,7 +122,7 @@ describe('🔴 the slide-over cannot hide the confirmation it raises', () => {
     // The reasoning above is only sound while overlay < drawer. If a future token change inverted
     // them, the rule above would pass while the bug returned.
     const tokens = readFileSync(
-      join(__dirname, '..', '..', '..', '..', '..', '..', 'design-system', 'styles', 'tokens.css'),
+      join(__dirname, '..', '..', '..', '..', '..', '..', '..', '..', '..', 'packages', 'ui', 'src', 'styles', 'tokens.css'),
       'utf8',
     )
     const val = (name: string) => Number(new RegExp(`--nds-z-${name}:\\s*(\\d+)`).exec(tokens)?.[1])

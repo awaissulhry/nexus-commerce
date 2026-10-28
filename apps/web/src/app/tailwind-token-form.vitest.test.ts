@@ -21,7 +21,7 @@ import config from '../../tailwind.config'
 
 const HERE = import.meta.dirname
 const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '')
-const tokensGlobal = stripComments(readFileSync(join(HERE, '..', 'design-system', 'styles', 'tokens-global.css'), 'utf8'))
+const tokensGlobal = stripComments(readFileSync(join(HERE, '..', '..', '..', '..', 'packages', 'ui', 'src', 'styles', 'tokens-global.css'), 'utf8'))
 
 /** The names globals.css once defined as RGB numbers and tokens.css defines as whole colours. */
 const CONTESTED = [

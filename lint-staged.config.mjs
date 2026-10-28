@@ -17,7 +17,7 @@ export default {
     'node scripts/check-css-radius-ratchet.mjs --check',
     'node scripts/check-css-ds-shadow-ratchet.mjs --check',
   ),
-  'apps/*/src/**/*.{ts,tsx}': run(
+  '{apps/*,packages/ui}/src/**/*.{ts,tsx}': run(
     'node scripts/check-raw-primitives-ratchet.mjs --check',
     'node scripts/check-ag-grid-import-boundary.mjs',
     'node scripts/check-route-prisma-ratchet.mjs --check',
@@ -31,5 +31,5 @@ export default {
     'node packages/database/scripts/check-model-ownership.mjs',
     'node scripts/check-migration-expand-contract.mjs',
   ),
-  'apps/*/src/design-system/tokens/**': run('npm run tokens:check --silent', 'npm run tokens:check:factory --silent'),
+  '{apps/*/src/design-system,packages/ui/src}/tokens/**': run('npm run tokens:check --silent', 'npm run tokens:check:factory --silent'),
 }

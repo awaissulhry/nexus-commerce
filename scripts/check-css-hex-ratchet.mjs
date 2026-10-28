@@ -33,10 +33,12 @@ import { execSync } from 'node:child_process';
 import { join, relative } from 'node:path';
 
 const ROOT = join(process.cwd(), 'apps/web/src');
+// The web's design system lives in @nexus/ui since it moved out of apps/web/src; its files are keyed repo-relative.
+const UI_ROOT = join(process.cwd(), 'packages/ui/src');
 const BASELINE = join(process.cwd(), 'scripts/css-hex-baseline.json');
 
 /** The palette SOURCE. Literals belong here and nowhere else — this is what the tokens are. */
-const TOKEN_SOURCES = ['design-system/styles/tokens.css', 'design-system/styles/tokens-global.css'];
+const TOKEN_SOURCES = ['packages/ui/src/styles/tokens.css', 'packages/ui/src/styles/tokens-global.css'];
 
 const HEX = /#[0-9a-fA-F]{3,8}\b/g;
 
@@ -72,8 +74,7 @@ function* walk(dir) {
 }
 
 const counts = {};
-for (const file of walk(ROOT)) {
-  const rel = relative(ROOT, file);
+for (const [file, rel] of [...[...walk(ROOT)].map((f) => [f, relative(ROOT, f)]), ...[...walk(UI_ROOT)].map((f) => [f, relative(process.cwd(), f)])]) {
   if (TOKEN_SOURCES.includes(rel)) continue;
   // Comments are not code. Several of these files DOCUMENT a literal on purpose ("#b87503 lives in
   // the shell half"), and counting the explanation would push people to delete the explanation.

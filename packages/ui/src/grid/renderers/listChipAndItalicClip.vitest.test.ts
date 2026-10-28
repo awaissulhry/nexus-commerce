@@ -11,9 +11,10 @@ import { describe, expect, it } from 'vitest'
  * Text assertions, and they know it: the behaviour was read off the screen (chip 20px against a
  * 104px text; the text's right edge equal to its clip edge) and these hold the shape of the fix.
  */
-const web = join(__dirname, '..', '..', '..')
+// The design system's root (packages/ui/src): every file this guard reads is inside it.
+const ds = join(__dirname, '..', '..')
 const read = (rel: string) => {
-  const src = readFileSync(join(web, rel), 'utf8')
+  const src = readFileSync(join(ds, rel), 'utf8')
   // A guard that cannot find its subject says NOT MEASURED, never "clean".
   if (!src.trim()) throw new Error(`${rel} is empty — the guard has nothing to check`)
   return src
@@ -21,13 +22,13 @@ const read = (rel: string) => {
 
 describe('the list value chip never wears the identity badge class', () => {
   it('shapeCells hands TokenChip its own class', () => {
-    const src = read('design-system/grid/renderers/shapeCells.tsx')
+    const src = read('grid/renderers/shapeCells.tsx')
     expect(src).toMatch(/className="nds-cell-listchip"/)
     expect(src).not.toMatch(/className="nds-cell-chip"/)
   })
 
   it('grid.css pins no fixed WIDTH on the list token, and never routes the badge rule into a list', () => {
-    const css = read('design-system/grid/theme/grid.css').replace(/\/\*[\s\S]*?\*\//g, '')
+    const css = read('grid/theme/grid.css').replace(/\/\*[\s\S]*?\*\//g, '')
     const listRule = css.match(/\.nds-cell-list \.nds-token \{[^}]*\}/)?.[0] ?? ''
     expect(listRule, 'no `.nds-cell-list .nds-token` rule — the guard has nothing to check').toBeTruthy()
     // `max-width` is the chip's ceiling and stays; a bare `width:` is the badge's mistake.
@@ -38,7 +39,7 @@ describe('the list value chip never wears the identity badge class', () => {
 
 describe('italic text inside a clipped cell carries an end padding, so the last glyph can paint', () => {
   it('.nds-cell-required and the ai-draft cell text both do', () => {
-    const css = read('design-system/grid/theme/grid.css')
+    const css = read('grid/theme/grid.css')
     const req = css.match(/\.nds-cell-required \{[^}]*\}/)?.[0] ?? ''
     expect(req, 'no `.nds-cell-required` rule').toBeTruthy()
     expect(req).toMatch(/font-style:\s*italic/)
@@ -47,7 +48,7 @@ describe('italic text inside a clipped cell carries an end padding, so the last 
   })
 
   it('every italic rule in grid.css is one of the padded ones (a NEW italic needs its padding, or an exemption here)', () => {
-    const css = read('design-system/grid/theme/grid.css')
+    const css = read('grid/theme/grid.css')
     const selectors = [...css.matchAll(/([^{}]+)\{[^}]*font-style:\s*italic[^}]*\}/g)].map((m) => m[1].trim().split('\n').pop()!.trim())
     expect(selectors.length, 'no italic rule found at all — the guard has nothing to check').toBeGreaterThan(0)
     const known = [

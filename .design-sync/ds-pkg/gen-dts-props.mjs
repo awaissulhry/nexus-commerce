@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..');
-const dsRoot = join(repo, 'apps/web/src/design-system');
+const dsRoot = join(repo, 'packages/ui/src');
 const bundle = join(repo, 'ds-bundle/components');
 const configPath = join(repo, '.design-sync/config.json');
 

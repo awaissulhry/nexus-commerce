@@ -25,7 +25,7 @@ describe('the header fold restyles the header, not the grid', () => {
 
   // Step 4 (D6) — the fold's look moved into the design system; the studio no longer restyles the DS header.
   it('every folded rule is scoped to the fold host, and the studio restyles no DS header', () => {
-    const css = read('../../../../../design-system/styles/patterns.css').replace(/\/\*[\s\S]*?\*\//g, '')
+    const css = read('../../../../../../../../packages/ui/src/styles/patterns.css').replace(/\/\*[\s\S]*?\*\//g, '')
     const selectors = [...css.matchAll(/^\s*([^{}/]*\.is-folded[^{}]*)\{/gm)].map((m) => m[1].trim())
     expect(selectors.length).toBe(4)
     for (const selector of selectors) for (const part of selector.split(',')) expect(part.trim()).toMatch(/^\.nds-detailhdr-fold\.is-folded /)
@@ -33,7 +33,7 @@ describe('the header fold restyles the header, not the grid', () => {
   })
 
   it('the sheet top is a non-inherited property, in the web and Factory copies alike', () => {
-    for (const path of ['../../../../../design-system/grid/theme/grid.css', '../../../../../../../factory/src/design-system/grid/theme/grid.css']) {
+    for (const path of ['../../../../../../../../packages/ui/src/grid/theme/grid.css', '../../../../../../../factory/src/design-system/grid/theme/grid.css']) {
       expect(read(path)).toMatch(/@property --nds-grid-sheet-top \{ syntax: '<length>'; inherits: false; initial-value: 0px; \}/)
     }
   })

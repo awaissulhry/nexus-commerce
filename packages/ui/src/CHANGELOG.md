@@ -1,3 +1,13 @@
+## The design system is its own package, `@nexus/ui` — 2026-10-28
+
+Moved from `apps/web/src/design-system/` to `packages/ui/src/` as one `git mv` (every file keeps its history). Nothing
+inside changed: same folders, same files, same behaviour. The web still imports it as `@/design-system/*`
+(`apps/web/tsconfig.json` and `apps/web/vitest.config.ts` point that at `packages/ui/src`; `next.config.js` compiles it
+through `transpilePackages`). Its tests run from here: `cd packages/ui && npx vitest run`. Two tests that read app or API
+files left with that half: the sheets' tooltip wiring (`apps/web/src/app/products/[id]/edit/_studio/sheet/`) and the
+listing-status contract with the API's writers (`apps/web/src/lib/`). `scripts/check-ds-moved.mjs` fails if
+`apps/web/src/design-system` comes back.
+
 ## Native controls always use the DS font — 2026-10-28
 
 Owner, on Reviews › Insights › Fixes: "I'm still seeing a breach of the Arial font … Remove it from everywhere in the

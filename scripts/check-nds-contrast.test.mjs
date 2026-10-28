@@ -9,7 +9,7 @@ import { join } from 'node:path'
 
 const ROOT = new URL('..', import.meta.url).pathname
 const SCRIPT = join(ROOT, 'scripts/check-nds-contrast.mjs')
-const REAL = join(ROOT, 'apps/web/src/design-system/styles/tokens.css')
+const REAL = join(ROOT, 'packages/ui/src/styles/tokens.css')
 const dir = mkdtempSync(join(tmpdir(), 'nds-contrast-'))
 let n = 0
 /** A copy of the real tokens with one exact declaration swapped (asserted to exist exactly once in :root). */
@@ -45,7 +45,7 @@ test('Tag tones measure the actual component foreground/background in both theme
 })
 
 test('a Tag use-site regression fails even when its unused semantic text token still passes', () => {
-  const source = readFileSync(join(ROOT, 'apps/web/src/design-system/styles/primitives.css'), 'utf8')
+  const source = readFileSync(join(ROOT, 'packages/ui/src/styles/primitives.css'), 'utf8')
   const anchor = '.nds-tag.danger { color: var(--nds-danger-text);'
   assert.equal(source.split(anchor).length, 2)
   const path = join(dir, 'tag-regression.css')

@@ -57,7 +57,7 @@ echo "$CHANGED_FILES" | grep -qE "apps/api/src/jobs/|\.job\.ts" \
 echo "$CHANGED_FILES" | grep -qE "apps/web/src/app/" \
   && NEEDS_UPDATE+=("10 - Pages & Routes")
 
-echo "$CHANGED_FILES" | grep -qE "apps/web/src/design-system/" \
+echo "$CHANGED_FILES" | grep -qE "packages/ui/src/" \
   && NEEDS_UPDATE+=("09 - Design System")
 
 echo "$CHANGED_FILES" | grep -qE "amazon" \

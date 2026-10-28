@@ -93,4 +93,4 @@ ds-bundle/
 # converter can read each component's API). They are BUILD OUTPUT sitting in a source directory:
 # 78 of them, regenerated every sync, and a stale one next to its .tsx invites the reader to trust
 # the wrong file. TypeScript resolves .ts/.tsx first so they do not shadow anything at build time.
-apps/web/src/design-system/**/*.d.ts
+packages/ui/src/**/*.d.ts

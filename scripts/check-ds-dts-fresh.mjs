@@ -30,7 +30,7 @@ import { join, relative } from 'node:path'
 import { tmpdir } from 'node:os'
 
 const ROOT = new URL('..', import.meta.url).pathname
-const DS = join(ROOT, 'apps/web/src/design-system')
+const DS = join(ROOT, 'packages/ui/src')
 const CFG = '.design-sync/ds-pkg/tsconfig.json'
 
 if (!existsSync(join(ROOT, CFG))) {
@@ -76,16 +76,16 @@ for (const fresh of walk(out)) {
 }
 
 if (mode === '--write') {
-  console.log(`✓ ds-dts: regenerated ${stale.length} of ${checked} declaration(s) under apps/web/src/design-system (apps/factory NOT touched)`)
+  console.log(`✓ ds-dts: regenerated ${stale.length} of ${checked} declaration(s) under packages/ui/src (apps/factory NOT touched)`)
   process.exit(0)
 }
 if (stale.length) {
-  console.error(`❌ ds-dts: ${stale.length} of ${checked} committed declaration(s) under apps/web/src/design-system are stale:`)
+  console.error(`❌ ds-dts: ${stale.length} of ${checked} committed declaration(s) under packages/ui/src are stale:`)
   for (const s of stale) console.error(`   ${s}`)
   console.error(`\n   A .d.ts that omits a prop is worse than none: the brief tells sessions to read\n` +
                 `   the component, and a stale declaration describes one that does not exist.\n` +
                 `   Run: node scripts/check-ds-dts-fresh.mjs --write`)
   process.exit(1)
 }
-console.log(`✓ ds-dts: all ${checked} declaration(s) under apps/web/src/design-system match their source`)
+console.log(`✓ ds-dts: all ${checked} declaration(s) under packages/ui/src match their source`)
 console.log('   scope: apps/web ONLY — apps/factory carries its own .d.ts and is NOT scanned by this guard (DS1-20)')

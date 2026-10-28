@@ -61,7 +61,7 @@ it('the API scope vocabulary and the DS chip table are the SAME set (R-LX-9)', a
   // string on the chip, so the set is derived from both sources and compared.
   const { SCOPE_STATES } = await import('./readiness-model.js')
   const { readFileSync } = await import('node:fs')
-  const ds = readFileSync(new URL('../../../../web/src/design-system/grid/renderers/readiness.ts', import.meta.url), 'utf8')
+  const ds = readFileSync(new URL('../../../../../packages/ui/src/grid/renderers/readiness.ts', import.meta.url), 'utf8')
   const table = ds.slice(ds.indexOf('const SCOPE:'))
   const members = [...table.slice(0, table.indexOf('\n}')).matchAll(/^\s{2}([A-Za-z]+):\s*\{ tone:/gm)].map(match => match[1])
   expect(members.length).toBeGreaterThan(0) // positive control: the table was found and parsed

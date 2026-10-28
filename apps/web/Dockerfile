@@ -42,8 +42,8 @@ ARG NEXUS_API_PROXY_TARGET
 # Without an API address the app falls back to the production API (hard rule 3): refuse to build one by accident.
 RUN test -n "$NEXT_PUBLIC_API_URL" || { echo "NEXT_PUBLIC_API_URL is required"; exit 1; }
 # Without next build's type step, as CI's smoke build does: the app imports types from apps/api's sources, which this
-# pruned tree does not contain (and apps/api imports types from the web). The compile resolves every real import;
-# CI's typecheck job checks the types.
+# pruned tree does not contain (and apps/api imports types from the design system, @nexus/ui). The compile resolves
+# every real import; CI's typecheck job checks the types.
 RUN NEXT_OUTPUT=standalone NEXUS_CI_SKIP_BUILD_TYPECHECK=1 npm run build --workspace=@nexus/web
 
 # The standalone tree keeps the repository layout: /app/apps/web/server.js, /app/node_modules, /app/packages.

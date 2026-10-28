@@ -10,11 +10,11 @@
  * only considered re-exported when it appears as a whole token — a substring
  * (e.g. `Column` inside `ColumnCustomizer`) does not count as coverage.
  *
- *   node apps/web/src/design-system/tools/api-guard.mjs
+ *   node packages/ui/src/tools/api-guard.mjs
  */
 import { readdirSync, readFileSync } from 'fs'
 
-const ROOT = 'apps/web/src/design-system'
+const ROOT = 'packages/ui/src'
 const AREAS = ['primitives', 'components', 'patterns']
 
 // Captures the identifier after `export type` / `export interface`

@@ -25,6 +25,9 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
+      "@/design-system/*": [
+        "../../packages/ui/src/*"
+      ],
       "@/*": [
         "./src/*"
       ]
@@ -39,6 +42,7 @@
   },
   "include": [
     "src",
+    "../../packages/ui/src",
     ".next/types/**/*.ts"
   ],
   "references": [

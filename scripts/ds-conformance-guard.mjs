@@ -211,7 +211,7 @@ function scan() {
  */
 export function typeScale() {
   try {
-    const src = readFileSync(join(process.cwd(), 'apps/web/src/design-system/styles/tokens.css'), 'utf8')
+    const src = readFileSync(join(process.cwd(), 'packages/ui/src/styles/tokens.css'), 'utf8')
     const lines = src.split('\n')
     const names = []
     let first = 0
@@ -328,7 +328,7 @@ if (process.argv.includes('--self-test')) {
   // utilities are ever reverted, this fails here rather than in a reader's editor.
   let styles = ''
   for (const f of ['primitives.css', 'components.css', 'tokens.css', 'tokens-global.css']) {
-    try { styles += readFileSync(join(process.cwd(), `apps/web/src/design-system/styles/${f}`), 'utf8') } catch { /* absent is fine */ }
+    try { styles += readFileSync(join(process.cwd(), `packages/ui/src/styles/${f}`), 'utf8') } catch { /* absent is fine */ }
   }
   const utilities = [...new Set([...styles.matchAll(/\.nds-type-([\w-]+)/g)].map((m) => m[1]))]
   const scale = typeScale().names
@@ -403,7 +403,7 @@ if (mode === '--check') {
   // left ads.css and 5 ebay colours "went off-palette" without anyone changing them. So resolve
   // BOTH sides: literals plus the hex behind every --nds-* token the file references. This is the
   // "resolve both sides through tokens.css" option the note below names.
-  const tokenSrc = readFileSync(join(process.cwd(), 'apps/web/src/design-system/styles/tokens.css'), 'utf8')
+  const tokenSrc = readFileSync(join(process.cwd(), 'packages/ui/src/styles/tokens.css'), 'utf8')
   const tokenHex = new Map()
   for (const m of tokenSrc.matchAll(/(--nds-[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,8})\s*;/g)) tokenHex.set(m[1], m[2].toLowerCase())
   for (let i = 0; i < 4; i++) {  // `--nds-primary: var(--nds-blue-600)` — resolve alias hops
