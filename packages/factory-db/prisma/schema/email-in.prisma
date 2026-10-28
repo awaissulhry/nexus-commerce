@@ -1,0 +1,175 @@
+// Email in (plan A1 §2.3 EmailInbound, §3.3 `email-in`, §3.7 "Receiving", "Matching", "Content"; features COL-020,
+// COL-022, COL-023, COL-025, COL-026): replies and new mail reach the factory through Amazon SES receiving in Milan
+// (eu-south-1): an MX record on the reply domain → a receipt rule stores the raw mail in S3 (30-day lifecycle) and
+// notifies SNS → the inbound webhook ledger (platform/inbound) → apps/factory-api's platform/email-in, always through
+// command():
+//   - the notification makes ONE InboundEmail row (RECEIVED; a virus verdict: REJECTED, never read), with SES's
+//     verdicts (SPF, DKIM, DMARC, spam, virus) and where the raw mail is;
+//   - the worker reads the raw mail through the gateway (S3 GetObject), parses it, sanitises its HTML and puts its
+//     attachments in the file store (FETCHED);
+//   - the worker sorts it: its record's thread by the reply token of its address (`r-<token>@<reply domain>`), else by
+//     In-Reply-To / References against our own mail, else by the sender's party; a known sender with a passing
+//     DMARC joins the thread as an INBOUND message (MATCHED); anything else waits for a person (HELD) or for a record
+//     ("mail to sort", TRIAGE); the attachments become files of the record (or of the mail while it waits).
+//
+// Who sees what: the office only (factory_runtime: office sessions with email.triage, the worker and the inbound job
+// in a tenant's system context). A party reads what it sent as its thread's INBOUND message (threads.prisma), never
+// these rows. The raw mail is never shown; the stored HTML is sanitised. Rows are never deleted; what SES said never
+// changes, what the mail held is written once, and the status moves only along the machine (the …_email_in_guards
+// trigger, for every login).
+
+/// One mail SES received for the tenant (A1 §2.3 EmailInbound).
+model InboundEmail {
+  /// UUIDv7 from newId().
+  id              String               @id @db.Uuid
+  tenantId        String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company of the SES account it came through (null: a tenant-wide account): whose staff sort it while it waits.
+  companyId       String?              @db.Uuid
+  /// The SES account (IntegrationAccount, provider SES) whose receiving got it; the raw mail is read through it.
+  accountId       String               @db.Uuid
+  /// The inbound ledger's receipt (InboundWebhook) of SES's notification.
+  receiptId       String               @db.Uuid
+  /// SES's id of the received mail. Unique in the tenant: a notification that comes again adds nothing.
+  sesMessageId    String
+  /// Where SES stored the raw mail (S3 in Milan, 30-day lifecycle). Never shown.
+  s3Bucket        String
+  s3Key           String
+  /// When SES received it (SES's clock).
+  receivedAt      DateTime             @db.Timestamptz(3)
+  /// The SMTP envelope: its sender (MAIL FROM; empty for a bounce) and the recipients SES took it for, lower case.
+  envelopeFrom    String?
+  envelopeTo      String[]             @default([])
+  /// The header From: its address (lower case) and display name.
+  fromAddress     String?
+  fromName        String?
+  /// The header To and Cc, lower case.
+  to              String[]             @default([])
+  cc              String[]             @default([])
+  subject         String?
+  /// The mail's own Message-ID (RFC 5322) with its angle brackets. Unique in the tenant: a mail is taken once.
+  emailMessageId  String?
+  /// The mail it answers (In-Reply-To) and the mail before it (References), as Message-IDs.
+  inReplyTo       String?
+  referenceIds    String[]             @default([])
+  /// SES's verdicts (A1 §3.7: a DMARC failure is held for a person; a virus is never read).
+  spfVerdict      InboundVerdict
+  dkimVerdict     InboundVerdict
+  dmarcVerdict    InboundVerdict
+  /// The sender domain's DMARC policy, as SES reports it with a failure (none, quarantine, reject).
+  dmarcPolicy     String?
+  spamVerdict     InboundVerdict
+  virusVerdict    InboundVerdict
+  /// The raw mail's size in bytes, once read.
+  sizeBytes       Int?
+  /// The mail's text (its plain-text part, else the text of its HTML), once read, at most 100 000 characters.
+  bodyText        String?
+  /// The mail's HTML, sanitised (no script, style sheet, form, frame or handler; no picture loads by itself), once read.
+  bodyHtml        String?
+  /// Its attachments as read: each kept one with its object in the file store (and the file that holds it, once
+  /// sorted), each skipped one with why (a type files do not take, too large, empty, an inline picture, too many).
+  attachments     Json                 @default("[]")
+  status          InboundEmailStatus   @default(RECEIVED)
+  /// The thread it joined (MATCHED), or the one its reply token, headers or sender named (HELD, TRIAGE: a release
+  /// writes there).
+  threadId        String?              @db.Uuid
+  /// The INBOUND message it became (MATCHED).
+  messageId       String?              @db.Uuid
+  /// How it found its thread (MATCHED).
+  matchedBy       InboundMatchedBy?
+  /// The sender's party and contact when the sender is a contact of one party (a known sender, a suggestion while it
+  /// waits); the party alone when only its company domain matched.
+  senderPartyId   String?              @db.Uuid
+  senderContactId String?              @db.Uuid
+  /// Why it waits for a person (HELD).
+  heldReason      InboundHeldReason?
+  /// Why it was thrown away (REJECTED).
+  rejectReason    InboundRejectReason?
+  /// Tries to read the raw mail so far.
+  attempts        Int                  @default(0)
+  /// The last failure to read or sort it (no address, no text).
+  lastError       String?
+  /// When it was read (FETCHED and after).
+  fetchedAt       DateTime?            @db.Timestamptz(3)
+  /// When its place was decided, by the worker or a person.
+  sortedAt        DateTime?            @db.Timestamptz(3)
+  /// The person who assigned, released or rejected it (null: the worker).
+  sortedById      String?              @db.Uuid
+  version         Int                  @default(1)
+  createdAt       DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  /// Null: the inbound job made it.
+  createdById     String?              @db.Uuid
+
+  company       Company?           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  account       IntegrationAccount @relation(fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  thread        Thread?            @relation(fields: [tenantId, threadId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  senderParty   Party?             @relation(fields: [tenantId, senderPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The contact is one of the sender party's own contacts.
+  senderContact PartyContact?      @relation(fields: [tenantId, senderPartyId, senderContactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, sesMessageId])
+  @@unique([tenantId, emailMessageId])
+  // "Mail to sort" (status, newest first) and the worker's backlog.
+  @@index([tenantId, status, receivedAt])
+  // A thread's received mail.
+  @@index([tenantId, threadId])
+}
+
+/// Where a received mail is: RECEIVED → FETCHED | REJECTED (a virus) | FAILED (the raw mail could not be read);
+/// FETCHED → MATCHED | TRIAGE | HELD | REJECTED (a duplicate); TRIAGE → MATCHED | REJECTED; HELD → MATCHED | TRIAGE |
+/// REJECTED; FAILED → REJECTED. MATCHED and REJECTED are final.
+enum InboundEmailStatus {
+  RECEIVED
+  FETCHED
+  MATCHED
+  TRIAGE
+  HELD
+  REJECTED
+  FAILED
+}
+
+/// SES's verdict of one check (receipt notification: spfVerdict … virusVerdict).
+enum InboundVerdict {
+  PASS
+  FAIL
+  GRAY
+  PROCESSING_FAILED
+  DISABLED
+}
+
+/// How a mail found its thread.
+enum InboundMatchedBy {
+  /// The reply token of a recipient address (COL-020).
+  TOKEN
+  /// In-Reply-To or References name a mail we sent from the thread.
+  HEADERS
+  /// The sender is a contact of one party, and the mail joined that party's own thread.
+  SENDER
+  /// A person assigned or released it.
+  MANUAL
+}
+
+/// Why a mail waits for a person (COL-022).
+enum InboundHeldReason {
+  /// SES's DMARC verdict failed: the From address may be forged.
+  DMARC_FAIL
+  /// SES's spam verdict failed.
+  SPAM
+  /// The thread does not know the sender (no contact of its party, no recipient of its mail, no contact's domain).
+  UNKNOWN_SENDER
+  /// The thread is closed.
+  THREAD_CLOSED
+}
+
+/// Why a mail was thrown away.
+enum InboundRejectReason {
+  /// SES's virus verdict failed: never read.
+  VIRUS
+  /// Its Message-ID is already a message of a thread.
+  DUPLICATE
+  /// A person marked it as spam.
+  MARKED_SPAM
+  /// A person threw it away.
+  DISCARDED
+}
