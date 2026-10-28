@@ -5,6 +5,7 @@ import { startCrons, type CronJob } from './core/cron'
 import { redact } from './core/logger'
 import { openQueues, queueConnection, type Log } from './core/queue'
 import { loadFactoryEnv } from './env'
+import { certificateExpiryCron } from './modules/compliance/certificates/expiry'
 import { emailInHandlers } from './platform/email-in/handlers'
 import { emailSendHandler } from './platform/email-out/outbound'
 import { assertNoFakeAccountsInProduction } from './platform/gateway/boot'
@@ -101,7 +102,7 @@ if (mode === 'worker') {
   const workers = startEventWorkers({ kit, handlers: HANDLERS, database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
-  const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log })]
+  const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log })]
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

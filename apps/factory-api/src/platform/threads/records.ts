@@ -29,6 +29,13 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const site = await client.site.findUnique({ where: { id }, select: { companyId: true } })
     return site ? { companyId: site.companyId, siteId: id, partyId: null } : null
   },
+  // modules/compliance/certificates (SCR-051): the holder company (none: brand-held); the party only when a brand holds
+  // it (the brand is the legal maker), not a supplier holding a protector's certificate.
+  Certificate: async (client, id) => {
+    const certificate = await client.certificate.findUnique({ where: { id }, select: { companyId: true, holderPartyId: true, holderParty: { select: { roles: true } } } })
+    if (!certificate) return null
+    return { companyId: certificate.companyId, siteId: null, partyId: certificate.holderParty?.roles.includes('BRAND') ? certificate.holderPartyId : null }
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}
