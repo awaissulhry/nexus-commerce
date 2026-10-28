@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { compose, formatExpiry } from './compose'
-import { footerOf, formatCapital, legalLines, officeAddress, privacyNoticeUrl, type CompanyLegal } from './footer'
+import { footerOf, legalBlock, privacyNoticeUrl, type CompanyLegal } from './footer'
 import { cleanDisplayName, encodeHeaderText, formatAddress, fromLine, mailDate, messageIdFor, replyAddress, replySubject, threadingOf, type IdentityHeaders } from './headers'
-import { buildMime } from './mime'
+import { attachmentName, buildMime } from './mime'
 import {
+  attachmentSizeProblems,
   canMove,
+  MAX_ATTACHMENT_BYTES,
   cleanSubject,
   domainOf,
   failureText,
@@ -22,6 +24,8 @@ import {
 const COMPANY: CompanyLegal = {
   legalName: 'Pelletteria Esempio S.r.l.',
   address: { line1: 'Via Esempio 1', postalCode: '50100', city: 'Firenze', province: 'FI', country: 'IT' },
+  soleShareholder: false,
+  inLiquidation: false,
   vatNumber: 'IT00000000000',
   fiscalCode: '00000000000',
   reaOffice: 'FI',
@@ -128,20 +132,23 @@ describe('headers', () => {
 })
 
 describe('the footer (c.c. art. 2250, GDPR art. 13-14)', () => {
-  it('prints the legal block the company row can fill, in Italian and English', () => {
-    expect(legalLines(COMPANY, 'it')).toEqual([
+  it('prints the legal block as the company documents do (documents/legal.ts), in Italian and English', () => {
+    expect(legalBlock(COMPANY, 'it')).toEqual([
       'Pelletteria Esempio S.r.l.',
-      'Sede legale: Via Esempio 1, 50100 Firenze (FI), IT',
-      'Registro delle Imprese di FI n. 00000000000 – REA FI-123456',
-      'Capitale sociale € 10.000,00',
-      'P. IVA IT00000000000 – C.F. 00000000000',
+      'Sede legale: Via Esempio 1, 50100 Firenze (FI)',
+      'P. IVA IT00000000000 · C.F. 00000000000',
+      'Registro Imprese di FI n. 00000000000 · REA FI-123456',
+      'Capitale sociale versato € 10.000,00',
       'PEC: esempio@pec.example.com',
     ])
-    expect(legalLines(COMPANY, 'en')).toContain('Share capital € 10,000.00')
+    expect(legalBlock(COMPANY, 'en')).toContain('Paid-up share capital €10,000.00')
+    // c. 3 and c. 4: a company in liquidation says so after its name; one with a single shareholder says that too.
+    const winding = legalBlock({ ...COMPANY, soleShareholder: true, inLiquidation: true }, 'it')
+    expect(winding[0]).toBe('Pelletteria Esempio S.r.l. in liquidazione')
+    expect(winding).toContain('Capitale sociale versato € 10.000,00 · Società con socio unico')
+    expect(legalBlock({ ...COMPANY, soleShareholder: true, inLiquidation: true }, 'en')[0]).toBe('Pelletteria Esempio S.r.l. in liquidation')
     // A sole trader: no capital, no register line; only what exists.
-    expect(legalLines({ legalName: 'Mario Esempio', vatNumber: 'IT11111111111', address: null }, 'it')).toEqual(['Mario Esempio', 'P. IVA IT11111111111'])
-    expect(formatCapital('1234567.5', 'GBP', 'en')).toBe('£ 1,234,567.50')
-    expect(officeAddress({ line1: 'Via\r\nX 1', city: 'Roma' })).toBe('Via X 1, Roma')
+    expect(legalBlock({ legalName: 'Mario Esempio', vatNumber: 'IT11111111111', address: null, fiscalCode: null, reaOffice: null, reaNumber: null, shareCapital: null, currency: 'EUR' }, 'it')).toEqual(['Mario Esempio', 'P. IVA IT11111111111'])
   })
 
   it('links the company privacy notice in text and HTML, escaped', () => {
@@ -166,8 +173,8 @@ describe('compose', () => {
     expect(mail.subject).toBeNull()
     expect(mail.text).toContain('Buongiorno,\necco il preventivo.')
     expect(mail.text).toContain('Ada Esempio\nEsempio')
-    expect(mail.text).toContain('- Preventivo <12>.pdf')
-    expect(mail.text).toContain('Registro delle Imprese di FI')
+    expect(mail.text).toContain('Allegati:\n- Preventivo <12>.pdf')
+    expect(mail.text).toContain('Registro Imprese di FI')
     expect(mail.text).toContain(PRIVACY)
     expect(mail.html).not.toContain('<script>')
     expect(mail.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
@@ -234,6 +241,24 @@ describe('the MIME message', () => {
     expect(raw).toContain('Auto-Submitted: auto-generated')
     expect(raw).not.toContain('Reply-To')
     expect(raw).not.toContain('In-Reply-To')
+  })
+
+  it('attaches files: a multipart/mixed around the text and HTML, each file in base64 with a safe name', () => {
+    const pdf = Uint8Array.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x0a, 0xff, 0x00])
+    const raw = buildMime({ ...base, attachments: [{ filename: 'Preventivo giacche.pdf', contentType: 'application/pdf', content: pdf }, { filename: '../Prezzi\r\n"città".csv', contentType: 'text/csv; x', content: Buffer.from('a;b') }] })
+    expect(raw).toContain('Content-Type: multipart/mixed; boundary="=_mix_0192f0a0000070008000000000000002"')
+    expect(raw).toContain('--=_mix_0192f0a0000070008000000000000002\r\nContent-Type: multipart/alternative; boundary="=_alt_0192f0a0000070008000000000000002"')
+    expect(raw).toContain('Content-Type: application/pdf; name="Preventivo giacche.pdf"\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename="Preventivo giacche.pdf"\r\n\r\n' + Buffer.from(pdf).toString('base64'))
+    expect(raw).toContain(`Content-Type: application/octet-stream; name="Prezzi citt_ .csv"`)
+    expect(raw).toContain(`filename*=UTF-8''Prezzi%20citt%C3%A0%20.csv`)
+    expect(raw.endsWith('--=_mix_0192f0a0000070008000000000000002--\r\n')).toBe(true)
+    expect(attachmentName('C:\\tmp\\a.pdf')).toBe('a.pdf')
+    expect(attachmentName('\r\n')).toBe('attachment')
+  })
+
+  it('caps the attachments of one mail at 10 MB together', () => {
+    expect(attachmentSizeProblems([MAX_ATTACHMENT_BYTES - 1, 1])).toEqual([])
+    expect(attachmentSizeProblems([MAX_ATTACHMENT_BYTES, 1])).toEqual([{ path: 'body/attachments', message: expect.stringMatching(/hold 10\.1 MB together; a mail carries at most 10 MB/) }])
   })
 
   it('refuses a line break smuggled into a header value', () => {

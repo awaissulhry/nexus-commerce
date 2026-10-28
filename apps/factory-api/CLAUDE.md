@@ -304,14 +304,17 @@ run (`src/platform/imports/`), documents and printing (`src/platform/{documents,
   status QUEUED → SENDING → SENT → DELIVERED / BOUNCED / COMPLAINED, or FAILED; NO body), Suppression (tenant-wide).
   The …_email_guards trigger keeps what a mail sends fixed and its status moving forward; nothing is deleted.
 - Send from a module's command: `sendEmail(tools, { record, sender, to, cc?, bcc?, subject?, body, attachments?,
-  identityId?, locale? })` (outbound.ts): ensureThread → attachmentProblems(PARTNER) → suppression check → writeMessage
+  identityId?, locale? })` (outbound.ts): ensureThread → attachmentProblems(PARTNER) and at most 10 MB of attachments
+  together (MAX_ATTACHMENT_BYTES) → suppression check → writeMessage
   (OUTBOUND, EMAIL, `emailMessageId: <outboundId@identity domain>`) → EmailOutbound QUEUED → event `email.queued`, one
   transaction. Route: `POST /threads/:recordType/:recordId/emails` (email.send). `GET …/emails` lists them (threads.read).
 - The worker's `emailSendHandler()` (background.ts HANDLERS) runs `deliverOutbound`: claim (QUEUED, or SENDING with a
   lapsed claim → SENDING, one try counted; suppression and identity re-checked) → MIME (factory-domain email/compose +
-  mime: the message text, the sender's signature, the shared files' names, the footer with the c.c. art. 2250 block and
-  the privacy-notice slot `<FACTORY_WEB_ORIGIN>/privacy/<companyId>`; Reply-To `r-<thread replyToken>@<replyDomain>`
-  read here only) → ONE gateway call `mail.send` (non-idempotent; the ledger keeps id, template, recipient count and
+  mime: the message text, the sender's signature, the attached files (bytes read here, in the worker, through the file
+  store: one `files.read` gateway call each; still AVAILABLE and shared with the party), the footer with the c.c. art.
+  2250 block as the documents print it (documents/legal.ts on platform/documents `companyLegalOf`: liquidation, single
+  shareholder …) and the privacy-notice slot `<FACTORY_WEB_ORIGIN>/privacy/<companyId>`; Reply-To
+  `r-<thread replyToken>@<replyDomain>` read here only) → ONE gateway call `mail.send` (non-idempotent; the ledger keeps id, template, recipient count and
   size, never an address) → SENT. A failed try → QUEUED and the job retries (MAX_SEND_ATTEMPTS 5), else FAILED.
 - Sign-in mail (`auth-mail.ts`, the default AuthMailer): composed in memory with the link, an EmailOutbound row without
   body (record `User`), sent at once through the same deliverOutbound from the tenant's default NOTIFICATION identity,
@@ -323,7 +326,7 @@ run (`src/platform/imports/`), documents and printing (`src/platform/{documents,
 - Adapters: `adapters/ses/ses.ts` (SESv2 client; LIVE and SANDBOX; credentials sealed on the account, else the
   environment's), `fake.ts` (FAKE: in-memory mailbox, local and test only; never a table or a file), `sns.ts` (the SNS
   envelope parser and verifier), `testing.ts` (FakeSesTransport: the real client on a scripted transport;
-  sesNotificationBody). Tests: `email.pg.vitest.test.ts` on the auth harness (`h.ses`, `h.email`, `h.mailer`).
+  sesNotificationBody). Tests: `email.pg.vitest.test.ts` on the auth harness (`h.ses`, `h.email`, `h.files`, `h.mailer`).
 
 ## Rules
 - Configuration only through `src/env.ts`. It reads ONLY `apps/factory-api/.env`, by explicit path, and ONLY

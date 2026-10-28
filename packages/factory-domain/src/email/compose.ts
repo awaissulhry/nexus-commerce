@@ -8,7 +8,7 @@ import type { Locale, TemplateKey } from './rules'
  * every mail.
  *
  *   thread.message        a person's message on a record's thread: their text, their signature, the names of the
- *                         record's files they shared with it, the footer
+ *                         files attached (the MIME carries their bytes), the footer
  *   auth.invitation       an invitation to the tenant's Office, with its single-use link
  *   auth.password_reset   a password reset, with its single-use link
  *
@@ -24,7 +24,7 @@ export type ComposeInput =
       readonly senderName: string | null
       /** The company's name as mail shows it. */
       readonly companyName: string
-      /** The names of the record's files shared with the recipient (their bytes travel through the portal or a link). */
+      /** The names of the files attached to the mail (the record's files shared with the recipient). */
       readonly attachmentNames: readonly string[]
     }
   | {
@@ -61,7 +61,7 @@ export interface Composed {
 
 const TEXT = {
   it: {
-    files: 'File condivisi con te su questo argomento:',
+    files: 'Allegati:',
     invitationSubject: (tenant: string) => `Invito a ${tenant} su Nexus Factory`,
     hello: (name: string) => `Buongiorno ${name},`,
     invited: (inviter: string | null, tenant: string) =>
@@ -74,7 +74,7 @@ const TEXT = {
     button: { invitation: 'Accetta l\'invito', reset: 'Scegli una nuova password' },
   },
   en: {
-    files: 'Files shared with you on this matter:',
+    files: 'Attached:',
     invitationSubject: (tenant: string) => `Invitation to ${tenant} on Nexus Factory`,
     hello: (name: string) => `Hello ${name},`,
     invited: (inviter: string | null, tenant: string) =>

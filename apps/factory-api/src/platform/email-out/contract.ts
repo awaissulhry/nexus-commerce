@@ -60,7 +60,7 @@ export const sendEmailContract = defineContract({
     /** Left out: "Re: " and the subject of the thread's latest mail. */
     subject: z.string().max(MAX_SUBJECT_LENGTH).optional(),
     body: z.string().max(MAX_BODY_LENGTH),
-    /** Files of this record shared with its party. */
+    /** Files of this record shared with its party, together at most 10 MB; the mail carries their bytes. */
     attachments: z.array(id()).max(MAX_ATTACHMENTS).optional(),
     /** A sending identity of the record's company; default its CONVERSATION default. */
     identityId: id().optional(),

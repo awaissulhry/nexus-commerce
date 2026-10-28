@@ -124,25 +124,35 @@ async function notify(tenantId: string, accountId: string, body: string): Promis
   return receiptId
 }
 
-/** An AVAILABLE file of a quote, written straight into the table (the files flow is tested in platform/files). */
-async function file(recordId: string, sharedWith: string | null): Promise<string> {
+/** The bytes of the shared quote PDF (made up). */
+const QUOTE_PDF = Buffer.concat([Buffer.from('%PDF-1.7\n% made-up quote for the email tests\n'), Buffer.from([0x00, 0xff, 0x10, 0x80])])
+
+/**
+ * An AVAILABLE file of a quote, written straight into the table (the files flow is tested in platform/files); with
+ * `bytes`, its object is put in the local store first (one files.put), so the worker can attach it.
+ */
+async function file(recordId: string, sharedWith: string | null, bytes?: Buffer, sizeBytes = bytes?.byteLength ?? 100): Promise<string> {
   const id = newId()
   const store = (await first(`SELECT id FROM "IntegrationAccount" WHERE "tenantId" = $1 AND provider = 'R2'`, [tenant.id])).id
+  const key = `t/${tenant.id}/c/${tenant.companies[0]!.id}/2026/${newId()}`
+  const sha256 = createHash('sha256').update(bytes ?? id).digest('hex')
+  if (bytes) await h.files.storage.put(system(), store, { key, contentType: 'application/pdf', body: bytes, sha256 })
   await admin(
     `INSERT INTO "StoredFile" (id, "tenantId", "companyId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", sha256,
        "storeAccountId", "storageKey", status, visibility, "partyId", "availableAt")
-     VALUES ($1, $2, $3, 'Quote', $4, 'DOCUMENT', $5, 'application/pdf', 100, $6, $7, $8, 'AVAILABLE', $9::"FileAudience"[], $10, now())`,
+     VALUES ($1, $2, $3, 'Quote', $4, 'DOCUMENT', $5, 'application/pdf', $11, $6, $7, $8, 'AVAILABLE', $9::"FileAudience"[], $10, now())`,
     [
       id,
       tenant.id,
       tenant.companies[0]!.id,
       recordId,
       sharedWith ? 'Preventivo giacche.pdf' : 'Costi interni.pdf',
-      createHash('sha256').update(id).digest('hex'),
+      sha256,
       store,
-      `t/${tenant.id}/c/${tenant.companies[0]!.id}/2026/${newId()}`,
+      key,
       sharedWith ? ['OFFICE', 'PARTNER'] : ['OFFICE'],
       sharedWith,
+      sizeBytes,
     ],
   )
   return id
@@ -168,15 +178,16 @@ beforeAll(async () => {
     },
   })
   useInbound({ secrets: h.secrets, clock: h.clock, environment: 'test' })
-  // Company C1's legal data (made up): the footer prints it.
+  // Company C1's legal data (made up): the footer prints it, with c. 3 and c. 4 of art. 2250.
   await admin(
     `UPDATE "Company" SET "vatNumber" = 'IT00000000000', "fiscalCode" = '00000000000', "reaOffice" = 'FI', "reaNumber" = '123456', "shareCapital" = 10000,
+       "soleShareholder" = true, "inLiquidation" = true,
        pec = 'mail-a@pec.example.com', address = '{"line1":"Via Esempio 1","postalCode":"50100","city":"Firenze","province":"FI","country":"IT"}'::jsonb
      WHERE id = $1`,
     [c1!.id],
   )
   await admin(`INSERT INTO "IntegrationAccount" (id, "tenantId", provider, code, label, mode) VALUES ($1, $2, 'R2', 'files', 'Files', 'FAKE')`, [newId(), tenant.id])
-  sharedFile = await file(quote, partyOne)
+  sharedFile = await file(quote, partyOne, QUOTE_PDF)
   officeFile = await file(quote, null)
   sesA = await sesAccount(tenant.id, 'FAKE')
   sesB = await sesAccount(tenantB.id, 'FAKE')
@@ -315,12 +326,29 @@ describe('sending from a record thread (COL-024)', () => {
     expect(mail.raw).not.toContain('archive@example.com')
     const text = textOf(mail.raw)
     expect(text).toContain('Buongiorno,\necco il preventivo per le giacche.')
-    expect(text).toContain('- Preventivo giacche.pdf')
-    expect(text).toContain('Test company C1\nSede legale: Via Esempio 1, 50100 Firenze (FI), IT')
-    expect(text).toContain('Registro delle Imprese di FI n. 00000000000 – REA FI-123456')
-    expect(text).toContain('Capitale sociale € 10.000,00')
-    expect(text).toContain('P. IVA IT00000000000 – C.F. 00000000000')
+    expect(text).toContain('Allegati:\n- Preventivo giacche.pdf')
+    expect(text).toContain('Test company C1 in liquidazione\nSede legale: Via Esempio 1, 50100 Firenze (FI)')
+    expect(text).toContain('P. IVA IT00000000000 · C.F. 00000000000')
+    expect(text).toContain('Registro Imprese di FI n. 00000000000 · REA FI-123456')
+    expect(text).toContain('Capitale sociale versato € 10.000,00 · Società con socio unico')
     expect(text).toContain(`Informativa privacy (artt. 13-14 GDPR): http://localhost:3200/privacy/${tenant.companies[0]!.id}`)
+
+    // The attachment's bytes and name travel in the MIME, read once through the file store (worker, not the command).
+    expect(mail.raw).toContain('Content-Type: multipart/mixed; boundary=')
+    expect(mail.raw).toContain('Content-Disposition: attachment; filename="Preventivo giacche.pdf"')
+    const part = /filename="Preventivo giacche\.pdf"\r\n\r\n([A-Za-z0-9+/=\r\n]+?)\r\n--/.exec(mail.raw)?.[1] ?? ''
+    expect(Buffer.from(part.replace(/\r\n/g, ''), 'base64').equals(QUOTE_PDF)).toBe(true)
+    const { storageKey } = await first(`SELECT "storageKey" FROM "StoredFile" WHERE id = $1`, [sharedFile])
+    expect(await admin(`SELECT status FROM "IntegrationCall" WHERE operation = 'files.read' AND "requestSummary"->>'key' = $1`, [storageKey])).toEqual([{ status: 'SUCCEEDED' }])
+  })
+
+  it('refuses attachments that hold more than 10 MB together, before anything is written', async () => {
+    const big = await file(quote, partyOne, undefined, 6 * 1024 * 1024)
+    const bigger = await file(quote, partyOne, undefined, 5 * 1024 * 1024)
+    const refused = await send(sales, quote, { to: ['buyer@example.com'], subject: 'Campionario', body: 'Tutto.', attachments: [big, bigger] })
+    expect(refused.status).toBe(400)
+    expect(refused.body.error.issues).toEqual([{ path: 'body/attachments', message: expect.stringMatching(/hold 11 MB together; a mail carries at most 10 MB/) }])
+    expect(await admin(`SELECT id FROM "Message" WHERE $1 = ANY("attachmentFileIds")`, [big])).toEqual([])
   })
 
   it('a reply on the same thread threads: In-Reply-To and References, and "Re:" the subject', async () => {

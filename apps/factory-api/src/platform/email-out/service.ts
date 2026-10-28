@@ -1,6 +1,8 @@
 import { FakeSes } from '../../adapters/ses/fake'
 import { sesMailAdapter } from '../../adapters/ses/ses'
 import { loadFactoryEnv } from '../../env'
+import { processFiles } from '../files/service'
+import type { FileStorage } from '../files/store'
 import type { Gateway } from '../gateway/gateway'
 import { processGateway } from '../gateway/service'
 import type { MailAdapter } from './port'
@@ -8,7 +10,8 @@ import { mailStorage, type MailStorage } from './store'
 
 /**
  * The process's email runtime: the mail store behind the gateway (store.ts), the fake mailbox of FAKE SES accounts (local
- * and test only; none in staging or production), and the web origin the privacy-notice slot and sign-in links point at.
+ * and test only; none in staging or production), the file store attachments are read from (platform/files, gateway op
+ * files.read), and the web origin the privacy-notice slot and sign-in links point at.
  * Made on first use from apps/factory-api/.env and the process gateway; tests set their own with
  * useEmail(createEmailRuntime({ … })), like useGateway() and useFiles().
  */
@@ -19,6 +22,8 @@ export interface EmailRuntime {
   readonly fake: FakeSes | null
   /** FACTORY_WEB_ORIGIN: the privacy notice's address (footer). */
   readonly webOrigin: string
+  /** The file store the worker reads attachments from (default: the process's, processFiles()). */
+  files(): FileStorage
 }
 
 export interface EmailRuntimeOptions {
@@ -27,6 +32,8 @@ export interface EmailRuntimeOptions {
   readonly webOrigin: string
   /** Default: the real SES adapter. Tests pass one on a fake transport. */
   readonly ses?: MailAdapter
+  /** Default: the process's file store (processFiles), made when first needed. */
+  readonly files?: FileStorage
 }
 
 export function createEmailRuntime(options: EmailRuntimeOptions): EmailRuntime {
@@ -34,6 +41,7 @@ export function createEmailRuntime(options: EmailRuntimeOptions): EmailRuntime {
     mail: mailStorage(options.gateway, { ses: options.ses ?? sesMailAdapter(), fake: options.fake }),
     fake: options.fake,
     webOrigin: options.webOrigin.replace(/\/+$/, ''),
+    files: () => options.files ?? processFiles().storage,
   })
 }
 

@@ -65,6 +65,11 @@ export function localeOf(value: string | null | undefined): Locale {
 /** The most recipients one mail has (to, cc and bcc together) and the longest subject. */
 export const MAX_RECIPIENTS = 50
 export const MAX_SUBJECT_LENGTH = 200
+/**
+ * The most bytes the files attached to one mail hold together: 10 MiB, about 13.4 MiB once base64-encoded, well below
+ * SES's 40 MB limit for a raw message with its text and headers.
+ */
+export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 /** An address's longest length (RFC 5321: 254 in a path). */
 export const MAX_ADDRESS_LENGTH = 254
 
@@ -191,6 +196,14 @@ export function statusAfter(current: OutboundStatus, reported: 'DELIVERED' | 'BO
   const now = AFTER_SENDING.indexOf(current)
   if (now < 0) return current
   return AFTER_SENDING.indexOf(reported) > now ? reported : current
+}
+
+/** The problem of attachments that hold too much together (empty when they fit). */
+export function attachmentSizeProblems(sizes: readonly number[], at = 'body'): Issue[] {
+  const total = sizes.reduce((sum, size) => sum + size, 0)
+  if (total <= MAX_ATTACHMENT_BYTES) return []
+  const mib = (bytes: number) => `${Math.ceil((bytes / (1024 * 1024)) * 10) / 10} MB`
+  return [{ path: `${at}/attachments`, message: `The attachments hold ${mib(total)} together; a mail carries at most ${mib(MAX_ATTACHMENT_BYTES)}. Share the larger files by link instead.` }]
 }
 
 /** The text of a failure as stored on the mail: one line, no address, at most 500 characters. */

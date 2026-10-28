@@ -8,6 +8,7 @@ import { identityReady, localeOf, normalizeAddress } from '@nexus/factory-domain
 import { callerFor, COMMAND_SETTINGS, runCommand } from '../../core/command'
 import type { Clock } from '../../core/time'
 import type { AuthMailer, AuthMessage } from '../auth/sessions/mail'
+import { companyLegalOf } from '../documents/documents'
 import { systemContext } from '../outbox/system'
 import { deliverOutbound } from './outbound'
 import { processEmail, type EmailRuntime } from './service'
@@ -76,20 +77,15 @@ export function emailAuthMailer(options: AuthMailOptions): AuthMailer {
         const tenant = await client.tenant.findUnique({ where: { id: message.tenantId }, select: { name: true } })
         const inviter =
           message.kind === 'invitation' && message.invitedById ? await client.user.findUnique({ where: { id: message.invitedById }, select: { displayName: true } }) : null
-        const company = identity
-          ? await client.company.findUniqueOrThrow({
-              where: { id: identity.companyId },
-              select: { legalName: true, address: true, vatNumber: true, fiscalCode: true, reaOffice: true, reaNumber: true, shareCapital: true, currency: true, pec: true },
-            })
-          : null
-        return { identity, user, tenant, inviter, company }
+        return { identity, user, tenant, inviter }
       })
-      const { identity, company } = facts
-      if (!identity || !company) throw new NoSenderError('The tenant has no verified sending identity: the sign-in mail was not sent.')
+      const { identity } = facts
+      if (!identity) throw new NoSenderError('The tenant has no verified sending identity: the sign-in mail was not sent.')
+      const company = await companyLegalOf(caller, identity.companyId)
 
       const locale = localeOf(facts.user?.locale)
       const recipientName = facts.user?.displayName ?? message.to
-      const context = { locale, company: { ...company, shareCapital: company.shareCapital?.toString() ?? null }, privacyUrl: privacyNoticeUrl(runtime.webOrigin, identity.companyId) }
+      const context = { locale, company, privacyUrl: privacyNoticeUrl(runtime.webOrigin, identity.companyId) }
       const mail =
         message.kind === 'invitation'
           ? compose(

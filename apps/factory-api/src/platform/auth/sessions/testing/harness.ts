@@ -1,4 +1,7 @@
 import { randomBytes } from 'node:crypto'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
 import type { Redis } from 'ioredis'
@@ -7,6 +10,7 @@ import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testi
 import { hashPassword } from '@nexus/factory-domain/auth/password/password'
 import { timeStepAt } from '@nexus/factory-domain/auth/totp/totp'
 import { newId } from '@nexus/factory-domain/core/ids'
+import { localFileStore } from '../../../../adapters/local-files/local'
 import { FakeSes, textOf, type FakeMail } from '../../../../adapters/ses/fake'
 import { sesMailAdapter } from '../../../../adapters/ses/ses'
 import { buildApp } from '../../../../core/app'
@@ -14,6 +18,7 @@ import type { Clock } from '../../../../core/time'
 import { LOCAL_COOKIE_SECRET, LOCAL_PIN_PEPPER } from '../../../../env'
 import { emailAuthMailer } from '../../../email-out/auth-mail'
 import { createEmailRuntime, useEmail, type EmailRuntime } from '../../../email-out/service'
+import { createFilesRuntime, useFiles, type FilesRuntime } from '../../../files/service'
 import { createGateway } from '../../../gateway/gateway'
 import { testRedis, type TestRedis } from '../../../outbox/testing'
 import { createSecretsService, type SecretsService } from '../../../secrets/envelope'
@@ -27,7 +32,8 @@ import { createOfficeAuth, type AuthRateLimits, type OfficeAuth } from '../offic
 /**
  * Test helpers for the office sign-in's PostgreSQL tests (never imported by a route): a throwaway database built from
  * the migrations, the real app with its real routes and the real authenticator, a clock the test moves, email out with
- * the gateway on the local Redis (this harness's own prefix) and a FAKE SES account per tenant whose in-memory mailbox
+ * the gateway on the local Redis (this harness's own prefix), the local file store in a temporary folder (FAKE R2
+ * accounts; `h.files`), and a FAKE SES account per tenant whose in-memory mailbox
  * is the only place an invitation or reset link can be read (`h.mailer`), and a cookie jar that behaves like a browser.
  */
 
@@ -98,6 +104,8 @@ export interface Harness {
   readonly ses: FakeSes
   /** Email out as the app uses it (useEmail), on the gateway below. */
   readonly email: EmailRuntime
+  /** Files as the app uses them (useFiles): FAKE R2 accounts store in a temporary folder. */
+  readonly files: FilesRuntime
   readonly secrets: SecretsService
   /** The gateway's Redis connection and this harness's prefix. */
   readonly redis: Redis
@@ -124,6 +132,9 @@ export async function startHarness(label: string): Promise<Harness> {
   const redis = testRedisKit.connect()
   const secrets = createSecretsService({ providers: [localKeyProvider({ masterKey: randomBytes(32), environment: 'test' })] })
   const gateway = createGateway({ environment: 'test', redis, prefix: testRedisKit.prefix, secrets, sleep: async () => {}, log: { info() {}, warn() {}, error() {} } })
+  const filesRoot = mkdtempSync(join(tmpdir(), 'factory-harness-files-'))
+  const files = createFilesRuntime({ gateway, local: localFileStore({ root: filesRoot, environment: 'test' }), clock })
+  useFiles(files)
   const ses = new FakeSes()
   // A LIVE or SANDBOX account never reaches SES from a test: its client refuses before anything is sent.
   const neverSes = sesMailAdapter({
@@ -131,7 +142,7 @@ export async function startHarness(label: string): Promise<Harness> {
       throw new Error('The test harness never calls SES; use a FAKE account or a FakeSesTransport.')
     },
   })
-  const email = createEmailRuntime({ gateway, fake: ses, webOrigin: WEB_ORIGIN, ses: neverSes })
+  const email = createEmailRuntime({ gateway, fake: ses, webOrigin: WEB_ORIGIN, ses: neverSes, files: files.storage })
   useEmail(email)
   const mailer = emailAuthMailer({ database, clock, runtime: () => email })
   const make = (rateLimits: Partial<AuthRateLimits>) =>
@@ -146,6 +157,7 @@ export async function startHarness(label: string): Promise<Harness> {
     mailer: authMailbox(ses),
     ses,
     email,
+    files,
     secrets,
     redis,
     redisPrefix: testRedisKit.prefix,
@@ -160,6 +172,8 @@ export async function startHarness(label: string): Promise<Harness> {
       for (const other of others) await other.close()
       await app.close()
       useEmail(undefined)
+      useFiles(undefined)
+      rmSync(filesRoot, { recursive: true, force: true })
       await testRedisKit.cleanup()
       await database.close()
       await db.close()

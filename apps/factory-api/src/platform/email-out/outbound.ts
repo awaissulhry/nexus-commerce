@@ -8,13 +8,15 @@ import { compose } from '@nexus/factory-domain/email/compose'
 import { events as emailEvents } from '@nexus/factory-domain/email/events'
 import { privacyNoticeUrl } from '@nexus/factory-domain/email/footer'
 import { fromLine, messageIdFor, replyAddress, replySubject, threadingOf } from '@nexus/factory-domain/email/headers'
-import { buildMime } from '@nexus/factory-domain/email/mime'
+import { buildMime, type MimeAttachment } from '@nexus/factory-domain/email/mime'
 import {
   allRecipients,
+  attachmentSizeProblems,
   cleanSubject,
   failureText,
   identityReady,
   localeOf,
+  MAX_ATTACHMENT_BYTES,
   MAX_SEND_ATTEMPTS,
   normalizeRecipients,
   recipientProblems,
@@ -29,6 +31,7 @@ import { cleanBody, MAX_BODY_LENGTH } from '@nexus/factory-domain/threads/rules'
 import { encodeCursor } from '@nexus/factory-domain/threads/timeline'
 import { COMMAND_SETTINGS, command, runCommand, type CommandCaller, type CommandSpec, type CommandTools, type CommandTx } from '../../core/command'
 import { actorOf } from '../../core/context'
+import { companyLegalOf } from '../documents/documents'
 import type { Clock } from '../../core/time'
 import { GatewayCallFailed, GatewayRefusal } from '../gateway/gateway'
 import { defineHandler, type EventHandler } from '../outbox/dispatch'
@@ -53,13 +56,15 @@ import { processEmail, type EmailRuntime } from './service'
  *
  *   send      `sendEmail(tools, …)` inside a command (the route's `email.send`, or a module's own command that sends):
  *             the record's thread (ensureThread), the attachments checked as shared with the thread's party
- *             (attachmentProblems PARTNER), the recipients checked against the suppression list, the OUTBOUND EMAIL
+ *             (attachmentProblems PARTNER) and together at most MAX_ATTACHMENT_BYTES (10 MB), the recipients checked
+ *             against the suppression list, the OUTBOUND EMAIL
  *             message on the thread (writeMessage: its text is the mail's), the EmailOutbound row QUEUED (From line,
  *             recipients, subject, Message-ID, In-Reply-To and References from the thread's earlier mail) and the
  *             event email.queued: all in ONE transaction.
  *   deliver   the worker's handler of email.queued (`deliverOutbound`): a claim (QUEUED → SENDING, one try counted,
  *             suppression and identity checked again) → the MIME built from the message (headers, the reply address
- *             read from the thread here and nowhere else, the footer with the legal block and the privacy notice) →
+ *             read from the thread here and nowhere else, the footer with the legal block and the privacy notice, the
+ *             attached files' bytes read through the file store: one `files.read` gateway call each) →
  *             ONE gateway call (`mail.send`, one IntegrationCall row) → SENT with SES's message id; a failure goes back
  *             to QUEUED for the job's next try, or FAILED after MAX_SEND_ATTEMPTS or when it cannot succeed. A mail
  *             already SENT (a repeated event) is left alone: it is sent once.
@@ -213,7 +218,12 @@ export async function sendEmail(tools: SendTools, input: ThreadMailInput): Promi
   const problems: Issue[] = [...recipientProblems(recipients), ...subjectProblems(subject)]
   if (bodyText.length === 0) problems.push({ path: 'body/body', message: 'Write the message.' })
   if (bodyText.length > MAX_BODY_LENGTH) problems.push({ path: 'body/body', message: `A message holds at most ${MAX_BODY_LENGTH} characters.` })
-  problems.push(...(await attachmentProblems(tx, context, thread, attachments, 'PARTNER')))
+  const attachmentIssues = await attachmentProblems(tx, context, thread, attachments, 'PARTNER')
+  problems.push(...attachmentIssues)
+  if (attachments.length > 0 && attachmentIssues.length === 0) {
+    const sizes = await tx.storedFile.findMany({ where: { id: { in: attachments } }, select: { sizeBytes: true } })
+    problems.push(...attachmentSizeProblems(sizes.map((file) => file.sizeBytes)))
+  }
   problems.push(...suppressionProblems(recipients, await suppressedAmong(tx, allRecipients(recipients))))
   if (problems.length > 0) throw new ValidationError('The mail is not valid.', problems)
 
@@ -465,43 +475,70 @@ export async function deliverOutbound(runtime: EmailRuntime, caller: CommandCall
   return again ? 'retry' : 'failed'
 }
 
-/** The MIME of a record mail, from its thread message (read in the caller's system scope). */
+/**
+ * The files a record mail attaches, with their bytes: each still AVAILABLE, of the thread's record and shared with its
+ * party (checked again: a file may have changed since the mail was queued), together at most MAX_ATTACHMENT_BYTES, read
+ * through the file store (one `files.read` gateway call each, never inside a command). A file that no longer qualifies
+ * fails the mail (a plain Error: final); a store that does not answer fails the try (the gateway's error: retried).
+ */
+async function attachmentsOf(runtime: EmailRuntime, caller: CommandCaller, thread: { readonly recordType: string; readonly recordId: string; readonly partyId: string | null }, fileIds: readonly string[]): Promise<MimeAttachment[]> {
+  if (fileIds.length === 0) return []
+  const rows = await caller.withClient((client) =>
+    client.storedFile.findMany({
+      where: { id: { in: [...fileIds] } },
+      select: { id: true, originalName: true, contentType: true, sizeBytes: true, status: true, recordType: true, recordId: true, partyId: true, storeAccountId: true, storageKey: true },
+    }),
+  )
+  const files = fileIds.map((id) => {
+    const file = rows.find((row) => row.id === id)
+    if (!file || file.status !== 'AVAILABLE' || file.recordType !== thread.recordType || file.recordId !== thread.recordId || file.partyId === null || file.partyId !== thread.partyId) {
+      throw new Error(`attachment ${id} is no longer an available file shared with the record's party`)
+    }
+    return file
+  })
+  const total = files.reduce((sum, file) => sum + file.sizeBytes, 0)
+  if (total > MAX_ATTACHMENT_BYTES) throw new Error(`the attachments hold ${total} bytes; a mail carries at most ${MAX_ATTACHMENT_BYTES}`)
+  const attached: MimeAttachment[] = []
+  for (const file of files) {
+    const content = await runtime.files().read(caller, file.storeAccountId, file.storageKey, file.sizeBytes)
+    if (!content) throw new Error(`attachment ${file.id} is missing from the file store`)
+    attached.push({ filename: file.originalName, contentType: file.contentType, content })
+  }
+  return attached
+}
+
+/** The MIME of a record mail, from its thread message and its attached files (read in the caller's system scope). */
 export function threadMailBuilder(runtime: EmailRuntime, caller: CommandCaller, clock?: Clock): (row: ClaimedOutbound) => Promise<string> {
-  return async (row) =>
-    caller.withClient(async (client) => {
-      if (!row.threadId || !row.messageId) throw new Error('A record mail names its thread and message.')
-      const { identity } = row
-      const thread = await client.thread.findUniqueOrThrow({ where: { id: row.threadId }, select: { replyToken: true } })
-      const message = await client.message.findUniqueOrThrow({ where: { id: row.messageId }, select: { bodyText: true, authorName: true, attachmentFileIds: true } })
-      const company = await client.company.findUniqueOrThrow({
-        where: { id: row.companyId },
-        select: { legalName: true, address: true, vatNumber: true, fiscalCode: true, reaOffice: true, reaNumber: true, shareCapital: true, currency: true, pec: true },
-      })
-      const files = message.attachmentFileIds.length
-        ? await client.storedFile.findMany({ where: { id: { in: message.attachmentFileIds } }, select: { id: true, originalName: true } })
-        : []
-      const names = message.attachmentFileIds.flatMap((id) => files.filter((file) => file.id === id).map((file) => file.originalName))
-      const locale = localeOf(row.locale)
-      const mail = compose(
-        { template: 'thread.message', body: message.bodyText, senderName: message.authorName, companyName: identity.displayName, attachmentNames: names },
-        { locale, company: { ...company, shareCapital: company.shareCapital?.toString() ?? null }, privacyUrl: privacyNoticeUrl(runtime.webOrigin, row.companyId) },
-      )
-      return buildMime({
-        id: row.id,
-        from: { name: row.fromName, address: row.fromAddress },
-        to: row.to,
-        cc: row.cc,
-        replyTo: replyAddress(thread.replyToken, identity.replyDomain),
-        subject: row.subject,
-        messageId: row.emailMessageId,
-        inReplyTo: row.inReplyTo,
-        references: row.referenceIds,
-        date: (clock ?? COMMAND_SETTINGS.clock).now(),
-        text: mail.text,
-        html: mail.html,
-        automatic: false,
-      })
+  return async (row) => {
+    if (!row.threadId || !row.messageId) throw new Error('A record mail names its thread and message.')
+    const { threadId, messageId, identity } = row
+    const { thread, message } = await caller.withClient(async (client) => ({
+      thread: await client.thread.findUniqueOrThrow({ where: { id: threadId }, select: { replyToken: true, recordType: true, recordId: true, partyId: true } }),
+      message: await client.message.findUniqueOrThrow({ where: { id: messageId }, select: { bodyText: true, authorName: true, attachmentFileIds: true } }),
+    }))
+    const company = await companyLegalOf(caller, row.companyId)
+    const attachments = await attachmentsOf(runtime, caller, thread, message.attachmentFileIds)
+    const mail = compose(
+      { template: 'thread.message', body: message.bodyText, senderName: message.authorName, companyName: identity.displayName, attachmentNames: attachments.map((file) => file.filename) },
+      { locale: localeOf(row.locale), company, privacyUrl: privacyNoticeUrl(runtime.webOrigin, row.companyId) },
+    )
+    return buildMime({
+      id: row.id,
+      from: { name: row.fromName, address: row.fromAddress },
+      to: row.to,
+      cc: row.cc,
+      replyTo: replyAddress(thread.replyToken, identity.replyDomain),
+      subject: row.subject,
+      messageId: row.emailMessageId,
+      inReplyTo: row.inReplyTo,
+      references: row.referenceIds,
+      date: (clock ?? COMMAND_SETTINGS.clock).now(),
+      text: mail.text,
+      html: mail.html,
+      automatic: false,
+      attachments,
     })
+  }
 }
 
 export const EMAIL_SEND_HANDLER = 'email.sendQueued'
