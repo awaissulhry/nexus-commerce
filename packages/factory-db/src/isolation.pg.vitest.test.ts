@@ -7,6 +7,7 @@ import { seed as seedFiles } from '../seed/files'
 import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
+import { seed as seedPrint } from '../seed/print'
 import { seed as seedRoles } from '../seed/roles'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels } from './ownership'
@@ -92,6 +93,8 @@ beforeAll(async () => {
   await seedIntegration({ db: factory, namespace: 'iso-b' })
   await seedFiles({ db: factory, namespace: 'iso-a' })
   await seedFiles({ db: factory, namespace: 'iso-b' })
+  await seedPrint({ db: factory, namespace: 'iso-a' })
+  await seedPrint({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -113,6 +116,8 @@ it('covers every classified table and every runtime role', () => {
     'NumberSeries',
     'OutboxEvent',
     'PasswordReset',
+    'PrintJob',
+    'Printer',
     'Role',
     'RoleAssignment',
     'SecretValue',

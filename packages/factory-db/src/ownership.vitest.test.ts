@@ -26,6 +26,8 @@ describe('model ownership', () => {
       'NumberSeries',
       'OutboxEvent',
       'PasswordReset',
+      'PrintJob',
+      'Printer',
       'Role',
       'RoleAssignment',
       'SecretValue',

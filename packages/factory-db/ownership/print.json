@@ -1,0 +1,23 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/print.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps the printers of each site and queues print jobs; the worker (the tenant's system context, the office role) hands jobs to the site's print relay and records what happened, all through apps/factory-api's platform/print and command(). A floor device reads its own site's printers (not where the relay reaches them) and queues and follows label jobs at its own site only. Portal and link sessions print nothing. No role deletes: a printer is archived, a job keeps its row; the triggers of the …_print_guards migration refuse DELETE and TRUNCATE for every login and keep a queued job's content fixed. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Printer": {
+      "about": "The office adds printers to a site and changes them (name, relay target, label stock, pause, archive); the worker reads them to reach the relay. A floor device lists its own site's printers to choose one, without the relay target.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["relayTarget"] }
+      }
+    },
+    "PrintJob": {
+      "about": "The office queues jobs and sends failed ones again; the worker moves them (SENT, PRINTED, FAILED). A floor device queues label jobs at its own site and follows that site's queue.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

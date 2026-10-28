@@ -118,6 +118,8 @@ model Site {
   stations    Station[]
   // files.prisma: the files shared with this site's floor.
   floorFiles  StoredFile[]
+  // print.prisma: the site's printers.
+  printers    Printer[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])

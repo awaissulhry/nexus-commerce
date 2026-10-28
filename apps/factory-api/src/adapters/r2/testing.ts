@@ -3,7 +3,8 @@ import { S3Client, type S3ClientConfig } from '@aws-sdk/client-s3'
 /**
  * A fake R2 for tests (imported by tests only): the real S3 client, with a request handler that answers from memory
  * instead of opening a socket. Every request the SDK would send is recorded, so a test can prove which calls reached
- * "R2" and that nothing else did. HEAD answers with the stored size, type and SHA-256 checksum; DELETE removes.
+ * "R2" and that nothing else did. HEAD answers with the stored size, type and SHA-256 checksum; PUT keeps what a
+ * PutObject sent; DELETE removes.
  */
 
 export interface FakeObject {
@@ -58,6 +59,16 @@ export class FakeR2 {
           body: undefined,
         },
       }
+    }
+    if (request.method === 'PUT') {
+      // A PutObject (presigned PUTs never reach this fake: the browser sends them). Size, type and checksum as sent.
+      const header = (name: string): string | undefined => Object.entries(request.headers).find(([key]) => key.toLowerCase() === name)?.[1]
+      this.objects.set(decodeURIComponent(request.path), {
+        sizeBytes: Number.parseInt(header('content-length') ?? '0', 10),
+        contentType: header('content-type') ?? 'application/octet-stream',
+        sha256: Buffer.from(header('x-amz-checksum-sha256') ?? '', 'base64').toString('hex'),
+      })
+      return { response: { statusCode: 200, headers: { etag: '"fake"' }, body: undefined } }
     }
     if (request.method === 'DELETE') {
       this.objects.delete(decodeURIComponent(request.path))

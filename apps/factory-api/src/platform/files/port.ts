@@ -5,7 +5,8 @@ import type { GatewayCall } from '../gateway/gateway'
  * implement it, chosen by the R2 account's mode: `adapters/r2` (LIVE, SANDBOX: Cloudflare R2 through the S3 API) and
  * `adapters/local-files` (FAKE: a folder on this machine, local and test only). Each operation runs inside ONE gateway
  * call (store.ts): the account is re-read, the call is rate limited and recorded as one IntegrationCall row, and the
- * adapter gets the account's settings and credentials from `call`. A presign signs locally and sends nothing.
+ * adapter gets the account's settings and credentials from `call`. A presign signs locally and sends nothing; `put`
+ * writes bytes the API made itself (a rendered document, platform/documents).
  */
 
 /** A request the browser (or a test) makes straight to the store: a presigned URL and the headers it must send. */
@@ -45,11 +46,22 @@ export interface DownloadTarget {
   readonly now: Date
 }
 
+/** Bytes the API made itself (a rendered document), written straight to the store: nothing passes through a browser. */
+export interface PutTarget {
+  readonly key: string
+  readonly contentType: string
+  readonly body: Uint8Array
+  /** Lower-case hex of the body. The store refuses a body with another checksum. */
+  readonly sha256: string
+}
+
 export interface FileStoreAdapter {
   presignUpload(call: GatewayCall, target: UploadTarget): Promise<PresignedRequest>
   presignDownload(call: GatewayCall, target: DownloadTarget): Promise<PresignedRequest>
   /** The object, or null when there is none under the key. */
   head(call: GatewayCall, key: string): Promise<StoredObject | null>
+  /** Stores bytes the API made under the key (a generated document). */
+  put(call: GatewayCall, target: PutTarget): Promise<void>
   /** Removes the object; no object under the key is not an error. */
   remove(call: GatewayCall, key: string): Promise<void>
 }

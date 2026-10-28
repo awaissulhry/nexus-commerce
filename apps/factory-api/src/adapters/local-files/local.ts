@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, resolve, sep } from 'node:path'
 import type { FactoryEnv } from '../../env'
 import { ProviderError, type GatewayCall } from '../../platform/gateway/gateway'
-import type { DownloadTarget, FileStoreAdapter, PresignedRequest, StoredObject, UploadTarget } from '../../platform/files/port'
+import type { DownloadTarget, FileStoreAdapter, PresignedRequest, PutTarget, StoredObject, UploadTarget } from '../../platform/files/port'
 import { isStorageKey, normaliseContentType } from '../../platform/files/rules'
 
 /**
@@ -97,6 +97,15 @@ export function localFileStore(options: LocalFileStoreOptions): LocalFileStore {
   function fakeAccountOnly(call: GatewayCall): void {
     if (call.account.mode !== 'FAKE') throw new ProviderError('The local file store serves FAKE accounts only.', { retryable: false })
   }
+  /** Writes the object and its type beside it; the object appears whole (written aside, then renamed). */
+  async function write(key: string, contentType: string, body: Buffer): Promise<void> {
+    const path = pathOf(key)
+    await mkdir(dirname(path), { recursive: true })
+    const temporary = `${path}.${randomBytes(6).toString('hex')}.part`
+    await writeFile(temporary, body)
+    await writeFile(`${path}.meta.json`, JSON.stringify({ contentType }))
+    await rename(temporary, path)
+  }
   const presigned = (method: Grant['m'], grant: Grant, headers: Record<string, string>): PresignedRequest => ({
     method,
     url: `${LOCAL_FILES_PATH}?token=${tokenOf(grant)}`,
@@ -130,6 +139,12 @@ export function localFileStore(options: LocalFileStoreOptions): LocalFileStore {
         throw error
       }
     },
+    async put(call: GatewayCall, target: PutTarget): Promise<void> {
+      fakeAccountOnly(call)
+      const body = Buffer.from(target.body.buffer, target.body.byteOffset, target.body.byteLength)
+      if (sha256Hex(body) !== target.sha256) throw new ProviderError('The content does not match its SHA-256.', { retryable: false })
+      await write(target.key, normaliseContentType(target.contentType), body)
+    },
     async remove(call: GatewayCall, key: string): Promise<void> {
       fakeAccountOnly(call)
       const path = pathOf(key)
@@ -141,12 +156,7 @@ export function localFileStore(options: LocalFileStoreOptions): LocalFileStore {
       if (normaliseContentType(upload.contentType ?? '') !== grant.t) throw new LocalFileError(400, 'The content type is not the one announced.')
       if (upload.body.length !== grant.n) throw new LocalFileError(400, 'The size is not the one announced.')
       if (sha256Hex(upload.body) !== grant.s) throw new LocalFileError(400, 'The content does not match its SHA-256.')
-      const path = pathOf(grant.k)
-      await mkdir(dirname(path), { recursive: true })
-      const temporary = `${path}.${randomBytes(6).toString('hex')}.part`
-      await writeFile(temporary, upload.body)
-      await writeFile(`${path}.meta.json`, JSON.stringify({ contentType: grant.t }))
-      await rename(temporary, path)
+      await write(grant.k, grant.t, upload.body)
     },
     async openDownload(token, now) {
       const grant = grantOf(token, 'GET', now)

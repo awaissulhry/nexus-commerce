@@ -2,7 +2,7 @@ import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectComm
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { z } from 'zod'
 import { ProviderError, type GatewayCall } from '../../platform/gateway/gateway'
-import type { DownloadTarget, FileStoreAdapter, PresignedRequest, StoredObject, UploadTarget } from '../../platform/files/port'
+import type { DownloadTarget, FileStoreAdapter, PresignedRequest, PutTarget, StoredObject, UploadTarget } from '../../platform/files/port'
 import { isLegalKey } from '../../platform/files/rules'
 
 /**
@@ -19,6 +19,7 @@ import { isLegalKey } from '../../platform/files/rules'
  *                 size, and a body whose SHA-256 differs; it lives `expiresInSeconds` (5 minutes)
  *   presign GET   `response-content-disposition: attachment…` and the stored type; 60 seconds
  *   head          size, type and the stored SHA-256 checksum (`x-amz-checksum-mode: ENABLED`); 404 → null
+ *   put           PutObject of bytes the API made (a generated document), with its SHA-256: R2 refuses another body
  *   delete        DeleteObject; the retention check is the caller's (store.ts), the legal bucket's lock is R2's
  *
  * Presigning signs locally and sends nothing. The client makes one attempt per call (the gateway retries) and gets the
@@ -121,6 +122,26 @@ export function r2FileStore(options: R2Options = {}): FileStoreAdapter {
           return null
         }
         return asProviderError(error, 'HeadObject')
+      }
+    },
+
+    async put(call: GatewayCall, target: PutTarget): Promise<void> {
+      const { client, bucketOf } = await open(call)
+      try {
+        await client.send(
+          new PutObjectCommand({
+            Bucket: bucketOf(target.key),
+            Key: target.key,
+            Body: target.body,
+            ContentType: target.contentType,
+            ContentLength: target.body.byteLength,
+            ChecksumSHA256: hexToBase64(target.sha256),
+          }),
+          { abortSignal: call.signal },
+        )
+        call.answer({ httpStatus: 200 })
+      } catch (error) {
+        asProviderError(error, 'PutObject')
       }
     },
 

@@ -56,6 +56,32 @@ export const FILES_UPLOAD = 'files.upload' satisfies Permission
 export const FILES_DELETE = 'files.delete' satisfies Permission
 export const FILES_MANAGE = 'files.manage' satisfies Permission
 
+/**
+ * Company documents as PDF (apps/factory-api platform/documents; plan A1 §3.9, GAP-008). An issued document's PDF is
+ * made by the command that issues it, under that module's own permission (quotes.send, ddt.issue, invoices.issue…);
+ * documents.view shows the fixed layouts with a company's legal data (the letterhead preview), stored nowhere.
+ */
+export const DOCUMENTS_DEFINITIONS = definePermissions('documents', {
+  view: { risk: 'read', description: "Preview a company's document layouts (quote, purchase order, DDT, invoice copy) with its legal data." },
+})
+export const DOCUMENTS_VIEW = 'documents.view' satisfies Permission
+
+/**
+ * Printing (apps/factory-api platform/print; plan A1 §3.9, GAP-007): printers per site and print jobs through the
+ * site's print relay, or a PDF for the browser. Each is checked with can() against the printer's company and site; a
+ * floor session prints only at its own device's site. Sending a failed job again needs the permission that queued it.
+ */
+export const PRINT_DEFINITIONS = definePermissions('print', {
+  view: { risk: 'read', description: "See a site's printers and its print jobs." },
+  labels: { risk: 'write', description: "Print labels (hides, lots, bundles, cartons) on a site's label printer, or as a PDF for any printer." },
+  documents: { risk: 'write', description: "Print a record's PDF document on a site's printer." },
+  manage: { risk: 'write', description: 'Add printers to a site and change them: name, relay target, label stock, pause, archive.' },
+})
+export const PRINT_VIEW = 'print.view' satisfies Permission
+export const PRINT_LABELS = 'print.labels' satisfies Permission
+export const PRINT_DOCUMENTS = 'print.documents' satisfies Permission
+export const PRINT_MANAGE = 'print.manage' satisfies Permission
+
 /** The money grains as they travel in grants (`../grains/grains`): from Role.grains, never Role.permissions. */
 export const MONEY_PERMISSIONS: PermissionDefinition[] = GRAINS.map((grain) =>
   Object.freeze({ name: grainPermission(grain), area: 'money', description: GRAIN_DESCRIPTIONS[grain], risk: 'read' as const, grain }),
@@ -67,10 +93,12 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   AUDIT_PERMISSIONS,
   NUMBERING_DEFINITIONS,
   FILES_DEFINITIONS,
+  DOCUMENTS_DEFINITIONS,
+  PRINT_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
 // The modules' constants and their declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE]) {
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE]) {
   if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 }
