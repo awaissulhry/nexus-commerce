@@ -1,0 +1,15 @@
+{
+  "$comment": "Who may read and write the model of prisma/schema/outbox.prisma (rules: src/ownership.ts; roles: src/roles.ts). Every audience that writes through apps/factory-api's command() adds outbox rows in the transaction of its change; only the worker's relay (the system context, in the office role factory_runtime, one tenant per transaction) reads them and moves their delivery state. The event columns never change and a pending row is never deleted: the triggers of the …_outbox_guard migration refuse it for every login. No role deletes. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "OutboxEvent": {
+      "about": "factory_runtime: office commands insert; the worker's relay, which runs as the system context of each tenant (office role, RLS forced), selects pending rows FOR UPDATE SKIP LOCKED and updates their delivery state (status, attempts, nextAttemptAt, publishedAt, lastError; the trigger refuses any other column). Floor and portal/link commands only insert their own rows: a floor row carries the device's site, a partner row the session's party (WITH CHECK); they read none.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["insert"], "scopedBy": ["site"] },
+        "factory_partner_runtime": { "privileges": ["insert"], "scopedBy": ["party"] }
+      }
+    }
+  }
+}

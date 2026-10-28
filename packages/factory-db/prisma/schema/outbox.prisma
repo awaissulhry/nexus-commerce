@@ -1,0 +1,66 @@
+// The transactional outbox (plan A1 §2.3, §3.3, §3.4; features PLT-191, PLT-217). apps/factory-api's command() writes
+// one row per event the change emitted, in the SAME transaction as the change, its audit rows and its receipt: an event
+// exists exactly when its change committed. The worker's relay (apps/factory-api/src/platform/outbox) then publishes
+// each row to BullMQ (job id = the event id) and marks it published.
+//
+// The event itself never changes: the hand-written migration …_outbox_guard refuses, for every login, an UPDATE that
+// touches any column but the delivery state (status, attempts, nextAttemptAt, publishedAt, lastError), a delivery
+// state that moves backwards, a DELETE of a row that is not published, and TRUNCATE. tenantId is held by the policies
+// (USING and WITH CHECK on the tenant), so no runtime role can move a row to another tenant.
+//
+// No foreign keys: like the audit log, the outbox keeps what was true when it was written. companyId and siteId are the
+// event's own scope (the envelope); partyId is the scope a partner or link write ran in, read by the partner policy.
+
+/// One domain event, written by command() in the transaction of its change and published by the worker's relay.
+/// The envelope (A1 §3.4) is fixed once written; only the delivery state moves forward.
+model OutboxEvent {
+  /// The event id (the envelope's eventId): UUIDv7 from newId(), so a tenant's events sort in time order. It is also
+  /// the BullMQ job id, so a second publish of one event is not a second job.
+  id            String       @id @db.Uuid
+  tenantId      String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company the event belongs to, when known.
+  companyId     String?      @db.Uuid
+  /// The site: always the device's site for a floor write (the floor policy checks it).
+  siteId        String?      @db.Uuid
+  /// The party of a portal or link write (the partner policy checks it); not part of the published envelope.
+  partyId       String?      @db.Uuid
+  /// The catalogue's type (`quote.sent`), declared in @nexus/factory-domain/events before it can be written.
+  type          String
+  /// The payload's schema version in the catalogue.
+  version       Int
+  /// The module that owns the event (the catalogue's context).
+  context       String
+  /// The aggregate the event is about (usually the record id): the partition key.
+  subject       String
+  /// The request (or job) that caused the write; one request's events share it.
+  correlationId String
+  /// The event a job handled when it wrote this one, if any.
+  causationId   String?
+  /// The command that emitted it (`sites.rename`).
+  source        String
+  /// The command's server time.
+  occurredAt    DateTime     @db.Timestamptz(3)
+  /// The payload, checked against the catalogue's strict schema before it was written.
+  payload       Json
+  /// Delivery: PENDING until the relay published it, DEAD after the relay gave up (lastError says why).
+  status        OutboxStatus @default(PENDING)
+  /// Publish attempts so far.
+  attempts      Int          @default(0)
+  /// The relay picks a pending row from this time on (now for a new row; later after a failed attempt).
+  nextAttemptAt DateTime     @default(now()) @db.Timestamptz(3)
+  publishedAt   DateTime?    @db.Timestamptz(3)
+  /// The last publish failure, for the person who looks at a dead event.
+  lastError     String?
+
+  // The relay's pick (status, then due time) and the lag check.
+  @@index([tenantId, status, nextAttemptAt])
+  // One record's events in order.
+  @@index([tenantId, subject, occurredAt])
+}
+
+/// Where an outbox row is in its delivery. Forward only: PENDING → PUBLISHED or DEAD.
+enum OutboxStatus {
+  PENDING
+  PUBLISHED
+  DEAD
+}

@@ -1,0 +1,110 @@
+// Number series and the numbers they issued (plan A1 §2.3 NumberSeries, §3.9; PLAN §2.8; features PLT-122, PLT-123).
+// The formats, kinds and rules live in @nexus/factory-domain/numbering; apps/factory-api's allocateNumber takes a
+// number inside the issuing command's transaction (src/platform/numbering/allocate.ts).
+//
+// Gapless: a number is taken under the series row's lock (SELECT … FOR UPDATE) and the counter moves in the same
+// transaction as the document, its NumberAllocation row and its audit row, so a rolled-back command consumes nothing
+// and two commands never get the same number. The hand-written migration …_numbering_guards adds what Prisma does not
+// model: a series' counter never moves back and its pattern, start and identity are fixed once it moved (trigger), and
+// NumberAllocation is append-only (`@append-only`, scripts/factory/check-append-only.mjs).
+
+/// One counter: the numbers of one kind of document of one company, in one series (sezionale) and one period (the
+/// calendar year of a yearly series, `ALL` for one that never resets). A new year's row is made from the family's
+/// newest row when its first number is taken. Closed (status CLOSED), never deleted.
+model NumberSeries {
+  id             String             @id @db.Uuid
+  tenantId       String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId      String             @db.Uuid
+  kind           NumberKind
+  /// The series inside the company and kind (sezionale): `MAIN`, `A`, `B`… (1-16 capitals, digits, hyphens).
+  code           String
+  /// The period the counter runs in: the calendar year (`2026`) when reset is YEARLY, `ALL` when NEVER.
+  scopeKey       String
+  reset          NumberReset
+  /// The printed form, e.g. `FT-{YYYY}-{N:5}` (@nexus/factory-domain/numbering/format). Fixed once a number is issued.
+  pattern        String
+  /// An invoice, deposit invoice, credit note or DDT series (DPR 633/1972 art. 21; DPR 472/1996): no gap, no reuse,
+  /// no date before the last number's, at most 20 characters. Set from the kind.
+  fiscal         Boolean
+  /// The first number of the period: 1, or where a paper booklet or the accountant's software stopped plus one.
+  startValue     Int                @default(1)
+  /// The number the next document gets. Only moves forward once it left startValue.
+  nextValue      Int                @default(1)
+  /// The business date (Europe/Rome) of the newest document numbered here: a fiscal series refuses an earlier one.
+  lastIssuedDate DateTime?          @db.Date
+  status         NumberSeriesStatus @default(ACTIVE)
+  version        Int                @default(1)
+  createdAt      DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?            @db.Uuid
+
+  company     Company            @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  allocations NumberAllocation[]
+
+  @@unique([tenantId, companyId, kind, code, scopeKey])
+  // The target of the allocations' tenant- and company-safe reference.
+  @@unique([tenantId, companyId, id])
+}
+
+/// What a series numbers (the same list as NUMBER_KINDS in @nexus/factory-domain/numbering/kinds). Additive.
+enum NumberKind {
+  QUOTE
+  SALES_ORDER
+  PURCHASE_ORDER
+  GOODS_RECEIPT
+  WORK_ORDER
+  SHIPMENT
+  DDT
+  INVOICE
+  DEPOSIT_INVOICE
+  CREDIT_NOTE
+  RETURN
+  LOT
+  BATCH
+}
+
+enum NumberReset {
+  YEARLY
+  NEVER
+}
+
+/// A closed series issues no more numbers.
+enum NumberSeriesStatus {
+  ACTIVE
+  CLOSED
+}
+
+/// One issued number: which series gave which number to which record, when, for whom. Written by allocateNumber in
+/// the issuing command's transaction; never changed or removed (a voided document keeps its number).
+/// @append-only
+model NumberAllocation {
+  /// UUIDv7 from newId().
+  id            String     @id @db.Uuid
+  tenantId      String     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String     @db.Uuid
+  seriesId      String     @db.Uuid
+  /// The series' kind, kept here for the one-number-per-record key.
+  kind          NumberKind
+  value         Int
+  /// The number as printed on the document (the series' pattern, fixed once used, so it is unique like the value).
+  formatted     String
+  /// The document's business date (Europe/Rome).
+  documentDate  DateTime   @db.Date
+  /// The numbered record: its model name and id.
+  recordType    String
+  recordId      String     @db.Uuid
+  /// The command's server time.
+  allocatedAt   DateTime   @db.Timestamptz(3)
+  /// The caller of the command (a user, or the system actor of a job).
+  allocatedById String     @db.Uuid
+  /// The request (or job) that issued it, as on its audit rows.
+  requestId     String
+
+  series NumberSeries @relation(fields: [tenantId, companyId, seriesId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // Never the same number twice in a series period.
+  @@unique([tenantId, seriesId, formatted])
+  // A record gets one number of each kind.
+  @@unique([tenantId, recordType, recordId, kind])
+  @@index([tenantId, seriesId, value])
+}

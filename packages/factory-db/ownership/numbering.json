@@ -1,0 +1,21 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/numbering.prisma (rules: src/ownership.ts; roles: src/roles.ts). Numbers are issued by apps/factory-api's allocateNumber inside an office (or worker) command; floor and portal sessions issue none in W0, so they get no grant (a later step that numbers lots or bundles on the floor adds what it needs). NumberAllocation is append-only (`@append-only`, scripts/factory/check-append-only.mjs): no update or delete grant, and the triggers of the …_numbering_guards migration refuse UPDATE, DELETE and TRUNCATE for every login. Series are closed, never deleted. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "NumberSeries": {
+      "about": "Office sessions and the worker keep the series: an admin creates one, sets its start or moves it past a number (numbering.manage, through command()), and allocateNumber locks the row and moves its counter. The API keeps staff to the companies their grants reach (scopeWhere / can()).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "NumberAllocation": {
+      "about": "Office sessions and the worker add one row per issued number (allocateNumber) and read the ledger (which record has which number; the no-gap check). Nobody changes or removes a row.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    }
+  }
+}

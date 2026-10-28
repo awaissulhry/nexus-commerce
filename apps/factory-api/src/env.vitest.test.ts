@@ -3,15 +3,29 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { FACTORY_ENV_FILE, loadFactoryEnv, parseFactoryEnv, readFactoryVariables } from './env'
+import { FACTORY_ENV_FILE, LOCAL_COOKIE_SECRET, LOCAL_PIN_PEPPER, loadFactoryEnv, parseFactoryEnv, readFactoryVariables } from './env'
 
 const LOCAL = {
   FACTORY_ENV: 'local',
   FACTORY_DATABASE_URL: 'postgresql://postgres@127.0.0.1:5442/factory_w9_01',
   FACTORY_REDIS_URL: 'redis://127.0.0.1:6399',
+  FACTORY_QUEUE_PREFIX: 'w9_01',
 }
 const REMOTE_DATABASE = 'postgresql://factory_runtime:hunter2@db.example.com:5432/factory'
 const REMOTE_REDIS = 'redis://default:hunter2@cache.example.com:6379'
+const RAILWAY = {
+  FACTORY_ENV: 'production',
+  FACTORY_DATABASE_URL: REMOTE_DATABASE,
+  FACTORY_REDIS_URL: REMOTE_REDIS,
+  FACTORY_WEB_ORIGIN: 'https://factory.example.com',
+  FACTORY_COOKIE_SECRET: 'a-random-secret-of-at-least-thirty-two-chars',
+  FACTORY_PIN_PEPPER: 'a-made-up-pin-pepper-of-at-least-thirty-two-chars',
+  FACTORY_KMS_KEY_ID: 'arn:aws:kms:eu-south-1:000000000000:key/00000000-0000-0000-0000-000000000000',
+  FACTORY_AWS_ACCESS_KEY_ID: 'AKIAIOSFODNN7EXAMPLE',
+  FACTORY_AWS_SECRET_ACCESS_KEY: 'not-a-real-secret-access-key-for-tests',
+}
+/** A made-up master key (32 bytes of 0x01), never a real one. */
+const TEST_MASTER_KEY = Buffer.alloc(32, 1).toString('base64')
 
 const folders: string[] = []
 function variablesFile(content: string): string {
@@ -90,6 +104,92 @@ describe('refusals', () => {
     expect(() => parseFactoryEnv(variables, '')).toThrow(/runs only on Railway/)
   })
 
+  it.each(['production', 'staging'])('refuses FACTORY_ENV=%s without an https web origin', (name) => {
+    const { FACTORY_WEB_ORIGIN: _unused, ...rest } = RAILWAY
+    expect(() => parseFactoryEnv({ ...rest, FACTORY_ENV: name }, 'production')).toThrow(/FACTORY_WEB_ORIGIN must be set/)
+    expect(() => parseFactoryEnv({ ...RAILWAY, FACTORY_ENV: name, FACTORY_WEB_ORIGIN: 'http://factory.example.com' }, 'production')).toThrow(
+      /https origin/,
+    )
+  })
+
+  it('refuses a web origin with a path, a trailing slash or another scheme', () => {
+    for (const origin of ['https://factory.example.com/', 'https://factory.example.com/app', 'ftp://factory.example.com', 'factory.example.com']) {
+      expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_WEB_ORIGIN: origin }, undefined), origin).toThrow(/FACTORY_WEB_ORIGIN/)
+    }
+  })
+
+  it.each(['production', 'staging'])('refuses FACTORY_ENV=%s without a real cookie secret', (name) => {
+    const { FACTORY_COOKIE_SECRET: _unused, ...rest } = RAILWAY
+    for (const variables of [rest, { ...RAILWAY, FACTORY_COOKIE_SECRET: 'short' }, { ...RAILWAY, FACTORY_COOKIE_SECRET: LOCAL_COOKIE_SECRET }]) {
+      expect(() => parseFactoryEnv({ ...variables, FACTORY_ENV: name }, 'production')).toThrow(/FACTORY_COOKIE_SECRET/)
+    }
+  })
+
+  it.each(['production', 'staging'])('refuses FACTORY_ENV=%s without a real PIN pepper (or with a weak previous one)', (name) => {
+    const { FACTORY_PIN_PEPPER: _unused, ...rest } = RAILWAY
+    for (const variables of [
+      rest,
+      { ...RAILWAY, FACTORY_PIN_PEPPER: 'a-short-pin-pepper-1' },
+      { ...RAILWAY, FACTORY_PIN_PEPPER: LOCAL_PIN_PEPPER },
+      { ...RAILWAY, FACTORY_PIN_PEPPER_PREVIOUS: LOCAL_PIN_PEPPER },
+    ]) {
+      expect(() => parseFactoryEnv({ ...variables, FACTORY_ENV: name }, 'production')).toThrow(/FACTORY_PIN_PEPPER/)
+    }
+    expect(parseFactoryEnv({ ...RAILWAY, FACTORY_ENV: name, FACTORY_PIN_PEPPER_PREVIOUS: 'an-older-made-up-pin-pepper-of-32-chars' }, 'production').FACTORY_PIN_PEPPER).toBe(RAILWAY.FACTORY_PIN_PEPPER)
+  })
+
+  it.each(['local', 'test'])('refuses FACTORY_ENV=%s without its own queue prefix (the local Redis is shared)', (name) => {
+    const { FACTORY_QUEUE_PREFIX: _unused, ...rest } = LOCAL
+    expect(() => parseFactoryEnv({ ...rest, FACTORY_ENV: name }, undefined)).toThrow(/FACTORY_QUEUE_PREFIX is required with FACTORY_ENV=/)
+    expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_ENV: name, FACTORY_QUEUE_PREFIX: '' }, undefined)).toThrow(/FACTORY_QUEUE_PREFIX is required/)
+  })
+
+  it('refuses a queue prefix that is not lower-case letters, digits and underscores', () => {
+    for (const prefix of ['W0_12', 'w0-12', '0w', 'w0:12', 'x'.repeat(33)]) {
+      expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_QUEUE_PREFIX: prefix }, undefined), prefix).toThrow(/FACTORY_QUEUE_PREFIX/)
+    }
+  })
+
+  it('refuses proxy hops out of range', () => {
+    expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_TRUST_PROXY_HOPS: '-1' }, undefined)).toThrow(/FACTORY_TRUST_PROXY_HOPS/)
+    expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_TRUST_PROXY_HOPS: 'all' }, undefined)).toThrow(/FACTORY_TRUST_PROXY_HOPS/)
+  })
+
+  it.each(['production', 'staging'])('refuses a local master key with FACTORY_ENV=%s, and needs the KMS key and its AWS keys', (name) => {
+    expect(() => parseFactoryEnv({ ...RAILWAY, FACTORY_ENV: name, FACTORY_SECRETS_MASTER_KEY: TEST_MASTER_KEY }, 'production')).toThrow(
+      /FACTORY_SECRETS_MASTER_KEY \(a local master key\) is refused/,
+    )
+    for (const key of ['FACTORY_KMS_KEY_ID', 'FACTORY_AWS_ACCESS_KEY_ID', 'FACTORY_AWS_SECRET_ACCESS_KEY'] as const) {
+      const { [key]: _unused, ...rest } = RAILWAY
+      expect(() => parseFactoryEnv({ ...rest, FACTORY_ENV: name }, 'production'), key).toThrow(new RegExp(`${key} must be set`))
+    }
+  })
+
+  it.each(['local', 'test'])('refuses KMS and AWS variables with FACTORY_ENV=%s (nothing local reaches AWS)', (name) => {
+    for (const key of ['FACTORY_KMS_KEY_ID', 'FACTORY_AWS_ACCESS_KEY_ID', 'FACTORY_AWS_SECRET_ACCESS_KEY'] as const) {
+      expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_ENV: name, [key]: RAILWAY[key] }, undefined), key).toThrow(new RegExp(`${key} is for staging and production only`))
+    }
+  })
+
+  it('refuses a master key that is not 32 bytes in base64', () => {
+    for (const key of ['short', Buffer.alloc(16, 1).toString('base64'), Buffer.alloc(48, 1).toString('base64'), `${TEST_MASTER_KEY.slice(0, -1)}!`]) {
+      expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_SECRETS_MASTER_KEY: key }, undefined), key).toThrow(/FACTORY_SECRETS_MASTER_KEY/)
+    }
+    expect(parseFactoryEnv({ ...LOCAL, FACTORY_SECRETS_MASTER_KEY: TEST_MASTER_KEY }, undefined).FACTORY_SECRETS_MASTER_KEY).toBe(TEST_MASTER_KEY)
+  })
+
+  it.each(['production', 'staging'])('refuses the local files folder with FACTORY_ENV=%s (files are on R2 there)', (name) => {
+    expect(() => parseFactoryEnv({ ...RAILWAY, FACTORY_ENV: name, FACTORY_LOCAL_FILES_DIR: '/tmp/factory-files' }, 'production')).toThrow(
+      /FACTORY_LOCAL_FILES_DIR \(the local file store\) is refused/,
+    )
+  })
+
+  it('takes the local files folder only as an absolute path', () => {
+    expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_LOCAL_FILES_DIR: 'relative/files' }, undefined)).toThrow(/FACTORY_LOCAL_FILES_DIR: must be an absolute path/)
+    expect(parseFactoryEnv({ ...LOCAL, FACTORY_LOCAL_FILES_DIR: '/tmp/factory-files' }, undefined).FACTORY_LOCAL_FILES_DIR).toBe('/tmp/factory-files')
+    expect(parseFactoryEnv(LOCAL, undefined).FACTORY_LOCAL_FILES_DIR).toBeUndefined()
+  })
+
   it('does not let the file pretend to be Railway', () => {
     const file = variablesFile(
       `FACTORY_ENV=production\nFACTORY_DATABASE_URL=${REMOTE_DATABASE}\nFACTORY_REDIS_URL=${REMOTE_REDIS}\nRAILWAY_ENVIRONMENT=production`,
@@ -100,22 +200,28 @@ describe('refusals', () => {
 
 describe('accepted', () => {
   it('local, on loopback, with defaults', () => {
-    expect(parseFactoryEnv(LOCAL, undefined)).toEqual({ ...LOCAL, FACTORY_HOST: '127.0.0.1', FACTORY_PORT: 8190 })
+    expect(parseFactoryEnv(LOCAL, undefined)).toEqual({
+      ...LOCAL,
+      FACTORY_HOST: '127.0.0.1',
+      FACTORY_PORT: 8190,
+      FACTORY_WEB_ORIGIN: 'http://localhost:3200',
+      FACTORY_COOKIE_SECRET: LOCAL_COOKIE_SECRET,
+      FACTORY_PIN_PEPPER: LOCAL_PIN_PEPPER,
+      FACTORY_TRUST_PROXY_HOPS: 0,
+      FACTORY_AWS_REGION: 'eu-south-1',
+    })
   })
 
   it('production on Railway, with remote hosts', () => {
     const env = loadFactoryEnv({
       file: join(tmpdir(), 'factory-env-missing', 'variables'),
-      processEnv: {
-        FACTORY_ENV: 'production',
-        FACTORY_DATABASE_URL: REMOTE_DATABASE,
-        FACTORY_REDIS_URL: REMOTE_REDIS,
-        FACTORY_PORT: '8080',
-        RAILWAY_ENVIRONMENT: 'production',
-      },
+      processEnv: { ...RAILWAY, FACTORY_PORT: '8080', FACTORY_TRUST_PROXY_HOPS: '2', RAILWAY_ENVIRONMENT: 'production' },
     })
     expect(env.FACTORY_HOST).toBe('::')
     expect(env.FACTORY_PORT).toBe(8080)
+    expect(env.FACTORY_TRUST_PROXY_HOPS).toBe(2)
+    expect(env.FACTORY_WEB_ORIGIN).toBe('https://factory.example.com')
+    expect(env.FACTORY_QUEUE_PREFIX).toBe('factory')
     expect(Object.isFrozen(env)).toBe(true)
   })
 })

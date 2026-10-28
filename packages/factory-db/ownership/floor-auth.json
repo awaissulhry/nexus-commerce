@@ -1,0 +1,68 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/floor-auth.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office administrators keep devices, workers, badges, floor roles and floor settings as factory_runtime, inside their tenant (apps/factory-api platform/auth/floor, through command(); the API keeps them to the companies and sites their grants reach). Everything a tablet does runs as factory_floor_runtime in the device's site (tenant and site come from the device token): trading an enrolment code for the device token, signing a worker in and out, counting wrong PINs, sliding the idle end, reading the floor roles of the signed-in worker. So the floor role reads and writes only its own site's rows; it never inserts a device, a worker or a badge, and never sees a worker's office-user link. No role deletes: devices are revoked, workers deactivated, badges revoked, roles and sessions ended. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Device": {
+      "about": "Office: the device registry (enrol, rename, move to a station, revoke). Floor: the device reads its own row by its token, takes its token at enrolment (status, tokenHash), points at its current session and records its last contact.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "DeviceEnrolment": {
+      "about": "Office makes and retires one-time codes; the tablet (floor, in the code's site) reads its code and marks it used.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "Worker": {
+      "about": "Office keeps the floor workers (name, language, employee number, status, PIN reset). Floor reads its site's workers to sign one in (the roster for name + PIN), checks the PIN, counts wrong PINs and stores a PIN the worker changed; it never sees the link to an office user.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"], "hiddenColumns": ["userId"] }
+      }
+    },
+    "Badge": {
+      "about": "Office issues and revokes badges; floor looks a scanned badge up by its code hash.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "WorkerRole": {
+      "about": "Office gives and ends floor roles; the floor authenticator reads the signed-in worker's live ones to build the session's grants.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "FloorSession": {
+      "about": "Floor writes the sessions of its devices (sign-in, switch, sign-out, the idle slide, closing an expired one) and reads them on every request; office ends them when it revokes a device or badge, deactivates a worker or resets a PIN, and reads whether a device is in use.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "FloorSettings": {
+      "about": "Office sets a site's idle minutes and shift ends; floor reads its site's row at sign-in.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

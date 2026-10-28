@@ -1,0 +1,23 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/threads.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context: the email steps) writes threads and messages through apps/factory-api's platform/threads, always through command(). The partner role only reads, and only what is shared with its party: a thread whose record is its party's, and the messages shared with it (Message.partyId is set exactly when the message's audience is PARTNER, so an internal note never matches a party). The floor reads neither. Message is an append-only ledger: no role updates or deletes it, and the triggers of the …_threads_guards migration refuse UPDATE, DELETE and TRUNCATE for every login; a thread is never deleted either. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Thread": {
+      "about": "The office makes a record's thread with its first message, keeps its last-activity time and closes or reopens it. A portal or link session reads the threads of its party's records (the API also needs the link's own record for a link); it never sees the reply token, the last-activity time (internal notes move it) or who opened the thread.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["replyToken", "lastMessageAt", "createdById"] }
+      }
+    },
+    "Message": {
+      "about": "The office writes internal notes (and, in the email steps, the mail sent and received); it reads every message of the tenant (the API scopes it by the thread's company and site). A portal or link session reads only the messages shared with its party, never who in the office wrote them (it has the author's name) or whom a note mentioned.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["authorId", "mentionedUserIds"] }
+      }
+    }
+  }
+}

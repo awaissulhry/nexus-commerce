@@ -1,0 +1,118 @@
+// Files on R2 (plan A1 §3.6, §2.3, §4 "FileStore"; PLAN §2.8; features COL-045, COL-050, PLT-011): every file the
+// factory keeps — tech packs, photos, certificates, documents, the fiscal archive — lives in object storage (Cloudflare
+// R2, EU jurisdiction; a local folder for local and test), never in the database. This table is the record of each one:
+// which record it belongs to, what it is, where it is stored, who may see it and how long it must be kept.
+// apps/factory-api/src/platform/files runs the flow: request an upload (type and size checked per kind) → a presigned
+// PUT → confirm (the store's HEAD: size, type and SHA-256) → AVAILABLE; a download is a short presigned GET after the
+// audience check; a delete is refused while the file is retained or on legal hold.
+//
+// Who sees a file (COL-050): `visibility` lists the audiences. The office always does (OFFICE is always in it); FLOOR
+// shares it with the floor devices of ONE site (`floorSiteId`), PARTNER with ONE party's portal and LINK with that
+// party's one-off links (`partyId`). The policies compare key columns only, so `floorSiteId` and `partyId` are set
+// exactly when the file is shared that way (the guard trigger of …_files_guards keeps them consistent): the floor role
+// reads only files shared with its site's floor, the partner role only files shared with its party.
+//
+// The fiscal archive (PLAN §2.8: invoices, DDTs, signed quote versions; c.c. art. 2220, 10 years): FISCAL_ARCHIVE files
+// are stored under `legal/` (the locked bucket), carry a retention date at least ten years ahead, and like every file
+// never change their content; nothing deletes them before that date or while on legal hold (the domain checks it, the
+// trigger refuses it for every login, the locked bucket refuses it at R2).
+
+/// One file in object storage, kept for one record (COL-045). Content columns (name, type, size, SHA-256, store and key)
+/// never change after the row is written; a new version is a new file. Rows are never deleted: a deleted file keeps its
+/// row in status DELETED (its object is removed from the store).
+model StoredFile {
+  id               String         @id @db.Uuid
+  tenantId         String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose staff see it. Null: tenant-wide master data (a style's tech pack shared by every company).
+  companyId        String?        @db.Uuid
+  /// The record it belongs to: its model name (`Quote`, `Style`, `Company`) and id.
+  recordType       String
+  recordId         String         @db.Uuid
+  kind             FileKind
+  /// The name it was uploaded with (path and control characters removed); the download's file name.
+  originalName     String
+  /// The MIME type announced at upload and confirmed by the store; one of the kind's allowed types.
+  contentType      String
+  sizeBytes        Int
+  /// SHA-256 of the content, lower-case hex, announced at upload and confirmed by the store's checksum.
+  sha256           String
+  /// The R2 account (IntegrationAccount, provider R2) whose store holds the object; FAKE: the local folder.
+  storeAccountId   String         @db.Uuid
+  /// Where the object is in that store: `t/<tenantId>/c/<companyId>/<yyyy>/<random uuid>` (`…/tenant/…` without a
+  /// company), under `legal/` for the fiscal archive. Never a URL, never guessable, never listed publicly.
+  storageKey       String
+  status           FileStatus     @default(PENDING_UPLOAD)
+  /// Who may see it: OFFICE always; FLOOR, PARTNER and LINK when shared (COL-050).
+  visibility       FileAudience[] @default([OFFICE])
+  /// The site whose floor devices see it: set exactly when visibility has FLOOR (the floor role's policy key).
+  floorSiteId      String?        @db.Uuid
+  /// The party it is shared with: set exactly when visibility has PARTNER or LINK (the partner role's policy key).
+  /// The parties module adds its reference.
+  partyId          String?        @db.Uuid
+  /// Kept at least until then: nobody deletes it before (FISCAL_ARCHIVE: at least ten years). Only ever moves later.
+  retainUntil      DateTime?      @db.Timestamptz(3)
+  /// Held for a legal matter: nobody deletes it while set. Hidden from the floor and partner roles.
+  legalHold        Boolean        @default(false)
+  /// Why a confirmed upload did not match what was announced (QUARANTINED): size_mismatch, type_mismatch,
+  /// checksum_mismatch.
+  quarantineReason String?
+  /// When the upload was confirmed (AVAILABLE).
+  availableAt      DateTime?      @db.Timestamptz(3)
+  /// When it was deleted (DELETED).
+  deletedAt        DateTime?      @db.Timestamptz(3)
+  version          Int            @default(1)
+  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  /// Who asked for the upload (a user, or the system for a generated document).
+  createdById      String?        @db.Uuid
+
+  company      Company?           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // A floor-visible file belongs to a company, and its site is one of that company's sites.
+  floorSite    Site?              @relation(fields: [tenantId, companyId, floorSiteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  storeAccount IntegrationAccount @relation(fields: [tenantId, storeAccountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // imports.prisma: the import job whose sheet this file is.
+  importJobs   ImportJob[]
+
+  @@unique([tenantId, storageKey])
+  // The target of the tenant-safe references from other rows (a company's logo, a document's PDF).
+  @@unique([tenantId, id])
+  // A record's files (the record's file panel).
+  @@index([tenantId, recordType, recordId])
+  @@index([tenantId, floorSiteId])
+  @@index([tenantId, partyId])
+}
+
+/// What a file is; each kind has its allowed content types and its size limit (platform/files/rules.ts). Additive.
+enum FileKind {
+  /// Anything attached to a record: PDFs, pictures, office documents, CSV.
+  ATTACHMENT
+  /// A document made or kept for the record: PDF, office documents, CSV.
+  DOCUMENT
+  /// A picture (the floor's defect photo, a sample).
+  PHOTO
+  /// A certificate or test report: PDF, JPEG, PNG.
+  CERTIFICATE
+  /// A fiscal document kept ten years (invoice XML and PDF, DDT, signed quote): stored under `legal/`, immutable.
+  FISCAL_ARCHIVE
+}
+
+/// Where a file is: PENDING_UPLOAD (row written, the upload not confirmed) → AVAILABLE (confirmed) or QUARANTINED (it
+/// did not match what was announced); any of them → DELETED (final; its object removed from the store).
+enum FileStatus {
+  PENDING_UPLOAD
+  AVAILABLE
+  QUARANTINED
+  DELETED
+}
+
+/// Who may see a file (COL-050).
+enum FileAudience {
+  /// The office staff (always).
+  OFFICE
+  /// The floor devices of one site.
+  FLOOR
+  /// One party's portal users.
+  PARTNER
+  /// One party's one-off links (with the link's record).
+  LINK
+}

@@ -1,0 +1,113 @@
+// One-off links (plan A1 §3.10 "Links", §2.2 the partner wall; features SAL-099, PLT-007, PLT-035): a customer or a
+// supplier opens ONE record of its own, for ONE purpose, through a link, with no account. apps/factory-api's
+// platform/links makes, reads and revokes them (office) and opens and answers them (link sessions, as
+// factory_partner_runtime behind the party's wall); the purposes, the token and the evidence rules are factory-domain's
+// links/.
+//
+// The token is never stored: only SHA-256 of it. A link session's grants come from its purpose, never from a role.
+// Moving the party or the tenant of a link is refused by the policies for the runtime roles, and every column but the
+// use counters, the revocation and the office note is fixed once the link exists (the …_links_guards migration's
+// trigger, for every login).
+
+/// One link: one purpose on one record of one party of the tenant, with an expiry and a use limit. Revoked or used up,
+/// it opens nothing; never deleted (its evidence keeps pointing at it).
+model OneOffLink {
+  id          String      @id @db.Uuid
+  tenantId    String      @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose record the link opens (the seller of the quote, the buyer of the purchase order).
+  companyId   String      @db.Uuid
+  /// The customer, supplier or subcontractor the link was made for: its session sits behind this party's wall. A
+  /// plain id until the parties module brings the Party table.
+  partyId     String      @db.Uuid
+  purpose     LinkPurpose
+  /// The one record the link opens: its model name (one of the purpose's record types) and id.
+  recordType  String
+  recordId    String      @db.Uuid
+  /// SHA-256 (hex) of the whole token; the token itself is never stored.
+  tokenHash   String      @unique
+  /// The address the link was sent to, trimmed and lower case; an accept checks a typed address against it. Null: the
+  /// address is not known (the accept records NOT_KNOWN).
+  email       String?
+  /// Why the office made it, for the office only: the partner role can neither read nor write it.
+  /// @internal
+  note        String?
+  expiresAt   DateTime    @db.Timestamptz(3)
+  /// How many counted uses it allows (the purpose's default or the office's choice within the purpose's maximum).
+  maxUses     Int
+  /// Counted uses so far: never down, never past maxUses (the guard trigger).
+  uses        Int         @default(0)
+  /// The last open or answer.
+  lastUsedAt  DateTime?   @db.Timestamptz(3)
+  revokedAt   DateTime?   @db.Timestamptz(3)
+  revokedById String?     @db.Uuid
+  version     Int         @default(1)
+  createdAt   DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime    @default(now()) @updatedAt @db.Timestamptz(3)
+  /// The office user who made it (or the system actor, for a link a job made).
+  createdById String      @db.Uuid
+
+  company  Company        @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  evidence LinkEvidence[]
+
+  // The target of the evidence rows' reference: an evidence row names its link's party.
+  @@unique([tenantId, partyId, id])
+  // The links of one record (the office list).
+  @@index([tenantId, recordType, recordId])
+}
+
+/// What a link lets its holder do (factory-domain links/purposes).
+enum LinkPurpose {
+  /// Open one sent quote with its own prices; accept (typed name, email checked when known) or decline it.
+  QUOTE_ACCEPT
+  /// Open one purchase order, without any price; confirm or decline it.
+  PO_CONFIRM
+  /// Open one of the party's own documents.
+  DOCUMENT_VIEW
+  /// Open the deposit request of an accepted quote.
+  DEPOSIT_INFO
+}
+
+/// The evidence of one open or answer of a link (ported from the old app's acceptance evidence, EPQ.5: typed name,
+/// server time, hashed client address, user agent): written by the link session in the command of the use.
+/// @append-only
+model LinkEvidence {
+  id         String             @id @db.Uuid
+  tenantId   String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The link's party (the partner policy checks it on insert).
+  partyId    String             @db.Uuid
+  linkId     String             @db.Uuid
+  action     LinkEvidenceAction
+  /// The link's counted uses after this one (1 … maxUses); null when it did not count.
+  useNumber  Int?
+  /// The full name the person typed, as typed (trimmed); null when not asked or not given.
+  typedName  String?
+  emailCheck LinkEmailCheck
+  /// HMAC of the shortened client address (/24, /64), never the address.
+  ipHash     String?
+  userAgent  String?
+  /// Server time (the command's).
+  at         DateTime           @db.Timestamptz(3)
+  /// The request that used the link; its audit rows share it.
+  requestId  String
+
+  link OneOffLink @relation(fields: [tenantId, partyId, linkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, linkId, at])
+}
+
+enum LinkEvidenceAction {
+  OPENED
+  ACCEPTED
+  DECLINED
+  CONFIRMED
+}
+
+/// The email check of an answer (factory-domain links/evidence): a typed address that differs is refused, never stored.
+enum LinkEmailCheck {
+  /// The person typed the address the link was sent to.
+  MATCHED
+  /// The answer checks the address, but the link has none.
+  NOT_KNOWN
+  /// The action does not check it.
+  NOT_ASKED
+}

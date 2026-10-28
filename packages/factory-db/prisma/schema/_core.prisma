@@ -1,0 +1,235 @@
+// The tenancy core: the tenant (one manufacturing group), its companies (legal entities), their sites, and the floor
+// structure of a site: lines, stations and work centres. The generator and the datasource live in schema.prisma.
+//
+// Conventions (plan A1 §2.1), for every model in every file of this folder:
+//   - `id String @id @db.Uuid`, made by the app (UUIDv7 from newId()); no cuid(), no autoincrement.
+//   - Tenant tables carry `tenantId` with the default below: the app never sets it, the policy's WITH CHECK refuses a
+//     wrong one, and without a tenant scope the insert fails (NULL into a NOT NULL column).
+//   - References inside a tenant include `tenantId` (and `siteId` where both rows sit on a site), so a row can never
+//     point at another tenant's or another site's row: foreign-key checks skip row-level security, these keys do not.
+//   - `version` for compare-and-set updates; `createdAt`, `updatedAt` as timestamptz; `createdById` (a user id; the
+//     user table comes with sign-in).
+//   - Master data in use is archived (status ARCHIVED), never deleted; no cascade deletes.
+// Who may read and write each model: ownership/_core.json. Every model must be classified there.
+
+/// One manufacturing group: the row-level-security wall. A platform table: only factory_platform lists and creates
+/// tenants; a tenant session reads its own row.
+model Tenant {
+  id            String       @id @db.Uuid
+  slug          String       @unique
+  name          String
+  status        TenantStatus @default(ACTIVE)
+  defaultLocale String       @default("it")
+  version       Int          @default(1)
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?      @db.Uuid
+
+  companies Company[]
+  // auth.prisma: the people of the tenant.
+  users     User[]
+  // roles.prisma: the tenant's system and custom roles.
+  roles     Role[]
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+/// A legal entity of the tenant: the seller on quotes, DDTs and invoices (FatturaPA CedentePrestatore). Many per tenant.
+model Company {
+  id                   String       @id @db.Uuid
+  tenantId             String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Short code, unique in the tenant; the Office URL /w/<code>/… uses it.
+  code                 String
+  legalName            String
+  tradeName            String?
+  /// Partita IVA, with its country prefix (IT…).
+  vatNumber            String?
+  /// Codice fiscale.
+  fiscalCode           String?
+  /// FatturaPA RegimeFiscale code (RF01 ordinary, …); checked by the invoicing module, not by an enum here.
+  regimeFiscale        String?
+  /// REA registration: the province of the office and the number.
+  reaOffice            String?
+  reaNumber            String?
+  /// Capitale sociale. Decimal, not Int minor units: it can pass the Int cap of a document amount.
+  shareCapital         Decimal?     @db.Decimal(18, 2)
+  /// The registered office: { line1, line2?, postalCode, city, province?, country }.
+  address              Json?
+  pec                  String?
+  /// Codice destinatario for invoices this company receives through SDI.
+  sdiReceiverCode      String?
+  /// ISO 3166-1 alpha-2.
+  country              String       @default("IT")
+  /// Base currency, ISO 4217.
+  currency             String       @default("EUR")
+  timezone             String       @default("Europe/Rome")
+  locale               String       @default("it")
+  /// Month (1-12) the fiscal year starts in.
+  fiscalYearStartMonth Int          @default(1)
+  /// Footer text printed on this company's documents.
+  documentFooter       String?
+  /// The logo file (FileObject, which comes with files on R2).
+  logoFileId           String?      @db.Uuid
+  status               MasterStatus @default(ACTIVE)
+  version              Int          @default(1)
+  createdAt            DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?      @db.Uuid
+
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sites        Site[]
+  numberSeries NumberSeries[]
+  // auth.prisma: the sessions that start in this company.
+  sessions     Session[]
+  // integration.prisma: the company's accounts with outside services.
+  integrationAccounts IntegrationAccount[]
+  // files.prisma: the company's files.
+  files               StoredFile[]
+  // links.prisma: the one-off links that open the company's records.
+  oneOffLinks         OneOffLink[]
+  // threads.prisma: the threads of the company's records.
+  threads             Thread[]
+  // imports.prisma: the company's imports.
+  importJobs          ImportJob[]
+
+  @@unique([tenantId, code])
+  // The target of the tenant-safe references from the company's rows.
+  @@unique([tenantId, id])
+}
+
+/// A plant, warehouse or office of a company. Physical rows (stock, work orders, scans, devices…) carry its siteId.
+model Site {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String       @db.Uuid
+  /// Short code, unique in the tenant; used in document numbers and on labels.
+  code        String
+  name        String
+  kind        SiteKind
+  /// { line1, line2?, postalCode, city, province?, country }.
+  address     Json?
+  timezone    String       @default("Europe/Rome")
+  status      MasterStatus @default(ACTIVE)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  company       Company         @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines         Line[]
+  workCentres   WorkCentre[]
+  stations      Station[]
+  // files.prisma: the files shared with this site's floor.
+  floorFiles    StoredFile[]
+  // floor-auth.prisma: the site's enrolled devices, floor workers and floor session times.
+  devices       Device[]
+  workers       Worker[]
+  floorSettings FloorSettings[]
+  // threads.prisma: the threads of the site's records.
+  threads       Thread[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, companyId, id])
+}
+
+enum SiteKind {
+  PLANT
+  WAREHOUSE
+  OFFICE
+}
+
+/// A production line of a site (a sewing line, a cutting room, a finishing cell). Its stations sit on it.
+model Line {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String       @db.Uuid
+  siteId      String       @db.Uuid
+  /// Short code, unique on the site.
+  code        String
+  name        String
+  status      MasterStatus @default(ACTIVE)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  site     Site      @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  stations Station[]
+
+  @@unique([tenantId, siteId, code])
+  @@unique([tenantId, siteId, id])
+}
+
+/// A kind of work on a site with its own capacity (cutting, sewing, inspection…). Routing operations run at a work
+/// centre; a station belongs to one.
+model WorkCentre {
+  id          String         @id @db.Uuid
+  tenantId    String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String         @db.Uuid
+  siteId      String         @db.Uuid
+  /// Short code, unique on the site.
+  code        String
+  name        String
+  kind        WorkCentreKind
+  status      MasterStatus   @default(ACTIVE)
+  version     Int            @default(1)
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?        @db.Uuid
+
+  site     Site      @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  stations Station[]
+
+  @@unique([tenantId, siteId, code])
+  @@unique([tenantId, siteId, id])
+}
+
+enum WorkCentreKind {
+  CUTTING
+  SEWING
+  ASSEMBLY
+  FINISHING
+  INSPECTION
+  PACKING
+  SUBCONTRACT
+}
+
+/// One place where work is done and scanned; a floor device is enrolled to a station. It sits on a line, or stands
+/// alone on the site (a cutting table, an inspection bench), and belongs to one work centre, which says what work it does.
+model Station {
+  id           String       @id @db.Uuid
+  tenantId     String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId    String       @db.Uuid
+  siteId       String       @db.Uuid
+  /// Empty for a station that stands alone; a set line is on the same site (the reference includes tenantId and siteId).
+  lineId       String?      @db.Uuid
+  workCentreId String       @db.Uuid
+  /// Short code, unique on the site; printed on the station's label.
+  code         String
+  name         String
+  status       MasterStatus @default(ACTIVE)
+  version      Int          @default(1)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?      @db.Uuid
+
+  site       Site       @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  line       Line?      @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  workCentre WorkCentre @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // floor-auth.prisma: the devices enrolled at this station.
+  devices    Device[]
+
+  @@unique([tenantId, siteId, code])
+  // The target of the tenant- and site-safe references from the station's rows (a device at a station).
+  @@unique([tenantId, siteId, id])
+}
+
+/// Master data in use is archived, never deleted.
+enum MasterStatus {
+  ACTIVE
+  ARCHIVED
+}
