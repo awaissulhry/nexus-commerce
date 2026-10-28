@@ -7,8 +7,8 @@ and the idempotency receipt; the outbox (events → BullMQ → handlers and live
 (`src/background.ts worker|scheduler`); office and floor sign-in, roles and money grains (`src/platform/auth/`),
 one-off links (`src/platform/links/`), the integration platform (gateway, sealed secrets, inbound ledger), files on
 R2 (`src/platform/files/`), record threads with the record timeline (`src/platform/threads/`), imports with a dry
-run (`src/platform/imports/`), and documents and printing (`src/platform/{documents,print}/`), below. Portal sign-in,
-the modules and the other adapters come in later steps.
+run (`src/platform/imports/`), documents and printing (`src/platform/{documents,print}/`) and email out through SES
+(`src/platform/email-out/`), below. Portal sign-in, email in, the modules and the other adapters come in later steps.
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>
@@ -90,8 +90,8 @@ the modules and the other adapters come in later steps.
 - Grants come from the person's live role assignments (below), read on every request (`sessions/grants.ts`). Risky
   routes call `requireStepUp(auth, request)` (a TOTP code on this session in the last 5 minutes; 403 with issue path
   `stepUp` otherwise): every permission declared with risk `stepUp` does.
-- Links never leave the API in an answer or a log: the `AuthMailer` seam (`sessions/mail.ts`, `holdAuthMail` until the
-  email step); tests read them from `memoryAuthMailer()` (refused unless FACTORY_ENV=test).
+- Links never leave the API in an answer, a stored row or a log: the `AuthMailer` seam (`sessions/mail.ts`), by default
+  email out's `emailAuthMailer` (below); tests read them from the harness's fake SES mailbox (`h.mailer.last(kind, to)`).
 - PostgreSQL tests: `sessions/testing/harness.ts` (`startHarness`, `Browser` cookie jar, `movableClock`, `enrolTotp`,
   `stepUp`). Keep a test file's clock moving forward once a TOTP code was used: an older step is a replay.
 
@@ -203,7 +203,8 @@ the modules and the other adapters come in later steps.
 - `inbound/`: `POST /inbound/<provider>/<tenantId>/<accountId>` (public, raw body): verify (FAKE accounts: the fake
   HMAC verifier; others: INBOUND_PROVIDERS) → InboundWebhook receipt FIRST (dedupe key unique per provider; a bad
   signature is kept as REJECTED) + the event integration.inbound_received in one command → 200. The worker's
-  `inboundHandler()` (in background.ts HANDLERS) applies a receipt once with its provider's processor.
+  `inboundHandler()` (in background.ts HANDLERS) applies a receipt once with its provider's processor. INBOUND_PROVIDERS:
+  SES (SNS: basic-auth verifier, platform/email-out notifications processor).
 
 ## Files on R2 (`src/platform/files/`, `src/adapters/{r2,local-files}/`, plan A1 §3.6; COL-045, COL-050, PLAN §2.8)
 - `StoredFile` (files.prisma): one row per file, for ONE record (`recordType` + `recordId`), never the bytes. Flow:
@@ -295,6 +296,37 @@ the modules and the other adapters come in later steps.
   nothing; local and test only): which relay a site gets is the Owner's question (A1 §9 q. 5). Without a relay the
   browser prints the PDF. Tests: `usePrintRelays(printRelays({ FAKE: fakePrintRelay({ environment: 'test' }) }))`.
 - Permissions: documents.view; print.view, print.labels, print.documents, print.manage (printers).
+
+## Email out (`src/platform/email-out/`, `src/adapters/ses/`, plan A1 §3.3, §3.7; PLT-139, PLT-149, PLT-230, COL-024, GAP-005)
+- Tables (email.prisma): EmailIdentity (a company's verified SES domain: kind CONVERSATION for record mail, NOTIFICATION
+  for sign-in mail; From-line policy COMPANY | PERSON_VIA_COMPANY | PERSON_ADDRESS; reply domain; its SES account; the
+  company's default per kind), EmailOutbound (who, from which identity, subject, Message-ID, In-Reply-To/References,
+  status QUEUED → SENDING → SENT → DELIVERED / BOUNCED / COMPLAINED, or FAILED; NO body), Suppression (tenant-wide).
+  The …_email_guards trigger keeps what a mail sends fixed and its status moving forward; nothing is deleted.
+- Send from a module's command: `sendEmail(tools, { record, sender, to, cc?, bcc?, subject?, body, attachments?,
+  identityId?, locale? })` (outbound.ts): ensureThread → attachmentProblems(PARTNER) and at most 10 MB of attachments
+  together (MAX_ATTACHMENT_BYTES) → suppression check → writeMessage
+  (OUTBOUND, EMAIL, `emailMessageId: <outboundId@identity domain>`) → EmailOutbound QUEUED → event `email.queued`, one
+  transaction. Route: `POST /threads/:recordType/:recordId/emails` (email.send). `GET …/emails` lists them (threads.read).
+- The worker's `emailSendHandler()` (background.ts HANDLERS) runs `deliverOutbound`: claim (QUEUED, or SENDING with a
+  lapsed claim → SENDING, one try counted; suppression and identity re-checked) → MIME (factory-domain email/compose +
+  mime: the message text, the sender's signature, the attached files (bytes read here, in the worker, through the file
+  store: one `files.read` gateway call each; still AVAILABLE and shared with the party), the footer with the c.c. art.
+  2250 block as the documents print it (documents/legal.ts on platform/documents `companyLegalOf`: liquidation, single
+  shareholder …) and the privacy-notice slot `<FACTORY_WEB_ORIGIN>/privacy/<companyId>`; Reply-To
+  `r-<thread replyToken>@<replyDomain>` read here only) → ONE gateway call `mail.send` (non-idempotent; the ledger keeps id, template, recipient count and
+  size, never an address) → SENT. A failed try → QUEUED and the job retries (MAX_SEND_ATTEMPTS 5), else FAILED.
+- Sign-in mail (`auth-mail.ts`, the default AuthMailer): composed in memory with the link, an EmailOutbound row without
+  body (record `User`), sent at once through the same deliverOutbound from the tenant's default NOTIFICATION identity,
+  never retried by a job (the person asks again). No thread, no Reply-To, `Auto-Submitted: auto-generated`.
+- SES notifications (`notifications.ts`, via platform/inbound): Delivery → DELIVERED; Bounce Permanent → BOUNCED + the
+  addresses suppressed; Transient → noted only; Complaint → COMPLAINED + suppressed. A later event only makes it worse.
+- Identities: `GET /email/identities` (email.send), `POST /email/identities`, `POST …/:id/check`, `PUT …/:id`
+  (email.manage, step-up): SES CreateEmailIdentity / GetEmailIdentity through the gateway (Easy DKIM records shown).
+- Adapters: `adapters/ses/ses.ts` (SESv2 client; LIVE and SANDBOX; credentials sealed on the account, else the
+  environment's), `fake.ts` (FAKE: in-memory mailbox, local and test only; never a table or a file), `sns.ts` (the SNS
+  envelope parser and verifier), `testing.ts` (FakeSesTransport: the real client on a scripted transport;
+  sesNotificationBody). Tests: `email.pg.vitest.test.ts` on the auth harness (`h.ses`, `h.email`, `h.files`, `h.mailer`).
 
 ## Rules
 - Configuration only through `src/env.ts`. It reads ONLY `apps/factory-api/.env`, by explicit path, and ONLY

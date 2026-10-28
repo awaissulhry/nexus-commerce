@@ -10,7 +10,8 @@ import type { FactoryEnv } from '../../../env'
 import { floorAuthenticator, sessionAuthenticator } from '../floor/authenticator'
 import { linkAuthenticator, withLinkSessions } from '../../links/authenticator'
 import { officeAuthenticator } from './authenticator'
-import { holdAuthMail, isMemoryAuthMailer, type AuthMailer, type AuthMessage } from './mail'
+import { emailAuthMailer } from '../../email-out/auth-mail'
+import type { AuthMailer, AuthMessage } from './mail'
 import { authSecrets, type AuthSecrets } from './secrets'
 
 /**
@@ -70,7 +71,7 @@ export interface OfficeAuthOptions {
   /** FACTORY_WEB_ORIGIN: invitation and reset links point at the web. */
   readonly webOrigin: string
   readonly clock?: Clock
-  /** Default `holdAuthMail` (no transport until the email step). A memoryAuthMailer only with FACTORY_ENV=test. */
+  /** Default email out's (`emailAuthMailer`: SES through the gateway, on this object's database and clock). */
   readonly mailer?: AuthMailer
   readonly rateLimits?: Partial<AuthRateLimits>
 }
@@ -111,11 +112,8 @@ export interface OfficeAuth {
 }
 
 export function createOfficeAuth(options: OfficeAuthOptions): OfficeAuth {
-  const mailer = options.mailer ?? holdAuthMail
-  if (isMemoryAuthMailer(mailer) && options.environment !== 'test') {
-    throw new Error(`The memory mailer keeps sign-in links readable; it is refused with FACTORY_ENV=${options.environment}.`)
-  }
   const clock = options.clock ?? serverClock
+  const mailer = options.mailer ?? emailAuthMailer({ database: options.database, clock })
   const secrets = authSecrets(options.cookieSecret)
   const settings = { ...COMMAND_SETTINGS, clock }
   const pending = new Set<Promise<void>>()
