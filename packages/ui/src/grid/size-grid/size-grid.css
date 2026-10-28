@@ -1,0 +1,338 @@
+/* Size grid (gap G9): SizeGridEditor and SizeGridView, packages/ui/src/grid/size-grid.
+   Every size reads the page density (--nds-density-*, tokens/density.ts): standard is the console's compact grid
+   (28 px cells, 13 px type), comfortable the portal's (44 px cells, 16 px type, so a phone never zooms in).
+   Colours are semantic --nds-* roles only. The grid scrolls sideways inside .nds-size-grid-scroll; the page never does. */
+
+.nds-size-grid {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+  max-width: 100%;
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+}
+
+/* ── the scroll area and the table ───────────────────────────────────────────────────────── */
+
+.nds-size-grid-scroll {
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+}
+.nds-size-grid-scroll:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-primary);
+  outline-offset: var(--nds-density-focus-offset);
+}
+
+.nds-size-grid-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+/* The visible caption sits above the scroll box (the table's own <caption> is for screen readers). */
+.nds-size-grid-caption {
+  margin: 0;
+  font-weight: 600;
+  color: var(--nds-text-strong);
+}
+.nds-size-grid-table th,
+.nds-size-grid-table td {
+  padding: 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  border-right: 1px solid var(--nds-border-subtle);
+  vertical-align: middle;
+}
+.nds-size-grid-table tr > :last-child {
+  border-right: 0;
+}
+
+/* Header row: the sizes, right-aligned over their numbers. */
+.nds-size-grid-table thead th {
+  background: var(--nds-grid-header-bg);
+  color: var(--nds-text-2);
+  font-size: var(--nds-density-font-label);
+  font-weight: 600;
+  white-space: nowrap;
+  padding: var(--nds-space-5) var(--nds-space-8);
+  border-bottom-color: var(--nds-border);
+}
+.nds-size-grid-colhead {
+  text-align: right;
+  min-width: 3.5em;
+}
+
+/* The first column stays in view while the sizes scroll. */
+.nds-size-grid-corner,
+.nds-size-grid-rowhead {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  text-align: left;
+  border-right-color: var(--nds-border);
+}
+.nds-size-grid-corner {
+  z-index: 2;
+}
+.nds-size-grid-table .nds-size-grid-rowhead {
+  background: var(--nds-surface);
+  padding: var(--nds-space-4) var(--nds-space-10);
+  font-weight: 500;
+  min-width: 6em;
+  max-width: 14em;
+}
+.nds-size-grid-rowlabel {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.nds-size-grid-rowtext {
+  overflow-wrap: anywhere;
+}
+.nds-size-grid-swatch {
+  flex: none;
+  width: 0.85em;
+  height: 0.85em;
+  border-radius: var(--nds-radius-round);
+  border: 1px solid var(--nds-border-strong);
+}
+
+/* ── cells ───────────────────────────────────────────────────────────────────────────────── */
+
+.nds-size-grid-cell {
+  position: relative;
+}
+.nds-size-grid-input {
+  display: block;
+  box-sizing: border-box;
+  /* A fixed width, not 100%: a percentage-wide input brings its default 20-character width into the table's
+     auto layout, and every column grew to about 150 px (measured, 1440 px). 4.4em holds 99999 with its padding. */
+  width: 4.4em;
+  min-width: 100%;
+  height: max(var(--nds-density-control-h-sm), var(--nds-density-target-min));
+  margin: 0;
+  padding: 0 var(--nds-space-8);
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--nds-text);
+  font-family: inherit;
+  font-size: var(--nds-density-font-body);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.nds-size-grid-input[data-zero] {
+  color: var(--nds-text-muted);
+}
+.nds-size-grid-input:hover {
+  background: var(--nds-surface-hover);
+}
+.nds-size-grid-input:focus {
+  outline: var(--nds-density-focus-w) solid var(--nds-primary);
+  outline-offset: calc(-1 * var(--nds-density-focus-w));
+  background: var(--nds-surface);
+  color: var(--nds-text);
+}
+
+/* A flagged cell: a coloured border AND a glyph in the corner (the shape says which). */
+.nds-size-grid-cell[data-tone='error'] .nds-size-grid-input {
+  border-color: var(--nds-danger-strong);
+  background: var(--nds-danger-soft);
+}
+.nds-size-grid-cell[data-tone='warning'] .nds-size-grid-input {
+  border-color: var(--nds-warning-strong);
+  background: var(--nds-warning-soft);
+}
+.nds-size-grid-mark {
+  position: absolute;
+  top: var(--nds-space-2);
+  left: var(--nds-space-2);
+  display: inline-flex;
+  pointer-events: none;
+}
+.nds-size-grid-cell[data-tone='error'] .nds-size-grid-mark,
+.nds-size-grid-rowhead[data-tone='error'] .nds-size-grid-glyph {
+  color: var(--nds-danger-text);
+}
+.nds-size-grid-cell[data-tone='warning'] .nds-size-grid-mark,
+.nds-size-grid-rowhead[data-tone='warning'] .nds-size-grid-glyph {
+  color: var(--nds-warning-text);
+}
+
+/* A size the colourway is not made in. */
+.nds-size-grid-table .nds-size-grid-off {
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-muted);
+  text-align: center;
+}
+
+/* Numbers in the read view and the totals. */
+.nds-size-grid-num {
+  text-align: right;
+  white-space: nowrap;
+  padding: var(--nds-space-4) var(--nds-space-8);
+}
+.nds-size-grid[data-mode='edit'] .nds-size-grid-num {
+  padding: 0 var(--nds-space-10);
+}
+.nds-size-grid-num[data-zero] {
+  color: var(--nds-text-muted);
+}
+.nds-size-grid-table .nds-size-grid-total {
+  background: var(--nds-grid-totals-bg);
+  font-weight: 600;
+  border-left: 1px solid var(--nds-border);
+}
+.nds-size-grid-table thead .nds-size-grid-total {
+  background: var(--nds-grid-header-bg);
+}
+.nds-size-grid-table tfoot th,
+.nds-size-grid-table tfoot td {
+  background: var(--nds-grid-totals-bg);
+  font-weight: 600;
+  border-top: 1px solid var(--nds-border);
+  border-bottom: 0;
+}
+.nds-size-grid-table tfoot .nds-size-grid-total {
+  border-left: 0;
+}
+.nds-size-grid-table tfoot td:last-child {
+  border-left: 1px solid var(--nds-border);
+}
+.nds-size-grid-table .nds-size-grid-grand {
+  font-weight: 700;
+  color: var(--nds-text-strong);
+}
+.nds-size-grid[data-mode='edit'] tbody .nds-size-grid-num,
+.nds-size-grid[data-mode='edit'] tfoot .nds-size-grid-num,
+.nds-size-grid[data-mode='edit'] tfoot .nds-size-grid-rowhead {
+  height: max(var(--nds-density-control-h-sm), var(--nds-density-target-min));
+}
+
+/* ── curve fill, notes, issues ───────────────────────────────────────────────────────────── */
+
+.nds-size-grid-curve {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-density-gap);
+}
+.nds-size-grid-curve-colour,
+.nds-size-grid-curve-pick {
+  min-width: 10em;
+}
+.nds-size-grid-curve-total {
+  width: 7em;
+}
+.nds-size-grid-curve-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+.nds-size-grid-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  margin: 0;
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-danger-text);
+}
+
+.nds-size-grid-note {
+  margin: 0;
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+
+.nds-size-grid-issues ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-size-grid-issues li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+}
+.nds-size-grid-issues li .nds-size-grid-glyph {
+  flex: none;
+  margin-top: 0.15em;
+}
+.nds-size-grid-issues li[data-tone='error'] .nds-size-grid-glyph {
+  color: var(--nds-danger-text);
+}
+.nds-size-grid-issues li[data-tone='warning'] .nds-size-grid-glyph {
+  color: var(--nds-warning-text);
+}
+.nds-size-grid-where {
+  font-weight: 600;
+  color: var(--nds-text);
+}
+
+/* ── made to measure ─────────────────────────────────────────────────────────────────────── */
+
+/* The whole line is the switch's hit area (a <label> for the Toggle), at least a touch target high. */
+.nds-size-grid-mtm {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-height: var(--nds-density-target-min);
+  font-weight: 500;
+  cursor: pointer;
+}
+.nds-size-grid-mtm-body {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  width: 100%;
+  padding: var(--nds-space-12);
+  background: var(--nds-surface-raised);
+  border: 1px dashed var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+}
+.nds-size-grid-mtm-hint,
+.nds-size-grid-mtm-title {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+.nds-size-grid-mtm-title {
+  font-weight: 600;
+  color: var(--nds-text);
+}
+
+/* ── paper ───────────────────────────────────────────────────────────────────────────────── */
+
+@media print {
+  .nds-size-grid-scroll {
+    overflow: visible;
+    border-color: currentColor;
+  }
+  .nds-size-grid-corner,
+  .nds-size-grid-rowhead {
+    position: static;
+  }
+  .nds-size-grid-table th,
+  .nds-size-grid-table td,
+  .nds-size-grid-table .nds-size-grid-total,
+  .nds-size-grid-table .nds-size-grid-off,
+  .nds-size-grid-table thead th,
+  .nds-size-grid-table .nds-size-grid-rowhead {
+    background: none;
+  }
+  .nds-size-grid-table tr {
+    break-inside: avoid;
+  }
+}

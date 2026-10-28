@@ -1,0 +1,43 @@
+/**
+ * The size grid (gap G9): colour × size quantities. `SizeGridEditor` to enter them (keyboard, paste, curve fill,
+ * totals, the made-to-measure switch), `SizeGridView` to read them; the rules in `sizeGridModel.ts`.
+ */
+export { SizeGridEditor, type SizeGridEditorProps } from './SizeGridEditor'
+export { SizeGridView, type SizeGridViewProps } from './SizeGridView'
+export {
+  SIZE_GRID_COPY,
+  SIZE_GRID_MAX_QUANTITY,
+  clampSizeGridQuantity,
+  curveFillSizeGrid,
+  curveShareText,
+  distributeBySizeCurve,
+  formatSizeGridQuantity,
+  normaliseSizeGrid,
+  parseSizeGridQuantity,
+  parseSizeGridPaste,
+  pasteIntoSizeGrid,
+  setSizeGridCell,
+  sizeGridCell,
+  sizeGridCopy,
+  sizeGridIssueTone,
+  sizeGridIssuesFor,
+  sizeGridOffered,
+  sizeGridStep,
+  sizeGridTotals,
+  sizeGridOffers,
+  type SizeGridColour,
+  type SizeGridCopy,
+  type SizeGridCurve,
+  type SizeGridDirection,
+  type SizeGridFillRefusal,
+  type SizeGridFillResult,
+  type SizeGridIssue,
+  type SizeGridIssueTone,
+  type SizeGridPasteResult,
+  type SizeGridPosition,
+  type SizeGridShareRefusal,
+  type SizeGridShareResult,
+  type SizeGridSize,
+  type SizeGridTotals,
+  type SizeGridValue,
+} from './sizeGridModel'
