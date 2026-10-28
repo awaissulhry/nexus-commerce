@@ -164,7 +164,7 @@ export function OfficeAuth({ start, company = '' }: { start: AuthStart; company?
         const opened = held.current.opened
         if (!opened) return
         setModel((current) => ({ ...current, busy: true }))
-        return enter(opened, action.now ? opened.authenticator : opened.home)
+        return enter(opened, action.now ? opened.authenticator : opened.entry)
       }
     }
   }

@@ -7,17 +7,8 @@ import { Button, Input, SegmentedControl, Spinner } from '@nexus/ui/primitives'
 import { formatDateTime } from '../../../../lib/i18n/format'
 import { LOCALES, LOCALE_NAMES, isLocale } from '../../../../lib/i18n/locales'
 import { useLocale, useLocaleSwitch, useT } from '../../../../lib/i18n/provider'
-import {
-  checkCode,
-  checkForgot,
-  checkInvitation,
-  checkNewPassword,
-  checkSignIn,
-  PASSWORD_RULES,
-  type AuthProblem,
-  type FieldProblem,
-  type FieldProblems,
-} from '../auth-model'
+import { checkNewPassword, PASSWORD_RULES } from '../../../../lib/auth/password-rules'
+import { checkCode, checkForgot, checkInvitation, checkSignIn, type AuthProblem, type FieldProblem, type FieldProblems } from '../auth-model'
 import '../auth.css'
 
 /**

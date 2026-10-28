@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { ApiClient } from '../../../lib/api/client'
 import { isApiError, type ApiError } from '../../../lib/api/errors'
-import { officeMeSchema, type OfficeMe } from '../../../lib/api/office'
+import { fetchOfficeMe, type OfficeMe } from '../../../lib/api/office'
 import { companyPrefix } from '../../../lib/session/session'
 import { landingCompany } from '../../../lib/session/scope-memory'
 import { newPasswordProblem, signInProblem, type AuthProblem } from './auth-model'
@@ -19,8 +19,6 @@ const signInAnswer = z.discriminatedUnion('status', [
   z.object({ status: z.literal('password_change_required'), resetToken: z.string(), expiresAt: z.string() }),
 ])
 const done = z.object({ status: z.string() })
-/** `me` with the companies the person's roles reach (the API lists them; an older API answers none). */
-const meWithCompanies = officeMeSchema.extend({ companies: z.array(z.object({ id: z.string(), code: z.string(), name: z.string() })).default([]) })
 type MeWithCompanies = Pick<OfficeMe, 'user' | 'tenant' | 'company' | 'mfa'> & { companies?: readonly { code: string }[] }
 const invitationPreview = z.object({ tenant: z.object({ name: z.string() }), email: z.string(), displayName: z.string(), expiresAt: z.string() })
 export type InvitationPreview = z.infer<typeof invitationPreview>
@@ -29,11 +27,11 @@ export type InvitationPreview = z.infer<typeof invitationPreview>
 export interface OpenSession {
   kind: 'open'
   tenantSlug: string
-  /** Its Home (`/w/<company>/home`). */
-  home: string
+  /** The office's entry (`/w/<company>`): the first page the person may open (shell/office/office-entry.ts). */
+  entry: string
   /** The authenticator set-up on the person's profile (`/w/<company>/me#authenticator`). */
   authenticator: string
-  /** Where it opens: the set-up while the person's role needs two-factor they have not set up, else Home. */
+  /** Where it opens: the set-up while the person's role needs two-factor they have not set up, else the entry. */
   to: string
   mfaRequired: boolean
 }
@@ -52,14 +50,14 @@ export function sessionPlaces(me: MeWithCompanies, scopeCookie: string | null | 
   const codes = me.companies?.length ? me.companies.map((company) => company.code) : own ? [own] : []
   const company = landingCompany(scopeCookie, { tenantId: me.tenant.id, userId: me.user.id }, own, codes)
   if (!company) return refused('noCompany')
-  const home = `${companyPrefix(company)}/home`
+  const entry = companyPrefix(company)
   const authenticator = `${companyPrefix(company)}/me#authenticator`
   const setupFirst = me.mfa.required && !me.mfa.enabled
-  return { kind: 'open', tenantSlug: me.tenant.slug, home, authenticator, to: setupFirst ? authenticator : home, mfaRequired: me.mfa.required }
+  return { kind: 'open', tenantSlug: me.tenant.slug, entry, authenticator, to: setupFirst ? authenticator : entry, mfaRequired: me.mfa.required }
 }
 
 async function openSession(api: ApiClient, scopeCookie: string | null | undefined): Promise<OpenSession | Refused> {
-  return sessionPlaces(await api.get('/auth/office/me', { schema: meWithCompanies }), scopeCookie)
+  return sessionPlaces(await fetchOfficeMe(api), scopeCookie)
 }
 
 /** Rethrows anything that is not an API answer (a bug), so it is seen. */

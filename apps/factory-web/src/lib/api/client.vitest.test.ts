@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { cookieValue } from '../cookies'
 import { linkTokenFromHash } from '../links/token'
 import { apiUrl, createApiClient, requestHeaders, type ApiClientOptions } from './client'
-import { ApiError, apiErrorFrom, errorKindFor } from './errors'
+import { ApiError, apiErrorFrom, errorKindFor, issuePath } from './errors'
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
@@ -46,6 +46,11 @@ describe('the API client', () => {
     await expect(client(json(200, { ok: 'yes' })).api.get('/x', { schema: z.object({ ok: z.boolean() }) })).rejects.toMatchObject({ kind: 'contract' })
   })
 
+  it('reads a step-up refusal as the API sends it', async () => {
+    const answer = json(403, { error: { code: 'forbidden', message: 'm', issues: [{ path: 'stepUp', message: 'Required.' }] } })
+    await expect(client(answer).api.post('/auth/users/x/suspend', { body: {} })).rejects.toMatchObject({ kind: 'step_up', status: 403 })
+  })
+
   it('maps error answers to what a screen does', async () => {
     await expect(client(json(401, { error: { code: 'unauthenticated', message: 'm', requestId: 'r1' } })).api.get('/x')).rejects.toMatchObject({ kind: 'signed_out', status: 401, requestId: 'r1' })
     await expect(client(json(404, { error: { code: 'LINK_UNAVAILABLE', message: 'm' } })).api.post('/link/open', { body: {} })).rejects.toMatchObject({ kind: 'not_found', code: 'LINK_UNAVAILABLE' })
@@ -54,8 +59,14 @@ describe('the API client', () => {
   })
 
   it('tells a step-up request from a plain refusal', () => {
+    // The API's shape: `{ path: 'stepUp' }` (apps/factory-api office/account.ts StepUpRequiredError); a list is read too.
+    expect(errorKindFor(403, [{ path: 'stepUp', message: 'Required.' }])).toBe('step_up')
     expect(errorKindFor(403, [{ path: ['stepUp'] }])).toBe('step_up')
+    expect(errorKindFor(403, [{ path: 'stepUpUntil' }])).toBe('forbidden')
     expect(errorKindFor(403)).toBe('forbidden')
+    expect(issuePath({ path: 'lines.0.qty' })).toBe('lines.0.qty')
+    expect(issuePath({ path: ['lines', 0, 'qty'] })).toBe('lines.0.qty')
+    expect(issuePath({})).toBe('')
     expect(errorKindFor(409)).toBe('conflict')
     expect(errorKindFor(422)).toBe('invalid')
     expect(errorKindFor(429)).toBe('rate_limited')

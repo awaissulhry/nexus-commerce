@@ -1,7 +1,6 @@
-import { createElement, useMemo } from 'react'
+import { createElement } from 'react'
 import { defineDesignScreen } from '../../lib/design/design-screen'
-import { messagesFor } from '../../lib/i18n/messages'
-import { I18nProvider, useLocale } from '../../lib/i18n/provider'
+import { useLocale } from '../../lib/i18n/provider'
 import { permissionCheck } from '../../lib/session/session'
 import { DEMO_COMPANIES, DEMO_SITES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../shell/design-data'
 import { officeNavFor } from '../../shell/nav/office-nav'
@@ -26,19 +25,11 @@ const SHELL: OfficeShellViewModel = {
 /** Two-factor required and not proved: the roles give nothing yet, so the rail is empty. */
 const SHELL_NO_AREAS: OfficeShellViewModel = { ...SHELL, nav: officeNavFor(permissionCheck([])) }
 
-/**
- * The page in the office shell, with its own text: the design frame gives the `shell` namespace only; the live page
- * gives `me`. The page's language follows the frame's.
- */
+/** The page in the office shell, as the person menu opens it; the page's language follows the frame's. */
 function MyProfileDesign({ model }: { model: MyProfileViewModel }) {
   const locale = useLocale()
-  const messages = useMemo(() => messagesFor(locale, ['me']), [locale])
   const locked = model.authenticator.state === 'off' && model.authenticator.required
-  return createElement(
-    I18nProvider,
-    { locale, messages },
-    createElement(OfficeShellView, { model: locked ? SHELL_NO_AREAS : SHELL }, createElement(MyProfileView, { model: { ...model, locale } })),
-  )
+  return createElement(OfficeShellView, { model: locked ? SHELL_NO_AREAS : SHELL }, createElement(MyProfileView, { model: { ...model, locale } }))
 }
 
 // A made-up base32 secret and its otpauth address (as the API's `otpauthUri` builds it).

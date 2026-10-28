@@ -1,20 +1,10 @@
-import { createElement, useMemo } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { messagesFor } from '../../../lib/i18n/messages'
-import { I18nProvider, useLocale } from '../../../lib/i18n/provider'
 import { OfficeAuthView, type AuthScreen, type OfficeAuthViewModel } from './view/OfficeAuthView'
 
 /**
  * SCR-001's cases with made-up data: a made-up company sign-in name and example.com addresses; no password appears
  * anywhere (the view never holds one in its model).
  */
-
-/** The view with its own text: the design frame gives the `shell` namespace only; the live layout gives `auth`. */
-function OfficeAuthDesign({ model }: { model: OfficeAuthViewModel }) {
-  const locale = useLocale()
-  const messages = useMemo(() => messagesFor(locale, ['auth']), [locale])
-  return createElement(I18nProvider, { locale, messages }, createElement(OfficeAuthView, { model }))
-}
 
 const EMAIL = 'alex.demo@example.com'
 const signIn = (extra: Partial<Extract<AuthScreen, { kind: 'sign-in' }>> = {}): AuthScreen => ({ kind: 'sign-in', company: '', email: '', ...extra })
@@ -26,7 +16,7 @@ const invite: AuthScreen = { kind: 'invite', tenant: 'Officina Demo', email: 'nu
 export const designScreen = defineDesignScreen<OfficeAuthViewModel>({
   screen: 'SCR-001',
   title: 'Office sign-in & password reset',
-  view: OfficeAuthDesign,
+  view: OfficeAuthView,
   cases: [
     { id: 'sign-in', label: 'Sign in (empty)', model: { screen: signIn() }, note: 'Company sign-in name, email, password. Language on top; nothing of the office.' },
     {

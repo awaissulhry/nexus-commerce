@@ -9,6 +9,8 @@ export const officeMeSchema = z.object({
   user: z.object({ id: z.string(), email: z.string(), displayName: z.string(), locale: z.string() }),
   tenant: z.object({ id: z.string(), slug: z.string(), name: z.string() }),
   company: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable(),
+  /** The active companies the person's live roles reach, by code (before two-factor is proved too). */
+  companies: z.array(z.object({ id: z.string(), code: z.string(), name: z.string() })).default([]),
   session: z.object({
     id: z.string(),
     createdAt: z.string(),

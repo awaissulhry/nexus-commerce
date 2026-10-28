@@ -33,9 +33,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/app/(auth)/` — office sign-in (SCR-001), no chrome, no session: `/sign-in`, `/forgot-password`, and the mailed
   links `/reset-password#token=…`, `/accept-invitation#token=…` (the token read from the fragment once, then removed
   from the address bar). One flow container (`_auth/OfficeAuth.tsx`) over one view; the company's sign-in name is a
-  page cookie (`factory_tenant`). A new session opens `/w/<company>/home`, or the profile's authenticator card while
+  page cookie (`factory_tenant`). A new session opens `/w/<company>`, or the profile's authenticator card while
   the person's role needs two-factor they have not set up. `src/areas/me/` — my profile & security (SCR-007,
   `/w/<company>/me`, from the person menu; no navigation row).
+- Office entries — `/w/<company>` and each area's own address (`/home`, `/admin`; the rail and the brand link go
+  there) — redirect on the server to the first page the person may open, in navigation order, among the BUILT pages
+  (`shell/office/office-entry.ts`, `OFFICE_PAGES` in shell/nav/office-nav.ts); none built: My profile. A step that
+  builds an office page adds its address to `OFFICE_PAGES`; a new area adds its entry page (`office-entry.vitest.test.ts`
+  holds both).
 - `src/app/(links)/` — no chrome: `/l#token=…` (a one-off link; the token is read from the fragment, removed from the
   address bar, sent only in `x-factory-link`), `/privacy/<company id>` (the privacy-notice slot, GAP-005).
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension

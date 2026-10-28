@@ -1,5 +1,6 @@
 import { recoveryCodeOf, totpCodeOf } from '@nexus/factory-domain/auth/totp/totp'
-import type { ApiError, ApiIssue } from '../../../lib/api/errors'
+import { issuePath, type ApiError } from '../../../lib/api/errors'
+import { checkNewPassword, type RuleProblem } from '../../../lib/auth/password-rules'
 
 /**
  * SCR-001's rules without React (PLT-047, PLT-048, PLT-070, PLT-015): what each form asks before it is sent, what an
@@ -13,18 +14,8 @@ import type { ApiError, ApiIssue } from '../../../lib/api/errors'
 /** The page cookie that keeps the company's sign-in name on this device (not secret; PLT-047). */
 export const TENANT_COOKIE = 'factory_tenant'
 
-/**
- * The password rules the API applies (factory-domain auth/password `passwordProblems`), mirrored here because that
- * module hashes with node:crypto and cannot reach the browser; `auth-model.vitest.test.ts` holds the mirror to it. The
- * list of well-known passwords stays on the API: its refusal is `problem.passwordRefused`.
- */
-export const PASSWORD_RULES = Object.freeze({ min: 12, max: 256, distinct: 4, namePart: 4 })
-
 /** A field's problem: a message key of `auth` (`field.…`) and its parameters. */
-export interface FieldProblem {
-  key: string
-  params?: Readonly<Record<string, string | number>>
-}
+export type FieldProblem = RuleProblem
 
 export type FieldProblems<F extends string> = Partial<Record<F, FieldProblem>>
 
@@ -63,36 +54,11 @@ export function checkCode(code: string, recovery: boolean): FieldProblems<'code'
   return codeOf(code, recovery) === null ? { code: problem(recovery ? 'field.recoveryFormat' : 'field.codeFormat') } : {}
 }
 
-/** A new password as the API will judge it (all but the list of well-known passwords), and its repetition. */
-export function checkNewPassword(
-  values: { password: string; confirmation: string },
-  person: { email?: string | null; displayName?: string | null } = {},
-): FieldProblems<'password' | 'confirmation'> {
-  const value = values.password.normalize('NFKC')
-  const length = [...value].length
-  const lower = value.toLowerCase()
-  const parts = [person.email?.split('@')[0], person.email, ...(person.displayName?.split(/\s+/) ?? [])]
-    .map((part) => part?.trim().toLowerCase() ?? '')
-    .filter((part) => part.length >= PASSWORD_RULES.namePart)
-  let password: FieldProblem | undefined
-  if (length < PASSWORD_RULES.min) password = problem('field.passwordShort', { min: PASSWORD_RULES.min })
-  else if (length > PASSWORD_RULES.max) password = problem('field.passwordLong', { max: PASSWORD_RULES.max })
-  else if (value.trim() === '' || new Set(lower).size < PASSWORD_RULES.distinct) password = problem('field.passwordSimple')
-  else if (parts.some((part) => lower.includes(part))) password = problem('field.passwordName')
-  return clean({ password, confirmation: !password && values.confirmation !== values.password ? problem('field.repeatMismatch') : undefined })
-}
-
 export function checkInvitation(values: { displayName: string; password: string; confirmation: string }, email: string): FieldProblems<'displayName' | 'password' | 'confirmation'> {
   return clean({
     displayName: values.displayName.trim() === '' ? problem('field.nameRequired') : undefined,
     ...checkNewPassword(values, { email, displayName: values.displayName }),
   })
-}
-
-/** The path of an API issue, whichever shape it came in (the API sends a dotted string). */
-export function issuePath(issue: ApiIssue | { path?: unknown }): string {
-  const path = (issue as { path?: unknown }).path
-  return Array.isArray(path) ? path.join('.') : typeof path === 'string' ? path : ''
 }
 
 /** An API refusal or a network failure, as the sentence the page shows (`problem.…`). */

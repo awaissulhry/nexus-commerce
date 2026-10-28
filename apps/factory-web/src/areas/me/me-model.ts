@@ -1,5 +1,5 @@
 import { totpCodeOf } from '@nexus/factory-domain/auth/totp/totp'
-import type { ApiError, ApiIssue } from '../../lib/api/errors'
+import { issuePath, type ApiError } from '../../lib/api/errors'
 import type { OfficeMe } from '../../lib/api/office'
 import { DEFAULT_TIME_ZONE } from '../../lib/i18n/format'
 import { localeOf, DEFAULT_LOCALE, type Locale } from '../../lib/i18n/locales'
@@ -71,11 +71,7 @@ export function profileModel(me: OfficeMe, theme: ThemeMode): MyProfileViewModel
   }
 }
 
-const pathOf = (issue: ApiIssue | { path?: unknown }): string => {
-  const path = (issue as { path?: unknown }).path
-  return Array.isArray(path) ? path.join('.') : typeof path === 'string' ? path : ''
-}
-const names = (error: ApiError, field: string) => error.issues.some((issue) => pathOf(issue) === field)
+const names = (error: ApiError, field: string) => error.issues.some((issue) => issuePath(issue) === field)
 
 /** What every refusal shares: the session ended, too many tries, the API away. */
 function common(error: ApiError): MeProblem | null {

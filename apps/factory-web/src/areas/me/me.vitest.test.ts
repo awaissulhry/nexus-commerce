@@ -24,6 +24,7 @@ const ME: OfficeMe = {
   user: { id: '0190f0e2-3333-7000-8000-000000000001', email: 'alex.demo@example.com', displayName: 'Alex Demo', locale: 'en-GB' },
   tenant: { id: '0190f0e2-4c1d-7a3b-9e55-2f1c8d7a6b10', slug: 'demo', name: 'Officina Demo' },
   company: { id: '0190f0e2-1111-7000-8000-000000000001', code: 'DEMO', name: 'Officina Demo S.r.l.' },
+  companies: [{ id: '0190f0e2-1111-7000-8000-000000000001', code: 'DEMO', name: 'Officina Demo S.r.l.' }],
   session: { id: '0190f0e2-5555-7000-8000-000000000001', createdAt: '2026-10-28T08:00:00.000Z', idleExpiresAt: '2026-10-28T16:00:00.000Z', absoluteExpiresAt: '2026-11-04T08:00:00.000Z', stepUpUntil: null },
   mfa: { enabled: false, required: true, satisfied: false, recoveryCodesLeft: 0 },
   permissions: [],

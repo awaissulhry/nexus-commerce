@@ -1,21 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, passwordProblems } from '@nexus/factory-domain/auth/password/password'
 import { ApiError } from '../../../lib/api/errors'
 import { CATALOGUE } from '../../../lib/i18n/messages'
 import { LOCALES } from '../../../lib/i18n/locales'
-import {
-  checkCode,
-  checkForgot,
-  checkInvitation,
-  checkNewPassword,
-  checkSignIn,
-  codeOf,
-  newPasswordProblem,
-  PASSWORD_RULES,
-  signInProblem,
-  tokenFromFragment,
-  type AuthProblem,
-} from './auth-model'
+import { checkCode, checkForgot, checkInvitation, checkSignIn, codeOf, newPasswordProblem, signInProblem, tokenFromFragment, type AuthProblem } from './auth-model'
 
 const error = (kind: ConstructorParameters<typeof ApiError>[0], status: number, issues: { path: string }[] = []) =>
   new ApiError(kind, status, 'x', 'the API said something', null, issues as never)
@@ -42,29 +29,13 @@ describe('the sign-in forms check themselves before asking (SCR-001)', () => {
     expect(checkCode('ABCDE 23456', true)).toEqual({})
   })
 
-  it('a new password follows the API\'s rules, and is typed the same twice', () => {
-    expect(checkNewPassword({ password: 'short', confirmation: 'short' })).toEqual({ password: { key: 'field.passwordShort', params: { min: 12 } } })
-    expect(checkNewPassword({ password: 'aaaabbbbaaaabbbb', confirmation: 'aaaabbbbaaaabbbb' })).toEqual({ password: { key: 'field.passwordSimple' } })
-    expect(checkNewPassword({ password: 'alex-demo-likes-tea', confirmation: 'alex-demo-likes-tea' }, { email: 'alex.demo@example.com', displayName: 'Alex Demo' })).toEqual({
-      password: { key: 'field.passwordName' },
-    })
-    expect(checkNewPassword({ password: 'calm-meadow-river-91', confirmation: 'calm-meadow-river-19' })).toEqual({ confirmation: { key: 'field.repeatMismatch' } })
-    expect(checkNewPassword({ password: 'calm-meadow-river-91', confirmation: 'calm-meadow-river-91' })).toEqual({})
+  it('an invitation needs a name, and a new password by the shared rules (lib/auth/password-rules)', () => {
     expect(checkInvitation({ displayName: ' ', password: 'calm-meadow-river-91', confirmation: 'calm-meadow-river-91' }, 'new.person@example.com')).toEqual({
       displayName: { key: 'field.nameRequired' },
     })
-  })
-
-  it('mirrors factory-domain\'s password rules: it refuses what the API refuses, the well-known list aside', () => {
-    expect(PASSWORD_RULES.min).toBe(PASSWORD_MIN_LENGTH)
-    expect(PASSWORD_RULES.max).toBe(PASSWORD_MAX_LENGTH)
-    const person = { email: 'alex.demo@example.com', displayName: 'Alex Demo' }
-    const samples = ['short', 'x'.repeat(300), '            ', 'abababababab', 'calm-meadow-river-91', 'demo-alex-stuff-1', 'my alex.demo@example.com', 'Ünïcødé-wörds-ok-1', 'quiet harbour lantern']
-    for (const password of samples) {
-      const ours = Object.keys(checkNewPassword({ password, confirmation: password }, person)).length > 0
-      const api = passwordProblems(password, person).length > 0
-      expect(ours, password).toBe(api)
-    }
+    expect(checkInvitation({ displayName: 'New Person', password: 'new-person-2026', confirmation: 'new-person-2026' }, 'new.person@example.com')).toEqual({
+      password: { key: 'field.passwordName' },
+    })
   })
 })
 

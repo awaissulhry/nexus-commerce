@@ -48,14 +48,14 @@ function scripted(script: Script) {
 const CSRF: Script = { 'GET /auth/csrf': { status: 200, body: { csrfToken: 'csrf-1' } } }
 
 describe('sign-in (PLT-047, PLT-048)', () => {
-  it('opens the company\'s Home, after asking for the CSRF cookie and sending its header', async () => {
+  it('opens the company\'s office entry, after asking for the CSRF cookie and sending its header', async () => {
     const { api, calls } = scripted({
       ...CSRF,
       'POST /auth/office/sign-in': { status: 200, body: { status: 'signed_in', csrfToken: 'csrf-1' } },
       'GET /auth/office/me': { status: 200, body: ME({ enabled: false, required: false, satisfied: true }) },
     })
     const outcome = await signIn(api, { company: ' Demo ', email: ' alex.demo@example.com ', password: 'calm-meadow-river-91' })
-    expect(outcome).toMatchObject({ kind: 'open', to: '/w/DEMO/home', tenantSlug: 'demo', mfaRequired: false })
+    expect(outcome).toMatchObject({ kind: 'open', to: '/w/DEMO', tenantSlug: 'demo', mfaRequired: false })
     expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual(['GET /api/auth/csrf', 'POST /api/auth/office/sign-in', 'GET /api/auth/office/me'])
     expect(calls[1]).toMatchObject({ csrf: 'csrf-1', body: { tenant: 'Demo', email: 'alex.demo@example.com', password: 'calm-meadow-river-91' } })
     expect(calls[1]!.body).not.toHaveProperty('code')
@@ -70,7 +70,7 @@ describe('sign-in (PLT-047, PLT-048)', () => {
     const input = { company: 'demo', email: 'alex.demo@example.com', password: 'calm-meadow-river-91' }
     expect(await signIn(api, input)).toEqual({ kind: 'code' })
     expect(await signIn(api, { ...input, code: '123456' })).toEqual({ kind: 'problem', problem: 'wrongCode' })
-    expect(await signIn(api, { ...input, code: 'ABCDE23456' })).toMatchObject({ kind: 'open', to: '/w/DEMO/home' })
+    expect(await signIn(api, { ...input, code: 'ABCDE23456' })).toMatchObject({ kind: 'open', to: '/w/DEMO' })
     expect(calls.filter((call) => call.url.endsWith('/sign-in')).map((call) => (call.body as { code?: string }).code)).toEqual([undefined, '123456', 'ABCDE23456'])
   })
 
@@ -90,18 +90,18 @@ describe('sign-in (PLT-047, PLT-048)', () => {
       'POST /auth/office/sign-in': { status: 200, body: { status: 'signed_in' } },
       'GET /auth/office/me': { status: 200, body: ME({ enabled: false, required: true, satisfied: false }) },
     })
-    expect(await signIn(api, { company: 'demo', email: 'alex.demo@example.com', password: 'p' })).toMatchObject({ to: '/w/DEMO/me#authenticator', home: '/w/DEMO/home' })
+    expect(await signIn(api, { company: 'demo', email: 'alex.demo@example.com', password: 'p' })).toMatchObject({ to: '/w/DEMO/me#authenticator', entry: '/w/DEMO' })
   })
 
   it('opens the company this person last worked in on this device, else the session\'s, else the first their roles reach', () => {
     const me = ME({ enabled: false, required: false, satisfied: true })
     const two = { ...me, company: null, companies: [{ code: 'DEMO' }, { code: 'ESEMPIO' }] }
     const remembered = rememberScope(undefined, { tenantId: TENANT, userId: USER }, { company: 'ESEMPIO', site: null })
-    expect(sessionPlaces(me, undefined)).toMatchObject({ to: '/w/DEMO/home' })
-    expect(sessionPlaces(two, remembered)).toMatchObject({ to: '/w/ESEMPIO/home' })
-    expect(sessionPlaces(two, undefined)).toMatchObject({ to: '/w/DEMO/home' })
+    expect(sessionPlaces(me, undefined)).toMatchObject({ to: '/w/DEMO' })
+    expect(sessionPlaces(two, remembered)).toMatchObject({ to: '/w/ESEMPIO' })
+    expect(sessionPlaces(two, undefined)).toMatchObject({ to: '/w/DEMO' })
     // A remembered company the roles no longer reach is not opened.
-    expect(sessionPlaces({ ...two, companies: [{ code: 'DEMO' }] }, remembered)).toMatchObject({ to: '/w/DEMO/home' })
+    expect(sessionPlaces({ ...two, companies: [{ code: 'DEMO' }] }, remembered)).toMatchObject({ to: '/w/DEMO' })
     expect(sessionPlaces({ ...me, company: null, companies: [] }, undefined)).toEqual({ kind: 'problem', problem: 'noCompany' })
   })
 })
@@ -162,7 +162,7 @@ describe('an invitation (PLT-015)', () => {
       'GET /auth/office/me': { status: 200, body: ME({ enabled: false, required: false, satisfied: true }) },
     })
     const outcome = await acceptInvitation(api, { token: TOKEN, displayName: ' New Person ', password: 'calm-meadow-river-91' })
-    expect(outcome).toMatchObject({ kind: 'open', home: '/w/DEMO/home', authenticator: '/w/DEMO/me#authenticator', mfaRequired: false })
+    expect(outcome).toMatchObject({ kind: 'open', entry: '/w/DEMO', authenticator: '/w/DEMO/me#authenticator', mfaRequired: false })
     expect(calls.find((call) => call.url.endsWith('/accept'))).toMatchObject({ csrf: 'csrf-1', body: { token: TOKEN, displayName: 'New Person', password: 'calm-meadow-river-91' } })
   })
 
