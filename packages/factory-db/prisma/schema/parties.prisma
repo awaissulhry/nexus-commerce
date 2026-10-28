@@ -72,6 +72,8 @@ model Party {
   // inventory.prisma: as a supplier, the goods received from it and its lots.
   goodsReceipts        GoodsReceipt[]
   lots                 Lot[]
+  // quality.prisma: the PPE register's entries it reported.
+  ppeRegisterEntries   PpeRegisterEntry[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the party's rows.
@@ -143,6 +145,8 @@ model PartyAddress {
   // sales.prisma: the quote versions it is the bill-to or ship-to address of.
   quoteVersionsBillTo QuoteVersion[] @relation("QuoteVersionBillTo")
   quoteVersionsShipTo QuoteVersion[] @relation("QuoteVersionShipTo")
+  // shipping.prisma: the shipments sent to it.
+  shipments           Shipment[]
 
   @@unique([tenantId, partyId, id])
 }

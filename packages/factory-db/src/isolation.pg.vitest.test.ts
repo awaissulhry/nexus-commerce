@@ -18,8 +18,10 @@ import { seed as seedParties } from '../seed/parties'
 import { seed as seedPrint } from '../seed/print'
 import { seed as seedProduct } from '../seed/product'
 import { seed as seedProduction } from '../seed/production'
+import { seed as seedQuality } from '../seed/quality'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
+import { seed as seedShipping } from '../seed/shipping'
 import { seed as seedSupply } from '../seed/supply'
 import { seed as seedThreads } from '../seed/threads'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
@@ -135,6 +137,10 @@ beforeAll(async () => {
   await seedInventory({ db: factory, namespace: 'iso-b' })
   await seedProduction({ db: factory, namespace: 'iso-a' })
   await seedProduction({ db: factory, namespace: 'iso-b' })
+  await seedQuality({ db: factory, namespace: 'iso-a' })
+  await seedQuality({ db: factory, namespace: 'iso-b' })
+  await seedShipping({ db: factory, namespace: 'iso-a' })
+  await seedShipping({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -158,6 +164,8 @@ it('covers every classified table and every runtime role', () => {
     'ComplianceDocument',
     'CutLog',
     'CutLogPiece',
+    'Ddt',
+    'DdtCancellation',
     'DepositRequest',
     'Device',
     'DeviceEnrolment',
@@ -165,6 +173,7 @@ it('covers every classified table and every runtime role', () => {
     'EmailOutbound',
     'FloorSession',
     'FloorSettings',
+    'GarmentSerial',
     'GoodsReceipt',
     'GoodsReceiptLine',
     'Hide',
@@ -173,6 +182,8 @@ it('covers every classified table and every runtime role', () => {
     'ImportRow',
     'InboundEmail',
     'InboundWebhook',
+    'Inspection',
+    'InspectionDefect',
     'IntegrationAccount',
     'IntegrationCall',
     'Invitation',
@@ -194,17 +205,20 @@ it('covers every classified table and every runtime role', () => {
     'Operation',
     'OperationScan',
     'OutboxEvent',
+    'Parcel',
     'Party',
     'PartyAddress',
     'PartyContact',
     'PartyTaxIdentity',
     'PasswordReset',
     'PlanningRun',
+    'PpeRegisterEntry',
     'PrintJob',
     'Printer',
     'ProductionSettings',
     'PurchaseOrder',
     'PurchaseOrderLine',
+    'QualityRelease',
     'Quote',
     'QuoteAcceptance',
     'QuoteApproval',
@@ -219,6 +233,9 @@ it('covers every classified table and every runtime role', () => {
     'SalesOrderLineSize',
     'SecretValue',
     'Session',
+    'Shipment',
+    'ShipmentLine',
+    'ShippingSettings',
     'Site',
     'Size',
     'SizeScale',
@@ -231,6 +248,7 @@ it('covers every classified table and every runtime role', () => {
     'Suppression',
     'Tenant',
     'Thread',
+    'TrackingEvent',
     'User',
     'Variant',
     'ViesCheck',

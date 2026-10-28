@@ -38,6 +38,9 @@ model Printer {
 
   site Site       @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   jobs PrintJob[]
+  // shipping.prisma: the sites' shipping settings that print carrier labels and documents on it.
+  shippingLabelSettings    ShippingSettings[] @relation("ShippingLabelPrinter")
+  shippingDocumentSettings ShippingSettings[] @relation("ShippingDocumentPrinter")
 
   @@unique([tenantId, siteId, code])
   // The target of a job's reference: a job is on its printer's company and site.

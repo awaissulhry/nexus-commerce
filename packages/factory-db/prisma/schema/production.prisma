@@ -139,6 +139,8 @@ model WorkOrder {
   cutLogs       CutLog[]
   bundles       Bundle[]
   scans         OperationScan[]
+  // quality.prisma: its final inspections.
+  inspections   Inspection[]
 
   @@unique([tenantId, companyId, number])
   @@unique([tenantId, batchNumber])
@@ -201,6 +203,12 @@ model WorkOrderSize {
   materials          WorkOrderMaterial[]
   cutPieces          CutLogPiece[]
   bundles            Bundle[]
+  // quality.prisma: the defects found in it, its releases and its garments' serials.
+  inspectionDefects  InspectionDefect[]
+  qualityReleases    QualityRelease[]
+  garmentSerials     GarmentSerial[]
+  // shipping.prisma: the shipment lines that ship it.
+  shipmentLines      ShipmentLine[]
 
   @@unique([tenantId, workOrderId, colourwayId, size])
   // The target of the materials', cut pieces' and bundles' references: a cell of the same site and work order.

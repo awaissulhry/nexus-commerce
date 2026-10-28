@@ -1,0 +1,298 @@
+// Quality (plan A1 §2.1 "Append-only", §2.4 F, §2.5 "Final release"; PLAN §2.8 "PPE", "Limits on monitoring workers",
+// §4.7 stages 13a-labels, 13b-release; Q31; features QHS-050, QHS-058, QHS-073, QHS-118, MES-076, PRD-025): the final
+// inspection of a work order's garments with its defects per class, the quality release of inspected garments (only
+// released garments are packed and shipped, shipping.prisma), the garment serials of a serial-tracked style, and the
+// PPE register of complaints, non-conformities and recalls. apps/factory-api's modules write them (B-W1-44 serials at
+// the final operation, B-W1-45 final inspection and release, B-W1-43 the register), always through command(); the floor
+// writes through floorCommand.
+//
+// Batch or serial (Q31: both are built, a setting per style): Style.garmentTracking (product.prisma) is BATCH, the
+// default (every garment label of a work order carries its batch number, WorkOrder.batchNumber), or SERIAL (each garment
+// also gets its own serial, GarmentSerial, at the final operation). A style's setting changes only while none of its
+// work orders has a serial or a release (the …_quality_shipping_guards trigger), so a work order is tracked one way.
+//
+// The final inspection (QHS-050, A1 §2.5): OPEN while the inspector records the sample, the garment and label
+// checklist and the defects per class (CRITICAL, MAJOR, MINOR); PASSED or FAILED when decided, then never changed (the
+// triggers, for every login); CANCELLED when abandoned. A PASS has no critical defect, no more major and minor defective
+// garments than the sampling plan's acceptance numbers (ISO 2859-1), and no checklist item marked not ok. Four-eyes
+// (PPE Regulation 2016/425; PLAN §2.8, Q19): the inspector made none of the garments: no cut log and no report or
+// correction scan of the work order names the inspector's worker (or a worker linked to the inspector's office user).
+// Where the site records the station, not the worker (the monitoring switch, MES-278), the floor records cannot tell,
+// so the decision carries the inspector's signed statement that they made none of them.
+//
+// The quality release (QHS-058): garments of one cell (colourway x size) of a work order, from one PASSED inspection,
+// signed by an office user who made none of them (the same four-eyes rule), with the VALID certificates that cover the
+// style, colourway and size on the day for a PPE style (the certificate gate; Reg. 2016/425 arts. 8, 15). Append-only;
+// never more than the cell's quantity, nor more than the inspection's lot. Shipments ship released garments only.
+//
+// The PPE register (QHS-118; Reg. 2016/425 art. 8(4)): the maker's register of complaints, non-conforming PPE and
+// recalls, kept and exported for the authorities. With a brand label the brand is the legal maker and keeps the
+// register; the factory keeps the same records to hand over (PLAN §2.8). An entry is closed, never deleted.
+//
+// Who sees what (ownership/quality.json): the office reads and writes; the floor reads its OWN site's inspections,
+// defects, releases and serials, records inspections and their defects (a floor inspector, signed in) and the serials
+// of the final operation; portal and link sessions read nothing here (the Declaration of Conformity reaches a customer
+// through a link, B-W1-49). No table here has a cost, price, margin or wages column.
+
+/// How the garments of a style are traced on their labels (Q31; PPE Regulation 2016/425 art. 8(5): batch or serial).
+enum GarmentTracking {
+  /// One batch number per work order (WorkOrder.batchNumber) on every garment label (Q31 (a), the default).
+  BATCH
+  /// A serial per garment (GarmentSerial), beside the work order's batch number (Q31 (b)).
+  SERIAL
+}
+
+/// The final inspection of a work order's finished garments (QHS-050; A1 §2.4 F Inspection, §2.5 "Final release"): an
+/// inspection lot of the work order, the sample examined under its sampling plan, the garment and label checklist, the
+/// defects per class (InspectionDefect) and the decision, signed by an inspector who made none of the garments. OPEN →
+/// PASSED | FAILED | CANCELLED; a decided inspection never changes.
+model Inspection {
+  id                String           @id @db.Uuid
+  tenantId          String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The work order's company and site.
+  companyId         String           @db.Uuid
+  siteId            String           @db.Uuid
+  workOrderId       String           @db.Uuid
+  /// The finished garments this inspection judges (the inspection lot), from 1 up to the work order's pieces.
+  lotSize           Int
+  /// The garments examined, from 1 up to the lot.
+  sampleSize        Int
+  /// The sampling plan (ISO 2859-1): its inspection level ("II", "S-3") and the AQL of the major and minor classes, in
+  /// percent; a critical defect is never accepted.
+  inspectionLevel   String
+  aqlMajor          Decimal          @db.Decimal(7, 3)
+  aqlMinor          Decimal          @db.Decimal(7, 3)
+  /// The plan's acceptance numbers (Ac) for this sample: the most garments with a major, and with a minor, defect a PASS
+  /// allows.
+  acceptMajor       Int
+  acceptMinor       Int
+  /// The garment and label checklist as checked (QHS-050: EN 17092 class label, size, CE marking, care label, fibre
+  /// composition, animal-origin phrase, armour fitted, zips, reflectives, hangtags, user information, packaging):
+  /// [{ "code": "CE_MARK", "ok": true, "note": null }, …]. A decided inspection has it; a PASS has no item "ok": false.
+  checklist         Json?
+  /// OPEN → PASSED | FAILED | CANCELLED (all three final).
+  status            InspectionStatus @default(OPEN)
+  /// The inspector: a worker of the site (a floor inspector, signed in) or an office user; exactly one. The floor
+  /// records only a worker's inspection.
+  inspectorWorkerId String?          @db.Uuid
+  inspectorUserId   String?          @db.Uuid
+  /// The inspector's signed statement that they made none of the garments: required where the floor records do not
+  /// name every maker (the site records the station, MES-278; PLAN §2.8).
+  notMakerStatement Boolean          @default(false)
+  /// When it was decided (PASSED or FAILED), and the SHA-256 (hex) of the decision as the inspector signed it (the
+  /// e-signature, QHS-058): set exactly then.
+  decidedAt         DateTime?        @db.Timestamptz(3)
+  signatureSha256   String?
+  note              String?
+  version           Int              @default(1)
+  createdAt         DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?          @db.Uuid
+
+  site            Site               @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder       WorkOrder          @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  inspectorWorker Worker?            @relation(fields: [tenantId, siteId, inspectorWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  defects         InspectionDefect[]
+  releases        QualityRelease[]
+
+  // The target of the defects' and releases' references: an inspection of the same site and work order.
+  @@unique([tenantId, siteId, workOrderId, id])
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, status])
+}
+
+enum InspectionStatus {
+  /// Being recorded: its sample, checklist and defects change.
+  OPEN
+  PASSED
+  FAILED
+  /// Abandoned before a decision (started by mistake).
+  CANCELLED
+}
+
+/// The defects found in an inspection's sample (QHS-050): per class and defect code, the garments of the sample that
+/// have it, and the cell they were found in when known. Photos are files of the row (StoredFile recordType
+/// "InspectionDefect"). Written, changed and removed only while the inspection is OPEN.
+model InspectionDefect {
+  id              String      @id @db.Uuid
+  tenantId        String      @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId          String      @db.Uuid
+  workOrderId     String      @db.Uuid
+  inspectionId    String      @db.Uuid
+  /// CRITICAL (a safety or legal defect: armour missing, CE mark wrong), MAJOR, MINOR.
+  defectClass     DefectClass
+  /// The defect's code as the defect list names it ("STITCH-SKIP", "LABEL-MISSING"); one row per class and code.
+  code            String
+  description     String?
+  /// Garments of the sample with this defect, from 1.
+  quantity        Int
+  /// The cell (colourway and size) of the work order it was found in, when known.
+  workOrderSizeId String?     @db.Uuid
+  note            String?
+  version         Int         @default(1)
+  createdAt       DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime    @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?     @db.Uuid
+
+  inspection    Inspection     @relation(fields: [tenantId, siteId, workOrderId, inspectionId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and
+  // workOrderId.
+  workOrderSize WorkOrderSize? @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, inspectionId, defectClass, code])
+}
+
+/// The class of a defect (ISO 2859-1 classes, as the garment trade uses them).
+enum DefectClass {
+  /// Unsafe or unlawful (a PPE defect): never accepted.
+  CRITICAL
+  MAJOR
+  MINOR
+}
+
+/// A quality release (QHS-058; A1 §2.4 F QualityRelease): garments of one cell of a work order released to be packed and
+/// shipped, from one PASSED inspection of the work order, signed by an office user who made none of them, with the
+/// certificates that cover the cell on the day (the certificate gate). Never changed or removed (the triggers, for
+/// every login); never more than the cell's pieces, nor more than the inspection's lot. A serial-tracked style's release
+/// names its serials (GarmentSerial.releaseId).
+/// @append-only
+model QualityRelease {
+  id              String   @id @db.Uuid
+  tenantId        String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The work order's company and site.
+  companyId       String   @db.Uuid
+  siteId          String   @db.Uuid
+  workOrderId     String   @db.Uuid
+  workOrderSizeId String   @db.Uuid
+  /// The PASSED inspection of the work order it releases from.
+  inspectionId    String   @db.Uuid
+  /// Garments released, from 1.
+  quantity        Int
+  /// A PPE style: the certificates that cover the style, colourway and size on the release day (VALID then); at least
+  /// one. Empty for a style that is not PPE.
+  certificateIds  String[] @default([]) @db.Uuid
+  /// The office user who signed the release (never a maker of the garments), when, and the SHA-256 (hex) of what they
+  /// signed.
+  releasedById    String   @db.Uuid
+  releasedAt      DateTime @db.Timestamptz(3)
+  signatureSha256 String
+  note            String?
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  createdById     String?  @db.Uuid
+
+  site          Site            @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrderSize WorkOrderSize   @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  inspection    Inspection      @relation(fields: [tenantId, siteId, workOrderId, inspectionId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  serials       GarmentSerial[]
+
+  // The target of the serials' reference: a release of the serial's cell.
+  @@unique([tenantId, siteId, workOrderSizeId, id])
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, inspectionId])
+}
+
+/// One garment's serial (Q31 (b), PRD-025, MES-076; A1 §2.4 E Serial): given at the final operation (B-W1-44) to a
+/// garment of a cell of a work order whose style is serial-tracked, printed on its label. MADE → RELEASED (a quality
+/// release of its cell names it) → SHIPPED (packed in a line of a shipment that left); VOID (a garment scrapped or a
+/// label spoilt) from MADE or RELEASED. Never deleted. A cell never has more live (not VOID) serials than pieces.
+model GarmentSerial {
+  id              String              @id @db.Uuid
+  tenantId        String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId          String              @db.Uuid
+  workOrderId     String              @db.Uuid
+  workOrderSizeId String              @db.Uuid
+  /// The serial on the garment's label (factory-domain numbering/scan-id, type SERIAL), unique in the tenant; never
+  /// reused, also when voided.
+  serial          String
+  status          GarmentSerialStatus @default(MADE)
+  /// The quality release of its cell that released it: set with RELEASED, then never changed.
+  releaseId       String?             @db.Uuid
+  /// The shipment line it is packed in (shipping.prisma): set and cleared while it is RELEASED and the shipment is a
+  /// DRAFT; fixed once SHIPPED.
+  shipmentLineId  String?             @db.Uuid
+  /// VOID: when and why (set exactly then).
+  voidedAt        DateTime?           @db.Timestamptz(3)
+  voidReason      String?
+  version         Int                 @default(1)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?             @db.Uuid
+
+  workOrderSize WorkOrderSize   @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and
+  // workOrderSizeId.
+  release       QualityRelease? @relation(fields: [tenantId, siteId, workOrderSizeId, releaseId], references: [tenantId, siteId, workOrderSizeId, id], onDelete: Restrict, onUpdate: Restrict)
+  shipmentLine  ShipmentLine?   @relation(fields: [tenantId, siteId, workOrderSizeId, shipmentLineId], references: [tenantId, siteId, workOrderSizeId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, serial])
+  @@index([tenantId, workOrderSizeId])
+  @@index([tenantId, releaseId])
+  @@index([tenantId, shipmentLineId])
+}
+
+/// MADE → RELEASED → SHIPPED; VOID from MADE or RELEASED. SHIPPED and VOID are final (returns come with W2).
+enum GarmentSerialStatus {
+  MADE
+  RELEASED
+  SHIPPED
+  VOID
+}
+
+/// One entry of the PPE register (QHS-118; Reg. 2016/425 art. 8(4)): a complaint, a non-conforming PPE found, or a
+/// recall, about a style (and a batch or serials of it), with the investigation, the action taken and when distributors
+/// and, where the PPE presents a risk, the authorities were told (art. 8(9)). OPEN → CLOSED; never deleted, a closed
+/// entry never changes.
+model PpeRegisterEntry {
+  id                     String               @id @db.Uuid
+  tenantId               String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose register it is (the maker, or the factory keeping it for a brand).
+  companyId              String               @db.Uuid
+  /// The entry's reference in the register, unique in the company ("REG-2026-001").
+  reference              String
+  kind                   PpeRegisterKind
+  /// The PPE concerned: the style, and the batch numbers and serials as reported.
+  styleId                String               @db.Uuid
+  batchNumbers           String[]             @default([])
+  serials                String[]             @default([])
+  /// Who reported it (a customer or distributor), when it came from a party.
+  partyId                String?              @db.Uuid
+  /// When it was received or found.
+  reportedAt             DateTime             @db.Timestamptz(3)
+  description            String
+  /// The investigation, its finding and the risk it found.
+  investigation          String?
+  /// The corrective action taken (a repair, a replacement, a recall, a change of the style).
+  actionTaken            String?
+  /// When the distributors were kept informed (art. 8(4)), and the market surveillance authorities told (art. 8(9)).
+  distributorsInformedAt DateTime?            @db.Timestamptz(3)
+  authorityNotifiedAt    DateTime?            @db.Timestamptz(3)
+  status                 PpeRegisterStatus    @default(OPEN)
+  /// Set exactly when CLOSED.
+  closedAt               DateTime?            @db.Timestamptz(3)
+  closedById             String?              @db.Uuid
+  version                Int                  @default(1)
+  createdAt              DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById            String?              @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  style   Style   @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  party   Party?  @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, companyId, reference])
+  @@index([tenantId, styleId])
+}
+
+/// What a register entry records (Reg. 2016/425 art. 8(4)).
+enum PpeRegisterKind {
+  COMPLAINT
+  NON_CONFORMITY
+  RECALL
+}
+
+enum PpeRegisterStatus {
+  OPEN
+  CLOSED
+}
