@@ -4,10 +4,10 @@ The factory's Fastify 5 API: a separate product from Commerce, with its own data
 Today the API core: context, contracts, route manifest, security baseline, `GET /health` and `GET /ready`, and
 `command()` (`src/core/command.ts`): the ONLY way to write — one transaction for the change, its audit rows, its events
 and the idempotency receipt; the outbox (events → BullMQ → handlers and live screens); and the worker and scheduler
-(`src/background.ts worker|scheduler`); office sign-in, roles and money grains (`src/platform/auth/`), the
-integration platform (gateway, sealed secrets, inbound ledger), files on R2 (`src/platform/files/`) and record threads
-with the record timeline (`src/platform/threads/`), below. Floor,
-portal and link sign-in, the modules and the other adapters come in later steps.
+(`src/background.ts worker|scheduler`); office and floor sign-in, roles and money grains (`src/platform/auth/`),
+one-off links (`src/platform/links/`), the integration platform (gateway, sealed secrets, inbound ledger), files on
+R2 (`src/platform/files/`) and record threads with the record timeline (`src/platform/threads/`), below. Portal
+sign-in, the modules and the other adapters come in later steps.
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>
@@ -71,9 +71,10 @@ portal and link sign-in, the modules and the other adapters come in later steps.
 
 ## Office sign-in (`src/platform/auth/`, plan A1 §3.10)
 - `sessions/office-auth.ts`: `createOfficeAuth({ database, environment, cookieSecret, webOrigin, clock?, mailer? })`,
-  made in `src/index.ts` and passed to `buildApp` as `officeAuth`: its `authenticate` reads the office cookie (the
-  default authenticator), the auth routes read it with `officeAuthOf(app)` (503 without it). Floor, portal and link
-  sessions are not read yet: those requests have no session (401).
+  made in `src/index.ts` and passed to `buildApp` as `officeAuth`: its `authenticate` reads a one-off link's token
+  (`x-factory-link`, platform/links), else the floor session cookie (the floor authenticator, below; no office
+  fallback), else the office cookie (the default authenticator); the auth and link routes read it with
+  `officeAuthOf(app)` (503 without it). Portal sessions are not read yet (401).
 - Identity is per tenant: `User` (email unique in the tenant), `Session`, `Invitation`, `PasswordReset` (auth.prisma),
   all behind the tenant wall. The tenant is known before any lookup: sign-in names its slug (`factory_platform` reads
   only `Tenant`), cookies and links carry `<tenantId>.<userId>.<secret>`; only SHA-256 of a token is stored.
@@ -94,8 +95,10 @@ portal and link sign-in, the modules and the other adapters come in later steps.
   assembled in `catalogue.ts` with a description and a risk: read, write, stepUp). The app refuses to boot a routes
   file whose manifest names an undeclared one (`core/app.ts`; test routes passed in `routes` are not checked). A module
   that adds routes declares its permissions in the same PR and gives them to the templates that need them.
-- Role templates (`@nexus/factory-domain/auth/roles/templates`): owner, admin, finance, sales, planner, buyer,
-  warehouse, production_manager, quality_inspector, floor_supervisor, read_only. Each tenant has them as system Role
+- Role templates (`@nexus/factory-domain/auth/roles/templates`): office owner, admin, finance, sales, planner, buyer,
+  warehouse, production_manager, quality_inspector, floor_supervisor, read_only; floor (audience FLOOR, given to floor
+  workers, never to people) operator, cutting_operator, floor_inspector, team_leader: only `floor.*` permissions, at
+  most wages, no two-factor. Office roles never hold `floor.*`; custom roles are office roles. Each tenant has them as system Role
   rows, synced with the templates for every ACTIVE tenant when the worker starts and by the daily clustered cron
   `roles.syncTemplates` (`roles/sync.ts`, in each tenant's system context), at tenant set-up and the seed, and on demand
   by `POST /auth/roles/sync-templates`; one audit row per changed role. Custom roles (`custom.<key>`) are copies the
@@ -115,6 +118,67 @@ portal and link sign-in, the modules and the other adapters come in later steps.
   `check-money-grains` fails on an unmarked money-looking contract field, audit value or Prisma column.
 - PostgreSQL tests: the harness's `addTenant` gives a tenant its system roles; `addUser({ role: 'owner' })` and
   `addRole(h, tenant, userId, key)` give a system role over every company.
+
+## Floor sign-in (`src/platform/auth/floor/`, plan A1 §3.8, §3.10 "Floor")
+- Tables (floor-auth.prisma): Device, DeviceEnrolment, Worker (+ PIN hash and lockout), Badge, WorkerRole (a worker's
+  FLOOR roles), FloorSession, FloorSettings (per site, its id = the site's id). Everything a tablet does runs in the
+  FLOOR scope (`factory_floor_runtime`) of the device token's tenant and site: the device (or the enrolment code) is the
+  actor until an operator is signed in, then the worker. Office administrators keep them in the office scope.
+- Secrets: device token `<tenantId>.<siteId>.<deviceId>.<secret>` (cookie `__Host-factory_device`, 400 days),
+  enrolment code `<tenantId>.<siteId>.<enrolmentId>.<secret>` (QR code of a web link, 15 minutes, once), floor session
+  token (cookie `__Host-factory_floor`, until the shift end), badge code (128 bits, Crockford base32): SHA-256 only.
+  The PIN: HMAC-SHA-256 with the server's pepper (`FACTORY_PIN_PEPPER`, required in staging and production; a
+  placeholder locally), then scrypt, stored `$pin$<pepper id>$scrypt$…`; `FACTORY_PIN_PEPPER_PREVIOUS` still opens
+  older hashes during a rotation (re-hashed at the next sign-in). `auth.pins` is the keyring. Every secret is minted
+  BEFORE its command and never enters its input, result (receipts keep results) or audit row; the Office's enrol,
+  new-code, badge and PIN-reset routes take an Idempotency-Key, and a repeat answers from its receipt with the secret
+  `null` (`invitations/tokens.pg.vitest.test.ts` scans receipts, audit rows and events for each floor secret). Unsafe
+  floor routes pass the office CSRF double submit.
+- `floor/authenticator.ts` (wired in `sessions/office-auth.ts`): the floor session cookie → floor authenticator, no
+  office fallback. Live = the device token matches an ACTIVE device, the session is the device's `currentSessionId`
+  (one operator per device), not ended, before its idle end (site setting, default 10 minutes, slid at most once a
+  minute) and its shift end (first site shift end at least 30 minutes after sign-in, at most 12 hours); worker ACTIVE,
+  its badge (if any) ACTIVE. Grants: the worker's live FLOOR roles over the device's company and site, grains capped to
+  wages (`factory-domain auth/floor/grants`); none while `pinMustChange`.
+- Sign-in: badge + PIN or worker id (name) + PIN; one uniform 401 for every failure; 5 wrong PINs lock the worker
+  (5 minutes, doubling, not the device). Another worker live on the device → 409 (use `POST /floor/switch`); the same
+  worker → REPLACED; an expired one → closed (IDLE, SHIFT_END). The device row is locked (`FOR UPDATE`) in the command.
+- Floor commands use `floorCommand` (store.ts): a fresh server Idempotency-Key each (a sign-in is never a replay).
+- Revoking a device or badge, deactivating a worker or resetting a PIN ends the sessions (`endSessions`); the
+  authenticator re-checks each on every request anyway. Office routes `/auth/floor/*` are scoped by record (can() on
+  the device's, worker's or site's company and site; scopeWhere() for lists); nobody manages the roles, badge or PIN of
+  the worker linked to themselves. A worker's floor roles (`workers.roles`, also when a worker is made with roles) and
+  credentials (`workers.credentials`: badges, PIN reset) are step-up permissions: `requireStepUp` after the record and
+  scope checks.
+- Legal: a worker is a name, language, optional employee number, site, status, badge and PIN hash (GDPR art. 5(1)(c));
+  no biometric, photo, birth date or national id (MES-276); no productivity figure, and the registry shows "in use",
+  never who (Statuto dei Lavoratori art. 4). The PG tests that prove it name these articles.
+
+## One-off links (`src/platform/links/`, plan A1 §3.10 "Links", §2.2; features SAL-099, PLT-007, PLT-035)
+- A link opens ONE record of ONE party for ONE purpose (factory-domain `links/purposes`: QUOTE_ACCEPT, PO_CONFIRM,
+  DOCUMENT_VIEW, DEPOSIT_INFO), with an expiry and a use limit. Token `<tenantId>.<partyId>.<linkId>.<secret>` (256
+  bits, `links/token`); only its SHA-256 is stored. The web link is `<web>/l#token=…` (fragment: in no server log); the
+  web sends the token in the `x-factory-link` header.
+- `authenticator.ts` (chained before the office cookie): the link is read in the token's PARTY scope
+  (factory_partner_runtime), hash compared in constant time, live (not revoked, not expired, uses left), tenant
+  ACTIVE → context `link` with its one record and the grants of its purpose (never a role's: `links.open`, its answers
+  `links.accept|decline|confirm`, `money.price` only for purposes that show the party its own document; PO_CONFIRM
+  none). Anything else is ONE 404 (`LINK_UNAVAILABLE`), whatever was wrong. `linkSessionOf(request)` gives the link.
+- Every use goes through `useLink(tools, request, { action, typedName?, email? })` INSIDE a command (`linkCommand`, on
+  the sign-in clock): the purpose's evidence rules (`links/evidence`: typed name, email check), the use counted by one
+  UPDATE that matches only a live link (a race uses a one-use link once), a LinkEvidence row (append-only), an audit
+  row and the `link.used` event. Link writes need an Idempotency-Key. A module's answer route (W1: accept a quote,
+  confirm a PO) has the `link` audience, its action's permission and scope `record`, and calls useLink beside its
+  change; command() refuses any record but the link's.
+- Office: `POST /links` (links.manage over the record's company and party; the URL is in the answer once, never in the
+  command result, so no receipt holds it), `GET /links?recordType=&recordId=` (links.view, scopeWhere), `POST
+  /links/:linkId/revoke` (final). A record type is linkable only once its module registers a source
+  (`records.ts`, `registerLinkRecordSource`); W0 has none. Rate limit `AuthRateLimits.linkUse` on link routes.
+- The partner wall (factory-db `src/ownership.ts`): a column marked `/// @grain cost|margin|wages` or `/// @internal`
+  must be in the partner role's hiddenColumns (check-ownership). The OneOffLink guard trigger keeps a link fixed but for
+  its uses, revocation and note.
+- PostgreSQL tests: `links.pg.vitest.test.ts` (a made-up module with in-memory records registers sources and link
+  routes), `guards.pg.vitest.test.ts`.
 
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),

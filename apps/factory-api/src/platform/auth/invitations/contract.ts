@@ -22,8 +22,11 @@ export const inviteContract = defineContract({
     /** The person's first roles, each with its scope. Naming any needs roles.assign as well. */
     roles: z.array(assignmentInput).max(20).default([]),
   }),
-  /** The link goes to the mail seam (sessions/mail.ts), never into this answer. */
-  response: { 200: output({ invitation: invitationView }) },
+  /**
+   * The link goes to the mail seam (sessions/mail.ts), never into this answer. `delivery`: `sent` now, or
+   * `already_sent` for a repeated Idempotency-Key (the first request mailed it; no second mail).
+   */
+  response: { 200: output({ invitation: invitationView, delivery: z.enum(['sent', 'already_sent']) }) },
 })
 
 export const revokeInvitationContract = defineContract({

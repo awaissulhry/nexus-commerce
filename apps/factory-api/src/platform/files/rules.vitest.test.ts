@@ -176,7 +176,8 @@ describe('the permissions (registry and role templates)', () => {
   })
 
   it('gives every office template files.read, the record roles files.upload, admin and owner the rest', () => {
-    const files = Object.fromEntries(ROLE_TEMPLATES.map((role) => [role.key, role.permissions.filter((permission) => permission.startsWith('files.'))]))
+    const office = ROLE_TEMPLATES.filter((role) => role.audience === 'office')
+    const files = Object.fromEntries(office.map((role) => [role.key, role.permissions.filter((permission) => permission.startsWith('files.'))]))
     expect(files).toEqual({
       owner: ['files.delete', 'files.manage', 'files.read', 'files.upload'],
       admin: ['files.delete', 'files.manage', 'files.read', 'files.upload'],

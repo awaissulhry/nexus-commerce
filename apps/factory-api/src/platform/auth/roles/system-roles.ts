@@ -83,7 +83,9 @@ export async function applySystemRoleChanges(tx: FactoryClient | CommandTx, chan
   for (const change of changes) {
     const data = { ...change.after, permissions: [...change.after.permissions], grains: [...change.after.grains] }
     if (change.kind === 'created') {
-      await tx.role.create({ data: { id: change.roleId, key: change.key, system: true, ...data, createdAt: at.now, createdById: at.actorId } })
+      // A template's audience never changes, so it is set once, when its system role is made.
+      const audience = templateOf(change.key)?.audience === 'floor' ? 'FLOOR' : 'OFFICE'
+      await tx.role.create({ data: { id: change.roleId, key: change.key, system: true, audience, ...data, createdAt: at.now, createdById: at.actorId } })
     } else {
       await tx.role.update({ where: { id: change.roleId }, data: { ...data, version: { increment: 1 } } })
     }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { checkOwnership, OwnershipError, policyInputs, type OwnershipFile } from './ownership'
+import { checkOwnership, OwnershipError, partnerWalledColumns, policyInputs, type OwnershipFile } from './ownership'
+import { TENANT_ID_DEFAULT } from './roles'
 import { parseSchema } from './schema-models'
 import { loadOwnership, loadSchema } from './tools'
 
@@ -15,16 +16,23 @@ describe('model ownership', () => {
     const inputs = policyInputs(loadSchema(), loadOwnership())
     expect(inputs.model.tables.map((table) => table.table).sort()).toEqual([
       'AuditLog',
+      'Badge',
       'Company',
+      'Device',
+      'DeviceEnrolment',
+      'FloorSession',
+      'FloorSettings',
       'IdempotencyReceipt',
       'InboundWebhook',
       'IntegrationAccount',
       'IntegrationCall',
       'Invitation',
       'Line',
+      'LinkEvidence',
       'Message',
       'NumberAllocation',
       'NumberSeries',
+      'OneOffLink',
       'OutboxEvent',
       'PasswordReset',
       'Role',
@@ -38,6 +46,8 @@ describe('model ownership', () => {
       'Thread',
       'User',
       'WorkCentre',
+      'Worker',
+      'WorkerRole',
     ])
     expect(inputs.platformTables).toEqual([{ table: 'Tenant', privileges: ['select', 'insert', 'update'], walled: true }])
   })
@@ -120,5 +130,71 @@ describe('model ownership', () => {
     } catch (error) {
       expect((error as OwnershipError).violations).toHaveLength(2)
     }
+  })
+
+  describe('the partner wall (A1 §2.2)', () => {
+    const quotes = parseSchema([
+      {
+        file: 'quotes.prisma',
+        text: [
+          'model Quote {',
+          '  id           String @id @db.Uuid',
+          `  tenantId     String @default(dbgenerated(${JSON.stringify(TENANT_ID_DEFAULT)})) @db.Uuid`,
+          '  partyId      String @db.Uuid',
+          '  /// The total the customer pays.',
+          '  /// @grain price',
+          '  totalMinor   Int',
+          '  /// @grain cost',
+          '  costMinor    Int',
+          '  /// @grain margin',
+          '  marginMinor  Int',
+          '  /// For the office only.',
+          '  /// @internal',
+          '  internalNote String?',
+          '}',
+        ].join('\n'),
+      },
+    ])
+    const classify = (hiddenColumns: string[]): OwnershipFile => ({
+      file: 'quotes.json',
+      data: {
+        models: {
+          Quote: {
+            kind: 'tenant',
+            keyColumns: { tenant: 'tenantId', party: 'partyId' },
+            access: {
+              factory_runtime: { privileges: ['select'] },
+              factory_partner_runtime: { privileges: ['select'], scopedBy: ['party'], hiddenColumns },
+            },
+          },
+        },
+      },
+    })
+
+    it('finds the cost, margin, wages and internal-note columns from the schema markers; prices stay readable', () => {
+      expect(partnerWalledColumns(quotes[0]!)).toEqual([
+        { column: 'costMinor', why: 'a cost (@grain cost)' },
+        { column: 'marginMinor', why: 'a margin (@grain margin)' },
+        { column: 'internalNote', why: 'an internal note (@internal)' },
+      ])
+    })
+
+    it('fails on a partner access that does not hide them, naming each column', () => {
+      expect(problems([...loadOwnership(), classify([])], [...loadSchema(), ...quotes])).toEqual([
+        'ownership/quotes.json: Quote: factory_partner_runtime: column costMinor is a cost (@grain cost), behind the partner wall; add it to hiddenColumns',
+        'ownership/quotes.json: Quote: factory_partner_runtime: column marginMinor is a margin (@grain margin), behind the partner wall; add it to hiddenColumns',
+        'ownership/quotes.json: Quote: factory_partner_runtime: column internalNote is an internal note (@internal), behind the partner wall; add it to hiddenColumns',
+      ])
+      expect(problems([...loadOwnership(), classify(['costMinor', 'marginMinor', 'internalNote'])], [...loadSchema(), ...quotes])).toEqual([])
+    })
+
+    it('holds on the real schema: the link note is hidden from the partner role', () => {
+      const files = copy()
+      const links = files.find((file) => file.file === 'links.json')!.data.models
+      links.OneOffLink!.access.factory_partner_runtime.hiddenColumns = ['createdById', 'revokedById']
+      expect(problems(files)).toEqual([expect.stringMatching(/OneOffLink: factory_partner_runtime: column note is an internal note \(@internal\)/)])
+      const oneOffLink = loadSchema().find((model) => model.name === 'OneOffLink')!
+      expect(partnerWalledColumns(oneOffLink)).toEqual([{ column: 'note', why: 'an internal note (@internal)' }])
+    })
   })
 })

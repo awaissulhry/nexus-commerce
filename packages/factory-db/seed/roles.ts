@@ -1,4 +1,5 @@
 import { ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templates'
+import { RoleAudience } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 
 /**
@@ -34,6 +35,7 @@ export async function seed({ db, namespace }: SeedContext): Promise<RolesSeed> {
       description: template.description,
       system: true,
       basedOn: null,
+      audience: template.audience === 'floor' ? RoleAudience.FLOOR : RoleAudience.OFFICE,
       requireMfa: template.requireMfa,
       permissions: [...template.permissions],
       grains: [...template.grains],
@@ -44,6 +46,7 @@ export async function seed({ db, namespace }: SeedContext): Promise<RolesSeed> {
       description: 'A copy of the floor supervisor that also reads the audit log.',
       system: false,
       basedOn: 'floor_supervisor',
+      audience: RoleAudience.OFFICE,
       requireMfa: false,
       permissions: ['audit.read'],
       grains: [] as string[],
