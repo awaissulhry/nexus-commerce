@@ -35,6 +35,7 @@ with a `ProvenanceMark` (see "Channel cell marks" below).
 This is the screen used to judge the whole system at once, and the surface where
 "screenshot-diff before showing" is enforced for every later visual phase.
 
+- **AppRail** (`#app-rail-example`, Patterns): the main sidebar from `patterns/shell`. Its `LinkComponent` here moves the specimen's current page instead of navigating; check hover, the Pinned box, Tab through the rows (the rail opens on keyboard focus) and Enter moving the one current row, in light and dark.
 - **WorkspaceSubheader** (`#workspace-subheader-example`, Patterns): subheader-only toggle cell, overlay navigation, independent title menu and native view links. The optional 32-collection specimen exercises long-label wrapping, badges, disclosure and internal scrolling. Main content is a sibling of the strip.
 
 `OrderedList` is demonstrated at `#ordered-list-example`: controlled string IDs, optional `renderItem`, `disabled` and `draggable`; use stable unique IDs. Keyboard move buttons are always available. `ScopeBar` can use `nds-workspace-scope` below a WorkspaceSubheader to keep navigation geometry independent from scope.

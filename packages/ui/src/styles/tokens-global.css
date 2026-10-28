@@ -625,3 +625,60 @@
   --nds-grid-tone-cyan-fg: #a5f3fc;
   --nds-grid-tone-cyan-rule: #0e7490;
 }
+
+:root, [data-density='standard'] {
+
+  /* ── Density: standard, the default (tokens/density.ts) ── */
+  --nds-density-target-min: var(--nds-space-24);
+  --nds-density-control-h-sm: var(--nds-control-h-sm);
+  --nds-density-control-h: var(--nds-control-h-md);
+  --nds-density-control-h-primary: var(--nds-control-h-md);
+  --nds-density-pad-x: var(--nds-space-11);
+  --nds-density-gap: var(--nds-space-8);
+  --nds-density-target-gap: var(--nds-space-8);
+  --nds-density-radius: var(--nds-radius-lg);
+  --nds-density-font-label: var(--nds-font-size-sm-plus);
+  --nds-density-font-body: var(--nds-font-size-base);
+  --nds-density-font-numeral: var(--nds-font-size-xl);
+  --nds-density-icon: 15px;
+  --nds-density-focus-w: 2px;
+  --nds-density-focus-offset: 1px;
+}
+
+[data-density='comfortable'] {
+
+  /* ── Density: comfortable (portal and link pages) ── */
+  --nds-density-target-min: 44px;
+  --nds-density-control-h-sm: var(--nds-space-40);
+  --nds-density-control-h: 44px;
+  --nds-density-control-h-primary: var(--nds-space-48);
+  --nds-density-pad-x: var(--nds-space-16);
+  --nds-density-gap: var(--nds-space-12);
+  --nds-density-target-gap: var(--nds-space-12);
+  --nds-density-radius: var(--nds-radius-xl);
+  --nds-density-font-label: var(--nds-font-size-md-minus);
+  --nds-density-font-body: 16px;
+  --nds-density-font-numeral: var(--nds-font-size-2xl);
+  --nds-density-icon: 20px;
+  --nds-density-focus-w: 3px;
+  --nds-density-focus-offset: 2px;
+}
+
+[data-density='floor'] {
+
+  /* ── Density: floor (tablets on the factory floor) ── */
+  --nds-density-target-min: var(--nds-space-48);
+  --nds-density-control-h-sm: var(--nds-space-48);
+  --nds-density-control-h: 56px;
+  --nds-density-control-h-primary: 64px;
+  --nds-density-pad-x: var(--nds-space-24);
+  --nds-density-gap: var(--nds-space-16);
+  --nds-density-target-gap: var(--nds-space-48);
+  --nds-density-radius: var(--nds-radius-2xl);
+  --nds-density-font-label: 16px;
+  --nds-density-font-body: var(--nds-font-size-lg);
+  --nds-density-font-numeral: 40px;
+  --nds-density-icon: 28px;
+  --nds-density-focus-w: 3px;
+  --nds-density-focus-offset: 2px;
+}

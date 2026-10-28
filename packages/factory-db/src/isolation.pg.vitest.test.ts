@@ -4,6 +4,7 @@ import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
 import { seed as seedCompliance } from '../seed/compliance'
+import { seed as seedEmail } from '../seed/email'
 import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedImports } from '../seed/imports'
@@ -117,6 +118,8 @@ beforeAll(async () => {
   await seedImports({ db: factory, namespace: 'iso-b' })
   await seedPrint({ db: factory, namespace: 'iso-a' })
   await seedPrint({ db: factory, namespace: 'iso-b' })
+  await seedEmail({ db: factory, namespace: 'iso-a' })
+  await seedEmail({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -139,6 +142,8 @@ it('covers every classified table and every runtime role', () => {
     'ComplianceDocument',
     'Device',
     'DeviceEnrolment',
+    'EmailIdentity',
+    'EmailOutbound',
     'FloorSession',
     'FloorSettings',
     'IdempotencyReceipt',
@@ -181,6 +186,7 @@ it('covers every classified table and every runtime role', () => {
     'StoredFile',
     'Style',
     'StyleRevision',
+    'Suppression',
     'Tenant',
     'Thread',
     'User',

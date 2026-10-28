@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { FactoryDatabase } from '@nexus/factory-db'
 import { LOCAL_COOKIE_SECRET, LOCAL_PIN_PEPPER } from '../../../env'
 import { mfaSatisfied } from './grants'
-import { holdAuthMail, memoryAuthMailer } from './mail'
+import type { AuthMailer, AuthMessage } from './mail'
 import { createOfficeAuth } from './office-auth'
 import { authSecrets, mintToken, parseToken, sameSecret, shortenIp, tokenHash } from './secrets'
 import { idleExpiryAt, SESSION_LIFETIME } from './session-store'
@@ -114,12 +114,23 @@ describe('createOfficeAuth', () => {
   const database = {} as FactoryDatabase
   const base = { database, cookieSecret: LOCAL_COOKIE_SECRET, pinPepper: LOCAL_PIN_PEPPER, webOrigin: 'http://localhost:3200/' }
 
-  it('refuses the memory mailer outside tests: links stay unreadable', () => {
-    for (const environment of ['local', 'staging', 'production'] as const) {
-      expect(() => createOfficeAuth({ ...base, environment, mailer: memoryAuthMailer() })).toThrow(/refused with FACTORY_ENV/)
+  it('hands a sign-in message to its mailer after the command, and only logs a failure (never the link)', async () => {
+    const delivered: AuthMessage[] = []
+    const mailer: AuthMailer = {
+      async deliver(message) {
+        delivered.push(message)
+        if (message.to === 'broken@example.com') throw new Error('no sending identity')
+      },
     }
-    expect(() => createOfficeAuth({ ...base, environment: 'production', mailer: holdAuthMail })).not.toThrow()
-    expect(() => createOfficeAuth({ ...base, environment: 'test', mailer: memoryAuthMailer() })).not.toThrow()
+    const auth = createOfficeAuth({ ...base, environment: 'production', mailer })
+    const logged: unknown[] = []
+    const log = { error: (fields: unknown) => logged.push(fields) } as never
+    const message = { kind: 'password_reset', tenantId: TENANT, userId: USER, to: 'ada@example.com', link: auth.link('/reset-password', 'secret-token'), expiresAt: new Date() } as const
+    await auth.deliver(message, log)
+    await auth.deliver({ ...message, to: 'broken@example.com' }, log)
+    expect(delivered.map((entry) => entry.to)).toEqual(['ada@example.com', 'broken@example.com'])
+    expect(logged).toHaveLength(1)
+    expect(JSON.stringify(logged)).not.toContain('secret-token')
   })
 
   it('puts link tokens in the fragment, never in the path or query', () => {

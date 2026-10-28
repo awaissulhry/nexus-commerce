@@ -132,8 +132,10 @@ import { EmbeddedDrawerExample } from './EmbeddedDrawerExample'
 import { DrawerFooterExample } from './DrawerFooterExample'
 import { StepUpModalExample } from './StepUpModalExample'
 import { WorkspaceSubheaderExample } from './WorkspaceSubheaderExample'
+import { AppRailExample } from './AppRailExample'
 import { ChangeValueExample } from './ChangeValueExample'
 import { CountdownExample } from './CountdownExample'
+import { DensityTiersExample } from './DensityTiersExample'
 import { GridRowVerbsExample } from './GridRowVerbsExample'
 import { FamilyFooterFrameExample } from './FamilyFooterFrameExample'
 import { SwitchColumnExample } from './SwitchColumnExample'
@@ -1107,6 +1109,7 @@ export function TokenCatalog() {
           Page-level organisms — the app shell + headers that every section adopts.
         </p>
 
+        <AppRailExample />
         <h3>WorkspaceSubheader · collapsible secondary navigation</h3>
         <WorkspaceSubheaderExample />
         <RecordListExample />
@@ -1511,6 +1514,13 @@ export function TokenCatalog() {
             structural: rail {size.railCollapsed}→{size.railExpanded} · nav row {size.rowNav} · icon zone {size.iconZone}
           </div>
         </Card>
+      </Section>
+
+      <Section
+        title="Density tiers"
+        desc="How big a screen's controls, type and touch targets are: standard (the console, the default), comfortable (portal and links) and floor (gloved hands on a tablet). --nds-density-* tokens; tokens/density.ts."
+      >
+        <DensityTiersExample />
       </Section>
 
       <Section title="Radius">

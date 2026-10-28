@@ -101,6 +101,8 @@ model Company {
   // parties.prisma: the parties of this company only (tenant-wide ones have none), and the VIES checks it requested.
   parties             Party[]
   viesChecks          ViesCheck[]
+  // email.prisma: the company's sending identities (its mail goes out through them).
+  emailIdentities     EmailIdentity[]
   // product.prisma: the company's own master data (tenant-wide rows have none).
   colours              Colour[]
   items                Item[]
