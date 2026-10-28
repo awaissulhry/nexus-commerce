@@ -22,7 +22,7 @@ import { seed as seedParties } from './parties'
  *               (rolls of metres, grey) and a shoulder protector, each with a made-up standard cost; the leather and
  *               protector come from the parties seed's supplier P2
  *   sizes       an EU jacket scale 48-56 with body measures; the style uses 50, 52, 54 (base 52)
- *   style       SEED-JKT-01, Category II PPE to EN 17092-3 class A, for the brand P1, made-to-measure allowed (the
+ *   style       SEED-JKT-01, Category II PPE to EN 17092-3 class AA, for the brand P1, made-to-measure allowed (the
  *               JACKET measurement template, whose points match the parties seed's rider profiles)
  *   colourways  BLK and RED, so 2 x 3 = 6 SKUs
  *   revision 1  DRAFT: the leather in ft² per size with hide wastage and a colour per colourway, the lining in one
@@ -195,7 +195,7 @@ export async function seed(context: SeedContext): Promise<ProductSeed> {
     baseSize: '52',
     ppeCategory: PpeCategory.CATEGORY_II,
     ppeStandard: 'EN 17092-3:2020',
-    ppeClass: 'A',
+    ppeClass: 'AA',
     mtmAllowed: true,
     measurementTemplateId: templateId,
     status: StyleStatus.DRAFT,

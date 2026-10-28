@@ -54,6 +54,11 @@ model Device {
   sessions       FloorSession[]    @relation("DeviceSessions")
   // inventory.prisma: the stock moves posted from it.
   stockMoves     StockMove[]
+  // production.prisma: the notice acknowledgements, cut logs, bundles and scans recorded on it.
+  noticeAcks     WorkerNoticeAck[]
+  cutLogs        CutLog[]
+  bundles        Bundle[]
+  operationScans OperationScan[]
 
   @@unique([tenantId, siteId, id])
   @@index([tenantId, siteId])
@@ -131,6 +136,10 @@ model Worker {
   badges   Badge[]
   roles    WorkerRole[]
   sessions FloorSession[]
+  // production.prisma: the notice acknowledgements, cut logs and scans that name the worker.
+  noticeAcks     WorkerNoticeAck[]
+  cutLogs        CutLog[]
+  operationScans OperationScan[]
 
   @@unique([tenantId, employeeCode])
   // The target of the tenant- and site-safe references from the worker's rows.

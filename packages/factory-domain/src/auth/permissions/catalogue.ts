@@ -1,8 +1,10 @@
 import { CERTIFICATES_PERMISSIONS } from '../../compliance/certificates/permissions'
 import type { Permission } from '../../core/permissions'
+import { INVENTORY_FLOOR_PERMISSIONS, INVENTORY_PERMISSIONS } from '../../inventory/permissions'
 import { LINK_SESSION_PERMISSIONS as LINK_SESSION_NAMES, LINKS_OFFICE_PERMISSIONS } from '../../links/permissions'
 import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
 import { PRODUCT_MATERIALS_DEFINITIONS, PRODUCT_MATERIALS_PERMISSIONS } from '../../product/materials/permissions'
+import { PRODUCT_STYLES_DEFINITIONS, PRODUCT_STYLES_PERMISSIONS } from '../../product/styles/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -182,6 +184,21 @@ export const COMPLIANCE_DEFINITIONS = definePermissions('compliance', {
   'certificates.manage': { risk: 'write', description: 'Type in certificates, register them with their PDF, suspend, reinstate and withdraw them, and record or end what they cover.' },
 })
 
+/**
+ * Inventory: locations, the stock ledger and the stock overview (apps/factory-api modules/inventory; SCM-176, SCM-189,
+ * SCM-192, SCM-280). Checked with can() against the site's company and the site; a floor device works only at its own
+ * site. Values (costs) also need the cost grain. The constants live in factory-domain/src/inventory/permissions.ts.
+ */
+export const INVENTORY_DEFINITIONS = definePermissions('inventory', {
+  'locations.view': { risk: 'read', description: "See a site's locations: the tree of warehouses, zones and bins, with their codes." },
+  'locations.manage': { risk: 'write', description: 'Create, rename, move and archive (when empty) the locations of a site, and import them from a sheet.' },
+  'stock.view': { risk: 'read', description: 'See the stock: on hand, held and available per location, item, lot and hide; the moves behind each figure; the ledger check (values only with the cost grain).' },
+  adjust: { risk: 'write', description: "Correct stock up or down with a reason, and post a count's differences." },
+  transfer: { risk: 'write', description: 'Move stock between two locations of a site (a floor device: at its own site).' },
+  scrap: { risk: 'write', description: 'Take stock out as scrap, with the reason.' },
+  reverse: { risk: 'write', description: 'Reverse a stock move that was wrong: the same move with its locations swapped, with the reason.' },
+})
+
 /** The money grains as they travel in grants (`../grains/grains`): from Role.grains, never Role.permissions. */
 export const MONEY_PERMISSIONS: PermissionDefinition[] = GRAINS.map((grain) =>
   Object.freeze({ name: grainPermission(grain), area: 'money', description: GRAIN_DESCRIPTIONS[grain], risk: 'read' as const, grain }),
@@ -205,6 +222,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   EMAIL_DEFINITIONS,
   COMPLIANCE_DEFINITIONS,
   PRODUCT_MATERIALS_DEFINITIONS,
+  PRODUCT_STYLES_DEFINITIONS,
+  INVENTORY_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -214,12 +233,13 @@ export const FLOOR_AREA = 'floor'
 /**
  * The office permissions a floor role may hold too: what a floor device does on the same routes as the office, at its
  * own device's site only (can() pins a floor session to it, row-level security too). Printing labels at the site's
- * printer (GAP-007) and seeing its print queue. Never a money grain; floor roles still hold no other office permission.
+ * printer (GAP-007) and seeing its print queue; seeing the site's locations and moving stock between them (SCM-176,
+ * SCM-189). Never a money grain; floor roles still hold no other office permission.
  */
-export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS])
+export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS, ...INVENTORY_FLOOR_PERMISSIONS])
 
 // The modules' constants and their declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS]) {
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS]) {
   if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 }
 for (const name of LINK_SESSION_NAMES) {

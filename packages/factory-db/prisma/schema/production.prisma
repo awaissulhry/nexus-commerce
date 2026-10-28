@@ -1,0 +1,516 @@
+// Production (plan A1 §2.1 "Append-only", §2.4 E, §2.5 "Work order", "Operation scan", §3.8; PLAN §2.8 "Limits on
+// monitoring workers", §4.7 stages 10-work-order, 11a-issue, 11b-cut, 12-scans; features MES-001, MES-002, MES-003,
+// MES-005, MES-007, MES-056, MES-065, MES-068, MES-069, MES-073, MES-076, MES-090, MES-095, MES-096, MES-278, PLT-208):
+// the floor rules of each site, work orders made from sales order lines with their frozen specification, the cut log of
+// each hide, the bundles cut pieces travel in, the operation scans of the floor and the workers' acknowledgement of the
+// information notice. apps/factory-api's modules/production writes them (B-W1-37 floor rules, B-W1-38 work orders,
+// B-W1-40 cutting, B-W1-41 bundles, B-W1-42 scans), floor writes through floorCommand, always through command().
+//
+// A work order makes one style, at one site, as a size grid (colourway x size cells, each from a sales order line) or as
+// one made-to-measure unit (one cell with the rider's measurement profile revision). DRAFT → RELEASED → IN_PROGRESS →
+// COMPLETED → CLOSED; CANCELLED from DRAFT, RELEASED or IN_PROGRESS, with a reason (MES-007; who and when: the audit
+// log). ON_HOLD (MES-008) comes with W2a; enum values are additive.
+//
+// The frozen specification (MES-005, PRD-192, PRD-193): release fixes the RELEASED style revision (its BOM and routing
+// are frozen for every login by the …_product_guards triggers), the revision's garment label template (ACTIVE, frozen
+// by the same triggers), the batch number and the work order's own parts: its cells, its operations (the revision's
+// routing mapped to work centres of the site) and its planned materials (BOM line x cell). From RELEASED on the
+// hand-written …_production_guards triggers refuse, for every login, any change to them (an operation may only move to
+// another work centre of the same kind); a different spec is a new work order. A made-to-measure unit's measurement
+// profile revision is never edited in place (parties.prisma), so naming it freezes it.
+//
+// One batch number per work order (MES-076, PRD-025, Reg. (EU) 2016/425 art. 8(5): batch or serial on the PPE): set at
+// release from the company's BATCH series, never changed, never shared (unique in the tenant). Serials per garment, if
+// the Owner picks them (PRD-025), come with a later wave.
+//
+// The floor writes ledgers, not counters: the cut log (CutLog, CutLogPiece), the bundles and the operation scans hold
+// what happened; progress, WIP per operation (MES-167) and a hide's yield are sums of them. Cut logs and scans are
+// append-only (`@append-only`): a mistake is a reversal (a cut log), an undo or a correction (a scan) that names the row
+// it voids. Offline (A1 §3.8): every floor row carries the device's own time and the server's, and the device's client
+// event id, unique per device, so a resent event is applied once.
+//
+// Workers (Statuto dei Lavoratori, L. 300/1970, art. 4; GDPR art. 13; PLAN §2.8, Q16 OPEN): a scan or cut log names the
+// signed-in worker only when the site records workers (ProductionSettings.scanSubject WORKER, the default), and only a
+// worker who has acknowledged the information notice (WorkerNoticeAck): the …_production_guards triggers refuse it
+// otherwise. With STATION (Q16 (b)) it names the station and no worker. No table here holds a productivity figure, an
+// efficiency, a piece rate or earnings (no individual performance scoring in W1; AI Act: no AI scoring of workers).
+//
+// Who sees what (ownership/production.json): the office reads and writes; the floor reads its OWN site's work orders,
+// cells, operations, planned materials, cut logs, bundles, scans, acknowledgements and floor rules, and inserts cut logs,
+// bundles, scans and acknowledgements (and reprints or voids a bundle's ticket); no table here has a cost, price or
+// wages column. Portal and link sessions read nothing here. Nobody deletes a work order (cancelled), a bundle (voided),
+// a cut log, a scan or an acknowledgement; the office deletes only a DRAFT work order's parts.
+
+/// A site's floor rules (SCR-074, B-W1-37): who a floor record names (MES-278: the monitoring switch with its legal
+/// reference). The site's row has the site's own id; a site without one names workers. Undo window, scrap limit and
+/// sequence rules per site are W2b (MES-294): W1 uses fixed defaults.
+model ProductionSettings {
+  /// The site's own id (`siteId`): a site has at most one row, and it is read by the site's id.
+  id                     String             @id @db.Uuid
+  tenantId               String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId              String             @db.Uuid
+  siteId                 String             @db.Uuid
+  /// WORKER: scans and cut logs name the signed-in worker (who must have acknowledged the notice); STATION: they name
+  /// the station only (Q16 (b), when an agreement under Statuto art. 4 c.1 is not in place).
+  scanSubject            ScanSubject        @default(WORKER)
+  /// The legal basis on record for naming workers (MES-278), its reference (the agreement with the RSU/RSA, the
+  /// Ispettorato's authorisation, or counsel's opinion that none is needed) and who recorded it, when: all or none.
+  monitoringBasis        MonitoringBasis?
+  monitoringReference    String?
+  monitoringRecordedAt   DateTime?          @db.Timestamptz(3)
+  monitoringRecordedById String?            @db.Uuid
+  version                Int                @default(1)
+  createdAt              DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById            String?            @db.Uuid
+
+  site Site @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, siteId])
+}
+
+/// Who a site's floor records name.
+enum ScanSubject {
+  /// The signed-in worker (Q16 (a), the default).
+  WORKER
+  /// The station only, never the worker (Q16 (b)).
+  STATION
+}
+
+/// The legal basis on record for naming workers in floor records (L. 300/1970 art. 4 c.1).
+enum MonitoringBasis {
+  /// An agreement with the company's union representatives (RSU or RSA).
+  UNION_AGREEMENT
+  /// The Ispettorato nazionale del lavoro's authorisation.
+  INL_AUTHORISATION
+  /// Counsel's written opinion that the records need neither.
+  NOT_REQUIRED
+}
+
+/// A work order (MES-001, MES-002, MES-003, MES-007): one style made at one site, from sales order lines, as a size grid
+/// (its cells) or one made-to-measure unit. Released with its frozen specification and batch number; never deleted
+/// (CANCELLED with a reason).
+model WorkOrder {
+  id              String          @id @db.Uuid
+  tenantId        String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that makes it: the site's.
+  companyId       String          @db.Uuid
+  siteId          String          @db.Uuid
+  /// The number from the company's WORK_ORDER series, unique in the company.
+  number          String
+  /// The number from the company's BATCH series (MES-076): set at release, never changed, unique in the tenant;
+  /// printed on every garment label of the work order (PPE batch).
+  batchNumber     String?
+  kind            WorkOrderKind
+  styleId         String          @db.Uuid
+  /// The style's RELEASED revision it is made to: chosen while DRAFT (or at release), frozen from RELEASED on.
+  styleRevisionId String?         @db.Uuid
+  /// The revision's garment label template (ACTIVE), copied at release; frozen from RELEASED on.
+  labelTemplateId String?         @db.Uuid
+  /// DRAFT → RELEASED → IN_PROGRESS → COMPLETED → CLOSED; CANCELLED (with a reason) from DRAFT, RELEASED or
+  /// IN_PROGRESS. CLOSED and CANCELLED are final.
+  status          WorkOrderStatus @default(DRAFT)
+  dueDate         DateTime?       @db.Date
+  /// Higher first; 0 is normal.
+  priority        Int             @default(0)
+  note            String?
+  /// Set exactly from RELEASED on (a work order cancelled before release has none).
+  releasedAt      DateTime?       @db.Timestamptz(3)
+  releasedById    String?         @db.Uuid
+  /// The first work on it (an issue, a cut or a scan): set with IN_PROGRESS.
+  startedAt       DateTime?       @db.Timestamptz(3)
+  completedAt     DateTime?       @db.Timestamptz(3)
+  closedAt        DateTime?       @db.Timestamptz(3)
+  cancelledAt     DateTime?       @db.Timestamptz(3)
+  cancelReason    String?
+  version         Int             @default(1)
+  createdAt       DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?         @db.Uuid
+
+  site          Site                 @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  style         Style                @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and styleId.
+  styleRevision StyleRevision?       @relation(fields: [tenantId, styleId, styleRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  labelTemplate LabelTemplate?       @relation(fields: [tenantId, labelTemplateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  sizes         WorkOrderSize[]
+  operations    WorkOrderOperation[]
+  materials     WorkOrderMaterial[]
+  cutLogs       CutLog[]
+  bundles       Bundle[]
+  scans         OperationScan[]
+
+  @@unique([tenantId, companyId, number])
+  @@unique([tenantId, batchNumber])
+  // The target of the site-safe references from the floor's rows (cut logs, bundles, scans).
+  @@unique([tenantId, siteId, id])
+  // The target of the cells' reference: a work order of the same site and style (their colourway is of that style).
+  @@unique([tenantId, siteId, styleId, id])
+  // The target of the operations' and materials' references: a work order of the same site and revision (they come
+  // from that revision's routing and BOM).
+  @@unique([tenantId, siteId, styleRevisionId, id])
+  @@index([tenantId, status, dueDate])
+}
+
+enum WorkOrderKind {
+  /// Colourway x size cells with quantities, from size-grid order lines.
+  SIZE_GRID
+  /// One made-to-measure unit for one rider (MES-003): one cell of quantity 1 with the measurement profile revision.
+  MADE_TO_MEASURE
+}
+
+enum WorkOrderStatus {
+  DRAFT
+  RELEASED
+  IN_PROGRESS
+  COMPLETED
+  CLOSED
+  CANCELLED
+}
+
+/// One cell of a work order's size grid (MES-002): the pieces of one colourway in one size, from one sales order line
+/// (the line's style and colourway). A made-to-measure work order has exactly one cell, of quantity 1, with the rider's
+/// measurement profile revision (PRD-193). Changes only while the work order is DRAFT.
+model WorkOrderSize {
+  id                   String   @id @db.Uuid
+  tenantId             String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String   @db.Uuid
+  workOrderId          String   @db.Uuid
+  /// The work order's style.
+  styleId              String   @db.Uuid
+  colourwayId          String   @db.Uuid
+  /// A size code of the style's range (for a made-to-measure unit: the base size it is graded from).
+  size                 String
+  /// Pieces, above 0.
+  quantity             Int
+  /// The sales order line it makes, and that line's party (the key of the reference).
+  salesOrderLineId     String   @db.Uuid
+  partyId              String   @db.Uuid
+  /// MADE_TO_MEASURE: the rider's measurement profile revision, the order line's.
+  measurementProfileId String?  @db.Uuid
+  version              Int      @default(1)
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?  @db.Uuid
+
+  workOrder          WorkOrder           @relation(fields: [tenantId, siteId, styleId, workOrderId], references: [tenantId, siteId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  colourway          Colourway           @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  salesOrderLine     SalesOrderLine      @relation(fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  measurementProfile MeasurementProfile? @relation(fields: [tenantId, partyId, measurementProfileId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  materials          WorkOrderMaterial[]
+  cutPieces          CutLogPiece[]
+  bundles            Bundle[]
+
+  @@unique([tenantId, workOrderId, colourwayId, size])
+  // The target of the materials', cut pieces' and bundles' references: a cell of the same site and work order.
+  @@unique([tenantId, siteId, workOrderId, id])
+  @@index([tenantId, salesOrderLineId])
+}
+
+/// One operation of a work order (A1 §2.4 E): a step of its revision's routing (code, name and standard minutes as the
+/// revision has them), mapped to a work centre of the work order's site of the step's kind. The floor scans bundles at
+/// it. Added and removed only while the work order is DRAFT; afterwards only its work centre changes (another of the
+/// same kind).
+model WorkOrderOperation {
+  id              String   @id @db.Uuid
+  tenantId        String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId          String   @db.Uuid
+  workOrderId     String   @db.Uuid
+  /// The work order's revision.
+  styleRevisionId String   @db.Uuid
+  /// Its place in the work order's routing, unique per work order.
+  seq             Int
+  /// The revision's routing step it is (RoutingOperation.seq).
+  routingSeq      Int
+  /// The routing step's code, name and standard minutes per garment, as copied (the …_production_guards trigger keeps
+  /// them equal).
+  code            String
+  name            String
+  standardMinutes Decimal  @db.Decimal(10, 3)
+  /// Every bundle is scanned at it.
+  scanRequired    Boolean  @default(true)
+  /// A work centre of the site, of the routing step's kind.
+  workCentreId    String   @db.Uuid
+  version         Int      @default(1)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?  @db.Uuid
+
+  workOrder        WorkOrder        @relation(fields: [tenantId, siteId, styleRevisionId, workOrderId], references: [tenantId, siteId, styleRevisionId, id], onDelete: Restrict, onUpdate: Restrict)
+  routingOperation RoutingOperation @relation(fields: [tenantId, styleRevisionId, routingSeq], references: [tenantId, revisionId, seq], onDelete: Restrict, onUpdate: Restrict)
+  workCentre       WorkCentre       @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  scans            OperationScan[]
+
+  @@unique([tenantId, workOrderId, seq])
+  // The target of the scans' reference: an operation of the scan's site and work order.
+  @@unique([tenantId, siteId, workOrderId, id])
+}
+
+/// One planned material line of a work order (SCR-093 pick list): a BOM line of its revision for one cell, in the BOM
+/// line's unit (wastage included) and in the item's base unit, with the material colour the cell's colourway takes. What
+/// was issued and returned is the stock ledger's: the ISSUE and RETURN moves that name the work order (StockMove
+/// .workOrderId). Changes only while the work order is DRAFT. No cost: costing reads the ledger's valuation.
+model WorkOrderMaterial {
+  id              String   @id @db.Uuid
+  tenantId        String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId          String   @db.Uuid
+  workOrderId     String   @db.Uuid
+  /// The work order's revision, and the BOM line of it (whose material this is).
+  styleRevisionId String   @db.Uuid
+  bomLineId       String   @db.Uuid
+  itemId          String   @db.Uuid
+  /// The material's colour for the cell's colourway, when the material comes in colours.
+  itemColourId    String?  @db.Uuid
+  workOrderSizeId String   @db.Uuid
+  /// Above 0, in `uom` (the BOM line's), wastage included.
+  quantity        Decimal  @db.Decimal(18, 4)
+  uom             Uom
+  /// Above 0, in the item's base unit: what the ledger's moves are compared with.
+  baseQuantity    Decimal  @db.Decimal(18, 4)
+  version         Int      @default(1)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?  @db.Uuid
+
+  workOrder     WorkOrder     @relation(fields: [tenantId, siteId, styleRevisionId, workOrderId], references: [tenantId, siteId, styleRevisionId, id], onDelete: Restrict, onUpdate: Restrict)
+  bomLine       BomLine       @relation(fields: [tenantId, styleRevisionId, bomLineId, itemId], references: [tenantId, revisionId, id, itemId], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and itemId.
+  itemColour    ItemColour?   @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrderSize WorkOrderSize @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, workOrderId])
+}
+
+/// One cut of one hide for a work order (MES-056, SCR-094; A1 CutLogEntry): the area the cut used, the usable offcut it
+/// left (returned to stock as a remnant by a RETURN move), its pieces per cell and part (CutLogPiece), who cut it (or
+/// the station), on which device, when. The hide was issued to the work order (the ledger) from a RELEASED lot. Never
+/// changed or removed (the …_production_guards triggers, for every login); a wrong entry is reversed by a row that
+/// mirrors it (`reversalOfId`, at most one).
+/// @append-only
+model CutLog {
+  id              String    @id @db.Uuid
+  tenantId        String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId          String    @db.Uuid
+  workOrderId     String    @db.Uuid
+  /// The hide, and its lot (the key of the reference).
+  lotId           String    @db.Uuid
+  hideId          String    @db.Uuid
+  /// The area unit it was entered in (M2, DM2, FT2).
+  uom             Uom
+  /// The area the cut used (pieces and waste), above 0, in `uom` and in the hide's item's base unit.
+  areaUsed        Decimal   @db.Decimal(18, 4)
+  baseAreaUsed    Decimal   @db.Decimal(18, 4)
+  /// The usable offcut set aside as a remnant (MES-058), from 0, in `uom` and in the base unit.
+  remnantArea     Decimal   @default(0) @db.Decimal(18, 4)
+  baseRemnantArea Decimal   @default(0) @db.Decimal(18, 4)
+  /// The entry this one reverses (the same work order, hide and areas; no pieces).
+  reversalOfId    String?   @db.Uuid
+  note            String?
+  /// The signed-in worker who cut it; null when the site records the station only.
+  workerId        String?   @db.Uuid
+  stationId       String?   @db.Uuid
+  /// The floor device it came from (null: written in the office).
+  deviceId        String?   @db.Uuid
+  /// The device's id for the event (A1 §3.8), unique per device: a resent event is applied once.
+  clientEventId   String
+  /// The device's clock, kept for the record; serverTime orders rows.
+  deviceTime      DateTime? @db.Timestamptz(3)
+  serverTime      DateTime  @default(now()) @db.Timestamptz(3)
+  createdById     String?   @db.Uuid
+
+  workOrder  WorkOrder     @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  hide       Hide          @relation(fields: [tenantId, siteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  reversalOf CutLog?       @relation("CutLogReversal", fields: [tenantId, siteId, reversalOfId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversals  CutLog[]      @relation("CutLogReversal")
+  worker     Worker?       @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  station    Station?      @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device     Device?       @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  pieces     CutLogPiece[]
+
+  @@unique([tenantId, deviceId, clientEventId])
+  // The target of the reversals' reference: on the entry's own site.
+  @@unique([tenantId, siteId, id])
+  // The target of the pieces' reference: an entry of the same site and work order.
+  @@unique([tenantId, siteId, workOrderId, id])
+  @@index([tenantId, hideId])
+}
+
+/// The pieces one cut log entry cut for one cell of its work order and one garment part ("front", "sleeve"), above 0.
+/// Written with its entry; never changed or removed (a reversed entry's pieces count no more).
+/// @append-only
+model CutLogPiece {
+  id              String   @id @db.Uuid
+  tenantId        String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId          String   @db.Uuid
+  workOrderId     String   @db.Uuid
+  cutLogId        String   @db.Uuid
+  workOrderSizeId String   @db.Uuid
+  /// The garment part, as the pattern names it.
+  part            String
+  pieces          Int
+  serverTime      DateTime @default(now()) @db.Timestamptz(3)
+  createdById     String?  @db.Uuid
+
+  cutLog        CutLog        @relation(fields: [tenantId, siteId, workOrderId, cutLogId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrderSize WorkOrderSize @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, cutLogId, workOrderSizeId, part])
+}
+
+/// A bundle (MES-065, MES-068; A1 §2.4 E): cut pieces of one cell (colourway and size) of a work order travelling
+/// together through the operations, as garments (`quantity`), for the whole garment or one part or operation group;
+/// one garment for a made-to-measure unit. Its ticket carries its scannable id (`code`); reprinting a lost ticket gives a
+/// new code and voids the old one (MES-073: scanning it says "replaced"). A bundle made by mistake is VOID, never
+/// deleted.
+model Bundle {
+  id              String       @id @db.Uuid
+  tenantId        String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId          String       @db.Uuid
+  workOrderId     String       @db.Uuid
+  workOrderSizeId String       @db.Uuid
+  /// The scannable id on its current ticket (factory-domain numbering/scan-id, type BUNDLE), unique in the tenant.
+  code            String
+  /// The codes of its earlier, voided tickets, oldest first.
+  replacedCodes   String[]     @default([])
+  /// Garments (sets of cut pieces), above 0; 1 for a made-to-measure unit.
+  quantity        Int
+  /// The garment part or operation group it carries ("SLEEVES"); null: whole garments.
+  part            String?
+  /// The cut log entries its pieces came from (genealogy: hide, lot), entries of its work order.
+  cutLogIds       String[]     @default([]) @db.Uuid
+  status          BundleStatus @default(ACTIVE)
+  voidedAt        DateTime?    @db.Timestamptz(3)
+  voidReason      String?
+  /// The floor device it was made on (null: made in the office).
+  deviceId        String?      @db.Uuid
+  version         Int          @default(1)
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?      @db.Uuid
+
+  workOrder     WorkOrder       @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrderSize WorkOrderSize   @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  device        Device?         @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  scans         OperationScan[]
+
+  @@unique([tenantId, code])
+  // The target of the scans' reference: a bundle of the scan's site and work order.
+  @@unique([tenantId, siteId, workOrderId, id])
+}
+
+/// ACTIVE → VOID (final).
+enum BundleStatus {
+  ACTIVE
+  /// Made by mistake: no scan takes it any more.
+  VOID
+}
+
+/// One operation scan (MES-069, MES-090, MES-095, MES-096; A1 §2.5 "Operation scan", §3.8): a bundle reported done at an
+/// operation with its good, scrap and rework counts (REPORT), the undo of a report (UNDO), or a lead-approved correction
+/// of an older one (CORRECTION, its right counts); an undo or a correction voids the scan it names, which stays. A
+/// bundle has at most one standing report per operation (a report or correction no later row voids). Taken only while
+/// the work order is RELEASED or IN_PROGRESS, by a worker who acknowledged the notice (Statuto art. 4), or by the station
+/// when the site records stations. Never changed or removed (the …_production_guards triggers, for every login). No
+/// productivity, efficiency or piece-rate figure (Q16).
+/// @append-only
+model OperationScan {
+  id                   String    @id @db.Uuid
+  tenantId             String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String    @db.Uuid
+  workOrderId          String    @db.Uuid
+  workOrderOperationId String    @db.Uuid
+  bundleId             String    @db.Uuid
+  kind                 ScanKind
+  /// UNDO, CORRECTION: the scan it voids (a REPORT or CORRECTION of the same bundle, operation and worker).
+  correctsId           String?   @db.Uuid
+  /// Garments: REPORT and CORRECTION from 1 up to the bundle's quantity together; UNDO all 0.
+  goodQuantity         Int       @default(0)
+  scrapQuantity        Int       @default(0)
+  reworkQuantity       Int       @default(0)
+  /// The scrap reason's code, when something was scrapped.
+  scrapReason          String?
+  /// UNDO, CORRECTION: why (a CORRECTION always says why).
+  reason               String?
+  /// CORRECTION: the team leader or office user who approved it (MES-096).
+  approvedById         String?   @db.Uuid
+  /// The signed-in worker; null when the site records the station only.
+  workerId             String?   @db.Uuid
+  /// The device's station; required when the site records the station only.
+  stationId            String?   @db.Uuid
+  /// The floor device it came from (null: a correction written in the office).
+  deviceId             String?   @db.Uuid
+  /// The device's id for the scan (A1 §3.8 clientEventId), unique per device: a resent scan is applied once.
+  clientScanId         String
+  /// The device's clock, kept for the record (more than 24 h of skew is flagged by the API); serverTime orders rows.
+  deviceTime           DateTime? @db.Timestamptz(3)
+  serverTime           DateTime  @default(now()) @db.Timestamptz(3)
+  createdById          String?   @db.Uuid
+
+  workOrder   WorkOrder          @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  operation   WorkOrderOperation @relation(fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  bundle      Bundle             @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  corrects    OperationScan?     @relation("OperationScanCorrection", fields: [tenantId, siteId, correctsId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  correctedBy OperationScan[]    @relation("OperationScanCorrection")
+  worker      Worker?            @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  station     Station?           @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device      Device?            @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, deviceId, clientScanId])
+  // The target of the undos' and corrections' reference: on the scan's own site.
+  @@unique([tenantId, siteId, id])
+  // One standing report per bundle and operation, and WIP per operation (MES-167).
+  @@index([tenantId, bundleId, workOrderOperationId])
+  @@index([tenantId, workOrderId])
+}
+
+enum ScanKind {
+  /// The bundle is done at the operation: good, scrap and rework counts.
+  REPORT
+  /// The last scan undone at once (MES-095): no counts.
+  UNDO
+  /// An older scan corrected, approved by a lead (MES-096): the right counts.
+  CORRECTION
+}
+
+/// A worker's acknowledgement of the floor information notice (PLT-208, SCR-025; Statuto dei Lavoratori art. 4 c.3,
+/// GDPR art. 13): which version, in which language, as shown (its SHA-256), when, on which device, or on a signed paper
+/// copy the office recorded (its scan is a file of this row). No floor record names a worker before one exists. Never
+/// changed or removed (the …_production_guards triggers, for every login); a new notice version is acknowledged anew.
+/// @append-only
+model WorkerNoticeAck {
+  id             String           @id @db.Uuid
+  tenantId       String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId         String           @db.Uuid
+  workerId       String           @db.Uuid
+  /// The notice's version as published ("2026-10"); the privacy pack (B-W1-36) keeps the notices.
+  noticeVersion  String
+  /// The language it was shown in (ISO 639-1).
+  locale         String
+  /// SHA-256 (hex) of the notice text as shown.
+  noticeSha256   String
+  channel        NoticeAckChannel
+  /// DEVICE: the floor device the worker acknowledged on.
+  deviceId       String?          @db.Uuid
+  /// The device's clock (DEVICE); serverTime is when it was recorded.
+  deviceTime     DateTime?        @db.Timestamptz(3)
+  serverTime     DateTime         @default(now()) @db.Timestamptz(3)
+  createdById    String?          @db.Uuid
+
+  worker Worker  @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  device Device? @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, workerId, noticeVersion])
+}
+
+/// How a worker acknowledged the notice.
+enum NoticeAckChannel {
+  /// On a floor device, signed in.
+  DEVICE
+  /// On paper, signed; the office recorded it.
+  PAPER
+}

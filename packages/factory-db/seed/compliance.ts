@@ -7,7 +7,7 @@ import { seed as seedProduct } from './product'
  * The compliance seed, per tenant of seed/_core.ts: the PPE paperwork of the product seed's jacket, as with a brand
  * label (PLAN §2.8, the Q9 default): the brand P1 is the legal maker and the certificate holder.
  *
- *   certificates  an EN 17092-3 class A certificate covering the jacket in every colourway and size, made-to-measure
+ *   certificates  an EN 17092-3 class AA certificate covering the jacket in every colourway and size, made-to-measure
  *                 units included (VALID); the shoulder protector's EN 1621-1 level 2 certificate, held by its supplier P2
  *                 (VALID)
  *   label         the jacket's garment label template, revision 1 (ACTIVE), which revision 1 of the style carries
@@ -45,7 +45,7 @@ export async function seed(context: SeedContext): Promise<ComplianceSeed> {
       id: certificate.jacket,
       holderPartyId: brandId,
       standard: 'EN 17092-3:2020',
-      ppeClass: 'A',
+      ppeClass: 'AA',
       number: 'SEED-CERT-0001',
       notifiedBodyName: 'Seed Notified Body',
       notifiedBodyNumber: '0000',
