@@ -30,9 +30,9 @@ export async function seed({ db, namespace }: SeedContext): Promise<AuthSeed> {
   const notAToken = (key: string): string => `seed-not-a-token:${id(key)}`
 
   const users = [
-    { id: ownerId, email: `owner.${namespace}@example.com`, displayName: 'Seed Owner', status: UserStatus.ACTIVE, isOwner: true, requireMfa: true },
-    { id: memberId, email: `member.${namespace}@example.com`, displayName: 'Seed Member', status: UserStatus.ACTIVE, isOwner: false, requireMfa: false },
-    { id: invitedId, email: `invited.${namespace}@example.com`, displayName: 'Seed Invited', status: UserStatus.INVITED, isOwner: false, requireMfa: false },
+    { id: ownerId, email: `owner.${namespace}@example.com`, displayName: 'Seed Owner', status: UserStatus.ACTIVE, requireMfa: true },
+    { id: memberId, email: `member.${namespace}@example.com`, displayName: 'Seed Member', status: UserStatus.ACTIVE, requireMfa: false },
+    { id: invitedId, email: `invited.${namespace}@example.com`, displayName: 'Seed Invited', status: UserStatus.INVITED, requireMfa: false },
   ]
 
   await db.withScope({ audience: 'office', tenantId, actorId: ownerId }, (client) =>

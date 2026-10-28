@@ -51,7 +51,7 @@ export async function me(request: FastifyRequest) {
   }))
   const until = stepUpUntil(session)
   return {
-    user: { id: context.actorId, email: session.user.email, displayName: session.user.displayName, locale: session.user.locale, isOwner: session.user.isOwner },
+    user: { id: context.actorId, email: session.user.email, displayName: session.user.displayName, locale: session.user.locale },
     tenant,
     company: company ? { id: company.id, code: company.code, name: company.tradeName ?? company.legalName } : null,
     session: {

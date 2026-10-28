@@ -1,0 +1,21 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/roles.prisma (rules: src/ownership.ts; roles: src/roles.ts). Only office sessions and the worker touch them, as factory_runtime inside their own tenant: the office authenticator reads the person's live assignments and their roles on every request to build the session's grants, and the roles routes (apps/factory-api platform/auth/roles) write them through command(). The floor and partner roles get no access here: the floor step decides how a floor session's grants are read, the links step gives link sessions fixed grants. No role deletes: an assignment is ended (endedAt), a role is kept for the history. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Role": {
+      "about": "The tenant's system roles (synced from the factory-domain templates) and custom roles: read by the authenticator and the role screens, written by the roles routes.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "RoleAssignment": {
+      "about": "Who holds which role, over which companies, sites and parties, from when to when: read by the authenticator on every request, written by the roles routes and invitations, ended (never deleted).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

@@ -188,6 +188,24 @@ GRANT SELECT, INSERT, UPDATE ON TABLE "public"."PasswordReset" TO "factory_runti
 CREATE POLICY "factory_runtime_select" ON "public"."PasswordReset" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."PasswordReset" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_update" ON "public"."PasswordReset" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."Role"
+ALTER TABLE "public"."Role" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."Role" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'Role' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'Role'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."Role" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."Role" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."Role" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."Role" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."Role" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."RoleAssignment"
+ALTER TABLE "public"."RoleAssignment" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."RoleAssignment" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'RoleAssignment' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'RoleAssignment'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."RoleAssignment" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."RoleAssignment" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."RoleAssignment" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."RoleAssignment" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."RoleAssignment" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."SecretValue"
 ALTER TABLE "public"."SecretValue" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."SecretValue" FORCE ROW LEVEL SECURITY;

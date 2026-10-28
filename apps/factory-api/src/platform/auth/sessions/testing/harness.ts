@@ -9,6 +9,7 @@ import { buildApp } from '../../../../core/app'
 import type { Clock } from '../../../../core/time'
 import { LOCAL_COOKIE_SECRET } from '../../../../env'
 import { codesFor } from '../../office/second-factor'
+import { applySystemRoleChanges, systemRoleChanges } from '../../roles/system-roles'
 import { CSRF_COOKIE, CSRF_HEADER } from '../cookies'
 import { memoryAuthMailer, type MemoryAuthMailer } from '../mail'
 import { createOfficeAuth, type AuthRateLimits, type OfficeAuth } from '../office-auth'
@@ -95,15 +96,30 @@ export interface TestTenant {
   readonly companies: readonly { readonly id: string; readonly code: string }[]
 }
 
-/** A made-up tenant with its companies, written as tenant set-up would (platform scope, then the tenant's). */
+/**
+ * A made-up tenant with its companies and its system roles (one per factory-domain template), written as tenant set-up
+ * would (platform scope, then the tenant's).
+ */
 export async function addTenant(h: Harness, slug: string, companyCount = 1): Promise<TestTenant> {
   const id = newId()
   await h.database.withScope({ audience: 'platform' }, (client) => client.tenant.create({ data: { id, slug, name: `Test group ${slug}` } }))
   const companies = Array.from({ length: companyCount }, (_, index) => ({ id: newId(), code: `C${index + 1}` }))
-  await h.database.withScope({ audience: 'office', tenantId: id, actorId: newId() }, async (client) => {
+  const actorId = newId()
+  await h.database.withScope({ audience: 'office', tenantId: id, actorId }, async (client) => {
     for (const company of companies) await client.company.create({ data: { id: company.id, code: company.code, legalName: `Test company ${company.code}` } })
+    await applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId })
   })
   return { id, slug, companies }
+}
+
+/** Gives a user a system role (by template key) over every company, written straight into the tenant. */
+export async function addRole(h: Harness, tenant: TestTenant, userId: string, roleKey: string): Promise<string> {
+  const assignmentId = newId()
+  await h.database.withScope({ audience: 'office', tenantId: tenant.id, actorId: userId }, async (client) => {
+    const role = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: tenant.id, key: roleKey } }, select: { id: true } })
+    await client.roleAssignment.create({ data: { id: assignmentId, userId, roleId: role.id, allCompanies: true, validFrom: new Date(START) } })
+  })
+  return assignmentId
 }
 
 export interface TestUser {
@@ -114,11 +130,11 @@ export interface TestUser {
 
 export const PASSWORD = 'quiet-harbour-lantern-58'
 
-/** A user written straight into the tenant (an ACTIVE one has a password). */
+/** A user written straight into the tenant (an ACTIVE one has a password), with a system role when `role` names one. */
 export async function addUser(
   h: Harness,
   tenant: TestTenant,
-  options: { email: string; isOwner?: boolean; requireMfa?: boolean; status?: 'INVITED' | 'ACTIVE' | 'SUSPENDED'; password?: string },
+  options: { email: string; role?: string; requireMfa?: boolean; status?: 'INVITED' | 'ACTIVE' | 'SUSPENDED'; password?: string },
 ): Promise<TestUser> {
   const id = newId()
   const password = options.password ?? PASSWORD
@@ -131,12 +147,12 @@ export async function addUser(
         email: options.email,
         displayName: options.email.split('@')[0]!.replace(/\./g, ' '),
         status,
-        isOwner: options.isOwner ?? false,
         requireMfa: options.requireMfa ?? false,
         passwordHash,
       },
     }),
   )
+  if (options.role) await addRole(h, tenant, id, options.role)
   return { id, email: options.email, password }
 }
 
