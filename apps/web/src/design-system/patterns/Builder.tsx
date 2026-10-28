@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
-import { Button } from '@/design-system/primitives'
+import { Button } from '../primitives'
 import { useHydrated } from '../components/useHydrated'
 import { builderSectionId, scrolledToEnd, spyActiveSection } from './builderSpy'
 

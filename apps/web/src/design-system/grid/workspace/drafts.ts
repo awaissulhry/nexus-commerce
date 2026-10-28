@@ -11,7 +11,7 @@
  *
  * The shape is the one `collectEdits` (the shared diff) reads: `{ [rowId]: { [fieldKey]: value } }`.
  */
-import type { EditDrafts } from '@/design-system/patterns/workspace-grid/editDrafts'
+import type { EditDrafts } from '../../patterns/workspace-grid/editDrafts'
 
 type Listener = () => void
 

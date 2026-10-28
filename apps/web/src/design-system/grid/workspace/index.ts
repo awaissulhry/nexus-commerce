@@ -5,8 +5,8 @@
  * so a consumer needs one import path.
  */
 export { WorkspaceGrid } from './WorkspaceGrid'
-export { AdsFilterBar, stripServerKeys, isServerKey } from '@/design-system/patterns/workspace-grid/AdsFilterBar'
-export { enabledRank } from '@/design-system/patterns/workspace-grid/enabledRank'
+export { AdsFilterBar, stripServerKeys, isServerKey } from '../../patterns/workspace-grid/AdsFilterBar'
+export { enabledRank } from '../../patterns/workspace-grid/enabledRank'
 export type {
   GridPrefs, GridColumn, GridHierarchy, GridRangeFilter, GridSelectFilter, GridMultiSelectFilter, GridFilter,
   GridEditField, GridEditMode, RangeVal, FilterState, WorkspaceGridProps,

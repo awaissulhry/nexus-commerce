@@ -35,13 +35,13 @@ import type {
   RowDataUpdatedEvent, SortChangedEvent,
 } from 'ag-grid-community'
 
-import { ToolbarButton } from '@/design-system/primitives'
+import { ToolbarButton } from '../../primitives'
 // The pattern FILE, not the `../patterns` barrel — the barrel would be a cycle (see the note in the legacy grid).
-import { PreferencesModal } from '@/design-system/patterns/PreferencesModal'
+import { PreferencesModal } from '../../patterns/PreferencesModal'
 import { withVisibleColumnOrder } from '../preferencesLayout'
 
 import type { Column, DataGridProps } from '../../components/dataGridTypes'
-import { TooltipPortalProvider } from '@/design-system/primitives/Tooltip'
+import { TooltipPortalProvider } from '../../primitives/Tooltip'
 import { NexusGrid } from '../NexusGrid'
 import { rendererOwnsKeyboard } from '../rendererKeyboard'
 import {

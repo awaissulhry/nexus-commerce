@@ -20,7 +20,7 @@ import { useGridFloatingFilter, type CustomFloatingFilterProps } from 'ag-grid-r
 
 import type { GridNumberFilterModel, GridSetFilterModel, GridTextFilterModel } from '@nexus/shared/products-grid'
 
-import { Input } from '@/design-system/primitives'
+import { Input } from '../../primitives'
 
 /**
  * A draft that commits after a pause and follows the model when it changes from elsewhere — the

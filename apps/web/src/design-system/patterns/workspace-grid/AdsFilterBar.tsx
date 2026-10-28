@@ -24,10 +24,10 @@
  * counts — "Filters · GALE-JACKET · Enabled" tells you where you are; "3 filters" does not.
  */
 import { useState, type ReactNode } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button } from '../../primitives'
 import { ChevronDown } from 'lucide-react'
-import { Listbox, MultiSelect } from '@/design-system/components'
-import { InfoTip } from '@/design-system/primitives'
+import { Listbox, MultiSelect } from '../../components'
+import { InfoTip } from '../../primitives'
 import type { GridFilter, FilterState, RangeVal } from './WorkspaceGrid'
 
 /**

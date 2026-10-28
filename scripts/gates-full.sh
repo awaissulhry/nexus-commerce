@@ -176,11 +176,17 @@ node scripts/check-alias-form.mjs --check || {
   exit 1
 }
 
-# apps/factory carries a COPY of the design system, not an import. A file identical in
-# both apps must stay identical — a DS fix that lands in one app is not applied to the
-# platform, and nothing else in this hook can see that.
-node scripts/check-ds-fork-drift.mjs --check || {
-  echo "❌ DS fork-drift ratchet FAILED — see message above (rule + why: scripts/check-ds-fork-drift.mjs header)"
+# 2026-10-28 — apps/factory is frozen (reference only; a new factory app replaces it later), so the
+# web design system is no longer copied into it. No committed change under apps/factory/.
+node scripts/check-frozen-paths.mjs || {
+  echo "❌ frozen paths FAILED — see message above (rule + why: scripts/check-frozen-paths.mjs header)"
+  exit 1
+}
+
+# 2026-10-28 — the design system imports only its own files and npm packages: no `@/…` alias, no
+# relative path out of apps/web/src/design-system. So the folder can move as one unit.
+node scripts/check-ds-self-contained.mjs || {
+  echo "❌ DS self-contained FAILED — see message above (rule + why: scripts/check-ds-self-contained.mjs header)"
   exit 1
 }
 

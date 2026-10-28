@@ -2,7 +2,7 @@
 
 import { useId, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { Button } from '@/design-system/primitives'
+import { Button } from '../primitives'
 
 export interface FilterPanelProps {
   title?: ReactNode
