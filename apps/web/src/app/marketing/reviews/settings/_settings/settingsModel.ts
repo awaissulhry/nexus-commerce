@@ -18,7 +18,6 @@ export interface SourceRow {
   stateWords: string
   tone: SourceTone
   words: string
-  later: string | null
   lastAt: string | null
   lastWords: string | null
   /**
@@ -125,16 +124,6 @@ export function sourceActionHref(action: SourceRow['action']): string | null {
   // The review app opens its connect window on the page (SourcesSection), not a link.
   if (action.kind === 'app') return null
   return action.href
-}
-
-/**
- * The held "Connect" of a source Nexus reads only from a later update: its reason in
- * words. Null for a source read today — also one that needs a fix but has no fix link (its words already say what is
- * wrong), and one whose later part is only an extra (eBay's photos and AI topics).
- */
-export function sourceLaterHeld(row: Pick<SourceRow, 'name' | 'tone' | 'later' | 'action'>): string | null {
-  if (row.action || !row.later || row.tone !== 'neutral') return null
-  return `Coming later: Nexus reads ${row.name} in a later update.`
 }
 
 // ── Times ────────────────────────────────────────────────────────────────────────────────────────────────────────
