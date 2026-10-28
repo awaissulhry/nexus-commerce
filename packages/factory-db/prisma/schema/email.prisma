@@ -1,0 +1,203 @@
+// Email out (plan A1 §2.3 EmailOutbound, §3.3 `email-out`, §3.7; features PLT-139, PLT-149, PLT-230, COL-024, GAP-005):
+// mail leaves the factory through Amazon SES in Milan (eu-south-1), by API only, from a verified domain of the sending
+// company. apps/factory-api's platform/email-out writes these rows, always through command():
+//   - a mail on a record's thread is written in ONE command with the thread's OUTBOUND message (its text is the
+//     message's: this table holds no body), an EmailOutbound row QUEUED and the event email.queued; the worker's job
+//     sends it through the gateway (one IntegrationCall row per call) and moves its status;
+//   - a sign-in mail (an invitation, a password reset) carries a single-use link, so its body is made in memory, sent at
+//     once and NEVER stored: its row keeps who, when and how it went, not what it said;
+//   - SES's delivery, bounce and complaint notifications arrive through the inbound webhook ledger
+//     (platform/inbound) and move the row's status; a hard bounce or a complaint suppresses the address.
+//
+// Who sees what: the office only (factory_runtime: office sessions, and the worker in a tenant's system context). A
+// partner reads the mail it got as the thread's OUTBOUND message (threads.prisma), never these rows, never the
+// thread's reply address. Rows are never deleted; an EmailOutbound row's content never changes and its status only
+// moves forward (the …_email_guards trigger, for every login).
+
+/// One address a company sends from (PLT-230: a domain verified in SES, with DKIM): mail on records goes out from its
+/// CONVERSATION identity, sign-in and notification mail from its NOTIFICATION one (A1 §3.7: `mail.<domain>` keeps
+/// notification mail apart from conversation mail). Disabled, never deleted while a mail names it.
+model EmailIdentity {
+  id                 String                  @id @db.Uuid
+  tenantId           String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that sends: its name and legal block are in the footer, its privacy notice is linked there.
+  companyId          String                  @db.Uuid
+  kind               EmailIdentityKind
+  /// The verified sending domain, lower case (`acme.example.com`, `mail.acme.example.com`).
+  domain             String
+  /// The address the mail is sent from when it is not the person's own (`noreply@<domain>`), lower case, at `domain`.
+  fromAddress        String
+  /// The company's name as mail shows it ("Acme", in "Ada Esempio via Acme").
+  displayName        String
+  /// How the From line names the sender (COL-024).
+  displayNamePolicy  EmailDisplayNamePolicy  @default(PERSON_VIA_COMPANY)
+  /// The domain of the records' reply addresses (`r-<thread reply token>@<replyDomain>`), where SES receives mail.
+  replyDomain        String
+  /// The SES account (IntegrationAccount, provider SES) that sends; the gateway calls through it.
+  accountId          String                  @db.Uuid
+  /// SES's identity ARN, once SES made the identity.
+  sesIdentityArn     String?
+  /// SES's verification of the domain, and of its DKIM records (both must be SUCCESS before mail goes out).
+  verificationStatus EmailVerificationStatus @default(NOT_STARTED)
+  dkimStatus         EmailVerificationStatus @default(NOT_STARTED)
+  /// The DKIM tokens SES gave: three CNAME records `<token>._domainkey.<domain>` → `<token>.dkim.amazonses.com`.
+  dkimTokens         String[]                @default([])
+  /// When SES's status was last read.
+  lastCheckedAt      DateTime?               @db.Timestamptz(3)
+  /// The company's identity of its kind when nothing names one (at most one per company and kind: the API keeps it).
+  isDefault          Boolean                 @default(false)
+  status             EmailIdentityStatus     @default(ACTIVE)
+  version            Int                     @default(1)
+  createdAt          DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?                 @db.Uuid
+
+  company  Company            @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  account  IntegrationAccount @relation(fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  outbound EmailOutbound[]
+
+  @@unique([tenantId, companyId, fromAddress])
+  // The targets of the mails' tenant-safe references (a mail's company is its identity's).
+  @@unique([tenantId, id])
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, companyId, kind])
+}
+
+/// What an identity is for.
+enum EmailIdentityKind {
+  /// Mail on records (quotes, orders, POs …), sent as the person: replies come back to the record's thread.
+  CONVERSATION
+  /// Sign-in and notification mail, sent as the company from a sending subdomain.
+  NOTIFICATION
+}
+
+/// How the From line names the sender (COL-024).
+enum EmailDisplayNamePolicy {
+  /// "Acme" <noreply@acme.example.com>.
+  COMPANY
+  /// "Ada Esempio via Acme" <noreply@acme.example.com>: the person's name, the company's verified address.
+  PERSON_VIA_COMPANY
+  /// "Ada Esempio" <ada.esempio@acme.example.com>: the person's own address when it is at the verified domain; otherwise as
+  /// PERSON_VIA_COMPANY.
+  PERSON_ADDRESS
+}
+
+/// SES's verification status (SESv2 VerificationStatus).
+enum EmailVerificationStatus {
+  NOT_STARTED
+  PENDING
+  SUCCESS
+  FAILED
+  TEMPORARY_FAILURE
+}
+
+enum EmailIdentityStatus {
+  ACTIVE
+  DISABLED
+}
+
+/// One mail the factory sent or will send (PLT-139, PLT-149): to whom, from which identity, with which headers, and
+/// where it is. No body: a record mail's text is its thread message (`messageId`); a sign-in mail's is never kept.
+model EmailOutbound {
+  /// UUIDv7 from newId(); also the left part of the mail's Message-ID.
+  id             String              @id @db.Uuid
+  tenantId       String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The sending company: the identity's (the reference includes it).
+  companyId      String              @db.Uuid
+  identityId     String              @db.Uuid
+  /// A record mail: the record's thread and the OUTBOUND message that holds its text (both, or neither).
+  threadId       String?             @db.Uuid
+  messageId      String?             @db.Uuid
+  /// The record the mail is about (a thread's record; `User` for a sign-in mail).
+  recordType     String?
+  recordId       String?             @db.Uuid
+  /// The template that made it: `thread.message`, `auth.invitation`, `auth.password_reset`.
+  templateKey    String
+  /// The language of its fixed text (`it`, `en`).
+  locale         String
+  /// The From line as sent.
+  fromAddress    String
+  fromName       String
+  /// The recipients, lower case. bcc is never shown to the other recipients (it is not in the headers).
+  to             String[]
+  cc             String[]            @default([])
+  bcc            String[]            @default([])
+  subject        String
+  /// Our Message-ID with its angle brackets (`<id@domain>`), unique in the tenant; the thread message carries the same.
+  emailMessageId String
+  /// The thread's mail this one answers, and the thread's mail ids before it (In-Reply-To, References), as sent.
+  inReplyTo      String?
+  referenceIds   String[]            @default([])
+  /// SES's id of the accepted mail; its notifications name it.
+  sesMessageId   String?
+  status         EmailOutboundStatus @default(QUEUED)
+  /// Sending attempts so far (each claim of the row counts one).
+  attempts       Int                 @default(0)
+  /// While SENDING: when the claim lapses and another job may take the row again.
+  claimedUntil   DateTime?           @db.Timestamptz(3)
+  /// The last failure (no address, no secret), or what the last bounce or complaint said.
+  lastError      String?
+  queuedAt       DateTime            @db.Timestamptz(3)
+  sentAt         DateTime?           @db.Timestamptz(3)
+  deliveredAt    DateTime?           @db.Timestamptz(3)
+  bouncedAt      DateTime?           @db.Timestamptz(3)
+  complainedAt   DateTime?           @db.Timestamptz(3)
+  failedAt       DateTime?           @db.Timestamptz(3)
+  version        Int                 @default(1)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?             @db.Uuid
+
+  identity EmailIdentity @relation(fields: [tenantId, companyId, identityId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  thread   Thread?       @relation(fields: [tenantId, threadId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, emailMessageId])
+  @@unique([tenantId, sesMessageId])
+  // A thread's mails, newest first; the worker's backlog.
+  @@index([tenantId, threadId, queuedAt])
+  @@index([tenantId, status, queuedAt])
+}
+
+/// Where a mail is (A1 §2.3). QUEUED → SENDING → SENT → DELIVERED; SENT or DELIVERED → BOUNCED → COMPLAINED (a later
+/// notification may only make it worse); SENDING → QUEUED (a failed try, retried); QUEUED or SENDING → FAILED (refused:
+/// suppressed, no verified identity, out of tries).
+enum EmailOutboundStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  BOUNCED
+  COMPLAINED
+  FAILED
+}
+
+/// An address no mail goes to (PLT-149): it bounced for good, its owner complained, or a person stopped it. Tenant-wide.
+model Suppression {
+  id          String            @id @db.Uuid
+  tenantId    String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Lower case.
+  address     String
+  reason      SuppressionReason
+  /// When it was suppressed (the notification's time).
+  at          DateTime          @db.Timestamptz(3)
+  /// What SES said (`Permanent/General`, `abuse`), or why a person stopped it.
+  detail      String?
+  /// The mail whose notification suppressed it, when it was ours.
+  outboundId  String?           @db.Uuid
+  version     Int               @default(1)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?           @db.Uuid
+
+  @@unique([tenantId, address])
+}
+
+enum SuppressionReason {
+  /// A permanent bounce.
+  BOUNCE
+  /// The recipient marked a mail as spam.
+  COMPLAINT
+  /// Stopped by a person.
+  MANUAL
+}

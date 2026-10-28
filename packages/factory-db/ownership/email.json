@@ -1,0 +1,29 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/email.prisma (rules: src/ownership.ts; roles: src/roles.ts). Only the office role: office sessions (email.send, email.manage, through apps/factory-api's platform/email-out) and the worker and the inbound job in a tenant's system context (sending, SES notifications). Floor and partner roles have no grant: a party reads the mail it got as its thread's OUTBOUND message (threads.json), never the delivery state, the recipients' list or the reply address. No role deletes: an identity is disabled, a mail keeps its row (the …_email_guards trigger refuses DELETE and TRUNCATE, keeps a mail's content fixed and moves its status only forward), a suppression is updated, never removed here. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "EmailIdentity": {
+      "about": "Office admins (email.manage, step-up) add a company's sending identities, refresh their SES status and choose the default; the sender and the worker read them. Disabled, never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "EmailOutbound": {
+      "about": "A send command adds the row (QUEUED) with its thread message; the worker claims it, sends it through the gateway and records SENT or the failure; the SES notifications move it to DELIVERED, BOUNCED or COMPLAINED. The office lists a thread's mails and their states.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "Suppression": {
+      "about": "The SES notification job adds an address after a permanent bounce or a complaint (and updates it when it happens again); every send reads the list first and refuses a suppressed recipient.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

@@ -98,6 +98,11 @@ model Company {
   threads             Thread[]
   // imports.prisma: the company's imports.
   importJobs          ImportJob[]
+  // parties.prisma: the parties of this company only (tenant-wide ones have none), and the VIES checks it requested.
+  parties             Party[]
+  viesChecks          ViesCheck[]
+  // email.prisma: the company's sending identities (its mail goes out through them).
+  emailIdentities     EmailIdentity[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.

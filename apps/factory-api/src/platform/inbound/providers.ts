@@ -1,10 +1,12 @@
 import type { IntegrationProvider } from '@nexus/factory-db'
 import type { Clock } from '@nexus/factory-domain/ports/clock'
 import type { SignatureVerifier } from '@nexus/factory-domain/ports/signature'
+import { snsVerifier } from '../../adapters/ses/sns'
 import type { CommandTools } from '../../core/command'
 import { serverClock } from '../../core/time'
 import { loadFactoryEnv, type FactoryEnv } from '../../env'
 import type { SecretsService } from '../secrets/envelope'
+import { sesNotificationProcessor } from '../email-out/notifications'
 import { processSecrets } from '../secrets/service'
 
 /**
@@ -50,8 +52,13 @@ export interface InboundProvider {
 
 export type InboundProviders = Readonly<Partial<Record<IntegrationProvider, InboundProvider>>>
 
-/** The providers' entries. The W1 adapters (SES via SNS, the SDI intermediary, Sendcloud) add theirs here. */
-export const INBOUND_PROVIDERS: InboundProviders = Object.freeze({})
+/**
+ * The providers' entries. SES: delivery, bounce and complaint notifications via SNS (email out,
+ * platform/email-out/notifications.ts). The W1 adapters (the SDI intermediary, Sendcloud) add theirs here.
+ */
+export const INBOUND_PROVIDERS: InboundProviders = Object.freeze({
+  SES: { verifier: snsVerifier, processor: sesNotificationProcessor },
+})
 
 /** What the inbound route and its job need. */
 export interface InboundRuntime {
