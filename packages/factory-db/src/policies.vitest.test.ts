@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { policyInputs } from './ownership'
-import { checkPolicyParity, platformPolicySql, POLICY_MIGRATION_HEADER, policyMigrationSql, readMigrations, runtimeLoginSql, type Migration } from './policies'
+import {
+  checkPolicyParity,
+  isPolicyMigration,
+  platformPolicySql,
+  POLICY_MIGRATION_HEADER,
+  policyMigrationSql,
+  readMigrations,
+  runtimeLoginSql,
+  type Migration,
+} from './policies'
 import { RUNTIME_LOGIN, RUNTIME_ROLES } from './roles'
 import { generatedPolicySql, loadOwnership, loadSchema, MIGRATIONS_DIR } from './tools'
 
@@ -45,7 +54,9 @@ describe('the policy migration', () => {
 
 describe('policy parity', () => {
   it('holds for the checked-in migrations', () => {
-    expect(migrations.map((migration) => migration.folder)).toEqual(['202610281200__core_tenancy', '202610281201__core_policies'])
+    // The core's two first; each later module adds its own (their timestamps change when the lead merges them).
+    expect(migrations.slice(0, 2).map((migration) => migration.folder)).toEqual(['202610281200__core_tenancy', '202610281201__core_policies'])
+    expect(isPolicyMigration(migrations.at(-1) as Migration)).toBe(true)
     expect(checkPolicyParity(migrations, expected)).toEqual([])
   })
 
@@ -54,7 +65,7 @@ describe('policy parity', () => {
     ['a hand edit in the policy migration', [...migrations.slice(0, -1), { ...newest, sql: newest.sql.replace('USING (true)', 'USING (1 = 1)') }], /differs from the generator at line \d+/],
     ['a dropped policy line', [...migrations.slice(0, -1), { ...newest, sql: newest.sql.replace(/^CREATE POLICY "factory_runtime_update" ON "public"."Line".*\n/m, '') }], /differs from the generator/],
     ['a schema migration after the newest policy migration', [...migrations, { folder: '202610281300__core_more', sql: 'ALTER TABLE "Line" ADD COLUMN "note" TEXT;' }], /comes after the newest policy migration/],
-    ['no policy migration at all', migrations.slice(0, -1), /no policy migration/],
+    ['no policy migration at all', migrations.filter((migration) => !isPolicyMigration(migration)), /no policy migration/],
   ])('fails on %s', (_label, planted, problem) => {
     expect(checkPolicyParity(planted, expected)).toEqual(expect.arrayContaining([expect.stringMatching(problem)]))
   })

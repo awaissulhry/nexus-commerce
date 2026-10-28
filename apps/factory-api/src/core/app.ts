@@ -23,7 +23,7 @@ import { serverClock, type Clock } from './time'
  * `platform/*` and `modules/*` (core/autoload.ts).
  * It rejects, so the process does not start, when a route has no manifest entry or an entry has no route.
  *
- * Writes go through `command()` (the next step); a route reaches the database only through `request.withClient`,
+ * Writes go through `command()` (core/command.ts); a route reaches the database only through `request.withClient`,
  * which needs a session context (core/context.ts).
  */
 

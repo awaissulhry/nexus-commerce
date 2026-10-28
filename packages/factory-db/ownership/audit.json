@@ -1,0 +1,25 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/audit.prisma (rules: src/ownership.ts; roles: src/roles.ts). Both models are append-only ledgers (`@append-only` in the schema, scripts/factory/check-append-only.mjs): no role may update or delete, and the triggers of the …_audit_append_only migration refuse UPDATE, DELETE and TRUNCATE for every login. Rows are written by apps/factory-api's command() in the transaction of the change. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "AuditLog": {
+      "about": "Office sessions (and the worker, in the office role) write audit rows and read the tenant's audit (the audit route checks audit.read and the company/site scope). Floor and portal/link sessions only add their own rows: a floor row carries the device's site, a partner row the session's party (WITH CHECK); they read none.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["insert"], "scopedBy": ["site"] },
+        "factory_partner_runtime": { "privileges": ["insert"], "scopedBy": ["party"] }
+      }
+    },
+    "IdempotencyReceipt": {
+      "about": "Every audience that writes keeps receipts and reads them back to answer a repeated key: office for the tenant, a floor device for its site, a partner for its party.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert"], "scopedBy": ["party"] }
+      }
+    }
+  }
+}

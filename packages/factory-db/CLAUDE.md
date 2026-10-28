@@ -37,8 +37,10 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    throwaway database, against the schema), then `npm run policies -w @nexus/factory-db -- <YYYYMMDDHHmm>_<module>_policies`
    (a later timestamp). Folder names: `<timestamp>_<module>_<name>`, so `_core` gives `…__core_…`.
 3. Run the schema checks above and the PostgreSQL tests; the isolation tests cover a new table by themselves.
-4. Merging (the lead, under the schema token, plan §2.1): merge `origin/main`, delete the branch's two migration
-   folders, re-run step 2 with new timestamps, re-run the checks, merge, release the token.
+4. Merging (the lead, under the schema token, plan §2.1): merge `origin/main`, delete the branch's GENERATED migration
+   folders, re-run step 2 with new timestamps, re-run the checks, merge, release the token. A hand-written folder (for
+   example `…_audit_append_only`, the triggers) is not regenerated: `git mv` it to a timestamp between the new schema
+   and policy folders, unchanged. The policy folder is always the last migration.
 
 ## Rules
 - Run the Prisma CLI only from this folder. `prisma.config.ts` reads only `packages/factory-db/.env`
