@@ -41,7 +41,7 @@ describe('the permission registry', () => {
     expect(FACTORY_PERMISSIONS.get('roles.assign')?.risk).toBe('stepUp')
     expect(FACTORY_PERMISSIONS.assignable.some((definition) => definition.area === 'money')).toBe(false)
     expect(FACTORY_PERMISSIONS.undeclared(['users.view', 'quotes.send', 'quotes.send'])).toEqual(['quotes.send'])
-    expect([...FACTORY_PERMISSIONS.byArea().keys()]).toEqual(['users', 'roles', 'audit', 'numbering', 'files', 'documents', 'print', 'money'])
+    expect([...FACTORY_PERMISSIONS.byArea().keys()]).toEqual(['users', 'roles', 'audit', 'numbering', 'files', 'links', 'devices', 'workers', 'floor', 'threads', 'imports', 'documents', 'print', 'money'])
   })
 
   it('refuses a name declared twice, a bad area, a bad risk, an empty description', () => {
@@ -58,8 +58,12 @@ describe('role templates', () => {
     expect(templateProblems(ROLE_TEMPLATES)).toEqual([])
     expect(ROLE_TEMPLATES.map((entry) => entry.key)).toEqual([
       'owner', 'admin', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor', 'read_only',
+      'operator', 'cutting_operator', 'floor_inspector', 'team_leader',
     ])
-    expect(templateOf('owner')?.permissions).toEqual(FACTORY_PERMISSIONS.assignable.map((definition) => definition.name).sort())
+    // The owner holds every office permission; the floor's are held only by floor roles.
+    expect(templateOf('owner')?.permissions).toEqual(
+      FACTORY_PERMISSIONS.assignable.filter((definition) => definition.area !== 'floor').map((definition) => definition.name).sort(),
+    )
     expect(templateOf('owner')?.grains).toEqual([...GRAINS])
     expect(templateOf('read_only')?.permissions.every((name) => FACTORY_PERMISSIONS.get(name)?.risk === 'read')).toBe(true)
     expect(templateOf('admin')?.requireMfa).toBe(true)
@@ -87,6 +91,14 @@ describe('custom roles', () => {
     ])
     expect(customKeyProblems('night_lead')).toEqual([])
     expect(customKeyProblems('Night lead')).toHaveLength(1)
+  })
+
+  it('refuses the permissions only a one-off link session holds (they come from the link\'s purpose)', () => {
+    expect(roleProblems({ name: 'Link sender', requireMfa: false, permissions: ['links.view', 'links.manage'], grains: [] })).toEqual([])
+    expect(roleProblems({ name: 'Customer', requireMfa: false, permissions: ['links.open', 'links.view', 'links.accept'], grains: ['price'] })).toEqual([
+      { path: 'permissions/0', message: 'links.open is held only by a one-off link session, from its purpose; a role cannot give it.' },
+      { path: 'permissions/2', message: 'links.accept is held only by a one-off link session, from its purpose; a role cannot give it.' },
+    ])
   })
 
   it('a template update never widens a copy: it only shows what the template has that the copy lacks', () => {

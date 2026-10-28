@@ -1,10 +1,11 @@
+import { Readable } from 'node:stream'
 import { S3Client, type S3ClientConfig } from '@aws-sdk/client-s3'
 
 /**
  * A fake R2 for tests (imported by tests only): the real S3 client, with a request handler that answers from memory
  * instead of opening a socket. Every request the SDK would send is recorded, so a test can prove which calls reached
- * "R2" and that nothing else did. HEAD answers with the stored size, type and SHA-256 checksum; PUT keeps what a
- * PutObject sent; DELETE removes.
+ * "R2" and that nothing else did. HEAD answers with the stored size, type and SHA-256 checksum; GET with the stored
+ * body (an object put with one); PUT keeps what a PutObject sent; DELETE removes.
  */
 
 export interface FakeObject {
@@ -12,6 +13,8 @@ export interface FakeObject {
   readonly contentType: string
   /** Lower-case hex. */
   readonly sha256: string
+  /** The bytes GET answers with (an object without them answers an empty body). */
+  readonly body?: Buffer
 }
 
 export interface RecordedRequest {
@@ -57,6 +60,17 @@ export class FakeR2 {
             etag: '"fake"',
           },
           body: undefined,
+        },
+      }
+    }
+    if (request.method === 'GET') {
+      if (!object) return { response: { statusCode: 404, headers: { 'content-type': 'application/xml' }, body: Readable.from([Buffer.from('<Error><Code>NoSuchKey</Code></Error>')]) } }
+      const body = object.body ?? Buffer.alloc(0)
+      return {
+        response: {
+          statusCode: 200,
+          headers: { 'content-length': String(body.length), 'content-type': object.contentType, etag: '"fake"' },
+          body: Readable.from([body]),
         },
       }
     }

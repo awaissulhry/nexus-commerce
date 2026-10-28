@@ -16,7 +16,33 @@ import type { SchemaModel } from './schema-models'
  * Per model: `keyColumns` (key → column the policies compare with the scope: tenant, site, party) and `access` (role →
  * privileges, the extra keys its rows must match, and the columns it may not read or write). The floor role is scoped
  * by site wherever the table has a site key, the partner role always by party.
+ *
+ * The partner wall (plan A1 §2.2, §2.6; features PLT-007, PLT-035): portal and one-off link sessions
+ * (factory_partner_runtime) never read or write a cost, margin or wages column, nor an internal note. Such a column is
+ * marked in the schema (`/// @grain cost|margin|wages` above it, which check-money-grains requires of every
+ * money-looking column; `/// @internal` for an office-only note), and every partner access to its table must list it in
+ * hiddenColumns, so the column grants leave it out. A price column (`@grain price`) stays readable: the party scope
+ * keeps the partner to its own documents, and the API drops prices for a link whose purpose shows none.
  */
+
+/** The doc tags that put a column behind the partner wall, with why. */
+export const PARTNER_WALL_TAGS: Readonly<Record<string, string>> = {
+  '@grain cost': 'a cost (@grain cost)',
+  '@grain margin': 'a margin (@grain margin)',
+  '@grain wages': 'wages (@grain wages)',
+  '@internal': 'an internal note (@internal)',
+}
+
+const hasTag = (tags: readonly string[], tag: string): boolean => tags.some((entry) => entry === tag || (tag === '@internal' && entry.startsWith('@internal ')))
+
+/** The columns of a model the partner role may never read or write, each with why. */
+export function partnerWalledColumns(model: SchemaModel): { readonly column: string; readonly why: string }[] {
+  return model.fields.flatMap((field) => {
+    if (field.relation) return []
+    const tag = Object.keys(PARTNER_WALL_TAGS).find((candidate) => hasTag(field.tags ?? [], candidate))
+    return tag ? [{ column: field.column, why: PARTNER_WALL_TAGS[tag] as string }] : []
+  })
+}
 
 export type ModelKind = 'tenant' | 'platform'
 
@@ -221,6 +247,11 @@ function checkModel(at: string, model: SchemaModel, entry: unknown): string[] {
       problems.push(`${where}: the floor role must be scopedBy site on a table with a site key`)
     }
     if (role === PARTNER_ROLE && !scopedBy.includes('party')) problems.push(`${where}: the partner role must be scopedBy party`)
+    if (role === PARTNER_ROLE) {
+      for (const { column, why } of partnerWalledColumns(model)) {
+        if (!hidden.includes(column)) problems.push(`${where}: column ${column} is ${why}, behind the partner wall; add it to hiddenColumns`)
+      }
+    }
     for (const key of WALL) {
       if (role !== PLATFORM_ROLE && keyColumns[key] === undefined) problems.push(`${where}: no column for the ${key} wall (keyColumns.${key})`)
     }

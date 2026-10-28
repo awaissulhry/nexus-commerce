@@ -64,4 +64,14 @@ export interface FileStoreAdapter {
   put(call: GatewayCall, target: PutTarget): Promise<void>
   /** Removes the object; no object under the key is not an error. */
   remove(call: GatewayCall, key: string): Promise<void>
+  /**
+   * The object's bytes, for server-side work on an uploaded file (an import reads its sheet); null when there is no
+   * object under the key. An object larger than `maxBytes` is refused (TooLargeObjectError) without reading it all.
+   */
+  read(call: GatewayCall, key: string, maxBytes: number): Promise<Buffer | null>
+}
+
+/** The stored object is larger than the reader allows. */
+export class TooLargeObjectError extends Error {
+  override name = 'TooLargeObjectError'
 }

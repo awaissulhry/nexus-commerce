@@ -50,9 +50,10 @@ const ROLE_SELECT = {
   permissions: true,
   grains: true,
   version: true,
+  audience: true,
 } as const
 
-type RoleRow = { id: string; key: string; name: string; description: string | null; system: boolean; basedOn: string | null; requireMfa: boolean; permissions: string[]; grains: string[]; version: number }
+type RoleRow = { id: string; key: string; name: string; description: string | null; system: boolean; basedOn: string | null; requireMfa: boolean; permissions: string[]; grains: string[]; version: number; audience: 'OFFICE' | 'FLOOR' }
 
 const mutable = (adds: { readonly permissionsAdded: readonly string[]; readonly grainsAdded: readonly Grain[] }) => ({
   permissionsAdded: [...adds.permissionsAdded],
@@ -68,7 +69,7 @@ function roleViewOf(row: RoleRow, holders: number) {
     description: row.description,
     system: row.system,
     basedOn: row.basedOn,
-    audience: 'office' as const,
+    audience: row.audience === 'FLOOR' ? ('floor' as const) : ('office' as const),
     requireMfa: row.requireMfa,
     permissions: row.permissions,
     grains,
@@ -127,6 +128,7 @@ export async function createRole(auth: OfficeAuth, request: FastifyRequest, body
   if (keyIssues.length > 0) throw new ValidationError('The key is not valid.', keyIssues)
   const source = body.basedOn === undefined ? undefined : templateOf(body.basedOn)
   if (body.basedOn !== undefined && !source) throw new ValidationError('No template has this key.', [{ path: 'basedOn', message: 'Expected a template key.' }])
+  if (source && source.audience !== 'office') throw new ValidationError('Custom roles are office roles; a floor template cannot be copied.', [{ path: 'basedOn', message: 'Expected an office template.' }])
   const content = checkedContent({
     name: body.name,
     requireMfa: body.requireMfa ?? source?.requireMfa ?? false,

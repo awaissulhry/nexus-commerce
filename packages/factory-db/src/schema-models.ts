@@ -25,6 +25,11 @@ export interface SchemaField {
   readonly nativeType: string
   /** The raw argument of `@default(…)`, e.g. `now()`, `dbgenerated("…")`; undefined without a default. */
   readonly defaultValue: string | undefined
+  /**
+   * The tags of its doc comment (`/// @grain cost`, `/// @internal`), each as `@name` plus its first word: `@grain
+   * cost`, `@internal`. The partner wall (ownership.ts) and the money guard read them.
+   */
+  readonly tags: readonly string[]
 }
 
 export interface SchemaModel {
@@ -151,6 +156,38 @@ function blocks(file: string, text: string): RawBlock[] {
   return out
 }
 
+/**
+ * The doc-comment tags of each field of each multi-line model, as `Model.field` → tags. Read from the text itself (the
+ * parser below strips comments): the `///` lines right above a field line; a blank line ends them.
+ */
+function fieldTags(text: string): Map<string, string[]> {
+  const out = new Map<string, string[]>()
+  let model: string | null = null
+  let tags: string[] = []
+  for (const raw of text.split('\n')) {
+    const line = raw.trim()
+    const head = /^model\s+([A-Za-z_]\w*)\s*\{(.*)$/.exec(line)
+    if (head) {
+      model = (head[2] as string).includes('}') ? null : (head[1] as string)
+      tags = []
+    } else if (model === null) {
+      continue
+    } else if (line.startsWith('}')) {
+      model = null
+    } else if (line.startsWith('///')) {
+      const tag = /^\/\/\/\s*(@[A-Za-z][\w-]*(?:[ \t]+[A-Za-z][\w-]*)?)/.exec(line)
+      if (tag) tags.push((tag[1] as string).replace(/[ \t]+/, ' '))
+    } else if (line === '') {
+      tags = []
+    } else if (!line.startsWith('//')) {
+      const field = /^([A-Za-z_]\w*)\s/.exec(line)
+      if (field && tags.length > 0) out.set(`${model}.${field[1]}`, tags)
+      tags = []
+    }
+  }
+  return out
+}
+
 /** Reads every `.prisma` file of the folder. */
 export function readSchemaFolder(dir: string): SchemaModel[] {
   const files = readdirSync(dir)
@@ -163,6 +200,7 @@ export function readSchemaFolder(dir: string): SchemaModel[] {
 /** Parses schema files given as text (the tests use this). */
 export function parseSchema(files: readonly { file: string; text: string }[]): SchemaModel[] {
   const all = files.flatMap(({ file, text }) => blocks(basename(file), text))
+  const tags = new Map(files.flatMap(({ text }) => [...fieldTags(text)]))
   for (const block of all) {
     if (block.kind === 'type' || block.kind === 'view') {
       throw new SchemaReadError(`${block.file}: ${block.kind} ${block.name} is not supported by the factory schema reader.`)
@@ -175,11 +213,11 @@ export function parseSchema(files: readonly { file: string; text: string }[]): S
     .map((block) => {
       if (seen.has(block.name)) throw new SchemaReadError(`Model ${block.name} is defined twice.`)
       seen.add(block.name)
-      return model(block, modelNames)
+      return model(block, modelNames, tags)
     })
 }
 
-function model(block: RawBlock, modelNames: ReadonlySet<string>): SchemaModel {
+function model(block: RawBlock, modelNames: ReadonlySet<string>, tags: ReadonlyMap<string, readonly string[]>): SchemaModel {
   const where = `${block.file}: model ${block.name}`
   const fields: SchemaField[] = []
   const blockAttributes: Attribute[] = []
@@ -209,6 +247,7 @@ function model(block: RawBlock, modelNames: ReadonlySet<string>): SchemaModel {
       relation,
       nativeType: native ? native.name.slice('@db.'.length) : '',
       defaultValue: fallback?.args,
+      tags: tags.get(`${block.name}.${name}`) ?? [],
     })
     for (const attr of attrs) {
       if (attr.name === '@id' || attr.name === '@unique') blockAttributes.push({ name: attr.name === '@id' ? '@@id' : '@@unique', args: `[${name}]` })

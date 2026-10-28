@@ -27,6 +27,11 @@ export interface PermissionDefinition {
   readonly risk: PermissionRisk
   /** Set for a money grain (`money.cost`…): it comes from Role.grains, never from Role.permissions. */
   readonly grain?: Grain
+  /**
+   * Set for a permission only a one-off link session holds (`links.open`, `links.accept`…): its grants come from the
+   * link's purpose (factory-domain links/purposes), never from a role, so it is not assignable.
+   */
+  readonly link?: true
 }
 
 export interface PermissionDeclaration {
@@ -55,7 +60,7 @@ export function definePermissions(area: string, declarations: Readonly<Record<st
 export interface PermissionRegistry {
   /** Every declared permission, in declaration order. */
   readonly all: readonly PermissionDefinition[]
-  /** The permissions a role may list (every one but the grains). */
+  /** The permissions a role may list (every one but the grains and the link-session permissions). */
   readonly assignable: readonly PermissionDefinition[]
   get(name: string): PermissionDefinition | undefined
   isDeclared(name: string): boolean
@@ -74,7 +79,7 @@ export function permissionRegistry(lists: readonly (readonly PermissionDefinitio
     byName.set(definition.name, Object.freeze({ ...definition }))
   }
   const all = Object.freeze([...byName.values()])
-  const assignable = Object.freeze(all.filter((definition) => definition.grain === undefined))
+  const assignable = Object.freeze(all.filter((definition) => definition.grain === undefined && definition.link === undefined))
   return {
     all,
     assignable,

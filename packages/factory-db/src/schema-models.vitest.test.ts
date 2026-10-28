@@ -17,11 +17,11 @@ describe('the schema reader', () => {
   it('reads relations, native types, defaults and unique keys', () => {
     const station = loadSchema().find((model) => model.name === 'Station')!
     expect(station.file).toBe('_core.prisma')
-    expect(station.fields.filter((field) => field.relation).map((field) => field.name)).toEqual(['site', 'line', 'workCentre'])
+    expect(station.fields.filter((field) => field.relation).map((field) => field.name)).toEqual(['site', 'line', 'workCentre', 'devices'])
     expect(station.fields.find((field) => field.name === 'lineId')).toMatchObject({ type: 'String', nativeType: 'Uuid', optional: true })
     expect(station.fields.find((field) => field.name === 'workCentreId')).toMatchObject({ type: 'String', nativeType: 'Uuid', optional: false })
     expect(station.fields.find((field) => field.name === 'tenantId')?.defaultValue).toMatch(/^dbgenerated\(".*factory\.tenant_id.*"\)$/)
-    expect(station.uniques).toEqual([['id'], ['tenantId', 'siteId', 'code']])
+    expect(station.uniques).toEqual([['id'], ['tenantId', 'siteId', 'code'], ['tenantId', 'siteId', 'id']])
   })
 
   it('honours @map and @@map, and ignores comments but not strings that look like them', () => {
@@ -45,6 +45,37 @@ describe('the schema reader', () => {
     expect(model?.uniques).toEqual([['thing_id'], ['url', 'kind']])
     expect(model?.fields.find((field) => field.name === 'url')?.defaultValue).toBe('"https://example.test/{a}"')
     expect(model?.fields.find((field) => field.name === 'tags')?.list).toBe(true)
+  })
+
+  it('reads the tags of each field\'s doc comment, not the model\'s, and not across a blank line', () => {
+    const [model] = parseSchema([
+      {
+        file: 'x.prisma',
+        text: [
+          '/// @append-only',
+          'model Thing {',
+          '  id    String @id',
+          '  /// The price the customer pays.',
+          '  /// @grain   price',
+          '  price Int',
+          '  /// @internal for the office',
+          '  // a plain comment',
+          '  note  String?',
+          '  /// @grain cost',
+          '',
+          '  other Int',
+          '}',
+        ].join('\n'),
+      },
+    ])
+    expect(Object.fromEntries(model!.fields.map((field) => [field.name, field.tags]))).toEqual({
+      id: [],
+      price: ['@grain price'],
+      note: ['@internal for'],
+      other: [],
+    })
+    const link = loadSchema().find((entry) => entry.name === 'OneOffLink')!
+    expect(link.fields.find((field) => field.name === 'note')?.tags).toEqual(['@internal'])
   })
 
   it.each([

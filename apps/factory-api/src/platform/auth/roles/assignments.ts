@@ -92,8 +92,9 @@ export async function createAssignment(
   const path = options.path ?? ''
   const scope = { allCompanies: input.allCompanies, companyIds: input.companyIds, siteIds: input.siteIds, partyIds: input.partyIds }
   const problems = at(path, scopeProblems(scope))
-  const role = await tx.role.findUnique({ where: { id: input.roleId }, select: { key: true, system: true } })
+  const role = await tx.role.findUnique({ where: { id: input.roleId }, select: { key: true, system: true, audience: true } })
   if (!role) problems.push({ path: `${path}roleId`, message: 'No role of the tenant has this id.' })
+  else if (role.audience !== 'OFFICE') problems.push({ path: `${path}roleId`, message: 'A floor role is given to floor workers (Floor → Workers), not to people.' })
   else if (role.system && !templateOf(role.key)) problems.push({ path: `${path}roleId`, message: 'This system role was retired; it gives nothing.' })
   if (!scope.allCompanies && scope.companyIds.length > 0) {
     const found = await tx.company.count({ where: { id: { in: [...scope.companyIds] }, status: 'ACTIVE' } })
