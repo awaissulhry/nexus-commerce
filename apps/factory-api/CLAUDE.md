@@ -6,8 +6,9 @@ Today the API core: context, contracts, route manifest, security baseline, `GET 
 and the idempotency receipt; the outbox (events → BullMQ → handlers and live screens); and the worker and scheduler
 (`src/background.ts worker|scheduler`); office and floor sign-in, roles and money grains (`src/platform/auth/`),
 one-off links (`src/platform/links/`), the integration platform (gateway, sealed secrets, inbound ledger), files on
-R2 (`src/platform/files/`), record threads with the record timeline (`src/platform/threads/`) and imports with a dry
-run (`src/platform/imports/`), below. Portal sign-in, the modules and the other adapters come in later steps.
+R2 (`src/platform/files/`), record threads with the record timeline (`src/platform/threads/`), imports with a dry
+run (`src/platform/imports/`), and documents and printing (`src/platform/{documents,print}/`), below. Portal sign-in,
+the modules and the other adapters come in later steps.
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>
@@ -270,6 +271,30 @@ run (`src/platform/imports/`), below. Portal sign-in, the modules and the other 
   `POST /imports/:id/cancel`. Handlers are in background.ts HANDLERS (`importHandlers()`).
 - Permissions: imports.view (read), imports.run, imports.apply (write); admin's template has all three (owner and
   read-only follow the registry). A module that adds an importer gives imports.* to the templates that use it.
+
+## Documents and printing (`src/platform/{documents,print}/`, `src/adapters/print-relay/`, plan A1 §3.9; GAP-007, GAP-008)
+- Documents: the issuing module builds its frozen document (`@nexus/factory-domain/documents`: QUOTE, PURCHASE_ORDER,
+  DDT, INVOICE_COPY; it, en) and calls `storeDocumentPdf(processFiles(), caller, { companyId, recordType, recordId,
+  document })` after its own permission check: the company's c.c. art. 2250 data comes from its Company row, never a
+  request; `composeDocument` refuses an incomplete document (legal data, DPR 472/1996 for a DDT, totals that do not add
+  up); `pdf.ts` paints it with pdfkit's standard fonts (same input, same bytes); `files.storeGeneratedFile` puts it in
+  the store (gateway op files.put) and records it AVAILABLE in one command `documents.render` — FISCAL_ARCHIVE (ten
+  years) for DDTs and invoice copies, DOCUMENT otherwise. The invoice PDF is a courtesy copy and says so (the legal
+  invoice is the FatturaPA XML). `GET /documents/sample` (documents.view) previews each layout with a company's data.
+- Labels: `@nexus/factory-domain/labels` composes HIDE, LOT, BUNDLE and CARTON labels (the scannable id must be the
+  tenant's, of the label's kind) and makes ZPL (`^BC` Code 128 + the id as text); `documents/label-pdf.ts` draws the same
+  label as a PDF with Code 128 bars (`POST /print/labels/pdf`, the browser's fallback, stored nowhere).
+- Printing: `Printer` (site, kind LABEL_ZPL | A4_PDF, relay, relay target, label stock, ACTIVE | PAUSED | ARCHIVED) and
+  `PrintJob` (print.prisma). `POST /print/jobs/label|document` → `print.queue` (QUEUED + event print.job_queued) → the
+  worker's `printDispatchHandler()` (in background.ts HANDLERS) hands it to the printer's relay → SENT
+  (`print.markSent`); a refused try is counted (`print.recordAttempt`) and retried with backoff; FAILED after 5 tries or
+  a final refusal (`print.fail`); a relay's report → PRINTED or FAILED (`applyRelayReport`); `POST
+  /print/jobs/:jobId/retry` queues a FAILED job again. A floor device prints and lists only at its own site (row-level
+  security; an idempotency key is required).
+- Relays: `adapters/print-relay/port.ts` (submit is idempotent by job id). Only FAKE exists (`fake.ts`: records, sends
+  nothing; local and test only): which relay a site gets is the Owner's question (A1 §9 q. 5). Without a relay the
+  browser prints the PDF. Tests: `usePrintRelays(printRelays({ FAKE: fakePrintRelay({ environment: 'test' }) }))`.
+- Permissions: documents.view; print.view, print.labels, print.documents, print.manage (printers).
 
 ## Rules
 - Configuration only through `src/env.ts`. It reads ONLY `apps/factory-api/.env`, by explicit path, and ONLY

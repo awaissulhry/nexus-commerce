@@ -1,0 +1,127 @@
+// Printing (plan A1 §3.9, §2.3 PrintJob; GAP-007; PLT-126): the printers of each site and the jobs sent to them. The
+// server makes what a printer needs — ZPL for a label printer (factory-domain/labels), a PDF for an A4 printer
+// (platform/documents, stored as a StoredFile) — and a job reaches the printer through the site's print relay; with no
+// relay the browser prints the PDF (a download). apps/factory-api's platform/print runs the flow: queue (QUEUED, event
+// print.job_queued) → the worker hands the job to the relay (SENT) → the relay reports it printed (PRINTED), or the job
+// fails after its tries (FAILED) and may be queued again.
+//
+// Which relay serves a site is the Owner's choice (A1 §9 question 5: Zebra-type label printers, or plain printers
+// only). Until then the only relay is FAKE: it records jobs and sends nothing (local and test runs). A job's content
+// (printer, payload, copies, record) never changes after it is queued; jobs and printers are never deleted (the
+// …_print_guards trigger).
+
+/// A printer of a site (GAP-007). A LABEL_ZPL printer takes ZPL on its label stock; an A4_PDF printer takes PDFs.
+model Printer {
+  id            String        @id @db.Uuid
+  tenantId      String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String        @db.Uuid
+  siteId        String        @db.Uuid
+  /// Short code, unique on the site (`LBL-RECV`, `A4-OFFICE`).
+  code          String
+  name          String
+  kind          PrinterKind
+  /// How a job reaches the printer: the relay of the site. FAKE records and sends nothing (refused in production).
+  relay         PrintRelay
+  /// Where the relay sends a job: the printer as the relay knows it (`10.0.0.21:9100`, a queue name). Never a secret.
+  relayTarget   String
+  /// A label printer's print head, dots per inch (203, 300, 600); null for an A4 printer.
+  dpi           Int?
+  /// The label stock a label printer holds, in millimetres; null for an A4 printer.
+  labelWidthMm  Int?
+  labelHeightMm Int?
+  /// ACTIVE takes jobs; PAUSED takes none for now (out of labels, maintenance); ARCHIVED is no longer used.
+  status        PrinterStatus @default(ACTIVE)
+  version       Int           @default(1)
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?       @db.Uuid
+
+  site Site       @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  jobs PrintJob[]
+
+  @@unique([tenantId, siteId, code])
+  // The target of a job's reference: a job is on its printer's company and site.
+  @@unique([tenantId, companyId, siteId, id])
+}
+
+enum PrinterKind {
+  /// A thermal label printer that takes ZPL (Zebra and compatibles).
+  LABEL_ZPL
+  /// An office printer that takes PDF documents.
+  A4_PDF
+}
+
+/// The relay a printer is reached through. Additive: the Owner's choice of relay (own agent at the plant, or a cloud
+/// print service) adds its value.
+enum PrintRelay {
+  /// The factory's fake relay: records each job and sends nothing (local and test only).
+  FAKE
+}
+
+enum PrinterStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+/// One print request (A1 §2.3 PrintJob): a label (ZPL) or a document (a PDF StoredFile) for one printer, for one record.
+model PrintJob {
+  id            String           @id @db.Uuid
+  tenantId      String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String           @db.Uuid
+  siteId        String           @db.Uuid
+  printerId     String           @db.Uuid
+  /// What it prints for: the record's model name and id (`Hide`, `Bundle`, `Ddt`).
+  recordType    String
+  recordId      String           @db.Uuid
+  payloadKind   PrintPayloadKind
+  /// The label's kind (HIDE, LOT, BUNDLE, CARTON) and its scannable id, for a ZPL job.
+  labelKind     String?
+  scanId        String?
+  /// The ZPL sent to a label printer, exactly as made by factory-domain/labels (ZPL jobs only).
+  zpl           String?
+  /// The PDF printed: a StoredFile of the job's company (PDF jobs only).
+  fileId        String?          @db.Uuid
+  copies        Int              @default(1)
+  status        PrintJobStatus   @default(QUEUED)
+  /// Hand-overs to the relay tried since the job was (last) queued.
+  attempts      Int              @default(0)
+  /// The relay's last refusal, in words for a person (never a secret or an address).
+  lastError     String?
+  /// The relay's own id of the job, once it has it.
+  relayJobId    String?
+  sentAt        DateTime?        @db.Timestamptz(3)
+  printedAt     DateTime?        @db.Timestamptz(3)
+  failedAt      DateTime?        @db.Timestamptz(3)
+  /// Who asked: an office user, or the operator on a floor device (with the device).
+  requestedById String?          @db.Uuid
+  deviceId      String?          @db.Uuid
+  version       Int              @default(1)
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?          @db.Uuid
+
+  printer Printer     @relation(fields: [tenantId, companyId, siteId, printerId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  file    StoredFile? @relation(fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A printer's queue, newest first.
+  @@index([tenantId, printerId, status])
+  // A record's print history.
+  @@index([tenantId, recordType, recordId])
+  @@index([tenantId, siteId, createdAt])
+}
+
+enum PrintPayloadKind {
+  ZPL
+  PDF
+}
+
+/// QUEUED → SENT (the relay has it) → PRINTED (the relay says the printer finished); QUEUED or SENT → FAILED (after
+/// its tries, or the relay's report); FAILED → QUEUED (sent again).
+enum PrintJobStatus {
+  QUEUED
+  SENT
+  PRINTED
+  FAILED
+}

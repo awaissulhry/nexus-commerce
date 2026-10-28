@@ -37,6 +37,8 @@ describe('model ownership', () => {
       'OneOffLink',
       'OutboxEvent',
       'PasswordReset',
+      'PrintJob',
+      'Printer',
       'Role',
       'RoleAssignment',
       'SecretValue',
