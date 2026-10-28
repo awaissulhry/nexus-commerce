@@ -77,10 +77,11 @@ model Company {
   updatedAt            DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
   createdById          String?      @db.Uuid
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  sites    Site[]
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sites        Site[]
+  numberSeries NumberSeries[]
   // auth.prisma: the sessions that start in this company.
-  sessions Session[]
+  sessions     Session[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.

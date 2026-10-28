@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { UnauthenticatedError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { assertJson, COMMAND_SETTINGS, idempotencyKeyFrom, refuseEvents, requestHash, runCommand, type CommandCaller, type CommandSpec, type VersionedModel } from './command'
+import { assertJson, COMMAND_SETTINGS, idempotencyKeyFrom, requestHash, runCommand, type CommandCaller, type CommandSpec, type VersionedModel } from './command'
 import type { RequestContext } from './context'
 import { ApiError } from './errors'
 
@@ -101,8 +101,8 @@ describe('types', () => {
     expectTypeOf<'IdempotencyReceipt'>().not.toExtend<VersionedModel>()
   })
 
-  it('refuses every event until the outbox exists', async () => {
-    await expect(refuseEvents({} as never, [])).resolves.toBeUndefined()
-    await expect(refuseEvents({} as never, [{} as never])).rejects.toThrow(/outbox/)
+  it('writes events with the outbox writer, which refuses an undeclared type', async () => {
+    await expect(COMMAND_SETTINGS.writeEvents({} as never, [])).resolves.toBeUndefined()
+    await expect(COMMAND_SETTINGS.writeEvents({} as never, [{ type: 'site.renamed', version: 1 } as never])).rejects.toThrow(/not declared in the event catalogue/)
   })
 })

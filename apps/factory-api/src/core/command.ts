@@ -5,6 +5,7 @@ import { ConflictError, ForbiddenError, NotFoundError, UnauthenticatedError, Val
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { isPermission, type Permission } from '@nexus/factory-domain/core/permissions'
 import { assertTransition, type Machine } from '@nexus/factory-domain/state/machine'
+import { outboxWriter } from '../platform/outbox/writer'
 import { SYSTEM_ACTOR_ID, withContextClient, type RequestContext } from './context'
 import { ApiError } from './errors'
 import { serverClock, type Clock } from './time'
@@ -24,7 +25,8 @@ import { serverClock, type Clock } from './time'
  *   3. the work, with the transaction client;
  *   4. the audit rows the work recorded (at least one: every write is audited), with the server time, the caller,
  *      the request id and the key;
- *   5. the events the work emitted (the seam the outbox step fills: `EventWriter`);
+ *   5. the events the work emitted, checked against the event catalogue and written as OutboxEvent rows
+ *      (`EventWriter`, platform/outbox/writer.ts; an undeclared type or a refused payload rolls everything back);
  *   6. the receipt, when there is a key.
  * Commit. Any failure rolls everything back: no change without its audit row, no audit row or receipt without its
  * change. Nothing that matters happens after the commit.
@@ -116,9 +118,9 @@ export interface AuditEntry {
   readonly siteId?: string | null
 }
 
-/** An event the work emits; the outbox step writes it in the same transaction (A1 §3.4). */
+/** An event the work emits; the outbox writer stores it in the same transaction (A1 §3.4). */
 export interface CommandEvent {
-  /** Declared in the event catalogue (the outbox step refuses an undeclared type). */
+  /** Declared in the event catalogue (`@nexus/factory-domain/events/catalogue`); an undeclared type rolls back. */
   readonly type: string
   /** The payload's schema version. Default 1. */
   readonly version?: number
@@ -138,6 +140,8 @@ export interface PendingEvent {
   readonly tenantId: string
   readonly companyId: string | null
   readonly siteId: string | null
+  /** The party of a partner or link write (the outbox row's scope; not part of the published envelope). */
+  readonly partyId: string | null
   readonly subject: string
   /** The request (or job) id: ties the chain together. */
   readonly correlationId: string
@@ -151,16 +155,9 @@ export interface PendingEvent {
 
 /**
  * Writes the collected events inside the command's transaction, after the audit rows and before the receipt. The
- * outbox step (OutboxEvent rows, the event catalogue check) replaces the default, which refuses any event: an event
- * that nothing stores would be lost.
+ * default is the outbox writer (platform/outbox/writer.ts): OutboxEvent rows, each checked against the event catalogue.
  */
 export type EventWriter = (tx: CommandTx, events: readonly PendingEvent[]) => Promise<void>
-
-export const refuseEvents: EventWriter = async (_tx, events) => {
-  if (events.length > 0) {
-    throw new ApiError('internal_error', `A command emitted ${events.length} event(s), but the outbox that stores them does not exist yet.`)
-  }
-}
 
 /** The guarded record, as the work sees it after the version bump. */
 export interface GuardedRecord {
@@ -207,7 +204,7 @@ export const RECEIPT_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
 export const COMMAND_SETTINGS: CommandSettings = Object.freeze({
   clock: serverClock,
-  writeEvents: refuseEvents,
+  writeEvents: outboxWriter(),
   receiptTtlMs: RECEIPT_TTL_MS,
   maxWaitMs: 5_000,
   timeoutMs: 10_000,
@@ -546,6 +543,7 @@ export async function runCommand<Result, State extends string = string, Facts = 
               tenantId: writer.tenantId,
               companyId: event.companyId ?? writer.companyId,
               siteId: event.siteId ?? writer.siteId,
+              partyId: writer.partyId,
               subject: event.subject,
               correlationId: writer.requestId,
               causationId: spec.causationId ?? null,
