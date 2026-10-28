@@ -8,7 +8,7 @@
  * (`collectEdits`), the rank vocabulary (`enabledRank`) and the interactive-child rule
  * (`isInteractiveChild`) are the SHARED modules both engines already ran — imported, never copied.
  */
-import { enabledRank } from '@/design-system/patterns/workspace-grid/enabledRank'
+import { enabledRank } from '../../patterns/workspace-grid/enabledRank'
 
 // Consonant-y takes -ies ("8 Queries", not "8 Querys" — shipped, seen, fixed).
 export const pluralize = (noun: string, n: number) => (n === 1 ? noun : /[^aeiou]y$/i.test(noun) ? `${noun.slice(0, -1)}ies` : `${noun}s`)

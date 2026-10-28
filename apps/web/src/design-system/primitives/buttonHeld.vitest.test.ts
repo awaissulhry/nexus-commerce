@@ -2,14 +2,11 @@
  * `Button heldReason` (Keyword Harvest DS lane H5, 2026-10-10) — a held action keeps its focus and says why; it is never
  * `disabled` (a disabled button takes no focus, so its reason is never heard), and a click does nothing.
  */
-import { readFileSync } from 'node:fs'
 import { createElement, type ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { Button, type ButtonProps } from './Button'
 
-const web = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
-const factory = (path: string) => readFileSync(new URL(`../../../../factory/src/design-system/${path}`, import.meta.url), 'utf8')
 type El = ReactElement<Record<string, unknown>>
 /** The element Button returns (forwardRef's render), so its handlers can be called without a DOM. */
 const tree = (props: ButtonProps) => (Button as unknown as { render: (p: ButtonProps, ref: null) => El }).render(props, null)
@@ -53,9 +50,5 @@ describe('Button heldReason', () => {
       expect(el.props.onClick).toBe(onClick)
       expect(el.props['aria-disabled']).toBeUndefined()
     }
-  })
-
-  it('Factory carries the same Button source (mirror)', () => {
-    expect(factory('primitives/Button.tsx')).toBe(web('primitives/Button.tsx'))
   })
 })

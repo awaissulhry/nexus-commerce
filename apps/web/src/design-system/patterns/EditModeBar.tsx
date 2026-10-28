@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
-import { Button, Kbd } from '@/design-system/primitives'
+import { Button, Kbd } from '../primitives'
 import { isMacPlatform, saveKeyAction, saveShortcutWords, warnBeforeLeaving } from './editModeBarKeys'
 
 export interface EditModeBarProps {

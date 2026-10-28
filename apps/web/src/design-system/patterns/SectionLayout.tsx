@@ -32,7 +32,7 @@
  * this pattern exists to avoid. (Neither is server-side yet; when one moves, both should.)
  */
 import { useCallback, useMemo, type ReactNode } from 'react'
-import { Button } from '@/design-system/primitives/Button'
+import { Button } from '../primitives/Button'
 import { emitPrefsChanged } from './prefs-bus'
 
 export type SectionWidth = 'half' | 'two-thirds' | 'full'

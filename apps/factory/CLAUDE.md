@@ -1,5 +1,9 @@
 # apps/factory
 
+> **FROZEN (2026-10-28). Reference only.** No new features, no fixes, no design-system copies. A new factory app
+> replaces this one later. `node scripts/check-frozen-paths.mjs` fails a branch that adds, changes or deletes any file
+> under `apps/factory/` (this file is the one exception). Its header names the override for the planned deletion.
+
 Nexus Factory OS: orders → quoting → production → shipping for the leather and moto-apparel factory. It is fully
 isolated from the commerce platform.
 
@@ -10,10 +14,8 @@ isolated from the commerce platform.
   permission and uses `guarded()` (`npm run check:rbac -w @nexus/factory`).
 - **Never import** from `apps/web`, `apps/api` or `packages/*`. `npm run check:no-touch -w @nexus/factory` checks the
   two apps only.
-- **Design system:** `src/design-system/` is a copy of `apps/web/src/design-system`, so the factory looks the same.
-  It is never imported from web.
-  - A shared file that is identical in both apps must stay identical (`node scripts/check-ds-fork-drift.mjs --check`
-    from the repo root).
+- **Design system:** `src/design-system/` is an old copy of `apps/web/src/design-system`, frozen with the app.
+  It is never imported from web, and web design-system changes are no longer copied here.
   - `npm run check:ds-parity -w @nexus/factory` reports drift. `npm run tokens:gen:factory` regenerates its tokens.
 
 ## Commands (verified 2026-09-26 on main)

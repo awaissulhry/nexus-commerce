@@ -9,8 +9,8 @@
  * `rowInteraction`, `enabledRank`) and the preset library are unchanged and still live beside it.
  * The hand-rolled `<table>` implementation is gone (grid audit wave 4: the lab's parity harness retired with it).
  */
-export { WorkspaceGrid, AdsFilterBar, stripServerKeys, isServerKey, enabledRank } from '@/design-system/grid/workspace'
+export { WorkspaceGrid, AdsFilterBar, stripServerKeys, isServerKey, enabledRank } from '../../grid/workspace'
 export type {
   GridPrefs, GridColumn, GridHierarchy, GridRangeFilter, GridSelectFilter, GridMultiSelectFilter, GridFilter,
   GridEditField, GridEditMode, RangeVal, FilterState, WorkspaceGridProps,
-} from '@/design-system/grid/workspace'
+} from '../../grid/workspace'

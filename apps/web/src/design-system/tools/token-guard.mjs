@@ -38,9 +38,9 @@ import { fileURLToPath } from 'url'
  * the copy up as it stood would have produced a confident green about a tree it never opened.
  * A scanner aimed one app away is the vacuous pass that looks most like coverage.
  *
- * Deriving it also makes the two copies BYTE-IDENTICAL, which is what lets
- * `check-ds-fork-drift` hold them identical from here on (P14's second half widened its EXT to
- * `.mjs`). The only thing that had ever differed between them was this hardcoded path.
+ * Deriving it also made the two copies byte-identical: the only thing that had ever differed
+ * between them was this hardcoded path. (The fork-drift check that then held them identical was
+ * retired on 2026-10-28, when the factory app was frozen.)
  *
  * REPO is used for the `git ls-files` tracking check. It must NOT come from `process.cwd()`:
  * with an absolute ROOT the walk would succeed from any directory while the tracked-set lookup

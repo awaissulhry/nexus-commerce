@@ -30,8 +30,8 @@ describe('selectionBarFit', () => {
     expect(attrs.get('data-fit')).toBe('no-note')
     expect(attrs.has('data-measure')).toBe(false)
   })
-  it('the stylesheet hides by the measured form, never by a fixed card width (web and Factory)', () => {
-    for (const path of ['../theme/grid.css', '../../../../../factory/src/design-system/grid/theme/grid.css']) {
+  it('the stylesheet hides by the measured form, never by a fixed card width', () => {
+    for (const path of ['../theme/grid.css']) {
       const css = readFileSync(new URL(path, import.meta.url), 'utf8')
       expect(css).not.toMatch(/@container \(max-width: 1320px\) \{ \.nds-grid-selbar-lbl/)
       expect(css).toMatch(/\.nds-grid-selbar\[data-fit~="icons"\] \.nds-grid-selbar-lbl \{ display: none; \}/)
