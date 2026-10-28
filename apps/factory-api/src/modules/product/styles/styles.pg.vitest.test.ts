@@ -5,6 +5,9 @@ import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission, ScopeSet } from '@nexus/factory-domain/core/permissions'
+// The factory-db seeds are no package export: a test reads them where they live.
+import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
+import { seed as seedProduct } from '../../../../../../packages/factory-db/seed/product'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
@@ -472,5 +475,18 @@ describe('lists, archive, idempotency and the walls', () => {
     // The thread is shared with the brand: the style keeps its brand.
     const current = (await ok('maker', 'GET', `/product/styles/${jacket.id}`)).style
     expect((await refused('maker', 'PATCH', `/product/styles/${jacket.id}`, { version: current.version, brandPartyId: null }, 409)).message).toMatch(/^The style's thread is shared with its brand/)
+  })
+})
+
+describe('the seed style (packages/factory-db seed/product.ts)', () => {
+  it('passes the style rules: a PATCH of it is accepted (EN 17092-3 is class AA), and the seed stays idempotent', async () => {
+    const core = await seedCore({ db: database, namespace: 'styles-seed' })
+    const seeded = await seedProduct({ db: database, namespace: 'styles-seed' })
+    await seedProduct({ db: database, namespace: 'styles-seed' })
+    SESSIONS.seeded = { audience: 'office', tenantId: core.tenantId, actorId: core.actorId, grants: [{ permissions: [VIEW, MANAGE], companies: 'all', sites: 'all', parties: 'all' }] }
+    const style = (await ok('seeded', 'GET', `/product/styles/${seeded.styleId}`)).style
+    expect(style).toMatchObject({ code: 'SEED-JKT-01', ppeStandard: 'EN 17092-3:2020', ppeClass: 'AA', matrix: { generated: true, missing: 0 } })
+    const patched = (await ok('seeded', 'PATCH', `/product/styles/${seeded.styleId}`, { version: style.version, name: 'Seed leather jacket (edited)' })).style
+    expect(patched).toMatchObject({ name: 'Seed leather jacket (edited)', ppeClass: 'AA', version: style.version + 1 })
   })
 })

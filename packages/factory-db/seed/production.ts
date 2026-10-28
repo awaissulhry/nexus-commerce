@@ -184,7 +184,7 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
         baseSize: '52',
         ppeCategory: PpeCategory.CATEGORY_II,
         ppeStandard: 'EN 17092-3:2020',
-        ppeClass: 'A',
+        ppeClass: 'AA',
         status: StyleStatus.ACTIVE,
         ...stamp(T.setup),
       }
