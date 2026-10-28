@@ -8,7 +8,8 @@ import { areaNavForPerson, findAreaNavPlace, type AreaNav, type AreaNavArea, typ
  *    gone, a section or area left empty goes with it; a row without a permission is shown to everyone in the office);
  *  - `translateNav(nav, t)` — labels are message keys (`shell:nav.admin.users`), drawn in the person's language;
  *  - `officeCrumbs(nav, path)` — where a page sits: area › row (› row under a row).
- * The same manifest drives the rail, the pinned sub-sidebar, the crumbs, the phone bottom bar and the palette's pages.
+ * The same manifest drives the rail, the area's sub-sidebar (its pages button), the crumbs, the phone bottom bar and the
+ * palette's pages.
  */
 
 export interface OfficeAreaNav {

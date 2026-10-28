@@ -16,6 +16,8 @@ export default function factoryWebConfig(phase: string): NextConfig {
     poweredByHeader: false,
     // Repository instructions live in the CLAUDE.md files; the dev server must not write its own.
     agentRules: false,
+    // A check build beside a running dev server writes elsewhere (FACTORY_WEB_DIST_DIR=.next-check); unset: `.next`.
+    ...(process.env.FACTORY_WEB_DIST_DIR ? { distDir: process.env.FACTORY_WEB_DIST_DIR } : {}),
     // The design system is TypeScript source (packages/ui): this app compiles it, as the Commerce web does.
     transpilePackages: ['@nexus/ui'],
     // `/design` (the local design index) exists only under `next dev`: src/lib/design/route.ts.

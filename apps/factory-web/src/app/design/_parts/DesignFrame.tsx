@@ -3,7 +3,6 @@
 import { useEffect, useMemo, type MouseEvent } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Card, EmptyState } from '@nexus/ui/components'
-import { PageHeader } from '@nexus/ui/patterns'
 import { Button } from '@nexus/ui/primitives'
 import { messagesFor } from '../../../lib/i18n/messages'
 import { LOCALES } from '../../../lib/i18n/locales'
@@ -63,14 +62,15 @@ export function DesignFrame({ screenId, caseId, options }: { screenId: string; c
   )
 }
 
-/** A stand-in page inside the office shell: the shell's fixtures show the frame, not a page. */
+/** A stand-in page inside the office shell: the shell's fixtures show the frame, not a page (its title is the band's). */
 function SamplePage() {
   return (
-    <>
-      <PageHeader eyebrow="Design index" title="Page content" subtitle="Each area's page renders here (its own design batch)." actions={<Button variant="primary">Primary action</Button>} />
-      <Card padded>
-        <EmptyState title="The page goes here" description="This frame shows the Office shell around a page: rail, sub-sidebar, crumbs, top bar, banners and the phone bottom bar." />
-      </Card>
-    </>
+    <Card padded>
+      <EmptyState
+        title="The page goes here"
+        description="This frame shows the Office shell around a page: top bar, rail, the area's subheader band with its pages button, banners and the phone bottom bar. Each area's page is its own design batch."
+        action={<Button variant="primary">Primary action</Button>}
+      />
+    </Card>
   )
 }

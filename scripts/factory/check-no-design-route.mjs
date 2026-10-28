@@ -10,10 +10,11 @@
  *   2. the `.design.tsx` extension is used only under src/app/design/ (dev-only routes live in one place);
  *   3. next.config.ts gives the design extension only to the development server, and route.ts declares only it;
  *   4. no app code outside src/app/design/ imports the design index (its registry or its parts);
- *   5. when a production build exists (`.next/BUILD_ID`), none of its route manifests names a `/design` route.
- *      `--require-build` makes a missing build a failure (run it after `next build`).
+ *   5. when a production build exists (`<dist>/BUILD_ID`), none of its route manifests names a `/design` route.
+ *      `--require-build` makes a missing build a failure (run it after `next build`); `--dist <dir>` reads a build
+ *      made with FACTORY_WEB_DIST_DIR=<dir> (default `.next`).
  *
- * Run: node scripts/factory/check-no-design-route.mjs [--require-build] — exit 1 on any violation.
+ * Run: node scripts/factory/check-no-design-route.mjs [--require-build] [--dist <dir>] — exit 1 on any violation.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
@@ -78,9 +79,11 @@ for (const file of files(join(WEB, 'src'))) {
 
 // 5: the production build.
 const requireBuild = process.argv.includes('--require-build')
+const distAt = process.argv.indexOf('--dist')
+const DIST = distAt > 0 && process.argv[distAt + 1] ? process.argv[distAt + 1].replace(/\/+$/, '') : '.next'
 let buildNote = 'no production build to inspect'
-if (existsSync(join(WEB, '.next/BUILD_ID'))) {
-  const manifests = ['.next/app-path-routes-manifest.json', '.next/server/app-paths-manifest.json', '.next/routes-manifest.json', '.next/prerender-manifest.json']
+if (existsSync(join(WEB, DIST, 'BUILD_ID'))) {
+  const manifests = ['app-path-routes-manifest.json', 'server/app-paths-manifest.json', 'routes-manifest.json', 'prerender-manifest.json'].map((name) => `${DIST}/${name}`)
   const seen = []
   let routes = 0
   for (const manifest of manifests) {
@@ -91,10 +94,10 @@ if (existsSync(join(WEB, '.next/BUILD_ID'))) {
     routes += (text.match(/"\/[^"]*"/g) ?? []).length
     for (const hit of text.matchAll(/"(\/design(?:\/[^"]*)?)"/g)) violations.push(`apps/factory-web/${manifest}: the production build has a /design route (${hit[1]})`)
   }
-  if (seen.length === 0) violations.push('apps/factory-web/.next: a build exists but none of its route manifests could be read')
-  buildNote = `production build ${readFileSync(join(WEB, '.next/BUILD_ID'), 'utf8').trim()}: ${seen.length} manifest(s), ${routes} route entries, none under /design`
+  if (seen.length === 0) violations.push(`apps/factory-web/${DIST}: a build exists but none of its route manifests could be read`)
+  buildNote = `production build ${readFileSync(join(WEB, DIST, 'BUILD_ID'), 'utf8').trim()} in ${DIST}: ${seen.length} manifest(s), ${routes} route entries, none under /design`
 } else if (requireBuild) {
-  violations.push('apps/factory-web/.next/BUILD_ID: no production build (run `next build` first, or drop --require-build)')
+  violations.push(`apps/factory-web/${DIST}/BUILD_ID: no production build (run \`next build\` first, or drop --require-build)`)
 }
 
 if (violations.length > 0) {

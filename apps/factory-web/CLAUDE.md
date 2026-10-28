@@ -11,6 +11,9 @@ Next.js 16 (App Router), the same Next and React versions as `apps/web`, built f
     cd apps/factory-web && FACTORY_API_URL=http://127.0.0.1:1 npx next build
     node scripts/factory/run-guards.mjs        # check-view-boundaries, check-i18n, check-no-design-route among them
     node scripts/factory/check-no-design-route.mjs --require-build   # after `next build`: no /design in the build
+    # Beside a running dev server, build elsewhere (Next adds that folder to tsconfig.json's include: do not commit it):
+    cd apps/factory-web && FACTORY_WEB_DIST_DIR=.next-check FACTORY_API_URL=http://127.0.0.1:1 npx next build
+    node scripts/factory/check-no-design-route.mjs --require-build --dist .next-check
 
 The design index: `FACTORY_API_URL=http://127.0.0.1:1 npm run dev -w @nexus/factory-web`, then
 http://localhost:3200/design (every screen by SCR id) → a screen (every case in light and dark, desktop 1440 or phone
@@ -23,6 +26,10 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/app/(office)/layout.tsx` — the session loader (`GET /auth/office/me`; no session → `/sign-in`); the person's
   language. `(office)/w/[company]/layout.tsx` — one company (`x-factory-company` = the address's company; 403 → "go to
   your company"), the Office shell. Pages live under `/w/<company code>/<area>/…`.
+- The Office shell's area navigation is the DS `WorkspaceSubheader` NOT `pinned`, exactly as Commerce's Settings
+  (`apps/web/src/app/settings/_shell/SettingsShellHeader.tsx`): a band on top of the page — the toggle button, then a
+  dense `DetailHeader` (page title, area › group as meta) — whose button opens the area's pages as an overlay. No
+  permanent column, no collapse strip (Owner, 2026-10-28).
 - `src/app/(links)/` — no chrome: `/l#token=…` (a one-off link; the token is read from the fragment, removed from the
   address bar, sent only in `x-factory-link`), `/privacy/<company id>` (the privacy-notice slot, GAP-005).
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension

@@ -62,6 +62,13 @@ describe('next.config.ts', () => {
     expect((await configFor('phase-production-server')).pageExtensions).toEqual(['tsx', 'ts', 'jsx', 'js'])
   })
 
+  it('builds into FACTORY_WEB_DIST_DIR when it is set (a check build beside a running dev server), else .next', async () => {
+    vi.stubEnv('FACTORY_API_URL', 'http://127.0.0.1:8190')
+    expect((await configFor(BUILD)).distDir).toBeUndefined()
+    vi.stubEnv('FACTORY_WEB_DIST_DIR', '.next-check')
+    expect((await configFor(BUILD)).distDir).toBe('.next-check')
+  })
+
   it('compiles the design system from source', async () => {
     vi.stubEnv('FACTORY_API_URL', 'http://127.0.0.1:8190')
     expect((await configFor(BUILD)).transpilePackages).toEqual(['@nexus/ui'])

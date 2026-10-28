@@ -1,14 +1,14 @@
 'use client'
 
-import { forwardRef, useEffect, useId, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
+import { forwardRef, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import Link from 'next/link'
-import { LogOut, Monitor, Moon, PanelLeftOpen, Search, Sun, UserRound } from 'lucide-react'
-import { Banner, EntityPath, Menu, SearchTrigger } from '@nexus/ui/components'
+import { LogOut, Monitor, Moon, Search, Sun, UserRound } from 'lucide-react'
+import { Banner, Menu, SearchTrigger } from '@nexus/ui/components'
 import { BottomBar } from '@nexus/ui/components/BottomBar/index'
-import { WorkspaceSubheader } from '@nexus/ui/patterns'
+import { DetailHeader, WorkspaceSubheader, type WorkspaceSubheaderProps } from '@nexus/ui/patterns'
 import { AppRail, areaRailItems, areaSubNavGroups, findAreaNavPlace, type AreaNav, type RailLinkProps } from '@nexus/ui/patterns/shell/index'
 import '@nexus/ui/patterns/shell/app-rail.css'
-import { Button, Kbd, ToolbarButton } from '@nexus/ui/primitives'
+import { Kbd, ToolbarButton } from '@nexus/ui/primitives'
 import { useScopedT, useT } from '../../../lib/i18n/provider'
 import { companyPrefix } from '../../../lib/session/session'
 import { useTheme } from '../../../lib/theme/use-theme'
@@ -23,9 +23,11 @@ import '../office-shell.css'
  *    also ⌘K / Ctrl K), the theme button and the person's menu (profile, sign out);
  *  - system banners under it: TEST MODE while a fake or sandbox connection is active;
  *  - the main sidebar: the DS `AppRail`, one row per area the person may open (areas/<area>/nav.ts);
- *  - the area's pinned sub-sidebar: DS `WorkspaceSubheader pinned` (a column from 1024 px, a drawer below, opened by the
- *    area button in the crumbs row);
- *  - crumbs: area › page (DS `EntityPath`), from the same manifest;
+ *  - the area's sub-sidebar, as Commerce's Settings and product studio have it: the DS `WorkspaceSubheader` (NOT
+ *    `pinned`) — a band on top of the page with the toggle BUTTON at its start and the page's place beside it (a dense
+ *    `DetailHeader`: the page as its title, the area › group as its meta — the crumbs). The button opens the area's
+ *    pages as an overlay from the left, under the top bar and beside the rail; there is no permanent column. Enter
+ *    opens it, Esc closes it and the focus goes back to the button; choosing a page closes it. The same on a phone;
  *  - on a phone (under 720 px) no rail: the DS `BottomBar` with the areas, More for the rest.
  * Standard (office) density. The page itself is `children`, inside `<main id="main-content">`.
  */
@@ -51,6 +53,8 @@ export interface OfficeShellViewModel {
   counts?: Readonly<Record<string, number>>
   /** Open the palette at once (design fixtures). */
   paletteOpen?: boolean
+  /** Open the area's navigation at once (design fixtures). */
+  areaNavOpen?: boolean
   paletteQuery?: string
 }
 
@@ -82,9 +86,12 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
   const named = useScopedT('shell')
   const { mode, cycleTheme } = useTheme()
   const [paletteOpen, setPaletteOpen] = useState(model.paletteOpen ?? false)
-  const [areaMenuOpen, setAreaMenuOpen] = useState(false)
-  const areaMenuId = `fw-area-nav-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
+  const [areaNavOpen, setAreaNavOpen] = useState(false)
   const [isMac, setIsMac] = useState(true)
+  // The overlay sits under the top bar and beside the rail: the subheader measures them (as Commerce's Settings).
+  const topBar = useRef<HTMLElement>(null)
+  const body = useRef<HTMLDivElement>(null)
+  const [chrome, setChrome] = useState<WorkspaceSubheaderProps['chrome']>()
 
   const prefix = companyPrefix(model.switcher.company)
   const toHref = (address: string) => `${prefix}${address}`
@@ -92,9 +99,19 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
   const nav = useMemo(() => translateNav(model.nav, named), [model.nav, named])
   const place = findAreaNavPlace(nav, model.path)
   const area = place?.area
-  const crumbs = officeCrumbs(nav, model.path).map((crumb) => ({ id: crumb.id, name: crumb.name, href: crumb.href ? toHref(crumb.href) : null }))
+  // The page's place (the crumbs): its name as the band's title, the area (› group) as its meta. A record under a page
+  // keeps the page's name; the record page draws its own header below.
+  const crumbs = officeCrumbs(nav, model.path)
+  const here = crumbs.length > 1 ? crumbs[crumbs.length - 1].name : (area?.label ?? '')
+  const above = crumbs.slice(0, -1).map((crumb) => crumb.name).join(' › ')
   const count = (key: string) => model.counts?.[key]
   const pages = useMemo(() => navPages(model.nav).map((page) => ({ ...page, href: `${prefix}${page.href}` })), [model.nav, prefix])
+
+  useEffect(() => {
+    setChrome({ header: topBar.current, primaryNavigation: body.current?.querySelector<HTMLElement>('.h10-rail') ?? null })
+  }, [])
+  // Opened after the first paint (design fixtures): the overlay is drawn into <body>, which a server render lacks.
+  useEffect(() => setAreaNavOpen(model.areaNavOpen ?? false), [model.areaNavOpen])
 
   useEffect(() => {
     setIsMac(/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent))
@@ -119,7 +136,7 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
 
   return (
     <div className="fw-office">
-      <header className="fw-topbar" role="banner">
+      <header ref={topBar} className="fw-topbar" role="banner">
         <Link href={toHref('/home')} className="fw-topbar-brand" aria-label={t('topbar.home')}>
           <span className="logo" aria-hidden="true">
             F
@@ -174,36 +191,28 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
         </Banner>
       ))}
 
-      <div className="fw-office-body">
+      <div ref={body} className="fw-office-body">
         <AppRail navItems={areaRailItems(nav, count).map((item) => ({ ...item, href: toHref(item.href) }))} pathname={fullPath} LinkComponent={ShellLink} />
-        <div className="fw-office-area">
+        <div className="fw-office-page">
           {area?.sections?.length ? (
-            <WorkspaceSubheader
-              pinned
-              navigationLabel={t('subnav.label', { area: area.label })}
-              title={area.label}
-              groups={areaSubNavGroups(area, { path: model.path, href: toHref, count })}
-              onNavigate={(event, item) => follow(event, item.href)}
-              navigationOpen={areaMenuOpen}
-              onNavigationOpenChange={setAreaMenuOpen}
-              navigationId={areaMenuId}
-            />
-          ) : null}
-          <div className="fw-office-page">
-            <div className="fw-office-crumbs">
-              {area?.sections?.length ? (
-                <span className="fw-area-button">
-                  <Button size="sm" aria-haspopup="dialog" aria-expanded={areaMenuOpen} aria-controls={areaMenuId} onClick={() => setAreaMenuOpen(!areaMenuOpen)}>
-                    <PanelLeftOpen size={13} aria-hidden /> {area.label}
-                  </Button>
-                </span>
-              ) : null}
-              {crumbs.length > 0 && <EntityPath items={crumbs} label={t('crumbs.label')} linkAs={Link} />}
+            <div className="fw-office-subheader">
+              <WorkspaceSubheader
+                chrome={chrome}
+                navigationLabel={t('subnav.label', { area: area.label })}
+                title={area.label}
+                groups={areaSubNavGroups(area, { path: model.path, href: toHref, count })}
+                onNavigate={(event, item) => follow(event, item.href)}
+                navigationOpen={areaNavOpen}
+                onNavigationOpenChange={setAreaNavOpen}
+                header={
+                  <DetailHeader dense title={here} meta={above || undefined} />
+                }
+              />
             </div>
-            <main id="main-content" tabIndex={-1} className="fw-office-main">
-              {children}
-            </main>
-          </div>
+          ) : null}
+          <main id="main-content" tabIndex={-1} className="fw-office-main">
+            {children}
+          </main>
         </div>
       </div>
 
