@@ -136,6 +136,14 @@ model Item {
   bomLines        BomLine[]
   // compliance.prisma: the certificates that cover it (a protector's EN 1621 certificate).
   coverage        CertificateCoverage[]
+  // supply.prisma: the purchase order lines that buy it and the planning runs' requirements of it.
+  purchaseOrderLines   PurchaseOrderLine[]
+  materialRequirements MaterialRequirement[]
+  // inventory.prisma: its receipt lines, lots, stock moves and their values.
+  goodsReceiptLines    GoodsReceiptLine[]
+  lots                 Lot[]
+  stockMoves           StockMove[]
+  stockValuations      StockValuation[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from BOM lines and the item's colours.
@@ -231,6 +239,13 @@ model ItemColour {
   colour         Colour?         @relation(fields: [tenantId, colourId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   bomLines       BomLine[]
   bomLineColours BomLineColour[]
+  // supply.prisma: the purchase order lines and requirements in this colour.
+  purchaseOrderLines   PurchaseOrderLine[]
+  materialRequirements MaterialRequirement[]
+  // inventory.prisma: its receipt lines, lots and stock moves.
+  goodsReceiptLines    GoodsReceiptLine[]
+  lots                 Lot[]
+  stockMoves           StockMove[]
 
   @@unique([tenantId, itemId, code])
   // The target of the references from BOM lines and grid cells: a colour of the line's own material.

@@ -1,0 +1,316 @@
+// Supply: purchasing and planning (plan A1 §2.4 D, §2.5, §2.6; PLAN §1.3, §2.8 "Cr VI", §4.7 stage 08-buy; features
+// SCM-050, SCM-053, SCM-075, PLN-062): purchase orders with their lines, and the "what to buy and make" planning runs
+// with their material requirements. apps/factory-api's modules write them (B-W1-29 planning, B-W1-30 purchase orders,
+// B-W1-31 the supplier's confirmation by link), always through command(). Receipts, lots, hides and the stock ledger
+// are inventory.prisma's.
+//
+// A purchase order: DRAFT → SENT → CONFIRMED → PARTLY_RECEIVED → RECEIVED → CLOSED, or CANCELLED (PO approval,
+// SCM-078, is W2b; new states are additive). The supplier answers the PO_CONFIRM link (factory-domain links/purposes):
+// confirm (SENT → CONFIRMED) or decline (SENT → DECLINED; the office changes the order and sends it again, or cancels
+// it). A SENT or DECLINED order goes back to DRAFT to be changed (its revision goes up by one); goods may arrive before
+// the supplier confirmed (SENT → PARTLY_RECEIVED | RECEIVED); a reversed receipt moves it back. The lines change only
+// while the order is DRAFT; the supplier's confirmation (the order's and each line's) is set once and never changed
+// (the …_supply_guards triggers, for every login).
+//
+// Planning (PLN-062, B-W1-29): one run at a time per site (a partial unique index of …_supply_guards) explodes the
+// BOMs of the open orders per size and colour and nets them against usable (RELEASED) stock and open purchase orders.
+// Each MaterialRequirement is one item (and colour) of a run: its numbers are a snapshot, fixed when written; only its
+// decision changes (ORDERED with the purchase order line that buys it, or IGNORED) once the run is DONE. Reservations
+// are not kept (PLAN §1.3: SCM-205, 209, 210 are W2a).
+//
+// Money (A1 §2.1, §2.6): purchase prices are costs (`@grain cost`): unit prices Decimal(18,6), amounts Int minor units
+// of the order's currency. Quantities are Decimal(18,4) with their unit (enum Uom): a line is bought in its own unit
+// (ft² or m² for leather, SCM-075) and also counted in the item's base unit, which planning and receiving use.
+//
+// Who sees what (ownership/supply.json): the office reads and writes; the floor of the delivery site reads its
+// purchase orders and lines without any price (to receive against them); a portal or link session reads only its OWN
+// party's orders and lines, never a price, cost or internal column (the PO_CONFIRM link shows quantities and dates, PLAN
+// §1.4), and writes only the confirmation (the triggers allow nothing else); planning is the office's. Nobody deletes
+// an order (it is cancelled) or a planning row (a run is superseded); the office deletes only the lines of a DRAFT
+// order.
+//
+// Every child row carries its parent's partyId and siteId in its reference, so it can never belong to another party or
+// site than its order. Uniqueness made only of references (one requirement per item and colour of a run) is the
+// planning module's: a unique key of ids alone cannot be copied by the generated isolation tests.
+
+/// A purchase order of a company to a supplier (SCM-050), delivered to one of the company's sites.
+model PurchaseOrder {
+  id              String                       @id @db.Uuid
+  tenantId        String                       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The buying company (its PURCHASE_ORDER series, its letterhead).
+  companyId       String                       @db.Uuid
+  /// The site the goods are delivered to, one of the company's: its floor receives against the order.
+  siteId          String                       @db.Uuid
+  /// The number from the company's PURCHASE_ORDER series, unique in the company.
+  number          String
+  /// The supplier (a party with the SUPPLIER role; the purchasing module checks the role). The partner role's policy
+  /// key: a confirm link reads only its own party's orders.
+  partyId         String                       @db.Uuid
+  /// The person at the supplier the order and its confirm link go to.
+  contactId       String?                      @db.Uuid
+  status          PurchaseOrderStatus          @default(DRAFT)
+  /// 1 for the first send; one more each time a SENT or DECLINED order goes back to DRAFT to be changed.
+  revision        Int                          @default(1)
+  /// ISO 4217: the currency of its prices.
+  currency        String                       @default("EUR")
+  orderDate       DateTime                     @db.Date
+  /// The delivery date asked for the whole order; each line has its own need date.
+  requestedDate   DateTime?                    @db.Date
+  /// The Incoterms rule and place, as printed ("EXW Seedville").
+  incoterms       String?
+  /// Payment terms as printed (the party's by default; free text).
+  paymentTerms    String?
+  /// Printed on the order, for the supplier.
+  note            String?
+  /// For the office only: the partner role can neither read nor write it.
+  /// @internal
+  internalNote    String?
+  /// The sum of the lines' net amounts, in minor units; fixed when the order is sent (the triggers check the sum).
+  /// @grain cost
+  netAmount       Int                          @default(0)
+  sentAt          DateTime?                    @db.Timestamptz(3)
+  sentById        String?                      @db.Uuid
+  /// The supplier's confirmation: set once, in the move SENT → CONFIRMED, never changed after.
+  confirmedAt     DateTime?                    @db.Timestamptz(3)
+  confirmedVia    PurchaseConfirmationChannel?
+  /// LINK: the PO_CONFIRM link it came through (a link of the same party); null for OFFICE.
+  confirmLinkId   String?                      @db.Uuid
+  /// The name the supplier typed on the link (optional), or the person the office heard from.
+  confirmedByName String?
+  /// The supplier's own order or confirmation number.
+  supplierRef     String?
+  /// What the supplier wrote with its answer.
+  confirmNote     String?
+  /// The supplier's decline: written in the move SENT → DECLINED.
+  declinedAt      DateTime?                    @db.Timestamptz(3)
+  declineReason   String?
+  closedAt        DateTime?                    @db.Timestamptz(3)
+  cancelledAt     DateTime?                    @db.Timestamptz(3)
+  cancelReason    String?
+  version         Int                          @default(1)
+  createdAt       DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?                      @db.Uuid
+
+  site          Site                @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  party         Party               @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  contact       PartyContact?       @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  confirmLink   OneOffLink?         @relation(fields: [tenantId, partyId, confirmLinkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines         PurchaseOrderLine[]
+  // inventory.prisma: the goods received against it.
+  goodsReceipts GoodsReceipt[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the lines' reference: a line names its order's party and site.
+  @@unique([tenantId, partyId, siteId, id])
+  // The target of the goods receipts' reference: received at the order's own site.
+  @@unique([tenantId, siteId, id])
+}
+
+/// DRAFT → SENT → CONFIRMED → PARTLY_RECEIVED → RECEIVED → CLOSED; DECLINED by the supplier; CANCELLED by the office.
+enum PurchaseOrderStatus {
+  DRAFT
+  SENT
+  CONFIRMED
+  /// The supplier declined it through its link: the office changes it (back to DRAFT) or cancels it.
+  DECLINED
+  PARTLY_RECEIVED
+  RECEIVED
+  /// Done: everything received, or the rest given up (short-closed).
+  CLOSED
+  CANCELLED
+}
+
+/// How the supplier's confirmation reached us.
+enum PurchaseConfirmationChannel {
+  /// The supplier answered the PO_CONFIRM link.
+  LINK
+  /// The office recorded it from the supplier's mail or call.
+  OFFICE
+}
+
+/// One material of a purchase order (SCM-050, SCM-075): what, which colour, how much in which unit, at what price, by
+/// when; for leather the grade, thickness, one dye batch, area tolerance and the hides the area is expected to be.
+model PurchaseOrderLine {
+  id                  String    @id @db.Uuid
+  tenantId            String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  purchaseOrderId     String    @db.Uuid
+  /// The order's supplier (the partner role's policy key).
+  partyId             String    @db.Uuid
+  /// The order's delivery site (the floor role's policy key).
+  siteId              String    @db.Uuid
+  /// The line's place on the order: 10, 20, 30 …
+  seq                 Int
+  itemId              String    @db.Uuid
+  /// The material's colour to buy: one of the item's colours.
+  itemColourId        String?   @db.Uuid
+  /// What the supplier reads on the order, when more than the item's name.
+  description         String?
+  /// The supplier's article and colour codes, as printed (the item's by default).
+  supplierArticleCode String?
+  supplierColourCode  String?
+  /// Above 0, in `uom`: the unit it is bought in (ft² or m² for leather, metres, pieces …).
+  quantity            Decimal   @db.Decimal(18, 4)
+  uom                 Uom
+  /// The same quantity in the item's base unit: planning nets it, receipts count against it.
+  baseQuantity        Decimal   @db.Decimal(18, 4)
+  /// The price per `uom`, in the order's currency.
+  /// @grain cost
+  unitPrice           Decimal   @db.Decimal(18, 6)
+  /// quantity × unit price, rounded to minor units (factory-domain money).
+  /// @grain cost
+  netAmount           Int
+  /// The day the material must be at the site.
+  needDate            DateTime  @db.Date
+  /// Leather: the tannery's selection or grade asked for ("A", "TR1").
+  grade               String?
+  /// Leather: the thickness range asked for, in millimetres.
+  thicknessMinMm      Decimal?  @db.Decimal(6, 2)
+  thicknessMaxMm      Decimal?  @db.Decimal(6, 2)
+  /// Leather: every hide of the line from one dye batch (one shade).
+  oneDyeBatch         Boolean   @default(false)
+  /// Leather: how far the delivered area may differ from the ordered one, in percent.
+  areaTolerancePct    Decimal?  @db.Decimal(7, 4)
+  /// Leather: how many hides the area is expected to be (an estimate, for the supplier and the receiving floor).
+  estimatedHides      Int?
+  /// Copied from the item: every lot received against the line needs Cr VI evidence before it is released (REACH
+  /// Annex XVII entry 47).
+  requiresCrViTest    Boolean   @default(false)
+  note                String?
+  /// The supplier's confirmation of the line: set once, while the order is SENT or CONFIRMED; never changed after. A
+  /// confirmed quantity of 0 says the supplier cannot deliver the line.
+  confirmedQuantity   Decimal?  @db.Decimal(18, 4)
+  confirmedDate       DateTime? @db.Date
+  version             Int       @default(1)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?   @db.Uuid
+
+  purchaseOrder PurchaseOrder         @relation(fields: [tenantId, partyId, siteId, purchaseOrderId], references: [tenantId, partyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  item          Item                  @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour    ItemColour?           @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  requirements  MaterialRequirement[]
+  // inventory.prisma: the receipt lines received against it.
+  receiptLines  GoodsReceiptLine[]
+
+  @@unique([tenantId, purchaseOrderId, seq])
+  // The target of the receipt lines' and requirements' references: on the line's own site.
+  @@unique([tenantId, siteId, id])
+}
+
+/// One "what to buy and make" run of a site (PLN-062): on demand, when an order is confirmed, or scheduled. One runs at
+/// a time per site; a newer DONE run supersedes the older one.
+model PlanningRun {
+  id          String            @id @db.Uuid
+  tenantId    String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String            @db.Uuid
+  /// The site it plans for: its stock is netted, its purchase orders are counted.
+  siteId      String            @db.Uuid
+  trigger     PlanningTrigger
+  status      PlanningRunStatus @default(RUNNING)
+  /// How many open sales order lines it exploded.
+  orderLines  Int               @default(0)
+  startedAt   DateTime          @db.Timestamptz(3)
+  /// Set exactly when it is no longer RUNNING.
+  finishedAt  DateTime?         @db.Timestamptz(3)
+  /// FAILED: why, for the office.
+  error       String?
+  note        String?
+  version     Int               @default(1)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?           @db.Uuid
+
+  site         Site                  @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  requirements MaterialRequirement[]
+
+  // The target of the requirements' reference: on the run's own site.
+  @@unique([tenantId, siteId, id])
+}
+
+enum PlanningTrigger {
+  /// A planner asked for it.
+  MANUAL
+  /// A sales order was confirmed or changed.
+  ORDER
+  /// The nightly run.
+  SCHEDULED
+}
+
+/// RUNNING → DONE | FAILED; DONE → SUPERSEDED when a newer run is done.
+enum PlanningRunStatus {
+  RUNNING
+  DONE
+  FAILED
+  SUPERSEDED
+}
+
+/// One material (and colour) a planning run found (B-W1-29): the gross need from the BOMs per size and colour of the
+/// open orders, what usable stock and open purchase orders cover, the net need and the suggestion. Its numbers never
+/// change; once the run is DONE the office decides it: ORDERED (with the purchase order line that buys it) or IGNORED.
+model MaterialRequirement {
+  id                  String              @id @db.Uuid
+  tenantId            String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The run's site.
+  siteId              String              @db.Uuid
+  runId               String              @db.Uuid
+  /// Its place in the run's list.
+  seq                 Int
+  itemId              String              @db.Uuid
+  itemColourId        String?             @db.Uuid
+  /// BUY for a bought material, MAKE for a part we make (a work order, W1-23).
+  action              RequirementAction
+  /// The item's base unit: every quantity below but the suggestion counts in it.
+  uom                 Uom
+  /// What the open orders need: BOM quantity per size and colour × pieces, with wastage.
+  grossQuantity       Decimal             @db.Decimal(18, 4)
+  /// RELEASED stock at the site: the only stock that counts as usable (REACH: a lot in quarantine is not).
+  usableStock         Decimal             @db.Decimal(18, 4)
+  /// Stock in QUARANTINE or BLOCKED at the site: shown, never netted.
+  heldStock           Decimal             @db.Decimal(18, 4)
+  /// What open purchase orders to the site will still bring.
+  onOrder             Decimal             @db.Decimal(18, 4)
+  /// max(0, gross − usable − on order) (the triggers check it).
+  netQuantity         Decimal             @db.Decimal(18, 4)
+  /// The net need rounded up to how the supplier sells it (whole hides, rolls, boxes), in `suggestedUom`.
+  suggestedQuantity   Decimal             @db.Decimal(18, 4)
+  suggestedUom        Uom
+  /// When the earliest order needs it.
+  needDate            DateTime            @db.Date
+  /// The item's default supplier, for a BUY.
+  supplierId          String?             @db.Uuid
+  /// The demand behind the gross quantity, as decimal strings (no floats):
+  /// [{ "orderId": "…", "orderLineId": "…", "size": "52", "pieces": 4, "quantity": "201.6000" }].
+  sources             Json
+  decision            RequirementDecision @default(OPEN)
+  decisionNote        String?
+  /// ORDERED (a BUY): the purchase order line that buys it.
+  purchaseOrderLineId String?             @db.Uuid
+  decidedAt           DateTime?           @db.Timestamptz(3)
+  decidedById         String?             @db.Uuid
+  version             Int                 @default(1)
+  createdAt           DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?             @db.Uuid
+
+  run               PlanningRun        @relation(fields: [tenantId, siteId, runId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  item              Item               @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour        ItemColour?        @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplier          Party?             @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrderLine PurchaseOrderLine? @relation(fields: [tenantId, siteId, purchaseOrderLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, runId, seq])
+}
+
+enum RequirementAction {
+  BUY
+  MAKE
+}
+
+/// OPEN until the office decides: ORDERED (bought or made) or IGNORED.
+enum RequirementDecision {
+  OPEN
+  ORDERED
+  IGNORED
+}
