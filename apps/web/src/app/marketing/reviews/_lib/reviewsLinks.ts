@@ -175,6 +175,15 @@ export function reviewsSettingsHref(section?: ReviewsSettingsSection | null): st
   return withQuery('/marketing/reviews/settings', { section })
 }
 
+/**
+ * One review automation in the rules builder — the builder page every rule is made and edited on
+ * (`/marketing/ads/rules-automation/builder/<type>`, here the `review-automation` type: its trigger settings and action).
+ * Close and Save come back to Reviews › Settings › Automations.
+ */
+export function reviewAutomationEditHref(ruleId: string): string {
+  return withQuery('/marketing/ads/rules-automation/builder/review-automation', { ruleId })
+}
+
 /** One product's reviews: the product pop-up over Insights › Products (`?product=<id>`). */
 export function productReviewsHref(productId: string, scope: { channel?: string | null; market?: string | null; period?: string | null } = {}): string {
   return insightsHref('products', { ...scope, product: productId })

@@ -3,8 +3,8 @@
  * review data comes from and whether it still arrives, and the jobs behind them (schedule, last and next run, state).
  *
  * Sources build on review-sources.service.ts (the Overview's answer), never naming a setting: a person reads
- * "Sign-in expired · Reconnect eBay Germany", never a variable. Sources that arrive in a later phase are rows that say
- * "Coming later" (build spec ruling 3); Amazon gives sellers topics only, no review text and no stars (ruling 5).
+ * "Sign-in expired · Reconnect eBay Germany", never a variable. Every source has a row that says what Nexus reads from it
+ * now; Amazon gives sellers topics only, no review text and no stars (ruling 5).
  *
  * Pipeline jobs are read from the CronRun rows the jobs write (`recordCronRun`) and the schedules they use; the
  * output-freshness guard (review-pipeline-health.service.ts) adds what a job that "ran fine" did not do. A failure's
@@ -61,8 +61,6 @@ export interface SettingsSourceRow {
   tone: SourceTone
   /** What is going on, in words a person can act on. */
   words: string
-  /** "Coming later" words for the part that arrives in a later update; null when nothing does. */
-  later: string | null
   /** When it last worked (ISO); null when never or not applicable. */
   lastAt: string | null
   /** The last-read cell in words when a date alone does not say it ("Never worked"). */
@@ -106,7 +104,7 @@ export function settingsSourceRows(facts: SourceFacts, extra: SourceExtraFacts, 
   const markets = extra.amazonSent30.filter((m) => m.count > 0).length
   const requests: SettingsSourceRow = {
     key: 'amazon-requests', name: 'Amazon review requests', what: 'Amazon’s own standard e-mail, on the day a review rule picks',
-    stateWords: 'Not sending', tone: 'neutral', words: 'No Amazon review request went out in the last 30 days.', later: null,
+    stateWords: 'Not sending', tone: 'neutral', words: 'No Amazon review request went out in the last 30 days.',
     lastAt: extra.amazonLastSentAt?.toISOString() ?? null, lastWords: extra.amazonLastSentAt ? null : 'Never sent',
     action: { kind: 'rules', label: 'Open requests', href: null },
   }
@@ -132,7 +130,7 @@ export function settingsSourceRows(facts: SourceFacts, extra: SourceExtraFacts, 
   const lastOk = newest(topics.map(([, t]) => t.lastOkAt))
   const topicRow: SettingsSourceRow = {
     key: 'amazon-topics', name: 'Amazon topics', what: 'Topics buyers mention, their share of reviews, star effect and 6-month trend, per product',
-    stateWords: 'Off', tone: 'neutral', later: null, lastAt: lastOk?.toISOString() ?? null, lastWords: lastOk ? null : '—', action: null,
+    stateWords: 'Off', tone: 'neutral', lastAt: lastOk?.toISOString() ?? null, lastWords: lastOk ? null : '—', action: null,
     words: `Nexus does not read Amazon topics in this setup yet. They need the Selling Partner Insights role on the Amazon connection. ${TOPIC_MARKETS_WORDS}`,
   }
   if (amazonSignIn) {
@@ -161,7 +159,7 @@ export function settingsSourceRows(facts: SourceFacts, extra: SourceExtraFacts, 
   const amazonImport = lastImport('AMAZON')
   rows.push({
     key: 'amazon-review-text', name: 'Amazon review text', what: 'The words and stars buyers write',
-    stateWords: 'Not available', tone: 'neutral', later: null,
+    stateWords: 'Not available', tone: 'neutral',
     words: 'Amazon gives sellers no review text and no star rating by API — only topics. Import a file if you have one.',
     lastAt: amazonImport?.toISOString() ?? null, lastWords: amazonImport ? null : 'Nothing imported',
     action: { kind: 'import', label: 'Import reviews…', href: null },
@@ -170,9 +168,9 @@ export function settingsSourceRows(facts: SourceFacts, extra: SourceExtraFacts, 
   // ── eBay feedback ──
   const ebay = sources.filter((s) => s.channel === 'EBAY')
   const ebayRow: SettingsSourceRow = {
-    // Photos and eBay's AI topics are read since #795 (eBay's REST feedback read): no longer "coming later" (live audit).
+    // Photos and eBay's AI topics are read since #795 (eBay's REST feedback read).
     key: 'ebay-feedback', name: 'eBay feedback', what: 'Seller feedback, with the buyer’s photos and eBay’s AI topics where eBay’s newer feedback read works; one public reply of up to 500 characters',
-    stateWords: 'Not connected', tone: 'neutral', later: null, lastAt: null, lastWords: '—',
+    stateWords: 'Not connected', tone: 'neutral', lastAt: null, lastWords: '—',
     words: 'No eBay account is connected to Nexus.', action: { kind: 'connect', label: 'Connect eBay', href: settingsHref('EBAY') },
   }
   if (ebay.length) {
@@ -200,7 +198,7 @@ export function settingsSourceRows(facts: SourceFacts, extra: SourceExtraFacts, 
   const etsy = extra.etsy
   rows.push({
     key: 'etsy-reviews', name: 'Etsy reviews', what: 'Reviews of 1 to 5 stars with text and one photo',
-    stateWords: etsy.stateWords, tone: etsy.tone, later: null,
+    stateWords: etsy.stateWords, tone: etsy.tone,
     words: `${etsy.words} Read only: you reply on Etsy.com, once, within 100 days of the buyer’s last edit, and the reply can’t be edited after.`,
     lastAt: etsy.lastReadAt, lastWords: etsy.lastReadAt ? null : 'Never read',
     action: etsy.state === 'not_connected'
@@ -222,7 +220,6 @@ export function settingsSourceRows(facts: SourceFacts, extra: SourceExtraFacts, 
     key: 'shopify-app', name: 'Shopify review app', what: 'Reviews with photos from the store’s review app · Judge.me, Okendo, Yotpo or Loox',
     stateWords: app ? `${app.name} · ${app.stateWords}` : 'Not connected',
     tone: app?.state === 'needs_fix' ? 'danger' : app?.tone === 'warning' ? 'warning' : connected ? app!.tone : 'neutral',
-    later: null,
     words: `${app?.words ?? 'Connect the store’s review app — Judge.me, Okendo, Yotpo or Loox — to let Nexus read its reviews.'}${others.length ? ` ${others.join(' ')}` : ''}${shopifyImport ? ` A file import also works: the last one was on ${dayWords(shopifyImport)}.` : ''}`,
     lastAt: lastRead?.toISOString() ?? shopifyImport?.toISOString() ?? null,
     lastWords: lastRead || shopifyImport ? null : 'Never read',
@@ -259,7 +256,7 @@ export function sellerFeedbackRow(state: SellerFeedbackState | null): SettingsSo
   const report = 'Amazon’s report holds only feedback of 1 to 3 stars, and Amazon can’t schedule it, so Nexus asks for it'
   const row: SettingsSourceRow = {
     key: 'amazon-seller-feedback', name: 'Amazon seller feedback', what: 'Feedback of 1 to 3 stars about the seller',
-    stateWords: 'Off', tone: 'neutral', later: null, lastAt: state?.lastOkAt ?? null, lastWords: state?.lastOkAt ? null : '—',
+    stateWords: 'Off', tone: 'neutral', lastAt: state?.lastOkAt ?? null, lastWords: state?.lastOkAt ? null : '—',
     words: `${report}. Nexus could not check the fetches just now.`,
     action: { kind: 'fetch', label: 'Fetch now', href: null, held: state ? state.held : 'Nexus could not check the fetches just now.' },
   }

@@ -1,15 +1,20 @@
 /** Full-screen builder route, one per type (/builder/<slug>). Criteria-based rule types use
- *  the shared RuleBuilder; schedule types (Budget Schedule · Dayparting) use ScheduleBuilder. */
+ *  the shared RuleBuilder; schedule types (Budget Schedule · Dayparting) use ScheduleBuilder.
+ *  A review automation (`review-automation?ruleId=`, Edit on Reviews › Settings › Automations) uses
+ *  ReviewAutomationBuilder: not an ads rule type, so the "Select a Rule Type" chooser does not offer it. */
 import { notFound } from 'next/navigation'
 import { ruleTypeBySlug } from '../../_shared/ruleTypes'
 import { RuleBuilder } from '../../_shared/RuleBuilder'
 import { ScheduleBuilder } from '../../_schedule/ScheduleBuilder'
 import { RankGoalBuilder } from '../../_rank/RankGoalBuilder'
+import { ReviewAutomationBuilder } from '../../_review/ReviewAutomationBuilder'
+import { REVIEW_AUTOMATION_SLUG } from '../../_review/reviewAutomationForm'
 
 export const dynamic = 'force-dynamic'
 
 export default async function Page({ params }: { params: Promise<{ type: string }> }) {
   const { type } = await params
+  if (type === REVIEW_AUTOMATION_SLUG) return <ReviewAutomationBuilder />
   const rt = ruleTypeBySlug(type)
   if (!rt) notFound()
   // RGD.0 — Dayparting Schedule now defaults to the rank-goal builder (which itself toggles to the

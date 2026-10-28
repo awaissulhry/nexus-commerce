@@ -6,14 +6,17 @@
  * only) and the list is read again. "Load templates (N)" adds the review automation templates not loaded yet (they start
  * off, in trial run). A rule in trial run records what it would do and changes nothing.
  *
- * Edit: the rules builder cannot open a review automation yet, so Edit is a labelled placeholder (build spec ruling 3).
+ * Edit opens the automation in the rules builder (its trigger settings — themes, how fast complaints must rise,
+ * products, market — its action and how often a day); Save there comes back here. On/off and trial run stay here.
  */
 import { useCallback, useMemo, useState } from 'react'
 import { Card, EmptyState, useToast } from '@/design-system/components'
 import { NexusGrid, type ColDef, type ICellRendererParams } from '@/design-system/grid'
 import { Button, InfoTip, Skeleton, Tag, Toggle } from '@/design-system/primitives'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import Link from '@/lib/workspaces/Link'
 import { reviewsSend } from '../../_lib/reviewsFetch'
+import { reviewAutomationEditHref } from '../../_lib/reviewsLinks'
 import { ReadFailed } from './ReadFailed'
 import { automationLastRun, automationWords, loadTemplatesButton, type AutomationRule } from './settingsModel'
 import type { SettingsRead } from './useSettingsRead'
@@ -24,7 +27,6 @@ interface Ctx {
   onToggle: (rule: AutomationRule, on: boolean) => void
 }
 
-const EDIT_LATER = 'Coming later: the rules builder opens review automations in a later update. Turn them on or off here.'
 const TRIAL_TIP = 'Trial run: it records what it would do and changes nothing.'
 
 function OnCell({ data, context }: ICellRendererParams<AutomationRule, unknown, Ctx>) {
@@ -62,10 +64,17 @@ function LastCell({ data }: ICellRendererParams<AutomationRule>) {
   )
 }
 
-function EditCell({ data }: ICellRendererParams<AutomationRule>) {
+/** Edit: the automation in the rules builder; held with its reason for a person who may not change review settings. */
+export function EditCell({ data, context }: Pick<ICellRendererParams<AutomationRule, unknown, Ctx>, 'data' | 'context'>) {
   if (!data) return null
-  // ⛔ KEEP — placeholder (build spec ruling 3): Edit opens the rules builder once it can open a review automation.
-  return <span className={s.cellActions}><Button size="sm" variant="quiet" heldReason={EDIT_LATER} aria-label={`Edit ${data.name}`}>Edit</Button></span>
+  if (context.manageHeld) {
+    return <span className={s.cellActions}><Button size="sm" variant="quiet" heldReason={context.manageHeld} aria-label={`Edit ${data.name}`}>Edit</Button></span>
+  }
+  return (
+    <span className={s.cellActions}>
+      <Button size="sm" variant="quiet" asChild><Link href={reviewAutomationEditHref(data.id)} aria-label={`Edit ${data.name}`}>Edit</Link></Button>
+    </span>
+  )
 }
 
 const COLUMNS: ColDef<AutomationRule>[] = [

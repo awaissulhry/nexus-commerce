@@ -7,6 +7,9 @@
  *     Per OPEN ReviewSpike row. Carries the spike metadata + the
  *     linked product (if any). Rules in domain='reviews' are evaluated
  *     against each context; marketplace scoping is respected.
+ *     `product.familyId` is the whole product a size or colour belongs to
+ *     (its parent, or itself when it has none): the rules builder's
+ *     "Products" setting names whole products (review-automation-builder.ts).
  *
  * Gated by NEXUS_ENABLE_REVIEW_INGEST=1 (same flag as the ingest/spike
  * detector croons so a single env var turns the whole SR-series on).
@@ -41,10 +44,12 @@ interface ReviewSpikeContext {
     sku: string
     name: string
     productType: string | null
+    familyId: string
   } | null
 }
 
-async function buildReviewSpikeContexts(): Promise<ReviewSpikeContext[]> {
+/** One context per open complaint-spike alert (exported for its tests). */
+export async function buildReviewSpikeContexts(): Promise<ReviewSpikeContext[]> {
   const spikes = await prisma.reviewSpike.findMany({
     // A "Rating drop" alert (category RATING_DROP, Reviews Phase 3) is not a complaint spike: no spike rule runs on it.
     where: { status: 'OPEN', category: { not: 'RATING_DROP' } },
@@ -63,7 +68,7 @@ async function buildReviewSpikeContexts(): Promise<ReviewSpikeContext[]> {
       detectedAt: true,
       productId: true,
       product: {
-        select: { id: true, sku: true, name: true, productType: true },
+        select: { id: true, sku: true, name: true, productType: true, parentId: true },
       },
     },
   })
@@ -82,7 +87,9 @@ async function buildReviewSpikeContexts(): Promise<ReviewSpikeContext[]> {
       rate28dDenominator: s.rate28dDenominator,
       detectedAt: s.detectedAt,
     },
-    product: s.product ?? null,
+    product: s.product
+      ? { id: s.product.id, sku: s.product.sku, name: s.product.name, productType: s.product.productType, familyId: s.product.parentId ?? s.product.id }
+      : null,
   }))
 }
 

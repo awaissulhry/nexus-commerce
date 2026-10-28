@@ -18,7 +18,6 @@ export interface SourceRow {
   stateWords: string
   tone: SourceTone
   words: string
-  later: string | null
   lastAt: string | null
   lastWords: string | null
   /**
@@ -65,6 +64,8 @@ export interface AutomationRule {
   lastEvaluatedAt: string | null
   lastMatchedAt: string | null
   matchCount: number
+  /** What it does in words, from its own settings; null for a template as it was loaded (worded below). */
+  words?: string | null
 }
 
 export interface ReplyTemplateRow {
@@ -125,16 +126,6 @@ export function sourceActionHref(action: SourceRow['action']): string | null {
   // The review app opens its connect window on the page (SourcesSection), not a link.
   if (action.kind === 'app') return null
   return action.href
-}
-
-/**
- * The held "Connect" of a source Nexus reads only from a later update: its reason in
- * words. Null for a source read today — also one that needs a fix but has no fix link (its words already say what is
- * wrong), and one whose later part is only an extra (eBay's photos and AI topics).
- */
-export function sourceLaterHeld(row: Pick<SourceRow, 'name' | 'tone' | 'later' | 'action'>): string | null {
-  if (row.action || !row.later || row.tone !== 'neutral') return null
-  return `Coming later: Nexus reads ${row.name} in a later update.`
 }
 
 // ── Times ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -327,8 +318,8 @@ const AUTOMATION_WORDS: Record<string, string> = {
   'Create A+ module from review spike': 'When complaints about one theme rise 2.5 times faster than usual or more, the AI drafts an A+ module that answers them and saves it as an A+ draft in Nexus. A person approves it before anything is published.',
 }
 
-export function automationWords(rule: Pick<AutomationRule, 'name' | 'description'>): string {
-  return AUTOMATION_WORDS[rule.name] ?? rule.description ?? '—'
+export function automationWords(rule: Pick<AutomationRule, 'name' | 'description' | 'words'>): string {
+  return rule.words ?? AUTOMATION_WORDS[rule.name] ?? rule.description ?? '—'
 }
 
 /**

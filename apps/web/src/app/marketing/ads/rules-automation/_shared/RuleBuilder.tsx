@@ -2645,7 +2645,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
  * and a screen reader stay in the builder that covers the screen. Returns the hand-back (once; it restores what each
  * element had). A list portalled to <body> after this ran (a picker's options) is not touched.
  */
-function inertOutside(root: HTMLElement): () => void {
+export function inertOutside(root: HTMLElement): () => void {
   const changed: Array<[HTMLElement, boolean]> = []
   for (let node: HTMLElement = root; node.parentElement && node !== document.body; node = node.parentElement) {
     for (const sibling of Array.from(node.parentElement.children)) {

@@ -1,0 +1,56 @@
+/*
+ * The rules builder's review automation — layout only, on top of the builder shell (`h10-rb-*` in
+ * rules-automation.css). Every control is a design-system component; nothing here restyles one. `--nds-*` tokens only.
+ */
+
+/* A card's blocks and choices sit apart the way the builder's other cards do. */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+}
+
+/* What a choice opens: under it, in line with its text. */
+.nested {
+  margin: var(--nds-space-6) 0 0 var(--nds-space-26);
+  max-width: 420px;
+}
+
+.kept {
+  margin: var(--nds-space-6) 0 0;
+  padding-left: var(--nds-space-18);
+  list-style: disc;
+}
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  margin-top: var(--nds-space-10);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-strong);
+}
+
+/* The state above the sections: on / off and trial run, as they are. */
+.state {
+  margin: 0 0 var(--nds-space-24);
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+@media (max-width: 720px) {
+  .nested {
+    margin-left: 0;
+    max-width: none;
+  }
+}

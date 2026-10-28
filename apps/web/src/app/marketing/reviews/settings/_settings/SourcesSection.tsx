@@ -2,9 +2,8 @@
 
 /**
  * Reviews › Settings › Sources — where reviews, feedback and review requests come from, per channel (GET
- * /api/reviews/settings/sources): each source's state in words, when it last worked, and what a person can do. Sources
- * that arrive in a later update say "Coming later" (build spec ruling 3); Amazon gives topics only, never review text
- * or stars (ruling 5). Amazon seller feedback (PR H) has "Fetch now", held with its reason when this setup does not
+ * /api/reviews/settings/sources): each source's state in words, when it last worked, and what a person can do. Every
+ * source is read today; Amazon gives topics only, never review text or stars (ruling 5). Amazon seller feedback (PR H) has "Fetch now", held with its reason when this setup does not
  * fetch it, Amazon is not connected or a fetch runs. The Shopify review app's row opens "Connect your review app"
  * (Judge.me, Okendo, Yotpo or Loox: paste what that app needs; PR I) and reads the rows again after a change. No setting
  * name is ever shown.
@@ -14,11 +13,11 @@ import { FetchNowButton } from '../../_channel/FetchNowButton'
 import { MANAGE_FETCH } from '../../_channel/sellerFeedbackModel'
 import { Card } from '@/design-system/components'
 import { NexusGrid, type ColDef, type ICellRendererParams } from '@/design-system/grid'
-import { Button, Pill, Skeleton, Tag } from '@/design-system/primitives'
+import { Button, Pill, Skeleton } from '@/design-system/primitives'
 import Link from '@/lib/workspaces/Link'
 import { ReviewAppConnect } from '../../_channel/ReviewAppConnect'
 import { ReadFailed } from './ReadFailed'
-import { sourceActionHref, sourceLaterHeld, timeWords, type SourceRow, type SourcesResponse } from './settingsModel'
+import { sourceActionHref, timeWords, type SourceRow, type SourcesResponse } from './settingsModel'
 import type { SettingsRead } from './useSettingsRead'
 import s from './settings.module.css'
 
@@ -40,7 +39,6 @@ function StateCell({ data }: ICellRendererParams<SourceRow>) {
     <span className={s.cellStack}>
       <span className={s.cellLine}>
         <Pill tone={PILL_TONE[data.tone]} dot>{data.stateWords}</Pill>
-        {data.later && <Tag tone="neutral">{data.later}</Tag>}
       </span>
       <span className={s.cellSub}>{data.words}</span>
     </span>
@@ -83,15 +81,6 @@ function ActionCell({ data, context }: ICellRendererParams<SourceRow, unknown, S
         <Button size="sm" variant={data.tone === 'warning' || data.tone === 'danger' ? 'primary' : 'secondary'} asChild>
           <Link href={href}>{data.action.label}</Link>
         </Button>
-      </span>
-    )
-  }
-  const later = sourceLaterHeld(data)
-  if (later) {
-    // ⛔ KEEP — placeholder (build spec ruling 3): this source is read from a later update; "Connect" then opens it.
-    return (
-      <span className={s.cellActions}>
-        <Button size="sm" heldReason={later}>Connect</Button>
       </span>
     )
   }

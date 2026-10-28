@@ -235,7 +235,7 @@ describe('sources', () => {
   const conn = (channelType: string, marketplace: string, authStatus = 'connected') =>
     ({ id: `${channelType}-${marketplace}`, channelType, marketplace, isActive: true, authStatus, lastErrorAt: hoursAgo(3), isPrimary: true })
 
-  it('the role missing, an eBay sign-in expired, later sources labelled; problems counted', () => {
+  it('the role missing, an eBay sign-in expired, every source said as it is now; problems counted', () => {
     const { rows, problems } = settingsSourceRows(facts({
       connections: [conn('AMAZON', 'IT'), conn('EBAY', 'IT'), conn('EBAY', 'DE', 'needs_reauth')],
       topics: [{ marketplace: 'IT', accessStatus: 'OK', fetchedAt: daysAgo(13) }, { marketplace: 'IT', accessStatus: 'NEEDS_BRAND_ANALYTICS_ROLE', fetchedAt: daysAgo(6) }],
@@ -247,15 +247,17 @@ describe('sources', () => {
     expect(by('amazon-topics').words).toMatch(/not on Amazon\.nl/)
     expect(by('ebay-feedback')).toMatchObject({ stateWords: 'Needs a fix', action: { kind: 'reconnect', label: 'Reconnect eBay Germany' } })
     expect(by('ebay-feedback').words).toMatch(/eBay Italy is fine\./)
-    expect(by('amazon-seller-feedback')).toMatchObject({ later: null, action: { kind: 'fetch', label: 'Fetch now' } })
-    // PR I: Etsy and the Shopify review app are real rows; no review app is "coming later" (Okendo, Yotpo, Loox connect too).
-    expect(by('etsy-reviews')).toMatchObject({ later: null, stateWords: 'Connected · not read yet', action: { kind: 'page', href: '/marketing/reviews/etsy' } })
-    expect(by('shopify-app')).toMatchObject({ stateWords: 'Not connected', later: null, action: { kind: 'app', label: 'Connect a review app…' } })
+    expect(by('amazon-seller-feedback')).toMatchObject({ action: { kind: 'fetch', label: 'Fetch now' } })
+    // PR I: Etsy and the Shopify review app are real rows (Judge.me, Okendo, Yotpo and Loox all connect).
+    expect(by('etsy-reviews')).toMatchObject({ stateWords: 'Connected · not read yet', action: { kind: 'page', href: '/marketing/reviews/etsy' } })
+    expect(by('shopify-app')).toMatchObject({ stateWords: 'Not connected', action: { kind: 'app', label: 'Connect a review app…' } })
     expect(by('shopify-app').what).toBe('Reviews with photos from the store’s review app · Judge.me, Okendo, Yotpo or Loox')
     expect(by('amazon-review-text')).toMatchObject({ stateWords: 'Not available', action: { kind: 'import' } })
     expect(by('amazon-review-text').words).toMatch(/no review text and no star rating by API/)
     expect(problems).toBe(2)
-    for (const r of rows) expect(`${r.words} ${r.what} ${r.stateWords} ${r.later ?? ''}`).not.toMatch(SETTING_NAME)
+    for (const r of rows) expect(`${r.words} ${r.what} ${r.stateWords}`).not.toMatch(SETTING_NAME)
+    // Every source is read now: no row carries a field for a part still to come.
+    for (const r of rows) expect(r).not.toHaveProperty('later')
   })
 
   it('the Shopify review app row: the connected app named, a fix first, the others said after', async () => {
@@ -266,7 +268,7 @@ describe('sources', () => {
     const apps = [reviewAppView('JUDGEME', null, { readOn: true, now: NOW }), conn('OKENDO'), conn('YOTPO', { state: 'NEEDS_FIX', lastError: 'Yotpo refused the store ID or the API secret (HTTP 401).' }), reviewAppView('LOOX', null, { readOn: true, now: NOW })]
     const { rows } = settingsSourceRows(facts(), { amazonSent30: [], amazonLastSentAt: null, mailerPaused: null, etsy: ETSY_OFF, apps }, NOW)
     const row = rows.find((r) => r.key === 'shopify-app')!
-    expect(row).toMatchObject({ stateWords: 'Yotpo · Needs a fix', tone: 'danger', later: null, action: { kind: 'app', label: 'Manage review apps…' } })
+    expect(row).toMatchObject({ stateWords: 'Yotpo · Needs a fix', tone: 'danger', action: { kind: 'app', label: 'Manage review apps…' } })
     expect(row.words).toMatch(/^Yotpo refused the store ID or the API secret \(HTTP 401\)\. .* Okendo: connected\.$/)
     expect(row.lastAt).toBe(hoursAgo(1).toISOString())
   })
@@ -278,7 +280,7 @@ describe('sources', () => {
     const market = (m: string, s: 'ok' | 'failed' | 'never' | 'fetching', rows: number | null, words = ''): SellerFeedbackState['markets'][number] =>
       ({ market: m, state: s, lastFetchAt: null, lastOkAt: s === 'ok' ? hoursAgo(5).toISOString() : null, rows, words })
     const off = sellerFeedbackRow(state({ on: false, canFetch: false, held: 'Nexus does not fetch Amazon seller feedback in this setup yet.' }))
-    expect(off).toMatchObject({ stateWords: 'Off', tone: 'neutral', later: null, action: { kind: 'fetch', held: 'Nexus does not fetch Amazon seller feedback in this setup yet.' } })
+    expect(off).toMatchObject({ stateWords: 'Off', tone: 'neutral', action: { kind: 'fetch', held: 'Nexus does not fetch Amazon seller feedback in this setup yet.' } })
     expect(off.words).toMatch(/^Off in this setup\. When it is on, Nexus asks Amazon for it daily at 06:00 UTC, and “Fetch now” asks at once\./)
     expect(off.words).toMatch(/only feedback of 1 to 3 stars/)
     const on = sellerFeedbackRow(state({ markets: [market('IT', 'ok', 7), market('DE', 'ok', 2)], lastOkAt: hoursAgo(5).toISOString() }))
