@@ -5,10 +5,10 @@ import { Redis } from 'ioredis'
 import { EVENT_CATALOGUE, type EventCatalogue } from '@nexus/factory-domain/events/catalogue'
 import { liveMessage, type LiveMessage } from '@nexus/factory-domain/events/envelope'
 import { liveViewFor } from '@nexus/factory-domain/events/live'
-import { loadFactoryEnv, readFactoryVariables } from '../env'
+import { loadFactoryEnv } from '../env'
 import { actorOf, requireContext } from './context'
 import { ApiError } from './errors'
-import { queuePrefixFrom, type Log } from './queue'
+import type { Log } from './queue'
 
 /**
  * Live screens (plan A1 §3.5, ported from Commerce's apps/api/src/lib/sse.ts): the worker's dispatcher publishes a
@@ -169,13 +169,7 @@ export function processLiveFeed(): LiveFeed {
   if (configured) return configured
   if (!fromEnv) {
     const env = loadFactoryEnv()
-    let prefix: string
-    try {
-      prefix = queuePrefixFrom(readFactoryVariables().FACTORY_QUEUE_PREFIX, env.FACTORY_ENV)
-    } catch (error) {
-      throw new ApiError('not_ready', `Live updates are not configured: ${(error as Error).message}.`)
-    }
-    fromEnv = new LiveFeed({ prefix, connect: () => new Redis(env.FACTORY_REDIS_URL, { maxRetriesPerRequest: null }) })
+    fromEnv = new LiveFeed({ prefix: env.FACTORY_QUEUE_PREFIX, connect: () => new Redis(env.FACTORY_REDIS_URL, { maxRetriesPerRequest: null }) })
   }
   return fromEnv
 }

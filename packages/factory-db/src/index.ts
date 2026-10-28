@@ -22,5 +22,5 @@ export {
   type Audience,
   type RuntimeRole,
 } from './roles'
-export type { Company, Line, Prisma, Site, Station, Tenant, WorkCentre } from './generated/prisma/client'
-export { MasterStatus, SiteKind, TenantStatus, WorkCentreKind } from './generated/prisma/enums'
+export type { Company, Line, OutboxEvent, Prisma, Site, Station, Tenant, WorkCentre } from './generated/prisma/client'
+export { MasterStatus, OutboxStatus, SiteKind, TenantStatus, WorkCentreKind } from './generated/prisma/enums'

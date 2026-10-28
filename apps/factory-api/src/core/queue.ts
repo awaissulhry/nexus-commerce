@@ -1,12 +1,12 @@
 import { Queue, UnrecoverableError, Worker, type Job, type JobsOptions } from 'bullmq'
 import { Redis } from 'ioredis'
-import type { FactoryEnv } from '../env'
+import { QUEUE_PREFIX_PATTERN } from '../env'
 
 /**
  * The background queues (plan A1 §3.3): BullMQ on the factory's Redis. Every queue and every job key sits under the
- * process's queue prefix (FACTORY_QUEUE_PREFIX): `<prefix>:<queue>:…`, the cron locks under `<prefix>:cron:…` and the
- * live-screen channels under `<prefix>:live:…`. A local Redis is shared by every worktree, so a local or test process
- * must name its own prefix (the worktree's step, `w0_12`); there is no default to collide on.
+ * process's queue prefix (FACTORY_QUEUE_PREFIX, env.ts): `<prefix>:<queue>:…`, the cron locks under `<prefix>:cron:…`
+ * and the live-screen channels under `<prefix>:live:…`. A local Redis is shared by every worktree, so env.ts makes a
+ * local or test process name its own prefix (the worktree's step, `w0_12`); there is no default to collide on.
  *
  * Every job is idempotent with a deterministic id (A1 §3.3): `add` takes the id, and adding an id that is still kept
  * is a no-op. Completed jobs are kept for a week, so a repeated publish of one event (a relay that crashed between
@@ -35,25 +35,9 @@ export class QueueConfigError extends Error {
   override name = 'QueueConfigError'
 }
 
-const PREFIX = /^[a-z][a-z0-9_]{0,31}$/
 const JOB_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/
 const WEEK_S = 7 * 24 * 60 * 60
 const MONTH_S = 30 * 24 * 60 * 60
-
-/**
- * The queue prefix of this process. local and test: FACTORY_QUEUE_PREFIX is required (the shared local Redis);
- * staging and production: it defaults to `factory` (each environment has its own Redis).
- */
-export function queuePrefixFrom(value: string | undefined, environment: FactoryEnv['FACTORY_ENV']): string {
-  const prefix = value === undefined || value === '' ? (environment === 'staging' || environment === 'production' ? 'factory' : undefined) : value
-  if (prefix === undefined) {
-    throw new QueueConfigError(
-      `FACTORY_QUEUE_PREFIX is required with FACTORY_ENV=${environment}: the local Redis is shared by every worktree, so name this worktree's own (e.g. w0_12)`,
-    )
-  }
-  if (!PREFIX.test(prefix)) throw new QueueConfigError(`FACTORY_QUEUE_PREFIX ${JSON.stringify(prefix)} must be 1-32 lower-case letters, digits or underscores, starting with a letter`)
-  return prefix
-}
 
 /** A Redis connection for BullMQ (it needs `maxRetriesPerRequest: null`: a worker's blocking reads wait out an outage). */
 export function queueConnection(url: string): Redis {
@@ -109,7 +93,7 @@ export function assertJobId(jobId: string): string {
 
 /** The queues of one prefix on one connection. */
 export function openQueues({ connection, prefix }: { readonly connection: Redis; readonly prefix: string }): QueueKit {
-  if (!PREFIX.test(prefix)) throw new QueueConfigError(`Queue prefix ${JSON.stringify(prefix)} is not valid`)
+  if (!QUEUE_PREFIX_PATTERN.test(prefix)) throw new QueueConfigError(`Queue prefix ${JSON.stringify(prefix)} is not valid`)
   const queues = new Map<QueueName, Queue>()
   const workers = new Set<Worker>()
   let closed = false

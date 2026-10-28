@@ -3,8 +3,8 @@ import { openFactoryDatabase, type FactoryDatabase } from '@nexus/factory-db'
 import { checkTestDatabaseUrl, readWorktree, worktreeDatabaseNames } from '@nexus/factory-db/test-database'
 import { startCrons, type CronJob } from './core/cron'
 import { redact } from './core/logger'
-import { openQueues, queueConnection, queuePrefixFrom, type Log } from './core/queue'
-import { loadFactoryEnv, readFactoryVariables } from './env'
+import { openQueues, queueConnection, type Log } from './core/queue'
+import { loadFactoryEnv } from './env'
 import { startEventWorkers, type EventHandler } from './platform/outbox/dispatch'
 import { outboxLagCron } from './platform/outbox/lag'
 import { queuePublisher, startRelay } from './platform/outbox/relay'
@@ -22,7 +22,8 @@ import { queuePublisher, startRelay } from './platform/outbox/relay'
  *   - a wrong environment (env.ts: local and test only on loopback, staging and production only on Railway);
  *   - with FACTORY_ENV local or test, a database that is not this worktree's own (factory_<branch>, factory_<step>) or a
  *     throwaway factory_test…: never a shared one;
- *   - with FACTORY_ENV local or test, a missing FACTORY_QUEUE_PREFIX: the local Redis is shared by every worktree.
+ *   - with FACTORY_ENV local or test, a missing FACTORY_QUEUE_PREFIX (env.ts): the local Redis is shared by every
+ *     worktree.
  * Then the database login is audited (openFactoryDatabase), as at the API's boot.
  */
 
@@ -56,13 +57,12 @@ function refuse(reason: string): never {
 }
 
 let env: ReturnType<typeof loadFactoryEnv>
-let prefix: string
 try {
   env = loadFactoryEnv()
-  prefix = queuePrefixFrom(readFactoryVariables().FACTORY_QUEUE_PREFIX, env.FACTORY_ENV)
 } catch (error) {
   refuse((error as Error).message)
 }
+const prefix = env.FACTORY_QUEUE_PREFIX
 if (env.FACTORY_ENV === 'local' || env.FACTORY_ENV === 'test') {
   const own = checkTestDatabaseUrl(env.FACTORY_DATABASE_URL, worktreeDatabaseNames(readWorktree(fileURLToPath(new URL('.', import.meta.url)))))
   if (!own.ok) refuse(`${own.reason}; a local ${mode} runs only against this worktree's own database`)

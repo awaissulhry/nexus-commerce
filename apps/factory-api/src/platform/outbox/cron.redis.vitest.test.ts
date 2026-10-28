@@ -1,11 +1,11 @@
 import { Redis } from 'ioredis'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { CronConfigError, cronLockKey, defineCron, runTick, startCrons, type CronSettings } from '../../core/cron'
-import { assertJobId, QueueConfigError, queuePrefixFrom, type Log } from '../../core/queue'
+import { assertJobId, QueueConfigError, type Log } from '../../core/queue'
 import { testRedis, type TestRedis } from './testing'
 
 /**
- * core/cron.ts on the local Redis (under this file's own prefix), and the pure parts of core/queue.ts: a clustered
+ * core/cron.ts on the local Redis (under this file's own prefix), and core/queue.ts's job ids: a clustered
  * cron runs each tick once however many schedulers run it, and not at all when the lock cannot be taken.
  */
 
@@ -81,17 +81,7 @@ describe('clustered crons (A1 §3.1; Commerce hard rule 7)', () => {
   })
 })
 
-describe('queue prefix and job ids', () => {
-  it('needs its own prefix locally (the shared Redis) and defaults to factory on Railway', () => {
-    expect(() => queuePrefixFrom(undefined, 'local')).toThrow(/FACTORY_QUEUE_PREFIX is required with FACTORY_ENV=local/)
-    expect(() => queuePrefixFrom('', 'test')).toThrow(QueueConfigError)
-    expect(queuePrefixFrom('w0_12', 'local')).toBe('w0_12')
-    expect(queuePrefixFrom(undefined, 'production')).toBe('factory')
-    expect(queuePrefixFrom(undefined, 'staging')).toBe('factory')
-    expect(() => queuePrefixFrom('W0-12', 'local')).toThrow(/lower-case/)
-    expect(() => queuePrefixFrom('bull', 'local')).not.toThrow()
-  })
-
+describe('job ids', () => {
   it('takes only deterministic-id shaped job ids', () => {
     expect(assertJobId('0190a000-0000-7000-8000-000000000001')).toBe('0190a000-0000-7000-8000-000000000001')
     expect(assertJobId('sites.audited.0190a000-0000-7000-8000-000000000001')).toMatch(/^sites/)

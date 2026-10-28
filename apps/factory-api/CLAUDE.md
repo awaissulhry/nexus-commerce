@@ -7,8 +7,7 @@ and the idempotency receipt; the outbox (events → BullMQ → handlers and live
 (`src/background.ts worker|scheduler`). Sign-in, the modules and the adapters come in later steps.
 
 ## Commands (from the repository root unless noted)
-    cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, and add
-                                                             # FACTORY_QUEUE_PREFIX=<step> (w0_12): the local Redis is shared
+    cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>
     cd packages/factory-db && npx prisma generate            # once after npm ci (typecheck and tests need the client)
     npm run dev -w @nexus/factory-api           # :8190 unless FACTORY_PORT
     npm run dev:worker -w @nexus/factory-api    # outbox relay + event handlers; ONLY on this worktree's own database
@@ -80,7 +79,8 @@ and the idempotency receipt; the outbox (events → BullMQ → handlers and live
 - Local stack: PostgreSQL 17 on 127.0.0.1:5442 and Redis on 127.0.0.1:6399 (`infra/factory/docker-compose.yml`,
   started once from a fixed folder, never from a worktree). Never Commerce's 5432/6379 or Commerce's databases.
 - The worker and scheduler run only against this worktree's own loopback database: with FACTORY_ENV local or test,
-  `background.ts` refuses any other database name and a missing FACTORY_QUEUE_PREFIX before it connects.
+  `background.ts` refuses any other database name before it connects, and env.ts refuses a missing
+  FACTORY_QUEUE_PREFIX (the local Redis is shared; Railway defaults it to `factory`).
 - Every event is declared before it is emitted (`check-event-contract`); every schedule is a `defineCron` job
   (`check-cron-clustered`: node-cron only in core/cron.ts, no other scheduler library, no BullMQ repeatable job).
 - The Prisma CLI runs only from `packages/factory-db`.
