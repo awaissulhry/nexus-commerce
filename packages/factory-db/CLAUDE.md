@@ -40,9 +40,9 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
 4. Merging (the lead, under the schema token, plan §2.1): merge `origin/main`, delete the branch's GENERATED migration
    folders, re-run step 2 with new timestamps, re-run the checks, merge, release the token. The hand-written folders
    (`…_audit_append_only`, `…_numbering_guards`, `…_outbox_guard`, `…_integration_guards`, `…_files_guards`,
-   `…_links_guards`: triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new
-   schema and policy folders; keep it out of `prisma/migrations` while `npm run migration` runs (it replays every
-   folder, and the triggers need the new table). The policy folder is always the last migration.
+   `…_links_guards`, `…_threads_guards`: triggers) are not regenerated: `git mv` the branch's one, unchanged, to a
+   timestamp between its new schema and policy folders; keep it out of `prisma/migrations` while `npm run migration`
+   runs (it replays every folder, and the triggers need the new table). The policy folder is always the last migration.
 
 ## Rules
 - Run the Prisma CLI only from this folder. `prisma.config.ts` reads only `packages/factory-db/.env`
