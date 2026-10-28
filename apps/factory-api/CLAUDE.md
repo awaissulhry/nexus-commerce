@@ -10,6 +10,7 @@ R2 (`src/platform/files/`), record threads with the record timeline (`src/platfo
 run (`src/platform/imports/`), documents and printing (`src/platform/{documents,print}/`), email out through SES
 (`src/platform/email-out/`) and email in with "mail to sort" (`src/platform/email-in/`), below. Portal sign-in, the
 modules and the other adapters come in later steps.
+Modules: `modules/compliance/certificates` (certificate register and gate `certificateGateFor`; cron `compliance.certificateExpiry`).
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>

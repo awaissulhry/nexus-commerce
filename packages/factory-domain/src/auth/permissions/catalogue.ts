@@ -1,3 +1,4 @@
+import { CERTIFICATES_PERMISSIONS } from '../../compliance/certificates/permissions'
 import type { Permission } from '../../core/permissions'
 import { LINK_SESSION_PERMISSIONS as LINK_SESSION_NAMES, LINKS_OFFICE_PERMISSIONS } from '../../links/permissions'
 import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
@@ -170,6 +171,17 @@ export const EMAIL_SEND = 'email.send' satisfies Permission
 export const EMAIL_MANAGE = 'email.manage' satisfies Permission
 export const EMAIL_TRIAGE = 'email.triage' satisfies Permission
 
+/**
+ * Compliance: the EU type-examination certificate register (apps/factory-api modules/compliance/certificates; QHS-103,
+ * QHS-051, PRD-288; Reg. (EU) 2016/425). Checked with can() against the certificate's company and holder party. The
+ * constants live in factory-domain/src/compliance/certificates/permissions.ts. Not step-up: a certificate is typed from
+ * the notified body's PDF, and registering one needs that PDF on the record.
+ */
+export const COMPLIANCE_DEFINITIONS = definePermissions('compliance', {
+  'certificates.view': { risk: 'read', description: 'See the EU type-examination certificates, what they cover and when they expire; ask the certificate gate whether a garment is covered.' },
+  'certificates.manage': { risk: 'write', description: 'Type in certificates, register them with their PDF, suspend, reinstate and withdraw them, and record or end what they cover.' },
+})
+
 /** The money grains as they travel in grants (`../grains/grains`): from Role.grains, never Role.permissions. */
 export const MONEY_PERMISSIONS: PermissionDefinition[] = GRAINS.map((grain) =>
   Object.freeze({ name: grainPermission(grain), area: 'money', description: GRAIN_DESCRIPTIONS[grain], risk: 'read' as const, grain }),
@@ -191,6 +203,7 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   DOCUMENTS_DEFINITIONS,
   PRINT_DEFINITIONS,
   EMAIL_DEFINITIONS,
+  COMPLIANCE_DEFINITIONS,
   PRODUCT_MATERIALS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
@@ -206,7 +219,7 @@ export const FLOOR_AREA = 'floor'
 export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS])
 
 // The modules' constants and their declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...PRODUCT_MATERIALS_PERMISSIONS]) {
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS]) {
   if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 }
 for (const name of LINK_SESSION_NAMES) {
