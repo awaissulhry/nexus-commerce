@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { newId } from '@nexus/factory-domain/core/ids'
-import type { OfficeContext } from '../../../core/context'
+import { SYSTEM_ACTOR_ID, type OfficeContext } from '../../../core/context'
+import type { Log } from '../../../core/queue'
+import { rolesSyncCron, syncAllTenants } from './sync'
 import { addRole, addTenant, addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant, type TestUser } from '../sessions/testing/harness'
 
 /**
@@ -62,7 +64,7 @@ beforeAll(async () => {
   h = await startHarness('auth_roles')
   alpha = await addTenant(h, 'alpha', 2)
   beta = await addTenant(h, 'beta')
-  ownerUser = await addUser(h, alpha, { email: 'owner@example.com', isOwner: true })
+  ownerUser = await addUser(h, alpha, { email: 'owner@example.com', role: 'owner' })
   owner = await signedIn('alpha', ownerUser)
   ownerSecret = await enrolTotp(h, owner)
 }, 60_000)
@@ -100,7 +102,7 @@ describe('the grants of a session', () => {
     expect(after).toEqual(expect.arrayContaining(['users.view', 'roles.assign', 'audit.read', 'money.price']))
     expect(after).not.toContain('money.cost')
     expect((await browser.get('/auth/users')).status).toBe(200)
-    expect((await browser.get('/auth/office/me')).body).toMatchObject({ user: { isOwner: false }, mfa: { required: true, satisfied: true } })
+    expect((await browser.get('/auth/office/me')).body).toMatchObject({ mfa: { required: true, satisfied: true } })
   })
 
   it('is the union of the live assignments; one that starts later gives nothing yet', async () => {
@@ -226,7 +228,7 @@ describe('assignments', () => {
 
   it('keep an administrator: the last one is neither unassigned nor suspended', async () => {
     const gamma = await addTenant(h, 'gamma')
-    const boss = await addUser(h, gamma, { email: 'boss@example.com', isOwner: true })
+    const boss = await addUser(h, gamma, { email: 'boss@example.com', role: 'owner' })
     const delegate = await person(gamma, 'delegate@example.com')
     const bossBrowser = await signedIn('gamma', boss)
     const bossSecret = await enrolTotp(h, bossBrowser)
@@ -246,6 +248,44 @@ describe('assignments', () => {
     const suspend = await delegate.browser.post(`/auth/users/${boss.id}/suspend`, { version: bossRow.version })
     expect(suspend.status).toBe(409)
     expect(suspend.body.error.message).toMatch(/another active administrator/)
+  })
+})
+
+describe('an assigner gives roles only within their own roles.assign scope', () => {
+  it('refuses an assignment or an invitation wider than the companies and sites the assigner reaches (403)', async () => {
+    const [c1, c2] = alpha.companies
+    const siteId = newId()
+    await h.database.withScope({ audience: 'office', tenantId: alpha.id, actorId: ownerUser.id }, (client) =>
+      client.site.create({ data: { id: siteId, companyId: c1!.id, code: 'P1', name: 'Plant 1', kind: 'PLANT' } }),
+    )
+    const desk = await asOwner('post', '/auth/roles', { key: 'access_c1', name: 'Access desk C1', permissions: ['roles.view', 'roles.assign', 'users.invite'] })
+    const companyDesk = await person(alpha, 'desk.company@example.com')
+    const siteDesk = await person(alpha, 'desk.site@example.com')
+    await assign(companyDesk.user.id, { roleId: desk.body.id, companyIds: [c1!.id] })
+    await assign(siteDesk.user.id, { roleId: desk.body.id, companyIds: [c1!.id], siteIds: [siteId] })
+    const salesId = await roleIdOf(owner, 'sales')
+    const target = await addUser(h, alpha, { email: 'scoped.target@example.com' })
+    const give = async (desker: Required<Person>, scope: Record<string, unknown>) => {
+      await stepUp(h, desker.browser, desker.secret)
+      return desker.browser.post(`/auth/users/${target.id}/roles`, { roleId: salesId, ...scope })
+    }
+
+    const everyCompany = await give(companyDesk, { allCompanies: true })
+    expect(everyCompany.status).toBe(403)
+    expect(everyCompany.body.error.issues).toEqual([{ path: 'allCompanies', message: 'Outside your own roles.assign scope: every company and site.' }])
+    expect((await give(companyDesk, { companyIds: [c2!.id] })).body.error.issues[0].path).toBe('companyIds')
+    expect((await give(companyDesk, { companyIds: [c1!.id] })).status).toBe(200)
+    expect((await give(companyDesk, { companyIds: [c1!.id], siteIds: [siteId] })).status).toBe(200)
+
+    expect((await give(siteDesk, { companyIds: [c1!.id] })).status).toBe(403)
+    expect((await give(siteDesk, { companyIds: [c1!.id], siteIds: [siteId] })).status).toBe(200)
+
+    await stepUp(h, companyDesk.browser, companyDesk.secret)
+    const wideInvite = await companyDesk.browser.post('/auth/invitations', { email: 'wide@example.com', displayName: 'Wide', roles: [{ roleId: salesId, allCompanies: true }] })
+    expect(wideInvite.status).toBe(403)
+    expect(wideInvite.body.error.issues).toEqual([{ path: 'roles/0/allCompanies', message: 'Outside your own roles.assign scope: every company and site.' }])
+    await stepUp(h, companyDesk.browser, companyDesk.secret)
+    expect((await companyDesk.browser.post('/auth/invitations', { email: 'narrow@example.com', displayName: 'Narrow', roles: [{ roleId: salesId, companyIds: [c1!.id] }] })).status).toBe(200)
   })
 })
 
@@ -299,9 +339,48 @@ describe('money grains on audit rows', () => {
   })
 })
 
+describe('the system roles follow their templates by themselves', () => {
+  const lines: { level: string; fields: Record<string, unknown>; message: string }[] = []
+  const log: Log = {
+    info: (fields, message) => void lines.push({ level: 'info', fields, message }),
+    warn: (fields, message) => void lines.push({ level: 'warn', fields, message }),
+    error: (fields, message) => void lines.push({ level: 'error', fields, message }),
+  }
+  const admin = async (sql: string, values: unknown[] = []) => (await h.db.admin.query(sql, values)).rows as Record<string, unknown>[]
+
+  it('syncs every ACTIVE tenant (worker start and the daily cron), audited as the system; a suspended tenant waits', async () => {
+    const delta = await addTenant(h, 'delta')
+    const omega = await addTenant(h, 'omega')
+    // As if a deploy had changed the sales template and added the warehouse one after these tenants were synced.
+    await admin(`UPDATE "Role" SET permissions = '{}' WHERE "tenantId" IN ($1::uuid, $2::uuid) AND key = 'sales'`, [delta.id, omega.id])
+    await admin(`DELETE FROM "Role" WHERE "tenantId" IN ($1::uuid, $2::uuid) AND key = 'warehouse'`, [delta.id, omega.id])
+    await h.database.withScope({ audience: 'platform' }, (client) => client.tenant.update({ where: { id: omega.id }, data: { status: 'SUSPENDED' } }))
+
+    const first = await syncAllTenants({ database: h.database, log, clock: h.clock })
+    expect(first).toMatchObject({ changed: 1, created: 1, updated: 1, failed: 0 })
+    const audited = await admin(
+      `SELECT a.action, a.audience::text, a."actorId"::text AS actor, r.key FROM "AuditLog" a JOIN "Role" r ON r.id = a."recordId" WHERE a."tenantId" = $1::uuid AND a.action = 'roles.syncTemplates' ORDER BY r.key`,
+      [delta.id],
+    )
+    expect(audited).toEqual([
+      { action: 'roles.syncTemplates', audience: 'SYSTEM', actor: SYSTEM_ACTOR_ID, key: 'sales' },
+      { action: 'roles.syncTemplates', audience: 'SYSTEM', actor: SYSTEM_ACTOR_ID, key: 'warehouse' },
+    ])
+    expect((await admin(`SELECT permissions FROM "Role" WHERE "tenantId" = $1::uuid AND key = 'sales'`, [omega.id]))[0]).toEqual({ permissions: [] })
+    expect(await syncAllTenants({ database: h.database, log, clock: h.clock })).toMatchObject({ changed: 0, created: 0, updated: 0 })
+
+    const cron = rolesSyncCron({ database: h.database, log, clock: h.clock })
+    expect(cron).toMatchObject({ name: 'roles.syncTemplates', schedule: '15 3 * * *', timezone: 'Europe/Rome' })
+    await admin(`UPDATE "Role" SET grains = '{}' WHERE "tenantId" = $1::uuid AND key = 'owner'`, [delta.id])
+    await cron.run({ name: cron.name, scheduledAt: h.clock.now() })
+    expect((await admin(`SELECT grains FROM "Role" WHERE "tenantId" = $1::uuid AND key = 'owner'`, [delta.id]))[0]).toEqual({ grains: ['price', 'cost', 'margin', 'wages'] })
+    expect(lines.filter((line) => line.level === 'error')).toEqual([])
+  })
+})
+
 describe('the tenant wall', () => {
   it("never shows or touches another tenant's roles and assignments", async () => {
-    const betaOwnerUser = await addUser(h, beta, { email: 'owner@example.com', isOwner: true, password: 'other-tenant-lantern-31' })
+    const betaOwnerUser = await addUser(h, beta, { email: 'owner@example.com', role: 'owner', password: 'other-tenant-lantern-31' })
     const betaOwner = await signedIn('beta', betaOwnerUser)
     const betaSecret = await enrolTotp(h, betaOwner)
     const alphaRoles = ((await owner.get('/auth/roles')).body.roles as { id: string }[]).map((role) => role.id)

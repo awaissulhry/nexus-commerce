@@ -10,12 +10,14 @@ import { inboundHandler } from './platform/inbound/process'
 import { startEventWorkers, type EventHandler } from './platform/outbox/dispatch'
 import { outboxLagCron } from './platform/outbox/lag'
 import { queuePublisher, startRelay } from './platform/outbox/relay'
+import { rolesSyncCron, syncAllTenants } from './platform/auth/roles/sync'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
  *
  *   node dist/background.js worker      the outbox relay (relay.ts), the events dispatcher and the handler runner
- *                                       (dispatch.ts); npm run dev:worker -w @nexus/factory-api under tsx
+ *                                       (dispatch.ts), after syncing every active tenant's system roles with their
+ *                                       templates (platform/auth/roles/sync.ts); npm run dev:worker -w @nexus/factory-api
  *   node dist/background.js scheduler   the clustered crons (core/cron.ts): each tick runs on one replica only;
  *                                       npm run dev:scheduler -w @nexus/factory-api
  *
@@ -89,11 +91,13 @@ const kit = openQueues({ connection: redis, prefix })
 
 const stops: Array<() => Promise<void>> = []
 if (mode === 'worker') {
+  // A deploy that changed a role template starts a new worker: the system roles follow it (audited per tenant).
+  await syncAllTenants({ database, log }).catch((error) => log.error({ err: error }, 'the system roles could not be synced at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
   const workers = startEventWorkers({ kit, handlers: HANDLERS, database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
-  const crons: CronJob[] = [outboxLagCron({ database, kit, log })]
+  const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log })]
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

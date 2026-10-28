@@ -52,7 +52,7 @@ describe('sign-in, me and sign-out', () => {
     const me = await browser.get('/auth/office/me')
     expect(me.status).toBe(200)
     expect(me.body).toMatchObject({
-      user: { id: user.id, email: 'ada@example.com', isOwner: false },
+      user: { id: user.id, email: 'ada@example.com' },
       tenant: { id: tenant.id, slug: 'alpha' },
       company: { id: tenant.companies[0]!.id, code: 'C1' },
       mfa: { enabled: false, required: false, satisfied: true, recoveryCodesLeft: 0 },
@@ -202,7 +202,7 @@ describe('two-factor', () => {
 
   it('an owner holds no permission until two-factor is set up and proved on the session', async () => {
     h.clock.set(START)
-    const owner = await addUser(h, tenant, { email: 'first.owner@example.com', isOwner: true })
+    const owner = await addUser(h, tenant, { email: 'first.owner@example.com', role: 'owner' })
     const browser = new Browser(h.app)
     const answer = await browser.signIn('alpha', owner.email, owner.password)
     expect(answer.body.mfa).toEqual({ enabled: false, required: true, satisfied: false })

@@ -43,8 +43,6 @@ export interface OfficeSession {
     readonly email: string
     readonly displayName: string
     readonly locale: string
-    /** Holds the owner system role now. */
-    readonly isOwner: boolean
     /** Two-factor is required now: the person's own flag or a role they hold. */
     readonly requireMfa: boolean
     readonly totpEnabled: boolean
@@ -132,7 +130,6 @@ export function officeAuthenticator(core: { readonly database: FactoryDatabase; 
           email: row.user.email,
           displayName: row.user.displayName,
           locale: row.user.locale,
-          isOwner: access.isOwner,
           requireMfa: access.requireMfa,
           totpEnabled: row.user.totpConfirmedAt !== null,
         },

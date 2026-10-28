@@ -16,6 +16,7 @@ import {
   scopeProblems,
   sessionGrants,
   templateAdds,
+  uncoveredScope,
   widens,
   type AssignmentScope,
 } from './roles'
@@ -163,5 +164,39 @@ describe('money grains by audience', () => {
     expect([...heldGrains({ audience: 'system', tenantId, grants: [] })]).toEqual([...GRAINS])
     expect([...heldGrains(null)]).toEqual([])
     expect([...heldGrains(office([]))]).toEqual([])
+  })
+})
+
+describe('an assigner gives roles only within their own roles.assign scope', () => {
+  const C1 = A
+  const S1 = SITE
+  const S2 = '0195f5d0-0000-7000-8000-0000000000c2'
+  const sites = new Map([[S1, C1], [S2, B]])
+  const assigner = (scope: AssignmentScope, permissions: Permission[] = ['roles.assign']) => [grantOf({ permissions, grains: [] }, scope)]
+  const paths = (issues: { path: string }[]) => issues.map((issue) => issue.path)
+
+  it('lets a tenant-wide assigner give anything', () => {
+    expect(uncoveredScope(assigner(everywhere), { ...everywhere, siteIds: [S1], partyIds: [B] }, sites)).toEqual([])
+  })
+
+  it('keeps a company-scoped assigner inside their companies and sites', () => {
+    const c1 = assigner(onlyA)
+    expect(uncoveredScope(c1, onlyA, sites)).toEqual([])
+    expect(uncoveredScope(c1, { ...onlyA, siteIds: [S1] }, sites)).toEqual([])
+    expect(paths(uncoveredScope(c1, everywhere, sites))).toEqual(['allCompanies'])
+    expect(paths(uncoveredScope(c1, { ...everywhere, siteIds: [S1] }, sites))).toEqual(['siteIds'])
+    expect(paths(uncoveredScope(c1, { ...onlyA, companyIds: [A, B] }, sites))).toEqual(['companyIds'])
+    const siteBound = assigner({ ...onlyA, siteIds: [S1] })
+    expect(paths(uncoveredScope(siteBound, onlyA, sites))).toEqual(['companyIds'])
+    expect(uncoveredScope(siteBound, { ...onlyA, siteIds: [S1] }, sites)).toEqual([])
+    expect(paths(uncoveredScope(siteBound, { ...onlyA, companyIds: [A, B], siteIds: [S1, S2] }, sites))).toEqual(['companyIds', 'siteIds'])
+  })
+
+  it('keeps a party limit at least as tight, and counts only roles.assign grants', () => {
+    const party = assigner({ ...everywhere, partyIds: [A] })
+    expect(paths(uncoveredScope(party, everywhere, sites))).toEqual(['allCompanies'])
+    expect(uncoveredScope(party, { ...everywhere, partyIds: [A] }, sites)).toEqual([])
+    expect(paths(uncoveredScope(party, { ...everywhere, partyIds: [A, B] }, sites))).toEqual(['allCompanies'])
+    expect(paths(uncoveredScope(assigner(everywhere, ['users.view']), onlyA, sites))).toEqual(['companyIds'])
   })
 })

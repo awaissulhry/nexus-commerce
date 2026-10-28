@@ -165,6 +165,47 @@ export function sessionGrants(user: { readonly requireMfa: boolean }, held: read
   return held.filter(({ role }) => mfaProved || !role.requireMfa).map(({ role, scope }) => grantOf(role, scope))
 }
 
+/**
+ * What of an assignment's scope the assigner's ADMIN_PERMISSION grants do not reach (plan A1 §3.11; no escalation): a
+ * person gives roles only within their own roles.assign scope. Each part of the new scope needs ONE grant of the
+ * assigner that reaches it, with a party limit at least as tight:
+ *   every company, no site limit       a grant over every company and every site
+ *   every company, some sites          per site, a grant over every company that reaches the site
+ *   some companies, no site limit      per company, a grant that reaches it with every site
+ *   some companies, some sites         per company a grant that reaches it; per site a grant that reaches its company
+ *                                      and the site
+ * `siteCompanies` maps each site of the new scope to its company. Empty: the assigner may give it.
+ */
+export function uncoveredScope(assignerGrants: readonly Grant[], scope: AssignmentScope, siteCompanies: ReadonlyMap<string, string>): Issue[] {
+  const grants = assignerGrants.filter((grant) => grant.permissions.includes(ADMIN_PERMISSION))
+  const reaches = (set: ScopeSet, id: string): boolean => set === 'all' || set.includes(id)
+  const parties = (grant: Grant): boolean =>
+    grant.parties === 'all' || (scope.partyIds.length > 0 && scope.partyIds.every((party) => reaches(grant.parties, party)))
+  const some = (test: (grant: Grant) => boolean): boolean => grants.some((grant) => parties(grant) && test(grant))
+  const issues: Issue[] = []
+  const wider = (path: string, what: string) => issues.push({ path, message: `Outside your own ${ADMIN_PERMISSION} scope: ${what}.` })
+
+  if (scope.allCompanies) {
+    if (scope.siteIds.length === 0) {
+      if (!some((grant) => grant.companies === 'all' && grant.sites === 'all')) wider('allCompanies', 'every company and site')
+    } else {
+      for (const site of scope.siteIds) {
+        if (!some((grant) => grant.companies === 'all' && reaches(grant.sites, site))) wider('siteIds', `site ${site} in every company`)
+      }
+    }
+  } else {
+    for (const company of scope.companyIds) {
+      const fits = scope.siteIds.length === 0 ? (grant: Grant) => reaches(grant.companies, company) && grant.sites === 'all' : (grant: Grant) => reaches(grant.companies, company)
+      if (!some(fits)) wider('companyIds', `company ${company}`)
+    }
+    for (const site of scope.siteIds) {
+      const company = siteCompanies.get(site)
+      if (company === undefined || !some((grant) => reaches(grant.companies, company) && reaches(grant.sites, site))) wider('siteIds', `site ${site}`)
+    }
+  }
+  return issues
+}
+
 /** The assignment makes its holder an administrator (ADMIN_PERMISSION over every company). */
 export function isAdminAssignment(role: Pick<RoleContent, 'permissions'>, scope: Pick<AssignmentScope, 'allCompanies'>): boolean {
   return scope.allCompanies && role.permissions.includes(ADMIN_PERMISSION)

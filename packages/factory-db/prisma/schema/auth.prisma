@@ -9,8 +9,8 @@
 // Secrets are never stored: passwords as scrypt hashes, session, invitation and reset tokens as SHA-256 of the token,
 // recovery codes as HMACs, the TOTP secret encrypted (AES-256-GCM). The logger redacts these columns by name.
 
-/// A person who signs in to the Office of one tenant (the roles step adds what they may do; floor workers and portal
-/// users join this table in their steps). Never deleted: a leaver is DEACTIVATED and keeps their name on history.
+/// A person who signs in to the Office of one tenant (what they may do: their role assignments, roles.prisma; floor
+/// workers and portal users join this table in their steps). Never deleted: a leaver is DEACTIVATED and keeps their name on history.
 model User {
   id                   String     @id @db.Uuid
   tenantId             String     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -19,11 +19,8 @@ model User {
   displayName          String
   locale               String     @default("it")
   status               UserStatus @default(INVITED)
-  /// Placeholder for the roles step: an owner holds every permission of the platform parts built so far, in every
-  /// company, and must use two-factor.
-  isOwner              Boolean    @default(false)
-  /// Two-factor is required for this person (the roles step adds Role.requireMfa). Until it is set up and proved on a
-  /// session, the session holds no permission.
+  /// Two-factor is required for this person, whatever their roles (a role can require it too: Role.requireMfa). Until
+  /// it is set up and proved on a session, the session holds no permission.
   requireMfa           Boolean    @default(false)
   /// scrypt, `$scrypt$ln=…,r=…,p=…$salt$hash` (factory-domain auth/password). Null: no password (invited, deactivated).
   passwordHash         String?

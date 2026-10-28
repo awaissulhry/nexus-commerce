@@ -130,11 +130,11 @@ export interface TestUser {
 
 export const PASSWORD = 'quiet-harbour-lantern-58'
 
-/** A user written straight into the tenant (an ACTIVE one has a password; an owner holds the owner role). */
+/** A user written straight into the tenant (an ACTIVE one has a password), with a system role when `role` names one. */
 export async function addUser(
   h: Harness,
   tenant: TestTenant,
-  options: { email: string; isOwner?: boolean; requireMfa?: boolean; status?: 'INVITED' | 'ACTIVE' | 'SUSPENDED'; password?: string },
+  options: { email: string; role?: string; requireMfa?: boolean; status?: 'INVITED' | 'ACTIVE' | 'SUSPENDED'; password?: string },
 ): Promise<TestUser> {
   const id = newId()
   const password = options.password ?? PASSWORD
@@ -147,13 +147,12 @@ export async function addUser(
         email: options.email,
         displayName: options.email.split('@')[0]!.replace(/\./g, ' '),
         status,
-        isOwner: options.isOwner ?? false,
         requireMfa: options.requireMfa ?? false,
         passwordHash,
       },
     }),
   )
-  if (options.isOwner) await addRole(h, tenant, id, 'owner')
+  if (options.role) await addRole(h, tenant, id, options.role)
   return { id, email: options.email, password }
 }
 

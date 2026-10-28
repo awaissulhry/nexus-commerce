@@ -22,7 +22,8 @@ import type { OfficeAuth } from '../sessions/office-auth'
 import { activeAdmins, heldRoles, liveAssignment } from './access'
 import { assertKeepsAnAdmin, assignmentAudit, assignmentViewOf, ASSIGNMENT_SELECT, createAssignment, findAssignment, listAssignments } from './assignments'
 import type { AssignBody, CreateRoleBody, EditRoleBody, EndAssignmentBody } from './contract'
-import { applySystemRoleChanges, isOutdated, systemRoleChanges } from './system-roles'
+import { syncRolesInCommand } from './sync'
+import { isOutdated, systemRoleChanges } from './system-roles'
 
 /**
  * Roles and assignments (plan A1 §3.11; features PLT-029, PLT-030, PLT-032). Every change is ONE command with its
@@ -191,13 +192,7 @@ export async function syncTemplates(auth: OfficeAuth, request: FastifyRequest) {
   requireStepUp(auth, request)
   const pending = await request.withClient((client) => systemRoleChanges(client))
   if (pending.length === 0) return { created: 0, updated: 0 }
-  const { result } = await auth.command(context, { name: 'roles.syncTemplates', input: null }, async ({ tx, now, audit }) => {
-    const changes = await systemRoleChanges(tx)
-    await applySystemRoleChanges(tx, changes, { now, actorId: context.actorId })
-    for (const change of changes) audit({ recordType: 'Role', recordId: change.roleId, before: change.before, after: { key: change.key, change: change.kind, ...change.after } })
-    if (changes.length === 0) audit({ recordType: 'Tenant', recordId: context.tenantId, after: { created: 0, updated: 0 } })
-    return { created: changes.filter((change) => change.kind === 'created').length, updated: changes.filter((change) => change.kind !== 'created').length }
-  })
+  const { result } = await auth.command(context, { name: 'roles.syncTemplates', input: null }, syncRolesInCommand)
   return result
 }
 
@@ -219,7 +214,7 @@ export async function assignRole(auth: OfficeAuth, request: FastifyRequest, user
     const user = await tx.user.findUnique({ where: { id: userId }, select: { status: true } })
     if (!user) throw new NotFoundError('User not found.')
     if (user.status === 'DEACTIVATED') throw new InvalidStateError('A deactivated user holds no roles; invite them again.')
-    const view = await createAssignment(tx, input, { userId, now, grantedById: context.actorId })
+    const view = await createAssignment(tx, input, { userId, now, grantedById: context.actorId, assignerGrants: context.grants })
     audit({ recordType: 'RoleAssignment', recordId: view.id, after: assignmentAudit(view), ...(reason ? { reason } : {}) })
     return view
   })

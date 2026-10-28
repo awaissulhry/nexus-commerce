@@ -26,7 +26,7 @@ const tokenOf = (email: string): string => {
 beforeAll(async () => {
   h = await startHarness('auth_invitations')
   tenant = await addTenant(h, 'gamma')
-  const account = await addUser(h, tenant, { email: 'owner@example.com', isOwner: true })
+  const account = await addUser(h, tenant, { email: 'owner@example.com', role: 'owner' })
   owner = new Browser(h.app)
   await owner.signIn('gamma', account.email, account.password)
   ownerSecret = await enrolTotp(h, owner)

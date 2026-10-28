@@ -113,7 +113,6 @@ export async function changeUser(auth: OfficeAuth, request: FastifyRequest, user
         await tx.user.update({
           where: { id: userId },
           data: {
-            isOwner: false,
             passwordHash: null,
             mustChangePassword: false,
             totpSecretEnc: null,

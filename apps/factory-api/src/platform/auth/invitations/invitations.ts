@@ -76,7 +76,7 @@ export async function invite(auth: OfficeAuth, request: FastifyRequest, body: In
       }
       const roleIds: string[] = []
       for (const [index, role] of body.roles.entries()) {
-        const view = await createAssignment(tx, role, { userId, now, grantedById: context.actorId, path: `roles/${index}/` })
+        const view = await createAssignment(tx, role, { userId, now, grantedById: context.actorId, assignerGrants: context.grants, path: `roles/${index}/` })
         audit({ recordType: 'RoleAssignment', recordId: view.id, after: assignmentAudit(view) })
         roleIds.push(view.roleId)
       }

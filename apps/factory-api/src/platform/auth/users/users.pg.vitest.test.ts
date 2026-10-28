@@ -47,7 +47,7 @@ beforeAll(async () => {
   h = await startHarness('auth_users')
   alpha = await addTenant(h, 'alpha')
   beta = await addTenant(h, 'beta')
-  const account = await addUser(h, alpha, { email: 'owner@example.com', isOwner: true })
+  const account = await addUser(h, alpha, { email: 'owner@example.com', role: 'owner' })
   ownerId = account.id
   owner = new Browser(h.app)
   await owner.signIn('alpha', account.email, account.password)
@@ -142,7 +142,7 @@ describe('required password reset', () => {
 
 describe('tenant wall', () => {
   it('another tenant\'s owner neither sees nor changes this tenant\'s users, and a cookie cannot be moved across', async () => {
-    const betaOwner = await addUser(h, beta, { email: 'owner@example.com', isOwner: true, password: 'other-tenant-lantern-31' })
+    const betaOwner = await addUser(h, beta, { email: 'owner@example.com', role: 'owner', password: 'other-tenant-lantern-31' })
     const other = new Browser(h.app)
     await other.signIn('beta', betaOwner.email, betaOwner.password)
     const betaSecret = await enrolTotp(h, other)

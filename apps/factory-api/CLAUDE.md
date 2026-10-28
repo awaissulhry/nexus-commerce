@@ -95,22 +95,24 @@ the adapters come in later steps.
   that adds routes declares its permissions in the same PR and gives them to the templates that need them.
 - Role templates (`@nexus/factory-domain/auth/roles/templates`): owner, admin, finance, sales, planner, buyer,
   warehouse, production_manager, quality_inspector, floor_supervisor, read_only. Each tenant has them as system Role
-  rows (`syncSystemRoles`: tenant set-up, the seed, `POST /auth/roles/sync-templates` after a deploy that changed one,
-  one audit row per changed role). Custom roles (`custom.<key>`) are copies the tenant edits; a template change never
-  widens them (the list shows `templateAdds`).
+  rows, synced with the templates for every ACTIVE tenant when the worker starts and by the daily clustered cron
+  `roles.syncTemplates` (`roles/sync.ts`, in each tenant's system context), at tenant set-up and the seed, and on demand
+  by `POST /auth/roles/sync-templates`; one audit row per changed role. Custom roles (`custom.<key>`) are copies the
+  tenant edits; a template change never widens them (the list shows `templateAdds`).
 - RoleAssignment: one role for one person over every company or a list, optional sites and parties, from/to; ended,
   never deleted. A session holds the union (one Grant per live assignment); a role with `requireMfa` gives nothing
-  until two-factor is proved on the session. Nobody gives themselves a role or edits one they hold; the tenant keeps an
-  administrator (an ACTIVE person with `roles.assign` over every company): users' suspend/deactivate, ending an
-  assignment and editing a role all refuse to remove the last one.
+  until two-factor is proved on the session. A person gives roles only within their own `roles.assign` scope
+  (companies, sites, parties; a wider assignment or invitation is a 403). Nobody gives themselves a role or edits one
+  they hold; the tenant keeps an administrator (an ACTIVE person with `roles.assign` over every company): users'
+  suspend/deactivate, ending an assignment and editing a role all refuse to remove the last one.
 - Money grains (price, cost, margin, wages) travel in grants as the permissions `money.<grain>`; floor sessions hold at
   most wages, partner and link sessions at most price. A contract field that carries money is `money.<grain>(schema)`
   (`@nexus/factory-domain/money/marked`: optional, typed `Money<grain>`; return it with `asMoney`); free JSON holding
   money uses `markMoney(grain, value)` (audit before/after) inside a `grainedJson()` field. `roles/grain-filter.ts`
   (installed by `core/app.ts`) drops unheld marked fields from every answer and refuses a body that sends one.
   `check-money-grains` fails on an unmarked money-looking contract field, audit value or Prisma column.
-- PostgreSQL tests: the harness's `addTenant` gives a tenant its system roles, `addUser({ isOwner: true })` and
-  `addRole(h, tenant, userId, key)` give roles. `User.isOwner` is no longer read.
+- PostgreSQL tests: the harness's `addTenant` gives a tenant its system roles; `addUser({ role: 'owner' })` and
+  `addRole(h, tenant, userId, key)` give a system role over every company.
 
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),

@@ -51,9 +51,6 @@ export async function heldRoles(client: FactoryClient | CommandTx, userId: strin
   }))
 }
 
-/** The person holds the owner system role now (the `isOwner` the Office shows). */
-export const holdsOwner = (held: readonly HeldAssignment[]): boolean => held.some((entry) => entry.system && entry.roleKey === 'owner')
-
 /** What an administrator count leaves out: a user, an assignment, or every assignment of a role. */
 export interface AdminExclusion {
   readonly userId?: string

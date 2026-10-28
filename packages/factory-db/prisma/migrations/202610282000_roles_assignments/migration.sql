@@ -1,6 +1,9 @@
 -- CreateEnum
 CREATE TYPE "RoleAudience" AS ENUM ('OFFICE');
 
+-- AlterTable
+ALTER TABLE "User" DROP COLUMN "isOwner";
+
 -- CreateTable
 CREATE TABLE "Role" (
     "id" UUID NOT NULL,

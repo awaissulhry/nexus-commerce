@@ -1,7 +1,8 @@
-import { isAdminAssignment, isLive, scopeProblems } from '@nexus/factory-domain/auth/roles/roles'
+import { isAdminAssignment, isLive, scopeProblems, uncoveredScope } from '@nexus/factory-domain/auth/roles/roles'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
-import { InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { DomainError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
+import type { Grant } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { CommandTx } from '../../../core/command'
 import { activeAdmins, liveAssignment } from './access'
@@ -11,7 +12,8 @@ import type { AssignmentInput, AssignmentView } from './contract'
  * Giving and ending role assignments (features PLT-030, PLT-032), inside a command's transaction: the roles routes
  * and invitations use the same functions. An assignment names an office role of the tenant (row-level security hides
  * other tenants' roles; the foreign key includes tenantId) and a valid scope: every company or a list of the tenant's
- * active companies, sites of those companies, any parties. It is never deleted: ending it sets endedAt.
+ * active companies, sites of those companies, any parties. The assigner gives roles only within their own roles.assign
+ * scope (factory-domain uncoveredScope): a wider assignment is a 403. It is never deleted: ending it sets endedAt.
  */
 
 export const ASSIGNMENT_SELECT = {
@@ -77,11 +79,14 @@ export const assignmentAudit = (view: AssignmentView) => ({
 
 const at = (prefix: string, issues: readonly Issue[]): Issue[] => issues.map((issue) => ({ ...issue, path: `${prefix}${issue.path}` }))
 
-/** Creates one assignment after checking the role and the scope. `path` prefixes the issue paths (`roles/0/`). */
+/**
+ * Creates one assignment after checking the role, the scope (400) and that the assigner's own roles.assign grants
+ * reach all of it (403). `path` prefixes the issue paths (`roles/0/`).
+ */
 export async function createAssignment(
   tx: CommandTx,
   input: AssignmentInput,
-  options: { readonly userId: string; readonly now: Date; readonly grantedById: string; readonly path?: string },
+  options: { readonly userId: string; readonly now: Date; readonly grantedById: string; readonly assignerGrants: readonly Grant[]; readonly path?: string },
 ): Promise<AssignmentView> {
   const path = options.path ?? ''
   const scope = { allCompanies: input.allCompanies, companyIds: input.companyIds, siteIds: input.siteIds, partyIds: input.partyIds }
@@ -93,8 +98,10 @@ export async function createAssignment(
     const found = await tx.company.count({ where: { id: { in: [...scope.companyIds] }, status: 'ACTIVE' } })
     if (found !== new Set(scope.companyIds).size) problems.push({ path: `${path}companyIds`, message: 'Every company must be an active company of the tenant.' })
   }
+  const siteCompanies = new Map<string, string>()
   if (scope.siteIds.length > 0) {
-    const sites = await tx.site.findMany({ where: { id: { in: [...scope.siteIds] } }, select: { companyId: true } })
+    const sites = await tx.site.findMany({ where: { id: { in: [...scope.siteIds] } }, select: { id: true, companyId: true } })
+    for (const site of sites) siteCompanies.set(site.id, site.companyId)
     const outside = sites.some((site) => !scope.allCompanies && !scope.companyIds.includes(site.companyId))
     if (sites.length !== new Set(scope.siteIds).size || outside) problems.push({ path: `${path}siteIds`, message: 'Every site must be a site of the companies reached.' })
   }
@@ -102,6 +109,8 @@ export async function createAssignment(
   const validTo = input.validTo ? new Date(input.validTo) : null
   if (validTo && validTo.getTime() <= validFrom.getTime()) problems.push({ path: `${path}validTo`, message: 'The end must come after the start.' })
   if (problems.length > 0) throw new ValidationError('The role assignment is not valid.', problems)
+  const wider = at(path, uncoveredScope(options.assignerGrants, scope, siteCompanies))
+  if (wider.length > 0) throw new DomainError('forbidden', 'You can give roles only within your own roles.assign scope.', wider)
 
   const row = await tx.roleAssignment.create({
     data: { id: newId(), userId: options.userId, roleId: input.roleId, ...scope, companyIds: [...scope.companyIds], siteIds: [...scope.siteIds], partyIds: [...scope.partyIds], validFrom, validTo, grantedById: options.grantedById, createdAt: options.now },

@@ -45,7 +45,7 @@ export const signOutContract = defineContract({ response: { 200: output({ status
 export const meContract = defineContract({
   response: {
     200: output({
-      user: sessionUser.extend({ isOwner: z.boolean() }),
+      user: sessionUser,
       tenant: output({ id: id(), slug: z.string(), name: z.string() }),
       company: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
       session: sessionTimes.extend({ id: id(), createdAt: instant(), stepUpUntil: instant().nullable() }),
