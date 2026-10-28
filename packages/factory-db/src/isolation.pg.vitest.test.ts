@@ -16,6 +16,7 @@ import { seed as seedParties } from '../seed/parties'
 import { seed as seedPrint } from '../seed/print'
 import { seed as seedProduct } from '../seed/product'
 import { seed as seedRoles } from '../seed/roles'
+import { seed as seedSales } from '../seed/sales'
 import { seed as seedThreads } from '../seed/threads'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels } from './ownership'
@@ -120,6 +121,8 @@ beforeAll(async () => {
   await seedPrint({ db: factory, namespace: 'iso-b' })
   await seedEmail({ db: factory, namespace: 'iso-a' })
   await seedEmail({ db: factory, namespace: 'iso-b' })
+  await seedSales({ db: factory, namespace: 'iso-a' })
+  await seedSales({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -140,6 +143,7 @@ it('covers every classified table and every runtime role', () => {
     'Colourway',
     'Company',
     'ComplianceDocument',
+    'DepositRequest',
     'Device',
     'DeviceEnrolment',
     'EmailIdentity',
@@ -174,9 +178,18 @@ it('covers every classified table and every runtime role', () => {
     'PasswordReset',
     'PrintJob',
     'Printer',
+    'Quote',
+    'QuoteAcceptance',
+    'QuoteApproval',
+    'QuoteLine',
+    'QuoteLineSize',
+    'QuoteVersion',
     'Role',
     'RoleAssignment',
     'RoutingOperation',
+    'SalesOrder',
+    'SalesOrderLine',
+    'SalesOrderLineSize',
     'SecretValue',
     'Session',
     'Site',

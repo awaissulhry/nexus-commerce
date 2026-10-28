@@ -114,6 +114,10 @@ model Company {
   certificates         Certificate[]
   labelTemplates       LabelTemplate[]
   complianceDocuments  ComplianceDocument[]
+  // sales.prisma: its quotes, sales orders and deposit requests.
+  quotes               Quote[]
+  salesOrders          SalesOrder[]
+  depositRequests      DepositRequest[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.
@@ -152,6 +156,8 @@ model Site {
   threads       Thread[]
   // print.prisma: the site's printers.
   printers      Printer[]
+  // sales.prisma: the sales order lines it makes.
+  salesOrderLines SalesOrderLine[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])
