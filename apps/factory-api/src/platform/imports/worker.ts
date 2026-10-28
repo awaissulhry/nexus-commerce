@@ -1,4 +1,6 @@
 import type { Prisma } from '@nexus/factory-db'
+import { sessionGrants } from '@nexus/factory-domain/auth/roles/roles'
+import type { Actor } from '@nexus/factory-domain/core/permissions'
 import { DomainError, InvalidStateError, type Issue } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { events as fileEvents } from '@nexus/factory-domain/files/events'
@@ -10,10 +12,13 @@ import { IMPORT_LIMITS, importMachine, type CsvEncoding } from '@nexus/factory-d
 import { applyCheck, parseRow, planner } from '@nexus/factory-domain/imports/plan'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller, type CommandTx } from '../../core/command'
+import { actorOf } from '../../core/context'
+import { serverClock } from '../../core/time'
+import { heldRoles } from '../auth/roles/access'
 import { TooLargeObjectError } from '../files/port'
 import { processFiles, type FilesRuntime } from '../files/service'
 import { defineHandler, type EventHandler } from '../outbox/dispatch'
-import { unheldGrainIssues, type Layout } from './jobs'
+import { adapterRefusals, mappedColumns, unheldGrainIssues, type Layout } from './jobs'
 import { processImporters, type ImportAdapter, type ImportScope } from './registry'
 import { readSheet, SheetError } from './sheet'
 
@@ -74,8 +79,26 @@ const PLAN_JOB_SELECT = {
   grains: true,
   status: true,
   mode: true,
+  createdById: true,
   file: { select: { storeAccountId: true, storageKey: true, contentType: true, status: true } },
 } as const satisfies Prisma.ImportJobSelect
+
+/**
+ * The person who started a job, as their live roles make them now, for the importer's own check in the dry run
+ * (registry.ts `authorize`). Two-factor is taken as proved: the session that started the job had to hold these
+ * permissions, and the apply checks the person who applies on their own session. Nobody (a person who left, or no
+ * person): no grants.
+ */
+async function starterOf(caller: CommandCaller, userId: string | null): Promise<Actor> {
+  const tenantId = caller.factoryContext ? actorOf(caller.factoryContext).tenantId : undefined
+  if (!userId || !tenantId) return { audience: 'office', ...(tenantId ? { tenantId } : {}), grants: [] }
+  const grants = await caller.withClient(async (client) => {
+    const user = await client.user.findUnique({ where: { id: userId }, select: { requireMfa: true, status: true } })
+    if (!user || user.status !== 'ACTIVE') return []
+    return sessionGrants(user, await heldRoles(client, userId, serverClock.now()), true)
+  })
+  return { audience: 'office', tenantId, grants }
+}
 
 /** A failure in words for the job (an adapter's own message only when it is a domain error: those are for people). */
 const failureText = (error: unknown): string =>
@@ -186,6 +209,7 @@ export async function planImport(caller: CommandCaller, jobId: string, work: Imp
       ignored: mapping.ignored,
     }
     const issues = [...mapping.issues, ...unheldGrainIssues(adapter, layout, job.grains)]
+    if (adapter.authorize) issues.push(...adapterRefusals(adapter, await starterOf(caller, job.createdById), job.companyId, mappedColumns(layout)))
     if (issues.length > 0) {
       await saveLayout(caller, jobId, layout, causationId)
       return await fail({ error: 'The sheet cannot be imported as it is: see the issues.', issues })

@@ -1,0 +1,103 @@
+/*
+ * The command palette's list inside the DS Modal (SCR-004). Layout only: every colour, size and radius is a semantic
+ * design-system token; the field and the dialog are the DS's own.
+ */
+.fw-palette-field {
+  width: 100%;
+}
+
+.fw-palette-list {
+  margin-top: var(--nds-space-12);
+  max-height: min(420px, 55vh);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-palette-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-palette-group-label {
+  padding: 0 var(--nds-space-8);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fw-palette-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-8);
+  border-radius: var(--nds-radius-md);
+  color: var(--nds-text);
+  cursor: pointer;
+}
+
+.fw-palette-row.info {
+  cursor: default;
+}
+
+.fw-palette-row.on {
+  background: var(--nds-surface-hover);
+  box-shadow: inset 2px 0 0 var(--nds-primary);
+}
+
+.fw-palette-ico {
+  display: flex;
+  padding-top: var(--nds-space-1);
+  color: var(--nds-text-muted);
+}
+
+.fw-palette-row.refused .fw-palette-ico {
+  color: var(--nds-warning-text);
+}
+
+.fw-palette-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-palette-title {
+  font-size: var(--nds-font-size-base);
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.fw-palette-detail {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+.fw-palette-empty {
+  margin: 0;
+  padding: var(--nds-space-16) var(--nds-space-8);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-base);
+}
+
+.fw-palette-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-16);
+  margin: var(--nds-space-12) 0 0;
+  padding-top: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border-subtle);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+@media (max-width: 719px) {
+  .fw-palette-keys {
+    display: none;
+  }
+}

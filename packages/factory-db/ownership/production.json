@@ -1,0 +1,95 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/production.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context) writes floor rules, work orders and their cells, operations and planned materials through apps/factory-api's modules/production, always through command(); the API keeps staff to the companies and sites their grants reach. The floor (factory_floor_runtime) works on its OWN site only (every table here has a site key): it reads the site's floor rules, work orders, cells, operations, planned materials (the pick list), cut logs, bundles, scans and acknowledgements, and writes the floor's ledgers through floorCommand: a cut log entry with its pieces (B-W1-40), a bundle (B-W1-41) and its ticket reprint or void, an operation scan (B-W1-42) and the worker's acknowledgement of the information notice (SCR-025). No table here has a cost, price, margin or wages column, so the floor's column grants leave nothing out (plan A1 §2.2, §2.6). Portal and link sessions read nothing here. CutLog, CutLogPiece, OperationScan and WorkerNoticeAck are append-only (`@append-only`; the …_production_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes them. Nobody deletes a work order (cancelled) or a bundle (voided); the office deletes only the cells, operations and planned materials of a DRAFT work order. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "ProductionSettings": {
+      "about": "The office keeps each site's floor rules: whether floor records name the worker or the station (the monitoring switch, MES-278) and the legal basis on record. The floor reads its own site's row (the scan screen and the triggers read it).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "WorkOrder": {
+      "about": "The office makes work orders from sales order lines, releases them with their frozen specification and batch number, moves them on and cancels them (the worker's handlers move a released one to IN_PROGRESS after the first floor work). The floor reads its own site's work orders (never changes one).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "WorkOrderSize": {
+      "about": "The office writes the cells of a DRAFT work order (colourway x size from sales order lines, or the made-to-measure unit) and removes them while DRAFT. The floor reads its site's cells (the size grid on the screens and tickets).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "WorkOrderOperation": {
+      "about": "The office maps a DRAFT work order's routing to the site's work centres (and, after release, moves an operation to another work centre of the same kind). The floor reads its site's operations (the scan screen).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "WorkOrderMaterial": {
+      "about": "The office plans a DRAFT work order's materials (BOM line x cell). The floor reads its site's planned materials (the pick list); what was issued is the stock ledger's.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "CutLog": {
+      "about": "The site's floor (the cutting table) and the office log each cut of a hide for a work order, and reverse a wrong entry with a new one; both read the site's cut log. Nobody changes or removes an entry.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    },
+    "CutLogPiece": {
+      "about": "The pieces of a cut log entry per cell and part, written with it by the site's floor or the office. Nobody changes or removes them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    },
+    "Bundle": {
+      "about": "The site's floor (and the office) makes bundles from a cut, reprints a lost ticket (a new code, the old one voided) and voids a bundle made by mistake; nothing else of a bundle changes, and nobody deletes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "OperationScan": {
+      "about": "The site's floor reports bundles at operations and undoes its last scan; a team leader on the floor or the office records a correction of an older one. Both read the site's scans (WIP). Nobody changes or removes a scan.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    },
+    "WorkerNoticeAck": {
+      "about": "A worker acknowledges the information notice on the site's floor device (first sign-in, SCR-025), or the office records a signed paper copy; both read the site's acknowledgements. Nobody changes or removes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

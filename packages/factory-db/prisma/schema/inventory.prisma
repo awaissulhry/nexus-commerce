@@ -291,6 +291,8 @@ model Hide {
 
   lot   Lot         @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   moves StockMove[]
+  // production.prisma: the cut log entries of the hide.
+  cutLogs CutLog[]
 
   @@unique([tenantId, code])
   // The target of the moves' reference: a hide of the move's own site and lot.
