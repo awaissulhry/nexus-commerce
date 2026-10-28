@@ -1,0 +1,220 @@
+{
+  "a11y": {
+    "skipToContent": "Skip to content"
+  },
+  "nav": {
+    "home": {
+      "area": "Home",
+      "mailToSort": "Mail to sort"
+    },
+    "admin": {
+      "area": "Admin",
+      "organisation": "Organisation",
+      "companies": "Companies",
+      "sites": "Sites & structure",
+      "devices": "Devices",
+      "access": "Access",
+      "users": "Users",
+      "roles": "Roles",
+      "platform": "Platform",
+      "numbering": "Numbering",
+      "email": "Email & addresses",
+      "languages": "Languages & formats",
+      "imports": "Import",
+      "audit": "Audit log",
+      "connections": "Connections"
+    }
+  },
+  "topbar": {
+    "home": "Nexus Factory home",
+    "searchLabel": "Search: opens the command palette",
+    "searchPlaceholder": "Find a page or scan a label…",
+    "theme": {
+      "light": "Light theme. Switch to dark",
+      "dark": "Dark theme. Switch to the system's",
+      "system": "System theme. Switch to light"
+    },
+    "userMenu": "{name}: profile and sign out",
+    "profile": "My profile",
+    "signOut": "Sign out"
+  },
+  "banner": {
+    "testMode": {
+      "title": "Test mode",
+      "body": "These connections are fake or in a sandbox: {connections}. Nothing they do reaches a real customer, supplier, carrier or tax office."
+    }
+  },
+  "subnav": {
+    "label": "{area} pages"
+  },
+  "crumbs": {
+    "label": "You are here"
+  },
+  "bottomBar": {
+    "navigation": "Main",
+    "more": "More",
+    "count_one": "{count} waiting",
+    "count_other": "{count} waiting",
+    "currentInside": "current page is here"
+  },
+  "switcher": {
+    "noCompany": "No company",
+    "allSites": "All sites",
+    "companies": "Company",
+    "sites": "Site",
+    "label": "Company and site: {company}, {site}"
+  },
+  "palette": {
+    "title": "Search",
+    "placeholder": "Page name, label code or number",
+    "results": "Results",
+    "group": {
+      "labels": "Label",
+      "numbers": "Number",
+      "pages": "Pages"
+    },
+    "empty": "Nothing matches “{query}”.",
+    "keys": {
+      "move": "to move",
+      "open": "to open",
+      "close": "to close"
+    },
+    "label": {
+      "found": "{type} label {code}",
+      "later": "Reference {reference}. You can open it from here once these records are in Nexus Factory.",
+      "refused": "{code} is not a label of this factory"
+    },
+    "problem": {
+      "format": "It is not written the way labels are printed. Scan it again.",
+      "type": "This kind of label ({type}) is not taken here.",
+      "check": "One character is wrong: its check symbol does not match. Scan it again or type it again.",
+      "tenant": "This label belongs to another factory."
+    },
+    "number": {
+      "find": "Find number “{number}”",
+      "later": "Search by document number comes with the first records."
+    }
+  },
+  "scanType": {
+    "HIDE": "Hide",
+    "BUNDLE": "Bundle",
+    "LOT": "Lot",
+    "BATCH": "Batch",
+    "SERIAL": "Serial number",
+    "CARTON": "Carton",
+    "LOCATION": "Location",
+    "WORK_ORDER": "Work order"
+  },
+  "links": {
+    "language": "Language",
+    "contact": "Questions? Write to {name}:",
+    "privacy": "How {sender} uses your data (privacy notice)",
+    "privacyUnknown": "The sender's privacy notice is linked in the email that brought you here.",
+    "sentWith": "Sent with Nexus Factory",
+    "facts": {
+      "purpose": "This link lets you",
+      "expires": "Open until",
+      "usesLeft": "Uses left"
+    },
+    "purpose": {
+      "QUOTE_ACCEPT": "read your quote and accept or decline it",
+      "PO_CONFIRM": "confirm the purchase order's quantities and dates, or propose others",
+      "DOCUMENT_VIEW": "read and download the document",
+      "DEPOSIT_INFO": "see the deposit request and how to pay it"
+    },
+    "usesLeft_one": "{count} use",
+    "usesLeft_other": "{count} uses",
+    "state": {
+      "loading": {
+        "title": "Opening the link…",
+        "body": "One moment.",
+        "bodyAnonymous": "One moment."
+      },
+      "valid": {
+        "title": "The link is open",
+        "body": "{sender} sent you this link. It shows only what it was made for.",
+        "bodyAnonymous": "This link shows only what it was made for."
+      },
+      "used": {
+        "title": "This link was already used",
+        "body": "It cannot be used again. If you need it once more, ask {sender} for a new link.",
+        "bodyAnonymous": "It cannot be used again. If you need it once more, ask whoever sent it to you for a new link."
+      },
+      "expired": {
+        "title": "This link has expired",
+        "body": "Ask {sender} to send you a new one.",
+        "bodyAnonymous": "Ask whoever sent it to you for a new one."
+      },
+      "wrong_person": {
+        "title": "This link was sent to someone else",
+        "body": "The name or address you gave does not match the person it was sent to. Ask {sender} to send a link to you.",
+        "bodyAnonymous": "The name or address you gave does not match the person it was sent to. Ask whoever sent it to send a link to you."
+      },
+      "withdrawn": {
+        "title": "This link was withdrawn",
+        "body": "{sender} withdrew it. Ask them for a new one if you still need it.",
+        "bodyAnonymous": "It was withdrawn. If you still need it, ask whoever sent it to you for a new one."
+      },
+      "unavailable": {
+        "title": "This link can no longer be opened",
+        "body": "It may have been used, have expired or been withdrawn. Ask {sender} for a new link.",
+        "bodyAnonymous": "It may have been used, have expired or been withdrawn. Ask whoever sent it to you for a new link."
+      },
+      "missing": {
+        "title": "This address is not a complete link",
+        "body": "Open the link from your email again, or copy all of it into the browser.",
+        "bodyAnonymous": "Open the link from your email again, or copy all of it into the browser."
+      },
+      "error": {
+        "title": "The link cannot be opened right now",
+        "body": "Our service did not answer. Try again in a few minutes.",
+        "bodyAnonymous": "Our service did not answer. Try again in a few minutes."
+      }
+    }
+  },
+  "privacy": {
+    "title": "Privacy notice of {sender}",
+    "pending": {
+      "title": "Not published here yet",
+      "body": "{sender} has not published its privacy notice on this page yet. Ask them for it: you have the right to receive it.",
+      "bodyAnonymous": "This company has not published its privacy notice on this page yet. Ask the company that sent you here for it: you have the right to receive it."
+    },
+    "titleAnonymous": "Privacy notice"
+  },
+  "pdf": {
+    "loading": "Opening the document",
+    "error": "This document could not be opened.",
+    "retry": "Try again",
+    "download": "Download",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "firstPageHeld": "This is the first page",
+    "lastPageHeld": "This is the last page",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomInHeld": "This is the largest size",
+    "zoomOutHeld": "This is the smallest size",
+    "fitWidth": "Fit to width",
+    "page": "Page {page} of {count}",
+    "pageImage": "{title}, page {page} of {count}",
+    "pageError": "This page could not be drawn.",
+    "previewUnavailable": "The page preview is not available on this device. Download the document to read it.",
+    "nativeView": "The page preview is not available here, so your browser shows the document with its own viewer."
+  },
+  "unavailable": {
+    "forbidden": {
+      "title": "You cannot work in this company",
+      "body": "The address names a company your roles do not reach. Ask an administrator if you need it.",
+      "action": "Go to your company"
+    },
+    "api": {
+      "title": "Nexus Factory is not answering",
+      "body": "The service did not answer as it should (code {code}). Try again in a moment.",
+      "action": "Try again"
+    }
+  },
+  "signInPlaceholder": {
+    "title": "Sign-in",
+    "body": "The office sign-in page arrives with the next build step. Your session has ended or you have not signed in yet."
+  }
+}

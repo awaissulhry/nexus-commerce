@@ -10,6 +10,7 @@ R2 (`src/platform/files/`), record threads with the record timeline (`src/platfo
 run (`src/platform/imports/`), documents and printing (`src/platform/{documents,print}/`), email out through SES
 (`src/platform/email-out/`) and email in with "mail to sort" (`src/platform/email-in/`), below. Portal sign-in, the
 modules and the other adapters come in later steps.
+Modules: `modules/compliance/certificates` (certificate register and gate `certificateGateFor`; cron `compliance.certificateExpiry`).
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>
@@ -273,6 +274,12 @@ modules and the other adapters come in later steps.
   `POST /imports/:id/cancel`. Handlers are in background.ts HANDLERS (`importHandlers()`).
 - Permissions: imports.view (read), imports.run, imports.apply (write); admin's template has all three (owner and
   read-only follow the registry). A module that adds an importer gives imports.* to the templates that use it.
+- An adapter's optional `authorize(actor, job, columns)` adds refusals (issues; never fewer checks): called at the start
+  (the mapping's columns), in the dry run (the starter's live roles, two-factor taken as proved; the job fails with the
+  issues) and at the apply (the person who applies). The materials importer uses it for its routes' rules.
+
+## Modules
+- Product › materials (`src/modules/product/materials/`, B-W1-09): office routes `/product/materials…` (product.materials.view | manage | cost; the standard cost has its own PUT route, money.cost to send or see it), the `product.materials` importer in IMPORTERS; the rules and unit conversions are factory-domain `product/{materials,units}`; every read names its columns (`store.ts`); no floor route (the floor reads materials through its work orders).
 
 ## Documents and printing (`src/platform/{documents,print}/`, `src/adapters/print-relay/`, plan A1 §3.9; GAP-007, GAP-008)
 - Documents: the issuing module builds its frozen document (`@nexus/factory-domain/documents`: QUOTE, PURCHASE_ORDER,

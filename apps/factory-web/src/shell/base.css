@@ -1,0 +1,50 @@
+/*
+ * The page's base (every view): the design system's ground, text colour and font on <body>, the browser's own
+ * controls in the theme, and the skip link. Semantic tokens only.
+ */
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background-color: var(--nds-bg);
+  color: var(--nds-text);
+  font-family: var(--nds-font-sans);
+  font-size: var(--nds-font-size-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* WCAG 2.4.1: the first stop of the keyboard, shown only when focused. */
+.fw-skip {
+  position: absolute;
+  left: var(--nds-space-8);
+  top: -100px;
+  z-index: var(--nds-z-toast);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-primary);
+  color: var(--nds-text-inverse);
+  font-weight: var(--nds-font-weight-semibold);
+  text-decoration: none;
+}
+
+.fw-skip:focus {
+  top: var(--nds-space-8);
+}
+
+/* A whole-page message (the office cannot open, the sign-in placeholder). */
+.fw-office-unavailable {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--nds-space-24) var(--nds-space-16);
+  box-sizing: border-box;
+}

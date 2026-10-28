@@ -1,0 +1,220 @@
+{
+  "a11y": {
+    "skipToContent": "Vai al contenuto"
+  },
+  "nav": {
+    "home": {
+      "area": "Home",
+      "mailToSort": "Posta da smistare"
+    },
+    "admin": {
+      "area": "Amministrazione",
+      "organisation": "Organizzazione",
+      "companies": "Società",
+      "sites": "Sedi e struttura",
+      "devices": "Dispositivi",
+      "access": "Accessi",
+      "users": "Utenti",
+      "roles": "Ruoli",
+      "platform": "Piattaforma",
+      "numbering": "Numerazioni",
+      "email": "Email e indirizzi",
+      "languages": "Lingue e formati",
+      "imports": "Importazione",
+      "audit": "Registro attività",
+      "connections": "Collegamenti"
+    }
+  },
+  "topbar": {
+    "home": "Home di Nexus Factory",
+    "searchLabel": "Cerca: apre la palette dei comandi",
+    "searchPlaceholder": "Trova una pagina o scansiona un'etichetta…",
+    "theme": {
+      "light": "Tema chiaro. Passa allo scuro",
+      "dark": "Tema scuro. Passa a quello di sistema",
+      "system": "Tema di sistema. Passa al chiaro"
+    },
+    "userMenu": "{name}: profilo ed esci",
+    "profile": "Il mio profilo",
+    "signOut": "Esci"
+  },
+  "banner": {
+    "testMode": {
+      "title": "Modalità di prova",
+      "body": "Questi collegamenti sono finti o in ambiente di prova: {connections}. Nulla di ciò che fanno arriva a un vero cliente, fornitore, corriere o all'Agenzia delle Entrate."
+    }
+  },
+  "subnav": {
+    "label": "Pagine di {area}"
+  },
+  "crumbs": {
+    "label": "Ti trovi qui"
+  },
+  "bottomBar": {
+    "navigation": "Principale",
+    "more": "Altro",
+    "count_one": "{count} in attesa",
+    "count_other": "{count} in attesa",
+    "currentInside": "qui c'è la pagina attuale"
+  },
+  "switcher": {
+    "noCompany": "Nessuna società",
+    "allSites": "Tutte le sedi",
+    "companies": "Società",
+    "sites": "Sede",
+    "label": "Società e sede: {company}, {site}"
+  },
+  "palette": {
+    "title": "Cerca",
+    "placeholder": "Nome di una pagina, codice etichetta o numero",
+    "results": "Risultati",
+    "group": {
+      "labels": "Etichetta",
+      "numbers": "Numero",
+      "pages": "Pagine"
+    },
+    "empty": "Nessun risultato per “{query}”.",
+    "keys": {
+      "move": "per spostarti",
+      "open": "per aprire",
+      "close": "per chiudere"
+    },
+    "label": {
+      "found": "Etichetta {type} {code}",
+      "later": "Riferimento {reference}. Potrai aprirla da qui quando questi dati saranno in Nexus Factory.",
+      "refused": "{code} non è un'etichetta di questa fabbrica"
+    },
+    "problem": {
+      "format": "Non è scritta come si stampano le etichette. Scansionala di nuovo.",
+      "type": "Questo tipo di etichetta ({type}) qui non si usa.",
+      "check": "Un carattere è sbagliato: il simbolo di controllo non corrisponde. Scansionala o scrivila di nuovo.",
+      "tenant": "Questa etichetta è di un'altra fabbrica."
+    },
+    "number": {
+      "find": "Trova il numero “{number}”",
+      "later": "La ricerca per numero di documento arriva con i primi dati."
+    }
+  },
+  "scanType": {
+    "HIDE": "pelle",
+    "BUNDLE": "fascio",
+    "LOT": "lotto",
+    "BATCH": "partita",
+    "SERIAL": "numero di serie",
+    "CARTON": "collo",
+    "LOCATION": "ubicazione",
+    "WORK_ORDER": "ordine di lavoro"
+  },
+  "links": {
+    "language": "Lingua",
+    "contact": "Domande? Scrivi a {name}:",
+    "privacy": "Come {sender} usa i tuoi dati (informativa privacy)",
+    "privacyUnknown": "L'informativa privacy del mittente è nel link dell'email che ti ha portato qui.",
+    "sentWith": "Inviato con Nexus Factory",
+    "facts": {
+      "purpose": "Con questo link puoi",
+      "expires": "Aperto fino al",
+      "usesLeft": "Usi rimasti"
+    },
+    "purpose": {
+      "QUOTE_ACCEPT": "leggere il tuo preventivo e accettarlo o rifiutarlo",
+      "PO_CONFIRM": "confermare quantità e date dell'ordine d'acquisto, o proporne altre",
+      "DOCUMENT_VIEW": "leggere e scaricare il documento",
+      "DEPOSIT_INFO": "vedere la richiesta di acconto e come pagarla"
+    },
+    "usesLeft_one": "{count} uso",
+    "usesLeft_other": "{count} usi",
+    "state": {
+      "loading": {
+        "title": "Apertura del link…",
+        "body": "Un momento.",
+        "bodyAnonymous": "Un momento."
+      },
+      "valid": {
+        "title": "Il link è aperto",
+        "body": "{sender} ti ha inviato questo link. Mostra solo ciò per cui è stato creato.",
+        "bodyAnonymous": "Questo link mostra solo ciò per cui è stato creato."
+      },
+      "used": {
+        "title": "Questo link è già stato usato",
+        "body": "Non si può usare di nuovo. Se ti serve ancora, chiedi a {sender} un nuovo link.",
+        "bodyAnonymous": "Non si può usare di nuovo. Se ti serve ancora, chiedi un nuovo link a chi te l'ha inviato."
+      },
+      "expired": {
+        "title": "Questo link è scaduto",
+        "body": "Chiedi a {sender} di inviartene uno nuovo.",
+        "bodyAnonymous": "Chiedine uno nuovo a chi te l'ha inviato."
+      },
+      "wrong_person": {
+        "title": "Questo link è stato inviato a un'altra persona",
+        "body": "Il nome o l'indirizzo che hai indicato non corrisponde alla persona a cui è stato inviato. Chiedi a {sender} di inviare un link a te.",
+        "bodyAnonymous": "Il nome o l'indirizzo che hai indicato non corrisponde alla persona a cui è stato inviato. Chiedi a chi l'ha inviato di mandarne uno a te."
+      },
+      "withdrawn": {
+        "title": "Questo link è stato ritirato",
+        "body": "{sender} lo ha ritirato. Chiedine uno nuovo se ti serve ancora.",
+        "bodyAnonymous": "È stato ritirato. Se ti serve ancora, chiedine uno nuovo a chi te l'ha inviato."
+      },
+      "unavailable": {
+        "title": "Questo link non si può più aprire",
+        "body": "Potrebbe essere già stato usato, scaduto o ritirato. Chiedi a {sender} un nuovo link.",
+        "bodyAnonymous": "Potrebbe essere già stato usato, scaduto o ritirato. Chiedi un nuovo link a chi te l'ha inviato."
+      },
+      "missing": {
+        "title": "Questo indirizzo non è un link completo",
+        "body": "Apri di nuovo il link dalla tua email, oppure copialo per intero nel browser.",
+        "bodyAnonymous": "Apri di nuovo il link dalla tua email, oppure copialo per intero nel browser."
+      },
+      "error": {
+        "title": "Al momento il link non si può aprire",
+        "body": "Il nostro servizio non ha risposto. Riprova tra qualche minuto.",
+        "bodyAnonymous": "Il nostro servizio non ha risposto. Riprova tra qualche minuto."
+      }
+    }
+  },
+  "privacy": {
+    "title": "Informativa privacy di {sender}",
+    "pending": {
+      "title": "Non ancora pubblicata qui",
+      "body": "{sender} non ha ancora pubblicato la sua informativa privacy su questa pagina. Chiedila: hai il diritto di riceverla.",
+      "bodyAnonymous": "Questa società non ha ancora pubblicato qui la sua informativa privacy. Chiedila alla società che ti ha indirizzato qui: hai il diritto di riceverla."
+    },
+    "titleAnonymous": "Informativa privacy"
+  },
+  "pdf": {
+    "loading": "Apertura del documento",
+    "error": "Non è stato possibile aprire questo documento.",
+    "retry": "Riprova",
+    "download": "Scarica",
+    "previousPage": "Pagina precedente",
+    "nextPage": "Pagina successiva",
+    "firstPageHeld": "Questa è la prima pagina",
+    "lastPageHeld": "Questa è l'ultima pagina",
+    "zoomIn": "Ingrandisci",
+    "zoomOut": "Riduci",
+    "zoomInHeld": "Questa è la dimensione massima",
+    "zoomOutHeld": "Questa è la dimensione minima",
+    "fitWidth": "Adatta alla larghezza",
+    "page": "Pagina {page} di {count}",
+    "pageImage": "{title}, pagina {page} di {count}",
+    "pageError": "Non è stato possibile disegnare questa pagina.",
+    "previewUnavailable": "L'anteprima delle pagine non è disponibile su questo dispositivo. Scarica il documento per leggerlo.",
+    "nativeView": "L'anteprima delle pagine non è disponibile qui: il browser mostra il documento con il proprio visualizzatore."
+  },
+  "unavailable": {
+    "forbidden": {
+      "title": "Non puoi lavorare in questa società",
+      "body": "L'indirizzo indica una società che i tuoi ruoli non raggiungono. Chiedi a un amministratore se ti serve.",
+      "action": "Vai alla tua società"
+    },
+    "api": {
+      "title": "Nexus Factory non risponde",
+      "body": "Il servizio non ha risposto come dovrebbe (codice {code}). Riprova tra un momento.",
+      "action": "Riprova"
+    }
+  },
+  "signInPlaceholder": {
+    "title": "Accesso",
+    "body": "La pagina di accesso dell'ufficio arriva con il prossimo passo. La tua sessione è terminata oppure non hai ancora effettuato l'accesso."
+  }
+}
