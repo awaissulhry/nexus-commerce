@@ -1,0 +1,26 @@
+// @nexus/factory-db: the factory's database for the API, worker and scheduler. See CLAUDE.md.
+//
+// Only the scoped client is exported, never the PrismaClient class: every query runs through a scope (db-kit's
+// TenantPg). The types and enums of the generated client are exported for the code that uses it.
+export {
+  openFactoryDatabase,
+  RUNTIME_LOGIN_AUDIT,
+  type FactoryClient,
+  type FactoryDatabase,
+  type FactoryDatabaseOptions,
+  type FactoryScope,
+} from './client'
+export {
+  FLOOR_ROLE,
+  OFFICE_ROLE,
+  PARTNER_ROLE,
+  PLATFORM_ROLE,
+  POLICY_KEYS,
+  RUNTIME_LOGIN,
+  RUNTIME_ROLES,
+  SCOPE_DEFINITIONS,
+  type Audience,
+  type RuntimeRole,
+} from './roles'
+export type { Company, Line, Prisma, Site, Station, Tenant, WorkCentre } from './generated/prisma/client'
+export { MasterStatus, SiteKind, TenantStatus, WorkCentreKind } from './generated/prisma/enums'
