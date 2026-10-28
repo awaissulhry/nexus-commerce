@@ -27,16 +27,19 @@ export const RESET_TTL_MS = 60 * 60_000
 export const REQUIRED_RESET_TTL_MS = 15 * 60_000
 const COALESCE_MS = 5 * 60_000
 
-/** A new reset row; returns its id, token (to the person only) and expiry. */
+/**
+ * A new reset row from its token's hash (a command's work); returns its id and expiry. The token is minted before the
+ * command (`mintToken`) and given to the person after it: neither the work nor its result (which a receipt could
+ * store) ever holds it.
+ */
 export async function createPasswordReset(
   tx: CommandTx,
-  input: { readonly tenantId: string; readonly userId: string; readonly kind: PasswordResetKind; readonly now: Date; readonly ttlMs: number },
-): Promise<{ readonly id: string; readonly token: string; readonly expiresAt: string }> {
-  const token = mintToken(input.tenantId, input.userId)
+  input: { readonly userId: string; readonly tokenHash: string; readonly kind: PasswordResetKind; readonly now: Date; readonly ttlMs: number },
+): Promise<{ readonly id: string; readonly expiresAt: string }> {
   const id = newId()
   const expiresAt = new Date(input.now.getTime() + input.ttlMs)
-  await tx.passwordReset.create({ data: { id, userId: input.userId, tokenHash: tokenHash(token.value), kind: input.kind, createdAt: input.now, expiresAt } })
-  return { id, token: token.value, expiresAt: toUtcIso(expiresAt) }
+  await tx.passwordReset.create({ data: { id, userId: input.userId, tokenHash: input.tokenHash, kind: input.kind, createdAt: input.now, expiresAt } })
+  return { id, expiresAt: toUtcIso(expiresAt) }
 }
 
 /** The command found a link asked for in the last minutes: nothing is written, nothing mailed. */
@@ -52,7 +55,10 @@ export function requestPasswordReset(auth: OfficeAuth, request: FastifyRequest, 
       client.user.findUnique({ where: { tenantId_email: { tenantId: tenant.id, email } }, select: { id: true, status: true } }),
     )
     if (!user || user.status !== 'ACTIVE') return
-    let reset: { readonly token: string; readonly expiresAt: string }
+    // Minted outside the command, only its hash goes in: the token reaches the mail and nothing else.
+    const token = mintToken(tenant.id, user.id)
+    const hash = tokenHash(token.value)
+    let reset: { readonly expiresAt: string }
     try {
       ;({ result: reset } = await auth.command(auth.contextFor(request, tenant.id, user.id), { name: 'auth.passwordResetRequest', input: { email } }, async ({ tx, now, audit }) => {
         // One request at a time per person (the row lock), so two at once cannot both pass the check below.
@@ -61,7 +67,7 @@ export function requestPasswordReset(auth: OfficeAuth, request: FastifyRequest, 
           where: { userId: user.id, kind: 'REQUESTED', usedAt: null, createdAt: { gt: new Date(now.getTime() - COALESCE_MS) } },
         })
         if (recent > 0) throw new AlreadyRequested()
-        const created = await createPasswordReset(tx, { tenantId: tenant.id, userId: user.id, kind: 'REQUESTED', now, ttlMs: RESET_TTL_MS })
+        const created = await createPasswordReset(tx, { userId: user.id, tokenHash: hash, kind: 'REQUESTED', now, ttlMs: RESET_TTL_MS })
         audit({ recordType: 'PasswordReset', recordId: created.id, after: { kind: 'REQUESTED', expiresAt: created.expiresAt } })
         return created
       }))
@@ -70,7 +76,7 @@ export function requestPasswordReset(auth: OfficeAuth, request: FastifyRequest, 
       throw error
     }
     await auth.deliver(
-      { kind: 'password_reset', tenantId: tenant.id, userId: user.id, to: email, link: auth.link('/reset-password', reset.token), expiresAt: new Date(reset.expiresAt) },
+      { kind: 'password_reset', tenantId: tenant.id, userId: user.id, to: email, link: auth.link('/reset-password', token.value), expiresAt: new Date(reset.expiresAt) },
       request.log,
     )
   }, request.log)

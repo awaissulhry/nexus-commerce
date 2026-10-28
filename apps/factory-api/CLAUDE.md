@@ -81,6 +81,10 @@ R2 (`src/platform/files/`), below. Portal sign-in, the modules and the other ada
   of a cookie session, and sign-in, sign-out and invitation accept, send `x-csrf-token` = the CSRF cookie
   (`GET /auth/csrf` makes one). Idle 8 h (slid at most once a minute), absolute 7 days, user and tenant ACTIVE.
 - Writes go through command() on the auth object's clock (`auth.command`); the idle slide is the one unaudited write.
+- Every office secret (session and CSRF token, invitation and reset token, TOTP secret, recovery codes) is minted
+  BEFORE its command and is never in its input, result or audit row (sign-in and resets hand only the hash in:
+  `createSession`, `createPasswordReset`); `invitations/tokens.pg.vitest.test.ts` gives each office auth command a
+  receipt and scans it.
 - Grants come from the person's live role assignments (below), read on every request (`sessions/grants.ts`). Risky
   routes call `requireStepUp(auth, request)` (a TOTP code on this session in the last 5 minutes; 403 with issue path
   `stepUp` otherwise): every permission declared with risk `stepUp` does.
