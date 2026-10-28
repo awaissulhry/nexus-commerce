@@ -1,0 +1,13 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/email-in.prisma (rules: src/ownership.ts; roles: src/roles.ts). Only the office role: office sessions that sort mail (email.triage, through apps/factory-api's platform/email-in) and the inbound job and the worker in a tenant's system context (receiving, reading, sorting). Floor and partner roles have no grant: a party reads what it sent as its thread's INBOUND message (threads.json), never these rows, the raw mail's place or SES's verdicts. No role deletes: the …_email_in_guards trigger refuses DELETE and TRUNCATE, keeps what SES said fixed, lets what the mail held be written once, and moves the status only along the machine. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "InboundEmail": {
+      "about": "The inbound job adds the row (RECEIVED) when SES's notification arrives; the worker reads the raw mail (FETCHED) and sorts it (MATCHED, TRIAGE, HELD, REJECTED, FAILED); office people with email.triage list the mail to sort and assign, release or reject it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

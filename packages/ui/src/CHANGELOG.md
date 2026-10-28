@@ -31,6 +31,58 @@ branding rules are a stylesheet of their own. The token files every page loads a
 - Catalog: `#bottom-bar-example`, `#branding-example`, `#pdf-viewer-example` (a stub pdf.js; a real PDF in the
   browser's own view), `#qr-code-example`.
 
+## Size grid: colour × size quantities, an editor and a read view — 2026-10-28
+
+Gap G9 (the quote editor, the order record, the style's variants and the work order all show a size run).
+`grid/size-grid/`, exported by the grid barrel.
+- **`SizeGridEditor`**: rows are colourways (swatch + name), columns the sizes in scale order, then row totals; the
+  last row holds the column totals and the grand total. Props: `colours` (`key`, `label`, `swatch`, `offered` — a size
+  a colourway lacks is a cell that takes no entry), `sizes`, `value` (colour → size → pieces), `onChange` (the FULL
+  matrix on every change), `curves`, `issues` (a message per cell, or per colourway; `error` marks the cell invalid,
+  `warning` only shows), `max` (99 999), `caption` / `showCaption`, `mtm` / `onMtmChange` / `mtmSlot`, `locale`,
+  `copy` (every word, for another language).
+- **Keyboard**: a `<table>` with one labelled `<input>` per cell ("Black, size M"); Tab walks the cells, the arrows
+  move between them (left and right at the edge of the number), Enter / Shift+Enter move down / up, Escape puts back
+  what the cell had. A polite status region reads the row, column and grand total after a change.
+- **Paste** a block from a spreadsheet (tab and newline separated): it lands from the cell pasted into; what cannot
+  land (a size not offered, outside the grid, not a whole number) is counted and said under the grid.
+- **Curve fill**: a total shared across the sizes a colour is made in by a curve's shares (whole numbers or decimal
+  strings), for one colour or each. Largest remainder, exact (BigInt): the cells add up to the total; a leftover piece
+  goes to the larger remainder, then the larger share, then the earlier size. Held, with its reason, until it can run.
+- **Made to measure**: with `onMtmChange` a switch, "One made-to-measure unit"; on, the grid is hidden and `mtmSlot`
+  (the app's profile picker) is shown. The quantities are left to the screen.
+- **`SizeGridView`**: the same layout with numbers (0 muted, a size not offered "–"), compact, print-friendly (no scroll
+  box, fills or sticky column on paper; rows never split).
+- **Density**: every size reads `--nds-density-*`, so the grid is the first part that follows the tier: 28 px cells in
+  13 px type on `standard`, 44 px in 16 px on `comfortable`. It scrolls sideways inside its own box.
+- Pure helpers, tested: `sizeGridTotals`, `distributeBySizeCurve`, `curveFillSizeGrid`, `parseSizeGridPaste`,
+  `pasteIntoSizeGrid`, `parseSizeGridQuantity` (strict: `1,200` and `12.5` are refused, not guessed),
+  `clampSizeGridQuantity`, `normaliseSizeGrid`, `setSizeGridCell`, `sizeGridStep`. Catalog: "Size grid"
+  (`_catalog/size-grid/SizeGridExample.tsx`, standard and comfortable). Commerce does not use it.
+
+## Floor kit: shell parts, scan input, PIN pad, tiles, confirm feedback — 2026-10-28
+
+A new area, `floor/` (`@/design-system/floor` in the web, `@nexus/ui/floor` elsewhere): the parts the factory's floor
+tablets are built from (factory plan gaps G2 G3 G4 G5 G8). Every part reads `--nds-density-*`, so it is glove-sized
+inside the floor tier, phone-sized inside comfortable and console-sized at standard; every word comes in as a prop.
+- **Shell (G2)**: `FloorFrame` (+ `FloorHeader`) applies the tier (`DensityProvider` and `data-density` on its root) and
+  lays out top bar, banner, content and action bar; `useConfirmFeedback()` honours its `muted`. `OperatorChip`,
+  `OfflineBanner` (offline warning always shown with the waiting count as a big number; refused danger; sending info),
+  `IdleOverlay` + `useIdleSignOut` (countdown numeral, "I am here", Tab trapped, Escape stays), `FloorHelpButton`.
+- **Scan (G3)**: `ScanInput` — keyboard wedge first (`scanWedge.ts`: a burst vs a person typing; a document reader while
+  focus is on a tile), `inputmode="none"`, scanned flash and announcement, optional keyboard button; the camera is an
+  injected `CameraScanner` (the design system adds no dependency; Nexus apps wrap `@zxing/browser`).
+- **PIN (G4)**: `PinPad` — fixed 3 × 4 keys, dots only, no `<input>`, digits in a ref and cleared on submit, held keys when
+  locked or busy, physical keys.
+- **Tiles, action bar, rows (G5)**: `FloorTile` / `FloorTileGrid`, `FloorActionBar` (one to three actions, main last),
+  `FloorList` / `FloorListRow` (icon + tone + status word + big number), and `FloorButton`, the kit's button idiom.
+- **Feedback (G8)**: `confirmFeedback(kind, { target, muted, haptics })` — colour flash (still under reduced motion),
+  `navigator.vibrate`, WebAudio tones; never throws.
+- **Nothing existing changes**: new files only, plus the `./floor` export in `package.json`.
+- Tests: `floor/*.vitest.test.ts` (wedge detection, PIN masking and submit, idle countdown, feedback channels in Node,
+  banner states, the parts' markup, the stylesheet's density and colour rules). Catalog: "Floor kit"
+  (`apps/web/src/app/design-system/_catalog/floor/`).
+
 ## The app rail and the area-navigation type are in the design system — 2026-10-28
 
 `patterns/shell` (exported by the patterns barrel; `patterns/shell` is the same set, narrower, for an app's root chrome).

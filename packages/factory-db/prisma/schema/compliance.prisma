@@ -1,0 +1,231 @@
+// Compliance (plan A1 §2.4 B; PLAN §2.8 "PPE"; features QHS-103, PRD-270, PRD-288, PRD-331): the PPE paperwork of the
+// styles under Regulation (EU) 2016/425 — the EU type-examination certificates (EN 17092, EN 1621, EN 13594 …) with
+// what they cover, the garment label templates, and the Declarations of Conformity and user information. apps/factory-api's
+// modules/compliance writes them (B-W1-12, 19, 20), always through command().
+//
+// Who is the maker (PLAN §2.8): with a brand label the brand is the legal PPE maker (the certificate holder, the name on
+// the label and the DoC); otherwise our company. Both cases use the same rows.
+//
+// Kept and frozen (Reg. 2016/425 art. 8(3): technical documentation and the DoC kept 10 years): no role deletes a row of
+// this file. A certificate, a label template or a compliance document is typed in as DRAFT and edited freely; once
+// registered (VALID), activated (ACTIVE) or issued (ISSUED) only its status moves (the …_product_guards triggers, for
+// every login, the owner included): a new or extended certificate, a changed label, a new DoC is a new row. Their
+// files (the certificate PDF, the signed DoC, the leaflet) are StoredFile rows of the record (recordType "Certificate" or
+// "ComplianceDocument", kind CERTIFICATE or DOCUMENT).
+//
+// Who sees what (ownership/compliance.json): the office reads and writes; the floor reads the certificates, their
+// coverage and the label templates (garment labels are printed at the final operation behind the certificate gate,
+// B-W1-44); portal and link sessions read none of it (the DoC reaches a customer as a file through a link, B-W1-49).
+
+/// An EU type-examination certificate (QHS-103; Reg. 2016/425 Annex V, module B) or a protector's or material's
+/// certificate, from a notified body. Its validity dates are required and span at most five years. DRAFT while typed in;
+/// VALID ⇄ SUSPENDED; WITHDRAWN and EXPIRED are final. A VALID certificate covering the style, colourway and size is the
+/// gate for labels, release and shipping (A1 §2.5).
+model Certificate {
+  id                 String            @id @db.Uuid
+  tenantId           String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that holds it (the manufacturer it names); null when a brand holds it (holderPartyId) for every
+  /// company of the tenant that makes for that brand.
+  companyId          String?           @db.Uuid
+  /// The brand that holds it (PLAN §2.8: with a brand label the brand is the legal maker); null: the company holds it.
+  holderPartyId      String?           @db.Uuid
+  /// The harmonised standard with its edition ("EN 17092-4:2020", "EN 1621-1:2012").
+  standard           String
+  /// The class or level it grants (EN 17092: AAA, AA, A, B, C; EN 1621: 1 or 2).
+  ppeClass           String?
+  /// The certificate's number as the notified body wrote it.
+  number             String
+  notifiedBodyName   String
+  /// The notified body's four-digit identification number (NANDO).
+  notifiedBodyNumber String
+  /// The model or type designation the certificate names, as written on it.
+  modelReference     String?
+  /// The first and last day it is valid (required; at most five years apart).
+  validFrom          DateTime          @db.Date
+  validTo            DateTime          @db.Date
+  status             CertificateStatus @default(DRAFT)
+  /// Why it was suspended or withdrawn, as the notified body wrote it.
+  statusReason       String?
+  statusChangedAt    DateTime?         @db.Timestamptz(3)
+  note               String?
+  version            Int               @default(1)
+  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?           @db.Uuid
+
+  company             Company?              @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  holderParty         Party?                @relation(fields: [tenantId, holderPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  coverage            CertificateCoverage[]
+  complianceDocuments ComplianceDocument[]
+
+  // One row per certificate of a notified body.
+  @@unique([tenantId, notifiedBodyNumber, number])
+  // The target of the tenant-safe references from its coverage and the documents that cite it.
+  @@unique([tenantId, id])
+}
+
+enum CertificateStatus {
+  /// Being typed in; covers nothing yet.
+  DRAFT
+  VALID
+  /// The notified body suspended it; it covers nothing until VALID again.
+  SUSPENDED
+  WITHDRAWN
+  /// Past its validTo (the scheduler moves it).
+  EXPIRED
+}
+
+/// What a certificate covers (QHS-103, PRD-288): one style (in some of its colourways and sizes, or all), or one item (a
+/// protector, a material it was tested with). Exactly one of styleId and itemId (the …_product_guards trigger). One row
+/// per certificate and style or item (the compliance module keeps it so); an end of coverage is ARCHIVED.
+model CertificateCoverage {
+  id                  String       @id @db.Uuid
+  tenantId            String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  certificateId       String       @db.Uuid
+  styleId             String?      @db.Uuid
+  itemId              String?      @db.Uuid
+  /// The style's colourways it covers; empty: all of them.
+  colourwayIds        String[]     @default([]) @db.Uuid
+  /// The style's size codes it covers; empty: its whole range.
+  sizes               String[]     @default([])
+  /// Made-to-measure single units built on the covered style are covered while the rider's measures fall inside the
+  /// body measures of the covered sizes (PRD-288; Reg. 2016/425 Annex III).
+  allowsMadeToMeasure Boolean      @default(false)
+  note                String?
+  status              MasterStatus @default(ACTIVE)
+  version             Int          @default(1)
+  createdAt           DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?      @db.Uuid
+
+  certificate Certificate @relation(fields: [tenantId, certificateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // product.prisma.
+  style       Style?      @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  item        Item?       @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, certificateId])
+  // The gate asks: which certificates cover this style (or item)?
+  @@index([tenantId, styleId])
+  @@index([tenantId, itemId])
+}
+
+/// A garment label template (PRD-331; Reg. 2016/425 art. 8(5)(6), art. 17; Reg. (EU) 1007/2011): the sewn-in label's
+/// layout and fixed content, per style or shared by several. Revised, never edited once ACTIVE: a style revision points
+/// at the template revision its units carry. DRAFT → ACTIVE → RETIRED.
+model LabelTemplate {
+  id                 String              @id @db.Uuid
+  tenantId           String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide master data (A1 §2.1).
+  companyId          String?             @db.Uuid
+  code               String
+  /// 1, 2, 3 … per code.
+  revision           Int
+  name               String
+  /// The style it is for; null: shared by several styles.
+  styleId            String?             @db.Uuid
+  status             LabelTemplateStatus @default(DRAFT)
+  /// The languages it prints, ISO 639-1, in order.
+  languages          String[]            @default([])
+  /// The legal maker it names (art. 8(6): name, trade name or mark, postal address): a brand party with a brand label,
+  /// else our company (makerPartyId null); the name and address as printed.
+  makerPartyId       String?             @db.Uuid
+  makerName          String
+  makerAddress       String
+  /// The importer, when the maker is outside the EU (art. 10(3)).
+  importerName       String?
+  importerAddress    String?
+  /// The fibre composition per part (Reg. 1007/2011), percentages as decimal strings:
+  /// [{ "part": "lining", "fibres": [{ "fibre": "polyester", "percent": "100" }] }].
+  composition        Json?
+  /// Prints "Contains non-textile parts of animal origin" (Reg. 1007/2011 art. 12) in its languages.
+  animalOriginPhrase Boolean             @default(false)
+  /// Care symbols (ISO 3758) and their text: [{ "symbol": "wash-not", "text": { "en": "Do not wash" } }].
+  care               Json?
+  /// What the builder places where (B-W1-19): CE mark, model, batch or serial, size with its body measures, the EN 17092
+  /// pictogram with the class, the standard; the printed values come from the style, size, certificate and unit.
+  layout             Json
+  widthMm            Decimal             @db.Decimal(6, 2)
+  heightMm           Decimal             @db.Decimal(6, 2)
+  version            Int                 @default(1)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?             @db.Uuid
+
+  company        Company?        @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // product.prisma.
+  style          Style?          @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  makerParty     Party?          @relation(fields: [tenantId, makerPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  styleRevisions StyleRevision[]
+
+  @@unique([tenantId, code, revision])
+  // The target of the style revisions' reference.
+  @@unique([tenantId, id])
+}
+
+enum LabelTemplateStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+/// A Declaration of Conformity (Reg. 2016/425 art. 15, Annex IX) or the user information leaflet (Annex II 1.4) of a
+/// style, in one language, by revision. Its data is what Annex IX asks; its signed PDF or leaflet is its file. DRAFT →
+/// ISSUED (frozen) → SUPERSEDED by a newer revision, or WITHDRAWN. The DoC goes with the goods (art. 8(8), B-W1-49).
+model ComplianceDocument {
+  id                    String                   @id @db.Uuid
+  tenantId              String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide (A1 §2.1).
+  companyId             String?                  @db.Uuid
+  styleId               String                   @db.Uuid
+  kind                  ComplianceDocumentKind
+  /// ISO 639-1.
+  language              String
+  /// 1, 2, 3 … per style, kind and language.
+  revision              Int
+  /// The reference printed on it (the DoC number).
+  number                String?
+  status                ComplianceDocumentStatus @default(DRAFT)
+  /// The EU type-examination certificate it cites, with its notified body (Annex IX 7).
+  certificateId         String?                  @db.Uuid
+  /// The maker (Annex IX 2): a brand party with a brand label, else our company; the name and address as printed.
+  makerPartyId          String?                  @db.Uuid
+  makerName             String
+  makerAddress          String
+  /// The PPE it covers: product, type, batch or serial range (Annex IX 1 and 4).
+  productIdentification String?
+  /// The harmonised standards it declares, with their editions (Annex IX 6).
+  standards             String[]                 @default([])
+  /// Signed for and on behalf of (Annex IX 8): who, their function, where and on which day.
+  signedByName          String?
+  signedByFunction      String?
+  signedPlace           String?
+  signedOn              DateTime?                @db.Date
+  /// When it was issued; set exactly from ISSUED on.
+  issuedAt              DateTime?                @db.Timestamptz(3)
+  version               Int                      @default(1)
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById           String?                  @db.Uuid
+
+  company     Company?     @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // product.prisma.
+  style       Style        @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  certificate Certificate? @relation(fields: [tenantId, certificateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  makerParty  Party?       @relation(fields: [tenantId, makerPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, styleId, kind, language, revision])
+}
+
+enum ComplianceDocumentKind {
+  /// The EU Declaration of Conformity (Annex IX).
+  DECLARATION_OF_CONFORMITY
+  /// The manufacturer's information leaflet (Annex II 1.4).
+  USER_INFORMATION
+}
+
+enum ComplianceDocumentStatus {
+  DRAFT
+  ISSUED
+  SUPERSEDED
+  WITHDRAWN
+}

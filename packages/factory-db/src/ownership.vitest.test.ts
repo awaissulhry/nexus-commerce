@@ -17,7 +17,16 @@ describe('model ownership', () => {
     expect(inputs.model.tables.map((table) => table.table).sort()).toEqual([
       'AuditLog',
       'Badge',
+      'BomLine',
+      'BomLineColour',
+      'BomLineSize',
+      'Certificate',
+      'CertificateCoverage',
+      'Colour',
+      'Colourway',
       'Company',
+      'ComplianceDocument',
+      'DepositRequest',
       'Device',
       'DeviceEnrolment',
       'EmailIdentity',
@@ -27,17 +36,24 @@ describe('model ownership', () => {
       'IdempotencyReceipt',
       'ImportJob',
       'ImportRow',
+      'InboundEmail',
       'InboundWebhook',
       'IntegrationAccount',
       'IntegrationCall',
       'Invitation',
+      'Item',
+      'ItemColour',
+      'LabelTemplate',
       'Line',
       'LinkEvidence',
+      'MeasurementPoint',
       'MeasurementProfile',
+      'MeasurementTemplate',
       'Message',
       'NumberAllocation',
       'NumberSeries',
       'OneOffLink',
+      'Operation',
       'OutboxEvent',
       'Party',
       'PartyAddress',
@@ -46,17 +62,32 @@ describe('model ownership', () => {
       'PasswordReset',
       'PrintJob',
       'Printer',
+      'Quote',
+      'QuoteAcceptance',
+      'QuoteApproval',
+      'QuoteLine',
+      'QuoteLineSize',
+      'QuoteVersion',
       'Role',
       'RoleAssignment',
+      'RoutingOperation',
+      'SalesOrder',
+      'SalesOrderLine',
+      'SalesOrderLineSize',
       'SecretValue',
       'Session',
       'Site',
+      'Size',
+      'SizeScale',
       'Station',
       'StoredFile',
+      'Style',
+      'StyleRevision',
       'Suppression',
       'Tenant',
       'Thread',
       'User',
+      'Variant',
       'ViesCheck',
       'WorkCentre',
       'Worker',
@@ -148,9 +179,9 @@ describe('model ownership', () => {
   describe('the partner wall (A1 §2.2)', () => {
     const quotes = parseSchema([
       {
-        file: 'quotes.prisma',
+        file: 'example-quotes.prisma',
         text: [
-          'model Quote {',
+          'model ExampleQuote {',
           '  id           String @id @db.Uuid',
           `  tenantId     String @default(dbgenerated(${JSON.stringify(TENANT_ID_DEFAULT)})) @db.Uuid`,
           '  partyId      String @db.Uuid',
@@ -169,10 +200,10 @@ describe('model ownership', () => {
       },
     ])
     const classify = (hiddenColumns: string[]): OwnershipFile => ({
-      file: 'quotes.json',
+      file: 'example-quotes.json',
       data: {
         models: {
-          Quote: {
+          ExampleQuote: {
             kind: 'tenant',
             keyColumns: { tenant: 'tenantId', party: 'partyId' },
             access: {
@@ -194,9 +225,9 @@ describe('model ownership', () => {
 
     it('fails on a partner access that does not hide them, naming each column', () => {
       expect(problems([...loadOwnership(), classify([])], [...loadSchema(), ...quotes])).toEqual([
-        'ownership/quotes.json: Quote: factory_partner_runtime: column costMinor is a cost (@grain cost), behind the partner wall; add it to hiddenColumns',
-        'ownership/quotes.json: Quote: factory_partner_runtime: column marginMinor is a margin (@grain margin), behind the partner wall; add it to hiddenColumns',
-        'ownership/quotes.json: Quote: factory_partner_runtime: column internalNote is an internal note (@internal), behind the partner wall; add it to hiddenColumns',
+        'ownership/example-quotes.json: ExampleQuote: factory_partner_runtime: column costMinor is a cost (@grain cost), behind the partner wall; add it to hiddenColumns',
+        'ownership/example-quotes.json: ExampleQuote: factory_partner_runtime: column marginMinor is a margin (@grain margin), behind the partner wall; add it to hiddenColumns',
+        'ownership/example-quotes.json: ExampleQuote: factory_partner_runtime: column internalNote is an internal note (@internal), behind the partner wall; add it to hiddenColumns',
       ])
       expect(problems([...loadOwnership(), classify(['costMinor', 'marginMinor', 'internalNote'])], [...loadSchema(), ...quotes])).toEqual([])
     })

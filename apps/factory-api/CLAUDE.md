@@ -7,8 +7,9 @@ and the idempotency receipt; the outbox (events → BullMQ → handlers and live
 (`src/background.ts worker|scheduler`); office and floor sign-in, roles and money grains (`src/platform/auth/`),
 one-off links (`src/platform/links/`), the integration platform (gateway, sealed secrets, inbound ledger), files on
 R2 (`src/platform/files/`), record threads with the record timeline (`src/platform/threads/`), imports with a dry
-run (`src/platform/imports/`), documents and printing (`src/platform/{documents,print}/`) and email out through SES
-(`src/platform/email-out/`), below. Portal sign-in, email in, the modules and the other adapters come in later steps.
+run (`src/platform/imports/`), documents and printing (`src/platform/{documents,print}/`), email out through SES
+(`src/platform/email-out/`) and email in with "mail to sort" (`src/platform/email-in/`), below. Portal sign-in, the
+modules and the other adapters come in later steps.
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>
@@ -204,7 +205,7 @@ run (`src/platform/imports/`), documents and printing (`src/platform/{documents,
   HMAC verifier; others: INBOUND_PROVIDERS) → InboundWebhook receipt FIRST (dedupe key unique per provider; a bad
   signature is kept as REJECTED) + the event integration.inbound_received in one command → 200. The worker's
   `inboundHandler()` (in background.ts HANDLERS) applies a receipt once with its provider's processor. INBOUND_PROVIDERS:
-  SES (SNS: basic-auth verifier, platform/email-out notifications processor).
+  SES (SNS: basic-auth verifier; processor: platform/email-in's for "Received", in front of platform/email-out's).
 
 ## Files on R2 (`src/platform/files/`, `src/adapters/{r2,local-files}/`, plan A1 §3.6; COL-045, COL-050, PLAN §2.8)
 - `StoredFile` (files.prisma): one row per file, for ONE record (`recordType` + `recordId`), never the bytes. Flow:
@@ -327,6 +328,41 @@ run (`src/platform/imports/`), documents and printing (`src/platform/{documents,
   environment's), `fake.ts` (FAKE: in-memory mailbox, local and test only; never a table or a file), `sns.ts` (the SNS
   envelope parser and verifier), `testing.ts` (FakeSesTransport: the real client on a scripted transport;
   sesNotificationBody). Tests: `email.pg.vitest.test.ts` on the auth harness (`h.ses`, `h.email`, `h.files`, `h.mailer`).
+
+## Email in (`src/platform/email-in/`, `src/adapters/ses-inbound/`, plan A1 §3.7; COL-020, COL-022, COL-023, COL-025, COL-026)
+- Table (email-in.prisma): InboundEmail, office only: what SES said (account, receipt, SES id, S3 bucket and key, envelope,
+  SPF/DKIM/DMARC/spam/virus verdicts; never changes), what the mail held (From, To, Cc, subject, Message-ID unique per
+  tenant, In-Reply-To, References, size, text, sanitised HTML; written once, when read), its attachments (JSON: kept ones
+  with their object and file, skipped ones with why), status RECEIVED → FETCHED → MATCHED | TRIAGE | HELD | REJECTED, or
+  FAILED; thread, message, matchedBy (TOKEN, HEADERS, SENDER, MANUAL), held and reject reasons, the sender's party and
+  contact (a suggestion while it waits). The …_email_in_guards trigger holds all of it; nothing is deleted.
+- Receive (`receive.ts`, inside the inbound ledger's processing command): SES's "Received" notification → ONE row
+  RECEIVED + `email.inbound_received` (a virus verdict: REJECTED, never read); the same SES id or Message-ID again adds
+  nothing. Other SES notifications go on to email out's processor (`emailInProcessor(next)`, inbound/providers.ts).
+- Fetch (`fetch.ts`, worker handler `emailIn.fetch`): the raw mail through the gateway (`mail.fetch_inbound` on the SES
+  account: FAKE → `adapters/ses-inbound/fake.ts` FakeMailBucket, in memory; LIVE/SANDBOX → `s3.ts`, GetObject from the
+  account's `settings.inboundBucket` only; at most 40 MB) → postal-mime (`parse.ts`) → sanitised HTML and text
+  (factory-domain email-in/sanitise) → each attachment an ATTACHMENT file may hold is put in the file store (files.put);
+  inline pictures, other types, empty and too many are listed as skipped → command FETCHED + `email.inbound_fetched`.
+  A retryable failure is counted and retried (5 tries), a final one (object gone or too large, unreadable, no file store)
+  makes the mail FAILED.
+- Sort (`sort.ts`, handler `emailIn.sort`, ONE command): the facts (`match.ts`: thread by `r-<token>@<a tenant reply
+  domain>`, else In-Reply-To/References against OUTBOUND Message-IDs; the sender known to the thread: a contact of its
+  party, a recipient of its mail, or at a contact's company domain; else the one party the sender is a contact of and
+  its `Party` thread) → factory-domain `sortMail`: virus or duplicate Message-ID → REJECTED; DMARC FAIL or spam → HELD;
+  thread + unknown sender → HELD; closed thread → HELD; thread without party → TRIAGE; else MATCHED: `writeMessage`
+  INBOUND EMAIL (sanitised HTML, the mail's Message-ID) with the files on the thread's RECORD shared with its party; a
+  known contact without a thread joins its party's thread only with DMARC PASS and a `Party` thread resolver (the parties
+  module's; none in W0: TRIAGE with the party suggested). HELD and TRIAGE keep their files on the mail (office only).
+  Event `email.inbound_sorted` (live: email.triage).
+- "Mail to sort" (A2 SCR-019; email.triage over the mail's company; `triage.ts`): `GET /email/inbound` (TRIAGE, HELD,
+  FAILED, or `?status=`), `GET /email/inbound/:id`, `POST …/:id/assign` (record with a party; threads.post over it),
+  `POST …/:id/release` (HELD: into the thread it named, also a closed one, else TRIAGE), `POST …/:id/reject`
+  (MARKED_SPAM | DISCARDED). Version-guarded commands; assign and release copy the mail's files onto the record (files.read
+  + files.put before the command: a file's record never changes). Answers never hold the raw mail, its S3 place, a reply
+  token or a storage key.
+- Tests: `email-in.pg.vitest.test.ts` on the auth harness (`createEmailInRuntime({ gateway, fake: FakeMailBucket, s3 })`,
+  `testing.ts`: `receivedNotificationBody`, `rawMail`), `parse.vitest.test.ts`, `adapters/ses-inbound` (FakeS3Transport).
 
 ## Rules
 - Configuration only through `src/env.ts`. It reads ONLY `apps/factory-api/.env`, by explicit path, and ONLY

@@ -52,6 +52,20 @@ model Party {
   contacts            PartyContact[]
   taxIdentities       PartyTaxIdentity[]
   measurementProfiles MeasurementProfile[]
+  // product.prisma: the items it supplies by default, the styles made for it as a brand, the BOM lines bought from it.
+  suppliedItems       Item[]
+  brandStyles         Style[]
+  bomLines            BomLine[]
+  // compliance.prisma: as a brand, the certificates it holds and the labels and documents that name it as the maker.
+  certificatesHeld    Certificate[]
+  labelTemplates      LabelTemplate[]
+  complianceDocuments ComplianceDocument[]
+  // email-in.prisma: the mail received from this party's contacts (or its company domain).
+  inboundEmails       InboundEmail[]
+  // sales.prisma: its quotes, sales orders and deposit requests.
+  quotes              Quote[]
+  salesOrders         SalesOrder[]
+  depositRequests     DepositRequest[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the party's rows.
@@ -120,6 +134,9 @@ model PartyAddress {
   createdById     String?            @db.Uuid
 
   party Party @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // sales.prisma: the quote versions it is the bill-to or ship-to address of.
+  quoteVersionsBillTo QuoteVersion[] @relation("QuoteVersionBillTo")
+  quoteVersionsShipTo QuoteVersion[] @relation("QuoteVersionShipTo")
 
   @@unique([tenantId, partyId, id])
 }
@@ -157,6 +174,10 @@ model PartyContact {
 
   party               Party                @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   measurementProfiles MeasurementProfile[]
+  // email-in.prisma: the mail received from this contact.
+  inboundEmails       InboundEmail[]
+  // sales.prisma: the quotes sent to them.
+  quotes              Quote[]
 
   // The target of the measurement profiles' reference: a rider is a contact of the profile's own party.
   @@unique([tenantId, partyId, id])
@@ -207,6 +228,8 @@ model PartyTaxIdentity {
 
   party      Party       @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   viesChecks ViesCheck[]
+  // sales.prisma: the quote versions priced with it.
+  quoteVersions QuoteVersion[]
 
   @@unique([tenantId, partyId, validFrom])
   // The target of the VIES checks' reference: a check names its identity's party.
@@ -324,6 +347,9 @@ model MeasurementProfile {
   contact      PartyContact?        @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   supersedes   MeasurementProfile?  @relation("MeasurementProfileRevisions", fields: [tenantId, partyId, supersedesId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   supersededBy MeasurementProfile[] @relation("MeasurementProfileRevisions")
+  // sales.prisma: the made-to-measure quote and order lines made to this revision.
+  quoteLines      QuoteLine[]
+  salesOrderLines SalesOrderLine[]
 
   @@unique([tenantId, partyId, riderName, garmentType, revision])
   // The target of the revisions' reference: a revision supersedes one of its own party.

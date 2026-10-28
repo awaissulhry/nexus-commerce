@@ -103,6 +103,23 @@ model Company {
   viesChecks          ViesCheck[]
   // email.prisma: the company's sending identities (its mail goes out through them).
   emailIdentities     EmailIdentity[]
+  // product.prisma: the company's own master data (tenant-wide rows have none).
+  colours              Colour[]
+  items                Item[]
+  sizeScales           SizeScale[]
+  styles               Style[]
+  operations           Operation[]
+  measurementTemplates MeasurementTemplate[]
+  // compliance.prisma: the certificates it holds, its label templates and compliance documents.
+  certificates         Certificate[]
+  labelTemplates       LabelTemplate[]
+  complianceDocuments  ComplianceDocument[]
+  // email-in.prisma: the mail received through the company's SES account.
+  inboundEmails        InboundEmail[]
+  // sales.prisma: its quotes, sales orders and deposit requests.
+  quotes               Quote[]
+  salesOrders          SalesOrder[]
+  depositRequests      DepositRequest[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.
@@ -141,6 +158,8 @@ model Site {
   threads       Thread[]
   // print.prisma: the site's printers.
   printers      Printer[]
+  // sales.prisma: the sales order lines it makes.
+  salesOrderLines SalesOrderLine[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])

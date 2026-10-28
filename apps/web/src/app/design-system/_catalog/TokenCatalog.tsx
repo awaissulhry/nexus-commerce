@@ -136,6 +136,7 @@ import { AppRailExample } from './AppRailExample'
 import { ChangeValueExample } from './ChangeValueExample'
 import { CountdownExample } from './CountdownExample'
 import { DensityTiersExample } from './DensityTiersExample'
+import { FloorKitExample } from './floor/FloorKitExample'
 import { GridRowVerbsExample } from './GridRowVerbsExample'
 import { FamilyFooterFrameExample } from './FamilyFooterFrameExample'
 import { SwitchColumnExample } from './SwitchColumnExample'
@@ -149,6 +150,7 @@ import { DetailModalExample } from './DetailModalExample'
 import { ReviewPartsExample } from './ReviewPartsExample'
 import { BottomBarExample, BrandingExample } from './shell'
 import { PdfViewerExample, QrCodeExample } from './documents'
+import { SizeGridExample } from './size-grid/SizeGridExample'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -1078,6 +1080,7 @@ export function TokenCatalog() {
         <BidPartsExample />
         <HarvestPartsExample />
         <NegativesPartsExample />
+        <SizeGridExample />
 
         <GridCard toolbar={<GridToolbar count={<><b>{GDS_ROWS.length}</b> campaigns</>} />}>
           <NexusGrid<GdsRow> density="cozy" domLayout="autoHeight" rowData={GDS_ROWS} getRowId={GDS_ROW_ID} columnDefs={GDS_COLS} rowSelection={gdsSelection} selectionColumnDef={GDS_SELECTION_COLUMN} pinnedBottomRowData={GDS_TOTALS} />
@@ -1525,6 +1528,8 @@ export function TokenCatalog() {
       >
         <DensityTiersExample />
       </Section>
+
+      <Section title="Floor kit" desc="Parts for the factory's floor tablets, on the floor density tier: frame, operator chip, offline banner, idle sign-out, Help, scan input, PIN pad, tiles, action bar, list rows and confirm feedback (gaps G2 G3 G4 G5 G8; packages/ui/src/floor)."><FloorKitExample /></Section>
 
       <Section title="Radius">
         <Card>

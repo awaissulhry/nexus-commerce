@@ -95,6 +95,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'print.manage',
       'email.send',
       'email.manage',
+      'email.triage',
     ],
     grains: [],
   }),
@@ -109,7 +110,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Sales',
     description: 'Customers, quotes and orders; sees selling prices, not costs or margins.',
     requireMfa: false,
-    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send'],
+    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage'],
     grains: ['price'],
   }),
   template('planner', {
@@ -123,7 +124,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Buyer',
     description: 'Suppliers and purchase orders; sees purchase prices (the cost grain).',
     requireMfa: true,
-    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send'],
+    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage'],
     grains: ['cost'],
   }),
   template('warehouse', {

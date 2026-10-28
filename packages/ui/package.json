@@ -8,6 +8,7 @@
     "./components": "./src/components/index.ts",
     "./patterns": "./src/patterns/index.ts",
     "./grid": "./src/grid/index.ts",
+    "./floor": "./src/floor/index.ts",
     "./tokens": "./src/tokens/index.ts",
     "./styles/*": "./src/styles/*",
     "./patterns/shell/app-rail.css": "./src/patterns/shell/app-rail.css",
