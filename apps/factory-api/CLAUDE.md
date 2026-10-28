@@ -11,6 +11,7 @@ run (`src/platform/imports/`), documents and printing (`src/platform/{documents,
 (`src/platform/email-out/`) and email in with "mail to sort" (`src/platform/email-in/`), below. Portal sign-in, the
 modules and the other adapters come in later steps.
 Modules: `modules/compliance/certificates` (certificate register and gate `certificateGateFor`; cron `compliance.certificateExpiry`).
+`modules/inventory/{locations,ledger,stock}`: every stock move goes through `postMoves(tools, drafts, { key })` (ledger/post-moves.ts) inside the caller's command (locks, 409 before below zero, values office/system moves; worker handler `inventory.valueFloorMoves` values floor moves); locations import `inventory.locations`.
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>
