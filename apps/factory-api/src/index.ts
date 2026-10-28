@@ -3,6 +3,7 @@ import { Redis } from 'ioredis'
 import { openFactoryDatabase, type FactoryDatabase } from '@nexus/factory-db'
 import { appConfig, buildApp } from './core/app'
 import { loadFactoryEnv } from './env'
+import { assertNoFakeAccountsInProduction } from './platform/gateway/boot'
 import { createOfficeAuth } from './platform/auth/sessions/office-auth'
 
 // The env loader runs first: it refuses a wrong environment before anything opens a connection.
@@ -14,6 +15,15 @@ try {
   database = await openFactoryDatabase({ connectionString: env.FACTORY_DATABASE_URL })
 } catch (error) {
   console.error(`factory-api: the database refused the boot: ${(error as Error).message}`)
+  process.exit(1)
+}
+
+// Plan A1 §4: production never starts while an integration account is FAKE (platform/gateway/boot.ts).
+try {
+  await assertNoFakeAccountsInProduction(database, env.FACTORY_ENV)
+} catch (error) {
+  console.error(`factory-api: refused to start: ${(error as Error).message}`)
+  await database.close().catch(() => {})
   process.exit(1)
 }
 

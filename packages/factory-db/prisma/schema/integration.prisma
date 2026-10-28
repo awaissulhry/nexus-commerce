@@ -1,0 +1,235 @@
+// The integration platform (plan A1 §4, §5.4; features PLT-194, PLT-195, PLT-197, PLT-224): the accounts the factory
+// holds with outside services, their secrets, the ledger of every call made to them, and the ledger of every webhook
+// they sent. apps/factory-api uses them:
+//   - platform/gateway   every outbound call goes through gateway.call(): account state and mode, a rate limit and a
+//                        circuit breaker per account, a timeout, retries only for idempotent operations, and ONE
+//                        IntegrationCall row per call, whatever happened (Commerce hard rule 4, for the factory);
+//   - platform/secrets   SecretValue rows: AES-256-GCM per value under its own data key, the data key wrapped by AWS KMS
+//                        (staging, production) or a local master key (local, test); never stored in plain text;
+//   - platform/inbound   a webhook is verified, stored FIRST (InboundWebhook, deduplicated per provider), answered at
+//                        once, and processed later by a worker job (the outbox event integration.inbound_received).
+//
+// The ledgers keep what was true when they were written, so they have no foreign keys (like the audit log): the
+// account, company and provider of a call or a receipt are copied onto its row. IntegrationCall is append-only
+// (`@append-only`, scripts/factory/check-append-only.mjs; the triggers of …_integration_guards). InboundWebhook keeps
+// its receipt columns fixed and only moves its processing state forward (the same migration's guard trigger); it is
+// never deleted.
+
+/// One account of a tenant (or of one of its companies) with an outside service: which provider, in which mode, in
+/// which state, with which secrets and limits. The gateway reads it before every call; the admin keeps it (through
+/// command()). Disabled, never deleted while a ledger row names it.
+model IntegrationAccount {
+  id                      String                   @id @db.Uuid
+  tenantId                String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose account it is (the SDI provider, Sendcloud: one per legal company). Null: tenant-wide
+  /// (SES, R2, VIES, whose credentials are the environment's).
+  companyId               String?                  @db.Uuid
+  provider                IntegrationProvider
+  /// Short code, unique in the tenant (`sdi-main`, `ses`).
+  code                    String
+  /// The name the Connections page shows.
+  label                   String
+  /// LIVE: the provider's production; SANDBOX: its test system; FAKE: the factory's own fake (no network). The API
+  /// refuses to start with FACTORY_ENV=production while any account is FAKE, and the gateway refuses a FAKE call there.
+  mode                    IntegrationMode
+  /// Only an ACTIVE account is called. PAUSED is the kill switch (calls are refused, recorded as such); DISABLED is
+  /// an account no longer used.
+  status                  IntegrationAccountStatus @default(ACTIVE)
+  /// The sealed credentials (JSON: API keys, client secrets), purpose `integration.credentials`. Null: none needed
+  /// (FAKE) or the environment's.
+  credentialsSecretId     String?                  @db.Uuid
+  /// The sealed secret that signs this account's webhooks, purpose `integration.webhook`.
+  webhookSecretId         String?                  @db.Uuid
+  /// Settings that are not secret (a region, a configuration set, a sender): JSON, checked by the provider's adapter.
+  settings                Json?
+  /// The rate limit of this account's calls (a token bucket in Redis): refill per minute and burst.
+  rateLimitPerMinute      Int                      @default(60)
+  rateLimitBurst          Int                      @default(10)
+  /// The longest wait for one attempt of a call.
+  callTimeoutMs           Int                      @default(10000)
+  /// The circuit breaker: after this many failed calls in a row the account is not called for the cool-down; then one
+  /// trial call decides (success closes it, failure opens it again).
+  circuitFailureThreshold Int                      @default(5)
+  circuitCooldownSeconds  Int                      @default(60)
+  /// The gateway's last successful call (kept at most a minute stale) and its last failure, for the Connections page.
+  lastOkAt                DateTime?                @db.Timestamptz(3)
+  lastErrorAt             DateTime?                @db.Timestamptz(3)
+  lastError               String?
+  version                 Int                      @default(1)
+  createdAt               DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById             String?                  @db.Uuid
+
+  company       Company?     @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  credentials   SecretValue? @relation("IntegrationAccountCredentials", fields: [tenantId, credentialsSecretId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  webhookSecret SecretValue? @relation("IntegrationAccountWebhookSecret", fields: [tenantId, webhookSecretId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, id])
+  @@index([tenantId, provider])
+}
+
+/// An outside service the factory talks to (plan A1 §4). Additive.
+enum IntegrationProvider {
+  /// Amazon SES (eu-south-1): mail out, bounces and complaints, mail in (via SNS).
+  SES
+  /// Cloudflare R2: files.
+  R2
+  /// The SDI intermediary (A-Cube or Openapi): FatturaPA invoices and their notifications.
+  SDI
+  /// Sendcloud: parcels, labels, tracking.
+  SENDCLOUD
+  /// VIES: EU VAT number checks.
+  VIES
+}
+
+/// Which system an account's calls reach.
+enum IntegrationMode {
+  LIVE
+  SANDBOX
+  FAKE
+}
+
+enum IntegrationAccountStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+}
+
+/// One secret, envelope-encrypted (PLT-197, PLT-224; GDPR art. 32): the value is AES-256-GCM-encrypted under its own
+/// random data key, and only the WRAPPED data key is stored; the key that wraps it (`keyId`) lives in AWS KMS (staging,
+/// production) or is the local master key (local, test). The tenant and the purpose are the encryption context (the
+/// GCM additional data, and the KMS context), so a value copied to another tenant or another purpose does not open.
+/// Rotation re-seals in place (new data key under the current key, `rotatedAt`); the plain value is never stored or
+/// shown again after it was saved.
+model SecretValue {
+  id          String    @id @db.Uuid
+  tenantId    String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// What it is for, the purpose of its encryption context: `integration.credentials`, `integration.webhook`, ….
+  purpose     String
+  /// The key that wrapped the data key: `local:<fingerprint>` or `kms:<KMS key id>`.
+  keyId       String
+  /// `AES-256-GCM`.
+  algorithm   String
+  /// The data key, wrapped by keyId.
+  wrappedKey  Bytes
+  /// The value's 96-bit GCM nonce, its ciphertext and its 128-bit tag.
+  iv          Bytes
+  ciphertext  Bytes
+  authTag     Bytes
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  /// The last re-seal under a newer key.
+  rotatedAt   DateTime? @db.Timestamptz(3)
+  createdById String?   @db.Uuid
+
+  credentialsOf   IntegrationAccount[] @relation("IntegrationAccountCredentials")
+  webhookSecretOf IntegrationAccount[] @relation("IntegrationAccountWebhookSecret")
+
+  // The target of the accounts' tenant-safe references.
+  @@unique([tenantId, id])
+}
+
+/// One call to an outside service, as the gateway made it (PLT-195): written once, when the call ended, whatever
+/// happened (success, failure, timeout, or a refusal before anything was sent). Request and answer are kept only as
+/// summaries with secrets and personal data removed.
+/// @append-only
+model IntegrationCall {
+  /// UUIDv7 from newId().
+  id              String                @id @db.Uuid
+  tenantId        String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The account's company, when it has one.
+  companyId       String?               @db.Uuid
+  accountId       String                @db.Uuid
+  provider        IntegrationProvider
+  /// The account's mode at the time of the call.
+  mode            IntegrationMode
+  /// `<area>.<action>` of the adapter (`mail.send`, `sdi.send_invoice`).
+  operation       String
+  /// The request (or job) that made the call, as on its audit rows.
+  requestId       String
+  /// The idempotency key sent to the provider, when the operation has one.
+  idempotencyKey  String?
+  startedAt       DateTime              @db.Timestamptz(3)
+  finishedAt      DateTime              @db.Timestamptz(3)
+  /// Latency of the whole call, retries included.
+  durationMs      Int
+  /// Attempts made (0 for a refusal: nothing was sent).
+  attempts        Int
+  status          IntegrationCallStatus
+  /// Why a call was refused or failed: `account_paused`, `fake_in_production`, `rate_limited`, `circuit_open`,
+  /// `timeout`, `provider_error`, `network_error`, ….
+  reason          String?
+  /// The provider's HTTP status of the last attempt, when there was an answer.
+  httpStatus      Int?
+  requestSummary  Json?
+  responseSummary Json?
+  /// The last error, in one line (no secret: the gateway removes the account's secret values from it).
+  error           String?
+
+  // An account's calls in time order (the Connections page, the error queue).
+  @@index([tenantId, accountId, startedAt])
+  @@index([tenantId, status, startedAt])
+}
+
+enum IntegrationCallStatus {
+  SUCCEEDED
+  FAILED
+  TIMED_OUT
+  REFUSED
+}
+
+/// One webhook delivery from an outside service (PLT-194), stored BEFORE it is answered and before anything acts on
+/// it. A verified delivery has its dedupe key (the provider's event id), unique per provider, so a repeat is stored
+/// once and processed once; it keeps its body for the worker. A delivery whose signature failed is kept too
+/// (`verified` false, REJECTED, no dedupe key and no body: a forged request can never take a real event's key).
+/// The receipt never changes; only its processing state moves forward. Never deleted.
+model InboundWebhook {
+  /// UUIDv7 from newId().
+  id           String              @id @db.Uuid
+  tenantId     String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The account's company, when it has one.
+  companyId    String?             @db.Uuid
+  accountId    String              @db.Uuid
+  provider     IntegrationProvider
+  /// The signature was checked and holds.
+  verified     Boolean
+  /// The provider's id of the event (from the verified delivery): one receipt per provider and key.
+  dedupeKey    String?
+  /// The provider's id of the object the event is about, when it names one.
+  externalId   String?
+  /// The provider's event type (`Bounce`, `invoice.delivered`), as the verifier read it.
+  eventType    String?
+  /// SHA-256 (hex) of the raw body, and its size: the record of what arrived, rejected or not.
+  bodySha256   String
+  bodyBytes    Int
+  contentType  String?
+  /// The raw body (UTF-8) of a verified delivery, for the processing job.
+  body         String?
+  /// Why the signature check failed (REJECTED only).
+  rejectReason String?
+  receivedAt   DateTime            @db.Timestamptz(3)
+  /// The request that delivered it.
+  requestId    String
+  status       InboundStatus
+  /// Processing attempts so far.
+  attempts     Int                 @default(0)
+  processedAt  DateTime?           @db.Timestamptz(3)
+  /// The last processing failure.
+  lastError    String?
+
+  // The dedupe key (a rejected delivery has none, and NULLs never collide).
+  @@unique([tenantId, provider, dedupeKey])
+  // The error queue and the processing backlog.
+  @@index([tenantId, status, receivedAt])
+}
+
+/// Where a webhook receipt is: RECEIVED (verified, waiting for its job) → PROCESSED, or FAILED (its last attempt
+/// failed; a person may send it back to RECEIVED). REJECTED: the signature failed; never processed.
+enum InboundStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+  REJECTED
+}

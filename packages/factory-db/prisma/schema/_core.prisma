@@ -84,6 +84,8 @@ model Company {
   numberSeries NumberSeries[]
   // auth.prisma: the sessions that start in this company.
   sessions     Session[]
+  // integration.prisma: the company's accounts with outside services.
+  integrationAccounts IntegrationAccount[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.

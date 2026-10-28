@@ -1,3 +1,4 @@
+import { events as integration } from '../integration/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -93,9 +94,9 @@ export function createCatalogue(definitions: readonly EventDefinition[]): EventC
  *   import { events as sales } from '../sales/events'
  *   …
  *   ...sales,
- * The platform (W0) emits no domain event yet; the W1 modules bring theirs.
+ * The platform's own events come first (integration: the inbound webhook ledger); the W1 modules bring theirs.
  */
-export const EVENT_DEFINITIONS = [] as const satisfies readonly EventDefinition[]
+export const EVENT_DEFINITIONS = [...integration] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

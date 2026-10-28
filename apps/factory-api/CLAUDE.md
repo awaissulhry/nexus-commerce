@@ -4,8 +4,9 @@ The factory's Fastify 5 API: a separate product from Commerce, with its own data
 Today the API core: context, contracts, route manifest, security baseline, `GET /health` and `GET /ready`, and
 `command()` (`src/core/command.ts`): the ONLY way to write — one transaction for the change, its audit rows, its events
 and the idempotency receipt; the outbox (events → BullMQ → handlers and live screens); and the worker and scheduler
-(`src/background.ts worker|scheduler`). Office sign-in, roles and money grains live in `src/platform/auth/` (below).
-Floor, portal and link sign-in, the modules and the adapters come in later steps.
+(`src/background.ts worker|scheduler`); office sign-in, roles and money grains (`src/platform/auth/`) and the
+integration platform (gateway, sealed secrets, inbound ledger), below. Floor, portal and link sign-in, the modules and
+the adapters come in later steps.
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>
@@ -110,6 +111,26 @@ Floor, portal and link sign-in, the modules and the adapters come in later steps
   `check-money-grains` fails on an unmarked money-looking contract field, audit value or Prisma column.
 - PostgreSQL tests: the harness's `addTenant` gives a tenant its system roles, `addUser({ isOwner: true })` and
   `addRole(h, tenant, userId, key)` give roles. `User.isOwner` is no longer read.
+
+## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
+- `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),
+  { name, idempotent, idempotencyKey?, request? }, async (call) => …)`. It re-reads the IntegrationAccount (office or
+  system caller only), refuses FAKE in production, PAUSED and DISABLED, an open circuit and an empty rate bucket (Redis,
+  `<prefix>:gateway:…`; Redis down = refused), applies the timeout, retries only idempotent operations, and writes ONE
+  IntegrationCall row per call (summaries redacted: secrets, personal data, the account's own secret values). Throw
+  `ProviderError(message, { httpStatus })` from `fn`. Never call it inside a command's transaction.
+  `scripts/factory/check-integration-calls.mjs`: no HTTP client, SDK or fetch() outside `platform/gateway/`,
+  `src/adapters/` and `platform/secrets/aws-kms.ts`.
+- `gateway/boot.ts`: `assertNoFakeAccountsInProduction(database, env.FACTORY_ENV)` runs at boot in index.ts and
+  background.ts, right after openFactoryDatabase: production does not start while any account is FAKE.
+- `secrets/`: envelope encryption (AES-256-GCM, a data key per value, wrapped by AWS KMS in staging/production or by
+  FACTORY_SECRETS_MASTER_KEY in local/test). `processSecrets().seal/open(…, { tenantId, purpose })`, the `s1.` string
+  form for a column of another table, `rotate`; SecretValue rows: `storeSecret(tools, …)` inside a command,
+  `readSecret(client, …)`, `rotateSecret(caller, …)`. A value never appears in a row, a log or an audit row.
+- `inbound/`: `POST /inbound/<provider>/<tenantId>/<accountId>` (public, raw body): verify (FAKE accounts: the fake
+  HMAC verifier; others: INBOUND_PROVIDERS) → InboundWebhook receipt FIRST (dedupe key unique per provider; a bad
+  signature is kept as REJECTED) + the event integration.inbound_received in one command → 200. The worker's
+  `inboundHandler()` (in background.ts HANDLERS) applies a receipt once with its provider's processor.
 
 ## Rules
 - Configuration only through `src/env.ts`. It reads ONLY `apps/factory-api/.env`, by explicit path, and ONLY
