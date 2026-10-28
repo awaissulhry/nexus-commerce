@@ -1,0 +1,663 @@
+// Sales (plan A1 §2.4 C, §2.5, §2.6; PLAN §2.8 "Codice del Consumo", §4.7 stages 05-quote, 06a-accept, 06b-deposit,
+// 07-order; features SAL-143, SAL-157, SAL-172, SAL-184, SAL-195, SAL-200, SAL-203, SAL-204, SAL-206, SAL-304, FIN-066):
+// quotes with their versions, lines, size quantities, approvals and acceptances, the deposit request of an accepted
+// quote, and the sales order made from the accepted version. apps/factory-api's modules/sales writes them (B-W1-21
+// quotes, B-W1-24 send and accept, B-W1-25 orders), always through command().
+//
+// A quote is a header (number, party, status) and its versions. A version is the document: its lines and size
+// quantities, prices, VAT, totals, terms, validity and, from SENT on, the party's tax identity and addresses as sent
+// (snapshots) and the SHA-256 of the PDF the party received. Its lines change only while it is DRAFT (an approval or a
+// send freezes them: a change after that is a return to DRAFT, or a new version); a SENT version never changes but for
+// its decision, and a decided one never changes at all (the …_sales_guards triggers, for every login). A revision of a
+// sent quote is a new version (the old one is SUPERSEDED). The quote's status follows its current version's; a quote
+// has at most one ACCEPTED version (a partial unique index of …_sales_guards).
+//
+// The accept link (QUOTE_ACCEPT) runs as factory_partner_runtime behind the party's wall, in one command: it may only
+// move its party's SENT version (and the quote) to ACCEPTED or DECLINED with the decision columns, and add the
+// QuoteAcceptance row (append-only: the evidence; a version becomes ACCEPTED only with its acceptance row in the same
+// transaction, checked at commit). The deposit request and the order are made after it by the office or the system
+// context (the factory_runtime role). A version whose lines contain a made-to-measure unit for a consumer states that
+// there is no right of withdrawal (Codice del Consumo art. 59(c)); its acceptance must record that the consumer accepted
+// it (SAL-304).
+//
+// An order is made from one ACCEPTED version (or typed by the office): its lines and size quantities, prices, bill-to
+// and ship-to as accepted. Its lines change only while it is CONFIRMED, IN_PRODUCTION or READY (an amendment); once
+// anything shipped they are fixed, and a CLOSED or CANCELLED order never changes. CLOSED comes only from SHIPPED (the
+// close command asks a port whether every line is shipped, invoiced and paid: PLAN §4.7); CANCELLED needs a reason and
+// happens only before anything shipped; originalPromiseDate is set once. The other moves are the domain's state
+// machine (factory-domain, one writer per transition).
+//
+// Money (A1 §2.1, §2.6): amounts are Int minor units in the document's currency, rounded at line level; unit prices and
+// costs Decimal(18,6); every money column has its grain. Garment quantities are whole pieces (Int). Sizes are the style's
+// size codes, as in product.prisma.
+//
+// Who sees what (ownership/sales.json): the office reads and writes; a portal or link session reads only its OWN
+// party's quotes, versions, lines, acceptances, deposit requests and orders, never a cost, margin or internal column,
+// nor who in the office wrote a row (the portal shows a party its versions from SENT on: a draft is the office's work,
+// the API filters it); the floor reads nothing here (its work orders carry the style, colour, sizes and dates).
+//
+// Every child row carries its parent's partyId (the partner role's policy key) in its reference, so it can never belong
+// to another party than its quote or order. Uniqueness made only of references (one order per accepted version, one
+// open version per quote) is the sales module's: a unique key of ids alone cannot be copied by the generated isolation
+// tests (src/isolation.pg.vitest.test.ts).
+
+/// A quote of a company to a party (SAL-143): its number, its party and contact, and the status of its current version.
+/// Its documents are its versions.
+model Quote {
+  id              String      @id @db.Uuid
+  tenantId        String      @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The selling company (its number series, its letterhead).
+  companyId       String      @db.Uuid
+  /// The number from the company's QUOTE series, unique in the company.
+  number          String
+  /// The customer. A quote never moves to another party: a quote for another party is a new quote.
+  partyId         String      @db.Uuid
+  /// The person at the party the quote and its accept link go to.
+  contactId       String?     @db.Uuid
+  /// The party's own reference (its inquiry or request number), printed on the quote.
+  customerRef     String?
+  /// The status of its current version: DRAFT → (PENDING_APPROVAL → APPROVED) → SENT → ACCEPTED | DECLINED | EXPIRED;
+  /// a revision (a new version) brings it back to DRAFT; CANCELLED when the office withdraws it.
+  status          QuoteStatus @default(DRAFT)
+  /// The revision number of its current (newest) version.
+  currentRevision Int         @default(1)
+  /// Why it was lost (the office's reading: price, lead time, …), when DECLINED or EXPIRED.
+  /// @internal
+  lostReason      String?
+  /// For the office only: the partner role can neither read nor write it.
+  /// @internal
+  internalNote    String?
+  version         Int         @default(1)
+  createdAt       DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime    @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?     @db.Uuid
+
+  company  Company        @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party    Party          @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  contact  PartyContact?  @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  versions QuoteVersion[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the versions' reference: a version names its quote's party.
+  @@unique([tenantId, partyId, id])
+  // A party's quotes.
+  @@index([tenantId, partyId, status])
+}
+
+/// The status of a quote: its current version's (QuoteVersionStatus without SUPERSEDED).
+enum QuoteStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SENT
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  CANCELLED
+}
+
+/// One version of a quote (SAL-157): the document the party receives and accepts. DRAFT while edited; its lines are
+/// frozen from PENDING_APPROVAL on; SENT freezes the whole version (the …_sales_guards triggers, for every login), and a
+/// change after that is a new version. Prices are net; the VAT-inclusive total is on every version (Codice del Consumo
+/// art. 49: a consumer sees it before accepting).
+model QuoteVersion {
+  id                  String             @id @db.Uuid
+  tenantId            String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  quoteId             String             @db.Uuid
+  /// The quote's party (the partner role's policy key).
+  partyId             String             @db.Uuid
+  /// 1, 2, 3 … per quote: "version 2" of the quote.
+  revision            Int
+  /// DRAFT → PENDING_APPROVAL → APPROVED → SENT, or DRAFT → SENT when no approval rule is broken; PENDING_APPROVAL and
+  /// APPROVED go back to DRAFT for a change. SENT → ACCEPTED | DECLINED (the party), EXPIRED (past its validity),
+  /// SUPERSEDED (a newer version was made) or CANCELLED (withdrawn). The last five are final.
+  status              QuoteVersionStatus @default(DRAFT)
+  /// ISO 4217: the currency of every amount of the version.
+  currency            String             @default("EUR")
+  /// The language of the document, ISO 639-1.
+  language            String             @default("it")
+  /// The VAT treatment of the sale (the party's tax mode, or IT_B2B for an EU business without a valid VIES check).
+  taxMode             PartyTaxMode
+  /// The party's tax identity the version was priced with.
+  taxIdentityId       String?            @db.Uuid
+  /// The party's invoice and delivery addresses, chosen while DRAFT.
+  billToAddressId     String?            @db.Uuid
+  shipToAddressId     String?            @db.Uuid
+  /// The buyer as sent: { legalName, kind, country, taxMode, vatNumber?, fiscalCode?, sdiRecipientCode?, pec?,
+  /// viesConsultationNumber?, address: { line1, line2?, postalCode, city, province?, country } }. Written at send.
+  billTo              Json?
+  /// The delivery address as sent: { name?, line1, line2?, postalCode, city, province?, country, contactName?, phone? }.
+  shipTo              Json?
+  /// The last day the offer can be accepted (a date in the company's time zone); required from SENT on.
+  validUntil          DateTime?          @db.Date
+  /// A firm offer (c.c. art. 1329): it is not withdrawn before validUntil. Otherwise revocable until accepted.
+  firmOffer           Boolean            @default(false)
+  /// The delivery date offered (Codice del Consumo art. 49(1)(g) for a consumer).
+  promiseDate         DateTime?          @db.Date
+  /// Payment terms as printed.
+  paymentTerms        String?
+  /// The terms and conditions as printed on this version, and the reference of their version.
+  termsText           String?
+  termsVersion        String?
+  /// The deposit asked at acceptance (SAL-195): percent of the gross total, its legal kind and the amount.
+  depositPct          Decimal?           @db.Decimal(7, 4)
+  depositKind         DepositKind?
+  /// @grain price
+  depositAmount       Int?
+  /// The version contains a made-to-measure unit for a consumer and states that there is no right of withdrawal
+  /// (Codice del Consumo art. 59(c)); its acceptance records that the consumer accepted this (SAL-304).
+  noWithdrawal        Boolean            @default(false)
+  /// The sum of the lines' net amounts.
+  /// @grain price
+  netAmount           Int                @default(0)
+  /// @grain price
+  vatAmount           Int                @default(0)
+  /// The VAT-inclusive total.
+  /// @grain price
+  grossAmount         Int                @default(0)
+  /// The cost snapshot of the lines (SAL-172).
+  /// @grain cost
+  costAmount          Int?
+  /// @grain margin
+  marginAmount        Int?
+  /// The margin in percent of the net amount.
+  /// @grain margin
+  marginPct           Decimal?           @db.Decimal(9, 4)
+  /// The margin floor the approval rules applied (SAL-184), and whether the version is below it.
+  /// @grain margin
+  marginFloorPct      Decimal?           @db.Decimal(7, 4)
+  /// @grain margin
+  marginFloorBreached Boolean            @default(false)
+  /// What changed against the previous version, as the party reads it.
+  changeNote          String?
+  /// SHA-256 (hex) of the PDF the party received (the version's StoredFile); required from SENT on.
+  documentSha256      String?
+  sentAt              DateTime?          @db.Timestamptz(3)
+  /// The office user who sent it.
+  sentById            String?            @db.Uuid
+  /// When it reached its final status (ACCEPTED, DECLINED, EXPIRED, SUPERSEDED, CANCELLED).
+  closedAt            DateTime?          @db.Timestamptz(3)
+  /// The party's own words with its acceptance or decline.
+  decisionNote        String?
+  version             Int                @default(1)
+  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?            @db.Uuid
+
+  quote           Quote             @relation(fields: [tenantId, partyId, quoteId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  taxIdentity     PartyTaxIdentity? @relation(fields: [tenantId, partyId, taxIdentityId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  billToAddress   PartyAddress?     @relation("QuoteVersionBillTo", fields: [tenantId, partyId, billToAddressId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  shipToAddress   PartyAddress?     @relation("QuoteVersionShipTo", fields: [tenantId, partyId, shipToAddressId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines           QuoteLine[]
+  approvals       QuoteApproval[]
+  acceptances     QuoteAcceptance[]
+  depositRequests DepositRequest[]
+  salesOrders     SalesOrder[]
+
+  @@unique([tenantId, quoteId, revision])
+  // The target of the references from the version's lines, approvals, acceptances, deposit requests and orders.
+  @@unique([tenantId, partyId, id])
+  // The expiry sweep: SENT versions past their validity.
+  @@index([tenantId, status, validUntil])
+}
+
+enum QuoteVersionStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SENT
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  SUPERSEDED
+  CANCELLED
+}
+
+/// The shape of a quote or order line (SAL-203).
+enum SalesLineKind {
+  /// A style in one colourway with quantities per size (QuoteLineSize, SalesOrderLineSize).
+  SIZE_GRID
+  /// One made-to-measure unit for one rider: a measurement profile revision, quantity 1, no size rows.
+  MADE_TO_MEASURE
+}
+
+/// The legal kind of a deposit.
+enum DepositKind {
+  /// An advance payment on the price (acconto).
+  ACCONTO
+  /// A caparra confirmatoria (c.c. art. 1385).
+  CAPARRA
+}
+
+/// One line of a quote version: a style in one colourway, as a size grid or one made-to-measure unit, with its price,
+/// VAT, cost and margin. Changes only while its version is DRAFT.
+model QuoteLine {
+  id                   String        @id @db.Uuid
+  tenantId             String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  versionId            String        @db.Uuid
+  /// The version's party (the partner role's policy key; the measurement profile must be this party's).
+  partyId              String        @db.Uuid
+  /// The line's place on the document: 10, 20, 30 …
+  seq                  Int
+  kind                 SalesLineKind
+  styleId              String        @db.Uuid
+  /// The style revision the cost was taken from, when the style has one.
+  styleRevisionId      String?       @db.Uuid
+  colourwayId          String        @db.Uuid
+  /// MADE_TO_MEASURE: the rider's measurement profile revision.
+  measurementProfileId String?       @db.Uuid
+  /// MADE_TO_MEASURE: the standard size the pattern is graded from.
+  baseSize             String?
+  /// The text printed for the line (style name, colourway, options), and a note for the party.
+  description          String?
+  note                 String?
+  /// Pieces: the sum of the size quantities, or 1 for a made-to-measure unit.
+  quantity             Int
+  /// The price list's unit price before any adjustment.
+  /// @grain price
+  listUnitPrice        Decimal?      @db.Decimal(18, 6)
+  /// The net unit price offered (a size's own price, when it has one, is on its size row).
+  /// @grain price
+  unitPrice            Decimal       @db.Decimal(18, 6)
+  /// Why the price differs from the list price (a reason code of the pricing rules).
+  /// @internal
+  adjustmentReason     String?
+  /// The line's net amount, rounded at line level.
+  /// @grain price
+  netAmount            Int
+  /// The VAT rate in percent; 0 with a nature code when no VAT is charged.
+  vatRatePct           Decimal       @db.Decimal(5, 2)
+  /// FatturaPA Natura of a line without VAT (N3.2 intra-EU supply, N3.1 export …).
+  vatNature            String?
+  /// @grain price
+  vatAmount            Int
+  /// The unit cost from the style's cost sheet (B-W1-16) when the line was priced.
+  /// @grain cost
+  unitCost             Decimal?      @db.Decimal(18, 6)
+  /// @grain cost
+  costAmount           Int?
+  /// @grain margin
+  marginAmount         Int?
+  /// @grain margin
+  marginPct            Decimal?      @db.Decimal(9, 4)
+  /// The cost sheet as priced: material by size and labour from standard minutes.
+  /// @grain cost
+  costSnapshot         Json?
+  version              Int           @default(1)
+  createdAt            DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?       @db.Uuid
+
+  quoteVersion       QuoteVersion        @relation(fields: [tenantId, partyId, versionId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  style              Style               @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  styleRevision      StyleRevision?      @relation(fields: [tenantId, styleId, styleRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  colourway          Colourway           @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  measurementProfile MeasurementProfile? @relation(fields: [tenantId, partyId, measurementProfileId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  sizes              QuoteLineSize[]
+  orderLines         SalesOrderLine[]
+
+  @@unique([tenantId, versionId, seq])
+  // The target of the references from the line's size rows and the order lines made from it.
+  @@unique([tenantId, partyId, id])
+}
+
+/// The quantity of one size of a SIZE_GRID quote line (the size grid as rows). Changes only while its version is DRAFT.
+model QuoteLineSize {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  lineId      String   @db.Uuid
+  /// The line's party (the partner role's policy key).
+  partyId     String   @db.Uuid
+  /// A size code of the style's range.
+  size        String
+  /// Pieces, above 0 (a size not ordered has no row).
+  quantity    Int
+  /// The size's own net unit price when it differs from the line's (a size surcharge); null: the line's.
+  /// @grain price
+  unitPrice   Decimal? @db.Decimal(18, 6)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  line QuoteLine @relation(fields: [tenantId, partyId, lineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, lineId, size])
+}
+
+/// An approval a version needs before it is sent (SAL-184): the rules it broke (a margin under the floor, a discount or
+/// an amount over a limit, a special item), asked by the office user who wants to send it and decided by an approver.
+/// A decision never changes; a version changed after it asks again.
+model QuoteApproval {
+  id           String                @id @db.Uuid
+  tenantId     String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  versionId    String                @db.Uuid
+  /// The version's party, for the tenant-safe reference (the partner role reads no approval).
+  partyId      String                @db.Uuid
+  /// The rules the version broke; one or more.
+  reasons      QuoteApprovalReason[] @default([])
+  /// What the rules found: the margin and its floor, the discount and its limit, the amount and its limit.
+  /// @grain margin
+  details      Json?
+  /// Why the requester asks for it.
+  requestNote  String?
+  /// PENDING → APPROVED | REJECTED | WITHDRAWN (the version went back to DRAFT first). The last three are final.
+  status       QuoteApprovalStatus   @default(PENDING)
+  /// When it was decided or withdrawn, and by whom (APPROVED, REJECTED).
+  decidedAt    DateTime?             @db.Timestamptz(3)
+  decidedById  String?               @db.Uuid
+  decisionNote String?
+  version      Int                   @default(1)
+  createdAt    DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  /// The office user who asked.
+  createdById  String?               @db.Uuid
+
+  quoteVersion QuoteVersion @relation(fields: [tenantId, partyId, versionId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, versionId])
+  // The approvers' list.
+  @@index([tenantId, status])
+}
+
+/// The approval rules of SAL-184.
+enum QuoteApprovalReason {
+  MARGIN_FLOOR
+  DISCOUNT_LIMIT
+  AMOUNT_LIMIT
+  SPECIAL_ITEM
+}
+
+enum QuoteApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+/// The acceptance of one quote version: the evidence that the party accepted exactly the document it received (SAL-157,
+/// SAL-304; A1 §2.5: only the latest version, through a valid link, with a typed name). Through a link, written by the
+/// link session in the command of the accept (beside its LinkEvidence row, same requestId); otherwise recorded by the
+/// office from the party's signed copy or written reply, filed on this record. Its version is ACCEPTED, its
+/// documentSha256 is the version's, and a version that states no withdrawal right is accepted only with that statement
+/// accepted; a version becomes ACCEPTED only with an acceptance row in the same transaction (the …_sales_guards
+/// triggers, the last one checked at commit). Never changed or removed.
+/// @append-only
+model QuoteAcceptance {
+  id                   String                 @id @db.Uuid
+  tenantId             String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  versionId            String                 @db.Uuid
+  /// The version's party (the partner policy checks it on insert).
+  partyId              String                 @db.Uuid
+  channel              QuoteAcceptanceChannel
+  /// LINK: the one-off link that was used; null for OFFICE.
+  linkId               String?                @db.Uuid
+  /// The name of the person who accepted: as typed on the link page, or as signed on the party's reply.
+  signerName           String
+  /// LINK: the email check of the answer; null for OFFICE.
+  emailCheck           LinkEmailCheck?
+  /// SHA-256 (hex) of the PDF accepted: the version's documentSha256.
+  documentSha256       String
+  /// The terms and conditions version accepted.
+  termsVersion         String?
+  /// The consumer accepted that a made-to-measure unit has no right of withdrawal (Codice del Consumo art. 59(c)).
+  noWithdrawalAccepted Boolean                @default(false)
+  /// When the party accepted (server time of the accept, or the date of its reply).
+  acceptedAt           DateTime               @db.Timestamptz(3)
+  /// The request whose command wrote it; its audit rows (and the link's evidence row) share it. Who recorded it is its
+  /// audit row's actor (the office user, or the link): like LinkEvidence it has no createdById, so the link session
+  /// inserts every column of it (the partner role hides no column here).
+  requestId            String
+  createdAt            DateTime               @default(now()) @db.Timestamptz(3)
+
+  quoteVersion QuoteVersion @relation(fields: [tenantId, partyId, versionId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  link         OneOffLink?  @relation(fields: [tenantId, partyId, linkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, versionId])
+}
+
+enum QuoteAcceptanceChannel {
+  /// The party's one-off QUOTE_ACCEPT link.
+  LINK
+  /// Recorded by the office from the party's signed copy or written reply.
+  OFFICE
+}
+
+/// The deposit a party pays for an accepted quote before production starts (SAL-195, FIN-066): a non-fiscal request
+/// with its amount and due date. When it is paid, the money module issues the deposit invoice (TD02, DPR 633/1972
+/// art. 6 c.4) if `fiscalDocument` says so: the VAT rule for the party's type decided it when the request was made
+/// (B-W1-05). Made at acceptance from the version; the order it belongs to is named once it exists.
+model DepositRequest {
+  id             String                @id @db.Uuid
+  tenantId       String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The selling company.
+  companyId      String                @db.Uuid
+  partyId        String                @db.Uuid
+  /// The accepted version it was asked for, and the order once made; at least one.
+  quoteVersionId String?               @db.Uuid
+  orderId        String?               @db.Uuid
+  kind           DepositKind
+  /// The percent of the gross total it came from, when it came from one.
+  depositPct     Decimal?              @db.Decimal(7, 4)
+  /// ISO 4217.
+  currency       String
+  /// The amount asked, VAT included; above 0.
+  /// @grain price
+  amount         Int
+  dueDate        DateTime              @db.Date
+  /// TD02: a deposit invoice is issued when it is paid; NONE: the rule for this party's type issues none.
+  fiscalDocument DepositFiscalDocument
+  /// The rule that decided it (its code and version, from the VAT rules of B-W1-05).
+  fiscalRule     String
+  /// OPEN → PAID (the payments allocated cover it) | WAIVED | CANCELLED. The last three are final.
+  status         DepositRequestStatus  @default(OPEN)
+  paidAt         DateTime?             @db.Timestamptz(3)
+  /// Why it was waived or cancelled.
+  /// @internal
+  statusNote     String?
+  version        Int                   @default(1)
+  createdAt      DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?               @db.Uuid
+
+  company      Company       @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party        Party         @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  quoteVersion QuoteVersion? @relation(fields: [tenantId, partyId, quoteVersionId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  order        SalesOrder?   @relation(fields: [tenantId, companyId, partyId, orderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, quoteVersionId])
+  @@index([tenantId, orderId])
+  // Open deposits by due date.
+  @@index([tenantId, status, dueDate])
+}
+
+enum DepositFiscalDocument {
+  TD02
+  NONE
+}
+
+enum DepositRequestStatus {
+  OPEN
+  PAID
+  WAIVED
+  CANCELLED
+}
+
+/// A sales order (SAL-200, SAL-204, SAL-206): made from one accepted quote version, or typed by the office. Its lines are
+/// what the party ordered; its prices, bill-to and ship-to are as accepted.
+model SalesOrder {
+  id                  String           @id @db.Uuid
+  tenantId            String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The selling company: the accepted version's quote's company.
+  companyId           String           @db.Uuid
+  partyId             String           @db.Uuid
+  /// The number from the company's SALES_ORDER series, unique in the company.
+  number              String
+  /// The ACCEPTED version it was made from; null for an order typed by the office. Never changes.
+  quoteVersionId      String?          @db.Uuid
+  /// The party's purchase order number.
+  customerRef         String?
+  /// CONFIRMED → IN_PRODUCTION → READY → PARTLY_SHIPPED → SHIPPED → CLOSED; CANCELLED (with a reason) before anything
+  /// shipped. CLOSED and CANCELLED are final.
+  status              SalesOrderStatus @default(CONFIRMED)
+  /// The order's date as printed.
+  orderDate           DateTime         @db.Date
+  /// ISO 4217, ISO 639-1.
+  currency            String           @default("EUR")
+  language            String           @default("it")
+  /// The VAT treatment of the sale, as accepted.
+  taxMode             PartyTaxMode
+  /// The buyer and the delivery address as accepted (the version's snapshots), the shapes of QuoteVersion.billTo and
+  /// shipTo.
+  billTo              Json
+  shipTo              Json
+  paymentTerms        String?
+  /// The date the party asked for, the date promised now, and the first date promised (set once, never changed).
+  requestedDate       DateTime?        @db.Date
+  promiseDate         DateTime?        @db.Date
+  originalPromiseDate DateTime?        @db.Date
+  /// Higher first; 0 is normal.
+  priority            Int              @default(0)
+  /// The order states that a made-to-measure unit for a consumer has no right of withdrawal; the acceptance of its
+  /// version holds the consumer's acceptance of it (SAL-304).
+  noWithdrawal        Boolean          @default(false)
+  /// Production waits for a PAID or WAIVED deposit request of the order (the deposit gate).
+  depositRequired     Boolean          @default(false)
+  /// The sums of the lines.
+  /// @grain price
+  netAmount           Int              @default(0)
+  /// @grain price
+  vatAmount           Int              @default(0)
+  /// @grain price
+  grossAmount         Int              @default(0)
+  /// @grain cost
+  costAmount          Int?
+  /// Set when an amendment changed the net total after acceptance (the party must accept it again); cleared when it
+  /// does.
+  reapprovalNeededAt  DateTime?        @db.Timestamptz(3)
+  /// Why it was cancelled; set exactly when CANCELLED.
+  cancelReason        String?
+  /// When it was closed or cancelled.
+  closedAt            DateTime?        @db.Timestamptz(3)
+  /// For the office only: the partner role can neither read nor write it.
+  /// @internal
+  internalNote        String?
+  version             Int              @default(1)
+  createdAt           DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?          @db.Uuid
+
+  company         Company          @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party           Party            @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  quoteVersion    QuoteVersion?    @relation(fields: [tenantId, partyId, quoteVersionId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines           SalesOrderLine[]
+  depositRequests DepositRequest[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the references from the order's lines and deposit requests: the same company and party.
+  @@unique([tenantId, companyId, partyId, id])
+  // The board by state and the late list.
+  @@index([tenantId, status, promiseDate])
+  @@index([tenantId, partyId])
+  @@index([tenantId, quoteVersionId])
+}
+
+enum SalesOrderStatus {
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+  PARTLY_SHIPPED
+  SHIPPED
+  CLOSED
+  CANCELLED
+}
+
+/// One line of a sales order (SAL-203, SAL-206): a style in one colourway as a size grid, or one made-to-measure unit
+/// with the rider's measurement profile revision; its own dates, priority and producing site when they differ from the
+/// order's. Changes only while the order is CONFIRMED, IN_PRODUCTION or READY.
+model SalesOrderLine {
+  id                   String        @id @db.Uuid
+  tenantId             String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company (the producing site is one of its sites).
+  companyId            String        @db.Uuid
+  orderId              String        @db.Uuid
+  /// The order's party (the partner role's policy key; the measurement profile must be this party's).
+  partyId              String        @db.Uuid
+  /// The line's place on the order: 10, 20, 30 …
+  seq                  Int
+  kind                 SalesLineKind
+  /// The accepted quote line it was made from.
+  quoteLineId          String?       @db.Uuid
+  styleId              String        @db.Uuid
+  /// The RELEASED style revision it is made to, when the order fixes one (the work order freezes it otherwise).
+  styleRevisionId      String?       @db.Uuid
+  colourwayId          String        @db.Uuid
+  /// MADE_TO_MEASURE: the rider's measurement profile revision it is made to.
+  measurementProfileId String?       @db.Uuid
+  /// MADE_TO_MEASURE: the standard size the pattern is graded from.
+  baseSize             String?
+  description          String?
+  note                 String?
+  /// Pieces: the sum of the size quantities, or 1 for a made-to-measure unit.
+  quantity             Int
+  /// @grain price
+  unitPrice            Decimal       @db.Decimal(18, 6)
+  /// @grain price
+  netAmount            Int
+  vatRatePct           Decimal       @db.Decimal(5, 2)
+  vatNature            String?
+  /// @grain price
+  vatAmount            Int
+  /// @grain cost
+  unitCost             Decimal?      @db.Decimal(18, 6)
+  /// @grain cost
+  costAmount           Int?
+  /// The line's own dates and priority; null: the order's.
+  requestedDate        DateTime?     @db.Date
+  promiseDate          DateTime?     @db.Date
+  priority             Int?
+  /// The site that makes it; null: not decided yet.
+  siteId               String?       @db.Uuid
+  version              Int           @default(1)
+  createdAt            DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?       @db.Uuid
+
+  order              SalesOrder           @relation(fields: [tenantId, companyId, partyId, orderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  quoteLine          QuoteLine?           @relation(fields: [tenantId, partyId, quoteLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  style              Style                @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  styleRevision      StyleRevision?       @relation(fields: [tenantId, styleId, styleRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  colourway          Colourway            @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  measurementProfile MeasurementProfile?  @relation(fields: [tenantId, partyId, measurementProfileId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  site               Site?                @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  sizes              SalesOrderLineSize[]
+
+  @@unique([tenantId, orderId, seq])
+  // The target of the references from the line's size rows (and the work orders of W1-23).
+  @@unique([tenantId, partyId, id])
+}
+
+/// The quantity of one size of a SIZE_GRID order line (the size grid as rows). Changes only while the order is
+/// CONFIRMED, IN_PRODUCTION or READY. Shipped and invoiced quantities are the shipping and money modules' (ports).
+model SalesOrderLineSize {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  lineId      String   @db.Uuid
+  /// The line's party (the partner role's policy key).
+  partyId     String   @db.Uuid
+  /// A size code of the style's range.
+  size        String
+  /// Pieces, above 0.
+  quantity    Int
+  /// The size's own net unit price when it differs from the line's; null: the line's.
+  /// @grain price
+  unitPrice   Decimal? @db.Decimal(18, 6)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  line SalesOrderLine @relation(fields: [tenantId, partyId, lineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, lineId, size])
+}

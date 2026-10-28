@@ -48,6 +48,8 @@ model OneOffLink {
 
   company  Company        @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   evidence LinkEvidence[]
+  // sales.prisma: the quote acceptances made through it.
+  quoteAcceptances QuoteAcceptance[]
 
   // The target of the evidence rows' reference: an evidence row names its link's party.
   @@unique([tenantId, partyId, id])

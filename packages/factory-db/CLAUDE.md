@@ -41,9 +41,10 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    folders, re-run step 2 with new timestamps, re-run the checks, merge, release the token. The hand-written folders
    (`…_audit_append_only`, `…_numbering_guards`, `…_outbox_guard`, `…_integration_guards`, `…_files_guards`,
    `…_links_guards`, `…_threads_guards`, `…_print_guards`, `…_parties_guards`, `…_email_guards`, `…_product_guards`,
-   `…_email_in_guards`: triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its
-   new schema and policy folders; keep it out of `prisma/migrations` while `npm run migration` runs (it replays every
-   folder, and the triggers need the new table). The policy folder is always the last migration.
+   `…_email_in_guards`, `…_sales_guards`: triggers and partial unique indexes) are not regenerated: `git mv` the branch's
+   one, unchanged, to a timestamp between its new schema and policy folders; keep it out of `prisma/migrations` while
+   `npm run migration` runs (it replays every folder, and the triggers need the new table). The policy folder is always
+   the last migration.
 
 ## Rules
 - Run the Prisma CLI only from this folder. `prisma.config.ts` reads only `packages/factory-db/.env`
