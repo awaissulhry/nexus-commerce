@@ -26,9 +26,23 @@
  *
  * `grid/hooks/useGridDensity` re-exports this, so every existing importer and the grid barrel are
  * unchanged.
+ *
+ * ## The page density: standard / comfortable / floor (2026-10-28)
+ *
+ * A SECOND axis, kept apart from the grid's on purpose: the grid density is an operator's preference for a grid's ROWS;
+ * the page density is how big a whole screen's controls, type and touch targets are, chosen by who uses the screen —
+ * `standard` (the office console, the default), `comfortable` (portal and link pages, phone first) and `floor` (gloved
+ * hands on a tablet). Values and reasons: `tokens/density.ts`.
+ *
+ * `DensityProvider` switches a subtree: it renders `data-density` on a `display: contents` wrapper (the CSS tokens
+ * `--nds-density-*` follow it) and puts the name in a context (`useDensity`, `useDensityTokens` give TypeScript the
+ * tier's px numbers, e.g. an icon's `size`). The two can never disagree inside the provider. A portal renders into
+ * `<body>`, outside the wrapper: a screen that is all one tier also spreads `densityAttrs(tier)` on its root element.
+ * Outside any provider the density is `standard`, and every token holds the console's sizes.
  */
 import { createContext, useContext, type ReactNode } from 'react'
 
+import { DEFAULT_DENSITY, densityAttrs, densityTokens, type DensityName } from '../tokens/density'
 import { gridDensity, type GridDensityName } from '../tokens/grid'
 
 export const DEFAULT_GRID_DENSITY: GridDensityName = 'spacious'
@@ -48,4 +62,34 @@ export function useGridDensity(): GridDensityName {
 export function useGridDensityTier() {
   const density = useGridDensity()
   return { density, ...gridDensity[density] }
+}
+
+// The plain helpers live in `tokens/density.ts` (no 'use client'), so a SERVER component — a layout putting
+// `densityAttrs('floor')` on `<html>` — imports them from there; re-exported here for client code.
+export { DEFAULT_DENSITY, DENSITIES, densityAttrs, isDensityName, type DensityName } from '../tokens/density'
+
+const DensityContext = createContext<DensityName>(DEFAULT_DENSITY)
+
+const CONTENTS = { display: 'contents' } as const
+
+/** Switches its children to a tier: the CSS tokens (`data-density`) and the context, together. */
+export function DensityProvider({ value, children }: { value: DensityName; children: ReactNode }) {
+  return (
+    <DensityContext.Provider value={value}>
+      <div {...densityAttrs(value)} style={CONTENTS}>
+        {children}
+      </div>
+    </DensityContext.Provider>
+  )
+}
+
+/** The page density in force here (`standard` outside any provider). */
+export function useDensity(): DensityName {
+  return useContext(DensityContext)
+}
+
+/** The page density in force here, and its numbers in px (`tokens/density.ts`). */
+export function useDensityTokens() {
+  const density = useDensity()
+  return { density, ...densityTokens[density] }
 }

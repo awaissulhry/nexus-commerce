@@ -134,6 +134,7 @@ import { StepUpModalExample } from './StepUpModalExample'
 import { WorkspaceSubheaderExample } from './WorkspaceSubheaderExample'
 import { ChangeValueExample } from './ChangeValueExample'
 import { CountdownExample } from './CountdownExample'
+import { DensityTiersExample } from './DensityTiersExample'
 import { GridRowVerbsExample } from './GridRowVerbsExample'
 import { FamilyFooterFrameExample } from './FamilyFooterFrameExample'
 import { SwitchColumnExample } from './SwitchColumnExample'
@@ -1511,6 +1512,13 @@ export function TokenCatalog() {
             structural: rail {size.railCollapsed}→{size.railExpanded} · nav row {size.rowNav} · icon zone {size.iconZone}
           </div>
         </Card>
+      </Section>
+
+      <Section
+        title="Density tiers"
+        desc="How big a screen's controls, type and touch targets are: standard (the console, the default), comfortable (portal and links) and floor (gloved hands on a tablet). --nds-density-* tokens; tokens/density.ts."
+      >
+        <DensityTiersExample />
       </Section>
 
       <Section title="Radius">
