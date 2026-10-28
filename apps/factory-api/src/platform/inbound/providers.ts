@@ -7,6 +7,7 @@ import { serverClock } from '../../core/time'
 import { loadFactoryEnv, type FactoryEnv } from '../../env'
 import type { SecretsService } from '../secrets/envelope'
 import { sesNotificationProcessor } from '../email-out/notifications'
+import { emailInProcessor } from '../email-in/receive'
 import { processSecrets } from '../secrets/service'
 
 /**
@@ -53,11 +54,12 @@ export interface InboundProvider {
 export type InboundProviders = Readonly<Partial<Record<IntegrationProvider, InboundProvider>>>
 
 /**
- * The providers' entries. SES: delivery, bounce and complaint notifications via SNS (email out,
- * platform/email-out/notifications.ts). The W1 adapters (the SDI intermediary, Sendcloud) add theirs here.
+ * The providers' entries. SES via SNS: a received mail ("Received", email in, platform/email-in/receive.ts), else a
+ * delivery, bounce or complaint notification (email out, platform/email-out/notifications.ts). The W1 adapters (the SDI
+ * intermediary, Sendcloud) add theirs here.
  */
 export const INBOUND_PROVIDERS: InboundProviders = Object.freeze({
-  SES: { verifier: snsVerifier, processor: sesNotificationProcessor },
+  SES: { verifier: snsVerifier, processor: emailInProcessor(sesNotificationProcessor) },
 })
 
 /** What the inbound route and its job need. */

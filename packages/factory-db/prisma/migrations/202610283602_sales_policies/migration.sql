@@ -294,6 +294,15 @@ GRANT SELECT, INSERT, UPDATE ON TABLE "public"."ImportRow" TO "factory_runtime";
 CREATE POLICY "factory_runtime_select" ON "public"."ImportRow" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."ImportRow" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_update" ON "public"."ImportRow" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."InboundEmail"
+ALTER TABLE "public"."InboundEmail" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."InboundEmail" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'InboundEmail' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'InboundEmail'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."InboundEmail" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."InboundEmail" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."InboundEmail" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."InboundEmail" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."InboundEmail" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."InboundWebhook"
 ALTER TABLE "public"."InboundWebhook" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."InboundWebhook" FORCE ROW LEVEL SECURITY;

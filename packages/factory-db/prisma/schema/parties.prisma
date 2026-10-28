@@ -60,6 +60,8 @@ model Party {
   certificatesHeld    Certificate[]
   labelTemplates      LabelTemplate[]
   complianceDocuments ComplianceDocument[]
+  // email-in.prisma: the mail received from this party's contacts (or its company domain).
+  inboundEmails       InboundEmail[]
   // sales.prisma: its quotes, sales orders and deposit requests.
   quotes              Quote[]
   salesOrders         SalesOrder[]
@@ -172,6 +174,8 @@ model PartyContact {
 
   party               Party                @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   measurementProfiles MeasurementProfile[]
+  // email-in.prisma: the mail received from this contact.
+  inboundEmails       InboundEmail[]
   // sales.prisma: the quotes sent to them.
   quotes              Quote[]
 

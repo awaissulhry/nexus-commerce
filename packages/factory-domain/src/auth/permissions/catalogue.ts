@@ -157,13 +157,17 @@ export const PRINT_MANAGE = 'print.manage' satisfies Permission
  * Email out (apps/factory-api platform/email-out; plan A1 §3.7; PLT-139, PLT-230, COL-024). email.send is checked with
  * can() against the record's company, site and party, like threads.post; email.manage against the identity's company,
  * and it is a step-up permission (A1 §3.10: what changes who the company's mail appears to come from).
+ * Email in (platform/email-in; COL-022, COL-023, A2 SCR-019 "Mail to sort"): email.triage against the received mail's
+ * company (the SES account's; none: every company), and for an assignment also threads.post over the record.
  */
 export const EMAIL_DEFINITIONS = definePermissions('email', {
   send: { risk: 'write', description: "Send mail from a record's thread to its customer or supplier, as yourself, from the company's verified address." },
   manage: { risk: 'stepUp', description: "Add and change the companies' sending identities: SES domains, DKIM, how the From line names the sender, the default." },
+  triage: { risk: 'write', description: 'Sort received mail no record took or that waits for a person: read it, assign it to a record, release it, or throw it away.' },
 })
 export const EMAIL_SEND = 'email.send' satisfies Permission
 export const EMAIL_MANAGE = 'email.manage' satisfies Permission
+export const EMAIL_TRIAGE = 'email.triage' satisfies Permission
 
 /** The money grains as they travel in grants (`../grains/grains`): from Role.grains, never Role.permissions. */
 export const MONEY_PERMISSIONS: PermissionDefinition[] = GRAINS.map((grain) =>
@@ -200,7 +204,7 @@ export const FLOOR_AREA = 'floor'
 export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS])
 
 // The modules' constants and their declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE]) {
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE]) {
   if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 }
 for (const name of LINK_SESSION_NAMES) {
