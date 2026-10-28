@@ -117,7 +117,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Planner',
     description: 'Plans work orders and capacity; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'compliance.certificates.view'],
     grains: [],
   }),
   template('buyer', {
@@ -138,14 +138,14 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Production manager',
     description: 'Runs production: work orders, lines and floor results; sees no money.',
     requireMfa: false,
-    permissions: ['audit.read', 'files.read', 'files.upload', 'devices.view', 'workers.view', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents'],
+    permissions: ['audit.read', 'files.read', 'files.upload', 'devices.view', 'workers.view', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'compliance.certificates.view'],
     grains: [],
   }),
   template('quality_inspector', {
     name: 'Quality inspector',
     description: 'Inspects lots and finished goods and releases them; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'compliance.certificates.view', 'compliance.certificates.manage'],
     grains: [],
   }),
   template('floor_supervisor', {
