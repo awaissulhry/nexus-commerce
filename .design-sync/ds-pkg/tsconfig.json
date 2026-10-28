@@ -13,7 +13,7 @@
     "declaration": true,
     "emitDeclarationOnly": true,
     "outDir": "./dist",
-    "rootDir": "../../apps/web/src/design-system",
+    "rootDir": "../../packages/ui/src",
     "baseUrl": "../..",
     "paths": { "@/*": ["apps/web/src/*"] },
     // `modules.ts` reads `process.env.NODE_ENV` to register AG's ValidationModule in development
@@ -24,13 +24,13 @@
     "types": ["node"]
   },
   "include": [
-    "../../apps/web/src/design-system/**/*.ts",
-    "../../apps/web/src/design-system/**/*.tsx"
+    "../../packages/ui/src/**/*.ts",
+    "../../packages/ui/src/**/*.tsx"
   ],
   "exclude": [
-    "../../apps/web/src/design-system/tools/**",
-    "../../apps/web/src/design-system/catalog/**",
-    "../../apps/web/src/design-system/**/*.test.ts",
-    "../../apps/web/src/design-system/**/*.test.tsx"
+    "../../packages/ui/src/tools/**",
+    "../../packages/ui/src/catalog/**",
+    "../../packages/ui/src/**/*.test.ts",
+    "../../packages/ui/src/**/*.test.tsx"
   ]
 }

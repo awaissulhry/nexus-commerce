@@ -19,6 +19,9 @@ import { describe, expect, it } from 'vitest'
 const SRC = join(import.meta.dirname, '..')
 const strip = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '')
 const read = (rel: string) => strip(readFileSync(join(SRC, rel), 'utf8'))
+// The design system (@nexus/ui) — it moved from src/design-system to packages/ui/src.
+const DS = join(SRC, '..', '..', '..', 'packages', 'ui', 'src')
+const readDs = (rel: string) => strip(readFileSync(join(DS, rel), 'utf8'))
 const globals = read('app/globals.css')
 
 describe('color-scheme', () => {
@@ -59,7 +62,7 @@ describe('light boxes without a dark partner keep dark ink', () => {
   it('sets a theme-stable dark ink and light controls', () => {
     expect(rule![2]).toMatch(/color:\s*var\(--nds-grey-900\)/)
     expect(rule![2]).toMatch(/color-scheme:\s*light/)
-    const tokens = read('design-system/styles/tokens-global.css')
+    const tokens = readDs('styles/tokens-global.css')
     expect(/:root\s*\{[^}]*--nds-grey-900:\s*#1c2530/.test(tokens)).toBe(true)
     const dark = /\.dark, \.dark body[^{]*\{([^}]*)\}/.exec(tokens)?.[1] ?? ''
     expect(dark.length).toBeGreaterThan(100)
@@ -71,7 +74,7 @@ describe('plain fields in dark mode take the DS field surface', () => {
   const rule = /:where\(\.dark :is\(input:not\(([^)]*)\),\s*textarea, select\):not\(\[class\*="bg-"\]\):not\(:is\(([^)]*)\):not\(\[class\*="dark:bg-"\]\) \*\)\)\s*\{([^}]*)\}/.exec(globals)
   const lightBox = /:where\(\.dark :is\(([^)]*)\):not\(\[class\*="dark:bg-"\]\)\)\s*\{/.exec(globals)
   const list = (raw: string) => raw.split(',').map((x) => x.trim()).filter(Boolean)
-  const tokens = read('design-system/styles/tokens-global.css')
+  const tokens = readDs('styles/tokens-global.css')
   const dark = /\.dark, \.dark body[^{]*\{([^}]*)\}/.exec(tokens)?.[1] ?? ''
   const hex = (name: string) => new RegExp(`${name}:\\s*(#[0-9a-f]{6})`, 'i').exec(dark)?.[1] ?? ''
   const lin = (c: number) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
@@ -91,7 +94,7 @@ describe('plain fields in dark mode take the DS field surface', () => {
   })
 
   it('uses the tokens .nds-field uses for its surface and border', () => {
-    const field = /\.nds-field\s*\{([^}]*)\}/.exec(read('design-system/styles/primitives.css'))?.[1] ?? ''
+    const field = /\.nds-field\s*\{([^}]*)\}/.exec(readDs('styles/primitives.css'))?.[1] ?? ''
     expect(field).toMatch(/background:\s*var\(--nds-surface\)/)
     expect(field).toMatch(/border:\s*1px solid var\(--nds-border\)/)
     expect(rule![3]).toMatch(/background-color:\s*var\(--nds-surface\)/)
@@ -128,12 +131,12 @@ describe('inverted buttons (slate-900, dark:slate-100)', () => {
   const LIGHT_DARK_FILL = /\bdark:bg-(?:white|(?:slate|gray|zinc)-(?:50|100|200))\b/
   const offenders: string[] = []
   let seen = 0
-  for (const file of walk(SRC)) {
+  for (const file of [...walk(SRC), ...walk(DS)]) {
     const src = readFileSync(file, 'utf8')
     for (const m of src.matchAll(/[^'"`{}\n]+/g)) {
       if (!LIGHT_DARK_FILL.test(m[0])) continue
       seen++
-      if (/(?<![:\w-])text-white\b/.test(m[0]) && !/dark:text-/.test(m[0])) offenders.push(`${file.slice(SRC.length + 1)}:${src.slice(0, m.index).split('\n').length}`)
+      if (/(?<![:\w-])text-white\b/.test(m[0]) && !/dark:text-/.test(m[0])) offenders.push(`${file.startsWith(DS) ? `packages/ui/src/${file.slice(DS.length + 1)}` : file.slice(SRC.length + 1)}:${src.slice(0, m.index).split('\n').length}`)
     }
   }
 

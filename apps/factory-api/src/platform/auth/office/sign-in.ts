@@ -7,8 +7,8 @@ import { liveSession } from '../sessions/authenticator'
 import { assertCsrf, clearSessionCookies, sessionCookieOf, setSessionCookies } from '../sessions/cookies'
 import { mfaRequired, requiresMfa } from '../sessions/grants'
 import { PRE_SESSION_ACTOR_ID, type OfficeAuth } from '../sessions/office-auth'
-import { parseToken } from '../sessions/secrets'
-import { SESSION_LIFETIME, startSession, type StartedSession } from '../sessions/session-store'
+import { mintToken, parseToken, tokenHash } from '../sessions/secrets'
+import { createSession, mintSessionSecrets, SESSION_LIFETIME, withSessionSecrets, type StartedSession } from '../sessions/session-store'
 import { normalizeEmail } from '../users/email'
 import type { SignedInBody, SignInBody } from './contract'
 import { createPasswordReset, REQUIRED_RESET_TTL_MS } from './password-reset'
@@ -27,6 +27,8 @@ import { checkSecondFactor, claimOf, recordWrongSecret, type Proof } from './sec
  *      once) or a recovery code; a wrong one is counted → 401;
  *   5. an administrator required a new password → no session, a reset token instead (`password_change_required`);
  *   6. otherwise one command: the claim of the proof, the count cleared, the session, the audit row; the cookies.
+ * The session's token and CSRF token (6) and the reset token (5) are minted before their command and only the token's
+ * hash goes in: a command's result can become an Idempotency-Key receipt, so it never holds a secret.
  */
 
 const USER_SELECT = {
@@ -129,30 +131,35 @@ export async function signIn(auth: OfficeAuth, request: FastifyRequest, reply: F
   const rehash = check.needsRehash ? { passwordHash: await hashPassword(body.password) } : {}
 
   if (user.mustChangePassword) {
+    const resetToken = mintToken(tenant.id, user.id)
+    const resetHash = tokenHash(resetToken.value)
     const { result } = await auth.command(context, { name: 'auth.passwordChangeRequired', input: { email } }, async ({ tx, now: at, audit }) => {
       await claimSignIn(tx, { id: user.id, passwordHash }, proof, at, rehash)
-      const reset = await createPasswordReset(tx, { tenantId: tenant.id, userId: user.id, kind: 'REQUIRED', now: at, ttlMs: REQUIRED_RESET_TTL_MS })
+      const reset = await createPasswordReset(tx, { userId: user.id, tokenHash: resetHash, kind: 'REQUIRED', now: at, ttlMs: REQUIRED_RESET_TTL_MS })
       audit({ recordType: 'PasswordReset', recordId: reset.id, after: { kind: 'REQUIRED', expiresAt: reset.expiresAt } })
       return reset
     })
-    return { status: 'password_change_required', resetToken: result.token, expiresAt: result.expiresAt }
+    return { status: 'password_change_required', resetToken: resetToken.value, expiresAt: result.expiresAt }
   }
 
+  const secrets = mintSessionSecrets(tenant.id, user.id)
+  const sessionHash = tokenHash(secrets.token.value)
   const { result } = await auth.command(context, { name: 'auth.signIn', input: { email } }, async ({ tx, now: at, audit }) => {
     await claimSignIn(tx, { id: user.id, passwordHash }, proof, at, { ...rehash, lastSignInAt: at })
-    const session = await startSession(tx, {
+    const session = await createSession(tx, {
       tenantId: tenant.id,
       userId: user.id,
       now: at,
       mfaProved: proof !== null,
       ipHash: auth.secrets.ipHash(request.ip),
       userAgent: request.headers['user-agent'],
+      tokenHash: sessionHash,
     })
     audit({ recordType: 'Session', recordId: session.id, after: { userId: user.id, secondFactor: proof?.kind ?? null, companyId: session.companyId } })
     return session
   })
   const requireMfa = await auth.inTenant(tenant.id, user.id, (client) => requiresMfa(client, user, auth.clock.now()))
-  return signedIn(reply, result, { ...user, requireMfa }, proof !== null)
+  return signedIn(reply, withSessionSecrets(result, secrets), { ...user, requireMfa }, proof !== null)
 }
 
 /** Ends the session of the cookie, if it is live, and clears the cookies whatever it was. */

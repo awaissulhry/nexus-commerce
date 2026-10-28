@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { assertTransition } from '../../state/machine'
 import { heldGrains } from '../grains/grains'
-import { FACTORY_PERMISSIONS } from '../permissions/catalogue'
+import { FACTORY_PERMISSIONS, FLOOR_SHARED_PERMISSIONS } from '../permissions/catalogue'
 import { audienceProblems, ROLE_TEMPLATES, templateOf, templateProblems } from '../roles/templates'
 import { roleProblems } from '../roles/roles'
 import { badgeCodeHash, badgeHint, newBadgeCode, normalizeBadgeCode, printedBadgeCode } from './badge'
@@ -203,12 +203,14 @@ describe('floor roles and their grants', () => {
     for (const entry of floor) {
       expect(entry.requireMfa).toBe(false)
       expect(entry.grains).toEqual([])
-      expect(entry.permissions.every((name) => name.startsWith('floor.'))).toBe(true)
+      // floor.* only, and the few office permissions shared with the floor (printing labels at the device's site).
+      expect(entry.permissions.every((name) => name.startsWith('floor.') || (FLOOR_SHARED_PERMISSIONS as readonly string[]).includes(name))).toBe(true)
+      expect(entry.permissions).toEqual(expect.arrayContaining(['print.labels', 'print.view']))
     }
     for (const entry of ROLE_TEMPLATES.filter((item) => item.audience === 'office')) {
       expect(entry.permissions.some((name) => name.startsWith('floor.')), entry.key).toBe(false)
     }
-    expect(templateOf('team_leader')?.permissions).toEqual(['floor.lead', 'floor.work'])
+    expect(templateOf('team_leader')?.permissions).toEqual(['floor.lead', 'floor.work', 'print.labels', 'print.view'])
     expect(templateOf('admin')?.permissions).toEqual(expect.arrayContaining(['devices.manage', 'devices.revoke', 'workers.manage', 'workers.credentials']))
   })
 
@@ -219,6 +221,12 @@ describe('floor roles and their grants', () => {
       'a floor role cannot require two-factor',
     ])
     expect(audienceProblems({ audience: 'floor', permissions: ['floor.work'], grains: ['wages'], requireMfa: false })).toEqual([])
+    expect(audienceProblems({ audience: 'floor', permissions: ['floor.work', 'print.view', 'print.labels'], grains: [], requireMfa: false })).toEqual([])
+    expect(audienceProblems({ audience: 'floor', permissions: ['print.manage', 'print.documents', 'files.read'], grains: [], requireMfa: false })).toEqual([
+      'a floor role holds only floor permissions, not print.manage',
+      'a floor role holds only floor permissions, not print.documents',
+      'a floor role holds only floor permissions, not files.read',
+    ])
     expect(audienceProblems({ audience: 'office', permissions: ['floor.work'], grains: [], requireMfa: false })).toEqual(['floor.work is held only by floor roles'])
     expect(roleProblems({ name: 'Copy', requireMfa: false, permissions: ['floor.work'], grains: [] })[0]?.message).toMatch(/only by floor roles/)
     expect(FACTORY_PERMISSIONS.get('floor.work')?.area).toBe('floor')

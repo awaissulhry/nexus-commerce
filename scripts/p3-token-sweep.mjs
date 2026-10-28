@@ -68,7 +68,8 @@ function walk(dir, acc = []) {
   return acc
 }
 
-const files = walk(ROOT)
+// The web's design system lives in @nexus/ui (packages/ui/src) since it moved out of apps/web/src.
+const files = [...walk(ROOT), ...walk('packages/ui/src')]
 const counts = Object.fromEntries(MAPPINGS.map((m) => [m.label, 0]))
 const changedFiles = []
 
@@ -111,7 +112,7 @@ if (CHECK) {
 }
 
 console.log(`\n  P3 token sweep — ${APPLY ? '\x1b[33mAPPLY\x1b[0m' : 'dry-run'}`)
-console.log(`  scanned ${files.length} files under ${ROOT}\n`)
+console.log(`  scanned ${files.length} files under ${ROOT} and packages/ui/src\n`)
 for (const m of MAPPINGS) {
   console.log(`    ${counts[m.label].toString().padStart(5)}  ${m.label}`)
 }

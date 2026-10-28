@@ -2,11 +2,11 @@
 
 ## Shape & wiring (why this repo needs a scaffold)
 
-- The DS lives at `apps/web/src/design-system/` **inside the Next.js app** — it is not a
-  package and has no standalone build. `.design-sync/ds-pkg/` is the sync scaffold:
-  a barrel (`index.ts`, mirroring the DS's own three barrels), a declaration-only
+- The DS lives at `packages/ui/src/` (the `@nexus/ui` package; until 2026-10-28 it was
+  `apps/web/src/design-system/` inside the Next.js app) and has no standalone build.
+  `.design-sync/ds-pkg/` is the sync scaffold: a barrel (`index.ts`, mirroring the DS's own three barrels), a declaration-only
   `tsconfig.json`, `base.css`, `fonts/`, and `build.mjs`. It writes **only** into its own
-  gitignored `dist/`; `apps/web` is read-only to it.
+  gitignored `dist/`; `packages/ui` is read-only to it.
 - `buildCmd` = `node .design-sync/ds-pkg/build.mjs`. It emits (1) the `.d.ts` tree the
   converter reads the API contract from and (2) `dist/ds.css`, one concatenated
   stylesheet, because `cfg.cssEntry` takes a single file.
@@ -52,7 +52,7 @@ them and they land in `general` with no JSDoc.
 
 ## Composition source
 
-`apps/web/src/design-system/catalog/TokenCatalog.tsx` (1121 lines) is the DS team's own living
+`apps/web/src/app/design-system/_catalog/TokenCatalog.tsx` (1121 lines) is the DS team's own living
 catalog and the canonical composition source — port from it before inventing. Realistic
 domain content (ad campaigns, €, ACOS, marketplace names) is the house style. Second source:
 real usage across `apps/web/src/app/**`. `catalog/` is excluded from the declaration build

@@ -56,6 +56,10 @@ model Company {
   reaNumber            String?
   /// Capitale sociale. Decimal, not Int minor units: it can pass the Int cap of a document amount.
   shareCapital         Decimal?     @db.Decimal(18, 2)
+  /// A S.p.A. or S.r.l. with one shareholder: its documents say so (c.c. art. 2250 c. 4; FatturaPA SocioUnico SU).
+  soleShareholder      Boolean      @default(false)
+  /// In liquidation: its documents say so after its name (c.c. art. 2250 c. 3; FatturaPA StatoLiquidazione LS).
+  inLiquidation        Boolean      @default(false)
   /// The registered office: { line1, line2?, postalCode, city, province?, country }.
   address              Json?
   pec                  String?
@@ -92,6 +96,11 @@ model Company {
   oneOffLinks         OneOffLink[]
   // threads.prisma: the threads of the company's records.
   threads             Thread[]
+  // imports.prisma: the company's imports.
+  importJobs          ImportJob[]
+  // parties.prisma: the parties of this company only (tenant-wide ones have none), and the VIES checks it requested.
+  parties             Party[]
+  viesChecks          ViesCheck[]
   // email.prisma: the company's sending identities (its mail goes out through them).
   emailIdentities     EmailIdentity[]
 
@@ -130,6 +139,8 @@ model Site {
   floorSettings FloorSettings[]
   // threads.prisma: the threads of the site's records.
   threads       Thread[]
+  // print.prisma: the site's printers.
+  printers      Printer[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])

@@ -1,6 +1,6 @@
 // Build for the design-sync import of the Nexus Design System.
 //
-// The DS lives in apps/web/src/design-system and has no standalone build —
+// The DS lives in packages/ui/src and has no standalone build —
 // Next.js compiles it in-app. This emits the two things the converter needs:
 //   1. a .d.ts tree (declaration-only) so component props become the API
 //      contract the claude.ai/design agent codes against;
@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..');
 const dist = join(here, 'dist');
-const dsStyles = join(repo, 'apps/web/src/design-system/styles');
+const dsStyles = join(repo, 'packages/ui/src/styles');
 
 // ── 1. declarations ──────────────────────────────────────────────────────
 execFileSync('npx', ['tsc', '-p', join(here, 'tsconfig.json')], { stdio: 'inherit', cwd: repo });

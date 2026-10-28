@@ -1,0 +1,37 @@
+{
+  "name": "@nexus/ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The Nexus design system: primitives, components, patterns, grid, tokens and styles. TypeScript source, compiled by the consuming Next app (transpilePackages).",
+  "exports": {
+    "./primitives": "./src/primitives/index.ts",
+    "./components": "./src/components/index.ts",
+    "./patterns": "./src/patterns/index.ts",
+    "./grid": "./src/grid/index.ts",
+    "./tokens": "./src/tokens/index.ts",
+    "./styles/*": "./src/styles/*",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nexus/shared": "*"
+  },
+  "peerDependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "ag-grid-community": "36.1.0",
+    "ag-grid-enterprise": "36.1.0",
+    "ag-grid-react": "36.1.0",
+    "lucide-react": "^0.469.0",
+    "next": "16.3.5",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "recharts": "^3.8.1"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.5"
+  }
+}

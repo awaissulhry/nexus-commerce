@@ -112,6 +112,46 @@ export const THREADS_DEFINITIONS = definePermissions('threads', {
 export const THREADS_READ = 'threads.read' satisfies Permission
 export const THREADS_POST = 'threads.post' satisfies Permission
 export const THREADS_MANAGE = 'threads.manage' satisfies Permission
+/**
+ * Imports with a dry run (apps/factory-api platform/imports; plan A1 W0-22, feature PLT-176). Each is checked with can()
+ * against the job's company. An importer also names the permissions of the records it writes (its adapter's
+ * `permission` to run and apply it, `viewPermission` to see its plans): imports.* alone never reaches a record. Money
+ * columns need their grain as well, to import and to see. Not step-up (A1 §3.10, as files).
+ */
+export const IMPORTS_DEFINITIONS = definePermissions('imports', {
+  view: { risk: 'read', description: 'See import jobs and their plans (values of money columns only with their grain).' },
+  run: { risk: 'write', description: 'Upload a sheet for an import and see its dry run; cancel an import.' },
+  apply: { risk: 'write', description: "Apply an import's plan: its valid rows are written to the records." },
+})
+export const IMPORTS_VIEW = 'imports.view' satisfies Permission
+export const IMPORTS_RUN = 'imports.run' satisfies Permission
+export const IMPORTS_APPLY = 'imports.apply' satisfies Permission
+
+/**
+ * Company documents as PDF (apps/factory-api platform/documents; plan A1 §3.9, GAP-008). An issued document's PDF is
+ * made by the command that issues it, under that module's own permission (quotes.send, ddt.issue, invoices.issue…);
+ * documents.view shows the fixed layouts with a company's legal data (the letterhead preview), stored nowhere.
+ */
+export const DOCUMENTS_DEFINITIONS = definePermissions('documents', {
+  view: { risk: 'read', description: "Preview a company's document layouts (quote, purchase order, DDT, invoice copy) with its legal data." },
+})
+export const DOCUMENTS_VIEW = 'documents.view' satisfies Permission
+
+/**
+ * Printing (apps/factory-api platform/print; plan A1 §3.9, GAP-007): printers per site and print jobs through the
+ * site's print relay, or a PDF for the browser. Each is checked with can() against the printer's company and site; a
+ * floor session prints only at its own device's site. Sending a failed job again needs the permission that queued it.
+ */
+export const PRINT_DEFINITIONS = definePermissions('print', {
+  view: { risk: 'read', description: "See a site's printers and its print jobs." },
+  labels: { risk: 'write', description: "Print labels (hides, lots, bundles, cartons) on a site's label printer, or as a PDF for any printer." },
+  documents: { risk: 'write', description: "Print a record's PDF document on a site's printer." },
+  manage: { risk: 'write', description: 'Add printers to a site and change them: name, relay target, label stock, pause, archive.' },
+})
+export const PRINT_VIEW = 'print.view' satisfies Permission
+export const PRINT_LABELS = 'print.labels' satisfies Permission
+export const PRINT_DOCUMENTS = 'print.documents' satisfies Permission
+export const PRINT_MANAGE = 'print.manage' satisfies Permission
 
 /**
  * Email out (apps/factory-api platform/email-out; plan A1 §3.7; PLT-139, PLT-230, COL-024). email.send is checked with
@@ -142,15 +182,25 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   WORKERS_PERMISSIONS,
   FLOOR_PERMISSIONS,
   THREADS_DEFINITIONS,
+  IMPORTS_DEFINITIONS,
+  DOCUMENTS_DEFINITIONS,
+  PRINT_DEFINITIONS,
   EMAIL_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
-/** The area of the permissions only floor roles hold (and floor roles hold no other). */
+/** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
 export const FLOOR_AREA = 'floor'
 
+/**
+ * The office permissions a floor role may hold too: what a floor device does on the same routes as the office, at its
+ * own device's site only (can() pins a floor session to it, row-level security too). Printing labels at the site's
+ * printer (GAP-007) and seeing its print queue. Never a money grain; floor roles still hold no other office permission.
+ */
+export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS])
+
 // The modules' constants and their declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, EMAIL_SEND, EMAIL_MANAGE]) {
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE]) {
   if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 }
 for (const name of LINK_SESSION_NAMES) {

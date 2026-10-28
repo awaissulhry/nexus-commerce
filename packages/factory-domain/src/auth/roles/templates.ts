@@ -1,6 +1,6 @@
 import type { Permission } from '../../core/permissions'
 import { GRAINS, isGrain, type Grain } from '../grains/grains'
-import { FACTORY_PERMISSIONS, FLOOR_AREA } from '../permissions/catalogue'
+import { FACTORY_PERMISSIONS, FLOOR_AREA, FLOOR_SHARED_PERMISSIONS } from '../permissions/catalogue'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -12,7 +12,9 @@ import { FACTORY_PERMISSIONS, FLOOR_AREA } from '../permissions/catalogue'
  * Office roles (B-W0-15) and floor roles (B-W0-16, audience `floor`: given to floor workers, never to office users,
  * and held only by a floor session on an enrolled device). A floor role holds only `floor.*` permissions, sees at
  * most wages and never requires two-factor (the device and the PIN are the floor's factors); an office role holds no
- * `floor.*` permission. Each module step adds its new permissions to the templates that need them. The owner holds
+ * `floor.*` permission. The few office permissions the floor uses on the same routes, at its own site only
+ * (FLOOR_SHARED_PERMISSIONS: printing labels), are the exception a floor role may hold. Each module step adds its new
+ * permissions to the templates that need them. The owner holds
  * every declared office permission and the read-only role every office `read` one, so they follow the registry by
  * themselves.
  *
@@ -85,6 +87,12 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'threads.read',
       'threads.post',
       'threads.manage',
+      'imports.view',
+      'imports.run',
+      'imports.apply',
+      'documents.view',
+      'print.view',
+      'print.manage',
       'email.send',
       'email.manage',
     ],
@@ -94,56 +102,56 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Finance',
     description: 'Invoices, payments and number series; sees prices, costs, margins and wages.',
     requireMfa: true,
-    permissions: ['numbering.view', 'numbering.manage', 'audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'email.send'],
+    permissions: ['numbering.view', 'numbering.manage', 'audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send'],
     grains: ['price', 'cost', 'margin', 'wages'],
   }),
   template('sales', {
     name: 'Sales',
     description: 'Customers, quotes and orders; sees selling prices, not costs or margins.',
     requireMfa: false,
-    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'email.send'],
+    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send'],
     grains: ['price'],
   }),
   template('planner', {
     name: 'Planner',
     description: 'Plans work orders and capacity; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents'],
     grains: [],
   }),
   template('buyer', {
     name: 'Buyer',
     description: 'Suppliers and purchase orders; sees purchase prices (the cost grain).',
     requireMfa: true,
-    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'email.send'],
+    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send'],
     grains: ['cost'],
   }),
   template('warehouse', {
     name: 'Warehouse',
     description: 'Receiving, stock and shipping; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents'],
     grains: [],
   }),
   template('production_manager', {
     name: 'Production manager',
     description: 'Runs production: work orders, lines and floor results; sees no money.',
     requireMfa: false,
-    permissions: ['audit.read', 'files.read', 'files.upload', 'devices.view', 'workers.view', 'threads.read', 'threads.post'],
+    permissions: ['audit.read', 'files.read', 'files.upload', 'devices.view', 'workers.view', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents'],
     grains: [],
   }),
   template('quality_inspector', {
     name: 'Quality inspector',
     description: 'Inspects lots and finished goods and releases them; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels'],
     grains: [],
   }),
   template('floor_supervisor', {
     name: 'Floor supervisor',
     description: 'Follows the lines of their sites from the Office, and keeps their floor devices, workers, badges and PINs; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'devices.view', 'devices.manage', 'devices.revoke', 'workers.view', 'workers.manage', 'workers.roles', 'workers.credentials', 'threads.read', 'threads.post'],
+    permissions: ['files.read', 'devices.view', 'devices.manage', 'devices.revoke', 'workers.view', 'workers.manage', 'workers.roles', 'workers.credentials', 'threads.read', 'threads.post', 'print.view', 'print.labels'],
     grains: [],
   }),
   template('read_only', {
@@ -156,25 +164,25 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
   floorTemplate('operator', {
     name: 'Operator',
     description: 'Works at a station on an enrolled floor device; sees no money.',
-    permissions: ['floor.work'],
+    permissions: ['floor.work', 'print.view', 'print.labels'],
     grains: [],
   }),
   floorTemplate('cutting_operator', {
     name: 'Cutting operator',
     description: 'Works at a cutting table on an enrolled floor device; sees no money.',
-    permissions: ['floor.work'],
+    permissions: ['floor.work', 'print.view', 'print.labels'],
     grains: [],
   }),
   floorTemplate('floor_inspector', {
     name: 'Floor inspector',
     description: 'Inspects work at an inspection bench on an enrolled floor device; sees no money.',
-    permissions: ['floor.work'],
+    permissions: ['floor.work', 'print.view', 'print.labels'],
     grains: [],
   }),
   floorTemplate('team_leader', {
     name: 'Team leader',
     description: "Leads a crew on the floor: works and sees the team leader's screens of the device's site; sees no money.",
-    permissions: ['floor.work', 'floor.lead'],
+    permissions: ['floor.work', 'floor.lead', 'print.view', 'print.labels'],
     grains: [],
   }),
 ])
@@ -208,14 +216,17 @@ export function templateProblems(templates: readonly RoleTemplate[]): string[] {
 }
 
 /**
- * What a role's audience forbids in its content: a floor role holds only `floor.*` permissions, at most the wages grain
- * and no two-factor rule; an office role holds no `floor.*` permission.
+ * What a role's audience forbids in its content: a floor role holds only `floor.*` permissions (and the few shared with
+ * the floor), at most the wages grain and no two-factor rule; an office role holds no `floor.*` permission.
  */
 export function audienceProblems(role: { readonly audience: RoleAudience } & Pick<RoleContent, 'permissions' | 'grains' | 'requireMfa'>): string[] {
   const floorPermission = (permission: string) => FACTORY_PERMISSIONS.get(permission)?.area === FLOOR_AREA
+  const sharedWithFloor = (permission: string) => (FLOOR_SHARED_PERMISSIONS as readonly string[]).includes(permission)
   if (role.audience === 'floor') {
     const problems: string[] = []
-    for (const permission of role.permissions) if (!floorPermission(permission)) problems.push(`a floor role holds only floor permissions, not ${permission}`)
+    for (const permission of role.permissions) {
+      if (!floorPermission(permission) && !sharedWithFloor(permission)) problems.push(`a floor role holds only floor permissions, not ${permission}`)
+    }
     for (const grain of role.grains) if (grain !== 'wages') problems.push(`a floor role sees at most wages, not ${grain}`)
     if (role.requireMfa) problems.push('a floor role cannot require two-factor')
     return problems

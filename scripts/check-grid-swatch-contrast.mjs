@@ -49,9 +49,9 @@ const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '')
 // A scratch token file permits a seeded-red rehearsal without editing shared tokens.
 const tokensArg = process.argv.indexOf('--tokens-css')
 if (tokensArg >= 0 && !process.argv[tokensArg + 1]) throw new Error('--tokens-css requires a path')
-const TOKENS_CSS = tokensArg >= 0 ? process.argv[tokensArg + 1] : `${ROOT}/apps/web/src/design-system/styles/tokens.css`
-const COLORS_TS = `${ROOT}/apps/web/src/design-system/tokens/colors.ts`
-const PALETTE_TS = `${ROOT}/apps/web/src/design-system/grid/editors/formulaPalette.ts`
+const TOKENS_CSS = tokensArg >= 0 ? process.argv[tokensArg + 1] : `${ROOT}/packages/ui/src/styles/tokens.css`
+const COLORS_TS = `${ROOT}/packages/ui/src/tokens/colors.ts`
+const PALETTE_TS = `${ROOT}/packages/ui/src/grid/editors/formulaPalette.ts`
 
 /** An outline is a graphical object (WCAG 1.4.11), not text. */
 const BAR = 3

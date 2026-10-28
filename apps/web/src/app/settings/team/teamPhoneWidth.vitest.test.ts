@@ -20,7 +20,7 @@ describe('Team & Access fits a phone', () => {
   })
 
   it('a card head breaks a long word at the card edge, and at phone width puts its action under the text', () => {
-    const css = read('../../../design-system/styles/components.css')
+    const css = read('../../../../../../packages/ui/src/styles/components.css')
     expect(rules(css, '.nds-card-head .t, .nds-card-head .d')).toMatch(/overflow-wrap: break-word;/)
     const phone = css.slice(css.indexOf('@media (max-width: 600px) {\n  .nds-card-head.stacked'))
     expect(phone.length).toBeGreaterThan(0)
@@ -29,13 +29,13 @@ describe('Team & Access fits a phone', () => {
   })
 
   it('a headed card with an empty body ends at its head: no blank band, no border under the head', () => {
-    const css = read('../../../design-system/styles/components.css')
+    const css = read('../../../../../../packages/ui/src/styles/components.css')
     expect(rules(css, '.nds-card-body:empty')).toMatch(/display: none;/)
     expect(rules(css, '.nds-card-head:has(+ .nds-card-body:empty)')).toMatch(/border-bottom: 0;/)
   })
 
   it('the Factory copy of the card rules says the same', () => {
-    const web = read('../../../design-system/styles/components.css')
+    const web = read('../../../../../../packages/ui/src/styles/components.css')
     const factory = read('../../../../../factory/src/design-system/styles/components.css')
     const cardRules = (css: string) => css.slice(css.indexOf('.nds-card-head .d {'), css.indexOf('.nds-card-body {'))
     expect(cardRules(factory)).toBe(cardRules(web))

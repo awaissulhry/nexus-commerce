@@ -22,7 +22,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const ROOT = new URL('..', import.meta.url).pathname
-const FILES = ['apps/web/src/design-system/styles/tokens.css']
+const FILES = ['packages/ui/src/styles/tokens.css']
 
 let bad = []
 for (const rel of FILES) {

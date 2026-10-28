@@ -6,10 +6,13 @@ import { seed as seedAuth } from '../seed/auth'
 import { seed as seedEmail } from '../seed/email'
 import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
+import { seed as seedImports } from '../seed/imports'
 import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedLinks } from '../seed/links'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
+import { seed as seedParties } from '../seed/parties'
+import { seed as seedPrint } from '../seed/print'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedThreads } from '../seed/threads'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
@@ -25,7 +28,8 @@ import { loadOwnership, loadSchema } from './tools'
  *   - a role with select sees exactly the rows inside its scope (tenant, and site or party where it is scoped by them),
  *     and rows outside it exist, so the wall is really tested;
  *   - it cannot read a hidden column, and Prisma's default select (every column) fails loudly;
- *   - a role with insert cannot insert a row outside its scope (the control insert inside it works);
+ *   - a role with insert cannot insert a row outside its scope (the control insert inside it works; the copied row
+ *     gets a new id, and its unique text and number columns new values);
  *   - a role with update changes no row outside its scope and cannot move a row out of it (the control works);
  *   - a role with delete deletes no row outside its scope;
  *   - every privilege the classification does not grant is refused.
@@ -40,7 +44,7 @@ let db: MigratedDatabase
 let factory: FactoryDatabase
 let a: CoreSeed
 let b: CoreSeed
-/** Tenant A's portal party: the audit seed writes its partner rows for it. */
+/** Tenant A's portal party: the audit seed writes its partner rows for it, the parties seed its Party row (P1). */
 let partyId: string
 
 /** Tenant A's scope for each role; the floor device sits on A's first site. */
@@ -90,6 +94,8 @@ beforeAll(async () => {
   await seedNumbering({ db: factory, namespace: 'iso-b' })
   await seedOutbox({ db: factory, namespace: 'iso-a' })
   await seedOutbox({ db: factory, namespace: 'iso-b' })
+  await seedParties({ db: factory, namespace: 'iso-a' })
+  await seedParties({ db: factory, namespace: 'iso-b' })
   await seedRoles({ db: factory, namespace: 'iso-a' })
   await seedRoles({ db: factory, namespace: 'iso-b' })
   await seedIntegration({ db: factory, namespace: 'iso-a' })
@@ -102,6 +108,10 @@ beforeAll(async () => {
   await seedFloorAuth({ db: factory, namespace: 'iso-b' })
   await seedThreads({ db: factory, namespace: 'iso-a' })
   await seedThreads({ db: factory, namespace: 'iso-b' })
+  await seedImports({ db: factory, namespace: 'iso-a' })
+  await seedImports({ db: factory, namespace: 'iso-b' })
+  await seedPrint({ db: factory, namespace: 'iso-a' })
+  await seedPrint({ db: factory, namespace: 'iso-b' })
   await seedEmail({ db: factory, namespace: 'iso-a' })
   await seedEmail({ db: factory, namespace: 'iso-b' })
 }, 60_000)
@@ -123,18 +133,27 @@ it('covers every classified table and every runtime role', () => {
     'FloorSession',
     'FloorSettings',
     'IdempotencyReceipt',
+    'ImportJob',
+    'ImportRow',
     'InboundWebhook',
     'IntegrationAccount',
     'IntegrationCall',
     'Invitation',
     'Line',
     'LinkEvidence',
+    'MeasurementProfile',
     'Message',
     'NumberAllocation',
     'NumberSeries',
     'OneOffLink',
     'OutboxEvent',
+    'Party',
+    'PartyAddress',
+    'PartyContact',
+    'PartyTaxIdentity',
     'PasswordReset',
+    'PrintJob',
+    'Printer',
     'Role',
     'RoleAssignment',
     'SecretValue',
@@ -146,6 +165,7 @@ it('covers every classified table and every runtime role', () => {
     'Tenant',
     'Thread',
     'User',
+    'ViesCheck',
     'WorkCentre',
     'Worker',
     'WorkerRole',
@@ -176,13 +196,24 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
       expect(row, `a ${model.name} row ${where}`).toBeDefined()
       return row!.row as Record<string, unknown>
     }
-    /** A copy of a row that breaks no unique key: a new id, and every unique text column suffixed (a NULL stays NULL). */
+    /**
+     * A copy of a row that breaks no unique key: a new id, every unique text column suffixed, and every unique number
+     * and date moved out of the seeded range (a NULL stays NULL).
+     */
     const copyOf = (row: Record<string, unknown>): Record<string, unknown> => {
       const copy: Record<string, unknown> = { ...row, [pk]: randomUUID() }
       for (const unique of model.uniques) {
         for (const column of unique) {
           const field = model.fields.find((entry) => entry.column === column)
           if (field?.type === 'String' && field.nativeType !== 'Uuid' && row[column] !== null) copy[column] = `${String(row[column])}-copy-${randomUUID().slice(0, 8)}`
+          // A number in a unique key (a row number) moves out of the seeded range.
+          if (field?.type === 'Int' && row[column] !== null) copy[column] = Number(row[column]) + 1_000_000
+          // So does a date or time in one (a validity start): a thousand years later.
+          if (field?.type === 'DateTime' && row[column] !== null) {
+            const later = new Date(String(row[column]))
+            later.setUTCFullYear(later.getUTCFullYear() + 1000)
+            copy[column] = field.nativeType === 'Date' ? later.toISOString().slice(0, 10) : later.toISOString()
+          }
         }
       }
       return copy

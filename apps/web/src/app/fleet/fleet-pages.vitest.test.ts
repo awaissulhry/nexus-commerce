@@ -16,12 +16,14 @@ import { describe, expect, it } from 'vitest'
 
 const FLEET = import.meta.dirname
 const SRC = join(FLEET, '..', '..')
+// The design system (@nexus/ui) — it moved from src/design-system to packages/ui/src.
+const DS = join(SRC, '..', '..', '..', 'packages', 'ui', 'src')
 const read = (path: string) => readFileSync(path, 'utf8')
 const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '')
 
 const pages = stripComments(read(join(FLEET, 'fleet-pages.css')))
 const approvals = stripComments(read(join(FLEET, 'approvals', 'approvals.css')))
-const tokens = stripComments(read(join(SRC, 'design-system', 'styles', 'tokens.css')))
+const tokens = stripComments(read(join(DS, 'styles', 'tokens.css')))
 
 /** The declarations of every rule whose selector list matches. */
 function rulesFor(css: string, selector: RegExp): string[] {
@@ -94,7 +96,7 @@ describe('MCP.12 — what those rules and the Approvals page read stays light un
   })
 
   it('the returned-request Banner (warning and danger tones) is dark-safe on the Approvals page', () => {
-    const components = stripComments(read(join(SRC, 'design-system', 'styles', 'components.css')))
+    const components = stripComments(read(join(DS, 'styles', 'components.css')))
     const banner = tokensIn(rulesFor(components, /\.nds-banner(\.(warning|danger))?(\s|$|,)|\.nds-banner-(icon|body|desc|title)\b/))
     expect([...banner]).toEqual(expect.arrayContaining(['--nds-warning-soft', '--nds-warning-strong', '--nds-danger-soft', '--nds-text-2']))
     const unsafe = [...banner].filter((t) => flipsInDark.has(t) && !fleetPin.has(t) && !pagePin.has(t))

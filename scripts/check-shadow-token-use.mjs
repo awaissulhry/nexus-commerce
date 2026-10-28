@@ -22,7 +22,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '')
-const TOKENS_CSS = `${ROOT}/apps/web/src/design-system/styles/tokens.css`
+const TOKENS_CSS = `${ROOT}/packages/ui/src/styles/tokens.css`
 const SCAN = [`${ROOT}/apps/web/src`, `${ROOT}/apps/factory/src`]
 const ALLOWED_PROPS = new Set(['box-shadow', 'text-shadow', 'filter'])
 

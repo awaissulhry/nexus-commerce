@@ -69,7 +69,7 @@ const baseline = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath
 const unexpected = findings.filter(f => (counts.get(keyOf(f)) ?? 0) > (baseline[keyOf(f)] ?? 0))
 const errors = []
 // Derive every union from the sole DS authority, never a second enumerated list.
-const authority = join(root, 'apps/web/src/design-system/grid/renderers/presence.ts')
+const authority = join(root, 'packages/ui/src/grid/renderers/presence.ts')
 const ds = ts.createSourceFile(authority, readFileSync(authority, 'utf8'), ts.ScriptTarget.Latest, true)
 for (const name of ['PresenceIntent', 'ChannelFact', 'PresenceVerdict']) {
   const declaration = ds.statements.find(n => ts.isTypeAliasDeclaration(n) && n.name.text === name)

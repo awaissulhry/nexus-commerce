@@ -1,0 +1,58 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/parties.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context: the VIES re-check) writes parties through apps/factory-api's modules/parties, always through command(); the API keeps staff to the companies and parties their grants reach. A portal or one-off link session (factory_partner_runtime) only reads, and only its OWN party: the Party row whose id is its party (keyColumns.party = id) and the rows of the other tables whose partyId is its party; it never sees an internal note (the partner wall of src/ownership.ts: every column marked `@internal` or with a cost, margin or wages grain is hidden) nor which office user wrote a row. It does not read the VIES checks: they are the office's tax evidence. The floor reads nothing here: a floor screen that shows a customer shows the name its own record carries. No role deletes: parties, addresses and contacts are archived (status), tax identities are superseded by a newer validFrom. ViesCheck is append-only (`@append-only`; the triggers of the …_parties_guards migration refuse UPDATE, DELETE and TRUNCATE for every login). A measurement profile is never edited in place (a new revision supersedes it): no role updates it. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Party": {
+      "about": "The office creates, edits and archives parties (parties.manage). A portal or link session reads its own party's row, without the internal note or who made it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "id" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["internalNote", "createdById"] }
+      }
+    },
+    "PartyAddress": {
+      "about": "The office keeps a party's addresses and its default bill-to and ship-to. A portal or link session reads its own party's addresses (where its goods and invoices go).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "PartyContact": {
+      "about": "The office keeps a party's contacts and their roles. A portal or link session reads its own party's contacts.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "PartyTaxIdentity": {
+      "about": "The office records a party's tax identity from a date and corrects it. A portal or link session reads its own party's identities (the billing details its invoices carry).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "ViesCheck": {
+      "about": "The office (and the scheduled re-check, in the tenant's system context) adds one row per VIES check and reads them as the proof for a zero-rated sale. Nobody changes or removes a row.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "MeasurementProfile": {
+      "about": "The office records a rider's measurements and adds a new revision for a change. A portal or link session reads its own party's profiles (the rider's own data), without the internal note or who recorded it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["internalNote", "createdById"] }
+      }
+    }
+  }
+}

@@ -33,7 +33,9 @@ COPY --from=prune /repo/out/full/ ./
 #   its `nexus-model-metadata` generator, whose file did not exist yet, and runs `prisma generate`); sharp and msgpackr
 #   load their prebuilt binaries without one;
 # - the API, compiled as `npm run build --workspace=@nexus/api` does but with `--noCheck`: src/services/presence/types.ts
-#   imports types from @nexus/web, which this pruned tree does not contain. Type-only imports leave no trace in the
+#   imports types from the design system, @nexus/ui (until 2026-10-28 from @nexus/web), which this pruned tree does not
+#   contain. apps/api does not declare it on purpose: as a dependency, even a dev one, its peers (next, recharts, …)
+#   would land in this image (measured 2026-10-28: 1.66 GB → 2.19 GB). Type-only imports leave no trace in the
 #   output (measured 2026-09-29: all 1,813 emitted .js and .map files byte-identical with and without the check), and
 #   CI's typecheck job checks the types. The compiler's heap is 8 GB: at 4 GB the image build ran out of memory on
 #   2026-10-07 (about 4.5 GB resident on a Mac for this build; the GitHub runner has 16 GB);

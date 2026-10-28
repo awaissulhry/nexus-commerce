@@ -19,7 +19,7 @@
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
         "factory_floor_runtime": {
           "privileges": ["select"],
-          "hiddenColumns": ["vatNumber", "fiscalCode", "regimeFiscale", "reaOffice", "reaNumber", "shareCapital", "pec", "sdiReceiverCode", "documentFooter"]
+          "hiddenColumns": ["vatNumber", "fiscalCode", "regimeFiscale", "reaOffice", "reaNumber", "shareCapital", "soleShareholder", "inLiquidation", "pec", "sdiReceiverCode", "documentFooter"]
         }
       }
     },

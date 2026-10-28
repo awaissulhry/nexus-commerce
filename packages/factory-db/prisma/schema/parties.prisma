@@ -1,0 +1,331 @@
+// Parties (plan A1 §2.4 A; features SAL-001, SAL-003, SAL-004, SAL-005, SAL-006, SCM-001, SAL-285): the customers,
+// brands, suppliers, subcontractors and carriers of the tenant. ONE record per business partner, whatever it does for
+// us: its roles say so (the old app's PartyKind became a list of roles: one company can be customer AND supplier).
+// apps/factory-api's modules/parties writes them (B-W1-07; the measurement profiles B-W1-18), always through command().
+//
+// Who sees what (plan A1 §2.2): the office reads and writes; a portal or one-off link session
+// (factory_partner_runtime) reads only its OWN party (Party by its id, every other table by partyId), never an internal
+// note or who in the office wrote a row; the floor reads none of it. Master data in use is archived (status
+// ARCHIVED), never deleted: no role deletes a row of this file. ViesCheck is the art. 41 DL 331/1993 proof and is
+// append-only (the hand-written …_parties_guards migration's triggers hold it for every login). A measurement profile
+// is never edited in place: a change is a new revision (no update grant).
+//
+// The partyId columns of the W0 modules (OneOffLink, LinkEvidence, Thread, Message, StoredFile, OutboxEvent,
+// AuditLog, IdempotencyReceipt) stay plain ids: the ledgers keep the scope a row was written in, and the others' seeds
+// and tests still plant made-up parties. A later step can add their tenant-safe references to Party.
+
+/// A business partner of the tenant: a company or a person we sell to, buy from, send work to or ship with.
+model Party {
+  id           String      @id @db.Uuid
+  tenantId     String      @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide master data, shared by every company of the tenant (A1 §2.1).
+  companyId    String?     @db.Uuid
+  /// Short code, unique in the tenant: lists, imports, the portal address /p/<code>.
+  code         String
+  /// ORGANISATION (a company, team or body) or PERSON (a private rider: the legal name is a person's name, personal
+  /// data).
+  kind         PartyKind
+  /// The registered name, as on its invoices (FatturaPA Denominazione, or Nome + Cognome for a person).
+  legalName    String
+  tradeName    String?
+  /// What it is for us; one or more. Never empty (the parties module checks it).
+  roles        PartyRole[] @default([])
+  status       PartyStatus @default(ACTIVE)
+  /// Where it is established, ISO 3166-1 alpha-2. Its tax country is on its tax identity.
+  country      String      @default("IT")
+  /// The currency of its documents, ISO 4217.
+  currency     String      @default("EUR")
+  /// The language of its documents and mail, ISO 639-1.
+  language     String      @default("it")
+  /// Payment terms as printed on its quotes, orders and purchase orders (free text; terms with rules are W2a).
+  paymentTerms String?
+  /// For the office only: the partner role can neither read nor write it.
+  /// @internal
+  internalNote String?
+  version      Int         @default(1)
+  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime    @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?     @db.Uuid
+
+  company             Company?             @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  addresses           PartyAddress[]
+  contacts            PartyContact[]
+  taxIdentities       PartyTaxIdentity[]
+  measurementProfiles MeasurementProfile[]
+
+  @@unique([tenantId, code])
+  // The target of the tenant-safe references from the party's rows.
+  @@unique([tenantId, id])
+}
+
+enum PartyKind {
+  ORGANISATION
+  PERSON
+}
+
+/// What a party is for us (several at once).
+enum PartyRole {
+  /// We sell to it: quotes, orders, invoices.
+  CUSTOMER
+  /// A brand we make for (private label): with a brand label it is the legal PPE maker (PLAN §2.8).
+  BRAND
+  /// We buy from it: purchase orders.
+  SUPPLIER
+  /// We send work to it (W2 subcontract orders).
+  SUBCONTRACTOR
+  /// It carries our goods.
+  CARRIER
+}
+
+/// PROSPECT → ACTIVE ⇄ BLOCKED; ARCHIVED when no longer used (never deleted).
+enum PartyStatus {
+  PROSPECT
+  ACTIVE
+  BLOCKED
+  ARCHIVED
+}
+
+/// An address of a party: its registered office, where its invoices go, where goods are delivered or collected. Many
+/// per party; one address can serve several uses.
+model PartyAddress {
+  id              String             @id @db.Uuid
+  tenantId        String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  partyId         String             @db.Uuid
+  /// What the address is used for; one or more. The registered office is FatturaPA's Sede of the party.
+  kinds           PartyAddressKind[] @default([])
+  /// The name on the address (a warehouse, a workshop, the recipient); null: the party's legal name.
+  name            String?
+  line1           String
+  line2           String?
+  postalCode      String
+  city            String
+  /// The province (Italian two-letter sigla) or region, when the country uses one.
+  province        String?
+  /// ISO 3166-1 alpha-2.
+  country         String
+  /// Who to ask for at the address (carrier labels, DDTs). Personal data.
+  contactName     String?
+  phone           String?
+  /// For the carrier or the warehouse: opening hours, dock, access.
+  deliveryNotes   String?
+  /// The party's default invoice address (an address with BILL_TO). At most one per party: the parties module clears
+  /// the old default in the same command and moves the party's version, so two changes cannot both win.
+  isDefaultBillTo Boolean            @default(false)
+  /// The party's default delivery address (an address with SHIP_TO); at most one per party, as above.
+  isDefaultShipTo Boolean            @default(false)
+  status          MasterStatus       @default(ACTIVE)
+  version         Int                @default(1)
+  createdAt       DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?            @db.Uuid
+
+  party Party @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, partyId, id])
+}
+
+enum PartyAddressKind {
+  /// The registered office (sede legale).
+  REGISTERED
+  /// Invoices and deposit requests go here.
+  BILL_TO
+  /// Goods are delivered here (DDT destination, carrier label).
+  SHIP_TO
+  /// Goods are collected here (a supplier's or subcontractor's ship-from).
+  PICKUP
+}
+
+/// A person at a party, with what they deal with. Personal data. One person who works for two parties is two contacts.
+model PartyContact {
+  id          String             @id @db.Uuid
+  tenantId    String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  partyId     String             @db.Uuid
+  /// The person's full name.
+  name        String
+  /// Trimmed, lower case; the documents and links of their roles go to it, and inbound mail from it matches the party.
+  email       String?
+  phone       String?
+  /// What they deal with; none is a plain contact.
+  roles       PartyContactRole[] @default([])
+  /// The language they read, ISO 639-1; null: the party's language.
+  language    String?
+  status      MasterStatus       @default(ACTIVE)
+  version     Int                @default(1)
+  createdAt   DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?            @db.Uuid
+
+  party               Party                @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  measurementProfiles MeasurementProfile[]
+
+  // The target of the measurement profiles' reference: a rider is a contact of the profile's own party.
+  @@unique([tenantId, partyId, id])
+  // Inbound mail: the sender's address → its contact and party.
+  @@index([tenantId, email])
+}
+
+enum PartyContactRole {
+  /// Quotes, order confirmations and their links (a customer's buyer); purchase orders (a supplier's order desk).
+  ORDERS
+  /// Invoices, deposit requests and payments.
+  INVOICES
+  /// Certificates, test reports, complaints.
+  QUALITY
+  /// Tech packs and samples.
+  DESIGN
+  /// The owner or decision maker.
+  OWNER
+  /// Wears a made-to-measure garment: the person of a measurement profile.
+  RIDER
+}
+
+/// A party's tax identity from a date (SAL-005): what an e-invoice to it needs (D.Lgs. 127/2015: the VAT number or
+/// codice fiscale, and the SDI recipient code or a PEC address) and its tax mode. A change from a date is a new row;
+/// the identity at a date is the row with the newest validFrom on or before it. Issued documents keep their own copy.
+model PartyTaxIdentity {
+  id               String       @id @db.Uuid
+  tenantId         String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  partyId          String       @db.Uuid
+  /// The country of tax residence, ISO 3166-1 alpha-2.
+  country          String
+  /// Which VAT rules apply to it (the FatturaPA builder and the VAT treatment read it).
+  taxMode          PartyTaxMode
+  /// The VAT number with its VAT prefix (IT…, DE…; EL… for Greece). Null: none (a consumer).
+  vatNumber        String?
+  /// Codice fiscale: a person's 16 characters or a company's 11 digits. Personal data for a person.
+  fiscalCode       String?
+  /// Codice destinatario: 7 characters ("0000000" when invoices go to the PEC, or for a consumer without one).
+  sdiRecipientCode String?
+  /// The PEC address SDI delivers to when there is no recipient code.
+  pec              String?
+  /// The first day this identity applies.
+  validFrom        DateTime     @db.Date
+  version          Int          @default(1)
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?      @db.Uuid
+
+  party      Party       @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  viesChecks ViesCheck[]
+
+  @@unique([tenantId, partyId, validFrom])
+  // The target of the VIES checks' reference: a check names its identity's party.
+  @@unique([tenantId, partyId, id])
+  // Imports and the duplicate warning find a party by its VAT number.
+  @@index([tenantId, vatNumber])
+}
+
+/// The tax mode of a party (SAL-005).
+enum PartyTaxMode {
+  /// An Italian business: e-invoice through SDI.
+  IT_B2B
+  /// An Italian consumer: e-invoice through SDI with the codice fiscale.
+  IT_B2C
+  /// A business in another EU state: zero-rated intra-EU supply, only with a valid VIES check (art. 41 DL 331/1993).
+  EU_B2B
+  /// A consumer in another EU state.
+  EU_B2C
+  /// Outside the EU.
+  EXTRA_EU
+}
+
+/// One VIES check of a party's VAT number (SAL-006), kept as the proof that the number was valid when a sale was
+/// zero-rated (art. 41 DL 331/1993: a valid number is a substantive condition). Written by the parties module (on
+/// request, and by the scheduled re-check) in the command of the check; never changed or removed.
+/// @append-only
+model ViesCheck {
+  id                 String          @id @db.Uuid
+  tenantId           String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The checked identity's party.
+  partyId            String          @db.Uuid
+  /// The tax identity whose VAT number was checked.
+  taxIdentityId      String          @db.Uuid
+  /// The company whose VAT number identified the request (VIES gives a consultation number only to an identified
+  /// requester); null: an anonymous check.
+  companyId          String?         @db.Uuid
+  /// The member-state code sent (EL for Greece, XI for Northern Ireland).
+  countryCode        String
+  /// The number sent, without the member-state code.
+  vatNumber          String
+  /// The requester's VAT number as sent, with its prefix; null for an anonymous check.
+  requesterVatNumber String?
+  /// When the request was sent (server time).
+  requestedAt        DateTime        @db.Timestamptz(3)
+  result             ViesCheckResult
+  /// VIES's requestIdentifier: the consultation number, the proof. Null when VIES gave none.
+  consultationNumber String?
+  /// The name and address as VIES returned them (null when the member state does not give them).
+  traderName         String?
+  traderAddress      String?
+  /// Why the check gave no answer (VIES's fault, e.g. MS_UNAVAILABLE, or the network's); only for ERROR.
+  errorCode          String?
+  /// SHA-256 (hex) of the raw response body as received; null when none came.
+  responseSha256     String?
+  /// The request whose command wrote it; its audit rows share it.
+  requestId          String
+  createdAt          DateTime        @default(now()) @db.Timestamptz(3)
+  /// The office user who asked; null for the scheduled re-check.
+  createdById        String?         @db.Uuid
+
+  taxIdentity PartyTaxIdentity @relation(fields: [tenantId, partyId, taxIdentityId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  company     Company?         @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The checks of an identity, newest first (the proof for a sale, the re-check).
+  @@index([tenantId, taxIdentityId, requestedAt])
+}
+
+enum ViesCheckResult {
+  VALID
+  INVALID
+  /// VIES or the network gave no answer: neither proof nor refusal.
+  ERROR
+}
+
+/// A rider's body measurements for one garment type (SAL-285), for a made-to-measure unit. Personal data: the rider is
+/// told how it is used (GDPR art. 13) before the measurements are recorded. Never edited in place: a change is a new
+/// revision that supersedes the previous one; work orders keep the revision they were made from.
+model MeasurementProfile {
+  id               String   @id @db.Uuid
+  tenantId         String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The customer: a private rider (a PERSON party) or the team, dealer or brand that ordered for the rider.
+  partyId          String   @db.Uuid
+  /// The rider as a contact of the party (role RIDER), when known.
+  contactId        String?  @db.Uuid
+  /// The rider's name as recorded.
+  riderName        String
+  /// The garment type the measurements are for: the code of its measurement template (PRD-200).
+  garmentType      String
+  /// 1, 2, 3 … for the rider and garment type.
+  revision         Int
+  /// The revision this one replaces (of the same party); null for the first.
+  supersedesId     String?  @db.Uuid
+  /// The measurements by point of measure, each with its unit, values as decimal strings (no floats):
+  /// { "<point code>": { "value": "61.5", "unit": "cm" } }.
+  measurements     Json
+  /// The standard size it is closest to, when known.
+  baseSize         String?
+  /// Fit preferences, posture and asymmetry, for the pattern maker; the rider may read them.
+  fitNotes         String?
+  /// For the office only: the partner role can neither read nor write it.
+  /// @internal
+  internalNote     String?
+  /// When the rider was measured, and by whom (the fitter, the dealer, the rider), as written.
+  takenAt          DateTime @db.Timestamptz(3)
+  takenBy          String
+  /// The privacy notice the rider was given (GDPR art. 13): its reference (the privacy pack keeps the notices) and
+  /// when it was given.
+  privacyNoticeRef String
+  privacyNoticeAt  DateTime @db.Timestamptz(3)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  /// The office user who recorded it.
+  createdById      String?  @db.Uuid
+
+  party        Party                @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  contact      PartyContact?        @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  supersedes   MeasurementProfile?  @relation("MeasurementProfileRevisions", fields: [tenantId, partyId, supersedesId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  supersededBy MeasurementProfile[] @relation("MeasurementProfileRevisions")
+
+  @@unique([tenantId, partyId, riderName, garmentType, revision])
+  // The target of the revisions' reference: a revision supersedes one of its own party.
+  @@unique([tenantId, partyId, id])
+}

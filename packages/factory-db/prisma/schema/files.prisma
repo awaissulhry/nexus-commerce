@@ -70,6 +70,10 @@ model StoredFile {
   // A floor-visible file belongs to a company, and its site is one of that company's sites.
   floorSite    Site?              @relation(fields: [tenantId, companyId, floorSiteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   storeAccount IntegrationAccount @relation(fields: [tenantId, storeAccountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // imports.prisma: the import job whose sheet this file is.
+  importJobs   ImportJob[]
+  // print.prisma: the print jobs that printed this file.
+  printJobs    PrintJob[]
 
   @@unique([tenantId, storageKey])
   // The target of the tenant-safe references from other rows (a company's logo, a document's PDF).

@@ -63,7 +63,7 @@ those pages are rebuilt — that is a decision, not a backlog. But nothing new m
 **If the DS does not cover it, ADD IT TO THE DS.** Never hand-roll locally, never work around.
 File it in `.claude/DS-GAPS.md` with the measurement. See /DESIGN.md for the full mapping.
 
-## The DS is at `apps/web/src/design-system/`
+## The DS is at `packages/ui/src/` (the `@nexus/ui` package; the web imports it as `@/design-system/*`)
 - `primitives/` — **Button** (`primary|secondary|ghost|danger|link`, `md|sm`, `active`), ToolbarButton, tone
 - `components/` — Modal, Listbox, MultiSelect, Combobox, Menu, Tabs, Card, Banner, Toast,
   Drawer, EmptyState, Pagination, ProgressBar, DateField, DateRangePicker, HoverCard, DataGrid…
@@ -133,7 +133,7 @@ called `-m` and fail. Never `git add .`, never a bare `git commit`.
 
 **🔴 Never copy a design-system change into `apps/factory`.** The old factory app is frozen (reference
 only), and `scripts/check-frozen-paths.mjs` fails a branch that changes any file under it. A DS change
-lands in `apps/web/src/design-system` only.
+lands in `packages/ui/src` only.
 
 ## The method — all six steps, every time
 1. **Census every spelling** — the same concept hides under `-chip`, `-pill`, `-badge`.

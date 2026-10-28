@@ -31,10 +31,10 @@ const OPTION_PROPS = new Set([
 ])
 const GRID_NAMES = new Set(['NexusGrid'])
 
-const files = execSync('git ls-files "apps/web/src/**/*.tsx"', { encoding: 'utf8' }).split('\n').filter(Boolean)
+const files = execSync('git ls-files "apps/web/src/**/*.tsx" "packages/ui/src/**/*.tsx"', { encoding: 'utf8' }).split('\n').filter(Boolean)
 // Untracked files are what a fresh session writes; a `git ls-files` guard is blind to them (memory:
 // reference_git_lsfiles_guards_miss_untracked). Add anything untracked under the same glob.
-const untracked = execSync('git ls-files --others --exclude-standard "apps/web/src/**/*.tsx"', { encoding: 'utf8' }).split('\n').filter(Boolean)
+const untracked = execSync('git ls-files --others --exclude-standard "apps/web/src/**/*.tsx" "packages/ui/src/**/*.tsx"', { encoding: 'utf8' }).split('\n').filter(Boolean)
 const all = [...new Set([...files, ...untracked])]
 
 const offenders = []

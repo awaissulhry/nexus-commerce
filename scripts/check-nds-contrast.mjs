@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * PLAN Step 4.0 (docs/product-cheat/PLAN.md, R-44/R-45) — text contrast of the design-system palette the studio and the DS
- * grid actually paint with (`--nds-*` in `apps/web/src/design-system/styles/tokens.css`), light and dark, at 7:1 (AAA)
+ * grid actually paint with (`--nds-*` in `packages/ui/src/styles/tokens.css`), light and dark, at 7:1 (AAA)
  * and 4.5:1 (AA).
  *
  * ── Why this and not `check-contrast.mjs` (retired 2026-10-01) ──────────────────────────────────────────────────────
@@ -57,9 +57,9 @@ const opt = (name) => {
   if (!argv[i + 1] || argv[i + 1].startsWith('--')) throw new Error(`${name} requires a value`)
   return argv[i + 1]
 }
-const TOKENS_CSS = opt('--tokens') ?? `${ROOT}/apps/web/src/design-system/styles/tokens.css`
+const TOKENS_CSS = opt('--tokens') ?? `${ROOT}/packages/ui/src/styles/tokens.css`
 // Token scratch copies use web's component rules unless explicitly overridden.
-const PRIMITIVES_CSS = opt('--primitives') ?? `${ROOT}/apps/${resolve(TOKENS_CSS).includes('/apps/factory/') ? 'factory' : 'web'}/src/design-system/styles/primitives.css`
+const PRIMITIVES_CSS = opt('--primitives') ?? `${ROOT}/${resolve(TOKENS_CSS).includes('/apps/factory/') ? 'apps/factory/src/design-system' : 'packages/ui/src'}/styles/primitives.css`
 // The Tailwind status channels live in web's globals.css; Factory has no Tailwind.
 const GLOBALS_CSS = opt('--globals') ?? (resolve(TOKENS_CSS).includes('/apps/factory/') ? null : `${ROOT}/apps/web/src/app/globals.css`)
 const JSON_OUT = argv.includes('--json')

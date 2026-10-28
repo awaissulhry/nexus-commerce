@@ -65,6 +65,15 @@ describe('the local file store', () => {
     await expect(files.openDownload(tokenOf(get.url), NOW)).rejects.toMatchObject({ status: 404 })
   })
 
+  it('reads an object\'s bytes for server-side work, up to a limit; no object is null', async () => {
+    const files = store()
+    expect(await files.read(call(), KEY, 1_000)).toBeNull()
+    await files.acceptUpload(tokenOf((await files.presignUpload(call(), upload)).url), { body: BODY, contentType: 'application/pdf' }, NOW)
+    expect(await files.read(call(), KEY, BODY.length)).toEqual(BODY)
+    await expect(files.read(call(), KEY, BODY.length - 1)).rejects.toMatchObject({ name: 'TooLargeObjectError' })
+    await expect(files.read(call('LIVE'), KEY, 1_000)).rejects.toBeInstanceOf(ProviderError)
+  })
+
   it('refuses a body whose type, size or SHA-256 is not the one announced, and stores nothing', async () => {
     const files = store()
     const token = tokenOf((await files.presignUpload(call(), upload)).url)
@@ -97,6 +106,15 @@ describe('the local file store', () => {
     await files.acceptUpload(tokenOf((await files.presignUpload(call(), upload)).url), { body: BODY, contentType: 'application/pdf' }, NOW)
     writeFileSync(join(files.root, KEY), 'something else')
     expect(await files.head(call(), KEY)).toMatchObject({ sizeBytes: 14, sha256: createHash('sha256').update('something else').digest('hex') })
+  })
+
+  it('puts bytes the API made (a generated document) when they match their SHA-256, and only for FAKE accounts', async () => {
+    const local = store()
+    await expect(local.put(call(), { key: KEY, contentType: 'application/pdf', body: BODY, sha256: 'ab'.repeat(32) })).rejects.toThrow(ProviderError)
+    expect(await local.head(call(), KEY)).toBeNull()
+    await local.put(call(), { key: KEY, contentType: 'Application/PDF', body: BODY, sha256: SHA })
+    expect(await local.head(call(), KEY)).toEqual({ sizeBytes: BODY.length, contentType: 'application/pdf', sha256: SHA })
+    await expect(local.put(call('LIVE'), { key: KEY, contentType: 'application/pdf', body: BODY, sha256: SHA })).rejects.toThrow(ProviderError)
   })
 
   it('takes only storage keys under its folder, and only FAKE accounts', async () => {

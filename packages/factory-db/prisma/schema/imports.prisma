@@ -1,0 +1,144 @@
+// Imports with a dry run (plan A1 §2.3 ImportJob, ImportRow; W0-22; feature PLT-176): a person uploads a sheet (CSV or
+// Excel) for one importer (customers, items, prices… each brought by its module), the worker reads it and plans every
+// row against the records its key finds — create, update, unchanged or error — and nothing is written to a business
+// record until a person applies the plan; then the valid rows are written in batches, each batch one transaction with
+// its audit rows. apps/factory-api's platform/imports runs the flow; the engine's rules are in
+// packages/factory-domain/src/imports.
+//
+// The sheet itself is a StoredFile (files.prisma) owned by the job (recordType ImportJob), never bytes in the database.
+// Money (A1 §2.6): the values of a money column are stored marked with their grain (`{ "$money": "price", "value": … }`)
+// in ImportRow.before and .after, so the review shows them only to people holding the grain; the dry run refuses a
+// sheet whose money columns the job's creator may not write (`grains`).
+
+/// One import of one sheet: its importer, its sheet, where it is in the flow and what its plan holds. The status moves
+/// only along the import machine (factory-domain imports/job.ts) through command().
+model ImportJob {
+  id                 String       @id @db.Uuid
+  tenantId           String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose records it writes and whose staff see it. Null: tenant-wide master data (items, parties).
+  companyId          String?      @db.Uuid
+  /// The importer: `<module>.<name>` (registered in apps/factory-api platform/imports).
+  importerKey        String
+  /// The uploaded sheet (a StoredFile whose record is this job).
+  fileId             String       @db.Uuid
+  /// The Excel sheet to read; null: the first one.
+  sheetName          String?
+  /// The CSV encoding asked for (utf-8, windows-1252); null: detected (UTF-8 when the bytes are valid UTF-8).
+  encoding           String?
+  /// How numbers are written in the sheet: it (1.234,56) or en (1,234.56).
+  numberFormat       String       @default("it")
+  /// A person's header overrides: { "<header>": "<column>" | null (ignore it) }.
+  mapping            Json?
+  /// What the dry run read: { format, sheet, encoding, delimiter, headers, columns: [{ index, header, column }],
+  /// ignored: [{ index, header, reason }] }. Never cell values.
+  layout             Json?
+  /// The money grains the person who created the job held then: the dry run refuses a mapped money column outside them.
+  grains             String[]     @default([])
+  status             ImportStatus @default(UPLOADED)
+  mode               ImportMode   @default(DRY_RUN)
+  /// Data rows of the sheet (blank rows are not counted), and the plan's counts by action.
+  rowCount           Int          @default(0)
+  createCount        Int          @default(0)
+  updateCount        Int          @default(0)
+  unchangedCount     Int          @default(0)
+  errorCount         Int          @default(0)
+  /// What the apply did: rows written, and planned rows it skipped (changed since the dry run, or already done).
+  appliedCount       Int          @default(0)
+  skippedCount       Int          @default(0)
+  /// Why the sheet could not be planned (missing or ambiguous columns, a refused money column): [{ path, message }].
+  issues             Json?
+  /// The last failure, in words (never a cell value).
+  error              String?
+  plannedAt          DateTime?    @db.Timestamptz(3)
+  /// Who asked to apply it, and when.
+  applyRequestedAt   DateTime?    @db.Timestamptz(3)
+  applyRequestedById String?      @db.Uuid
+  appliedAt          DateTime?    @db.Timestamptz(3)
+  cancelledAt        DateTime?    @db.Timestamptz(3)
+  version            Int          @default(1)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?      @db.Uuid
+
+  company Company?    @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  file    StoredFile  @relation(fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  rows    ImportRow[]
+
+  // The target of the tenant-safe reference from ImportRow.
+  @@unique([tenantId, id])
+  // The import screen's list (newest first, per company).
+  @@index([tenantId, companyId, createdAt])
+  // The worker finds the job of an uploaded sheet.
+  @@index([tenantId, fileId])
+}
+
+/// One data row of an import's sheet as the dry run planned it, and what the apply did with it. Written once by the
+/// dry run; the apply only fills outcome, note, recordId (of a created record) and appliedAt.
+model ImportRow {
+  id        String            @id @db.Uuid
+  tenantId  String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  jobId     String            @db.Uuid
+  /// The row number as the spreadsheet shows it (the header is row 1).
+  rowNumber Int
+  action    ImportRowAction
+  /// The key columns' values as a JSON array (`["A-12"]`): how the row found its record. Never money.
+  key       String?
+  /// The record it updates (UPDATE, UNCHANGED), or the one it created (after the apply).
+  recordId  String?           @db.Uuid
+  /// ERROR: every problem of the row, [{ column?, message }] (never a cell value).
+  errors    Json?
+  /// UPDATE: the record's current values of the columns that change. Money values marked with their grain.
+  before    Json?
+  /// CREATE: every given value; UPDATE: the new values of the columns that change. Money values marked with their grain.
+  after     Json?
+  /// Set by the apply: APPLIED, or SKIPPED (see note).
+  outcome   ImportRowOutcome?
+  /// Why a planned row was skipped: changed_since_dry_run, already_done.
+  note      String?
+  appliedAt DateTime?         @db.Timestamptz(3)
+  createdAt DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+
+  job ImportJob @relation(fields: [tenantId, jobId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One plan row per sheet row: a repeated dry-run batch cannot add a row twice.
+  @@unique([tenantId, jobId, rowNumber])
+  // The apply's next batch: planned rows not applied yet, in row order.
+  @@index([tenantId, jobId, action, appliedAt])
+}
+
+/// Where an import is (factory-domain imports/job.ts). Additive.
+enum ImportStatus {
+  /// The job and its sheet's upload exist; the dry run has not finished.
+  UPLOADED
+  /// The dry run finished: every row is planned; nothing written to a record yet.
+  PLANNED
+  /// The plan is being applied, batch by batch.
+  APPLYING
+  /// Every valid row was applied or skipped (final).
+  APPLIED
+  /// The sheet could not be planned, or the apply stopped (an apply can be resumed).
+  FAILED
+  /// A person cancelled it (final); rows already applied stay applied.
+  CANCELLED
+}
+
+/// DRY_RUN: stop at PLANNED for a person to review. APPLY: apply the valid rows as soon as the dry run is done.
+enum ImportMode {
+  DRY_RUN
+  APPLY
+}
+
+/// What a sheet row would do to its record. Additive.
+enum ImportRowAction {
+  CREATE
+  UPDATE
+  UNCHANGED
+  ERROR
+}
+
+/// What the apply did with a planned CREATE or UPDATE row.
+enum ImportRowOutcome {
+  APPLIED
+  SKIPPED
+}
