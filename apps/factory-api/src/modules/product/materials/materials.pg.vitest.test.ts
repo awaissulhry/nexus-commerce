@@ -46,7 +46,6 @@ const tenantB = newId()
 const companyA1 = newId()
 const companyA2 = newId()
 const companyB = newId()
-const user = newId()
 const supplier = newId()
 const blocked = newId()
 const customer = newId()
@@ -57,17 +56,34 @@ const MANAGE = 'product.materials.manage'
 const COST = 'product.materials.cost'
 const IMPORTS: Permission[] = ['imports.view', 'imports.run', 'imports.apply', 'files.upload', 'files.read']
 
-const grant = (permissions: readonly Permission[], companies: ScopeSet = 'all'): Grant => ({ permissions, companies, sites: 'all', parties: 'all' })
-const office = (tenantId: string, grants: Grant[]): SessionContext => ({ audience: 'office', tenantId, actorId: user, grants })
-/** Buyer: everything, the cost grain included. Maker: a production manager, no money. Finance: sets costs only. */
-const SESSIONS: Record<string, SessionContext> = {
-  buyer: office(tenantA, [grant([VIEW, MANAGE, COST, 'money.cost', 'audit.read', ...IMPORTS])]),
-  maker: office(tenantA, [grant([VIEW, MANAGE, 'audit.read', ...IMPORTS])]),
-  finance: office(tenantA, [grant([VIEW, COST, 'money.cost', 'audit.read'])]),
-  viewer: office(tenantA, [grant([VIEW, 'imports.view'])]),
-  companyOne: office(tenantA, [grant([VIEW, MANAGE], [companyA1])]),
-  otherTenant: office(tenantB, [grant([VIEW, MANAGE, COST, 'money.cost'])]),
+/**
+ * The people of the test: each is a User with one custom role assigned in the database (the dry run of an import reads
+ * the live roles of the person who started it) and the same grants as their test session. Buyer: everything, the
+ * cost grain included. Maker: a production manager, no money. Finance: sets costs only. Pricer: a manager who sees
+ * costs but may not set them. CompanyOne: a manager of company 1 only.
+ */
+interface Person {
+  readonly tenantId: string
+  readonly permissions: readonly Permission[]
+  readonly grains: readonly ('cost' | 'price')[]
+  readonly companies: ScopeSet
 }
+const PEOPLE: Record<string, Person> = {
+  buyer: { tenantId: tenantA, permissions: [VIEW, MANAGE, COST, 'audit.read', ...IMPORTS], grains: ['cost'], companies: 'all' },
+  maker: { tenantId: tenantA, permissions: [VIEW, MANAGE, 'audit.read', ...IMPORTS], grains: [], companies: 'all' },
+  finance: { tenantId: tenantA, permissions: [VIEW, COST, 'audit.read'], grains: ['cost'], companies: 'all' },
+  pricer: { tenantId: tenantA, permissions: [VIEW, MANAGE, ...IMPORTS], grains: ['cost'], companies: 'all' },
+  viewer: { tenantId: tenantA, permissions: [VIEW, 'imports.view'], grains: [], companies: 'all' },
+  companyOne: { tenantId: tenantA, permissions: [VIEW, MANAGE, ...IMPORTS], grains: [], companies: [companyA1] },
+  otherTenant: { tenantId: tenantB, permissions: [VIEW, MANAGE, COST], grains: ['cost'], companies: 'all' },
+}
+const IDS: Record<string, string> = Object.fromEntries(Object.keys(PEOPLE).map((key) => [key, newId()]))
+const SESSIONS: Record<string, SessionContext> = Object.fromEntries(
+  Object.entries(PEOPLE).map(([key, person]) => {
+    const grant: Grant = { permissions: [...person.permissions, ...person.grains.map((grain) => `money.${grain}` as Permission)], companies: person.companies, sites: 'all', parties: 'all' }
+    return [key, { audience: 'office', tenantId: person.tenantId, actorId: IDS[key]!, grants: [grant] }]
+  }),
+)
 
 type Json = Record<string, any>
 const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]> => (await db.admin.query(sql, values)).rows as T[]
@@ -150,6 +166,15 @@ beforeAll(async () => {
     [supplier, blocked, customer, tenantA],
   )
   await admin(`INSERT INTO "Colour" (id, "tenantId", code, name) VALUES ($1, $2, 'BLK', 'Black')`, [blackLibrary, tenantA])
+  for (const [key, person] of Object.entries(PEOPLE)) {
+    const roleId = newId()
+    await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, 'ACTIVE')`, [IDS[key], person.tenantId, `${key}@example.com`, key])
+    await admin(`INSERT INTO "Role" (id, "tenantId", key, name, permissions, grains) VALUES ($1, $2, $3, $4, $5, $6)`, [roleId, person.tenantId, `custom.${key.toLowerCase()}`, key, person.permissions, person.grains])
+    await admin(
+      `INSERT INTO "RoleAssignment" (id, "tenantId", "userId", "roleId", "allCompanies", "companyIds", "validFrom") VALUES ($1, $2, $3, $4, $5, $6, now() - interval '1 day')`,
+      [newId(), person.tenantId, IDS[key], roleId, person.companies === 'all', person.companies === 'all' ? [] : person.companies],
+    )
+  }
   const secrets = createSecretsService({ providers: [localKeyProvider({ masterKey: randomBytes(32), environment: 'test' })] })
   const gateway = createGateway({ environment: 'test', redis: connection, prefix: redis.prefix, secrets, sleep: async () => {}, log: { info() {}, warn() {}, error() {} } })
   useFiles(createFilesRuntime({ gateway, local: localFileStore({ root: localRoot, environment: 'test' }) }))
@@ -202,7 +227,7 @@ describe('materials through the API (PRD-028, PRD-030, PRD-032, GAP-006)', () =>
     ])
     expect((await eventsOf(material.id)).map((event) => event.type)).toEqual(['material.created'])
     const [row] = await admin('SELECT "standardCost"::text AS cost, "purchaseFactor"::text AS factor, "createdById" FROM "Item" WHERE id = $1', [material.id])
-    expect(row).toEqual({ cost: '2.400000', factor: '52.50000000', createdById: user })
+    expect(row).toEqual({ cost: '2.400000', factor: '52.50000000', createdById: IDS.buyer })
   })
 
   it('refuses the Cr VI rule with a clear error, never the database trigger (REACH Annex XVII entry 47)', async () => {
@@ -441,11 +466,14 @@ describe('the material import (PLT-176, PRD-040)', () => {
     'PL-IMP-2;Pelle;pelle;ft²;pelle;;dmq;bovine;cromo;A;1;1,2;sì;3,5;;',
   ]
 
-  async function upload(session: string, body: Buffer): Promise<Json> {
-    const started = await call(session, 'POST', '/imports', {
+  const start = (session: string, body: Buffer, fields: Json = {}) =>
+    call(session, 'POST', '/imports', {
       importerKey: 'product.materials',
       file: { originalName: 'materiali.csv', contentType: SHEET_TYPES.csv, sizeBytes: body.length, sha256: sha256(body) },
+      ...fields,
     })
+  async function upload(session: string, body: Buffer, fields: Json = {}): Promise<Json> {
+    const started = await start(session, body, fields)
     expect(started.statusCode, started.body).toBe(201)
     const { job, upload: presigned } = started.json() as { job: Json; upload: { url: string; headers: Record<string, string> } }
     const sent = await app.inject({ method: 'PUT', url: presigned.url, headers: presigned.headers, payload: body })
@@ -502,11 +530,76 @@ describe('the material import (PLT-176, PRD-040)', () => {
     expect(forCost.after.standardCost).toBe('3.1')
   })
 
-  it('refuses a sheet with the cost column to a person without the cost grain', async () => {
+  const COST_REFUSED = { path: 'column/standardCost', message: 'Importing the standard cost needs product.materials.cost over every company.' }
+
+  it('refuses a sheet with the cost column to a person without the cost grain or the cost permission, in the dry run', async () => {
     const job = await upload('maker', csv(SHEET.slice(0, 2)))
     expect(job.status).toBe('FAILED')
-    expect(job.issues).toEqual([{ path: 'column/standardCost', message: 'The column "Costo standard" holds cost values (the cost money grain), which may not be imported without that grain.' }])
+    expect(job.issues).toEqual([
+      { path: 'column/standardCost', message: 'The column "Costo standard" holds cost values (the cost money grain), which may not be imported without that grain.' },
+      COST_REFUSED,
+    ])
     const without = await upload('maker', csv([SHEET[0]!.replace(';Costo standard', ''), 'TR-IMP-1;Zip;accessorio;pz;scatola;100;;;;;;;;;;']))
     expect(without).toMatchObject({ status: 'PLANNED', createCount: 1 })
+  })
+
+  it('lets only product.materials.cost and the cost grain import the standard cost: the dry run says why, the apply refuses', async () => {
+    // A manager who sees costs but may not set them: refused in the dry run, with the reason.
+    const sheet = csv([SHEET[0]!, 'TR-IMP-2;Bottone;accessorio;pz;;;;;;;;;;;;0,12'])
+    const own = await upload('pricer', sheet)
+    expect(own).toMatchObject({ status: 'FAILED', issues: [COST_REFUSED] })
+    // …and at the start when the mapping names the column.
+    const named = await start('pricer', sheet, { mapping: { 'Costo standard': 'standardCost' } })
+    expect(named.statusCode).toBe(403)
+    expect(named.json().error.issues).toEqual([COST_REFUSED])
+    // A plan made by a buyer is applied by a buyer only.
+    const planned = await upload('buyer', sheet)
+    expect(planned).toMatchObject({ status: 'PLANNED', createCount: 1 })
+    const refused = await call('pricer', 'POST', `/imports/${planned.id}/apply`, { version: planned.version })
+    expect(refused.statusCode).toBe(403)
+    expect(refused.json().error).toMatchObject({ code: 'forbidden', issues: [COST_REFUSED] })
+    expect(await admin('SELECT code FROM "Item" WHERE code = $1', ['TR-IMP-2'])).toEqual([])
+    const applied = await call('buyer', 'POST', `/imports/${planned.id}/apply`, { version: planned.version })
+    expect(applied.statusCode, applied.body).toBe(200)
+    await applyPlan(system(), planned.id, { lastAttempt: true })
+    expect(await byCode('TR-IMP-2')).toMatchObject({ standardCost: '0.12' })
+  })
+
+  it('lets a manager of one company import for that company only, never for every company', async () => {
+    const sheet = (code: string) => csv([SHEET[0]!.replace(';Costo standard', ''), `${code};Fibbia;minuteria;pz;;;;;;;;;;;`])
+    const COMPANY_REFUSED = { path: 'companyId', message: 'A materials import for every company needs product.materials.manage over every company; import for one company instead.' }
+    // Every company: refused at the start.
+    const everyCompany = await start('companyOne', sheet('HW-1'))
+    expect(everyCompany.statusCode).toBe(403)
+    expect(everyCompany.json().error.issues).toEqual([COMPANY_REFUSED])
+    // A plan for every company made by a buyer: not applied by them.
+    const tenantWide = await upload('buyer', sheet('HW-2'))
+    expect(tenantWide.status).toBe('PLANNED')
+    const refused = await call('companyOne', 'POST', `/imports/${tenantWide.id}/apply`, { version: tenantWide.version })
+    expect(refused.statusCode).toBe(403)
+    expect(refused.json().error.issues).toEqual([COMPANY_REFUSED])
+    // Their own company: started, planned and applied; the material is that company's.
+    const theirs = await upload('companyOne', sheet('HW-3'), { companyId: companyA1 })
+    expect(theirs).toMatchObject({ status: 'PLANNED', createCount: 1 })
+    expect((await call('companyOne', 'POST', `/imports/${theirs.id}/apply`, { version: theirs.version })).statusCode).toBe(200)
+    await applyPlan(system(), theirs.id, { lastAttempt: true })
+    expect(await admin('SELECT code, "companyId" FROM "Item" WHERE code IN ($1, $2) ORDER BY code', ['HW-2', 'HW-3'])).toEqual([{ code: 'HW-3', companyId: companyA1 }])
+  })
+
+  it('checks the live roles of the person who started the import in its dry run', async () => {
+    // The pricer gets product.materials.cost after starting: the dry run reads the role as it is then.
+    const sheet = csv([SHEET[0]!, 'TR-IMP-3;Gancio;accessorio;pz;;;;;;;;;;;;0,3'])
+    const started = await start('pricer', sheet)
+    expect(started.statusCode, started.body).toBe(201)
+    const { job, upload: presigned } = started.json() as { job: Json; upload: { url: string; headers: Record<string, string> } }
+    expect((await app.inject({ method: 'PUT', url: presigned.url, headers: presigned.headers, payload: sheet })).statusCode).toBe(200)
+    expect((await call('pricer', 'POST', `/files/${job.fileId}/complete`)).statusCode).toBe(200)
+    await admin(`UPDATE "Role" SET permissions = array_append(permissions, $1) WHERE key = 'custom.pricer'`, [COST])
+    try {
+      await planImport(system(), job.id, { lastAttempt: true })
+      expect((await call('pricer', 'GET', `/imports/${job.id}`)).json().job).toMatchObject({ status: 'PLANNED', createCount: 1, issues: null })
+    } finally {
+      await admin(`UPDATE "Role" SET permissions = array_remove(permissions, $1) WHERE key = 'custom.pricer'`, [COST])
+    }
   })
 })

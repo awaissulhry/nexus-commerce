@@ -1,19 +1,24 @@
+import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
+import type { Issue } from '@nexus/factory-domain/core/errors'
 import type { CellValue } from '@nexus/factory-domain/imports/cells'
 import { markValues } from '@nexus/factory-domain/imports/importer'
 import { coloursOf, importRecordValues, materialImporter, materialInputOf, patchOfRow } from '@nexus/factory-domain/product/materials/importer'
-import { PRODUCT_MATERIALS_MANAGE, PRODUCT_MATERIALS_VIEW } from '@nexus/factory-domain/product/materials/permissions'
+import { PRODUCT_MATERIALS_COST, PRODUCT_MATERIALS_MANAGE, PRODUCT_MATERIALS_VIEW } from '@nexus/factory-domain/product/materials/permissions'
 import { changeMaterial, newMaterial, type MaterialFields } from '@nexus/factory-domain/product/materials/rules'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { ApiError } from '../../../core/errors'
 // Types only: platform/imports/registry.ts lists this adapter, so a value import back from it would be a cycle.
 import type { ImportAdapter } from '../../../platform/imports/registry'
-import { COLOUR_COLUMNS, fieldsOf, insertMaterial, MATERIAL_COLUMNS_WITH_COST, upsertColours, writeFields } from './store'
+import { COLOUR_COLUMNS, fieldsOf, insertMaterial, MATERIAL_COLUMNS_WITH_COST, mayWrite, upsertColours, writeFields } from './store'
 
 /**
  * The material import's adapter (platform/imports; features PLT-176, PRD-040): factory-domain's `materialImporter`
  * decides what each row does in the dry run; this loads the materials the codes find and writes one planned row inside
  * the batch's command. Writing needs product.materials.manage, seeing the plans product.materials.view (the engine
  * checks both against the job's company), and a sheet that maps the standard cost column needs the cost grain.
+ * `authorize` adds the routes' own rules, at the start, in the dry run and at the apply: a job for every company (no
+ * company) needs product.materials.manage over every company; a sheet that maps the standard cost needs
+ * product.materials.cost and the cost grain over the job's company (every company for a tenant-wide job).
  *
  * Load finds a code in the whole tenant: a code of another company's material is a row error of the plan, never a
  * duplicate insert. Write checks the material again as it is now and refuses (a failed batch, applied again later)
@@ -34,6 +39,20 @@ export const materialsImportAdapter = Object.freeze({
   importer: materialImporter,
   permission: PRODUCT_MATERIALS_MANAGE,
   viewPermission: PRODUCT_MATERIALS_VIEW,
+
+  authorize(actor, job, columns) {
+    const issues: Issue[] = []
+    const reach = job.companyId === null ? 'over every company' : "for the import's company"
+    if (job.companyId === null && !mayWrite(actor, PRODUCT_MATERIALS_MANAGE, null)) {
+      issues.push({ path: 'companyId', message: 'A materials import for every company needs product.materials.manage over every company; import for one company instead.' })
+    }
+    if (columns.includes('standardCost')) {
+      if (!mayWrite(actor, PRODUCT_MATERIALS_COST, job.companyId)) issues.push({ path: 'column/standardCost', message: `Importing the standard cost needs product.materials.cost ${reach}.` })
+      // Without the grain at all, the engine already says so; here, a grain held for other companies only.
+      if (heldGrains(actor).has('cost') && !mayWrite(actor, 'money.cost', job.companyId)) issues.push({ path: 'column/standardCost', message: `Importing the standard cost needs the cost grain ${reach}.` })
+    }
+    return issues
+  },
 
   async load(client, keys, scope) {
     const codes = keys.map((key) => String(key.code))

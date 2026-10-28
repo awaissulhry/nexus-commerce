@@ -145,6 +145,16 @@ async function readVisible(caller: CommandCaller, jobId: string): Promise<{ row:
   return { row, adapter }
 }
 
+/** The importer's own refusals for this person, job and mapped columns (registry.ts `authorize`); empty: none. */
+export function adapterRefusals(adapter: ImportAdapter, actor: Actor, companyId: string | null, columns: readonly string[]): Issue[] {
+  return adapter.authorize ? [...adapter.authorize(actor, { companyId }, [...new Set(columns)])] : []
+}
+
+/** The columns a job's layout maps (the dry run's reading of the sheet). */
+export const mappedColumns = (layout: Layout | null): string[] => (layout?.columns ?? []).map((entry) => entry.column)
+
+const NEEDS_MORE = 'This import needs more than your roles give here: see the issues.'
+
 /** The grains a person lacks for the money columns a job maps, as issues (empty: they may). */
 export function unheldGrainIssues(adapter: ImportAdapter, layout: Layout | null, held: ReadonlySet<Grain> | readonly string[]): Issue[] {
   const has = (grain: Grain) => (held instanceof Set ? held.has(grain) : (held as readonly string[]).includes(grain))
@@ -303,6 +313,9 @@ export async function startImport(runtime: FilesRuntime, caller: CommandCaller, 
   const scope = { companyId }
   if (!can(actor, IMPORTS_RUN, scope) || !can(actor, adapter.permission, scope) || !can(actor, adapter.viewPermission, scope)) throw new ForbiddenError()
   if (mode === 'APPLY' && !can(actor, IMPORTS_APPLY, { companyId })) throw new ForbiddenError('Applying an import at once needs imports.apply.')
+  const named = Object.values(input.mapping ?? {}).filter((column): column is string => column !== null && Object.hasOwn(adapter.importer.columns, column))
+  const refusals = adapterRefusals(adapter, actor, companyId, named)
+  if (refusals.length > 0) throw new DomainError('forbidden', NEEDS_MORE, refusals)
   const problems: Issue[] = []
   const typeProblem = sheetTypeProblem(input.file.contentType, input.file.originalName)
   if (typeProblem) problems.push({ path: 'body/file/contentType', message: typeProblem })
@@ -360,6 +373,8 @@ export async function applyImport(caller: CommandCaller, jobId: string, input: {
   if (!can(actor, IMPORTS_APPLY, { companyId: before.companyId }) || !can(actor, adapter.permission, { companyId: before.companyId })) throw new ForbiddenError()
   const refused = unheldGrainIssues(adapter, layoutOf(before), heldGrains(actor))
   if (refused.length > 0) throw new DomainError('forbidden', 'This import writes money values you may not see; someone who holds their grain must apply it.', refused)
+  const refusals = adapterRefusals(adapter, actor, before.companyId, mappedColumns(layoutOf(before)))
+  if (refusals.length > 0) throw new DomainError('forbidden', NEEDS_MORE, refusals)
   const { result } = await command(
     caller,
     {
