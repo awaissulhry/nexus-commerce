@@ -1,0 +1,16 @@
+// The factory's Prisma schema is a folder: this file holds the generator and the datasource, and each module adds its
+// own file beside it (_core.prisma, parties.prisma, …). No models yet: the tenancy core brings the first ones.
+//
+// The client goes to packages/factory-db/src/generated/prisma, never to node_modules, where Commerce's client lives.
+// A relative output is read from THIS file's folder (prisma/schema), so it climbs two levels.
+// scripts/factory/check-prisma-output.mjs refuses a generator without an output inside this package.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../../src/generated/prisma"
+}
+
+// The URL comes from prisma.config.ts (FACTORY_ variables from packages/factory-db/.env only).
+datasource db {
+  provider = "postgresql"
+}
