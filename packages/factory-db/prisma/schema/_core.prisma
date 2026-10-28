@@ -88,6 +88,8 @@ model Company {
   integrationAccounts IntegrationAccount[]
   // files.prisma: the company's files.
   files               StoredFile[]
+  // imports.prisma: the company's imports.
+  importJobs          ImportJob[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.

@@ -24,6 +24,8 @@ export {
 } from './roles'
 export type {
   Company,
+  ImportJob,
+  ImportRow,
   InboundWebhook,
   IntegrationAccount,
   IntegrationCall,
@@ -47,6 +49,10 @@ export {
   FileAudience,
   FileKind,
   FileStatus,
+  ImportMode,
+  ImportRowAction,
+  ImportRowOutcome,
+  ImportStatus,
   InboundStatus,
   IntegrationAccountStatus,
   IntegrationCallStatus,

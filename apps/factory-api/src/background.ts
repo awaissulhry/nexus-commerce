@@ -6,6 +6,7 @@ import { redact } from './core/logger'
 import { openQueues, queueConnection, type Log } from './core/queue'
 import { loadFactoryEnv } from './env'
 import { assertNoFakeAccountsInProduction } from './platform/gateway/boot'
+import { importHandlers } from './platform/imports/worker'
 import { inboundHandler } from './platform/inbound/process'
 import { startEventWorkers, type EventHandler } from './platform/outbox/dispatch'
 import { outboxLagCron } from './platform/outbox/lag'
@@ -36,7 +37,7 @@ const MODES = ['worker', 'scheduler'] as const
 type Mode = (typeof MODES)[number]
 
 /** The handlers of published events, one list for the worker. Modules add theirs here (dispatch.ts defineHandler). */
-const HANDLERS: readonly EventHandler[] = [inboundHandler()]
+const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers()]
 
 const mode = process.argv[2] as Mode
 if (!MODES.includes(mode)) {

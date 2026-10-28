@@ -56,6 +56,21 @@ export const FILES_UPLOAD = 'files.upload' satisfies Permission
 export const FILES_DELETE = 'files.delete' satisfies Permission
 export const FILES_MANAGE = 'files.manage' satisfies Permission
 
+/**
+ * Imports with a dry run (apps/factory-api platform/imports; plan A1 W0-22, feature PLT-176). Each is checked with can()
+ * against the job's company. An importer also names the permissions of the records it writes (its adapter's
+ * `permission` to run and apply it, `viewPermission` to see its plans): imports.* alone never reaches a record. Money
+ * columns need their grain as well, to import and to see. Not step-up (A1 §3.10, as files).
+ */
+export const IMPORTS_DEFINITIONS = definePermissions('imports', {
+  view: { risk: 'read', description: 'See import jobs and their plans (values of money columns only with their grain).' },
+  run: { risk: 'write', description: 'Upload a sheet for an import and see its dry run; cancel an import.' },
+  apply: { risk: 'write', description: "Apply an import's plan: its valid rows are written to the records." },
+})
+export const IMPORTS_VIEW = 'imports.view' satisfies Permission
+export const IMPORTS_RUN = 'imports.run' satisfies Permission
+export const IMPORTS_APPLY = 'imports.apply' satisfies Permission
+
 /** The money grains as they travel in grants (`../grains/grains`): from Role.grains, never Role.permissions. */
 export const MONEY_PERMISSIONS: PermissionDefinition[] = GRAINS.map((grain) =>
   Object.freeze({ name: grainPermission(grain), area: 'money', description: GRAIN_DESCRIPTIONS[grain], risk: 'read' as const, grain }),
@@ -67,10 +82,11 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   AUDIT_PERMISSIONS,
   NUMBERING_DEFINITIONS,
   FILES_DEFINITIONS,
+  IMPORTS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
 // The modules' constants and their declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE]) {
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY]) {
   if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 }

@@ -5,8 +5,9 @@ Today the API core: context, contracts, route manifest, security baseline, `GET 
 `command()` (`src/core/command.ts`): the ONLY way to write — one transaction for the change, its audit rows, its events
 and the idempotency receipt; the outbox (events → BullMQ → handlers and live screens); and the worker and scheduler
 (`src/background.ts worker|scheduler`); office sign-in, roles and money grains (`src/platform/auth/`), the
-integration platform (gateway, sealed secrets, inbound ledger) and files on R2 (`src/platform/files/`), below. Floor,
-portal and link sign-in, the modules and the other adapters come in later steps.
+integration platform (gateway, sealed secrets, inbound ledger), files on R2 (`src/platform/files/`) and imports with a
+dry run (`src/platform/imports/`), below. Floor, portal and link sign-in, the modules and the other adapters come in
+later steps.
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>
@@ -146,8 +147,8 @@ portal and link sign-in, the modules and the other adapters come in later steps.
   site's floor files and a party to its own; `audienceSees()` adds portal vs link (LINK also needs the link's record).
 - Retention: a delete is refused under legal hold or before `retainUntil` (the state machine's guard and the trigger);
   FISCAL_ARCHIVE keeps ten years at least; content columns never change; rows are never deleted (status DELETED).
-- Store calls go through the gateway (`store.ts`: files.presign_upload, files.presign_download, files.head, files.delete;
-  one IntegrationCall row each) for the tenant's R2 account: LIVE/SANDBOX → `adapters/r2` (S3 API), FAKE → the local
+- Store calls go through the gateway (`store.ts`: files.presign_upload, files.presign_download, files.head, files.delete,
+  files.read (server-side work on a file's bytes, e.g. an import's sheet, size-capped); one IntegrationCall row each) for the tenant's R2 account: LIVE/SANDBOX → `adapters/r2` (S3 API), FAKE → the local
   store (`adapters/local-files`, local and test only; its presigned requests are `PUT|GET /local-files?token=…` on this
   API, HMAC-signed). Floor, portal and link downloads presign as the tenant's system caller after the audience check.
   Tests: `useFiles(createFilesRuntime({ gateway, local, r2: r2FileStore({ clientFor: new FakeR2().clientFor }) }))`
@@ -156,6 +157,27 @@ portal and link sign-in, the modules and the other adapters come in later steps.
   files.upload, files.delete, files.manage (sharing beyond the office, also at upload; retention; legal hold). Every
   office template has files.read; the roles that work on records also files.upload; admin (and owner) files.manage and
   files.delete. Floor, portal and link sessions see files through their audience rule above, never an office template.
+
+## Imports with a dry run (`src/platform/imports/`, plan A1 W0-22; PLT-176)
+- Engine only in W0; business importers come with their modules. An importer = `defineImporter` in
+  `@nexus/factory-domain/imports/importer` (key `<module>.<name>`, columns with `cell.*` types (Italian/English numbers,
+  day-first dates), aliases, required, `grain` for money; `keyColumns` for upsert matching; optional `validateRow`,
+  `plan`) + `defineImportAdapter` here (`permission`, `viewPermission`, `load` = the records the keys find, read only;
+  `write` = one planned row inside the batch's command, audited, money marked). Add the adapter to `IMPORTERS`
+  (`registry.ts`, one line); tests use `useImporters([...])`.
+- Flow: `POST /imports` (importer, company, mode DRY_RUN|APPLY, sheetName, encoding, numberFormat, header `mapping`, the
+  sheet announced as a file: needs imports.run, the importer's permissions and files.upload) → PUT the bytes → `POST
+  /files/:fileId/complete` → `file.available` → worker `imports.planUpload`: read the sheet (`sheet.ts`: CSV UTF-8 or
+  Windows-1252, `;`/`,`/tab; xlsx first or named sheet, formulas as values, macros and zip bombs refused), map headers,
+  refuse money columns outside the creator's grains (`ImportJob.grains`), plan in batches (`load` in a transaction that
+  is always rolled back and refused if it wrote) → PLANNED. Review: `GET /imports/:id`, `/rows` (before/after money only
+  with its grain), `/errors` (CSV, never cell values). `POST /imports/:id/apply` (imports.apply, the importer's
+  permission, the grains of the mapped money columns) → `import.apply_requested` → worker `imports.applyPlan`: batches
+  of the importer's batchSize, each ONE command (job row locked; rows changed since the dry run SKIPPED, never
+  overwritten); a throw rolls back its batch and, after the last attempt, fails the job; apply again resumes.
+  `POST /imports/:id/cancel`. Handlers are in background.ts HANDLERS (`importHandlers()`).
+- Permissions: imports.view (read), imports.run, imports.apply (write); admin's template has all three (owner and
+  read-only follow the registry). A module that adds an importer gives imports.* to the templates that use it.
 
 ## Rules
 - Configuration only through `src/env.ts`. It reads ONLY `apps/factory-api/.env`, by explicit path, and ONLY

@@ -17,6 +17,8 @@ describe('model ownership', () => {
       'AuditLog',
       'Company',
       'IdempotencyReceipt',
+      'ImportJob',
+      'ImportRow',
       'InboundWebhook',
       'IntegrationAccount',
       'IntegrationCall',
