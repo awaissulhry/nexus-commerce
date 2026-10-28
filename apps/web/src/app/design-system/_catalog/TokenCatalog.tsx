@@ -136,6 +136,7 @@ import { AppRailExample } from './AppRailExample'
 import { ChangeValueExample } from './ChangeValueExample'
 import { CountdownExample } from './CountdownExample'
 import { DensityTiersExample } from './DensityTiersExample'
+import { FloorKitExample } from './floor/FloorKitExample'
 import { GridRowVerbsExample } from './GridRowVerbsExample'
 import { FamilyFooterFrameExample } from './FamilyFooterFrameExample'
 import { SwitchColumnExample } from './SwitchColumnExample'
@@ -1522,6 +1523,8 @@ export function TokenCatalog() {
       >
         <DensityTiersExample />
       </Section>
+
+      <Section title="Floor kit" desc="Parts for the factory's floor tablets, on the floor density tier: frame, operator chip, offline banner, idle sign-out, Help, scan input, PIN pad, tiles, action bar, list rows and confirm feedback (gaps G2 G3 G4 G5 G8; packages/ui/src/floor)."><FloorKitExample /></Section>
 
       <Section title="Radius">
         <Card>

@@ -1,3 +1,26 @@
+## Floor kit: shell parts, scan input, PIN pad, tiles, confirm feedback — 2026-10-28
+
+A new area, `floor/` (`@/design-system/floor` in the web, `@nexus/ui/floor` elsewhere): the parts the factory's floor
+tablets are built from (factory plan gaps G2 G3 G4 G5 G8). Every part reads `--nds-density-*`, so it is glove-sized
+inside the floor tier, phone-sized inside comfortable and console-sized at standard; every word comes in as a prop.
+- **Shell (G2)**: `FloorFrame` (+ `FloorHeader`) applies the tier (`DensityProvider` and `data-density` on its root) and
+  lays out top bar, banner, content and action bar; `useConfirmFeedback()` honours its `muted`. `OperatorChip`,
+  `OfflineBanner` (offline warning always shown with the waiting count as a big number; refused danger; sending info),
+  `IdleOverlay` + `useIdleSignOut` (countdown numeral, "I am here", Tab trapped, Escape stays), `FloorHelpButton`.
+- **Scan (G3)**: `ScanInput` — keyboard wedge first (`scanWedge.ts`: a burst vs a person typing; a document reader while
+  focus is on a tile), `inputmode="none"`, scanned flash and announcement, optional keyboard button; the camera is an
+  injected `CameraScanner` (the design system adds no dependency; Nexus apps wrap `@zxing/browser`).
+- **PIN (G4)**: `PinPad` — fixed 3 × 4 keys, dots only, no `<input>`, digits in a ref and cleared on submit, held keys when
+  locked or busy, physical keys.
+- **Tiles, action bar, rows (G5)**: `FloorTile` / `FloorTileGrid`, `FloorActionBar` (one to three actions, main last),
+  `FloorList` / `FloorListRow` (icon + tone + status word + big number), and `FloorButton`, the kit's button idiom.
+- **Feedback (G8)**: `confirmFeedback(kind, { target, muted, haptics })` — colour flash (still under reduced motion),
+  `navigator.vibrate`, WebAudio tones; never throws.
+- **Nothing existing changes**: new files only, plus the `./floor` export in `package.json`.
+- Tests: `floor/*.vitest.test.ts` (wedge detection, PIN masking and submit, idle countdown, feedback channels in Node,
+  banner states, the parts' markup, the stylesheet's density and colour rules). Catalog: "Floor kit"
+  (`apps/web/src/app/design-system/_catalog/floor/`).
+
 ## The app rail and the area-navigation type are in the design system — 2026-10-28
 
 `patterns/shell` (exported by the patterns barrel; `patterns/shell` is the same set, narrower, for an app's root chrome).
