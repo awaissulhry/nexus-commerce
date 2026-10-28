@@ -5,8 +5,8 @@ Today the API core: context, contracts, route manifest, security baseline, `GET 
 `command()` (`src/core/command.ts`): the ONLY way to write — one transaction for the change, its audit rows, its events
 and the idempotency receipt; the outbox (events → BullMQ → handlers and live screens); and the worker and scheduler
 (`src/background.ts worker|scheduler`); office sign-in, roles and money grains (`src/platform/auth/`), one-off links
-(`src/platform/links/`) and the integration platform (gateway, sealed secrets, inbound ledger), below. Floor and portal
-sign-in, the modules and the adapters come in later steps.
+(`src/platform/links/`), the integration platform (gateway, sealed secrets, inbound ledger) and files on R2
+(`src/platform/files/`), below. Floor and portal sign-in, the modules and the other adapters come in later steps.
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>
@@ -160,6 +160,28 @@ sign-in, the modules and the adapters come in later steps.
   HMAC verifier; others: INBOUND_PROVIDERS) → InboundWebhook receipt FIRST (dedupe key unique per provider; a bad
   signature is kept as REJECTED) + the event integration.inbound_received in one command → 200. The worker's
   `inboundHandler()` (in background.ts HANDLERS) applies a receipt once with its provider's processor.
+
+## Files on R2 (`src/platform/files/`, `src/adapters/{r2,local-files}/`, plan A1 §3.6; COL-045, COL-050, PLAN §2.8)
+- `StoredFile` (files.prisma): one row per file, for ONE record (`recordType` + `recordId`), never the bytes. Flow:
+  `POST /files` (kind's types and size limit, sharing, retention) → files.requestUpload (PENDING_UPLOAD, random key
+  `t/<tenant>/c/<company>/<yyyy>/<uuid4>`, `legal/…` for FISCAL_ARCHIVE) → a presigned PUT (5 min; type, length and
+  SHA-256 signed) → `POST /files/:id/complete` (the store's HEAD) → AVAILABLE + event `file.available`, or QUARANTINED
+  with its reason → `GET /files/:id/download` (60 s presigned GET, always an attachment). Rules: `rules.ts` (pure).
+- Visibility (COL-050): OFFICE always; FLOOR with `floorSiteId`, PARTNER/LINK with `partyId`. Those two columns are the
+  floor and partner roles' policy keys, set exactly when shared (the …_files_guards trigger), so RLS keeps a floor to its
+  site's floor files and a party to its own; `audienceSees()` adds portal vs link (LINK also needs the link's record).
+- Retention: a delete is refused under legal hold or before `retainUntil` (the state machine's guard and the trigger);
+  FISCAL_ARCHIVE keeps ten years at least; content columns never change; rows are never deleted (status DELETED).
+- Store calls go through the gateway (`store.ts`: files.presign_upload, files.presign_download, files.head, files.delete;
+  one IntegrationCall row each) for the tenant's R2 account: LIVE/SANDBOX → `adapters/r2` (S3 API), FAKE → the local
+  store (`adapters/local-files`, local and test only; its presigned requests are `PUT|GET /local-files?token=…` on this
+  API, HMAC-signed). Floor, portal and link downloads presign as the tenant's system caller after the audience check.
+  Tests: `useFiles(createFilesRuntime({ gateway, local, r2: r2FileStore({ clientFor: new FakeR2().clientFor }) }))`
+  (`adapters/r2/testing.ts`: the real S3 client on an in-memory transport, no network).
+- Permissions (declared in `@nexus/factory-domain/auth/permissions/catalogue`, FILES_DEFINITIONS): files.read,
+  files.upload, files.delete, files.manage (sharing beyond the office, also at upload; retention; legal hold). Every
+  office template has files.read; the roles that work on records also files.upload; admin (and owner) files.manage and
+  files.delete. Floor, portal and link sessions see files through their audience rule above, never an office template.
 
 ## Rules
 - Configuration only through `src/env.ts`. It reads ONLY `apps/factory-api/.env`, by explicit path, and ONLY

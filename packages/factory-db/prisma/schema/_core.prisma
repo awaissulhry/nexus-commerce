@@ -86,6 +86,8 @@ model Company {
   sessions     Session[]
   // integration.prisma: the company's accounts with outside services.
   integrationAccounts IntegrationAccount[]
+  // files.prisma: the company's files.
+  files               StoredFile[]
   // links.prisma: the one-off links that open the company's records.
   oneOffLinks         OneOffLink[]
 
@@ -116,6 +118,8 @@ model Site {
   lines       Line[]
   workCentres WorkCentre[]
   stations    Station[]
+  // files.prisma: the files shared with this site's floor.
+  floorFiles  StoredFile[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])

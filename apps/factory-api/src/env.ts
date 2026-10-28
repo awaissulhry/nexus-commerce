@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseEnv } from 'node:util'
 import { z } from 'zod'
@@ -28,13 +29,16 @@ import { describeUrlHost, isLoopbackUrl } from '@nexus/db-kit/url-guard'
  *   FACTORY_AWS_ACCESS_KEY_ID, FACTORY_AWS_SECRET_ACCESS_KEY
  *                             staging and production only, and required there: the IAM user for KMS (passed to the AWS
  *                             client explicitly, so it never falls back to a profile or another variable)
+ *   FACTORY_LOCAL_FILES_DIR   local and test only: the folder of the local file store (the store of a FAKE R2
+ *                             account; platform/files), an absolute path; default a folder under the system's
+ *                             temporary directory named after FACTORY_QUEUE_PREFIX
  *
  * Refusals:
  *   - FACTORY_ENV local or test: the database and Redis must be on this machine (loopback), and FACTORY_QUEUE_PREFIX
  *     must be set; no KMS or AWS variable (nothing local reaches AWS);
  *   - FACTORY_ENV staging or production: only on Railway (RAILWAY_ENVIRONMENT set by the platform, never by the file),
  *     with an https web origin, a real cookie secret of at least 32 characters (never the local placeholder), the KMS key
- *     and its AWS keys, and no local master key.
+ *     and its AWS keys, no local master key and no local files folder (files are on R2 there).
  */
 export const FACTORY_ENV_FILE = fileURLToPath(new URL('../.env', import.meta.url))
 
@@ -88,6 +92,7 @@ const schema = z.object({
   FACTORY_AWS_REGION: z.string().regex(/^[a-z]{2}(-[a-z]+)+-\d$/, { message: 'must be an AWS region such as eu-south-1' }).default('eu-south-1'),
   FACTORY_AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
   FACTORY_AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  FACTORY_LOCAL_FILES_DIR: z.string().refine(isAbsolute, { message: 'must be an absolute path' }).optional(),
 })
 
 export type FactoryEnv = Readonly<
@@ -154,6 +159,9 @@ export function parseFactoryEnv(variables: Record<string, string>, railwayEnviro
     }
     if (env.FACTORY_SECRETS_MASTER_KEY !== undefined) {
       throw new FactoryEnvError(`FACTORY_SECRETS_MASTER_KEY (a local master key) is refused with FACTORY_ENV=${env.FACTORY_ENV}; secrets are wrapped by AWS KMS there`)
+    }
+    if (env.FACTORY_LOCAL_FILES_DIR !== undefined) {
+      throw new FactoryEnvError(`FACTORY_LOCAL_FILES_DIR (the local file store) is refused with FACTORY_ENV=${env.FACTORY_ENV}; files are on R2 there`)
     }
     for (const key of ['FACTORY_KMS_KEY_ID', 'FACTORY_AWS_ACCESS_KEY_ID', 'FACTORY_AWS_SECRET_ACCESS_KEY'] as const) {
       if (env[key] === undefined) throw new FactoryEnvError(`${key} must be set with FACTORY_ENV=${env.FACTORY_ENV}: secrets are wrapped by AWS KMS there`)

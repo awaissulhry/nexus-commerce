@@ -40,11 +40,15 @@ export type {
   Session,
   Site,
   Station,
+  StoredFile,
   Tenant,
   User,
   WorkCentre,
 } from './generated/prisma/client'
 export {
+  FileAudience,
+  FileKind,
+  FileStatus,
   InboundStatus,
   IntegrationAccountStatus,
   IntegrationCallStatus,
