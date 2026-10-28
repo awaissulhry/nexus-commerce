@@ -108,6 +108,15 @@ describe('the local file store', () => {
     expect(await files.head(call(), KEY)).toMatchObject({ sizeBytes: 14, sha256: createHash('sha256').update('something else').digest('hex') })
   })
 
+  it('puts bytes the API made (a generated document) when they match their SHA-256, and only for FAKE accounts', async () => {
+    const local = store()
+    await expect(local.put(call(), { key: KEY, contentType: 'application/pdf', body: BODY, sha256: 'ab'.repeat(32) })).rejects.toThrow(ProviderError)
+    expect(await local.head(call(), KEY)).toBeNull()
+    await local.put(call(), { key: KEY, contentType: 'Application/PDF', body: BODY, sha256: SHA })
+    expect(await local.head(call(), KEY)).toEqual({ sizeBytes: BODY.length, contentType: 'application/pdf', sha256: SHA })
+    await expect(local.put(call('LIVE'), { key: KEY, contentType: 'application/pdf', body: BODY, sha256: SHA })).rejects.toThrow(ProviderError)
+  })
+
   it('takes only storage keys under its folder, and only FAKE accounts', async () => {
     const files = store()
     for (const key of ['../escape', `${KEY}/../../../../x`, '/etc/passwd', 'legal/../t']) {

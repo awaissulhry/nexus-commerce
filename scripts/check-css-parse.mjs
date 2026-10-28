@@ -30,7 +30,7 @@
 import { readFileSync, existsSync } from 'fs'
 import { execSync } from 'child_process'
 
-const ROOTS = ['apps/web/src/design-system', 'apps/factory/src/design-system']
+const ROOTS = ['packages/ui/src', 'apps/factory/src/design-system']
 
 /**
  * Every stylesheet under the design systems, TRACKED OR NOT.

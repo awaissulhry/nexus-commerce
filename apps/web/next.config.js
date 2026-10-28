@@ -63,6 +63,9 @@ const nextConfig = {
   typescript: { ignoreBuildErrors: process.env.NEXUS_CI_SKIP_BUILD_TYPECHECK === '1' },
   // This prevents Turbopack from breaking the Prisma connection
   serverExternalPackages: ["@prisma/client", "pg", "@nexus/database"],
+  // The design system is @nexus/ui (packages/ui): TypeScript source, compiled here. The app imports it as
+  // `@/design-system/*` (tsconfig paths).
+  transpilePackages: ['@nexus/ui'],
   // PERF — client-side Router Cache. Next 15 defaults staleTimes.dynamic to 0,
   // so dynamic (force-dynamic) pages are NEVER kept client-side → every Back
   // navigation re-fetches + re-renders from scratch (skeleton flash + reload).

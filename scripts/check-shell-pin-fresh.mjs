@@ -38,7 +38,7 @@ import { join } from 'node:path'
 import { themeDefinitions } from './lib/theme-definitions.mjs'
 
 const ROOT = new URL('..', import.meta.url).pathname
-const TOKENS = join(ROOT, 'apps/web/src/design-system/styles/tokens.css')
+const TOKENS = join(ROOT, 'packages/ui/src/styles/tokens.css')
 const SHELL = join(ROOT, 'apps/web/src/app/_shared/shared-shell.css')
 
 if (!existsSync(TOKENS) || !existsSync(SHELL)) {

@@ -6,7 +6,7 @@ import postcss from 'postcss'
 import assert from 'node:assert/strict'
 
 const roots = process.argv.filter(a => !a.startsWith('--')).slice(2)
-if (!roots.length) roots.push('apps/web/src/design-system', 'apps/factory/src/design-system')
+if (!roots.length) roots.push('packages/ui/src', 'apps/factory/src/design-system')
 function sheets(root) {
   return readdirSync(root, { withFileTypes: true }).flatMap(e => e.isDirectory()
     ? sheets(resolve(root, e.name)) : e.name.endsWith('.css') ? [resolve(root, e.name)] : [])

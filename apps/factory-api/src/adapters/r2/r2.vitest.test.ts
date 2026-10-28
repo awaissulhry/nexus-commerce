@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import type { AdapterAccount } from '@nexus/factory-domain/ports/provider'
 import { ProviderError, type GatewayCall } from '../../platform/gateway/gateway'
@@ -95,6 +96,19 @@ describe('the R2 file store', () => {
     expect(r2.requests.map((request) => [request.method, request.hostname, request.path, request.headers['x-amz-checksum-mode']])).toEqual([
       ['HEAD', 'example-account.eu.r2.cloudflarestorage.com', `/factory-test/${KEY}`, 'ENABLED'],
       ['HEAD', 'example-account.eu.r2.cloudflarestorage.com', `/factory-test-legal/${LEGAL}`, 'ENABLED'],
+    ])
+  })
+
+  it('puts bytes the API made with PutObject: type, length and SHA-256 sent, the fiscal archive in the legal bucket', async () => {
+    const r2 = new FakeR2()
+    const body = Buffer.from('%PDF-1.7 made-up generated document')
+    const sha256 = createHash('sha256').update(body).digest('hex')
+    const put = call()
+    await r2FileStore({ clientFor: r2.clientFor }).put(put, { key: LEGAL, contentType: 'application/pdf', body, sha256 })
+    expect(put.answers).toEqual([{ httpStatus: 200 }])
+    expect(r2.objects.get(`/factory-test-legal/${LEGAL}`)).toEqual({ sizeBytes: body.length, contentType: 'application/pdf', sha256 })
+    expect(r2.requests.map((request) => [request.method, request.path, request.headers['x-amz-checksum-sha256']])).toEqual([
+      ['PUT', `/factory-test-legal/${LEGAL}`, Buffer.from(sha256, 'hex').toString('base64')],
     ])
   })
 

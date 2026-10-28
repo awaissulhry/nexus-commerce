@@ -98,7 +98,7 @@ Minimal `/api/*` routes in the web app — mostly delegates to Fastify backend:
 
 ## Design System
 
-All new UI **must** use `apps/web/src/design-system` primitives. No hand-rolled components.
+All new UI **must** use `packages/ui/src` (`@nexus/ui`, imported as `@/design-system/*`) primitives. No hand-rolled components.
 
 See [[09 - Design System]] for full component inventory.
 

@@ -87,10 +87,13 @@ import ts from 'typescript'
 import { stripComments } from './lib/strip-comments.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
+// `roots`: every folder of one app's sources. The web's design system (its token definitions among them) lives in
+// @nexus/ui since it moved out of apps/web/src, so the web reads both.
 const APPS = [
-  { name: 'web', root: 'apps/web/src' },
-  { name: 'factory', root: 'apps/factory/src' },
+  { name: 'web', root: 'apps/web/src', roots: ['apps/web/src', 'packages/ui/src'] },
+  { name: 'factory', root: 'apps/factory/src', roots: ['apps/factory/src'] },
 ]
+const filesForAll = (roots, ext) => roots.flatMap((r) => filesFor(r, ext))
 
 function* walk(dir, ext) {
   if (!existsSync(dir)) return
@@ -175,9 +178,9 @@ const EXCLUDE_REF = [/\.(test|spec|vitest\.test)\.[jt]sx?$/, /\.stories\.[jt]sx?
    not the only thing that consumes a token. Comments are stripped first — the file that motivated
    the original guard carries a comment NAMING the undefined token it documents, and scanning raw
    text would report the documentation of the bug as the bug. */
-function scanScriptRefs(appRoot) {
+function scanScriptRefs(appRoots) {
   const used = new Map()
-  for (const f of [...filesFor(appRoot, '.ts'), ...filesFor(appRoot, '.tsx')]) {
+  for (const f of [...filesForAll(appRoots, '.ts'), ...filesForAll(appRoots, '.tsx')]) {
     if (EXCLUDE_REF.some((re) => re.test(f))) continue
     const abs = join(ROOT, f)
     if (!existsSync(abs)) continue
@@ -213,10 +216,10 @@ function objectTokenWrites(code, file = 'styles.tsx') {
   return writes
 }
 
-function scanSources(appRoot) {
+function scanSources(appRoots) {
   const runtime = new Map()
   const dynamic = new Map()
-  for (const f of [...filesFor(appRoot, '.ts'), ...filesFor(appRoot, '.tsx')]) {
+  for (const f of [...filesForAll(appRoots, '.ts'), ...filesForAll(appRoots, '.tsx')]) {
     if (EXCLUDE_REF.some((re) => re.test(f))) continue
     const abs = join(ROOT, f)
     if (!existsSync(abs)) continue
@@ -241,11 +244,11 @@ function scanSources(appRoot) {
 }
 
 function analyse(app) {
-  const sheets = filesFor(app.root, '.css')
+  const sheets = filesForAll(app.roots, '.css')
   const { defined, used, unparsed } = scanStylesheets(sheets)
-  const { runtime, dynamic } = scanSources(app.root)
+  const { runtime, dynamic } = scanSources(app.roots)
   // TS/TSX inline-style references join the same set — same app, same resolution rule.
-  const scriptRefs = scanScriptRefs(app.root)
+  const scriptRefs = scanScriptRefs(app.roots)
   for (const [name, occ] of scriptRefs) used.set(name, [...(used.get(name) ?? []), ...occ])
   const abstained = []
   const red = []
@@ -264,7 +267,7 @@ function analyse(app) {
 
 function report(r, { verbose }) {
   const { app } = r
-  console.log(`\n── ${app.name}  (${app.root})`)
+  console.log(`\n── ${app.name}  (${app.roots.join(' + ')})`)
   console.log(`   ${r.sheets.length} stylesheet(s) · ${r.defined.size} token(s) defined · ${r.used.size} consumed`)
   if (r.unparsed.length) {
     console.error(`   ❌ ${r.unparsed.length} stylesheet(s) did not parse — the scan is INCOMPLETE, not clean:`)

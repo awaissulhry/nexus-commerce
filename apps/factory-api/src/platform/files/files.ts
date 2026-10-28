@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { FastifyRequest } from 'fastify'
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { FILES_DELETE, FILES_MANAGE, FILES_READ, FILES_UPLOAD } from '@nexus/factory-domain/auth/permissions/catalogue'
@@ -52,6 +52,8 @@ import { RetainedFileError } from './store'
  *   delete     refused while on legal hold or before the retention date (the state machine's guard, the database's
  *              trigger) → DELETED, then the object is removed from the store
  *   share      files.setVisibility; retention and legal hold: files.setRetention (the date only moves later)
+ *   generated  storeGeneratedFile: bytes the API made itself (a rendered document) are written to the store first,
+ *              then recorded AVAILABLE in one command (the module that made them names it and checked its permission)
  *
  * Every write goes through command() with its audit row; no store call runs inside a transaction.
  */
@@ -319,6 +321,117 @@ export async function requestUpload(runtime: FilesRuntime, caller: CommandCaller
     }),
   )
   return { file: result.file, upload: presignedView(upload) }
+}
+
+/** A file the API made itself: a rendered document (platform/documents), never bytes from a request. */
+export interface GeneratedFile {
+  readonly companyId: string | null
+  readonly recordType: string
+  readonly recordId: string
+  readonly kind: FileKind
+  readonly originalName: string
+  readonly contentType: string
+  readonly body: Uint8Array
+  readonly visibility?: readonly FileAudience[] | undefined
+  readonly floorSiteId?: string | null | undefined
+  readonly partyId?: string | null | undefined
+  /** Default: none, or ten years for the fiscal archive (retentionFor). */
+  readonly retainUntil?: Date | null | undefined
+}
+
+export interface GeneratedFileOptions {
+  /** The command that makes the file (`documents.render`): its audit action and idempotency scope. Default files.storeGenerated. */
+  readonly commandName?: Permission
+  readonly idempotencyKey?: string | undefined
+  /** What the audit row records beside the file: the document's type, number, layout and language. Plain JSON, no money. */
+  readonly details?: Readonly<Record<string, string | number | boolean | null>>
+}
+
+/**
+ * Stores a file the API made itself (A1 §3.9: "stored in R2 with its hash, linked to the record"): the bytes go to the
+ * tenant's store first (one gateway call, files.put, under a new random key), then ONE command records the file
+ * AVAILABLE with its audit row and the event file.available (the …_files_guards trigger lets a generated document be
+ * born AVAILABLE). The caller is an office session or a tenant's system context and has checked its own permission for
+ * the record (quotes.send, ddt.issue, documents.view for a preview…): no files.* permission is asked, as for every
+ * document the system makes. Sharing and retention follow the upload's rules. When the command fails after the put,
+ * the object stays behind with no row naming it: never listed, never downloadable, removed by a later sweep.
+ */
+export async function storeGeneratedFile(runtime: FilesRuntime, caller: CommandCaller, file: GeneratedFile, options: GeneratedFileOptions = {}): Promise<FileView> {
+  const context = contextOf(caller)
+  if (context.audience !== 'office' && context.audience !== 'system') throw new ForbiddenError()
+  const now = runtime.clock.now()
+  const body = Buffer.from(file.body.buffer, file.body.byteOffset, file.body.byteLength)
+  const sha256 = createHash('sha256').update(body).digest('hex')
+  const contentType = normaliseContentType(file.contentType)
+  const originalName = cleanFileName(file.originalName)
+  const sharing: Sharing = {
+    visibility: normaliseVisibility(file.visibility),
+    companyId: file.companyId,
+    floorSiteId: file.floorSiteId ?? null,
+    partyId: file.partyId ?? null,
+  }
+  const retention = retentionFor(file.kind, file.retainUntil ?? null, now)
+  const problems: Issue[] = [
+    ...uploadProblems({ kind: file.kind, contentType, sizeBytes: body.length, sha256 }),
+    ...(originalName === null ? [{ path: 'body/originalName', message: 'The file needs a name.' }] : []),
+    ...sharingProblems(sharing),
+    ...retention.problems,
+  ]
+  if (problems.length > 0) throw new ValidationError('The generated file is not valid.', problems)
+  const storeAccountId = await storeAccountOf(caller, sharing.companyId)
+  const storageKey = storageKeyFor({ tenantId: tenantOf(context), companyId: sharing.companyId, kind: file.kind, now, random: randomUUID() })
+  await storeCall(() => runtime.storage.put(caller, storeAccountId, { key: storageKey, contentType, body, sha256 }))
+
+  const input = {
+    companyId: sharing.companyId,
+    recordType: file.recordType,
+    recordId: file.recordId,
+    kind: file.kind,
+    originalName,
+    contentType,
+    sizeBytes: body.length,
+    sha256,
+    visibility: sharing.visibility,
+    floorSiteId: sharing.floorSiteId,
+    partyId: sharing.partyId,
+    details: options.details ?? null,
+  }
+  const { result } = await command(caller, { name: options.commandName ?? 'files.storeGenerated', idempotencyKey: options.idempotencyKey, input }, async ({ tx, audit, emit, now: at, context: inside }) => {
+    if (sharing.companyId !== null && !(await tx.company.findUnique({ where: { id: sharing.companyId }, select: { id: true } }))) {
+      throw new NotFoundError('Company not found.')
+    }
+    await checkSite(tx, sharing)
+    const id = newId()
+    const row = await tx.storedFile.create({
+      data: {
+        id,
+        companyId: sharing.companyId,
+        recordType: file.recordType,
+        recordId: file.recordId,
+        kind: file.kind,
+        originalName: originalName!,
+        contentType,
+        sizeBytes: body.length,
+        sha256,
+        storeAccountId,
+        storageKey,
+        status: 'AVAILABLE',
+        availableAt: at,
+        visibility: sharing.visibility as FileAudience[],
+        floorSiteId: sharing.floorSiteId,
+        partyId: sharing.partyId,
+        retainUntil: retention.retainUntil,
+        createdAt: at,
+        updatedAt: at,
+        createdById: inside.audience === 'office' ? inside.actorId : null,
+      },
+      select: SELECT_FOR.office,
+    })
+    audit({ recordType: 'StoredFile', recordId: id, companyId: sharing.companyId, after: { ...audited(row), ...(options.details ?? {}) } })
+    emit({ type: 'file.available', subject: id, companyId: row.companyId, payload: { fileId: id, recordType: row.recordType, recordId: row.recordId, kind: row.kind } })
+    return viewOf(row)
+  })
+  return result
 }
 
 /** Why a stored object is not the file that was announced, or null when it is. */

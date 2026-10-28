@@ -4,7 +4,7 @@
  * MX.1 (2026-09-13) moved this here from `apps/web/src/app/products/[id]/edit/_studio/matrix/contract.ts`, which is
  * now a one-line re-export, so the API serves EXACTLY the shape the page reads — types, constants and `MATRIX_COPY`
  * (the refusal sentences the server answers with are the page's words, one source). The design-system's engine
- * copy (`apps/web/src/design-system/grid/matrix/contract.ts`) is held equal by its parity test against the app file.
+ * copy (`packages/ui/src/grid/matrix/contract.ts`) is held equal by its parity test against the app file.
  *
  * `docs/2026-09-13-matrix-page-design.md` §3.6 (read) and §3.7 (writes) are the prose; THIS FILE is the one
  * source both the page and the service code against. Every number a cell shows arrives here — the

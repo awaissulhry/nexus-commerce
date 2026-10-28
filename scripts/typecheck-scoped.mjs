@@ -25,7 +25,7 @@
  *    Same rule as `check-css-parse`'s zero-file abstain.
  *
  * USAGE
- *   node scripts/typecheck-scoped.mjs apps/web/src/design-system/components/Listbox.tsx …
+ *   node scripts/typecheck-scoped.mjs packages/ui/src/components/Listbox.tsx …
  *   node scripts/typecheck-scoped.mjs $(git diff --name-only | grep -E '\.tsx?$')
  *
  * Paths may be repo-relative or absolute. Files are grouped by owning workspace and each group is
@@ -82,7 +82,9 @@ const groups = new Map()
 const orphans = []
 for (const f of files) {
   const rel = relative(REPO, f)
-  const ws = WORKSPACES.find((w) => rel === w || rel.startsWith(`${w}/`))
+  // The design system (packages/ui, @nexus/ui) is type-checked by the web, whose tsconfig includes it — as when it lived
+  // in apps/web/src/design-system.
+  const ws = rel.startsWith('packages/ui/') ? 'apps/web' : WORKSPACES.find((w) => rel === w || rel.startsWith(`${w}/`))
   if (!ws) { orphans.push(rel); continue }
   if (!groups.has(ws)) groups.set(ws, [])
   groups.get(ws).push(f)

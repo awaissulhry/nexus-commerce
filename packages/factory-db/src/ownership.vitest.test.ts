@@ -42,6 +42,8 @@ describe('model ownership', () => {
       'PartyContact',
       'PartyTaxIdentity',
       'PasswordReset',
+      'PrintJob',
+      'Printer',
       'Role',
       'RoleAssignment',
       'SecretValue',

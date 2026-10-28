@@ -3,7 +3,8 @@
 The token vocabulary for `apps/web`. Read this before writing any colour, size, spacing or
 radius — in a stylesheet or an inline style.
 
-**Source of truth:** `apps/web/src/design-system/tokens/*.ts`.
+**Source of truth:** `packages/ui/src/tokens/*.ts` — the design system is the `@nexus/ui` package
+(`packages/ui/src`); the web imports it as `@/design-system/*`.
 **Emitted to CSS by:** `npm run tokens:gen` → `styles/tokens.css` + `styles/tokens-global.css`.
 Both are **generated — never hand-edit them.** `npm run tokens:check` runs in `.githooks/pre-push`
 and fails the push if they are stale.
@@ -52,7 +53,7 @@ hints below AA, and a `SegmentedControl` that could not be reached by Tab at all
 | where | form | how to use it |
 |---|---|---|
 | `app/globals.css`, `app/marketing/ads/ads.css` | RGB **channels** — `15 23 42` | `rgb(var(--text-primary))` — Tailwind composes these with `<alpha-value>` |
-| `design-system/styles/tokens.css` | whole **colours** — `#1c2530` | `var(--text-primary)` |
+| `packages/ui/src/styles/tokens.css` | whole **colours** — `#1c2530` | `var(--text-primary)` |
 
 Used the wrong way round, the declaration is **invalid and silently dropped** — no error, no
 warning. A border becomes `0px`, a background becomes transparent, a colour inherits.
@@ -65,7 +66,7 @@ declarations were dead this way for months.
 **The rule that avoids all of it: in design-system code, use `--nds-*` and nothing else.**
 `--nds-*` is DS-owned, no other stylesheet redefines it, it is a real colour in every scope, and
 `.dark` already overrides it. `token-guard` check D enforces this. Full account:
-`design-system/docs/PHASE-9-0B-TOKEN-FORM.md`.
+`packages/ui/src/docs/PHASE-9-0B-TOKEN-FORM.md`.
 
 ## Which stylesheet you get depends on the route
 
@@ -179,7 +180,7 @@ into integers. Body/table/control text is `base` (13px).
 
 | guard | bans |
 |---|---|
-| `design-system/tools/token-guard.mjs` | raw hex, numbered ramps, Tailwind palette classes, and platform aliases in DS stylesheets |
+| `packages/ui/src/tools/token-guard.mjs` | raw hex, numbered ramps, Tailwind palette classes, and platform aliases in DS stylesheets |
 | `scripts/ds-conformance-guard.mjs` | native `<select>` / `<input type="date">`, inline `fontSize`, inline hex — ratcheted per app section |
 | `npm run tokens:check` | `tokens.css` stale vs `css-vars.ts` |
 
@@ -190,10 +191,10 @@ session's work in progress, not part of your commit.
 
 | | |
 |---|---|
-| `design-system/docs/TOKENS.md` | the full token reference |
-| `design-system/docs/NAMING.md` | naming rules |
-| `design-system/docs/MIGRATION.md` | Phase 9 — the plan to converge the platform on one system |
-| `design-system/docs/PHASE-9-0B-TOKEN-FORM.md` | the alias collision, in full |
-| `design-system/docs/TOKEN-GUARD-RATCHET.md` | why adherence is 74.8% inside the DS and 5.5% outside |
+| `packages/ui/src/docs/TOKENS.md` | the full token reference |
+| `packages/ui/src/docs/NAMING.md` | naming rules |
+| `packages/ui/src/docs/MIGRATION.md` | Phase 9 — the plan to converge the platform on one system |
+| `packages/ui/src/docs/PHASE-9-0B-TOKEN-FORM.md` | the alias collision, in full |
+| `packages/ui/src/docs/TOKEN-GUARD-RATCHET.md` | why adherence is 74.8% inside the DS and 5.5% outside |
 | `docs/TAILWIND-TO-DS-MIGRATION.md` | retiring the Tailwind kit — scope and blockers |
 | `.design-sync/conventions.md` | what the claude.ai/design agent is told about this system |

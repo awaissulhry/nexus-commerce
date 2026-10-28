@@ -72,6 +72,8 @@ model StoredFile {
   storeAccount IntegrationAccount @relation(fields: [tenantId, storeAccountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // imports.prisma: the import job whose sheet this file is.
   importJobs   ImportJob[]
+  // print.prisma: the print jobs that printed this file.
+  printJobs    PrintJob[]
 
   @@unique([tenantId, storageKey])
   // The target of the tenant-safe references from other rows (a company's logo, a document's PDF).

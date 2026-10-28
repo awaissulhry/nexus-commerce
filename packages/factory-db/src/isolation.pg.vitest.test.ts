@@ -11,6 +11,7 @@ import { seed as seedLinks } from '../seed/links'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
+import { seed as seedPrint } from '../seed/print'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedThreads } from '../seed/threads'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
@@ -108,6 +109,8 @@ beforeAll(async () => {
   await seedThreads({ db: factory, namespace: 'iso-b' })
   await seedImports({ db: factory, namespace: 'iso-a' })
   await seedImports({ db: factory, namespace: 'iso-b' })
+  await seedPrint({ db: factory, namespace: 'iso-a' })
+  await seedPrint({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -144,6 +147,8 @@ it('covers every classified table and every runtime role', () => {
     'PartyContact',
     'PartyTaxIdentity',
     'PasswordReset',
+    'PrintJob',
+    'Printer',
     'Role',
     'RoleAssignment',
     'SecretValue',

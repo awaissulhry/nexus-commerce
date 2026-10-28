@@ -268,7 +268,7 @@ function fullBleedBreakpointFromCss(): { px: number | null; problem: string | nu
   let dir = dirname(fileURLToPath(import.meta.url))
   let cssPath: string | null = null
   for (let i = 0; i < 12; i++) {
-    const candidate = join(dir, 'design-system', 'styles', 'components.css')
+    const candidate = join(dir, 'packages', 'ui', 'src', 'styles', 'components.css')
     if (existsSync(candidate)) { cssPath = candidate; break }
     const parent = dirname(dir)
     if (parent === dir) break

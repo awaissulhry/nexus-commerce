@@ -159,7 +159,7 @@ const cents = (n: number) => Math.round(n * 100)
 
 /* ── the grid's own words (Matrix bulk Edit v2, 2026-10-12) ─────────────────────────────────────────────────────────
    A preview line's `fromLabel → toLabel` says what the Matrix cell says now and will say, in the GRID's words. These
-   mirror the design system's cell texts (`apps/web/src/design-system/grid/renderers/matrixCells.ts`: `matrixModeWord`,
+   mirror the design system's cell texts (`packages/ui/src/grid/renderers/matrixCells.ts`: `matrixModeWord`,
    `matrixQtyText`, the Buffer text of `matrixCellText`, `matrixQueueWord`). That file is mirrored byte-for-byte into
    `apps/factory`, which has no `@nexus/shared`, so the words are restated here and held equal by
    `apps/web/src/app/products/[id]/edit/_studio/matrix/preview-words.vitest.test.ts`. */
