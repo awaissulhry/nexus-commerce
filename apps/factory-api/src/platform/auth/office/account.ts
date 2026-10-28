@@ -1,18 +1,21 @@
 import type { FastifyRequest } from 'fastify'
+import type { FactoryClient } from '@nexus/factory-db'
 import { isLocked } from '@nexus/factory-domain/auth/lockout/lockout'
-import { verifyPassword } from '@nexus/factory-domain/auth/password/password'
+import { hashPassword, passwordProblems, verifyPassword } from '@nexus/factory-domain/auth/password/password'
 import { ConflictError, DomainError, ForbiddenError, InvalidStateError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import type { Locale } from '@nexus/factory-domain/email/rules'
 import { requireContext, type OfficeContext } from '../../../core/context'
 import { officeSessionOf, type OfficeSession } from '../sessions/authenticator'
+import { heldRoles } from '../roles/access'
 import { mfaRequired, mfaSatisfied } from '../sessions/grants'
 import type { OfficeAuth } from '../sessions/office-auth'
-import { STEP_UP_VALID_MS } from '../sessions/session-store'
+import { endSessions, STEP_UP_VALID_MS } from '../sessions/session-store'
 import { checkSecondFactor, claimOf, markSession, newRecoveryCodes, newTotpSecret, otpauthUri, recordWrongSecret } from './second-factor'
 
 /**
- * The signed-in person's own account (features PLT-048, PLT-063): who am I, two-factor set-up, confirm and switch-off,
- * and the step-up.
+ * The signed-in person's own account (features PLT-048, PLT-063, PLT-070, PLT-127): who am I, two-factor set-up,
+ * confirm and switch-off, the step-up, a new password, and the interface language.
  *
  * Step-up (A1 §3.10): bank details, issuing invoices, and user and role changes need a fresh code from the
  * authenticator app on this session, at most 5 minutes old (`requireStepUp`). Each code works once (the TOTP step
@@ -39,21 +42,37 @@ export function requireStepUp(auth: OfficeAuth, request: FastifyRequest): void {
   if (until === null || until.getTime() <= auth.clock.now().getTime()) throw new StepUpRequiredError()
 }
 
-export async function me(request: FastifyRequest) {
+const COMPANY_VIEW = { id: true, code: true, legalName: true, tradeName: true } as const
+const companyView = (company: { id: string; code: string; legalName: string; tradeName: string | null }) => ({
+  id: company.id,
+  code: company.code,
+  name: company.tradeName ?? company.legalName,
+})
+
+/** The active companies a person's live roles reach (any role: two-factor not yet proved still lists them). */
+async function companiesOf(client: FactoryClient, userId: string, now: Date) {
+  const held = await heldRoles(client, userId, now)
+  if (held.length === 0) return []
+  const every = held.some((assignment) => assignment.scope.allCompanies)
+  const ids = [...new Set(held.flatMap((assignment) => assignment.scope.companyIds))]
+  return client.company.findMany({ where: { status: 'ACTIVE', ...(every ? {} : { id: { in: ids } }) }, orderBy: [{ code: 'asc' }], select: COMPANY_VIEW })
+}
+
+export async function me(auth: OfficeAuth, request: FastifyRequest) {
   const context = officeContextOf(request)
   const session = officeSessionOf(request)
-  const { tenant, company, user } = await request.withClient(async (client) => ({
+  const { tenant, company, companies, user } = await request.withClient(async (client) => ({
     tenant: await client.tenant.findUniqueOrThrow({ where: { id: context.tenantId }, select: { id: true, slug: true, name: true } }),
-    company: context.companyId
-      ? await client.company.findUnique({ where: { id: context.companyId }, select: { id: true, code: true, legalName: true, tradeName: true } })
-      : null,
+    company: context.companyId ? await client.company.findUnique({ where: { id: context.companyId }, select: COMPANY_VIEW }) : null,
+    companies: await companiesOf(client, context.actorId, auth.clock.now()),
     user: await client.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { recoveryCodeHashes: true } }),
   }))
   const until = stepUpUntil(session)
   return {
     user: { id: context.actorId, email: session.user.email, displayName: session.user.displayName, locale: session.user.locale },
     tenant,
-    company: company ? { id: company.id, code: company.code, name: company.tradeName ?? company.legalName } : null,
+    company: company ? companyView(company) : null,
+    companies: companies.map(companyView),
     session: {
       id: session.id,
       createdAt: toUtcIso(session.createdAt),
@@ -159,4 +178,52 @@ export async function disableTotp(auth: OfficeAuth, request: FastifyRequest, pas
     return null
   })
   return { status: 'off' }
+}
+
+/**
+ * A new password from the signed-in person (PLT-070, SCR-007): the current one first, checked as at sign-in (a wrong one
+ * counts towards the lockout; while locked nothing is accepted), then the password rules, then in one command: the new
+ * hash (only if the stored one is still the one checked), the lock cleared, every open reset link used up, and every
+ * OTHER session ended (a changed password means "lock out whoever had it"). This session goes on; two-factor stays.
+ */
+export async function changePassword(
+  auth: OfficeAuth,
+  request: FastifyRequest,
+  body: { readonly currentPassword: string; readonly password: string },
+): Promise<{ status: 'password_changed'; sessionsEnded: number }> {
+  const context = officeContextOf(request)
+  const session = officeSessionOf(request)
+  const user = await request.withClient((client) => client.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { passwordHash: true, lockedUntil: true } }))
+  if (isLocked(user, auth.clock.now())) throw new ForbiddenError('Too many wrong attempts. Wait a few minutes, then try again.')
+  if (!(await verifyPassword(body.currentPassword, user.passwordHash)).ok) {
+    await recordWrongSecret(auth, context, 'auth.passwordCheckFailed', 'password')
+    throw new ValidationError('The current password is wrong.', [{ path: 'currentPassword', message: 'Wrong password.' }])
+  }
+  const problems = passwordProblems(body.password, { email: session.user.email, displayName: session.user.displayName })
+  if (problems.length > 0) throw new ValidationError('Choose another password.', problems)
+  const passwordHash = await hashPassword(body.password)
+  const { result } = await auth.command(context, { name: 'auth.passwordChange', input: null }, async ({ tx, now, audit }) => {
+    const { count } = await tx.user.updateMany({
+      where: { id: context.actorId, status: 'ACTIVE', passwordHash: user.passwordHash },
+      data: { passwordHash, passwordChangedAt: now, mustChangePassword: false, failedAttempts: 0, lockedUntil: null },
+    })
+    if (count !== 1) throw new ConflictError('The password changed meanwhile. Sign in again.')
+    await tx.passwordReset.updateMany({ where: { userId: context.actorId, usedAt: null }, data: { usedAt: now } })
+    const sessionsEnded = await endSessions(tx, { userId: context.actorId, now, reason: 'PASSWORD_CHANGED', exceptSessionId: session.id })
+    audit({ recordType: 'User', recordId: context.actorId, after: { passwordChangedAt: toUtcIso(now), sessionsEnded } })
+    return { sessionsEnded }
+  })
+  return { status: 'password_changed', sessionsEnded: result.sessionsEnded }
+}
+
+/** The signed-in person's interface language (PLT-127): the office layout reads it on every page. */
+export async function setLocale(auth: OfficeAuth, request: FastifyRequest, locale: Locale): Promise<{ locale: Locale }> {
+  const context = officeContextOf(request)
+  await auth.command(context, { name: 'auth.setLocale', input: { locale } }, async ({ tx, audit }) => {
+    const before = await tx.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { locale: true } })
+    await tx.user.update({ where: { id: context.actorId }, data: { locale } })
+    audit({ recordType: 'User', recordId: context.actorId, before: { locale: before.locale }, after: { locale } })
+    return null
+  })
+  return { locale }
 }

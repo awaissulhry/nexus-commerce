@@ -2,7 +2,7 @@
 
 Next.js 16 (App Router), the same Next and React versions as `apps/web`, built from the design system `@nexus/ui`
 (packages/ui, compiled here: `transpilePackages`). Four views as route groups: Office `(office)` (built), Links
-`(links)` (built), Floor `(floor)` and Portal `(portal)` (later steps); sign-in `(auth)` (B-W0-26; today a placeholder).
+`(links)` (built), Floor `(floor)` and Portal `(portal)` (later steps); office sign-in `(auth)` (built: B-W0-26).
 
 ## Commands (from the repository root unless noted)
     FACTORY_API_URL=http://127.0.0.1:8190 npm run dev -w @nexus/factory-web     # :3200
@@ -30,6 +30,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (`apps/web/src/app/settings/_shell/SettingsShellHeader.tsx`): a band on top of the page — the toggle button, then a
   dense `DetailHeader` (page title, area › group as meta) — whose button opens the area's pages as an overlay. No
   permanent column, no collapse strip (Owner, 2026-10-28).
+- `src/app/(auth)/` — office sign-in (SCR-001), no chrome, no session: `/sign-in`, `/forgot-password`, and the mailed
+  links `/reset-password#token=…`, `/accept-invitation#token=…` (the token read from the fragment once, then removed
+  from the address bar). One flow container (`_auth/OfficeAuth.tsx`) over one view; the company's sign-in name is a
+  page cookie (`factory_tenant`). A new session opens `/w/<company>/home`, or the profile's authenticator card while
+  the person's role needs two-factor they have not set up. `src/areas/me/` — my profile & security (SCR-007,
+  `/w/<company>/me`, from the person menu; no navigation row).
 - `src/app/(links)/` — no chrome: `/l#token=…` (a one-off link; the token is read from the fragment, removed from the
   address bar, sent only in `x-factory-link`), `/privacy/<company id>` (the privacy-notice slot, GAP-005).
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension

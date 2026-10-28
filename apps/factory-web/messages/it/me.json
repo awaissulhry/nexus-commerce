@@ -1,0 +1,99 @@
+{
+  "title": "Il mio profilo",
+  "subtitle": "{name} · {email} · {tenant}",
+  "display": {
+    "title": "Lingua e aspetto",
+    "description": "La tua lingua ti segue su ogni dispositivo. Il tema resta su questo dispositivo.",
+    "language": "Lingua",
+    "theme": "Tema",
+    "themes": {
+      "light": "Chiaro",
+      "dark": "Scuro",
+      "system": "Come il dispositivo"
+    },
+    "formats": "Numeri e date",
+    "timeZone": "Gli orari sono mostrati in",
+    "timeZoneValue": "{zone}, il fuso orario della sede"
+  },
+  "password": {
+    "title": "Password",
+    "description": "Una nuova password disconnette tutti gli altri dispositivi su cui hai effettuato l'accesso.",
+    "change": "Cambia password",
+    "current": "Password attuale",
+    "new": "Nuova password",
+    "newHint": "Almeno {min} caratteri. Una breve frase si ricorda facilmente. Non usare il tuo nome o la tua email.",
+    "repeat": "Ripeti la nuova password",
+    "submit": "Salva la nuova password",
+    "cancel": "Annulla",
+    "done": "La password è cambiata.",
+    "ended_one": "{count} altro dispositivo è stato disconnesso.",
+    "ended_other": "{count} altri dispositivi sono stati disconnessi."
+  },
+  "authenticator": {
+    "title": "App di autenticazione",
+    "description": "Dopo la password, l'accesso chiede un codice da un'app sul tuo telefono (autenticazione a due fattori).",
+    "state": "Stato",
+    "on": "Attiva",
+    "off": "Non attiva",
+    "required": "Il tuo ruolo richiede un'app di autenticazione. Finché non la configuri, puoi aprire solo questa pagina.",
+    "requiredOn": "Il tuo ruolo la richiede, quindi non si può disattivare.",
+    "setup": "Configura l'app",
+    "scan": "1. Inquadra questo codice con la tua app di autenticazione, per esempio Google Authenticator, Microsoft Authenticator o 1Password. Niente fotocamera? Inserisci nell'app la chiave sotto il codice.",
+    "qrLabel": "Codice QR che aggiunge Nexus Factory alla tua app di autenticazione",
+    "enter": "2. Inserisci il codice di 6 cifre che l'app mostra ora.",
+    "code": "Codice dell'app",
+    "confirm": "Attiva",
+    "cancel": "Annulla",
+    "codesTitle": "Salva i codici di recupero",
+    "codesBody": "Se perdi il telefono, ognuno di questi codici ti fa accedere una volta al posto dell'app. Sono mostrati solo ora: copiali o stampali, oppure scrivili, e tienili in un posto sicuro.",
+    "copy": "Copia i codici",
+    "copied": "Copiati",
+    "copyFailed": "Impossibile copiare. Seleziona i codici e copiali.",
+    "codesDone": "Li ho salvati",
+    "recoveryLeft": "Codici di recupero rimasti",
+    "recoveryLow": "Restano pochi codici di recupero. Disattiva e riattiva l'app per averne 10 nuovi.",
+    "turnedOn": "L'app di autenticazione è attiva. Ora l'accesso chiede il suo codice.",
+    "disable": "Disattiva",
+    "disableBody": "Inserisci la password per disattivare l'app di autenticazione. I codici di recupero smettono di funzionare.",
+    "disableSubmit": "Disattiva l'app",
+    "turnedOff": "L'app di autenticazione non è più attiva."
+  },
+  "sessions": {
+    "title": "Sessioni",
+    "description": "Dove hai effettuato l'accesso ora.",
+    "thisDevice": "Questo dispositivo",
+    "started": "Accesso effettuato",
+    "idle": "Termina se non usata",
+    "idleHint": "Ogni uso la sposta più avanti.",
+    "absolute": "Termina al più tardi",
+    "others": "L'elenco degli altri tuoi dispositivi arriverà più avanti. Per disconnetterti ora da tutti gli altri, cambia la password.",
+    "signOut": "Esci da questo dispositivo"
+  },
+  "qr": {
+    "copy": "Copia la chiave",
+    "copied": "Copiata",
+    "copyFailed": "Impossibile copiare. Seleziona la chiave e copiala.",
+    "loading": "Disegno del codice",
+    "tooLong": "È troppo lungo per un codice QR."
+  },
+  "field": {
+    "currentRequired": "Inserisci la password attuale.",
+    "codeFormat": "Inserisci le 6 cifre mostrate dall'app.",
+    "passwordRequired": "Inserisci la password.",
+    "passwordShort": "Usa almeno {min} caratteri.",
+    "passwordLong": "Usa al massimo {max} caratteri.",
+    "passwordSimple": "Usa più caratteri diversi.",
+    "passwordName": "Non usare il tuo nome o la tua email nella password.",
+    "repeatMismatch": "Le due password non sono uguali."
+  },
+  "problem": {
+    "wrongPassword": "La password non è corretta. Dopo vari tentativi sbagliati l'account si blocca per qualche minuto.",
+    "wrongCode": "Il codice non corrisponde. Controlla che l'orologio del telefono sia giusto, poi inserisci il codice attuale.",
+    "locked": "Troppi tentativi sbagliati. Aspetta qualche minuto, poi riprova.",
+    "rateLimited": "Troppi tentativi da questo dispositivo. Aspetta qualche minuto, poi riprova.",
+    "passwordRefused": "Questa password è troppo facile da indovinare. Scegline un'altra.",
+    "changed": "Nel frattempo qualcosa è cambiato. Ricarica la pagina e ripeti.",
+    "unavailable": "Nexus Factory non risponde. Riprova tra un momento.",
+    "signedOut": "La sessione è terminata. Accedi di nuovo."
+  }
+}

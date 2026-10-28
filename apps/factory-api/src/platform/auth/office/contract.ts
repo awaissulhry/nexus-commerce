@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { LOCALES } from '@nexus/factory-domain/email/rules'
 
 /**
  * The office sign-in routes' contracts (features PLT-047, PLT-048, PLT-063, PLT-070). Secrets go in bodies, never in a
@@ -48,6 +49,12 @@ export const meContract = defineContract({
       user: sessionUser,
       tenant: output({ id: id(), slug: z.string(), name: z.string() }),
       company: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
+      /**
+       * The active companies the person's live roles reach, by code (the sign-in opens one of them; the company
+       * switcher offers them). Listed before two-factor is proved too: the person must reach their own profile to set
+       * it up. Empty for a person with no role.
+       */
+      companies: z.array(output({ id: id(), code: z.string(), name: z.string() })),
       session: sessionTimes.extend({ id: id(), createdAt: instant(), stepUpUntil: instant().nullable() }),
       mfa: mfaView.extend({ recoveryCodesLeft: z.number().int() }),
       /** What the session's grants allow (the web hides what is not listed). */
@@ -74,6 +81,19 @@ export const totpConfirmContract = defineContract({
 export const totpDisableContract = defineContract({
   body: input({ password: passwordText }),
   response: { 200: output({ status: z.literal('off') }) },
+})
+
+/** The signed-in person changes their own password: the current one first (a wrong one counts towards the lockout). */
+export const passwordChangeContract = defineContract({
+  body: input({ currentPassword: passwordText, password: passwordText }),
+  /** Every other session of the person ended; this one goes on. */
+  response: { 200: output({ status: z.literal('password_changed'), sessionsEnded: z.number().int() }) },
+})
+
+/** The signed-in person's interface language (PLT-127): the office speaks it from the next page on. */
+export const localeContract = defineContract({
+  body: input({ locale: z.enum(LOCALES) }),
+  response: { 200: output({ locale: z.enum(LOCALES) }) },
 })
 
 export const resetRequestContract = defineContract({

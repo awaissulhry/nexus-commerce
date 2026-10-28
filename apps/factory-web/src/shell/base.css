@@ -39,7 +39,7 @@ body {
   top: var(--nds-space-8);
 }
 
-/* A whole-page message (the office cannot open, the sign-in placeholder). */
+/* A whole-page message (the office cannot open). */
 .fw-office-unavailable {
   min-height: 100dvh;
   display: flex;
