@@ -88,6 +88,8 @@ model Company {
   integrationAccounts IntegrationAccount[]
   // files.prisma: the company's files.
   files               StoredFile[]
+  // links.prisma: the one-off links that open the company's records.
+  oneOffLinks         OneOffLink[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.

@@ -50,6 +50,9 @@ export function roleProblems(
     const definition = registry.get(permission)
     if (!definition) issues.push({ path: `permissions/${index}`, message: `${permission} is not a permission of the factory.` })
     else if (definition.grain !== undefined) issues.push({ path: `permissions/${index}`, message: `${permission} is a money grain: list it in grains.` })
+    else if (definition.link === true) {
+      issues.push({ path: `permissions/${index}`, message: `${permission} is held only by a one-off link session, from its purpose; a role cannot give it.` })
+    }
   })
   content.grains.forEach((grain, index) => {
     if (!isGrain(grain)) issues.push({ path: `grains/${index}`, message: `${String(grain)} is not a money grain (${GRAINS.join(', ')}).` })
