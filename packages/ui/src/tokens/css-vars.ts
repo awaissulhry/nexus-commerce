@@ -21,6 +21,7 @@ import { groupToneVars, groupToneVarsDark } from './groupTones'
 import { workspaceVars } from './workspace'
 import { chromeVars } from './chrome'
 import { topbarVars } from './topbar'
+import { densityBlocks } from './density'
 
 export interface CssVar {
   /** when set, a section-comment is emitted before this row */
@@ -799,3 +800,11 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   // No top-bar or chrome entries here: chrome is theme-independent literals (tokens/chrome.ts)
   // and the bar aliases only those, so there is nothing to re-resolve in the dark scope.
 ]
+
+/**
+ * The density tiers' blocks, emitted after the `.dark` block: `:root, [data-density='standard']` (the default, today's
+ * sizes), then `[data-density='comfortable']` and `[data-density='floor']`. Blocks of their own rather than rows of
+ * `cssVars`, so the `:root` block above stays byte-identical. Dimensions only, and only `--nds-density-*` names — see
+ * tokens/density.ts.
+ */
+export const cssDensityBlocks = densityBlocks

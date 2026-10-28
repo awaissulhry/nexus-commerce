@@ -10,6 +10,7 @@
     "./grid": "./src/grid/index.ts",
     "./tokens": "./src/tokens/index.ts",
     "./styles/*": "./src/styles/*",
+    "./patterns/shell/app-rail.css": "./src/patterns/shell/app-rail.css",
     "./*": "./src/*.ts"
   },
   "scripts": {

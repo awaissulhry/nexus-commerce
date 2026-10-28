@@ -52,6 +52,14 @@ model Party {
   contacts            PartyContact[]
   taxIdentities       PartyTaxIdentity[]
   measurementProfiles MeasurementProfile[]
+  // product.prisma: the items it supplies by default, the styles made for it as a brand, the BOM lines bought from it.
+  suppliedItems       Item[]
+  brandStyles         Style[]
+  bomLines            BomLine[]
+  // compliance.prisma: as a brand, the certificates it holds and the labels and documents that name it as the maker.
+  certificatesHeld    Certificate[]
+  labelTemplates      LabelTemplate[]
+  complianceDocuments ComplianceDocument[]
   // email-in.prisma: the mail received from this party's contacts (or its company domain).
   inboundEmails       InboundEmail[]
 
