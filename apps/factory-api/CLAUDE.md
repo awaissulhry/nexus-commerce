@@ -152,8 +152,10 @@ portal and link sign-in, the modules and the other adapters come in later steps.
   API, HMAC-signed). Floor, portal and link downloads presign as the tenant's system caller after the audience check.
   Tests: `useFiles(createFilesRuntime({ gateway, local, r2: r2FileStore({ clientFor: new FakeR2().clientFor }) }))`
   (`adapters/r2/testing.ts`: the real S3 client on an in-memory transport, no network).
-- Permissions (until the roles step assembles them; not in the owner's placeholder grants): files.read, files.upload,
-  files.delete, files.manage.
+- Permissions (declared in `@nexus/factory-domain/auth/permissions/catalogue`, FILES_DEFINITIONS): files.read,
+  files.upload, files.delete, files.manage (sharing beyond the office, also at upload; retention; legal hold). Every
+  office template has files.read; the roles that work on records also files.upload; admin (and owner) files.manage and
+  files.delete. Floor, portal and link sessions see files through their audience rule above, never an office template.
 
 ## Rules
 - Configuration only through `src/env.ts`. It reads ONLY `apps/factory-api/.env`, by explicit path, and ONLY

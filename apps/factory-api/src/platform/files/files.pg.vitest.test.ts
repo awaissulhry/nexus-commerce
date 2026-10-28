@@ -65,6 +65,7 @@ const SESSIONS: Record<string, SessionContext> = {
   admin: { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(ALL)] },
   'admin-one': { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(ALL, [companyOne])] },
   viewer: { audience: 'office', tenantId: tenantA, actorId: user, grants: read },
+  uploader: { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(['files.read', 'files.upload'])] },
   'admin-b': { audience: 'office', tenantId: tenantB, actorId: user, grants: [grant(ALL)] },
   'floor-one': { audience: 'floor', tenantId: tenantA, actorId: user, siteId: siteOne, deviceId: newId(), grants: [grant(ALL)] },
   'floor-two': { audience: 'floor', tenantId: tenantA, actorId: user, siteId: siteTwo, deviceId: newId(), grants: read },
@@ -355,6 +356,10 @@ describe('who sees a file (COL-050)', () => {
     const one = await uploaded('company one')
     const body = pdf('company two')
     expect((await call('viewer', 'POST', '/files', announcement(body))).statusCode).toBe(403)
+    // Uploading is files.upload; sharing beyond the office, at upload too, is files.manage.
+    expect((await call('uploader', 'POST', '/files', announcement(body))).statusCode).toBe(201)
+    expect((await call('uploader', 'POST', '/files', announcement(body, { visibility: ['PARTNER'], partyId: partyOne }))).statusCode).toBe(403)
+    expect((await call('uploader', 'POST', '/files', announcement(body, { visibility: ['FLOOR'], floorSiteId: siteOne }))).statusCode).toBe(403)
     expect((await call('admin-one', 'POST', '/files', announcement(body, { companyId: companyTwo }))).statusCode).toBe(403)
     expect((await call(undefined, 'POST', '/files', announcement(body))).statusCode).toBe(401)
     expect((await call(undefined, 'GET', `/files/${one.id}`)).statusCode).toBe(401)

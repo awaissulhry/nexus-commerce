@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { FileAudience, FileKind, FileStatus } from '@nexus/factory-db'
+import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templates'
 import { canTransition } from '@nexus/factory-domain/state/machine'
+import { manifest } from './manifest'
 import {
   addYears,
   attachmentDisposition,
@@ -157,5 +160,35 @@ describe('storage keys (A1 §3.6)', () => {
     expect(legal).toBe(`legal/t/${TENANT}/c/${COMPANY}/2026/${RANDOM}`)
     expect([isStorageKey(key), isStorageKey(legal), isLegalKey(legal), isLegalKey(key)]).toEqual([true, true, true, false])
     for (const bad of [`${key}/../x`, `../${key}`, `/${key}`, `t/${TENANT}/c/${COMPANY}/2026/x`, `other/${key}`]) expect(isStorageKey(bad), bad).toBe(false)
+  })
+})
+
+describe('the permissions (registry and role templates)', () => {
+  it('declares every permission the routes name, none of them step-up', () => {
+    const named = new Set(Object.values(manifest).map((entry) => entry.permission).filter((permission) => permission.startsWith('files.')))
+    expect([...named].sort()).toEqual(['files.delete', 'files.manage', 'files.read', 'files.upload'])
+    expect(FACTORY_PERMISSIONS.byArea().get('files')?.map(({ name, risk }) => [name, risk])).toEqual([
+      ['files.read', 'read'],
+      ['files.upload', 'write'],
+      ['files.delete', 'write'],
+      ['files.manage', 'write'],
+    ])
+  })
+
+  it('gives every office template files.read, the record roles files.upload, admin and owner the rest', () => {
+    const files = Object.fromEntries(ROLE_TEMPLATES.map((role) => [role.key, role.permissions.filter((permission) => permission.startsWith('files.'))]))
+    expect(files).toEqual({
+      owner: ['files.delete', 'files.manage', 'files.read', 'files.upload'],
+      admin: ['files.delete', 'files.manage', 'files.read', 'files.upload'],
+      finance: ['files.read', 'files.upload'],
+      sales: ['files.read', 'files.upload'],
+      planner: ['files.read', 'files.upload'],
+      buyer: ['files.read', 'files.upload'],
+      warehouse: ['files.read', 'files.upload'],
+      production_manager: ['files.read', 'files.upload'],
+      quality_inspector: ['files.read', 'files.upload'],
+      floor_supervisor: ['files.read'],
+      read_only: ['files.read'],
+    })
   })
 })

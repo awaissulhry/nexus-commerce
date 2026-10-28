@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { FastifyRequest } from 'fastify'
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
+import { FILES_DELETE, FILES_MANAGE, FILES_READ, FILES_UPLOAD } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere, type Permission, type ScopeColumns, type ScopedRecord } from '@nexus/factory-domain/core/permissions'
@@ -12,7 +13,6 @@ import { ApiError } from '../../core/errors'
 import { GatewayCallFailed, GatewayRefusal } from '../gateway/gateway'
 import { systemContext } from '../outbox/system'
 import type { FileView } from './contract'
-import { FILES_DELETE, FILES_MANAGE, FILES_READ, FILES_UPLOAD } from './permissions'
 import type { PresignedRequest, StoredObject } from './port'
 import {
   attachmentDisposition,
@@ -39,8 +39,9 @@ import { RetainedFileError } from './store'
 /**
  * Files on R2 (plan A1 §3.6; features COL-045, COL-050, PLT-011; PLAN §2.8), the flow:
  *
- *   upload     POST /files: the kind's content types and size limit, the sharing, the retention (a fiscal archive
- *              file: ten years at least) → files.requestUpload writes the row PENDING_UPLOAD under a new random key
+ *   upload     POST /files: the kind's content types and size limit, the sharing (beyond the office it also needs
+ *              files.manage), the retention (a fiscal archive file: ten years at least) → files.requestUpload writes
+ *              the row PENDING_UPLOAD under a new random key
  *              → a presigned PUT (5 minutes; type, size and SHA-256 signed) from the tenant's file store
  *   confirm    POST /files/:id/complete: the store's HEAD; size, type and SHA-256 as announced → AVAILABLE (and the
  *              event file.available), anything else → QUARANTINED with the reason; not there yet → 409, still pending
@@ -270,6 +271,8 @@ export async function requestUpload(runtime: FilesRuntime, caller: CommandCaller
   ]
   if (problems.length > 0) throw new ValidationError('The upload is not valid.', problems)
   mayWrite(caller, FILES_UPLOAD, sharing)
+  // Sharing with a floor, a portal or links is files.manage, at upload as afterwards (COL-050).
+  if (sharing.visibility.length > 1) mayWrite(caller, FILES_MANAGE, sharing)
   const storeAccountId = await storeAccountOf(caller, sharing.companyId)
 
   const { result } = await command(caller, { name: 'files.requestUpload', idempotencyKey, input }, async ({ tx, audit, now: at, context }) => {
