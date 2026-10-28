@@ -17,6 +17,7 @@ import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
 import { seed as seedPrint } from '../seed/print'
 import { seed as seedProduct } from '../seed/product'
+import { seed as seedProduction } from '../seed/production'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
 import { seed as seedSupply } from '../seed/supply'
@@ -132,6 +133,8 @@ beforeAll(async () => {
   await seedSupply({ db: factory, namespace: 'iso-b' })
   await seedInventory({ db: factory, namespace: 'iso-a' })
   await seedInventory({ db: factory, namespace: 'iso-b' })
+  await seedProduction({ db: factory, namespace: 'iso-a' })
+  await seedProduction({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -146,12 +149,15 @@ it('covers every classified table and every runtime role', () => {
     'BomLine',
     'BomLineColour',
     'BomLineSize',
+    'Bundle',
     'Certificate',
     'CertificateCoverage',
     'Colour',
     'Colourway',
     'Company',
     'ComplianceDocument',
+    'CutLog',
+    'CutLogPiece',
     'DepositRequest',
     'Device',
     'DeviceEnrolment',
@@ -186,6 +192,7 @@ it('covers every classified table and every runtime role', () => {
     'NumberSeries',
     'OneOffLink',
     'Operation',
+    'OperationScan',
     'OutboxEvent',
     'Party',
     'PartyAddress',
@@ -195,6 +202,7 @@ it('covers every classified table and every runtime role', () => {
     'PlanningRun',
     'PrintJob',
     'Printer',
+    'ProductionSettings',
     'PurchaseOrder',
     'PurchaseOrderLine',
     'Quote',
@@ -227,7 +235,12 @@ it('covers every classified table and every runtime role', () => {
     'Variant',
     'ViesCheck',
     'WorkCentre',
+    'WorkOrder',
+    'WorkOrderMaterial',
+    'WorkOrderOperation',
+    'WorkOrderSize',
     'Worker',
+    'WorkerNoticeAck',
     'WorkerRole',
   ])
   expect(RUNTIME_ROLES).toHaveLength(4)

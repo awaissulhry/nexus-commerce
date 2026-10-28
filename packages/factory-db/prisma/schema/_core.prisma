@@ -169,6 +169,9 @@ model Site {
   lots            Lot[]
   stockMoves      StockMove[]
   stockValuations StockValuation[]
+  // production.prisma: its floor rules and the work orders it makes.
+  productionSettings ProductionSettings[]
+  workOrders         WorkOrder[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])
@@ -221,6 +224,8 @@ model WorkCentre {
 
   site     Site      @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   stations Station[]
+  // production.prisma: the work order operations mapped to it.
+  workOrderOperations WorkOrderOperation[]
 
   @@unique([tenantId, siteId, code])
   @@unique([tenantId, siteId, id])
@@ -261,6 +266,9 @@ model Station {
   workCentre WorkCentre @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // floor-auth.prisma: the devices enrolled at this station.
   devices    Device[]
+  // production.prisma: the cut logs and scans that name the station (a site that records stations, not workers).
+  cutLogs        CutLog[]
+  operationScans OperationScan[]
 
   @@unique([tenantId, siteId, code])
   // The target of the tenant- and site-safe references from the station's rows (a device at a station).
