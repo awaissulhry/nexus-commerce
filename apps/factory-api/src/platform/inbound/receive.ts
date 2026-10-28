@@ -30,7 +30,6 @@ export const PROVIDER_SLUGS = Object.freeze({
   sdi: 'SDI',
   sendcloud: 'SENDCLOUD',
   vies: 'VIES',
-  stripe: 'STRIPE',
 } as const satisfies Record<string, IntegrationProvider>)
 export type ProviderSlug = keyof typeof PROVIDER_SLUGS
 

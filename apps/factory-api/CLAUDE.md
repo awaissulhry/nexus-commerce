@@ -97,8 +97,8 @@ come in later steps.
   `ProviderError(message, { httpStatus })` from `fn`. Never call it inside a command's transaction.
   `scripts/factory/check-integration-calls.mjs`: no HTTP client, SDK or fetch() outside `platform/gateway/`,
   `src/adapters/` and `platform/secrets/aws-kms.ts`.
-- `gateway/boot.ts`: `assertNoFakeAccountsInProduction(database, env.FACTORY_ENV)` must run at boot (index.ts and
-  background.ts, right after openFactoryDatabase).
+- `gateway/boot.ts`: `assertNoFakeAccountsInProduction(database, env.FACTORY_ENV)` runs at boot in index.ts and
+  background.ts, right after openFactoryDatabase: production does not start while any account is FAKE.
 - `secrets/`: envelope encryption (AES-256-GCM, a data key per value, wrapped by AWS KMS in staging/production or by
   FACTORY_SECRETS_MASTER_KEY in local/test). `processSecrets().seal/open(…, { tenantId, purpose })`, the `s1.` string
   form for a column of another table, `rotate`; SecretValue rows: `storeSecret(tools, …)` inside a command,
@@ -106,7 +106,7 @@ come in later steps.
 - `inbound/`: `POST /inbound/<provider>/<tenantId>/<accountId>` (public, raw body): verify (FAKE accounts: the fake
   HMAC verifier; others: INBOUND_PROVIDERS) → InboundWebhook receipt FIRST (dedupe key unique per provider; a bad
   signature is kept as REJECTED) + the event integration.inbound_received in one command → 200. The worker's
-  `inboundHandler()` (background.ts HANDLERS) applies a receipt once with its provider's processor.
+  `inboundHandler()` (in background.ts HANDLERS) applies a receipt once with its provider's processor.
 
 ## Rules
 - Configuration only through `src/env.ts`. It reads ONLY `apps/factory-api/.env`, by explicit path, and ONLY

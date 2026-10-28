@@ -81,8 +81,6 @@ enum IntegrationProvider {
   SENDCLOUD
   /// VIES: EU VAT number checks.
   VIES
-  /// Stripe: deposits and balances by card.
-  STRIPE
 }
 
 /// Which system an account's calls reach.

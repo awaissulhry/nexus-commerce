@@ -1,7 +1,7 @@
 /**
  * Webhook signature verification (plan A1 §4 "Inbound webhooks: verify the signature → InboundEvent → claim → handler
- * → done"; feature PLT-194). One verifier per provider (SNS for SES, Stripe, Sendcloud, the SDI intermediary) and one
- * for the factory's own fakes; apps/factory-api/src/platform/inbound runs it on the RAW body before anything is stored
+ * → done"; feature PLT-194). One verifier per provider (SNS for SES, Sendcloud, the SDI intermediary) and one for the
+ * factory's own fakes; apps/factory-api/src/platform/inbound runs it on the RAW body before anything is stored
  * as verified, then stores the receipt (deduplicated by `dedupeKey`), answers, and processes it later.
  *
  * A verifier never throws for a bad delivery: it answers `{ ok: false, reason }`, and the receipt is kept as REJECTED.

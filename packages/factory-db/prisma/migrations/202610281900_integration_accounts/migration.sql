@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "IntegrationProvider" AS ENUM ('SES', 'R2', 'SDI', 'SENDCLOUD', 'VIES', 'STRIPE');
+CREATE TYPE "IntegrationProvider" AS ENUM ('SES', 'R2', 'SDI', 'SENDCLOUD', 'VIES');
 
 -- CreateEnum
 CREATE TYPE "IntegrationMode" AS ENUM ('LIVE', 'SANDBOX', 'FAKE');

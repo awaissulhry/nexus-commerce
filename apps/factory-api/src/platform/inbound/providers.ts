@@ -50,7 +50,7 @@ export interface InboundProvider {
 
 export type InboundProviders = Readonly<Partial<Record<IntegrationProvider, InboundProvider>>>
 
-/** The providers' entries. The W1 adapters (SES via SNS, the SDI intermediary, Sendcloud, Stripe) add theirs here. */
+/** The providers' entries. The W1 adapters (SES via SNS, the SDI intermediary, Sendcloud) add theirs here. */
 export const INBOUND_PROVIDERS: InboundProviders = Object.freeze({})
 
 /** What the inbound route and its job need. */

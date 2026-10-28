@@ -5,6 +5,8 @@ import { startCrons, type CronJob } from './core/cron'
 import { redact } from './core/logger'
 import { openQueues, queueConnection, type Log } from './core/queue'
 import { loadFactoryEnv } from './env'
+import { assertNoFakeAccountsInProduction } from './platform/gateway/boot'
+import { inboundHandler } from './platform/inbound/process'
 import { startEventWorkers, type EventHandler } from './platform/outbox/dispatch'
 import { outboxLagCron } from './platform/outbox/lag'
 import { queuePublisher, startRelay } from './platform/outbox/relay'
@@ -24,14 +26,15 @@ import { queuePublisher, startRelay } from './platform/outbox/relay'
  *     throwaway factory_test…: never a shared one;
  *   - with FACTORY_ENV local or test, a missing FACTORY_QUEUE_PREFIX (env.ts): the local Redis is shared by every
  *     worktree.
- * Then the database login is audited (openFactoryDatabase), as at the API's boot.
+ * Then the database login is audited (openFactoryDatabase) and, with FACTORY_ENV=production, no integration account may be
+ * in FAKE mode, as at the API's boot.
  */
 
 const MODES = ['worker', 'scheduler'] as const
 type Mode = (typeof MODES)[number]
 
 /** The handlers of published events, one list for the worker. Modules add theirs here (dispatch.ts defineHandler). */
-const HANDLERS: readonly EventHandler[] = []
+const HANDLERS: readonly EventHandler[] = [inboundHandler()]
 
 const mode = process.argv[2] as Mode
 if (!MODES.includes(mode)) {
@@ -73,6 +76,12 @@ try {
   database = await openFactoryDatabase({ connectionString: env.FACTORY_DATABASE_URL, pool: { max: 8 } })
 } catch (error) {
   refuse(`the database refused the boot: ${(error as Error).message}`)
+}
+// Plan A1 §4: production never starts while an integration account is FAKE (platform/gateway/boot.ts).
+try {
+  await assertNoFakeAccountsInProduction(database, env.FACTORY_ENV)
+} catch (error) {
+  refuse((error as Error).message)
 }
 const redis = queueConnection(env.FACTORY_REDIS_URL)
 redis.on('error', (error) => log.warn({ err: error }, 'redis is unreachable'))
