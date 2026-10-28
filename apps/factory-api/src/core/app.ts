@@ -7,6 +7,7 @@ import type { FactoryDatabase } from '@nexus/factory-db'
 import { healthContract, readyContract } from '@nexus/factory-domain/core/contracts'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { FactoryEnv } from '../env'
+import type { OfficeAuth } from '../platform/auth/sessions/office-auth'
 import { routesFiles } from './autoload'
 import { isTestAuthenticator, noSessions, withContextClient, type Authenticator } from './context'
 import { installErrorHandling } from './errors'
@@ -53,7 +54,12 @@ export interface AppDependencies {
   readonly database?: FactoryDatabase | undefined
   /** Redis (ioredis). Without it, `/ready` reports Redis as not configured and rate limits count in memory. */
   readonly redis?: Redis | undefined
-  /** Reads the session of a request. Default: no sessions (every route that is not public answers 401). */
+  /**
+   * Office sign-in (platform/auth/sessions/office-auth.ts): its authenticator reads the office session cookie, and the
+   * auth routes use it. Without it those routes answer 503.
+   */
+  readonly officeAuth?: OfficeAuth
+  /** Reads the session of a request. Default: the office sign-in's authenticator, else no sessions (401). */
   readonly authenticate?: Authenticator
   /** The folder that holds `platform/` and `modules/`: `src/` under tsx and vitest, `dist/` in a build. */
   readonly routesRoot?: string
@@ -107,7 +113,7 @@ async function registerRoutesFiles(app: FastifyInstance, root: string): Promise<
 }
 
 export async function buildApp(config: AppConfig, dependencies: AppDependencies = {}): Promise<FastifyInstance> {
-  const authenticate = dependencies.authenticate ?? noSessions
+  const authenticate = dependencies.authenticate ?? dependencies.officeAuth?.authenticate ?? noSessions
   if (isTestAuthenticator(authenticate) && config.environment !== 'test') {
     throw new Error(`A test authenticator is refused with FACTORY_ENV=${config.environment}; it works only in tests.`)
   }
@@ -140,6 +146,7 @@ export async function buildApp(config: AppConfig, dependencies: AppDependencies 
   })
   await app.register(cookie, { secret: config.cookieSecret })
   installRouteManifest(app, authenticate)
+  app.decorate('officeAuth', dependencies.officeAuth ?? null)
   app.decorateRequest('withClient', function withClient(work) {
     return withContextClient(database, this.factoryContext, work)
   })

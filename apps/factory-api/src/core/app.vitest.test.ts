@@ -233,6 +233,26 @@ export default defineRoutes(${JSON.stringify(name)}, manifest, async (app) => { 
     ])
   })
 
+  it('looks one level into a group folder that has no routes file of its own, never deeper', () => {
+    const root = tree({
+      'platform/auth/office/routes.ts': '',
+      'platform/auth/users/routes.ts': '',
+      'platform/auth/users/deeper/routes.ts': '',
+      'platform/auth/notes.ts': '',
+      'platform/auth/office/deeper/routes.ts': '',
+      'modules/gauges/routes.ts': '',
+      'modules/gauges/part/routes.ts': '',
+    })
+    expect(routesFiles(root).map((file) => file.slice(root.length + 1))).toEqual([
+      join('platform', 'auth', 'office', 'routes.ts'),
+      join('platform', 'auth', 'users', 'routes.ts'),
+      join('modules', 'gauges', 'routes.ts'),
+    ])
+    expect(() => routesFiles(tree({ 'platform/auth/office/routes.ts': '', 'platform/auth/office/routes.js': '' }))).toThrow(
+      /platform\/auth\/office has more than one routes file/,
+    )
+  })
+
   it('refuses a folder with two routes files', () => {
     const root = tree({ 'platform/auth/routes.ts': '', 'platform/auth/routes.js': '' })
     expect(() => routesFiles(root)).toThrow(/platform\/auth has more than one routes file/)
