@@ -3,17 +3,20 @@
 The factory's Fastify 5 API: a separate product from Commerce, with its own database, login and Railway projects.
 Today the API core: context, contracts, route manifest, security baseline, `GET /health` and `GET /ready`, and
 `command()` (`src/core/command.ts`): the ONLY way to write — one transaction for the change, its audit rows, its events
-and the idempotency receipt. Sign-in, the outbox writer, the worker and scheduler (`src/background.ts`), the modules
-and the adapters come in later steps; until the outbox step, a command that emits an event is refused.
+and the idempotency receipt; the outbox (events → BullMQ → handlers and live screens); and the worker and scheduler
+(`src/background.ts worker|scheduler`). Sign-in, the modules and the adapters come in later steps.
 
 ## Commands (from the repository root unless noted)
-    cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only
+    cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>
     cd packages/factory-db && npx prisma generate            # once after npm ci (typecheck and tests need the client)
     npm run dev -w @nexus/factory-api           # :8190 unless FACTORY_PORT
+    npm run dev:worker -w @nexus/factory-api    # outbox relay + event handlers; ONLY on this worktree's own database
+    npm run dev:scheduler -w @nexus/factory-api # clustered crons; same refusals (start:worker / start:scheduler on dist/)
     npm run typecheck -w @nexus/factory-api
-    cd apps/factory-api && npx vitest run       # needs FACTORY_DATABASE_URL: factory_test… or factory_<branch>
+    cd apps/factory-api && npx vitest run       # needs FACTORY_DATABASE_URL: factory_test… or factory_<branch>;
+                                                # *.redis.vitest.test.ts and the outbox pg test need the local Redis
     node scripts/factory/run-pg-tests.mjs apps/factory-api   # the *.pg.vitest.test.ts files, on throwaway databases
-    npm run build -w @nexus/factory-api         # prisma generate, then esbuild (build.mjs) → dist/ (index + routes files)
+    npm run build -w @nexus/factory-api         # prisma generate, then esbuild → dist/ (index, background, routes files)
     node scripts/factory/run-guards.mjs         # includes check-route-manifest
 
 ## The core (`src/core/`)
@@ -44,6 +47,22 @@ and the adapters come in later steps; until the outbox step, a command that emit
   refused, rate limit (Redis when present), 1 MiB body limit.
 - `ids.ts` (request ids), `time.ts` (the server clock). UUIDv7 `newId()` and Europe/Rome dates live in
   `@nexus/factory-domain/core/{ids,time}`.
+- `queue.ts`: BullMQ queues `events`, `event-handlers`, `dead-letter`, every key under FACTORY_QUEUE_PREFIX
+  (`openQueues`). `add` needs a deterministic `jobId`; a job that fails its last attempt is copied to `dead-letter`.
+- `cron.ts`: `defineCron({ name, schedule, run })` + `startCrons` (scheduler only): each tick claims
+  `<prefix>:cron:<job>:<second>` in Redis (SET NX PX); fails closed when Redis is down.
+- `sse.ts`: live screens. One Redis subscriber per process (`LiveFeed`), `GET /live` (platform/outbox) streams what
+  `liveViewFor` lets each office or floor viewer see; heartbeat 20 s.
+
+## The outbox (`src/platform/outbox/`)
+- `writer.ts`: command()'s EventWriter. An emitted event must be declared in `@nexus/factory-domain/events/catalogue`
+  (module lists in `factory-domain/src/<module>/events.ts`); an undeclared type or version, or a payload its strict
+  schema refuses, rolls the command back. Only this folder writes OutboxEvent rows (`check-event-contract`).
+- `relay.ts` (worker): per active tenant, in its system context (office role, RLS forced), `FOR UPDATE SKIP LOCKED`
+  → `events` queue (job id = event id) → PUBLISHED; failures back off, DEAD after 10 tries.
+- `dispatch.ts` (worker): an event → its live message (Redis pub/sub) + one `event-handlers` job per handler
+  (`defineHandler`, listed in `background.ts`; handlers write through `tools.caller` = command() as the system).
+- `lag.ts` (scheduler): the `outbox.lag` cron logs pending/dead events, dead letters and failed jobs every minute.
 
 ## Rules
 - Configuration only through `src/env.ts`. It reads ONLY `apps/factory-api/.env`, by explicit path, and ONLY
@@ -59,6 +78,10 @@ and the adapters come in later steps; until the outbox step, a command that emit
   `factory_<branch>` (`src/testing/global-setup.ts`), even tests that never connect.
 - Local stack: PostgreSQL 17 on 127.0.0.1:5442 and Redis on 127.0.0.1:6399 (`infra/factory/docker-compose.yml`,
   started once from a fixed folder, never from a worktree). Never Commerce's 5432/6379 or Commerce's databases.
-- The worker and scheduler run only against this worktree's own loopback database.
+- The worker and scheduler run only against this worktree's own loopback database: with FACTORY_ENV local or test,
+  `background.ts` refuses any other database name before it connects, and env.ts refuses a missing
+  FACTORY_QUEUE_PREFIX (the local Redis is shared; Railway defaults it to `factory`).
+- Every event is declared before it is emitted (`check-event-contract`); every schedule is a `defineCron` job
+  (`check-cron-clustered`: node-cron only in core/cron.ts, no other scheduler library, no BullMQ repeatable job).
 - The Prisma CLI runs only from `packages/factory-db`.
 - Vitest runs `src/**/*.vitest.test.ts`; `*.pg.vitest.test.ts` need the local stack.

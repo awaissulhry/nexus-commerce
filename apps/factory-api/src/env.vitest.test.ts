@@ -9,6 +9,7 @@ const LOCAL = {
   FACTORY_ENV: 'local',
   FACTORY_DATABASE_URL: 'postgresql://postgres@127.0.0.1:5442/factory_w9_01',
   FACTORY_REDIS_URL: 'redis://127.0.0.1:6399',
+  FACTORY_QUEUE_PREFIX: 'w9_01',
 }
 const REMOTE_DATABASE = 'postgresql://factory_runtime:hunter2@db.example.com:5432/factory'
 const REMOTE_REDIS = 'redis://default:hunter2@cache.example.com:6379'
@@ -118,6 +119,18 @@ describe('refusals', () => {
     }
   })
 
+  it.each(['local', 'test'])('refuses FACTORY_ENV=%s without its own queue prefix (the local Redis is shared)', (name) => {
+    const { FACTORY_QUEUE_PREFIX: _unused, ...rest } = LOCAL
+    expect(() => parseFactoryEnv({ ...rest, FACTORY_ENV: name }, undefined)).toThrow(/FACTORY_QUEUE_PREFIX is required with FACTORY_ENV=/)
+    expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_ENV: name, FACTORY_QUEUE_PREFIX: '' }, undefined)).toThrow(/FACTORY_QUEUE_PREFIX is required/)
+  })
+
+  it('refuses a queue prefix that is not lower-case letters, digits and underscores', () => {
+    for (const prefix of ['W0_12', 'w0-12', '0w', 'w0:12', 'x'.repeat(33)]) {
+      expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_QUEUE_PREFIX: prefix }, undefined), prefix).toThrow(/FACTORY_QUEUE_PREFIX/)
+    }
+  })
+
   it('refuses proxy hops out of range', () => {
     expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_TRUST_PROXY_HOPS: '-1' }, undefined)).toThrow(/FACTORY_TRUST_PROXY_HOPS/)
     expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_TRUST_PROXY_HOPS: 'all' }, undefined)).toThrow(/FACTORY_TRUST_PROXY_HOPS/)
@@ -152,6 +165,7 @@ describe('accepted', () => {
     expect(env.FACTORY_PORT).toBe(8080)
     expect(env.FACTORY_TRUST_PROXY_HOPS).toBe(2)
     expect(env.FACTORY_WEB_ORIGIN).toBe('https://factory.example.com')
+    expect(env.FACTORY_QUEUE_PREFIX).toBe('factory')
     expect(Object.isFrozen(env)).toBe(true)
   })
 })

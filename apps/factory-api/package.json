@@ -5,8 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "dev:worker": "tsx src/background.ts worker",
+    "dev:scheduler": "tsx src/background.ts scheduler",
     "build": "npm run generate -w @nexus/factory-db && node build.mjs",
     "start": "node dist/index.js",
+    "start:worker": "node dist/background.js worker",
+    "start:scheduler": "node dist/background.js scheduler",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },

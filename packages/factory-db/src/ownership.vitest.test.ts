@@ -20,6 +20,7 @@ describe('model ownership', () => {
       'Line',
       'NumberAllocation',
       'NumberSeries',
+      'OutboxEvent',
       'Site',
       'Station',
       'Tenant',

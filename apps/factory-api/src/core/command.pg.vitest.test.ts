@@ -240,14 +240,14 @@ describe('a write and its audit row', () => {
     expect(await siteRow(siteId)).toMatchObject({ version: 1 })
   })
 
-  it('refuses events while no outbox stores them, and writes nothing', async () => {
+  it('refuses an event type the catalogue does not declare, and writes nothing', async () => {
     const siteId = await newSite()
     const context = officeA()
     await expect(
       rename(as(context), { siteId, name: 'Evented', version: 1 }, { ...SETTINGS, writeEvents: COMMAND_SETTINGS.writeEvents }, async ({ emit }) =>
         emit({ type: 'site.renamed', subject: siteId, payload: { name: 'Evented' } }),
       ),
-    ).rejects.toThrow(/outbox that stores them does not exist yet/)
+    ).rejects.toThrow(/"site.renamed" version 1 is not declared in the event catalogue/)
     expect(await siteRow(siteId)).toMatchObject({ name: 'Plant', version: 1 })
     expect(await auditRows('"requestId" = $1', [context.requestId])).toHaveLength(0)
   })

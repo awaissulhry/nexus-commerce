@@ -1,13 +1,14 @@
-// The production build (decision D5: the API is bundled with esbuild). Entry points: src/index.ts and every routes
-// file of src/platform/* and src/modules/*, found by the same function the app loads them with at run time
-// (src/core/autoload.ts), so dev and prod cannot drift. Output mirrors src/: dist/index.js,
+// The production build (decision D5: the API is bundled with esbuild). Entry points: src/index.ts (the API),
+// src/background.ts (the worker and the scheduler: `node dist/background.js worker|scheduler`) and every routes file of
+// src/platform/* and src/modules/*, found by the same function the app loads them with at run time
+// (src/core/autoload.ts), so dev and prod cannot drift. Output mirrors src/: dist/index.js, dist/background.js,
 // dist/platform/<name>/routes.js, dist/modules/<name>/routes.js; at run time dist/index.js finds those files the way
 // src/index.ts finds the .ts ones.
 //
-// ESM with code splitting: code shared by index.js and the routes files (src/core, the @nexus/* factory packages, the
-// generated Prisma client) goes into chunks they all import, so every module exists ONCE at run time: one route
-// manifest registry, one DomainError class for `instanceof`. The build checks that from esbuild's metafile and fails
-// if any source file landed in two outputs. Chunks sit beside index.js, so a path built from import.meta.url
+// ESM with code splitting: code shared by index.js, background.js and the routes files (src/core, the @nexus/* factory
+// packages, the generated Prisma client) goes into chunks they all import, so every module exists ONCE at run time:
+// one route manifest registry, one DomainError class for `instanceof`. The build checks that from esbuild's metafile
+// and fails if any source file landed in two outputs. Chunks sit beside index.js, so a path built from import.meta.url
 // (env.ts: ../.env) resolves the same from every output.
 //
 // The @nexus/* factory packages export TypeScript source and are bundled; every other package stays external and is
@@ -37,7 +38,7 @@ const externalPackages = {
 rmSync(new URL('./dist', import.meta.url), { recursive: true, force: true })
 const result = await build({
   absWorkingDir: workspace,
-  entryPoints: ['src/index.ts', ...routes],
+  entryPoints: ['src/index.ts', 'src/background.ts', ...routes],
   outbase: 'src',
   outdir: 'dist',
   bundle: true,
@@ -63,4 +64,4 @@ if (doubled.length > 0) {
   for (const [input, outputs] of doubled) console.error(`  ${input}: ${outputs.join(', ')}`)
   process.exit(1)
 }
-console.log(`build: dist/index.js + ${routes.length} routes file(s); ${outputsOf.size} modules, each in exactly one output`)
+console.log(`build: dist/index.js + dist/background.js + ${routes.length} routes file(s); ${outputsOf.size} modules, each in exactly one output`)

@@ -13,13 +13,17 @@ import { describeUrlHost, isLoopbackUrl } from '@nexus/db-kit/url-guard'
  *   FACTORY_ENV               local | test | staging | production
  *   FACTORY_DATABASE_URL      the runtime login `factory_app` (never the owner; openFactoryDatabase audits it at boot)
  *   FACTORY_REDIS_URL         Redis (queues, rate limits, cron locks)
+ *   FACTORY_QUEUE_PREFIX      every Redis key of the queues, cron locks and live screens sits under it; required with
+ *                             local and test (the local Redis is shared by every worktree: the worktree's step, w0_12),
+ *                             `factory` by default on Railway (each environment has its own Redis)
  *   FACTORY_HOST, FACTORY_PORT
  *   FACTORY_WEB_ORIGIN        the factory web's origin, the only one allowed cross-origin (local: http://localhost:3200)
  *   FACTORY_COOKIE_SECRET     signs cookies; local and test fall back to a fixed placeholder
  *   FACTORY_TRUST_PROXY_HOPS  proxies in front of the API whose X-Forwarded-For is trusted (default 0)
  *
  * Refusals:
- *   - FACTORY_ENV local or test: the database and Redis must be on this machine (loopback);
+ *   - FACTORY_ENV local or test: the database and Redis must be on this machine (loopback), and FACTORY_QUEUE_PREFIX
+ *     must be set;
  *   - FACTORY_ENV staging or production: only on Railway (RAILWAY_ENVIRONMENT set by the platform, never by the file),
  *     with an https web origin and a real cookie secret of at least 32 characters (never the local placeholder).
  */
@@ -34,6 +38,10 @@ export class FactoryEnvError extends Error {
 /** The cookie secret of local and test runs. Public on purpose: staging and production refuse it. */
 export const LOCAL_COOKIE_SECRET = 'factory-local-cookie-secret-not-for-staging-or-production'
 const LOCAL_WEB_ORIGIN = 'http://localhost:3200'
+
+/** A queue prefix: 1-32 lower-case letters, digits or underscores, starting with a letter. */
+export const QUEUE_PREFIX_PATTERN = /^[a-z][a-z0-9_]{0,31}$/
+const RAILWAY_QUEUE_PREFIX = 'factory'
 
 const origin = z.string().refine(
   (value) => {
@@ -51,6 +59,11 @@ const schema = z.object({
   FACTORY_ENV: z.enum(['local', 'test', 'staging', 'production']),
   FACTORY_DATABASE_URL: z.string().min(1),
   FACTORY_REDIS_URL: z.string().min(1),
+  FACTORY_QUEUE_PREFIX: z
+    .string()
+    .regex(QUEUE_PREFIX_PATTERN, { message: 'must be 1-32 lower-case letters, digits or underscores, starting with a letter' })
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
   FACTORY_HOST: z.string().min(1).optional(),
   FACTORY_PORT: z.coerce.number().int().min(1).max(65535).default(8190),
   FACTORY_WEB_ORIGIN: origin.optional(),
@@ -59,7 +72,7 @@ const schema = z.object({
 })
 
 export type FactoryEnv = Readonly<
-  z.infer<typeof schema> & { FACTORY_HOST: string; FACTORY_WEB_ORIGIN: string; FACTORY_COOKIE_SECRET: string }
+  z.infer<typeof schema> & { FACTORY_HOST: string; FACTORY_WEB_ORIGIN: string; FACTORY_COOKIE_SECRET: string; FACTORY_QUEUE_PREFIX: string }
 >
 
 type Sources = { file?: string; processEnv?: NodeJS.ProcessEnv }
@@ -96,6 +109,11 @@ export function parseFactoryEnv(variables: Record<string, string>, railwayEnviro
         )
       }
     }
+    if (env.FACTORY_QUEUE_PREFIX === undefined) {
+      throw new FactoryEnvError(
+        `FACTORY_QUEUE_PREFIX is required with FACTORY_ENV=${env.FACTORY_ENV}: the local Redis is shared by every worktree, so name this worktree's own (e.g. w0_12)`,
+      )
+    }
   } else if (railwayEnvironment === undefined || railwayEnvironment === '') {
     throw new FactoryEnvError(
       `FACTORY_ENV=${env.FACTORY_ENV} runs only on Railway (RAILWAY_ENVIRONMENT is not set); use local or test here`,
@@ -116,6 +134,7 @@ export function parseFactoryEnv(variables: Record<string, string>, railwayEnviro
     FACTORY_HOST: env.FACTORY_HOST ?? (local ? '127.0.0.1' : '::'),
     FACTORY_WEB_ORIGIN: env.FACTORY_WEB_ORIGIN ?? LOCAL_WEB_ORIGIN,
     FACTORY_COOKIE_SECRET: env.FACTORY_COOKIE_SECRET ?? LOCAL_COOKIE_SECRET,
+    FACTORY_QUEUE_PREFIX: env.FACTORY_QUEUE_PREFIX ?? RAILWAY_QUEUE_PREFIX,
   })
 }
 
