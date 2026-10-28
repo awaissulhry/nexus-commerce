@@ -3,8 +3,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
+import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedIntegration } from '../seed/integration'
+import { seed as seedLinks } from '../seed/links'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedRoles } from '../seed/roles'
@@ -90,6 +92,10 @@ beforeAll(async () => {
   await seedRoles({ db: factory, namespace: 'iso-b' })
   await seedIntegration({ db: factory, namespace: 'iso-a' })
   await seedIntegration({ db: factory, namespace: 'iso-b' })
+  await seedFiles({ db: factory, namespace: 'iso-a' })
+  await seedFiles({ db: factory, namespace: 'iso-b' })
+  await seedLinks({ db: factory, namespace: 'iso-a' })
+  await seedLinks({ db: factory, namespace: 'iso-b' })
   await seedFloorAuth({ db: factory, namespace: 'iso-a' })
   await seedFloorAuth({ db: factory, namespace: 'iso-b' })
 }, 60_000)
@@ -114,8 +120,10 @@ it('covers every classified table and every runtime role', () => {
     'IntegrationCall',
     'Invitation',
     'Line',
+    'LinkEvidence',
     'NumberAllocation',
     'NumberSeries',
+    'OneOffLink',
     'OutboxEvent',
     'PasswordReset',
     'Role',
@@ -124,6 +132,7 @@ it('covers every classified table and every runtime role', () => {
     'Session',
     'Site',
     'Station',
+    'StoredFile',
     'Tenant',
     'User',
     'WorkCentre',
@@ -150,6 +159,7 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
     const filter = keys.map((key) => ({ column: keyColumns[key] as string, type: POLICY_KEYS[key].type, value: () => keyValue(key) }))
     const inside = filter.map((entry, index) => `${q(entry.column)} = $${index + 1}::${entry.type}`).join(' AND ') || 'true'
     const values = () => filter.map((entry) => entry.value())
+    /** The first row matching `where`, whose `$n` parameters are the scope's values (or `params`, when given). */
     const rowOf = async (where: string, params: unknown[] = values()): Promise<Record<string, unknown>> => {
       const [row] = await admin(`SELECT to_jsonb(t) AS row FROM ${table} t WHERE ${where} ORDER BY ${q(pk)} LIMIT 1`, params)
       expect(row, `a ${model.name} row ${where}`).toBeDefined()

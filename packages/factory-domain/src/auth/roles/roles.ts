@@ -50,6 +50,9 @@ export function roleProblems(
     const definition = registry.get(permission)
     if (!definition) issues.push({ path: `permissions/${index}`, message: `${permission} is not a permission of the factory.` })
     else if (definition.grain !== undefined) issues.push({ path: `permissions/${index}`, message: `${permission} is a money grain: list it in grains.` })
+    else if (definition.link === true) {
+      issues.push({ path: `permissions/${index}`, message: `${permission} is held only by a one-off link session, from its purpose; a role cannot give it.` })
+    }
     // Custom roles are office roles: the floor's permissions come only with the floor templates.
     else if (definition.area === FLOOR_AREA) issues.push({ path: `permissions/${index}`, message: `${permission} is held only by floor roles.` })
   })

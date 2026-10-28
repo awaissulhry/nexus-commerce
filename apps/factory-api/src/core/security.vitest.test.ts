@@ -82,6 +82,7 @@ describe('CORS: only the web origin', () => {
     expect(response.statusCode).toBe(204)
     expect(response.headers['access-control-allow-methods']).toContain('POST')
     expect(response.headers['access-control-allow-headers']).toContain('x-csrf-token')
+    expect(response.headers['access-control-allow-headers']).toContain('x-factory-link')
   })
 
   it('refuses a preflight and a write from any other origin', async () => {

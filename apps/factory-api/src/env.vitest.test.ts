@@ -164,6 +164,18 @@ describe('refusals', () => {
     expect(parseFactoryEnv({ ...LOCAL, FACTORY_SECRETS_MASTER_KEY: TEST_MASTER_KEY }, undefined).FACTORY_SECRETS_MASTER_KEY).toBe(TEST_MASTER_KEY)
   })
 
+  it.each(['production', 'staging'])('refuses the local files folder with FACTORY_ENV=%s (files are on R2 there)', (name) => {
+    expect(() => parseFactoryEnv({ ...RAILWAY, FACTORY_ENV: name, FACTORY_LOCAL_FILES_DIR: '/tmp/factory-files' }, 'production')).toThrow(
+      /FACTORY_LOCAL_FILES_DIR \(the local file store\) is refused/,
+    )
+  })
+
+  it('takes the local files folder only as an absolute path', () => {
+    expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_LOCAL_FILES_DIR: 'relative/files' }, undefined)).toThrow(/FACTORY_LOCAL_FILES_DIR: must be an absolute path/)
+    expect(parseFactoryEnv({ ...LOCAL, FACTORY_LOCAL_FILES_DIR: '/tmp/factory-files' }, undefined).FACTORY_LOCAL_FILES_DIR).toBe('/tmp/factory-files')
+    expect(parseFactoryEnv(LOCAL, undefined).FACTORY_LOCAL_FILES_DIR).toBeUndefined()
+  })
+
   it('does not let the file pretend to be Railway', () => {
     const file = variablesFile(
       `FACTORY_ENV=production\nFACTORY_DATABASE_URL=${REMOTE_DATABASE}\nFACTORY_REDIS_URL=${REMOTE_REDIS}\nRAILWAY_ENVIRONMENT=production`,

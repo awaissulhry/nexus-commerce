@@ -7,14 +7,16 @@ import { ApiError } from '../../../core/errors'
 import { serverClock, type Clock } from '../../../core/time'
 import type { FactoryEnv } from '../../../env'
 import { floorAuthenticator, sessionAuthenticator } from '../floor/authenticator'
+import { linkAuthenticator, withLinkSessions } from '../../links/authenticator'
 import { officeAuthenticator } from './authenticator'
 import { holdAuthMail, isMemoryAuthMailer, type AuthMailer, type AuthMessage } from './mail'
 import { authSecrets, type AuthSecrets } from './secrets'
 
 /**
- * Office sign-in as one object (plan A1 §3.10): the real `Authenticator` for office cookies (and, for a request that
- * carries a floor session cookie, the floor's: platform/auth/floor), and what the auth routes
- * (platform/auth/{office,sessions,invitations,users,roles,floor}) share. `src/index.ts` makes it and hands it to `buildApp`
+ * Office sign-in as one object (plan A1 §3.10): the real `Authenticator` for office cookies (and one-off link tokens,
+ * platform/links; and, for a request that carries a floor session cookie, the floor's: platform/auth/floor), and what
+ * the auth and link routes (platform/auth/{office,sessions,invitations,users,roles,floor}, platform/links) share.
+ * `src/index.ts` makes it and hands it to `buildApp`
  * (`officeAuth`), which uses its authenticator and decorates the app with it; a route reads it with `officeAuthOf`.
  *
  * Before a session exists (sign-in, an invitation or reset link) the tenant comes from the request: the sign-in names
@@ -38,6 +40,8 @@ export interface AuthRateLimits {
   readonly tokenUse: AuthRateLimit
   /** Step-up and two-factor codes of a signed-in session. */
   readonly codes: AuthRateLimit
+  /** Opening and answering a one-off link (platform/links): a token tried from one address. */
+  readonly linkUse: AuthRateLimit
   /** Floor sign-in, switch and PIN change: per enrolled device (a plant's tablets may share one address). */
   readonly floorSignIn: AuthRateLimit
 }
@@ -47,6 +51,7 @@ export const AUTH_RATE_LIMITS: AuthRateLimits = Object.freeze({
   resetRequest: { max: 5, timeWindowMs: 15 * 60_000 },
   tokenUse: { max: 20, timeWindowMs: 15 * 60_000 },
   codes: { max: 10, timeWindowMs: 5 * 60_000 },
+  linkUse: { max: 30, timeWindowMs: 60_000 },
   floorSignIn: { max: 30, timeWindowMs: 60_000 },
 })
 
@@ -72,8 +77,9 @@ export interface OfficeAuth {
   readonly secrets: AuthSecrets
   readonly rateLimits: AuthRateLimits
   /**
-   * Reads the session of a request (core/context.ts Authenticator): the floor session cookie's (floor/authenticator.ts)
-   * when the request carries one, else the office session cookie's.
+   * Reads the session of a request (core/context.ts Authenticator): a one-off link's token in the `x-factory-link`
+   * header (platform/links/authenticator.ts), else the floor session cookie's (floor/authenticator.ts: no office
+   * fallback), else the office session cookie.
    */
   readonly authenticate: Authenticator
   /** Reads inside a tenant before a session exists, as `actorId` (a link's user, or PRE_SESSION_ACTOR_ID). */
@@ -114,7 +120,10 @@ export function createOfficeAuth(options: OfficeAuthOptions): OfficeAuth {
     clock,
     secrets,
     rateLimits: { ...AUTH_RATE_LIMITS, ...options.rateLimits },
-    authenticate: sessionAuthenticator(officeAuthenticator({ database: options.database, clock }), floorAuthenticator({ database: options.database, clock })),
+    authenticate: withLinkSessions(
+      linkAuthenticator({ database: options.database, clock }),
+      sessionAuthenticator(officeAuthenticator({ database: options.database, clock }), floorAuthenticator({ database: options.database, clock })),
+    ),
     inTenant: (tenantId, actorId, work) => options.database.withScope({ audience: 'office', tenantId, actorId }, work),
     inPlatform: (work) => options.database.withScope({ audience: 'platform' }, work),
     command: (context, spec, work) => runCommand(callerFor(options.database, context), spec, work, settings),

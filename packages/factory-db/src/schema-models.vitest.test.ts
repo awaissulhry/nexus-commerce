@@ -47,6 +47,37 @@ describe('the schema reader', () => {
     expect(model?.fields.find((field) => field.name === 'tags')?.list).toBe(true)
   })
 
+  it('reads the tags of each field\'s doc comment, not the model\'s, and not across a blank line', () => {
+    const [model] = parseSchema([
+      {
+        file: 'x.prisma',
+        text: [
+          '/// @append-only',
+          'model Thing {',
+          '  id    String @id',
+          '  /// The price the customer pays.',
+          '  /// @grain   price',
+          '  price Int',
+          '  /// @internal for the office',
+          '  // a plain comment',
+          '  note  String?',
+          '  /// @grain cost',
+          '',
+          '  other Int',
+          '}',
+        ].join('\n'),
+      },
+    ])
+    expect(Object.fromEntries(model!.fields.map((field) => [field.name, field.tags]))).toEqual({
+      id: [],
+      price: ['@grain price'],
+      note: ['@internal for'],
+      other: [],
+    })
+    const link = loadSchema().find((entry) => entry.name === 'OneOffLink')!
+    expect(link.fields.find((field) => field.name === 'note')?.tags).toEqual(['@internal'])
+  })
+
   it.each([
     ['a composite type', 'type Address { city String }'],
     ['a view', 'view Totals { id String @unique }'],

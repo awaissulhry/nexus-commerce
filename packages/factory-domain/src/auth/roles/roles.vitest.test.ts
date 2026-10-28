@@ -41,7 +41,7 @@ describe('the permission registry', () => {
     expect(FACTORY_PERMISSIONS.get('roles.assign')?.risk).toBe('stepUp')
     expect(FACTORY_PERMISSIONS.assignable.some((definition) => definition.area === 'money')).toBe(false)
     expect(FACTORY_PERMISSIONS.undeclared(['users.view', 'quotes.send', 'quotes.send'])).toEqual(['quotes.send'])
-    expect([...FACTORY_PERMISSIONS.byArea().keys()]).toEqual(['users', 'roles', 'audit', 'numbering', 'devices', 'workers', 'floor', 'money'])
+    expect([...FACTORY_PERMISSIONS.byArea().keys()]).toEqual(['users', 'roles', 'audit', 'numbering', 'files', 'links', 'devices', 'workers', 'floor', 'money'])
   })
 
   it('refuses a name declared twice, a bad area, a bad risk, an empty description', () => {
@@ -91,6 +91,14 @@ describe('custom roles', () => {
     ])
     expect(customKeyProblems('night_lead')).toEqual([])
     expect(customKeyProblems('Night lead')).toHaveLength(1)
+  })
+
+  it('refuses the permissions only a one-off link session holds (they come from the link\'s purpose)', () => {
+    expect(roleProblems({ name: 'Link sender', requireMfa: false, permissions: ['links.view', 'links.manage'], grains: [] })).toEqual([])
+    expect(roleProblems({ name: 'Customer', requireMfa: false, permissions: ['links.open', 'links.view', 'links.accept'], grains: ['price'] })).toEqual([
+      { path: 'permissions/0', message: 'links.open is held only by a one-off link session, from its purpose; a role cannot give it.' },
+      { path: 'permissions/2', message: 'links.accept is held only by a one-off link session, from its purpose; a role cannot give it.' },
+    ])
   })
 
   it('a template update never widens a copy: it only shows what the template has that the copy lacks', () => {

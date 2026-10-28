@@ -5,6 +5,8 @@ import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, Valida
 import { newId } from '@nexus/factory-domain/core/ids'
 import { holds } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { assertTransition } from '@nexus/factory-domain/state/machine'
+import { StaleVersionError } from '../../../core/command'
 import { actorOf, requireContext, type OfficeContext } from '../../../core/context'
 import { requireStepUp } from '../office/account'
 import { signedIn } from '../office/sign-in'
@@ -13,7 +15,7 @@ import { assertCsrf } from '../sessions/cookies'
 import { requiresMfa } from '../sessions/grants'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { mintToken, parseToken, tokenHash } from '../sessions/secrets'
-import { startSession } from '../sessions/session-store'
+import { mintSessionSecrets, startSession, type StartedSession } from '../sessions/session-store'
 import { emailOrThrow } from '../users/email'
 import { adminFacts, userStatus } from '../users/status'
 import type { AcceptInvitationBody, InviteBody } from './contract'
@@ -26,7 +28,10 @@ import type { AcceptInvitationBody, InviteBody } from './contract'
  *             (or an earlier invited or deactivated one is reused, so history keeps one person) with those role
  *             assignments (an earlier invitation's are ended: the newest invitation says what the person gets);
  *             earlier open invitations of the person stop; the link (72 hours) goes to the mail seam after the commit.
- *             An address that is already an active or suspended user is refused.
+ *             An address that is already an active or suspended user is refused. The token is minted BEFORE the
+ *             command and only its hash goes in: the command's result (an Idempotency-Key receipt stores it) never
+ *             holds it. A repeated request with the same Idempotency-Key answers the stored invitation with
+ *             `delivery: already_sent` and sends no second mail.
  *   revoke    the open invitation stops; the invited user becomes DEACTIVATED (and can be invited again), and the
  *             roles it gave end.
  *   preview   what the accept page shows (tenant, address, name), for a valid link only.
@@ -43,7 +48,7 @@ const INVALID = 'This invitation is not valid or has expired. Ask for a new one.
 
 const isUniqueViolation = (error: unknown): boolean => (error as { code?: unknown } | null)?.code === 'P2002'
 
-export async function invite(auth: OfficeAuth, request: FastifyRequest, body: InviteBody) {
+export async function invite(auth: OfficeAuth, request: FastifyRequest, body: InviteBody, idempotencyKey?: string) {
   const context = requireContext(request) as OfficeContext
   requireStepUp(auth, request)
   const email = emailOrThrow(body.email)
@@ -58,15 +63,25 @@ export async function invite(auth: OfficeAuth, request: FastifyRequest, body: In
     throw new ConflictError('This address already belongs to a user of the tenant.')
   }
   const userId = existing?.id ?? newId()
-  const record = existing
-    ? { type: 'User' as const, id: existing.id, expectedVersion: existing.version, ...(existing.status === 'DEACTIVATED' ? { transition: { machine: userStatus, to: 'INVITED' as const } } : {}) }
-    : undefined
 
+  // Minted outside the command: the receipt of a keyed request stores the command's result, never this.
+  const token = mintToken(context.tenantId, userId)
   let outcome
   try {
-    outcome = await auth.command(context, { name: 'users.invite', input: { email, displayName: body.displayName, locale, roles: body.roles }, ...(record ? { record } : {}) }, async ({ tx, now, audit }) => {
+    // The spec names only the request (no record read before it), so a repeated Idempotency-Key finds the same request
+    // hash and answers from its receipt. The person's row is guarded inside the work instead: compare-and-set on the
+    // version read above, and the status machine's move from DEACTIVATED.
+    outcome = await auth.command(context, { name: 'users.invite', idempotencyKey, input: { email, displayName: body.displayName, locale, roles: body.roles } }, async ({ tx, now, audit }) => {
       if (existing) {
-        await tx.user.update({ where: { id: userId }, data: { displayName: body.displayName, locale } })
+        const current = await tx.user.findUnique({ where: { id: userId }, select: { status: true, version: true } })
+        if (!current) throw new NotFoundError('User not found.')
+        if (current.version !== existing.version) throw new StaleVersionError('User', userId, current.version, existing.version)
+        if (current.status === 'DEACTIVATED') assertTransition(userStatus, current.status, 'INVITED', undefined)
+        const { count } = await tx.user.updateMany({
+          where: { id: userId, version: current.version },
+          data: { version: current.version + 1, status: 'INVITED', displayName: body.displayName, locale },
+        })
+        if (count !== 1) throw new StaleVersionError('User', userId, current.version + 1, current.version)
         const revoked = await tx.invitation.updateMany({ where: { userId, acceptedAt: null, revokedAt: null }, data: { revokedAt: now } })
         const assignmentsEnded = await endAllAssignments(tx, userId, { now, endedById: context.actorId })
         audit({ recordType: 'User', recordId: userId, before: { status: existing.status }, after: { status: 'INVITED', displayName: body.displayName, invitationsRevoked: revoked.count, assignmentsEnded } })
@@ -80,31 +95,32 @@ export async function invite(auth: OfficeAuth, request: FastifyRequest, body: In
         audit({ recordType: 'RoleAssignment', recordId: view.id, after: assignmentAudit(view) })
         roleIds.push(view.roleId)
       }
-      const token = mintToken(context.tenantId, userId)
       const id = newId()
       const expiresAt = toUtcIso(new Date(now.getTime() + INVITATION_TTL_MS))
       await tx.invitation.create({ data: { id, userId, email, tokenHash: tokenHash(token.value), invitedById: context.actorId, createdAt: now, expiresAt } })
       audit({ recordType: 'Invitation', recordId: id, after: { userId, email, expiresAt, roleIds } })
-      return { invitation: { id, userId, email, expiresAt, roleIds }, token: token.value }
+      return { invitation: { id, userId, email, expiresAt, roleIds } }
     })
   } catch (error) {
     if (isUniqueViolation(error)) throw new ConflictError('This address was just invited by someone else. Reload the list.')
     throw error
   }
-  const { invitation, token } = outcome.result
+  const { invitation } = outcome.result
+  // A repeat answers from the receipt: the first request already mailed the link, and this token was never stored.
+  if (outcome.replayed) return { invitation, delivery: 'already_sent' as const }
   await auth.deliver(
     {
       kind: 'invitation',
       tenantId: context.tenantId,
       userId,
       to: email,
-      link: auth.link('/accept-invitation', token),
+      link: auth.link('/accept-invitation', token.value),
       expiresAt: new Date(invitation.expiresAt),
       invitedById: context.actorId,
     },
     request.log,
   )
-  return { invitation }
+  return { invitation, delivery: 'sent' as const }
 }
 
 export async function revokeInvitation(auth: OfficeAuth, request: FastifyRequest, invitationId: string) {
@@ -183,6 +199,8 @@ export async function acceptInvitation(auth: OfficeAuth, request: FastifyRequest
   const problems = passwordProblems(body.password, { email: invitation.user.email, displayName })
   if (problems.length > 0) throw new ValidationError('Choose another password.', problems)
   const passwordHash = await hashPassword(body.password)
+  // The session's secrets are minted outside the command: its result (which a receipt could store) never holds them.
+  const secrets = mintSessionSecrets(token.tenantId, token.userId)
 
   const { result } = await auth.command(
     auth.contextFor(request, token.tenantId, token.userId),
@@ -201,13 +219,16 @@ export async function acceptInvitation(auth: OfficeAuth, request: FastifyRequest
         mfaProved: false,
         ipHash: auth.secrets.ipHash(request.ip),
         userAgent: request.headers['user-agent'],
+        secrets,
       })
       audit({ recordType: 'User', recordId: token.userId, before: { status: 'INVITED' }, after: { status: 'ACTIVE', displayName } })
       audit({ recordType: 'Invitation', recordId: invitation.id, after: { acceptedAt: toUtcIso(now) } })
       audit({ action: 'auth.signIn', recordType: 'Session', recordId: session.id, after: { userId: token.userId, secondFactor: null, companyId: session.companyId } })
-      return session
+      const { token: _token, csrfToken: _csrf, ...stored } = session
+      return stored
     },
   )
+  const started: StartedSession = { ...result, token: secrets.token.value, csrfToken: secrets.csrfToken }
   const requireMfa = await auth.inTenant(token.tenantId, token.userId, (client) => requiresMfa(client, { id: token.userId, requireMfa: invitation.user.requireMfa }, auth.clock.now()))
-  return signedIn(reply, result, { id: token.userId, email: invitation.user.email, displayName, locale: invitation.user.locale, requireMfa, totpConfirmedAt: null }, false)
+  return signedIn(reply, started, { id: token.userId, email: invitation.user.email, displayName, locale: invitation.user.locale, requireMfa, totpConfirmedAt: null }, false)
 }

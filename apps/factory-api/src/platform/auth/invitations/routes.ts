@@ -1,3 +1,4 @@
+import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { AUTH_RATE_LIMITS, officeAuthOf } from '../sessions/office-auth'
 import { acceptInvitationContract, inviteContract, previewInvitationContract, revokeInvitationContract } from './contract'
@@ -14,7 +15,7 @@ export default defineRoutes('auth-invitations', manifest, async (app) => {
   const tokenUse = app.officeAuth?.rateLimits.tokenUse ?? AUTH_RATE_LIMITS.tokenUse
   const limited = { rateLimit: { max: tokenUse.max, timeWindow: tokenUse.timeWindowMs } }
 
-  app.post('/auth/invitations', { schema: inviteContract }, (request) => invite(officeAuthOf(app), request, request.body))
+  app.post('/auth/invitations', { schema: inviteContract }, (request) => invite(officeAuthOf(app), request, request.body, idempotencyKeyFrom(request)))
   app.post('/auth/invitations/:invitationId/revoke', { schema: revokeInvitationContract }, (request) =>
     revokeInvitation(officeAuthOf(app), request, request.params.invitationId),
   )

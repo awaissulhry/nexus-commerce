@@ -4,9 +4,9 @@ The factory's Fastify 5 API: a separate product from Commerce, with its own data
 Today the API core: context, contracts, route manifest, security baseline, `GET /health` and `GET /ready`, and
 `command()` (`src/core/command.ts`): the ONLY way to write — one transaction for the change, its audit rows, its events
 and the idempotency receipt; the outbox (events → BullMQ → handlers and live screens); and the worker and scheduler
-(`src/background.ts worker|scheduler`); office and floor sign-in, roles and money grains (`src/platform/auth/`) and
-the integration platform (gateway, sealed secrets, inbound ledger), below. Portal and link sign-in, the modules and the
-adapters come in later steps.
+(`src/background.ts worker|scheduler`); office and floor sign-in, roles and money grains (`src/platform/auth/`),
+one-off links (`src/platform/links/`), the integration platform (gateway, sealed secrets, inbound ledger) and files on
+R2 (`src/platform/files/`), below. Portal sign-in, the modules and the other adapters come in later steps.
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>
@@ -70,10 +70,10 @@ adapters come in later steps.
 
 ## Office sign-in (`src/platform/auth/`, plan A1 §3.10)
 - `sessions/office-auth.ts`: `createOfficeAuth({ database, environment, cookieSecret, webOrigin, clock?, mailer? })`,
-  made in `src/index.ts` and passed to `buildApp` as `officeAuth`: its `authenticate` reads the office cookie (the
-  default authenticator; a request with the floor session cookie goes to the floor authenticator instead, below), the
-  auth routes read it with `officeAuthOf(app)` (503 without it). Portal and link sessions are not read yet: those
-  requests have no session (401).
+  made in `src/index.ts` and passed to `buildApp` as `officeAuth`: its `authenticate` reads a one-off link's token
+  (`x-factory-link`, platform/links), else the floor session cookie (the floor authenticator, below; no office
+  fallback), else the office cookie (the default authenticator); the auth and link routes read it with
+  `officeAuthOf(app)` (503 without it). Portal sessions are not read yet (401).
 - Identity is per tenant: `User` (email unique in the tenant), `Session`, `Invitation`, `PasswordReset` (auth.prisma),
   all behind the tenant wall. The tenant is known before any lookup: sign-in names its slug (`factory_platform` reads
   only `Tenant`), cookies and links carry `<tenantId>.<userId>.<secret>`; only SHA-256 of a token is stored.
@@ -146,6 +146,32 @@ adapters come in later steps.
   no biometric, photo, birth date or national id (MES-276); no productivity figure, and the registry shows "in use",
   never who (Statuto dei Lavoratori art. 4). The PG tests that prove it name these articles.
 
+## One-off links (`src/platform/links/`, plan A1 §3.10 "Links", §2.2; features SAL-099, PLT-007, PLT-035)
+- A link opens ONE record of ONE party for ONE purpose (factory-domain `links/purposes`: QUOTE_ACCEPT, PO_CONFIRM,
+  DOCUMENT_VIEW, DEPOSIT_INFO), with an expiry and a use limit. Token `<tenantId>.<partyId>.<linkId>.<secret>` (256
+  bits, `links/token`); only its SHA-256 is stored. The web link is `<web>/l#token=…` (fragment: in no server log); the
+  web sends the token in the `x-factory-link` header.
+- `authenticator.ts` (chained before the office cookie): the link is read in the token's PARTY scope
+  (factory_partner_runtime), hash compared in constant time, live (not revoked, not expired, uses left), tenant
+  ACTIVE → context `link` with its one record and the grants of its purpose (never a role's: `links.open`, its answers
+  `links.accept|decline|confirm`, `money.price` only for purposes that show the party its own document; PO_CONFIRM
+  none). Anything else is ONE 404 (`LINK_UNAVAILABLE`), whatever was wrong. `linkSessionOf(request)` gives the link.
+- Every use goes through `useLink(tools, request, { action, typedName?, email? })` INSIDE a command (`linkCommand`, on
+  the sign-in clock): the purpose's evidence rules (`links/evidence`: typed name, email check), the use counted by one
+  UPDATE that matches only a live link (a race uses a one-use link once), a LinkEvidence row (append-only), an audit
+  row and the `link.used` event. Link writes need an Idempotency-Key. A module's answer route (W1: accept a quote,
+  confirm a PO) has the `link` audience, its action's permission and scope `record`, and calls useLink beside its
+  change; command() refuses any record but the link's.
+- Office: `POST /links` (links.manage over the record's company and party; the URL is in the answer once, never in the
+  command result, so no receipt holds it), `GET /links?recordType=&recordId=` (links.view, scopeWhere), `POST
+  /links/:linkId/revoke` (final). A record type is linkable only once its module registers a source
+  (`records.ts`, `registerLinkRecordSource`); W0 has none. Rate limit `AuthRateLimits.linkUse` on link routes.
+- The partner wall (factory-db `src/ownership.ts`): a column marked `/// @grain cost|margin|wages` or `/// @internal`
+  must be in the partner role's hiddenColumns (check-ownership). The OneOffLink guard trigger keeps a link fixed but for
+  its uses, revocation and note.
+- PostgreSQL tests: `links.pg.vitest.test.ts` (a made-up module with in-memory records registers sources and link
+  routes), `guards.pg.vitest.test.ts`.
+
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),
   { name, idempotent, idempotencyKey?, request? }, async (call) => …)`. It re-reads the IntegrationAccount (office or
@@ -165,6 +191,28 @@ adapters come in later steps.
   HMAC verifier; others: INBOUND_PROVIDERS) → InboundWebhook receipt FIRST (dedupe key unique per provider; a bad
   signature is kept as REJECTED) + the event integration.inbound_received in one command → 200. The worker's
   `inboundHandler()` (in background.ts HANDLERS) applies a receipt once with its provider's processor.
+
+## Files on R2 (`src/platform/files/`, `src/adapters/{r2,local-files}/`, plan A1 §3.6; COL-045, COL-050, PLAN §2.8)
+- `StoredFile` (files.prisma): one row per file, for ONE record (`recordType` + `recordId`), never the bytes. Flow:
+  `POST /files` (kind's types and size limit, sharing, retention) → files.requestUpload (PENDING_UPLOAD, random key
+  `t/<tenant>/c/<company>/<yyyy>/<uuid4>`, `legal/…` for FISCAL_ARCHIVE) → a presigned PUT (5 min; type, length and
+  SHA-256 signed) → `POST /files/:id/complete` (the store's HEAD) → AVAILABLE + event `file.available`, or QUARANTINED
+  with its reason → `GET /files/:id/download` (60 s presigned GET, always an attachment). Rules: `rules.ts` (pure).
+- Visibility (COL-050): OFFICE always; FLOOR with `floorSiteId`, PARTNER/LINK with `partyId`. Those two columns are the
+  floor and partner roles' policy keys, set exactly when shared (the …_files_guards trigger), so RLS keeps a floor to its
+  site's floor files and a party to its own; `audienceSees()` adds portal vs link (LINK also needs the link's record).
+- Retention: a delete is refused under legal hold or before `retainUntil` (the state machine's guard and the trigger);
+  FISCAL_ARCHIVE keeps ten years at least; content columns never change; rows are never deleted (status DELETED).
+- Store calls go through the gateway (`store.ts`: files.presign_upload, files.presign_download, files.head, files.delete;
+  one IntegrationCall row each) for the tenant's R2 account: LIVE/SANDBOX → `adapters/r2` (S3 API), FAKE → the local
+  store (`adapters/local-files`, local and test only; its presigned requests are `PUT|GET /local-files?token=…` on this
+  API, HMAC-signed). Floor, portal and link downloads presign as the tenant's system caller after the audience check.
+  Tests: `useFiles(createFilesRuntime({ gateway, local, r2: r2FileStore({ clientFor: new FakeR2().clientFor }) }))`
+  (`adapters/r2/testing.ts`: the real S3 client on an in-memory transport, no network).
+- Permissions (declared in `@nexus/factory-domain/auth/permissions/catalogue`, FILES_DEFINITIONS): files.read,
+  files.upload, files.delete, files.manage (sharing beyond the office, also at upload; retention; legal hold). Every
+  office template has files.read; the roles that work on records also files.upload; admin (and owner) files.manage and
+  files.delete. Floor, portal and link sessions see files through their audience rule above, never an office template.
 
 ## Rules
 - Configuration only through `src/env.ts`. It reads ONLY `apps/factory-api/.env`, by explicit path, and ONLY

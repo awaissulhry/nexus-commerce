@@ -1,0 +1,27 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/links.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (factory_runtime) makes, lists and revokes links through apps/factory-api's platform/links, with command(). A link session runs as factory_partner_runtime behind its party's wall: it reads its link (the authenticator looks it up in the party scope the token names), counts a use on it, and adds evidence rows; it can neither read nor write the office's note or who made or revoked the link (hiddenColumns; the partner wall of src/ownership.ts also requires every column marked `@internal` or with a cost, margin or wages grain to be hidden from it). Every column but the use counters, the revocation and the note is fixed once the link exists, for every login (the …_links_guards trigger). LinkEvidence is append-only (`@append-only`, scripts/factory/check-append-only.mjs). No role deletes. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "OneOffLink": {
+      "about": "Office sessions with links.manage make and revoke links, with links.view list them (the API keeps staff to the companies and parties their grants reach). A link session reads its own link and counts its uses (uses, lastUsedAt), only inside its party.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": {
+          "privileges": ["select", "update"],
+          "scopedBy": ["party"],
+          "hiddenColumns": ["note", "createdById", "revokedById"]
+        }
+      }
+    },
+    "LinkEvidence": {
+      "about": "A link session adds one row per open or answer, inside its party (WITH CHECK). The office reads them (who accepted, when, with which typed name). Nobody changes or removes a row.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select"] },
+        "factory_partner_runtime": { "privileges": ["insert"], "scopedBy": ["party"] }
+      }
+    }
+  }
+}

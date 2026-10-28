@@ -1,3 +1,5 @@
+import type { Permission } from '../../core/permissions'
+import { LINK_SESSION_PERMISSIONS as LINK_SESSION_NAMES, LINKS_OFFICE_PERMISSIONS } from '../../links/permissions'
 import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
@@ -37,6 +39,41 @@ export const NUMBERING_DEFINITIONS = definePermissions('numbering', {
   manage: { risk: 'write', description: 'Create a number series, set where it starts, move it past a number.' },
 })
 
+/**
+ * Files on R2 (apps/factory-api platform/files; plan A1 §3.6, COL-045, COL-050). Each is checked with can() against the
+ * file's company, and for a floor, portal or link session against the site or party the file is shared with (that
+ * audience's own rule decides what it sees; a role only grants the permission). Sharing beyond the office, retention
+ * and legal hold are files.manage. Not step-up: A1 §3.10 keeps step-up for bank details, issuing invoices and user and
+ * role changes; a retained or held file cannot be deleted by anyone (the database refuses it too).
+ */
+export const FILES_DEFINITIONS = definePermissions('files', {
+  read: { risk: 'read', description: "See a record's files and download them (floor, portal and link sessions: only what is shared with them)." },
+  upload: { risk: 'write', description: 'Upload a file to a record (seen by the office only, unless shared with files.manage).' },
+  delete: { risk: 'write', description: 'Delete a file; never one on legal hold or before its retention date.' },
+  manage: { risk: 'write', description: 'Share a file with a floor, a portal or links; set its retention date and legal hold.' },
+})
+export const FILES_READ = 'files.read' satisfies Permission
+export const FILES_UPLOAD = 'files.upload' satisfies Permission
+export const FILES_DELETE = 'files.delete' satisfies Permission
+export const FILES_MANAGE = 'files.manage' satisfies Permission
+
+/** One-off links, office side (platform/links): make, revoke and follow the links of a record. */
+export const LINKS_PERMISSIONS = definePermissions('links', {
+  view: { risk: 'read', description: 'See the one-off links of a record: whom they were made for, their state, their uses and the evidence of each answer.' },
+  manage: { risk: 'write', description: 'Make a one-off link for a record, to send to its customer or supplier, and revoke one.' },
+})
+
+/**
+ * What a one-off link session may do (platform/links). Held only by link sessions, from the link's purpose
+ * (factory-domain links/purposes): never assignable to a role.
+ */
+export const LINK_SESSION_PERMISSIONS: PermissionDefinition[] = definePermissions('links', {
+  open: { risk: 'read', description: "Open the link's one record (its own prices only when the purpose shows its own document)." },
+  accept: { risk: 'write', description: 'Accept the quote the link opens, with a typed name (and the address it was sent to, when known).' },
+  decline: { risk: 'write', description: 'Decline the quote or purchase order the link opens.' },
+  confirm: { risk: 'write', description: 'Confirm the purchase order the link opens.' },
+}).map((definition) => Object.freeze({ ...definition, link: true as const }))
+
 /** The floor devices of the sites (apps/factory-api platform/auth/floor; features PLT-056, PLT-226). */
 export const DEVICES_PERMISSIONS = definePermissions('devices', {
   view: { risk: 'read', description: 'See the floor devices of the sites: station, status, last contact, whether someone is signed in.' },
@@ -70,6 +107,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   ROLES_PERMISSIONS,
   AUDIT_PERMISSIONS,
   NUMBERING_DEFINITIONS,
+  FILES_DEFINITIONS,
+  LINKS_PERMISSIONS,
+  LINK_SESSION_PERMISSIONS,
   DEVICES_PERMISSIONS,
   WORKERS_PERMISSIONS,
   FLOOR_PERMISSIONS,
@@ -79,7 +119,10 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
 /** The area of the permissions only floor roles hold (and floor roles hold no other). */
 export const FLOOR_AREA = 'floor'
 
-// The numbering module's constants and its declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE]) {
-  if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by the numbering module but not declared`)
+// The modules' constants and their declarations name the same permissions.
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS]) {
+  if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+}
+for (const name of LINK_SESSION_NAMES) {
+  if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

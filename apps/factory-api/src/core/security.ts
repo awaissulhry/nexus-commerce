@@ -35,7 +35,7 @@ export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 const ALLOWED_METHODS = 'GET, POST, PUT, PATCH, DELETE'
 /** Request headers the web may send cross-origin. */
-const ALLOWED_HEADERS = ['content-type', REQUEST_ID_HEADER, 'x-csrf-token', 'x-factory-company', 'idempotency-key'].join(', ')
+const ALLOWED_HEADERS = ['content-type', REQUEST_ID_HEADER, 'x-csrf-token', 'x-factory-company', 'idempotency-key', 'x-factory-link'].join(', ')
 const PREFLIGHT_MAX_AGE_SECONDS = '600'
 
 export interface SecurityOptions {

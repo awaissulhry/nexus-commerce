@@ -3,7 +3,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { CommandTx } from '../../../core/command'
 import { newCsrfToken } from './cookies'
-import { mintToken, tokenHash } from './secrets'
+import { mintToken, tokenHash, type AuthToken } from './secrets'
 
 /**
  * Office session rows (plan A1 §2.3 Session, §3.10; ported from Commerce's apps/api/src/lib/auth/session.ts): server
@@ -34,7 +34,20 @@ export interface StartSessionInput {
   readonly mfaProved: boolean
   readonly ipHash: string | null
   readonly userAgent: string | undefined
+  /**
+   * The session's secrets, minted before the command (`mintSessionSecrets`), so the command's result never has to
+   * carry them: a result can become an Idempotency-Key receipt, and a receipt is stored. Left out, they are minted here.
+   */
+  readonly secrets?: SessionSecrets
 }
+
+/** A session's cookie token and CSRF token. Never in a row, an audit entry, an event or a command's result. */
+export interface SessionSecrets {
+  readonly token: AuthToken
+  readonly csrfToken: string
+}
+
+export const mintSessionSecrets = (tenantId: string, userId: string): SessionSecrets => ({ token: mintToken(tenantId, userId), csrfToken: newCsrfToken() })
 
 /** A new session, as plain JSON (a command's result). The token and the CSRF token go to the cookies only. */
 export interface StartedSession {
@@ -53,7 +66,8 @@ async function startingCompany(tx: CommandTx): Promise<string | null> {
 }
 
 export async function startSession(tx: CommandTx, input: StartSessionInput): Promise<StartedSession> {
-  const token = mintToken(input.tenantId, input.userId)
+  const secrets = input.secrets ?? mintSessionSecrets(input.tenantId, input.userId)
+  const token = secrets.token
   const id = newId()
   const absoluteExpiresAt = new Date(input.now.getTime() + SESSION_LIFETIME.absoluteMs)
   const idleExpiresAt = idleExpiryAt(input.now, absoluteExpiresAt)
@@ -76,7 +90,7 @@ export async function startSession(tx: CommandTx, input: StartSessionInput): Pro
   return {
     id,
     token: token.value,
-    csrfToken: newCsrfToken(),
+    csrfToken: secrets.csrfToken,
     companyId,
     idleExpiresAt: toUtcIso(idleExpiresAt),
     absoluteExpiresAt: toUtcIso(absoluteExpiresAt),
