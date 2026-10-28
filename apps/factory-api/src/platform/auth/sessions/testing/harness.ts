@@ -7,7 +7,7 @@ import { timeStepAt } from '@nexus/factory-domain/auth/totp/totp'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { buildApp } from '../../../../core/app'
 import type { Clock } from '../../../../core/time'
-import { LOCAL_COOKIE_SECRET } from '../../../../env'
+import { LOCAL_COOKIE_SECRET, LOCAL_PIN_PEPPER } from '../../../../env'
 import { codesFor } from '../../office/second-factor'
 import { applySystemRoleChanges, systemRoleChanges } from '../../roles/system-roles'
 import { CSRF_COOKIE, CSRF_HEADER } from '../cookies'
@@ -65,7 +65,7 @@ export async function startHarness(label: string): Promise<Harness> {
   const clock = movableClock()
   const mailer = memoryAuthMailer()
   const make = (rateLimits: Partial<AuthRateLimits>) =>
-    createOfficeAuth({ database, environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, webOrigin: WEB_ORIGIN, clock, mailer, rateLimits })
+    createOfficeAuth({ database, environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, pinPepper: LOCAL_PIN_PEPPER, webOrigin: WEB_ORIGIN, clock, mailer, rateLimits })
   const auth = make(GENEROUS_LIMITS)
   const app = await appFor(database, auth, clock)
   const others: FastifyInstance[] = []

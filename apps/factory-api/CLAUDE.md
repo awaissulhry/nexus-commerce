@@ -125,9 +125,14 @@ R2 (`src/platform/files/`), below. Portal sign-in, the modules and the other ada
   actor until an operator is signed in, then the worker. Office administrators keep them in the office scope.
 - Secrets: device token `<tenantId>.<siteId>.<deviceId>.<secret>` (cookie `__Host-factory_device`, 400 days),
   enrolment code `<tenantId>.<siteId>.<enrolmentId>.<secret>` (QR code of a web link, 15 minutes, once), floor session
-  token (cookie `__Host-factory_floor`, until the shift end), badge code (128 bits, Crockford base32): SHA-256 only;
-  the PIN: scrypt. A secret never enters a command's input, result (receipts keep results) or audit row: it is made
-  outside the command and returned beside its result. Unsafe floor routes pass the office CSRF double submit.
+  token (cookie `__Host-factory_floor`, until the shift end), badge code (128 bits, Crockford base32): SHA-256 only.
+  The PIN: HMAC-SHA-256 with the server's pepper (`FACTORY_PIN_PEPPER`, required in staging and production; a
+  placeholder locally), then scrypt, stored `$pin$<pepper id>$scrypt$…`; `FACTORY_PIN_PEPPER_PREVIOUS` still opens
+  older hashes during a rotation (re-hashed at the next sign-in). `auth.pins` is the keyring. Every secret is minted
+  BEFORE its command and never enters its input, result (receipts keep results) or audit row; the Office's enrol,
+  new-code, badge and PIN-reset routes take an Idempotency-Key, and a repeat answers from its receipt with the secret
+  `null` (`invitations/tokens.pg.vitest.test.ts` scans receipts, audit rows and events for each floor secret). Unsafe
+  floor routes pass the office CSRF double submit.
 - `floor/authenticator.ts` (wired in `sessions/office-auth.ts`): the floor session cookie → floor authenticator, no
   office fallback. Live = the device token matches an ACTIVE device, the session is the device's `currentSessionId`
   (one operator per device), not ended, before its idle end (site setting, default 10 minutes, slid at most once a
@@ -141,7 +146,9 @@ R2 (`src/platform/files/`), below. Portal sign-in, the modules and the other ada
 - Revoking a device or badge, deactivating a worker or resetting a PIN ends the sessions (`endSessions`); the
   authenticator re-checks each on every request anyway. Office routes `/auth/floor/*` are scoped by record (can() on
   the device's, worker's or site's company and site; scopeWhere() for lists); nobody manages the roles, badge or PIN of
-  the worker linked to themselves.
+  the worker linked to themselves. A worker's floor roles (`workers.roles`, also when a worker is made with roles) and
+  credentials (`workers.credentials`: badges, PIN reset) are step-up permissions: `requireStepUp` after the record and
+  scope checks.
 - Legal: a worker is a name, language, optional employee number, site, status, badge and PIN hash (GDPR art. 5(1)(c));
   no biometric, photo, birth date or national id (MES-276); no productivity figure, and the registry shows "in use",
   never who (Statuto dei Lavoratori art. 4). The PG tests that prove it name these articles.

@@ -84,8 +84,9 @@ export const DEVICES_PERMISSIONS = definePermissions('devices', {
 /** The floor workers of the sites, kept to what the work needs (features PLT-018, PLT-019; GDPR art. 5(1)(c)). */
 export const WORKERS_PERMISSIONS = definePermissions('workers', {
   view: { risk: 'read', description: 'See the floor workers of the sites: name, language, badges, floor roles.' },
-  manage: { risk: 'write', description: 'Add a floor worker, edit their name and language, give them floor roles, deactivate and reactivate them.' },
-  credentials: { risk: 'write', description: "Issue and revoke a worker's badge, and reset their PIN." },
+  manage: { risk: 'write', description: 'Add a floor worker, edit their name and language, deactivate and reactivate them.' },
+  roles: { risk: 'stepUp', description: "Give and end a floor worker's floor roles (what their floor sessions may do)." },
+  credentials: { risk: 'stepUp', description: "Issue and revoke a worker's badge, and reset their PIN." },
 })
 
 /**

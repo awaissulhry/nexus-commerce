@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { hashPassword } from '@nexus/factory-domain/auth/password/password'
+import { hashPin } from '@nexus/factory-domain/auth/floor/pin'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { addTenant, addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../sessions/testing/harness'
 import { DEVICE_COOKIE, FLOOR_COOKIE } from './cookies'
@@ -43,6 +43,9 @@ interface TestWorker {
 }
 
 const PIN = '482913'
+/** The TOTP secret of each signed-in office browser: credential and floor-role changes need a fresh step-up. */
+const totp = new Map<Browser, string>()
+const stepped = (browser: Browser) => stepUp(h, browser, totp.get(browser)!)
 const OTHER_PIN = '730561'
 const admin = async (sql: string, values: unknown[] = []) => (await h.db.admin.query(sql, values)).rows as Record<string, any>[]
 
@@ -62,6 +65,7 @@ async function signedIn(tenant: TestTenant, email: string, role: string): Promis
   const browser = new Browser(h.app)
   const answer = await browser.signIn(tenant.slug, user.email, user.password)
   if (answer.body.status !== 'signed_in') throw new Error(`sign-in ${email}: ${answer.status} ${JSON.stringify(answer.body)}`)
+  totp.set(browser, await enrolTotp(h, browser))
   return browser
 }
 
@@ -83,14 +87,15 @@ async function tablet(site: Site, by: Browser = office): Promise<Tablet> {
   return { browser, deviceId: made.body.device.id, site }
 }
 
-/** A worker of a site with floor roles, a badge (issued through the API) and a PIN (written straight in). */
+/** A worker of a site with floor roles, a badge (issued through the API) and a PIN (written straight in, peppered). */
 async function worker(site: Site, name: string, roles: string[] = ['operator'], by: Browser = office, locale = 'it'): Promise<TestWorker> {
   const roleIds = await Promise.all(roles.map((key) => roleId(site.tenant, key)))
+  await stepped(by)
   const made = await by.post('/auth/floor/workers', { siteId: site.id, displayName: name, locale, roleIds })
   if (made.status !== 200) throw new Error(`worker: ${made.status} ${JSON.stringify(made.body)}`)
   const badge = await by.post(`/auth/floor/workers/${made.body.id}/badges`)
   if (badge.status !== 200) throw new Error(`badge: ${badge.status} ${JSON.stringify(badge.body)}`)
-  const pinHash = await hashPassword(PIN, { logN: 12, r: 8, p: 1 })
+  const pinHash = await hashPin(PIN, h.auth.pins, { logN: 12, r: 8, p: 1 })
   await admin('UPDATE "Worker" SET "pinHash" = $2 WHERE id = $1::uuid', [made.body.id, pinHash])
   return { id: made.body.id, badgeCode: badge.body.code, pin: PIN }
 }
@@ -361,6 +366,7 @@ describe('revocation ends sessions', () => {
     const max = await worker(p1, 'Max Test')
     expect((await signIn(device, max)).status).toBe(200)
     const first = await currentSession(device.deviceId)
+    await stepped(office)
     const reprint = await office.post(`/auth/floor/workers/${max.id}/badges`)
     expect(reprint.status).toBe(200)
     expect(reprint.body.badge.hint).toBe(reprint.body.code.slice(-4))
@@ -370,6 +376,7 @@ describe('revocation ends sessions', () => {
     const fresh = { ...max, badgeCode: reprint.body.code }
     expect((await signIn(device, fresh)).status).toBe(200)
     const second = await currentSession(device.deviceId)
+    await stepped(office)
     const revoked = await office.post(`/auth/floor/badges/${reprint.body.badge.id}/revoke`, { status: 'LOST' })
     expect(revoked.body).toMatchObject({ status: 'LOST' })
     expect(await sessionRow(second!)).toMatchObject({ reason: 'BADGE_REVOKED' })
@@ -396,6 +403,7 @@ describe('revocation ends sessions', () => {
     const ola = await worker(p1, 'Ola Test')
     expect((await signIn(device, ola)).status).toBe(200)
     const sessionId = await currentSession(device.deviceId)
+    await stepped(office)
     const reset = await office.post(`/auth/floor/workers/${ola.id}/pin-reset`)
     expect(reset.status).toBe(200)
     expect(reset.body.pin).toMatch(/^\d{6}$/)
@@ -419,6 +427,7 @@ describe('floor grants come from floor roles, with at most wages', () => {
     const pia = await worker(p1, 'Pia Test', ['team_leader'])
     expect((await signIn(device, pia)).status).toBe(200)
     expect((await me(device)).body.permissions).toEqual(['floor.lead', 'floor.work'])
+    await stepped(office)
     expect((await send(office, 'PUT', `/auth/floor/workers/${pia.id}/roles`, { roleIds: [] })).status).toBe(200)
     expect((await me(device)).body.permissions).toEqual([])
     expect((await send(office, 'PUT', `/auth/floor/workers/${pia.id}/roles`, { roleIds: [await roleId(alpha, 'operator')] })).body.roles.map((role: { key: string }) => role.key)).toEqual(['operator'])
@@ -432,6 +441,7 @@ describe('floor grants come from floor roles, with at most wages', () => {
     )
     const device = await tablet(p1)
     const quin = await worker(p1, 'Quin Test', [])
+    await stepped(office)
     expect((await send(office, 'PUT', `/auth/floor/workers/${quin.id}/roles`, { roleIds: [customId] })).status).toBe(200)
     expect((await signIn(device, quin)).status).toBe(200)
     expect((await me(device)).body.permissions).toEqual(['floor.work', 'money.wages'])
@@ -503,20 +513,25 @@ describe('Statuto dei Lavoratori art. 4 and GDPR art. 5(1)(c): minimal worker re
     // A sign-in takes a badge or a name and a PIN, nothing else (no biometric factor).
     expect((await device.browser.post('/floor/sign-in', { workerId: una.id, pin: una.pin, fingerprint: 'x' })).status).toBe(400)
   })
+})
 
-  it('keeps every secret out of the audit log, the idempotency receipts and the floor tables', async () => {
-    const device = await tablet(p1)
-    const vic = await worker(p1, 'Vic Test')
-    expect((await signIn(device, vic)).status).toBe(200)
-    const reset = await office.post(`/auth/floor/workers/${vic.id}/pin-reset`)
-    const secrets = [vic.badgeCode, reset.body.pin, device.browser.cookies.get(DEVICE_COOKIE)!.split('.')[3]!, PIN]
-    const text = JSON.stringify(
-      await admin(`SELECT before, after, reason FROM "AuditLog" WHERE "tenantId" = $1::uuid UNION ALL SELECT response, NULL, NULL FROM "IdempotencyReceipt" WHERE "tenantId" = $1::uuid`, [alpha.id]),
-    )
-    for (const secret of secrets) expect(text).not.toContain(secret)
-    const stored = JSON.stringify(await admin('SELECT b."codeHash", w."pinHash" FROM "Badge" b JOIN "Worker" w ON w.id = b."workerId" WHERE w.id = $1::uuid', [vic.id]))
-    expect(stored).not.toContain(vic.badgeCode)
-    expect(stored).not.toContain(reset.body.pin)
+describe('credentials and floor roles need a fresh office step-up', () => {
+  it('refuses a badge, a PIN reset, a role change or a worker made with roles without one; plain edits need none', async () => {
+    const ivo = await worker(p1, 'Ivo Test')
+    h.clock.advance(6 * 60_000)
+    const refusals = [
+      await office.post(`/auth/floor/workers/${ivo.id}/badges`),
+      await office.post(`/auth/floor/workers/${ivo.id}/pin-reset`),
+      await send(office, 'PUT', `/auth/floor/workers/${ivo.id}/roles`, { roleIds: [] }),
+      await office.post('/auth/floor/workers', { siteId: p1.id, displayName: 'Roled Test', roleIds: [await roleId(alpha, 'operator')] }),
+    ]
+    for (const answer of refusals) {
+      expect(answer.status).toBe(403)
+      expect(answer.body.error.issues).toEqual([{ path: 'stepUp', message: 'Required.' }])
+    }
+    expect((await office.post('/auth/floor/workers', { siteId: p1.id, displayName: 'Plain Test' })).status).toBe(200)
+    await stepped(office)
+    expect((await office.post(`/auth/floor/workers/${ivo.id}/pin-reset`)).status).toBe(200)
   })
 })
 

@@ -7,12 +7,12 @@ import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, Valida
 import { newId } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
-import type { CommandTx } from '../../../core/command'
+import { idempotencyKeyFrom, type CommandTx } from '../../../core/command'
 import { actorOf, requireContext, type OfficeContext } from '../../../core/context'
 import type { OfficeAuth } from '../sessions/office-auth'
 import type { CreateDeviceBody, DeviceView, EditDeviceBody, PutSettingsBody, RevokeDeviceBody } from './contract'
 import { endSessions, isLiveSession } from './store'
-import { floorHash, mintSiteToken } from './tokens'
+import { floorHash, mintSiteToken, type SiteToken } from './tokens'
 
 /**
  * The Office's device registry and floor session times (plan A1 §3.10 "Floor"; features PLT-056, PLT-060, PLT-226).
@@ -20,7 +20,9 @@ import { floorHash, mintSiteToken } from './tokens'
  * grants reach (can() for one, scopeWhere() for a list); every write is one office command with its audit row.
  *
  *   enrol      a PENDING device and a one-time code (15 minutes), shown once as a QR code of a web link; the tablet
- *              that scans it trades the code for its token (floor/device.ts). A new code retires the older ones.
+ *              that scans it trades the code for its token (floor/device.ts). A new code retires the older ones. The
+ *              code is minted before the command and never in its result: a repeat with the same Idempotency-Key
+ *              answers from the receipt, with the first device and no code.
  *   edit       rename, move to another station of its site (version).
  *   revoke     PENDING or ACTIVE → REVOKED: the token is cleared, open sign-ins end at once (DEVICE_REVOKED), unused
  *              codes are retired. A revoked device stays listed; enrol a new one.
@@ -124,17 +126,18 @@ async function enrolmentAnswer(auth: OfficeAuth, code: string, expiresAt: string
   return { code, url, qrSvg, expiresAt }
 }
 
-/** A new one-time code for a PENDING device (inside the command); the older unused ones are retired. */
-async function newEnrolment(tx: CommandTx, context: OfficeContext, device: { id: string; siteId: string }, now: Date) {
+/** A one-time enrolment code, minted BEFORE its command: only its hash enters the command (never its result). */
+const mintEnrolment = (context: OfficeContext, siteId: string): SiteToken => mintSiteToken(context.tenantId, siteId, newId())
+
+/** Stores a PENDING device's new code (inside the command); the older unused ones are retired. */
+async function storeEnrolment(tx: CommandTx, context: OfficeContext, device: { id: string; siteId: string }, code: SiteToken, now: Date) {
   await tx.deviceEnrolment.updateMany({ where: { deviceId: device.id, usedAt: null, revokedAt: null }, data: { revokedAt: now } })
-  const enrolmentId = newId()
-  const code = mintSiteToken(context.tenantId, device.siteId, enrolmentId)
   const expiresAt = new Date(now.getTime() + ENROLMENT_TTL_MS)
   await tx.deviceEnrolment.create({
-    data: { id: enrolmentId, siteId: device.siteId, deviceId: device.id, codeHash: floorHash(code.value), createdById: context.actorId, createdAt: now, expiresAt },
+    data: { id: code.id, siteId: device.siteId, deviceId: device.id, codeHash: floorHash(code.value), createdById: context.actorId, createdAt: now, expiresAt },
     select: { id: true },
   })
-  return { enrolmentId, code: code.value, expiresAt }
+  return { enrolmentId: code.id, expiresAt }
 }
 
 export async function createDevice(auth: OfficeAuth, request: FastifyRequest, body: CreateDeviceBody) {
@@ -144,15 +147,14 @@ export async function createDevice(auth: OfficeAuth, request: FastifyRequest, bo
   if (body.stationId) await request.withClient((client) => checkStation(client, site.id, body.stationId!))
   const deviceId = newId()
   const kind = body.kind ?? 'TABLET'
-  // The code leaves the command only through this closure: never in its result (an idempotency receipt keeps results).
-  let code = ''
-  const { result } = await auth.command(context, { name: 'devices.enrol', input: { siteId: site.id, stationId: body.stationId ?? null, name: body.name, kind } }, async ({ tx, now, audit }) => {
+  const code = mintEnrolment(context, site.id)
+  const spec = { name: 'devices.enrol' as const, idempotencyKey: idempotencyKeyFrom(request), input: { siteId: site.id, stationId: body.stationId ?? null, name: body.name, kind } }
+  const { result, replayed } = await auth.command(context, spec, async ({ tx, now, audit }) => {
     await tx.device.create({
       data: { id: deviceId, companyId: site.companyId, siteId: site.id, stationId: body.stationId ?? null, name: body.name, kind, createdAt: now, createdById: context.actorId },
       select: { id: true },
     })
-    const enrolment = await newEnrolment(tx, context, { id: deviceId, siteId: site.id }, now)
-    code = enrolment.code
+    const enrolment = await storeEnrolment(tx, context, { id: deviceId, siteId: site.id }, code, now)
     audit({
       recordType: 'Device',
       recordId: deviceId,
@@ -160,27 +162,28 @@ export async function createDevice(auth: OfficeAuth, request: FastifyRequest, bo
       siteId: site.id,
       after: { name: body.name, kind, stationId: body.stationId ?? null, status: 'PENDING', enrolmentId: enrolment.enrolmentId, enrolmentExpiresAt: toUtcIso(enrolment.expiresAt) },
     })
-    return { expiresAt: toUtcIso(enrolment.expiresAt) }
+    return { deviceId, expiresAt: toUtcIso(enrolment.expiresAt) }
   })
-  const row = await request.withClient((client) => deviceRow(client, deviceId))
-  return { device: deviceViewOf(row, auth.clock.now()), enrolment: await enrolmentAnswer(auth, code, result.expiresAt) }
+  // A repeat answers from its receipt: the first request's device, and no code (it was never stored).
+  const row = await request.withClient((client) => deviceRow(client, result.deviceId))
+  return { device: deviceViewOf(row, auth.clock.now()), enrolment: replayed ? null : await enrolmentAnswer(auth, code.value, result.expiresAt) }
 }
 
 export async function renewEnrolment(auth: OfficeAuth, request: FastifyRequest, deviceId: string) {
   const context = officeContextOf(request)
   const before = await reachableDevice(request, deviceId, DEVICES_MANAGE)
   if (before.status !== 'PENDING') throw new InvalidStateError('Only a device waiting for its enrolment gets a new code; revoke it and enrol a new one.')
-  let code = ''
-  const { result } = await auth.command(context, { name: 'devices.renewEnrolment', input: null, record: { type: 'Device', id: deviceId } }, async ({ tx, now, audit }) => {
+  const code = mintEnrolment(context, before.siteId)
+  const spec = { name: 'devices.renewEnrolment' as const, idempotencyKey: idempotencyKeyFrom(request), input: null, record: { type: 'Device' as const, id: deviceId } }
+  const { result, replayed } = await auth.command(context, spec, async ({ tx, now, audit }) => {
     const row = await deviceRow(tx, deviceId)
     if (row.status !== 'PENDING') throw new InvalidStateError('This device is no longer waiting for its enrolment.')
-    const enrolment = await newEnrolment(tx, context, row, now)
-    code = enrolment.code
+    const enrolment = await storeEnrolment(tx, context, row, code, now)
     audit({ recordType: 'Device', recordId: deviceId, companyId: row.companyId, siteId: row.siteId, after: { enrolmentId: enrolment.enrolmentId, enrolmentExpiresAt: toUtcIso(enrolment.expiresAt) } })
     return { expiresAt: toUtcIso(enrolment.expiresAt) }
   })
   const row = await request.withClient((client) => deviceRow(client, deviceId))
-  return { device: deviceViewOf(row, auth.clock.now()), enrolment: await enrolmentAnswer(auth, code, result.expiresAt) }
+  return { device: deviceViewOf(row, auth.clock.now()), enrolment: replayed ? null : await enrolmentAnswer(auth, code.value, result.expiresAt) }
 }
 
 export async function editDevice(auth: OfficeAuth, request: FastifyRequest, deviceId: string, body: EditDeviceBody) {

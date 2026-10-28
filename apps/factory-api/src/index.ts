@@ -46,6 +46,8 @@ const officeAuth = createOfficeAuth({
   database,
   environment: env.FACTORY_ENV,
   cookieSecret: env.FACTORY_COOKIE_SECRET,
+  pinPepper: env.FACTORY_PIN_PEPPER,
+  pinPepperPrevious: env.FACTORY_PIN_PEPPER_PREVIOUS,
   webOrigin: env.FACTORY_WEB_ORIGIN,
 })
 

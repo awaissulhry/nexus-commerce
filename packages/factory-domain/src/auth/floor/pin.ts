@@ -1,6 +1,6 @@
-import { randomInt } from 'node:crypto'
+import { createHmac, hkdfSync, randomInt } from 'node:crypto'
 import type { Issue } from '../../core/errors'
-import { hashPassword, verifyPassword, type PasswordCheck } from '../password/password'
+import { hashPassword, SCRYPT_PARAMS, verifyPassword, type PasswordCheck, type ScryptParams } from '../password/password'
 
 /**
  * Floor PINs (plan A1 §3.10 "Floor"; features PLT-057, PLT-058): what a PIN must be, how it is stored, and the lock a
@@ -10,8 +10,13 @@ import { hashPassword, verifyPassword, type PasswordCheck } from '../password/pa
  *   policy    exactly 6 digits; not one digit repeated (000000), not a straight run up or down (123456, 987654), not
  *             a repeated pair or triple (121212, 123123), not a mirror (123321), not a well-known PIN, not the
  *             worker's own employee number.
- *   storage   scrypt with a per-PIN random salt, the same self-describing form as office passwords
- *             (`$scrypt$ln=…`, ../password); the verify takes the same time with or without a stored PIN.
+ *   storage   peppered, then scrypt: HMAC-SHA-256 of the PIN with a server-side pepper (FACTORY_PIN_PEPPER, never in
+ *             the database), then scrypt with a per-PIN random salt in the self-describing form of office passwords
+ *             (../password). A million six-digit PINs are guessed in minutes against a plain scrypt hash; without the
+ *             pepper a leaked hash cannot be guessed at all. Stored as `$pin$<pepper id>$scrypt$ln=…`: the id names
+ *             the pepper, so a new pepper can take over (FACTORY_PIN_PEPPER_PREVIOUS still opens the older hashes,
+ *             and a sign-in re-hashes them with the new one). The verify takes the same time with or without a
+ *             stored PIN.
  *   lockout   5 wrong PINs in a row lock THAT worker (never the device: the next person can sign in) for 5 minutes,
  *             every further wrong one doubles the lock, up to an hour. While locked even the right PIN opens
  *             nothing. A successful sign-in or an administrator's PIN reset clears the count.
@@ -67,23 +72,70 @@ export function pinProblems(pin: unknown, context: PinContext = {}): Issue[] {
   return []
 }
 
-/** The stored form of a new PIN (check `pinProblems` first; this refuses anything that is not 6 digits). */
-export async function hashPin(pin: string): Promise<string> {
-  if (typeof pin !== 'string' || pin.length !== PIN_LENGTH || !DIGITS.test(pin)) throw new Error('A PIN is exactly 6 digits.')
-  return hashPassword(pin)
+/** A pepper: the HMAC key derived from a configured secret, and its id (stored with every hash it made). */
+export interface PinPepper {
+  readonly id: string
+  readonly key: Buffer
+}
+
+/** The peppers the API holds: the current one makes every new hash; previous ones still open older hashes. */
+export interface PinKeyring {
+  readonly current: PinPepper
+  readonly previous: readonly PinPepper[]
+}
+
+/** The minimum length of a configured pepper secret in staging and production. */
+export const PIN_PEPPER_MIN_LENGTH = 32
+
+/**
+ * The pepper of a configured secret: an HMAC key derived with HKDF-SHA-256, and an id that names it without revealing
+ * it (`p` + 12 hex characters of an HMAC of a fixed label).
+ */
+export function pinPepper(secret: string): PinPepper {
+  if (typeof secret !== 'string' || secret.length < 16) throw new Error('The PIN pepper is too short.')
+  const key = Buffer.from(hkdfSync('sha256', secret, 'nexus-factory-pin', 'pin-pepper v1', 32))
+  const id = `p${createHmac('sha256', key).update('factory pin pepper id v1').digest('hex').slice(0, 12)}`
+  return { id, key }
+}
+
+/** The keyring of the configured current secret and any previous ones (rotation). */
+export function pinKeyring(current: string, previous: readonly string[] = []): PinKeyring {
+  const peppers = previous.map(pinPepper)
+  const head = pinPepper(current)
+  return Object.freeze({ current: head, previous: Object.freeze(peppers.filter((pepper) => pepper.id !== head.id)) })
+}
+
+const STORED = /^\$pin\$(p[0-9a-f]{12})\$(\$scrypt\$.+)$/
+
+/** What scrypt hashes: the PIN's HMAC with the pepper, never the PIN. */
+const peppered = (pin: string, pepper: PinPepper): string => createHmac('sha256', pepper.key).update(`factory-pin\u0000${pin}`, 'utf8').digest('base64url')
+
+const isPin = (pin: unknown): pin is string => typeof pin === 'string' && pin.length === PIN_LENGTH && DIGITS.test(pin)
+
+/**
+ * The stored form of a new PIN, with the keyring's current pepper (check `pinProblems` first; this refuses anything
+ * that is not 6 digits). `params` only for tests (a cheaper scrypt; a sign-in re-hashes it).
+ */
+export async function hashPin(pin: string, keyring: PinKeyring, params: ScryptParams = SCRYPT_PARAMS): Promise<string> {
+  if (!isPin(pin)) throw new Error('A PIN is exactly 6 digits.')
+  return `$pin$${keyring.current.id}$${await hashPassword(peppered(pin, keyring.current), params)}`
 }
 
 /**
- * Checks a PIN against its stored form in constant time. Without a stored PIN (none set, a damaged row) or with input
- * that is not a PIN it still runs one scrypt, so the answer takes the same time; then it answers no.
+ * Checks a PIN against its stored form in constant time. Without a stored PIN (none set, a damaged row, a pepper the
+ * keyring does not hold) or with input that is not a PIN it still runs one scrypt, so the answer takes the same time;
+ * then it answers no. `needsRehash`: the hash was made with a previous pepper or older scrypt settings; store a new
+ * one after the successful check.
  */
-export async function verifyPin(pin: unknown, stored: string | null | undefined): Promise<PasswordCheck> {
-  const usable = typeof pin === 'string' && pin.length === PIN_LENGTH && DIGITS.test(pin)
-  if (!usable) {
-    await verifyPassword('000000', null)
+export async function verifyPin(pin: unknown, stored: string | null | undefined, keyring: PinKeyring): Promise<PasswordCheck> {
+  const match = typeof stored === 'string' ? STORED.exec(stored) : null
+  const pepper = match ? [keyring.current, ...keyring.previous].find((entry) => entry.id === match[1]) : undefined
+  if (!isPin(pin) || !match || !pepper) {
+    await verifyPassword(peppered('000000', keyring.current), null)
     return { ok: false, needsRehash: false }
   }
-  return verifyPassword(pin, stored)
+  const check = await verifyPassword(peppered(pin, pepper), match[2])
+  return { ok: check.ok, needsRehash: check.ok && (check.needsRehash || pepper.id !== keyring.current.id) }
 }
 
 /** A random PIN that passes the policy (an administrator's reset hands it to the worker once). */

@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify'
 import type { FactoryClient, FactoryDatabase } from '@nexus/factory-db'
+import { pinKeyring, type PinKeyring } from '@nexus/factory-domain/auth/floor/pin'
 import type { Grant } from '@nexus/factory-domain/core/permissions'
 import { callerFor, COMMAND_SETTINGS, runCommand, type CommandOutcome, type CommandSpec, type CommandTools } from '../../../core/command'
 import type { Authenticator, OfficeContext } from '../../../core/context'
@@ -63,6 +64,9 @@ export interface OfficeAuthOptions {
   readonly environment: FactoryEnv['FACTORY_ENV']
   /** FACTORY_COOKIE_SECRET: the keys of auth/sessions/secrets.ts derive from it. */
   readonly cookieSecret: string
+  /** FACTORY_PIN_PEPPER (and FACTORY_PIN_PEPPER_PREVIOUS during a rotation): the floor PIN hashes' pepper. */
+  readonly pinPepper: string
+  readonly pinPepperPrevious?: string | undefined
   /** FACTORY_WEB_ORIGIN: invitation and reset links point at the web. */
   readonly webOrigin: string
   readonly clock?: Clock
@@ -75,6 +79,8 @@ export interface OfficeAuth {
   readonly database: FactoryDatabase
   readonly clock: Clock
   readonly secrets: AuthSecrets
+  /** The floor PIN peppers (factory-domain auth/floor/pin): the current one hashes, previous ones still verify. */
+  readonly pins: PinKeyring
   readonly rateLimits: AuthRateLimits
   /**
    * Reads the session of a request (core/context.ts Authenticator): a one-off link's token in the `x-factory-link`
@@ -119,6 +125,7 @@ export function createOfficeAuth(options: OfficeAuthOptions): OfficeAuth {
     database: options.database,
     clock,
     secrets,
+    pins: pinKeyring(options.pinPepper, options.pinPepperPrevious ? [options.pinPepperPrevious] : []),
     rateLimits: { ...AUTH_RATE_LIMITS, ...options.rateLimits },
     authenticate: withLinkSessions(
       linkAuthenticator({ database: options.database, clock }),

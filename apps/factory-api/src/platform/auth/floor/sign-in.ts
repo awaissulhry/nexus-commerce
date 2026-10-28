@@ -90,15 +90,15 @@ async function provedWorker(auth: OfficeAuth, request: FastifyRequest, place: De
   const candidate = await candidateOf(auth, place, body)
   const worker = candidate?.worker
   if (!candidate || !worker || worker.status !== 'ACTIVE' || worker.pinHash === null || isPinLocked(worker, now)) {
-    await verifyPin(body.pin, null)
+    await verifyPin(body.pin, null, auth.pins)
     throw wrongCredentials()
   }
-  const check = await verifyPin(body.pin, worker.pinHash)
+  const check = await verifyPin(body.pin, worker.pinHash, auth.pins)
   if (!check.ok) {
     await recordWrongPin(auth, request, place.device, worker.id, actorId)
     throw wrongCredentials()
   }
-  return { candidate, pinHash: worker.pinHash, rehash: check.needsRehash ? await hashPin(body.pin) : null }
+  return { candidate, pinHash: worker.pinHash, rehash: check.needsRehash ? await hashPin(body.pin, auth.pins) : null }
 }
 
 /** The reason an expired session is closed with. */
@@ -265,10 +265,10 @@ export async function changePin(auth: OfficeAuth, request: FastifyRequest, body:
     client.worker.findUniqueOrThrow({ where: { id: session.workerId }, select: { pinHash: true, pinLockedUntil: true, employeeCode: true } }),
   )
   if (worker.pinHash === null || isPinLocked(worker, now)) {
-    await verifyPin(body.currentPin, null)
+    await verifyPin(body.currentPin, null, auth.pins)
     throw wrongCredentials()
   }
-  const check = await verifyPin(body.currentPin, worker.pinHash)
+  const check = await verifyPin(body.currentPin, worker.pinHash, auth.pins)
   if (!check.ok) {
     await recordWrongPin(auth, request, session.device, session.workerId, session.workerId)
     throw wrongCredentials()
@@ -276,7 +276,7 @@ export async function changePin(auth: OfficeAuth, request: FastifyRequest, body:
   const problems = pinProblems(body.newPin, { employeeCode: worker.employeeCode })
   if (problems.length > 0) throw new ValidationError('Choose another PIN.', problems.map((issue) => ({ ...issue, path: 'newPin' })))
   if (body.newPin === body.currentPin) throw new ValidationError('Choose a PIN different from the current one.', [{ path: 'newPin', message: 'The same as the current PIN.' }])
-  const pinHash = await hashPin(body.newPin)
+  const pinHash = await hashPin(body.newPin, auth.pins)
   const oldHash = worker.pinHash
   await floorCommand(auth, floorContext(request, session.device, session.workerId), { name: 'floor.changePin', input: null }, async ({ tx, now: at, audit }) => {
     const { count } = await tx.worker.updateMany({

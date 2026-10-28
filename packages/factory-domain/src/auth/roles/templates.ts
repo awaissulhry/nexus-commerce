@@ -80,6 +80,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'devices.revoke',
       'workers.view',
       'workers.manage',
+      'workers.roles',
       'workers.credentials',
     ],
     grains: [],
@@ -137,7 +138,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Floor supervisor',
     description: 'Follows the lines of their sites from the Office, and keeps their floor devices, workers, badges and PINs; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'devices.view', 'devices.manage', 'devices.revoke', 'workers.view', 'workers.manage', 'workers.credentials'],
+    permissions: ['files.read', 'devices.view', 'devices.manage', 'devices.revoke', 'workers.view', 'workers.manage', 'workers.roles', 'workers.credentials'],
     grains: [],
   }),
   template('read_only', {

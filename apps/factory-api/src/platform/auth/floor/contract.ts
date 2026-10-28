@@ -93,7 +93,10 @@ export const deviceView = output({
 })
 export type DeviceView = z.infer<typeof deviceView>
 
-/** The one-time enrolment code, shown once as a QR code; the tablet trades it within `expiresAt`. */
+/**
+ * The one-time enrolment code, shown once as a QR code; the tablet trades it within `expiresAt`. Null when the answer
+ * comes from an Idempotency-Key receipt (a repeat): the code was never stored, ask for a new one.
+ */
 const enrolmentView = output({ code: z.string(), url: z.string(), qrSvg: z.string(), expiresAt: instant() })
 
 export const listDevicesContract = defineContract({
@@ -103,12 +106,12 @@ export const listDevicesContract = defineContract({
 
 export const createDeviceContract = defineContract({
   body: input({ siteId: id(), stationId: id().optional(), name: z.string().trim().min(1).max(100), kind: z.enum(DEVICE_KINDS).optional() }),
-  response: { 200: output({ device: deviceView, enrolment: enrolmentView }) },
+  response: { 200: output({ device: deviceView, enrolment: enrolmentView.nullable() }) },
 })
 
 export const renewEnrolmentContract = defineContract({
   params: input({ deviceId: id() }),
-  response: { 200: output({ device: deviceView, enrolment: enrolmentView }) },
+  response: { 200: output({ device: deviceView, enrolment: enrolmentView.nullable() }) },
 })
 
 export const editDeviceContract = defineContract({
@@ -208,10 +211,10 @@ export const issueBadgeContract = defineContract({
   response: {
     200: output({
       badge: badgeRef,
-      /** The badge code, once: printed as a QR code or barcode (never stored, never shown again). */
-      code: z.string(),
+      /** The badge code, once: printed as a QR code or barcode (never stored, never shown again; null on a repeat). */
+      code: z.string().nullable(),
       /** The code grouped for printing under the barcode. */
-      printed: z.string(),
+      printed: z.string().nullable(),
     }),
   },
 })
@@ -226,8 +229,8 @@ export const resetPinContract = defineContract({
   params: input({ workerId: id() }),
   response: {
     200: output({
-      /** The new PIN, once, for the worker; they choose their own at their next sign-in. */
-      pin: z.string(),
+      /** The new PIN, once, for the worker; they choose their own at their next sign-in (null on a repeat). */
+      pin: z.string().nullable(),
       pinMustChange: z.literal(true),
     }),
   },

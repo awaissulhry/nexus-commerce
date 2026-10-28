@@ -6,11 +6,14 @@ import { audienceProblems, ROLE_TEMPLATES, templateOf, templateProblems } from '
 import { roleProblems } from '../roles/roles'
 import { badgeCodeHash, badgeHint, newBadgeCode, normalizeBadgeCode, printedBadgeCode } from './badge'
 import { floorGrants, FLOOR_GRAINS } from './grants'
-import { hashPin, isPinLocked, pinLockMsAfter, pinLockUntil, pinProblems, PIN_LOCKOUT, randomPin, verifyPin } from './pin'
+import { hashPassword, verifyPassword } from '../password/password'
+import { hashPin, isPinLocked, pinKeyring, pinLockMsAfter, pinLockUntil, pinPepper, pinProblems, PIN_LOCKOUT, randomPin, verifyPin } from './pin'
 import { FLOOR_SESSION, idleEndAt, sessionEndsAt, sessionState, timingProblems, zonedInstant } from './session'
 import { badgeStatus, deviceStatus, workerStatus } from './status'
 
 const NOW = new Date('2026-10-28T09:00:00.000Z')
+/** A cheaper scrypt for tests that need several hashes. */
+const CHEAP = { logN: 12, r: 8, p: 1 }
 const SITE = '019a0000-0000-7000-8000-00000000a001'
 const COMPANY = '019a0000-0000-7000-8000-00000000c001'
 
@@ -36,21 +39,50 @@ describe('the PIN policy (PLT-058)', () => {
   })
 })
 
-describe('PIN storage (scrypt)', () => {
-  it('stores a salted scrypt hash, never the PIN, and checks it', async () => {
-    const stored = await hashPin('482913')
-    expect(stored).toMatch(/^\$scrypt\$ln=15,r=8,p=3\$/)
+describe('PIN storage (pepper, then scrypt)', () => {
+  const keyring = pinKeyring('a-made-up-pin-pepper-for-tests-0001')
+  const other = pinKeyring('another-made-up-pin-pepper-for-tests-02')
+
+  it('stores the pepper id and a salted scrypt hash of the peppered PIN, never the PIN, and checks it', async () => {
+    const stored = await hashPin('482913', keyring)
+    expect(stored).toMatch(new RegExp(`^\\$pin\\$${keyring.current.id}\\$\\$scrypt\\$ln=15,r=8,p=3\\$`))
     expect(stored).not.toContain('482913')
-    expect(await hashPin('482913')).not.toBe(stored)
-    expect((await verifyPin('482913', stored)).ok).toBe(true)
-    expect((await verifyPin('482914', stored)).ok).toBe(false)
+    expect(await hashPin('482913', keyring)).not.toBe(stored)
+    expect((await verifyPin('482913', stored, keyring)).ok).toBe(true)
+    expect((await verifyPin('482914', stored, keyring)).ok).toBe(false)
+  }, 20_000)
+
+  it('the same PIN with a different pepper does not match', async () => {
+    const stored = await hashPin('482913', keyring, CHEAP)
+    expect(other.current.id).not.toBe(keyring.current.id)
+    expect((await verifyPin('482913', stored, other)).ok).toBe(false)
+    // Even a hash relabelled with the other pepper's id opens nothing.
+    expect((await verifyPin('482913', stored.replace(keyring.current.id, other.current.id), other)).ok).toBe(false)
+  }, 20_000)
+
+  it('a stored hash is never a pepper-less scrypt of the PIN', async () => {
+    const stored = await hashPin('482913', keyring, CHEAP)
+    const scryptPart = stored.slice(`$pin$${keyring.current.id}$`.length)
+    expect(stored.startsWith('$scrypt$')).toBe(false)
+    expect((await verifyPassword('482913', scryptPart)).ok).toBe(false)
+    // And a plain scrypt hash of the PIN is not accepted as a stored PIN.
+    expect((await verifyPin('482913', await hashPassword('482913', CHEAP), keyring)).ok).toBe(false)
+  }, 20_000)
+
+  it('rotates: a previous pepper still opens its hashes and asks for a re-hash with the current one', async () => {
+    const stored = await hashPin('482913', keyring, CHEAP)
+    const rotated = pinKeyring('another-made-up-pin-pepper-for-tests-02', ['a-made-up-pin-pepper-for-tests-0001'])
+    expect(await verifyPin('482913', stored, rotated)).toEqual({ ok: true, needsRehash: true })
+    expect((await hashPin('482913', rotated, CHEAP)).startsWith(`$pin$${rotated.current.id}$`)).toBe(true)
+    expect(pinPepper('a-made-up-pin-pepper-for-tests-0001').id).toBe(keyring.current.id)
   }, 20_000)
 
   it('answers no for a missing hash or input that is not a PIN, after the same work', async () => {
-    expect((await verifyPin('482913', null)).ok).toBe(false)
-    expect((await verifyPin('48291', await hashPin('482913'))).ok).toBe(false)
-    expect((await verifyPin(undefined, undefined)).ok).toBe(false)
-    await expect(hashPin('12345')).rejects.toThrow(/6 digits/)
+    expect((await verifyPin('482913', null, keyring)).ok).toBe(false)
+    expect((await verifyPin('48291', await hashPin('482913', keyring, CHEAP), keyring)).ok).toBe(false)
+    expect((await verifyPin(undefined, undefined, keyring)).ok).toBe(false)
+    await expect(hashPin('12345', keyring)).rejects.toThrow(/6 digits/)
+    expect(() => pinPepper('short')).toThrow()
   }, 20_000)
 })
 

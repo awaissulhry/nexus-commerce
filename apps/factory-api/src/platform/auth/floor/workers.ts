@@ -8,8 +8,9 @@ import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, Valida
 import { newId } from '@nexus/factory-domain/core/ids'
 import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
-import type { CommandTx } from '../../../core/command'
+import { idempotencyKeyFrom, type CommandTx } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
+import { requireStepUp } from '../office/account'
 import type { OfficeAuth } from '../sessions/office-auth'
 import type { CreateWorkerBody, EditWorkerBody, RevokeBadgeBody, WorkerStatusBody, WorkerView } from './contract'
 import { activeSite, assertReaches, officeContextOf } from './registry'
@@ -29,11 +30,14 @@ import { endSessions } from './store'
  *   PIN reset    a random policy-valid PIN, shown once; the worker must choose their own at the next sign-in (they hold
  *                nothing until then), the lock is cleared, their sign-ins end.
  * Separation of duties: nobody links a worker to themselves, or manages the roles, badges or PIN of the worker linked
- * to themselves; another administrator does it.
+ * to themselves; another administrator does it. Floor roles (workers.roles, also at creation) and credentials
+ * (workers.credentials) are access changes: they need a fresh step-up (A1 §3.10), checked after the record and its
+ * scope, before the command.
  */
 
 const WORKERS_VIEW: Permission = 'workers.view'
 const WORKERS_MANAGE: Permission = 'workers.manage'
+const WORKERS_ROLES: Permission = 'workers.roles'
 const WORKERS_CREDENTIALS: Permission = 'workers.credentials'
 
 const isUniqueViolation = (error: unknown): boolean => (error as { code?: unknown } | null)?.code === 'P2002'
@@ -136,6 +140,10 @@ export async function createWorker(auth: OfficeAuth, request: FastifyRequest, bo
   const context = officeContextOf(request)
   const site = await request.withClient((client) => activeSite(client, body.siteId))
   assertReaches(context, WORKERS_MANAGE, { companyId: site.companyId, siteId: site.id })
+  if ((body.roleIds ?? []).length > 0) {
+    assertReaches(context, WORKERS_ROLES, { companyId: site.companyId, siteId: site.id })
+    requireStepUp(auth, request)
+  }
   const workerId = newId()
   const data = { displayName: body.displayName, locale: body.locale ?? 'it', employeeCode: body.employeeCode ?? null, userId: body.userId ?? null }
   try {
@@ -206,8 +214,9 @@ export async function setWorkerStatus(auth: OfficeAuth, request: FastifyRequest,
 
 export async function setWorkerRoles(auth: OfficeAuth, request: FastifyRequest, workerId: string, roleIds: readonly string[]) {
   const context = officeContextOf(request)
-  const before = await reachableWorker(request, workerId, WORKERS_MANAGE)
+  const before = await reachableWorker(request, workerId, WORKERS_ROLES)
   notSelf(context, before)
+  requireStepUp(auth, request)
   const { result } = await auth.command(context, { name: 'workers.setRoles', input: { roleIds: [...new Set(roleIds)].sort() }, record: { type: 'Worker', id: workerId } }, async ({ tx, now, audit }) => {
     const wanted = await floorRoles(tx, roleIds)
     const live = await tx.workerRole.findMany({ where: { workerId, endedAt: null }, select: { id: true, roleId: true, role: { select: { key: true } } } })
@@ -235,10 +244,12 @@ export async function issueBadge(auth: OfficeAuth, request: FastifyRequest, work
   const before = await reachableWorker(request, workerId, WORKERS_CREDENTIALS)
   notSelf(context, before)
   if (before.status !== 'ACTIVE') throw new InvalidStateError('An inactive worker gets no badge; reactivate them first.')
-  // The code leaves the command only through this closure: never in its result or its audit row.
+  requireStepUp(auth, request)
+  // Minted before the command: only its hash and hint enter it, never its result or its audit row.
   const code = newBadgeCode()
   const badgeId = newId()
-  const { result } = await auth.command(context, { name: 'workers.issueBadge', input: null, record: { type: 'Worker', id: workerId } }, async ({ tx, now, audit }) => {
+  const spec = { name: 'workers.issueBadge' as const, idempotencyKey: idempotencyKeyFrom(request), input: null, record: { type: 'Worker' as const, id: workerId } }
+  const { result, replayed } = await auth.command(context, spec, async ({ tx, now, audit }) => {
     const older = await tx.badge.findMany({ where: { workerId, status: 'ACTIVE' }, select: { id: true } })
     const olderIds = older.map((badge) => badge.id)
     const ended = olderIds.length > 0 ? await endSessions(tx, { badgeId: { in: olderIds } }, 'BADGE_REVOKED', now) : []
@@ -250,7 +261,8 @@ export async function issueBadge(auth: OfficeAuth, request: FastifyRequest, work
     audit({ recordType: 'Badge', recordId: badgeId, companyId: before.companyId, siteId: before.siteId, after: { workerId, hint, revokedBadges: olderIds, sessionsEnded: ended.length } })
     return { id: badgeId, hint, issuedAt: toUtcIso(now) }
   })
-  return { badge: result, code, printed: printedBadgeCode(code) }
+  // A repeat answers from its receipt: the first badge, and no code (it was never stored; issue a new badge).
+  return { badge: result, code: replayed ? null : code, printed: replayed ? null : printedBadgeCode(code) }
 }
 
 export async function revokeBadge(auth: OfficeAuth, request: FastifyRequest, badgeId: string, body: RevokeBadgeBody) {
@@ -261,6 +273,7 @@ export async function revokeBadge(auth: OfficeAuth, request: FastifyRequest, bad
   if (!badge) throw new NotFoundError('Badge not found.')
   assertReaches(context, WORKERS_CREDENTIALS, badge.worker)
   notSelf(context, badge.worker)
+  requireStepUp(auth, request)
   const to = body.status ?? 'REVOKED'
   const { result } = await auth.command(
     context,
@@ -279,14 +292,17 @@ export async function resetPin(auth: OfficeAuth, request: FastifyRequest, worker
   const context = officeContextOf(request)
   const before = await reachableWorker(request, workerId, WORKERS_CREDENTIALS)
   notSelf(context, before)
-  // The PIN leaves the command only through this closure: never in its result or its audit row.
+  requireStepUp(auth, request)
+  // Minted (and hashed) before the command: only the hash enters it, never its result or its audit row.
   const pin = randomPin({ employeeCode: before.employeeCode })
-  const pinHash = await hashPin(pin)
-  await auth.command(context, { name: 'workers.resetPin', input: null, record: { type: 'Worker', id: workerId } }, async ({ tx, now, audit }) => {
+  const pinHash = await hashPin(pin, auth.pins)
+  const spec = { name: 'workers.resetPin' as const, idempotencyKey: idempotencyKeyFrom(request), input: null, record: { type: 'Worker' as const, id: workerId } }
+  const { replayed } = await auth.command(context, spec, async ({ tx, now, audit }) => {
     const ended = await endSessions(tx, { workerId }, 'PIN_RESET', now)
     await tx.worker.updateMany({ where: { id: workerId }, data: { pinHash, pinMustChange: true, pinChangedAt: now, failedPinAttempts: 0, pinLockedUntil: null } })
     audit({ recordType: 'Worker', recordId: workerId, companyId: before.companyId, siteId: before.siteId, after: { pinReset: true, pinMustChange: true, sessionsEnded: ended.length } })
     return null
   })
-  return { pin, pinMustChange: true as const }
+  // A repeat answers from its receipt: the first reset stands, its PIN is not shown again (reset again for a new one).
+  return { pin: replayed ? null : pin, pinMustChange: true as const }
 }
