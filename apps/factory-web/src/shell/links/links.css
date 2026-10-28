@@ -1,0 +1,143 @@
+/*
+ * The link frame (SCR-028): one column, phone first, no chrome. Layout only — colours, sizes and radii are semantic
+ * design-system tokens; the comfortable tier's `--nds-density-*` sizes the text and the touch targets; the sender's
+ * accent arrives as `--nds-brand-accent` (DS branding tokens, only where it passed its contrast check).
+ */
+.fw-link {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-20);
+  max-width: 680px;
+  margin: 0 auto;
+  padding: var(--nds-space-20) var(--nds-space-16) var(--nds-space-24);
+  background: var(--nds-bg);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+  border-top: 4px solid var(--nds-brand-accent, var(--nds-primary));
+}
+
+.fw-link-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--nds-space-12);
+  min-height: var(--nds-density-target-min);
+}
+
+.fw-link-sender {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.fw-link-logo {
+  display: block;
+  max-height: 40px;
+  max-width: 220px;
+  object-fit: contain;
+}
+
+.fw-link-logo.for-dark,
+.dark .fw-link-logo.for-light {
+  display: none;
+}
+
+.dark .fw-link-logo.for-dark {
+  display: block;
+}
+
+.fw-link-sender-name {
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text-strong);
+}
+
+.fw-link-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  outline: none;
+}
+
+.fw-link-title {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text-strong);
+  line-height: 1.25;
+}
+
+.fw-link-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+}
+
+.fw-link-state {
+  border-top: 3px solid var(--nds-border);
+}
+
+.fw-link-state.tone-warning {
+  border-top-color: var(--nds-warning);
+}
+
+.fw-link-state.tone-danger {
+  border-top-color: var(--nds-danger);
+}
+
+.fw-link-state.tone-info {
+  border-top-color: var(--nds-info);
+}
+
+.fw-link-spin {
+  animation: fw-link-spin 1s linear infinite;
+}
+
+@keyframes fw-link-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fw-link-spin {
+    animation: none;
+  }
+}
+
+.fw-link-notice {
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.fw-link-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-16);
+  border-top: 1px solid var(--nds-border-subtle);
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-muted);
+}
+
+.fw-link-foot p {
+  margin: 0;
+}
+
+.fw-link-legal {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-link-foot a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--nds-density-target-min);
+  color: var(--nds-text-link);
+}

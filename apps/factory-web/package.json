@@ -12,11 +12,14 @@
   },
   "dependencies": {
     "@nexus/factory-domain": "*",
+    "@nexus/ui": "*",
     "@tanstack/react-query": "^5.104.2",
     "@zxing/browser": "^0.2.0",
     "@zxing/library": "^0.22.0",
     "lucide-react": "^0.469.0",
     "next": "16.3.5",
+    "pdfjs-dist": "^5.4.296",
+    "qrcode": "^1.5.4",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "zod": "^4.3.6"

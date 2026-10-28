@@ -22,14 +22,19 @@ describe('readFactoryApiUrl', () => {
 })
 
 describe('next.config.ts', () => {
+  const DEV = 'phase-development-server'
+  const BUILD = 'phase-production-build'
+  const configFor = async (phase: string) => (await import('../../next.config')).default(phase)
+
   afterEach(() => {
     vi.unstubAllEnvs()
     vi.resetModules()
   })
 
-  it('refuses to load without FACTORY_API_URL', async () => {
+  it('refuses to start without FACTORY_API_URL', async () => {
     vi.stubEnv('FACTORY_API_URL', '')
-    await expect(import('../../next.config')).rejects.toThrow(/FACTORY_API_URL is not set/)
+    await expect(configFor(BUILD)).rejects.toThrow(/FACTORY_API_URL is not set/)
+    await expect(configFor(DEV)).rejects.toThrow(/FACTORY_API_URL is not set/)
   })
 
   it('lets only `next typegen` load without it, with an address that cannot resolve', async () => {
@@ -37,16 +42,28 @@ describe('next.config.ts', () => {
     const argv = process.argv
     process.argv = [argv[0] ?? 'node', 'next', 'typegen']
     try {
-      const config = (await import('../../next.config')).default
-      expect(await config.rewrites?.()).toEqual([{ source: '/api/:path*', destination: 'http://typegen.invalid/api/:path*' }])
+      const config = await configFor(BUILD)
+      expect(await config.rewrites?.()).toEqual([{ source: '/api/:path*', destination: 'http://typegen.invalid/:path*' }])
     } finally {
       process.argv = argv
     }
   })
 
-  it('proxies /api to the factory API when it is set', async () => {
+  it('proxies /api/<route> to <FACTORY_API_URL>/<route> (the API has no /api prefix of its own)', async () => {
     vi.stubEnv('FACTORY_API_URL', 'http://127.0.0.1:8190')
-    const config = (await import('../../next.config')).default
-    expect(await config.rewrites?.()).toEqual([{ source: '/api/:path*', destination: 'http://127.0.0.1:8190/api/:path*' }])
+    const config = await configFor(BUILD)
+    expect(await config.rewrites?.()).toEqual([{ source: '/api/:path*', destination: 'http://127.0.0.1:8190/:path*' }])
+  })
+
+  it('reads `page.design.tsx` as a route only under `next dev`: /design never reaches a production build', async () => {
+    vi.stubEnv('FACTORY_API_URL', 'http://127.0.0.1:8190')
+    expect((await configFor(DEV)).pageExtensions).toEqual(['tsx', 'ts', 'jsx', 'js', 'design.tsx'])
+    expect((await configFor(BUILD)).pageExtensions).toEqual(['tsx', 'ts', 'jsx', 'js'])
+    expect((await configFor('phase-production-server')).pageExtensions).toEqual(['tsx', 'ts', 'jsx', 'js'])
+  })
+
+  it('compiles the design system from source', async () => {
+    vi.stubEnv('FACTORY_API_URL', 'http://127.0.0.1:8190')
+    expect((await configFor(BUILD)).transpilePackages).toEqual(['@nexus/ui'])
   })
 })
