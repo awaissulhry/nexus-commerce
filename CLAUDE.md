@@ -17,6 +17,11 @@ Each app and package below has its own CLAUDE.md; it loads when you open a file 
 - `packages/events` — the event catalogue (`catalog.ts`) and envelope.
 - `packages/shared` — pure logic used by api and web. They import its `dist/`, not its source.
 - `services/bidding-engine` — separate service; not an npm workspace, not covered by the checks below.
+- The new factory, a separate product (own PostgreSQL, login and Railway projects; never the root `.env`):
+  `apps/factory-api` (Fastify API, env only from `apps/factory-api/.env` and `FACTORY_` variables),
+  `apps/factory-web` (Next.js 16; refuses to start without `FACTORY_API_URL`), `packages/factory-db` (Prisma schema
+  folder, its own client in `src/generated/prisma`), `packages/factory-domain` (pure logic), `packages/db-kit`
+  (generic database tools). Local stack: `infra/factory/`. Guards: `node scripts/factory/run-guards.mjs`.
 
 ## Commands (verified 2026-09-26 on main)
     npm ci                                    # fresh clone/worktree only — it deletes node_modules first
