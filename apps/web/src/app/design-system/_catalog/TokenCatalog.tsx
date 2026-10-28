@@ -132,6 +132,7 @@ import { EmbeddedDrawerExample } from './EmbeddedDrawerExample'
 import { DrawerFooterExample } from './DrawerFooterExample'
 import { StepUpModalExample } from './StepUpModalExample'
 import { WorkspaceSubheaderExample } from './WorkspaceSubheaderExample'
+import { AppRailExample } from './AppRailExample'
 import { ChangeValueExample } from './ChangeValueExample'
 import { CountdownExample } from './CountdownExample'
 import { DensityTiersExample } from './DensityTiersExample'
@@ -1109,6 +1110,7 @@ export function TokenCatalog() {
           Page-level organisms — the app shell + headers that every section adopts.
         </p>
 
+        <AppRailExample />
         <h3>WorkspaceSubheader · collapsible secondary navigation</h3>
         <WorkspaceSubheaderExample />
         <RecordListExample />

@@ -70,3 +70,6 @@ export { ReplyComposer, type ReplyComposerProps, type ReplyTemplate, type ReplyA
 export { replyHeldReason, replyOverWords, replyLengthWords, REPLY_SENT_HELD, REPLY_EMPTY_HELD, type ReplyHeldInput } from './replyComposerModel'
 export { Lightbox, type LightboxProps, type LightboxItem } from './Lightbox'
 export { lightboxCounter, lightboxStep, lightboxHeld, lightboxKey, photoAlt, lightboxThumbLabel, type LightboxDirection } from './lightboxModel'
+// The app shell (2026-10-28): the main-sidebar rail, moved from the web (the app passes its `LinkComponent` and
+// `pathname`; it loads `shell/app-rail.css`), and the area-navigation manifest type with its helpers.
+export * from './shell'
