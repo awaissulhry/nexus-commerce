@@ -4,6 +4,7 @@ import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
 import { seed as seedEmail } from '../seed/email'
+import { seed as seedEmailIn } from '../seed/email-in'
 import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedImports } from '../seed/imports'
@@ -114,6 +115,8 @@ beforeAll(async () => {
   await seedPrint({ db: factory, namespace: 'iso-b' })
   await seedEmail({ db: factory, namespace: 'iso-a' })
   await seedEmail({ db: factory, namespace: 'iso-b' })
+  await seedEmailIn({ db: factory, namespace: 'iso-a' })
+  await seedEmailIn({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -135,6 +138,7 @@ it('covers every classified table and every runtime role', () => {
     'IdempotencyReceipt',
     'ImportJob',
     'ImportRow',
+    'InboundEmail',
     'InboundWebhook',
     'IntegrationAccount',
     'IntegrationCall',

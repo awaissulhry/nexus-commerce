@@ -5,6 +5,7 @@ import { startCrons, type CronJob } from './core/cron'
 import { redact } from './core/logger'
 import { openQueues, queueConnection, type Log } from './core/queue'
 import { loadFactoryEnv } from './env'
+import { emailInHandlers } from './platform/email-in/handlers'
 import { emailSendHandler } from './platform/email-out/outbound'
 import { assertNoFakeAccountsInProduction } from './platform/gateway/boot'
 import { importHandlers } from './platform/imports/worker'
@@ -39,7 +40,7 @@ const MODES = ['worker', 'scheduler'] as const
 type Mode = (typeof MODES)[number]
 
 /** The handlers of published events, one list for the worker. Modules add theirs here (dispatch.ts defineHandler). */
-const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler()]
+const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers()]
 
 const mode = process.argv[2] as Mode
 if (!MODES.includes(mode)) {

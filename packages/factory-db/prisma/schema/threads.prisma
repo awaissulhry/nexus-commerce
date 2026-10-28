@@ -52,6 +52,8 @@ model Thread {
   sharedMessages Message[] @relation("ThreadSharedMessages")
   // email.prisma: the mail sent from this thread.
   emailOutbound  EmailOutbound[]
+  // email-in.prisma: the mail received for this thread (joined, or waiting for a person).
+  inboundEmails  InboundEmail[]
 
   @@unique([tenantId, recordType, recordId])
   @@unique([replyToken])
