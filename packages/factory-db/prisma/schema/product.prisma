@@ -21,7 +21,8 @@
 // triggers refuse, for every login, any change to a released or obsolete revision other than RELEASED → OBSOLETE, and
 // any insert, change or removal of its BOM lines, size quantities, colour grid cells and routing operations. A change
 // to a released style is a new revision (the product module copies the released one into a new DRAFT). A style's
-// current revision is its RELEASED one; releasing a new one obsoletes the previous in the same command.
+// current revision is its RELEASED one, and it has at most one (a partial unique index of …_product_guards, which
+// Prisma cannot express): a release obsoletes the previous revision first, then releases the new one, in one command.
 //
 // Who sees what (ownership/product.json): the office reads and writes; the floor reads the styles, materials (never a
 // cost), BOMs and routings it works from; portal and link sessions read none of it. Master data in use is archived

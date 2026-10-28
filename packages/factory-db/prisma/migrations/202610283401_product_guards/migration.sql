@@ -32,7 +32,8 @@ CREATE TRIGGER "Item_guard" BEFORE INSERT OR UPDATE ON "Item"
   FOR EACH ROW EXECUTE FUNCTION "factory_item_guard"();
 
 -- StyleRevision (A1 §2.5: a work order is made from a released revision, which never changes)
---   every row  RELEASED has releasedAt; DRAFT has neither releasedAt nor releasedById.
+--   every row  RELEASED has releasedAt; DRAFT has neither releasedAt nor releasedById; at most one RELEASED revision per
+--              style (the partial unique index below).
 --   UPDATE     the style, the number and the creation never change; the status moves only DRAFT → RELEASED | OBSOLETE
 --              and RELEASED → OBSOLETE; once out of DRAFT, nothing but the status changes (a change is a new revision).
 --   DELETE     only a draft (PRD-022: an unused draft); a released or obsolete revision is kept. TRUNCATE refused.
@@ -85,6 +86,11 @@ CREATE TRIGGER "StyleRevision_guard" BEFORE INSERT OR UPDATE OR DELETE ON "Style
   FOR EACH ROW EXECUTE FUNCTION "factory_style_revision_guard"();
 CREATE TRIGGER "StyleRevision_no_truncate" BEFORE TRUNCATE ON "StyleRevision"
   FOR EACH STATEMENT EXECUTE FUNCTION "factory_style_revision_guard"();
+
+-- At most one RELEASED revision per style: the style's current revision is its released one (A1 §2.5). Prisma cannot
+-- express a partial unique index, so it lives here. A unique index is checked row by row, not at commit: a release
+-- obsoletes the previous revision FIRST, then releases the new one, in the same transaction.
+CREATE UNIQUE INDEX "StyleRevision_one_released_per_style" ON "StyleRevision" ("tenantId", "styleId") WHERE "status" = 'RELEASED';
 
 -- BomLine, BomLineSize, BomLineColour, RoutingOperation: the parts of a revision
 --   INSERT, UPDATE, DELETE  only while the revision is DRAFT; a row never moves to another revision. An UPDATE that

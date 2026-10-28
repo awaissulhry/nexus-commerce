@@ -18,6 +18,8 @@ import { loadOwnership, loadSchema } from './tools'
  *     of any table of product.prisma or compliance.prisma;
  *   - a RELEASED style revision never changes, nor do its BOM lines, size quantities, colour cells and routing operations,
  *     for any login, the owner included (the …_product_guards triggers); a release waits for an edit of its parts;
+ *   - a style has at most one RELEASED revision (the partial unique index of …_product_guards): a release obsoletes the
+ *     previous revision first, in the same transaction;
  *   - a certificate's validity dates are required, end after they start and span at most five years; a registered
  *     certificate, an active label template and an issued compliance document change only their status;
  *   - a material's Cr VI limit, a coverage's subject and every reference stay as the schema says;
@@ -224,17 +226,43 @@ describe('a released style revision', () => {
     }
   })
 
-  it('moves to OBSOLETE, and then changes no more', async () => {
-    const obsolete = await draftRevision(3)
-    await release(obsolete.revisionId)
-    const status = (to: 'OBSOLETE' | 'RELEASED') => run(office(a), `UPDATE "StyleRevision" SET status = '${to}' WHERE id = $1::uuid`, obsolete.revisionId)
-    expect(await status('OBSOLETE')).toBe(1)
+  it('is the only released revision of its style: a second release is refused', async () => {
+    const second = await draftRevision(3)
+    const releaseSecond = `UPDATE "StyleRevision" SET status = 'RELEASED', "releasedAt" = now() WHERE id = $1::uuid`
+    await expect(run(office(a), releaseSecond, second.revisionId)).rejects.toThrow(/StyleRevision_one_released_per_style/)
+    await expect(admin(releaseSecond, [second.revisionId])).rejects.toThrow(/duplicate key value violates unique constraint "StyleRevision_one_released_per_style"/)
+    // Released before the previous one is obsoleted, in one transaction: refused, and nothing of it stays.
+    await expect(
+      as(office(a), (client) =>
+        client.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(releaseSecond, second.revisionId)
+          await tx.$executeRawUnsafe(`UPDATE "StyleRevision" SET status = 'OBSOLETE' WHERE id = $1::uuid`, parts.revisionId)
+        }),
+      ),
+    ).rejects.toThrow(/StyleRevision_one_released_per_style/)
+    const statuses = await admin('SELECT id::text AS id, status::text AS status FROM "StyleRevision" WHERE id = ANY($1::uuid[]) ORDER BY revision', [[parts.revisionId, second.revisionId]])
+    expect(statuses.map((row) => row.status)).toEqual(['RELEASED', 'DRAFT'])
+  })
+
+  it('is replaced in one transaction: the previous revision obsoleted first, then the new one released', async () => {
+    const next = await draftRevision(4)
+    const now = new Date()
+    await as(office(a), (client) =>
+      client.$transaction(async (tx) => {
+        await tx.styleRevision.update({ where: { id: parts.revisionId }, data: { status: 'OBSOLETE' }, select: { id: true } })
+        await tx.styleRevision.update({ where: { id: next.revisionId }, data: { status: 'RELEASED', releasedAt: now, releasedById: a.actorId }, select: { id: true } })
+      }),
+    )
+    const released = await admin('SELECT id::text AS id FROM "StyleRevision" WHERE "tenantId" = $1 AND "styleId" = $2 AND status = $3', [a.tenantId, productA.styleId, 'RELEASED'])
+    expect(released).toEqual([{ id: next.revisionId }])
+    // The obsolete one changes no more, nor do its parts.
+    const status = (to: 'OBSOLETE' | 'RELEASED') => run(office(a), `UPDATE "StyleRevision" SET status = '${to}' WHERE id = $1::uuid`, parts.revisionId)
     await expect(status('RELEASED')).rejects.toThrow(/cannot move from OBSOLETE to RELEASED/)
-    await expect(run(office(a), `UPDATE "BomLine" SET note = 'x' WHERE id = $1::uuid`, obsolete.lineId)).rejects.toThrow(/is OBSOLETE; its "BomLine" rows never change/)
+    await expect(run(office(a), `UPDATE "BomLine" SET note = 'x' WHERE id = $1::uuid`, parts.lineId)).rejects.toThrow(/is OBSOLETE; its "BomLine" rows never change/)
   })
 
   it('needs its release time; a draft has none', async () => {
-    const draft = await draftRevision(4)
+    const draft = await draftRevision(7)
     await expect(
       as(office(a), (client) => client.styleRevision.update({ where: { id: draft.revisionId }, data: { status: 'RELEASED' }, select: { id: true } })),
     ).rejects.toThrow(/is RELEASED with the wrong release time/)
@@ -251,20 +279,30 @@ describe('a draft style revision', () => {
     expect(edited.qty.toString()).toBe('46')
     expect(await run(office(a), 'UPDATE "BomLineSize" SET qty = 46 WHERE id = $1::uuid', draft.sizeId)).toBe(1)
 
-    // An edit holds the revision row FOR SHARE until it commits: the release cannot slip in between.
+    // An edit holds the revision row FOR SHARE until it commits: the release cannot slip in between. The release, as
+    // the product module will run it: obsolete the style's released revision, then release this one, in one transaction.
     const editor = new pg.Client({ connectionString: db.url('postgres') })
     const releaser = new pg.Client({ connectionString: db.url('postgres') })
+    const releaseDraft = async (): Promise<void> => {
+      await releaser.query('BEGIN')
+      try {
+        await releaser.query("SET LOCAL lock_timeout = '300ms'")
+        await releaser.query(`UPDATE "StyleRevision" SET status = 'OBSOLETE' WHERE "tenantId" = $1 AND "styleId" = $2 AND status = 'RELEASED'`, [a.tenantId, productA.styleId])
+        await releaser.query(`UPDATE "StyleRevision" SET status = 'RELEASED', "releasedAt" = now() WHERE id = $1`, [draft.revisionId])
+        await releaser.query('COMMIT')
+      } catch (error) {
+        await releaser.query('ROLLBACK')
+        throw error
+      }
+    }
     await editor.connect()
     await releaser.connect()
     try {
       await editor.query('BEGIN')
       await editor.query('UPDATE "BomLineSize" SET qty = 47 WHERE id = $1', [draft.sizeId])
-      await releaser.query("SET lock_timeout = '300ms'")
-      await expect(releaser.query(`UPDATE "StyleRevision" SET status = 'RELEASED', "releasedAt" = now() WHERE id = $1`, [draft.revisionId])).rejects.toThrow(
-        /lock timeout/,
-      )
+      await expect(releaseDraft()).rejects.toThrow(/lock timeout/)
       await editor.query('COMMIT')
-      await releaser.query(`UPDATE "StyleRevision" SET status = 'RELEASED', "releasedAt" = now() WHERE id = $1`, [draft.revisionId])
+      await releaseDraft()
       await expect(editor.query('UPDATE "BomLineSize" SET qty = 48 WHERE id = $1', [draft.sizeId])).rejects.toThrow(/is RELEASED/)
     } finally {
       await editor.query('ROLLBACK').catch(() => {})
