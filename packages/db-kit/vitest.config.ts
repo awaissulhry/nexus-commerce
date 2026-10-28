@@ -1,7 +1,8 @@
 import { defineConfig } from 'vitest/config'
 
-// Pure tests only so far. Tests that open a database arrive with the tenant adapter; they will use the factory's
-// throwaway-database runner, never a URL from a `.env`.
+// Pure tests (`*.vitest.test.ts`) and real-PostgreSQL tests (`*.pg.vitest.test.ts`) run together. The PostgreSQL ones
+// use throwaway `factory_test_dbkit_*` databases and random roles on the local factory stack (src/testing/), never a
+// URL from a `.env`; without the stack they fail, they never skip.
 export default defineConfig({
   test: {
     include: ['src/**/*.vitest.test.ts'],

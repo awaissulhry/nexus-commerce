@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./url-guard": "./src/url-guard.ts"
+    "./url-guard": "./src/url-guard.ts",
+    "./policy-sql": "./src/policy-sql.ts",
+    "./sql-guard": "./src/sql-guard.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
