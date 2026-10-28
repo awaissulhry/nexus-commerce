@@ -6,6 +6,7 @@ import { redact } from './core/logger'
 import { openQueues, queueConnection, type Log } from './core/queue'
 import { loadFactoryEnv } from './env'
 import { certificateExpiryCron } from './modules/compliance/certificates/expiry'
+import { floorMoveValuationHandler } from './modules/inventory/ledger/valuation'
 import { emailInHandlers } from './platform/email-in/handlers'
 import { emailSendHandler } from './platform/email-out/outbound'
 import { assertNoFakeAccountsInProduction } from './platform/gateway/boot'
@@ -41,7 +42,7 @@ const MODES = ['worker', 'scheduler'] as const
 type Mode = (typeof MODES)[number]
 
 /** The handlers of published events, one list for the worker. Modules add theirs here (dispatch.ts defineHandler). */
-const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers()]
+const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler()]
 
 const mode = process.argv[2] as Mode
 if (!MODES.includes(mode)) {

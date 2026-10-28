@@ -36,6 +36,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     if (!certificate) return null
     return { companyId: certificate.companyId, siteId: null, partyId: certificate.holderParty?.roles.includes('BRAND') ? certificate.holderPartyId : null }
   },
+  // modules/product/styles (SCR-041): the style's company (none: tenant-wide); the party is the brand a private-label
+  // style is made for, so its tech-pack questions can be shared with that brand only.
+  Style: async (client, id) => {
+    const style = await client.style.findUnique({ where: { id }, select: { companyId: true, brandPartyId: true } })
+    return style ? { companyId: style.companyId, siteId: null, partyId: style.brandPartyId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}
