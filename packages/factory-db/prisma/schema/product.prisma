@@ -1,0 +1,685 @@
+// Product (plan A1 §2.4 B; features PRD-001, PRD-002, PRD-004, PRD-005, PRD-022, PRD-024, PRD-025, PRD-028, PRD-030,
+// PRD-032, PRD-043, PRD-047, PRD-048, PRD-076, PRD-079, PRD-082, PRD-100, PRD-109, PRD-110, PRD-200, PRD-270, PRD-288,
+// GAP-006): the material library with its units and colours, the colour library, size scales, styles with their
+// colourways and colour x size SKU matrix, the BOM and routing of each style revision, the operation library and the
+// made-to-measure templates. apps/factory-api's modules/product writes them (B-W1-09, 11, 13, 14, 17), always through
+// command().
+//
+// Master data is tenant-wide (companyId null) or of one company (A1 §2.1, PRD-002). It carries no siteId: a site key
+// would make the floor role see only its own site's rows; the site comes with the work order that makes the style, and
+// a routing operation names the KIND of work centre, which the work order maps to one of its site's work centres.
+//
+// Units (PRD-030): a closed list (enum Uom). The fixed factors inside one dimension (1 ft² = 0.09290304 m²,
+// 1 dm² = 0.01 m²) are factory-domain constants, the same for every tenant; an item's own conversions (a hide's average
+// area, a roll's length) are its purchase and consumption factors.
+//
+// Sizes inside a style are named by their CODE (Style.sizes, Variant.size, BomLineSize.size), as the sales, stock and
+// production rows of A1 do; a code of a scale never changes once used (the product module refuses it).
+//
+// Revisions (A1 §2.5): a style's BOM, routing and label template belong to a StyleRevision: DRAFT (edited) → RELEASED
+// (frozen; work orders made from it point at it) → OBSOLETE (replaced). The hand-written …_product_guards migration's
+// triggers refuse, for every login, any change to a released or obsolete revision other than RELEASED → OBSOLETE, and
+// any insert, change or removal of its BOM lines, size quantities, colour grid cells and routing operations. A change
+// to a released style is a new revision (the product module copies the released one into a new DRAFT). A style's
+// current revision is its RELEASED one; releasing a new one obsoletes the previous in the same command.
+//
+// Who sees what (ownership/product.json): the office reads and writes; the floor reads the styles, materials (never a
+// cost), BOMs and routings it works from; portal and link sessions read none of it. Master data in use is archived
+// (status ARCHIVED), never deleted (PRD-022; PPE Regulation 2016/425 art. 8(3): technical documentation kept 10 years).
+//
+// Uniqueness of a cell of two references (a BOM line's colour in one colourway) is the product module's: a unique key of
+// ids alone cannot be copied by the generated isolation tests (src/isolation.pg.vitest.test.ts), as for WorkerRole.
+
+/// A colour of the tenant's colour library (PRD-032, PRD-004): the reference our material colours and colourways use.
+model Colour {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide master data, shared by every company of the tenant (A1 §2.1).
+  companyId   String?      @db.Uuid
+  /// Our colour reference, unique in the tenant ("BLK", "RED-01").
+  code        String
+  name        String
+  /// The name per locale: { "it": "Nero", "en": "Black" }.
+  nameI18n    Json?
+  /// For screens and swatches: "#RRGGBB".
+  hex         String?
+  status      MasterStatus @default(ACTIVE)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  company     Company?     @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColours ItemColour[]
+  colourways  Colourway[]
+
+  @@unique([tenantId, code])
+  // The target of the tenant-safe references from material colours and colourways.
+  @@unique([tenantId, id])
+}
+
+/// A material, component or trim of the library (PRD-028): a leather article, a textile, a lining or membrane, thread,
+/// a trim or hardware, a label, a protector, packaging, or a part we make (PRD-024). BOM lines name it; purchase orders,
+/// lots and stock (W1-15) will too.
+model Item {
+  id                  String       @id @db.Uuid
+  tenantId            String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide master data (A1 §2.1).
+  companyId           String?      @db.Uuid
+  /// Our article code, unique in the tenant.
+  code                String
+  name                String
+  /// The name per locale: { "it": "…", "en": "…" }.
+  nameI18n            Json?
+  kind                ItemKind
+  /// Bought, made, or either (PRD-024): MAKE needs a BOM and routing, BUY a supplier.
+  sourcing            ItemSourcing @default(BUY)
+  /// How its stock is traced (PRD-025): hides one by one, dye lots, or a serial per unit.
+  tracking            ItemTracking @default(NONE)
+  /// The stock unit (PRD-030): stock, lots and the standard cost count in it.
+  baseUom             Uom
+  /// The unit it is bought in, and how many base units one of it holds: 1 when it is the base unit; the fixed factor
+  /// when both are of one dimension (FT2 → M2); the article's average for a unit of its own (1 HIDE = 52.5 FT2).
+  purchaseUom         Uom
+  purchaseFactor      Decimal      @default(1) @db.Decimal(18, 8)
+  /// The unit BOM lines use (leather is bought in square feet and cut in dm²), and how many base units one of it holds.
+  consumptionUom      Uom
+  consumptionFactor   Decimal      @default(1) @db.Decimal(18, 8)
+  /// The supplier we buy it from by default (a party with the SUPPLIER role; the product module checks the role).
+  defaultSupplierId   String?      @db.Uuid
+  /// That supplier's article code.
+  supplierArticleCode String?
+  /// The standard purchase price per base unit, typed by the office (GAP-006): quotes and the cost sheet use it until
+  /// supplier price lists come (W2a). Never shown to the floor, a portal or a link.
+  /// @grain cost
+  standardCost        Decimal?     @db.Decimal(18, 6)
+  /// The currency of the standard cost, ISO 4217.
+  currency            String       @default("EUR")
+  /// Leather: the animal ("bovine", "goat", "kangaroo"), for the user information and the supplier documents.
+  animalSpecies       String?
+  /// Leather: how it was tanned; chrome tanning is why Cr VI is tested (REACH Annex XVII entry 47).
+  tannage             Tannage?
+  /// Leather: the tannery's selection or grade ("A", "TR1").
+  grade               String?
+  /// Leather: the finish (full grain, corrected grain, nubuck, aniline …).
+  finish              String?
+  /// Leather and textiles: the thickness range in millimetres.
+  thicknessMinMm      Decimal?     @db.Decimal(6, 2)
+  thicknessMaxMm      Decimal?     @db.Decimal(6, 2)
+  /// Textiles: the fibre composition (Reg. (EU) 1007/2011), percentages as decimal strings (no floats):
+  /// [{ "fibre": "polyamide", "percent": "100" }]. The garment label is typed from these (B-W1-19).
+  composition         Json?
+  /// Has non-textile parts of animal origin (leather, fur): the garment label then carries the phrase of Reg. (EU)
+  /// 1007/2011 art. 12.
+  animalOrigin        Boolean      @default(false)
+  /// Other attributes of its kind, for screens and supplier documents: { "<name>": "<value>" }.
+  attributes          Json?
+  /// A component that is itself PPE or part of the protection (an EN 1621 protector): a certificate covers it, and a
+  /// substitute needs the notified body's consent.
+  isPpeComponent      Boolean      @default(false)
+  /// Every lot needs Cr VI evidence before it is released (REACH Annex XVII entry 47: leather articles in contact with
+  /// the skin). What counts as evidence is a setting (B-W1-34, Q14).
+  requiresCrViTest    Boolean      @default(false)
+  /// The Cr VI limit a lot must stay below, mg/kg: the legal 3, or a brand's lower one. Set exactly when a test is
+  /// required; never above 3 (the …_product_guards trigger).
+  crViLimitMgKg       Decimal?     @db.Decimal(8, 3)
+  status              MasterStatus @default(ACTIVE)
+  version             Int          @default(1)
+  createdAt           DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?      @db.Uuid
+
+  company         Company?              @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  defaultSupplier Party?                @relation(fields: [tenantId, defaultSupplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  colours         ItemColour[]
+  bomLines        BomLine[]
+  // compliance.prisma: the certificates that cover it (a protector's EN 1621 certificate).
+  coverage        CertificateCoverage[]
+
+  @@unique([tenantId, code])
+  // The target of the tenant-safe references from BOM lines and the item's colours.
+  @@unique([tenantId, id])
+}
+
+enum ItemKind {
+  LEATHER
+  TEXTILE
+  LINING
+  MEMBRANE
+  PADDING
+  THREAD
+  /// Zips, snaps, hook-and-loop, buckles.
+  TRIM
+  HARDWARE
+  /// Impact protectors (EN 1621-1, -2) and their pockets' inserts.
+  PROTECTOR
+  LABEL
+  PACKAGING
+  /// A part we make (a pre-assembled panel): sourcing MAKE.
+  COMPONENT
+}
+
+enum ItemSourcing {
+  BUY
+  MAKE
+  MAKE_OR_BUY
+}
+
+enum ItemTracking {
+  NONE
+  /// By lot: dye lots, protectors, thread.
+  LOT
+  /// Hide by hide: each hide has its own code, area and grade (W1-15).
+  HIDE
+  /// One serial per unit (finished PPE garments, PPE art. 8(5)).
+  SERIAL
+}
+
+enum Tannage {
+  CHROME
+  VEGETABLE
+  CHROME_FREE
+  COMBINATION
+}
+
+/// A unit of measure (PRD-030). Within a dimension the factors are fixed (factory-domain units); HIDE, SIDE, ROLL,
+/// CONE and BOX hold what the item says (its purchase or consumption factor). New units are added, never renamed.
+enum Uom {
+  /// A piece.
+  PCS
+  PAIR
+  SET
+  M
+  CM
+  MM
+  M2
+  DM2
+  /// A square foot (0.09290304 m²).
+  FT2
+  KG
+  G
+  L
+  /// A whole hide or skin.
+  HIDE
+  /// Half a hide.
+  SIDE
+  ROLL
+  CONE
+  BOX
+}
+
+/// A material in one of its colours (PRD-032): what a BOM line resolves to, so the right colour is bought.
+model ItemColour {
+  id                 String       @id @db.Uuid
+  tenantId           String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  itemId             String       @db.Uuid
+  /// Our reference for the material in this colour, unique per material.
+  code               String
+  name               String
+  /// The library colour it matches, when there is one.
+  colourId           String?      @db.Uuid
+  /// The supplier's colour code, as it goes on a purchase order.
+  supplierColourCode String?
+  status             MasterStatus @default(ACTIVE)
+  version            Int          @default(1)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?      @db.Uuid
+
+  item           Item            @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  colour         Colour?         @relation(fields: [tenantId, colourId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  bomLines       BomLine[]
+  bomLineColours BomLineColour[]
+
+  @@unique([tenantId, itemId, code])
+  // The target of the references from BOM lines and grid cells: a colour of the line's own material.
+  @@unique([tenantId, itemId, id])
+}
+
+/// A size scale of the library (PRD-047): EU 44-64, S-4XL, gloves 7-13, women 38-50. Reused by many styles.
+model SizeScale {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide master data (A1 §2.1).
+  companyId   String?      @db.Uuid
+  code        String
+  name        String
+  status      MasterStatus @default(ACTIVE)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  sizes   Size[]
+  styles  Style[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, id])
+}
+
+/// One size of a scale, in the scale's order.
+model Size {
+  id           String       @id @db.Uuid
+  tenantId     String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  scaleId      String       @db.Uuid
+  /// The size code, unique in the scale and never changed once used: styles, SKUs, BOM quantities, orders and work
+  /// orders name the size by it.
+  code         String
+  /// How it is shown, when not the code ("52 (L)").
+  label        String?
+  /// Its place in the scale, from small to large.
+  seq          Int
+  /// The body measures the size is for, as the PPE label shows them (EN 17092 size pictogram) and against which a
+  /// made-to-measure rider's measures are checked (PRD-288); keys are measurement point codes, values decimal strings:
+  /// { "chest": { "min": "100", "max": "104", "unit": "cm" }, "height": { "min": "176", "max": "182", "unit": "cm" } }.
+  bodyMeasures Json?
+  status       MasterStatus @default(ACTIVE)
+  version      Int          @default(1)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?      @db.Uuid
+
+  scale SizeScale @relation(fields: [tenantId, scaleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, scaleId, code])
+}
+
+/// A style (model) we make (PRD-001): the parent of its colourways, SKUs, revisions (BOM, routing, label), certificates
+/// and orders. DRAFT → ACTIVE (it has a released revision, it can be sold) → ARCHIVED (never deleted, PRD-022).
+model Style {
+  id                    String      @id @db.Uuid
+  tenantId              String      @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that owns it; null: tenant-wide, made by every company (A1 §2.1, PRD-002).
+  companyId             String?     @db.Uuid
+  /// The style code, unique in the tenant; SKUs start with it.
+  code                  String
+  name                  String
+  /// The name per locale.
+  nameI18n              Json?
+  description           String?
+  productType           ProductType
+  /// The season or collection ("FW27"), as the office writes it.
+  season                String?
+  /// The brand it is made for (private label); null: our own collection. With a brand label, the brand is the legal PPE
+  /// maker (PLAN §2.8).
+  brandPartyId          String?     @db.Uuid
+  sizeScaleId           String      @db.Uuid
+  /// The size range (PRD-048): codes of the scale's sizes, in the scale's order. The SKU matrix is built from it.
+  sizes                 String[]    @default([])
+  /// The base (sample) size grading works from; one of `sizes`.
+  baseSize              String?
+  /// Its PPE classification (PRD-270; Reg. (EU) 2016/425 art. 18, Annex I): rider garments with impact protectors or
+  /// abrasion protection are Category II; a climate-only garment for private use is not PPE.
+  ppeCategory           PpeCategory
+  /// The harmonised standard it is made to, with its edition ("EN 17092-4:2020"); null when not PPE.
+  ppeStandard           String?
+  /// The class it is made for (EN 17092: AAA, AA, A, B, C); the certificate that covers it says what it has.
+  ppeClass              String?
+  /// Made-to-measure single units may be made from it (PRD-288: inside the certified range of its basic model).
+  mtmAllowed            Boolean     @default(false)
+  /// The measurement template a made-to-measure unit is measured with (PRD-200).
+  measurementTemplateId String?     @db.Uuid
+  status                StyleStatus @default(DRAFT)
+  version               Int         @default(1)
+  createdAt             DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime    @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById           String?     @db.Uuid
+
+  company             Company?              @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  brandParty          Party?                @relation(fields: [tenantId, brandPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  sizeScale           SizeScale             @relation(fields: [tenantId, sizeScaleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  measurementTemplate MeasurementTemplate?  @relation(fields: [tenantId, measurementTemplateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  colourways          Colourway[]
+  revisions           StyleRevision[]
+  // compliance.prisma: what covers and documents it.
+  coverage            CertificateCoverage[]
+  labelTemplates      LabelTemplate[]
+  complianceDocuments ComplianceDocument[]
+
+  @@unique([tenantId, code])
+  // The target of the tenant-safe references from the style's rows.
+  @@unique([tenantId, id])
+}
+
+enum StyleStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+/// The kind of garment: it decides the measurement template and, with the protection, the PPE classification.
+enum ProductType {
+  JACKET
+  TROUSERS
+  /// A one-piece or two-piece race suit.
+  SUIT
+  GLOVES
+  VEST
+  OTHER
+}
+
+/// PPE category (Reg. (EU) 2016/425 Annex I).
+enum PpeCategory {
+  NOT_PPE
+  CATEGORY_I
+  CATEGORY_II
+  CATEGORY_III
+}
+
+/// A colour variant of a style (PRD-004): main leather colour, contrast panels, stitching and logos. Orders, BOM colours
+/// and stock are per colourway.
+model Colourway {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  styleId     String       @db.Uuid
+  /// The colourway code, unique in the style; SKUs carry it.
+  code        String
+  name        String
+  /// The library colour of its main material.
+  colourId    String?      @db.Uuid
+  /// Its contrast panels, stitching and logos, as the office writes them; its pictures are its files.
+  description String?
+  status      MasterStatus @default(ACTIVE)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  style          Style           @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  colour         Colour?         @relation(fields: [tenantId, colourId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  variants       Variant[]
+  bomLines       BomLine[]
+  bomLineColours BomLineColour[]
+
+  @@unique([tenantId, styleId, code])
+  // The target of the references from the style's SKUs, BOM lines and grid cells: a colourway of the same style.
+  @@unique([tenantId, styleId, id])
+}
+
+/// One cell of the colour x size SKU matrix (PRD-005): a colourway in a size of the style's range. A cell switched off
+/// is ARCHIVED (never deleted once used).
+model Variant {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  styleId     String       @db.Uuid
+  colourwayId String       @db.Uuid
+  /// The size code: one of the style's sizes.
+  size        String
+  /// The SKU, unique in the tenant (built from the style, colourway and size codes).
+  sku         String
+  /// The barcode (GTIN-13 / EAN), unique in the tenant when set.
+  gtin        String?
+  status      MasterStatus @default(ACTIVE)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  colourway Colourway @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, sku])
+  @@unique([tenantId, gtin])
+  @@unique([tenantId, styleId, colourwayId, size])
+}
+
+/// One revision of a style's specification: its BOM, routing and garment label (A1 §2.5). DRAFT while edited;
+/// RELEASED is frozen for every login (the …_product_guards triggers), so a work order made from it always reads the
+/// same specification; OBSOLETE when a newer revision is released (or a draft is abandoned).
+model StyleRevision {
+  id                  String              @id @db.Uuid
+  tenantId            String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  styleId             String              @db.Uuid
+  /// 1, 2, 3 … per style.
+  revision            Int
+  status              StyleRevisionStatus @default(DRAFT)
+  /// What changed against the previous revision.
+  changeNote          String?
+  /// The share of a hide's area the cutting plan expects to use for this style, percent (PRD-082); cutting compares the
+  /// real yield with it.
+  plannedHideYieldPct Decimal?            @db.Decimal(7, 4)
+  /// The garment label template revision its units carry (PRD-331; ACTIVE when the revision is released).
+  labelTemplateId     String?             @db.Uuid
+  /// When and by whom it was released; set exactly from RELEASED on.
+  releasedAt          DateTime?           @db.Timestamptz(3)
+  releasedById        String?             @db.Uuid
+  version             Int                 @default(1)
+  createdAt           DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?             @db.Uuid
+
+  style          Style              @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // compliance.prisma.
+  labelTemplate  LabelTemplate?     @relation(fields: [tenantId, labelTemplateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  bomLines       BomLine[]
+  bomLineColours BomLineColour[]
+  routing        RoutingOperation[]
+
+  @@unique([tenantId, styleId, revision])
+  // The target of the references from the revision's parts: a revision of the same style.
+  @@unique([tenantId, styleId, id])
+}
+
+enum StyleRevisionStatus {
+  DRAFT
+  RELEASED
+  OBSOLETE
+}
+
+/// One line of a style revision's BOM (PRD-076, PRD-100): a material for every SKU of the style, or for one colourway
+/// only. The quantity is per garment in `uom`; with sizeDependent the per-size quantities are BomLineSize rows
+/// (PRD-079, PRD-082: leather area per size); with colourDependent the material colour per colourway is a BomLineColour
+/// row (PRD-043), else itemColourId is the one colour for every colourway.
+model BomLine {
+  id              String   @id @db.Uuid
+  tenantId        String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  styleId         String   @db.Uuid
+  revisionId      String   @db.Uuid
+  /// Its place in the BOM, unique per revision.
+  seq             Int
+  itemId          String   @db.Uuid
+  /// Where it goes: front panel, sleeve, lining, armour pocket.
+  placement       String?
+  /// Per garment, in `uom`: for every size, or the base size's when sizeDependent (the size rows then hold each size's).
+  qty             Decimal  @db.Decimal(18, 4)
+  /// Usually the item's consumption unit (leather: DM2 or FT2).
+  uom             Uom
+  /// Added on top of the quantity for waste and, on leather, the hide's yield; percent.
+  wastagePct      Decimal  @default(0) @db.Decimal(7, 4)
+  sizeDependent   Boolean  @default(false)
+  colourDependent Boolean  @default(false)
+  /// The material's colour for every colourway, when not colour-dependent and the material comes in colours.
+  itemColourId    String?  @db.Uuid
+  /// Only in this colourway; null: in every colourway (PRD-100).
+  colourwayId     String?  @db.Uuid
+  /// Bought from this supplier when it is not the item's default.
+  supplierId      String?  @db.Uuid
+  note            String?
+  version         Int      @default(1)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?  @db.Uuid
+
+  revision   StyleRevision   @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  item       Item            @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour ItemColour?     @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  colourway  Colourway?      @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplier   Party?          @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  sizes      BomLineSize[]
+  colours    BomLineColour[]
+
+  @@unique([tenantId, revisionId, seq])
+  // The target of the size rows' reference: a line of the same revision.
+  @@unique([tenantId, revisionId, id])
+  // The target of the grid cells' reference: a line of the same revision, and of the material whose colour they name.
+  @@unique([tenantId, revisionId, id, itemId])
+}
+
+/// A size-dependent BOM line's quantity in one size (PRD-079), in the line's unit. A size of the range without a row
+/// does not use the line.
+model BomLineSize {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  revisionId  String   @db.Uuid
+  bomLineId   String   @db.Uuid
+  /// The size code: one of the style's sizes.
+  size        String
+  qty         Decimal  @db.Decimal(18, 4)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  bomLine BomLine @relation(fields: [tenantId, revisionId, bomLineId], references: [tenantId, revisionId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, bomLineId, size])
+}
+
+/// One cell of the colourway BOM colour grid (PRD-043): the material colour a colour-dependent line uses in one
+/// colourway. One per line and colourway (the product module keeps it so); a colourway without one does not use the
+/// line.
+model BomLineColour {
+  id           String   @id @db.Uuid
+  tenantId     String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  styleId      String   @db.Uuid
+  revisionId   String   @db.Uuid
+  bomLineId    String   @db.Uuid
+  /// The line's material (its colour must be one of the material's).
+  itemId       String   @db.Uuid
+  colourwayId  String   @db.Uuid
+  itemColourId String   @db.Uuid
+  version      Int      @default(1)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?  @db.Uuid
+
+  bomLine    BomLine       @relation(fields: [tenantId, revisionId, bomLineId, itemId], references: [tenantId, revisionId, id, itemId], onDelete: Restrict, onUpdate: Restrict)
+  // So the colourway is one of the revision's own style.
+  revision   StyleRevision @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  colourway  Colourway     @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour ItemColour    @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, bomLineId])
+}
+
+/// An operation of the library (PRD-109): what is done, at which kind of work centre, on which machine, with which
+/// skill and its standard minutes (SMV). Its photos and videos are its files. Routings copy it.
+model Operation {
+  id              String         @id @db.Uuid
+  tenantId        String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide master data (A1 §2.1).
+  companyId       String?        @db.Uuid
+  code            String
+  name            String
+  /// The name per locale, the floor languages included.
+  nameI18n        Json?
+  /// The department: the kind of work centre it runs at.
+  workCentreKind  WorkCentreKind
+  /// Flat-bed, post-bed, twin-needle, skiving, press, laser …
+  machineType     String?
+  skill           String?
+  /// Standard minutes per garment.
+  standardMinutes Decimal        @db.Decimal(10, 3)
+  /// How it is done, for the traveller and the floor screen.
+  instructions    String?
+  status          MasterStatus   @default(ACTIVE)
+  version         Int            @default(1)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?        @db.Uuid
+
+  company Company?           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  routing RoutingOperation[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, id])
+}
+
+/// One step of a style revision's routing (PRD-110), in order: an operation of the library, copied with its name, kind
+/// of work centre and standard minutes (which the revision may change), so a later library edit leaves released
+/// routings as they are. The floor scans these operations; the work order maps each to a work centre of its site.
+model RoutingOperation {
+  id              String         @id @db.Uuid
+  tenantId        String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  styleId         String         @db.Uuid
+  revisionId      String         @db.Uuid
+  /// Its place in the routing, unique per revision.
+  seq             Int
+  operationId     String         @db.Uuid
+  /// The library operation's code and name, as copied.
+  code            String
+  name            String
+  nameI18n        Json?
+  workCentreKind  WorkCentreKind
+  /// Standard minutes per garment.
+  standardMinutes Decimal        @db.Decimal(10, 3)
+  /// Every bundle is scanned at it (floor scans, B-W1-42).
+  scanRequired    Boolean        @default(true)
+  instructions    String?
+  version         Int            @default(1)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?        @db.Uuid
+
+  revision  StyleRevision @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  operation Operation     @relation(fields: [tenantId, operationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, revisionId, seq])
+}
+
+/// Which body measures to take for a made-to-measure garment of one type (PRD-200; about 23 for a race suit). A
+/// measurement profile (parties.prisma) names it by its code (garmentType).
+model MeasurementTemplate {
+  id           String       @id @db.Uuid
+  tenantId     String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide master data (A1 §2.1).
+  companyId    String?      @db.Uuid
+  /// The garment type, unique in the tenant ("JACKET"): a measurement profile's garmentType.
+  code         String
+  name         String
+  nameI18n     Json?
+  productType  ProductType
+  /// How to measure, before the points.
+  instructions String?
+  status       MasterStatus @default(ACTIVE)
+  version      Int          @default(1)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?      @db.Uuid
+
+  company Company?           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  points  MeasurementPoint[]
+  styles  Style[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, id])
+}
+
+/// One point of measure of a template, with its unit and plausible range; its how-to pictures are its files.
+model MeasurementPoint {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  templateId  String       @db.Uuid
+  /// Its key in a measurement profile and in a size's body measures ("chest"), unique in the template.
+  code        String
+  name        String
+  nameI18n    Json?
+  /// Its place in the template.
+  seq         Int
+  uom         Uom          @default(CM)
+  /// The plausible range: a value outside it is asked again.
+  minValue    Decimal?     @db.Decimal(8, 2)
+  maxValue    Decimal?     @db.Decimal(8, 2)
+  required    Boolean      @default(true)
+  /// How to measure it.
+  howTo       String?
+  status      MasterStatus @default(ACTIVE)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  template MeasurementTemplate @relation(fields: [tenantId, templateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, templateId, code])
+}

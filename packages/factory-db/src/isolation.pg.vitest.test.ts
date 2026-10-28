@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
+import { seed as seedCompliance } from '../seed/compliance'
 import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedImports } from '../seed/imports'
@@ -12,6 +13,7 @@ import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
 import { seed as seedPrint } from '../seed/print'
+import { seed as seedProduct } from '../seed/product'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedThreads } from '../seed/threads'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
@@ -95,6 +97,10 @@ beforeAll(async () => {
   await seedOutbox({ db: factory, namespace: 'iso-b' })
   await seedParties({ db: factory, namespace: 'iso-a' })
   await seedParties({ db: factory, namespace: 'iso-b' })
+  await seedProduct({ db: factory, namespace: 'iso-a' })
+  await seedProduct({ db: factory, namespace: 'iso-b' })
+  await seedCompliance({ db: factory, namespace: 'iso-a' })
+  await seedCompliance({ db: factory, namespace: 'iso-b' })
   await seedRoles({ db: factory, namespace: 'iso-a' })
   await seedRoles({ db: factory, namespace: 'iso-b' })
   await seedIntegration({ db: factory, namespace: 'iso-a' })
@@ -122,7 +128,15 @@ it('covers every classified table and every runtime role', () => {
   expect(classified.map(({ model }) => model.name).sort()).toEqual([
     'AuditLog',
     'Badge',
+    'BomLine',
+    'BomLineColour',
+    'BomLineSize',
+    'Certificate',
+    'CertificateCoverage',
+    'Colour',
+    'Colourway',
     'Company',
+    'ComplianceDocument',
     'Device',
     'DeviceEnrolment',
     'FloorSession',
@@ -134,13 +148,19 @@ it('covers every classified table and every runtime role', () => {
     'IntegrationAccount',
     'IntegrationCall',
     'Invitation',
+    'Item',
+    'ItemColour',
+    'LabelTemplate',
     'Line',
     'LinkEvidence',
+    'MeasurementPoint',
     'MeasurementProfile',
+    'MeasurementTemplate',
     'Message',
     'NumberAllocation',
     'NumberSeries',
     'OneOffLink',
+    'Operation',
     'OutboxEvent',
     'Party',
     'PartyAddress',
@@ -151,14 +171,20 @@ it('covers every classified table and every runtime role', () => {
     'Printer',
     'Role',
     'RoleAssignment',
+    'RoutingOperation',
     'SecretValue',
     'Session',
     'Site',
+    'Size',
+    'SizeScale',
     'Station',
     'StoredFile',
+    'Style',
+    'StyleRevision',
     'Tenant',
     'Thread',
     'User',
+    'Variant',
     'ViesCheck',
     'WorkCentre',
     'Worker',

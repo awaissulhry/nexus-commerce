@@ -101,6 +101,17 @@ model Company {
   // parties.prisma: the parties of this company only (tenant-wide ones have none), and the VIES checks it requested.
   parties             Party[]
   viesChecks          ViesCheck[]
+  // product.prisma: the company's own master data (tenant-wide rows have none).
+  colours              Colour[]
+  items                Item[]
+  sizeScales           SizeScale[]
+  styles               Style[]
+  operations           Operation[]
+  measurementTemplates MeasurementTemplate[]
+  // compliance.prisma: the certificates it holds, its label templates and compliance documents.
+  certificates         Certificate[]
+  labelTemplates       LabelTemplate[]
+  complianceDocuments  ComplianceDocument[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.

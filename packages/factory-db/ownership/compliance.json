@@ -1,0 +1,40 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/compliance.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes certificates, coverage, label templates and compliance documents through apps/factory-api's modules/compliance, always through command(); the scheduler expires certificates in the tenant's system context. The floor (factory_floor_runtime) reads the certificates, their coverage and the label templates: garment labels are printed at the final operation behind the certificate gate (B-W1-44). It reads no compliance document (the DoC travels with the shipment, an office step). None of these tables has a cost, margin or price column. Portal and link sessions read nothing here: a DoC reaches a customer as a file through a link (B-W1-49). No role deletes (Reg. 2016/425 art. 8(3): kept 10 years); once a certificate is registered, a label template activated or a document issued, only its status moves (the …_product_guards triggers, for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Certificate": {
+      "about": "The office registers certificates, suspends, withdraws and reinstates them; the scheduler expires them. The floor reads them (the certificate gate and the number and class on the garment label).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "CertificateCoverage": {
+      "about": "The office records which styles, colourways, sizes and items a certificate covers, and ends a coverage (status). The floor reads it (the certificate gate).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "LabelTemplate": {
+      "about": "The office builds label templates, activates and retires them; an active one changes no more (a change is a new revision). The floor reads them to print garment labels.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "ComplianceDocument": {
+      "about": "The office drafts, issues, supersedes and withdraws Declarations of Conformity and user information per style and language; an issued one changes no more but its status.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}
