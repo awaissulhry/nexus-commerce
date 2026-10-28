@@ -114,6 +114,23 @@ CREATE POLICY "factory_floor_runtime_select" ON "public"."Line" AS PERMISSIVE FO
 CREATE POLICY "factory_runtime_select" ON "public"."Line" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."Line" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_update" ON "public"."Line" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."NumberAllocation"
+ALTER TABLE "public"."NumberAllocation" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."NumberAllocation" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'NumberAllocation' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'NumberAllocation'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."NumberAllocation" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT ON TABLE "public"."NumberAllocation" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."NumberAllocation" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."NumberAllocation" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."NumberSeries"
+ALTER TABLE "public"."NumberSeries" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."NumberSeries" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'NumberSeries' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'NumberSeries'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."NumberSeries" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."NumberSeries" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."NumberSeries" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."NumberSeries" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."NumberSeries" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."OutboxEvent"
 ALTER TABLE "public"."OutboxEvent" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."OutboxEvent" FORCE ROW LEVEL SECURITY;

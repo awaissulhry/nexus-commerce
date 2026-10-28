@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAudit } from '../seed/audit'
+import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels } from './ownership'
@@ -75,6 +76,8 @@ beforeAll(async () => {
   b = await seed({ db: factory, namespace: 'iso-b' })
   partyId = (await seedAudit({ db: factory, namespace: 'iso-a' })).partyId
   await seedAudit({ db: factory, namespace: 'iso-b' })
+  await seedNumbering({ db: factory, namespace: 'iso-a' })
+  await seedNumbering({ db: factory, namespace: 'iso-b' })
   await seedOutbox({ db: factory, namespace: 'iso-a' })
   await seedOutbox({ db: factory, namespace: 'iso-b' })
 }, 60_000)
@@ -90,6 +93,8 @@ it('covers every classified table and every runtime role', () => {
     'Company',
     'IdempotencyReceipt',
     'Line',
+    'NumberAllocation',
+    'NumberSeries',
     'OutboxEvent',
     'Site',
     'Station',

@@ -73,6 +73,7 @@ and the idempotency receipt; the outbox (events → BullMQ → handlers and live
 - `FACTORY_ENV=local` or `test`: the database and Redis must be loopback, or the API refuses to start.
   `staging` and `production` start only on Railway (`RAILWAY_ENVIRONMENT`, set by the platform, never by the file),
   with an https `FACTORY_WEB_ORIGIN` and a real `FACTORY_COOKIE_SECRET` (32+ characters, not the local placeholder).
+- A document number comes only from `allocateNumber(tools, { companyId, kind, code? }, { type, id, date? })` (`src/platform/numbering/allocate.ts`), called in the issuing command's work: it locks the series row, so numbers have no gap and never repeat.
 - `testAuthenticator()` is the only way to give a test a session; `buildApp` refuses it unless FACTORY_ENV=test.
 - Tests refuse to start unless `FACTORY_DATABASE_URL` is loopback and names `factory_test…` or this worktree's
   `factory_<branch>` (`src/testing/global-setup.ts`), even tests that never connect.
