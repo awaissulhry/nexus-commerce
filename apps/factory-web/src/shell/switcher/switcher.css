@@ -1,0 +1,18 @@
+/* The company and site switcher's trigger (SCR-002): the two names, each cut with an ellipsis. Semantic tokens only;
+   the top bar gives the site name the chrome's colours (office/office-shell.css). */
+.fw-switcher-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 24ch;
+}
+
+.fw-switcher-site {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 18ch;
+  padding-left: var(--nds-space-8);
+  border-left: 1px solid var(--nds-border);
+  color: var(--nds-text-muted);
+}

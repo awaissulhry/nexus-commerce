@@ -358,6 +358,8 @@ model MeasurementProfile {
   // sales.prisma: the made-to-measure quote and order lines made to this revision.
   quoteLines      QuoteLine[]
   salesOrderLines SalesOrderLine[]
+  // production.prisma: the made-to-measure work order cells made to this revision.
+  workOrderSizes  WorkOrderSize[]
 
   @@unique([tenantId, partyId, riderName, garmentType, revision])
   // The target of the revisions' reference: a revision supersedes one of its own party.

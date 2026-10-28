@@ -631,6 +631,8 @@ model SalesOrderLine {
   measurementProfile MeasurementProfile?  @relation(fields: [tenantId, partyId, measurementProfileId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   site               Site?                @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   sizes              SalesOrderLineSize[]
+  // production.prisma: the work order cells that make it.
+  workOrderSizes     WorkOrderSize[]
 
   @@unique([tenantId, orderId, seq])
   // The target of the references from the line's size rows (and the work orders of W1-23).

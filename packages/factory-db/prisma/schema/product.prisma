@@ -246,6 +246,8 @@ model ItemColour {
   goodsReceiptLines    GoodsReceiptLine[]
   lots                 Lot[]
   stockMoves           StockMove[]
+  // production.prisma: the work orders' planned materials in this colour.
+  workOrderMaterials   WorkOrderMaterial[]
 
   @@unique([tenantId, itemId, code])
   // The target of the references from BOM lines and grid cells: a colour of the line's own material.
@@ -355,6 +357,8 @@ model Style {
   // sales.prisma: its quote and sales order lines.
   quoteLines          QuoteLine[]
   salesOrderLines     SalesOrderLine[]
+  // production.prisma: the work orders that make it.
+  workOrders          WorkOrder[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the style's rows.
@@ -413,6 +417,8 @@ model Colourway {
   // sales.prisma: its quote and sales order lines.
   quoteLines      QuoteLine[]
   salesOrderLines SalesOrderLine[]
+  // production.prisma: the work order cells made in it.
+  workOrderSizes  WorkOrderSize[]
 
   @@unique([tenantId, styleId, code])
   // The target of the references from the style's SKUs, BOM lines and grid cells: a colourway of the same style.
@@ -479,6 +485,8 @@ model StyleRevision {
   // sales.prisma: the quote lines costed from it and the sales order lines made to it.
   quoteLines      QuoteLine[]
   salesOrderLines SalesOrderLine[]
+  // production.prisma: the work orders released with it as their frozen specification.
+  workOrders      WorkOrder[]
 
   @@unique([tenantId, styleId, revision])
   // The target of the references from the revision's parts: a revision of the same style.
@@ -532,6 +540,8 @@ model BomLine {
   supplier   Party?          @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   sizes      BomLineSize[]
   colours    BomLineColour[]
+  // production.prisma: the work orders' planned materials of the line.
+  workOrderMaterials WorkOrderMaterial[]
 
   @@unique([tenantId, revisionId, seq])
   // The target of the size rows' reference: a line of the same revision.
@@ -648,6 +658,8 @@ model RoutingOperation {
 
   revision  StyleRevision @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
   operation Operation     @relation(fields: [tenantId, operationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // production.prisma: the work order operations made from the step.
+  workOrderOperations WorkOrderOperation[]
 
   @@unique([tenantId, revisionId, seq])
 }

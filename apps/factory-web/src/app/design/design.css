@@ -1,0 +1,96 @@
+/* The local design index (/design). Layout only; semantic tokens. */
+.fw-design {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: var(--nds-space-24) var(--nds-space-24) var(--nds-space-48);
+}
+
+.fw-design-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--nds-space-16);
+}
+
+.fw-design-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-design-card-title {
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-link);
+}
+
+.fw-design-muted {
+  margin: var(--nds-space-6) 0 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-design-cases {
+  margin: var(--nds-space-12) 0 0;
+  padding-left: var(--nds-space-18);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-design-cases a,
+.fw-design-back,
+.fw-design-frame a {
+  color: var(--nds-text-link);
+}
+
+.fw-design-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-12);
+}
+
+.fw-design-cases-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-32);
+}
+
+.fw-design-case-head h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  color: var(--nds-text-strong);
+}
+
+.fw-design-frames {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: var(--nds-space-10);
+}
+
+.fw-design-frame {
+  margin: 0;
+}
+
+.fw-design-frame figcaption {
+  margin-bottom: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+.fw-design-viewport {
+  overflow: hidden;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+
+.fw-design-viewport iframe {
+  display: block;
+  border: 0;
+  transform-origin: 0 0;
+}
+
+/* A screen part (a top-bar control) alone in its frame: room around it, and room below for its menu. */
+.fw-design-part {
+  padding: var(--nds-space-24);
+}
