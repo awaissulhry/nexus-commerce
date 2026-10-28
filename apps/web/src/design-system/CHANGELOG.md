@@ -1,3 +1,24 @@
+## Native controls always use the DS font — 2026-10-28
+
+Owner, on Reviews › Insights › Fixes: "I'm still seeing a breach of the Arial font … Remove it from everywhere in the
+design system so that it never gets reused." Measured (lane N10): the font Chromium drew every text node in
+(`CSS.getPlatformFontsForNode`) on every Reviews page and pop-up, light and dark, 1440 and 390 px — 0 nodes in Arial or
+Helvetica before and after; the only non-DS faces are the system fonts for glyphs the subsets lack (⌘, →, emoji). The
+hole that remained is structural: a native `<button>`, `<input>`, `<select>`, `<textarea>` or `<optgroup>` does not
+inherit the page's font, and Chromium draws it in 13.33 px Arial (measured). Web was covered only by Tailwind's reset;
+Factory had nothing.
+- **Base rule** (both apps, identical: `styles/primitives.css`): `:where(button, input, select, textarea, optgroup),
+  :where(input)::file-selector-button { font: inherit; }` — every native control takes the family, size, weight and line
+  height of where it sits. Zero specificity: every DS or page class still sets its own size and weight. In Factory a
+  native control with no class of its own is now the DS font at its surroundings' size instead of 13.33 px Arial.
+- **Guard** `scripts/check-font-families.mjs`: fails when that rule leaves either app's `primitives.css` (all five
+  elements, `font: inherit`) or a root layout stops loading the file; `initial` / `revert` / `revert-layer` on
+  `font-family`, `font` or `all`, and a system-font keyword as the whole `font` (`menu`, `-webkit-small-control`…), now
+  fail like a literal family; the `font` shorthand in style objects and on a canvas is now read too. Self-tests for each.
+- **Catalog** `ReviewPartsExample.tsx`: the placeholder buyer photos drew "Buyer photo 1…" inside an SVG image with
+  `font-family='sans-serif'` (Arial on Windows, Helvetica on a Mac: an SVG shown as an image cannot use the page's fonts)
+  — the guard's one finding on main. They now draw dots, no text.
+
 ## Sparkline fixed axis — 2026-10-28
 
 Reviews › Amazon topics (lane N5b). Both apps, identical: `components/{Sparkline.tsx, sparklineModel.ts, index.ts}`.
