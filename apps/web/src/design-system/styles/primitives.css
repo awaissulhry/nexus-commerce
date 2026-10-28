@@ -7,6 +7,19 @@
  * pill = .h10-pill, program badge = .pb[data-p], targeting = .tg[data-t]).
  */
 
+/* ── Native controls use the DS font (base rule) ─────────────────────
+   A <button>, <input>, <select>, <textarea> or <optgroup> does not inherit the page's font: the browser draws it in its
+   own (13.33 px Arial — measured in Chromium, 2026-10-28), whatever the page says. Owner rule since 2026-09-26: no
+   Arial, ever. This makes every native control take the font of where it sits — family, size, weight, line height — so
+   a control with no class of its own still draws in the DS font at the DS size. `:where()` weighs nothing: any class
+   (a DS component's or a page's) still sets its own size and weight; only the browser's default is replaced. The file
+   chooser's button is a part of its <input> and is drawn the same way. Both apps load this file on every page (web has
+   Tailwind's reset as well; Factory has nothing else). `scripts/check-font-families.mjs` fails if this rule goes. */
+:where(button, input, select, textarea, optgroup),
+:where(input)::file-selector-button {
+  font: inherit;
+}
+
 /* ── Button ──────────────────────────────────────────────────────── */
 .nds-btn {
   display: inline-flex;

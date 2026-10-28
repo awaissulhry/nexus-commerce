@@ -1,3 +1,10 @@
+## Native controls always use the DS font — 2026-10-28
+
+Mirrored from `apps/web`. `styles/primitives.css` (both apps, identical): `:where(button, input, select, textarea,
+optgroup), :where(input)::file-selector-button { font: inherit; }`. A native control the browser drew in its own 13.33 px
+Arial (Factory has no Tailwind reset) now takes the font and size of where it sits; any class still sets its own size and
+weight. `scripts/check-font-families.mjs` fails if the rule leaves this file or `app/layout.tsx` stops loading it.
+
 ## Sparkline fixed axis — 2026-10-28
 
 Mirrored from `apps/web`. `components/{Sparkline.tsx, sparklineModel.ts, index.ts}` (both apps, identical).

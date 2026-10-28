@@ -11,10 +11,14 @@
   color: var(--nds-text);
 }
 
+/* The DS base size for every Reviews page (2026-10-28): text a page's own CSS gives no size (a name in a row, a number in
+   the Amazon pipeline, "days" in the rule editor) was the browser's 16 px, which reads as another font (Owner, "Arial").
+   The Insights pages set it themselves; now every page has it. DS components keep their own sizes. */
 .content {
   flex: 1;
   min-width: 0;
   padding: var(--nds-space-26) var(--nds-space-30);
+  font-size: var(--nds-font-size-base);
 }
 
 @media (max-width: 719px) {

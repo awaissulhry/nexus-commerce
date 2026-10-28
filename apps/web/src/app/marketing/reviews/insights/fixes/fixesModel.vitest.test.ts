@@ -29,6 +29,7 @@ import {
   sentWords,
   targetWords,
   toggleKind,
+  toolbarCount,
   wayOut,
   withdrawHeld,
   type FixItem,
@@ -84,6 +85,15 @@ describe('the list a tab shows', () => {
     expect(filterFixes(items, { status: 'OPEN', kinds: [], market: 'DE' }).map((f) => f.id)).toEqual(['a', 'c'])
     expect(filterFixes(items, { status: 'OPEN', kinds: ['APLUS'], market: null }).map((f) => f.id)).toEqual(['b'])
     expect(tabCounts(items, { kinds: [], market: 'DE' })).toEqual({ OPEN: 2, SENT: 1, APPLIED: 0, DISMISSED: 0 })
+  })
+
+  it('counts the list in its toolbar as the other Reviews lists do, and the ticked ones while fixes are ticked', () => {
+    expect(toolbarCount('OPEN', 2, 0)).toEqual({ n: 2, words: 'open fixes' })
+    expect(toolbarCount('OPEN', 1, 0)).toEqual({ n: 1, words: 'open fix' })
+    expect(toolbarCount('OPEN', 3, 2)).toEqual({ n: 2, words: 'selected' })
+    expect(toolbarCount('SENT', 1, 0)).toEqual({ n: 1, words: 'fix waiting for approval' })
+    expect(toolbarCount('APPLIED', 0, 0)).toEqual({ n: 0, words: 'applied fixes' })
+    expect(toolbarCount('DISMISSED', 4, 0)).toEqual({ n: 4, words: 'dismissed fixes' })
   })
 })
 
