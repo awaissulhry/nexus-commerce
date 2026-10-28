@@ -11,7 +11,8 @@
  * Pure (no React), tested in shopChannelModel.vitest.test.ts.
  */
 import { reviewReplyRules, ETSY_REPLY_WINDOW_DAYS } from '@nexus/shared/review-reply-rules'
-import { inboxHref, needsReplyHref } from '../_lib/reviewsLinks'
+import { etsyClosedHref, etsyClosingHref, inboxHref, needsReplyHref } from '../_lib/reviewsLinks'
+import { STATUS_WORD } from '../_lib/reviewWords'
 import type { InboxRow } from '../inbox/inboxDatasource'
 import { count, dayMonth, plural, type Section, type TileView } from './channelModel'
 
@@ -123,7 +124,9 @@ export const ETSY_REVIEWS_HREF = reviewReplyRules('ETSY').open?.href ?? 'https:/
 
 /** The Etsy page's six tiles (the board): average, new, with a photo, not replied yet, window closing, window closed. */
 export function etsyTileViews(t: EtsyTiles): TileView[] {
-  // The one needs-a-reply list (open, inside Etsy's window, not imported): the Inbox shows this same number.
+  // Each reply tile links to the Inbox rows it counts (the API counts with the Inbox's own query for the same address):
+  // the one needs-a-reply list for Etsy (open, inside the window, not imported, not positive), of it the windows that
+  // close within 10 days, and the reviews that needed a reply by the same rule but whose window ran out.
   const open = needsReplyHref({ channel: 'ETSY' })
   return [
     { key: 'average', label: 'Average rating', value: average(t.average), hint: plural(t.reviews, 'review', 'reviews') },
@@ -133,8 +136,8 @@ export function etsyTileViews(t: EtsyTiles): TileView[] {
     },
     { key: 'photo', label: 'With a photo', value: count(t.withPhoto), hint: 'one per review' },
     { key: 'open', label: 'Not replied yet', value: count(t.notReplied), hint: 'window still open', href: open, accent: t.notReplied > 0 ? 'var(--nds-warning)' : undefined },
-    { key: 'closing', label: 'Window closing', value: count(t.closing), hint: '10 days or less left', href: open, accent: t.closing > 0 ? 'var(--nds-danger)' : undefined },
-    { key: 'closed', label: 'Window closed', value: count(t.closed), hint: 'no reply possible' },
+    { key: 'closing', label: 'Window closing', value: count(t.closing), hint: '10 days or less left', href: etsyClosingHref(), accent: t.closing > 0 ? 'var(--nds-danger)' : undefined },
+    { key: 'closed', label: 'Window closed', value: count(t.closed), hint: 'needed a reply, too late now', href: etsyClosedHref() },
   ]
 }
 
@@ -188,19 +191,36 @@ export function isAnswered(row: Pick<InboxRow, 'status' | 'responses'>): boolean
 export interface ReplyCellView {
   /** Write a reply (the Inbox's reply box: copy, open Etsy, mark as responded) — or held, with why. */
   write: { href: string | null; held: string | null }
-  /** "Replied 24 Oct", "Window open", "Closed". */
+  /** "Responded", "Window closed", "Needs a reply", "No reply needed: positive" (`replyNeedWords`). */
   note: string
+  /** The line under the buttons: "Needs a reply · New · Anna", "Marked as responded". */
+  sub: string
+}
+
+/**
+ * Whether a review that has no reply yet needs one, by the API's one needs-a-reply rule (`noReply`, the same rule the
+ * tiles and the Inbox's "Needs a reply" count): "Needs a reply" only when it says so.
+ */
+export function replyNeedWords(row: Pick<InboxRow, 'noReply'>): string {
+  if (row.noReply == null) return 'Needs a reply'
+  if (row.noReply === 'window_closed') return 'Window closed'
+  if (row.noReply === 'positive') return 'No reply needed: positive'
+  if (row.noReply === 'imported') return 'No reply needed: imported'
+  return 'No reply needed'
 }
 
 const MANAGE_REPLY = 'You need ‘Manage reviews’ to reply to reviews.'
 
-/** What the Etsy row's Reply cell offers. */
+/** What the Etsy row's Reply cell offers, and says: "Needs a reply" only when the one rule says so. */
 export function etsyReplyCell(row: EtsyRow, canManage: boolean): ReplyCellView {
   const href = inboxHref({ channel: 'ETSY', review: row.id })
-  if (isAnswered(row)) return { write: { href, held: null }, note: 'Responded' }
-  if (row.window?.closed) return { write: { href: null, held: `Etsy’s 100 days to reply ran out on ${dayMonth(row.window.endsAt)}: no reply is possible now.` }, note: 'Closed' }
-  if (!canManage) return { write: { href: null, held: MANAGE_REPLY }, note: 'Needs a reply' }
-  return { write: { href, held: null }, note: row.status === 'IGNORED' || row.status === 'RESOLVED' ? 'No reply needed' : 'Needs a reply' }
+  const who = row.assignee ? ` · ${row.assignee}` : ''
+  if (isAnswered(row)) return { write: { href, held: null }, note: 'Responded', sub: `Marked as responded${who}` }
+  const w = row.window
+  const note = w?.closed ? 'Window closed' : replyNeedWords(row)
+  const sub = `${note} · ${STATUS_WORD[row.status] ?? row.status}${who}`
+  if (w?.closed) return { write: { href: null, held: `Etsy’s 100 days to reply ran out on ${dayMonth(w.endsAt)}: no reply is possible now.` }, note, sub }
+  return { write: canManage ? { href, held: null } : { href: null, held: MANAGE_REPLY }, note, sub }
 }
 
 /** "last edit 24 Oct" (the board's line under each Etsy review). */
@@ -238,8 +258,11 @@ export function appName(app: string | null | undefined): string | null {
 }
 
 /** The Shopify row's reply note: who posts it, from the apps' states (`GET /api/reviews/apps`). */
-export function shopifyReplyNote(row: Pick<ShopifyRow, 'app' | 'status' | 'responses'>, apps: ReadonlyArray<Pick<ReviewAppView, 'app' | 'replies' | 'state'>>): string {
+export function shopifyReplyNote(row: Pick<ShopifyRow, 'app' | 'status' | 'responses' | 'noReply'>, apps: ReadonlyArray<Pick<ReviewAppView, 'app' | 'replies' | 'state'>>): string {
   if (isAnswered(row)) return 'Responded'
+  // The one rule says no reply is needed (positive, imported, closed by a person): never "Reply from Nexus" or
+  // "Reply in Yotpo" as if work were waiting.
+  if (row.noReply != null) return replyNeedWords(row)
   const name = appName(row.app)
   if (!name) return 'Copy and post in the app'
   const app = apps.find((a) => a.app === row.app)

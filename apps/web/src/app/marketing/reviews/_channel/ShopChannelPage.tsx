@@ -114,7 +114,7 @@ function EtsyReplyCell({ data, context }: EtsyCell) {
           <a href={ETSY_REVIEWS_HREF} target="_blank" rel="noopener noreferrer" aria-label="Open on Etsy (opens a new tab)">Open on Etsy <ExternalLink size={11} aria-hidden /></a>
         </Button>
       </span>
-      <span className={s.sub}>{cell.note === 'Responded' ? 'Marked as responded' : STATUS_WORD[data.status] ?? data.status}{data.assignee ? ` · ${data.assignee}` : ''}</span>
+      <span className={s.sub}>{cell.sub}</span>
     </span>
   )
 }
@@ -135,7 +135,7 @@ function EtsyPage({ data, busy, canManage, me, onRetry }: { data: EtsySections; 
   const tiles = sectionData(data.tiles)
   const metrics = useMemo(() => (tiles ? tileMetrics(etsyTileViews(tiles)) : null), [tiles])
   const list = sectionData(data.reviews)
-  const cellContext = useMemo(() => ({ canManage, appConnected: false }), [canManage])
+  const cellContext = useMemo(() => ({ canManage, apps: [] as ReviewAppView[] }), [canManage])
   const empty = useMemo(() => ({
     title: 'No Etsy reviews yet',
     message: source?.state === 'ok' || source?.state === 'waiting' ? 'Reviews show here as Nexus reads them from Etsy, every 30 minutes.' : 'Reviews show here once Nexus reads the Etsy shop.',

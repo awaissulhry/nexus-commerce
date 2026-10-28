@@ -14,11 +14,10 @@
  * and leads the list, soonest first.
  */
 import type { Prisma } from '@prisma/client'
-import { ETSY_REPLY_WINDOW_DAYS, reviewReplyRules } from '@nexus/shared/review-reply-rules'
+import { reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import prisma from '../../db.js'
-import { needsReplyWhere, reviewKindOf } from './review-visibility.js'
+import { CLOSING_DAYS, etsyClosingWhere, needsReplyWhere, reviewKindOf } from './review-visibility.js'
 import { statusWhere } from './review-queue.service.js'
-import { CLOSING_DAYS } from './review-shop-channel-math.js'
 import { shortDay } from './review-sources.service.js'
 import { buyerShort, channelMarketLabel, channelWords, daysBetween, marketWords, quoteOf, round, themeWords } from './overviewMath.js'
 import { RATING_DROP_CATEGORY, ratingDropChangeWords, ratingDropTitle } from './rating-drop-math.js'
@@ -138,22 +137,6 @@ export function replyItem(r: ReplyRow, now: Date): NeedsYouItem {
     at: r.postedAt.toISOString(),
     ...(closing ? { dueAt: open.endsAt } : {}),
     action: { label: 'Reply', page: 'review', params: { id: r.id, channel: r.channel.toUpperCase(), ...(r.marketplace ? { market: r.marketplace.toUpperCase() } : {}) } },
-  }
-}
-
-const DAY_MS = 86_400_000
-
-/**
- * The Etsy reviews whose reply window closes within CLOSING_DAYS (the window counts from the buyer's last edit, else
- * from when it was posted). Narrows the needs-a-reply rows; never a count of its own.
- */
-export function etsyClosingWhere(now: Date): Prisma.ReviewWhereInput {
-  const cut = new Date(now.getTime() - (ETSY_REPLY_WINDOW_DAYS - CLOSING_DAYS) * DAY_MS)
-  return {
-    AND: [
-      { channel: 'ETSY' },
-      { OR: [{ channelEditedAt: { lte: cut } }, { AND: [{ channelEditedAt: null }, { postedAt: { lte: cut } }] }] },
-    ],
   }
 }
 

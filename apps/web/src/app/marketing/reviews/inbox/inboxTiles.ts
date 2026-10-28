@@ -12,9 +12,9 @@ import { COUNTRY_NAMES } from '@/app/_shared/app-nav'
 import { channelLabel } from '@/app/listings/_readiness/marketChips'
 import type { InboxFacets, InboxReadState, InboxRow, InboxStatusCounts, InboxTabCounts } from './inboxDatasource'
 import {
-  NO_OWNER, toggleStatusTile, withNeedsReply, withPeriod, withPhotos, withProduct, withSearch, withoutValue, type InboxFilterKey, type InboxKind,
+  NO_OWNER, toggleStatusTile, withPeriod, withPhotos, withProduct, withReply, withSearch, withoutValue, type InboxFilterKey, type InboxKind,
   type InboxPeriod,
-  type InboxQuery, type InboxStatus,
+  type InboxQuery, type InboxReplyFilter, type InboxStatus,
 } from './inboxQuery'
 
 const HOUR = 3_600_000
@@ -126,6 +126,13 @@ export function valueWord(key: InboxFilterKey, value: string | number, facets: I
   }
 }
 
+/** The `reply=` filter's chip: what the list holds, and what its × does. */
+const REPLY_CHIP: Record<InboxReplyFilter, { label: string; removeLabel: string }> = {
+  needed: { label: 'Needs a reply', removeLabel: 'Show every review, not only the ones that need a reply' },
+  closing: { label: 'Needs a reply: Etsy window closing', removeLabel: 'Show every review, not only the Etsy ones whose reply window closes within 10 days' },
+  closed: { label: 'Etsy window closed, no reply', removeLabel: 'Show every review, not only the Etsy ones that needed a reply after their window closed' },
+}
+
 /** One chip per filter on, in the Filters order, then the search; the period first. */
 export function inboxChips(q: InboxQuery, facets: InboxFacets | null = null): InboxChip[] {
   const chips: InboxChip[] = []
@@ -135,9 +142,7 @@ export function inboxChips(q: InboxQuery, facets: InboxFacets | null = null): In
   if (q.product) {
     chips.push({ key: 'product', label: 'One product (and its variants)', removeLabel: 'Show the reviews of every product', next: withProduct(q, null) })
   }
-  if (q.needsReply) {
-    chips.push({ key: 'needsReply', label: 'Needs a reply', removeLabel: 'Show every review, not only the ones that need a reply', next: withNeedsReply(q, false) })
-  }
+  if (q.reply) chips.push({ key: 'reply', ...REPLY_CHIP[q.reply], next: withReply(q, null) })
   if (q.statuses.length === 1) {
     const s = q.statuses[0]
     chips.push({ key: `statuses:${s}`, label: statusChipWord(s), removeLabel: `Show every status, not only ${tileLabel(s)}`, next: toggleStatusTile(q, null) })

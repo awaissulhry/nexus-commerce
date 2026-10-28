@@ -6,15 +6,15 @@ import { describe, expect, it } from 'vitest'
 import type { InboxRow } from '../inbox/inboxDatasource'
 import {
   appActionLabel, connectHeld, connectedApps, csvFileName, etsyReplyCell, etsySubtitle, etsyTileViews, initialValues, isAnswered, isAppConnected,
-  lastEditWords, mediaWords, namesWords, reviewsCsv, shopDomainOf, shopifyReplyNote, shopifySubtitle, shopifyTileViews, waitHoursWords, windowWords,
+  lastEditWords, mediaWords, namesWords, replyNeedWords, reviewsCsv, shopDomainOf, shopifyReplyNote, shopifySubtitle, shopifyTileViews, waitHoursWords, windowWords,
   type EtsyRow, type ReviewAppField, type ReviewAppKey, type ReviewAppView, type ShopifyRow,
 } from './shopChannelModel'
 
 const base: InboxRow = {
   id: 'r1', postedAt: '2026-10-20T10:00:00.000Z', channel: 'ETSY', market: null, kind: 'product', rating: 5, snippet: 'Lovely, fits well',
   english: null, language: 'en', buyer: 'A. Buyer', product: { id: 'p1', name: 'Racing gloves', sku: 'GLV-1', variant: 'M' },
-  order: { id: 'o1', label: '3456789' }, mood: null, themes: [], status: 'NEW', assignee: null, dueAt: null, overdue: false, imported: false,
-  responses: { sent: 0, draft: 0 }, photos: 1, aiTopics: null,
+  order: { id: 'o1', label: '3456789' }, mood: null, themes: [], status: 'NEW', assignee: null, dueAt: null, noReply: 'positive', overdue: false,
+  imported: false, responses: { sent: 0, draft: 0 }, photos: 1, aiTopics: null,
 }
 const etsy = (over: Partial<EtsyRow> = {}): EtsyRow => ({
   ...base, photoUrl: 'https://i.etsystatic.com/x.jpg', editedAt: '2026-10-25T10:00:00.000Z',
@@ -25,7 +25,7 @@ const shopify = (over: Partial<ShopifyRow> = {}): ShopifyRow => ({
 })
 
 describe('Etsy', () => {
-  it('six tiles in the board’s order; open and closing link to the Inbox filtered to Etsy', () => {
+  it('six tiles in the board’s order; "Not replied yet" and "Window closing" each link to the Inbox rows it counts', () => {
     const views = etsyTileViews({ average: 4.8, reviews: 96, newReviews: 7, newDelta: 3, withPhoto: 22, notReplied: 5, closing: 1, closed: 3 })
     expect(views.map((v) => [v.label, v.value, v.hint])).toEqual([
       ['Average rating', '4.8', '96 reviews'],
@@ -33,9 +33,12 @@ describe('Etsy', () => {
       ['With a photo', '22', 'one per review'],
       ['Not replied yet', '5', 'window still open'],
       ['Window closing', '1', '10 days or less left'],
-      ['Window closed', '3', 'no reply possible'],
+      ['Window closed', '3', 'needed a reply, too late now'],
     ])
+    // The same addresses the API counts with (review-channel-reply-tiles.vitest.test.ts): the tile = the Inbox rows.
     expect(views[3].href).toBe('/marketing/reviews/inbox?period=all&channel=ETSY&reply=needed')
+    expect(views[4].href).toBe('/marketing/reviews/inbox?period=all&channel=ETSY&reply=closing')
+    expect(views[5].href).toBe('/marketing/reviews/inbox?period=all&channel=ETSY&reply=closed')
   })
 
   it('the window in words', () => {
@@ -46,11 +49,24 @@ describe('Etsy', () => {
   })
 
   it('the reply cell: write a reply (the Inbox pop-up), held when the window closed or without the permission; responded rows show the reply', () => {
-    expect(etsyReplyCell(etsy(), true)).toEqual({ write: { href: '/marketing/reviews/inbox?channel=ETSY&review=r1', held: null }, note: 'Needs a reply' })
-    expect(etsyReplyCell(etsy({ window: { days: 100, day: 100, daysLeft: 0, closed: true, endsAt: '2026-10-01T00:00:00Z' } }), true).write.held).toMatch(/^Etsy’s 100 days to reply ran out on 1 Oct/)
-    expect(etsyReplyCell(etsy(), false).write.held).toMatch(/Manage reviews/)
-    expect(etsyReplyCell(etsy({ status: 'RESPONDED' }), false)).toMatchObject({ note: 'Responded', write: { held: null } })
+    const waiting = etsy({ rating: 2, noReply: null, dueAt: '2026-10-22T10:00:00.000Z', assignee: 'Anna' })
+    expect(etsyReplyCell(waiting, true)).toEqual({ write: { href: '/marketing/reviews/inbox?channel=ETSY&review=r1', held: null }, note: 'Needs a reply', sub: 'Needs a reply · New · Anna' })
+    const closed = etsy({ rating: 2, noReply: 'window_closed', window: { days: 100, day: 100, daysLeft: 0, closed: true, endsAt: '2026-10-01T00:00:00Z' } })
+    expect(etsyReplyCell(closed, true)).toMatchObject({ note: 'Window closed', sub: 'Window closed · New', write: { href: null } })
+    expect(etsyReplyCell(closed, true).write.held).toMatch(/^Etsy’s 100 days to reply ran out on 1 Oct/)
+    expect(etsyReplyCell(waiting, false)).toMatchObject({ note: 'Needs a reply', write: { href: null } })
+    expect(etsyReplyCell(waiting, false).write.held).toMatch(/Manage reviews/)
+    expect(etsyReplyCell(etsy({ status: 'RESPONDED', noReply: 'closed' }), false)).toMatchObject({ note: 'Responded', sub: 'Marked as responded', write: { held: null } })
     expect(isAnswered(etsy({ responses: { sent: 1, draft: 0 } }))).toBe(true)
+  })
+
+  it('"Needs a reply" only when the one rule says so: a positive or imported review, or one a person closed, needs none', () => {
+    // A 5-star review with no reply yet: the tiles and the Inbox leave it out, so its cell does too (it can still be answered).
+    expect(etsyReplyCell(etsy(), true)).toMatchObject({ note: 'No reply needed: positive', sub: 'No reply needed: positive · New', write: { held: null } })
+    expect(etsyReplyCell(etsy({ rating: 1, noReply: 'imported', imported: true }), true).note).toBe('No reply needed: imported')
+    expect(etsyReplyCell(etsy({ rating: 1, noReply: 'closed', status: 'RESOLVED' }), true)).toMatchObject({ note: 'No reply needed', sub: 'No reply needed · Resolved' })
+    expect(replyNeedWords({ noReply: null })).toBe('Needs a reply')
+    expect(replyNeedWords({ noReply: 'automatic' })).toBe('No reply needed')
   })
 
   it('the last edit and the header line', () => {
@@ -78,19 +94,28 @@ describe('Shopify', () => {
   it('four tiles', () => {
     expect(shopifyTileViews({ average: 4.6, reviews: 318, newReviews: 24, newDelta: 6, withMedia: 64, videos: 9, needReply: 2, oldestWaitHours: 6 }).map((v) => `${v.label}: ${v.value} (${v.hint})`))
       .toEqual(['Average rating: 4.6 (318 reviews)', 'New reviews: 24 (+6 · last 30 days)', 'With photo or video: 64 (9 videos)', 'Needs a reply: 2 (oldest 6 h)'])
+    // The address the API counts "Needs a reply" with (review-channel-reply-tiles.vitest.test.ts).
+    expect(shopifyTileViews({ average: null, reviews: 0, newReviews: 0, newDelta: null, withMedia: 0, videos: 0, needReply: 0, oldestWaitHours: null })[3].href)
+      .toBe('/marketing/reviews/inbox?period=all&channel=SHOPIFY&reply=needed')
     expect(waitHoursWords(null)).toBe('nothing waits')
     expect(waitHoursWords(50)).toBe('oldest 2 days')
   })
-  it('who posts the reply: Nexus through Judge.me or Okendo while connected; Yotpo and Loox in the app', () => {
+  it('who posts the reply: Nexus through Judge.me or Okendo while connected; Yotpo and Loox in the app; nothing when no reply is needed', () => {
     const apps = [app('JUDGEME', 'connected'), app('OKENDO', 'not_connected'), app('YOTPO', 'connected'), app('LOOX', 'connected')]
-    expect(shopifyReplyNote(shopify(), apps)).toBe('Reply from Nexus')
-    expect(shopifyReplyNote(shopify(), [app('JUDGEME', 'needs_fix')])).toBe('Judge.me not connected')
-    expect(shopifyReplyNote(shopify({ app: 'OKENDO' }), apps)).toBe('Okendo not connected')
-    expect(shopifyReplyNote(shopify({ app: 'OKENDO' }), [app('OKENDO', 'waiting')])).toBe('Reply from Nexus')
-    expect(shopifyReplyNote(shopify({ app: 'YOTPO' }), apps)).toBe('Reply in Yotpo')
-    expect(shopifyReplyNote(shopify({ app: 'LOOX' }), apps)).toBe('Reply in Loox')
-    expect(shopifyReplyNote(shopify({ app: null }), apps)).toBe('Copy and post in the app')
-    expect(shopifyReplyNote(shopify({ status: 'RESPONDED' }), apps)).toBe('Responded')
+    const waiting = (over: Partial<ShopifyRow> = {}) => shopify({ rating: 2, noReply: null, ...over })
+    expect(shopifyReplyNote(waiting(), apps)).toBe('Reply from Nexus')
+    expect(shopifyReplyNote(waiting(), [app('JUDGEME', 'needs_fix')])).toBe('Judge.me not connected')
+    expect(shopifyReplyNote(waiting({ app: 'OKENDO' }), apps)).toBe('Okendo not connected')
+    expect(shopifyReplyNote(waiting({ app: 'OKENDO' }), [app('OKENDO', 'waiting')])).toBe('Reply from Nexus')
+    expect(shopifyReplyNote(waiting({ app: 'YOTPO' }), apps)).toBe('Reply in Yotpo')
+    expect(shopifyReplyNote(waiting({ app: 'LOOX' }), apps)).toBe('Reply in Loox')
+    expect(shopifyReplyNote(waiting({ app: null }), apps)).toBe('Copy and post in the app')
+    expect(shopifyReplyNote(shopify({ status: 'RESPONDED', noReply: 'closed' }), apps)).toBe('Responded')
+    // The one rule: a positive or imported review waits for nothing, whoever would post the reply (no "Reply in Loox").
+    expect(shopifyReplyNote(shopify(), apps)).toBe('No reply needed: positive')
+    expect(shopifyReplyNote(shopify({ app: 'LOOX' }), apps)).toBe('No reply needed: positive')
+    expect(shopifyReplyNote(shopify({ rating: 1, noReply: 'imported', app: null }), apps)).toBe('No reply needed: imported')
+    expect(replyNeedWords(waiting())).not.toMatch(/No reply needed/)
     expect(isAppConnected(app('JUDGEME', 'waiting'))).toBe(true)
     expect(isAppConnected(app('JUDGEME', 'needs_fix'))).toBe(false)
     expect(mediaWords(shopify())).toBe('1 photo · video in Judge.me')

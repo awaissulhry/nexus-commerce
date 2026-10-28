@@ -4,13 +4,16 @@
  * from the buyer's last edit, `@nexus/shared/review-reply-rules`), the tiles of both pages, the photo and video of a
  * review from what Nexus stored, and whether Etsy is read, in words. No database, no clock of its own: tested in
  * review-shop-channel.vitest.test.ts.
+ *
+ * The reply tiles ("Not replied yet", "Window closing", "Window closed", "Needs a reply") are NOT counted here: the
+ * service counts them with the Inbox's own `where` for the tile's link (the one needs-a-reply rule, review-visibility.ts),
+ * so a tile's number is the rows its link opens (lane N8, 2026-10-28). They come in as `EtsyReplyCounts` /
+ * `ShopifyReplyCounts`.
  */
-import { isReviewOpen, reviewReplyRules } from '@nexus/shared/review-reply-rules'
+import { reviewReplyRules } from '@nexus/shared/review-reply-rules'
 import { averageRating } from './overviewMath.js'
 
 const DAY_MS = 24 * 60 * 60 * 1000
-/** "Window closing" = at most this many days left (the board's tile). */
-export const CLOSING_DAYS = 10
 /** The pages' "New reviews" tile counts this many days, against the same span before. */
 export const NEW_DAYS = 30
 
@@ -28,26 +31,29 @@ export function etsyWindow(review: { postedAt: Date | string; editedAt: Date | s
   return w ? { days: w.days, day: w.day, daysLeft: w.daysLeft, closed: w.closed, endsAt: w.endsAt } : null
 }
 
-/** A review counts as answered once a reply was recorded (sent or marked) or its status says so. */
-export function answered(row: { status: string | null; sentReplies: number }): boolean {
-  return row.sentReplies > 0 || row.status === 'RESPONDED'
-}
-
+/** What the tiles other than the reply tiles read of each visible review. */
 export interface TileFacts {
   rating: number | null
   postedAt: Date
-  editedAt: Date | null
-  status: string | null
-  sentReplies: number
   hasPhoto: boolean
   hasVideo?: boolean
-  /** Read in from a file: old history, never waiting for a reply (review-visibility.ts, the one needs-a-reply rule). */
-  imported?: boolean
 }
 
-/** Waits for a reply by the one needs-a-reply rule: open, not answered, not imported (Etsy: its window, below). */
-function waitsForReply(r: TileFacts): boolean {
-  return !answered(r) && isReviewOpen(r.status) && !r.imported
+/** The reply tiles, counted by the service with the Inbox's `where` for each tile's link (never here). */
+export interface EtsyReplyCounts {
+  /** The Inbox's `reply=needed&channel=ETSY`: the one needs-a-reply rule (inside the 100 days, not positive, …). */
+  notReplied: number
+  /** The Inbox's `reply=closing&channel=ETSY`: of those, the windows that close within CLOSING_DAYS. */
+  closing: number
+  /** The Inbox's `reply=closed&channel=ETSY`: needed a reply by the same rule, but the window ran out. */
+  closed: number
+}
+
+export interface ShopifyReplyCounts {
+  /** The Inbox's `reply=needed&channel=SHOPIFY`. */
+  needReply: number
+  /** When the oldest of those rows was posted; null when none waits. */
+  oldestPostedAt: Date | null
 }
 
 export interface EtsyTiles {
@@ -56,11 +62,11 @@ export interface EtsyTiles {
   newReviews: number
   newDelta: number | null
   withPhoto: number
-  /** Open (no reply, not closed by a person) and the window still open. */
+  /** Needs a reply by the one rule (the Inbox's "Needs a reply" for Etsy): open, inside the window, not positive. */
   notReplied: number
-  /** …of those, at most CLOSING_DAYS left. */
+  /** …of those, at most CLOSING_DAYS left (the Inbox's `reply=closing`). */
   closing: number
-  /** Open, but the window closed: no reply is possible any more. */
+  /** Needed a reply by the same rule, but the window ran out unanswered (the Inbox's `reply=closed`). */
   closed: number
 }
 
@@ -77,31 +83,18 @@ function newCounts(rows: readonly TileFacts[], now: Date): { now: number; before
   return { now: a, before: b }
 }
 
-/** The Etsy page's six tiles. */
-export function etsyTiles(rows: readonly TileFacts[], now: Date): EtsyTiles {
+/** The Etsy page's six tiles; the three reply tiles are the Inbox's counts (`reply`). */
+export function etsyTiles(rows: readonly TileFacts[], now: Date, reply: EtsyReplyCounts): EtsyTiles {
   const fresh = newCounts(rows, now)
-  let notReplied = 0
-  let closing = 0
-  let closed = 0
-  for (const r of rows) {
-    if (!waitsForReply(r)) continue
-    const w = etsyWindow({ postedAt: r.postedAt, editedAt: r.editedAt }, now)
-    if (!w) continue
-    if (w.closed) closed++
-    else {
-      notReplied++
-      if (w.daysLeft <= CLOSING_DAYS) closing++
-    }
-  }
   return {
     average: averageRating(rows.map((r) => r.rating)),
     reviews: rows.length,
     newReviews: fresh.now,
     newDelta: fresh.before > 0 || fresh.now > 0 ? fresh.now - fresh.before : null,
     withPhoto: rows.filter((r) => r.hasPhoto).length,
-    notReplied,
-    closing,
-    closed,
+    notReplied: reply.notReplied,
+    closing: reply.closing,
+    closed: reply.closed,
   }
 }
 
@@ -112,16 +105,16 @@ export interface ShopifyTiles {
   newDelta: number | null
   withMedia: number
   videos: number
+  /** The Inbox's "Needs a reply" for Shopify (the one rule). */
   needReply: number
-  /** Hours the oldest open review waits; null when none waits. */
+  /** Hours the oldest of those waits; null when none waits. */
   oldestWaitHours: number | null
 }
 
-/** The Shopify page's four tiles. */
-export function shopifyTiles(rows: readonly TileFacts[], now: Date): ShopifyTiles {
+/** The Shopify page's four tiles; "Needs a reply" is the Inbox's count (`reply`). */
+export function shopifyTiles(rows: readonly TileFacts[], now: Date, reply: ShopifyReplyCounts): ShopifyTiles {
   const fresh = newCounts(rows, now)
-  const waiting = rows.filter(waitsForReply)
-  const oldest = waiting.reduce<number | null>((min, r) => (min == null || r.postedAt.getTime() < min ? r.postedAt.getTime() : min), null)
+  const oldest = reply.oldestPostedAt?.getTime() ?? null
   return {
     average: averageRating(rows.map((r) => r.rating)),
     reviews: rows.length,
@@ -129,7 +122,7 @@ export function shopifyTiles(rows: readonly TileFacts[], now: Date): ShopifyTile
     newDelta: fresh.before > 0 || fresh.now > 0 ? fresh.now - fresh.before : null,
     withMedia: rows.filter((r) => r.hasPhoto || r.hasVideo).length,
     videos: rows.filter((r) => r.hasVideo).length,
-    needReply: waiting.length,
+    needReply: reply.needReply,
     oldestWaitHours: oldest == null ? null : Math.max(0, Math.floor((now.getTime() - oldest) / (60 * 60 * 1000))),
   }
 }

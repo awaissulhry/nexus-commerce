@@ -17,7 +17,7 @@ import {
   type InboxBulkRow,
   type InboxQuery,
 } from './review-inbox-query.js'
-import { needsReplyWhere, reviewKindOf, reviewNeedsReply, reviewOverdue, visibleReviewWhere, type ReviewKind } from './review-visibility.js'
+import { needsReplyWhere, noReplyReason, reviewKindOf, reviewOverdue, visibleReviewWhere, type NoReplyReason, type ReviewKind } from './review-visibility.js'
 import { REVIEW_CATEGORIES } from './sentiment-extraction.service.js'
 import { reviewSources, type ReviewSource } from './review-sources.service.js'
 import { applyBulkTriage } from './review-triage.service.js'
@@ -46,6 +46,12 @@ export interface InboxRow {
   assignee: string | null
   /** When a reply is due, while the review is open; null once it is closed. */
   dueAt: string | null
+  /**
+   * Why the one needs-a-reply rule says this review needs no reply (review-visibility.ts `noReplyReason`: positive,
+   * eBay's automatic feedback, imported, Etsy's window closed, closed by a person…); null while it needs one. The same
+   * value as the review pop-up's `noReply`.
+   */
+  noReply: NoReplyReason | null
   overdue: boolean
   imported: boolean
   responses: { sent: number; draft: number }
@@ -157,6 +163,7 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
     const status = r.triageStatus ?? 'NEW'
     const order = r.orderId ? orderById.get(r.orderId) : undefined
     const replyFacts = { ...r, mood: r.sentiment?.label ?? null }
+    const noReply = noReplyReason(replyFacts, now)
     return {
       id: r.id,
       postedAt: r.postedAt.toISOString(),
@@ -178,7 +185,8 @@ export async function listInbox(rawQuery: Record<string, unknown>, now: Date = n
       assignee: r.assignee,
       // Due and overdue only for a review that needs a reply (answerable, not imported, not positive, not eBay's
       // automatic feedback: review-visibility.ts).
-      dueAt: reviewNeedsReply(replyFacts, now) ? reviewDueAt(r.postedAt).toISOString() : null,
+      dueAt: noReply == null ? reviewDueAt(r.postedAt).toISOString() : null,
+      noReply,
       overdue: reviewOverdue(replyFacts, now),
       imported: isImportedSource(r.ingestSource),
       responses: responses.get(r.id) ?? { sent: 0, draft: 0 },
