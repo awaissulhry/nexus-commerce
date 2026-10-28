@@ -1,0 +1,90 @@
+// The audit log and the idempotency receipts (plan A1 §2.3, §3.2; features PLT-072, PLT-073, PLT-084, PLT-189).
+// apps/factory-api's command() writes both in the SAME transaction as the change it records: the change, its audit
+// rows and its receipt commit together or not at all.
+//
+// Both are append-only ledgers (A1 §2.1), marked `@append-only` in their doc comment for
+// scripts/factory/check-append-only.mjs: the runtime roles may insert and read them, never update or delete
+// (ownership/audit.json), and the triggers of the hand-written migration …_audit_append_only refuse UPDATE, DELETE and
+// TRUNCATE for every login, the owner included. A mistake is fixed with a new row.
+//
+// No foreign keys: a ledger keeps what was true when it was written, and the audited record is named by type and id
+// (any model). companyId, siteId and partyId are the scope the row was written in, read by the policies and by
+// scopeWhere().
+
+/// One audited write: who did what to which record, when, from where, and the record before and after.
+/// @append-only
+model AuditLog {
+  /// UUIDv7 from newId(), so the ids of one tenant sort in time order.
+  id             String        @id @db.Uuid
+  tenantId       String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company the change belongs to, when known (null: tenant-wide master data, or not known).
+  companyId      String?       @db.Uuid
+  /// The site: always set for a floor write (the device's site, which the floor policy checks).
+  siteId         String?       @db.Uuid
+  /// The party: always set for a portal or link write (the session's party, which the partner policy checks).
+  partyId        String?       @db.Uuid
+  /// Server time in UTC with milliseconds (PLT-084), from the API clock, never a device's.
+  at             DateTime      @default(now()) @db.Timestamptz(3)
+  /// The device's own clock for a floor event, kept for the record (A1 §3.8); never used to order rows.
+  deviceTime     DateTime?     @db.Timestamptz(3)
+  /// How the write came in.
+  audience       AuditAudience
+  /// Who: the user, the floor operator, the portal user, the link token's row, or the system actor (jobs).
+  actorId        String        @db.Uuid
+  /// The enrolled floor device the write came from.
+  deviceId       String?       @db.Uuid
+  /// What was done: the command's name (`sites.rename`) or a finer action of it.
+  action         String
+  /// The audited record: its model name and id.
+  recordType     String
+  recordId       String        @db.Uuid
+  /// The record's fields before and after the change, as the command chose to record them.
+  before         Json?
+  after          Json?
+  /// Why, when the caller gave a reason (a cancel, an override).
+  reason         String?
+  /// The request (or job) that wrote it; one request's rows share it.
+  requestId      String
+  /// The Idempotency-Key of the request, when it had one.
+  idempotencyKey String?
+
+  // The history of one record (GET /audit/:recordType/:recordId), newest first.
+  @@index([tenantId, recordType, recordId, at])
+}
+
+/// The channel an audited write came through (plan A1 §3.10; `system` is the worker and scheduler).
+enum AuditAudience {
+  OFFICE
+  FLOOR
+  PARTNER
+  LINK
+  SYSTEM
+}
+
+/// The stored answer of a write sent with an Idempotency-Key (PLT-189): the same key with the same request returns it
+/// again without running the write twice; the same key with another request is refused. Written in the transaction of
+/// the write, so a failed write leaves no receipt and may be sent again.
+/// @append-only
+model IdempotencyReceipt {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Set for a floor write: a device reads only its own site's receipts.
+  siteId      String?  @db.Uuid
+  /// Set for a portal or link write: a partner reads only its own party's receipts.
+  partyId     String?  @db.Uuid
+  /// The command the key was used for (`sites.rename`).
+  scope       String
+  /// The Idempotency-Key as sent (8 to 128 characters; the floor sends its clientEventId).
+  key         String
+  /// SHA-256 (hex) of the command, the caller (audience and actor), the record and the input.
+  requestHash String
+  /// The command's answer, as JSON.
+  response    Json
+  actorId     String   @db.Uuid
+  requestId   String
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  /// Until then the receipt answers repeats; after it a purge job may delete it (only then: see the trigger).
+  expiresAt   DateTime @db.Timestamptz(3)
+
+  @@unique([tenantId, scope, key])
+}

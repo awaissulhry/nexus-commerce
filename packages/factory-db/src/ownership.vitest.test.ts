@@ -13,7 +13,16 @@ describe('model ownership', () => {
   it('classifies every model of the schema, consistently', () => {
     expect(problems(loadOwnership())).toEqual([])
     const inputs = policyInputs(loadSchema(), loadOwnership())
-    expect(inputs.model.tables.map((table) => table.table).sort()).toEqual(['Company', 'Line', 'Site', 'Station', 'Tenant', 'WorkCentre'])
+    expect(inputs.model.tables.map((table) => table.table).sort()).toEqual([
+      'AuditLog',
+      'Company',
+      'IdempotencyReceipt',
+      'Line',
+      'Site',
+      'Station',
+      'Tenant',
+      'WorkCentre',
+    ])
     expect(inputs.platformTables).toEqual([{ table: 'Tenant', privileges: ['select', 'insert', 'update'], walled: true }])
   })
 

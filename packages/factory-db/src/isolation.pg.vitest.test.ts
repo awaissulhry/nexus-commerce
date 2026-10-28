@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed, type CoreSeed } from '../seed/_core'
+import { seed as seedAudit } from '../seed/audit'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels } from './ownership'
 import { PLATFORM_ROLE, POLICY_KEYS, RUNTIME_LOGIN, RUNTIME_ROLES, WALL, type PolicyKeyName, type RuntimeRole } from './roles'
@@ -9,8 +10,8 @@ import { loadOwnership, loadSchema } from './tools'
 
 /**
  * The generated isolation tests (plan A1 §6.7): for EVERY classified table and EVERY runtime role, on a database built
- * from the migrations and seeded twice (tenant A and tenant B, two sites each), through the real login, the audited
- * pool and the scoped client:
+ * from the migrations and seeded twice (tenant A and tenant B, two sites each, one portal party each), through the
+ * real login, the audited pool and the scoped client:
  *   - a role with select sees exactly the rows inside its scope (tenant, and site or party where it is scoped by them),
  *     and rows outside it exist, so the wall is really tested;
  *   - it cannot read a hidden column, and Prisma's default select (every column) fails loudly;
@@ -29,7 +30,8 @@ let db: MigratedDatabase
 let factory: FactoryDatabase
 let a: CoreSeed
 let b: CoreSeed
-const partyId = randomUUID()
+/** Tenant A's portal party: the audit seed writes its partner rows for it. */
+let partyId: string
 
 /** Tenant A's scope for each role; the floor device sits on A's first site. */
 function scopeOf(role: RuntimeRole): FactoryScope {
@@ -45,6 +47,21 @@ const as = <T>(role: RuntimeRole, work: (client: FactoryClient) => Promise<T>): 
 const query = (role: RuntimeRole, sql: string, ...values: unknown[]) => as(role, (client) => client.$queryRawUnsafe<Record<string, unknown>[]>(sql, ...values))
 const execute = (role: RuntimeRole, sql: string, ...values: unknown[]) => as(role, (client) => client.$executeRawUnsafe(sql, ...values))
 const admin = async (sql: string, values: unknown[] = []) => (await db.admin.query(sql, values)).rows as Record<string, unknown>[]
+/**
+ * Removes a row the test inserted. Append-only tables refuse DELETE for every login (their triggers), so the cleanup
+ * runs with triggers off for its own transaction (session_replication_role, superuser only: the test admin).
+ */
+async function removeRow(table: string, pk: string, id: unknown): Promise<void> {
+  await db.admin.query('BEGIN')
+  try {
+    await db.admin.query("SET LOCAL session_replication_role = 'replica'")
+    await db.admin.query(`DELETE FROM ${table} WHERE ${pk} = $1::uuid`, [id])
+    await db.admin.query('COMMIT')
+  } catch (error) {
+    await db.admin.query('ROLLBACK')
+    throw error
+  }
+}
 const q = (name: string): string => {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`bad identifier ${name}`)
   return `"${name}"`
@@ -55,6 +72,8 @@ beforeAll(async () => {
   factory = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 4 } })
   a = await seed({ db: factory, namespace: 'iso-a' })
   b = await seed({ db: factory, namespace: 'iso-b' })
+  partyId = (await seedAudit({ db: factory, namespace: 'iso-a' })).partyId
+  await seedAudit({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -63,7 +82,16 @@ afterAll(async () => {
 }, 60_000)
 
 it('covers every classified table and every runtime role', () => {
-  expect(classified.map(({ model }) => model.name).sort()).toEqual(['Company', 'Line', 'Site', 'Station', 'Tenant', 'WorkCentre'])
+  expect(classified.map(({ model }) => model.name).sort()).toEqual([
+    'AuditLog',
+    'Company',
+    'IdempotencyReceipt',
+    'Line',
+    'Site',
+    'Station',
+    'Tenant',
+    'WorkCentre',
+  ])
   expect(RUNTIME_ROLES).toHaveLength(4)
   expect(a.tenantId).not.toBe(b.tenantId)
 })
@@ -150,7 +178,7 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
         if (filter.length > 0) await expect(insert(copyOf(await rowOf(`NOT (${inside})`)))).rejects.toThrow(RLS)
         const own = copyOf(await rowOf(inside))
         expect(await insert(own)).toBe(1)
-        await admin(`DELETE FROM ${table} WHERE ${q(pk)} = $1::uuid`, [own[pk]])
+        await removeRow(table, q(pk), own[pk])
       })
     } else {
       it('cannot insert', async () => {
