@@ -1,9 +1,10 @@
 # apps/factory-api — the factory API
 
 The factory's Fastify 5 API: a separate product from Commerce, with its own database, login and Railway projects.
-Today the API core: context, contracts, route manifest, security baseline, `GET /health` and `GET /ready`. Writes
-through `command()`, sign-in, the worker and scheduler (`src/background.ts`), the modules and the adapters come in
-later steps.
+Today the API core: context, contracts, route manifest, security baseline, `GET /health` and `GET /ready`, and
+`command()` (`src/core/command.ts`): the ONLY way to write — one transaction for the change, its audit rows, its events
+and the idempotency receipt. Sign-in, the outbox writer, the worker and scheduler (`src/background.ts`), the modules
+and the adapters come in later steps; until the outbox step, a command that emits an event is refused.
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only
