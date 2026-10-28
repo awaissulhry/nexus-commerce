@@ -1,0 +1,102 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/sales.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context: the expiry sweep, the deposit request and order made after an acceptance) writes quotes, deposit requests and orders through apps/factory-api's modules/sales, always through command(); the API keeps staff to the companies and parties their grants reach. A portal or one-off link session (factory_partner_runtime) reads only its OWN party's rows (every table here carries the party's partyId), never a cost, margin or internal column nor which office user wrote a row (the partner wall of src/ownership.ts: every column marked `@internal` or with a cost, margin or wages grain is hidden); prices stay readable, they are the party's own document. The accept link (QUOTE_ACCEPT) answers in the partner scope, in one command: it updates its party's SENT version and quote to ACCEPTED or DECLINED and adds the QuoteAcceptance row; the …_sales_guards triggers refuse any other partner change. The floor reads nothing here: a work order carries the style, colour, sizes and dates it needs. Nobody deletes a header: a quote is cancelled, a version superseded, an order or deposit request cancelled; the office deletes only the lines and size rows of a DRAFT version or of an order that is still CONFIRMED, IN_PRODUCTION or READY (the triggers hold the states for every login). QuoteAcceptance is append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Quote": {
+      "about": "The office creates quotes, moves their status with their current version, cancels them and keeps the lost reason. A portal or link session reads its own party's quotes, and its accept or decline moves a SENT quote to ACCEPTED or DECLINED (nothing else: the trigger).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select", "update"], "scopedBy": ["party"], "hiddenColumns": ["lostReason", "internalNote", "createdById"] }
+      }
+    },
+    "QuoteVersion": {
+      "about": "The office drafts versions, asks for approval, sends them (the send freezes them), supersedes, expires and cancels them. A portal or link session reads its own party's versions without cost, margin or who sent them, and its accept or decline moves a SENT version to ACCEPTED or DECLINED with its decision note (nothing else: the trigger).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": {
+          "privileges": ["select", "update"],
+          "scopedBy": ["party"],
+          "hiddenColumns": ["costAmount", "marginAmount", "marginPct", "marginFloorPct", "marginFloorBreached", "sentById", "createdById"]
+        }
+      }
+    },
+    "QuoteLine": {
+      "about": "The office edits the lines of a DRAFT version (and deletes them). A portal or link session reads its own party's lines with their prices, never their cost, margin, cost sheet or the internal adjustment reason.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": {
+          "privileges": ["select"],
+          "scopedBy": ["party"],
+          "hiddenColumns": ["adjustmentReason", "unitCost", "costAmount", "marginAmount", "marginPct", "costSnapshot", "createdById"]
+        }
+      }
+    },
+    "QuoteLineSize": {
+      "about": "The office types the size quantities of a DRAFT version's lines (and deletes them). A portal or link session reads its own party's.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "QuoteApproval": {
+      "about": "The office asks for an approval of a version and an approver decides it; a version changed first withdraws it. Office only: it holds the margin and its floor.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "QuoteAcceptance": {
+      "about": "The accept link adds one row in its party's scope (WITH CHECK); the office records an acceptance from a signed copy or a written reply, and reads them. A portal or link session reads its own party's acceptances. Nobody changes or removes a row.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert"], "scopedBy": ["party"] }
+      }
+    },
+    "DepositRequest": {
+      "about": "The office (or the system context, after an acceptance) asks for a deposit, names its order, marks it PAID when the payments cover it, waives or cancels it. A portal or link session reads its own party's deposit requests, without the internal note.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["statusNote", "createdById"] }
+      }
+    },
+    "SalesOrder": {
+      "about": "The office (or the system context) makes an order from an accepted version, amends, moves, closes and cancels it. A portal or link session reads its own party's orders without the cost or the internal note.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["costAmount", "internalNote", "createdById"] }
+      }
+    },
+    "SalesOrderLine": {
+      "about": "The office writes an order's lines (an amendment deletes one) while the order is CONFIRMED, IN_PRODUCTION or READY. A portal or link session reads its own party's order lines with their prices, never their cost.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["unitCost", "costAmount", "createdById"] }
+      }
+    },
+    "SalesOrderLineSize": {
+      "about": "The office writes the size quantities of an order's lines while the order is CONFIRMED, IN_PRODUCTION or READY. A portal or link session reads its own party's.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    }
+  }
+}

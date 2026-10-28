@@ -337,6 +337,9 @@ model Style {
   coverage            CertificateCoverage[]
   labelTemplates      LabelTemplate[]
   complianceDocuments ComplianceDocument[]
+  // sales.prisma: its quote and sales order lines.
+  quoteLines          QuoteLine[]
+  salesOrderLines     SalesOrderLine[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the style's rows.
@@ -392,6 +395,9 @@ model Colourway {
   variants       Variant[]
   bomLines       BomLine[]
   bomLineColours BomLineColour[]
+  // sales.prisma: its quote and sales order lines.
+  quoteLines      QuoteLine[]
+  salesOrderLines SalesOrderLine[]
 
   @@unique([tenantId, styleId, code])
   // The target of the references from the style's SKUs, BOM lines and grid cells: a colourway of the same style.
@@ -455,6 +461,9 @@ model StyleRevision {
   bomLines       BomLine[]
   bomLineColours BomLineColour[]
   routing        RoutingOperation[]
+  // sales.prisma: the quote lines costed from it and the sales order lines made to it.
+  quoteLines      QuoteLine[]
+  salesOrderLines SalesOrderLine[]
 
   @@unique([tenantId, styleId, revision])
   // The target of the references from the revision's parts: a revision of the same style.

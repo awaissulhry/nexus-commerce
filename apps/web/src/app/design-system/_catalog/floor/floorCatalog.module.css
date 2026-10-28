@@ -1,0 +1,101 @@
+/* Layout of the floor kit catalogue examples — the frames, the demo controls around them, and the captions. The floor
+   parts style themselves (`packages/ui/src/floor/floor.css`). */
+
+.kit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-32);
+}
+
+.example {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text);
+}
+
+.note {
+  margin: 0;
+  max-width: 72rem;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* A frame drawn as a tablet screen inside the page. */
+.screen {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-2xl);
+}
+
+.tall {
+  min-height: 36rem;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  gap: var(--nds-space-16);
+  align-items: start;
+}
+
+.caption {
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nds-text-3);
+}
+
+.status {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+}
+
+/* The thing an operation screen counts: the target of the confirm feedback. */
+.target {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+
+.targetNumber {
+  font-size: calc(var(--nds-density-font-numeral) * 1.5);
+  font-weight: var(--nds-font-weight-extrabold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.targetWords {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+.centre {
+  display: flex;
+  justify-content: center;
+}
