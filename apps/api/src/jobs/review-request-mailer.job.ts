@@ -31,6 +31,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import { schedulePendingOrders } from '../services/reviews/review-scheduler.service.js'
 import { readShopReviewPage, reviewLinkFor, type ShopReviewPage } from '../services/reviews/review-links.service.js'
 import { sendReviewRequestEmail } from '../services/reviews/review-request-email.service.js'
+import { requestTextLanguageFor, ruleTextFor } from '@nexus/shared/review-request-text'
 import {
   AMAZON_SOLICITATION_MAX_DAYS,
   AMAZON_SOLICITATION_MIN_DAYS,
@@ -229,8 +230,8 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
       // RV.6.4 — pre-load any linked sentiment check so we can branch on
       // its response before firing Solicitations / writing emails.
       sentimentCheck: true,
-      // RX.6 — the rule's no-response fallback preference.
-      rule: { select: { fallbackOnNoResponse: true, sendHourLocal: true } },
+      // RX.6 — the rule's no-response fallback preference. N3 — its own e-mail text per language (null = standard).
+      rule: { select: { fallbackOnNoResponse: true, sendHourLocal: true, emailText: true } },
     },
     take: 200,
   })
@@ -509,6 +510,9 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
           continue
         }
         const firstProduct = order.items[0]?.product ?? null
+        // Italian for Italy, English for every other market. N3 — the asking rule's own text for that language when it
+        // has one that passes the check (side B of an A/B split asks with B's); else the standard text, as before.
+        const locale = requestTextLanguageFor(order.marketplace)
         const result = await sendReviewRequestEmail({
           to: order.customerEmail,
           customerName: order.customerName,
@@ -518,7 +522,8 @@ export async function runReviewMailerOnce(opts: MailerRunOptions = {}): Promise<
           productName: firstProduct?.name ?? null,
           productType: firstProduct?.productType ?? null,
           reviewUrl: await reviewLink(order.channel),
-          locale: (order.marketplace ?? 'IT').toUpperCase() === 'IT' ? 'it' : 'en',
+          locale,
+          ruleText: ruleTextFor(req.rule?.emailText, locale),
         })
         if (result.dryRun) {
           // Email sending switched off answers ok + dryRun: nothing went out, so the request is not marked sent.

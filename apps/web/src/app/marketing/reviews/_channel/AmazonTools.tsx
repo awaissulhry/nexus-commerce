@@ -11,7 +11,7 @@
 import { useCallback, useMemo, useState, type MouseEvent } from 'react'
 import { ChevronDown, ExternalLink } from 'lucide-react'
 import {
-  Banner, Card, Disclosure, EmptyState, Listbox, Menu, MetricStrip, PerformanceGraph, RatingBars, StarRating,
+  Banner, Card, Disclosure, EmptyState, Listbox, Menu, MetricStrip, PerformanceGraph, RatingBars, Sparkline, StarRating,
   type ChartSeries, type MenuItemDef, type Metric, type RatingStars,
 } from '@/design-system/components'
 import { NexusGrid, numericColumn, type ColDef, type ICellRendererParams } from '@/design-system/grid'
@@ -31,6 +31,7 @@ import {
 } from './channelModel'
 import { lockParams, scopeTitleWords, type ReviewsLock } from './reviewsScope'
 import { FetchNowButton } from './FetchNowButton'
+import { SHARE_AXIS, shareWords, type TopicTrendView } from './topicTrendModel'
 import { failedFetchWords, feedbackCardLine, feedbackRowView, fetchHeldWords, REMOVAL_RULES } from './sellerFeedbackModel'
 import s from './channel.module.css'
 
@@ -260,6 +261,23 @@ function SpreadCard({ lock, period, sections, busy, canManage, onRetry }: CardPr
   )
 }
 
+/**
+ * A topic's 6-month trend under its row: the line from the first month to the last, and what it says. The line's
+ * accessible name holds the words and the months, so the visible copies are hidden from assistive technology; with no
+ * line the words say why.
+ */
+function TopicTrendLine({ trend }: { trend: TopicTrendView }) {
+  if (!trend.values) return <span className={`${s.topicTrend} ${s.sub}`}>{trend.words}</span>
+  return (
+    <span className={s.topicTrend}>
+      <span className={s.sub} aria-hidden="true">{trend.from}</span>
+      <Sparkline values={trend.values} label={trend.label} shape="line" domain={SHARE_AXIS} format={shareWords} />
+      <span className={s.sub} aria-hidden="true">{trend.to}</span>
+      <span className={s.sub} aria-hidden="true">· {trend.words}</span>
+    </span>
+  )
+}
+
 function TopicList({ title, tone, note, rows }: { title: string; tone: 'success' | 'danger'; note: string; rows: TopicView[] }) {
   return (
     <section className={s.topicCol} aria-label={title}>
@@ -280,8 +298,8 @@ function TopicList({ title, tone, note, rows }: { title: string; tone: 'success'
               </span>
               <span className={s.stackEnd}>
                 <span className={t.impactTone === 'down' ? s.down : t.impactTone === 'up' ? s.up : s.main} title="Star effect: how much this topic moves the star rating, by Amazon">{t.impact}</span>
-                <span className={s.sub}>{t.trend}</span>
               </span>
+              <TopicTrendLine trend={t.trend} />
             </li>
           ))}
         </ul>
@@ -326,7 +344,7 @@ function TopicsCard({ lock, sections, busy, onRetry }: Omit<CardProps, 'period' 
             </div>
           )}
           <p className={s.note}>
-            {topics.where} {scopeTitleWords(lock)}: each topic shows its mentions, the share of reviews, its effect on stars (±) and a short English snippet.
+            {topics.where} {scopeTitleWords(lock)}: each topic shows its mentions, the share of reviews, its effect on stars (±), a short English snippet and Amazon’s 6-month trend of its share of reviews (a topic of several products or markets is weighted by its mentions).
           </p>
         </div>
       )}

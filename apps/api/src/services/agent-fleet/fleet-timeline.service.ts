@@ -257,6 +257,7 @@ export const TOOL_PHRASE: Record<string, string> = {
   'leave-buyer-feedback': 'leave feedback for an eBay buyer',
   'start-review-timing-test': 'start a review timing test',
   'apply-review-timing-winner': 'apply a review timing test’s winning day',
+  'apply-review-ab-winner': 'apply the winner of a review rule’s A/B split',
   'issue-fiscal-document': 'number invoices or credit notes',
   'schedule-pickup': 'book a carrier pickup',
   'sync-orders-now': 'sync orders now',

@@ -518,7 +518,8 @@ export const ENTRIES: Entry[] = [
   RW(F.ordersView, F.ordersEdit, pfx('/api/ebay/orders')),
   // Audit A12 (2026-10-27) — POSTs of the review pages that write nothing are reads: a rule's Test run (dry-run), the
   // rule editor's timing line and copy check, and the package-insert PDF. A person who may only view reviews uses them.
-  P(F.reviewsView, (m, p) => m.toUpperCase() === 'POST' && ['/api/review-rules/:id/dry-run', '/api/review-rules/preview-timing', '/api/review-rules/lint', '/api/review-inserts/bulk'].includes(p)),
+  // N3 — the rule editor's "Preview email" with its unsaved text (POST: the text is too long for a query) writes nothing.
+  P(F.reviewsView, (m, p) => m.toUpperCase() === 'POST' && ['/api/review-rules/:id/dry-run', '/api/review-rules/preview-timing', '/api/review-rules/lint', '/api/review-inserts/bulk', '/api/review-emails/preview'].includes(p)),
   RW(F.reviewsView, F.reviewsManage, pfx('/api/reviews')),
   RW(F.reviewsView, F.reviewsManage, pfx('/api/orders-reviews')),
   RW(F.reviewsView, F.reviewsManage, pfx('/api/review-')),

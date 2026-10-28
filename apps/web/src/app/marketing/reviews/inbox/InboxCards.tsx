@@ -12,10 +12,11 @@ import { useCallback, useRef } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { EmptyState, PressableRow } from '@/design-system/components'
 import { Button, Pill, Skeleton } from '@/design-system/primitives'
+import Link from '@/lib/workspaces/Link'
 import { STATUS_WORD, channelMarketWords } from '../_lib/reviewWords'
 import { RatingMark } from './inboxColumns'
 import type { InboxRow } from './inboxDatasource'
-import { STATUS_TONE, agoWords, dueWords, photoWords, plural, productWords } from './inboxTiles'
+import { STATUS_TONE, agoWords, dueWords, photoWords, plural, productWords, type NotConnectedEmpty } from './inboxTiles'
 import s from './inbox.module.css'
 
 const LONG_PRESS_MS = 550
@@ -38,10 +39,13 @@ export interface InboxCardsProps {
   moreHeld: string | null
   filtered: boolean
   onClearFilters: () => void
+  /** Filtered to a channel with no account connected (Etsy with no shop): the empty list says so, with Connect. */
+  unconnected?: NotConnectedEmpty | null
 }
 
 export function InboxCards({
   rows, total, loading, error, onRetry, onOpen, selecting, selected, onToggle, onLongPress, onMore, moreHeld, filtered, onClearFilters,
+  unconnected = null,
 }: InboxCardsProps) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pressed = useRef<string | null>(null)
@@ -85,6 +89,15 @@ export function InboxCards({
     )
   }
   if (rows.length === 0) {
+    if (unconnected) {
+      return (
+        <EmptyState
+          title={unconnected.title}
+          description={unconnected.message}
+          action={<Button asChild size="sm"><Link href={unconnected.action.href}>{unconnected.action.label}</Link></Button>}
+        />
+      )
+    }
     return filtered ? (
       <EmptyState
         title="No reviews match these filters"

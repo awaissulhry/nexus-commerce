@@ -5,6 +5,7 @@
  * The server decides again (`POST /review-rules/bulk` → `{ changed, held }`); this file mirrors its rules
  * (review-queue.service.ts `rulesBulkPlan`). Pure; tested in rulesModel.vitest.test.ts.
  */
+import type { RuleEmailText } from '@nexus/shared/review-request-text'
 import { COUNTRY_NAMES } from '@/app/_shared/app-nav'
 import { EBAY_NOT_EMAILED, NOT_MEASURABLE, rateNotMeasurable } from '../../../_lib/reviewWords'
 
@@ -27,6 +28,8 @@ export interface RuleItem {
   sendHourLocal?: number | null
   skipWeekends?: boolean
   shiftToBestDay?: boolean
+  /** N3 — the rule's own e-mail text per language (null / absent = the standard text). */
+  emailText?: RuleEmailText | null
   requestCount?: number
   updatedAt?: string
   /** `?withStats=1`: requests sent in 30 days. */

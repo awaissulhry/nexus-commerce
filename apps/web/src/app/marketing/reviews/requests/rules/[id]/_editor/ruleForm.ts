@@ -3,7 +3,24 @@
  * (the save bar's count), and why Save is held. Amazon always counts from delivery (Amazon's request is
  * delivery-based) and its first try stays inside day 4–30; "Shipped by" is Amazon's FBA / FBM. Pure; tested in
  * ruleForm.vitest.test.ts.
+ *
+ * N3 — the rule's own e-mail text: per language (Italian, English) the standard text or this rule's own subject and
+ * text. Only a Shopify rule shows it (Amazon sends its own e-mail, eBay none). A language left on the standard text, or
+ * own text equal to it, sends nothing of its own, so no buyer's e-mail changes until a person writes and saves a text.
+ * The live check is @nexus/shared/review-request-text — the same one the API refuses a save with.
  */
+import {
+  REQUEST_TEXT_LANGUAGES,
+  REQUEST_TEXT_LANGUAGE_NAMES,
+  STANDARD_REQUEST_TEXT,
+  checkRequestText,
+  isStandardRequestText,
+  readRuleEmailText,
+  type RequestText,
+  type RequestTextIssue,
+  type RequestTextLanguage,
+  type RuleEmailText,
+} from '@nexus/shared/review-request-text'
 import type { RuleItem } from '../../_rules/rulesModel'
 
 export const RULE_SCOPES = [
@@ -34,6 +51,12 @@ export const DELAY_MAX = 60
 export type ShippedBy = 'any' | 'fbm' | 'fba'
 export type Anchor = 'DELIVERY' | 'SHIP' | 'PURCHASE'
 
+/** One language's text in the editor: the standard text, or this rule's own (kept while "Standard" is picked). */
+export interface LanguageText extends RequestText {
+  mode: 'standard' | 'own'
+}
+export type FormEmailText = Record<RequestTextLanguage, LanguageText>
+
 export interface RuleForm {
   name: string
   notes: string
@@ -58,6 +81,14 @@ export interface RuleForm {
   otherExclusions: string[]
   useSentimentDiversion: boolean
   fallbackOnNoResponse: boolean
+  /** N3 — the e-mail text per language (Shopify rules). */
+  emailText: FormEmailText
+}
+
+/** Every language on the standard text (an own text starts from it). */
+export const STANDARD_FORM_TEXT: FormEmailText = {
+  it: { mode: 'standard', ...STANDARD_REQUEST_TEXT.it },
+  en: { mode: 'standard', ...STANDARD_REQUEST_TEXT.en },
 }
 
 /** A new rule: off until a person turns it on; the safe skips ticked. */
@@ -83,6 +114,7 @@ export const NEW_RULE_FORM: RuleForm = {
   otherExclusions: [],
   useSentimentDiversion: false,
   fallbackOnNoResponse: true,
+  emailText: STANDARD_FORM_TEXT,
 }
 
 export const isAmazon = (scope: string) => scope === 'AMAZON_PER_MARKETPLACE' || scope === 'AMAZON_GLOBAL'
@@ -113,7 +145,62 @@ export function formFromRule(rule: RuleItem): RuleForm {
     otherExclusions: ex.filter((e) => !SKIP_KEYS.includes(e) && e !== SHIPPED_BY_KEYS.fbm && e !== SHIPPED_BY_KEYS.fba),
     useSentimentDiversion: !!rule.useSentimentDiversion,
     fallbackOnNoResponse: rule.fallbackOnNoResponse !== false,
+    emailText: formEmailText(rule.emailText),
   }
+}
+
+/** The stored texts → the editor's: a language with its own text is "own", the rest show the standard text. */
+export function formEmailText(raw: unknown): FormEmailText {
+  const own = readRuleEmailText(raw)
+  const out = { ...STANDARD_FORM_TEXT }
+  for (const lang of REQUEST_TEXT_LANGUAGES) {
+    const t = own?.[lang]
+    if (t) out[lang] = { mode: 'own', ...t }
+  }
+  return out
+}
+
+/** Does this rule's buyers get OUR e-mail (so its own text is shown and sent)? Shopify only: Amazon sends its own, eBay none. */
+export const emailsBuyers = (scope: string) => scope === 'SHOPIFY'
+
+/**
+ * What a save sends for the text: only languages with words of their own (null = the standard text everywhere).
+ * `passingOnly` leaves out a text the check refuses (a rule that no longer e-mails buyers keeps only sendable words).
+ */
+export function emailTextBody(text: FormEmailText, passingOnly = false): RuleEmailText | null {
+  const out: RuleEmailText = {}
+  for (const lang of REQUEST_TEXT_LANGUAGES) {
+    const t = text[lang]
+    if (t.mode !== 'own' || isStandardRequestText(lang, t)) continue
+    if (passingOnly && checkRequestText(t).length > 0) continue
+    out[lang] = { subject: t.subject, body: t.body }
+  }
+  return Object.keys(out).length ? out : null
+}
+
+/** The live check of one language's own text (none while it is on the standard text). */
+export function languageIssues(text: LanguageText): RequestTextIssue[] {
+  return text.mode === 'own' ? checkRequestText(text) : []
+}
+
+/** "Standard text" ⇄ "This rule's own text": own starts from the standard text the first time. */
+export function withTextMode(form: RuleForm, lang: RequestTextLanguage, mode: LanguageText['mode']): RuleForm {
+  return { ...form, emailText: { ...form.emailText, [lang]: { ...form.emailText[lang], mode } } }
+}
+
+/** A typed subject or text. */
+export function withText(form: RuleForm, lang: RequestTextLanguage, patch: Partial<RequestText>): RuleForm {
+  return { ...form, emailText: { ...form.emailText, [lang]: { ...form.emailText[lang], ...patch, mode: 'own' } } }
+}
+
+/** "Start again from the standard text". */
+export function withStandardWords(form: RuleForm, lang: RequestTextLanguage): RuleForm {
+  return { ...form, emailText: { ...form.emailText, [lang]: { mode: 'own', ...STANDARD_REQUEST_TEXT[lang] } } }
+}
+
+/** The editor's text for "Preview email": the language's own words, or null for the standard text. */
+export function previewText(text: FormEmailText, lang: RequestTextLanguage): RequestText | null {
+  return emailTextBody(text)?.[lang] ?? null
 }
 
 /** A minimum order total in cents; empty = none; NaN when it is not a number. */
@@ -146,6 +233,9 @@ export function ruleBody(form: RuleForm) {
     shiftToBestDay: form.shiftToBestDay,
     useSentimentDiversion: form.useSentimentDiversion,
     fallbackOnNoResponse: form.fallbackOnNoResponse,
+    // N3 — the rule's own e-mail text (null = the standard text). Kept as typed on an Amazon or eBay rule, which never
+    // sends it; the editor shows it only on a Shopify rule.
+    emailText: emailTextBody(form.emailText, !emailsBuyers(form.scope)),
   }
 }
 
@@ -203,6 +293,12 @@ export function saveHeld(form: RuleForm, opts: { canManage: boolean; lint: reado
   }
   const errors = opts.lint.filter((i) => i.severity === 'error')
   if (errors.length) return `Fix ${errors.length} ${errors.length === 1 ? 'problem' : 'problems'} in the notes first: ${errors[0].message}`
+  if (emailsBuyers(form.scope)) {
+    for (const lang of REQUEST_TEXT_LANGUAGES) {
+      const issue = languageIssues(form.emailText[lang])[0]
+      if (issue) return `Fix the ${REQUEST_TEXT_LANGUAGE_NAMES[lang]} e-mail ${issue.where === 'subject' ? 'subject' : 'text'} first: ${issue.words}`
+    }
+  }
   return null
 }
 

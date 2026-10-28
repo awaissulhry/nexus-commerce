@@ -150,6 +150,30 @@ describe('runReviewMailerOnce', () => {
     }
   })
 
+  it('N3 — our e-mail carries the asking rule’s own text for the buyer’s language; without one, the standard text', async () => {
+    const it_ = { subject: 'Com’è {product}?', body: 'Ciao {first_name}\n\n{review_button}\n\nBasta email? {unsubscribe_link}' }
+    const en = { subject: 'How is your {product}?', body: 'Hi {first_name}\n\n{review_button}\n\nStop? {unsubscribe_link}' }
+    db.reviewRequest.findMany.mockResolvedValue([
+      due('it', 'SHOPIFY', 'IT', 12, { rule: { fallbackOnNoResponse: true, emailText: { it: it_ } } }),
+      due('de', 'SHOPIFY', 'DE', 12, { rule: { fallbackOnNoResponse: true, emailText: { it: it_, en } } }),
+      // A rule with only Italian text of its own: a German buyer (English) gets the standard English text.
+      due('fr', 'SHOPIFY', 'FR', 12, { rule: { fallbackOnNoResponse: true, emailText: { it: it_ } } }),
+      // No rule (asked by hand) and a text the check refuses: the standard text.
+      due('none', 'SHOPIFY', 'IT', 12, { rule: null }),
+      due('bad', 'SHOPIFY', 'UK', 12, { rule: { fallbackOnNoResponse: true, emailText: { en: { ...en, subject: 'Get a discount' } } } }),
+    ])
+    spies.sendReviewRequestEmail.mockResolvedValue({ ok: true, dryRun: false })
+    await runReviewMailerOnce({ onlyIds: ['it', 'de', 'fr', 'none', 'bad'] })
+    const by = Object.fromEntries(spies.sendReviewRequestEmail.mock.calls.map(([arg]) => [arg.channelOrderId, { locale: arg.locale, ruleText: arg.ruleText }]))
+    expect(by).toEqual({
+      'ORDER-it': { locale: 'it', ruleText: it_ },
+      'ORDER-de': { locale: 'en', ruleText: en },
+      'ORDER-fr': { locale: 'en', ruleText: null },
+      'ORDER-none': { locale: 'it', ruleText: null },
+      'ORDER-bad': { locale: 'en', ruleText: null },
+    })
+  })
+
   it('paused: nothing is read or sent, also with onlyIds', async () => {
     spies.readReviewMailerState.mockResolvedValue({ isPaused: true, pausedReason: 'checking a rule', pausedAt: new Date(), pausedBy: 'user-1' })
     const result = await runReviewMailerOnce({ onlyIds: ['r1'] })

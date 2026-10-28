@@ -8,10 +8,11 @@
  *
  * Header: the product, who · where · what · when, the stars, the mood, "Return open"; Status and Owner save at once
  * (`PATCH /api/reviews/:id/triage`). Tabs: Review · Order · Buyer · History. The Review tab: what the buyer wrote and its
- * English, the buyer's photos (PR G: eBay's photos open the DS `Lightbox`; channels whose photos Nexus does not read yet
- * keep the labelled sample), eBay's AI topics and the revision state, product / order / return / listing links, the
- * mood and themes (AI-set, editable: `PATCH /api/reviews/:id/sentiment`), the reply (DS `ReplyComposer` with the
- * channel's rules), and beside it the team's triage (tags, a note saved 800 ms after typing) and what happened.
+ * English, the buyer's photos (PR G: eBay's photos open the DS `Lightbox`; Amazon, which gives sellers no review photos,
+ * says where they really are and links the product page), eBay's AI topics and the revision state, product / order /
+ * return / listing links, the mood and themes (AI-set, editable: `PATCH /api/reviews/:id/sentiment`), the reply (DS
+ * `ReplyComposer` with the channel's rules), and beside it the team's triage (tags, a note saved 800 ms after typing)
+ * and what happened.
  *
  * No optimistic changes: every save is the call, then `emitInvalidation` (the Inbox and any other tab read again), then
  * this review is read again, then a toast in the server's words. Without "Manage reviews" every change is held and says
@@ -328,14 +329,15 @@ export function ReviewDetailModal({ reviewId, ids, place, onGo, onClose, canMana
                   ) : null}
                 </Card>
 
-                {photos?.kind === 'later' ? (
-                  // ⛔ KEEP — placeholder (build spec ruling 3): this channel's photos arrive with a later update. Until
-                  // then a labelled sample, never hidden. eBay's photos are real since PR G; Etsy's and Judge.me's since PR I.
-                  <Card header="Photos from the buyer" headerAction={<span className={s.pills}><Pill tone="info">Coming later</Pill><Pill tone="neutral">Sample</Pill></span>}>
-                    <div className={s.photoStrip} aria-label="Sample photos">
-                      {[1, 2, 3].map((n) => <Thumbnail key={n} src={null} alt={`Sample photo ${n}`} />)}
-                    </div>
-                    <p className={s.hint}>Nexus will show the photos buyers add on eBay and in your review app here. These tiles are a sample.</p>
+                {photos?.kind === 'elsewhere' ? (
+                  // A channel that gives sellers no buyers' photos (Amazon): where they really are, no tiles.
+                  <Card header="Photos from the buyer">
+                    <p className={s.hint}>{photos.words}</p>
+                    {photos.link && (
+                      <Button asChild size="sm" variant="link">
+                        <a href={photos.link.href} target="_blank" rel="noopener noreferrer">{photos.link.label} <ExternalLink size={12} aria-hidden /></a>
+                      </Button>
+                    )}
                   </Card>
                 ) : photos ? (
                   <Card header="Photos from the buyer" headerAction={photos.kind === 'photos' ? <Tag tone="neutral">{photos.count}</Tag> : undefined}>

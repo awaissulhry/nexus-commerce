@@ -1266,6 +1266,11 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { testId: 't1', armId: 'before', ruleId: 'r1', created: false, sendDelayDays: 4, minDays: 4, maxDays: 25, isActive: true },
         after: { testId: 't1', armId: 'a2', ruleId: 'r1', created: false, sendDelayDays: 7, minDays: 4, maxDays: 25, isActive: true },
       },
+      // Reviews N3 — an A/B split's winner put back through the same tool (armId "before"): rule A's settings as before.
+      'apply-review-ab-winner': {
+        before: { testId: 't2', armId: 'before', ruleId: 'r2', sendDelayDays: 7, anchor: 'DELIVERY', sendHourLocal: null, skipWeekends: false, shiftToBestDay: false, minDaysSinceDelivery: 4, maxDaysSinceDelivery: 25, useSentimentDiversion: false, fallbackOnNoResponse: true, emailText: null },
+        after: { testId: 't2', armId: 'arm-b', ruleId: 'r2', sendDelayDays: 7, anchor: 'DELIVERY', sendHourLocal: null, skipWeekends: false, shiftToBestDay: false, minDaysSinceDelivery: 4, maxDaysSinceDelivery: 25, useSentimentDiversion: false, fallbackOnNoResponse: true, emailText: { en: { subject: 'How is it?', body: 'Hi {first_name} {review_button} {unsubscribe_link}' } } },
+      },
     }
     const withUndo = listTools().filter((t) => t.undo)
     expect(withUndo.map((t) => t.name).sort()).toEqual(Object.keys(sample).sort())

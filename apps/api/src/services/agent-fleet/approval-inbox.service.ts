@@ -1252,6 +1252,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // Reviews PR J — a timing test as approved (never its status or counts, which move while it waits); a winner and the rule.
   'start-review-timing-test': ['test'],
   'apply-review-timing-winner': ['test', 'winner', 'rule', 'from', 'to'],
+  // N3 — an A/B split's winner: the split, the winning side, rule A and each setting it takes (from → to).
+  'apply-review-ab-winner': ['test', 'winner', 'rule', 'changes'],
   // 07 O14 — the series and, per document, whether a new number is taken.
   'issue-fiscal-document': ['series', 'invoices', 'creditNotes'],
   // 07 O17 — the pickup (carrier, day, warehouse) and Sendcloud's live/dry-run mode; the channel and its accounts.

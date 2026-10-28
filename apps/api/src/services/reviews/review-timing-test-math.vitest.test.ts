@@ -148,9 +148,25 @@ describe('applyHeld — a winner is applied only when the result holds', () => {
     expect(applyHeld({ kind: 'TIMING', status: 'DONE' }, { ...sure(95), tooEarly: true })).toMatch(/Too early/)
     expect(applyHeld({ kind: 'TIMING', status: 'DONE' }, { ...sure(95), leaderId: 'd4' })).toMatch(/nothing to apply/)
     expect(applyHeld({ kind: 'TIMING', status: 'DONE' }, sure(APPLY_MIN_SURE - 1))).toMatch(/Only 79% sure/)
-    expect(applyHeld({ kind: 'AB', status: 'DONE' }, sure(95))).toMatch(/End test/)
     expect(applyHeld({ kind: 'TIMING', status: 'DONE' }, sure(92))).toBeNull()
     expect(applyHeld({ kind: 'TIMING', status: 'STOPPED' }, sure(92))).toBeNull()
+  })
+
+  it('N3 — an A/B split: the SAME too-early and how-sure rules, while it runs too; only B (not A, in place) is applied', () => {
+    const b = (n: number) => ({ tooEarly: false, leaderId: 'arm-b', controlId: 'arm-a', sure: n })
+    expect(applyHeld({ kind: 'AB', status: 'RUNNING' }, b(92))).toBeNull()
+    expect(applyHeld({ kind: 'AB', status: 'DONE' }, b(APPLY_MIN_SURE))).toBeNull()
+    expect(applyHeld({ kind: 'AB', status: 'STOPPED' }, b(92))).toBeNull()
+    expect(applyHeld({ kind: 'AB', status: 'RUNNING' }, { ...b(92), tooEarly: true })).toBe('Too early to call — there is no winner yet.')
+    expect(applyHeld({ kind: 'AB', status: 'RUNNING' }, b(APPLY_MIN_SURE - 1))).toBe('Only 79% sure — a winner can be applied at 80% or more. Let the split run on, or end it to keep A.')
+    expect(applyHeld({ kind: 'AB', status: 'DONE' }, { ...b(95), leaderId: 'arm-a' })).toMatch(/^A — the rule as it is — is the best: there is nothing to apply/)
+    expect(applyHeld({ kind: 'AB', status: 'WAITING_APPROVAL' }, b(95))).toBe('The split has not started.')
+    // The too-early line is the timing tests' own: under MIN_COUNTED_PER_ARM counted orders per side.
+    const early = testResult([
+      { id: 'arm-a', label: 'A', position: 0, holdout: false, orders: 150, sent: 150, counted: MIN_COUNTED_PER_ARM - 1, reviews: 2 },
+      { id: 'arm-b', label: 'B', position: 1, holdout: false, orders: 150, sent: 150, counted: MIN_COUNTED_PER_ARM - 1, reviews: 20 },
+    ], { kind: 'AB' })
+    expect(applyHeld({ kind: 'AB', status: 'RUNNING' }, early)).toBe('Too early to call — there is no winner yet.')
   })
 })
 

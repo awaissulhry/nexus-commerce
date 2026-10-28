@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { InboxRow } from './inboxDatasource'
 import { EMPTY_INBOX_QUERY } from './inboxQuery'
 import {
-  TILE_ORDER, agoWords, dueWords, hasTranslation, headerSubtitle, inboxChips, kindWords, livePill, photoWords, productWords,
-  readStateBanners, tabItems, tileHint, tileLabel, tileValue,
+  TILE_ORDER, agoWords, dueWords, hasTranslation, headerSubtitle, inboxChips, kindWords, livePill, notConnectedEmpty, photoWords,
+  productWords, readStateBanners, tabItems, tileHint, tileLabel, tileValue,
 } from './inboxTiles'
 
 const NOW = Date.parse('2026-10-26T12:00:00Z')
@@ -79,6 +79,26 @@ describe('Inbox read state', () => {
     expect(livePill({ error: false, updating: false, readState: [ok('EBAY', 'IT'), ok('AMAZON', 'DE', true), ok('AMAZON', 'IT', true)] }))
       .toEqual({ tone: 'success', words: 'eBay up to date · Amazon by file' })
     expect(livePill({ error: false, updating: false, readState: [ok('AMAZON', 'IT', true)] })).toEqual({ tone: 'neutral', words: 'Amazon by file only' })
+  })
+
+  it('Etsy with no shop connected (lane N4): no banner, not in the pill; the Etsy filter’s empty list says so, with Connect', () => {
+    const etsy = { channel: 'ETSY', market: null, ok: true, since: null, reason: 'No Etsy shop is connected', reconnectHref: '/settings/channels/etsy', byFile: true, connected: false as const }
+    const ebay = { channel: 'EBAY', market: 'IT', ok: true, since: null, reason: null, reconnectHref: null, byFile: false }
+    expect(readStateBanners([etsy, { ...etsy, ok: false }])).toEqual([])
+    expect(livePill({ error: false, updating: false, readState: [ebay, etsy] })).toEqual({ tone: 'success', words: 'Up to date' })
+    expect(livePill({ error: false, updating: false, readState: [etsy] })).toEqual({ tone: 'success', words: 'Up to date' })
+
+    expect(notConnectedEmpty(['ETSY'], [ebay, etsy])).toEqual({
+      title: 'No Etsy shop is connected',
+      message: 'Etsy reviews show here once an Etsy shop is connected in Settings › Channels: Nexus then reads them every 30 minutes, each with its one photo. You reply on Etsy.com.',
+      action: { label: 'Connect Etsy', href: '/settings/channels/etsy' },
+    })
+    // Not narrowed to Etsy alone, Etsy connected, or the read state unknown: the usual empty words.
+    expect(notConnectedEmpty([], [etsy])).toBeNull()
+    expect(notConnectedEmpty(['ETSY', 'EBAY'], [ebay, etsy])).toBeNull()
+    expect(notConnectedEmpty(['EBAY'], [ebay, etsy])).toBeNull()
+    expect(notConnectedEmpty(['ETSY'], [ebay, { ...etsy, connected: undefined }])).toBeNull()
+    expect(notConnectedEmpty(['ETSY'], null)).toBeNull()
   })
 
   it('the header line', () => {

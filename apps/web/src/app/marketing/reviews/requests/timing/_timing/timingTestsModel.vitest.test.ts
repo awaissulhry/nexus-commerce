@@ -1,10 +1,14 @@
 /**
  * Reviews PR J — the Timing tests section, the rule editor's A/B card, the Rules A/B marks and the Queue's A/B rows lay
- * out what the API answers; this proves the form, the held reasons, the rows and the marks.
+ * out what the API answers; this proves the form, the held reasons, the rows and the marks. Lane N6: the form offers an
+ * Amazon market or the Shopify store; eBay and Etsy are listed held, each with why.
  */
 import { describe, expect, it } from 'vitest'
+import { STANDARD_REQUEST_TEXT } from '@nexus/shared/review-request-text'
 import {
+  abAppliedWords,
   NEW_TEST_FORM,
+  NOT_OFFERED_WORDS,
   abBadge,
   abPartner,
   abResultRows,
@@ -12,9 +16,14 @@ import {
   abStartHeld,
   abTestOf,
   abTile,
+  appliedWords,
   armProgress,
+  isAbApplied,
+  sideTimingWords,
   armRows,
   daysHint,
+  estimateQuery,
+  holdoutHint,
   keepLabel,
   needMoreWords,
   newTestBody,
@@ -22,6 +31,8 @@ import {
   splitTests,
   statusPill,
   toggleDay,
+  whereOf,
+  whereOptions,
   type AbRule,
   type TimingTest,
   type TimingTestArm,
@@ -57,8 +68,32 @@ describe('New timing test', () => {
     expect(newTestHeld({ ...NEW_TEST_FORM, days: [7] }, { canManage: true, sending: false })).toBe('Pick at least 2 days to compare.')
     expect(newTestHeld(NEW_TEST_FORM, { canManage: true, sending: true })).toBe('Sending…')
     expect(newTestHeld(NEW_TEST_FORM, { canManage: true, sending: false })).toBeNull()
-    expect(newTestBody({ ...NEW_TEST_FORM, productType: ' Glove ' })).toEqual({ market: 'DE', productType: 'glove', days: [4, 7], holdoutPct: 10 })
+    expect(newTestBody({ ...NEW_TEST_FORM, productType: ' Glove ' })).toEqual({ channel: 'AMAZON', market: 'DE', productType: 'glove', days: [4, 7], holdoutPct: 10 })
     expect(newTestBody(NEW_TEST_FORM).productType).toBeNull()
+  })
+
+  it('Shopify is offered (the whole store, no market); eBay and Etsy are listed held, each with why', () => {
+    const options = whereOptions()
+    expect(options.filter((o) => !o.heldReason).map((o) => [o.group, o.label])).toEqual([
+      ['Amazon', 'Amazon Italy'], ['Amazon', 'Amazon Germany'], ['Amazon', 'Amazon France'], ['Amazon', 'Amazon Spain'], ['Amazon', 'Amazon UK'],
+      ['Shopify', 'Shopify store'],
+    ])
+    expect(options.filter((o) => o.heldReason).map((o) => [o.label, o.heldReason])).toEqual([
+      ['eBay', 'Not offered: Nexus asks no eBay buyer — eBay asks its buyers for feedback itself.'],
+      ['Etsy', 'Not offered: Nexus sends Etsy buyers no review request, so there is no day to test.'],
+    ])
+    expect(NOT_OFFERED_WORDS).toMatch(/^eBay and Etsy are not offered: Nexus asks no eBay buyer/)
+    // A held option never becomes a test.
+    expect(whereOf('EBAY')).toBeNull()
+    expect(newTestHeld({ ...NEW_TEST_FORM, where: 'ETSY' }, { canManage: true, sending: false })).toBe('Pick an Amazon market or Shopify to test.')
+
+    const shopify = { ...NEW_TEST_FORM, where: 'SHOPIFY', productType: 'Glove', days: [4, 10], holdoutPct: 5 }
+    expect(newTestHeld(shopify, { canManage: true, sending: false })).toBeNull()
+    expect(newTestBody(shopify)).toEqual({ channel: 'SHOPIFY', productType: 'glove', days: [4, 10], holdoutPct: 5 })
+    expect(estimateQuery(shopify)).toEqual({ channel: 'SHOPIFY', market: undefined, productType: 'Glove', days: '4,10', holdout: 5 })
+    expect(estimateQuery(NEW_TEST_FORM)).toEqual({ channel: 'AMAZON', market: 'DE', productType: undefined, days: '4,7', holdout: 10 })
+    expect(holdoutHint(shopify)).toBe('Shows what asking adds at all. These buyers get no review e-mail from Nexus.')
+    expect(holdoutHint(NEW_TEST_FORM)).toBe('Shows what asking adds at all. These buyers get no request.')
   })
 })
 
@@ -79,6 +114,12 @@ describe('a test’s card', () => {
       [false, 'Not asked (holdout)', '20', '—', '20', '0', '0.0%'],
     ])
     expect(keepLabel(called)).toBe('Keep day 4')
+  })
+
+  it('an applied winner says what its day counts from (a Shopify rule may count from shipping)', () => {
+    const applied = { armId: '7', label: 'Day 7', delayDays: 7, ruleId: 'r', ruleName: 'Shopify glove', created: true, at: '2026-10-20T00:00:00Z', by: null }
+    expect(appliedWords(applied)).toBe('“Shopify glove” asks on day 7 after delivery.')
+    expect(appliedWords({ ...applied, countsFrom: 'shipping' })).toBe('“Shopify glove” asks on day 7 after shipping.')
   })
 
   it('progress towards the end, too-early words, live and ended tests', () => {
@@ -144,5 +185,27 @@ describe('A/B splits', () => {
       ['“Germany jackets” · A/B split', '186 sent · 7.5%', '180 sent · 8.9%', 'Too early to call — B leads, 71% sure.'],
       ['“Germany jackets” · A/B split', '186 sent · 7.5%', '180 sent · 8.9%', 'Ended — Too early to call — B leads, 71% sure.'],
     ])
+  })
+
+  it('N3 — a Shopify split may differ by B’s own e-mail text only; the words say what each side sends', () => {
+    const ctx = { canManage: true, unsaved: 0, live: null, sending: false }
+    const own = { en: { subject: 'How is it?', body: 'Hi {first_name}\n\n{review_button}\n\n{unsubscribe_link}' } }
+    const shopA = rule('SA', 'Shop', { scope: 'SHOPIFY', marketplace: null })
+    const shopB = rule('SB', 'Shop (variant 1)', { scope: 'SHOPIFY', marketplace: null, isActive: false, emailText: own })
+    expect(abStartHeld({ a: shopA, b: shopB }, ctx)).toBeNull()
+    expect(abStartHeld({ a: shopA, b: { ...shopB, emailText: { it: STANDARD_REQUEST_TEXT.it } } }, ctx))
+      .toBe('“Shop (variant 1)” has the same timing and e-mail text as A. Change B’s e-mail text, first try, send hour or window first.')
+    // An Amazon pair is compared by its timing only (Amazon sends its own e-mail).
+    expect(abStartHeld({ a, b: { ...b, sendDelayDays: 4, emailText: own } }, ctx)).toMatch(/same timing as A\./)
+    expect(sideTimingWords(shopB)).toBe('Day 4 · window day 4–25 · own English text')
+    expect(sideTimingWords(shopA)).toBe('Day 4 · window day 4–25 · standard e-mail text')
+    expect(sideTimingWords(a)).toBe('Day 4 · window day 4–25')
+  })
+
+  it('N3 — an applied A/B winner in words', () => {
+    const applied = { kind: 'AB' as const, armId: 'b', label: 'B', ruleId: 'SA', ruleName: 'Shop', winnerRuleName: 'Shop (variant 1)', changed: ['E-mail text in English', 'First try'], at: '2026-10-27T10:00:00Z', by: 'app:u' }
+    expect(isAbApplied(applied)).toBe(true)
+    expect(isAbApplied({ armId: 'x', label: 'Day 7', delayDays: 7, ruleId: 'r', ruleName: 'R', created: false, at: '2026-10-27T10:00:00Z', by: null })).toBe(false)
+    expect(abAppliedWords(applied)).toBe('Applied 27 Oct: “Shop” took B’s e-mail text in English, first try. The split ended; “Shop (variant 1)” stays off.')
   })
 })

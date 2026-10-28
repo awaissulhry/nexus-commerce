@@ -36,22 +36,27 @@ let digestTask: ReturnType<typeof cron.schedule> | null = null
 let insightsTask: ReturnType<typeof cron.schedule> | null = null
 
 // D.4 — Amazon official Customer Feedback API insights. Weekly (the data
-// refreshes weekly). Sweeps every active Amazon market from the Marketplace
-// table (not the IT,DE-only ingest env). Per-ASIN 403 → accessStatus, never a
-// throw — the summary reports denied counts so the health strip stays honest.
+// refreshes weekly). Sweeps the active Amazon markets from the Marketplace
+// table that the API serves for Nexus — UK, DE, FR, IT, ES, never Amazon.nl
+// (docs/reviews/CHANNEL-FACTS.md row 2a). Each family: its topics, then its
+// 6-month topic trends (getItemReviewTrends, same account and rate bucket).
+// Per-ASIN 403 → accessStatus, never a throw — the summary reports denied
+// counts so the health strip stays honest.
 export async function runAmazonReviewInsightsCron(): Promise<void> {
   try {
     await recordCronRun('amazon-review-insights', async () => {
-      const { ingestAmazonReviewInsights } = await import('../services/reviews/amazon-review-insights.service.js')
-      const markets = await prisma.marketplace.findMany({ where: { channel: 'AMAZON', isActive: true }, select: { code: true } })
-      let upserted = 0, denied = 0, failed = 0, noAsin = 0
+      const { ingestAmazonReviewInsights, servesReviewTopics } = await import('../services/reviews/amazon-review-insights.service.js')
+      const active = await prisma.marketplace.findMany({ where: { channel: 'AMAZON', isActive: true }, select: { code: true } })
+      const markets = active.filter((m) => servesReviewTopics(m.code))
+      let upserted = 0, denied = 0, failed = 0, noAsin = 0, trends = 0, trendsDenied = 0, trendsFailed = 0
       const parts: string[] = []
       for (const m of markets) {
         const r = await ingestAmazonReviewInsights({ marketplaceCode: m.code })
         upserted += r.upserted; denied += r.deniedAsins; failed += r.failedAsins; if (r.noAsin) noAsin += 1
+        trends += r.trendsRead ?? 0; trendsDenied += r.trendsDenied ?? 0; trendsFailed += r.trendsFailed ?? 0
         parts.push(`${m.code}:${r.upserted}${r.deniedAsins ? `(denied ${r.deniedAsins})` : ''}`)
       }
-      const summary = `markets=${markets.length} upserted=${upserted} denied=${denied} failed=${failed} noAsin=${noAsin} · ${parts.join(' ')}`
+      const summary = `markets=${markets.length} upserted=${upserted} denied=${denied} failed=${failed} noAsin=${noAsin} trends=${trends} trendsDenied=${trendsDenied} trendsFailed=${trendsFailed} · ${parts.join(' ')}`
       logger.info('amazon-review-insights cron: completed', { summary })
       return summary
     })

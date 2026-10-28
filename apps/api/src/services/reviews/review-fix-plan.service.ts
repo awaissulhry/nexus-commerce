@@ -3,7 +3,8 @@
  *
  *   GET   /api/reviews/action-items?status&kind&productId&spikeId&limit   the fixes, each with why it cannot be sent
  *   PATCH /api/reviews/action-items/:id        { status: OPEN | DISMISSED } (Bring back / Dismiss) or an edit of the
- *                                              proposal while it is Open (title, bullets, module, language, english, days)
+ *                                              proposal while it is Open (title, bullets, module, language, english, days,
+ *                                              line — a size guide's bullet)
  *   POST  /api/reviews/action-items/:id/propose  "Send for approval"
  *   POST  /api/reviews/action-items/bulk       { ids ≤ 200, action: propose | dismiss } → { changed, held, sent?, tasks? }
  *   POST  /api/reviews/action-items/:id/withdraw  takes the waiting change plan back (every fix in it is Open again)
@@ -19,11 +20,15 @@
  *                market (Amazon refuses it without Brand Registry: that refusal holds the fix, in Amazon's words)
  *   Recall check reserve-stock: a hold on the available units in the business's OWN warehouses only. Amazon FBA stock is
  *                never held from here (refused in code: assertOwnWarehouses) — Amazon owns that number.
+ *   Size guide   set-content: the family's bullet points in the business's source language, as they are, plus one new
+ *                last bullet with the sizing advice (review-size-guide.ts; made by the re-check from fit by size, never
+ *                by the AI). The size guide itself is not kept in Nexus: the fix says to add the advice there by hand.
  *   Task         no step: created at once, without approval.
  * A fix that cannot be sent is held, with why and the way out (ruling 7); the others still go. A plan step the plan
  * refuses (the person's permissions, a market without Brand Registry …) holds only its fix, and the rest are sent.
  * Every status here follows the plan: Sent while it waits, Applied once it ran, Open again (with why) when it is
- * declined, withdrawn or expires (`syncSentFixes`, on every read).
+ * declined, withdrawn or expires (`syncSentFixes`, on every read). Size-guide fixes are made and closed by the re-check
+ * from fit by size (review-size-guide.service.ts, on a read at most every few minutes), never by the AI.
  */
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
@@ -34,6 +39,8 @@ import type { UserPrincipal } from '../agents/call-tool.js'
 import { marketWords, themeWords } from './overviewMath.js'
 import { InsightsInputError, parseBulk, whereWords } from './review-insights-math.js'
 import { peopleNames } from './review-alerts.service.js'
+import { recheckSizeGuideIfDue } from './review-size-guide.service.js'
+import { SIZE_GUIDE_LINE_MAX } from './review-size-guide.js'
 
 export const FIX_KINDS = ['BULLETS', 'APLUS', 'RECALL_FLAG', 'TASK', 'SIZE_GUIDE'] as const
 export type FixKind = (typeof FIX_KINDS)[number]
@@ -45,7 +52,6 @@ export const RECALL_HOLD_DAYS = 14
 const MAX_BULLETS = 10
 
 const TOOL_WORDS: Record<string, string> = { 'set-content': 'Product text', 'set-aplus-content': 'A+ content', 'reserve-stock': 'Stock hold' }
-const SIZE_GUIDE_LATER = 'Size-guide changes come later: Nexus cannot change a size chart from here yet. Make it a task, or dismiss it.'
 const NOT_FOUND = 'Not found in this business’s fixes.'
 
 export class FixNotFoundError extends Error {
@@ -96,6 +102,8 @@ export interface FixFacts {
   textProblem: string | null
   /** Recall: the product's (and its variants') stock with units available, at every kind of location. */
   stock: Array<{ productId: string; sku: string; location: string; locationType: string; available: number }>
+  /** Size guide: the family's own bullet points in the business's source language, as Nexus stores them now. */
+  bullets?: { language: string; current: string[] } | null
 }
 
 type Payload = {
@@ -104,12 +112,18 @@ type Payload = {
   language?: unknown
   english?: unknown
   days?: unknown
+  line?: unknown
+  edited?: unknown
   plan?: { approvalId?: string; positions?: number[]; sentBy?: string; sentAt?: string } | null
   task?: { createdBy?: string; createdAt?: string; assignee?: string | null } | null
   lastSend?: { words?: string; at?: string } | null
   [key: string]: unknown
 }
 
+const closedOf = (payload: Payload): { words: string; at: string | null } | null => {
+  const c = payload.closed as { words?: unknown; at?: unknown } | null | undefined
+  return c && typeof c.words === 'string' && c.words ? { words: c.words, at: typeof c.at === 'string' ? c.at : null } : null
+}
 const payloadOf = (fix: Pick<FixRow, 'payload'>): Payload => (fix.payload && typeof fix.payload === 'object' && !Array.isArray(fix.payload) ? (fix.payload as Payload) : {})
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string' && s.trim().length > 0).map((s) => s.trim()) : [])
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null)
@@ -156,10 +170,11 @@ export function assertOwnWarehouses(steps: readonly ToolStep[], stock: FixFacts[
 export function stepsForFix(fix: FixRow, facts: FixFacts, opts: { days?: number } = {}): { steps: ToolStep[] } | { held: string } {
   const kind = kindOf(fix)
   if (kind === 'TASK') return { held: 'A task needs no approval: create it instead.' }
-  if (kind === 'SIZE_GUIDE') return { held: SIZE_GUIDE_LATER }
   if (!fix.productId) return { held: 'This fix names no product: make it a task, or dismiss it.' }
   const product = facts.product
   if (!product) return { held: 'Its product is no longer in Nexus: dismiss this fix.' }
+
+  if (kind === 'SIZE_GUIDE') return sizeGuideSteps(fix, product, facts)
 
   if (kind === 'BULLETS') {
     if (facts.languageProblem || !facts.language) return { held: facts.languageProblem ?? 'Nexus does not know which language this market shows.' }
@@ -225,6 +240,47 @@ export function stepsForFix(fix: FixRow, facts: FixFacts, opts: { days?: number 
   return { steps }
 }
 
+const languageName = (code: string) => {
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) ?? code
+  } catch {
+    return code
+  }
+}
+
+/**
+ * Size guide → one set-content step: the family's own bullet points in the source language, as they are, plus the
+ * sizing bullet as the new last one. Held (with the way out) when the family keeps no bullet points in Nexus (one bullet
+ * would replace what the channels show), when they already say it, when there are already MAX_BULLETS, or when the
+ * bullet or its English is missing.
+ */
+function sizeGuideSteps(fix: FixRow, product: NonNullable<FixFacts['product']>, facts: FixFacts): { steps: ToolStep[] } | { held: string } {
+  const payload = payloadOf(fix)
+  const language = facts.bullets?.language ?? PRIMARY_CONTENT_LOCALE
+  const line = str(payload.line)
+  if (!line || lang(payload.language) !== language) return { held: `Write the sizing bullet point in ${languageName(language)} (Edit the proposal) before sending: the product's text is kept in ${languageName(language)}.` }
+  const english = language === 'en' ? null : str(payload.english)
+  if (language !== 'en' && !english) return { held: 'Say what the sizing bullet point means in English (Edit the proposal) before sending: the person who approves reads it.' }
+  // Exactly as stored: the new bullet is added after them, nothing else in them changes.
+  const stored = (facts.bullets?.current ?? []).filter((b): b is string => typeof b === 'string')
+  const current = stored.filter((b) => b.trim())
+  if (current.length === 0) return { held: `${product.sku} keeps no bullet points in Nexus, so one sizing bullet would replace what the channels show. Create a task instead, and add the advice where its text is kept.` }
+  const same = (a: string) => a.trim().toLowerCase() === line.toLowerCase()
+  if (current.some(same)) return { held: 'Its bullet points already say this: dismiss this fix.' }
+  if (stored.length >= MAX_BULLETS) return { held: `${product.sku} has ${MAX_BULLETS} bullet points already: make room in the product sheet, or create a task instead.` }
+  return {
+    steps: [{
+      tool: 'set-content',
+      args: {
+        product: product.id,
+        language,
+        bulletPoints: [...stored, line],
+        ...(english ? { englishMeaning: { bulletPoints: `The ${current.length} bullet ${current.length === 1 ? 'point' : 'points'} as they are, then a new last one: “${english}”` } } : {}),
+      },
+    }],
+  }
+}
+
 // ── Facts (one read per kind of fact, for many fixes) ───────────────
 
 const ASIN = /^[A-Z0-9]{10}$/
@@ -254,7 +310,7 @@ export async function factsFor(rows: readonly FixRow[], opts: { translate: boole
   const products = productIds.length
     ? await prisma.product.findMany({
         where: { id: { in: productIds }, deletedAt: null },
-        select: { id: true, sku: true, name: true, amazonAsin: true, children: { where: { deletedAt: null }, select: { id: true } } },
+        select: { id: true, sku: true, name: true, amazonAsin: true, bulletPoints: true, children: { where: { deletedAt: null }, select: { id: true } } },
       })
     : []
   const byId = new Map(products.map((p) => [p.id, p]))
@@ -278,6 +334,8 @@ export async function factsFor(rows: readonly FixRow[], opts: { translate: boole
     const kind = kindOf(row)
     const p = row.productId ? byId.get(row.productId) : undefined
     const facts: FixFacts = { product: p ? { id: p.id, sku: p.sku, name: p.name } : null, language: null, languageProblem: null, amazonMarket: false, asin: null, text: null, textProblem: null, stock: [] }
+    // Size guide: the family's own bullet points in the source language (the product's own columns are that language).
+    if (p && kind === 'SIZE_GUIDE') facts.bullets = { language: PRIMARY_CONTENT_LOCALE, current: Array.isArray(p.bulletPoints) ? p.bulletPoints.filter((b): b is string => typeof b === 'string') : [] }
     if (p && (kind === 'BULLETS' || kind === 'APLUS')) {
       const market = row.marketplace?.toUpperCase() ?? null
       if (!market) facts.language = PRIMARY_CONTENT_LOCALE
@@ -418,21 +476,53 @@ export interface FixItem {
   market: string | null
   theme: { key: string; label: string } | null
   spikeId: string | null
-  proposal: { bullets?: string[]; module?: { headline: string; body: string } | null; language: string; english?: unknown; days?: number }
+  proposal: { bullets?: string[]; module?: { headline: string; body: string } | null; language: string; english?: unknown; days?: number; sizeGuide?: SizeGuideProposal }
   /** Why it cannot be sent now, with the way out; null when it can (or is not Open). */
   held: string | null
   plan: { approvalId: string; state: string; words: string; sentBy: string | null; sentAt: string | null; expiresAt: string | null } | null
   task: { createdBy: string | null; createdAt: string | null; assignee: string | null } | null
   applied: { words: string; at: string | null; approvalId: string | null } | null
   lastSend: { words: string; at: string | null } | null
+  /** Closed by the size-guide re-check (Dismissed), with why. */
+  closed: { words: string; at: string | null } | null
   source: string
   createdBy: string | null
   createdAt: string
 }
 
+/** A size-guide fix's proposal, as the Fixes card shows it (review-size-guide.ts `SizeGuidePayload`). */
+export interface SizeGuideProposal {
+  direction: 'small' | 'large'
+  sizes: string[]
+  allSizes: boolean
+  reviews: number
+  returns: number
+  advice: string
+  /** The new last bullet point, in `proposal.language`; null = none yet (edit the proposal). */
+  line: string | null
+  /** Each judged size's verdict in words. */
+  evidence: string[]
+}
+
+function sizeGuideProposal(payload: Payload): SizeGuideProposal {
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+  return {
+    direction: payload.direction === 'large' ? 'large' : 'small',
+    sizes: strings(payload.sizes),
+    allSizes: payload.allSizes === true,
+    reviews: n(payload.reviews),
+    returns: n(payload.returns),
+    advice: str(payload.advice) ?? '',
+    line: str(payload.line),
+    evidence: strings(payload.evidence),
+  }
+}
+
 export async function listFixes(input: { status?: unknown; kind?: unknown; productId?: unknown; spikeId?: unknown; limit?: unknown; now?: Date } = {}): Promise<{ items: FixItem[]; count: number; counts: Record<FixStatus, number> }> {
   const now = input.now ?? new Date()
   await syncSentFixes(now).catch((error) => logger.warn('[review-fixes] sync with change plans failed', { error: error instanceof Error ? error.message : String(error) }))
+  // Size guide: one open fix per family and direction from fit by size, closed when its evidence is gone.
+  await recheckSizeGuideIfDue(now).catch((error) => logger.warn('[review-fixes] size-guide re-check failed', { error: error instanceof Error ? error.message : String(error) }))
   const statusText = typeof input.status === 'string' ? input.status.trim().toUpperCase() : ''
   const status = (FIX_STATUSES as readonly string[]).includes(statusText) ? statusText : null
   const kinds = (typeof input.kind === 'string' ? input.kind.split(',') : []).map((k) => k.trim().toUpperCase()).filter((k) => (FIX_KINDS as readonly string[]).includes(k))
@@ -477,6 +567,7 @@ export async function listFixes(input: { status?: unknown; kind?: unknown; produ
         language: lang(payload.language),
         ...(payload.english != null ? { english: payload.english } : {}),
         ...(kind === 'RECALL_FLAG' ? { days: Number(payload.days) || RECALL_HOLD_DAYS } : {}),
+        ...(kind === 'SIZE_GUIDE' ? { sizeGuide: sizeGuideProposal(payload) } : {}),
       },
       held: r.status === 'OPEN' ? listHeld(r, facts.get(r.id)) : null,
       plan: r.status === 'SENT' && r.approvalId
@@ -492,6 +583,7 @@ export async function listFixes(input: { status?: unknown; kind?: unknown; produ
       task: payload.task ? { createdBy: payload.task.createdBy ? names.get(payload.task.createdBy) ?? null : null, createdAt: payload.task.createdAt ?? null, assignee: payload.task.assignee ? names.get(payload.task.assignee) ?? null : null } : null,
       applied: r.status === 'APPLIED' ? { words: applied?.words ?? (payload.task ? 'Task created: nothing changed on a channel' : 'Applied'), at: applied?.at ?? payload.task?.createdAt ?? null, approvalId: r.approvalId } : null,
       lastSend: r.status === 'OPEN' && payload.lastSend?.words ? { words: payload.lastSend.words, at: payload.lastSend.at ?? null } : null,
+      closed: r.status === 'DISMISSED' && closedOf(payload) ? closedOf(payload) : null,
       source: r.source,
       createdBy: r.createdBy,
       createdAt: r.createdAt.toISOString(),
@@ -689,8 +781,16 @@ export async function updateFix(id: string, body: unknown) {
   }
   // An edit of the proposal.
   if (fix.status !== 'OPEN') throw new FixConflictError(statusHeld(fix.status) ?? 'Only an open fix can be edited.')
+  const sizeGuide = kindOf(fix) === 'SIZE_GUIDE'
   const payload = { ...payloadOf(fix) }
   const data: Prisma.ReviewActionItemUpdateInput = {}
+  if (b.line !== undefined) {
+    if (!sizeGuide) throw new InsightsInputError('line: only a size-guide fix has a sizing bullet point.')
+    const line = str(b.line)
+    if (!line || line.length > SIZE_GUIDE_LINE_MAX) throw new InsightsInputError(`line: the sizing bullet point, 1 to ${SIZE_GUIDE_LINE_MAX} characters.`)
+    payload.line = line
+  }
+  if (sizeGuide && b.language !== undefined) throw new InsightsInputError('language: a size-guide fix is written in the language the product’s text is kept in.')
   if (b.title !== undefined) {
     const title = str(b.title)
     if (!title || title.length > 200) throw new InsightsInputError('title: 1 to 200 characters.')
@@ -722,7 +822,9 @@ export async function updateFix(id: string, body: unknown) {
     if (!Number.isInteger(days) || days < 1 || days > 90) throw new InsightsInputError('days: a whole number of days, 1 to 90.')
     payload.days = days
   }
-  if (Object.keys(data).length === 0 && JSON.stringify(payload) === JSON.stringify(payloadOf(fix))) throw new InsightsInputError('Nothing to change: give status, or an edit (title, bullets, module, language, english, days).')
+  if (Object.keys(data).length === 0 && JSON.stringify(payload) === JSON.stringify(payloadOf(fix))) throw new InsightsInputError('Nothing to change: give status, or an edit (title, bullets, module, language, english, days, line).')
+  // A size-guide fix a person edited keeps their words when the re-check finds the same sizes (review-size-guide.ts).
+  if (sizeGuide) payload.edited = true
   data.payload = payload as Prisma.InputJsonValue
   const done = await prisma.reviewActionItem.updateMany({ where: { id, status: 'OPEN', updatedAt: fix.updatedAt }, data: data as Prisma.ReviewActionItemUpdateManyMutationInput })
   if (done.count === 0) throw new FixConflictError('Someone changed it a moment ago: reload it.')

@@ -24,7 +24,21 @@ export type TestStatus = (typeof TEST_STATUSES)[number]
 /** A test that still holds its market: nobody may start another one there. */
 export const LIVE_STATUSES: readonly TestStatus[] = ['DRAFT', 'WAITING_APPROVAL', 'RUNNING']
 
-/** The first-try days a timing test may compare (Amazon: day 4 at the earliest, the scheduler's cap is day 25). */
+/**
+ * The channels a TIMING test may cover: an Amazon market (Amazon's own request), or Shopify (Nexus's own review e-mail).
+ * A Shopify test covers the whole store — its orders carry no market — stored as EVERY_MARKET, as an A/B split of an
+ * all-markets rule is.
+ */
+export const TIMING_CHANNELS = ['AMAZON', 'SHOPIFY'] as const
+export type TimingChannel = (typeof TIMING_CHANNELS)[number]
+export const EVERY_MARKET = '*'
+/** Why a channel is not offered for a timing test, in words (Owner, 2026-10-27: Nexus asks no eBay buyer). */
+export const NOT_OFFERED_WORDS: Readonly<Record<string, string>> = {
+  EBAY: 'eBay is not offered: Nexus asks no eBay buyer — eBay asks its buyers for feedback itself.',
+  ETSY: 'Etsy is not offered: Nexus sends Etsy buyers no review request, so there is no day to test.',
+}
+
+/** The first-try days a timing test may compare (Amazon: day 4 at the earliest, the scheduler's cap is day 25; Shopify the same). */
 export const FIRST_DAY = 4
 export const LAST_DAY = 25
 export const DAY_CHOICES = [4, 7, 10, 14, 21] as const
@@ -243,13 +257,24 @@ export function testResult(arms: readonly ArmCounts[], opts: { where?: string; k
   return { ...base, tooEarly, leaderId: leader.id, sure, liftPct, words, sureWords: sure == null ? null : sureWords(sure) }
 }
 
-/** Why the winner may not be applied, or null. Only a finished timing test whose leader is not the group in place. */
+/**
+ * Why the winner may not be applied, or null. A timing test: only once it finished, and only a leader that is not the
+ * group in place. An A/B split (N3): as soon as it has a result — the same "too early" and the same "how sure" rule — and
+ * only when B leads (A is what is in place); applying ends the split.
+ */
 export function applyHeld(test: { kind: string; status: string }, result: Pick<TestResult, 'tooEarly' | 'leaderId' | 'controlId' | 'sure'>): string | null {
-  if (test.kind === 'AB') return 'An A/B split ends with End test; change rule A yourself, or turn B on in its place.'
-  if (test.status === 'RUNNING' || test.status === 'WAITING_APPROVAL' || test.status === 'DRAFT') return 'The test has not finished: stop it, or wait until it ends.'
+  const ab = test.kind === 'AB'
+  if (test.status === 'WAITING_APPROVAL' || test.status === 'DRAFT') return ab ? 'The split has not started.' : 'The test has not finished: stop it, or wait until it ends.'
+  if (!ab && test.status === 'RUNNING') return 'The test has not finished: stop it, or wait until it ends.'
   if (result.tooEarly || !result.leaderId) return 'Too early to call — there is no winner yet.'
-  if (result.leaderId === result.controlId) return 'The day in place now is the best: there is nothing to apply. Keep it instead.'
-  if ((result.sure ?? 0) < APPLY_MIN_SURE) return `Only ${result.sure ?? 0}% sure — a winner can be applied at ${APPLY_MIN_SURE}% or more. Keep the day in place, or run a new test.`
+  if (result.leaderId === result.controlId) {
+    return ab
+      ? 'A — the rule as it is — is the best: there is nothing to apply. End the test to keep A as it is.'
+      : 'The day in place now is the best: there is nothing to apply. Keep it instead.'
+  }
+  if ((result.sure ?? 0) < APPLY_MIN_SURE) {
+    return `Only ${result.sure ?? 0}% sure — a winner can be applied at ${APPLY_MIN_SURE}% or more. ${ab ? 'Let the split run on, or end it to keep A.' : 'Keep the day in place, or run a new test.'}`
+  }
   return null
 }
 

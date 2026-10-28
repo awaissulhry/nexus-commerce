@@ -40,7 +40,8 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *   GET    /api/reviews/spikes                     ?status&channel&market&productId&theme → alerts, counts, time to resolve
  *   PATCH  /api/reviews/spikes/:id                 { status: ACKNOWLEDGED | RESOLVED | REOPEN } — actor = signed-in person
  *   POST   /api/reviews/spikes/bulk                { ids ≤ 200, action: acknowledge | resolve | suggest (≤ 5) } → { changed, held }
- *   GET    /api/reviews/action-items               ?status&kind&productId&spikeId → fixes (each says why it cannot be sent)
+ *   GET    /api/reviews/action-items               ?status&kind&productId&spikeId → fixes (each says why it cannot be sent;
+ *                                                  size-guide fixes re-checked from fit by size first)
  *   PATCH  /api/reviews/action-items/:id           { status: OPEN | DISMISSED } or an edit of the proposal
  *   POST   /api/reviews/action-items/suggest       { productId } — AI fixes for one product
  *   POST   /api/reviews/action-items/:id/propose   ONE change plan (approved on the Approvals page); a Task without approval

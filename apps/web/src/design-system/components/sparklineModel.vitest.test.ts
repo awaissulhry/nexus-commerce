@@ -32,6 +32,22 @@ describe('sparkGeometry', () => {
     expect(one.last).toEqual({ x: 11, y: 6 })
   })
 
+  it('a fixed axis: [0, null] draws from zero, so a small change stays small; the readings\' low and high are unchanged', () => {
+    // Without an axis 10 → 11 fills the box (y 11 → 1); from zero it moves less than a pixel (y 1.9 → 1).
+    expect(sparkGeometry([10, 11], 'line', box).path).toBe('M 1 11 L 21 1')
+    const fromZero = sparkGeometry([10, 11], 'line', box, [0, null])
+    expect(fromZero.path).toBe('M 1 1.9 L 21 1')
+    expect(fromZero).toMatchObject({ min: 10, max: 11 })
+    // A flat series on a fixed axis sits at its own height, not mid-box.
+    expect(sparkGeometry([5, 5], 'step', box, [0, 10]).path).toBe('M 1 6 L 21 6')
+    expect(sparkGeometry([10, 10], 'step', box, [0, null]).path).toBe('M 1 1 L 21 1')
+  })
+
+  it('a reading outside the axis widens it (never cut off); a non-number end is the readings\' own', () => {
+    expect(sparkGeometry([2, 30], 'line', box, [0, 20]).path).toBe('M 1 10.3 L 21 1')
+    expect(sparkGeometry([2, 4], 'line', box, [Number.NaN, null]).path).toBe(sparkGeometry([2, 4], 'line', box).path)
+  })
+
   it('nothing to draw is said, not drawn as a flat value', () => {
     expect(sparkGeometry([], 'step', box)).toEqual({ path: '', dots: [], last: null, count: 0, min: null, max: null })
     expect(sparkGeometry([null, undefined, Number.NaN], 'step', box).count).toBe(0)

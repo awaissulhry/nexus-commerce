@@ -171,6 +171,30 @@ describe('review sources', () => {
     expect(markets.map(s => [s.market, s.reviews])).toEqual([['DE', 1], ['IT', 4]])
   })
 
+  it('Etsy with no shop connected (lane N4): one "Not connected" row with Connect, kept apart from what Nexus reads', () => {
+    // Nothing held, nothing connected: one row, no numbers made up, never "read every 30 minutes".
+    const none = sourcesFromFacts(facts({ etsyReadOn: true, etsyLastReadAt: daysAgo(0) }), NOW)
+    expect(none.sources.find(s => s.channel === 'ETSY')).toBeUndefined()
+    expect(none.notConnected).toEqual([{
+      channel: 'ETSY', market: null, state: 'not_connected', reason: 'No Etsy shop is connected', since: null,
+      reconnectHref: '/settings/channels/etsy', what: 'Shop reviews, one photo each', lastNote: null, lastReviewAt: null, reviews: 0,
+      readsItself: false,
+    }])
+    expect(none.setup).toEqual([]) // not connecting a channel is a choice, not a problem to fix
+    expect(wordsOf(none.notConnected).filter(w => SETTING_NAME.test(w))).toEqual([])
+
+    // Etsy reviews held from before (a shop since removed, or a file): their real numbers, still "Not connected".
+    const held = sourcesFromFacts(facts({ etsyReadOn: true, reviewGroups: [group('ETSY', 'IT', 'ETSY_API', 3, daysAgo(4)), group('ETSY', null, 'IMPORT_CSV', 2, daysAgo(9))] }), NOW)
+    expect(held.sources.find(s => s.channel === 'ETSY')).toBeUndefined()
+    expect(held.notConnected.map(s => [s.market, s.state, s.reviews, s.lastReviewAt])).toEqual([['IT', 'not_connected', 5, daysAgo(4).toISOString()]])
+
+    // Once a shop is connected (even one that needs a fix) Etsy is a source again, and nothing is "not connected".
+    const etsyConn = conn('ETSY', null)
+    expect(sourcesFromFacts(facts({ connections: [etsyConn], etsyReadOn: true }), NOW).notConnected).toEqual([])
+    expect(sourcesFromFacts(facts({ connections: [{ ...etsyConn, authStatus: 'revoked' }], etsyReadOn: true }), NOW).sources.find(s => s.channel === 'ETSY'))
+      .toMatchObject({ state: 'not_updating', reconnectHref: '/settings/channels/etsy', readsItself: true })
+  })
+
   it('Shopify via Judge.me (PR I): the row says the app is read', () => {
     const out = sourcesFromFacts(facts({ shopifyApp: { connected: true, lastReadAt: daysAgo(0) } }), NOW)
     expect(out.sources.find(s => s.channel === 'SHOPIFY')).toMatchObject({ what: 'Store review app (Judge.me), read every 30 min', lastNote: 'Judge.me read 26 Oct' })

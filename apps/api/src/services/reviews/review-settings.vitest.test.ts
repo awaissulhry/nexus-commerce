@@ -75,6 +75,7 @@ describe('what a save may hold', () => {
     expect(words({ alerts: [{ key: 'negative', recipients: ['gone'] }] })).toMatch(/no longer a member of this business/)
     expect(words({ alerts: [{ key: 'negative', via: [] }] })).toBe('Choose how “New negative review” arrives: in Nexus, by e-mail or both.')
     expect(words({ alerts: [{ key: 'spike', on: true }] })).toMatch(/no such review alert/)
+    expect(words({ alerts: [{ key: 'complaintSpike', on: true, via: [] }] })).toBe('Choose how “Complaint spike” arrives: in Nexus, by e-mail or both.')
   })
 
   it('cleans words to avoid: trimmed, once each whatever the case', () => {
@@ -88,6 +89,7 @@ describe('what a save may hold', () => {
       { key: 'negative', on: false, recipients: [], via: [] },
       { key: 'digest', on: true, recipients: ['u2'], via: ['email'] },
       { key: 'ratingDrop', on: false, recipients: [], via: ['app'] },
+      { key: 'complaintSpike', on: false, recipients: [], via: ['app'] },
     ])
   })
 
@@ -100,6 +102,15 @@ describe('what a save may hold', () => {
       return r.ok ? null : r.words
     }
     expect(words({ alerts: [{ key: 'ratingDrop', on: true, via: [] }] })).toBe('Choose how “Rating drop” arrives: in Nexus, by e-mail or both.')
+  })
+
+  it('"Complaint spike" is off until switched on (a saved row without it reads off), and arrives in Nexus, by e-mail or both', () => {
+    expect(alertsFromJson(null).find((a) => a.key === 'complaintSpike')).toEqual({ key: 'complaintSpike', on: false, recipients: [], via: ['app'] })
+    // A business saved before the alert existed: its other alerts as saved, "Complaint spike" off.
+    const before = alertsFromJson([{ key: 'negative', on: false, recipients: [], via: ['email'] }, { key: 'ratingDrop', on: true, recipients: [], via: ['app'] }])
+    expect(before.map((a) => [a.key, a.on])).toEqual([['negative', false], ['digest', true], ['ratingDrop', true], ['complaintSpike', false]])
+    const on = validateSettingsInput({ alerts: [{ key: 'complaintSpike', on: true, via: ['email'], recipients: ['u2'] }] }, ctx)
+    expect(on.ok && on.alerts.find((a) => a.key === 'complaintSpike')).toEqual({ key: 'complaintSpike', on: true, recipients: ['u2'], via: ['email'] })
   })
 })
 
@@ -303,8 +314,9 @@ describe('against real SQL', () => {
   it('no row reads the defaults; a save makes the one row and a second save updates it', async () => {
     const first = await inside(() => svc.readReviewSettings())
     expect(first.voice).toEqual(DEFAULT_VOICE)
-    expect(first.alerts.map((a) => [a.key, a.on])).toEqual([['negative', true], ['digest', true], ['ratingDrop', false]])
+    expect(first.alerts.map((a) => [a.key, a.on])).toEqual([['negative', true], ['digest', true], ['ratingDrop', false], ['complaintSpike', false]])
     expect(first.ratingDropRule).toEqual({ recentDays: 7, beforeDays: 28, minRated: 5, dropAtLeast: 0.3, reopenAfterDays: 7 })
+    expect(first.complaintSpikeRule).toEqual({ recentDays: 7, baselineDays: 28, minNegative: 3, minReviews: 5, multiplier: 2, reopenAfterDays: 7 })
     expect(first.sender.editHref).toBe('/settings/company')
     expect(first.automationTemplates).toEqual({ total: 3, missing: 3 })
 

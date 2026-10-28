@@ -11,7 +11,7 @@ describe('the path → the page', () => {
     expect(reviewsLockFromPath('/marketing/reviews/amazon/')).toEqual({ channel: 'AMAZON', marketplace: '' })
   })
 
-  it('is no channel page anywhere else (Shopify and Etsy come later; a market is two letters)', () => {
+  it('is no locked channel page anywhere else (Shopify and Etsy are one page each, with no market; a market is two letters)', () => {
     for (const path of ['/marketing/reviews', '/marketing/reviews/inbox', '/marketing/reviews/shopify', '/marketing/reviews/etsy',
       '/marketing/reviews/amazon/ita', '/marketing/reviews/amazon/it/x', '/marketing/reviews/amazon/1t', '/listings/amazon/it']) {
       expect(reviewsLockFromPath(path)).toBeUndefined()

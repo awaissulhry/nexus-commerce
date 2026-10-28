@@ -3,7 +3,12 @@
  * answers, the "New timing test" form, and the words and rows the Timing page, the rule editor's A/B card, the Rules
  * page and the Queue's results show. Pure: no fetch, no clock of its own. Every number and sentence about a result comes
  * from the API (how sure, too early, the words); this file only lays it out.
+ *
+ * N3 — an A/B split also compares a Shopify rule's own e-mail text; its winner is applied ("Apply winner — send for
+ * approval") as soon as the API's result allows it (the same too-early and how-sure rules as a timing test): rule A takes
+ * B's settings and the split ends.
  */
+import { ruleEmailTextWords, sameRuleEmailText } from '@nexus/shared/review-request-text'
 
 export type TestKind = 'TIMING' | 'AB'
 export type TestStatus = 'DRAFT' | 'WAITING_APPROVAL' | 'RUNNING' | 'STOPPED' | 'DONE'
@@ -55,12 +60,19 @@ export interface TimingTest {
   result: TimingTestResult
   countedWords: string
   approval: { id: string; what: 'start' | 'apply' } | null
-  applied: { armId: string; label: string; delayDays: number; ruleId: string; ruleName: string; created: boolean; at: string; by: string | null } | null
+  applied: TimingApplied | AbApplied | null
   kept: { at: string; by: string | null } | null
   lastWords: string | null
   applyWords: string | null
   held: { start: string | null; stop: string | null; apply: string | null; keep: string | null }
 }
+
+/** A timing test's applied winner: the rule asks on that day. */
+export interface TimingApplied { kind?: undefined; armId: string; label: string; delayDays: number; ruleId: string; ruleName: string; created: boolean; countsFrom?: string; at: string; by: string | null }
+/** N3 — an A/B split's applied winner: rule A took B's settings (what changed, in words). */
+export interface AbApplied { kind: 'AB'; armId: string; label: string; ruleId: string; ruleName: string; winnerRuleName: string; changed: string[]; at: string; by: string | null }
+
+export const isAbApplied = (a: TimingTest['applied']): a is AbApplied => !!a && a.kind === 'AB'
 
 export interface TimingTestsAnswer { tests: TimingTest[]; running: number }
 export interface TimingEstimate { currentDays: number; currentWords: string; ordersPerDay: number; endsWords: string }
@@ -72,20 +84,50 @@ export const APPROVALS_PATH = '/fleet/approvals'
 
 // ── New timing test ──────────────────────────────────────────────────────────────────────────────────────────────
 
-export const TEST_MARKETS = [
-  { value: 'IT', label: 'Amazon Italy' },
-  { value: 'DE', label: 'Amazon Germany' },
-  { value: 'FR', label: 'Amazon France' },
-  { value: 'ES', label: 'Amazon Spain' },
-  { value: 'UK', label: 'Amazon UK' },
+/** Where a timing test may run: an Amazon market (Amazon's own request) or the Shopify store (Nexus's review e-mail). */
+export interface TestWhere { value: string; label: string; channel: 'AMAZON' | 'SHOPIFY'; market: string | null; group: string }
+export const TEST_WHERE: readonly TestWhere[] = [
+  { value: 'AMAZON:IT', label: 'Amazon Italy', channel: 'AMAZON', market: 'IT', group: 'Amazon' },
+  { value: 'AMAZON:DE', label: 'Amazon Germany', channel: 'AMAZON', market: 'DE', group: 'Amazon' },
+  { value: 'AMAZON:FR', label: 'Amazon France', channel: 'AMAZON', market: 'FR', group: 'Amazon' },
+  { value: 'AMAZON:ES', label: 'Amazon Spain', channel: 'AMAZON', market: 'ES', group: 'Amazon' },
+  { value: 'AMAZON:UK', label: 'Amazon UK', channel: 'AMAZON', market: 'UK', group: 'Amazon' },
+  { value: 'SHOPIFY', label: 'Shopify store', channel: 'SHOPIFY', market: null, group: 'Shopify' },
+]
+/** The channels not offered, each with why (the API refuses them in the same words). */
+export const NOT_OFFERED = [
+  { value: 'EBAY', label: 'eBay', heldReason: 'Not offered: Nexus asks no eBay buyer — eBay asks its buyers for feedback itself.' },
+  { value: 'ETSY', label: 'Etsy', heldReason: 'Not offered: Nexus sends Etsy buyers no review request, so there is no day to test.' },
 ] as const
+export const NOT_OFFERED_WORDS = 'eBay and Etsy are not offered: Nexus asks no eBay buyer (eBay asks for feedback itself), and sends Etsy buyers no review request.'
+
+/** The "Where" picker's options: the Amazon markets and Shopify, then eBay and Etsy held with why. */
+export function whereOptions(): Array<{ value: string; label: string; group: string; heldReason?: string }> {
+  return [
+    ...TEST_WHERE.map((w) => ({ value: w.value, label: w.label, group: w.group })),
+    ...NOT_OFFERED.map((n) => ({ value: n.value, label: n.label, group: 'Not offered', heldReason: n.heldReason })),
+  ]
+}
+
+/** The channel and market a picked "Where" means (null for anything not offered). */
+export function whereOf(value: string): TestWhere | null {
+  return TEST_WHERE.find((w) => w.value === value) ?? null
+}
+
 export const DAY_CHOICES = [4, 7, 10, 14, 21] as const
 export const MIN_DAYS = 2
 export const MAX_DAYS = 4
 export const HOLDOUT_MAX = 20
 
-export interface NewTestForm { market: string; productType: string; days: number[]; holdoutPct: number }
-export const NEW_TEST_FORM: NewTestForm = { market: 'DE', productType: '', days: [4, 7], holdoutPct: 10 }
+export interface NewTestForm { where: string; productType: string; days: number[]; holdoutPct: number }
+export const NEW_TEST_FORM: NewTestForm = { where: 'AMAZON:DE', productType: '', days: [4, 7], holdoutPct: 10 }
+
+/** The holdout's hint: what a held-out buyer does not get, on the channel picked. */
+export function holdoutHint(form: Pick<NewTestForm, 'where'>): string {
+  return whereOf(form.where)?.channel === 'SHOPIFY'
+    ? 'Shows what asking adds at all. These buyers get no review e-mail from Nexus.'
+    : 'Shows what asking adds at all. These buyers get no request.'
+}
 
 /** Ticks or unticks a day (sorted; never more than MAX_DAYS). */
 export function toggleDay(form: NewTestForm, day: number): NewTestForm {
@@ -106,13 +148,27 @@ export function daysHint(form: NewTestForm): string {
 export function newTestHeld(form: NewTestForm, ctx: { canManage: boolean; sending: boolean }): string | null {
   if (!ctx.canManage) return "You need 'Manage reviews' to start a test."
   if (ctx.sending) return 'Sending…'
-  if (!form.market) return 'Pick the market to test.'
+  if (!whereOf(form.where)) return 'Pick an Amazon market or Shopify to test.'
   if (form.days.length < MIN_DAYS) return `Pick at least ${MIN_DAYS} days to compare.`
   return null
 }
 
-export function newTestBody(form: NewTestForm): { market: string; productType: string | null; days: number[]; holdoutPct: number } {
-  return { market: form.market, productType: form.productType.trim() ? form.productType.trim().toLowerCase() : null, days: [...form.days], holdoutPct: form.holdoutPct }
+/** POST /review-timing-tests: the channel, the Amazon market (Shopify: the whole store), the product type, days and holdout. */
+export function newTestBody(form: NewTestForm): { channel: string; market?: string; productType: string | null; days: number[]; holdoutPct: number } {
+  const where = whereOf(form.where)
+  return {
+    channel: where?.channel ?? '',
+    ...(where?.market ? { market: where.market } : {}),
+    productType: form.productType.trim() ? form.productType.trim().toLowerCase() : null,
+    days: [...form.days],
+    holdoutPct: form.holdoutPct,
+  }
+}
+
+/** GET /review-timing-tests/estimate's query for the form. */
+export function estimateQuery(form: NewTestForm): Record<string, string | number | undefined> {
+  const where = whereOf(form.where)
+  return { channel: where?.channel, market: where?.market ?? undefined, productType: form.productType || undefined, days: form.days.join(','), holdout: form.holdoutPct }
 }
 
 // ── A test's card ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -165,6 +221,11 @@ export function armLine(arm: TimingTestArm): string {
 export function splitTests(tests: readonly TimingTest[]): { live: TimingTest[]; ended: TimingTest[] } {
   const live = tests.filter((t) => t.status === 'DRAFT' || t.status === 'WAITING_APPROVAL' || t.status === 'RUNNING')
   return { live, ended: tests.filter((t) => !live.includes(t)) }
+}
+
+/** "“Italy glove” asks on day 7 after delivery." — an applied winner (a Shopify rule may count from shipping). */
+export function appliedWords(applied: TimingApplied): string {
+  return `“${applied.ruleName}” asks on day ${applied.delayDays} after ${applied.countsFrom ?? 'delivery'}.`
 }
 
 /** The day the winner would bring ("Keep day 4" uses the group in place now). */
@@ -249,6 +310,8 @@ export interface AbRule {
   shiftToBestDay?: boolean
   useSentimentDiversion?: boolean
   fallbackOnNoResponse?: boolean
+  /** N3 — a Shopify rule's own e-mail text per language (null = the standard text). */
+  emailText?: unknown
 }
 
 const VARIANT = /^(.*) \(variant \d+\)$/
@@ -275,8 +338,14 @@ export function abStartHeld(pair: { a: AbRule; b: AbRule }, ctx: { canManage: bo
   if (ctx.sending) return 'Sending…'
   if (!pair.a.isActive) return `Turn “${pair.a.name}” (side A) on first: the split takes the orders it decides.`
   if (pair.b.isActive) return `Turn “${pair.b.name}” (side B) off first: during the split it gets half of A’s orders.`
-  const same = TIMING_KEYS.every((k) => JSON.stringify(pair.a[k] ?? null) === JSON.stringify(pair.b[k] ?? null))
-  if (same) return `“${pair.b.name}” has the same timing as A. Change B’s first try, send hour or window first.`
+  const sameTiming = TIMING_KEYS.every((k) => JSON.stringify(pair.a[k] ?? null) === JSON.stringify(pair.b[k] ?? null))
+  // N3 — on a Shopify rule the e-mail text is compared too (Amazon sends its own e-mail, eBay none).
+  const shop = pair.a.scope === 'SHOPIFY'
+  if (sameTiming && (!shop || sameRuleEmailText(pair.a.emailText, pair.b.emailText))) {
+    return shop
+      ? `“${pair.b.name}” has the same timing and e-mail text as A. Change B’s e-mail text, first try, send hour or window first.`
+      : `“${pair.b.name}” has the same timing as A. Change B’s first try, send hour or window first.`
+  }
   return null
 }
 
@@ -285,5 +354,13 @@ export function sideTimingWords(rule: AbRule): string {
   const day = rule.sendDelayDays != null ? `Day ${rule.sendDelayDays}` : 'Day from the product-type table'
   const hour = rule.sendHourLocal != null ? ` · ${String(rule.sendHourLocal).padStart(2, '0')}:00` : ''
   const extra = [rule.skipWeekends ? 'skips weekends' : '', rule.shiftToBestDay ? 'best day' : '', rule.useSentimentDiversion ? '“How was it?” first' : ''].filter(Boolean)
-  return `${day}${hour}${extra.length ? ` · ${extra.join(' · ')}` : ''} · window day ${rule.minDaysSinceDelivery}–${rule.maxDaysSinceDelivery}`
+  const text = rule.scope === 'SHOPIFY' ? ` · ${ruleEmailTextWords(rule.emailText)}` : ''
+  return `${day}${hour}${extra.length ? ` · ${extra.join(' · ')}` : ''} · window day ${rule.minDaysSinceDelivery}–${rule.maxDaysSinceDelivery}${text}`
+}
+
+/** N3 — "Applied 28 Oct: “Shop” took B’s e-mail text in English." for an A/B split whose winner was applied. */
+export function abAppliedWords(applied: AbApplied): string {
+  const when = new Date(applied.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  const what = applied.changed.map((w) => w.charAt(0).toLowerCase() + w.slice(1)).join(', ')
+  return `Applied ${when}: “${applied.ruleName}” took B’s ${what}. The split ended; “${applied.winnerRuleName}” stays off.`
 }

@@ -305,6 +305,10 @@
     "./review-reply-rules": {
       "types": "./dist/review-reply-rules.d.ts",
       "default": "./dist/review-reply-rules.js"
+    },
+    "./review-request-text": {
+      "types": "./dist/review-request-text.d.ts",
+      "default": "./dist/review-request-text.js"
     }
   },
   "scripts": {

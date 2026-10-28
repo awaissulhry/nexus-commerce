@@ -16,6 +16,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { automaticFeedbackWhere, needsReplyWhere, reviewKindOf, visibleReviewWhere } from './review-visibility.js'
 import { countsAsStars, ratingInMeasure, ratingOf } from './review-rating.js'
+import { amazonTopicShare } from './review-insights-math.js'
 import { readRateFacts, readRateRequests, rateKey, rateOf, ratePercent } from './review-rate.service.js'
 import { openAlertIds } from './review-needs-you.service.js'
 import { statusWhere } from './review-queue.service.js'
@@ -75,7 +76,8 @@ export interface OverviewChannelRow {
   /** Why there is no rate ("Not measurable: …"), or why it leaves requests out; null otherwise. */
   rateWords: string | null
   lastReviewAt: string | null
-  state: 'ok' | 'not_updating'
+  /** `not_connected`: no account of the channel is connected (Etsy): "Not connected" and Connect (`reconnectHref`). */
+  state: 'ok' | 'not_updating' | 'not_connected'
   reason: string | null
   since: string | null
   reconnectHref: string | null
@@ -252,14 +254,17 @@ export function reviewThemes(rows: readonly ReviewRow[], polarity: 'POSITIVE' | 
   })
 }
 
-type InsightTopic = { topic?: unknown; mentionCount?: unknown; ratingImpact?: unknown; snippets?: unknown }
+type InsightTopic = { topic?: unknown; mentionCount?: unknown; ratingImpact?: unknown; share?: unknown; snippets?: unknown }
 
-/** Amazon's own topics (Customer Feedback API), merged over products and markets. */
+/**
+ * Amazon's own topics (Customer Feedback API), merged over products and markets. The share of reviews is Amazon's own,
+ * weighted by mentions across the merged reads (`amazonTopicShare`, the one calculation).
+ */
 export function amazonThemes(
-  rows: ReadonlyArray<{ marketplace: string; reviewCount: number | null; positiveTopics: unknown; negativeTopics: unknown }>,
+  rows: ReadonlyArray<{ marketplace: string; positiveTopics: unknown; negativeTopics: unknown }>,
   polarity: 'POSITIVE' | 'NEGATIVE',
 ): OverviewTheme[] {
-  const merged = new Map<string, { label: string; mentions: number; reviews: number; impact: number | null; quote: string | null; market: string | null; marketMentions: number }>()
+  const merged = new Map<string, { label: string; mentions: number; shares: Array<{ share: number | null; mentions: number }>; impact: number | null; quote: string | null; market: string | null; marketMentions: number }>()
   for (const row of rows) {
     const list = (polarity === 'POSITIVE' ? row.positiveTopics : row.negativeTopics) as InsightTopic[] | null
     if (!Array.isArray(list)) continue
@@ -269,10 +274,11 @@ export function amazonThemes(
       const id = label.toLowerCase()
       const mentions = Number(t.mentionCount) > 0 ? Number(t.mentionCount) : 0
       const impact = Number.isFinite(Number(t.ratingImpact)) && t.ratingImpact != null ? Number(t.ratingImpact) : null
+      const share = t.share != null && t.share !== '' && Number.isFinite(Number(t.share)) ? Number(t.share) : null
       const snippet = Array.isArray(t.snippets) ? t.snippets.find((s): s is string => typeof s === 'string' && s.trim().length > 0) ?? null : null
-      const slot = merged.get(id) ?? { label, mentions: 0, reviews: 0, impact: null, quote: null, market: null, marketMentions: -1 }
+      const slot = merged.get(id) ?? { label, mentions: 0, shares: [], impact: null, quote: null, market: null, marketMentions: -1 }
       slot.mentions += mentions
-      slot.reviews += row.reviewCount ?? 0
+      slot.shares.push({ share, mentions })
       if (impact != null && (slot.impact == null || Math.abs(impact) > Math.abs(slot.impact))) slot.impact = impact
       if (mentions > slot.marketMentions) {
         slot.marketMentions = mentions
@@ -285,7 +291,7 @@ export function amazonThemes(
   return [...merged.entries()].filter(([, s]) => s.mentions > 0).map(([id, s]) => ({
     key: `amazon:${id}`,
     label: s.label,
-    share: s.reviews > 0 ? Math.min(100, Math.round((s.mentions / s.reviews) * 100)) : null,
+    share: amazonTopicShare(s.shares),
     shareOf: 'amazon' as const,
     mentions: s.mentions,
     source: 'amazon_topic' as const,
@@ -412,7 +418,10 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
     }),
 
     section('channels', async (): Promise<OverviewChannelRow[]> => {
-      const [{ now: rowsNow, prev: rowsPrev }, reqs, { sources: known }, facts] = await Promise.all([split(), requestSplit(), sources(), rateFacts()])
+      const [{ now: rowsNow, prev: rowsPrev }, reqs, { sources: read, notConnected }, facts] = await Promise.all([split(), requestSplit(), sources(), rateFacts()])
+      // A channel no account of which is connected (Etsy) is a row of its own: "Not connected" with Connect, its
+      // numbers only the reviews Nexus already holds — never sample numbers (lane N4).
+      const known = [...read, ...notConnected]
       const keys = new Map<string, { channel: string; market: string | null }>()
       const add = (c: string, m: string | null) => {
         const ch = c.toUpperCase()
@@ -478,7 +487,7 @@ export async function reviewsOverview(input: OverviewInput = {}): Promise<Review
       const topics = wantAmazon
         ? await prisma.amazonReviewInsight.findMany({
             where: { accessStatus: 'OK', marketplace: market ? market : { notIn: [...NO_TOPICS_MARKETS] } },
-            select: { marketplace: true, reviewCount: true, positiveTopics: true, negativeTopics: true },
+            select: { marketplace: true, positiveTopics: true, negativeTopics: true },
           })
         : []
       return {

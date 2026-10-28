@@ -12,7 +12,7 @@
 import { reviewDueAt, type ReplyRules } from '@nexus/shared/review-reply-rules'
 import { photoAlt, type LightboxItem } from '@/design-system/patterns'
 import type { Tone } from '@/design-system/primitives'
-import { MOOD_WORD, STATUS_WORD, THEME_LABEL, channelMarketWords, themeWord } from '../_lib/reviewWords'
+import { MOOD_WORD, STATUS_WORD, THEME_LABEL, channelMarketWords, marketCodeOf, themeWord } from '../_lib/reviewWords'
 import { SETTABLE_STATUSES } from './inboxBulk'
 import { inboxPageHref } from './inboxQuery'
 import { count, plural } from './inboxTiles'
@@ -424,7 +424,7 @@ export function recentSteps(d: InboxDetail, n = 4): StepView[] {
 
 /**
  * Channels whose buyers' photos Nexus reads: eBay (the REST feedback read, PR G), Etsy's one photo and the store's review
- * app (Judge.me, Okendo, Yotpo, Loox; PR I). Others still show the Coming-later sample.
+ * app (Judge.me, Okendo, Yotpo, Loox; PR I). Every other channel says where its buyers' photos really are (`photosElsewhere`).
  */
 export const PHOTO_CHANNELS: readonly string[] = ['EBAY', 'ETSY', 'SHOPIFY']
 
@@ -446,12 +446,36 @@ export function reviewPhotos(detail: Pick<InboxDetail, 'media' | 'review'>): Lig
 
 export type PhotosView =
   | { kind: 'photos'; count: string; items: LightboxItem[]; hint: string }
+  /** Nexus reads this channel's photos and this review has none (or came from a file). */
   | { kind: 'none'; words: string }
-  /** ⛔ KEEP — the labelled sample (build spec ruling 3) for channels whose photos Nexus does not read yet. */
-  | { kind: 'later' }
+  /** The channel gives sellers no buyers' photos: where they really are, and the page that shows them when Nexus knows it. */
+  | { kind: 'elsewhere'; words: string; link: { label: string; href: string } | null }
+
+/**
+ * A channel that gives sellers no buyers' photos, in true words (no tiles: there is nothing for Nexus to show).
+ * Amazon has no review API for sellers at all, so no photo ever reaches Nexus: a product review's photos show with the
+ * review on Amazon's product page (linked when Nexus knows the ASIN and the market); Amazon seller feedback has no photos.
+ */
+export function photosElsewhere(detail: Pick<InboxDetail, 'review' | 'listingHref'>): Extract<PhotosView, { kind: 'elsewhere' }> {
+  const r = detail.review
+  const channel = r.channel.toUpperCase()
+  if (channel === 'AMAZON') {
+    if (r.kind === 'seller') return { kind: 'elsewhere', words: 'Amazon seller feedback has no photos: buyers leave stars and words only.', link: null }
+    const market = marketCodeOf(r.market)
+    const asin = !!r.asin && /^[A-Z0-9]{10}$/.test(r.asin)
+    const words = 'Amazon gives sellers no review photos. Buyers’ photos show on the product page on Amazon.'
+    if (asin && market && detail.listingHref) {
+      return { kind: 'elsewhere', words, link: { label: `Open the product page on ${channelMarketWords('AMAZON', market)}`, href: detail.listingHref } }
+    }
+    if (asin && market) return { kind: 'elsewhere', words, link: null }
+    return { kind: 'elsewhere', words: `${words} Nexus does not know ${asin ? 'the market' : 'the product’s ASIN'} of this review, so it cannot link the page.`, link: null }
+  }
+  const name = channelMarketWords(r.channel, null)
+  return { kind: 'elsewhere', words: `Nexus reads no photos from ${name}: any the buyer added stay on ${name}.`, link: null }
+}
 
 /** What the pop-up's "Photos from the buyer" card shows. */
-export function photosView(detail: Pick<InboxDetail, 'media' | 'review' | 'videoIn' | 'app'>): PhotosView {
+export function photosView(detail: Pick<InboxDetail, 'media' | 'review' | 'videoIn' | 'app' | 'listingHref'>): PhotosView {
   const items = reviewPhotos(detail)
   const channel = detail.review.channel.toUpperCase()
   // A video Nexus does not show (the review apps give no file Nexus can play for sure): said, never hidden.
@@ -466,7 +490,7 @@ export function photosView(detail: Pick<InboxDetail, 'media' | 'review' | 'video
     const what = detail.review.kind === 'seller' ? 'feedback' : 'review'
     return { kind: 'none', words: detail.review.imported ? `This ${what} came from a file: its photos are not in Nexus.` : `${NO_PHOTOS[channel]}${video(false)}` }
   }
-  return { kind: 'later' }
+  return photosElsewhere(detail)
 }
 
 /** The Lightbox's head: who and where, and the item where it lives on the channel ("Open on eBay"). */

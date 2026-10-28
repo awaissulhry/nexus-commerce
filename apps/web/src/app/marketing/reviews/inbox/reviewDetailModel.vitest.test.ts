@@ -217,10 +217,52 @@ describe('the buyer’s photos and the Lightbox (PR G)', () => {
     expect(lightboxCounter(1, items.length)).toBe('2 of 2')
   })
 
-  it('says when there are none (eBay), keeps the labelled sample where Nexus does not read photos yet', () => {
+  it('says when there are none (eBay)', () => {
     expect(photosView(detail({ media: [] }))).toEqual({ kind: 'none', words: 'No photos with this feedback. eBay buyers can add up to 5.' })
     expect(photosView(detail({ media: [] }, { imported: true }))).toEqual({ kind: 'none', words: 'This feedback came from a file: its photos are not in Nexus.' })
-    expect(photosView(detail({}, { channel: 'AMAZON', kind: 'product' }))).toEqual({ kind: 'later' })
+  })
+
+  it('every channel has a true state: never a sample, never "Coming later"', () => {
+    const channels = ['EBAY', 'ETSY', 'SHOPIFY', 'AMAZON', 'WALMART']
+    for (const channel of channels) {
+      for (const kind of ['product', 'seller'] as const) {
+        for (const imported of [false, true]) {
+          const view = photosView(detail({ media: [] }, { channel, kind, imported, asin: 'B0TEST0001', market: 'IT' }))
+          expect(['none', 'elsewhere']).toContain(view.kind)
+          expect(JSON.stringify(view)).not.toMatch(/sample|coming later/i)
+        }
+      }
+    }
+  })
+
+  it('an Amazon product review: Amazon gives sellers no photos; the product page on Amazon, linked when Nexus knows the ASIN and market', () => {
+    const words = 'Amazon gives sellers no review photos. Buyers’ photos show on the product page on Amazon.'
+    const href = 'https://www.amazon.it/dp/B0TEST0001'
+    expect(photosView(detail({ media: [], listingHref: href }, { channel: 'AMAZON', kind: 'product', asin: 'B0TEST0001', market: 'IT' }))).toEqual({
+      kind: 'elsewhere', words, link: { label: 'Open the product page on Amazon Italy', href },
+    })
+    // A file import: Amazon still gives no photos; the same words and link.
+    expect(photosView(detail({ listingHref: href }, { channel: 'AMAZON', kind: 'product', asin: 'B0TEST0001', market: 'IT', imported: true }))).toMatchObject({ kind: 'elsewhere', words, link: { href } })
+    expect(photosView(detail({ listingHref: null }, { channel: 'AMAZON', kind: 'product', asin: null, market: 'IT' }))).toEqual({
+      kind: 'elsewhere', words: `${words} Nexus does not know the product’s ASIN of this review, so it cannot link the page.`, link: null,
+    })
+    // No market: the API would fall back to amazon.com, so no link (it could be the wrong country's page).
+    expect(photosView(detail({ listingHref: 'https://www.amazon.com/dp/B0TEST0001' }, { channel: 'AMAZON', kind: 'product', asin: 'B0TEST0001', market: null }))).toEqual({
+      kind: 'elsewhere', words: `${words} Nexus does not know the market of this review, so it cannot link the page.`, link: null,
+    })
+    expect(photosView(detail({ listingHref: null }, { channel: 'AMAZON', kind: 'product', asin: 'B0TEST0001', market: 'DE' }))).toEqual({ kind: 'elsewhere', words, link: null })
+  })
+
+  it('Amazon seller feedback has no photos at all', () => {
+    expect(photosView(detail({ listingHref: 'https://www.amazon.de/dp/B0TEST0001' }, { channel: 'AMAZON', kind: 'seller', asin: 'B0TEST0001', market: 'DE' }))).toEqual({
+      kind: 'elsewhere', words: 'Amazon seller feedback has no photos: buyers leave stars and words only.', link: null,
+    })
+  })
+
+  it('a channel Nexus reads no photos from says so', () => {
+    expect(photosView(detail({ media: [] }, { channel: 'WALMART', kind: 'product' }))).toEqual({
+      kind: 'elsewhere', words: 'Nexus reads no photos from Walmart: any the buyer added stay on Walmart.', link: null,
+    })
   })
 
   it('the Lightbox head: who, where, when, and the listing on eBay', () => {

@@ -248,3 +248,272 @@ describe('the ONE review rate decides what can be measured (PR J on main\'s revi
     expect(view.held.apply).toBe('Too early to call — there is no winner yet.')
   })
 })
+
+// ── Lane N6 — Shopify: Nexus's own review e-mail ──────────────────────────────────────────────────────────────────
+
+describe('a Shopify timing test (lane N6): made, sent for approval, nothing changes before', () => {
+  beforeAll(async () => {
+    await inside(async () => {
+      // The Shopify rule counts its first try from shipping: the test's groups count the same way, and the words say so.
+      await database.client.reviewRule.create({ data: { id: 'rule-shop', name: 'Shopify', scope: 'SHOPIFY', isActive: true, sendDelayDays: 7, minDaysSinceDelivery: 2, maxDaysSinceDelivery: 25, anchor: 'SHIP', exclusions: ['has_refund'] } })
+    })
+  })
+
+  it('eBay and Etsy are not offered, with the reason in words; nothing is made', async () => {
+    const { NOT_OFFERED_WORDS } = await import('./review-timing-test-math.js')
+    const before = await inside(() => database.client.reviewTimingTest.count())
+    await expect(inside(() => svc.createTimingTest({ channel: 'EBAY', market: 'IT', days: [4, 7] }, person, { requester }))).rejects.toThrow(NOT_OFFERED_WORDS.EBAY)
+    await expect(inside(() => svc.createTimingTest({ channel: 'etsy', days: [4, 7] }, person, { requester }))).rejects.toThrow(NOT_OFFERED_WORDS.ETSY)
+    await expect(inside(() => svc.estimateTimingTest({ channel: 'EBAY', market: 'IT' }))).rejects.toThrow('eBay is not offered: Nexus asks no eBay buyer — eBay asks its buyers for feedback itself.')
+    await expect(inside(() => svc.createTimingTest({ channel: 'WOOCOMMERCE', days: [4, 7] }, person, { requester }))).rejects.toThrow('Pick an Amazon market or Shopify to test.')
+    expect(await inside(() => database.client.reviewTimingTest.count())).toBe(before)
+  })
+
+  it('the estimate reads the day in place now from the Shopify rule, and the store’s pace', async () => {
+    const est = await inside(() => svc.estimateTimingTest({ channel: 'SHOPIFY', productType: 'glove', days: '4,7', holdout: '10' }, NOW))
+    expect(est).toMatchObject({ currentDays: 7, currentWords: 'Day 7 now, from the rule “Shopify” (after shipping, as that rule counts)', ordersPerDay: 0 })
+    expect(est.endsWords).toBe('At 300 orders per group, or after 8 weeks — no Shopify orders were delivered in the last 4 weeks, so it would end after 8 weeks')
+  })
+
+  it('"Start test — send for approval": waiting for approval, the whole store, the scheduler does not see it; a second one is held', async () => {
+    const out = await inside(() => svc.createTimingTest({ channel: 'SHOPIFY', market: 'IT', productType: 'Glove', days: [4, 10, 7], holdoutPct: 10 }, person, { requester, now: NOW }))
+    expect(asks.at(-1)).toMatchObject({ tool: 'start-review-timing-test', args: { testId: out.test.id } })
+    expect(out.test).toMatchObject({
+      channel: 'SHOPIFY', market: '*', productType: 'glove', title: 'Shopify · glove', status: 'WAITING_APPROVAL', statusWords: 'Waiting for approval',
+      groupsWords: 'Day 7 vs 4 vs 10 · 10% holdout', approval: { what: 'start' },
+    })
+    expect(out.test.arms.map((a) => a.label)).toEqual(['Day 7 (now)', 'Day 4', 'Day 10', 'Not asked (holdout)'])
+    expect(out.test.countedWords).toMatch(/A Shopify review comes from the store’s review app and names no order, so it is matched by its product: rates are estimates\.$/)
+    expect(out.test.countedWords).not.toMatch(/Amazon/)
+    expect(await inside(() => svc.runningTimingTests(NOW))).toEqual([])
+    // The store is held by it: a second Shopify test on the same orders is refused; an Amazon market is not.
+    await expect(inside(() => svc.createTimingTest({ channel: 'SHOPIFY', days: [4, 14] }, person, { requester, now: NOW })))
+      .rejects.toThrow(/Shopify · glove is waiting for approval on the same orders/)
+
+    // The approval says what happens to Shopify buyers.
+    const preview = await inside(() => tool('start-review-timing-test').handler({ testId: out.test.id }, ctxFor('x', undefined)))
+    expect((preview.preview as { effect: string }).effect).toMatch(/^From the next scheduler run, new Shopify orders of glove are split by order number: each group gets Nexus’s review e-mail on its day/)
+    expect((preview.preview as { effect: string }).effect).toMatch(/10% of the orders \(the holdout\) get no review e-mail and no “How was it\?” check from Nexus\.$/)
+    // Stopped before anyone approved: withdrawn, nothing changed.
+    await inside(() => svc.stopTimingTest(out.test.id, 'Test person', NOW))
+    expect(await inside(() => svc.runningTimingTests(NOW))).toEqual([])
+  })
+})
+
+// A Shopify order: no market (Shopify orders carry none), a test order number of its own.
+const shopOrder = async (id: string, delivered: Date) => database.client.order.create({ data: { id, channel: 'SHOPIFY', channelOrderId: `TEST-${id}`, status: 'DELIVERED', totalPrice: '30.00', customerName: 'Test', customerEmail: `${id}@example.test`, shippingAddress: {}, deliveredAt: delivered, items: { create: [{ sku: 'TEST-GLOVE', quantity: 1, price: '30.00', productId: 'prod-glove' }] } } as never })
+
+describe('a Shopify test before any Shopify review is in Nexus (lane N6)', () => {
+  it('no Shopify review in Nexus: "Not measurable" in the rate’s words for Shopify — never 0 %', async () => {
+    await inside(async () => {
+      const c = database.client
+      await c.reviewTimingTest.create({
+        data: {
+          id: 'test-shop-nm', kind: 'TIMING', channel: 'SHOPIFY', market: '*', holdoutPct: 0, status: 'DONE', startedAt: daysAgo(90), endedAt: daysAgo(2),
+          arms: { create: [{ id: 'nm-d7', label: 'Day 7 (now)', position: 0, delayDays: 7 }, { id: 'nm-d4', label: 'Day 4', position: 1, delayDays: 4 }] },
+        },
+      })
+      for (const [i, arm] of ['nm-d7', 'nm-d4'].entries()) {
+        await shopOrder(`ord-nm-${i}`, daysAgo(60))
+        await c.reviewRequest.create({ data: { orderId: `ord-nm-${i}`, channel: 'SHOPIFY', status: 'SENT', timingTestArmId: arm, scheduledFor: daysAgo(55), sentAt: daysAgo(55) } as never })
+      }
+    })
+    const view = (await inside(() => svc.listTimingTests({ kind: 'TIMING' }, NOW))).tests.find((t) => t.id === 'test-shop-nm')!
+    expect(view.title).toBe('Shopify · every product')
+    expect(view.arms.map((a) => [a.id, a.counted, a.rate])).toEqual([['nm-d7', 1, null], ['nm-d4', 1, null]])
+    expect(view.result).toMatchObject({ leaderId: null, sure: null, rates: { 'nm-d7': null, 'nm-d4': null } })
+    expect(view.result.words).toBe('Not measurable: no Shopify review is in Nexus yet — Shopify keeps none itself; connect the store’s review app to count them.')
+  })
+})
+
+describe('a Shopify test’s result (lane N6): the ONE review rate and its attribution', () => {
+  const testId = 'test-shop'
+  beforeAll(async () => {
+    await inside(async () => {
+      const c = database.client
+      await c.reviewTimingTest.create({
+        data: {
+          id: testId, kind: 'TIMING', channel: 'SHOPIFY', market: '*', productType: 'glove', holdoutPct: 10, status: 'DONE',
+          startedAt: daysAgo(90), endedAt: daysAgo(2), endsWhen: { ordersPerArm: 100, maxDays: 84 },
+          arms: { create: [
+            { id: 'shop-d7', label: 'Day 7 (now)', position: 0, delayDays: 7 },
+            { id: 'shop-d4', label: 'Day 4', position: 1, delayDays: 4 },
+            { id: 'shop-hold', label: 'Not asked (holdout)', position: 2, holdout: true },
+          ] },
+        },
+      })
+      // 100 orders per asked group whose time to answer is over; reviews come from the review app (no market, no order),
+      // linked by the attribution to the group's sent e-mail.
+      const groups: Array<[string, number, number]> = [['shop-d7', 100, 5], ['shop-d4', 100, 15], ['shop-hold', 10, 0]]
+      let n = 0
+      for (const [arm, orders, reviews] of groups) {
+        for (let i = 0; i < orders; i++) {
+          n += 1
+          const id = `ord-shop-${n}`
+          const delivered = daysAgo(60)
+          await shopOrder(id, delivered)
+          const holdout = arm === 'shop-hold'
+          await c.reviewRequest.create({ data: { id: `req-shop-${n}`, orderId: id, channel: 'SHOPIFY', status: holdout ? 'SKIPPED' : 'SENT', timingTestArmId: arm, scheduledFor: new Date(delivered.getTime() + 7 * DAY), sentAt: holdout ? null : new Date(delivered.getTime() + 7 * DAY), ...(holdout ? { suppressedReason: 'timing_test_holdout', providerResponseCode: 'TIMING_TEST_HOLDOUT' } : {}) } as never })
+          if (!holdout && i < reviews) {
+            await c.review.create({ data: { channel: 'SHOPIFY', externalReviewId: `jm-${n}`, body: 'Good', rating: 5, postedAt: new Date(delivered.getTime() + 10 * DAY), productId: 'prod-glove', attributedRequestId: `req-shop-${n}` } as never })
+          }
+        }
+      }
+      // A review-app review no request explains, for the same product inside a holdout order's window: it counts once.
+      await c.review.create({ data: { channel: 'SHOPIFY', externalReviewId: 'jm-free', body: 'Fine', rating: 4, postedAt: daysAgo(60 - 12), productId: 'prod-glove' } as never })
+      // An Amazon review of the same product never counts for a Shopify order.
+      await c.review.create({ data: { channel: 'AMAZON', marketplace: 'IT', externalReviewId: 'rv-amz-for-shop', body: 'Fine', rating: 4, postedAt: daysAgo(60 - 12), productId: 'prod-glove' } as never })
+    })
+  }, 180_000)
+
+  it('orders, sent, counted and reviews per group; the result “on Shopify” and how sure', async () => {
+    const view = (await inside(() => svc.listTimingTests({ kind: 'TIMING' }, NOW))).tests.find((t) => t.id === testId)!
+    const by = Object.fromEntries(view.arms.map((a) => [a.id, { orders: a.orders, sent: a.sent, counted: a.counted, reviews: a.reviews }]))
+    expect(by).toEqual({
+      'shop-d7': { orders: 100, sent: 100, counted: 100, reviews: 5 },
+      'shop-d4': { orders: 100, sent: 100, counted: 100, reviews: 15 },
+      'shop-hold': { orders: 10, sent: 0, counted: 10, reviews: 1 },
+    })
+    expect(view.result).toMatchObject({ tooEarly: false, leaderId: 'shop-d4', controlId: 'shop-d7', liftPct: 200 })
+    expect(view.result.sure).toBeGreaterThanOrEqual(95)
+    expect(view.result.words).toBe(`Day 4 gets 200% more reviews on Shopify — ${view.result.sure}% sure`)
+    expect(view.held).toMatchObject({ apply: null, keep: null })
+  })
+
+  it('Apply winner asks for approval; the approved tool adds the Shopify rule (counting from shipping, as the rule did); its undo turns it off', async () => {
+    const rulesBefore = await inside(() => database.client.reviewRule.findMany({ orderBy: { name: 'asc' } }))
+    const out = await inside(() => svc.applyTimingWinner(testId, person, { requester, now: NOW }))
+    expect(asks.at(-1)).toMatchObject({ tool: 'apply-review-timing-winner', args: { testId, armId: 'shop-d4' } })
+    expect(out.test).toMatchObject({ approval: { what: 'apply' } })
+    expect(await inside(() => database.client.reviewRule.findMany({ orderBy: { name: 'asc' } }))).toEqual(rulesBefore)
+
+    const apply = tool('apply-review-timing-winner')
+    const approvalId = asks.at(-1)!.id
+    const preview = await inside(() => apply.handler({ testId, armId: 'shop-d4' }, ctxFor(approvalId, undefined)))
+    expect(preview).toMatchObject({ ok: true, preview: { summary: 'Add the rule “Shopify glove”: first try on day 4 after shipping', rule: { mode: 'create', name: 'Shopify glove' }, to: { delayDays: 4 } } })
+    expect((preview.preview as { note: string }).note).toMatch(/^Adds the rule “Shopify glove” \(Shopify, glove\) with the first try on day 4/)
+    const ran = await inside(() => apply.execute!({ testId, armId: 'shop-d4' }, ctxFor(approvalId, preview.preview)))
+    expect(ran.ok).toBe(true)
+    const made = await inside(() => database.client.reviewRule.findFirst({ where: { name: 'Shopify glove' } }))
+    expect(made).toMatchObject({ scope: 'SHOPIFY', marketplace: null, productTypes: ['glove'], sendDelayDays: 4, anchor: 'SHIP', minDaysSinceDelivery: 2, maxDaysSinceDelivery: 25, isActive: true, createdBy: 'timing-test' })
+    const view = (await inside(() => svc.listTimingTests({ kind: 'TIMING' }, NOW))).tests.find((t) => t.id === testId)!
+    expect(view.applied).toMatchObject({ ruleName: 'Shopify glove', delayDays: 4, countsFrom: 'shipping', created: true })
+    const undo = apply.undo!.request(ran.change as never)
+    expect(undo).toEqual({ tool: 'apply-review-timing-winner', args: { testId, armId: 'before' } })
+    const back = await inside(() => apply.handler((undo as { args: Record<string, unknown> }).args, ctxFor('u', undefined)))
+    const undone = await inside(() => apply.execute!((undo as { args: Record<string, unknown> }).args, ctxFor('u', back.preview)))
+    expect(undone.ok).toBe(true)
+    expect(await inside(() => database.client.reviewRule.findFirst({ where: { name: 'Shopify glove' } }))).toMatchObject({ isActive: false })
+  })
+})
+
+// ── N3 — after the Shopify timing tests (lane N6): this block adds Shopify reviews and A/B splits of its own ─────────
+
+describe('N3 — an A/B split of a rule’s own e-mail text, and Apply winner', () => {
+  const ownEn = { subject: 'How is your {product}?', body: 'Hi {first_name},\n\nTell other riders what you think.\n\n{review_button}\n\nStop these e-mails? {unsubscribe_link}' }
+  const testId = 'test-ab-shop'
+  beforeAll(async () => {
+    await inside(async () => {
+      const c = database.client
+      await c.reviewRule.create({ data: { id: 'rule-shop-a', name: 'Shop', scope: 'SHOPIFY', isActive: true, minDaysSinceDelivery: 7, maxDaysSinceDelivery: 25, exclusions: [] } })
+      await c.reviewRule.create({ data: { id: 'rule-shop-b', name: 'Shop (variant 1)', scope: 'SHOPIFY', isActive: false, minDaysSinceDelivery: 7, maxDaysSinceDelivery: 25, exclusions: [], emailText: { en: ownEn } } })
+      await c.reviewTimingTest.create({
+        data: {
+          id: testId, kind: 'AB', channel: 'SHOPIFY', market: '*', ruleId: 'rule-shop-a', holdoutPct: 0, status: 'RUNNING', startedAt: daysAgo(80),
+          endsWhen: { ordersPerArm: 2000, maxDays: 84 },
+          arms: { create: [{ id: 'ab-a', label: 'A', position: 0, ruleId: 'rule-shop-a' }, { id: 'ab-b', label: 'B', position: 1, ruleId: 'rule-shop-b' }] },
+        },
+      })
+      // 110 orders per side delivered 70 days ago (their time to answer is over): A brings 5 reviews, B 20.
+      let n = 0
+      for (const [arm, reviews] of [['ab-a', 5], ['ab-b', 20]] as const) {
+        for (let i = 0; i < 110; i++) {
+          n += 1
+          const id = `ord-ab-${n}`
+          await c.order.create({ data: { id, channel: 'SHOPIFY', channelOrderId: `TEST-AB-${n}`, marketplace: 'DE', status: 'DELIVERED', totalPrice: '30.00', customerName: 'Test', customerEmail: `${id}@example.test`, shippingAddress: {}, deliveredAt: daysAgo(70), items: { create: [{ sku: 'TEST-GLOVE', quantity: 1, price: '30.00', productId: 'prod-glove' }] } } as never })
+          await c.reviewRequest.create({ data: { id: `req-ab-${n}`, orderId: id, channel: 'SHOPIFY', marketplace: 'DE', status: 'SENT', ruleId: arm === 'ab-a' ? 'rule-shop-a' : 'rule-shop-b', timingTestArmId: arm, scheduledFor: daysAgo(63), sentAt: daysAgo(63) } as never })
+          if (i < reviews) await c.review.create({ data: { channel: 'SHOPIFY', marketplace: 'DE', externalReviewId: `rv-ab-${n}`, body: 'Fine', rating: 4, postedAt: daysAgo(60), productId: 'prod-glove', attributedRequestId: `req-ab-${n}` } as never })
+        }
+      }
+    })
+  }, 180_000)
+
+  it('B that differs from A only by its own e-mail text may be split; the same text and timing may not', async () => {
+    const a = await inside(() => database.client.reviewRule.findUniqueOrThrow({ where: { id: 'rule-shop-a' } }))
+    const b = await inside(() => database.client.reviewRule.findUniqueOrThrow({ where: { id: 'rule-shop-b' } }))
+    expect(svc.abHeld(a as never, b as never)).toBeNull()
+    expect(svc.abHeld(a as never, { ...b, emailText: null } as never)).toBe('“Shop (variant 1)” has the same timing and e-mail text as A. Change B’s e-mail text, first try, send hour or window first.')
+    // On an Amazon rule the text is not compared: Amazon sends its own e-mail.
+    expect(svc.abHeld({ ...a, scope: 'AMAZON_GLOBAL' } as never, { ...b, scope: 'AMAZON_GLOBAL' } as never)).toMatch(/has the same timing as A\./)
+  })
+
+  it('the running split has a result by the SAME rules as a timing test: B leads, how sure; Apply winner is offered', async () => {
+    const view = (await inside(() => svc.listTimingTests({ kind: 'AB', ruleId: 'rule-shop-a' }, NOW))).tests.find((t) => t.id === testId)!
+    expect(view.arms.map((x) => [x.id, x.counted, x.reviews])).toEqual([['ab-a', 110, 5], ['ab-b', 110, 20]])
+    expect(view.result).toMatchObject({ tooEarly: false, leaderId: 'ab-b', controlId: 'ab-a' })
+    expect(view.result.sure).toBeGreaterThanOrEqual(80)
+    expect(view.held.apply).toBeNull()
+  })
+
+  it('Apply winner asks for approval (apply-review-ab-winner) and changes nothing before a person approves', async () => {
+    const before = await inside(() => database.client.reviewRule.findMany({ where: { scope: 'SHOPIFY' }, orderBy: { name: 'asc' } }))
+    const out = await inside(() => svc.applyTimingWinner(testId, person, { requester, now: NOW }))
+    expect(asks.at(-1)).toMatchObject({ tool: 'apply-review-ab-winner', args: { testId, armId: 'ab-b' } })
+    expect(out.test).toMatchObject({ status: 'RUNNING', approval: { what: 'apply' }, held: { apply: 'Waits for approval on the Approvals page.' } })
+    expect(await inside(() => database.client.reviewRule.findMany({ where: { scope: 'SHOPIFY' }, orderBy: { name: 'asc' } }))).toEqual(before)
+    await expect(inside(() => svc.applyTimingWinner(testId, person, { requester, now: NOW }))).rejects.toThrow(/already waits for approval/)
+  })
+
+  it('the approved tool makes B’s text A’s own and ends the split; B stays off; its undo puts A back', async () => {
+    const apply = tool('apply-review-ab-winner')
+    const approvalId = asks.at(-1)!.id
+    const preview = await inside(() => apply.handler({ testId, armId: 'ab-b' }, ctxFor(approvalId, undefined)))
+    expect(preview).toMatchObject({ ok: true, preview: { rule: { id: 'rule-shop-a', name: 'Shop' }, winner: { label: 'B', rule: 'Shop (variant 1)' } } })
+    expect((preview.preview as { changes: unknown[] }).changes).toEqual([
+      { field: 'emailText.en', what: 'E-mail text in English', from: 'the standard text', to: 'its own text, subject “How is your {product}?”' },
+    ])
+    // The timing test tool refuses an A/B split (and the other way round).
+    expect((await inside(() => tool('apply-review-timing-winner').handler({ testId, armId: 'ab-b' }, ctxFor('x', undefined)))).error).toMatch(/A\/B split — its winner is applied by apply-review-ab-winner/)
+    const ran = await inside(() => apply.execute!({ testId, armId: 'ab-b' }, ctxFor(approvalId, preview.preview)))
+    expect(ran.ok).toBe(true)
+    const a = await inside(() => database.client.reviewRule.findUniqueOrThrow({ where: { id: 'rule-shop-a' } }))
+    expect(a).toMatchObject({ isActive: true, emailText: { en: ownEn } })
+    expect(await inside(() => database.client.reviewRule.findUniqueOrThrow({ where: { id: 'rule-shop-b' } }))).toMatchObject({ isActive: false })
+    const row = await inside(() => database.client.reviewTimingTest.findUniqueOrThrow({ where: { id: testId } }))
+    expect(row.status).toBe('DONE')
+    const view = (await inside(() => svc.listTimingTests({ kind: 'AB', ruleId: 'rule-shop-a' }, NOW))).tests.find((t) => t.id === testId)!
+    expect(view.applied).toMatchObject({ kind: 'AB', ruleName: 'Shop', winnerRuleName: 'Shop (variant 1)', changed: ['E-mail text in English'] })
+    expect(view.held.apply).toMatch(/^Applied .*: “Shop” took B’s e-mail text in English\.$/)
+    expect(await inside(() => svc.runningTimingTests(NOW))).not.toContainEqual(expect.objectContaining({ id: testId }))
+
+    const undo = apply.undo!.request(ran.change as never)
+    expect(undo).toEqual({ tool: 'apply-review-ab-winner', args: { testId, armId: 'before' } })
+    expect(await inside(() => apply.undo!.current(ran.change as never))).toEqual(ran.change!.after)
+    const back = await inside(() => apply.handler((undo as { args: Record<string, unknown> }).args, ctxFor('u', undefined)))
+    expect(back.ok).toBe(true)
+    const undone = await inside(() => apply.execute!((undo as { args: Record<string, unknown> }).args, ctxFor('u', back.preview)))
+    expect(undone.ok).toBe(true)
+    expect(await inside(() => database.client.reviewRule.findUniqueOrThrow({ where: { id: 'rule-shop-a' } }))).toMatchObject({ emailText: null })
+    expect((await inside(() => database.client.reviewTimingTest.findUniqueOrThrow({ where: { id: testId } }))).status).toBe('DONE')
+    expect(apply.undo!.request(undone.change as never)).toEqual({ tool: 'apply-review-ab-winner', args: { testId, armId: 'ab-b' } })
+  })
+
+  afterAll(async () => {
+    // Nothing of this block may hold another test of this file: the splits it left running end here.
+    await inside(() => database.client.reviewTimingTest.updateMany({ where: { id: { in: [testId, 'test-ab-early'] }, status: 'RUNNING' }, data: { status: 'STOPPED', endedAt: new Date() } }))
+  })
+
+  it('too early (under 100 counted orders per side, the timing tests’ own line): Apply winner is held in words', async () => {
+    await inside(async () => {
+      const c = database.client
+      await c.reviewRule.create({ data: { id: 'rule-shop2-a', name: 'Shop two', scope: 'SHOPIFY', isActive: true, exclusions: [] } })
+      await c.reviewRule.create({ data: { id: 'rule-shop2-b', name: 'Shop two (variant 1)', scope: 'SHOPIFY', isActive: false, exclusions: [], emailText: { en: ownEn } } })
+      await c.reviewTimingTest.create({
+        data: { id: 'test-ab-early', kind: 'AB', channel: 'SHOPIFY', market: '*', ruleId: 'rule-shop2-a', status: 'RUNNING', startedAt: daysAgo(5), arms: { create: [{ id: 'ab2-a', label: 'A', position: 0, ruleId: 'rule-shop2-a' }, { id: 'ab2-b', label: 'B', position: 1, ruleId: 'rule-shop2-b' }] } },
+      })
+    })
+    await expect(inside(() => svc.applyTimingWinner('test-ab-early', person, { requester, now: NOW }))).rejects.toThrow('Too early to call — there is no winner yet.')
+    const view = (await inside(() => svc.listTimingTests({ kind: 'AB', ruleId: 'rule-shop2-a' }, NOW))).tests[0]
+    expect(view.held.apply).toBe('Too early to call — there is no winner yet.')
+  })
+})

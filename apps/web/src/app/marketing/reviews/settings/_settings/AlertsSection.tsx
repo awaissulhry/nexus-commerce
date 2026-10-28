@@ -9,14 +9,18 @@
  *   Rating drop           (Phase 3) a product family's average stars fall in one market — the rule in words, from the
  *                         API (`ratingDropRule`); off until switched on; opens an alert in Insights › Alerts and tells
  *                         the people picked, in Nexus and/or by e-mail.
- *
- * "Complaint spike" is a labelled placeholder (ruling 3): the hourly spike check already opens alerts on Insights › Alerts;
- * a notice for them comes later.
+ *   Complaint spike       complaints about one theme rise fast for a product in one market — the spike check's rule in
+ *                         words, from the API (`complaintSpikeRule`); the hourly check opens these alerts in Insights ›
+ *                         Alerts either way; off until switched on, then the people picked hear about each new one, in
+ *                         Nexus and/or by e-mail.
  */
 import { Card, MultiSelect } from '@/design-system/components'
-import { Button, Checkbox, Pill, Skeleton, Tag, Toggle } from '@/design-system/primitives'
+import { Checkbox, Skeleton, Toggle } from '@/design-system/primitives'
 import { ReadFailed } from './ReadFailed'
-import { ALERT_NAME, ALERT_WHEN, ALERTS_WITH_VIA, ratingDropWords, recipientsHint, type AlertForm, type AlertKey, type AlertVia, type RatingDropRule } from './settingsForm'
+import {
+  ALERT_NAME, ALERT_WHEN, ALERTS_WITH_VIA, complaintSpikeWords, ratingDropWords, recipientsHint, type AlertForm, type AlertKey, type AlertVia,
+  type ComplaintSpikeRule, type RatingDropRule,
+} from './settingsForm'
 import s from './settings.module.css'
 
 export interface AlertsSectionProps {
@@ -27,17 +31,21 @@ export interface AlertsSectionProps {
   digestFallback: string[]
   /** When "Rating drop" opens an alert (null while the settings are read). */
   ratingDropRule: RatingDropRule | null
+  /** When "Complaint spike" opens an alert (null while the settings are read). */
+  complaintSpikeRule: ComplaintSpikeRule | null
   onOn: (key: AlertKey, on: boolean) => void
   onRecipients: (key: AlertKey, ids: string[]) => void
   onVia: (key: AlertKey, via: AlertVia, on: boolean) => void
 }
 
-/** ⛔ KEEP — placeholders (build spec ruling 3): these alerts arrive with Insights in Phase 2 (PR E). */
-const LATER: ReadonlyArray<{ name: string; when: string }> = [
-  { name: 'Complaint spike', when: 'A theme suddenly shows up in many more reviews than usual.' },
-]
+/** The rule of an alert that has one, in words (one line each). */
+function ruleLines(key: AlertKey, ratingDropRule: RatingDropRule | null, complaintSpikeRule: ComplaintSpikeRule | null): string[] {
+  if (key === 'ratingDrop' && ratingDropRule) return ratingDropWords(ratingDropRule)
+  if (key === 'complaintSpike' && complaintSpikeRule) return complaintSpikeWords(complaintSpikeRule)
+  return []
+}
 
-export function AlertsSection({ alerts, error, onRetry, team, digestFallback, ratingDropRule, onOn, onRecipients, onVia }: AlertsSectionProps) {
+export function AlertsSection({ alerts, error, onRetry, team, digestFallback, ratingDropRule, complaintSpikeRule, onOn, onRecipients, onVia }: AlertsSectionProps) {
   const options = team.map((m) => ({ value: m.userId, label: m.owner ? `${m.name} (owner)` : m.name }))
   return (
     <div className={s.section}>
@@ -55,7 +63,7 @@ export function AlertsSection({ alerts, error, onRetry, team, digestFallback, ra
                 <div className={`${s.alertName} ${a.on ? '' : s.dim}`}>
                   <span className={s.cellStrong}>{ALERT_NAME[a.key]}</span>
                   <span className={s.cellSub}>{ALERT_WHEN[a.key]}</span>
-                  {a.key === 'ratingDrop' && ratingDropRule && ratingDropWords(ratingDropRule).map((line) => <span key={line} className={s.cellSub}>{line}</span>)}
+                  {ruleLines(a.key, ratingDropRule, complaintSpikeRule).map((line) => <span key={line} className={s.cellSub}>{line}</span>)}
                 </div>
                 <div className={`${s.alertField} ${a.on ? '' : s.dim}`}>
                   <span className={s.fieldLabel} id={`alert-who-${a.key}`}>Who</span>
@@ -81,27 +89,6 @@ export function AlertsSection({ alerts, error, onRetry, team, digestFallback, ra
                   ) : (
                     <span className={s.cellSub}>By e-mail, daily at 08:00 UTC</span>
                   )}
-                </div>
-              </div>
-            ))}
-            {/* ⛔ KEEP — placeholders (build spec ruling 3): "Complaint spike" arrives with Insights (Phase 2, PR E).
-                Shown labelled, never hidden: the switch is held until then. */}
-            {LATER.map((l) => (
-              <div key={l.name} className={s.alert}>
-                {/* Live audit C09: the Insights pages exist and the hourly spike check already opens alerts there; only the
-                    notice for them is still to come (the true words; the placeholder itself stays, ruling 3). */}
-                <Button size="sm" heldReason={`Coming later: a notice for a “${l.name}”. The hourly spike check already opens these alerts on Insights › Alerts; the automation “Alert team on negative review spike” tells you once it is on (Automations, below).`}>Off</Button>
-                <div className={`${s.alertName} ${s.dim}`}>
-                  <span className={s.cellLine}><span className={s.cellStrong}>{l.name}</span><Tag tone="neutral">Coming later</Tag><Pill tone="neutral">Sample</Pill></span>
-                  <span className={s.cellSub}>{l.when}</span>
-                </div>
-                <div className={`${s.alertField} ${s.dim}`}>
-                  <span className={s.fieldLabel}>Who</span>
-                  <span className={s.cellSub}>The people you pick</span>
-                </div>
-                <div className={`${s.alertField} ${s.dim}`}>
-                  <span className={s.fieldLabel}>How</span>
-                  <span className={s.cellSub}>In Nexus or by e-mail</span>
                 </div>
               </div>
             ))}
