@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { FACTORY_ENV_FILE, loadFactoryEnv, parseFactoryEnv, readFactoryVariables } from './env'
+import { FACTORY_ENV_FILE, LOCAL_COOKIE_SECRET, loadFactoryEnv, parseFactoryEnv, readFactoryVariables } from './env'
 
 const LOCAL = {
   FACTORY_ENV: 'local',
@@ -12,6 +12,13 @@ const LOCAL = {
 }
 const REMOTE_DATABASE = 'postgresql://factory_runtime:hunter2@db.example.com:5432/factory'
 const REMOTE_REDIS = 'redis://default:hunter2@cache.example.com:6379'
+const RAILWAY = {
+  FACTORY_ENV: 'production',
+  FACTORY_DATABASE_URL: REMOTE_DATABASE,
+  FACTORY_REDIS_URL: REMOTE_REDIS,
+  FACTORY_WEB_ORIGIN: 'https://factory.example.com',
+  FACTORY_COOKIE_SECRET: 'a-random-secret-of-at-least-thirty-two-chars',
+}
 
 const folders: string[] = []
 function variablesFile(content: string): string {
@@ -90,6 +97,32 @@ describe('refusals', () => {
     expect(() => parseFactoryEnv(variables, '')).toThrow(/runs only on Railway/)
   })
 
+  it.each(['production', 'staging'])('refuses FACTORY_ENV=%s without an https web origin', (name) => {
+    const { FACTORY_WEB_ORIGIN: _unused, ...rest } = RAILWAY
+    expect(() => parseFactoryEnv({ ...rest, FACTORY_ENV: name }, 'production')).toThrow(/FACTORY_WEB_ORIGIN must be set/)
+    expect(() => parseFactoryEnv({ ...RAILWAY, FACTORY_ENV: name, FACTORY_WEB_ORIGIN: 'http://factory.example.com' }, 'production')).toThrow(
+      /https origin/,
+    )
+  })
+
+  it('refuses a web origin with a path, a trailing slash or another scheme', () => {
+    for (const origin of ['https://factory.example.com/', 'https://factory.example.com/app', 'ftp://factory.example.com', 'factory.example.com']) {
+      expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_WEB_ORIGIN: origin }, undefined), origin).toThrow(/FACTORY_WEB_ORIGIN/)
+    }
+  })
+
+  it.each(['production', 'staging'])('refuses FACTORY_ENV=%s without a real cookie secret', (name) => {
+    const { FACTORY_COOKIE_SECRET: _unused, ...rest } = RAILWAY
+    for (const variables of [rest, { ...RAILWAY, FACTORY_COOKIE_SECRET: 'short' }, { ...RAILWAY, FACTORY_COOKIE_SECRET: LOCAL_COOKIE_SECRET }]) {
+      expect(() => parseFactoryEnv({ ...variables, FACTORY_ENV: name }, 'production')).toThrow(/FACTORY_COOKIE_SECRET/)
+    }
+  })
+
+  it('refuses proxy hops out of range', () => {
+    expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_TRUST_PROXY_HOPS: '-1' }, undefined)).toThrow(/FACTORY_TRUST_PROXY_HOPS/)
+    expect(() => parseFactoryEnv({ ...LOCAL, FACTORY_TRUST_PROXY_HOPS: 'all' }, undefined)).toThrow(/FACTORY_TRUST_PROXY_HOPS/)
+  })
+
   it('does not let the file pretend to be Railway', () => {
     const file = variablesFile(
       `FACTORY_ENV=production\nFACTORY_DATABASE_URL=${REMOTE_DATABASE}\nFACTORY_REDIS_URL=${REMOTE_REDIS}\nRAILWAY_ENVIRONMENT=production`,
@@ -100,22 +133,25 @@ describe('refusals', () => {
 
 describe('accepted', () => {
   it('local, on loopback, with defaults', () => {
-    expect(parseFactoryEnv(LOCAL, undefined)).toEqual({ ...LOCAL, FACTORY_HOST: '127.0.0.1', FACTORY_PORT: 8190 })
+    expect(parseFactoryEnv(LOCAL, undefined)).toEqual({
+      ...LOCAL,
+      FACTORY_HOST: '127.0.0.1',
+      FACTORY_PORT: 8190,
+      FACTORY_WEB_ORIGIN: 'http://localhost:3200',
+      FACTORY_COOKIE_SECRET: LOCAL_COOKIE_SECRET,
+      FACTORY_TRUST_PROXY_HOPS: 0,
+    })
   })
 
   it('production on Railway, with remote hosts', () => {
     const env = loadFactoryEnv({
       file: join(tmpdir(), 'factory-env-missing', 'variables'),
-      processEnv: {
-        FACTORY_ENV: 'production',
-        FACTORY_DATABASE_URL: REMOTE_DATABASE,
-        FACTORY_REDIS_URL: REMOTE_REDIS,
-        FACTORY_PORT: '8080',
-        RAILWAY_ENVIRONMENT: 'production',
-      },
+      processEnv: { ...RAILWAY, FACTORY_PORT: '8080', FACTORY_TRUST_PROXY_HOPS: '2', RAILWAY_ENVIRONMENT: 'production' },
     })
     expect(env.FACTORY_HOST).toBe('::')
     expect(env.FACTORY_PORT).toBe(8080)
+    expect(env.FACTORY_TRUST_PROXY_HOPS).toBe(2)
+    expect(env.FACTORY_WEB_ORIGIN).toBe('https://factory.example.com')
     expect(Object.isFrozen(env)).toBe(true)
   })
 })
