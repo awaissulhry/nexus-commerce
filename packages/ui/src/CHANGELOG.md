@@ -1,3 +1,36 @@
+## Phone bottom bar, PDF viewer, QR code and tenant branding — 2026-10-28
+
+Four parts the factory's W0 screens need (gaps G14, G18, G7 QR, G20). Commerce does not use them, and no Commerce page
+carries their code or CSS: they are NOT in the components barrel (the web pulls that barrel into every page's first
+load); each folder is its own entry point (`components/BottomBar`, `components/PdfViewer`, `components/QrCode`), and the
+branding rules are a stylesheet of their own. The token files every page loads are unchanged.
+- **`BottomBar` + `MoreSheet`** (`components/BottomBar`): the phone's main navigation, read from the view's `AreaNav`
+  (filtered with `areaNavForPerson`). The areas and rows marked `phone: 'tab'` are the tabs (4 at most); every other area
+  and the rows marked `phone: 'more'` are in the More sheet (the DS `Modal`, a bottom sheet under 720 px); a More with one
+  entry becomes a fifth tab; a manifest that marks none uses its first areas. One current slot (`findAreaNavPlace`):
+  `aria-current="page"` on a tab, or More says the current page is inside it. Props: `nav`, `pathname`,
+  `LinkComponent` (the app's link, as `AppRail`), `href`, `count`, `maxTabs`, `labels`, `inline`. Fixed to the bottom
+  under 720 px with the safe-area inset; `inline` draws it in the flow (previews, frames). `bottomBarLayout` is the model.
+- **`PdfViewer`** (`components/PdfViewer`): a PDF's pages with page steps, zoom (50–300 %), fit to width, the page count
+  (a live region) and a download. pdf.js is **injected**: `loadPdfJs` or `PdfJsProvider` with a loader the app owns
+  (`PdfJsLike`, a slice of pdf.js 5 that the real `pdfjs-dist` module satisfies); `@nexus/ui` never imports `pdfjs-dist`.
+  Without a loader: says the page preview is not available and shows the browser's own view where
+  `navigator.pdfViewerEnabled` (not Android Chrome), else the download. Props: `src` (address or bytes), `title`,
+  `onDownload`, `fileName`, `loadPdfJs`, `labels`, `height`. States: opening, error (Try again, Download), a page that
+  failed to draw. Keys in the page area: PageUp / PageDown / Home / End, + / - / 0. `PdfViewerView` draws a state.
+- **`QrCode`** (`components/QrCode`): a QR code as SVG (`role="img"` named by `label`), dark on a light plate in both
+  themes, with its text form (`code`, default the value) and a Copy button. Props: `value`, `label`, `size`, `code`,
+  `level`, `labels`. The encoder (`qrcode`, now a peer dependency; the web already depends on it) loads lazily.
+- **Tenant branding** (`tokens/branding.ts`, in the tokens barrel): `BrandingTokens` (name, logo, logo for dark, accent,
+  accent for dark), `checkBranding` (per theme: the colour is the button fill and accent text only when it clears the
+  seven pairs `check-nds-contrast` holds `--nds-primary` to at 7:1, and decoration only at 3:1 on the five surfaces;
+  otherwise that role keeps the DS colour), `brandingAttrs` (`data-brand="primary-light accent-light …"`, the roles that
+  passed, + `--nds-brand-*` on a subtree's root), `safeLogoUrl`. The new generated stylesheet `styles/branding.css`
+  (`npm run tokens:gen`, from `brandBlocks`) maps them onto `--nds-primary`, `--nds-primary-hover` and the new
+  `--nds-brand-accent` per theme; it holds no colour, and the app that shows branded pages loads it.
+- Catalog: `#bottom-bar-example`, `#branding-example`, `#pdf-viewer-example` (a stub pdf.js; a real PDF in the
+  browser's own view), `#qr-code-example`.
+
 ## The app rail and the area-navigation type are in the design system — 2026-10-28
 
 `patterns/shell` (exported by the patterns barrel; `patterns/shell` is the same set, narrower, for an app's root chrome).

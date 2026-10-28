@@ -123,3 +123,6 @@ export { RatingBars, type RatingBarsProps } from './RatingBars'
 export { ratingBarRows, ratingPercents, ratingTotal, nextRatingFilter, defaultZeroReason, type RatingBarRow, type RatingCounts, type RatingStars } from './ratingBarsModel'
 export { metricKind, metricMinWidth, type MetricKind } from './metricStripModel'
 export { heatKey, isHeatMarked, heatMax, heatAlpha, heatCellWords } from './heatmapModel'
+// W0 parts (2026-10-28) — the phone bottom bar + More sheet (G14), the PDF viewer (G18) and the QR code (G7) are NOT
+// re-exported here: the web pulls this barrel into every page, so anything exported from it reaches every page's first
+// load. Each has an entry point of its own — `components/BottomBar`, `components/PdfViewer`, `components/QrCode`.

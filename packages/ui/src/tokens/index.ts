@@ -16,6 +16,7 @@ export * from './zindex'
 export * from './breakpoints'
 export * from './grid'
 export * from './density'
+export * from './branding'
 
 import { palette, color, pill, badge } from './colors'
 import { fontFamily, fontSize, fontWeight, letterSpacing, lineHeight, fontSmoothing } from './typography'

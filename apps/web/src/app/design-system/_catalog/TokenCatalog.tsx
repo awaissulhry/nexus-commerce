@@ -147,6 +147,8 @@ import { LinkTabsExample } from './LinkTabsExample'
 import { ReviewChangesModalExample } from './ReviewChangesModalExample'
 import { DetailModalExample } from './DetailModalExample'
 import { ReviewPartsExample } from './ReviewPartsExample'
+import { BottomBarExample, BrandingExample } from './shell'
+import { PdfViewerExample, QrCodeExample } from './documents'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -1128,6 +1130,7 @@ export function TokenCatalog() {
         <ReviewChangesModalExample />
         <DetailModalExample />
         <ReviewPartsExample />
+        <BottomBarExample /><BrandingExample /><PdfViewerExample /><QrCodeExample />
 
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>PageHeader</div>
         <DSCard padded elevated>
