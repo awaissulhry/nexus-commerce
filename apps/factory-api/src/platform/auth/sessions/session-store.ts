@@ -34,11 +34,12 @@ export interface StartSessionInput {
   readonly mfaProved: boolean
   readonly ipHash: string | null
   readonly userAgent: string | undefined
-  /**
-   * The session's secrets, minted before the command (`mintSessionSecrets`), so the command's result never has to
-   * carry them: a result can become an Idempotency-Key receipt, and a receipt is stored. Left out, they are minted here.
-   */
-  readonly secrets?: SessionSecrets
+}
+
+/** A session made from the hash of its token alone (`createSession`): the token itself never enters the command. */
+export interface CreateSessionInput extends StartSessionInput {
+  /** `tokenHash(secrets.token.value)` of secrets minted before the command (`mintSessionSecrets`). */
+  readonly tokenHash: string
 }
 
 /** A session's cookie token and CSRF token. Never in a row, an audit entry, an event or a command's result. */
@@ -49,15 +50,26 @@ export interface SessionSecrets {
 
 export const mintSessionSecrets = (tenantId: string, userId: string): SessionSecrets => ({ token: mintToken(tenantId, userId), csrfToken: newCsrfToken() })
 
-/** A new session, as plain JSON (a command's result). The token and the CSRF token go to the cookies only. */
-export interface StartedSession {
+/** A new session as a command may return it (plain JSON, a possible receipt): no token, no CSRF token. */
+export interface StoredSession {
   readonly id: string
-  readonly token: string
-  readonly csrfToken: string
   readonly companyId: string | null
   readonly idleExpiresAt: string
   readonly absoluteExpiresAt: string
 }
+
+/** A new session with its secrets, after the command: the token and the CSRF token go to the cookies only. */
+export interface StartedSession extends StoredSession {
+  readonly token: string
+  readonly csrfToken: string
+}
+
+/** The session of a command's result with the secrets minted before it, for the cookies and the answer. */
+export const withSessionSecrets = (session: StoredSession, secrets: SessionSecrets): StartedSession => ({
+  ...session,
+  token: secrets.token.value,
+  csrfToken: secrets.csrfToken,
+})
 
 /** The company a session starts in: the tenant's only active company, else none (the web then picks one). */
 async function startingCompany(tx: CommandTx): Promise<string | null> {
@@ -65,9 +77,11 @@ async function startingCompany(tx: CommandTx): Promise<string | null> {
   return companies.length === 1 ? companies[0]!.id : null
 }
 
-export async function startSession(tx: CommandTx, input: StartSessionInput): Promise<StartedSession> {
-  const secrets = input.secrets ?? mintSessionSecrets(input.tenantId, input.userId)
-  const token = secrets.token
+/**
+ * Writes a new session row from its token's hash (a command's work). The secrets were minted before the command and
+ * stay outside it: neither the work nor its result (which a receipt could store) ever holds them.
+ */
+export async function createSession(tx: CommandTx, input: CreateSessionInput): Promise<StoredSession> {
   const id = newId()
   const absoluteExpiresAt = new Date(input.now.getTime() + SESSION_LIFETIME.absoluteMs)
   const idleExpiresAt = idleExpiryAt(input.now, absoluteExpiresAt)
@@ -76,7 +90,7 @@ export async function startSession(tx: CommandTx, input: StartSessionInput): Pro
     data: {
       id,
       userId: input.userId,
-      tokenHash: tokenHash(token.value),
+      tokenHash: input.tokenHash,
       companyId,
       createdAt: input.now,
       lastSeenAt: input.now,
@@ -87,14 +101,16 @@ export async function startSession(tx: CommandTx, input: StartSessionInput): Pro
       userAgent: input.userAgent?.slice(0, 256) ?? null,
     },
   })
-  return {
-    id,
-    token: token.value,
-    csrfToken: secrets.csrfToken,
-    companyId,
-    idleExpiresAt: toUtcIso(idleExpiresAt),
-    absoluteExpiresAt: toUtcIso(absoluteExpiresAt),
-  }
+  return { id, companyId, idleExpiresAt: toUtcIso(idleExpiresAt), absoluteExpiresAt: toUtcIso(absoluteExpiresAt) }
+}
+
+/**
+ * `createSession` for a caller that hands in the secrets themselves (minted before the command, required): the answer
+ * carries them again, so the work must strip them before it returns (users.acceptInvitation does). Prefer createSession.
+ */
+export async function startSession(tx: CommandTx, input: StartSessionInput & { readonly secrets: SessionSecrets }): Promise<StartedSession> {
+  const { secrets, ...rest } = input
+  return withSessionSecrets(await createSession(tx, { ...rest, tokenHash: tokenHash(secrets.token.value) }), secrets)
 }
 
 /** Ends every live session of a user (optionally but one). Returns how many ended. */
