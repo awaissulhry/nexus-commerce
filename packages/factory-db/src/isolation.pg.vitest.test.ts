@@ -10,6 +10,7 @@ import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedImports } from '../seed/imports'
 import { seed as seedIntegration } from '../seed/integration'
+import { seed as seedInventory } from '../seed/inventory'
 import { seed as seedLinks } from '../seed/links'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
@@ -18,6 +19,7 @@ import { seed as seedPrint } from '../seed/print'
 import { seed as seedProduct } from '../seed/product'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
+import { seed as seedSupply } from '../seed/supply'
 import { seed as seedThreads } from '../seed/threads'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels } from './ownership'
@@ -126,6 +128,10 @@ beforeAll(async () => {
   await seedEmailIn({ db: factory, namespace: 'iso-b' })
   await seedSales({ db: factory, namespace: 'iso-a' })
   await seedSales({ db: factory, namespace: 'iso-b' })
+  await seedSupply({ db: factory, namespace: 'iso-a' })
+  await seedSupply({ db: factory, namespace: 'iso-b' })
+  await seedInventory({ db: factory, namespace: 'iso-a' })
+  await seedInventory({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -153,6 +159,9 @@ it('covers every classified table and every runtime role', () => {
     'EmailOutbound',
     'FloorSession',
     'FloorSettings',
+    'GoodsReceipt',
+    'GoodsReceiptLine',
+    'Hide',
     'IdempotencyReceipt',
     'ImportJob',
     'ImportRow',
@@ -166,6 +175,9 @@ it('covers every classified table and every runtime role', () => {
     'LabelTemplate',
     'Line',
     'LinkEvidence',
+    'Location',
+    'Lot',
+    'MaterialRequirement',
     'MeasurementPoint',
     'MeasurementProfile',
     'MeasurementTemplate',
@@ -180,8 +192,11 @@ it('covers every classified table and every runtime role', () => {
     'PartyContact',
     'PartyTaxIdentity',
     'PasswordReset',
+    'PlanningRun',
     'PrintJob',
     'Printer',
+    'PurchaseOrder',
+    'PurchaseOrderLine',
     'Quote',
     'QuoteAcceptance',
     'QuoteApproval',
@@ -200,6 +215,8 @@ it('covers every classified table and every runtime role', () => {
     'Size',
     'SizeScale',
     'Station',
+    'StockMove',
+    'StockValuation',
     'StoredFile',
     'Style',
     'StyleRevision',

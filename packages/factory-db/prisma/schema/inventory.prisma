@@ -1,0 +1,443 @@
+// Inventory (plan A1 §2.1 "Quantities", "Append-only", §2.4 D, §2.5 "Lot"; PLAN §1.3, §2.8 "Cr VI", §4.7 stages
+// 09a-receive, 09b-cr6, 11a-issue and the end check "the stock ledger reconciles"; features SCM-113, SCM-116, SCM-117,
+// SCM-176, SCM-184, SCM-187, SCM-189, SCM-194, SCM-232, SCM-233, SCM-247, SCM-253, QHS-029): the locations of each site,
+// goods receipts against purchase orders, lots (a dye batch, a roll batch, a protector batch) with their quality hold
+// and Cr VI result, hides one by one, the append-only stock ledger and its valuation. apps/factory-api's modules write
+// them (B-W1-22 locations and ledger, B-W1-32 receipts in the office, B-W1-33 on the floor, B-W1-34 the Cr VI release,
+// B-W1-35 opening stock, B-W1-39 issue to the work order), always through command().
+//
+// The stock ledger (StockMove, `@append-only`) is the truth: every movement is one row (a receipt, an issue to a work
+// order, a return from it, a transfer, an adjustment, a count difference, a scrap, the opening stock) with its item,
+// colour, lot and hide, its quantity as entered and in the item's base unit, the location it leaves and the one it
+// enters (none: outside the site's stock: the supplier, the work order, the bin), its document and who and which
+// device posted it, when. Quantities are always above 0: the locations give the direction. A mistake is fixed by a new
+// row: a reversal (the same move with its locations swapped, at most one per move) or an adjustment with its reason.
+//
+// Balances are DERIVED, not stored: on hand at a location = the sum of the moves into it − the sum of the moves out of
+// it, per site, item, colour, lot and hide. So the ledger reconciles by construction (no projection to rebuild). The
+// …_supply_guards trigger refuses a move that would take a location below zero (SCM-194: no double use), under a
+// transaction lock per location and stock key, and refuses to ISSUE a lot that is not RELEASED. A receipt is POSTED
+// only when the ledger holds exactly its lines' quantities (checked at commit).
+//
+// Quality (A1 §2.5, SCM-117, QHS-029): a lot is QUARANTINE → RELEASED, or REJECTED or BLOCKED; a hide follows its lot.
+// A lot of leather that needs the Cr VI test (REACH Annex XVII entry 47: below 3 mg/kg) is RELEASED only with its Cr VI
+// result PASS (what counts as evidence is a setting, Q14: a report per lot, or a supplier report covering the article
+// and period). Only RELEASED stock is usable: planning nets only it, and only it is issued.
+//
+// Valuation (A1 §2.6: costs never reach the floor or a partner): StockValuation, `@append-only`, office only, holds the
+// cost of each move that changes the site's stock value (a transfer inside the site changes none): signed base quantity,
+// unit cost and amount. It is a ledger of its own, not columns of the move, because the floor posts moves: its column
+// grants would leave a cost column out of its insert, and the move could never be valued afterwards (append-only). The
+// office values its own moves in the same command; a system handler values the floor's moves after their event.
+//
+// Who sees what (ownership/inventory.json): the office reads and writes; the floor reads and writes the stock of its
+// own site (receives goods and hides, posts moves, changes a hide's state; never releases a lot, never sees a value);
+// portal and link sessions read nothing here. Nobody deletes a location, lot, hide or receipt (archived, rejected,
+// scrapped, cancelled or reversed instead); the office deletes only the lines of an OPEN receipt.
+//
+// Units (A1 §2.1, SCM-184, SCM-187): Decimal(18,4) with an explicit unit (enum Uom), never a float; each hide carries
+// its own measured area, and stock is the sum of the hides, never a count times an average. Physical rows carry their
+// site (and company), and every reference between them includes it, so a row can never point at another site's row.
+
+/// A place on a site where stock lies (SCM-176): a warehouse, a zone, a bin, the goods-in dock, the quarantine shelf,
+/// a line-side supply point. A tree inside the site. Archived (never deleted) once used; an archived location takes no
+/// more stock, and a location is archived only once it is empty.
+model Location {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String       @db.Uuid
+  siteId      String       @db.Uuid
+  /// The location it is inside (a bin in a zone, a zone in a warehouse), on the same site; null at the top.
+  parentId    String?      @db.Uuid
+  /// Short code, unique on the site; printed on the bin label and scanned.
+  code        String
+  name        String
+  kind        LocationKind
+  status      MasterStatus @default(ACTIVE)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  site     Site        @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  parent   Location?   @relation("LocationTree", fields: [tenantId, siteId, parentId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  children Location[]  @relation("LocationTree")
+  movesOut StockMove[] @relation("StockMoveFrom")
+  movesIn  StockMove[] @relation("StockMoveTo")
+
+  @@unique([tenantId, siteId, code])
+  // The target of the tenant- and site-safe references from the moves and the child locations.
+  @@unique([tenantId, siteId, id])
+}
+
+enum LocationKind {
+  WAREHOUSE
+  ZONE
+  BIN
+  /// The goods-in dock.
+  RECEIVING
+  /// The quality-hold shelf (a lot's status is what holds it; the place only helps to find it).
+  QUARANTINE
+  /// A line-side supply point (the cutting room's leather rack).
+  PRODUCTION
+  SHIPPING
+}
+
+/// Goods received from a supplier at a site (SCM-113), usually against a purchase order, with the supplier's DDT. OPEN
+/// while its lines, lots and hides are written; POSTED when its moves are in the ledger; REVERSED (by reversing moves)
+/// when it was wrong; CANCELLED when it never happened.
+model GoodsReceipt {
+  id                String             @id @db.Uuid
+  tenantId          String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId         String             @db.Uuid
+  siteId            String             @db.Uuid
+  /// The number from the company's GOODS_RECEIPT series, unique in the company.
+  number            String
+  /// The supplier: the purchase order's party when one is named.
+  supplierId        String             @db.Uuid
+  /// The purchase order it receives against, delivered to this site; null for goods without an order.
+  purchaseOrderId   String?            @db.Uuid
+  /// The supplier's transport document (DDT, DPR 472/1996) the goods came with.
+  supplierDdtNumber String?
+  supplierDdtDate   DateTime?          @db.Date
+  receivedAt        DateTime           @db.Timestamptz(3)
+  status            GoodsReceiptStatus @default(OPEN)
+  note              String?
+  /// Set exactly when POSTED or REVERSED.
+  postedAt          DateTime?          @db.Timestamptz(3)
+  postedById        String?            @db.Uuid
+  /// Set exactly when REVERSED, with the reason.
+  reversedAt        DateTime?          @db.Timestamptz(3)
+  reversedById      String?            @db.Uuid
+  reversalReason    String?
+  /// Set exactly when CANCELLED.
+  cancelledAt       DateTime?          @db.Timestamptz(3)
+  version           Int                @default(1)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?            @db.Uuid
+
+  site          Site               @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplier      Party              @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrder PurchaseOrder?     @relation(fields: [tenantId, siteId, purchaseOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines         GoodsReceiptLine[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the lines' reference: on the receipt's own site.
+  @@unique([tenantId, siteId, id])
+}
+
+/// OPEN → POSTED → REVERSED; OPEN → CANCELLED.
+enum GoodsReceiptStatus {
+  OPEN
+  POSTED
+  REVERSED
+  CANCELLED
+}
+
+/// One material of a goods receipt: how much came, in which unit, against which purchase order line. Its lots (and
+/// their hides) say how it came; its RECEIPT moves put it into the ledger. Changes only while the receipt is OPEN.
+model GoodsReceiptLine {
+  id                  String   @id @db.Uuid
+  tenantId            String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId              String   @db.Uuid
+  receiptId           String   @db.Uuid
+  /// The line's place on the receipt: 10, 20, 30 …
+  seq                 Int
+  /// The purchase order line it receives against: a line of the receipt's purchase order, of the same item and colour.
+  purchaseOrderLineId String?  @db.Uuid
+  itemId              String   @db.Uuid
+  itemColourId        String?  @db.Uuid
+  /// Above 0, as counted or measured at the dock, in `uom`.
+  quantity            Decimal  @db.Decimal(18, 4)
+  uom                 Uom
+  /// The same quantity in the item's base unit: what the line's RECEIPT moves add up to once the receipt is POSTED.
+  baseQuantity        Decimal  @db.Decimal(18, 4)
+  /// Leather: how many hides came (each a Hide of the line's lots).
+  hideCount           Int?
+  note                String?
+  version             Int      @default(1)
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?  @db.Uuid
+
+  receipt           GoodsReceipt       @relation(fields: [tenantId, siteId, receiptId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrderLine PurchaseOrderLine? @relation(fields: [tenantId, siteId, purchaseOrderLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  item              Item               @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour        ItemColour?        @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  lots              Lot[]
+  moves             StockMove[]
+
+  @@unique([tenantId, receiptId, seq])
+  // The target of the lots' and moves' references: on the line's own site.
+  @@unique([tenantId, siteId, id])
+}
+
+/// A lot of one material in one colour at a site (SCM-116, SCM-232): a tannery dye batch, a fabric roll batch, a
+/// protector batch, with our number and the supplier's. Its quality status is the hold of all its stock (and of its
+/// hides): QUARANTINE until released (SCM-117), with its Cr VI result (QHS-029). Never deleted: a bad lot is REJECTED.
+model Lot {
+  id                 String           @id @db.Uuid
+  tenantId           String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId          String           @db.Uuid
+  siteId             String           @db.Uuid
+  /// An item tracked by LOT or HIDE.
+  itemId             String           @db.Uuid
+  /// The colour the lot is (a dye batch is one colour).
+  itemColourId       String?          @db.Uuid
+  /// Our lot number (the LOT series), unique in the tenant; printed on its labels.
+  code               String
+  supplierId         String?          @db.Uuid
+  /// The supplier's batch number.
+  supplierLotRef     String?
+  /// The tannery's dye batch (one shade).
+  dyeBatch           String?
+  shade              String?
+  /// The receipt line it came with; null for opening stock (B-W1-35).
+  receiptLineId      String?          @db.Uuid
+  receivedAt         DateTime?        @db.Timestamptz(3)
+  qualityStatus      LotQualityStatus @default(QUARANTINE)
+  /// Why it was released, rejected or blocked.
+  qualityNote        String?
+  /// Set from the first decision on (any status but QUARANTINE).
+  qualityDecidedAt   DateTime?        @db.Timestamptz(3)
+  qualityDecidedById String?          @db.Uuid
+  /// Copied from the item at receipt and never changed: the lot needs Cr VI evidence before release.
+  requiresCrViTest   Boolean          @default(false)
+  /// The limit it must stay below, mg/kg (the item's: the legal 3, or a brand's lower one); set exactly when tested.
+  crViLimitMgKg      Decimal?         @db.Decimal(8, 3)
+  /// NOT_REQUIRED for a lot without the test; PENDING → PASS | FAIL (PASS → FAIL on later evidence).
+  crViStatus         CrViStatus       @default(NOT_REQUIRED)
+  /// The measured Cr VI content, mg/kg: at or above the limit is a FAIL.
+  crViMgKg           Decimal?         @db.Decimal(8, 3)
+  /// What the result rests on (the evidence rule is a setting, Q14); the report itself is a file of the lot.
+  crViEvidence       CrViEvidence?
+  crViTestedAt       DateTime?        @db.Date
+  version            Int              @default(1)
+  createdAt          DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?          @db.Uuid
+
+  site        Site              @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  item        Item              @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour  ItemColour?       @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplier    Party?            @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  receiptLine GoodsReceiptLine? @relation(fields: [tenantId, siteId, receiptLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  hides       Hide[]
+  moves       StockMove[]
+  valuations  StockValuation[]
+
+  @@unique([tenantId, code])
+  // The target of the hides', moves' and valuations' references: a lot of the same site and item.
+  @@unique([tenantId, siteId, itemId, id])
+}
+
+/// QUARANTINE → RELEASED | REJECTED | BLOCKED; RELEASED → BLOCKED; BLOCKED → RELEASED | REJECTED. Only RELEASED is usable.
+enum LotQualityStatus {
+  QUARANTINE
+  RELEASED
+  /// Final: returned to the supplier or scrapped.
+  REJECTED
+  /// Held after a release (a later finding, a recall).
+  BLOCKED
+}
+
+enum CrViStatus {
+  NOT_REQUIRED
+  PENDING
+  PASS
+  FAIL
+}
+
+/// What a Cr VI result rests on (setting Q14).
+enum CrViEvidence {
+  /// A lab report on this lot.
+  LOT_REPORT
+  /// The supplier's report covering the article and the period.
+  SUPPLIER_REPORT
+}
+
+/// One hide (or skin) of a lot, received one by one (SCM-233, SCM-247): its tag, its own measured area, grade, shade,
+/// thickness and defects. Its stock is the ledger's (the moves that name it); its state is what cutting left of it
+/// (SCM-253): FULL, PARTLY_CUT, REMNANT, CONSUMED, SCRAPPED.
+model Hide {
+  id           String    @id @db.Uuid
+  tenantId     String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId       String    @db.Uuid
+  lotId        String    @db.Uuid
+  /// The lot's item (tracked by HIDE).
+  itemId       String    @db.Uuid
+  /// Our tag (barcode), unique in the tenant; printed on the hide tag (B-W1-33) and scanned at cutting.
+  code         String
+  /// The tannery's own number on the hide, when it has one.
+  supplierCode String?
+  /// The area as measured at receipt, above 0, in an area unit (M2, DM2, FT2). Never changed: a correction is an
+  /// adjustment move.
+  area         Decimal   @db.Decimal(18, 4)
+  areaUom      Uom
+  /// The same area in the item's base unit: what its receipt move adds.
+  baseArea     Decimal   @db.Decimal(18, 4)
+  grade        String?
+  shade        String?
+  thicknessMm  Decimal?  @db.Decimal(6, 2)
+  /// Defects seen (holes, scars, brand marks) and where; its photos are its files.
+  defects      String?
+  state        HideState @default(FULL)
+  version      Int       @default(1)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?   @db.Uuid
+
+  lot   Lot         @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  moves StockMove[]
+
+  @@unique([tenantId, code])
+  // The target of the moves' reference: a hide of the move's own site and lot.
+  @@unique([tenantId, siteId, lotId, id])
+}
+
+/// FULL → PARTLY_CUT | REMNANT | CONSUMED | SCRAPPED; between PARTLY_CUT and REMNANT freely; CONSUMED and SCRAPPED are
+/// final.
+enum HideState {
+  FULL
+  PARTLY_CUT
+  /// What is left after cutting, back in stock as an offcut.
+  REMNANT
+  CONSUMED
+  SCRAPPED
+}
+
+/// One movement of stock (SCM-189): the append-only ledger of the site's stock. Never changed or removed (the
+/// …_supply_guards triggers, for every login); a mistake is fixed with a reversal or an adjustment.
+/// @append-only
+model StockMove {
+  id             String          @id @db.Uuid
+  tenantId       String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that owns the stock: the site's.
+  companyId      String          @db.Uuid
+  siteId         String          @db.Uuid
+  reason         StockMoveReason
+  itemId         String          @db.Uuid
+  itemColourId   String?         @db.Uuid
+  /// Required for an item tracked by LOT or HIDE; a lot of the same item and colour.
+  lotId          String?         @db.Uuid
+  /// Required for an item tracked by HIDE; a hide of the lot.
+  hideId         String?         @db.Uuid
+  /// The location it leaves; null when it comes from outside the site's stock (a supplier, a work order, opening stock).
+  fromLocationId String?         @db.Uuid
+  /// The location it enters; null when it leaves the site's stock (to a work order, to scrap).
+  toLocationId   String?         @db.Uuid
+  /// Above 0, as entered, in `uom`.
+  quantity       Decimal         @db.Decimal(18, 4)
+  uom            Uom
+  /// Above 0, in the item's base unit: what the balances add up.
+  baseQuantity   Decimal         @db.Decimal(18, 4)
+  /// RECEIPT: the goods receipt line it posts.
+  receiptLineId  String?         @db.Uuid
+  /// ISSUE, RETURN: the work order (the production schema, W1-23, brings its table; a plain id until then).
+  workOrderId    String?         @db.Uuid
+  /// A human reference: the work order number, the count sheet, the supplier's DDT.
+  reference      String?
+  /// Why; required for an ADJUSTMENT, a COUNT difference and a SCRAP (SCM-192).
+  note           String?
+  /// The move this one reverses: the same move with its locations swapped. At most one reversal per move.
+  reversalOfId   String?         @db.Uuid
+  /// Unique in the tenant: the command's idempotency key, so a retried scan or request posts once.
+  idempotencyKey String
+  /// When it happened: the device's time for a floor scan (createdAt is the server's).
+  occurredAt     DateTime        @db.Timestamptz(3)
+  /// The floor device it was posted from.
+  deviceId       String?         @db.Uuid
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  /// The office user or floor worker who posted it.
+  createdById    String?         @db.Uuid
+
+  site         Site              @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  item         Item              @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  itemColour   ItemColour?       @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot          Lot?              @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  hide         Hide?             @relation(fields: [tenantId, siteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  fromLocation Location?         @relation("StockMoveFrom", fields: [tenantId, siteId, fromLocationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  toLocation   Location?         @relation("StockMoveTo", fields: [tenantId, siteId, toLocationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  receiptLine  GoodsReceiptLine? @relation(fields: [tenantId, siteId, receiptLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversalOf   StockMove?        @relation("StockMoveReversal", fields: [tenantId, siteId, reversalOfId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversals    StockMove[]       @relation("StockMoveReversal")
+  device       Device?           @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  valuations   StockValuation[]
+
+  @@unique([tenantId, idempotencyKey])
+  // The target of the reversals' and valuations' references: on the move's own site.
+  @@unique([tenantId, siteId, id])
+  // The balances: the moves of one stock key.
+  @@index([tenantId, siteId, itemId, lotId, hideId])
+}
+
+/// Why stock moved. Into the site's stock: OPENING, RECEIPT, RETURN; out of it: ISSUE, SCRAP; inside it: TRANSFER;
+/// either way: ADJUSTMENT, COUNT.
+enum StockMoveReason {
+  /// Stock the site held before the factory app (B-W1-35).
+  OPENING
+  /// Goods from a supplier, posting a goods receipt line.
+  RECEIPT
+  /// To a work order: only RELEASED stock.
+  ISSUE
+  /// Back from a work order (a remnant, unused material).
+  RETURN
+  TRANSFER
+  /// A correction with its reason (SCM-192).
+  ADJUSTMENT
+  /// A count difference.
+  COUNT
+  SCRAP
+}
+
+/// The value of one move that changes the site's stock value (A1 §2.6: a cost, office only): its signed base quantity
+/// (+ into the site's stock, − out of it), the unit cost it is valued at and the amount. Never changed or removed; a
+/// wrong value is corrected by the move's reversal and a new move, each valued.
+/// @append-only
+model StockValuation {
+  id             String               @id @db.Uuid
+  tenantId       String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The move's company and site.
+  companyId      String               @db.Uuid
+  siteId         String               @db.Uuid
+  moveId         String               @db.Uuid
+  /// The move's item and lot.
+  itemId         String               @db.Uuid
+  lotId          String?              @db.Uuid
+  /// The move's base quantity, signed: + when it entered the site's stock, − when it left it.
+  quantity       Decimal              @db.Decimal(18, 4)
+  /// Per base unit, in `currency`.
+  /// @grain cost
+  unitCost       Decimal              @db.Decimal(18, 6)
+  /// quantity × unit cost, rounded to minor units, signed like the quantity.
+  /// @grain cost
+  valueAmount    Int
+  currency       String               @default("EUR")
+  method         StockValuationMethod
+  /// Unique in the tenant: one valuation per move (`move:<moveId>`), so a retried handler values it once.
+  idempotencyKey String
+  note           String?
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  createdById    String?              @db.Uuid
+
+  site Site      @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  move StockMove @relation(fields: [tenantId, siteId, moveId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  item Item      @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot  Lot?      @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, idempotencyKey])
+}
+
+enum StockValuationMethod {
+  /// A receipt, at its purchase order line's price.
+  PURCHASE_PRICE
+  /// Stock leaving, at the cost its lot came in with.
+  LOT_COST
+  /// At the item's standard cost (opening stock, untracked items).
+  STANDARD_COST
+  /// Typed by the office with a reason (an adjustment).
+  MANUAL
+}
