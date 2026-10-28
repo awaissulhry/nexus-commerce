@@ -31,6 +31,10 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *   DELETE /api/reviews/reply-templates/:id
  *   POST   /api/reviews/reply-templates/:id/use    a person picked it in the Inbox reply box (its "Used" count)
  *   PATCH  /api/reviews/automation-rules/:id       { enabled } — review automations only (404 for any other rule)
+ *   GET    /api/reviews/automation-rules/:id       one review automation as the rules builder shows it, with what to pick
+ *   PUT    /api/reviews/automation-rules/:id       the rules builder's save: trigger settings, action, market, runs a day
+ *                                                  (never on/off or trial run; 409 when it changed since it was read)
+ * (logic in services/reviews/review-automation-builder{,.service}.ts)
  *
  * Reviews Insights (2026-10-26, PR E) — logic in services/reviews/review-{themes,products,alerts,fix-plan,spotlight}*.ts:
  *   GET    /api/reviews/insights/themes            ?channel&market&period&sort → themes, summary, Amazon topic states
@@ -62,6 +66,7 @@ import { logger } from '../utils/logger.js'
 import { sendEmail } from '../services/email/transport.js'
 import { triageReview } from '../services/reviews/review-triage.service.js'
 import { seedReviewTemplates } from '../services/reviews/review-templates.js'
+import { listReviewAutomations, readReviewAutomation, saveReviewAutomation } from '../services/reviews/review-automation-builder.service.js'
 import {
   previewReviewImport,
   applyReviewImport,
@@ -441,15 +446,30 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── SR.3 — review-domain automation rules ──────────────────────────
+  // Each item carries `words`: what it does (null for an unchanged template, which the page words itself).
   fastify.get('/reviews/automation-rules', async (request, _reply) => {
     const q = request.query as { limit?: string }
-    const limit = Math.min(Number(q.limit) || 100, 500)
-    const items = await prisma.automationRule.findMany({
-      where: { domain: 'reviews' },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    })
-    return { items, count: items.length }
+    return listReviewAutomations(Math.min(Number(q.limit) || 100, 500))
+  })
+
+  // The rules builder (/marketing/ads/rules-automation/builder/review-automation?ruleId=) reads and saves one here.
+  fastify.get<{ Params: { id: string } }>('/reviews/automation-rules/:id', async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store')
+    const read = await readReviewAutomation(request.params.id)
+    if (!read) {
+      reply.code(404)
+      return { error: 'not_found', message: 'Nexus could not find this review automation.' }
+    }
+    return read
+  })
+
+  fastify.put<{ Params: { id: string } }>('/reviews/automation-rules/:id', async (request, reply) => {
+    const result = await saveReviewAutomation(request.params.id, request.body, requestUserId(request))
+    if (result.ok === false) {
+      reply.code(result.code)
+      return { error: result.code === 404 ? 'not_found' : result.code === 409 ? 'conflict' : 'invalid', message: result.words }
+    }
+    return result
   })
 
   fastify.post('/reviews/automation-rules/seed-templates', async (_request, _reply) => {

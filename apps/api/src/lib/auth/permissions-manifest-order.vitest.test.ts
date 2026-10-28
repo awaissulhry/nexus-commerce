@@ -123,6 +123,9 @@ describe('permission manifest ordering', () => {
     ['POST', '/api/orders/bulk-request-reviews', 'orders.view'],
     ['POST', '/api/orders/:id/mark-delivered', 'orders.edit'],
     ['POST', '/api/reviews/automation-rules/seed-templates', 'reviews.manage'],
+    // The rules builder reads a review automation with reviews.view and saves it with reviews.manage.
+    ['GET', '/api/reviews/automation-rules/:id', 'reviews.view'],
+    ['PUT', '/api/reviews/automation-rules/:id', 'reviews.manage'],
     ['POST', '/api/fulfillment/returns/automation/apply', 'returns.process'],
     // The ads automation routes keep theirs (control).
     ['POST', '/api/advertising/automation/halt', 'ads.automation.manage'],

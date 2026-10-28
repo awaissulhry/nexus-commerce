@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   addressProblem, automationLastRun, automationWords, canRemove, everyLocal, loadTemplatesButton, maskEmail, pipelineSummary, removePlan, removedWords, sectionFlag,
-  sectionFromSearch, sourceActionHref, sourceLaterHeld, suppressionScope, suppressionWhy, suppressionsCsv, templateLanguagesWords, timeWords,
+  sectionFromSearch, sourceActionHref, suppressionScope, suppressionWhy, suppressionsCsv, templateLanguagesWords, timeWords,
   visibleSuppressions, type PipelineJob, type SuppressionRow,
 } from './settingsModel'
 
@@ -34,12 +34,9 @@ describe('sources and times', () => {
     expect(sourceActionHref({ kind: 'rules', label: 'Open requests', href: null })).toBe('/marketing/reviews/requests')
     expect(sourceActionHref({ kind: 'reconnect', label: 'Reconnect eBay Germany', href: '/settings/channels/ebay' })).toBe('/settings/channels/ebay')
     expect(sourceActionHref(null)).toBeNull()
-    // Only a source read from a later update holds its Connect, named as the channel writes it.
-    expect(sourceLaterHeld({ name: 'Etsy reviews', tone: 'neutral', later: 'Coming later', action: null })).toBe('Coming later: Nexus reads Etsy reviews in a later update.')
     expect(sourceActionHref({ kind: 'fetch', label: 'Fetch now', href: null, held: null })).toBeNull()
-    // eBay feedback is read today (only photos and AI topics come later): a fix without a link shows no Connect.
-    expect(sourceLaterHeld({ name: 'eBay feedback', tone: 'warning', later: 'Photos and AI topics: coming later', action: null })).toBeNull()
-    expect(sourceLaterHeld({ name: 'Shopify review app', tone: 'neutral', later: 'Live link: coming later', action: { kind: 'import', label: 'Import reviews…', href: null } })).toBeNull()
+    // The review app opens its connect window on the page, not a link.
+    expect(sourceActionHref({ kind: 'app', label: 'Connect a review app…', href: null })).toBeNull()
   })
 
   it('times in words', () => {
