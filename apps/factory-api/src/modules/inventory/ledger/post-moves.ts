@@ -14,6 +14,7 @@ import {
   type LocatedKey,
   type Shortfall,
 } from '@nexus/factory-domain/inventory/ledger/moves'
+import { baseQuantityOf } from '@nexus/factory-domain/inventory/ledger/units'
 import { costBasis, lotUnitCost, valuationKey, valueOfMove, type CostBasis, type ValuationMethod } from '@nexus/factory-domain/inventory/ledger/valuation'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
@@ -29,7 +30,9 @@ import { postedBy, stockContextOf, type StockContext } from './access'
  *     toLocationId, quantity: '53.2' }], { key: `inventory.transfer:${idempotencyKey}` })
  *
  * In the caller's transaction (READ COMMITTED, command()'s; each statement sees what committed before it), in order:
- *   1. every move is checked against the domain (factory-domain inventory/ledger moves) and the rows it names (site,
+ *   1. every move gets its base quantity (factory-domain inventory/ledger/units, on product/units: computed for a unit
+ *      the item converts, the caller's for a HIDE or ROLL, a mismatch refused), and is checked against the domain
+ *      (factory-domain inventory/ledger moves) and the rows it names (site,
  *      item, colour, lot, hide, locations, receipt line, the move it reverses), with the same rules as the
  *      …_supply_guards trigger, so the caller gets a clear 400 (paths `moves/<i>/<field>`, or the caller's) instead of a
  *      trigger message that a Prisma model call can lose. A floor device posts only at its own site and never a cost;
@@ -65,7 +68,10 @@ export interface MoveDraft {
   readonly quantity: string
   /** Default the item's base unit. */
   readonly uom?: Uom
-  /** In the item's base unit; required when `uom` is another unit (the caller converts). */
+  /**
+   * In the item's base unit. Computed for a unit the item converts (m² for an item in ft², its purchase or consumption
+   * unit): one sent must match it. Required for a unit of the item's own size (HIDE, SIDE, ROLL, CONE, BOX, SET).
+   */
   readonly baseQuantity?: string
   readonly receiptLineId?: string | null
   readonly workOrderId?: string | null
@@ -126,8 +132,19 @@ export class InsufficientStockError extends ConflictError {
 
 // ---- the rows a batch names --------------------------------------------------------------------------------------------
 
-const ITEM_SELECT = { id: true, code: true, tracking: true, baseUom: true, currency: true } as const
-type ItemRow = { id: string; code: string; tracking: ItemTracking; baseUom: Uom; currency: string; standardCost?: Prisma.Decimal | null }
+const ITEM_SELECT = { id: true, code: true, tracking: true, baseUom: true, purchaseUom: true, purchaseFactor: true, consumptionUom: true, consumptionFactor: true, currency: true } as const
+type ItemRow = {
+  id: string
+  code: string
+  tracking: ItemTracking
+  baseUom: Uom
+  purchaseUom: Uom
+  purchaseFactor: Prisma.Decimal
+  consumptionUom: Uom
+  consumptionFactor: Prisma.Decimal
+  currency: string
+  standardCost?: Prisma.Decimal | null
+}
 const LOT_SELECT = { id: true, siteId: true, itemId: true, itemColourId: true, code: true, qualityStatus: true, receiptLineId: true } as const
 const HIDE_SELECT = { id: true, siteId: true, lotId: true, itemId: true, code: true, state: true } as const
 const LOCATION_SELECT = { id: true, siteId: true, code: true, status: true } as const
@@ -236,9 +253,23 @@ export async function postMoves(tools: CommandTools, drafts: readonly MoveDraft[
     if (drafts.some((draft) => draft.cost)) throw new ForbiddenError('A floor device never sets a cost.')
   }
 
-  const moves = await completeKeys(tx, drafts)
-  const facts = await readFacts(tx, context, moves)
-  const problems = moves.flatMap((move, index) => checkDraft(move, index, facts, moves).map((issue) => ({ path: `${at(index)}/${issue.path}`, message: issue.message })))
+  const keyed = await completeKeys(tx, drafts)
+  const facts = await readFacts(tx, context, keyed)
+  // Each move's unit and base quantity (the product units module): computed for a unit the item converts, the caller's
+  // for a unit of the item's own size (a hide, a roll), refused when they disagree. A reversal keeps its original's.
+  const sizing = keyed.map((move) => {
+    const item = facts.items.get(move.itemId)
+    if (!item) return { move, problem: null }
+    const uom = move.uom ?? item.baseUom
+    if (move.reversalOfId && move.baseQuantity !== undefined) return { move: { ...move, uom }, problem: null }
+    const units = { baseUom: item.baseUom, purchaseUom: item.purchaseUom, purchaseFactor: item.purchaseFactor.toString(), consumptionUom: item.consumptionUom, consumptionFactor: item.consumptionFactor.toString() }
+    const base = baseQuantityOf({ quantity: move.quantity, uom, baseQuantity: move.baseQuantity }, units)
+    return base.problem ? { move, problem: base.problem } : { move: { ...move, uom, baseQuantity: base.baseQuantity }, problem: null }
+  })
+  const moves = sizing.map((entry) => entry.move)
+  const problems = sizing.flatMap((entry, index) =>
+    (entry.problem ? [entry.problem] : checkDraft(entry.move, index, facts, moves)).map((issue) => ({ path: `${at(index)}/${issue.path}`, message: issue.message })),
+  )
   if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'These moves break the stock rules.', problems)
 
   const rows = moves.map((move, index) => rowOf(move, index, facts, context, tools.now, options.key ?? null))
@@ -376,9 +407,9 @@ function checkDraft(move: KeyedDraft, index: number, facts: Facts, batch: readon
   if (!site) return [{ path: 'siteId', message: 'Not a site of the tenant.' }]
   const item = facts.items.get(move.itemId)
   if (!item) return [{ path: 'itemId', message: 'Not an item of the tenant.' }]
+  // Sized before (postMoves): the unit and the base quantity are set.
   const uom = move.uom ?? item.baseUom
-  const baseQuantity = move.baseQuantity ?? (uom === item.baseUom ? move.quantity : undefined)
-  if (baseQuantity === undefined) return [{ path: 'baseQuantity', message: `Entered in ${uom}: give the quantity in the item's base unit ${item.baseUom} too.` }]
+  const baseQuantity = move.baseQuantity ?? move.quantity
   const problems: Issue[] = moveProblems({ ...move, uom, baseQuantity, item: { tracking: item.tracking, baseUom: item.baseUom } })
 
   if (move.itemColourId && facts.colours.get(move.itemColourId)?.itemId !== move.itemId) problems.push({ path: 'itemColourId', message: 'Not a colour of this item.' })

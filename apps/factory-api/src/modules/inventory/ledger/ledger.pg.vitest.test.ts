@@ -84,6 +84,29 @@ describe('adjustments (SCM-192)', () => {
   })
 })
 
+describe('units (the product units module)', () => {
+  it('ft² → m²: a quantity in another unit of the base unit’s dimension gets its base quantity computed; a wrong one is refused', async () => {
+    const fabric = await adjust({ itemId: ids.fabric, locationId: ids.store, direction: 'IN', quantity: '10', uom: 'FT2' })
+    expect(fabric).toMatchObject({ quantity: '10.0000', uom: 'FT2', baseQuantity: '0.9290' })
+    expect(await onHand(ids.store, ids.fabric)).toBe('0.9290')
+    // Valued per base unit (m²): 0.9290 × 12.00 = 11.148 → 11.15.
+    expect(await valuationOf(fabric.id)).toMatchObject({ quantity: '0.9290', unitCost: '12.000000', valueAmount: 1115 })
+    const same = await adjust({ itemId: ids.fabric, locationId: ids.store, direction: 'IN', quantity: '10', uom: 'FT2', baseQuantity: '0.929' })
+    expect(same.baseQuantity).toBe('0.9290')
+    const wrong = await f.call('manager', 'POST', '/inventory/adjustments', { siteId: ids.siteA1, itemId: ids.fabric, locationId: ids.store, direction: 'IN', quantity: '10', uom: 'FT2', baseQuantity: '1', note: 'x' }, key())
+    expect(wrong.statusCode).toBe(400)
+    expect(wrong.json().error.issues).toEqual([{ path: 'body/baseQuantity', message: '10.0000 FT2 is 0.9290 M2; the base quantity sent (1) does not match it.' }])
+  })
+
+  it('a hide counted as one HIDE needs its measured area; a unit the item cannot convert is refused', async () => {
+    const hide = await f.call('manager', 'POST', '/inventory/adjustments', { siteId: ids.siteA1, itemId: ids.leather, hideId: ids.hide3, locationId: ids.store, direction: 'IN', quantity: '1', uom: 'HIDE', note: 'x' }, key())
+    expect(hide.statusCode).toBe(400)
+    expect(hide.json().error.issues.map((issue: Json) => issue.path)).toEqual(['body/baseQuantity'])
+    const kilos = await f.call('manager', 'POST', '/inventory/adjustments', { siteId: ids.siteA1, itemId: ids.leather, hideId: ids.hide3, locationId: ids.store, direction: 'IN', quantity: '1', uom: 'KG', note: 'x' }, key())
+    expect(kilos.json().error.issues).toEqual([{ path: 'body/uom', message: 'This item does not convert KG to its base unit FT2; use M2, DM2, FT2.' }])
+  })
+})
+
 describe('never below zero (SCM-194)', () => {
   it('answers a clear 409 before the database, and the database refuses a direct insert too', async () => {
     const before = await onHand(ids.store, ids.protector)

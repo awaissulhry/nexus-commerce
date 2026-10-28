@@ -3,6 +3,7 @@ import { amountMinor, currency, defineContract, id, input, instant, output, quan
 import { STOCK_MOVE_REASONS } from '@nexus/factory-domain/inventory/ledger/moves'
 import { VALUATION_METHODS } from '@nexus/factory-domain/inventory/ledger/valuation'
 import { money } from '@nexus/factory-domain/money/marked'
+import { UOMS } from '@nexus/factory-domain/product/units/units'
 
 /**
  * The stock ledger's contracts (SCM-189, SCM-191, SCM-192, SCM-193, SCM-195; A2 SCR-064). Quantities are decimal
@@ -11,7 +12,6 @@ import { money } from '@nexus/factory-domain/money/marked'
  * may not send them.
  */
 
-export const UOMS = ['PCS', 'PAIR', 'SET', 'M', 'CM', 'MM', 'M2', 'DM2', 'FT2', 'KG', 'G', 'L', 'HIDE', 'SIDE', 'ROLL', 'CONE', 'BOX'] as const
 const uom = z.enum(UOMS)
 const reason = z.enum(STOCK_MOVE_REASONS)
 const why = () => z.string().trim().min(1).max(500)
@@ -31,7 +31,10 @@ const amount = {
   quantity: quantity(),
   /** Default the item's base unit. */
   uom: uom.optional(),
-  /** The quantity in the item's base unit, when `uom` is another unit. */
+  /**
+   * The quantity in the item's base unit. Computed when `uom` is another unit the item converts (m² for ft²); one sent
+   * must match it. Required for a unit of the item's own size (HIDE, SIDE, ROLL, CONE, BOX, SET): what it measures.
+   */
   baseQuantity: quantity().optional(),
 }
 

@@ -17,6 +17,7 @@ import {
   type MoveFacts,
   type PostedMove,
 } from './moves'
+import { baseQuantityOf } from './units'
 import { costBasis, lotUnitCost, stockValue, valuationKey, valueOfMove } from './valuation'
 
 const SITE = '0195f5d0-0000-7000-8000-0000000000a1'
@@ -146,7 +147,7 @@ describe('the sides of a move', () => {
     expect(paths(facts({ lotId: LOT }))).toEqual(['lotId'])
     expect(paths(facts({ quantity: '2', baseQuantity: '3' }))).toEqual(['baseQuantity'])
     // Another unit (a hide in m² for an item counted in ft²): the base quantity is the caller's conversion.
-    expect(paths(facts({ item: { tracking: 'HIDE', baseUom: 'FT2' }, uom: 'M2', quantity: '4.9', baseQuantity: '52.7431', lotId: LOT, hideId: HIDE }))).toEqual([])
+    expect(paths(facts({ item: { tracking: 'HIDE', baseUom: 'FT2' }, uom: 'M2', quantity: '4.9', baseQuantity: '52.7432', lotId: LOT, hideId: HIDE }))).toEqual([])
   })
 })
 
@@ -280,5 +281,33 @@ describe('a count posts its differences as COUNT moves (PLAN §2.8, the year-end
       'lines/2/counted',
       'lines/3',
     ])
+  })
+})
+
+describe('a move’s base quantity (the product units module)', () => {
+  const leather = { baseUom: 'FT2', purchaseUom: 'HIDE', purchaseFactor: '52.5', consumptionUom: 'DM2', consumptionFactor: '0.10763910' } as const
+  const fabric = { baseUom: 'M2', purchaseUom: 'M', purchaseFactor: '1.5', consumptionUom: 'M2', consumptionFactor: '1' } as const
+
+  it('ft² ↔ m²: computed with the exact ratio, rounded half up to four decimals', () => {
+    expect(baseQuantityOf({ quantity: '10', uom: 'FT2' }, fabric)).toEqual({ baseQuantity: '0.9290' })
+    expect(baseQuantityOf({ quantity: '4.9', uom: 'M2' }, leather)).toEqual({ baseQuantity: '52.7432' })
+    // dm² for an item counted in ft²: the exact ratio, never the stored (rounded) consumption factor.
+    expect(baseQuantityOf({ quantity: '250', uom: 'DM2' }, leather)).toEqual({ baseQuantity: '26.9098' })
+    // The item's own conversion of another dimension: metres of a 1.5 m wide fabric.
+    expect(baseQuantityOf({ quantity: '12', uom: 'M' }, fabric)).toEqual({ baseQuantity: '18.0000' })
+  })
+
+  it('accepts the same base quantity from the caller and refuses another', () => {
+    expect(baseQuantityOf({ quantity: '10', uom: 'FT2', baseQuantity: '0.929' }, fabric)).toEqual({ baseQuantity: '0.9290' })
+    expect(baseQuantityOf({ quantity: '10', uom: 'FT2', baseQuantity: '0.93' }, fabric)).toEqual({
+      problem: { path: 'baseQuantity', message: '10.0000 FT2 is 0.9290 M2; the base quantity sent (0.93) does not match it.' },
+    })
+  })
+
+  it('a unit of the item’s own size (a hide, a roll) needs the measured base quantity; a unit it cannot convert is refused', () => {
+    expect(baseQuantityOf({ quantity: '1', uom: 'HIDE' }, leather).problem?.path).toBe('baseQuantity')
+    expect(baseQuantityOf({ quantity: '1', uom: 'HIDE', baseQuantity: '53.2' }, leather)).toEqual({ baseQuantity: '53.2' })
+    expect(baseQuantityOf({ quantity: '1', uom: 'KG' }, leather)).toEqual({ problem: { path: 'uom', message: 'This item does not convert KG to its base unit FT2; use M2, DM2, FT2, HIDE.' } })
+    expect(baseQuantityOf({ quantity: '3', uom: 'FT2' }, leather)).toEqual({ baseQuantity: '3' })
   })
 })

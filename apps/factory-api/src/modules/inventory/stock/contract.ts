@@ -3,7 +3,7 @@ import { amountMinor, currency, defineContract, id, input, instant, output, unit
 import { ITEM_TRACKINGS, STOCK_MOVE_REASONS } from '@nexus/factory-domain/inventory/ledger/moves'
 import { LOT_QUALITY_STATUSES } from '@nexus/factory-domain/inventory/stock/overview'
 import { money } from '@nexus/factory-domain/money/marked'
-import { UOMS } from '../ledger/contract'
+import { UOMS } from '@nexus/factory-domain/product/units/units'
 
 /**
  * The stock overview's, the stock card's and the ledger check's contracts (SCM-190, SCM-191, SCM-258, SCM-280; A2

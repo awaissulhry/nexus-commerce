@@ -17,7 +17,7 @@ import { systemContext } from '../../../../platform/outbox/system'
  *
  *   tenant A  company A (sites A1 and A2), company A2 (site C1); tenant B  company B (site B1)
  *   items     LEATHER (hide by hide, ft², standard cost 6.25), LINING (by lot, m, 3.10), PROTECTOR (untracked, pieces,
- *             4.00), THREAD (untracked, cones, no standard cost); tenant B: its own LINING
+ *             4.00), THREAD (untracked, cones, no standard cost), FABRIC (untracked, m², 12.00); tenant B: its own LINING
  *   lots      leather RELEASED (hides H1 53.2 ft², H2 51.8 ft²) and QUARANTINE (hide H3 40 ft²); lining RELEASED
  *   locations A1: STORE with BIN-01 and BIN-02 inside, CUT; A2: STORE; C1: STORE; B1: STORE (no stock anywhere yet)
  *   devices   one at A1, one at A2 (floor sessions)
@@ -69,6 +69,7 @@ function makeIds() {
     lining: newId(),
     protector: newId(),
     thread: newId(),
+    fabric: newId(),
     liningB: newId(),
     leatherBlack: newId(),
     liningGrey: newId(),
@@ -143,6 +144,7 @@ export async function startInventoryFixture(label: string): Promise<InventoryFix
   await item(ids.lining, ids.tenantA, 'TEST-LINING', 'LINING', 'LOT', 'M', '3.10')
   await item(ids.protector, ids.tenantA, 'TEST-PROTECTOR', 'PROTECTOR', 'NONE', 'PCS', '4.00')
   await item(ids.thread, ids.tenantA, 'TEST-THREAD', 'THREAD', 'NONE', 'CONE', null)
+  await item(ids.fabric, ids.tenantA, 'TEST-FABRIC', 'TEXTILE', 'NONE', 'M2', '12.00')
   await item(ids.liningB, ids.tenantB, 'TEST-LINING', 'LINING', 'LOT', 'M', '3.10')
   await admin(`INSERT INTO "ItemColour" (id, "tenantId", "itemId", code, name) VALUES ($1, $2, $3, 'BLK', 'Black'), ($4, $2, $5, 'GRY', 'Grey')`, [ids.leatherBlack, ids.tenantA, ids.leather, ids.liningGrey, ids.lining])
 
