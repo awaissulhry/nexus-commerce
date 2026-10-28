@@ -90,6 +90,8 @@ model Company {
   files               StoredFile[]
   // links.prisma: the one-off links that open the company's records.
   oneOffLinks         OneOffLink[]
+  // threads.prisma: the threads of the company's records.
+  threads             Thread[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.
@@ -124,6 +126,8 @@ model Site {
   devices       Device[]
   workers       Worker[]
   floorSettings FloorSettings[]
+  // threads.prisma: the threads of the site's records.
+  threads       Thread[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])

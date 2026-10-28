@@ -1,0 +1,147 @@
+// Record threads (plan A1 §2.3 Thread / Message, §3.7; features COL-001, COL-002, COL-003, COL-020). Every record
+// (an order, a quote, a PO, a lot, a customer …) has at most ONE thread: its conversation. Staff write internal notes
+// into it; the email steps write the mail sent to the record's customer or supplier (OUTBOUND) and their replies
+// (INBOUND) into the same thread, found by its reply address (`r-<replyToken>@reply.<domain>`). The record's timeline
+// (COL-002) is not stored: apps/factory-api's platform/threads merges the record's audit rows, the thread's messages and
+// the record's files when it is read, so nothing is written twice.
+//
+// Who sees what (COL-003: internal notes never reach a customer): a message is for the OFFICE only (every internal
+// note) or shared with the record's party (PARTNER: what was sent to them or came from them). `partyId` is set on a
+// message exactly when it is shared, and is then the thread's party (the second reference below pins it), so the
+// partner role's policy (partyId = its party) reads only the shared messages of its own records. The floor reads none.
+//
+// A thread's company, site and party are the record's own, read from the record when the thread is made (a resolver
+// per record type in the API), never sent by the caller. Messages are append-only (a correction is a new message);
+// rows of either table are never deleted. The guard triggers of the hand-written …_threads_guards migration hold the
+// rules for every login.
+
+/// The one conversation of one record (COL-001), made when its first message is written.
+model Thread {
+  id            String       @id @db.Uuid
+  tenantId      String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The record's company (null: a tenant-wide record). Never changes.
+  companyId     String?      @db.Uuid
+  /// The record's site, when the record sits on one (a work order, a lot). Never changes.
+  siteId        String?      @db.Uuid
+  /// The record's party (its customer, supplier or subcontractor): the only party its shared messages reach. Set once,
+  /// when the thread is made or when the record first has one; never changed after. The parties module adds its
+  /// reference.
+  partyId       String?      @db.Uuid
+  /// The record: its model name (`Quote`, `PurchaseOrder`) and id. One thread per record.
+  recordType    String
+  recordId      String       @db.Uuid
+  /// The reply address's secret part (`r-<replyToken>@reply.<domain>`, COL-020): 26 random lower-case base32
+  /// characters (130 bits), unique across every tenant, so the email-in step finds the thread from the address alone.
+  /// Never changes; never shown to a partner role.
+  replyToken    String
+  /// OPEN, or CLOSED (no new notes; the email-in step decides what a reply to a closed thread does).
+  status        ThreadStatus @default(OPEN)
+  /// When the newest message entered the thread (null: none yet). Moves only later. Hidden from the partner role: it
+  /// counts internal notes too.
+  lastMessageAt DateTime?    @db.Timestamptz(3)
+  version       Int          @default(1)
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  /// Who wrote the first message (a user), or null (the system, an inbound mail).
+  createdById   String?      @db.Uuid
+
+  company        Company?  @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // A site-bound record belongs to a company, and the site is one of its sites.
+  site           Site?     @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  messages       Message[] @relation("ThreadMessages")
+  sharedMessages Message[] @relation("ThreadSharedMessages")
+
+  @@unique([tenantId, recordType, recordId])
+  @@unique([replyToken])
+  // The targets of the messages' tenant-safe references: the thread, and the thread with its party.
+  @@unique([tenantId, id])
+  @@unique([tenantId, id, partyId])
+  @@index([tenantId, partyId])
+}
+
+/// OPEN → CLOSED → OPEN (threads.manage).
+enum ThreadStatus {
+  OPEN
+  CLOSED
+}
+
+/// One message of a thread: an internal note, a message sent to the record's party, or one received from it. Never
+/// changes and is never deleted (a correction is a new message).
+/// @append-only
+model Message {
+  /// UUIDv7 from newId(), so a thread's messages sort in time order.
+  id                String            @id @db.Uuid
+  tenantId          String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  threadId          String            @db.Uuid
+  /// The thread's party, set exactly when the message is shared with it (audience PARTNER): the partner role's policy
+  /// key. Null on every internal note.
+  partyId           String?           @db.Uuid
+  direction         MessageDirection
+  /// OFFICE: staff only (every internal note). PARTNER: shared with the thread's party (sent to it or received from it).
+  audience          MessageAudience
+  channel           MessageChannel
+  authorKind        MessageAuthorKind
+  /// The user (USER), floor worker (WORKER) or party contact (PARTY) who wrote it; null for the system and for an
+  /// inbound sender who is not a known contact. Hidden from the partner role.
+  authorId          String?           @db.Uuid
+  /// The author's name as shown when it was written (the portal and the mail show it).
+  authorName        String?
+  /// The text: what staff typed, or the plain-text part of an inbound mail.
+  bodyText          String
+  /// The sanitised HTML of an inbound mail (the email-in step's sanitiser). Never set from the app's composer.
+  bodyHtml          String?
+  /// The office users this internal note notifies (an event per user). Hidden from the partner role.
+  mentionedUserIds  String[]          @default([]) @db.Uuid
+  /// The record's files attached to it, in order (StoredFile ids; files are never deleted, only marked DELETED). Each
+  /// reader sees only the ones its own file rules let it see.
+  attachmentFileIds String[]          @default([]) @db.Uuid
+  /// The RFC 5322 Message-ID (outbound: ours; inbound: the sender's), for In-Reply-To and References and to take an
+  /// inbound mail once. Unique in the tenant.
+  emailMessageId    String?
+  /// When it entered the thread: posted (server time) or received (an inbound mail's arrival).
+  at                DateTime          @db.Timestamptz(3)
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+
+  thread       Thread  @relation("ThreadMessages", fields: [tenantId, threadId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // A shared message names its thread's own party: the reference is checked whenever partyId is set.
+  sharedThread Thread? @relation("ThreadSharedMessages", fields: [tenantId, threadId, partyId], references: [tenantId, id, partyId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, emailMessageId])
+  // A thread's messages, newest first (the record panel and the timeline).
+  @@index([tenantId, threadId, at])
+  @@index([tenantId, partyId])
+}
+
+/// Which way a message went.
+enum MessageDirection {
+  /// Written by staff for staff (COL-003): never reaches a party.
+  INTERNAL_NOTE
+  /// Sent to the record's party (the email-out step; the portal later).
+  OUTBOUND
+  /// Received from the record's party (the email-in step; the portal later).
+  INBOUND
+}
+
+/// Who may read a message.
+enum MessageAudience {
+  /// The office staff only.
+  OFFICE
+  /// The office and the thread's party (its portal users and its one-off link for the record).
+  PARTNER
+}
+
+/// How a message came in or went out.
+enum MessageChannel {
+  /// Written in the factory app.
+  APP
+  EMAIL
+  PORTAL
+}
+
+/// Who wrote a message.
+enum MessageAuthorKind {
+  USER
+  WORKER
+  PARTY
+  SYSTEM
+}
