@@ -160,6 +160,15 @@ model Site {
   printers      Printer[]
   // sales.prisma: the sales order lines it makes.
   salesOrderLines SalesOrderLine[]
+  // supply.prisma: the purchase orders delivered to it and its planning runs.
+  purchaseOrders  PurchaseOrder[]
+  planningRuns    PlanningRun[]
+  // inventory.prisma: its locations, goods receipts, lots, stock moves and their values.
+  locations       Location[]
+  goodsReceipts   GoodsReceipt[]
+  lots            Lot[]
+  stockMoves      StockMove[]
+  stockValuations StockValuation[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])

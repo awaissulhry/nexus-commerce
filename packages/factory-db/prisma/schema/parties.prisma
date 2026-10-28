@@ -66,6 +66,12 @@ model Party {
   quotes              Quote[]
   salesOrders         SalesOrder[]
   depositRequests     DepositRequest[]
+  // supply.prisma: as a supplier, its purchase orders and the requirements it is suggested for.
+  purchaseOrders       PurchaseOrder[]
+  materialRequirements MaterialRequirement[]
+  // inventory.prisma: as a supplier, the goods received from it and its lots.
+  goodsReceipts        GoodsReceipt[]
+  lots                 Lot[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the party's rows.
@@ -178,6 +184,8 @@ model PartyContact {
   inboundEmails       InboundEmail[]
   // sales.prisma: the quotes sent to them.
   quotes              Quote[]
+  // supply.prisma: the purchase orders sent to them.
+  purchaseOrders      PurchaseOrder[]
 
   // The target of the measurement profiles' reference: a rider is a contact of the profile's own party.
   @@unique([tenantId, partyId, id])
