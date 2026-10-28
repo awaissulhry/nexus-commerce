@@ -1,0 +1,221 @@
+/*
+ * DS floor kit — AqlCounter (gap G6). Every size reads `--nds-density-*`; tones are the status pairs the contrast gate
+ * measures (`--nds-<tone>-text` on `--nds-<tone>-soft`, the stripe in `--nds-<tone>`).
+ */
+.nds-floor-aql {
+  container: nds-floor-aql / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+  padding: var(--nds-space-16);
+  border: 1px solid var(--nds-border);
+  border-inline-start: var(--nds-space-6) solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+}
+.nds-floor-aql[data-verdict='accept'] {
+  border-inline-start-color: var(--nds-success);
+}
+.nds-floor-aql[data-verdict='reject'] {
+  border-inline-start-color: var(--nds-danger);
+}
+
+.nds-floor-aql-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+}
+.nds-floor-aql-title {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-floor-aql-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-height: var(--nds-density-control-h-sm);
+  padding: var(--nds-space-4) var(--nds-space-16);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-floor-aql-verdict[data-verdict='accept'] {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-floor-aql-verdict[data-verdict='reject'] {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+
+/* The sample: the count and its bar, then − and the main "+ one piece". */
+.nds-floor-aql-sample {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-density-gap) var(--nds-density-target-gap);
+}
+.nds-floor-aql-count {
+  display: flex;
+  flex: 1 1 14rem;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.nds-floor-aql-name {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.nds-floor-aql-numeral {
+  font-size: calc(var(--nds-density-font-numeral) * 1.25);
+  font-weight: var(--nds-font-weight-extrabold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.nds-floor-aql-of {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.nds-floor-aql-bar {
+  display: block;
+  height: var(--nds-space-10);
+  overflow: hidden;
+  border-radius: var(--nds-radius-round);
+  border: 1px solid var(--nds-border);
+  background: var(--nds-surface-sunken);
+}
+.nds-floor-aql-bar-fill {
+  display: block;
+  width: calc(var(--nds-aql-done, 0) * 100%);
+  height: 100%;
+  background: var(--nds-primary);
+}
+.nds-floor-aql[data-verdict='accept'] .nds-floor-aql-bar-fill {
+  background: var(--nds-success);
+}
+.nds-floor-aql[data-verdict='reject'] .nds-floor-aql-bar-fill {
+  background: var(--nds-danger);
+}
+.nds-floor-aql-sample-actions {
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  gap: var(--nds-density-target-gap);
+}
+
+/* One row per defect class: icon, name over its numbers, the state word, then − count +. */
+.nds-floor-aql-classes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-floor-aql-class {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-raised);
+}
+.nds-floor-aql-class-icon {
+  padding: calc(var(--nds-density-icon) * 0.2);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+.nds-floor-aql-class[data-state='limit'] {
+  border-color: var(--nds-warning);
+}
+.nds-floor-aql-class[data-state='limit'] :is(.nds-floor-aql-class-icon, .nds-floor-aql-class-status) {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.nds-floor-aql-class[data-state='reject'] {
+  border-color: var(--nds-danger);
+}
+.nds-floor-aql-class[data-state='reject'] :is(.nds-floor-aql-class-icon, .nds-floor-aql-class-status) {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-floor-aql-class-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.nds-floor-aql-class-name {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+.nds-floor-aql-class-meta {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-floor-aql-class-status {
+  padding: var(--nds-space-4) var(--nds-space-12);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-bold);
+  white-space: nowrap;
+}
+.nds-floor-aql-class-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-density-gap);
+}
+.nds-floor-aql-class-number {
+  min-width: calc(var(--nds-density-font-numeral) * 1.2);
+  font-size: var(--nds-density-font-numeral);
+  font-weight: var(--nds-font-weight-extrabold);
+  line-height: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Narrow (a phone): the numbers and buttons move under the class name; "+ one piece" takes the rest of its row. */
+@container nds-floor-aql (max-width: 33.99rem) {
+  .nds-floor-aql-class {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .nds-floor-aql-class-count {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+  .nds-floor-aql-sample-actions {
+    flex-basis: 100%;
+  }
+  .nds-floor-aql-sample-actions > .nds-floor-btn:last-child {
+    flex: 1 1 auto;
+  }
+}
+/* Very narrow (under 20 rem): one column — "+ one piece" full width on top of −, a class's − count + across its row. */
+@container nds-floor-aql (max-width: 19.99rem) {
+  .nds-floor-aql-sample-actions {
+    flex-direction: column-reverse;
+    gap: var(--nds-density-gap);
+  }
+  .nds-floor-aql-class {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .nds-floor-aql-class-status {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .nds-floor-aql-class-count {
+    justify-content: space-between;
+  }
+}

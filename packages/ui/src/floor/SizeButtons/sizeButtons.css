@@ -1,0 +1,110 @@
+/*
+ * DS floor kit — SizeButtons (gap G6). Every size reads `--nds-density-*`; colours are semantic `--nds-*` roles.
+ */
+.nds-floor-sizes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.nds-floor-sizes-label {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+}
+/* As many a row as fit, each at least the PIN key's size (80 px on the floor tier), 8 mm apart. */
+.nds-floor-sizes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--nds-density-control-h-primary) * 1.25), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+.nds-floor-size {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  min-height: calc(var(--nds-density-control-h-primary) * 1.25);
+  padding: var(--nds-space-6) var(--nds-space-4);
+  border: 2px solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-raised);
+  color: var(--nds-text);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) {
+  .nds-floor-size:hover:not([aria-disabled='true']):not([aria-checked='true']) {
+    background: var(--nds-surface-hover);
+  }
+}
+.nds-floor-size:active:not([aria-disabled='true']) {
+  transform: translateY(1px);
+}
+.nds-floor-size:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-primary);
+  outline-offset: var(--nds-density-focus-offset);
+}
+.nds-floor-size-label {
+  max-width: 100%;
+  font-size: calc(var(--nds-density-font-numeral) * 0.8);
+  font-weight: var(--nds-font-weight-extrabold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.nds-floor-size-count,
+.nds-floor-size-done {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-2);
+}
+.nds-floor-size-done .nds-floor-icon {
+  width: calc(var(--nds-density-icon) * 0.75);
+  height: calc(var(--nds-density-icon) * 0.75);
+}
+.nds-floor-size-hint {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+
+/* Done: a tick, on the sunken ground. */
+.nds-floor-size[data-state='done'] {
+  border-color: var(--nds-border);
+  background: var(--nds-surface-sunken);
+}
+.nds-floor-size[data-state='done'] .nds-floor-size-done {
+  padding: 0 var(--nds-space-8);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+/* Picked: primary border, a thick bar under it, a tinted ground. */
+.nds-floor-size[aria-checked='true'] {
+  border-color: var(--nds-primary);
+  border-block-end-width: var(--nds-space-8);
+  background: var(--nds-wash-primary);
+}
+.nds-floor-size[aria-checked='true'] .nds-floor-size-count {
+  color: var(--nds-text);
+}
+/* Held: in view, announced, inert. */
+.nds-floor-size[aria-disabled='true'] {
+  border-style: dashed;
+  opacity: 0.55;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nds-floor-size:active {
+    transform: none;
+  }
+}

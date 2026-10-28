@@ -1,0 +1,279 @@
+/*
+ * DS — LabelPreview and Code128 (gap G11).
+ *
+ * 🔴 A label is paper and ink: white with black print in BOTH themes, so the preview shows what prints and a barcode can
+ * be scanned off the screen (a scanner reads dark bars on a light ground only). The two roles are the theme-invariant
+ * pair the light tooltip already uses (`--nds-tooltip-light-bg` white, `--nds-tooltip-light-fg` #1c2530: 15.9:1),
+ * named here once as the label's paper and ink. Everything around the label (frame, print state, buttons) follows the
+ * theme and the page density (`--nds-density-*`) as usual.
+ *
+ * Inside the label every size is in label millimetres: `--nds-label-mm` is one millimetre of the label as drawn, from
+ * the label's own width (container units), so a label squeezed into a narrow column keeps its proportions, text and all.
+ */
+
+/* ── Code128 ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.nds-code128 {
+  --nds-label-paper: var(--nds-tooltip-light-bg);
+  --nds-label-ink: var(--nds-tooltip-light-fg);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  background: var(--nds-label-paper);
+  color: var(--nds-label-ink);
+}
+.nds-code128-bars {
+  display: block;
+  width: 100%;
+  height: var(--nds-code128-h, 3rem);
+}
+.nds-code128-text {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nds-code128.is-invalid {
+  align-items: center;
+  justify-content: center;
+  min-height: var(--nds-code128-h, 3rem);
+  border: 1px dashed var(--nds-label-ink);
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--nds-label-paper) 0 6px,
+    color-mix(in srgb, var(--nds-label-ink) 18%, var(--nds-label-paper)) 6px 9px
+  );
+}
+.nds-code128-invalid {
+  padding: 0 var(--nds-space-6);
+  background: var(--nds-label-paper);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-bold);
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+/* ── LabelPreview ────────────────────────────────────────────────────────────────────────────────────────────────── */
+.nds-label-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+.nds-label-figure {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  margin: 0;
+  padding: var(--nds-space-12);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+}
+.nds-label-preview[data-status='failed'] .nds-label-figure {
+  outline: 2px dashed var(--nds-danger);
+  outline-offset: -2px;
+}
+
+/* The label: its own size (mm × scale px), never wider than the space, its proportions kept. */
+.nds-label {
+  --nds-label-paper: var(--nds-tooltip-light-bg);
+  --nds-label-ink: var(--nds-tooltip-light-fg);
+  container-type: inline-size;
+  flex: 0 1 auto;
+  width: min(100%, calc(var(--nds-label-w) * var(--nds-label-scale) * 1px));
+  aspect-ratio: var(--nds-label-w) / var(--nds-label-h);
+  overflow: hidden;
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-label-paper);
+  color: var(--nds-label-ink);
+  box-shadow: var(--nds-shadow-card);
+}
+.nds-label-body {
+  --nds-label-mm: calc(100cqw / var(--nds-label-w));
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--nds-label-mm) * 1);
+  height: 100%;
+  padding: calc(var(--nds-label-mm) * var(--nds-label-pad));
+  font-family: var(--nds-font-sans);
+  font-size: calc(var(--nds-label-mm) * 2.2);
+  line-height: 1.15;
+}
+
+/* Text heights in label mm — `LABEL_TEXT_MM` in labelLayout.ts (a test holds the two together). */
+.nds-label [data-size='sm'] {
+  font-size: calc(var(--nds-label-mm) * 2.2);
+}
+.nds-label [data-size='md'] {
+  font-size: calc(var(--nds-label-mm) * 3);
+}
+.nds-label [data-size='lg'] {
+  font-size: calc(var(--nds-label-mm) * 4.2);
+}
+.nds-label [data-size='xl'] {
+  font-size: calc(var(--nds-label-mm) * 6);
+}
+
+.nds-label-title {
+  font-weight: var(--nds-font-weight-extrabold);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.nds-label-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.nds-label-text[data-bold='true'] {
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-label-text[data-align='center'] {
+  text-align: center;
+}
+.nds-label-text[data-align='end'] {
+  text-align: end;
+}
+
+.nds-label-fields {
+  display: grid;
+  grid-template-columns: repeat(var(--nds-label-cols, 2), minmax(0, 1fr));
+  gap: calc(var(--nds-label-mm) * 0.8) calc(var(--nds-label-mm) * 2);
+  margin: 0;
+}
+.nds-label-field {
+  min-width: 0;
+}
+.nds-label-field > dt {
+  font-size: calc(var(--nds-label-mm) * 1.8);
+  font-weight: var(--nds-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.nds-label-field > dd {
+  margin: 0;
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.nds-label-barcode {
+  --nds-code128-h: calc(var(--nds-label-mm) * var(--nds-label-bar-h, 10));
+  flex: none;
+}
+.nds-label-barcode .nds-code128-text,
+.nds-label-barcode .nds-code128-invalid {
+  font-size: calc(var(--nds-label-mm) * 2.4);
+}
+
+/* QR codes and marks: an app-drawn image in a square of `--nds-label-square` mm. */
+.nds-label-square {
+  display: inline-flex;
+  flex: none;
+  width: calc(var(--nds-label-mm) * var(--nds-label-square));
+  height: calc(var(--nds-label-mm) * var(--nds-label-square));
+}
+.nds-label-square > :is(svg, img, canvas) {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.nds-label-square-empty {
+  flex: 1;
+  border: calc(var(--nds-label-mm) * 0.3) dashed var(--nds-label-ink);
+}
+
+.nds-label-row {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(var(--nds-label-mm) * 2);
+  min-width: 0;
+}
+.nds-label-row[data-align='center'] {
+  align-items: center;
+}
+.nds-label-row[data-align='end'] {
+  align-items: flex-end;
+}
+.nds-label-row > :not(.nds-label-square) {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.nds-label-rule {
+  flex: none;
+  width: 100%;
+  height: 0;
+  margin: 0;
+  border: 0;
+  border-top: calc(var(--nds-label-mm) * 0.3) solid var(--nds-label-ink);
+}
+.nds-label-fill {
+  flex: 1 1 auto;
+}
+
+/* ── Print state: icon + word + detail in its tone, then Retry and the app's actions ────────────────────────────── */
+.nds-label-print {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+.nds-label-print-state {
+  display: flex;
+  flex: 1 1 14rem;
+  align-items: center;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  min-height: var(--nds-density-control-h);
+  padding: var(--nds-space-6) var(--nds-space-14);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+}
+.nds-label-print-state[data-status='sent'] {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+.nds-label-print-state[data-status='printed'] {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-label-print-state[data-status='failed'] {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-label-print-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: var(--nds-density-icon);
+  height: var(--nds-density-icon);
+}
+.nds-label-print-icon > svg {
+  width: 100%;
+  height: 100%;
+}
+.nds-label-print-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.nds-label-print-word {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-label-print-detail {
+  font-size: var(--nds-density-font-label);
+  overflow-wrap: anywhere;
+}
+.nds-label-print-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-gap);
+}

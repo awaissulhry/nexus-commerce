@@ -137,6 +137,9 @@ import { ChangeValueExample } from './ChangeValueExample'
 import { CountdownExample } from './CountdownExample'
 import { DensityTiersExample } from './DensityTiersExample'
 import { FloorKitExample } from './floor/FloorKitExample'
+import { FloorCountsExample } from './quantity/FloorCountsExample'
+import { LabelPreviewExample } from './labels/LabelPreviewExample'
+import { SignBlockExample } from './sign/SignBlockExample'
 import { GridRowVerbsExample } from './GridRowVerbsExample'
 import { FamilyFooterFrameExample } from './FamilyFooterFrameExample'
 import { SwitchColumnExample } from './SwitchColumnExample'
@@ -1530,6 +1533,9 @@ export function TokenCatalog() {
       </Section>
 
       <Section title="Floor kit" desc="Parts for the factory's floor tablets, on the floor density tier: frame, operator chip, offline banner, idle sign-out, Help, scan input, PIN pad, tiles, action bar, list rows and confirm feedback (gaps G2 G3 G4 G5 G8; packages/ui/src/floor)."><FloorKitExample /></Section>
+      <Section title="Floor counts" desc="Counting on the floor tier: the quantity pad (big number, − and +, digit pad, quick values), size buttons with what is left per size, and the AQL sample counter (gap G6; packages/ui/src/floor/QuantityPad, SizeButtons)."><FloorCountsExample /></Section>
+      <Section title="Label preview" desc="Labels as data drawn to scale — bundle ticket, hide tag, garment PPE label, badge, carrier label — with Code 128 drawn here, QR and pictograms from the app, and the print state with retry (gap G11; packages/ui/src/components/LabelPreview)."><LabelPreviewExample /></Section>
+      <Section title="Sign and accept" desc="Accept by typing your name: what is accepted, what it means, ticks, the typed name matched loosely, an optional email check, busy, done and held states, on the comfortable tier of a link page (gap G12; packages/ui/src/components/SignBlock)."><SignBlockExample /></Section>
 
       <Section title="Radius">
         <Card>
