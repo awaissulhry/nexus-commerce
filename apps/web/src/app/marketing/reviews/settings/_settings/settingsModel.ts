@@ -64,6 +64,8 @@ export interface AutomationRule {
   lastEvaluatedAt: string | null
   lastMatchedAt: string | null
   matchCount: number
+  /** What it does in words, from its own settings; null for a template as it was loaded (worded below). */
+  words?: string | null
 }
 
 export interface ReplyTemplateRow {
@@ -316,8 +318,8 @@ const AUTOMATION_WORDS: Record<string, string> = {
   'Create A+ module from review spike': 'When complaints about one theme rise 2.5 times faster than usual or more, the AI drafts an A+ module that answers them and saves it as an A+ draft in Nexus. A person approves it before anything is published.',
 }
 
-export function automationWords(rule: Pick<AutomationRule, 'name' | 'description'>): string {
-  return AUTOMATION_WORDS[rule.name] ?? rule.description ?? '—'
+export function automationWords(rule: Pick<AutomationRule, 'name' | 'description' | 'words'>): string {
+  return rule.words ?? AUTOMATION_WORDS[rule.name] ?? rule.description ?? '—'
 }
 
 /**

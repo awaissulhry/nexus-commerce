@@ -13,6 +13,7 @@ import {
   insightsHref,
   productReviewsHref,
   requestsHref,
+  reviewAutomationEditHref,
   reviewsSettingsHref,
   ruleHref,
   withQuery,
@@ -67,6 +68,7 @@ describe('reviews links', () => {
       channelHref('AMAZON'), channelHref('AMAZON', 'IT'), channelHref('EBAY'), channelHref('EBAY', 'GB'), channelHref('ETSY'), channelHref('SHOPIFY'),
       rulesHref(), timingHref(),
       needsReplyHref({ channel: 'ETSY' }), etsyClosingHref(), etsyClosedHref(),
+      reviewAutomationEditHref('rule-1'),
     ]
     for (const href of hrefs) expect(isPage(href), href).toBe(true)
   })

@@ -23,6 +23,8 @@ const NAV_PERMS: Array<[string, string]> = [
   ['/fleet', 'pages.advertising'],
   ['/marketing/advertising', 'pages.advertising'],
   ['/marketing/ads', 'pages.advertising'],
+  // A review automation opens in the rules builder (Reviews › Settings › Automations › Edit): a Reviews page there.
+  ['/marketing/ads/rules-automation/builder/review-automation', 'pages.reviews'],
   ['/marketing/reviews', 'pages.reviews'],
   ['/marketing', 'pages.marketing'],
   ['/products', 'pages.products'],
