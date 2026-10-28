@@ -39,13 +39,15 @@ redis.on('error', () => {
   redisDown = true
 })
 
-// Office sign-in: the authenticator (a one-off link's token in x-factory-link, platform/links, else the office session
-// cookie) and the auth and link routes' services. Floor and portal sessions come with their steps; until then those
-// requests have no session (401).
+// Office sign-in: the authenticator (a one-off link's token in x-factory-link, platform/links; else a floor session
+// cookie, platform/auth/floor; else the office session cookie) and the auth, floor and link routes' services. Portal
+// sessions come with their step; until then those requests have no session (401).
 const officeAuth = createOfficeAuth({
   database,
   environment: env.FACTORY_ENV,
   cookieSecret: env.FACTORY_COOKIE_SECRET,
+  pinPepper: env.FACTORY_PIN_PEPPER,
+  pinPepperPrevious: env.FACTORY_PIN_PEPPER_PREVIOUS,
   webOrigin: env.FACTORY_WEB_ORIGIN,
 })
 

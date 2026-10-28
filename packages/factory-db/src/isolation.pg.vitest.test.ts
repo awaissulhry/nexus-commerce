@@ -4,6 +4,7 @@ import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
 import { seed as seedFiles } from '../seed/files'
+import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedLinks } from '../seed/links'
 import { seed as seedNumbering } from '../seed/numbering'
@@ -95,6 +96,8 @@ beforeAll(async () => {
   await seedFiles({ db: factory, namespace: 'iso-b' })
   await seedLinks({ db: factory, namespace: 'iso-a' })
   await seedLinks({ db: factory, namespace: 'iso-b' })
+  await seedFloorAuth({ db: factory, namespace: 'iso-a' })
+  await seedFloorAuth({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -105,7 +108,12 @@ afterAll(async () => {
 it('covers every classified table and every runtime role', () => {
   expect(classified.map(({ model }) => model.name).sort()).toEqual([
     'AuditLog',
+    'Badge',
     'Company',
+    'Device',
+    'DeviceEnrolment',
+    'FloorSession',
+    'FloorSettings',
     'IdempotencyReceipt',
     'InboundWebhook',
     'IntegrationAccount',
@@ -128,6 +136,8 @@ it('covers every classified table and every runtime role', () => {
     'Tenant',
     'User',
     'WorkCentre',
+    'Worker',
+    'WorkerRole',
   ])
   expect(RUNTIME_ROLES).toHaveLength(4)
   expect(a.tenantId).not.toBe(b.tenantId)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FactoryDatabase } from '@nexus/factory-db'
-import { LOCAL_COOKIE_SECRET } from '../../../env'
+import { LOCAL_COOKIE_SECRET, LOCAL_PIN_PEPPER } from '../../../env'
 import { mfaSatisfied } from './grants'
 import { holdAuthMail, memoryAuthMailer } from './mail'
 import { createOfficeAuth } from './office-auth'
@@ -112,7 +112,7 @@ describe('two-factor on the session', () => {
 
 describe('createOfficeAuth', () => {
   const database = {} as FactoryDatabase
-  const base = { database, cookieSecret: LOCAL_COOKIE_SECRET, webOrigin: 'http://localhost:3200/' }
+  const base = { database, cookieSecret: LOCAL_COOKIE_SECRET, pinPepper: LOCAL_PIN_PEPPER, webOrigin: 'http://localhost:3200/' }
 
   it('refuses the memory mailer outside tests: links stay unreadable', () => {
     for (const environment of ['local', 'staging', 'production'] as const) {

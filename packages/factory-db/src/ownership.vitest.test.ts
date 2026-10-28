@@ -16,7 +16,12 @@ describe('model ownership', () => {
     const inputs = policyInputs(loadSchema(), loadOwnership())
     expect(inputs.model.tables.map((table) => table.table).sort()).toEqual([
       'AuditLog',
+      'Badge',
       'Company',
+      'Device',
+      'DeviceEnrolment',
+      'FloorSession',
+      'FloorSettings',
       'IdempotencyReceipt',
       'InboundWebhook',
       'IntegrationAccount',
@@ -39,6 +44,8 @@ describe('model ownership', () => {
       'Tenant',
       'User',
       'WorkCentre',
+      'Worker',
+      'WorkerRole',
     ])
     expect(inputs.platformTables).toEqual([{ table: 'Tenant', privileges: ['select', 'insert', 'update'], walled: true }])
   })

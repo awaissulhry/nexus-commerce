@@ -1,0 +1,268 @@
+// Floor sign-in (plan A1 §2.3 Device/Badge/PinCredential, §3.8, §3.10 "Floor"; features PLT-018, PLT-019, PLT-056,
+// PLT-057, PLT-058, PLT-060, PLT-062, PLT-226, MES-276): the enrolled devices of a site, their one-time enrolment codes,
+// the floor workers of a site with their badges and PIN, their floor roles, the floor sessions, and each site's floor
+// session times. apps/factory-api's platform/auth/floor reads and writes them; every change goes through command()
+// with its audit row.
+//
+// Everything a tablet does runs in the FLOOR scope (factory_floor_runtime: tenant and site come from the device
+// token), so a device reads and writes only its own site's rows. Office administrators keep them in the office scope.
+//
+// Data minimisation (GDPR art. 5(1)(c)) and the Statuto dei Lavoratori art. 4: a worker is a name, a language, an
+// optional employee number, a site, a status, a badge and a PIN hash, optionally linked to an office user. No date of
+// birth, no national id, no photo, no biometric data (MES-276, GDPR art. 9; the Garante), no productivity figure or
+// score: these tables record WHO is signed in on WHICH device, for traceability, nothing more.
+//
+// Secrets are never stored: the device token, the enrolment code, the floor session token and the badge code as
+// SHA-256 (all random: nothing to guess), the PIN as an scrypt hash. The logger redacts these columns by name.
+
+/// A tablet, handheld or PC of a site, enrolled once by an administrator's one-time QR code (PLT-056) and listed in
+/// the device registry (PLT-226). Its token is long-lived and revocable; a revoked device is kept for the history.
+/// One operator at a time: `currentSessionId` names the device's open floor session (a column holds one value).
+model Device {
+  id               String       @id @db.Uuid
+  tenantId         String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId        String       @db.Uuid
+  siteId           String       @db.Uuid
+  /// The station it sits at, on the same site; empty for a device that moves around the site.
+  stationId        String?      @db.Uuid
+  name             String
+  kind             DeviceKind   @default(TABLET)
+  status           DeviceStatus @default(PENDING)
+  /// SHA-256 (hex) of the device token (`<tenantId>.<siteId>.<deviceId>.<secret>`); null until enrolled and after a revoke.
+  tokenHash        String?      @unique
+  enrolledAt       DateTime?    @db.Timestamptz(3)
+  /// The office user who made the enrolment code that was used.
+  enrolledById     String?      @db.Uuid
+  /// The device's last request (at most one write a minute).
+  lastSeenAt       DateTime?    @db.Timestamptz(3)
+  /// The floor app's version, as the device reports it.
+  appVersion       String?
+  /// The open floor session, if any: the one operator signed in on it.
+  currentSessionId String?      @db.Uuid
+  revokedAt        DateTime?    @db.Timestamptz(3)
+  revokedById      String?      @db.Uuid
+  version          Int          @default(1)
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?      @db.Uuid
+
+  site           Site              @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  station        Station?          @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  currentSession FloorSession?     @relation("DeviceCurrentSession", fields: [tenantId, siteId, currentSessionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  enrolments     DeviceEnrolment[]
+  sessions       FloorSession[]    @relation("DeviceSessions")
+
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, siteId])
+}
+
+enum DeviceKind {
+  TABLET
+  HANDHELD
+  PC
+}
+
+/// The life of a device (factory-domain auth/floor/status: deviceStatus).
+enum DeviceStatus {
+  /// Made, with an enrolment code; no token yet.
+  PENDING
+  ACTIVE
+  /// Lost or retired: its token opens nothing, its sessions ended. Final.
+  REVOKED
+}
+
+/// A one-time enrolment code for a device, shown as a QR code in the Office; the tablet trades it for its token. It
+/// expires after minutes and works once.
+model DeviceEnrolment {
+  id          String    @id @db.Uuid
+  tenantId    String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId      String    @db.Uuid
+  deviceId    String    @db.Uuid
+  /// SHA-256 (hex) of the code (`<tenantId>.<siteId>.<enrolmentId>.<secret>`).
+  codeHash    String    @unique
+  createdById String    @db.Uuid
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  expiresAt   DateTime  @db.Timestamptz(3)
+  usedAt      DateTime? @db.Timestamptz(3)
+  /// A newer code for the device, or the device's revoke, retired this one.
+  revokedAt   DateTime? @db.Timestamptz(3)
+
+  device Device @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, deviceId])
+}
+
+/// A person who works on the floor of one site (PLT-018): signs in on an enrolled device with a badge or their name,
+/// and a PIN. Kept to what the work needs (GDPR art. 5(1)(c)); never deleted (a leaver is INACTIVE and keeps their name
+/// on the history).
+model Worker {
+  id                String       @id @db.Uuid
+  tenantId          String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId         String       @db.Uuid
+  siteId            String       @db.Uuid
+  /// The name shown on the floor and on the badge (often a first name and an initial).
+  displayName       String
+  /// The floor screens switch to it when the worker signs in (PLT-062).
+  locale            String       @default("it")
+  /// The staff roster's number, to match the payroll's list; unique in the tenant when set.
+  employeeCode      String?
+  /// The office user this worker also is (a team leader with an Office account), if any.
+  userId            String?      @db.Uuid
+  status            WorkerStatus @default(ACTIVE)
+  /// scrypt, `$scrypt$ln=…` (factory-domain auth/floor/pin). Null: no PIN yet, the worker cannot sign in.
+  pinHash           String?
+  pinChangedAt      DateTime?    @db.Timestamptz(3)
+  /// An administrator reset the PIN: the worker holds nothing until they chose their own.
+  pinMustChange     Boolean      @default(false)
+  /// Wrong PINs in a row, and the lock they set (factory-domain auth/floor/pin: 5, then minutes).
+  failedPinAttempts Int          @default(0)
+  pinLockedUntil    DateTime?    @db.Timestamptz(3)
+  version           Int          @default(1)
+  createdAt         DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?      @db.Uuid
+
+  site     Site           @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  user     User?          @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  badges   Badge[]
+  roles    WorkerRole[]
+  sessions FloorSession[]
+
+  @@unique([tenantId, employeeCode])
+  // The target of the tenant- and site-safe references from the worker's rows.
+  @@unique([tenantId, siteId, id])
+}
+
+/// The life of a worker (factory-domain auth/floor/status: workerStatus).
+enum WorkerStatus {
+  ACTIVE
+  /// Cannot sign in; every session ended. Reactivation gives the access back.
+  INACTIVE
+}
+
+/// A printed badge (PLT-019): a QR code or barcode with a random 128-bit code, never the PIN, never a photo. A new badge
+/// revokes the worker's older ones.
+model Badge {
+  id          String      @id @db.Uuid
+  tenantId    String      @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId      String      @db.Uuid
+  workerId    String      @db.Uuid
+  /// SHA-256 (hex) of the normalized code (factory-domain auth/floor/badge).
+  codeHash    String      @unique
+  /// The code's last four characters, to name the badge on screen.
+  hint        String
+  status      BadgeStatus @default(ACTIVE)
+  issuedAt    DateTime    @db.Timestamptz(3)
+  issuedById  String      @db.Uuid
+  revokedAt   DateTime?   @db.Timestamptz(3)
+  revokedById String?     @db.Uuid
+  version     Int         @default(1)
+  createdAt   DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime    @default(now()) @updatedAt @db.Timestamptz(3)
+
+  worker   Worker         @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  sessions FloorSession[]
+
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, workerId])
+}
+
+/// The life of a badge (factory-domain auth/floor/status: badgeStatus).
+enum BadgeStatus {
+  ACTIVE
+  LOST
+  REVOKED
+}
+
+/// A floor role of a worker (roles.prisma Role, audience FLOOR): what their floor sessions may do. Never deleted:
+/// ending it sets endedAt, so the history says who could do what, when.
+model WorkerRole {
+  id          String    @id @db.Uuid
+  tenantId    String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId      String    @db.Uuid
+  workerId    String    @db.Uuid
+  roleId      String    @db.Uuid
+  grantedById String    @db.Uuid
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  endedAt     DateTime? @db.Timestamptz(3)
+  endedById   String?   @db.Uuid
+
+  worker Worker @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  role   Role   @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, workerId])
+}
+
+/// One worker signed in on one device (PLT-057, PLT-058, PLT-060): live until signed out, switched, revoked, idle for
+/// the site's idle minutes, or past its shift end; valid only with its device's token. It records who worked where and
+/// when (traceability), never how fast.
+model FloorSession {
+  id            String                 @id @db.Uuid
+  tenantId      String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId        String                 @db.Uuid
+  deviceId      String                 @db.Uuid
+  workerId      String                 @db.Uuid
+  /// The badge scanned at sign-in; null for a sign-in by name and PIN.
+  badgeId       String?                @db.Uuid
+  /// SHA-256 (hex) of the session cookie's value; the value is never stored.
+  tokenHash     String                 @unique
+  startedAt     DateTime               @db.Timestamptz(3)
+  lastSeenAt    DateTime               @db.Timestamptz(3)
+  /// Slides forward with use (at most once a minute), never past `endsAt`.
+  idleExpiresAt DateTime               @db.Timestamptz(3)
+  /// The shift end (or the 12-hour cap): the session ends then at the latest.
+  endsAt        DateTime               @db.Timestamptz(3)
+  endedAt       DateTime?              @db.Timestamptz(3)
+  endReason     FloorSessionEndReason?
+
+  device          Device   @relation("DeviceSessions", fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker          Worker   @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  badge           Badge?   @relation(fields: [tenantId, siteId, badgeId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  currentOnDevice Device[] @relation("DeviceCurrentSession")
+
+  // The target of the device's current-session reference.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, deviceId])
+  @@index([tenantId, workerId])
+}
+
+/// Why a floor session ended.
+enum FloorSessionEndReason {
+  SIGNED_OUT
+  /// Another operator took the device ("switch operator").
+  SWITCHED
+  /// The same worker signed in again on the device.
+  REPLACED
+  /// No request for the site's idle minutes (closed at the device's next sign-in).
+  IDLE
+  /// Past its shift end (closed at the device's next sign-in).
+  SHIFT_END
+  DEVICE_REVOKED
+  BADGE_REVOKED
+  WORKER_DEACTIVATED
+  PIN_RESET
+}
+
+/// The floor session times of one site (PLT-060): idle minutes and the shift ends. A site without a row has the
+/// defaults (10 idle minutes, no shift ends: a session lasts at most 12 hours).
+model FloorSettings {
+  /// The site's own id (`siteId`): a site has at most one row, and it is read by the site's id.
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String   @db.Uuid
+  siteId      String   @db.Uuid
+  idleMinutes Int      @default(10)
+  /// `HH:MM` in the site's time zone, sorted.
+  shiftEnds   String[] @default([])
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  site Site @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, siteId])
+}

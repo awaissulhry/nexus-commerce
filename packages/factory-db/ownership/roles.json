@@ -1,12 +1,13 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/roles.prisma (rules: src/ownership.ts; roles: src/roles.ts). Only office sessions and the worker touch them, as factory_runtime inside their own tenant: the office authenticator reads the person's live assignments and their roles on every request to build the session's grants, and the roles routes (apps/factory-api platform/auth/roles) write them through command(). The floor and partner roles get no access here: the floor step decides how a floor session's grants are read, the links step gives link sessions fixed grants. No role deletes: an assignment is ended (endedAt), a role is kept for the history. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/roles.prisma (rules: src/ownership.ts; roles: src/roles.ts). Only office sessions and the worker touch them, as factory_runtime inside their own tenant: the office authenticator reads the person's live assignments and their roles on every request to build the session's grants, and the roles routes (apps/factory-api platform/auth/roles) write them through command(). The floor role reads Role (its floor sessions' grants come from the worker's live floor roles, floor-auth.json WorkerRole, read in the device's site scope; a role is tenant-wide, it has no site); it reads no RoleAssignment (office people's assignments). The partner role gets no access here: the links step gives link sessions fixed grants. No role deletes: an assignment is ended (endedAt), a role is kept for the history. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "Role": {
-      "about": "The tenant's system roles (synced from the factory-domain templates) and custom roles: read by the authenticator and the role screens, written by the roles routes.",
+      "about": "The tenant's system roles (synced from the factory-domain templates) and custom roles: read by the authenticator and the role screens, written by the roles routes. The floor authenticator reads the worker's floor roles.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
       }
     },
     "RoleAssignment": {

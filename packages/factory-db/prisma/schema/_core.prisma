@@ -114,12 +114,16 @@ model Site {
   updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
   createdById String?      @db.Uuid
 
-  company     Company      @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
-  lines       Line[]
-  workCentres WorkCentre[]
-  stations    Station[]
+  company       Company         @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines         Line[]
+  workCentres   WorkCentre[]
+  stations      Station[]
   // files.prisma: the files shared with this site's floor.
-  floorFiles  StoredFile[]
+  floorFiles    StoredFile[]
+  // floor-auth.prisma: the site's enrolled devices, floor workers and floor session times.
+  devices       Device[]
+  workers       Worker[]
+  floorSettings FloorSettings[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])
@@ -210,8 +214,12 @@ model Station {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   line       Line?      @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   workCentre WorkCentre @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // floor-auth.prisma: the devices enrolled at this station.
+  devices    Device[]
 
   @@unique([tenantId, siteId, code])
+  // The target of the tenant- and site-safe references from the station's rows (a device at a station).
+  @@unique([tenantId, siteId, id])
 }
 
 /// Master data in use is archived, never deleted.
