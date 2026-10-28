@@ -1,3 +1,4 @@
+import type { UserStatus } from '@nexus/factory-db'
 import { defineMachine } from '@nexus/factory-domain/state/machine'
 import type { CommandTx } from '../../../core/command'
 
@@ -28,7 +29,7 @@ const keepsAnOwner = (facts: OwnerFacts | undefined): readonly string[] => {
   return facts.isOwner && facts.otherActiveOwners === 0 ? ['another active owner of the tenant'] : []
 }
 
-export const userStatus = defineMachine<'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED', OwnerFacts | undefined>({
+export const userStatus = defineMachine<UserStatus, OwnerFacts | undefined>({
   name: 'user',
   states: ['INVITED', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED'],
   transitions: {
@@ -39,8 +40,6 @@ export const userStatus = defineMachine<'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'DE
   },
   guards: { SUSPENDED: keepsAnOwner, DEACTIVATED: keepsAnOwner },
 })
-
-export type UserStatus = (typeof userStatus.states)[number]
 
 /** The facts of the owner guard, read inside the command's transaction. */
 export const ownerFacts =

@@ -1,9 +1,10 @@
 import { z } from 'zod'
+import type { UserStatus } from '@nexus/factory-db'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 
 /** The user list and the lifecycle commands (features PLT-015, PLT-016, PLT-070). */
 
-export const USER_STATUSES = ['INVITED', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED'] as const
+export const USER_STATUSES = ['INVITED', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED'] as const satisfies readonly UserStatus[]
 
 export const userView = output({
   id: id(),

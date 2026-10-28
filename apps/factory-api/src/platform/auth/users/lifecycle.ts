@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify'
+import type { UserStatus } from '@nexus/factory-db'
 import { ForbiddenError, InvalidStateError } from '@nexus/factory-domain/core/errors'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { requireContext, type OfficeContext } from '../../../core/context'
@@ -6,7 +7,7 @@ import { requireStepUp } from '../office/account'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { endSessions } from '../sessions/session-store'
 import type { UserChangeBody } from './contract'
-import { ownerFacts, userStatus, type UserStatus } from './status'
+import { ownerFacts, userStatus } from './status'
 
 /**
  * The user list and the lifecycle commands (features PLT-015, PLT-016, PLT-070). Each change is ONE command with its

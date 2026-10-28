@@ -1,4 +1,4 @@
-import type { Prisma } from '@nexus/factory-db'
+import type { SessionEndReason } from '@nexus/factory-db'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { CommandTx } from '../../../core/command'
@@ -11,9 +11,6 @@ import { mintToken, tokenHash } from './secrets'
  * without a request (the idle expiry slides forward with use, at most one write a minute, never past the absolute
  * expiry) or until 7 days after sign-in. Always written inside a command's transaction.
  */
-
-/** Why a session ended (the SessionEndReason enum of auth.prisma). */
-export type SessionEndReason = NonNullable<Prisma.SessionUncheckedCreateInput['revokedReason']>
 
 export const SESSION_LIFETIME = Object.freeze({
   idleMs: 8 * 60 * 60_000,

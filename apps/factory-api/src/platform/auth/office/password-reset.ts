@@ -3,7 +3,7 @@ import { hashPassword, passwordProblems } from '@nexus/factory-domain/auth/passw
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
-import type { Prisma } from '@nexus/factory-db'
+import type { PasswordResetKind } from '@nexus/factory-db'
 import type { CommandTx } from '../../../core/command'
 import { PRE_SESSION_ACTOR_ID, type OfficeAuth } from '../sessions/office-auth'
 import { mintToken, parseToken, tokenHash } from '../sessions/secrets'
@@ -27,12 +27,10 @@ export const RESET_TTL_MS = 60 * 60_000
 export const REQUIRED_RESET_TTL_MS = 15 * 60_000
 const COALESCE_MS = 5 * 60_000
 
-type ResetKind = Prisma.PasswordResetUncheckedCreateInput['kind']
-
 /** A new reset row; returns its id, token (to the person only) and expiry. */
 export async function createPasswordReset(
   tx: CommandTx,
-  input: { readonly tenantId: string; readonly userId: string; readonly kind: ResetKind; readonly now: Date; readonly ttlMs: number },
+  input: { readonly tenantId: string; readonly userId: string; readonly kind: PasswordResetKind; readonly now: Date; readonly ttlMs: number },
 ): Promise<{ readonly id: string; readonly token: string; readonly expiresAt: string }> {
   const token = mintToken(input.tenantId, input.userId)
   const id = newId()
