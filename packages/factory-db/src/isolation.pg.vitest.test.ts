@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
+import { seed as seedFiles } from '../seed/files'
 import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
@@ -86,6 +87,8 @@ beforeAll(async () => {
   await seedOutbox({ db: factory, namespace: 'iso-b' })
   await seedIntegration({ db: factory, namespace: 'iso-a' })
   await seedIntegration({ db: factory, namespace: 'iso-b' })
+  await seedFiles({ db: factory, namespace: 'iso-a' })
+  await seedFiles({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -111,6 +114,7 @@ it('covers every classified table and every runtime role', () => {
     'Session',
     'Site',
     'Station',
+    'StoredFile',
     'Tenant',
     'User',
     'WorkCentre',
