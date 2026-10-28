@@ -1,6 +1,9 @@
 ## Floor counts, label preview, sign and accept (factory gaps G6 G11 G12) — 2026-10-28
 
-New parts, new files only (plus their barrel lines); nothing existing changes. Every word comes in as a prop.
+New parts, new files only; nothing existing changes, and no Commerce page carries their code or CSS. Every word comes in
+as a prop. They are NOT in the components barrel (the web pulls it into every page's first load): `LabelPreview` and
+`SignBlock` are entry points of their own (`components/LabelPreview`, `components/SignBlock`; by package path
+`@nexus/ui/components/LabelPreview/index`), and the count parts are only behind the floor entry point (`floor/`).
 - **Counts (G6, `floor/`)**: `QuantityPad` — a big number as a spin button, − and + the PIN keys' size, the PIN pad's own
   digit keys (no `<input>`, so no keyboard opens), quick values, an optional Confirm; the default is replaced by the first
   digit (2, 2 → 22, not 2422), a digit past `max` is refused with an amber flash + buzz and the range in words, under

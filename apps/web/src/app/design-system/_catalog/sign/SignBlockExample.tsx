@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-import { SignBlock, SummaryTable, type SignAcceptance, type SignBlockState } from '@/design-system/components'
+import { SummaryTable } from '@/design-system/components'
+import { SignBlock, type SignAcceptance, type SignBlockState } from '@/design-system/components/SignBlock'
 import { DensityProvider } from '@/design-system/lib/density'
 import { SegmentedControl } from '@/design-system/primitives'
 

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Printer, Shield } from 'lucide-react'
 
-import { LabelPreview, type LabelLayout, type LabelPrintState, type LabelPrintStatus } from '@/design-system/components'
+import { LabelPreview, type LabelLayout, type LabelPrintState, type LabelPrintStatus } from '@/design-system/components/LabelPreview'
 import { FloorButton, FloorFrame } from '@/design-system/floor'
 import { SegmentedControl } from '@/design-system/primitives'
 

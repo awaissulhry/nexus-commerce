@@ -99,46 +99,6 @@ export { ActionConfirm, canConfirmAction, useActionConfirm, type ActionConfirmPr
 // Sheet publish parity (2026-10-04) — the typed confirmation, shared by ActionConfirm, the Publish window and the selling dialogs.
 export { ConfirmPhraseField, phraseMatches, phraseMatchState, PHRASE_STATE_TEXT, type ConfirmPhraseFieldProps, type PhraseMatchState } from './ConfirmPhraseField'
 export { AsOf, type AsOfProps } from './AsOf'
-// Factory gaps G11 G12 (2026-10-28) — a label to scale with its print state (Code 128 drawn here, QR from the app), and
-// the typed-name accept block of the quote-accept and PO-confirm links.
-export { LabelPreview, type LabelPreviewProps } from './LabelPreview/LabelPreview'
-export { Code128, type Code128Props } from './LabelPreview/Code128'
-export {
-  CODE128_PATTERNS,
-  CODE128_QUIET_MODULES,
-  code128Bars,
-  code128Check,
-  code128ModuleString,
-  encodeCode128,
-  isCode128Text,
-  type Code128Encoding,
-} from './LabelPreview/code128Model'
-export {
-  LABEL_PRINT_STATUSES,
-  LABEL_PRINT_TONE,
-  LABEL_TEXT_MM,
-  labelBlocks,
-  labelCanRetry,
-  labelInvalidCodes,
-  type LabelBlock,
-  type LabelField,
-  type LabelLayout,
-  type LabelPrintState,
-  type LabelPrintStatus,
-  type LabelTextSize,
-} from './LabelPreview/labelLayout'
-export { SignBlock, type SignAcceptance, type SignAcknowledgement, type SignBlockProps, type SignBlockState, type SignEmailCheck } from './SignBlock/SignBlock'
-export {
-  emailLooksValid,
-  emailMatches,
-  nameMatches,
-  nameWords,
-  signCanAccept,
-  signProblems,
-  type SignInput,
-  type SignProblems,
-  type SignRules,
-} from './SignBlock/signBlockModel'
 // Approvals grid G7 (2026-10-05) — a live countdown ("Runs in 14 s"): one shared timer for the page, onDone once at zero.
 export { Countdown, type CountdownProps } from './Countdown'
 export { countdownText, countdownNextTick, countdownStep, countdownSnapshot, readCountdownSnapshot, countdownTarget, createCountdownTicker, countdownTicker, COUNTDOWN_SECONDS_UNDER, COUNTDOWN_SLOW_TICK, type CountdownStep, type CountdownView, type CountdownClock, type CountdownTicker } from './countdownTicker'
@@ -166,3 +126,5 @@ export { heatKey, isHeatMarked, heatMax, heatAlpha, heatCellWords } from './heat
 // W0 parts (2026-10-28) — the phone bottom bar + More sheet (G14), the PDF viewer (G18) and the QR code (G7) are NOT
 // re-exported here: the web pulls this barrel into every page, so anything exported from it reaches every page's first
 // load. Each has an entry point of its own — `components/BottomBar`, `components/PdfViewer`, `components/QrCode`.
+// Factory gaps G11 G12 (2026-10-28) — the label preview (+ Code128) and the sign / accept block are NOT re-exported here
+// either, for the same reason: each has its own entry point — `components/LabelPreview`, `components/SignBlock`.
