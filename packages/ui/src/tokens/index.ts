@@ -15,6 +15,7 @@ export * from './motion'
 export * from './zindex'
 export * from './breakpoints'
 export * from './grid'
+export * from './density'
 
 import { palette, color, pill, badge } from './colors'
 import { fontFamily, fontSize, fontWeight, letterSpacing, lineHeight, fontSmoothing } from './typography'
@@ -25,6 +26,7 @@ import { duration, easing, durationMs } from './motion'
 import { zIndex } from './zindex'
 import { breakpoint, mediaQuery } from './breakpoints'
 import { grid } from './grid'
+import { densityTokens } from './density'
 
 /** Aggregate accessor for ergonomic destructuring: `const { color } = tokens`. */
 export const tokens = {
@@ -51,4 +53,5 @@ export const tokens = {
   breakpoint,
   mediaQuery,
   grid,
+  density: densityTokens,
 } as const

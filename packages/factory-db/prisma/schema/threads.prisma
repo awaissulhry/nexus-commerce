@@ -50,6 +50,8 @@ model Thread {
   site           Site?     @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   messages       Message[] @relation("ThreadMessages")
   sharedMessages Message[] @relation("ThreadSharedMessages")
+  // email.prisma: the mail sent from this thread.
+  emailOutbound  EmailOutbound[]
 
   @@unique([tenantId, recordType, recordId])
   @@unique([replyToken])

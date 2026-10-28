@@ -65,6 +65,8 @@ model IntegrationAccount {
   webhookSecret SecretValue? @relation("IntegrationAccountWebhookSecret", fields: [tenantId, webhookSecretId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // files.prisma: the files this (R2) account's store holds.
   storedFiles   StoredFile[]
+  // email.prisma: the sending identities this (SES) account sends for.
+  emailIdentities EmailIdentity[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, id])

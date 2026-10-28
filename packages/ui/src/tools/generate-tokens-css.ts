@@ -9,7 +9,7 @@
  */
 import { readFileSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
-import { cssVars, cssVarsDark } from '../tokens/css-vars'
+import { cssVars, cssVarsDark, cssDensityBlocks } from '../tokens/css-vars'
 import type { CssVar } from '../tokens/css-vars'
 
 const OUT = resolve(__dirname, '../styles/tokens.css')
@@ -47,7 +47,14 @@ const emit = (rows: ReadonlyArray<CssVar>, indent = '  '): string =>
     .map((r) => `${r.section ? `\n${indent}/* ── ${r.section} ── */\n` : ''}${indent}${r.name}: ${r.value};`)
     .join('\n')
 
-const css = `${HEAD}\n\n:root {\n${emit(cssVars)}\n}\n\n.dark, .dark body:has(.nds-theme-responsive), .dark body .nds-theme-responsive {\n${emit(cssVarsDark)}\n}\n`
+/**
+ * The density tiers (tokens/density.ts), after `.dark`: one `[data-density='…']` block per tier. Same specificity as
+ * `:root`, so on an `<html data-density>` the later block wins. Appended at the END of both files, so the generated diff
+ * only adds lines, and holding only `--nds-density-*` names, so no existing declaration can change.
+ */
+const densityCss = cssDensityBlocks.map((b) => `\n${b.selector} {\n${emit(b.vars)}\n}\n`).join('')
+
+const css = `${HEAD}\n\n:root {\n${emit(cssVars)}\n}\n\n.dark, .dark body:has(.nds-theme-responsive), .dark body .nds-theme-responsive {\n${emit(cssVarsDark)}\n}\n${densityCss}`
 
 const GLOBAL_HEAD = `/**
  * GENERATED — do not edit by hand.
@@ -60,7 +67,7 @@ const GLOBAL_HEAD = `/**
  */`
 
 const globalVars = cssVars.filter((r) => !CONTESTED.has(r.name))
-const cssGlobal = `${GLOBAL_HEAD}\n\n:root {\n${emit(globalVars)}\n}\n\n.dark, .dark body:has(.nds-theme-responsive), .dark body .nds-theme-responsive {\n${emit(cssVarsDark)}\n}\n`
+const cssGlobal = `${GLOBAL_HEAD}\n\n:root {\n${emit(globalVars)}\n}\n\n.dark, .dark body:has(.nds-theme-responsive), .dark body .nds-theme-responsive {\n${emit(cssVarsDark)}\n}\n${densityCss}`
 
 if (process.argv.includes('--check')) {
   let stale = false
@@ -75,6 +82,6 @@ if (process.argv.includes('--check')) {
 } else {
   writeFileSync(OUT, css)
   writeFileSync(OUT_GLOBAL, cssGlobal)
-  console.log(`✓ wrote ${OUT} (${cssVars.length} vars + ${cssVarsDark.length} dark)`)
+  console.log(`✓ wrote ${OUT} (${cssVars.length} vars + ${cssVarsDark.length} dark + ${cssDensityBlocks.length} density tiers)`)
   console.log(`✓ wrote ${OUT_GLOBAL} (${globalVars.length} vars — ${cssVars.length - globalVars.length} contested aliases withheld)`)
 }
