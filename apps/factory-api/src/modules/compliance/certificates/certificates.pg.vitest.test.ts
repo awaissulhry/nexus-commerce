@@ -59,6 +59,7 @@ const companyA2 = newId()
 const companyB = newId()
 const brandA = newId()
 const riderParty = newId()
+const supplierA = newId()
 const user = newId()
 const scaleA = newId()
 const styleA = newId()
@@ -82,11 +83,13 @@ const SESSIONS: Record<string, SessionContext> = {
   viewer: { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant([VIEW])] },
   'company-two': { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant([VIEW, MANAGE], [companyA2])] },
   nobody: { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(['files.read'])] },
-  'manager-b': { audience: 'office', tenantId: tenantB, actorId: user, grants: [grant([VIEW, MANAGE])] },
+  'files-admin': { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(['files.read', 'files.delete', 'files.manage'])] },
+  writer: { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(['threads.read', 'threads.post'])] },
+  'manager-b': { audience: 'office', tenantId: tenantB, actorId: user, grants: [grant([VIEW, MANAGE, 'threads.read', 'threads.post'])] },
 }
 
 const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]> => (await db.admin.query(sql, values)).rows as T[]
-const call = (session: string, method: 'GET' | 'POST' | 'PATCH', url: string, payload?: unknown, key?: string) =>
+const call = (session: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, payload?: unknown, key?: string) =>
   app.inject({ method, url, headers: { 'x-test-session': session, ...(key ? { 'idempotency-key': key } : {}) }, ...(payload === undefined ? {} : { payload: payload as object }) })
 
 let serial = 0
@@ -164,6 +167,7 @@ beforeAll(async () => {
   }
   await admin(`INSERT INTO "Party" (id, "tenantId", code, kind, "legalName", roles) VALUES ($1, $2, 'BRAND-1', 'ORGANISATION', 'Marchio Inventato S.r.l.', '{CUSTOMER,BRAND}')`, [brandA, tenantA])
   await admin(`INSERT INTO "Party" (id, "tenantId", code, kind, "legalName", roles) VALUES ($1, $2, 'RIDER-1', 'PERSON', 'Pilota Inventato', '{CUSTOMER}')`, [riderParty, tenantA])
+  await admin(`INSERT INTO "Party" (id, "tenantId", code, kind, "legalName", roles) VALUES ($1, $2, 'SUPP-1', 'ORGANISATION', 'Protezioni Inventate S.r.l.', '{SUPPLIER}')`, [supplierA, tenantA])
 
   // A jacket in sizes 48, 50, 52 with their body measures (chest and height), two colourways, and a style no
   // certificate covers; tenant B has a jacket of its own.
@@ -322,6 +326,53 @@ describe('the certificate register (QHS-103)', () => {
     // A draft typed by mistake is withdrawn too (it is kept, never deleted).
     const mistake = await draft()
     expect((await call('manager', 'POST', `/compliance/certificates/${mistake.id}/withdraw`, { version: 1, reason: 'Typed twice' })).json().certificate.status).toBe('WITHDRAWN')
+  })
+})
+
+describe('the certificate PDF (Reg. (EU) 2016/425 art. 8(3))', () => {
+  it('PPE Regulation 2016/425 art. 8(3): an issued certificate\'s PDF is kept ten years after its last valid day and cannot be deleted before', async () => {
+    const created = await draft({ validTo: '2030-12-31' })
+    await attach(created.id, { contentType: 'image/png' })
+    await attach(created.id)
+    await call('manager', 'POST', `/compliance/certificates/${created.id}/issue`, { version: 1 })
+    const filesOf = () => admin<{ id: string; contentType: string; retainUntil: Date | null; version: number }>('SELECT id, "contentType", "retainUntil", version FROM "StoredFile" WHERE "recordId" = $1 ORDER BY "contentType"', [created.id])
+    const [pdf, picture] = await filesOf()
+    // The end of 31 December 2040 in Rome (UTC+1 in winter).
+    expect(pdf).toMatchObject({ contentType: 'application/pdf', retainUntil: new Date('2040-12-31T23:00:00.000Z'), version: 2 })
+    // Only the PDF of kind CERTIFICATE is the certificate; a picture of it is not kept by this rule.
+    expect(picture).toMatchObject({ contentType: 'image/png', retainUntil: null })
+    // (storeGeneratedFile writes on the server clock, the register on the test's: find the row by its action.)
+    expect((await auditOf(pdf!.id)).filter((row) => row.action === 'files.setRetention')).toMatchObject([{ after: { retainUntil: '2040-12-31T23:00:00.000Z' }, reason: expect.stringContaining('art. 8(3)') }])
+
+    const refused = await call('files-admin', 'DELETE', `/files/${pdf!.id}?reason=${encodeURIComponent('Not needed any more')}`)
+    expect(refused.statusCode).toBe(409)
+    expect(refused.json().error.code).toBe('invalid_state')
+    // Nor by any login straight in the database (the …_files_guards trigger), nor by moving the date earlier.
+    await expect(admin(`UPDATE "StoredFile" SET status = 'DELETED', "deletedAt" = now() WHERE id = $1`, [pdf!.id])).rejects.toThrow(/retained/)
+    await expect(admin(`UPDATE "StoredFile" SET "retainUntil" = '2031-01-01' WHERE id = $1`, [pdf!.id])).rejects.toThrow(/only moves later/)
+    expect((await filesOf())[0]).toMatchObject({ retainUntil: new Date('2040-12-31T23:00:00.000Z') })
+    // The picture, kept by no rule, can be deleted.
+    expect((await call('files-admin', 'DELETE', `/files/${picture!.id}`)).statusCode).toBe(200)
+  })
+})
+
+describe("a certificate's thread (SCR-051)", () => {
+  it('opens on the certificate: its company, and its party only when a brand holds it', async () => {
+    const own = await registered({ number: 'TEST-THREAD-0001' })
+    const note = await call('writer', 'POST', `/threads/Certificate/${own.id}/notes`, { body: 'Renewal asked of the notified body.' })
+    expect(note.statusCode, note.body).toBe(201)
+    expect(note.json().thread).toMatchObject({ recordType: 'Certificate', recordId: own.id, companyId: companyA, siteId: null, partyId: null, status: 'OPEN' })
+    const read = await call('writer', 'GET', `/threads/Certificate/${own.id}`)
+    expect(read.json().messages.map((message: Json) => message.body)).toEqual(['Renewal asked of the notified body.'])
+
+    const brandHeld = await draft({ companyId: null, holderPartyId: brandA, number: 'TEST-THREAD-0002' })
+    expect((await call('writer', 'POST', `/threads/Certificate/${brandHeld.id}/notes`, { body: 'The brand holds this one.' })).json().thread).toMatchObject({ companyId: null, partyId: brandA })
+    const supplierHeld = await draft({ companyId: null, holderPartyId: supplierA, standard: 'EN 1621-1:2012', ppeClass: '2', number: 'TEST-THREAD-0003' })
+    expect((await call('writer', 'POST', `/threads/Certificate/${supplierHeld.id}/notes`, { body: 'A protector supplier holds this one.' })).json().thread).toMatchObject({ companyId: null, partyId: null })
+
+    expect((await call('writer', 'GET', `/threads/Certificate/${newId()}`)).statusCode).toBe(404)
+    expect((await call('manager-b', 'GET', `/threads/Certificate/${own.id}`)).statusCode).toBe(404)
+    expect((await call('manager-b', 'POST', `/threads/Certificate/${own.id}/notes`, { body: 'x' })).statusCode).toBe(404)
   })
 })
 

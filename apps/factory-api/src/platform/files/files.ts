@@ -7,7 +7,7 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere, type Permission, type ScopeColumns, type ScopedRecord } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
-import { command, type CommandCaller } from '../../core/command'
+import { command, type CommandCaller, type CommandTools } from '../../core/command'
 import { actorOf, type RequestContext } from '../../core/context'
 import { ApiError } from '../../core/errors'
 import { GatewayCallFailed, GatewayRefusal } from '../gateway/gateway'
@@ -560,6 +560,33 @@ export async function deleteFile(runtime: FilesRuntime, caller: CommandCaller, f
     // a later sweep; the gateway's ledger row records the failure.
   }
   return result
+}
+
+/**
+ * Keeps files at least until `retainUntil`, inside the caller's own command (a module that must keep a record's files:
+ * compliance keeps a registered certificate's PDF, Reg. (EU) 2016/425 art. 8(3)). The caller checked its own
+ * permission for the record; no files.* permission is asked, as for generated files. A file already kept longer, or
+ * deleted, is left as it is: the date only moves later (the …_files_guards trigger refuses anything else). One audit
+ * row per changed file, as files.setRetention writes it. Returns the files it changed.
+ */
+export async function retainFilesInCommand(tools: Pick<CommandTools, 'tx' | 'audit'>, fileIds: readonly string[], retainUntil: Date, reason: string): Promise<string[]> {
+  const rows = await tools.tx.storedFile.findMany({ where: { id: { in: [...fileIds] }, status: { not: 'DELETED' } }, select: { id: true, companyId: true, retainUntil: true, legalHold: true }, orderBy: { id: 'asc' } })
+  const changed: string[] = []
+  for (const row of rows) {
+    if (row.retainUntil !== null && row.retainUntil >= retainUntil) continue
+    await tools.tx.storedFile.update({ where: { id: row.id }, data: { retainUntil, version: { increment: 1 } }, select: { id: true } })
+    tools.audit({
+      action: 'files.setRetention',
+      recordType: 'StoredFile',
+      recordId: row.id,
+      companyId: row.companyId,
+      before: { legalHold: row.legalHold, retainUntil: iso(row.retainUntil) },
+      after: { legalHold: row.legalHold, retainUntil: iso(retainUntil) },
+      reason,
+    })
+    changed.push(row.id)
+  }
+  return changed
 }
 
 /** files.setVisibility: who sees the file (COL-050). The caller needs files.manage for the new site and party too. */

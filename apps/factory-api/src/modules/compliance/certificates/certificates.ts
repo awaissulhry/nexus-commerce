@@ -2,6 +2,7 @@ import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { CERTIFICATES_MANAGE, CERTIFICATES_VIEW } from '@nexus/factory-domain/compliance/certificates/permissions'
 import {
   addDays,
+  addYears,
   certificateMachine,
   certificateNextStatuses,
   certificateProblems,
@@ -14,11 +15,12 @@ import {
 import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere, type ScopeColumns } from '@nexus/factory-domain/core/permissions'
-import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { businessDate, businessDayRange, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { COMMAND_SETTINGS, runCommand, type CommandCaller, type CommandSpec, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf, type RequestContext } from '../../../core/context'
 import { ApiError } from '../../../core/errors'
 import { serverClock, type Clock } from '../../../core/time'
+import { retainFilesInCommand } from '../../../platform/files/files'
 import type { CertificateDetail, CertificateView, CoverageView } from './contract'
 
 /**
@@ -172,12 +174,27 @@ export function coverageView(row: CoverageRow): CoverageView {
 }
 
 /** The certificate's PDF from the notified body: an available CERTIFICATE file of the record, in PDF. */
+const PDF_WHERE = (certificateId: string) =>
+  ({ recordType: 'Certificate', recordId: certificateId, kind: 'CERTIFICATE', status: 'AVAILABLE', contentType: 'application/pdf' }) as const satisfies Prisma.StoredFileWhereInput
+
 export async function hasCertificatePdf(client: FactoryClient | CommandTx, certificateId: string): Promise<boolean> {
-  const file = await client.storedFile.findFirst({
-    where: { recordType: 'Certificate', recordId: certificateId, kind: 'CERTIFICATE', status: 'AVAILABLE', contentType: 'application/pdf' },
-    select: { id: true },
-  })
-  return file !== null
+  return (await client.storedFile.findFirst({ where: PDF_WHERE(certificateId), select: { id: true } })) !== null
+}
+
+/** Reg. (EU) 2016/425 art. 8(3): the technical documentation is kept 10 years after the last unit is placed on the market. */
+export const PDF_RETENTION_YEARS = 10
+
+/**
+ * How long a certificate's PDF is kept at least: to the end (Europe/Rome) of the day ten years after its last valid
+ * day, the last day a unit it covers can be placed on the market.
+ */
+export const pdfRetainUntil = (validTo: BusinessDate): Date => businessDayRange(addYears(validTo, PDF_RETENTION_YEARS)).end
+
+/** Inside a move into VALID: the certificate's PDFs are kept at least until pdfRetainUntil (files module, audited). */
+async function retainCertificatePdfs(tools: Pick<CommandTools, 'tx' | 'audit'>, certificateId: string, validTo: BusinessDate): Promise<void> {
+  const files = await tools.tx.storedFile.findMany({ where: PDF_WHERE(certificateId), select: { id: true } })
+  const reason = `The certificate's PDF is kept ${PDF_RETENTION_YEARS} years after its last valid day, ${validTo} (Reg. (EU) 2016/425 art. 8(3)).`
+  await retainFilesInCommand(tools, files.map((file) => file.id), pdfRetainUntil(validTo), reason)
 }
 
 /** The facts of a move, read inside the command (after its row lock). */
@@ -392,8 +409,9 @@ export interface MoveInput {
 /**
  * compliance.certificates.issue | suspend | reinstate | withdraw: one move of the certificate machine, checked inside the
  * command with the facts it needs (the PDF on the record for VALID, a reason for SUSPENDED and WITHDRAWN). Issue
- * registers a draft (Reg. 2016/425 Annex V: the notified body's certificate, typed in and filed); reinstate makes a
- * suspended certificate VALID again; withdraw is final.
+ * registers a draft (Reg. 2016/425 Annex V: the notified body's certificate, typed in and filed) and keeps its PDF at
+ * least ten years after its last valid day (art. 8(3)); reinstate makes a suspended certificate VALID again; withdraw
+ * is final.
  */
 export async function moveCertificate(caller: CommandCaller, certificateId: string, move: Move, input: MoveInput, idempotencyKey?: string): Promise<CertificateDetail> {
   const before = await readCertificate(caller, certificateId)
@@ -419,6 +437,8 @@ export async function moveCertificate(caller: CommandCaller, certificateId: stri
     async ({ tx, audit, now, record }) => {
       const statusReason = move === 'issue' ? null : reason
       const row = await tx.certificate.update({ where: { id: certificateId }, data: { statusReason, statusChangedAt: now }, select: CERTIFICATE_SELECT })
+      // Registered (or reinstated): its PDF is kept, in the same transaction as the move.
+      if (to === 'VALID') await retainCertificatePdfs({ tx, audit }, certificateId, dayOf(row.validTo))
       audit({
         recordType: 'Certificate',
         recordId: certificateId,
