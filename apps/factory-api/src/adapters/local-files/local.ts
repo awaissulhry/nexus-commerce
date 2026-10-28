@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, resolve, sep } from 'node:path'
 import type { FactoryEnv } from '../../env'
 import { ProviderError, type GatewayCall } from '../../platform/gateway/gateway'
-import type { DownloadTarget, FileStoreAdapter, PresignedRequest, StoredObject, UploadTarget } from '../../platform/files/port'
+import { TooLargeObjectError, type DownloadTarget, type FileStoreAdapter, type PresignedRequest, type StoredObject, type UploadTarget } from '../../platform/files/port'
 import { isStorageKey, normaliseContentType } from '../../platform/files/rules'
 
 /**
@@ -135,6 +135,14 @@ export function localFileStore(options: LocalFileStoreOptions): LocalFileStore {
       const path = pathOf(key)
       await rm(path, { force: true })
       await rm(`${path}.meta.json`, { force: true })
+    },
+    async read(call: GatewayCall, key: string, maxBytes: number): Promise<Buffer | null> {
+      fakeAccountOnly(call)
+      const path = pathOf(key)
+      const found = await stat(path).catch(() => null)
+      if (!found?.isFile()) return null
+      if (found.size > maxBytes) throw new TooLargeObjectError(`The object holds ${found.size} bytes; at most ${maxBytes} are read.`)
+      return readFile(path)
     },
     async acceptUpload(token, upload, now) {
       const grant = grantOf(token, 'PUT', now)

@@ -110,7 +110,7 @@ describe('the grants of a session', () => {
     await assign(reader.user.id, { roleId: await roleIdOf(owner, 'sales'), companyIds: [alpha.companies[0]!.id] })
     const later = new Date(h.clock.now().getTime() + 24 * 3_600_000).toISOString()
     await assign(reader.user.id, { roleId: await roleIdOf(owner, 'planner'), allCompanies: true, validFrom: later })
-    expect(await permissionsOf(reader.browser)).toEqual(['audit.read', 'devices.view', 'files.read', 'files.upload', 'links.view', 'money.price', 'numbering.view', 'roles.view', 'threads.post', 'threads.read', 'users.view', 'workers.view'])
+    expect(await permissionsOf(reader.browser)).toEqual(['audit.read', 'devices.view', 'files.read', 'files.upload', 'imports.view', 'links.view', 'money.price', 'numbering.view', 'roles.view', 'threads.post', 'threads.read', 'users.view', 'workers.view'])
     const listed = (await reader.browser.get(`/auth/users/${reader.user.id}/roles`)).body.assignments as { roleKey: string; live: boolean }[]
     expect(listed.map((entry) => [entry.roleKey, entry.live])).toEqual(expect.arrayContaining([['planner', false], ['sales', true], ['read_only', true]]))
   })

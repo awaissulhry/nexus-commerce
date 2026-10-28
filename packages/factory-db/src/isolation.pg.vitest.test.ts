@@ -5,6 +5,7 @@ import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
 import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
+import { seed as seedImports } from '../seed/imports'
 import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedLinks } from '../seed/links'
 import { seed as seedNumbering } from '../seed/numbering'
@@ -24,7 +25,8 @@ import { loadOwnership, loadSchema } from './tools'
  *   - a role with select sees exactly the rows inside its scope (tenant, and site or party where it is scoped by them),
  *     and rows outside it exist, so the wall is really tested;
  *   - it cannot read a hidden column, and Prisma's default select (every column) fails loudly;
- *   - a role with insert cannot insert a row outside its scope (the control insert inside it works);
+ *   - a role with insert cannot insert a row outside its scope (the control insert inside it works; the copied row
+ *     gets a new id, and its unique text and number columns new values);
  *   - a role with update changes no row outside its scope and cannot move a row out of it (the control works);
  *   - a role with delete deletes no row outside its scope;
  *   - every privilege the classification does not grant is refused.
@@ -101,6 +103,8 @@ beforeAll(async () => {
   await seedFloorAuth({ db: factory, namespace: 'iso-b' })
   await seedThreads({ db: factory, namespace: 'iso-a' })
   await seedThreads({ db: factory, namespace: 'iso-b' })
+  await seedImports({ db: factory, namespace: 'iso-a' })
+  await seedImports({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -118,6 +122,8 @@ it('covers every classified table and every runtime role', () => {
     'FloorSession',
     'FloorSettings',
     'IdempotencyReceipt',
+    'ImportJob',
+    'ImportRow',
     'InboundWebhook',
     'IntegrationAccount',
     'IntegrationCall',
@@ -177,6 +183,8 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
         for (const column of unique) {
           const field = model.fields.find((entry) => entry.column === column)
           if (field?.type === 'String' && field.nativeType !== 'Uuid' && row[column] !== null) copy[column] = `${String(row[column])}-copy-${randomUUID().slice(0, 8)}`
+          // A number in a unique key (a row number) moves out of the seeded range.
+          if (field?.type === 'Int' && row[column] !== null) copy[column] = Number(row[column]) + 1_000_000
         }
       }
       return copy

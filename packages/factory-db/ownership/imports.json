@@ -1,0 +1,21 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/imports.prisma (rules: src/ownership.ts; roles: src/roles.ts). Imports are office work: the office (and the worker, in the tenant's system context) creates jobs, writes their plan rows in the dry run and fills the rows' outcome in the apply, always through apps/factory-api's platform/imports and command(). The floor and partner roles have no access. No role deletes: a job is cancelled, never removed, and its rows stay as the record of what was planned and applied. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "ImportJob": {
+      "about": "The office creates an import job with its sheet, reviews its plan, applies or cancels it; the worker moves it through the dry run and the apply. The API checks imports.view/run/apply and the importer's own permissions against the job's company.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ImportRow": {
+      "about": "The worker writes one row per sheet row in the dry run and records the outcome in the apply; the office reads them to review the plan (money values marked with their grain, filtered by the API).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

@@ -23,6 +23,8 @@ describe('model ownership', () => {
       'FloorSession',
       'FloorSettings',
       'IdempotencyReceipt',
+      'ImportJob',
+      'ImportRow',
       'InboundWebhook',
       'IntegrationAccount',
       'IntegrationCall',

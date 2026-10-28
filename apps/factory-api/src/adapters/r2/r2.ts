@@ -2,7 +2,7 @@ import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectComm
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { z } from 'zod'
 import { ProviderError, type GatewayCall } from '../../platform/gateway/gateway'
-import type { DownloadTarget, FileStoreAdapter, PresignedRequest, StoredObject, UploadTarget } from '../../platform/files/port'
+import { TooLargeObjectError, type DownloadTarget, type FileStoreAdapter, type PresignedRequest, type StoredObject, type UploadTarget } from '../../platform/files/port'
 import { isLegalKey } from '../../platform/files/rules'
 
 /**
@@ -20,6 +20,8 @@ import { isLegalKey } from '../../platform/files/rules'
  *   presign GET   `response-content-disposition: attachment…` and the stored type; 60 seconds
  *   head          size, type and the stored SHA-256 checksum (`x-amz-checksum-mode: ENABLED`); 404 → null
  *   delete        DeleteObject; the retention check is the caller's (store.ts), the legal bucket's lock is R2's
+ *   read          GetObject (server-side work on a file, an import's sheet); 404 → null; a body larger than the
+ *                 reader allows is refused from its length before it is read
  *
  * Presigning signs locally and sends nothing. The client makes one attempt per call (the gateway retries) and gets the
  * gateway's abort signal. Tests give `clientFor` an S3Client with a fake request handler: no network.
@@ -132,6 +134,29 @@ export function r2FileStore(options: R2Options = {}): FileStoreAdapter {
       } catch (error) {
         asProviderError(error, 'DeleteObject')
       }
+    },
+
+    async read(call: GatewayCall, key: string, maxBytes: number): Promise<Buffer | null> {
+      const { client, bucketOf } = await open(call)
+      let found
+      try {
+        found = await client.send(new GetObjectCommand({ Bucket: bucketOf(key), Key: key }), { abortSignal: call.signal })
+      } catch (error) {
+        if (error instanceof S3ServiceException && (error.$metadata?.httpStatusCode === 404 || error.name === 'NoSuchKey')) {
+          call.answer({ httpStatus: 404, response: { found: false } })
+          return null
+        }
+        return asProviderError(error, 'GetObject')
+      }
+      const length = found.ContentLength ?? 0
+      if (length > maxBytes) {
+        found.Body?.transformToWebStream().cancel().catch(() => {})
+        throw new TooLargeObjectError(`The object holds ${length} bytes; at most ${maxBytes} are read.`)
+      }
+      const body = Buffer.from((await found.Body?.transformToByteArray()) ?? new Uint8Array())
+      if (body.length > maxBytes) throw new TooLargeObjectError(`The object holds more than ${maxBytes} bytes.`)
+      call.answer({ httpStatus: 200, response: { sizeBytes: body.length } })
+      return body
     },
   }
 }

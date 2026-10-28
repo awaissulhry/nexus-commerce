@@ -92,6 +92,8 @@ model Company {
   oneOffLinks         OneOffLink[]
   // threads.prisma: the threads of the company's records.
   threads             Thread[]
+  // imports.prisma: the company's imports.
+  importJobs          ImportJob[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.

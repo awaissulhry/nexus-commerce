@@ -405,7 +405,7 @@ describe('retention, legal hold and the fiscal archive (PLAN §2.8)', () => {
     await expect(asOffice(`UPDATE "StoredFile" SET "retainUntil" = now() + interval '1 year' WHERE id = $1::uuid`, fiscal.id)).rejects.toThrow(/only moves later/)
     await expect(asOffice(`UPDATE "StoredFile" SET "retainUntil" = NULL WHERE id = $1::uuid`, fiscal.id)).rejects.toThrow(/needs its retention date/)
     await expect(admin(`DELETE FROM "StoredFile" WHERE id = $1`, [fiscal.id])).rejects.toThrow(/never deleted/)
-    await expect(admin(`TRUNCATE "StoredFile"`)).rejects.toThrow(/TRUNCATE on "StoredFile" is refused/)
+    await expect(admin(`TRUNCATE "StoredFile" CASCADE`)).rejects.toThrow(/TRUNCATE on "StoredFile" is refused/)
     // The owner login too: a fiscal file stays one, in the legal store, with its content.
     await expect(admin(`UPDATE "StoredFile" SET kind = 'DOCUMENT' WHERE id = $1`, [fiscal.id])).rejects.toThrow(/legal store exactly when it is a fiscal archive file/)
     await expect(admin(`UPDATE "StoredFile" SET "contentType" = 'application/pdf' WHERE id = $1`, [fiscal.id])).rejects.toThrow(/never changes/)

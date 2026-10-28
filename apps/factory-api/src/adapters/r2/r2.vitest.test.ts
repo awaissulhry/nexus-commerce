@@ -106,6 +106,25 @@ describe('the R2 file store', () => {
     expect(r2.requests.map((request) => request.method)).toEqual(['DELETE'])
   })
 
+  it('reads an object\'s bytes with GetObject, refusing one larger than asked; no object is null', async () => {
+    const r2 = new FakeR2()
+    const store = r2FileStore({ clientFor: r2.clientFor })
+    const body = Buffer.from('codice;nome\nA-1;Bolt\n')
+    r2.put('factory-test', KEY, { sizeBytes: body.length, contentType: 'text/csv', sha256: SHA, body })
+    const reading = call()
+    expect(await store.read(reading, KEY, 1_000)).toEqual(body)
+    expect(reading.answers).toEqual([{ httpStatus: 200, response: { sizeBytes: body.length } }])
+    await expect(store.read(call(), KEY, body.length - 1)).rejects.toMatchObject({ name: 'TooLargeObjectError' })
+    const missing = call()
+    expect(await store.read(missing, `${KEY.slice(0, -1)}0`, 1_000)).toBeNull()
+    expect(missing.answers).toEqual([{ httpStatus: 404, response: { found: false } }])
+    expect(r2.requests.map((request) => [request.method, request.path])).toEqual([
+      ['GET', `/factory-test/${KEY}`],
+      ['GET', `/factory-test/${KEY}`],
+      ['GET', `/factory-test/${KEY.slice(0, -1)}0`],
+    ])
+  })
+
   it('turns an R2 error answer into the gateway\'s ProviderError (5xx retryable, 4xx final)', async () => {
     const r2 = new FakeR2()
     const store = r2FileStore({ clientFor: r2.clientFor })
