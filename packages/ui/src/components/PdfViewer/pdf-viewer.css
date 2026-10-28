@@ -1,0 +1,112 @@
+/* PdfViewer (PdfViewer.tsx): a toolbar over a scrolling page area. The page is a canvas pdf.js draws (with its own
+   white paper); the area around it is the sunken ground. Without pdf.js the area holds the browser's own PDF view
+   (`.native`) or a message with the download. */
+
+.nds-pdf {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-xl);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  overflow: hidden;
+}
+
+.nds-pdf-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+.nds-pdf-title {
+  flex: 1 1 160px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-pdf-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-2);
+}
+.nds-pdf-pos,
+.nds-pdf-zoom {
+  min-width: 4.5em;
+  text-align: center;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.nds-pdf-pos { min-width: 7em; }
+.nds-pdf-end { display: inline-flex; margin-left: auto; }
+
+.nds-pdf-stage {
+  position: relative;
+  height: min(70vh, 760px);
+  overflow: auto;
+  padding: var(--nds-space-16);
+  background: var(--nds-surface-sunken);
+  overscroll-behavior: contain;
+}
+.nds-pdf-stage:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-text);
+  outline-offset: calc(-1 * var(--nds-density-focus-w));
+}
+.nds-pdf-stage.native {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8);
+}
+
+.nds-pdf-canvas {
+  display: block;
+  margin: 0 auto;
+  box-shadow: var(--nds-shadow-card);
+}
+
+.nds-pdf-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nds-space-12);
+  min-height: 100%;
+  padding: var(--nds-space-24);
+  color: var(--nds-text-2);
+  text-align: center;
+}
+.nds-pdf-msg.over {
+  position: absolute;
+  inset: auto var(--nds-space-16) var(--nds-space-16);
+  min-height: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+}
+.nds-pdf-actions { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: var(--nds-space-8); }
+.nds-pdf-note {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+.nds-pdf-native {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: var(--nds-radius-md);
+}
+
+@media (max-width: 719px) {
+  .nds-pdf-stage { height: min(64vh, 640px); padding: var(--nds-space-8); }
+  .nds-pdf-title { flex-basis: 100%; }
+}

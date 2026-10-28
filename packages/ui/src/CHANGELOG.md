@@ -1,3 +1,93 @@
+## Floor counts, label preview, sign and accept (factory gaps G6 G11 G12) — 2026-10-28
+
+New parts, new files only; nothing existing changes, and no Commerce page carries their code or CSS. Every word comes in
+as a prop. They are NOT in the components barrel (the web pulls it into every page's first load): `LabelPreview` and
+`SignBlock` are entry points of their own (`components/LabelPreview`, `components/SignBlock`; by package path
+`@nexus/ui/components/LabelPreview/index`), and the count parts are only behind the floor entry point (`floor/`).
+- **Counts (G6, `floor/`)**: `QuantityPad` — a big number as a spin button, − and + the PIN keys' size, the PIN pad's own
+  digit keys (no `<input>`, so no keyboard opens), quick values, an optional Confirm; the default is replaced by the first
+  digit (2, 2 → 22, not 2422), a digit past `max` is refused with an amber flash + buzz and the range in words, under
+  `min` may be typed on the way and holds Confirm; `decimals` with the app's separator; side by side from 40 rem of its
+  own width. `qtyHeldReason` holds an action-bar Confirm by the same rule (`quantityPadModel.ts`). `SizeButtons` — a
+  radio group of big size buttons with what is left per size (done = tick + word, held = focusable with its reason).
+  `AqlCounter` — single sampling: inspected / n with a bar, defects per class against Ac / Re, verdict open, accepted
+  (whole sample within Ac) or rejected (any class at Re, at once) (`aqlModel.ts`).
+- **Labels (G11, `components/LabelPreview/`)**: `LabelPreview` draws a label layout given as data (mm size; title, text,
+  fields, Code 128, QR, pictogram marks, rows, rule, fill) to scale by container units, paper and ink in both themes;
+  QR and marks are render props (no dependency); print state QUEUED / SENT / PRINTED / FAILED as icon + word + detail,
+  Retry on a failed job, an `actions` slot. `Code128` + `code128Model.ts`: a pure Code 128 encoder (sets B and C with the
+  usual switching, mod-103 check), verified by ZXing's reader; a value it cannot carry draws no bars.
+- **Sign (G12, `components/SignBlock/`)**: `SignBlock` — summary and legal slots, required ticks, the typed name matched
+  loosely (case, accents, punctuation, order, a middle name), an optional email check, Decline / Accept, busy, done and
+  held states; errors after a field is left or Accept pressed, focus to the first problem (`signBlockModel.ts`).
+- **Density**: all three read `--nds-density-*` (floor for the counts, comfortable for link pages); their buttons are
+  `FloorButton`, so they are console-sized at standard.
+- Tests: `quantityPadModel`, `aqlModel`, `sizeButtonsModel`, `countParts`, `code128Model`, `labelPreview`, `signBlock`
+  (`*.vitest.test.ts`). Catalog: "Floor counts", "Label preview", "Sign and accept"
+  (`apps/web/src/app/design-system/_catalog/{quantity,labels,sign}/`).
+
+## Phone bottom bar, PDF viewer, QR code and tenant branding — 2026-10-28
+
+Four parts the factory's W0 screens need (gaps G14, G18, G7 QR, G20). Commerce does not use them, and no Commerce page
+carries their code or CSS: they are NOT in the components barrel (the web pulls that barrel into every page's first
+load); each folder is its own entry point (`components/BottomBar`, `components/PdfViewer`, `components/QrCode`), and the
+branding rules are a stylesheet of their own. The token files every page loads are unchanged.
+- **`BottomBar` + `MoreSheet`** (`components/BottomBar`): the phone's main navigation, read from the view's `AreaNav`
+  (filtered with `areaNavForPerson`). The areas and rows marked `phone: 'tab'` are the tabs (4 at most); every other area
+  and the rows marked `phone: 'more'` are in the More sheet (the DS `Modal`, a bottom sheet under 720 px); a More with one
+  entry becomes a fifth tab; a manifest that marks none uses its first areas. One current slot (`findAreaNavPlace`):
+  `aria-current="page"` on a tab, or More says the current page is inside it. Props: `nav`, `pathname`,
+  `LinkComponent` (the app's link, as `AppRail`), `href`, `count`, `maxTabs`, `labels`, `inline`. Fixed to the bottom
+  under 720 px with the safe-area inset; `inline` draws it in the flow (previews, frames). `bottomBarLayout` is the model.
+- **`PdfViewer`** (`components/PdfViewer`): a PDF's pages with page steps, zoom (50–300 %), fit to width, the page count
+  (a live region) and a download. pdf.js is **injected**: `loadPdfJs` or `PdfJsProvider` with a loader the app owns
+  (`PdfJsLike`, a slice of pdf.js 5 that the real `pdfjs-dist` module satisfies); `@nexus/ui` never imports `pdfjs-dist`.
+  Without a loader: says the page preview is not available and shows the browser's own view where
+  `navigator.pdfViewerEnabled` (not Android Chrome), else the download. Props: `src` (address or bytes), `title`,
+  `onDownload`, `fileName`, `loadPdfJs`, `labels`, `height`. States: opening, error (Try again, Download), a page that
+  failed to draw. Keys in the page area: PageUp / PageDown / Home / End, + / - / 0. `PdfViewerView` draws a state.
+- **`QrCode`** (`components/QrCode`): a QR code as SVG (`role="img"` named by `label`), dark on a light plate in both
+  themes, with its text form (`code`, default the value) and a Copy button. Props: `value`, `label`, `size`, `code`,
+  `level`, `labels`. The encoder (`qrcode`, now a peer dependency; the web already depends on it) loads lazily.
+- **Tenant branding** (`tokens/branding.ts`, in the tokens barrel): `BrandingTokens` (name, logo, logo for dark, accent,
+  accent for dark), `checkBranding` (per theme: the colour is the button fill and accent text only when it clears the
+  seven pairs `check-nds-contrast` holds `--nds-primary` to at 7:1, and decoration only at 3:1 on the five surfaces;
+  otherwise that role keeps the DS colour), `brandingAttrs` (`data-brand="primary-light accent-light …"`, the roles that
+  passed, + `--nds-brand-*` on a subtree's root), `safeLogoUrl`. The new generated stylesheet `styles/branding.css`
+  (`npm run tokens:gen`, from `brandBlocks`) maps them onto `--nds-primary`, `--nds-primary-hover` and the new
+  `--nds-brand-accent` per theme; it holds no colour, and the app that shows branded pages loads it.
+- Catalog: `#bottom-bar-example`, `#branding-example`, `#pdf-viewer-example` (a stub pdf.js; a real PDF in the
+  browser's own view), `#qr-code-example`.
+
+## Size grid: colour × size quantities, an editor and a read view — 2026-10-28
+
+Gap G9 (the quote editor, the order record, the style's variants and the work order all show a size run).
+`grid/size-grid/`, exported by the grid barrel.
+- **`SizeGridEditor`**: rows are colourways (swatch + name), columns the sizes in scale order, then row totals; the
+  last row holds the column totals and the grand total. Props: `colours` (`key`, `label`, `swatch`, `offered` — a size
+  a colourway lacks is a cell that takes no entry), `sizes`, `value` (colour → size → pieces), `onChange` (the FULL
+  matrix on every change), `curves`, `issues` (a message per cell, or per colourway; `error` marks the cell invalid,
+  `warning` only shows), `max` (99 999), `caption` / `showCaption`, `mtm` / `onMtmChange` / `mtmSlot`, `locale`,
+  `copy` (every word, for another language).
+- **Keyboard**: a `<table>` with one labelled `<input>` per cell ("Black, size M"); Tab walks the cells, the arrows
+  move between them (left and right at the edge of the number), Enter / Shift+Enter move down / up, Escape puts back
+  what the cell had. A polite status region reads the row, column and grand total after a change.
+- **Paste** a block from a spreadsheet (tab and newline separated): it lands from the cell pasted into; what cannot
+  land (a size not offered, outside the grid, not a whole number) is counted and said under the grid.
+- **Curve fill**: a total shared across the sizes a colour is made in by a curve's shares (whole numbers or decimal
+  strings), for one colour or each. Largest remainder, exact (BigInt): the cells add up to the total; a leftover piece
+  goes to the larger remainder, then the larger share, then the earlier size. Held, with its reason, until it can run.
+- **Made to measure**: with `onMtmChange` a switch, "One made-to-measure unit"; on, the grid is hidden and `mtmSlot`
+  (the app's profile picker) is shown. The quantities are left to the screen.
+- **`SizeGridView`**: the same layout with numbers (0 muted, a size not offered "–"), compact, print-friendly (no scroll
+  box, fills or sticky column on paper; rows never split).
+- **Density**: every size reads `--nds-density-*`, so the grid is the first part that follows the tier: 28 px cells in
+  13 px type on `standard`, 44 px in 16 px on `comfortable`. It scrolls sideways inside its own box.
+- Pure helpers, tested: `sizeGridTotals`, `distributeBySizeCurve`, `curveFillSizeGrid`, `parseSizeGridPaste`,
+  `pasteIntoSizeGrid`, `parseSizeGridQuantity` (strict: `1,200` and `12.5` are refused, not guessed),
+  `clampSizeGridQuantity`, `normaliseSizeGrid`, `setSizeGridCell`, `sizeGridStep`. Catalog: "Size grid"
+  (`_catalog/size-grid/SizeGridExample.tsx`, standard and comfortable). Commerce does not use it.
+
 ## Floor kit: shell parts, scan input, PIN pad, tiles, confirm feedback — 2026-10-28
 
 A new area, `floor/` (`@/design-system/floor` in the web, `@nexus/ui/floor` elsewhere): the parts the factory's floor
