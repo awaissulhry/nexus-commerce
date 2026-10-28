@@ -23,7 +23,12 @@ export {
   type RuntimeRole,
 } from './roles'
 export type {
+  Badge,
   Company,
+  Device,
+  DeviceEnrolment,
+  FloorSession,
+  FloorSettings,
   InboundWebhook,
   IntegrationAccount,
   IntegrationCall,
@@ -41,8 +46,14 @@ export type {
   Tenant,
   User,
   WorkCentre,
+  Worker,
+  WorkerRole,
 } from './generated/prisma/client'
 export {
+  BadgeStatus,
+  DeviceKind,
+  DeviceStatus,
+  FloorSessionEndReason,
   InboundStatus,
   IntegrationAccountStatus,
   IntegrationCallStatus,
@@ -57,4 +68,5 @@ export {
   TenantStatus,
   UserStatus,
   WorkCentreKind,
+  WorkerStatus,
 } from './generated/prisma/enums'

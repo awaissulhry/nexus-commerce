@@ -53,6 +53,8 @@ model User {
   passwordResets  PasswordReset[]
   // roles.prisma: the roles the person holds, with their scopes.
   roleAssignments RoleAssignment[]
+  // floor-auth.prisma: the floor worker records linked to this person.
+  workers         Worker[]
 
   @@unique([tenantId, email])
   // The target of the tenant-safe references from the auth rows.
