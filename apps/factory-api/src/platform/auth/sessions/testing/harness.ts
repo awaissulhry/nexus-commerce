@@ -38,7 +38,7 @@ export function movableClock(start: string | Date = START): MovableClock {
 }
 
 const GENEROUS = { max: 10_000, timeWindowMs: 60_000 }
-export const GENEROUS_LIMITS: AuthRateLimits = { signIn: GENEROUS, resetRequest: GENEROUS, tokenUse: GENEROUS, codes: GENEROUS }
+export const GENEROUS_LIMITS: AuthRateLimits = { signIn: GENEROUS, resetRequest: GENEROUS, tokenUse: GENEROUS, codes: GENEROUS, linkUse: GENEROUS }
 
 export interface Harness {
   readonly db: MigratedDatabase

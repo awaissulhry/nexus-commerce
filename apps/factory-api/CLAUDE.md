@@ -4,9 +4,9 @@ The factory's Fastify 5 API: a separate product from Commerce, with its own data
 Today the API core: context, contracts, route manifest, security baseline, `GET /health` and `GET /ready`, and
 `command()` (`src/core/command.ts`): the ONLY way to write — one transaction for the change, its audit rows, its events
 and the idempotency receipt; the outbox (events → BullMQ → handlers and live screens); and the worker and scheduler
-(`src/background.ts worker|scheduler`); office sign-in, roles and money grains (`src/platform/auth/`) and the
-integration platform (gateway, sealed secrets, inbound ledger), below. Floor, portal and link sign-in, the modules and
-the adapters come in later steps.
+(`src/background.ts worker|scheduler`); office sign-in, roles and money grains (`src/platform/auth/`), one-off links
+(`src/platform/links/`) and the integration platform (gateway, sealed secrets, inbound ledger), below. Floor and portal
+sign-in, the modules and the adapters come in later steps.
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>
@@ -70,9 +70,9 @@ the adapters come in later steps.
 
 ## Office sign-in (`src/platform/auth/`, plan A1 §3.10)
 - `sessions/office-auth.ts`: `createOfficeAuth({ database, environment, cookieSecret, webOrigin, clock?, mailer? })`,
-  made in `src/index.ts` and passed to `buildApp` as `officeAuth`: its `authenticate` reads the office cookie (the
-  default authenticator), the auth routes read it with `officeAuthOf(app)` (503 without it). Floor, portal and link
-  sessions are not read yet: those requests have no session (401).
+  made in `src/index.ts` and passed to `buildApp` as `officeAuth`: its `authenticate` reads a one-off link's token
+  (`x-factory-link`, platform/links) or else the office cookie (the default authenticator), the auth and link routes
+  read it with `officeAuthOf(app)` (503 without it). Floor and portal sessions are not read yet (401).
 - Identity is per tenant: `User` (email unique in the tenant), `Session`, `Invitation`, `PasswordReset` (auth.prisma),
   all behind the tenant wall. The tenant is known before any lookup: sign-in names its slug (`factory_platform` reads
   only `Tenant`), cookies and links carry `<tenantId>.<userId>.<secret>`; only SHA-256 of a token is stored.
@@ -114,6 +114,32 @@ the adapters come in later steps.
   `check-money-grains` fails on an unmarked money-looking contract field, audit value or Prisma column.
 - PostgreSQL tests: the harness's `addTenant` gives a tenant its system roles; `addUser({ role: 'owner' })` and
   `addRole(h, tenant, userId, key)` give a system role over every company.
+
+## One-off links (`src/platform/links/`, plan A1 §3.10 "Links", §2.2; features SAL-099, PLT-007, PLT-035)
+- A link opens ONE record of ONE party for ONE purpose (factory-domain `links/purposes`: QUOTE_ACCEPT, PO_CONFIRM,
+  DOCUMENT_VIEW, DEPOSIT_INFO), with an expiry and a use limit. Token `<tenantId>.<partyId>.<linkId>.<secret>` (256
+  bits, `links/token`); only its SHA-256 is stored. The web link is `<web>/l#token=…` (fragment: in no server log); the
+  web sends the token in the `x-factory-link` header.
+- `authenticator.ts` (chained before the office cookie): the link is read in the token's PARTY scope
+  (factory_partner_runtime), hash compared in constant time, live (not revoked, not expired, uses left), tenant
+  ACTIVE → context `link` with its one record and the grants of its purpose (never a role's: `links.open`, its answers
+  `links.accept|decline|confirm`, `money.price` only for purposes that show the party its own document; PO_CONFIRM
+  none). Anything else is ONE 404 (`LINK_UNAVAILABLE`), whatever was wrong. `linkSessionOf(request)` gives the link.
+- Every use goes through `useLink(tools, request, { action, typedName?, email? })` INSIDE a command (`linkCommand`, on
+  the sign-in clock): the purpose's evidence rules (`links/evidence`: typed name, email check), the use counted by one
+  UPDATE that matches only a live link (a race uses a one-use link once), a LinkEvidence row (append-only), an audit
+  row and the `link.used` event. Link writes need an Idempotency-Key. A module's answer route (W1: accept a quote,
+  confirm a PO) has the `link` audience, its action's permission and scope `record`, and calls useLink beside its
+  change; command() refuses any record but the link's.
+- Office: `POST /links` (links.manage over the record's company and party; the URL is in the answer once, never in the
+  command result, so no receipt holds it), `GET /links?recordType=&recordId=` (links.view, scopeWhere), `POST
+  /links/:linkId/revoke` (final). A record type is linkable only once its module registers a source
+  (`records.ts`, `registerLinkRecordSource`); W0 has none. Rate limit `AuthRateLimits.linkUse` on link routes.
+- The partner wall (factory-db `src/ownership.ts`): a column marked `/// @grain cost|margin|wages` or `/// @internal`
+  must be in the partner role's hiddenColumns (check-ownership). The OneOffLink guard trigger keeps a link fixed but for
+  its uses, revocation and note.
+- PostgreSQL tests: `links.pg.vitest.test.ts` (a made-up module with in-memory records registers sources and link
+  routes), `guards.pg.vitest.test.ts`.
 
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),

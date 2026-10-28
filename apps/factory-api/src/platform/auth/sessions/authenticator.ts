@@ -22,8 +22,8 @@ import { idleExpiryAt, SESSION_LIFETIME } from './session-store'
  *   5. the idle expiry slides forward (at most once a minute; bookkeeping, not audited);
  *   6. the context: office, tenant, user, company, and the grants of the person's live role assignments
  *      (sessions/grants.ts; a role that requires two-factor gives nothing until it was proved on the session).
- * No cookie, or a cookie that opens nothing: no session (401). Floor devices, portal and link sessions are not read
- * here; their steps add them, until then they get no session.
+ * No cookie, or a cookie that opens nothing: no session (401). A one-off link's token is read before this, by
+ * platform/links/authenticator.ts (office-auth.ts chains them); floor devices and portal sessions come with their steps.
  */
 
 export const COMPANY_HEADER = 'x-factory-company'
