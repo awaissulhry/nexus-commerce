@@ -27,13 +27,17 @@ export type {
   InboundWebhook,
   IntegrationAccount,
   IntegrationCall,
+  Invitation,
   Line,
   OutboxEvent,
+  PasswordReset,
   Prisma,
   SecretValue,
+  Session,
   Site,
   Station,
   Tenant,
+  User,
   WorkCentre,
 } from './generated/prisma/client'
 export {
@@ -44,7 +48,10 @@ export {
   IntegrationProvider,
   MasterStatus,
   OutboxStatus,
+  PasswordResetKind,
+  SessionEndReason,
   SiteKind,
   TenantStatus,
+  UserStatus,
   WorkCentreKind,
 } from './generated/prisma/enums'

@@ -4,8 +4,9 @@ The factory's Fastify 5 API: a separate product from Commerce, with its own data
 Today the API core: context, contracts, route manifest, security baseline, `GET /health` and `GET /ready`, and
 `command()` (`src/core/command.ts`): the ONLY way to write — one transaction for the change, its audit rows, its events
 and the idempotency receipt; the outbox (events → BullMQ → handlers and live screens); and the worker and scheduler
-(`src/background.ts worker|scheduler`); the integration platform (gateway, sealed secrets, inbound ledger, below).
-Sign-in, the modules and the adapters come in later steps.
+(`src/background.ts worker|scheduler`); office sign-in (`src/platform/auth/`) and the integration platform
+(gateway, sealed secrets, inbound ledger), below. Roles, floor, portal and link sign-in, the modules and the adapters
+come in later steps.
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>
@@ -30,8 +31,10 @@ Sign-in, the modules and the adapters come in later steps.
 - `manifest.ts` + `autoload.ts`: every route has a manifest entry `{ audiences, permission, scope }`. Routes live
   ONLY in `src/platform/<name>/routes.ts` (auth, admin, outbox, numbering, …) and `src/modules/<name>/routes.ts`
   (sales, product, …), each with `manifest.ts` beside it: `routes.ts` default-exports
-  `defineRoutes(name, manifest, plugin)`, `manifest.ts` holds `defineManifest({...})`. One level of folders; write
-  full paths (no prefixes). `routesFiles()` (autoload.ts) finds them for the app, `build.mjs` and the guard alike.
+  `defineRoutes(name, manifest, plugin)`, `manifest.ts` holds `defineManifest({...})`. A folder without a routes file
+  of its own may group parts one level down (`platform/auth/office/routes.ts`); nothing deeper is loaded. Write full
+  paths (no prefixes); test helpers that call `.post('/…')` live in a `testing/` folder (the guard skips it).
+  `routesFiles()` (autoload.ts) finds them for the app, `build.mjs` and the guard alike.
   A route without an entry, an entry without a route, a bad entry, or a route anywhere else stops the boot or fails
   `check-route-manifest.mjs`.
 - `build.mjs`: entry points `src/index.ts` + every routes file, ESM with code splitting, so shared code is one
@@ -64,6 +67,26 @@ Sign-in, the modules and the adapters come in later steps.
 - `dispatch.ts` (worker): an event → its live message (Redis pub/sub) + one `event-handlers` job per handler
   (`defineHandler`, listed in `background.ts`; handlers write through `tools.caller` = command() as the system).
 - `lag.ts` (scheduler): the `outbox.lag` cron logs pending/dead events, dead letters and failed jobs every minute.
+
+## Office sign-in (`src/platform/auth/`, plan A1 §3.10)
+- `sessions/office-auth.ts`: `createOfficeAuth({ database, environment, cookieSecret, webOrigin, clock?, mailer? })`,
+  made in `src/index.ts` and passed to `buildApp` as `officeAuth`: its `authenticate` reads the office cookie (the
+  default authenticator), the auth routes read it with `officeAuthOf(app)` (503 without it). Floor, portal and link
+  sessions are not read yet: those requests have no session (401).
+- Identity is per tenant: `User` (email unique in the tenant), `Session`, `Invitation`, `PasswordReset` (auth.prisma),
+  all behind the tenant wall. The tenant is known before any lookup: sign-in names its slug (`factory_platform` reads
+  only `Tenant`), cookies and links carry `<tenantId>.<userId>.<secret>`; only SHA-256 of a token is stored.
+- Cookies `__Host-factory_session` (HttpOnly, SameSite=Lax) and `__Host-factory_csrf` (readable). Every unsafe request
+  of a cookie session, and sign-in, sign-out and invitation accept, send `x-csrf-token` = the CSRF cookie
+  (`GET /auth/csrf` makes one). Idle 8 h (slid at most once a minute), absolute 7 days, user and tenant ACTIVE.
+- Writes go through command() on the auth object's clock (`auth.command`); the idle slide is the one unaudited write.
+- Grants are a placeholder until the roles step: an owner (`User.isOwner`) holds `OWNER_PERMISSIONS` once two-factor is
+  proved on the session; everyone else holds none. Risky routes call `requireStepUp(auth, request)` (a TOTP code on
+  this session in the last 5 minutes; 403 with issue path `stepUp` otherwise).
+- Links never leave the API in an answer or a log: the `AuthMailer` seam (`sessions/mail.ts`, `holdAuthMail` until the
+  email step); tests read them from `memoryAuthMailer()` (refused unless FACTORY_ENV=test).
+- PostgreSQL tests: `sessions/testing/harness.ts` (`startHarness`, `Browser` cookie jar, `movableClock`, `enrolTotp`,
+  `stepUp`). Keep a test file's clock moving forward once a TOTP code was used: an older step is a replay.
 
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),

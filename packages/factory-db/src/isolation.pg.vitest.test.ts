@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAudit } from '../seed/audit'
+import { seed as seedAuth } from '../seed/auth'
 import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
@@ -77,6 +78,8 @@ beforeAll(async () => {
   b = await seed({ db: factory, namespace: 'iso-b' })
   partyId = (await seedAudit({ db: factory, namespace: 'iso-a' })).partyId
   await seedAudit({ db: factory, namespace: 'iso-b' })
+  await seedAuth({ db: factory, namespace: 'iso-a' })
+  await seedAuth({ db: factory, namespace: 'iso-b' })
   await seedNumbering({ db: factory, namespace: 'iso-a' })
   await seedNumbering({ db: factory, namespace: 'iso-b' })
   await seedOutbox({ db: factory, namespace: 'iso-a' })
@@ -98,14 +101,18 @@ it('covers every classified table and every runtime role', () => {
     'InboundWebhook',
     'IntegrationAccount',
     'IntegrationCall',
+    'Invitation',
     'Line',
     'NumberAllocation',
     'NumberSeries',
     'OutboxEvent',
+    'PasswordReset',
     'SecretValue',
+    'Session',
     'Site',
     'Station',
     'Tenant',
+    'User',
     'WorkCentre',
   ])
   expect(RUNTIME_ROLES).toHaveLength(4)

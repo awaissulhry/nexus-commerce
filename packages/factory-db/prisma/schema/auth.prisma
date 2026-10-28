@@ -1,0 +1,161 @@
+// Office sign-in (plan A1 §2.3, §3.10; features PLT-014, PLT-015, PLT-016, PLT-047, PLT-048, PLT-070): the people of a
+// tenant, their sessions, their invitations and their password resets. apps/factory-api/src/platform/auth reads and
+// writes them; every change goes through command() with its audit row.
+//
+// Every model sits behind the tenant wall. The person is a row of ONE tenant (email unique in the tenant), not a global
+// identity: the walls of A1 §2.2 let factory_platform read only Tenant, so sign-in finds the tenant first (its slug in
+// the sign-in request; its id in every cookie and link) and looks the person up inside it, as factory_runtime.
+//
+// Secrets are never stored: passwords as scrypt hashes, session, invitation and reset tokens as SHA-256 of the token,
+// recovery codes as HMACs, the TOTP secret encrypted (AES-256-GCM). The logger redacts these columns by name.
+
+/// A person who signs in to the Office of one tenant (the roles step adds what they may do; floor workers and portal
+/// users join this table in their steps). Never deleted: a leaver is DEACTIVATED and keeps their name on history.
+model User {
+  id                   String     @id @db.Uuid
+  tenantId             String     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The sign-in name: trimmed and lower case (normalizeEmail), unique in the tenant.
+  email                String
+  displayName          String
+  locale               String     @default("it")
+  status               UserStatus @default(INVITED)
+  /// Placeholder for the roles step: an owner holds every permission of the platform parts built so far, in every
+  /// company, and must use two-factor.
+  isOwner              Boolean    @default(false)
+  /// Two-factor is required for this person (the roles step adds Role.requireMfa). Until it is set up and proved on a
+  /// session, the session holds no permission.
+  requireMfa           Boolean    @default(false)
+  /// scrypt, `$scrypt$ln=…,r=…,p=…$salt$hash` (factory-domain auth/password). Null: no password (invited, deactivated).
+  passwordHash         String?
+  passwordChangedAt    DateTime?  @db.Timestamptz(3)
+  /// An administrator asked for a new password: the next sign-in ends in a reset, not a session (PLT-070).
+  mustChangePassword   Boolean    @default(false)
+  /// Wrong passwords and codes in a row, and the lock they set (factory-domain auth/lockout).
+  failedAttempts       Int        @default(0)
+  lockedUntil          DateTime?  @db.Timestamptz(3)
+  lastSignInAt         DateTime?  @db.Timestamptz(3)
+  /// The confirmed TOTP secret, encrypted; null without two-factor.
+  totpSecretEnc        String?
+  totpConfirmedAt      DateTime?  @db.Timestamptz(3)
+  /// A secret being set up, encrypted, until a code confirms it.
+  totpPendingSecretEnc String?
+  /// The time step of the last accepted code: a code of this step or an earlier one is refused (replay).
+  totpLastStep         Int?
+  /// HMAC-SHA-256 of each unused recovery code; a code leaves the list when it is used.
+  recoveryCodeHashes   String[]   @default([])
+  version              Int        @default(1)
+  createdAt            DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?    @db.Uuid
+
+  // A suspended tenant's people cannot sign in, and their sessions stop (sessions/authenticator.ts).
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sessions        Session[]
+  invitations     Invitation[]    @relation("InvitedUser")
+  sentInvitations Invitation[]    @relation("InvitedBy")
+  passwordResets  PasswordReset[]
+
+  @@unique([tenantId, email])
+  // The target of the tenant-safe references from the auth rows.
+  @@unique([tenantId, id])
+}
+
+/// The life of a user (apps/factory-api platform/auth/users: the machine and its commands).
+enum UserStatus {
+  /// Invited, no password yet; signs in after accepting the invitation.
+  INVITED
+  ACTIVE
+  /// Cannot sign in; every session ended. Reactivation gives the access back.
+  SUSPENDED
+  /// Left: cannot sign in, credentials cleared, kept for the history. Can only be invited again.
+  DEACTIVATED
+}
+
+/// One signed-in browser (a `__Host-` cookie holds the token). Valid until revoked, 8 hours without use or 7 days
+/// after sign-in, whichever comes first; the user must still be ACTIVE.
+model Session {
+  id                String            @id @db.Uuid
+  tenantId          String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  userId            String            @db.Uuid
+  /// SHA-256 (hex) of the cookie value; the value is never stored.
+  tokenHash         String            @unique
+  /// The company the session starts in (the tenant's only active company at sign-in, else none); the
+  /// x-factory-company header picks one per request.
+  companyId         String?           @db.Uuid
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+  lastSeenAt        DateTime          @db.Timestamptz(3)
+  /// Slides forward with use (at most once a minute), never past the absolute expiry.
+  idleExpiresAt     DateTime          @db.Timestamptz(3)
+  absoluteExpiresAt DateTime          @db.Timestamptz(3)
+  /// When the second factor was proved on this session (at sign-in or when two-factor was set up).
+  mfaAt             DateTime?         @db.Timestamptz(3)
+  /// The last step-up (a fresh code) on this session; risky actions need a recent one.
+  stepUpAt          DateTime?         @db.Timestamptz(3)
+  /// HMAC of the shortened client address (/24, /64), never the address.
+  ipHash            String?
+  userAgent         String?
+  revokedAt         DateTime?         @db.Timestamptz(3)
+  revokedReason     SessionEndReason?
+
+  user    User     @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, userId])
+}
+
+/// Why a session ended before its time.
+enum SessionEndReason {
+  SIGNED_OUT
+  SUSPENDED
+  DEACTIVATED
+  /// A new password was set, or an administrator required one.
+  PASSWORD_CHANGED
+}
+
+/// An invitation to join the tenant's Office by email (PLT-015): a single-use link that expires. The invited user row
+/// exists from the start (INVITED); accepting sets the password and activates it.
+model Invitation {
+  id          String    @id @db.Uuid
+  tenantId    String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  userId      String    @db.Uuid
+  /// The address it was sent to.
+  email       String
+  /// SHA-256 (hex) of the link's token.
+  tokenHash   String    @unique
+  /// Who invited; null for the first owner, invited at tenant set-up.
+  invitedById String?   @db.Uuid
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  expiresAt   DateTime  @db.Timestamptz(3)
+  acceptedAt  DateTime? @db.Timestamptz(3)
+  revokedAt   DateTime? @db.Timestamptz(3)
+
+  user      User  @relation("InvitedUser", fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  invitedBy User? @relation("InvitedBy", fields: [tenantId, invitedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, userId])
+}
+
+/// A single-use link to set a new password (PLT-070), asked for by the person or required by an administrator.
+model PasswordReset {
+  id        String            @id @db.Uuid
+  tenantId  String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  userId    String            @db.Uuid
+  /// SHA-256 (hex) of the link's token.
+  tokenHash String            @unique
+  kind      PasswordResetKind
+  createdAt DateTime          @default(now()) @db.Timestamptz(3)
+  expiresAt DateTime          @db.Timestamptz(3)
+  usedAt    DateTime?         @db.Timestamptz(3)
+
+  user User @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, userId])
+}
+
+enum PasswordResetKind {
+  /// The person asked for a link (forgot the password).
+  REQUESTED
+  /// A sign-in found that an administrator required a new password; the link comes with that answer.
+  REQUIRED
+}

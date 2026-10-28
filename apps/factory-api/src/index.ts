@@ -2,8 +2,8 @@ import { fileURLToPath } from 'node:url'
 import { Redis } from 'ioredis'
 import { openFactoryDatabase, type FactoryDatabase } from '@nexus/factory-db'
 import { appConfig, buildApp } from './core/app'
-import { noSessions } from './core/context'
 import { loadFactoryEnv } from './env'
+import { createOfficeAuth } from './platform/auth/sessions/office-auth'
 
 // The env loader runs first: it refuses a wrong environment before anything opens a connection.
 const env = loadFactoryEnv()
@@ -29,13 +29,22 @@ redis.on('error', () => {
   redisDown = true
 })
 
+// Office sign-in: the session cookie's authenticator and the auth routes' services. Floor, portal and link sessions
+// come with their steps; until then those requests have no session (401).
+const officeAuth = createOfficeAuth({
+  database,
+  environment: env.FACTORY_ENV,
+  cookieSecret: env.FACTORY_COOKIE_SECRET,
+  webOrigin: env.FACTORY_WEB_ORIGIN,
+})
+
 // A route without a manifest entry (or an entry without a route) stops the boot here.
 let app: Awaited<ReturnType<typeof buildApp>>
 try {
   app = await buildApp(appConfig(env), {
     database,
     redis,
-    authenticate: noSessions,
+    officeAuth,
     // src/{platform,modules} under tsx; dist/{platform,modules} next to the bundle (build.mjs).
     routesRoot: fileURLToPath(new URL('.', import.meta.url)),
     logger: { level: env.FACTORY_ENV === 'test' ? 'warn' : 'info' },

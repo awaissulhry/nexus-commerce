@@ -20,14 +20,18 @@ describe('model ownership', () => {
       'InboundWebhook',
       'IntegrationAccount',
       'IntegrationCall',
+      'Invitation',
       'Line',
       'NumberAllocation',
       'NumberSeries',
       'OutboxEvent',
+      'PasswordReset',
       'SecretValue',
+      'Session',
       'Site',
       'Station',
       'Tenant',
+      'User',
       'WorkCentre',
     ])
     expect(inputs.platformTables).toEqual([{ table: 'Tenant', privileges: ['select', 'insert', 'update'], walled: true }])

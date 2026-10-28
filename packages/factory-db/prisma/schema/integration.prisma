@@ -21,7 +21,7 @@
 model IntegrationAccount {
   id                      String                   @id @db.Uuid
   tenantId                String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
-  /// The company whose account it is (Stripe, the SDI provider, Sendcloud: one per legal company). Null: tenant-wide
+  /// The company whose account it is (the SDI provider, Sendcloud: one per legal company). Null: tenant-wide
   /// (SES, R2, VIES, whose credentials are the environment's).
   companyId               String?                  @db.Uuid
   provider                IntegrationProvider
