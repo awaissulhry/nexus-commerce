@@ -1,3 +1,4 @@
+import type { Permission } from '../../core/permissions'
 import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
@@ -37,6 +38,24 @@ export const NUMBERING_DEFINITIONS = definePermissions('numbering', {
   manage: { risk: 'write', description: 'Create a number series, set where it starts, move it past a number.' },
 })
 
+/**
+ * Files on R2 (apps/factory-api platform/files; plan A1 §3.6, COL-045, COL-050). Each is checked with can() against the
+ * file's company, and for a floor, portal or link session against the site or party the file is shared with (that
+ * audience's own rule decides what it sees; a role only grants the permission). Sharing beyond the office, retention
+ * and legal hold are files.manage. Not step-up: A1 §3.10 keeps step-up for bank details, issuing invoices and user and
+ * role changes; a retained or held file cannot be deleted by anyone (the database refuses it too).
+ */
+export const FILES_DEFINITIONS = definePermissions('files', {
+  read: { risk: 'read', description: "See a record's files and download them (floor, portal and link sessions: only what is shared with them)." },
+  upload: { risk: 'write', description: 'Upload a file to a record (seen by the office only, unless shared with files.manage).' },
+  delete: { risk: 'write', description: 'Delete a file; never one on legal hold or before its retention date.' },
+  manage: { risk: 'write', description: 'Share a file with a floor, a portal or links; set its retention date and legal hold.' },
+})
+export const FILES_READ = 'files.read' satisfies Permission
+export const FILES_UPLOAD = 'files.upload' satisfies Permission
+export const FILES_DELETE = 'files.delete' satisfies Permission
+export const FILES_MANAGE = 'files.manage' satisfies Permission
+
 /** The money grains as they travel in grants (`../grains/grains`): from Role.grains, never Role.permissions. */
 export const MONEY_PERMISSIONS: PermissionDefinition[] = GRAINS.map((grain) =>
   Object.freeze({ name: grainPermission(grain), area: 'money', description: GRAIN_DESCRIPTIONS[grain], risk: 'read' as const, grain }),
@@ -47,10 +66,11 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   ROLES_PERMISSIONS,
   AUDIT_PERMISSIONS,
   NUMBERING_DEFINITIONS,
+  FILES_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
-// The numbering module's constants and its declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE]) {
-  if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by the numbering module but not declared`)
+// The modules' constants and their declarations name the same permissions.
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE]) {
+  if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 }

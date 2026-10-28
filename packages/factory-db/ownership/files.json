@@ -1,0 +1,15 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/files.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context) writes file rows through apps/factory-api's platform/files, always through command(). The floor and partner roles only read, and only the files shared with them: the floor key is floorSiteId (set exactly when visibility has FLOOR), the partner key is partyId (set exactly when visibility has PARTNER or LINK); the guard trigger of the …_files_guards migration keeps both consistent with visibility. Neither sees the legal hold. No role deletes a row: a deleted file keeps its row in status DELETED, and the trigger refuses DELETE and TRUNCATE for every login. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "StoredFile": {
+      "about": "The office requests uploads, confirms them, shares files, sets retention and legal holds, and deletes files (status DELETED); the worker will add generated documents. A floor device reads the files shared with its site's floor; a portal or link session reads the files shared with its party (the API also needs PARTNER for a portal session, and LINK and the link's record for a link).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "floorSiteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["legalHold", "partyId"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["legalHold", "floorSiteId", "createdById"] }
+      }
+    }
+  }
+}

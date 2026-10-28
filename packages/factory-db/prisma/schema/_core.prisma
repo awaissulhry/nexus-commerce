@@ -86,6 +86,8 @@ model Company {
   sessions     Session[]
   // integration.prisma: the company's accounts with outside services.
   integrationAccounts IntegrationAccount[]
+  // files.prisma: the company's files.
+  files               StoredFile[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.
@@ -114,6 +116,8 @@ model Site {
   lines       Line[]
   workCentres WorkCentre[]
   stations    Station[]
+  // files.prisma: the files shared with this site's floor.
+  floorFiles  StoredFile[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])

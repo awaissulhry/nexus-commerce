@@ -32,6 +32,7 @@ describe('model ownership', () => {
       'Session',
       'Site',
       'Station',
+      'StoredFile',
       'Tenant',
       'User',
       'WorkCentre',
