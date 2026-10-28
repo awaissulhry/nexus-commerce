@@ -16,6 +16,7 @@ Each app and package below has its own CLAUDE.md; it loads when you open a file 
 - `packages/database` — Prisma schema, migrations, the workspace-scoped client, row-level-security SQL.
 - `packages/events` — the event catalogue (`catalog.ts`) and envelope.
 - `packages/shared` — pure logic used by api and web. They import its `dist/`, not its source.
+- `packages/ui` — the design system (`@nexus/ui`). The web still imports it as `@/design-system/*`.
 - `services/bidding-engine` — separate service; not an npm workspace, not covered by the checks below.
 - The new factory, a separate product (own PostgreSQL, login and Railway projects; never the root `.env`):
   `apps/factory-api` (Fastify API, env only from `apps/factory-api/.env` and `FACTORY_` variables),
