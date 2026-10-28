@@ -37,6 +37,9 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),
   `nav/office-nav.ts` (assembles the area manifests). `src/areas/<area>/nav.ts` — one navigation declaration per area.
 - `src/lib/` — shared by every view: `api/` (the client), `session/`, `i18n/`, `theme/`, `pdf/`, `links/`, `design/`.
+- `src/record-panels/` — SCR-006, the panels every record page mounts: `<RecordPanels record={{ type, id, companyId,
+  siteId }} title party />` (thread, files, history; live refresh from `/live`). A screen with its own catalogue wraps its
+  view in `WithMessages` (record-panels/i18n.tsx): the layouts load `shell` only.
 
 ## Rules
 - `FACTORY_API_URL` has NO fallback: without it `next dev`, `next build` and `next start` refuse to start

@@ -1,0 +1,228 @@
+{
+  "mailToSort": {
+    "intro": "Mail that reached the company's addresses but found no record, mail held until someone looks at it, and mail that could not be read. Assign each one to a record, release it, or throw it away.",
+    "filterLabel": "Show",
+    "filter": {
+      "all": "All to sort",
+      "TRIAGE": "No record",
+      "HELD": "Held",
+      "FAILED": "Not read"
+    },
+    "count_one": "{count} mail",
+    "count_other": "{count} mails",
+    "countMore_one": "{count} mail shown, more below",
+    "countMore_other": "{count} mails shown, more below",
+    "listLabel": "Mail to sort, newest first",
+    "loading": "Reading the mail…",
+    "reading": "Reading this mail…",
+    "retry": "Try again",
+    "dismiss": "Dismiss",
+    "more": "Show more",
+    "noSubject": "(no subject)",
+    "unknownSender": "Unknown sender",
+    "empty": {
+      "all": {
+        "title": "Nothing to sort",
+        "body": "Every mail found its record. New mail that does not shows up here."
+      },
+      "TRIAGE": {
+        "title": "No mail without a record",
+        "body": "Mail that matches no record and no known sender shows up here."
+      },
+      "HELD": {
+        "title": "No held mail",
+        "body": "Mail that failed a check or came from an unknown sender is held here for you."
+      },
+      "FAILED": {
+        "title": "No unread mail",
+        "body": "Mail that the mail store could not hand over shows up here."
+      }
+    },
+    "status": {
+      "RECEIVED": "Received",
+      "FETCHED": "Read",
+      "TRIAGE": "No record",
+      "HELD": "Held",
+      "FAILED": "Not read",
+      "MATCHED": "In a thread",
+      "REJECTED": "Thrown away"
+    },
+    "heldReason": {
+      "DMARC_FAIL": {
+        "short": "Sender not confirmed",
+        "body": "The sender's domain did not pass its DMARC check: the mail may not come from who it says. Release it only if you know it is genuine."
+      },
+      "SPAM": {
+        "short": "Looks like spam",
+        "body": "The mail service marked it as spam. Release it only if you know the sender."
+      },
+      "UNKNOWN_SENDER": {
+        "short": "Unknown sender",
+        "body": "It answers one of our threads, but the sender is not someone that thread knows. Check who wrote before it joins the thread."
+      },
+      "THREAD_CLOSED": {
+        "short": "Thread closed",
+        "body": "It answers a thread that was closed. Release it to put it in that thread anyway, or assign it to another record."
+      }
+    },
+    "whyTitle": {
+      "TRIAGE": "No record found",
+      "HELD": "Held for you",
+      "FAILED": "This mail could not be read"
+    },
+    "why": {
+      "TRIAGE": "Nothing in it names one of our records, and the sender is not a known contact. Assign it to the record it is about, or throw it away.",
+      "FAILED_one": "The mail store could not hand it over after {count} try (it is gone, too large or unreadable). Only its envelope is known: throw it away and ask the sender to write again if it mattered.",
+      "FAILED_other": "The mail store could not hand it over after {count} tries (it is gone, too large or unreadable). Only its envelope is known: throw it away and ask the sender to write again if it mattered."
+    },
+    "attachmentCount_one": "{count} file",
+    "attachmentCount_other": "{count} files",
+    "suggested": "Known sender's company",
+    "suggestedBody": "The sender writes from the domain of a customer or supplier we know: look among that party's records.",
+    "action": {
+      "assign": "Assign to a record…",
+      "release": "Release…",
+      "reject": "Throw away…"
+    },
+    "held": {
+      "noWrite": "Writing mail into a record's thread needs another role.",
+      "busy": "Working…",
+      "noFiles": "Opening files needs another role.",
+      "reason": "Write at least 3 characters, or leave it empty."
+    },
+    "field": {
+      "from": "From",
+      "received": "Received",
+      "to": "To",
+      "cc": "Cc",
+      "checks": "Checks"
+    },
+    "check": {
+      "spf": "SPF",
+      "dkim": "DKIM",
+      "dmarc": "DMARC",
+      "spam": "Spam",
+      "virus": "Virus"
+    },
+    "verdict": {
+      "auth": {
+        "PASS": "passed",
+        "FAIL": "failed",
+        "GRAY": "unknown",
+        "PROCESSING_FAILED": "not checked",
+        "DISABLED": "off"
+      },
+      "content": {
+        "PASS": "none found",
+        "FAIL": "found",
+        "GRAY": "unknown",
+        "PROCESSING_FAILED": "not checked",
+        "DISABLED": "off"
+      }
+    },
+    "bodyLabel": "The mail",
+    "frameTitle": "The mail, shown safely",
+    "pictures": {
+      "blocked_one": "{count} picture from the web is not shown.",
+      "blocked_other": "{count} pictures from the web are not shown.",
+      "shown_one": "{count} picture from the web is shown.",
+      "shown_other": "{count} pictures from the web are shown.",
+      "show": "Show pictures",
+      "hide": "Hide pictures"
+    },
+    "noBody": "The mail has no text.",
+    "noBodyFailed": "The mail could not be read, so there is no text to show.",
+    "attachmentsLabel": "Attached files",
+    "attachments_one": "{count} attached file",
+    "attachments_other": "{count} attached files",
+    "attachmentsNote": "Kept files become the record's files when the mail is assigned or released. Files of other types are never kept.",
+    "download": "Download",
+    "downloadNamed": "Download {name}",
+    "keptLater": "Kept",
+    "skip": {
+      "type_not_allowed": "Not kept: type not allowed",
+      "too_large": "Not kept: too large",
+      "empty": "Not kept: empty",
+      "inline": "Picture inside the text",
+      "too_many": "Not kept: too many files"
+    },
+    "cancel": "Cancel",
+    "recordKind": {
+      "Certificate": "Certificate"
+    },
+    "assign": {
+      "title": "Assign to a record",
+      "body": "The mail joins the record's thread as a message from the customer or supplier, and its kept files become the record's.",
+      "loading": "Reading the records…",
+      "none": "No record that can take mail was found. A record needs a customer or supplier for its thread to take mail.",
+      "placeholder": "e.g. 2026-0042",
+      "go": "Assign",
+      "held": "Choose the record first.",
+      "withoutParty_one": "{count} record without a customer or supplier is not offered: its thread cannot take mail.",
+      "withoutParty_other": "{count} records without a customer or supplier are not offered: their threads cannot take mail.",
+      "files": "Nothing is sent to anyone: the mail and its files only move into the record.",
+      "number": "Record number",
+      "numberHint": "Type the number, or part of it.",
+      "matches_one": "{count} record found",
+      "matches_other": "{count} records found",
+      "noMatch": "No record with this number can take mail.",
+      "moreMatches_one": "{count} more: type more of the number.",
+      "moreMatches_other": "{count} more: type more of the number."
+    },
+    "release": {
+      "title": "Release this mail",
+      "body": {
+        "thread": "It goes into the thread it answers, as a message from the customer or supplier, with its kept files.",
+        "list": "It goes back to the list as mail without a record: assign it to a record next."
+      },
+      "go": {
+        "thread": "Release into the thread",
+        "list": "Release to the list"
+      },
+      "risky": "It failed a check: release it only if you are sure who sent it.",
+      "reason": "Why (optional)"
+    },
+    "reasonHint": "Kept with the change, for whoever looks later.",
+    "reject": {
+      "title": "Throw this mail away",
+      "body": "It leaves the list. Nothing is deleted and nobody is told.",
+      "legend": "Why",
+      "reason": {
+        "MARKED_SPAM": {
+          "title": "Spam",
+          "body": "Unwanted mail: advertising, phishing, a sender we do not deal with."
+        },
+        "DISCARDED": {
+          "title": "Not for us",
+          "body": "A real mail that needs no record: a newsletter, an out-of-office reply, a duplicate."
+        }
+      },
+      "note": "Note (optional)",
+      "go": "Throw away"
+    },
+    "notice": {
+      "assigned": "Assigned. The mail is now a message of the record's thread.",
+      "releasedThread": "Released into its thread.",
+      "releasedList": "Released. It is back in the list, waiting for a record.",
+      "rejected": {
+        "MARKED_SPAM": "Thrown away as spam.",
+        "DISCARDED": "Thrown away as not for us."
+      },
+      "conflict": "Someone else, or the mail service, sorted this mail meanwhile. It was read again: check it and try once more.",
+      "cannot": "The mail cannot go there: the record needs a customer or supplier, or the mail was sorted already. It was read again.",
+      "notFound": "This mail or that record is no longer here. The list was read again.",
+      "forbidden": "You may not do this with this mail or this record.",
+      "invalid": "The answer was refused as it is. Check what you wrote.",
+      "signedOut": "Your session ended. Sign in again to go on.",
+      "rateLimited": "Too many tries in a short time. Wait a minute and try again.",
+      "unavailable": "The factory server did not answer. Nothing was changed; try again.",
+      "failed": "That did not work. Nothing was changed; try again."
+    },
+    "problem": {
+      "read": "The mail could not be read. Try again in a moment.",
+      "forbidden": "You may not sort mail of this company.",
+      "notFound": "This mail is no longer here.",
+      "unavailable": "The factory server did not answer. Check the connection and try again."
+    }
+  }
+}

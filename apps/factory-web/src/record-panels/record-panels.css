@@ -1,0 +1,319 @@
+/*
+ * The record panels' LAYOUT (SCR-006): where the tabs, the composer, the messages, the files and the history sit. The
+ * look of every control is the design system's; this file places them, with semantic tokens only (spacing, the edge
+ * that tells an internal note from a shared message, muted text).
+ */
+/* The design system's controls assume border-box sizing (Commerce gets it from its Tailwind preflight); factory-web's
+   base.css has no global reset yet, so the panels set it for their own parts (and the PDF viewer's dialog body). */
+.fw-rp,
+.fw-rp *,
+.fw-rp *::before,
+.fw-rp *::after,
+.fw-rp-preview,
+.fw-rp-preview *,
+.fw-rp-preview *::before,
+.fw-rp-preview *::after {
+  box-sizing: border-box;
+}
+
+.fw-rp {
+  min-width: 0;
+}
+
+.fw-rp-inner,
+.fw-rp-panel,
+.fw-rp-thread,
+.fw-rp-files,
+.fw-rp-history,
+.fw-rp-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-rp-panel {
+  outline: none;
+}
+
+.fw-rp-panel[hidden] {
+  display: none;
+}
+
+.fw-rp-muted {
+  color: var(--nds-text-2);
+}
+
+.fw-rp-small {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-rp-inline,
+.fw-rp-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-rp-loading {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rp-more,
+.fw-rp-thread-tools {
+  display: flex;
+  justify-content: center;
+}
+
+.fw-rp-thread-tools {
+  justify-content: flex-end;
+}
+
+/* ── composer ──────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-rp-composer-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--nds-space-12);
+}
+
+.fw-rp-composer-pickers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-rp-composer-pickers:empty {
+  display: none;
+}
+
+.fw-rp-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-rp-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-rp-attach-option {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ── messages ──────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-rp-messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-rp-message {
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-inline-start-width: 3px;
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+/* An internal note has the strong neutral edge; a message the party sees has the info edge (and each says so in words). */
+.fw-rp-message.is-internal {
+  border-inline-start-color: var(--nds-border-strong);
+}
+
+.fw-rp-message.is-shared {
+  border-inline-start-color: var(--nds-info);
+}
+
+.fw-rp-message-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-8);
+}
+
+.fw-rp-tag-icon {
+  vertical-align: -2px;
+  margin-inline-end: var(--nds-space-4);
+}
+
+.fw-rp-message-author {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-rp-message-head time {
+  margin-inline-start: auto;
+}
+
+.fw-rp-message-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  margin-top: var(--nds-space-4);
+  overflow-wrap: anywhere;
+}
+
+.fw-rp-message-body {
+  margin-top: var(--nds-space-6);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  color: var(--nds-text);
+}
+
+.fw-rp-message-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+  margin: var(--nds-space-6) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ── files ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-rp-upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-12);
+  border: 1px dashed var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-rp-upload-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-12) var(--nds-space-24);
+  min-width: 0;
+}
+
+.fw-rp-upload-fields .nds-field {
+  min-width: 200px;
+}
+
+.fw-rp-audiences {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-14);
+}
+
+.fw-rp-audiences > .fw-rp-legend {
+  flex-basis: 100%;
+}
+
+.fw-rp-upload-go {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-rp-filelist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-rp-file {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  align-items: center;
+  min-width: 0;
+}
+
+.fw-rp-file > .nds-filerow {
+  min-width: 0;
+}
+
+.fw-rp-file-meta {
+  grid-column: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+
+.fw-rp-file-actions {
+  grid-column: 2;
+  grid-row: 1;
+  /* The same width on every row, so the file rows line up whichever actions a file has. */
+  min-width: 13rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--nds-space-4);
+}
+
+.fw-rp-versions {
+  grid-column: 1 / -1;
+}
+
+.fw-rp-versions .fw-rp-filelist {
+  margin-top: var(--nds-space-8);
+}
+
+/* ── history ───────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-rp-step-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  overflow-wrap: anywhere;
+}
+
+.fw-rp-values {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-rp-excerpt {
+  color: var(--nds-text);
+}
+
+/* ── phone ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 719px) {
+  .fw-rp-composer-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-rp-file {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-rp-file-actions {
+    grid-column: 1;
+    grid-row: auto;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  .fw-rp-upload-fields .nds-field {
+    min-width: 0;
+    width: 100%;
+  }
+}

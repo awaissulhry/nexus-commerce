@@ -1,0 +1,299 @@
+{
+  "panels": {
+    "label": "Thread, files and history of {title}",
+    "tabs": {
+      "label": "Record panels",
+      "thread": "Thread",
+      "files": "Files",
+      "history": "History"
+    },
+    "retry": "Try again",
+    "dismiss": "Dismiss",
+    "problem": {
+      "read": "This could not be read. Try again in a moment.",
+      "notFound": "This record has no thread here, or you may not see it.",
+      "forbidden": "You may not see this part of the record.",
+      "signedOut": "Your session ended. Sign in again to go on.",
+      "unavailable": "The factory server did not answer. Check the connection and try again."
+    }
+  },
+  "notice": {
+    "noteAdded": "Note added. Only the office sees it.",
+    "emailQueued": "Email queued. It goes out in a moment; its state shows on the message.",
+    "closed": "Thread closed. Nobody can write in it until it is reopened.",
+    "reopened": "Thread reopened.",
+    "sendConflict": "Nothing was sent: the thread is closed, or the company's sending address is not ready yet. It was read again.",
+    "statusConflict": "Someone else changed this thread meanwhile. It was read again; check it and try once more.",
+    "invalid": "Nothing was saved: something in it was refused. Check the addresses, the files and the text.",
+    "forbidden": "You may not do this on this record.",
+    "stepUp": "Confirm it is you with your authenticator code, then try again.",
+    "rateLimited": "Too many tries in a short time. Wait a minute and try again.",
+    "unavailable": "The factory server did not answer. Nothing was changed; try again.",
+    "failed": "That did not work. Nothing was changed; try again.",
+    "noSender": "Nothing was sent: this record's company has no address to send mail from yet (Admin › Email & addresses).",
+    "badRecipient": "Nothing was sent: an address was refused (not valid, or it bounced or complained before).",
+    "noSubject": "Nothing was sent: write a subject for the first mail of this thread.",
+    "attachmentsRefused": "Nothing was sent: a file can no longer go with it (not shared with the party, or too large together).",
+    "mentionsRefused": "Nothing was saved: a person you mentioned cannot read this record."
+  },
+  "thread": {
+    "loading": "Reading the thread…",
+    "listLabel": "Messages, newest first",
+    "older": "Show older messages",
+    "close": "Close thread",
+    "reopen": "Reopen",
+    "closed": {
+      "title": "This thread is closed",
+      "body": "Nobody can write in it. Someone who manages threads can reopen it.",
+      "bodyManage": "Nobody can write in it until you reopen it."
+    },
+    "empty": {
+      "title": "No messages yet",
+      "body": "Internal notes and mail with the customer or supplier of this record show here, newest first."
+    }
+  },
+  "composer": {
+    "modeLabel": "Who sees this message",
+    "mode": {
+      "note": "Internal note",
+      "email": "Email to {party}"
+    },
+    "title": {
+      "note": "Internal note",
+      "email": "Email to {party}"
+    },
+    "rule": {
+      "note": "Only people in the office see an internal note: {party} never does.",
+      "noParty": "the customer or supplier",
+      "email": "Sent from your company's address, as you. {party} sees it, and their reply comes back to this thread."
+    },
+    "placeholder": {
+      "note": "Write a note for your colleagues",
+      "email": "Write the message to send"
+    },
+    "send": {
+      "note": "Add note",
+      "email": "Send email"
+    },
+    "to": "To",
+    "toHint": "Addresses separated by commas.",
+    "toPlaceholder": "name@example.com",
+    "subject": "Subject",
+    "subjectHint": "Leave it empty to answer with the subject of the last mail.",
+    "mentions": "Mention people",
+    "mentionsChosen_one": "Mention people · {count} chosen",
+    "mentionsChosen_other": "Mention people · {count} chosen",
+    "mentionsLegend": "Each person you choose is told about this note.",
+    "attach": "Attach files",
+    "attachChosen_one": "Attach files · {count} chosen",
+    "attachChosen_other": "Attach files · {count} chosen",
+    "attachLegendNote": "Files of this record",
+    "attachLegendEmail": "Files already shared with {party}: the email carries them",
+    "noSharedFiles": "No file of this record is shared with {party} yet, so none can go with the email. Share it first in Files.",
+    "held": {
+      "closed": "The thread is closed.",
+      "sending": "Sending…",
+      "emptyNote": "Write the note first.",
+      "emptyEmail": "Write the message first.",
+      "tooLong": "Cut {count} characters to send it.",
+      "tooManyFiles": "Attach at most {max} files.",
+      "tooManyMentions": "Mention at most {max} people.",
+      "badAddress": "\"{address}\" is not an email address.",
+      "noRecipient": "Add the address to send it to.",
+      "tooManyRecipients": "Send to at most {max} addresses.",
+      "subjectTooLong": "Keep the subject under {max} characters.",
+      "attachmentsTooLarge": "The files together are over 10 MB: attach fewer.",
+      "noSubject": "Write a subject: this is the thread's first mail."
+    },
+    "absent": {
+      "noParty": "This record has no customer or supplier, so no email can be sent from it.",
+      "noPermission": "You can read this thread; writing in it needs another role."
+    },
+    "subjectFirst": "The first mail of this thread needs a subject."
+  },
+  "message": {
+    "theParty": "the customer or supplier",
+    "someone": "someone",
+    "label": "{kind} from {author}",
+    "author": {
+      "USER": "Someone in the office",
+      "WORKER": "A floor worker",
+      "PARTY": "The customer or supplier",
+      "SYSTEM": "Nexus Factory"
+    },
+    "kind": {
+      "note": "Internal note",
+      "outbound": "Email to {party}",
+      "inbound": "Email from {party}"
+    },
+    "email": {
+      "QUEUED": "Waiting to send",
+      "SENDING": "Sending",
+      "SENT": "Sent",
+      "DELIVERED": "Delivered",
+      "BOUNCED": "Bounced",
+      "COMPLAINED": "Marked as spam",
+      "FAILED": "Not sent"
+    },
+    "emailTo": "To {to} · {subject}",
+    "mentioned": "Mentioned: {names}",
+    "attachments": "Attached files"
+  },
+  "files": {
+    "listLabel": "Files of this record",
+    "uploadsLabel": "Uploads in progress",
+    "loading": "Reading the files…",
+    "empty": {
+      "title": "No files yet",
+      "body": "Documents, photos and certificates of this record show here.",
+      "bodyUpload": "Upload a document, a photo or a certificate: choose its kind and who may see it."
+    },
+    "phase": {
+      "hashing": "Checking the file…",
+      "uploading": "Uploading…",
+      "confirming": "Confirming…"
+    },
+    "problem": {
+      "failed": "The upload did not finish. Try again.",
+      "type": "This kind of file does not take this type. Choose another kind, or another file.",
+      "empty": "The file is empty.",
+      "size": "The file is too large for this kind.",
+      "store": "The file store did not take the file. Try again.",
+      "refused": "The factory refused the file as it is (its type, size or sharing).",
+      "forbidden": "You may not upload or share files on this record."
+    },
+    "notice": {
+      "uploaded": "File uploaded. It shows in the list and the history.",
+      "quarantined": "The file store refused the file: it differs from what was announced. It is quarantined and cannot be opened."
+    },
+    "dismiss": "Dismiss",
+    "earlier_one": "{count} earlier version",
+    "earlier_other": "{count} earlier versions",
+    "version": "Version {n}",
+    "audience": {
+      "officeOnly": "Office only",
+      "OFFICE": "Office",
+      "FLOOR": "Floor",
+      "PARTNER": "Portal",
+      "LINK": "Link"
+    },
+    "quarantined": "Quarantined",
+    "quarantine": {
+      "size_mismatch": "Refused: its size differs from what was announced.",
+      "type_mismatch": "Refused: its type differs from what was announced.",
+      "checksum_mismatch": "Refused: its content differs from what was announced.",
+      "unknown": "Refused by the file store."
+    },
+    "pending": "The upload was never finished.",
+    "added": "{kind} · added {at}",
+    "kind": {
+      "ATTACHMENT": "Attachment",
+      "DOCUMENT": "Document",
+      "PHOTO": "Photo",
+      "CERTIFICATE": "Certificate",
+      "FISCAL_ARCHIVE": "Fiscal archive"
+    },
+    "kindHint": {
+      "ATTACHMENT": "PDF, pictures, Word, Excel, OpenDocument, CSV or text; up to 25 MB.",
+      "DOCUMENT": "PDF, Word, Excel, OpenDocument or CSV; up to 25 MB.",
+      "PHOTO": "JPEG, PNG, WebP or HEIC; up to 15 MB.",
+      "CERTIFICATE": "PDF, JPEG or PNG; up to 20 MB.",
+      "FISCAL_ARCHIVE": "PDF, XML or signed .p7m; up to 20 MB. Kept for ten years."
+    },
+    "held": {
+      "noRead": "Opening files needs another role.",
+      "notAvailable": "This file cannot be opened."
+    },
+    "preview": "View",
+    "previewNamed": "View {name}",
+    "download": "Download",
+    "downloadNamed": "Download {name}",
+    "retention": {
+      "legalHold": "Legal hold",
+      "until": "Kept until {date}",
+      "fiscal": "Fiscal archive · kept until {date}"
+    },
+    "upload": {
+      "label": "Upload a file",
+      "kind": "Kind of file",
+      "audience": "Who sees it",
+      "share": {
+        "FLOOR": "The floor of this site",
+        "PARTNER": "{party} on the portal",
+        "LINK": "{party} through a link"
+      },
+      "officeOnly": "Only the office sees what you upload. Sharing a file needs another role.",
+      "officeOnlyNoParty": "Only the office sees it: this record has no customer, supplier or site to share it with.",
+      "choose": "Choose files…",
+      "fiscalNote": "A fiscal archive file is kept ten years and cannot be deleted before."
+    }
+  },
+  "history": {
+    "label": "History of the record, newest first",
+    "filterLabel": "Show",
+    "filter": {
+      "all": "Everything",
+      "message": "Messages",
+      "change": "Changes",
+      "file": "Files"
+    },
+    "loading": "Reading the history…",
+    "older": "Show older",
+    "empty": {
+      "title": "Nothing here yet",
+      "body": {
+        "all": "Messages, changes and files of this record show here, newest first.",
+        "message": "No message on this record yet.",
+        "change": "No change recorded on this record yet.",
+        "file": "No file on this record yet."
+      }
+    },
+    "message": {
+      "note": "{who} added an internal note",
+      "outbound": "{who} emailed {party}",
+      "inbound": "{who} wrote to the office"
+    },
+    "attachments_one": "{count} file attached",
+    "attachments_other": "{count} files attached",
+    "file": {
+      "available": "File {name} added",
+      "quarantined": "File {name} refused by the store",
+      "detail": "{kind} · {audiences}"
+    },
+    "actor": {
+      "OFFICE": "Someone in the office",
+      "FLOOR": "The floor",
+      "PARTNER": "The customer or supplier",
+      "LINK": "Someone with a link",
+      "SYSTEM": "Nexus Factory"
+    },
+    "change": {
+      "label": "{who}: {verb}",
+      "status": "Status {from} → {to}",
+      "valuesLabel": "What changed",
+      "fields": "Changed: {fields}",
+      "reason": "Why: {reason}"
+    },
+    "verb": {
+      "created": "created",
+      "updated": "edited",
+      "deleted": "deleted",
+      "issued": "issued",
+      "suspended": "suspended",
+      "reinstated": "reinstated",
+      "withdrawn": "withdrawn",
+      "archived": "archived",
+      "noted": "added a note",
+      "statusChanged": "changed the status",
+      "sent": "sent",
+      "uploadStarted": "started an upload",
+      "uploaded": "uploaded a file",
+      "shared": "changed who sees a file",
+      "retentionChanged": "changed how long a file is kept",
+      "assigned": "assigned a mail",
+      "released": "released a mail",
+      "rejected": "rejected a mail",
+      "changed": "changed it"
+    }
+  }
+}

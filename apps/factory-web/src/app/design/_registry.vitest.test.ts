@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { DESIGN_SCREENS, designScreens, findCase, findScreen } from './_registry'
 
 describe('the design index finds the fixtures by itself (PLAN §3.1)', () => {
-  it('lists the W0 shell screens by SCR id', () => {
-    expect(DESIGN_SCREENS.map((screen) => screen.screen)).toEqual(['SCR-002', 'SCR-003', 'SCR-004', 'SCR-028'])
+  it('lists the W0 screens by SCR id, in order', () => {
+    const ids = DESIGN_SCREENS.map((screen) => screen.screen)
+    // Each screen step adds its own fixtures: the list grows without this test naming every later one.
+    expect(ids).toEqual(expect.arrayContaining(['SCR-002', 'SCR-003', 'SCR-004', 'SCR-006', 'SCR-019', 'SCR-028']))
+    expect(ids).toEqual([...ids].sort((a, b) => a.localeCompare(b, 'en', { numeric: true })))
     expect(findScreen('SCR-003')?.file).toBe('shell/office/fixtures.ts')
   })
 

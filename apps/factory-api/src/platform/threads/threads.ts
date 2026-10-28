@@ -424,6 +424,37 @@ export async function mentionProblems(tx: CommandTx, context: RequestContext, th
   return problems
 }
 
+/** The most people the mention list reads (a tenant's office staff, by name). */
+export const MAX_MENTIONABLE = 500
+
+/**
+ * GET /threads/<type>/<id>/people: who a note on the record may mention (COL-006) — the same rule `mentionProblems`
+ * checks at write: ACTIVE people whose roles let them read the record's thread (two-factor taken as proved). Office
+ * writers only (threads.post over the record); names only, never an address or a role.
+ */
+export async function mentionablePeople(caller: CommandCaller, record: RecordRef, now: Date): Promise<Array<{ id: string; name: string }>> {
+  const context = contextOf(caller)
+  if (context.audience !== 'office') throw new ForbiddenError()
+  const actor = actorOf(context)
+  return caller.withClient(async (client) => {
+    const { scope } = await officeRecord(client, record)
+    if (!can(actor, THREADS_READ, scope)) throw new NotFoundError('Record not found.')
+    if (!can(actor, THREADS_POST, scope)) throw new ForbiddenError()
+    const users = await client.user.findMany({
+      where: { status: 'ACTIVE' },
+      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+      take: MAX_MENTIONABLE,
+      select: { id: true, displayName: true },
+    })
+    const people: Array<{ id: string; name: string }> = []
+    for (const user of users) {
+      const reader: Actor = { audience: 'office', tenantId: context.tenantId, grants: sessionGrants({ requireMfa: false }, await heldRoles(client, user.id, now), true) }
+      if (can(reader, THREADS_READ, scope)) people.push({ id: user.id, name: user.displayName })
+    }
+    return people
+  })
+}
+
 export interface NoteInput {
   readonly body: string
   readonly mentions?: readonly string[] | undefined
