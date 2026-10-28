@@ -89,6 +89,14 @@ describe('custom roles', () => {
     expect(customKeyProblems('Night lead')).toHaveLength(1)
   })
 
+  it('refuses the permissions only a one-off link session holds (they come from the link\'s purpose)', () => {
+    expect(roleProblems({ name: 'Link sender', requireMfa: false, permissions: ['links.view', 'links.manage'], grains: [] })).toEqual([])
+    expect(roleProblems({ name: 'Customer', requireMfa: false, permissions: ['links.open', 'links.view', 'links.accept'], grains: ['price'] })).toEqual([
+      { path: 'permissions/0', message: 'links.open is held only by a one-off link session, from its purpose; a role cannot give it.' },
+      { path: 'permissions/2', message: 'links.accept is held only by a one-off link session, from its purpose; a role cannot give it.' },
+    ])
+  })
+
   it('a template update never widens a copy: it only shows what the template has that the copy lacks', () => {
     const copy = normalizeContent({ basedOn: 'admin', permissions: ['users.view', 'roles.view'], grains: [] as never[] })
     expect(templateAdds(copy).permissionsAdded).toEqual(expect.arrayContaining(['roles.assign', 'users.invite']))
