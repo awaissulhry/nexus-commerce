@@ -3,8 +3,9 @@
 The factory's Fastify 5 API: a separate product from Commerce, with its own database, login and Railway projects.
 Today the API core: context, contracts, route manifest, security baseline, `GET /health` and `GET /ready`, and
 `command()` (`src/core/command.ts`): the ONLY way to write — one transaction for the change, its audit rows, its events
-and the idempotency receipt. Sign-in, the outbox writer, the worker and scheduler (`src/background.ts`), the modules
-and the adapters come in later steps; until the outbox step, a command that emits an event is refused.
+and the idempotency receipt. Office sign-in lives in `src/platform/auth/` (below). The outbox writer, the worker and
+scheduler (`src/background.ts`), roles, floor/portal/link sign-in, the modules and the adapters come in later steps;
+until the outbox step, a command that emits an event is refused.
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only
@@ -26,8 +27,9 @@ and the adapters come in later steps; until the outbox step, a command that emit
 - `manifest.ts` + `autoload.ts`: every route has a manifest entry `{ audiences, permission, scope }`. Routes live
   ONLY in `src/platform/<name>/routes.ts` (auth, admin, outbox, numbering, …) and `src/modules/<name>/routes.ts`
   (sales, product, …), each with `manifest.ts` beside it: `routes.ts` default-exports
-  `defineRoutes(name, manifest, plugin)`, `manifest.ts` holds `defineManifest({...})`. One level of folders; write
-  full paths (no prefixes). `routesFiles()` (autoload.ts) finds them for the app, `build.mjs` and the guard alike.
+  `defineRoutes(name, manifest, plugin)`, `manifest.ts` holds `defineManifest({...})`. A folder without a routes file
+  of its own may group parts one level down (`platform/auth/office/routes.ts`); nothing deeper is loaded. Write full
+  paths (no prefixes); test helpers that call `.post('/…')` live in a `testing/` folder (the guard skips it). `routesFiles()` (autoload.ts) finds them for the app, `build.mjs` and the guard alike.
   A route without an entry, an entry without a route, a bad entry, or a route anywhere else stops the boot or fails
   `check-route-manifest.mjs`.
 - `build.mjs`: entry points `src/index.ts` + every routes file, ESM with code splitting, so shared code is one
@@ -44,6 +46,26 @@ and the adapters come in later steps; until the outbox step, a command that emit
   refused, rate limit (Redis when present), 1 MiB body limit.
 - `ids.ts` (request ids), `time.ts` (the server clock). UUIDv7 `newId()` and Europe/Rome dates live in
   `@nexus/factory-domain/core/{ids,time}`.
+
+## Office sign-in (`src/platform/auth/`, plan A1 §3.10)
+- `sessions/office-auth.ts`: `createOfficeAuth({ database, environment, cookieSecret, webOrigin, clock?, mailer? })`,
+  made in `src/index.ts` and passed to `buildApp` as `officeAuth`: its `authenticate` reads the office cookie (the
+  default authenticator), the auth routes read it with `officeAuthOf(app)` (503 without it). Floor, portal and link
+  sessions are not read yet: those requests have no session (401).
+- Identity is per tenant: `User` (email unique in the tenant), `Session`, `Invitation`, `PasswordReset` (auth.prisma),
+  all behind the tenant wall. The tenant is known before any lookup: sign-in names its slug (`factory_platform` reads
+  only `Tenant`), cookies and links carry `<tenantId>.<userId>.<secret>`; only SHA-256 of a token is stored.
+- Cookies `__Host-factory_session` (HttpOnly, SameSite=Lax) and `__Host-factory_csrf` (readable). Every unsafe request
+  of a cookie session, and sign-in, sign-out and invitation accept, send `x-csrf-token` = the CSRF cookie
+  (`GET /auth/csrf` makes one). Idle 8 h (slid at most once a minute), absolute 7 days, user and tenant ACTIVE.
+- Writes go through command() on the auth object's clock (`auth.command`); the idle slide is the one unaudited write.
+- Grants are a placeholder until the roles step: an owner (`User.isOwner`) holds `OWNER_PERMISSIONS` once two-factor is
+  proved on the session; everyone else holds none. Risky routes call `requireStepUp(auth, request)` (a TOTP code on
+  this session in the last 5 minutes; 403 with issue path `stepUp` otherwise).
+- Links never leave the API in an answer or a log: the `AuthMailer` seam (`sessions/mail.ts`, `holdAuthMail` until the
+  email step); tests read them from `memoryAuthMailer()` (refused unless FACTORY_ENV=test).
+- PostgreSQL tests: `sessions/testing/harness.ts` (`startHarness`, `Browser` cookie jar, `movableClock`, `enrolTotp`,
+  `stepUp`). Keep a test file's clock moving forward once a TOTP code was used: an older step is a replay.
 
 ## Rules
 - Configuration only through `src/env.ts`. It reads ONLY `apps/factory-api/.env`, by explicit path, and ONLY

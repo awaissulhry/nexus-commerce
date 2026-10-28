@@ -17,10 +17,14 @@ describe('model ownership', () => {
       'AuditLog',
       'Company',
       'IdempotencyReceipt',
+      'Invitation',
       'Line',
+      'PasswordReset',
+      'Session',
       'Site',
       'Station',
       'Tenant',
+      'User',
       'WorkCentre',
     ])
     expect(inputs.platformTables).toEqual([{ table: 'Tenant', privileges: ['select', 'insert', 'update'], walled: true }])
