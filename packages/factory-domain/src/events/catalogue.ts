@@ -7,6 +7,7 @@ import { events as integration } from '../integration/events'
 import { events as links } from '../links/events'
 import { events as threads } from '../threads/events'
 import { events as print } from '../print/events'
+import { events as product } from '../product/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -105,9 +106,9 @@ export function createCatalogue(definitions: readonly EventDefinition[]): EventC
  * The platform's own events come first (integration: the inbound webhook ledger; files: confirmed uploads; links: a
  * one-off link's use; threads: messages and mentions on records;
  * imports: the import jobs; print: print jobs; email: mail out and its delivery; email-in: mail received); the W1
- * modules bring theirs (compliance: certificate expiry).
+ * modules bring theirs (compliance: certificate expiry; product: the material library).
  */
-export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance] as const satisfies readonly EventDefinition[]
+export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
