@@ -261,6 +261,21 @@ describe('storeDocumentPdf (GAP-008)', () => {
     expect(await admin('SELECT id FROM "StoredFile" WHERE "recordId" = $1', [request.recordId])).toHaveLength(1)
   })
 
+  it('c.c. art. 2250 c. 3 and c. 4: prints the liquidation and the single shareholder the Company row records', async () => {
+    const liquidating = newId()
+    await admin(
+      `INSERT INTO "Company" (id, "tenantId", code, "legalName", address, "vatNumber", "fiscalCode", "reaOffice", "reaNumber", "shareCapital", "soleShareholder", "inLiquidation")
+       SELECT $1, "tenantId", 'LQ', 'Liquidanda Fittizia S.r.l.', address, "vatNumber", "fiscalCode", "reaOffice", "reaNumber", "shareCapital", true, true FROM "Company" WHERE id = $2`,
+      [liquidating, company],
+    )
+    const { file } = await storeDocumentPdf(files, office(), { companyId: liquidating, recordType: 'Ddt', recordId: newId(), document: ddt({ number: '2026/000160' }) })
+    const text = pdfText(await downloaded(file.id))
+    expect(text).toContain('Liquidanda Fittizia S.r.l. in liquidazione')
+    expect(text).toContain('Capitale sociale versato € 10.000,00 · Società con socio unico')
+    expect(text.match(/Liquidanda Fittizia S\.r\.l\. in liquidazione/g)?.length).toBe(2)
+    expect(pdfText(await downloaded((await storeDocumentPdf(files, office(), { companyId: company, recordType: 'Ddt', recordId: newId(), document: ddt({ number: '2026/000161' }) })).file.id))).not.toMatch(/liquidazione|socio unico/)
+  })
+
   it('c.c. art. 2250: refuses a document of a company without its legal data, before anything is stored', async () => {
     const before = (await admin('SELECT count(*)::int AS n FROM "IntegrationCall"'))[0]!.n
     const refusal = await storeDocumentPdf(files, office(), { companyId: bareCompany, recordType: 'Ddt', recordId: newId(), document: ddt() }).catch((error: unknown) => error)

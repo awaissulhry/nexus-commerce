@@ -176,8 +176,15 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   MONEY_PERMISSIONS,
 ])
 
-/** The area of the permissions only floor roles hold (and floor roles hold no other). */
+/** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
 export const FLOOR_AREA = 'floor'
+
+/**
+ * The office permissions a floor role may hold too: what a floor device does on the same routes as the office, at its
+ * own device's site only (can() pins a floor session to it, row-level security too). Printing labels at the site's
+ * printer (GAP-007) and seeing its print queue. Never a money grain; floor roles still hold no other office permission.
+ */
+export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS])
 
 // The modules' constants and their declarations name the same permissions.
 for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE]) {

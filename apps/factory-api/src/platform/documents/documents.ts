@@ -43,16 +43,30 @@ const addressSchema = z.object({
 })
 
 /**
- * The company's legal data for its documents (c.c. art. 2250), read in the caller's scope (row-level security keeps it
- * to the tenant). The single-shareholder and liquidation facts are not on the Company row yet: nothing is printed for
- * them until the company settings keep them.
+ * The company's legal data for its documents (c.c. art. 2250: registered office, register office and number, paid-up
+ * capital, single shareholder (c. 4), liquidation (c. 3)), read from its Company row in the caller's scope (row-level
+ * security keeps it to the tenant).
  */
 export async function companyLegalOf(caller: CommandCaller, companyId: string): Promise<CompanyLegal> {
   if (!isUuid(companyId)) throw new NotFoundError('Company not found.')
   const row = await caller.withClient((client) =>
     client.company.findUnique({
       where: { id: companyId },
-      select: { legalName: true, tradeName: true, address: true, vatNumber: true, fiscalCode: true, reaOffice: true, reaNumber: true, shareCapital: true, currency: true, pec: true, documentFooter: true },
+      select: {
+        legalName: true,
+        tradeName: true,
+        address: true,
+        vatNumber: true,
+        fiscalCode: true,
+        reaOffice: true,
+        reaNumber: true,
+        shareCapital: true,
+        soleShareholder: true,
+        inLiquidation: true,
+        currency: true,
+        pec: true,
+        documentFooter: true,
+      },
     }),
   )
   if (!row) throw new NotFoundError('Company not found.')
@@ -66,6 +80,8 @@ export async function companyLegalOf(caller: CommandCaller, companyId: string): 
     reaOffice: row.reaOffice,
     reaNumber: row.reaNumber,
     shareCapital: row.shareCapital === null ? null : row.shareCapital.toFixed(2),
+    soleShareholder: row.soleShareholder,
+    inLiquidation: row.inLiquidation,
     currency: row.currency,
     pec: row.pec,
     documentFooter: row.documentFooter,

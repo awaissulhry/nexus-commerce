@@ -13,6 +13,10 @@ CREATE TYPE "PrintPayloadKind" AS ENUM ('ZPL', 'PDF');
 -- CreateEnum
 CREATE TYPE "PrintJobStatus" AS ENUM ('QUEUED', 'SENT', 'PRINTED', 'FAILED');
 
+-- AlterTable
+ALTER TABLE "Company" ADD COLUMN     "inLiquidation" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "soleShareholder" BOOLEAN NOT NULL DEFAULT false;
+
 -- CreateTable
 CREATE TABLE "Printer" (
     "id" UUID NOT NULL,

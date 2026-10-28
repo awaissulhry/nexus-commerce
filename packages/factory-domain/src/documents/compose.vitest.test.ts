@@ -118,6 +118,20 @@ describe('the company legal block (c.c. art. 2250)', () => {
     expect(document.footer.legal).toMatch(/^Pelletteria Fittizia S\.r\.l\. in liquidazione · /)
   })
 
+  it('c.c. art. 2250 c. 3 and c. 4: a company in liquidation with a single shareholder says both, in the header and every footer', () => {
+    const company = { ...COMPANY, inLiquidation: true, soleShareholder: true }
+    const italian = composeDocument(ddt({ company }))
+    expect(italian.issuer.name).toBe('Pelletteria Fittizia S.r.l. in liquidazione')
+    expect(italian.issuer.lines).toContain('Capitale sociale versato € 10.000,00 · Società con socio unico')
+    expect(italian.footer.legal).toMatch(/^Pelletteria Fittizia S\.r\.l\. in liquidazione · .* · Società con socio unico$/)
+    const english = composeDocument(ddt({ company, language: 'en' }))
+    expect(english.issuer.name).toBe('Pelletteria Fittizia S.r.l. in liquidation')
+    expect(english.footer.legal).toMatch(/ · Single-shareholder company$/)
+    // A company that is neither says nothing about either.
+    const plain = composeDocument(ddt({ company: { ...COMPANY, inLiquidation: false, soleShareholder: false } }))
+    expect(JSON.stringify(plain)).not.toMatch(/liquidazione|socio unico/)
+  })
+
   it('c.c. art. 2250: refuses a document while the company lacks its registered office, VAT number, codice fiscale or REA', () => {
     const company = { ...COMPANY, address: null, vatNumber: null, fiscalCode: '', reaOffice: 'MI', reaNumber: null }
     expect(documentProblems(ddt({ company })).map((problem) => problem.path)).toEqual(['company/address', 'company/vatNumber', 'company/fiscalCode', 'company/rea'])
