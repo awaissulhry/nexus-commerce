@@ -56,6 +56,21 @@ export const FILES_UPLOAD = 'files.upload' satisfies Permission
 export const FILES_DELETE = 'files.delete' satisfies Permission
 export const FILES_MANAGE = 'files.manage' satisfies Permission
 
+/**
+ * Record threads and the record timeline (apps/factory-api platform/threads; plan A1 §2.3, §3.7; COL-001, COL-002,
+ * COL-003). Each is checked with can() against the record's company and site (a portal or link session: its party, and
+ * a link only its own record). threads.read opens a record's thread and timeline (the timeline's field values also need
+ * audit.read); threads.post writes internal notes; threads.manage closes and reopens a thread.
+ */
+export const THREADS_DEFINITIONS = definePermissions('threads', {
+  read: { risk: 'read', description: "See a record's thread and timeline (portal and link sessions: only the messages shared with them)." },
+  post: { risk: 'write', description: "Write internal notes on a record's thread, mention colleagues and attach the record's files." },
+  manage: { risk: 'write', description: "Close a record's thread to new notes, and reopen it." },
+})
+export const THREADS_READ = 'threads.read' satisfies Permission
+export const THREADS_POST = 'threads.post' satisfies Permission
+export const THREADS_MANAGE = 'threads.manage' satisfies Permission
+
 /** The money grains as they travel in grants (`../grains/grains`): from Role.grains, never Role.permissions. */
 export const MONEY_PERMISSIONS: PermissionDefinition[] = GRAINS.map((grain) =>
   Object.freeze({ name: grainPermission(grain), area: 'money', description: GRAIN_DESCRIPTIONS[grain], risk: 'read' as const, grain }),
@@ -67,10 +82,11 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   AUDIT_PERMISSIONS,
   NUMBERING_DEFINITIONS,
   FILES_DEFINITIONS,
+  THREADS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
 // The modules' constants and their declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE]) {
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, THREADS_READ, THREADS_POST, THREADS_MANAGE]) {
   if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 }

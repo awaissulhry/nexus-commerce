@@ -88,6 +88,8 @@ model Company {
   integrationAccounts IntegrationAccount[]
   // files.prisma: the company's files.
   files               StoredFile[]
+  // threads.prisma: the threads of the company's records.
+  threads             Thread[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.
@@ -118,6 +120,8 @@ model Site {
   stations    Station[]
   // files.prisma: the files shared with this site's floor.
   floorFiles  StoredFile[]
+  // threads.prisma: the threads of the site's records.
+  threads     Thread[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])

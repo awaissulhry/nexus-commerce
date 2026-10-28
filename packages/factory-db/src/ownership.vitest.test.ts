@@ -22,6 +22,7 @@ describe('model ownership', () => {
       'IntegrationCall',
       'Invitation',
       'Line',
+      'Message',
       'NumberAllocation',
       'NumberSeries',
       'OutboxEvent',
@@ -34,6 +35,7 @@ describe('model ownership', () => {
       'Station',
       'StoredFile',
       'Tenant',
+      'Thread',
       'User',
       'WorkCentre',
     ])

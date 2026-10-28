@@ -5,7 +5,8 @@ Today the API core: context, contracts, route manifest, security baseline, `GET 
 `command()` (`src/core/command.ts`): the ONLY way to write — one transaction for the change, its audit rows, its events
 and the idempotency receipt; the outbox (events → BullMQ → handlers and live screens); and the worker and scheduler
 (`src/background.ts worker|scheduler`); office sign-in, roles and money grains (`src/platform/auth/`), the
-integration platform (gateway, sealed secrets, inbound ledger) and files on R2 (`src/platform/files/`), below. Floor,
+integration platform (gateway, sealed secrets, inbound ledger), files on R2 (`src/platform/files/`) and record threads
+with the record timeline (`src/platform/threads/`), below. Floor,
 portal and link sign-in, the modules and the other adapters come in later steps.
 
 ## Commands (from the repository root unless noted)
@@ -156,6 +157,29 @@ portal and link sign-in, the modules and the other adapters come in later steps.
   files.upload, files.delete, files.manage (sharing beyond the office, also at upload; retention; legal hold). Every
   office template has files.read; the roles that work on records also files.upload; admin (and owner) files.manage and
   files.delete. Floor, portal and link sessions see files through their audience rule above, never an office template.
+
+## Record threads and the timeline (`src/platform/threads/`, plan A1 §2.3, §3.7; COL-001, COL-002, COL-003)
+- `Thread` (threads.prisma): ONE per record (`recordType` + `recordId`, unique per tenant), made with its first message
+  by `ensureThread` (INSERT … ON CONFLICT DO NOTHING: racing first posts share one row). Its company, site and party are
+  the RECORD's, read by a resolver per record type in `records.ts` (`THREAD_RECORDS`; W0: Company, Site), never sent by
+  the caller: a module adds its record types there with its thread panel; an unknown type is a 404. `replyToken`
+  (26 lower-case base32, unique across tenants) is the reply address's secret part; it never leaves the API.
+- `Message`: append-only (`@append-only`, the …_threads_guards triggers). INTERNAL_NOTE, and only it, is OFFICE; OUTBOUND
+  and INBOUND are PARTNER and carry `partyId` = the thread's party (the partner role's policy key; the reference
+  (tenantId, threadId, partyId) → Thread pins it), so an internal note never reaches a party. Attachments are StoredFile
+  ids of the SAME record (checked at write: AVAILABLE, the writer's files.read, and for a shared message shared with the
+  thread's party); each reader sees only the attachments its own file rules allow (RLS, `audienceSees`, can()).
+- Routes: `GET /threads/:recordType/:recordId` (office; partner and link: the shared messages of their party, a link only
+  its record), `POST …/notes` (threads.post; mentions: ACTIVE people whose roles read the thread), `PUT …/status`
+  (threads.manage: close and reopen, version-guarded), `GET …/timeline` (office). Pages newest first; `nextCursor`.
+- The timeline is computed at read time, not stored: the record's AuditLog rows + its thread's messages + its files
+  (`availableAt`), merged by (time, id) (factory-domain threads/timeline). A change shows its action, actor, status move
+  and changed field names to threads.read; its values only with audit.read over the row, money only with its grain.
+- Events `thread.message_posted` (live: threads.read) and `thread.user_mentioned` (one per person; no live rule: the
+  notification centre consumes it).
+- The email steps write through the same seam inside their own command: `ensureThread`, `attachmentProblems(…,
+  'PARTNER')`, `writeMessage` with direction OUTBOUND (the mail's delivery state is their own table; Message never
+  changes) or INBOUND (`bodyHtml` sanitised, `emailMessageId` unique per tenant). The seam checks no permission.
 
 ## Rules
 - Configuration only through `src/env.ts`. It reads ONLY `apps/factory-api/.env`, by explicit path, and ONLY

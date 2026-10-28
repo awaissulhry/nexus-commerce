@@ -8,6 +8,7 @@ import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedRoles } from '../seed/roles'
+import { seed as seedThreads } from '../seed/threads'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels } from './ownership'
 import { PLATFORM_ROLE, POLICY_KEYS, RUNTIME_LOGIN, RUNTIME_ROLES, WALL, type PolicyKeyName, type RuntimeRole } from './roles'
@@ -92,6 +93,8 @@ beforeAll(async () => {
   await seedIntegration({ db: factory, namespace: 'iso-b' })
   await seedFiles({ db: factory, namespace: 'iso-a' })
   await seedFiles({ db: factory, namespace: 'iso-b' })
+  await seedThreads({ db: factory, namespace: 'iso-a' })
+  await seedThreads({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -109,6 +112,7 @@ it('covers every classified table and every runtime role', () => {
     'IntegrationCall',
     'Invitation',
     'Line',
+    'Message',
     'NumberAllocation',
     'NumberSeries',
     'OutboxEvent',
@@ -121,6 +125,7 @@ it('covers every classified table and every runtime role', () => {
     'Station',
     'StoredFile',
     'Tenant',
+    'Thread',
     'User',
     'WorkCentre',
   ])
