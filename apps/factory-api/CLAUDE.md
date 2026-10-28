@@ -101,8 +101,9 @@ the adapters come in later steps.
   tenant edits; a template change never widens them (the list shows `templateAdds`).
 - RoleAssignment: one role for one person over every company or a list, optional sites and parties, from/to; ended,
   never deleted. A session holds the union (one Grant per live assignment); a role with `requireMfa` gives nothing
-  until two-factor is proved on the session. A person gives roles only within their own `roles.assign` scope
-  (companies, sites, parties; a wider assignment or invitation is a 403). Nobody gives themselves a role or edits one
+  until two-factor is proved on the session. A person gives and ends roles only within their own `roles.assign` scope
+  (companies, sites, parties): a wider assignment or invitation, or ending one their scope does not wholly reach, is a
+  403. Nobody gives themselves a role or edits one
   they hold; the tenant keeps an administrator (an ACTIVE person with `roles.assign` over every company): users'
   suspend/deactivate, ending an assignment and editing a role all refuse to remove the last one.
 - Money grains (price, cost, margin, wages) travel in grants as the permissions `money.<grain>`; floor sessions hold at

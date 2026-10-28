@@ -20,7 +20,7 @@ import { requireContext, type OfficeContext } from '../../../core/context'
 import { requireStepUp } from '../office/account'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { activeAdmins, heldRoles, liveAssignment } from './access'
-import { assertKeepsAnAdmin, assignmentAudit, assignmentViewOf, ASSIGNMENT_SELECT, createAssignment, findAssignment, listAssignments } from './assignments'
+import { assertKeepsAnAdmin, assertWithinAssignerScope, assignmentAudit, assignmentViewOf, ASSIGNMENT_SELECT, createAssignment, findAssignment, listAssignments } from './assignments'
 import type { AssignBody, CreateRoleBody, EditRoleBody, EndAssignmentBody } from './contract'
 import { syncRolesInCommand } from './sync'
 import { isOutdated, systemRoleChanges } from './system-roles'
@@ -29,6 +29,7 @@ import { isOutdated, systemRoleChanges } from './system-roles'
  * Roles and assignments (plan A1 §3.11; features PLT-029, PLT-030, PLT-032). Every change is ONE command with its
  * audit rows, needs a step-up (A1 §3.10: user and role changes), and:
  *   - a system role is never edited (copy it into a custom role); a custom role's edit says what it adds and removes;
+ *   - a person gives and ends roles only within their own roles.assign scope (companies, sites, parties);
  *   - nobody gives themselves a role, ends their own, or edits a role they hold (separation of duties): another
  *     administrator does it;
  *   - the tenant keeps an administrator (a person with roles.assign over every company): the last one's assignment is
@@ -231,6 +232,7 @@ export async function endAssignment(auth: OfficeAuth, request: FastifyRequest, a
       const row = await findAssignment(tx, assignmentId)
       if (row.userId === context.actorId) throw new ForbiddenError('You cannot end your own role: ask another administrator.')
       if (row.endedAt !== null) throw new InvalidStateError('This role assignment has ended already.')
+      await assertWithinAssignerScope(tx, row, context.grants)
       await assertKeepsAnAdmin(tx, row, now)
       const ended = await tx.roleAssignment.update({ where: { id: assignmentId }, data: { endedAt: now, endedById: context.actorId }, select: ASSIGNMENT_SELECT })
       const view = assignmentViewOf(ended, now)

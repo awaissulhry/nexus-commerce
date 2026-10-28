@@ -13,7 +13,8 @@ import type { AssignmentInput, AssignmentView } from './contract'
  * and invitations use the same functions. An assignment names an office role of the tenant (row-level security hides
  * other tenants' roles; the foreign key includes tenantId) and a valid scope: every company or a list of the tenant's
  * active companies, sites of those companies, any parties. The assigner gives roles only within their own roles.assign
- * scope (factory-domain uncoveredScope): a wider assignment is a 403. It is never deleted: ending it sets endedAt.
+ * scope (factory-domain uncoveredScope): a wider assignment is a 403, and so is ending one whose scope that scope does
+ * not wholly reach. It is never deleted: ending it sets endedAt.
  */
 
 export const ASSIGNMENT_SELECT = {
@@ -98,12 +99,10 @@ export async function createAssignment(
     const found = await tx.company.count({ where: { id: { in: [...scope.companyIds] }, status: 'ACTIVE' } })
     if (found !== new Set(scope.companyIds).size) problems.push({ path: `${path}companyIds`, message: 'Every company must be an active company of the tenant.' })
   }
-  const siteCompanies = new Map<string, string>()
+  const siteCompanies = await siteCompaniesOf(tx, scope.siteIds)
   if (scope.siteIds.length > 0) {
-    const sites = await tx.site.findMany({ where: { id: { in: [...scope.siteIds] } }, select: { id: true, companyId: true } })
-    for (const site of sites) siteCompanies.set(site.id, site.companyId)
-    const outside = sites.some((site) => !scope.allCompanies && !scope.companyIds.includes(site.companyId))
-    if (sites.length !== new Set(scope.siteIds).size || outside) problems.push({ path: `${path}siteIds`, message: 'Every site must be a site of the companies reached.' })
+    const outside = [...siteCompanies.values()].some((companyId) => !scope.allCompanies && !scope.companyIds.includes(companyId))
+    if (siteCompanies.size !== new Set(scope.siteIds).size || outside) problems.push({ path: `${path}siteIds`, message: 'Every site must be a site of the companies reached.' })
   }
   const validFrom = input.validFrom ? new Date(input.validFrom) : options.now
   const validTo = input.validTo ? new Date(input.validTo) : null
@@ -129,6 +128,20 @@ export async function endAllAssignments(tx: CommandTx, userId: string, at: { now
     data: { endedAt: at.now, endedById: at.endedById, version: { increment: 1 } },
   })
   return count
+}
+
+/** The company of each of these sites of the tenant (a site of another tenant is not found). */
+async function siteCompaniesOf(tx: CommandTx, siteIds: readonly string[]): Promise<Map<string, string>> {
+  if (siteIds.length === 0) return new Map()
+  const sites = await tx.site.findMany({ where: { id: { in: [...siteIds] } }, select: { id: true, companyId: true } })
+  return new Map(sites.map((site) => [site.id, site.companyId]))
+}
+
+/** Refuses to end an assignment whose whole scope the ender's own roles.assign grants do not reach (403). */
+export async function assertWithinAssignerScope(tx: CommandTx, row: AssignmentRow, assignerGrants: readonly Grant[]): Promise<void> {
+  const scope = { allCompanies: row.allCompanies, companyIds: row.companyIds, siteIds: row.siteIds, partyIds: row.partyIds }
+  const wider = uncoveredScope(assignerGrants, scope, await siteCompaniesOf(tx, row.siteIds))
+  if (wider.length > 0) throw new DomainError('forbidden', 'You can end roles only within your own roles.assign scope.', wider)
 }
 
 /** Refuses to end the last administrator's administrator assignment (the tenant would have nobody to fix access). */

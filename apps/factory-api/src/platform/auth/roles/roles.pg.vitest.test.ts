@@ -226,7 +226,7 @@ describe('assignments', () => {
     expect((await owner.get(`/audit/RoleAssignment/${given.body.id}`)).body.entries[0]).toMatchObject({ action: 'roles.unassign' })
   })
 
-  it('keep an administrator: the last one is neither unassigned nor suspended', async () => {
+  it('keep an administrator: the last one is not suspended, and a narrower desk cannot unassign them', async () => {
     const gamma = await addTenant(h, 'gamma')
     const boss = await addUser(h, gamma, { email: 'boss@example.com', role: 'owner' })
     const delegate = await person(gamma, 'delegate@example.com')
@@ -240,9 +240,10 @@ describe('assignments', () => {
 
     const bossAssignments = (await delegate.browser.get(`/auth/users/${boss.id}/roles`)).body.assignments as { id: string; version: number }[]
     await stepUp(h, delegate.browser, delegate.secret)
+    // Only someone whose roles.assign reaches every company could end it, and that person is an administrator too.
     const unassign = await delegate.browser.post(`/auth/role-assignments/${bossAssignments[0]!.id}/end`, { version: bossAssignments[0]!.version })
-    expect(unassign.status).toBe(409)
-    expect(unassign.body.error.message).toMatch(/last administrator/)
+    expect(unassign.status).toBe(403)
+    expect(unassign.body.error.issues[0].path).toBe('allCompanies')
     const bossRow = ((await delegate.browser.get('/auth/users')).body.users as { id: string; version: number }[]).find((user) => user.id === boss.id)!
     await stepUp(h, delegate.browser, delegate.secret)
     const suspend = await delegate.browser.post(`/auth/users/${boss.id}/suspend`, { version: bossRow.version })
@@ -274,11 +275,27 @@ describe('an assigner gives roles only within their own roles.assign scope', () 
     expect(everyCompany.status).toBe(403)
     expect(everyCompany.body.error.issues).toEqual([{ path: 'allCompanies', message: 'Outside your own roles.assign scope: every company and site.' }])
     expect((await give(companyDesk, { companyIds: [c2!.id] })).body.error.issues[0].path).toBe('companyIds')
-    expect((await give(companyDesk, { companyIds: [c1!.id] })).status).toBe(200)
+    const insideCompany = await give(companyDesk, { companyIds: [c1!.id] })
+    expect(insideCompany.status).toBe(200)
     expect((await give(companyDesk, { companyIds: [c1!.id], siteIds: [siteId] })).status).toBe(200)
 
     expect((await give(siteDesk, { companyIds: [c1!.id] })).status).toBe(403)
-    expect((await give(siteDesk, { companyIds: [c1!.id], siteIds: [siteId] })).status).toBe(200)
+    const insideSite = await give(siteDesk, { companyIds: [c1!.id], siteIds: [siteId] })
+    expect(insideSite.status).toBe(200)
+
+    // Ending follows the same rule: the desk's scope must cover the WHOLE scope of the assignment it ends.
+    const tenantWide = await assign(target.id, { roleId: salesId, allCompanies: true })
+    const end = async (desker: Required<Person>, assignment: { id: string; version: number }) => {
+      await stepUp(h, desker.browser, desker.secret)
+      return desker.browser.post(`/auth/role-assignments/${assignment.id}/end`, { version: assignment.version })
+    }
+    const wideEnd = await end(companyDesk, tenantWide.body)
+    expect(wideEnd.status).toBe(403)
+    expect(wideEnd.body.error.issues).toEqual([{ path: 'allCompanies', message: 'Outside your own roles.assign scope: every company and site.' }])
+    expect((await end(siteDesk, insideCompany.body)).body.error.issues).toEqual([{ path: 'companyIds', message: `Outside your own roles.assign scope: company ${c1!.id}.` }])
+    expect((await end(siteDesk, insideSite.body)).body).toMatchObject({ live: false, endedAt: expect.any(String) })
+    expect((await end(companyDesk, insideCompany.body)).body).toMatchObject({ live: false, endedAt: expect.any(String) })
+    expect(((await owner.get(`/auth/users/${target.id}/roles`)).body.assignments as { id: string; live: boolean }[]).find((entry) => entry.id === tenantWide.body.id)?.live).toBe(true)
 
     await stepUp(h, companyDesk.browser, companyDesk.secret)
     const wideInvite = await companyDesk.browser.post('/auth/invitations', { email: 'wide@example.com', displayName: 'Wide', roles: [{ roleId: salesId, allCompanies: true }] })
