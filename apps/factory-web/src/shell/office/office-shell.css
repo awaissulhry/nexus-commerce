@@ -1,0 +1,234 @@
+/*
+ * The Office shell's LAYOUT (SCR-003): where the top bar, the banners, the rail, the area's subheader band and the page
+ * sit. As Commerce's `app-topbar.css` and `shared-shell.css` do for its shell: no colour, size or radius of
+ * its own — semantic design-system tokens only (`--nds-topbar-*` and `--nds-chrome-*` for the dark chrome the bar and
+ * the rail share). The rail's own look is the DS's `patterns/shell/app-rail.css`.
+ */
+.fw-office {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--nds-bg);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+}
+
+/* ── top bar ───────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-topbar {
+  flex: 0 0 auto;
+  height: var(--nds-topbar-h);
+  display: flex;
+  align-items: stretch;
+  background: var(--nds-topbar-bg);
+  border-bottom: 1px solid var(--nds-topbar-border);
+  color: var(--nds-topbar-fg);
+  position: relative;
+  /* Above the rail: the rail hover-expands under the bar, never over it. */
+  z-index: var(--nds-z-topbar);
+}
+
+.fw-topbar-brand {
+  width: var(--nds-topbar-brand-w);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.fw-topbar-brand .logo {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-primary);
+  color: var(--nds-white);
+  font-weight: var(--nds-font-weight-extrabold);
+  font-size: var(--nds-font-size-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fw-topbar-scope,
+.fw-topbar-utility {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-topbar-gap);
+  padding: 0 var(--nds-space-12);
+}
+
+.fw-topbar-utility {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.fw-topbar-search {
+  flex: 0 1 520px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--nds-space-12);
+}
+
+.fw-topbar-field {
+  width: 100%;
+  height: var(--nds-topbar-slot-h);
+  align-items: center;
+}
+
+.fw-topbar-search-compact {
+  display: none;
+}
+
+/* The chrome is one dark surface in both themes: the DS controls on it take the chrome tokens (Commerce's top bar does
+   the same in app-topbar.css). */
+.fw-topbar .nds-field {
+  background: var(--nds-topbar-field-bg);
+  border-color: var(--nds-topbar-field-border);
+}
+
+.fw-topbar .nds-field > input {
+  color: var(--nds-topbar-field-fg);
+}
+
+.fw-topbar .nds-field .lead {
+  color: var(--nds-chrome-fg-2);
+}
+
+.fw-topbar .nds-kbd {
+  background: var(--nds-chrome-kbd-bg);
+  border-color: var(--nds-chrome-kbd-border);
+  color: var(--nds-chrome-kbd-fg);
+}
+
+.fw-topbar .nds-tbtn {
+  color: var(--nds-chrome-fg);
+}
+
+.fw-topbar .nds-tbtn:hover:not(:disabled),
+.fw-topbar .nds-tbtn[aria-expanded='true'] {
+  background: var(--nds-chrome-item-hover);
+  color: var(--nds-chrome-fg-strong);
+}
+
+.fw-topbar .nds-menu-wrap > .nds-btn {
+  height: var(--nds-topbar-slot-h);
+  max-width: 100%;
+  background: var(--nds-chrome-control-bg);
+  border-color: var(--nds-chrome-control-border);
+  color: var(--nds-chrome-fg-strong);
+}
+
+.fw-topbar .nds-menu-wrap > .nds-btn:hover {
+  background: var(--nds-chrome-control-hover);
+}
+
+.fw-topbar .nds-menu-wrap {
+  min-width: 0;
+}
+
+.fw-usermenu-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 24ch;
+}
+
+/* The switcher's own layout is switcher/switcher.css; on the dark chrome its site name takes the chrome's text. */
+.fw-topbar .fw-switcher-site {
+  border-left-color: var(--nds-chrome-control-border);
+  color: var(--nds-chrome-fg);
+}
+
+/* ── banners ───────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-system-banner {
+  flex: 0 0 auto;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+}
+
+/* ── rail + page ──────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-office-body {
+  /* The rail is absolutely placed over the reserved 66 px strip and hover-expands without moving the page. */
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-left: 66px;
+}
+
+.fw-office-page {
+  height: 100%;
+  min-width: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The area's subheader band (WorkspaceSubheader, not pinned) stays on top while the page scrolls, as Commerce's Settings. */
+.fw-office-subheader {
+  position: sticky;
+  top: 0;
+  z-index: var(--nds-z-sticky);
+}
+
+.fw-office-main {
+  flex: 1 0 auto;
+  padding: var(--nds-space-24) var(--nds-space-30) var(--nds-space-26);
+  outline: none;
+}
+
+/* ── phone: no rail, the bottom bar instead ────────────────────────────────────────────────────────────────────── */
+@media (max-width: 719px) {
+  .fw-office-body {
+    padding-left: 0;
+  }
+
+  .fw-office-body > .h10-rail {
+    display: none;
+  }
+
+  .fw-topbar-brand {
+    width: auto;
+    padding-inline: var(--nds-space-12);
+  }
+
+  .fw-topbar-scope {
+    flex: 1 1 auto;
+    padding-inline: 0;
+  }
+
+  .fw-topbar-search {
+    flex: 0 0 auto;
+    padding-inline: var(--nds-space-4);
+  }
+
+  .fw-topbar-search > .nds-searchtrigger {
+    display: none;
+  }
+
+  .fw-topbar-search-compact {
+    display: flex;
+  }
+
+  .fw-topbar-utility {
+    margin-left: 0;
+    gap: var(--nds-space-4);
+    padding-inline: var(--nds-space-4) var(--nds-space-8);
+  }
+
+  .fw-usermenu-name,
+  .fw-switcher-site {
+    display: none;
+  }
+
+  .fw-switcher-name {
+    max-width: 16ch;
+  }
+
+  .fw-office-main {
+    padding: var(--nds-space-12) var(--nds-space-16) calc(64px + env(safe-area-inset-bottom) + var(--nds-space-16));
+  }
+}
