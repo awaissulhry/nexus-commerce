@@ -31,11 +31,16 @@ describe('model ownership', () => {
       'Invitation',
       'Line',
       'LinkEvidence',
+      'MeasurementProfile',
       'Message',
       'NumberAllocation',
       'NumberSeries',
       'OneOffLink',
       'OutboxEvent',
+      'Party',
+      'PartyAddress',
+      'PartyContact',
+      'PartyTaxIdentity',
       'PasswordReset',
       'Role',
       'RoleAssignment',
@@ -47,6 +52,7 @@ describe('model ownership', () => {
       'Tenant',
       'Thread',
       'User',
+      'ViesCheck',
       'WorkCentre',
       'Worker',
       'WorkerRole',
@@ -57,21 +63,21 @@ describe('model ownership', () => {
   it('fails on an unclassified model and names the file to classify it in', () => {
     const schema = [
       ...loadSchema(),
-      ...parseSchema([{ file: 'parties.prisma', text: 'model Party { id String @id @db.Uuid\n tenantId String @db.Uuid }' }]),
+      ...parseSchema([{ file: 'example.prisma', text: 'model Example { id String @id @db.Uuid\n tenantId String @db.Uuid }' }]),
     ]
     expect(problems(loadOwnership(), schema)).toEqual([
-      expect.stringMatching(/^prisma\/schema\/parties\.prisma: model Party is not classified; add it to ownership\/parties\.json/),
+      expect.stringMatching(/^prisma\/schema\/example\.prisma: model Example is not classified; add it to ownership\/example\.json/),
     ])
   })
 
   it('fails on a classification without a model, or in the wrong file', () => {
     const files = copy()
     core(files).Ghost = { kind: 'tenant', keyColumns: { tenant: 'tenantId' }, access: { factory_runtime: { privileges: ['select'] } } }
-    files.push({ file: 'parties.json', data: { models: { Company: core(files).Company! } } })
+    files.push({ file: 'example.json', data: { models: { Company: core(files).Company! } } })
     expect(problems(files)).toEqual(
       expect.arrayContaining([
         'ownership/_core.json: Ghost is not a model of prisma/schema/*.prisma',
-        'ownership/parties.json: Company is classified twice (also in ownership/_core.json)',
+        'ownership/example.json: Company is classified twice (also in ownership/_core.json)',
       ]),
     )
   })

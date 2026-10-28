@@ -10,6 +10,7 @@ import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedLinks } from '../seed/links'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
+import { seed as seedParties } from '../seed/parties'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedThreads } from '../seed/threads'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
@@ -41,7 +42,7 @@ let db: MigratedDatabase
 let factory: FactoryDatabase
 let a: CoreSeed
 let b: CoreSeed
-/** Tenant A's portal party: the audit seed writes its partner rows for it. */
+/** Tenant A's portal party: the audit seed writes its partner rows for it, the parties seed its Party row (P1). */
 let partyId: string
 
 /** Tenant A's scope for each role; the floor device sits on A's first site. */
@@ -91,6 +92,8 @@ beforeAll(async () => {
   await seedNumbering({ db: factory, namespace: 'iso-b' })
   await seedOutbox({ db: factory, namespace: 'iso-a' })
   await seedOutbox({ db: factory, namespace: 'iso-b' })
+  await seedParties({ db: factory, namespace: 'iso-a' })
+  await seedParties({ db: factory, namespace: 'iso-b' })
   await seedRoles({ db: factory, namespace: 'iso-a' })
   await seedRoles({ db: factory, namespace: 'iso-b' })
   await seedIntegration({ db: factory, namespace: 'iso-a' })
@@ -130,11 +133,16 @@ it('covers every classified table and every runtime role', () => {
     'Invitation',
     'Line',
     'LinkEvidence',
+    'MeasurementProfile',
     'Message',
     'NumberAllocation',
     'NumberSeries',
     'OneOffLink',
     'OutboxEvent',
+    'Party',
+    'PartyAddress',
+    'PartyContact',
+    'PartyTaxIdentity',
     'PasswordReset',
     'Role',
     'RoleAssignment',
@@ -146,6 +154,7 @@ it('covers every classified table and every runtime role', () => {
     'Tenant',
     'Thread',
     'User',
+    'ViesCheck',
     'WorkCentre',
     'Worker',
     'WorkerRole',
@@ -176,7 +185,10 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
       expect(row, `a ${model.name} row ${where}`).toBeDefined()
       return row!.row as Record<string, unknown>
     }
-    /** A copy of a row that breaks no unique key: a new id, and every unique text column suffixed (a NULL stays NULL). */
+    /**
+     * A copy of a row that breaks no unique key: a new id, every unique text column suffixed, and every unique number
+     * and date moved out of the seeded range (a NULL stays NULL).
+     */
     const copyOf = (row: Record<string, unknown>): Record<string, unknown> => {
       const copy: Record<string, unknown> = { ...row, [pk]: randomUUID() }
       for (const unique of model.uniques) {
@@ -185,6 +197,12 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
           if (field?.type === 'String' && field.nativeType !== 'Uuid' && row[column] !== null) copy[column] = `${String(row[column])}-copy-${randomUUID().slice(0, 8)}`
           // A number in a unique key (a row number) moves out of the seeded range.
           if (field?.type === 'Int' && row[column] !== null) copy[column] = Number(row[column]) + 1_000_000
+          // So does a date or time in one (a validity start): a thousand years later.
+          if (field?.type === 'DateTime' && row[column] !== null) {
+            const later = new Date(String(row[column]))
+            later.setUTCFullYear(later.getUTCFullYear() + 1000)
+            copy[column] = field.nativeType === 'Date' ? later.toISOString().slice(0, 10) : later.toISOString()
+          }
         }
       }
       return copy
