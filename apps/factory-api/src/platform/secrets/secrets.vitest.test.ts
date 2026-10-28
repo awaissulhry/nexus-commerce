@@ -227,7 +227,7 @@ describe('the AWS KMS key provider (a fake client: nothing reaches AWS)', () => 
           FACTORY_WEB_ORIGIN: 'https://factory.example.com',
           FACTORY_COOKIE_SECRET: 'a-random-secret-of-at-least-thirty-two-chars',
           FACTORY_KMS_KEY_ID: 'arn:aws:kms:eu-south-1:000000000000:key/made-up',
-          FACTORY_AWS_ACCESS_KEY_ID: 'AKIAEXAMPLEEXAMPLE00',
+          FACTORY_AWS_ACCESS_KEY_ID: 'AKIAIOSFODNN7EXAMPLE',
           FACTORY_AWS_SECRET_ACCESS_KEY: 'not-a-real-secret-access-key-for-tests',
         },
         'production',
