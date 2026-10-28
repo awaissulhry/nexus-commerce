@@ -7,12 +7,10 @@
  *
  *   · `rg "from '@/app/" apps/web/src/design-system` → **0 hits** in ~200 files. No design-system
  *     file imports an app module, and this one must not be the first.
- *   · Every DS file is mirrored byte-for-byte into `apps/factory/src/design-system/**`
- *     (`scripts/check-ds-fork-drift.mjs`). `apps/factory/tsconfig.json` maps `@/*` → `./src/*` and
- *     `apps/factory/src/app` has no `products/[id]/edit/_studio/` tree, while that workspace
- *     typechecks green today (`npx tsc --noEmit -p tsconfig.json`, exit 0, 0 lines). A mirror
- *     carrying an `@/app/...` import could not resolve there. The mirror rule and the import are
- *     mutually exclusive; the mirror rule wins.
+ *   · The design system imports nothing outside its own folder (`scripts/check-ds-self-contained.mjs`),
+ *     so it can move as one unit and serve more than one app. An `@/app/...` import here would break
+ *     that. (When this was written, the reason was the byte-for-byte copy in `apps/factory`; that app
+ *     is now frozen and no longer receives copies.)
  *
  * 🔴 **This is not a licence to drift.** `matrix/contract.parity.vitest.test.ts` — which lives in
  * `apps/web` only and is therefore free to import both — asserts that every type here is

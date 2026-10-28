@@ -34,7 +34,7 @@ describe('onlyEmptyState (M12)', () => {
 
 describe('phone sheet header (S3)', () => {
   const phone = (path: string) => (readFileSync(new URL(path, import.meta.url), 'utf8').match(/@media \(max-width: 760px\) \{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g) ?? []).join('\n')
-  for (const [app, path] of [['web', '../styles/components.css'], ['factory', '../../../../factory/src/design-system/styles/components.css']] as const) {
+  for (const [app, path] of [['web', '../styles/components.css']] as const) {
     it(`${app}: the header's controls flow into the title row; the title truncates; Close is 44 px`, () => {
       const p = phone(path)
       expect(p).toMatch(/\.nds-modal\.detail \.nds-modal-hl,\s*\.nds-modal\.detail \.nds-modal-h-actions\s*\{\s*display:\s*contents;\s*\}/)

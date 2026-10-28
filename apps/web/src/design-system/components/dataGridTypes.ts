@@ -1,7 +1,7 @@
 /**
  * The DS data grid's props and column types — one contract for both tables: the AG `DataGrid` every web page draws
- * (`design-system/grid/datagrid`) and the factory's HTML-table `components/DataGrid.tsx`. Identical in both apps
- * (`scripts/check-ds-fork-drift.mjs`); the barrels export them from here.
+ * (`design-system/grid/datagrid`) and the factory's HTML-table `components/DataGrid.tsx`. The factory app is frozen and
+ * its copy of this file is no longer kept in step; the barrels export them from here.
  */
 import type { HTMLAttributes, ReactNode } from 'react'
 

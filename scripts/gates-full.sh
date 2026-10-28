@@ -310,7 +310,7 @@ npm run tokens:check --silent || {
 # 2026-09-02 (hub #684/#708, DS.1-b) — the SAME check for the factory fork, which had none.
 # `npm run tokens:check` is web-only: root package.json pointed both token scripts at
 # apps/web, and neither app had one of its own, so factory's generated tokens.css has never had a
-# drift gate. `check-ds-fork-drift` is blind to stylesheets, so nothing else covered it either.
+# drift gate. The fork-drift check (retired 2026-10-28) was blind to stylesheets, so nothing else covered it either.
 echo "→ Checking factory tokens.css is in sync with its css-vars.ts..."
 npm run tokens:check:factory --silent || {
   echo "❌ factory tokens.css drift — edit apps/factory/.../tokens/css-vars.ts and run 'npm run tokens:gen:factory'"

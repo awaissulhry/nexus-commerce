@@ -42,7 +42,11 @@ const BASELINE = join(process.cwd(), 'scripts/ds-conformance-baseline.json')
 const ALLOW = ['marketing/advertising/',
   // /r = the RV.6 public review-funnel (customer-facing, email-linked, server-rendered
   // without app CSS — its inline styles are load-bearing, not chrome). Investigated 2026-07-04.
-  'r/']
+  'r/',
+  // 2026-10-28 — the /design-system page's examples moved here from src/design-system/catalog/,
+  // which is outside this guard's scope (apps/web/src/app), so they were never counted. They show
+  // the type tokens at their real sizes with inline styles (TokenCatalog's type ramp). Same status as before.
+  'design-system/_catalog/']
 // Kept for the record, now a no-op: with `marketing/ads/` out of ALLOW, ebay is enforced by
 // default. Its zero is protected by giving it its OWN section below, not by this list.
 const ENFORCE_ANYWAY = ['marketing/ads/ebay/']

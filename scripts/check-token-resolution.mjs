@@ -17,8 +17,8 @@
  *                           never whether a consumed one resolves.
  *   tokens:check            proves the generated CSS matches its generator — a token missing from
  *                           BOTH sides is entirely consistent, and it is web-only besides.
- *   check-ds-fork-drift     is blind to stylesheets, which is why the factory fork is where these
- *                           accumulate.
+ *   check-ds-fork-drift     (retired 2026-10-28, when the factory app was frozen) was blind to
+ *                           stylesheets, which is why the factory fork is where these accumulated.
  *
  * ── INHERITED FROM `check-css-token-definitions.mjs`, WHICH THIS REPLACES (hub #708) ─────────
  * That guard (PES.3, 2026-09-01) was written for the same class and never wired. Its founding
