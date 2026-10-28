@@ -5,12 +5,16 @@
  * change because of what buyers say — bullets, A+ content, a recall check, a size guide, a task.
  *
  *   Banner   a fix never changes a listing by itself
- *   Tabs     Open · Sent for approval · Applied · Dismissed (`?status=`), kind chips (`?kind=`), one product (`?product=`)
- *   Cards    why (the theme, the alert or the reviews it came from), what it proposes (and in English), a size guide's
+ *   Tabs     Open · Sent for approval · Applied · Dismissed (`?status=`) and the kind chips (`?kind=`) on one row, the chips
+ *            under the tabs when the row is too narrow; one product (`?product=`)
+ *   List     the DS grid card the other Reviews lists use (Inbox, Requests, Alerts): the toolbar's count ("2 open fixes",
+ *            "1 selected"), the bulk actions while fixes are ticked, newest first and whether the list is up to date;
+ *            "Select all" over the Open list; one row per fix
+ *   Rows     why (the theme, the alert or the reviews it came from), what it proposes (and in English), a size guide's
  *            evidence per size (fit by size, made by Nexus, never the AI), where it goes, and
  *            per status: Send for approval / Create task / Edit the proposal / Dismiss (Open; a held Send says why and
  *            offers the way out) · Withdraw and Open Approvals (Sent) · its change plan (Applied) · Bring back (Dismissed)
- *   Bulk     Open tab: tick fixes (or Select all): "Send N for approval" = ONE change plan a person approves on the
+ *   Bulk     Open tab: tick fixes (or Select all): in the toolbar, "Send N for approval" = ONE change plan a person approves on the
  *            Approvals page (ticked tasks are created without approval), held while a ticked fix cannot be sent — the tip
  *            names it; Dismiss; Clear
  * No direct Apply: the API refuses one. Every change is the call, then every open Reviews page reads again, then a toast
@@ -18,8 +22,8 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Ban, ClipboardList, PencilLine, RotateCcw, Send, Undo2, Wrench } from 'lucide-react'
-import { Banner, Card, EmptyState, Tabs, ToastProvider, useToast } from '@/design-system/components'
-import { GridSelectionActions, SelectionLabel } from '@/design-system/grid'
+import { Banner, EmptyState, Tabs, ToastProvider, useToast } from '@/design-system/components'
+import { GridCard, GridSelectionActions, SelectionLabel } from '@/design-system/grid'
 import { GridToolbar } from '@/design-system/patterns'
 import { Button, Checkbox, FilterChip, Pill, Tag, TokenChip } from '@/design-system/primitives'
 import { APPROVALS_HREF } from '@/app/fleet/_shared/approvals-waiting-words'
@@ -63,6 +67,7 @@ import {
   tabCounts,
   targetWords,
   toggleKind,
+  toolbarCount,
   wayOut,
   withdrawHeld,
   type FixItem,
@@ -209,6 +214,7 @@ function Fixes() {
     : `What to change because of what buyers say · ${counts.OPEN} open · ${counts.SENT} waiting for approval${scope.market ? ` · fixes for this market and for every market` : ''}`
   const filtered = kinds.length > 0
   const empty = emptyHelp(tab ?? 'OPEN', kinds)
+  const count = toolbarCount(tab ?? 'OPEN', items.length, selected.length)
 
   return (
     <div className={shared.page}>
@@ -245,43 +251,51 @@ function Fixes() {
           {read.error} This is not an empty list.
         </Banner>
       ) : (
-        <>
-          {tab === 'OPEN' && items.length > 0 && (
-            <div className={s.toolbar}>
-              <GridToolbar
-                count={selected.length ? <><b>{selected.length}</b> selected</> : <><b>{items.length}</b> open {items.length === 1 ? 'fix' : 'fixes'}</>}
-              >
-                <Checkbox
-                  label="Select all"
-                  checked={allTicked}
-                  aria-label={allTicked ? 'Untick every open fix' : 'Select all open fixes'}
-                  onChange={(e) => setTicked(e.target.checked ? new Set(items.map((f) => f.id)) : new Set())}
-                />
-                {bulkBar}
-              </GridToolbar>
-            </div>
+        <GridCard
+          toolbar={(
+            <GridToolbar
+              count={data ? <><b>{count.n}</b> {count.words}</> : 'Reading…'}
+              right={(
+                <>
+                  <span className={shared.sub}>Newest first</span>
+                  <Pill tone={read.error ? 'danger' : 'success'} dot size="md">{read.error ? 'Not updating' : read.updating ? 'Updating…' : 'Up to date'}</Pill>
+                </>
+              )}
+            >
+              {bulkBar}
+            </GridToolbar>
           )}
+        >
           {read.loading ? (
-            <p className={shared.muted}>Reading the fixes…</p>
+            <p className={`${shared.muted} ${s.pad}`}>Reading the fixes…</p>
           ) : items.length === 0 ? (
-            <Card padded>
-              <EmptyState
-                icon={<Wrench size={20} aria-hidden />}
-                title={emptyTitle(tab ?? 'OPEN', filtered, kinds)}
-                description={empty.description}
-                action={empty.link === 'themes' ? (
-                  <Button asChild size="sm">
-                    <Link href={insightsHref('themes', { period: SIZE_GUIDE_PERIOD })}>Open fit by size</Link>
-                  </Button>
-                ) : (
-                  <Button asChild size="sm">
-                    <Link href={insightsHref('alerts', { channel: scope?.channel, market: scope?.market, period: scope?.period })}>Open alerts</Link>
-                  </Button>
-                )}
-              />
-            </Card>
+            <EmptyState
+              icon={<Wrench size={20} aria-hidden />}
+              title={emptyTitle(tab ?? 'OPEN', filtered, kinds)}
+              description={empty.description}
+              action={empty.link === 'themes' ? (
+                <Button asChild size="sm">
+                  <Link href={insightsHref('themes', { period: SIZE_GUIDE_PERIOD })}>Open fit by size</Link>
+                </Button>
+              ) : (
+                <Button asChild size="sm">
+                  <Link href={insightsHref('alerts', { channel: scope?.channel, market: scope?.market, period: scope?.period })}>Open alerts</Link>
+                </Button>
+              )}
+            />
           ) : (
-            <ul className={s.list} aria-label={`${STATUS_TABS.find((t) => t.id === tab)?.label ?? 'Open'} fixes`}>
+            <>
+              {tab === 'OPEN' && (
+                <div className={s.selectAll}>
+                  <Checkbox
+                    label="Select all"
+                    checked={allTicked}
+                    aria-label={allTicked ? 'Untick every open fix' : 'Select all open fixes'}
+                    onChange={(e) => setTicked(e.target.checked ? new Set(items.map((f) => f.id)) : new Set())}
+                  />
+                </div>
+              )}
+              <ul className={s.list} aria-label={`${STATUS_TABS.find((t) => t.id === tab)?.label ?? 'Open'} fixes`}>
               {items.map((f) => (
                 <FixCard
                   key={f.id}
@@ -300,9 +314,10 @@ function Fixes() {
                   onWithdraw={() => void withdraw(f)}
                 />
               ))}
-            </ul>
+              </ul>
+            </>
           )}
-        </>
+        </GridCard>
       )}
       {read.error && data && <p className={shared.muted} role="status">Not updating: {read.error}</p>}
       {data && data.count >= FIXES_READ_LIMIT && <p className={shared.muted}>Showing the newest {FIXES_READ_LIMIT} fixes: the tabs and kind counts cover those {FIXES_READ_LIMIT} only.</p>}
@@ -345,89 +360,91 @@ function FixCard({ fix: f, ticked, onTick, canManage, busy, evidence, themeHref,
   const held = !canManage ? MANAGE_FIXES : busy ? 'Wait for the change on its way.' : null
   const out = f.held ? wayOut(f.held) : null
   return (
-    <li>
-      <Card padded>
-        <div className={s.card}>
-          <div className={s.head}>
-            {f.status === 'OPEN' && <Checkbox checked={ticked} onChange={(e) => onTick(e.target.checked)} aria-label={`Select: ${f.title}`} />}
-            <div className={`${shared.stack} ${s.headMain}`}>
-              <span className={shared.line}><Tag tone="info">{f.kindWords}</Tag><span className={shared.sub}>{f.product ? `${f.product.name} · ${f.product.sku}` : 'No product'}{f.market ? ` · ${f.market}` : ''}</span></span>
-              <h2 className={s.title}>{f.title}</h2>
-            </div>
-            <Pill tone={pill.tone}>{pill.word}</Pill>
-          </div>
-
-          <div className={shared.line}>
-            <span className={shared.sub}>Why</span>
-            {f.theme && themeHref && <Link href={themeHref}><Tag tone="danger">{f.theme.label}</Tag></Link>}
-            {f.detail && f.kind !== 'TASK' && <span>{f.detail}</span>}
-            {evidence && <Button asChild size="sm" variant="link"><Link href={evidence.href}>{evidence.label}</Link></Button>}
-          </div>
-
-          <div className={s.proposal}>
-            <div>
-              <div className={shared.sub}>{proposal.heading}</div>
-              {proposal.lines.length > 1 && f.kind === 'BULLETS' ? (
-                <ul className={s.bullets}>{proposal.lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
-              ) : proposal.lines.map((l, i) => <p key={i}>{l}</p>)}
-            </div>
-            {english && (
-              <div>
-                <div className={shared.sub}>In English</div>
-                {english.length > 1 ? <ul className={s.bullets}>{english.map((l, i) => <li key={i}>{l}</li>)}</ul> : <p>{english[0]}</p>}
-              </div>
-            )}
-            {evidenceList && (
-              <div>
-                <div className={shared.sub}>{evidenceList.heading}</div>
-                <ul className={s.bullets}>{evidenceList.lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
-              </div>
-            )}
-          </div>
-
-          <div className={shared.line}>
-            <span className={shared.sub}>Goes to</span>
-            {targetWords(f).map((t) => <Tag key={t} tone="neutral">{t}</Tag>)}
-          </div>
-          <p className={shared.muted}>{metaWords(f, Date.now())}{f.lastSend ? ` · ${f.lastSend.words}` : ''}</p>
-
-          <div className={s.actions}>
-            {f.status === 'OPEN' && (
-              <>
-                <Button size="sm" variant="primary" heldReason={held ?? f.held} onClick={onSend}>
-                  {f.kind === 'TASK' ? <ClipboardList size={13} aria-hidden /> : <Send size={13} aria-hidden />} {sendLabel(f)}
-                </Button>
-                {out === 'task' && <Button size="sm" heldReason={held} onClick={onTask}><ClipboardList size={13} aria-hidden /> {WAY_OUT_LABEL.task}</Button>}
-                {f.kind !== 'TASK' && <Button size="sm" heldReason={held} onClick={onEdit}><PencilLine size={13} aria-hidden /> Edit the proposal</Button>}
-                <span className={s.grow} />
-                <Button size="sm" variant="ghost" heldReason={held} onClick={onDismiss}><Ban size={13} aria-hidden /> Dismiss</Button>
-              </>
-            )}
-            {f.status === 'SENT' && (
-              <>
-                <span className={shared.sub}>{sentWords(f)}</span>
-                <span className={s.grow} />
-                <Button asChild size="sm" variant="link"><Link href={APPROVALS_HREF}>Open Approvals</Link></Button>
-                <Button size="sm" variant="ghost" heldReason={held ?? withdrawHeld(f)} onClick={onWithdraw}><Undo2 size={13} aria-hidden /> Withdraw</Button>
-              </>
-            )}
-            {f.status === 'APPLIED' && (
-              <>
-                <span className={shared.sub}>{doneWords(f)}</span>
-                <span className={s.grow} />
-                {f.applied?.approvalId && <Button asChild size="sm" variant="link"><Link href={APPROVALS_HREF}>Its change plan (undo there)</Link></Button>}
-              </>
-            )}
-            {f.status === 'DISMISSED' && (
-              <>
-                <span className={shared.sub}>{doneWords(f)}</span>
-                <span className={s.grow} />
-                <Button size="sm" heldReason={held} onClick={onRestore}><RotateCcw size={13} aria-hidden /> Bring back</Button>
-              </>
-            )}
-          </div>
+    <li className={s.row}>
+      {f.status === 'OPEN' && (
+        <div className={s.tick}>
+          <Checkbox checked={ticked} onChange={(e) => onTick(e.target.checked)} aria-label={`Select: ${f.title}`} />
         </div>
-      </Card>
+      )}
+      <div className={s.body}>
+        <div className={s.head}>
+          <div className={`${shared.stack} ${s.headMain}`}>
+            <span className={shared.line}><Tag tone="info">{f.kindWords}</Tag><span className={shared.sub}>{f.product ? `${f.product.name} · ${f.product.sku}` : 'No product'}{f.market ? ` · ${f.market}` : ''}</span></span>
+            <h2 className={s.title}>{f.title}</h2>
+          </div>
+          <Pill tone={pill.tone}>{pill.word}</Pill>
+        </div>
+
+        <div className={shared.line}>
+          <span className={shared.sub}>Why</span>
+          {f.theme && themeHref && <Link href={themeHref}><Tag tone="danger">{f.theme.label}</Tag></Link>}
+          {f.detail && f.kind !== 'TASK' && <span>{f.detail}</span>}
+          {evidence && <Button asChild size="sm" variant="link"><Link href={evidence.href}>{evidence.label}</Link></Button>}
+        </div>
+
+        <div className={s.proposal}>
+          <div>
+            <div className={shared.sub}>{proposal.heading}</div>
+            {proposal.lines.length > 1 && f.kind === 'BULLETS' ? (
+              <ul className={s.bullets}>{proposal.lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+            ) : proposal.lines.map((l, i) => <p key={i}>{l}</p>)}
+          </div>
+          {english && (
+            <div>
+              <div className={shared.sub}>In English</div>
+              {english.length > 1 ? <ul className={s.bullets}>{english.map((l, i) => <li key={i}>{l}</li>)}</ul> : <p>{english[0]}</p>}
+            </div>
+          )}
+          {evidenceList && (
+            <div>
+              <div className={shared.sub}>{evidenceList.heading}</div>
+              <ul className={s.bullets}>{evidenceList.lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+            </div>
+          )}
+        </div>
+
+        <div className={shared.line}>
+          <span className={shared.sub}>Goes to</span>
+          {targetWords(f).map((t) => <Tag key={t} tone="neutral">{t}</Tag>)}
+        </div>
+        <p className={shared.muted}>{metaWords(f, Date.now())}{f.lastSend ? ` · ${f.lastSend.words}` : ''}</p>
+
+        <div className={s.actions}>
+          {f.status === 'OPEN' && (
+            <>
+              <Button size="sm" variant="primary" heldReason={held ?? f.held} onClick={onSend}>
+                {f.kind === 'TASK' ? <ClipboardList size={13} aria-hidden /> : <Send size={13} aria-hidden />} {sendLabel(f)}
+              </Button>
+              {out === 'task' && <Button size="sm" heldReason={held} onClick={onTask}><ClipboardList size={13} aria-hidden /> {WAY_OUT_LABEL.task}</Button>}
+              {f.kind !== 'TASK' && <Button size="sm" heldReason={held} onClick={onEdit}><PencilLine size={13} aria-hidden /> Edit the proposal</Button>}
+              <span className={s.grow} />
+              <Button size="sm" variant="ghost" heldReason={held} onClick={onDismiss}><Ban size={13} aria-hidden /> Dismiss</Button>
+            </>
+          )}
+          {f.status === 'SENT' && (
+            <>
+              <span className={shared.sub}>{sentWords(f)}</span>
+              <span className={s.grow} />
+              <Button asChild size="sm" variant="link"><Link href={APPROVALS_HREF}>Open Approvals</Link></Button>
+              <Button size="sm" variant="ghost" heldReason={held ?? withdrawHeld(f)} onClick={onWithdraw}><Undo2 size={13} aria-hidden /> Withdraw</Button>
+            </>
+          )}
+          {f.status === 'APPLIED' && (
+            <>
+              <span className={shared.sub}>{doneWords(f)}</span>
+              <span className={s.grow} />
+              {f.applied?.approvalId && <Button asChild size="sm" variant="link"><Link href={APPROVALS_HREF}>Its change plan (undo there)</Link></Button>}
+            </>
+          )}
+          {f.status === 'DISMISSED' && (
+            <>
+              <span className={shared.sub}>{doneWords(f)}</span>
+              <span className={s.grow} />
+              <Button size="sm" heldReason={held} onClick={onRestore}><RotateCcw size={13} aria-hidden /> Bring back</Button>
+            </>
+          )}
+        </div>
+      </div>
     </li>
   )
 }

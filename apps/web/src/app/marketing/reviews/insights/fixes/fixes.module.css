@@ -1,14 +1,17 @@
 /*
- * Reviews › Insights › Fixes — the fix cards' layout (the shared layout is _shared/insights.module.css). `--nds-*` tokens
- * only; nothing here restyles a design-system control. Every row wraps at 390 px.
+ * Reviews › Insights › Fixes — the tab row and the fix rows (the shared layout is _shared/insights.module.css). `--nds-*`
+ * tokens only; nothing here restyles a design-system control. The list sits in the DS grid card (GridCard + GridToolbar),
+ * as on the other Reviews lists; its "Select all" row and its rows are the Alerts list's. Every row wraps at 390 px.
  */
 
+/* The status tabs and the kind chips on ONE row, centred on each other; when the row is too narrow the chips move under
+   the tabs as a whole (Owner 2026-10-28: the chips sat lower than the tab labels). */
 .tabsRow {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--nds-space-10);
+  gap: var(--nds-space-8) var(--nds-space-12);
   min-width: 0;
 }
 
@@ -18,23 +21,43 @@
   max-width: 100%;
 }
 
-.toolbar {
-  border: 1px solid var(--nds-border);
-  border-radius: var(--nds-radius-lg);
-  background: var(--nds-surface);
+.pad {
+  padding: var(--nds-space-14) var(--nds-space-16);
+}
+
+.selectAll {
+  display: flex;
+  align-items: center;
+  padding: var(--nds-space-8) var(--nds-space-16);
+  border-bottom: 1px solid var(--nds-border-subtle);
 }
 
 .list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-12);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.card {
+/* One fix: its tick (Open only), then everything about it. */
+.row {
   display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-14) var(--nds-space-16);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.tick {
+  padding-top: var(--nds-space-2);
+}
+
+.body {
+  display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: var(--nds-space-10);
   min-width: 0;
@@ -93,4 +116,11 @@
 
 .grow {
   flex: 1;
+}
+
+/* A phone: the proposal's columns stack (260 px each would not fit beside each other). */
+@media (max-width: 599px) {
+  .proposal {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

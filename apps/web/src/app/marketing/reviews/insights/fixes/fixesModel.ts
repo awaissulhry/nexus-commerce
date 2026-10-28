@@ -135,6 +135,20 @@ export function tabCounts(items: readonly FixItem[], view: Omit<FixesView, 'stat
   return counts
 }
 
+const COUNT_NOUN: Record<FixStatus, readonly [one: string, many: string]> = {
+  OPEN: ['open fix', 'open fixes'],
+  SENT: ['fix waiting for approval', 'fixes waiting for approval'],
+  APPLIED: ['applied fix', 'applied fixes'],
+  DISMISSED: ['dismissed fix', 'dismissed fixes'],
+}
+
+/** The list toolbar's count, worded as on the other Reviews lists: "2 open fixes", or "3 selected" while fixes are ticked. */
+export function toolbarCount(status: FixStatus, shown: number, selected: number): { n: number; words: string } {
+  if (selected > 0) return { n: selected, words: 'selected' }
+  const [one, many] = COUNT_NOUN[status]
+  return { n: shown, words: shown === 1 ? one : many }
+}
+
 // ── One fix ─────────────────────────────────────────────────────────
 
 export const STATUS_PILL: Record<FixStatus, { word: string; tone: 'info' | 'warning' | 'success' | 'neutral' }> = {
