@@ -50,15 +50,19 @@ const TEMPLATES: ReplyTemplate[] = [
   { id: 'thanks', label: 'Thanks for the review', description: 'Positive', body: 'Thank you very much for the review! We are glad you like the jacket. Ride safe!' },
 ]
 
-function photo(label: string, tint: string): string {
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='640' height='480'><rect width='640' height='480' fill='${tint}'/><text x='320' y='250' font-family='sans-serif' font-size='28' text-anchor='middle' fill='dimgray'>${label}</text></svg>`
+// A synthetic buyer photo: no text inside the picture. An SVG shown as an image cannot use the page's fonts, so lettering
+// in it was drawn in the system font (Arial on Windows, Helvetica on a Mac) — the DS-fonts rule (2026-10-28). The number of
+// dots tells the pictures apart; the alt names them.
+function photo(dots: number, tint: string): string {
+  const marks = Array.from({ length: dots }, (_, i) => `<circle cx='${320 + (i - (dots - 1) / 2) * 56}' cy='240' r='16' fill='dimgray'/>`).join('')
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='640' height='480'><rect width='640' height='480' fill='${tint}'/>${marks}</svg>`
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
 const PHOTOS: LightboxItem[] = [
-  { url: photo('Buyer photo 1', 'gainsboro'), alt: photoAlt(0, 4, 'Jonas K.') },
-  { url: photo('Buyer photo 2', 'lightgray'), alt: photoAlt(1, 4, 'Jonas K.') },
+  { url: photo(1, 'gainsboro'), alt: photoAlt(0, 4, 'Jonas K.') },
+  { url: photo(2, 'lightgray'), alt: photoAlt(1, 4, 'Jonas K.') },
   { url: 'https://nexus.invalid/review-photo-3.jpg', alt: photoAlt(2, 4, 'Jonas K.') },
-  { url: photo('Buyer photo 4', 'silver'), alt: photoAlt(3, 4, 'Jonas K.') },
+  { url: photo(4, 'silver'), alt: photoAlt(3, 4, 'Jonas K.') },
 ]
 
 const NAV_ICON = { size: 16, 'aria-hidden': true } as const
