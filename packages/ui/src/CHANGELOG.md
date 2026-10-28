@@ -1,3 +1,25 @@
+## The app rail and the area-navigation type are in the design system — 2026-10-28
+
+`patterns/shell` (exported by the patterns barrel; `patterns/shell` is the same set, narrower, for an app's root chrome).
+- **`AppRail` moved here** from the web (`apps/web/src/app/_shared/AppRail.tsx`, with `app-rail-active.ts` and its tests),
+  so a second app can draw the same rail. It imports no router: two new required props, **`LinkComponent`** (the app's
+  link for in-app rows, `ComponentType<RailLinkProps>`: `href`, `className`, `aria-current`, `aria-label`, `children`)
+  and **`pathname`** (the address the rows' hrefs are matched against). Everything else is unchanged: the markup, the
+  props, one current row by longest match, groups open on the current page. The web's `_shared/AppRail.tsx` is now a
+  wrapper that passes its workspace `Link` and the workspace-free pathname; `_shared/app-rail-active.ts` re-exports.
+- **The rail's rules moved here too:** `patterns/shell/app-rail.css`, verbatim and in order from the web's
+  `_shared/shared-shell.css`, which now pulls it in with an `@import` at its top. Same stylesheet, same place in every
+  page's cascade (no rule left in `shared-shell.css` styles a rail element). `AppRail` does not import it: an app
+  loads it. Commerce pixels unchanged (computed styles of every rail element compared before and after, light and dark,
+  desktop and phone).
+- **`AreaNav`** (`area-nav.ts`): the manifest a view declares its navigation in — areas (the main sidebar: `id`,
+  `label`, `icon`, `href`, `permission`, `badge`, `kinds`, `phone`) and each area's `sections` of rows (the sub-sidebar:
+  the Reviews nav's group and row, plus `children`, `exact`, `match`, `ariaLabel`), for the views `office`, `floor`,
+  `portal` and `links`. Helpers: `areaNavForPerson` (what a person may open; floor and portal fail closed, an area left
+  with no page is dropped), `findAreaNavPlace` (the one area and row a path belongs to, longest match), `areaRailItems`
+  (→ `AppRail` rows) and `areaSubNavGroups` (→ `WorkspaceSubheader` groups). Commerce does not use it yet.
+- Catalog: `#app-rail-example`.
+
 ## Density tiers: comfortable and floor — 2026-10-28
 
 A second density axis next to the grid's rows: how big a whole screen's controls, type and touch targets are. Three
