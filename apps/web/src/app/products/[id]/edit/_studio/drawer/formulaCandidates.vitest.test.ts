@@ -114,7 +114,7 @@ describe('nextActiveIndex — the ↑/↓ walk', () => {
 
 describe('🔴 invariants the compiler cannot see', () => {
   const field = readFileSync(new URL('./fields/FormulaField.tsx', import.meta.url), 'utf8')
-  const composer = readFileSync(new URL('../../../../../../design-system/grid/editors/FormulaComposer.tsx', import.meta.url), 'utf8')
+  const composer = readFileSync(new URL('../../../../../../../../../packages/ui/src/grid/editors/FormulaComposer.tsx', import.meta.url), 'utf8')
   const record = readFileSync(new URL('./fields/RecordField.tsx', import.meta.url), 'utf8')
 
   it('a formula is saved through the FORMULA writer, never through the value writer', () => {

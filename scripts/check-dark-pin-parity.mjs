@@ -43,8 +43,8 @@
 import { readFileSync, existsSync } from 'fs'
 
 const DARK_SHEETS = [
-  'apps/web/src/design-system/styles/tokens.css',
-  'apps/web/src/design-system/styles/tokens-global.css',
+  'packages/ui/src/styles/tokens.css',
+  'packages/ui/src/styles/tokens-global.css',
   'apps/web/src/app/globals.css',
 ]
 const SHELL = 'apps/web/src/app/_shared/shared-shell.css'

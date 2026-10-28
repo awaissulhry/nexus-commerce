@@ -20,7 +20,7 @@
  *
  * The `catalog/` (a demo surface) is intentionally out of scope throughout.
  *
- *   node apps/web/src/design-system/tools/token-guard.mjs
+ *   node packages/ui/src/tools/token-guard.mjs
  */
 import { readdirSync, readFileSync, statSync } from 'fs'
 import { execSync } from 'child_process'
@@ -49,7 +49,7 @@ import { fileURLToPath } from 'url'
  * cannot change the answer.
  */
 const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '')
-const REPO = fileURLToPath(new URL('../../../../../', import.meta.url)).replace(/\/$/, '')
+const REPO = fileURLToPath(new URL('../../../../', import.meta.url)).replace(/\/$/, '')
 const APP = relative(REPO, ROOT).split('/')[1] ?? 'unknown'
 
 // A — raw hex literals

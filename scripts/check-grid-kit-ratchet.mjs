@@ -43,7 +43,7 @@ const KITS = {
 
 const tracked = execSync(`git ls-files "${ROOT}**/*.tsx" "${ROOT}**/*.ts"`, { encoding: 'utf8' }).split('\n').filter(Boolean)
 const untracked = execSync(`git ls-files --others --exclude-standard "${ROOT}**/*.tsx" "${ROOT}**/*.ts"`, { encoding: 'utf8' }).split('\n').filter(Boolean)
-const files = [...new Set([...tracked, ...untracked])].filter((f) => !/\.(vitest\.)?test\.tsx?$/.test(f) && !f.startsWith('apps/web/src/design-system/'))
+const files = [...new Set([...tracked, ...untracked])].filter((f) => !/\.(vitest\.)?test\.tsx?$/.test(f) && !f.startsWith('packages/ui/src/'))
 
 const counts = Object.fromEntries(Object.keys(KITS).map((k) => [k, []]))
 counts.rawTable = []

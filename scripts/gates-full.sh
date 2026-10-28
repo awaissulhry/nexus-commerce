@@ -184,9 +184,16 @@ node scripts/check-frozen-paths.mjs || {
 }
 
 # 2026-10-28 — the design system imports only its own files and npm packages: no `@/…` alias, no
-# relative path out of apps/web/src/design-system. So the folder can move as one unit.
+# relative path out of packages/ui/src (it moved there from apps/web/src/design-system as one unit).
 node scripts/check-ds-self-contained.mjs || {
   echo "❌ DS self-contained FAILED — see message above (rule + why: scripts/check-ds-self-contained.mjs header)"
+  exit 1
+}
+
+# 2026-10-28 — the design system lives in packages/ui (@nexus/ui): apps/web/src/design-system must not exist again
+# (a branch cut before the move brings its NEW files back to the old folder).
+{ node scripts/check-ds-moved.mjs --self-test >/dev/null && node scripts/check-ds-moved.mjs; } || {
+  echo "❌ DS moved FAILED — see message above (rule + why: scripts/check-ds-moved.mjs header)"
   exit 1
 }
 
@@ -354,7 +361,7 @@ node scripts/check-dark-pin-parity.mjs || {
 #   api-guard   — every public type a component exports is reachable from its
 #                 area barrel, so a consumer can name what it is handed.
 echo "→ Checking DS token conformance..."
-node apps/web/src/design-system/tools/token-guard.mjs || {
+node packages/ui/src/tools/token-guard.mjs || {
   echo "❌ DS token-guard FAILED — see message above"
   exit 1
 }
@@ -521,7 +528,7 @@ node scripts/check-ds-gaps-append-only.mjs --check || {
 }
 
 echo "→ Checking DS barrel/API consistency..."
-node apps/web/src/design-system/tools/api-guard.mjs || {
+node packages/ui/src/tools/api-guard.mjs || {
   echo "❌ DS api-guard FAILED — see message above"
   exit 1
 }
@@ -540,6 +547,16 @@ npm run test --workspace=@nexus/web --silent > /tmp/web-tests.log 2>&1 || {
 }
 grep -E "Tests +[0-9]+ passed" /tmp/web-tests.log | tail -1 || true
 echo "✓ apps/web tests passed"
+
+# 2026-10-28 — the design system's own tests ran inside the apps/web suite until it moved to packages/ui (@nexus/ui).
+echo "→ Running @nexus/ui (design system) unit tests..."
+npm run test --workspace=@nexus/ui --silent > /tmp/ui-tests.log 2>&1 || {
+  echo "❌ @nexus/ui tests FAILED"
+  tail -40 /tmp/ui-tests.log
+  exit 1
+}
+grep -E "Tests +[0-9]+ passed" /tmp/ui-tests.log | tail -1 || true
+echo "✓ @nexus/ui tests passed"
 
 # PLAN amendment A-8 (2026-09-22) — the apps/api suite. Until today the hook ran only
 # `test:security` for this workspace, which is `vitest run src/lib/auth src/routes/auth-routes…`

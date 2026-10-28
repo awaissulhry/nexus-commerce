@@ -4,7 +4,7 @@
   "pkg": "@nexus/design-system",
   "globalName": "NexusDS",
   "buildCmd": "node .design-sync/ds-pkg/build.mjs",
-  "srcDir": "../../apps/web/src/design-system",
+  "srcDir": "../../packages/ui/src",
   "tsconfig": "tsconfig.json",
   "cssEntry": "dist/ds.css",
   "extraFonts": [
@@ -14,9 +14,9 @@
     "source-kit.mjs": "keep 'components' as a group label \u2014 this DS's tiers are primitives/components/patterns"
   },
   "componentSrcMap": {
-    "FilterField": "../../apps/web/src/design-system/patterns/FilterPanel.tsx",
-    "ToastProvider": "../../apps/web/src/design-system/components/Toast.tsx",
-    "ToolbarDivider": "../../apps/web/src/design-system/primitives/ToolbarButton.tsx",
+    "FilterField": "../../packages/ui/src/patterns/FilterPanel.tsx",
+    "ToastProvider": "../../packages/ui/src/components/Toast.tsx",
+    "ToolbarDivider": "../../packages/ui/src/primitives/ToolbarButton.tsx",
     "ColumnCustomizer": null
   },
   "overrides": {

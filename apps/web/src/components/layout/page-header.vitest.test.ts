@@ -21,7 +21,7 @@ const read = (path: string) => readFileSync(path, 'utf8')
 const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '')
 const headerCss = stripComments(read(join(HERE, 'page-header.css')))
 const freshnessCss = stripComments(read(join(HERE, '..', 'filters', 'freshness-indicator.css')))
-const tokensGlobal = stripComments(read(join(HERE, '..', '..', 'design-system', 'styles', 'tokens-global.css')))
+const tokensGlobal = stripComments(read(join(HERE, '..', '..', '..', '..', '..', 'packages', 'ui', 'src', 'styles', 'tokens-global.css')))
 
 /** Tailwind classes that colour text, fills or borders through the colliding aliases or raw palettes. */
 const TAILWIND_COLOUR = /\b(text|bg|border)-(primary|secondary|tertiary|default|subtle|strong|white|black|slate-\d+|rose-\d+|amber-\d+)\b|hover:(text|border)-/

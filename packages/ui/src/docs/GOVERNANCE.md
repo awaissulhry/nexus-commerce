@@ -107,7 +107,7 @@ concurrent sessions.
 - **Token drift (hex)** — `tools/token-guard.mjs` fails on any raw hex literal in
   shipped DS code — `primitives/` · `components/` · `patterns/` · `styles/`
   (`tokens.css` excepted, since it *defines* the palette; `catalog/` out of
-  scope). Run from repo root: `node apps/web/src/design-system/tools/token-guard.mjs`.
+  scope). Run from repo root: `node packages/ui/src/tools/token-guard.mjs`.
   Passes today.
 - **Contract intent (not yet a script).** The consistency contract (see
   `docs/AUDIT.md` §0, spec §3) extends the hex guard to two further rules that are

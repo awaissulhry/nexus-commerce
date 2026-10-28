@@ -35,11 +35,11 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 const ROOT = new URL('..', import.meta.url).pathname
-const SCAN = ['apps/web/src', 'apps/factory/src']
+const SCAN = ['apps/web/src', 'packages/ui/src', 'apps/factory/src']
 const LAYOUTS = ['apps/web/src/app/layout.tsx', 'apps/factory/src/app/layout.tsx']
 /** Where each app keeps the DS base rule, and the layout that must load it on every page. */
 const BASE_RULE = [
-  { css: 'apps/web/src/design-system/styles/primitives.css', layout: 'apps/web/src/app/layout.tsx' },
+  { css: 'packages/ui/src/styles/primitives.css', layout: 'apps/web/src/app/layout.tsx' },
   { css: 'apps/factory/src/design-system/styles/primitives.css', layout: 'apps/factory/src/app/layout.tsx' },
 ]
 /** The native controls the browser draws in its own font unless told to inherit. */
@@ -47,9 +47,9 @@ export const CONTROLS = ['button', 'input', 'select', 'textarea', 'optgroup']
 
 /** Files whose fonts are not this app's UI, or that DEFINE the tokens. Path prefix → reason. */
 export const EXCEPTIONS = {
-  'apps/web/src/design-system/styles/tokens.css': 'defines --nds-font-* (the fallback stack after the web font)',
+  'packages/ui/src/styles/tokens.css': 'defines --nds-font-* (the fallback stack after the web font)',
   'apps/factory/src/design-system/styles/tokens.css': 'Factory copy of the token definitions',
-  'apps/web/src/design-system/tokens/typography.ts': 'defines the JS font tokens',
+  'packages/ui/src/tokens/typography.ts': 'defines the JS font tokens',
   'apps/factory/src/design-system/tokens/typography.ts': 'Factory copy of the JS font tokens',
   'apps/web/src/app/globals.css': 'the body default: var(--font-sans) first, then the fallback stack',
   'apps/factory/src/app/globals.css': 'Factory body default',
@@ -64,11 +64,11 @@ export const EXCEPTIONS = {
   'apps/factory/src/lib/financials/render-invoice.ts': 'a PDF drawn by the PDF library with its built-in Helvetica',
   'apps/factory/src/lib/quotes/render-pdf.ts': 'a PDF drawn by the PDF library with its built-in Helvetica',
   'apps/factory/src/lib/shipping/': 'shipping labels and manifests drawn by the PDF library with its built-in Helvetica',
-  'apps/web/src/design-system/tokens/css-vars.ts': 'generates the --nds-font-* definitions',
+  'packages/ui/src/tokens/css-vars.ts': 'generates the --nds-font-* definitions',
   'apps/factory/src/design-system/tokens/css-vars.ts': 'Factory copy of the --nds-font-* generator',
   'apps/factory/src/design-system/tokens/index.d.ts': 'generated type declarations of the font tokens',
   'apps/factory/src/design-system/tokens/typography.d.ts': 'generated type declarations of the font tokens',
-  'apps/web/src/design-system/grid/renderers/bandWidth.ts': 'canvas measurement: a plain family only when --nds-font-mono is absent (canvas cannot read var())',
+  'packages/ui/src/grid/renderers/bandWidth.ts': 'canvas measurement: a plain family only when --nds-font-mono is absent (canvas cannot read var())',
   'apps/factory/src/design-system/grid/renderers/bandWidth.ts': 'Factory copy of the canvas measurement',
 }
 
@@ -176,7 +176,8 @@ export function baseRuleFindings(css) {
 
 /** The layout must load the stylesheet that holds the base rule, or a page could render without it. */
 export function layoutLoadsBaseRule(layoutText, cssFile) {
-  const name = cssFile.split('/design-system/')[1]
+  // The web's DS is @nexus/ui (packages/ui/src), still imported as `@/design-system/…`; the frozen factory keeps its own copy.
+  const name = cssFile.replace(/^(packages\/ui\/src|apps\/[^/]+\/src\/design-system)\//, '')
   return new RegExp(`import\\s+["']@/design-system/${name.replace(/[.]/g, '\\.')}["']`).test(layoutText)
     ? []
     : [`does not import @/design-system/${name}, which holds the DS base rule (native controls inherit the font)`]

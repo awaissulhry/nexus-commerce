@@ -48,7 +48,9 @@ fi
 BUILD='package(-lock)?\.json$|patches/|\.npmrc$|\.dockerignore$|\.gitignore$|\.railwayignore$|railway\.(json|toml)$|railpack\.json$|nixpacks\.toml$|mise\.toml$|\.tool-versions$|Dockerfile$'
 API_FILES="^(apps/api/|packages/(database|shared|events)/|$BUILD)"
 # docs/fixtures/vt1/fixtures.ts: the one file outside the workspaces that the web imports (/design-system).
-WEB_FILES="^(apps/web/|packages/(database|shared)/|docs/fixtures/vt1/fixtures\.ts$|$BUILD)"
+# packages/ui: the design system (@nexus/ui), compiled into the web. The API only imports types from it, so it is not
+# in API_FILES: a design-system change alone ships the web, not the API, worker or scheduler.
+WEB_FILES="^(apps/web/|packages/(database|shared|ui)/|docs/fixtures/vt1/fixtures\.ts$|$BUILD)"
 
 # What a service runs: sets `kind` (image, up, or empty when Railway cannot be read) and `sha` (empty when the
 # deployment names no commit). Only one of our GHCR images counts as an image deployment: a `railway up` record has no
