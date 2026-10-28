@@ -34,6 +34,7 @@ vi.mock('./review-ingest.service.js', () => ({
 
 import {
   applyReviewImport,
+  autodetectMapping,
   importChannel,
   isPrivateColumn,
   parseRating,
@@ -142,6 +143,21 @@ describe('.tsv, source and the reasons a row cannot import', () => {
     expect(parseReviewDate('31/09/2026')).toBeNull()
     expect(parseReviewDate('2026-02-30')).toBeNull()
     expect(parseReviewDate('2026-10-20T08:00:00Z')?.toISOString()).toBe('2026-10-20T08:00:00.000Z')
+  })
+})
+
+describe('the Shopify review apps’ own exports', () => {
+  it('Yotpo, Okendo and Loox columns match on their own (as their docs list them); their e-mail columns never import', async () => {
+    // Yotpo's export columns, in its documented order (the first ones).
+    const yotpo = ['app_key', 'Review ID', 'Review Creation Date', 'Review Type', 'Review Status', 'Status Details', 'Review Source', 'Review Score', 'Review Title', 'Review Content', 'Sentiment Score', 'Profanity Flag', 'Published Image URL', 'Unpublished Image URL', 'Published Video URL', 'Unpublished Video URL', 'Comment Date', 'Comment Content', 'Comment Public', 'Review Tags', 'Thumbs Up', 'Thumbs Down', 'Order ID', 'Order Date', 'Pushed to Social', 'Reviewer Display Name', 'Reviewer Email', 'Reviewer Type', 'Reviewer Country', 'Product ID', 'Product Title', 'Product SKU']
+    expect(autodetectMapping(yotpo)).toMatchObject({ externalReviewId: 'Review ID', postedAt: 'Review Creation Date', rating: 'Review Score', title: 'Review Title', body: 'Review Content', helpfulVotes: 'Thumbs Up', authorName: 'Reviewer Display Name', sku: 'Product SKU' })
+    const okendo = ['hash', 'body', 'countryCode', 'dateCreated', 'email', 'handle', 'imageCount', 'imageUrls', 'isApproved', 'isRecommended', 'isVerifiedBuyer', 'name', 'productId', 'productName', 'rating', 'rejectedImageUrls', 'reply', 'replyDateCreated', 'replyIsPublic', 'sentiment', 'sku', 'source', 'status', 'syndicated', 'title', 'variantId', 'videoCount', 'videoUrls', 'tags', 'upvotes', 'downvotes']
+    expect(autodetectMapping(okendo)).toMatchObject({ body: 'body', postedAt: 'dateCreated', verifiedPurchase: 'isVerifiedBuyer', authorName: 'name', rating: 'rating', sku: 'sku', title: 'title', helpfulVotes: 'upvotes' })
+    const looxCsv = ['product_handle,product_Id,rating,author,email,body,created_at,photo_url,reply,replied_at,verified_purchase', 'gloves,7891234567890,5,John D.,john@example.com,"Great, warm",2026-10-20,,,,true'].join('\n')
+    const preview = await previewReviewImport({ text: looxCsv, fileKind: 'csv', source: 'shopify_app' })
+    expect(preview).toMatchObject({ channel: 'SHOPIFY', validRows: 1, droppedColumns: ['email'], appliedMapping: { rating: 'rating', authorName: 'author', body: 'body', postedAt: 'created_at', verifiedPurchase: 'verified_purchase' } })
+    expect(preview.sample[0]).toMatchObject({ body: 'Great, warm', rating: 5, authorName: 'John D.', verifiedPurchase: true })
+    expect(JSON.stringify(preview)).not.toContain('john@example.com')
   })
 })
 

@@ -17,7 +17,9 @@ import {
   replyRefusal,
   reviewDueAt,
   reviewAppOf,
+  reviewAppReplyHref,
   reviewReplyRules,
+  shopHandleOf,
 } from './review-reply-rules'
 
 const NOW = new Date('2026-10-26T12:00:00Z')
@@ -88,7 +90,7 @@ describe('reviewReplyRules — one reply rule per channel (Reviews Inbox, 2026-1
 
   it('Shopify via Judge.me: Nexus sends one reply, held once replied; without the connection, or from a file, it is copied', () => {
     const r = reviewReplyRules('SHOPIFY', { app: 'JUDGEME' }, NOW)
-    expect(r).toMatchObject({ mode: 'send', sendLabel: 'Send reply to Judge.me', markAsResponded: false, limit: null, oneReply: true, held: null })
+    expect(r).toMatchObject({ mode: 'send', sendLabel: 'Send reply to Judge.me', markAsResponded: false, limit: null, oneReply: true, held: null, via: 'Judge.me' })
     expect(r.ruleLine).toMatch(/public on the store’s review widget/)
     expect(reviewReplyRules('SHOPIFY', { app: 'JUDGEME', replied: true }, NOW)).toMatchObject({ heldCode: 'already_replied' })
     const off = reviewReplyRules('SHOPIFY', { app: 'JUDGEME', appConnected: false }, NOW)
@@ -99,16 +101,38 @@ describe('reviewReplyRules — one reply rule per channel (Reviews Inbox, 2026-1
     expect(reviewReplyRules('SHOPIFY', { imported: true }, NOW).ruleLine).toMatch(/came from a file/)
   })
 
-  it('Shopify via Okendo, Yotpo or Loox: copy, with each app’s own words', () => {
-    expect(reviewReplyRules('SHOPIFY', { app: 'OKENDO' }, NOW).ruleLine).toMatch(/Enterprise plan only/)
-    expect(reviewReplyRules('SHOPIFY', { app: 'YOTPO' }, NOW)).toMatchObject({ mode: 'copy', held: null })
-    expect(reviewReplyRules('SHOPIFY', { app: 'LOOX' }, NOW).ruleLine).toMatch(/^Loox gives apps no way to reply/)
+  it('Shopify via Okendo: Nexus sends one reply like Judge.me; not connected, it is copied with a link to Okendo', () => {
+    const r = reviewReplyRules('SHOPIFY', { app: 'OKENDO' }, NOW)
+    expect(r).toMatchObject({ mode: 'send', sendLabel: 'Send reply to Okendo', via: 'Okendo', oneReply: true, held: null })
+    expect(r.ruleLine).toMatch(/^Nexus posts the reply under the review in Okendo/)
+    expect(reviewReplyRules('SHOPIFY', { app: 'OKENDO', replied: true }, NOW)).toMatchObject({ heldCode: 'already_replied', held: 'This review already has a reply. To change it, use Okendo.' })
+    const off = reviewReplyRules('SHOPIFY', { app: 'OKENDO', appConnected: false }, NOW)
+    expect(off).toMatchObject({ mode: 'copy', open: { label: 'Reply in Okendo', href: 'https://reviews.okendo.io/admin/#/reviews/moderation' } })
+    // Judge.me not connected keeps its words and has no link (Nexus answers Judge.me itself once connected again).
+    expect(reviewReplyRules('SHOPIFY', { app: 'JUDGEME', appConnected: false }, NOW).open).toBeNull()
   })
 
-  it('reviewAppOf: Judge.me reads only', () => {
+  it('Shopify via Yotpo or Loox: read only — the box says "Reply in <app>" with a link, then mark as responded', () => {
+    const yotpo = reviewReplyRules('SHOPIFY', { app: 'YOTPO' }, NOW)
+    expect(yotpo).toMatchObject({ mode: 'copy', markAsResponded: true, held: null, via: 'Yotpo', open: { label: 'Reply in Yotpo', href: 'https://reviews.yotpo.com/#/moderation/reviews' } })
+    expect(yotpo.ruleLine).toBe('Yotpo gives apps no way to reply: copy the reply, post it in Yotpo, then mark it as responded.')
+    const loox = reviewReplyRules('SHOPIFY', { app: 'LOOX', shopDomain: 'a-store.myshopify.com' }, NOW)
+    expect(loox.open).toEqual({ label: 'Reply in Loox', href: 'https://admin.shopify.com/store/a-store/apps/loox' })
+    expect(reviewReplyRules('SHOPIFY', { app: 'LOOX' }, NOW).open?.href).toBe('https://admin.shopify.com')
+    // A file import of either is the plain file rule.
+    expect(reviewReplyRules('SHOPIFY', { app: 'YOTPO', imported: true }, NOW).ruleLine).toMatch(/came from a file/)
+  })
+
+  it('reviewAppOf: each app by how Nexus read it', () => {
     expect(reviewAppOf('JUDGEME_API')).toBe('JUDGEME')
+    expect(reviewAppOf('OKENDO_API')).toBe('OKENDO')
+    expect(reviewAppOf('yotpo_api')).toBe('YOTPO')
+    expect(reviewAppOf('LOOX_API')).toBe('LOOX')
     expect(reviewAppOf('IMPORT_CSV')).toBeNull()
     expect(reviewAppOf(null)).toBeNull()
+    expect(shopHandleOf('A-Store.myshopify.com')).toBe('a-store')
+    expect(shopHandleOf('store.example.com')).toBeNull()
+    expect(reviewAppReplyHref('JUDGEME')).toBeNull()
   })
 
   it('an unknown channel: copy and mark as responded', () => {

@@ -100,9 +100,10 @@ describe('the reply box from the channel rules', () => {
     expect(initialReplyText(drafted)).toBe('Hallo')
     expect(draftResponseId(drafted)).toBe('d1')
     expect(replyDoneWords('send', 'EBAY')).toBe('Reply sent to eBay. The review is Responded.')
-    // PR I: a Shopify review read from Judge.me is answered through Judge.me.
-    expect(replyDoneWords('send', 'SHOPIFY')).toBe('Reply sent to Judge.me. The review is Responded.')
-    expect(replyTitle({ channel: 'SHOPIFY', mode: 'send' })).toBe('Reply on Judge.me')
+    // PR I: a Shopify review read from Judge.me or Okendo is answered through that app (the rules' `via`).
+    expect(replyDoneWords('send', 'SHOPIFY', 'Judge.me')).toBe('Reply sent to Judge.me. The review is Responded.')
+    expect(replyTitle({ channel: 'SHOPIFY', mode: 'send', via: 'Okendo' })).toBe('Reply on Okendo')
+    expect(replyDoneWords('send', 'SHOPIFY', 'Okendo')).toBe('Reply sent to Okendo. The review is Responded.')
     expect(replyTitle({ channel: 'EBAY', mode: 'send' })).toBe('Reply on eBay')
     expect(replyTitle({ channel: 'ETSY', mode: 'copy' })).toBe('Reply')
   })
@@ -196,14 +197,16 @@ describe('the buyer’s photos and the Lightbox (PR G)', () => {
     expect(reviewPhotos(etsy)).toEqual([{ url: one[0].url, alt: 'Photo 1 of 1 from buyer-one', type: 'IMAGE' }])
     expect(photosView(detail({ media: [] }, { channel: 'ETSY', kind: 'product' }))).toEqual({ kind: 'none', words: 'No photo with this review. Etsy buyers can add one.' })
     const jm = [{ url: 'https://img.judge.me/o.jpg', type: 'image', width: null, height: null, position: 0 }]
-    expect(photosView(detail({ media: jm, videoIn: 'Judge.me' }, { channel: 'SHOPIFY', kind: 'product' }))).toMatchObject({
+    expect(photosView(detail({ media: jm, videoIn: 'Judge.me', app: 'Judge.me' }, { channel: 'SHOPIFY', kind: 'product' }))).toMatchObject({
       kind: 'photos',
-      hint: 'Press a photo to see it large. Judge.me keeps the photos; Nexus shows them from Judge.me. The buyer also added a video: watch it in Judge.me (it does not share videos with Nexus).',
+      hint: 'Press a photo to see it large. Judge.me keeps the photos; Nexus shows them from Judge.me. The buyer also added a video: watch it in Judge.me (Nexus shows the photos only).',
     })
     expect(photosView(detail({ media: [], videoIn: 'Judge.me' }, { channel: 'SHOPIFY', kind: 'product' }))).toEqual({
-      kind: 'none', words: 'No photos with this review. The buyer added a video: watch it in Judge.me (it does not share videos with Nexus).',
+      kind: 'none', words: 'No photos with this review. The buyer added a video: watch it in Judge.me (Nexus shows the photos only).',
     })
     expect(photosView(detail({ media: [] }, { channel: 'SHOPIFY', kind: 'product', imported: true }))).toEqual({ kind: 'none', words: 'This review came from a file: its photos are not in Nexus.' })
+    // Okendo, Yotpo and Loox: the photos are the app's (the detail names the app).
+    expect(photosView(detail({ media: jm, videoIn: null, app: 'Loox' }, { channel: 'SHOPIFY', kind: 'product' }))).toMatchObject({ hint: 'Press a photo to see it large. Loox keeps the photos; Nexus shows them from Loox.' })
   })
 
   it('Prev is held on the first photo, Next on the last; the counter reads "2 of 2"', () => {

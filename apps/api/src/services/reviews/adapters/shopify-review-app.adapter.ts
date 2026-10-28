@@ -1,7 +1,7 @@
 /**
  * Reviews (2026-10-27, build spec B21 / PR I) — the store's review app for Shopify. Shopify keeps no reviews itself: they
- * live in the review app the store installed. Today Nexus connects to Judge.me (Owner ruling 8: the store uses
- * Judge.me); Okendo, Yotpo and Loox are named in words only (`@nexus/shared/review-reply-rules`) until they are built.
+ * live in the review app the store installed. This file is Judge.me (Owner ruling 8: the store uses Judge.me); Okendo,
+ * Yotpo and Loox have their own adapters next to it (okendo-, yotpo-, loox-review-app.adapter.ts, review-app-http.ts).
  *
  * Judge.me API v1 (OpenAPI spec https://judge.me/api/docs.yaml, docs https://judge.me/api/docs, read 2026-10-27):
  *   - server `https://api.judge.me/api/v1`; a private API token goes in the `X-Api-Token` header and the store in the

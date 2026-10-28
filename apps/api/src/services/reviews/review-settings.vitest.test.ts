@@ -239,7 +239,7 @@ describe('sources', () => {
     const { rows, problems } = settingsSourceRows(facts({
       connections: [conn('AMAZON', 'IT'), conn('EBAY', 'IT'), conn('EBAY', 'DE', 'needs_reauth')],
       topics: [{ marketplace: 'IT', accessStatus: 'OK', fetchedAt: daysAgo(13) }, { marketplace: 'IT', accessStatus: 'NEEDS_BRAND_ANALYTICS_ROLE', fetchedAt: daysAgo(6) }],
-    }), { amazonSent30: [{ marketplace: 'IT', count: 40 }, { marketplace: 'DE', count: 12 }], amazonLastSentAt: hoursAgo(1), mailerPaused: null, etsy: ETSY_OFF, judgeme: null }, NOW)
+    }), { amazonSent30: [{ marketplace: 'IT', count: 40 }, { marketplace: 'DE', count: 12 }], amazonLastSentAt: hoursAgo(1), mailerPaused: null, etsy: ETSY_OFF, apps: [] }, NOW)
     const by = (key: string) => rows.find((r) => r.key === key)!
     expect(by('amazon-requests')).toMatchObject({ stateWords: 'On', words: 'Sending in 2 markets · 52 in 30 days', action: { kind: 'rules' } })
     expect(by('amazon-topics')).toMatchObject({ stateWords: 'Needs a fix', tone: 'warning', lastWords: 'Last worked Tue 13 Oct', action: { kind: 'reconnect', href: '/settings/channels/amazon' } })
@@ -248,13 +248,27 @@ describe('sources', () => {
     expect(by('ebay-feedback')).toMatchObject({ stateWords: 'Needs a fix', action: { kind: 'reconnect', label: 'Reconnect eBay Germany' } })
     expect(by('ebay-feedback').words).toMatch(/eBay Italy is fine\./)
     expect(by('amazon-seller-feedback')).toMatchObject({ later: null, action: { kind: 'fetch', label: 'Fetch now' } })
-    // PR I: Etsy and the Shopify review app are real rows now; only the apps not built yet say "coming later".
+    // PR I: Etsy and the Shopify review app are real rows; no review app is "coming later" (Okendo, Yotpo, Loox connect too).
     expect(by('etsy-reviews')).toMatchObject({ later: null, stateWords: 'Connected · not read yet', action: { kind: 'page', href: '/marketing/reviews/etsy' } })
-    expect(by('shopify-app')).toMatchObject({ stateWords: 'Not connected', later: 'Okendo, Yotpo, Loox: coming later', action: { kind: 'app', label: 'Connect Judge.me…' } })
+    expect(by('shopify-app')).toMatchObject({ stateWords: 'Not connected', later: null, action: { kind: 'app', label: 'Connect a review app…' } })
+    expect(by('shopify-app').what).toBe('Reviews with photos from the store’s review app · Judge.me, Okendo, Yotpo or Loox')
     expect(by('amazon-review-text')).toMatchObject({ stateWords: 'Not available', action: { kind: 'import' } })
     expect(by('amazon-review-text').words).toMatch(/no review text and no star rating by API/)
     expect(problems).toBe(2)
     for (const r of rows) expect(`${r.words} ${r.what} ${r.stateWords} ${r.later ?? ''}`).not.toMatch(SETTING_NAME)
+  })
+
+  it('the Shopify review app row: the connected app named, a fix first, the others said after', async () => {
+    const { reviewAppView } = await import('./review-app-connection.service.js')
+    const conn = (app: 'JUDGEME' | 'OKENDO' | 'YOTPO' | 'LOOX', over: Record<string, unknown> = {}) => reviewAppView(app, {
+      app, shopDomain: 'x-store-id', state: 'CONNECTED', hasCredentials: true, lastReadAt: hoursAgo(1), lastReadCount: 12, lastError: null, lastErrorAt: null, createdAt: daysAgo(3), ...over,
+    }, { readOn: true, now: NOW })
+    const apps = [reviewAppView('JUDGEME', null, { readOn: true, now: NOW }), conn('OKENDO'), conn('YOTPO', { state: 'NEEDS_FIX', lastError: 'Yotpo refused the store ID or the API secret (HTTP 401).' }), reviewAppView('LOOX', null, { readOn: true, now: NOW })]
+    const { rows } = settingsSourceRows(facts(), { amazonSent30: [], amazonLastSentAt: null, mailerPaused: null, etsy: ETSY_OFF, apps }, NOW)
+    const row = rows.find((r) => r.key === 'shopify-app')!
+    expect(row).toMatchObject({ stateWords: 'Yotpo · Needs a fix', tone: 'danger', later: null, action: { kind: 'app', label: 'Manage review apps…' } })
+    expect(row.words).toMatch(/^Yotpo refused the store ID or the API secret \(HTTP 401\)\. .* Okendo: connected\.$/)
+    expect(row.lastAt).toBe(hoursAgo(1).toISOString())
   })
 
   it('Amazon seller feedback: off, on and fetched, a market refused, a sign-in to fix — in words, never a setting name', () => {
@@ -281,7 +295,7 @@ describe('sources', () => {
   })
 
   it('a paused mailer and no eBay account', () => {
-    const { rows } = settingsSourceRows(facts(), { amazonSent30: [], amazonLastSentAt: null, mailerPaused: { at: daysAgo(2) }, etsy: ETSY_OFF, judgeme: null }, NOW)
+    const { rows } = settingsSourceRows(facts(), { amazonSent30: [], amazonLastSentAt: null, mailerPaused: { at: daysAgo(2) }, etsy: ETSY_OFF, apps: [] }, NOW)
     expect(rows.find((r) => r.key === 'amazon-requests')).toMatchObject({ stateWords: 'Paused', tone: 'warning' })
     expect(rows.find((r) => r.key === 'ebay-feedback')).toMatchObject({ stateWords: 'Not connected', action: { kind: 'connect' } })
   })

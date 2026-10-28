@@ -327,7 +327,7 @@ export function OverviewClient() {
         Where the numbers come from: Amazon — review topics per product, updated weekly, for the UK, Germany, France, Italy and Spain (not
         available on Amazon.nl); 1–3 star seller feedback from Amazon’s report, fetched daily and on request where it is switched on; stars only from reviews you import, because
         Amazon gives no review text and no rating by API. eBay — seller feedback, read every 30 minutes. Shopify — your store’s review app,
-        Judge.me read every 30 minutes once connected, or by file import. Etsy — shop reviews with their one photo, read every 30 minutes once an Etsy shop is connected.
+        Judge.me, Okendo, Yotpo or Loox read every 30 minutes once connected, or by file import. Etsy — shop reviews with their one photo, read every 30 minutes once an Etsy shop is connected.
       </p>
     </div>
   )

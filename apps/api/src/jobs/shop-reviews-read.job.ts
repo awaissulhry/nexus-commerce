@@ -3,7 +3,7 @@
  * cron (one replica per tick, once per active business with business profiles on):
  *
  *   etsy-reviews-read   every connected Etsy shop's reviews (services/etsy/reviews-read.ts, through the gateway)
- *   review-app-read     the store's review app — Judge.me (services/reviews/review-app-connection.service.ts)
+ *   review-app-read     the store's review apps — Judge.me, Okendo, Yotpo, Loox (services/reviews/review-app-connection.service.ts)
  *
  * 🔴 OFF by default, twice over: runtime/scheduler.ts starts a schedule only when its switch is on
  * (NEXUS_ENABLE_ETSY_REVIEWS_READ=1, NEXUS_ENABLE_REVIEW_APP_READ=1), and a run checks the same switch again and reads

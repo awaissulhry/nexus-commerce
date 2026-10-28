@@ -5,7 +5,9 @@
  *   - a new review stores its photos as media, in order; an edit replaces them as a set, a removed photo goes;
  *   - a review stored before Nexus kept media gets them on the next read;
  *   - the Inbox pop-up returns them for the Lightbox, and says where a Judge.me video is (Judge.me gives no video URL);
- *   - the Etsy and Shopify pages read the photos from the same media (Judge.me's thumbnails kept).
+ *   - the Etsy and Shopify pages read the photos from the same media (Judge.me's thumbnails kept);
+ *   - Okendo and Loox reviews land the same way (channel SHOPIFY, their own dedupe key, photos, the video mark, the
+ *     store's reply), and an Okendo review is answered from Nexus while a Loox one links to Loox.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../test-support/formula-database.js'
@@ -106,7 +108,8 @@ describe('Etsy and Judge.me photos as review media (real SQL)', () => {
 
   it('Judge.me: the photos in order; an edit replaces them; a review stored before media gets them on the next read', async () => {
     const { parseJudgemeReview } = await import('./adapters/shopify-review-app.adapter.js')
-    const { storeJudgemeReviews } = await import('./review-app-connection.service.js')
+    const { storeAppReviews } = await import('./review-app-connection.service.js')
+    const storeJudgemeReviews = (parsed: Parameters<typeof storeAppReviews>[1]) => storeAppReviews('JUDGEME', parsed)
     const video = parseJudgemeReview(jmReview(70001, ['a', 'b'], { has_published_videos: true }))!
     const before = parseJudgemeReview(jmReview(70009, ['b'], { body: 'Stored before media', rating: 5, created_at: new Date(secAgo(20) * 1000).toISOString(), updated_at: null }))!
     const out = await inside(() => storeJudgemeReviews([video, before]))
@@ -141,5 +144,40 @@ describe('Etsy and Judge.me photos as review media (real SQL)', () => {
     const row = sections.reviews.ok ? sections.reviews.data.rows.find((r) => r.id === jm.id) : undefined
     expect(row).toMatchObject({ photos: 1, photoItems: [{ url: 'https://img.judge.example/b-o.jpg', thumb: 'https://img.judge.example/b-c.jpg' }], hasVideo: true, app: 'JUDGEME' })
     expect(sections.tiles).toMatchObject({ ok: true, data: { withMedia: 2, videos: 1 } })
+  })
+
+  it('Okendo and Loox: the same channel, their own ids, photos and the video mark; a reply from Nexus only where the app takes one', async () => {
+    const { parseOkendoReview } = await import('./adapters/okendo-review-app.adapter.js')
+    const { parseLooxReview } = await import('./adapters/loox-review-app.adapter.js')
+    const { storeAppReviews } = await import('./review-app-connection.service.js')
+    const { getInboxReview } = await import('./review-detail.service.js')
+    const ok = parseOkendoReview({
+      reviewId: '3f2c9a8e-5b1d-4c7e-9a6f-1d2e3f4a5b6c', productId: 'shopify-8123456789', title: 'Fits', body: 'Okendo review', rating: 5,
+      dateCreated: new Date(secAgo(3) * 1000).toISOString(), status: 'approved', reviewer: { name: 'Tim Cook', displayName: 'Tim C.', email: 'tim@example.test' },
+      media: [{ type: 'image', fullSizeUrl: 'https://media.okendo.example/1.jpg', thumbnailUrl: 'https://media.okendo.example/1t.jpg', isHidden: false, streamId: 'a' }, { type: 'video', fullSizeUrl: 'https://media.okendo.example/v', thumbnailUrl: 'https://media.okendo.example/vt.jpg', isHidden: false, streamId: 'b' }],
+    })!
+    const lx = parseLooxReview({
+      id: '64a1f2b3c4d5e6f7a8b9c0d1', rating: 2, body: 'Loox review', createdAt: new Date(secAgo(2) * 1000).toISOString(), verified: true, status: 'published',
+      reviewer: { name: 'John Doe', email: 'john@example.test' }, product: { id: '8123456789', url: 'https://mystore.myshopify.com/products/gloves' },
+      media: [{ type: 'image', url: 'https://loox.example/p.jpg' }], reply: { body: 'Thank you!' },
+    })!
+    expect(await inside(() => storeAppReviews('OKENDO', [ok]))).toMatchObject({ inserted: 1, errors: [] })
+    expect(await inside(() => storeAppReviews('LOOX', [lx]))).toMatchObject({ inserted: 1, errors: [] })
+    // The same read again changes nothing.
+    expect(await inside(() => storeAppReviews('LOOX', [lx]))).toMatchObject({ inserted: 0, updated: 0 })
+    expect(await mediaOf('okendo:3f2c9a8e-5b1d-4c7e-9a6f-1d2e3f4a5b6c')).toEqual([['https://media.okendo.example/1.jpg', 'image', 0]])
+    expect(await mediaOf('loox:64a1f2b3c4d5e6f7a8b9c0d1')).toEqual([['https://loox.example/p.jpg', 'image', 0]])
+    const rows = await inside(() => database.client.review.findMany({ where: { externalReviewId: { in: ['okendo:3f2c9a8e-5b1d-4c7e-9a6f-1d2e3f4a5b6c', 'loox:64a1f2b3c4d5e6f7a8b9c0d1'] } }, orderBy: { externalReviewId: 'asc' } }))
+    expect(rows.map((r) => [r.channel, r.ingestSource])).toEqual([['SHOPIFY', 'LOOX_API'], ['SHOPIFY', 'OKENDO_API']])
+    expect(JSON.stringify(rows)).not.toMatch(/tim@example\.test|john@example\.test/)
+
+    const okDetail = (await inside(() => getInboxReview(rows[1].id)))!
+    expect(okDetail).toMatchObject({ videoIn: 'Okendo', app: 'Okendo' })
+    // Okendo is not connected in this database: the reply is copied, with a link to Okendo.
+    expect(okDetail.reply).toMatchObject({ mode: 'copy', via: 'Okendo', open: { label: 'Reply in Okendo' } })
+    const lxDetail = (await inside(() => getInboxReview(rows[0].id)))!
+    // Loox: read only — "Reply in Loox" opens the store's Shopify admin; the store's reply on Loox counts as a reply.
+    expect(lxDetail.reply).toMatchObject({ mode: 'copy', via: 'Loox', open: { label: 'Reply in Loox', href: 'https://admin.shopify.com/store/mystore/apps/loox' } })
+    expect(lxDetail.videoIn).toBeNull()
   })
 })

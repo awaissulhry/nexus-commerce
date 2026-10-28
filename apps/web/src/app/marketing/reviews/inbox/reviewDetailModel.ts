@@ -66,10 +66,12 @@ export interface InboxDetail {
   }[]
   timeline: { at: string; words: string }[]
   reply: ReplyRules
-  /** PR G — the buyer's photos (or videos), in order: eBay's, Etsy's one photo and Judge.me's (PR I). */
+  /** PR G — the buyer's photos (or videos), in order: eBay's, Etsy's one photo and the review apps' (PR I). */
   media?: { url: string; type: string; width: number | null; height: number | null; position: number }[]
-  /** PR I — the review app that holds a video Nexus cannot show (Judge.me gives no video URL); null when none. */
+  /** PR I — the review app that holds a video Nexus does not show (the apps give no file Nexus can play for sure); null when none. */
   videoIn?: string | null
+  /** Shopify: the review app the review was read from ("Okendo"), which keeps its photos; null otherwise. */
+  app?: string | null
   /** PR G — eBay's AI topics with the buyer's words eBay found; null when eBay's topics were not read. */
   aiTopics?: { topic: string; label: string; sentiment: string | null; texts: string[] }[] | null
   /** PR G — eBay's revision state of this feedback, in words; null when there is nothing to say. */
@@ -200,16 +202,19 @@ export interface ComposerView {
 
 const CHANNEL_NAME: Record<string, string> = { EBAY: 'eBay', AMAZON: 'Amazon', ETSY: 'Etsy', SHOPIFY: 'your store' }
 
-/** Where a reply goes: the channel, or — a Shopify review read from Judge.me — Judge.me, which posts it (PR I). */
-export function replyPlace(channel: string, mode: 'send' | 'copy' | 'mark'): string {
+/**
+ * Where a reply goes: the channel, or — a Shopify review read from a review app that takes replies (Judge.me, Okendo) —
+ * that app, which posts it (PR I). `via` is the rules' app name.
+ */
+export function replyPlace(channel: string, mode: 'send' | 'copy' | 'mark', via?: string | null): string {
   const c = channel.toUpperCase()
-  if (c === 'SHOPIFY' && mode === 'send') return 'Judge.me'
+  if (c === 'SHOPIFY' && mode === 'send') return via ?? 'the review app'
   return CHANNEL_NAME[c] ?? 'the channel'
 }
 
-/** The reply box's title: "Reply on eBay", "Reply on Judge.me" when Nexus posts it; "Reply" when a person does. */
-export function replyTitle(rules: { channel: string; mode: 'send' | 'copy' }): string {
-  return rules.mode === 'send' ? `Reply on ${replyPlace(rules.channel, 'send')}` : 'Reply'
+/** The reply box's title: "Reply on eBay", "Reply on Okendo" when Nexus posts it; "Reply" when a person does. */
+export function replyTitle(rules: { channel: string; mode: 'send' | 'copy'; via?: string | null }): string {
+  return rules.mode === 'send' ? `Reply on ${replyPlace(rules.channel, 'send', rules.via)}` : 'Reply'
 }
 
 /** The reply box for this review: what the channel allows, what is held and why, what was sent. */
@@ -218,7 +223,7 @@ export function composerView(d: InboxDetail, ctx: { canManage: boolean }, timeZo
   const sent = [...d.responses].reverse().find((r) => r.status === 'SENT') ?? null
   const failed = [...d.responses].reverse().find((r) => r.status === 'FAILED') ?? null
   const refused = failed && (!sent || failed.createdAt > sent.createdAt) ? failed.failedWords : null
-  const where = replyPlace(rules.channel, rules.mode)
+  const where = replyPlace(rules.channel, rules.mode, rules.via)
   const held = !ctx.canManage ? MANAGE_REPLY : rules.held
   return {
     limit: rules.limit,
@@ -234,7 +239,7 @@ export function composerView(d: InboxDetail, ctx: { canManage: boolean }, timeZo
           at: `${rules.mode === 'send' ? 'Sent' : 'Marked'} ${dateTimeWords(sent.sentAt ?? sent.createdAt, timeZone)}`,
           text: sent.body,
           note: rules.mode !== 'send' ? '· marked as responded in Nexus'
-            : where === 'Judge.me' ? '· public under the review on the store · change it in Judge.me' : `· public on ${where} · cannot be undone or edited`,
+            : rules.channel.toUpperCase() === 'SHOPIFY' ? `· public under the review on the store · change it in ${where}` : `· public on ${where} · cannot be undone or edited`,
         }
       : null,
     refused,
@@ -254,8 +259,8 @@ export function draftResponseId(d: InboxDetail): string | null {
 }
 
 /** The toast after a send or a mark. */
-export function replyDoneWords(mode: 'send' | 'mark', channel: string): string {
-  const where = replyPlace(channel, mode)
+export function replyDoneWords(mode: 'send' | 'mark', channel: string, via?: string | null): string {
+  const where = replyPlace(channel, mode, via)
   return mode === 'send' ? `Reply sent to ${where}. The review is Responded.` : 'Marked as responded. The review is Responded.'
 }
 
@@ -419,12 +424,12 @@ export function recentSteps(d: InboxDetail, n = 4): StepView[] {
 
 /**
  * Channels whose buyers' photos Nexus reads: eBay (the REST feedback read, PR G), Etsy's one photo and the store's review
- * app, Judge.me (PR I). Every other channel says where its buyers' photos really are (`photosElsewhere`).
+ * app (Judge.me, Okendo, Yotpo, Loox; PR I). Every other channel says where its buyers' photos really are (`photosElsewhere`).
  */
 export const PHOTO_CHANNELS: readonly string[] = ['EBAY', 'ETSY', 'SHOPIFY']
 
-/** Where the photos live (Nexus shows them from there), per channel. */
-const PHOTOS_HOME: Record<string, string> = { EBAY: 'eBay', ETSY: 'Etsy', SHOPIFY: 'Judge.me' }
+/** Where the photos live (Nexus shows them from there), per channel; a Shopify review's are in its review app. */
+const PHOTOS_HOME: Record<string, string> = { EBAY: 'eBay', ETSY: 'Etsy' }
 
 /** "No photos" in words, per channel. */
 const NO_PHOTOS: Record<string, string> = {
@@ -470,14 +475,14 @@ export function photosElsewhere(detail: Pick<InboxDetail, 'review' | 'listingHre
 }
 
 /** What the pop-up's "Photos from the buyer" card shows. */
-export function photosView(detail: Pick<InboxDetail, 'media' | 'review' | 'videoIn' | 'listingHref'>): PhotosView {
+export function photosView(detail: Pick<InboxDetail, 'media' | 'review' | 'videoIn' | 'app' | 'listingHref'>): PhotosView {
   const items = reviewPhotos(detail)
   const channel = detail.review.channel.toUpperCase()
-  // A video Nexus cannot show (Judge.me gives no video URL): said, never hidden.
+  // A video Nexus does not show (the review apps give no file Nexus can play for sure): said, never hidden.
   const video = (also: boolean) =>
-    detail.videoIn ? ` The buyer ${also ? 'also ' : ''}added a video: watch it in ${detail.videoIn} (it does not share videos with Nexus).` : ''
+    detail.videoIn ? ` The buyer ${also ? 'also ' : ''}added a video: watch it in ${detail.videoIn} (Nexus shows the photos only).` : ''
   if (items.length > 0) {
-    const home = PHOTOS_HOME[channel]
+    const home = channel === 'SHOPIFY' ? detail.app ?? null : PHOTOS_HOME[channel]
     const where = home ? ` ${home} keeps the photos; Nexus shows them from ${home}.` : ''
     return { kind: 'photos', count: plural(items.length, 'photo', 'photos'), items, hint: `Press a photo to see it large.${where}${video(true)}` }
   }

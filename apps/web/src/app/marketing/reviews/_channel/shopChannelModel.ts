@@ -6,7 +6,8 @@
  * ruling 7). Every link to the Inbox goes through `_lib/reviewsLinks.ts` with the page's channel.
  *
  * Etsy has no reply API: a reply is written and copied in the Inbox's reply box, posted on Etsy.com, then marked as
- * responded (Nexus records only what a person marks). Judge.me replies go out from the reply box (Nexus posts them).
+ * responded (Nexus records only what a person marks). Judge.me and Okendo replies go out from the reply box (Nexus posts
+ * them); Yotpo and Loox replies are posted in the app ("Reply in Yotpo"), then marked as responded.
  * Pure (no React), tested in shopChannelModel.vitest.test.ts.
  */
 import { reviewReplyRules, ETSY_REPLY_WINDOW_DAYS } from '@nexus/shared/review-reply-rules'
@@ -32,7 +33,7 @@ export interface ShopifyRow extends InboxRow {
   /** The review's photos with their thumbnails; the Inbox row's `photos` is their count. */
   photoItems: Array<{ url: string; thumb: string }>
   hasVideo: boolean
-  /** JUDGEME when read through Nexus's connection; null for a file import. */
+  /** The review app it was read from (JUDGEME, OKENDO, YOTPO, LOOX); null for a file import. */
   app: string | null
 }
 
@@ -74,20 +75,32 @@ export interface ShopifyTiles {
 
 export type ReviewAppKey = 'JUDGEME' | 'OKENDO' | 'YOTPO' | 'LOOX'
 
+/** One thing an app's connect window asks for (the API decides, per app). */
+export interface ReviewAppField { key: string; label: string; hint: string; secret: boolean; placeholder: string | null }
+
+/** `GET /api/reviews/apps` → one app (review-app-connection.service.ts `ReviewAppView`). Never a secret. */
 export interface ReviewAppView {
   app: ReviewAppKey
   name: string
   what: string
-  state: 'connected' | 'waiting' | 'needs_fix' | 'disconnected' | 'not_connected' | 'later'
+  state: 'connected' | 'waiting' | 'needs_fix' | 'disconnected' | 'not_connected'
   stateWords: string
   tone: Tone
   words: string
-  shopDomain: string | null
+  fields: ReviewAppField[]
+  /** The plan the app's API needs, and what to do on another plan. */
+  planWords: string
+  /** What the app knows the store by (not a secret). */
+  storeId: string | null
+  storeWords: string | null
   connectedAt: string | null
   lastReadAt: string | null
   lastReadCount: number | null
+  /** The app lets Nexus post replies (Judge.me, Okendo). */
+  replies: boolean
   canReply: boolean
-  connectable: boolean
+  /** Where a reply is posted by hand in the app; null for Judge.me. */
+  replyHref: string | null
 }
 
 export interface ShopifyApps { apps: ReviewAppView[]; readOn: boolean; lastImportAt: string | null; imported: number }
@@ -217,27 +230,52 @@ export function lastEditWords(row: Pick<EtsyRow, 'editedAt' | 'postedAt'>): stri
 
 // ── Shopify: the app and each row's reply ────────────────────────────
 
-/** The review app the page is about (Judge.me today). */
-export function judgeme(apps: ShopifyApps | null): ReviewAppView | null {
-  return apps?.apps.find((a) => a.app === 'JUDGEME') ?? null
-}
-
-export function isAppConnected(app: ReviewAppView | null): boolean {
+export function isAppConnected(app: Pick<ReviewAppView, 'state'> | null | undefined): boolean {
   return !!app && (app.state === 'connected' || app.state === 'waiting')
 }
 
-/** The Shopify row's reply note: who posts it. */
-export function shopifyReplyNote(row: Pick<ShopifyRow, 'app' | 'status' | 'responses' | 'noReply'>, appConnected: boolean): string {
-  if (isAnswered(row)) return 'Responded'
-  // The one rule says no reply is needed (positive, imported, closed by a person): never "Reply from Nexus" as if work.
-  if (row.noReply != null) return replyNeedWords(row)
-  if (row.app === 'JUDGEME') return appConnected ? 'Reply from Nexus' : 'Judge.me not connected'
-  return 'Copy and post in the app'
+/** The apps a person connected (read, or waiting for their read), in the API's order. */
+export function connectedApps(apps: ShopifyApps | null): ReviewAppView[] {
+  return apps?.apps.filter(isAppConnected) ?? []
 }
 
-/** "3 photos · video", "1 photo", "". */
-export function mediaWords(row: Pick<ShopifyRow, 'photoItems' | 'hasVideo'>): string {
-  return [row.photoItems.length ? plural(row.photoItems.length, 'photo', 'photos') : null, row.hasVideo ? 'video in Judge.me' : null].filter(Boolean).join(' · ')
+/** The apps that need a person: a key the app refused. */
+export function appsNeedingFix(apps: ShopifyApps | null): ReviewAppView[] {
+  return apps?.apps.filter((a) => a.state === 'needs_fix') ?? []
+}
+
+/** "Judge.me", "Judge.me and Okendo", "Judge.me, Okendo and Loox". */
+export function namesWords(names: readonly string[]): string {
+  if (names.length <= 1) return names.join('')
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
+const APP_NAME: Record<string, string> = { JUDGEME: 'Judge.me', OKENDO: 'Okendo', YOTPO: 'Yotpo', LOOX: 'Loox' }
+
+/** The review app's name for a row's `app` ("Okendo"), or null for a file import. */
+export function appName(app: string | null | undefined): string | null {
+  return app ? APP_NAME[app] ?? null : null
+}
+
+/** The Shopify row's reply note: who posts it, from the apps' states (`GET /api/reviews/apps`). */
+export function shopifyReplyNote(row: Pick<ShopifyRow, 'app' | 'status' | 'responses' | 'noReply'>, apps: ReadonlyArray<Pick<ReviewAppView, 'app' | 'replies' | 'state'>>): string {
+  if (isAnswered(row)) return 'Responded'
+  // The one rule says no reply is needed (positive, imported, closed by a person): never "Reply from Nexus" or
+  // "Reply in Yotpo" as if work were waiting.
+  if (row.noReply != null) return replyNeedWords(row)
+  const name = appName(row.app)
+  if (!name) return 'Copy and post in the app'
+  const app = apps.find((a) => a.app === row.app)
+  if (app?.replies) return isAppConnected(app) ? 'Reply from Nexus' : `${name} not connected`
+  return `Reply in ${name}`
+}
+
+/** "3 photos · video in Okendo", "1 photo", "". */
+export function mediaWords(row: Pick<ShopifyRow, 'photoItems' | 'hasVideo' | 'app'>): string {
+  return [
+    row.photoItems.length ? plural(row.photoItems.length, 'photo', 'photos') : null,
+    row.hasVideo ? `video in ${appName(row.app) ?? 'the review app'}` : null,
+  ].filter(Boolean).join(' · ')
 }
 
 // ── Header lines ─────────────────────────────────────────────────────
@@ -261,9 +299,10 @@ export function etsySubtitle(source: EtsySource | null, tiles: EtsyTiles | null)
 }
 
 export function shopifySubtitle(apps: ShopifyApps | null): string {
-  const app = judgeme(apps)
-  if (!app || !isAppConnected(app)) return 'Your store · Shopify keeps no reviews itself: they live in the store’s review app'
-  return `Your store · Judge.me · ${app.lastReadAt ? `read every 30 min, last ${shortTime(app.lastReadAt)}` : app.stateWords.toLowerCase()}`
+  const live = connectedApps(apps)
+  if (live.length === 0) return 'Your store · Shopify keeps no reviews itself: they live in the store’s review app'
+  const last = live.map((a) => a.lastReadAt).filter((x): x is string => !!x).sort().pop() ?? null
+  return `Your store · ${namesWords(live.map((a) => a.name))} · ${last ? `read every 30 min, last ${shortTime(last)}` : live[0].stateWords.toLowerCase()}`
 }
 
 // ── Export (the bulk bar) ────────────────────────────────────────────
@@ -298,22 +337,44 @@ export function csvFileName(channel: ShopChannel, now: Date = new Date()): strin
   return `${channel.toLowerCase()}-reviews-${now.toISOString().slice(0, 10)}.csv`
 }
 
-// ── Connecting Judge.me ──────────────────────────────────────────────
+// ── Connecting a review app ──────────────────────────────────────────
 
-/** The store address as the API takes it, or null (the form says why). */
+/** The store address as Judge.me takes it, or null (the form says why). */
 export function shopDomainOf(raw: string): string | null {
   const host = raw.trim().toLowerCase().replace(/^https?:\/\//, '').split(/[/?#]/)[0]
   return /^[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com$/.test(host) ? host : null
 }
 
+/** Why one field's value cannot go yet, or null. The API checks again and answers in words. */
+function fieldHeld(app: ReviewAppKey, field: ReviewAppField, raw: string): string | null {
+  const value = raw.trim()
+  if (!value) return field.secret ? `Paste the ${field.label} first.` : field.key === 'shopDomain' ? 'Type the store’s Shopify address first.' : `Paste the ${field.label} first.`
+  if (field.key === 'shopDomain' && !shopDomainOf(value)) return 'The store address ends in .myshopify.com (the Shopify address, not the shop’s own domain).'
+  if (app === 'OKENDO' && field.key === 'userId' && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+    return 'That does not look like an Okendo User ID: 36 letters, digits and dashes.'
+  }
+  if (!field.secret && field.key === 'storeId' && !/^[A-Za-z0-9._-]{6,200}$/.test(value)) return `That does not look like a ${field.label}: letters, digits, dots and dashes.`
+  if (field.secret && !/^[\x21-\x7e]{8,200}$/.test(value)) return `That does not look like a ${field.label}: one word, at least 8 characters.`
+  return null
+}
+
 /** Why Connect is held, or null: the permission first, then each field in order. */
-export function connectHeld(input: { canManage: boolean; shopDomain: string; apiToken: string; busy: boolean }): string | null {
+export function connectHeld(input: { canManage: boolean; app: Pick<ReviewAppView, 'app' | 'fields'>; values: Record<string, string>; busy: boolean }): string | null {
   if (!input.canManage) return 'You need ‘Manage reviews’ to connect a review app.'
   if (input.busy) return 'Connecting… this takes a moment.'
-  if (!input.shopDomain.trim()) return 'Type the store’s Shopify address first.'
-  if (!shopDomainOf(input.shopDomain)) return 'The store address ends in .myshopify.com (the Shopify address, not the shop’s own domain).'
-  const token = input.apiToken.trim()
-  if (!token) return 'Paste the private API token from Judge.me first.'
-  if (!/^[\x21-\x7e]{8,200}$/.test(token)) return 'That does not look like a Judge.me API token: one word, at least 8 characters.'
+  for (const field of input.app.fields) {
+    const held = fieldHeld(input.app.app, field, input.values[field.key] ?? '')
+    if (held) return held
+  }
   return null
+}
+
+/** The window's first values: what the app knows the store by is filled back in; a secret never is. */
+export function initialValues(app: Pick<ReviewAppView, 'fields' | 'storeId'>): Record<string, string> {
+  return Object.fromEntries(app.fields.map((f) => [f.key, !f.secret && app.storeId ? app.storeId : '']))
+}
+
+/** The button that opens an app in the list: connect it, or manage it. */
+export function appActionLabel(app: Pick<ReviewAppView, 'name' | 'state'>): string {
+  return app.state === 'connected' || app.state === 'waiting' || app.state === 'needs_fix' ? `Manage ${app.name}…` : `Connect ${app.name}…`
 }
