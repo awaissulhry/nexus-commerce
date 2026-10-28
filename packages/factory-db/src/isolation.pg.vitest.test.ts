@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
+import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
@@ -83,6 +84,8 @@ beforeAll(async () => {
   await seedNumbering({ db: factory, namespace: 'iso-b' })
   await seedOutbox({ db: factory, namespace: 'iso-a' })
   await seedOutbox({ db: factory, namespace: 'iso-b' })
+  await seedIntegration({ db: factory, namespace: 'iso-a' })
+  await seedIntegration({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -95,12 +98,16 @@ it('covers every classified table and every runtime role', () => {
     'AuditLog',
     'Company',
     'IdempotencyReceipt',
+    'InboundWebhook',
+    'IntegrationAccount',
+    'IntegrationCall',
     'Invitation',
     'Line',
     'NumberAllocation',
     'NumberSeries',
     'OutboxEvent',
     'PasswordReset',
+    'SecretValue',
     'Session',
     'Site',
     'Station',
@@ -133,13 +140,13 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
       expect(row, `a ${model.name} row ${where}`).toBeDefined()
       return row!.row as Record<string, unknown>
     }
-    /** A copy of a row that breaks no unique key: a new id, and every unique text column suffixed. */
+    /** A copy of a row that breaks no unique key: a new id, and every unique text column suffixed (a NULL stays NULL). */
     const copyOf = (row: Record<string, unknown>): Record<string, unknown> => {
       const copy: Record<string, unknown> = { ...row, [pk]: randomUUID() }
       for (const unique of model.uniques) {
         for (const column of unique) {
           const field = model.fields.find((entry) => entry.column === column)
-          if (field?.type === 'String' && field.nativeType !== 'Uuid') copy[column] = `${String(row[column])}-copy-${randomUUID().slice(0, 8)}`
+          if (field?.type === 'String' && field.nativeType !== 'Uuid' && row[column] !== null) copy[column] = `${String(row[column])}-copy-${randomUUID().slice(0, 8)}`
         }
       }
       return copy

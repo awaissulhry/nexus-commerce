@@ -24,11 +24,15 @@ export {
 } from './roles'
 export type {
   Company,
+  InboundWebhook,
+  IntegrationAccount,
+  IntegrationCall,
   Invitation,
   Line,
   OutboxEvent,
   PasswordReset,
   Prisma,
+  SecretValue,
   Session,
   Site,
   Station,
@@ -37,6 +41,11 @@ export type {
   WorkCentre,
 } from './generated/prisma/client'
 export {
+  InboundStatus,
+  IntegrationAccountStatus,
+  IntegrationCallStatus,
+  IntegrationMode,
+  IntegrationProvider,
   MasterStatus,
   OutboxStatus,
   PasswordResetKind,

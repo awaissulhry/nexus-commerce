@@ -1,0 +1,37 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/integration.prisma (rules: src/ownership.ts; roles: src/roles.ts). Outside services are called only by apps/factory-api's gateway, in an office session or in the system context of the worker and scheduler (office role factory_runtime, RLS forced); floor and portal/link sessions never reach these tables (their work that needs a provider runs as a job). IntegrationCall is append-only (`@append-only`, scripts/factory/check-append-only.mjs): no update or delete grant, and the triggers of the …_integration_guards migration refuse UPDATE, DELETE and TRUNCATE for every login. InboundWebhook is never deleted and its receipt columns never change (the same migration's guard trigger); only its processing state moves. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "IntegrationAccount": {
+      "about": "Office admins keep the accounts (through command()); the gateway reads an account before each call and records its last success and failure; the inbound route reads it (as the tenant's system context) to verify a webhook. Disabled, never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SecretValue": {
+      "about": "Sealed secrets: written when an admin saves credentials, read (and opened in memory) by the gateway and the inbound route, re-sealed in place by a rotation, deleted when the credential is replaced or its account removed. Only the wrapped data key and the ciphertext are stored.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "IntegrationCall": {
+      "about": "The gateway adds one row per call; the Connections page and the error queue read them. Nobody changes or removes a row.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "InboundWebhook": {
+      "about": "The inbound route (the tenant's system context) adds the receipt; the worker's job reads it and moves its processing state (status, attempts, processedAt, lastError; the trigger refuses any other change). Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}
