@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { FACTORY_ENV_FILE, LOCAL_COOKIE_SECRET, loadFactoryEnv, parseFactoryEnv, readFactoryVariables } from './env'
+import { FACTORY_ENV_FILE, LOCAL_COOKIE_SECRET, LOCAL_PIN_PEPPER, loadFactoryEnv, parseFactoryEnv, readFactoryVariables } from './env'
 
 const LOCAL = {
   FACTORY_ENV: 'local',
@@ -19,6 +19,7 @@ const RAILWAY = {
   FACTORY_REDIS_URL: REMOTE_REDIS,
   FACTORY_WEB_ORIGIN: 'https://factory.example.com',
   FACTORY_COOKIE_SECRET: 'a-random-secret-of-at-least-thirty-two-chars',
+  FACTORY_PIN_PEPPER: 'a-made-up-pin-pepper-of-at-least-thirty-two-chars',
   FACTORY_KMS_KEY_ID: 'arn:aws:kms:eu-south-1:000000000000:key/00000000-0000-0000-0000-000000000000',
   FACTORY_AWS_ACCESS_KEY_ID: 'AKIAIOSFODNN7EXAMPLE',
   FACTORY_AWS_SECRET_ACCESS_KEY: 'not-a-real-secret-access-key-for-tests',
@@ -124,6 +125,19 @@ describe('refusals', () => {
     }
   })
 
+  it.each(['production', 'staging'])('refuses FACTORY_ENV=%s without a real PIN pepper (or with a weak previous one)', (name) => {
+    const { FACTORY_PIN_PEPPER: _unused, ...rest } = RAILWAY
+    for (const variables of [
+      rest,
+      { ...RAILWAY, FACTORY_PIN_PEPPER: 'a-short-pin-pepper-1' },
+      { ...RAILWAY, FACTORY_PIN_PEPPER: LOCAL_PIN_PEPPER },
+      { ...RAILWAY, FACTORY_PIN_PEPPER_PREVIOUS: LOCAL_PIN_PEPPER },
+    ]) {
+      expect(() => parseFactoryEnv({ ...variables, FACTORY_ENV: name }, 'production')).toThrow(/FACTORY_PIN_PEPPER/)
+    }
+    expect(parseFactoryEnv({ ...RAILWAY, FACTORY_ENV: name, FACTORY_PIN_PEPPER_PREVIOUS: 'an-older-made-up-pin-pepper-of-32-chars' }, 'production').FACTORY_PIN_PEPPER).toBe(RAILWAY.FACTORY_PIN_PEPPER)
+  })
+
   it.each(['local', 'test'])('refuses FACTORY_ENV=%s without its own queue prefix (the local Redis is shared)', (name) => {
     const { FACTORY_QUEUE_PREFIX: _unused, ...rest } = LOCAL
     expect(() => parseFactoryEnv({ ...rest, FACTORY_ENV: name }, undefined)).toThrow(/FACTORY_QUEUE_PREFIX is required with FACTORY_ENV=/)
@@ -192,6 +206,7 @@ describe('accepted', () => {
       FACTORY_PORT: 8190,
       FACTORY_WEB_ORIGIN: 'http://localhost:3200',
       FACTORY_COOKIE_SECRET: LOCAL_COOKIE_SECRET,
+      FACTORY_PIN_PEPPER: LOCAL_PIN_PEPPER,
       FACTORY_TRUST_PROXY_HOPS: 0,
       FACTORY_AWS_REGION: 'eu-south-1',
     })

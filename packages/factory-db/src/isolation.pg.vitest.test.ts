@@ -4,11 +4,14 @@ import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
 import { seed as seedFiles } from '../seed/files'
+import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedImports } from '../seed/imports'
 import { seed as seedIntegration } from '../seed/integration'
+import { seed as seedLinks } from '../seed/links'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedRoles } from '../seed/roles'
+import { seed as seedThreads } from '../seed/threads'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels } from './ownership'
 import { PLATFORM_ROLE, POLICY_KEYS, RUNTIME_LOGIN, RUNTIME_ROLES, WALL, type PolicyKeyName, type RuntimeRole } from './roles'
@@ -94,6 +97,12 @@ beforeAll(async () => {
   await seedIntegration({ db: factory, namespace: 'iso-b' })
   await seedFiles({ db: factory, namespace: 'iso-a' })
   await seedFiles({ db: factory, namespace: 'iso-b' })
+  await seedLinks({ db: factory, namespace: 'iso-a' })
+  await seedLinks({ db: factory, namespace: 'iso-b' })
+  await seedFloorAuth({ db: factory, namespace: 'iso-a' })
+  await seedFloorAuth({ db: factory, namespace: 'iso-b' })
+  await seedThreads({ db: factory, namespace: 'iso-a' })
+  await seedThreads({ db: factory, namespace: 'iso-b' })
   await seedImports({ db: factory, namespace: 'iso-a' })
   await seedImports({ db: factory, namespace: 'iso-b' })
 }, 60_000)
@@ -106,7 +115,12 @@ afterAll(async () => {
 it('covers every classified table and every runtime role', () => {
   expect(classified.map(({ model }) => model.name).sort()).toEqual([
     'AuditLog',
+    'Badge',
     'Company',
+    'Device',
+    'DeviceEnrolment',
+    'FloorSession',
+    'FloorSettings',
     'IdempotencyReceipt',
     'ImportJob',
     'ImportRow',
@@ -115,8 +129,11 @@ it('covers every classified table and every runtime role', () => {
     'IntegrationCall',
     'Invitation',
     'Line',
+    'LinkEvidence',
+    'Message',
     'NumberAllocation',
     'NumberSeries',
+    'OneOffLink',
     'OutboxEvent',
     'PasswordReset',
     'Role',
@@ -127,8 +144,11 @@ it('covers every classified table and every runtime role', () => {
     'Station',
     'StoredFile',
     'Tenant',
+    'Thread',
     'User',
     'WorkCentre',
+    'Worker',
+    'WorkerRole',
   ])
   expect(RUNTIME_ROLES).toHaveLength(4)
   expect(a.tenantId).not.toBe(b.tenantId)
@@ -150,8 +170,9 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
     const filter = keys.map((key) => ({ column: keyColumns[key] as string, type: POLICY_KEYS[key].type, value: () => keyValue(key) }))
     const inside = filter.map((entry, index) => `${q(entry.column)} = $${index + 1}::${entry.type}`).join(' AND ') || 'true'
     const values = () => filter.map((entry) => entry.value())
-    const rowOf = async (where: string): Promise<Record<string, unknown>> => {
-      const [row] = await admin(`SELECT to_jsonb(t) AS row FROM ${table} t WHERE ${where} ORDER BY ${q(pk)} LIMIT 1`, values())
+    /** The first row matching `where`, whose `$n` parameters are the scope's values (or `params`, when given). */
+    const rowOf = async (where: string, params: unknown[] = values()): Promise<Record<string, unknown>> => {
+      const [row] = await admin(`SELECT to_jsonb(t) AS row FROM ${table} t WHERE ${where} ORDER BY ${q(pk)} LIMIT 1`, params)
       expect(row, `a ${model.name} row ${where}`).toBeDefined()
       return row!.row as Record<string, unknown>
     }
@@ -236,7 +257,7 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
           const other = await rowOf(`NOT (${inside})`)
           expect(await touch(other[pk])).toBe(0)
           for (const entry of filter) {
-            const away = await rowOf(`${q(entry.column)} <> $${filter.indexOf(entry) + 1}::${entry.type}`)
+            const away = await rowOf(`${q(entry.column)} <> $1::${entry.type}`, [entry.value()])
             await expect(
               execute(role, `UPDATE ${table} SET ${q(entry.column)} = $1::${entry.type} WHERE ${q(pk)} = $2::uuid`, away[entry.column], own[pk]),
             ).rejects.toThrow(RLS)

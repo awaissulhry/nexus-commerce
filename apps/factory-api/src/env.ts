@@ -20,6 +20,10 @@ import { describeUrlHost, isLoopbackUrl } from '@nexus/db-kit/url-guard'
  *   FACTORY_HOST, FACTORY_PORT
  *   FACTORY_WEB_ORIGIN        the factory web's origin, the only one allowed cross-origin (local: http://localhost:3200)
  *   FACTORY_COOKIE_SECRET     signs cookies; local and test fall back to a fixed placeholder
+ *   FACTORY_PIN_PEPPER        the server-side pepper of floor PIN hashes (HMAC before scrypt, never stored), at least
+ *                             32 characters; local and test fall back to a fixed placeholder
+ *   FACTORY_PIN_PEPPER_PREVIOUS  optional: the pepper before a rotation, so older PIN hashes still open (each is
+ *                             re-hashed with the current one at its next sign-in); drop it once they all were
  *   FACTORY_TRUST_PROXY_HOPS  proxies in front of the API whose X-Forwarded-For is trusted (default 0)
  *   FACTORY_SECRETS_MASTER_KEY  local and test only: the master key that wraps the data keys of sealed secrets
  *                             (platform/secrets), 32 random bytes in base64 (`openssl rand -base64 32`); optional (sealing
@@ -37,7 +41,8 @@ import { describeUrlHost, isLoopbackUrl } from '@nexus/db-kit/url-guard'
  *   - FACTORY_ENV local or test: the database and Redis must be on this machine (loopback), and FACTORY_QUEUE_PREFIX
  *     must be set; no KMS or AWS variable (nothing local reaches AWS);
  *   - FACTORY_ENV staging or production: only on Railway (RAILWAY_ENVIRONMENT set by the platform, never by the file),
- *     with an https web origin, a real cookie secret of at least 32 characters (never the local placeholder), the KMS key
+ *     with an https web origin, a real cookie secret and PIN pepper of at least 32 characters each (never the local
+ *     placeholders), the KMS key
  *     and its AWS keys, no local master key and no local files folder (files are on R2 there).
  */
 export const FACTORY_ENV_FILE = fileURLToPath(new URL('../.env', import.meta.url))
@@ -50,6 +55,8 @@ export class FactoryEnvError extends Error {
 
 /** The cookie secret of local and test runs. Public on purpose: staging and production refuse it. */
 export const LOCAL_COOKIE_SECRET = 'factory-local-cookie-secret-not-for-staging-or-production'
+/** The PIN pepper of local and test runs. Public on purpose: staging and production refuse it. */
+export const LOCAL_PIN_PEPPER = 'factory-local-pin-pepper-not-for-staging-or-production'
 const LOCAL_WEB_ORIGIN = 'http://localhost:3200'
 
 /** A queue prefix: 1-32 lower-case letters, digits or underscores, starting with a letter. */
@@ -81,6 +88,8 @@ const schema = z.object({
   FACTORY_PORT: z.coerce.number().int().min(1).max(65535).default(8190),
   FACTORY_WEB_ORIGIN: origin.optional(),
   FACTORY_COOKIE_SECRET: z.string().min(1).optional(),
+  FACTORY_PIN_PEPPER: z.string().min(16).optional(),
+  FACTORY_PIN_PEPPER_PREVIOUS: z.string().min(16).optional(),
   FACTORY_TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
   FACTORY_SECRETS_MASTER_KEY: z
     .string()
@@ -96,7 +105,13 @@ const schema = z.object({
 })
 
 export type FactoryEnv = Readonly<
-  z.infer<typeof schema> & { FACTORY_HOST: string; FACTORY_WEB_ORIGIN: string; FACTORY_COOKIE_SECRET: string; FACTORY_QUEUE_PREFIX: string }
+  z.infer<typeof schema> & {
+    FACTORY_HOST: string
+    FACTORY_WEB_ORIGIN: string
+    FACTORY_COOKIE_SECRET: string
+    FACTORY_PIN_PEPPER: string
+    FACTORY_QUEUE_PREFIX: string
+  }
 >
 
 type Sources = { file?: string; processEnv?: NodeJS.ProcessEnv }
@@ -157,6 +172,12 @@ export function parseFactoryEnv(variables: Record<string, string>, railwayEnviro
         `FACTORY_COOKIE_SECRET must be a random secret of at least 32 characters with FACTORY_ENV=${env.FACTORY_ENV} (not the local placeholder)`,
       )
     }
+    for (const key of ['FACTORY_PIN_PEPPER', 'FACTORY_PIN_PEPPER_PREVIOUS'] as const) {
+      const pepper = env[key]
+      if ((key === 'FACTORY_PIN_PEPPER' && pepper === undefined) || (pepper !== undefined && (pepper.length < 32 || pepper === LOCAL_PIN_PEPPER))) {
+        throw new FactoryEnvError(`${key} must be a random secret of at least 32 characters with FACTORY_ENV=${env.FACTORY_ENV} (not the local placeholder)`)
+      }
+    }
     if (env.FACTORY_SECRETS_MASTER_KEY !== undefined) {
       throw new FactoryEnvError(`FACTORY_SECRETS_MASTER_KEY (a local master key) is refused with FACTORY_ENV=${env.FACTORY_ENV}; secrets are wrapped by AWS KMS there`)
     }
@@ -172,6 +193,7 @@ export function parseFactoryEnv(variables: Record<string, string>, railwayEnviro
     FACTORY_HOST: env.FACTORY_HOST ?? (local ? '127.0.0.1' : '::'),
     FACTORY_WEB_ORIGIN: env.FACTORY_WEB_ORIGIN ?? LOCAL_WEB_ORIGIN,
     FACTORY_COOKIE_SECRET: env.FACTORY_COOKIE_SECRET ?? LOCAL_COOKIE_SECRET,
+    FACTORY_PIN_PEPPER: env.FACTORY_PIN_PEPPER ?? LOCAL_PIN_PEPPER,
     FACTORY_QUEUE_PREFIX: env.FACTORY_QUEUE_PREFIX ?? RAILWAY_QUEUE_PREFIX,
   })
 }

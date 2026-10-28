@@ -51,7 +51,7 @@ describe('check-event-contract', () => {
     expect(guard()).toMatchObject({ status: 0 })
     expect(guard(tree()).status).toBe(0)
     const ok = guard(tree({ [MODULE]: quotesEvents(quoteSent), [CATALOGUE]: assembled, [EMITTER]: emitting("{ type: 'quote.sent', subject: 'q', payload: {} }") }))
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(8 declared event version\(s\), 9 literal emit/) })
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(11 declared event version\(s\), 10 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

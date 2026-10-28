@@ -46,7 +46,7 @@ describe('invite and accept', () => {
     const expiresAt = inThreeDays()
     const invited = await owner.post('/auth/invitations', { email: ' New.Person@Example.com', displayName: 'New Person' })
     expect(invited.status).toBe(200)
-    expect(invited.body).toEqual({ invitation: { id: expect.any(String), userId: expect.any(String), email: 'new.person@example.com', expiresAt, roleIds: [] } })
+    expect(invited.body).toEqual({ invitation: { id: expect.any(String), userId: expect.any(String), email: 'new.person@example.com', expiresAt, roleIds: [] }, delivery: 'sent' })
     expect(JSON.stringify(invited.body)).not.toMatch(/token|#/)
     const message = h.mailer.last('invitation', 'new.person@example.com')!
     expect(message).toMatchObject({ tenantId: tenant.id, userId: invited.body.invitation.userId, link: expect.stringMatching(/^http:\/\/localhost:3200\/accept-invitation#token=/) })

@@ -2,7 +2,7 @@ import type { Issue } from '../../core/errors'
 import { isUuid } from '../../core/ids'
 import type { Grant, Permission, ScopeSet } from '../../core/permissions'
 import { GRAINS, grainPermission, isGrain, type Grain } from '../grains/grains'
-import { FACTORY_PERMISSIONS } from '../permissions/catalogue'
+import { FACTORY_PERMISSIONS, FLOOR_AREA } from '../permissions/catalogue'
 import type { PermissionRegistry } from '../permissions/registry'
 import { templateOf, type RoleContent } from './templates'
 
@@ -50,6 +50,11 @@ export function roleProblems(
     const definition = registry.get(permission)
     if (!definition) issues.push({ path: `permissions/${index}`, message: `${permission} is not a permission of the factory.` })
     else if (definition.grain !== undefined) issues.push({ path: `permissions/${index}`, message: `${permission} is a money grain: list it in grains.` })
+    else if (definition.link === true) {
+      issues.push({ path: `permissions/${index}`, message: `${permission} is held only by a one-off link session, from its purpose; a role cannot give it.` })
+    }
+    // Custom roles are office roles: the floor's permissions come only with the floor templates.
+    else if (definition.area === FLOOR_AREA) issues.push({ path: `permissions/${index}`, message: `${permission} is held only by floor roles.` })
   })
   content.grains.forEach((grain, index) => {
     if (!isGrain(grain)) issues.push({ path: `grains/${index}`, message: `${String(grain)} is not a money grain (${GRAINS.join(', ')}).` })
