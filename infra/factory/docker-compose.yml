@@ -1,4 +1,4 @@
-# The factory's local stack: PostgreSQL 17 and Redis on their own ports, never Commerce's (5432, 6379).
+# The factory's local stack: PostgreSQL 17 and Redis on their own ports, never Commerce's (5432, 6379; its dev Redis on 6389).
 # Both listen on 127.0.0.1 only. One stack per machine, started from a fixed folder outside the worktrees (a copy of
 # this file), never from a worktree: a changed copy would recreate the shared database under other sessions.
 #
@@ -29,7 +29,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - '127.0.0.1:6389:6379'
+      - '127.0.0.1:6399:6379'
     volumes:
       - factory_redis:/data
     healthcheck:
