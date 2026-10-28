@@ -131,12 +131,9 @@ called `-m` and fail. Never `git add .`, never a bare `git commit`.
 `--only` still absorbs a parallel session's edits to the SAME file — which Rule 2 prevents.
 **Never `--no-verify`.** Pre-push runs six DS guards; if one fails, that is the system working.
 
-**🔴 Before `cp`-ing a file into `apps/factory`, check `scripts/ds-fork-baseline.json`.** Files
-listed there differ on purpose-or-by-history and are FROZEN; copying over one is silent, because
-the drift guard treats convergence as progress and says nothing. I did exactly that to
-`components/DataGrid.tsx` — it turned out to be a stale 196-line subset of web's 488, so nothing
-was lost, but that was luck rather than method. Check first; if it genuinely converged, drop it
-from the baseline in the same commit.
+**🔴 Never copy a design-system change into `apps/factory`.** The old factory app is frozen (reference
+only), and `scripts/check-frozen-paths.mjs` fails a branch that changes any file under it. A DS change
+lands in `apps/web/src/design-system` only.
 
 ## The method — all six steps, every time
 1. **Census every spelling** — the same concept hides under `-chip`, `-pill`, `-badge`.

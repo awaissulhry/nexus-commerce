@@ -31,8 +31,8 @@ import type { GridNumberFilterModel, GridSetFilterModel, GridTextFilterModel } f
 import { numberFilterPasses, setFilterPasses, textFilterPasses } from './filterPredicates'
 import { GridNumberRangeFloatingFilter, GridSetFloatingFilter, GridTextFloatingFilter } from './gridFloatingFilters'
 
-import { OptionList } from '@/design-system/components/OptionList'
-import { Button, Input } from '@/design-system/primitives'
+import { OptionList } from '../../components/OptionList'
+import { Button, Input } from '../../primitives'
 
 import type { ColDef } from '../NexusGrid'
 

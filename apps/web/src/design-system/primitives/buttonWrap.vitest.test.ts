@@ -11,7 +11,6 @@ import { describe, expect, it } from 'vitest'
 import { Button } from './Button'
 
 const web = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
-const factory = (path: string) => readFileSync(new URL(`../../../../factory/src/design-system/${path}`, import.meta.url), 'utf8')
 const rule = (css: string, selector: string) => new RegExp(`${selector.replace(/\./g, '\\.')}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? null
 
 describe('Button wrap', () => {
@@ -22,8 +21,8 @@ describe('Button wrap', () => {
     expect(link).toMatch(/^<a [^>]*class="nds-btn link wrap"[^>]*>SKU<\/a>$/)
     expect(link).toMatch(/href="\/p"/)
   })
-  it('the stylesheet lets a wrap button break its label anywhere, in web and in Factory', () => {
-    for (const [app, css] of [['web', web('styles/primitives.css')], ['factory', factory('styles/primitives.css')]] as const) {
+  it('the stylesheet lets a wrap button break its label anywhere', () => {
+    for (const [app, css] of [['web', web('styles/primitives.css')]] as const) {
       const body = rule(css, '.nds-btn.wrap')
       expect(body, `${app} .nds-btn.wrap`).not.toBeNull()
       expect(body, app).toMatch(/white-space:\s*normal/)
@@ -31,8 +30,5 @@ describe('Button wrap', () => {
     }
     // Positive control: the base rule this overrides really is nowrap.
     expect(rule(web('styles/primitives.css'), '.nds-btn')).toMatch(/white-space:\s*nowrap/)
-  })
-  it('Factory carries the same Button source (mirror)', () => {
-    expect(factory('primitives/Button.tsx')).toBe(web('primitives/Button.tsx'))
   })
 })

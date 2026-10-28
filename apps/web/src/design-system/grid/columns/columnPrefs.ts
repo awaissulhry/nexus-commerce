@@ -13,7 +13,7 @@
  */
 import type { ColumnState } from 'ag-grid-community'
 
-import type { PreferencesValue } from '@/design-system/patterns/PreferencesModal'
+import type { PreferencesValue } from '../../patterns/PreferencesModal'
 
 /** AG's fixed ids for the columns it creates itself. */
 export const AG_SELECTION_COL = 'ag-Grid-SelectionColumn'

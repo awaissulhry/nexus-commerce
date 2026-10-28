@@ -31,8 +31,8 @@ import { usePopoverPosition } from '../../components/usePopoverPosition'
 import { useClickAway } from '../../components/useClickAway'
 import { AlertTriangle, ChevronDown } from 'lucide-react'
 
-import { Button, Input } from '@/design-system/primitives'
-import { Menu, useToast, type MenuItemDef } from '@/design-system/components'
+import { Button, Input } from '../../primitives'
+import { Menu, useToast, type MenuItemDef } from '../../components'
 
 import type { GridStateApi } from '../hooks/useGridState'
 import type { SavedGridView } from '../hooks/useGridViews'

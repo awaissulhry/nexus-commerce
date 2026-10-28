@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ColumnState } from 'ag-grid-community'
 import { AG_AUTO_COL, AG_SELECTION_COL, columnStateToPrefs, operatorLocks, prefsToColumnState, type PrefsBridgeOptions } from './columnPrefs'
-import type { PreferencesValue } from '@/design-system/patterns/PreferencesModal'
+import type { PreferencesValue } from '../../patterns/PreferencesModal'
 
 // The products page's shape: product (locked, tree) · movable… · actions (locked)
 const O: PrefsBridgeOptions = {

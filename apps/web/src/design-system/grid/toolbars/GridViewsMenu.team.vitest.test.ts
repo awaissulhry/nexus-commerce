@@ -2,15 +2,15 @@ import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup as render } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { MenuItemDef } from '@/design-system/components'
+import type { MenuItemDef } from '../../components'
 import type { GridStateApi } from '../hooks/useGridState'
 import type { SavedGridView } from '../hooks/useGridViews'
 import { columnsViewPayload } from '../views/viewPayload'
 
 /* The DS Menu renders its items only when open; capture what GridViewsMenu hands it instead. */
 const captured = vi.hoisted(() => ({ items: [] as MenuItemDef[] }))
-vi.mock('@/design-system/components', async (original) => ({
-  ...(await original<typeof import('@/design-system/components')>()),
+vi.mock('../../components', async (original) => ({
+  ...(await original<typeof import('../../components')>()),
   Menu: (props: { items: MenuItemDef[] }) => { captured.items = props.items; return null },
 }))
 

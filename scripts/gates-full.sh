@@ -176,11 +176,17 @@ node scripts/check-alias-form.mjs --check || {
   exit 1
 }
 
-# apps/factory carries a COPY of the design system, not an import. A file identical in
-# both apps must stay identical — a DS fix that lands in one app is not applied to the
-# platform, and nothing else in this hook can see that.
-node scripts/check-ds-fork-drift.mjs --check || {
-  echo "❌ DS fork-drift ratchet FAILED — see message above (rule + why: scripts/check-ds-fork-drift.mjs header)"
+# 2026-10-28 — apps/factory is frozen (reference only; a new factory app replaces it later), so the
+# web design system is no longer copied into it. No committed change under apps/factory/.
+node scripts/check-frozen-paths.mjs || {
+  echo "❌ frozen paths FAILED — see message above (rule + why: scripts/check-frozen-paths.mjs header)"
+  exit 1
+}
+
+# 2026-10-28 — the design system imports only its own files and npm packages: no `@/…` alias, no
+# relative path out of apps/web/src/design-system. So the folder can move as one unit.
+node scripts/check-ds-self-contained.mjs || {
+  echo "❌ DS self-contained FAILED — see message above (rule + why: scripts/check-ds-self-contained.mjs header)"
   exit 1
 }
 
@@ -304,7 +310,7 @@ npm run tokens:check --silent || {
 # 2026-09-02 (hub #684/#708, DS.1-b) — the SAME check for the factory fork, which had none.
 # `npm run tokens:check` is web-only: root package.json pointed both token scripts at
 # apps/web, and neither app had one of its own, so factory's generated tokens.css has never had a
-# drift gate. `check-ds-fork-drift` is blind to stylesheets, so nothing else covered it either.
+# drift gate. The fork-drift check (retired 2026-10-28) was blind to stylesheets, so nothing else covered it either.
 echo "→ Checking factory tokens.css is in sync with its css-vars.ts..."
 npm run tokens:check:factory --silent || {
   echo "❌ factory tokens.css drift — edit apps/factory/.../tokens/css-vars.ts and run 'npm run tokens:gen:factory'"

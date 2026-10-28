@@ -1,7 +1,7 @@
 'use client'
 
 import { Bar, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { color } from '@/design-system/tokens'
+import { color } from '../tokens'
 import { axisScale, isolatedPoints } from './performanceGraphModel'
 import { chartMarks, legendMarks, markOf, type ChartMark, type ChartStackPart } from './performanceGraphSeries'
 

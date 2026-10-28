@@ -10,7 +10,6 @@ import { FamilyFooterFrame, type FamilyFooterFrameProps } from './FamilyFooterFr
 
 const html = (props: FamilyFooterFrameProps) => renderToStaticMarkup(createElement(FamilyFooterFrame, props))
 const web = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8')
-const factory = (path: string) => readFileSync(new URL(`../../../../../factory/src/design-system/${path}`, import.meta.url), 'utf8')
 const rule = (css: string, selector: string) => new RegExp(`${selector.replace(/[.-]/g, (c) => `\\${c}`)}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? null
 
 describe('FamilyFooterFrame', () => {
@@ -35,9 +34,8 @@ describe('FamilyFooterFrame', () => {
       + '<span class="nds-grid-famfoot-count" title="Not answered yet.">Variation mapping · Not computed</span><a href="/products">Open family</a></div>',
     )
   })
-  it('the styles are on DS tokens and the same in web and Factory', () => {
-    expect(web('grid/toolbars/FamilyFooterFrame.tsx')).toBe(factory('grid/toolbars/FamilyFooterFrame.tsx'))
-    for (const [app, css] of [['web', web('grid/theme/grid.css')], ['factory', factory('grid/theme/grid.css')]] as const) {
+  it('the styles are on DS tokens', () => {
+    for (const [app, css] of [['web', web('grid/theme/grid.css')]] as const) {
       const frame = rule(css, '.nds-grid-famfoot')
       expect(frame, `${app} .nds-grid-famfoot`).toMatch(/gap: var\(--nds-space-12\)/)
       expect(frame, app).toMatch(/padding: var\(--nds-space-10\) var\(--nds-space-14\)/)
