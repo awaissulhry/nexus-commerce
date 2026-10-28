@@ -120,6 +120,8 @@ model Company {
   quotes               Quote[]
   salesOrders          SalesOrder[]
   depositRequests      DepositRequest[]
+  // quality.prisma: its PPE register.
+  ppeRegisterEntries   PpeRegisterEntry[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.
@@ -172,6 +174,14 @@ model Site {
   // production.prisma: its floor rules and the work orders it makes.
   productionSettings ProductionSettings[]
   workOrders         WorkOrder[]
+  // quality.prisma: its final inspections, quality releases and their reversals.
+  inspections             Inspection[]
+  qualityReleases         QualityRelease[]
+  qualityReleaseReversals QualityReleaseReversal[]
+  // shipping.prisma: its shipping settings, the shipments that leave it and their DDTs.
+  shippingSettings   ShippingSettings[]
+  shipments          Shipment[]
+  ddts               Ddt[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])

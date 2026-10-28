@@ -336,6 +336,9 @@ model Style {
   ppeClass              String?
   /// Made-to-measure single units may be made from it (PRD-288: inside the certified range of its basic model).
   mtmAllowed            Boolean     @default(false)
+  /// How its garments are traced (Q31, quality.prisma): one batch number per work order (BATCH, the default) or also a
+  /// serial per garment (SERIAL). Changes only while none of its work orders has a serial or a quality release.
+  garmentTracking       GarmentTracking @default(BATCH)
   /// The measurement template a made-to-measure unit is measured with (PRD-200).
   measurementTemplateId String?     @db.Uuid
   status                StyleStatus @default(DRAFT)
@@ -359,6 +362,8 @@ model Style {
   salesOrderLines     SalesOrderLine[]
   // production.prisma: the work orders that make it.
   workOrders          WorkOrder[]
+  // quality.prisma: the PPE register's entries about it.
+  ppeRegisterEntries  PpeRegisterEntry[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the style's rows.

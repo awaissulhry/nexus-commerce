@@ -69,6 +69,9 @@ model IntegrationAccount {
   emailIdentities EmailIdentity[]
   // email-in.prisma: the mail this (SES) account received.
   inboundEmails   InboundEmail[]
+  // shipping.prisma: the (Sendcloud) account's sites and the shipments labelled with it.
+  shippingSettings ShippingSettings[]
+  shipments        Shipment[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, id])

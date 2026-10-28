@@ -40,6 +40,8 @@ model NumberSeries {
 
   company     Company            @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   allocations NumberAllocation[]
+  // shipping.prisma: the DDTs numbered from it.
+  ddts        Ddt[]
 
   @@unique([tenantId, companyId, kind, code, scopeKey])
   // The target of the allocations' tenant- and company-safe reference.

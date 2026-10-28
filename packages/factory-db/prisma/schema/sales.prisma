@@ -552,6 +552,8 @@ model SalesOrder {
   quoteVersion    QuoteVersion?    @relation(fields: [tenantId, partyId, quoteVersionId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   lines           SalesOrderLine[]
   depositRequests DepositRequest[]
+  // shipping.prisma: its shipments.
+  shipments       Shipment[]
 
   @@unique([tenantId, companyId, number])
   // The target of the references from the order's lines and deposit requests: the same company and party.
@@ -633,6 +635,8 @@ model SalesOrderLine {
   sizes              SalesOrderLineSize[]
   // production.prisma: the work order cells that make it.
   workOrderSizes     WorkOrderSize[]
+  // shipping.prisma: the shipment lines that ship it.
+  shipmentLines      ShipmentLine[]
 
   @@unique([tenantId, orderId, seq])
   // The target of the references from the line's size rows (and the work orders of W1-23).
