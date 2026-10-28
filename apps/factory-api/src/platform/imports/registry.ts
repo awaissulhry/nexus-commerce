@@ -2,6 +2,7 @@ import type { Permission } from '@nexus/factory-domain/core/permissions'
 import type { CellValue } from '@nexus/factory-domain/imports/cells'
 import { importerRegistry, type ExistingRecord, type Importer, type ImporterRegistry, type RecordValues, type RowValues } from '@nexus/factory-domain/imports/importer'
 import type { CommandTools, CommandTx } from '../../core/command'
+import { materialsImportAdapter } from '../../modules/product/materials/importer'
 
 /**
  * The importers this process runs (plan A1 W0-22; feature PLT-176): each is an importer of factory-domain (its columns,
@@ -57,7 +58,7 @@ export interface ImportAdapter {
 export const defineImportAdapter = (adapter: ImportAdapter): ImportAdapter => Object.freeze({ ...adapter })
 
 /** The process's importers. Each module that brings an importer adds its adapter here. */
-export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([])
+export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([materialsImportAdapter])
 
 let configured: ImporterRegistry<ImportAdapter> | undefined
 let fromList: ImporterRegistry<ImportAdapter> | undefined

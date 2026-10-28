@@ -274,6 +274,9 @@ modules and the other adapters come in later steps.
 - Permissions: imports.view (read), imports.run, imports.apply (write); admin's template has all three (owner and
   read-only follow the registry). A module that adds an importer gives imports.* to the templates that use it.
 
+## Modules
+- Product › materials (`src/modules/product/materials/`, B-W1-09): office routes `/product/materials…` (product.materials.view | manage | cost; the standard cost has its own PUT route, money.cost to send or see it), the `product.materials` importer in IMPORTERS; the rules and unit conversions are factory-domain `product/{materials,units}`; every read names its columns (`store.ts`); no floor route (the floor reads materials through its work orders).
+
 ## Documents and printing (`src/platform/{documents,print}/`, `src/adapters/print-relay/`, plan A1 §3.9; GAP-007, GAP-008)
 - Documents: the issuing module builds its frozen document (`@nexus/factory-domain/documents`: QUOTE, PURCHASE_ORDER,
   DDT, INVOICE_COPY; it, en) and calls `storeDocumentPdf(processFiles(), caller, { companyId, recordType, recordId,
