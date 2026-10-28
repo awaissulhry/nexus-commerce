@@ -1,0 +1,58 @@
+/* QrCode (QrCode.tsx): dark modules on a light plate in both themes — readers expect dark on light. The plate and the
+   modules are the light-tooltip pair, the design system's theme-invariant light ground and its text. */
+
+.nds-qr {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-space-10);
+  margin: 0;
+  max-width: 100%;
+}
+.nds-qr-plate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-tooltip-light-bg);
+  overflow: hidden;
+}
+.nds-qr-svg { display: block; max-width: 100%; height: auto; }
+.nds-qr-light { fill: var(--nds-tooltip-light-bg); }
+.nds-qr-dark { fill: var(--nds-tooltip-light-fg); }
+.nds-qr-note {
+  padding: var(--nds-space-12);
+  color: var(--nds-tooltip-light-fg);
+  font-size: var(--nds-font-size-sm);
+  text-align: center;
+}
+
+.nds-qr-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nds-space-8);
+  max-width: 100%;
+}
+.nds-qr-code {
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--nds-space-4) var(--nds-space-8);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-md);
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.nds-qr-live {
+  flex-basis: 100%;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  text-align: center;
+}

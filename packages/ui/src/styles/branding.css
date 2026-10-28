@@ -1,0 +1,33 @@
+/**
+ * GENERATED — do not edit by hand.
+ * Source: tokens/branding.ts (`brandBlocks`). Regenerate: `npm run tokens:gen`.
+ *
+ * Tenant branding on a `[data-brand]` subtree (`brandingAttrs`): maps the subtree's --nds-brand-* properties onto
+ * --nds-primary, --nds-primary-hover and --nds-brand-accent, per theme, only for the roles `data-brand` names (the roles
+ * the tenant's colour passed). Loaded by the app that shows branded pages; the token files every page loads are not
+ * touched, so an app without branded pages carries none of this.
+ */
+
+[data-brand] {
+
+  /* ── Branding: decoration follows the subtree's primary unless the accent passed ── */
+  --nds-brand-accent: var(--nds-primary);
+}
+
+[data-brand~='primary-light']:not(.dark, .dark *) {
+  --nds-primary: var(--nds-brand-primary-light);
+  --nds-primary-hover: var(--nds-brand-primary-hover-light);
+}
+
+[data-brand~='accent-light']:not(.dark, .dark *) {
+  --nds-brand-accent: var(--nds-brand-accent-light);
+}
+
+.dark [data-brand~='primary-dark'], .dark[data-brand~='primary-dark'] {
+  --nds-primary: var(--nds-brand-primary-dark);
+  --nds-primary-hover: var(--nds-brand-primary-hover-dark);
+}
+
+.dark [data-brand~='accent-dark'], .dark[data-brand~='accent-dark'] {
+  --nds-brand-accent: var(--nds-brand-accent-dark);
+}

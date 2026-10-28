@@ -1,0 +1,157 @@
+/* BottomBar + MoreSheet (BottomBar.tsx). The phone's main navigation: fixed to the bottom under 720 px, not drawn above
+   (the rail takes over); `.inline` draws it in the page flow at every width. Targets are at least 48 px tall and as wide
+   as a fifth of the screen. The current slot is said three ways: its colour, its weight and a bar on its top edge
+   (`--nds-brand-accent`, a tenant's accent inside a `[data-brand]` subtree, else the primary). */
+
+.nds-bottombar {
+  display: none;
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: var(--nds-z-actionbar);
+  background: var(--nds-surface);
+  border-top: 1px solid var(--nds-border-subtle);
+  box-shadow: var(--nds-shadow-pop);
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+@media (max-width: 719px) {
+  .nds-bottombar { display: block; }
+}
+.nds-bottombar.inline {
+  display: block;
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  box-shadow: none;
+}
+
+.nds-bottombar-list {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-bottombar-slot {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+}
+
+.nds-bottombar-tab {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: calc(var(--nds-space-48) + var(--nds-space-8));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-6) var(--nds-space-2);
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: var(--nds-text-2);
+  font: inherit;
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-medium);
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.nds-bottombar-tab::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 25%;
+  right: 25%;
+  height: 3px;
+  border-radius: 0 0 var(--nds-radius-xs) var(--nds-radius-xs);
+  background: transparent;
+}
+.nds-bottombar-tab:hover { color: var(--nds-text); background: var(--nds-surface-hover); }
+.nds-bottombar-tab.on { color: var(--nds-primary); font-weight: var(--nds-font-weight-semibold); }
+.nds-bottombar-tab.on::before { background: var(--nds-brand-accent, var(--nds-primary)); }
+.nds-bottombar-tab:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-text);
+  outline-offset: calc(-1 * var(--nds-density-focus-w) - var(--nds-density-focus-offset));
+}
+
+.nds-bottombar-ico {
+  position: relative;
+  display: inline-flex;
+  line-height: 0;
+}
+.nds-bottombar-lbl {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* A count over the icon's corner, ringed in the bar's surface — the rail's badge (`.h10-nav-badge`), same colours. */
+.nds-bottombar-badge {
+  position: absolute;
+  top: calc(-1 * var(--nds-space-6));
+  left: calc(100% - var(--nds-space-3));
+  min-width: var(--nds-space-16);
+  height: var(--nds-space-16);
+  padding: 0 var(--nds-space-4);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-rail-badge-bg);
+  color: var(--nds-white);
+  font-size: var(--nds-font-size-micro);
+  font-weight: var(--nds-font-weight-bold);
+  line-height: var(--nds-space-16);
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--nds-surface);
+}
+.nds-bottombar-badge.in-row {
+  position: static;
+  margin-left: auto;
+  box-shadow: none;
+}
+
+/* The More sheet: the DS Modal, a bottom sheet under 720 px. */
+.nds-moresheet .nds-modal-b { padding: var(--nds-space-4) var(--nds-space-8) var(--nds-space-12); }
+.nds-moresheet-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-moresheet-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-12);
+  min-height: var(--nds-space-48);
+  padding: var(--nds-space-6) var(--nds-space-10);
+  border-radius: var(--nds-radius-lg);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-md);
+  text-decoration: none;
+}
+.nds-moresheet-row:hover { background: var(--nds-surface-hover); }
+.nds-moresheet-row.on { color: var(--nds-primary); font-weight: var(--nds-font-weight-semibold); background: var(--nds-surface-raised); }
+.nds-moresheet-row:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-text);
+  outline-offset: calc(-1 * var(--nds-density-focus-w));
+}
+.nds-moresheet-ico { display: inline-flex; line-height: 0; color: var(--nds-text-2); }
+.nds-moresheet-row.on .nds-moresheet-ico { color: var(--nds-primary); }
+.nds-moresheet-text { display: flex; flex-direction: column; min-width: 0; }
+.nds-moresheet-lbl { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.nds-moresheet-area { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-normal); }
+
+@media (max-width: 719px) {
+  .nds-backdrop:has(> .nds-modal.nds-moresheet) {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .nds-modal.nds-moresheet {
+    width: 100%;
+    max-height: 80vh;
+    border-radius: var(--nds-radius-3xl) var(--nds-radius-3xl) 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
