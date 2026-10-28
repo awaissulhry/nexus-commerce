@@ -24,8 +24,8 @@ import { lockStyle } from '../styles/store'
  * compare-and-set of its version (`lockDraft`; the …_product_guards part trigger then takes it FOR SHARE, which this
  * transaction already holds), then the materials a line names (FOR SHARE, by id), then the parts. Two writes to one
  * revision wait for each other on the style row and the second then fails on the version (409): never a deadlock.
- * A draft's parts are removed with DELETE (the trigger allows it only while the revision is DRAFT); the runtime role's
- * DELETE grant on BomLine, BomLineSize and BomLineColour comes with the policy migration (see the module's report).
+ * A draft's parts are removed with DELETE: the runtime role holds it on BomLine, BomLineSize, BomLineColour and
+ * RoutingOperation (ownership/product.json), and the …_product_guards trigger allows it only while the revision is DRAFT.
  */
 
 export { contextOf }

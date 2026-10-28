@@ -1,5 +1,5 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/product.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes the product master data through apps/factory-api's modules/product, always through command(); the API keeps staff to the companies their grants reach. The floor (factory_floor_runtime) reads what it works from: materials and their colours, sizes, styles, colourways, SKUs, revisions, BOMs and routings, the operation library. No product table has a site key, so a floor device reads its whole tenant's product data (styles are tenant- or company-wide; the work order brings the site). The floor never reads a cost, margin or price column (plan A1 §2.2, §2.6: the column grants leave out every `@grain cost|margin|price` column; src/product.pg.vitest.test.ts checks every such column of this file and compliance.json), nor the made-to-measure templates. Portal and link sessions read nothing here. No role deletes: master data is archived (status ARCHIVED), a revision is obsoleted; a released revision and its BOM lines, size quantities, colour cells and routing operations never change (the …_product_guards triggers, for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/product.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes the product master data through apps/factory-api's modules/product, always through command(); the API keeps staff to the companies their grants reach. The floor (factory_floor_runtime) reads what it works from: materials and their colours, sizes, styles, colourways, SKUs, revisions, BOMs and routings, the operation library. No product table has a site key, so a floor device reads its whole tenant's product data (styles are tenant- or company-wide; the work order brings the site). The floor never reads a cost, margin or price column (plan A1 §2.2, §2.6: the column grants leave out every `@grain cost|margin|price` column; src/product.pg.vitest.test.ts checks every such column of this file and compliance.json), nor the made-to-measure templates. Portal and link sessions read nothing here. No role deletes master data: it is archived (status ARCHIVED), and a revision is obsoleted. The office deletes only a DRAFT revision's parts (BOM lines, size quantities, colour cells, routing operations) while it edits them; a released or obsolete revision and its parts never change and are never deleted (the …_product_guards triggers, for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "Colour": {
       "about": "The office keeps the colour library. The floor reads it (colour names on screens and travellers).",
@@ -83,29 +83,29 @@
       }
     },
     "BomLine": {
-      "about": "The office edits a draft revision's BOM. The floor reads it (what to pick, issue and cut); a BOM line has no cost column: costs come from the item, behind the floor's column grant.",
+      "about": "The office edits a draft revision's BOM: adds, changes and removes lines (delete only while the revision is DRAFT: the …_product_guards trigger). The floor reads it (what to pick, issue and cut); a BOM line has no cost column: costs come from the item, behind the floor's column grant.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
         "factory_floor_runtime": { "privileges": ["select"] }
       }
     },
     "BomLineSize": {
-      "about": "The office types a draft revision's quantities per size. The floor reads them (leather area per size at cutting).",
+      "about": "The office types, changes and clears a draft revision's quantities per size (delete only while the revision is DRAFT: the …_product_guards trigger). The floor reads them (leather area per size at cutting).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
         "factory_floor_runtime": { "privileges": ["select"] }
       }
     },
     "BomLineColour": {
-      "about": "The office fills a draft revision's colourway colour grid. The floor reads it (which material colour each colourway takes).",
+      "about": "The office fills, changes and clears a draft revision's colourway colour grid (delete only while the revision is DRAFT: the …_product_guards trigger). The floor reads it (which material colour each colourway takes).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
         "factory_floor_runtime": { "privileges": ["select"] }
       }
     },
@@ -119,11 +119,11 @@
       }
     },
     "RoutingOperation": {
-      "about": "The office edits a draft revision's routing. The floor reads it: the operations it scans, with their standard minutes.",
+      "about": "The office edits a draft revision's routing: adds, changes and removes steps (delete only while the revision is DRAFT: the …_product_guards trigger). The floor reads it: the operations it scans, with their standard minutes.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
         "factory_floor_runtime": { "privileges": ["select"] }
       }
     },

@@ -19,10 +19,6 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
  * security and the …_product_guards triggers are real), the product seed's jacket (leather in ft² per size with hide
  * wastage, lining in metres, protectors per piece) and sessions from the test authenticator. Every code and name is
  * made up. Run with `node scripts/factory/run-pg-tests.mjs bom`.
- *
- * The runtime role's DELETE on a draft's BOM parts (BomLine, BomLineSize, BomLineColour) is not in the policy migration
- * yet (ownership/product.json grants select, insert, update), while the …_product_guards trigger allows it on a DRAFT
- * revision: this file grants it in its own throwaway database, as the generator would, until the policy change lands.
  */
 
 let db: MigratedDatabase
@@ -112,17 +108,6 @@ const LEATHER_BY_SIZE = [
 beforeAll(async () => {
   db = await migratedDatabase('bom')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 16 } })
-  // What the policy migration lacks (reported): the runtime role removes a DRAFT revision's parts; the trigger keeps a
-  // released revision's parts for every login.
-  for (const table of ['BomLine', 'BomLineSize', 'BomLineColour']) {
-    const [privilege] = await admin<{ granted: boolean }>(`SELECT has_table_privilege('factory_runtime', 'public."${table}"', 'DELETE') AS granted`)
-    if (!privilege?.granted) {
-      await admin(`GRANT DELETE ON TABLE "public"."${table}" TO "factory_runtime"`)
-      await admin(
-        `CREATE POLICY "factory_runtime_delete" ON "public"."${table}" AS PERMISSIVE FOR DELETE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid)`,
-      )
-    }
-  }
   await seedCore({ db: database, namespace: NS })
   await seedProduct({ db: database, namespace: NS })
   await admin('INSERT INTO "Tenant" (id, slug, name) VALUES ($1, $2, $2)', [otherTenant, 'bom-other'])
@@ -340,6 +325,36 @@ describe('release (A1 §2.5; the PPE technical file a work order is made from, R
     await expect(admin('UPDATE "BomLine" SET "wastagePct" = 0 WHERE "revisionId" = $1', [draft2])).rejects.toThrow(/never change, a change is a new revision/)
     await expect(admin('UPDATE "StyleRevision" SET "plannedHideYieldPct" = 90 WHERE id = $1', [draft2])).rejects.toThrow(/it never changes, a change is a new revision/)
     expect((await getBom(jacket2, draft2)).lines[0].bySize).toEqual(LEATHER_BY_SIZE)
+  })
+
+  it("gives the office runtime role DELETE on a draft's parts only (the trigger refuses a released one's) and the floor none", async () => {
+    // The grants as the policy migration gives them (ownership/product.json).
+    const PARTS = ['BomLine', 'BomLineSize', 'BomLineColour', 'RoutingOperation']
+    expect(
+      await admin(
+        `SELECT t AS "table", has_table_privilege('factory_runtime', format('public.%I', t), 'DELETE') AS office, has_table_privilege('factory_floor_runtime', format('public.%I', t), 'DELETE') AS floor
+           FROM unnest($1::text[]) AS t`,
+        [PARTS],
+      ),
+    ).toEqual(PARTS.map((table) => ({ table, office: true, floor: false })))
+
+    const released = await getBom(jacket2, draft2)
+    const draft = (await ok('companyA', 'POST', `${bomUrl(jacket2, draft2)}/copy`, {}, 201)).bom
+    const office = (sql: string, id: string) => database.withScope({ audience: 'office', tenantId: tenant, actorId: ACTORS.companyA! }, (client) => client.$executeRawUnsafe(sql, id))
+    const floor = (sql: string, id: string) =>
+      database.withScope({ audience: 'floor', tenantId: tenant, actorId: newId(), siteId: seedId('site:A1') }, (client) => client.$executeRawUnsafe(sql, id))
+    const frozen = /rows never change, a change is a new revision/
+
+    await expect(floor('DELETE FROM "BomLine" WHERE id = $1::uuid', lineOf(draft, protector).id)).rejects.toThrow(/permission denied for table BomLine/)
+    await expect(office('DELETE FROM "BomLine" WHERE id = $1::uuid', lineOf(released, protector).id)).rejects.toThrow(frozen)
+    await expect(office('DELETE FROM "BomLineSize" WHERE "bomLineId" = $1::uuid', lineOf(released, leather).id)).rejects.toThrow(frozen)
+    await expect(office('DELETE FROM "BomLineColour" WHERE "bomLineId" = $1::uuid', lineOf(released, leather).id)).rejects.toThrow(frozen)
+    expect(await office('DELETE FROM "BomLineColour" WHERE "bomLineId" = $1::uuid', lineOf(draft, leather).id)).toBe(3)
+    expect(await office('DELETE FROM "BomLine" WHERE id = $1::uuid', lineOf(draft, protector).id)).toBe(1)
+    expect((await getBom(jacket2, draft.revision.id)).lines.map((line: Json) => line.item.id)).toEqual([leather, lining])
+    expect((await getBom(jacket2, draft2)).lines).toHaveLength(3)
+    // The draft is abandoned: the style keeps one open draft at most.
+    await ok('companyA', 'POST', `${bomUrl(jacket2, draft.revision.id)}/obsolete`, { version: draft.revision.version })
   })
 
   it('copies the released revision into a new draft, compares them, and releasing the new one makes the old one obsolete', async () => {
