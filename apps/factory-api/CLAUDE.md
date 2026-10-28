@@ -20,7 +20,7 @@ modules and the adapters come in later steps.
   `staging` and `production` start only on Railway (`RAILWAY_ENVIRONMENT`, set by the platform, never by the file).
 - Tests refuse to start unless `FACTORY_DATABASE_URL` is loopback and names `factory_test…` or this worktree's
   `factory_<branch>` (`src/testing/global-setup.ts`), even tests that never connect.
-- Local stack: PostgreSQL 17 on 127.0.0.1:5442 and Redis on 127.0.0.1:6389 (`infra/factory/docker-compose.yml`,
+- Local stack: PostgreSQL 17 on 127.0.0.1:5442 and Redis on 127.0.0.1:6399 (`infra/factory/docker-compose.yml`,
   started once from a fixed folder, never from a worktree). Never Commerce's 5432/6379 or Commerce's databases.
 - The worker and scheduler run only against this worktree's own loopback database.
 - The Prisma CLI runs only from `packages/factory-db`.

@@ -8,7 +8,7 @@ import { FACTORY_ENV_FILE, loadFactoryEnv, parseFactoryEnv, readFactoryVariables
 const LOCAL = {
   FACTORY_ENV: 'local',
   FACTORY_DATABASE_URL: 'postgresql://postgres@127.0.0.1:5442/factory_w9_01',
-  FACTORY_REDIS_URL: 'redis://127.0.0.1:6389',
+  FACTORY_REDIS_URL: 'redis://127.0.0.1:6399',
 }
 const REMOTE_DATABASE = 'postgresql://factory_runtime:hunter2@db.example.com:5432/factory'
 const REMOTE_REDIS = 'redis://default:hunter2@cache.example.com:6379'
