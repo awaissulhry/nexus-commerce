@@ -1,0 +1,58 @@
+/* Layout of the floor count catalogue examples: the tablet screens, the demo controls around them and the captions. The
+   floor parts style themselves (`packages/ui/src/floor/QuantityPad`, `SizeButtons`). */
+
+.kit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-32);
+}
+
+.example {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text);
+}
+
+.note {
+  margin: 0;
+  max-width: 72rem;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* A frame drawn as a tablet screen inside the page. */
+.screen {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-2xl);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-target-gap);
+}
+
+.status {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+}

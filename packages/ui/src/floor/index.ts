@@ -48,3 +48,46 @@ export {
   type FeedbackKind,
   type FeedbackTone,
 } from './confirmFeedback'
+// G6 (2026-10-28) — counts on the floor: the quantity pad, the AQL sample counter and the size buttons.
+export { QuantityPad, type QtyQuickValue, type QuantityPadProps } from './QuantityPad/QuantityPad'
+export {
+  QTY_MAX_DIGITS,
+  clampQty,
+  isQtyDigit,
+  qtyCanStep,
+  qtyDisplayText,
+  qtyEntry,
+  qtyFromText,
+  qtyHeldReason,
+  qtyInRange,
+  qtyKeyFromKeyboard,
+  qtyNumberText,
+  qtyPadRows,
+  qtyPress,
+  qtyStep,
+  roundQty,
+  textFromQty,
+  type QtyBounds,
+  type QtyDigit,
+  type QtyEntry,
+  type QtyHeldWords,
+  type QtyKey,
+  type QtyKeyboardAction,
+  type QtyPressResult,
+  type QtyRefusal,
+} from './QuantityPad/quantityPadModel'
+export { AqlCounter, type AqlCounterProps } from './QuantityPad/AqlCounter'
+export { aqlClassState, aqlCount, aqlProgress, aqlRejectAt, aqlRemaining, aqlVerdict, type AqlClass, type AqlClassState, type AqlPlan, type AqlVerdict } from './QuantityPad/aqlModel'
+export { SizeButtons, type SizeButtonsProps } from './SizeButtons/SizeButtons'
+export {
+  isSizeNavKey,
+  sizeCanPick,
+  sizeKeyTarget,
+  sizePress,
+  sizeRemainingTotal,
+  sizeState,
+  sizeTabStop,
+  type SizeButton,
+  type SizeNavKey,
+  type SizeState,
+} from './SizeButtons/sizeButtonsModel'

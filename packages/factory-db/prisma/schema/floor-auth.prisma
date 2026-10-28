@@ -52,6 +52,8 @@ model Device {
   currentSession FloorSession?     @relation("DeviceCurrentSession", fields: [tenantId, siteId, currentSessionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   enrolments     DeviceEnrolment[]
   sessions       FloorSession[]    @relation("DeviceSessions")
+  // inventory.prisma: the stock moves posted from it.
+  stockMoves     StockMove[]
 
   @@unique([tenantId, siteId, id])
   @@index([tenantId, siteId])

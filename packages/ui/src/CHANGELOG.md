@@ -1,3 +1,31 @@
+## Floor counts, label preview, sign and accept (factory gaps G6 G11 G12) — 2026-10-28
+
+New parts, new files only; nothing existing changes, and no Commerce page carries their code or CSS. Every word comes in
+as a prop. They are NOT in the components barrel (the web pulls it into every page's first load): `LabelPreview` and
+`SignBlock` are entry points of their own (`components/LabelPreview`, `components/SignBlock`; by package path
+`@nexus/ui/components/LabelPreview/index`), and the count parts are only behind the floor entry point (`floor/`).
+- **Counts (G6, `floor/`)**: `QuantityPad` — a big number as a spin button, − and + the PIN keys' size, the PIN pad's own
+  digit keys (no `<input>`, so no keyboard opens), quick values, an optional Confirm; the default is replaced by the first
+  digit (2, 2 → 22, not 2422), a digit past `max` is refused with an amber flash + buzz and the range in words, under
+  `min` may be typed on the way and holds Confirm; `decimals` with the app's separator; side by side from 40 rem of its
+  own width. `qtyHeldReason` holds an action-bar Confirm by the same rule (`quantityPadModel.ts`). `SizeButtons` — a
+  radio group of big size buttons with what is left per size (done = tick + word, held = focusable with its reason).
+  `AqlCounter` — single sampling: inspected / n with a bar, defects per class against Ac / Re, verdict open, accepted
+  (whole sample within Ac) or rejected (any class at Re, at once) (`aqlModel.ts`).
+- **Labels (G11, `components/LabelPreview/`)**: `LabelPreview` draws a label layout given as data (mm size; title, text,
+  fields, Code 128, QR, pictogram marks, rows, rule, fill) to scale by container units, paper and ink in both themes;
+  QR and marks are render props (no dependency); print state QUEUED / SENT / PRINTED / FAILED as icon + word + detail,
+  Retry on a failed job, an `actions` slot. `Code128` + `code128Model.ts`: a pure Code 128 encoder (sets B and C with the
+  usual switching, mod-103 check), verified by ZXing's reader; a value it cannot carry draws no bars.
+- **Sign (G12, `components/SignBlock/`)**: `SignBlock` — summary and legal slots, required ticks, the typed name matched
+  loosely (case, accents, punctuation, order, a middle name), an optional email check, Decline / Accept, busy, done and
+  held states; errors after a field is left or Accept pressed, focus to the first problem (`signBlockModel.ts`).
+- **Density**: all three read `--nds-density-*` (floor for the counts, comfortable for link pages); their buttons are
+  `FloorButton`, so they are console-sized at standard.
+- Tests: `quantityPadModel`, `aqlModel`, `sizeButtonsModel`, `countParts`, `code128Model`, `labelPreview`, `signBlock`
+  (`*.vitest.test.ts`). Catalog: "Floor counts", "Label preview", "Sign and accept"
+  (`apps/web/src/app/design-system/_catalog/{quantity,labels,sign}/`).
+
 ## Phone bottom bar, PDF viewer, QR code and tenant branding — 2026-10-28
 
 Four parts the factory's W0 screens need (gaps G14, G18, G7 QR, G20). Commerce does not use them, and no Commerce page

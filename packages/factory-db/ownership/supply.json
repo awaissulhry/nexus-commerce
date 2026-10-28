@@ -1,0 +1,45 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/supply.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context: the scheduled planning run) writes purchase orders and planning runs through apps/factory-api's modules/purchasing and modules/planning, always through command(); the API keeps staff to the companies and sites their grants reach. The floor of the delivery site (factory_floor_runtime, scoped by site) reads its purchase orders and lines to receive against them, never a price or an internal note (plan A1 §2.2, §2.6: the column grants leave out every `@grain cost` column). A portal or one-off link session (factory_partner_runtime) reads only its OWN party's orders and lines (every table it reads carries the supplier's partyId), never a price, cost or internal column nor which office user wrote or sent a row (the partner wall of src/ownership.ts; PO prices are costs, so the PO_CONFIRM link shows quantities and dates only, PLAN §1.4). Its confirm or decline (PO_CONFIRM, B-W1-31) updates, in the partner scope and in one command, its party's SENT order to CONFIRMED (with the confirmation columns) or DECLINED (with the decline columns) and the lines' confirmed quantity and date; the …_supply_guards triggers refuse any other partner change and set the confirmation once. Planning is the office's. Nobody deletes an order (it is cancelled) or a planning row (a newer run supersedes the run); the office deletes only the lines of a DRAFT order (the triggers hold the states for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "PurchaseOrder": {
+      "about": "The office drafts, sends, recalls, closes and cancels purchase orders, records a confirmation heard by mail or phone, and moves the status as goods are received. The delivery site's floor reads them to receive against them, without the amount or the internal note. A link session reads its own party's orders without any amount, internal note or who wrote and sent them, and its confirm or decline moves a SENT order to CONFIRMED or DECLINED (nothing else: the trigger).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["netAmount", "internalNote"] },
+        "factory_partner_runtime": {
+          "privileges": ["select", "update"],
+          "scopedBy": ["party"],
+          "hiddenColumns": ["netAmount", "internalNote", "sentById", "createdById"]
+        }
+      }
+    },
+    "PurchaseOrderLine": {
+      "about": "The office writes the lines of a DRAFT order (and deletes them), and records a line's confirmation heard by mail or phone. The delivery site's floor reads them (what to expect at the dock), never a price. A link session reads its own party's lines without the price or amount, and its confirm sets each line's confirmed quantity and date once, while the order is SENT.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["unitPrice", "netAmount"] },
+        "factory_partner_runtime": { "privileges": ["select", "update"], "scopedBy": ["party"], "hiddenColumns": ["unitPrice", "netAmount", "createdById"] }
+      }
+    },
+    "PlanningRun": {
+      "about": "The office (or the scheduler, in the system context) starts a planning run, finishes or fails it, and supersedes the older one. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "MaterialRequirement": {
+      "about": "A planning run writes its requirements; the office then decides each one (ordered with the purchase order line that buys it, or ignored). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}
