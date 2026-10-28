@@ -1,0 +1,63 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/_core.prisma (rules: src/ownership.ts; roles: src/roles.ts). After a change run `npm run policies -w @nexus/factory-db -- <folder>`; scripts/factory/check-ownership.mjs and check-policy-parity.mjs check it. keyColumns: the column each policy key is compared on. access: role -> privileges, scopedBy (keys beyond the tenant wall), hiddenColumns (neither read nor written). No role deletes master data here: it is archived. The partner role has no core table yet; the partner wall step decides what the portal reads.",
+  "models": {
+    "Tenant": {
+      "about": "Platform table. factory_platform lists and creates tenants (sign-in lookups before a tenant is known, tenant set-up); office and floor sessions read their own tenant's row (its name and default locale).",
+      "kind": "platform",
+      "keyColumns": { "tenant": "id" },
+      "access": {
+        "factory_platform": { "privileges": ["select", "insert", "update"] },
+        "factory_runtime": { "privileges": ["select"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "Company": {
+      "about": "Office keeps the legal entities. The floor reads names, address and logo (labels printed at a station carry the manufacturer), not the fiscal identifiers or the share capital.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": {
+          "privileges": ["select"],
+          "hiddenColumns": ["vatNumber", "fiscalCode", "regimeFiscale", "reaOffice", "reaNumber", "shareCapital", "pec", "sdiReceiverCode", "documentFooter"]
+        }
+      }
+    },
+    "Site": {
+      "about": "Office keeps the sites; a floor device reads only its own site.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "id" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "Line": {
+      "about": "Office keeps the lines; a floor device reads the lines of its site.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "WorkCentre": {
+      "about": "Office keeps the work centres; a floor device reads those of its site.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "Station": {
+      "about": "Office keeps the stations; a floor device reads the stations of its site.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

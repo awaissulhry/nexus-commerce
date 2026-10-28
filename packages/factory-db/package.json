@@ -4,13 +4,21 @@
   "private": true,
   "type": "module",
   "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/database.ts",
     "./test-database": "./src/test-database.ts"
   },
   "scripts": {
     "generate": "prisma generate",
     "validate": "prisma validate",
     "typecheck": "prisma generate && tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:pg": "node ../../scripts/factory/run-pg-tests.mjs packages/factory-db",
+    "migrate": "prisma migrate deploy",
+    "migration": "tsx src/cli.ts migration",
+    "policies": "tsx src/cli.ts policies",
+    "check:drift": "node ../../scripts/factory/check-migrations-replay.mjs",
+    "seed": "tsx src/cli.ts seed"
   },
   "dependencies": {
     "@nexus/db-kit": "*",
