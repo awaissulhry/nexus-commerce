@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
+import { seed as seedEmail } from '../seed/email'
 import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedIntegration } from '../seed/integration'
@@ -101,6 +102,8 @@ beforeAll(async () => {
   await seedFloorAuth({ db: factory, namespace: 'iso-b' })
   await seedThreads({ db: factory, namespace: 'iso-a' })
   await seedThreads({ db: factory, namespace: 'iso-b' })
+  await seedEmail({ db: factory, namespace: 'iso-a' })
+  await seedEmail({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -115,6 +118,8 @@ it('covers every classified table and every runtime role', () => {
     'Company',
     'Device',
     'DeviceEnrolment',
+    'EmailIdentity',
+    'EmailOutbound',
     'FloorSession',
     'FloorSettings',
     'IdempotencyReceipt',
@@ -137,6 +142,7 @@ it('covers every classified table and every runtime role', () => {
     'Site',
     'Station',
     'StoredFile',
+    'Suppression',
     'Tenant',
     'Thread',
     'User',

@@ -92,6 +92,8 @@ model Company {
   oneOffLinks         OneOffLink[]
   // threads.prisma: the threads of the company's records.
   threads             Thread[]
+  // email.prisma: the company's sending identities (its mail goes out through them).
+  emailIdentities     EmailIdentity[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.

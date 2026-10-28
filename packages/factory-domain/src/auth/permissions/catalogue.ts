@@ -113,6 +113,18 @@ export const THREADS_READ = 'threads.read' satisfies Permission
 export const THREADS_POST = 'threads.post' satisfies Permission
 export const THREADS_MANAGE = 'threads.manage' satisfies Permission
 
+/**
+ * Email out (apps/factory-api platform/email-out; plan A1 §3.7; PLT-139, PLT-230, COL-024). email.send is checked with
+ * can() against the record's company, site and party, like threads.post; email.manage against the identity's company,
+ * and it is a step-up permission (A1 §3.10: what changes who the company's mail appears to come from).
+ */
+export const EMAIL_DEFINITIONS = definePermissions('email', {
+  send: { risk: 'write', description: "Send mail from a record's thread to its customer or supplier, as yourself, from the company's verified address." },
+  manage: { risk: 'stepUp', description: "Add and change the companies' sending identities: SES domains, DKIM, how the From line names the sender, the default." },
+})
+export const EMAIL_SEND = 'email.send' satisfies Permission
+export const EMAIL_MANAGE = 'email.manage' satisfies Permission
+
 /** The money grains as they travel in grants (`../grains/grains`): from Role.grains, never Role.permissions. */
 export const MONEY_PERMISSIONS: PermissionDefinition[] = GRAINS.map((grain) =>
   Object.freeze({ name: grainPermission(grain), area: 'money', description: GRAIN_DESCRIPTIONS[grain], risk: 'read' as const, grain }),
@@ -130,6 +142,7 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   WORKERS_PERMISSIONS,
   FLOOR_PERMISSIONS,
   THREADS_DEFINITIONS,
+  EMAIL_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -137,7 +150,7 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
 export const FLOOR_AREA = 'floor'
 
 // The modules' constants and their declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE]) {
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, EMAIL_SEND, EMAIL_MANAGE]) {
   if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 }
 for (const name of LINK_SESSION_NAMES) {
