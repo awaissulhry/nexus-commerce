@@ -174,9 +174,10 @@ model Site {
   // production.prisma: its floor rules and the work orders it makes.
   productionSettings ProductionSettings[]
   workOrders         WorkOrder[]
-  // quality.prisma: its final inspections and quality releases.
-  inspections        Inspection[]
-  qualityReleases    QualityRelease[]
+  // quality.prisma: its final inspections, quality releases and their reversals.
+  inspections             Inspection[]
+  qualityReleases         QualityRelease[]
+  qualityReleaseReversals QualityReleaseReversal[]
   // shipping.prisma: its shipping settings, the shipments that leave it and their DDTs.
   shippingSettings   ShippingSettings[]
   shipments          Shipment[]

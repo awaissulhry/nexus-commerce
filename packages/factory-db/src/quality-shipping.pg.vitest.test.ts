@@ -26,6 +26,9 @@ import { loadOwnership, loadSchema } from './tools'
  *   - serials only for a SERIAL-tracked style (Q31), unique in the tenant, never more live ones than pieces, released by
  *     a release of their cell, packed only while released, shipped with their shipment; the style's setting is fixed
  *     once its work orders have serials or releases;
+ *   - a release reversal takes garments back before they ship (corrective action), never those a shipment holds, never
+ *     beyond the release; shipping is then limited to the remainder; a serial-tracked one moves its named serials back
+ *     to MADE or VOID in the same transaction, and a reversed garment is released again only from a new inspection;
  *   - only released garments ship, also when two packers race; a shipment moves DRAFT → PACKED → SHIPPED → DELIVERED,
  *     the floor only packs, and it leaves only with a DDT that is not cancelled;
  *   - a DDT carries every DPR 472/1996 field, is numbered once in its series and never changes (a cancellation row);
@@ -209,6 +212,20 @@ const releaseRow = (extra: Record<string, unknown>): Record<string, unknown> => 
   signatureSha256: SIGNED,
   ...extra,
 })
+/** A reversal of `quantity` garments of a release of a cell of WO-0001 (or of another work order, in `extra`). */
+const reversalRow = (releaseId: string, workOrderSizeId: string, extra: Record<string, unknown> = {}): Record<string, unknown> => ({
+  id: randomUUID(),
+  companyId: A.companyA,
+  siteId: A.siteA,
+  workOrderId: production().workOrderId,
+  workOrderSizeId,
+  releaseId,
+  quantity: 1,
+  reason: 'A defect found after release',
+  reversedById: a.actorId,
+  reversedAt: new Date().toISOString(),
+  ...extra,
+})
 const shipmentRow = (extra: Record<string, unknown> = {}): Record<string, unknown> => ({
   id: randomUUID(),
   companyId: A.companyA,
@@ -308,6 +325,7 @@ describe('the walls', () => {
       'Parcel',
       'PpeRegisterEntry',
       'QualityRelease',
+      'QualityReleaseReversal',
       'Shipment',
       'ShipmentLine',
       'ShippingSettings',
@@ -336,6 +354,7 @@ describe('the walls', () => {
     const seen = async (scope: FactoryScope) => ({
       inspections: (await sql(scope, 'SELECT id FROM "Inspection"')).length,
       releases: (await sql(scope, 'SELECT id FROM "QualityRelease"')).length,
+      reversals: (await sql(scope, 'SELECT id FROM "QualityReleaseReversal"')).length,
       serials: (await sql(scope, `SELECT serial FROM "GarmentSerial" WHERE serial LIKE 'SEED-%' ORDER BY serial`)).map((row) => row.serial),
       shipments: (await sql(scope, `SELECT number FROM "Shipment" WHERE number LIKE 'SEED-%' ORDER BY number`)).map((row) => row.number),
       ddts: (await sql(scope, 'SELECT number FROM "Ddt" ORDER BY number')).map((row) => row.number),
@@ -343,19 +362,21 @@ describe('the walls', () => {
     })
     expect(await seen(floor(0))).toEqual({
       inspections: 3,
-      releases: 4,
-      serials: ['SEED-SN-0001', 'SEED-SN-0002'],
+      releases: 5,
+      reversals: 1,
+      serials: ['SEED-SN-0001', 'SEED-SN-0002', 'SEED-SN-0003'],
       shipments: ['SEED-SH-0001', 'SEED-SH-0002'],
       ddts: ['143/2026', '144/2026'],
       settings: [A.siteA],
     })
     // Company B's plant (B1) sees nothing of A1's, only its own settings.
-    expect(await seen(floor(1))).toEqual({ inspections: 0, releases: 0, serials: [], shipments: [], ddts: [], settings: [a.sites[1]!.id] })
+    expect(await seen(floor(1))).toEqual({ inspections: 0, releases: 0, reversals: 0, serials: [], shipments: [], ddts: [], settings: [a.sites[1]!.id] })
     // Tracking and the register are not the floor's.
     await expect(sql(floor(), 'SELECT id FROM "TrackingEvent"')).rejects.toThrow(DENIED)
     await expect(sql(floor(), 'SELECT id FROM "PpeRegisterEntry"')).rejects.toThrow(DENIED)
-    // The floor never releases garments nor issues a DDT.
+    // The floor never releases garments, takes them back nor issues a DDT.
     await expect(insert(floor(), 'QualityRelease', releaseRow({ workOrderSizeId: cell('RED-54'), inspectionId: seeded.quality.passedInspectionId }))).rejects.toThrow(DENIED)
+    await expect(insert(floor(), 'QualityReleaseReversal', reversalRow(seeded.quality.releaseIds['BLK-52'], cell('BLK-52')))).rejects.toThrow(DENIED)
     await expect(insert(floor(), 'Ddt', ddtRow(seeded.shipmentId))).rejects.toThrow(DENIED)
   })
 })
@@ -549,12 +570,12 @@ describe('garment serials (Q31)', () => {
     await expect(insert(floor(), 'GarmentSerial', serialRow({ serial: 'SEED-SN-0001' }))).rejects.toThrow(/GarmentSerial_tenantId_serial_key/)
     // Each tenant has its own SEED-SN-0001.
     expect(await count(`SELECT count(*) AS n FROM "GarmentSerial" WHERE serial = 'SEED-SN-0001'`)).toBe(2)
-    await expect(insert(floor(), 'GarmentSerial', serialRow({ status: 'RELEASED', releaseId: seeded.quality.serialReleaseId }))).rejects.toThrow(/starts MADE/)
+    await expect(insert(floor(), 'GarmentSerial', serialRow({ status: 'RELEASED', releaseId: seeded.quality.serialReleaseIds[0] }))).rejects.toThrow(/starts MADE/)
 
-    // WO-0003's cell has 3 pieces and 2 serials.
+    // WO-0003's cell has 4 pieces and 3 serials.
     const third = serialRow()
     expect(await insert(floor(), 'GarmentSerial', third)).toBe(1)
-    await expect(insert(floor(), 'GarmentSerial', serialRow())).rejects.toThrow(/has 3 piece\(s\) and 3 live serial\(s\)/)
+    await expect(insert(floor(), 'GarmentSerial', serialRow())).rejects.toThrow(/has 4 piece\(s\) and 4 live serial\(s\)/)
     await expect(run(floor(), `UPDATE "GarmentSerial" SET status = 'VOID' WHERE id = $1::uuid`, third.id)).rejects.toThrow(/wrong voiding/)
     expect(await run(floor(), `UPDATE "GarmentSerial" SET status = 'VOID', "voidedAt" = now(), "voidReason" = 'label spoilt' WHERE id = $1::uuid`, third.id)).toBe(1)
     await expect(run(floor(), `UPDATE "GarmentSerial" SET "voidReason" = 'x' WHERE id = $1::uuid`, third.id)).rejects.toThrow(/is VOID; it never changes/)
@@ -581,18 +602,18 @@ describe('garment serials (Q31)', () => {
   it('are released by a release of their cell (the office), packed only while released, and shipped with their shipment', async () => {
     const q = seeded.quality
     const [made, released] = q.serialIds
-    await expect(run(floor(), `UPDATE "GarmentSerial" SET status = 'RELEASED', "releaseId" = $2::uuid WHERE id = $1::uuid`, made, q.serialReleaseId)).rejects.toThrow(/releasing and shipping serial .* are the office's/)
-    // The seeded release of WO-0003 released one garment, the second serial.
-    await expect(run(office(), `UPDATE "GarmentSerial" SET status = 'RELEASED', "releaseId" = $2::uuid WHERE id = $1::uuid`, made, q.serialReleaseId)).rejects.toThrow(/released 1 garment\(s\), and 1 serial\(s\) name it/)
+    await expect(run(floor(), `UPDATE "GarmentSerial" SET status = 'RELEASED', "releaseId" = $2::uuid WHERE id = $1::uuid`, made, q.serialReleaseIds[0])).rejects.toThrow(/releasing, taking back and shipping serial .* are the office's/)
+    // The first seeded release of WO-0003 released one garment, the second serial.
+    await expect(run(office(), `UPDATE "GarmentSerial" SET status = 'RELEASED', "releaseId" = $2::uuid WHERE id = $1::uuid`, made, q.serialReleaseIds[0])).rejects.toThrow(/holds 1 garment\(s\) \(less reversals\), and 1 serial\(s\) name it/)
     await expect(run(office(), `UPDATE "GarmentSerial" SET status = 'RELEASED' WHERE id = $1::uuid`, made)).rejects.toThrow(/wrong release or shipment line/)
     await expect(run(office(), `UPDATE "GarmentSerial" SET status = 'SHIPPED' WHERE id = $1::uuid`, made)).rejects.toThrow(/cannot move from MADE to SHIPPED/)
-    // The second garment of WO-0003's PASSED inspection (a lot of 2).
+    // The third garment of WO-0003's PASSED inspection (a lot of 3).
     const second = releaseRow({ workOrderId: q.serialWorkOrderId, workOrderSizeId: q.serialCellId, inspectionId: q.serialInspectionId })
     expect(await insert(office(), 'QualityRelease', second)).toBe(1)
     expect(await run(office(), `UPDATE "GarmentSerial" SET status = 'RELEASED', "releaseId" = $2::uuid WHERE id = $1::uuid`, made, second.id)).toBe(1)
-    await expect(run(office(), `UPDATE "GarmentSerial" SET "releaseId" = $2::uuid WHERE id = $1::uuid`, made, q.serialReleaseId)).rejects.toThrow(/is named once/)
+    await expect(run(office(), `UPDATE "GarmentSerial" SET "releaseId" = $2::uuid WHERE id = $1::uuid`, made, q.serialReleaseIds[0])).rejects.toThrow(/is named only when it is released/)
 
-    // A shipment of SEED-SO-0003: one parcel, one line of both released garments.
+    // A shipment of SEED-SO-0003: one parcel, one line of two released garments (SEED-SH-0002, a DRAFT, holds a third).
     const shipment = shipmentRow({ salesOrderId: q.serialSalesOrderId })
     await insert(office(), 'Shipment', shipment)
     const parcel = parcelRow(shipment.id as string, 1)
@@ -620,16 +641,18 @@ describe('garment serials (Q31)', () => {
 // --- the shipment ---------------------------------------------------------------------------------------------------
 
 describe('a shipment', () => {
-  it('ships only released garments (QHS-058, LOG-001): a cell’s lines over its shipments never pass its releases', async () => {
-    // SH-0002 (a DRAFT) ships one of BLK 52's two released garments.
-    const draft = seeded.draftShipmentId
-    const second = lineOf(draft, 'BLK-52')
-    expect(await insert(floor(), 'ShipmentLine', second)).toBe(1)
-    await expect(insert(floor(), 'ShipmentLine', lineOf(draft, 'BLK-52'))).rejects.toThrow(/only released garments ship \(QHS-058\): cell .* has 2 released and 2 on other shipments/)
-    await expect(run(floor(), 'UPDATE "ShipmentLine" SET quantity = 2 WHERE id = $1::uuid', second.id)).rejects.toThrow(/only released garments ship/)
+  it('ships only released garments (QHS-058, LOG-001): a cell’s lines over its shipments never pass its releases less reversals', async () => {
+    // BLK 52: two released, one taken back (the seed's reversal), none on a shipment.
+    const draftRow = shipmentRow()
+    await insert(office(), 'Shipment', draftRow)
+    const draft = draftRow.id as string
+    const only = lineOf(draft, 'BLK-52')
+    expect(await insert(floor(), 'ShipmentLine', only)).toBe(1)
+    await expect(insert(floor(), 'ShipmentLine', lineOf(draft, 'BLK-52'))).rejects.toThrow(/only released garments ship \(QHS-058\): cell .* has 1 released \(less reversals\) and 1 on other shipments/)
+    await expect(run(floor(), 'UPDATE "ShipmentLine" SET quantity = 2 WHERE id = $1::uuid', only.id)).rejects.toThrow(/only released garments ship/)
     // RED 54 is not released at all.
     await expect(insert(floor(), 'ShipmentLine', lineOf(draft, 'RED-54'))).rejects.toThrow(/has 0 released/)
-    expect(await run(floor(), 'DELETE FROM "ShipmentLine" WHERE id = $1::uuid', second.id)).toBe(1)
+    expect(await run(floor(), 'DELETE FROM "ShipmentLine" WHERE id = $1::uuid', only.id)).toBe(1)
 
     // A cancelled shipment's lines ship nothing: BLK 54 (released once, above) moves to another shipment.
     const first = shipmentRow()
@@ -637,7 +660,7 @@ describe('a shipment', () => {
     expect(await insert(office(), 'ShipmentLine', lineOf(first.id as string, 'BLK-54'))).toBe(1)
     const other = shipmentRow()
     await insert(office(), 'Shipment', other)
-    await expect(insert(office(), 'ShipmentLine', lineOf(other.id as string, 'BLK-54'))).rejects.toThrow(/has 1 released and 1 on other shipments/)
+    await expect(insert(office(), 'ShipmentLine', lineOf(other.id as string, 'BLK-54'))).rejects.toThrow(/has 1 released \(less reversals\) and 1 on other shipments/)
     await expect(run(office(), `UPDATE "Shipment" SET status = 'CANCELLED' WHERE id = $1::uuid`, first.id)).rejects.toThrow(/wrong cancellation/)
     expect(await run(office(), `UPDATE "Shipment" SET status = 'CANCELLED', "cancelledAt" = now(), "cancelReason" = 'the customer collects' WHERE id = $1::uuid`, first.id)).toBe(1)
     expect(await insert(office(), 'ShipmentLine', lineOf(other.id as string, 'BLK-54'))).toBe(1)
@@ -661,7 +684,7 @@ describe('a shipment', () => {
     const line = (shipmentId: string) => lineRow(shipmentId, { workOrderId: wo.workOrderId, workOrderSizeId: wo.cellId, salesOrderLineId: A.orderLine.BLK, size: '50' })
     const results = await race(floor(), 'ShipmentLine', line(one.id as string), line(two.id as string))
     expect(results.map((result) => result.status)).toEqual(['fulfilled', 'rejected'])
-    expect(String((results[1] as PromiseRejectedResult).reason)).toMatch(/has 1 released and 1 on other shipments/)
+    expect(String((results[1] as PromiseRejectedResult).reason)).toMatch(/has 1 released \(less reversals\) and 1 on other shipments/)
   })
 
   it('moves DRAFT → PACKED → SHIPPED → DELIVERED; the floor only packs; lines and parcels freeze; it leaves only with its DDT', async () => {
@@ -711,6 +734,122 @@ describe('a shipment', () => {
     const invoiced = await packedDraft({ workOrderId: wo.workOrderId, workOrderSizeId: wo.cellId, salesOrderLineId: A.orderLine.RED, size: '50' }, { ddtRequired: false })
     expect(await pack(floor(), invoiced.shipmentId)).toBe(1)
     expect(await ship(invoiced.shipmentId)).toBe(1)
+  })
+})
+
+// --- the release reversal -------------------------------------------------------------------------------------------
+
+describe('a release reversal', () => {
+  /** A reversal written with the serial moves it names, in one office transaction. */
+  const reverse = (row: Record<string, unknown>, moves: string[] = []) =>
+    as(office(), (client) =>
+      client.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(...insertSql('QualityReleaseReversal', row))
+        for (const move of moves) await tx.$executeRawUnsafe(move)
+      }),
+    )
+
+  it('takes released garments back before they ship; never those a shipment holds; shipping is then limited to the remainder', async () => {
+    // A work order cell of two garments, both released.
+    const wo = await releasedWorkOrder('BLK', 2)
+    const passed = await passedInspection(wo.workOrderId, 2)
+    const release = releaseRow({ workOrderId: wo.workOrderId, workOrderSizeId: wo.cellId, inspectionId: passed, quantity: 2 })
+    await insert(office(), 'QualityRelease', release)
+    const of = (extra: Record<string, unknown> = {}) => reversalRow(release.id as string, wo.cellId, { workOrderId: wo.workOrderId, ...extra })
+    const line = (shipmentId: string) => lineRow(shipmentId, { workOrderId: wo.workOrderId, workOrderSizeId: wo.cellId, salesOrderLineId: A.orderLine.BLK, size: '50' })
+
+    await expect(insert(office(), 'QualityReleaseReversal', of({ quantity: 0 }))).rejects.toThrow(/at least one garment and says why/)
+    await expect(insert(office(), 'QualityReleaseReversal', of({ reason: ' ' }))).rejects.toThrow(/says why/)
+    await expect(insert(office(), 'QualityReleaseReversal', of({ quantity: 3 }))).rejects.toThrow(/released 2 garment\(s\), 0 reversed already/)
+    await expect(insert(office(), 'QualityReleaseReversal', of({ serialIds: [seeded.quality.serialIds[0]] }))).rejects.toThrow(/batch-tracked release; it names no serial/)
+    // Its cell and work order are the release's.
+    await expect(insert(office(), 'QualityReleaseReversal', of({ workOrderSizeId: cell('BLK-52') }))).rejects.toThrow(/foreign key/)
+
+    // One garment is packed into a DRAFT shipment: it is not taken back.
+    const packing = shipmentRow()
+    await insert(office(), 'Shipment', packing)
+    const parcel = parcelRow(packing.id as string, 1)
+    await insert(floor(), 'Parcel', parcel)
+    expect(await insert(floor(), 'ShipmentLine', { ...line(packing.id as string), parcelId: parcel.id })).toBe(1)
+    await expect(insert(office(), 'QualityReleaseReversal', of({ quantity: 2 }))).rejects.toThrow(/has 2 garment\(s\) released and 1 on shipments; reversal .* would take back garments a shipment holds/)
+    // The other one is, before it ships.
+    expect(await insert(office(), 'QualityReleaseReversal', of())).toBe(1)
+    // Shipping is limited to what is left released: the one already on the DRAFT shipment.
+    const another = shipmentRow()
+    await insert(office(), 'Shipment', another)
+    await expect(insert(floor(), 'ShipmentLine', line(another.id as string))).rejects.toThrow(/has 1 released \(less reversals\) and 1 on other shipments/)
+    await expect(insert(office(), 'QualityReleaseReversal', of())).rejects.toThrow(/has 1 garment\(s\) released and 1 on shipments/)
+    // Once it ships, it is never taken back either.
+    expect(await pack(floor(), packing.id as string)).toBe(1)
+    await insert(office(), 'Ddt', ddtRow(packing.id as string))
+    expect(await ship(packing.id as string)).toBe(1)
+    await expect(insert(office(), 'QualityReleaseReversal', of())).rejects.toThrow(/would take back garments a shipment holds/)
+    // The seeded shipment SH-0001 left with BLK 50: its release is not reversed.
+    await expect(insert(office(), 'QualityReleaseReversal', reversalRow(seeded.quality.releaseIds['BLK-50'], cell('BLK-50')))).rejects.toThrow(/has 1 garment\(s\) released and 1 on shipments/)
+  })
+
+  it('frees a garment held by a DRAFT line once the line goes, and the garment is released again only from a new inspection', async () => {
+    const q = seeded.quality
+    // BLK 52: the seed released two and took one back; the other goes onto a DRAFT shipment.
+    const draft = shipmentRow()
+    await insert(office(), 'Shipment', draft)
+    const held = lineOf(draft.id as string, 'BLK-52')
+    await insert(floor(), 'ShipmentLine', held)
+    const blk52 = reversalRow(q.releaseIds['BLK-52'], cell('BLK-52'))
+    await expect(insert(office(), 'QualityReleaseReversal', blk52)).rejects.toThrow(/would take back garments a shipment holds/)
+    expect(await run(floor(), 'DELETE FROM "ShipmentLine" WHERE id = $1::uuid', held.id)).toBe(1)
+    expect(await insert(office(), 'QualityReleaseReversal', blk52)).toBe(1)
+    await expect(insert(office(), 'QualityReleaseReversal', reversalRow(q.releaseIds['BLK-52'], cell('BLK-52')))).rejects.toThrow(/released 2 garment\(s\), 2 reversed already/)
+    await expect(insert(floor(), 'ShipmentLine', lineOf(draft.id as string, 'BLK-52'))).rejects.toThrow(/has 0 released/)
+    // The seeded inspection's lot is used up (reversed garments count): a new inspection releases the reworked ones.
+    await expect(insert(office(), 'QualityRelease', releaseRow({ workOrderSizeId: cell('BLK-52'), inspectionId: q.passedInspectionId }))).rejects.toThrow(/judged a lot of 5 garment\(s\), 5 released already/)
+    const reinspected = await passedInspection(production().workOrderId, 2)
+    expect(await insert(office(), 'QualityRelease', releaseRow({ workOrderSizeId: cell('BLK-52'), inspectionId: reinspected, quantity: 2 }))).toBe(1)
+    await expect(insert(office(), 'QualityRelease', releaseRow({ workOrderSizeId: cell('BLK-52'), inspectionId: await passedInspection(production().workOrderId) }))).rejects.toThrow(
+      /has 2 piece\(s\) and 2 released \(less reversals\)/,
+    )
+    expect(await insert(floor(), 'ShipmentLine', lineOf(draft.id as string, 'BLK-52', { quantity: 2 }))).toBe(1)
+  })
+
+  it('names the serials of a serial-tracked release, which go back to MADE or VOID in the same transaction, and only so', async () => {
+    const q = seeded.quality
+    const [, shipped, third] = q.serialIds
+    const of = (releaseId: string, extra: Record<string, unknown> = {}) => reversalRow(releaseId, q.serialCellId, { workOrderId: q.serialWorkOrderId, ...extra })
+    const toMade = (id: string) => `UPDATE "GarmentSerial" SET status = 'MADE' WHERE id = '${id}'::uuid`
+    // WO-0003's DRAFT shipment SH-0002 holds a garment; its line goes, so a released garment is free.
+    expect(await run(floor(), 'DELETE FROM "ShipmentLine" WHERE id = $1::uuid', seeded.draftLineId)).toBe(1)
+
+    // The third serial, RELEASED by the second seeded release and not packed.
+    await expect(run(office(), toMade(third))).rejects.toThrow(/goes back to MADE only through a reversal of that release that names it/)
+    await expect(run(floor(), `UPDATE "GarmentSerial" SET status = 'VOID', "voidedAt" = now(), "voidReason" = 'x' WHERE id = $1::uuid`, third)).rejects.toThrow(/the office's/)
+    const second = q.serialReleaseIds[1]
+    await expect(reverse(of(second))).rejects.toThrow(/names exactly its 1 serial\(s\)/)
+    await expect(reverse(of(second, { serialIds: [shipped] }))).rejects.toThrow(/names serial .*, which is not a RELEASED, unpacked serial of release/)
+    // Named, but left RELEASED: refused at commit.
+    await expect(reverse(of(second, { serialIds: [third] }))).rejects.toThrow(/is still RELEASED; reversal .* takes it back to MADE or VOID in the same transaction/)
+    await expect(insert(floor(), 'QualityReleaseReversal', of(second, { serialIds: [third] }))).rejects.toThrow(DENIED)
+    await reverse(of(second, { serialIds: [third] }), [toMade(third)])
+    expect(await sql(office(), 'SELECT status::text AS status, "releaseId" FROM "GarmentSerial" WHERE id = $1::uuid', third)).toEqual([{ status: 'MADE', releaseId: second }])
+
+    // Released again only by a new release, from a new inspection; then scrapped through a second reversal.
+    await expect(run(office(), `UPDATE "GarmentSerial" SET status = 'RELEASED' WHERE id = $1::uuid`, third)).rejects.toThrow(/took serial .* back; it is released again only by a new release/)
+    const reinspected = await passedInspection(q.serialWorkOrderId)
+    const again = releaseRow({ workOrderId: q.serialWorkOrderId, workOrderSizeId: q.serialCellId, inspectionId: reinspected })
+    await insert(office(), 'QualityRelease', again)
+    expect(await run(office(), `UPDATE "GarmentSerial" SET status = 'RELEASED', "releaseId" = $2::uuid WHERE id = $1::uuid`, third, again.id)).toBe(1)
+    await reverse(of(again.id as string, { serialIds: [third], reason: 'Armour pocket torn: scrapped' }), [
+      `UPDATE "GarmentSerial" SET status = 'VOID', "voidedAt" = now(), "voidReason" = 'scrapped' WHERE id = '${third}'::uuid`,
+    ])
+    expect(await sql(office(), 'SELECT status::text AS status FROM "GarmentSerial" WHERE id = $1::uuid', third)).toEqual([{ status: 'VOID' }])
+  })
+
+  it('is append-only, for every login', async () => {
+    const reversal = seeded.quality.reversalId
+    await expect(run(office(), 'UPDATE "QualityReleaseReversal" SET quantity = 2 WHERE id = $1::uuid', reversal)).rejects.toThrow(DENIED)
+    await expect(run(office(), 'DELETE FROM "QualityReleaseReversal" WHERE id = $1::uuid', reversal)).rejects.toThrow(DENIED)
+    await expect(admin('UPDATE "QualityReleaseReversal" SET quantity = 2 WHERE id = $1', [reversal])).rejects.toThrow(/append-only: UPDATE on "QualityReleaseReversal" is refused/)
+    await expect(admin('DELETE FROM "QualityReleaseReversal" WHERE id = $1', [reversal])).rejects.toThrow(/append-only: DELETE on "QualityReleaseReversal" is refused/)
+    await expect(admin('TRUNCATE "QualityReleaseReversal"')).rejects.toThrow(/append-only: TRUNCATE on "QualityReleaseReversal" is refused/)
   })
 })
 
@@ -844,7 +983,7 @@ describe('the partner wall', () => {
     await expect(insert(partner(A.P1), 'TrackingEvent', { id: randomUUID(), siteId: A.siteA, partyId: A.P1, shipmentId: seeded.shipmentId, status: 'DELIVERED', occurredAt: new Date().toISOString(), source: 'MANUAL' })).rejects.toThrow(
       DENIED,
     )
-    for (const table of ['Inspection', 'InspectionDefect', 'QualityRelease', 'GarmentSerial', 'PpeRegisterEntry', 'ShippingSettings']) {
+    for (const table of ['Inspection', 'InspectionDefect', 'QualityRelease', 'QualityReleaseReversal', 'GarmentSerial', 'PpeRegisterEntry', 'ShippingSettings']) {
       await expect(sql(partner(A.P1), `SELECT id FROM "${table}" LIMIT 1`), table).rejects.toThrow(DENIED)
     }
   })
@@ -881,7 +1020,7 @@ describe('the PPE register', () => {
 
 describe('the seeds', () => {
   it('are idempotent', async () => {
-    const tables = ['Inspection', 'InspectionDefect', 'QualityRelease', 'GarmentSerial', 'PpeRegisterEntry', 'ShippingSettings', 'Shipment', 'ShipmentLine', 'Parcel', 'Ddt', 'DdtCancellation', 'TrackingEvent', 'NumberAllocation']
+    const tables = ['Inspection', 'InspectionDefect', 'QualityRelease', 'QualityReleaseReversal', 'GarmentSerial', 'PpeRegisterEntry', 'ShippingSettings', 'Shipment', 'ShipmentLine', 'Parcel', 'Ddt', 'DdtCancellation', 'TrackingEvent', 'NumberAllocation']
     const counts = async () => {
       const out: number[] = []
       for (const table of tables) out.push(await count(`SELECT count(*) AS n FROM "${table}" WHERE "tenantId" = $1`, [b.tenantId]))
@@ -889,7 +1028,7 @@ describe('the seeds', () => {
     }
     const before = await counts()
     // NumberAllocation: the numbering seed's two invoice numbers per company and the two DDT numbers.
-    expect(before).toEqual([3, 2, 4, 2, 1, 2, 2, 3, 3, 2, 1, 3, 6])
+    expect(before).toEqual([3, 2, 5, 1, 3, 1, 2, 2, 3, 3, 2, 1, 3, 6])
     await seedShipping({ db: factory, namespace: 'qs-b' })
     expect(await counts()).toEqual(before)
     expect(await admin(`SELECT number, status::text FROM "Shipment" WHERE "tenantId" = $1 ORDER BY number`, [b.tenantId])).toEqual([

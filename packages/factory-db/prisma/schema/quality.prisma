@@ -23,15 +23,22 @@
 // The quality release (QHS-058): garments of one cell (colourway x size) of a work order, from one PASSED inspection,
 // signed by an office user who made none of them (the same four-eyes rule), with the VALID certificates that cover the
 // style, colourway and size on the day for a PPE style (the certificate gate; Reg. 2016/425 arts. 8, 15). Append-only;
-// never more than the cell's quantity, nor more than the inspection's lot. Shipments ship released garments only.
+// the cell's releases less their reversals never pass its pieces, and an inspection's releases never pass its lot (a
+// reversed garment is released again only from a new inspection). Shipments ship released garments only.
+//
+// A release reversal (Reg. 2016/425 art. 8(8): corrective action before a non-conforming PPE leaves): garments of a
+// release taken back before they ship (a defect found after release, a certificate withdrawn), with the reason and who
+// signed it; append-only. Only garments that no shipment holds are reversed: the cell's releases less its reversals
+// never fall below what its non-cancelled shipments hold. A serial-tracked release names the serials it takes back,
+// which go back to MADE (rework) or VOID (scrapped) in the same transaction.
 //
 // The PPE register (QHS-118; Reg. 2016/425 art. 8(4)): the maker's register of complaints, non-conforming PPE and
 // recalls, kept and exported for the authorities. With a brand label the brand is the legal maker and keeps the
 // register; the factory keeps the same records to hand over (PLAN §2.8). An entry is closed, never deleted.
 //
-// Who sees what (ownership/quality.json): the office reads and writes; the floor reads its OWN site's inspections,
-// defects, releases and serials, records inspections and their defects (a floor inspector, signed in) and the serials
-// of the final operation; portal and link sessions read nothing here (the Declaration of Conformity reaches a customer
+// Who sees what (ownership/quality.json): the office reads and writes (releases and their reversals are the office's);
+// the floor reads its OWN site's inspections, defects, releases, reversals and serials, records inspections and their
+// defects (a floor inspector, signed in) and the serials of the final operation; portal and link sessions read nothing here (the Declaration of Conformity reaches a customer
 // through a link, B-W1-49). No table here has a cost, price, margin or wages column.
 
 /// How the garments of a style are traced on their labels (Q31; PPE Regulation 2016/425 art. 8(5): batch or serial).
@@ -154,8 +161,9 @@ enum DefectClass {
 /// A quality release (QHS-058; A1 §2.4 F QualityRelease): garments of one cell of a work order released to be packed and
 /// shipped, from one PASSED inspection of the work order, signed by an office user who made none of them, with the
 /// certificates that cover the cell on the day (the certificate gate). Never changed or removed (the triggers, for
-/// every login); never more than the cell's pieces, nor more than the inspection's lot. A serial-tracked style's release
-/// names its serials (GarmentSerial.releaseId).
+/// every login); taken back only by a QualityReleaseReversal. The cell's releases less their reversals never pass its
+/// pieces; an inspection's releases (reversed or not) never pass its lot. A serial-tracked style's release names its
+/// serials (GarmentSerial.releaseId).
 /// @append-only
 model QualityRelease {
   id              String   @id @db.Uuid
@@ -181,21 +189,60 @@ model QualityRelease {
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   createdById     String?  @db.Uuid
 
-  site          Site            @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
-  workOrderSize WorkOrderSize   @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
-  inspection    Inspection      @relation(fields: [tenantId, siteId, workOrderId, inspectionId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  site          Site                     @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrderSize WorkOrderSize            @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  inspection    Inspection               @relation(fields: [tenantId, siteId, workOrderId, inspectionId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
   serials       GarmentSerial[]
+  reversals     QualityReleaseReversal[]
 
-  // The target of the serials' reference: a release of the serial's cell.
+  // The target of the serials' and reversals' references: a release of the same cell.
   @@unique([tenantId, siteId, workOrderSizeId, id])
   @@index([tenantId, workOrderId])
   @@index([tenantId, inspectionId])
 }
 
+/// The reversal of (part of) a quality release before the garments ship (Reg. 2016/425 art. 8(8): corrective action; a
+/// defect found after release, a certificate withdrawn): how many garments of the release go back, why, and the office
+/// user who signed it. Never changed or removed (the triggers, for every login). Only garments no non-cancelled
+/// shipment holds are reversed (under the cell's shipping lock), and a release is never reversed beyond its quantity. A
+/// serial-tracked release names exactly the serials it takes back: RELEASED and unpacked, they go back to MADE (rework,
+/// then a new inspection and release) or VOID (scrapped) in the same transaction (checked at commit).
+/// @append-only
+model QualityReleaseReversal {
+  id              String   @id @db.Uuid
+  tenantId        String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The release's company, site, work order and cell.
+  companyId       String   @db.Uuid
+  siteId          String   @db.Uuid
+  workOrderId     String   @db.Uuid
+  workOrderSizeId String   @db.Uuid
+  releaseId       String   @db.Uuid
+  /// Garments taken back, from 1.
+  quantity        Int
+  /// A serial-tracked style: the serials taken back (GarmentSerial ids of the release), as many as the quantity; empty
+  /// for a batch-tracked style.
+  serialIds       String[] @default([]) @db.Uuid
+  reason          String
+  /// The office user who signed the reversal, and when.
+  reversedById    String   @db.Uuid
+  reversedAt      DateTime @db.Timestamptz(3)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  createdById     String?  @db.Uuid
+
+  site          Site           @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrderSize WorkOrderSize  @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  release       QualityRelease @relation(fields: [tenantId, siteId, workOrderSizeId, releaseId], references: [tenantId, siteId, workOrderSizeId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, releaseId])
+  // The cell's net released garments (only released garments ship).
+  @@index([tenantId, workOrderSizeId])
+}
+
 /// One garment's serial (Q31 (b), PRD-025, MES-076; A1 §2.4 E Serial): given at the final operation (B-W1-44) to a
 /// garment of a cell of a work order whose style is serial-tracked, printed on its label. MADE → RELEASED (a quality
 /// release of its cell names it) → SHIPPED (packed in a line of a shipment that left); VOID (a garment scrapped or a
-/// label spoilt) from MADE or RELEASED. Never deleted. A cell never has more live (not VOID) serials than pieces.
+/// label spoilt) from MADE; RELEASED → MADE or VOID only through a QualityReleaseReversal of its release that names it.
+/// Never deleted. A cell never has more live (not VOID) serials than pieces.
 model GarmentSerial {
   id              String              @id @db.Uuid
   tenantId        String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -206,7 +253,8 @@ model GarmentSerial {
   /// reused, also when voided.
   serial          String
   status          GarmentSerialStatus @default(MADE)
-  /// The quality release of its cell that released it: set with RELEASED, then never changed.
+  /// The quality release of its cell that released it last: set with RELEASED (MADE → RELEASED), and kept when a
+  /// reversal takes the garment back (a MADE or VOID serial with a release was reversed).
   releaseId       String?             @db.Uuid
   /// The shipment line it is packed in (shipping.prisma): set and cleared while it is RELEASED and the shipment is a
   /// DRAFT; fixed once SHIPPED.
@@ -231,7 +279,8 @@ model GarmentSerial {
   @@index([tenantId, shipmentLineId])
 }
 
-/// MADE → RELEASED → SHIPPED; VOID from MADE or RELEASED. SHIPPED and VOID are final (returns come with W2).
+/// MADE → RELEASED → SHIPPED; VOID from MADE; RELEASED → MADE | VOID through a release reversal. SHIPPED and VOID are
+/// final (returns come with W2).
 enum GarmentSerialStatus {
   MADE
   RELEASED

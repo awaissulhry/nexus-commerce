@@ -89,6 +89,7 @@ export type {
   PurchaseOrder,
   PurchaseOrderLine,
   QualityRelease,
+  QualityReleaseReversal,
   Quote,
   QuoteAcceptance,
   QuoteApproval,

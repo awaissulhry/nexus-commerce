@@ -27,21 +27,25 @@ import { seed as seedProduction, type ProductionSeed } from './production'
  * the garments), the serials of the final operation in A1's floor scope (the operator), the office's rows in the tenant's
  * office scope.
  *
- *   certificate   an EN 17092-3 class A certificate held by the brand P1 (VALID), covering the production seed's
+ *   certificate   an EN 17092-3 class AA certificate held by the brand P1 (VALID), covering the production seed's
  *                 SEED-JKT-02 and this seed's SEED-JKT-03 in every colourway and size.
  *   serial style  SEED-JKT-03 (Q31 (b): garmentTracking SERIAL), colourway BLK, its ACTIVE label template and revision 1
- *                 RELEASED with one routing step (final inspection); order SEED-SO-0003 for P1 (3 x BLK 52); work order
- *                 WO-0003 of one cell, released with batch SEED-BT-0003; two serials of the final operation.
+ *                 RELEASED with one routing step (final inspection); order SEED-SO-0003 for P1 (4 x BLK 52); work order
+ *                 WO-0003 of one cell, released with batch SEED-BT-0003; three serials of the final operation.
  *   WO-0001       (the production seed's, BATCH-tracked): an OPEN inspection (sample begun, one defect) and a PASSED one
- *                 (lot of 5, one minor defect within the plan); releases from it of BLK 50 x1, BLK 52 x2, RED 52 x1.
- *   WO-0003       a PASSED inspection (lot of 2) and a release of one garment, which names the second serial.
+ *                 (lot of 5, one minor defect within the plan); releases from it of BLK 50 x1, BLK 52 x2, RED 52 x1; one
+ *                 of the two BLK 52s taken back (a stain found after release: a reversal, corrective action).
+ *   WO-0003       a PASSED inspection (lot of 3) and two releases of one garment each, which name the second and third
+ *                 serials.
  *   register      one OPEN complaint in the PPE register about SEED-JKT-02, batch SEED-BT-0001, from P1.
  *
  * The generated isolation tests (src/isolation.pg.vitest.test.ts) copy the FIRST row of each table by id and insert the
- * copy: a decided inspection never changes and takes no defect, a cell never gets more releases than pieces nor an
- * inspection more than its lot, a cell never gets more live serials than pieces, a serial starts MADE, a register entry
- * starts OPEN. So the OPEN inspection, its defect, the release of WO-0003 (1 of the cell's 3, 1 of the lot's 2), the
- * MADE serial (2 of the cell's 3) and the register entry get ids that start with eight zeros, and the rows this seed
+ * copy: a decided inspection never changes and takes no defect, a cell never gets more releases (less reversals) than
+ * pieces nor an inspection more than its lot, a release is never reversed beyond its garments nor below what shipments
+ * hold, a cell never gets more live serials than pieces, a serial starts MADE, a register entry starts OPEN. So the OPEN
+ * inspection, its defect, the first release of WO-0003 (2 of the cell's 4 released, 2 of the lot's 3), the BLK 52
+ * reversal (1 of the release's 2, the other garment on no shipment), the MADE serial (3 of the cell's 4) and the
+ * register entry get ids that start with eight zeros, and the rows this seed
  * adds to other modules' tables (style, revision, label, certificate, order, work order …) ids that start with eight
  * f's (all still derived from the namespace), so those tables' first rows stay the ones their seeds chose.
  *
@@ -60,6 +64,7 @@ const T = {
   inspected: new Date('2026-11-20T08:00:00.000Z'),
   decided: new Date('2026-11-20T09:30:00.000Z'),
   released: new Date('2026-11-20T11:00:00.000Z'),
+  reversed: new Date('2026-11-20T15:00:00.000Z'),
   reported: new Date('2026-11-21T10:00:00.000Z'),
 } as const
 const DAY = { orderDate: new Date('2026-11-12T00:00:00.000Z'), due: new Date('2026-12-11T00:00:00.000Z') } as const
@@ -83,11 +88,12 @@ export interface QualitySeed {
   readonly openDefectId: string
   readonly passedInspectionId: string
   readonly serialInspectionId: string
-  /** WO-0001's releases by cell, and WO-0003's release. */
+  /** WO-0001's releases by cell, and the reversal of one of BLK 52's two garments; WO-0003's two releases. */
   readonly releaseIds: { readonly 'BLK-50': string; readonly 'BLK-52': string; readonly 'RED-52': string }
-  readonly serialReleaseId: string
-  /** WO-0003's serials: MADE, and RELEASED by its release. */
-  readonly serialIds: readonly [string, string]
+  readonly reversalId: string
+  readonly serialReleaseIds: readonly [string, string]
+  /** WO-0003's serials: MADE, then RELEASED by its first and its second release. */
+  readonly serialIds: readonly [string, string, string]
   readonly registerEntryId: string
   /** Plant A1's team leader, the floor inspector here (made none of WO-0001's garments). */
   readonly inspectorId: string
@@ -141,7 +147,7 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
         baseSize: '52',
         ppeCategory: PpeCategory.CATEGORY_II,
         ppeStandard: 'EN 17092-3:2020',
-        ppeClass: 'A',
+        ppeClass: 'AA',
         garmentTracking: GarmentTracking.SERIAL,
         status: StyleStatus.ACTIVE,
         ...stamp(T.setup),
@@ -202,7 +208,7 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
       const certificate = {
         holderPartyId: brandId,
         standard: 'EN 17092-3:2020',
-        ppeClass: 'A',
+        ppeClass: 'AA',
         number: 'SEED-CERT-0003',
         notifiedBodyName: 'Seed Notified Body',
         notifiedBodyNumber: '0000',
@@ -229,7 +235,7 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
   await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {
       if (await tx.salesOrder.findUnique({ where: { id: serialSalesOrderId }, select: { id: true } })) return
-      const net = 3 * 42_000
+      const net = 4 * 42_000
       const vat = (net * 22) / 100
       await tx.salesOrder.create({
         data: {
@@ -264,7 +270,7 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
           styleRevisionId: serialRevisionId,
           colourwayId: serialColourwayId,
           description: 'SEED-JKT-03 BLK',
-          quantity: 3,
+          quantity: 4,
           unitPrice: '420.000000',
           netAmount: net,
           vatRatePct: '22.00',
@@ -275,7 +281,7 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
         select: { id: true },
       })
       await tx.salesOrderLineSize.create({
-        data: { id: lastId('quality:sales-order:SO-0003:BLK:52'), lineId: serialSalesOrderLineId, partyId: brandId, size: '52', quantity: 3, ...stamp(T.ordered) },
+        data: { id: lastId('quality:sales-order:SO-0003:BLK:52'), lineId: serialSalesOrderLineId, partyId: brandId, size: '52', quantity: 4, ...stamp(T.ordered) },
         select: { id: true },
       })
     }),
@@ -295,7 +301,7 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
           styleId: serialStyleId,
           colourwayId: serialColourwayId,
           size: '52',
-          quantity: 3,
+          quantity: 4,
           salesOrderLineId: serialSalesOrderLineId,
           partyId: brandId,
           ...stamp(T.planned),
@@ -327,7 +333,7 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
   )
 
   // --- the serials of the final operation (the floor) -----------------------------------------------------------------
-  const serialIds = [firstId('quality:serial:WO-0003:1'), id('quality:serial:WO-0003:2')] as const
+  const serialIds = [firstId('quality:serial:WO-0003:1'), id('quality:serial:WO-0003:2'), id('quality:serial:WO-0003:3')] as const
   await db.withScope({ audience: 'floor', tenantId, actorId: operatorId, siteId: siteA }, (client) =>
     client.$transaction(async (tx) => {
       if (await tx.garmentSerial.findUnique({ where: { id: serialIds[0] }, select: { id: true } })) return
@@ -444,7 +450,7 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
           companyId: companyA,
           siteId: siteA,
           workOrderId: serialWorkOrderId,
-          lotSize: 2,
+          lotSize: 3,
           sampleSize: 2,
           ...plan,
           acceptMajor: 0,
@@ -462,32 +468,36 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
     }),
   )
 
-  // --- the releases (the office) --------------------------------------------------------------------------------------
+  // --- the releases and the reversal (the office) -------------------------------------------------------------------
   const releaseIds = { 'BLK-50': id('quality:release:WO-0001:BLK-50'), 'BLK-52': id('quality:release:WO-0001:BLK-52'), 'RED-52': id('quality:release:WO-0001:RED-52') } as const
-  const serialReleaseId = firstId('quality:release:WO-0003:1')
+  const serialReleaseIds = [firstId('quality:release:WO-0003:1'), id('quality:release:WO-0003:2')] as const
+  const reversalId = firstId('quality:reversal:WO-0001:BLK-52:1')
   const signed = (key: string) => ({ releasedById: actorId, releasedAt: T.released, signatureSha256: signature(`release ${key}`), createdAt: T.released, createdById: actorId })
   await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {
-      if (await tx.qualityRelease.findUnique({ where: { id: serialReleaseId }, select: { id: true } })) return
-      await tx.qualityRelease.create({
-        data: {
-          id: serialReleaseId,
-          companyId: companyA,
-          siteId: siteA,
-          workOrderId: serialWorkOrderId,
-          workOrderSizeId: serialCellId,
-          inspectionId: serialInspectionId,
-          quantity: 1,
-          certificateIds: [certificateId],
-          ...signed('WO-0003:1'),
-        },
-        select: { id: true },
-      })
-      await tx.garmentSerial.update({
-        where: { id: serialIds[1] },
-        data: { status: GarmentSerialStatus.RELEASED, releaseId: serialReleaseId, updatedAt: T.released },
-        select: { id: true },
-      })
+      if (await tx.qualityRelease.findUnique({ where: { id: serialReleaseIds[0] }, select: { id: true } })) return
+      // WO-0003: one garment per release, each naming its serial.
+      for (const [index, releaseId] of serialReleaseIds.entries()) {
+        await tx.qualityRelease.create({
+          data: {
+            id: releaseId,
+            companyId: companyA,
+            siteId: siteA,
+            workOrderId: serialWorkOrderId,
+            workOrderSizeId: serialCellId,
+            inspectionId: serialInspectionId,
+            quantity: 1,
+            certificateIds: [certificateId],
+            ...signed(`WO-0003:${index + 1}`),
+          },
+          select: { id: true },
+        })
+        await tx.garmentSerial.update({
+          where: { id: serialIds[index + 1]! },
+          data: { status: GarmentSerialStatus.RELEASED, releaseId, updatedAt: T.released },
+          select: { id: true },
+        })
+      }
       await tx.qualityRelease.createMany({
         data: (
           [
@@ -506,6 +516,28 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
           certificateIds: [certificateId],
           ...signed(`WO-0001:${key}`),
         })),
+      })
+    }),
+  )
+  await db.withScope(office, (client) =>
+    client.$transaction(async (tx) => {
+      if (await tx.qualityReleaseReversal.findUnique({ where: { id: reversalId }, select: { id: true } })) return
+      await tx.qualityReleaseReversal.create({
+        data: {
+          id: reversalId,
+          companyId: companyA,
+          siteId: siteA,
+          workOrderId: production.workOrderId,
+          workOrderSizeId: cell['BLK-52'],
+          releaseId: releaseIds['BLK-52'],
+          quantity: 1,
+          reason: 'A stain found on a sleeve after release; back to rework, then a new inspection.',
+          reversedById: actorId,
+          reversedAt: T.reversed,
+          createdAt: T.reversed,
+          createdById: actorId,
+        },
+        select: { id: true },
       })
     }),
   )
@@ -548,7 +580,8 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
     passedInspectionId,
     serialInspectionId,
     releaseIds,
-    serialReleaseId,
+    reversalId,
+    serialReleaseIds,
     serialIds,
     registerEntryId,
     inspectorId,

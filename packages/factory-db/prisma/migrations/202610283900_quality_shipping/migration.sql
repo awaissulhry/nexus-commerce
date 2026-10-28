@@ -110,6 +110,26 @@ CREATE TABLE "QualityRelease" (
 );
 
 -- CreateTable
+CREATE TABLE "QualityReleaseReversal" (
+    "id" UUID NOT NULL,
+    "tenantId" UUID NOT NULL DEFAULT (NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid,
+    "companyId" UUID NOT NULL,
+    "siteId" UUID NOT NULL,
+    "workOrderId" UUID NOT NULL,
+    "workOrderSizeId" UUID NOT NULL,
+    "releaseId" UUID NOT NULL,
+    "quantity" INTEGER NOT NULL,
+    "serialIds" UUID[] DEFAULT ARRAY[]::UUID[],
+    "reason" TEXT NOT NULL,
+    "reversedById" UUID NOT NULL,
+    "reversedAt" TIMESTAMPTZ(3) NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdById" UUID,
+
+    CONSTRAINT "QualityReleaseReversal_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "GarmentSerial" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL DEFAULT (NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid,
@@ -351,6 +371,12 @@ CREATE INDEX "QualityRelease_tenantId_inspectionId_idx" ON "QualityRelease"("ten
 CREATE UNIQUE INDEX "QualityRelease_tenantId_siteId_workOrderSizeId_id_key" ON "QualityRelease"("tenantId", "siteId", "workOrderSizeId", "id");
 
 -- CreateIndex
+CREATE INDEX "QualityReleaseReversal_tenantId_releaseId_idx" ON "QualityReleaseReversal"("tenantId", "releaseId");
+
+-- CreateIndex
+CREATE INDEX "QualityReleaseReversal_tenantId_workOrderSizeId_idx" ON "QualityReleaseReversal"("tenantId", "workOrderSizeId");
+
+-- CreateIndex
 CREATE INDEX "GarmentSerial_tenantId_workOrderSizeId_idx" ON "GarmentSerial"("tenantId", "workOrderSizeId");
 
 -- CreateIndex
@@ -442,6 +468,15 @@ ALTER TABLE "QualityRelease" ADD CONSTRAINT "QualityRelease_tenantId_siteId_work
 
 -- AddForeignKey
 ALTER TABLE "QualityRelease" ADD CONSTRAINT "QualityRelease_tenantId_siteId_workOrderId_inspectionId_fkey" FOREIGN KEY ("tenantId", "siteId", "workOrderId", "inspectionId") REFERENCES "Inspection"("tenantId", "siteId", "workOrderId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
+
+-- AddForeignKey
+ALTER TABLE "QualityReleaseReversal" ADD CONSTRAINT "QualityReleaseReversal_tenantId_companyId_siteId_fkey" FOREIGN KEY ("tenantId", "companyId", "siteId") REFERENCES "Site"("tenantId", "companyId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
+
+-- AddForeignKey
+ALTER TABLE "QualityReleaseReversal" ADD CONSTRAINT "QualityReleaseReversal_tenantId_siteId_workOrderId_workOrd_fkey" FOREIGN KEY ("tenantId", "siteId", "workOrderId", "workOrderSizeId") REFERENCES "WorkOrderSize"("tenantId", "siteId", "workOrderId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
+
+-- AddForeignKey
+ALTER TABLE "QualityReleaseReversal" ADD CONSTRAINT "QualityReleaseReversal_tenantId_siteId_workOrderSizeId_rel_fkey" FOREIGN KEY ("tenantId", "siteId", "workOrderSizeId", "releaseId") REFERENCES "QualityRelease"("tenantId", "siteId", "workOrderSizeId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
 ALTER TABLE "GarmentSerial" ADD CONSTRAINT "GarmentSerial_tenantId_siteId_workOrderId_workOrderSizeId_fkey" FOREIGN KEY ("tenantId", "siteId", "workOrderId", "workOrderSizeId") REFERENCES "WorkOrderSize"("tenantId", "siteId", "workOrderId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;

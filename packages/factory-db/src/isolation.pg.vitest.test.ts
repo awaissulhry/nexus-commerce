@@ -219,6 +219,7 @@ it('covers every classified table and every runtime role', () => {
     'PurchaseOrder',
     'PurchaseOrderLine',
     'QualityRelease',
+    'QualityReleaseReversal',
     'Quote',
     'QuoteAcceptance',
     'QuoteApproval',

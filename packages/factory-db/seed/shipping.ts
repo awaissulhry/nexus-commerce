@@ -15,12 +15,13 @@ import { seed as seedQuality, type QualitySeed } from './quality'
  *               DDT series, then cancelled (the goods' appearance was wrong) and replaced by DDT 144/2026, which keeps
  *               the series without a gap (their NumberAllocation rows, the series moved to 145); SHIPPED; tracking:
  *               both labels created, then in transit.
- *   SH-0002     a DRAFT shipment of SEED-SO-0002's released BLK 52 (one of the two released), one parcel, being packed.
+ *   SH-0002     a DRAFT shipment of SEED-SO-0003's serial-tracked jacket: one of WO-0003's two released garments, one
+ *               parcel, being packed (its serial is packed before it is PACKED).
  *
  * The generated isolation tests (src/isolation.pg.vitest.test.ts) copy the FIRST row of each table by id and insert the
  * copy: lines and parcels change only while their shipment is a DRAFT, and a cell's lines never ship more than it has
- * released. So the DRAFT shipment, its line and its parcel get ids that start with eight zeros (still derived from the
- * namespace), and its line takes one of the two released BLK 52s, leaving one.
+ * released (less reversals). So the DRAFT shipment, its line and its parcel get ids that start with eight zeros (still
+ * derived from the namespace), and its line takes one of WO-0003's two released garments, leaving one.
  *
  * Every name, number and value is invented. Idempotent: each step runs once and is skipped when its rows exist (DDTs,
  * their cancellations and tracking events are append-only, a shipment that left never changes).
@@ -189,8 +190,8 @@ export async function seed(context: SeedContext): Promise<ShippingSeed> {
 
   // --- the DDTs: 143/2026 cancelled and replaced by 144/2026; then SH-0001 leaves -------------------------------------
   const ddtLines = [
-    { seq: 1, description: 'Giacca moto in pelle SEED-JKT-02, nero, taglia 50 (DPI cat. II, EN 17092-3 classe A)', quantity: '1', uom: 'PCS', salesOrderLineId: orderLine.BLK, size: '50', batchNumber: 'SEED-BT-0001', serials: [] },
-    { seq: 2, description: 'Giacca moto in pelle SEED-JKT-02, rosso, taglia 52 (DPI cat. II, EN 17092-3 classe A)', quantity: '1', uom: 'PCS', salesOrderLineId: orderLine.RED, size: '52', batchNumber: 'SEED-BT-0001', serials: [] },
+    { seq: 1, description: 'Giacca moto in pelle SEED-JKT-02, nero, taglia 50 (DPI cat. II, EN 17092-3 classe AA)', quantity: '1', uom: 'PCS', salesOrderLineId: orderLine.BLK, size: '50', batchNumber: 'SEED-BT-0001', serials: [] },
+    { seq: 2, description: 'Giacca moto in pelle SEED-JKT-02, rosso, taglia 52 (DPI cat. II, EN 17092-3 classe AA)', quantity: '1', uom: 'PCS', salesOrderLineId: orderLine.RED, size: '52', batchNumber: 'SEED-BT-0001', serials: [] },
   ]
   const ddt = (number: string, appearance: string, at: Date) => ({
     companyId: companyA,
@@ -277,13 +278,13 @@ export async function seed(context: SeedContext): Promise<ShippingSeed> {
 
   // --- SH-0002: a DRAFT being packed ----------------------------------------------------------------------------------
   const draftShipmentId = firstId('shipping:shipment:SH-0002')
-  const draftLineId = firstId('shipping:SH-0002:line:BLK-52')
+  const draftLineId = firstId('shipping:SH-0002:line:BLK-52-JKT-03')
   const draftParcelId = firstId('shipping:SH-0002:parcel:1')
   await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {
       if (await tx.shipment.findUnique({ where: { id: draftShipmentId }, select: { id: true } })) return
       await tx.shipment.create({
-        data: { id: draftShipmentId, companyId: companyA, siteId: siteA, partyId: brandId, salesOrderId: production.salesOrderId, number: 'SEED-SH-0002', shipTo, transportBy: TransportBy.CARRIER, ...carrier, ...stamp(T.draft) },
+        data: { id: draftShipmentId, companyId: companyA, siteId: siteA, partyId: brandId, salesOrderId: quality.serialSalesOrderId, number: 'SEED-SH-0002', shipTo, transportBy: TransportBy.CARRIER, ...carrier, ...stamp(T.draft) },
         select: { id: true },
       })
     }),
@@ -299,9 +300,9 @@ export async function seed(context: SeedContext): Promise<ShippingSeed> {
           partyId: brandId,
           shipmentId: draftShipmentId,
           parcelId: draftParcelId,
-          workOrderId: production.workOrderId,
-          workOrderSizeId: cell['BLK-52'],
-          salesOrderLineId: orderLine.BLK,
+          workOrderId: quality.serialWorkOrderId,
+          workOrderSizeId: quality.serialCellId,
+          salesOrderLineId: quality.serialSalesOrderLineId,
           size: '52',
           quantity: 1,
           ...stamp(T.draft, operatorId),

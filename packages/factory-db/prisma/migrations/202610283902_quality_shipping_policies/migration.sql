@@ -826,6 +826,16 @@ GRANT SELECT, INSERT ON TABLE "public"."QualityRelease" TO "factory_runtime";
 CREATE POLICY "factory_floor_runtime_select" ON "public"."QualityRelease" AS PERMISSIVE FOR SELECT TO "factory_floor_runtime" USING ("siteId" = NULLIF(current_setting('factory.site_id', true), '')::uuid AND "tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_select" ON "public"."QualityRelease" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."QualityRelease" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."QualityReleaseReversal"
+ALTER TABLE "public"."QualityReleaseReversal" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."QualityReleaseReversal" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'QualityReleaseReversal' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'QualityReleaseReversal'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."QualityReleaseReversal" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT ON TABLE "public"."QualityReleaseReversal" TO "factory_floor_runtime";
+GRANT SELECT, INSERT ON TABLE "public"."QualityReleaseReversal" TO "factory_runtime";
+CREATE POLICY "factory_floor_runtime_select" ON "public"."QualityReleaseReversal" AS PERMISSIVE FOR SELECT TO "factory_floor_runtime" USING ("siteId" = NULLIF(current_setting('factory.site_id', true), '')::uuid AND "tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_select" ON "public"."QualityReleaseReversal" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."QualityReleaseReversal" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."Quote"
 ALTER TABLE "public"."Quote" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."Quote" FORCE ROW LEVEL SECURITY;

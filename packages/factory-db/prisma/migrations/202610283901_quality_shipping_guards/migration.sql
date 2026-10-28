@@ -23,13 +23,14 @@ BEGIN
 END
 $$;
 
--- The append-only ledgers of this module (plan A1 §2.1; scripts/factory/check-append-only.mjs): QualityRelease, Ddt,
--- DdtCancellation, TrackingEvent. No login may change or remove a row, the owner and superusers included; the runtime
--- roles have no UPDATE, DELETE or TRUNCATE grant either (the policy migration). A mistake is a new row: a DDT is
--- cancelled by a DdtCancellation and replaced by a new DDT; a tracking event is followed by the next one.
+-- The append-only ledgers of this module (plan A1 §2.1; scripts/factory/check-append-only.mjs): QualityRelease,
+-- QualityReleaseReversal, Ddt, DdtCancellation, TrackingEvent. No login may change or remove a row, the owner and
+-- superusers included; the runtime roles have no UPDATE, DELETE or TRUNCATE grant either (the policy migration). A
+-- mistake is a new row: a release is taken back by a QualityReleaseReversal; a DDT is cancelled by a DdtCancellation
+-- and replaced by a new DDT; a tracking event is followed by the next one.
 CREATE FUNCTION "factory_refuse_quality_shipping_ledger_change"() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  RAISE EXCEPTION 'append-only: % on "%" is refused; a release, a DDT, its cancellation and a tracking event are kept as they were written', TG_OP, TG_TABLE_NAME
+  RAISE EXCEPTION 'append-only: % on "%" is refused; a release, its reversal, a DDT, its cancellation and a tracking event are kept as they were written', TG_OP, TG_TABLE_NAME
     USING ERRCODE = 'check_violation';
 END
 $$;
@@ -37,6 +38,10 @@ $$;
 CREATE TRIGGER "QualityRelease_append_only" BEFORE UPDATE OR DELETE ON "QualityRelease"
   FOR EACH ROW EXECUTE FUNCTION "factory_refuse_quality_shipping_ledger_change"();
 CREATE TRIGGER "QualityRelease_no_truncate" BEFORE TRUNCATE ON "QualityRelease"
+  FOR EACH STATEMENT EXECUTE FUNCTION "factory_refuse_quality_shipping_ledger_change"();
+CREATE TRIGGER "QualityReleaseReversal_append_only" BEFORE UPDATE OR DELETE ON "QualityReleaseReversal"
+  FOR EACH ROW EXECUTE FUNCTION "factory_refuse_quality_shipping_ledger_change"();
+CREATE TRIGGER "QualityReleaseReversal_no_truncate" BEFORE TRUNCATE ON "QualityReleaseReversal"
   FOR EACH STATEMENT EXECUTE FUNCTION "factory_refuse_quality_shipping_ledger_change"();
 CREATE TRIGGER "Ddt_append_only" BEFORE UPDATE OR DELETE ON "Ddt"
   FOR EACH ROW EXECUTE FUNCTION "factory_refuse_quality_shipping_ledger_change"();
@@ -302,8 +307,9 @@ CREATE TRIGGER "InspectionDefect_no_truncate" BEFORE TRUNCATE ON "InspectionDefe
 -- QualityRelease, INSERT (QHS-058; A1 §2.5 "Final release"; append-only above)
 --   every row     from 1 garment, a signature.
 --   work order    RELEASED, IN_PROGRESS or COMPLETED; the inspection (of the same work order: the reference) PASSED.
---   quantities    under a transaction lock per work order: the cell's releases never pass its pieces, and the
---                 releases from one inspection never pass its lot.
+--   quantities    under a transaction lock per work order: the cell's releases less their reversals never pass its
+--                 pieces, and the releases from one inspection (reversed or not) never pass its lot: a reversed
+--                 garment is released again only from a new inspection.
 --   four-eyes     the releasing user made none of the garments; nor did the inspection's inspector (checked again: a
 --                 scan after the decision counts too).
 --   certificates  a PPE style (not NOT_PPE): at least one certificate named; every certificate named is VALID on the
@@ -347,10 +353,11 @@ BEGIN
   SELECT c."quantity", c."colourwayId", c."size", c."measurementProfileId" INTO cell
     FROM "WorkOrderSize" c WHERE c."tenantId" = NEW."tenantId" AND c."id" = NEW."workOrderSizeId";
   IF FOUND THEN
-    SELECT coalesce(sum(r."quantity"), 0) INTO released
-      FROM "QualityRelease" r WHERE r."tenantId" = NEW."tenantId" AND r."workOrderSizeId" = NEW."workOrderSizeId";
+    SELECT (SELECT coalesce(sum(r."quantity"), 0) FROM "QualityRelease" r WHERE r."tenantId" = NEW."tenantId" AND r."workOrderSizeId" = NEW."workOrderSizeId")
+         - (SELECT coalesce(sum(v."quantity"), 0) FROM "QualityReleaseReversal" v WHERE v."tenantId" = NEW."tenantId" AND v."workOrderSizeId" = NEW."workOrderSizeId")
+      INTO released;
     IF released + NEW."quantity" > cell."quantity" THEN
-      RAISE EXCEPTION 'quality: cell % has % piece(s) and % released; release % of % more is refused', NEW."workOrderSizeId", cell."quantity", released, NEW."id", NEW."quantity"
+      RAISE EXCEPTION 'quality: cell % has % piece(s) and % released (less reversals); release % of % more is refused', NEW."workOrderSizeId", cell."quantity", released, NEW."id", NEW."quantity"
         USING ERRCODE = 'check_violation';
     END IF;
   END IF;
@@ -400,18 +407,119 @@ $$;
 CREATE TRIGGER "QualityRelease_check" BEFORE INSERT ON "QualityRelease"
   FOR EACH ROW EXECUTE FUNCTION "factory_quality_release_check"();
 
+-- QualityReleaseReversal, INSERT (Reg. 2016/425 art. 8(8): corrective action before the goods leave; append-only above)
+--   every row    from 1 garment, a reason; its cell and work order are its release's (the references).
+--   quantities   under the work order's release lock and then the cell's shipping lock (the order every writer takes
+--                them in): a release's reversals never pass its quantity; the cell's releases less its reversals never
+--                fall below what its shipments that are not CANCELLED hold (a garment on a shipment, packed or gone, is
+--                not reversed: a DRAFT shipment's line is removed first, or the shipment cancelled).
+--   serials      a SERIAL-tracked style names exactly `quantity` distinct serials of the release, RELEASED and not
+--                packed; a batch-tracked one names none. At commit none of them is still RELEASED by the release (they
+--                went back to MADE or VOID in the same transaction: the deferred trigger below).
+CREATE FUNCTION "factory_quality_release_reversal_check"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  release record;
+  tracking text;
+  reversed bigint;
+  released bigint;
+  shipped bigint;
+  wrong uuid;
+BEGIN
+  IF NEW."quantity" < 1 OR btrim(NEW."reason") = '' THEN
+    RAISE EXCEPTION 'quality: reversal % takes back at least one garment and says why', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT r."quantity", r."workOrderId" INTO release
+    FROM "QualityRelease" r WHERE r."tenantId" = NEW."tenantId" AND r."id" = NEW."releaseId";
+  IF NOT FOUND THEN
+    -- Outside this session's scope: the policies refuse the row.
+    RETURN NEW;
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.release', NEW."tenantId", NEW."workOrderId"), 0));
+  PERFORM pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.ship-cell', NEW."tenantId", NEW."workOrderSizeId"), 0));
+  SELECT coalesce(sum(v."quantity"), 0) INTO reversed
+    FROM "QualityReleaseReversal" v WHERE v."tenantId" = NEW."tenantId" AND v."releaseId" = NEW."releaseId";
+  IF reversed + NEW."quantity" > release."quantity" THEN
+    RAISE EXCEPTION 'quality: release % released % garment(s), % reversed already; reversal % of % more is refused', NEW."releaseId", release."quantity", reversed, NEW."id", NEW."quantity"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT (SELECT coalesce(sum(r."quantity"), 0) FROM "QualityRelease" r WHERE r."tenantId" = NEW."tenantId" AND r."workOrderSizeId" = NEW."workOrderSizeId")
+       - (SELECT coalesce(sum(v."quantity"), 0) FROM "QualityReleaseReversal" v WHERE v."tenantId" = NEW."tenantId" AND v."workOrderSizeId" = NEW."workOrderSizeId")
+    INTO released;
+  SELECT coalesce(sum(l."quantity"), 0) INTO shipped
+    FROM "ShipmentLine" l JOIN "Shipment" sh ON sh."tenantId" = l."tenantId" AND sh."id" = l."shipmentId"
+   WHERE l."tenantId" = NEW."tenantId" AND l."workOrderSizeId" = NEW."workOrderSizeId" AND sh."status" <> 'CANCELLED';
+  IF released - NEW."quantity" < shipped THEN
+    RAISE EXCEPTION 'quality: cell % has % garment(s) released and % on shipments; reversal % of % would take back garments a shipment holds (remove the line or cancel the shipment first)', NEW."workOrderSizeId", released, shipped, NEW."id", NEW."quantity"
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT s."garmentTracking"::text INTO tracking
+    FROM "WorkOrder" w JOIN "Style" s ON s."tenantId" = w."tenantId" AND s."id" = w."styleId"
+   WHERE w."tenantId" = NEW."tenantId" AND w."id" = NEW."workOrderId";
+  IF tracking = 'SERIAL' THEN
+    IF cardinality(NEW."serialIds") <> NEW."quantity" OR (SELECT count(DISTINCT x) FROM unnest(NEW."serialIds") AS x) <> NEW."quantity" THEN
+      RAISE EXCEPTION 'quality: reversal % of a serial-tracked release names exactly its % serial(s) (Q31)', NEW."id", NEW."quantity"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    SELECT x INTO wrong FROM unnest(NEW."serialIds") AS x
+     WHERE NOT EXISTS (SELECT 1 FROM "GarmentSerial" g
+                        WHERE g."tenantId" = NEW."tenantId" AND g."id" = x AND g."workOrderSizeId" = NEW."workOrderSizeId"
+                          AND g."releaseId" = NEW."releaseId" AND g."status" = 'RELEASED' AND g."shipmentLineId" IS NULL)
+     LIMIT 1;
+    IF FOUND THEN
+      RAISE EXCEPTION 'quality: reversal % names serial %, which is not a RELEASED, unpacked serial of release %', NEW."id", wrong, NEW."releaseId"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSIF cardinality(NEW."serialIds") > 0 THEN
+    RAISE EXCEPTION 'quality: reversal % is of a batch-tracked release; it names no serial', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+CREATE TRIGGER "QualityReleaseReversal_check" BEFORE INSERT ON "QualityReleaseReversal"
+  FOR EACH ROW EXECUTE FUNCTION "factory_quality_release_reversal_check"();
+
+-- The serials a reversal names leave RELEASED with it: at commit (a deferred constraint trigger) none of them is still
+-- RELEASED by the reversed release, so the reversal is written first and the serials move after it.
+CREATE FUNCTION "factory_quality_release_reversal_serials_moved"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  still uuid;
+BEGIN
+  SELECT g."id" INTO still FROM "GarmentSerial" g
+   WHERE g."tenantId" = NEW."tenantId" AND g."id" = ANY (NEW."serialIds") AND g."releaseId" = NEW."releaseId" AND g."status" = 'RELEASED'
+   LIMIT 1;
+  IF FOUND THEN
+    RAISE EXCEPTION 'quality: serial % is still RELEASED; reversal % takes it back to MADE or VOID in the same transaction', still, NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE CONSTRAINT TRIGGER "QualityReleaseReversal_serials_moved" AFTER INSERT ON "QualityReleaseReversal"
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW WHEN (cardinality(NEW."serialIds") > 0)
+  EXECUTE FUNCTION "factory_quality_release_reversal_serials_moved"();
+
 -- GarmentSerial (Q31 (b), PRD-025, MES-076)
 --   INSERT     MADE, not released, not packed; the work order's style is SERIAL-tracked and the work order RELEASED,
 --              IN_PROGRESS or COMPLETED; under a transaction lock per cell, the cell's live (not VOID) serials never pass
 --              its pieces. The serial is unique in the tenant (the unique key).
 --   UPDATE     an UPDATE that changes nothing passes; the work order, cell, serial and creation never change; MADE →
---              RELEASED | VOID, RELEASED → SHIPPED | VOID; SHIPPED and VOID are final. RELEASED names a release of its
---              cell (once), whose serials never pass its garments (a lock per release). Packing (the shipment line set
---              or cleared) happens only while RELEASED and the shipment is a DRAFT, and a line never holds more serials
---              than garments (a lock per line). SHIPPED keeps its line, whose shipment SHIPPED (or later DELIVERED).
---              A floor session packs, unpacks and voids a MADE serial; releasing and shipping are the office's.
---   every row  a serial; MADE has no release and no line; RELEASED and SHIPPED a release; SHIPPED a line; VOID no line,
---              and its time and reason exactly when VOID.
+--              RELEASED | VOID, RELEASED → SHIPPED | MADE | VOID; SHIPPED and VOID are final. MADE → RELEASED names a
+--              release of its cell (the release changes only then), never one that took the serial back, and a release
+--              never has more RELEASED or SHIPPED serials than its garments less its reversals (a lock per release).
+--              RELEASED → MADE or VOID only when a reversal of its release names it (corrective action). Packing (the
+--              shipment line set or cleared) happens only while RELEASED and the shipment is a DRAFT, and a line never
+--              holds more serials than garments (a lock per line). SHIPPED keeps its line, whose shipment SHIPPED (or
+--              later DELIVERED). A floor session packs, unpacks and voids a MADE serial; releasing, taking back and
+--              shipping are the office's.
+--   every row  a serial; MADE has no line (and a release only once one took it back); RELEASED and SHIPPED a release;
+--              SHIPPED a line; VOID no line, and its time and reason exactly when VOID.
 --   DELETE     refused (a serial is voided, never reused). TRUNCATE refused.
 CREATE FUNCTION "factory_garment_serial_guard"() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -471,28 +579,39 @@ BEGIN
     END IF;
     IF NEW."status" <> OLD."status"
        AND NOT ((OLD."status" = 'MADE' AND NEW."status" IN ('RELEASED', 'VOID'))
-                OR (OLD."status" = 'RELEASED' AND NEW."status" IN ('SHIPPED', 'VOID'))) THEN
+                OR (OLD."status" = 'RELEASED' AND NEW."status" IN ('SHIPPED', 'MADE', 'VOID'))) THEN
       RAISE EXCEPTION 'quality: serial % cannot move from % to %', OLD."id", OLD."status", NEW."status"
         USING ERRCODE = 'check_violation';
     END IF;
-    IF OLD."releaseId" IS NOT NULL AND NEW."releaseId" IS DISTINCT FROM OLD."releaseId" THEN
-      RAISE EXCEPTION 'quality: the release of serial % is named once', OLD."id"
+    IF NEW."releaseId" IS DISTINCT FROM OLD."releaseId" AND NOT (OLD."status" = 'MADE' AND NEW."status" = 'RELEASED') THEN
+      RAISE EXCEPTION 'quality: the release of serial % is named only when it is released', OLD."id"
         USING ERRCODE = 'check_violation';
     END IF;
     IF current_user = 'factory_floor_runtime' AND NEW."status" <> OLD."status" AND NOT (OLD."status" = 'MADE' AND NEW."status" = 'VOID') THEN
-      RAISE EXCEPTION 'quality: the floor packs, unpacks and voids serials; releasing and shipping serial % are the office''s', OLD."id"
+      RAISE EXCEPTION 'quality: the floor packs, unpacks and voids serials; releasing, taking back and shipping serial % are the office''s', OLD."id"
         USING ERRCODE = 'check_violation';
     END IF;
 
     IF OLD."status" = 'MADE' AND NEW."status" = 'RELEASED' AND NEW."releaseId" IS NOT NULL THEN
       PERFORM pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.serial-release', NEW."tenantId", NEW."releaseId"), 0));
-      SELECT r."quantity" INTO allowed FROM "QualityRelease" r WHERE r."tenantId" = NEW."tenantId" AND r."id" = NEW."releaseId";
-      SELECT count(*) INTO taken FROM "GarmentSerial" g
-       WHERE g."tenantId" = NEW."tenantId" AND g."releaseId" = NEW."releaseId" AND g."id" <> NEW."id";
-      IF allowed IS NOT NULL AND taken + 1 > allowed THEN
-        RAISE EXCEPTION 'quality: release % released % garment(s), and % serial(s) name it; serial % is one too many', NEW."releaseId", allowed, taken, NEW."serial"
+      IF EXISTS (SELECT 1 FROM "QualityReleaseReversal" v WHERE v."tenantId" = NEW."tenantId" AND v."releaseId" = NEW."releaseId" AND NEW."id" = ANY (v."serialIds")) THEN
+        RAISE EXCEPTION 'quality: release % took serial % back; it is released again only by a new release (after a new inspection)', NEW."releaseId", NEW."serial"
           USING ERRCODE = 'check_violation';
       END IF;
+      SELECT r."quantity" - (SELECT coalesce(sum(v."quantity"), 0) FROM "QualityReleaseReversal" v WHERE v."tenantId" = r."tenantId" AND v."releaseId" = r."id")
+        INTO allowed FROM "QualityRelease" r WHERE r."tenantId" = NEW."tenantId" AND r."id" = NEW."releaseId";
+      SELECT count(*) INTO taken FROM "GarmentSerial" g
+       WHERE g."tenantId" = NEW."tenantId" AND g."releaseId" = NEW."releaseId" AND g."status" IN ('RELEASED', 'SHIPPED') AND g."id" <> NEW."id";
+      IF allowed IS NOT NULL AND taken + 1 > allowed THEN
+        RAISE EXCEPTION 'quality: release % holds % garment(s) (less reversals), and % serial(s) name it; serial % is one too many', NEW."releaseId", allowed, taken, NEW."serial"
+          USING ERRCODE = 'check_violation';
+      END IF;
+    END IF;
+
+    IF OLD."status" = 'RELEASED' AND NEW."status" IN ('MADE', 'VOID')
+       AND NOT EXISTS (SELECT 1 FROM "QualityReleaseReversal" v WHERE v."tenantId" = OLD."tenantId" AND v."releaseId" = OLD."releaseId" AND OLD."id" = ANY (v."serialIds")) THEN
+      RAISE EXCEPTION 'quality: serial % is RELEASED by release %; it goes back to % only through a reversal of that release that names it (corrective action)', OLD."id", OLD."releaseId", NEW."status"
+        USING ERRCODE = 'check_violation';
     END IF;
 
     IF NEW."shipmentLineId" IS DISTINCT FROM OLD."shipmentLineId" THEN
@@ -541,11 +660,11 @@ BEGIN
   END IF;
 
   IF btrim(NEW."serial") = ''
-     OR (NEW."status" = 'MADE' AND (NEW."releaseId" IS NOT NULL OR NEW."shipmentLineId" IS NOT NULL))
+     OR (NEW."status" = 'MADE' AND NEW."shipmentLineId" IS NOT NULL)
      OR (NEW."status" IN ('RELEASED', 'SHIPPED') AND NEW."releaseId" IS NULL)
      OR (NEW."status" = 'SHIPPED' AND NEW."shipmentLineId" IS NULL)
      OR (NEW."status" = 'VOID' AND NEW."shipmentLineId" IS NOT NULL) THEN
-    RAISE EXCEPTION 'quality: serial % is % with the wrong release or shipment line (MADE: neither; RELEASED: its release; SHIPPED: its release and line; VOID: no line)', NEW."id", NEW."status"
+    RAISE EXCEPTION 'quality: serial % is % with the wrong release or shipment line (MADE: no line; RELEASED: its release; SHIPPED: its release and line; VOID: no line)', NEW."id", NEW."status"
       USING ERRCODE = 'check_violation';
   END IF;
   IF (NEW."status" = 'VOID') <> (NEW."voidedAt" IS NOT NULL) OR (NEW."status" = 'VOID') <> (btrim(coalesce(NEW."voidReason", '')) <> '') THEN
@@ -808,7 +927,7 @@ CREATE CONSTRAINT TRIGGER "Shipment_shipped_has_ddt" AFTER UPDATE ON "Shipment"
 --                           session also checks that the line is of the shipment's order (the floor reads no sales
 --                           order). It holds at most its garments' serials.
 --   released only           under a transaction lock per cell: the cell's lines over every shipment that is not
---                           CANCELLED never pass the cell's quality releases.
+--                           CANCELLED never pass the cell's quality releases less their reversals.
 --   TRUNCATE                refused.
 CREATE FUNCTION "factory_shipment_line_guard"() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -880,13 +999,14 @@ BEGIN
   END IF;
 
   PERFORM pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.ship-cell', NEW."tenantId", NEW."workOrderSizeId"), 0));
-  SELECT coalesce(sum(r."quantity"), 0) INTO released
-    FROM "QualityRelease" r WHERE r."tenantId" = NEW."tenantId" AND r."workOrderSizeId" = NEW."workOrderSizeId";
+  SELECT (SELECT coalesce(sum(r."quantity"), 0) FROM "QualityRelease" r WHERE r."tenantId" = NEW."tenantId" AND r."workOrderSizeId" = NEW."workOrderSizeId")
+       - (SELECT coalesce(sum(v."quantity"), 0) FROM "QualityReleaseReversal" v WHERE v."tenantId" = NEW."tenantId" AND v."workOrderSizeId" = NEW."workOrderSizeId")
+    INTO released;
   SELECT coalesce(sum(l."quantity"), 0) INTO shipped
     FROM "ShipmentLine" l JOIN "Shipment" sh ON sh."tenantId" = l."tenantId" AND sh."id" = l."shipmentId"
    WHERE l."tenantId" = NEW."tenantId" AND l."workOrderSizeId" = NEW."workOrderSizeId" AND l."id" <> NEW."id" AND sh."status" <> 'CANCELLED';
   IF shipped + NEW."quantity" > released THEN
-    RAISE EXCEPTION 'shipping: only released garments ship (QHS-058): cell % has % released and % on other shipments; shipment line % of % is refused', NEW."workOrderSizeId", released, shipped, NEW."id", NEW."quantity"
+    RAISE EXCEPTION 'shipping: only released garments ship (QHS-058): cell % has % released (less reversals) and % on other shipments; shipment line % of % is refused', NEW."workOrderSizeId", released, shipped, NEW."id", NEW."quantity"
       USING ERRCODE = 'check_violation';
   END IF;
   RETURN NEW;

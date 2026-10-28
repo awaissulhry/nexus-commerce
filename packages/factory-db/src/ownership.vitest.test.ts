@@ -84,6 +84,7 @@ describe('model ownership', () => {
       'PurchaseOrder',
       'PurchaseOrderLine',
       'QualityRelease',
+      'QualityReleaseReversal',
       'Quote',
       'QuoteAcceptance',
       'QuoteApproval',
