@@ -148,6 +148,7 @@ import { LinkTabsExample } from './LinkTabsExample'
 import { ReviewChangesModalExample } from './ReviewChangesModalExample'
 import { DetailModalExample } from './DetailModalExample'
 import { ReviewPartsExample } from './ReviewPartsExample'
+import { SizeGridExample } from './size-grid/SizeGridExample'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -1077,6 +1078,7 @@ export function TokenCatalog() {
         <BidPartsExample />
         <HarvestPartsExample />
         <NegativesPartsExample />
+        <SizeGridExample />
 
         <GridCard toolbar={<GridToolbar count={<><b>{GDS_ROWS.length}</b> campaigns</>} />}>
           <NexusGrid<GdsRow> density="cozy" domLayout="autoHeight" rowData={GDS_ROWS} getRowId={GDS_ROW_ID} columnDefs={GDS_COLS} rowSelection={gdsSelection} selectionColumnDef={GDS_SELECTION_COLUMN} pinnedBottomRowData={GDS_TOTALS} />

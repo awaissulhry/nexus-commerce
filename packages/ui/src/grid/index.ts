@@ -147,3 +147,4 @@ export { intentMeta, factMeta, verdictMeta, presenceVerdict, presenceLine, PRESE
 export { CellSaveMark, type CellSaveMarkProps } from './renderers/CellSaveMark'
 export { SheetStatuses, type SheetStatus, type SheetStatusesProps } from './toolbars/SheetStatus'
 export { frictionFor, requiresAcknowledgement, reversalSentence, validateAction, type Reach, type Fidelity, type ActionReversal, type ActionSubject, type ActionFinding, type ActionRefusal, type ActionHandoff, type ActionReview } from './actions/registry'
+export * from './size-grid' // gap G9 (2026-10-28): colour × size quantities, SizeGridEditor and SizeGridView
