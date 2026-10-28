@@ -3,19 +3,6 @@
  * look of every control is the design system's; this file places them, with semantic tokens only (spacing, the edge
  * that tells an internal note from a shared message, muted text).
  */
-/* The design system's controls assume border-box sizing (Commerce gets it from its Tailwind preflight); factory-web's
-   base.css has no global reset yet, so the panels set it for their own parts (and the PDF viewer's dialog body). */
-.fw-rp,
-.fw-rp *,
-.fw-rp *::before,
-.fw-rp *::after,
-.fw-rp-preview,
-.fw-rp-preview *,
-.fw-rp-preview *::before,
-.fw-rp-preview *::after {
-  box-sizing: border-box;
-}
-
 .fw-rp {
   min-width: 0;
 }

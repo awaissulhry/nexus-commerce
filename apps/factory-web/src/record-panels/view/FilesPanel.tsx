@@ -97,16 +97,14 @@ export function FilesPanel({ model, actions, now }: { model: RecordPanelsViewMod
 
       <Modal open={!!model.preview} onClose={() => actions?.onClosePreview?.()} title={model.preview?.name ?? ''} size="xl">
         {model.preview && (
-          <div className="fw-rp-preview">
-            <PdfViewer
-              src={model.preview.src}
-              title={model.preview.name}
-              fileName={model.preview.name}
-              labels={pdfViewerLabels(shellT)}
-              onDownload={actions?.onDownload ? () => actions.onDownload?.(model.preview!.fileId) : undefined}
-              height="min(70vh, 720px)"
-            />
-          </div>
+          <PdfViewer
+            src={model.preview.src}
+            title={model.preview.name}
+            fileName={model.preview.name}
+            labels={pdfViewerLabels(shellT)}
+            onDownload={actions?.onDownload ? () => actions.onDownload?.(model.preview!.fileId) : undefined}
+            height="min(70vh, 720px)"
+          />
         )}
       </Modal>
     </div>

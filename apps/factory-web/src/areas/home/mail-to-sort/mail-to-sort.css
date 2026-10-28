@@ -3,23 +3,6 @@
  * the design system's; this file places them with semantic tokens only. The mail itself is drawn in a sandboxed frame
  * (its own document: model.ts mailDocument).
  */
-/* Border-box for the design system's controls (factory-web's base.css has no global reset yet): the page, the detail's
-   body and the dialogs, which the modals draw outside the page. */
-.fw-mts,
-.fw-mts *,
-.fw-mts *::before,
-.fw-mts *::after,
-.fw-mts-detail,
-.fw-mts-detail *,
-.fw-mts-detail *::before,
-.fw-mts-detail *::after,
-.fw-mts-dialog,
-.fw-mts-dialog *,
-.fw-mts-dialog *::before,
-.fw-mts-dialog *::after {
-  box-sizing: border-box;
-}
-
 .fw-mts {
   display: flex;
   flex-direction: column;
