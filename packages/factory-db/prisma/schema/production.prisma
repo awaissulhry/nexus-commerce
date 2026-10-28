@@ -20,8 +20,8 @@
 // profile revision is never edited in place (parties.prisma), so naming it freezes it.
 //
 // One batch number per work order (MES-076, PRD-025, Reg. (EU) 2016/425 art. 8(5): batch or serial on the PPE): set at
-// release from the company's BATCH series, never changed, never shared (unique in the tenant). Serials per garment, if
-// the Owner picks them (PRD-025), come with a later wave.
+// release from the company's BATCH series, never changed, never shared (unique in the tenant). A serial per garment as
+// well, for a style that is serial-tracked (Q31: Style.garmentTracking), is quality.prisma's GarmentSerial.
 //
 // The floor writes ledgers, not counters: the cut log (CutLog, CutLogPiece), the bundles and the operation scans hold
 // what happened; progress, WIP per operation (MES-167) and a hide's yield are sums of them. Cut logs and scans are
@@ -139,6 +139,8 @@ model WorkOrder {
   cutLogs       CutLog[]
   bundles       Bundle[]
   scans         OperationScan[]
+  // quality.prisma: its final inspections.
+  inspections   Inspection[]
 
   @@unique([tenantId, companyId, number])
   @@unique([tenantId, batchNumber])
@@ -201,6 +203,13 @@ model WorkOrderSize {
   materials          WorkOrderMaterial[]
   cutPieces          CutLogPiece[]
   bundles            Bundle[]
+  // quality.prisma: the defects found in it, its releases, their reversals and its garments' serials.
+  inspectionDefects       InspectionDefect[]
+  qualityReleases         QualityRelease[]
+  qualityReleaseReversals QualityReleaseReversal[]
+  garmentSerials     GarmentSerial[]
+  // shipping.prisma: the shipment lines that ship it.
+  shipmentLines      ShipmentLine[]
 
   @@unique([tenantId, workOrderId, colourwayId, size])
   // The target of the materials', cut pieces' and bundles' references: a cell of the same site and work order.

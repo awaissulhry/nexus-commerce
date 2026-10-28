@@ -140,6 +140,8 @@ model Worker {
   noticeAcks     WorkerNoticeAck[]
   cutLogs        CutLog[]
   operationScans OperationScan[]
+  // quality.prisma: the final inspections the worker made as the inspector.
+  inspections    Inspection[]
 
   @@unique([tenantId, employeeCode])
   // The target of the tenant- and site-safe references from the worker's rows.
