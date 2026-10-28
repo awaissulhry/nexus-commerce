@@ -281,6 +281,7 @@ Modules: `modules/compliance/certificates` (certificate register and gate `certi
 
 ## Modules
 - Product › materials (`src/modules/product/materials/`, B-W1-09): office routes `/product/materials…` (product.materials.view | manage | cost; the standard cost has its own PUT route, money.cost to send or see it), the `product.materials` importer in IMPORTERS; the rules and unit conversions are factory-domain `product/{materials,units}`; every read names its columns (`store.ts`); no floor route (the floor reads materials through its work orders).
+- Product › styles (`src/modules/product/styles/`, B-W1-11): office routes `/product/styles…` and `/product/size-scales…` (product.styles.view | manage): styles, colourways, the colour x size SKU matrix (generate, follow the range and colourways, cells on/off, GTIN), DRAFT revision shells, size scales; rules in factory-domain `product/{styles,sizes}`; lock the style (or scale) row first, then compare-and-set the child's version (`store.ts`); `Style` has a thread.
 
 ## Documents and printing (`src/platform/{documents,print}/`, `src/adapters/print-relay/`, plan A1 §3.9; GAP-007, GAP-008)
 - Documents: the issuing module builds its frozen document (`@nexus/factory-domain/documents`: QUOTE, PURCHASE_ORDER,
