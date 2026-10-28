@@ -54,6 +54,44 @@
     },
     "lint": {
       "outputs": []
+    },
+    // The factory workspaces (apps/factory-api, apps/factory-web, packages/factory-db, packages/factory-domain,
+    // packages/db-kit). They use neither @nexus/shared nor @nexus/events, so these entries replace the generic tasks
+    // above for them. The factory packages export TypeScript source: `^typecheck` puts the factory packages a workspace
+    // depends on into its cache key (turbo hashes only a package's own folder and the tasks it depends on), and runs
+    // factory-db's `prisma generate` before anything that imports its client. Strict env mode: FACTORY_API_URL reaches
+    // the web's build and dev server only because it is listed here.
+    "@nexus/db-kit#typecheck": {
+      "outputs": []
+    },
+    "@nexus/factory-domain#typecheck": {
+      "outputs": []
+    },
+    "@nexus/factory-db#typecheck": {
+      "dependsOn": ["^typecheck"],
+      "outputs": ["src/generated/**"]
+    },
+    "@nexus/factory-api#typecheck": {
+      "dependsOn": ["^typecheck"],
+      "outputs": []
+    },
+    "@nexus/factory-web#typecheck": {
+      "dependsOn": ["^typecheck"],
+      "outputs": []
+    },
+    "@nexus/factory-api#build": {
+      "dependsOn": ["^typecheck"],
+      "outputs": ["dist/**"]
+    },
+    "@nexus/factory-web#build": {
+      "dependsOn": ["^typecheck"],
+      "env": ["FACTORY_API_URL"],
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
+    "@nexus/factory-web#dev": {
+      "cache": false,
+      "persistent": true,
+      "passThroughEnv": ["FACTORY_API_URL"]
     }
   }
 }

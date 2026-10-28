@@ -1,0 +1,6 @@
+# Written by `next typegen`, `next dev` and `next build`.
+next-env.d.ts
+*.tsbuildinfo
+# Playwright output.
+/test-results/
+/playwright-report/

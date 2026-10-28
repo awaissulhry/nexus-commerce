@@ -1,0 +1,33 @@
+{
+  "name": "@nexus/factory-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3200",
+    "build": "next build",
+    "start": "next start -p 3200",
+    "typecheck": "next typegen && tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nexus/factory-domain": "*",
+    "@tanstack/react-query": "^5.104.2",
+    "@zxing/browser": "^0.2.0",
+    "@zxing/library": "^0.22.0",
+    "lucide-react": "^0.469.0",
+    "next": "16.3.5",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "fake-indexeddb": "^6.2.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.5"
+  }
+}

@@ -94,3 +94,8 @@ ds-bundle/
 # 78 of them, regenerated every sync, and a stale one next to its .tsx invites the reader to trust
 # the wrong file. TypeScript resolves .ts/.tsx first so they do not shadow anything at build time.
 apps/web/src/design-system/**/*.d.ts
+
+# Factory: the per-step helper notes (never committed) and the factory API's local env file (already covered by
+# .env above; named here so a later change to that rule cannot expose it).
+STEP-NOTES.md
+apps/factory-api/.env
