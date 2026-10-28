@@ -145,7 +145,7 @@ const STAMP_FILES = [
   // build was unchanged. `flaggedColumns.ts` feeds `flaggedKeys`, which decides part of the column
   // SET. Both are on the read path; neither was on the stamp. The stamp is a property of the PATH,
   // and the path grows whenever someone moves a number into a new file.
-  'apps/web/src/design-system/grid/columns/presets.ts',
+  'packages/ui/src/grid/columns/presets.ts',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/flaggedColumns.ts',
   // 🔴 ADDED 2026-09-02 (#741). The identity band is now the WHOLE pinned geometry on every scope,
   // so the files that derive its width are a term in every §9.1 shortfall this suite prints. The hub
@@ -154,9 +154,9 @@ const STAMP_FILES = [
   // 16:51 — a file on the read path that nobody had listed, which is the exact hole the stamp exists
   // to close and the third time today the path grew under it. `buildSkuFont` needs no entry of its
   // own: the hoist landed inside `bandWidth.ts:80`.
-  'apps/web/src/design-system/grid/renderers/bandWidth.ts',
-  'apps/web/src/design-system/grid/renderers/IdentityBand.tsx',
-  'apps/web/src/design-system/grid/renderers/readiness.ts',
+  'packages/ui/src/grid/renderers/bandWidth.ts',
+  'packages/ui/src/grid/renderers/IdentityBand.tsx',
+  'packages/ui/src/grid/renderers/readiness.ts',
   // 🔴 ADDED 2026-09-02 (#746), decided from the IMPORT GRAPH rather than from anyone's list — the
   // hub asked whether four candidates belonged and the graph said all four do:
   //  · `renderers/index.ts` — the BARREL. `design-system/grid/index.ts:67` is `export * from
@@ -171,7 +171,7 @@ const STAMP_FILES = [
   //    types-only: it exports `aliasKeyOf` (:433), `wireAliasKey` (:448) and `studioRowId` (:452) as
   //    RUNTIME functions, and `rows.ts:22` imports two of them as values. The name was the argument
   //    for excluding it; the exports are the evidence for keeping it.
-  'apps/web/src/design-system/grid/renderers/index.ts',
+  'packages/ui/src/grid/renderers/index.ts',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/channel/AliasBandCell.tsx',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/channel/rows.ts',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/channel/types.ts',
@@ -194,8 +194,8 @@ const STAMP_FILES = [
   'apps/web/src/app/products/[id]/edit/_studio/StudioBar.tsx',
   'apps/web/src/app/products/[id]/edit/_studio/StudioHeader.tsx',
   'apps/web/src/app/products/[id]/edit/_studio/studio.module.css',
-  'apps/web/src/design-system/grid/theme/grid.css',
-  'apps/web/src/design-system/grid/hosts/GridSheet.tsx',
+  'packages/ui/src/grid/theme/grid.css',
+  'packages/ui/src/grid/hosts/GridSheet.tsx',
 ]
 const stampOf = () => STAMP_FILES.map((f) => { try { return `${statSync(f).mtimeMs}` } catch { return 'MISSING' } }).join('|')
 /**

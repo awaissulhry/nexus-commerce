@@ -50,6 +50,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const ROOT = join(process.cwd(), 'apps/web/src');
+// The web's design system lives in @nexus/ui since it moved out of apps/web/src; its files are named repo-relative.
+const UI_ROOT = join(process.cwd(), 'packages/ui/src');
 
 /** Re-pinned to channels under `.h10-shell` (apps/web/src/app/_shared/shared-shell.css). */
 const CHANNEL_TIER = new Set([
@@ -71,7 +73,7 @@ const CHANNEL_SCOPE = 'app/marketing/ads/';
 /** …minus the file that DEFINES the pin, which necessarily writes the raw triplets. */
 const DEFINERS = ['app/_shared/shared-shell.css', 'app/globals.css',
                   'app/products/next/products-next-shell.css', 'app/fleet/fleet-pages.css',
-                  'design-system/styles/'];
+                  'packages/ui/src/styles/'];
 
 const WRAPPED = /rgb\(\s*var\((--[a-z0-9-]+)\)\s*\)/g;
 
@@ -183,8 +185,8 @@ const violations = [];
 const REPO = process.cwd();
 violations.push(...tailwindViolations(readFileSync(join(REPO, TAILWIND_CONFIG), 'utf8'), TAILWIND_CONFIG));
 violations.push(...globalsViolations(readFileSync(join(REPO, GLOBALS_CSS), 'utf8'), GLOBALS_CSS));
-for (const file of walk(ROOT)) {
-  const rel = relative(ROOT, file);
+const scanned = [...walk(ROOT).map((f) => [f, relative(ROOT, f)]), ...walk(UI_ROOT).map((f) => [f, relative(process.cwd(), f)])];
+for (const [file, rel] of scanned) {
   if (DEFINERS.some((d) => rel.startsWith(d))) continue;
   const raw = readFileSync(file, 'utf8');
   // Comments are stripped, never checked: several of these files DOCUMENT the wrong form on

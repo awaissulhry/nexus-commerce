@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * The design system is self-contained — `apps/web/src/design-system`.
+ * The design system is self-contained — `packages/ui/src` (`@nexus/ui`).
  *
  * WHY THIS EXISTS
- * The design system is meant to move as ONE folder (into its own package) and to be used by more
- * than one app. It can only do that if nothing in it reaches out of it. One import of app code, or
+ * The design system is its own package (it moved there from `apps/web/src/design-system` as ONE
+ * folder) and is used by more than one app. It can only stay that way if nothing in it reaches out of it. One import of app code, or
  * one `@/…` alias (which means "this app's src/"), and the folder no longer builds anywhere else.
  * App code may import the design system; the design system may not import app code.
  *
  * THE RULE (strict, no baseline: the count is zero)
- * A file under `apps/web/src/design-system/` imports only
+ * A file under `packages/ui/src/` imports only
  *   - a relative path that stays inside that folder, and
  *   - an npm package.
  * It never imports through an alias (`@/…`, or any other `paths` key in `apps/web/tsconfig.json`),
@@ -38,7 +38,7 @@ import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
-const DS_REL = 'apps/web/src/design-system'
+const DS_REL = 'packages/ui/src'
 const DS = join(ROOT, DS_REL)
 const TSCONFIG = join(ROOT, 'apps/web/tsconfig.json')
 const CODE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/

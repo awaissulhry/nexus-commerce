@@ -27,6 +27,8 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(here, '..')
 const appDir = path.join(root, 'apps/web/src/app')
 const srcDir = path.join(root, 'apps/web/src')
+// The web's design system lives in @nexus/ui (packages/ui/src) since it moved out of apps/web/src.
+const uiDir = path.join(root, 'packages/ui/src')
 
 // Build route index from page.tsx + route.ts files (Next.js App
 // Router treats both as route entry points; route.ts is for
@@ -77,7 +79,7 @@ const pass = (m) => console.log(`✓ ${m}`)
 const hrefRe = /href=(?:"([^"]+)"|\{['"`]([^'"`]+)['"`]\})/g
 const links = new Map()
 let totalStatic = 0
-for (const file of walk(srcDir)) {
+for (const file of [...walk(srcDir), ...walk(uiDir)]) {
   const src = fs.readFileSync(file, 'utf8')
   let m
   while ((m = hrefRe.exec(src)) !== null) {
@@ -112,7 +114,7 @@ const bcRe = /breadcrumbs=\{\s*\[([\s\S]*?)\]\s*\}/g
 const itemRe = /\{\s*label:\s*['"`][^'"`]+['"`]\s*,\s*href:\s*['"`]([^'"`]+)['"`]/g
 const broken2 = []
 let totalCrumbs = 0
-for (const file of walk(srcDir)) {
+for (const file of [...walk(srcDir), ...walk(uiDir)]) {
   const src = fs.readFileSync(file, 'utf8')
   let bm
   while ((bm = bcRe.exec(src)) !== null) {
@@ -148,7 +150,7 @@ const ENUM_ALLOWLIST = [
 const tmplRe = /href=\{`([^`]+)`\}/g
 const broken3 = []
 let totalTmpl = 0
-for (const file of walk(srcDir)) {
+for (const file of [...walk(srcDir), ...walk(uiDir)]) {
   const src = fs.readFileSync(file, 'utf8')
   let m
   while ((m = tmplRe.exec(src)) !== null) {

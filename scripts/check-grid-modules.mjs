@@ -47,14 +47,14 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 const ROOT = new URL('..', import.meta.url).pathname
-const MODULES_FILE = 'apps/web/src/design-system/grid/modules.ts'
+const MODULES_FILE = 'packages/ui/src/grid/modules.ts'
 
 /**
  * Where production grids live. The grid LAB is excluded on purpose: it registers the wildcard
  * itself (`labModules.ts`), so a feature used only there is legitimately unregistered here — and
  * that exclusion is precisely why the lab could not catch either incident.
  */
-const SCAN_DIRS = ['apps/web/src/design-system/grid', 'apps/web/src/app']
+const SCAN_DIRS = ['packages/ui/src/grid', 'apps/web/src/app']
 const EXCLUDE = [/apps\/web\/src\/app\/design\/grid-lab\//, /\.vitest\.test\./, /\/node_modules\//]
 
 /**

@@ -15,7 +15,7 @@
    Sep 13 source) — so the import failed with "does not provide an export named variationThemeWrite" for a
    function that has existed for hours. A stale declaration is not a missing export; that error is the
    declaration talking. */
-const { variationThemeWrite } = await import('../apps/web/src/design-system/grid/editors/sheetWriter.ts')
+const { variationThemeWrite } = await import('../packages/ui/src/grid/editors/sheetWriter.ts')
 
 const API = 'http://127.0.0.1:8091'
 const GALE = 'cmokmy3a40078pm0p1fvnu523'

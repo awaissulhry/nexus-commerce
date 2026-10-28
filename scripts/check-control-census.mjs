@@ -124,7 +124,7 @@ function assertAllowListIsReal() {
      `apps/web/src` were in that state, one of them in `design-system/grid/workspace/`. Verified
      NUL-safely that no allowed name lives only in a blinded file today — but a check that could
      be blinded tomorrow is not a check. */
-  const root = 'apps/web/src/design-system'
+  const root = 'packages/ui/src'
   const seen = new Set()
   const walk = (dir) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -156,10 +156,10 @@ const STUDIO = `${PAGE_BASE}/products/${PRODUCT}/edit/studio`
  *  must run this gate. A path ending `/` covers everything under it. */
 const STAMP_FILES = [
   'apps/web/src/app/products/[id]/edit/_studio/',
-  'apps/web/src/design-system/components/',
-  'apps/web/src/design-system/primitives/',
-  'apps/web/src/design-system/patterns/',
-  'apps/web/src/design-system/styles/',
+  'packages/ui/src/components/',
+  'packages/ui/src/primitives/',
+  'packages/ui/src/patterns/',
+  'packages/ui/src/styles/',
   'scripts/check-control-census.mjs',
   'scripts/studio-browser-auth.mjs',
   'scripts/studio-variants-selection.mjs',

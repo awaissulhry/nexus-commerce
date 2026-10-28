@@ -1,13 +1,8 @@
 import { expect, it } from 'vitest'
-import { listingStatusMeta, LISTING_STATUSES } from './listingStatus'
-it('normalises provider case without claiming channel verification', () => {
- for (const raw of ['ACTIVE','Active','active',' LIVE ']) expect(listingStatusMeta(raw)).toMatchObject({ label: 'Listed', tone: 'info' })
- expect(listingStatusMeta('Completed').label).toBe('Ended')
- expect(listingStatusMeta('ARCHIVED').label).toBe('Archived')
- expect(listingStatusMeta('future-token')).toMatchObject({ label: 'future-token', tone: 'neutral' })
- expect(listingStatusMeta(null).label).toBe('Not recorded')
- for (const s of LISTING_STATUSES) expect(listingStatusMeta(s).tone).not.toBe('success')
-})
+import { LISTING_STATUSES } from '@/design-system/grid/renderers/listingStatus'
+// The design system's listing-status vocabulary against the statuses the API's writers emit. It moved here from the
+// design system's own test (packages/ui/src/grid/renderers/listingStatus.vitest.test.ts) because it walks apps/api/src,
+// a folder outside that package.
 
 // Re-derive literal and conditional status writes; ordering metadata is a positive exclusion control.
 import ts from 'typescript'
@@ -40,7 +35,7 @@ function emittedStatuses(text: string) {
 it('covers the vocabulary currently emitted by API source writers, without treating orderBy as a status', () => {
  expect([...emittedStatuses("write({ orderBy: { listingStatus: 'asc' }, data: { listingStatus: active ? 'ACTIVE' : 'INACTIVE' } })")].sort()).toEqual(['ACTIVE','INACTIVE'])
  const walk = (root: string): string[] => readdirSync(root, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(join(root, e.name)) : e.name.endsWith('.ts') && !e.name.includes('.test.') ? [join(root, e.name)] : [])
- const files = walk(fileURLToPath(new URL('../../../../../api/src', import.meta.url)))
+ const files = walk(fileURLToPath(new URL('../../../api/src', import.meta.url)))
  expect(files.length).toBeGreaterThan(100)
  const emitted = new Set(files.flatMap(file => [...emittedStatuses(readFileSync(file, 'utf8'))]))
  expect(emitted.has('DRAFT')).toBe(true); expect(emitted.has('SUPPRESSED')).toBe(true)

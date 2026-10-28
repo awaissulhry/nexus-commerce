@@ -66,11 +66,11 @@ const GATES = {
   // 5b (2026-10-04) — every Amazon negative goes through the one negative write service; baseline 0.
   'negative write path (5b)': node('scripts/check-negative-write-path.mjs', '--check'),
   'inbound ledger (P2.1)': node('scripts/check-inbound-ledger.mjs'),
-  'web tokens.css in sync': tsx('apps/web/src/design-system/tools/generate-tokens-css.ts', undefined, '--check'),
+  'web tokens.css in sync': tsx('packages/ui/src/tools/generate-tokens-css.ts', undefined, '--check'),
   'factory tokens.css in sync': tsx('apps/factory/src/design-system/tools/generate-tokens-css.ts', undefined, '--check'),
   'token resolution': node('scripts/check-token-resolution.mjs', '--check'),
   'dark ⇄ pin parity': node('scripts/check-dark-pin-parity.mjs'),
-  'DS token guard': node('apps/web/src/design-system/tools/token-guard.mjs'),
+  'DS token guard': node('packages/ui/src/tools/token-guard.mjs'),
   'AG Grid import boundary': node('scripts/check-ag-grid-import-boundary.mjs'),
   'grid option identity': node('scripts/check-grid-option-identity.mjs'),
   'grid kit': node('scripts/check-grid-kit-ratchet.mjs', '--check'),
@@ -103,7 +103,7 @@ const GATES = {
   'sheet editor coverage': node('scripts/check-sheet-editor-coverage.mjs', '--check'),
   'sheet CI dependency paths and skip policy': node('apps/web/smoke/sheet/ci-policy.mjs', 'self-test'),
   'sheet editor coverage self-test': node('scripts/check-sheet-editor-coverage.mjs', '--self-test'),
-  'DS api guard': node('apps/web/src/design-system/tools/api-guard.mjs'),
+  'DS api guard': node('packages/ui/src/tools/api-guard.mjs'),
 }
 
 if (process.argv.includes('--list')) {

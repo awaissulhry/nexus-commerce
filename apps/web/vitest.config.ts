@@ -22,9 +22,13 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   // Component contract tests render the real editors in Node; compile Next's preserved JSX.
   oxc: { jsx: { runtime: 'automatic' } },
-  // Matches `paths: { "@/*": ["./src/*"] }` in tsconfig.json — the tests import through it.
+  // Matches `paths` in tsconfig.json — the tests import through it. `@/design-system/` comes first: the design system
+  // lives in @nexus/ui (packages/ui/src), and `@` alone would send those imports to src/design-system, which is gone.
   resolve: {
-    alias: { '@': path.resolve(__dirname, 'src') },
+    alias: [
+      { find: /^@\/design-system\//, replacement: `${path.resolve(__dirname, '../../packages/ui/src')}/` },
+      { find: '@', replacement: path.resolve(__dirname, 'src') },
+    ],
   },
   test: {
     include: ['src/**/*.vitest.test.ts'],

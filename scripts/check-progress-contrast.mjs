@@ -36,7 +36,7 @@ const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '')
 const argv = process.argv.slice(2)
 const tokensAt = argv.indexOf('--tokens')
 if (tokensAt >= 0 && !argv[tokensAt + 1]) throw new Error('--tokens requires a path')
-const TOKENS_CSS = tokensAt >= 0 ? argv[tokensAt + 1] : `${ROOT}/apps/web/src/design-system/styles/tokens.css`
+const TOKENS_CSS = tokensAt >= 0 ? argv[tokensAt + 1] : `${ROOT}/packages/ui/src/styles/tokens.css`
 const BAR = 3
 
 // ── WCAG maths ──────────────────────────────────────────────────────────────────────────────────────────────────────

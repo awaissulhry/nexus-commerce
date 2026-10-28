@@ -46,7 +46,7 @@ const DEFAULT_ROOTS = {
   'apps/web/src/app/marketing/ads/rules-automation': 19,
   // First DS census under the original detector, 2026-09-13: 10 web / 8 Factory.
   // Frozen BEFORE tightening. New detector findings must be repaired, never re-baselined.
-  'apps/web/src/design-system': 10,
+  'packages/ui/src': 10,
   'apps/factory/src/design-system': 8,
 }
 const positional = process.argv.slice(2).filter(arg => !arg.startsWith('--'))

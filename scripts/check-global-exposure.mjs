@@ -43,7 +43,7 @@
 import { readFileSync, existsSync } from 'fs'
 import { execSync } from 'child_process'
 
-const ROOTS = ['apps/web/src', 'apps/factory/src']
+const ROOTS = ['apps/web/src', 'packages/ui/src', 'apps/factory/src']
 /**
  * 🔴 1, not the 2 this door was commissioned at. The two live cases were routed the moment they were
  * found; DS.2 landed `use-factory-events.ts` at 06:50 — the `globalThis` singleton is now a

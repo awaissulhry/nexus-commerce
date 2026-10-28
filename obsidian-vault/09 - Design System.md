@@ -4,7 +4,7 @@
 
 ## Location
 
-`apps/web/src/design-system/`
+`packages/ui/src/` — the `@nexus/ui` package (until 2026-10-28 `apps/web/src/design-system/`); the web imports it as `@/design-system/*`.
 
 ## Rule
 

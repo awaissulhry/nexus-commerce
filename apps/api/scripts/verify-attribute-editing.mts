@@ -6,9 +6,9 @@ import { coerceForShape } from '../src/services/pim/sheet-values.ts'
 import { channelValuePatch, storedChannelState } from '../src/services/pim/channel-value-mutation.ts'
 
 const require = createRequire(import.meta.url)
-const { parseScalarValue, booleanLabel } = require('../../web/src/design-system/grid/editors/scalarValue.ts')
-const { parseShape } = require('../../web/src/design-system/grid/editors/shapeValue.ts')
-const { formatMeasure } = require('../../web/src/design-system/grid/renderers/shapeFormat.ts')
+const { parseScalarValue, booleanLabel } = require('../../../packages/ui/src/grid/editors/scalarValue.ts')
+const { parseShape } = require('../../../packages/ui/src/grid/editors/shapeValue.ts')
+const { formatMeasure } = require('../../../packages/ui/src/grid/renderers/shapeFormat.ts')
 
 const base = process.env.ATTRIBUTE_QA_API ?? 'http://localhost:8091'
 const product = process.env.ATTRIBUTE_QA_PRODUCT ?? 'cmokmy3a40078pm0p1fvnu523'

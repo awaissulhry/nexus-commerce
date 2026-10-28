@@ -1,9 +1,9 @@
 /** Presence wire: canonical DS types, no readiness-state copy. */
 // In services/presence/types.ts; these resolve to the canonical DS source.
 import type { PresenceIntent, ChannelFact, PresenceVerdict }
-  from '@nexus/web/src/design-system/grid/renderers/presence'
+  from '@nexus/ui/grid/renderers/presence'
 import type { Reach, ActionReversal, ActionHandoff }
-  from '@nexus/web/src/design-system/grid/actions/registry'
+  from '@nexus/ui/grid/actions/registry'
 import type { ListingCoordinate } from '../../lib/listing-coordinate.js'
 
 export interface NamedCoordinate {

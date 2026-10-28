@@ -1,0 +1,33 @@
+{
+  // The compiler options apps/web/tsconfig.json gave these files before they moved out of apps/web/src, so every tool
+  // that reads the NEAREST tsconfig (editors, Vite's transform, the bundler) treats them exactly as before. No `paths`:
+  // the design system imports only its own files (relative) and npm packages (scripts/check-ds-self-contained.mjs).
+  // The web's typecheck (`npm run typecheck -w @nexus/web`) checks every file here; its tsconfig includes this folder.
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "preserve",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowJs": true
+  },
+  "include": [
+    "src"
+  ]
+}

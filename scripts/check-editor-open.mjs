@@ -127,7 +127,7 @@ process.on('exit', () => {
  * and a gate asserting yesterday's caps passes for the wrong reason. If the parse cannot find them
  * the run FAILS: "the gate could not read what it is asserting" is not a pass.
  */
-const CAPS_SOURCE = 'apps/web/src/design-system/grid/editors/editorBox.ts'
+const CAPS_SOURCE = 'packages/ui/src/grid/editors/editorBox.ts'
 /**
  * 🔴 THE CONTRACT TABLE IS THE GATE'S INPUT, not a description of it. Parsed from the document, so
  * there is no second copy to drift from: edit a cell in the doc and the next run asserts the new
@@ -188,10 +188,10 @@ function readCaps() {
 const readConstant = (file, name) => {
   try { return readFileSync(file, 'utf8').match(new RegExp(`export const ${name} = '([^']+)'`))?.[1] ?? null } catch { return null }
 }
-const NUMBER_ONLY_MESSAGE = readConstant('apps/web/src/design-system/grid/editors/numberEntry.ts', 'NUMBER_ONLY_MESSAGE')
-const EDITOR_KEY_HINT = readConstant('apps/web/src/design-system/grid/editors/editorHint.ts', 'EDITOR_KEY_HINT')
+const NUMBER_ONLY_MESSAGE = readConstant('packages/ui/src/grid/editors/numberEntry.ts', 'NUMBER_ONLY_MESSAGE')
+const EDITOR_KEY_HINT = readConstant('packages/ui/src/grid/editors/editorHint.ts', 'EDITOR_KEY_HINT')
 /* R-55 (Step 4.3 #3) — the bullets editor's own key line (Tab moves between bullets there), read the same way. */
-const EDITOR_KEY_HINT_FORM = readConstant('apps/web/src/design-system/grid/editors/editorHint.ts', 'EDITOR_KEY_HINT_FORM')
+const EDITOR_KEY_HINT_FORM = readConstant('packages/ui/src/grid/editors/editorHint.ts', 'EDITOR_KEY_HINT_FORM')
 
 // The document owns the driving columns and modes for the four scalar editor arms too.
 const scalarContract = readContract()
@@ -202,19 +202,19 @@ if (KINDS.length !== 4) { console.error('The contract must declare four fresh sc
 
 const STAMP_FILES = [
   CONTRACT_DOC,
-  'apps/web/src/design-system/grid/NexusGrid.tsx',
-  'apps/web/src/design-system/grid/editors/openGesture.ts',
-  'apps/web/src/design-system/grid/editors/editorBox.ts',
-  'apps/web/src/design-system/grid/editors/numberEntry.ts',
-  'apps/web/src/design-system/grid/editors/editorHint.ts',
-  'apps/web/src/design-system/grid/theme/grid.css',
-  'apps/web/src/design-system/grid/hosts/GridSheet.tsx',
+  'packages/ui/src/grid/NexusGrid.tsx',
+  'packages/ui/src/grid/editors/openGesture.ts',
+  'packages/ui/src/grid/editors/editorBox.ts',
+  'packages/ui/src/grid/editors/numberEntry.ts',
+  'packages/ui/src/grid/editors/editorHint.ts',
+  'packages/ui/src/grid/theme/grid.css',
+  'packages/ui/src/grid/hosts/GridSheet.tsx',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/master/columns.tsx',
   'scripts/check-editor-open.mjs',
   'scripts/studio-browser-auth.mjs',
   'scripts/lib/gate-write-guard.mjs',
-  'apps/web/src/design-system/grid/editors/FormulaCellEditor.tsx',
-  'apps/web/src/design-system/components/SourceIndicator.tsx',
+  'packages/ui/src/grid/editors/FormulaCellEditor.tsx',
+  'packages/ui/src/components/SourceIndicator.tsx',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/channel/CascadeCell.tsx',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/ProductSheet.tsx',
@@ -232,9 +232,9 @@ const STAMP_FILES = [
   'apps/web/src/app/products/[id]/edit/_studio/sheet/productSheetRows.ts',
   /* Step 4.3 #3 (A-52) — the bullets editor, its engine column, the channel builder that returns it, the studio placement
      and the landing that hides Bullet 1–10 (R-56). `master/channelColumns.tsx` builds every channel editor and was missing. */
-  'apps/web/src/design-system/grid/editors/slotList.ts',
-  'apps/web/src/design-system/grid/editors/SlotListEditor.tsx',
-  'apps/web/src/design-system/grid/editors/slotListColumn.ts',
+  'packages/ui/src/grid/editors/slotList.ts',
+  'packages/ui/src/grid/editors/SlotListEditor.tsx',
+  'packages/ui/src/grid/editors/slotListColumn.ts',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/master/channelColumns.tsx',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/slotListColumns.ts',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/views.ts',

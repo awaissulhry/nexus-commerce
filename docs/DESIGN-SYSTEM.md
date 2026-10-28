@@ -1,8 +1,8 @@
 # Legacy UI kit reference
 
-**For all new and changed UI, use `apps/web/src/design-system`.** Read
+**For all new and changed UI, use the design system, `@nexus/ui` (`packages/ui/src`).** Read
 [DESIGN.md](../DESIGN.md) for canonical tokens and
-[Contributing](../apps/web/src/design-system/docs/CONTRIBUTING.md) for components
+[Contributing](../packages/ui/src/docs/CONTRIBUTING.md) for components
 and reuse rules. New reusable UI belongs in that system and its living catalog.
 
 The reference below records the older `components/ui` kit during migration.

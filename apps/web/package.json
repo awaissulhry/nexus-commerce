@@ -20,6 +20,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@nexus/database": "*",
     "@nexus/shared": "*",
+    "@nexus/ui": "*",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.13.24",
     "@xyflow/react": "^12.11.1",

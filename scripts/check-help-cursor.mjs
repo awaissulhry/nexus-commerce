@@ -19,6 +19,8 @@ import { fileURLToPath } from 'node:url'
 // Resolved from this file's own location, not process.cwd(), so the guard gives the same
 // answer from the pre-push hook (repo root) and from any subdirectory.
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'apps/web/src')
+// The web's design system lives in @nexus/ui (packages/ui/src) since it moved out of apps/web/src.
+const UI_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'packages/ui/src')
 const PATTERNS = [/cursor\s*:\s*help/i, /cursor\s*:\s*['"]help['"]/i, /\bcursor-help\b/]
 const EXT = new Set(['.css', '.ts', '.tsx'])
 
@@ -38,6 +40,7 @@ const walk = (dir) => {
   }
 }
 walk(ROOT)
+walk(UI_ROOT)
 
 if (hits.length) {
   console.error(`❌ help-cursor ratchet: ${hits.length} occurrence(s) of a help cursor — the baseline is 0.`)
