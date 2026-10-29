@@ -4,6 +4,7 @@ import type { CellValue } from '@nexus/factory-domain/imports/cells'
 import { importerRegistry, type ExistingRecord, type Importer, type ImporterRegistry, type RecordValues, type RowValues } from '@nexus/factory-domain/imports/importer'
 import type { CommandTools, CommandTx } from '../../core/command'
 import { locationsImportAdapter } from '../../modules/inventory/locations/importer'
+import { partiesImportAdapter } from '../../modules/parties/importer'
 import { materialsImportAdapter } from '../../modules/product/materials/importer'
 
 /**
@@ -68,7 +69,7 @@ export interface ImportAdapter {
 export const defineImportAdapter = (adapter: ImportAdapter): ImportAdapter => Object.freeze({ ...adapter })
 
 /** The process's importers. Each module that brings an importer adds its adapter here. */
-export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([materialsImportAdapter, locationsImportAdapter])
+export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([materialsImportAdapter, locationsImportAdapter, partiesImportAdapter])
 
 let configured: ImporterRegistry<ImportAdapter> | undefined
 let fromList: ImporterRegistry<ImportAdapter> | undefined

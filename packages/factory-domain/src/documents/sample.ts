@@ -38,6 +38,12 @@ export function sampleDocument(type: DocumentType, language: DocumentLanguage, c
       return { ...base, totals, deliveryDate: date, deliveryTerms: 'EXW' }
     case 'INVOICE_COPY':
       return { ...base, totals, invoice: { kind: 'TD01' } }
+    case 'PACKING_LIST':
+      return {
+        ...base,
+        lines: LINES.map(({ code, description, quantity, uom }, index) => ({ code, description, quantity, uom, parcel: String(index + 1) })),
+        packing: { packages: 2, grossWeightKg: '12.5' },
+      }
     case 'DDT':
       return {
         ...base,
