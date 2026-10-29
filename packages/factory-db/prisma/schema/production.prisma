@@ -139,6 +139,9 @@ model WorkOrder {
   cutLogs       CutLog[]
   bundles       Bundle[]
   scans         OperationScan[]
+  // The floor's correction requests and refused scans about it (B-W1-42).
+  scanCorrectionRequests ScanCorrectionRequest[]
+  scanRefusals           FloorScanRefusal[]
   // quality.prisma: its final inspections.
   inspections   Inspection[]
 
@@ -250,6 +253,7 @@ model WorkOrderOperation {
   routingOperation RoutingOperation @relation(fields: [tenantId, styleRevisionId, routingSeq], references: [tenantId, revisionId, seq], onDelete: Restrict, onUpdate: Restrict)
   workCentre       WorkCentre       @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   scans            OperationScan[]
+  correctionRequests ScanCorrectionRequest[]
 
   @@unique([tenantId, workOrderId, seq])
   // The target of the scans' reference: an operation of the scan's site and work order.
@@ -404,6 +408,7 @@ model Bundle {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   device        Device?         @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   scans         OperationScan[]
+  correctionRequests ScanCorrectionRequest[]
 
   @@unique([tenantId, code])
   // The target of the scans' reference: a bundle of the scan's site and work order.
@@ -464,6 +469,12 @@ model OperationScan {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   corrects    OperationScan?     @relation("OperationScanCorrection", fields: [tenantId, siteId, correctsId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   correctedBy OperationScan[]    @relation("OperationScanCorrection")
+  // B-W1-42: its scrap and rework lines, the correction requests that name it (and the one its CORRECTION answered), the
+  // refused scans it resolved.
+  defects            OperationScanDefect[]
+  correctionRequests ScanCorrectionRequest[] @relation("CorrectionRequestScan")
+  answersRequests    ScanCorrectionRequest[] @relation("CorrectionRequestAnswer")
+  resolvesRefusals   FloorScanRefusal[]
   worker      Worker?            @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   station     Station?           @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   device      Device?            @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -529,4 +540,199 @@ enum NoticeAckChannel {
   DEVICE
   /// On paper, signed; the office recorded it.
   PAPER
+}
+
+/// What a scrap or rework line says (B-W1-42; design floor.operation "reason-first counting").
+enum DefectKind {
+  /// The garment is lost at the operation.
+  SCRAP
+  /// The garment goes back to be made again.
+  REWORK
+}
+
+/// A scrap or rework reason of the operation screen's tiles (B-W1-42; MES-090, QHS-007: one code, shown in each worker's
+/// language, read in the office's own): the tenant's list, seeded with W1's (factory-domain production/scans/reasons);
+/// W2a's "Floor rules & codes" edits these rows. A code never changes (scans keep it); a reason no longer used is set
+/// inactive, never deleted.
+model ScrapReason {
+  id          String     @id @db.Uuid
+  tenantId    String     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  kind        DefectKind
+  /// Upper-case letters, digits and underscores (factory-domain REASON_CODE; the API checks it); unique per kind.
+  code        String
+  labelIt     String
+  labelEn     String
+  /// Tiles are shown in this order (lower first).
+  sortOrder   Int        @default(0)
+  active      Boolean    @default(true)
+  version     Int        @default(1)
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?    @db.Uuid
+
+  lines OperationScanDefect[]
+
+  @@unique([tenantId, kind, code])
+}
+
+/// One scrap or rework line (B-W1-42; MES-090): how many garments one reason took, of a scan (its REPORT or CORRECTION
+/// counts) or of a correction request (the counts it asks). Written with its scan or request, in the same command; the
+/// API counts a scan's scrap and rework from its lines (factory-domain production/scans normaliseDefects), so they add
+/// up. OperationScan.scrapReason keeps the one scrap reason of a scan that has exactly one. Never changed or removed (the
+/// …_production_scan_records_guards triggers, for every login).
+/// @append-only
+model OperationScanDefect {
+  id                  String     @id @db.Uuid
+  tenantId            String     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId              String     @db.Uuid
+  /// Exactly one of the two: the scan or the correction request it is a line of.
+  scanId              String?    @db.Uuid
+  correctionRequestId String?    @db.Uuid
+  kind                DefectKind
+  /// A code of the tenant's reason list of this kind.
+  reasonCode          String
+  /// Garments, from 1 up to the scan's (or request's) count of this kind.
+  quantity            Int
+  serverTime          DateTime   @default(now()) @db.Timestamptz(3)
+  createdById         String?    @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  scan              OperationScan?         @relation(fields: [tenantId, siteId, scanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  correctionRequest ScanCorrectionRequest? @relation(fields: [tenantId, siteId, correctionRequestId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  reason            ScrapReason            @relation(fields: [tenantId, kind, reasonCode], references: [tenantId, kind, code], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, scanId])
+  @@index([tenantId, correctionRequestId])
+  // Scrap and rework by reason (W2a reports).
+  @@index([tenantId, kind, reasonCode])
+}
+
+/// PENDING → APPROVED (a CORRECTION scan) | REFUSED (final).
+enum ScanCorrectionStatus {
+  PENDING
+  APPROVED
+  REFUSED
+}
+
+/// A floor worker's request to correct one of their own older scans (B-W1-42; MES-096; design floor.operation "Ask a
+/// correction"; c.c. art. 2101: the original stays): the standing scan it names, the counts it should have (and their
+/// lines), why, who asked (the worker at a site that names workers; the station only otherwise) on which device, when
+/// (device and server time). A lead or the office decides it, never the person who took the scan or asked (four eyes): on
+/// APPROVED a CORRECTION scan voids the old one; REFUSED carries a note. Decided once; never deleted.
+model ScanCorrectionRequest {
+  id                   String               @id @db.Uuid
+  tenantId             String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String               @db.Uuid
+  workOrderId          String               @db.Uuid
+  bundleId             String               @db.Uuid
+  workOrderOperationId String               @db.Uuid
+  /// The standing scan (a REPORT or CORRECTION of this bundle and operation) it asks to correct.
+  scanId               String               @db.Uuid
+  /// The counts asked: from 1 up to the bundle's garments together.
+  goodQuantity         Int                  @default(0)
+  scrapQuantity        Int                  @default(0)
+  reworkQuantity       Int                  @default(0)
+  reason               String
+  status               ScanCorrectionStatus @default(PENDING)
+  /// The worker who asked (a site that names workers); null at a site that records the station only.
+  askedById            String?              @db.Uuid
+  stationId            String?              @db.Uuid
+  /// The floor device it was asked on.
+  deviceId             String?              @db.Uuid
+  /// The device's id for the ask (its queue's client scan id), unique per device: a resent ask is recorded once.
+  clientRequestId      String
+  deviceTime           DateTime?            @db.Timestamptz(3)
+  serverTime           DateTime             @default(now()) @db.Timestamptz(3)
+  /// The lead or office user who decided it (never the scan's worker or the asker, nor their office account).
+  decidedById          String?              @db.Uuid
+  decidedAt            DateTime?            @db.Timestamptz(3)
+  /// REFUSED: why (required); APPROVED: an optional note.
+  decisionNote         String?
+  /// APPROVED: the CORRECTION scan it wrote (correctsId = scanId).
+  correctionScanId     String?              @db.Uuid
+  version              Int                  @default(1)
+  createdAt            DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?              @db.Uuid
+
+  workOrder      WorkOrder             @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  bundle         Bundle                @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  operation      WorkOrderOperation    @relation(fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  scan           OperationScan         @relation("CorrectionRequestScan", fields: [tenantId, siteId, scanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  correctionScan OperationScan?        @relation("CorrectionRequestAnswer", fields: [tenantId, siteId, correctionScanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  askedBy        Worker?               @relation(fields: [tenantId, siteId, askedById], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  station        Station?              @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device         Device?               @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines          OperationScanDefect[]
+
+  @@unique([tenantId, deviceId, clientRequestId])
+  // The target of the lines' reference: a request of the line's site.
+  @@unique([tenantId, siteId, id])
+  // Approvals: what waits, per site.
+  @@index([tenantId, status, siteId])
+  @@index([tenantId, scanId])
+}
+
+/// What a refused floor action was.
+enum ScanRefusalAction {
+  REPORT
+  UNDO
+  ASK_CORRECTION
+}
+
+/// A floor scan the server refused (B-W1-42; A1 §3.8; PLAN risk 17 "refused actions are kept and shown"; the data of the
+/// sync queue's refused list, SCR-023, B-W0-30): what the device sent (its client scan id, the bundle, operation and
+/// counts as far as they were understood, its time), the refusal's code, words and one fix, and whether it may pass when
+/// sent again (`final` false). Kept once per device, client scan id and code. Open until the device or the office
+/// discards it, or the same client scan id is accepted later (resolvedByScanId) or became a correction request
+/// (resolvedByRequestId). Its content never changes (the …_production_scan_records_guards triggers); never deleted.
+model FloorScanRefusal {
+  id                   String            @id @db.Uuid
+  tenantId             String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String            @db.Uuid
+  deviceId             String            @db.Uuid
+  clientScanId         String
+  action               ScanRefusalAction
+  /// factory-domain production/scans SCAN_REFUSALS.
+  code                 String
+  message              String
+  fix                  String
+  /// False: the device's queue sends it again by itself.
+  final                Boolean
+  workOrderId          String?           @db.Uuid
+  bundleId             String?           @db.Uuid
+  workOrderOperationId String?           @db.Uuid
+  /// The code the device read, as sent.
+  scanned              String?
+  goodQuantity         Int               @default(0)
+  scrapQuantity        Int               @default(0)
+  reworkQuantity       Int               @default(0)
+  /// The signed-in worker who sent it (a site that names workers); null at a site that records the station only.
+  workerId             String?           @db.Uuid
+  stationId            String?           @db.Uuid
+  deviceTime           DateTime?         @db.Timestamptz(3)
+  serverTime           DateTime          @default(now()) @db.Timestamptz(3)
+  discardedAt          DateTime?         @db.Timestamptz(3)
+  /// The worker (a site that names workers) or office user who discarded it.
+  discardedById        String?           @db.Uuid
+  /// The scan the same client scan id became when it was sent again and accepted.
+  resolvedByScanId     String?           @db.Uuid
+  /// The correction request it became (an ask sent again).
+  resolvedByRequestId  String?           @db.Uuid
+  version              Int               @default(1)
+  createdAt            DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?           @db.Uuid
+
+  device         Device         @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  workOrder      WorkOrder?     @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker         Worker?        @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  station        Station?       @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  resolvedByScan OperationScan? @relation(fields: [tenantId, siteId, resolvedByScanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, deviceId, clientScanId, code])
+  // The refused list: open ones per site.
+  @@index([tenantId, siteId, discardedAt])
 }

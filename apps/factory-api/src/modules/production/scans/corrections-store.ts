@@ -1,20 +1,19 @@
+import type { Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
+import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { DefectLine } from '@nexus/factory-domain/production/scans/rules'
-import type { CommandTools, CommandTx } from '../../../core/command'
+import { StaleVersionError, type CommandTools, type CommandTx } from '../../../core/command'
+import { readRequestDefects, writeDefects } from './defects-store'
 import type { Reader } from './store'
 
 /**
  * THE seam of the floor's correction requests (B-W1-42; MES-096; design floor.operation "Ask a correction": the original
- * stays, on approval a CORRECTION row voids it; W1 decisions in the Office, Home › Approvals): a request names one
- * standing scan and the counts it should have, why, who asked on which device; PENDING → APPROVED (with the CORRECTION
- * scan) | REFUSED, decided by a person who neither took the scan nor asked.
- *
- * INTERIM (until the schema step, the lead's SCHEMA token): a request is the newest of its audit rows (recordType
- * ScanCorrectionRequest, the whole request in `after`; the ask, then the decision), written inside the floor's and the
- * office's commands. Audit rows are office reading, so the reads take an office or system reader (a floor route reads
- * through the tenant's system view). One pending request per scan is the commands' check (a race of two asks of one scan
- * at the same moment is the table's partial unique index's to stop). Then: the ScanCorrectionRequest table (the floor
- * inserts its own, the office decides with a version guard). The signatures stay.
+ * stays, on approval a CORRECTION row voids it; W1 decisions in the Office, Home › Approvals): the ScanCorrectionRequest
+ * rows with their lines (OperationScanDefect). The floor inserts its own asks (and reads its site's); the office decides,
+ * after `lockCorrectionRequest` (the row FOR UPDATE), with a compare-and-set on the version. One PENDING ask per scan is
+ * the ask command's check, read inside its transaction under the bundle's scan lock (so two asks of one scan take turns);
+ * the …_production_scan_records_guards trigger holds the rest (asked PENDING of a standing scan, the subject rule, decided
+ * once, four eyes).
  */
 
 export const CORRECTION_STATUSES = ['PENDING', 'APPROVED', 'REFUSED'] as const
@@ -51,25 +50,98 @@ export interface CorrectionRequest {
   readonly version: number
 }
 
-const RECORD = 'ScanCorrectionRequest'
+const COLUMNS = {
+  id: true,
+  siteId: true,
+  workOrderId: true,
+  bundleId: true,
+  workOrderOperationId: true,
+  scanId: true,
+  goodQuantity: true,
+  scrapQuantity: true,
+  reworkQuantity: true,
+  reason: true,
+  status: true,
+  askedById: true,
+  stationId: true,
+  deviceId: true,
+  clientRequestId: true,
+  deviceTime: true,
+  serverTime: true,
+  decidedById: true,
+  decidedAt: true,
+  decisionNote: true,
+  correctionScanId: true,
+  version: true,
+} as const satisfies Prisma.ScanCorrectionRequestSelect
+
+type Row = Prisma.ScanCorrectionRequestGetPayload<{ select: typeof COLUMNS }>
+
+const at = (value: Date | null) => (value ? toUtcIso(value) : null)
+
+function requestOf(row: Row, companyId: string, defects: readonly DefectLine[]): CorrectionRequest {
+  const { deviceTime, serverTime, decidedAt, ...rest } = row
+  return { ...rest, companyId, defects: [...defects], deviceTime: at(deviceTime), serverTime: toUtcIso(serverTime), decidedAt: at(decidedAt) }
+}
+
+/** The rows with their lines and their work order's company (read one after another: no relation select). */
+async function withLines(db: Reader, rows: readonly Row[]): Promise<CorrectionRequest[]> {
+  if (rows.length === 0) return []
+  const lines = await readRequestDefects(db, rows.map((row) => row.id))
+  const companies = new Map((await db.workOrder.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.workOrderId))] } }, select: { id: true, companyId: true } })).map((row) => [row.id, row.companyId]))
+  return rows.map((row) => requestOf(row, companies.get(row.workOrderId) ?? '', lines.get(row.id) ?? []))
+}
 
 const audited = (tools: CommandTools, action: string, request: CorrectionRequest, before?: Partial<CorrectionRequest>) =>
-  tools.audit({ action, recordType: RECORD, recordId: request.id, companyId: request.companyId, siteId: request.siteId, ...(before ? { before } : {}), after: request, ...(request.decisionNote ? { reason: request.decisionNote } : {}) })
+  tools.audit({ action, recordType: 'ScanCorrectionRequest', recordId: request.id, companyId: request.companyId, siteId: request.siteId, ...(before ? { before } : {}), after: request, ...(request.decisionNote ? { reason: request.decisionNote } : {}) })
 
-/** Records a new PENDING request inside the floor's ask command. */
-export function insertCorrectionRequest(tools: CommandTools, request: CorrectionRequest): void {
+/** Records a new PENDING request and its lines inside the floor's ask command. */
+export async function insertCorrectionRequest(tools: CommandTools, request: CorrectionRequest): Promise<void> {
+  const createdById = request.askedById
+  await tools.tx.scanCorrectionRequest.create({
+    data: {
+      id: request.id,
+      siteId: request.siteId,
+      workOrderId: request.workOrderId,
+      bundleId: request.bundleId,
+      workOrderOperationId: request.workOrderOperationId,
+      scanId: request.scanId,
+      goodQuantity: request.goodQuantity,
+      scrapQuantity: request.scrapQuantity,
+      reworkQuantity: request.reworkQuantity,
+      reason: request.reason,
+      askedById: request.askedById,
+      stationId: request.stationId,
+      deviceId: request.deviceId,
+      clientRequestId: request.clientRequestId,
+      deviceTime: request.deviceTime ? new Date(request.deviceTime) : null,
+      serverTime: tools.now,
+      createdById,
+      createdAt: tools.now,
+      updatedAt: tools.now,
+    },
+    select: { id: true },
+  })
+  await writeDefects(tools, { correctionRequestId: request.id, siteId: request.siteId, createdById }, request.defects)
   audited(tools, 'production.askScanCorrection', request)
 }
 
-/** Records the decision inside the office's command (after lockCorrectionRequest). */
-export function decideCorrectionRequest(tools: CommandTools, before: CorrectionRequest, after: CorrectionRequest): void {
+/** Records the decision inside the office's command (after lockCorrectionRequest): compare-and-set on the version. */
+export async function decideCorrectionRequest(tools: CommandTools, before: CorrectionRequest, after: CorrectionRequest): Promise<void> {
+  const { count } = await tools.tx.scanCorrectionRequest.updateMany({
+    where: { id: before.id, version: before.version, status: 'PENDING' },
+    data: {
+      status: after.status,
+      decidedById: after.decidedById,
+      decidedAt: tools.now,
+      decisionNote: after.decisionNote,
+      correctionScanId: after.correctionScanId,
+      version: before.version + 1,
+      updatedAt: tools.now,
+    },
+  })
+  if (count !== 1) throw new StaleVersionError('ScanCorrectionRequest', before.id, before.version + 1, before.version)
   audited(tools, after.status === 'APPROVED' ? 'production.approveScanCorrection' : 'production.refuseScanCorrection', after, { status: before.status, version: before.version })
-}
-
-function newest(rows: readonly { readonly recordId: string; readonly after: unknown }[]): CorrectionRequest[] {
-  const byId = new Map<string, CorrectionRequest>()
-  for (const row of rows) byId.set(row.recordId, row.after as CorrectionRequest)
-  return [...byId.values()]
 }
 
 export interface CorrectionFilter {
@@ -81,39 +153,41 @@ export interface CorrectionFilter {
   readonly deviceId?: string
   readonly clientRequestId?: string
   readonly askedById?: string
+  /** The asks of a station at a site that records the station only (no asker named). */
   readonly stationId?: string
   readonly since?: Date
 }
 
-/** The requests that match, oldest ask first. An office or system reader. */
+/** The requests that match, oldest ask first, in the caller's scope. */
 export async function readCorrectionRequests(db: Reader, filter: CorrectionFilter = {}): Promise<CorrectionRequest[]> {
-  const rows = await db.auditLog.findMany({
-    where: { recordType: RECORD, ...(filter.siteIds ? { siteId: { in: [...filter.siteIds] } } : {}) },
-    select: { recordId: true, after: true },
-    orderBy: [{ at: 'asc' }, { id: 'asc' }],
+  const rows = await db.scanCorrectionRequest.findMany({
+    where: {
+      ...(filter.siteIds ? { siteId: { in: [...filter.siteIds] } } : {}),
+      ...(filter.status ? { status: filter.status } : {}),
+      ...(filter.workOrderId ? { workOrderId: filter.workOrderId } : {}),
+      ...(filter.scanIds ? { scanId: { in: [...filter.scanIds] } } : {}),
+      ...(filter.deviceId ? { deviceId: filter.deviceId } : {}),
+      ...(filter.clientRequestId ? { clientRequestId: filter.clientRequestId } : {}),
+      ...(filter.askedById ? { askedById: filter.askedById } : {}),
+      ...(filter.stationId ? { stationId: filter.stationId, askedById: null } : {}),
+      ...(filter.since ? { serverTime: { gte: filter.since } } : {}),
+    },
+    select: COLUMNS,
+    orderBy: [{ serverTime: 'asc' }, { id: 'asc' }],
   })
-  return newest(rows).filter(
-    (request) =>
-      (filter.status === undefined || request.status === filter.status) &&
-      (filter.workOrderId === undefined || request.workOrderId === filter.workOrderId) &&
-      (filter.scanIds === undefined || filter.scanIds.includes(request.scanId)) &&
-      (filter.deviceId === undefined || request.deviceId === filter.deviceId) &&
-      (filter.clientRequestId === undefined || request.clientRequestId === filter.clientRequestId) &&
-      (filter.askedById === undefined || request.askedById === filter.askedById) &&
-      (filter.stationId === undefined || (request.askedById === null && request.stationId === filter.stationId)) &&
-      (filter.since === undefined || new Date(request.serverTime) >= filter.since),
-  )
+  return withLines(db, rows)
 }
 
-/** One request, or null. An office or system reader. */
+/** One request, or null, in the caller's scope. */
 export async function readCorrectionRequest(db: Reader, requestId: string): Promise<CorrectionRequest | null> {
   if (!isUuid(requestId)) return null
-  const rows = await db.auditLog.findMany({ where: { recordType: RECORD, recordId: requestId }, select: { recordId: true, after: true }, orderBy: [{ at: 'asc' }, { id: 'asc' }] })
-  return newest(rows)[0] ?? null
+  const row = await db.scanCorrectionRequest.findUnique({ where: { id: requestId }, select: COLUMNS })
+  return row ? ((await withLines(db, [row]))[0] ?? null) : null
 }
 
-/** The request locked for its decision (one decision at a time), then read. The office's transaction. */
-export async function lockCorrectionRequest(tx: CommandTx, tenantId: string, requestId: string): Promise<CorrectionRequest | null> {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.scan-correction', ${tenantId}::uuid, ${requestId}::uuid), 0))`
+/** The request's row locked for its decision (one decision at a time), then read. The office's transaction. */
+export async function lockCorrectionRequest(tx: CommandTx, _tenantId: string, requestId: string): Promise<CorrectionRequest | null> {
+  if (!isUuid(requestId)) return null
+  await tx.$queryRaw`SELECT "id" FROM "ScanCorrectionRequest" WHERE "id" = ${requestId}::uuid FOR UPDATE`
   return readCorrectionRequest(tx, requestId)
 }

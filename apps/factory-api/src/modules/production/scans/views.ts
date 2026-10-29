@@ -26,8 +26,8 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { readBundleByCode, readCellLabels } from '../bundles/store'
-import { scanSubjectFor } from '../settings/subject'
-import { floorOf, floorOrOffice, mayScan, officeOf, scanWorkOrder, systemView } from './access'
+import { hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
+import { floorOf, floorOrOffice, mayScan, officeOf, scanWorkOrder } from './access'
 import { readCorrectionRequests } from './corrections-store'
 import { readDefects } from './defects-store'
 import { readReasons } from './reasons-store'
@@ -177,8 +177,7 @@ export async function mine(caller: CommandCaller) {
     const undoable = latest && latest.scan.kind === 'REPORT' && latest.standing && latest.scan.deviceId === context.deviceId && isOwn(latest.scan, viewer) && undoDelay(latest.scan, null, now) <= UNDO_WINDOW_MS
     return { scanSubject, stationId, since, rows, undoable: undoable ? latest! : null }
   })
-  const system = systemView(caller)
-  const extra = await system.withClient(async (db) => {
+  const extra = await caller.withClient(async (db) => {
     const defects = await readDefects(db, own.rows.map((row) => row.scan.id))
     const requests = await readCorrectionRequests(db, { siteIds: [context.siteId], since: own.since, ...(own.scanSubject === 'WORKER' ? { askedById: context.actorId } : own.stationId ? { stationId: own.stationId } : { deviceId: context.deviceId }) })
     const pending = new Set((await readCorrectionRequests(db, { siteIds: [context.siteId], status: 'PENDING', scanIds: own.rows.map((row) => row.scan.id) })).map((request) => request.scanId))
@@ -285,8 +284,7 @@ export async function refusalOf(caller: CommandCaller, refusalId: string) {
 /** "Discard" (design sync.discard): the device's own refused scan, or the office's for its sites. Once. */
 export async function discard(caller: CommandCaller, refusalId: string, idempotencyKey?: string) {
   const context = floorOrOffice(caller)
-  const system = systemView(caller)
-  const row = await system.withClient((db) => readRefusal(db, refusalId))
+  const row = await caller.withClient((db) => readRefusal(db, refusalId))
   if (!row) throw new NotFoundError('Refused scan not found.')
   if (context.audience === 'floor') {
     if (row.deviceId !== context.deviceId) throw new NotFoundError('Refused scan not found.')
@@ -294,8 +292,14 @@ export async function discard(caller: CommandCaller, refusalId: string, idempote
     const site = await caller.withClient((db) => db.site.findUnique({ where: { id: row.siteId }, select: { id: true, companyId: true } }))
     if (!site || !mayScan(context, PRODUCTION_SCAN_CORRECT, { companyId: site.companyId, siteId: site.id })) throw new NotFoundError('Refused scan not found.')
   }
-  const by = context.audience === 'office' ? context.actorId : row.workerId !== null ? context.actorId : null
-  const kept = await discardRefusal(system, row, { discardedById: by, idempotencyKey })
+  // Who discarded it: the office user; on the floor the worker, where the site names workers and they acknowledged the
+  // notice in force (no floor record names a worker before that), else nobody (the station's tablet did).
+  const by =
+    context.audience === 'office'
+      ? context.actorId
+      : await caller.withClient(async (db) => ((await scanSubjectFor(db, row.siteId)) === 'WORKER' && (await hasAcknowledgedNotice(db, row.siteId, context.actorId)) ? context.actorId : null))
+  // A floor write needs an Idempotency-Key: the device's own, else one per refusal (a repeat answers the first discard).
+  const kept = await discardRefusal(caller, row, { discardedById: by, idempotencyKey: idempotencyKey ?? (context.audience === 'floor' ? `d.${row.id}` : undefined) })
   return { refusal: refusalRow({ ...row, ...kept }) }
 }
 

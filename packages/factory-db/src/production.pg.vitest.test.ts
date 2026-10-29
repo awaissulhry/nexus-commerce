@@ -235,8 +235,12 @@ describe('the floor', () => {
       'Bundle',
       'CutLog',
       'CutLogPiece',
+      'FloorScanRefusal',
       'OperationScan',
+      'OperationScanDefect',
       'ProductionSettings',
+      'ScanCorrectionRequest',
+      'ScrapReason',
       'WorkOrder',
       'WorkOrderMaterial',
       'WorkOrderOperation',
@@ -248,7 +252,8 @@ describe('the floor', () => {
       // Nor a column that looks like money or scores a worker (Statuto dei Lavoratori art. 4, Q16: no per-person figures).
       expect(model.columns.filter((column) => /cost|margin|price|amount|total|wage|earning|rate|efficien|productiv|score|bonus/i.test(column)), model.name).toEqual([])
       const access = ownership.access[FLOOR_ROLE]
-      expect(access?.scopedBy, model.name).toEqual(['site'])
+      // The reason list is the tenant's (no site key): every floor device reads it (the operation screen's tiles).
+      expect(access?.scopedBy, model.name).toEqual(model.name === 'ScrapReason' ? undefined : ['site'])
       // No money is walled off; only the floor rules' legal basis is hidden from the floor (B-W1-37: the floor reads who
       // its records name, never the basis, its reference or who recorded it, when).
       expect(access?.hiddenColumns ?? [], model.name).toEqual(model.name === 'ProductionSettings' ? ['monitoringBasis', 'monitoringReference', 'monitoringRecordedAt', 'monitoringRecordedById'] : [])
@@ -587,7 +592,9 @@ describe('the scans', () => {
     await expect(run(office(), 'DELETE FROM "OperationScan" WHERE id = $1::uuid', scan)).rejects.toThrow(DENIED)
     await expect(admin(`UPDATE "OperationScan" SET "goodQuantity" = 0 WHERE id = $1`, [scan])).rejects.toThrow(/append-only: UPDATE on "OperationScan" is refused/)
     await expect(admin('DELETE FROM "OperationScan" WHERE id = $1', [scan])).rejects.toThrow(/append-only: DELETE on "OperationScan" is refused/)
-    await expect(admin('TRUNCATE "OperationScan"')).rejects.toThrow(/append-only: TRUNCATE on "OperationScan" is refused/)
+    // Its lines, correction requests and refused scans name it (B-W1-42): a TRUNCATE cascading to them is refused too.
+    await expect(admin('TRUNCATE "OperationScan" CASCADE')).rejects.toThrow(/TRUNCATE on "(OperationScan|OperationScanDefect|ScanCorrectionRequest|FloorScanRefusal)" is refused/)
+    await expect(admin('TRUNCATE "OperationScanDefect"')).rejects.toThrow(/append-only: TRUNCATE on "OperationScanDefect" is refused/)
     await expect(run(office(), `UPDATE "WorkerNoticeAck" SET locale = 'de' WHERE id = $1::uuid`, seeded.ackId)).rejects.toThrow(DENIED)
     await expect(admin(`UPDATE "WorkerNoticeAck" SET locale = 'de' WHERE id = $1`, [seeded.ackId])).rejects.toThrow(/append-only: UPDATE on "WorkerNoticeAck" is refused/)
     await expect(admin('DELETE FROM "WorkerNoticeAck" WHERE id = $1', [seeded.ackId])).rejects.toThrow(/append-only: DELETE on "WorkerNoticeAck" is refused/)

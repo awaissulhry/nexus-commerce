@@ -599,12 +599,12 @@ describe('the offline queue (A1 §3.8): a batch in device order, each action acc
 
   it('answers the same batch sent again with duplicates and the same refusals: not one row more', async () => {
     const before = await counts(`SELECT count(*)::int AS n FROM "OperationScan" WHERE "workOrderId" = $1`, [WO.offline.id])
-    const refusalsBefore = await counts(`SELECT count(DISTINCT "recordId")::int AS n FROM "AuditLog" WHERE "recordType" = 'FloorScanRefusal' AND "siteId" = $1`, [A.siteA1])
+    const refusalsBefore = await counts(`SELECT count(*)::int AS n FROM "FloorScanRefusal" WHERE "siteId" = $1`, [A.siteA1])
     const again = await ok('sew1', 'POST', '/production/scans/batch', { items })
     expect(again.items.map((item: Json) => item.status)).toEqual(['duplicate', 'duplicate', 'duplicate', 'refused', 'refused', 'refused', 'refused'])
     expect(again.items.map((item: Json) => item.scan?.id ?? item.refusal?.refusalId)).toEqual(first.items.map((item: Json) => item.scan?.id ?? item.refusal?.refusalId))
     expect(await counts(`SELECT count(*)::int AS n FROM "OperationScan" WHERE "workOrderId" = $1`, [WO.offline.id])).toBe(before)
-    expect(await counts(`SELECT count(DISTINCT "recordId")::int AS n FROM "AuditLog" WHERE "recordType" = 'FloorScanRefusal' AND "siteId" = $1`, [A.siteA1])).toBe(refusalsBefore)
+    expect(await counts(`SELECT count(*)::int AS n FROM "FloorScanRefusal" WHERE "siteId" = $1`, [A.siteA1])).toBe(refusalsBefore)
     // Sent online once more under the same client scan id: the same scan (200); the id for another action: refused.
     const online = await report('sew1', { clientScanId: items[2]!.clientScanId, code: BN.offline[0]!.code, good: 4, scrap: [{ reason: 'TEAR', quantity: 1 }], occurredAt: deviceAt(3140) })
     expect(online.statusCode, online.body).toBe(200)
@@ -636,6 +636,11 @@ describe('the offline queue (A1 §3.8): a batch in device order, each action acc
     expect(all.refusals.find((row: Json) => row.code === 'MORE_THAN_PASSED').resolvedByScanId).toBe(fixed.items[0].scan.id)
     // Another tablet cannot discard this tablet's refusal.
     expect((await call('sew2', 'POST', `/production/scans/mine/refusals/${open.refusals[0].id}/discard`)).statusCode).toBe(404)
+    expect((await admin(`SELECT "discardedById" FROM "FloorScanRefusal" WHERE id = $1`, [unknown.id]))[0]!.discardedById).toBe(A.operatorA1)
+    // A worker who has not acknowledged the notice is not named on a refused scan of theirs (Statuto art. 4 c.3).
+    const lead = await ok('leadSew1', 'POST', '/production/scans/batch', { items: [{ action: 'REPORT', clientScanId: clientId(), code: BN.offline[1]!.code, good: 5 }] })
+    expect(lead.items[0].refusal.code).toBe('NOTICE_NOT_ACKNOWLEDGED')
+    expect((await admin(`SELECT "workerId", "createdById" FROM "FloorScanRefusal" WHERE id = $1`, [lead.items[0].refusal.refusalId]))[0]).toEqual({ workerId: null, createdById: null })
   })
 })
 
@@ -722,8 +727,11 @@ describe('walls: a tablet works at its own site, the office within its companies
     expect((await report('floorB1', scanBody(bundle, 1))).statusCode).toBe(404)
     expect((await call('companyB', 'GET', `/production/scans/work-orders/${WO.flow.id}/wip`)).statusCode).toBe(404)
     expect((await call('otherTenant', 'GET', `/production/scans/work-orders/${WO.flow.id}/wip`)).statusCode).toBe(404)
-    expect((await ok('otherTenant', 'GET', '/production/scans/corrections')).requests).toEqual([])
-    expect((await ok('otherTenant', 'GET', '/production/scans/refusals')).refusals).toEqual([])
+    // The other tenant sees its own seeded records only.
+    const theirs = await ok('otherTenant', 'GET', '/production/scans/corrections')
+    expect(theirs.requests.length).toBeGreaterThan(0)
+    expect(theirs.requests.filter((row: Json) => Object.values(WO).some((workOrder) => workOrder.id === row.workOrder.id))).toEqual([])
+    expect((await ok('otherTenant', 'GET', '/production/scans/refusals')).refusals.filter((row: Json) => row.siteId === A.siteA1)).toEqual([])
     expect((await ok('companyB', 'GET', `/production/scans/refusals?siteId=${A.siteA1}`)).refusals).toEqual([])
   })
 
@@ -740,5 +748,39 @@ describe('walls: a tablet works at its own site, the office within its companies
     expect(header.statusCode).toBe(400)
     const card = await ok('sew1', 'GET', `/production/scans/card?code=${BN.flow[0]!.code}`)
     expect(keysOf(card).filter((name) => MONEY.test(name) || name === 'workerId')).toEqual([])
+  })
+})
+
+// ---- the tables' own rules (…_production_scan_records_guards), for every login ------------------------------------------------------
+
+describe('the scan records hold their rules for every login, the owner included', () => {
+  const seededRequest = idOf(ns.a, 'production:scan-correction:WO-0001:1')
+  const seededRefusal = idOf(ns.a, 'production:scan-refusal:A1:1')
+
+  it('keeps a scrap or rework line within its scan’s count, and never changes or removes one', async () => {
+    const [scan] = await admin(`SELECT id, "siteId", "tenantId" FROM "OperationScan" WHERE "workOrderId" = $1 AND kind = 'REPORT' AND "scrapQuantity" = 0 LIMIT 1`, [WO.flow.id])
+    await expect(admin(`INSERT INTO "OperationScanDefect" (id, "tenantId", "siteId", "scanId", kind, "reasonCode", quantity) VALUES ($1, $2, $3, $4, 'SCRAP', 'STAIN', 1)`, [newId(), scan!.tenantId, scan!.siteId, scan!.id])).rejects.toThrow(
+      /counts 1 SCRAP garment\(s\); its scan or request counts 0/,
+    )
+    await expect(admin(`INSERT INTO "OperationScanDefect" (id, "tenantId", "siteId", kind, "reasonCode", quantity) VALUES ($1, $2, $3, 'SCRAP', 'STAIN', 1)`, [newId(), scan!.tenantId, scan!.siteId])).rejects.toThrow(/exactly one scan or one correction request/)
+    const [line] = await admin(`SELECT id FROM "OperationScanDefect" WHERE "tenantId" = $1 LIMIT 1`, [A.tenant])
+    await expect(admin(`UPDATE "OperationScanDefect" SET quantity = 2 WHERE id = $1`, [line!.id])).rejects.toThrow(/append-only: UPDATE on "OperationScanDefect" is refused/)
+    await expect(admin(`DELETE FROM "OperationScanDefect" WHERE id = $1`, [line!.id])).rejects.toThrow(/append-only: DELETE on "OperationScanDefect" is refused/)
+    await expect(admin(`UPDATE "ScrapReason" SET code = 'SPOT' WHERE "tenantId" = $1 AND code = 'STAIN'`, [A.tenant])).rejects.toThrow(/keeps its kind and code/)
+  })
+
+  it('decides a correction request once, never by the scanner or the asker (nor their office account)', async () => {
+    await expect(admin(`UPDATE "ScanCorrectionRequest" SET status = 'REFUSED', "decidedById" = $2, "decidedAt" = now(), "decisionNote" = 'No' WHERE id = $1`, [seededRequest, A.operatorUser])).rejects.toThrow(/four eyes/)
+    // The asker (the scanner too) deciding it, as a lead on the floor would: refused as well.
+    await expect(admin(`UPDATE "ScanCorrectionRequest" SET status = 'REFUSED', "decidedById" = $2, "decidedAt" = now(), "decisionNote" = 'No' WHERE id = $1`, [seededRequest, A.operatorA1])).rejects.toThrow(/four eyes/)
+    await expect(admin(`UPDATE "ScanCorrectionRequest" SET status = 'REFUSED', "decidedById" = $2, "decidedAt" = now() WHERE id = $1`, [seededRequest, A.supervisor])).rejects.toThrow(/says why/)
+    await expect(admin(`UPDATE "ScanCorrectionRequest" SET "goodQuantity" = 2 WHERE id = $1`, [seededRequest])).rejects.toThrow(/changes only by its decision/)
+    await expect(admin(`DELETE FROM "ScanCorrectionRequest" WHERE id = $1`, [seededRequest])).rejects.toThrow(/never deleted/)
+  })
+
+  it('keeps what a device sent in a refused scan, closes it once, and never removes it', async () => {
+    await expect(admin(`UPDATE "FloorScanRefusal" SET code = 'OTHER' WHERE id = $1`, [seededRefusal])).rejects.toThrow(/keeps what the device sent/)
+    await expect(admin(`UPDATE "FloorScanRefusal" SET "resolvedByScanId" = (SELECT id FROM "OperationScan" WHERE "workOrderId" = $2 LIMIT 1) WHERE id = $1`, [seededRefusal, WO.flow.id])).rejects.toThrow(/sent again under the same id/)
+    await expect(admin(`DELETE FROM "FloorScanRefusal" WHERE id = $1`, [seededRefusal])).rejects.toThrow(/never deleted/)
   })
 })

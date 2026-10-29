@@ -34,7 +34,7 @@ import { floorOf, mayScan, ScanRefusedError, refuse, systemView } from './access
 import { insertCorrectionRequest, readCorrectionRequests, type CorrectionRequest } from './corrections-store'
 import { readDefects, writeDefects } from './defects-store'
 import { readReasons } from './reasons-store'
-import { recordRefusal, type RefusedAction } from './refusals-store'
+import { recordRefusal, resolveRefusals, type RefusedAction } from './refusals-store'
 import {
   deviceStationOf,
   latestOnDevice,
@@ -318,7 +318,7 @@ async function reportedBefore(caller: CommandCaller, session: Session, input: Re
   if (found.scan.kind !== 'REPORT' || !sameBundle || (input.workOrderOperationId !== undefined && input.workOrderOperationId !== found.scan.workOrderOperationId)) {
     return refused(clientIdReusedRefusal(input.clientScanId))
   }
-  const defects = (await systemView(caller).withClient((client) => readDefects(client, [found.scan.id]))).get(found.scan.id) ?? []
+  const defects = (await caller.withClient((client) => readDefects(client, [found.scan.id]))).get(found.scan.id) ?? []
   return { status: 'duplicate', scan: scanView(found.scan, found.operations, found.bundle?.code ?? '', defects) }
 }
 
@@ -441,7 +441,9 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
     },
     select: { id: true },
   })
-  writeDefects(tools, { id, companyId: workOrder.companyId, siteId: workOrder.siteId }, work.lines)
+  await writeDefects(tools, { scanId: id, siteId: workOrder.siteId, createdById: subject.workerId ? context.actorId : null }, work.lines)
+  // A refused send of this action that the device's queue sent again under the same id is resolved by it.
+  await resolveRefusals(tx, tools.now, { deviceId: context.deviceId, clientScanId: work.input.clientScanId, scanId: id })
   const row = (await readScan(tx, id))!
   const after = { workOrderId: workOrder.id, bundleId: locked.bundle.id, operationId: decision.operation.id, operationSeq: decision.operation.seq, goodQuantity: row.goodQuantity, scrapQuantity: row.scrapQuantity, reworkQuantity: row.reworkQuantity, cap: decision.cap, workerId: row.workerId, stationId: row.stationId, clientScanId: row.clientScanId }
   tools.audit({ action: 'production.reportScan', recordType: 'OperationScan', recordId: id, companyId: workOrder.companyId, siteId: workOrder.siteId, after, ...(row.reason ? { reason: row.reason } : {}) })
@@ -557,6 +559,7 @@ async function undo(caller: CommandCaller, session: Session, input: UndoInput): 
             },
             select: { id: true },
           })
+          await resolveRefusals(tx, tools.now, { deviceId: context.deviceId, clientScanId: input.clientScanId, scanId: id })
           const row = (await readScan(tx, id))!
           const operation = operations.find((entry) => entry.id === target.workOrderOperationId)!
           tools.audit({ action: 'production.undoScan', recordType: 'OperationScan', recordId: id, companyId: current.companyId, siteId: current.siteId, after: { correctsId: target.id, bundleId: target.bundleId, operationId: operation.id, clientScanId: input.clientScanId }, reason: UNDO_NOTE })
@@ -575,7 +578,7 @@ async function undo(caller: CommandCaller, session: Session, input: UndoInput): 
 // ---- ask a correction ------------------------------------------------------------------------------------------------------------
 
 async function askedBefore(caller: CommandCaller, session: Session, input: AskInput): Promise<Outcome | null> {
-  const [request] = await systemView(caller).withClient((client) => readCorrectionRequests(client, { siteIds: [session.context.siteId], deviceId: session.context.deviceId, clientRequestId: input.clientScanId }))
+  const [request] = await caller.withClient((client) => readCorrectionRequests(client, { siteIds: [session.context.siteId], deviceId: session.context.deviceId, clientRequestId: input.clientScanId }))
   if (!request) return null
   if (input.scanId !== undefined && input.scanId !== request.scanId) return refused(clientIdReusedRefusal(input.clientScanId))
   return { status: 'duplicate', request: requestView(request) }
@@ -593,11 +596,6 @@ async function ask(caller: CommandCaller, session: Session, input: AskInput): Pr
   }
   const normal = normaliseDefects(linesOf(input), await reasonsOf(caller, session))
   if (!normal.ok) return refused(normal.refusal)
-  // Read as the tenant's system caller (interim seams on audit rows): the target's own lines and a pending ask of it.
-  const facts = await systemView(caller).withClient(async (client) => ({
-    targetLines: (await readDefects(client, [target.id])).get(target.id) ?? [],
-    pending: (await readCorrectionRequests(client, { siteIds: [target.siteId], scanIds: [target.id], status: 'PENDING' })).length > 0,
-  }))
   const deviceTime = deviceTimeOf(input.occurredAt)
   const stationId = await stationOf(caller, session)
   const counts = { good: input.good, scrap: normal.scrap, rework: normal.rework }
@@ -615,9 +613,14 @@ async function ask(caller: CommandCaller, session: Session, input: AskInput): Pr
           const scans = await readBundleScans(tx, target.bundleId)
           const bundle = (await readBundle(tx, target.bundleId))!
           const scanSubject = await scanSubjectFor(tx, current.siteId)
-          if (scanSubject === 'WORKER') {
-            const notNamed = subjectRefusal({ scanSubject, workerId: context.actorId, acknowledged: await hasAcknowledgedNotice(tx, current.siteId, context.actorId), stationId })
-            if (notNamed) refuse(notNamed)
+          // The ask names its asker by the site's floor rules, as a scan does (the trigger checks the same).
+          const acknowledged = scanSubject === 'WORKER' ? await hasAcknowledgedNotice(tx, current.siteId, context.actorId) : false
+          const notNamed = subjectRefusal({ scanSubject, workerId: context.actorId, acknowledged, stationId })
+          if (notNamed) refuse(notNamed)
+          // Under the bundle's scan lock: the target's own lines, and a pending ask of it (two asks of one scan take turns).
+          const facts = {
+            targetLines: (await readDefects(tx, [target.id])).get(target.id) ?? [],
+            pending: (await readCorrectionRequests(tx, { scanIds: [target.id], status: 'PENDING' })).length > 0,
           }
           const refusal = correctionAskRefusal({
             workOrder: current,
@@ -658,7 +661,8 @@ async function ask(caller: CommandCaller, session: Session, input: AskInput): Pr
             correctionScanId: null,
             version: 1,
           }
-          insertCorrectionRequest(tools, request)
+          await insertCorrectionRequest(tools, request)
+          await resolveRefusals(tx, tools.now, { deviceId: context.deviceId, clientScanId: input.clientScanId, requestId: request.id })
           tools.audit({ action: 'production.askScanCorrection', recordType: 'WorkOrder', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { requestId: request.id, scanId: target.id, bundleId: target.bundleId }, reason: request.reason })
           tools.emit({
             type: 'production.scan_correction_requested',
@@ -717,7 +721,7 @@ async function whereOf(caller: CommandCaller, session: Session, item: BatchItem)
 }
 
 /** What a refused item sent, for the refused scans list. */
-function refusalDraft(session: Session, item: BatchItem, refusal: ScanRefusal, where: Where, facts: { readonly stationId: string | null; readonly subject: ScanSubject }) {
+function refusalDraft(session: Session, item: BatchItem, refusal: ScanRefusal, where: Where, facts: { readonly stationId: string | null; readonly subject: ScanSubject; readonly acknowledged: boolean }) {
   const lines = item.action === 'UNDO' ? [] : linesOf(item)
   const sum = (kind: 'SCRAP' | 'REWORK') => lines.filter((line) => line.kind === kind).reduce((total, line) => total + line.quantity, 0)
   return {
@@ -735,7 +739,8 @@ function refusalDraft(session: Session, item: BatchItem, refusal: ScanRefusal, w
     goodQuantity: item.action === 'UNDO' ? 0 : item.good,
     scrapQuantity: sum('SCRAP'),
     reworkQuantity: sum('REWORK'),
-    workerId: facts.subject === 'WORKER' ? session.context.actorId : null,
+    // No floor record names a worker before they acknowledged the notice in force (Statuto art. 4 c.3), a refusal neither.
+    workerId: facts.subject === 'WORKER' && facts.acknowledged ? session.context.actorId : null,
     stationId: facts.stationId,
     deviceTime: item.occurredAt ? toUtcIso(parseInstant(item.occurredAt)!) : null,
   }
@@ -757,6 +762,7 @@ export async function sendBatch(caller: CommandCaller, body: { readonly sentAt?:
   const { context } = session
   const subject = await subjectOf(caller, session)
   const stationId = await stationOf(caller, session)
+  const acknowledged = subject === 'WORKER' ? await caller.withClient((client) => hasAcknowledgedNotice(client, context.siteId, context.actorId)) : false
   const answers = []
   for (const item of body.items) {
     let outcome: Outcome
@@ -770,7 +776,7 @@ export async function sendBatch(caller: CommandCaller, body: { readonly sentAt?:
       answers.push({ clientScanId: item.clientScanId, action: item.action, status: outcome.status, scan: outcome.scan ?? null, request: outcome.request ?? null, refusal: null })
       continue
     }
-    const kept = await recordRefusal(systemView(caller), refusalDraft(session, item, outcome.refusal, await whereOf(caller, session, item), { stationId, subject }))
+    const kept = await recordRefusal(caller, refusalDraft(session, item, outcome.refusal, await whereOf(caller, session, item), { stationId, subject, acknowledged }))
     answers.push({ clientScanId: item.clientScanId, action: item.action, status: 'refused' as const, scan: null, request: null, refusal: { ...outcome.refusal, refusalId: kept.id } })
   }
   const now = serverClock.now()

@@ -104,9 +104,9 @@ export async function approveCorrection(caller: CommandCaller, requestId: string
       },
       select: { id: true },
     })
-    writeDefects(tools, { id, companyId: workOrder.companyId, siteId: workOrder.siteId }, request.defects)
+    await writeDefects(tools, { scanId: id, siteId: workOrder.siteId, createdById: context.actorId }, request.defects)
     const after: CorrectionRequest = { ...request, status: 'APPROVED', decidedById: context.actorId, decidedAt: toUtcIso(tools.now), decisionNote: note, correctionScanId: id, version: request.version + 1 }
-    decideCorrectionRequest(tools, request, after)
+    await decideCorrectionRequest(tools, request, after)
     const row = (await readScan(tx, id))!
     const operation = operations.find((entry) => entry.id === request.workOrderOperationId)!
     tools.audit({ action: 'production.approveScanCorrection', recordType: 'OperationScan', recordId: id, companyId: workOrder.companyId, siteId: workOrder.siteId, before: { scanId: target!.id, goodQuantity: target!.goodQuantity, scrapQuantity: target!.scrapQuantity, reworkQuantity: target!.reworkQuantity }, after: { correctsId: target!.id, requestId: request.id, goodQuantity: row.goodQuantity, scrapQuantity: row.scrapQuantity, reworkQuantity: row.reworkQuantity }, reason: request.reason })
@@ -128,7 +128,7 @@ export async function refuseCorrection(caller: CommandCaller, requestId: string,
     if (stale) refuse(stale)
     const workOrder = (await readHeader(tools.tx, request.workOrderId))!
     const after: CorrectionRequest = { ...request, status: 'REFUSED', decidedById: context.actorId, decidedAt: toUtcIso(tools.now), decisionNote: note, version: request.version + 1 }
-    decideCorrectionRequest(tools, request, after)
+    await decideCorrectionRequest(tools, request, after)
     tools.audit({ action: 'production.refuseScanCorrection', recordType: 'WorkOrder', recordId: workOrder.id, companyId: workOrder.companyId, siteId: workOrder.siteId, after: { requestId: request.id, scanId: request.scanId }, reason: note })
     tools.emit({ type: 'production.scan_correction_decided', subject: workOrder.id, companyId: workOrder.companyId, siteId: workOrder.siteId, payload: { workOrderId: workOrder.id, number: workOrder.number, requestId: request.id, scanId: request.scanId, decision: 'REFUSED', correctionScanId: null } })
     return { request: requestView(after) }
