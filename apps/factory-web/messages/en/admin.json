@@ -1477,7 +1477,8 @@
     "orders": "Sales orders",
     "privacy": "Privacy",
     "quality": "Quality",
-    "home": "Home"
+    "home": "Home",
+    "floorsync": "Floor sync"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",

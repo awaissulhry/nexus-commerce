@@ -1477,7 +1477,8 @@
     "orders": "Ordini clienti",
     "privacy": "Privacy",
     "quality": "Qualità",
-    "home": "Home"
+    "home": "Home",
+    "floorsync": "Sincronizzazione reparto"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
