@@ -195,6 +195,8 @@ beforeAll(async () => {
   )
   const tenantA: TestTenant = { id: T.a, slug: NS.a, companies: [{ id: companyA, code: 'SCA' }] }
   const salesUser = await addUser(h, tenantA, { email: 'olga.orders@seed-a.example.com', role: 'sales' })
+  // The order screens' reads (SCR-039): a session acting as that real person, so the record can name them.
+  SESSIONS['a.named'] = () => ({ audience: 'office', tenantId: T.a, actorId: salesUser.id, grants: [grant(['orders.view', 'orders.manage', 'money.price', 'money.margin'])] })
   sales = new Browser(h.app)
   expect((await sales.signIn(NS.a, salesUser.email, salesUser.password)).status).toBe(200)
   await enrolTotp(h, sales)
@@ -589,5 +591,61 @@ describe('walls: tenant, company, party, money; the floor and the portal are ref
       await refused(session, 'GET', orderUrl(order.id), undefined, 403)
       await refused(session, 'POST', `${orderUrl(order.id)}/close`, { version: order.version, reason: 'x' }, 403)
     }
+  })
+})
+
+describe('what the order screens read (SCR-039): the deposit as paid and sent, the TD02 it bills, margin %, names', () => {
+  let finance: Browser
+  beforeAll(async () => {
+    // Finance, signed in for real (the deposit page's link is the real app's): records payments, drafts invoices.
+    const user = await addUser(h, { id: T.a, slug: NS.a, companies: [{ id: companyA, code: 'SCA' }] }, { email: 'fina.orders@seed-a.example.com', role: 'finance' })
+    finance = new Browser(h.app)
+    expect((await finance.signIn(NS.a, user.email, user.password)).status).toBe(200)
+    await enrolTotp(h, finance)
+    SESSIONS['a.priceOnly'] = office('a', ['orders.view', 'money.price'])
+  }, 60_000)
+
+  it('a deposit request carries what was paid on it and its latest bank-details page; a TD02 names its request', async () => {
+    const before = (await as(finance, 'GET', orderUrl(order.id))).order
+    const deposit = before.chain.depositRequests[0]
+    // The percentage as asked (30 %: a whole "30" is not trimmed to "3").
+    expect(deposit).toMatchObject({ status: 'OPEN', depositPct: '30', amount: 228384, paidAmount: 0, link: null })
+
+    const first = await as(finance, 'POST', `/payments/deposit-requests/${deposit.id}/link`, {}, 201, { 'idempotency-key': key('link') })
+    const mails = h.ses.mails.length
+    const second = await as(finance, 'POST', `/payments/deposit-requests/${deposit.id}/link`, { message: 'Ecco i dati per il bonifico.' }, 201, { 'idempotency-key': key('link') })
+    expect(second.link.revokedLinkIds).toEqual([first.link.id])
+    // The customer's page (SCR-199) says the same percentage.
+    const mail = h.ses.mails.slice(mails).find((entry) => entry.outboundId === second.emailId)!
+    const token = decodeURIComponent(/#token=(\S+)/.exec(textOf(mail.raw))?.[1] ?? '')
+    const page = await h.app.inject({ method: 'GET', url: '/payments/link/deposit', headers: { 'x-factory-link': token } })
+    expect(page.statusCode, page.body).toBe(200)
+    expect(page.json().deposit).toMatchObject({ depositPct: '30', amount: 228384, paid: false })
+    // A part payment, recorded without the deposit invoice (finance issues it later).
+    await as(finance, 'POST', '/payments/deposit-received', { depositRequestId: deposit.id, amount: 100000, receivedOn: TODAY, externalRef: `CRO-ORD-${newId().slice(0, 8)}`, issueDepositInvoice: false }, 201, { 'idempotency-key': key('paid') })
+    const draft = (await as(finance, 'POST', '/invoicing/invoices/deposit-draft', { depositRequestId: deposit.id }, 201, { 'idempotency-key': key('draft') })).invoice
+
+    const after = (await as(finance, 'GET', orderUrl(order.id))).order
+    expect(after.chain.depositRequests[0]).toMatchObject({ id: deposit.id, status: 'OPEN', paidAmount: 100000, link: { to: second.link.to, expiresAt: second.link.expiresAt, state: 'LIVE' } })
+    expect(after.chain.invoices).toEqual([expect.objectContaining({ id: draft.id, docType: 'TD02', status: 'DRAFT', depositRequestId: deposit.id })])
+    // No price grain: neither the amount nor what was paid; the page's state is no money.
+    const viewer = (await ok('a.viewer', 'GET', orderUrl(order.id))).order
+    expect(viewer.chain.depositRequests[0]).not.toHaveProperty('paidAmount')
+    expect(viewer.chain.depositRequests[0].link).toMatchObject({ state: 'LIVE' })
+  })
+
+  it('the margin % follows the margin grain; the people the record names come with their names', async () => {
+    const named = (await ok('a.named', 'GET', orderUrl(order.id))).order
+    const cost = await one<{ netAmount: number; costAmount: number | null }>('SELECT "netAmount", "costAmount" FROM "SalesOrder" WHERE id = $1', [order.id])
+    expect(cost.costAmount).not.toBeNull()
+    expect(Number(named.marginPct)).toBeCloseTo(((cost.netAmount - cost.costAmount!) * 100) / cost.netAmount, 3)
+    expect(named).not.toHaveProperty('costAmount')
+    expect((await ok('a.priceOnly', 'GET', orderUrl(order.id))).order).not.toHaveProperty('marginPct')
+
+    const changed = (await ok('a.named', 'PUT', `${orderUrl(order.id)}/promise`, { version: named.version, promiseDate: addDays(TODAY, 80), reason: 'Moved with the customer.' })).order
+    const actorId = changed.promiseHistory[0].actorId
+    expect(changed.people).toContainEqual({ id: actorId, name: 'olga orders' })
+    // Ids of no person (the test sessions' earlier changes) are simply not named.
+    expect(changed.people.map((person: Json) => person.id)).toEqual([actorId])
   })
 })

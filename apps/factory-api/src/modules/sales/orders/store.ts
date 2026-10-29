@@ -139,6 +139,8 @@ export interface InvoiceLink {
   readonly docType: string
   readonly status: string
   readonly issueDate: Date | null
+  /** A deposit invoice (TD02): the request it bills. */
+  readonly depositRequestId: string | null
 }
 
 /** Everything that followed the order, and its per-size progress. */
@@ -185,7 +187,7 @@ export async function readOrderFacts(db: Reader, order: Pick<OrderRow, 'id'>): P
   const invoiceLines = lineIds.length > 0 ? await db.invoiceLine.findMany({ where: { salesOrderLineId: { in: lineIds }, kind: 'GOODS' }, select: { invoiceId: true, salesOrderLineId: true, size: true, quantity: true } }) : []
   const invoices = await db.invoice.findMany({
     where: { OR: [{ salesOrderId: order.id }, ...(invoiceLines.length > 0 ? [{ id: { in: unique(invoiceLines.map((line) => line.invoiceId)) } }] : [])] },
-    select: { id: true, number: true, docType: true, status: true, issueDate: true },
+    select: { id: true, number: true, docType: true, status: true, issueDate: true, depositRequestId: true },
     orderBy: [{ issueDate: 'asc' }, { id: 'asc' }],
   })
   const invoiceOf = new Map(invoices.map((row) => [row.id, row]))

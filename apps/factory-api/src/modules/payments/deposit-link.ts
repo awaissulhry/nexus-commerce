@@ -10,6 +10,7 @@ import { localeOf } from '@nexus/factory-domain/email/rules'
 import { linkState, linkTerms } from '@nexus/factory-domain/links/purposes'
 import { linkTokenHash, mintLinkToken } from '@nexus/factory-domain/links/token'
 import { asMoney } from '@nexus/factory-domain/money/marked'
+import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { depositLinkMail } from '@nexus/factory-domain/payments/deposit-link'
 import { PAYMENTS_RECORD, PAYMENTS_VIEW } from '@nexus/factory-domain/payments/permissions'
 import { quoteDocumentNumber } from '@nexus/factory-domain/sales/quotes/document'
@@ -255,7 +256,8 @@ export async function depositLinkView(request: FastifyRequest) {
       return {
         deposit: {
           kind: row.kind,
-          depositPct: row.depositPct === null ? null : row.depositPct.toString().replace(/\.?0+$/, ''),
+          // As the database holds it: "30.0000" → "30" (trimming zeros off a whole "30" would say 3 %).
+          depositPct: row.depositPct === null ? null : decimalText(row.depositPct.toString()),
           currency: row.currency,
           amount: asMoney('price', row.amount),
           dueDate: row.dueDate.toISOString().slice(0, 10),

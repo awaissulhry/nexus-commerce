@@ -1,0 +1,705 @@
+{
+  "common": {
+    "retry": "Riprova",
+    "dismiss": "Chiudi",
+    "cancel": "Annulla",
+    "done": "Fatto",
+    "working": "In corso…"
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In tempo reale",
+    "offline": "Non in linea: ricarica per vedere gli ultimi dati"
+  },
+  "status": {
+    "CONFIRMED": "Confermato",
+    "IN_PRODUCTION": "In produzione",
+    "READY": "Pronto",
+    "PARTLY_SHIPPED": "Spedito in parte",
+    "SHIPPED": "Spedito",
+    "CLOSED": "Chiuso",
+    "CANCELLED": "Annullato"
+  },
+  "deposit": {
+    "NOT_NEEDED": "Non serve",
+    "MISSING": "Non chiesto",
+    "OPEN": "Aperto",
+    "PAID": "Pagato",
+    "WAIVED": "Rinunciato",
+    "title": "Richiesta di {kind}",
+    "overdue": "Scaduto",
+    "amount": "Importo",
+    "due": "Scadenza",
+    "paidSoFar": "Pagato finora",
+    "left": "{amount} ancora da pagare",
+    "document": "Dopo il pagamento",
+    "documentTd02": "Una fattura di acconto (TD02)",
+    "documentNone": "Nessuna fattura di acconto (per la sua regola IVA)",
+    "stepsLabel": "Passi dell'acconto",
+    "send": "Invia la pagina con i dati bancari",
+    "sendAgain": "Inviala di nuovo",
+    "record": "Registra il pagamento",
+    "sendSdi": "Invia allo SDI",
+    "step": {
+      "requested": "Richiesto",
+      "requestedWords": "Richiesto quando il cliente ha accettato il preventivo ({date})",
+      "page": "Pagina con i dati bancari",
+      "pageNotSent": "Non ancora inviata: il cliente vi trova l'IBAN, l'importo e la causale",
+      "pageNotNeeded": "Non resta nulla da pagare",
+      "paid": "Pagamento",
+      "paidOn": "Pagato per intero il {date}",
+      "paidDone": "Pagato per intero",
+      "partPaid": "{paid} ricevuti, {left} ancora da pagare",
+      "waitingTransfer": "In attesa del bonifico",
+      "invoice": "Fattura di acconto (TD02)",
+      "invoiceNotNeeded": "Non serve: questo acconto è solo un pagamento",
+      "td02": "TD02 {number}",
+      "issuedOn": "emessa il {date}",
+      "td02Draft": "Bozza TD02: la emette l'amministrazione",
+      "invoiceWaits": "In attesa di emissione da parte dell'amministrazione",
+      "invoiceAfterPayment": "Emessa quando arriva il pagamento",
+      "sdi": "SDI",
+      "sdiNotNeeded": "Niente da inviare",
+      "sdiAfterInvoice": "Inviata una volta emessa la TD02",
+      "sdiNoRight": "Lo stato SDI è visibile a chi vede le fatture",
+      "sdiReading": "Lettura dello stato SDI…"
+    },
+    "none": {
+      "title": "Nessun acconto richiesto",
+      "body": "Questo ordine non richiede acconto: la produzione può partire quando i suoi ordini di lavoro sono rilasciati.",
+      "missing": "L'ordine richiede un acconto, ma non esiste alcuna richiesta: viene chiesta all'accettazione del preventivo."
+    }
+  },
+  "depositKind": {
+    "ACCONTO": "acconto",
+    "CAPARRA": "caparra confirmatoria"
+  },
+  "requestStatus": {
+    "OPEN": "Aperto",
+    "PAID": "Pagato",
+    "WAIVED": "Rinunciato",
+    "CANCELLED": "Annullato"
+  },
+  "rows": {
+    "open": "Aperti",
+    "late": "In ritardo",
+    "deposit": "In attesa di acconto",
+    "CONFIRMED": "Confermati",
+    "IN_PRODUCTION": "In produzione",
+    "READY": "Pronti da spedire",
+    "PARTLY_SHIPPED": "Spediti in parte",
+    "SHIPPED": "Spediti",
+    "CLOSED": "Chiusi",
+    "CANCELLED": "Annullati",
+    "all": "Tutti gli ordini"
+  },
+  "tile": {
+    "late": "In ritardo",
+    "waitingForDeposit": "In attesa di acconto",
+    "inProduction": "In produzione",
+    "readyToShip": "Pronti da spedire",
+    "unknown": "Conteggio non riuscito"
+  },
+  "layout": {
+    "list": "Elenco",
+    "board": "Bacheca"
+  },
+  "list": {
+    "tableLabel": "Ordini di vendita",
+    "search": "Cerca numero o ordine del cliente",
+    "rowsLabel": "Righe",
+    "layoutLabel": "Mostra gli ordini come",
+    "keyView": "Elenco o bacheca",
+    "keysTitle": "Tasti di questo elenco",
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "count_one": "{count} ordine",
+    "count_other": "{count} ordini",
+    "countMore_one": "{count} ordine mostrato, altri da caricare",
+    "countMore_other": "{count} ordini mostrati, altri da caricare",
+    "more": "Mostra altri 50",
+    "customerRef": "Ord. cliente {ref}",
+    "noCustomerRef": "Senza ordine del cliente",
+    "depositDue": "scade il {date}",
+    "depositOverdue": "scaduto il {date}",
+    "units_one": "{count} capo",
+    "units_other": "{count} capi",
+    "lines_one": "{count} riga",
+    "lines_other": "{count} righe",
+    "daysLate_one": "{count} giorno di ritardo",
+    "daysLate_other": "{count} giorni di ritardo",
+    "requested": "richiesto il {date}",
+    "noRequested": "nessuna data richiesta",
+    "noPromise": "Nessuna data promessa",
+    "shipped": "{shipped} di {units} spediti",
+    "shippedLabel": "Capi di {number} spediti",
+    "quoteRef": "{number} v{revision}",
+    "rowMenu": "Altro per {number}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "failed": "Impossibile caricare gli ordini",
+    "noMatch": {
+      "title": "Nessun ordine corrisponde",
+      "body": "Cambia la ricerca o le righe, oppure togli i filtri."
+    },
+    "clearFilters": "Togli i filtri",
+    "empty": {
+      "title": "Ancora nessun ordine",
+      "body": "Un ordine compare qui quando un cliente accetta un preventivo.",
+      "quotes": "Vai ai preventivi"
+    },
+    "viewing": "Mostra: {view}"
+  },
+  "col": {
+    "number": "Numero",
+    "customer": "Cliente",
+    "status": "Stato",
+    "deposit": "Acconto",
+    "units": "Capi",
+    "orderDate": "Ordinato",
+    "promised": "Promesso",
+    "shipped": "Spedito",
+    "net": "Imponibile",
+    "quote": "Dal preventivo",
+    "more": "Altro"
+  },
+  "bulk": {
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)"
+  },
+  "csv": {
+    "number": "Numero",
+    "customer": "Cliente",
+    "customerRef": "Ordine del cliente",
+    "status": "Stato",
+    "deposit": "Acconto",
+    "depositDue": "Scadenza acconto",
+    "lines": "Righe",
+    "units": "Capi",
+    "shipped": "Spediti",
+    "orderDate": "Ordinato",
+    "requested": "Richiesto",
+    "promised": "Promesso",
+    "daysLate": "Giorni di ritardo",
+    "net": "Imponibile",
+    "gross": "Totale",
+    "quote": "Preventivo"
+  },
+  "board": {
+    "label": "Ordini per stato",
+    "count_one": "{count} stato",
+    "count_other": "{count} stati",
+    "countMore": "{count}+",
+    "updates_one": "{count} aggiornamento · Mostra",
+    "updates_other": "{count} aggiornamenti · Mostra",
+    "valuePartial": "Valore quando sono tutti mostrati",
+    "laneEmpty": "Nessun ordine in questo stato",
+    "allInList": "Tutti gli ordini «{state}» nell'elenco",
+    "offBoard": "Non in bacheca: {closed} chiusi, {cancelled} annullati.",
+    "seeClosed": "Vedi gli ordini chiusi",
+    "keyWalk": "Scheda precedente o successiva",
+    "cardLabel": "{number}, {customer}",
+    "promise": "Promesso il {date}",
+    "promiseLate_one": "{date} · {count} giorno di ritardo",
+    "promiseLate_other": "{date} · {count} giorni di ritardo",
+    "notOnBoard": {
+      "title": "Gli ordini chiusi e annullati non sono in bacheca",
+      "body": "La bacheca mostra gli ordini ancora in movimento. Questi sono nell'elenco.",
+      "list": "Mostrali nell'elenco"
+    },
+    "deposit": {
+      "NOT_NEEDED": "Senza acconto",
+      "MISSING": "Acconto non chiesto",
+      "OPEN": "Acconto aperto",
+      "PAID": "Acconto pagato",
+      "WAIVED": "Acconto rinunciato"
+    }
+  },
+  "tab": {
+    "lines": "Righe",
+    "dates": "Date e promessa",
+    "production": "Produzione",
+    "shipments": "Spedizioni",
+    "money": "Fatture e pagamenti",
+    "documents": "Documenti",
+    "activity": "Attività",
+    "depositOpen": "C'è un acconto aperto"
+  },
+  "step": {
+    "makeWorkOrders": "Crea ordini di lavoro",
+    "changePromise": "Cambia data promessa…",
+    "close": "Chiudi ordine…"
+  },
+  "action": {
+    "promise": "Cambia data promessa…",
+    "ready": "Segna come pronto…",
+    "openQuote": "Apri il preventivo {number}",
+    "copyNumber": "Copia il numero"
+  },
+  "record": {
+    "back": "Ordini",
+    "backToList": "Torna agli ordini",
+    "title": "Ordine",
+    "loading": "Caricamento dell'ordine…",
+    "state": {
+      "not_found": {
+        "title": "Questo ordine non esiste",
+        "body": "Può appartenere a un'altra azienda, oppure l'indirizzo è sbagliato."
+      },
+      "forbidden": {
+        "title": "Non hai accesso a questo ordine",
+        "body": "Gli ordini si aprono a chi ha un ruolo vendite, amministrazione o produzione sulla sua azienda e sul suo cliente."
+      },
+      "error": {
+        "title": "Impossibile caricare l'ordine"
+      }
+    },
+    "dock": "Conversazione",
+    "dockHint": "La conversazione dell'ordine accanto alla scheda",
+    "dockLabel": "La conversazione dell'ordine",
+    "more": "Altro per questo ordine",
+    "tabsLabel": "Sezioni dell'ordine",
+    "depositOpen": "Acconto aperto — scade il {date}",
+    "depositPaid": "Acconto pagato",
+    "depositMissing": "Acconto non chiesto",
+    "late_one": "In ritardo di {count} giorno",
+    "late_other": "In ritardo di {count} giorni",
+    "customerRef": "Ordine del cliente {ref}",
+    "fromQuote": "Dal preventivo {number} v{revision}",
+    "changed": "Questo ordine è cambiato alle {time}",
+    "reload": "Ricarica",
+    "cancelled": "Annullato: {reason}",
+    "closed": "Chiuso il {date}: non cambia più nulla.",
+    "closedNoDate": "Chiuso: non cambia più nulla.",
+    "readOnly": "Sola lettura: il tuo ruolo segue gli ordini e non ne cambia nessuno.",
+    "noPanels": "La conversazione, i file e la cronologia si aprono con il record."
+  },
+  "held": {
+    "busy": "Sto salvando l'ultima modifica…",
+    "noWorkOrders": "Creare ordini di lavoro richiede il diritto del responsabile di produzione",
+    "deposit": "La produzione aspetta l'acconto (scade il {date})",
+    "depositMissing": "La produzione aspetta un acconto che non è mai stato chiesto",
+    "noManage": "Cambiare un ordine richiede il diritto vendite di gestire gli ordini",
+    "closeState": "Si chiude solo un ordine spedito",
+    "noClose": "Chiudere richiede il diritto di gestire o chiudere gli ordini",
+    "notSettled": "Non ancora saldato: chiuderlo comunque richiede il diritto di chiudere ordini non saldati",
+    "cancelState": "Si annulla solo un ordine confermato",
+    "cancelWorkOrders": "Le sue righe hanno ordini di lavoro: annulla prima le bozze; uno rilasciato tiene l'ordine",
+    "readyState": "Si segna come pronto solo un ordine in produzione",
+    "final": "Un ordine chiuso o annullato non cambia mai",
+    "noPayments": "Registrare pagamenti richiede il diritto dell'amministrazione",
+    "depositNotOpen": "Su questo acconto non resta nulla da pagare",
+    "noQuote": "Questo acconto non appartiene a un preventivo: la sua pagina va con il preventivo",
+    "noPrice": "Gli importi sono visibili a chi vede i prezzi",
+    "noIssue": "Inviare allo SDI richiede il diritto di emettere fatture",
+    "sdiNotNow": "Ora non si può inviare: vedi il suo stato"
+  },
+  "summary": {
+    "label": "L'ordine in sintesi",
+    "title": "Riepilogo",
+    "lines": "Righe",
+    "linesValue": "{lines} righe · {units} capi",
+    "net": "Imponibile",
+    "vat": "IVA",
+    "gross": "Totale",
+    "grossConsumer": "Totale, IVA inclusa",
+    "money": "Importi",
+    "noPrice": "Visibili a chi vede i prezzi",
+    "deposit": "Acconto",
+    "depositNotNeeded": "Non serve",
+    "depositMissing": "Serve, non chiesto",
+    "depositPaid": "{amount} pagati",
+    "depositWaived": "Rinunciato",
+    "depositOpen": "{amount} entro il {date}",
+    "invoiced": "Fatturato",
+    "paid": "Pagato",
+    "balance": "Saldo da pagare",
+    "margin": "Margine stimato",
+    "marginValue": "{pct}",
+    "marginUnknown": "Non noto: manca un costo",
+    "cost": "Costo",
+    "costIncomplete": "Incompleto"
+  },
+  "chain": {
+    "title": "Dal preventivo alle fatture",
+    "quote": "Preventivo",
+    "quoteValue": "{number} v{revision}",
+    "noQuote": "Inserito dall'ufficio",
+    "order": "Ordine",
+    "deposit": "Acconto",
+    "workOrders": "Ordini di lavoro",
+    "shipments": "Spedizioni",
+    "invoices": "Fatture",
+    "count_one": "{count}",
+    "count_other": "{count}"
+  },
+  "gate": {
+    "title": "Blocco acconto",
+    "state": {
+      "NOT_NEEDED": "Non serve",
+      "WAITING": "In attesa di pagamento",
+      "PAID": "Pagato",
+      "WAIVED": "Rinunciato",
+      "MISSING": "Non chiesto"
+    },
+    "waiting": "La produzione aspetta l'acconto (scade il {date}).",
+    "paid": "Acconto pagato il {date}: la produzione può partire.",
+    "paidNoDate": "Acconto pagato: la produzione può partire.",
+    "waived": "Acconto rinunciato: la produzione può partire.",
+    "missing": "L'ordine richiede un acconto, ma non è stato chiesto: la produzione aspetta.",
+    "notNeeded": "Nessun acconto necessario: la produzione può partire.",
+    "amount": "{amount} come {kind}",
+    "open": "Apri l'acconto"
+  },
+  "lines": {
+    "readOnly": "Quello che il cliente ha ordinato, come accettato. Un ordine cambia con una variazione (più avanti).",
+    "show": "Mostra",
+    "vatNature": "IVA {nature}",
+    "orderDate": "Come l'ordine",
+    "revision": "Fatto sulla rev. {revision}",
+    "noRevision": "Revisione scelta dall'ordine di lavoro",
+    "gridCaption": "{style}: {layer} per colore e taglia",
+    "pricesOf": "Prezzi di {style}",
+    "madeHint": "I capi fatti per taglia si contano su ogni ordine di lavoro (scheda Produzione).",
+    "col": {
+      "colour": "Colore",
+      "pieces": "Capi",
+      "shipped": "Spediti",
+      "unitNet": "Prezzo unitario (imponibile)",
+      "unitGross": "Prezzo unitario (IVA incl.)",
+      "net": "Imponibile",
+      "vat": "IVA",
+      "promise": "Promessa"
+    }
+  },
+  "layer": {
+    "ordered": "Ordinati",
+    "inWorkOrders": "Negli ordini di lavoro",
+    "released": "Rilasciati",
+    "shipped": "Spediti",
+    "toShip": "Da spedire"
+  },
+  "dates": {
+    "title": "Date",
+    "ordered": "Ordinato",
+    "requested": "Richiesto",
+    "promised": "Promesso",
+    "firstPromised": "Prima promessa",
+    "late_one": "{count} giorno di ritardo",
+    "late_other": "{count} giorni di ritardo",
+    "left_one": "tra {count} giorno",
+    "left_other": "tra {count} giorni",
+    "linesLabel": "Date per riga",
+    "asOrder": "{date} (dell'ordine)",
+    "historyTitle": "Cambi della promessa",
+    "never": "Mai cambiata",
+    "neverBody": "La promessa è ancora quella data quando l'ordine è nato.",
+    "someone": "Qualcuno dell'ufficio",
+    "fromTo": "{from} → {to}",
+    "wholeOrder": "Tutto l'ordine",
+    "col": {
+      "line": "Riga",
+      "requested": "Richiesto",
+      "promised": "Promesso",
+      "state": "In tempo?",
+      "when": "Quando",
+      "who": "Chi",
+      "change": "Cambio",
+      "reason": "Perché"
+    }
+  },
+  "production": {
+    "title": "Ordini di lavoro",
+    "empty": {
+      "title": "Ancora nessun ordine di lavoro",
+      "body": "La produzione crea gli ordini di lavoro dalle righe dell'ordine quando l'acconto lo consente."
+    },
+    "uncovered_one": "{count} riga non ancora tutta in produzione",
+    "uncovered_other": "{count} righe non ancora tutte in produzione",
+    "noProgressRight": "L'avanzamento del reparto è visibile a chi segue la produzione.",
+    "progressLabel": "Capi finiti di {number}",
+    "progress": "Tagliati {cut} · cuciti {sewn} · finiti {finished} su {pieces}",
+    "notReleased": "Non ancora rilasciato",
+    "col": {
+      "number": "Ordine di lavoro",
+      "style": "Modello",
+      "pieces": "Capi",
+      "status": "Stato",
+      "progress": "Avanzamento",
+      "due": "Scadenza",
+      "site": "Sede",
+      "released": "Rilasciato"
+    }
+  },
+  "woStatus": {
+    "DRAFT": "Bozza",
+    "RELEASED": "Rilasciato",
+    "IN_PROGRESS": "In lavorazione",
+    "COMPLETED": "Completato",
+    "CLOSED": "Chiuso",
+    "CANCELLED": "Annullato"
+  },
+  "ship": {
+    "leftTitle": "Da spedire",
+    "figures": "{ordered} ordinati · {released} rilasciati · {shipped} spediti · {toShip} da spedire",
+    "gridCaption": "{style}: capi da spedire per colore e taglia",
+    "listTitle": "Spedizioni",
+    "empty": {
+      "title": "Ancora nulla di spedito",
+      "body": "Qui compaiono le spedizioni fatte in magazzino per questo ordine."
+    },
+    "col": {
+      "number": "Spedizione",
+      "status": "Stato",
+      "shipped": "Partita",
+      "delivered": "Consegnata"
+    }
+  },
+  "shipStatus": {
+    "DRAFT": "Bozza",
+    "PACKED": "Imballata",
+    "SHIPPED": "Spedita",
+    "DELIVERED": "Consegnata",
+    "RETURNED": "Rientrata",
+    "CANCELLED": "Annullata"
+  },
+  "money": {
+    "balanceTitle": "Saldo",
+    "gross": "Totale ordine",
+    "invoiced": "Fatturato",
+    "paid": "Pagato sulle fatture",
+    "depositPaid": "Acconti ricevuti",
+    "balance": "Saldo da pagare",
+    "invoicesTitle": "Fatture e note di credito",
+    "noInvoices": {
+      "title": "Ancora nulla di fatturato",
+      "body": "Qui compaiono la fattura di acconto e le fatture della merce spedita."
+    },
+    "draft": "Bozza",
+    "noInvoiceRight": "Le fatture sono visibili a chi vede le fatture.",
+    "col": {
+      "number": "Numero",
+      "kind": "Tipo",
+      "status": "Stato",
+      "sdi": "SDI",
+      "gross": "Totale",
+      "open": "Aperto"
+    }
+  },
+  "docType": {
+    "TD01": "Fattura (TD01)",
+    "TD02": "Fattura di acconto (TD02)",
+    "TD04": "Nota di credito (TD04)",
+    "TD24": "Fattura differita (TD24)"
+  },
+  "invoiceStatus": {
+    "DRAFT": "Bozza",
+    "ISSUED": "Emessa",
+    "SENT": "Inviata allo SDI",
+    "DELIVERED": "Consegnata",
+    "NOT_DELIVERABLE": "Non recapitabile",
+    "REJECTED": "Scartata",
+    "ERROR": "Invio non riuscito"
+  },
+  "sdi": {
+    "state": {
+      "DRAFT": "Bozza",
+      "NOT_SENT": "Non inviata",
+      "SENDING": "In invio",
+      "AT_SDI": "Presso lo SDI",
+      "DELIVERED": "Consegnata",
+      "NOT_DELIVERED": "Non consegnata",
+      "REJECTED": "Scartata",
+      "ERROR": "Invio non riuscito"
+    },
+    "next": {
+      "ISSUE": "Va prima emessa.",
+      "SEND": "Inviala allo SDI.",
+      "WAIT": "Lo SDI risponde entro pochi giorni.",
+      "FIX_AND_RESEND": "Correggila e inviala di nuovo (Fatture).",
+      "SEND_AGAIN": "Inviala di nuovo.",
+      "CHECK_COPY": "Nel cassetto fiscale del cliente; una copia è partita per e-mail.",
+      "NONE": "Nulla da fare."
+    }
+  },
+  "link": {
+    "LIVE": "Inviata a {to} il {date} · si apre fino al {until}",
+    "REVOKED": "Inviata a {to} il {date} · sostituita da una pagina più recente",
+    "USED_UP": "Inviata a {to} il {date} · aperta tutte le volte consentite",
+    "EXPIRED": "Inviata a {to} il {date} · scaduta il {until}",
+    "contact": "il contatto del preventivo",
+    "title": "Invia la pagina con i dati bancari",
+    "body": "Il cliente riceve un'e-mail con il link a una pagina che mostra l'importo, la scadenza, la causale da scrivere nel bonifico e il conto dell'azienda.",
+    "to": "A",
+    "valid": "Si apre per",
+    "validValue": "30 giorni",
+    "replaces": "Una pagina inviata prima smette di aprirsi: la nuova la sostituisce.",
+    "message": "Le tue parole (facoltative)",
+    "messageHint": "Aggiunte all'e-mail sopra il link.",
+    "go": "Invia la pagina",
+    "sentTo": "Inviata a {to}: la pagina si apre fino al {until}.",
+    "sentFailed": "La pagina è pronta per {to}, ma l'e-mail non è partita: inviala di nuovo.",
+    "revoked_one": "La pagina precedente ha smesso di aprirsi.",
+    "revoked_other": "{count} pagine precedenti hanno smesso di aprirsi."
+  },
+  "payment": {
+    "title": "Registra il pagamento dell'acconto · {number}",
+    "body": "Inserisci il bonifico come è arrivato sul conto. Va su questo acconto, mai oltre quanto chiede ancora.",
+    "amount": "Importo ricevuto",
+    "amountHint": "Ancora da pagare: {left}",
+    "receivedOn": "Ricevuto il",
+    "reference": "Riferimento bancario (CRO / TRN)",
+    "referenceHint": "Come lo mostra l'estratto conto; un riferimento si registra una volta sola.",
+    "note": "Nota per l'ufficio (facoltativa)",
+    "issue": "Emetti ora la fattura di acconto (TD02)",
+    "issueHint": "La TD02 prende ora il suo numero; ti viene chiesto il codice dell'app di autenticazione.",
+    "issueOff": "Il pagamento viene registrato; la TD02 resta da emettere.",
+    "issueByFinance": "La TD02 che segue la emette una persona con il diritto di emettere fatture.",
+    "noInvoice": "A questo acconto non segue alcuna fattura di acconto (per la sua regola IVA).",
+    "over": "Più di quanto resta: {left} va sull'acconto, il resto rimane sul pagamento.",
+    "go": "Registra {amount}",
+    "goEmpty": "Registra il pagamento",
+    "doneFull": "{amount} registrati ({reference}): l'acconto è pagato e la produzione può partire.",
+    "donePart": "{amount} registrati ({reference}): parte dell'acconto resta da pagare.",
+    "td02Issued": "Fattura di acconto {number} emessa.",
+    "td02FilesPending": "Fattura di acconto {number} emessa; i suoi file sono ancora in preparazione.",
+    "td02Later": "La fattura di acconto (TD02) resta da emettere.",
+    "td02NotNeeded": "Non segue alcuna fattura di acconto.",
+    "problem": {
+      "amount": "Inserisci un importo sopra zero, ad es. 1872,00",
+      "date": "Scegli il giorno in cui è arrivato",
+      "future": "Un pagamento si registra quando è arrivato",
+      "reference": "Inserisci il riferimento della banca"
+    }
+  },
+  "sdiSend": {
+    "title": "Invia {number} allo SDI",
+    "body": "La fattura di acconto del {date} va al Sistema di Interscambio, che la consegna al cliente. Dopo non si può cambiare.",
+    "go": "Invia allo SDI",
+    "sending": "Invio in corso…"
+  },
+  "promise": {
+    "title": "Cambia la promessa di {number}",
+    "scope": "Per",
+    "scopeOrder": "Tutto l'ordine",
+    "scopeOrderHint": "Ogni riga senza una data propria",
+    "scopeLines": "Righe scelte",
+    "scopeLinesHint": "Prima che parta qualcosa",
+    "lines": "Righe",
+    "date": "Nuova data promessa",
+    "dateHint": "Da oggi in poi. La prima promessa resta registrata.",
+    "reason": "Perché",
+    "reasonHint": "Resta nella cronologia della promessa.",
+    "tellCustomer": "Avvisa il cliente nella conversazione dell'ordine (Attività).",
+    "go": "Cambia la data",
+    "problem": {
+      "date": "Scegli una data",
+      "past": "Una nuova promessa è un giorno da oggi in poi",
+      "same": "È già la data promessa",
+      "reason": "Indica il perché",
+      "lines": "Scegli almeno una riga"
+    }
+  },
+  "ready": {
+    "title": "Segna {number} come pronto da spedire",
+    "body": "Finché il rilascio qualità non si usa per questo ordine, una persona dice che è pronto, con il motivo.",
+    "reason": "Perché è pronto",
+    "reasonNeeded": "Indica il perché",
+    "go": "Segna come pronto"
+  },
+  "close": {
+    "title": "Chiudi {number}",
+    "settled": "Ogni riga è spedita, fatturata e pagata.",
+    "notSettled": "Questo ordine non è saldato",
+    "reason": "Perché chiuderlo ora",
+    "reasonHint": "Resta nella cronologia dell'ordine.",
+    "reasonNeeded": "Indica perché si chiude prima di essere saldato",
+    "final": "Un ordine chiuso non cambia mai.",
+    "go": "Chiudi l'ordine"
+  },
+  "settlement": {
+    "ORDER_CANCELLED": "L'ordine è annullato.",
+    "NOT_SHIPPED": "Non è ancora partito tutto.",
+    "NOT_INVOICED": "La merce spedita non è ancora fatturata.",
+    "OVER_INVOICED": "È fatturato più dello spedito: lo corregge una nota di credito.",
+    "NO_INVOICE": "Non è ancora emessa alcuna fattura.",
+    "AT_SDI": "Una fattura non è ancora consegnata dallo SDI.",
+    "DEPOSIT_NOT_DEDUCTED": "Una fattura di acconto non è stornata per intero.",
+    "DEPOSIT_NOT_INVOICED": "Un acconto pagato non ha ancora la sua fattura di acconto.",
+    "BALANCE_DUE": "Le fatture non sono pagate per intero.",
+    "REFUND_DUE": "È dovuto un rimborso al cliente.",
+    "OTHER": "Manca qualcos'altro."
+  },
+  "docs": {
+    "acceptedTitle": "Preventivo accettato",
+    "openQuote": "Apri il preventivo {number}",
+    "noQuote": {
+      "title": "Inserito dall'ufficio — nessun preventivo",
+      "body": "Questo ordine non viene da un preventivo accettato."
+    },
+    "noQuoteRight": "Dal preventivo {number} v{revision}. Le sue prove sono visibili a chi vede i preventivi.",
+    "noEvidence": "Il preventivo {number} v{revision} non ha prove di accettazione registrate.",
+    "version": "Versione",
+    "versionValue": "{number} v{revision}",
+    "signer": "Firmato da",
+    "acceptedAt": "Accettato",
+    "channel": "Come",
+    "channelValue": {
+      "LINK": "Dal link del cliente",
+      "OFFICE": "Registrato dall'ufficio"
+    },
+    "document": "Il PDF firmato",
+    "matches": "Uguale al PDF inviato",
+    "differs": "Diverso dal PDF inviato",
+    "terms": "Versione delle condizioni",
+    "filesTitle": "Documenti e file",
+    "filesBody": "I file dell'ordine — l'ordine del cliente, le copie, quanto aggiunto — sono in Attività › File, con chi può vedere ciascuno.",
+    "openFiles": "Apri i file"
+  },
+  "part": {
+    "loading": "Caricamento di {part}…",
+    "failed": "Impossibile caricare {part}"
+  },
+  "notice": {
+    "promise": "La data promessa è cambiata; la prima promessa resta registrata.",
+    "ready": "L'ordine è pronto da spedire.",
+    "closed": "L'ordine è chiuso.",
+    "sdiSent": "Inviata allo SDI: la sua risposta compare qui quando arriva."
+  },
+  "stepUp": {
+    "title": "Conferma che sei tu",
+    "confirm": "Conferma",
+    "sentence": {
+      "td02": "Emettere la fattura di acconto le dà il numero per sempre. Inserisci il codice dell'app di autenticazione.",
+      "sdi": "Inviare una fattura allo SDI non si può annullare. Inserisci il codice dell'app di autenticazione."
+    },
+    "problem": {
+      "wrong": "Il codice è sbagliato o già usato. Inserisci il più recente.",
+      "locked": "Troppi tentativi: aspetta un minuto e riprova.",
+      "unavailable": "Ora non è stato possibile controllare il codice. Riprova."
+    }
+  },
+  "problem": {
+    "read": {
+      "signed_out": "Sei uscito: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non lo apre.",
+      "not_found": "Non c'è più.",
+      "unavailable": "Il server della fabbrica non risponde: controlla la connessione e riprova.",
+      "rate_limited": "Troppe richieste: aspetta un momento.",
+      "internal": "Qualcosa non ha funzionato sul server."
+    },
+    "write": {
+      "moved": "Qualcuno ha cambiato questo ordine nel frattempo: è stato riletto, controllalo e riprova.",
+      "state": "L'ordine è andato avanti nel frattempo: è stato riletto.",
+      "reference": "Questo riferimento bancario è già registrato: controlla l'estratto conto.",
+      "invalid": "Qualcosa di inserito non è accettato: controlla i campi.",
+      "signed_out": "Sei uscito: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non può farlo.",
+      "not_found": "Non c'è più.",
+      "rate_limited": "Troppe richieste: aspetta un momento.",
+      "unavailable": "Il server della fabbrica non risponde: non è cambiato nulla.",
+      "step_up": "Serve il codice dell'app di autenticazione.",
+      "internal": "Qualcosa non ha funzionato sul server: non è cambiato nulla."
+    }
+  }
+}

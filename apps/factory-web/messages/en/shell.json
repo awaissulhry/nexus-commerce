@@ -18,7 +18,8 @@
       "area": "Sales",
       "main": "Main",
       "customers": "Customers",
-      "quotes": "Quotes"
+      "quotes": "Quotes",
+      "orders": "Orders"
     },
     "purchasing": {
       "area": "Purchasing",
