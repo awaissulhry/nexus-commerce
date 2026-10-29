@@ -13,7 +13,7 @@ import { baseFactor, convertibleUnits, COST_SCALE, decimalOf, QUANTITY_SCALE, ro
  * same states for every login.
  *
  *   states     DRAFT → SENT → CONFIRMED → PARTLY_RECEIVED → RECEIVED → CLOSED; DECLINED by the supplier (B-W1-31's
- *              link); CANCELLED by the office. Approval (PENDING_APPROVAL / APPROVED, SCM-078) is W2b: in W1 the
+ *              link), or CHANGES_PROPOSED by it (the buyer accepts → CONFIRMED, or refuses → SENT); CANCELLED by the office. Approval (PENDING_APPROVAL / APPROVED, SCM-078) is W2b: in W1 the
  *              person who may send places the order.
  *   a line     bought in its own unit (ft² or m² for leather, metres, pieces …; any unit the item converts) and counted in
  *              the item's base unit as well (planning nets it, receiving counts against it). Its amount is quantity × unit
@@ -31,7 +31,7 @@ import { baseFactor, convertibleUnits, COST_SCALE, decimalOf, QUANTITY_SCALE, ro
  *              newer version (409) and, read again, a state that refuses it.
  */
 
-export const PURCHASE_ORDER_STATUSES = ['DRAFT', 'SENT', 'CONFIRMED', 'DECLINED', 'PARTLY_RECEIVED', 'RECEIVED', 'CLOSED', 'CANCELLED'] as const
+export const PURCHASE_ORDER_STATUSES = ['DRAFT', 'SENT', 'CONFIRMED', 'DECLINED', 'CHANGES_PROPOSED', 'PARTLY_RECEIVED', 'RECEIVED', 'CLOSED', 'CANCELLED'] as const
 export type PurchaseOrderStatus = (typeof PURCHASE_ORDER_STATUSES)[number]
 
 export const STATUS_WORDS: Readonly<Record<PurchaseOrderStatus, string>> = Object.freeze({
@@ -39,6 +39,7 @@ export const STATUS_WORDS: Readonly<Record<PurchaseOrderStatus, string>> = Objec
   SENT: 'sent and waiting for the supplier',
   CONFIRMED: 'confirmed by the supplier',
   DECLINED: 'declined by the supplier',
+  CHANGES_PROPOSED: "waiting for the buyer's decision on the supplier's changes",
   PARTLY_RECEIVED: 'partly received',
   RECEIVED: 'received',
   CLOSED: 'closed',
@@ -288,6 +289,7 @@ export function draftProblem(status: PurchaseOrderStatus): string | null {
 export function newLinkProblem(status: PurchaseOrderStatus): string | null {
   if (status === 'SENT') return null
   if (status === 'DRAFT') return 'The order is not sent yet: send it.'
+  if (status === 'CHANGES_PROPOSED') return "The supplier proposed changes: accept or refuse the supplier's changes first (refused, the order waits for a new link)."
   return `The order is ${STATUS_WORDS[status]}: it waits for no confirmation, so it gets no new link.`
 }
 
@@ -301,6 +303,8 @@ export function cancelProblem(status: PurchaseOrderStatus): string | null {
     case 'SENT':
     case 'DECLINED':
       return null
+    case 'CHANGES_PROPOSED':
+      return "The supplier proposed changes to this order: accept or refuse the supplier's changes first (refused, the order can be cancelled)."
     case 'CONFIRMED':
       return 'The supplier confirmed this order: it is a contract now. Agree any change with the supplier; a confirmed order is not cancelled here.'
     case 'PARTLY_RECEIVED':

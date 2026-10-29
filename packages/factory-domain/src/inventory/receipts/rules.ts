@@ -55,6 +55,8 @@ export function receivingProblem(status: PurchaseOrderStatus): string | null {
       return 'The order is a draft: it was never sent, so no goods are received against it. Send it first.'
     case 'DECLINED':
       return 'The supplier declined the order: change it and send it again, or cancel it.'
+    case 'CHANGES_PROPOSED':
+      return "The supplier proposed changes to this order: accept or refuse the supplier's changes first, then receive the goods."
     case 'RECEIVED':
       return 'The order is received in full: record extra goods against a new order (or reverse a wrong receipt first).'
     default:
