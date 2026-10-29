@@ -73,6 +73,7 @@ const grant = (permissions: Grant['permissions'], companies: Grant['companies'] 
 const office = (tenantId: string, grants: Grant[]): SessionContext => ({ audience: 'office', tenantId, actorId: user, grants })
 const SESSIONS: Record<string, SessionContext> = {
   manager: office(tenantA, [grant([VIEW, MANAGE, 'files.read', 'files.upload'])]),
+  certificates: office(tenantA, [grant([VIEW, 'compliance.certificates.manage', 'files.read', 'files.upload'])]),
   viewer: office(tenantA, [grant([VIEW, 'files.read'])]),
   noFiles: office(tenantA, [grant([VIEW, MANAGE])]),
   companyTwo: office(tenantA, [grant([VIEW, MANAGE, 'files.read', 'files.upload'], [companyA2])]),
@@ -484,3 +485,78 @@ describe('who sees and writes it', () => {
   })
 })
 
+describe('files written only through their module (platform/files/owned.ts)', () => {
+  const announce = (session: string, body: Json) => call(session, 'POST', '/files', body)
+  const fileBody = (recordType: string, recordId: string, kind: string, text: string, companyId: string | null = companyA) => {
+    const body = pdf(text)
+    return { companyId, recordType, recordId, kind, originalName: 'file.pdf', contentType: 'application/pdf', sizeBytes: body.length, sha256: sha(body) }
+  }
+
+  it('refuses the generic upload and confirmation of a DoC or leaflet file; the module\'s own routes still work', async () => {
+    const [document] = await admin<{ id: string }>('SELECT id::text AS id FROM "ComplianceDocument" WHERE "styleId" = $1 AND kind = $2 AND language = $3 AND revision = 2', [jacket, 'DECLARATION_OF_CONFORMITY', 'it'])
+    for (const kind of ['DOCUMENT', 'ATTACHMENT']) {
+      const refused = await announce('manager', fileBody('ComplianceDocument', document!.id, kind, `generic ${kind}`))
+      expect(refused.statusCode, refused.body).toBe(409)
+      expect(refused.json().error.message).toBe(
+        `A ${kind} file of a ComplianceDocument is uploaded and confirmed only through its own route: POST /product/styles/:styleId/compliance/documents, then POST …/documents/:documentId/files/:fileId/complete.`,
+      )
+    }
+    expect(await admin('SELECT 1 FROM "StoredFile" WHERE "recordId" = $1 AND "originalName" = $2', [document!.id, 'file.pdf'])).toEqual([])
+
+    // A file announced through the module is confirmed only through the module.
+    const body = pdf('DoC it rev 2, third version')
+    const announced = await ok(
+      'manager',
+      'POST',
+      `/product/styles/${jacket}/compliance/documents`,
+      { revisionId: rev2, kind: 'DECLARATION_OF_CONFORMITY', language: 'it', originalName: 'doc-v3.pdf', contentType: 'application/pdf', sizeBytes: body.length, sha256: sha(body) },
+      201,
+    )
+    expect((await app.inject({ method: 'PUT', url: announced.upload.url, headers: announced.upload.headers, payload: body })).statusCode).toBe(200)
+    const generic = await call('manager', 'POST', `/files/${announced.file.id}/complete`)
+    expect(generic.statusCode).toBe(409)
+    expect((await admin<{ status: string }>('SELECT status FROM "StoredFile" WHERE id = $1', [announced.file.id]))[0]!.status).toBe('PENDING_UPLOAD')
+    const confirmed = await ok('manager', 'POST', `/product/styles/${jacket}/compliance/documents/${announced.document.id}/files/${announced.file.id}/complete`)
+    expect(confirmed.document).toMatchObject({ status: 'ISSUED', currentFile: { id: announced.file.id } })
+  })
+
+  it('refuses a generic CERTIFICATE file on a certificate, keeps its other attachments open, and uploads the PDF through the register\'s route', async () => {
+    const draft = newId()
+    await admin(
+      `INSERT INTO "Certificate" (id, "tenantId", "companyId", standard, "ppeClass", number, "notifiedBodyName", "notifiedBodyNumber", "validFrom", "validTo")
+       VALUES ($1, $2, $3, 'EN 17092-4:2020', 'A', 'TEST-CERT-0004', 'Test Notified Body', '0000', '2026-01-15', '2030-12-31')`,
+      [draft, tenantA, companyA],
+    )
+    const refused = await announce('certificates', fileBody('Certificate', draft, 'CERTIFICATE', 'generic certificate'))
+    expect(refused.statusCode).toBe(409)
+    expect(refused.json().error.message).toMatch(/only through its own route: POST \/compliance\/certificates\/:certificateId\/pdf/)
+    // A test report or a mail attachment on the certificate's thread is not the certificate's PDF: still open.
+    expect((await announce('certificates', fileBody('Certificate', draft, 'ATTACHMENT', 'test report'))).statusCode).toBe(201)
+
+    const upload = async (text: string) => {
+      const body = pdf(text)
+      const announced = await ok('certificates', 'POST', `/compliance/certificates/${draft}/pdf`, { originalName: 'certificate.pdf', contentType: 'application/pdf', sizeBytes: body.length, sha256: sha(body) }, 201)
+      expect(announced.file).toMatchObject({ recordType: 'Certificate', recordId: draft, kind: 'CERTIFICATE', companyId: companyA, status: 'PENDING_UPLOAD' })
+      expect((await app.inject({ method: 'PUT', url: announced.upload.url, headers: announced.upload.headers, payload: body })).statusCode).toBe(200)
+      expect((await call('certificates', 'POST', `/files/${announced.file.id}/complete`)).statusCode).toBe(409)
+      return ok('certificates', 'POST', `/compliance/certificates/${draft}/pdf/${announced.file.id}/complete`)
+    }
+    const first = await upload('the notified body PDF')
+    expect(first.certificate).toMatchObject({ status: 'DRAFT', hasPdf: true })
+    expect(first.file).toMatchObject({ status: 'AVAILABLE', retainUntil: null })
+    // Registered with it, as before.
+    const issued = await ok('certificates', 'POST', `/compliance/certificates/${draft}/issue`, { version: first.certificate.version })
+    expect(issued.certificate).toMatchObject({ status: 'VALID', hasPdf: true })
+    // A PDF added to a registered certificate is kept ten years after its last valid day at once.
+    const second = await upload('the notified body PDF, corrected copy')
+    expect(second.file.retainUntil).toBe('2040-12-31T23:00:00.000Z')
+    const audit = await admin('SELECT action, after FROM "AuditLog" WHERE "recordId" = $1 AND action = $2 ORDER BY at, id', [draft, 'compliance.certificates.attachPdf'])
+    expect(audit).toEqual([
+      { action: 'compliance.certificates.attachPdf', after: { pdfFileId: first.file.id, retainUntil: null } },
+      { action: 'compliance.certificates.attachPdf', after: { pdfFileId: second.file.id, retainUntil: '2040-12-31T23:00:00.000Z' } },
+    ])
+    const wrong = await call('certificates', 'POST', `/compliance/certificates/${draft}/pdf`, { originalName: 'certificate.png', contentType: 'image/png', sizeBytes: 10, sha256: 'd'.repeat(64) })
+    expect(wrong.statusCode).toBe(400)
+    expect((await call('viewer', 'POST', `/compliance/certificates/${draft}/pdf`, { originalName: 'c.pdf', contentType: 'application/pdf', sizeBytes: 10, sha256: 'd'.repeat(64) })).statusCode).toBe(403)
+  })
+})

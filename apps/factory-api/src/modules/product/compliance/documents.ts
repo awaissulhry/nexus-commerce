@@ -254,6 +254,7 @@ export async function uploadDocument(caller: CommandCaller, styleId: string, bod
       sha256: body.sha256,
     },
     idempotencyKey,
+    { viaModule: true },
   )
   const document = await caller.withClient(async (client) => {
     const row = await client.complianceDocument.findUniqueOrThrow({ where: { id: documentId }, select: DOCUMENT_SELECT })
@@ -280,7 +281,7 @@ export async function completeDocumentFile(
   mayUpload(context, row.companyId)
   if (row.status === 'WITHDRAWN') throw WITHDRAWN(row.kind as DocumentKind, row.language, row.revision)
 
-  const file = await completeUpload(processFiles(), caller, fileId, idempotencyKey)
+  const file = await completeUpload(processFiles(), caller, fileId, idempotencyKey, { viaModule: true })
   const answer = async () => ({ document: await caller.withClient((client) => detailWith(client, documentId)), file })
   if (file.status !== 'AVAILABLE') return answer()
   if (before.status === 'AVAILABLE' && row.status !== 'DRAFT') return answer() // confirmed before: nothing to do again
