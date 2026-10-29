@@ -152,6 +152,8 @@ model Worker {
   scanRefusals           FloorScanRefusal[]
   // quality.prisma: the final inspections the worker made as the inspector.
   inspections    Inspection[]
+  // The quality releases a floor inspector signed (B-W1-45).
+  qualityReleases QualityRelease[]
 
   @@unique([tenantId, employeeCode])
   // The target of the tenant- and site-safe references from the worker's rows.

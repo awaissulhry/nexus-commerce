@@ -588,7 +588,7 @@ describe('floor grants come from floor roles, with at most wages', () => {
     const device = await tablet(p1)
     const pia = await worker(p1, 'Pia Test', ['team_leader'])
     expect((await signIn(device, pia)).status).toBe(200)
-    expect((await me(device)).body.permissions).toEqual(['floor.lead', 'floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'production.scan', 'production.serials', 'shipping.pack'])
+    expect((await me(device)).body.permissions).toEqual(['floor.lead', 'floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'production.scan', 'production.serials', 'quality.inspections.view', 'shipping.pack'])
     await stepped(office)
     expect((await send(office, 'PUT', `/auth/floor/workers/${pia.id}/roles`, { roleIds: [] })).status).toBe(200)
     expect((await me(device)).body.permissions).toEqual([])
