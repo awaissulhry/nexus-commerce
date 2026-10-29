@@ -32,7 +32,12 @@
       "seconds_other": "{count} seconds",
       "stay": "I am here",
       "signOut": "Sign out now"
-    }
+    },
+    "refused_one": "{count} refused",
+    "refused_other": "{count} refused",
+    "synced": "Everything is recorded",
+    "lastSent": "Last sent {time}",
+    "openQueue": "Open queue"
   },
   "mode": {
     "cutting": "Cutting",
@@ -278,7 +283,15 @@
       "open": "Read it"
     },
     "switched": "{from} signed out · {to} signed in",
-    "badgeRefused": "This badge does not open this tablet. Ask your team leader."
+    "badgeRefused": "This badge does not open this tablet. Ask your team leader.",
+    "offline": {
+      "queues": "No network: your work is saved on this tablet and sent when the network is back.",
+      "held": {
+        "receive": "No network: receiving goods waits for the network (a receipt and its lots take their numbers from the office). Other work is saved on this tablet.",
+        "inspect": "No network: inspections and releases wait for the network (they take their number from the office). Scans are saved on this tablet.",
+        "serials": "No network: garment serials and their labels wait for the network (the office gives them). Other work is saved on this tablet."
+      }
+    }
   },
   "tile": {
     "operation": "Operation",
@@ -429,6 +442,184 @@
       "QUARANTINE": "Quarantine",
       "PRODUCTION": "Production",
       "SHIPPING": "Shipping"
+    }
+  },
+  "sync": {
+    "title": "Waiting to send",
+    "actions": "Queue actions",
+    "sendNow": "Send now",
+    "sending": "Sending…",
+    "noNetwork": "No network",
+    "needsNetwork": "Needs the network",
+    "needsNetworkDiscard": "Discarding needs the network: the office is told at once.",
+    "now": {
+      "title": "This tablet now",
+      "waiting": "Waiting",
+      "refused": "Refused",
+      "recorded": "Recorded today",
+      "online": "Online",
+      "offline": "Offline",
+      "lastSent": "last sent {time}",
+      "neverSent": "nothing sent yet"
+    },
+    "problem": {
+      "unavailable": "The office did not answer the last send. The actions stay on this tablet and are sent again.",
+      "signedOut": "Your session ended: sign in again and the actions are sent."
+    },
+    "clock": {
+      "behind_one": "This tablet's clock is {count} minute behind. Tell the office.",
+      "behind_other": "This tablet's clock is {count} minutes behind. Tell the office.",
+      "ahead_one": "This tablet's clock is {count} minute ahead. Tell the office.",
+      "ahead_other": "This tablet's clock is {count} minutes ahead. Tell the office."
+    },
+    "storage": {
+      "kept": "Data kept on this tablet",
+      "low": "Space low: {mb} MB left. Tell the office.",
+      "mayClear": "The browser may clear this tablet's data: install the app and tell the office."
+    },
+    "numbers": {
+      "left_one": "{count} {what} number left on this tablet",
+      "left_other": "{count} {what} numbers left on this tablet",
+      "lowOnline_one": "Only {count} {what} number left: more come with the next send.",
+      "lowOnline_other": "Only {count} {what} numbers left: more come with the next send.",
+      "lowOffline_one": "Only {count} {what} number left on this tablet. Connect to the network to get more.",
+      "lowOffline_other": "Only {count} {what} numbers left on this tablet. Connect to the network to get more.",
+      "kind": {
+        "BUNDLE": "bundle ticket",
+        "HIDE": "hide tag",
+        "GARMENT_SERIAL": "garment serial"
+      }
+    },
+    "refused": {
+      "title": "Refused, with a fix",
+      "empty": "Nothing refused.",
+      "final": "Refused",
+      "again": "Sent again by itself",
+      "others_one": "Another person has {count} refused action: the team leader sees it.",
+      "others_other": "Another person has {count} refused actions: the team leader sees them."
+    },
+    "waiting": {
+      "title": "Waiting, in send order",
+      "empty": "Everything is recorded.",
+      "offline": "No network. It sends by itself when the network is back.",
+      "sending": "Sending…",
+      "saved": "Saved on this tablet",
+      "again": "Saved on this tablet, tried before",
+      "others_one": "Another person has {count} action waiting on this tablet: it is sent when they sign in.",
+      "others_other": "Another person has {count} actions waiting on this tablet: they are sent when they sign in."
+    },
+    "recorded": {
+      "title": "Recorded today",
+      "show_one": "Show recorded today ({count})",
+      "show_other": "Show recorded today ({count})",
+      "hide": "Hide recorded today",
+      "empty": "Nothing recorded today yet.",
+      "at": "Done {device} · recorded {server}",
+      "status": "Recorded by the office"
+    },
+    "detail": {
+      "actions": "Refused action",
+      "back": "Back",
+      "again": "Send again",
+      "discard": "Discard",
+      "fix": "What to do:",
+      "when": "Done on this tablet at {time}",
+      "final": "It will not pass as it is.",
+      "notFinal": "It is sent again by itself with the next send."
+    },
+    "discard": {
+      "title": "Discard this action?",
+      "body": "It will not be recorded. Your team leader sees that it was discarded.",
+      "cancel": "Cancel",
+      "confirm": "Discard"
+    },
+    "what": {
+      "report_one": "Report {code} · {count} good",
+      "report_other": "Report {code} · {count} good",
+      "undo": "Undo a report",
+      "ask_one": "Ask a correction · {count} good",
+      "ask_other": "Ask a correction · {count} good",
+      "cut_one": "Cut on {code} · {count} set",
+      "cut_other": "Cut on {code} · {count} sets",
+      "remnant": "Remnant of {code}",
+      "bundle_one": "Bundle {code} · {count} piece",
+      "bundle_other": "Bundle {code} · {count} pieces",
+      "other": "Action",
+      "noCode": "no code yet",
+      "scrap_one": "{count} scrap",
+      "scrap_other": "{count} scrap",
+      "rework_one": "{count} rework",
+      "rework_other": "{count} rework"
+    },
+    "refusal": {
+      "UNKNOWN_BUNDLE": {
+        "message": "This is not a bundle ticket of this site.",
+        "fix": "Scan the bundle's ticket again, or ask your team leader."
+      },
+      "REPLACED": {
+        "message": "This ticket was replaced by a new one.",
+        "fix": "Discard it and scan the new ticket."
+      },
+      "VOIDED": {
+        "message": "This bundle was voided.",
+        "fix": "Discard it."
+      },
+      "WORK_ORDER_NOT_OPEN": {
+        "message": "The work order is not open (on hold, done or cancelled).",
+        "fix": "Ask your team leader."
+      },
+      "PREVIOUS_NOT_REPORTED": {
+        "message": "The operation before this one is not reported yet (it may still be on another tablet).",
+        "fix": "It is sent again by itself; if it stays here, ask your team leader."
+      },
+      "FLOOR_NOT_READY": {
+        "message": "Work is held at this site until its floor is ready.",
+        "fix": "It is sent again by itself once the floor is ready; ask your team leader."
+      },
+      "NOT_RESERVED": {
+        "message": "This label number is not one of this tablet's numbers.",
+        "fix": "Discard it, print a new label and put it on instead."
+      },
+      "BLOCK_CLOSED": {
+        "message": "The number block of this label was closed by the office.",
+        "fix": "Discard it, print a new label and put it on instead."
+      },
+      "ALREADY_USED": {
+        "message": "This label number was used before.",
+        "fix": "Discard it, print a new label and put it on instead."
+      },
+      "NOT_ALLOWED": {
+        "message": "The person signed in may not do this at this site.",
+        "fix": "Ask your team leader for the role, or discard it."
+      },
+      "BAD_EVENT": {
+        "message": "This tablet kept the action with something missing or wrong.",
+        "fix": "Discard it and do it again."
+      },
+      "UNKNOWN_KIND": {
+        "message": "The office does not take this kind of action from the tablet.",
+        "fix": "Discard it and update the app; ask your team leader."
+      },
+      "CLIENT_ID_REUSED": {
+        "message": "This tablet used one action's id for another action.",
+        "fix": "Discard it and do it again."
+      },
+      "HIDE_USED_UP": {
+        "message": "The hide is used up: its cuts are final.",
+        "fix": "Discard it."
+      },
+      "ALREADY_REPORTED": {
+        "message": "This bundle was already reported at this operation.",
+        "fix": "Discard it."
+      },
+      "NOT_FOUND": {
+        "message": "What this action names is not on record here.",
+        "fix": "Discard it, scan the label again or ask your team leader."
+      },
+      "CONFLICT": {
+        "message": "The office could not record it now.",
+        "fix": "It is sent again by itself; if it stays here, ask your team leader."
+      }
     }
   }
 }

@@ -15,7 +15,7 @@ export const DEMO_OPERATOR = 'Ada Demo'
 
 /** A signed-in screen's frame. */
 export function signedInFrame(titleKey: string, extra: Partial<FrameModel> = {}): FrameModel {
-  return { operator: { name: DEMO_OPERATOR }, station: { name: DEMO_STATION, site: DEMO_SITE }, titleKey, online: true, pending: 0, showHome: true, ...extra }
+  return { operator: { name: DEMO_OPERATOR }, station: { name: DEMO_STATION, site: DEMO_SITE }, titleKey, online: true, pending: 0, showHome: true, queueButton: true, ...extra }
 }
 
 /** A frame before anyone is signed in (set-up, sign-in): brand, language, Help. */

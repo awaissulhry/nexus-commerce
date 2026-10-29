@@ -12,6 +12,10 @@ import { designScreen as enrolScreen } from './enrol/fixtures'
 import { designScreen as homeScreen } from './home/fixtures'
 import { FLOOR_MODES, TILE_KEYS } from './model'
 import { designScreen as noticeScreen } from './notice/fixtures'
+import { WHAT_KEYS } from './queue/actions'
+import { designScreen as syncScreen } from './queue/fixtures'
+import { REFUSAL_WORDS } from './queue/view/SyncView'
+import { SCAN_ID_KINDS } from '@nexus/factory-domain/numbering/kinds'
 import { LABEL_TYPES } from './scan/scan-model'
 import { designScreen as scanScreen } from './scan/fixtures'
 import { designScreen as signInScreen } from './sign-in/fixtures'
@@ -33,7 +37,7 @@ function sources(dir: string): string[] {
   })
 }
 
-const PREFIXES = ['brand', 'frame', 'mode', 'start', 'enrol', 'signIn', 'notice', 'home', 'tile', 'scan', 'label', 'labelPlural', 'status']
+const PREFIXES = ['brand', 'frame', 'mode', 'start', 'enrol', 'signIn', 'notice', 'home', 'tile', 'scan', 'label', 'labelPlural', 'status', 'sync']
 const literalKeys = () => {
   const pattern = new RegExp(`\\bt\\(\\s*'((?:${PREFIXES.join('|')})(?:\\.[A-Za-z0-9_]+)*)'`, 'g')
   const keys = new Set<string>()
@@ -60,6 +64,15 @@ const built = [
   ...['mismatch', 'refused', 'wrong', 'repeat', 'run'].map((problem) => `signIn.change.problem.${problem}`),
   'frame.pending',
   'frame.idle.seconds',
+  // B-W0-30: the queue's words built from lists.
+  ...[...WHAT_KEYS, 'other'].map((key) => `sync.what.${key}`),
+  ...REFUSAL_WORDS.flatMap((code) => [`sync.refusal.${code}.message`, `sync.refusal.${code}.fix`]),
+  ...SCAN_ID_KINDS.map((kind) => `sync.numbers.kind.${kind}`),
+  ...['receive', 'inspect', 'serials'].map((held) => `home.offline.held.${held}`),
+  ...['signedOut', 'unavailable'].map((problem) => `sync.problem.${problem}`),
+  ...['kept', 'low', 'mayClear'].map((storage) => `sync.storage.${storage}`),
+  ...['ahead', 'behind'].map((way) => `sync.clock.${way}`),
+  ...['left', 'lowOnline', 'lowOffline'].map((words) => `sync.numbers.${words}`),
 ]
 
 const has = (key: string) =>
@@ -76,7 +89,7 @@ describe('every floor string exists in it and en', () => {
   })
 })
 
-const SCREENS = [enrolScreen, signInScreen, homeScreen, scanScreen, noticeScreen] as DesignScreen<unknown>[]
+const SCREENS = [enrolScreen, signInScreen, homeScreen, syncScreen, scanScreen, noticeScreen] as DesignScreen<unknown>[]
 const LEFT_KEY = new RegExp(`(?:^|[\\s>"])(?:${PREFIXES.filter((prefix) => prefix !== 'brand').join('|')})\\.[a-zA-Z]+(?:\\.[a-zA-Z_]+)*`)
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
@@ -85,8 +98,8 @@ function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof L
 }
 
 describe('every floor design case draws in both languages', () => {
-  it('has the five screens of this step', () => {
-    expect(SCREENS.map((screen) => screen.screen)).toEqual(['SCR-020', 'SCR-021', 'SCR-022', 'SCR-024', 'SCR-025'])
+  it('has the floor screens of B-W0-29 and B-W0-30', () => {
+    expect(SCREENS.map((screen) => screen.screen)).toEqual(['SCR-020', 'SCR-021', 'SCR-022', 'SCR-023', 'SCR-024', 'SCR-025'])
   })
 
   for (const screen of SCREENS) {
@@ -121,5 +134,18 @@ describe('every floor design case draws in both languages', () => {
     const held = render(homeScreen as DesignScreen<unknown>, homeScreen.cases.find((item) => item.id === 'notice-blocks')!.model, 'en')
     expect(held).toContain('Read the notice first')
     expect(held).not.toContain('Coming soon')
+  })
+
+  it('the queue shows refused actions in the person\'s words with one fix, and others\' counted, never shown', () => {
+    const refused = render(syncScreen as DesignScreen<unknown>, syncScreen.cases.find((item) => item.id === 'refused')!.model, 'it')
+    expect(refused).toContain('Rifiutate, con la soluzione')
+    expect(refused).toContain('Scartala e scansiona il cartellino nuovo.')
+    expect(refused).toContain('la vede il capo squadra')
+    const detail = render(syncScreen as DesignScreen<unknown>, syncScreen.cases.find((item) => item.id === 'discard-offline')!.model, 'en')
+    expect(detail).toContain('Needs the network')
+    const offline = render(homeScreen as DesignScreen<unknown>, homeScreen.cases.find((item) => item.id === 'held-network')!.model, 'en')
+    expect(offline).toContain('inspections and releases wait for the network')
+    const waiting = render(homeScreen as DesignScreen<unknown>, homeScreen.cases.find((item) => item.id === 'queue-offline-pending')!.model, 'en')
+    expect(waiting).toContain('Open queue')
   })
 })

@@ -1,0 +1,7 @@
+/* SCR-023 — layout only (design floor.sync "This tablet now"): the three big numbers side by side on a tablet, one under
+   the other on a phone, so the refused list starts on the first screen. Colours and sizes are the floor kit's. */
+.fw-floor-sync-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--nds-density-gap);
+}

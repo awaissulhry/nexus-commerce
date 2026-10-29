@@ -4,8 +4,8 @@ import { homeTiles, type FloorMode } from '../model'
 import { HomeView, type HomeViewModel } from './view/HomeView'
 
 /**
- * SCR-022's cases: the floor frame (operator chip, offline banner, Help, operator menu, idle sign-out) around the tile
- * home, per station mode and per person's floor permissions. Made-up people and places only. The tiles come from the
+ * SCR-022's cases: the floor frame (operator chip, offline banner with the queue's counts, Help, operator menu, idle
+ * sign-out) around the tile home, per station mode and per person's floor permissions, and the offline queue's states. Made-up people and places only. The tiles come from the
  * same rule as the live page (model.ts `homeTiles`): only Scan anything is built; every other tile says "Coming soon".
  */
 
@@ -58,9 +58,51 @@ export const designScreen = defineDesignScreen<HomeViewModel>({
     },
     {
       id: 'offline',
-      label: 'Offline',
-      model: home('cutting', { frame: signedInFrame('home.title', { showHome: false, online: false }) }),
-      note: 'The banner shows the waiting count: 0 until the offline queue (B-W0-30) keeps actions on the tablet.',
+      label: 'Offline, nothing waiting',
+      model: home('cutting', { frame: signedInFrame('home.title', { showHome: false, online: false }), offline: { held: null } }),
+      note: 'B-W0-30: every action at a cutting table is saved on this tablet and sent when the network is back.',
+    },
+    {
+      id: 'queue-online',
+      label: 'Online, everything recorded',
+      model: home('sewing', { frame: signedInFrame('home.title', { showHome: false, lastSentAt: '2026-10-29T09:58:00.000Z' }) }),
+      note: 'Nothing waits: the banner leaves (it comes back the moment an action waits).',
+    },
+    {
+      id: 'queue-offline-pending',
+      label: 'Offline, 4 actions waiting',
+      model: home('cutting', { frame: signedInFrame('home.title', { showHome: false, online: false, pending: 4, lastSentAt: '2026-10-29T09:38:00.000Z' }), offline: { held: null } }),
+      note: 'The waiting count as a big number, the last send, and Open queue (Waiting to send, SCR-023).',
+    },
+    {
+      id: 'queue-sending',
+      label: 'Back online: sending',
+      model: home('cutting', { frame: signedInFrame('home.title', { showHome: false, pending: 3, lastSentAt: '2026-10-29T09:38:00.000Z' }) }),
+      note: 'Online with actions still on their way: they go in the queue\'s order, one send at a time.',
+    },
+    {
+      id: 'queue-refused',
+      label: 'An action was refused',
+      model: home('sewing', { frame: signedInFrame('home.title', { showHome: false, pending: 1, refused: 1, lastSentAt: '2026-10-29T09:58:00.000Z' }) }),
+      note: 'The banner turns red with the refused count; Open queue shows why in words and the one fix.',
+    },
+    {
+      id: 'held-network',
+      label: 'Offline at the inspection bench',
+      model: home('inspection', { frame: signedInFrame('home.title', { showHome: false, online: false, station: { name: 'QC-01 · Banco collaudo', site: 'Stabilimento Demo Nord' } }), offline: { held: 'inspect' } }, INSPECTOR),
+      note: 'Inspections and releases take their number from the office at once: they wait for the network (never queued). Scans still go on.',
+    },
+    {
+      id: 'held-network-warehouse',
+      label: 'Offline at the warehouse',
+      model: home('warehouse', { frame: signedInFrame('home.title', { showHome: false, online: false, station: { name: null, site: 'Stabilimento Demo Nord' } }), offline: { held: 'receive' } }),
+      note: 'A goods receipt and its lots take their numbers from the office at once: receiving waits for the network.',
+    },
+    {
+      id: 'numbers-low',
+      label: 'Bundle ticket numbers running low (offline)',
+      model: home('cutting', { frame: signedInFrame('home.title', { showHome: false, online: false, pending: 6 }), offline: { held: null }, lowNumbers: [{ kind: 'BUNDLE', left: 12 }] }),
+      note: 'Tickets printed offline take numbers from this tablet\'s own block; it tops up by itself with the next send.',
     },
     { id: 'switched', label: 'Person switched by a badge', model: home('cutting', { switched: { from: 'Bea Esempio', to: 'Ada Demo' } }), note: 'The next person scanned their badge on Home (badge-only site): one line says who left and who is on.' },
     { id: 'badge-refused', label: 'A badge that does not open this tablet', model: home('cutting', { badgeRefused: true }), note: 'The person signed in stays.' },

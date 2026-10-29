@@ -1,7 +1,8 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { CircleAlert, ClipboardList, Layers, Package, PackageOpen, ScanLine, ScrollText, Scissors, ShieldCheck, Shirt, Tag, UserRoundCheck } from 'lucide-react'
+import { CircleAlert, ClipboardList, CloudOff, Hash, Layers, Package, PackageOpen, ScanLine, ScrollText, Scissors, ShieldCheck, Shirt, Tag, UserRoundCheck } from 'lucide-react'
+import type { ScanIdKind } from '@nexus/factory-domain/numbering/kinds'
 import { FloorButton, FloorTile, FloorTileGrid, ScanInput, type CameraScanner } from '@nexus/ui/floor'
 import { useT } from '../../../lib/i18n/provider'
 import type { FloorMode, HomeTile, TileKey } from '../../model'
@@ -13,7 +14,9 @@ import { FloorState } from '../../frame/view/FloorState'
  * here opens the right card at once: Scan anything, SCR-024), then at most six tiles — the station's mode AND the
  * person's floor permissions, fail closed. Only a tile whose page exists opens; every other one says "Coming soon" on
  * the tile (never a dead tile). While the worker notice blocks scans, every scan tile says "Read the notice first" and
- * a card opens the notice.
+ * a card opens the notice. Offline (B-W0-30): one line says what goes on (every queued action is saved on this tablet)
+ * and what waits for the network at this station (receipts, inspections and releases take their number from the office
+ * at once), and, when the tablet runs low on its own label numbers, how many are left.
  */
 
 export interface HomeViewModel {
@@ -25,6 +28,10 @@ export interface HomeViewModel {
   switched?: { from: string; to: string } | null
   /** A badge scanned here did not open this tablet (the person on it stays). */
   badgeRefused?: boolean
+  /** Offline: what waits for the network at this station (null: all its work is saved on the tablet). */
+  offline?: { held: 'receive' | 'inspect' | 'serials' | null } | null
+  /** Label kinds this tablet is running low on, with the numbers left (said while offline: online it tops up itself). */
+  lowNumbers?: readonly { kind: ScanIdKind; left: number }[]
 }
 
 export type HomeAction = { type: 'tile'; key: TileKey } | { type: 'scan'; code: string } | { type: 'notice' }
@@ -71,6 +78,24 @@ export function HomeView({ model, onAction, onFrame, camera }: HomeViewProps) {
             {t('home.badgeRefused')}
           </p>
         ) : null}
+        {model.offline ? (
+          <p role="status" className="fw-floor-notice" data-tone="warning">
+            <span className="fw-floor-inline-icon" aria-hidden="true">
+              <CloudOff />
+            </span>
+            {model.offline.held ? t(`home.offline.held.${model.offline.held}`) : t('home.offline.queues')}
+          </p>
+        ) : null}
+        {model.offline
+          ? (model.lowNumbers ?? []).map((entry) => (
+              <p key={entry.kind} className="fw-floor-notice" data-tone="warning">
+                <span className="fw-floor-inline-icon" aria-hidden="true">
+                  <Hash />
+                </span>
+                {t('sync.numbers.lowOffline', { count: entry.left, what: t(`sync.numbers.kind.${entry.kind}`) })}
+              </p>
+            ))
+          : null}
         {model.notice.due ? (
           <div className="fw-floor-notice fw-floor-notice-card" data-tone={held ? 'warning' : 'info'}>
             <span className="fw-floor-inline-icon" aria-hidden="true">

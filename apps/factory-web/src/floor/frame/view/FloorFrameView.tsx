@@ -5,14 +5,16 @@ import { House, Languages, LogOut, ScanLine, X } from 'lucide-react'
 import { Modal } from '@nexus/ui/components'
 import { FloorButton, FloorFrame, FloorHeader, FloorHelpButton, IdleOverlay, OfflineBanner, OperatorChip } from '@nexus/ui/floor'
 import { LOCALES, LOCALE_NAMES, type Locale } from '../../../lib/i18n/locales'
+import { formatTime } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import '../../floor.css'
 
 /**
  * SCR-022 — the floor frame of every floor screen (design 02-sections-floor "The floor frame"; anatomy 2.7): the
  * header (Home on every screen but Home · the operator chip, which opens the operator menu · the screen's title and
- * the station · language before a sign-in · Help), the offline banner (its waiting count is 0 until the offline queue,
- * B-W0-30, keeps actions on the tablet), the one job, the big action bar, and the idle overlay above all. No rail, no
+ * the station · language before a sign-in · Help), the offline banner (online or offline, the person's actions waiting on
+ * this tablet as a big number, the refused ones in red, the last send's time, "Open queue": the offline queue, B-W0-30),
+ * the one job, the big action bar, and the idle overlay above all. No rail, no
  * Pages button, no palette. Pop-ups: the operator menu, Help, and the language before a sign-in (frame.operator-menu,
  * frame.help, signin.language); nothing else covers the job.
  */
@@ -25,8 +27,16 @@ export interface FrameModel {
   /** The screen's title, a `floor` message key. */
   titleKey: string
   online: boolean
-  /** Actions saved on this tablet and not yet sent: 0 until the offline queue (B-W0-30). */
+  /** The person's actions saved on this tablet and not yet recorded by the office (floor/shell/banner.ts). */
   pending: number
+  /** The person's actions the office refused. */
+  refused?: number
+  /** The server's last answer to a send (an instant): "Last sent 10:42". */
+  lastSentAt?: string | null
+  /** The banner offers "Open queue" (every screen but the queue's own). */
+  queueButton?: boolean
+  /** Keep a quiet "Everything is recorded" line when nothing waits (the queue's own screen). */
+  showSynced?: boolean
   /** The Home button (every screen but Home, when someone is signed in). */
   showHome?: boolean
   /** Before a sign-in: the language button (the screen's language, for this screen only). */
@@ -45,6 +55,7 @@ export type FrameAction =
   | { type: 'locale'; locale: Locale }
   | { type: 'sign-out' }
   | { type: 'stay' }
+  | { type: 'queue' }
 
 export interface FloorFrameViewProps {
   frame: FrameModel
@@ -116,9 +127,16 @@ export function FloorFrameView({ frame, onFrame, actions, children }: FloorFrame
           <OfflineBanner
             online={frame.online}
             pending={frame.pending}
+            refused={frame.refused ?? 0}
             offlineLabel={t('frame.offline')}
             sendingLabel={t('frame.sending')}
             pendingLabel={(count) => t('frame.pending', { count })}
+            refusedLabel={(count) => t('frame.refused', { count })}
+            syncedLabel={t('frame.synced')}
+            showWhenSynced={frame.showSynced}
+            lastSyncLabel={frame.lastSentAt ? t('frame.lastSent', { time: formatTime(frame.lastSentAt, { locale }) }) : undefined}
+            onOpenQueue={frame.queueButton ? () => send({ type: 'queue' }) : undefined}
+            queueLabel={t('frame.openQueue')}
           />
         ) : undefined
       }
