@@ -26,7 +26,10 @@ import { floorHash, mintSiteToken, type SiteToken } from './tokens'
  *   edit       rename, move to another station of its site (version).
  *   revoke     PENDING or ACTIVE → REVOKED: the token is cleared, open sign-ins end at once (DEVICE_REVOKED), unused
  *              codes are retired. A revoked device stays listed; enrol a new one.
- *   times      a site's idle minutes (1 to 120, default 10) and shift ends (HH:MM in the site's time zone).
+ *   times      a site's idle minutes (1 to 120, default 10) and shift ends (HH:MM in the site's time zone), and whether a
+ *              badge alone signs a worker in (Owner answer F1 a; default false: badge and PIN). Switching it on asks no
+ *              step-up, like the idle minutes; it is audited with before and after. Sessions already started keep
+ *              running until their idle or shift end.
  * The registry says whether a device is in use, never who uses it (Statuto dei Lavoratori art. 4: no presence board).
  */
 
@@ -225,7 +228,7 @@ export async function revokeDevice(auth: OfficeAuth, request: FastifyRequest, de
   return result
 }
 
-const settingsSelect = { idleMinutes: true, shiftEnds: true, version: true } as const
+const settingsSelect = { idleMinutes: true, shiftEnds: true, badgeOnlySignIn: true, version: true } as const
 
 export async function getSettings(request: FastifyRequest, siteId: string) {
   const context = officeContextOf(request)
@@ -234,7 +237,14 @@ export async function getSettings(request: FastifyRequest, siteId: string) {
     assertReaches(context, DEVICES_VIEW, { companyId: site.companyId, siteId: site.id })
     const row = await client.floorSettings.findUnique({ where: { id: site.id }, select: settingsSelect })
     const timing = defaultTiming(site.timezone)
-    return { siteId: site.id, idleMinutes: row?.idleMinutes ?? timing.idleMinutes, shiftEnds: row?.shiftEnds ?? [], timeZone: site.timezone, version: row?.version ?? null }
+    return {
+      siteId: site.id,
+      idleMinutes: row?.idleMinutes ?? timing.idleMinutes,
+      shiftEnds: row?.shiftEnds ?? [],
+      badgeOnlySignIn: row?.badgeOnlySignIn ?? false,
+      timeZone: site.timezone,
+      version: row?.version ?? null,
+    }
   })
 }
 
@@ -248,7 +258,7 @@ export async function putSettings(auth: OfficeAuth, request: FastifyRequest, sit
     return { site: found, existing: await client.floorSettings.findUnique({ where: { id: found.id }, select: settingsSelect }) }
   })
   assertReaches(context, DEVICES_MANAGE, { companyId: site.companyId, siteId: site.id })
-  const after = { idleMinutes: body.idleMinutes, shiftEnds }
+  const after = { idleMinutes: body.idleMinutes, shiftEnds, badgeOnlySignIn: body.badgeOnlySignIn ?? existing?.badgeOnlySignIn ?? false }
   try {
     await auth.command(
       context,
@@ -256,7 +266,7 @@ export async function putSettings(auth: OfficeAuth, request: FastifyRequest, sit
       async ({ tx, now, audit }) => {
         if (existing) await tx.floorSettings.updateMany({ where: { id: site.id }, data: after })
         else await tx.floorSettings.create({ data: { id: site.id, companyId: site.companyId, siteId: site.id, ...after, createdAt: now, createdById: context.actorId }, select: { id: true } })
-        audit({ recordType: 'FloorSettings', recordId: site.id, companyId: site.companyId, siteId: site.id, before: existing ? { idleMinutes: existing.idleMinutes, shiftEnds: existing.shiftEnds } : null, after })
+        audit({ recordType: 'FloorSettings', recordId: site.id, companyId: site.companyId, siteId: site.id, before: existing ? { idleMinutes: existing.idleMinutes, shiftEnds: existing.shiftEnds, badgeOnlySignIn: existing.badgeOnlySignIn } : null, after })
         return null
       },
     )

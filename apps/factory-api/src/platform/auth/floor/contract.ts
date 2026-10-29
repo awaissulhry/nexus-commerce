@@ -18,16 +18,33 @@ const reason = z.string().trim().min(1).max(500)
 const pin = z.string().max(12)
 const locale = z.string().regex(/^[a-z]{2}(?:-[A-Z]{2})?$/, 'Expected a language code such as it, en or ro.')
 const named = output({ id: id(), code: z.string(), name: z.string() })
+/** The work centre kinds of factory-db (WorkCentreKind): what the station does, so the tablet knows its mode. */
+export const WORK_CENTRE_KINDS = ['CUTTING', 'SEWING', 'ASSEMBLY', 'FINISHING', 'INSPECTION', 'PACKING', 'SUBCONTRACT'] as const
+/** The device's station, with the kind of its work centre. */
+const stationRef = output({ id: id(), code: z.string(), name: z.string(), workCentreKind: z.enum(WORK_CENTRE_KINDS) })
 const workerRef = output({ id: id(), displayName: z.string(), locale: z.string() })
-const sessionTimes = output({ startedAt: instant(), idleExpiresAt: instant(), endsAt: instant() })
+const sessionTimes = output({
+  startedAt: instant(),
+  idleExpiresAt: instant(),
+  endsAt: instant(),
+  /** The site's idle minutes: the tablet's idle overlay counts them (the server ends the session anyway). */
+  idleMinutes: z.number().int(),
+  /**
+   * Until when signing acts and My day are open without asking the PIN again (POST /floor/step-up). Null: a session
+   * started by a badge alone, or a PIN proved too long ago.
+   */
+  stepUpUntil: instant().nullable(),
+})
 
 // ---- the floor (an enrolled device) ----
 
 export const deviceInfo = output({
-  device: output({ id: id(), name: z.string(), kind: z.enum(DEVICE_KINDS), station: named.nullable() }),
+  device: output({ id: id(), name: z.string(), kind: z.enum(DEVICE_KINDS), station: stationRef.nullable() }),
   site: named,
   /** The tenant's language: the screen's language while nobody is signed in (PLT-062). */
   defaultLocale: z.string(),
+  /** The site's sign-in rule (Owner answer F1): a badge alone signs in, or the PIN pad follows the badge. */
+  signIn: output({ badgeOnly: z.boolean() }),
   /** Someone is signed in on this device now. */
   operatorSignedIn: z.boolean(),
   /** The site's active workers who have a PIN: the names for a sign-in by name and PIN (PLT-058). */
@@ -41,8 +58,11 @@ export const enrolDeviceContract = defineContract({
 
 export const deviceContract = defineContract({ response: { 200: deviceInfo } })
 
-/** A badge code (scanned) or a worker id (picked by name), and the PIN. */
-const credentials = input({ badgeCode: z.string().max(64).optional(), workerId: id().optional(), pin })
+/**
+ * A badge code (scanned) or a worker id (picked by name), and the PIN. The PIN may be left out only with a badge, at
+ * a site whose floor settings say a badge alone signs in (`badgeOnlySignIn`); a sign-in by name always needs it.
+ */
+const credentials = input({ badgeCode: z.string().max(64).optional(), workerId: id().optional(), pin: pin.optional() })
 export type FloorCredentials = z.infer<typeof credentials>
 
 export const signedIn = output({
@@ -63,8 +83,10 @@ export const floorMeContract = defineContract({
   response: {
     200: output({
       worker: workerRef,
-      device: output({ id: id(), name: z.string(), station: named.nullable() }),
+      device: output({ id: id(), name: z.string(), station: stationRef.nullable() }),
       site: named,
+      /** The tenant tag of this factory's label codes (factory-domain numbering/scan-id): a label of another is refused. */
+      scanTag: z.string(),
       session: sessionTimes,
       pinMustChange: z.boolean(),
       notice: workerNoticeGateView,
@@ -76,6 +98,12 @@ export const floorMeContract = defineContract({
 export const changePinContract = defineContract({
   body: input({ currentPin: pin, newPin: pin }),
   response: { 200: output({ status: z.literal('changed') }) },
+})
+
+/** The signed-in worker proves their PIN again: signing acts and My day open until `stepUpUntil`. */
+export const floorStepUpContract = defineContract({
+  body: input({ pin }),
+  response: { 200: output({ stepUpUntil: instant() }) },
 })
 
 // ---- the Office: devices ----
@@ -134,6 +162,8 @@ const settingsView = output({
   siteId: id(),
   idleMinutes: z.number().int(),
   shiftEnds: z.array(z.string()),
+  /** A badge alone signs a worker in (Owner answer F1 a); false (the default): badge and PIN. */
+  badgeOnlySignIn: z.boolean(),
   timeZone: z.string(),
   /** Null while the site uses the defaults. */
   version: z.number().int().nullable(),
@@ -143,7 +173,13 @@ export const getSettingsContract = defineContract({ params: input({ siteId: id()
 
 export const putSettingsContract = defineContract({
   params: input({ siteId: id() }),
-  body: input({ idleMinutes: z.number().int(), shiftEnds: z.array(z.string().max(5)).max(24), version: version.optional() }),
+  body: input({
+    idleMinutes: z.number().int(),
+    shiftEnds: z.array(z.string().max(5)).max(24),
+    /** Left out: unchanged (false on a site's first row). */
+    badgeOnlySignIn: z.boolean().optional(),
+    version: version.optional(),
+  }),
   response: { 200: settingsView },
 })
 

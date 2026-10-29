@@ -61,20 +61,21 @@ interface Person {
   readonly permissions: readonly Permission[]
   readonly companies: ScopeSet
 }
-const fromTemplate = (key: string, extra: Permission[] = []): Person => {
+const fromTemplate = (key: string): Person => {
   const role = templateOf(key)!
-  return { tenantId: tenant, actorId: newId(), permissions: [...role.permissions, ...grainsOf(role.grains), ...extra], companies: 'all' }
+  return { tenantId: tenant, actorId: newId(), permissions: [...role.permissions, ...grainsOf(role.grains)], companies: 'all' }
 }
+const withoutGrain = (person: Person, grain: string): Person => ({ ...person, permissions: person.permissions.filter((name) => name !== `money.${grain}`) })
 const QUOTES: Permission[] = ['quotes.view', 'quotes.manage']
 const PEOPLE: Record<string, Person> = {
-  // The templates as they are: sales sees prices only (design question S2, answer b, until the Owner answers), finance
-  // everything, and approves.
+  // The templates as they are: sales sees prices and the margin % against the floor, never a cost (the Owner's answer a
+  // to design question S2); finance everything, and approves.
   sales: fromTemplate('sales'),
   finance: fromTemplate('finance'),
   // Finance over company A only: it keeps company A's sales settings, never the tenant-wide ones.
   financeA: { ...fromTemplate('finance'), companies: [companyA] },
-  // Sales as design answer a (the template with the margin grain too): margin % against the floor, never a cost.
-  salesWithMargin: fromTemplate('sales', ['money.margin']),
+  // A copy of the sales role without the margin grain (S2's answer b, as a custom role may be): prices only.
+  salesPriceOnly: withoutGrain(fromTemplate('sales'), 'margin'),
   // A manager who may edit and approve, with every grain: asks, then may not approve their own request.
   boss: { tenantId: tenant, actorId: newId(), permissions: [...QUOTES, 'quotes.approve', ...grainsOf(['price', 'cost', 'margin'])], companies: 'all' },
   // An approver without the margin grain.
@@ -208,8 +209,9 @@ describe('a quote for the brand customer: 2 colours × 3 sizes (SAL-143, SAL-203
       netAmount: 0,
       grossAmount: 0,
     })
-    // The floor the version is checked against: margin grain (sales today sees no margin).
-    expect(quote.current.marginFloorPct).toBeUndefined()
+    // The floor the version is checked against: margin grain (sales sees it; the price-only copy does not).
+    expect(quote.current.marginFloorPct).toBe('20')
+    expect((await get('salesPriceOnly', quote.id)).current.marginFloorPct).toBeUndefined()
     expect((await get('finance', quote.id)).current.marginFloorPct).toBe('20')
     expect(quote.issues.map((issue: Json) => [issue.code, issue.severity])).toEqual([['NO_LINES', 'BLOCKS']])
     const [allocation] = await admin('SELECT formatted, "recordType" FROM "NumberAllocation" WHERE "recordId" = $1', [quote.id])
@@ -253,29 +255,30 @@ describe('a quote for the brand customer: 2 colours × 3 sizes (SAL-143, SAL-203
     expect(row).toEqual({ netAmount: 624000, costAmount: 408497, marginFloorBreached: false, floor: '20.0000' })
   })
 
-  it('sales sees prices, never a cost; with the margin grain the margin % against the floor, never the margin amount (S2)', async () => {
-    // Answer b (the sales template today): no margin at all; the rules still say why, in words.
+  it('sales sees prices and the margin % against the floor, never a cost or the margin amount; without the margin grain no margin (S2)', async () => {
+    // Answer a (the sales template: the margin grain without the cost grain): percentages against the floor, never an
+    // amount that gives the cost away (net − margin).
     const seen = await get('sales', quote.id)
     const keys = new Set(keysOf(seen))
-    for (const key of ['unitCost', 'costAmount', 'costSnapshot', 'marginAmount', 'knownTotal', 'marginPct', 'marginFloorPct', 'marginFloorBreached', 'belowFloor', 'details']) expect(keys.has(key), key).toBe(false)
-    expect(seen.current).toMatchObject({ netAmount: 624000, grossAmount: 761280, costComplete: true })
-    expect(seen.lines[0]).toMatchObject({ unitPrice: '450', netAmount: 360000, costComplete: true })
-    expect(seen.approval.rules.map((rule: Json) => [rule.reason, rule.broken, rule.message])).toEqual([
+    for (const key of ['unitCost', 'costAmount', 'costSnapshot', 'marginAmount', 'knownTotal']) expect(keys.has(key), key).toBe(false)
+    expect(seen.current).toMatchObject({ netAmount: 624000, grossAmount: 761280, costComplete: true, marginPct: '34.5357', marginFloorPct: '20', marginFloorBreached: false })
+    expect(seen.lines[0]).toMatchObject({ unitPrice: '450', netAmount: 360000, costComplete: true, marginPct: '35.3272', belowFloor: false })
+    // Answer b (a copy of the role without the margin grain): no margin at all; the rules still say why, in words.
+    const blind = await get('salesPriceOnly', quote.id)
+    const blindKeys = new Set(keysOf(blind))
+    for (const key of ['unitCost', 'costAmount', 'costSnapshot', 'marginAmount', 'knownTotal', 'marginPct', 'marginFloorPct', 'marginFloorBreached', 'belowFloor', 'details']) expect(blindKeys.has(key), key).toBe(false)
+    expect(blind.current).toMatchObject({ netAmount: 624000, grossAmount: 761280, costComplete: true })
+    expect(blind.approval.rules.map((rule: Json) => [rule.reason, rule.broken, rule.message])).toEqual([
       ['MARGIN_FLOOR', false, 'The margin is at or above the floor.'],
       ['DISCOUNT_LIMIT', false, 'No discount is over the 15 % limit.'],
     ])
-    // Answer a (the margin grain without the cost grain): percentages against the floor, never an amount that gives the
-    // cost away (net − margin).
-    const margins = await get('salesWithMargin', quote.id)
-    const marginKeys = new Set(keysOf(margins))
-    for (const key of ['unitCost', 'costAmount', 'costSnapshot', 'marginAmount', 'knownTotal']) expect(marginKeys.has(key), key).toBe(false)
-    expect(margins.current).toMatchObject({ netAmount: 624000, marginPct: '34.5357', marginFloorPct: '20', marginFloorBreached: false })
-    expect(margins.lines[0]).toMatchObject({ marginPct: '35.3272', belowFloor: false })
     // The list: the same walls.
-    const listed = (await ok('sales', 'GET', '/sales/quotes')).quotes
+    const listed = (await ok('salesPriceOnly', 'GET', '/sales/quotes')).quotes
     expect(listed).toEqual([expect.objectContaining({ id: quote.id, number: quote.number, partyName: 'Seed Customer One S.r.l.', lineCount: 2, units: 14, netAmount: 624000, approval: null })])
     expect(Object.keys(listed[0])).not.toContain('marginPct')
-    expect((await ok('salesWithMargin', 'GET', '/sales/quotes')).quotes[0]).toMatchObject({ marginPct: '34.5357', marginFloorBreached: false })
+    const [row] = (await ok('sales', 'GET', '/sales/quotes')).quotes
+    expect(row).toMatchObject({ marginPct: '34.5357', marginFloorBreached: false })
+    for (const key of ['costAmount', 'marginAmount']) expect(Object.keys(row), key).not.toContain(key)
   })
 
   it('asking for an approval when no rule breaks is refused: the quote can be sent as it is', async () => {
@@ -547,7 +550,8 @@ describe('the sales settings: the quote rules of the tenant and of a company (SA
       inForce: { marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' },
       defaults: { marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' },
     })
-    expect((await ok('sales', 'GET', settingsUrl)).settings.inForce).toEqual({ discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' })
+    expect((await ok('sales', 'GET', settingsUrl)).settings.inForce).toEqual({ marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' })
+    expect((await ok('salesPriceOnly', 'GET', settingsUrl)).settings.inForce).toEqual({ discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' })
   })
 
   it('finance sets the tenant-wide rules; a new quote takes them (validity, deposit, the floor it is checked against)', async () => {

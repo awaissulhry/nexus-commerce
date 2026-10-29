@@ -199,9 +199,11 @@ beforeAll(async () => {
   const seller = await addUser(h, tenant, { email: 'sara.sales@mail-a.example.com', role: 'sales' })
   sales = new Browser(h.app)
   await sales.signIn('mail-a', seller.email, seller.password)
+  await enrolTotp(h, sales)
   const sellerB = await addUser(h, tenantB, { email: 'bruno.sales@mail-b.example.com', role: 'sales' })
   salesB = new Browser(h.app)
   await salesB.signIn('mail-b', sellerB.email, sellerB.password)
+  await enrolTotp(h, salesB)
 }, 90_000)
 
 afterAll(async () => {

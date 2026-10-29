@@ -67,7 +67,8 @@ describe('role templates', () => {
     expect(templateOf('owner')?.grains).toEqual([...GRAINS])
     expect(templateOf('read_only')?.permissions.every((name) => FACTORY_PERMISSIONS.get(name)?.risk === 'read')).toBe(true)
     expect(templateOf('admin')?.requireMfa).toBe(true)
-    expect(templateOf('sales')?.grains).toEqual(['price'])
+    // Design question S2, answer a: sales sees margin % and the floor, never a cost, so it requires two-factor.
+    expect(templateOf('sales')).toMatchObject({ grains: ['price', 'margin'], requireMfa: true })
   })
 
   it('finds a template naming an unknown permission, a grain as a permission, or cost without two-factor', () => {

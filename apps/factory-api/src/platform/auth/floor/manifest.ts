@@ -15,6 +15,7 @@ export const manifest = defineManifest({
   'POST /floor/switch': { audiences: ['floor'], permission: SIGNED_IN, scope: 'site' },
   'GET /floor/me': { audiences: ['floor'], permission: SIGNED_IN, scope: 'site' },
   'POST /floor/pin': { audiences: ['floor'], permission: SIGNED_IN, scope: 'site' },
+  'POST /floor/step-up': { audiences: ['floor'], permission: SIGNED_IN, scope: 'site' },
 
   'GET /auth/floor/devices': { audiences: ['office'], permission: 'devices.view', scope: 'record' },
   'POST /auth/floor/devices': { audiences: ['office'], permission: 'devices.manage', scope: 'record' },

@@ -90,16 +90,18 @@ describe('the grants of a session', () => {
   it('a role that requires two-factor gives nothing until two-factor is proved on the session; the others give theirs', async () => {
     const user = await addUser(h, alpha, { email: 'admin.person@example.com' })
     await addRole(h, alpha, user.id, 'admin')
+    // Sales sees margins (design question S2, answer a), so it too waits for two-factor; warehouse does not.
     await addRole(h, alpha, user.id, 'sales')
+    await addRole(h, alpha, user.id, 'warehouse')
     const browser = new Browser(h.app)
     const answer = await browser.signIn('alpha', user.email, user.password)
     expect(answer.body.mfa).toEqual({ enabled: false, required: true, satisfied: false })
-    expect(await permissionsOf(browser)).toEqual(['audit.read', 'costing.view', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'invoices.view', 'money.price', 'orders.manage', 'orders.view', 'parties.manage', 'parties.vies', 'parties.view', 'payments.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'quotes.manage', 'quotes.send', 'quotes.view', 'shipping.view', 'threads.post', 'threads.read', 'workorders.view'])
+    expect(await permissionsOf(browser)).toEqual(['files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'inventory.adjust', 'inventory.issue', 'inventory.issue.over', 'inventory.locations.manage', 'inventory.locations.view', 'inventory.receive', 'inventory.reverse', 'inventory.scrap', 'inventory.stock.view', 'inventory.transfer', 'orders.view', 'parties.view', 'print.documents', 'print.labels', 'print.view', 'product.materials.view', 'product.styles.view', 'purchasing.view', 'quality.lots.view', 'shipping.ddt.cancel', 'shipping.ddt.issue', 'shipping.labels.buy', 'shipping.labels.void', 'shipping.manage', 'shipping.pack', 'shipping.settings.manage', 'shipping.settings.view', 'shipping.view', 'threads.post', 'threads.read', 'workorders.view'])
     expect((await browser.get('/auth/users')).status).toBe(403)
 
     await enrolTotp(h, browser)
     const after = await permissionsOf(browser)
-    expect(after).toEqual(expect.arrayContaining(['users.view', 'roles.assign', 'audit.read', 'money.price']))
+    expect(after).toEqual(expect.arrayContaining(['users.view', 'roles.assign', 'audit.read', 'quotes.manage', 'money.price', 'money.margin', 'inventory.stock.view']))
     expect(after).not.toContain('money.cost')
     expect((await browser.get('/auth/users')).status).toBe(200)
     expect((await browser.get('/auth/office/me')).body).toMatchObject({ mfa: { required: true, satisfied: true } })
@@ -111,7 +113,7 @@ describe('the grants of a session', () => {
     const later = new Date(h.clock.now().getTime() + 24 * 3_600_000).toISOString()
     await assign(reader.user.id, { roleId: await roleIdOf(owner, 'planner'), allCompanies: true, validFrom: later })
     expect(await permissionsOf(reader.browser)).toEqual([
-      'audit.read', 'companies.bank.view', 'companies.view', 'compliance.certificates.view', 'compliance.register.view', 'costing.view', 'devices.view', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'inventory.locations.view', 'inventory.stock.view', 'invoices.view', 'links.view', 'money.price', 'numbering.view', 'orders.manage', 'orders.view', 'parties.manage', 'parties.vies', 'parties.view', 'payments.view', 'planning.view', 'print.documents', 'print.view', 'privacy.view', 'product.bom.view', 'product.materials.view', 'product.routing.view', 'product.styles.view', 'production.settings.view', 'purchasing.view', 'quality.lots.view', 'quotes.manage', 'quotes.send', 'quotes.view', 'roles.view', 'shipping.settings.view', 'shipping.view', 'sites.view', 'threads.post', 'threads.read', 'users.view', 'workers.view', 'workorders.view',
+      'audit.read', 'companies.bank.view', 'companies.view', 'compliance.certificates.view', 'compliance.register.view', 'costing.view', 'devices.view', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'inventory.locations.view', 'inventory.stock.view', 'invoices.view', 'links.view', 'money.margin', 'money.price', 'numbering.view', 'orders.manage', 'orders.view', 'parties.manage', 'parties.vies', 'parties.view', 'payments.view', 'planning.view', 'print.documents', 'print.view', 'privacy.view', 'product.bom.view', 'product.materials.view', 'product.routing.view', 'product.styles.view', 'production.settings.view', 'purchasing.view', 'quality.lots.view', 'quotes.manage', 'quotes.send', 'quotes.view', 'roles.view', 'shipping.settings.view', 'shipping.view', 'sites.view', 'threads.post', 'threads.read', 'users.view', 'workers.view', 'workorders.view',
     ])
     const listed = (await reader.browser.get(`/auth/users/${reader.user.id}/roles`)).body.assignments as { roleKey: string; live: boolean }[]
     expect(listed.map((entry) => [entry.roleKey, entry.live])).toEqual(expect.arrayContaining([['planner', false], ['sales', true], ['read_only', true]]))
@@ -145,7 +147,7 @@ describe('scope: company A from a role does not reach company B', () => {
 describe('custom roles', () => {
   it('are created from a template and edited through command(), with an audit row that says what changed', async () => {
     const created = await asOwner('post', '/auth/roles', { key: 'quoting', name: 'Quoting', basedOn: 'sales' })
-    expect(created.body).toMatchObject({ key: 'custom.quoting', system: false, basedOn: 'sales', permissions: ['audit.read', 'costing.view', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'invoices.view', 'orders.manage', 'orders.view', 'parties.manage', 'parties.vies', 'parties.view', 'payments.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'quotes.manage', 'quotes.send', 'quotes.view', 'shipping.view', 'threads.post', 'threads.read', 'workorders.view'], grains: ['price'], version: 1, holders: 0 })
+    expect(created.body).toMatchObject({ key: 'custom.quoting', system: false, basedOn: 'sales', permissions: ['audit.read', 'costing.view', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'invoices.view', 'orders.manage', 'orders.view', 'parties.manage', 'parties.vies', 'parties.view', 'payments.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'quotes.manage', 'quotes.send', 'quotes.view', 'shipping.view', 'threads.post', 'threads.read', 'workorders.view'], grains: ['price', 'margin'], version: 1, holders: 0 })
     expect((await asOwner('post', '/auth/roles', { key: 'quoting', name: 'Again' })).status).toBe(409)
 
     const edited = await asOwner('patch', `/auth/roles/${created.body.id}`, { version: 1, permissions: ['audit.read', 'costing.view', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'invoices.view', 'numbering.view', 'orders.manage', 'orders.view', 'parties.manage', 'parties.vies', 'parties.view', 'payments.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'quotes.manage', 'quotes.send', 'quotes.view', 'shipping.view', 'threads.post', 'threads.read', 'workorders.view'], reason: 'Quotes need the series' })
@@ -163,7 +165,8 @@ describe('custom roles', () => {
 
     const stale = await asOwner('patch', `/auth/roles/${created.body.id}`, { version: 1, name: 'Old' })
     expect(stale.status).toBe(409)
-    const unknown = await asOwner('patch', `/auth/roles/${created.body.id}`, { version: 2, permissions: ['quotes.export'], grains: ['cost'] })
+    // The copy of sales requires two-factor (it sees margins); taking that off while it would see costs is refused.
+    const unknown = await asOwner('patch', `/auth/roles/${created.body.id}`, { version: 2, permissions: ['quotes.export'], grains: ['cost'], requireMfa: false })
     expect(unknown.status).toBe(400)
     expect(unknown.body.error.issues.map((issue: { path: string }) => issue.path)).toEqual(['permissions/0', 'requireMfa'])
   })
@@ -322,8 +325,11 @@ describe('invitations carry roles', () => {
     const guest = new Browser(h.app)
     await guest.get('/auth/csrf')
     const accepted = await guest.post('/auth/invitations/accept', { token: decodeURIComponent(message.link.split('#token=')[1]!), password: 'calm-meadow-river-91' })
-    expect(accepted.body).toMatchObject({ status: 'signed_in', mfa: { required: false, satisfied: true } })
-    expect(await permissionsOf(guest)).toEqual(['audit.read', 'costing.view', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'invoices.view', 'money.price', 'orders.manage', 'orders.view', 'parties.manage', 'parties.vies', 'parties.view', 'payments.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'quotes.manage', 'quotes.send', 'quotes.view', 'shipping.view', 'threads.post', 'threads.read', 'workorders.view'])
+    // Sales sees margins, so its permissions wait for two-factor on the session.
+    expect(accepted.body).toMatchObject({ status: 'signed_in', mfa: { required: true, satisfied: false } })
+    expect(await permissionsOf(guest)).toEqual([])
+    await enrolTotp(h, guest)
+    expect(await permissionsOf(guest)).toEqual(['audit.read', 'costing.view', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'invoices.view', 'money.margin', 'money.price', 'orders.manage', 'orders.view', 'parties.manage', 'parties.vies', 'parties.view', 'payments.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'quotes.manage', 'quotes.send', 'quotes.view', 'shipping.view', 'threads.post', 'threads.read', 'workorders.view'])
   })
 
   it('needs roles.assign to give roles with an invitation', async () => {

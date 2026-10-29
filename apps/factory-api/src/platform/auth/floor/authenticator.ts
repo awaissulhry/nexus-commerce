@@ -35,6 +35,8 @@ export interface FloorSession {
   readonly startedAt: Date
   readonly idleExpiresAt: Date
   readonly endsAt: Date
+  /** When the worker last proved their PIN in this session (null: a badge alone, not proved since). */
+  readonly pinVerifiedAt: Date | null
   readonly worker: { readonly displayName: string; readonly locale: string; readonly pinMustChange: boolean; readonly employeeCode: string | null }
 }
 
@@ -91,6 +93,7 @@ export function floorAuthenticator(core: FloorCore): Authenticator {
         startedAt: row.startedAt,
         idleExpiresAt,
         endsAt: row.endsAt,
+        pinVerifiedAt: row.pinVerifiedAt,
         worker: { displayName: row.worker.displayName, locale: row.worker.locale, pinMustChange: row.worker.pinMustChange, employeeCode: row.worker.employeeCode },
       })
       return { audience: 'floor', tenantId: device.tenantId, siteId: device.siteId, deviceId: device.id, actorId: row.workerId, grants }

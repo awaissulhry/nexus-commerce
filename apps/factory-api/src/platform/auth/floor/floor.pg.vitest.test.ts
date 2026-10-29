@@ -341,7 +341,148 @@ describe('idle sign-out (PLT-060)', () => {
 
   it('checks the site settings', async () => {
     expect((await send(office, 'PUT', `/auth/floor/sites/${p1.id}/settings`, { idleMinutes: 0, shiftEnds: ['25:00'] })).status).toBe(400)
-    expect((await office.get(`/auth/floor/sites/${p2.id}/settings`)).body).toEqual({ siteId: p2.id, idleMinutes: 10, shiftEnds: [], timeZone: 'Europe/Rome', version: null })
+    expect((await office.get(`/auth/floor/sites/${p2.id}/settings`)).body).toEqual({ siteId: p2.id, idleMinutes: 10, shiftEnds: [], badgeOnlySignIn: false, timeZone: 'Europe/Rome', version: null })
+  })
+})
+
+describe('badge alone starts work, as a site setting (Owner answer F1 a)', () => {
+  const settingsOf = (site: Site) => office.get(`/auth/floor/sites/${site.id}/settings`)
+  const badgeOnly = async (site: Site, on: boolean) => {
+    const { body } = await settingsOf(site)
+    const answer = await send(office, 'PUT', `/auth/floor/sites/${site.id}/settings`, { idleMinutes: body.idleMinutes, shiftEnds: body.shiftEnds, badgeOnlySignIn: on, ...(body.version ? { version: body.version } : {}) })
+    expect(answer.status).toBe(200)
+    return answer.body
+  }
+  const badgeAlone = (device: Tablet, who: TestWorker) => device.browser.post('/floor/sign-in', { badgeCode: who.badgeCode })
+  const pinVerifiedAt = async (deviceId: string) =>
+    (await admin('SELECT s."pinVerifiedAt" AS at FROM "FloorSession" s JOIN "Device" d ON d."currentSessionId" = s.id WHERE d.id = $1::uuid', [deviceId]))[0]!.at as Date | null
+  let site: Site
+
+  beforeAll(async () => {
+    site = await addSite(alpha, 'F1')
+  })
+
+  it('is off by default: a badge without a PIN is a 400 that never looks at the badge; the office reads and writes the setting', async () => {
+    const device = await tablet(site)
+    const lia = await worker(site, 'Lia Test')
+    expect((await settingsOf(site)).body).toMatchObject({ badgeOnlySignIn: false, version: null })
+    expect((await device.browser.get('/floor/device')).body.signIn).toEqual({ badgeOnly: false })
+    for (const badgeCode of [lia.badgeCode, 'NOT-A-BADGE']) {
+      const answer = await device.browser.post('/floor/sign-in', { badgeCode })
+      expect(answer.status).toBe(400)
+      expect(answer.body.error.issues[0].path).toBe('pin')
+    }
+    expect(await currentSession(device.deviceId)).toBeNull()
+
+    // On, with before and after in the audit row; left out of a later PUT, it stays as it is.
+    expect(await badgeOnly(site, true)).toMatchObject({ badgeOnlySignIn: true, version: 1 })
+    const [audit] = await admin(`SELECT "before", "after" FROM "AuditLog" WHERE action = 'devices.setFloorTimes' AND "recordId" = $1::uuid ORDER BY "at" DESC LIMIT 1`, [site.id])
+    expect(audit!.after).toMatchObject({ badgeOnlySignIn: true })
+    const kept = await send(office, 'PUT', `/auth/floor/sites/${site.id}/settings`, { idleMinutes: 12, shiftEnds: [], version: 1 })
+    expect(kept.body).toMatchObject({ idleMinutes: 12, badgeOnlySignIn: true, version: 2 })
+    expect((await device.browser.get('/floor/device')).body.signIn).toEqual({ badgeOnly: true })
+    // The floor reads the setting; it never writes it.
+    const tablets = await admin(`SELECT has_column_privilege('factory_floor_runtime', '"FloorSettings"', 'badgeOnlySignIn', 'UPDATE') AS write, has_column_privilege('factory_floor_runtime', '"FloorSettings"', 'badgeOnlySignIn', 'SELECT') AS read`)
+    expect(tablets[0]).toEqual({ write: false, read: true })
+  })
+
+  it('on: a badge alone signs in with no PIN proved; signing acts and My day wait for a step-up with the PIN', async () => {
+    await badgeOnly(site, true)
+    const device = await tablet(site)
+    const max = await worker(site, 'Max Test')
+    const answer = await badgeAlone(device, max)
+    expect(answer.status).toBe(200)
+    expect(answer.body).toMatchObject({ status: 'signed_in', worker: { id: max.id }, session: { stepUpUntil: null, idleMinutes: expect.any(Number) } })
+    expect(await pinVerifiedAt(device.deviceId)).toBeNull()
+    const signedIn = await me(device)
+    expect(signedIn.body).toMatchObject({ session: { stepUpUntil: null }, device: { station: { code: 'CUT-01', workCentreKind: 'CUTTING' } } })
+    expect(signedIn.body.scanTag).toMatch(/^[0-9A-HJKMNP-TV-Z]{2}$/)
+    const [audit] = await admin(`SELECT "after" FROM "AuditLog" WHERE action = 'floor.signIn' AND "actorId" = $1::uuid ORDER BY "at" DESC LIMIT 1`, [max.id])
+    expect(audit!.after).toMatchObject({ method: 'badge', pin: false })
+
+    // The step-up: a wrong PIN counts (as at sign-in) and keeps the worker signed in; the right one opens 2 minutes.
+    const wrong = await device.browser.post('/floor/step-up', { pin: OTHER_PIN })
+    expect(wrong.status).toBe(400)
+    expect(wrong.body.error.issues[0].path).toBe('pin')
+    expect((await admin('SELECT "failedPinAttempts" AS n FROM "Worker" WHERE id = $1::uuid', [max.id]))[0]!.n).toBe(1)
+    expect((await me(device)).status).toBe(200)
+    const stepped = await device.browser.post('/floor/step-up', { pin: max.pin })
+    expect(stepped.status).toBe(200)
+    expect(Date.parse(stepped.body.stepUpUntil) - h.clock.now().getTime()).toBe(2 * 60_000)
+    expect(await pinVerifiedAt(device.deviceId)).not.toBeNull()
+    expect((await me(device)).body.session.stepUpUntil).toBe(stepped.body.stepUpUntil)
+    expect((await admin('SELECT "failedPinAttempts" AS n FROM "Worker" WHERE id = $1::uuid', [max.id]))[0]!.n).toBe(0)
+    h.clock.advance(2 * 60_000 + 1_000)
+    // Past its window the session is still live; the step-up is what ran out (requireFloorStepUp then answers 403 stepUp).
+    expect((await me(device)).status).toBe(200)
+    // A step-up's audit row holds no PIN.
+    const rows = await admin(`SELECT "after"::text AS after FROM "AuditLog" WHERE action = 'floor.stepUp' AND "actorId" = $1::uuid`, [max.id])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.after).not.toContain(max.pin)
+  })
+
+  it('on: a badge with a PIN still proves it; a name always needs the PIN', async () => {
+    await badgeOnly(site, true)
+    const device = await tablet(site)
+    const nia = await worker(site, 'Nia Test')
+    const withPin = await signIn(device, nia)
+    expect(withPin.status).toBe(200)
+    expect(withPin.body.session.stepUpUntil).not.toBeNull()
+    expect(await pinVerifiedAt(device.deviceId)).not.toBeNull()
+    expect((await device.browser.post('/floor/sign-out')).status).toBe(200)
+    const byName = await device.browser.post('/floor/sign-in', { workerId: nia.id })
+    expect(byName.status).toBe(400)
+    expect(byName.body.error.issues[0].path).toBe('pin')
+    expect((await device.browser.post('/floor/sign-in', { workerId: nia.id, pin: nia.pin })).status).toBe(200)
+    // A wrong PIN with a badge is refused, even where a badge alone would do.
+    expect((await device.browser.post('/floor/sign-out')).status).toBe(200)
+    expect((await signIn(device, nia, OTHER_PIN)).status).toBe(401)
+  })
+
+  it('on: a badge alone never clears wrong PINs, and opens nothing for a locked worker, one without a PIN, or a revoked badge', async () => {
+    await badgeOnly(site, true)
+    const device = await tablet(site)
+    const oli = await worker(site, 'Oli Test')
+    for (let attempt = 1; attempt <= 4; attempt++) expect((await signIn(device, oli, OTHER_PIN)).status).toBe(401)
+    expect((await badgeAlone(device, oli)).status).toBe(200)
+    expect((await admin('SELECT "failedPinAttempts" AS n FROM "Worker" WHERE id = $1::uuid', [oli.id]))[0]!.n).toBe(4)
+    // The fifth wrong PIN (here at a step-up) locks the worker: no step-up, no new sign-in by badge alone.
+    expect((await device.browser.post('/floor/step-up', { pin: OTHER_PIN })).status).toBe(400)
+    const locked = await device.browser.post('/floor/step-up', { pin: oli.pin })
+    expect(locked.status).toBe(403)
+    expect(locked.body.error.issues ?? []).toEqual([])
+    expect((await device.browser.post('/floor/sign-out')).status).toBe(200)
+    const refused = await badgeAlone(device, oli)
+    expect(refused.status).toBe(401)
+    expect(refused.body.error.message).toBe((await signIn(device, oli, OTHER_PIN)).body.error.message)
+
+    // A worker without a PIN, and a revoked badge: the same 401.
+    const pia = await worker(site, 'Pia Test')
+    await admin('UPDATE "Worker" SET "pinHash" = NULL WHERE id = $1::uuid', [pia.id])
+    expect((await badgeAlone(device, pia)).status).toBe(401)
+    const quin = await worker(site, 'Quin Test')
+    const [badge] = await admin('SELECT id::text FROM "Badge" WHERE "workerId" = $1::uuid AND status = \'ACTIVE\'', [quin.id])
+    await stepped(office)
+    expect((await office.post(`/auth/floor/badges/${badge!.id}/revoke`, { status: 'LOST' })).status).toBe(200)
+    expect((await badgeAlone(device, quin)).status).toBe(401)
+    expect(await currentSession(device.deviceId)).toBeNull()
+  })
+
+  it('on: the next badge switches person with no PIN; off again: a badge alone is refused', async () => {
+    await badgeOnly(site, true)
+    const device = await tablet(site)
+    const ray = await worker(site, 'Ray Test')
+    const sol = await worker(site, 'Sol Test')
+    expect((await badgeAlone(device, ray)).status).toBe(200)
+    const switched = await device.browser.post('/floor/switch', { badgeCode: sol.badgeCode })
+    expect(switched.status).toBe(200)
+    expect(switched.body).toMatchObject({ worker: { id: sol.id }, session: { stepUpUntil: null } })
+    expect((await device.browser.post('/floor/sign-out')).status).toBe(200)
+
+    await badgeOnly(site, false)
+    expect((await device.browser.get('/floor/device')).body.signIn).toEqual({ badgeOnly: false })
+    expect((await badgeAlone(device, ray)).status).toBe(400)
+    expect((await signIn(device, ray)).status).toBe(200)
   })
 })
 
@@ -414,7 +555,7 @@ describe('revocation ends sessions', () => {
     expect((await me(device)).body).toMatchObject({ pinMustChange: true, permissions: [] })
     expect((await device.browser.post('/floor/pin', { currentPin: reset.body.pin, newPin: '123456' })).status).toBe(400)
     expect((await device.browser.post('/floor/pin', { currentPin: reset.body.pin, newPin: '905218' })).body).toEqual({ status: 'changed' })
-    expect((await me(device)).body).toMatchObject({ pinMustChange: false, permissions: ['floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'production.cut', 'shipping.pack'] })
+    expect((await me(device)).body).toMatchObject({ pinMustChange: false, permissions: ['floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'shipping.pack'] })
     expect((await device.browser.post('/floor/sign-out')).status).toBe(200)
     expect((await signIn(device, ola, reset.body.pin)).status).toBe(401)
     expect((await signIn(device, ola, '905218')).status).toBe(200)
@@ -426,12 +567,12 @@ describe('floor grants come from floor roles, with at most wages', () => {
     const device = await tablet(p1)
     const pia = await worker(p1, 'Pia Test', ['team_leader'])
     expect((await signIn(device, pia)).status).toBe(200)
-    expect((await me(device)).body.permissions).toEqual(['floor.lead', 'floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'production.cut', 'shipping.pack'])
+    expect((await me(device)).body.permissions).toEqual(['floor.lead', 'floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'shipping.pack'])
     await stepped(office)
     expect((await send(office, 'PUT', `/auth/floor/workers/${pia.id}/roles`, { roleIds: [] })).status).toBe(200)
     expect((await me(device)).body.permissions).toEqual([])
     expect((await send(office, 'PUT', `/auth/floor/workers/${pia.id}/roles`, { roleIds: [await roleId(alpha, 'operator')] })).body.roles.map((role: { key: string }) => role.key)).toEqual(['operator'])
-    expect((await me(device)).body.permissions).toEqual(['floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'production.cut', 'shipping.pack'])
+    expect((await me(device)).body.permissions).toEqual(['floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'shipping.pack'])
   })
 
   it('drops every grain but wages, and refuses office roles for workers and floor roles for people', async () => {
@@ -501,7 +642,7 @@ describe('Statuto dei Lavoratori art. 4 and GDPR art. 5(1)(c): minimal worker re
     // A floor session records who, where and when; nothing counts or scores the work.
     const session = await admin(`SELECT column_name AS c FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'FloorSession' ORDER BY column_name`)
     expect(session.map((column) => column.c)).toEqual(
-      ['badgeId', 'deviceId', 'endReason', 'endedAt', 'endsAt', 'id', 'idleExpiresAt', 'lastSeenAt', 'siteId', 'startedAt', 'tenantId', 'tokenHash', 'workerId'].sort(),
+      ['badgeId', 'deviceId', 'endReason', 'endedAt', 'endsAt', 'id', 'idleExpiresAt', 'lastSeenAt', 'pinVerifiedAt', 'siteId', 'startedAt', 'tenantId', 'tokenHash', 'workerId'].sort(),
     )
     const device = await tablet(p1)
     const una = await worker(p1, 'Una Test')
