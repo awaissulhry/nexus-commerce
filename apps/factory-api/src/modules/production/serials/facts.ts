@@ -27,13 +27,15 @@ import { garmentLabelFor } from '../../compliance/labels/preview'
 import { scanProgressOf } from '../scans/progress'
 import { readOperations, readWorkOrderBundles, readWorkOrderScans } from '../scans/store'
 import { readLabelLog, type LabelLogEntry } from './label-log'
-import { buyerLanguages, liveSerialsPerCell, readCells, readHeader, readLabelPrinters, readStyle, readTemplateSize, type CellRow, type LabelHeader, type LabelPrinterRow, type Reader, type StyleFacts } from './store'
+import { buyerLanguages, liveSerialsPerCell, readCells, readHeader, readLabelPrinters, readStyle, readTemplateSize, type CellRow, type LabelHeader, type LabelPrinterRow, type Reader, type SerialRow, type StyleFacts } from './store'
 
 /**
  * What the garment label step knows about a work order (B-W1-44), read the same way by its commands (inside their
  * transaction, after the cells' label locks) and its screens: who may work on it, its cells' finished, labelled and
  * still-to-label garments, the bundles finished garments came in, the label of a cell rendered with the certificate gate
- * on the day (compliance/labels garmentLabelFor), the label printer, the buyers' languages, and the refusal error.
+ * on the day (compliance/labels garmentLabelFor), the label printer, the buyers' languages, and the refusal error. Every
+ * read runs as the caller (row-level security keeps a floor device to its own site); only the readiness gate and the
+ * buyers' languages are read in the tenant's system context.
  */
 
 export type Worker = FloorContext | OfficeContext
@@ -140,18 +142,15 @@ export interface LabelFacts {
   readonly log: readonly LabelLogEntry[]
 }
 
-/**
- * Everything the label rules need, read with `db` (a request's client or a command's transaction) and, for the label
- * log, through its seam (a floor caller's log read goes through the tenant's system context).
- */
-export async function labelFacts(caller: CommandCaller, db: Reader, header: LabelHeader): Promise<LabelFacts> {
+/** Everything the label rules need, read with `db` (a request's client, or a command's transaction after its locks). */
+export async function labelFacts(db: Reader, header: LabelHeader): Promise<LabelFacts> {
   const style = await readStyle(db, header.styleId)
   if (!style) throw new NotFoundError('Work order not found.')
   const rows = await readCells(db, header.id)
   const operations = await readOperations(db, header.id)
   const final = finalOperationOf(operations)
   const progress = await scanProgressOf(db, header)
-  const log = await readLabelLog(caller, rows.map((row) => row.id), db)
+  const log = await readLabelLog(db, header.id)
   const printed = printedPerCell(log)
   const live = style.tracking === 'SERIAL' ? await liveSerialsPerCell(db, header.id) : new Map<string, number>()
   const bundles = new Map<string, FinishedBundle[]>()
@@ -193,23 +192,11 @@ export async function labelFacts(caller: CommandCaller, db: Reader, header: Labe
   }
 }
 
-/** Which bundle each live serial came in (the label log's PRINT entries), counted per bundle. */
-export function serialsPerBundle(log: readonly LabelLogEntry[], liveSerialIds: ReadonlySet<string>): Map<string, number> {
+/** The live (not VOID) serials each bundle holds (GarmentSerial.bundleId). */
+export function serialsPerBundle(serials: readonly Pick<SerialRow, 'status' | 'bundleId'>[]): Map<string, number> {
   const held = new Map<string, number>()
-  for (const entry of log) {
-    if (entry.kind !== 'PRINT') continue
-    for (const serial of entry.serials) {
-      if (serial.bundleId && liveSerialIds.has(serial.id)) held.set(serial.bundleId, (held.get(serial.bundleId) ?? 0) + 1)
-    }
-  }
+  for (const serial of serials) if (serial.status !== 'VOID' && serial.bundleId) held.set(serial.bundleId, (held.get(serial.bundleId) ?? 0) + 1)
   return held
-}
-
-/** The bundle each serial was given from (the label log's PRINT entries). */
-export function bundleOfSerial(log: readonly LabelLogEntry[]): Map<string, string | null> {
-  const out = new Map<string, string | null>()
-  for (const entry of log) if (entry.kind === 'PRINT') for (const serial of entry.serials) out.set(serial.id, serial.bundleId)
-  return out
 }
 
 // ---- the label of a cell ---------------------------------------------------------------------------------------------------------

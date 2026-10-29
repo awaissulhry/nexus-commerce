@@ -77,6 +77,7 @@ export const SERIAL_COLUMNS = {
   status: true,
   releaseId: true,
   shipmentLineId: true,
+  bundleId: true,
   voidedAt: true,
   voidReason: true,
   version: true,

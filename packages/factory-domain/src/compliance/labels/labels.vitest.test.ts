@@ -227,7 +227,18 @@ describe('the rendered label of a cell, with the source of each value', () => {
     ])
     expect(block(refused, 'pictogram')!.source).toMatchObject({ kind: 'STYLE', words: 'From style TEST-JKT-01: class AA; no valid certificate covers BLK 52 on 2026-10-29.' })
     const serial = renderLabel(active, { ...real, identification: { kind: 'SERIAL', value: 'SN-000123', recordType: 'GarmentSerial', recordId: null, reference: 'WO-00012' } })
-    expect(block(serial, 'batchOrSerial')).toMatchObject({ lines: [{ text: 'SN SN-000123' }], source: { kind: 'SERIAL' } })
+    // A serial scan id prints once ("SN-…", never "SN SN-…"), and both carry their Code 128 bars (B-W1-44: packing scans them).
+    expect(block(serial, 'batchOrSerial')).toMatchObject({ lines: [{ text: 'SN-000123' }], graphic: { kind: 'BARCODE', value: 'SN-000123' }, source: { kind: 'SERIAL' } })
+    expect(block(label, 'batchOrSerial')!.graphic).toEqual({ kind: 'BARCODE', value: 'BA-00012' })
+    expect(block(renderLabel(active, { ...real, identification: { ...real.identification, kind: 'SERIAL', value: 'SEED-0001' } }), 'batchOrSerial')!.lines).toEqual([{ text: 'SN SEED-0001', language: null }])
+    // The bars and the text line; the widest module the 45 mm between the margins holds: 134 modules → 2 dots at 203 dpi,
+    // 3 at 300; a full serial scan id (189 modules) → 1 dot at 203 dpi.
+    const zpl = garmentLabelZpl(serial, 203)
+    expect(zpl).toMatch(/\^BY2,3,\d+\^BCN,\d+,N,N,N\^FH\^FDSN-000123\^FS/)
+    expect(zpl.match(/\^FDSN-000123\^FS/g)).toHaveLength(2)
+    expect(garmentLabelZpl(serial, 300)).toMatch(/\^BY3,3,\d+\^BCN/)
+    const long = renderLabel(active, { ...real, identification: { ...real.identification, kind: 'SERIAL', value: 'SN-7K-00001A-4' } })
+    expect(garmentLabelZpl(long, 203)).toMatch(/\^BY1,3,\d+\^BCN,\d+,N,N,N\^FH\^FDSN-7K-00001A-4\^FS/)
   })
 
   it("names a class the certificate does not grant, missing body measures and the buyer's missing language", () => {

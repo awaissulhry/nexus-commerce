@@ -3,7 +3,6 @@ import { garmentLabelZpl } from '@nexus/factory-domain/compliance/labels/zpl'
 import { DomainError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
-import { tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 import { PRODUCTION_SERIALS } from '@nexus/factory-domain/production/serials/permissions'
 import {
   assignBundles,
@@ -11,7 +10,6 @@ import {
   gateRefusal,
   planLabels,
   serialReprintRefusal,
-  serialText,
   voidRefusal,
   type GarmentSerialStatus,
   type GarmentTracking,
@@ -27,7 +25,6 @@ import { floorRecordSubjectFor } from '../settings/subject'
 import {
   assertFloorReady,
   batchIdentification,
-  bundleOfSerial,
   floorOf,
   labelFacts,
   labelPrinter,
@@ -46,8 +43,8 @@ import {
   type CellFacts,
   type Worker,
 } from './facts'
-import { recordLabelLog, type LabelLogSerial } from './label-log'
-import { serialNumbers } from './numbers'
+import { recordLabelLog } from './label-log'
+import { takeSerials } from './numbers'
 import { lockLabelCells, lockSerial, readCells, readHeader, readSerial, readSerials, type LabelHeader, type LabelPrinterRow, type SerialRow } from './store'
 import { cellStateView, serialView } from './views'
 
@@ -65,11 +62,12 @@ import { cellStateView, serialView } from './views'
  *            site nobody) → the facts (finished from the scans, labelled from the serials or the label log) → planLabels
  *            (never more than finished) → each cell's label rendered on the day with the work order's FROZEN label
  *            template and revision (garmentLabelFor, the certificate gate inside): a cell the gate refuses is refused in
- *            its words and the others print; none prints → 409 with every refusal. A BATCH style: one label log entry
- *            per cell (the batch number). A SERIAL style: the serials' references from the serial series seam
- *            (numbers.ts), the GarmentSerial rows MADE with their bundle (assignBundles), an entry per cell naming them.
+ *            its words and the others print; none prints → 409 with every refusal. A BATCH style: one GarmentLabelPrint
+ *            entry per cell (the batch number). A SERIAL style: the tenant's GARMENT_SERIAL scan ids (numbers.ts,
+ *            platform/numbering allocateScanIds: its counter's lock last), the GarmentSerial rows MADE with their bundle
+ *            (assignBundles → GarmentSerial.bundleId), then an entry per cell naming them (its trigger checks them).
  *   reprint  floor or office: a BATCH cell's labels (at most those printed) or one serial's label, the same batch or
- *            serial, a reason, the certificate gate again; an entry REPRINT.
+ *            serial, a reason, the certificate gate again; an entry REPRINT (the floor: named by the site's rules).
  *   void     floor or office: a MADE serial with a reason (the row locked FOR UPDATE first); a RELEASED one only through
  *            its release's reversal (B-W1-45), never a SHIPPED one.
  * After the command each label is rendered again (the gate on the day) and queued on the label printer (platform/print
@@ -82,6 +80,18 @@ import { cellStateView, serialView } from './views'
 
 const postedBy = (context: Worker) => (context.audience === 'floor' ? 'FLOOR' : 'OFFICE')
 const scopeOf = (header: LabelHeader) => ({ companyId: header.companyId, siteId: header.siteId })
+const deviceOf = (context: Worker): string | null => (context.audience === 'floor' ? context.deviceId : null)
+
+/**
+ * Who a label log entry names: the office user; on the floor the worker where the site names workers and the worker
+ * acknowledged the notice (production/settings floorRecordSubjectFor: 409 in words otherwise), nobody at a station site.
+ */
+async function namedBy(tools: CommandTools, siteId: string): Promise<string | null> {
+  const context = tools.context as Worker
+  if (context.audience === 'office') return context.actorId
+  const subject = await floorRecordSubjectFor(tools.tx, { siteId, workerId: context.actorId, stationId: await deviceStationOf(tools.tx, context.deviceId) })
+  return subject.workerId ? context.actorId : null
+}
 
 // ---- printing after the command ------------------------------------------------------------------------------------------------
 
@@ -195,7 +205,7 @@ interface PrintResult {
   readonly refused: LabelRefusal[]
 }
 
-async function printInCommand(tools: CommandTools, caller: CommandCaller, workOrderId: string, body: PrintInput, languages: ReadonlyMap<string, string>): Promise<PrintResult> {
+async function printInCommand(tools: CommandTools, workOrderId: string, body: PrintInput, languages: ReadonlyMap<string, string>): Promise<PrintResult> {
   const context = tools.context as FloorContext
   const { tx } = tools
   await scanWorkOrderLock(tx, context.tenantId, workOrderId)
@@ -207,7 +217,7 @@ async function printInCommand(tools: CommandTools, caller: CommandCaller, workOr
   const subject = await floorRecordSubjectFor(tx, { siteId: header.siteId, workerId: context.actorId, stationId: await deviceStationOf(tx, context.deviceId) })
   const createdById = subject.workerId ? context.actorId : null
 
-  const facts = await labelFacts(caller, tx, header)
+  const facts = await labelFacts(tx, header)
   const tracking = facts.style.tracking
   const plan = planLabels({ workOrder: facts.workOrder, tracking, cells: facts.cells, asks: body.cells ? body.cells.map((cell) => ({ cellId: cell.workOrderSizeId, count: cell.count })) : null })
   if (!plan.ok) return refuse(plan.refusal)
@@ -229,22 +239,19 @@ async function printInCommand(tools: CommandTools, caller: CommandCaller, workOr
   const scope = scopeOf(header)
   const printed: PrintedLine[] = []
   if (tracking === 'SERIAL') {
-    const ids = printable.flatMap(({ count }) => Array.from({ length: count }, () => newId()))
-    const refs = await serialNumbers().take(tools, { companyId: header.companyId, siteId: header.siteId, recordIds: ids })
-    if (refs.length !== ids.length) throw new Error('the serial series gave the wrong number of references')
-    const tag = tenantTag(context.tenantId)
-    const live = new Set((await readSerials(tx, header.id)).filter((row) => row.status !== 'VOID').map((row) => row.id))
-    const held = serialsPerBundle(facts.log, live)
+    const total = printable.reduce((sum, { count }) => sum + count, 0)
+    const codes = await takeSerials(tools, total)
+    const held = serialsPerBundle(await readSerials(tx, header.id))
     let next = 0
     for (const { cell, count } of printable) {
       const bundles = assignBundles(facts.bundles.get(cell.cellId) ?? [], held, count)
       const serials: PrintedSerial[] = bundles.map((bundleId) => {
         const index = next++
         if (bundleId) held.set(bundleId, (held.get(bundleId) ?? 0) + 1)
-        return { id: ids[index]!, serial: serialText(tag, refs[index]!), bundleId }
+        return { id: newId(), serial: codes[index]!, bundleId }
       })
       await tx.garmentSerial.createMany({
-        data: serials.map((serial) => ({ id: serial.id, siteId: header.siteId, workOrderId: header.id, workOrderSizeId: cell.cellId, serial: serial.serial, createdAt: tools.now, updatedAt: tools.now, createdById })),
+        data: serials.map((serial) => ({ id: serial.id, siteId: header.siteId, workOrderId: header.id, workOrderSizeId: cell.cellId, serial: serial.serial, bundleId: serial.bundleId, createdAt: tools.now, updatedAt: tools.now, createdById })),
       })
       for (const serial of serials) {
         tools.audit({ recordType: 'GarmentSerial', recordId: serial.id, ...scope, after: { serial: serial.serial, status: 'MADE', workOrderId: header.id, workOrderSizeId: cell.cellId, bundleId: serial.bundleId } })
@@ -255,10 +262,22 @@ async function printInCommand(tools: CommandTools, caller: CommandCaller, workOr
     for (const { cell, count } of printable) printed.push({ entryId: newId(), workOrderSizeId: cell.cellId, colourwayCode: cell.colourwayCode, size: cell.size, count, batchNumber: header.batchNumber!, serials: [] })
   }
 
-  const printer = body.printerId ?? null
   for (const line of printed) {
-    const serials: LabelLogSerial[] = line.serials.map((serial) => ({ ...serial }))
-    recordLabelLog(tools, { id: line.entryId, kind: 'PRINT', tracking, ...scope, workOrderId: header.id, cellId: line.workOrderSizeId, quantity: line.count, batchNumber: header.batchNumber, serials, printerId: printer ?? '', reason: null })
+    await recordLabelLog(tools, {
+      id: line.entryId,
+      kind: 'PRINT',
+      tracking,
+      ...scope,
+      workOrderId: header.id,
+      cellId: line.workOrderSizeId,
+      quantity: line.count,
+      batchNumber: line.batchNumber,
+      serialIds: line.serials.map((serial) => serial.id),
+      printerId: body.printerId ?? null,
+      deviceId: context.deviceId,
+      createdById,
+      reason: null,
+    })
     tools.emit({
       type: 'production.garment_labels_printed',
       subject: header.id,
@@ -283,7 +302,7 @@ export async function printLabels(caller: CommandCaller, workOrderId: string, bo
   const printer = await labelPrinter(caller, header, body.printerId)
   const languages = await languagesOf(caller, await caller.withClient((client) => readCells(client, header.id)))
   const outcome = await command(caller, { name: 'production.printGarmentLabels', idempotencyKey, input: { workOrderId, ...body, printerId: printer.id } }, (tools) =>
-    printInCommand(tools, caller, workOrderId, { ...body, printerId: printer.id }, languages),
+    printInCommand(tools, workOrderId, { ...body, printerId: printer.id }, languages),
   )
   const { printed, refused, ...rest } = outcome.result
   return {
@@ -319,7 +338,8 @@ export async function reprintCellLabels(caller: CommandCaller, workOrderId: stri
     const current = await readHeader(tx, workOrderId)
     if (!current || !mayLabel(context, PRODUCTION_SERIALS, current)) throw new NotFoundError('Work order not found.')
     await lockLabelCells(tx, context.tenantId, current.siteId, [body.workOrderSizeId])
-    const facts = await labelFacts(caller, tx, current)
+    const createdById = await namedBy(tools, current.siteId)
+    const facts = await labelFacts(tx, current)
     const cell = facts.cells.find((row) => row.cellId === body.workOrderSizeId)
     const refusal = batchReprintRefusal({ workOrder: current, tracking: facts.style.tracking, cell, cellId: body.workOrderSizeId, count: body.count })
     if (refusal) refuse(refusal)
@@ -327,7 +347,7 @@ export async function reprintCellLabels(caller: CommandCaller, workOrderId: stri
     if (gate) refuse(gate)
     const scope = scopeOf(current)
     const entryId = newId()
-    recordLabelLog(tools, { id: entryId, kind: 'REPRINT', tracking: 'BATCH', ...scope, workOrderId: current.id, cellId: cell!.cellId, quantity: body.count, batchNumber: current.batchNumber, serials: [], printerId: printer.id, reason })
+    await recordLabelLog(tools, { id: entryId, kind: 'REPRINT', tracking: 'BATCH', ...scope, workOrderId: current.id, cellId: cell!.cellId, quantity: body.count, batchNumber: current.batchNumber!, serialIds: [], printerId: printer.id, deviceId: deviceOf(context), createdById, reason })
     tools.audit({ recordType: 'WorkOrder', recordId: current.id, ...scope, after: { garmentLabelsReprinted: { entryId, workOrderSizeId: cell!.cellId, count: body.count } }, reason })
     tools.emit({
       type: 'production.garment_labels_reprinted',
@@ -366,14 +386,15 @@ export async function reprintSerial(caller: CommandCaller, serialId: string, bod
     const current = (await readHeader(tx, serial.workOrderId))!
     const refusal = serialReprintRefusal({ workOrder: current, serial: { serial: serial.serial, status: serial.status as GarmentSerialStatus, workOrderSizeId: serial.workOrderSizeId } })
     if (refusal) refuse(refusal)
-    const facts = await labelFacts(caller, tx, current)
+    const createdById = await namedBy(tools, current.siteId)
+    const facts = await labelFacts(tx, current)
     const cell = facts.cells.find((row) => row.cellId === serial.workOrderSizeId)!
     const gate = gateRefusal(cell, await renderCell(tx, current, cell, serialIdentification(current, serial), printDay(tools.now), languages))
     if (gate) refuse(gate)
     const scope = scopeOf(current)
     const entryId = newId()
-    const printedSerial: PrintedSerial = { id: serial.id, serial: serial.serial, bundleId: bundleOfSerial(facts.log).get(serial.id) ?? null }
-    recordLabelLog(tools, { id: entryId, kind: 'REPRINT', tracking: 'SERIAL', ...scope, workOrderId: current.id, cellId: cell.cellId, quantity: 1, batchNumber: current.batchNumber, serials: [printedSerial], printerId: printer.id, reason })
+    const printedSerial: PrintedSerial = { id: serial.id, serial: serial.serial, bundleId: serial.bundleId }
+    await recordLabelLog(tools, { id: entryId, kind: 'REPRINT', tracking: 'SERIAL', ...scope, workOrderId: current.id, cellId: cell.cellId, quantity: 1, batchNumber: current.batchNumber!, serialIds: [serial.id], printerId: printer.id, deviceId: deviceOf(context), createdById, reason })
     tools.audit({ recordType: 'GarmentSerial', recordId: serial.id, ...scope, after: { labelReprinted: { entryId, serial: serial.serial } }, reason })
     tools.emit({
       type: 'production.garment_labels_reprinted',

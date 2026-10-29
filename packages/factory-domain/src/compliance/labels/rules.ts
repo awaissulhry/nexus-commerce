@@ -99,11 +99,12 @@ export const LISTED_ONLY_FIELDS: readonly LabelField[] = ['class', 'colourway']
 
 /**
  * The layout choices (sizes in hundredths of a millimetre): the text height and line pitch, the CE mark's height (5 mm
- * at least, the CE marking's smallest), the pictogram's and the care symbols' rows, the margin and the gap between fields.
+ * at least, the CE marking's smallest), the pictogram's and the care symbols' rows, the batch or serial's Code 128
+ * barcode row (B-W1-44: packing scans it), the margin and the gap between fields.
  */
 export const LAYOUT_PRESETS = Object.freeze({
-  STANDARD: { margin: 250, text: 180, line: 230, gap: 100, ce: 600, pictogram: 1000, care: 500 },
-  COMPACT: { margin: 200, text: 140, line: 180, gap: 60, ce: 500, pictogram: 800, care: 400 },
+  STANDARD: { margin: 250, text: 180, line: 230, gap: 100, ce: 600, pictogram: 1000, care: 500, barcode: 600 },
+  COMPACT: { margin: 200, text: 140, line: 180, gap: 60, ce: 500, pictogram: 800, care: 400, barcode: 500 },
 })
 export type LayoutPreset = keyof typeof LAYOUT_PRESETS
 export const LAYOUT_PRESET_KEYS = Object.keys(LAYOUT_PRESETS) as [LayoutPreset, ...LayoutPreset[]]

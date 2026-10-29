@@ -213,6 +213,8 @@ model WorkOrderSize {
   garmentSerials     GarmentSerial[]
   // shipping.prisma: the shipment lines that ship it.
   shipmentLines      ShipmentLine[]
+  // The garment labels printed for it (B-W1-44).
+  garmentLabelPrints GarmentLabelPrint[]
 
   @@unique([tenantId, workOrderId, colourwayId, size])
   // The target of the materials', cut pieces' and bundles' references: a cell of the same site and work order.
@@ -409,9 +411,11 @@ model Bundle {
   device        Device?         @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   scans         OperationScan[]
   correctionRequests ScanCorrectionRequest[]
+  // quality.prisma: the serials of the garments it carried to the final operation (B-W1-44).
+  garmentSerials GarmentSerial[]
 
   @@unique([tenantId, code])
-  // The target of the scans' reference: a bundle of the scan's site and work order.
+  // The target of the scans' and serials' references: a bundle of the same site and work order.
   @@unique([tenantId, siteId, workOrderId, id])
 }
 
@@ -735,4 +739,56 @@ model FloorScanRefusal {
   @@unique([tenantId, deviceId, clientScanId, code])
   // The refused list: open ones per site.
   @@index([tenantId, siteId, discardedAt])
+}
+
+/// One print or reprint of garment labels at the final operation (PRD-348: every print and reprint is logged, a reprint
+/// with its reason; MES-076; Q31; B-W1-44): N labels of one cell of a work order, with the work order's batch number
+/// (a BATCH style), or the serials given or printed again (a SERIAL style: one label each). Written in the command that
+/// gives the labels, before their print jobs are queued (a PrintJob names the cell or the serial). Never changed or
+/// removed (the triggers, for every login). The cell's PRINT entries are the labels its finished garments have (a BATCH
+/// style); the API never gives more than the garments finished at the final operation, under the cell's label lock.
+/// @append-only
+model GarmentLabelPrint {
+  id              String                 @id @db.Uuid
+  tenantId        String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The work order's company and site.
+  companyId       String                 @db.Uuid
+  siteId          String                 @db.Uuid
+  workOrderId     String                 @db.Uuid
+  workOrderSizeId String                 @db.Uuid
+  kind            GarmentLabelPrintKind
+  /// How the style traced its garments when printed (Style.garmentTracking, Q31).
+  tracking        GarmentTracking
+  /// Labels printed, from 1 (a SERIAL style: as many as serials named).
+  quantity        Int
+  /// The work order's batch number, printed on every label of it.
+  batchNumber     String
+  /// A SERIAL style: the serials printed (GarmentSerial ids of the cell, each once); empty for a BATCH style.
+  serialIds       String[]               @default([]) @db.Uuid
+  /// Why a REPRINT (required then: damaged, lost, unreadable …); null for a PRINT.
+  reason          String?
+  /// The label printer the labels were sent to (null: printed without a registered printer, which W1 does not do).
+  printerId       String?                @db.Uuid
+  /// The floor device it was printed from (null: the office).
+  deviceId        String?                @db.Uuid
+  createdAt       DateTime               @default(now()) @db.Timestamptz(3)
+  /// The office user, or the worker at a site that names workers (production settings); null at a site that records
+  /// the station only.
+  createdById     String?                @db.Uuid
+
+  site          Site          @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrderSize WorkOrderSize @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId, siteId.
+  printer       Printer?      @relation(fields: [tenantId, companyId, siteId, printerId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device        Device?       @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A work order's label log; a cell's labels.
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, workOrderSizeId])
+}
+
+/// A first print of a cell's labels, or a print again of labels already given (the same batch or serials).
+enum GarmentLabelPrintKind {
+  PRINT
+  REPRINT
 }

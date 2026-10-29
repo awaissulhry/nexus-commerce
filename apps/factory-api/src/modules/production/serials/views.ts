@@ -13,7 +13,6 @@ import { certificateGateFor } from '../../compliance/certificates/gate'
 import { labelView } from '../../compliance/labels/preview'
 import {
   batchIdentification,
-  bundleOfSerial,
   floorReadyRefusal,
   labelFacts,
   labelSize,
@@ -28,8 +27,6 @@ import {
   workerOf,
   type CellFacts,
 } from './facts'
-import { readLabelLog } from './label-log'
-import { serialNumbers } from './numbers'
 import { bundleCodes, LABEL_HEADER, readBundleByCode, readCells, readLabelJobs, readLabelPrinters, readSerialByText, readSerials, readTemplateSize, type LabelHeader, type SerialRow } from './store'
 
 /**
@@ -83,7 +80,7 @@ const refusalView = (refusal: LabelRefusal) => ({ code: refusal.code, message: r
 
 /** Each cell's finished, labelled and still-to-label garments (the commands' answers after the write). */
 export async function cellStateView(caller: CommandCaller, header: LabelHeader) {
-  const facts = await caller.withClient((db) => labelFacts(caller, db, header))
+  const facts = await caller.withClient((db) => labelFacts(db, header))
   return facts.cells.map(cellView)
 }
 
@@ -101,7 +98,7 @@ export async function labelsOfWorkOrder(caller: CommandCaller, workOrderId: stri
   const floorReady = context.audience === 'floor' ? await floorReadyRefusal(caller, header.siteId) : null
   const date = printDay(serverClock.now())
   return caller.withClient(async (db) => {
-    const facts = await labelFacts(caller, db, header)
+    const facts = await labelFacts(db, header)
     if (query.cellId !== undefined && !facts.cells.some((cell) => cell.cellId === query.cellId)) throw new ValidationError('Not a cell of this work order.', [{ path: 'querystring/cellId', message: 'Pick a cell of this work order.' }])
     const template = header.labelTemplateId ? await readTemplateSize(db, header.labelTemplateId) : null
     const blocked = workOrderRefusal(facts.workOrder)
@@ -148,8 +145,6 @@ export async function labelsOfWorkOrder(caller: CommandCaller, workOrderId: stri
       date,
       /** What stops every label of the work order now (null: each cell answers for itself). */
       blocked: blocked ? refusalView(blocked) : floorReady ? refusalView(floorReady) : null,
-      /** A SERIAL style without a serial series: why no serial can be given yet (null: they can, or a BATCH style). */
-      serialSeries: facts.style.tracking === 'SERIAL' ? serialNumbers().missing() : null,
       cells,
       printers,
       preview,
@@ -180,9 +175,8 @@ export async function scanForLabels(caller: CommandCaller, code: string) {
       const serial = await readSerialByText(db, parsed.text)
       const header = serial ? await headerOf(serial.workOrderId) : null
       if (!serial || !visible(header)) throw new NotFoundError('No garment of this factory has this serial.')
-      const bundleId = bundleOfSerial(await readLabelLog(caller, [serial.workOrderSizeId], context.audience === 'office' ? db : undefined)).get(serial.id) ?? null
-      const codes = await bundleCodes(db, bundleId ? [bundleId] : [])
-      return { scanned: parsed.text, kind: 'SERIAL' as const, workOrderId: header.id, number: header.number, workOrderSizeId: serial.workOrderSizeId, bundle: null, serial: serialView(serial, bundleId ? { id: bundleId, code: codes.get(bundleId) ?? '' } : null, null) }
+      const codes = await bundleCodes(db, serial.bundleId ? [serial.bundleId] : [])
+      return { scanned: parsed.text, kind: 'SERIAL' as const, workOrderId: header.id, number: header.number, workOrderSizeId: serial.workOrderSizeId, bundle: null, serial: serialView(serial, serial.bundleId ? { id: serial.bundleId, code: codes.get(serial.bundleId) ?? '' } : null, null) }
     }
     // Not a bundle or serial label: a work order number (the traveller), typed or scanned.
     const number = code.trim()
@@ -205,10 +199,10 @@ export async function workOrderSerials(caller: CommandCaller, workOrderId: strin
   const context = officeOf(caller)
   const header = await labelWorkOrder(caller, workOrderId, WORKORDERS_VIEW)
   return caller.withClient(async (db) => {
-    const facts = await labelFacts(caller, db, header)
+    const facts = await labelFacts(db, header)
     const serials = await readSerials(db, header.id)
-    const bundleOf = bundleOfSerial(facts.log)
-    const codes = await bundleCodes(db, [...bundleOf.values()].filter((id): id is string => id !== null))
+    const serialText = new Map(serials.map((serial) => [serial.id, serial.serial]))
+    const codes = await bundleCodes(db, serials.flatMap((serial) => (serial.bundleId ? [serial.bundleId] : [])))
     const seesJobs = can(actorOf(context), PRINT_VIEW, { companyId: header.companyId, siteId: header.siteId })
     const jobs = seesJobs ? await readLabelJobs(db, [...facts.cells.map((cell) => cell.cellId), ...serials.map((serial) => serial.id)]) : []
     const jobsOf = (recordId: string) => (seesJobs ? jobs.filter((job) => job.recordId === recordId) : null)
@@ -217,10 +211,7 @@ export async function workOrderSerials(caller: CommandCaller, workOrderId: strin
       workOrder: { id: header.id, number: header.number, batchNumber: header.batchNumber, status: header.status, siteId: header.siteId },
       tracking: facts.style.tracking,
       cells: facts.cells.map((cell) => ({ ...cellView(cell), jobs: facts.style.tracking === 'BATCH' ? (jobsOf(cell.cellId)?.map(jobView) ?? null) : seesJobs ? [] : null })),
-      serials: serials.map((serial) => {
-        const bundleId = bundleOf.get(serial.id) ?? null
-        return serialView(serial, bundleId ? { id: bundleId, code: codes.get(bundleId) ?? '' } : null, jobsOf(serial.id))
-      }),
+      serials: serials.map((serial) => serialView(serial, serial.bundleId ? { id: serial.bundleId, code: codes.get(serial.bundleId) ?? '' } : null, jobsOf(serial.id))),
       log: [...facts.log].reverse().map((entry) => ({
         entryId: entry.id,
         kind: entry.kind,
@@ -230,9 +221,9 @@ export async function workOrderSerials(caller: CommandCaller, workOrderId: strin
         size: cells.get(entry.cellId)?.size ?? '',
         quantity: entry.quantity,
         batchNumber: entry.batchNumber,
-        serials: entry.serials.map((serial) => serial.serial),
+        serials: entry.serialIds.map((serialId) => serialText.get(serialId) ?? ''),
         reason: entry.reason,
-        printerId: entry.printerId === '' ? null : entry.printerId,
+        printerId: entry.printerId,
         postedBy: entry.postedBy,
         deviceId: entry.deviceId,
         at: toUtcIso(entry.at),

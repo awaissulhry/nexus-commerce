@@ -16,7 +16,6 @@ import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
-import { useSerialNumbers } from './numbers'
 import { lockLabelCells } from './store'
 
 /**
@@ -29,9 +28,9 @@ import { lockLabelCells } from './store'
  * black hides, made-up tablets at A1's sewing, inspection and packing stations and a made-up label printer at A1 (203 dpi,
  * 100 × 100 mm, FAKE relay). Released work orders are made through the work-order routes, cut, bundled and reported
  * through every operation (10 cut, 20 sew, 30 inspection, 40 pack: finished = packed) through the floor's routes. The
- * jacket traces by batch first (Q31 (a)); the serial tests switch it to SERIAL (allowed while no serial or release
- * exists) with a stand-in serial series (numbers.ts `useSerialNumbers`), since the GARMENT_SERIAL number kind comes with
- * the floor numbering step. Sessions come from the test authenticator. Every name and number is made up. Run with
+ * jacket traces by batch first (Q31 (a)); the serial tests then switch it to SERIAL (the database refuses that once its
+ * work orders have labels, so the test proves the refusal and then flips it with triggers off, as a fixture), and take
+ * the serials from the tenant's real GARMENT_SERIAL counter (platform/numbering allocateScanIds). Sessions come from the test authenticator. Every name and number is made up. Run with
  * `node scripts/factory/run-pg-tests.mjs serials`.
  */
 
@@ -138,8 +137,12 @@ const viewUrl = (workOrderId: string) => `/production/serials/work-orders/${work
 const printUrl = (workOrderId: string) => `/production/serials/work-orders/${workOrderId}/labels`
 const print = (workOrderId: string, body: Json = {}, session = 'pack', key: string = freshKey()) => call(session, 'POST', printUrl(workOrderId), body, key)
 const garmentJobs = (recordIds: string[]) => admin(`SELECT "recordType", "recordId", "scanId", copies, "labelKind", zpl FROM "PrintJob" WHERE "labelKind" = 'GARMENT' AND "recordId" = ANY($1::uuid[]) ORDER BY "createdAt", id`, [recordIds])
-const logRows = (cellIds: string[]) => admin(`SELECT action, "recordId", after, reason, audience FROM "AuditLog" WHERE "recordType" = 'WorkOrderSize' AND "recordId" = ANY($1::uuid[]) AND action LIKE 'production.garmentLabels.%' ORDER BY at, id`, [cellIds])
-const serialsOf = (workOrderId: string) => admin(`SELECT id, serial, status::text AS status, "workOrderSizeId", "createdById", "voidReason" FROM "GarmentSerial" WHERE "workOrderId" = $1 ORDER BY "createdAt", serial`, [workOrderId])
+const logRows = (cellIds: string[]) =>
+  admin(
+    `SELECT id, kind::text AS kind, tracking::text AS tracking, "workOrderSizeId", quantity, "batchNumber", "serialIds", reason, "printerId", "deviceId", "createdById" FROM "GarmentLabelPrint" WHERE "workOrderSizeId" = ANY($1::uuid[]) ORDER BY "createdAt", id`,
+    [cellIds],
+  )
+const serialsOf = (workOrderId: string) => admin(`SELECT id, serial, status::text AS status, "workOrderSizeId", "bundleId", "createdById", "voidReason" FROM "GarmentSerial" WHERE "workOrderId" = $1 ORDER BY "createdAt", serial`, [workOrderId])
 
 // ---- made-up stock, work orders, cuts, bundles and scans -------------------------------------------------------------------------
 
@@ -241,7 +244,6 @@ type Orders = 'batch' | 'race' | 'gate' | 'serial' | 'walls'
 const WO = {} as Record<Orders, Json>
 const BN = {} as Record<Orders, Json[]>
 let certificate52 = ''
-let nextRef = 0
 
 beforeAll(async () => {
   db = await migratedDatabase('serials')
@@ -322,7 +324,6 @@ beforeAll(async () => {
 }, 900_000)
 
 afterAll(async () => {
-  useSerialNumbers(null)
   await app?.close()
   await database?.close()
   await db?.close()
@@ -342,7 +343,6 @@ describe('a batch-tracked style (Q31 (a)): the batch number on N labels, never m
       label: { status: 'ACTIVE' },
       finalOperation: { seq: 40 },
       blocked: null,
-      serialSeries: null,
       printers: [{ id: A.printer, code: 'LBL-GA', holdsLabel: true }],
     })
     expect(view.cells.map((cell: Json) => [cell.size, cell.quantity, cell.finished, cell.labelled, cell.toLabel, cell.printable, cell.gate.outcome])).toEqual([
@@ -373,7 +373,10 @@ describe('a batch-tracked style (Q31 (a)): the batch number on N labels, never m
     expect(jobs[0]!.zpl).toContain('^PQ3')
     expect(answer.cells.find((cell: Json) => cell.size === '50')).toMatchObject({ finished: 5, labelled: 3, toLabel: 2 })
     const log = await logRows([cellOf(WO.batch)])
-    expect(log).toEqual([expect.objectContaining({ action: 'production.garmentLabels.print', audience: 'FLOOR', reason: null, after: expect.objectContaining({ entryId: firstEntry, kind: 'PRINT', tracking: 'BATCH', quantity: 3, batchNumber: WO.batch.batchNumber }) })])
+    expect(log).toEqual([
+      { id: firstEntry, kind: 'PRINT', tracking: 'BATCH', workOrderSizeId: cellOf(WO.batch), quantity: 3, batchNumber: WO.batch.batchNumber, serialIds: [], reason: null, printerId: A.printer, deviceId: A.pack, createdById: A.operatorA1 },
+    ])
+    expect(await counts(`SELECT count(*)::int AS n FROM "AuditLog" WHERE "recordType" = 'GarmentLabelPrint' AND "recordId" = $1`, [firstEntry])).toBe(1)
     expect(await counts(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE type = 'production.garment_labels_printed' AND payload->>'workOrderSizeId' = $1`, [cellOf(WO.batch)])).toBe(1)
   })
 
@@ -421,9 +424,9 @@ describe('a batch-tracked style (Q31 (a)): the batch number on N labels, never m
     expect(error.message).toBe('5 labels of BLK 50 were printed: a reprint replaces at most 5, not 6.')
     expect((await call('pack', 'POST', url, { workOrderSizeId: cellOf(WO.batch), count: 1 }, freshKey())).statusCode).toBe(400)
     const log = await logRows([cellOf(WO.batch), cellOf(WO.batch, '52')])
-    expect(log.filter((row) => row.action === 'production.garmentLabels.reprint').map((row) => [row.reason, row.audience, row.after.quantity])).toEqual([
-      ['Smudged in the press', 'FLOOR', 2],
-      ['Torn when sewn in', 'OFFICE', 1],
+    expect(log.filter((row) => row.kind === 'REPRINT').map((row) => [row.reason, row.deviceId, row.quantity])).toEqual([
+      ['Smudged in the press', A.pack, 2],
+      ['Torn when sewn in', null, 1],
     ])
   })
 
@@ -472,7 +475,7 @@ describe('two benches at once: the cap holds under concurrency', () => {
     expect(refusalOf(loser)).toBe('refusal/MORE_THAN_FINISHED')
     expect(loser.message).toBe('BLK 50 has 4 garments finished and 3 of them labelled: 1 still needs a label, not 3.')
     const log = await logRows([cellOf(WO.race)])
-    expect(log.reduce((sum, row) => sum + row.after.quantity, 0)).toBe(3)
+    expect(log.reduce((sum, row) => sum + row.quantity, 0)).toBe(3)
   })
 })
 
@@ -584,26 +587,17 @@ describe('a serial-tracked style (Q31 (b)): a serial per finished garment, each 
   let serials: Json[] = []
 
   beforeAll(async () => {
-    // No serial or release of the jacket exists yet, so how it is traced may still change (the …_quality_shipping_guards trigger).
-    await admin(`UPDATE "Style" SET "garmentTracking" = 'SERIAL' WHERE id = $1`, [A.style])
+    // The jacket's work orders have batch labels now: the database keeps how it is traced (Q31; the
+    // …_production_garment_labels_guards Style rule). A test fixture, not a path of the app: flip it with triggers off.
+    await expect(admin(`UPDATE "Style" SET "garmentTracking" = 'SERIAL' WHERE id = $1`, [A.style])).rejects.toThrow(/has work orders with garment labels, serials or quality releases/)
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "Style" SET "garmentTracking" = 'SERIAL' WHERE id = '${A.style}'; COMMIT;`)
   })
 
-  it('refuses serials in words while the factory has no serial series, and writes nothing', async () => {
-    useSerialNumbers(null)
-    expect((await ok('pack', 'GET', viewUrl(WO.serial.id))).serialSeries).toMatch(/^Garment serials cannot be given yet/)
-    const error = await refused('pack', 'POST', printUrl(WO.serial.id), {}, 409)
-    expect(refusalOf(error)).toBe('refusal/NO_SERIAL_SERIES')
-    expect(await serialsOf(WO.serial.id)).toEqual([])
-    expect(await logRows([cellOf(WO.serial)])).toEqual([])
-  })
-
-  it('gives 5 finished garments 5 serials (MADE), each its own GARMENT job, from the bundle they came in', async () => {
-    nextRef = 1000 + Math.floor(Math.random() * 100_000)
-    useSerialNumbers({ missing: () => null, take: async (_tools, { recordIds }) => recordIds.map(() => nextRef++) })
+  it('gives 5 finished garments 5 serials (MADE) from the tenant\'s GARMENT_SERIAL counter, each its own GARMENT job, with its bundle', async () => {
     const view = await ok('pack', 'GET', `${viewUrl(WO.serial.id)}?cellId=${cellOf(WO.serial)}`)
-    expect(view).toMatchObject({ tracking: 'SERIAL', serialSeries: null })
+    expect(view).toMatchObject({ tracking: 'SERIAL' })
     expect(view.cells).toEqual([expect.objectContaining({ size: '50', quantity: 6, finished: 5, labelled: 0, toLabel: 5, printable: true })])
-    expect(view.preview.blocks.find((block: Json) => block.field === 'batchOrSerial').value).toMatch(/^SN-/)
+    expect(view.preview.blocks.find((block: Json) => block.field === 'batchOrSerial')).toMatchObject({ value: expect.stringMatching(/^SN-/), graphic: { kind: 'BARCODE' } })
 
     const answer = await ok('pack', 'POST', printUrl(WO.serial.id), { cells: [{ workOrderSizeId: cellOf(WO.serial) }] }, 201, freshKey())
     expect(answer.tracking).toBe('SERIAL')
@@ -611,17 +605,29 @@ describe('a serial-tracked style (Q31 (b)): a serial per finished garment, each 
     expect(line).toMatchObject({ count: 5, batchNumber: WO.serial.batchNumber, job: null, problem: null })
     expect(line.serials).toHaveLength(5)
     const fiveBundle = BN.serial.find((bundle) => bundle.quantity === 5)!
+    const refs: number[] = []
     for (const serial of line.serials) {
       expect(serial).toMatchObject({ bundleId: fiveBundle.id, problem: null, job: { labelKind: 'GARMENT', scanId: serial.serial, copies: 1, status: 'QUEUED' } })
-      expect(parseScanId(serial.serial, { tenantTag: TAG, types: ['SERIAL'] })).toMatchObject({ ok: true })
+      const parsed = parseScanId(serial.serial, { tenantTag: TAG, types: ['SERIAL'] })
+      expect(parsed).toMatchObject({ ok: true })
+      if (parsed.ok) refs.push(parsed.ref)
     }
+    // The real kind: one ONLINE block of the tenant's GARMENT_SERIAL counter, consecutive references.
+    expect(refs).toEqual(Array.from({ length: 5 }, (_, index) => refs[0]! + index))
+    expect(await admin(`SELECT purpose::text AS purpose, "fromRef", "toRef", "deviceId" FROM "NumberBlock" WHERE kind = 'GARMENT_SERIAL' AND "fromRef" <= $1 AND "toRef" >= $2`, [refs[0], refs[4]])).toEqual([
+      { purpose: 'ONLINE', fromRef: refs[0], toRef: refs[4], deviceId: null },
+    ])
     serials = await serialsOf(WO.serial.id)
-    expect(serials.map((row) => [row.status, row.createdById])).toEqual(Array.from({ length: 5 }, () => ['MADE', A.operatorA1]))
+    expect(serials.map((row) => [row.status, row.createdById, row.bundleId])).toEqual(Array.from({ length: 5 }, () => ['MADE', A.operatorA1, fiveBundle.id]))
     expect(new Set(serials.map((row) => row.serial))).toEqual(new Set(line.serials.map((serial: Json) => serial.serial)))
     const jobs = await garmentJobs(serials.map((row) => row.id))
     expect(jobs).toHaveLength(5)
-    expect(jobs.every((job) => job.recordType === 'GarmentSerial' && job.copies === 1 && job.zpl.includes(job.scanId))).toBe(true)
+    // Each label carries its serial once as text and once as Code 128 bars (packing scans it).
+    expect(jobs.every((job) => job.recordType === 'GarmentSerial' && job.copies === 1 && job.zpl.includes(`^BCN`) && job.zpl.split(`^FD${job.scanId}^FS`).length === 3)).toBe(true)
     expect(answer.cells).toEqual([expect.objectContaining({ finished: 5, labelled: 5, toLabel: 0 })])
+    const [entry] = await logRows([cellOf(WO.serial)])
+    expect(entry).toMatchObject({ kind: 'PRINT', tracking: 'SERIAL', quantity: 5, batchNumber: WO.serial.batchNumber, deviceId: A.pack })
+    expect([...entry!.serialIds].sort()).toEqual(serials.map((row) => row.id).sort())
   })
 
   it('never gives more serials than finished garments', async () => {
@@ -682,5 +688,55 @@ describe('a serial-tracked style (Q31 (b)): a serial per finished garment, each 
     })
     expect((await call('floorB1', 'GET', `/production/serials/scan?code=${encodeURIComponent(first.serial)}`)).statusCode).toBe(404)
     expect((await call('floorB1', 'POST', `/production/serials/${first.id}/void`, { reason: 'Not ours' }, freshKey())).statusCode).toBe(404)
+  })
+})
+
+// ---- the database's own rules (…_production_garment_labels_guards), for every login ---------------------------------------------
+
+describe('the label log and the serials hold their rules in the database too', () => {
+  const entry = (overrides: Json = {}) => {
+    const row: Json = {
+      id: newId(),
+      companyId: A.companyA,
+      siteId: A.siteA1,
+      workOrderId: WO.serial.id,
+      workOrderSizeId: cellOf(WO.serial),
+      kind: 'REPRINT',
+      tracking: 'SERIAL',
+      quantity: 1,
+      batchNumber: WO.serial.batchNumber,
+      serialIds: [] as string[],
+      reason: 'Torn',
+      ...overrides,
+    }
+    return admin(
+      `INSERT INTO "GarmentLabelPrint" (id, "tenantId", "companyId", "siteId", "workOrderId", "workOrderSizeId", kind, tracking, quantity, "batchNumber", "serialIds", reason)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::"GarmentLabelPrintKind", $8::"GarmentTracking", $9, $10, $11::uuid[], $12)`,
+      [row.id, A.tenant, row.companyId, row.siteId, row.workOrderId, row.workOrderSizeId, row.kind, row.tracking, row.quantity, row.batchNumber, row.serialIds, row.reason],
+    )
+  }
+
+  it('takes a well-formed reprint, and refuses a missing reason, another batch, another tracking and a void serial', async () => {
+    const rows = await serialsOf(WO.serial.id)
+    const made = rows.find((row) => row.status === 'MADE')!
+    const voided = rows.find((row) => row.status === 'VOID')!
+    await entry({ serialIds: [made.id] })
+    await expect(entry({ serialIds: [made.id], reason: null })).rejects.toThrow(/says why the labels are printed again/)
+    await expect(entry({ serialIds: [made.id], kind: 'PRINT' })).rejects.toThrow(/only a reprint has a reason/)
+    await expect(entry({ serialIds: [made.id], batchNumber: 'NOT-THE-BATCH' })).rejects.toThrow(/carries batch NOT-THE-BATCH/)
+    await expect(entry({ tracking: 'BATCH' })).rejects.toThrow(/traces by SERIAL/)
+    await expect(entry({ serialIds: [voided.id] })).rejects.toThrow(/are void or shipped/)
+    await expect(entry({ serialIds: [made.id, made.id], quantity: 2 })).rejects.toThrow(/names each serial once/)
+    await expect(entry({ serialIds: [made.id], quantity: 0 })).rejects.toThrow(/at least one label/)
+    await expect(entry({ serialIds: [made.id], quantity: 2 })).rejects.toThrow(/one label per serial/)
+  })
+
+  it('never changes or removes an entry, and never moves a serial to another bundle', async () => {
+    const [first] = await logRows([cellOf(WO.serial)])
+    await expect(admin(`UPDATE "GarmentLabelPrint" SET reason = 'changed' WHERE id = $1`, [first!.id])).rejects.toThrow(/append-only: UPDATE on "GarmentLabelPrint" is refused/)
+    await expect(admin(`DELETE FROM "GarmentLabelPrint" WHERE id = $1`, [first!.id])).rejects.toThrow(/append-only: DELETE on "GarmentLabelPrint" is refused/)
+    const made = (await serialsOf(WO.serial.id)).find((row) => row.status === 'MADE')!
+    const other = BN.serial.find((bundle) => bundle.quantity === 1)!
+    await expect(admin(`UPDATE "GarmentSerial" SET "bundleId" = $2 WHERE id = $1`, [made.id, other.id])).rejects.toThrow(/is set when it is given and never changes/)
   })
 })

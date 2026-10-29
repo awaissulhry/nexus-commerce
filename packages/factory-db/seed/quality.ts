@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import {
   CertificateStatus,
   DefectClass,
+  GarmentLabelPrintKind,
   GarmentSerialStatus,
   GarmentTracking,
   InspectionStatus,
@@ -31,7 +32,8 @@ import { seed as seedProduction, type ProductionSeed } from './production'
  *                 SEED-JKT-02 and this seed's SEED-JKT-03 in every colourway and size.
  *   serial style  SEED-JKT-03 (Q31 (b): garmentTracking SERIAL), colourway BLK, its ACTIVE label template and revision 1
  *                 RELEASED with one routing step (final inspection); order SEED-SO-0003 for P1 (4 x BLK 52); work order
- *                 WO-0003 of one cell, released with batch SEED-BT-0003; three serials of the final operation.
+ *                 WO-0003 of one cell, released with batch SEED-BT-0003; three serials of the final operation and their
+ *                 labels' PRINT entry in the label log (GarmentLabelPrint, B-W1-44).
  *   WO-0001       (the production seed's, BATCH-tracked): an OPEN inspection (sample begun, one defect) and a PASSED one
  *                 (lot of 5, one minor defect within the plan); releases from it of BLK 50 x1, BLK 52 x2, RED 52 x1; one
  *                 of the two BLK 52s taken back (a stain found after release: a reversal, corrective action).
@@ -44,8 +46,8 @@ import { seed as seedProduction, type ProductionSeed } from './production'
  * pieces nor an inspection more than its lot, a release is never reversed beyond its garments nor below what shipments
  * hold, a cell never gets more live serials than pieces, a serial starts MADE, a register entry starts OPEN. So the OPEN
  * inspection, its defect, the first release of WO-0003 (2 of the cell's 4 released, 2 of the lot's 3), the BLK 52
- * reversal (1 of the release's 2, the other garment on no shipment), the MADE serial (3 of the cell's 4) and the
- * register entry get ids that start with eight zeros, and the rows this seed
+ * reversal (1 of the release's 2, the other garment on no shipment), the MADE serial (3 of the cell's 4), the label
+ * print (its serials are none VOID or SHIPPED) and the register entry get ids that start with eight zeros, and the rows this seed
  * adds to other modules' tables (style, revision, label, certificate, order, work order …) ids that start with eight
  * f's (all still derived from the namespace), so those tables' first rows stay the ones their seeds chose.
  *
@@ -346,6 +348,24 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
           serial: `SEED-SN-000${index + 1}`,
           ...stamp(T.serialled, operatorId),
         })),
+      })
+      // Their labels, printed in the same step (B-W1-44's label log): one PRINT entry naming the three serials.
+      await tx.garmentLabelPrint.create({
+        data: {
+          id: firstId('quality:label-print:WO-0003:1'),
+          companyId: companyA,
+          siteId: siteA,
+          workOrderId: serialWorkOrderId,
+          workOrderSizeId: serialCellId,
+          kind: GarmentLabelPrintKind.PRINT,
+          tracking: GarmentTracking.SERIAL,
+          quantity: serialIds.length,
+          batchNumber: 'SEED-BT-0003',
+          serialIds: [...serialIds],
+          createdAt: T.serialled,
+          createdById: operatorId,
+        },
+        select: { id: true },
       })
     }),
   )

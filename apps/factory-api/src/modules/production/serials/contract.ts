@@ -89,7 +89,6 @@ export const labelsViewContract = defineContract({
       /** The day the certificate gate is asked for. */
       date: businessDate(),
       blocked: refusal.nullable(),
-      serialSeries: z.string().nullable(),
       cells: z.array(
         cell.extend({
           gate: output({
