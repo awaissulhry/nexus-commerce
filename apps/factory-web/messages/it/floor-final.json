@@ -1,0 +1,298 @@
+{
+  "bar": "Collaudo finale",
+  "loading": "Lettura dell'ordine di lavoro…",
+  "busy": "Invio all'ufficio…",
+  "noPermission": {
+    "title": "Il collaudo finale non è per il tuo ruolo",
+    "body": "Il tuo ruolo non apre i collaudi finali a questo banco. Chiedi al capo squadra."
+  },
+  "role": {
+    "record": "Il tuo ruolo vede i collaudi ma non li registra."
+  },
+  "offline": {
+    "held": "Collaudi e rilasci prendono subito il numero dall'ufficio: aspettano la rete."
+  },
+  "pick": {
+    "scan": "Scansiona il foglio di lavorazione",
+    "hint": "Oppure scegli qui sotto un ordine di lavoro con capi finiti.",
+    "read": "Letto {code}",
+    "type": "Scrivi un numero",
+    "camera": {
+      "start": "Usa la fotocamera",
+      "stop": "Ferma la fotocamera",
+      "error": "La fotocamera non si apre. Usa lo scanner o scrivi il numero."
+    },
+    "notFound": "Nessun ordine di lavoro {code} in questo stabilimento.",
+    "notReady": "L'ordine di lavoro {code} è {status}: i suoi capi si collaudano quando è rilasciato, in corso o completato.",
+    "empty": {
+      "title": "Niente aspetta il collaudo finale",
+      "body": "Nessun ordine di lavoro di questo stabilimento ha capi finiti da collaudare o rilasciare."
+    },
+    "title": "Finiti, da collaudare o rilasciare",
+    "due": "consegna {date}",
+    "open": "Collaudo aperto",
+    "ready": "Pronto",
+    "toRelease": "da rilasciare",
+    "count_one": "{count} ordine di lavoro",
+    "count_other": "{count} ordini di lavoro"
+  },
+  "strip": {
+    "batch": "lotto {batch}",
+    "checksOpen_one": "{count} controllo aperto",
+    "checksOpen_other": "{count} controlli aperti",
+    "checksOk": "tutti i controlli ok",
+    "groups": "lista di controllo {done} di {total} gruppi"
+  },
+  "workOrderStatus": {
+    "DRAFT": "in bozza",
+    "RELEASED": "rilasciato",
+    "IN_PROGRESS": "in corso",
+    "COMPLETED": "completato",
+    "CLOSED": "chiuso",
+    "CANCELLED": "annullato"
+  },
+  "inspectionStatus": {
+    "OPEN": "aperto",
+    "PASSED": "superato",
+    "FAILED": "non superato",
+    "CANCELLED": "annullato"
+  },
+  "fact": {
+    "workOrder": "Ordine di lavoro",
+    "toRelease": "da rilasciare",
+    "style": "Modello",
+    "batch": "Lotto",
+    "finished": "Finiti",
+    "released": "Rilasciati",
+    "pieces": "Pezzi",
+    "labels": "Etichette capo stampate",
+    "inspections": "Collaudi",
+    "none": "Nessuno per ora"
+  },
+  "maker": {
+    "made": "Hai lavorato su questo ordine. Un altro collaudatore deve collaudarlo e rilasciarlo.",
+    "ok": "Non hai prodotto nessuno di questi capi."
+  },
+  "rule": {
+    "WHEN_REQUIRED": "Un collaudatore che non ha prodotto i capi rilascia da solo; una seconda persona solo per le deroghe e i clienti in elenco.",
+    "ALWAYS": "Questa azienda chiede una seconda persona per ogni rilascio finale, dopo la firma del collaudatore.",
+    "customer": "I capi di questo cliente chiedono sempre una seconda persona: li rilascia un altro collaudatore."
+  },
+  "gate": {
+    "cells": "Colore e taglia",
+    "start": "Inizia il collaudo",
+    "continue": "Continua il collaudo",
+    "toRelease": "Rilascia per la spedizione",
+    "held": {
+      "othersOpen": "Un altro collaudatore ha un collaudo aperto su questo ordine.",
+      "nothing": "Ora non c'è niente da collaudare o rilasciare su questo ordine."
+    }
+  },
+  "cell": {
+    "ready": "Pronto da rilasciare",
+    "open_one": "{count} controllo aperto",
+    "open_other": "{count} controlli aperti",
+    "counts": "{pieces} pezzi · {released} rilasciati · {releasable} rilasciabili ora",
+    "checksOk_one": "{count} controllo ok",
+    "checksOk_other": "{count} controlli ok",
+    "release": "Rilascia"
+  },
+  "held": {
+    "offline": "Per rilasciare serve la rete.",
+    "noRight": "Il tuo ruolo non rilascia capi.",
+    "maker": "Hai lavorato su questo ordine: lo rilascia un altro collaudatore.",
+    "checks": "Un controllo è aperto: vedi sopra cosa fare.",
+    "nothing": "Ora non si può rilasciare niente di questa taglia."
+  },
+  "check": {
+    "WORK_ORDER": "Ordine di lavoro",
+    "INSPECTION": "Collaudo finale",
+    "QUANTITY": "Quantità",
+    "SERIALS": "Matricole",
+    "LABELS": "Etichette capo",
+    "CERTIFICATE": "Certificato",
+    "DOCUMENTS": "Dichiarazione e informazioni per l'utilizzatore",
+    "LOTS": "Lotti di materiale",
+    "MAKER": "Chi li ha prodotti",
+    "SECOND_PERSON": "Seconda persona"
+  },
+  "checkState": {
+    "OK": "ok",
+    "OPEN": "aperto",
+    "NOT_NEEDED": "non serve"
+  },
+  "fix": {
+    "WORK_ORDER": "Chiedi all'ufficio: l'ordine di lavoro deve essere rilasciato, in corso o completato.",
+    "INSPECTION": "Prima collauda i capi e firma il risultato.",
+    "QUANTITY": "Rilascia meno capi, o collauda il resto in un nuovo collaudo.",
+    "SERIALS": "Scansiona o scegli di nuovo le matricole di questi capi.",
+    "LABELS": "Prima stampa le etichette capo all'ultima operazione (Etichette capo).",
+    "CERTIFICATE": "Chiedi al responsabile conformità: un certificato valido deve coprire oggi questo colore e taglia.",
+    "DOCUMENTS": "Chiedi all'ufficio di archiviare la dichiarazione di conformità firmata e le informazioni per l'utilizzatore.",
+    "LOTS": "Prima chiedi alla qualità di decidere il lotto di materiale.",
+    "MAKER": "Li rilascia un altro collaudatore, che non ha prodotto nessuno di questi capi.",
+    "SECOND_PERSON": "Li rilascia un altro collaudatore, non quello che ha firmato il risultato."
+  },
+  "refusedCheck": "{check}: non pronto per il rilascio.",
+  "secondPerson": {
+    "OVERRIDE": "il collaudo ha derogato al risultato calcolato",
+    "CUSTOMER": "i capi di questo cliente chiedono sempre una seconda persona",
+    "ALWAYS": "l'azienda chiede una seconda persona per ogni rilascio"
+  },
+  "plan": {
+    "title": "Il piano di collaudo",
+    "lead": "Si controllano tutti i capi del lotto, nessun difetto accettato. Se il piano del cliente accetta difetti, cambia i numeri prima di aprire (il campionamento con le tabelle AQL arriverà più avanti).",
+    "hundred_one": "Lotto: {count} capo, tutti controllati",
+    "hundred_other": "Lotto: {count} capi, tutti controllati",
+    "acceptMajor_one": "Difetti maggiori accettati: {count}",
+    "acceptMajor_other": "Difetti maggiori accettati: {count}",
+    "acceptMinor_one": "Difetti minori accettati: {count}",
+    "acceptMinor_other": "Difetti minori accettati: {count}",
+    "field": {
+      "lotSize": "Capi nel lotto",
+      "acceptMajor": "Difetti maggiori accettati",
+      "acceptMinor": "Difetti minori accettati"
+    },
+    "done": "Fatto",
+    "open": "Apri il collaudo"
+  },
+  "checklist": {
+    "groups": "I gruppi della lista di controllo",
+    "pass": "Ok",
+    "fail": "Non ok",
+    "cancelFail": "Non è un difetto",
+    "whatIsWrong": "Cosa non va in \"{check}\"?",
+    "reasons": "Cosa non va",
+    "groupPasses": "Gruppo ok",
+    "groupAnswered": "Ogni controllo di questo gruppo ha una risposta: scegli il gruppo successivo.",
+    "sign": "Firma il risultato: {result}",
+    "resultPass": "Risultato ora: SUPERATO — nessun controllo non ok, difetti entro il piano.",
+    "resultFail": "Risultato ora: NON SUPERATO — {failed} controlli non ok, {defects} difetti registrati."
+  },
+  "result": {
+    "PASS": "SUPERATO",
+    "FAIL": "NON SUPERATO"
+  },
+  "group": {
+    "LABELS": "Etichette",
+    "GARMENT": "Capo",
+    "ARMOUR": "Protezioni",
+    "PACKAGING": "Imballo e documenti"
+  },
+  "groupState": {
+    "open": "da controllare",
+    "partly": "in parte controllato",
+    "passed": "ok",
+    "failed": "un controllo non è ok"
+  },
+  "item": {
+    "EN17092_CLASS_LABEL": "L'etichetta di classe EN 17092 corrisponde al certificato",
+    "SIZE_LABEL": "Etichetta della taglia",
+    "CE_MARK": "Marcatura CE",
+    "CARE_LABEL": "Etichetta di manutenzione",
+    "FIBRE_COMPOSITION": "Etichetta di composizione",
+    "ANIMAL_ORIGIN_PHRASE": "\"Contiene parti non tessili di origine animale\"",
+    "ZIPS": "Cerniere",
+    "REFLECTIVES": "Inserti riflettenti",
+    "ARMOUR_FITTED": "Protezioni montate, della taglia giusta, marcate EN 1621",
+    "HANGTAGS": "Cartellini",
+    "USER_INFORMATION": "Informazioni per l'utilizzatore nelle lingue del mercato",
+    "PACKAGING": "Imballo"
+  },
+  "reason": {
+    "LABEL-MISSING": "Etichetta mancante",
+    "LABEL-WRONG": "Etichetta sbagliata",
+    "LABEL-UNREADABLE": "Etichetta illeggibile",
+    "STITCHING": "Difetto di cucitura",
+    "ZIP-FAULT": "La cerniera non funziona",
+    "REFLECTIVE-FAULT": "Inserto riflettente difettoso",
+    "MATERIAL-DAMAGE": "Materiale danneggiato",
+    "ARMOUR-MISSING": "Protezione mancante",
+    "ARMOUR-WRONG-SIZE": "Protezione della taglia sbagliata",
+    "ARMOUR-UNMARKED": "Protezione non marcata",
+    "HANGTAG-MISSING": "Cartellino mancante",
+    "LEAFLET-MISSING": "Informazioni per l'utilizzatore mancanti",
+    "PACKAGING-DAMAGED": "Imballo danneggiato"
+  },
+  "hold": {
+    "action": "Blocca il lotto",
+    "title": "Bloccare questo lotto?",
+    "body": "Il collaudo è firmato NON SUPERATO: l'imballo è bloccato finché decide la qualità.",
+    "reasons": "Perché",
+    "reason": {
+      "DEFECTS": "Difetti trovati sui capi",
+      "LABELS": "Etichette sbagliate o mancanti",
+      "ARMOUR": "Protezioni sbagliate o mancanti",
+      "DOCUMENTS": "Documenti mancanti",
+      "OTHER": "Un altro motivo: decide la qualità"
+    },
+    "pickReason": "Prima scegli un motivo.",
+    "notComplete": "Prima rispondi a ogni controllo.",
+    "cancel": "Annulla",
+    "confirm": "Blocca"
+  },
+  "sign": {
+    "title": "Firma il risultato: {result}",
+    "titleHold": "Firma: blocca il lotto",
+    "meaningPass": "Con il tuo PIN confermi di aver collaudato questi capi e che il risultato è SUPERATO.",
+    "meaningFail": "Con il tuo PIN confermi di aver collaudato questi capi e che il risultato è NON SUPERATO: non vengono rilasciati.",
+    "meaningHold": "Con il tuo PIN firmi il collaudo NON SUPERATO e blocchi il lotto: l'imballo è bloccato finché decide la qualità.",
+    "statement": "Non ho prodotto questi capi",
+    "tickFirst": "Questo stabilimento registra le postazioni, non le persone: segna \"Non ho prodotto questi capi\" prima di firmare.",
+    "plan": "Lotto {lot} · campione {sample}",
+    "checks": "{passed} di {total} controlli ok",
+    "defects_one": "{count} difetto registrato",
+    "defects_other": "{count} difetti registrati",
+    "noDefects": "Nessun difetto registrato",
+    "holdReason": "Bloccato: {reason}"
+  },
+  "release": {
+    "cell": "Colore e taglia",
+    "canRelease": "rilasciabili",
+    "secondPerson": "Questi li rilascia una seconda persona: {why}.",
+    "refused": "Non rilasciati: cosa li ferma",
+    "signTitle_one": "Firma il rilascio di {count} capo di {cell}",
+    "signTitle_other": "Firma il rilascio di {count} capi di {cell}",
+    "meaning": "Con il tuo PIN confermi di aver collaudato questi capi e li rilasci per la spedizione.",
+    "quantity": "Capi da rilasciare",
+    "expected": "{count} rilasciabili",
+    "confirm_one": "Rilascia {count} capo",
+    "confirm_other": "Rilascia {count} capi"
+  },
+  "labels": {
+    "action": "Stampa le etichette capo",
+    "title": "Etichette capo",
+    "jobs": "Stampe",
+    "copies_one": "{count} etichetta",
+    "copies_other": "{count} etichette",
+    "retry_one": "Stampa di nuovo {count} etichetta",
+    "retry_other": "Stampa di nuovo {count} etichette",
+    "lead_one": "Serve almeno {count} etichetta in più prima del prossimo rilascio. Si stampa sulla stampante di etichette dello stabilimento che tiene questa etichetta.",
+    "lead_other": "Servono almeno {count} etichette in più prima del prossimo rilascio. Si stampano sulla stampante di etichette dello stabilimento che tiene questa etichetta.",
+    "print": "Stampa le etichette",
+    "done": "Fatto"
+  },
+  "job": {
+    "QUEUED": "In attesa della stampante",
+    "SENT": "Inviata alla stampante",
+    "PRINTED": "Stampata",
+    "FAILED": "Non stampata"
+  },
+  "done": {
+    "title_one": "Rilasciato · lotto {batch} · {count} capo · l'imballo può iniziare.",
+    "title_other": "Rilasciato · lotto {batch} · {count} capi · l'imballo può iniziare.",
+    "body": "Le etichette e la postazione di imballo vedono subito il rilascio.",
+    "number": "{number} · {cell}",
+    "secondPerson": "Rilasciato da te come seconda persona.",
+    "back": "Questo ordine di lavoro",
+    "next": "Prossimo ordine di lavoro"
+  },
+  "pad": {
+    "minus": "Meno",
+    "plus": "Più",
+    "clear": "Cancella",
+    "back": "Indietro",
+    "empty": "Scrivi un numero",
+    "range": "Da {min} a {max}"
+  }
+}

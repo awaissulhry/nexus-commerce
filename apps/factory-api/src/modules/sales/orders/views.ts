@@ -1,7 +1,12 @@
+import type { MinorUnits } from '@nexus/factory-domain/core/money'
 import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { linkState } from '@nexus/factory-domain/links/purposes'
 import { asMoney } from '@nexus/factory-domain/money/marked'
+import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { daysLate, orderActions, type Progress, type SettlementAnswer } from '@nexus/factory-domain/sales/orders/orders'
 import { priceBasisOf, priceText } from '@nexus/factory-domain/sales/quotes/quotes'
+import { Dec, HUNDRED } from '@nexus/factory-domain/tax/decimal'
+import { serverClock } from '../../../core/time'
 import { depositViewOf, DEPOSIT_COLUMNS } from '../deposits/deposits'
 import { dayOf, dayOrNull, moveFactsOf, readOrderFacts, type OrderRow, type Reader } from './store'
 
@@ -44,6 +49,30 @@ async function promiseHistory(db: Reader, orderId: string) {
   })
 }
 
+/** Margin % of the net (4 places, as the quotes write it), or null without a cost or a net. */
+function marginPctOf(net: MinorUnits, cost: MinorUnits | null): string | null {
+  if (cost === null || net === 0) return null
+  const pct = new Dec(net - cost).times(HUNDRED).dividedBy(net).toDecimalPlaces(4, Dec.ROUND_HALF_UP)
+  return pct.abs().gte(100_000) ? null : decimalText(pct)
+}
+
+/** Each request's payments placed on it (allocations less their reversals) and its latest DEPOSIT_INFO page. */
+async function depositFacts(db: Reader, requestIds: readonly string[], now: Date) {
+  if (requestIds.length === 0) return { paid: new Map<string, number>(), links: new Map<string, { sentAt: string; to: string | null; expiresAt: string; state: ReturnType<typeof linkState> }>() }
+  const placed = await db.paymentAllocation.groupBy({ by: ['depositRequestId'], where: { depositRequestId: { in: [...requestIds] } }, _sum: { amount: true } })
+  const links = await db.oneOffLink.findMany({
+    where: { purpose: 'DEPOSIT_INFO', recordType: 'DepositRequest', recordId: { in: [...requestIds] } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { recordId: true, email: true, createdAt: true, expiresAt: true, revokedAt: true, uses: true, maxUses: true },
+  })
+  const latest = new Map<string, { sentAt: string; to: string | null; expiresAt: string; state: ReturnType<typeof linkState> }>()
+  for (const link of links) {
+    if (latest.has(link.recordId)) continue
+    latest.set(link.recordId, { sentAt: toUtcIso(link.createdAt), to: link.email, expiresAt: toUtcIso(link.expiresAt), state: linkState(link, now) })
+  }
+  return { paid: new Map(placed.flatMap((row) => (row.depositRequestId ? [[row.depositRequestId, row._sum.amount ?? 0] as const] : []))), links: latest }
+}
+
 export async function orderView(db: Reader, order: OrderRow, today: BusinessDate, settlement: SettlementAnswer) {
   const facts = await readOrderFacts(db, order)
   const party = await db.party.findUnique({ where: { id: order.partyId }, select: { code: true, legalName: true } })
@@ -61,6 +90,9 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   })
   const history = await promiseHistory(db, order.id)
+  const placed = await depositFacts(db, deposits.map((row) => row.id), serverClock.now())
+  const peopleIds = [...new Set([order.createdById, ...history.map((entry) => entry.actorId)].filter((id): id is string => id !== null))]
+  const people = peopleIds.length > 0 ? await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true }, orderBy: { id: 'asc' } }) : []
 
   const progressOf = (lineId: string, size: string | null) => facts.progress.rows.find((row) => row.lineId === lineId && row.size === size)
   const strip = (row: Progress) => ({ ordered: row.ordered, inWorkOrders: row.inWorkOrders, made: row.made, released: row.released, shipped: row.shipped, invoiced: row.invoiced, toShip: row.toShip })
@@ -93,6 +125,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
     vatAmount: asMoney('price', order.vatAmount),
     grossAmount: asMoney('price', order.grossAmount),
     costAmount: asMoney('cost', order.costAmount),
+    marginPct: asMoney('margin', marginPctOf(order.netAmount, order.costAmount)),
     reapprovalNeededAt: instantOrNull(order.reapprovalNeededAt),
     cancelReason: order.cancelReason,
     closedAt: instantOrNull(order.closedAt),
@@ -149,13 +182,16 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
       quote: quote && version ? { id: quote.id, number: quote.number, versionId: version.id, revision: version.revision } : null,
       depositRequests: deposits.map((row) => {
         const view = depositViewOf(row)
-        return { ...view, amount: asMoney('price', view.amount) }
+        // The percentage as the database holds it ("30.0000" → "30"; deposits.ts's own text turns a whole "30" into "3").
+        const depositPct = row.depositPct === null ? null : decimalText(row.depositPct.toString())
+        return { ...view, depositPct, amount: asMoney('price', view.amount), paidAmount: asMoney('price', placed.paid.get(row.id) ?? 0), link: placed.links.get(row.id) ?? null }
       }),
       workOrders: facts.workOrders.map((row) => ({ id: row.id, number: row.number, status: row.status, siteId: row.siteId, releasedAt: instantOrNull(row.releasedAt) })),
       shipments: facts.shipments.map((row) => ({ id: row.id, number: row.number, status: row.status, shippedAt: instantOrNull(row.shippedAt), deliveredAt: instantOrNull(row.deliveredAt) })),
-      invoices: facts.invoices.map((row) => ({ id: row.id, number: row.number, docType: row.docType, status: row.status, issueDate: dayOrNull(row.issueDate) })),
+      invoices: facts.invoices.map((row) => ({ id: row.id, number: row.number, docType: row.docType, status: row.status, issueDate: dayOrNull(row.issueDate), depositRequestId: row.depositRequestId })),
     },
     promiseHistory: history,
+    people: people.map((user) => ({ id: user.id, name: user.displayName })),
     settlement: { settled: settlement.settled, missing: settlement.missing.map((entry) => ({ code: entry.code, message: entry.message })), source: settlement.source },
     actions: orderActions(order.status, moveFactsOf(facts, settlement)),
   }

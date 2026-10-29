@@ -2,12 +2,13 @@ import { defineManifest } from '../../../core/manifest'
 
 /**
  * The final inspection and release by an inspector who is not a maker (B-W1-45; QHS-050, QHS-051, QHS-058, QHS-073,
- * PLT-097; Owner answers Q1, Q2, Q3; A2 SCR-075, SCR-076, SCR-097): a work order's final state, inspections (open,
+ * PLT-097; Owner answers Q1, Q2, Q3; A2 SCR-075, SCR-076, SCR-097): the bench's work orders, a work order's final state, inspections (open,
  * record, sign, cancel) and releases for the office and the site's floor devices (their own site only: can() pins them,
  * row-level security too); the lists, one release, the reversal, the four-eyes rule and the evidence trail for the office.
  * Handlers check each work order with can() over its company and site (`record`); lists use scopeWhere().
  */
 export const manifest = defineManifest({
+  'GET /quality/final/work-orders': { audiences: ['office', 'floor'], permission: 'quality.inspections.view', scope: 'record' },
   'GET /quality/final/work-orders/:workOrderId': { audiences: ['office', 'floor'], permission: 'quality.inspections.view', scope: 'record' },
   'GET /quality/inspections': { audiences: ['office'], permission: 'quality.inspections.view', scope: 'record' },
   'POST /quality/inspections': { audiences: ['office', 'floor'], permission: 'quality.inspections.record', scope: 'record' },

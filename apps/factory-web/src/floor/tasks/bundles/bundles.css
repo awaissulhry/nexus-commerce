@@ -1,0 +1,134 @@
+/*
+ * Bundles & tickets (SCR-095): layout only, inside the DS FloorFrame. Sizes read the floor tier's `--nds-density-*`
+ * tokens; colours are semantic `--nds-*` roles (the label's paper and ink are LabelPreview's own variables). No raw colour.
+ */
+
+/* ── the bundle size: its number big, − and + beside it ────────────────────────────────────────────────────────────── */
+.fw-bundles-size {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-10) var(--nds-density-gap);
+  padding: var(--nds-space-10) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-bundles-size-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+.fw-bundles-size-value {
+  font-size: max(40px, calc(var(--nds-density-font-body) * 2));
+  font-weight: var(--nds-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.fw-bundles-size-buttons {
+  display: inline-flex;
+  gap: var(--nds-density-target-gap);
+}
+
+/* ── the proposal per cell: its line, its counts, a button per bundle ──────────────────────────────────────────────── */
+.fw-bundles-cells {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-bundles-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-bundles-cell[data-editing] {
+  border-color: var(--nds-primary);
+}
+.fw-bundles-cell-line {
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+}
+.fw-bundles-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-target-gap);
+}
+.fw-bundles-chips .nds-floor-btn {
+  min-width: calc(var(--nds-density-control-h) * 1.4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── the tickets: a head line (code, what, ticks), the print line, the label to scale ──────────────────────────────── */
+.fw-bundles-tickets {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-density-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-bundles-ticket {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-bundles-ticket-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+}
+.fw-bundles-ticket-code {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-bundles-label {
+  min-width: 0;
+}
+
+/* ── the QR mark inside the label's square: fills it, dark on the label's paper ─────────────────────────────────────── */
+.fw-bundles-qr {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.fw-bundles-qr-dark {
+  fill: var(--nds-label-ink);
+}
+.fw-bundles-qr-empty {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── a bundle's operations with their ticks ─────────────────────────────────────────────────────────────────────────── */
+.fw-bundles-ops {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-bundles-op {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-10);
+  font-size: var(--nds-density-font-body);
+}
+.fw-bundles-op[data-done] > .fw-floor-inline-icon {
+  color: var(--nds-success-text);
+}
+.fw-bundles-op:not([data-done]) > .fw-floor-inline-icon {
+  color: var(--nds-text-muted);
+}

@@ -210,12 +210,14 @@ describe('the rules of the screen', () => {
 
 describe('where a row opens (one detail rule; lib/records/record-links.ts)', () => {
   it('its own page when built, else its panels with what they show; real addresses for ⌘-click', () => {
-    expect(recordAddress({ type: 'SalesOrder', id: 'o1', label: 'SO-1', companyId: 'c1' }, OFFICE_PAGES)).toBe('/records/SalesOrder/o1?label=SO-1&company=c1')
+    expect(recordAddress({ type: 'SalesOrder', id: 'o1', label: 'SO-1', companyId: 'c1' }, OFFICE_PAGES)).toBe('/sales/orders/o1')
+    expect(recordAddress({ type: 'Shipment', id: 's1', label: 'SH-1', companyId: 'c1' }, OFFICE_PAGES)).toBe('/records/Shipment/s1?label=SH-1&company=c1')
     expect(recordAddress({ type: 'InboundEmail', id: 'm1' }, OFFICE_PAGES)).toBe('/home/mail-to-sort?open=m1')
     expect(recordAddress({ type: 'InboundEmail', id: 'm1' }, new Set())).toBe('/records/InboundEmail/m1')
     expect(OFFICE_PAGES.has('/records/[type]/[id]')).toBe(true)
     expect(listAddress('/email/inbound', {}, OFFICE_PAGES)).toBe('/home/mail-to-sort')
-    expect(listAddress('/sales/orders', { late: 'true' }, OFFICE_PAGES)).toBeNull()
+    expect(listAddress('/sales/orders', { late: 'true' }, OFFICE_PAGES)).toBe('/sales/orders?late=true')
+    expect(listAddress('/purchasing/orders', { status: 'SENT' }, OFFICE_PAGES)).toBeNull()
     expect(listAddress(null, null, OFFICE_PAGES)).toBeNull()
     expect(recordAddress({ type: 'Quote', id: 'q1', label: 'Q-1', companyId: 'c1' }, OFFICE_PAGES)).toBe('/sales/quotes/q1')
     expect(listAddress('/sales/quotes', { status: 'PENDING_APPROVAL' }, OFFICE_PAGES)).toBe('/sales/quotes?status=PENDING_APPROVAL')

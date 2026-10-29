@@ -3,6 +3,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { DocumentLanguage } from '@nexus/factory-domain/documents/model'
 import { markMoney } from '@nexus/factory-domain/money/marked'
+import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { depositRequestFor, paymentInstructions, type BankDetails, type DepositDraft, type PaymentInstructions } from '@nexus/factory-domain/sales/deposits/deposits'
 import type { DepositKind } from '@nexus/factory-domain/sales/quotes/quotes'
 import type { CustomerTaxProfile } from '@nexus/factory-domain/tax/vat-treatment'
@@ -56,7 +57,7 @@ export function depositViewOf(row: DepositRow) {
     quoteVersionId: row.quoteVersionId,
     orderId: row.orderId,
     kind: row.kind as DepositKind,
-    depositPct: row.depositPct === null ? null : row.depositPct.toString().replace(/\.?0+$/, ''),
+    depositPct: row.depositPct === null ? null : decimalText(row.depositPct.toString()),
     currency: row.currency,
     amount: row.amount,
     dueDate: day(row.dueDate),

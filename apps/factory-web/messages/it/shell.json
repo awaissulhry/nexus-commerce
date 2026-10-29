@@ -18,7 +18,8 @@
       "area": "Vendite",
       "main": "Principali",
       "customers": "Clienti",
-      "quotes": "Preventivi"
+      "quotes": "Preventivi",
+      "orders": "Ordini"
     },
     "purchasing": {
       "area": "Acquisti",

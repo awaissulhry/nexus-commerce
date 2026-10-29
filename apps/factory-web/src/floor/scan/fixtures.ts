@@ -57,13 +57,13 @@ export const designScreen = defineDesignScreen<ScanViewModel>({
   view: onFloor(ScanView),
   cases: [
     { id: 'empty', label: 'Ready to scan', model: scan(null), note: 'Scanner first (always listening), camera button, "Type a code".' },
-    { id: 'hide', label: 'A hide', model: scan(hide), note: 'Lot status and Cr VI, where it is, the work orders it can be cut for. "Cut this hide" waits for the cutting screen (held, with its reason).' },
+    { id: 'hide', label: 'A hide', model: scan(hide, { canCut: true }), note: 'Lot status and Cr VI, where it is, the work orders it can be cut for. "Cut this hide" opens Cut a hide (SCR-094) with it.' },
     {
       id: 'hide-on-hold',
       label: 'A hide of a lot on hold',
       model: scan({ ...hide, state: 'FULL', lot: { ...hide.lot, qualityStatus: 'QUARANTINE', crViStatus: 'PENDING', usable: false, words: null }, workOrders: [] }),
     },
-    { id: 'work-order', label: 'A work order', model: scan(workOrder), note: 'Style, batch, due date, size run left to cut. Never a price or a cost.' },
+    { id: 'work-order', label: 'A work order', model: scan(workOrder, { canCut: true }), note: 'Style, batch, due date, size run left to cut; "Open at cutting" opens Cut a hide for it. Never a price or a cost.' },
     { id: 'location', label: 'A location', model: scan({ kind: 'location', code: 'A1-STORE-01', name: 'Magazzino pelli', locationKind: 'BIN', path: ['A1-STORE', 'A1-STORE-01'] }) },
     { id: 'bundle', label: 'A bundle (not on the tablet yet)', model: scan({ kind: 'notOnFloor', type: 'bundle', code: BUNDLE }), note: 'The bundles step adds its card; until then the label is named, nothing pretends.' },
     { id: 'lot', label: 'A lot (not on the tablet yet)', model: scan({ kind: 'notOnFloor', type: 'lot', code: LOT }) },

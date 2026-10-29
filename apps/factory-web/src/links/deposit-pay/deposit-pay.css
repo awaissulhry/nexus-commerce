@@ -1,0 +1,54 @@
+/*
+ * The deposit page by link (SCR-199, W1: the bank-transfer part of Pay online) LAYOUT inside the link frame
+ * (comfortable density, phone first). Controls are the design system's; semantic tokens only.
+ */
+.fw-dp-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-dp-h2 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-dp-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+
+p.fw-dp-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-dp-total {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-2xl);
+  font-weight: var(--nds-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-dp-copy {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-dp-mono {
+  font-family: var(--nds-font-mono);
+  overflow-wrap: anywhere;
+}

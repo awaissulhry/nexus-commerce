@@ -1,0 +1,126 @@
+/*
+ * SCR-097 — the final inspection bench: layout only, inside the DS FloorFrame. Sizes read the floor tier's
+ * `--nds-density-*` tokens; colours are semantic `--nds-*` roles (a check's mark in its tone's text colour, always with
+ * its icon and word). No raw colour.
+ */
+
+/* ── the work order's line on top: number · batch · checks · groups ────────────────────────────────────────────────── */
+.fw-final-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* ── the release checks of a cell ─────────────────────────────────────────────────────────────────────────────────── */
+.fw-final-checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-final-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10);
+}
+.fw-final-check .fw-floor-inline-icon[data-tone='success'] {
+  color: var(--nds-success-text);
+}
+.fw-final-check .fw-floor-inline-icon[data-tone='danger'] {
+  color: var(--nds-danger-text);
+}
+.fw-final-check .fw-floor-inline-icon[data-tone='info'] {
+  color: var(--nds-text-muted);
+}
+.fw-final-check-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  font-size: var(--nds-density-font-body);
+  overflow-wrap: anywhere;
+}
+.fw-final-check-fix {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-final-cell-actions {
+  justify-content: flex-end;
+}
+
+/* ── the sampling plan's four numbers ─────────────────────────────────────────────────────────────────────────────── */
+.fw-final-plan {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16em), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+
+/* ── the checklist: the four groups, then the group's checks ──────────────────────────────────────────────────────── */
+.fw-final-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11em), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+.fw-final-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-target-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-final-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-10) var(--nds-density-gap);
+  padding: var(--nds-space-10) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-inline-start-width: 6px;
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-final-item[data-ok='true'] {
+  border-inline-start-color: var(--nds-success);
+}
+.fw-final-item[data-ok='false'] {
+  border-inline-start-color: var(--nds-danger);
+}
+.fw-final-item-text {
+  display: flex;
+  flex: 1 1 16em;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  font-size: var(--nds-density-font-body);
+}
+.fw-final-item-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-target-gap);
+}
+
+/* ── what the PIN signs ───────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-final-summary {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding-inline-start: 1.2em;
+  font-size: var(--nds-density-font-body);
+}
+
+/* ── a label print job and its Retry ──────────────────────────────────────────────────────────────────────────────── */
+.fw-final-job {
+  display: flex;
+  justify-content: flex-end;
+}

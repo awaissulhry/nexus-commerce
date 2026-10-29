@@ -26,6 +26,7 @@ import { WorkOrdersListView } from './view/WorkOrdersListView'
  * `/w/<company>/production/work-orders` (SCR-069): reads the work orders of the saved view (`?view=`, default open) and
  * the search (`?q=`), 50 a page with "Show more" (cursor), the tiles' counts, and keeps them live (workorder.* and
  * production.* events wait behind "N updates · Show": rows never move under the cursor). `?new=1` opens New work order.
+ * `?new=1&order=<number>` opens it with that sales order chosen (the order studio's Make work orders).
  * Bulk: Export N (CSV, the loaded rows) and Release N (one release per draft, in turn, each with its version; the API
  * checks each one again and says what holds it).
  */
@@ -49,6 +50,9 @@ function WorkOrdersContainer() {
   const view = viewFromAddress(params)
   const q = params?.get('q') ?? ''
   const newAsked = params?.get('new') === '1'
+  // `?new=1&order=<number>` (the sales order studio's "Make work orders"): the dialog opens with that order chosen.
+  const autoPick = useRef<string | null>(newAsked ? (params?.get('order')?.trim() || null) : null)
+  const chooseRef = useRef<(order: OrderOption | null) => void>(() => undefined)
 
   const [rows, setRows] = useState<WorkOrdersListModel['rows']>({ items: null, more: false, problem: null })
   const [cursor, setCursor] = useState<string | null>(null)
@@ -136,6 +140,12 @@ function WorkOrdersContainer() {
       try {
         const orders = await findOrders(api, query)
         setNewOrder((current) => (current && current.query === query ? { ...current, orders } : current))
+        const asked = autoPick.current
+        if (asked && query === asked) {
+          autoPick.current = null
+          const match = orders.find((order) => order.number === asked)
+          if (match) chooseRef.current(match)
+        }
       } catch (error) {
         setNewOrder((current) => (current && current.query === query ? { ...current, orders: null, ordersProblem: readProblem(error) } : current))
       }
@@ -143,7 +153,7 @@ function WorkOrdersContainer() {
     [api],
   )
   useEffect(() => {
-    if (newOrder && newOrder.orders === null && newOrder.ordersProblem === null && newOrder.query === '' && can.orders) void searchOrders('')
+    if (newOrder && newOrder.orders === null && newOrder.ordersProblem === null && newOrder.query === '' && can.orders) void searchOrders(autoPick.current ?? '')
     // Only when the dialog opens.
   }, [newOrder !== null])
 
@@ -166,6 +176,8 @@ function WorkOrdersContainer() {
     },
     [api],
   )
+
+  chooseRef.current = (order) => void chooseOrder(order)
 
   const create = useCallback(async () => {
     const current = newOrder

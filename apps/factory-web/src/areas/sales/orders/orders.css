@@ -1,0 +1,508 @@
+/*
+ * Sales orders (SCR-038 the list and the board by state, SCR-039 the order studio) LAYOUT: the page head, the board's
+ * lanes and cards, the record's band and tabs, the body with the optional thread beside it, card grids, the deposit's
+ * steps, the record chain. The controls are the design system's; this file only places them, with semantic tokens (no
+ * colours of its own). No page max-width (Owner rule 2026-10-29): pages fill the shell's main area.
+ */
+.fw-so {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-so-head,
+.fw-so-meta-row,
+.fw-so-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-so-inline,
+.fw-so-actions,
+.fw-so-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-so-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-so-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-so-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-so-list {
+  margin: 0;
+  padding: 0 0 0 var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+/* ---- list cells ---- */
+.fw-so-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-so-cell-sub,
+.fw-so-card-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.fw-so-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-so-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+
+.fw-so-link:hover,
+.fw-so-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-so-progress {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  width: 100%;
+}
+
+.fw-so-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+/* ---- the board by state: lanes side by side on a wide screen (the width is used), one under the other on a phone ---- */
+.fw-so-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-12);
+  min-width: 0;
+}
+
+@media (min-width: 1200px) {
+  .fw-so-board {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-template-columns: none;
+  }
+}
+
+.fw-so-board-state {
+  padding: var(--nds-space-16);
+}
+
+.fw-so-lane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-8);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-so-lane-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-so-lane-count {
+  color: var(--nds-text-muted);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-so-lane-cards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-so-lane-empty,
+.fw-so-lane-state {
+  padding: var(--nds-space-8) var(--nds-space-4);
+}
+
+.fw-so-lane-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+}
+
+.fw-so-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  padding: var(--nds-space-10, var(--nds-space-8)) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+
+.fw-so-card:focus-within {
+  border-color: var(--nds-border-strong);
+}
+
+.fw-so-card > .nds-btn,
+.fw-so-card > a.nds-btn {
+  align-self: flex-start;
+}
+
+.fw-so-card-top,
+.fw-so-card-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-so-card-facts {
+  justify-content: flex-start;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-so-card-customer {
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- the record ---- */
+.fw-so-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-so-title {
+  overflow-wrap: anywhere;
+}
+
+.fw-so-title-sub {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-muted);
+}
+
+.fw-so-keys {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: var(--nds-space-4);
+}
+
+.fw-so-tablabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-so-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--nds-warning);
+}
+
+.fw-so-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-so-body.has-dock {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+}
+
+@media (max-width: 1279px) {
+  .fw-so-body.has-dock {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-so-dock {
+    display: none;
+  }
+}
+
+.fw-so-main,
+.fw-so-stack,
+.fw-so-dialog,
+.fw-so-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-so-dialog {
+  gap: var(--nds-space-12);
+}
+
+.fw-so-stack-tight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+/* Cards side by side on a wide screen (the width is used: Owner rule 2026-10-29), one column below. */
+.fw-so-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--nds-space-14);
+  min-width: 0;
+  align-items: start;
+}
+
+/* Two parts that each need room (the deposit's steps beside the invoices): one under the other until 1600 px. */
+.fw-so-cards--wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1600px) {
+  .fw-so-cards--wide {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
+.fw-so-block,
+.fw-so-card-plain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10, var(--nds-space-8));
+  min-width: 0;
+}
+
+.fw-so-h2,
+.fw-so-h3 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-so-h2 {
+  font-size: var(--nds-font-size-md, var(--nds-font-size-sm));
+}
+
+.fw-so-h3 {
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The size grid scrolls sideways in its own DS box; this box clips its visually hidden words (no scrollbar). */
+.fw-so-gridbox {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+/* ---- the record chain (composed: Quote → Order → Deposit → Work orders → Shipments → Invoices) ---- */
+.fw-so-chain {
+  margin: var(--nds-space-8) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-so-chain-step {
+  display: grid;
+  grid-template-columns: minmax(96px, 40%) minmax(0, 1fr);
+  gap: var(--nds-space-8);
+  align-items: baseline;
+  padding-left: var(--nds-space-10, var(--nds-space-8));
+  border-left: 2px solid var(--nds-border);
+  min-width: 0;
+}
+
+.fw-so-chain-label {
+  color: var(--nds-text-muted);
+}
+
+/* ---- the deposit gate and the deposit's steps ---- */
+.fw-so-gate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-10, var(--nds-space-8)) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-so-gate-body {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-so-gate-words {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-so-ico {
+  flex: none;
+  margin-top: 2px;
+  color: var(--nds-text-muted);
+}
+
+.fw-so-ico.is-ok {
+  color: var(--nds-success);
+}
+
+.fw-so-ico.is-blocked {
+  color: var(--nds-danger);
+}
+
+.fw-so-ico.is-waiting {
+  color: var(--nds-warning);
+}
+
+.fw-so-deposit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-so-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10, var(--nds-space-8));
+  min-width: 0;
+}
+
+.fw-so-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  padding-bottom: var(--nds-space-10, var(--nds-space-8));
+  border-bottom: 1px solid var(--nds-border-subtle, var(--nds-border));
+  min-width: 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-so-step:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.fw-so-step-body {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-so-step.is-notNeeded .fw-so-step-body,
+.fw-so-step.is-waiting .fw-so-step-body {
+  color: var(--nds-text-muted);
+}
+
+/* ---- dialogs ---- */
+fieldset.fw-so-choices {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-so-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-4);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-so-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-so-done {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10, var(--nds-space-8));
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}

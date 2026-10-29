@@ -264,11 +264,11 @@
     "scan": {
       "label": "Scan a label to start",
       "hint": {
-        "cutting": "Scan a hide or a work order to open it.",
-        "sewing": "Scan a bundle or a work order to open it.",
+        "cutting": "Scan a hide to cut it, or a bundle to fix its ticket.",
+        "sewing": "Scan a bundle ticket to report it.",
         "packing": "Scan a carton, a lot or a work order to open it.",
-        "inspection": "Scan a lot, a bundle or a work order to open it.",
-        "warehouse": "Scan a location, a lot or a hide to open it.",
+        "inspection": "Scan a work order to inspect it.",
+        "warehouse": "Scan a work order to pick for it, or any label to open it.",
         "none": "Scan any label to open it."
       }
     },
@@ -304,7 +304,12 @@
     "final": "Final inspection",
     "scan": "Scan anything",
     "hint": {
-      "scan": "Any label of the factory"
+      "scan": "Any label of the factory",
+      "operation": "Report a bundle at your operation",
+      "cut": "Check a hide and log what you cut",
+      "bundles": "Make bundles and print their tickets",
+      "pick": "Issue materials to a work order",
+      "final": "Check, sign and release garments"
     },
     "held": {
       "notice": "Read the notice first",

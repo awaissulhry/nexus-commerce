@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
+import { LINK_STATES } from '@nexus/factory-domain/links/purposes'
 import { PARTY_TAX_MODES } from '@nexus/factory-domain/parties/tax'
 import { MAX_REASON, ORDER_ACTIONS, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { DEPOSIT_KINDS, SALES_LINE_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
@@ -80,6 +81,10 @@ const depositView = output({
   status: z.enum(['OPEN', 'PAID', 'WAIVED', 'CANCELLED']),
   paidAt: instant().nullable(),
   createdAt: instant(),
+  /** What payments placed on it so far (allocations less their reversals). */
+  paidAmount: money.price(z.number().int()),
+  /** Its latest bank-details page sent to the customer (DEPOSIT_INFO link), or null when none was sent. */
+  link: output({ sentAt: instant(), to: z.string().nullable(), expiresAt: instant(), state: z.enum(LINK_STATES) }).nullable(),
 })
 
 const settlementView = output({
@@ -121,6 +126,8 @@ export const orderView = output({
   vatAmount: money.price(z.number().int()),
   grossAmount: money.price(z.number().int()),
   costAmount: money.cost(z.number().int().nullable()),
+  /** The estimated margin % of the net from the accepted costs (null without a complete cost). */
+  marginPct: money.margin(z.string().nullable()),
   reapprovalNeededAt: instant().nullable(),
   cancelReason: z.string().nullable(),
   closedAt: instant().nullable(),
@@ -137,10 +144,12 @@ export const orderView = output({
     depositRequests: z.array(depositView),
     workOrders: z.array(output({ id: id(), number: z.string(), status: z.string(), siteId: id(), releasedAt: instant().nullable() })),
     shipments: z.array(output({ id: id(), number: z.string(), status: z.string(), shippedAt: instant().nullable(), deliveredAt: instant().nullable() })),
-    invoices: z.array(output({ id: id(), number: z.string().nullable(), docType: z.string(), status: z.string(), issueDate: z.string().nullable() })),
+    invoices: z.array(output({ id: id(), number: z.string().nullable(), docType: z.string(), status: z.string(), issueDate: z.string().nullable(), /** A TD02: the deposit request it bills. */ depositRequestId: id().nullable() })),
   }),
   /** Every promise change, newest first: who, when, from → to, which lines (none: the order), why. */
   promiseHistory: z.array(output({ at: instant(), actorId: id(), from: z.string().nullable(), to: z.string(), lineIds: z.array(id()), reason: z.string().nullable() })),
+  /** The names of the people the record names (promise changes, who made it). */
+  people: z.array(output({ id: id(), name: z.string() })),
   settlement: settlementView,
   /** What may be done next, held with the first reason in words. */
   actions: z.array(output({ action: z.enum(ORDER_ACTIONS), allowed: z.boolean(), needsReason: z.boolean(), held: z.string().nullable() })),

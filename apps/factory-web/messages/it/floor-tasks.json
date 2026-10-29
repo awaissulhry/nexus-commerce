@@ -1,0 +1,79 @@
+{
+  "ticks": {
+    "saved": "Salvato su questo tablet",
+    "sending": "Invio all'ufficio…",
+    "recorded": "Registrato dall'ufficio",
+    "refused": "Rifiutato: vedi In attesa di invio"
+  },
+  "undo": {
+    "label": "Annulla",
+    "ask": "Chiedi una correzione"
+  },
+  "pin": {
+    "label": "Il tuo PIN",
+    "entered": "{entered} di {total}",
+    "clear": "Cancella",
+    "back": "Indietro",
+    "busy": "Controllo del PIN…",
+    "problem": {
+      "wrong": "PIN errato. Riprova.",
+      "locked": "Troppi PIN errati: aspetta qualche minuto o chiedi al capo squadra.",
+      "unavailable": "L'ufficio non ha risposto. Riprova.",
+      "offline": "Per firmare serve la rete. Aspetta che torni, poi firma."
+    }
+  },
+  "problem": {
+    "forbidden": {
+      "title": "Qui non puoi farlo",
+      "body": "Il tuo ruolo non lo permette a questa postazione. Chiedi al capo squadra."
+    },
+    "notFound": {
+      "title": "Non trovato in questo stabilimento",
+      "body": "Niente con questo codice in questo stabilimento. Controlla l'etichetta o chiedi al capo squadra."
+    },
+    "conflict": {
+      "title": "È cambiato nel frattempo",
+      "body": "Qualcuno l'ha cambiato un momento fa. È stato riletto: controllalo e riprova."
+    },
+    "invalid": {
+      "title": "Non è stato accettato",
+      "body": "L'ufficio non l'ha accettato così com'era. Controlla i numeri e riprova."
+    },
+    "signedOut": {
+      "title": "Sei uscito",
+      "body": "La sessione è finita. Accedi di nuovo: nulla di salvato su questo tablet va perso."
+    },
+    "rateLimited": {
+      "title": "Troppi tentativi",
+      "body": "Aspetta un momento, poi riprova."
+    },
+    "offline": {
+      "title": "Niente rete",
+      "body": "Per questo serve la rete. Torna da sola; poi riprova."
+    },
+    "unavailable": {
+      "title": "L'ufficio non risponde",
+      "body": "Il server non ha risposto. Riprova tra un momento."
+    }
+  },
+  "keys": {
+    "trigger": "Tasti di questo elenco",
+    "title": "Tasti",
+    "enter": "Apre la riga selezionata",
+    "tab": "Passa da una riga all'altra",
+    "escape": "Indietro",
+    "scan": "Scansiona un'etichetta: si apre subito"
+  },
+  "action": {
+    "back": "Indietro",
+    "retry": "Riprova",
+    "home": "Home",
+    "scanAnother": "Scansiona un altro",
+    "change": "Cambia"
+  },
+  "asOf": "Da questo tablet, aggiornato alle {time}",
+  "notOnTablet": {
+    "title": "Non è su questo tablet",
+    "body": "Il tablet non ne ha una copia e non c'è rete. Fallo quando torna la rete, o chiedi al capo squadra."
+  }
+}
