@@ -131,7 +131,10 @@ function fakeApi(answer: (call: Call) => unknown) {
     if (value instanceof Error) throw value
     return (options.schema ? options.schema.parse(value) : value) as T
   }
-  const api: ApiClient = { request, get: (path, options) => request('GET', path, options), post: (path, options) => request('POST', path, options) }
+  const bytes = async (): Promise<Uint8Array> => {
+    throw new Error('the queue reads no files')
+  }
+  const api: ApiClient = { request, get: (path, options) => request('GET', path, options), post: (path, options) => request('POST', path, options), bytes }
   return { api, calls }
 }
 
