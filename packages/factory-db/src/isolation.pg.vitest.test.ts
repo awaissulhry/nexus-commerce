@@ -4,6 +4,7 @@ import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
 import { seed as seedCompliance } from '../seed/compliance'
+import { seed as seedCosting } from '../seed/costing'
 import { seed as seedEmail } from '../seed/email'
 import { seed as seedEmailIn } from '../seed/email-in'
 import { seed as seedFiles } from '../seed/files'
@@ -144,6 +145,8 @@ beforeAll(async () => {
   await seedShipping({ db: factory, namespace: 'iso-b' })
   await seedMoney({ db: factory, namespace: 'iso-a' })
   await seedMoney({ db: factory, namespace: 'iso-b' })
+  await seedCosting({ db: factory, namespace: 'iso-a' })
+  await seedCosting({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -165,6 +168,7 @@ it('covers every classified table and every runtime role', () => {
     'Colourway',
     'Company',
     'ComplianceDocument',
+    'CostingSettings',
     'CutLog',
     'CutLogPiece',
     'Ddt',
@@ -195,6 +199,7 @@ it('covers every classified table and every runtime role', () => {
     'Item',
     'ItemColour',
     'LabelTemplate',
+    'LabourRate',
     'Line',
     'LinkEvidence',
     'Location',

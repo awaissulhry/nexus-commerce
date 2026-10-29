@@ -1,0 +1,21 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/costing.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps the labour rates and the costing settings through apps/factory-api's modules/costing (B-W1-16), always through command(); the API keeps staff to the companies their grants reach, and the cost grain to send or see a rate. The floor, portal and link sessions read none of it: a cost per minute is a cost (A1 §2.6), and no floor or portal screen needs a rate or an overhead. Nobody deletes a rate (archived) or the settings (changed). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "LabourRate": {
+      "about": "The office keeps the cost of a standard minute per kind of work centre, tenant-wide or per company, from a day; it archives a rate, never deletes it. The cost sheet reads them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "CostingSettings": {
+      "about": "The office keeps the overhead percentage of each company and the tenant-wide one. The cost sheet reads them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}
