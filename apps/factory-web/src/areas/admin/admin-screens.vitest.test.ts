@@ -28,6 +28,7 @@ import { designScreen as recordScreen } from './users/record/fixtures'
  * Every Admin string exists in it and en (PLAN §4.6, PLT-127): the same keys and placeholders, every key the code names
  * (literally, or built from an enum), a sentence for every permission of the platform, and every design case of SCR-008
  * to SCR-013 and SCR-165 drawn in both languages with no message key left on screen (as `/design` first draws them).
+ * The lists' cells are drawn by AG Grid in a browser only: admin-lists.vitest.test.ts draws each cell alone.
  */
 
 const SRC = fileURLToPath(new URL('.', import.meta.url))
@@ -146,12 +147,6 @@ describe('every Admin design case draws in both languages with no key left on sc
     }
   }
 
-  it('money sight is said in words, not colour alone (GrainChips)', () => {
-    const html = render(usersScreen as DesignScreen<unknown>, usersScreen.cases[0]!.model, 'en')
-    expect(html).toContain('does not see')
-    expect(html).toContain('margin')
-  })
-
   it('F1 on the site: a switch for who may change it, the state in words with the right it needs for who may not', () => {
     const draw = (id: string) => render(sitesScreen as DesignScreen<unknown>, sitesScreen.cases.find((item) => item.id === id)!.model, 'en')
     const on = draw('calendars-badge-on')
@@ -162,11 +157,5 @@ describe('every Admin design case draws in both languages with no key left on sc
     expect(held).toContain('Needs the right: Enrol and change floor devices')
     expect(held).not.toMatch(/role="switch"/)
     expect(draw('calendars')).not.toContain('Coming with the floor step')
-  })
-
-  it('a floor worker row never says who is on which tablet; a device says "In use", never who', () => {
-    const html = render(devicesScreen as DesignScreen<unknown>, devicesScreen.cases[0]!.model, 'en')
-    expect(html).toContain('In use')
-    expect(html).not.toMatch(/Anna Demo|Bruno Esempio/)
   })
 })

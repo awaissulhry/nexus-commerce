@@ -1,16 +1,17 @@
 'use client'
 
-import { useEffect, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Building2, Search } from 'lucide-react'
+import { Building2 } from 'lucide-react'
 import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, ExpandToggle, Input, Pill, Select, Tag, Toggle } from '@nexus/ui/primitives'
+import { Button, Input, Select, Toggle } from '@nexus/ui/primitives'
 import { useT } from '../../../../lib/i18n/provider'
+import { ListFrame } from '../../../../list-frame/ListFrame'
+import type { ListKey } from '../../../../list-frame/model'
 import { SITE_KINDS, type CompanyWithSites, type SiteKind } from '../../shared/api'
-import { adminHref, pageOf, STATUS_TONE } from '../../shared/model'
-import { AdminMessages, dash, ListState, ListTable, NoticeBanner, PageHead } from '../../shared/view/parts'
+import { adminHref, shownOf } from '../../shared/model'
+import { AdminMessages, FrameState, ListKeysHelp, ListSearch, NoticeBanner, PageHead } from '../../shared/view/parts'
 import {
-  addressLine,
   issueKey,
   newCompanyProblems,
   newSiteProblems,
@@ -22,7 +23,9 @@ import {
   type NewCompanyDraft,
   type NewSiteDraft,
   type OrgDialog,
+  type TreeRow,
 } from '../model'
+import { orgColumns, treeRowId } from './columns'
 
 export type { CompaniesViewModel } from '../model'
 
@@ -30,8 +33,11 @@ export interface CompaniesActions {
   onQuery?: (query: string) => void
   onShowArchived?: (show: boolean) => void
   onToggle?: (companyId: string, expanded: boolean) => void
-  onPage?: (page: number) => void
+  /** "Show 50 more". */
+  onMore?: () => void
   onRetry?: () => void
+  /** Enter on a row: open its record. */
+  onOpen?: (href: string) => void
   onDialog?: (dialog: OrgDialog | null, companyId?: string | null) => void
   /** Resolve true when made (the page then opens the new record). */
   onCreateCompany?: (draft: NewCompanyDraft) => Promise<boolean>
@@ -41,8 +47,9 @@ export interface CompaniesActions {
 
 /**
  * SCR-008 — Admin › Companies & sites (design 02 admin.org; PLT-003, PLT-004): one tree of the legal companies and their
- * plants, warehouses and offices, with what each is missing, and the two short creates (New company, New site). Rows open
- * the Company or Site record. It draws ONE view model and fetches nothing (CompaniesPage.tsx reads the API).
+ * plants, warehouses and offices, with what each is missing, in the Office list frame (read-only: no bulk action
+ * applies to companies), and the two short creates (New company, New site). Rows open the Company or Site record. It
+ * draws ONE view model and fetches nothing (CompaniesPage.tsx reads the API).
  */
 export function CompaniesView({ model, actions }: { model: CompaniesViewModel; actions?: CompaniesActions }) {
   return (
@@ -56,15 +63,18 @@ function Companies({ model, actions }: { model: CompaniesViewModel; actions?: Co
   const t = useT('admin')
   const [dialog, setDialog] = useState<OrgDialog | null>(model.dialog ?? null)
   useEffect(() => setDialog(model.dialog ?? null), [model.dialog])
+  const [help, setHelp] = useState(false)
   const open = (next: OrgDialog | null) => {
     setDialog(next)
     actions?.onDialog?.(next)
   }
   const items = model.companies.items
   const rows = items ? treeRows(items, model.query, model.collapsed, model.showArchived) : []
-  const paged = pageOf(rows, model.page)
+  const shown = shownOf(rows, model.pages)
   const gap = items ? readiness(items) : null
   const href = (path: string) => adminHref(model.prefix, path)
+  const onToggle = actions?.onToggle
+  const columns = useMemo(() => orgColumns({ t, prefix: model.prefix, viewSites: model.can.viewSites, onToggle }), [t, model.prefix, model.can.viewSites, onToggle])
 
   // c: a new company (when no field has the focus), as every list's "c" (00 §3.17).
   useEffect(() => {
@@ -80,73 +90,28 @@ function Companies({ model, actions }: { model: CompaniesViewModel; actions?: Co
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  const onTreeKey = (event: KeyboardEvent<HTMLDivElement>) => {
-    const toggle = (event.target as HTMLElement).closest<HTMLElement>('[data-company]')
-    if (!toggle || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return
-    event.preventDefault()
-    actions?.onToggle?.(toggle.dataset.company!, event.key === 'ArrowRight')
-  }
-
-  const columns = [t('org.col.name'), t('org.col.code'), t('org.col.kind'), t('org.col.vatAddress'), t('org.col.invoicing'), t('org.col.timezone'), t('org.col.structure'), t('org.col.devices'), t('org.col.status')]
-  const tableRows = paged.rows.map((row) => {
-    if (row.kind === 'company') {
-      const { company } = row
-      const active = company.sites.filter((site) => site.status === 'ACTIVE')
-      const lines = active.reduce((sum, site) => sum + site.counts.lines, 0)
-      const stations = active.reduce((sum, site) => sum + site.counts.stations, 0)
-      const devices = active.reduce((sum, site) => sum + site.counts.devices, 0)
-      return {
-        id: company.id,
-        cells: [
-          <span key="name" className="fw-adm-cell-row">
-            {model.can.viewSites && company.sites.length > 0 ? (
-              <ExpandToggle
-                expanded={row.expanded}
-                label={t(row.expanded ? 'org.collapse' : 'org.expand', { name: company.legalName })}
-                data-company={company.id}
-                onClick={() => actions?.onToggle?.(company.id, !row.expanded)}
-              />
-            ) : null}
-            <Link className="fw-adm-name" href={href(`/companies/${company.id}`)}>
-              {company.legalName}
-            </Link>
-          </span>,
-          <span key="code" className="fw-adm-code">{company.code}</span>,
-          t('org.kind.COMPANY'),
-          <span key="vat" className="fw-adm-cell">
-            <span>{dash(company.vatNumber)}</span>
-            <span className="fw-adm-hint">{dash(addressLine(company.address))}</span>
-          </span>,
-          company.invoicing.ready ? <Pill key="inv" tone="success">{t('org.invoicing.ready')}</Pill> : <Pill key="inv" tone="warning">{t('org.invoicing.missing', { count: company.invoicing.issues.length })}</Pill>,
-          company.timezone,
-          model.can.viewSites ? t('org.structure', { lines, stations }) : '—',
-          model.can.viewSites ? String(devices) : '—',
-          <Pill key="status" tone={STATUS_TONE[company.status] ?? 'neutral'}>{t(`status.${company.status}`)}</Pill>,
-        ],
-      }
-    }
-    const { site, company } = row
-    return {
-      id: site.id,
-      cells: [
-        <span key="name" className="fw-adm-child">
-          <Link className="fw-adm-link" href={href(`/companies/${company.id}/sites/${site.id}`)}>{site.name}</Link>
-        </span>,
-        <span key="code" className="fw-adm-code">{site.code}</span>,
-        t(`org.kind.${site.kind}`),
-        <span key="address" className="fw-adm-hint">{dash(addressLine(site.address))}</span>,
-        '—',
-        site.timezone,
-        site.kind === 'PLANT' && site.counts.stations === 0 ? <Tag key="st" tone="warning">{t('org.noStations')}</Tag> : t('org.structure', { lines: site.counts.lines, stations: site.counts.stations }),
-        String(site.counts.devices),
-        <Pill key="status" tone={STATUS_TONE[site.status] ?? 'neutral'}>{t(`status.${site.status}`)}</Pill>,
-      ],
-    }
-  })
-
   const codes = (items ?? []).map((company) => company.code)
   const siteCodes = (items ?? []).flatMap((company) => company.sites.map((site) => site.code))
   const noCompany = !items || items.filter((company) => company.status === 'ACTIVE').length === 0
+  const own: ListKey[] = [...(model.can.manageCompanies ? [{ keys: ['c'], does: t('org.newCompany') }] : []), ...(model.can.viewSites ? [{ keys: ['←', '→'], does: t('org.keys.fold') }] : [])]
+  const state = model.companies.problem ? (
+    <FrameState problem={model.companies.problem} onRetry={actions?.onRetry} />
+  ) : items && items.length === 0 ? (
+    <FrameState
+      empty={{
+        icon: <Building2 size={24} aria-hidden />,
+        title: t('org.empty.title'),
+        body: t('org.empty.body'),
+        action: model.can.manageCompanies ? (
+          <Button variant="primary" onClick={() => open('new-company')}>
+            {t('org.newCompany')}
+          </Button>
+        ) : undefined,
+      }}
+    />
+  ) : items && rows.length === 0 ? (
+    <FrameState noMatch={{ onClear: () => actions?.onQuery?.(''), clearLabel: t('list.clearSearch') }} />
+  ) : undefined
 
   return (
     <div className="fw-adm">
@@ -192,67 +157,32 @@ function Companies({ model, actions }: { model: CompaniesViewModel; actions?: Co
         />
       )}
 
-      <div className="fw-adm-toolbar">
-        <span className="fw-adm-toolbar-search">
-          <Input
-            size="sm"
-            type="search"
-            fieldClassName="fw-adm-fill"
-            leadingIcon={<Search size={14} aria-hidden />}
-            aria-label={t('org.search')}
-            placeholder={t('org.search')}
-            value={model.query}
-            onChange={(event) => actions?.onQuery?.(event.target.value)}
-          />
-        </span>
-        <label className="fw-adm-toggle-row">
-          <Toggle size="sm" checked={model.showArchived} onChange={(next) => actions?.onShowArchived?.(next)} aria-label={t('org.showArchived')} />
-          <span className="fw-adm-hint">{t('org.showArchived')}</span>
-        </label>
-      </div>
-
-      {model.companies.problem || items === null ? (
-        <ListState problem={model.companies.problem} loading={items === null} onRetry={actions?.onRetry} />
-      ) : items.length === 0 ? (
-        <ListState
-          loading={false}
-          empty={{
-            icon: <Building2 size={24} aria-hidden />,
-            title: t('org.empty.title'),
-            body: t('org.empty.body'),
-            action: model.can.manageCompanies ? (
-              <Button variant="primary" onClick={() => open('new-company')}>
-                {t('org.newCompany')}
-              </Button>
-            ) : undefined,
-          }}
-        />
-      ) : rows.length === 0 ? (
-        <ListState
-          loading={false}
-          empty={{
-            title: t('list.noMatch'),
-            action: (
-              <Button size="sm" onClick={() => actions?.onQuery?.('')}>
-                {t('list.clearSearch')}
-              </Button>
-            ),
-          }}
-        />
-      ) : (
-        <div onKeyDown={onTreeKey}>
-          <ListTable
-            label={t('org.tableLabel')}
-            columns={columns}
-            rows={tableRows}
-            page={paged.page}
-            pageCount={paged.pageCount}
-            onPage={actions?.onPage}
-            widths={['22%', '8%', '8%', '18%', '12%', '10%', '10%', '6%', '8%']}
-            count={t('org.count', { companies: items.filter((company) => model.showArchived || company.status === 'ACTIVE').length, sites: items.reduce((sum, company) => sum + company.sites.filter((site) => model.showArchived || site.status === 'ACTIVE').length, 0) })}
-          />
-        </div>
-      )}
+      <ListFrame<TreeRow>
+        label={t('org.tableLabel')}
+        rows={items === null ? null : shown.rows}
+        rowId={treeRowId}
+        columns={columns}
+        count={
+          items
+            ? t('org.count', {
+                companies: items.filter((company) => model.showArchived || company.status === 'ACTIVE').length,
+                sites: items.reduce((sum, company) => sum + company.sites.filter((site) => model.showArchived || site.status === 'ACTIVE').length, 0),
+              })
+            : '—'
+        }
+        search={<ListSearch label={t('org.search')} value={model.query} onChange={actions?.onQuery} />}
+        tools={
+          <label className="fw-adm-toggle-row">
+            <Toggle size="sm" checked={model.showArchived} onChange={(next) => actions?.onShowArchived?.(next)} aria-label={t('org.showArchived')} />
+            <span className="fw-adm-hint">{t('org.showArchived')}</span>
+          </label>
+        }
+        more={shown.more > 0 ? { label: t('list.more', { count: shown.more }), onMore: () => actions?.onMore?.() } : null}
+        keys={own}
+        onHelp={() => setHelp(true)}
+        onOpen={(row) => actions?.onOpen?.(row.kind === 'company' ? href(`/companies/${row.company.id}`) : href(`/companies/${row.company.id}/sites/${row.site.id}`))}
+        state={state}
+      />
 
       <NewCompanyModal open={dialog === 'new-company'} taken={codes} busy={!!model.busy} problem={model.dialogProblem ?? null} onClose={() => open(null)} onCreate={(draft) => actions?.onCreateCompany?.(draft) ?? Promise.resolve(false)} />
       <NewSiteModal
@@ -265,6 +195,7 @@ function Companies({ model, actions }: { model: CompaniesViewModel; actions?: Co
         onClose={() => open(null)}
         onCreate={(draft) => actions?.onCreateSite?.(draft) ?? Promise.resolve(false)}
       />
+      <ListKeysHelp open={help} onClose={() => setHelp(false)} keys={own} selection={false} />
     </div>
   )
 }

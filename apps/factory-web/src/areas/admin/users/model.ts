@@ -1,5 +1,7 @@
 import type { Role, User, UserRole, Worker } from '../shared/api'
+import { reachOf, type BulkReach } from '../shared/reach'
 import { grainsOf, matches, scopeWords, type Grain, type Loaded, type Notice, type ScopeChoice, type ScopeOption, type StepUpModel } from '../shared/model'
+import { isLastAdmin } from './record/model'
 
 /**
  * SCR-010 Users (design 02 admin.users; PLT-014, PLT-015, PLT-018): everyone who signs in, by kind — office people
@@ -24,6 +26,10 @@ export interface UsersAbilities {
   manageWorkers: boolean
   /** workers.roles (step-up): give a new worker floor roles. */
   workerRoles: boolean
+  /** users.suspend, users.reactivate, users.deactivate (step-up): the office list's bulk actions. */
+  suspend: boolean
+  reactivate: boolean
+  deactivate: boolean
 }
 
 export interface SiteOption {
@@ -52,9 +58,16 @@ export interface UsersViewModel {
   sites: readonly SiteOption[]
   tile: OfficeTile | FloorTile | null
   query: string
-  page: number
+  /** Pages of 50 shown ("Show 50 more" adds one). */
+  pages: number
   asOf: string | null
+  /** The signed-in person (nobody suspends or deactivates themselves). */
+  me: string
   can: UsersAbilities
+  /** Rows ticked at first (design fixtures); the view keeps the ticks. */
+  selected?: readonly string[]
+  /** A bulk action's confirm open at first (design fixtures). */
+  bulk?: UsersBulk | null
   notice?: Notice | null
   dialog?: UsersDialog | null
   busy?: boolean
@@ -117,6 +130,33 @@ export function tileCounts(model: Pick<UsersViewModel, 'users' | 'workers'>): Re
     ...Object.fromEntries(OFFICE_TILES.map((tile) => [tile, users ? users.filter((user) => officeTileMatch(tile, user)).length : null])),
     ...Object.fromEntries(FLOOR_TILES.map((tile) => [tile, workers ? workers.filter((worker) => floorTileMatch(tile, worker)).length : null])),
   }
+}
+
+// ---- bulk actions (one call per person: POST /auth/users/:id/<action>, /auth/floor/workers/:id/<action>) ----
+
+export const OFFICE_ACTIONS = ['suspend', 'reactivate', 'deactivate'] as const
+export type OfficeAction = (typeof OFFICE_ACTIONS)[number]
+export const FLOOR_ACTIONS = ['deactivate', 'reactivate'] as const
+export type FloorAction = (typeof FLOOR_ACTIONS)[number]
+export type UsersBulk = { audience: 'office'; action: OfficeAction } | { audience: 'floor'; action: FloorAction }
+
+/**
+ * Which selected office people an action reaches (the API's status machine: suspend an active person, reactivate a
+ * suspended one, deactivate anyone not deactivated yet), never oneself or the tenant's last administrator.
+ */
+export function officeReach(action: OfficeAction, selected: readonly User[], context: { me: string; can: UsersAbilities; users: readonly User[]; roles: readonly Role[] | null }): BulkReach<User> {
+  const keeps = (user: User) => user.id !== context.me && !(context.roles && isLastAdmin(user.id, context.users, context.roles))
+  if (action === 'suspend') return reachOf(selected, (user) => user.status === 'ACTIVE' && keeps(user), { held: context.can.suspend ? null : 'right.users_suspend', none: 'users.bulk.held.suspend' })
+  if (action === 'reactivate') return reachOf(selected, (user) => user.status === 'SUSPENDED', { held: context.can.reactivate ? null : 'right.users_reactivate', none: 'users.bulk.held.reactivate' })
+  return reachOf(selected, (user) => user.status !== 'DEACTIVATED' && keeps(user), { held: context.can.deactivate ? null : 'right.users_deactivate', none: 'users.bulk.held.deactivate' })
+}
+
+/** Which selected floor workers an action reaches: deactivate the active ones, reactivate the inactive ones. */
+export function floorReach(action: FloorAction, selected: readonly Worker[], can: UsersAbilities): BulkReach<Worker> {
+  const held = can.manageWorkers ? null : 'right.workers_manage'
+  return action === 'deactivate'
+    ? reachOf(selected, (worker) => worker.status === 'ACTIVE', { held, none: 'users.bulk.held.workerDeactivate' })
+    : reachOf(selected, (worker) => worker.status === 'INACTIVE', { held, none: 'users.bulk.held.workerReactivate' })
 }
 
 // ---- invite people ----

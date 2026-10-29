@@ -1,11 +1,12 @@
 import type { Device, DeviceKind, Enrolment, Printer, PrinterKind, PrinterStatus } from '../shared/api'
 import { PRINTER_CODE } from '../shared/api'
+import { reachOf, type BulkReach } from '../shared/reach'
 import { matches, type Loaded, type Notice } from '../shared/model'
 
 /**
  * SCR-013 Devices & printers (design 02 admin.devices; PLT-226, GAP-007, MES-184): the enrolled tablets and phones bound
- * to stations, and the sites' printers, on one page. Enrol a device with a one-time QR code (15 minutes), revoke one
- * (typed name), add and change printers. The print queue is W1; a device's mode (Operator, Cutting…) comes with the floor
+ * to stations, and the sites' printers, on one page. Enrol a device with a one-time QR code (15 minutes), revoke the
+ * ticked ones (or one on its record, typed name), add and change printers, pause or resume the ticked ones. The print queue is W1; a device's mode (Operator, Cutting…) comes with the floor
  * step: the API has no mode yet. Pure: the tiles, the rows, the enrol steps, the printer form's checks.
  */
 
@@ -60,15 +61,18 @@ export interface DevicesViewModel {
   sites: readonly SiteChoice[]
   tile: DeviceTile | null
   query: string
-  page: number
+  /** Pages of 50 rows shown ("Show 50 more" adds one). */
+  pages: number
   asOf: string | null
   /** "Now" for "seen in the last hour" (a fixture fixes it). */
   now: string
   can: DevicesAbilities
   enrol?: EnrolModel | null
   printer?: PrinterDialog | null
-  /** The device a revoke confirm is open for. */
-  revokeId?: string | null
+  /** Rows ticked at first (design fixtures); the view keeps the ticks. */
+  selected?: readonly string[]
+  /** A bulk action's confirm open at first (design fixtures). */
+  bulk?: DevicesBulk | null
   busy?: boolean
   dialogProblem?: string | null
   notice?: Notice | null
@@ -85,6 +89,23 @@ export function deviceRows(devices: readonly Device[], tile: DeviceTile | null, 
 
 export function printerRows(printers: readonly Printer[], query: string, sites: readonly SiteChoice[]): Printer[] {
   return printers.filter((printer) => matches(query, printer.code, printer.name, sites.find((site) => site.id === printer.siteId)?.name)).sort((a, b) => a.code.localeCompare(b.code))
+}
+
+// ---- bulk actions (one call per row: POST /auth/floor/devices/:id/revoke, PATCH /print/printers/:id) ----
+
+export type DevicesBulk = 'revoke' | 'pause' | 'resume'
+
+/** Which ticked devices Revoke reaches: those waiting or enrolled (a revoked one stays revoked). */
+export function revokeReach(selected: readonly Device[], can: DevicesAbilities): BulkReach<Device> {
+  return reachOf(selected, (device) => device.status !== 'REVOKED', { held: can.revoke ? null : 'right.devices_revoke', none: 'devices.bulk.held.revoke' })
+}
+
+/** Which ticked printers Pause (the active ones) or Resume (the paused ones) reaches; an archived printer neither. */
+export function printerReach(action: 'pause' | 'resume', selected: readonly Printer[], can: DevicesAbilities): BulkReach<Printer> {
+  const held = can.managePrinters ? null : 'right.print_manage'
+  return action === 'pause'
+    ? reachOf(selected, (printer) => printer.status === 'ACTIVE', { held, none: 'printers.bulk.held.pause' })
+    : reachOf(selected, (printer) => printer.status === 'PAUSED', { held, none: 'printers.bulk.held.resume' })
 }
 
 export interface EnrolDraft {

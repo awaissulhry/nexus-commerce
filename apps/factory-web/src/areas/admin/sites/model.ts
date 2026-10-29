@@ -61,6 +61,17 @@ export function structureGroups(structure: SiteStructure, showArchived: boolean)
   return groups
 }
 
+/** One row of the structure's list: a line (or the group of stations standing alone), or a station one step in. */
+export type StructureRow = { kind: 'group'; id: string; line: Line | null; stations: number } | { kind: 'station'; id: string; station: Station }
+
+/** The structure as one list: each line followed by its stations, then the stations standing alone. */
+export function structureRows(structure: SiteStructure, showArchived: boolean): StructureRow[] {
+  return structureGroups(structure, showArchived).flatMap((group): StructureRow[] => [
+    { kind: 'group', id: group.line?.id ?? 'alone', line: group.line, stations: group.stations.length },
+    ...group.stations.map((station): StructureRow => ({ kind: 'station', id: station.id, station })),
+  ])
+}
+
 /** What still uses a row (an archive waits until it is empty): kind → count. Empty: it may be archived. */
 export function archiveUses(structure: SiteStructure, target: 'line' | 'station' | 'centre' | 'site', id: string): Record<string, number> {
   const active = structure.stations.filter((station) => station.status === 'ACTIVE')

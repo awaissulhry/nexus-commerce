@@ -4,7 +4,7 @@ import { companyDraft, companyPatch, companyProblems, newCompanyProblems, newSit
 import { deviceRows, deviceTileMatch, enrolProblems, printerBody, printerDraft, printerProblems } from './devices/model'
 import { setupSteps, type OverviewFacts } from './overview/model'
 import { heldAreas, holdersOf, roleRows, templateGap } from './roles/model'
-import { grainsOf, pageOf, problemKey, problemNotice, scopeWords, usesOf } from './shared/model'
+import { grainsOf, problemKey, problemNotice, scopeWords, selectedAmong, shownOf, usesOf } from './shared/model'
 import { ApiError } from '../../lib/api/errors'
 import { ASSIGNMENTS, CATALOGUE, CENTRES, COMPANIES, DEVICES, LINES, NOW, PREFIX, PRINTERS, ROLES, SITES, STATIONS, USERS, WORKERS } from './shared/fixtures'
 import { archiveUses, floorBody, floorDraft, floorProblems, partProblems, sameFloor, structureGroups, takenCodes } from './sites/model'
@@ -17,12 +17,21 @@ import { DEMO_USER } from '../../shell/design-data'
 const companies = COMPANIES.map((company) => ({ id: company.id, name: company.legalName, sites: company.sites.map((site) => ({ id: site.id, name: site.name })) }))
 
 describe('shared rules', () => {
-  it('pages of 50 rows (Owner L3), the page clamped to what exists', () => {
+  it('50 rows at first, "Show N more" adds 50 at a time until every row is shown (Owner L3)', () => {
     const rows = Array.from({ length: 120 }, (_, index) => index)
-    expect(pageOf(rows, 1).rows).toHaveLength(50)
-    expect(pageOf(rows, 3)).toMatchObject({ page: 3, pageCount: 3 })
-    expect(pageOf(rows, 9).page).toBe(3)
-    expect(pageOf([], 1)).toMatchObject({ page: 1, pageCount: 1 })
+    expect(shownOf(rows, 1)).toMatchObject({ more: 50 })
+    expect(shownOf(rows, 1).rows).toHaveLength(50)
+    expect(shownOf(rows, 2)).toMatchObject({ more: 20 })
+    expect(shownOf(rows, 3).rows).toHaveLength(120)
+    expect(shownOf(rows, 3).more).toBe(0)
+    expect(shownOf(rows, 9).rows).toHaveLength(120)
+    expect(shownOf([], 1)).toEqual({ rows: [], more: 0 })
+  })
+
+  it('the selection keeps only the rows shown (a search or a filter that hides a row drops it)', () => {
+    const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+    expect(selectedAmong(rows, ['c', 'z', 'a']).map((row) => row.id)).toEqual(['a', 'c'])
+    expect(selectedAmong(rows, [])).toEqual([])
   })
 
   it('money grains in their fixed order, whatever roles give them', () => {

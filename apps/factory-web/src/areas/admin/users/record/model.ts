@@ -1,4 +1,5 @@
 import type { Assignment, Role, User, Worker } from '../../shared/api'
+import { reachOf, type BulkReach } from '../../shared/reach'
 import type { Loaded, Notice, ScopeChoice, ScopeOption, StepUpModel } from '../../shared/model'
 import type { RevealModel } from '../../shared/view/OneTimeReveal'
 
@@ -14,7 +15,7 @@ export type UserTab = (typeof USER_TABS)[number]
 export const WORKER_TABS = ['profile', 'badge', 'activity'] as const
 export type WorkerTab = (typeof WORKER_TABS)[number]
 
-export type UserDialog = 'give-role' | 'end-role' | 'suspend' | 'reactivate' | 'deactivate' | 'password'
+export type UserDialog = 'give-role' | 'end-roles' | 'suspend' | 'reactivate' | 'deactivate' | 'password'
 
 export interface UserAbilities {
   suspend: boolean
@@ -39,8 +40,8 @@ export interface UserRecordModel {
   /** This person is the tenant's last administrator (an active person who gives roles over every company). */
   lastAdmin: boolean
   dialog?: UserDialog | null
-  /** The assignment an "End" dialog ends. */
-  endId?: string | null
+  /** Role assignments ticked at first (design fixtures); the view keeps the ticks. "End N" reads them. */
+  selected?: readonly string[]
   busy?: boolean
   dialogProblem?: string | null
   notice?: Notice | null
@@ -70,6 +71,11 @@ export function lifecycleHeld(model: Pick<UserRecordModel, 'user' | 'me' | 'last
     password: !model.can.resetPassword ? 'right.users_resetPassword' : status !== 'ACTIVE' ? 'user.held.notActive' : null,
     assign: !model.can.assign ? 'right.roles_assign' : self ? 'user.held.selfRoles' : status === 'DEACTIVATED' ? 'user.held.deactivated' : null,
   }
+}
+
+/** Which ticked role assignments "End N" reaches: the live ones; held while the person may not end roles here. */
+export function endReach(selected: readonly Assignment[], model: Pick<UserRecordModel, 'user' | 'me' | 'lastAdmin' | 'can'>): BulkReach<Assignment> {
+  return reachOf(selected, (assignment) => assignment.live, { held: lifecycleHeld(model).assign, none: 'user.bulk.held.end' })
 }
 
 export interface GiveRoleDraft {

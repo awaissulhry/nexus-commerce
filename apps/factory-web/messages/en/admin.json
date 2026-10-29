@@ -37,6 +37,16 @@
       "10": "October",
       "11": "November",
       "12": "December"
+    },
+    "bulk": {
+      "refused_one": "{count} refused",
+      "refused_other": "{count} refused",
+      "none_one": "Nothing changed: {count} refused",
+      "none_other": "Nothing changed: {count} refused",
+      "andMore_one": "and {count} more",
+      "andMore_other": "and {count} more",
+      "skipped_one": "{count} selected row is left out: this does not apply to it.",
+      "skipped_other": "{count} selected rows are left out: this does not apply to them."
     }
   },
   "nav": {
@@ -99,7 +109,9 @@
     "clearFilters": "Clear filters",
     "count": "{shown} of {total}",
     "updated": "Updated {time}",
-    "notYet": "Not read yet"
+    "notYet": "Not read yet",
+    "more_one": "Show {count} more",
+    "more_other": "Show {count} more"
   },
   "record": {
     "backTo": "Back to {name}",
@@ -416,6 +428,9 @@
       "postalCode": "Postal code",
       "city": "City",
       "province": "Province"
+    },
+    "keys": {
+      "fold": "Fold or unfold the sites of the company on the row"
     }
   },
   "company": {
@@ -501,7 +516,9 @@
     },
     "sites": {
       "empty": "No sites yet",
-      "label": "Sites of {name}"
+      "label": "Sites of {name}",
+      "count_one": "1 site",
+      "count_other": "{count} sites"
     },
     "defaults": {
       "title": "Defaults",
@@ -539,14 +556,13 @@
       "empty": "Add your first line, then its stations",
       "emptyCentres": "Each station belongs to a work centre: add the work centres too (Cutting, Sewing, Inspection…).",
       "hint": "Tablets, people and alerts are bound to these stations.",
-      "tableLabel": "Stations of {name}"
+      "label": "Lines and stations of {name}"
     },
     "alone": "Standing alone",
     "aloneHint": "Stations on no line: a cutting table, an inspection bench.",
     "line": {
       "stations_one": "1 station",
-      "stations_other": "{count} stations",
-      "empty": "No station on it yet."
+      "stations_other": "{count} stations"
     },
     "rename": "Rename…",
     "move": "Move to another line…",
@@ -564,7 +580,9 @@
     "centres": {
       "hint": "Groups of stations that do one kind of work.",
       "empty": "No work centres",
-      "capacityLater": "Capacity per work centre is set in Planning (W1)."
+      "capacityLater": "Capacity per work centre is set in Planning (W1).",
+      "count_one": "{count} work centre",
+      "count_other": "{count} work centres"
     },
     "centreKind": {
       "CUTTING": "Cutting",
@@ -608,7 +626,9 @@
     "devices": {
       "tablets": "Tablets here",
       "printers": "Printers here",
-      "empty": "No devices. Enrol a tablet."
+      "empty": "No devices. Enrol a tablet.",
+      "count_one": "{count} device",
+      "count_other": "{count} devices"
     },
     "dialog": {
       "line": {
@@ -657,6 +677,10 @@
       "moved": "Station moved.",
       "archived": "Archived.",
       "floor": "Floor times saved."
+    },
+    "printers": {
+      "count_one": "{count} printer",
+      "count_other": "{count} printers"
     }
   },
   "users": {
@@ -757,7 +781,6 @@
     },
     "noRole": "No role: sees nothing",
     "noFloorRole": "No floor role",
-    "invitedUntil": "Invite valid until {date}",
     "employeeNo": "No. {code}",
     "badgeHint": "•••• {hint}",
     "noBadge": "No badge",
@@ -775,7 +798,7 @@
       "floor": "Add the floor workers",
       "floorBody": "No e-mail needed: a name, a site, a badge and a PIN."
     },
-    "later": "Partner users come in W2b; AI agents in W3. Bulk actions (give a role to many, print badges, resend invites) come with the shared list tools.",
+    "later": "Partner users come in W2b; AI agents in W3. Giving a role to many people, printing badges and resending invites in one go come later.",
     "worker": {
       "hint": "A floor worker signs in on a tablet with a badge and a PIN; no e-mail.",
       "minimal": "Only what the work needs (GDPR art. 5(1)(c)): no photo, birth date or national id.",
@@ -798,7 +821,51 @@
       "pinStep": "Give a first PIN",
       "pinHow": "Badge & PIN › Reset PIN: a temporary PIN; the worker chooses their own at the first sign-in.",
       "next": "Open Badge & PIN"
-    }
+    },
+    "bulk": {
+      "suspend_one": "Suspend {count}",
+      "suspend_other": "Suspend {count}",
+      "reactivate_one": "Reactivate {count}",
+      "reactivate_other": "Reactivate {count}",
+      "deactivate_one": "Deactivate {count}",
+      "deactivate_other": "Deactivate {count}",
+      "workerDeactivate_one": "Deactivate {count}",
+      "workerDeactivate_other": "Deactivate {count}",
+      "workerReactivate_one": "Reactivate {count}",
+      "workerReactivate_other": "Reactivate {count}",
+      "held": {
+        "suspend": "None of the selected can be suspended: only active people, never yourself or the last administrator.",
+        "reactivate": "None of the selected is suspended.",
+        "deactivate": "None of the selected can be deactivated: never yourself, the last administrator or someone deactivated already.",
+        "workerDeactivate": "None of the selected workers is active.",
+        "workerReactivate": "None of the selected workers is inactive."
+      },
+      "confirm": {
+        "suspend_one": "Suspend {count} person?",
+        "suspend_other": "Suspend {count} people?",
+        "reactivate_one": "Reactivate {count} person?",
+        "reactivate_other": "Reactivate {count} people?",
+        "deactivate_one": "Deactivate {count} person?",
+        "deactivate_other": "Deactivate {count} people?",
+        "workerDeactivate_one": "Deactivate {count} floor worker?",
+        "workerDeactivate_other": "Deactivate {count} floor workers?",
+        "workerReactivate_one": "Reactivate {count} floor worker?",
+        "workerReactivate_other": "Reactivate {count} floor workers?"
+      },
+      "done": {
+        "suspend_one": "{count} person suspended",
+        "suspend_other": "{count} people suspended",
+        "reactivate_one": "{count} person reactivated",
+        "reactivate_other": "{count} people reactivated",
+        "deactivate_one": "{count} person deactivated",
+        "deactivate_other": "{count} people deactivated",
+        "workerDeactivate_one": "{count} floor worker deactivated",
+        "workerDeactivate_other": "{count} floor workers deactivated",
+        "workerReactivate_one": "{count} floor worker reactivated",
+        "workerReactivate_other": "{count} floor workers reactivated"
+      }
+    },
+    "validUntil": "until {date}"
   },
   "user": {
     "tab": {
@@ -825,8 +892,7 @@
       "suspend": "Suspended: every session ended.",
       "reactivate": "Reactivated.",
       "deactivate": "Deactivated.",
-      "given": "{role} given.",
-      "ended": "{role} ended."
+      "given": "{role} given."
     },
     "suspend": {
       "title": "Suspend",
@@ -881,10 +947,25 @@
       "raises": "This gives them more than they have now: a fresh code is asked.",
       "noRaise": "Nothing new beyond what they already hold."
     },
-    "endRole": {
-      "title": "End {role} for {name}?",
-      "body": "The role stops giving access now. The assignment stays listed as ended (never deleted)."
-    }
+    "bulk": {
+      "end_one": "End {count} role",
+      "end_other": "End {count} roles",
+      "held": {
+        "end": "None of the selected roles is live."
+      },
+      "confirm": {
+        "end_one": "End {count} role for {name}?",
+        "end_other": "End {count} roles for {name}?"
+      },
+      "endBody_one": "The role stops giving access now. It stays listed as ended (never deleted).",
+      "endBody_other": "These roles stop giving access now. Each stays listed as ended (never deleted).",
+      "done": {
+        "end_one": "{count} role ended",
+        "end_other": "{count} roles ended"
+      }
+    },
+    "assignmentsCount_one": "{count} role",
+    "assignmentsCount_other": "{count} roles"
   },
   "worker": {
     "tab": {
@@ -976,11 +1057,7 @@
     }
   },
   "roles": {
-    "intro": "What each role can do, in plain words first: the money it sees (price · cost · margin · wages) and whether it asks for two-factor. Ready-made roles stay equal to their templates; a custom copy says what its template gained.",
-    "compare": "Compare roles",
-    "held": {
-      "compare": "Two roles are needed to compare."
-    },
+    "intro": "What each role can do, in plain words first: the money it sees (price · cost · margin · wages) and whether it asks for two-factor. Ready-made roles stay equal to their templates; a custom copy says what its template gained. Tick two or three roles to compare them.",
     "search": "Search roles",
     "tableLabel": "Roles",
     "audience": {
@@ -1015,9 +1092,7 @@
     },
     "later": "Making a custom copy of a ready-made role and changing it comes in W2b.",
     "compareTitle": "Compare roles",
-    "compareHint": "Pick two or three: what each can do, by area, with the differences marked.",
-    "comparePick": "Roles to compare",
-    "compareNeedTwo": "Pick at least two roles.",
+    "compareHint": "What each can do, by area, with the differences marked.",
     "system": {
       "owner": {
         "name": "Owner",
@@ -1079,6 +1154,14 @@
         "name": "Team leader",
         "description": "Leads a crew on the floor: works and sees the team leader's screens of the device's site; sees no money."
       }
+    },
+    "bulk": {
+      "compare_one": "Compare {count}",
+      "compare_other": "Compare {count}",
+      "held": {
+        "compareOne": "Tick a second role to compare (two or three).",
+        "compareMany": "Compare takes two or three roles: untick the others."
+      }
     }
   },
   "role": {
@@ -1139,7 +1222,9 @@
       "later": "Switching it per role comes in W2a (Security & health)."
     },
     "floorHolders": "A floor role is held by floor workers ({count} now); see them in Users › Floor.",
-    "nobody": "Nobody has this role."
+    "nobody": "Nobody has this role.",
+    "holders_one": "{count} person",
+    "holders_other": "{count} people"
   },
   "devices": {
     "intro": "The tablets and phones enrolled to the stations, and the printers of the sites. A device says \"in use\", never who.",
@@ -1229,6 +1314,25 @@
     },
     "done": {
       "revoked": "{name} is revoked."
+    },
+    "bulk": {
+      "revoke_one": "Revoke {count}",
+      "revoke_other": "Revoke {count}",
+      "held": {
+        "revoke": "None of the selected devices can be revoked: they are revoked already."
+      },
+      "confirm": {
+        "revoke_one": "Revoke {count} device?",
+        "revoke_other": "Revoke {count} devices?"
+      },
+      "revokeBody_one": "Its sign-ins end at once, and it must be enrolled again to be used.",
+      "revokeBody_other": "Their sign-ins end at once, and each must be enrolled again to be used.",
+      "inUse_one": "{count} of them is in use now: whoever is signed in on it is signed out, and what it still has to send is refused.",
+      "inUse_other": "{count} of them are in use now: whoever is signed in on them is signed out, and what they still have to send is refused.",
+      "done": {
+        "revoke_one": "{count} device revoked",
+        "revoke_other": "{count} devices revoked"
+      }
     }
   },
   "printers": {
@@ -1273,6 +1377,34 @@
     "done": {
       "added": "Printer added.",
       "saved": "Printer saved."
+    },
+    "bulk": {
+      "pause_one": "Pause {count}",
+      "pause_other": "Pause {count}",
+      "resume_one": "Resume {count}",
+      "resume_other": "Resume {count}",
+      "pauseVerb": "Pause",
+      "resumeVerb": "Resume",
+      "held": {
+        "pause": "None of the selected printers is active.",
+        "resume": "None of the selected printers is paused."
+      },
+      "confirm": {
+        "pause_one": "Pause {count} printer?",
+        "pause_other": "Pause {count} printers?",
+        "resume_one": "Resume {count} printer?",
+        "resume_other": "Resume {count} printers?"
+      },
+      "pauseBody_one": "A paused printer takes no new labels or documents until it is resumed.",
+      "pauseBody_other": "Paused printers take no new labels or documents until they are resumed.",
+      "resumeBody_one": "It takes labels and documents again.",
+      "resumeBody_other": "They take labels and documents again.",
+      "done": {
+        "pause_one": "{count} printer paused",
+        "pause_other": "{count} printers paused",
+        "resume_one": "{count} printer resumed",
+        "resume_other": "{count} printers resumed"
+      }
     }
   },
   "device": {
@@ -1344,7 +1476,8 @@
     "sales": "Sales settings",
     "orders": "Sales orders",
     "privacy": "Privacy",
-    "quality": "Quality"
+    "quality": "Quality",
+    "home": "Home"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",

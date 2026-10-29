@@ -30,7 +30,6 @@
 
 .fw-adm-intro,
 .fw-adm-hint,
-.fw-adm-count,
 .fw-adm-loading,
 .fw-adm-asof {
   margin: 0;
@@ -52,47 +51,11 @@
   gap: var(--nds-space-8);
 }
 
-.fw-adm-toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-8) var(--nds-space-16);
-  padding-block: var(--nds-space-6);
-  background: var(--nds-bg);
-}
-
-.fw-adm-toolbar-search {
-  flex: 1 1 220px;
-  max-width: 360px;
-}
-
 .fw-adm-skeleton {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-8);
   margin-top: var(--nds-space-12);
-}
-
-.fw-adm-tablecard {
-  min-width: 0;
-}
-
-.fw-adm-count {
-  padding: var(--nds-space-8) var(--nds-space-12) 0;
-}
-
-.fw-adm-table {
-  min-width: 0;
-  overflow-x: auto;
-}
-
-.fw-adm-pager {
-  display: flex;
-  justify-content: flex-end;
-  padding: var(--nds-space-8) var(--nds-space-12);
 }
 
 .fw-adm-cell {
@@ -115,8 +78,60 @@
   color: var(--nds-text-strong);
 }
 
-.fw-adm-child {
+/* ---- list frame cells (the grid is the design system's; these place a cell's own parts) ---- */
+/* A cell of two lines: the value, then its muted sub-line (DS .nds-cell-sub), each cut with "…" when narrow. */
+.fw-adm-cell2 {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-adm-cell2 > *,
+.fw-adm-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tags in a cell stay on one line (the row keeps its height); the last ones are cut, their words in the row's text. */
+.fw-adm-celltags {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The money chips of a row (GrainChips) on one line. */
+.fw-adm-celltags .fw-adm-grains {
+  flex-wrap: nowrap;
+}
+
+/* A row one step in a tree (a station under its line). */
+.fw-adm-tree-child {
+  display: block;
   padding-inline-start: var(--nds-space-24);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A record tab with two lists: each under its own heading. */
+.fw-adm-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-adm-section-title {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
 }
 
 .fw-adm-code {
@@ -469,20 +484,4 @@
   display: flex;
   align-items: center;
   gap: var(--nds-space-8);
-}
-
-/* The page's own links (a row's name, a record): the design system's link colour, underlined on hover. */
-.fw-adm a.fw-adm-name,
-.fw-adm a.fw-adm-link {
-  color: var(--nds-text-link);
-  text-decoration: none;
-}
-
-.fw-adm a.fw-adm-name:hover,
-.fw-adm a.fw-adm-link:hover {
-  text-decoration: underline;
-}
-
-.fw-adm-fill {
-  width: 100%;
 }

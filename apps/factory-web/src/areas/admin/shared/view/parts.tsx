@@ -1,12 +1,14 @@
 'use client'
 
-import type { ReactNode } from 'react'
-import { Check, X } from 'lucide-react'
-import { Banner, Card, EmptyState, Pagination, SummaryTable } from '@nexus/ui/components'
+import { Fragment, useMemo, type ReactNode } from 'react'
+import { Check, Search, X } from 'lucide-react'
+import { Banner, Card, EmptyState, Modal } from '@nexus/ui/components'
+import { SelectionLabel } from '@nexus/ui/grid'
 import { StepUpModal } from '@nexus/ui/patterns'
-import { Button, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { Button, Input, Kbd, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
+import { listKeys, type ListKey } from '../../../../list-frame/model'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { GRAINS, type Grain, type Notice, type StepUpModel } from '../model'
 import '../admin.css'
@@ -45,14 +47,21 @@ export function PageHead({ intro, asOf, actions }: { intro?: ReactNode; asOf?: s
   )
 }
 
-/** One notice (a receipt or a refusal) with a way to put it away. */
+/**
+ * One notice (a receipt or a refusal) with a way to put it away. A bulk run's notice says how many were done and how
+ * many refused ("2 suspended · 1 refused"), then names each refused row with its problem.
+ */
 export function NoticeBanner({ notice, onDismiss }: { notice: Notice | null | undefined; onDismiss?: () => void }) {
   const t = useT('admin')
   if (!notice) return null
+  const refused = notice.refused ?? []
+  const done = Number(notice.params?.count ?? 0)
+  const title =
+    refused.length === 0 ? t(notice.key, notice.params) : done === 0 ? t('common.bulk.none', { count: refused.length }) : `${t(notice.key, notice.params)} · ${t('common.bulk.refused', { count: refused.length })}`
   return (
     <Banner
       tone={notice.tone}
-      title={t(notice.key, notice.params)}
+      title={title}
       action={
         onDismiss ? (
           <Button size="sm" variant="quiet" onClick={onDismiss}>
@@ -60,8 +69,24 @@ export function NoticeBanner({ notice, onDismiss }: { notice: Notice | null | un
           </Button>
         ) : undefined
       }
-    />
+    >
+      {refused.length > 0 && (
+        <ul className="fw-adm-guards">
+          {refused.map((row, index) => (
+            <li key={`${row.name}-${index}`}>
+              {row.name} — {t(row.problem)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Banner>
   )
+}
+
+/** A held reason in words: a right the person lacks (`right.…` → "Needs the right: …"), or the rule's own sentence. */
+export function heldText(t: (key: string, params?: Record<string, string | number>) => string, reason: string | null | undefined): string | null {
+  if (!reason) return null
+  return reason.startsWith('right.') ? t('held.needs', { right: t(reason) }) : t(reason)
 }
 
 /** A read's three states before its rows: loading (skeleton rows in the list's shape), failed (Try again), empty. */
@@ -118,43 +143,96 @@ export function ListState({
   return null
 }
 
-/** A list's table: the DS SummaryTable (stacked on a phone) and its pager of 50 rows. */
-export function ListTable({
-  label,
-  columns,
-  rows,
-  page,
-  pageCount,
-  onPage,
-  widths,
-  count,
+/**
+ * What a list frame draws in place of its grid (the toolbar stays): the read failed (Try again; never drawn as empty),
+ * nothing yet (with the list's create), or nothing matches the search and filters (Clear).
+ */
+export function FrameState({
+  problem,
+  onRetry,
+  empty,
+  noMatch,
 }: {
-  label: string
-  columns: readonly string[]
-  rows: ReadonlyArray<{ id: string; cells: readonly ReactNode[] }>
-  page: number
-  pageCount: number
-  onPage?: (page: number) => void
-  widths?: ReadonlyArray<string | undefined>
-  /** The rows shown and how many match ("12 of 48"). */
-  count?: string
+  problem?: string | null
+  onRetry?: () => void
+  empty?: { title: string; body?: string; action?: ReactNode; icon?: ReactNode } | null
+  noMatch?: { onClear?: () => void; clearLabel?: string } | null
 }) {
+  const t = useT('admin')
+  if (problem)
+    return (
+      <EmptyState
+        title={t('list.failedTitle')}
+        description={t(problem)}
+        action={
+          <Button size="sm" onClick={() => onRetry?.()}>
+            {t('common.retry')}
+          </Button>
+        }
+      />
+    )
+  if (empty) return <EmptyState icon={empty.icon} title={empty.title} description={empty.body} action={empty.action} />
+  if (noMatch)
+    return (
+      <EmptyState
+        title={t('list.noMatch')}
+        action={
+          noMatch.onClear ? (
+            <Button size="sm" onClick={noMatch.onClear}>
+              {noMatch.clearLabel ?? t('list.clearFilters')}
+            </Button>
+          ) : undefined
+        }
+      />
+    )
+  return null
+}
+
+/** A list frame's search field (the frame puts it left in its toolbar; `/` focuses it). */
+export function ListSearch({ label, value, onChange }: { label: string; value: string; onChange?: (value: string) => void }) {
+  return <Input size="sm" type="search" leadingIcon={<Search size={13} aria-hidden />} placeholder={label} aria-label={label} value={value} onChange={(event) => onChange?.(event.target.value)} />
+}
+
+/**
+ * One bulk action in a list frame's selection bar: its icon and its words with the reach ("Suspend 2"; the words hide
+ * first on a narrow card), held with its reason when it applies to none of the selected rows.
+ */
+export function BulkButton({ icon, label, held, tone = 'secondary', onClick }: { icon: ReactNode; label: string; held?: string | null; tone?: 'secondary' | 'primary' | 'danger-outline'; onClick?: () => void }) {
   return (
-    <Card className="fw-adm-tablecard">
-      {count && (
-        <p className="fw-adm-count" role="status">
-          {count}
-        </p>
-      )}
-      <div className="fw-adm-table">
-        <SummaryTable label={label} columns={columns} rows={rows} density="roomy" stackOnPhone widths={widths} align={columns.map(() => 'left')} />
-      </div>
-      {pageCount > 1 && (
-        <div className="fw-adm-pager">
-          <Pagination page={page} pageCount={pageCount} onPage={(next) => onPage?.(next)} />
-        </div>
-      )}
-    </Card>
+    <Button size="sm" variant={tone} aria-label={label} heldReason={held ?? null} onClick={onClick}>
+      {icon} <SelectionLabel>{label}</SelectionLabel>
+    </Button>
+  )
+}
+
+/** The full key list of an Admin list (`?`, or "All shortcuts" in the frame's footer): the list's own keys, then the frame's. */
+export function ListKeysHelp({ open, onClose, keys, selection }: { open: boolean; onClose: () => void; keys: readonly ListKey[]; selection: boolean }) {
+  return (
+    <WithMessages namespaces={['lists']}>
+      <KeysHelp open={open} onClose={onClose} keys={keys} selection={selection} />
+    </WithMessages>
+  )
+}
+
+function KeysHelp({ open, onClose, keys, selection }: { open: boolean; onClose: () => void; keys: readonly ListKey[]; selection: boolean }) {
+  const t = useT('lists')
+  if (!open) return null
+  const words = (does: string) => (t(does) === does ? does : t(does))
+  return (
+    <Modal open onClose={onClose} title={t('keys.title')} size="sm">
+      <dl className="fw-list-keymap">
+        {listKeys(keys, selection).map((entry) => (
+          <Fragment key={`${entry.keys.join('+')}-${entry.does}`}>
+            <dt>
+              {entry.keys.map((key) => (
+                <Kbd key={key}>{key === 'click' ? t('keys.click') : key}</Kbd>
+              ))}
+            </dt>
+            <dd>{words(entry.does)}</dd>
+          </Fragment>
+        ))}
+      </dl>
+    </Modal>
   )
 }
 
@@ -240,14 +318,17 @@ export const dash = (value: ReactNode | null | undefined): ReactNode => (value =
  */
 export function useRoleWords() {
   const t = useT('admin')
-  const custom = (key: string) => key.startsWith('custom.')
-  const word = (key: string, field: 'name' | 'description'): string | null => {
-    const id = `roles.system.${key}.${field}`
-    const text = t(id)
-    return text === id ? null : text
-  }
-  return {
-    name: (role: { key: string; name: string }) => (custom(role.key) ? role.name : (word(role.key, 'name') ?? role.name)),
-    description: (role: { key: string; description: string | null }) => (custom(role.key) ? role.description : (word(role.key, 'description') ?? role.description)),
-  }
+  // The same object while the language stays: list columns are built from it once.
+  return useMemo(() => {
+    const custom = (key: string) => key.startsWith('custom.')
+    const word = (key: string, field: 'name' | 'description'): string | null => {
+      const id = `roles.system.${key}.${field}`
+      const text = t(id)
+      return text === id ? null : text
+    }
+    return {
+      name: (role: { key: string; name: string }) => (custom(role.key) ? role.name : (word(role.key, 'name') ?? role.name)),
+      description: (role: { key: string; description: string | null }) => (custom(role.key) ? role.description : (word(role.key, 'description') ?? role.description)),
+    }
+  }, [t])
 }
