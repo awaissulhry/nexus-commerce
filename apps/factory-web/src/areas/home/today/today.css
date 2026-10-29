@@ -7,7 +7,28 @@
   flex-direction: column;
   gap: var(--nds-space-20);
   min-width: 0;
-  max-width: 1200px;
+}
+
+/* The page fills the shell's main area (no page max-width: Owner, 2026-10-29). On wide screens the work (the list and
+   the flow strip) and my lists sit side by side, two thirds and one third (the design's panel widths). */
+.fw-today-columns,
+.fw-today-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-20);
+  min-width: 0;
+}
+
+@media (min-width: 1440px) {
+  .fw-today-columns--split {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr);
+    align-items: start;
+  }
+
+  .fw-today-side .fw-today-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .fw-today-band {
@@ -283,7 +304,7 @@ a.fw-today-stage-box:hover {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-16);
-  max-width: 900px;
+  min-width: 0;
 }
 
 .fw-today-print-head {
@@ -317,10 +338,6 @@ a.fw-today-stage-box:hover {
   .fw-system-banner,
   .fw-today-print-button {
     display: none !important;
-  }
-
-  .fw-today-print {
-    max-width: none;
   }
 
   .fw-today-print-group {

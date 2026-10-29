@@ -209,6 +209,9 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
         <MetricStrip metrics={tiles} minTileWidth={180} />
       </section>
 
+      {/* Wide screens: the work (the list, the flow strip) and my lists side by side (design: panels half / two-thirds). */}
+      <div className={model.panels.length > 0 ? 'fw-today-columns fw-today-columns--split' : 'fw-today-columns'}>
+      <div className="fw-today-main">
       <section className="fw-today-section" aria-labelledby="fw-today-needs">
         <div className="fw-today-head">
           <h2 id="fw-today-needs" className="fw-today-h">
@@ -273,9 +276,10 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
       </section>
 
       {model.flow && <FlowSection model={model} lens={lens} onLens={setLens} onRetry={() => actions?.onRetry?.('flow')} />}
+      </div>
 
       {model.panels.length > 0 && (
-        <section className="fw-today-section" aria-labelledby="fw-today-lists">
+        <section className="fw-today-section fw-today-side" aria-labelledby="fw-today-lists">
           <h2 id="fw-today-lists" className="fw-today-h">
             {t('today.panels.title')}
           </h2>
@@ -329,6 +333,7 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
           </div>
         </section>
       )}
+      </div>
 
       <DecideModal
         items={items}
