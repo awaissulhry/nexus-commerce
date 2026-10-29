@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,9 +18,11 @@ import type { ShippingSeed } from '../../../../../../packages/factory-db/seed/sh
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { localFileStore } from '../../../adapters/local-files/local'
 import { buildApp } from '../../../core/app'
+import { callerFor } from '../../../core/command'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { pdfFlatText } from '../../../platform/documents/testing/pdf-text'
+import { storeGeneratedFile } from '../../../platform/files/files'
 import { createFilesRuntime, useFiles, type FilesRuntime } from '../../../platform/files/service'
 import { createGateway } from '../../../platform/gateway/gateway'
 import { testRedis, type TestRedis } from '../../../platform/outbox/testing'
@@ -60,6 +62,7 @@ const SESSIONS: Record<string, SessionContext> = {
   warehouse: office(A.tenant, [grant([...SHIPPING, 'files.read'])]),
   issuer: office(A.tenant, [grant(['shipping.view', 'shipping.ddt.issue'])]),
   viewer: office(A.tenant, [grant(['shipping.view'])]),
+  uploader: office(A.tenant, [grant(['shipping.view', 'files.read', 'files.upload'])]),
   companyB: office(A.tenant, [grant(SHIPPING, [A.companyB])]),
   otherTenant: office(B.tenant, [grant(SHIPPING)]),
   partner: { audience: 'partner', tenantId: A.tenant, actorId: newId(), partyId: A.brand, grants: [grant(SHIPPING)] },
@@ -416,6 +419,31 @@ describe('the PDF', () => {
     expect(printed.file).toMatchObject({ recordId: issued.ddt.id, kind: 'FISCAL_ARCHIVE' })
     expect((await ok('warehouse', 'POST', `/shipping/ddts/${issued.ddt.id}/pdf`, undefined, 200)).file.id).toBe(printed.file.id)
     expect((await ok('viewer', 'GET', `/shipping/ddts/${issued.ddt.id}`)).ddt.fileId).toBe(printed.file.id)
+  })
+
+  it('the first stored print is the document: a later FISCAL_ARCHIVE file never replaces it (record, list, download); none is uploaded', async () => {
+    const [live] = await admin<{ id: string }>(`SELECT d.id FROM "Ddt" d WHERE d."shipmentId" = $1 AND NOT EXISTS (SELECT 1 FROM "DdtCancellation" x WHERE x."ddtId" = d.id)`, [sh2()])
+    const first = (await ok('viewer', 'GET', `/shipping/ddts/${live!.id}`)).ddt.fileId as string
+    expect(first).toEqual(expect.any(String))
+    // A later fiscal-archive file on the same DDT, the way only the API can make one (a generated file).
+    const later = Buffer.from('%PDF-1.4\n% a later made-up print of the same DDT\n%%EOF\n')
+    const caller = callerFor(database, { audience: 'office', tenantId: A.tenant, actorId: newId(), grants: [], requestId: newId() })
+    const second = await storeGeneratedFile(files, caller, { companyId: A.companyA, recordType: 'Ddt', recordId: live!.id, kind: 'FISCAL_ARCHIVE', originalName: 'later.pdf', contentType: 'application/pdf', body: later })
+    expect(second.id).not.toBe(first)
+    expect((await ok('viewer', 'GET', `/shipping/ddts/${live!.id}`)).ddt.fileId).toBe(first)
+    const listed = (await ok('viewer', 'GET', `/shipping/ddts?shipmentId=${sh2()}&status=LIVE`)).ddts as Json[]
+    expect(listed.map((row) => [row.id, row.fileId])).toEqual([[live!.id, first]])
+    const download = (await ok('warehouse', 'GET', `/shipping/ddts/${live!.id}/pdf`)).download
+    const fetched = await app.inject({ method: 'GET', url: download.url })
+    expect(fetched.statusCode).toBe(200)
+    expect(fetched.rawPayload.equals(later)).toBe(false)
+    // The generic upload route refuses a DDT's fiscal-archive file (platform/files/owned.ts); a scan of the signed copy is open.
+    const announce = (kind: string) =>
+      call('uploader', 'POST', '/files', { companyId: A.companyA, recordType: 'Ddt', recordId: live!.id, kind, originalName: 'ddt.pdf', contentType: 'application/pdf', sizeBytes: later.length, sha256: createHash('sha256').update(later).digest('hex') })
+    const refusedUpload = await announce('FISCAL_ARCHIVE')
+    expect(refusedUpload.statusCode).toBe(409)
+    expect(refusedUpload.json().error.message).toMatch(/A FISCAL_ARCHIVE file of a Ddt is uploaded and confirmed only through its own route: POST \/shipping\/shipments\/:shipmentId\/ddt/)
+    expect((await announce('ATTACHMENT')).statusCode).toBe(201)
   })
 })
 

@@ -17,4 +17,6 @@ export const manifest = defineManifest({
   'POST /compliance/certificates/:certificateId/coverage': { audiences: ['office'], permission: 'compliance.certificates.manage', scope: 'record' },
   'POST /compliance/certificates/:certificateId/coverage/:coverageId/archive': { audiences: ['office'], permission: 'compliance.certificates.manage', scope: 'record' },
   'POST /compliance/certificates/gate': { audiences: ['office'], permission: 'compliance.certificates.view', scope: 'record' },
+  'POST /compliance/certificates/:certificateId/pdf': { audiences: ['office'], permission: 'compliance.certificates.manage', scope: 'record' },
+  'POST /compliance/certificates/:certificateId/pdf/:fileId/complete': { audiences: ['office'], permission: 'compliance.certificates.manage', scope: 'record' },
 })

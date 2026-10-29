@@ -22,7 +22,7 @@ import { assertMay, mayOn, officeContextOf } from '../access'
 import { tenantOf } from '../cells'
 import { shipmentDetail, officeShipment } from '../shipments/shipments'
 import { lockedStatus, readShipment, shipmentFacts, type ShipmentHeader } from '../store'
-import { ddtView, expectedDdtNumber, issuedOf, languageOf, liveDdtOf, pdfFileIdOf, readDdt, readDdtFacts, type DdtRow, type DdtView } from './store'
+import { ddtView, expectedDdtNumber, issuedOf, languageOf, liveDdtOf, pdfFileIdOf, pdfFileIdsOf, readDdt, readDdtFacts, type DdtRow, type DdtView } from './store'
 
 /**
  * The DDT of a shipment (B-W1-47; LOG-054; DPR 472/1996; A2 SCR-067 Documents tab). Office only.
@@ -334,8 +334,8 @@ export async function listDdts(caller: CommandCaller, query: ListDdtsQuery) {
         cancellations: { select: { cancelledAt: true }, orderBy: { cancelledAt: 'asc' }, take: 1 },
       },
     })
-    const pdfs = await client.storedFile.findMany({ where: { recordType: 'Ddt', recordId: { in: found.map((row) => row.id) }, kind: 'FISCAL_ARCHIVE', status: 'AVAILABLE' }, select: { id: true, recordId: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
-    return { found, pdf: new Map(pdfs.map((file) => [file.recordId, file.id])) }
+    // The same choice as the record's: the first stored print (store.ts pdfFileIdsOf).
+    return { found, pdf: await pdfFileIdsOf(client, found.map((row) => row.id)) }
   })
   const page = rows.found.slice(0, query.limit)
   return {

@@ -26,6 +26,8 @@ import { loadOwnership, loadSchema } from './tools'
  *   - an offline resend is applied once (the device's client scan id); a bundle is reported once per operation, and an
  *     undo or a correction voids a scan, which stays;
  *   - cut logs, scans and acknowledgements are append-only for every login, the owner included;
+ *   - an issue to a work order or a return from it names one of its site, an issue only a RELEASED or IN_PROGRESS one,
+ *     and a cancel and an issue at once take turns (…_inventory_issue_work_order_guards);
  *   - the seeds are idempotent.
  * The refusals are check_violation (SQLSTATE 23514); their messages are read through the scoped client's raw SQL.
  */
@@ -627,5 +629,133 @@ describe('the seeds', () => {
       { number: 'SEED-WO-0001', status: 'IN_PROGRESS', batchNumber: 'SEED-BT-0001' },
       { number: 'SEED-WO-0002', status: 'DRAFT', batchNumber: null },
     ])
+  })
+})
+
+// --- issues to a work order and returns from it (…_inventory_issue_work_order_guards, B-W1-39) ---------------------------
+
+describe('a stock move to a work order names one of its site, in the state it needs; a cancel and an issue take turns', () => {
+  const lining = { item: key('production-a', 'product:item:lining'), colour: key('production-a', 'product:item-colour:lining:GRY') }
+  /** One metre of the seeded grey lining (opening stock, RELEASED) to or from a work order, at A1's bin. */
+  const liningMove = (reason: 'ISSUE' | 'RETURN', workOrderId: string | null, extra: Record<string, unknown> = {}) => ({
+    id: randomUUID(),
+    companyId: A.companyA,
+    siteId: A.siteA,
+    reason,
+    itemId: lining.item,
+    itemColourId: lining.colour,
+    lotId: seeded.inventory.liningLotId,
+    ...(reason === 'ISSUE' ? { fromLocationId: A.bin } : { toLocationId: A.bin }),
+    quantity: '1.0000',
+    uom: 'M',
+    baseQuantity: '1.0000',
+    workOrderId,
+    idempotencyKey: `t-${randomUUID()}`,
+    occurredAt: new Date().toISOString(),
+    ...extra,
+  })
+  const released = async () => {
+    const { workOrderId } = await draftWorkOrder()
+    expect(await release(workOrderId)).toBe(1)
+    return workOrderId
+  }
+  const moveTo = (workOrderId: string, status: 'IN_PROGRESS' | 'COMPLETED' | 'CLOSED' | 'CANCELLED') =>
+    run(
+      office(),
+      `UPDATE "WorkOrder" SET status = $2::"WorkOrderStatus", "startedAt" = CASE WHEN $2 IN ('IN_PROGRESS', 'COMPLETED', 'CLOSED') THEN coalesce("startedAt", now()) END,
+         "completedAt" = CASE WHEN $2 IN ('COMPLETED', 'CLOSED') THEN coalesce("completedAt", now()) END, "closedAt" = CASE WHEN $2 = 'CLOSED' THEN now() END,
+         "cancelledAt" = CASE WHEN $2 = 'CANCELLED' THEN now() END, "cancelReason" = CASE WHEN $2 = 'CANCELLED' THEN 'The customer cancelled' END,
+         version = version + 1 WHERE id = $1::uuid`,
+      workOrderId,
+      status,
+    )
+  const cancelSql = `UPDATE "WorkOrder" SET status = 'CANCELLED', "cancelledAt" = now(), "cancelReason" = 'The customer cancelled', version = version + 1 WHERE id = $1::uuid`
+  const advisoryWaiters = () =>
+    count(`SELECT count(*) AS n FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`)
+  async function untilWaiting(n: number, what: string) {
+    for (let tries = 0; (await advisoryWaiters()) < n; tries++) {
+      if (tries > 250) throw new Error(`${what} never waited for the work order's issue lock`)
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+  }
+  /** A transaction that does `work` and stays open until released. */
+  function held(scope: FactoryScope, work: (tx: Parameters<Parameters<FactoryClient['$transaction']>[0]>[0]) => Promise<unknown>) {
+    let release!: () => void
+    const released = new Promise<void>((resolve) => (release = resolve))
+    let done!: () => void
+    const did = new Promise<void>((resolve) => (done = resolve))
+    const transaction = as(scope, (client) =>
+      client.$transaction(
+        async (tx) => {
+          await work(tx)
+          done()
+          await released
+        },
+        { timeout: 20_000 },
+      ),
+    )
+    return { did, release, transaction }
+  }
+
+  it('an issue names a work order of its tenant and site that is RELEASED or IN_PROGRESS; nothing goes to or from a DRAFT', async () => {
+    expect(await insert(floor(), 'StockMove', liningMove('ISSUE', seeded.workOrderId))).toBe(1)
+    const workOrderId = await released()
+    expect(await insert(floor(), 'StockMove', liningMove('ISSUE', workOrderId))).toBe(1)
+    await expect(insert(floor(), 'StockMove', liningMove('ISSUE', randomUUID()))).rejects.toThrow(/which is not a work order of its site/)
+    await expect(insert(office(), 'StockMove', liningMove('ISSUE', seeded.draftWorkOrderId))).rejects.toThrow(/is DRAFT; nothing is issued to it or returned from it/)
+    await expect(insert(office(), 'StockMove', liningMove('RETURN', seeded.draftWorkOrderId))).rejects.toThrow(/is DRAFT/)
+    // Another site's move never names A1's work order (here B1's own lining, at its store).
+    const lotB = randomUUID()
+    const storeB = key('production-a', 'inventory:location:B1-STORE')
+    await admin(
+      `INSERT INTO "Lot" (id, "tenantId", "companyId", "siteId", "itemId", "itemColourId", code, "qualityStatus", "qualityDecidedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, 'RELEASED', now())`,
+      [lotB, a.tenantId, a.companies[1]!.id, a.sites[1]!.id, lining.item, lining.colour, `T-LOT-${tag()}`],
+    )
+    const atB = { companyId: a.companies[1]!.id, siteId: a.sites[1]!.id, lotId: lotB }
+    expect(await insert(office(), 'StockMove', liningMove('RETURN', null, { ...atB, reason: 'OPENING', toLocationId: storeB, workOrderId: null }))).toBe(1)
+    await expect(insert(office(), 'StockMove', liningMove('ISSUE', seeded.workOrderId, { ...atB, fromLocationId: storeB }))).rejects.toThrow(/which is not a work order of its site/)
+    // Without a work order, the ledger's own check speaks.
+    await expect(insert(office(), 'StockMove', liningMove('ISSUE', null))).rejects.toThrow(/without its work order/)
+  })
+
+  it('takes returns and reversals from a completed, closed or cancelled work order, never a new issue', async () => {
+    for (const status of ['COMPLETED', 'CLOSED', 'CANCELLED'] as const) {
+      const workOrderId = await released()
+      const issue = liningMove('ISSUE', workOrderId, { quantity: '2.0000', baseQuantity: '2.0000' })
+      expect(await insert(floor(), 'StockMove', issue)).toBe(1)
+      if (status !== 'CANCELLED') expect(await moveTo(workOrderId, 'IN_PROGRESS')).toBe(1)
+      if (status === 'CLOSED') expect(await moveTo(workOrderId, 'COMPLETED')).toBe(1)
+      expect(await moveTo(workOrderId, status)).toBe(1)
+      await expect(insert(floor(), 'StockMove', liningMove('ISSUE', workOrderId))).rejects.toThrow(new RegExp(`is ${status}; stock is issued only to a RELEASED or IN_PROGRESS work order`))
+      expect(await insert(floor(), 'StockMove', liningMove('RETURN', workOrderId))).toBe(1)
+      // The issue's reversal (one mirror move) puts a wrong record right on any of them.
+      const reversal = { ...liningMove('ISSUE', workOrderId, { quantity: '2.0000', baseQuantity: '2.0000' }), fromLocationId: null, toLocationId: A.bin, reversalOfId: issue.id, note: 'Wrong work order' }
+      expect(await insert(office(), 'StockMove', reversal)).toBe(1)
+    }
+  })
+
+  it('a cancel waits for an issue in flight, which goes through first (READ COMMITTED, the issue lock)', async () => {
+    const workOrderId = await released()
+    const issue = held(floor(), (tx) => tx.$executeRawUnsafe(...insertSql('StockMove', liningMove('ISSUE', workOrderId))))
+    await issue.did
+    const cancelled = run(office(), cancelSql, workOrderId)
+    await untilWaiting(1, 'the cancel')
+    issue.release()
+    await issue.transaction
+    expect(await cancelled).toBe(1)
+    expect(await admin(`SELECT status::text FROM "WorkOrder" WHERE id = $1`, [workOrderId])).toEqual([{ status: 'CANCELLED' }])
+    expect(await count(`SELECT count(*) AS n FROM "StockMove" WHERE "workOrderId" = $1 AND reason = 'ISSUE'`, [workOrderId])).toBe(1)
+  })
+
+  it('an issue waits for a cancel in flight, then sees it and is refused', async () => {
+    const workOrderId = await released()
+    const cancel = held(office(), (tx) => tx.$executeRawUnsafe(cancelSql, workOrderId))
+    await cancel.did
+    const issued = insert(floor(), 'StockMove', liningMove('ISSUE', workOrderId))
+    await untilWaiting(1, 'the issue')
+    cancel.release()
+    await cancel.transaction
+    await expect(issued).rejects.toThrow(/is CANCELLED; stock is issued only to a RELEASED or IN_PROGRESS work order/)
+    expect(await count(`SELECT count(*) AS n FROM "StockMove" WHERE "workOrderId" = $1`, [workOrderId])).toBe(0)
   })
 })

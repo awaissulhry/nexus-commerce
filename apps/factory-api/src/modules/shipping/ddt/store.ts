@@ -160,10 +160,26 @@ export async function readDdt(db: CommandTx, ddtId: string): Promise<DdtRow | nu
   return db.ddt.findUnique({ where: { id: ddtId }, select: DDT_SELECT })
 }
 
-/** The DDT's stored PDF (its first FISCAL_ARCHIVE file), or null while it has none. */
+/**
+ * The DDTs' stored PDFs: per DDT its FIRST available FISCAL_ARCHIVE file (the oldest: createdAt, then id). The first
+ * stored print is the document; a later print of the same DDT never replaces it. The record, the download and the list
+ * all choose with this one ordering. Only the DDT step writes these files (platform/files/owned.ts: Ddt, FISCAL_ARCHIVE).
+ */
+export async function pdfFileIdsOf(db: CommandTx, ddtIds: readonly string[]): Promise<Map<string, string>> {
+  if (ddtIds.length === 0) return new Map()
+  const files = await db.storedFile.findMany({
+    where: { recordType: 'Ddt', recordId: { in: [...ddtIds] }, kind: 'FISCAL_ARCHIVE', status: 'AVAILABLE' },
+    select: { id: true, recordId: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  })
+  const first = new Map<string, string>()
+  for (const file of files) if (!first.has(file.recordId)) first.set(file.recordId, file.id)
+  return first
+}
+
+/** The DDT's stored PDF (its first FISCAL_ARCHIVE file, pdfFileIdsOf), or null while it has none. */
 export async function pdfFileIdOf(db: CommandTx, ddtId: string): Promise<string | null> {
-  const file = await db.storedFile.findFirst({ where: { recordType: 'Ddt', recordId: ddtId, kind: 'FISCAL_ARCHIVE', status: 'AVAILABLE' }, select: { id: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
-  return file?.id ?? null
+  return (await pdfFileIdsOf(db, [ddtId])).get(ddtId) ?? null
 }
 
 const record = (value: unknown): Record<string, unknown> => (value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {})

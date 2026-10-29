@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { defineEvent } from '../events/define'
+import { DOCUMENT_KINDS } from './compliance/rules'
 import { MATERIAL_STATUSES } from './materials/rules'
 import { OPERATION_STATUSES } from './routing/operations'
 import { REVISION_STATUSES } from './styles/revisions'
@@ -19,6 +20,7 @@ const styleLive = { permission: 'product.styles.view', fields: ['styleId', 'code
 const scaleLive = { permission: 'product.styles.view', fields: ['sizeScaleId', 'code'] } as const
 const revisionLive = { permission: 'product.styles.view', fields: ['styleId', 'code', 'revisionId', 'revision'] } as const
 const operationLive = { permission: 'product.routing.view', fields: ['operationId', 'code'] } as const
+const complianceLive = { permission: 'compliance.certificates.view', fields: ['styleId', 'code', 'documentId', 'kind', 'language', 'revision'] } as const
 
 export const events = [
   defineEvent({
@@ -166,5 +168,40 @@ export const events = [
     description: 'A size scale changed: its name or code, its sizes (added, edited, reordered, archived, restored) or its status.',
     payload: z.strictObject({ sizeScaleId: z.uuid(), code: z.string() }),
     live: scaleLive,
+  }),
+  // The style's signed DoC and user information leaflet (B-W1-20; LOG-020; Reg. (EU) 2016/425 art. 8(7)(8), art. 15):
+  // the style's Compliance tab, and the shipping step that sends the document with the goods (B-W1-49). Ids, the kind,
+  // the language and the style revision number only.
+  defineEvent({
+    type: 'style.compliance_document_issued',
+    context: 'product',
+    description: "A style revision's signed Declaration of Conformity or user information leaflet in one language was confirmed and issued; the older revisions' ones in that language are superseded.",
+    payload: z.strictObject({
+      styleId: z.uuid(),
+      code: z.string(),
+      documentId: z.uuid(),
+      kind: z.enum(DOCUMENT_KINDS),
+      language: z.string(),
+      revision: z.number().int().min(1),
+      fileId: z.uuid(),
+      supersededDocumentIds: z.array(z.uuid()),
+    }),
+    live: complianceLive,
+  }),
+  defineEvent({
+    type: 'style.compliance_document_replaced',
+    context: 'product',
+    description: 'A new version of an issued Declaration of Conformity or user information leaflet was confirmed; the earlier file is kept.',
+    payload: z.strictObject({
+      styleId: z.uuid(),
+      code: z.string(),
+      documentId: z.uuid(),
+      kind: z.enum(DOCUMENT_KINDS),
+      language: z.string(),
+      revision: z.number().int().min(1),
+      fileId: z.uuid(),
+      previousFileId: z.uuid().nullable(),
+    }),
+    live: complianceLive,
   }),
 ] as const
