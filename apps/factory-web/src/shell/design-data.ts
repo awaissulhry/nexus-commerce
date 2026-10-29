@@ -48,6 +48,7 @@ export const OWNER_PERMISSIONS = [
   'imports.view',
   'audit.read',
   'integrations.view',
+  'parties.view',
 ]
 
 /** A sales person: Home's Today and mail to sort, nothing of Admin. */

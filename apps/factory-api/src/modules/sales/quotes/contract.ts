@@ -475,6 +475,8 @@ export const versionsContract = defineContract({
   params: quoteParams,
   response: {
     200: output({
+      /** Who made and who sent the versions, by name. */
+      people: z.array(output({ id: id(), name: z.string() })),
       versions: z.array(
         output({
           id: id(),
@@ -608,6 +610,9 @@ export const linkQuoteView = output({
 
 export const openLinkQuoteContract = defineContract({ response: { 200: linkQuoteView } })
 
+/** The version's PDF as sent (application/pdf, inline): the link page's viewer. */
+export const linkDocumentContract = defineContract({ response: {} })
+
 const answerFields = {
   /** The version the page showed: the answer is for it only. */
   versionId: id(),
@@ -628,4 +633,66 @@ export const declineLinkQuoteContract = defineContract({ body: input(answerField
 export const newLinkQuoteContract = defineContract({
   body: input({ note: text(MAX_TEXT.reason).nullish() }),
   response: { 200: output({ asked: z.boolean(), message: z.string() }) },
+})
+
+// ---- B-W1-21 part 2 (the screens): the approvals queue, the next number, the PDF before it is sent --------------------
+
+const personRef = output({ id: id(), name: z.string().nullable(), you: z.boolean() })
+
+export const approvalsContract = defineContract({
+  querystring: input({
+    /** waiting: what the caller may decide; mine: the caller's own requests; decided: the last 7 days; all. */
+    view: z.enum(['waiting', 'mine', 'decided', 'all']).default('waiting'),
+    /** One quote's rounds. */
+    quoteId: id().optional(),
+  }),
+  response: {
+    200: output({
+      approvals: z.array(
+        output({
+          id: id(),
+          quoteId: id(),
+          number: z.string(),
+          companyId: id(),
+          partyId: id(),
+          partyName: z.string(),
+          quoteVersion: z.number().int(),
+          revision: z.number().int(),
+          /** The request is about the quote's current version. */
+          current: z.boolean(),
+          status: z.enum(APPROVAL_STATUSES),
+          reasons: z.array(z.enum(APPROVAL_REASONS)),
+          requestNote: z.string().nullable(),
+          askedBy: personRef.nullable(),
+          askedAt: instant(),
+          decidedBy: personRef.nullable(),
+          decidedAt: instant().nullable(),
+          decisionNote: z.string().nullable(),
+          currency: z.string(),
+          netAmount: money.price(z.number().int()),
+          grossAmount: money.price(z.number().int()),
+          marginPct: money.margin(z.string().nullable()),
+          marginFloorPct: money.margin(z.string().nullable()),
+          validUntil: z.string().nullable(),
+          /** The caller may decide it now; else `held` says why (before the click). */
+          mayDecide: z.boolean(),
+          held: z.enum(['OWN_REQUEST', 'NO_RIGHT', 'NEEDS_MARGIN', 'NOT_WAITING']).nullable(),
+        }),
+      ),
+      /** The tiles: each the total of its view. */
+      counts: output({ waiting: z.number().int(), mine: z.number().int(), decided: z.number().int(), capped: z.boolean() }),
+      at: instant(),
+    }),
+  },
+})
+
+export const nextNumberContract = defineContract({
+  querystring: input({ companyId: id() }),
+  response: { 200: output({ number: z.string().nullable() }) },
+})
+
+export const previewContract = defineContract({
+  params: quoteParams,
+  querystring: input({ language: z.enum(['it', 'en']).optional() }),
+  response: {},
 })

@@ -39,7 +39,11 @@ export async function listVersions(caller: CommandCaller, quoteId: string) {
     // A link answers the newest version sent at or before it was made.
     const sentAsc = versions.filter((version) => version.sentAt !== null).sort((a, b) => a.revision - b.revision)
     const versionOfLinkAt = (createdAt: string) => sentAsc.filter((version) => version.sentAt!.getTime() <= Date.parse(createdAt)).at(-1)?.id ?? null
+    // Who made and who sent each version, by name (the Versions tab says "Made by …", "Sent by …").
+    const peopleIds = [...new Set(versions.flatMap((version) => [version.createdById, version.sentById]).filter((id): id is string => id !== null))]
+    const people = peopleIds.length > 0 ? await client.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true }, orderBy: { id: 'asc' } }) : []
     return {
+      people: people.map((user) => ({ id: user.id, name: user.displayName })),
       versions: versions.map((version) => {
         const file = files.find((row) => row.sha256 === version.documentSha256) ?? null
         const acceptance = acceptances.find((row) => row.versionId === version.id) ?? null

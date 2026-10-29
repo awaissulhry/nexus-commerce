@@ -8,7 +8,7 @@ import type { OfficeAreaNav } from '../../shell/nav/office-nav'
  * Labels are message keys (`shell:` = messages/<locale>/shell.json).
  */
 export const officeArea: OfficeAreaNav = {
-  order: 9,
+  order: 10,
   area: {
     id: 'compliance',
     label: 'shell:nav.compliance.area',

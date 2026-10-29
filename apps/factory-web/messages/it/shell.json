@@ -6,24 +6,47 @@
     "home": {
       "area": "Home",
       "today": "Oggi",
+      "approvals": "Approvazioni",
       "mailToSort": "Posta da smistare"
+    },
+    "products": {
+      "area": "Prodotti",
+      "main": "Principali",
+      "styles": "Modelli"
+    },
+    "sales": {
+      "area": "Vendite",
+      "main": "Principali",
+      "customers": "Clienti",
+      "quotes": "Preventivi"
+    },
+    "purchasing": {
+      "area": "Acquisti",
+      "main": "Principali",
+      "suppliers": "Fornitori"
     },
     "admin": {
       "area": "Amministrazione",
+      "overview": "Tutte le impostazioni",
       "organisation": "Organizzazione",
-      "companies": "Società",
-      "sites": "Sedi e struttura",
-      "devices": "Dispositivi",
+      "companies": "Società e stabilimenti",
+      "devices": "Dispositivi e stampanti",
       "access": "Accessi",
       "users": "Utenti",
-      "roles": "Ruoli",
+      "roles": "Ruoli e permessi",
       "platform": "Piattaforma",
-      "numbering": "Numerazioni",
-      "email": "Email e indirizzi",
+      "documents": "Documenti e numerazioni",
       "languages": "Lingue e formati",
-      "imports": "Importazione",
       "audit": "Registro attività",
-      "connections": "Collegamenti"
+      "connections": "Connessioni e API",
+      "data": "Dati",
+      "import": "Importa ed esporta"
+    },
+    "production": {
+      "area": "Produzione",
+      "main": "Principali",
+      "floor": "Reparto ora",
+      "workOrders": "Ordini di produzione"
     },
     "quality": {
       "area": "Qualità",

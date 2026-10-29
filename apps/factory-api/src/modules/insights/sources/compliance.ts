@@ -44,6 +44,7 @@ export const registerDuty: Source = async ({ caller, viewer }) =>
         ...registerDutyWords({ reference: entry.reference, kind: KIND_WORDS[entry.kind], style: styles.get(entry.styleId) ?? 'a style', duties: open }),
         due: null,
         since: entry.reportedAt,
+        condition: open,
         why: (personId) => (ownerId !== null && ownerId === personId ? phrase('why.REGISTER_DUTY.follow') : null),
       })
     }
@@ -87,6 +88,7 @@ export const styleHold: Source = async ({ caller, viewer }) => {
       ...styleComplianceWords({ style: style.code, checks, steps: [...new Set(compliance.blockers.flatMap((blocker) => blocker.blocks))], orders, workOrders }),
       due: null,
       since: compliance.revision?.releasedAt ? new Date(compliance.revision.releasedAt) : style.createdAt,
+      condition: checks,
       act: complianceActs(checks, fixers),
     })
   }

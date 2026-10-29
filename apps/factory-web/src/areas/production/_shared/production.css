@@ -1,0 +1,516 @@
+/*
+ * Production (SCR-069 work orders, SCR-070 … SCR-072 the work order studio, SCR-073 Floor now) LAYOUT: the page head,
+ * the record's band and tabs, the body with the optional thread beside it, card grids, the size run, the hides' area
+ * bars, the floor's operation strips. The controls are the design system's; this file only places them, with semantic
+ * tokens (no colours of its own). No page max-width (Owner rule 2026-10-29): pages fill the shell's main area.
+ */
+.fw-pr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pr-head-text,
+.fw-pr-inline,
+.fw-pr-actions,
+.fw-pr-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pr-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-pr-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-pr-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pr-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+/* ---- list cells ---- */
+.fw-pr-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-pr-cell-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-pr-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-pr-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+
+.fw-pr-link:hover,
+.fw-pr-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-pr-progress {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  width: 100%;
+}
+
+.fw-pr-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+/* ---- the record ---- */
+.fw-pr-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pr-title {
+  overflow-wrap: anywhere;
+}
+
+.fw-pr-title-sub {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-muted);
+}
+
+.fw-pr-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pr-keys {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: var(--nds-space-4);
+}
+
+.fw-pr-tablabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-pr-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--nds-warning);
+}
+
+.fw-pr-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pr-body.has-dock {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+}
+
+@media (max-width: 1279px) {
+  .fw-pr-body.has-dock {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-pr-dock {
+    display: none;
+  }
+}
+
+.fw-pr-main,
+.fw-pr-stack,
+.fw-pr-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pr-dialog {
+  gap: var(--nds-space-12);
+}
+
+/* Cards side by side on a wide screen (the width is used: Owner rule 2026-10-29), one column below. */
+.fw-pr-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pr-cards > *,
+.fw-pr-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10, var(--nds-space-8));
+  min-width: 0;
+}
+
+@media (min-width: 1600px) {
+  .fw-pr-cards--wide {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
+
+.fw-pr-h2,
+.fw-pr-h3 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pr-h2 {
+  font-size: var(--nds-font-size-md, var(--nds-font-size-sm));
+}
+
+.fw-pr-h3 {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pr-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pr-checks,
+.fw-pr-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-pr-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pr-check-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-pr-check-problems {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  color: var(--nds-text-muted);
+}
+
+.fw-pr-ico {
+  flex: none;
+  margin-top: 2px;
+  color: var(--nds-text-muted);
+}
+
+.fw-pr-ico.is-ok {
+  color: var(--nds-success);
+}
+
+.fw-pr-ico.is-blocked {
+  color: var(--nds-danger);
+}
+
+.fw-pr-ico.is-overridden {
+  color: var(--nds-warning);
+}
+
+.fw-pr-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--nds-space-10, var(--nds-space-8)) var(--nds-space-16);
+}
+
+.fw-pr-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-pr-step-label {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-pr-step-value {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* The size grid scrolls sideways in its own DS box. A "not offered" cell's visually hidden words are positioned against
+   the nearest positioned ancestor, outside that box: this box is their containing block and clips them (no scrollbar). */
+.fw-pr-gridbox {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.fw-pr-table {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+/* ---- cutting: each hide's area bar (cut + waste + returned + left = issued) ---- */
+.fw-pr-hides {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-pr-hide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  padding: var(--nds-space-10, var(--nds-space-8)) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+
+.fw-pr-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--nds-surface-sunken);
+}
+
+.fw-pr-bar > span {
+  display: block;
+  height: 100%;
+}
+
+.fw-pr-bar .is-cut {
+  background: var(--nds-primary);
+}
+
+.fw-pr-bar .is-waste {
+  background: var(--nds-danger);
+}
+
+.fw-pr-bar .is-returned {
+  background: var(--nds-success);
+}
+
+.fw-pr-bar .is-left {
+  background: var(--nds-border-strong);
+}
+
+.fw-pr-legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-pr-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-pr-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.fw-pr-swatch.is-cut {
+  background: var(--nds-primary);
+}
+
+.fw-pr-swatch.is-waste {
+  background: var(--nds-danger);
+}
+
+.fw-pr-swatch.is-returned {
+  background: var(--nds-success);
+}
+
+.fw-pr-swatch.is-left {
+  background: var(--nds-border-strong);
+}
+
+/* ---- Floor now: one row per work order, its operations as a strip ---- */
+.fw-pr-floor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10, var(--nds-space-8));
+  min-width: 0;
+}
+
+.fw-pr-floor-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  align-items: start;
+  padding: var(--nds-space-10, var(--nds-space-8)) 0;
+  border-top: 1px solid var(--nds-border-subtle, var(--nds-border));
+  min-width: 0;
+}
+
+.fw-pr-floor-row:first-child {
+  border-top: 0;
+}
+
+@media (max-width: 759px) {
+  .fw-pr-floor-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pr-ops {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pr-op {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--nds-space-6) var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  color: inherit;
+  text-decoration: none;
+  font-size: var(--nds-font-size-xs);
+}
+
+a.fw-pr-op:hover,
+a.fw-pr-op:focus-visible {
+  border-color: var(--nds-border-strong);
+  background: var(--nds-surface-hover);
+}
+
+.fw-pr-op.is-pile {
+  border-color: var(--nds-warning-border, var(--nds-warning));
+}
+
+.fw-pr-op-name {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-pr-op-figures {
+  color: var(--nds-text-muted);
+}
+
+.fw-pr-empty-card {
+  padding: var(--nds-space-8) 0;
+}
+
+/* Choice groups (the new work order's order, style and lines; the reprint reasons): no browser fieldset box. */
+fieldset.fw-pr-list {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+fieldset.fw-pr-list > legend {
+  margin-bottom: var(--nds-space-6);
+  padding: 0;
+}
+
+.fw-pr-op-item {
+  display: flex;
+  min-width: 0;
+}
+
+.fw-pr-op-item > .fw-pr-op {
+  flex: 1;
+}
+
+@media (max-width: 759px) {
+  .fw-pr-keys {
+    display: none;
+  }
+}

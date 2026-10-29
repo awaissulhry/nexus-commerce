@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { heldGrains, type Grain } from '../auth/grains/grains'
 import { EMAIL_TRIAGE } from '../auth/permissions/catalogue'
 import { REGISTER_MANAGE, REGISTER_VIEW } from '../compliance/register/permissions'
@@ -305,6 +306,26 @@ export interface AttentionCandidate {
   readonly amounts?: CandidateAmounts | null
   /** Tells apart rows of one record (a customer's DDTs per company and month). */
   readonly subKey?: string
+  /**
+   * The codes that make the row's condition beside its state, due date and since (a work order's blocked checks, an
+   * entry's open duties): a resolved row comes back when they change (conditionOf).
+   */
+  readonly condition?: readonly string[]
+}
+
+/** The row's key: `<kind>:<record id>[:<sub key>]`, stable while the row needs a person. */
+export const rowKeyOf = (candidate: Pick<AttentionCandidate, 'kind' | 'record' | 'subKey'>): string =>
+  `${candidate.kind}:${candidate.record.id}${candidate.subKey ? `:${candidate.subKey}` : ''}`
+
+/**
+ * The row's CONDITION: a fingerprint of what makes it need a person now — its state, due date, since when it waits and
+ * the codes of its condition. What a person does about a row (resolve with a note, acknowledge) holds for its condition:
+ * a resolved row leaves Today until its condition changes (a promise date moved, a lot blocked again, another check
+ * failing), and comes back then. 32 hex characters of SHA-256.
+ */
+export function conditionOf(candidate: Pick<AttentionCandidate, 'kind' | 'state' | 'due' | 'since' | 'condition'>): string {
+  const material = JSON.stringify([candidate.kind, candidate.state, candidate.due ?? null, candidate.since.toISOString(), [...(candidate.condition ?? [])].sort()])
+  return createHash('sha256').update(material).digest('hex').slice(0, 32)
 }
 
 /** What decides whether a row is the viewer's (a source may ask it before an expensive read). */
@@ -363,6 +384,8 @@ const refOf = (value: Phrase): PhraseRef => ({ key: value.key, params: value.par
 export interface AttentionItem {
   /** `<kind>:<record id>[:<sub key>]`: stable while the row needs attention. */
   readonly key: string
+  /** Its condition's fingerprint (conditionOf): what an action on the row holds for. */
+  readonly condition: string
   readonly kind: AttentionKind
   readonly state: string
   readonly category: Category
@@ -439,7 +462,8 @@ export function presentItem(viewer: Viewer, candidate: AttentionCandidate, why: 
   const sentence = candidate.sentence.text
   const days = candidate.due === null ? null : daysFrom(viewer.today, candidate.due)
   return {
-    key: `${candidate.kind}:${candidate.record.id}${candidate.subKey ? `:${candidate.subKey}` : ''}`,
+    key: rowKeyOf(candidate),
+    condition: conditionOf(candidate),
     kind: candidate.kind,
     state: candidate.state,
     category: kindRule.category,
@@ -533,7 +557,7 @@ export function parseCursor(cursor: string): RankKey | null {
  * One page of ranked rows after the cursor (rows ranked after the last one shown, so a row decided meanwhile never shifts
  * the next page), with the cursor of the next page.
  */
-export function pageOf(items: readonly AttentionItem[], cursor: RankKey | null, limit: number): { readonly items: AttentionItem[]; readonly nextCursor: string | null } {
+export function pageOf<Item extends AttentionItem>(items: readonly Item[], cursor: RankKey | null, limit: number): { readonly items: Item[]; readonly nextCursor: string | null } {
   const after = cursor === null ? items : items.filter((item) => compareRankKeys(rankKeyOf(item), cursor) > 0)
   const page = after.slice(0, limit)
   return { items: page, nextCursor: after.length > limit ? cursorAfter(page[page.length - 1]!) : null }
@@ -565,7 +589,11 @@ export function countsOf(items: readonly AttentionItem[], tileKinds: readonly At
   }
 }
 
-/** Every event any of these kinds refreshes on, sorted (the web's GET /live filter for Today). */
+/** What people do about an alert (insights/actions): Today is read again after one, for everyone who sees the row. */
+export const ACTION_EVENTS: readonly EventType[] = Object.freeze(['attention.assigned', 'attention.resolved', 'attention.acknowledged'])
+
+/** Every event any of these kinds refreshes on, sorted (the web's GET /live filter for Today); with alerts, the actions'. */
 export function liveEventsOf(kinds: readonly AttentionKind[]): EventType[] {
-  return [...new Set(kinds.flatMap((kind) => KIND_RULES[kind].live))].sort()
+  const actions = kinds.some((kind) => KIND_RULES[kind].category === 'ALERT') ? ACTION_EVENTS : []
+  return [...new Set([...kinds.flatMap((kind) => KIND_RULES[kind].live), ...actions])].sort()
 }

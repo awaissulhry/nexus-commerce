@@ -43,6 +43,7 @@ export const workOrderHeld: Source = async ({ caller, viewer }) => {
         ...workOrderHeldWords({ number: row.number, style: basics.style.code, checks: blocked, orders: basics.orders.map((order) => order.number) }),
         due: dueDate,
         since: row.createdAt,
+        condition: blocked,
       })
     }
     return { kind: 'WORK_ORDER_HELD', candidates, complete: complete && mine.length <= CHECK_LIMIT }

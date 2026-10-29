@@ -1,0 +1,1219 @@
+{
+  "common": {
+    "back": "Back",
+    "close": "Close",
+    "dismiss": "Dismiss",
+    "retry": "Try again",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "status": {
+    "DRAFT": "Draft",
+    "ACTIVE": "Active",
+    "ARCHIVED": "Archived"
+  },
+  "statusMeans": {
+    "DRAFT": "Not released yet: it cannot be ordered or produced.",
+    "ACTIVE": "A released revision: it can be quoted, ordered and produced.",
+    "ARCHIVED": "Out of new use: open orders keep it; never deleted."
+  },
+  "revisionStatus": {
+    "DRAFT": "Draft",
+    "RELEASED": "Released",
+    "OBSOLETE": "Obsolete"
+  },
+  "masterStatus": {
+    "ACTIVE": "Active",
+    "ARCHIVED": "Archived"
+  },
+  "productType": {
+    "JACKET": "Jacket",
+    "TROUSERS": "Trousers",
+    "SUIT": "Suit",
+    "GLOVES": "Gloves",
+    "VEST": "Vest",
+    "OTHER": "Other"
+  },
+  "tracking": {
+    "LOT": "Batch number on every label (PPE: Reg. 2016/425 art. 8(5))",
+    "NONE": "None (not PPE)"
+  },
+  "ppe": {
+    "question": "Does it have impact protectors or abrasion protection for riders?",
+    "category": {
+      "NOT_PPE": "No — not PPE",
+      "CATEGORY_I": "Category I — minimal risks only",
+      "CATEGORY_II": "Yes — Category II PPE",
+      "CATEGORY_III": "Category III — mortal or irreversible risks"
+    },
+    "why": {
+      "NOT_PPE": "Fashion garment: no certificate, no declaration of conformity.",
+      "CATEGORY_I": "Self-certified; rider garments and gloves are not Category I.",
+      "CATEGORY_II": "Protective rider garment or glove (EN 17092, EN 13594): a notified-body certificate is needed.",
+      "CATEGORY_III": "Certificate and production checks by the notified body."
+    },
+    "short": {
+      "NOT_PPE": "Not PPE",
+      "CATEGORY_I": "Cat. I",
+      "CATEGORY_II": "Cat. II",
+      "CATEGORY_III": "Cat. III"
+    },
+    "standard": "Standard and edition",
+    "standardHint": "EN 17092: the part sets the class (2 = AAA … 6 = C).",
+    "standardHintGloves": "Rider gloves are made to EN 13594.",
+    "standardOption": "{standard} — class {class}",
+    "noStandard": "Not chosen yet",
+    "class": "Class",
+    "classByPart": "Class {class} (set by the part)",
+    "classAfterStandard": "Comes with the standard",
+    "classIs": "class {class}",
+    "level": "Level",
+    "noLevel": "Not chosen yet",
+    "levelName": {
+      "1": "Level 1",
+      "2": "Level 2",
+      "1KP": "Level 1 with knuckle protection",
+      "2KP": "Level 2 with knuckle protection"
+    }
+  },
+  "tab": {
+    "overview": "Overview",
+    "variants": "Colourways & sizes",
+    "bom": "Materials (BOM)",
+    "routing": "Operations",
+    "cost": "Cost",
+    "compliance": "Compliance",
+    "activity": "Activity",
+    "problems_one": "{count} problem before release",
+    "problems_other": "{count} problems before release"
+  },
+  "record": {
+    "back": "Styles",
+    "backToList": "Back to the styles",
+    "title": "Style",
+    "loading": "Opening the style…",
+    "state": {
+      "not_found": {
+        "title": "This style does not exist",
+        "body": "It may belong to another company, or the link is wrong."
+      },
+      "forbidden": {
+        "title": "You do not have access to this style",
+        "body": "Your role does not read styles of this company. The product office or the owner can give access."
+      },
+      "error": {
+        "title": "The style could not be opened"
+      }
+    },
+    "tabsLabel": "Parts of the style",
+    "viewing": "Viewing",
+    "revisionPicker": "Revision in view",
+    "revisionOption": "Rev {revision} · {status}",
+    "noRevision": "No revision yet",
+    "releasedIs": "Rev {revision} is the released one",
+    "thingsBefore_one": "{count} thing before release",
+    "thingsBefore_other": "{count} things before release",
+    "readyToRelease": "Ready to release",
+    "dock": "Thread",
+    "dockHint": "Show the thread beside the tab (⌘J)",
+    "dockLabel": "Thread of the style",
+    "more": "More actions",
+    "noPanels": "The thread opens here once the style is loaded.",
+    "changed": "Someone else changed this style at {time}.",
+    "reload": "Reload",
+    "archivedBanner": "Archived: read only. Reactivate it (⋯) to change it.",
+    "frozenReleased": "Revision {revision} is released and frozen: work orders use it exactly as it is.",
+    "frozenObsolete": "Revision {revision} is obsolete: kept for the record, no longer used.",
+    "goToDraft": "Go to revision {revision} (draft)"
+  },
+  "action": {
+    "release": "Release revision {revision}",
+    "startRevision": "Start revision {revision}",
+    "abandon": "Abandon draft revision {revision}…",
+    "archive": "Archive style…",
+    "reactivate": "Reactivate style",
+    "copyCode": "Copy code",
+    "keys": "Keyboard shortcuts"
+  },
+  "save": {
+    "saving": "Saving…",
+    "saved": "Saved {time}",
+    "failed": "Not saved"
+  },
+  "held": {
+    "busy": "Wait: the last change is still being saved.",
+    "noManage": "Your role can view this style, not change it.",
+    "noRelease": "Your role does not release revisions.",
+    "archived": "The style is archived: reactivate it first.",
+    "draftOpen": "Revision {revision} is still a draft: release or abandon it first.",
+    "notDraft": "Only a draft revision is released.",
+    "noRevision": "The style has no revision yet: start revision 1.",
+    "checking": "The release check is still being read.",
+    "blockers_one": "{count} thing to fix first (r opens the check)",
+    "blockers_other": "{count} things to fix first (r opens the check)",
+    "long": "At most 500 characters."
+  },
+  "problem": {
+    "read": {
+      "signed_out": "Your session ended: sign in again.",
+      "forbidden": "Your role does not read this.",
+      "not_found": "It is no longer there.",
+      "unavailable": "The factory server did not answer: try again in a moment.",
+      "rate_limited": "Too many requests: wait a moment.",
+      "contract": "The server answered in a form this page does not know: reload the page.",
+      "internal": "Something went wrong while reading: try again."
+    },
+    "write": {
+      "moved": "Someone else changed it meanwhile: it was read again, check it and do it again.",
+      "state": "Its state no longer allows this: it was read again.",
+      "blocked": "The release was refused: the check below says what to fix.",
+      "codeTaken": "This code is already used by another record: choose another.",
+      "invalid": "The server refused a value: check the marked fields.",
+      "stepUp": "Confirm it is you (authenticator code) and do it again.",
+      "signed_out": "Your session ended: sign in again. Nothing was saved.",
+      "forbidden": "Your role does not allow this change.",
+      "not_found": "It is no longer there: the page was read again.",
+      "rate_limited": "Too many changes at once: wait a moment and do it again.",
+      "unavailable": "The factory server did not answer: nothing was saved, try again.",
+      "internal": "Something went wrong: nothing was saved, try again."
+    }
+  },
+  "notice": {
+    "saved": "Saved.",
+    "rangeSaved": "The size range is saved; the SKUs followed it.",
+    "colourwayAdded": "Colourway added.",
+    "colourwayArchived": "Colourway archived: its SKUs are off.",
+    "colourwayRestored": "Colourway restored: its SKUs in the range are back on.",
+    "generated_one": "{count} SKU made.",
+    "generated_other": "{count} SKUs made.",
+    "skusSaved_one": "{count} SKU saved.",
+    "skusSaved_other": "{count} SKUs saved.",
+    "released": "Revision {revision} is released: new work orders use it.",
+    "revisionStarted": "The new draft revision is open.",
+    "abandoned": "The draft revision is abandoned.",
+    "archived": "The style is archived.",
+    "archivedMany_one": "{count} style archived.",
+    "archivedMany_other": "{count} styles archived.",
+    "reactivated": "The style is reactivated.",
+    "lineAdded": "Material added to the BOM.",
+    "lineRemoved": "Line removed from the draft BOM.",
+    "stepsAdded_one": "{count} operation added.",
+    "stepsAdded_other": "{count} operations added.",
+    "stepRemoved": "Operation removed from the draft routing.",
+    "uploaded": "The signed file is uploaded and in force for the revision.",
+    "trackingSaved": "The garment numbering is saved.",
+    "labelNamed": "The revision names its garment label."
+  },
+  "identity": {
+    "title": "Identity",
+    "intro": "What the style is. Save with ⌘S.",
+    "readOnly": "You can view, not change.",
+    "readArchived": "Archived: read only.",
+    "code": "Code",
+    "codeHint": "1 to 24 capital letters or digits, with . _ - inside. SKUs start with it.",
+    "codeFrozen": "Fixed: the style has SKUs.",
+    "name": "Name",
+    "type": "Product type",
+    "season": "Season",
+    "seasonHint": "As FW27 or SS28.",
+    "brand": "Brand",
+    "brandHint": "A private-label style names the brand it is made for.",
+    "ownCollection": "Our own collection",
+    "mtm": "Made-to-measure allowed",
+    "mtmHint": "A measurement template is chosen with made-to-measure orders (W2a).",
+    "ppe": "PPE",
+    "tracking": "Garment tracking",
+    "description": "Description",
+    "descriptionHint": "Construction, materials, what makes it different.",
+    "unsaved_one": "{count} unsaved change",
+    "unsaved_other": "{count} unsaved changes",
+    "save": "Save",
+    "held": {
+      "name": "Type a name.",
+      "code": "The code is 1 to 24 capital letters or digits, with . _ - inside."
+    }
+  },
+  "warning": {
+    "title_one": "{count} thing this style still lacks",
+    "title_other": "{count} things this style still lacks",
+    "NO_SIZE_RANGE": "Choose the sizes it is made in: the SKUs are built from them.",
+    "NO_BASE_SIZE": "Choose the base (sample) size grading works from.",
+    "NO_COLOURWAY": "Add a colourway: orders, BOM colours and stock are per colourway.",
+    "SKUS_MISSING": "Some colour and size combinations have no SKU yet: generate the SKUs.",
+    "NO_PPE_STANDARD": "Name the standard it is made to: the label, the certificate and the declaration need it.",
+    "NO_PPE_CLASS": "Name the class it is made for: the label shows it.",
+    "NO_MEASUREMENT_TEMPLATE": "Made-to-measure is allowed without a measurement template yet.",
+    "fix": "Fix it"
+  },
+  "side": {
+    "label": "State, release check and revisions",
+    "state": "State",
+    "skus": "SKUs on",
+    "skusValue": "{skus} in {colourways} colourways",
+    "range": "Range",
+    "created": "Created",
+    "updated": "Updated",
+    "activity": "Thread and history",
+    "release": "Release check",
+    "coverage": "Certificate coverage",
+    "open": "Open",
+    "revisions": "Revisions"
+  },
+  "check": {
+    "noRevision": "No revision yet: start revision 1 to fill its BOM and routing.",
+    "noBomView": "Your role does not read the BOM, so the check is not shown.",
+    "released": "Revision {revision} is released: nothing to check.",
+    "obsolete": "Revision {revision} is obsolete.",
+    "checking": "Checking…",
+    "ready": "Revision {revision} passes the check: it can be released.",
+    "showMe": "Show me",
+    "fix": "Fix",
+    "more_one": "{count} more in the check",
+    "more_other": "{count} more in the check",
+    "open": "Open the check",
+    "complianceAfter_one": "After the release, {count} compliance point still stops production, labels or shipping.",
+    "complianceAfter_other": "After the release, {count} compliance points still stop production, labels or shipping.",
+    "seeCompliance": "See Compliance",
+    "inUse": "Rev {released} stays in use until rev {draft} is released."
+  },
+  "coverage": {
+    "covered_one": "{count} covered",
+    "covered_other": "{count} covered",
+    "expiring_one": "{count} expiring within 60 days",
+    "expiring_other": "{count} expiring within 60 days",
+    "notCoveredCount_one": "{count} not covered",
+    "notCoveredCount_other": "{count} not covered",
+    "ofOffered_one": "of {count} colour and size combination switched on",
+    "ofOffered_other": "of {count} colour and size combinations switched on",
+    "notPpe": "Not PPE: no certificate needed.",
+    "notRequired": "No notified-body certificate is required for this category."
+  },
+  "revisions": {
+    "none": "No revision yet.",
+    "col": {
+      "revision": "Revision",
+      "status": "Status",
+      "when": "Released or started"
+    },
+    "rev": "Rev {revision}"
+  },
+  "range": {
+    "title": "Size range",
+    "intro": "The scale, the sizes it is made in and the base size. The SKUs follow the range.",
+    "scale": "Size scale",
+    "scaleHint": "Scales are kept in Sizes & measurements.",
+    "scaleLocked": "Fixed: the style has SKUs.",
+    "chooseScale": "Choose a scale",
+    "base": "Base size",
+    "baseHint": "The sample size; quantities and grading start from it.",
+    "noBase": "Not chosen yet",
+    "baseMark": "base",
+    "sizes_one": "Sizes in the range: {count}",
+    "sizes_other": "Sizes in the range: {count}",
+    "noSizes": "Choose a scale to see its sizes.",
+    "effectTitle": "What Apply does",
+    "effectAdd_one": "Adds {sizes}: {count} new SKU, one per active colourway.",
+    "effectAdd_other": "Adds {sizes}: {count} new SKUs, one per active colourway.",
+    "effectAddPlain": "Adds {sizes}.",
+    "effectRemove_one": "Takes out {sizes}: {count} SKU switched off (kept, never deleted).",
+    "effectRemove_other": "Takes out {sizes}: {count} SKUs switched off (kept, never deleted).",
+    "effectRemovePlain": "Takes out {sizes}.",
+    "unsaved": "The range changed",
+    "apply": "Apply",
+    "held": {
+      "empty": "Choose at least one size.",
+      "base": "Choose the base size among the sizes of the range."
+    }
+  },
+  "measures": {
+    "title": "Body measures",
+    "intro": "From the scale: what each size fits (the size pictogram on the label).",
+    "none": "The scale has no body measures.",
+    "size": "Size"
+  },
+  "colourways": {
+    "title_one": "Colourways ({count})",
+    "title_other": "Colourways ({count})",
+    "intro": "Each colourway has its main colour from the library; archived ones keep their history.",
+    "add": "Add colourway",
+    "edit": "Edit",
+    "editOne": "Edit colourway {code}",
+    "archive": "Archive",
+    "archiveOne": "Archive colourway {code}",
+    "restore": "Restore",
+    "restoreOne": "Restore colourway {code}",
+    "empty": {
+      "title": "Add the first colourway",
+      "body": "Orders, BOM colours and stock are kept per colourway."
+    },
+    "col": {
+      "colourway": "Colourway",
+      "colour": "Main colour",
+      "skus": "SKUs on",
+      "status": "Status",
+      "actions": "Actions"
+    }
+  },
+  "colourway": {
+    "addTitle": "Add colourway",
+    "editTitle": "Colourway {code}",
+    "code": "Code",
+    "codeHint": "1 to 12 capital letters or digits, with . or _ inside (no -).",
+    "codeInUse": "Fixed: SKUs, BOM colours or orders name it.",
+    "name": "Name",
+    "colour": "Main colour",
+    "colourHint": "From the colour library.",
+    "colourNone": "The colour library could not be read.",
+    "noColour": "No library colour",
+    "description": "Contrast panels, stitching, logos",
+    "descriptionHint": "What differs from the other colourways.",
+    "addsSkus_one": "Adding it makes {count} SKU, one per size of the range.",
+    "addsSkus_other": "Adding it makes {count} SKUs, one per size of the range.",
+    "add": "Add colourway",
+    "save": "Save",
+    "held": {
+      "code": "The code is 1 to 12 capital letters or digits, with . or _ inside.",
+      "taken": "Another colourway of this style is {code}.",
+      "name": "Type a name."
+    }
+  },
+  "matrix": {
+    "title": "Colour × size SKUs",
+    "intro": "One SKU per colourway and size: switch a cell on or off, a whole colourway from its name, a whole size from its column; open a cell for its SKU and GTIN.",
+    "generate_one": "Generate {count} SKU",
+    "generate_other": "Generate {count} SKUs",
+    "generateNone": "Generate SKUs",
+    "nothingToGenerate": "Every switched-on cell has its SKU.",
+    "empty": {
+      "title": "No SKUs yet",
+      "body": "Add colourways and a size range to generate SKUs."
+    },
+    "colourway": "Colourway",
+    "toggleColumn": "Switch size {size} on or off in every colourway",
+    "toggleRow": "Switch every size of {code} on or off",
+    "cell": {
+      "on": "{colourway}, size {size}: SKU {sku} on",
+      "off": "{colourway}, size {size}: SKU {sku} off",
+      "none": "{colourway}, size {size}: no SKU yet",
+      "closed": "{colourway}, size {size}: colourway archived"
+    },
+    "notCovered": "not covered by a valid certificate",
+    "legend": {
+      "on": "On",
+      "off": "Off",
+      "none": "No SKU yet",
+      "notCovered": "Not covered by a valid certificate (blocks release, labels and shipping of the cell)"
+    },
+    "keys": {
+      "move": "Move between cells",
+      "cell": "Switch the cell on or off",
+      "row": "Switch the whole colourway",
+      "open": "Open the cell (SKU, GTIN, certificate)"
+    }
+  },
+  "sku": {
+    "title": "{colourway} · size {size}",
+    "code": "SKU",
+    "noneYet": "None yet",
+    "state": "State",
+    "stateIs": {
+      "on": "On: it can be ordered and made",
+      "off": "Off: kept, not offered",
+      "none": "No SKU yet: generate the SKUs",
+      "closed": "The colourway is archived"
+    },
+    "coverage": "Certificate",
+    "coverageUnknown": "Shown on the Compliance tab",
+    "certificate": "{number}, valid until {until}",
+    "generateFirst": "Generate the SKUs to make this one.",
+    "gtin": "GTIN (barcode)",
+    "gtinHint": "8, 12, 13 or 14 digits with the check digit; never reused.",
+    "gtinFormat": "A GTIN is 8, 12, 13 or 14 digits.",
+    "gtinSame": "Nothing changed.",
+    "saveGtin": "Save GTIN",
+    "switchOn": "Switch on",
+    "switchOff": "Switch off"
+  },
+  "generate": {
+    "title_one": "Generate {count} SKU",
+    "title_other": "Generate {count} SKUs",
+    "what": "A SKU for every switched-on colourway and size that has none:",
+    "pattern": "Each SKU is style-colourway-size, as {example}.",
+    "go_one": "Generate {count} SKU",
+    "go_other": "Generate {count} SKUs"
+  },
+  "release": {
+    "title": "Release revision {revision}",
+    "titlePlain": "Release",
+    "go": "Release revision {revision}",
+    "checkTitle": "Release check",
+    "okBom_one": "BOM complete: {count} line, quantities, colours per colourway and sizes",
+    "okBom_other": "BOM complete: {count} lines, quantities, colours per colourway and sizes",
+    "okRouting": "Routing: {steps} operations, {minutes} standard minutes, a scanned step",
+    "okRoutingPlain": "Routing has operations with minutes and a scanned step",
+    "warningPasses": "noted, does not stop the release",
+    "afterTitle": "Not part of the release, but it stops the work after it:",
+    "blocks": "stops {steps}",
+    "whatHappens": "What happens",
+    "becomes": "Revision {revision} becomes the one every new work order uses; its BOM, routing and label are frozen.",
+    "obsoletes": "Revision {revision} becomes obsolete: work orders already made from it keep it, quotes costed from it keep their price.",
+    "activates": "The style becomes Active: it can be quoted, ordered and produced.",
+    "frozen": "A later change is a new revision (Start revision).",
+    "note": "What changed (optional)",
+    "noteHint": "Kept with the revision and in the history."
+  },
+  "startRevision": {
+    "title": "Start revision {revision}?",
+    "copy": "Revision {from} is copied into a new draft revision {revision} (BOM, routing and label). Revision {from} stays in use until you release {revision}.",
+    "copyObsolete": "Revision {from} (obsolete) is copied into a new draft revision {revision}.",
+    "first": "Revision 1 starts empty: its BOM, routing and label are filled next.",
+    "note": "What will change (optional)",
+    "noteHint": "Kept with the revision."
+  },
+  "abandon": {
+    "title": "Abandon draft revision {revision}?",
+    "what": "Revision {revision} becomes obsolete: its BOM and routing are kept for the record, never used.",
+    "after": "You can start a new revision afterwards.",
+    "go": "Abandon the draft"
+  },
+  "archive": {
+    "title": "Archive {code}?",
+    "reach": "No new quotes or work orders can use it.",
+    "kept": "Open orders keep it; it is never deleted.",
+    "back": "Reactivate brings it back.",
+    "go": "Archive"
+  },
+  "dialog": {
+    "reason": "Reason (optional)",
+    "reasonHint": "Kept in the history."
+  },
+  "issue": {
+    "NO_LINES": "The BOM has no materials yet.",
+    "NO_SIZE_RANGE": "The style has no size range.",
+    "NO_ACTIVE_COLOURWAY": "The style has no active colourway.",
+    "MATERIAL_ARCHIVED": "Line {line}: the material is archived.",
+    "UNIT_NOT_CONVERTIBLE": "Line {line}: its unit does not convert to the material’s unit.",
+    "QUANTITY_NOT_POSITIVE": "Line {line}: the quantity must be above 0.",
+    "WASTAGE_OUT_OF_RANGE": "Line {line}: wastage is 0 to 60 %.",
+    "SIZE_QUANTITY_MISSING": "Line {line}: no quantity for size {size}.",
+    "SIZE_OUTSIDE_RANGE": "Line {line}: size {size} is not in the range.",
+    "SIZE_QUANTITIES_ALL_ZERO": "Line {line}: every size is 0.",
+    "COLOUR_MISSING": "Line {line}: no colour for colourway {colourway}.",
+    "COLOUR_ARCHIVED": "Line {line}: the colour for {colourway} is archived.",
+    "COLOUR_MISSING_LINE": "Line {line}: the material comes in colours: choose one, or make the line vary by colourway.",
+    "COLOUR_ARCHIVED_LINE": "Line {line}: its colour is archived.",
+    "LEATHER_WITHOUT_WASTAGE": "Line {line}: leather without wastage (the hide’s yield is in the wastage).",
+    "NO_PLANNED_HIDE_YIELD": "No planned hide yield for this revision.",
+    "LINE_OF_ARCHIVED_COLOURWAY": "Line {line}: only for an archived colourway.",
+    "NO_STEPS": "The routing has no operations yet.",
+    "MINUTES_NOT_POSITIVE": "Operation {step}: its minutes must be above 0.",
+    "NO_SCAN_POINT": "No operation is scanned: the floor needs at least one.",
+    "OPERATION_ARCHIVED": "Operation {step}: archived in the library (the routing keeps it).",
+    "LAST_STEP_NOT_SCANNED": "The last operation is not scanned: the batch is given at the last scanned one."
+  },
+  "complianceCheck": {
+    "REVISION": {
+      "BLOCKED": "No released revision",
+      "OK": "A released revision",
+      "NOT_REQUIRED": "A released revision: not required"
+    },
+    "LABEL_TEMPLATE": {
+      "BLOCKED": "No active garment label for the revision",
+      "OK": "An active garment label for the revision",
+      "NOT_REQUIRED": "An active garment label for the revision: not required"
+    },
+    "CERTIFICATE": {
+      "BLOCKED": "Some switched-on colour and size combinations are not covered by a valid certificate",
+      "OK": "Every switched-on colour and size covered by a valid certificate",
+      "NOT_REQUIRED": "Every switched-on colour and size covered by a valid certificate: not required"
+    },
+    "DECLARATION_OF_CONFORMITY": {
+      "BLOCKED": "The signed declaration of conformity of the revision is missing",
+      "OK": "The signed declaration of conformity of the revision",
+      "NOT_REQUIRED": "The signed declaration of conformity of the revision: not required"
+    },
+    "USER_INFORMATION": {
+      "BLOCKED": "The user information leaflet of the revision is missing",
+      "OK": "The user information leaflet of the revision",
+      "NOT_REQUIRED": "The user information leaflet of the revision: not required"
+    }
+  },
+  "blocks": {
+    "PRODUCTION": "production",
+    "LABELS": "labels",
+    "SHIPPING": "shipping"
+  },
+  "cellStatus": {
+    "COVERED": "Covered",
+    "NOT_COVERED": "Not covered",
+    "EXPIRED": "Certificate expired",
+    "SUSPENDED": "Certificate suspended",
+    "NOT_REQUIRED": "Not required"
+  },
+  "list": {
+    "intro": "Every style with its colourways and sizes, BOM, routing, cost and compliance in one studio.",
+    "updated": "Updated {time} · live",
+    "notYet": "Reading…",
+    "new": "New style",
+    "keyNew": "New style",
+    "tableLabel": "Styles",
+    "search": "Search code, name or season",
+    "viewFilter": "Saved filter",
+    "typeFilter": "Product type",
+    "ppeFilter": "PPE",
+    "allTypes": "Every type",
+    "allPpe": "Every PPE category",
+    "view": {
+      "open": "Open (draft and active)",
+      "drafts": "Drafts (never released)",
+      "waiting": "Waiting for release",
+      "active": "Active",
+      "archived": "Archived",
+      "all": "All"
+    },
+    "tile": {
+      "drafts": "Drafts",
+      "waiting": "Waiting for release",
+      "active": "Active",
+      "archived": "Archived"
+    },
+    "tileHint": {
+      "drafts": "Never released",
+      "waiting": "A draft revision is open",
+      "active": "Can be ordered and made",
+      "archived": "Out of new use"
+    },
+    "activeFilters": "Filters in use",
+    "removeFilter": "Remove this filter",
+    "chipSearch": "Search: {q}",
+    "clearAll": "Clear filters",
+    "count_one": "{count} style",
+    "count_other": "{count} styles",
+    "countMore": "{count} of {total}",
+    "more": "Show more",
+    "failed": "Could not load the styles",
+    "noMatch": {
+      "title": "No style matches these filters",
+      "body": "Clear a filter or search for something else."
+    },
+    "forbidden": {
+      "title": "You do not have access to styles",
+      "body": "The product office, production manager and owner roles read styles; ask the owner for one of them."
+    },
+    "empty": {
+      "title": "No styles yet",
+      "body": "Create the first style: its colourways, sizes, BOM and routing follow in its studio.",
+      "bodyView": "The product office creates the styles."
+    },
+    "emptyCreate": "Create the first style",
+    "col": {
+      "style": "Style",
+      "typeSeason": "Type",
+      "status": "Status",
+      "revision": "Revision",
+      "range": "Size range",
+      "skus": "SKUs on",
+      "ppe": "PPE",
+      "ready": "Complete",
+      "updated": "Updated",
+      "more": "Actions"
+    },
+    "rev": {
+      "released": "Rev {revision} released",
+      "draft": "Rev {revision} draft"
+    },
+    "noRevision": "No revision",
+    "base": "base {size}",
+    "colourwaysCount_one": "in {count} colourway",
+    "colourwaysCount_other": "in {count} colourways",
+    "noStandard": "standard not named",
+    "ready": "{done} of {of}",
+    "rowMenu": "Actions for {code}",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "openVariants": "Open colourways & sizes",
+    "bulk": {
+      "export_one": "Export {count} (CSV)",
+      "export_other": "Export {count} (CSV)",
+      "archive_one": "Archive {count}…",
+      "archive_other": "Archive {count}…",
+      "archiveHeld_one": "{count} of them is archived already: take it out of the selection.",
+      "archiveHeld_other": "{count} of them are archived already: take them out of the selection.",
+      "archiveTitle_one": "Archive {count} style?",
+      "archiveTitle_other": "Archive {count} styles?"
+    }
+  },
+  "completeness": {
+    "colourways": "Missing: colourways",
+    "sizeRange": "Missing: size range",
+    "baseSize": "Missing: base size",
+    "skus": "Missing: skus",
+    "releasedRevision": "Missing: released revision"
+  },
+  "csv": {
+    "code": "Code",
+    "name": "Name",
+    "type": "Type",
+    "season": "Season",
+    "brand": "Brand",
+    "status": "Status",
+    "released": "Released revision",
+    "draft": "Draft revision",
+    "sizes": "Sizes",
+    "base": "Base size",
+    "colourways": "Colourways",
+    "skus": "SKUs on",
+    "ppe": "PPE",
+    "class": "Class"
+  },
+  "newStyle": {
+    "title": "New style",
+    "intro": "A draft style with revision 1: its colourways, BOM and routing follow in its studio.",
+    "company": "Company",
+    "companyHint": "Every company: made by all the companies of the group.",
+    "everyCompany": "Every company",
+    "create": "Create draft style",
+    "after": "It opens on its Overview with revision 1 (draft).",
+    "noScales": "No size scale yet: a scale is created in Sizes & measurements first.",
+    "refused": "The server refused this value.",
+    "held": {
+      "code": "Type a code: 1 to 24 capital letters or digits, with . _ - inside.",
+      "name": "Type a name.",
+      "scale": "Choose a size scale."
+    }
+  },
+  "compliance": {
+    "upload": {
+      "notPdf": "A signed DoC or a leaflet is a PDF.",
+      "tooBig": "At most 20 MB.",
+      "empty": "The file is empty.",
+      "title": "Upload a signed PDF for revision {revision}",
+      "kind": "Document",
+      "languageHint": "Two letters: it, en, de…",
+      "number": "Declaration number (optional)",
+      "numberHint": "As printed on it; fixed once issued.",
+      "hint": "A PDF of at most 20 MB.",
+      "chosen": "Chosen: {name}",
+      "what": "It is checked, kept for 10 years and becomes the one in force for revision {revision}; an earlier version is kept.",
+      "go": "Upload",
+      "held": {
+        "file": "Choose the signed PDF.",
+        "language": "Type the language: two letters."
+      }
+    },
+    "loading": "Reading compliance…",
+    "failed": "Could not load compliance",
+    "checks": {
+      "title": "Checks",
+      "intro": "For revision {revision} ({status}): what stops production, labels or shipping.",
+      "noRevision": "The style has no revision yet.",
+      "allOk": "Nothing stops production, labels or shipping.",
+      "other": "Shown for revision {revision}: open it"
+    },
+    "class": {
+      "title": "PPE classification",
+      "change": "Change in Overview",
+      "category": "Category",
+      "part": "part {part}, edition {edition}",
+      "partClass": "The part sets class {class}",
+      "maker": "Legal maker",
+      "brand": "The brand (private label)",
+      "company": "Our company",
+      "certificate": "Notified-body certificate needed",
+      "documents": "Declaration and leaflet needed"
+    },
+    "coverage": {
+      "title": "Certificate coverage",
+      "intro": "Each colourway × size against the certificates, on {date}.",
+      "expired_one": "{count} expired",
+      "expired_other": "{count} expired",
+      "suspended_one": "{count} suspended",
+      "suspended_other": "{count} suspended",
+      "noColourways": "The style has no colourway: nothing to cover yet.",
+      "cell": "{colourway}, size {size}: {status}, valid until {until}",
+      "ok": "Covered",
+      "daysLeft_one": "{count} day left",
+      "daysLeft_other": "{count} days left",
+      "legend": "Green: covered · amber: expires within 60 days · red: not covered (blocks release, labels and shipping of the cell) · grey: switched off.",
+      "certificates": "Certificates of the style",
+      "certificate": "Certificate",
+      "body": "Notified body",
+      "valid": "Valid",
+      "covers": "Covers",
+      "coversValue_one": "Sizes {sizes} in {count} colourway",
+      "coversValue_other": "Sizes {sizes} in {count} colourways",
+      "cellTitle": "{colourway} · size {size}",
+      "notOffered": "switched off",
+      "blocks": "Not covered: its work orders are not released, its labels not printed and it is not shipped.",
+      "where": "Certificates are registered in Compliance › Certificates."
+    },
+    "docs": {
+      "title": "Declaration of conformity and leaflet",
+      "intro": "Signed PDFs for revision {revision}, in the languages its label prints ({languages}). Shipping needs them.",
+      "notRequired": "Not PPE: no declaration of conformity or leaflet is needed.",
+      "language": "Language",
+      "state": "State",
+      "document": "Document",
+      "actions": "Actions",
+      "pending": "An upload is waiting to be confirmed",
+      "issued": "issued {date}",
+      "versions_one": "{count} version kept",
+      "versions_other": "{count} versions kept",
+      "download": "Download",
+      "downloadOne": "Download the {language} file",
+      "upload": "Upload signed PDF",
+      "newVersion": "New version",
+      "uploadOne": "Upload the {language} file",
+      "uploadOther": "Upload in another language",
+      "noLanguages": "No language yet: the revision’s garment label names them.",
+      "held": {
+        "right": "Your role does not upload declarations (compliance and files rights)."
+      },
+      "maker": "Maker on the declaration: {name}, {address}."
+    },
+    "label": {
+      "title": "Garment label",
+      "intro": "The sewn-in label the revision prints at the final operation.",
+      "template": "Template",
+      "status": "Status",
+      "languages": "Languages",
+      "none": "Revision {revision} names no garment label yet: it blocks production and labels.",
+      "name": "Label of the draft revision",
+      "nameHint": "An active template of this style or for every style.",
+      "loading": "Reading the label templates…",
+      "noTemplates": "No active label template yet: make one in Compliance › Labels & marking.",
+      "noneChosen": "No label",
+      "save": "Name this label",
+      "where": "Templates are made and approved in Compliance › Labels & marking."
+    },
+    "tracking": {
+      "title": "Garment tracking",
+      "numbering": "Number on each garment’s label",
+      "save": "Save numbering",
+      "fixed": "It changes until the style’s work orders print a garment label, give a serial or release a garment; then the numbering of the garments that exist is fixed.",
+      "none": "Not PPE: no batch number is needed on the label."
+    }
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "release": "Open the release check",
+    "prevRevision": "Previous revision",
+    "nextRevision": "Next revision",
+    "thread": "Thread beside the tab",
+    "save": "Save the form",
+    "add": "Add a BOM line or operations",
+    "bomView": "Next BOM view",
+    "skuCell": "Switch a SKU cell",
+    "skuRow": "Switch a whole colourway",
+    "moveUp": "Move up (BOM line, operation)",
+    "moveDown": "Move down (BOM line, operation)",
+    "help": "These shortcuts"
+  },
+  "kind": {
+    "LEATHER": "Leather",
+    "TEXTILE": "Fabric",
+    "LINING": "Lining",
+    "MEMBRANE": "Membrane",
+    "PADDING": "Padding",
+    "THREAD": "Thread",
+    "TRIM": "Trim",
+    "HARDWARE": "Hardware",
+    "PROTECTOR": "Protector",
+    "LABEL": "Label",
+    "PACKAGING": "Packaging",
+    "COMPONENT": "Component"
+  },
+  "uom": {
+    "PCS": "pcs",
+    "PAIR": "pair",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hide",
+    "SIDE": "side",
+    "ROLL": "roll",
+    "CONE": "cone",
+    "BOX": "box"
+  },
+  "department": {
+    "CUTTING": "Cutting",
+    "SEWING": "Sewing",
+    "ASSEMBLY": "Assembly",
+    "FINISHING": "Finishing",
+    "INSPECTION": "Inspection",
+    "PACKING": "Packing",
+    "SUBCONTRACT": "Subcontract"
+  },
+  "category": {
+    "LEATHER": "Leather",
+    "MATERIALS": "Materials",
+    "TRIMS": "Trims and labels",
+    "PACKAGING": "Packaging"
+  },
+  "priceSource": {
+    "STANDARD": "Standard"
+  },
+  "certStatus": {
+    "DRAFT": "Draft",
+    "VALID": "Valid",
+    "SUSPENDED": "Suspended",
+    "WITHDRAWN": "Withdrawn",
+    "EXPIRED": "Expired"
+  },
+  "labelStatus": {
+    "DRAFT": "Draft",
+    "ACTIVE": "Active",
+    "RETIRED": "Retired"
+  },
+  "docKind": {
+    "DECLARATION_OF_CONFORMITY": "EU declaration of conformity (signed)",
+    "USER_INFORMATION": "User information leaflet"
+  },
+  "docState": {
+    "CURRENT": "Current (rev {revision})",
+    "OLDER_REVISION": "Only for rev {revision}",
+    "MISSING": "Missing"
+  },
+  "checkState": {
+    "OK": "OK",
+    "BLOCKED": "Blocks",
+    "NOT_REQUIRED": "Not required"
+  },
+  "cellShort": {
+    "COVERED": "OK",
+    "NOT_COVERED": "Not covered",
+    "EXPIRED": "Expired",
+    "SUSPENDED": "Suspended",
+    "NOT_REQUIRED": "Not required"
+  },
+  "gate": {
+    "no_certificate": "No certificate is registered for this style.",
+    "certificate_not_valid": "The certificate is not valid (suspended or withdrawn).",
+    "certificate_expired": "The certificate has expired.",
+    "certificate_not_yet_valid": "The certificate is not valid yet.",
+    "colourway_not_covered": "The certificate does not cover this colourway.",
+    "size_not_covered": "The certificate does not cover this size.",
+    "style_not_made_to_measure": "The style is not made to measure.",
+    "made_to_measure_not_allowed": "The certificate does not allow made-to-measure units.",
+    "body_measures_missing": "The size has no body measures.",
+    "measurement_missing": "A measurement is missing.",
+    "measurement_invalid": "A measurement is not valid.",
+    "measurement_outside": "A measurement is outside what the certificate covers."
+  },
+  "missing": {
+    "NO_BOM": "The revision has no BOM lines.",
+    "NO_ROUTING": "The revision has no operations.",
+    "BOM_QUANTITY": "Line {line}: no quantity for size {size}.",
+    "MATERIAL_UNIT": "Line {line}: its unit does not convert to the material’s unit.",
+    "MATERIAL_PRICE": "{material} has no standard cost: set it on the material.",
+    "MATERIAL_CURRENCY": "{material} is priced in another currency.",
+    "LABOUR_RATE": "No cost per minute for {kind}: Finance sets it.",
+    "LABOUR_CURRENCY": "The cost per minute for {kind} is in another currency."
+  },
+  "bom": {
+    "noRevision": {
+      "title": "No revision yet",
+      "body": "Start revision 1 (⋯ or Overview): its BOM, routing, cost and label go into it."
+    },
+    "loading": "Reading the BOM…",
+    "failed": "Could not load the BOM",
+    "check": {
+      "title_one": "{count} thing to fix in the BOM",
+      "title_other": "{count} things to fix in the BOM",
+      "intro": "Show me lands on the line or the cell."
+    },
+    "title_one": "Materials ({count})",
+    "title_other": "Materials ({count})",
+    "intro": "Every material of one garment in revision {revision}.",
+    "viewLabel": "BOM view",
+    "view": {
+      "lines": "Lines",
+      "sizes": "By size",
+      "colours": "By colourway"
+    },
+    "add": "Add material",
+    "addFirst": "Add the first material",
+    "empty": {
+      "title": "No materials yet",
+      "body": "Add the leather, lining, protectors, trims and labels of one garment."
+    },
+    "held": {
+      "frozen": "This revision is not a draft: start a new revision to change it.",
+      "first": "Already the first.",
+      "last": "Already the last."
+    },
+    "col": {
+      "seq": "Place",
+      "material": "Material",
+      "placement": "Placement",
+      "qty": "Qty (size {size})",
+      "wastage": "Wastage",
+      "gross": "With wastage",
+      "depends": "Varies by",
+      "actions": "Actions"
+    },
+    "bySize": "size",
+    "byColour": "colourway",
+    "onlyIn": "only {code}",
+    "missing": "— missing",
+    "missingShort": "missing",
+    "edit": "Edit",
+    "editOne": "Edit line {line}",
+    "moveUp": "Move line {line} up",
+    "moveDown": "Move line {line} down",
+    "remove": "Remove",
+    "removeOne": "Remove line {line}",
+    "removeTitle": "Remove line {line} ({code})?",
+    "removeBody": "It leaves the draft BOM of revision {revision}; released revisions keep theirs.",
+    "sizeCell": "{line}, size {size}",
+    "sizes": {
+      "empty": {
+        "title": "No size-dependent lines",
+        "body": "Switch “Varies by size” on in a line (Edit) to type its quantity per size here."
+      },
+      "leatherTotal": "Leather with wastage",
+      "notNumber": "That is not a number: type it as 6,35 or 6.35.",
+      "hint": "Type a quantity and leave the cell (or Enter) to save it; 0 means the size does not use the line; Escape puts it back.",
+      "hintRead": "Quantities per garment, in the line’s unit."
+    },
+    "colourCell": "{line}, colourway {colourway}",
+    "colours": {
+      "empty": {
+        "title": "No colour-dependent lines",
+        "body": "Switch “Varies by colourway” on in a line (Edit) to choose its colour per colourway here."
+      },
+      "choose": "Choose a colour",
+      "loading": "Reading the material’s colours…",
+      "none": "— no colour",
+      "hint": "Only the material’s own colours are offered; every active colourway needs one."
+    },
+    "leather": {
+      "title": "Leather and hide wastage",
+      "intro": "How much hide a garment really takes, with the revision’s planned hide yield.",
+      "sentence": "Size {size} cuts {net} {unit} and needs {gross} {unit} of hide ({pct} % wastage).",
+      "noBase": "The base size has no quantity yet.",
+      "hideArea": "Average hide",
+      "hideUnknown": "Not known (the material is not bought by the hide)",
+      "perGarment": "Hides per garment (base size)",
+      "per100": "Hides per 100 garments",
+      "yield": "Planned hide yield",
+      "yieldHint": "The share of a hide’s area the cutting plan expects to use; cutting compares the real yield with it.",
+      "yieldRange": "A share above 0 and at most 100 %.",
+      "saveYield": "Save yield"
+    },
+    "line": {
+      "addTitle": "Add a material",
+      "editTitle": "Line {line} · {code}",
+      "material": "Material",
+      "materialHint": "Search the materials library by code or name.",
+      "materialPlaceholder": "Leather, lining, protector, zip…",
+      "typeToSearch": "Type to search",
+      "searching": "Searching…",
+      "noneFound": "No active material matches.",
+      "found_one": "{count} material",
+      "found_other": "{count} materials",
+      "colours_one": "{count} colour",
+      "colours_other": "{count} colours",
+      "loadingMaterial": "Reading the material…",
+      "baseUnit": "base unit {unit}",
+      "crVi": "Cr VI test per lot",
+      "ppeComponent": "PPE component",
+      "change": "Choose another",
+      "placementHint": "Front panel, sleeve, lining, armour pocket.",
+      "unit": "Unit",
+      "qty": "Quantity per garment",
+      "qtyHint": "Above 0; decimals with , or .",
+      "wastageHint": "0 to 60 %.",
+      "wastageLeather": "On leather, include the hide’s yield (0 to 60 %).",
+      "sizeDependent": "Varies by size",
+      "sizeDependentHint": "A quantity per size of the range.",
+      "colourDependent": "Varies by colourway",
+      "colourDependentHint": "A material colour per colourway.",
+      "oneColour": "Colour",
+      "oneColourHint": "The same in every colourway.",
+      "noColour": "No colour",
+      "onlyIn": "Used in",
+      "onlyInHint": "A line of one colourway only (a contrast panel).",
+      "everyColourway": "Every colourway",
+      "note": "Note",
+      "sizesAfter": "Type the quantity of each size in the By size view.",
+      "coloursAfter": "Choose the colour of each colourway in the By colourway view.",
+      "add": "Add to the BOM",
+      "save": "Save the line",
+      "held": {
+        "material": "Choose a material.",
+        "qty": "Type a quantity above 0.",
+        "wastage": "Wastage is 0 to 60 %."
+      }
+    }
+  },
+  "routing": {
+    "loading": "Reading the routing…",
+    "failed": "Could not load the routing",
+    "minutes": "{minutes} min",
+    "strip": {
+      "total": "Standard minutes per garment",
+      "totalHint": "The same in every size (W1)",
+      "steps_one": "{count} operation",
+      "steps_other": "{count} operations",
+      "scans": "Scan points",
+      "scansHint_one": "of {count} operation",
+      "scansHint_other": "of {count} operations",
+      "labour": "Labour per garment",
+      "labourHint": "Minutes × cost per minute ÷ efficiency"
+    },
+    "issuesTitle_one": "{count} thing to fix in the routing",
+    "issuesTitle_other": "{count} things to fix in the routing",
+    "warningsTitle_one": "{count} point to note",
+    "warningsTitle_other": "{count} points to note",
+    "title_one": "Operations ({count})",
+    "title_other": "Operations ({count})",
+    "intro": "In order, from the library, with their minutes for this style (revision {revision}).",
+    "filtered": "Only {department}: the tile above filters.",
+    "showAll": "Show every department",
+    "add": "Add operations",
+    "addFirst": "Add from the library",
+    "empty": {
+      "title": "No operations yet",
+      "body": "Add the operations that make the garment, from cutting to the final check."
+    },
+    "col": {
+      "seq": "Place",
+      "operation": "Operation",
+      "department": "Department",
+      "machine": "Machine · skill",
+      "minutes": "Standard minutes",
+      "scanned": "Scanned",
+      "actions": "Actions"
+    },
+    "final": "final",
+    "archivedOp": "archived in the library",
+    "addInstructions": "Add instructions",
+    "minutesOf": "Standard minutes of {step}",
+    "scannedOf": "{step} is scanned",
+    "library": "Library: {minutes} min",
+    "libraryList": "Operations of the library",
+    "useLibrary": "Use library value",
+    "moveUp": "Move operation {step} up",
+    "moveDown": "Move operation {step} down",
+    "removeOne": "Remove operation {step}",
+    "removeTitle": "Remove {step}?",
+    "removeBody": "It leaves the draft routing; released revisions keep theirs.",
+    "removeFinal": "It is the final operation: the batch is then given at the scanned one before it.",
+    "addTitle": "Add operations from the library",
+    "search": "Search code, name, machine or skill",
+    "everyDepartment": "Every department",
+    "searching": "Searching…",
+    "noneFound": "No active operation matches.",
+    "pickOrder": "{n}.",
+    "alreadyIn": "already in the routing",
+    "addOrder": "They are added at the end, in the order you tick them; each copies its minutes from the library.",
+    "addN_one": "Add {count} operation",
+    "addN_other": "Add {count} operations",
+    "addHeld": "Tick at least one operation.",
+    "instructionsTitle": "Instructions · {step}",
+    "instructions": "Instructions",
+    "instructionsHint": "How it is done for this style: the traveller and the floor screen show it."
+  },
+  "cost": {
+    "loading": "Working out the cost…",
+    "failed": "Could not compute the cost sheet",
+    "empty": {
+      "title": "Add BOM lines and operations to see a cost",
+      "body": "The sheet is worked out from the BOM by size and the routing’s minutes."
+    },
+    "noGrain": "Cost figures are not in your role: the sheet shows quantities, minutes and what is missing.",
+    "estimate": "Revision {revision} is a draft: this cost is an estimate and may still change.",
+    "colourway": "Colourway",
+    "size": "Size",
+    "computed": "Worked out {date} · {currency}",
+    "notInRole": "Not in your role",
+    "notInRoleHint": "Cost figures need the cost grain",
+    "strip": {
+      "total": "Cost per garment · {colourway} {size}",
+      "complete": "Every input known",
+      "incomplete_one": "{count} input missing",
+      "incomplete_other": "{count} inputs missing",
+      "material": "Materials",
+      "labour": "Labour",
+      "overhead": "Overhead",
+      "change": "Against rev {revision}"
+    },
+    "up": "more",
+    "down": "less",
+    "changeUnknown": "One side is not complete",
+    "partial": "partial",
+    "noOverhead": "No overhead rule",
+    "overheadPct": "{pct} % on materials and labour",
+    "incomplete": "incomplete",
+    "knownSoFar": "— (known so far: {amount})",
+    "sheet": {
+      "title": "Cost sheet",
+      "intro": "From materials to cost: open a step for the lines behind it; ⓘ says how a figure is made.",
+      "labour": "Labour · {minutes} min",
+      "labourTable": "Labour by department",
+      "overhead": "Overhead · {pct} %",
+      "rounding": "Rounding",
+      "total": "Cost per garment"
+    },
+    "col": {
+      "material": "Material",
+      "qty": "Qty + wastage",
+      "base": "In base unit",
+      "unitCost": "Price",
+      "amount": "Amount",
+      "minutes": "Minutes",
+      "perMinute": "Cost per minute",
+      "efficiency": "Efficiency"
+    },
+    "how": "How is the figure of {what} made?",
+    "howTitle": "How is this made?",
+    "howMaterial": "{qty} + {wastage} % wastage = {base} {unit} per garment.",
+    "howMaterialCost": "{base} × {price} = {amount}",
+    "howLabour": "{minutes} min × {rate} ÷ {efficiency} % = {amount}",
+    "howOverhead": "{base} × {pct} % = {amount}",
+    "bySize": {
+      "title": "Cost by size",
+      "intro": "The colourway above in every size of the range.",
+      "what": "Part",
+      "hint": "“—” where an input is missing; the base size is marked with ·.",
+      "hintNoGrain": "Figures are not in your role (·); “—” where an input is missing."
+    },
+    "missingTitle_one": "{count} input missing: the cost is not complete",
+    "missingTitle_other": "{count} inputs missing: the cost is not complete",
+    "prices": {
+      "title": "Material prices",
+      "intro": "The price each material is costed at (W1: its standard cost).",
+      "source": "Source",
+      "perBase": "Per base unit",
+      "perPurchase": "Per purchase unit",
+      "asOf": "Set on",
+      "none": "— no standard cost",
+      "noGrain": "Prices are not in your role."
+    },
+    "rates": {
+      "title": "Labour rates and overhead",
+      "intro": "What the sheet used today, per department of the routing.",
+      "from": "Valid from",
+      "none": "— no rate",
+      "overhead": "Overhead",
+      "company": "Priced with",
+      "companyOwn": "The company’s rates and currency",
+      "tenantWide": "The group’s rates (every company)",
+      "where": "Rates and overhead are kept by Finance (costing settings)."
+    }
+  },
+  "garmentTracking": {
+    "BATCH": "Batch number",
+    "BATCH_why": "The work order’s batch number on every label of the batch.",
+    "SERIAL": "One serial per garment",
+    "SERIAL_why": "Each garment gets its own serial at the final operation; recalls and the evidence trail follow each one."
+  }
+}

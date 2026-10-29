@@ -9,7 +9,7 @@ import type { OfficeAreaNav } from '../../shell/nav/office-nav'
  * join with their own steps.
  */
 export const officeArea: OfficeAreaNav = {
-  order: 8,
+  order: 9,
   area: {
     id: 'quality',
     label: 'shell:nav.quality.area',

@@ -1,0 +1,75 @@
+{
+  "to": {
+    "label": "To",
+    "noEmail": "no email address",
+    "none": "No contact chosen"
+  },
+  "language": "Language",
+  "languageName": {
+    "it": "Italian",
+    "en": "English"
+  },
+  "how": {
+    "label": "How",
+    "acceptLink": "Email with the PDF and a one-off link to answer online",
+    "acceptLinkUntil": "Email with the PDF and a one-off link to answer online, open until {date}",
+    "pdfOnly": "Email with the PDF attached"
+  },
+  "cc": {
+    "label": "Copy to",
+    "hint": "Other addresses, separated by commas (they get the mail, not their own link).",
+    "placeholder": "name@example.com",
+    "invalid": "Not an email address: {list}"
+  },
+  "subject": "Subject",
+  "message": {
+    "label": "Message",
+    "hint": "Your words above the standard text; empty: the standard text alone."
+  },
+  "recipientCan": "What the recipient can do",
+  "checks": {
+    "title": "Checks before sending",
+    "loading": "Checking…",
+    "state": {
+      "blocks": "Stops the send",
+      "warning": "To check",
+      "passes": "Passes"
+    }
+  },
+  "retry": "Try again",
+  "send": "Send",
+  "sending": "Sending…",
+  "cancel": "Close",
+  "close": "Done",
+  "held": {
+    "loading": "The checks are still running.",
+    "busy": "Sending…",
+    "noRight": "Your role cannot send documents.",
+    "noEmail": "The recipient has no email address.",
+    "cc": "Fix the copy addresses first: {list}",
+    "sent": "Already sent."
+  },
+  "preview": {
+    "title": "The document as it leaves",
+    "newTab": "Open in new tab",
+    "loading": "Making the PDF…",
+    "sentNote": "This is the version frozen at {time}."
+  },
+  "result": {
+    "sentTitle": "Sent",
+    "sentBody": "Sent to {to} at {time}.",
+    "failedTitle": "The mail could not leave",
+    "failedBody": "The document is frozen and stored, but the mail to {to} failed. Send a new link.",
+    "at": "When",
+    "linkUntil": "Link open until",
+    "delivery": "Mail",
+    "state": {
+      "sent": "Sent",
+      "failed": "Failed",
+      "retry": "Will be retried",
+      "settled": "Done"
+    },
+    "linkNote": "The link is only in the recipient's mail: nobody here sees its address.",
+    "newLink": "Send a new link"
+  }
+}

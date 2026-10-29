@@ -1,0 +1,132 @@
+// Home › Today's actions (B-W1-52 actions; ANA-037; design home.today: needs-me "alert → Acknowledge · Assign · Resolve"
+// and "Handled today", popups assign, resolve-note and arrange). Today's rows are computed from the records at read time
+// (apps/factory-api modules/insights, factory-domain insights/attention); what people DID about a row is kept here:
+//
+//   AttentionAction     one row per Today row key (`<kind>:<record id>[:<sub key>]`): who the alert is assigned to, and
+//                       the CONDITION it was resolved with a note or acknowledged in. A condition is the row's
+//                       fingerprint (factory-domain insights/attention conditionOf: its state, due date, since when it
+//                       waits and the codes that make it), so a resolved alert leaves Today for everyone until its
+//                       condition changes, and comes back then; an acknowledgement marks the row while its condition
+//                       holds; an assignment holds until the row is resolved or assigned again. Never deleted.
+//   AttentionActionLog  the history: one row per thing done (assigned, unassigned, resolved with its note, acknowledged),
+//                       with the condition it was done in and the record's label then. Append-only.
+//   TodayLayout         one person's Today ("Arrange Today"): the order of its sections and which are hidden, the panels
+//                       of "My lists" (order, hidden, width) and the lens the flow strip opens on. One per person (its
+//                       id is the person's user id).
+//
+// Who may act on a row is never stored: the API asks the same rule as the list (actingPermission: the record's view
+// permission and one of its act permissions over its company, site and party, four eyes, the decision's grain) at
+// every action, for the person acting and for the person a row is assigned to. The hand-written migration
+// …_insights_attention_actions_guards holds the rules Prisma does not model.
+
+/// What people did about one row of Today: its assignee, and the condition it was resolved or acknowledged in.
+model AttentionAction {
+  id                    String    @id @db.Uuid
+  tenantId              String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// `<kind>:<record id>[:<sub key>]` (factory-domain insights/attention rowKeyOf): stable while the row needs a person.
+  rowKey                String
+  /// factory-domain insights/attention ATTENTION_KINDS (text: a new kind needs no migration).
+  kind                  String
+  /// The record the row is about: its model name and id, and the sub key that tells rows of one record apart.
+  recordType            String
+  recordId              String    @db.Uuid
+  subKey                String?
+  /// The row's company, site and party when it was last acted on (null: tenant-wide, or none).
+  companyId             String?   @db.Uuid
+  siteId                String?   @db.Uuid
+  partyId               String?   @db.Uuid
+  /// The person it is assigned to (someone who may act on it), who assigned it and when; all three or none.
+  assignedToId          String?   @db.Uuid
+  assignedById          String?   @db.Uuid
+  assignedAt            DateTime? @db.Timestamptz(3)
+  /// The condition it was resolved in, with the note saying what was done (required), by whom and when; all or none.
+  resolvedCondition     String?
+  resolveNote           String?
+  resolvedById          String?   @db.Uuid
+  resolvedAt            DateTime? @db.Timestamptz(3)
+  /// The condition it was acknowledged in, by whom and when; all three or none.
+  acknowledgedCondition String?
+  acknowledgedById      String?   @db.Uuid
+  acknowledgedAt        DateTime? @db.Timestamptz(3)
+  version               Int       @default(1)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById           String?   @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  assignedTo User?                @relation("AttentionAssignee", fields: [tenantId, assignedToId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  log        AttentionActionLog[]
+
+  @@unique([tenantId, rowKey])
+  // The target of the log's tenant-safe reference.
+  @@unique([tenantId, id])
+  // What is assigned to a person.
+  @@index([tenantId, assignedToId])
+}
+
+/// One thing a person did about a row of Today, in the condition the row was in then. Never changed or removed (the
+/// triggers, for every login).
+/// @append-only
+model AttentionActionLog {
+  id          String        @id @db.Uuid
+  tenantId    String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  actionId    String        @db.Uuid
+  /// The action's row key, kind and record (the triggers hold them equal), and the record's label then.
+  rowKey      String
+  kind        String
+  recordType  String
+  recordId    String        @db.Uuid
+  recordLabel String
+  companyId   String?       @db.Uuid
+  siteId      String?       @db.Uuid
+  partyId     String?       @db.Uuid
+  verb        AttentionVerb
+  /// The row's condition when it was done (factory-domain insights/attention conditionOf).
+  condition   String
+  /// Who did it.
+  actorId     String        @db.Uuid
+  /// ASSIGNED: the person it was assigned to. UNASSIGNED: the person it was taken from.
+  assigneeId  String?       @db.Uuid
+  /// RESOLVED: what was done (required).
+  note        String?
+  at          DateTime      @db.Timestamptz(3)
+  requestId   String
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+
+  action AttentionAction @relation(fields: [tenantId, actionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A row's history.
+  @@index([tenantId, actionId, at])
+  // What a person handled today ("Handled today").
+  @@index([tenantId, actorId, at])
+}
+
+enum AttentionVerb {
+  ASSIGNED
+  UNASSIGNED
+  RESOLVED
+  ACKNOWLEDGED
+}
+
+/// One person's arrangement of Today ("Arrange Today", saved on the server per person): factory-domain
+/// insights/actions TodayLayout, checked by the API before it is saved. One per person: its id is the person's user id
+/// (as FloorSettings' is its site's).
+model TodayLayout {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  userId      String   @db.Uuid
+  /// The page's sections in order: [{ id, hidden }] (TODAY_SECTIONS; "Needs me now" is never hidden).
+  sections    Json
+  /// The "My lists" panels in order: [{ id, hidden, width: HALF | TWO_THIRDS | FULL }].
+  panels      Json
+  /// The lens the flow strip opens on ("My main role"); null: the first the person has.
+  mainLens    String?
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  user User @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, userId])
+}

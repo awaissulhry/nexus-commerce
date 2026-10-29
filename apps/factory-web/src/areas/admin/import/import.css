@@ -1,0 +1,120 @@
+/*
+ * Import & export (B-W0-28, SCR-017) LAYOUT: the importer cards, the wizard's sections and the dry run's rows. The
+ * controls are the design system's; this file places them with semantic tokens only.
+ */
+.fw-adm-imp-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-adm-imp-h2,
+.fw-adm-imp-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-weight: 600;
+}
+
+.fw-adm-imp-h2 {
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-adm-imp-h3 {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-adm-imp-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-adm-imp-card {
+  min-width: 0;
+}
+
+.fw-adm-imp-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-adm-imp-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-12);
+}
+
+.fw-adm-imp-wizard {
+  min-width: 0;
+}
+
+.fw-adm-imp-formats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-adm-imp-legend {
+  grid-column: 1 / -1;
+  margin-bottom: var(--nds-space-4);
+  padding: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-adm-imp-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-adm-imp-p {
+  margin: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* An API sentence shown as data, never as the page's own words. */
+.fw-adm-imp-said {
+  color: var(--nds-text-2);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.fw-adm-imp-changes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-adm-imp-change {
+  overflow-wrap: anywhere;
+}
+
+.fw-adm-imp-col {
+  color: var(--nds-text-2);
+}
+
+.fw-adm-imp-col::after {
+  content: ':';
+}
+
+.fw-adm-imp-before {
+  color: var(--nds-text-2);
+}

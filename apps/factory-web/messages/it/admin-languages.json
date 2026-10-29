@@ -1,0 +1,66 @@
+{
+  "langs": {
+    "intro": "Quali lingue parlano l'ufficio, i documenti e il reparto, come si scrivono numeri e date, e come si tiene il tempo.",
+    "on": "Attiva",
+    "office": {
+      "title": "Lingue dell'ufficio",
+      "intro": "Ogni schermata dell'ufficio le parla entrambe. In questa versione sono sempre attive.",
+      "written": "{percent} % delle parole delle schermate scritte",
+      "people_one": "La usa 1 persona",
+      "people_other": "La usano {count} persone",
+      "pick": "Ognuno sceglie la propria lingua in",
+      "profile": "Il mio profilo"
+    },
+    "documents": {
+      "title": "Lingue dei documenti e delle e-mail",
+      "intro": "Preventivi, ordini fornitore, DDT, fatture e le loro e-mail escono in italiano o in inglese: nella lingua scritta sulla scheda del cliente o del fornitore. Qui sotto, la lingua di ogni società.",
+      "label": "La lingua di ogni società",
+      "pickFor": "Lingua di {name}",
+      "noCompany": "Nessuna società attiva."
+    },
+    "col": {
+      "company": "Società",
+      "language": "La sua lingua",
+      "where": "Società o stabilimento",
+      "zone": "Fuso orario"
+    },
+    "formats": {
+      "title": "Numeri e date",
+      "intro": "Ognuno vede numeri e date scritti come nella propria lingua.",
+      "number": "Un numero",
+      "date": "Una data",
+      "week": "La settimana inizia di",
+      "monday": "lunedì",
+      "imports": "Un foglio da importare può scrivere i numeri in un modo o nell'altro: lo indichi quando lo carichi.",
+      "importLink": "Importa ed esporta"
+    },
+    "time": {
+      "title": "Fusi orari",
+      "intro": "Come la fabbrica tiene il tempo, e il fuso di ogni società e stabilimento.",
+      "stored": "Salvato",
+      "storedValue": "In UTC, al millisecondo",
+      "shown": "Mostrato",
+      "shownValue": "Nel fuso Europe/Rome",
+      "site": "Turni, calendari e orari limite",
+      "siteValue": "Nel fuso di ogni stabilimento",
+      "label": "Fusi orari delle società e degli stabilimenti",
+      "several": "Sono in uso {count} fusi diversi."
+    },
+    "floor": {
+      "title": "Lingue del reparto",
+      "intro": "Le lingue che leggono gli operatori, ognuna nella propria lingua. Le schermate del reparto parlano italiano e inglese; chi legge un'altra lingua per ora vede l'italiano.",
+      "screens": "Le schermate la parlano",
+      "notYet": "Non ancora nelle schermate",
+      "workers_one": "1 operatore",
+      "workers_other": "{count} operatori"
+    },
+    "later": "Un glossario dei termini del mestiere e il controllo dei messaggi tradotti automaticamente arrivano nei prossimi passi.",
+    "done": {
+      "saved_one": "Lingua di 1 società salvata.",
+      "saved_other": "Lingue di {count} società salvate."
+    },
+    "problem": {
+      "conflict": "Qualcuno ha cambiato una società nel frattempo ({count} salvate prima). La pagina è stata riletta: controlla e salva di nuovo."
+    }
+  }
+}

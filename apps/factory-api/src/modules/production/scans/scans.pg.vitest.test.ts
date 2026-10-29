@@ -400,6 +400,13 @@ describe('a bundle through its operations (MES-069, MES-090): one tap, each oper
     expect(workOrder.progress.counted).toBe(true)
     // The site's floor at a glance: every open work order with its operations.
     const site = await ok('supervisor', 'GET', `/production/scans/wip?siteId=${A.siteA1}`)
+    const flowRow = site.workOrders.find((row: Json) => row.workOrder.id === WO.flow.id)
+    expect(flowRow).toMatchObject({ siteCode: expect.any(String), style: { code: expect.any(String), name: expect.any(String) }, pieces: 12, finished: 0, priority: expect.any(Number) })
+    expect(flowRow.operations.find((op: Json) => op.seq === 20).lines).toEqual([{ lineId: A.line, code: 'L1', name: expect.any(String), good: 4 }])
+    expect(keysOf(site).filter((name) => /worker|station/i.test(name) || MONEY.test(name))).toEqual([])
+    // The list's progress for the same work order: the record's cells summed.
+    const listed = (await ok('planner', 'GET', `/production/work-orders?q=${encodeURIComponent(WO.flow.number)}`)).workOrders.find((row: Json) => row.id === WO.flow.id)
+    expect(listed.progress).toEqual({ cut: 12, bundled: 12, sewn: 4, finished: 0 })
     expect(site.workOrders.find((row: Json) => row.workOrder.id === WO.flow.id).operations.map((op: Json) => [op.seq, op.waiting, op.good])).toEqual([
       [10, 0, 12],
       [20, 7, 4],

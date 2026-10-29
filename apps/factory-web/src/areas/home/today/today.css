@@ -26,8 +26,9 @@
     align-items: start;
   }
 
-  .fw-today-side .fw-today-panels {
-    grid-template-columns: minmax(0, 1fr);
+  /* Beside the work, each list takes the column. */
+  .fw-today-side .fw-today-panels-row {
+    flex-direction: column;
   }
 }
 
@@ -216,10 +217,34 @@ a.fw-today-stage-box:hover {
   color: var(--nds-text-3);
 }
 
+/* My lists across the page: six columns; each list half, two thirds or the whole row (Arrange Today), holes backfilled. */
 .fw-today-panels {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: var(--nds-space-12);
+}
+
+/* A row of lists shares the width in proportion to their widths (half 3, two thirds 4); no space left at its end. */
+.fw-today-panels-row {
+  display: flex;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-today-panels-row > * {
+  min-width: 0;
+}
+
+.fw-today-panel--half {
+  flex: 3 1 0;
+}
+
+.fw-today-panel--two-thirds {
+  flex: 4 1 0;
+}
+
+.fw-today-panel--full {
+  flex: 6 1 0;
 }
 
 .fw-today-panel-row {
@@ -275,8 +300,8 @@ a.fw-today-stage-box:hover {
 /* Phone: rows and panels in one column, the keys hint gone (no keyboard), stages two per row. */
 @media (max-width: 760px) {
 
-  .fw-today-panels {
-    grid-template-columns: minmax(0, 1fr);
+  .fw-today-panels-row {
+    flex-direction: column;
   }
 
   .fw-today-stage {
@@ -341,4 +366,86 @@ a.fw-today-stage-box:hover {
   .fw-today-print-group {
     break-inside: avoid-page;
   }
+}
+
+/* The alert verbs: the record link and the row's ⋯ side by side; who it is assigned to and who acknowledged it. */
+.fw-today-row-actions,
+.fw-today-marks {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-today-marks .nds-tag svg {
+  vertical-align: -1px;
+}
+
+.fw-today-queue-foot {
+  flex-wrap: wrap;
+}
+
+.fw-today-queue-foot--empty {
+  justify-content: center;
+}
+
+/* Dialogs: Assign to, Resolve, Handled today, the left panel of Arrange Today. */
+.fw-today-dialog,
+.fw-today-field,
+.fw-today-arrange,
+.fw-today-arrange-widths {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-today-field-label {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-today-arrange {
+  gap: var(--nds-space-16);
+}
+
+.fw-today-arrange-widths {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-today-arrange-width {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(8rem, auto);
+  align-items: center;
+  gap: var(--nds-space-10);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-today-handled {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.fw-today-handled-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--nds-space-8);
+}
+
+.fw-today-handled-time {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-today-handled-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-3);
+  min-width: 0;
 }

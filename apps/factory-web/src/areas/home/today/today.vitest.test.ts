@@ -69,6 +69,8 @@ const item = (key: string, extra: Partial<TodayItem> = {}): TodayItem => ({
   ageDays: 2,
   decide: 'OPEN',
   figures: null,
+  condition: 'c'.repeat(32),
+  actions: { version: 0, verbs: ['ASSIGN', 'RESOLVE', 'ACKNOWLEDGE'], assigned: null, acknowledged: null },
   ...extra,
 })
 
@@ -88,6 +90,7 @@ const TODAY_ANSWER = {
   total: 1,
   items: [item('a')],
   nextCursor: 'cursor-2',
+  handled: { today: 0 },
   live: { events: ['sales_order.promise_changed'] },
 }
 
@@ -214,13 +217,17 @@ describe('where a row opens (one detail rule; lib/records/record-links.ts)', () 
     expect(listAddress('/email/inbound', {}, OFFICE_PAGES)).toBe('/home/mail-to-sort')
     expect(listAddress('/sales/orders', { late: 'true' }, OFFICE_PAGES)).toBeNull()
     expect(listAddress(null, null, OFFICE_PAGES)).toBeNull()
+    expect(recordAddress({ type: 'Quote', id: 'q1', label: 'Q-1', companyId: 'c1' }, OFFICE_PAGES)).toBe('/sales/quotes/q1')
+    expect(listAddress('/sales/quotes', { status: 'PENDING_APPROVAL' }, OFFICE_PAGES)).toBe('/sales/quotes?status=PENDING_APPROVAL')
+    expect(listAddress('/sales/quote-approvals', { view: 'waiting' }, OFFICE_PAGES)).toBe('/home/approvals?view=waiting')
+    expect(newVerbsFor(new Set(['quotes.manage']), OFFICE_PAGES, '/w/DEMO')).toEqual([{ id: 'quote', labelKey: 'today.new.quote', href: '/w/DEMO/sales/quotes?new=1' }])
   })
 
   it('a mail row opens Mail to sort’s review; a quote approval is decided here; other rows open their record', () => {
     const mail = queueItem(item('m', { kind: 'MAIL_TO_SORT', decide: 'REVIEW', record: { type: 'InboundEmail', id: 'm1', label: 'Hello' } }), '/w/DEMO')
     expect(mail).toMatchObject({ href: '/w/DEMO/home/mail-to-sort?open=m1', reviewHref: '/w/DEMO/home/mail-to-sort?open=m1' })
     const quote = queueItem(item('q', { kind: 'QUOTE_APPROVAL', decide: 'REVIEW', record: { type: 'Quote', id: 'q1', label: 'Q-1' } }), '/w/DEMO')
-    expect(quote).toMatchObject({ href: '/w/DEMO/records/Quote/q1?label=Q-1&company=c1', reviewHref: null })
+    expect(quote).toMatchObject({ href: '/w/DEMO/sales/quotes/q1', reviewHref: null })
     const proposal = queueItem(item('p', { kind: 'PO_PROPOSAL', decide: 'REVIEW', siteId: 's1', record: { type: 'PurchaseOrder', id: 'po1', label: 'PO-1' } }), '/w/DEMO')
     expect(proposal).toMatchObject({ href: '/w/DEMO/records/PurchaseOrder/po1?label=PO-1&company=c1&site=s1', reviewHref: null })
   })
@@ -400,11 +407,12 @@ describe('the rows in the person’s language: the API’s phrases drawn with to
 })
 
 describe('the keys live in ONE info icon in the list footer (Owner rule 2026-10-29: no key hints above a list)', () => {
-  it('Today’s own keys: j / k, Enter, and a / r for a quote approval’s review — no grid keys', () => {
+  it('Today’s own keys: j / k, Enter, e for an alert, and a / r for a quote approval’s review — no grid keys', () => {
     const en = createTranslator('en', CATALOGUE.en.home!)
     expect(todayKeys(en)).toEqual([
       { keys: ['j', 'k'], does: 'keys.rows' },
       { keys: ['↵'], does: 'keys.open' },
+      { keys: ['e'], does: 'Acknowledge the alert (in the list or its review)' },
       { keys: ['a'], does: 'Approve the quote (in its review)' },
       { keys: ['r'], does: 'Reject the quote, with a reason (in its review)' },
     ])

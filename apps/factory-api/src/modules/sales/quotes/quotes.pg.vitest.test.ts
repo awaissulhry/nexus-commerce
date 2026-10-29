@@ -231,7 +231,7 @@ describe('a quote for the brand customer: 2 colours × 3 sizes (SAL-143, SAL-203
       [20, 'RED', 6, '440', 264000, '22.00', 58080, '292.791', 175675, 88325, '33.4564', false],
     ])
     const [blk] = quote.lines
-    expect(blk).toMatchObject({ styleId: jacket, styleRevisionId: revision1, styleRevision: { revision: 1, status: 'DRAFT' }, description: 'SEED-JKT-01 Seed leather jacket — Black', costMissing: [] })
+    expect(blk).toMatchObject({ styleId: jacket, styleRevisionId: revision1, styleRevision: { revision: 1, status: 'DRAFT' }, description: 'SEED-JKT-01 Seed leather jacket - Black', costMissing: [] })
     expect(blk.sizes.map((row: Json) => [row.size, row.quantity, row.unitPrice, row.certificate.outcome])).toEqual([
       ['50', 2, null, 'covered'],
       ['52', 4, null, 'covered'],

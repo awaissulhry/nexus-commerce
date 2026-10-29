@@ -33,6 +33,8 @@ const item = (n: number, extra: Omit<Partial<TodayItem>, 'sentence' | 'why' | 'b
     ageDays: 2,
     decide: 'OPEN',
     figures: null,
+    condition: '0'.repeat(32),
+    actions: { version: 0, verbs: [], assigned: null, acknowledged: null },
     ...rest,
   }
 }
