@@ -251,7 +251,8 @@ Modules: `modules/compliance/certificates` (certificate register and gate `certi
   ids of the SAME record (checked at write: AVAILABLE, the writer's files.read, and for a shared message shared with the
   thread's party); each reader sees only the attachments its own file rules allow (RLS, `audienceSees`, can()).
 - Routes: `GET /threads/:recordType/:recordId` (office; partner and link: the shared messages of their party, a link only
-  its record), `POST …/notes` (threads.post; mentions: ACTIVE people whose roles read the thread), `PUT …/status`
+  its record), `POST …/notes` (threads.post; mentions: ACTIVE people whose roles read the thread; `GET …/people` lists
+  them by name for the composer, threads.post), `PUT …/status`
   (threads.manage: close and reopen, version-guarded), `GET …/timeline` (office). Pages newest first; `nextCursor`.
 - The timeline is computed at read time, not stored: the record's AuditLog rows + its thread's messages + its files
   (`availableAt`), merged by (time, id) (factory-domain threads/timeline). A change shows its action, actor, status move

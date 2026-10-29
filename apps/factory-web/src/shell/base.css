@@ -2,6 +2,13 @@
  * The page's base (every view): the design system's ground, text colour and font on <body>, the browser's own
  * controls in the theme, and the skip link. Semantic tokens only.
  */
+/* The design system assumes border-box sizing everywhere (Commerce gets it from Tailwind's preflight). */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html {
   color-scheme: light;
 }

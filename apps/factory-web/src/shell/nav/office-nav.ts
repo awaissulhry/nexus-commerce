@@ -95,7 +95,7 @@ export function navPermissions(nav: AreaNav = OFFICE_NAV): string[] {
  * (`office-entry.vitest.test.ts` compares this list with the page files under `app/(office)/w/[company]/`): the office
  * entry opens only a page that exists, never a row whose page comes with a later step.
  */
-export const OFFICE_PAGES: ReadonlySet<string> = new Set(['/me'])
+export const OFFICE_PAGES: ReadonlySet<string> = new Set(['/me', '/home/mail-to-sort'])
 
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */
 export const PROFILE_PAGE = '/me'
@@ -103,7 +103,7 @@ export const PROFILE_PAGE = '/me'
 /**
  * The page an office entry opens (`/w/<company>`, an area's own address, the brand link, a new session): the first
  * row in the navigation's order this person may open whose page is built — inside `areaId` first when one is given —
- * else My profile (W0 builds no area page yet; a person with no role opens no row).
+ * else My profile (W0 builds one area page, Home › Mail to sort; a person with no role opens no row).
  */
 export function firstOfficePage(nav: AreaNav, options: { areaId?: string; built?: ReadonlySet<string> } = {}): string {
   const built = options.built ?? OFFICE_PAGES

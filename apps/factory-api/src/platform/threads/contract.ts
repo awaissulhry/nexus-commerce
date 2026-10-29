@@ -94,6 +94,15 @@ export const postNoteContract = defineContract({
   response: { 201: output({ thread: threadView, message: messageView }) },
 })
 
+/**
+ * Who a note on the record may mention (COL-006; A2 SCR-006's composer): every ACTIVE person whose roles let them read
+ * the record's thread, by name. Names only: no address, no role.
+ */
+export const mentionablePeopleContract = defineContract({
+  params: recordParams,
+  response: { 200: output({ people: z.array(output({ id: id(), name: z.string() })) }) },
+})
+
 export const setStatusContract = defineContract({
   params: recordParams,
   body: input({

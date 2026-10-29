@@ -16,10 +16,12 @@ const owner = officeNavFor(permissionCheck(OWNER_PERMISSIONS))
 const sales = officeNavFor(permissionCheck(SALES_PERMISSIONS))
 
 describe('the first page a person may open (shell/office/office-entry.ts)', () => {
-  it('W0 builds no area page yet: every entry opens My profile', () => {
-    expect(firstOfficePage(owner)).toBe('/me')
-    expect(firstOfficePage(owner, { areaId: 'home' })).toBe('/me')
-    expect(firstOfficePage(owner, { areaId: 'admin' })).toBe('/me')
+  it('W0 builds one area page, Home › Mail to sort: the entry opens it for whoever sorts mail, else My profile', () => {
+    expect(firstOfficePage(owner)).toBe('/home/mail-to-sort')
+    expect(firstOfficePage(owner, { areaId: 'home' })).toBe('/home/mail-to-sort')
+    // Admin has no page built yet: its address opens the person's first built page.
+    expect(firstOfficePage(owner, { areaId: 'admin' })).toBe('/home/mail-to-sort')
+    expect(firstOfficePage(officeNavFor(permissionCheck(['audit.read'])))).toBe(PROFILE_PAGE)
     expect(firstOfficePage(officeNavFor(permissionCheck([])))).toBe(PROFILE_PAGE)
   })
 

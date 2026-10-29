@@ -1,0 +1,187 @@
+/*
+ * "Mail to sort" (SCR-019) LAYOUT: the toolbar, the list of mails, the detail's parts and the dialogs. The controls are
+ * the design system's; this file places them with semantic tokens only. The mail itself is drawn in a sandboxed frame
+ * (its own document: model.ts mailDocument).
+ */
+.fw-mts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+  max-width: 1100px;
+}
+
+.fw-mts-intro {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.fw-mts-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-mts-count,
+.fw-mts-hint,
+.fw-mts-loading {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-mts-hint {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.fw-mts-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-mts-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-mts-row-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-mts-row-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-mts-sender {
+  overflow-wrap: anywhere;
+}
+
+.fw-mts-excerpt {
+  display: block;
+  margin-top: var(--nds-space-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-mts-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+  margin-top: var(--nds-space-6);
+}
+
+.fw-mts-tag-icon {
+  vertical-align: -2px;
+  margin-inline-end: var(--nds-space-4);
+}
+
+.fw-mts-more {
+  display: flex;
+  justify-content: center;
+}
+
+/* ── the detail ────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-mts-detail,
+.fw-mts-section,
+.fw-mts-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-mts-detail .fw-mts-tags {
+  margin-top: 0;
+}
+
+.fw-mts-heading {
+  margin: 0;
+  font-size: var(--nds-font-size-base);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-mts-pictures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-mts-frame {
+  display: block;
+  width: 100%;
+  height: min(50vh, 420px);
+  min-height: 200px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  resize: vertical;
+}
+
+.fw-mts-text {
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  max-height: min(50vh, 420px);
+  overflow: auto;
+}
+
+.fw-mts-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-mts-attachment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-mts-attachment-name {
+  overflow-wrap: anywhere;
+}
+
+.fw-mts-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-4);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-mts-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
