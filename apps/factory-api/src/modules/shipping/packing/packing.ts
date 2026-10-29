@@ -5,6 +5,7 @@ import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { SHIPPING_PACK } from '@nexus/factory-domain/shipping/permissions'
 import {
+  labelledParcelProblems,
   MAX_PARCELS,
   nextParcelSeq,
   parcelChangeProblems,
@@ -21,7 +22,7 @@ import { actorOf } from '../../../core/context'
 import { assertMay, shippingContextOf, type ShippingContext } from '../access'
 import { lockCells, tenantOf } from '../cells'
 import { readSettings } from '../settings/settings'
-import { contentsView, lockedStatus, packLineOf, readContents, readShipment, shipmentFacts, type ShipmentHeader } from '../store'
+import { contentsView, lockedStatus, packLineOf, packParcelOf, readContents, readShipment, shipmentFacts, type ShipmentHeader } from '../store'
 
 /**
  * Packing (B-W1-46; LOG-039, LOG-002, QHS-073; A2 SCR-098 on the floor, SCR-067 in the office): the office and a floor
@@ -189,9 +190,9 @@ export async function changeParcel(caller: CommandCaller, shipmentId: string, pa
   checkMeasures(body)
   const { version, ...measures } = body
   return packCommand(caller, shipmentId, { name: 'shipping.changeParcel', idempotencyKey, input: { parcelId, ...body }, version, change: 'parcels' }, async (tools, shipment) => {
-    const problems = parcelChangeProblems(shipment.status as ShipmentStatus, measures)
-    if (problems.length > 0) throw new ConflictError(problems.join(' '))
     const parcel = await parcelOf(tools.tx, shipment.id, parcelId)
+    const problems = parcelChangeProblems(shipment.status as ShipmentStatus, measures, { seq: parcel.seq, labelled: parcel.trackingNumber !== null || parcel.labelledAt !== null })
+    if (problems.length > 0) throw new ConflictError(problems.join(' '))
     const data = measuresData(measures)
     await tools.tx.parcel.update({ where: { id: parcel.id }, data: { ...data, version: { increment: 1 } }, select: { id: true } })
     tools.audit({ action: 'shipping.changeParcel', recordType: 'Parcel', recordId: parcel.id, companyId: shipment.companyId, siteId: shipment.siteId, before: measuresOf(parcel), after: { ...measuresOf(parcel), ...data } })
@@ -228,6 +229,9 @@ export async function placeLine(caller: CommandCaller, shipmentId: string, lineI
     const line = lines.find((entry) => entry.id === lineId)
     if (!line) throw new NotFoundError('Shipment line not found.')
     if (body.parcelId !== null && !parcels.some((parcel) => parcel.id === body.parcelId)) throw new NotFoundError('Parcel not found.')
+    // A labelled parcel keeps its contents until its label is voided (B-W1-48).
+    const labelled = [line.parcelId, body.parcelId].flatMap((id) => labelledParcelProblems(parcels.map(packParcelOf).find((parcel) => parcel.id === id)))
+    if (labelled.length > 0) throw new ConflictError(labelled.join(' '))
     const placed = placementOf(packLineOf(line), body.parcelId, body.quantity ?? line.quantity, lines.map(packLineOf))
     if (!placed.ok) throw new ConflictError(placed.problem)
     const placement = placed.placement
