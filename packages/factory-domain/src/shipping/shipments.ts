@@ -273,9 +273,22 @@ export const shipmentMachine = defineMachine<ShipmentStatus, ShipmentFacts>({
 /** The statuses a shipment's lines and parcels may be added to, removed from or moved in. */
 export const isPackable = (status: ShipmentStatus): boolean => status === 'DRAFT'
 
-/** A parcel's weight and sizes change until the shipment leaves (DRAFT or PACKED); a PACKED parcel keeps a weight. */
-export function parcelChangeProblems(status: ShipmentStatus, measures: ParcelMeasures): string[] {
+/**
+ * A labelled parcel (B-W1-48) keeps the weight, sizes and contents its carrier label was bought for: they change again
+ * only once the label is voided (empty: the parcel is not labelled).
+ */
+export function labelledParcelProblems(parcel: { readonly seq: number; readonly labelled: boolean } | null | undefined): string[] {
+  return parcel?.labelled ? [`Parcel ${parcel.seq} has a carrier label: void the label first (it was bought for this weight, size and contents).`] : []
+}
+
+/**
+ * A parcel's weight and sizes change until the shipment leaves (DRAFT or PACKED); a PACKED parcel keeps a weight; a
+ * labelled parcel keeps them until its label is voided.
+ */
+export function parcelChangeProblems(status: ShipmentStatus, measures: ParcelMeasures, parcel?: { readonly seq: number; readonly labelled: boolean } | null): string[] {
   if (status !== 'DRAFT' && status !== 'PACKED') return [`The shipment is ${status}; its parcels change only until it leaves.`]
+  const labelled = labelledParcelProblems(parcel)
+  if (labelled.length > 0) return labelled
   if (status === 'PACKED' && measures.grossWeightKg === null) return ['The shipment is PACKED: every parcel keeps a weight (unpack it first).']
   return []
 }
