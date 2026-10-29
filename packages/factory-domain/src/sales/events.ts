@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineEvent } from '../events/define'
 import { PARTY_TAX_MODES } from '../parties/tax'
+import { SALES_ORDER_STATUSES } from './orders/orders'
 import { LINK_QUOTE_STATES } from './quotes/acceptance'
 import { APPROVAL_REASONS } from './quotes/quotes'
 
@@ -29,8 +30,15 @@ import { APPROVAL_REASONS } from './quotes/quotes'
  *   deposit_request.created   the deposit request of an accepted version (OPEN), with its fiscal decision
  *   company.bank_details_changed  a company's bank account was set, changed or removed (the IBAN masked): the owners and
  *                             administrators are told (live: companies.bank.view)
+ * B-W1-25 (orders; live: orders.view):
+ *   sales_order.created         the order of an accepted version was made (CONFIRMED), its deposit requests named
+ *   sales_order.status_changed  it moved: production started, ready, partly shipped, shipped, closed or cancelled; `by`
+ *                               says whether a person or the system (following work orders, shipments, the settlement)
+ *   sales_order.promise_changed its promise date (or some lines') changed; the first promise stays
  */
 const live = { permission: 'quotes.view', fields: ['quoteId', 'versionId'] } as const
+const orderLive = { permission: 'orders.view', fields: ['orderId', 'number'] } as const
+const orderStatus = z.enum(SALES_ORDER_STATUSES)
 const ids = { quoteId: z.uuid(), versionId: z.uuid() }
 
 export const events = [
@@ -160,5 +168,26 @@ export const events = [
     description: "A company's bank account (where deposits are paid) was set, changed or removed: who did it is in the audit row; the IBAN is shown masked.",
     payload: z.strictObject({ companyId: z.uuid(), fields: z.array(z.string()), ibanBefore: z.string().nullable(), ibanAfter: z.string().nullable() }),
     live: { permission: 'companies.bank.view', fields: ['companyId', 'fields', 'ibanBefore', 'ibanAfter'] },
+  }),
+  defineEvent({
+    type: 'sales_order.created',
+    context: 'sales',
+    description: 'The sales order of an accepted quote version was made (CONFIRMED), with its number; its deposit requests name it.',
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), quoteId: z.uuid().nullable(), versionId: z.uuid().nullable(), partyId: z.uuid(), depositRequestIds: z.array(z.uuid()) }),
+    live: { permission: 'orders.view', fields: ['orderId', 'number', 'quoteId'] },
+  }),
+  defineEvent({
+    type: 'sales_order.status_changed',
+    context: 'sales',
+    description: 'A sales order moved: production started, ready, partly shipped, shipped, closed or cancelled.',
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), from: orderStatus, to: orderStatus, by: z.enum(['person', 'system']) }),
+    live: { ...orderLive, fields: ['orderId', 'number', 'from', 'to'] },
+  }),
+  defineEvent({
+    type: 'sales_order.promise_changed',
+    context: 'sales',
+    description: "A sales order's promise date (or some of its lines') changed; its first promise stays.",
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), promiseDate: z.iso.date(), previous: z.iso.date().nullable(), lineIds: z.array(z.uuid()) }),
+    live: orderLive,
   }),
 ] as const
