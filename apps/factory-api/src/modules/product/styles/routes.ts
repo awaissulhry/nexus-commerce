@@ -7,6 +7,7 @@ import {
   createRevisionContract,
   createScaleContract,
   createStyleContract,
+  garmentTrackingContract,
   generateSkusContract,
   getScaleContract,
   getStyleContract,
@@ -28,7 +29,7 @@ import { manifest } from './manifest'
 import { createRevision, listRevisions } from './revisions'
 import { addSizes, createScale, getScale, listScales, moveScale, reorderSizes, updateScale, updateSize } from './scales'
 import { generateSkus, updateSku } from './skus'
-import { createStyle, getStyle, listStyles, moveStyle, updateStyle } from './styles'
+import { createStyle, getStyle, listStyles, moveStyle, setGarmentTracking, updateStyle } from './styles'
 
 /**
  * Styles, colourways, size scales and the colour x size SKU matrix (product module, B-W1-11; A2 SCR-040, SCR-041,
@@ -54,6 +55,10 @@ export default defineRoutes('product.styles', manifest, async (app) => {
 
   app.post('/product/styles/:styleId/reactivate', { schema: styleStatusContract }, async (request) => ({
     style: await moveStyle(request, request.params.styleId, 'reactivate', request.body, idempotencyKeyFrom(request)),
+  }))
+
+  app.put('/product/styles/:styleId/garment-tracking', { schema: garmentTrackingContract }, async (request) => ({
+    style: await setGarmentTracking(request, request.params.styleId, request.body, idempotencyKeyFrom(request)),
   }))
 
   app.post('/product/styles/:styleId/colourways', { schema: addColourwayContract }, async (request, reply) =>

@@ -98,8 +98,10 @@ export async function moveWorkOrder(
  * first cut or scan): RELEASED → IN_PROGRESS with its start time, as the system (the worker's handler; the floor role
  * cannot update a work order) or the office, in one command on the work order (its version bump locks the row). Answers
  * `started: false` and writes nothing when the work order is not RELEASED any more (started already, or cancelled
- * meanwhile). The same work order is started once: its key is `workorders-start:<id>`, so a repeat answers from the
- * receipt.
+ * meanwhile). The same work order is started once: its key is `workorders-start:<id>` and its input names only the
+ * work order (never the cause), so a repeat, or a second first work handled at the same time (two issues of one work
+ * order in one worker batch), answers from the receipt instead of being refused as a reused key; the audit row keeps
+ * the cause of the start that won.
  */
 export async function startOnFirstWork(caller: CommandCaller, workOrderId: string, cause: { readonly what: string; readonly causationId?: string }): Promise<{ started: boolean }> {
   const context = caller.factoryContext
@@ -112,7 +114,7 @@ export async function startOnFirstWork(caller: CommandCaller, workOrderId: strin
       {
         name: 'workorders.start',
         idempotencyKey: `workorders-start:${workOrderId}`,
-        input: { workOrderId, to: 'IN_PROGRESS', cause: cause.what },
+        input: { workOrderId, to: 'IN_PROGRESS' },
         record: { type: 'WorkOrder', id: workOrderId },
         ...(cause.causationId ? { causationId: cause.causationId } : {}),
       },

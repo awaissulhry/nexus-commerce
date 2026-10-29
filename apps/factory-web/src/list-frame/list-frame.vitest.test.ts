@@ -6,8 +6,9 @@ import { LOCALES } from '../lib/i18n/locales'
 import { CATALOGUE, messagesFor, placeholdersOf } from '../lib/i18n/messages'
 import { I18nProvider } from '../lib/i18n/provider'
 import { designScreen, LAB_ROWS } from './fixtures'
+import { labRowReason } from './lab/ListFrameLab'
 import { ListKeysInfo } from './ListKeysInfo'
-import { FRAME_KEYS, isListKey, listKeys, nextRowIndex, rangeIds, sameIds, selectAllState, toggleAll, toggleId } from './model'
+import { FIT_ROWS, FRAME_KEYS, gridLayout, isListKey, listKeys, nextRowIndex, ownsKeys, rangeIds, sameIds, selectAllState, toggleAll, toggleId } from './model'
 
 /**
  * The list frame (Owner rule 2026-10-29): the selection rules every Office list shares, the keys its footer icon lists,
@@ -112,5 +113,36 @@ describe('words in it and en; no key left on screen', () => {
     const cases = (designScreen as DesignScreen<unknown>).cases.map((item) => item.id)
     expect(cases).toEqual(expect.arrayContaining(['none-selected', 'some-selected', 'all-selected', 'keys-open', 'read-only', 'loading', 'failed', 'empty']))
     expect(LAB_ROWS.every((row) => /^Demo /.test(row.name))).toBe(true)
+  })
+})
+
+describe('several frames on one page, rows that may not be selected', () => {
+  it('the keys belong to the frame with the focus, else to the page\'s first frame', () => {
+    expect(ownsKeys(0, null)).toBe(true)
+    expect(ownsKeys(1, null)).toBe(false)
+    expect(ownsKeys(1, 1)).toBe(true)
+    expect(ownsKeys(0, 1)).toBe(false)
+  })
+
+  it('a lab row that may not be selected says why (blocked rows)', () => {
+    const blocked = LAB_ROWS.find((row) => row.status === 'BLOCKED')!
+    const active = LAB_ROWS.find((row) => row.status === 'ACTIVE')!
+    expect(labRowReason(blocked, (key) => key)).toBe('lab.blockedReason')
+    expect(labRowReason(active, (key) => key)).toBeNull()
+  })
+})
+
+describe('the grid takes its rows\' height up to one page (no dead space under a short list)', () => {
+  it('fits 1 to 50 rows, keeps AG\'s minimum with none, scrolls inside with more', () => {
+    expect(FIT_ROWS).toBe(50)
+    expect(gridLayout(0)).toEqual({ domLayout: 'autoHeight', fit: false })
+    expect(gridLayout(2)).toEqual({ domLayout: 'autoHeight', fit: true })
+    expect(gridLayout(50)).toEqual({ domLayout: 'autoHeight', fit: true })
+    expect(gridLayout(51)).toEqual({ domLayout: 'normal', fit: false })
+  })
+
+  it('the lab shows a short list and a long one', () => {
+    const ids = designScreen.cases.map((item) => item.id)
+    expect(ids).toEqual(expect.arrayContaining(['short', 'long']))
   })
 })

@@ -71,6 +71,13 @@ export const designScreen = defineDesignScreen<ListFrameLabModel>({
     { id: 'keyboard', label: 'Keyboard: a focused row (j / k move it, x ticks it, Enter opens)', model: lab({ focusRow: 2, selected: ids(2) }) },
     { id: 'help', label: '? opens the full shortcut list', model: lab({ helpOpen: true }) },
     { id: 'read-only', label: 'A read-only list: no checkboxes, the same frame', model: lab({ readOnly: true }) },
+    { id: 'short', label: 'A short list: the grid is exactly as tall as its two rows', model: lab({ rows: LAB_ROWS.slice(0, 2), total: 2 }), note: 'No empty band under the rows (AG\'s 150 px minimum is lifted up to one page of rows).' },
+    {
+      id: 'long',
+      label: 'More than one page loaded: a bounded grid that scrolls inside',
+      model: lab({ rows: Array.from({ length: 60 }, (_, index) => ({ ...LAB_ROWS[index % LAB_ROWS.length]!, id: `long-${index}`, code: `L-${String(index + 1).padStart(3, '0')}` })), total: 60 }),
+    },
+    { id: 'row-locked', label: 'Rows that may not be selected: their box is disabled and says why', model: lab({ blockedLocked: true, selected: ids(1) }), note: 'isRowSelectable: the header box and x skip them.' },
     { id: 'loading', label: 'Loading', model: lab({ rows: null, total: null }) },
     { id: 'failed', label: 'The read failed (never drawn as empty)', model: lab({ state: 'failed' }) },
     { id: 'empty', label: 'Nothing yet', model: lab({ rows: [], total: 0, state: 'empty' }) },

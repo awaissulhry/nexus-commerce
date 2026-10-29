@@ -56,6 +56,7 @@ export const STYLE_COLUMNS = {
   id: true,
   companyId: true,
   ...FIELD_COLUMNS,
+  garmentTracking: true,
   status: true,
   version: true,
   createdAt: true,
@@ -338,6 +339,7 @@ export function styleViewOf(row: StyleRowData, parts: StyleParts): StyleView {
     description: row.description,
     measurementTemplate: row.measurementTemplate ? { ...row.measurementTemplate } : null,
     tracking: garmentTracking(fields),
+    garmentTracking: row.garmentTracking,
     range: fields.sizes.map((code) => {
       const size = sizeByCode.get(code)
       return { code, label: size?.label ?? null, status: (size?.status ?? 'ARCHIVED') as MasterStatus, bodyMeasures: (size?.bodyMeasures as BodyMeasures | null | undefined) ?? null }

@@ -137,3 +137,49 @@ export const depositReceivedContract = defineContract({
   },
 })
 
+
+// ---- the deposit page by link (DEPOSIT_INFO) ---------------------------------------------------------------------------
+
+/** Office: mail the deposit page's link to the quote's contact (an OPEN request). The link's token is never in an answer. */
+export const sendDepositLinkContract = defineContract({
+  params: input({ depositRequestId: id() }),
+  body: input({ message: z.string().trim().max(2000).optional() }),
+  response: {
+    201: output({
+      link: output({ id: id(), expiresAt: instant(), to: z.string(), revokedLinkIds: z.array(id()) }),
+      emailId: id(),
+      /** How the mail went at once (email out's delivery outcome), or `replayed` for a repeat of the request. */
+      delivery: z.enum(['sent', 'failed', 'retry', 'settled', 'replayed']),
+    }),
+  },
+})
+
+/** The customer's deposit page: the request, the quote and order it belongs to, and how to pay (price grain). */
+export const depositLinkViewContract = defineContract({
+  response: {
+    200: output({
+      deposit: output({
+        kind: z.string(),
+        depositPct: z.string().nullable(),
+        currency: currency(),
+        amount: money.price(z.number().int()),
+        dueDate: businessDate(),
+        status: z.string(),
+        paid: z.boolean(),
+      }),
+      quote: output({ document: z.string() }),
+      order: output({ number: z.string() }).nullable(),
+      from: output({ legalName: z.string(), tradeName: z.string().nullable() }),
+      instructions: output({
+        method: z.literal('BANK_TRANSFER'),
+        amount: money.price(z.number().int()),
+        currency: z.string(),
+        dueDate: z.string(),
+        reference: z.string(),
+        bank: output({ accountHolder: z.string(), iban: z.string(), bic: z.string().nullable(), bankName: z.string().nullable() }).nullable(),
+        text: z.string(),
+      }),
+      expiresAt: instant(),
+    }),
+  },
+})

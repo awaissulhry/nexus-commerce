@@ -6,6 +6,7 @@ import {
   createRevisionBody,
   createStyleBody,
   generatedSkus,
+  garmentTrackingBody,
   generateSkusBody,
   colourRow,
   listColoursQuery,
@@ -38,6 +39,7 @@ export const getStyleContract = defineContract({ params: style, response: one })
 export const createStyleContract = defineContract({ body: createStyleBody, response: created })
 export const updateStyleContract = defineContract({ params: style, body: updateStyleBody, response: one })
 export const styleStatusContract = defineContract({ params: style, body: styleStatusBody, response: one })
+export const garmentTrackingContract = defineContract({ params: style, body: garmentTrackingBody, response: one })
 
 export const addColourwayContract = defineContract({ params: style, body: colourwayBody, response: created })
 export const updateColourwayContract = defineContract({ params: input({ styleId: id(), colourwayId: id() }), body: updateColourwayBody, response: one })

@@ -28,7 +28,8 @@ Commerce keeps its own copy unchanged and nothing in Commerce imports this packa
 - `policy-sql.ts` (also `@nexus/db-kit/policy-sql`, pure):
   - `policySql(model)` and `tablePolicySql(model, table)` write idempotent, sorted SQL: ENABLE + FORCE RLS, one
     policy per role and command on `current_setting('<setting>', true)` (empty → no row), and grants. A role with
-    hidden columns gets column grants that leave them out.
+    hidden columns gets column grants that leave them out; a role with `onlyValues` (column → listed values) reaches
+    only the rows whose column holds one of them (`"kind"::text IN (…)` in every policy of that role).
   - The generator owns every policy on a managed table: it drops unknown ones and revokes all from PUBLIC and every
     managed role before granting.
   - `runtimeRoleSql(roles)` creates NOLOGIN runtime roles.

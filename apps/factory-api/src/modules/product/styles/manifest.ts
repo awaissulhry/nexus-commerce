@@ -16,6 +16,7 @@ export const manifest = defineManifest({
   'PATCH /product/styles/:styleId': manage,
   'POST /product/styles/:styleId/archive': manage,
   'POST /product/styles/:styleId/reactivate': manage,
+  'PUT /product/styles/:styleId/garment-tracking': manage,
   'POST /product/styles/:styleId/colourways': manage,
   'PATCH /product/styles/:styleId/colourways/:colourwayId': manage,
   'POST /product/styles/:styleId/skus/generate': manage,
