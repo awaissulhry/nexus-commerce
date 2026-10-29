@@ -261,8 +261,8 @@ describe('a missing input is listed and the cost is not complete, never a silent
     await ok('engineer', 'PUT', `/product/materials/${lining}/standard-cost`, { version: await version(), standardCost: '3.1', reason: 'New price list (made up).' })
     const again = await getSheet()
     expect(again.complete).toBe(true)
-    const [{ at }] = await admin<{ at: Date }>(`SELECT at FROM "AuditLog" WHERE "recordType" = 'Item' AND "recordId" = $1 ORDER BY at DESC LIMIT 1`, [lining])
-    expect(again.inputs.materials.find((entry: Json) => entry.itemId === lining)).toMatchObject({ standardCost: '3.1', asOf: at!.toISOString() })
+    const [audit] = await admin<{ at: Date }>(`SELECT at FROM "AuditLog" WHERE "recordType" = 'Item' AND "recordId" = $1 ORDER BY at DESC LIMIT 1`, [lining])
+    expect(again.inputs.materials.find((entry: Json) => entry.itemId === lining)).toMatchObject({ standardCost: '3.1', asOf: audit!.at.toISOString() })
   })
 
   it('a kind of work centre without a cost per minute: every cell, and the labour says which', async () => {

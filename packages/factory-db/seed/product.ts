@@ -20,7 +20,8 @@ import { seed as seedParties } from './parties'
  *
  *   materials   leather (bought by the hide, counted and costed in ft², Cr VI tested, black and red), a mesh lining
  *               (rolls of metres, grey) and a shoulder protector, each with a made-up standard cost; the leather and
- *               protector come from the parties seed's supplier P2
+ *               protector come from the parties seed's supplier P2 (leather: 14 days, at least 5 hides; protectors in
+ *               steps of 12, the supplier's own lead time)
  *   sizes       an EU jacket scale 48-56 with body measures; the style uses 50, 52, 54 (base 52)
  *   style       SEED-JKT-01, Category II PPE to EN 17092-3 class AA, for the brand P1, made-to-measure allowed (the
  *               JACKET measurement template, whose points match the parties seed's rider profiles)
@@ -89,6 +90,9 @@ export async function seed(context: SeedContext): Promise<ProductSeed> {
       consumptionFactor: '1',
       defaultSupplierId: supplierId,
       supplierArticleCode: 'SEED-ART-100',
+      // The supplier's terms: 14 days, at least 5 hides an order.
+      leadTimeDays: 14,
+      minOrderQty: '5.0000',
       standardCost: '4.200000',
       animalSpecies: 'bovine',
       tannage: Tannage.CHROME,
@@ -129,6 +133,8 @@ export async function seed(context: SeedContext): Promise<ProductSeed> {
       consumptionUom: Uom.PCS,
       defaultSupplierId: supplierId,
       supplierArticleCode: 'SEED-ART-300',
+      // No lead time of its own (the supplier's usual one applies); sold in boxes of 12.
+      orderMultiple: '12.0000',
       standardCost: '6.500000',
       isPpeComponent: true,
       ...stamp,
