@@ -1,5 +1,4 @@
 import { ValidationError, type Issue } from '../../core/errors'
-import { formatScanId, MAX_SCAN_REF, parseScanId } from '../../numbering/scan-id'
 import { NO_DPIA_NOTE, NO_WORKER_NOTICE_NOTE, type FloorReadiness } from '../../privacy/readiness'
 import { CUTTABLE_STATUSES } from '../cutting/rules'
 import type { WorkOrderKind, WorkOrderStatus } from '../work-orders/machine'
@@ -222,26 +221,6 @@ export function planBundles(facts: PlanFacts): BundlePlan {
     return refuse('TOO_MANY_BUNDLES', `That makes ${bundles.length} bundles; at most ${MAX_BUNDLES_PER_MAKE} are made at once. Take a larger bundle size, or bundle fewer cells at a time.`)
   }
   return { ok: true, bundles, singlePiece }
-}
-
-// ---- codes ---------------------------------------------------------------------------------------------------------------------
-
-/** The highest BUNDLE reference among these codes of the tenant (0: none). Other text (another type, another tenant, a made-up seed code) counts nothing. */
-export function highestBundleRef(codes: readonly (string | null | undefined)[], tag: string): number {
-  let highest = 0
-  for (const code of codes) {
-    if (typeof code !== 'string') continue
-    const scan = parseScanId(code, { tenantTag: tag, types: ['BUNDLE'] })
-    if (scan.ok && scan.ref > highest) highest = scan.ref
-  }
-  return highest
-}
-
-/** The next `count` ticket codes after the highest reference: BUNDLE scannable ids of the tenant. */
-export function nextBundleCodes(tag: string, highest: number, count: number): string[] {
-  if (!Number.isSafeInteger(count) || count < 0) throw new RangeError('A count of codes is a whole number from 0.')
-  if (highest + count > MAX_SCAN_REF) throw new RangeError('The bundle codes of this factory have run out.')
-  return Array.from({ length: count }, (_, index) => formatScanId({ type: 'BUNDLE', tenantTag: tag, ref: highest + 1 + index }))
 }
 
 // ---- reprint, void, scan -------------------------------------------------------------------------------------------------------

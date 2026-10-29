@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
-import { MAX_NUMBER, MAX_YEAR, MIN_YEAR, NUMBER_KINDS, NUMBER_RESETS, SERIES_CODE } from '@nexus/factory-domain/numbering/kinds'
+import { MAX_BLOCK_SIZE } from '@nexus/factory-domain/numbering/blocks'
+import { DOCUMENT_KINDS, MAX_NUMBER, MAX_YEAR, MIN_YEAR, NUMBER_RESETS, SCAN_ID_KINDS, SERIES_CODE } from '@nexus/factory-domain/numbering/kinds'
 import { MAX_PATTERN_LENGTH } from '@nexus/factory-domain/numbering/format'
 
 /**
@@ -14,7 +15,7 @@ export const SERIES_STATUSES = ['ACTIVE', 'CLOSED'] as const
 export const seriesView = output({
   id: id(),
   companyId: id(),
-  kind: z.enum(NUMBER_KINDS),
+  kind: z.enum(DOCUMENT_KINDS),
   code: z.string(),
   /** `2026`, or `ALL` for a series that never resets. */
   scopeKey: z.string(),
@@ -40,14 +41,15 @@ const seriesParams = input({ seriesId: id() })
 const one = { 200: output({ series: seriesView }) }
 
 export const listSeriesContract = defineContract({
-  querystring: input({ companyId: id().optional(), kind: z.enum(NUMBER_KINDS).optional() }),
+  querystring: input({ companyId: id().optional(), kind: z.enum(DOCUMENT_KINDS).optional() }),
   response: { 200: output({ series: z.array(seriesView) }) },
 })
 
 export const createSeriesContract = defineContract({
   body: input({
     companyId: id(),
-    kind: z.enum(NUMBER_KINDS),
+    /** A document kind: the scan-id kinds (BUNDLE, HIDE, GARMENT_SERIAL) have no series, only the tenant's blocks. */
+    kind: z.enum(DOCUMENT_KINDS),
     /** Default `MAIN`. */
     code: z.string().regex(SERIES_CODE).optional(),
     /** Default YEARLY. */
@@ -80,4 +82,76 @@ export const advanceContract = defineContract({
     version: version(),
   }),
   response: one,
+})
+
+// ---- scan-id blocks (scan-ids.ts) -------------------------------------------------------------------------------------------
+
+export const BLOCK_STATUSES = ['ACTIVE', 'CLOSED'] as const
+
+export const blockView = output({
+  id: id(),
+  kind: z.enum(SCAN_ID_KINDS),
+  deviceId: id(),
+  fromRef: z.number().int(),
+  toRef: z.number().int(),
+  size: z.number().int(),
+  /** Numbers of it the server saw used. */
+  used: z.number().int(),
+  /** The highest number used (null: none): a tablet that lost its data goes on after it. */
+  highestUsedRef: z.number().int().nullable(),
+  remaining: z.number().int(),
+  firstCode: z.string(),
+  lastCode: z.string(),
+  status: z.enum(BLOCK_STATUSES),
+  closedReason: z.string().nullable(),
+  closedAt: instant().nullable(),
+  version: z.number().int(),
+  createdAt: instant(),
+})
+
+export const listBlocksContract = defineContract({
+  querystring: input({ deviceId: id().optional(), kind: z.enum(SCAN_ID_KINDS).optional(), status: z.enum(BLOCK_STATUSES).optional() }),
+  response: { 200: output({ blocks: z.array(blockView) }) },
+})
+
+export const reserveBlockContract = defineContract({
+  body: input({
+    deviceId: id(),
+    kind: z.enum(SCAN_ID_KINDS),
+    /** Default: the kind's tablet size (200 bundle tickets or hide tags, 500 garment serials). */
+    size: z.number().int().min(1).max(MAX_BLOCK_SIZE).optional(),
+  }),
+  response: { 201: output({ block: blockView }) },
+})
+
+export const closeBlockContract = defineContract({
+  params: input({ blockId: id() }),
+  body: input({
+    /** Why (for the audit log): "tablet lost on 29 Oct", "tablet retired". */
+    reason: z.string().trim().min(3).max(500),
+    version: version(),
+  }),
+  response: { 200: output({ block: blockView }) },
+})
+
+/** The tablet's open blocks, and the tenant tag it prints its scan ids with. */
+export const myBlocksContract = defineContract({
+  response: { 200: output({ scanTag: z.string(), blocks: z.array(blockView) }) },
+})
+
+export const topUpContract = defineContract({
+  body: input({
+    /** Default: every scan-id kind. */
+    kinds: z
+      .array(
+        input({
+          kind: z.enum(SCAN_ID_KINDS),
+          /** The tablet's own count of numbers left (labels printed and not yet sent count as used). */
+          remaining: z.number().int().min(0).max(MAX_NUMBER).optional(),
+        }),
+      )
+      .max(SCAN_ID_KINDS.length)
+      .optional(),
+  }),
+  response: { 200: output({ scanTag: z.string(), blocks: z.array(blockView), reserved: z.array(blockView) }) },
 })

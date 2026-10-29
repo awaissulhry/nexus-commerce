@@ -1,13 +1,12 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { SCAN_TYPES } from '@nexus/factory-domain/numbering/scan-id'
 import { scannedBundleRefusal, type BundleRefusal } from '@nexus/factory-domain/production/bundles/rules'
 import type { CommandTx } from '../../../core/command'
 
 /**
  * The bundles' reads and locks (B-W1-41): a work order as the bundles see it, its operations, its bundles, a bundle by
- * its ticket's code (the current one or a replaced one), the scans that name bundles, the tenant's highest ticket code,
- * and the advisory locks of a cell's bundles and of the tenant's ticket codes. Every read names its columns, selects no
+ * its ticket's code (the current one or a replaced one), the scans that name bundles, and the advisory locks of a cell's
+ * bundles (ticket codes come from the tenant's BUNDLE counter: codes.ts). Every read names its columns, selects no
  * relation (inside a command's transaction the queries run one after another on its one connection) and runs as the
  * caller: row-level security keeps a floor device to its own site.
  */
@@ -145,23 +144,6 @@ export async function lockCells(tx: CommandTx, tenantId: string, siteId: string,
   for (const cellId of [...new Set(cellIds)].sort()) {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.bundle-cell', ${tenantId}::uuid, ${siteId}::uuid, ${cellId}::uuid), 0))`
   }
-}
-
-/** The tenant's ticket-code lock: the next codes (after the highest one) are read and taken by one write at a time. Taken last. */
-export async function lockBundleCodes(tx: CommandTx, tenantId: string): Promise<void> {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.bundle-code', ${tenantId}::uuid), 0))`
-}
-
-/**
- * The highest ticket code the reader sees among the tenant's BUNDLE codes (`BN-<tag>-…`), or null. A ticket's code is
- * never reused: the highest reference ever given is always some bundle's current code (a reprint takes a higher one,
- * and a void bundle keeps its code), so the current codes are enough. The office and the tenant's system context see
- * every site's bundles; a floor device sees its own site's only (see codes.ts).
- */
-export async function highestBundleCode(db: Reader, tag: string): Promise<string | null> {
-  const prefix = `${SCAN_TYPES.BUNDLE}-${tag}-%`
-  const [row] = await db.$queryRaw<{ code: string }[]>`SELECT "code" FROM "Bundle" WHERE "code" LIKE ${prefix} ORDER BY length("code") DESC, "code" DESC LIMIT 1`
-  return row?.code ?? null
 }
 
 // ---- the scan's lock (B-W1-42) -------------------------------------------------------------------------------------------------

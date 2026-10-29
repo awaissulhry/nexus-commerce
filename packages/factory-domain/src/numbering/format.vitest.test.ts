@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { formatNumber, MAX_FISCAL_NUMBER_LENGTH, parseNumber, parsePattern, PatternError, patternProblem } from './format'
 import {
   defaultPattern,
+  DOCUMENT_KINDS,
   FISCAL_KINDS,
   isFiscalKind,
   isScopeKey,
@@ -36,8 +37,8 @@ describe('number kinds and periods', () => {
     expect(['', 'main', '-A', 'A B', 'X'.repeat(17)].some(isSeriesCode)).toBe(false)
   })
 
-  it('gives every kind a default pattern that fits its reset (and FatturaPA for fiscal kinds)', () => {
-    for (const kind of NUMBER_KINDS) {
+  it('gives every document kind a default pattern that fits its reset (and FatturaPA for fiscal kinds)', () => {
+    for (const kind of DOCUMENT_KINDS) {
       for (const reset of ['YEARLY', 'NEVER'] as const) expect(patternProblem(defaultPattern(kind, reset), reset, isFiscalKind(kind))).toBeNull()
     }
     expect(defaultPattern('INVOICE', 'YEARLY')).toBe('FT-{YYYY}-{N:5}')
