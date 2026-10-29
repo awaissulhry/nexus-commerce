@@ -1,5 +1,8 @@
 import type { Prisma } from '../src/generated/prisma/client'
+import { W1_SCAN_REASONS } from '@nexus/factory-domain/production/scans/reasons'
+import { unknownBundleRefusal } from '@nexus/factory-domain/production/scans/rules'
 import {
+  DefectKind,
   HideState,
   LabelTemplateStatus,
   MonitoringBasis,
@@ -8,7 +11,9 @@ import {
   ProductType,
   SalesLineKind,
   SalesOrderStatus,
+  ScanCorrectionStatus,
   ScanKind,
+  ScanRefusalAction,
   ScanSubject,
   StockMoveReason,
   StockValuationMethod,
@@ -46,7 +51,10 @@ import { seedWorkerNotice } from './privacy'
  *                seedWorkerNotice, run first); one cut of the issued hide
  *                (20 ft² for sleeves of BLK 50 and 52, so the hide stays PARTLY_CUT); two bundles of sleeves from it;
  *                three scans at sewing: a report of the first bundle undone at once (a mis-scan) and a report of the
- *                second.
+ *                second; the operator's correction request of that report (one of its two sleeve sets stained: 1 good,
+ *                1 scrapped, its line STAIN 1), still PENDING; a scan the cutting tablet's queue sent that was refused
+ *                (an unknown ticket), kept open (B-W1-42).
+ *   reasons      the tenant's scrap and rework reasons: W1's list (factory-domain production/scans/reasons), it/en.
  *
  * The generated isolation tests (src/isolation.pg.vitest.test.ts) copy the FIRST row of each table by id and insert the
  * copy: the parts of a released work order are frozen, a second standing report of a bundle at an operation is refused,
@@ -72,6 +80,8 @@ const T = {
   scanned: new Date('2026-11-17T08:00:00.000Z'),
   undone: new Date('2026-11-17T08:00:20.000Z'),
   rescanned: new Date('2026-11-17T09:30:00.000Z'),
+  asked: new Date('2026-11-17T10:00:00.000Z'),
+  refused: new Date('2026-11-17T10:30:00.000Z'),
 } as const
 const DAY = { orderDate: new Date('2026-11-12T00:00:00.000Z'), due: new Date('2026-12-04T00:00:00.000Z') } as const
 
@@ -115,6 +125,9 @@ export interface ProductionSeed {
   readonly operatorId: string
   readonly leadId: string
   readonly deviceId: string
+  /** The operator's PENDING correction request of the standing report (scanIds[2]) and the cutting tablet's refused scan. */
+  readonly correctionRequestId: string
+  readonly refusalId: string
 }
 
 export async function seed(context: SeedContext): Promise<ProductionSeed> {
@@ -560,6 +573,86 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
       })
     }),
   )
+  // B-W1-42's records: the tenant's reasons (the office keeps them), then on the floor an ask of a correction of the
+  // standing report with its line, and a refused scan of the cutting tablet's queue.
+  const correctionRequestId = id('production:scan-correction:WO-0001:1')
+  const refusalId = id('production:scan-refusal:A1:1')
+  await db.withScope({ audience: 'office', tenantId, actorId }, (client) =>
+    client.$transaction(async (tx) => {
+      for (const reason of W1_SCAN_REASONS) {
+        const reasonId = id(`production:scrap-reason:${reason.kind}:${reason.code}`)
+        const data = { labelIt: reason.label.it, labelEn: reason.label.en, sortOrder: reason.sortOrder, active: reason.active }
+        await tx.scrapReason.upsert({
+          where: { id: reasonId },
+          create: { id: reasonId, kind: reason.kind === 'SCRAP' ? DefectKind.SCRAP : DefectKind.REWORK, code: reason.code, ...data, ...stamp(T.setup) },
+          update: data,
+          select: { id: true },
+        })
+      }
+    }),
+  )
+  await db.withScope(signedIn, (client) =>
+    client.$transaction(async (tx) => {
+      if (await tx.scanCorrectionRequest.findUnique({ where: { id: correctionRequestId }, select: { id: true } })) return
+      await tx.scanCorrectionRequest.create({
+        data: {
+          id: correctionRequestId,
+          siteId: siteA,
+          workOrderId,
+          bundleId: bundleIds[1],
+          workOrderOperationId: operationIds.sew,
+          scanId: scanIds[2],
+          goodQuantity: 1,
+          scrapQuantity: 1,
+          reason: 'One sleeve set has a stain that does not clean off.',
+          status: ScanCorrectionStatus.PENDING,
+          askedById: operatorId,
+          stationId: id('site:A1:station:CUT-01'),
+          deviceId,
+          clientRequestId: 'seed-ask-1',
+          deviceTime: T.asked,
+          serverTime: T.asked,
+          createdById: operatorId,
+          createdAt: T.asked,
+          updatedAt: T.asked,
+        },
+        select: { id: true },
+      })
+      await tx.operationScanDefect.create({
+        data: { id: id('production:scan-line:WO-0001:ask-1'), siteId: siteA, correctionRequestId, kind: DefectKind.SCRAP, reasonCode: 'STAIN', quantity: 1, serverTime: T.asked, createdById: operatorId },
+        select: { id: true },
+      })
+    }),
+  )
+  await db.withScope(signedIn, (client) =>
+    client.$transaction(async (tx) => {
+      if (await tx.floorScanRefusal.findUnique({ where: { id: refusalId }, select: { id: true } })) return
+      const refusal = unknownBundleRefusal()
+      await tx.floorScanRefusal.create({
+        data: {
+          id: refusalId,
+          siteId: siteA,
+          deviceId,
+          clientScanId: 'seed-scan-refused-1',
+          action: ScanRefusalAction.REPORT,
+          code: refusal.code,
+          message: refusal.message,
+          fix: refusal.fix,
+          final: refusal.final,
+          scanned: 'SEED-BN-9999',
+          goodQuantity: 1,
+          workerId: operatorId,
+          stationId: id('site:A1:station:CUT-01'),
+          deviceTime: T.refused,
+          serverTime: T.refused,
+          createdById: operatorId,
+          createdAt: T.refused,
+          updatedAt: T.refused,
+        },
+        select: { id: true },
+      })
+    }),
+  )
   // The first floor work moves the work order on (the office, or the worker's handler after the floor's event).
   await db.withScope({ audience: 'office', tenantId, actorId }, (client) =>
     client.workOrder.updateMany({ where: { id: workOrderId, status: WorkOrderStatus.RELEASED }, data: { status: WorkOrderStatus.IN_PROGRESS, startedAt: T.cut, updatedAt: T.cut } }),
@@ -584,5 +677,7 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
     operatorId,
     leadId,
     deviceId,
+    correctionRequestId,
+    refusalId,
   }
 }

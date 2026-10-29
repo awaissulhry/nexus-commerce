@@ -59,6 +59,9 @@ model Device {
   cutLogs        CutLog[]
   bundles        Bundle[]
   operationScans OperationScan[]
+  // B-W1-42: correction requests asked and scans refused on it.
+  scanCorrectionRequests ScanCorrectionRequest[]
+  scanRefusals           FloorScanRefusal[]
 
   @@unique([tenantId, siteId, id])
   @@index([tenantId, siteId])
@@ -140,6 +143,9 @@ model Worker {
   noticeAcks     WorkerNoticeAck[]
   cutLogs        CutLog[]
   operationScans OperationScan[]
+  // B-W1-42: the correction requests they asked and the refused scans they sent (a site that names workers).
+  scanCorrectionRequests ScanCorrectionRequest[]
+  scanRefusals           FloorScanRefusal[]
   // quality.prisma: the final inspections the worker made as the inspector.
   inspections    Inspection[]
 
