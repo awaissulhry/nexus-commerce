@@ -7,6 +7,7 @@ import { MASTER_STATUSES } from '../sizes/rules'
 import { MAX_COLOURWAYS } from '../styles/colourways'
 import { REVISION_STATUSES } from '../styles/revisions'
 import { MAX_RANGE_SIZES, STYLE_STATUSES } from '../styles/rules'
+import { ROUTING_ISSUE_CODES } from '../routing/rules'
 import { UOMS } from '../units/units'
 import { BOM_ISSUE_CODES, MAX_SEQ } from './rules'
 
@@ -139,7 +140,15 @@ export type CompareQuery = z.output<typeof compareQuery>
 
 const ref = output({ id: id(), code: z.string(), name: z.string() })
 const colourRef = output({ id: id(), code: z.string(), name: z.string(), status: z.enum(MASTER_STATUSES) })
-const issue = output({ code: z.enum(BOM_ISSUE_CODES), lineId: id().nullable(), size: z.string().nullable(), colourwayId: id().nullable(), message: z.string() })
+/** A release-check finding: of the BOM (a line, a size, a colourway) or of the revision's routing (a step). */
+const issue = output({
+  code: z.enum([...BOM_ISSUE_CODES, ...ROUTING_ISSUE_CODES]),
+  lineId: id().nullable(),
+  size: z.string().nullable(),
+  colourwayId: id().nullable(),
+  stepId: id().nullable(),
+  message: z.string(),
+})
 
 export const bomLineView = output({
   id: id(),
@@ -217,9 +226,13 @@ export const bomView = output({
       ),
     }),
   ),
-  /** What stops the release (a draft only; a frozen revision is not checked again). */
+  /**
+   * What stops the release: the BOM's blockers and the routing's (B-W1-14), exactly what the release refuses (a draft
+   * only; a frozen revision is not checked again). Warnings of both are shown, never refused.
+   */
   issues: z.array(issue),
   warnings: z.array(issue),
+  /** A draft of a style that is not archived, with no issue: the release would pass. */
   releasable: z.boolean(),
 })
 export type BomView = z.infer<typeof bomView>
