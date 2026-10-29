@@ -30,6 +30,10 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // The DDT's legal PDF (modules/shipping/ddt): FISCAL_ARCHIVE files only, made at the issue or by a print of a missing
   // one; the first stored is the document. A scan of the signed delivery note (another kind) stays open.
   Ddt: { kinds: ['FISCAL_ARCHIVE'], route: 'POST /shipping/shipments/:shipmentId/ddt, or POST /shipping/ddts/:ddtId/pdf for a missing PDF (made by the API, never uploaded)' },
+  // A notice version's PDF per language and the signed DPIA (platform/privacy, B-W1-36): every kind; the notice's PDF
+  // carries the fingerprint acknowledgements store, the DPIA's opens the floor's gate.
+  PrivacyNotice: { route: 'POST /privacy/notices/:noticeId/texts/:locale/pdf, then POST …/pdf/:fileId/complete' },
+  PrivacyDpia: { route: 'POST /privacy/dpia/:dpiaId/pdf, then POST …/pdf/:fileId/complete' },
 })
 
 /** How a caller of requestUpload / completeUpload reaches them: the generic files routes, or a module's own route. */

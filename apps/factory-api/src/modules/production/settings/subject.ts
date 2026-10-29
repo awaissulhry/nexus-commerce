@@ -1,6 +1,7 @@
 import { InvalidStateError } from '@nexus/factory-domain/core/errors'
 import { floorRecordSubject, scanSubjectOf, type ScanSubject } from '@nexus/factory-domain/production/settings/monitoring'
 import type { CommandTx } from '../../../core/command'
+import { acknowledgedInForce } from '../../../platform/privacy/read'
 
 /**
  * Who a floor record names at a site, for the modules that write floor records: cutting (B-W1-40, CutLog) and scans
@@ -9,7 +10,7 @@ import type { CommandTx } from '../../../core/command'
  * …_production_guards triggers check the same at the insert, for every login; these answer first, in words (409).
  */
 
-type Reader = Pick<CommandTx, 'productionSettings' | 'workerNoticeAck'>
+type Reader = Pick<CommandTx, 'productionSettings' | 'workerNoticeAck' | 'site' | 'privacyNotice'>
 
 /** The site's scan subject: WORKER (the default, also for a site without floor rules) or STATION. */
 export async function scanSubjectFor(tx: Pick<CommandTx, 'productionSettings'>, siteId: string): Promise<ScanSubject> {
@@ -17,10 +18,12 @@ export async function scanSubjectFor(tx: Pick<CommandTx, 'productionSettings'>, 
   return scanSubjectOf(row)
 }
 
-/** The worker acknowledged the information notice at the site (any version: the database's rule for naming them). */
-export async function hasAcknowledgedNotice(tx: Pick<CommandTx, 'workerNoticeAck'>, siteId: string, workerId: string): Promise<boolean> {
-  const ack = await tx.workerNoticeAck.findFirst({ where: { siteId, workerId }, select: { id: true } })
-  return ack !== null
+/**
+ * The worker acknowledged the information notice that counts at the site (the database's rule for naming them, B-W1-36:
+ * the worker notice in force at the site's company; none counts while it has none in force).
+ */
+export async function hasAcknowledgedNotice(tx: Pick<CommandTx, 'workerNoticeAck' | 'site' | 'privacyNotice'>, siteId: string, workerId: string): Promise<boolean> {
+  return acknowledgedInForce(tx, siteId, workerId)
 }
 
 /**

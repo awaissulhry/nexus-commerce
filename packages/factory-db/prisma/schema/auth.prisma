@@ -55,6 +55,8 @@ model User {
   roleAssignments RoleAssignment[]
   // floor-auth.prisma: the floor worker records linked to this person.
   workers         Worker[]
+  // privacy.prisma: the person's acknowledgements of their company's staff notice.
+  staffNoticeAcks StaffNoticeAck[]
 
   @@unique([tenantId, email])
   // The target of the tenant-safe references from the auth rows.
