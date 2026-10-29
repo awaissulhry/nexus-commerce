@@ -22,6 +22,7 @@ import { cellLabel } from '@nexus/factory-domain/production/cutting/rules'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf, type FloorContext, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
+import { useScanIds } from '../../../platform/numbering/scan-ids'
 import { floorReadinessFor } from '../../../platform/privacy/read'
 import type { PrintJobView } from '../../../platform/print/contract'
 import { queueModuleLabel } from '../../../platform/print/jobs'
@@ -301,6 +302,11 @@ export interface MakeInput {
   readonly language?: LabelLanguage | undefined
   /** The floor queue's id for this event (A1 §3.8): the make is ONE bundle, made once whatever the resends. */
   readonly clientEventId?: string | undefined
+  /**
+   * The ticket code the tablet numbered from its own BUNDLE block (B-W0-30: a ticket printed offline): recorded with
+   * useScanIds in the make's command instead of a code taken online. Only with a client event id (one bundle).
+   */
+  readonly ticketCode?: string | undefined
 }
 
 async function makeInCommand(tools: CommandTools, workOrderId: string, body: MakeInput, codes: TicketCodes) {
@@ -336,10 +342,16 @@ async function makeInCommand(tools: CommandTools, workOrderId: string, body: Mak
     ])
   }
 
-  const taken = await codes.take(tx, plan.bundles.length)
+  const ids = plan.bundles.map(() => newId())
+  // A ticket the tablet numbered offline from its own block (409 in words when the number is not its own or was used),
+  // else codes taken online.
+  const taken =
+    body.ticketCode !== undefined
+      ? (await useScanIds(tools, 'BUNDLE', [{ code: body.ticketCode, record: { type: 'Bundle', id: ids[0]! } }])).map((use) => use.code)
+      : await codes.take(tx, plan.bundles.length)
   const entriesOf = new Map(cut.map((cell) => [cell.workOrderSizeId, cell.cutLogIds]))
   const rows = plan.bundles.map((bundle, index) => ({
-    id: newId(),
+    id: ids[index]!,
     siteId: workOrder.siteId,
     workOrderId: workOrder.id,
     workOrderSizeId: bundle.cellId,
@@ -429,6 +441,9 @@ async function madeBefore(caller: CommandCaller, workOrder: BundleHeader, body: 
 /** The floor's "make bundles and print their tickets": one command, then the tickets. */
 export async function makeBundles(caller: CommandCaller, workOrderId: string, body: MakeInput, idempotencyKey?: string) {
   const context = floorOf(caller)
+  if (body.ticketCode !== undefined && body.clientEventId === undefined) {
+    throw new ValidationError('A ticket numbered on the tablet comes with its queue event.', [{ path: 'body/ticketCode', message: 'Send it with the clientEventId of the one bundle it numbers.' }])
+  }
   const workOrder = await bundleWorkOrder(caller, workOrderId, PRODUCTION_BUNDLES)
   // A resent queue event answers the bundle it made (before the gate: it was made while the floor was ready).
   const before = await madeBefore(caller, workOrder, body)

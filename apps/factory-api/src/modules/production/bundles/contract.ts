@@ -177,6 +177,8 @@ export const makeBundlesContract = defineContract({
      * under any key answers the bundle it made (200, replayed).
      */
     clientEventId: z.string().trim().min(1).max(80).optional(),
+    /** The ticket's code from the tablet's own BUNDLE block (a ticket printed offline); only with clientEventId. */
+    ticketCode: z.string().trim().min(1).max(60).optional(),
     ...printing,
   }),
   response: { 200: makeAnswer, 201: makeAnswer },

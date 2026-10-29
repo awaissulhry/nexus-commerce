@@ -1,0 +1,134 @@
+// The floor sync (B-W0-30; PLT-237, PLT-239, PLT-240, PLT-189; A1 §3.8; design 02-sections-floor "offline", floor.sync
+// SCR-023). A floor tablet keeps every action it takes offline as an event (its own id for it, its place in the queue,
+// its clock) and sends its queue in order when the network is there; apps/factory-api platform/floor-sync applies each
+// event through its own module command (a scan, a cut, a bundle …) and keeps what became of it here:
+//
+//   FloorSyncEvent       the per-device sync ledger: one row per event the server recorded, once per device and client
+//                        event id, with the record it became, the device's time and the server's. A resend is answered
+//                        from it and never reaches the module again. Append-only.
+//   FloorRefusedAction   an event the server refused, with its reason in words and ONE fix, whether it may pass when sent
+//                        again, and what was sent; open until the same event is recorded later (RESOLVED) or someone
+//                        discards it with a reason (DISCARDED, by the tablet or the office). What was sent never changes;
+//                        it closes once; it is never deleted.
+//
+// Neither names a worker in a list: a refused action names the worker only where the site's floor rules name workers
+// and the worker acknowledged the notice in force (Statuto dei Lavoratori art. 4; production/settings subject.ts). The
+// ledger names nobody (the module's record and the audit row keep who, by the same rules). The hand-written migration
+// …_floor_sync_guards holds the rules Prisma does not model.
+
+/// One event a floor tablet's queue sent that the server recorded (the per-device sync ledger; PLT-237, PLT-240,
+/// PLT-189): the record its module command made, or found made before under the same id (DUPLICATE). Written by the
+/// tablet's own sync, never changed or removed (the triggers, for every login).
+/// @append-only
+model FloorSyncEvent {
+  id               String           @id @db.Uuid
+  tenantId         String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId           String           @db.Uuid
+  deviceId         String           @db.Uuid
+  /// The tablet's id for the event (factory-domain floor-sync CLIENT_EVENT_ID), unique per device.
+  clientEventId    String
+  /// factory-domain floor-sync FLOOR_SYNC_KINDS (`production.scan.report` …).
+  kind             String
+  /// Its place in the tablet's queue (FIFO per device).
+  deviceSeq        Int
+  /// When it happened, by the tablet's clock (null: the tablet did not say).
+  deviceTime       DateTime?        @db.Timestamptz(3)
+  /// When the server recorded it.
+  serverTime       DateTime         @db.Timestamptz(3)
+  /// The server's clock minus the tablet's at the send, in seconds (PLT-240; null: the tablet did not say).
+  clockSkewSeconds Int?
+  outcome          FloorSyncOutcome
+  /// The record it became (OperationScan, ScanCorrectionRequest, CutLog, Bundle).
+  resultType       String
+  resultId         String           @db.Uuid
+  requestId        String
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+
+  device   Device               @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  resolved FloorRefusedAction[]
+
+  @@unique([tenantId, deviceId, clientEventId])
+  // The target of a refused action's tenant- and site-safe reference.
+  @@unique([tenantId, siteId, id])
+  // A tablet's recorded events by time ("Recorded today").
+  @@index([tenantId, deviceId, serverTime])
+}
+
+/// ACCEPTED: the module recorded the event now. DUPLICATE: the module had recorded it before (a resend whose ledger
+/// row was not written yet); nothing was done again.
+enum FloorSyncOutcome {
+  ACCEPTED
+  DUPLICATE
+}
+
+/// A floor tablet's queued action the server refused (PLT-239; SCR-023 "Refused, with a fix"): kept with the module's
+/// code, its words and ONE fix until the same event is recorded later or someone discards it with a reason. Once per
+/// device, client event id and code. Content fixed; closed once; never deleted (the triggers).
+model FloorRefusedAction {
+  id                String                @id @db.Uuid
+  tenantId          String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The tablet's company and site.
+  companyId         String                @db.Uuid
+  siteId            String                @db.Uuid
+  deviceId          String                @db.Uuid
+  clientEventId     String
+  kind              String
+  deviceSeq         Int
+  /// The module's refusal code, or the sync's own (factory-domain floor-sync SYNC_REFUSAL_CODES).
+  code              String
+  message           String
+  fix               String
+  /// False: the tablet sends it again by itself.
+  final             Boolean
+  /// What it was, in facts for the lists (factory-domain floor-sync summaryOf): never money, never a person.
+  summary           Json
+  /// What the tablet sent (the event's payload), for the office.
+  payload           Json
+  /// The module's own record of this refusal, when it keeps one (FloorScanRefusal for a scan): both or neither.
+  moduleRefusalType String?
+  moduleRefusalId   String?               @db.Uuid
+  /// The signed-in worker who sent it, at a site that names workers and only once they acknowledged the notice in
+  /// force; null at a site that records the station only.
+  workerId          String?               @db.Uuid
+  stationId         String?               @db.Uuid
+  deviceTime        DateTime?             @db.Timestamptz(3)
+  /// When the server first refused it.
+  serverTime        DateTime              @db.Timestamptz(3)
+  status            FloorRefusalStatus    @default(OPEN)
+  /// RESOLVED: the ledger row of the same device and client event id.
+  resolvedByEventId String?               @db.Uuid
+  resolvedAt        DateTime?             @db.Timestamptz(3)
+  /// DISCARDED: when, by whom (the worker at a site that names workers, an office user; null at a station site),
+  /// from where, and why.
+  discardedAt       DateTime?             @db.Timestamptz(3)
+  discardedById     String?               @db.Uuid
+  discardedBy       FloorDiscardAudience?
+  discardReason     String?
+  version           Int                   @default(1)
+  createdAt         DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?               @db.Uuid
+
+  site            Site            @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  device          Device          @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  worker          Worker?         @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  station         Station?        @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  resolvedByEvent FloorSyncEvent? @relation(fields: [tenantId, siteId, resolvedByEventId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, deviceId, clientEventId, code])
+  // The open lists: per site, per device.
+  @@index([tenantId, siteId, status])
+  @@index([tenantId, deviceId, status])
+}
+
+enum FloorRefusalStatus {
+  OPEN
+  RESOLVED
+  DISCARDED
+}
+
+enum FloorDiscardAudience {
+  FLOOR
+  OFFICE
+}

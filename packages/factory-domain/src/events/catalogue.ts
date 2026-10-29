@@ -3,6 +3,7 @@ import { events as costing } from '../costing/events'
 import { events as email } from '../email/events'
 import { events as emailIn } from '../email-in/events'
 import { events as files } from '../files/events'
+import { events as floorSync } from '../floor-sync/events'
 import { events as imports } from '../imports/events'
 import { events as integration } from '../integration/events'
 import { events as inventory } from '../inventory/events'
@@ -119,9 +120,9 @@ export function createCatalogue(definitions: readonly EventDefinition[]): EventC
  * one-off link's use; threads: messages and mentions on records;
  * imports: the import jobs; print: print jobs; email: mail out and its delivery; email-in: mail received); the W1
  * modules bring theirs (compliance: certificate expiry; product: the material library; inventory: stock moves; parties: customers and suppliers;
- * production: floor rules and work orders; purchasing: purchase orders).
+ * production: floor rules and work orders; purchasing: purchase orders); floor-sync: the floor tablets' refused queued actions.
  */
-export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy, ...quality] as const satisfies readonly EventDefinition[]
+export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy, ...quality, ...floorSync] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
