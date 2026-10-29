@@ -15,10 +15,12 @@
 // correction is a TD04 credit note; FIN-061), for every login. Only its status moves, along the SDI states:
 //   DRAFT → ISSUED → SENT (the provider took the file) → DELIVERED (RC) | NOT_DELIVERABLE (MC: in the buyer's tax area,
 //   still a valid invoice) | REJECTED (NS); ERROR (the send failed before SDI) from ISSUED, SENT or after a rejection;
-//   REJECTED and ERROR → SENT again. A rejected file counts as never issued: it is corrected and sent again within five
-//   working days under the SAME number and date (Provv. AdE 89757/2018; FIN-087), so while REJECTED the buyer and seller
-//   data, the payment terms, the printed text and the files may change; the lines and totals do not (a rejection that
-//   needs other amounts is not corrected here: the API decides, B-W1-50). DELIVERED and NOT_DELIVERABLE are final.
+//   REJECTED and ERROR → SENT again. A rejected file counts as never issued (circolare AdE 13/E/2018): it is corrected
+//   and sent again within five working days under the SAME number and date (Provv. AdE 89757/2018; FIN-087), so while
+//   REJECTED its buyer and seller data, payment terms, printed text, files, lines, totals, VAT summary and stamp duty
+//   may change (the error behind an NS may be in the lines or totals, e.g. 00423), never its number, series, year,
+//   date, type, company, party or links; leaving REJECTED runs every check of the issue again, and a corrected total
+//   never drops below what is paid and credited on it. DELIVERED and NOT_DELIVERABLE are final.
 // A DRAFT may be deleted (it has no number, so no gap); nothing else is ever deleted (no cascade, A1 §2.1).
 //
 // Document types (FatturaPA TipoDocumento): TD01 invoice (an immediate one, or a sale without DDT), TD02 the deposit
@@ -50,7 +52,7 @@
 // allocations, never an internal column nor who in the office wrote a row.
 
 /// A sales invoice or credit note of a company to a party (FIN-054, FIN-057, FIN-061; A1 §2.4 G Invoice): numbered
-/// only at issue, frozen after it (only its SDI status moves). Never deleted once issued.
+/// only at issue, frozen after it (only its SDI status moves; a REJECTED file is corrected). Never deleted once issued.
 model Invoice {
   id               String             @id @db.Uuid
   tenantId         String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -190,7 +192,7 @@ enum InvoicePriceBasis {
 
 /// One line of an invoice (A1 §2.4 G InvoiceLine; FatturaPA DettaglioLinee): what is billed, its price and VAT, and
 /// what it comes from (the sales order line and size, the DDT the goods travelled with). Written, changed and removed
-/// only while the invoice is a DRAFT.
+/// only while the invoice is a DRAFT, or REJECTED (the corrected file, checked again when it is sent).
 model InvoiceLine {
   id               String          @id @db.Uuid
   tenantId         String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -198,7 +200,7 @@ model InvoiceLine {
   /// The invoice's buyer (its references).
   buyerPartyId     String          @db.Uuid
   /// The partner role's policy key: null while the invoice is a DRAFT; its party from the issue on (set by the
-  /// invoice's issue).
+  /// invoice's issue; a line added while REJECTED gets it).
   partyId          String?         @db.Uuid
   /// NumeroLinea: 1, 2, 3 … in the invoice.
   seq              Int

@@ -5,6 +5,9 @@
 -- Money (plan A1 §2.1 "Money", "Append-only", "Issued documents", §2.5 "Invoice"; PLAN §2.8 "Corrections only by credit
 -- note" (DPR 633/1972 art. 26), "Rejected file resent within 5 working days" (Provv. AdE 89757/2018), "Sequential,
 -- gap-free numbering" (art. 21 c.2); Q12; features FIN-054, FIN-061, FIN-069, FIN-084, FIN-086, FIN-087, FIN-121).
+-- A file SDI rejected (NS) counts as never issued (circolare AdE 13/E/2018): while REJECTED the invoice is corrected
+-- (its lines and totals too: the error behind an NS may be in them, e.g. 00423) and every check of the issue runs again
+-- when it leaves REJECTED; its number, series, year, date, type, company and buyer never change.
 -- apps/factory-api's modules check all of this first; these rules hold for every login, the owner included. The tenant
 -- and party of a row are held by the policies (USING and WITH CHECK) and by the references, not here: the triggers
 -- leave "tenantId" to them. Every refusal is a check_violation (SQLSTATE 23514): a restrict_violation reaches a Prisma
@@ -65,7 +68,8 @@ $$;
 -- Invoice (FIN-054, FIN-057, FIN-061, FIN-069, FIN-087; A1 §2.5 "Invoice")
 -- =====================================================================================================================
 
--- The issue (DRAFT → ISSUED): everything that must hold once the invoice has its number.
+-- The issue (DRAFT → ISSUED), and again every send of a corrected file (REJECTED → SENT | ERROR): everything that must
+-- hold once the invoice has its number.
 --   number      Numero: at most 20 characters, at least one digit (SDI 00425); the year is the issue date's; the series
 --               is a fiscal one of the company (the reference) for the document type: INVOICE, or DEPOSIT_INVOICE for a
 --               TD02, CREDIT_NOTE for a TD04 (the NumberAllocation row is checked at commit, below).
@@ -270,20 +274,30 @@ $$;
 --              issued and not a credit note.
 --   UPDATE     an UPDATE that changes nothing passes; the company, buyer, type and creation never change. From ISSUED on
 --              the invoice is frozen (DPR 633/1972 art. 26; FIN-061): only its status, version, internal note and the
---              XML and PDF named once (null → a file) change; while REJECTED also the seller and buyer data, payment
---              terms, text, references and files (the corrected file, sent again under the same number and date:
---              Provv. AdE 89757/2018). The status moves DRAFT → ISSUED (the issue checks above); ISSUED → SENT | ERROR;
---              SENT → DELIVERED | NOT_DELIVERABLE | REJECTED | ERROR; ERROR → SENT | DELIVERED | NOT_DELIVERABLE |
---              REJECTED; REJECTED → SENT | ERROR; DELIVERED and NOT_DELIVERABLE are final.
+--              XML and PDF named once (null → a file) change. While REJECTED (a file SDI rejected counts as never
+--              issued: circolare AdE 13/E/2018) the invoice is corrected: also its seller and buyer data, payment terms,
+--              text, references, files, totals, VAT summary and stamp duty (its lines too: the InvoiceLine guard); its
+--              number, series, year, date, issue, party key and links never change: the corrected file is sent again
+--              under the same number and date (Provv. AdE 89757/2018), and leaving REJECTED runs every check of the
+--              issue again. A corrected gross total never drops below what is paid on the invoice plus what its credit
+--              notes credit, and a corrected TD02's net never below what is deducted from it plus credited (lock: the
+--              invoice, as for an allocation or a credit note). The status moves DRAFT → ISSUED (the issue checks above);
+--              ISSUED → SENT | ERROR; SENT → DELIVERED | NOT_DELIVERABLE | REJECTED | ERROR; ERROR → SENT | DELIVERED |
+--              NOT_DELIVERABLE | REJECTED; REJECTED → SENT | ERROR; DELIVERED and NOT_DELIVERABLE are final.
 --   DELETE     only a DRAFT (it has no number: no gap). TRUNCATE refused.
 CREATE FUNCTION "factory_invoice_guard"() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
   kept CONSTANT text[] := ARRAY['tenantId'];
   moving CONSTANT text[] := ARRAY['status', 'version', 'updatedAt', 'internalNote', 'xmlFileId', 'pdfFileId'];
-  correctable CONSTANT text[] := ARRAY['seller', 'billTo', 'paymentTerms', 'causale', 'documentRefs'];
+  correctable CONSTANT text[] := ARRAY['seller', 'billTo', 'paymentTerms', 'causale', 'documentRefs', 'netTotal', 'vatTotal',
+                                       'grossTotal', 'vatSummary', 'stampDutyAmount'];
   state text;
   doc_type text;
   fiscal_document text;
+  allocated bigint;
+  credited bigint;
+  credited_net bigint;
+  deducted_net bigint;
 BEGIN
   IF TG_OP = 'DELETE' THEN
     IF OLD."status" <> 'DRAFT' THEN
@@ -310,12 +324,12 @@ BEGIN
     END IF;
     IF OLD."status" <> 'DRAFT' THEN
       IF (to_jsonb(NEW) - (kept || moving || correctable)) IS DISTINCT FROM (to_jsonb(OLD) - (kept || moving || correctable)) THEN
-        RAISE EXCEPTION 'invoicing: invoice % (number % of %) is issued; its number, date, party, links and totals never change (DPR 633/1972 art. 26: a credit note corrects it; a rejected file is sent again under the same number and date)', OLD."id", OLD."number", OLD."issueDate"
+        RAISE EXCEPTION 'invoicing: invoice % (number % of %) is issued; its number, series, year, date, party and links never change (DPR 633/1972 art. 26: a credit note corrects it; a rejected file is sent again under the same number and date)', OLD."id", OLD."number", OLD."issueDate"
           USING ERRCODE = 'check_violation';
       END IF;
       IF OLD."status" <> 'REJECTED' THEN
         IF (to_jsonb(NEW) - (kept || moving)) IS DISTINCT FROM (to_jsonb(OLD) - (kept || moving)) THEN
-          RAISE EXCEPTION 'invoicing: invoice % is %; its buyer and seller data, payment terms and text are corrected only while it is REJECTED (Provv. AdE 89757/2018)', OLD."id", OLD."status"
+          RAISE EXCEPTION 'invoicing: invoice % is %; its data, totals and text are corrected only while it is REJECTED (a credit note corrects an invoice SDI took; Provv. AdE 89757/2018)', OLD."id", OLD."status"
             USING ERRCODE = 'check_violation';
         END IF;
         IF (OLD."xmlFileId" IS NOT NULL AND NEW."xmlFileId" IS DISTINCT FROM OLD."xmlFileId")
@@ -395,7 +409,30 @@ BEGIN
     END IF;
   END IF;
 
-  IF TG_OP = 'UPDATE' AND OLD."status" = 'DRAFT' AND NEW."status" = 'ISSUED' THEN
+  -- A corrected (REJECTED) invoice whose totals drop: never below what is paid and credited on it.
+  IF TG_OP = 'UPDATE' AND OLD."status" <> 'DRAFT'
+     AND (NEW."grossTotal" < OLD."grossTotal" OR NEW."netTotal" < OLD."netTotal") THEN
+    PERFORM "factory_money_lock"('invoice', NEW."tenantId", NEW."id");
+    credited := "factory_invoice_credited"(NEW."tenantId", NEW."id", NULL);
+    SELECT coalesce(sum(a."amount"), 0) INTO allocated FROM "PaymentAllocation" a WHERE a."tenantId" = NEW."tenantId" AND a."invoiceId" = NEW."id";
+    IF NEW."grossTotal" < OLD."grossTotal" AND allocated + credited > NEW."grossTotal" THEN
+      RAISE EXCEPTION 'invoicing: invoice % has % paid and % credited; its corrected gross total % cannot be below them', NEW."id", allocated, credited, NEW."grossTotal"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW."docType" = 'TD02' AND NEW."netTotal" < OLD."netTotal" THEN
+      SELECT coalesce(sum(c."netTotal"), 0) INTO credited_net FROM "Invoice" c
+       WHERE c."tenantId" = NEW."tenantId" AND c."creditOfId" = NEW."id" AND c."docType" = 'TD04' AND c."status" <> 'DRAFT';
+      SELECT coalesce(sum(-l."netAmount"), 0) INTO deducted_net FROM "InvoiceLine" l JOIN "Invoice" i ON i."tenantId" = l."tenantId" AND i."id" = l."invoiceId"
+       WHERE l."tenantId" = NEW."tenantId" AND l."depositInvoiceId" = NEW."id" AND i."status" <> 'DRAFT';
+      IF credited_net + deducted_net > NEW."netTotal" THEN
+        RAISE EXCEPTION 'invoicing: deposit invoice % has % deducted and % credited; its corrected net % cannot be below them', NEW."id", deducted_net, credited_net, NEW."netTotal"
+          USING ERRCODE = 'check_violation';
+      END IF;
+    END IF;
+  END IF;
+
+  -- The issue, and every send of a corrected file: the same checks.
+  IF TG_OP = 'UPDATE' AND ((OLD."status" = 'DRAFT' AND NEW."status" = 'ISSUED') OR (OLD."status" = 'REJECTED' AND NEW."status" <> 'REJECTED')) THEN
     PERFORM "factory_invoice_check_issue"(NEW);
   END IF;
   RETURN NEW;
@@ -441,15 +478,17 @@ CREATE CONSTRAINT TRIGGER "Invoice_number_allocated" AFTER UPDATE ON "Invoice"
   EXECUTE FUNCTION "factory_invoice_number_allocated"();
 
 -- InvoiceLine
---   INSERT, UPDATE, DELETE  only while the invoice is a DRAFT (its row locked FOR SHARE, so an issue waits for the
---                           transaction that edits its lines, and an edit after it sees it issued); a line never moves
---                           to another invoice. The one change to a line of an issued invoice is its party key, set by
---                           the issue to the invoice's.
+--   INSERT, UPDATE, DELETE  only while the invoice is a DRAFT, or REJECTED (the corrected file: its lines may hold the
+--                           error SDI found; the resend checks them again). The invoice's row is locked FOR SHARE, so an
+--                           issue or a resend waits for the transaction that edits its lines, and an edit after it sees
+--                           the new status. A line never moves to another invoice. The one change to a line of an issued
+--                           invoice otherwise is its party key, set by the issue to the invoice's.
 --   every row               a place from 1, a description, a quantity above 0, a discount above 0 and below 100; a rate
 --                           of 0 or more, a Natura (N1 … N7) with its law exactly when the rate is 0. A DEPOSIT_DEDUCTION
 --                           (and only it) names an issued TD02 of the company, on a TD01 or TD24, with a negative amount
 --                           and price and no order line or DDT; any other line has an amount and price of 0 or more. A
---                           draft's line has no party key.
+--                           draft's line has no party key; a REJECTED invoice's line has the invoice's (a new line gets
+--                           it), so the portal keeps seeing the lines of the invoice it sees.
 --   TRUNCATE                refused.
 CREATE FUNCTION "factory_invoice_line_guard"() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -480,21 +519,30 @@ BEGIN
     SELECT i."status"::text, i."partyId", i."docType"::text, i."companyId" INTO state, invoice_party, invoice_type, invoice_company
       FROM "Invoice" i WHERE i."tenantId" = NEW."tenantId" AND i."id" = NEW."invoiceId" FOR SHARE;
   END IF;
-  IF state IS NOT NULL AND state <> 'DRAFT' THEN
+  IF state IS NOT NULL AND state NOT IN ('DRAFT', 'REJECTED') THEN
     IF TG_OP = 'UPDATE' AND OLD."partyId" IS NULL AND NEW."partyId" IS NOT DISTINCT FROM invoice_party
        AND (to_jsonb(NEW) - ARRAY['tenantId', 'partyId']) = (to_jsonb(OLD) - ARRAY['tenantId', 'partyId']) THEN
       RETURN NEW;
     END IF;
-    RAISE EXCEPTION 'invoicing: invoice % is %; its lines are written only while it is a DRAFT (an issued invoice never changes: a credit note corrects it)', part_of, state
+    RAISE EXCEPTION 'invoicing: invoice % is %; its lines are written only while it is a DRAFT, or REJECTED to correct the file (an invoice SDI took never changes: a credit note corrects it)', part_of, state
       USING ERRCODE = 'check_violation';
   END IF;
   IF TG_OP = 'DELETE' THEN
     RETURN OLD;
   END IF;
 
-  IF state IS NOT NULL AND NEW."partyId" IS NOT NULL THEN
+  IF state = 'DRAFT' AND NEW."partyId" IS NOT NULL THEN
     RAISE EXCEPTION 'invoicing: line % belongs to a DRAFT; it has no party key until the invoice is issued', NEW."id"
       USING ERRCODE = 'check_violation';
+  END IF;
+  IF state = 'REJECTED' THEN
+    IF NEW."partyId" IS NULL AND TG_OP = 'INSERT' THEN
+      NEW."partyId" := invoice_party;
+    END IF;
+    IF NEW."partyId" IS DISTINCT FROM invoice_party THEN
+      RAISE EXCEPTION 'invoicing: line % of issued invoice % has the invoice''s party key %', NEW."id", part_of, invoice_party
+        USING ERRCODE = 'check_violation';
+    END IF;
   END IF;
   IF NEW."seq" < 1 OR btrim(NEW."description") = '' OR NEW."quantity" <= 0
      OR (NEW."discountPct" IS NOT NULL AND (NEW."discountPct" <= 0 OR NEW."discountPct" >= 100)) THEN

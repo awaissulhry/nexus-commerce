@@ -20,7 +20,9 @@ import { migratedDatabase, type MigratedDatabase } from './testing/database'
  *   - an invoice starts as a DRAFT without a number; it is numbered only at issue, from a fiscal series of its company
  *     (the NumberAllocation row checked at commit), with totals that add up to its lines and VAT summary; once issued it
  *     never changes but for its SDI status, for every login (a correction is a credit note);
- *   - a rejected file is corrected and sent again under the same number and date; each send carries the invoice's XML;
+ *   - a rejected file (never issued for SDI) is corrected, its lines and totals too, and sent again under the same
+ *     number and date; the resend runs the issue's checks again; a corrected total never drops below what is paid or
+ *     credited; each send carries the invoice's XML;
  *   - a TD04 credits an issued invoice of its company and party, never more than is still creditable; a deposit
  *     invoice is deducted at most for its net; a TD02 invoices a deposit request that needs one;
  *   - allocations never pass the payment, the invoice (less its credit notes) or the deposit request, also when two
@@ -366,10 +368,12 @@ describe('an invoice', () => {
   it('never changes once issued (DPR 633/1972 art. 26), for every login; only its SDI status moves', async () => {
     const { id, number } = await issued()
     const [line] = await admin('SELECT id::text AS id FROM "InvoiceLine" WHERE "invoiceId" = $1', [id])
-    const frozen = /is issued; its number, date, party, links and totals never change/
+    const frozen = /is issued; its number, series, year, date, party and links never change/
     await expect(run(office(), `UPDATE "Invoice" SET number = 'X-1' WHERE id = $1::uuid`, id)).rejects.toThrow(frozen)
     await expect(run(office(), `UPDATE "Invoice" SET "issueDate" = "issueDate" + 1 WHERE id = $1::uuid`, id)).rejects.toThrow(frozen)
-    await expect(run(office(), `UPDATE "Invoice" SET "netTotal" = 1, "vatTotal" = 0, "grossTotal" = 1 WHERE id = $1::uuid`, id)).rejects.toThrow(frozen)
+    await expect(run(office(), `UPDATE "Invoice" SET "netTotal" = 1, "vatTotal" = 0, "grossTotal" = 1 WHERE id = $1::uuid`, id)).rejects.toThrow(
+      /its data, totals and text are corrected only while it is REJECTED/,
+    )
     await expect(run(office(), `UPDATE "Invoice" SET "salesOrderId" = $2::uuid WHERE id = $1::uuid`, id, seeded.sales.orderId)).rejects.toThrow(frozen)
     await expect(run(office(), `UPDATE "Invoice" SET "buyerPartyId" = $2::uuid WHERE id = $1::uuid`, id, A.P3)).rejects.toThrow(/company, buyer, type and creation .* never change/)
     await expect(admin(`UPDATE "Invoice" SET number = 'X-1' WHERE id = $1`, [id])).rejects.toThrow(frozen)
@@ -411,16 +415,35 @@ describe('an invoice', () => {
     })
     expect(await run(office(), `UPDATE "SdiSubmission" SET status = 'REJECTED', "outcomeAt" = now(), "failureReason" = '00305' WHERE id = $1::uuid`, first.id)).toBe(1)
     expect(await setStatus(id, 'REJECTED')).toBe(1)
-    // The number, date, lines and totals stay; the buyer's data and the file are corrected.
-    const frozen = /is issued; its number, date, party, links and totals never change/
+    // The number, series, year, date, type, company, party and links stay.
+    const frozen = /is issued; its number, series, year, date, party and links never change/
     await expect(run(office(), `UPDATE "Invoice" SET "issueDate" = "issueDate" + 1 WHERE id = $1::uuid`, id)).rejects.toThrow(frozen)
     await expect(run(office(), `UPDATE "Invoice" SET number = 'X-2' WHERE id = $1::uuid`, id)).rejects.toThrow(frozen)
-    await expect(run(office(), `UPDATE "Invoice" SET "netTotal" = 1, "vatTotal" = 0, "grossTotal" = 1 WHERE id = $1::uuid`, id)).rejects.toThrow(frozen)
-    await expect(run(office(), 'UPDATE "InvoiceLine" SET "netAmount" = 1 WHERE "invoiceId" = $1::uuid', id)).rejects.toThrow(/written only while it is a DRAFT/)
+    await expect(run(office(), `UPDATE "Invoice" SET year = 2027 WHERE id = $1::uuid`, id)).rejects.toThrow(frozen)
+    await expect(run(office(), `UPDATE "Invoice" SET "salesOrderId" = $2::uuid WHERE id = $1::uuid`, id, seeded.sales.orderId)).rejects.toThrow(frozen)
+    await expect(run(office(), `UPDATE "Invoice" SET "docType" = 'TD24' WHERE id = $1::uuid`, id)).rejects.toThrow(/company, buyer, type and creation .* never change/)
+    // The buyer's data, the lines and the totals are corrected (the NS may be in any of them, e.g. 00423), and the file.
+    const [line] = await admin('SELECT id::text AS id FROM "InvoiceLine" WHERE "invoiceId" = $1', [id])
+    expect(await run(office(), `UPDATE "InvoiceLine" SET "netAmount" = 8000, "unitPrice" = '80' WHERE id = $1::uuid`, line!.id)).toBe(1)
+    const added = lineRow(id, { seq: 2, description: 'Test gloves', netAmount: 2000, unitPrice: '20' })
+    await insert(office(), 'InvoiceLine', added)
+    // A line added while REJECTED gets the invoice's party key: the portal keeps seeing the invoice's lines.
+    expect(await sql(partner(A.P1), 'SELECT id::text AS id FROM "InvoiceLine" WHERE "invoiceId" = $1::uuid', id)).toHaveLength(2)
+    await expect(run(office(), 'UPDATE "InvoiceLine" SET "partyId" = NULL WHERE id = $1::uuid', added.id)).rejects.toThrow(/has the invoice's party key/)
+    const extra = lineRow(id, { seq: 3 })
+    await insert(office(), 'InvoiceLine', extra)
+    expect(await run(office(), 'DELETE FROM "InvoiceLine" WHERE id = $1::uuid', extra.id)).toBe(1)
     const corrected = randomUUID()
     await insert(office(), 'StoredFile', xmlRow(id, corrected))
     expect(
-      await run(office(), `UPDATE "Invoice" SET "billTo" = $2::jsonb, "xmlFileId" = $3::uuid WHERE id = $1::uuid`, id, JSON.stringify({ ...BILL_TO, vatNumber: '00000001024' }), corrected),
+      await run(
+        office(),
+        `UPDATE "Invoice" SET "billTo" = $2::jsonb, "xmlFileId" = $3::uuid, "netTotal" = 10000, "vatTotal" = 2200, "grossTotal" = 12200,
+           "vatSummary" = '[{"rate":"22.00","taxable":10000,"vat":2200,"rounding":0}]' WHERE id = $1::uuid`,
+        id,
+        JSON.stringify({ ...BILL_TO, vatNumber: '00000001024' }),
+        corrected,
+      ),
     ).toBe(1)
     // A send carries the invoice's XML of the moment: never the rejected one.
     await expect(insert(office(), 'SdiSubmission', sendRow(id, xmlFileId, { attempt: 2 }))).rejects.toThrow(/not the invoice's XML/)
@@ -431,11 +454,74 @@ describe('an invoice', () => {
     expect(await setStatus(id, 'DELIVERED')).toBe(1)
     const [row] = await admin('SELECT number, "issueDate"::text AS date FROM "Invoice" WHERE id = $1', [id])
     expect(row).toEqual({ number, date })
+    // Once SDI took it, the lines are fixed again.
+    await expect(run(office(), 'UPDATE "InvoiceLine" SET "netAmount" = 7000 WHERE id = $1::uuid', line!.id)).rejects.toThrow(/its lines are written only while it is a DRAFT, or REJECTED/)
+    await expect(insert(office(), 'InvoiceLine', lineRow(id, { seq: 4 }))).rejects.toThrow(/its lines are written only while it is a DRAFT, or REJECTED/)
     // A send keeps what it sent; its outcome is final.
     await expect(run(office(), `UPDATE "SdiSubmission" SET "xmlFileId" = $2::uuid WHERE id = $1::uuid`, second.id, xmlFileId)).rejects.toThrow(/never change \(a resend is a new row\)/)
     await expect(run(office(), `UPDATE "SdiSubmission" SET status = 'SENT', "outcomeAt" = NULL WHERE id = $1::uuid`, second.id)).rejects.toThrow(/is DELIVERED; it never changes/)
     await expect(admin('DELETE FROM "SdiSubmission" WHERE id = $1', [second.id])).rejects.toThrow(/is kept, never deleted/)
     await expect(run(office(), `UPDATE "Invoice" SET "billTo" = '{"name":"Again"}' WHERE id = $1::uuid`, id)).rejects.toThrow(/corrected only while it is REJECTED/)
+  })
+
+  it('a corrected file is sent again only when it passes every check of the issue again', async () => {
+    const rejected = async (extra: Record<string, unknown> = {}, lines?: Record<string, unknown>[]) => {
+      const id = await draft(extra, lines)
+      const invoice = { id, ...(await issue(id)) }
+      await insert(office(), 'SdiSubmission', sendRow(invoice.id, invoice.xmlFileId))
+      expect(await setStatus(invoice.id, 'SENT')).toBe(1)
+      // While SENT the lines and totals are fixed.
+      await expect(run(office(), 'UPDATE "InvoiceLine" SET "netAmount" = 1 WHERE "invoiceId" = $1::uuid', invoice.id)).rejects.toThrow(/its lines are written only while/)
+      await expect(run(office(), `UPDATE "Invoice" SET "vatSummary" = '[]' WHERE id = $1::uuid`, invoice.id)).rejects.toThrow(/corrected only while it is REJECTED/)
+      expect(await setStatus(invoice.id, 'REJECTED')).toBe(1)
+      return invoice
+    }
+    // A line changed without the totals: the resend (and an ERROR) is refused.
+    const broken = await rejected()
+    expect(await run(office(), 'UPDATE "InvoiceLine" SET "netAmount" = 9000 WHERE "invoiceId" = $1::uuid', broken.id)).toBe(1)
+    await expect(setStatus(broken.id, 'SENT')).rejects.toThrow(/the totals of invoice .* do not add up/)
+    await expect(setStatus(broken.id, 'ERROR')).rejects.toThrow(/the totals of invoice .* do not add up/)
+    // Every line removed: refused too.
+    const empty = await rejected()
+    expect(await run(office(), 'DELETE FROM "InvoiceLine" WHERE "invoiceId" = $1::uuid', empty.id)).toBe(1)
+    await expect(setStatus(empty.id, 'SENT')).rejects.toThrow(/has no line/)
+    // A TD24 goods line that loses its DDT: refused.
+    const td24 = await rejected({ docType: 'TD24' }, [lineRow('', { ddtId: seeded.shipping.ddtId })])
+    expect(await run(office(), 'UPDATE "InvoiceLine" SET "ddtId" = NULL WHERE "invoiceId" = $1::uuid', td24.id)).toBe(1)
+    await expect(setStatus(td24.id, 'SENT')).rejects.toThrow(/TD24 .* names its DDT/)
+    // Put right, it goes.
+    expect(await run(office(), 'UPDATE "InvoiceLine" SET "ddtId" = $2::uuid WHERE "invoiceId" = $1::uuid', td24.id, seeded.shipping.ddtId)).toBe(1)
+    expect(await setStatus(td24.id, 'SENT')).toBe(1)
+  })
+
+  it('a corrected total never drops below what is paid on the invoice or credited by its credit notes', async () => {
+    const paid = await issued(totals(10000))
+    const payer = await payment(12200)
+    await insert(office(), 'PaymentAllocation', allocationRow(payer, { invoiceId: paid.id }, 7000))
+    expect(await setStatus(paid.id, 'SENT')).toBe(1)
+    expect(await setStatus(paid.id, 'REJECTED')).toBe(1)
+    const lower = (id: string, net: number) => {
+      const t = totals(net)
+      return run(office(), `UPDATE "Invoice" SET "netTotal" = $2, "vatTotal" = $3, "grossTotal" = $4, "vatSummary" = $5::jsonb WHERE id = $1::uuid`, id, t.netTotal, t.vatTotal, t.grossTotal, JSON.stringify(t.vatSummary))
+    }
+    await expect(lower(paid.id, 5000)).rejects.toThrow(/has 7000 paid and 0 credited; its corrected gross total 6100 cannot be below them/)
+    expect(await lower(paid.id, 6000)).toBe(1)
+    const credited = await issued(totals(10000))
+    const note = await draft({ docType: 'TD04', creditOfId: credited.id, causale: 'Reso', ...totals(5000) }, [lineRow('', { netAmount: 5000, unitPrice: '50' })])
+    await issue(note)
+    expect(await setStatus(credited.id, 'SENT')).toBe(1)
+    expect(await setStatus(credited.id, 'REJECTED')).toBe(1)
+    await expect(lower(credited.id, 4000)).rejects.toThrow(/has 0 paid and 6100 credited; its corrected gross total 4880 cannot be below them/)
+    // A credit note of the corrected invoice is checked again at its own resend: never more than is creditable.
+    expect(await lower(credited.id, 5000)).toBe(1)
+    expect(await setStatus(note, 'SENT')).toBe(1)
+    expect(await setStatus(note, 'REJECTED')).toBe(1)
+    const t = totals(6000)
+    expect(
+      await run(office(), `UPDATE "Invoice" SET "netTotal" = $2, "vatTotal" = $3, "grossTotal" = $4, "vatSummary" = $5::jsonb WHERE id = $1::uuid`, note, t.netTotal, t.vatTotal, t.grossTotal, JSON.stringify(t.vatSummary)),
+    ).toBe(1)
+    expect(await run(office(), 'UPDATE "InvoiceLine" SET "netAmount" = 6000, "unitPrice" = \'60\' WHERE "invoiceId" = $1::uuid', note)).toBe(1)
+    await expect(setStatus(note, 'SENT')).rejects.toThrow(/passes what is still creditable/)
   })
 
   it('a send goes through an SDI account of the invoice company, and the XML is named from the first send on', async () => {
