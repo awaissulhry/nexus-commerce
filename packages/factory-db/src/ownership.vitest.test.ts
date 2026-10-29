@@ -72,6 +72,8 @@ describe('model ownership', () => {
       'MeasurementTemplate',
       'Message',
       'NumberAllocation',
+      'NumberBlock',
+      'NumberBlockUse',
       'NumberSeries',
       'OneOffLink',
       'Operation',

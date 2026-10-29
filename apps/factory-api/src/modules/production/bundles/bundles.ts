@@ -58,7 +58,8 @@ import {
  *            cell's live cut log entries (genealogy: hides, lots). Lock order: the work order's issue lock (a cut's undo
  *            or correction and the work order's complete, close and cancel take it first, so no cut is reversed under
  *            bundles being made and no bundle lands on a cancelled work order) → the cells' bundle locks (sorted) → the
- *            tenant's ticket-code lock (codes.ts). Two tablets on one cell take turns; the second is told what is left.
+ *            tenant's BUNDLE counter (codes.ts → allocateScanIds, its `factory.scan-ids` lock). Two tablets on one cell
+ *            take turns; the second is told what is left.
  *   reprint  floor or office: the ticket gets a new code, the old one joins `replacedCodes` (a scan of it is refused
  *            with the new code in the words); the bundle row is locked FOR UPDATE first (store.ts lockBundle).
  *   void     floor or office: a bundle made by mistake, only before any scan names it (B-W1-42 locks the bundle row

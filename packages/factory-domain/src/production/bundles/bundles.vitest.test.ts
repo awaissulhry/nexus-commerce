@@ -1,15 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { ValidationError } from '../../core/errors'
 import { composeLabel } from '../../labels/model'
-import { formatScanId, parseScanId, tenantTag } from '../../numbering/scan-id'
+import { formatScanId, tenantTag } from '../../numbering/scan-id'
 import { floorPrivacyStatus, floorReadiness, NO_DPIA_NOTE } from '../../privacy/readiness'
 import { floorRulesStatus } from '../settings/monitoring'
 import {
   bundlesReadyRefusal,
   cellBundles,
   DEFAULT_BUNDLE_SIZE,
-  highestBundleRef,
-  nextBundleCodes,
   planBundles,
   reprintRefusal,
   scannedBundleRefusal,
@@ -118,20 +116,7 @@ describe('a request to make bundles', () => {
   })
 })
 
-describe('ticket codes, reprint, void and the scan of an old ticket (MES-073)', () => {
-  const tag = tenantTag('7c9e6679-7425-40de-944b-e07fc1f90ae7')
-  const other = tenantTag('a3bb189e-8bf9-3888-9912-ace4e6543002')
-
-  it('gives new tickets the next BUNDLE ids of the tenant after its highest one', () => {
-    const highest = formatScanId({ type: 'BUNDLE', tenantTag: tag, ref: 41 })
-    const codes = [formatScanId({ type: 'BUNDLE', tenantTag: tag, ref: 7 }), highest, 'SEED-BN-0001', formatScanId({ type: 'HIDE', tenantTag: tag, ref: 900 }), other === tag ? null : formatScanId({ type: 'BUNDLE', tenantTag: other, ref: 99 })]
-    expect(highestBundleRef(codes, tag)).toBe(41)
-    expect(highestBundleRef([], tag)).toBe(0)
-    const next = nextBundleCodes(tag, 41, 3)
-    expect(next.map((code) => parseScanId(code, { tenantTag: tag, types: ['BUNDLE'] }))).toEqual([42, 43, 44].map((ref) => expect.objectContaining({ ok: true, type: 'BUNDLE', ref })))
-    expect(nextBundleCodes(tag, 0, 0)).toEqual([])
-  })
-
+describe('reprint, void and the scan of an old ticket (MES-073)', () => {
   it('reprints and voids only an ACTIVE bundle of an open work order; voids one only before any scan names it', () => {
     const bundle = { code: 'BN-A', status: 'ACTIVE' as const, replacedCodes: [] }
     expect(reprintRefusal({ bundle, workOrder })).toBeNull()

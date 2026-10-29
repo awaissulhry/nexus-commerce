@@ -7,6 +7,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { SHEET_TYPES } from '@nexus/factory-domain/imports/job'
+import { parseScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCompliance } from '../../../../../../packages/factory-db/seed/compliance'
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
@@ -137,7 +138,8 @@ const counts = async () =>
     await admin<Json>(
       `SELECT (SELECT count(*) FROM "Lot" WHERE "tenantId" = $1)::int AS lots, (SELECT count(*) FROM "Hide" WHERE "tenantId" = $1)::int AS hides,
               (SELECT count(*) FROM "StockMove" WHERE "tenantId" = $1)::int AS moves, (SELECT count(*) FROM "LabResult" WHERE "tenantId" = $1)::int AS results,
-              (SELECT count(*) FROM "StockValuation" WHERE "tenantId" = $1)::int AS valuations`,
+              (SELECT count(*) FROM "StockValuation" WHERE "tenantId" = $1)::int AS valuations,
+              (SELECT coalesce(max("toRef"), 0) FROM "NumberBlock" WHERE "tenantId" = $1 AND kind = 'HIDE')::int AS hideNumbers`,
       [A.tenant],
     )
   )[0]!
@@ -269,6 +271,11 @@ describe('an opening stock sheet with the existing test reports (SCM-288, QHS-02
     expect((file!.retainUntil as Date).getUTCFullYear()).toBeGreaterThanOrEqual(new Date().getUTCFullYear() + 10)
 
     expect(await openingLot(`DB-2-${run}`)).toMatchObject({ qualityStatus: 'QUARANTINE', crViStatus: 'PENDING', hides: 3 })
+    // The hide tags are the tenant's HIDE scan ids, from its tenant-wide counter (platform/numbering allocateScanIds).
+    const tags = await admin<{ code: string }>('SELECT h.code FROM "Hide" h JOIN "Lot" l ON l.id = h."lotId" WHERE l."tenantId" = $1 AND l."supplierLotRef" IN ($2, $3)', [A.tenant, `DB-1-${run}`, `DB-2-${run}`])
+    expect(tags).toHaveLength(5)
+    expect(tags.every((row) => parseScanId(row.code, { tenantTag: tenantTag(A.tenant), types: ['HIDE'] }).ok)).toBe(true)
+    expect(new Set(tags.map((row) => row.code)).size).toBe(5)
     expect(await openingLot(`R-77-${run}`)).toMatchObject({ qualityStatus: 'RELEASED', crViStatus: 'NOT_REQUIRED', qualityDecidedById: IDS.importer, hides: 0 })
     expect(await openingLot(`P-1-${run}`)).toMatchObject({ qualityStatus: 'QUARANTINE', crViStatus: 'NOT_REQUIRED' })
 
