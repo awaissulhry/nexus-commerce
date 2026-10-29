@@ -1,0 +1,52 @@
+'use client'
+
+import { useCallback, useEffect, useState } from 'react'
+import { companyPrefix } from '../../../lib/session/session'
+import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
+import { listRoles, roleCatalogue, type PermissionCatalogue, type Role } from '../shared/api'
+import { failed, loaded, loading, problemKey, type Loaded } from '../shared/model'
+import type { RolesViewModel } from './model'
+import { RolesView } from './view/RolesView'
+
+/**
+ * `/w/<company>/admin/roles` (SCR-012): the tenant's roles (`GET /auth/roles`: system roles kept equal to their
+ * templates, custom copies with what their template gained) and the permission catalogue for Compare
+ * (`GET /auth/roles/templates`: every permission with its area, risk and description).
+ */
+export function RolesPage() {
+  const api = useOfficeApi()
+  const session = useOfficeSession()
+  const prefix = companyPrefix(session.company?.code ?? '')
+  const [roles, setRoles] = useState<Loaded<Role>>(loading())
+  const [catalogue, setCatalogue] = useState<PermissionCatalogue | null>(null)
+  const [asOf, setAsOf] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [audience, setAudience] = useState<RolesViewModel['audience']>('all')
+
+  const load = useCallback(async () => {
+    try {
+      setRoles(loaded(await listRoles(api)))
+      setAsOf(new Date().toISOString())
+    } catch (error) {
+      setRoles(failed(problemKey(error)))
+    }
+    roleCatalogue(api).then(setCatalogue, () => setCatalogue(null))
+  }, [api])
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  return (
+    <RolesView
+      model={{ prefix, roles, catalogue, asOf, query, audience }}
+      actions={{
+        onQuery: setQuery,
+        onAudience: setAudience,
+        onRetry: () => {
+          setRoles(loading())
+          void load()
+        },
+      }}
+    />
+  )
+}

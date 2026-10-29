@@ -29,6 +29,18 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const site = await client.site.findUnique({ where: { id }, select: { companyId: true } })
     return site ? { companyId: site.companyId, siteId: id, partyId: null } : null
   },
+  // platform/auth (SCR-011, SCR-012, SCR-013; B-W0-27): an office person and a role are tenant-wide; a floor device and a
+  // floor worker sit on their site. Admin records take internal notes only (no party).
+  User: async (client, id) => ((await client.user.findUnique({ where: { id }, select: { id: true } })) ? { companyId: null, siteId: null, partyId: null } : null),
+  Role: async (client, id) => ((await client.role.findUnique({ where: { id }, select: { id: true } })) ? { companyId: null, siteId: null, partyId: null } : null),
+  Device: async (client, id) => {
+    const device = await client.device.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
+    return device ? { companyId: device.companyId, siteId: device.siteId, partyId: null } : null
+  },
+  Worker: async (client, id) => {
+    const worker = await client.worker.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
+    return worker ? { companyId: worker.companyId, siteId: worker.siteId, partyId: null } : null
+  },
   // modules/compliance/certificates (SCR-051): the holder company (none: brand-held); the party only when a brand holds
   // it (the brand is the legal maker), not a supplier holding a protector's certificate.
   Certificate: async (client, id) => {

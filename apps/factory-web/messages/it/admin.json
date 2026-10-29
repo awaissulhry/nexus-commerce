@@ -1,0 +1,1475 @@
+{
+  "common": {
+    "actions": "Azioni",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "dismiss": "Chiudi avviso",
+    "done": "Fatto",
+    "more": "Altro",
+    "moreFor": "Altro per {name}",
+    "no": "No",
+    "yes": "Sì",
+    "reason": "Motivo (facoltativo)",
+    "reasonHint": "Resta nella cronologia insieme alla modifica.",
+    "retry": "Riprova",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "language": {
+      "it": "Italiano",
+      "en": "Inglese",
+      "ro": "Rumeno",
+      "sq": "Albanese",
+      "ar": "Arabo",
+      "zh": "Cinese",
+      "ur": "Urdu",
+      "bn": "Bengalese"
+    },
+    "month": {
+      "1": "Gennaio",
+      "2": "Febbraio",
+      "3": "Marzo",
+      "4": "Aprile",
+      "5": "Maggio",
+      "6": "Giugno",
+      "7": "Luglio",
+      "8": "Agosto",
+      "9": "Settembre",
+      "10": "Ottobre",
+      "11": "Novembre",
+      "12": "Dicembre"
+    }
+  },
+  "nav": {
+    "companies": "Società e stabilimenti",
+    "devices": "Dispositivi e stampanti",
+    "users": "Utenti",
+    "roles": "Ruoli e permessi"
+  },
+  "problem": {
+    "signedOut": "La sessione è terminata. Accedi di nuovo per continuare.",
+    "forbidden": "Qui non puoi farlo. Chiedi il permesso a un amministratore.",
+    "stepUp": "Questa modifica richiede un codice nuovo dall'app di autenticazione.",
+    "notFound": "Non esiste, oppure non hai il permesso di vederlo.",
+    "conflict": "Qualcun altro l'ha modificato nel frattempo. È stato riletto: controlla e riprova.",
+    "inUse": "Ancora in uso: prima archivia o sposta ciò che lo usa.",
+    "invalid": "Qualcosa non è valido. Controlla i campi e riprova.",
+    "rateLimited": "Troppi tentativi. Attendi qualche minuto e riprova.",
+    "unavailable": "Il server della fabbrica non ha risposto. Riprova tra poco.",
+    "contract": "Il server ha risposto in un modo che questa pagina non conosce. Ricarica la pagina.",
+    "internal": "Qualcosa non ha funzionato sul server. Riprova; se succede ancora, avvisa l'amministratore.",
+    "inUseBy": {
+      "sites": "{count} stabilimenti attivi lo usano ancora.",
+      "lines": "Ci sono ancora {count} linee attive.",
+      "stations": "{count} postazioni attive lo usano.",
+      "devices": "{count} dispositivi sono registrati qui.",
+      "printers": "Ci sono ancora {count} stampanti.",
+      "other": "Qualcosa di attivo lo usa ancora."
+    }
+  },
+  "stepUp": {
+    "title": "Conferma con un codice nuovo",
+    "confirm": "Conferma",
+    "sentence": {
+      "default": "Inserisci il codice di 6 cifre dall'app di autenticazione per fare questa modifica.",
+      "invite": "Invitare persone (e dar loro ruoli) richiede un codice nuovo dall'app di autenticazione.",
+      "workerRoles": "Dare ruoli di reparto a un operatore richiede un codice nuovo dall'app di autenticazione.",
+      "giveRole": "Dare un ruolo richiede un codice nuovo dall'app di autenticazione.",
+      "endRole": "Chiudere un ruolo richiede un codice nuovo dall'app di autenticazione.",
+      "suspend": "Sospendere una persona richiede un codice nuovo dall'app di autenticazione.",
+      "reactivate": "Riattivare una persona richiede un codice nuovo dall'app di autenticazione.",
+      "deactivate": "Disattivare una persona richiede un codice nuovo dall'app di autenticazione.",
+      "password": "Imporre una nuova password richiede un codice nuovo dall'app di autenticazione.",
+      "badge": "Il badge di un operatore richiede un codice nuovo dall'app di autenticazione.",
+      "pin": "Azzerare il PIN di un operatore richiede un codice nuovo dall'app di autenticazione."
+    },
+    "problem": {
+      "wrong": "Il codice è sbagliato o è già stato usato. Inserisci il prossimo.",
+      "locked": "Troppi codici sbagliati. Attendi qualche minuto e riprova.",
+      "noAuthenticator": "Prima configura l'app di autenticazione in Il mio profilo.",
+      "tooMany": "Troppi tentativi. Attendi un minuto e riprova.",
+      "failed": "Non è stato possibile verificare il codice. Riprova."
+    }
+  },
+  "list": {
+    "failedTitle": "Impossibile caricare questo elenco",
+    "loading": "Caricamento…",
+    "noMatch": "Nessun risultato con questi filtri",
+    "clearSearch": "Cancella la ricerca",
+    "clearFilter": "Togli il filtro",
+    "clearFilters": "Togli i filtri",
+    "count": "{shown} di {total}",
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto"
+  },
+  "record": {
+    "backTo": "Torna a {name}",
+    "dangerZone": "Zona pericolosa",
+    "dock": "Conversazione",
+    "dockHint": "Mostra la conversazione accanto a questa scheda (schermi larghi); su schermi stretti apre Attività.",
+    "dockLabel": "Conversazione e cronologia di questo record",
+    "tabsLabel": "Sezioni di questo record",
+    "notFoundTitle": "Non trovato",
+    "forbiddenTitle": "Non hai accesso",
+    "failedTitle": "Impossibile aprire questo record",
+    "readOnly": "Sola lettura: puoi vederlo, non modificarlo."
+  },
+  "noAccess": {
+    "body": "Ti serve: {need}. Chiedi a un amministratore."
+  },
+  "held": {
+    "needs": "Serve il permesso: {right}"
+  },
+  "form": {
+    "required": "Compila questo campo.",
+    "code": "Usa da 1 a 20 lettere maiuscole, cifre o trattini.",
+    "codeTaken": "Questo codice è già usato. Scegline un altro.",
+    "vat": "Serve una partita IVA con il paese, per esempio IT12345678901.",
+    "country": "Serve un codice paese di 2 lettere, per esempio IT.",
+    "email": "Serve un indirizzo e-mail.",
+    "amount": "Serve un importo come 10000.00.",
+    "sdi": "Il codice SDI ha 7 lettere o cifre.",
+    "tooLong": "Troppo lungo.",
+    "fixFirst_one": "Correggi prima 1 problema",
+    "fixFirst_other": "Correggi prima {count} problemi",
+    "unsaved_one": "1 modifica non salvata",
+    "unsaved_other": "{count} modifiche non salvate"
+  },
+  "grains": {
+    "label": "Vede i soldi",
+    "labelOf": "Quali importi vede {name}",
+    "sees": "vede",
+    "doesNotSee": "non vede",
+    "short": {
+      "price": "prezzi",
+      "cost": "costi",
+      "margin": "margini",
+      "wages": "paghe"
+    },
+    "without": {
+      "price": "Senza prezzi: prezzi di vendita e di acquisto, totali e fatture appaiono nascosti.",
+      "cost": "Senza costi: costi di materiale e manodopera e schede costo appaiono nascosti.",
+      "margin": "Senza margini: margini e avvisi \"sotto il minimo\" appaiono nascosti.",
+      "wages": "Senza paghe: tariffe della manodopera e importi di paga appaiono nascosti."
+    }
+  },
+  "scope": {
+    "label": "Dove vale",
+    "all": "Tutte le società",
+    "allHint": "Ogni società del gruppo, anche quelle aggiunte dopo.",
+    "some": "Queste società",
+    "someHint": "Solo le società (e gli stabilimenti) selezionati qui sotto.",
+    "sitesOf": "Stabilimenti di {company}",
+    "sitesHint": "Nessuno selezionato: tutti gli stabilimenti di questa società."
+  },
+  "reveal": {
+    "print": "Stampa",
+    "done": "Fatto",
+    "closeHeld": "Prima spunta la casella: viene mostrato una volta sola.",
+    "repeat": "È già stato mostrato una volta e non viene conservato. Chiedine uno nuovo.",
+    "copy": "Copia",
+    "copied": "Copiato",
+    "copyFailed": "Impossibile copiare. Seleziona il testo e copialo.",
+    "drawing": "Disegno del codice in corso",
+    "tooLong": "È troppo lungo per un codice QR.",
+    "badge": {
+      "title": "Nuovo badge per {name}",
+      "body": "Stampalo ora (stampante per tessere o carta normale). Sostituisce il badge precedente, che smette subito di funzionare. Viene mostrato solo questa volta.",
+      "qr": "Codice badge di {name}",
+      "stored": "Ho stampato il badge",
+      "printHint": "La stampa usa il browser; il badge riporta il codice QR e il codice a gruppi, mai il PIN."
+    },
+    "pin": {
+      "title": "PIN temporaneo per {name}",
+      "body": "Consegnalo all'operatore di persona. Al prossimo accesso sceglierà il proprio PIN e questo smetterà di funzionare. Viene mostrato solo questa volta.",
+      "qr": "PIN temporaneo per {name}",
+      "label": "PIN temporaneo",
+      "stored": "Ho consegnato il PIN all'operatore"
+    },
+    "enrolment": {
+      "title": "Codice di registrazione per {name}",
+      "body": "Inquadralo con il tablet entro 15 minuti.",
+      "qr": "Codice di registrazione per {name}",
+      "stored": "Il tablet lo ha letto"
+    }
+  },
+  "matrix": {
+    "permission": "Cosa permette",
+    "tableLabel": "Permessi di {area}",
+    "count": "{count} di {total}",
+    "countOf": "{name}: {count} di {total}",
+    "risk": {
+      "stepUp": "Chiede un codice nuovo"
+    },
+    "differs": "Diverso",
+    "yes": "Permesso",
+    "no": "Non permesso"
+  },
+  "overview": {
+    "title": "Prepara la fabbrica",
+    "intro": "Configurazione: {done} di {total} passi fatti. Ogni stato è letto dal sistema, non spuntato a mano.",
+    "introChecking": "Controllo della configurazione…",
+    "recheck": "Controlla di nuovo",
+    "checkingHeld": "I controlli sono in corso.",
+    "allDone": "Tutti i passi di configurazione sono fatti.",
+    "show": "Mostra la configurazione",
+    "hide": "Nascondi la configurazione",
+    "later": "La ricerca tra tutte le impostazioni, gli interruttori delle funzioni e la cronologia delle impostazioni arriveranno più avanti (W3).",
+    "doIt": "Fallo ora",
+    "open": "Apri",
+    "stepNumber": "Passo {n}:",
+    "minutes_one": "Circa 1 minuto",
+    "minutes_other": "Circa {count} minuti",
+    "state": {
+      "done": "Fatto",
+      "needs": "Tocca a te",
+      "waiting": "In attesa",
+      "blocked": "Bloccato",
+      "unknown": "Non controllato",
+      "failed": "Controllo non riuscito",
+      "checking": "Controllo…"
+    },
+    "step": {
+      "legal": "Dati legali della società (partita IVA, regime fiscale, PEC o codice SDI)",
+      "sites": "Stabilimenti e linee",
+      "mail": "Dominio di posta verificato",
+      "numbering": "Valori iniziali delle numerazioni",
+      "people": "Persone invitate",
+      "roles": "Ruoli controllati",
+      "tablets": "Tablet registrati",
+      "printers": "Stampanti",
+      "sdi": "Collegamento SDI",
+      "privacy": "Registro privacy e informativa ai lavoratori",
+      "stock": "Giacenze iniziali importate"
+    },
+    "detail": {
+      "checking": "Controllo in corso…",
+      "failed": "Controllo non riuscito: {need}",
+      "noRight": "Non controllato: ti serve il permesso \"{need}\".",
+      "legal": {
+        "done_one": "L'unica società attiva può emettere fatture.",
+        "done_other": "Tutte le {count} società attive possono emettere fatture.",
+        "needs_one": "{name} non può ancora emettere fatture: manca 1 dato.",
+        "needs_other": "{name} non può ancora emettere fatture: mancano {count} dati.",
+        "needsMore_one": "{name} non può ancora emettere fatture: manca 1 dato (e altre {others} società).",
+        "needsMore_other": "{name} non può ancora emettere fatture: mancano {count} dati (e altre {others} società).",
+        "none": "Ancora nessuna società: aggiungi la prima (bastano ragione sociale e partita IVA)."
+      },
+      "sites": {
+        "done_one": "Ogni società ha uno stabilimento; il reparto produttivo ha postazioni.",
+        "done_other": "Ogni società ha uno stabilimento; tutti i {count} reparti produttivi hanno postazioni.",
+        "blocked": "Bloccato da: dati legali della società (aggiungi prima una società).",
+        "noSite": "{name} non ha ancora uno stabilimento.",
+        "noStation": "{name} non ha postazioni: lì non si possono registrare tablet."
+      },
+      "mail": {
+        "done": "La posta parte da {domain}.",
+        "waiting": "In attesa del tuo tecnico: i record DNS di {domain} non risultano ancora.",
+        "none": "Ancora nessun dominio di invio.",
+        "noneLater": "Ancora nessun dominio di invio. La sua pagina arriva con Collegamenti (il prossimo passo)."
+      },
+      "numbering": {
+        "done_one": "1 numerazione è impostata.",
+        "done_other": "{count} numerazioni sono impostate.",
+        "needs": "{name} non ha ancora una numerazione delle fatture.",
+        "needsLater": "{name} non ha ancora una numerazione delle fatture. La sua pagina arriva con Documenti e numerazioni (il prossimo passo)."
+      },
+      "people": {
+        "done_one": "Oltre a te può accedere 1 persona.",
+        "done_other": "Oltre a te possono accedere {count} persone.",
+        "waiting_one": "In attesa che 1 persona invitata accetti.",
+        "waiting_other": "In attesa che {count} persone invitate accettino.",
+        "none": "Per ora ci sei solo tu: invita le persone che lavorano in ufficio."
+      },
+      "roles": {
+        "done_one": "Il ruolo corrisponde al suo modello.",
+        "done_other": "Tutti i {count} ruoli corrispondono ai loro modelli.",
+        "needs_one": "1 ruolo differisce dal suo modello pronto: controllalo.",
+        "needs_other": "{count} ruoli differiscono dal loro modello pronto: controllali."
+      },
+      "tablets": {
+        "done_one": "1 tablet è registrato.",
+        "done_other": "{count} tablet sono registrati.",
+        "waiting_one": "In attesa che 1 tablet legga il suo codice.",
+        "waiting_other": "In attesa che {count} tablet leggano il loro codice.",
+        "none": "Ancora nessun tablet registrato: basta un minuto con il codice QR."
+      },
+      "printers": {
+        "done_one": "1 stampante è attiva.",
+        "done_other": "{count} stampanti sono attive.",
+        "none": "Ancora nessuna stampante: finché non ne aggiungi una, le etichette si stampano dal browser in PDF."
+      },
+      "sdi": {
+        "unknown": "Non ancora controllato: il collegamento SDI viene letto da Collegamenti (il prossimo passo)."
+      },
+      "privacy": {
+        "done": "Tutti gli adempimenti privacy sono fatti.",
+        "needs_one": "Resta aperto 1 adempimento privacy.",
+        "needs_other": "Restano aperti {count} adempimenti privacy.",
+        "needsLater_one": "Resta aperto 1 adempimento privacy. La sua pagina arriva con Privacy e informative.",
+        "needsLater_other": "Restano aperti {count} adempimenti privacy. La loro pagina arriva con Privacy e informative."
+      },
+      "stock": {
+        "unknown": "Non ancora controllato: l'importazione delle giacenze iniziali arriva con i passi del magazzino."
+      }
+    }
+  },
+  "status": {
+    "ACTIVE": "Attivo",
+    "ARCHIVED": "Archiviato"
+  },
+  "right": {
+    "companies_view": "Vedere le società",
+    "companies_manage": "Gestire le società",
+    "sites_view": "Vedere gli stabilimenti",
+    "sites_manage": "Gestire stabilimenti, linee e postazioni",
+    "devices_view": "Vedere i dispositivi di reparto",
+    "devices_manage": "Registrare e modificare i dispositivi di reparto",
+    "devices_revoke": "Revocare i dispositivi di reparto",
+    "print_view": "Vedere le stampanti",
+    "print_manage": "Gestire le stampanti",
+    "users_view": "Vedere le persone",
+    "users_invite": "Invitare persone",
+    "users_suspend": "Sospendere persone",
+    "users_reactivate": "Riattivare persone",
+    "users_deactivate": "Disattivare persone",
+    "users_resetPassword": "Imporre una nuova password",
+    "roles_view": "Vedere i ruoli",
+    "roles_assign": "Dare e chiudere ruoli",
+    "workers_manage": "Gestire gli operatori di reparto",
+    "workers_roles": "Cambiare i ruoli degli operatori",
+    "workers_credentials": "Emettere badge e azzerare PIN",
+    "email_send": "Inviare posta",
+    "numbering_view": "Vedere le numerazioni",
+    "privacy_view": "Vedere gli adempimenti privacy"
+  },
+  "org": {
+    "intro": "Le società del gruppo con i loro dati fiscali e di fatturazione elettronica, e i loro reparti produttivi, magazzini e uffici. Apri uno stabilimento per costruirne linee e postazioni.",
+    "newCompany": "Nuova società",
+    "newCompanyHint": "Bastano ragione sociale e partita IVA per iniziare; il resto è in Dati legali e fiscali.",
+    "createCompany": "Crea la società",
+    "newSite": "Nuovo stabilimento",
+    "newSiteHint": "Un reparto produttivo, un magazzino o un ufficio di una società.",
+    "createSite": "Crea lo stabilimento",
+    "held": {
+      "noCompany": "Prima aggiungi una società."
+    },
+    "search": "Cerca società e stabilimenti",
+    "showArchived": "Mostra archiviati",
+    "tableLabel": "Società e loro stabilimenti",
+    "count": "Società: {companies} · stabilimenti: {sites}",
+    "expand": "Mostra gli stabilimenti di {name}",
+    "collapse": "Nascondi gli stabilimenti di {name}",
+    "structure": "Linee {lines} · postazioni {stations}",
+    "noStations": "Nessuna postazione",
+    "invoicing": {
+      "ready": "Pronta a fatturare",
+      "missing_one": "Manca 1 dato",
+      "missing_other": "Mancano {count} dati"
+    },
+    "gap": {
+      "invoicing": "{name} non può ancora emettere fatture",
+      "noStation": "{name} non ha postazioni: lì non si possono registrare tablet",
+      "fix": "Correggi",
+      "addStations": "Aggiungi postazioni"
+    },
+    "empty": {
+      "title": "Aggiungi la prima società",
+      "body": "Bastano ragione sociale e partita IVA per iniziare."
+    },
+    "viesLater": "La verifica della partita IVA su VIES per una società arriva con Collegamenti; per clienti e fornitori è nella loro scheda.",
+    "col": {
+      "name": "Nome",
+      "code": "Codice",
+      "kind": "Tipo",
+      "vatAddress": "P. IVA / indirizzo",
+      "invoicing": "Fatturazione",
+      "timezone": "Fuso orario",
+      "structure": "Linee · postazioni",
+      "devices": "Dispositivi",
+      "status": "Stato"
+    },
+    "kind": {
+      "COMPANY": "Società",
+      "PLANT": "Reparto produttivo",
+      "WAREHOUSE": "Magazzino",
+      "OFFICE": "Ufficio"
+    },
+    "issue": {
+      "vatNumber": "Partita IVA",
+      "regimeFiscale": "Regime fiscale",
+      "address": "Indirizzo della sede legale",
+      "pec": "PEC o codice SDI per ricevere le fatture elettroniche"
+    },
+    "field": {
+      "legalName": "Ragione sociale",
+      "vatNumber": "Partita IVA",
+      "vatHint": "Con il prefisso del paese: IT e 11 cifre.",
+      "code": "Codice",
+      "codeHint": "Breve; usato nell'indirizzo dell'Ufficio e nei numeri dei documenti. Non si può cambiare dopo.",
+      "siteCodeHint": "Breve; usato nei numeri e sulle etichette. Non si può cambiare dopo.",
+      "country": "Paese",
+      "company": "Società",
+      "siteName": "Nome",
+      "kind": "Tipo",
+      "timezone": "Fuso orario",
+      "line1": "Via e numero civico",
+      "postalCode": "CAP",
+      "city": "Città",
+      "province": "Provincia"
+    }
+  },
+  "company": {
+    "tab": {
+      "legal": "Dati legali e fiscali",
+      "sites": "Stabilimenti",
+      "defaults": "Valori predefiniti",
+      "activity": "Attività"
+    },
+    "held": {
+      "archived": "Questa società è archiviata."
+    },
+    "archivedBanner": "Archiviata: questa società resta per la sua cronologia; non si può creare nulla di nuovo per lei.",
+    "legal": {
+      "identity": "Identità legale",
+      "identityHint": "Ciò che ogni documento e fattura riporta (c.c. art. 2250).",
+      "invoicing": "Fatturazione elettronica",
+      "invoicingHint": "Ciò che serve allo SDI per consegnare e ricevere le fatture.",
+      "look": "Piè di pagina dei documenti",
+      "lookHint": "Stampato in fondo a preventivi, ordini, DDT e fatture.",
+      "logoLater": "Il caricamento del logo e l'anteprima dei documenti arrivano con Documenti e numerazioni."
+    },
+    "field": {
+      "tradeName": "Nome commerciale",
+      "fiscalCode": "Codice fiscale",
+      "regimeFiscale": "Regime fiscale",
+      "rea": "REA",
+      "reaOffice": "Ufficio REA (provincia)",
+      "reaNumber": "Numero REA",
+      "shareCapital": "Capitale sociale (EUR)",
+      "shareCapitalHint": "Dato pubblico, stampato sui documenti.",
+      "soleShareholder": "Socio unico",
+      "inLiquidation": "In liquidazione",
+      "address": "Sede legale",
+      "line2": "Indirizzo, seconda riga",
+      "pec": "PEC",
+      "sdi": "Codice destinatario SDI",
+      "sdiHint": "Le 7 lettere o cifre fornite dal tuo intermediario.",
+      "currency": "Valuta",
+      "currencyHint": "Euro per tutte le società in W0.",
+      "footer": "Testo del piè di pagina",
+      "locale": "Lingua dei documenti",
+      "localeHint": "La lingua con cui iniziano i nuovi documenti.",
+      "fiscalYear": "L'esercizio inizia a",
+      "timezoneHint": "I nuovi stabilimenti iniziano con questo fuso orario."
+    },
+    "regime": {
+      "none": "Non impostato",
+      "RF01": "RF01 · Ordinario",
+      "RF02": "RF02 · Contribuenti minimi",
+      "RF04": "RF04 · Agricoltura e pesca",
+      "RF05": "RF05 · Vendita sali e tabacchi",
+      "RF06": "RF06 · Commercio dei fiammiferi",
+      "RF07": "RF07 · Editoria",
+      "RF08": "RF08 · Gestione telefonia pubblica",
+      "RF09": "RF09 · Rivendita documenti di trasporto",
+      "RF10": "RF10 · Intrattenimenti e giochi",
+      "RF11": "RF11 · Agenzie di viaggi e turismo",
+      "RF12": "RF12 · Agriturismo",
+      "RF13": "RF13 · Vendite a domicilio",
+      "RF14": "RF14 · Beni usati, oggetti d'arte e antiquariato",
+      "RF15": "RF15 · Agenzie di vendite all'asta",
+      "RF16": "RF16 · IVA per cassa P.A.",
+      "RF17": "RF17 · IVA per cassa",
+      "RF18": "RF18 · Altro",
+      "RF19": "RF19 · Regime forfettario"
+    },
+    "ready": "Pronta a emettere fatture",
+    "notReady_one": "Non può ancora emettere fatture: manca 1 dato",
+    "notReady_other": "Non può ancora emettere fatture: mancano {count} dati",
+    "saved": "Salvato.",
+    "archived": "La società è archiviata.",
+    "archive": {
+      "title": "Archivia questa società",
+      "body": "Solo quando nessuno dei suoi stabilimenti è attivo. Documenti e cronologia restano.",
+      "action": "Archivia la società",
+      "confirmTitle": "Archiviare {name}?",
+      "confirmBody": "Non si potrà creare nulla di nuovo per lei; documenti, numeri e cronologia restano. I dati archiviati si conservano, non si cancellano.",
+      "held_one": "Uno stabilimento è ancora attivo: prima archivialo o spostalo.",
+      "held_other": "{count} stabilimenti sono ancora attivi: prima archiviali.",
+      "inUse_one": "Ancora in uso: 1 stabilimento attivo.",
+      "inUse_other": "Ancora in uso: {count} stabilimenti attivi."
+    },
+    "sites": {
+      "empty": "Ancora nessuno stabilimento",
+      "label": "Stabilimenti di {name}"
+    },
+    "defaults": {
+      "title": "Valori predefiniti",
+      "hint": "Valori con cui iniziano i nuovi record di questa società.",
+      "later": "L'identità e-mail predefinita arriva con Collegamenti; le numerazioni di questa società con Documenti e numerazioni."
+    }
+  },
+  "site": {
+    "tab": {
+      "structure": "Struttura",
+      "centres": "Centri di lavoro",
+      "calendars": "Calendari",
+      "devices": "Dispositivi",
+      "activity": "Attività"
+    },
+    "addLine": "Aggiungi linea",
+    "addStation": "Aggiungi postazione",
+    "addStationHere": "Postazione",
+    "addCentre": "Aggiungi centro di lavoro",
+    "held": {
+      "archived": "Questo stabilimento è archiviato.",
+      "noCentre": "Prima aggiungi un centro di lavoro: ogni postazione ne fa parte.",
+      "stationDevices_one": "Bloccato: 1 dispositivo è registrato qui.",
+      "stationDevices_other": "Bloccato: {count} dispositivi sono registrati qui.",
+      "lineStations_one": "Bloccato: c'è ancora 1 postazione.",
+      "lineStations_other": "Bloccato: ci sono ancora {count} postazioni.",
+      "centreStations_one": "Bloccato: 1 postazione ne fa parte.",
+      "centreStations_other": "Bloccato: {count} postazioni ne fanno parte."
+    },
+    "archive": {
+      "action": "Archivia lo stabilimento"
+    },
+    "archivedBanner": "Archiviato: questo stabilimento resta per la sua cronologia; non si può creare nulla di nuovo qui.",
+    "structure": {
+      "empty": "Aggiungi la prima linea, poi le sue postazioni",
+      "emptyCentres": "Ogni postazione fa parte di un centro di lavoro: aggiungi anche i centri (Taglio, Cucito, Collaudo…).",
+      "hint": "Tablet, persone e avvisi sono legati a queste postazioni.",
+      "tableLabel": "Postazioni di {name}"
+    },
+    "alone": "Postazioni singole",
+    "aloneHint": "Postazioni fuori linea: un tavolo di taglio, un banco di collaudo.",
+    "line": {
+      "stations_one": "1 postazione",
+      "stations_other": "{count} postazioni",
+      "empty": "Ancora nessuna postazione."
+    },
+    "rename": "Rinomina…",
+    "move": "Sposta su un'altra linea…",
+    "archiveStation": "Archivia la postazione",
+    "archiveLine": "Archivia la linea",
+    "archiveCentre": "Archivia il centro di lavoro",
+    "devicesBound_one": "1 dispositivo",
+    "devicesBound_other": "{count} dispositivi",
+    "col": {
+      "centre": "Centro di lavoro",
+      "devices": "Dispositivi",
+      "lines": "Linee",
+      "stations": "Postazioni"
+    },
+    "centres": {
+      "hint": "Gruppi di postazioni che fanno un tipo di lavoro.",
+      "empty": "Nessun centro di lavoro",
+      "capacityLater": "La capacità per centro di lavoro si imposta in Pianificazione (W1)."
+    },
+    "centreKind": {
+      "CUTTING": "Taglio",
+      "SEWING": "Cucito",
+      "ASSEMBLY": "Assemblaggio",
+      "FINISHING": "Rifinitura",
+      "INSPECTION": "Collaudo",
+      "PACKING": "Imballo",
+      "SUBCONTRACT": "Conto terzi"
+    },
+    "floor": {
+      "title": "Turni e uscita automatica dal reparto",
+      "hint": "Quando finiscono i turni e quanto aspetta un tablet prima di far uscire un operatore. Orari nel fuso {zone}.",
+      "idle": "Uscita dopo inattività di",
+      "idleHint": "Da {min} a {max} minuti; 10 di base.",
+      "idleRange": "Servono da {min} a {max} minuti.",
+      "minutes": "min",
+      "less": "Un minuto in meno",
+      "more": "Un minuto in più",
+      "shiftEnds": "Orari di fine turno",
+      "shiftEndsHint": "Una sessione di reparto finisce al primo fine turno ad almeno 30 minuti dall'accesso (al massimo 12 ore).",
+      "noShifts": "Nessun fine turno: una sessione finisce dopo 12 ore.",
+      "shiftEnd": "Fine turno {n}",
+      "removeShift": "Togli il fine turno {time}",
+      "addShift": "Aggiungi un fine turno",
+      "timeFormat": "Serve un'ora del giorno, HH:MM.",
+      "tooMany": "Troppi fine turno.",
+      "twice": "Un orario è ripetuto.",
+      "zoneHint": "Il fuso orario dello stabilimento (impostato sullo stabilimento).",
+      "holidaysLater": "Giorni lavorativi e festività (festività italiane, chiusura di agosto) arrivano in W2a."
+    },
+    "badge": {
+      "title": "Inizio del lavoro sul tablet",
+      "hint": "La scelta del titolare (F1) per ogni tablet di questo stabilimento.",
+      "coming": "Arriva con il passo del reparto",
+      "start": "Iniziare il lavoro",
+      "startValue": "Solo badge",
+      "pin": "PIN richiesto",
+      "pinValue": "Solo per firmare, aprire La mia giornata o accedere per nome",
+      "later": "Il server non ha ancora questa impostazione: finché il passo del reparto non la aggiunge, un tablet chiede badge e PIN."
+    },
+    "devices": {
+      "tablets": "Tablet di questo stabilimento",
+      "printers": "Stampanti di questo stabilimento",
+      "empty": "Nessun dispositivo. Registra un tablet."
+    },
+    "dialog": {
+      "line": {
+        "title": "Aggiungi una linea",
+        "hint": "Una linea di cucito, una sala taglio, una cella di rifinitura di {site}.",
+        "create": "Aggiungi la linea"
+      },
+      "station": {
+        "title": "Aggiungi una postazione",
+        "hint": "Un posto di {site} dove si lavora e si scansiona; un tablet è registrato su una postazione.",
+        "create": "Aggiungi la postazione"
+      },
+      "centre": {
+        "title": "Aggiungi un centro di lavoro",
+        "hint": "Un tipo di lavoro di {site} con la propria capacità.",
+        "create": "Aggiungi il centro"
+      },
+      "rename": {
+        "title": "Rinomina"
+      },
+      "move": {
+        "title": "Sposta {name}",
+        "go": "Sposta"
+      },
+      "archive": {
+        "title": "Archiviare {name}?",
+        "body": "Resta per la sua cronologia e non viene cancellato; niente di nuovo potrà usarlo.",
+        "uses": "Ancora in uso:",
+        "held": "Bloccato: prima archivia o sposta ciò che lo usa ancora.",
+        "go": "Archivia"
+      }
+    },
+    "field": {
+      "codeHint": "Breve, unico nello stabilimento; stampato sulle etichette.",
+      "centreHint": "Il tipo di lavoro che si fa qui.",
+      "line": "Linea"
+    },
+    "station": {
+      "needsCentre": "Scegli il suo centro di lavoro."
+    },
+    "done": {
+      "line": "Linea aggiunta.",
+      "station": "Postazione aggiunta.",
+      "centre": "Centro di lavoro aggiunto.",
+      "renamed": "Rinominato.",
+      "moved": "Postazione spostata.",
+      "archived": "Archiviato.",
+      "floor": "Orari del reparto salvati."
+    }
+  },
+  "users": {
+    "intro": "Tutti quelli che accedono: persone d'ufficio (invitate per e-mail, con doppio fattore) e operatori di reparto (badge e PIN, senza e-mail).",
+    "addWorker": "Aggiungi operatore",
+    "invite": {
+      "action": "Invita persone",
+      "title": "Invita persone",
+      "hint": "Chi sono, cosa fanno e dove. L'invito arriva per e-mail.",
+      "valid": "L'invito vale 7 giorni.",
+      "go_one": "Invita 1 persona",
+      "go_other": "Invita {count} persone",
+      "who": "Chi",
+      "name": "Nome",
+      "email": "E-mail",
+      "remove": "Togli la persona {n}",
+      "another": "Aggiungi un'altra persona",
+      "paste": "Oppure incolla un elenco di indirizzi",
+      "pasteHint": "Separati da virgole, spazi o a capo; i nomi vengono dagli indirizzi e si possono cambiare.",
+      "what": "Cosa fanno",
+      "where": "Dove",
+      "language": "Lingua dell'invito e dell'Ufficio",
+      "noAssign": "Puoi invitare ma non dare ruoli: accederanno senza vedere nulla finché un amministratore non ne dà uno.",
+      "noRoles": "Non è stato possibile leggere i ruoli.",
+      "stepUp": "L'invito chiede un codice nuovo dall'app di autenticazione.",
+      "nobody": "Aggiungi almeno una persona.",
+      "exists": "Questo indirizzo ha già un account.",
+      "twice": "Questo indirizzo è ripetuto.",
+      "scopeNeeded": "Scegli le società, oppure Tutte le società.",
+      "results": "{sent} inviti su {total} inviati",
+      "outcome": {
+        "sent": "inviato",
+        "already_sent": "già inviato prima",
+        "refused": "rifiutato"
+      },
+      "done_one": "1 invito inviato.",
+      "done_other": "{count} inviti inviati."
+    },
+    "held": {
+      "noSite": "Prima aggiungi uno stabilimento: un operatore ne fa parte."
+    },
+    "audience": {
+      "label": "Chi",
+      "office": "Ufficio",
+      "floor": "Reparto",
+      "officeCount": "Ufficio ({count})",
+      "floorCount": "Reparto ({count})"
+    },
+    "search": "Cerca persone",
+    "tile": {
+      "invited": "Invitati, non entrati",
+      "noTwoFactor": "Doppio fattore spento",
+      "suspended": "Sospesi",
+      "deactivated": "Disattivati",
+      "locked": "Bloccati",
+      "noPin": "Senza PIN",
+      "noBadge": "Senza badge",
+      "inactive": "Inattivi"
+    },
+    "tileHint": {
+      "invited": "L'invito vale 7 giorni",
+      "noTwoFactor": "Persone attive senza app di autenticazione",
+      "suspended": "Non accedono finché non vengono riattivati",
+      "deactivated": "Usciti; restano nella cronologia",
+      "locked": "Troppi PIN sbagliati, per qualche minuto",
+      "noPin": "Dai un primo PIN",
+      "noBadge": "Accedono con nome e PIN",
+      "inactive": "Non accedono dal tablet"
+    },
+    "filtered": "Mostra: {tile}",
+    "col": {
+      "name": "Nome",
+      "roles": "Ruoli",
+      "where": "Dove",
+      "money": "Vede i soldi",
+      "status": "Stato",
+      "twoFactor": "Doppio fattore",
+      "lastSignIn": "Ultimo accesso",
+      "site": "Stabilimento",
+      "floorRoles": "Ruoli di reparto",
+      "badge": "Badge",
+      "pin": "PIN",
+      "language": "Lingua"
+    },
+    "status": {
+      "INVITED": "Invitato",
+      "ACTIVE": "Attivo",
+      "SUSPENDED": "Sospeso",
+      "DEACTIVATED": "Disattivato"
+    },
+    "workerStatus": {
+      "ACTIVE": "Attivo",
+      "INACTIVE": "Inattivo"
+    },
+    "mfa": {
+      "on": "Attivo",
+      "off": "Spento"
+    },
+    "noRole": "Nessun ruolo: non vede nulla",
+    "noFloorRole": "Nessun ruolo di reparto",
+    "invitedUntil": "Invito valido fino al {date}",
+    "employeeNo": "Matr. {code}",
+    "badgeHint": "•••• {hint}",
+    "noBadge": "Nessun badge",
+    "pin": {
+      "set": "Impostato",
+      "mustChange": "Ne sceglie uno nuovo all'accesso",
+      "none": "Non impostato"
+    },
+    "locked": "Bloccato",
+    "tableOffice": "Persone d'ufficio",
+    "tableFloor": "Operatori di reparto",
+    "empty": {
+      "office": "Invita le persone che lavorano in ufficio",
+      "officeBody": "Ognuno riceve una e-mail con un link valido 7 giorni.",
+      "floor": "Aggiungi gli operatori di reparto",
+      "floorBody": "Nessuna e-mail: nome, stabilimento, badge e PIN."
+    },
+    "later": "Gli utenti dei partner arrivano in W2b; gli agenti IA in W3. Le azioni multiple (ruolo a più persone, stampa badge, reinvio inviti) arrivano con gli strumenti comuni degli elenchi.",
+    "worker": {
+      "hint": "Un operatore accede dal tablet con badge e PIN; nessuna e-mail.",
+      "minimal": "Solo ciò che serve al lavoro (GDPR art. 5(1)(c)): niente foto, data di nascita o documento.",
+      "name": "Nome",
+      "site": "Stabilimento",
+      "language": "Lingua sul tablet",
+      "employeeNo": "Matricola",
+      "employeeHint": "Facoltativa.",
+      "roles": "Ruoli di reparto",
+      "noRolesRight": "Puoi aggiungere operatori, non dare ruoli di reparto: li darà un amministratore.",
+      "rolesStepUp": "Dare ruoli di reparto chiede un codice nuovo.",
+      "go": "Aggiungi l'operatore",
+      "made": "{name} è stato aggiunto",
+      "madeBody": "Due cose prima del primo accesso dal tablet:",
+      "nextSteps": "Prossimi passi",
+      "step": "Passo",
+      "how": "Come",
+      "badgeStep": "Stampa un badge",
+      "badgeHow": "Badge e PIN › Emetti badge (mostrato una volta, stampato subito).",
+      "pinStep": "Dai un primo PIN",
+      "pinHow": "Badge e PIN › Azzera PIN: un PIN temporaneo; l'operatore sceglie il proprio al primo accesso.",
+      "next": "Apri Badge e PIN"
+    }
+  },
+  "user": {
+    "tab": {
+      "profile": "Profilo",
+      "roles": "Ruoli e ambito",
+      "activity": "Attività"
+    },
+    "giveRole": "Dai un ruolo",
+    "mfaOn": "Doppio fattore attivo",
+    "mfaOff": "Doppio fattore spento",
+    "who": "Chi",
+    "invitedUntil": "Invito valido fino al",
+    "editLater": "Ognuno cambia il proprio nome e la propria lingua in Il mio profilo.",
+    "lastAdmin": "L'ultimo amministratore: il gruppo tiene sempre una persona che dà ruoli su tutte le società.",
+    "password": {
+      "title": "Imponi una nuova password",
+      "body": "Al prossimo accesso sceglierà una nuova password.",
+      "action": "Imponi nuova password",
+      "confirm": "Imporre una nuova password a {name}?",
+      "consequence": "Al prossimo accesso dovrà scegliere una nuova password; le sessioni proseguono fino ad allora."
+    },
+    "done": {
+      "password": "Al prossimo accesso verrà chiesta una nuova password.",
+      "suspend": "Sospeso: ogni sessione è terminata.",
+      "reactivate": "Riattivato.",
+      "deactivate": "Disattivato.",
+      "given": "{role} assegnato.",
+      "ended": "{role} chiuso."
+    },
+    "suspend": {
+      "title": "Sospendi",
+      "body": "Chiude subito ogni sessione; riattiva per ridare accesso.",
+      "action": "Sospendi",
+      "confirm": "Sospendere {name}?",
+      "consequence": "Ogni sessione termina ora e l'accesso è bloccato finché qualcuno non riattiva. Ruoli e cronologia restano."
+    },
+    "reactivate": {
+      "title": "Riattiva",
+      "body": "Ridà accesso a una persona sospesa.",
+      "action": "Riattiva",
+      "confirm": "Riattivare {name}?",
+      "consequence": "Potrà accedere di nuovo con i ruoli di prima."
+    },
+    "deactivate": {
+      "title": "Disattiva",
+      "body": "Per chi è uscito: chiude l'accesso per sempre, il nome resta nella cronologia.",
+      "action": "Disattiva",
+      "confirm": "Disattivare {name}?",
+      "consequence": "Chiude ogni sessione, blocca l'accesso e cancella le credenziali; il nome resta nella cronologia.",
+      "handover": "Il loro lavoro aperto (attività, approvazioni, record di cui sono responsabili) si passa ad altri in un passo successivo; controllalo prima."
+    },
+    "held": {
+      "self": "Non sul tuo account.",
+      "selfRoles": "Nessuno si dà ruoli da solo.",
+      "notActive": "Solo per una persona attiva.",
+      "notSuspended": "Solo per una persona sospesa.",
+      "deactivated": "Questa persona è disattivata.",
+      "lastAdmin": "Bloccato: è l'ultimo amministratore. Prima dai il ruolo di amministratore a un'altra persona."
+    },
+    "canDo": "Cosa possono fare",
+    "noRole": "Nessun ruolo: questa persona può accedere ma non vede nulla.",
+    "seesMoney": "Vede i soldi:",
+    "assignments": "Ruoli",
+    "col": {
+      "from": "Dal",
+      "to": "Al"
+    },
+    "noEnd": "Senza scadenza",
+    "live": "In vigore",
+    "ended": "Chiuso",
+    "end": "Chiudi",
+    "sessionsLater": "Sessioni e storico degli accessi arrivano in W2b.",
+    "give": {
+      "title": "Dai un ruolo a {name}",
+      "role": "Ruolo",
+      "fromHint": "Vuoto: da adesso.",
+      "toHint": "Vuoto: finché qualcuno non lo chiude.",
+      "endAfterStart": "La fine deve venire dopo l'inizio.",
+      "summary": "{name} riceve {role} in {where}.",
+      "raises": "Gli dà più di quanto ha ora: viene chiesto un codice nuovo.",
+      "noRaise": "Niente di nuovo oltre a quanto ha già."
+    },
+    "endRole": {
+      "title": "Chiudere {role} per {name}?",
+      "body": "Il ruolo smette subito di dare accesso. L'assegnazione resta in elenco come chiusa (mai cancellata)."
+    }
+  },
+  "worker": {
+    "tab": {
+      "profile": "Profilo",
+      "badge": "Badge e PIN",
+      "activity": "Attività"
+    },
+    "held": {
+      "own": "Nessuno gestisce il proprio badge, PIN o ruoli.",
+      "inactive": "Solo per un operatore attivo."
+    },
+    "ownBanner": "Questo operatore è collegato al tuo account: badge, PIN e ruoli li gestisce qualcun altro.",
+    "siteHint": "Spostarsi in un altro stabilimento significa un nuovo operatore lì.",
+    "badge": {
+      "title": "Badge",
+      "hint": "Si scansiona sul tablet per iniziare a lavorare; qui se ne tengono solo gli ultimi 4 caratteri.",
+      "hintLabel": "Badge",
+      "issued": "Emesso il",
+      "none": "Nessun badge: l'operatore sceglie il proprio nome e digita il PIN.",
+      "issue": "Emetti badge",
+      "reissue": "Emetti un nuovo badge",
+      "lost": "Segna smarrito"
+    },
+    "pin": {
+      "title": "PIN",
+      "hint": "Mai mostrato: solo se è impostato. 5 PIN sbagliati bloccano l'operatore per qualche minuto.",
+      "state": "PIN",
+      "set": "Impostato",
+      "mustChange": "PIN temporaneo: sceglie il proprio al prossimo accesso",
+      "none": "Non ancora impostato",
+      "lock": "Blocco",
+      "locked": "Bloccato dopo PIN sbagliati",
+      "notLocked": "Non bloccato",
+      "reset": "Azzera PIN",
+      "unlockHint": "Il blocco finisce da solo dopo qualche minuto; anche azzerare il PIN lo fa entrare subito."
+    },
+    "roles": {
+      "title": "Ruoli di reparto",
+      "hint": "Cosa fanno sul tablet; al massimo vedono le paghe.",
+      "change": "Cambia ruoli",
+      "dialog": "Ruoli di reparto di {name}",
+      "stepUp": "Cambiare i ruoli di reparto chiede un codice nuovo."
+    },
+    "deactivate": {
+      "title": "Disattiva",
+      "body": "Chiude le sessioni di reparto e blocca l'accesso; il nome resta nella cronologia.",
+      "action": "Disattiva l'operatore"
+    },
+    "reactivate": {
+      "title": "Riattiva",
+      "body": "Potrà di nuovo accedere dal tablet.",
+      "action": "Riattiva l'operatore"
+    },
+    "confirm": {
+      "badge": {
+        "title": "Emettere un badge per {name}?",
+        "body": "Il nuovo badge sostituisce il precedente, che smette subito di funzionare. Il codice viene mostrato una volta: stampalo subito.",
+        "go": "Emetti badge"
+      },
+      "pin": {
+        "title": "Azzerare il PIN di {name}?",
+        "body": "Le sessioni terminano; viene mostrato una volta un PIN temporaneo e al prossimo accesso sceglierà il proprio.",
+        "go": "Azzera PIN"
+      },
+      "lost": {
+        "title": "Segnare smarrito il badge di {name}?",
+        "body": "Il badge smette subito di funzionare; emettine uno nuovo quando serve.",
+        "go": "Segna smarrito"
+      },
+      "deactivate": {
+        "title": "Disattivare {name}?",
+        "body": "Chiude ora le sessioni di reparto e blocca l'accesso su ogni tablet. Il nome resta nella cronologia.",
+        "go": "Disattiva"
+      },
+      "reactivate": {
+        "title": "Riattivare {name}?",
+        "body": "Potrà di nuovo accedere dal tablet con badge e PIN.",
+        "go": "Riattiva"
+      },
+      "stepUp": "Questo chiede un codice nuovo dall'app di autenticazione."
+    },
+    "done": {
+      "saved": "Salvato.",
+      "lost": "Badge segnato smarrito.",
+      "roles": "Ruoli di reparto salvati.",
+      "revealed": "Fatto. Il codice non è più mostrato da nessuna parte.",
+      "deactivate": "Operatore disattivato.",
+      "reactivate": "Operatore riattivato."
+    }
+  },
+  "roles": {
+    "intro": "Cosa può fare ogni ruolo, prima a parole: gli importi che vede (prezzi · costi · margini · paghe) e se chiede il doppio fattore. I ruoli pronti restano uguali ai loro modelli; una copia personalizzata dice cosa ha guadagnato il suo modello.",
+    "compare": "Confronta ruoli",
+    "held": {
+      "compare": "Servono due ruoli per confrontare."
+    },
+    "search": "Cerca ruoli",
+    "tableLabel": "Ruoli",
+    "audience": {
+      "label": "Destinatari",
+      "all": "Tutti",
+      "office": "Ufficio",
+      "floor": "Reparto"
+    },
+    "col": {
+      "name": "Ruolo",
+      "does": "Cosa fa",
+      "people": "Persone",
+      "money": "Vede i soldi",
+      "twoFactor": "Doppio fattore",
+      "basedOn": "Basato su"
+    },
+    "kind": {
+      "system": "Pronto",
+      "custom": "Personalizzato"
+    },
+    "readyMade": "Ruolo pronto",
+    "noDescription": "Nessuna descrizione.",
+    "twoFactor": "Doppio fattore",
+    "gap": {
+      "adds_one": "1 permesso non presente nella tua copia",
+      "adds_other": "{count} permessi non presenti nella tua copia",
+      "outdated": "Non aggiornato: la sincronizzazione quotidiana lo riporta al suo modello"
+    },
+    "empty": {
+      "title": "Ancora nessun ruolo",
+      "body": "I ruoli pronti compaiono dopo la prima sincronizzazione."
+    },
+    "later": "Creare una copia personalizzata di un ruolo pronto e modificarla arriva in W2b.",
+    "compareTitle": "Confronta ruoli",
+    "compareHint": "Scegline due o tre: cosa può fare ognuno, per area, con le differenze segnate.",
+    "comparePick": "Ruoli da confrontare",
+    "compareNeedTwo": "Scegli almeno due ruoli.",
+    "system": {
+      "owner": {
+        "name": "Titolare",
+        "description": "Tutto, in ogni società, compresi tutti gli importi. Il gruppo ne tiene sempre uno."
+      },
+      "admin": {
+        "name": "Amministratore",
+        "description": "Persone, ruoli e registro attività; non vede importi se non ha anche un ruolo che li vede."
+      },
+      "finance": {
+        "name": "Amministrazione contabile",
+        "description": "Fatture, pagamenti e numerazioni; vede prezzi, costi, margini e paghe."
+      },
+      "sales": {
+        "name": "Commerciale",
+        "description": "Clienti, preventivi e ordini; vede i prezzi di vendita, non costi o margini."
+      },
+      "planner": {
+        "name": "Pianificatore",
+        "description": "Pianifica ordini di lavoro e capacità; non vede importi."
+      },
+      "buyer": {
+        "name": "Acquisti",
+        "description": "Fornitori e ordini d'acquisto; vede i prezzi d'acquisto (i costi)."
+      },
+      "warehouse": {
+        "name": "Magazzino",
+        "description": "Ricevimento, giacenze e spedizioni; non vede importi."
+      },
+      "production_manager": {
+        "name": "Responsabile di produzione",
+        "description": "Guida la produzione: ordini di lavoro, linee e risultati del reparto; non vede importi."
+      },
+      "quality_inspector": {
+        "name": "Ispettore qualità",
+        "description": "Controlla lotti e prodotti finiti e li rilascia; non vede importi."
+      },
+      "floor_supervisor": {
+        "name": "Capo reparto",
+        "description": "Segue le linee dei propri stabilimenti dall'Ufficio e gestisce dispositivi, operatori, badge e PIN; non vede importi."
+      },
+      "read_only": {
+        "name": "Sola lettura",
+        "description": "Vede ogni schermata del proprio ambito e non cambia nulla; non vede importi."
+      },
+      "operator": {
+        "name": "Operatore",
+        "description": "Lavora su una postazione con un dispositivo registrato; non vede importi."
+      },
+      "cutting_operator": {
+        "name": "Tagliatore",
+        "description": "Lavora a un tavolo di taglio con un dispositivo registrato; non vede importi."
+      },
+      "floor_inspector": {
+        "name": "Collaudatore di reparto",
+        "description": "Controlla il lavoro a un banco di collaudo con un dispositivo registrato; non vede importi."
+      },
+      "team_leader": {
+        "name": "Capo squadra",
+        "description": "Guida una squadra in reparto: lavora e vede le schermate del capo squadra dello stabilimento; non vede importi."
+      }
+    }
+  },
+  "role": {
+    "tab": {
+      "permissions": "Permessi",
+      "rules": "Regole di ambito",
+      "users": "Utenti",
+      "activity": "Attività"
+    },
+    "copyOf": "Copia personalizzata di {key}",
+    "readOnlySystem": "Ruolo pronto: sola lettura. Resta uguale al suo modello.",
+    "readOnlyCustom": "Modificare un ruolo personalizzato arriva in W2b; per ora qui è in sola lettura.",
+    "plain": "Cosa può fare questo ruolo",
+    "areaLine": "{area}: azioni {count} su {total}",
+    "mfaRequired": "Chiede il doppio fattore prima di dare qualsiasi cosa",
+    "every": "Tutti i permessi",
+    "everyHint": "Per area: ogni azione a parole, spuntata quando il ruolo la possiede; un segno quando chiede un codice nuovo.",
+    "rules": {
+      "title": "Regole sempre valide",
+      "hint": "Qualunque cosa abbia un ruolo, queste valgono comunque. Sola lettura.",
+      "rule": "Regola",
+      "why": "Perché"
+    },
+    "rule": {
+      "released": {
+        "title": "Ordini di lavoro rilasciati e fatture emesse non si modificano",
+        "why": "Cambiano solo con una nuova versione, una nota di credito o uno storno."
+      },
+      "floorNoCost": {
+        "title": "Le sessioni di reparto non vedono mai costi, margini o prezzi",
+        "why": "Un tablet vede al massimo le paghe (A1 §3.11)."
+      },
+      "partnerPrice": {
+        "title": "Clienti e fornitori vedono al massimo i prezzi",
+        "why": "Le sessioni del portale e dei link non ricevono mai costi o margini."
+      },
+      "ownRequest": {
+        "title": "Nessuno approva la propria richiesta",
+        "why": "Quattro occhi su ogni approvazione."
+      },
+      "ownRoles": {
+        "title": "Nessuno si dà un ruolo o modifica un ruolo che ha",
+        "why": "I permessi li dà sempre qualcun altro."
+      },
+      "lastAdmin": {
+        "title": "Il gruppo tiene sempre un amministratore",
+        "why": "L'ultimo non può essere sospeso, disattivato o perdere il ruolo."
+      },
+      "stepUp": {
+        "title": "Aumentare i permessi chiede un codice nuovo",
+        "why": "Persone, ruoli, badge, PIN e coordinate bancarie: un codice dall'app di autenticazione."
+      }
+    },
+    "mfa": {
+      "title": "Doppio fattore",
+      "on": "Richiesto: il ruolo non dà nulla finché nella sessione non è provato il doppio fattore.",
+      "off": "Non richiesto da questo ruolo.",
+      "later": "Cambiarlo per ruolo arriva in W2a (Sicurezza e stato del sistema)."
+    },
+    "floorHolders": "Un ruolo di reparto è degli operatori ({count} ora); li trovi in Utenti › Reparto.",
+    "nobody": "Nessuno ha questo ruolo."
+  },
+  "devices": {
+    "intro": "I tablet e i telefoni registrati sulle postazioni, e le stampanti degli stabilimenti. Un dispositivo dice \"in uso\", mai chi lo usa.",
+    "enrol": "Registra un dispositivo",
+    "held": {
+      "noSite": "Prima aggiungi uno stabilimento."
+    },
+    "tile": {
+      "seenHour": "Visti nell'ultima ora",
+      "notSeen": "Non visti da 24 ore",
+      "waiting": "In attesa di registrazione",
+      "revoked": "Revocati",
+      "failedPrinters": "Stampanti con lavori falliti"
+    },
+    "tileHint": {
+      "failedPrinters": "La coda di stampa arriva in W1"
+    },
+    "mode": {
+      "label": "Elenco",
+      "devices": "Dispositivi",
+      "printers": "Stampanti"
+    },
+    "search": "Cerca dispositivi e stampanti",
+    "tableLabel": "Dispositivi",
+    "col": {
+      "site": "Stabilimento",
+      "station": "Postazione",
+      "lastSeen": "Ultimo contatto",
+      "version": "Versione app"
+    },
+    "status": {
+      "PENDING": "In attesa",
+      "ACTIVE": "Attivo",
+      "REVOKED": "Revocato"
+    },
+    "kind": {
+      "TABLET": "Tablet",
+      "HANDHELD": "Palmare",
+      "PC": "PC"
+    },
+    "inUse": "In uso",
+    "notSeenTag": "Non visto da 24 ore",
+    "empty": {
+      "title": "Ancora nessun tablet",
+      "body": "Registrane uno: basta un minuto con il codice QR."
+    },
+    "later": "La coda di stampa (ogni etichetta con i tentativi e Riprova) arriva in W1; batteria e rete in W2a.",
+    "step": {
+      "where": "Dove lavorerà?",
+      "scan": "Inquadra sul tablet",
+      "ready": "Pronto"
+    },
+    "enrolCreate": "Crea il codice di registrazione",
+    "enrolLater": "Chiudi (il codice resta valido)",
+    "field": {
+      "site": "Stabilimento",
+      "station": "Postazione",
+      "stationHint": "Facoltativa: si può spostare dopo su una postazione dello stesso stabilimento.",
+      "name": "Nome",
+      "kind": "Tipo"
+    },
+    "noStation": "Ancora nessuna postazione",
+    "modeLater": "La sua modalità (Operatore, Taglio, Magazzino…) arriva con il passo del reparto: il server non ha ancora la modalità.",
+    "scanBody": "Su {name} apri la fotocamera o la pagina iniziale di Nexus Factory e inquadra questo codice. Funziona una volta, per 15 minuti.",
+    "qrLabel": "Codice di registrazione per {name}",
+    "expiresIn": "Valido ancora {left}",
+    "waiting": "In attesa del tablet…",
+    "codeExpired": "Il codice è scaduto. Creane uno nuovo.",
+    "codeRepeat": "Questo codice è già stato mostrato e non viene conservato. Creane uno nuovo.",
+    "newCode": "Nuovo codice di registrazione",
+    "ready": "{name} è pronto",
+    "readyKiosk": "Blocca il tablet sulla pagina di Nexus Factory (accesso guidato su iPad, blocco schermo su Android).",
+    "readyCharge": "Tienilo in carica sulla postazione.",
+    "readyWorkers": "Gli operatori accedono con badge e PIN.",
+    "revoke": {
+      "title": "Revocare {name}?",
+      "body": "Smette subito di funzionare e va registrato di nuovo per essere usato.",
+      "bodyInUse": "Qualcuno vi è collegato ora: la sessione termina subito e le azioni ancora da inviare verranno rifiutate. Va registrato di nuovo per essere usato.",
+      "type": "Scrivi il nome per confermare: {name}",
+      "hint": "Esattamente come scritto: maiuscole e spazi contano.",
+      "matches": "Corrisponde.",
+      "noMatch": "Non corrisponde ancora.",
+      "typeFirst": "Prima scrivi il nome del dispositivo.",
+      "go": "Revoca il dispositivo",
+      "action": "Revoca",
+      "cardBody": "Per un dispositivo perso o dismesso: la sessione termina subito e va registrato di nuovo."
+    },
+    "done": {
+      "revoked": "{name} è revocato."
+    }
+  },
+  "printers": {
+    "add": "Aggiungi stampante",
+    "save": "Salva la stampante",
+    "editTitle": "Stampante {code}",
+    "tableLabel": "Stampanti",
+    "col": {
+      "relay": "Relay",
+      "size": "Formato etichetta"
+    },
+    "kind": {
+      "LABEL_ZPL": "Etichette (ZPL)",
+      "A4_PDF": "A4 (PDF)"
+    },
+    "status": {
+      "ACTIVE": "Attiva",
+      "PAUSED": "In pausa",
+      "ARCHIVED": "Archiviata"
+    },
+    "relay": {
+      "FAKE": "Relay di prova (non stampa nulla)"
+    },
+    "empty": {
+      "title": "Nessuna stampante",
+      "body": "Finché non ne aggiungi una, le etichette si stampano dal browser in PDF."
+    },
+    "form": {
+      "code": "Usa fino a 24 lettere maiuscole, cifre o trattini.",
+      "codeHint": "Unico nello stabilimento; non si può cambiare dopo.",
+      "kindFixed": "Il tipo di una stampante non cambia.",
+      "relayHint": "Finché il titolare non sceglie un relay di stampa, qui funziona solo il relay di prova.",
+      "target": "Dove il relay la raggiunge",
+      "targetHint": "Il suo indirizzo di rete o nome di coda, come lo conosce il relay.",
+      "width": "Larghezza etichetta",
+      "height": "Altezza etichetta",
+      "dpi": "Scegli 203, 300 o 600 dpi.",
+      "dpiLabel": "Risoluzione",
+      "statusHint": "In pausa: i lavori attendono. Archiviata: per sempre.",
+      "testLater": "\"Stampa un'etichetta di prova\" arriva con la coda di stampa (W1)."
+    },
+    "done": {
+      "added": "Stampante aggiunta.",
+      "saved": "Stampante salvata."
+    }
+  },
+  "device": {
+    "tab": {
+      "binding": "Postazione e modalità",
+      "status": "Stato",
+      "activity": "Attività"
+    },
+    "held": {
+      "revoked": "Questo dispositivo è revocato: registrane uno nuovo."
+    },
+    "revokedBanner": "Revocato: non funziona più; resta per la sua cronologia.",
+    "pendingBanner": "In attesa che il tablet legga il codice di registrazione.",
+    "binding": {
+      "title": "Dove lavora",
+      "hint": "Il suo nome e la postazione di cui mostra il lavoro.",
+      "siteHint": "Un altro stabilimento richiede una nuova registrazione."
+    },
+    "mode": {
+      "title": "Modalità",
+      "later": "La modalità (Operatore, Taglio, Magazzino, Imballo, Collaudo, Capo reparto, Schermo) sceglie le tessere che il tablet mostra; arriva con il passo del reparto. Le stampanti predefinite di un dispositivo arrivano in W1."
+    },
+    "health": {
+      "title": "Funziona?",
+      "silent": "Non visto dal {at}: potrebbe essere spento o fuori dal Wi-Fi.",
+      "enrolled": "Registrato il",
+      "inUse": "In questo momento",
+      "inUseYes": "In uso",
+      "inUseNo": "Nessuno collegato",
+      "neverWho": "Mai chi (Statuto dei Lavoratori art. 4).",
+      "revoked": "Revocato il",
+      "later": "Batteria, rete e azioni in attesa di sincronizzazione arrivano in W2a."
+    },
+    "done": {
+      "saved": "Salvato."
+    }
+  },
+  "area": {
+    "companies": "Società",
+    "sites": "Stabilimenti",
+    "users": "Persone",
+    "roles": "Ruoli",
+    "audit": "Registro attività",
+    "numbering": "Numerazioni",
+    "files": "File",
+    "links": "Link monouso",
+    "devices": "Dispositivi di reparto",
+    "workers": "Operatori di reparto",
+    "floor": "Lavoro di reparto",
+    "threads": "Conversazioni",
+    "imports": "Importazioni",
+    "documents": "Documenti",
+    "print": "Stampa",
+    "email": "E-mail",
+    "compliance": "Conformità",
+    "product": "Prodotti",
+    "inventory": "Magazzino",
+    "shipping": "Spedizioni",
+    "parties": "Clienti e fornitori",
+    "planning": "Pianificazione",
+    "purchasing": "Acquisti",
+    "invoices": "Fatture",
+    "payments": "Pagamenti",
+    "costing": "Costi",
+    "production": "Produzione",
+    "workorders": "Ordini di lavoro",
+    "quotes": "Preventivi",
+    "sales": "Impostazioni vendite",
+    "orders": "Ordini clienti",
+    "privacy": "Privacy",
+    "quality": "Qualità"
+  },
+  "perm": {
+    "companies_view": "Vedere le società e se possono fatturare",
+    "companies_manage": "Aggiungere società e cambiarne i dati legali, di fatturazione e predefiniti",
+    "sites_view": "Vedere gli stabilimenti con linee, centri e postazioni",
+    "sites_manage": "Aggiungere e cambiare stabilimenti, linee, centri e postazioni",
+    "users_view": "Vedere le persone, il loro stato e gli inviti",
+    "users_invite": "Invitare persone per e-mail",
+    "users_suspend": "Sospendere una persona",
+    "users_reactivate": "Riattivare una persona sospesa",
+    "users_deactivate": "Disattivare una persona uscita",
+    "users_resetPassword": "Imporre una nuova password al prossimo accesso",
+    "roles_view": "Vedere i ruoli e chi li ha",
+    "roles_manage": "Creare e modificare ruoli personalizzati",
+    "roles_assign": "Dare e chiudere ruoli",
+    "audit_read": "Leggere la cronologia di un record",
+    "numbering_view": "Vedere le numerazioni",
+    "numbering_manage": "Creare numerazioni e impostarne il valore iniziale",
+    "files_read": "Vedere e scaricare i file di un record",
+    "files_upload": "Caricare file su un record",
+    "files_delete": "Cancellare un file (mai uno sotto conservazione legale)",
+    "files_manage": "Condividere file fuori dall'ufficio, impostare conservazione e blocco legale",
+    "links_view": "Vedere i link monouso di un record e le risposte",
+    "links_manage": "Creare e revocare link monouso",
+    "devices_view": "Vedere i dispositivi di reparto",
+    "devices_manage": "Registrare, rinominare e spostare dispositivi; impostare gli orari del reparto",
+    "devices_revoke": "Revocare un dispositivo perso o dismesso",
+    "workers_view": "Vedere gli operatori di reparto",
+    "workers_manage": "Aggiungere, modificare, disattivare operatori",
+    "workers_roles": "Dare e chiudere i ruoli di reparto di un operatore",
+    "workers_credentials": "Emettere badge e azzerare il PIN di un operatore",
+    "floor_work": "Lavorare su un tablet registrato nello stabilimento del dispositivo",
+    "floor_lead": "Guidare una squadra: le schermate del capo squadra",
+    "threads_read": "Vedere la conversazione e la cronologia di un record",
+    "threads_post": "Scrivere note interne e menzionare colleghi",
+    "threads_manage": "Chiudere e riaprire una conversazione",
+    "imports_view": "Vedere le importazioni e i loro piani",
+    "imports_run": "Caricare un foglio e vederne la prova",
+    "imports_apply": "Applicare il piano di un'importazione",
+    "documents_view": "Vedere in anteprima i modelli dei documenti di una società",
+    "print_view": "Vedere stampanti e lavori di stampa di uno stabilimento",
+    "print_labels": "Stampare etichette",
+    "print_documents": "Stampare documenti",
+    "print_manage": "Aggiungere e modificare stampanti",
+    "email_send": "Inviare posta dalla conversazione di un record",
+    "email_manage": "Gestire domini e identità di invio",
+    "email_triage": "Smistare la posta ricevuta",
+    "compliance_certificates_view": "Vedere i certificati di esame UE del tipo",
+    "compliance_certificates_manage": "Registrare, sospendere e ritirare certificati",
+    "compliance_declarations_manage": "Caricare dichiarazioni di conformità e note informative",
+    "compliance_labels_manage": "Creare e attivare i modelli delle etichette dei capi",
+    "compliance_register_view": "Vedere il registro DPI",
+    "compliance_register_manage": "Registrare reclami, non conformità e richiami",
+    "product_materials_view": "Vedere la libreria dei materiali",
+    "product_materials_manage": "Aggiungere e modificare materiali",
+    "product_materials_cost": "Impostare il prezzo standard di un materiale",
+    "product_styles_view": "Vedere gli articoli",
+    "product_styles_manage": "Creare e modificare articoli",
+    "product_bom_view": "Vedere le distinte base",
+    "product_bom_manage": "Modificare una distinta base in bozza",
+    "product_bom_release": "Rilasciare una revisione (blocca distinta, ciclo ed etichetta)",
+    "product_routing_view": "Vedere cicli e minuti standard",
+    "product_routing_manage": "Modificare un ciclo in bozza",
+    "product_operations_manage": "Gestire la libreria delle operazioni",
+    "inventory_locations_view": "Vedere le ubicazioni di uno stabilimento",
+    "inventory_locations_manage": "Creare, spostare e archiviare ubicazioni",
+    "inventory_stock_view": "Vedere le giacenze e i movimenti",
+    "inventory_adjust": "Rettificare le giacenze con un motivo",
+    "inventory_transfer": "Spostare merce tra ubicazioni",
+    "inventory_scrap": "Scartare merce con un motivo",
+    "inventory_reverse": "Stornare un movimento sbagliato",
+    "inventory_issue": "Prelevare e consegnare merce a un ordine di lavoro",
+    "inventory_issue_over": "Consegnare più di quanto serve a un ordine di lavoro",
+    "inventory_receive": "Ricevere merce su un ordine d'acquisto",
+    "shipping_view": "Vedere le spedizioni",
+    "shipping_manage": "Pianificare e cambiare spedizioni",
+    "shipping_pack": "Imballare una spedizione",
+    "shipping_settings_view": "Vedere le impostazioni di spedizione degli stabilimenti",
+    "shipping_settings_manage": "Cambiare le impostazioni di spedizione",
+    "shipping_ddt_issue": "Emettere il DDT di una spedizione",
+    "shipping_ddt_cancel": "Annullare un DDT emesso con un motivo",
+    "shipping_labels_buy": "Acquistare etichette del corriere",
+    "shipping_labels_void": "Annullare un'etichetta del corriere",
+    "parties_view": "Vedere clienti e fornitori",
+    "parties_manage": "Aggiungere e modificare clienti e fornitori",
+    "parties_block": "Bloccare e sbloccare un cliente o fornitore",
+    "parties_vies": "Verificare una partita IVA su VIES",
+    "planning_view": "Vedere le pianificazioni",
+    "planning_run": "Lanciare la pianificazione di uno stabilimento",
+    "planning_decide": "Escludere righe del piano con un motivo",
+    "purchasing_view": "Vedere gli ordini d'acquisto",
+    "purchasing_manage": "Creare e modificare ordini d'acquisto in bozza",
+    "purchasing_send": "Inviare un ordine d'acquisto al fornitore",
+    "invoices_view": "Vedere fatture e note di credito",
+    "invoices_manage": "Preparare fatture in bozza",
+    "invoices_issue": "Emettere una fattura (non potrà più cambiare)",
+    "payments_view": "Vedere i pagamenti ricevuti",
+    "payments_record": "Registrare e abbinare pagamenti",
+    "payments_void": "Annullare un pagamento inserito per errore",
+    "costing_view": "Vedere la scheda costi di un articolo",
+    "costing_rates_manage": "Gestire il costo per minuto standard",
+    "production_settings_view": "Vedere le regole di reparto degli stabilimenti",
+    "production_settings_manage": "Cambiare le regole di reparto",
+    "production_cut": "Tagliare pelli per un ordine di lavoro",
+    "production_cut_correct": "Correggere una registrazione di taglio sbagliata",
+    "workorders_view": "Vedere gli ordini di lavoro",
+    "workorders_manage": "Creare e cambiare ordini di lavoro in bozza",
+    "workorders_release": "Rilasciare un ordine di lavoro al reparto",
+    "quotes_view": "Vedere i preventivi",
+    "quotes_manage": "Creare e modificare preventivi",
+    "quotes_approve": "Approvare o respingere la richiesta di approvazione di un preventivo",
+    "quotes_send": "Inviare un preventivo al cliente",
+    "sales_settings_manage": "Impostare le regole dei preventivi di una società",
+    "companies_bank_view": "Vedere il conto bancario di una società",
+    "companies_bank_manage": "Cambiare il conto bancario di una società",
+    "orders_view": "Vedere gli ordini clienti",
+    "orders_manage": "Lavorare sugli ordini clienti",
+    "orders_close": "Chiudere un ordine spedito non saldato",
+    "privacy_view": "Vedere gli adempimenti privacy della società",
+    "privacy_manage": "Scrivere e pubblicare informative; registrare le prese visione",
+    "quality_lots_view": "Vedere la scheda qualità di un lotto",
+    "quality_lots_test": "Registrare il risultato cromo VI di un lotto",
+    "quality_lots_documents": "Allegare i documenti del fornitore di un lotto",
+    "quality_lots_release": "Rilasciare un lotto quando tutti i controlli passano",
+    "quality_lots_reject": "Respingere o bloccare un lotto",
+    "quality_settings_manage": "Cambiare cosa vale come prova del cromo VI"
+  }
+}

@@ -1,0 +1,1475 @@
+{
+  "common": {
+    "actions": "Actions",
+    "cancel": "Cancel",
+    "close": "Close",
+    "dismiss": "Dismiss",
+    "done": "Done",
+    "more": "More",
+    "moreFor": "More for {name}",
+    "no": "No",
+    "yes": "Yes",
+    "reason": "Reason (optional)",
+    "reasonHint": "Kept in the history with the change.",
+    "retry": "Try again",
+    "save": "Save",
+    "saving": "Saving…",
+    "language": {
+      "it": "Italian",
+      "en": "English",
+      "ro": "Romanian",
+      "sq": "Albanian",
+      "ar": "Arabic",
+      "zh": "Chinese",
+      "ur": "Urdu",
+      "bn": "Bengali"
+    },
+    "month": {
+      "1": "January",
+      "2": "February",
+      "3": "March",
+      "4": "April",
+      "5": "May",
+      "6": "June",
+      "7": "July",
+      "8": "August",
+      "9": "September",
+      "10": "October",
+      "11": "November",
+      "12": "December"
+    }
+  },
+  "nav": {
+    "companies": "Companies & sites",
+    "devices": "Devices & printers",
+    "users": "Users",
+    "roles": "Roles & permissions"
+  },
+  "problem": {
+    "signedOut": "Your session ended. Sign in again to go on.",
+    "forbidden": "You may not do this here. Ask an administrator for the right.",
+    "stepUp": "This change needs a fresh code from your authenticator app.",
+    "notFound": "This does not exist, or it is not yours to see.",
+    "conflict": "Someone else changed this meanwhile. It was read again: check it and try once more.",
+    "inUse": "Still in use: archive or move what uses it first.",
+    "invalid": "Something in it is not valid. Check the fields and try again.",
+    "rateLimited": "Too many tries. Wait a few minutes, then try again.",
+    "unavailable": "The factory server did not answer. Try again in a moment.",
+    "contract": "The server answered in a way this page does not know. Reload the page.",
+    "internal": "Something went wrong on the server. Try again; if it happens again, tell the administrator.",
+    "inUseBy": {
+      "sites": "{count} active sites still use it.",
+      "lines": "{count} active lines are on it.",
+      "stations": "{count} active stations use it.",
+      "devices": "{count} devices are enrolled at it.",
+      "printers": "{count} printers are on it.",
+      "other": "Something active still uses it."
+    }
+  },
+  "stepUp": {
+    "title": "Confirm with a fresh code",
+    "confirm": "Confirm",
+    "sentence": {
+      "default": "Type the 6-digit code from your authenticator app to make this change.",
+      "invite": "Inviting people (and giving them roles) needs a fresh code from your authenticator app.",
+      "workerRoles": "Giving a floor worker floor roles needs a fresh code from your authenticator app.",
+      "giveRole": "Giving a role needs a fresh code from your authenticator app.",
+      "endRole": "Ending a role needs a fresh code from your authenticator app.",
+      "suspend": "Suspending a person needs a fresh code from your authenticator app.",
+      "reactivate": "Reactivating a person needs a fresh code from your authenticator app.",
+      "deactivate": "Deactivating a person needs a fresh code from your authenticator app.",
+      "password": "Forcing a new password needs a fresh code from your authenticator app.",
+      "badge": "A worker's badge needs a fresh code from your authenticator app.",
+      "pin": "Resetting a worker's PIN needs a fresh code from your authenticator app."
+    },
+    "problem": {
+      "wrong": "That code is wrong or was already used. Type the next one.",
+      "locked": "Too many wrong codes. Wait a few minutes, then try again.",
+      "noAuthenticator": "Set up your authenticator app in My profile first.",
+      "tooMany": "Too many tries. Wait a minute, then try again.",
+      "failed": "The code could not be checked. Try again."
+    }
+  },
+  "list": {
+    "failedTitle": "Couldn't load this list",
+    "loading": "Loading…",
+    "noMatch": "Nothing matches these filters",
+    "clearSearch": "Clear the search",
+    "clearFilter": "Clear filter",
+    "clearFilters": "Clear filters",
+    "count": "{shown} of {total}",
+    "updated": "Updated {time}",
+    "notYet": "Not read yet"
+  },
+  "record": {
+    "backTo": "Back to {name}",
+    "dangerZone": "Danger zone",
+    "dock": "Thread",
+    "dockHint": "Show the thread beside this tab (wide screens); narrower, it opens Activity.",
+    "dockLabel": "Thread and history of this record",
+    "tabsLabel": "Sections of this record",
+    "notFoundTitle": "Not found",
+    "forbiddenTitle": "Not yours to open",
+    "failedTitle": "Couldn't open this record",
+    "readOnly": "Read-only: you can see this, not change it."
+  },
+  "noAccess": {
+    "body": "You need: {need}. Ask an administrator."
+  },
+  "held": {
+    "needs": "Needs the right: {right}"
+  },
+  "form": {
+    "required": "Fill this in.",
+    "code": "Use 1 to 20 capital letters, digits or hyphens.",
+    "codeTaken": "This code is already used. Pick another.",
+    "vat": "Expected a VAT number with its country, such as IT12345678901.",
+    "country": "Expected a 2-letter country code, such as IT.",
+    "email": "Expected an e-mail address.",
+    "amount": "Expected an amount such as 10000.00.",
+    "sdi": "An SDI code has 7 letters or digits.",
+    "tooLong": "Too long.",
+    "fixFirst_one": "Fix 1 problem first",
+    "fixFirst_other": "Fix {count} problems first",
+    "unsaved_one": "1 change not saved",
+    "unsaved_other": "{count} changes not saved"
+  },
+  "grains": {
+    "label": "Sees money",
+    "labelOf": "What money {name} sees",
+    "sees": "sees",
+    "doesNotSee": "does not see",
+    "short": {
+      "price": "price",
+      "cost": "cost",
+      "margin": "margin",
+      "wages": "wages"
+    },
+    "without": {
+      "price": "Without prices: selling and purchase prices, totals and invoices show as hidden.",
+      "cost": "Without costs: material and labour costs and cost sheets show as hidden.",
+      "margin": "Without margins: margins and \"under the floor\" warnings show as hidden.",
+      "wages": "Without wages: labour rates and pay figures show as hidden."
+    }
+  },
+  "scope": {
+    "label": "Where it applies",
+    "all": "All companies",
+    "allHint": "Every company of the group, also ones added later.",
+    "some": "These companies",
+    "someHint": "Only the companies (and sites) ticked below.",
+    "sitesOf": "Sites of {company}",
+    "sitesHint": "None ticked: every site of this company."
+  },
+  "reveal": {
+    "print": "Print",
+    "done": "Done",
+    "closeHeld": "Tick the box first: this is shown only once.",
+    "repeat": "This was already shown once and is not kept. Ask for a new one.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Could not copy. Select the text and copy it.",
+    "drawing": "Drawing the code",
+    "tooLong": "This is too long for a QR code.",
+    "badge": {
+      "title": "New badge for {name}",
+      "body": "Print it now (a card printer or plain paper). It replaces the old badge, which stops working at once. It is shown only this once.",
+      "qr": "Badge code for {name}",
+      "stored": "I printed the badge",
+      "printHint": "Print uses the browser; the badge prints the QR code and the grouped code, never the PIN."
+    },
+    "pin": {
+      "title": "Temporary PIN for {name}",
+      "body": "Give it to the worker in person. At the next sign-in they choose their own PIN; this one stops working then. It is shown only this once.",
+      "qr": "Temporary PIN for {name}",
+      "label": "Temporary PIN",
+      "stored": "I gave the PIN to the worker"
+    },
+    "enrolment": {
+      "title": "Enrolment code for {name}",
+      "body": "Scan it on the tablet within 15 minutes.",
+      "qr": "Enrolment code for {name}",
+      "stored": "The tablet scanned it"
+    }
+  },
+  "matrix": {
+    "permission": "What it allows",
+    "tableLabel": "Permissions of {area}",
+    "count": "{count} of {total}",
+    "countOf": "{name}: {count} of {total}",
+    "risk": {
+      "stepUp": "Asks for a fresh code"
+    },
+    "differs": "Differs",
+    "yes": "Allowed",
+    "no": "Not allowed"
+  },
+  "overview": {
+    "title": "Get the factory ready",
+    "intro": "Set-up: {done} of {total} steps done. Each state is read from the system, not ticked by hand.",
+    "introChecking": "Checking the set-up…",
+    "recheck": "Check again",
+    "checkingHeld": "The checks are running.",
+    "allDone": "Every set-up step is done.",
+    "show": "Show set-up",
+    "hide": "Hide set-up",
+    "later": "Search across every setting, feature switches and the history of settings come later (W3).",
+    "doIt": "Do it",
+    "open": "Open",
+    "stepNumber": "Step {n}:",
+    "minutes_one": "About 1 minute",
+    "minutes_other": "About {count} minutes",
+    "state": {
+      "done": "Done",
+      "needs": "Needs you",
+      "waiting": "Waiting",
+      "blocked": "Blocked",
+      "unknown": "Not checked",
+      "failed": "Couldn't check",
+      "checking": "Checking…"
+    },
+    "step": {
+      "legal": "Company legal data (VAT, tax regime, PEC or SDI code)",
+      "sites": "Sites and lines",
+      "mail": "Mail domain verified",
+      "numbering": "Number series start values",
+      "people": "People invited",
+      "roles": "Roles checked",
+      "tablets": "Tablets enrolled",
+      "printers": "Printers",
+      "sdi": "SDI connection",
+      "privacy": "Privacy register and worker notice",
+      "stock": "Opening stock imported"
+    },
+    "detail": {
+      "checking": "Checking…",
+      "failed": "Couldn't check: {need}",
+      "noRight": "Not checked: you need the right \"{need}\".",
+      "legal": {
+        "done_one": "The active company can issue invoices.",
+        "done_other": "All {count} active companies can issue invoices.",
+        "needs_one": "{name} cannot issue invoices yet: 1 thing missing.",
+        "needs_other": "{name} cannot issue invoices yet: {count} things missing.",
+        "needsMore_one": "{name} cannot issue invoices yet: 1 thing missing (and {others} more companies).",
+        "needsMore_other": "{name} cannot issue invoices yet: {count} things missing (and {others} more companies).",
+        "none": "No company yet: add the first one (legal name and VAT number are enough to start)."
+      },
+      "sites": {
+        "done_one": "Every company has a site; the plant has stations.",
+        "done_other": "Every company has a site; all {count} plants have stations.",
+        "blocked": "Blocked by: company legal data (add a company first).",
+        "noSite": "{name} has no site yet.",
+        "noStation": "{name} has no stations: tablets cannot be enrolled there."
+      },
+      "mail": {
+        "done": "Mail goes out from {domain}.",
+        "waiting": "Waiting for your IT: the DNS records of {domain} are not found yet.",
+        "none": "No sending domain yet.",
+        "noneLater": "No sending domain yet. Its page comes with Connections (the next step)."
+      },
+      "numbering": {
+        "done_one": "1 number series is set.",
+        "done_other": "{count} number series are set.",
+        "needs": "{name} has no invoice number series yet.",
+        "needsLater": "{name} has no invoice number series yet. Its page comes with Documents & numbering (the next step)."
+      },
+      "people": {
+        "done_one": "1 person besides you can sign in.",
+        "done_other": "{count} people besides you can sign in.",
+        "waiting_one": "Waiting for 1 invited person to join.",
+        "waiting_other": "Waiting for {count} invited people to join.",
+        "none": "Only you so far: invite the people who work in the office."
+      },
+      "roles": {
+        "done_one": "The role matches its template.",
+        "done_other": "All {count} roles match their templates.",
+        "needs_one": "1 role differs from its ready-made template: check it.",
+        "needs_other": "{count} roles differ from their ready-made template: check them."
+      },
+      "tablets": {
+        "done_one": "1 tablet is enrolled.",
+        "done_other": "{count} tablets are enrolled.",
+        "waiting_one": "Waiting for 1 tablet to scan its code.",
+        "waiting_other": "Waiting for {count} tablets to scan their code.",
+        "none": "No tablet enrolled yet: it takes a minute with the QR code."
+      },
+      "printers": {
+        "done_one": "1 printer is active.",
+        "done_other": "{count} printers are active.",
+        "none": "No printer yet: labels print from the browser as PDF until one is added."
+      },
+      "sdi": {
+        "unknown": "Not checked yet: the SDI connection is read by Connections (the next step)."
+      },
+      "privacy": {
+        "done": "Every privacy duty is done.",
+        "needs_one": "1 privacy duty is still open.",
+        "needs_other": "{count} privacy duties are still open.",
+        "needsLater_one": "1 privacy duty is still open. Its page comes with Privacy & notices.",
+        "needsLater_other": "{count} privacy duties are still open. Their page comes with Privacy & notices."
+      },
+      "stock": {
+        "unknown": "Not checked yet: the opening-stock import comes with the warehouse steps."
+      }
+    }
+  },
+  "status": {
+    "ACTIVE": "Active",
+    "ARCHIVED": "Archived"
+  },
+  "right": {
+    "companies_view": "See companies",
+    "companies_manage": "Manage companies",
+    "sites_view": "See sites",
+    "sites_manage": "Manage sites, lines and stations",
+    "devices_view": "See floor devices",
+    "devices_manage": "Enrol and change floor devices",
+    "devices_revoke": "Revoke floor devices",
+    "print_view": "See printers",
+    "print_manage": "Manage printers",
+    "users_view": "See people",
+    "users_invite": "Invite people",
+    "users_suspend": "Suspend people",
+    "users_reactivate": "Reactivate people",
+    "users_deactivate": "Deactivate people",
+    "users_resetPassword": "Force a new password",
+    "roles_view": "See roles",
+    "roles_assign": "Give and end roles",
+    "workers_manage": "Manage floor workers",
+    "workers_roles": "Change floor workers' roles",
+    "workers_credentials": "Issue badges and reset PINs",
+    "email_send": "Send mail",
+    "numbering_view": "See number series",
+    "privacy_view": "See privacy duties"
+  },
+  "org": {
+    "intro": "The legal companies of the group with their tax and e-invoicing data, and their plants, warehouses and offices. Open a site to build its lines and stations.",
+    "newCompany": "New company",
+    "newCompanyHint": "Legal name and VAT number are enough to start; the rest is on Legal & tax.",
+    "createCompany": "Create company",
+    "newSite": "New site",
+    "newSiteHint": "A plant, a warehouse or an office of a company.",
+    "createSite": "Create site",
+    "held": {
+      "noCompany": "Add a company first."
+    },
+    "search": "Search companies and sites",
+    "showArchived": "Show archived",
+    "tableLabel": "Companies and their sites",
+    "count": "Companies: {companies} · sites: {sites}",
+    "expand": "Show the sites of {name}",
+    "collapse": "Hide the sites of {name}",
+    "structure": "Lines {lines} · stations {stations}",
+    "noStations": "No stations",
+    "invoicing": {
+      "ready": "Ready to invoice",
+      "missing_one": "1 thing missing",
+      "missing_other": "{count} things missing"
+    },
+    "gap": {
+      "invoicing": "{name} can't issue invoices yet",
+      "noStation": "{name} has no stations: tablets can't be enrolled there",
+      "fix": "Fix",
+      "addStations": "Add stations"
+    },
+    "empty": {
+      "title": "Add your first company",
+      "body": "Legal name and VAT number are enough to start."
+    },
+    "viesLater": "The VAT check with VIES for a company comes with Connections; for customers and suppliers it is on their record.",
+    "col": {
+      "name": "Name",
+      "code": "Code",
+      "kind": "Kind",
+      "vatAddress": "VAT / address",
+      "invoicing": "Invoicing",
+      "timezone": "Time zone",
+      "structure": "Lines · stations",
+      "devices": "Devices",
+      "status": "Status"
+    },
+    "kind": {
+      "COMPANY": "Company",
+      "PLANT": "Plant",
+      "WAREHOUSE": "Warehouse",
+      "OFFICE": "Office"
+    },
+    "issue": {
+      "vatNumber": "Partita IVA (VAT number)",
+      "regimeFiscale": "Tax regime (RegimeFiscale)",
+      "address": "Registered office address",
+      "pec": "PEC or SDI code to receive e-invoices"
+    },
+    "field": {
+      "legalName": "Legal name",
+      "vatNumber": "VAT number",
+      "vatHint": "With the country prefix: IT and 11 digits.",
+      "code": "Code",
+      "codeHint": "Short; used in the Office address and in document numbers. It cannot change later.",
+      "siteCodeHint": "Short; used in numbers and on labels. It cannot change later.",
+      "country": "Country",
+      "company": "Company",
+      "siteName": "Name",
+      "kind": "Kind",
+      "timezone": "Time zone",
+      "line1": "Street and number",
+      "postalCode": "Postal code",
+      "city": "City",
+      "province": "Province"
+    }
+  },
+  "company": {
+    "tab": {
+      "legal": "Legal & tax",
+      "sites": "Sites",
+      "defaults": "Defaults",
+      "activity": "Activity"
+    },
+    "held": {
+      "archived": "This company is archived."
+    },
+    "archivedBanner": "Archived: this company is kept for its history; nothing new can be made for it.",
+    "legal": {
+      "identity": "Legal identity",
+      "identityHint": "What every document and invoice prints (c.c. art. 2250).",
+      "invoicing": "E-invoicing",
+      "invoicingHint": "What SDI needs to deliver and receive invoices.",
+      "look": "Document footer",
+      "lookHint": "Printed at the foot of quotes, orders, DDTs and invoices.",
+      "logoLater": "The logo upload and the document preview come with Documents & numbering."
+    },
+    "field": {
+      "tradeName": "Trade name",
+      "fiscalCode": "Codice fiscale",
+      "regimeFiscale": "Tax regime",
+      "rea": "REA",
+      "reaOffice": "REA office (province)",
+      "reaNumber": "REA number",
+      "shareCapital": "Share capital (EUR)",
+      "shareCapitalHint": "Public data, printed on documents.",
+      "soleShareholder": "Sole shareholder (socio unico)",
+      "inLiquidation": "In liquidation",
+      "address": "Registered office",
+      "line2": "Address, second line",
+      "pec": "PEC",
+      "sdi": "SDI recipient code",
+      "sdiHint": "7 letters or digits, as your intermediary gave it.",
+      "currency": "Currency",
+      "currencyHint": "Euro for every company in W0.",
+      "footer": "Footer text",
+      "locale": "Document language",
+      "localeHint": "The language new documents start in.",
+      "fiscalYear": "Fiscal year starts in",
+      "timezoneHint": "New sites start in this time zone."
+    },
+    "regime": {
+      "none": "Not set",
+      "RF01": "RF01 · Ordinary",
+      "RF02": "RF02 · Minimum taxpayers",
+      "RF04": "RF04 · Agriculture and fishing",
+      "RF05": "RF05 · Sale of salts and tobacco",
+      "RF06": "RF06 · Match trade",
+      "RF07": "RF07 · Publishing",
+      "RF08": "RF08 · Public telephony",
+      "RF09": "RF09 · Resale of transport documents",
+      "RF10": "RF10 · Entertainment and gaming",
+      "RF11": "RF11 · Travel agencies",
+      "RF12": "RF12 · Agritourism",
+      "RF13": "RF13 · Door-to-door sales",
+      "RF14": "RF14 · Second-hand goods, art, antiques",
+      "RF15": "RF15 · Art auction agencies",
+      "RF16": "RF16 · VAT cash accounting (PA)",
+      "RF17": "RF17 · VAT cash accounting",
+      "RF18": "RF18 · Other",
+      "RF19": "RF19 · Flat-rate regime"
+    },
+    "ready": "Ready to issue invoices",
+    "notReady_one": "Can't issue invoices yet: 1 thing missing",
+    "notReady_other": "Can't issue invoices yet: {count} things missing",
+    "saved": "Saved.",
+    "archived": "The company is archived.",
+    "archive": {
+      "title": "Archive this company",
+      "body": "Only when none of its sites is active. Its documents and history stay.",
+      "action": "Archive company",
+      "confirmTitle": "Archive {name}?",
+      "confirmBody": "Nothing new can be made for it; its documents, numbers and history stay. Archived master data is kept, never deleted.",
+      "held_one": "1 site is still active: archive or move it first.",
+      "held_other": "{count} sites are still active: archive them first.",
+      "inUse_one": "Still in use: 1 active site.",
+      "inUse_other": "Still in use: {count} active sites."
+    },
+    "sites": {
+      "empty": "No sites yet",
+      "label": "Sites of {name}"
+    },
+    "defaults": {
+      "title": "Defaults",
+      "hint": "Values new records of this company start with.",
+      "later": "The default e-mail identity comes with Connections; the number series of this company with Documents & numbering."
+    }
+  },
+  "site": {
+    "tab": {
+      "structure": "Structure",
+      "centres": "Work centres",
+      "calendars": "Calendars",
+      "devices": "Devices",
+      "activity": "Activity"
+    },
+    "addLine": "Add line",
+    "addStation": "Add station",
+    "addStationHere": "Station",
+    "addCentre": "Add work centre",
+    "held": {
+      "archived": "This site is archived.",
+      "noCentre": "Add a work centre first: every station belongs to one.",
+      "stationDevices_one": "Held: 1 device is enrolled at it.",
+      "stationDevices_other": "Held: {count} devices are enrolled at it.",
+      "lineStations_one": "Held: 1 station is on it.",
+      "lineStations_other": "Held: {count} stations are on it.",
+      "centreStations_one": "Held: 1 station belongs to it.",
+      "centreStations_other": "Held: {count} stations belong to it."
+    },
+    "archive": {
+      "action": "Archive site"
+    },
+    "archivedBanner": "Archived: this site is kept for its history; nothing new can be made on it.",
+    "structure": {
+      "empty": "Add your first line, then its stations",
+      "emptyCentres": "Each station belongs to a work centre: add the work centres too (Cutting, Sewing, Inspection…).",
+      "hint": "Tablets, people and alerts are bound to these stations.",
+      "tableLabel": "Stations of {name}"
+    },
+    "alone": "Standing alone",
+    "aloneHint": "Stations on no line: a cutting table, an inspection bench.",
+    "line": {
+      "stations_one": "1 station",
+      "stations_other": "{count} stations",
+      "empty": "No station on it yet."
+    },
+    "rename": "Rename…",
+    "move": "Move to another line…",
+    "archiveStation": "Archive station",
+    "archiveLine": "Archive line",
+    "archiveCentre": "Archive work centre",
+    "devicesBound_one": "1 device",
+    "devicesBound_other": "{count} devices",
+    "col": {
+      "centre": "Work centre",
+      "devices": "Devices",
+      "lines": "Lines",
+      "stations": "Stations"
+    },
+    "centres": {
+      "hint": "Groups of stations that do one kind of work.",
+      "empty": "No work centres",
+      "capacityLater": "Capacity per work centre is set in Planning (W1)."
+    },
+    "centreKind": {
+      "CUTTING": "Cutting",
+      "SEWING": "Sewing",
+      "ASSEMBLY": "Assembly",
+      "FINISHING": "Finishing",
+      "INSPECTION": "Inspection",
+      "PACKING": "Packing",
+      "SUBCONTRACT": "Subcontract"
+    },
+    "floor": {
+      "title": "Shifts and floor sign-out",
+      "hint": "When shifts end and how long a tablet waits before signing a worker out. Times are in {zone}.",
+      "idle": "Sign out after no use for",
+      "idleHint": "From {min} to {max} minutes; 10 by default.",
+      "idleRange": "Expected from {min} to {max} minutes.",
+      "minutes": "min",
+      "less": "One minute less",
+      "more": "One minute more",
+      "shiftEnds": "Shift end times",
+      "shiftEndsHint": "A floor session ends at the first shift end at least 30 minutes after sign-in (at most 12 hours).",
+      "noShifts": "No shift end: a session ends after 12 hours.",
+      "shiftEnd": "Shift end {n}",
+      "removeShift": "Remove the shift end {time}",
+      "addShift": "Add a shift end",
+      "timeFormat": "Expected a time of day, HH:MM.",
+      "tooMany": "Too many shift ends.",
+      "twice": "A time is listed twice.",
+      "zoneHint": "The site's own time zone (set on the site).",
+      "holidaysLater": "Working days and holidays (Italian holidays, the August shutdown) come in W2a."
+    },
+    "badge": {
+      "title": "Starting work on a tablet",
+      "hint": "The Owner's choice (F1) for every tablet of this site.",
+      "coming": "Coming with the floor step",
+      "start": "Start floor work",
+      "startValue": "Badge alone",
+      "pin": "PIN asked",
+      "pinValue": "Only to sign, to open My day, or when signing in by name",
+      "later": "The server has no setting for it yet: until the floor step adds it, a tablet asks for the badge and the PIN."
+    },
+    "devices": {
+      "tablets": "Tablets here",
+      "printers": "Printers here",
+      "empty": "No devices. Enrol a tablet."
+    },
+    "dialog": {
+      "line": {
+        "title": "Add a line",
+        "hint": "A sewing line, a cutting room, a finishing cell of {site}.",
+        "create": "Add line"
+      },
+      "station": {
+        "title": "Add a station",
+        "hint": "One place where work is done and scanned at {site}; a tablet is enrolled to a station.",
+        "create": "Add station"
+      },
+      "centre": {
+        "title": "Add a work centre",
+        "hint": "A kind of work at {site} with its own capacity.",
+        "create": "Add work centre"
+      },
+      "rename": {
+        "title": "Rename"
+      },
+      "move": {
+        "title": "Move {name}",
+        "go": "Move"
+      },
+      "archive": {
+        "title": "Archive {name}?",
+        "body": "It is kept for its history and never deleted; nothing new can use it.",
+        "uses": "Still in use:",
+        "held": "Held: archive or move what still uses it first.",
+        "go": "Archive"
+      }
+    },
+    "field": {
+      "codeHint": "Short, unique on this site; printed on labels.",
+      "centreHint": "The kind of work done here.",
+      "line": "Line"
+    },
+    "station": {
+      "needsCentre": "Pick its work centre."
+    },
+    "done": {
+      "line": "Line added.",
+      "station": "Station added.",
+      "centre": "Work centre added.",
+      "renamed": "Renamed.",
+      "moved": "Station moved.",
+      "archived": "Archived.",
+      "floor": "Floor times saved."
+    }
+  },
+  "users": {
+    "intro": "Everyone who signs in: office people (invited by e-mail, two-factor) and floor workers (a badge and a PIN, no e-mail).",
+    "addWorker": "Add floor worker",
+    "invite": {
+      "action": "Invite people",
+      "title": "Invite people",
+      "hint": "Who they are, what they do and where. The invite comes by e-mail.",
+      "valid": "The invite works for 7 days.",
+      "go_one": "Invite 1 person",
+      "go_other": "Invite {count} people",
+      "who": "Who",
+      "name": "Name",
+      "email": "E-mail",
+      "remove": "Remove person {n}",
+      "another": "Add another person",
+      "paste": "Or paste a list of addresses",
+      "pasteHint": "Separated by commas, spaces or new lines; names come from the addresses and can be changed.",
+      "what": "What they do",
+      "where": "Where",
+      "language": "Language of the invite and the Office",
+      "noAssign": "You may invite but not give roles: they will sign in and see nothing until an administrator gives them one.",
+      "noRoles": "The roles could not be read.",
+      "stepUp": "Inviting asks for a fresh code from your authenticator app.",
+      "nobody": "Add at least one person.",
+      "exists": "This address already has an account.",
+      "twice": "This address is listed twice.",
+      "scopeNeeded": "Pick the companies, or All companies.",
+      "results": "{sent} of {total} invitations sent",
+      "outcome": {
+        "sent": "sent",
+        "already_sent": "already sent before",
+        "refused": "refused"
+      },
+      "done_one": "1 invitation sent.",
+      "done_other": "{count} invitations sent."
+    },
+    "held": {
+      "noSite": "Add a site first: a floor worker belongs to one."
+    },
+    "audience": {
+      "label": "Who",
+      "office": "Office",
+      "floor": "Floor",
+      "officeCount": "Office ({count})",
+      "floorCount": "Floor ({count})"
+    },
+    "search": "Search people",
+    "tile": {
+      "invited": "Invited, not joined",
+      "noTwoFactor": "Two-factor off",
+      "suspended": "Suspended",
+      "deactivated": "Deactivated",
+      "locked": "Locked out",
+      "noPin": "No PIN yet",
+      "noBadge": "No badge",
+      "inactive": "Inactive"
+    },
+    "tileHint": {
+      "invited": "The invite works for 7 days",
+      "noTwoFactor": "Active office people without an authenticator",
+      "suspended": "Cannot sign in until reactivated",
+      "deactivated": "Left; kept on history",
+      "locked": "Too many wrong PINs, for a few minutes",
+      "noPin": "Give a first PIN",
+      "noBadge": "They sign in by name and PIN",
+      "inactive": "Cannot sign in on a tablet"
+    },
+    "filtered": "Showing: {tile}",
+    "col": {
+      "name": "Name",
+      "roles": "Roles",
+      "where": "Where",
+      "money": "Sees money",
+      "status": "Status",
+      "twoFactor": "Two-factor",
+      "lastSignIn": "Last sign-in",
+      "site": "Site",
+      "floorRoles": "Floor roles",
+      "badge": "Badge",
+      "pin": "PIN",
+      "language": "Language"
+    },
+    "status": {
+      "INVITED": "Invited",
+      "ACTIVE": "Active",
+      "SUSPENDED": "Suspended",
+      "DEACTIVATED": "Deactivated"
+    },
+    "workerStatus": {
+      "ACTIVE": "Active",
+      "INACTIVE": "Inactive"
+    },
+    "mfa": {
+      "on": "On",
+      "off": "Off"
+    },
+    "noRole": "No role: sees nothing",
+    "noFloorRole": "No floor role",
+    "invitedUntil": "Invite valid until {date}",
+    "employeeNo": "No. {code}",
+    "badgeHint": "•••• {hint}",
+    "noBadge": "No badge",
+    "pin": {
+      "set": "Set",
+      "mustChange": "Chooses a new one at sign-in",
+      "none": "Not set"
+    },
+    "locked": "Locked",
+    "tableOffice": "Office people",
+    "tableFloor": "Floor workers",
+    "empty": {
+      "office": "Invite the people who work in the office",
+      "officeBody": "Each gets an e-mail with a link that works for 7 days.",
+      "floor": "Add the floor workers",
+      "floorBody": "No e-mail needed: a name, a site, a badge and a PIN."
+    },
+    "later": "Partner users come in W2b; AI agents in W3. Bulk actions (give a role to many, print badges, resend invites) come with the shared list tools.",
+    "worker": {
+      "hint": "A floor worker signs in on a tablet with a badge and a PIN; no e-mail.",
+      "minimal": "Only what the work needs (GDPR art. 5(1)(c)): no photo, birth date or national id.",
+      "name": "Name",
+      "site": "Site",
+      "language": "Language on the tablet",
+      "employeeNo": "Employee number",
+      "employeeHint": "Optional.",
+      "roles": "Floor roles",
+      "noRolesRight": "You may add workers, not give floor roles: an administrator gives them later.",
+      "rolesStepUp": "Giving floor roles asks for a fresh code.",
+      "go": "Add worker",
+      "made": "{name} is added",
+      "madeBody": "Two things before the first sign-in on a tablet:",
+      "nextSteps": "Next steps",
+      "step": "Step",
+      "how": "How",
+      "badgeStep": "Print a badge",
+      "badgeHow": "Badge & PIN › Issue badge (shown once, printed at once).",
+      "pinStep": "Give a first PIN",
+      "pinHow": "Badge & PIN › Reset PIN: a temporary PIN; the worker chooses their own at the first sign-in.",
+      "next": "Open Badge & PIN"
+    }
+  },
+  "user": {
+    "tab": {
+      "profile": "Profile",
+      "roles": "Roles & scope",
+      "activity": "Activity"
+    },
+    "giveRole": "Give role",
+    "mfaOn": "Two-factor on",
+    "mfaOff": "Two-factor off",
+    "who": "Who",
+    "invitedUntil": "Invite valid until",
+    "editLater": "A person changes their own name and language in My profile.",
+    "lastAdmin": "The last administrator: the group always keeps one person who gives roles over every company.",
+    "password": {
+      "title": "Force a new password",
+      "body": "At the next sign-in they choose a new password.",
+      "action": "Force new password",
+      "confirm": "Force a new password for {name}?",
+      "consequence": "At the next sign-in they must choose a new password; their sessions go on until then."
+    },
+    "done": {
+      "password": "A new password will be asked at the next sign-in.",
+      "suspend": "Suspended: every session ended.",
+      "reactivate": "Reactivated.",
+      "deactivate": "Deactivated.",
+      "given": "{role} given.",
+      "ended": "{role} ended."
+    },
+    "suspend": {
+      "title": "Suspend",
+      "body": "Ends every session at once; reactivate to give access back.",
+      "action": "Suspend",
+      "confirm": "Suspend {name}?",
+      "consequence": "Every session ends now and sign-in is blocked until someone reactivates them. Roles and history stay."
+    },
+    "reactivate": {
+      "title": "Reactivate",
+      "body": "Gives a suspended person their access back.",
+      "action": "Reactivate",
+      "confirm": "Reactivate {name}?",
+      "consequence": "They can sign in again with their roles as they were."
+    },
+    "deactivate": {
+      "title": "Deactivate",
+      "body": "For someone who left: ends access for good, keeps their name on history.",
+      "action": "Deactivate",
+      "confirm": "Deactivate {name}?",
+      "consequence": "Ends every session now, blocks sign-in and clears their credentials; their name stays on history.",
+      "handover": "Their open work (tasks, approvals, records they own) is handed over in a later step; check it first."
+    },
+    "held": {
+      "self": "Not on your own account.",
+      "selfRoles": "Nobody gives roles to themselves.",
+      "notActive": "Only for an active person.",
+      "notSuspended": "Only for a suspended person.",
+      "deactivated": "This person is deactivated.",
+      "lastAdmin": "Held: the last administrator. Give another person the administrator role first."
+    },
+    "canDo": "What they can do",
+    "noRole": "No role: this person can sign in but sees nothing.",
+    "seesMoney": "Sees money:",
+    "assignments": "Roles",
+    "col": {
+      "from": "From",
+      "to": "Until"
+    },
+    "noEnd": "No end",
+    "live": "Live",
+    "ended": "Ended",
+    "end": "End",
+    "sessionsLater": "Sessions and sign-in history come in W2b.",
+    "give": {
+      "title": "Give {name} a role",
+      "role": "Role",
+      "fromHint": "Empty: from now.",
+      "toHint": "Empty: until someone ends it.",
+      "endAfterStart": "The end must come after the start.",
+      "summary": "{name} gets {role} in {where}.",
+      "raises": "This gives them more than they have now: a fresh code is asked.",
+      "noRaise": "Nothing new beyond what they already hold."
+    },
+    "endRole": {
+      "title": "End {role} for {name}?",
+      "body": "The role stops giving access now. The assignment stays listed as ended (never deleted)."
+    }
+  },
+  "worker": {
+    "tab": {
+      "profile": "Profile",
+      "badge": "Badge & PIN",
+      "activity": "Activity"
+    },
+    "held": {
+      "own": "Nobody manages their own badge, PIN or roles.",
+      "inactive": "Only for an active worker."
+    },
+    "ownBanner": "This worker is linked to your own account: someone else manages their badge, PIN and roles.",
+    "siteHint": "Moving to another site means a new worker there.",
+    "badge": {
+      "title": "Badge",
+      "hint": "Scanned on the tablet to start work; only its last 4 characters are kept here.",
+      "hintLabel": "Badge",
+      "issued": "Issued",
+      "none": "No badge — the worker picks their name and types the PIN.",
+      "issue": "Issue badge",
+      "reissue": "Issue a new badge",
+      "lost": "Mark lost"
+    },
+    "pin": {
+      "title": "PIN",
+      "hint": "Never shown: only whether it is set. 5 wrong PINs lock the worker for a few minutes.",
+      "state": "PIN",
+      "set": "Set",
+      "mustChange": "A temporary PIN: they choose their own at the next sign-in",
+      "none": "Not set yet",
+      "lock": "Lock",
+      "locked": "Locked after wrong PINs",
+      "notLocked": "Not locked",
+      "reset": "Reset PIN",
+      "unlockHint": "The lock ends by itself after a few minutes; a PIN reset also lets them in at once."
+    },
+    "roles": {
+      "title": "Floor roles",
+      "hint": "What they do on a tablet; at most wages of money.",
+      "change": "Change roles",
+      "dialog": "Floor roles of {name}",
+      "stepUp": "Changing floor roles asks for a fresh code."
+    },
+    "deactivate": {
+      "title": "Deactivate",
+      "body": "Ends their floor sessions and blocks sign-in; their name stays on history.",
+      "action": "Deactivate worker"
+    },
+    "reactivate": {
+      "title": "Reactivate",
+      "body": "They can sign in on a tablet again.",
+      "action": "Reactivate worker"
+    },
+    "confirm": {
+      "badge": {
+        "title": "Issue a badge for {name}?",
+        "body": "A new badge replaces the old one, which stops working at once. Its code is shown once: print it right away.",
+        "go": "Issue badge"
+      },
+      "pin": {
+        "title": "Reset {name}'s PIN?",
+        "body": "Their sessions end; a temporary PIN is shown once and they choose their own at the next sign-in.",
+        "go": "Reset PIN"
+      },
+      "lost": {
+        "title": "Mark {name}'s badge lost?",
+        "body": "The badge stops working at once; issue a new one when they need it.",
+        "go": "Mark lost"
+      },
+      "deactivate": {
+        "title": "Deactivate {name}?",
+        "body": "Ends their floor sessions now and blocks sign-in on every tablet. Their name stays on history.",
+        "go": "Deactivate"
+      },
+      "reactivate": {
+        "title": "Reactivate {name}?",
+        "body": "They can sign in on a tablet again with their badge and PIN.",
+        "go": "Reactivate"
+      },
+      "stepUp": "This asks for a fresh code from your authenticator app."
+    },
+    "done": {
+      "saved": "Saved.",
+      "lost": "Badge marked lost.",
+      "roles": "Floor roles saved.",
+      "revealed": "Done. The code is no longer shown anywhere.",
+      "deactivate": "Worker deactivated.",
+      "reactivate": "Worker reactivated."
+    }
+  },
+  "roles": {
+    "intro": "What each role can do, in plain words first: the money it sees (price · cost · margin · wages) and whether it asks for two-factor. Ready-made roles stay equal to their templates; a custom copy says what its template gained.",
+    "compare": "Compare roles",
+    "held": {
+      "compare": "Two roles are needed to compare."
+    },
+    "search": "Search roles",
+    "tableLabel": "Roles",
+    "audience": {
+      "label": "Audience",
+      "all": "All",
+      "office": "Office",
+      "floor": "Floor"
+    },
+    "col": {
+      "name": "Role",
+      "does": "What it does",
+      "people": "People",
+      "money": "Sees money",
+      "twoFactor": "Two-factor",
+      "basedOn": "Based on"
+    },
+    "kind": {
+      "system": "Ready-made",
+      "custom": "Custom"
+    },
+    "readyMade": "Ready-made role",
+    "noDescription": "No description.",
+    "twoFactor": "Two-factor",
+    "gap": {
+      "adds_one": "1 permission not in your copy",
+      "adds_other": "{count} permissions not in your copy",
+      "outdated": "Out of date: the daily sync brings it up to its template"
+    },
+    "empty": {
+      "title": "No roles yet",
+      "body": "The ready-made roles appear after the first sync."
+    },
+    "later": "Making a custom copy of a ready-made role and changing it comes in W2b.",
+    "compareTitle": "Compare roles",
+    "compareHint": "Pick two or three: what each can do, by area, with the differences marked.",
+    "comparePick": "Roles to compare",
+    "compareNeedTwo": "Pick at least two roles.",
+    "system": {
+      "owner": {
+        "name": "Owner",
+        "description": "Everything, in every company, including every money figure. The group always keeps one."
+      },
+      "admin": {
+        "name": "Administrator",
+        "description": "People, roles and the audit log; sees no money unless also given a role that does."
+      },
+      "finance": {
+        "name": "Finance",
+        "description": "Invoices, payments and number series; sees prices, costs, margins and wages."
+      },
+      "sales": {
+        "name": "Sales",
+        "description": "Customers, quotes and orders; sees selling prices, not costs or margins."
+      },
+      "planner": {
+        "name": "Planner",
+        "description": "Plans work orders and capacity; sees no money."
+      },
+      "buyer": {
+        "name": "Buyer",
+        "description": "Suppliers and purchase orders; sees purchase prices (the cost grain)."
+      },
+      "warehouse": {
+        "name": "Warehouse",
+        "description": "Receiving, stock and shipping; sees no money."
+      },
+      "production_manager": {
+        "name": "Production manager",
+        "description": "Runs production: work orders, lines and floor results; sees no money."
+      },
+      "quality_inspector": {
+        "name": "Quality inspector",
+        "description": "Inspects lots and finished goods and releases them; sees no money."
+      },
+      "floor_supervisor": {
+        "name": "Floor supervisor",
+        "description": "Follows the lines of their sites from the Office, and keeps their floor devices, workers, badges and PINs; sees no money."
+      },
+      "read_only": {
+        "name": "Read-only",
+        "description": "Sees every screen its scope reaches and changes nothing; sees no money."
+      },
+      "operator": {
+        "name": "Operator",
+        "description": "Works at a station on an enrolled floor device; sees no money."
+      },
+      "cutting_operator": {
+        "name": "Cutting operator",
+        "description": "Works at a cutting table on an enrolled floor device; sees no money."
+      },
+      "floor_inspector": {
+        "name": "Floor inspector",
+        "description": "Inspects work at an inspection bench on an enrolled floor device; sees no money."
+      },
+      "team_leader": {
+        "name": "Team leader",
+        "description": "Leads a crew on the floor: works and sees the team leader's screens of the device's site; sees no money."
+      }
+    }
+  },
+  "role": {
+    "tab": {
+      "permissions": "Permissions",
+      "rules": "Scope rules",
+      "users": "Users",
+      "activity": "Activity"
+    },
+    "copyOf": "Custom copy of {key}",
+    "readOnlySystem": "Ready-made role: read-only. It stays equal to its template.",
+    "readOnlyCustom": "Changing a custom role comes in W2b; it is read-only here for now.",
+    "plain": "What this role can do",
+    "areaLine": "{area}: {count} of {total} actions",
+    "mfaRequired": "Asks for two-factor before it gives anything",
+    "every": "Every permission",
+    "everyHint": "By area: each action in words, ticked when the role holds it; a mark when it asks for a fresh code.",
+    "rules": {
+      "title": "Rules that always apply",
+      "hint": "Whatever a role holds, these hold too. Read-only.",
+      "rule": "Rule",
+      "why": "Why"
+    },
+    "rule": {
+      "released": {
+        "title": "Released work orders and issued invoices can't be edited by anyone",
+        "why": "They change only by a new version, a credit note or a reversal."
+      },
+      "floorNoCost": {
+        "title": "Floor sessions never see costs, margins or prices",
+        "why": "A tablet sees wages at most (A1 §3.11)."
+      },
+      "partnerPrice": {
+        "title": "Customers and suppliers see prices at most",
+        "why": "Portal and link sessions never get costs or margins."
+      },
+      "ownRequest": {
+        "title": "Nobody approves their own request",
+        "why": "Four eyes on every approval."
+      },
+      "ownRoles": {
+        "title": "Nobody gives themselves a role or edits one they hold",
+        "why": "Rights are always given by someone else."
+      },
+      "lastAdmin": {
+        "title": "The group always keeps one administrator",
+        "why": "The last one cannot be suspended, deactivated or lose the role."
+      },
+      "stepUp": {
+        "title": "Raising rights asks for a fresh code",
+        "why": "People, roles, badges, PINs and bank details: a code from the authenticator app."
+      }
+    },
+    "mfa": {
+      "title": "Two-factor",
+      "on": "Required: the role gives nothing until two-factor is proved in the session.",
+      "off": "Not required by this role.",
+      "later": "Switching it per role comes in W2a (Security & health)."
+    },
+    "floorHolders": "A floor role is held by floor workers ({count} now); see them in Users › Floor.",
+    "nobody": "Nobody has this role."
+  },
+  "devices": {
+    "intro": "The tablets and phones enrolled to the stations, and the printers of the sites. A device says \"in use\", never who.",
+    "enrol": "Enrol a device",
+    "held": {
+      "noSite": "Add a site first."
+    },
+    "tile": {
+      "seenHour": "Seen in the last hour",
+      "notSeen": "Not seen for 24 h",
+      "waiting": "Waiting to be enrolled",
+      "revoked": "Revoked",
+      "failedPrinters": "Printers with failed jobs"
+    },
+    "tileHint": {
+      "failedPrinters": "The print queue comes in W1"
+    },
+    "mode": {
+      "label": "List",
+      "devices": "Devices",
+      "printers": "Printers"
+    },
+    "search": "Search devices and printers",
+    "tableLabel": "Devices",
+    "col": {
+      "site": "Site",
+      "station": "Station",
+      "lastSeen": "Last seen",
+      "version": "App version"
+    },
+    "status": {
+      "PENDING": "Waiting",
+      "ACTIVE": "Active",
+      "REVOKED": "Revoked"
+    },
+    "kind": {
+      "TABLET": "Tablet",
+      "HANDHELD": "Handheld",
+      "PC": "PC"
+    },
+    "inUse": "In use",
+    "notSeenTag": "Not seen for 24 h",
+    "empty": {
+      "title": "No tablets yet",
+      "body": "Enrol one: it takes a minute with the QR code."
+    },
+    "later": "The print queue (every label with its tries and Retry) comes in W1; battery and network in W2a.",
+    "step": {
+      "where": "Where will it work?",
+      "scan": "Scan this on the tablet",
+      "ready": "Ready"
+    },
+    "enrolCreate": "Create enrolment code",
+    "enrolLater": "Close (the code stays valid)",
+    "field": {
+      "site": "Site",
+      "station": "Station",
+      "stationHint": "Optional: it can move to a station of the same site later.",
+      "name": "Name",
+      "kind": "Kind"
+    },
+    "noStation": "No station yet",
+    "modeLater": "Its mode (Operator, Cutting, Warehouse…) comes with the floor step: the server has no mode yet.",
+    "scanBody": "On {name}, open the camera or the Nexus Factory start page and scan this code. It works once, for 15 minutes.",
+    "qrLabel": "Enrolment code for {name}",
+    "expiresIn": "Valid for {left}",
+    "waiting": "Waiting for the tablet…",
+    "codeExpired": "The code expired. Make a new one.",
+    "codeRepeat": "This code was already shown and is not kept. Make a new one.",
+    "newCode": "New enrolment code",
+    "ready": "{name} is ready",
+    "readyKiosk": "Lock the tablet on the Nexus Factory page (guided access on iPad, screen pinning on Android).",
+    "readyCharge": "Keep it on its charger at the station.",
+    "readyWorkers": "Workers sign in with their badge and PIN.",
+    "revoke": {
+      "title": "Revoke {name}?",
+      "body": "It stops working at once and must be enrolled again to be used.",
+      "bodyInUse": "Someone is signed in on it now: their session ends at once, and actions it still has to send will be refused. It must be enrolled again to be used.",
+      "type": "Type the name to confirm: {name}",
+      "hint": "Exactly as written: capital letters and spaces count.",
+      "matches": "Matches.",
+      "noMatch": "Does not match yet.",
+      "typeFirst": "Type the device name first.",
+      "go": "Revoke device",
+      "action": "Revoke",
+      "cardBody": "For a lost or retired device: its session ends at once and it must be enrolled again."
+    },
+    "done": {
+      "revoked": "{name} is revoked."
+    }
+  },
+  "printers": {
+    "add": "Add printer",
+    "save": "Save printer",
+    "editTitle": "Printer {code}",
+    "tableLabel": "Printers",
+    "col": {
+      "relay": "Relay",
+      "size": "Label size"
+    },
+    "kind": {
+      "LABEL_ZPL": "Labels (ZPL)",
+      "A4_PDF": "A4 (PDF)"
+    },
+    "status": {
+      "ACTIVE": "Active",
+      "PAUSED": "Paused",
+      "ARCHIVED": "Archived"
+    },
+    "relay": {
+      "FAKE": "Test relay (prints nothing)"
+    },
+    "empty": {
+      "title": "No printers",
+      "body": "Labels print from the browser as PDF until one is added."
+    },
+    "form": {
+      "code": "Use up to 24 capital letters, digits or hyphens.",
+      "codeHint": "Unique on the site; it cannot change later.",
+      "kindFixed": "A printer's kind never changes.",
+      "relayHint": "Only the test relay serves this environment until the Owner picks a print relay.",
+      "target": "Where the relay reaches it",
+      "targetHint": "Its network address or queue name, as the relay knows it.",
+      "width": "Label width",
+      "height": "Label height",
+      "dpi": "Pick 203, 300 or 600 dpi.",
+      "dpiLabel": "Resolution",
+      "statusHint": "Paused: jobs wait. Archived: for good.",
+      "testLater": "\"Print a test label\" comes with the print queue (W1)."
+    },
+    "done": {
+      "added": "Printer added.",
+      "saved": "Printer saved."
+    }
+  },
+  "device": {
+    "tab": {
+      "binding": "Station & mode",
+      "status": "Status",
+      "activity": "Activity"
+    },
+    "held": {
+      "revoked": "This device is revoked: enrol a new one."
+    },
+    "revokedBanner": "Revoked: it no longer works; it is kept for its history.",
+    "pendingBanner": "Waiting for its tablet to scan the enrolment code.",
+    "binding": {
+      "title": "Where it works",
+      "hint": "Its name and the station whose work it shows.",
+      "siteHint": "Another site needs a new enrolment."
+    },
+    "mode": {
+      "title": "Mode",
+      "later": "The mode (Operator, Cutting, Warehouse, Packing, Inspection, Supervisor, Display) picks the tiles the tablet shows; it comes with the floor step. The default printers of a device come in W1."
+    },
+    "health": {
+      "title": "Is it working?",
+      "silent": "Not seen since {at}: it may be off or out of Wi-Fi.",
+      "enrolled": "Enrolled",
+      "inUse": "Right now",
+      "inUseYes": "In use",
+      "inUseNo": "Nobody signed in",
+      "neverWho": "Never who (Statuto dei Lavoratori art. 4).",
+      "revoked": "Revoked",
+      "later": "Battery, network and actions waiting to sync come in W2a."
+    },
+    "done": {
+      "saved": "Saved."
+    }
+  },
+  "area": {
+    "companies": "Companies",
+    "sites": "Sites",
+    "users": "People",
+    "roles": "Roles",
+    "audit": "Audit log",
+    "numbering": "Numbering",
+    "files": "Files",
+    "links": "One-off links",
+    "devices": "Floor devices",
+    "workers": "Floor workers",
+    "floor": "Floor work",
+    "threads": "Threads",
+    "imports": "Imports",
+    "documents": "Documents",
+    "print": "Printing",
+    "email": "E-mail",
+    "compliance": "Compliance",
+    "product": "Products",
+    "inventory": "Warehouse",
+    "shipping": "Shipping",
+    "parties": "Customers & suppliers",
+    "planning": "Planning",
+    "purchasing": "Purchasing",
+    "invoices": "Invoices",
+    "payments": "Payments",
+    "costing": "Costing",
+    "production": "Production",
+    "workorders": "Work orders",
+    "quotes": "Quotes",
+    "sales": "Sales settings",
+    "orders": "Sales orders",
+    "privacy": "Privacy",
+    "quality": "Quality"
+  },
+  "perm": {
+    "companies_view": "See the companies and whether they can invoice",
+    "companies_manage": "Add companies and change their legal, e-invoicing and default data",
+    "sites_view": "See the sites with their lines, work centres and stations",
+    "sites_manage": "Add and change sites, lines, work centres and stations",
+    "users_view": "See the people, their status and invitations",
+    "users_invite": "Invite people by e-mail",
+    "users_suspend": "Suspend a person",
+    "users_reactivate": "Reactivate a suspended person",
+    "users_deactivate": "Deactivate a person who left",
+    "users_resetPassword": "Force a new password at the next sign-in",
+    "roles_view": "See the roles and who holds them",
+    "roles_manage": "Create and edit custom roles",
+    "roles_assign": "Give and end roles",
+    "audit_read": "Read the history of a record",
+    "numbering_view": "See the number series",
+    "numbering_manage": "Create number series and set where they start",
+    "files_read": "See and download a record's files",
+    "files_upload": "Upload files to a record",
+    "files_delete": "Delete a file (never one on legal hold)",
+    "files_manage": "Share files outside the office, set retention and legal hold",
+    "links_view": "See a record's one-off links and their answers",
+    "links_manage": "Make and revoke one-off links",
+    "devices_view": "See the floor devices",
+    "devices_manage": "Enrol, rename and move floor devices; set floor times",
+    "devices_revoke": "Revoke a lost or retired device",
+    "workers_view": "See the floor workers",
+    "workers_manage": "Add, edit, deactivate floor workers",
+    "workers_roles": "Give and end a worker's floor roles",
+    "workers_credentials": "Issue badges and reset a worker's PIN",
+    "floor_work": "Work on an enrolled tablet at the device's site",
+    "floor_lead": "Lead a crew: the team leader's screens",
+    "threads_read": "See a record's thread and timeline",
+    "threads_post": "Write internal notes and mention colleagues",
+    "threads_manage": "Close and reopen a thread",
+    "imports_view": "See import jobs and their plans",
+    "imports_run": "Upload a sheet and see its dry run",
+    "imports_apply": "Apply an import's plan",
+    "documents_view": "Preview a company's document layouts",
+    "print_view": "See a site's printers and print jobs",
+    "print_labels": "Print labels",
+    "print_documents": "Print documents",
+    "print_manage": "Add and change printers",
+    "email_send": "Send mail from a record's thread",
+    "email_manage": "Manage the sending domains and identities",
+    "email_triage": "Sort received mail",
+    "compliance_certificates_view": "See the EU type-examination certificates",
+    "compliance_certificates_manage": "Register, suspend and withdraw certificates",
+    "compliance_declarations_manage": "Upload declarations of conformity and leaflets",
+    "compliance_labels_manage": "Build and activate garment label templates",
+    "compliance_register_view": "See the PPE register",
+    "compliance_register_manage": "Record complaints, non-conformities and recalls",
+    "product_materials_view": "See the material library",
+    "product_materials_manage": "Add and edit materials",
+    "product_materials_cost": "Set a material's standard price",
+    "product_styles_view": "See the styles",
+    "product_styles_manage": "Create and edit styles",
+    "product_bom_view": "See bills of materials",
+    "product_bom_manage": "Edit a draft bill of materials",
+    "product_bom_release": "Release a revision (freezes BOM, routing and label)",
+    "product_routing_view": "See routings and standard minutes",
+    "product_routing_manage": "Edit a draft routing",
+    "product_operations_manage": "Keep the operation library",
+    "inventory_locations_view": "See a site's locations",
+    "inventory_locations_manage": "Create, move and archive locations",
+    "inventory_stock_view": "See the stock and its moves",
+    "inventory_adjust": "Correct stock with a reason",
+    "inventory_transfer": "Move stock between locations",
+    "inventory_scrap": "Scrap stock with a reason",
+    "inventory_reverse": "Reverse a wrong stock move",
+    "inventory_issue": "Pick and issue stock to a work order",
+    "inventory_issue_over": "Issue more than a work order needs",
+    "inventory_receive": "Receive goods against a purchase order",
+    "shipping_view": "See the shipments",
+    "shipping_manage": "Plan and change shipments",
+    "shipping_pack": "Pack a shipment",
+    "shipping_settings_view": "See each site's shipping settings",
+    "shipping_settings_manage": "Change a site's shipping settings",
+    "shipping_ddt_issue": "Issue a shipment's DDT",
+    "shipping_ddt_cancel": "Cancel an issued DDT with a reason",
+    "shipping_labels_buy": "Buy carrier labels",
+    "shipping_labels_void": "Void a carrier label",
+    "parties_view": "See customers and suppliers",
+    "parties_manage": "Add and edit customers and suppliers",
+    "parties_block": "Block and unblock a customer or supplier",
+    "parties_vies": "Check a VAT number with VIES",
+    "planning_view": "See the planning runs",
+    "planning_run": "Run the plan for a site",
+    "planning_decide": "Set plan lines aside with a reason",
+    "purchasing_view": "See purchase orders",
+    "purchasing_manage": "Make and edit draft purchase orders",
+    "purchasing_send": "Send a purchase order to its supplier",
+    "invoices_view": "See invoices and credit notes",
+    "invoices_manage": "Prepare draft invoices",
+    "invoices_issue": "Issue an invoice (it can never change again)",
+    "payments_view": "See the payments received",
+    "payments_record": "Record and allocate payments",
+    "payments_void": "Void a payment typed by mistake",
+    "costing_view": "See a style's cost sheet",
+    "costing_rates_manage": "Keep the cost per standard minute",
+    "production_settings_view": "See each site's floor rules",
+    "production_settings_manage": "Change a site's floor rules",
+    "production_cut": "Cut hides for a work order",
+    "production_cut_correct": "Correct a wrong cut log entry",
+    "workorders_view": "See the work orders",
+    "workorders_manage": "Make and change draft work orders",
+    "workorders_release": "Release a work order to the floor",
+    "quotes_view": "See quotes",
+    "quotes_manage": "Make and edit quotes",
+    "quotes_approve": "Approve or reject a quote's approval request",
+    "quotes_send": "Send a quote to its customer",
+    "sales_settings_manage": "Set a company's quote rules",
+    "companies_bank_view": "See a company's bank account",
+    "companies_bank_manage": "Change a company's bank account",
+    "orders_view": "See sales orders",
+    "orders_manage": "Work on sales orders",
+    "orders_close": "Close a shipped order that is not settled",
+    "privacy_view": "See the company's privacy duties",
+    "privacy_manage": "Write and publish notices; record acknowledgements",
+    "quality_lots_view": "See a lot's quality record",
+    "quality_lots_test": "Record a lot's chromium VI result",
+    "quality_lots_documents": "Attach a lot's supplier documents",
+    "quality_lots_release": "Release a lot when every check passes",
+    "quality_lots_reject": "Reject or block a lot",
+    "quality_settings_manage": "Change what counts as chromium VI evidence"
+  }
+}
