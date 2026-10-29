@@ -27,6 +27,8 @@ export const NUMBER_KINDS = [
   'BUNDLE',
   'HIDE',
   'GARMENT_SERIAL',
+  'INSPECTION',
+  'RELEASE',
 ] as const
 export type NumberKind = (typeof NUMBER_KINDS)[number]
 
@@ -65,6 +67,20 @@ export function isNumberKind(value: unknown): value is NumberKind {
 
 export function isFiscalKind(kind: NumberKind): boolean {
   return FISCAL_KINDS.includes(kind)
+}
+
+/**
+ * The document kinds a floor tablet may number from its own command, online (goods received at the dock, their lots, a
+ * final inspection opened at the bench and its release): the company's series of its site, the same gapless series the
+ * office numbers from. Never a fiscal kind: invoices, credit notes, deposit invoices and DDTs stay with the office. The
+ * database holds the same list (factory-db ownership/numbering.json: the floor's policies see and write only the series
+ * and numbers of these kinds; the …_numbering_floor_documents_guards triggers refuse a fiscal series to the floor).
+ */
+export const FLOOR_DOCUMENT_KINDS = ['GOODS_RECEIPT', 'LOT', 'INSPECTION', 'RELEASE'] as const satisfies readonly DocumentKind[]
+export type FloorDocumentKind = (typeof FLOOR_DOCUMENT_KINDS)[number]
+
+export function isFloorDocumentKind(value: unknown): value is FloorDocumentKind {
+  return typeof value === 'string' && (FLOOR_DOCUMENT_KINDS as readonly string[]).includes(value)
 }
 
 /** The kind in words, for messages: `invoice`, `DDT`, `purchase order`, `PPE register`. */
@@ -145,6 +161,8 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   LOT: 'LOT',
   BATCH: 'BT',
   PPE_REGISTER: 'REG',
+  INSPECTION: 'INS',
+  RELEASE: 'REL',
 }
 
 /** The pattern a new series gets when the admin types none: `FT-{YYYY}-{N:5}` (yearly) or `LOT-{N:6}` (never resets). */

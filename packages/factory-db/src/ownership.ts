@@ -14,8 +14,9 @@ import type { SchemaModel } from './schema-models'
  *                    a runtime role that is listed too sees only its own tenant's rows (keyColumns.tenant).
  *
  * Per model: `keyColumns` (key → column the policies compare with the scope: tenant, site, party) and `access` (role →
- * privileges, the extra keys its rows must match, and the columns it may not read or write). The floor role is scoped
- * by site wherever the table has a site key, the partner role always by party.
+ * privileges, the extra keys its rows must match, the columns it may not read or write, and `onlyValues`: column →
+ * the only values its rows may hold, e.g. the floor's document kinds of NumberSeries). The floor role is scoped by site
+ * wherever the table has a site key, the partner role always by party.
  *
  * The partner wall (plan A1 §2.2, §2.6; features PLT-007, PLT-035): portal and one-off link sessions
  * (factory_partner_runtime) never read or write a cost, margin or wages column, nor an internal note. Such a column is
@@ -81,7 +82,7 @@ export class OwnershipError extends Error {
 }
 
 const MODEL_KEYS = new Set(['about', 'kind', 'keyColumns', 'access'])
-const ACCESS_KEYS = new Set(['privileges', 'scopedBy', 'hiddenColumns'])
+const ACCESS_KEYS = new Set(['privileges', 'scopedBy', 'hiddenColumns', 'onlyValues'])
 const PRIVILEGES: readonly Privilege[] = ['select', 'insert', 'update', 'delete']
 
 /** Reads every `ownership/*.json` file. A file that is not valid JSON is an error. */
@@ -234,6 +235,16 @@ function checkModel(at: string, model: SchemaModel, entry: unknown): string[] {
       continue
     }
     for (const column of hidden) if (!columns.has(column)) problems.push(`${where}: hidden column ${String(column)} is not a column of ${model.name}`)
+    const only = (grant.onlyValues ?? {}) as unknown
+    if (!isObject(only)) problems.push(`${where}: onlyValues must be an object (column → values)`)
+    else {
+      for (const [column, values] of Object.entries(only)) {
+        if (!columns.has(column)) problems.push(`${where}: onlyValues names ${column}, which is not a column of ${model.name}`)
+        if (!Array.isArray(values) || values.length === 0 || values.some((value) => typeof value !== 'string')) problems.push(`${where}: onlyValues.${column} must list at least one value`)
+        if (hidden.includes(column)) problems.push(`${where}: onlyValues reads ${column}, so it cannot be hidden`)
+      }
+      if (role === PLATFORM_ROLE && Object.keys(only).length > 0) problems.push(`${where}: factory_platform takes no onlyValues`)
+    }
     const allowed = new Set<string>(keysSetBy(role))
     for (const key of scopedBy) {
       if (!allowed.has(key)) problems.push(`${where}: scopedBy ${String(key)}, which ${role}'s scope does not set`)

@@ -28,8 +28,8 @@ import { ApiError } from '../../core/errors'
  * tenant's tag, never the company). The counter is the tenant's ledger of blocks (NumberBlock); the rules are
  * factory-domain numbering/blocks, and the …_numbering_floor_guards triggers hold them for every login.
  *
- * Inside a command (office, worker, or a floor tablet's; floor sessions have no grant on NumberSeries/NumberAllocation,
- * and need none here):
+ * Inside a command (office, worker, or a floor tablet's; scan ids need no NumberSeries/NumberAllocation, which a floor
+ * session reaches only for the floor's document kinds, through allocateNumber):
  *   - allocateScanIds(tools, kind, count): ONLINE numbers, used by the command at once (a bundle make, a receipt's hide
  *     tags, a garment's serial). One ONLINE block, in the command's transaction: a command that rolls back takes none.
  *   - useScanIds(tools, kind, uses): the numbers a tablet printed from its OWN blocks (offline too), checked and recorded

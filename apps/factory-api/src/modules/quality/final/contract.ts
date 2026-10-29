@@ -34,7 +34,9 @@ const plan = {
 const defectOut = output({ id: id(), defectClass: z.enum(DEFECT_CLASSES), code: z.string(), description: z.string().nullable(), quantity: z.number().int(), workOrderSizeId: id().nullable(), note: z.string().nullable() })
 export const inspectionOut = output({
   id: id(),
-  /** "WO-0003 · inspection 2" (no number series of its own in W1). */
+  /** Its own number (INS-2026-0412, the company's INSPECTION series); null for one opened before the series existed. */
+  inspectionNumber: z.string().nullable(),
+  /** Its number, or "WO-0003 · inspection 2" for one without (W1 history). */
   label: z.string(),
   workOrderId: id(),
   companyId: id(),
@@ -74,7 +76,10 @@ const reversalOut = output({
 })
 export const releaseOut = output({
   id: id(),
+  /** Its own number (REL-2026-0088, the company's RELEASE series); null for one made before the series existed. */
+  releaseNumber: z.string().nullable(),
   workOrderId: id(),
+  /** The work order's number. */
   number: z.string(),
   workOrderSizeId: id(),
   inspectionId: id(),
@@ -107,7 +112,7 @@ export const workOrderFinalContract = defineContract({
     200: output({
       workOrder: output({ id: id(), number: z.string(), status: z.string(), batchNumber: z.string().nullable(), companyId: id(), siteId: id() }),
       inspectionId: id().nullable(),
-      inspections: z.array(output({ id: id(), label: z.string(), status, lotSize: z.number().int(), released: z.number().int(), overridden: z.boolean(), decidedAt: instant().nullable() })),
+      inspections: z.array(output({ id: id(), inspectionNumber: z.string().nullable(), label: z.string(), status, lotSize: z.number().int(), released: z.number().int(), overridden: z.boolean(), decidedAt: instant().nullable() })),
       cells: z.array(
         output({
           workOrderSizeId: id(),
@@ -216,6 +221,7 @@ export const listInspectionsContract = defineContract({
       inspections: z.array(
         output({
           id: id(),
+          inspectionNumber: z.string().nullable(),
           label: z.string(),
           workOrderId: id(),
           number: z.string(),
