@@ -1,9 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { addDays } from '@nexus/factory-domain/planning/buy'
-import type { Browser } from '../platform/auth/sessions/testing/harness'
+import { callerFor } from '../core/command'
 import { runSdiPoll } from '../modules/invoicing/sdi/poll'
-import { runTrackingPoll } from '../modules/shipping/labels/poll'
+import { processCarrier } from '../modules/shipping/labels/carrier'
+import { pollShipment, runTrackingPoll } from '../modules/shipping/labels/poll'
+import type { Browser } from '../platform/auth/sessions/testing/harness'
+import { systemContext } from '../platform/outbox/system'
 import {
   admin,
   announce,
@@ -40,6 +44,7 @@ import {
  * real app with the real sign-in, and the worker's handlers (background.ts) run in-process by the real outbox relay
  * after each step (`drain`). The scheduler's two polls (SDI status, carrier tracking) are run as their cron ticks.
  * Each step is one test, in order; a step that needs another lane's work first is an `it.todo` naming why.
+ * A second scenario follows in the same world: the EU variant (a German business customer, VIES, N3.2, no TD02).
  * Every name and number is made up. Run with `node scripts/factory/golden-flow.mjs`.
  */
 
@@ -126,8 +131,6 @@ describe('the golden flow: a brand size run from the customer to the paid invoic
     const vies = await ok(P.sales, 'POST', `/parties/${party.id}/vies-checks`, { companyId: companyA() }, 409)
     expect(vies.error.message).toMatch(/outside Italy/)
   })
-
-  it.todo('01b the EU variant: a customer in another EU state checked with VIES (FAKE), taxed N3.2, no TD02 (rule DEPOSIT_EU_B2B_GOODS) — a second scenario; the first order is Italian (Q9 a, Q12 a)')
 
   it('02 the production manager makes the style: one colourway, three sizes, PPE category II, the customer as brand', async () => {
     const { style } = await ok(
@@ -291,8 +294,6 @@ describe('the golden flow: a brand size run from the customer to the paid invoic
   // ---- 08-11 quote, acceptance, deposit, order -------------------------------------------------------------------------------
 
   it('08 sales quotes the size run; the discount over the limit asks finance, who approves it (Home shows it to finance meanwhile)', async () => {
-    // Company A has no QUOTE series yet: finance opens one through the numbering route.
-    await ok(P.finance, 'POST', '/numbering/series', { companyId: companyA(), kind: 'QUOTE' }, 201)
     let { quote } = await ok(P.sales, 'POST', '/sales/quotes', { companyId: companyA(), partyId: G.party.id, customerRef: 'RFQ-GOLDEN-1', promiseDate: addDays(today(), 60) }, 201)
     keep(quote.id, quote.current?.id)
     ;({ quote } = await ok(
@@ -306,9 +307,6 @@ describe('the golden flow: a brand size run from the customer to the paid invoic
         sizes: Object.entries(SIZES).map(([size, quantity]) => ({ size, quantity })),
         listUnitPrice: '500',
         discountPct: '20',
-        // Sales types the description: the default one joins style and colourway with an em dash, which travels to the
-        // order and the invoice, where FatturaPA (Latin-1) refuses it (gap for the sales lane, quotes/lines.ts).
-        description: 'GF-JKT-01 Golden touring jacket - Rosso',
       },
       201,
     ))
@@ -366,6 +364,30 @@ describe('the golden flow: a brand size run from the customer to the paid invoic
     await drain(w)
   })
 
+  it('10b finance mails the deposit page (DEPOSIT_INFO link): the customer reads amount, due date, reference and bank details', async () => {
+    const before = w.h.ses.mails.length
+    const sent = await ok(P.finance, 'POST', `/payments/deposit-requests/${G.deposit.id}/link`, {}, 201)
+    expect(sent).toMatchObject({ link: { to: CUSTOMER_ORDERS, revokedLinkIds: [] }, delivery: 'sent' })
+    expect(JSON.stringify(sent)).not.toMatch(/#token=/)
+    const mail = w.h.ses.mails.slice(before).find((entry) => entry.outboundId === sent.emailId)!
+    expect(mail.to).toEqual([CUSTOMER_ORDERS])
+    // The thread keeps the text without the link; only the sent mail holds it.
+    expect(await admin(w, `SELECT count(*)::int AS n FROM "Message" WHERE "bodyText" LIKE '%#token=%'`)).toEqual([{ n: 0 }])
+    const customer = linkBrowser(w, linkTokenSentTo(w, CUSTOMER_ORDERS))
+    const page = await customer.send('GET', '/payments/link/deposit')
+    expect(page).toMatchObject({
+      deposit: { kind: 'ACCONTO', status: 'OPEN', amount: G.deposit.amount, paid: false },
+      order: { number: G.order.number },
+      instructions: { method: 'BANK_TRANSFER', amount: G.deposit.amount, bank: { iban: expect.stringMatching(/^IT/) } },
+    })
+    expect(page.instructions.reference).toContain(page.quote.document)
+    await customer.send('POST', '/link/open', {})
+    // The link opens this request only: another purpose's page is not there for it.
+    await customer.send('GET', '/link/quote', undefined, 404)
+    keep(sent.link.id)
+    await drain(w)
+  })
+
   it('11 finance records the deposit received by bank transfer: the request is PAID and the TD02 issued with its XML and PDF', async () => {
     await stepped(w, P.finance)
     const received = await ok(P.finance, 'POST', '/payments/deposit-received', { depositRequestId: G.deposit.id, amount: G.deposit.amount, receivedOn: today(), externalRef: 'CRO-GOLDEN-0001' }, 201)
@@ -375,6 +397,8 @@ describe('the golden flow: a brand size run from the customer to the paid invoic
     })
     G.td02 = received.depositInvoice.invoice
     keep(received.payment.id, G.td02.id)
+    // A paid request has nothing left to pay: no new deposit page.
+    expect((await ok(P.finance, 'POST', `/payments/deposit-requests/${G.deposit.id}/link`, {}, 409)).error.message).toMatch(/is PAID/)
     await drain(w)
   })
 
@@ -525,6 +549,7 @@ describe('the golden flow: a brand size run from the customer to the paid invoic
     G.tablets = {} as Record<string, Browser>
     G.workers = {} as Record<string, FloorWorker>
     const pins = { CUTTING: '481537', SEWING: '592648', INSPECTION: '603759', PACKING: '714860' } as const
+    G.pins = pins
     for (const [kind, station] of [
       ['CUTTING', 'CUT-01'],
       ['SEWING', 'SEW-01'],
@@ -607,6 +632,11 @@ describe('the golden flow: a brand size run from the customer to the paid invoic
     expect(printed).toMatchObject({ tracking: 'BATCH', refused: [] })
     expect(printed.printed.reduce((sum: number, entry: Json) => sum + entry.count, 0)).toBe(PIECES)
     expect(new Set(printed.printed.map((entry: Json) => entry.batchNumber))).toEqual(new Set([G.wo.batchNumber]))
+    // Q31: the style's numbering (BATCH, set until now) no longer changes once its garments carry labels.
+    const style = (await ok(P.manager, 'GET', `/product/styles/${G.style.id}`)).style
+    expect(style.garmentTracking).toBe('BATCH')
+    const flip = await ok(P.manager, 'PUT', `/product/styles/${G.style.id}/garment-tracking`, { version: style.version, tracking: 'SERIAL' }, 409)
+    expect(flip.error.message).toMatch(/^Style GF-JKT-01 has work orders with garment labels printed: its garments stay numbered by batch \(Q31\)/)
     await drain(w)
   })
 
@@ -774,12 +804,173 @@ describe('the golden flow: a brand size run from the customer to the paid invoic
     const missingActions = EXPECTED_ACTIONS.filter((action) => !actions.has(action))
     const missingEvents = EXPECTED_EVENTS.filter((type) => !events.has(type))
     expect({ missingActions, missingEvents }).toEqual({ missingActions: [], missingEvents: [] })
-    // The worker's retry was needed only for one known race (a gap, not a failure): two first issues of one work order
-    // handled at once share inventory.startWorkOrderOnIssue's key `workorders-start:<id>` with different inputs (the
-    // cause names the issue), so one try is refused and its retry finds the work order started.
-    expect(w.retried.filter((entry) => !(entry.startsWith('inventory.startWorkOrderOnIssue on inventory.issued') && entry.includes('IdempotencyKeyReusedError')))).toEqual([])
+    // No handler of the worker needed a second try (two first issues of one work order share one start key now).
+    expect(w.retried).toEqual([])
     const pending = await admin(w, `SELECT type FROM "OutboxEvent" WHERE "tenantId" = $1 AND status <> 'PUBLISHED'`, [w.tenant.id])
     expect(pending).toEqual([])
+  })
+})
+
+/**
+ * The EU variant (second scenario, same world, after the first order): a business customer in Germany whose VAT number
+ * VIES (FAKE) confirms, so the jackets travel as an intra-EU supply of goods (DL 331/1993 art. 41: Natura N3.2, no
+ * Italian VAT) and the deposit needs no deposit invoice (tax/deposit-rule DEPOSIT_EU_B2B_GOODS: the supply happens when
+ * transport starts); the final TD01 carries the whole price. The same style, tablets, workers and printers make it.
+ */
+const EU = {} as Record<string, any>
+const madeEu = new Set<string>()
+const keepEu = (...ids: (string | undefined | null)[]) => ids.forEach((id) => id && madeEu.add(id))
+const EU_ORDERS = 'einkauf@kunde-golden.example.com'
+const EU_SIZES = { '52': 2 } as const
+
+describe('the EU variant: a German business customer, VIES, N3.2, no deposit invoice', { timeout: 180_000 }, () => {
+  it('E01 sales makes the customer and VIES (FAKE) confirms its VAT number', async () => {
+    const { party } = await ok(
+      P.sales,
+      'POST',
+      '/parties',
+      {
+        code: 'GF-EU-1',
+        legalName: 'Kunde Golden GmbH (made up)',
+        roles: ['CUSTOMER'],
+        country: 'DE',
+        language: 'en',
+        taxIdentity: { country: 'DE', taxMode: 'EU_B2B', vatNumber: '100000017' },
+        addresses: [{ kinds: ['REGISTERED', 'BILL_TO', 'SHIP_TO'], line1: 'Beispielstrasse 1', postalCode: '10115', city: 'Berlin', country: 'DE' }],
+        contacts: [{ name: 'Clara Beispiel', email: EU_ORDERS, roles: ['ORDERS'] }],
+      },
+      201,
+    )
+    keepEu(party.id)
+    const checked = await ok(P.sales, 'POST', `/parties/${party.id}/vies-checks`, { companyId: companyA() }, 201)
+    expect(checked).toMatchObject({ check: { result: 'VALID' }, vies: { state: 'VALID' } })
+    expect(w.vies.requests.at(-1)).toMatchObject({ countryCode: 'DE', vatNumber: '100000017' })
+    EU.party = checked.party ?? party
+  })
+
+  it('E02 the quote is taxed as an intra-EU supply (N3.2) and needs no approval; sent and accepted by link', async () => {
+    let { quote } = await ok(P.sales, 'POST', '/sales/quotes', { companyId: companyA(), partyId: EU.party.id, customerRef: 'PO-EU-77', promiseDate: addDays(today(), 60) }, 201)
+    keepEu(quote.id)
+    ;({ quote } = await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: G.style.id, colourwayId: G.colourway.id, sizes: Object.entries(EU_SIZES).map(([size, quantity]) => ({ size, quantity })), unitPrice: '450' }, 201))
+    expect(quote.current).toMatchObject({ taxMode: 'EU_B2B', vatAmount: 0 })
+    expect(quote.approval.needed).toBe(false)
+    const sent = await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/send`, { version: quote.version })
+    const customer = linkBrowser(w, linkTokenSentTo(w, EU_ORDERS))
+    const accepted = await customer.send('POST', '/link/quote/accept', { versionId: sent.sent.versionId, typedName: 'Clara Beispiel', email: EU_ORDERS })
+    // Goods to an EU business with a valid VIES number: the deposit is only a payment (no TD02).
+    expect(accepted).toMatchObject({ state: 'ACCEPTED', deposit: { fiscalDocument: 'NONE', status: 'OPEN' } })
+    EU.deposit = accepted.deposit
+    const { orders } = await ok(P.sales, 'GET', `/sales/orders?partyId=${EU.party.id}`)
+    EU.order = (await ok(P.sales, 'GET', `/sales/orders/${orders[0].id}`)).order
+    keepEu(EU.deposit.id, EU.order.id, ...EU.order.lines.map((line: Json) => line.id))
+    await drain(w)
+  })
+
+  it('E03 finance records the deposit: PAID, and no deposit invoice (the rule says why)', async () => {
+    await stepped(w, P.finance)
+    const received = await ok(P.finance, 'POST', '/payments/deposit-received', { depositRequestId: EU.deposit.id, amount: EU.deposit.amount, receivedOn: today(), externalRef: 'CRO-GOLDEN-EU-1' }, 201)
+    expect(received).toMatchObject({ depositRequest: { status: 'PAID' }, depositInvoice: { required: false } })
+    expect(received.depositInvoice.reason).toMatch(/DEPOSIT_EU_B2B_GOODS/)
+    keepEu(received.payment.id)
+    EU.depositPayment = received.payment
+    await drain(w)
+  })
+
+  it('E04 made on the same floor: work order, cut, bundles, scans at every station, labels, inspected and released', async () => {
+    const { workOrder } = await ok(P.planner, 'POST', '/production/work-orders', { lines: [{ salesOrderLineId: EU.order.lines[0].id }] }, 201)
+    keepEu(workOrder.id)
+    const check = await ok(P.planner, 'GET', `/production/work-orders/${workOrder.id}/release-check`)
+    const blocked = (check.checks as Json[]).filter((entry) => entry.state === 'BLOCKED').map((entry) => entry.code)
+    // The red leather left on the shelf is promised to the seeded work order: the planner releases with the reason.
+    expect(blocked.filter((code) => code !== 'MATERIAL')).toEqual([])
+    const wo = (await ok(P.planner, 'POST', `/production/work-orders/${workOrder.id}/release`, { version: workOrder.version, ...(blocked.length > 0 ? { materialOverride: { reason: 'The next red leather lot arrives before the seeded order is cut.' } } : {}) })).workOrder
+    EU.wo = wo
+    // The tablets' workers sign in again (their sessions may have gone idle), with their own PINs.
+    for (const kind of ['CUTTING', 'SEWING', 'INSPECTION', 'PACKING'] as const) await ok(G.tablets[kind], 'POST', '/floor/sign-in', { badgeCode: G.workers[kind].badgeCode, pin: G.pins[kind] })
+    const hide = (G.hides as Json[])[G.cutHides.length]!
+    await ok(G.tablets.CUTTING, 'POST', `/inventory/picking/work-orders/${wo.id}/issue`, { code: hide.code }, 201)
+    await ok(G.tablets.CUTTING, 'POST', `/production/cutting/work-orders/${wo.id}/cuts`, { clientEventId: `gf-eu-cut-${hide.code}`, code: hide.code, lines: wo.cells.map((cell: Json) => ({ workOrderSizeId: cell.id, sets: cell.quantity })), done: { remnant: null } }, 201)
+    const { bundles } = await ok(G.tablets.CUTTING, 'POST', `/production/bundles/work-orders/${wo.id}/bundles`, { bundleSize: 10, printerId: id('print:printer:A1:LBL') }, 201)
+    let n = 0
+    for (const bundle of bundles as Json[]) {
+      for (const op of (wo.spec.operations as Json[]).filter((entry) => entry.scanRequired).sort((a, b) => a.seq - b.seq)) {
+        const clientScanId = `gf-eu-scan-${++n}-${bundle.code}`
+        await ok(G.tablets[op.workCentreKind], 'POST', '/production/scans', { clientScanId, code: bundle.code, workOrderOperationId: op.id, good: bundle.quantity }, 201, { 'idempotency-key': clientScanId })
+      }
+    }
+    await ok(G.tablets.PACKING, 'POST', `/production/serials/work-orders/${wo.id}/labels`, { printerId: G.garmentPrinter }, 201)
+    await ok(P.planner, 'POST', `/production/work-orders/${wo.id}/complete`, {})
+    const pieces = Object.values(EU_SIZES).reduce((sum, count) => sum + count, 0)
+    const opened = (await ok(P.inspector, 'POST', '/quality/inspections', { workOrderId: wo.id, lotSize: pieces, sampleSize: pieces, inspectionLevel: 'II', aqlMajor: '2.5', aqlMinor: '4.0', acceptMajor: 0, acceptMinor: 1 }, 201)).inspection
+    await stepped(w, P.inspector)
+    await ok(P.inspector, 'POST', `/quality/inspections/${opened.id}/decide`, { version: opened.version, result: 'PASS', checklist: CHECKS.map((code) => ({ code, ok: true })) })
+    for (const cell of wo.cells as Json[]) {
+      await stepped(w, P.inspector)
+      await ok(P.inspector, 'POST', '/quality/releases', { inspectionId: opened.id, workOrderSizeId: cell.id, quantity: cell.quantity }, 201)
+    }
+    await drain(w)
+  })
+
+  it('E05 shipped with its DDT and the carrier label; delivered', async () => {
+    const ready = await ok(P.warehouse, 'GET', `/shipping/ready?salesOrderId=${EU.order.id}`)
+    const cells = (ready.orders as Json[]).flatMap((order) => order.cells as Json[])
+    let { shipment } = await ok(P.warehouse, 'POST', '/shipping/shipments', { salesOrderId: EU.order.id, lines: cells.map((cell) => ({ workOrderSizeId: cell.workOrderSizeId, quantity: cell.shippable })) }, 201)
+    keepEu(shipment.id)
+    const parcel = await ok(P.warehouse, 'POST', `/shipping/packing/${shipment.id}/parcels`, { grossWeightKg: '4.2' }, 201)
+    for (const line of shipment.lines as Json[]) shipment = (await ok(P.warehouse, 'PUT', `/shipping/packing/${shipment.id}/lines/${line.id}/parcel`, { parcelId: parcel.parcelId })).shipment
+    await ok(P.warehouse, 'POST', `/shipping/packing/${shipment.id}/pack`, {})
+    EU.ddt = (await ok(P.warehouse, 'POST', `/shipping/shipments/${shipment.id}/ddt`, {}, 201)).ddt
+    const bought = await ok(P.warehouse, 'POST', `/shipping/shipments/${shipment.id}/labels`, {}, 201)
+    expect((await ok(P.warehouse, 'POST', `/shipping/shipments/${shipment.id}/ship`, {})).shipment.status).toBe('SHIPPED')
+    await drain(w)
+    const after = Math.max(Date.now(), w.h.clock.now().getTime())
+    w.sendcloud.advance(bought.parcels[0].trackingNumber, 'DELIVERED', 'unused', new Date(after + 60_000))
+    // The first order's step ran the scheduler's tick (one per tenant and hour, due in the 12th hour of silence): here
+    // the worker's poll of this shipment runs directly, as its handler does on shipment.tracking_poll_due.
+    expect(await pollShipment(processCarrier(), callerFor(w.h.database, systemContext(w.tenant.id, newId())), shipment.id)).toMatchObject({ moved: 'DELIVERED', failures: [] })
+    await drain(w)
+    expect((await ok(P.warehouse, 'GET', `/shipping/shipments/${shipment.id}/tracking`)).shipment.status).toBe('DELIVERED')
+    EU.shipment = shipment
+  })
+
+  it('E06 the TD01 carries the whole price at N3.2 (no deposit deducted); SDI (FAKE) delivers it', async () => {
+    const drafted = await ok(P.finance, 'POST', '/invoicing/invoices/from-ddts', { ddtIds: [EU.ddt.id] }, 201)
+    expect(drafted.choice.docType).toBe('TD01')
+    const goods = (drafted.invoice.lines as Json[]).filter((line) => line.kind === 'GOODS')
+    expect(goods.every((line) => line.vatNature === 'N3.2' && line.vatLegalRef !== null)).toBe(true)
+    expect((drafted.invoice.lines as Json[]).filter((line) => line.kind === 'DEPOSIT_DEDUCTION')).toEqual([])
+    await stepped(w, P.finance)
+    const issued = await ok(P.finance, 'POST', `/invoicing/invoices/${drafted.invoice.id}/issue`, { version: drafted.invoice.version })
+    expect(issued.invoice).toMatchObject({ docType: 'TD01', status: 'ISSUED', vatTotal: 0 })
+    EU.td01 = issued.invoice
+    keepEu(EU.td01.id)
+    await stepped(w, P.finance)
+    await ok(P.finance, 'POST', `/invoicing/invoices/${EU.td01.id}/sdi/send`, {})
+    await drain(w)
+    await runSdiPoll({ database: w.h.database, log: QUIET, clock: { now: () => new Date(Date.now() + 3_600_000) } })
+    await drain(w)
+    expect((await ok(P.finance, 'GET', `/invoicing/invoices/${EU.td01.id}`)).invoice.status).toBe('DELIVERED')
+  })
+
+  it('E07 the deposit paid counts against the invoice; the balance settles the order and the worker closes it', async () => {
+    const before = (await ok(P.finance, 'GET', `/invoicing/orders/${EU.order.id}/settlement`)).settlement
+    expect(before.settled).toBe(false)
+    const balance = EU.td01.grossTotal - EU.deposit.amount
+    expect(before.balanceDueAmount).toBe(balance)
+    const paid = await ok(P.finance, 'POST', '/payments', { companyId: companyA(), partyId: EU.party.id, amount: balance, receivedOn: today(), externalRef: 'CRO-GOLDEN-EU-2', allocations: [{ invoiceId: EU.td01.id }] }, 201)
+    keepEu(paid.payment.id)
+    expect((await ok(P.finance, 'GET', `/invoicing/orders/${EU.order.id}/settlement`)).settlement).toMatchObject({ settled: true, gaps: [], balanceDueAmount: 0 })
+    await drain(w)
+    expect((await ok(P.finance, 'GET', `/sales/orders/${EU.order.id}`)).order.status).toBe('CLOSED')
+  })
+
+  it('E08 nothing of the EU order waits on Home for anyone; no worker retry; nothing left in the outbox', async () => {
+    for (const who of Object.values(P)) {
+      const items = ((await ok(who, 'GET', '/home/today?limit=200')).items ?? []) as Json[]
+      expect(items.filter((item) => madeEu.has(item.record.id)).map((item) => `${who.key}: ${item.kind} ${item.record.label}`), `Home of ${who.key}`).toEqual([])
+    }
+    expect(w.retried).toEqual([])
+    expect(await admin(w, `SELECT type FROM "OutboxEvent" WHERE "tenantId" = $1 AND status <> 'PUBLISHED'`, [w.tenant.id])).toEqual([])
   })
 })
 
@@ -795,6 +986,7 @@ const EXPECTED_ACTIONS = [
   'quotes.approve',
   'quotes.send',
   'quotes.accept',
+  'payments.sendDepositLink',
   'payments.depositPaid',
   'invoices.issue',
   'planning.run',
@@ -836,6 +1028,7 @@ const EXPECTED_EVENTS = [
   'quote.accepted',
   'deposit_request.created',
   'sales_order.created',
+  'deposit_request.link_sent',
   'payment.deposit_paid',
   'invoice.issued',
   'planning.run_finished',

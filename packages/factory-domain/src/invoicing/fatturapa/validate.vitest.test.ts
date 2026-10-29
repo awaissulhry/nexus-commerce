@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildFatturaPa, checkFatturaPaInput } from './build'
+import { fatturaPaText } from './format'
 import {
   FAKE_EU_BUSINESS,
   FAKE_IT_BUSINESS,
@@ -118,10 +119,33 @@ describe('amounts and text', () => {
     expect(issuesOf(oneLine({ discountPercent: '100' }))).toEqual(['lines[0].discountPercent DISCOUNT_INVALID'])
   })
 
-  it('refuses text FatturaPA cannot carry, naming the character', () => {
-    const issues = checkFatturaPaInput(oneLine({ description: 'Giacca – prezzo 389 €' }))
-    expect(issues.map((issue) => issue.code)).toEqual(['NOT_LATIN1'])
-    expect(issues[0]!.message).toContain('"–"')
+  it('carries typed text in Latin-1: dashes, curly quotes, the ellipsis, no-break spaces and the euro sign become plain', () => {
+    const typed = 'Giacca \u2014 Rosso \u201cGolden\u201d \u2026 prezzo 389\u00a0\u20ac \u2013 taglia\u202f52'
+    expect(issuesOf(oneLine({ description: typed }))).toEqual([])
+    const xml = buildFatturaPa(oneLine({ description: typed })).xml
+    expect(xml).toContain('Giacca - Rosso')
+    expect(xml).toContain('Golden')
+    expect(xml).toContain('... prezzo 389 EUR - taglia 52')
+    expect(xml).not.toMatch(/[\u2013\u2014\u2026\u201c\u201d\u00a0\u202f\u20ac]/)
+  })
+
+  it('refuses a character with no close Latin-1 form, naming the field and the character, and never builds the file', () => {
+    const issues = checkFatturaPaInput(oneLine({ description: 'Giacca \u2713 collaudata' }))
+    expect(issues.map((issue) => `${issue.path} ${issue.code}`)).toEqual(['lines[0].description NOT_LATIN1'])
+    expect(issues[0]!.message).toBe('holds "\u2713" (U+2713), which FatturaPA cannot carry and which has no close Latin-1 form; replace it')
+    expect(() => buildFatturaPa(oneLine({ description: 'Giacca \u2713 collaudata' }))).toThrow(FatturaPaInputError)
+    expect(issuesOf({ ...TD01_IT_B2B, causale: '\u65e5\u672c' })).toEqual(['causale NOT_LATIN1'])
+  })
+
+  it('a deposit deducted from goods typed with a dash matches their VAT (no false DEPOSIT_TREATMENT_UNMATCHED)', () => {
+    // The golden flow's invoice: the goods lines named "<style> — <colour>, taglia <n>" were refused, so no goods line
+    // was left to match the deposit's VAT. Carried as "-", every line counts and the deduction matches.
+    const dashed: FatturaPaInvoiceInput = {
+      ...TD24_IT_B2B_WITH_DEPOSIT,
+      lines: TD24_IT_B2B_WITH_DEPOSIT.lines.map((line) => ({ ...line, description: line.description.replace(', ', ' \u2014 ') })),
+    }
+    expect(issuesOf(dashed)).toEqual([])
+    expect(buildFatturaPa(dashed).xml).toContain('Giacca moto in pelle - rosso, taglia 52')
   })
 
   it('refuses an invoice number without a digit (SDI 00425) and a non-EUR currency', () => {
@@ -270,5 +294,24 @@ describe('errors', () => {
     expect(thrown).toBeInstanceOf(FatturaPaInputError)
     expect((thrown as FatturaPaInputError).issues).toEqual(issues)
     expect((thrown as FatturaPaInputError).message).toContain('seller.vatNumber')
+  })
+})
+
+describe('fatturaPaText: what the file carries of typed text', () => {
+  it('maps typographic forms and drops accents only where the field has no room for them', () => {
+    expect(fatturaPaText('Giacca \u2014 Rosso, taglia 50')).toEqual({ ok: true, text: 'Giacca - Rosso, taglia 50' })
+    expect(fatturaPaText('\u2018a\u2019 \u201cb\u201d \u2032 \u2033 \u2212 \u2010 \u2022 \u2122')).toEqual({ ok: true, text: `'a' "b" ' " - - - (TM)` })
+    expect(fatturaPaText('Via\u00a0Roma\u202f5\tint.\n2\u200b\ufeff')).toEqual({ ok: true, text: 'Via Roma 5 int. 2' })
+    // Latin-1 letters stay in a Latin-1 field; others lose what Latin-1 cannot hold.
+    expect(fatturaPaText('Citt\u00e0 M\u00fcller Stra\u00dfe \u00c6ble')).toEqual({ ok: true, text: 'Citt\u00e0 M\u00fcller Stra\u00dfe \u00c6ble' })
+    expect(fatturaPaText('\u0141\u00f3d\u017a \u0152uvre \ufb01ne \uff21\uff22\uff23 e\u0301')).toEqual({ ok: true, text: 'L\u00f3dz OEuvre fine ABC \u00e9' })
+    // A basic-Latin field: no accent, no Latin-1 symbol.
+    expect(fatturaPaText('Citt\u00e0 M\u00fcller Stra\u00dfe \u00c6ble \u00abx\u00bb', 'ASCII')).toEqual({ ok: true, text: 'Citta Muller Strasse AEble "x"' })
+  })
+
+  it('names the first character it cannot map, with its code point', () => {
+    expect(fatturaPaText('ok \u2713')).toEqual({ ok: false, character: '\u2713', codePoint: 'U+2713' })
+    expect(fatturaPaText('\u65e5\u672c')).toEqual({ ok: false, character: '\u65e5', codePoint: 'U+65E5' })
+    expect(fatturaPaText('\ud83d\ude00')).toEqual({ ok: false, character: '\ud83d\ude00', codePoint: 'U+1F600' })
   })
 })

@@ -50,7 +50,10 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    `…_production_garment_labels_guards` (it redefines the quality step's `factory_style_garment_tracking_guard`),
    `…_quality_final_release_guards` (it redefines the quality step's maker, inspection, release, reversal and serial
    functions), `…_production_leftovers_guards` (it redefines production's `factory_production_settings_guard` and
-   `factory_bundle_guard` and supply's `factory_hide_guard`): triggers, partial unique indexes and deferred
+   `factory_bundle_guard` and supply's `factory_hide_guard`), `…_numbering_floor_documents_guards` (the floor's series and
+   numbers; Inspection/QualityRelease numbers given once), `…_floor_sync_guards` (the floor sync's ledger append-only,
+   refused actions closed once), `…_insights_attention_actions_guards` (Today's actions: the history append-only, a
+   resolution needs its note, every action in its history at commit): triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). A guards folder with no schema folder of its own (…_inventory_issue_work_order_guards) still gets a policy

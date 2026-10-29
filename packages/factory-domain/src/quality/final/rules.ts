@@ -250,5 +250,8 @@ export function decisionProblems(decision: InspectionResult, computed: ComputedR
 /** A decision is an override when it differs from the computed result. */
 export const isOverride = (decision: InspectionResult, computed: Pick<ComputedResult, 'result'>): boolean => decision !== computed.result
 
-/** "INS 2 of WO-0003": an inspection's place among its work order's inspections (no number series of its own in W1). */
-export const inspectionLabel = (workOrderNumber: string, seq: number): string => `${workOrderNumber} · inspection ${seq}`
+/**
+ * How an inspection is named: its own number (INS-2026-0412, its company's INSPECTION series), or, for one opened before
+ * the series existed (W1 history, no number), its place among its work order's inspections: "WO-0003 · inspection 2".
+ */
+export const inspectionLabel = (workOrderNumber: string, seq: number, number: string | null = null): string => number ?? `${workOrderNumber} · inspection ${seq}`

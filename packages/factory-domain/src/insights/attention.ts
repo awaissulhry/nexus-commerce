@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto'
 import { heldGrains, type Grain } from '../auth/grains/grains'
+import { EMAIL_TRIAGE } from '../auth/permissions/catalogue'
 import { REGISTER_MANAGE, REGISTER_VIEW } from '../compliance/register/permissions'
 import { CERTIFICATES_MANAGE, CERTIFICATES_VIEW } from '../compliance/certificates/permissions'
 import { LABELS_MANAGE } from '../compliance/labels/permissions'
@@ -17,6 +19,7 @@ import { QUALITY_LOTS_REJECT, QUALITY_LOTS_RELEASE, QUALITY_LOTS_VIEW } from '..
 import { ORDERS_MANAGE, ORDERS_VIEW } from '../sales/orders/permissions'
 import { QUOTES_APPROVE, QUOTES_VIEW } from '../sales/quotes/permissions'
 import { Dec } from '../tax/decimal'
+import { phrase, whyKey, type Phrase, type WordParams } from './words'
 
 /**
  * Needs attention (B-W1-52; ANA-037; A2 SCR-029 "Today › Needs me now"; design home.today). ONE ranked list of what waits
@@ -53,6 +56,7 @@ export const ATTENTION_KINDS = [
   'REGISTER_DUTY',
   'PRIVACY_DUTY',
   'STYLE_COMPLIANCE',
+  'MAIL_TO_SORT',
 ] as const
 export type AttentionKind = (typeof ATTENTION_KINDS)[number]
 
@@ -66,7 +70,11 @@ export const SEVERITY_WORDS: Readonly<Record<Severity, string>> = Object.freeze(
 export const GROUPS = ['NOW', 'TODAY', 'THIS_WEEK', 'LATER'] as const
 export type Group = (typeof GROUPS)[number]
 
-export const CATEGORIES = ['APPROVAL', 'ALERT', 'TASK'] as const
+/**
+ * The design's tiles (home.today `focus-strip`, W1): "Needs me now" (every row) · "Approvals" (the decisions a person
+ * reviews: decide REVIEW) · "Alerts on my records" (late, on hold, rejected, a duty open: every other row).
+ */
+export const CATEGORIES = ['APPROVAL', 'ALERT'] as const
 export type Category = (typeof CATEGORIES)[number]
 
 /** How a row is decided from Today (O3 = A): the review of an approval, or the record of an alert or task. */
@@ -85,8 +93,6 @@ export interface KindRule {
   readonly view: Permission
   /** Acting on it: any one of these over the record. */
   readonly act: readonly Permission[]
-  /** Why it is mine, per act permission the person holds (the first held, in `act`'s order). */
-  readonly why: Readonly<Partial<Record<Permission, string>>>
   readonly decide: DecideMode
   /** The events after which the row may have changed: the web refreshes Today on them (GET /live). */
   readonly live: readonly EventType[]
@@ -101,7 +107,6 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     label: 'Orders late or due in 3 days and not ready',
     view: ORDERS_VIEW,
     act: [ORDERS_MANAGE],
-    why: { [ORDERS_MANAGE]: "You manage this customer's orders and their promise dates." },
     decide: 'OPEN',
     live: ['sales_order.created', 'sales_order.status_changed', 'sales_order.promise_changed', 'shipment.status_changed'],
   }),
@@ -111,7 +116,6 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     label: 'Draft work orders the release check holds',
     view: WORKORDERS_VIEW,
     act: [WORKORDERS_RELEASE],
-    why: { [WORKORDERS_RELEASE]: 'You release work orders at this site.' },
     decide: 'OPEN',
     live: ['workorder.created', 'workorder.changed', 'workorder.released', 'workorder.status_changed', 'lot.released', 'inventory.receipt_posted', 'payment.deposit_paid', 'style.revision_released', 'compliance.label_template_activated'],
   }),
@@ -121,7 +125,6 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     label: 'Lots in quarantine or blocked',
     view: QUALITY_LOTS_VIEW,
     act: [QUALITY_LOTS_RELEASE, QUALITY_LOTS_REJECT],
-    why: { [QUALITY_LOTS_RELEASE]: 'You release lots at this site.', [QUALITY_LOTS_REJECT]: 'You reject or block lots at this site.' },
     decide: 'OPEN',
     live: ['inventory.receipt_posted', 'inventory.opening_posted', 'lot.test_recorded', 'lot.document_attached', 'lot.released', 'lot.rejected', 'lot.blocked', 'lot.hold_cleared'],
   }),
@@ -131,7 +134,6 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     label: 'Invoices SDI rejected or did not take, not delivered, or without their files',
     view: INVOICES_VIEW,
     act: [INVOICES_ISSUE],
-    why: { [INVOICES_ISSUE]: "You issue and send this customer's invoices." },
     decide: 'OPEN',
     live: ['invoice.issued', 'invoice.files_attached', 'invoice.sdi_status_changed', 'invoice.sdi_corrected', 'invoice.courtesy_copy_queued', 'invoice.courtesy_copy_missing'],
   }),
@@ -141,7 +143,6 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     label: 'Quotes waiting for your approval',
     view: QUOTES_VIEW,
     act: [QUOTES_APPROVE],
-    why: { [QUOTES_APPROVE]: "You approve this customer's quotes, and someone else asked." },
     decide: 'REVIEW',
     live: ['quote.approval_requested', 'quote.approval_decided', 'quote.reopened', 'quote.cancelled'],
   }),
@@ -151,7 +152,6 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     label: "Suppliers' proposed changes to decide",
     view: PURCHASING_VIEW,
     act: [PURCHASING_SEND],
-    why: { [PURCHASING_SEND]: 'You send purchase orders to this supplier.' },
     decide: 'REVIEW',
     live: ['purchase_order.changes_proposed', 'purchase_order.confirmed', 'purchase_order.proposal_refused', 'purchase_order.cancelled'],
   }),
@@ -161,7 +161,6 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     label: 'Purchase orders not confirmed 48 hours after sending',
     view: PURCHASING_VIEW,
     act: [PURCHASING_SEND],
-    why: { [PURCHASING_SEND]: 'You send purchase orders to this supplier.' },
     decide: 'OPEN',
     live: ['purchase_order.sent', 'purchase_order.link_sent', 'purchase_order.confirmed', 'purchase_order.declined', 'purchase_order.changes_proposed', 'purchase_order.cancelled'],
   }),
@@ -171,47 +170,42 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     label: 'Scan corrections to decide',
     view: PRODUCTION_SCAN_CORRECT,
     act: [PRODUCTION_SCAN_CORRECT],
-    why: { [PRODUCTION_SCAN_CORRECT]: "You decide the floor's scan corrections at this site, and you neither scanned nor asked." },
     decide: 'REVIEW',
     live: ['production.scan_correction_requested', 'production.scan_correction_decided'],
   }),
   SCAN_REFUSAL: rule({
     kind: 'SCAN_REFUSAL',
-    category: 'TASK',
+    category: 'ALERT',
     label: 'Refused floor scans to look at',
     view: PRODUCTION_SCAN_CORRECT,
     act: [PRODUCTION_SCAN_CORRECT],
-    why: { [PRODUCTION_SCAN_CORRECT]: "You look after this site's floor scans." },
     decide: 'OPEN',
     live: ['production.scan_refused', 'production.scan_recorded', 'production.scan_correction_requested'],
   }),
   INVOICE_TO_ISSUE: rule({
     kind: 'INVOICE_TO_ISSUE',
-    category: 'TASK',
+    category: 'ALERT',
     label: 'Shipped goods to invoice',
     view: INVOICES_VIEW,
     act: [INVOICES_MANAGE],
-    why: { [INVOICES_MANAGE]: "You invoice this customer's shipped goods." },
     decide: 'OPEN',
     live: ['ddt.issued', 'ddt.cancelled', 'shipment.status_changed', 'invoice.draft_saved', 'invoice.draft_deleted', 'invoice.issued'],
   }),
   REGISTER_DUTY: rule({
     kind: 'REGISTER_DUTY',
-    category: 'TASK',
+    category: 'ALERT',
     label: 'PPE register entries with duties open',
     view: REGISTER_VIEW,
     act: [REGISTER_MANAGE],
-    why: { [REGISTER_MANAGE]: "You keep this company's PPE register." },
     decide: 'OPEN',
     live: ['compliance.register_entry_opened', 'compliance.register_entry_changed', 'compliance.register_entry_closed', 'shipment.status_changed'],
   }),
   PRIVACY_DUTY: rule({
     kind: 'PRIVACY_DUTY',
-    category: 'TASK',
+    category: 'ALERT',
     label: 'Companies with privacy duties open',
     view: PRIVACY_VIEW,
     act: [PRIVACY_MANAGE],
-    why: { [PRIVACY_MANAGE]: "You keep this company's privacy paperwork." },
     decide: 'OPEN',
     live: ['privacy.notice_published', 'privacy.dpia_stored'],
   }),
@@ -221,12 +215,6 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     label: 'Released styles with open orders that compliance holds',
     view: CERTIFICATES_VIEW,
     act: [DECLARATIONS_MANAGE, CERTIFICATES_MANAGE, LABELS_MANAGE, PRODUCT_BOM_RELEASE],
-    why: {
-      [DECLARATIONS_MANAGE]: "You file the styles' Declarations of Conformity and leaflets.",
-      [CERTIFICATES_MANAGE]: 'You keep the type-examination certificates.',
-      [LABELS_MANAGE]: 'You keep the garment label templates.',
-      [PRODUCT_BOM_RELEASE]: 'You release style revisions.',
-    },
     decide: 'OPEN',
     live: [
       'style.compliance_document_issued',
@@ -238,6 +226,17 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
       'sales_order.created',
       'sales_order.status_changed',
     ],
+  }),
+  // Mail no record took, held or unreadable (platform/email-in "Mail to sort", SCR-019). The mail has no assignee in W1:
+  // it is the person's when they sort the mail of its company (email.triage; a mail of no company: every company).
+  MAIL_TO_SORT: rule({
+    kind: 'MAIL_TO_SORT',
+    category: 'APPROVAL',
+    label: 'Mail to sort',
+    view: EMAIL_TRIAGE,
+    act: [EMAIL_TRIAGE],
+    decide: 'REVIEW',
+    live: ['email.inbound_sorted'],
   }),
 })
 
@@ -291,8 +290,8 @@ export interface AttentionCandidate {
   readonly severity: Severity
   readonly record: AttentionRecord
   readonly scope: AttentionScope
-  readonly sentence: string
-  readonly blocks: string | null
+  readonly sentence: Phrase
+  readonly blocks: Phrase | null
   readonly due: BusinessDate | null
   /** Since when it waits (its age). */
   readonly since: Date
@@ -303,10 +302,30 @@ export interface AttentionCandidate {
   /** The grain the decision rests on (a margin-floor approval needs the margin grain). */
   readonly needsGrain?: Grain
   /** Why it is mine when the record says so (the person follows the entry up). */
-  readonly why?: (personId: string) => string | null
+  readonly why?: (personId: string) => Phrase | null
   readonly amounts?: CandidateAmounts | null
   /** Tells apart rows of one record (a customer's DDTs per company and month). */
   readonly subKey?: string
+  /**
+   * The codes that make the row's condition beside its state, due date and since (a work order's blocked checks, an
+   * entry's open duties): a resolved row comes back when they change (conditionOf).
+   */
+  readonly condition?: readonly string[]
+}
+
+/** The row's key: `<kind>:<record id>[:<sub key>]`, stable while the row needs a person. */
+export const rowKeyOf = (candidate: Pick<AttentionCandidate, 'kind' | 'record' | 'subKey'>): string =>
+  `${candidate.kind}:${candidate.record.id}${candidate.subKey ? `:${candidate.subKey}` : ''}`
+
+/**
+ * The row's CONDITION: a fingerprint of what makes it need a person now — its state, due date, since when it waits and
+ * the codes of its condition. What a person does about a row (resolve with a note, acknowledge) holds for its condition:
+ * a resolved row leaves Today until its condition changes (a promise date moved, a lot blocked again, another check
+ * failing), and comes back then. 32 hex characters of SHA-256.
+ */
+export function conditionOf(candidate: Pick<AttentionCandidate, 'kind' | 'state' | 'due' | 'since' | 'condition'>): string {
+  const material = JSON.stringify([candidate.kind, candidate.state, candidate.due ?? null, candidate.since.toISOString(), [...(candidate.condition ?? [])].sort()])
+  return createHash('sha256').update(material).digest('hex').slice(0, 32)
 }
 
 /** What decides whether a row is the viewer's (a source may ask it before an expensive read). */
@@ -328,12 +347,11 @@ export function actingPermission(viewer: Viewer, question: ActingQuestion): Perm
   return act
 }
 
-/** Why the row is the viewer's, in words, or null when it is not (actingPermission). */
-export function whyMine(viewer: Viewer, candidate: AttentionCandidate): string | null {
+/** Why the row is the viewer's, as a phrase (`why.<KIND>.<permission>`), or null when it is not (actingPermission). */
+export function whyMine(viewer: Viewer, candidate: AttentionCandidate): Phrase | null {
   const act = actingPermission(viewer, candidate)
   if (act === null) return null
-  const kindRule = KIND_RULES[candidate.kind]
-  return candidate.why?.(viewer.personId) ?? kindRule.why[act] ?? 'You act on these records.'
+  return candidate.why?.(viewer.personId) ?? phrase(whyKey(candidate.kind, act))
 }
 
 /** The kinds whose records the actor can see somewhere: the sources worth reading for them. */
@@ -356,9 +374,18 @@ export interface ItemAmounts {
   readonly marginAmount?: number
 }
 
+/** A phrase as the web gets it: its key and params (no English). */
+export interface PhraseRef {
+  readonly key: string
+  readonly params: WordParams
+}
+const refOf = (value: Phrase): PhraseRef => ({ key: value.key, params: value.params })
+
 export interface AttentionItem {
   /** `<kind>:<record id>[:<sub key>]`: stable while the row needs attention. */
   readonly key: string
+  /** Its condition's fingerprint (conditionOf): what an action on the row holds for. */
+  readonly condition: string
   readonly kind: AttentionKind
   readonly state: string
   readonly category: Category
@@ -369,9 +396,14 @@ export interface AttentionItem {
   readonly companyId: string | null
   readonly siteId: string | null
   readonly partyId: string | null
+  /** In English, with its amount when the reader holds its grain (for callers without a catalogue). */
   readonly sentence: string
   readonly why: string
   readonly blocks: string | null
+  /** The same as phrases, for the reader's language. */
+  readonly words: { readonly sentence: PhraseRef; readonly why: PhraseRef; readonly blocks: PhraseRef | null }
+  /** The figure the sentence quotes, when the reader holds its grain (the web shows it beside the sentence). */
+  readonly sentenceFigure: AmountField | null
   readonly due: { readonly date: BusinessDate; readonly days: number; readonly word: 'OVERDUE' | 'TODAY' | 'SOON' | null } | null
   readonly since: Date
   readonly ageDays: number
@@ -422,14 +454,16 @@ export function amountWords(field: AmountField, amounts: ItemAmounts): string | 
 }
 
 /** The row as the viewer gets it: grouped, due in days, amounts only with their grain (the sentence too). */
-export function presentItem(viewer: Viewer, candidate: AttentionCandidate, why: string): AttentionItem {
+export function presentItem(viewer: Viewer, candidate: AttentionCandidate, why: Phrase): AttentionItem {
   const kindRule = KIND_RULES[candidate.kind]
   const amounts = visibleAmounts(candidate.amounts, heldGrains(viewer.actor))
   const field = candidate.amounts?.inSentence
   const quoted = field && amounts ? amountWords(field, amounts) : null
+  const sentence = candidate.sentence.text
   const days = candidate.due === null ? null : daysFrom(viewer.today, candidate.due)
   return {
-    key: `${candidate.kind}:${candidate.record.id}${candidate.subKey ? `:${candidate.subKey}` : ''}`,
+    key: rowKeyOf(candidate),
+    condition: conditionOf(candidate),
     kind: candidate.kind,
     state: candidate.state,
     category: kindRule.category,
@@ -440,9 +474,11 @@ export function presentItem(viewer: Viewer, candidate: AttentionCandidate, why: 
     companyId: candidate.scope.companyId,
     siteId: candidate.scope.siteId,
     partyId: candidate.scope.partyId,
-    sentence: quoted ? `${candidate.sentence.replace(/[.:]$/, '')} (${quoted}).` : candidate.sentence,
-    why,
-    blocks: candidate.blocks,
+    sentence: quoted ? `${sentence.replace(/[.:]$/, '')} (${quoted}).` : sentence,
+    why: why.text,
+    blocks: candidate.blocks?.text ?? null,
+    words: { sentence: refOf(candidate.sentence), why: refOf(why), blocks: candidate.blocks ? refOf(candidate.blocks) : null },
+    sentenceFigure: quoted && field ? field : null,
     due: candidate.due === null || days === null ? null : { date: candidate.due, days, word: dueWord(days) },
     since: candidate.since,
     ageDays: Math.max(0, Math.floor((viewer.now.getTime() - candidate.since.getTime()) / DAY_MS)),
@@ -521,7 +557,7 @@ export function parseCursor(cursor: string): RankKey | null {
  * One page of ranked rows after the cursor (rows ranked after the last one shown, so a row decided meanwhile never shifts
  * the next page), with the cursor of the next page.
  */
-export function pageOf(items: readonly AttentionItem[], cursor: RankKey | null, limit: number): { readonly items: AttentionItem[]; readonly nextCursor: string | null } {
+export function pageOf<Item extends AttentionItem>(items: readonly Item[], cursor: RankKey | null, limit: number): { readonly items: Item[]; readonly nextCursor: string | null } {
   const after = cursor === null ? items : items.filter((item) => compareRankKeys(rankKeyOf(item), cursor) > 0)
   const page = after.slice(0, limit)
   return { items: page, nextCursor: after.length > limit ? cursorAfter(page[page.length - 1]!) : null }
@@ -539,7 +575,7 @@ export interface AttentionCounts {
 
 /** The tiles: one per kind the person acts on (0 is an answer), plus any kind a row has; each count = its rows. */
 export function countsOf(items: readonly AttentionItem[], tileKinds: readonly AttentionKind[]): AttentionCounts {
-  const byCategory = { APPROVAL: 0, ALERT: 0, TASK: 0 } as Record<Category, number>
+  const byCategory = { APPROVAL: 0, ALERT: 0 } as Record<Category, number>
   const byKind = new Map<AttentionKind, number>(tileKinds.map((kind) => [kind, 0]))
   for (const item of items) {
     byCategory[item.category] += 1
@@ -553,7 +589,11 @@ export function countsOf(items: readonly AttentionItem[], tileKinds: readonly At
   }
 }
 
-/** Every event any of these kinds refreshes on, sorted (the web's GET /live filter for Today). */
+/** What people do about an alert (insights/actions): Today is read again after one, for everyone who sees the row. */
+export const ACTION_EVENTS: readonly EventType[] = Object.freeze(['attention.assigned', 'attention.resolved', 'attention.acknowledged'])
+
+/** Every event any of these kinds refreshes on, sorted (the web's GET /live filter for Today); with alerts, the actions'. */
 export function liveEventsOf(kinds: readonly AttentionKind[]): EventType[] {
-  return [...new Set(kinds.flatMap((kind) => KIND_RULES[kind].live))].sort()
+  const actions = kinds.some((kind) => KIND_RULES[kind].category === 'ALERT') ? ACTION_EVENTS : []
+  return [...new Set([...kinds.flatMap((kind) => KIND_RULES[kind].live), ...actions])].sort()
 }

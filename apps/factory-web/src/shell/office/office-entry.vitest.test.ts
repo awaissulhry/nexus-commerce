@@ -16,23 +16,24 @@ const owner = officeNavFor(permissionCheck(OWNER_PERMISSIONS))
 const sales = officeNavFor(permissionCheck(SALES_PERMISSIONS))
 
 describe('the first page a person may open (shell/office/office-entry.ts)', () => {
-  it('W0 builds Home › Mail to sort and the Admin pages: the entry opens the first one the person may open, else My profile', () => {
-    expect(firstOfficePage(owner)).toBe('/home/mail-to-sort')
-    expect(firstOfficePage(owner, { areaId: 'home' })).toBe('/home/mail-to-sort')
+  it('Home › Today is the entry for whoever holds home.view (every office role); Admin opens All settings; Mail to sort for one who only sorts mail; else My profile', () => {
+    expect(firstOfficePage(owner)).toBe('/home/today')
+    expect(firstOfficePage(owner, { areaId: 'home' })).toBe('/home/today')
     // Admin's own address is its first page, All settings (B-W0-27).
     expect(firstOfficePage(owner, { areaId: 'admin' })).toBe('/admin')
     // Without companies.view All settings is not theirs: Admin opens their first other built Admin page.
     expect(firstOfficePage(officeNavFor(permissionCheck(['users.view'])), { areaId: 'admin' })).toBe('/admin/users')
+    expect(firstOfficePage(officeNavFor(permissionCheck(['email.triage'])))).toBe('/home/mail-to-sort')
     expect(firstOfficePage(officeNavFor(permissionCheck(['audit.read'])))).toBe(PROFILE_PAGE)
     expect(firstOfficePage(officeNavFor(permissionCheck([])))).toBe(PROFILE_PAGE)
   })
 
   it('once pages are built: the first in navigation order the person may open, inside the area first', () => {
-    const built = new Set(['/me', '/home/mail-to-sort', '/admin/users', '/admin/audit'])
-    expect(firstOfficePage(owner, { built })).toBe('/home/mail-to-sort')
+    const built = new Set(['/me', '/home/today', '/home/mail-to-sort', '/admin/users', '/admin/audit'])
+    expect(firstOfficePage(owner, { built })).toBe('/home/today')
     expect(firstOfficePage(owner, { areaId: 'admin', built })).toBe('/admin/users')
     // A sales person has no Admin: its address opens their own first page.
-    expect(firstOfficePage(sales, { areaId: 'admin', built })).toBe('/home/mail-to-sort')
+    expect(firstOfficePage(sales, { areaId: 'admin', built })).toBe('/home/today')
     // A row the person may not open is never chosen.
     expect(firstOfficePage(officeNavFor(permissionCheck(['audit.read'])), { built })).toBe('/admin/audit')
   })

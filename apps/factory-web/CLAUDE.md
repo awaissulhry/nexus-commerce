@@ -2,7 +2,8 @@
 
 Next.js 16 (App Router), the same Next and React versions as `apps/web`, built from the design system `@nexus/ui`
 (packages/ui, compiled here: `transpilePackages`). Four views as route groups: Office `(office)` (built), Links
-`(links)` (built), Floor `(floor)` and Portal `(portal)` (later steps); office sign-in `(auth)` (built: B-W0-26).
+`(links)` (built), Floor `(floor)` (built: B-W0-29) and Portal `(portal)` (later steps); office sign-in `(auth)` (built:
+B-W0-26).
 
 ## Commands (from the repository root unless noted)
     FACTORY_API_URL=http://127.0.0.1:8190 npm run dev -w @nexus/factory-web     # :3200
@@ -16,8 +17,8 @@ Next.js 16 (App Router), the same Next and React versions as `apps/web`, built f
     node scripts/factory/check-no-design-route.mjs --require-build --dist .next-check
 
 The design index: `FACTORY_API_URL=http://127.0.0.1:1 npm run dev -w @nexus/factory-web`, then
-http://localhost:3200/design (every screen by SCR id) → a screen (every case in light and dark, desktop 1440 or phone
-390, Italian or English) → "Open alone" for the keyboard. It needs no API.
+http://localhost:3200/design (every screen by SCR id) → a screen (every case in light and dark, desktop 1440, tablet 1024
+(the floor's first size) or phone 390, Italian or English) → "Open alone" for the keyboard. It needs no API.
 
 ## Layout
 - `src/app/layout.tsx` — every view's root: DS stylesheets (tokens → primitives → components → patterns → a11y),
@@ -43,6 +44,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   holds both).
 - `src/app/(links)/` — no chrome: `/l#token=…` (a one-off link; the token is read from the fragment, removed from the
   address bar, sent only in `x-factory-link`), `/privacy/<company id>` (the privacy-notice slot, GAP-005).
+- `src/app/(floor)/` + `src/floor/` — the Floor view (SCR-020 … 025): `/floor` (tile home), `/floor/enrol`,
+  `/floor/sign-in`, `/floor/notice`, `/floor/scan`, the web app manifest `/floor/manifest.webmanifest` and icon (no
+  service worker yet: the offline queue is B-W0-30). One client root (`floor/FloorApp.tsx`, mounted by the group's
+  layout) knows the device (`GET /floor/device`) and the operator (`GET /floor/me`), speaks the operator's language
+  (else the one picked on the screen, else the tenant's; both catalogues come from the layout), runs the idle sign-out
+  and the frame's pop-ups, and sends each state to its screen (no device → enrol; nobody → sign-in; a PIN to choose →
+  sign-in; just signed in → the notice when due, else Home). Rules without a screen in `floor/model.ts` (mode from the
+  work centre, tiles = mode AND permission, only built pages open) and `floor/scan/scan-model.ts` (the scan router);
+  calls in `floor/api.ts`. A step that builds a floor page sets its tile `built` in `TILE_RULES`.
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),
@@ -56,6 +66,9 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/record-panels/` — SCR-006, the panels every record page mounts: `<RecordPanels record={{ type, id, companyId,
   siteId }} title party />` (thread, files, history; live refresh from `/live`). A screen with its own catalogue wraps its
   view in `WithMessages` (record-panels/i18n.tsx): the layouts load `shell` only.
+- `src/lib/records/record-links.ts` — where a record opens: its own page once built (`RECORD_PAGES`, one line per record
+  page; list pages in `LIST_PAGES`), else the record panel route `/w/<company>/records/<type>/<id>` (SCR-006 panels).
+  Home › Today (`src/areas/home/today/`, SCR-029) and its lists open records through it.
 
 ## Rules
 - `FACTORY_API_URL` has NO fallback: without it `next dev`, `next build` and `next start` refuse to start

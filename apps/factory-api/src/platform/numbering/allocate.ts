@@ -1,8 +1,8 @@
-import { ConflictError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { BUSINESS_TIME_ZONE, businessDate, isBusinessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { formatNumber, MAX_FISCAL_NUMBER_LENGTH } from '@nexus/factory-domain/numbering/format'
-import { isNumberKind, isScanIdKind, isSeriesCode, kindLabel, MAX_NUMBER, scopeKeyFor, yearOfScope, type NumberKind } from '@nexus/factory-domain/numbering/kinds'
+import { isFloorDocumentKind, isNumberKind, isScanIdKind, isSeriesCode, kindLabel, MAX_NUMBER, scopeKeyFor, yearOfScope, type NumberKind } from '@nexus/factory-domain/numbering/kinds'
 import type { CommandTools } from '../../core/command'
 import { SYSTEM_ACTOR_ID } from '../../core/context'
 import { ApiError } from '../../core/errors'
@@ -30,8 +30,14 @@ import { ApiError } from '../../core/errors'
  * FatturaPA's 20 characters.
  *
  * The series is named by company and kind, and by code when the company keeps several of that kind (sezionali); with
- * no code, the company's only active one. Office and system (worker) commands issue numbers; floor and portal sessions
- * have no grant on the series (a tablet must never move a company's counter, a fiscal one least of all).
+ * no code, the company's only active one. Office and system (worker) commands issue numbers of every kind. A floor
+ * tablet's command issues numbers of the floor's document kinds only (FLOOR_DOCUMENT_KINDS: goods receipts, lots,
+ * inspections, releases), of its own site's company, from the same series and through the same lock, so office and
+ * floor numbers interleave without a gap; any other kind (a fiscal one above all) is refused here, and the database
+ * holds the same wall (the floor's policies see only those kinds' series and numbers; the
+ * …_numbering_floor_documents_guards triggers refuse a fiscal series, another company, a skipped number). A floor
+ * number records the tablet as its allocator (the ledger names no worker; the audit row keeps who was signed in).
+ * Portal sessions issue none.
  *
  * Document kinds only. The scan-id kinds (BUNDLE, HIDE, GARMENT_SERIAL) have no company series: ONE tenant-wide
  * counter each, taken with allocateScanIds (online, any writing audience, the floor included) and, for a tablet's
@@ -85,19 +91,26 @@ const day = (date: BusinessDate): Date => new Date(`${date}T00:00:00.000Z`)
 
 export async function allocateNumber(tools: AllocationTools, series: SeriesRef, record: NumberedRecord): Promise<IssuedNumber> {
   const { tx, context, now } = tools
-  if (context.audience !== 'office' && context.audience !== 'system') {
-    throw new ApiError('internal_error', `Numbers are issued by office and system commands; the ${context.audience} audience has no grant on the series.`)
+  if (context.audience !== 'office' && context.audience !== 'system' && context.audience !== 'floor') {
+    throw new ApiError('internal_error', `Numbers are issued by office, system and floor commands; the ${context.audience} audience has no grant on the series.`)
   }
   const { companyId, kind } = series
   if (!isUuid(companyId)) throw new NotFoundError('Company not found.')
   if (!isNumberKind(kind)) throw new ApiError('internal_error', `allocateNumber(): ${JSON.stringify(kind)} is not a number kind.`)
   if (isScanIdKind(kind)) throw new ApiError('internal_error', `allocateNumber(): ${kind} is a scan-id kind with one tenant-wide counter; take it with allocateScanIds (platform/numbering/scan-ids).`)
+  if (context.audience === 'floor') {
+    // A tablet numbers the floor's document kinds of its own site's company only (the database refuses the rest too).
+    if (!isFloorDocumentKind(kind)) throw new ForbiddenError(`A tablet takes no ${kindLabel(kind)} numbers: they are issued in the office.`)
+    const site = await tx.site.findUnique({ where: { id: context.siteId }, select: { companyId: true } })
+    if (site?.companyId !== companyId) throw new ForbiddenError("A tablet numbers the documents of its own site's company only.")
+  }
   if (series.code !== undefined && !isSeriesCode(series.code)) throw new ValidationError('The series code is not valid.', [{ path: 'series', message: 'Expected 1 to 16 capitals, digits or hyphens.' }])
   if (!RECORD_TYPE.test(record.type) || !isUuid(record.id)) throw new ApiError('internal_error', 'allocateNumber() needs the record\'s model name and id.')
   const date = record.date ?? businessDate(now, BUSINESS_TIME_ZONE)
   if (!isBusinessDate(date)) throw new ValidationError('The document date is not valid.', [{ path: 'date', message: 'Expected a calendar day written YYYY-MM-DD.' }])
   const tenantId = context.tenantId
-  const actorId = context.audience === 'system' ? SYSTEM_ACTOR_ID : context.actorId
+  // The ledger's allocator: the user, the system actor, or the tablet (never the worker signed in on it).
+  const actorId = context.audience === 'system' ? SYSTEM_ACTOR_ID : context.audience === 'floor' ? context.deviceId : context.actorId
   const label = kindLabel(kind)
 
   const code = series.code ?? (await onlyActiveCode(tools, companyId, kind))
@@ -186,4 +199,18 @@ async function onlyActiveCode({ tx }: AllocationTools, companyId: string, kind: 
     throw new ValidationError(`This company has several ${label} series; name the one to use.`, [{ path: 'series', message: `One of ${rows.map((row) => row.code).join(', ')}.` }])
   }
   return rows[0]!.code
+}
+
+/**
+ * For a record whose printed number is unique in the TENANT (a lot, an inspection, a release: each company's series
+ * prints its own prefix), inside the same command, after allocateNumber: refuses in words (409) a number another series
+ * of the tenant issued already (two companies' series set up with one prefix), before the record's unique key would
+ * fail. It reads the ledger, which a floor session sees for its own kinds too (it sees only its site's records).
+ */
+export async function assertNumberUniqueInTenant(tools: Pick<CommandTools, 'tx'>, issued: IssuedNumber): Promise<void> {
+  const other = await tools.tx.numberAllocation.findFirst({ where: { kind: issued.kind, formatted: issued.formatted, NOT: { seriesId: issued.seriesId } }, select: { id: true } })
+  if (other) {
+    const label = kindLabel(issued.kind)
+    throw new InvalidStateError(`The ${label} number ${issued.formatted} was issued by another series of this factory already: give each company's ${label} series its own prefix (an admin, under numbering).`)
+  }
 }

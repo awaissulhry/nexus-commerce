@@ -97,7 +97,10 @@ export function navPermissions(nav: AreaNav = OFFICE_NAV): string[] {
  */
 export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/me',
+  '/home/today',
+  '/home/today/print',
   '/home/mail-to-sort',
+  '/records/[type]/[id]',
   // B-W0-27 Admin: All settings, Companies & sites, Devices & printers, Users, Roles & permissions, and their records.
   '/admin',
   '/admin/companies',

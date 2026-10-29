@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { FISCAL_KINDS, FLOOR_DOCUMENT_KINDS } from '@nexus/factory-domain/numbering/kinds'
 import { checkOwnership, OwnershipError, partnerWalledColumns, policyInputs, type OwnershipFile } from './ownership'
 import { TENANT_ID_DEFAULT } from './roles'
 import { parseSchema } from './schema-models'
@@ -15,6 +16,8 @@ describe('model ownership', () => {
     expect(problems(loadOwnership())).toEqual([])
     const inputs = policyInputs(loadSchema(), loadOwnership())
     expect(inputs.model.tables.map((table) => table.table).sort()).toEqual([
+      'AttentionAction',
+      'AttentionActionLog',
       'AuditLog',
       'Badge',
       'BomLine',
@@ -38,9 +41,11 @@ describe('model ownership', () => {
       'DeviceEnrolment',
       'EmailIdentity',
       'EmailOutbound',
+      'FloorRefusedAction',
       'FloorScanRefusal',
       'FloorSession',
       'FloorSettings',
+      'FloorSyncEvent',
       'GarmentLabelPrint',
       'GarmentSerial',
       'GoodsReceipt',
@@ -139,6 +144,7 @@ describe('model ownership', () => {
       'Suppression',
       'Tenant',
       'Thread',
+      'TodayLayout',
       'TrackingEvent',
       'User',
       'Variant',
@@ -194,6 +200,9 @@ describe('model ownership', () => {
     ['a platform table without the platform role', (m) => delete m.Tenant!.access.factory_platform, /a platform model is for factory_platform/],
     ['a runtime role on a platform table without the wall', (m) => delete m.Tenant!.keyColumns.tenant, /no column for the tenant wall/],
     ['a role with no privileges', (m) => (m.Site!.access.factory_runtime.privileges = []), /privileges must list some of/],
+    ['a value filter on a column it lacks', (m) => (m.Line!.access.factory_floor_runtime.onlyValues = { kind: ['A'] }), /onlyValues names kind, which is not a column of Line/],
+    ['a value filter with no value', (m) => (m.Line!.access.factory_floor_runtime.onlyValues = { code: [] }), /onlyValues.code must list at least one value/],
+    ['a value filter on the platform role', (m) => (m.Tenant!.access.factory_platform.onlyValues = { slug: ['a'] }), /factory_platform takes no onlyValues/],
   ])('fails on %s', (_label, plant, expected) => {
     const files = copy()
     plant(core(files))
@@ -221,6 +230,18 @@ describe('model ownership', () => {
     // Hiding the floor role's own policy column passes the factory rules, but the generator refuses it.
     core(files).Line!.access.factory_floor_runtime.hiddenColumns = ['siteId']
     expect(problems(files)).toEqual([expect.stringMatching(/^the policy generator refuses the classification: .*cannot hide siteId/)])
+  })
+
+  it("keeps the floor to the series and numbers of the floor's document kinds, none of them fiscal", () => {
+    const numbering = loadOwnership().find((file) => file.file === 'numbering.json')!.data as { models: Record<string, { access: Record<string, { onlyValues?: Record<string, string[]> }> }> }
+    for (const model of ['NumberSeries', 'NumberAllocation']) {
+      const kinds = numbering.models[model]!.access.factory_floor_runtime!.onlyValues!.kind!
+      expect([...kinds].sort(), model).toEqual([...FLOOR_DOCUMENT_KINDS].sort())
+      expect(kinds.filter((kind) => (FISCAL_KINDS as readonly string[]).includes(kind)), model).toEqual([])
+      expect(numbering.models[model]!.access.factory_runtime!.onlyValues, model).toBeUndefined()
+    }
+    const table = policyInputs(loadSchema(), loadOwnership()).model.tables.find((entry) => entry.table === 'NumberSeries')!
+    expect(table.access.factory_floor_runtime).toEqual({ privileges: ['select', 'insert', 'update'], onlyValues: { kind: [...FLOOR_DOCUMENT_KINDS] } })
   })
 
   it('policyInputs throws every problem at once', () => {

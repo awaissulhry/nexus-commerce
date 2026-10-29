@@ -88,10 +88,11 @@ export const invoiceToIssue: Source = async ({ caller }) => {
         severity: deadlineSeverity(month.deadline.state),
         record: { type: 'Party', id: customer.partyId, label: customer.legalName },
         scope: { companyId: customer.companyId, siteId: null, partyId: customer.partyId },
-        ...invoiceToIssueWords({ customer: customer.legalName, month: month.month, ddts: ddts.map((ddt) => ddt.number), deadlineWords: month.deadline.words }),
+        ...invoiceToIssueWords({ customer: customer.legalName, month: month.month, ddts: ddts.map((ddt) => ddt.number), docType: month.deadline.docType, dueBy: month.deadline.dueBy, daysLeft: month.deadline.daysLeft }),
         due: month.deadline.dueBy,
         since: asDay(oldest),
         subKey: `${customer.companyId}:${month.month}`,
+        condition: ddts.map((ddt) => ddt.ddtId),
       })
     }
   }
