@@ -92,3 +92,13 @@ export function isListKey(
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return false
   return !(target.closest?.('[role="dialog"], [role="menu"], [role="listbox"]') ?? null)
 }
+
+/**
+ * Several frames on one page (a record's tabs, two lists side by side): the list keys belong to ONE of them — the frame
+ * that holds the focus, else the page's first frame. `own` is this frame's place among the page's frames, `holding`
+ * the place of the frame the focus is in (null: none).
+ */
+export function ownsKeys(own: number, holding: number | null): boolean {
+  return holding === null ? own === 0 : own === holding
+}
+

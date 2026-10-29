@@ -71,6 +71,7 @@ export const designScreen = defineDesignScreen<ListFrameLabModel>({
     { id: 'keyboard', label: 'Keyboard: a focused row (j / k move it, x ticks it, Enter opens)', model: lab({ focusRow: 2, selected: ids(2) }) },
     { id: 'help', label: '? opens the full shortcut list', model: lab({ helpOpen: true }) },
     { id: 'read-only', label: 'A read-only list: no checkboxes, the same frame', model: lab({ readOnly: true }) },
+    { id: 'row-locked', label: 'Rows that may not be selected: their box is disabled and says why', model: lab({ blockedLocked: true, selected: ids(1) }), note: 'isRowSelectable: the header box and x skip them.' },
     { id: 'loading', label: 'Loading', model: lab({ rows: null, total: null }) },
     { id: 'failed', label: 'The read failed (never drawn as empty)', model: lab({ state: 'failed' }) },
     { id: 'empty', label: 'Nothing yet', model: lab({ rows: [], total: 0, state: 'empty' }) },
