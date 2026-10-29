@@ -75,6 +75,11 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/lib/records/record-links.ts` — where a record opens: its own page once built (`RECORD_PAGES`, one line per record
   page; list pages in `LIST_PAGES`), else the record panel route `/w/<company>/records/<type>/<id>` (SCR-006 panels).
   Home › Today (`src/areas/home/today/`, SCR-029) and its lists open records through it.
+- `src/areas/production/` — Production (SCR-069 … SCR-073): `work-orders/` the list (list frame; Export N, Release N) and
+  New work order (`?new=1`), `work-orders/record/` the work order studio (`?tab=overview|materials|cutting|bundles|
+  operations|quality|activity`, `?at=<seq>`; tabs in `cutting/`, `bundles/`, `progress/`), `wip/` Floor now
+  (`/production/floor`); `_shared/` api, rules (`model.ts`), hooks, made-up fixtures. Totals per work order, operation
+  and line only: no person's output and no station anywhere (Statuto art. 4, Owner F2); worker names only inside one record.
 
 ## Rules
 - `FACTORY_API_URL` has NO fallback: without it `next dev`, `next build` and `next start` refuse to start

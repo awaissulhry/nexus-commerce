@@ -41,6 +41,12 @@
       "connections": "Connessioni e API",
       "data": "Dati",
       "import": "Importa ed esporta"
+    },
+    "production": {
+      "area": "Produzione",
+      "main": "Principali",
+      "floor": "Reparto ora",
+      "workOrders": "Ordini di produzione"
     }
   },
   "topbar": {

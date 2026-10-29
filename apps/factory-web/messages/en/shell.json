@@ -41,6 +41,12 @@
       "connections": "Connections & API",
       "data": "Data",
       "import": "Import & export"
+    },
+    "production": {
+      "area": "Production",
+      "main": "Main",
+      "floor": "Floor now",
+      "workOrders": "Work orders"
     }
   },
   "topbar": {

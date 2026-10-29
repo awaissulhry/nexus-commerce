@@ -16,6 +16,7 @@ describe('the Office navigation (PLT-160: one declaration per area)', () => {
       [2, 'sales'],
       [3, 'products'],
       [6, 'purchasing'],
+      [8, 'production'],
       [14, 'admin'],
     ])
     expect(OFFICE_NAV.view).toBe('office')
@@ -55,6 +56,13 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
     ])
   })
 
+  it('workorders.view opens Production › Floor now and Work orders (B-W1-38 part 2), nothing of Admin', () => {
+    expect(ids(officeNavFor(permissionCheck(['home.view', 'workorders.view', 'workorders.manage', 'workorders.release'])))).toEqual([
+      ['home', ['home-today']],
+      ['production', ['production-floor', 'production-work-orders']],
+    ])
+  })
+
   it('a person with no permission sees no area: no door that leads nowhere', () => {
     expect(officeNavFor(permissionCheck([])).areas).toEqual([])
   })
@@ -71,7 +79,7 @@ describe('labels, crumbs, palette pages and the phone bar come from the same man
     expect(nav.areas.map((area) => area.label)).toEqual(['Home', 'Sales', 'Purchasing', 'Admin'])
     expect(nav.areas[3]?.sections?.map((s) => s.label)).toEqual(['Admin', 'Organisation', 'Access', 'Platform', 'Data'])
     const it = translateNav(OFFICE_NAV, createScopedTranslator('it', messagesFor('it', ['shell']), 'shell'))
-    expect(it.areas.map((area) => area.label)).toEqual(['Home', 'Vendite', 'Prodotti', 'Acquisti', 'Amministrazione'])
+    expect(it.areas.map((area) => area.label)).toEqual(['Home', 'Vendite', 'Prodotti', 'Acquisti', 'Produzione', 'Amministrazione'])
     expect(JSON.stringify(nav)).not.toContain('shell:')
   })
 

@@ -17,6 +17,7 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Party: '/sales/customers/[id]',
   Quote: '/sales/quotes/[id]',
   Style: '/products/styles/[id]',
+  WorkOrder: '/production/work-orders/[id]',
 })
 
 /** An API list route → the web page that shows it (with the same query). */
@@ -27,6 +28,7 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/sales/quotes': '/sales/quotes',
   '/sales/quote-approvals': '/home/approvals',
   '/product/styles': '/products/styles',
+  '/production/work-orders': '/production/work-orders',
 })
 
 export interface RecordRef {
