@@ -1,5 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
-import { DomainError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { ConflictError, DomainError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { depositInvoiceDraft, depositTreatment } from '@nexus/factory-domain/invoicing/deposit'
@@ -54,6 +54,8 @@ export interface PreparedLine {
   readonly salesOrderLineId: string | null
   readonly size: string | null
   readonly ddtId: string | null
+  /** DEPOSIT_DEDUCTION: the issued TD02 it deducts (B-W1-51). */
+  readonly depositInvoiceId?: string | null
 }
 
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
@@ -184,6 +186,7 @@ async function writeLines(tools: CommandTools, invoice: { id: string; buyerParty
         salesOrderLineId: line.salesOrderLineId,
         size: line.size,
         ddtId: line.ddtId,
+        depositInvoiceId: line.depositInvoiceId ?? null,
         createdById: actorIdOf(tools),
       },
       select: { id: true },
@@ -196,6 +199,41 @@ const auditedTotals = (totals: Pick<InvoiceTotals, 'netTotal' | 'vatTotal' | 'gr
   vatTotal: markMoney('price', totals.vatTotal),
   grossTotal: markMoney('price', totals.grossTotal),
 })
+
+/** A deposit deducted never takes a draft below 0 (the …_money_guards trigger refuses it too): 409 in words first. */
+function refuseNegative(totals: Pick<InvoiceTotals, 'netTotal' | 'grossTotal'>): void {
+  if (totals.netTotal < 0 || totals.grossTotal < 0) {
+    throw new ConflictError('The deposit deducted is more than the goods of this invoice: remove the deduction first (it is deducted on the next invoice of the order), or keep the goods.')
+  }
+}
+
+/** A stored line as a prepared one (its amounts recomputed from it; a deduction keeps its fixed amounts). */
+export function preparedOfRow(row: { kind: CoreLine['kind']; description: string; itemCode: string | null; quantity: Prisma.Decimal; uom: string | null; unitPrice: Prisma.Decimal; discountPct: Prisma.Decimal | null; vatRatePct: Prisma.Decimal; vatNature: string | null; vatLegalRef: string | null; salesOrderLineId: string | null; size: string | null; ddtId: string | null; depositInvoiceId: string | null; netAmount: number; grossAmount: number | null }): PreparedLine {
+  return {
+    core: {
+      kind: row.kind,
+      description: row.description,
+      itemCode: row.itemCode,
+      quantity: row.quantity.toFixed(4),
+      uom: row.uom,
+      unitPrice: row.unitPrice.toFixed(6),
+      discountPct: row.discountPct === null ? null : row.discountPct.toFixed(4),
+      vat: treatmentOf({ vatRatePct: row.vatRatePct.toFixed(2), vatNature: row.vatNature, vatLegalRef: row.vatLegalRef })!,
+      deduction: row.kind === 'DEPOSIT_DEDUCTION' ? { netAmount: row.netAmount, grossAmount: row.grossAmount ?? row.netAmount } : null,
+    },
+    salesOrderLineId: row.salesOrderLineId,
+    size: row.size,
+    ddtId: row.ddtId,
+    depositInvoiceId: row.depositInvoiceId,
+  }
+}
+
+const ROW_COLUMNS = { kind: true, description: true, itemCode: true, quantity: true, uom: true, unitPrice: true, discountPct: true, vatRatePct: true, vatNature: true, vatLegalRef: true, salesOrderLineId: true, size: true, ddtId: true, depositInvoiceId: true, netAmount: true, grossAmount: true } as const
+
+/** A draft's stored lines, prepared again (in their order). */
+export async function storedPrepared(db: CommandTx, invoiceId: string): Promise<PreparedLine[]> {
+  return (await db.invoiceLine.findMany({ where: { invoiceId }, orderBy: { seq: 'asc' }, select: ROW_COLUMNS })).map(preparedOfRow)
+}
 
 // ---- create ---------------------------------------------------------------------------------------------------------
 
@@ -215,10 +253,11 @@ export interface CreateDraftInput {
 /** The new draft's row and lines, inside a command (the generic route and the deposit flows). */
 export async function insertDraft(
   tools: CommandTools,
-  draft: { id: string; companyId: string; buyerPartyId: string; docType: InvoiceDocType; priceBasis: PriceBasis; currency: string; salesOrderId: string | null; depositRequestId: string | null; causale: string | null; documentRefs: Prisma.InputJsonValue | null; payment: PaymentInput | null; internalNote: string | null },
+  draft: { id: string; companyId: string; buyerPartyId: string; docType: InvoiceDocType; priceBasis: PriceBasis; currency: string; salesOrderId: string | null; depositRequestId: string | null; creditOfId?: string | null; causale: string | null; documentRefs: Prisma.InputJsonValue | null; payment: PaymentInput | null; internalNote: string | null },
   lines: readonly PreparedLine[],
 ): Promise<InvoiceTotals> {
   const totals = computeInvoiceTotals(lines.map((line) => line.core), draft.priceBasis, draft.currency)
+  refuseNegative(totals)
   const facts = await partyFacts(tools.tx, draft.buyerPartyId, businessDate(tools.now), tools.now)
   const billTo = facts ? billToFrom(facts).billTo : null
   const terms = termsFor(draft.payment, totals.grossTotal)
@@ -237,6 +276,7 @@ export async function insertDraft(
       ...(draft.documentRefs === null ? {} : { documentRefs: draft.documentRefs }),
       salesOrderId: draft.salesOrderId,
       depositRequestId: draft.depositRequestId,
+      creditOfId: draft.creditOfId ?? null,
       internalNote: draft.internalNote,
       createdById: actorIdOf(tools),
     },
@@ -248,7 +288,7 @@ export async function insertDraft(
     recordType: 'Invoice',
     recordId: draft.id,
     companyId: draft.companyId,
-    after: { docType: draft.docType, status: 'DRAFT', buyerPartyId: draft.buyerPartyId, basis: draft.priceBasis, depositRequestId: draft.depositRequestId, salesOrderId: draft.salesOrderId, lines: lines.length, ...auditedTotals(totals) },
+    after: { docType: draft.docType, status: 'DRAFT', buyerPartyId: draft.buyerPartyId, basis: draft.priceBasis, depositRequestId: draft.depositRequestId, creditOfId: draft.creditOfId ?? null, salesOrderId: draft.salesOrderId, lines: lines.length, deductions: lines.filter((line) => line.core.kind === 'DEPOSIT_DEDUCTION').length, ...auditedTotals(totals) },
   })
   tools.emit({ type: 'invoice.draft_saved', subject: draft.id, companyId: draft.companyId, payload: { invoiceId: draft.id, docType: draft.docType, created: true } })
   return totals
@@ -374,7 +414,7 @@ export async function createDepositDraft(caller: CommandCaller, body: { depositR
 // ---- change a draft -------------------------------------------------------------------------------------------------
 
 /** A command on a DRAFT invoice: its version guards it and locks its row; refused (409) once it is issued. */
-async function onDraft<Result>(caller: CommandCaller, invoice: InvoiceRow, spec: { name: `invoices.${string}`; idempotencyKey: string | undefined; input: unknown; version: number | undefined }, work: (tools: CommandTools, current: InvoiceRow) => Promise<Result>): Promise<Result> {
+export async function onDraft<Result>(caller: CommandCaller, invoice: InvoiceRow, spec: { name: `invoices.${string}`; idempotencyKey: string | undefined; input: unknown; version: number | undefined }, work: (tools: CommandTools, current: InvoiceRow) => Promise<Result>): Promise<Result> {
   const { result } = await command(caller, { name: spec.name, idempotencyKey: spec.idempotencyKey, input: spec.input, record: { type: 'Invoice', id: invoice.id, ...(spec.version === undefined ? {} : { expectedVersion: spec.version }) } }, async (tools) => {
     const current = (await readInvoice(tools.tx, invoice.id))!
     if (current.status !== 'DRAFT') throw new InvalidStateError(`The invoice is ${current.status} (number ${current.number}); an issued invoice never changes: a credit note corrects it (DPR 633/1972 art. 26).`)
@@ -384,8 +424,9 @@ async function onDraft<Result>(caller: CommandCaller, invoice: InvoiceRow, spec:
 }
 
 /** Recomputes a draft's totals, payment terms and billTo after its lines or basis changed. */
-async function refreshDraft(tools: CommandTools, current: InvoiceRow, lines: readonly PreparedLine[], basis: PriceBasis, payment: PaymentInput | null): Promise<InvoiceTotals> {
+export async function refreshDraft(tools: CommandTools, current: InvoiceRow, lines: readonly PreparedLine[], basis: PriceBasis, payment: PaymentInput | null): Promise<InvoiceTotals> {
   const totals = computeInvoiceTotals(lines.map((line) => line.core), basis, current.currency)
+  refuseNegative(totals)
   const facts = await partyFacts(tools.tx, current.buyerPartyId, businessDate(tools.now), tools.now)
   const billTo = facts ? billToFrom(facts).billTo : null
   const terms = termsFor(payment, totals.grossTotal)
@@ -400,14 +441,15 @@ async function refreshDraft(tools: CommandTools, current: InvoiceRow, lines: rea
   return totals
 }
 
-/** invoices.manage: replaces a draft's lines (the totals follow). */
+/** invoices.manage: replaces a draft's goods and services lines (the totals follow); its deposit deductions stay. */
 export async function replaceLines(caller: CommandCaller, invoiceId: string, body: { version?: number | undefined; lines: readonly LineInput[] }, idempotencyKey?: string): Promise<{ invoice: InvoiceDetail }> {
   const invoice = await officeInvoice(caller, invoiceId, INVOICES_MANAGE)
   const profile = await caller.withClient(async (client) => (await partyFacts(client, invoice.buyerPartyId, businessDate(serverClock.now()), serverClock.now()))?.profile ?? null)
   const lines = prepareLines(body.lines, profile)
   return onDraft(caller, invoice, { name: 'invoices.replaceLines', idempotencyKey, input: { invoiceId, ...body }, version: body.version }, async (tools, current) => {
     await checkSources(tools.tx, current, lines)
-    const totals = await refreshDraft(tools, current, lines, current.priceBasis, paymentInputOf(current.paymentTerms))
+    const deductions = (await storedPrepared(tools.tx, current.id)).filter((line) => line.core.kind === 'DEPOSIT_DEDUCTION')
+    const totals = await refreshDraft(tools, current, [...lines, ...deductions], current.priceBasis, paymentInputOf(current.paymentTerms))
     tools.audit({ recordType: 'Invoice', recordId: current.id, companyId: current.companyId, before: auditedTotals(current), after: { lines: lines.length, ...auditedTotals(totals) } })
     tools.emit({ type: 'invoice.draft_saved', subject: current.id, companyId: current.companyId, payload: { invoiceId: current.id, docType: current.docType, created: false } })
     return { invoice: await invoiceDetail(tools.tx, (await readInvoice(tools.tx, current.id))!) }
@@ -427,23 +469,7 @@ export interface UpdateDraftInput {
 export async function updateDraft(caller: CommandCaller, invoiceId: string, body: UpdateDraftInput, idempotencyKey?: string): Promise<{ invoice: InvoiceDetail }> {
   const invoice = await officeInvoice(caller, invoiceId, INVOICES_MANAGE)
   return onDraft(caller, invoice, { name: 'invoices.updateDraft', idempotencyKey, input: { invoiceId, ...body }, version: body.version }, async (tools, current) => {
-    const rows = await tools.tx.invoiceLine.findMany({ where: { invoiceId: current.id }, orderBy: { seq: 'asc' }, select: { kind: true, description: true, itemCode: true, quantity: true, uom: true, unitPrice: true, discountPct: true, vatRatePct: true, vatNature: true, vatLegalRef: true, salesOrderLineId: true, size: true, ddtId: true, netAmount: true, grossAmount: true } })
-    const lines: PreparedLine[] = rows.map((row) => ({
-      core: {
-        kind: row.kind,
-        description: row.description,
-        itemCode: row.itemCode,
-        quantity: row.quantity.toFixed(4),
-        uom: row.uom,
-        unitPrice: row.unitPrice.toFixed(6),
-        discountPct: row.discountPct === null ? null : row.discountPct.toFixed(4),
-        vat: treatmentOf({ vatRatePct: row.vatRatePct.toFixed(2), vatNature: row.vatNature, vatLegalRef: row.vatLegalRef })!,
-        deduction: row.kind === 'DEPOSIT_DEDUCTION' ? { netAmount: row.netAmount, grossAmount: row.grossAmount ?? row.netAmount } : null,
-      },
-      salesOrderLineId: row.salesOrderLineId,
-      size: row.size,
-      ddtId: row.ddtId,
-    }))
+    const lines = await storedPrepared(tools.tx, current.id)
     const payment = body.payment === undefined ? paymentInputOf(current.paymentTerms) : body.payment
     const totals = await refreshDraft(tools, current, lines, body.priceBasis ?? current.priceBasis, payment)
     const data: Prisma.InvoiceUncheckedUpdateInput = {

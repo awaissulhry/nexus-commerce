@@ -11,6 +11,7 @@ import { viesStanding, type ViesStanding } from '@nexus/factory-domain/parties/v
 import { partyWarnings, type PartyWarning } from '@nexus/factory-domain/parties/warnings'
 import type { CustomerTaxProfile } from '@nexus/factory-domain/tax/vat-treatment'
 import { ADDRESS_COLUMNS, CONTACT_COLUMNS, dateText, TAX_COLUMNS, taxFieldsOf, VIES_COLUMNS, viesFactsOf } from '../parties/store'
+import { issueReferences, shippedAndMoneyProblems } from './from-shipment/checks'
 import type { InvoiceRow, LineRow, Reader } from './store'
 
 /**
@@ -145,9 +146,11 @@ export async function reviewIssue(db: Reader, invoice: InvoiceRow, lines: readon
     const request = await db.depositRequest.findUnique({ where: { id: invoice.depositRequestId }, select: { status: true, currency: true, amount: true } })
     if (request) deposit = { ...request, invoicedGross: await depositInvoicedGross(db, invoice.depositRequestId, invoice.id) }
   }
-  // FatturaPA's own rules, offline, with a stand-in number and the date (the real number is taken at issue).
+  // FatturaPA's own rules, offline, with a stand-in number and the date (the real number is taken at issue), and the
+  // DDTs, the credited invoice and the deposit invoices as the file will cite them (B-W1-51).
   let fatturaPa: readonly { path: string; code: string; message: string }[] = []
   if (seller.seller && buyer.billTo && computed) {
+    const refs = await issueReferences(db, invoice, lines)
     try {
       fatturaPa = checkFatturaPaInput(
         fatturaPaInputOf({
@@ -159,7 +162,13 @@ export async function reviewIssue(db: Reader, invoice: InvoiceRow, lines: readon
           priceBasis: invoice.priceBasis,
           seller: seller.seller,
           billTo: buyer.billTo,
-          lines: lines.map((line, index) => ({ ...storedLineOf(line), netAmount: computed.lines[index]!.netAmount, grossAmount: computed.lines[index]!.grossAmount, deposit: line.depositInvoiceId ? { number: 'CHECK-0', issueDate: date } : null })),
+          lines: lines.map((line, index) => ({
+            ...storedLineOf(line),
+            netAmount: computed.lines[index]!.netAmount,
+            grossAmount: computed.lines[index]!.grossAmount,
+            ddtNumber: refs.ddtNumbers.get(line.id) ?? null,
+            deposit: line.depositInvoiceId ? (refs.deposits.get(line.depositInvoiceId) ?? { number: 'CHECK-0', issueDate: date }) : null,
+          })),
           netTotal: computed.netTotal,
           vatTotal: computed.vatTotal,
           grossTotal: computed.grossTotal,
@@ -167,7 +176,8 @@ export async function reviewIssue(db: Reader, invoice: InvoiceRow, lines: readon
           stampDutyAmount: computed.stampDutyAmount,
           causale: invoice.causale,
           purchaseOrders: purchaseOrdersOf(invoice.documentRefs),
-          ddts: [],
+          ddts: refs.ddts,
+          credits: refs.credits,
           paymentTerms: paymentTermsOf(invoice.paymentTerms),
         }),
       )
@@ -175,7 +185,7 @@ export async function reviewIssue(db: Reader, invoice: InvoiceRow, lines: readon
       fatturaPa = [{ path: 'lines', code: 'LINE', message: (error as Error).message }]
     }
   }
-  const problems = issueProblems({
+  const problems = [...issueProblems({
     docType: invoice.docType,
     currency: invoice.currency,
     party: party ? { status: party.party.status, legalName: party.party.legalName } : { status: 'MISSING', legalName: 'The customer' },
@@ -189,7 +199,7 @@ export async function reviewIssue(db: Reader, invoice: InvoiceRow, lines: readon
     dataIssues: [...seller.issues, ...buyer.issues],
     fatturaPa,
     deposit,
-  })
+  }), ...(await shippedAndMoneyProblems(db, invoice, lines))]
   return { problems, seller: seller.seller, billTo: buyer.billTo, party }
 }
 
