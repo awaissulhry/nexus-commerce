@@ -23,7 +23,7 @@ import { Button, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { useT } from '../lib/i18n/provider'
 import { WithMessages } from '../record-panels/i18n'
 import { ListKeysInfo } from './ListKeysInfo'
-import { isListKey, listKeys, nextRowIndex, ownsKeys, sameIds, toggleId, type ListKey } from './model'
+import { gridLayout, isListKey, listKeys, nextRowIndex, ownsKeys, sameIds, toggleId, type ListKey } from './model'
 import './list-frame.css'
 
 /** AG's own selection column (the row checkboxes and the header's select-all). */
@@ -287,11 +287,12 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
         </div>
       </div>
     )
-  else
+  else {
+    const layout = gridLayout(rows.length)
     body = (
-      <div className="fw-list-grid" role="region" aria-label={label}>
+      <div className={layout.fit ? 'fw-list-grid fit' : 'fw-list-grid'} role="region" aria-label={label}>
         <NexusGrid<T>
-          domLayout="autoHeight"
+          domLayout={layout.domLayout}
           rows={rowKind}
           rowData={rows as T[]}
           columnDefs={columns}
@@ -305,6 +306,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
         />
       </div>
     )
+  }
 
   return (
     <div className="fw-list" ref={frameRef}>
