@@ -5,7 +5,7 @@ import { MAX_RAW_BYTES } from '@nexus/factory-domain/email-in/rules'
 import { FakeMailBucket } from '../../adapters/ses-inbound/fake'
 import { inboundS3Store } from '../../adapters/ses-inbound/s3'
 import { callerFor, command, type CommandCaller } from '../../core/command'
-import { addTenant, addUser, Browser, startHarness, type Harness, type TestTenant } from '../auth/sessions/testing/harness'
+import { addTenant, addUser, Browser, enrolTotp, startHarness, type Harness, type TestTenant } from '../auth/sessions/testing/harness'
 import { createGateway } from '../gateway/gateway'
 import { processReceipt } from '../inbound/process'
 import { inboundRuntime, useInbound } from '../inbound/providers'
@@ -193,6 +193,7 @@ beforeAll(async () => {
   triagerId = triage.id
   triager = new Browser(h.app)
   await triager.signIn('in-a', triage.email, triage.password)
+  await enrolTotp(h, triager)
   const plan = await addUser(h, tenant, { email: 'piero.planner@in-a.example.com', role: 'planner' })
   planner = new Browser(h.app)
   await planner.signIn('in-a', plan.email, plan.password)
@@ -203,9 +204,11 @@ beforeAll(async () => {
   })
   triagerC2 = new Browser(h.app)
   await triagerC2.signIn('in-a', other.email, other.password)
+  await enrolTotp(h, triagerC2)
   const salesB = await addUser(h, tenantB, { email: 'bruno.sales@in-b.example.com', role: 'sales' })
   triagerB = new Browser(h.app)
   await triagerB.signIn('in-b', salesB.email, salesB.password)
+  await enrolTotp(h, triagerB)
 }, 90_000)
 
 afterAll(async () => {

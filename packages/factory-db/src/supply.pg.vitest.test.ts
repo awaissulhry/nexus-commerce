@@ -368,6 +368,8 @@ describe('the partner wall', () => {
       'PurchaseOrder.createdById',
       'PurchaseOrder.internalNote',
       'PurchaseOrder.netAmount',
+      'PurchaseOrder.proposalDecidedById',
+      'PurchaseOrder.proposalDecisionNote',
       'PurchaseOrder.sentById',
       'PurchaseOrderLine.createdById',
       'PurchaseOrderLine.netAmount',
@@ -413,6 +415,59 @@ describe('the partner wall', () => {
     await expect(
       run(partner(A.P2), `UPDATE "PurchaseOrder" SET status = 'CONFIRMED', "confirmedAt" = now(), "confirmedVia" = 'LINK' WHERE id = $1::uuid`, other.orderId),
     ).rejects.toThrow(/inconsistent confirmation/)
+  })
+
+  it('proposes changes to its SENT order through its link; only the buyer decides, and a new proposal clears the last decision (B-W1-31)', async () => {
+    const order = await draftOrder(A.P2)
+    await send(order.orderId)
+    const propose = (date: string) =>
+      as(partner(A.P2), (client) =>
+        client.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(
+            `UPDATE "PurchaseOrderLine" SET "proposedQuantity" = 6, "proposedDate" = $2::date, "proposedSplitQuantity" = 4, "proposedSplitDate" = '2026-12-10', "proposalReason" = 'Two lots' WHERE id = $1::uuid`,
+            order.lineId,
+            date,
+          )
+          await tx.$executeRawUnsafe(`UPDATE "PurchaseOrder" SET status = 'CHANGES_PROPOSED', "proposedAt" = now(), "proposalLinkId" = $2::uuid, "proposedByName" = 'Seed Order Desk' WHERE id = $1::uuid`, order.orderId, A.linkP2)
+        }),
+      )
+    // A split's second delivery needs its date; a proposal names the link it came through.
+    await expect(run(partner(A.P2), `UPDATE "PurchaseOrderLine" SET "proposedQuantity" = 6, "proposedDate" = '2026-12-03', "proposedSplitQuantity" = 4 WHERE id = $1::uuid`, order.lineId)).rejects.toThrow(/a second delivery with its quantity and date/)
+    await expect(run(partner(A.P2), `UPDATE "PurchaseOrder" SET status = 'CHANGES_PROPOSED', "proposedAt" = now() WHERE id = $1::uuid`, order.orderId)).rejects.toThrow(/inconsistent proposal/)
+    await propose('2026-12-03')
+    let [row] = await admin('SELECT status::text, "confirmedAt", "proposalDecision" FROM "PurchaseOrder" WHERE id = $1', [order.orderId])
+    expect(row).toEqual({ status: 'CHANGES_PROPOSED', confirmedAt: null, proposalDecision: null })
+
+    // The supplier neither decides nor confirms now; its proposal is not changed but by a new one.
+    await expect(run(partner(A.P2), `UPDATE "PurchaseOrder" SET status = 'SENT', "proposalDecision" = 'REFUSED', "proposalDecidedAt" = now() WHERE id = $1::uuid`, order.orderId)).rejects.toThrow(/only confirms or declines its SENT purchase order/)
+    await expect(run(partner(A.P2), `UPDATE "PurchaseOrderLine" SET "confirmedQuantity" = 10, "confirmedDate" = '2026-12-10' WHERE id = $1::uuid`, order.lineId)).rejects.toThrow(/only confirms the lines of its SENT purchase order/)
+    await expect(run(partner(A.P2), `UPDATE "PurchaseOrderLine" SET "proposalReason" = 'Other words' WHERE id = $1::uuid`, order.lineId)).rejects.toThrow(/written only while its order is SENT/)
+    await expect(run(office(), `UPDATE "PurchaseOrder" SET "proposalNote" = 'Edited' WHERE id = $1::uuid`, order.orderId)).rejects.toThrow(/is written only when it moves from SENT to CHANGES_PROPOSED/)
+
+    // It leaves CHANGES_PROPOSED only by the buyer's decision.
+    await expect(run(office(), `UPDATE "PurchaseOrder" SET status = 'SENT' WHERE id = $1::uuid`, order.orderId)).rejects.toThrow(/only by the buyer's decision/)
+    await expect(run(office(), `UPDATE "PurchaseOrder" SET status = 'CANCELLED', "cancelledAt" = now(), "cancelReason" = 'x' WHERE id = $1::uuid`, order.orderId)).rejects.toThrow(/cannot move from CHANGES_PROPOSED to CANCELLED/)
+    expect(await run(office(), `UPDATE "PurchaseOrder" SET status = 'SENT', "proposalDecision" = 'REFUSED', "proposalDecidedAt" = now(), "proposalDecisionNote" = 'We need it all' WHERE id = $1::uuid`, order.orderId)).toBe(1)
+    // Its next proposal clears that decision (the trigger), and the buyer accepts it: the proposal becomes the confirmation.
+    await propose('2026-12-04')
+    ;[row] = await admin('SELECT status::text, "proposalDecision", "proposalDecidedAt", "proposalDecisionNote" FROM "PurchaseOrder" WHERE id = $1', [order.orderId])
+    expect(row).toEqual({ status: 'CHANGES_PROPOSED', proposalDecision: null, proposalDecidedAt: null, proposalDecisionNote: null })
+    await expect(
+      run(office(), `UPDATE "PurchaseOrder" SET status = 'CONFIRMED', "confirmedAt" = now(), "confirmedVia" = 'OFFICE', "proposalDecision" = 'ACCEPTED', "proposalDecidedAt" = now() WHERE id = $1::uuid`, order.orderId),
+    ).rejects.toThrow(/only by the buyer's decision/)
+    await as(office(), (client) =>
+      client.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`UPDATE "PurchaseOrderLine" SET "confirmedQuantity" = 10, "confirmedDate" = '2026-12-10' WHERE id = $1::uuid`, order.lineId)
+        await tx.$executeRawUnsafe(
+          `UPDATE "PurchaseOrder" SET status = 'CONFIRMED', "confirmedAt" = now(), "confirmedVia" = 'LINK', "confirmLinkId" = $2::uuid, "proposalDecision" = 'ACCEPTED', "proposalDecidedAt" = now() WHERE id = $1::uuid`,
+          order.orderId,
+          A.linkP2,
+        )
+      }),
+    )
+    ;[row] = await admin('SELECT status::text, "proposalDecision", "proposedAt" IS NOT NULL AS kept FROM "PurchaseOrder" WHERE id = $1', [order.orderId])
+    expect(row).toEqual({ status: 'CONFIRMED', proposalDecision: 'ACCEPTED', kept: true })
+    await expect(run(office(), `UPDATE "PurchaseOrderLine" SET "proposedQuantity" = 1 WHERE id = $1::uuid`, order.lineId)).rejects.toThrow(/written only while its order is SENT/)
   })
 
   it('declines a SENT order with its reason; the office changes it in a new revision', async () => {

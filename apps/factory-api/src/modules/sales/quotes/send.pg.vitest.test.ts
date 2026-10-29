@@ -139,6 +139,7 @@ beforeAll(async () => {
   other = await addTenant(h, 'quote-send-other')
   sales = new Browser(h.app)
   expect((await sales.signIn(NS, salesUser.email, salesUser.password)).status).toBe(200)
+  await enrolTotp(h, sales)
   finance = new Browser(h.app)
   expect((await finance.signIn(NS, financeUser.email, financeUser.password)).status).toBe(200)
   financeSecret = await enrolTotp(h, finance)
