@@ -358,37 +358,39 @@ function CalendarsTab({ model, structure, actions }: { model: SiteRecordModel; s
                 onChange={(next) => setDraft({ ...draft, idleMinutes: next })}
               />
             </Field>
-            <Field label={t('site.floor.shiftEnds')} hint={t('site.floor.shiftEndsHint')} error={problems.shiftEnds ? t(problems.shiftEnds) : undefined} htmlFor="shift-end-0">
-              <ul className="fw-adm-list">
-                {draft.shiftEnds.length === 0 && <li className="fw-adm-hint">{t('site.floor.noShifts')}</li>}
-                {draft.shiftEnds.map((end, index) => (
-                  <li key={index} className="fw-adm-shift-row">
-                    <Input
-                      id={`shift-end-${index}`}
-                      type="time"
-                      size="sm"
-                      value={end}
-                      readOnly={!editable}
-                      aria-label={t('site.floor.shiftEnd', { n: index + 1 })}
-                      aria-invalid={problems[`shiftEnds/${index}`] ? true : undefined}
-                      onChange={(event) => setDraft({ ...draft, shiftEnds: draft.shiftEnds.map((item, at) => (at === index ? event.target.value : item)) })}
-                    />
-                    {editable && (
-                      <Button size="sm" variant="quiet" aria-label={t('site.floor.removeShift', { time: end || '—' })} onClick={() => setDraft({ ...draft, shiftEnds: draft.shiftEnds.filter((_, at) => at !== index) })}>
-                        <Trash2 size={14} aria-hidden />
-                      </Button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </Field>
-            {editable && (
-              <span>
-                <Button size="sm" onClick={() => setDraft({ ...draft, shiftEnds: [...draft.shiftEnds, ''] })}>
-                  <Plus size={14} aria-hidden /> {t('site.floor.addShift')}
-                </Button>
-              </span>
-            )}
+            <div className="fw-adm-form-cell">
+              <Field label={t('site.floor.shiftEnds')} hint={t('site.floor.shiftEndsHint')} error={problems.shiftEnds ? t(problems.shiftEnds) : undefined} htmlFor="shift-end-0">
+                <ul className="fw-adm-list">
+                  {draft.shiftEnds.length === 0 && <li className="fw-adm-hint">{t('site.floor.noShifts')}</li>}
+                  {draft.shiftEnds.map((end, index) => (
+                    <li key={index} className="fw-adm-shift-row">
+                      <Input
+                        id={`shift-end-${index}`}
+                        type="time"
+                        size="sm"
+                        value={end}
+                        readOnly={!editable}
+                        aria-label={t('site.floor.shiftEnd', { n: index + 1 })}
+                        aria-invalid={problems[`shiftEnds/${index}`] ? true : undefined}
+                        onChange={(event) => setDraft({ ...draft, shiftEnds: draft.shiftEnds.map((item, at) => (at === index ? event.target.value : item)) })}
+                      />
+                      {editable && (
+                        <Button size="sm" variant="quiet" aria-label={t('site.floor.removeShift', { time: end || '—' })} onClick={() => setDraft({ ...draft, shiftEnds: draft.shiftEnds.filter((_, at) => at !== index) })}>
+                          <Trash2 size={14} aria-hidden />
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </Field>
+              {editable && (
+                <span>
+                  <Button size="sm" onClick={() => setDraft({ ...draft, shiftEnds: [...draft.shiftEnds, ''] })}>
+                    <Plus size={14} aria-hidden /> {t('site.floor.addShift')}
+                  </Button>
+                </span>
+              )}
+            </div>
             <KeyValue labelCase="sentence" items={[{ label: t('org.field.timezone'), value: structure.site.timezone, hint: t('site.floor.zoneHint') }]} />
           </div>
         </Card>
