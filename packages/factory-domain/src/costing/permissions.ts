@@ -14,9 +14,14 @@ export const COSTING_DEFINITIONS = definePermissions('costing', {
   view: {
     risk: 'read',
     description:
-      "See a style revision's cost sheet: material from the BOM per size and colourway at each material's standard purchase price, labour from the routing's standard minutes, overhead, the waterfall, what is missing and the inputs used; compare two revisions; cost a quote's cells. Figures only with the cost grain.",
+      "See a style revision's cost sheet: material from the BOM per size and colourway at each material's standard purchase price, labour from the routing's standard minutes, overhead, the waterfall, what is missing and the inputs used; compare two revisions; cost a quote's cells; see the labour rates and costing settings. Figures only with the cost grain.",
+  },
+  'rates.manage': {
+    risk: 'write',
+    description: 'Keep the cost per standard minute of each kind of work centre (tenant-wide or per company, from a day; correct and archive them) and the overhead percentage. Sending a rate needs the cost grain.',
   },
 })
 
 export const COSTING_VIEW = 'costing.view' satisfies Permission
-export const COSTING_PERMISSIONS: readonly Permission[] = Object.freeze([COSTING_VIEW])
+export const COSTING_RATES_MANAGE = 'costing.rates.manage' satisfies Permission
+export const COSTING_PERMISSIONS: readonly Permission[] = Object.freeze([COSTING_VIEW, COSTING_RATES_MANAGE])

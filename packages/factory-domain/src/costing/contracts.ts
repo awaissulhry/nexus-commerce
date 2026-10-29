@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { amountMinor, businessDate, id, input, instant, output } from '../core/contracts'
+import { amountMinor, businessDate, currency, id, input, instant, output, unitPrice } from '../core/contracts'
 import { money } from '../money/marked'
 import { ITEM_KINDS } from '../product/materials/rules'
 import { WORK_CENTRE_KINDS } from '../product/routing/operations'
@@ -7,6 +7,7 @@ import { REVISION_STATUSES } from '../product/styles/revisions'
 import { STYLE_STATUSES } from '../product/styles/rules'
 import { UOMS } from '../product/units/units'
 import { COST_CATEGORIES, PRICE_SOURCES } from './inputs'
+import { isPercent, LABOUR_RATE_STATUSES } from './rates'
 
 /**
  * The cost sheet's contracts (plan A1 D2; A2 SCR-044 "Style › Cost"; features FIN-001, FIN-002, FIN-004, PLT-034): what
@@ -334,3 +335,95 @@ export const costCellsView = output({
   cells: z.array(costCellView),
 })
 export type CostCellsView = z.infer<typeof costCellsView>
+
+// ---- labour rates and costing settings (the Cost tab's "Costing parameters"; Finance settings) -------------------------
+
+const percent = () => z.string().refine(isPercent, { message: 'Expected a percentage with at most 3 digits and 4 decimals.' })
+const note = () => z.string().trim().min(1).max(500)
+
+/** A labour rate: the cost of one standard minute at a kind of work centre, from a day. */
+export const labourRateView = output({
+  id: id(),
+  /** null: tenant-wide. */
+  companyId: id().nullable(),
+  workCentreKind: kind(),
+  costPerMinute: money.cost(z.string()),
+  currency: z.string(),
+  plannedEfficiencyPct: z.string(),
+  validFrom: businessDate(),
+  note: z.string().nullable(),
+  status: z.enum(LABOUR_RATE_STATUSES),
+  /** The rate a cost sheet uses today for its company (a tenant-wide one: for a company without its own). */
+  inForce: z.boolean(),
+  version: z.number().int(),
+  createdAt: instant(),
+  updatedAt: instant(),
+})
+export type LabourRateView = z.infer<typeof labourRateView>
+
+/** The rates list: a company's own and the tenant-wide ones (or every one the caller sees), by kind, newest day first. */
+export const listRatesQuery = input({
+  companyId: id().optional(),
+  kind: kind().optional(),
+  status: z.enum([...LABOUR_RATE_STATUSES, 'ALL']).default('ACTIVE'),
+})
+export type ListRatesQuery = z.output<typeof listRatesQuery>
+
+export const createRateBody = input({
+  /** Left out or null: tenant-wide. */
+  companyId: id().nullish(),
+  workCentreKind: kind(),
+  /** Required; needs the cost grain. */
+  costPerMinute: money.cost(unitPrice()),
+  currency: currency().optional(),
+  /** Default 100. */
+  plannedEfficiencyPct: percent().optional(),
+  validFrom: businessDate(),
+  note: note().nullish(),
+})
+export type CreateRateBody = z.output<typeof createRateBody>
+
+/** A correction: only the fields sent change (null clears the note). */
+export const updateRateBody = input({
+  version: z.number().int().min(1),
+  costPerMinute: money.cost(unitPrice()),
+  currency: currency().optional(),
+  plannedEfficiencyPct: percent().optional(),
+  validFrom: businessDate().optional(),
+  note: note().nullish(),
+})
+export type UpdateRateBody = z.output<typeof updateRateBody>
+
+export const archiveRateBody = input({ version: z.number().int().min(1), reason: note().optional() })
+export type ArchiveRateBody = z.output<typeof archiveRateBody>
+
+/** The costing settings of a company, or the tenant-wide ones. */
+export const costingSettingsView = output({
+  id: id(),
+  companyId: id().nullable(),
+  /** Percent on material + labour. */
+  overheadPct: z.string(),
+  version: z.number().int(),
+  updatedAt: instant(),
+})
+export type CostingSettingsView = z.infer<typeof costingSettingsView>
+
+export const settingsQuery = input({ companyId: id().optional() })
+export type SettingsQuery = z.output<typeof settingsQuery>
+
+/** The tenant-wide settings, the company's when asked, and which of them a cost sheet for that company uses. */
+export const settingsListView = output({
+  tenant: costingSettingsView.nullable(),
+  company: costingSettingsView.nullable(),
+  /** The id of the row in force (the company's, else the tenant's); null: no overhead. */
+  inForce: id().nullable(),
+})
+export type SettingsListView = z.infer<typeof settingsListView>
+
+/** Saves the overhead of a company (or the tenant-wide one): with the version of the row when it exists. */
+export const saveSettingsBody = input({
+  companyId: id().nullish(),
+  overheadPct: percent(),
+  version: z.number().int().min(1).optional(),
+})
+export type SaveSettingsBody = z.output<typeof saveSettingsBody>

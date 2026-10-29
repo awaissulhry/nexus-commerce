@@ -6,23 +6,24 @@ import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testi
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission, ScopeSet } from '@nexus/factory-domain/core/permissions'
-import type { LabourRate, OverheadRule } from '@nexus/factory-domain/costing/inputs'
 import { MONEY_NAME } from '@nexus/factory-domain/money/marked'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../packages/factory-db/seed/_core'
+import { seed as seedCosting } from '../../../../../packages/factory-db/seed/costing'
 import { seed as seedProduct } from '../../../../../packages/factory-db/seed/product'
 import { seedUuid } from '../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../core/app'
 import { testAuthenticator, type SessionContext } from '../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../env'
-import { useCostingInputs } from './inputs'
+import { TABLE_COSTING_INPUTS, useCostingInputs } from './inputs'
 
 /**
  * The style cost sheet on the local stack (B-W1-16; FIN-001, FIN-002, FIN-004, GAP-006, PLT-034), with the app's real
  * routes: a throwaway PostgreSQL 17 database from the migrations (the runtime login, so row-level security is real),
  * the product seed's jacket (leather 43 / 45 / 47.5 ft² in sizes 50 / 52 / 54 with 12 % waste at 4.20/ft², a lining
- * 1.8 m with 5 % waste at 3.10/m, two protectors at 6.50; cut 14, sew 96.5, inspect 8, pack 3.5 minutes), made-up
- * rates per kind of work centre and 10 % overhead. Every figure is made up and worked out by hand below. Run with
+ * 1.8 m with 5 % waste at 3.10/m, two protectors at 6.50; cut 14, sew 96.5, inspect 8, pack 3.5 minutes), the costing
+ * seed's tenant-wide rates (cut 0.50, sew 0.40 at 80 %, inspect 0.45, pack 0.30 a minute) and its overhead, set to 10 %
+ * through the API first. Every figure is made up and worked out by hand below. Run with
  * `node scripts/factory/run-pg-tests.mjs costing`.
  */
 
@@ -64,6 +65,8 @@ const PEOPLE: Record<string, Person> = {
   sales: fromTemplate('sales'),
   engineer: { tenantId: tenant, permissions: [VIEW, ...PRODUCT, 'money.cost'], companies: 'all' },
   companyB: { tenantId: tenant, permissions: [VIEW, 'money.cost'], companies: [companyB] },
+  managerB: { tenantId: tenant, permissions: [VIEW, 'costing.rates.manage', 'money.cost'], companies: [companyB] },
+  blindManager: { tenantId: tenant, permissions: [VIEW, 'costing.rates.manage', 'audit.read'], companies: 'all' },
   noView: { tenantId: tenant, permissions: ['product.bom.view', 'money.cost'], companies: 'all' },
   otherTenant: { tenantId: otherTenant, permissions: [VIEW, 'money.cost'], companies: 'all' },
 }
@@ -101,41 +104,16 @@ const totals = (sheet: Json) => sheet.cells.map((cell: Json) => [cell.colourwayI
 const keysOf = (value: unknown): string[] =>
   Array.isArray(value) ? value.flatMap(keysOf) : value !== null && typeof value === 'object' ? Object.entries(value).flatMap(([key, item]) => [key, ...keysOf(item)]) : []
 
-// ---- the labour rates and overhead (made up) ----------------------------------------------------------------------------
-
-let rateSeq = 0
-const rate = (over: Partial<LabourRate> & Pick<LabourRate, 'workCentreKind' | 'costPerMinute'>): LabourRate => ({
-  id: newId(),
-  companyId: null,
-  currency: 'EUR',
-  plannedEfficiencyPct: '100',
-  validFrom: `2026-01-${String(++rateSeq).padStart(2, '0')}`,
-  status: 'ACTIVE',
-  ...over,
-})
-const RATES: LabourRate[] = [
-  rate({ workCentreKind: 'CUTTING', costPerMinute: '0.5' }),
-  rate({ workCentreKind: 'SEWING', costPerMinute: '0.4', plannedEfficiencyPct: '80' }),
-  rate({ workCentreKind: 'INSPECTION', costPerMinute: '0.45' }),
-  rate({ workCentreKind: 'PACKING', costPerMinute: '0.3' }),
-]
-const OVERHEAD: OverheadRule = { id: newId(), companyId: null, overheadPct: '10', updatedAt: '2026-10-01T08:00:00.000Z' }
-
-/** The rates and overhead rules the sheet reads (filtered by company as the reader does). */
-function setInputs(rates: readonly LabourRate[], overheads: readonly OverheadRule[]): void {
-  useCostingInputs({
-    labourRates: async (_client, companyId) => rates.filter((entry) => entry.companyId === null || entry.companyId === companyId),
-    overheadRules: async (_client, companyId) => overheads.filter((entry) => entry.companyId === null || entry.companyId === companyId),
-  })
-}
+const eventsOf = async (subject: string) => (await admin<{ type: string; payload: Json }>('SELECT type, payload FROM "OutboxEvent" WHERE subject = $1 ORDER BY "occurredAt", id', [subject])).map((event) => [event.type, event.payload])
+const settingsOf = async (session = 'finance', query = ''): Promise<Json> => (await ok(session, 'GET', `/costing/settings${query}`)).settings
 
 beforeAll(async () => {
   db = await migratedDatabase('costing')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 16 } })
   await seedCore({ db: database, namespace: NS })
   await seedProduct({ db: database, namespace: NS })
+  await seedCosting({ db: database, namespace: NS })
   await admin('INSERT INTO "Tenant" (id, slug, name) VALUES ($1, $2, $2)', [otherTenant, 'costing-other'])
-  setInputs(RATES, [OVERHEAD])
   app = await buildApp(
     { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
     {
@@ -144,6 +122,10 @@ beforeAll(async () => {
       authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null),
     },
   )
+  // The seed's tenant-wide overhead is 0 %: 10 % for the figures below.
+  const seeded = await settingsOf()
+  expect(seeded).toMatchObject({ tenant: { id: tenant, companyId: null, overheadPct: '0', version: 1 }, company: null, inForce: tenant })
+  await ok('finance', 'PUT', '/costing/settings', { overheadPct: '10', version: 1 })
 }, 60_000)
 
 afterAll(async () => {
@@ -213,7 +195,10 @@ describe("the seed jacket's cost per size (FIN-001, FIN-002, FIN-004)", () => {
       ['INSPECTION', 'LABOUR_RATE', '0.45', '100'],
       ['PACKING', 'LABOUR_RATE', '0.3', '100'],
     ])
-    expect(sheet.inputs.overhead).toMatchObject({ source: 'OVERHEAD_RULE', overheadPct: '10' })
+    expect(sheet.inputs.labour.map((entry: Json) => [entry.rateId, entry.companyId, entry.validFrom])).toEqual(
+      ['CUTTING', 'SEWING', 'INSPECTION', 'PACKING'].map((kind) => [seedId(`costing:rate:${kind}`), null, '2026-01-01']),
+    )
+    expect(sheet.inputs.overhead).toMatchObject({ source: 'OVERHEAD_RULE', ruleId: tenant, companyId: null, overheadPct: '10' })
   })
 
   it("costs a quote's cells: the unit cost per garment and the amount for a quantity, rounded once", async () => {
@@ -266,10 +251,11 @@ describe('a missing input is listed and the cost is not complete, never a silent
   })
 
   it('a kind of work centre without a cost per minute: every cell, and the labour says which', async () => {
-    setInputs(
-      RATES.filter((entry) => entry.workCentreKind !== 'SEWING'),
-      [OVERHEAD],
-    )
+    // The table's rates without the sewing ones (as if none had been typed).
+    useCostingInputs({
+      labourRates: async (client, companyId) => (await TABLE_COSTING_INPUTS.labourRates(client, companyId)).filter((entry) => entry.workCentreKind !== 'SEWING'),
+      overheadRules: TABLE_COSTING_INPUTS.overheadRules,
+    })
     try {
       const sheet = await getSheet()
       expect(sheet.complete).toBe(false)
@@ -281,7 +267,7 @@ describe('a missing input is listed and the cost is not complete, never a silent
       expect(sheet.inputs.labour[1]).toMatchObject({ workCentreKind: 'SEWING', source: 'NONE', rateId: null, costPerMinute: null })
       expect(sheet.cells.every((cell: Json) => !cell.complete && cell.missing.includes('LABOUR_RATE:SEWING'))).toBe(true)
     } finally {
-      setInputs(RATES, [OVERHEAD])
+      useCostingInputs(undefined)
     }
   })
 })
@@ -372,5 +358,130 @@ describe('two revisions compared', () => {
     expect(draft.missing).toEqual([{ key: `BOM_QUANTITY:${line.id}:50`, code: 'BOM_QUANTITY', itemId: null, lineId: line.id, size: '50', workCentreKind: null, message: 'BOM line 10 (SEED-LEA-100) has no quantity for size 50.' }])
     expect(draft.cells.filter((cell: Json) => !cell.complete).map((cell: Json) => cell.size)).toEqual(['50', '50'])
     expect(leatherLine).not.toBe(line.id)
+  })
+})
+
+describe('labour rates and the overhead setting (FIN-004, FIN-005)', () => {
+  const sewing = seedId('costing:rate:SEWING')
+  const base52 = async (query = '') => cellOf(await getSheet('finance', revision1, query), BLK, '52')
+
+  it("lists the seed's tenant-wide rates, each in force; a person without the cost grain sees them without the figure", async () => {
+    const { rates } = await ok('finance', 'GET', '/costing/rates')
+    expect(rates.map((rate: Json) => [rate.workCentreKind, rate.companyId, rate.costPerMinute, rate.plannedEfficiencyPct, rate.validFrom, rate.inForce])).toEqual([
+      ['CUTTING', null, '0.5', '100', '2026-01-01', true],
+      ['SEWING', null, '0.4', '80', '2026-01-01', true],
+      ['ASSEMBLY', null, '0.42', '100', '2026-01-01', true],
+      ['FINISHING', null, '0.38', '100', '2026-01-01', true],
+      ['INSPECTION', null, '0.45', '100', '2026-01-01', true],
+      ['PACKING', null, '0.3', '100', '2026-01-01', true],
+      ['SUBCONTRACT', null, '0.55', '100', '2026-01-01', true],
+    ])
+    const blind = (await ok('sales', 'GET', '/costing/rates?kind=SEWING')).rates
+    expect(blind).toEqual([expect.objectContaining({ id: sewing, workCentreKind: 'SEWING', currency: 'EUR', plannedEfficiencyPct: '80', inForce: true })])
+    expect(blind[0]).not.toHaveProperty('costPerMinute')
+  })
+
+  it("a company's own rate wins over the tenant-wide one for that company, from its first day; a later one waits for its day", async () => {
+    // Company A sews at 0.60 a minute at 100 %: 96.5 × 0.60 = 57.90; labour 7 + 57.90 + 3.60 + 1.05 = 69.55;
+    // size 52: 230.539 + 69.55 = 300.089, + 10 % = 330.0979. Company B keeps the tenant-wide 0.40 at 80 %: 319.4829.
+    const created = await ok('finance', 'POST', '/costing/rates', { companyId: companyA, workCentreKind: 'SEWING', costPerMinute: '0.6', validFrom: '2026-03-01', note: 'Payroll March (made up).' }, 201)
+    const own = created.rate
+    expect(own).toMatchObject({ companyId: companyA, workCentreKind: 'SEWING', costPerMinute: '0.6', currency: 'EUR', plannedEfficiencyPct: '100', validFrom: '2026-03-01', status: 'ACTIVE', inForce: true, version: 1 })
+    const later = (await ok('finance', 'POST', '/costing/rates', { companyId: companyA, workCentreKind: 'SEWING', costPerMinute: '0.9', validFrom: '2099-01-01' }, 201)).rate
+    expect(later.inForce).toBe(false)
+
+    expect((await base52(`?companyId=${companyA}`)).total).toBe('330.0979')
+    expect((await getSheet('finance', revision1, `?companyId=${companyA}`)).inputs.labour[1]).toMatchObject({ rateId: own.id, companyId: companyA, costPerMinute: '0.6', validFrom: '2026-03-01' })
+    expect((await base52(`?companyId=${companyB}`)).total).toBe('319.4829')
+    expect((await base52()).total).toBe('319.4829')
+    const listed = (await ok('finance', 'GET', `/costing/rates?companyId=${companyA}&kind=SEWING`)).rates
+    expect(listed.map((rate: Json) => [rate.companyId, rate.validFrom, rate.inForce])).toEqual([
+      [null, '2026-01-01', true],
+      [companyA, '2099-01-01', false],
+      [companyA, '2026-03-01', true],
+    ])
+
+    // The same kind, company and day again: refused.
+    expect((await refused('finance', 'POST', '/costing/rates', { companyId: companyA, workCentreKind: 'SEWING', costPerMinute: '0.7', validFrom: '2026-03-01' }, 409)).message).toBe(
+      'A SEWING rate from 2026-03-01 exists already for this company (or tenant-wide): correct it, or choose another first day.',
+    )
+    expect((await refused('finance', 'POST', '/costing/rates', { workCentreKind: 'SEWING', costPerMinute: '0.7', validFrom: '2026-01-01' }, 409)).code).toBe('conflict')
+
+    // A correction is audited with the cost marked, and the sheet follows.
+    const corrected = (await ok('finance', 'PATCH', `/costing/rates/${own.id}`, { version: 1, costPerMinute: '0.65', plannedEfficiencyPct: '130' })).rate
+    expect(corrected).toMatchObject({ costPerMinute: '0.65', plannedEfficiencyPct: '130', version: 2 })
+    // Sew 96.5 × 0.65 ÷ 1.30 = 48.25: the same labour as the tenant's, 319.4829.
+    expect((await base52(`?companyId=${companyA}`)).total).toBe('319.4829')
+    const [audit] = await admin<{ before: Json; after: Json }>(`SELECT before, after FROM "AuditLog" WHERE "recordType" = 'LabourRate' AND "recordId" = $1 ORDER BY at DESC LIMIT 1`, [own.id])
+    expect(audit).toEqual({ before: { costPerMinute: { $money: 'cost', value: '0.6' }, plannedEfficiencyPct: '100' }, after: { costPerMinute: { $money: 'cost', value: '0.65' }, plannedEfficiencyPct: '130' } })
+    expect((await refused('finance', 'PATCH', `/costing/rates/${own.id}`, { version: 1, costPerMinute: '0.7' }, 409)).code).toBe('conflict')
+
+    // Archived: the company is back on the tenant-wide rate; an archived rate is never changed again.
+    expect((await ok('finance', 'POST', `/costing/rates/${own.id}/archive`, { version: 2, reason: 'Typed in the wrong company (made up).' })).rate).toMatchObject({ status: 'ARCHIVED', inForce: false })
+    expect((await getSheet('finance', revision1, `?companyId=${companyA}`)).inputs.labour[1]).toMatchObject({ rateId: sewing, companyId: null })
+    expect((await refused('finance', 'PATCH', `/costing/rates/${own.id}`, { version: 3, costPerMinute: '0.7' }, 409)).message).toBe('This rate is archived: add a new rate instead.')
+    expect((await ok('finance', 'GET', `/costing/rates?companyId=${companyA}&kind=SEWING&status=ALL`)).rates.map((rate: Json) => rate.status)).toEqual(['ACTIVE', 'ACTIVE', 'ARCHIVED'])
+    expect(await eventsOf(own.id)).toEqual([
+      ['labour_rate.created', { rateId: own.id, workCentreKind: 'SEWING', validFrom: '2026-03-01' }],
+      ['labour_rate.updated', { rateId: own.id, workCentreKind: 'SEWING', fields: ['costPerMinute', 'plannedEfficiencyPct'] }],
+      ['labour_rate.status_changed', { rateId: own.id, workCentreKind: 'SEWING', status: 'ARCHIVED' }],
+    ])
+  })
+
+  it('keeps the cost grain, the company and the limits: who may send a rate, for which company, and what figures', async () => {
+    // Without the cost grain the figure cannot be sent at all.
+    expect((await refused('blindManager', 'POST', '/costing/rates', { workCentreKind: 'FINISHING', costPerMinute: '0.4', validFrom: '2026-05-01' }, 403)).issues).toEqual([{ path: 'costPerMinute', message: 'Needs the cost grain.' }])
+    // A manager of company B: B's own rates only, never a tenant-wide one or company A's.
+    expect((await ok('managerB', 'POST', '/costing/rates', { companyId: companyB, workCentreKind: 'FINISHING', costPerMinute: '0.4', validFrom: '2026-05-01' }, 201)).rate.companyId).toBe(companyB)
+    expect((await refused('managerB', 'POST', '/costing/rates', { workCentreKind: 'FINISHING', costPerMinute: '0.4', validFrom: '2026-05-02' }, 403)).message).toBe('A tenant-wide rate or setting is changed only by a role over every company.')
+    expect((await refused('managerB', 'POST', '/costing/rates', { companyId: companyA, workCentreKind: 'FINISHING', costPerMinute: '0.4', validFrom: '2026-05-02' }, 403)).code).toBe('forbidden')
+    expect((await refused('managerB', 'PATCH', `/costing/rates/${sewing}`, { version: 1, costPerMinute: '0.1' }, 403)).code).toBe('forbidden')
+    // Company B's person sees B's and the tenant's rates, never company A's.
+    expect((await ok('companyB', 'GET', '/costing/rates?status=ALL')).rates.every((rate: Json) => rate.companyId === null || rate.companyId === companyB)).toBe(true)
+    expect((await refused('companyB', 'GET', `/costing/rates?companyId=${companyA}`, undefined, 404)).message).toBe('Company not found.')
+    // The limits, in the API and in the database (for every login).
+    for (const [body, path] of [
+      [{ plannedEfficiencyPct: '0' }, 'body/plannedEfficiencyPct'],
+      [{ plannedEfficiencyPct: '250' }, 'body/plannedEfficiencyPct'],
+      [{ costPerMinute: '-0.1' }, 'body/costPerMinute'],
+    ] as const) {
+      expect((await refused('finance', 'POST', '/costing/rates', { workCentreKind: 'ASSEMBLY', costPerMinute: '0.4', validFrom: '2026-06-01', ...body }, 400)).issues).toEqual([{ path, message: expect.any(String) }])
+    }
+    await expect(admin(`UPDATE "LabourRate" SET "plannedEfficiencyPct" = 0 WHERE id = $1`, [sewing])).rejects.toThrow('the planned efficiency of the labour rate')
+    await expect(admin(`UPDATE "LabourRate" SET "costPerMinute" = -1 WHERE id = $1`, [sewing])).rejects.toThrow('the cost per minute of the labour rate')
+    await expect(admin(`UPDATE "LabourRate" SET "workCentreKind" = 'CUTTING' WHERE id = $1`, [sewing])).rejects.toThrow('never change')
+    await expect(admin(`DELETE FROM "LabourRate" WHERE id = $1`, [sewing])).rejects.toThrow('archived, never deleted')
+    await expect(
+      admin(`INSERT INTO "LabourRate" (id, "tenantId", "workCentreKind", "costPerMinute", "validFrom") VALUES ($1, $2, 'SEWING', 0.1, '2026-01-01')`, [newId(), tenant]),
+    ).rejects.toThrow('LabourRate_one_tenant_rate_per_kind_and_day')
+  })
+
+  it("the overhead: the tenant-wide setting, a company's own winning for its sheets, in range, by version", async () => {
+    expect(await settingsOf('finance', `?companyId=${companyA}`)).toMatchObject({ tenant: { id: tenant, overheadPct: '10', version: 2 }, company: null, inForce: tenant })
+    // Company A at 12 %: size 52 for A = 290.439 × 1.12 = 325.29168; the others keep 10 %.
+    const saved = (await ok('finance', 'PUT', '/costing/settings', { companyId: companyA, overheadPct: '12' })).settings
+    expect(saved).toMatchObject({ id: companyA, companyId: companyA, overheadPct: '12', version: 1 })
+    expect(await settingsOf('finance', `?companyId=${companyA}`)).toMatchObject({ company: { id: companyA, overheadPct: '12' }, inForce: companyA })
+    expect((await base52(`?companyId=${companyA}`)).total).toBe('325.29168')
+    expect((await getSheet('finance', revision1, `?companyId=${companyA}`)).inputs.overhead).toMatchObject({ source: 'OVERHEAD_RULE', ruleId: companyA, companyId: companyA, overheadPct: '12' })
+    expect((await base52(`?companyId=${companyB}`)).total).toBe('319.4829')
+
+    expect((await refused('finance', 'PUT', '/costing/settings', { companyId: companyA, overheadPct: '13' }, 409)).message).toBe('These costing settings exist: send their version to change them.')
+    expect((await refused('finance', 'PUT', '/costing/settings', { companyId: companyA, overheadPct: '13', version: 5 }, 409)).code).toBe('conflict')
+    expect((await refused('finance', 'PUT', '/costing/settings', { companyId: companyA, overheadPct: '101', version: 1 }, 400)).issues).toEqual([{ path: 'body/overheadPct', message: 'Expected a percentage from 0 to 100, with at most 4 decimals.' }])
+    expect((await refused('managerB', 'PUT', '/costing/settings', { overheadPct: '5', version: 2 }, 403)).code).toBe('forbidden')
+    expect((await refused('sales', 'PUT', '/costing/settings', { overheadPct: '5', version: 2 }, 403)).code).toBe('forbidden')
+    await expect(admin(`UPDATE "CostingSettings" SET "overheadPct" = 150 WHERE id = $1`, [companyA])).rejects.toThrow('the overhead of the costing settings')
+    await expect(admin(`DELETE FROM "CostingSettings" WHERE id = $1`, [companyA])).rejects.toThrow('changed, never deleted')
+    expect(await eventsOf(companyA)).toEqual([['costing_settings.changed', { settingsId: companyA, fields: ['overheadPct'] }]])
+  })
+
+  it('refuses the rate and settings routes to the floor and portal sessions', async () => {
+    for (const session of ['floor', 'partner']) {
+      expect((await refused(session, 'GET', '/costing/rates', undefined, 403)).code).toBe('forbidden')
+      expect((await refused(session, 'GET', '/costing/settings', undefined, 403)).code).toBe('forbidden')
+      expect((await refused(session, 'POST', '/costing/rates', { workCentreKind: 'CUTTING', costPerMinute: '0.1', validFrom: '2026-07-01' }, 403)).code).toBe('forbidden')
+    }
+    expect((await ok('otherTenant', 'GET', '/costing/rates')).rates).toEqual([])
   })
 })

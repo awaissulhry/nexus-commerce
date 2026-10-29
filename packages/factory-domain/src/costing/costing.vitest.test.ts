@@ -3,6 +3,7 @@ import type { BomLineData } from '../product/bom/rules'
 import type { CostCellView } from './contracts'
 import { diffCostCells } from './diff'
 import { pickOverhead, pickRate, type CostingMaterial, type LabourRate, type OverheadRule } from './inputs'
+import { labourRateMachine, overheadProblems, rateProblems } from './rates'
 import { costSheet, exactCell, exactCells, prepareSheet, quantityCost, type CostFacts, type CostingStep } from './sheet'
 
 /**
@@ -391,5 +392,27 @@ describe('two revisions compared', () => {
     const diff = diffCostCells(cells, missing)
     expect(diff.cells).toHaveLength(6)
     expect(diff.cells[0]).toMatchObject({ labourCostChange: null, totalChange: null, materialCostChange: '0' })
+  })
+})
+
+describe('the rates and overhead limits (the …_costing_guards limits)', () => {
+  it('a rate: cost per minute 0 or more, efficiency above 0 and at most 200 %, an ISO currency, a calendar day', () => {
+    expect(rateProblems({ costPerMinute: '0', currency: 'EUR', plannedEfficiencyPct: '200', validFrom: '2026-03-01' })).toEqual([])
+    expect(rateProblems({ costPerMinute: '-0.1', currency: 'eur', plannedEfficiencyPct: '0', validFrom: '2026-02-30' }).map((issue) => issue.path)).toEqual([
+      'costPerMinute',
+      'currency',
+      'plannedEfficiencyPct',
+      'validFrom',
+    ])
+    expect(rateProblems({ plannedEfficiencyPct: '200.0001' }).map((issue) => issue.path)).toEqual(['plannedEfficiencyPct'])
+    expect(rateProblems({ costPerMinute: '0.1234567' }).map((issue) => issue.path)).toEqual(['costPerMinute'])
+  })
+
+  it('an overhead from 0 to 100 %; an archived rate stays archived', () => {
+    expect(overheadProblems('0')).toEqual([])
+    expect(overheadProblems('100')).toEqual([])
+    expect(overheadProblems('100.5')).toHaveLength(1)
+    expect(overheadProblems('-1')).toHaveLength(1)
+    expect(labourRateMachine.finals).toEqual(['ARCHIVED'])
   })
 })
