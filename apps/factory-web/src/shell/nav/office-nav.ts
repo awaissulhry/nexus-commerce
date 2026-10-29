@@ -22,7 +22,7 @@ export interface OfficeAreaNav {
  * Permissions a W0 row names before the step that builds its page declares them (factory-domain's catalogue). Nobody
  * holds them yet, so their rows are hidden for everyone; the office-nav test fails on any OTHER undeclared name (a typo).
  */
-export const PENDING_PERMISSIONS: ReadonlySet<string> = new Set(['companies.view', 'sites.view', 'settings.view', 'integrations.view'])
+export const PENDING_PERMISSIONS: ReadonlySet<string> = new Set([])
 
 const MODULES = import.meta.glob('./*/nav.ts', { base: '../../areas', eager: true, import: 'officeArea' }) as Record<string, OfficeAreaNav | undefined>
 
@@ -95,7 +95,33 @@ export function navPermissions(nav: AreaNav = OFFICE_NAV): string[] {
  * (`office-entry.vitest.test.ts` compares this list with the page files under `app/(office)/w/[company]/`): the office
  * entry opens only a page that exists, never a row whose page comes with a later step.
  */
-export const OFFICE_PAGES: ReadonlySet<string> = new Set(['/me', '/home/today', '/home/today/print', '/home/mail-to-sort', '/records/[type]/[id]'])
+export const OFFICE_PAGES: ReadonlySet<string> = new Set([
+  '/me',
+  '/home/today',
+  '/home/today/print',
+  '/home/mail-to-sort',
+  '/records/[type]/[id]',
+  // B-W0-27 Admin: All settings, Companies & sites, Devices & printers, Users, Roles & permissions, and their records.
+  '/admin',
+  '/admin/companies',
+  '/admin/companies/[companyId]',
+  '/admin/companies/[companyId]/sites/[siteId]',
+  '/admin/devices',
+  '/admin/devices/[deviceId]',
+  '/admin/users',
+  '/admin/users/[userId]',
+  '/admin/users/floor/[workerId]',
+  '/admin/roles',
+  '/admin/roles/[roleId]',
+  // B-W0-28 Admin: Documents & numbering, Languages & formats, Connections & API (and a connection), Import & export,
+  // Audit log.
+  '/admin/documents',
+  '/admin/languages',
+  '/admin/connections',
+  '/admin/connections/[accountId]',
+  '/admin/import',
+  '/admin/audit',
+])
 
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */
 export const PROFILE_PAGE = '/me'

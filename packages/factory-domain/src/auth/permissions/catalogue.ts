@@ -50,6 +50,25 @@ export const USERS_PERMISSIONS = definePermissions('users', {
   resetPassword: { risk: 'stepUp', description: 'Require a new password at the next sign-in.' },
 })
 
+/**
+ * The tenancy core in the Office (apps/factory-api platform/admin/org; SCR-008, SCR-009; PLT-003, PLT-004, MES-292):
+ * the companies with their legal and e-invoicing data, and the sites with their lines, work centres and stations.
+ * Checked with can() against the company (and the site). Creating a company needs a grant over every company. Not
+ * step-up: the bank account has its own (companies.bank.manage); every change is audited from → to.
+ */
+export const COMPANIES_DEFINITIONS = definePermissions('companies', {
+  view: { risk: 'read', description: "See the companies: legal name, VAT and tax codes, PEC and SDI code, defaults, and whether they can issue invoices." },
+  manage: { risk: 'write', description: "Add a company, change its legal, e-invoicing and default data, archive it when nothing uses it." },
+})
+export const SITES_DEFINITIONS = definePermissions('sites', {
+  view: { risk: 'read', description: 'See the sites of the companies with their lines, work centres and stations.' },
+  manage: { risk: 'write', description: 'Add and change sites, lines, work centres and stations; archive them when nothing active uses them.' },
+})
+export const COMPANIES_VIEW = 'companies.view' satisfies Permission
+export const COMPANIES_MANAGE = 'companies.manage' satisfies Permission
+export const SITES_VIEW = 'sites.view' satisfies Permission
+export const SITES_MANAGE = 'sites.manage' satisfies Permission
+
 /** Roles and their assignments (platform/auth/roles). */
 export const ROLES_PERMISSIONS = definePermissions('roles', {
   view: { risk: 'read', description: 'See the role templates, the roles of the tenant and who holds them.' },
@@ -199,6 +218,22 @@ export const EMAIL_MANAGE = 'email.manage' satisfies Permission
 export const EMAIL_TRIAGE = 'email.triage' satisfies Permission
 
 /**
+ * The outside services the factory rents (apps/factory-api platform/admin/connections; design 02 admin.connections,
+ * SCR-087; PLT-139, PLT-195, PLT-197): each IntegrationAccount (SES, R2, SDI, Sendcloud, VIES) with its mode, state,
+ * calls and received webhooks. integrations.view reads them (never a secret: secrets are sealed and write-only);
+ * integrations.manage pauses an account (the kill switch: the gateway refuses its calls) and resumes it, each after a
+ * confirm. Checked with can() against the account's company; a tenant-wide account (SES, R2, VIES: every company's
+ * mail, files, VAT checks) needs a grant over every active company. Not step-up: nothing it does widens what anyone
+ * can see or do, and the account's secrets stay sealed (connecting and replacing secrets come later).
+ */
+export const INTEGRATIONS_DEFINITIONS = definePermissions('integrations', {
+  view: { risk: 'read', description: "See the outside services the factory uses (mail, files, SDI, carriers, VAT checks): what each is for, its mode, whether it works, its calls and received messages; never a secret." },
+  manage: { risk: 'write', description: 'Pause a service so no call reaches it, and resume it.' },
+})
+export const INTEGRATIONS_VIEW = 'integrations.view' satisfies Permission
+export const INTEGRATIONS_MANAGE = 'integrations.manage' satisfies Permission
+
+/**
  * Compliance: the EU type-examination certificate register (apps/factory-api modules/compliance/certificates; QHS-103,
  * QHS-051, PRD-288; Reg. (EU) 2016/425). Checked with can() against the certificate's company and holder party. The
  * constants live in factory-domain/src/compliance/certificates/permissions.ts. Not step-up: a certificate is typed from
@@ -271,6 +306,7 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   DOCUMENTS_DEFINITIONS,
   PRINT_DEFINITIONS,
   EMAIL_DEFINITIONS,
+  INTEGRATIONS_DEFINITIONS,
   COMPLIANCE_DEFINITIONS,
   PRODUCT_MATERIALS_DEFINITIONS,
   PRODUCT_STYLES_DEFINITIONS,
@@ -293,7 +329,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   WORKORDERS_DEFINITIONS,
   QUOTES_DEFINITIONS,
   SALES_SETTINGS_DEFINITIONS,
+  COMPANIES_DEFINITIONS,
   COMPANY_BANK_DEFINITIONS,
+  SITES_DEFINITIONS,
   ORDERS_DEFINITIONS,
   PRIVACY_DEFINITIONS,
   QUALITY_LAB_DEFINITIONS,
