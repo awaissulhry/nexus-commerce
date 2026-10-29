@@ -146,10 +146,11 @@ beforeAll(async () => {
     [A.tenant, A.companyA],
     [B.tenant, B.companyA],
   ] as const) {
-    // Made-up legal data (c.c. art. 2250) for the packing list, a SHIPMENT number series, the tenant's FAKE file store.
+    // Made-up legal data (c.c. art. 2250) for the packing list, a SHIPMENT number series (the numbering seed has one
+    // too), the tenant's FAKE file store.
     await admin(`UPDATE "Company" SET "vatNumber" = 'IT12345670009', "fiscalCode" = '12345670009', "reaOffice" = 'MI', "reaNumber" = '0000001' WHERE id = $1`, [companyId])
     await admin(
-      `INSERT INTO "NumberSeries" (id, "tenantId", "companyId", kind, code, "scopeKey", reset, pattern, fiscal) VALUES ($1, $2, $3, 'SHIPMENT', 'MAIN', 'ALL', 'NEVER', 'SH-{N:5}', false)`,
+      `INSERT INTO "NumberSeries" (id, "tenantId", "companyId", kind, code, "scopeKey", reset, pattern, fiscal) VALUES ($1, $2, $3, 'SHIPMENT', 'MAIN', 'ALL', 'NEVER', 'SH-{N:5}', false) ON CONFLICT DO NOTHING`,
       [newId(), tenantId, companyId],
     )
     if ((await admin(`SELECT 1 FROM "IntegrationAccount" WHERE "tenantId" = $1 AND provider = 'R2'`, [tenantId])).length === 0) {

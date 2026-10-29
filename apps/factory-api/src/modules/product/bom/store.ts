@@ -1,17 +1,19 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
-import { ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { DomainError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { BomLineView, BomRevisionView, BomView } from '@nexus/factory-domain/product/bom/contracts'
 import { PRODUCT_BOM_VIEW } from '@nexus/factory-domain/product/bom/permissions'
 import { lineBySize, requirements } from '@nexus/factory-domain/product/bom/requirements'
-import { bomIssues, editRefusal, inRangeOrder, type BomIssue, type BomLineData, type BomLineFields, type BomMaterial, type BomStyle } from '@nexus/factory-domain/product/bom/rules'
+import { bomIssues, editRefusal, inRangeOrder, type BomIssue, type BomIssueCode, type BomLineData, type BomLineFields, type BomMaterial, type BomStyle } from '@nexus/factory-domain/product/bom/rules'
+import { ROUTING_ISSUE_CODES, routingIssues, type LibraryOperation, type RoutingIssue, type RoutingIssueCode, type StepData } from '@nexus/factory-domain/product/routing/rules'
 import { decimalText, QUANTITY_SCALE, type RoundTo } from '@nexus/factory-domain/product/units/units'
 import { StaleVersionError, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf, type RequestContext } from '../../../core/context'
 import { ApiError } from '../../../core/errors'
 import { contextOf, mayWrite } from '../materials/store'
+import { readOperations, readSteps, type OperationFacts, type StepRecord } from '../routing/read'
 import { lockStyle } from '../styles/store'
 
 /**
@@ -215,6 +217,9 @@ export const bomStyleOf = (style: Pick<BomStyleRow, 'sizes' | 'baseSize'>, colou
 
 /** Everything the BOM view shows, read with one client. */
 export interface LoadedBom {
+  /** The revision's routing (B-W1-14), for the release check. */
+  readonly steps: readonly StepRecord[]
+  readonly routingOperations: ReadonlyMap<string, OperationFacts>
   readonly style: BomStyleRow
   readonly revision: RevisionRow
   readonly lines: readonly LineRecord[]
@@ -232,10 +237,14 @@ export async function loadBom(client: FactoryClient | CommandTx, style: BomStyle
   const sizes = await client.size.findMany({ where: { scaleId: style.sizeScaleId, code: { in: style.sizes } }, select: { code: true, label: true } })
   const supplierIds = [...new Set(lines.map((line) => line.supplierId).filter((id): id is string => id !== null))]
   const parties = supplierIds.length === 0 ? [] : await client.party.findMany({ where: { id: { in: supplierIds } }, select: { id: true, code: true, legalName: true, tradeName: true } })
+  const steps = await readSteps(client, revision.id)
+  const routingOperations = await readOperations(client, steps.map((step) => step.operationId))
   return {
     style,
     revision,
     lines,
+    steps,
+    routingOperations,
     materials,
     itemColours: colours,
     colourways,
@@ -263,14 +272,71 @@ export function revisionViewOf(row: RevisionRow): BomRevisionView {
   }
 }
 
-const issueView = (issue: BomIssue) => ({ ...issue })
+// ---- the release check ------------------------------------------------------------------------------------------------
+
+/** A release-check finding: of the BOM (a line, a size, a colourway) or of the revision's routing (a step). */
+export interface ReleaseIssue {
+  readonly code: BomIssueCode | RoutingIssueCode
+  readonly lineId: string | null
+  readonly size: string | null
+  readonly colourwayId: string | null
+  readonly stepId: string | null
+  readonly message: string
+}
+
+/** What the release check reads: the draft's BOM against its style and materials, and its routing against the library. */
+export interface ReleaseFacts {
+  readonly lines: readonly BomLineData[]
+  readonly style: BomStyle
+  readonly materials: ReadonlyMap<string, BomMaterial>
+  readonly plannedHideYieldPct: string | null
+  readonly steps: readonly StepData[]
+  readonly operations: ReadonlyMap<string, Pick<LibraryOperation, 'code' | 'status'>>
+}
+
+/**
+ * THE release check, one function for the release (./revisions releaseRevision refuses its blockers) and the BOM view
+ * (its `issues`, `warnings` and `releasable`), so the screen never says a release would pass that is refused: the BOM's
+ * findings (factory-domain product/bom `bomIssues`) and the routing's (product/routing `routingIssues`: a work order is
+ * released with one operation per routing step, and the floor reports at the scanned ones).
+ */
+export function releaseCheck(facts: ReleaseFacts): { readonly blockers: ReleaseIssue[]; readonly warnings: ReleaseIssue[] } {
+  const bom = bomIssues(facts.lines, facts.style, facts.materials, { plannedHideYieldPct: facts.plannedHideYieldPct })
+  const routing = routingIssues(facts.steps, facts.operations)
+  const fromBom = (issue: BomIssue): ReleaseIssue => ({ ...issue, stepId: null })
+  const fromRouting = (issue: RoutingIssue): ReleaseIssue => ({ code: issue.code, lineId: null, size: null, colourwayId: null, stepId: issue.stepId, message: issue.message })
+  return { blockers: [...bom.blockers.map(fromBom), ...routing.blockers.map(fromRouting)], warnings: [...bom.warnings.map(fromBom), ...routing.warnings.map(fromRouting)] }
+}
+
+const isRoutingIssue = (issue: ReleaseIssue): boolean => (ROUTING_ISSUE_CODES as readonly string[]).includes(issue.code)
+
+/** The release's refusal (409) with every blocker of the BOM and the routing, each pointing at what to fix. */
+export function releaseBlocked(blockers: readonly ReleaseIssue[]): DomainError {
+  const issues = blockers.map((issue) => ({
+    path: isRoutingIssue(issue)
+      ? issue.stepId === null
+        ? `routing/${issue.code}`
+        : `routing/steps/${issue.stepId}`
+      : issue.lineId === null
+        ? `bom/${issue.code}`
+        : `lines/${issue.lineId}${issue.size === null ? '' : `/sizes/${issue.size}`}${issue.colourwayId === null ? '' : `/colours/${issue.colourwayId}`}`,
+    message: issue.message,
+  }))
+  const routing = blockers.filter(isRoutingIssue).length
+  const what = routing === 0 ? 'The BOM is' : routing === blockers.length ? 'The routing is' : 'The BOM and the routing are'
+  return new DomainError('invalid_state', `${what} not ready to release: ${blockers.length} problem(s) to fix first.`, issues)
+}
+
+const issueView = (issue: ReleaseIssue) => ({ ...issue })
 
 /** The BOM of one revision (SCR-042), its figures per size and colourway, and what still blocks its release. */
 export function bomViewOf(loaded: LoadedBom): BomView {
   const { style, revision, lines, materials, itemColours, colourways } = loaded
   const bomStyle = bomStyleOf(style, colourways)
   const draft = revision.status === 'DRAFT'
-  const check = draft ? bomIssues(lines, bomStyle, materials, { plannedHideYieldPct: textOrNull(revision.plannedHideYieldPct) }) : { blockers: [], warnings: [] }
+  const check = draft
+    ? releaseCheck({ lines, style: bomStyle, materials, plannedHideYieldPct: textOrNull(revision.plannedHideYieldPct), steps: loaded.steps, operations: loaded.routingOperations })
+    : { blockers: [], warnings: [] }
   const colourwayOf = new Map(colourways.map((colourway) => [colourway.id, colourway]))
   const colourRef = (id: string) => {
     const colour = itemColours.get(id)
