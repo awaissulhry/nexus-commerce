@@ -1,0 +1,793 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "dismiss": "Dismiss",
+    "done": "Done",
+    "retry": "Try again"
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Live updates paused"
+  },
+  "status": {
+    "DRAFT": "Draft",
+    "PACKED": "Packed",
+    "SHIPPED": "Shipped",
+    "DELIVERED": "Delivered",
+    "RETURNED": "Returned",
+    "CANCELLED": "Cancelled"
+  },
+  "rows": {
+    "today": "Ship today (not left yet)",
+    "DRAFT": "To pack",
+    "PACKED": "Packed",
+    "SHIPPED": "In transit",
+    "DELIVERED": "Delivered",
+    "RETURNED": "Returned",
+    "CANCELLED": "Cancelled",
+    "all": "All shipments"
+  },
+  "tile": {
+    "toPack": "To pack",
+    "toLabel": "Ready to label",
+    "notHandedOver": "Labelled, not handed over",
+    "inTransit": "In transit",
+    "unknown": "More than 200: see the list"
+  },
+  "transport": {
+    "SENDER": "Own van",
+    "RECIPIENT": "Customer collects",
+    "noCarrier": "No carrier chosen",
+    "carrier": "{name}"
+  },
+  "transportBy": {
+    "SENDER": "Own van (the sender)",
+    "RECIPIENT": "The customer collects",
+    "CARRIER": "A carrier"
+  },
+  "reason": {
+    "SALE": "Sale",
+    "RETURN_FROM_WORK": "Return after processing",
+    "ON_APPROVAL": "On approval",
+    "REPAIR": "Repair",
+    "SAMPLE": "Samples",
+    "OTHER": "Other",
+    "WORK_ON_ACCOUNT": "Processing on account",
+    "RETURN": "Return",
+    "TRANSFER": "Transfer"
+  },
+  "freight": {
+    "FREE": "Free (franco)",
+    "FORWARD": "Forward (assegnato)"
+  },
+  "ref": {
+    "CUSTOMER_ORDER": "Customer order",
+    "QUOTE": "Quote",
+    "SALES_ORDER": "Order",
+    "PURCHASE_ORDER": "Purchase order",
+    "SUPPLIER_QUOTE": "Supplier quote",
+    "DDT": "DDT",
+    "INVOICE": "Invoice"
+  },
+  "trackingStatus": {
+    "LABEL_CREATED": "Label created",
+    "IN_TRANSIT": "In transit",
+    "OUT_FOR_DELIVERY": "Out for delivery",
+    "DELIVERED": "Delivered",
+    "EXCEPTION": "Exception",
+    "RETURNED": "Returned"
+  },
+  "printState": {
+    "QUEUED": "Queued",
+    "SENT": "Sent to the printer",
+    "PRINTED": "Printed",
+    "FAILED": "Failed"
+  },
+  "docKind": {
+    "DDT": "DDT",
+    "PACKING_LIST": "Packing list",
+    "DECLARATION_OF_CONFORMITY": "Declaration of Conformity",
+    "USER_INFORMATION": "User information"
+  },
+  "docState": {
+    "ATTACHED": "Attached for the customer",
+    "ON_FILE": "On file, not attached yet",
+    "MISSING": "Missing",
+    "NOT_REQUIRED": "Not required"
+  },
+  "linkState": {
+    "LIVE": "Works",
+    "REVOKED": "Withdrawn",
+    "USED_UP": "No opens left",
+    "EXPIRED": "Expired"
+  },
+  "csv": {
+    "number": "Shipment",
+    "status": "Status",
+    "customer": "Customer",
+    "order": "Order",
+    "shipTo": "Ship to",
+    "carrier": "Carrier",
+    "parcels": "Parcels",
+    "weight": "Weight kg",
+    "ddt": "DDT",
+    "tracking": "Tracking",
+    "shipped": "Shipped at"
+  },
+  "col": {
+    "number": "Shipment",
+    "status": "Status",
+    "customer": "Customer · order",
+    "shipTo": "Ship to",
+    "carrier": "Carrier",
+    "parcels": "Parcels",
+    "weight": "Weight",
+    "ddt": "DDT",
+    "tracking": "Tracking",
+    "when": "Ship by",
+    "more": "More"
+  },
+  "list": {
+    "updated": "Updated {time}",
+    "notYet": "Not read yet",
+    "new": "New shipment",
+    "keyNew": "New shipment",
+    "search": "Search number, order, customer PO, customer or tracking",
+    "rowsLabel": "Rows",
+    "tableLabel": "Shipments",
+    "count_one": "{count} shipment",
+    "count_other": "{count} shipments",
+    "countMore_one": "{count} shipment loaded, more to show",
+    "countMore_other": "{count} shipments loaded, more to show",
+    "more": "Show 50 more",
+    "moreToday": "Over 200 not left yet: see all shipments",
+    "viewing": "Showing: {view}",
+    "keysTitle": "Keys of this list",
+    "created": "Planned {date}",
+    "needsLabels_one": "{count} label to buy",
+    "needsLabels_other": "{count} labels to buy",
+    "waitsHandOver": "Waits to be handed over",
+    "parcels_one": "{count} parcel",
+    "parcels_other": "{count} parcels",
+    "garments_one": "{count} garment",
+    "garments_other": "{count} garments",
+    "kg": "{value} kg",
+    "noDdt": "Not issued",
+    "shippedAt": "Left {date}",
+    "cancelledAt": "Cancelled {date}",
+    "noCutOff": "No cut-off set",
+    "rowMenu": "More for {number}",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "failed": "The shipments could not be read",
+    "clearFilters": "Clear filters",
+    "noMatch": {
+      "title": "No shipment matches",
+      "body": "Nothing matches this search or these rows."
+    },
+    "today": {
+      "title": "Nothing to ship today",
+      "body": "Every shipment has left. New shipment plans one from what quality released."
+    },
+    "empty": {
+      "title": "No shipments yet",
+      "body": "A shipment is planned from the garments quality released for an order."
+    }
+  },
+  "bulk": {
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)"
+  },
+  "cutoff": {
+    "label": "Carrier cut-offs today",
+    "left": "{left} to the {time} cut-off",
+    "passed": "Cut-off {time} passed: the next working day",
+    "notSet": "No cut-off set for this site",
+    "unknown": "Cut-off not shown to you",
+    "ready_one": "{count} parcel ready",
+    "ready_other": "{count} parcels ready",
+    "toPack_one": "{count} still to pack",
+    "toPack_other": "{count} still to pack",
+    "allPacked": "all packed",
+    "none": "Nothing to ship today.",
+    "filtered": "Only {carrier}",
+    "clear": "Show every carrier"
+  },
+  "new": {
+    "title": "New shipment",
+    "subtitle": "{order} · {customer}",
+    "back": "Back",
+    "next": "Next",
+    "create_one": "Create shipment ({count} garment)",
+    "create_other": "Create shipment ({count} garments)",
+    "step": {
+      "order": "Order and who carries it",
+      "quantities": "Garments per size"
+    },
+    "loading": "Reading what quality released…",
+    "failed": "What can ship could not be read",
+    "empty": {
+      "title": "Nothing released to ship",
+      "body": "Garments can ship once quality released them at final inspection."
+    },
+    "search": "Search order, customer PO or customer",
+    "noMatch": "No order matches.",
+    "customerRef": "Customer PO {ref}",
+    "shippable_one": "{count} garment released, not shipped",
+    "shippable_other": "{count} garments released, not shipped",
+    "transportBy": "Who carries the goods",
+    "carrierCode": "Carrier (Sendcloud code)",
+    "carrierHint": "As the aggregator names it, e.g. brt, gls, poste_italiane. Empty: the site's default.",
+    "serviceCode": "Service",
+    "serviceHint": "Sendcloud's shipping option code. Empty: the site's default service, when the carrier is the site's default.",
+    "capNote": "Each size can take what quality released and no shipment holds yet.",
+    "all": "All released",
+    "size": "Size {size}",
+    "cap": "Up to {count} · {batch}",
+    "minus": "One less of size {size}",
+    "plus": "One more of size {size}",
+    "serials": "Serial-tracked style: each garment's serial is scanned at packing.",
+    "number": "The shipment takes the next number of the company's shipment series when it is created.",
+    "held": {
+      "order": "Choose an order first",
+      "range": "A size asks more than it can still ship",
+      "none": "Choose at least one garment"
+    },
+    "problem": {
+      "range": "From 0 to {max}"
+    }
+  },
+  "held": {
+    "busy": "Working…",
+    "noManage": "Needs the right to manage shipments",
+    "noPack": "Needs the right to pack",
+    "packing_one": "{count} packing check open: see Cartons",
+    "packing_other": "{count} packing checks open: see Cartons",
+    "noIssue": "Needs the right to issue DDTs",
+    "noBuy": "Needs the right to buy labels",
+    "ddtFirst": "Issue the DDT first: the label never leaves before the law's paper",
+    "documents_one": "{count} document must be on file before the goods leave",
+    "documents_other": "{count} documents must be on file before the goods leave",
+    "noAnnul": "Needs the right to annul DDTs",
+    "annulDelivered": "Delivered or returned: the DDT stays as issued",
+    "cancelLabels": "A parcel has a carrier label: void it first",
+    "cancelDdt": "A live DDT names it: annul the DDT first",
+    "deliveryDdt": "The DDT names the carrier: annul it to change who carries",
+    "deliveryLeft": "The goods left",
+    "unpackDdt": "A live DDT names the packing: annul it first",
+    "unpackLabels": "A parcel has a carrier label",
+    "ddtState": "A DDT is issued once the shipment is packed",
+    "ddtChecks_one": "{count} check open",
+    "ddtChecks_other": "{count} checks open",
+    "previewFirst": "Check the DDT first",
+    "buyState": "Labels are bought once packed, before the goods leave",
+    "allLabelled": "Every parcel has its label",
+    "noPrint": "Needs the right to print labels",
+    "noLabelPrinter": "This site has no label printer: download the PDFs",
+    "noLabels": "No label bought yet",
+    "parcelLabelled": "Labelled: void the label to change it",
+    "parcelLeft": "The goods left",
+    "parcelFull": "Holds garments: move them first",
+    "nothingToAttach": "Everything on file is attached",
+    "noRecipients": "The customer has no orders or quality contact with an e-mail",
+    "cancelledShipment": "The shipment is cancelled"
+  },
+  "step": {
+    "pack": "Mark packed",
+    "issueDdt": "Issue DDT {number}",
+    "buyLabels_one": "Buy {count} label",
+    "buyLabels_other": "Buy {count} labels",
+    "handOver": "Mark handed over"
+  },
+  "action": {
+    "delivery": "Change delivery",
+    "annul": "Annul DDT {number}…",
+    "unpack": "Unpack",
+    "cancel": "Cancel shipment",
+    "openOrder": "Open order {number}",
+    "copyNumber": "Copy the number"
+  },
+  "tab": {
+    "lines": "Lines & cartons",
+    "documents": "Documents",
+    "carrier": "Carrier & label",
+    "tracking": "Tracking & delivery",
+    "activity": "Activity",
+    "problem": "Something to do here"
+  },
+  "record": {
+    "back": "Shipments",
+    "title": "Shipment",
+    "loading": "Reading the shipment…",
+    "backToList": "Back to the shipments",
+    "tabsLabel": "The shipment's sections",
+    "state": {
+      "not_found": {
+        "title": "This shipment does not exist",
+        "body": "It does not exist or it is in another company."
+      },
+      "forbidden": {
+        "title": "Not yours to see",
+        "body": "Your role does not reach this shipment's company, site or customer."
+      },
+      "error": {
+        "title": "The shipment could not be read"
+      }
+    },
+    "dock": "Thread",
+    "dockHint": "The thread beside the tab (⌘J)",
+    "dockLabel": "The shipment's thread",
+    "more": "More actions",
+    "checksOpen_one": "{count} check open",
+    "checksOpen_other": "{count} checks open",
+    "order": "Order {number}",
+    "customerRef": "Customer PO {ref}",
+    "changed": "Someone changed this shipment at {time}",
+    "reload": "Reload",
+    "cancelled": "Cancelled: {reason}",
+    "shipped": "Left {when}: lines, cartons and the DDT stay as they left.",
+    "needsDdt": "The goods left without a live DDT: issue the replacement DDT now.",
+    "trackingProblem": "The carrier's news needs a person",
+    "readOnly": "Read-only: your role sees shipments but does not change them.",
+    "noPanels": "The thread, files and history are not shown here."
+  },
+  "part": {
+    "loading": "Reading {part}…",
+    "failed": "{part} could not be read"
+  },
+  "ready": {
+    "title": "Ready to ship",
+    "all": "Ready to hand over.",
+    "packedAt": "Packed {when}",
+    "released": {
+      "name": "Released by quality",
+      "ok_one": "{count} garment, every one released at final inspection",
+      "ok_other": "{count} garments, every one released at final inspection",
+      "none": "No garments on the shipment yet"
+    },
+    "documents": {
+      "name": "Declaration of Conformity and user information",
+      "ok": "On file for every style (PPE Reg. art. 8)",
+      "missing_one": "{count} style without its documents",
+      "missing_other": "{count} styles without their documents",
+      "fallback_one": "{count} document travels in another language",
+      "fallback_other": "{count} documents travel in another language",
+      "unknown": "Not read yet"
+    },
+    "packed": {
+      "name": "Cartons packed and weighed",
+      "ok_one": "{count} carton packed",
+      "ok_other": "{count} cartons packed",
+      "open_one": "{count} thing still to pack",
+      "open_other": "{count} things still to pack"
+    },
+    "ddt": {
+      "name": "DDT issued",
+      "ok": "DDT {number}",
+      "open": "Not issued yet",
+      "notNeeded": "An immediate invoice travels instead"
+    },
+    "labels": {
+      "name": "Carrier label",
+      "ok_one": "{count} parcel labelled",
+      "ok_other": "{count} parcels labelled",
+      "open_one": "{count} parcel without its label",
+      "open_other": "{count} parcels without their label",
+      "SENDER": "Own van: no carrier label",
+      "RECIPIENT": "The customer collects: no carrier label"
+    },
+    "fix": {
+      "lines": "Go to Lines & cartons",
+      "documents": "Go to Documents",
+      "carrier": "Go to Carrier & label",
+      "tracking": "Go to Tracking",
+      "activity": "Go to Activity"
+    }
+  },
+  "lines": {
+    "title": "Lines",
+    "count": "{count} garments in {lines} lines",
+    "add": "Add garments",
+    "locked": "Packed: the lines change only after Unpack (no label, no live DDT).",
+    "empty": {
+      "title": "No garments yet",
+      "body": "Add the garments quality released for this order.",
+      "readOnly": "No garments on this shipment."
+    },
+    "col": {
+      "style": "Style · colour",
+      "size": "Size",
+      "batch": "Batch · work order",
+      "quantity": "Garments",
+      "carton": "Carton",
+      "actions": "Actions"
+    },
+    "serials": "{count} of {total} serials",
+    "quantityOf": "Garments of {style} size {size}",
+    "minus": "One less",
+    "plus": "One more",
+    "cartonOf": "Carton for {style} size {size}",
+    "noCarton": "Not in a carton",
+    "remove": "Remove {style} size {size}",
+    "removeHeld": "Holds serials: unpack them first",
+    "serialList": "Serials on this shipment"
+  },
+  "cartons": {
+    "title": "Cartons",
+    "name": "Carton {seq} of {count}",
+    "empty": "Empty",
+    "garments_one": "{count} garment",
+    "garments_other": "{count} garments",
+    "add": "Add carton",
+    "unplaced_one": "{count} garment not in a carton",
+    "unplaced_other": "{count} garments not in a carton",
+    "none": {
+      "title": "No cartons yet",
+      "body": "Packing happens at the pack station or here."
+    },
+    "col": {
+      "carton": "Carton",
+      "contents": "Contents by size",
+      "weight": "Gross weight",
+      "size": "L × W × H",
+      "label": "Label",
+      "actions": "Actions"
+    },
+    "cm": "{l} × {w} × {h} cm",
+    "notWeighed": "Not weighed",
+    "labelled": "Labelled",
+    "noLabel": "No label yet",
+    "labelNotNeeded": "No carrier label",
+    "weigh": "Weigh and measure {carton}",
+    "remove": "Remove {carton}",
+    "stillNeeds": "Still needs: {what}",
+    "readyToMark": "Every garment is in a weighed carton: mark it packed.",
+    "packingList": "Make the packing list"
+  },
+  "docs": {
+    "ddt": {
+      "title": "DDT (documento di trasporto)",
+      "issued": "Issued · {number}",
+      "draft": "Draft",
+      "notRequired": "No DDT: an immediate invoice travels with the goods.",
+      "frozen": "DDT {number} is issued: it never changes and its number is never used again. It is kept 10 years in the fiscal archive. A mistake is fixed by annulling it and issuing a new one.",
+      "download": "Download PDF",
+      "printAgain": "Print the PDF again",
+      "previewFailed": "The draft could not be checked",
+      "previewLoading": "Checking the draft…",
+      "none": "No DDT was issued.",
+      "checksOpen_one": "{count} check open before it can be issued",
+      "checksOpen_other": "{count} checks open before it can be issued",
+      "readyToIssue": "Every field is there: issuing takes number {number}.",
+      "sampleNote": "Draft with the SAMPLE banner: nothing is stored, no number is used.",
+      "pdfTitle": "DDT {number}",
+      "sampleTitle": "DDT draft",
+      "vat": "VAT {vat}",
+      "net": "net {value} kg",
+      "carrier": "Carrier: {name}",
+      "goods_one": "{lines} line · {pieces} garments",
+      "goods_other": "{lines} lines · {pieces} garments",
+      "lines_one": "{count} goods line",
+      "lines_other": "{count} goods lines",
+      "batch": "batch {batch}",
+      "field": {
+        "number": "Number",
+        "numberLater": "Taken when issued",
+        "date": "Date",
+        "sender": "Sender (c.c. art. 2250)",
+        "recipient": "Recipient",
+        "destination": "Place of delivery",
+        "reason": "Reason for transport",
+        "goods": "Goods",
+        "packages": "Packages",
+        "weight": "Gross weight",
+        "appearance": "Appearance of the goods",
+        "transportBy": "Transport by",
+        "start": "Start of transport",
+        "freight": "Freight",
+        "refs": "Refers to",
+        "remarks": "Remarks",
+        "language": "Language"
+      }
+    },
+    "pdf": {
+      "loading": "Reading the PDF…",
+      "noFiles": "Reading the PDF needs the right to read files",
+      "missing": "The PDF is not stored yet: print it again",
+      "draftHeld": "The draft's PDF shows once the shipment is packed and its checks pass"
+    },
+    "annulled": {
+      "title": "Annulled DDTs",
+      "col": {
+        "number": "Number",
+        "date": "Date",
+        "when": "Annulled",
+        "state": "State"
+      },
+      "state": "Annulled",
+      "note": "An annulled DDT keeps its number and its reason; it is never deleted."
+    },
+    "travel": {
+      "title": "Declaration of Conformity and user information",
+      "attach_one": "Attach {count}",
+      "attach_other": "Attach {count}",
+      "law": "PPE travel with their Declaration of Conformity and the user information (Reg. (EU) 2016/425 art. 8), in the order's language.",
+      "blocked_one": "{count} style cannot leave without its documents",
+      "blocked_other": "{count} styles cannot leave without their documents",
+      "fallback_one": "{count} document is in another language than the order's",
+      "fallback_other": "{count} documents are in another language than the order's",
+      "none": {
+        "title": "No PPE documents needed",
+        "body": "No style on this shipment asks for a Declaration of Conformity."
+      },
+      "language": "In {language}",
+      "noLanguage": "No language on file",
+      "wanted": "the order asks {language}",
+      "fallbackTag": "Other language",
+      "open": "Download {document}",
+      "packingList": "Packing list (in the parcels only)",
+      "whenShipped": "When the goods leave, the documents are attached and the link is mailed by themselves.",
+      "allAttached": "Everything on file is attached for the customer"
+    },
+    "link": {
+      "title": "The customer's document link",
+      "send": "Send link",
+      "resend": "Send again",
+      "what": "One link to the DDT, the Declaration of Conformity and the user information, for the customer's orders and quality contacts.",
+      "none": "No link sent yet.",
+      "automatic": "Sent by itself when the goods leave.",
+      "byShipping": "Sent when the goods left",
+      "byOffice": "Sent by the office {when}",
+      "col": {
+        "to": "To",
+        "state": "State",
+        "opens": "Opens",
+        "until": "Works until"
+      },
+      "opens": "{uses} of {max}",
+      "lastOpen": "Last opened {when}"
+    }
+  },
+  "carrier": {
+    "booking": "Booking",
+    "transportBy": "Transport by",
+    "carrier": "Carrier",
+    "service": "Service",
+    "serviceDefault": "The carrier's default",
+    "parcels": "Parcels",
+    "cutOff": "Cut-off today",
+    "cutOffToday": "{time}",
+    "cutOffPassed": "{time} passed: it leaves the next working day",
+    "account": "Labels are bought through the company's own Sendcloud account; the carrier charges it.",
+    "noLabel": {
+      "SENDER": "Own van: the goods leave with the DDT, no carrier label.",
+      "RECIPIENT": "The customer collects: the goods leave with the DDT, no carrier label."
+    },
+    "labels": "Labels",
+    "print": "Print labels",
+    "noParcels": {
+      "title": "No parcels yet",
+      "body": "A label is bought per parcel once the shipment is packed."
+    },
+    "col": {
+      "parcel": "Parcel",
+      "weight": "Weight",
+      "tracking": "Tracking number",
+      "print": "Print",
+      "file": "Label"
+    },
+    "boughtAt": "Bought {when}",
+    "noLabelYet": "No label yet",
+    "notPrinted": "Not printed",
+    "pdf": "PDF",
+    "downloadOf": "Download the label of parcel {seq}",
+    "labelsHidden": "Print states show to those who pack.",
+    "noPrinter": "This site has no label printer: the labels print from their PDF."
+  },
+  "tracking": {
+    "title": "Tracking",
+    "last": "Last event {when}",
+    "noEvent": "No event yet",
+    "waiting": "Waiting for the carrier",
+    "events": "The carrier's events",
+    "noEventYet": "The carrier has sent no event yet.",
+    "notLeft": "The goods have not left yet.",
+    "parcel": "parcel {seq}",
+    "source": {
+      "WEBHOOK": "from the carrier",
+      "POLL": "found by the hourly check",
+      "MANUAL": "recorded by hand"
+    },
+    "none": {
+      "title": "No tracking yet",
+      "body": "Tracking starts once a label is bought.",
+      "SENDER": "Own van: no carrier tracking.",
+      "RECIPIENT": "The customer collects: no carrier tracking."
+    },
+    "pod": "Proof of delivery",
+    "shippedAt": "Left",
+    "deliveredAt": "Delivered",
+    "returnedAt": "Returned",
+    "notYet": "Not yet",
+    "notDelivered": "Not delivered yet",
+    "podLater": "The carrier's signature and photo come in a later release."
+  },
+  "issue": {
+    "title": "Issue DDT",
+    "subtitle": "Shipment {number}",
+    "frozen": "Number {number} is taken and kept for 10 years; the DDT cannot change after this. A mistake is fixed by annulling it and issuing a new one.",
+    "frozenNoNumber": "The DDT takes the next number of the company's DDT series; it cannot change after this.",
+    "checks_one": "{count} check open",
+    "checks_other": "{count} checks open",
+    "reason": "Reason for transport",
+    "reasonText": "The reason, in words",
+    "carrier": "Carrier on the DDT",
+    "carrierHint": "Empty: the shipment's carrier.",
+    "appearance": "Appearance of the goods",
+    "appearanceHint": "Empty: the site's default (e.g. cardboard boxes).",
+    "net": "Net weight",
+    "netHint": "Optional; at most the gross {gross} kg.",
+    "freight": "Freight",
+    "freightNone": "Not printed",
+    "remarks": "Remarks (printed)",
+    "ship": {
+      "SENDER": "The goods leave now in our van: issue and mark handed over together",
+      "RECIPIENT": "The customer collects now: issue and mark handed over together"
+    },
+    "check": "Check again",
+    "go": "Issue DDT {number}",
+    "goShip": "Issue DDT {number} and hand over"
+  },
+  "annul": {
+    "title": "Annul DDT {number}",
+    "what": "DDT {number} will read Annulled with your reason.",
+    "keeps": "Its number stays with it and is never used again.",
+    "packed": "The shipment stays packed: issue a new DDT for the correction.",
+    "shipped": "The goods left: issue the replacement DDT right after.",
+    "invoice": "An invoiced DDT cannot be annulled: a credit note corrects the invoice.",
+    "reason": "Reason",
+    "type": "Type {number} to annul it",
+    "go": "Annul DDT",
+    "held": {
+      "reason": "Say why (3 characters or more)",
+      "phrase": "Type the DDT number exactly"
+    },
+    "typeHint": "Exactly as printed: digits and the slash.",
+    "typeWrong": "Not the DDT's number yet"
+  },
+  "buy": {
+    "title": "Buy labels",
+    "go_one": "Buy {count} label",
+    "go_other": "Buy {count} labels",
+    "outside": "This leaves the building: the carrier is booked and the company's Sendcloud account is charged.",
+    "void": "A label is voided within the carrier's window to get the fee back.",
+    "test": "On a test account the labels say TEST and nothing is bought.",
+    "busy": "Asking the carrier…",
+    "done_one": "{count} label bought.",
+    "done_other": "{count} labels bought.",
+    "partial": "Some parcels have no label yet.",
+    "parcelOk": "Parcel {seq}: bought",
+    "parcelRefused": "Parcel {seq}: {problem}"
+  },
+  "handOver": {
+    "title": "Mark handed over",
+    "stock": "{count} garments leave the finished goods.",
+    "ddt": "DDT {number}, transport started {start}.",
+    "noDdt": "No DDT travels (an immediate invoice does).",
+    "documents": "The documents are attached and the link is mailed to the customer.",
+    "final": "The shipment's lines, cartons and DDT stay as they left."
+  },
+  "cancel": {
+    "title": "Cancel shipment {number}",
+    "what": "{count} garments go back to what the order can still ship.",
+    "reason": "Reason",
+    "go": "Cancel shipment",
+    "held": "Say why"
+  },
+  "delivery": {
+    "title": "Change delivery",
+    "go": "Save",
+    "note": "Who carries it is printed on the DDT: change it before the DDT is issued.",
+    "serviceHint": "Sendcloud's shipping option code: labels need one."
+  },
+  "addLines": {
+    "title": "Add garments",
+    "go_one": "Add {count} garment",
+    "go_other": "Add {count} garments",
+    "none": "Nothing more of this order is released and not on a shipment."
+  },
+  "parcel": {
+    "title": "{carton}",
+    "new": "New carton",
+    "weight": "Gross weight",
+    "length": "Length",
+    "width": "Width",
+    "height": "Height",
+    "save": "Save",
+    "positive": "Above 0",
+    "held": "Each measure above 0",
+    "heldWeight": "A packed carton keeps a weight"
+  },
+  "link": {
+    "title": "Send the document link",
+    "what": "The customer reads and downloads the DDT, the Declaration of Conformity and the user information; every download is logged.",
+    "to": "To",
+    "days": "Works for (days)",
+    "daysHint": "At most {max} days and 100 opens.",
+    "fewer": "One day less",
+    "more": "One day more",
+    "resendNote": "Sending again withdraws the older link of each address.",
+    "go_one": "Send to {count} address",
+    "go_other": "Send to {count} addresses",
+    "held": "Choose at least one contact",
+    "sent_one": "{count} link sent.",
+    "sent_other": "{count} links sent.",
+    "sentTo": "{email}: sent, works until {until}",
+    "notSent": "{email}: the mail did not go out; send again",
+    "skipped": {
+      "SUPPRESSED": "{email}: this address refuses our mail",
+      "ALREADY_SENT": "{email}: already has a link",
+      "ASKED_RECENTLY": "{email}: sent a moment ago"
+    }
+  },
+  "unpack": {
+    "title": "Unpack",
+    "what": "The shipment goes back to Draft so its cartons and lines can change."
+  },
+  "notice": {
+    "packed": "Marked packed.",
+    "unpacked": "Unpacked: the shipment is a draft again.",
+    "lineRemoved": "Line removed.",
+    "linesAdded": "Garments added.",
+    "parcelSaved": "Carton saved.",
+    "parcelAdded": "Carton added.",
+    "parcelRemoved": "Carton removed.",
+    "packingList": "Packing list made: the packing station prints it.",
+    "ddtIssued": "DDT issued.",
+    "ddtShipped": "DDT issued and the goods marked handed over.",
+    "ddtNoPdf": "DDT {number} is issued; its PDF is not stored yet: print it again.",
+    "ddtAnnulled": "DDT annulled. Issue the new one.",
+    "ddtPdf": "The DDT's PDF is stored.",
+    "attached": "Documents attached for the customer.",
+    "delivery": "Delivery saved.",
+    "labelsPrinted": "Labels sent to the printer.",
+    "shipped": "Handed over: the goods left.",
+    "cancelled": "Shipment cancelled."
+  },
+  "problem": {
+    "read": {
+      "signed_out": "Your session ended: sign in again.",
+      "forbidden": "Your role does not reach this.",
+      "not_found": "It does not exist or it is in another company.",
+      "unavailable": "The factory is not answering: try again in a moment.",
+      "rate_limited": "Too many requests: wait a moment.",
+      "internal": "Something went wrong on our side."
+    },
+    "write": {
+      "moved": "Someone changed this shipment meanwhile: it was read again, check and try again.",
+      "state": "The shipment's state does not allow it now.",
+      "invalid": "Something in what was sent is not valid.",
+      "signed_out": "Your session ended: sign in again.",
+      "forbidden": "Your role does not allow this.",
+      "not_found": "It no longer exists.",
+      "rate_limited": "Too many requests: wait a moment.",
+      "unavailable": "The factory is not answering: nothing was changed.",
+      "internal": "Something went wrong on our side: nothing was changed.",
+      "noService": "Labels need the carrier's service: set it in Change delivery (or a default service in Carriers & shipping).",
+      "address": "The carrier refuses the address as it stands: check the ship-to on the order."
+    }
+  },
+  "packing": {
+    "lines": "at least one line of released garments",
+    "unplaced_one": "{count} garment in a carton",
+    "unplaced_other": "{count} garments in a carton",
+    "parcel": "at least one carton",
+    "unweighed_one": "carton {parcels} weighed",
+    "unweighed_other": "cartons {parcels} weighed",
+    "empty_one": "carton {parcels} filled or removed (it is empty)",
+    "empty_other": "cartons {parcels} filled or removed (they are empty)",
+    "serials_one": "{count} serial scanned",
+    "serials_other": "{count} serials scanned"
+  }
+}

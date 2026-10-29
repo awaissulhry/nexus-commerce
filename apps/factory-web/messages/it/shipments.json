@@ -1,0 +1,793 @@
+{
+  "common": {
+    "cancel": "Annulla",
+    "dismiss": "Chiudi",
+    "done": "Fatto",
+    "retry": "Riprova"
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In diretta",
+    "offline": "Aggiornamenti in pausa"
+  },
+  "status": {
+    "DRAFT": "Bozza",
+    "PACKED": "Imballata",
+    "SHIPPED": "Spedita",
+    "DELIVERED": "Consegnata",
+    "RETURNED": "Resa",
+    "CANCELLED": "Annullata"
+  },
+  "rows": {
+    "today": "Da spedire oggi (non ancora partite)",
+    "DRAFT": "Da imballare",
+    "PACKED": "Imballate",
+    "SHIPPED": "In viaggio",
+    "DELIVERED": "Consegnate",
+    "RETURNED": "Rese",
+    "CANCELLED": "Annullate",
+    "all": "Tutte le spedizioni"
+  },
+  "tile": {
+    "toPack": "Da imballare",
+    "toLabel": "Da etichettare",
+    "notHandedOver": "Etichettate, non consegnate al vettore",
+    "inTransit": "In viaggio",
+    "unknown": "Più di 200: vedi l'elenco"
+  },
+  "transport": {
+    "SENDER": "Nostro furgone",
+    "RECIPIENT": "Ritira il cliente",
+    "carrier": "{name}",
+    "noCarrier": "Nessun corriere scelto"
+  },
+  "transportBy": {
+    "SENDER": "Mittente (nostro furgone)",
+    "RECIPIENT": "Destinatario (ritira il cliente)",
+    "CARRIER": "Vettore"
+  },
+  "reason": {
+    "SALE": "Vendita",
+    "RETURN_FROM_WORK": "Reso da lavorazione",
+    "ON_APPROVAL": "Conto visione",
+    "REPAIR": "Riparazione",
+    "SAMPLE": "Campionatura",
+    "OTHER": "Altro",
+    "WORK_ON_ACCOUNT": "Conto lavorazione",
+    "RETURN": "Reso",
+    "TRANSFER": "Trasferimento"
+  },
+  "freight": {
+    "FREE": "Franco",
+    "FORWARD": "Assegnato"
+  },
+  "ref": {
+    "CUSTOMER_ORDER": "Ordine cliente",
+    "QUOTE": "Preventivo",
+    "SALES_ORDER": "Ordine",
+    "PURCHASE_ORDER": "Ordine d'acquisto",
+    "SUPPLIER_QUOTE": "Offerta fornitore",
+    "DDT": "DDT",
+    "INVOICE": "Fattura"
+  },
+  "trackingStatus": {
+    "LABEL_CREATED": "Etichetta creata",
+    "IN_TRANSIT": "In viaggio",
+    "OUT_FOR_DELIVERY": "In consegna",
+    "DELIVERED": "Consegnata",
+    "EXCEPTION": "Anomalia",
+    "RETURNED": "Resa al mittente"
+  },
+  "printState": {
+    "QUEUED": "In coda",
+    "SENT": "Inviata alla stampante",
+    "PRINTED": "Stampata",
+    "FAILED": "Non riuscita"
+  },
+  "docKind": {
+    "DDT": "DDT",
+    "PACKING_LIST": "Packing list",
+    "DECLARATION_OF_CONFORMITY": "Dichiarazione di conformità",
+    "USER_INFORMATION": "Nota informativa"
+  },
+  "docState": {
+    "ATTACHED": "Allegato per il cliente",
+    "ON_FILE": "In archivio, non ancora allegato",
+    "MISSING": "Mancante",
+    "NOT_REQUIRED": "Non richiesto"
+  },
+  "linkState": {
+    "LIVE": "Attivo",
+    "REVOKED": "Ritirato",
+    "USED_UP": "Aperture esaurite",
+    "EXPIRED": "Scaduto"
+  },
+  "csv": {
+    "number": "Spedizione",
+    "status": "Stato",
+    "customer": "Cliente",
+    "order": "Ordine",
+    "shipTo": "Destinazione",
+    "carrier": "Corriere",
+    "parcels": "Colli",
+    "weight": "Peso kg",
+    "ddt": "DDT",
+    "tracking": "Tracking",
+    "shipped": "Partita il"
+  },
+  "col": {
+    "number": "Spedizione",
+    "status": "Stato",
+    "customer": "Cliente · ordine",
+    "shipTo": "Destinazione",
+    "carrier": "Corriere",
+    "parcels": "Colli",
+    "weight": "Peso",
+    "ddt": "DDT",
+    "tracking": "Tracking",
+    "when": "Partenza entro",
+    "more": "Altro"
+  },
+  "list": {
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "new": "Nuova spedizione",
+    "keyNew": "Nuova spedizione",
+    "search": "Cerca numero, ordine, ordine cliente, cliente o tracking",
+    "rowsLabel": "Righe",
+    "tableLabel": "Spedizioni",
+    "count_one": "{count} spedizione",
+    "count_other": "{count} spedizioni",
+    "countMore_one": "{count} spedizione caricata, altre da mostrare",
+    "countMore_other": "{count} spedizioni caricate, altre da mostrare",
+    "more": "Mostra altre 50",
+    "moreToday": "Oltre 200 non ancora partite: vedi tutte le spedizioni",
+    "viewing": "Stai vedendo: {view}",
+    "keysTitle": "Tasti di questo elenco",
+    "created": "Pianificata il {date}",
+    "needsLabels_one": "{count} etichetta da comprare",
+    "needsLabels_other": "{count} etichette da comprare",
+    "waitsHandOver": "Attende la consegna al vettore",
+    "parcels_one": "{count} collo",
+    "parcels_other": "{count} colli",
+    "garments_one": "{count} capo",
+    "garments_other": "{count} capi",
+    "kg": "{value} kg",
+    "noDdt": "Non emesso",
+    "shippedAt": "Partita il {date}",
+    "cancelledAt": "Annullata il {date}",
+    "noCutOff": "Nessun orario limite",
+    "rowMenu": "Altro per {number}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "failed": "Non è stato possibile leggere le spedizioni",
+    "clearFilters": "Togli i filtri",
+    "noMatch": {
+      "title": "Nessuna spedizione corrisponde",
+      "body": "Nulla corrisponde a questa ricerca o a queste righe."
+    },
+    "today": {
+      "title": "Niente da spedire oggi",
+      "body": "Tutte le spedizioni sono partite. Nuova spedizione ne pianifica una da ciò che la qualità ha rilasciato."
+    },
+    "empty": {
+      "title": "Ancora nessuna spedizione",
+      "body": "Una spedizione si pianifica dai capi che la qualità ha rilasciato per un ordine."
+    }
+  },
+  "bulk": {
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)"
+  },
+  "cutoff": {
+    "label": "Orari limite dei corrieri oggi",
+    "left": "{left} all'orario limite delle {time}",
+    "passed": "Orario limite delle {time} passato: parte il giorno lavorativo dopo",
+    "notSet": "Nessun orario limite per questo stabilimento",
+    "unknown": "Orario limite non visibile per te",
+    "ready_one": "{count} collo pronto",
+    "ready_other": "{count} colli pronti",
+    "toPack_one": "{count} ancora da imballare",
+    "toPack_other": "{count} ancora da imballare",
+    "allPacked": "tutto imballato",
+    "none": "Niente da spedire oggi.",
+    "filtered": "Solo {carrier}",
+    "clear": "Mostra tutti i corrieri"
+  },
+  "new": {
+    "title": "Nuova spedizione",
+    "subtitle": "{order} · {customer}",
+    "back": "Indietro",
+    "next": "Avanti",
+    "create_one": "Crea spedizione ({count} capo)",
+    "create_other": "Crea spedizione ({count} capi)",
+    "step": {
+      "order": "Ordine e chi trasporta",
+      "quantities": "Capi per taglia"
+    },
+    "loading": "Lettura di ciò che la qualità ha rilasciato…",
+    "failed": "Non è stato possibile leggere cosa può partire",
+    "empty": {
+      "title": "Niente di rilasciato da spedire",
+      "body": "I capi possono partire quando la qualità li ha rilasciati al collaudo finale."
+    },
+    "search": "Cerca ordine, ordine cliente o cliente",
+    "noMatch": "Nessun ordine corrisponde.",
+    "customerRef": "Ordine cliente {ref}",
+    "shippable_one": "{count} capo rilasciato, non spedito",
+    "shippable_other": "{count} capi rilasciati, non spediti",
+    "transportBy": "Chi trasporta la merce",
+    "carrierCode": "Corriere (codice Sendcloud)",
+    "carrierHint": "Come lo chiama l'aggregatore, ad es. brt, gls, poste_italiane. Vuoto: quello dello stabilimento.",
+    "serviceCode": "Servizio",
+    "serviceHint": "Il codice dell'opzione di spedizione Sendcloud. Vuoto: il servizio predefinito dello stabilimento, se il corriere è quello predefinito.",
+    "capNote": "Ogni taglia può prendere ciò che la qualità ha rilasciato e nessuna spedizione tiene ancora.",
+    "all": "Tutto il rilasciato",
+    "size": "Taglia {size}",
+    "cap": "Fino a {count} · {batch}",
+    "minus": "Un capo in meno della taglia {size}",
+    "plus": "Un capo in più della taglia {size}",
+    "serials": "Modello tracciato a matricola: la matricola di ogni capo si legge all'imballo.",
+    "number": "La spedizione prende il numero successivo della serie spedizioni dell'azienda quando viene creata.",
+    "held": {
+      "order": "Scegli prima un ordine",
+      "range": "Una taglia chiede più di quanto può ancora partire",
+      "none": "Scegli almeno un capo"
+    },
+    "problem": {
+      "range": "Da 0 a {max}"
+    }
+  },
+  "held": {
+    "busy": "In corso…",
+    "noManage": "Serve il permesso di gestire le spedizioni",
+    "noPack": "Serve il permesso di imballare",
+    "packing_one": "{count} controllo di imballo aperto: vedi Colli",
+    "packing_other": "{count} controlli di imballo aperti: vedi Colli",
+    "noIssue": "Serve il permesso di emettere DDT",
+    "noBuy": "Serve il permesso di comprare etichette",
+    "ddtFirst": "Emetti prima il DDT: l'etichetta non parte mai prima del documento di legge",
+    "documents_one": "{count} documento deve essere in archivio prima che la merce parta",
+    "documents_other": "{count} documenti devono essere in archivio prima che la merce parta",
+    "noAnnul": "Serve il permesso di annullare DDT",
+    "annulDelivered": "Consegnata o resa: il DDT resta come emesso",
+    "cancelLabels": "Un collo ha un'etichetta del corriere: annullala prima",
+    "cancelDdt": "Un DDT valido la cita: annulla prima il DDT",
+    "deliveryDdt": "Il DDT riporta il vettore: annullalo per cambiare chi trasporta",
+    "deliveryLeft": "La merce è partita",
+    "unpackDdt": "Un DDT valido riporta l'imballo: annullalo prima",
+    "unpackLabels": "Un collo ha un'etichetta del corriere",
+    "ddtState": "Il DDT si emette quando la spedizione è imballata",
+    "ddtChecks_one": "{count} controllo aperto",
+    "ddtChecks_other": "{count} controlli aperti",
+    "previewFirst": "Controlla prima il DDT",
+    "buyState": "Le etichette si comprano a imballo fatto, prima che la merce parta",
+    "allLabelled": "Ogni collo ha la sua etichetta",
+    "noPrint": "Serve il permesso di stampare etichette",
+    "noLabelPrinter": "Questo stabilimento non ha una stampante di etichette: scarica i PDF",
+    "noLabels": "Nessuna etichetta comprata",
+    "parcelLabelled": "Etichettato: annulla l'etichetta per cambiarlo",
+    "parcelLeft": "La merce è partita",
+    "parcelFull": "Contiene capi: spostali prima",
+    "nothingToAttach": "Tutto ciò che è in archivio è allegato",
+    "noRecipients": "Il cliente non ha un contatto ordini o qualità con un'e-mail",
+    "cancelledShipment": "La spedizione è annullata"
+  },
+  "step": {
+    "pack": "Segna come imballata",
+    "issueDdt": "Emetti DDT {number}",
+    "buyLabels_one": "Compra {count} etichetta",
+    "buyLabels_other": "Compra {count} etichette",
+    "handOver": "Segna come consegnata al vettore"
+  },
+  "action": {
+    "delivery": "Cambia consegna",
+    "annul": "Annulla DDT {number}…",
+    "unpack": "Disfa l'imballo",
+    "cancel": "Annulla spedizione",
+    "openOrder": "Apri ordine {number}",
+    "copyNumber": "Copia il numero"
+  },
+  "tab": {
+    "lines": "Righe e colli",
+    "documents": "Documenti",
+    "carrier": "Corriere ed etichetta",
+    "tracking": "Tracking e consegna",
+    "activity": "Attività",
+    "problem": "C'è qualcosa da fare qui"
+  },
+  "record": {
+    "back": "Spedizioni",
+    "title": "Spedizione",
+    "loading": "Lettura della spedizione…",
+    "backToList": "Torna alle spedizioni",
+    "tabsLabel": "Le sezioni della spedizione",
+    "state": {
+      "not_found": {
+        "title": "Questa spedizione non esiste",
+        "body": "Non esiste o è di un'altra azienda."
+      },
+      "forbidden": {
+        "title": "Non è visibile per te",
+        "body": "Il tuo ruolo non arriva all'azienda, allo stabilimento o al cliente di questa spedizione."
+      },
+      "error": {
+        "title": "Non è stato possibile leggere la spedizione"
+      }
+    },
+    "dock": "Conversazione",
+    "dockHint": "La conversazione accanto alla scheda (⌘J)",
+    "dockLabel": "La conversazione della spedizione",
+    "more": "Altre azioni",
+    "checksOpen_one": "{count} controllo aperto",
+    "checksOpen_other": "{count} controlli aperti",
+    "order": "Ordine {number}",
+    "customerRef": "Ordine cliente {ref}",
+    "changed": "Qualcuno ha cambiato questa spedizione alle {time}",
+    "reload": "Ricarica",
+    "cancelled": "Annullata: {reason}",
+    "shipped": "Partita il {when}: righe, colli e DDT restano come sono partiti.",
+    "needsDdt": "La merce è partita senza un DDT valido: emetti subito il DDT sostitutivo.",
+    "trackingProblem": "Le notizie del corriere chiedono una persona",
+    "readOnly": "Sola lettura: il tuo ruolo vede le spedizioni ma non le cambia.",
+    "noPanels": "Conversazione, file e storico non sono mostrati qui."
+  },
+  "part": {
+    "loading": "Lettura di {part}…",
+    "failed": "Non è stato possibile leggere {part}"
+  },
+  "ready": {
+    "title": "Pronta a partire",
+    "all": "Pronta per la consegna al vettore.",
+    "packedAt": "Imballata il {when}",
+    "released": {
+      "name": "Rilasciati dalla qualità",
+      "ok_one": "{count} capo, rilasciato al collaudo finale",
+      "ok_other": "{count} capi, ognuno rilasciato al collaudo finale",
+      "none": "Ancora nessun capo nella spedizione"
+    },
+    "documents": {
+      "name": "Dichiarazione di conformità e nota informativa",
+      "ok": "In archivio per ogni modello (Reg. DPI art. 8)",
+      "missing_one": "{count} modello senza i suoi documenti",
+      "missing_other": "{count} modelli senza i loro documenti",
+      "fallback_one": "{count} documento viaggia in un'altra lingua",
+      "fallback_other": "{count} documenti viaggiano in un'altra lingua",
+      "unknown": "Non ancora letto"
+    },
+    "packed": {
+      "name": "Colli imballati e pesati",
+      "ok_one": "{count} collo imballato",
+      "ok_other": "{count} colli imballati",
+      "open_one": "{count} cosa ancora da imballare",
+      "open_other": "{count} cose ancora da imballare"
+    },
+    "ddt": {
+      "name": "DDT emesso",
+      "ok": "DDT {number}",
+      "open": "Non ancora emesso",
+      "notNeeded": "Viaggia una fattura immediata al suo posto"
+    },
+    "labels": {
+      "name": "Etichetta del corriere",
+      "ok_one": "{count} collo etichettato",
+      "ok_other": "{count} colli etichettati",
+      "open_one": "{count} collo senza etichetta",
+      "open_other": "{count} colli senza etichetta",
+      "SENDER": "Nostro furgone: nessuna etichetta del corriere",
+      "RECIPIENT": "Ritira il cliente: nessuna etichetta del corriere"
+    },
+    "fix": {
+      "lines": "Vai a Righe e colli",
+      "documents": "Vai a Documenti",
+      "carrier": "Vai a Corriere ed etichetta",
+      "tracking": "Vai a Tracking",
+      "activity": "Vai ad Attività"
+    }
+  },
+  "lines": {
+    "title": "Righe",
+    "count": "{count} capi in {lines} righe",
+    "add": "Aggiungi capi",
+    "locked": "Imballata: le righe cambiano solo dopo Disfa l'imballo (senza etichetta né DDT valido).",
+    "empty": {
+      "title": "Ancora nessun capo",
+      "body": "Aggiungi i capi che la qualità ha rilasciato per questo ordine.",
+      "readOnly": "Nessun capo in questa spedizione."
+    },
+    "col": {
+      "style": "Modello · colore",
+      "size": "Taglia",
+      "batch": "Lotto · ordine di lavoro",
+      "quantity": "Capi",
+      "carton": "Collo",
+      "actions": "Azioni"
+    },
+    "serials": "{count} di {total} matricole",
+    "quantityOf": "Capi di {style} taglia {size}",
+    "minus": "Uno in meno",
+    "plus": "Uno in più",
+    "cartonOf": "Collo per {style} taglia {size}",
+    "noCarton": "Non in un collo",
+    "remove": "Togli {style} taglia {size}",
+    "removeHeld": "Contiene matricole: toglile prima",
+    "serialList": "Matricole di questa spedizione"
+  },
+  "cartons": {
+    "title": "Colli",
+    "name": "Collo {seq} di {count}",
+    "empty": "Vuoto",
+    "garments_one": "{count} capo",
+    "garments_other": "{count} capi",
+    "add": "Aggiungi collo",
+    "unplaced_one": "{count} capo non in un collo",
+    "unplaced_other": "{count} capi non in un collo",
+    "none": {
+      "title": "Ancora nessun collo",
+      "body": "L'imballo si fa alla postazione di imballo o qui."
+    },
+    "col": {
+      "carton": "Collo",
+      "contents": "Contenuto per taglia",
+      "weight": "Peso lordo",
+      "size": "L × P × A",
+      "label": "Etichetta",
+      "actions": "Azioni"
+    },
+    "cm": "{l} × {w} × {h} cm",
+    "notWeighed": "Non pesato",
+    "labelled": "Etichettato",
+    "noLabel": "Ancora senza etichetta",
+    "labelNotNeeded": "Nessuna etichetta del corriere",
+    "weigh": "Pesa e misura {carton}",
+    "remove": "Togli {carton}",
+    "stillNeeds": "Manca ancora: {what}",
+    "readyToMark": "Ogni capo è in un collo pesato: segnala come imballata.",
+    "packingList": "Crea la packing list"
+  },
+  "docs": {
+    "ddt": {
+      "title": "DDT (documento di trasporto)",
+      "issued": "Emesso · {number}",
+      "draft": "Bozza",
+      "notRequired": "Nessun DDT: con la merce viaggia una fattura immediata.",
+      "frozen": "Il DDT {number} è emesso: non cambia mai e il suo numero non si usa più. Resta 10 anni nell'archivio fiscale. Un errore si corregge annullandolo ed emettendone uno nuovo.",
+      "download": "Scarica PDF",
+      "printAgain": "Stampa di nuovo il PDF",
+      "previewFailed": "Non è stato possibile controllare la bozza",
+      "previewLoading": "Controllo della bozza…",
+      "none": "Nessun DDT emesso.",
+      "checksOpen_one": "{count} controllo aperto prima di poterlo emettere",
+      "checksOpen_other": "{count} controlli aperti prima di poterlo emettere",
+      "readyToIssue": "C'è ogni campo: l'emissione prende il numero {number}.",
+      "sampleNote": "Bozza con la scritta ESEMPIO: nulla è archiviato, nessun numero è usato.",
+      "pdfTitle": "DDT {number}",
+      "sampleTitle": "Bozza di DDT",
+      "vat": "P. IVA {vat}",
+      "net": "netto {value} kg",
+      "carrier": "Vettore: {name}",
+      "goods_one": "{lines} riga · {pieces} capi",
+      "goods_other": "{lines} righe · {pieces} capi",
+      "lines_one": "{count} riga di merce",
+      "lines_other": "{count} righe di merce",
+      "batch": "lotto {batch}",
+      "field": {
+        "number": "Numero",
+        "numberLater": "Preso all'emissione",
+        "date": "Data",
+        "sender": "Mittente (art. 2250 c.c.)",
+        "recipient": "Destinatario",
+        "destination": "Luogo di destinazione",
+        "reason": "Causale del trasporto",
+        "goods": "Merce",
+        "packages": "Colli",
+        "weight": "Peso lordo",
+        "appearance": "Aspetto esteriore dei beni",
+        "transportBy": "Trasporto a cura del",
+        "start": "Inizio del trasporto",
+        "freight": "Porto",
+        "refs": "Riferimenti",
+        "remarks": "Annotazioni",
+        "language": "Lingua"
+      }
+    },
+    "pdf": {
+      "loading": "Lettura del PDF…",
+      "noFiles": "Leggere il PDF richiede il permesso di leggere i file",
+      "missing": "Il PDF non è ancora archiviato: stampalo di nuovo",
+      "draftHeld": "Il PDF della bozza appare quando la spedizione è imballata e i controlli passano"
+    },
+    "annulled": {
+      "title": "DDT annullati",
+      "col": {
+        "number": "Numero",
+        "date": "Data",
+        "when": "Annullato",
+        "state": "Stato"
+      },
+      "state": "Annullato",
+      "note": "Un DDT annullato tiene il suo numero e il motivo; non si cancella mai."
+    },
+    "travel": {
+      "title": "Dichiarazione di conformità e nota informativa",
+      "attach_one": "Allega {count}",
+      "attach_other": "Allega {count}",
+      "law": "I DPI viaggiano con la dichiarazione di conformità e la nota informativa (Reg. (UE) 2016/425 art. 8), nella lingua dell'ordine.",
+      "blocked_one": "{count} modello non può partire senza i suoi documenti",
+      "blocked_other": "{count} modelli non possono partire senza i loro documenti",
+      "fallback_one": "{count} documento è in una lingua diversa da quella dell'ordine",
+      "fallback_other": "{count} documenti sono in una lingua diversa da quella dell'ordine",
+      "none": {
+        "title": "Nessun documento DPI richiesto",
+        "body": "Nessun modello di questa spedizione chiede una dichiarazione di conformità."
+      },
+      "language": "In {language}",
+      "noLanguage": "Nessuna lingua in archivio",
+      "wanted": "l'ordine chiede {language}",
+      "fallbackTag": "Altra lingua",
+      "open": "Scarica {document}",
+      "packingList": "Packing list (solo nei colli)",
+      "whenShipped": "Quando la merce parte, i documenti si allegano e il link si invia da soli.",
+      "allAttached": "Tutto ciò che è in archivio è allegato per il cliente"
+    },
+    "link": {
+      "title": "Il link ai documenti per il cliente",
+      "send": "Invia link",
+      "resend": "Invia di nuovo",
+      "what": "Un solo link al DDT, alla dichiarazione di conformità e alla nota informativa, per i contatti ordini e qualità del cliente.",
+      "none": "Nessun link ancora inviato.",
+      "automatic": "Si invia da solo quando la merce parte.",
+      "byShipping": "Inviato alla partenza della merce",
+      "byOffice": "Inviato dall'ufficio il {when}",
+      "col": {
+        "to": "A",
+        "state": "Stato",
+        "opens": "Aperture",
+        "until": "Attivo fino al"
+      },
+      "opens": "{uses} di {max}",
+      "lastOpen": "Ultima apertura {when}"
+    }
+  },
+  "carrier": {
+    "booking": "Prenotazione",
+    "transportBy": "Trasporto a cura del",
+    "carrier": "Corriere",
+    "service": "Servizio",
+    "serviceDefault": "Quello del corriere",
+    "parcels": "Colli",
+    "cutOff": "Orario limite oggi",
+    "cutOffToday": "{time}",
+    "cutOffPassed": "{time} passato: parte il giorno lavorativo dopo",
+    "account": "Le etichette si comprano con l'account Sendcloud dell'azienda; il corriere lo addebita.",
+    "noLabel": {
+      "SENDER": "Nostro furgone: la merce parte con il DDT, senza etichetta del corriere.",
+      "RECIPIENT": "Ritira il cliente: la merce parte con il DDT, senza etichetta del corriere."
+    },
+    "labels": "Etichette",
+    "print": "Stampa etichette",
+    "noParcels": {
+      "title": "Ancora nessun collo",
+      "body": "Si compra un'etichetta per collo quando la spedizione è imballata."
+    },
+    "col": {
+      "parcel": "Collo",
+      "weight": "Peso",
+      "tracking": "Numero di tracking",
+      "print": "Stampa",
+      "file": "Etichetta"
+    },
+    "boughtAt": "Comprata il {when}",
+    "noLabelYet": "Ancora senza etichetta",
+    "notPrinted": "Non stampata",
+    "pdf": "PDF",
+    "downloadOf": "Scarica l'etichetta del collo {seq}",
+    "labelsHidden": "Lo stato di stampa è visibile a chi imballa.",
+    "noPrinter": "Questo stabilimento non ha una stampante di etichette: le etichette si stampano dal loro PDF."
+  },
+  "tracking": {
+    "title": "Tracking",
+    "last": "Ultimo evento {when}",
+    "noEvent": "Ancora nessun evento",
+    "waiting": "In attesa del corriere",
+    "events": "Gli eventi del corriere",
+    "noEventYet": "Il corriere non ha ancora mandato eventi.",
+    "notLeft": "La merce non è ancora partita.",
+    "parcel": "collo {seq}",
+    "source": {
+      "WEBHOOK": "dal corriere",
+      "POLL": "trovato dal controllo orario",
+      "MANUAL": "registrato a mano"
+    },
+    "none": {
+      "title": "Ancora nessun tracking",
+      "body": "Il tracking parte quando si compra un'etichetta.",
+      "SENDER": "Nostro furgone: nessun tracking del corriere.",
+      "RECIPIENT": "Ritira il cliente: nessun tracking del corriere."
+    },
+    "pod": "Prova di consegna",
+    "shippedAt": "Partita",
+    "deliveredAt": "Consegnata",
+    "returnedAt": "Resa",
+    "notYet": "Non ancora",
+    "notDelivered": "Non ancora consegnata",
+    "podLater": "La firma e la foto del corriere arrivano in un rilascio successivo."
+  },
+  "issue": {
+    "title": "Emetti DDT",
+    "subtitle": "Spedizione {number}",
+    "frozen": "Il numero {number} viene preso e conservato per 10 anni; dopo l'emissione il DDT non può cambiare. Un errore si corregge annullandolo ed emettendone uno nuovo.",
+    "frozenNoNumber": "Il DDT prende il numero successivo della serie DDT dell'azienda; dopo l'emissione non può cambiare.",
+    "checks_one": "{count} controllo aperto",
+    "checks_other": "{count} controlli aperti",
+    "reason": "Causale del trasporto",
+    "reasonText": "La causale, a parole",
+    "carrier": "Vettore sul DDT",
+    "carrierHint": "Vuoto: il corriere della spedizione.",
+    "appearance": "Aspetto esteriore dei beni",
+    "appearanceHint": "Vuoto: quello dello stabilimento (ad es. scatole di cartone).",
+    "net": "Peso netto",
+    "netHint": "Facoltativo; al massimo il lordo di {gross} kg.",
+    "freight": "Porto",
+    "freightNone": "Non stampato",
+    "remarks": "Annotazioni (stampate)",
+    "ship": {
+      "SENDER": "La merce parte ora con il nostro furgone: emetti e segna consegnata insieme",
+      "RECIPIENT": "Il cliente ritira ora: emetti e segna consegnata insieme"
+    },
+    "check": "Controlla di nuovo",
+    "go": "Emetti DDT {number}",
+    "goShip": "Emetti DDT {number} e consegna"
+  },
+  "annul": {
+    "title": "Annulla DDT {number}",
+    "what": "Il DDT {number} risulterà Annullato con il tuo motivo.",
+    "keeps": "Il suo numero resta con lui e non si usa più.",
+    "packed": "La spedizione resta imballata: emetti un nuovo DDT per la correzione.",
+    "shipped": "La merce è partita: emetti subito il DDT sostitutivo.",
+    "invoice": "Un DDT fatturato non si può annullare: una nota di credito corregge la fattura.",
+    "reason": "Motivo",
+    "type": "Scrivi {number} per annullarlo",
+    "go": "Annulla DDT",
+    "held": {
+      "reason": "Di' perché (almeno 3 caratteri)",
+      "phrase": "Scrivi esattamente il numero del DDT"
+    },
+    "typeHint": "Esattamente come stampato: cifre e barra.",
+    "typeWrong": "Non è ancora il numero del DDT"
+  },
+  "buy": {
+    "title": "Compra etichette",
+    "go_one": "Compra {count} etichetta",
+    "go_other": "Compra {count} etichette",
+    "outside": "Questo esce dall'azienda: il corriere viene prenotato e l'account Sendcloud dell'azienda addebitato.",
+    "void": "Un'etichetta si annulla entro i tempi del corriere per riavere il costo.",
+    "test": "Con un account di prova le etichette riportano TEST e nulla viene comprato.",
+    "busy": "Richiesta al corriere…",
+    "done_one": "{count} etichetta comprata.",
+    "done_other": "{count} etichette comprate.",
+    "partial": "Alcuni colli non hanno ancora l'etichetta.",
+    "parcelOk": "Collo {seq}: comprata",
+    "parcelRefused": "Collo {seq}: {problem}"
+  },
+  "handOver": {
+    "title": "Segna come consegnata al vettore",
+    "stock": "{count} capi escono dai prodotti finiti.",
+    "ddt": "DDT {number}, trasporto iniziato il {start}.",
+    "noDdt": "Non viaggia un DDT (viaggia una fattura immediata).",
+    "documents": "I documenti si allegano e il link si invia al cliente.",
+    "final": "Righe, colli e DDT della spedizione restano come sono partiti."
+  },
+  "cancel": {
+    "title": "Annulla la spedizione {number}",
+    "what": "{count} capi tornano a ciò che l'ordine può ancora spedire.",
+    "reason": "Motivo",
+    "go": "Annulla spedizione",
+    "held": "Di' perché"
+  },
+  "delivery": {
+    "title": "Cambia consegna",
+    "go": "Salva",
+    "note": "Chi trasporta è stampato sul DDT: cambialo prima di emettere il DDT.",
+    "serviceHint": "Il codice dell'opzione di spedizione Sendcloud: le etichette ne chiedono uno."
+  },
+  "addLines": {
+    "title": "Aggiungi capi",
+    "go_one": "Aggiungi {count} capo",
+    "go_other": "Aggiungi {count} capi",
+    "none": "Nient'altro di questo ordine è rilasciato e fuori da una spedizione."
+  },
+  "parcel": {
+    "title": "{carton}",
+    "new": "Nuovo collo",
+    "weight": "Peso lordo",
+    "length": "Lunghezza",
+    "width": "Profondità",
+    "height": "Altezza",
+    "save": "Salva",
+    "positive": "Sopra 0",
+    "held": "Ogni misura sopra 0",
+    "heldWeight": "Un collo imballato tiene un peso"
+  },
+  "link": {
+    "title": "Invia il link ai documenti",
+    "what": "Il cliente legge e scarica il DDT, la dichiarazione di conformità e la nota informativa; ogni download è registrato.",
+    "to": "A",
+    "days": "Attivo per (giorni)",
+    "daysHint": "Al massimo {max} giorni e 100 aperture.",
+    "fewer": "Un giorno in meno",
+    "more": "Un giorno in più",
+    "resendNote": "Inviarlo di nuovo ritira il link precedente di ogni indirizzo.",
+    "go_one": "Invia a {count} indirizzo",
+    "go_other": "Invia a {count} indirizzi",
+    "held": "Scegli almeno un contatto",
+    "sent_one": "{count} link inviato.",
+    "sent_other": "{count} link inviati.",
+    "sentTo": "{email}: inviato, attivo fino al {until}",
+    "notSent": "{email}: la mail non è partita; invia di nuovo",
+    "skipped": {
+      "SUPPRESSED": "{email}: questo indirizzo rifiuta le nostre mail",
+      "ALREADY_SENT": "{email}: ha già un link",
+      "ASKED_RECENTLY": "{email}: inviato un momento fa"
+    }
+  },
+  "unpack": {
+    "title": "Disfa l'imballo",
+    "what": "La spedizione torna in bozza perché colli e righe possano cambiare."
+  },
+  "notice": {
+    "packed": "Segnata come imballata.",
+    "unpacked": "Imballo disfatto: la spedizione è di nuovo una bozza.",
+    "lineRemoved": "Riga tolta.",
+    "linesAdded": "Capi aggiunti.",
+    "parcelSaved": "Collo salvato.",
+    "parcelAdded": "Collo aggiunto.",
+    "parcelRemoved": "Collo tolto.",
+    "packingList": "Packing list creata: la stampa la postazione di imballo.",
+    "ddtIssued": "DDT emesso.",
+    "ddtShipped": "DDT emesso e merce segnata consegnata al vettore.",
+    "ddtNoPdf": "Il DDT {number} è emesso; il suo PDF non è ancora archiviato: stampalo di nuovo.",
+    "ddtAnnulled": "DDT annullato. Emetti quello nuovo.",
+    "ddtPdf": "Il PDF del DDT è archiviato.",
+    "attached": "Documenti allegati per il cliente.",
+    "delivery": "Consegna salvata.",
+    "labelsPrinted": "Etichette inviate alla stampante.",
+    "shipped": "Consegnata al vettore: la merce è partita.",
+    "cancelled": "Spedizione annullata."
+  },
+  "problem": {
+    "read": {
+      "signed_out": "La sessione è finita: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non arriva fin qui.",
+      "not_found": "Non esiste o è di un'altra azienda.",
+      "unavailable": "La fabbrica non risponde: riprova tra un momento.",
+      "rate_limited": "Troppe richieste: aspetta un momento.",
+      "internal": "Qualcosa non è andato da parte nostra."
+    },
+    "write": {
+      "moved": "Qualcuno ha cambiato questa spedizione nel frattempo: è stata riletta, controlla e riprova.",
+      "state": "Lo stato della spedizione ora non lo permette.",
+      "invalid": "Qualcosa di ciò che è stato inviato non è valido.",
+      "signed_out": "La sessione è finita: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non lo permette.",
+      "not_found": "Non esiste più.",
+      "rate_limited": "Troppe richieste: aspetta un momento.",
+      "unavailable": "La fabbrica non risponde: non è cambiato nulla.",
+      "internal": "Qualcosa non è andato da parte nostra: non è cambiato nulla.",
+      "noService": "Le etichette chiedono il servizio del corriere: indicalo in Cambia consegna (o un servizio predefinito in Corrieri e spedizioni).",
+      "address": "Il corriere non accetta l'indirizzo così com'è: controlla la destinazione nell'ordine."
+    }
+  },
+  "packing": {
+    "lines": "almeno una riga di capi rilasciati",
+    "unplaced_one": "{count} capo in un collo",
+    "unplaced_other": "{count} capi in un collo",
+    "parcel": "almeno un collo",
+    "unweighed_one": "il collo {parcels} pesato",
+    "unweighed_other": "i colli {parcels} pesati",
+    "empty_one": "il collo {parcels} riempito o tolto (è vuoto)",
+    "empty_other": "i colli {parcels} riempiti o tolti (sono vuoti)",
+    "serials_one": "{count} matricola letta",
+    "serials_other": "{count} matricole lette"
+  }
+}

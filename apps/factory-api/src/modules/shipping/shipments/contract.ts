@@ -62,6 +62,10 @@ export const readyContract = defineContract({
 export const listShipmentsContract = defineContract({
   querystring: input({
     status: statusSchema.optional(),
+    /** The ship-today queue (SCR-066): the shipments that have not left yet (DRAFT and PACKED). */
+    open: z.enum(['true', 'false']).optional(),
+    /** Part of the shipment's or its sales order's number, the customer PO, the customer's name, or a tracking number. */
+    q: z.string().trim().max(64).optional(),
     siteId: id().optional(),
     salesOrderId: id().optional(),
     partyId: id().optional(),
@@ -84,10 +88,20 @@ export const listShipmentsContract = defineContract({
           salesOrderNumber: z.string(),
           transportBy: transportBySchema,
           carrierCode: z.string().nullable(),
+          carrierName: z.string().nullable(),
           serviceCode: z.string().nullable(),
+          /** Where it goes, as sent (the ship-to snapshot): city and country. */
+          shipTo: output({ city: z.string().nullable(), country: z.string().nullable() }),
           lines: z.number().int(),
           garments: z.number().int(),
           parcels: z.number().int(),
+          /** The parcels' gross weights added up (kg, a decimal string); null while a parcel is not weighed. */
+          grossWeightKg: z.string().nullable(),
+          /** Parcels with a carrier label, and the first tracking numbers (by parcel). */
+          labelled: z.number().int(),
+          trackingNumbers: z.array(z.string()),
+          /** The live DDT (none: not issued, or cancelled and not replaced yet). */
+          ddt: output({ id: id(), number: z.string() }).nullable(),
           packedAt: instant().nullable(),
           shippedAt: instant().nullable(),
           cancelledAt: instant().nullable(),

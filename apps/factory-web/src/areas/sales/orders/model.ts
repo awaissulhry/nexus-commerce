@@ -50,6 +50,8 @@ export interface OrderAbilities {
   viewWorkOrders: boolean
   makeWorkOrders: boolean
   viewQuotes: boolean
+  /** Plan a shipment from the order's released garments (Warehouse › Shipments: shipping.manage). */
+  createShipment: boolean
   price: boolean
   cost: boolean
   margin: boolean
@@ -68,6 +70,7 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     viewWorkOrders: held.has('workorders.view'),
     makeWorkOrders: held.has('workorders.manage'),
     viewQuotes: held.has('quotes.view'),
+    createShipment: held.has('shipping.manage'),
     price: held.has('money.price'),
     cost: held.has('money.cost'),
     margin: held.has('money.margin'),
@@ -581,3 +584,10 @@ export function knownIds(order: Order): Set<string> {
 export function romeToday(now: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
 }
+
+/** Released garments not shipped yet: Create shipment opens Warehouse's New shipment with this order (the dialog says how many each cell can still take). */
+export const mayCreateShipment = (order: Pick<Order, 'status' | 'progress'>, can: Pick<OrderAbilities, 'createShipment'>): boolean =>
+  can.createShipment && order.status !== 'CANCELLED' && order.status !== 'CLOSED' && order.progress.released > order.progress.shipped
+
+/** The address of Warehouse's New shipment with the order chosen. */
+export const createShipmentHref = (prefix: string, orderId: string): string => `${prefix}/warehouse/shipments?new=1&order=${encodeURIComponent(orderId)}`

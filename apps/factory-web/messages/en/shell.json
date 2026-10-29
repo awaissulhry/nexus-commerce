@@ -60,6 +60,13 @@
       "tests": "Tests & substances",
       "safety": "Product safety",
       "register": "PPE register & recalls"
+    },
+    "warehouse": {
+      "area": "Warehouse",
+      "outbound": "Outbound",
+      "shipments": "Shipments",
+      "settings": "Settings",
+      "shipping": "Carriers & shipping"
     }
   },
   "topbar": {

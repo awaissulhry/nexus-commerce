@@ -27,6 +27,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Lot: '/compliance/tests/[id]',
   // Compliance › PPE register & recalls (SCR-113).
   PpeRegisterEntry: '/compliance/register/[id]',
+  // Warehouse › Shipments (SCR-067): a shipment's record.
+  Shipment: '/warehouse/shipments/[id]',
 })
 
 /** An API list route → the web page that shows it (with the same query). */
@@ -44,6 +46,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/quality/inspections': '/quality/inspections',
   '/quality/lots': '/compliance/tests',
   '/compliance/register': '/compliance/register',
+  // The shipments list (SCR-066) reads `?rows=` and `?q=` from the address.
+  '/shipping/shipments': '/warehouse/shipments',
 })
 
 export interface RecordRef {

@@ -26,6 +26,14 @@ const packingShipment = output({
   internalNote: z.string().nullable(),
   packedAt: instant().nullable(),
   ...contentsSchema,
+  /**
+   * What the packing station prints of the office's documents (SCR-098 "Documents", W1: the documents the office made):
+   * the live DDT (number, date, its stored PDF) and the latest packing list PDF; null while the office has made none.
+   */
+  documents: output({
+    ddt: output({ id: id(), number: z.string(), documentDate: z.string(), fileId: id().nullable() }).nullable(),
+    packingList: output({ fileId: id(), createdAt: instant() }).nullable(),
+  }),
   /** The site's packing settings: the cut-off, the goods' appearance, the station's printers; null when none are set. */
   settings: output({
     cutOffTime: z.string().nullable(),
@@ -107,3 +115,18 @@ export const packSerialContract = defineContract({
 export const unpackSerialContract = defineContract({ params: input({ shipmentId: id(), serialId: id() }), querystring: versionQuery, response: onePacking })
 
 export const packContract = defineContract({ params: shipmentParams, body: input({ version }), response: onePacking })
+
+/** The office's documents a packer prints on the station's A4 printer (the site's shipping settings, else the one named). */
+export const PACKING_DOCUMENTS = ['DDT', 'PACKING_LIST'] as const
+
+export const printDocumentsContract = defineContract({
+  params: shipmentParams,
+  body: input({
+    /** Default: every one that is there (the live DDT's PDF, the latest packing list). */
+    documents: z.array(z.enum(PACKING_DOCUMENTS)).min(1).max(PACKING_DOCUMENTS.length).optional(),
+    /** Default: the site's document printer (shipping settings). */
+    printerId: id().optional(),
+    copies: z.number().int().min(1).max(10).optional(),
+  }),
+  response: { 201: output({ jobs: z.array(output({ jobId: id(), document: z.enum(PACKING_DOCUMENTS), status: z.string() })) }) },
+})

@@ -234,7 +234,8 @@
     "promise": "Cambia data promessa…",
     "ready": "Segna come pronto…",
     "openQuote": "Apri il preventivo {number}",
-    "copyNumber": "Copia il numero"
+    "copyNumber": "Copia il numero",
+    "createShipment": "Crea spedizione"
   },
   "record": {
     "back": "Ordini",

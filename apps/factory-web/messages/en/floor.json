@@ -309,7 +309,8 @@
       "cut": "Check a hide and log what you cut",
       "bundles": "Make bundles and print their tickets",
       "pick": "Issue materials to a work order",
-      "final": "Check, sign and release garments"
+      "final": "Check, sign and release garments",
+      "pack": "Scan garments into cartons, print labels and the DDT"
     },
     "held": {
       "notice": "Read the notice first",

@@ -1,7 +1,8 @@
 import type { Prisma } from '@nexus/factory-db'
-import { ConflictError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { PRINT_DOCUMENTS } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { SHIPPING_PACK } from '@nexus/factory-domain/shipping/permissions'
 import {
@@ -19,9 +20,12 @@ import {
 import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
+import { readPrinter } from '../../../platform/print/printers'
 import { assertMay, shippingContextOf, type ShippingContext } from '../access'
 import { lockCells, tenantOf } from '../cells'
+import { pdfFileIdsOf } from '../ddt/store'
 import { readSettings } from '../settings/settings'
+import { PACKING_DOCUMENTS } from './contract'
 import { contentsView, lockedStatus, packLineOf, packParcelOf, readContents, readShipment, shipmentFacts, type ShipmentHeader } from '../store'
 
 /**
@@ -44,9 +48,31 @@ async function packingShipment(caller: CommandCaller, shipmentId: string): Promi
   return { context, shipment: shipment! }
 }
 
+/**
+ * The office's documents a packer prints (SCR-098 "Documents"): the shipment's live DDT with its stored PDF (FISCAL_ARCHIVE,
+ * shared with the site's floor), and the latest packing list (a DOCUMENT of the shipment shared with the site's floor;
+ * the copies that travel by the party's link are never shared with the floor, so never this one). In any client: the
+ * floor reads its own site's DDTs and the files shared with it.
+ */
+export async function packingDocuments(db: CommandTx, shipmentId: string) {
+  const ddt = await db.ddt.findFirst({ where: { shipmentId, cancellations: { none: {} } }, select: { id: true, number: true, documentDate: true } })
+  const ddtFile = ddt ? ((await pdfFileIdsOf(db, [ddt.id])).get(ddt.id) ?? null) : null
+  const packingList = await db.storedFile.findFirst({
+    where: { recordType: 'Shipment', recordId: shipmentId, kind: 'DOCUMENT', status: 'AVAILABLE', contentType: 'application/pdf', visibility: { has: 'FLOOR' } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { id: true, createdAt: true },
+  })
+  return {
+    ddt: ddt ? { id: ddt.id, number: ddt.number, documentDate: ddt.documentDate.toISOString().slice(0, 10), fileId: ddtFile } : null,
+    packingList: packingList ? { fileId: packingList.id, createdAt: toUtcIso(packingList.createdAt) } : null,
+  }
+}
+
 /** What a packer sees of a shipment: no order, party or address (the floor reads none). */
 async function packingView(db: CommandTx, shipment: ShipmentHeader) {
-  const [contents, settings] = await Promise.all([contentsView(db, shipment.id), readSettings(db, shipment.siteId)])
+  const contents = await contentsView(db, shipment.id)
+  const settings = await readSettings(db, shipment.siteId)
+  const documents = await packingDocuments(db, shipment.id)
   return {
     id: shipment.id,
     number: shipment.number,
@@ -60,6 +86,7 @@ async function packingView(db: CommandTx, shipment: ShipmentHeader) {
     internalNote: shipment.internalNote,
     packedAt: shipment.packedAt ? toUtcIso(shipment.packedAt) : null,
     ...contents,
+    documents,
     settings: settings
       ? { cutOffTime: settings.cutOffTime, defaultGoodsAppearance: settings.defaultGoodsAppearance, labelPrinterId: settings.labelPrinterId, documentPrinterId: settings.documentPrinterId }
       : null,
@@ -348,4 +375,68 @@ export async function packShipment(caller: CommandCaller, shipmentId: string, bo
 /** shipping.pack: PACKED → DRAFT, to change the packing, while no carrier label and no live DDT name it. */
 export async function unpackShipment(caller: CommandCaller, shipmentId: string, body: { version?: number | undefined }, idempotencyKey?: string) {
   return packCommand(caller, shipmentId, { name: 'shipping.unpackShipment', idempotencyKey, input: body, version: body.version, change: 'status' }, (tools, shipment) => move(tools, shipment, 'PACKED', 'DRAFT'))
+}
+
+// ---- the office's documents on the station's printer (SCR-098 "Documents") ------------------------------------------
+
+type PackingDocument = (typeof PACKING_DOCUMENTS)[number]
+
+/**
+ * shipping.pack: the office's documents of the shipment — its live DDT's PDF and the latest packing list — printed on
+ * the packing station's A4 printer (the site's shipping settings, `documentPrinterId`). Printing the shipment's own
+ * documents at its station is part of packing (a floor role never holds print.documents: FLOOR_SHARED_PERMISSIONS); any
+ * other printer of the site needs print.documents there. Nothing is made here: what the office has not issued (the DDT)
+ * or made (the packing list) is said in words. One command: a PDF print job per document (the relay sends it).
+ */
+export async function printDocuments(caller: CommandCaller, shipmentId: string, body: { documents?: PackingDocument[] | undefined; printerId?: string | undefined; copies?: number | undefined }, idempotencyKey?: string) {
+  const { context, shipment } = await packingShipment(caller, shipmentId)
+  const settings = await caller.withClient((client) => client.shippingSettings.findUnique({ where: { id: shipment.siteId }, select: { documentPrinterId: true } }))
+  const printerId = body.printerId ?? settings?.documentPrinterId ?? null
+  if (!printerId) throw new ValidationError('No document printer.', [{ path: 'body/printerId', message: "Set the site's document printer in the shipping settings; the office can print the PDFs meanwhile." }])
+  const printer = await readPrinter(caller, printerId)
+  if (printer.siteId !== shipment.siteId) throw new ValidationError('Not a printer of this site.', [{ path: 'body/printerId', message: "Choose a printer of the shipment's site." }])
+  if (printer.id !== settings?.documentPrinterId && !can(actorOf(context), PRINT_DOCUMENTS, { companyId: printer.companyId, siteId: printer.siteId })) throw new ForbiddenError()
+  if (printer.kind !== 'A4_PDF') throw new ValidationError('This printer prints labels.', [{ path: 'body/printerId', message: 'The DDT and the packing list print on an A4 printer.' }])
+  if (printer.status !== 'ACTIVE') throw new InvalidStateError(`This printer is ${printer.status.toLowerCase()}; it takes no jobs now.`)
+
+  const documents = await caller.withClient((client) => packingDocuments(client, shipment.id))
+  const asked = body.documents ?? null
+  const wanted: PackingDocument[] = asked ?? [...PACKING_DOCUMENTS]
+  const chosen: { document: PackingDocument; fileId: string; recordType: string; recordId: string }[] = []
+  for (const document of wanted) {
+    if (document === 'DDT') {
+      if (documents.ddt?.fileId) chosen.push({ document, fileId: documents.ddt.fileId, recordType: 'Ddt', recordId: documents.ddt.id })
+      else if (asked) throw new InvalidStateError(documents.ddt ? `The PDF of DDT ${documents.ddt.number} is not stored yet: the office prints it again.` : 'This shipment has no live DDT yet: the office issues it.')
+    } else if (documents.packingList) {
+      chosen.push({ document, fileId: documents.packingList.fileId, recordType: 'Shipment', recordId: shipment.id })
+    } else if (asked) {
+      throw new InvalidStateError('This shipment has no packing list yet: the office makes it.')
+    }
+  }
+  if (chosen.length === 0) throw new InvalidStateError('Nothing to print yet: the office issues the DDT and makes the packing list.')
+  const copies = body.copies ?? 1
+
+  const { result } = await command(caller, { name: 'shipping.printDocuments', idempotencyKey, input: { shipmentId, ...body } }, async ({ tx, audit, emit, now, context: inside }) => {
+    const current = await tx.printer.findUnique({ where: { id: printer.id }, select: { status: true } })
+    if (current?.status !== 'ACTIVE') throw new InvalidStateError('This printer takes no jobs now.')
+    const requester =
+      inside.audience === 'floor'
+        ? { requestedById: inside.actorId, deviceId: inside.deviceId, createdById: inside.actorId }
+        : inside.audience === 'office'
+          ? { requestedById: inside.actorId, deviceId: null, createdById: inside.actorId }
+          : { requestedById: null, deviceId: null, createdById: null }
+    const jobs: { jobId: string; document: PackingDocument; status: string }[] = []
+    for (const entry of chosen) {
+      const id = newId()
+      await tx.printJob.create({
+        data: { id, companyId: printer.companyId, siteId: printer.siteId, printerId: printer.id, recordType: entry.recordType, recordId: entry.recordId, payloadKind: 'PDF', fileId: entry.fileId, copies, ...requester, createdAt: now, updatedAt: now },
+        select: { id: true },
+      })
+      audit({ recordType: 'PrintJob', recordId: id, companyId: printer.companyId, siteId: printer.siteId, after: { printerId: printer.id, recordType: entry.recordType, recordId: entry.recordId, payloadKind: 'PDF', fileId: entry.fileId, copies, shipmentId: shipment.id, document: entry.document } })
+      emit({ type: 'print.job_queued', subject: id, companyId: printer.companyId, siteId: printer.siteId, payload: { jobId: id, printerId: printer.id, payloadKind: 'PDF' } })
+      jobs.push({ jobId: id, document: entry.document, status: 'QUEUED' })
+    }
+    return { jobs }
+  })
+  return result
 }

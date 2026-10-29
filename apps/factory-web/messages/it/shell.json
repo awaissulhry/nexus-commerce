@@ -60,6 +60,13 @@
       "tests": "Test e sostanze",
       "safety": "Sicurezza prodotto",
       "register": "Registro DPI e richiami"
+    },
+    "warehouse": {
+      "area": "Magazzino",
+      "outbound": "In uscita",
+      "shipments": "Spedizioni",
+      "settings": "Impostazioni",
+      "shipping": "Corrieri e spedizioni"
     }
   },
   "topbar": {
