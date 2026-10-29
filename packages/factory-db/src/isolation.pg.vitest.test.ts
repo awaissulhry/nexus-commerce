@@ -12,6 +12,7 @@ import { seed as seedImports } from '../seed/imports'
 import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedInventory } from '../seed/inventory'
 import { seed as seedLinks } from '../seed/links'
+import { seed as seedMoney } from '../seed/money'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
@@ -141,6 +142,8 @@ beforeAll(async () => {
   await seedQuality({ db: factory, namespace: 'iso-b' })
   await seedShipping({ db: factory, namespace: 'iso-a' })
   await seedShipping({ db: factory, namespace: 'iso-b' })
+  await seedMoney({ db: factory, namespace: 'iso-a' })
+  await seedMoney({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -187,6 +190,8 @@ it('covers every classified table and every runtime role', () => {
     'IntegrationAccount',
     'IntegrationCall',
     'Invitation',
+    'Invoice',
+    'InvoiceLine',
     'Item',
     'ItemColour',
     'LabelTemplate',
@@ -211,6 +216,8 @@ it('covers every classified table and every runtime role', () => {
     'PartyContact',
     'PartyTaxIdentity',
     'PasswordReset',
+    'Payment',
+    'PaymentAllocation',
     'PlanningRun',
     'PpeRegisterEntry',
     'PrintJob',
@@ -232,6 +239,8 @@ it('covers every classified table and every runtime role', () => {
     'SalesOrder',
     'SalesOrderLine',
     'SalesOrderLineSize',
+    'SdiNotification',
+    'SdiSubmission',
     'SecretValue',
     'Session',
     'Shipment',

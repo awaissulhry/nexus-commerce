@@ -298,11 +298,15 @@ model Ddt {
   shipment      Shipment          @relation(fields: [tenantId, siteId, partyId, shipmentId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   numberSeries  NumberSeries      @relation(fields: [tenantId, companyId, numberSeriesId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   cancellations DdtCancellation[]
+  // money.prisma: the invoice lines of the goods it carried (TD24).
+  invoiceLines  InvoiceLine[]
 
   // Never the same number twice in a series period.
   @@unique([tenantId, numberSeriesId, number])
   // The target of the cancellations' reference: the same site and party.
   @@unique([tenantId, siteId, partyId, id])
+  // The target of the invoice lines' reference: the same party.
+  @@unique([tenantId, partyId, id])
   @@index([tenantId, shipmentId])
 }
 
