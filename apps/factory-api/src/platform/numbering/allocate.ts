@@ -2,7 +2,7 @@ import { ConflictError, InvalidStateError, NotFoundError, ValidationError } from
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { BUSINESS_TIME_ZONE, businessDate, isBusinessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { formatNumber, MAX_FISCAL_NUMBER_LENGTH } from '@nexus/factory-domain/numbering/format'
-import { isNumberKind, isSeriesCode, kindLabel, MAX_NUMBER, scopeKeyFor, yearOfScope, type NumberKind } from '@nexus/factory-domain/numbering/kinds'
+import { isNumberKind, isScanIdKind, isSeriesCode, kindLabel, MAX_NUMBER, scopeKeyFor, yearOfScope, type NumberKind } from '@nexus/factory-domain/numbering/kinds'
 import type { CommandTools } from '../../core/command'
 import { SYSTEM_ACTOR_ID } from '../../core/context'
 import { ApiError } from '../../core/errors'
@@ -30,8 +30,12 @@ import { ApiError } from '../../core/errors'
  * FatturaPA's 20 characters.
  *
  * The series is named by company and kind, and by code when the company keeps several of that kind (sezionali); with
- * no code, the company's only active one. Office and system (worker) commands issue numbers; the other audiences have
- * no grant on the series yet.
+ * no code, the company's only active one. Office and system (worker) commands issue numbers; floor and portal sessions
+ * have no grant on the series (a tablet must never move a company's counter, a fiscal one least of all).
+ *
+ * Document kinds only. The scan-id kinds (BUNDLE, HIDE, GARMENT_SERIAL) have no company series: ONE tenant-wide
+ * counter each, taken with allocateScanIds (online, any writing audience, the floor included) and, for a tablet's
+ * offline labels, its own number blocks with useScanIds (scan-ids.ts).
  */
 
 export interface SeriesRef {
@@ -87,6 +91,7 @@ export async function allocateNumber(tools: AllocationTools, series: SeriesRef, 
   const { companyId, kind } = series
   if (!isUuid(companyId)) throw new NotFoundError('Company not found.')
   if (!isNumberKind(kind)) throw new ApiError('internal_error', `allocateNumber(): ${JSON.stringify(kind)} is not a number kind.`)
+  if (isScanIdKind(kind)) throw new ApiError('internal_error', `allocateNumber(): ${kind} is a scan-id kind with one tenant-wide counter; take it with allocateScanIds (platform/numbering/scan-ids).`)
   if (series.code !== undefined && !isSeriesCode(series.code)) throw new ValidationError('The series code is not valid.', [{ path: 'series', message: 'Expected 1 to 16 capitals, digits or hyphens.' }])
   if (!RECORD_TYPE.test(record.type) || !isUuid(record.id)) throw new ApiError('internal_error', 'allocateNumber() needs the record\'s model name and id.')
   const date = record.date ?? businessDate(now, BUSINESS_TIME_ZONE)

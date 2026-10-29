@@ -67,8 +67,8 @@ const companies = defineImporter({
   batchSize: 2,
 })
 
-/** Test switches: a legal name whose write throws; a load that tries to write. */
-const switches = { failOn: null as string | null, writeInLoad: false }
+/** Test switches: a legal name whose write throws; a load that tries to write; a legal name the row check refuses. */
+const switches = { failOn: null as string | null, writeInLoad: false, refuse: null as string | null, checked: [] as { rows: number; tenantId: string | undefined }[] }
 
 const adapter = defineImportAdapter({
   importer: companies,
@@ -84,6 +84,12 @@ const adapter = defineImportAdapter({
       id: row.id,
       values: { code: row.code, legalName: row.legalName, tradeName: row.tradeName, fiscalYearStartMonth: row.fiscalYearStartMonth, shareCapital: row.shareCapital?.toString() ?? null },
     }))
+  },
+  async check(client, rows, _scope, actor) {
+    // Reads only, in the dry run's read-only transaction and the apply batch's command.
+    await client.company.count()
+    switches.checked.push({ rows: rows.length, tenantId: actor.tenantId })
+    return rows.map((row) => (row.values.legalName !== undefined && row.values.legalName === switches.refuse ? [{ column: 'legalName', message: `Made-up check: row ${row.rowNumber} names a refused company.` }] : []))
   },
   async write(tools, row) {
     if (switches.failOn !== null && row.values.legalName === switches.failOn) throw new Error('made-up write failure')
@@ -227,6 +233,8 @@ afterAll(async () => {
 beforeEach(async () => {
   switches.failOn = null
   switches.writeInLoad = false
+  switches.refuse = null
+  switches.checked = []
   // Each test starts from the same records: HQ (to update) and KEEP (unchanged), nothing else of the test's codes.
   await admin(`DELETE FROM "Company" WHERE "tenantId" = $1 AND id <> $2 AND id NOT IN (SELECT "companyId" FROM "ImportJob" WHERE "companyId" IS NOT NULL)`, [tenantA, companyA])
   await admin(
@@ -428,6 +436,23 @@ describe('apply in batches', () => {
       [3, 'SKIPPED', 'already_done'],
     ])
     expect((await companiesOf()).find((company) => company.code === 'HQ')!.tradeName).toBe('Changed by hand')
+  })
+
+  it("the adapter's row check: an ERROR with its issues in the dry run; at the apply, a row it refuses now is skipped, never written", async () => {
+    switches.refuse = 'Two'
+    const refused = await planned('owner', csv(FIVE))
+    expect(refused).toMatchObject({ status: 'PLANNED', createCount: 4, errorCount: 1 })
+    expect((await rowsOf(refused.id)).find((row) => row.rowNumber === 3)).toMatchObject({ action: 'ERROR', errors: [{ column: 'legalName', message: 'Made-up check: row 3 names a refused company.' }] })
+    // Every row whose cells parsed, once, for the job's tenant.
+    expect(switches.checked).toEqual([{ rows: 5, tenantId: tenantA }])
+
+    switches.refuse = null
+    const job = await planned('owner', csv(FIVE))
+    expect(job).toMatchObject({ createCount: 5, errorCount: 0 })
+    switches.refuse = 'Four'
+    expect(await applied(job)).toMatchObject({ status: 'APPLIED', appliedCount: 4, skippedCount: 1 })
+    expect((await rowsOf(job.id)).find((row) => row.rowNumber === 5)).toMatchObject({ outcome: 'SKIPPED', note: 'changed_since_dry_run' })
+    expect((await companiesOf()).map((company) => company.code).filter((code) => code.startsWith('B-'))).toEqual(['B-1', 'B-2', 'B-3', 'B-5'])
   })
 
   it('a cancelled import is never applied', async () => {

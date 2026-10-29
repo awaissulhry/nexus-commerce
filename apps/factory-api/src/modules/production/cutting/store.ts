@@ -138,6 +138,19 @@ export async function latestEntryOf(db: Reader, siteId: string, deviceId: string
   return row?.id ?? null
 }
 
+/**
+ * The hide's newest live entry for the work order (serverTime orders rows): the closing entry of a Hide done that used
+ * nothing more (the last cut took what was left), named on the used-up hide (Hide.closingCutLogId).
+ */
+export async function lastLiveEntryOf(db: Reader, siteId: string, workOrderId: string, hideId: string): Promise<string | null> {
+  const row = await db.cutLog.findFirst({
+    where: { siteId, workOrderId, hideId, reversalOfId: null, reversals: { none: {} } },
+    orderBy: [{ serverTime: 'desc' }, { id: 'desc' }],
+    select: { id: true },
+  })
+  return row?.id ?? null
+}
+
 // ---- a hide ----------------------------------------------------------------------------------------------------------------------
 
 export const HIDE_COLUMNS = {
@@ -155,6 +168,7 @@ export const HIDE_COLUMNS = {
   thicknessMm: true,
   defects: true,
   state: true,
+  closingCutLogId: true,
   version: true,
 } as const satisfies Prisma.HideSelect
 export type HideRow = Prisma.HideGetPayload<{ select: typeof HIDE_COLUMNS }>

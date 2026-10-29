@@ -1,0 +1,50 @@
+{
+  "selected_one": "{count} selected",
+  "selected_other": "{count} selected",
+  "clear": "Clear selection",
+  "updates_one": "{count} update · Show",
+  "updates_other": "{count} updates · Show",
+  "selectAll": "Select all loaded rows",
+  "loading": "Loading…",
+  "keys": {
+    "trigger": "Keyboard keys of this list",
+    "title": "Keys",
+    "all": "All shortcuts (?)",
+    "click": "click",
+    "search": "Search the list",
+    "rows": "Next / previous row",
+    "cells": "Move between rows and cells",
+    "open": "Open the row",
+    "select": "Select the row (Space too)",
+    "range": "Select every row up to this one",
+    "help": "All shortcuts"
+  },
+  "lab": {
+    "title": "List frame",
+    "search": "Search name or code",
+    "count": "{shown} of {total}",
+    "more": "Show {count} more",
+    "newRecord": "New record",
+    "archive_one": "Archive {count}",
+    "archive_other": "Archive {count}",
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)",
+    "col": {
+      "name": "Name",
+      "status": "Status",
+      "country": "Country",
+      "updated": "Updated"
+    },
+    "status": {
+      "ACTIVE": "Active",
+      "PROSPECT": "Prospect",
+      "BLOCKED": "Blocked"
+    },
+    "newKey": "New record",
+    "failed": "Couldn't load the list. Nexus Factory didn't answer: try again.",
+    "retry": "Try again",
+    "empty": "Nothing here yet",
+    "noMatch": "No rows match these filters",
+    "clearFilters": "Clear filters"
+  }
+}

@@ -4,6 +4,7 @@ import type { PlannedMaterial, PlannedOperation } from '@nexus/factory-domain/pr
 import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { cutCountsOf } from '../cutting/views'
+import { scanProgressOf } from '../scans/progress'
 import { planSpec, readBasics, readIssued, readSpecParts, type Basics, type SpecParts } from './facts'
 import { dayOrNull, type Header, type Reader } from './store'
 
@@ -11,12 +12,15 @@ import { dayOrNull, type Header, type Reader } from './store'
  * The work order record (A2 SCR-070; design 02 "Record: Work order"): facts, the orders and customers it makes for,
  * the size run, and the specification — for a DRAFT what the release would freeze now (from the chosen revision, the
  * site's work centres and the BOM math), from RELEASED on the frozen rows themselves — with what the ledger issued to
- * it. Progress per cell: "cut" is counted from the cut log from the release on (B-W1-40: garments with every part cut
- * from hides; null for a draft, or a cell with no part cut from hides); sewn and finished come with the floor's scans
- * (B-W1-42): until then null ("not counted yet"), never a made-up 0.
+ * it. Progress per cell, from the release on (null for a draft, never a made-up 0): "cut" from the cut log (B-W1-40:
+ * garments with every part cut from hides; null for a cell with no part cut from hides); "bundled" from the bundles
+ * (B-W1-41: garments in ACTIVE bundles of whole garments; a part bundle is pieces, not garments); "sewn" and "finished" from the
+ * floor's scans (B-W1-42, modules/production/scans progress.ts): the good garments of whole-garment bundles at the last
+ * scanned sewing operation (SEWING or ASSEMBLY work centre; null when the routing sews nowhere) and at the final one.
  */
 
-export const PROGRESS_NOTE = 'Cut garments are counted from the cutting log; sewn and finished ones from the floor scans (B-W1-42): not counted yet.'
+export const PROGRESS_NOTE =
+  'Cut garments are counted from the cutting log; bundled ones are the garments in active bundles of whole garments; sewn ones are the good garments reported at the last scanned sewing operation, finished ones at the final operation (the floor scans).'
 
 const at = (value: Date | null): string | null => (value ? toUtcIso(value) : null)
 
@@ -135,6 +139,7 @@ export async function workOrderView(db: Reader, workOrder: Header, today: Busine
   const plan = draft ? { operations: draft.operations.map((op) => ({ ...op, id: null })), materials: draft.materials } : await frozenSpec(db, workOrder, parts)
   const issued = await readIssued(db, workOrder.siteId, [workOrder.id])
   const cut = frozen ? await cutCountsOf(db, workOrder.id, workOrder.styleId) : null
+  const scanned = frozen ? await scanProgressOf(db, workOrder) : null
   const pieces = cells.reduce((sum, cell) => sum + cell.quantity, 0)
   const perGarment = plan.operations.reduce<Decimal>((sum, op) => sum.plus(op.standardMinutes), ZERO)
   const dueDate = dayOrNull(workOrder.dueDate)
@@ -177,10 +182,10 @@ export async function workOrderView(db: Reader, workOrder: Header, today: Busine
       salesOrderLineId: cell.salesOrderLineId,
       salesOrderId: cell.salesOrderId,
       lineSeq: cell.lineSeq,
-      progress: { cut: cut?.get(cell.id) ?? null, sewn: null, finished: null },
+      progress: { cut: cut?.get(cell.id) ?? null, bundled: scanned?.get(cell.id)?.bundled ?? null, sewn: scanned?.get(cell.id)?.sewn ?? null, finished: scanned?.get(cell.id)?.finished ?? null },
     })),
     pieces,
-    progress: { counted: false, note: PROGRESS_NOTE },
+    progress: { counted: frozen, note: PROGRESS_NOTE },
     spec: {
       frozen,
       frozenAt: at(workOrder.releasedAt),

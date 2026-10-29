@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { ValidationError } from '../../core/errors'
 import { composeLabel } from '../../labels/model'
-import { formatScanId, parseScanId, tenantTag } from '../../numbering/scan-id'
+import { formatScanId, tenantTag } from '../../numbering/scan-id'
 import { floorPrivacyStatus, floorReadiness, NO_DPIA_NOTE } from '../../privacy/readiness'
 import { floorRulesStatus } from '../settings/monitoring'
 import {
   bundlesReadyRefusal,
   cellBundles,
   DEFAULT_BUNDLE_SIZE,
-  highestBundleRef,
-  nextBundleCodes,
   planBundles,
   reprintRefusal,
   scannedBundleRefusal,
   splitBundles,
+  standardBundleSizeOf,
+  targetBundleSize,
   voidRefusal,
   type CellCut,
   type PlanCell,
@@ -81,6 +81,21 @@ describe('a request to make bundles', () => {
     expect(planBundles(facts({ asks: [{ cellId: 'c50', quantity: 7, bundleSize: 4 }] }))).toMatchObject({ ok: true, bundles: [{ quantity: 4 }, { quantity: 3 }] })
   })
 
+  it("takes the site's standard bundle size when the request names none (MES-065), never over an asked one", () => {
+    // The site bundles by 4: 12 → 4 + 4 + 4; a size in the request (or the ask) wins; no row: 10.
+    expect(planBundles(facts({ standardSize: 4 }))).toMatchObject({ ok: true, bundles: [{ quantity: 4 }, { quantity: 4 }, { quantity: 4 }] })
+    expect(planBundles(facts({ standardSize: 4, bundleSize: 6 }))).toMatchObject({ ok: true, bundles: [{ quantity: 6 }, { quantity: 6 }] })
+    expect(planBundles(facts({ standardSize: 4, asks: [{ cellId: 'c50', bundleSize: 12 }] }))).toMatchObject({ ok: true, bundles: [{ quantity: 12 }] })
+    expect(standardBundleSizeOf({ standardBundleSize: 4 })).toBe(4)
+    expect(standardBundleSizeOf(null)).toBe(DEFAULT_BUNDLE_SIZE)
+    // The proposal's size: asked, else the site's; a made-to-measure unit is one garment whatever the site says.
+    expect(targetBundleSize('SIZE_GRID', undefined, 4)).toBe(4)
+    expect(targetBundleSize('SIZE_GRID', 7, 4)).toBe(7)
+    expect(targetBundleSize('MADE_TO_MEASURE', undefined, 4)).toBe(1)
+    const unit: CellCut = { cellId: 'u', quantity: 1, cut: 1, parts: [{ part: 'Outer shell', pieces: 1, planned: true }] }
+    expect(planBundles(facts({ workOrder: { ...workOrder, kind: 'MADE_TO_MEASURE' }, cells: [cell(unit, 'BLK MTM')], standardSize: 4 }))).toMatchObject({ ok: true, bundles: [{ quantity: 1 }] })
+  })
+
   it('never bundles more than was cut and not yet bundled, in words', () => {
     const over = planBundles(facts({ asks: [{ cellId: 'c50', quantity: 13 }] }))
     expect(over).toEqual({ ok: false, refusal: { code: 'MORE_THAN_CUT', message: 'BLK 50 has 12 cut garments not in bundles; 13 asked. A bundle never holds more than was cut.' } })
@@ -118,20 +133,7 @@ describe('a request to make bundles', () => {
   })
 })
 
-describe('ticket codes, reprint, void and the scan of an old ticket (MES-073)', () => {
-  const tag = tenantTag('7c9e6679-7425-40de-944b-e07fc1f90ae7')
-  const other = tenantTag('a3bb189e-8bf9-3888-9912-ace4e6543002')
-
-  it('gives new tickets the next BUNDLE ids of the tenant after its highest one', () => {
-    const highest = formatScanId({ type: 'BUNDLE', tenantTag: tag, ref: 41 })
-    const codes = [formatScanId({ type: 'BUNDLE', tenantTag: tag, ref: 7 }), highest, 'SEED-BN-0001', formatScanId({ type: 'HIDE', tenantTag: tag, ref: 900 }), other === tag ? null : formatScanId({ type: 'BUNDLE', tenantTag: other, ref: 99 })]
-    expect(highestBundleRef(codes, tag)).toBe(41)
-    expect(highestBundleRef([], tag)).toBe(0)
-    const next = nextBundleCodes(tag, 41, 3)
-    expect(next.map((code) => parseScanId(code, { tenantTag: tag, types: ['BUNDLE'] }))).toEqual([42, 43, 44].map((ref) => expect.objectContaining({ ok: true, type: 'BUNDLE', ref })))
-    expect(nextBundleCodes(tag, 0, 0)).toEqual([])
-  })
-
+describe('reprint, void and the scan of an old ticket (MES-073)', () => {
   it('reprints and voids only an ACTIVE bundle of an open work order; voids one only before any scan names it', () => {
     const bundle = { code: 'BN-A', status: 'ACTIVE' as const, replacedCodes: [] }
     expect(reprintRefusal({ bundle, workOrder })).toBeNull()

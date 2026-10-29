@@ -6,6 +6,7 @@ import { defineManifest } from '../../../core/manifest'
  * company and site (`record`); the settings over the company (tenant-wide: a grant over every company to save).
  */
 export const manifest = defineManifest({
+  'GET /quality/lots': { audiences: ['office'], permission: 'quality.lots.view', scope: 'record' },
   'GET /quality/lots/:lotId': { audiences: ['office'], permission: 'quality.lots.view', scope: 'record' },
   'GET /quality/lots/:lotId/release-check': { audiences: ['office'], permission: 'quality.lots.view', scope: 'record' },
   'GET /quality/lots/:lotId/results': { audiences: ['office'], permission: 'quality.lots.view', scope: 'record' },

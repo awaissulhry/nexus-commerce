@@ -59,6 +59,14 @@ model Device {
   cutLogs        CutLog[]
   bundles        Bundle[]
   operationScans OperationScan[]
+  // B-W1-42: correction requests asked and scans refused on it.
+  scanCorrectionRequests ScanCorrectionRequest[]
+  scanRefusals           FloorScanRefusal[]
+  // B-W1-44: the garment labels printed on it; the bundle tickets printed again on it.
+  garmentLabelPrints     GarmentLabelPrint[]
+  bundleReprints         BundleReprint[]
+  // numbering.prisma: the numbers of its blocks it used.
+  numberBlockUses NumberBlockUse[]
 
   @@unique([tenantId, siteId, id])
   @@index([tenantId, siteId])
@@ -140,8 +148,13 @@ model Worker {
   noticeAcks     WorkerNoticeAck[]
   cutLogs        CutLog[]
   operationScans OperationScan[]
+  // B-W1-42: the correction requests they asked and the refused scans they sent (a site that names workers).
+  scanCorrectionRequests ScanCorrectionRequest[]
+  scanRefusals           FloorScanRefusal[]
   // quality.prisma: the final inspections the worker made as the inspector.
   inspections    Inspection[]
+  // The quality releases a floor inspector signed (B-W1-45).
+  qualityReleases QualityRelease[]
 
   @@unique([tenantId, employeeCode])
   // The target of the tenant- and site-safe references from the worker's rows.

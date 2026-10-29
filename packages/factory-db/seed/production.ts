@@ -1,5 +1,8 @@
 import type { Prisma } from '../src/generated/prisma/client'
+import { W1_SCAN_REASONS } from '@nexus/factory-domain/production/scans/reasons'
+import { unknownBundleRefusal } from '@nexus/factory-domain/production/scans/rules'
 import {
+  DefectKind,
   HideState,
   LabelTemplateStatus,
   MonitoringBasis,
@@ -8,7 +11,9 @@ import {
   ProductType,
   SalesLineKind,
   SalesOrderStatus,
+  ScanCorrectionStatus,
   ScanKind,
+  ScanRefusalAction,
   ScanSubject,
   StockMoveReason,
   StockValuationMethod,
@@ -44,9 +49,13 @@ import { seedWorkerNotice } from './privacy'
  *   WO-0002      a DRAFT work order of one cell (BLK 52), with its operations and planned materials.
  *   floor        the operator's acknowledgement of the worker notice 2026-10 in force (both made by seed/privacy.ts
  *                seedWorkerNotice, run first); one cut of the issued hide
- *                (20 ft² for sleeves of BLK 50 and 52, so the hide stays PARTLY_CUT); two bundles of sleeves from it;
+ *                (20 ft² for sleeves of BLK 50 and 52, so the hide stays PARTLY_CUT); two bundles of sleeves from it,
+ *                one of them on its second ticket (its first came off: a BundleReprint with the reason);
  *                three scans at sewing: a report of the first bundle undone at once (a mis-scan) and a report of the
- *                second.
+ *                second; the operator's correction request of that report (one of its two sleeve sets stained: 1 good,
+ *                1 scrapped, its line STAIN 1), still PENDING; a scan the cutting tablet's queue sent that was refused
+ *                (an unknown ticket), kept open (B-W1-42).
+ *   reasons      the tenant's scrap and rework reasons: W1's list (factory-domain production/scans/reasons), it/en.
  *
  * The generated isolation tests (src/isolation.pg.vitest.test.ts) copy the FIRST row of each table by id and insert the
  * copy: the parts of a released work order are frozen, a second standing report of a bundle at an operation is refused,
@@ -69,9 +78,12 @@ const T = {
   issued: new Date('2026-11-16T07:30:00.000Z'),
   cut: new Date('2026-11-16T09:00:00.000Z'),
   bundled: new Date('2026-11-16T10:00:00.000Z'),
+  reprinted: new Date('2026-11-16T10:20:00.000Z'),
   scanned: new Date('2026-11-17T08:00:00.000Z'),
   undone: new Date('2026-11-17T08:00:20.000Z'),
   rescanned: new Date('2026-11-17T09:30:00.000Z'),
+  asked: new Date('2026-11-17T10:00:00.000Z'),
+  refused: new Date('2026-11-17T10:30:00.000Z'),
 } as const
 const DAY = { orderDate: new Date('2026-11-12T00:00:00.000Z'), due: new Date('2026-12-04T00:00:00.000Z') } as const
 
@@ -115,6 +127,9 @@ export interface ProductionSeed {
   readonly operatorId: string
   readonly leadId: string
   readonly deviceId: string
+  /** The operator's PENDING correction request of the standing report (scanIds[2]) and the cutting tablet's refused scan. */
+  readonly correctionRequestId: string
+  readonly refusalId: string
 }
 
 export async function seed(context: SeedContext): Promise<ProductionSeed> {
@@ -522,14 +537,19 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
         ],
       })
       await tx.hide.update({ where: { id: hide1 }, data: { state: HideState.PARTLY_CUT, updatedAt: T.cut }, select: { id: true } })
+      // The bundle whose id sorts last lost its first ticket (SEED-BN-001n) and was reprinted as SEED-BN-000n: the
+      // generated isolation tests copy the FIRST bundle by id, which must still be on its first ticket.
+      const reprinted = [...bundleIds].sort().at(-1)!
       for (const [index, cell] of (['BLK-50', 'BLK-52'] as const).entries()) {
+        const code = `SEED-BN-000${index + 1}`
+        const first = bundleIds[index] === reprinted ? `SEED-BN-001${index + 1}` : code
         await tx.bundle.create({
           data: {
             id: bundleIds[index]!,
             siteId: siteA,
             workOrderId,
             workOrderSizeId: cellIds[cell],
-            code: `SEED-BN-000${index + 1}`,
+            code: first,
             quantity: cell === 'BLK-50' ? 1 : 2,
             part: 'SLEEVES',
             cutLogIds: [cutLogId],
@@ -539,6 +559,25 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
           },
           select: { id: true },
         })
+        if (first === code) continue
+        // The reprint's row (with its reason) first, then the bundle's new code (the Bundle trigger checks the row).
+        await tx.bundleReprint.create({
+          data: {
+            id: id(`production:bundle-reprint:WO-0001:${index + 1}`),
+            companyId: companyA,
+            siteId: siteA,
+            workOrderId,
+            bundleId: bundleIds[index]!,
+            code,
+            replacedCode: first,
+            reason: 'The first ticket came off in the cutting room.',
+            deviceId,
+            createdAt: T.reprinted,
+            createdById: operatorId,
+          },
+          select: { id: true },
+        })
+        await tx.bundle.update({ where: { id: bundleIds[index]! }, data: { code, replacedCodes: [first], version: 2, updatedAt: T.reprinted }, select: { id: true } })
       }
     }),
   )
@@ -556,6 +595,86 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
       })
       await tx.operationScan.create({
         data: { id: scanIds[2], ...at, bundleId: bundleIds[1], kind: ScanKind.REPORT, goodQuantity: 2, clientScanId: 'seed-scan-3', deviceTime: T.rescanned, serverTime: T.rescanned },
+        select: { id: true },
+      })
+    }),
+  )
+  // B-W1-42's records: the tenant's reasons (the office keeps them), then on the floor an ask of a correction of the
+  // standing report with its line, and a refused scan of the cutting tablet's queue.
+  const correctionRequestId = id('production:scan-correction:WO-0001:1')
+  const refusalId = id('production:scan-refusal:A1:1')
+  await db.withScope({ audience: 'office', tenantId, actorId }, (client) =>
+    client.$transaction(async (tx) => {
+      for (const reason of W1_SCAN_REASONS) {
+        const reasonId = id(`production:scrap-reason:${reason.kind}:${reason.code}`)
+        const data = { labelIt: reason.label.it, labelEn: reason.label.en, sortOrder: reason.sortOrder, active: reason.active }
+        await tx.scrapReason.upsert({
+          where: { id: reasonId },
+          create: { id: reasonId, kind: reason.kind === 'SCRAP' ? DefectKind.SCRAP : DefectKind.REWORK, code: reason.code, ...data, ...stamp(T.setup) },
+          update: data,
+          select: { id: true },
+        })
+      }
+    }),
+  )
+  await db.withScope(signedIn, (client) =>
+    client.$transaction(async (tx) => {
+      if (await tx.scanCorrectionRequest.findUnique({ where: { id: correctionRequestId }, select: { id: true } })) return
+      await tx.scanCorrectionRequest.create({
+        data: {
+          id: correctionRequestId,
+          siteId: siteA,
+          workOrderId,
+          bundleId: bundleIds[1],
+          workOrderOperationId: operationIds.sew,
+          scanId: scanIds[2],
+          goodQuantity: 1,
+          scrapQuantity: 1,
+          reason: 'One sleeve set has a stain that does not clean off.',
+          status: ScanCorrectionStatus.PENDING,
+          askedById: operatorId,
+          stationId: id('site:A1:station:CUT-01'),
+          deviceId,
+          clientRequestId: 'seed-ask-1',
+          deviceTime: T.asked,
+          serverTime: T.asked,
+          createdById: operatorId,
+          createdAt: T.asked,
+          updatedAt: T.asked,
+        },
+        select: { id: true },
+      })
+      await tx.operationScanDefect.create({
+        data: { id: id('production:scan-line:WO-0001:ask-1'), siteId: siteA, correctionRequestId, kind: DefectKind.SCRAP, reasonCode: 'STAIN', quantity: 1, serverTime: T.asked, createdById: operatorId },
+        select: { id: true },
+      })
+    }),
+  )
+  await db.withScope(signedIn, (client) =>
+    client.$transaction(async (tx) => {
+      if (await tx.floorScanRefusal.findUnique({ where: { id: refusalId }, select: { id: true } })) return
+      const refusal = unknownBundleRefusal()
+      await tx.floorScanRefusal.create({
+        data: {
+          id: refusalId,
+          siteId: siteA,
+          deviceId,
+          clientScanId: 'seed-scan-refused-1',
+          action: ScanRefusalAction.REPORT,
+          code: refusal.code,
+          message: refusal.message,
+          fix: refusal.fix,
+          final: refusal.final,
+          scanned: 'SEED-BN-9999',
+          goodQuantity: 1,
+          workerId: operatorId,
+          stationId: id('site:A1:station:CUT-01'),
+          deviceTime: T.refused,
+          serverTime: T.refused,
+          createdById: operatorId,
+          createdAt: T.refused,
+          updatedAt: T.refused,
+        },
         select: { id: true },
       })
     }),
@@ -584,5 +703,7 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
     operatorId,
     leadId,
     deviceId,
+    correctionRequestId,
+    refusalId,
   }
 }

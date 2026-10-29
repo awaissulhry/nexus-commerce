@@ -73,6 +73,36 @@ export const labelBody = input({
 })
 
 const copies = () => z.number().int().min(1).max(MAX_LABEL_COPIES).default(1)
+/** A station with its label printer (MES-184): where its floor devices print bundle tickets when they name none. */
+export const stationPrinterView = output({
+  id: id(),
+  companyId: id(),
+  siteId: id(),
+  code: z.string(),
+  name: z.string(),
+  status: z.enum(['ACTIVE', 'ARCHIVED']),
+  labelPrinterId: id().nullable(),
+  version: z.number().int(),
+  updatedAt: instant(),
+})
+export type StationPrinterView = z.infer<typeof stationPrinterView>
+
+export const listStationPrintersContract = defineContract({
+  querystring: input({ siteId: id().optional() }),
+  response: { 200: output({ stations: z.array(stationPrinterView) }) },
+})
+
+export const setStationPrinterContract = defineContract({
+  params: input({ stationId: id() }),
+  body: input({
+    /** A label printer of the station's site; null: none. */
+    printerId: id().nullable(),
+    version: z.number().int().min(1),
+  }),
+  /** changed false: the station had this printer already (no audit row). */
+  response: { 200: output({ station: stationPrinterView, changed: z.boolean() }) },
+})
+
 const stockMm = (min: number) => z.number().int().min(min).max(MAX_LABEL_MM)
 const one = { 200: output({ printer: printerView }) }
 
