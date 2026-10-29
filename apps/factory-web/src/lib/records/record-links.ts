@@ -10,12 +10,14 @@
 /**
  * Record type (the API's model name) → its own page. W1 so far: a received mail opens in Mail to sort's review; a party
  * (customer or supplier: one record) opens on the Customers record page (the type does not say which side; the Suppliers
- * record page shows the same party from the buying side); a quote opens its studio (SCR-035).
+ * record page shows the same party from the buying side); a quote opens its studio (SCR-035), a sales order its studio
+ * (SCR-039).
  */
 export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   InboundEmail: '/home/mail-to-sort?open=[id]',
   Party: '/sales/customers/[id]',
   Quote: '/sales/quotes/[id]',
+  SalesOrder: '/sales/orders/[id]',
   Style: '/products/styles/[id]',
   WorkOrder: '/production/work-orders/[id]',
   // Quality › Inspections (SCR-076); a release is reviewed in its DetailModal on the list (design §2.3).
@@ -34,6 +36,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // The quote list (SCR-034) reads `status` and `q` as the API does; the approvals queue (SCR-030) reads `view`.
   '/sales/quotes': '/sales/quotes',
   '/sales/quote-approvals': '/home/approvals',
+  // The order list (SCR-038) reads the API's own filters from the address (`?late=true`, `?deposit=OPEN`, `?status=`).
+  '/sales/orders': '/sales/orders',
   '/product/styles': '/products/styles',
   '/production/work-orders': '/production/work-orders',
   // The pages read the API's own filters from the address (`?onHold=true`, `?waitingRelease=true`, `?status=OPEN`).

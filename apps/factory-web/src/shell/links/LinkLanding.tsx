@@ -6,6 +6,7 @@ import type { ApiClient } from '../../lib/api/client'
 import { isApiError } from '../../lib/api/errors'
 import { openLink, type OpenedLink } from '../../lib/api/links'
 import { takeLinkTokenFromLocation } from '../../lib/links/token'
+import { DepositPay } from '../../links/deposit-pay/DepositPay'
 import { QuoteAccept } from '../../links/quote-accept/QuoteAccept'
 import { linkStateFromError, linkStateOfOpened, type LinkState } from './link-state'
 import { LinkFrameView, type LinkFrameViewModel } from './view/LinkFrameView'
@@ -21,8 +22,9 @@ const linkBody = (state: LinkState, link?: OpenedLink): LinkFrameViewModel['body
 /**
  * `/l#token=…` — where every one-off link lands. It takes the token from the fragment (and out of the address bar),
  * opens the link (`POST /link/open`, token in `x-factory-link`, never in a URL), and shows the link's state. A valid
- * link's task is its module's page: a QUOTE_ACCEPT link opens the quote to accept (links/quote-accept, SCR-099) with the
- * same client (the token stays in memory, in its header); any other purpose shows what it opens and when it expires.
+ * link's task is its module's page: a QUOTE_ACCEPT link opens the quote to accept (links/quote-accept, SCR-099), a
+ * DEPOSIT_INFO link the deposit to pay by bank transfer (links/deposit-pay, SCR-199), each with the same client (the
+ * token stays in memory, in its header); any other purpose shows what it opens and when it expires.
  */
 export function LinkLanding() {
   const [model, setModel] = useState<LinkFrameViewModel>({ sender: null, title: null, body: linkBody('loading') })
@@ -51,7 +53,7 @@ export function LinkLanding() {
         .then((link) => {
           if (mine !== attempt) return
           const state = linkStateOfOpened(link, new Date())
-          if (state === 'valid' && link.purpose === 'QUOTE_ACCEPT') setTask({ purpose: link.purpose, api })
+          if (state === 'valid' && (link.purpose === 'QUOTE_ACCEPT' || link.purpose === 'DEPOSIT_INFO')) setTask({ purpose: link.purpose, api })
           setModel({ sender: null, title: null, body: linkBody(state, link) })
         })
         .catch((error: unknown) => {
@@ -68,5 +70,6 @@ export function LinkLanding() {
   }, [])
 
   if (task?.purpose === 'QUOTE_ACCEPT') return <QuoteAccept api={task.api} />
+  if (task?.purpose === 'DEPOSIT_INFO') return <DepositPay api={task.api} />
   return <LinkFrameView model={model} />
 }

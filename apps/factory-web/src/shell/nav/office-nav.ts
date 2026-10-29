@@ -106,6 +106,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/sales/customers/[partyId]',
   '/sales/quotes',
   '/sales/quotes/[id]',
+  '/sales/orders',
+  '/sales/orders/[id]',
   '/purchasing/suppliers',
   '/purchasing/suppliers/[partyId]',
   '/products/styles',

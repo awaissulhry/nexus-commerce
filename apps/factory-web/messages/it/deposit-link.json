@@ -1,0 +1,35 @@
+{
+  "title": "Acconto per l'ordine {order}",
+  "titleQuote": "Acconto per il preventivo {quote}",
+  "kind": {
+    "ACCONTO": "Acconto",
+    "CAPARRA": "Caparra confirmatoria"
+  },
+  "what": {
+    "title": "Cosa paghi",
+    "toPay": "Da pagare",
+    "for": "Per",
+    "forOrder": "Ordine {order} (preventivo {quote})",
+    "kind": "Tipo",
+    "kindPct": "{kind}, {pct} del totale",
+    "due": "Entro il"
+  },
+  "bank": {
+    "title": "Paga con bonifico",
+    "holder": "Beneficiario",
+    "iban": "IBAN",
+    "bic": "BIC",
+    "bank": "Banca",
+    "reference": "Causale da scrivere",
+    "amount": "Importo",
+    "none": "Le coordinate bancarie arrivano per e-mail: l'azienda non le ha ancora inserite qui.",
+    "production": "La produzione parte quando l'acconto è ricevuto."
+  },
+  "copy": "Copia {what}",
+  "copyShort": "Copia",
+  "copied": "{what} copiato.",
+  "paid": {
+    "title": "Pagato — grazie",
+    "body": "L'acconto di {amount} è ricevuto. La fattura di acconto arriva per e-mail quando è emessa."
+  }
+}

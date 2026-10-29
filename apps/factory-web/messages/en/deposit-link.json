@@ -1,0 +1,35 @@
+{
+  "title": "Deposit for order {order}",
+  "titleQuote": "Deposit for quote {quote}",
+  "kind": {
+    "ACCONTO": "Advance (acconto)",
+    "CAPARRA": "Confirmatory deposit (caparra)"
+  },
+  "what": {
+    "title": "What you pay",
+    "toPay": "To pay",
+    "for": "For",
+    "forOrder": "Order {order} (quote {quote})",
+    "kind": "Kind",
+    "kindPct": "{kind}, {pct} of the total",
+    "due": "Due by"
+  },
+  "bank": {
+    "title": "Pay by bank transfer",
+    "holder": "Beneficiary",
+    "iban": "IBAN",
+    "bic": "BIC",
+    "bank": "Bank",
+    "reference": "Reference to write",
+    "amount": "Amount",
+    "none": "The bank details follow by e-mail: the company has not entered them here yet.",
+    "production": "Production starts when the deposit is received."
+  },
+  "copy": "Copy {what}",
+  "copyShort": "Copy",
+  "copied": "{what} copied.",
+  "paid": {
+    "title": "Paid — thank you",
+    "body": "The deposit of {amount} is received. The deposit invoice follows by e-mail when it is issued."
+  }
+}

@@ -1,0 +1,705 @@
+{
+  "common": {
+    "retry": "Try again",
+    "dismiss": "Dismiss",
+    "cancel": "Cancel",
+    "done": "Done",
+    "working": "Working…"
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline: reload to see the latest"
+  },
+  "status": {
+    "CONFIRMED": "Confirmed",
+    "IN_PRODUCTION": "In production",
+    "READY": "Ready",
+    "PARTLY_SHIPPED": "Partly shipped",
+    "SHIPPED": "Shipped",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled"
+  },
+  "deposit": {
+    "NOT_NEEDED": "Not needed",
+    "MISSING": "Not asked",
+    "OPEN": "Open",
+    "PAID": "Paid",
+    "WAIVED": "Waived",
+    "title": "Deposit · {kind}",
+    "overdue": "Overdue",
+    "amount": "Amount",
+    "due": "Due",
+    "paidSoFar": "Paid so far",
+    "left": "{amount} still to pay",
+    "document": "After payment",
+    "documentTd02": "A deposit invoice (TD02)",
+    "documentNone": "No deposit invoice (its VAT rule)",
+    "stepsLabel": "Steps of the deposit",
+    "send": "Send the bank-details page",
+    "sendAgain": "Send it again",
+    "record": "Record the payment",
+    "sendSdi": "Send to SDI",
+    "step": {
+      "requested": "Asked",
+      "requestedWords": "Asked when the customer accepted the quote ({date})",
+      "page": "Bank-details page",
+      "pageNotSent": "Not sent yet: the customer finds the IBAN, the amount and the reference on it",
+      "pageNotNeeded": "Nothing left to pay",
+      "paid": "Payment",
+      "paidOn": "Paid in full on {date}",
+      "paidDone": "Paid in full",
+      "partPaid": "{paid} received, {left} still to pay",
+      "waitingTransfer": "Waiting for the bank transfer",
+      "invoice": "Deposit invoice (TD02)",
+      "invoiceNotNeeded": "Not needed: this deposit is only a payment",
+      "td02": "TD02 {number}",
+      "issuedOn": "issued on {date}",
+      "td02Draft": "TD02 draft: finance issues it",
+      "invoiceWaits": "Waits to be issued by finance",
+      "invoiceAfterPayment": "Issued when the payment arrives",
+      "sdi": "SDI",
+      "sdiNotNeeded": "Nothing to send",
+      "sdiAfterInvoice": "Sent once the TD02 is issued",
+      "sdiNoRight": "The SDI state is shown to people who see invoices",
+      "sdiReading": "Reading the SDI state…"
+    },
+    "none": {
+      "title": "No deposit asked",
+      "body": "This order needs no deposit: production may start when its work orders are released.",
+      "missing": "The order needs a deposit, but no request exists: it is asked when the quote is accepted."
+    }
+  },
+  "depositKind": {
+    "ACCONTO": "advance (acconto)",
+    "CAPARRA": "confirmatory deposit (caparra)"
+  },
+  "requestStatus": {
+    "OPEN": "Open",
+    "PAID": "Paid",
+    "WAIVED": "Waived",
+    "CANCELLED": "Cancelled"
+  },
+  "rows": {
+    "open": "Open",
+    "late": "Late",
+    "deposit": "Waiting for deposit",
+    "CONFIRMED": "Confirmed",
+    "IN_PRODUCTION": "In production",
+    "READY": "Ready to ship",
+    "PARTLY_SHIPPED": "Partly shipped",
+    "SHIPPED": "Shipped",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled",
+    "all": "All orders"
+  },
+  "tile": {
+    "late": "Late",
+    "waitingForDeposit": "Waiting for deposit",
+    "inProduction": "In production",
+    "readyToShip": "Ready to ship",
+    "unknown": "Couldn't count"
+  },
+  "layout": {
+    "list": "List",
+    "board": "Board"
+  },
+  "list": {
+    "tableLabel": "Sales orders",
+    "search": "Search number or customer PO",
+    "rowsLabel": "Rows",
+    "layoutLabel": "Show orders as",
+    "keyView": "List or board",
+    "keysTitle": "Keys of this list",
+    "updated": "Updated {time}",
+    "notYet": "Not read yet",
+    "count_one": "{count} order",
+    "count_other": "{count} orders",
+    "countMore_one": "{count} order shown, more to load",
+    "countMore_other": "{count} orders shown, more to load",
+    "more": "Show 50 more",
+    "customerRef": "PO {ref}",
+    "noCustomerRef": "No customer PO",
+    "depositDue": "due {date}",
+    "depositOverdue": "was due {date}",
+    "units_one": "{count} piece",
+    "units_other": "{count} pieces",
+    "lines_one": "{count} line",
+    "lines_other": "{count} lines",
+    "daysLate_one": "{count} day late",
+    "daysLate_other": "{count} days late",
+    "requested": "requested {date}",
+    "noRequested": "nothing requested",
+    "noPromise": "No promise",
+    "shipped": "{shipped} of {units} shipped",
+    "shippedLabel": "Pieces of {number} shipped",
+    "quoteRef": "{number} v{revision}",
+    "rowMenu": "More for {number}",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "failed": "Couldn't load the orders",
+    "noMatch": {
+      "title": "No orders match",
+      "body": "Change the search or the rows, or clear the filters."
+    },
+    "clearFilters": "Clear filters",
+    "empty": {
+      "title": "No orders yet",
+      "body": "An order appears here when a customer accepts a quote.",
+      "quotes": "Go to Quotes"
+    },
+    "viewing": "Showing: {view}"
+  },
+  "col": {
+    "number": "Number",
+    "customer": "Customer",
+    "status": "Status",
+    "deposit": "Deposit",
+    "units": "Pieces",
+    "orderDate": "Ordered",
+    "promised": "Promised",
+    "shipped": "Shipped",
+    "net": "Net",
+    "quote": "From quote",
+    "more": "More"
+  },
+  "bulk": {
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)"
+  },
+  "csv": {
+    "number": "Number",
+    "customer": "Customer",
+    "customerRef": "Customer PO",
+    "status": "Status",
+    "deposit": "Deposit",
+    "depositDue": "Deposit due",
+    "lines": "Lines",
+    "units": "Pieces",
+    "shipped": "Shipped",
+    "orderDate": "Ordered",
+    "requested": "Requested",
+    "promised": "Promised",
+    "daysLate": "Days late",
+    "net": "Net",
+    "gross": "Gross",
+    "quote": "Quote"
+  },
+  "board": {
+    "label": "Orders by state",
+    "count_one": "{count} state",
+    "count_other": "{count} states",
+    "countMore": "{count}+",
+    "updates_one": "{count} update · Show",
+    "updates_other": "{count} updates · Show",
+    "valuePartial": "Value when all are shown",
+    "laneEmpty": "No order in this state",
+    "allInList": "All {state} orders in the list",
+    "offBoard": "Not on the board: {closed} closed, {cancelled} cancelled.",
+    "seeClosed": "See closed orders",
+    "keyWalk": "Previous or next card",
+    "cardLabel": "{number}, {customer}",
+    "promise": "Promised {date}",
+    "promiseLate_one": "{date} · {count} day late",
+    "promiseLate_other": "{date} · {count} days late",
+    "notOnBoard": {
+      "title": "Closed and cancelled orders are not on the board",
+      "body": "The board shows the orders still moving. These are in the list.",
+      "list": "Show them in the list"
+    },
+    "deposit": {
+      "NOT_NEEDED": "No deposit",
+      "MISSING": "Deposit not asked",
+      "OPEN": "Deposit open",
+      "PAID": "Deposit paid",
+      "WAIVED": "Deposit waived"
+    }
+  },
+  "tab": {
+    "lines": "Lines",
+    "dates": "Dates & promise",
+    "production": "Production",
+    "shipments": "Shipments",
+    "money": "Invoices & payments",
+    "documents": "Documents",
+    "activity": "Activity",
+    "depositOpen": "A deposit is open"
+  },
+  "step": {
+    "makeWorkOrders": "Make work orders",
+    "changePromise": "Change promise date…",
+    "close": "Close order…"
+  },
+  "action": {
+    "promise": "Change promise date…",
+    "ready": "Mark ready…",
+    "openQuote": "Open quote {number}",
+    "copyNumber": "Copy the number"
+  },
+  "record": {
+    "back": "Orders",
+    "backToList": "Back to Orders",
+    "title": "Order",
+    "loading": "Loading the order…",
+    "state": {
+      "not_found": {
+        "title": "This order does not exist",
+        "body": "It may belong to another company, or the address is wrong."
+      },
+      "forbidden": {
+        "title": "You don't have access to this order",
+        "body": "Orders open to people with a sales, finance or production role over its company and customer."
+      },
+      "error": {
+        "title": "Couldn't load the order"
+      }
+    },
+    "dock": "Thread",
+    "dockHint": "The order's thread beside the tab",
+    "dockLabel": "The order's thread",
+    "more": "More for this order",
+    "tabsLabel": "Sections of the order",
+    "depositOpen": "Deposit open — due {date}",
+    "depositPaid": "Deposit paid",
+    "depositMissing": "Deposit not asked",
+    "late_one": "Late {count} day",
+    "late_other": "Late {count} days",
+    "customerRef": "Customer PO {ref}",
+    "fromQuote": "From quote {number} v{revision}",
+    "changed": "This order changed at {time}",
+    "reload": "Reload",
+    "cancelled": "Cancelled: {reason}",
+    "closed": "Closed on {date}: nothing on it changes any more.",
+    "closedNoDate": "Closed: nothing on it changes any more.",
+    "readOnly": "Read-only: your role follows orders and changes none.",
+    "noPanels": "The thread, files and history open with the record."
+  },
+  "held": {
+    "busy": "Working on the last change…",
+    "noWorkOrders": "Making work orders needs the production manager's right",
+    "deposit": "Production waits for the deposit (due {date})",
+    "depositMissing": "Production waits for a deposit that was never asked",
+    "noManage": "Changing an order needs the sales right to manage orders",
+    "closeState": "Only a shipped order is closed",
+    "noClose": "Closing needs the right to manage or close orders",
+    "notSettled": "Not settled yet: closing it anyway needs the right to close unsettled orders",
+    "cancelState": "Only a confirmed order is cancelled",
+    "cancelWorkOrders": "Its lines have work orders: cancel the drafts first; a released one keeps the order",
+    "readyState": "Only an order in production is marked ready",
+    "final": "A closed or cancelled order never changes",
+    "noPayments": "Recording payments needs the finance right",
+    "depositNotOpen": "Nothing is left to pay on this deposit",
+    "noQuote": "This deposit belongs to no quote: its page goes with the quote",
+    "noPrice": "Amounts are shown to people who see prices",
+    "noIssue": "Sending to SDI needs the right to issue invoices",
+    "sdiNotNow": "It cannot be sent now: see its state"
+  },
+  "summary": {
+    "label": "The order at a glance",
+    "title": "Summary",
+    "lines": "Lines",
+    "linesValue": "{lines} lines · {units} pieces",
+    "net": "Net",
+    "vat": "VAT",
+    "gross": "Gross",
+    "grossConsumer": "Total, VAT included",
+    "money": "Money",
+    "noPrice": "Shown to people who see prices",
+    "deposit": "Deposit",
+    "depositNotNeeded": "Not needed",
+    "depositMissing": "Needed, not asked",
+    "depositPaid": "{amount} paid",
+    "depositWaived": "Waived",
+    "depositOpen": "{amount} due {date}",
+    "invoiced": "Invoiced",
+    "paid": "Paid",
+    "balance": "Balance due",
+    "margin": "Estimated margin",
+    "marginValue": "{pct}",
+    "marginUnknown": "Not known: a cost is missing",
+    "cost": "Cost",
+    "costIncomplete": "Incomplete"
+  },
+  "chain": {
+    "title": "From the quote to the invoices",
+    "quote": "Quote",
+    "quoteValue": "{number} v{revision}",
+    "noQuote": "Typed by the office",
+    "order": "Order",
+    "deposit": "Deposit",
+    "workOrders": "Work orders",
+    "shipments": "Shipments",
+    "invoices": "Invoices",
+    "count_one": "{count}",
+    "count_other": "{count}"
+  },
+  "gate": {
+    "title": "Deposit gate",
+    "state": {
+      "NOT_NEEDED": "Not needed",
+      "WAITING": "Waiting for payment",
+      "PAID": "Paid",
+      "WAIVED": "Waived",
+      "MISSING": "Not asked"
+    },
+    "waiting": "Production waits for the deposit (due {date}).",
+    "paid": "Deposit paid on {date}: production may start.",
+    "paidNoDate": "Deposit paid: production may start.",
+    "waived": "Deposit waived: production may start.",
+    "missing": "The order needs a deposit, but none was asked: production waits.",
+    "notNeeded": "No deposit needed: production may start.",
+    "amount": "{amount} as {kind}",
+    "open": "Open the deposit"
+  },
+  "lines": {
+    "readOnly": "What the customer ordered, as accepted. An order changes through an amendment (later).",
+    "show": "Show",
+    "vatNature": "VAT {nature}",
+    "orderDate": "As the order",
+    "revision": "Made to rev {revision}",
+    "noRevision": "Revision chosen by the work order",
+    "gridCaption": "{style}: {layer} by colour and size",
+    "pricesOf": "Prices of {style}",
+    "madeHint": "Pieces made per size are counted on each work order (Production tab).",
+    "col": {
+      "colour": "Colour",
+      "pieces": "Pieces",
+      "shipped": "Shipped",
+      "unitNet": "Unit price (net)",
+      "unitGross": "Unit price (VAT incl.)",
+      "net": "Net",
+      "vat": "VAT",
+      "promise": "Promise"
+    }
+  },
+  "layer": {
+    "ordered": "Ordered",
+    "inWorkOrders": "In work orders",
+    "released": "Released",
+    "shipped": "Shipped",
+    "toShip": "Left to ship"
+  },
+  "dates": {
+    "title": "Dates",
+    "ordered": "Ordered",
+    "requested": "Requested",
+    "promised": "Promised",
+    "firstPromised": "First promised",
+    "late_one": "{count} day late",
+    "late_other": "{count} days late",
+    "left_one": "in {count} day",
+    "left_other": "in {count} days",
+    "linesLabel": "Dates by line",
+    "asOrder": "{date} (the order's)",
+    "historyTitle": "Promise changes",
+    "never": "Never changed",
+    "neverBody": "The promise is still the one given when the order was made.",
+    "someone": "Someone in the office",
+    "fromTo": "{from} → {to}",
+    "wholeOrder": "The whole order",
+    "col": {
+      "line": "Line",
+      "requested": "Requested",
+      "promised": "Promised",
+      "state": "On time?",
+      "when": "When",
+      "who": "Who",
+      "change": "Change",
+      "reason": "Why"
+    }
+  },
+  "production": {
+    "title": "Work orders",
+    "empty": {
+      "title": "No work orders yet",
+      "body": "Production makes work orders from the order's lines once the deposit allows it."
+    },
+    "uncovered_one": "{count} line not fully in production",
+    "uncovered_other": "{count} lines not fully in production",
+    "noProgressRight": "Floor progress is shown to people who follow production.",
+    "progressLabel": "Finished pieces of {number}",
+    "progress": "Cut {cut} · sewn {sewn} · finished {finished} of {pieces}",
+    "notReleased": "Not released yet",
+    "col": {
+      "number": "Work order",
+      "style": "Style",
+      "pieces": "Pieces",
+      "status": "State",
+      "progress": "Progress",
+      "due": "Due",
+      "site": "Site",
+      "released": "Released"
+    }
+  },
+  "woStatus": {
+    "DRAFT": "Draft",
+    "RELEASED": "Released",
+    "IN_PROGRESS": "In progress",
+    "COMPLETED": "Completed",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled"
+  },
+  "ship": {
+    "leftTitle": "Left to ship",
+    "figures": "{ordered} ordered · {released} released · {shipped} shipped · {toShip} left",
+    "gridCaption": "{style}: pieces left to ship by colour and size",
+    "listTitle": "Shipments",
+    "empty": {
+      "title": "Nothing shipped yet",
+      "body": "Shipments made in the warehouse for this order appear here."
+    },
+    "col": {
+      "number": "Shipment",
+      "status": "State",
+      "shipped": "Left",
+      "delivered": "Delivered"
+    }
+  },
+  "shipStatus": {
+    "DRAFT": "Draft",
+    "PACKED": "Packed",
+    "SHIPPED": "Shipped",
+    "DELIVERED": "Delivered",
+    "RETURNED": "Returned",
+    "CANCELLED": "Cancelled"
+  },
+  "money": {
+    "balanceTitle": "Balance",
+    "gross": "Order total",
+    "invoiced": "Invoiced",
+    "paid": "Paid on invoices",
+    "depositPaid": "Deposits received",
+    "balance": "Balance due",
+    "invoicesTitle": "Invoices and credit notes",
+    "noInvoices": {
+      "title": "Nothing invoiced yet",
+      "body": "The deposit invoice and the invoices of shipped goods appear here."
+    },
+    "draft": "Draft",
+    "noInvoiceRight": "Invoices are shown to people who see invoices.",
+    "col": {
+      "number": "Number",
+      "kind": "Kind",
+      "status": "State",
+      "sdi": "SDI",
+      "gross": "Total",
+      "open": "Open"
+    }
+  },
+  "docType": {
+    "TD01": "Invoice (TD01)",
+    "TD02": "Deposit invoice (TD02)",
+    "TD04": "Credit note (TD04)",
+    "TD24": "Deferred invoice (TD24)"
+  },
+  "invoiceStatus": {
+    "DRAFT": "Draft",
+    "ISSUED": "Issued",
+    "SENT": "Sent to SDI",
+    "DELIVERED": "Delivered",
+    "NOT_DELIVERABLE": "Not deliverable",
+    "REJECTED": "Rejected",
+    "ERROR": "Send failed"
+  },
+  "sdi": {
+    "state": {
+      "DRAFT": "Draft",
+      "NOT_SENT": "Not sent",
+      "SENDING": "Sending",
+      "AT_SDI": "At SDI",
+      "DELIVERED": "Delivered",
+      "NOT_DELIVERED": "Not delivered",
+      "REJECTED": "Rejected",
+      "ERROR": "Send failed"
+    },
+    "next": {
+      "ISSUE": "Issue it first.",
+      "SEND": "Send it to SDI.",
+      "WAIT": "SDI answers within a few days.",
+      "FIX_AND_RESEND": "Fix it and send it again (Invoices).",
+      "SEND_AGAIN": "Send it again.",
+      "CHECK_COPY": "In the customer's tax drawer; a copy went by e-mail.",
+      "NONE": "Nothing to do."
+    }
+  },
+  "link": {
+    "LIVE": "Sent to {to} on {date} · open until {until}",
+    "REVOKED": "Sent to {to} on {date} · replaced by a newer page",
+    "USED_UP": "Sent to {to} on {date} · opened as often as it may",
+    "EXPIRED": "Sent to {to} on {date} · expired on {until}",
+    "contact": "the quote's contact",
+    "title": "Send the bank-details page",
+    "body": "The customer gets an e-mail with a link to a page that shows the amount, the due date, the reference to write on the transfer and the company's bank account.",
+    "to": "To",
+    "valid": "Open for",
+    "validValue": "30 days",
+    "replaces": "A page sent before stops opening: the new one replaces it.",
+    "message": "Your words (optional)",
+    "messageHint": "Added to the e-mail above the link.",
+    "go": "Send the page",
+    "sentTo": "Sent to {to}: the page opens until {until}.",
+    "sentFailed": "The page was made for {to}, but the e-mail did not leave: send it again.",
+    "revoked_one": "The older page stopped opening.",
+    "revoked_other": "{count} older pages stopped opening."
+  },
+  "payment": {
+    "title": "Record the deposit payment · {number}",
+    "body": "Type the bank transfer as it reached the account. It is placed on this deposit, never more than it still asks.",
+    "amount": "Amount received",
+    "amountHint": "Still to pay: {left}",
+    "receivedOn": "Received on",
+    "reference": "Bank reference (CRO / TRN)",
+    "referenceHint": "As the bank statement shows it; one reference is recorded once.",
+    "note": "Note for the office (optional)",
+    "issue": "Issue the deposit invoice (TD02) now",
+    "issueHint": "The TD02 gets its number now; your authenticator code is asked.",
+    "issueOff": "The payment is recorded; the TD02 waits to be issued.",
+    "issueByFinance": "The TD02 that follows is issued by a person with the right to issue invoices.",
+    "noInvoice": "No deposit invoice follows this deposit (its VAT rule).",
+    "over": "More than is left: {left} goes on the deposit, the rest stays on the payment.",
+    "go": "Record {amount}",
+    "goEmpty": "Record the payment",
+    "doneFull": "{amount} recorded ({reference}): the deposit is paid and production may start.",
+    "donePart": "{amount} recorded ({reference}): part of the deposit is still to pay.",
+    "td02Issued": "Deposit invoice {number} issued.",
+    "td02FilesPending": "Deposit invoice {number} issued; its files are still being made.",
+    "td02Later": "The deposit invoice (TD02) waits to be issued.",
+    "td02NotNeeded": "No deposit invoice follows.",
+    "problem": {
+      "amount": "Type an amount above zero, e.g. 1872,00",
+      "date": "Choose the day it arrived",
+      "future": "A payment is recorded once it arrived",
+      "reference": "Type the bank's reference"
+    }
+  },
+  "sdiSend": {
+    "title": "Send {number} to SDI",
+    "body": "The deposit invoice of {date} goes to the Exchange System, which delivers it to the customer. It cannot be changed after.",
+    "go": "Send to SDI",
+    "sending": "Sending…"
+  },
+  "promise": {
+    "title": "Change the promise of {number}",
+    "scope": "For",
+    "scopeOrder": "The whole order",
+    "scopeOrderHint": "Every line without a date of its own",
+    "scopeLines": "Chosen lines",
+    "scopeLinesHint": "Before anything shipped",
+    "lines": "Lines",
+    "date": "New promise date",
+    "dateHint": "From today on. The first promise stays on record.",
+    "reason": "Why",
+    "reasonHint": "Kept in the promise history.",
+    "tellCustomer": "Tell the customer in the order's thread (Activity).",
+    "go": "Change the date",
+    "problem": {
+      "date": "Choose a date",
+      "past": "A new promise is a day from today on",
+      "same": "It is the promise already",
+      "reason": "Say why",
+      "lines": "Choose at least one line"
+    }
+  },
+  "ready": {
+    "title": "Mark {number} ready to ship",
+    "body": "While quality release is not used for this order, a person says it is ready, with the reason.",
+    "reason": "Why it is ready",
+    "reasonNeeded": "Say why",
+    "go": "Mark ready"
+  },
+  "close": {
+    "title": "Close {number}",
+    "settled": "Every line is shipped, invoiced and paid.",
+    "notSettled": "This order is not settled",
+    "reason": "Why close it now",
+    "reasonHint": "Kept on the order's history.",
+    "reasonNeeded": "Say why it closes before it is settled",
+    "final": "A closed order never changes.",
+    "go": "Close the order"
+  },
+  "settlement": {
+    "ORDER_CANCELLED": "The order is cancelled.",
+    "NOT_SHIPPED": "Not everything has shipped.",
+    "NOT_INVOICED": "Shipped goods are not invoiced yet.",
+    "OVER_INVOICED": "More is invoiced than shipped: a credit note corrects it.",
+    "NO_INVOICE": "No invoice is issued yet.",
+    "AT_SDI": "An invoice is not delivered by SDI yet.",
+    "DEPOSIT_NOT_DEDUCTED": "A deposit invoice is not deducted in full.",
+    "DEPOSIT_NOT_INVOICED": "A deposit paid has no deposit invoice yet.",
+    "BALANCE_DUE": "The invoices are not paid in full.",
+    "REFUND_DUE": "A refund is due to the customer.",
+    "OTHER": "Something else is missing."
+  },
+  "docs": {
+    "acceptedTitle": "Accepted quote",
+    "openQuote": "Open quote {number}",
+    "noQuote": {
+      "title": "Typed by the office — no quote",
+      "body": "This order did not come from an accepted quote."
+    },
+    "noQuoteRight": "From quote {number} v{revision}. Its evidence is shown to people who see quotes.",
+    "noEvidence": "Quote {number} v{revision} has no acceptance evidence on record.",
+    "version": "Version",
+    "versionValue": "{number} v{revision}",
+    "signer": "Signed by",
+    "acceptedAt": "Accepted",
+    "channel": "How",
+    "channelValue": {
+      "LINK": "On the customer's link",
+      "OFFICE": "Recorded by the office"
+    },
+    "document": "The signed PDF",
+    "matches": "Matches the PDF sent",
+    "differs": "Differs from the PDF sent",
+    "terms": "Terms version",
+    "filesTitle": "Documents and files",
+    "filesBody": "The order's files — the customer's PO, copies, anything added — are in Activity › Files, with who can see each.",
+    "openFiles": "Open the files"
+  },
+  "part": {
+    "loading": "Loading {part}…",
+    "failed": "Couldn't load {part}"
+  },
+  "notice": {
+    "promise": "The promise date changed; the first promise stays on record.",
+    "ready": "The order is ready to ship.",
+    "closed": "The order is closed.",
+    "sdiSent": "Sent to SDI: its answer appears here when it comes."
+  },
+  "stepUp": {
+    "title": "Confirm it's you",
+    "confirm": "Confirm",
+    "sentence": {
+      "td02": "Issuing the deposit invoice gives it its number for good. Type the code from your authenticator app.",
+      "sdi": "Sending an invoice to SDI cannot be undone. Type the code from your authenticator app."
+    },
+    "problem": {
+      "wrong": "That code is wrong or was used already. Type the newest one.",
+      "locked": "Too many tries: wait a minute and try again.",
+      "unavailable": "The code could not be checked now. Try again."
+    }
+  },
+  "problem": {
+    "read": {
+      "signed_out": "You were signed out: sign in again.",
+      "forbidden": "Your role does not open this.",
+      "not_found": "It is not there any more.",
+      "unavailable": "The factory server is not answering: check the connection and try again.",
+      "rate_limited": "Too many requests: wait a moment.",
+      "internal": "Something went wrong on the server."
+    },
+    "write": {
+      "moved": "Someone changed this order meanwhile: it was read again, check it and try once more.",
+      "state": "The order moved on meanwhile: it was read again.",
+      "reference": "This bank reference was recorded already: check the statement.",
+      "invalid": "Something typed is not accepted: check the fields.",
+      "signed_out": "You were signed out: sign in again.",
+      "forbidden": "Your role may not do this.",
+      "not_found": "It is not there any more.",
+      "rate_limited": "Too many requests: wait a moment.",
+      "unavailable": "The factory server is not answering: nothing was changed.",
+      "step_up": "Your authenticator code is needed.",
+      "internal": "Something went wrong on the server: nothing was changed."
+    }
+  }
+}

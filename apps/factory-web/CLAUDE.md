@@ -68,7 +68,8 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   against factory-domain's own contracts), `model.ts` (pure rules), `list/`, `record/` (studio shell, Overview, Colourways &
   sizes), `bom/`, `routing/`, `cost/`, `compliance/` (the revision tabs), `demo/fixtures.ts` (made-up data for the design cases).
 - `src/links/<task>/` — a one-off link's task page, in the Links view (`links/quote-accept`, SCR-099: the link landing
-  opens it for a QUOTE_ACCEPT link with the same client; the token stays in its header). `src/areas/_shared/` — Office
+  opens it for a QUOTE_ACCEPT link with the same client; the token stays in its header; `links/deposit-pay`, SCR-199:
+  a DEPOSIT_INFO link's deposit to pay by bank transfer, each field with Copy). `src/areas/_shared/` — Office
   parts several areas share (`document-send`, SCR-037: the send dialog any document uses; the host passes its words).
 - `src/list-frame/` — the ONE list frame of every Office list with actions over many rows (Owner rule 2026-10-29):
   `<ListFrame rows rowId columns count search tools right selection updates more keys onHelp onOpen state />` — the DS
@@ -86,6 +87,13 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/lib/records/record-links.ts` — where a record opens: its own page once built (`RECORD_PAGES`, one line per record
   page; list pages in `LIST_PAGES`), else the record panel route `/w/<company>/records/<type>/<id>` (SCR-006 panels).
   Home › Today (`src/areas/home/today/`, SCR-029) and its lists open records through it.
+- `src/areas/sales/orders/` — Sales › Orders (SCR-038 list + board by state, SCR-039 the order studio): `api.ts` (every
+  call: orders, the deposit's page and payment, an invoice's SDI state and send, the settlement, the order's work
+  orders), `model.ts` (saved rows ⇄ address = the API's own filters `?late=true` `?deposit=OPEN` `?status=` `?rows=all`,
+  `?view=board`; lanes, next step held with its reason, the deposit's five steps, words for API codes), `hooks.ts` (live,
+  thread dock, step-up asked first when the session has none fresh), `list/` (list frame; Export N), `record/` (tabs
+  `?tab=lines|dates|production|shipments|money|documents|activity`, dialogs), `_demo/fixtures.ts` (made-up data).
+  "Make work orders" opens `/production/work-orders?new=1&order=<number>` (the dialog picks that order).
 - `src/areas/production/` — Production (SCR-069 … SCR-073): `work-orders/` the list (list frame; Export N, Release N) and
   New work order (`?new=1`), `work-orders/record/` the work order studio (`?tab=overview|materials|cutting|bundles|
   operations|quality|activity`, `?at=<seq>`; tabs in `cutting/`, `bundles/`, `progress/`), `wip/` Floor now
