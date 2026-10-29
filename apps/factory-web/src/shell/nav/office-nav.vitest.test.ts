@@ -13,6 +13,8 @@ describe('the Office navigation (PLT-160: one declaration per area)', () => {
   it('finds every areas/<area>/nav.ts by itself and orders them as the main sidebar (Home first, Admin last)', () => {
     expect(officeAreaDeclarations().map((d) => [d.order, d.area.id])).toEqual([
       [1, 'home'],
+      [8, 'quality'],
+      [9, 'compliance'],
       [14, 'admin'],
     ])
     expect(OFFICE_NAV.view).toBe('office')
@@ -50,6 +52,17 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
     ])
   })
 
+  it('a quality inspector sees Quality › Inspections and Compliance › Tests & substances and the PPE register', () => {
+    const inspector = ['home.view', 'quality.inspections.view', 'quality.lots.view', 'compliance.register.view']
+    expect(ids(officeNavFor(permissionCheck(inspector)))).toEqual([
+      ['home', ['home-today']],
+      ['quality', ['quality-inspections']],
+      ['compliance', ['compliance-tests', 'compliance-register']],
+    ])
+    // A production manager sees inspections only; the lots and the register need their own permissions.
+    expect(ids(officeNavFor(permissionCheck(['quality.inspections.view'])))).toEqual([['quality', ['quality-inspections']]])
+  })
+
   it('a person with no permission sees no area: no door that leads nowhere', () => {
     expect(officeNavFor(permissionCheck([])).areas).toEqual([])
   })
@@ -66,7 +79,8 @@ describe('labels, crumbs, palette pages and the phone bar come from the same man
     expect(nav.areas.map((area) => area.label)).toEqual(['Home', 'Admin'])
     expect(nav.areas[1]?.sections?.map((s) => s.label)).toEqual(['Organisation', 'Access', 'Platform'])
     const it = translateNav(OFFICE_NAV, createScopedTranslator('it', messagesFor('it', ['shell']), 'shell'))
-    expect(it.areas[1]?.label).toBe('Amministrazione')
+    expect(it.areas.find((area) => area.id === 'admin')?.label).toBe('Amministrazione')
+    expect(it.areas.find((area) => area.id === 'compliance')?.label).toBe('Conformità')
     expect(JSON.stringify(nav)).not.toContain('shell:')
   })
 

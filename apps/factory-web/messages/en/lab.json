@@ -1,0 +1,480 @@
+{
+  "list": {
+    "intro": "Every lot with its chromium VI result against the limit, its supplier documents and its release. A lot in quarantine is not used until a quality person releases it.",
+    "record": "Record test result",
+    "table": "Lots and their tests",
+    "search": "Search by lot code",
+    "count_one": "{count} lot",
+    "count_other": "{count} lots",
+    "received": "Received {date}",
+    "opening": "Opening stock",
+    "ppeComponent": "PPE component",
+    "receiptReversed": "Its receipt was reversed",
+    "col": {
+      "lot": "Lot",
+      "material": "Material",
+      "crVi": "Chromium VI",
+      "evidence": "Evidence",
+      "tested": "Tested on",
+      "status": "Lot status",
+      "hold": "Receiver's hold",
+      "actions": "Actions"
+    },
+    "rows": "Rows: {view}",
+    "rowsHeading": "Show the lots",
+    "activeFilters": "Filters in use",
+    "removeFilter": "Remove the filter {name}",
+    "clearAll": "Clear filters",
+    "more": "More for this list",
+    "exportView": "Export this view (CSV)",
+    "exportViewHint_one": "{count} lot as shown",
+    "exportViewHint_other": "{count} lots as shown",
+    "exportNothing": "Nothing to export in this view",
+    "bulkExport_one": "Export {count} (CSV)",
+    "bulkExport_other": "Export {count} (CSV)",
+    "showMore_one": "Show {count} more",
+    "showMore_other": "Show {count} more",
+    "failedTitle": "The lots could not be read",
+    "noMatch": "No lot matches these filters",
+    "empty": {
+      "title": "No lot yet",
+      "body": "Receipts of leather and PPE components put their lots here. A lot that needs chromium VI evidence waits in quarantine until its result is recorded."
+    }
+  },
+  "noAccess": {
+    "title": "Tests & substances is not open to your role",
+    "body": "It needs the permission to see lots' quality records (quality.lots.view): the quality inspector, the buyer and the warehouse have it. Ask your factory's owner to add it to your role."
+  },
+  "view": {
+    "all": "All lots",
+    "onHold": "On hold",
+    "waiting": "Waiting Cr VI evidence",
+    "failed": "Failed Cr VI, not rejected",
+    "quarantine": "In quarantine",
+    "blocked": "Blocked",
+    "released": "Released",
+    "rejected": "Rejected"
+  },
+  "tile": {
+    "onHold": "On hold",
+    "onHoldHint": "In quarantine or blocked: not usable",
+    "waiting": "Waiting Cr VI evidence",
+    "waitingHint": "In quarantine, no result yet (counted among the lots on hold)",
+    "failed": "Failed Cr VI",
+    "failedHint": "At or above the limit, not rejected yet",
+    "released": "Released",
+    "releasedHint": "Usable stock (the newest {max} read)",
+    "atLeast": "{count}+",
+    "unknown": "Could not be counted"
+  },
+  "status": {
+    "QUARANTINE": "In quarantine",
+    "RELEASED": "Released",
+    "REJECTED": "Rejected",
+    "BLOCKED": "Blocked"
+  },
+  "crVi": {
+    "NOT_REQUIRED": "No test needed",
+    "PENDING": "Waiting result",
+    "PASS": "Pass",
+    "NOT_DETECTED": "Pass · not detected",
+    "FAIL": "Fail",
+    "value": "{value} / {limit} mg/kg"
+  },
+  "evidence": {
+    "LOT_REPORT": "Lab report on this lot",
+    "SUPPLIER_REPORT": "Supplier's report",
+    "hint": {
+      "LOT_REPORT": "A laboratory tested a sample of this lot.",
+      "SUPPLIER_REPORT": "The supplier's report covers the article and a period that holds the day this lot was received."
+    }
+  },
+  "receipt": {
+    "OPEN": "open",
+    "POSTED": "posted",
+    "REVERSED": "reversed",
+    "CANCELLED": "cancelled"
+  },
+  "rule": {
+    "title": {
+      "SUPPLIER_REPORT_ACCEPTED": "Chromium VI evidence: a supplier's report that covers the article and the period counts, as does a lab report on the lot.",
+      "LOT_REPORT_REQUIRED": "Chromium VI evidence: only a lab report on the lot itself counts."
+    },
+    "limit": "Limit {limit} mg/kg (REACH Annex XVII entry 47); a brand may set a lower one on the material.",
+    "source": {
+      "COMPANY": "This company's own rule.",
+      "TENANT": "The rule of every company of the factory.",
+      "DEFAULT": "The default rule: nobody has changed it."
+    },
+    "failed": "The chromium VI evidence rule could not be read.",
+    "change": "Change rule…",
+    "dialogTitle": "Chromium VI evidence rule",
+    "option": {
+      "SUPPLIER_REPORT_ACCEPTED": "A supplier's report counts",
+      "LOT_REPORT_REQUIRED": "A lab report for every lot"
+    },
+    "optionHint": {
+      "SUPPLIER_REPORT_ACCEPTED": "The supplier's report that covers the article and the period counts, as does a lab report on the lot. This is the default.",
+      "LOT_REPORT_REQUIRED": "Only a lab report on the lot itself counts. Lots that rest on a supplier report go back to quarantine checks."
+    },
+    "inForce": "in force",
+    "limitNote": "The legal limit of {limit} mg/kg is not a setting: it is the law.",
+    "loosenTitle": "This accepts more evidence than today",
+    "loosenBody": "Say why. Saving then asks for a fresh code from your authenticator app.",
+    "reason": "Why",
+    "reasonHint": "Kept with the change, for the audit.",
+    "save": "Save rule",
+    "saveLoosen": "Confirm and save",
+    "unchanged": "Choose another rule first",
+    "problem": {
+      "cancelled": "Not saved: the code was not given.",
+      "conflict": "Someone changed the rule in the meantime. It has been read again: check it and save again.",
+      "forbidden": "Your role may not change this rule.",
+      "invalid": "The change was refused as it is: give the reason.",
+      "failed": "The rule could not be saved. Try again."
+    }
+  },
+  "stepUp": {
+    "loosen": "Accepting more chromium VI evidence needs a fresh code."
+  },
+  "pick": {
+    "title": "Record a test result",
+    "sub": "Choose the lot the report is for: the result is recorded on its page, against its limit.",
+    "search": "Lot code or material",
+    "none": "No lot is waiting for chromium VI evidence",
+    "noMatch": "No waiting lot matches",
+    "noneBody": "Another lot's result (a later finding on a released lot) is recorded from that lot's page."
+  },
+  "row": {
+    "menu": "Actions for lot {code}",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "result": "Record result…",
+    "release": "Release lot…",
+    "reject": "Reject lot…",
+    "copy": "Copy lot code"
+  },
+  "held": {
+    "test": "Recording a result needs the quality role (quality.lots.test).",
+    "documents": "Attaching a supplier's document needs quality.lots.documents.",
+    "release": "Releasing a lot needs the quality role (quality.lots.release).",
+    "reject": "Rejecting or blocking a lot needs quality.lots.reject.",
+    "rule": "Only the owner changes this rule (quality.settings.manage).",
+    "noTest": "This material needs no chromium VI test.",
+    "rejected": "The lot is rejected: that is final.",
+    "failFinal": "The lot failed its chromium VI test: a fail is final (the law), reject the lot.",
+    "notQuarantine": "Only a lot in quarantine is released.",
+    "notBlocked": "Only a blocked lot is released again.",
+    "receiver": "You received this lot: another quality person releases it.",
+    "checksOpen_one": "{count} check is still open: see the checklist.",
+    "checksOpen_other": "{count} checks are still open: see the checklist.",
+    "rejectState": "Only a lot in quarantine or blocked is rejected.",
+    "blockState": "Only a released lot is blocked.",
+    "noHold": "There is no hold of the receiver to clear.",
+    "holdOwn": "You placed this hold when receiving: another quality person clears it.",
+    "listMax": "At most {max} lots are read at a time: search by code or choose a view."
+  },
+  "record": {
+    "back": "Tests & substances",
+    "title": "Lot {code}",
+    "receivedWith": "Received with {receipt} on {date}",
+    "opening": "Opening stock: no receipt",
+    "recordResult": "Record result",
+    "more": "More for this lot",
+    "tab": {
+      "results": "Results & limits",
+      "documents": "Documents",
+      "release": "Release",
+      "activity": "Activity"
+    },
+    "noPanels": "The thread, files and history need permission to read threads (threads.read).",
+    "youReceived": "You received this lot: you may record its results and documents, and another quality person releases it.",
+    "facts": {
+      "status": "Lot status",
+      "crVi": "Chromium VI",
+      "receipt": "Receipt"
+    }
+  },
+  "results": {
+    "title": "Chromium VI results",
+    "sub": "Newest first; the verdict is computed against the limit of {limit} mg/kg, never typed.",
+    "notRequired": "This material needs no chromium VI test.",
+    "empty": "No result yet",
+    "emptyBody": "The lot stays in quarantine until a result on evidence the rule accepts passes.",
+    "verdict": {
+      "PASS": "Pass",
+      "FAIL": "Fail"
+    },
+    "notDetected": "Not detected (below {lod} mg/kg) · limit {limit} mg/kg",
+    "superseded": "Replaced by a later fail",
+    "method": "Method",
+    "lab": "Laboratory",
+    "report": "Report no.",
+    "testedOn": "Tested on",
+    "evidence": "Evidence",
+    "article": "Article",
+    "period": "Period covered",
+    "recorded": "Recorded",
+    "fileUnknown": "The report file is not readable here",
+    "download": "Download {name}",
+    "downloadShort": "Download",
+    "ruleTitle": "The rule in force",
+    "failFinal": "A fail is final: no override (the law). A later fail on a released lot blocks it and lists the work orders it went to."
+  },
+  "result": {
+    "title": "Chromium VI result for lot {code}",
+    "sub": "{item} · limit {limit} mg/kg",
+    "method": "Method",
+    "belowDetection": "Not detected: below the detection limit",
+    "value": "Measured value",
+    "valueHint": "In mg/kg, at most 3 decimals.",
+    "lod": "Detection limit",
+    "lodHint": "The lab's detection limit in mg/kg: it must be at most the lot's limit.",
+    "lab": "Laboratory",
+    "reportNumber": "Report number",
+    "testedOn": "Tested on",
+    "evidence": "What the result rests on",
+    "supplierRefused": "The rule in force asks for a lab report on every lot: a supplier's report does not count.",
+    "article": "Article on the report",
+    "periodFrom": "Period from",
+    "periodTo": "Period to",
+    "note": "Note",
+    "file": "The report",
+    "fileHint": "A PDF or a scan (JPEG, PNG); kept ten years (REACH art. 36).",
+    "thenRelease": "Release the lot when this passes",
+    "thenReleaseHint": "Next you see the release checklist and type the lot's code: nothing is released without it.",
+    "save": "Save result",
+    "saveThenRelease": "Save result, then release",
+    "saving": "Sending the report…",
+    "verdict": {
+      "none": "Type the value: the verdict against the limit of {limit} mg/kg shows here.",
+      "pass": "{value} mg/kg is below the limit of {limit} mg/kg – Pass",
+      "notDetected": "Not detected: below the detection limit of {lod} mg/kg, so below the limit of {limit} mg/kg – Pass",
+      "fail": "{value} mg/kg is at or above the limit of {limit} mg/kg – Fail",
+      "failBody": "This lot cannot be used (REACH Annex XVII entry 47). A fail is final: reject the lot.",
+      "lodAbove": "Below a detection limit of {lod} mg/kg does not show the lot is below its limit of {limit} mg/kg: the lab needs EN ISO 17075-2.",
+      "lodInvalid": "Type the detection limit in mg/kg, above 0, at most 3 decimals.",
+      "valueInvalid": "Type the value in mg/kg, from 0, at most 3 decimals."
+    },
+    "problem": {
+      "method": "Choose the method of EN ISO 17075.",
+      "value": "Type the measured value, or tick \"not detected\".",
+      "lod": "Type the detection limit.",
+      "lab": "Name the laboratory, as on its report.",
+      "testedOn": "Give the day of the test.",
+      "testedOnFuture": "The test day cannot be after today.",
+      "ruleLotReport": "The rule in force asks for a lab report on every lot.",
+      "article": "Name the article the supplier's report covers.",
+      "periodFrom": "Give the first day the report covers.",
+      "periodTo": "Give the last day the report covers.",
+      "periodOrder": "The period ends before it starts.",
+      "file": "Choose the report file.",
+      "upload": "The file could not be sent to the store. Try again.",
+      "refused": "The result was refused as it is:",
+      "conflict": "The lot changed in the meantime. It has been read again: check it and save again."
+    }
+  },
+  "method": {
+    "one": "EN ISO 17075-1 (colorimetric)",
+    "two": "EN ISO 17075-2 (chromatographic)"
+  },
+  "date": {
+    "notSet": "not set",
+    "clear": "clear"
+  },
+  "common": {
+    "counter": "{used} / {max}"
+  },
+  "file": {
+    "choose": "Choose file…",
+    "change": "Choose another…",
+    "none": "No file chosen"
+  },
+  "documents": {
+    "title": "Supplier's documents",
+    "sub": "Certificates, declarations and test reports that came with the lot.",
+    "empty": "No document yet",
+    "emptyBody": "An LWG certificate or a fabric test report can be attached here.",
+    "emptyPpe": "A certified PPE component is released only with the supplier's certificate or declaration for the lot.",
+    "inForce": "In force",
+    "notInForce": "Not in force",
+    "archived": "Archived",
+    "validTo": "Valid to",
+    "noExpiry": "No end date",
+    "added": "Added",
+    "needsTitle": "What this lot needs",
+    "needsPpe": "A certified PPE component: the supplier's PPE certificate or declaration for the lot, valid today.",
+    "needsNone": "No document is required before release for this material.",
+    "needsLater": "Material profiles with their required documents come with a later step."
+  },
+  "document": {
+    "add": "Add document…",
+    "title": "Supplier document for lot {code}",
+    "sub": "The file is kept with the lot.",
+    "subPpe": "A PPE component needs the supplier's PPE certificate or declaration.",
+    "kind": "What it is",
+    "validTo": "Valid to",
+    "validToHint": "Leave empty when the document has no end date.",
+    "note": "Note",
+    "file": "The document",
+    "save": "Attach document",
+    "saving": "Sending the document…",
+    "problem": {
+      "expired": "It has already expired: attach a valid one.",
+      "note": "Say what the document is.",
+      "file": "Choose the document file.",
+      "refused": "The document was refused as it is. Check the kind, the date and the note."
+    }
+  },
+  "kind": {
+    "PPE_CERTIFICATE": "PPE certificate or declaration",
+    "CR_VI_STATEMENT": "Chromium VI statement",
+    "LWG_CERTIFICATE": "LWG certificate",
+    "FABRIC_TEST": "Fabric test report",
+    "OTHER": "Another document",
+    "hint": {
+      "PPE_CERTIFICATE": "The PPE component's certificate or the supplier's declaration for this lot.",
+      "CR_VI_STATEMENT": "The supplier's statement on chromium VI (not a test result).",
+      "LWG_CERTIFICATE": "The tannery's Leather Working Group certificate.",
+      "FABRIC_TEST": "A test report of the fabric's properties.",
+      "OTHER": "Say in the note what it is."
+    }
+  },
+  "release": {
+    "title": "Release checklist",
+    "titleUnblock": "Checks to release it again",
+    "ready": "Every check passes: the lot may be released by a quality person who did not receive it.",
+    "open_one": "{count} check is still open.",
+    "open_other": "{count} checks are still open.",
+    "checksLabel": "Release checks",
+    "state": {
+      "RELEASED": "Released: usable stock.",
+      "REJECTED": "Rejected: final.",
+      "QUARANTINE": "In quarantine.",
+      "BLOCKED": "Blocked."
+    },
+    "final": {
+      "RELEASED": "The lot is released: it may be issued to work orders. A later finding blocks it.",
+      "REJECTED": "The lot is rejected: it goes back to the supplier or is scrapped. Nothing more is decided here.",
+      "QUARANTINE": "In quarantine.",
+      "BLOCKED": "Blocked."
+    },
+    "decidedTitle": "The last decision",
+    "decidedAt": "Decided",
+    "who": "Always a person: a quality person who did not receive the lot types its code to release it."
+  },
+  "check": {
+    "STATE": "Lot state",
+    "RECEIPT": "Receipt",
+    "CR_VI": "Chromium VI",
+    "PPE_CERTIFICATE": "PPE certificate",
+    "SUPPLIER_DOCUMENTS": "Supplier's documents",
+    "HOLD": "Receiver's hold",
+    "RELEASER": "Who releases"
+  },
+  "decide": {
+    "typeCode": "Type the lot code to confirm:",
+    "saving": "Saving…",
+    "release": {
+      "title": "Release lot {code}",
+      "menu": "Release lot…",
+      "confirm": "Release lot {code}",
+      "reason": "Note"
+    },
+    "unblock": {
+      "title": "Release lot {code} again",
+      "menu": "Release again…",
+      "confirm": "Release lot {code} again",
+      "reason": "Why the finding is cleared"
+    },
+    "reject": {
+      "title": "Reject lot {code}",
+      "menu": "Reject lot…",
+      "confirm": "Reject lot {code}",
+      "reason": "Why",
+      "final": "Rejected is final: the lot goes back to the supplier or is scrapped.",
+      "next": "Next: a return to the supplier from Purchasing."
+    },
+    "block": {
+      "title": "Block lot {code}",
+      "menu": "Block lot…",
+      "confirm": "Block lot {code}",
+      "reason": "What was found",
+      "what": "Blocking holds the lot: it cannot be issued until it is released again or rejected.",
+      "next": "The work orders it already went to are listed after the block."
+    },
+    "clearHold": {
+      "title": "Clear the receiver's hold on lot {code}",
+      "menu": "Clear hold…",
+      "confirm": "Clear the hold",
+      "reason": "What you checked",
+      "what": "The receiver held this lot with these words:"
+    },
+    "problem": {
+      "code": "Type the lot code {code} exactly.",
+      "reason": "Give the reason.",
+      "reasonLong": "At most 500 characters.",
+      "checks": "Not yet: these checks are still open.",
+      "codeRefused": "The typed code is not the lot code.",
+      "refused": "It was refused as it is:",
+      "conflict": "The lot changed in the meantime. It has been read again: check it and decide again."
+    }
+  },
+  "write": {
+    "problem": {
+      "forbidden": "Your role does not allow this on this lot.",
+      "notFound": "The lot is not there any more.",
+      "signedOut": "Your session ended. Sign in again.",
+      "rateLimited": "Too many tries. Wait a minute.",
+      "unavailable": "The factory service did not answer. Try again."
+    }
+  },
+  "answer": {
+    "laterFail": "Lot {code} failed on new evidence and is blocked",
+    "workOrders_one": "It went to {count} work order:",
+    "workOrders_other": "It went to {count} work orders:",
+    "workOrder": "{number} (batch {batch}): {issued} issued",
+    "registerOpened": "PPE register entry {reference} opened for the garments made from it",
+    "registerNone": "No PPE register entry was opened:",
+    "blocked_one": "Blocked. It had gone to {count} work order:",
+    "blocked_other": "Blocked. It had gone to {count} work orders:"
+  },
+  "done": {
+    "resultPass": "Result saved: lot {code} passes its chromium VI test.",
+    "resultFail": "Result saved: lot {code} failed its chromium VI test. Reject it.",
+    "resultLaterFail": "Result saved: lot {code} failed on new evidence and is blocked.",
+    "document": "Document attached to lot {code}.",
+    "release": "Lot {code} released: it is usable stock.",
+    "unblock": "Lot {code} released again.",
+    "reject": "Lot {code} rejected.",
+    "block": "Lot {code} blocked.",
+    "clearHold": "The receiver's hold on lot {code} is cleared.",
+    "ruleLoosened": "Saved: a supplier's report covering the article and the period counts again.",
+    "ruleTightened": "Saved: only a lab report on each lot counts from now on.",
+    "exported_one": "{count} lot exported (CSV).",
+    "exported_other": "{count} lots exported (CSV).",
+    "copied": "Copied {code}.",
+    "copyFailed": "This browser did not allow copying.",
+    "downloadFailed": "The file could not be downloaded. Try again."
+  },
+  "csv": {
+    "lot": "Lot",
+    "itemCode": "Material code",
+    "itemName": "Material",
+    "status": "Lot status",
+    "crVi": "Chromium VI",
+    "value": "Value mg/kg",
+    "limit": "Limit mg/kg",
+    "evidence": "Evidence",
+    "tested": "Tested on",
+    "received": "Received",
+    "hold": "Receiver's hold"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "record": "Record a test result",
+    "release": "Release the lot (or release it again)",
+    "submit": "Save the open dialog",
+    "all": "All shortcuts"
+  }
+}

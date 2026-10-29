@@ -24,6 +24,18 @@
       "imports": "Importazione",
       "audit": "Registro attività",
       "connections": "Collegamenti"
+    },
+    "quality": {
+      "area": "Qualità",
+      "main": "Principali",
+      "inspections": "Ispezioni"
+    },
+    "compliance": {
+      "area": "Conformità",
+      "main": "Principali",
+      "tests": "Test e sostanze",
+      "safety": "Sicurezza prodotto",
+      "register": "Registro DPI e richiami"
     }
   },
   "topbar": {

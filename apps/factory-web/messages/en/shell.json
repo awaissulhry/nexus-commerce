@@ -24,6 +24,18 @@
       "imports": "Import",
       "audit": "Audit log",
       "connections": "Connections"
+    },
+    "quality": {
+      "area": "Quality",
+      "main": "Main",
+      "inspections": "Inspections"
+    },
+    "compliance": {
+      "area": "Compliance",
+      "main": "Main",
+      "tests": "Tests & substances",
+      "safety": "Product safety",
+      "register": "PPE register & recalls"
     }
   },
   "topbar": {

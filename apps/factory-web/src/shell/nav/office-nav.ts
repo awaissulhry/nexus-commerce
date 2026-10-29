@@ -95,7 +95,20 @@ export function navPermissions(nav: AreaNav = OFFICE_NAV): string[] {
  * (`office-entry.vitest.test.ts` compares this list with the page files under `app/(office)/w/[company]/`): the office
  * entry opens only a page that exists, never a row whose page comes with a later step.
  */
-export const OFFICE_PAGES: ReadonlySet<string> = new Set(['/me', '/home/today', '/home/today/print', '/home/mail-to-sort', '/records/[type]/[id]'])
+export const OFFICE_PAGES: ReadonlySet<string> = new Set([
+  '/me',
+  '/home/today',
+  '/home/today/print',
+  '/home/mail-to-sort',
+  '/records/[type]/[id]',
+  '/quality/inspections',
+  '/quality/inspections/[id]',
+  '/compliance/tests',
+  '/compliance/tests/[id]',
+  '/compliance/register',
+  '/compliance/register/[id]',
+  '/compliance/evidence/[kind]/[subject]',
+])
 
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */
 export const PROFILE_PAGE = '/me'

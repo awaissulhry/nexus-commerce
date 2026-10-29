@@ -1,0 +1,88 @@
+/*
+ * Tests & substances (SCR-054, B-W1-34 part 2) LAYOUT only, beside the shared quality layout (areas/quality/_shared/
+ * quality.css): the file chooser, the live verdict box, the keys dialog and the result rows. Semantic tokens only.
+ */
+.fw-lab-file {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-lab-file-label {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-lab-error {
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-lab-keymap {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nds-space-8) var(--nds-space-12);
+  margin: 0;
+  align-items: center;
+}
+
+.fw-lab-keymap dt {
+  display: inline-flex;
+  gap: var(--nds-space-2);
+}
+
+.fw-lab-keymap dd {
+  margin: 0;
+}
+
+.fw-lab-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-lab-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-block-end: var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border);
+  min-width: 0;
+}
+
+.fw-lab-result:last-child {
+  border-bottom: 0;
+  padding-block-end: 0;
+}
+
+.fw-lab-result-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+}
+
+.fw-lab-band-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-lab-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  padding-block: var(--nds-space-4);
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-lab-pick:last-child {
+  border-bottom: 0;
+}

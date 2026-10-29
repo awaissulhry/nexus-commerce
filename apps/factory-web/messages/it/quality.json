@@ -1,0 +1,983 @@
+{
+  "common": {
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "dismiss": "Chiudi",
+    "retry": "Riprova",
+    "loading": "Caricamento…",
+    "failedTitle": "Non è stato possibile leggere",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "unknown": "Non noto",
+    "you": "tu",
+    "bench": "al banco",
+    "office": "in ufficio",
+    "more": "Altro",
+    "copied": "Copiato",
+    "fixFirst": "Prima sistema questi punti",
+    "working": "In corso…",
+    "back": "Indietro"
+  },
+  "live": {
+    "connecting": "Connessione in corso",
+    "live": "In tempo reale",
+    "offline": "Offline – la pagina mostra l'ultima copia"
+  },
+  "problem": {
+    "signedOut": "La sessione è terminata. Accedi di nuovo.",
+    "forbidden": "Il tuo ruolo non lo consente.",
+    "stepUp": "Serve un codice nuovo dall'app di autenticazione.",
+    "notFound": "Non c'è più, oppure appartiene a un'altra società.",
+    "conflict": "Qualcuno l'ha modificato nel frattempo. È stato riletto.",
+    "invalid": "È stato rifiutato così com’è: controlla i campi.",
+    "rateLimited": "Troppi tentativi. Attendi un minuto.",
+    "contract": "La risposta non è quella che la pagina si aspetta. Ricarica la pagina.",
+    "unavailable": "Il servizio della fabbrica non ha risposto. Riprova tra poco.",
+    "internal": "Qualcosa non ha funzionato da parte nostra. Riprova."
+  },
+  "record": {
+    "dock": "Discussione",
+    "dockHint": "Tieni la discussione accanto al record (⌘J)",
+    "dockLabel": "Discussione",
+    "tabsLabel": "Sezioni del record",
+    "loading": "Lettura del record…",
+    "notFoundTitle": "Non trovato",
+    "notFoundBody": "Questo record non esiste, oppure appartiene a una società in cui non lavori.",
+    "forbiddenTitle": "Non per il tuo ruolo",
+    "failedTitle": "Non è stato possibile leggere il record",
+    "back": "Ispezioni",
+    "title": "Ispezione finale {label}",
+    "batch": "lotto {batch}",
+    "overridden": "Esito derogato",
+    "sign": "Firma l'esito…",
+    "releaseToShip": "Rilascia per la spedizione",
+    "more": "Altre azioni",
+    "evidence": "Catena delle prove (nuova scheda)",
+    "cancel": "Annulla l'ispezione…",
+    "stale": "L'ispezione è cambiata alle {time}.",
+    "reload": "Ricarica",
+    "locked": "Firmata {where} il {date}: i risultati sono bloccati.",
+    "cancelledBanner": "Questa ispezione è annullata: non rilascia nulla.",
+    "tab": {
+      "checks": "Controlli e risultati",
+      "decision": "Decisione e firma"
+    }
+  },
+  "check": {
+    "OK": "Fatto",
+    "OPEN": "Da fare",
+    "NOT_NEEDED": "Non serve",
+    "UNKNOWN": "Non noto",
+    "NOT_YET": "Non ancora"
+  },
+  "stepUp": {
+    "title": "Conferma con l'app di autenticazione",
+    "confirm": "Conferma",
+    "problem": {
+      "wrong": "Il codice non è stato accettato. Scrivi il codice più recente.",
+      "locked": "Troppi codici sbagliati. Attendi qualche minuto.",
+      "unavailable": "Non è stato possibile controllare il codice. Riprova."
+    },
+    "sentence": {
+      "sign": "Firmare l'esito è una firma elettronica: confermala con un codice nuovo.",
+      "release": "Rilasciare i capi è una firma elettronica: confermala con un codice nuovo.",
+      "loosenRule": "Allentare una regola qualità richiede un codice nuovo."
+    },
+    "cancelled": "Non è stato fatto nulla: il codice non è stato inserito."
+  },
+  "who": {
+    "you": "Tu",
+    "bench": "Al banco",
+    "office": "In ufficio"
+  },
+  "status": {
+    "OPEN": "Aperta",
+    "PASSED": "Superata",
+    "PASSED_OVERRIDE": "Superata (con deroga)",
+    "FAILED": "Non superata",
+    "CANCELLED": "Annullata",
+    "REVERSED": "Superata · rilascio revocato"
+  },
+  "hold": {
+    "failed": "Bloccati: rilavora e ispeziona di nuovo",
+    "reversed_one": "Bloccato: {count} revocato",
+    "reversed_other": "Bloccati: {count} revocati"
+  },
+  "lotStatus": {
+    "QUARANTINE": "In quarantena",
+    "RELEASED": "Rilasciato",
+    "REJECTED": "Respinto",
+    "BLOCKED": "Bloccato"
+  },
+  "crVi": {
+    "NOT_REQUIRED": "Cr VI non richiesto",
+    "PENDING": "Cr VI in attesa",
+    "PASS": "Cr VI conforme",
+    "FAIL": "Cr VI non conforme"
+  },
+  "certificateStatus": {
+    "DRAFT": "Bozza",
+    "VALID": "Valido oggi",
+    "SUSPENDED": "Sospeso oggi",
+    "WITHDRAWN": "Ritirato oggi",
+    "EXPIRED": "Scaduto oggi"
+  },
+  "serialStatus": {
+    "MADE": "Prodotto",
+    "RELEASED": "Rilasciato",
+    "SHIPPED": "Spedito",
+    "VOID": "Scartato"
+  },
+  "shipmentStatus": {
+    "DRAFT": "Bozza",
+    "PACKED": "Imballata",
+    "SHIPPED": "Spedita",
+    "DELIVERED": "Consegnata",
+    "RETURNED": "Resa dal corriere",
+    "CANCELLED": "Annullata"
+  },
+  "revisionStatus": {
+    "DRAFT": "bozza",
+    "RELEASED": "rilasciata",
+    "OBSOLETE": "sostituita da una più recente"
+  },
+  "templateStatus": {
+    "DRAFT": "Bozza",
+    "ACTIVE": "Attivo",
+    "RETIRED": "Ritirato"
+  },
+  "documentKind": {
+    "DECLARATION_OF_CONFORMITY": "Dichiarazione UE di conformità",
+    "USER_INFORMATION": "Nota informativa per l’utilizzatore"
+  },
+  "documentStatus": {
+    "DRAFT": "Bozza",
+    "ISSUED": "Emessa",
+    "SUPERSEDED": "Sostituita",
+    "WITHDRAWN": "Ritirata"
+  },
+  "lotDocumentKind": {
+    "PPE_CERTIFICATE": "Certificato DPI",
+    "CR_VI_STATEMENT": "Dichiarazione Cr VI",
+    "LWG_CERTIFICATE": "Certificato LWG",
+    "FABRIC_TEST": "Rapporto di prova tessuto",
+    "OTHER": "Altro documento"
+  },
+  "ppeCategory": {
+    "NOT_PPE": "Non DPI",
+    "CATEGORY_I": "DPI di categoria I",
+    "CATEGORY_II": "DPI di categoria II",
+    "CATEGORY_III": "DPI di categoria III"
+  },
+  "tracking": {
+    "BATCH": "Numero di lotto di produzione",
+    "SERIAL": "Un numero di serie per capo"
+  },
+  "registerKind": {
+    "COMPLAINT": "Reclamo",
+    "NON_CONFORMITY": "Non conformità",
+    "RECALL": "Richiamo"
+  },
+  "registerStatus": {
+    "OPEN": "aperta",
+    "CLOSED": "chiusa"
+  },
+  "registerRisk": {
+    "NO": "nessun rischio",
+    "ASSESSING": "rischio in valutazione",
+    "YES": "può presentare un rischio"
+  },
+  "woStatus": {
+    "DRAFT": "Bozza · {site}",
+    "RELEASED": "Rilasciato · {site}",
+    "IN_PROGRESS": "In corso · {site}",
+    "COMPLETED": "Completato · {site}",
+    "CLOSED": "Chiuso · {site}",
+    "CANCELLED": "Annullato · {site}"
+  },
+  "reason": {
+    "WRONG_RESULT": "Esito registrato per errore",
+    "DEFECT_FOUND_LATER": "Difetto trovato dopo",
+    "CERTIFICATE_PROBLEM": "Problema di certificato",
+    "CUSTOMER_COMPLAINT": "Reclamo del cliente",
+    "RECALL": "Richiamo",
+    "none": "Nessun tipo di motivo (record precedente)"
+  },
+  "secondPerson": {
+    "OVERRIDE": "L'ispezione ha derogato all'esito calcolato: rilascia una seconda persona.",
+    "CUSTOMER": "I capi di questo cliente richiedono sempre una seconda persona (regole qualità).",
+    "ALWAYS": "La regola della società richiede una seconda persona per ogni rilascio finale."
+  },
+  "secondPersonShort": {
+    "OVERRIDE": "Seconda persona: deroga",
+    "CUSTOMER": "Seconda persona: cliente in elenco",
+    "ALWAYS": "Seconda persona: sempre"
+  },
+  "gate": {
+    "WORK_ORDER": "Ordine di produzione",
+    "INSPECTION": "Ispezione",
+    "QUANTITY": "Quantità",
+    "SERIALS": "Numeri di serie",
+    "LABELS": "Etichette dei capi",
+    "CERTIFICATE": "Certificato",
+    "DOCUMENTS": "DoC e nota informativa",
+    "LOTS": "Lotti di materiale",
+    "MAKER": "Chi li ha prodotti",
+    "SECOND_PERSON": "Seconda persona"
+  },
+  "held": {
+    "noRecord": "Il tuo ruolo non registra ispezioni (quality.inspections.record).",
+    "noWorkOrders": "Per scegliere un ordine di produzione serve workorders.view.",
+    "decided": "L'esito è firmato: non cambia più (una correzione sarà un emendamento, più avanti).",
+    "cancelled": "L'ispezione è annullata.",
+    "notYours": "Solo l'ispettore che l'ha aperta la registra e la firma.",
+    "maker": "Hai prodotto alcuni di questi capi: firma un altro ispettore.",
+    "unanswered": "Prima rispondi a ogni controllo (conforme, non conforme o non applicabile).",
+    "noRelease": "Il tuo ruolo non rilascia capi (quality.garments.release).",
+    "nothingToRelease": "Di questa cella non resta nulla da rilasciare con questa ispezione.",
+    "gateOpen_one": "{count} controllo da fare: {check}.",
+    "gateOpen_other": "{count} controlli da fare, il primo: {check}.",
+    "noReverse": "Il tuo ruolo non revoca capi (quality.garments.reverse).",
+    "nothingToReverse": "Ora non si può revocare nulla di questo rilascio: il resto è su una spedizione.",
+    "noSettings": "Solo il titolare modifica le regole qualità (quality.settings.manage).",
+    "noParties": "Per aggiungere clienti serve parties.view.",
+    "noLots": "Per i lotti serve quality.lots.view.",
+    "noBatch": "L'ordine di produzione non ha ancora un numero di lotto."
+  },
+  "list": {
+    "intro": "Ispezioni finali dei capi finiti, il loro rilascio da parte di chi non li ha prodotti, i rilasci revocati e ciò che è bloccato.",
+    "new": "Nuova ispezione",
+    "rules": "Regole qualità",
+    "rulesMenu": "Regole qualità: chi rilascia",
+    "more": "Altre azioni della lista",
+    "ruleTitle": "Regola di rilascio in vigore: {rule}",
+    "ruleCustomers_one": "{count} cliente in elenco richiede sempre una seconda persona.",
+    "ruleCustomers_other": "{count} clienti in elenco richiedono sempre una seconda persona.",
+    "ruleNoCustomers": "Nessun cliente è in elenco per la seconda persona.",
+    "ruleFailed": "Non è stato possibile leggere la regola di rilascio",
+    "rowsHeading": "Mostra",
+    "rows": "Righe: {view}",
+    "activeFilters": "Filtri attivi",
+    "removeFilter": "Togli il filtro {name}",
+    "count_one": "{count} riga",
+    "count_other": "{count} righe",
+    "countAtLeast": "Almeno {count} righe",
+    "countReading": "Lettura…",
+    "showMore": "Mostra altri",
+    "maxReached": "La lista mostra al massimo {max} righe: restringila con una vista.",
+    "showAll": "Mostra tutte le ispezioni",
+    "bulkExport": "Esporta {count} (CSV)",
+    "opened": "Aperta il {date}",
+    "lotOf": "Lotto {lot} · campione {sample}",
+    "released": "{released} di {lot} rilasciati",
+    "takenBack_one": "{count} revocato",
+    "takenBack_other": "{count} revocati",
+    "toRelease_one": "{count} in attesa di rilascio",
+    "toRelease_other": "{count} in attesa di rilascio",
+    "backOf": "{back} di {released} revocati",
+    "holdCount_one": "{count} bloccato",
+    "holdCount_other": "{count} bloccati",
+    "holdCleared": "Blocco tolto: una nuova ispezione è superata",
+    "alone": "Rilasciato da solo",
+    "receivedOn": "Ricevuto il {date}",
+    "openingStock": "Giacenza iniziale",
+    "table": {
+      "inspections": "Ispezioni",
+      "releases": "Rilasci revocati",
+      "lots": "Lotti bloccati"
+    },
+    "failed": {
+      "inspections": "Non è stato possibile leggere le ispezioni",
+      "releases": "Non è stato possibile leggere i rilasci",
+      "lots": "Non è stato possibile leggere i lotti"
+    },
+    "empty": {
+      "title": "Nessuna ispezione per ora",
+      "body": "Un'ispezione finale giudica i capi finiti di un ordine di produzione; la apre il banco, oppure l'ufficio con Nuova ispezione."
+    },
+    "none": {
+      "open": "Nessuna ispezione aperta.",
+      "waiting": "Nulla di superato è in attesa di rilascio.",
+      "onHold": "Nessun capo è bloccato da un’ispezione.",
+      "reversed": "Nessun rilascio è stato revocato.",
+      "lots": "Nessun lotto è bloccato.",
+      "all": "Niente qui."
+    },
+    "noAccess": {
+      "title": "Le ispezioni non sono aperte al tuo ruolo",
+      "body": "Serve quality.inspections.view; lo concede il titolare o un amministratore in Amministrazione › Ruoli."
+    }
+  },
+  "view": {
+    "all": "Tutte le ispezioni",
+    "open": "Aperte",
+    "waiting": "In attesa di rilascio",
+    "onHold": "Bloccate",
+    "reversed": "Rilasci revocati",
+    "lots": "Lotti bloccati"
+  },
+  "tile": {
+    "open": "Aperte",
+    "openHint": "Ispezioni non ancora firmate",
+    "waiting": "In attesa di rilascio",
+    "waitingHint": "Superate, capi ancora da rilasciare",
+    "onHold": "Bloccate",
+    "onHoldHint": "Non superate, o capi revocati",
+    "reversed": "Rilasci revocati",
+    "reversedHint": "Con capi bloccati o sbloccati",
+    "lots": "Lotti bloccati",
+    "lotsHint": "In quarantena o bloccati",
+    "unknown": "Conteggio non riuscito",
+    "atLeast": "{count}+"
+  },
+  "col": {
+    "inspection": "Ispezione",
+    "workOrder": "Ordine di produzione",
+    "status": "Stato",
+    "lot": "Lotto · campione",
+    "released": "Rilasciati",
+    "inspector": "Ispettore",
+    "decided": "Firmata",
+    "actions": "Azioni",
+    "release": "Rilascio",
+    "takenBack": "Revocati",
+    "onHold": "Bloccati",
+    "releasedBy": "Rilasciato da",
+    "secondPerson": "Seconda persona",
+    "lotCode": "Lotto",
+    "material": "Materiale",
+    "lotStatus": "Stato del lotto",
+    "crVi": "Cromo VI",
+    "why": "Perché è bloccato"
+  },
+  "row": {
+    "menu": "Azioni per {name}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "release": "Rilascia per la spedizione…",
+    "openInspection": "Apri l'ispezione",
+    "copyNumber": "Copia il numero"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "new": "Nuova ispezione",
+    "sign": "s — firma l'esito (quando si può firmare)",
+    "save": "⌘↵ — conferma la finestra",
+    "tabs": "Tab — muoviti tra le sezioni"
+  },
+  "csv": {
+    "inspection": "Ispezione",
+    "workOrder": "Ordine di produzione",
+    "status": "Stato",
+    "lot": "Lotto",
+    "sample": "Campione",
+    "released": "Rilasciati",
+    "reversed": "Revocati",
+    "toRelease": "Da rilasciare",
+    "onHold": "Bloccati",
+    "decidedAt": "Firmata il",
+    "yes": "Sì",
+    "no": "No",
+    "release": "Rilascio",
+    "garments": "Capi",
+    "takenBack": "Revocati",
+    "releasedBy": "Rilasciato da",
+    "releasedAt": "Rilasciato il",
+    "material": "Materiale",
+    "lotStatus": "Stato del lotto",
+    "crVi": "Cromo VI",
+    "why": "Perché è bloccato"
+  },
+  "new": {
+    "title": "Nuova ispezione finale",
+    "subtitle": "Un lotto dei capi finiti dell'ordine di produzione, ispezionato su un campione.",
+    "workOrder": "Ordine di produzione",
+    "workOrderHint": "Rilasciato, in corso o completato: si ispezionano i suoi capi finiti.",
+    "workOrderPick": "Scegli un ordine di produzione",
+    "workOrderSearch": "Cerca per numero o modello",
+    "noWorkOrder": "Nessun ordine di produzione da ispezionare",
+    "workOrdersFailed": "Non è stato possibile leggere gli ordini di produzione",
+    "finished_one": "{style}: {count} capo finito su {pieces} (buono all'ultima operazione).",
+    "finished_other": "{style}: {count} capi finiti su {pieces} (buoni all'ultima operazione).",
+    "finishedUnknown": "{style}: i capi finiti non sono ancora contati (nessuna operazione finale scansionata).",
+    "lotSize": "Lotto (capi)",
+    "lotSizeHint": "Al massimo i capi finiti.",
+    "sampleSize": "Campione (capi)",
+    "sampleSizeHint": "Al massimo il lotto; tutto il lotto è un'ispezione al 100 %.",
+    "level": "Livello di ispezione",
+    "levelHint": "Come lo chiama la tua tabella di campionamento (\"II\", \"S-3\").",
+    "aqlMajor": "AQL maggiori (%)",
+    "aqlMinor": "AQL minori (%)",
+    "aqlHint": "Una percentuale, fino a tre decimali.",
+    "acceptMajor": "Accetta fino a (maggiori)",
+    "acceptMinor": "Accetta fino a (minori)",
+    "acceptHint": "Capi con un difetto che il campione accetta ancora.",
+    "tablesLater": "Scrivi i numeri di accettazione dalla tua tabella di campionamento; le tabelle ISO 2859-1 verranno calcolate qui in un passo successivo.",
+    "note": "Nota",
+    "numberWords": "Alla creazione prende il prossimo numero della serie ispezioni della società.",
+    "create": "Crea ispezione",
+    "keyHint": "crea",
+    "problem": {
+      "workOrder": "Scegli un ordine di produzione.",
+      "nothingFinished": "Nessun capo di questo ordine di produzione è ancora finito.",
+      "lotSize": "Il lotto è un numero intero di capi da 1.",
+      "lotOverFinished": "Il lotto è al massimo i capi finiti.",
+      "sampleSize": "Il campione è un numero intero di capi da 1.",
+      "sampleOverLot": "Il campione è al massimo il lotto.",
+      "accept": "I numeri di accettazione sono interi da 0.",
+      "aql": "Un AQL è una percentuale con al massimo tre decimali (\"2,5\").",
+      "level": "Indica il livello di ispezione.",
+      "refused": "L'ispezione non è stata aperta: l'ordine di produzione o la sua numerazione ora non lo consentono."
+    }
+  },
+  "rules": {
+    "title": "Regole qualità: chi rilascia",
+    "subtitle": "Rilascio finale dei capi in {company}",
+    "failed": "Non è stato possibile leggere la regola",
+    "inForce": "In vigore ora: {rule}",
+    "source": {
+      "COMPANY": "Impostata per questa società.",
+      "TENANT": "Impostata per tutte le società.",
+      "DEFAULT": "Quella predefinita: nessuno l’ha cambiata."
+    },
+    "rule": {
+      "WHEN_REQUIRED": "Un ispettore che non ha prodotto nessuno dei capi rilascia da solo",
+      "ALWAYS": "Ogni rilascio finale richiede una seconda persona"
+    },
+    "fourEyes": "Quattro occhi sul rilascio finale",
+    "follow": "Come per tutte le società",
+    "followHint": "Questa società segue la regola impostata per tutte le società (o quella predefinita).",
+    "whenRequiredHint": "Una seconda persona solo per le deroghe e i clienti in elenco qui sotto.",
+    "alwaysHint": "Dopo la firma dell'ispettore, rilascia un'altra persona qualificata.",
+    "customers": "Clienti che richiedono sempre una seconda persona",
+    "customersHint": "I loro capi sono rilasciati da una persona diversa dall'ispettore che ha firmato.",
+    "noCustomers": "Nessun cliente in elenco.",
+    "everyCompany": "in elenco per tutte le società",
+    "remove": "Togli {name} dall’elenco",
+    "find": "Aggiungi un cliente o un marchio",
+    "findPlaceholder": "Nome, codice o partita IVA",
+    "noMatch": "Nessun cliente o marchio trovato.",
+    "add": "Aggiungi {name}",
+    "reversalTitle": "Revocare un rilascio",
+    "reversalFixed": "Una persona qualificata con un motivo scritto, mai rallentata da una seconda persona o da un codice: una revoca protegge soltanto.",
+    "reason": "Perché allenti la regola",
+    "reasonHint": "Resta con la modifica; poi la conferma un codice nuovo dall'app di autenticazione.",
+    "tightens": "Una regola più severa non chiede motivo né codice.",
+    "save": "Salva la regola",
+    "saveLoosen": "Allenta la regola…",
+    "saved": "La regola di rilascio è salvata.",
+    "savedLoosened": "La regola di rilascio è allentata; la modifica è registrata con il tuo motivo.",
+    "problem": {
+      "nothing": "Non è ancora cambiato nulla.",
+      "reason": "Scrivi perché allenti la regola (almeno 3 caratteri)."
+    }
+  },
+  "release": {
+    "number": "Rilascio {number}",
+    "unnumbered": "{workOrder} · rilascio",
+    "title": "Rilascia {cell} per la spedizione",
+    "titleNone": "Rilascio per la spedizione",
+    "subtitle": "{releasable} rilasciabili ora · {released} di {pieces} rilasciati",
+    "gateTitle": "I controlli, uno per uno",
+    "gateIntro": "Ogni controllo deve essere fatto; le frasi sono i fatti del sistema.",
+    "whoTitle": "Chi può rilasciare",
+    "alone": "Non hai prodotto nessuno di questi capi e non serve una seconda persona: puoi rilasciare da solo.",
+    "secondPerson": "Rilascia una seconda persona, non l'ispettore che ha firmato:",
+    "serials": "Numeri di serie da rilasciare",
+    "noSerials": "Nessun numero di serie è pronto (prodotto, etichettato e non imballato).",
+    "quantity": "Capi da rilasciare",
+    "quantityHint_one": "Al massimo {count}.",
+    "quantityHint_other": "Al massimo {count}.",
+    "note": "Nota",
+    "codeWords": "Rilasciare è una firma: chiede un codice nuovo dall'app di autenticazione.",
+    "confirm_one": "Rilascia {count} capo",
+    "confirm_other": "Rilascia {count} capi",
+    "heldChecks_one": "{count} controllo da fare: {check}",
+    "heldChecks_other": "{count} controlli da fare, il primo: {check}",
+    "refused": "Il rilascio è stato rifiutato",
+    "done_one": "Rilasciato {count} capo ({number}): imballo consentito.",
+    "done_other": "Rilasciati {count} capi ({number}): imballo consentito.",
+    "problem": {
+      "quantity": "Indica quanti capi (un numero intero da 1).",
+      "tooMany": "È più di quanto questa cella può rilasciare con questa ispezione.",
+      "serials": "Spunta un numero di serie per capo.",
+      "gate": "I controlli lo hanno rifiutato: ogni controllo da fare è qui sotto.",
+      "maker": "Hai prodotto alcuni di questi capi: li rilascia un altro ispettore."
+    }
+  },
+  "releaseDetail": {
+    "title": "Rilascio",
+    "subtitle_one": "{count} capo di {workOrder} · {date}",
+    "subtitle_other": "{count} capi di {workOrder} · {date}",
+    "released": "Rilasciato",
+    "partReversed_one": "{count} revocato",
+    "partReversed_other": "{count} revocati",
+    "holdTag_one": "{count} bloccato",
+    "holdTag_other": "{count} bloccati",
+    "reverse": "Revoca…",
+    "tabsLabel": "Sezioni del rilascio",
+    "noun": "rilascio",
+    "tab": {
+      "release": "Rilascio",
+      "gate": "Controlli al rilascio",
+      "reversal": "Revoche"
+    },
+    "garments": "Capi",
+    "takenBack": "Revocati",
+    "onHold": "Bloccati",
+    "workOrder": "Ordine di produzione",
+    "inspection": "Ispezione",
+    "openInspection": "Apri l'ispezione",
+    "releasedBy": "Rilasciato da",
+    "method": "Firmato con",
+    "methodPin": "PIN al banco",
+    "methodCode": "Codice di autenticazione in ufficio",
+    "at": "Il",
+    "secondPerson": "Seconda persona",
+    "alone": "L'ispettore, che non ha prodotto nessuno dei capi, l'ha rilasciato da solo.",
+    "serials": "Numeri di serie",
+    "serial": "Numero di serie",
+    "serialStatus": "Ora",
+    "packed": "Imballato",
+    "signature": "Firma",
+    "signatureWords": "Impronta della firma (SHA-256):",
+    "gateIntro": "I certificati su cui si è basato il rilascio, e come stanno oggi.",
+    "noCertificate": "Nessun certificato indicato",
+    "noCertificateBody": "Il modello non è un DPI, oppure il rilascio è precedente all'istantanea dei controlli.",
+    "certificates": "Certificati",
+    "certificate": "Certificato",
+    "standard": "Norma e classe",
+    "validTo": "Valido fino al",
+    "today": "Oggi",
+    "notReversed": "Non revocato",
+    "notReversedBody": "Ogni capo di questo rilascio è ancora rilasciato.",
+    "reversals": "Capi revocati",
+    "when": "Quando",
+    "why": "Perché",
+    "by": "Da",
+    "holdNow": "Blocco",
+    "stillHeld": "Bloccati finché una nuova ispezione non è superata",
+    "heldCleared": "Tolto: una nuova ispezione è superata",
+    "register": "Registro DPI",
+    "noRegister": "Nessuna voce di registro: non era partito nulla, oppure il modello non è un DPI.",
+    "nowTitle": "Revocare altro ora farebbe questo"
+  },
+  "reverse": {
+    "title": "Revoca dei capi rilasciati",
+    "subtitle": "Dal rilascio {release}",
+    "impactTitle": "Cosa fa, prima di confermare",
+    "impact": {
+      "house_one": "{count} capo ancora qui → bloccato finché una nuova ispezione non è superata",
+      "house_other": "{count} capi ancora qui → bloccati finché una nuova ispezione non è superata",
+      "onShipment_one": "{count} su una spedizione non ancora partita → prima toglilo dalla spedizione",
+      "onShipment_other": "{count} su una spedizione non ancora partita → prima toglili dalla spedizione",
+      "shipped_one": "{count} spedito → non si richiama da qui: lo segue una voce del registro DPI",
+      "shipped_other": "{count} spediti → non si richiamano da qui: li segue una voce del registro DPI"
+    },
+    "onePerson": "Basta una persona qualificata con un motivo: una revoca protegge soltanto. I quattro occhi valgono per il prossimo rilascio.",
+    "quantity": "Capi da revocare",
+    "quantityHint_one": "Al massimo {count} ora.",
+    "quantityHint_other": "Al massimo {count} ora.",
+    "serials": "Numeri di serie da revocare",
+    "noSerials": "Ora non si può revocare nessun numero di serie di questo rilascio.",
+    "serialsTo": "Dove vanno i capi",
+    "toMade": "Di nuovo in rilavorazione",
+    "toMadeHint": "Vengono rilavorati e ispezionati di nuovo.",
+    "toVoid": "Scartati",
+    "toVoidHint": "I loro numeri di serie sono annullati per sempre.",
+    "serialsWent": {
+      "MADE": "Numeri di serie in rilavorazione",
+      "VOID": "Numeri di serie scartati",
+      "RELEASED": "Numeri di serie rilasciati",
+      "SHIPPED": "Numeri di serie spediti"
+    },
+    "reasonCode": "Tipo di motivo",
+    "reasonPick": "Scegli il tipo",
+    "reason": "Cosa è successo",
+    "reasonHint": "Almeno 3 caratteri; resta sul rilascio e sulla voce di registro.",
+    "stays": "Il rilascio resta registrato come revocato. Un nuovo rilascio richiede una nuova ispezione.",
+    "confirm_one": "Revoca {count} capo",
+    "confirm_other": "Revoca {count} capi",
+    "refused": "La revoca è stata rifiutata",
+    "done_one": "{count} capo revocato e bloccato.",
+    "done_other": "{count} capi revocati e bloccati.",
+    "registerOpened": "Li segue la voce del registro DPI {reference} — aprila",
+    "registerNone": "Nessuna voce del registro DPI aperta (non DPI, oppure il registro non ha potuto numerarla: aprila a mano).",
+    "problem": {
+      "quantity": "Indica quanti capi revocare.",
+      "tooMany": "È più di quanto si può revocare ora.",
+      "serialsTo": "Indica dove vanno i numeri di serie: rilavorazione o scarto.",
+      "reasonCode": "Scegli il tipo di motivo.",
+      "reason": "Scrivi cosa è successo (almeno 3 caratteri).",
+      "refused": "Qualcosa è cambiato dalla lettura: la revoca è stata rifiutata."
+    }
+  },
+  "whereSigned": {
+    "you": "da te",
+    "bench": "al banco",
+    "office": "in ufficio"
+  },
+  "plan": {
+    "heading": "Piano di campionamento",
+    "sub": "Come lo indica l'ispettore (tabelle ISO 2859-1 più avanti).",
+    "edit": "Modifica il piano…",
+    "title": "Piano di campionamento",
+    "save": "Salva il piano",
+    "saved": "Il piano è salvato.",
+    "lot": "Lotto",
+    "sample": "Campione",
+    "hundred": "{count} (100 %)",
+    "level": "Livello",
+    "aqlMajor": "Maggiori",
+    "aqlMinor": "Minori",
+    "aqlAccept": "AQL {aql} · accetta {accept}",
+    "problem": {
+      "refused": "Il piano è stato rifiutato: il lotto o il campione non sono compatibili con i capi finiti."
+    }
+  },
+  "checklist": {
+    "heading": "Lista di controllo",
+    "counts": "{answered} di {total} con risposta · {failed} non conformi",
+    "pass": "OK",
+    "fail": "Non OK",
+    "na": "N/A",
+    "answer": {
+      "pass": "OK",
+      "fail": "Non OK",
+      "na": "Non applicabile",
+      "unset": "Senza risposta"
+    },
+    "answerFor": "Risposta per {check}",
+    "noteFor": "Cosa non va in {check}",
+    "notePlaceholder": "Scrivi cosa non va",
+    "needNote": "Un controllo non conforme dice cosa non va: scrivilo e si salva.",
+    "saving": "Salvataggio…",
+    "saved": "Salvato",
+    "failed": "Non ancora salvato",
+    "group": {
+      "LABELS": "Etichette",
+      "GARMENT": "Capo",
+      "ARMOUR": "Protezioni",
+      "PACKAGING": "Imballo e documenti"
+    },
+    "item": {
+      "EN17092_CLASS_LABEL": "Etichetta di classe EN 17092 uguale alla classe del certificato",
+      "SIZE_LABEL": "Etichetta della taglia",
+      "CE_MARK": "Marcatura CE",
+      "CARE_LABEL": "Etichetta di manutenzione",
+      "FIBRE_COMPOSITION": "Composizione fibrosa (Reg. 1007/2011 art. 12)",
+      "ANIMAL_ORIGIN_PHRASE": "'Contiene parti non tessili di origine animale'",
+      "ZIPS": "Cerniere",
+      "REFLECTIVES": "Inserti riflettenti",
+      "ARMOUR_FITTED": "Protezioni montate, taglia giusta, marcate EN 1621",
+      "HANGTAGS": "Cartellini",
+      "USER_INFORMATION": "Nota informativa nelle lingue del mercato",
+      "PACKAGING": "Imballo"
+    }
+  },
+  "defects": {
+    "heading": "Difetti trovati nel campione",
+    "counts": "Critici {critical} · maggiori {major} · minori {minor}",
+    "edit": "Modifica i difetti…",
+    "none": "Nessun difetto registrato.",
+    "title": "Difetti trovati",
+    "subtitle": "Una riga per classe e codice; capi del campione di {sample}.",
+    "add": "Aggiungi una riga",
+    "save": "Salva i difetti",
+    "saved": "I difetti sono salvati; l'esito è ricalcolato.",
+    "line": "Riga {n}",
+    "remove": "Togli la riga {n}",
+    "classLabel": "Classe",
+    "code": "Codice",
+    "codeHint": "Maiuscole, cifre e trattini (\"STITCH-SKIP\").",
+    "quantity": "Capi",
+    "cell": "Colore e taglia",
+    "anyCell": "Nessuna cella in particolare",
+    "note": "Nota",
+    "critical": "Critici",
+    "major": "Maggiori",
+    "minor": "Minori",
+    "class": {
+      "CRITICAL": "Critico",
+      "MAJOR": "Maggiore",
+      "MINOR": "Minore"
+    },
+    "problem": {
+      "code": "Un codice difetto ha da 2 a 40 maiuscole, cifre o trattini.",
+      "quantity": "Un difetto si trova su almeno un capo.",
+      "overSample": "Al massimo il campione.",
+      "twice": "Una riga per classe e codice.",
+      "refused": "I difetti sono stati rifiutati così come sono."
+    }
+  },
+  "result": {
+    "heading": "Esito ora",
+    "computed": {
+      "PASS": "Le regole dicono: superata",
+      "FAIL": "Le regole dicono: non superata"
+    },
+    "decided": {
+      "PASSED": "Firmata: superata",
+      "FAILED": "Firmata: non superata",
+      "OPEN": "Aperta",
+      "CANCELLED": "Annullata"
+    },
+    "short": {
+      "PASS": "Superata",
+      "FAIL": "Non superata"
+    },
+    "incomplete_one": "Non completa: {count} controllo senza risposta",
+    "incomplete_other": "Non completa: {count} controlli senza risposta",
+    "incompleteFail_one": "Già non superata · {count} controllo senza risposta",
+    "incompleteFail_other": "Già non superata · {count} controlli senza risposta",
+    "passWords": "Nessun difetto critico, maggiori e minori entro i numeri di accettazione, ogni controllo OK.",
+    "reason": {
+      "critical_one": "{count} capo con un difetto critico: un difetto critico non è mai accettato.",
+      "critical_other": "{count} capi con un difetto critico: un difetto critico non è mai accettato.",
+      "checks_one": "{count} controllo non conforme.",
+      "checks_other": "{count} controlli non conformi.",
+      "major": "{count} con un difetto maggiore; il piano ne accetta {accept}.",
+      "minor": "{count} con un difetto minore; il piano ne accetta {accept}."
+    },
+    "makerNo": "Dai registri del reparto, non hai prodotto nessuno di questi capi.",
+    "makerYes": "Hai prodotto alcuni di questi capi: un altro ispettore li firma e li rilascia.",
+    "statementNeeded": "Questo stabilimento registra le postazioni, non le persone: firmando dichiari di non aver prodotto nessuno di questi capi.",
+    "certificateOk_one": "Controllo certificato: coperto oggi.",
+    "certificateOk_other": "Controllo certificato: ogni cella coperta oggi.",
+    "certificateOpen_one": "Controllo certificato: {count} cella non coperta oggi.",
+    "certificateOpen_other": "Controllo certificato: {count} celle non coperte oggi."
+  },
+  "sign": {
+    "title": "Firma l'esito di {label}",
+    "decision": "La tua decisione",
+    "result": {
+      "PASS": "Superata",
+      "FAIL": "Non superata"
+    },
+    "asComputed": "Come la calcolano le regole.",
+    "override": "Contro l'esito calcolato: una deroga con il tuo motivo scritto; il rilascio richiederà poi una seconda persona.",
+    "overrideReason": "Perché decidi contro l'esito calcolato",
+    "overrideHint": "Almeno 3 caratteri; resta con la firma (QHS-013).",
+    "statement": "Non ho prodotto nessuno di questi capi.",
+    "note": "Nota",
+    "ofAccept": "{count} (accetta {accept})",
+    "locked": "Un esito firmato non si modifica; una correzione sarà un emendamento con una seconda firma.",
+    "codeWords": "La firma chiede un codice nuovo dall'app di autenticazione.",
+    "confirm": {
+      "PASS": "Firma: superata",
+      "FAIL": "Firma: non superata"
+    },
+    "keyHint": "firma",
+    "refused": "La firma è stata rifiutata",
+    "donePass": "Firmata: superata. Ora i capi si possono rilasciare.",
+    "doneFail": "Firmata: non superata. I capi sono bloccati finché non sono rilavorati e ispezionati di nuovo.",
+    "problem": {
+      "passOverHard": "Non si firma mai una conformità sopra un difetto critico o un controllo non conforme.",
+      "reason": "Scrivi perché decidi contro l'esito calcolato (almeno 3 caratteri).",
+      "statement": "Spunta che non hai prodotto nessuno di questi capi.",
+      "maker": "Hai prodotto alcuni di questi capi: firma un altro ispettore.",
+      "refused": "La firma è stata rifiutata così com’è: le righe sotto spiegano perché."
+    }
+  },
+  "decision": {
+    "result": "Esito",
+    "notSigned": "Non ancora firmata.",
+    "decided": "Decisione",
+    "computed": "Calcolato dalle regole",
+    "override": "Motivo della deroga",
+    "noOverride": "Nessuno: come calcolato",
+    "signedAt": "Firmata il",
+    "signature": "Firma",
+    "who": "Chi firma",
+    "step1Waiting": "L'esito: in attesa della firma dell'ispettore.",
+    "step1Done": "L'esito: firmato {where} con il {method} il {date}.",
+    "step1None": "L'esito: non firmato.",
+    "pin": "PIN al banco",
+    "code": "codice di autenticazione",
+    "step2Alone": "Il rilascio: un ispettore che non ha prodotto nessuno dei capi può rilasciare da solo.",
+    "step2Second": "Il rilascio: da una seconda persona, non l'ispettore che ha firmato.",
+    "ruleNow": "Regola in vigore: {rule}.",
+    "release": "Rilascio per la spedizione",
+    "releaseSub": "Per colore e taglia: i controlli a parole, poi il rilascio (si imballano solo capi rilasciati).",
+    "finalFailed": "Non è stato possibile leggere lo stato del rilascio",
+    "releaseAfterSign": "I capi si rilasciano dopo che l'esito è firmato come superato.",
+    "failedNoRelease": "Un'ispezione non superata non rilascia nulla: rilavora, poi ispeziona di nuovo.",
+    "notNewest": "I rilasci partono dall'ultima ispezione superata dell'ordine di produzione:",
+    "cell": "Colore e taglia",
+    "pieces": "Pezzi",
+    "released": "Rilasciati",
+    "releasable": "Rilasciabili",
+    "gate": "Controlli",
+    "gateReady": "Pronto al rilascio",
+    "gateDone": "Tutto rilasciato",
+    "gateOpen_one": "{count} controllo da fare",
+    "gateOpen_other": "{count} controlli da fare",
+    "releaseCell": "Rilascia…",
+    "seeGate": "Vedi i controlli…",
+    "nothingLeft": "Niente da rilasciare",
+    "releases": "Rilasci di questa ispezione",
+    "releasesSub": "Un rilascio si apre nel suo dettaglio, dove si può revocare.",
+    "noReleases": "Ancora nulla rilasciato da questa ispezione.",
+    "garments": "Capi",
+    "at": "Quando",
+    "openRelease": "Apri"
+  },
+  "cancel": {
+    "title": "Annulla l'ispezione",
+    "body": "Un'ispezione annullata non rilascia nulla e resta registrata con il suo motivo.",
+    "reason": "Perché",
+    "reasonNeeded": "Scrivi perché (almeno 3 caratteri).",
+    "confirm": "Annulla l'ispezione",
+    "done": "L'ispezione è annullata."
+  },
+  "evidence": {
+    "title": "Catena delle prove",
+    "subjectBatch": "Lotto di produzione {batch}",
+    "subjectSerial": "Capo {serial}",
+    "print": "Stampa",
+    "noMoney": "Sola lettura. Costi, prezzi e paghe non compaiono mai qui. Il fascicolo PDF e il link per le autorità arriveranno più avanti.",
+    "loading": "Lettura delle prove…",
+    "failed": "Non è stato possibile leggere le prove",
+    "notFound": {
+      "title": "Nulla trovato",
+      "body": "Nessun capo o lotto {subject} nelle società e per i clienti con cui lavori."
+    },
+    "noAccess": {
+      "title": "La catena delle prove non è aperta al tuo ruolo",
+      "body": "Serve quality.inspections.view; lo concede il titolare o un amministratore in Amministrazione › Ruoli."
+    },
+    "badAddress": {
+      "title": "Questo indirizzo non indica un capo o un lotto",
+      "body": "Apri la catena delle prove da un'ispezione, un rilascio o una voce di registro."
+    },
+    "verdictAll": "È presente tutto ciò che serve ({present} di {required})",
+    "verdictGaps_one": "{count} mancanza: {present} di {required} presenti",
+    "verdictGaps_other": "{count} mancanze: {present} di {required} presenti",
+    "workOrder": "ordine di produzione {number}",
+    "batch": "lotto {batch}",
+    "serial": "numero di serie {serial} ({status})",
+    "chain": "La catena delle prove",
+    "chainSub": "In ordine, ogni anello con ciò che è vero ora.",
+    "style": "Modello",
+    "ppe": "DPI",
+    "tracking": "Tracciato con",
+    "revision": "Revisione",
+    "revisionWords": "Revisione {revision}, {status}",
+    "releasedAt": "Rilasciata il",
+    "noStyle": "Il modello non è leggibile per te.",
+    "certificateToday": "I controlli come sono al {date}, per colore e taglia",
+    "noCertificateWords": "Nessuna cella da controllare.",
+    "noDocuments": "Nessuna DoC o nota informativa in archivio per questa revisione.",
+    "docKind": "Documento",
+    "language": "Lingua",
+    "docStatus": "Stato",
+    "fingerprint": "Impronta",
+    "template": "Modello di etichetta",
+    "templateStatus": "Stato del modello",
+    "languages": "Lingue",
+    "printed": "Etichette stampate",
+    "noTemplate": "L'ordine di produzione non indica un modello di etichetta.",
+    "noLots": "Nessun lotto di materiale è collegato a questo ordine di produzione.",
+    "lot": "Lotto",
+    "material": "Materiale",
+    "lotStatus": "Stato del lotto",
+    "crVi": "Cromo VI",
+    "result": "Risultato più recente",
+    "supplierDocs": "Documenti del fornitore",
+    "resultValue": "{value} mg/kg (limite {limit}) · {lab} · {date}",
+    "resultBelow": "Sotto il limite di rilevabilità (limite {limit}) · {lab} · {date}",
+    "productionSub": "{cuts} registrazioni di taglio · {bundles} fasci",
+    "noScans": "Nessuna operazione è ancora scansionata.",
+    "operation": "Operazione",
+    "good": "Buoni",
+    "scrap": "Scarti",
+    "rework": "Rilavorati",
+    "noPeople": "Contati per operazione, mai per persona.",
+    "noInspections": "Nessuna ispezione finale per ora.",
+    "sample": "Campione",
+    "found": "Trovati",
+    "sampleOf": "{sample} su {lot} · livello {level}",
+    "foundWords": "Critici {critical} · maggiori {major} · minori {minor}",
+    "noReleases": "Ancora nulla rilasciato.",
+    "noShipments": "Ancora nulla spedito.",
+    "shipment": "Spedizione",
+    "shipmentStatus": "Stato",
+    "ddt": "DDT",
+    "shippedAt": "Spedita il",
+    "noRegister": "Nessuna voce del registro DPI riguarda questi capi.",
+    "foot": "Questa pagina è una lettura dei record così come sono ora; stampala per tenerne una copia.",
+    "name": {
+      "style": "Modello e revisione",
+      "certificate": "Certificato",
+      "documents": "DoC e nota informativa",
+      "label": "Etichetta del capo",
+      "materials": "Materiali",
+      "production": "Produzione",
+      "inspection": "Ispezione finale",
+      "release": "Rilascio",
+      "shipment": "Spedizione",
+      "register": "Registro DPI"
+    },
+    "link": {
+      "style": {
+        "released": "Revisione {revision}, rilasciata: la specifica congelata.",
+        "draft": "La revisione {revision} è ancora una bozza.",
+        "none": "La revisione non è nota."
+      },
+      "certificate": {
+        "notYet": "Nessun rilascio indica ancora un certificato; i controlli di oggi sono elencati sotto.",
+        "valid_one": "{count} certificato indicato dai rilasci, valido oggi.",
+        "valid_other": "{count} certificati indicati dai rilasci, validi oggi.",
+        "notValid_one": "{count} certificato indicato da un rilascio non è valido oggi.",
+        "notValid_other": "{count} certificati indicati dai rilasci non sono validi oggi."
+      },
+      "documents": {
+        "present_one": "{count} documento emesso (DoC e nota informativa).",
+        "present_other": "{count} documenti emessi (DoC e nota informativa).",
+        "missingBoth": "Nessuna DoC emessa e nessuna nota informativa.",
+        "missingDoc": "Nessuna Dichiarazione UE di conformità emessa.",
+        "missingLeaflet": "Nessuna nota informativa emessa."
+      },
+      "label": {
+        "noTemplate": "Nessun modello di etichetta indicato.",
+        "notPrinted": "Modello {code} r{revision}: ancora nessuna etichetta stampata.",
+        "printed": "Modello {code} r{revision}: {count} etichette stampate."
+      },
+      "materials": {
+        "none": "Nessun lotto collegato.",
+        "released_one": "{count} lotto rilasciato, cromo VI in regola.",
+        "released_other": "{count} lotti rilasciati, cromo VI in regola.",
+        "onHold_one": "{count} lotto bloccato o senza esito Cr VI conforme.",
+        "onHold_other": "{count} lotti bloccati o senza esito Cr VI conforme."
+      },
+      "production": {
+        "noScans": "{workOrder}: ancora nessuna operazione scansionata.",
+        "made": "{workOrder}: {count} scansioni buone registrate."
+      },
+      "inspection": {
+        "passed_one": "{count} ispezione finale superata.",
+        "passed_other": "{count} ispezioni finali superate.",
+        "notPassed": "Nessuna ispezione finale è superata.",
+        "none": "Nessuna ispezione finale per ora."
+      },
+      "release": {
+        "none": "Nulla rilasciato.",
+        "released_one": "{count} capo rilasciato.",
+        "released_other": "{count} capi rilasciati.",
+        "withReversals": "{count} rilasciati, {back} revocati."
+      },
+      "shipment": {
+        "shipped_one": "{count} spedizione partita.",
+        "shipped_other": "{count} spedizioni partite.",
+        "notYet": "Non ancora spedito."
+      },
+      "register": {
+        "none": "Nessun reclamo, non conformità o richiamo.",
+        "open_one": "{count} voce di registro è aperta.",
+        "open_other": "{count} voci di registro sono aperte.",
+        "closed_one": "{count} voce di registro, chiusa.",
+        "closed_other": "{count} voci di registro, tutte chiuse."
+      }
+    }
+  }
+}

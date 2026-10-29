@@ -1,0 +1,467 @@
+{
+  "intro": "The legal register of complaints, non-conformities and recalls of the PPE we place on the market (Reg. (EU) 2016/425 art. 8). Entries are never deleted: a correction is a note.",
+  "keeper": {
+    "title": "Who keeps the register",
+    "body": "For brand-label styles the brand is the legal maker and keeps its own register; we keep the same entries here and share them with the brand."
+  },
+  "noAccess": {
+    "title": "The PPE register is not for your role",
+    "body": "Seeing the register needs the permission compliance.register.view. The owner or an administrator grants it in Admin › Roles."
+  },
+  "tile": {
+    "open": "Open entries",
+    "openHint": "Not closed yet",
+    "risk": "May present a risk – open",
+    "riskHint": "Open, risk decided: yes (the authority must be told)",
+    "assessing": "Risk being assessed",
+    "assessingHint": "Open, nobody has decided the risk yet",
+    "uninformed": "Distributors not yet informed",
+    "uninformedHint": "Open entries not yet marked as informed",
+    "closed": "Closed",
+    "closedHint": "Closed with a reason",
+    "atLeast": "at least {count}",
+    "unknown": "Could not be counted"
+  },
+  "view": {
+    "all": "Every entry",
+    "open": "Open entries",
+    "risk": "May present a risk – open",
+    "assessing": "Risk being assessed",
+    "uninformed": "Distributors not yet informed",
+    "closed": "Closed"
+  },
+  "kind": {
+    "COMPLAINT": "Complaint",
+    "NON_CONFORMITY": "Non-conformity",
+    "RECALL": "Recall"
+  },
+  "kindHint": {
+    "COMPLAINT": "A customer or a distributor reported a problem.",
+    "NON_CONFORMITY": "We found garments that do not conform.",
+    "RECALL": "Garments are called back from the market."
+  },
+  "risk": {
+    "NO": "No risk",
+    "ASSESSING": "Being assessed",
+    "YES": "May present a risk"
+  },
+  "riskHint": {
+    "NO": "The PPE does not present a risk to the wearer.",
+    "ASSESSING": "Nobody has decided yet whether the PPE may present a risk.",
+    "YES": "The PPE may present a risk: the market surveillance authority must be told (art. 8(8))."
+  },
+  "status": {
+    "OPEN": "Open",
+    "CLOSED": "Closed"
+  },
+  "source": {
+    "none": "Added by hand",
+    "QualityReleaseReversal": "A release taken back",
+    "QualityRelease": "A release",
+    "Inspection": "An inspection",
+    "Shipment": "A shipment",
+    "LabResult": "A lab result (Cr VI)"
+  },
+  "list": {
+    "table": "PPE register entries",
+    "count_one": "{count} entry",
+    "count_other": "{count} entries",
+    "search": "Search reference or description",
+    "reportedOn": "Reported {date}",
+    "noGarments": "No batch or serial named",
+    "concern": {
+      "batch": "Batch numbers",
+      "serial": "Serials"
+    },
+    "andMore_one": "{codes} and {count} more",
+    "andMore_other": "{codes} and {count} more",
+    "notYet": "Not yet",
+    "col": {
+      "entry": "Entry",
+      "kind": "Kind",
+      "style": "Style",
+      "concern": "Batch or serials",
+      "reporter": "Reported by",
+      "risk": "May present a risk",
+      "source": "Source",
+      "status": "Status",
+      "informed": "Distributors informed",
+      "authority": "Authority notified",
+      "actions": "Actions"
+    },
+    "rowsHeading": "Saved views",
+    "rows": "Rows: {view}",
+    "filters": "Filters",
+    "filtersCount": "Filters ({count})",
+    "activeFilters": "Filters in use",
+    "removeFilter": "Remove the filter {name}",
+    "clearAll": "Clear filters",
+    "exportView": "This view (CSV)",
+    "exportNothing": "Nothing to export in this view",
+    "exportViewHint": "The {count} rows shown, in a spreadsheet",
+    "more": "More actions on the register",
+    "bulkExport_one": "Export {count} (CSV)",
+    "bulkExport_other": "Export {count} (CSV)",
+    "failedTitle": "The register could not be read",
+    "noMatch": "No entry matches these filters",
+    "empty": {
+      "title": "The register is empty",
+      "body": "Entries come from complaints, non-conformities, releases taken back and failed lab results – or New entry."
+    },
+    "showMore": "Show {count} more",
+    "atMax": "At most {max} shown"
+  },
+  "held": {
+    "manage": "Your role can see the register; changing it needs compliance.register.manage.",
+    "closed": "A closed entry never changes: add a note in its thread instead.",
+    "actionDone": "The corrective action is recorded as done: add a note instead of rewriting it.",
+    "informed": "The distributors are already recorded as informed.",
+    "notified": "The authority is already recorded as notified.",
+    "viewSetsRisk": "This view already chooses the risk",
+    "atMax": "The list shows at most {max} entries: narrow the filters or search.",
+    "noSubject": "This entry names no batch or serial to trace."
+  },
+  "row": {
+    "menu": "Actions for {reference}",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "copy": "Copy the reference"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "new": "New entry"
+  },
+  "new": {
+    "action": "New entry",
+    "title": "New register entry",
+    "subtitle": "What happened, to which garments, and whether the PPE may present a risk.",
+    "add": "Add to the register",
+    "adding": "Adding…",
+    "problemsTitle": "Before it can be added",
+    "company": "Company",
+    "chooseCompany": "Choose the company",
+    "kind": "Kind of event",
+    "style": "Style",
+    "styleHint": "The style of the garments concerned.",
+    "styleNoRight": "Your role cannot list styles (product.styles.view): ask someone who can to add the entry.",
+    "chooseStyle": "Choose a style",
+    "styleUnavailable": "No style to choose",
+    "reportedOn": "Reported on",
+    "reportedOnHint": "Empty: now.",
+    "clearDate": "Clear the date",
+    "batches": "Batch numbers",
+    "batchesHint": "As printed on the garment labels. Enter adds one.",
+    "batchesPlaceholder": "Add a batch number",
+    "serials": "Serials",
+    "serialsHint": "For a style with one serial per garment. Enter adds one.",
+    "serialsPlaceholder": "Add a serial",
+    "trace": "Where are these garments?",
+    "traceHint": "Finds the work orders, the shipments that left with their DDTs and the customers, before you add the entry.",
+    "tracing": "Looking…",
+    "traceNeeds": "Choose a style and add a batch number or a serial first.",
+    "traceFailed": "The garments could not be traced",
+    "traceRefused": "A batch, serial or style was refused as it is: check them.",
+    "description": "What happened",
+    "descriptionHint": "In plain words: what was found or reported, and how we learnt it.",
+    "reporter": "Reported by",
+    "reporterHint": "The customer or distributor who reported it, when there is one.",
+    "reporterNoRight": "Your role cannot list customers (parties.view): the reporter can be added later by someone who can.",
+    "noReporter": "Nobody (found by us)",
+    "risk": "May the PPE present a risk?",
+    "actionTaken": "Action already taken",
+    "actionTakenHint": "Optional. The corrective action is recorded as done later, on the entry.",
+    "reference": "The entry takes its reference from the company’s PPE register numbering when it is added.",
+    "problem": {
+      "company": "Choose the company.",
+      "style": "Choose the style of the garments.",
+      "description": "Say what happened.",
+      "recallNeedsGarments": "A recall names what it calls back: add a batch number or a serial.",
+      "tooManyBatches": "At most 50 batch numbers in one entry.",
+      "tooManySerials": "At most 500 serials in one entry.",
+      "noSeries": "This company has no PPE register numbering yet: Admin › Documents & numbering sets it.",
+      "refused": "The entry was refused as it is: check the style, batches and serials."
+    }
+  },
+  "csv": {
+    "file": "ppe-register-{day}.csv",
+    "reference": "Reference",
+    "reportedAt": "Reported on",
+    "kind": "Kind",
+    "style": "Style",
+    "styleName": "Style name",
+    "batchNumbers": "Batch numbers",
+    "serials": "Serials",
+    "reporter": "Reported by",
+    "risk": "May present a risk",
+    "source": "Source",
+    "status": "Status",
+    "distributorsInformedAt": "Distributors informed on",
+    "authorityNotifiedAt": "Authority notified on",
+    "authorityReference": "Authority reference",
+    "closedAt": "Closed on"
+  },
+  "done": {
+    "exported_one": "{count} entry exported.",
+    "exported_other": "{count} entries exported.",
+    "copied": "{reference} copied.",
+    "created": "Added to the register.",
+    "saved": "{reference}: the event is saved.",
+    "assessed": "{reference}: the risk assessment is saved.",
+    "actionSaved": "{reference}: the corrective action is saved (not done yet).",
+    "actionDone": "{reference}: the corrective action is recorded as done.",
+    "informed": "{reference}: the distributors are recorded as informed.",
+    "notified": "{reference}: the authority is recorded as notified.",
+    "closed": "{reference} is closed."
+  },
+  "trace": {
+    "countsLabel": "Where the garments are",
+    "workOrders": "Work orders",
+    "concerned": "Concerned",
+    "released": "Released",
+    "packed": "Packed",
+    "shipped": "Shipped",
+    "returned": "Returned",
+    "customers": "Customers",
+    "shippedGoods": "Some garments have left: the distributors who received them must be informed (art. 8(4)).",
+    "noShippedGoods": "None of these garments has left the factory.",
+    "problemsTitle_one": "{count} thing could not be traced",
+    "problemsTitle_other": "{count} things could not be traced",
+    "workOrdersTable": "Work orders concerned",
+    "cellsTable": "Garments per colour and size",
+    "shipmentsTable": "Shipments",
+    "customersTable": "Customers who received them",
+    "lotsTable": "Material lots",
+    "col": {
+      "workOrder": "Work order",
+      "batch": "Batch",
+      "reach": "Reach",
+      "via": "Found through",
+      "status": "Status",
+      "cell": "Colour · size",
+      "shipment": "Shipment",
+      "customer": "Customer",
+      "ddt": "DDT",
+      "left": "Left",
+      "garments": "Garments",
+      "shipments": "Shipments",
+      "lot": "Lot",
+      "workOrders": "Work orders"
+    },
+    "reach": {
+      "WHOLE": "Every garment",
+      "PART": "Some garments"
+    },
+    "via": {
+      "BATCH": "batch",
+      "SERIAL": "serial",
+      "LOT": "material lot",
+      "WORK_ORDER": "work order",
+      "SHIPMENT": "shipment"
+    },
+    "leftOn": "Left on {date}",
+    "leftYes": "Left",
+    "notLeft": "Not left"
+  },
+  "record": {
+    "back": "PPE register",
+    "reportedBy": "reported by {name}",
+    "more": "More actions on the entry",
+    "evidence": "Evidence trail",
+    "evidenceBatch": "Evidence trail of batch {code}",
+    "evidenceSerial": "Evidence trail of serial {code}",
+    "changed": "Someone changed this entry at {time}.",
+    "reload": "Reload",
+    "reloadFailed": "The entry could not be read again: it shows its last copy. Try again in a moment.",
+    "closed": "Closed on {date}",
+    "closedBody": "A closed entry never changes: a correction is a note in its thread.",
+    "addNote": "Add a note",
+    "sourceRelease": "Release {label}, taken back",
+    "sourceLot": "A lab result of the material lot (Cr VI)"
+  },
+  "tab": {
+    "event": "Event",
+    "affected": "Affected units",
+    "actions": "Actions",
+    "activity": "Activity"
+  },
+  "action": {
+    "edit": "Edit the event",
+    "risk": "Assess the risk",
+    "action": "Record corrective action",
+    "distributors": "Distributors informed",
+    "authority": "Authority notified",
+    "close": "Close entry"
+  },
+  "affected": {
+    "title": "Affected units",
+    "sub": "Where every garment of these batches and serials is now: made, released, packed, shipped (with the DDT and the customer) or returned.",
+    "none": "No work order matches what this entry names."
+  },
+  "event": {
+    "title": "What happened",
+    "sub": "As reported or found, and where it came from.",
+    "kind": "Kind",
+    "reportedAt": "Reported",
+    "reporter": "Reported by",
+    "noReporter": "Found by us",
+    "style": "Style",
+    "batches": "Batch numbers",
+    "serials": "Serials",
+    "source": "Source",
+    "added": "Added to the register"
+  },
+  "assess": {
+    "title": "Risk assessment",
+    "sub": "Whether the PPE may present a risk, and what the investigation found.",
+    "risk": "May present a risk",
+    "investigation": "Investigation",
+    "noInvestigation": "Nothing written yet"
+  },
+  "corrective": {
+    "title": "Corrective action",
+    "sub": "What was done to bring the PPE into conformity (art. 8(8)).",
+    "text": "Action",
+    "none": "Not decided yet",
+    "done": "Done on",
+    "notDone": "Not done yet"
+  },
+  "duties": {
+    "title": "What the law asks",
+    "sub": "Each duty of this entry, whether it applies now and whether it is met."
+  },
+  "duty": {
+    "RISK_ASSESSMENT": {
+      "name": "Risk assessed",
+      "OK": "Someone decided whether the PPE may present a risk",
+      "OPEN": "Nobody has decided yet whether the PPE may present a risk",
+      "NOT_NEEDED": "Not needed",
+      "fix": "Assess the risk: yes or no."
+    },
+    "CORRECTIVE_ACTION": {
+      "name": "Corrective action",
+      "OK": "The corrective action is recorded and done",
+      "OPEN": "The corrective action is not recorded as done",
+      "NOT_NEEDED": "Not needed",
+      "fix": "Record the corrective action (or why none is needed) and mark it done."
+    },
+    "DISTRIBUTORS": {
+      "name": "Distributors informed",
+      "OK": "The distributors who received the garments are recorded as informed",
+      "OPEN": "Garments have left: the distributors who received them are not recorded as informed",
+      "NOT_NEEDED": "No garment has left: nobody to inform",
+      "fix": "Tell them, then record how and when."
+    },
+    "AUTHORITY": {
+      "name": "Authority notified",
+      "OK": "The market surveillance authority is recorded as notified, with its reference",
+      "OPEN": "The PPE may present a risk: the authority is not recorded as notified",
+      "NOT_NEEDED": "Only when the PPE may present a risk",
+      "fix": "Notify the authority, then record the date and its reference."
+    }
+  },
+  "toClose": {
+    "title": "Closing the entry",
+    "ready": "Every duty is met: the entry can be closed with a reason.",
+    "closedAt": "Closed",
+    "reason": "Reason"
+  },
+  "distributors": {
+    "title": "Distributors",
+    "sub": "Who received garments of these batches (art. 8(4)).",
+    "informed": "Recorded as informed",
+    "needed": "To inform",
+    "neededYes_one": "{count} customer received garments",
+    "neededYes_other": "{count} customers received garments",
+    "neededNo": "Nobody: no garment has left",
+    "where": "The customers are on the Affected units tab; write to them from the thread."
+  },
+  "authority": {
+    "title": "Market surveillance authority",
+    "sub": "When the PPE may present a risk (art. 8(8)).",
+    "notified": "Recorded as notified",
+    "reference": "Their reference",
+    "needed": "Needed",
+    "neededYes": "Yes: the PPE may present a risk",
+    "neededAssessing": "Not known until the risk is assessed",
+    "neededNo": "No: no risk"
+  },
+  "dialog": {
+    "saving": "Saving…",
+    "conflict": "Someone changed this entry in the meantime: it has been read again. Check and confirm once more.",
+    "refused": {
+      "edit": "The event could not be saved",
+      "risk": "The risk assessment could not be saved",
+      "action": "The corrective action could not be saved",
+      "distributors": "The information to distributors could not be recorded",
+      "authority": "The notice to the authority could not be recorded",
+      "close": "The entry cannot be closed yet"
+    },
+    "edit": {
+      "title": "Edit the event",
+      "sub": "What happened and who reported it. The batches, serials and style stay as reported.",
+      "confirm": "Save the event"
+    },
+    "risk": {
+      "title": "Assess the risk",
+      "sub": "Decide whether the PPE may present a risk to the wearer, and write what the investigation found.",
+      "confirm": "Save the assessment",
+      "yesWarning": "With a risk, the market surveillance authority must be told at once, and the entry closes only with its reference.",
+      "investigation": "Investigation",
+      "investigationHint": "What was checked and what was found."
+    },
+    "action": {
+      "title": "Corrective action",
+      "sub": "What is done to bring the PPE into conformity, to withdraw it or to recall it – or why nothing is needed.",
+      "confirm": "Save the action",
+      "confirmDone": "Record as done",
+      "needsText": "Write the corrective action first.",
+      "needsDay": "Choose the day.",
+      "text": "Corrective action",
+      "textHint": "Once recorded as done it does not change; later facts go in a note.",
+      "done": "The action is done",
+      "doneOn": "Done on",
+      "doneOnHint": "Not in the future, not before the day it was reported.",
+      "law": "Reg. (EU) 2016/425 art. 8(8): the maker takes the corrective action needed at once."
+    },
+    "inform": {
+      "title": "Distributors informed",
+      "sub": "Record when and how the distributors who received the garments were told.",
+      "confirm": "Record as informed",
+      "recordsOnly": "This records that you told them; it sends nothing. Write to them from the entry’s thread or by your own means.",
+      "who_one": "{count} customer received these garments:",
+      "who_other": "{count} customers received these garments:",
+      "garments_one": "{count} garment",
+      "garments_other": "{count} garments",
+      "ddt": "DDT {numbers}",
+      "nobody": "The trace finds no customer who received these garments.",
+      "day": "Informed on",
+      "note": "How and whom",
+      "noteHint": "Kept as a note in the entry’s thread.",
+      "needsNote": "Say how and whom you informed."
+    },
+    "notify": {
+      "title": "Authority notified",
+      "sub": "Record the notice to the market surveillance authority and its reference.",
+      "confirm": "Record the notice",
+      "recordsOnly": "This records the notice you sent (for example through Safety Gate or ICSMS); it sends nothing.",
+      "day": "Notified on",
+      "reference": "The authority's reference",
+      "referenceHint": "Their number for the notice (or the Safety Gate / ICSMS number).",
+      "note": "Which authority, and what was sent",
+      "noteHint": "Kept as a note in the entry’s thread.",
+      "needsReference": "Write the authority's reference.",
+      "needsNote": "Say which authority and what was sent."
+    },
+    "close": {
+      "title": "Close {reference}",
+      "sub": "Say why the entry is closed. The register keeps it, unchanged, for good.",
+      "confirm": "Close entry",
+      "stillOpen_one": "{count} thing still stops it from closing:",
+      "stillOpen_other": "{count} things still stop it from closing:",
+      "reason": "Reason",
+      "reasonHint": "For example: action done, no further complaints, authority answered.",
+      "final": "A closed entry never changes: later facts go in a note.",
+      "needsReason": "Say why the entry is closed."
+    }
+  }
+}

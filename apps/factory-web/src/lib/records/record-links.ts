@@ -10,11 +10,22 @@
 /** Record type (the API's model name) → its own page. W1 so far: a received mail opens in Mail to sort's review. */
 export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   InboundEmail: '/home/mail-to-sort?open=[id]',
+  // Quality › Inspections (SCR-076); a release is reviewed in its DetailModal on the list (design §2.3).
+  Inspection: '/quality/inspections/[id]',
+  QualityRelease: '/quality/inspections?open=[id]',
+  // Compliance › Tests & substances (SCR-054): a lot's tests, documents and release, until Warehouse › Lots is built.
+  Lot: '/compliance/tests/[id]',
+  // Compliance › PPE register & recalls (SCR-113).
+  PpeRegisterEntry: '/compliance/register/[id]',
 })
 
 /** An API list route → the web page that shows it (with the same query). */
 export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/email/inbound': '/home/mail-to-sort',
+  // The pages read the API's own filters from the address (`?onHold=true`, `?waitingRelease=true`, `?status=OPEN`).
+  '/quality/inspections': '/quality/inspections',
+  '/quality/lots': '/compliance/tests',
+  '/compliance/register': '/compliance/register',
 })
 
 export interface RecordRef {

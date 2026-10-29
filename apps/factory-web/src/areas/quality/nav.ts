@@ -1,0 +1,32 @@
+import { ClipboardCheck } from 'lucide-react'
+import type { OfficeAreaNav } from '../../shell/nav/office-nav'
+
+/**
+ * Quality (A2 §1.3 row 8; design 01 "Quality / Qualità"): checking what we make — final inspections, their release by
+ * an inspector who made none of the garments, the release reversals and the goods on hold (Owner answer Q3: reached
+ * from Inspections before the Holds page of W2a). Labels are message keys (`shell:` = messages/<locale>/shell.json).
+ * B-W1-34/43/45 part 2 build Inspections (SCR-075, the record SCR-076); Holds, Nonconformances and the quality system
+ * join with their own steps.
+ */
+export const officeArea: OfficeAreaNav = {
+  order: 8,
+  area: {
+    id: 'quality',
+    label: 'shell:nav.quality.area',
+    href: '/quality',
+    icon: ClipboardCheck,
+    phone: 'more',
+    sections: [
+      {
+        id: 'quality-main',
+        label: 'shell:nav.quality.main',
+        hideLabel: true,
+        noCrumb: true,
+        items: [
+          // SCR-075 / SCR-076: final inspections, releases, reversals and what is on hold (quality.inspections.view).
+          { id: 'quality-inspections', label: 'shell:nav.quality.inspections', href: '/quality/inspections', icon: ClipboardCheck, permission: 'quality.inspections.view' },
+        ],
+      },
+    ],
+  },
+}

@@ -1,0 +1,471 @@
+/*
+ * Quality and compliance screens (B-W1-34/43/45 part 2) LAYOUT: the page head, the record frame, sections, the check
+ * lists, facts rows and the dialogs' grids. The lists are the shared list frame (src/list-frame). The controls are the
+ * design system's; this file places them with semantic tokens only (no raw colours, no restyled controls). No page sets
+ * a max-width (Owner rule 2026-10-29): the pages fill the shell's main area; wide screens get more columns.
+ */
+.fw-q {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-q-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-q-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-width: 820px;
+}
+
+.fw-q-intro,
+.fw-q-hint,
+.fw-q-loading,
+.fw-q-asof {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.fw-q-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-q-actions,
+.fw-q-tags,
+.fw-q-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-q-actions {
+  gap: var(--nds-space-8);
+}
+
+.fw-q-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-12);
+}
+
+.fw-q-lines {
+  margin: var(--nds-space-4) 0 0;
+  padding-inline-start: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+/* ---- list cells ---- */
+.fw-q-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-q-cell-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-q-name {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  overflow-wrap: anywhere;
+}
+
+a.fw-q-name:focus-visible,
+a.fw-q-link:focus-visible {
+  outline: var(--nds-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--nds-radius-sm);
+}
+
+.fw-q-link {
+  color: var(--nds-text-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+
+.fw-q-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.fw-q-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- the record ---- */
+.fw-q-record {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-q-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-q-keys {
+  display: inline-flex;
+  gap: var(--nds-space-2);
+  margin-inline-start: var(--nds-space-4);
+}
+
+.fw-q-record-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+}
+
+@media (min-width: 1280px) {
+  .fw-q-record-body.has-dock {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+  }
+}
+
+@media (max-width: 1279px) {
+  .fw-q-record-dock {
+    display: none;
+  }
+}
+
+.fw-q-record-main,
+.fw-q-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+/* Two columns once each has room; on wide screens the record's work and its side panel. */
+.fw-q-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .fw-q-two {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.fw-q-main-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1200px) {
+  .fw-q-main-side {
+    grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  }
+}
+
+/* Three cards side by side on wide screens (1600 px and wider), two from 1100 px. */
+.fw-q-three {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .fw-q-three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1600px) {
+  .fw-q-three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ---- a section card ---- */
+.fw-q-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-q-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-12);
+}
+
+.fw-q-section-title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-q-section-title h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+/* ---- facts in a row (wraps) ---- */
+.fw-q-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-20);
+  margin: 0;
+}
+
+.fw-q-fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-q-fact dt {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-q-fact dd {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* ---- the gate in words (each check: a mark AND a word, never colour alone) ---- */
+.fw-q-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-q-check {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
+  gap: var(--nds-space-10);
+  align-items: start;
+}
+
+.fw-q-check-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  white-space: nowrap;
+}
+
+.fw-q-check[data-state='OK'] .fw-q-check-mark {
+  color: var(--nds-success-text);
+}
+
+.fw-q-check[data-state='OPEN'] .fw-q-check-mark {
+  color: var(--nds-danger-text);
+}
+
+.fw-q-check[data-state='NOT_NEEDED'] .fw-q-check-mark,
+.fw-q-check[data-state='UNKNOWN'] .fw-q-check-mark {
+  color: var(--nds-text-2);
+}
+
+.fw-q-check-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-q-check-name {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+/* ---- dialogs ---- */
+.fw-q-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-q-form-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-10) var(--nds-space-12);
+}
+
+@media (min-width: 640px) {
+  .fw-q-form-two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fw-q-form-three {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-10) var(--nds-space-12);
+}
+
+@media (min-width: 640px) {
+  .fw-q-form-three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.fw-q-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+fieldset.fw-q-choices {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+fieldset.fw-q-choices > legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-strong);
+}
+
+ul.fw-q-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fw-q-pop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  max-width: 380px;
+}
+
+.fw-q-pop-title {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+/* ---- a defect line in its dialog: class, code, garments, cell, note, remove ---- */
+.fw-q-defect {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: var(--nds-space-10) 0;
+  border: 0;
+  border-top: 1px solid var(--nds-border);
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .fw-q-defect {
+    grid-template-columns: minmax(120px, 1fr) minmax(140px, 1.2fr) minmax(80px, 0.6fr) minmax(120px, 1fr) minmax(160px, 1.6fr) auto;
+    align-items: end;
+  }
+}
+
+/* ---- the checklist: a row per check (words, the answer, the note, its save state) ---- */
+.fw-q-checkrows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-q-checkrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-8) 0;
+  border-top: 1px solid var(--nds-border);
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .fw-q-checkrow {
+    grid-template-columns: minmax(0, 1.4fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: var(--nds-space-12);
+  }
+}
+
+.fw-q-group-title {
+  margin: var(--nds-space-10) 0 var(--nds-space-2);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+/* ---- the keys dialog ---- */
+.fw-q-keymap {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--nds-space-8) var(--nds-space-16);
+  margin: 0;
+}
+
+.fw-q-keymap dt {
+  display: inline-flex;
+  gap: var(--nds-space-2);
+}
+
+.fw-q-keymap dd {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+/* ---- print (the evidence trail, Print this view): only the page, never the shell ---- */
+@media print {
+  .fw-q-noprint {
+    display: none !important;
+  }
+}
