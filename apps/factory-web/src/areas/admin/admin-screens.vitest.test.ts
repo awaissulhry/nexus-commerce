@@ -152,6 +152,18 @@ describe('every Admin design case draws in both languages with no key left on sc
     expect(html).toContain('margin')
   })
 
+  it('F1 on the site: a switch for who may change it, the state in words with the right it needs for who may not', () => {
+    const draw = (id: string) => render(sitesScreen as DesignScreen<unknown>, sitesScreen.cases.find((item) => item.id === id)!.model, 'en')
+    const on = draw('calendars-badge-on')
+    expect(on).toContain('Badge alone starts work')
+    expect(on).toMatch(/role="switch"[^>]*aria-checked="true"|aria-checked="true"[^>]*role="switch"/)
+    expect(draw('calendars')).toMatch(/role="switch"[^>]*aria-checked="false"|aria-checked="false"[^>]*role="switch"/)
+    const held = draw('calendars-badge-held')
+    expect(held).toContain('Needs the right: Enrol and change floor devices')
+    expect(held).not.toMatch(/role="switch"/)
+    expect(draw('calendars')).not.toContain('Coming with the floor step')
+  })
+
   it('a floor worker row never says who is on which tablet; a device says "In use", never who', () => {
     const html = render(devicesScreen as DesignScreen<unknown>, devicesScreen.cases[0]!.model, 'en')
     expect(html).toContain('In use')

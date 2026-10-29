@@ -159,7 +159,7 @@ function BindingTab({ model, actions }: { model: DeviceRecordModel; actions?: De
         )}
       </Card>
       <Card header={t('device.mode.title')} headingLevel={2} padded>
-        <Tag tone="info">{t('site.badge.coming')}</Tag>
+        <Tag tone="info">{t('device.mode.coming')}</Tag>
         <p className="fw-adm-hint">{t('device.mode.later')}</p>
       </Card>
       {editable && dirty && (

@@ -393,21 +393,24 @@ function CalendarsTab({ model, structure, actions }: { model: SiteRecordModel; s
           </div>
         </Card>
       )}
-      <Card header={t('site.badge.title')} description={t('site.badge.hint')} headingLevel={2} padded>
-        <div className="fw-adm-toggles">
-          <span>
-            <Tag tone="info">{t('site.badge.coming')}</Tag>
-          </span>
-          <KeyValue
-            labelCase="sentence"
-            items={[
-              { label: t('site.badge.start'), value: t('site.badge.startValue') },
-              { label: t('site.badge.pin'), value: t('site.badge.pinValue') },
-            ]}
-          />
-          <p className="fw-adm-hint">{t('site.badge.later')}</p>
-        </div>
-      </Card>
+      {model.can.viewDevices && draft && (
+        <Card header={t('site.badge.title')} description={t('site.badge.hint')} headingLevel={2} padded>
+          {editable ? (
+            <div className="fw-adm-toggles">
+              <label className="fw-adm-toggle-row">
+                <span>{t('site.badge.switch')}</span>
+                <Toggle checked={draft.badgeOnlySignIn} onChange={(next) => setDraft({ ...draft, badgeOnlySignIn: next })} aria-label={t('site.badge.switch')} />
+              </label>
+              <p className="fw-adm-hint">{t(draft.badgeOnlySignIn ? 'site.badge.on' : 'site.badge.off')}</p>
+            </div>
+          ) : (
+            <div className="fw-adm-toggles">
+              <KeyValue labelCase="sentence" items={[{ label: t('site.badge.switch'), value: t(draft.badgeOnlySignIn ? 'site.badge.stateOn' : 'site.badge.stateOff'), hint: t(draft.badgeOnlySignIn ? 'site.badge.on' : 'site.badge.off') }]} />
+              <p className="fw-adm-hint">{structure.site.status === 'ACTIVE' ? t('held.needs', { right: t('right.devices_manage') }) : t('site.held.archived')}</p>
+            </div>
+          )}
+        </Card>
+      )}
       <p className="fw-adm-hint">{t('site.floor.holidaysLater')}</p>
       {editable && dirty && draft && (
         <EditModeBar

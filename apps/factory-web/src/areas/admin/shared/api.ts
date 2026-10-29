@@ -285,10 +285,11 @@ export const editDevice = (api: ApiClient, deviceId: string, body: { version: nu
 export const revokeDevice = (api: ApiClient, deviceId: string, body: { version?: number; reason?: string }) =>
   api.post(`/auth/floor/devices/${encodeURIComponent(deviceId)}/revoke`, { body, schema: deviceSchema })
 
-const floorSettings = z.object({ siteId: z.string(), idleMinutes: z.number(), shiftEnds: z.array(z.string()), timeZone: z.string(), version: z.number().nullable() })
+/** platform/auth/floor settingsView; `badgeOnlySignIn` (#888, Owner answer F1): a badge alone starts work at the site. */
+const floorSettings = z.object({ siteId: z.string(), idleMinutes: z.number(), shiftEnds: z.array(z.string()), badgeOnlySignIn: z.boolean(), timeZone: z.string(), version: z.number().nullable() })
 export type FloorSettings = z.infer<typeof floorSettings>
 export const getFloorSettings = (api: ApiClient, siteId: string) => api.get(`/auth/floor/sites/${encodeURIComponent(siteId)}/settings`, { schema: floorSettings })
-export const putFloorSettings = (api: ApiClient, siteId: string, body: { idleMinutes: number; shiftEnds: string[]; version?: number }) =>
+export const putFloorSettings = (api: ApiClient, siteId: string, body: { idleMinutes: number; shiftEnds: string[]; badgeOnlySignIn?: boolean; version?: number }) =>
   api.request('PUT', `/auth/floor/sites/${encodeURIComponent(siteId)}/settings`, { body, schema: floorSettings })
 
 export const WORKER_STATUSES = ['ACTIVE', 'INACTIVE'] as const

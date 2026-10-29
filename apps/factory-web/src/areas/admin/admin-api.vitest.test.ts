@@ -101,13 +101,16 @@ describe('people, roles and the floor (platform/auth)', () => {
     const { api, calls } = mockApi([
       { status: 200, body: { device: DEVICES[3], enrolment: { code: 'c', url: 'https://factory.example.com/floor/enrol#code=x', qrSvg: '<svg/>', expiresAt: '2026-10-29T10:00:00.000Z' } } },
       { status: 200, body: { ...DEVICES[0], status: 'REVOKED' } },
-      { status: 200, body: { siteId: 's', idleMinutes: 15, shiftEnds: ['14:00'], timeZone: 'Europe/Rome', version: 3 } },
+      { status: 200, body: { siteId: 's', idleMinutes: 15, shiftEnds: ['14:00'], badgeOnlySignIn: true, timeZone: 'Europe/Rome', version: 3 } },
     ])
     expect((await createDevice(api, { siteId: DEVICES[3]!.siteId, name: 'Lettore', kind: 'HANDHELD' }, 'k-dev')).enrolment?.url).toContain('example.com')
     expect((await revokeDevice(api, DEVICES[0]!.id, { version: 2 })).status).toBe('REVOKED')
-    expect((await putFloorSettings(api, 's', { idleMinutes: 15, shiftEnds: ['14:00'], version: 2 })).version).toBe(3)
+    const settings = await putFloorSettings(api, 's', { idleMinutes: 15, shiftEnds: ['14:00'], badgeOnlySignIn: true, version: 2 })
+    expect([settings.version, settings.badgeOnlySignIn]).toEqual([3, true])
     expect(calls.map((call) => call.method)).toEqual(['POST', 'POST', 'PUT'])
     expect(calls[1]!.body).toEqual({ version: 2 })
+    // F1: the switch travels in the floor settings' PUT, with the version read.
+    expect(calls[2]).toMatchObject({ url: '/api/auth/floor/sites/s/settings', body: { idleMinutes: 15, shiftEnds: ['14:00'], badgeOnlySignIn: true, version: 2 } })
   })
 })
 

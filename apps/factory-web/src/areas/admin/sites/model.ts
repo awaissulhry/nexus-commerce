@@ -104,10 +104,21 @@ export const centreName = (centres: readonly WorkCentre[], id: string) => centre
 export interface FloorDraft {
   idleMinutes: number
   shiftEnds: string[]
+  /** Owner answer F1: a badge alone starts work; the PIN is asked only to sign, to open My day, or for a name sign-in. */
+  badgeOnlySignIn: boolean
 }
 
-export const floorDraft = (settings: FloorSettings): FloorDraft => ({ idleMinutes: settings.idleMinutes, shiftEnds: [...settings.shiftEnds] })
-export const sameFloor = (a: FloorDraft, b: FloorDraft) => a.idleMinutes === b.idleMinutes && normalizeShiftEnds(a.shiftEnds).join() === normalizeShiftEnds(b.shiftEnds).join()
+export const floorDraft = (settings: FloorSettings): FloorDraft => ({ idleMinutes: settings.idleMinutes, shiftEnds: [...settings.shiftEnds], badgeOnlySignIn: settings.badgeOnlySignIn })
+export const sameFloor = (a: FloorDraft, b: FloorDraft) =>
+  a.idleMinutes === b.idleMinutes && a.badgeOnlySignIn === b.badgeOnlySignIn && normalizeShiftEnds(a.shiftEnds).join() === normalizeShiftEnds(b.shiftEnds).join()
+
+/** The PUT body of the floor settings: the shift ends sorted once each, the F1 switch, the version read. */
+export const floorBody = (draft: FloorDraft, version: number | null | undefined) => ({
+  idleMinutes: draft.idleMinutes,
+  shiftEnds: normalizeShiftEnds(draft.shiftEnds),
+  badgeOnlySignIn: draft.badgeOnlySignIn,
+  ...(version ? { version } : {}),
+})
 
 /** The floor rules' own check (factory-domain auth/floor/session timingProblems), as message keys by field. */
 export function floorProblems(draft: FloorDraft): Record<string, string> {

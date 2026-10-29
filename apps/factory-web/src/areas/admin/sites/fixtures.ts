@@ -12,7 +12,7 @@ const company = { id: COMPANIES[0]!.id, code: COMPANIES[0]!.code, legalName: COM
 const structure: SiteStructure = { site: SITES[0]!, company, lines: LINES, workCentres: CENTRES, stations: STATIONS }
 const bare: SiteStructure = { site: { ...SITES[2]!, companyId: COMPANIES[1]!.id }, company: { id: COMPANIES[1]!.id, code: COMPANIES[1]!.code, legalName: COMPANIES[1]!.legalName }, lines: [], workCentres: [], stations: [] }
 const CAN = { manage: true, viewDevices: true, manageDevices: true, viewPrinters: true }
-const SETTINGS = { siteId: SITES[0]!.id, idleMinutes: 10, shiftEnds: ['14:00', '22:00'], timeZone: 'Europe/Rome', version: 2 }
+const SETTINGS = { siteId: SITES[0]!.id, idleMinutes: 10, shiftEnds: ['14:00', '22:00'], badgeOnlySignIn: false, timeZone: 'Europe/Rome', version: 2 }
 
 const site = (over: Partial<SiteRecordModel> = {}): SiteRecordModel => ({
   prefix: PREFIX,
@@ -47,8 +47,11 @@ export const designScreen = defineDesignScreen<SiteRecordModel>({
     { id: 'archive-site-held', label: 'Archive the site: what still uses it', model: site({ dialog: { kind: 'archive', target: 'site', id: SITES[0]!.id } }) },
     { id: 'centres', label: 'Work centres', model: site({ tab: 'centres' }) },
     { id: 'add-centre', label: 'Add a work centre', model: site({ tab: 'centres', dialog: { kind: 'centre' } }) },
-    { id: 'calendars', label: 'Calendars: shift ends and floor sign-out', model: site({ tab: 'calendars' }), note: 'The Owner\'s F1 setting (badge alone starts work) is shown as coming with the floor step: the API has no column for it yet.' },
-    { id: 'calendars-editing', label: 'Calendars: a wrong time held', model: site({ tab: 'calendars', floorDraft: { idleMinutes: 0, shiftEnds: ['14:00', '14:00'] } }) },
+    { id: 'calendars', label: 'Calendars: floor times; badge alone off', model: site({ tab: 'calendars' }), note: "The Owner's F1 switch (FloorSettings.badgeOnlySignIn): off, every sign-in asks for the badge and the PIN." },
+    { id: 'calendars-badge-on', label: 'Calendars: badge alone starts work (on)', model: site({ tab: 'calendars', floor: { settings: { ...SETTINGS, badgeOnlySignIn: true } } }), note: 'The PIN is asked only to sign, to open My day, or for a name sign-in.' },
+    { id: 'calendars-badge-switched', label: 'Calendars: switch turned on, not saved yet', model: site({ tab: 'calendars', floorDraft: { idleMinutes: 10, shiftEnds: ['14:00', '22:00'], badgeOnlySignIn: true } }), note: 'Saved with the floor times (EditModeBar, ⌘S).' },
+    { id: 'calendars-badge-held', label: 'Calendars: without devices.manage (held)', model: site({ tab: 'calendars', can: { ...CAN, manageDevices: false }, floor: { settings: { ...SETTINGS, badgeOnlySignIn: true } } }), note: 'The state as text with the right it needs; no switch to press.' },
+    { id: 'calendars-editing', label: 'Calendars: a wrong time held', model: site({ tab: 'calendars', floorDraft: { idleMinutes: 0, shiftEnds: ['14:00', '14:00'], badgeOnlySignIn: false } }) },
     { id: 'calendars-no-right', label: 'Calendars without devices rights', model: site({ tab: 'calendars', can: { ...CAN, viewDevices: false, manageDevices: false } }) },
     { id: 'devices', label: 'Devices: tablets and printers here', model: site({ tab: 'devices' }) },
     { id: 'devices-empty', label: 'Devices: none yet', model: site({ tab: 'devices', structure: bare, devices: loaded([]), printers: loaded([]) }) },

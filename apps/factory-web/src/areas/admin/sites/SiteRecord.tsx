@@ -25,7 +25,7 @@ import {
 } from '../shared/api'
 import { failed, loaded, loading, problemKey, problemNotice, type Loaded, type Notice } from '../shared/model'
 import { useRecordTab, useThreadDock } from '../shared/record-hooks'
-import { normalizeShiftEnds, SITE_TABS, type FloorDraft, type PartDraft, type SiteDialog } from './model'
+import { floorBody, SITE_TABS, type FloorDraft, type PartDraft, type SiteDialog } from './model'
 import { SiteRecordView } from './view/SiteRecordView'
 
 /**
@@ -155,7 +155,7 @@ export function SiteRecord({ siteId }: { siteId: string }) {
           setBusy(true)
           setNotice(null)
           try {
-            const settings = await putFloorSettings(api, siteId, { idleMinutes: draft.idleMinutes, shiftEnds: normalizeShiftEnds(draft.shiftEnds), ...(floor.settings?.version ? { version: floor.settings.version } : {}) })
+            const settings = await putFloorSettings(api, siteId, floorBody(draft, floor.settings?.version))
             setFloor({ settings })
             setNotice({ key: 'site.done.floor', tone: 'success' })
             return true

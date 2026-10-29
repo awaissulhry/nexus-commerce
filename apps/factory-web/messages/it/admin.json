@@ -599,12 +599,11 @@
     "badge": {
       "title": "Inizio del lavoro sul tablet",
       "hint": "La scelta del titolare (F1) per ogni tablet di questo stabilimento.",
-      "coming": "Arriva con il passo del reparto",
-      "start": "Iniziare il lavoro",
-      "startValue": "Solo badge",
-      "pin": "PIN richiesto",
-      "pinValue": "Solo per firmare, aprire La mia giornata o accedere per nome",
-      "later": "Il server non ha ancora questa impostazione: finché il passo del reparto non la aggiunge, un tablet chiede badge e PIN."
+      "switch": "Il solo badge avvia il lavoro — il PIN si chiede solo per firmare, aprire La mia giornata o accedere per nome",
+      "on": "Attivo: il badge scansionato avvia subito il lavoro; firme, La mia giornata e l'accesso per nome chiedono comunque il PIN.",
+      "off": "Spento: ogni accesso dal tablet chiede badge e PIN.",
+      "stateOn": "Attivo",
+      "stateOff": "Spento"
     },
     "devices": {
       "tablets": "Tablet di questo stabilimento",
@@ -1294,6 +1293,7 @@
     },
     "mode": {
       "title": "Modalità",
+      "coming": "Arriva con il passo del reparto",
       "later": "La modalità (Operatore, Taglio, Magazzino, Imballo, Collaudo, Capo reparto, Schermo) sceglie le tessere che il tablet mostra; arriva con il passo del reparto. Le stampanti predefinite di un dispositivo arrivano in W1."
     },
     "health": {

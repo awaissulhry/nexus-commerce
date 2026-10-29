@@ -599,12 +599,11 @@
     "badge": {
       "title": "Starting work on a tablet",
       "hint": "The Owner's choice (F1) for every tablet of this site.",
-      "coming": "Coming with the floor step",
-      "start": "Start floor work",
-      "startValue": "Badge alone",
-      "pin": "PIN asked",
-      "pinValue": "Only to sign, to open My day, or when signing in by name",
-      "later": "The server has no setting for it yet: until the floor step adds it, a tablet asks for the badge and the PIN."
+      "switch": "Badge alone starts work — the PIN is asked only to sign, to open My day, or for name sign-in",
+      "on": "On: a scanned badge starts work at once; signing, My day and a sign-in by name still ask for the PIN.",
+      "off": "Off: every sign-in on a tablet asks for the badge and the PIN.",
+      "stateOn": "On",
+      "stateOff": "Off"
     },
     "devices": {
       "tablets": "Tablets here",
@@ -1294,6 +1293,7 @@
     },
     "mode": {
       "title": "Mode",
+      "coming": "Coming with the floor step",
       "later": "The mode (Operator, Cutting, Warehouse, Packing, Inspection, Supervisor, Display) picks the tiles the tablet shows; it comes with the floor step. The default printers of a device come in W1."
     },
     "health": {

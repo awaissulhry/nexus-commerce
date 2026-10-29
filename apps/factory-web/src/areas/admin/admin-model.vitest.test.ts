@@ -7,7 +7,7 @@ import { heldAreas, holdersOf, roleRows, templateGap } from './roles/model'
 import { grainsOf, pageOf, problemKey, problemNotice, scopeWords, usesOf } from './shared/model'
 import { ApiError } from '../../lib/api/errors'
 import { ASSIGNMENTS, CATALOGUE, CENTRES, COMPANIES, DEVICES, LINES, NOW, PREFIX, PRINTERS, ROLES, SITES, STATIONS, USERS, WORKERS } from './shared/fixtures'
-import { archiveUses, floorProblems, partProblems, sameFloor, structureGroups, takenCodes } from './sites/model'
+import { archiveUses, floorBody, floorDraft, floorProblems, partProblems, sameFloor, structureGroups, takenCodes } from './sites/model'
 import { floorRows, inviteProblems, nameFromEmail, officeRows, peopleFromPaste, tileCounts, userGrains, whereWords, workerProblems } from './users/model'
 import { giveRoleProblems, isLastAdmin, lifecycleHeld, ownWorker, raises } from './users/record/model'
 import { DEMO_USER } from '../../shell/design-data'
@@ -119,10 +119,20 @@ describe('SCR-009 a site', () => {
   })
 
   it("the floor times follow the floor rules (factory-domain timingProblems)", () => {
-    expect(floorProblems({ idleMinutes: 10, shiftEnds: ['14:00', '22:00'] })).toEqual({})
-    expect(floorProblems({ idleMinutes: 0, shiftEnds: ['6:00'] })).toEqual({ idleMinutes: 'site.floor.idleRange', 'shiftEnds/0': 'site.floor.timeFormat' })
-    expect(floorProblems({ idleMinutes: 10, shiftEnds: ['14:00', '14:00'] })).toEqual({ shiftEnds: 'site.floor.twice' })
-    expect(sameFloor({ idleMinutes: 10, shiftEnds: ['22:00', '14:00'] }, { idleMinutes: 10, shiftEnds: ['14:00', '22:00'] })).toBe(true)
+    expect(floorProblems({ idleMinutes: 10, shiftEnds: ['14:00', '22:00'], badgeOnlySignIn: false })).toEqual({})
+    expect(floorProblems({ idleMinutes: 0, shiftEnds: ['6:00'], badgeOnlySignIn: false })).toEqual({ idleMinutes: 'site.floor.idleRange', 'shiftEnds/0': 'site.floor.timeFormat' })
+    expect(floorProblems({ idleMinutes: 10, shiftEnds: ['14:00', '14:00'], badgeOnlySignIn: false })).toEqual({ shiftEnds: 'site.floor.twice' })
+    expect(sameFloor({ idleMinutes: 10, shiftEnds: ['22:00', '14:00'], badgeOnlySignIn: false }, { idleMinutes: 10, shiftEnds: ['14:00', '22:00'], badgeOnlySignIn: false })).toBe(true)
+  })
+
+  it('F1: the badge-alone switch is part of the floor settings, a change of it alone is unsaved, and it goes in the PUT', () => {
+    const read = floorDraft({ siteId: SITES[0]!.id, idleMinutes: 10, shiftEnds: ['22:00', '14:00'], badgeOnlySignIn: false, timeZone: 'Europe/Rome', version: 3 })
+    expect(read.badgeOnlySignIn).toBe(false)
+    const switched = { ...read, badgeOnlySignIn: true }
+    expect(sameFloor(read, switched)).toBe(false)
+    expect(floorBody(switched, 3)).toEqual({ idleMinutes: 10, shiftEnds: ['14:00', '22:00'], badgeOnlySignIn: true, version: 3 })
+    // A site still on the defaults has no row (version null): the PUT makes it without a version.
+    expect(floorBody(read, null)).toEqual({ idleMinutes: 10, shiftEnds: ['14:00', '22:00'], badgeOnlySignIn: false })
   })
 })
 
