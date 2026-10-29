@@ -8,6 +8,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { CommandTx } from '../../../core/command'
 import { requireContext } from '../../../core/context'
+import { workerNoticeGate } from '../../privacy/read'
 import { assertCsrf } from '../sessions/cookies'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { floorSessionOf } from './authenticator'
@@ -32,6 +33,10 @@ import { floorHash, mintSessionToken, parseSessionToken, parseSiteToken } from '
  *             and theirs starts, in one command (crews sharing a station).
  *   sign-out  ends the cookie's session (whatever its state) and clears the floor cookie; the device stays enrolled.
  *   me        who is signed in, where, until when, in which language, with which permissions.
+ *   notice    sign-in, switch and me also say what the tablet does next about the worker notice (B-W1-36; design
+ *             floor.notice): `due` opens it after sign-in (once per version), `blocksScans` holds every scan-taking tile
+ *             ("Read the notice first") at a site that names workers until the version in force is acknowledged
+ *             (platform/privacy read.ts workerNoticeGate; the …_privacy_guards triggers hold the same).
  *   PIN       the signed-in worker changes their PIN (required after an administrator's reset: until then they hold
  *             nothing).
  * Every write is one floor command with its audit row (audience FLOOR, the device and its site on the row); a token,
@@ -183,6 +188,10 @@ async function settleCurrent(
 }
 
 async function answerStarted(auth: OfficeAuth, reply: FastifyReply, place: DeviceRequest, proved: Awaited<ReturnType<typeof provedWorker>>, token: string, started: Started) {
+  const { worker: signedIn } = proved.candidate
+  const notice = await auth.database.withScope({ audience: 'floor', tenantId: place.device.tenantId, siteId: place.device.siteId, actorId: signedIn.id }, (client) =>
+    workerNoticeGate(client, place.device.siteId, signedIn.id),
+  )
   const now = auth.clock.now()
   setFloorCookie(reply, token, new Date(started.endsAt), now)
   // Keep a device in use enrolled: its cookie's 400 days start again.
@@ -193,6 +202,7 @@ async function answerStarted(auth: OfficeAuth, reply: FastifyReply, place: Devic
     worker: { id: worker.id, displayName: worker.displayName, locale: worker.locale },
     session: { startedAt: started.startedAt, idleExpiresAt: started.idleExpiresAt, endsAt: started.endsAt },
     pinMustChange: worker.pinMustChange,
+    notice,
   }
 }
 
@@ -244,9 +254,10 @@ export async function floorMe(request: FastifyRequest) {
   const context = requireContext(request)
   const session = floorSessionOf(request)
   const { device } = session
-  const { site, station } = await request.withClient(async (client) => ({
+  const { site, station, notice } = await request.withClient(async (client) => ({
     site: await client.site.findUniqueOrThrow({ where: { id: device.siteId }, select: { id: true, code: true, name: true } }),
     station: device.stationId ? await client.station.findUnique({ where: { id: device.stationId }, select: { id: true, code: true, name: true } }) : null,
+    notice: await workerNoticeGate(client, device.siteId, session.workerId),
   }))
   return {
     worker: { id: session.workerId, displayName: session.worker.displayName, locale: session.worker.locale },
@@ -254,6 +265,7 @@ export async function floorMe(request: FastifyRequest) {
     site,
     session: { startedAt: toUtcIso(session.startedAt), idleExpiresAt: toUtcIso(session.idleExpiresAt), endsAt: toUtcIso(session.endsAt) },
     pinMustChange: session.worker.pinMustChange,
+    notice,
     permissions: [...new Set(context.grants.flatMap((grant) => grant.permissions))].sort(),
   }
 }
