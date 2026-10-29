@@ -247,7 +247,9 @@ describe('the floor', () => {
       expect(model.columns.filter((column) => /cost|margin|price|amount|total|wage|earning|rate|efficien|productiv|score|bonus/i.test(column)), model.name).toEqual([])
       const access = ownership.access[FLOOR_ROLE]
       expect(access?.scopedBy, model.name).toEqual(['site'])
-      expect(access?.hiddenColumns ?? [], model.name).toEqual([])
+      // No money is walled off; only the floor rules' legal basis is hidden from the floor (B-W1-37: the floor reads who
+      // its records name, never the basis, its reference or who recorded it, when).
+      expect(access?.hiddenColumns ?? [], model.name).toEqual(model.name === 'ProductionSettings' ? ['monitoringBasis', 'monitoringReference', 'monitoringRecordedAt', 'monitoringRecordedById'] : [])
       expect(ownership.access[PARTNER_ROLE], model.name).toBeUndefined()
     }
   })
@@ -257,9 +259,10 @@ describe('the floor', () => {
       workOrders: (await as(scope, (client) => client.workOrder.findMany({ where: { number: { startsWith: 'SEED-' } }, orderBy: { number: 'asc' } }))).map((row) => row.number),
       bundles: (await as(scope, (client) => client.bundle.findMany({ where: { code: { startsWith: 'SEED-' } }, orderBy: { code: 'asc' } }))).map((row) => row.code),
       scans: (await as(scope, (client) => client.operationScan.findMany({ where: { clientScanId: { startsWith: 'seed-' } } }))).length,
-      rules: (await as(scope, (client) => client.productionSettings.findMany())).map((row) => row.scanSubject),
+      // The floor names what it reads of the floor rules: the legal basis columns are hidden from it.
+      rules: (await as(scope, (client) => client.productionSettings.findMany({ select: { scanSubject: true } }))).map((row) => row.scanSubject),
     })
-    // Prisma's default select names every column: the floor holds them all here (none is walled).
+    // Prisma's default select names every column: the floor holds them all here (none is walled), but the floor rules'.
     expect(await seen(floor(0))).toEqual({ workOrders: ['SEED-WO-0001', 'SEED-WO-0002'], bundles: ['SEED-BN-0001', 'SEED-BN-0002'], scans: 3, rules: ['WORKER'] })
     // The plant of company B (site B1) sees its own floor rules only.
     expect(await seen(floor(1))).toEqual({ workOrders: [], bundles: [], scans: 0, rules: ['STATION'] })
