@@ -3,10 +3,11 @@ import type { ReactNode } from 'react'
 import { color } from '@nexus/ui/tokens/colors'
 import { messagesFor } from '../../lib/i18n/messages'
 import { FloorApp } from '../../floor/FloorApp'
+import { FLOOR_NAMESPACES } from '../../floor/tasks/routes'
 
 /**
  * The Floor view (A2 §1.6; SCR-020 … 025): an enrolled tablet's app under `/floor`, installable (its own web app
- * manifest, `start_url` /floor), on the floor density, with no office chrome. Its text (`floor`) comes in both
+ * manifest, `start_url` /floor), on the floor density, with no office chrome. Its text (`floor`, and each floor task's: `floor-tasks`, `floor-scans` …) comes in both
  * languages: the screen speaks the device's language until someone signs in, then the person's (PLT-062), so the
  * client switches without asking the server. Never imports the office view (check-view-boundaries).
  */
@@ -27,5 +28,5 @@ export const viewport: Viewport = {
 }
 
 export default function FloorLayout({ children }: { children: ReactNode }) {
-  return <FloorApp catalogues={{ it: messagesFor('it', ['floor']), en: messagesFor('en', ['floor']) }}>{children}</FloorApp>
+  return <FloorApp catalogues={{ it: messagesFor('it', FLOOR_NAMESPACES), en: messagesFor('en', FLOOR_NAMESPACES) }}>{children}</FloorApp>
 }

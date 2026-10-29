@@ -1,0 +1,229 @@
+{
+  "title": "Bundles & tickets",
+  "loading": "Looking it up…",
+  "busy": "Working on it…",
+  "scan": {
+    "label": "Scan a work order or a bundle ticket",
+    "read": "Read {code}",
+    "type": "Type a code",
+    "camera": {
+      "start": "Use the camera",
+      "stop": "Stop the camera",
+      "error": "The camera does not open: use the scanner or type the code."
+    },
+    "hint": {
+      "pick": "Scan the work order's traveller, a bundle ticket to fix it, or pick a work order below.",
+      "proposal": "Scan another work order, or a bundle ticket to fix it.",
+      "card": "Scan another ticket, or a work order to bundle it."
+    }
+  },
+  "noPermission": {
+    "title": "Bundles are not for your role",
+    "body": "Making bundles and printing tickets needs the bundles permission at this station. Ask your team leader."
+  },
+  "pick": {
+    "title": "Cut, not in bundles",
+    "cell": "{cell}: {cut} cut · {bundled} in bundles",
+    "toBundle": "to bundle",
+    "footer_one": "{count} work order waits for bundles",
+    "footer_other": "{count} work orders wait for bundles",
+    "empty": {
+      "title": "Nothing cut is waiting for bundles",
+      "body": "When pieces are cut, their work order comes here. Scan a traveller to open one anyway."
+    }
+  },
+  "fact": {
+    "workOrder": "Work order",
+    "style": "Style",
+    "colour": "Colour",
+    "size": "Size",
+    "scans": "Scans so far",
+    "replaced": "Earlier tickets (replaced)"
+  },
+  "proposal": {
+    "type": "Work order",
+    "title": "Proposed bundles",
+    "closed": "This work order is not open (on hold, done or cancelled): no bundle can be made for it. Ask your team leader.",
+    "singlePiece": "Made to measure: one garment per bundle, each with its own ticket.",
+    "singlePieceHeld": "Made to measure: always one garment per bundle",
+    "size": {
+      "label": "Bundle size",
+      "standard": "Standard at this site: {size}",
+      "smaller": "Smaller bundles",
+      "bigger": "Bigger bundles",
+      "min": "One garment is the smallest bundle",
+      "max": "{size} garments is the biggest bundle"
+    },
+    "cell": {
+      "bundles_one": "{cell}: 1 bundle ({sizes})",
+      "bundles_other": "{cell}: {count} bundles ({sizes})",
+      "nothing": "{cell}: nothing to bundle",
+      "counts": "{cut} cut · {bundled} in bundles · {toBundle} to bundle",
+      "pending_one": "{count} on its way from this tablet",
+      "pending_other": "{count} on their way from this tablet",
+      "chips": "Bundles of {cell}",
+      "edit": "Bundle {index} of {cell}: {quantity} garments. Change it"
+    },
+    "make_one": "Make 1 bundle · print 1 ticket",
+    "make_other": "Make {count} bundles · print {count} tickets",
+    "makeNone": "Make bundles",
+    "another": "Another work order",
+    "held": {
+      "printer": "Pick the printer for the tickets first",
+      "closed": "The work order is not open",
+      "nothing": "Nothing cut waits for a bundle",
+      "tooMany": "At most {count} bundles at once: make bigger bundles",
+      "making": "Saving the bundles on this tablet…"
+    }
+  },
+  "pad": {
+    "title": "A bundle of {cell}",
+    "label": "Garments in bundle {index}",
+    "unit": "garments",
+    "expected": "Left for it {count}",
+    "less": "Less",
+    "more": "More",
+    "clear": "Clear",
+    "back": "Back",
+    "empty": "Type how many garments",
+    "range": "From {min} to {max}",
+    "set": "Set"
+  },
+  "printer": {
+    "station": "Tickets print on {name}, this station's printer.",
+    "site": "Tickets print on {name}.",
+    "choose": "Which printer prints the tickets?",
+    "none": "No label printer at this site: the tickets are not printed here. Ask the office to print them.",
+    "noView": "Your role does not see the print queue."
+  },
+  "tickets": {
+    "title_one": "Ticket made here",
+    "title_other": "{count} tickets made here",
+    "offline": "No network: the bundles are saved on this tablet; their tickets print on the station's printer when the office records them.",
+    "codePending": "Numbered by the office when it arrives",
+    "garments_one": "{count} garment",
+    "garments_other": "{count} garments",
+    "numbersLow_one": "Only {count} ticket number left on this tablet: it gets more with the next send.",
+    "numbersLow_other": "Only {count} ticket numbers left on this tablet: it gets more with the next send.",
+    "retry": "Print again",
+    "retryOffline": "Printing again needs the network",
+    "print": {
+      "queued": "In the print queue",
+      "sent": "Sent to the printer",
+      "printed": "Printed",
+      "failed": "Not printed",
+      "waiting": "Prints when the office records it.",
+      "none": "Not printed here: there is no label printer.",
+      "hidden": "Printed by the office's queue (your role does not see it).",
+      "looking": "Looking for its print job…"
+    }
+  },
+  "label": {
+    "name": "Bundle ticket {code}",
+    "workOrder": "Work order",
+    "style": "Style",
+    "colour": "Colour",
+    "size": "Size",
+    "pieces": "Pieces",
+    "operations": "Operations",
+    "numbering": "Code given by the office",
+    "qr": "QR code {code}",
+    "barcode": "Barcode {code}",
+    "invalid": "This code cannot be printed: {code}"
+  },
+  "card": {
+    "type": "Bundle",
+    "status": {
+      "ACTIVE": "Active",
+      "VOID": "Voided"
+    },
+    "garments": "garments",
+    "piecesOf": "pieces of {part}",
+    "operations": "Operations",
+    "op": {
+      "done": "Done",
+      "open": "Not yet"
+    },
+    "replaced": "Ticket {scanned} was replaced by {code}: use the new ticket, throw the old one away.",
+    "voided": "This bundle was voided: no scan takes it, and its ticket is not printed again.",
+    "reprint": "Reprint",
+    "void": "Void",
+    "held": {
+      "network": "Reprint and void need the network: they wait until it is back."
+    }
+  },
+  "reprint": {
+    "title": "Why a new ticket?",
+    "body": "The new ticket gets a new code; a scan of the old one says it was replaced.",
+    "reason": {
+      "lost": "Lost",
+      "damaged": "Damaged",
+      "unreadable": "Unreadable"
+    },
+    "done": "New ticket {code}. Ticket {old} is replaced: throw it away."
+  },
+  "void": {
+    "title": "Void this bundle?",
+    "body": "No scan takes {code} any more. Its pieces go back to cut, not in bundles.",
+    "reason": {
+      "label": "Why?",
+      "needed": "Pick why first",
+      "mistake": "Made by mistake",
+      "wrongSize": "Wrong size",
+      "wrongQuantity": "Wrong quantity"
+    },
+    "cancel": "Cancel",
+    "confirm": "Void",
+    "done": {
+      "title": "Bundle {code} is voided",
+      "body_one": "Its {count} garment is back in cut, not in bundles.",
+      "body_other": "Its {count} garments are back in cut, not in bundles."
+    }
+  },
+  "refusal": {
+    "FLOOR_NOT_READY": {
+      "message": "Bundles wait at this site until its floor is ready.",
+      "fix": "Ask your team leader: the office finishes setting up the floor rules."
+    },
+    "WORK_ORDER_NOT_OPEN": {
+      "message": "The work order is not open (on hold, done or cancelled).",
+      "fix": "Ask your team leader."
+    },
+    "NOT_CUT_FROM_HIDES": {
+      "message": "This size has no part cut from hides: it is not bundled here.",
+      "fix": "Ask your team leader."
+    },
+    "NOTHING_TO_BUNDLE": {
+      "message": "Nothing cut waits for a bundle in this size any more.",
+      "fix": "Another tablet may have bundled it: read the work order again."
+    },
+    "MORE_THAN_CUT": {
+      "message": "This is more than what was cut and is not in bundles.",
+      "fix": "Make the bundle smaller, or cut the rest first."
+    },
+    "NOT_A_PART": {
+      "message": "This part is not one of the size's parts.",
+      "fix": "Ask your team leader."
+    },
+    "SINGLE_PIECE": {
+      "message": "A made-to-measure garment goes in a bundle of its own.",
+      "fix": "Make one bundle per garment."
+    },
+    "TOO_MANY_BUNDLES": {
+      "message": "Too many bundles at once.",
+      "fix": "Make bigger bundles, or make them in two goes."
+    },
+    "VOIDED": {
+      "message": "This bundle was voided.",
+      "fix": "Scan another ticket."
+    },
+    "SCANNED": {
+      "message": "This bundle was scanned already: a bundle is voided only before any scan.",
+      "fix": "Ask your team leader to undo or correct its scans."
+    },
+    "REPLACED": {
+      "message": "This ticket was replaced by a new one.",
+      "fix": "Scan the new ticket."
+    }
+  }
+}

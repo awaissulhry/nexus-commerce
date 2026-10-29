@@ -8,6 +8,7 @@ import { lookupHide, lookupLocation, lookupWorkOrder } from '../api'
 import { zxingCamera } from '../camera'
 import { useFloor } from '../FloorApp'
 import { useFloorKeys } from '../keys'
+import { TASK_ROUTES } from '../tasks/routes'
 import { planScan, readScan, resultCode, resultType, type Lookup, type ScanResult } from './scan-model'
 import { ScanView, type RecentScan } from './view/ScanView'
 
@@ -96,12 +97,13 @@ export function FloorScan() {
   if (!me) return null
   return (
     <ScanView
-      model={{ frame, result, loading, recent, held: me.notice.blocksScans }}
+      model={{ frame, result, loading, recent, held: me.notice.blocksScans, canCut: me.permissions.includes('production.cut') && !me.notice.blocksScans }}
       onFrame={onFrame}
       onAction={(action) => {
         if (action.type === 'scan') return void look(action.code)
         if (action.type === 'clear') return setResult(null)
         if (action.type === 'home') return router.push('/floor')
+        if (action.type === 'cut') return store.openWith(TASK_ROUTES.cut, action.code)
       }}
       camera={zxingCamera}
     />

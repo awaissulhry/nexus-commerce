@@ -1,0 +1,193 @@
+{
+  "title": "Preleva e consegna",
+  "noPermission": {
+    "title": "Consegnare non fa parte del tuo ruolo",
+    "body": "Preleva e consegna richiede il permesso di consegna in questo stabilimento. Chiedi al capo squadra."
+  },
+  "choose": {
+    "scan": {
+      "label": "Per quale ordine di lavoro?",
+      "hint": "Scansiona il foglio di lavorazione dell'ordine, o sceglilo qui sotto."
+    },
+    "loading": "Lettura degli ordini di lavoro…",
+    "empty": {
+      "title": "Nessun ordine di lavoro rilasciato da preparare",
+      "body": "Nessun ordine attende materiali in questo stabilimento. Chiedi all'ufficio."
+    },
+    "list": "Ordini di lavoro rilasciati",
+    "due": "consegna {date}",
+    "pieces_one": "pezzo",
+    "pieces_other": "pezzi",
+    "count_one": "{count} ordine di lavoro",
+    "count_other": "{count} ordini di lavoro"
+  },
+  "offline": {
+    "choose": "Niente rete: la consegna aspetta che torni. L'elenco qui sotto è la copia di questo tablet.",
+    "held": "Per consegnare serve la rete: il materiale esce solo quando lo registra l'ufficio. Scansiona di nuovo quando torna la rete.",
+    "short": "Serve la rete"
+  },
+  "list": {
+    "loading": "Lettura della lista di prelievo…",
+    "workOrder": "Ordine di lavoro",
+    "coveredLabel": "coperte",
+    "fact": {
+      "style": "Modello",
+      "batch": "Lotto di produzione",
+      "due": "Consegna"
+    },
+    "notOpen": "Questo ordine di lavoro è {status}: non gli si consegna nulla. Chiedi all'ufficio.",
+    "notOpenShort": "Questo ordine di lavoro non è aperto",
+    "scan": {
+      "label": "Scansiona per consegnare",
+      "hint": "Una pelle si consegna intera con la scansione. Per un lotto o un materiale si chiede quanto."
+    },
+    "title": "Cosa serve",
+    "empty": {
+      "title": "Questo ordine di lavoro non richiede materiali",
+      "body": "La sua distinta base non prevede nulla da consegnare. Chiedi all'ufficio."
+    },
+    "count": "{covered} di {total} coperte"
+  },
+  "line": {
+    "issued": "Consegnati {issued} di {planned}",
+    "next": "Più vecchio: {code} in {location}",
+    "tapMaterial": "Tocca per consegnare",
+    "covered": "Coperta",
+    "noStock": "Niente di utilizzabile qui",
+    "toIssue": "{quantity} da consegnare",
+    "need": "richiesti, {unit}"
+  },
+  "held": {
+    "title": "Da non consegnare",
+    "row": "{lot} · {item}: {reason} ({quantity})",
+    "hides_one": "{count} pelle",
+    "hides_other": "{count} pelli",
+    "reason": {
+      "CR_VI_PENDING": "ancora senza esito del cromo VI, non si consegna",
+      "CR_VI_FAILED": "non ha superato il test del cromo VI, non si consegna",
+      "QUALITY_HOLD": "bloccato dalla qualità, non si consegna",
+      "BLOCKED": "bloccato, non si consegna",
+      "REJECTED": "respinto, non si consegna"
+    }
+  },
+  "pad": {
+    "title": "Quanto di {code}?",
+    "label": "Quantità",
+    "expected": "Ancora richiesti {quantity}",
+    "all": "Tutto il richiesto",
+    "separator": "Virgola",
+    "minus": "Meno",
+    "plus": "Più",
+    "clear": "Cancella",
+    "back": "Indietro",
+    "empty": "Scrivi una quantità",
+    "range": "Da {min} a {max}",
+    "covered": "L'ordine di lavoro ha già tutto ciò che gli serve di questo. Di più è una consegna in eccesso: la fa l'ufficio, con un motivo.",
+    "onHandOnly": "Qui sono utilizzabili solo {quantity}: il resto arriva dopo."
+  },
+  "action": {
+    "cancel": "Annulla",
+    "issue": "Consegna {quantity}",
+    "issueNothing": "Consegna",
+    "done": "Fatto"
+  },
+  "busy": "Consegna di {code}…",
+  "busyUndo": "Annullamento…",
+  "last": {
+    "issued": "Consegnato {code} · {quantity} a {workOrder}",
+    "undone": "Annullato: {code} · {quantity} è di nuovo a magazzino"
+  },
+  "undo": {
+    "text": "Ultima consegna: {code} · {quantity}"
+  },
+  "keys": {
+    "issue": "Consegna la quantità",
+    "done": "Fine con questo ordine di lavoro",
+    "digits": "Scrive nel tastierino"
+  },
+  "notStock": {
+    "message": "Non è una pelle, un lotto o un materiale di questo stabilimento.",
+    "fix": "Scansiona l'etichetta del materiale, o chiedi al capo squadra."
+  },
+  "badge": {
+    "message": "Questo badge non apre questo tablet.",
+    "fix": "Resta la persona che ha già effettuato l'accesso. Chiedi al capo squadra."
+  },
+  "refusal": {
+    "WORK_ORDER_NOT_OPEN": {
+      "message": "Questo ordine di lavoro non è aperto: si consegna solo a un ordine rilasciato.",
+      "fix": "Chiedi all'ufficio."
+    },
+    "NOT_IN_WORK_ORDER": {
+      "message": "Questo ordine di lavoro non usa questo materiale.",
+      "fix": "Rimettilo a posto e scansiona un materiale della lista di prelievo."
+    },
+    "OTHER_COLOUR": {
+      "message": "Questo ordine di lavoro vuole questo materiale in un altro colore.",
+      "fix": "Rimettilo a posto e prendi il colore della lista di prelievo."
+    },
+    "CR_VI_PENDING": {
+      "message": "Questo lotto non ha ancora l'esito del cromo VI: non si consegna.",
+      "fix": "Rimettilo sulla sua scaffalatura; prendi materiale rilasciato."
+    },
+    "CR_VI_FAILED": {
+      "message": "Questo lotto non ha superato il test del cromo VI: non si consegna.",
+      "fix": "Rimettilo sulla scaffalatura di quarantena e avvisa il capo squadra."
+    },
+    "QUALITY_HOLD": {
+      "message": "Questo lotto è bloccato dalla qualità: non si consegna.",
+      "fix": "Rimettilo sulla sua scaffalatura; prendi materiale rilasciato."
+    },
+    "BLOCKED": {
+      "message": "Questo lotto è bloccato: non si consegna.",
+      "fix": "Rimettilo sulla scaffalatura di quarantena e avvisa il capo squadra."
+    },
+    "REJECTED": {
+      "message": "Questo lotto è stato respinto: non si consegna.",
+      "fix": "Rimettilo sulla scaffalatura di quarantena e avvisa il capo squadra."
+    },
+    "HIDE_USED_UP": {
+      "message": "Questa pelle è esaurita o scartata.",
+      "fix": "Prendi un'altra pelle della lista di prelievo."
+    },
+    "NOTHING_ON_HAND": {
+      "message": "Non ce n'è a magazzino in questo stabilimento.",
+      "fix": "Prendine un'altra della lista di prelievo, o chiedi all'ufficio."
+    },
+    "MORE_THAN_ON_HAND": {
+      "message": "A magazzino in questo stabilimento ce n'è meno.",
+      "fix": "Consegna quello che c'è; l'ufficio vede che manca il resto."
+    },
+    "OVER_ISSUE": {
+      "message": "L'ordine di lavoro ha già tutto ciò che gli serve di questo.",
+      "fix": "Di più è una consegna in eccesso: la fa l'ufficio, con un motivo."
+    },
+    "NOT_LAST_ACTION": {
+      "message": "Non è più la tua ultima azione: qui non si può annullare.",
+      "fix": "Chiedi all'ufficio di stornarla."
+    },
+    "REVERSED_ALREADY": {
+      "message": "Questa consegna è già stata annullata.",
+      "fix": "Non c'è niente da fare."
+    }
+  },
+  "unit": {
+    "PCS": "pz",
+    "PAIR": "paia",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "fianchi",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  }
+}

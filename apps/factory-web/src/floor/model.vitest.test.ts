@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { enrolmentCodeOf, floorLocale, homeTiles, idleWarnAfterMs, isBadgeCode, MAX_TILES, modeOf, newPinProblem, noticePages, NOTICE_PAGE_CHARS, rosterLetters, TILE_RULES } from './model'
 
-const OPERATOR = ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'production.cut', 'shipping.pack']
+const OPERATOR = ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'production.cut', 'production.bundles', 'production.scan', 'shipping.pack']
 
 describe('the station\'s mode (design floor.home: from the work centre)', () => {
   it('maps every work centre kind; no station is a warehouse device; subcontract has none', () => {
@@ -17,10 +17,29 @@ describe('the station\'s mode (design floor.home: from the work centre)', () => 
 })
 
 describe('the home tiles: mode AND permission, fail closed, only built pages open', () => {
-  it('a cutting operator sees Cut a hide and Bundles (coming) and Scan (open)', () => {
+  it('a cutting operator sees Operation (the cutting operation\'s report), Cut a hide, Bundles and Scan (all open)', () => {
     expect(homeTiles('cutting', OPERATOR, false)).toEqual([
-      { key: 'cut', held: 'coming' },
-      { key: 'bundles', held: 'coming' },
+      { key: 'operation', held: null },
+      { key: 'cut', held: null },
+      { key: 'bundles', held: null },
+      { key: 'scan', held: null },
+    ])
+  })
+
+  it('a tile asks the permission its page\'s API needs (fail closed)', () => {
+    expect(homeTiles('cutting', ['floor.work', 'production.cut'], false).map((tile) => tile.key)).toEqual(['cut', 'scan'])
+    expect(homeTiles('inspection', ['floor.work', 'production.scan', 'quality.inspections.view'], false).map((tile) => tile.key)).toEqual(['operation', 'final', 'scan'])
+    expect(homeTiles('sewing', ['floor.work'], false).map((tile) => tile.key)).toEqual(['scan'])
+    expect(homeTiles('sewing', ['floor.work', 'production.scan'], false).map((tile) => tile.key)).toEqual(['operation', 'scan'])
+    expect(homeTiles('inspection', ['floor.work', 'quality.inspections.view'], false)).toEqual([
+      { key: 'final', held: null },
+      { key: 'scan', held: null },
+    ])
+    // Packing's pages are later steps: said on the tile, never a dead tile.
+    expect(homeTiles('packing', OPERATOR, false)).toEqual([
+      { key: 'operation', held: null },
+      { key: 'labels', held: 'coming' },
+      { key: 'pack', held: 'coming' },
       { key: 'scan', held: null },
     ])
   })
@@ -39,11 +58,11 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
   })
 
   it('holds every scan tile with "Read the notice first" while the notice blocks scans', () => {
-    expect(homeTiles('cutting', OPERATOR, true).map((tile) => tile.held)).toEqual(['notice', 'notice', 'notice'])
+    expect(homeTiles('cutting', OPERATOR, true).map((tile) => tile.held)).toEqual(['notice', 'notice', 'notice', 'notice'])
   })
 
-  it('only Scan anything is built in this step', () => {
-    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['scan'])
+  it('the floor tasks are built; receive, labels and pack are later steps', () => {
+    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['operation', 'cut', 'bundles', 'pick', 'final', 'scan'])
   })
 })
 
